@@ -198,7 +198,83 @@ static void commit_run(const Commit& m, const uint8_t* data, cudaStream_t st) {
 //            entries), into a layer's slot
 //   fr_tree  a thread a row: x from its segment digests, b = x ^ M_key.y, the hm96 leaf, and the frame leaf from its padded
 //            template with the value inserted as words (no byte assembly); then the CTA's 128-leaf subtree in shared memory,
-//            and the last CTA to finish (a counter) the levels above. One launch after sz_segments.
+//            and the last CTA to finish (a counter) the levels above. One launch after fr_segments (sz_segments with
+//            fr_compress).
+// s512_compress with 16 rounds unrolled, not 80: the latency path runs a warp or few a scheduler, where fully unrolled code
+// (~128 KB a compression) is bound by instruction fetch
+__device__ __forceinline__ void fr_compress(uint64_t st[8], uint64_t w[16]) {
+  uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+#pragma unroll 1
+  for (int r = 0; r < 80; r += 16) {
+#pragma unroll
+    for (int j = 0; j < 16; j++) {
+      if (r) {
+        const uint64_t w15 = w[(j + 1) & 15], w2 = w[(j + 14) & 15];
+        w[j] += (s512_rotr(w2, 19) ^ s512_rotr(w2, 61) ^ (w2 >> 6)) + w[(j + 9) & 15]
+              + (s512_rotr(w15, 1) ^ s512_rotr(w15, 8) ^ (w15 >> 7));
+      }
+      const uint64_t t1 = h + (s512_rotr(e, 14) ^ s512_rotr(e, 18) ^ s512_rotr(e, 41)) + ((e & f) ^ (~e & g)) + SHA512_K[r + j] + w[j];
+      const uint64_t t2 = (s512_rotr(a, 28) ^ s512_rotr(a, 34) ^ s512_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+      h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+    }
+  }
+  st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+}
+__device__ __forceinline__ void fr_pad_block(uint64_t st[8], uint64_t len) {
+  uint64_t w[16];
+#pragma unroll
+  for (int j = 0; j < 16; j++) w[j] = 0;
+  w[0] = 0x8000000000000000ull;
+  w[15] = len * 8;
+  fr_compress(st, w);
+}
+// sz_segments with fr_compress (the same digests)
+extern "C" __global__ void fr_segments(Args a) {
+  extern __shared__ uint32_t fr_sw[];
+  const uint8_t* data = (const uint8_t*)a.p[0];
+  const uint64_t* mids = (const uint64_t*)a.p[1];
+  uint8_t* out = (uint8_t*)a.p[2];
+  long long rows = a.i[0], stride = a.i[1];
+  int s = a.i[2], last = a.i[3];
+  long long total = rows * s;
+  int wid = threadIdx.x >> 5, lane = threadIdx.x & 31;
+  uint32_t* sh = fr_sw + wid * (32 * 33);
+  long long warp0 = ((long long)blockIdx.x * (blockDim.x >> 5) + wid) * 32;
+  if (warp0 >= total) return;
+  long long g = warp0 + lane;
+  int j = (int)(g % s);
+  int bytes = j == s - 1 ? last : 1024;
+  uint64_t st[8];
+  if (g < total)
+    for (int q = 0; q < 8; q++) st[q] = mids[8 * j + q];
+#pragma unroll 1
+  for (int c = 0; c < 8; c++) {
+#pragma unroll
+    for (int it = 0; it < 8; it++) {
+      int idx = it * 32 + lane, piece = idx >> 3, off = idx & 7;
+      long long pg = warp0 + piece;
+      uint4 v = make_uint4(0, 0, 0, 0);
+      if (pg < total) {
+        int pj = (int)(pg % s);
+        int pb = pj == s - 1 ? last : 1024;
+        if (c * 128 < pb) v = *(const uint4*)(data + (pg / s) * stride + (long long)pj * 1024 + c * 128 + off * 16);
+      }
+      uint32_t* d = sh + piece * 33 + off * 4;
+      d[0] = v.x; d[1] = v.y; d[2] = v.z; d[3] = v.w;
+    }
+    __syncwarp();
+    if (g < total && c * 128 < bytes) {
+      uint64_t w[16];
+#pragma unroll
+      for (int q = 0; q < 16; q++) w[q] = s512_be(sh[lane * 33 + 2 * q], sh[lane * 33 + 2 * q + 1]);
+      fr_compress(st, w);
+    }
+    __syncwarp();
+  }
+  if (g >= total) return;
+  fr_pad_block(st, (uint64_t)(128 + bytes));
+  s512_out(st, out + g * 64);
+}
 // value V (8 big-endian words) into the big-endian message words w = words [base, base + 16) at byte offset o
 __device__ __forceinline__ void fr_put(uint64_t w[16], int base, int o, const uint64_t V[8]) {
   const int q = o >> 3, r = (o & 7) * 8;
@@ -230,7 +306,7 @@ __device__ __forceinline__ void fr_hash(const uint8_t* tpl, int nblk, int o, con
     }
     fr_put(w, 16 * b, o, L);
     if (NODE) fr_put(w, 16 * b, o + 72, R);
-    s512_compress(st, w);
+    fr_compress(st, w);
   }
 }
 // p: tables, salts, hm96 mids, my out, cs out, b || c (c written)   i: rows
@@ -265,14 +341,14 @@ extern "C" __global__ void __launch_bounds__(128) fr_salt(Args a) {
   for (int t = 0; t < 8; t++) cs[t] = mid[t];
 #pragma unroll
   for (int t = 0; t < 16; t++) w[t] = s512_be(yw[2 * t], yw[2 * t + 1]);
-  s512_compress(cs, w);
+  fr_compress(cs, w);
 #pragma unroll
   for (int t = 0; t < 8; t++) w[t] = s512_be(yw[32 + 2 * t], yw[32 + 2 * t + 1]);
   w[8] = 0x8000000000000000ull;
 #pragma unroll
   for (int t = 9; t < 15; t++) w[t] = 0;
   w[15] = (128 + 192) * 8;
-  s512_compress(cs, w);
+  fr_compress(cs, w);
   uint64_t* co = (uint64_t*)a.p[4] + 8 * i;
 #pragma unroll
   for (int k = 0; k < 8; k++) co[k] = cs[k];
@@ -325,7 +401,7 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
         w[2 * t] = s512_be(u.x, u.y);
         w[2 * t + 1] = s512_be(u.z, u.w);
       }
-      s512_compress(st, w);
+      fr_compress(st, w);
     }
     if (j < s) {
 #pragma unroll
@@ -338,9 +414,9 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
 #pragma unroll
       for (int t = 9; t < 15; t++) w[t] = 0;
       w[15] = (uint64_t)(128 + 64 * s) * 8;
-      s512_compress(st, w);
+      fr_compress(st, w);
     } else {
-      s512_pad_block(st, 128 + 64 * (uint64_t)s);
+      fr_pad_block(st, 128 + 64 * (uint64_t)s);
     }
     const uint64_t* my = (const uint64_t*)a.p[2] + 8 * i;
     const uint64_t* cs = (const uint64_t*)a.p[3] + 8 * i;
@@ -355,8 +431,8 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
       w[8 + k] = cs[k];
       lt[k] = mid[8 + k];
     }
-    s512_compress(lt, w);
-    s512_pad_block(lt, 256);
+    fr_compress(lt, w);
+    fr_pad_block(lt, 256);
     s512_out(lt, (uint8_t*)a.p[9] + i * 64);
     fr_hash<false>((const uint8_t*)a.p[5] + i * 256, 2, (int)((const uint32_t*)a.p[6])[i], lt, lt, v);
     s512_out(v, tree + i * 64);
@@ -413,7 +489,7 @@ static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStre
   a.p[2] = (unsigned long long)m.digests;
   a.i[0] = m.R; a.i[1] = m.k; a.i[2] = m.s; a.i[3] = m.last;
   const long long total = (long long)m.R * m.s;
-  sz_segments<<<(unsigned)((total + 255) / 256), 256, 8 * 32 * 33 * 4, st>>>(a);
+  fr_segments<<<(unsigned)((total + 255) / 256), 256, 8 * 32 * 33 * 4, st>>>(a);
   Args f{};
   const unsigned long long ps[13] = {(unsigned long long)m.digests, (unsigned long long)(m.mids + 64 * m.s),
                                      (unsigned long long)(m.my + (size_t)64 * m.R * slot),
