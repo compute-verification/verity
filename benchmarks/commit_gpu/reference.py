@@ -83,13 +83,16 @@ def check_t_table(key: bytes, t: bytes) -> None:
                 raise AssertionError(f"T table differs from byte_tables at p {p}, v {v}")
 
 
-def params(n: int, n_bits: int, ks: bytes, key: bytes = KEY, seg: bool = False) -> bytes:
-    """commit_gpu's CGP1 file: P(n_bits) (row-seg: Q(n_bits)), the salt prefix, leaf_prefix(key), the domain id, Ks and T."""
+def params(n: int, n_bits: int, ks: bytes, key: bytes = KEY, seg: bool = False, domain_id: bytes | None = None) -> bytes:
+    """commit_gpu's CGP1 file: P(n_bits) (row-seg: Q(n_bits)), the salt prefix, leaf_prefix(key), the domain id (default
+    :func:`domain`'s; a caller's own ``CommitmentDomain(...).domain_id`` commits under its label), Ks and T."""
 
     t = t_table(key)
     check_t_table(key, t)
     p = sha512_row_seg_prefix(n_bits) if seg else sha512_row_v2_prefix(n_bits)
-    out = b"CGP1" + p + INST.salt_prefix + INST.leaf_prefix(key) + domain(n).domain_id + ks + t
+    did = domain(n).domain_id if domain_id is None else domain_id
+    assert len(did) == 64
+    out = b"CGP1" + p + INST.salt_prefix + INST.leaf_prefix(key) + did + ks + t
     assert len(out) == 4 + 128 * 3 + 64 * 2 + 65536
     return out
 
