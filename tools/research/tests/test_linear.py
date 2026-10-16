@@ -170,6 +170,9 @@ def test_an_ask_files_in_its_owners_team_and_still_goes_out_when_linear_fails(fa
     assert rc == 0 and out.startswith("linear: INF-1 https://linear.app/x/issue/INF-1")
     assert fake.messages[COORD][-1]["text"].endswith("4 GPUs on node 2" + LINKED)
     assert lin.sent("teams(filter")[0][1] == {"n": "INF"}                                      # the registry's key, not the handle
+    rc, _, _ = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", "4 GPUs for 6 h\nspec: the panel\nby 8 PM")
+    assert rc == 0 and fake.messages[COORD][-1]["text"].endswith("> 4 GPUs for 6 h" + LINKED)              # Slack: one line and the link
+    assert lin.sent("issueCreate")[-1][1]["i"]["description"] == "4 GPUs for 6 h\nspec: the panel\nby 8 PM"  # the issue: the whole brief
     lin.teams = []
     rc, _, err = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", "again")
     assert rc == 0 and "not filed on Linear (no Linear team named 'INF')" in err
