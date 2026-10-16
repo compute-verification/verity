@@ -31,13 +31,14 @@ After the lease it scores the run (`report`), writes `score.json` and one `kerne
 
 An arm that fails a gate isn't scored: its SCORE is null and `score_if_gated` keeps the number for diagnosis.
 
-filler-scorer/v3, the lock (`scoring.SCORER`), refuses at load, before the build and the lease, an arm whose record the
-ledger or the store would refuse (`arms.record_problems`); `check ARM` runs that check alone. Its SCORE is the proved
-reading: the filler at the entry `scoring.filler_entry` decides from the arm's declared `Filler.noise` and the kernel
-facts of the scorer's own build (`build.json`), with SCORE under CH (every filler at 0.99, v2's reading) beside it, and
-each point's slowdown margin. `report OUT --as v2` reads a run as v2 did, without writing `score.json`.
+filler-scorer/v3 refuses at load, before the build and the lease, an arm whose record the ledger or the store would
+refuse (`arms.record_problems`); `check ARM` runs that check alone. Its SCORE is the proved reading: the filler at the
+entry `scoring.filler_entry` decides from the arm's declared `Filler.noise` and the kernel facts of the scorer's own
+build (`build.json`), with SCORE under CH (every filler at 0.99, v2's reading) beside it, and each point's slowdown
+margin. `report OUT --as v2` (or `v3`) reads a run as that version did, without writing `score.json`.
 
-filler-scorer/v4 (prepared, not the lock: `report OUT --as v4` previews it) reads the filler wherever it's called from.
+filler-scorer/v4, the lock (`scoring.SCORER`, active since the coordinator's 11:05Z), keeps v3's load check and reads
+the filler wherever it's called from.
 The build also compiles each CUDA driver the arm lists (fscore.cu, pscore.cu) and records `scoring.program_facts` over
 dscore's and the drivers' nvdisasm. The theorem entries' SASS checks read the `dfill_k`/`dfill_p` functions' bodies alone
 (kernels or __noinline__ clones in serving kernels); any MMA, global store or register call outside them on a path the
@@ -489,7 +490,7 @@ def leaderboard(local: list[Path], refresh: bool, as_json: bool) -> int:
         print(json.dumps([{"record": a, "gated": gated(m), "proved": readings(m)[0], "under_ch": readings(m)[1], **m}
                           for a, m in uniq]))
         return 0
-    print("SCORE is the proved reading (filler-scorer/v3); SCORE under CH reads every filler at 0.99 (CH withdrawn, "
+    print("SCORE is the proved reading (filler-scorer/v3 and v4); SCORE under CH reads every filler at 0.99 (CH withdrawn, "
           "decision 27), as v2's SCORE did. A v2 record has no proved SCORE; an ungated one's numbers are in ().")
     print("| # | arm | variant | SCORE | SCORE under CH | min (entry) | worst slowdown | gates | run | scorer | parent | "
           "mechanism | flags |")
