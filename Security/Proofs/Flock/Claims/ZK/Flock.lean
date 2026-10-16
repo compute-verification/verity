@@ -70,7 +70,8 @@ in expectation. `S_GK` fails at a binding failure, where `S_Flock` goes on to th
 collision term.
 
 **What the masked verifier's instance still assumes** (`G : Proto Flock.Wit` for the deployed `--zk` protocol), as
-hypotheses of `Flock.zkR_gkE_hm96` and of the theorems that discharge them:
+hypotheses of `Flock.zkR_gkE_hm96` and of the theorems that discharge them, each named as a Prop in
+`Proofs.Flock.Claims.ZK.Hypotheses`:
 
 * `P_zk`'s message function per coin round (`Proto.msg`, `Proto.dmsg`): the masked prover (`flock-circuit --zk`) has no
   Lean model of its messages, so their link to the session analysis's prover is a hypothesis. At each statement and
@@ -78,14 +79,14 @@ hypotheses of `Flock.zkR_gkE_hm96` and of the theorems that discharge them:
   fibers of one size (`hlink`, `hlink₀` of `Proto.runs_close_hm96`), given by its leaves (`hP`) and in world `W₀` by the
   pre-final view cut where it stops (`hI`); at each coin vector, its messages are a function of the session's real view
   where it goes on (`hR` of `Proto.shvzk_at_hm96`) and of its leaves where it refuses (`hR`, `hD` of
-  `Proto.shvzk_refused_hm96`);
+  `Proto.shvzk_refused_hm96`) (`Proto.MsgLink`);
 * the SHVZK simulator (`Proto.sim`): the same function of the tables' `S_shvzk` outputs where the prover goes on (`hS`),
-  and the dummy-witness prover's messages where it refuses;
+  and the dummy-witness prover's messages where it refuses (`Proto.SimLink`);
 * where the prover goes on, the tables are non-degenerate (`Rank`, `PadOnto`, each `W^r` a bijection, `PadsOnto`,
-  `β ≠ 0`) and a valid witness's pads satisfy the inner constraint `⟨λ, h⟩ = θ` (`InnerHolds`, which nothing proves);
-  that it refuses at every other coin vector is its self-check's job;
-* `Proto.chk` is the coin-tree walk `treeChk` and the coin is read from the opening's coins (`hchk`, `hdec`), after
-  which `Binding` needs nothing of `H`;
+  `β ≠ 0`; `Proto.NonDegenerate`) and a valid witness's pads satisfy the inner constraint `⟨λ, h⟩ = θ`
+  (`Proto.InnerHolds`, which nothing proves); that it refuses at every other coin vector is its self-check's job;
+* `Proto.chk` is the coin-tree walk `treeChk` and the coin is read from the opening's coins (`hchk`, `hdec`;
+  `Proto.CoinCheck`), after which `Binding` needs nothing of `H`;
 * `G.K = (FlockDeploy.V true).k − 1`: the protocol's coins are the deployed verifier's, the link's and the recorded
   rounds' (`1 + rounds` where the statement sets up, none where it does not). Zero knowledge reads nothing else of
   `FlockDeploy.deployZk` but its `zk`.

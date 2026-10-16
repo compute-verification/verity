@@ -11,6 +11,7 @@ import Proofs.Flock.Claims.ZK.CoinCheck
 import Proofs.Flock.Claims.ZK.Prefix
 import Proofs.Flock.Claims.ZK.Shvzk
 import Proofs.Flock.Claims.ZK.Flock
+import Proofs.Flock.Claims.ZK.Hypotheses
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -54,4 +55,7 @@ import Proofs.Flock.Claims.ZK.Flock
   for today's `FlockDeploy.V`, which leaves `Hello` out (`deployZk_proto_k`, `Flock.zkRHello_deployZk`); `S_Flock`'s cost
   (`Flock.simCost_of_proto`) and the expected-cost simulator's; what changes for a malicious verifier, how the
   hypotheses map to the session analysis's Theorem GK (`gk_simulate_hm96`), and what the `--zk` instance still needs.
+* `Hypotheses`: what the `--zk` instance still needs, as five Props about models of the masked prover (`MsgLink`,
+  `SimLink`, `NonDegenerate`, `InnerHolds`, `CoinCheck`), and the claim from them under `Claims.Hm96Hiding`
+  (**`Flock.zk_of_models`**; `Flock.zkRHello_deployZk_of_models` at `FlockDeploy.deployZk`).
 -/
