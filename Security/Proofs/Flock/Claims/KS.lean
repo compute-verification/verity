@@ -12,6 +12,7 @@ import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.KS.ConflictOC
 import Proofs.Flock.Claims.KS.ConflictMerkle
 import Proofs.Flock.Claims.KS.ConflictWithin
+import Proofs.Flock.Claims.KS.PlainQueryRound
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -44,4 +45,6 @@ Toward `ConflictTied`: a run over `OC` within a log, peeled step by step, with t
 SHA-512 input of each opening (`ConflictMerkle`, `FlockDeploy.KS.merkleCheck_logs`), and two accepted openings of one
 position against one cap with different rows collide in the two logs (`FlockDeploy.KS.tiedColl_of_opens`). SHA-512
 answered only within a log (`ConflictWithin`, `FlockDeploy.KS.hashesIn`) carries a run within its log to a verdict in
-`V` and back (`FlockDeploy.KS.within`, `FlockDeploy.KS.back`), so the verifier's lemmas under every oracle hold of it. -/
+`V` and back (`FlockDeploy.KS.within`, `FlockDeploy.KS.back`), so the verifier's lemmas under every oracle hold of it:
+among them where level 0's query coins sit in a plain rep's stream, as `ZkQueryRound` has it for the masked one
+(`PlainQueryRound`, `FlockDeploy.KS.plainQueryRound_verifyWithM`). -/
