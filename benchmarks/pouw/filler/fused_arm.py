@@ -195,9 +195,11 @@ class FusedPumpK(FusedPump):
         return self.filler
 
 
-#: pfill-bU's chunk (pfill_arm.PFillBU's shape) with duo's receipt (NC 2) or XOR-in's (NC 4 built with -DPFILL_XIN)
+#: pfill-bU's chunk (pfill_arm.PFillBU's shape) with duo's receipt (NC 2), or one of P2-FF r9's at NC 4: XOR-in (13, 19)
+#: (-DPFILL_XIN13) or LOP3+IMAD (-DPFILL_LI)
 BU_DUO_FILLER = A.Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bitsU", fold="duo")
-BU_XIN_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU", fold="xor-in")
+BU_XIN13_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU", fold="xor-in-13")
+BU_LI_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU", fold="lop3-imad")
 
 
 @dataclass
@@ -224,22 +226,45 @@ class FusedPumpBU(FusedPumpK):
     nvcc_flags: str = "-DPFILL_BU -Xcompiler -mpopcnt -DFSCORE_PUMP_ONLY"
 
 
-@dataclass
-class FusedPumpBUXin(FusedPumpBU):
-    """FusedPumpBU with FILL-SEC's XOR-in drop-in for the fold (NC 4 built with -DPFILL_XIN, three ops a pair)."""
+def _bu_lineage(receipt: str, hypothesis: str) -> dict:
+    return {"parent": "fill-fused-pump-bu", "approach": "pouw/filler-fused",
+            "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-bU", receipt, "place:split",
+                          "split:per-point-table", "fused:flin-serving", "fused:persistent-attention",
+                          "fused:lm-head-flin", "prefill:split"],
+            "hypothesis": hypothesis}
 
-    name: str = "fill-fused-pump-bu-xin"
-    lineage: dict = field(default_factory=lambda: {
-        "parent": "fill-fused-pump-bu", "approach": "pouw/filler-fused",
-        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-bU", "receipt:xin-k32", "place:split",
-                      "split:per-point-table", "fused:flin-serving", "fused:persistent-attention", "fused:lm-head-flin",
-                      "prefill:split"],
-        "hypothesis": "XOR-in for duo in FusedPumpBU's pump (one op a pair over ram, not two a word) keeps ram's alone rate, "
-                      "0.78 of peak, if FILL-SEC's verdict has it bind every word"})
-    filler: A.Filler | None = BU_XIN_FILLER
-    choice: str = ("FusedPump's offline table of pump-only splits, a pfill-bU XOR-in pump, pfill's 4-SM prefill split; at "
-                   "serving time a lookup, a green split and one graph a step")
-    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN -Xcompiler -mpopcnt -DFSCORE_PUMP_ONLY"
+
+@dataclass
+class FusedPumpBUXin13(FusedPumpBU):
+    """FusedPumpBU with P2-FF r9's XOR-in (13, 19) for duo (FILL-SEC's drop-in, NC 4 built with -DPFILL_XIN13, three ops
+    a pair, keys under pf_key_ok_r9): every word read with no layout premise. It replaces XOR-in (7, 19), whose step
+    boundary's ±128 is an int8 ratio (note:20261016T1117Z-draft-fullfloor-s-r9). Provisional while RS-E-REF r7 referees
+    r9."""
+
+    name: str = "fill-fused-pump-bu-xin13"
+    lineage: dict = field(default_factory=lambda: _bu_lineage(
+        "receipt:xin13-k32", "XOR-in (13, 19) for duo in FusedPumpBU's pump keeps XOR-in (7, 19)'s alone rate, 0.78 of "
+        "peak (its rotation is free), with every word read in full under filler-scorer/v5"))
+    filler: A.Filler | None = BU_XIN13_FILLER
+    choice: str = ("FusedPump's offline table of pump-only splits, a pfill-bU XOR-in (13, 19) pump, pfill's 4-SM prefill "
+                   "split; at serving time a lookup, a green split and one graph a step")
+    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN13 -Xcompiler -mpopcnt -DFSCORE_PUMP_ONLY"
+
+
+@dataclass
+class FusedPumpBULi(FusedPumpBU):
+    """FusedPumpBU with P2-FF r9's LOP3+IMAD for duo (FILL-SEC's drop-in, NC 4 built with -DPFILL_LI, two ops a pair as
+    ram's, keys under pf_key_ok_r9), r9's pick for the filler: every word read given (HO), which the pump's hashed rows
+    give. Provisional while RS-E-REF r7 referees r9."""
+
+    name: str = "fill-fused-pump-bu-li"
+    lineage: dict = field(default_factory=lambda: _bu_lineage(
+        "receipt:li-k32", "LOP3+IMAD for duo in FusedPumpBU's pump runs at ram's op count, 0.78-0.81 of peak alone, with "
+        "every word read in full under filler-scorer/v5"))
+    filler: A.Filler | None = BU_LI_FILLER
+    choice: str = ("FusedPump's offline table of pump-only splits, a pfill-bU LOP3+IMAD pump, pfill's 4-SM prefill split; "
+                   "at serving time a lookup, a green split and one graph a step")
+    nvcc_flags: str = "-DPFILL_BU -DPFILL_LI -Xcompiler -mpopcnt -DFSCORE_PUMP_ONLY"
 
 
 def _warp(sms, fw, st=32, lm=1, aps=1):

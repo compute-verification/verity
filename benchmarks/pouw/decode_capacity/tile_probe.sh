@@ -11,8 +11,8 @@ export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/pouw/decode_capacity
 export B; B=$(mktemp -d /tmp/tprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
-export TP_BUILDS=${TP_BUILDS:-"bits:-DPFILL_BITS bu:-DPFILL_BU,-Xcompiler,-mpopcnt xin:-DPFILL_BU,-DPFILL_XIN,-Xcompiler,-mpopcnt"}
-export TP_NC=${TP_NC:-"bits:4 bu:4 bu:2 xin:4"} TP_W=${TP_W:-"bits xin"} TP_S=${TP_S:-256} TP_WS=${TP_WS:-2048}
+export TP_BUILDS=${TP_BUILDS:-"bits:-DPFILL_BITS bu:-DPFILL_BU,-Xcompiler,-mpopcnt li:-DPFILL_BU,-DPFILL_LI,-Xcompiler,-mpopcnt xin13:-DPFILL_BU,-DPFILL_XIN13,-Xcompiler,-mpopcnt"}
+export TP_NC=${TP_NC:-"bits:4 bu:4 bu:2 li:4 xin13:4"} TP_W=${TP_W:-"bits"} TP_S=${TP_S:-256} TP_WS=${TP_WS:-2048}
 export TP_WS_NCU=${TP_WS_NCU:-64}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
