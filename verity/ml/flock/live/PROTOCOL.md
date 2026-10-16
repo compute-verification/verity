@@ -885,10 +885,9 @@ start when it was replaced, cut shorter or no longer holds the last bytes read, 
 index was written, when a writer of the index ended mid-write, or when a file of it won't read; it reads the record whole
 when its last line has no newline yet, a line is one the firewall doesn't write or a name is over 100 bytes. An edit
 further back that leaves the record no shorter isn't seen, nor is a file of an index edited by hand that still reads. A
-torn last line (a writer killed inside its append) fails every call of
-either firewall, so nothing is served or released until the developer repairs the record; neither skips an event it
-can't read, since a skipped `stop` would serve a stopped recursive session. The Python relay reports such a fault as its
-connection's outcome `error`.
+torn last line (a writer killed inside its append) fails every call of either firewall, so nothing is served or released
+until the developer repairs the record; neither skips an event it can't read, since a skipped `stop` would serve a
+stopped recursive session. The Python relay reports such a fault as its connection's outcome `error`.
 
 **Retries.** Every stop is recorded and counted, in both phases, so the auditor knows how many times a recursive session was
 run, and each run it allows reveals its own ending: `r` stopped runs before an accepted one reveal at most `r + 1` times the
