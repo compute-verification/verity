@@ -463,6 +463,8 @@ class TpRow(Row):
             cmd.append("--require-fold-match")
         if ck.replay_deferred in ("1", "slim"):    # slim reaches a TP row only at a world where tp-commit replays in process (`run_row`)
             cmd.append("--replay-deferred")
+        if ck.serving_rows:
+            cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
         return cmd + R.tap_source_args(taps, self.env) + (ck.extra_commit_args or "").split()
 
     def commit_pending(self, rck: int, wall: int) -> bool:

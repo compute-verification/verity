@@ -13,6 +13,7 @@
     {"kind": "definition", "label": "BitAtx16_v1", "id": "BitAtx16_v1", "statics": {}, "pin": null},
     {"kind": "definition", "label": "BitAtx32_v1", "id": "BitAtx32_v1", "statics": {}, "pin": null},
     {"kind": "definition", "label": "BitAtx64_v1", "id": "BitAtx64_v1", "statics": {}, "pin": null},
+    {"kind": "definition", "label": "BitAtx8_v1", "id": "BitAtx8_v1", "statics": {}, "pin": null},
     {"kind": "definition", "label": "BitXor_v1", "id": "BitXor_v1", "statics": {}, "pin": null},
     {"kind": "definition", "label": "F32ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}", "id": "F32ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}", "statics": {"G": 1, "FIRST": 0, "FINAL": 0}, "pin": {"and": 35}},
     {"kind": "definition", "label": "F32ArgmaxLeaf_v1{G=2,FIRST=1,FINAL=1}", "id": "F32ArgmaxLeaf_v1{G=2,FIRST=1,FINAL=1}", "statics": {"G": 2, "FIRST": 1, "FINAL": 1}, "pin": {"and": 135}},

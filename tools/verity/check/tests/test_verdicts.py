@@ -261,21 +261,24 @@ def test_the_agreement_key_leaves_out_what_names_the_machine(monkeypatch):
 
 
 class _Store:
-    """The store as `gather_verdicts` reads it: recorded checks, newest first, each with its run files."""
+    """The store as `gather_verdicts` reads it: recorded checks, each an hour after the next one listed and running ``walls`` seconds
+    (none: one), with their run files."""
 
     remote = None
 
-    def __init__(self, tmp: Path, runs: dict[str, Path | None], states: dict[str, str] | None = None):
-        self.tmp, self.runs, self.states = tmp, runs, states or {}
+    def __init__(self, tmp: Path, runs: dict[str, Path | None], states: dict[str, str] | None = None,
+                 walls: dict[str, float] | None = None):
+        self.tmp, self.runs, self.states, self.walls = tmp, runs, states or {}, walls or {}
         self.index = self
 
     def sql(self, query: str, params: tuple = ()) -> list[tuple]:
         import sqlite3
 
         db = sqlite3.connect(":memory:")
-        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT)")
-        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?)",
-                       [(rid, self.states.get(rid, "done"), f"2026-10-12T{99 - i:02d}") for i, rid in enumerate(self.runs)])
+        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT, wall_s REAL)")
+        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?, ?)",
+                       [(rid, self.states.get(rid, "done"), f"2026-10-12T{23 - i:02d}:00:00Z", self.walls.get(rid, 1.0))
+                        for i, rid in enumerate(self.runs)])
         return db.execute(query, params).fetchall()
 
     def get_attempt(self, rid: str) -> dict:
@@ -308,6 +311,20 @@ def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_
     assert V.import_(got) == (3, 0)
     assert (V.roots()["tests"] / "k1.json").read_text() == "new"
     assert check.gather_verdicts(tmp_path / "none", _Store(tmp_path, {"r-none": None})) is None
+
+
+def test_the_checks_gathered_are_the_ones_that_ended_last_so_a_long_ones_passes_reach_the_next_check(tmp_path, monkeypatch, capsys):
+    """16 Oct: a pre-warm of #2113's cold circuit-check ran 4.5 h while drive started more than twelve warm checks; ordered by
+    start, its pack was out of the window when the train it warmed ran."""
+    check = _load("check")
+    packs = {}
+    for name in ("short", "long"):
+        r = _machine(tmp_path, monkeypatch, name)
+        _write(r["tests"] / f"{name}.json", name)
+        V.export(packs.setdefault(name, tmp_path / f"{name}.tar.gz"))
+    store = _Store(tmp_path, {"r-short": packs["short"], "r-long": packs["long"]}, walls={"r-long": 3 * 3600.0})
+    check.gather_verdicts(tmp_path / "out", store, limit=1)
+    assert "1 entries gathered from 1 recorded checks (r-long)" in capsys.readouterr().out
 
 
 def test_a_recorded_checks_pack_import_refuses_is_passed_over_by_name_and_a_refused_pack_given_is_an_error(tmp_path, monkeypatch,
