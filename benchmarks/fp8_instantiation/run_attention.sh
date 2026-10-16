@@ -4,9 +4,10 @@
 # WikiText-2's test window 0 that must begin with those 2048).  Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|wide|both [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
+#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|wide|both|peel|peelabc|peeld [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
 #     [--env D4A_IDS=ids8192.npy --send ids8192.npy] --send benchmarks/fp8_instantiation/run_attention.sh \
 #     -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run_attention.sh"'
+# D4A_IDS may hold several windows (N x T, windows.py), whose window 0 must begin with those 2048 tokens.
 set -uo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out${D4A_TAG:+/$D4A_TAG}
 mkdir -p "$O"
@@ -91,7 +92,23 @@ long_seeds_plan() {
   for s in ${NEW_SEEDS:-s0 ${SEEDS:-s1 s2}}; do for x in $new; do m+=" $x-$s"; done; done
   echo "$m"
 }
+# The peeled one-limb design (note:20261016T0001Z-draft-rs-d2-attention-lowrank-peel), every linear on rotated int8:
+# (a) the one-limb grid, (b) its Q and P tops shrunk by a peeled {+-1..+-8}, (c) (b) with V and K served +-1, and (d)
+# (b) with V alone and K alone; seeds S.
+peel_abc_plan() {
+  m="bf16 bf16-lin8r"
+  for s in ${SEEDS:-s0 s1 s2}; do for x in "" -eqp=w8 -eqp=w8-kv=pm1; do m+=" int8-rot-lin8r$x-$s"; done; done
+  echo "$m"
+}
+peel_d_plan() {
+  m=""
+  for s in ${SEEDS:-s0 s1 s2}; do for x in -eqp=w8-v=pm1 -eqp=w8-k=pm1; do m+=" int8-rot-lin8r$x-$s"; done; done
+  echo "$m"
+}
 case "${D4A_PLAN:-}" in
+  peel) D4A_METHODS="$(peel_abc_plan) $(peel_d_plan)" ;;
+  peelabc) D4A_METHODS=$(peel_abc_plan) ;;
+  peeld) D4A_METHODS=$(peel_d_plan) ;;
   longseeds) D4A_METHODS=$(long_seeds_plan) ;;
   wide) D4A_METHODS="bf16 int8-prow2-vchan2-qk2-none-rot"; for s in s0 s1 s2; do for x in $(wide_plan); do D4A_METHODS+=" $x-$s"; done; done ;;
   limbs2) D4A_METHODS=$(limbs2_plan) ;;
@@ -115,6 +132,7 @@ LEASE=(gpu-lease 1 --wait --max-min "${D4A_MAX_MIN:-60}" --)
   r=$?
   nvidia-smi --query-gpu=index,clocks.sm,clocks.mem --format=csv -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
   "$PY" "$S" --table "$O/results.jsonl" > "$O/table.md" 2>> "$O/stderr.txt"
+  "$PY" "$S" --peel-table "$O/results.jsonl" > "$O/peel_table.md" 2>> "$O/stderr.txt"
   exit $r'
 rc=$?
 echo "attention $rc" | tee "$O/status.txt"
