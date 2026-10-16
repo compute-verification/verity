@@ -1187,6 +1187,21 @@ def test_names_open_succeeds_records_the_working_branch_and_keeps_the_predecesso
     assert json.loads((routes_dirs[0] / "circuits.json").read_text())["branch_suffixes"] == ["ab12", "5555", "cd34", "ef56"]
 
 
+def test_names_open_keeps_a_suffix_the_published_route_doesnt_show_yet(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
+    """raw.githubusercontent serves the published route minutes stale: a second worktree's run replaced the first's suffix."""
+    notes_clone(tmp_path)
+    monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
+    box = inbox(fake, routes_dirs, "memory-accounting")
+    holder = "bc-4635cc01-e765-5c9d-9959-13885e12b0c1"
+    add_route(routes_dirs[1], "memory-accounting", box, holder=holder)                    # published, stale
+    add_route(routes_dirs[0], "memory-accounting", box, holder=holder, branch_suffixes=["93c1"])
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: "6cd3")
+    monkeypatch.setattr(slack.Routes, "get_route", lambda self, name, fresh=False: self._fetch(name) if fresh else self.local.get(name))
+    monkeypatch.setattr(slack.Routes, "_fetch", lambda self, name: json.loads((routes_dirs[1] / f"{name}.json").read_text()), raising=False)
+    assert run(capsys, "names", "open", "--as", "memory-accounting", "--holder", holder)[0] == 0
+    assert json.loads((routes_dirs[0] / "memory-accounting.json").read_text())["branch_suffixes"] == ["93c1", "6cd3"]
+
+
 def test_pr_branches_asks_gh_once_per_unknown_number_and_keeps_its_answers(tmp_path, monkeypatch):
     import sys
     calls = tmp_path / "calls"

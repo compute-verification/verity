@@ -12696,10 +12696,10 @@
    ]
   },
   "Flock.Library": {
-   "digest": "f2e8403d7ba1773315599741ffbbe4911e8656446dd9ca5ffcc4417431e0e0e2",
+   "digest": "bb62cf945bde7d73f005110acfbcb1173eecaee6a1d36a045c54ddda0aea30b9",
    "definitions": {
     "Flock.LIBRARY": "da053709b44964b14d2e1bd6d280351dfcced3c322316c724b9edba88e8e7792",
-    "Flock.LIBRARY_TABLES": "1a055d63ccffc7e982bc72d4d2296ed9db0b078fa0d56a331c82a4afbf6e7eae",
+    "Flock.LIBRARY_TABLES": "67c90c68c5d39ee639525f4d55e4e93d607a8f5953abe0e6138a42329de5d2e5",
     "Flock.LibraryTable": "823f5e62dc7223376ca0bf18d83b960c608cb96d20802a97af702645e6cfa328",
     "Flock.LibraryTable.indexBits": "7273ddd0301e5ec1ce0b3e0f46a5c13f0c163cff140051476a8211a80d4b14b2",
     "Flock.LibraryTable.name": "fe78aac1a4881faaedf59319c44f0ee2bfcd9a2abcfef0c30410934323561eb4",
@@ -17495,13 +17495,13 @@
    ]
   },
   "Proofs.Flock.Recursive.AuditC3": {
-   "digest": "8afae200c531c2a206c75f80bb755f37f94903e3e09cfdff077a4c6a66f5e17a",
+   "digest": "2a6e35dc8ff965052b68fb6443b0c47f1c0e4cccc1e37c104f102458f63e3abe",
    "definitions": {
     "Flock.Guarantees.ChecksC3": "51028e9378de1ba7733b8fe290d67ec773bd0903aa591c8f10a114ac189dbbb7",
     "Flock.Guarantees.ChecksVR": "91d4d45c655b92406ae93ab759d14b8488eee77108c5d38a2ff647a11312df12",
     "Flock.Guarantees.HoloSatSome": "7e726eed35ff1e0786a2af704243426e336d64bb2909847c74a9fe1e06ce27d7",
     "Flock.Guarantees.RecursiveAuditC3": "c627d9a8098dc7747b12bf04ed826276bf6a6d742b5daee6b4b5c74255aba752",
-    "Flock.Guarantees.RecursiveAuditC3At": "6c0d4491118715a63a51a081b7ab7f29287670911572fd905991ee6f077f4165",
+    "Flock.Guarantees.RecursiveAuditC3At": "e44b481b8336f925ecb2cdc449b8c46b1158dd0be99d8a4534f9468a4e0d6359",
     "Flock.Guarantees.RunOpensRegτ": "5ed00c8cb1b4f1f3bf709aac1656fd2f4ecd35f6f749090146167da3642b9c2c",
     "Flock.Guarantees.c3Of": "7a387edb360170506c4d9fe694a6badb5d15ffef124c97ec1b1350e75cbd2465",
     "Flock.Guarantees.checkedC3": "484710ae525294bcf9048eb3d726f25330e38d02e3e0000642eb08e508042213",

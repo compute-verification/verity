@@ -159,7 +159,7 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
 (`holoInnerAtτ`, `regStmtτ`, `clashPickHL` at `holoAtτ`), the salts' level a free parameter `lv` (the audit reads it
 at `(holoAt st hp).rsch.sch.level₀`, which no typing changes), the held top's collision `TopColl` off the bridge as in
 `zk_sessions_recursive_fork_regV`, and the error `holoAt st hp`'s own (`innerAtLeavesL_regτ`). `RecursiveAuditC3`
-consumes it inside its existential over `τv`. -/
+reads it at the registered typing `hp.τ`, which `_hbr`'s `τv` is wherever check 5 accepts the inner shape. -/
 theorem zk_sessions_recursive_fork_regVτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog))
     (_hcls : ClassOk (shapeOf st))

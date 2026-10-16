@@ -3,7 +3,7 @@
 In a recorded run the fast path never writes ROOT (the commit's shared source tree), and the slot tree's copy of the
 updated `lean-audit.json` is restored to the committed bytes by the next requirer iteration's `sync`, so without an
 explicit keep the record a lane must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
-and audit.py itself, and check the keep under `out/record/` (recorded and not) and the ROOT write-back (unrecorded
+and check.py itself, and check the keep under `out/record/` (recorded and not) and the ROOT write-back (unrecorded
 only)."""
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ NEW = json.dumps({"guarantees": {"G": {"owner": "@lean", "type_hash": "new"}}}) 
 
 @pytest.fixture()
 def fast(tmp_path, monkeypatch):
-    """`audit_records` against a stand-in package `pkg`, a held-open slot tree and a fake audit.py whose `--update`
+    """`audit_records` against a stand-in package `pkg`, a held-open slot tree and a fake check.py whose `--update`
     writes `NEW` over the tree's record; `sync` restores the committed record, as the real one does from ROOT's files."""
     root = tmp_path / "root"
     (root / "pkg").mkdir(parents=True)
