@@ -651,7 +651,8 @@ theorem SessionKS_of {H : Msg → Msg} {D : Deploy Coin Col T} (hKS : Claims.Flo
         rw [Ex_add, Ex_const]
     _ ≤ κF D x + Real.sqrt (Ex fun d => γF D x * Ex fun σ => collAt H D P x ω
           (forkOn (D.stage2 x) r (forkOn (selRounds D x sel (forkOn (D.stage2 x) r d)) d σ))) :=
-        add_le_add le_rfl (Ex_sqrt_le _ fun d => mul_nonneg (γF_nonneg D x) (Ex_nonneg fun σ => collAt_nonneg H D P x ω _))
+        add_le_add le_rfl (Ex_sqrt_le _ fun d =>
+          mul_nonneg (γF_nonneg D x) (Ex_nonneg fun σ => collAt_nonneg H D P x ω _))
     _ = κF D x + Real.sqrt (γF D x * Ex fun d => collAt H D P x ω (forkOn (D.stage2 x) r d)) := by
         rw [Ex_mul_left, hres]
 

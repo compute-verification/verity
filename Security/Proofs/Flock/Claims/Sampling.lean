@@ -4,6 +4,7 @@ import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.ExecBernoulli
 import Proofs.Flock.Claims.Sampling.KS
+import Proofs.Flock.Claims.Sampling.Leaf
 import Proofs.Flock.Claims.Sampling.Live
 import Proofs.Flock.Claims.Sampling.Path
 import Proofs.Flock.Claims.Sampling.Session
@@ -14,7 +15,7 @@ executable Bernoulli draw's bound (`Sampling.ExecBernoulli`) and every law's liv
 design's acceptance probability as its model draw's miss probability, the nested escape and the classes' product
 (`Sampling.Escape`), and the deployed count bound at the claims' designs (`Sampling.Count`); the extractor's rerun
 programs (`Sampling.Extract`, `Sampling.Cost`); the commitment's binding at the openings the extractor checks
-(`Sampling.Binding`) and at the registered path check (`Sampling.Path`); `B_ext` and the block's bits from its KS
-(`Sampling.Bext`); the waits' truncation and union bound (`Sampling.Wait`); and the block's KS, its count form and its
-bits from Flock's KS at the checked units' sessions and the deployed sampled verifier's named facts (`Sampling.KS`); and
-Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`). -/
+(`Sampling.Binding`), at the registered path check (`Sampling.Path`) and at its hm96 leaf (`Sampling.Leaf`); `B_ext`
+and the block's bits from its KS (`Sampling.Bext`); the waits' truncation and union bound (`Sampling.Wait`); the
+block's KS, its count form and its bits from Flock's KS at the checked units' sessions and the deployed sampled
+verifier's named facts (`Sampling.KS`); and Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`). -/
