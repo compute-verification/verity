@@ -29,11 +29,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes
+PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes
 #: the producer class the ISSUING MODULE's class admits (the link table names the class: `... (RowParallelLinear)`): an all-reduce issued
 #: by a RowParallelLinear reduces a K-sharded Gemm output, never an embedding row (equal-result-but-wrong-producer fails here by name)
 PRODUCER_BY_SITE_CLASS = {"VocabParallelEmbedding": ("EmbeddingShard_v1",),
-                          "RowParallelLinear": ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "batch:Gemm"),
+                          "RowParallelLinear": ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "batch:Gemm"),
                           "LogitsProcessor": ("Gemm_v1", "Gemm_v2", "batch:Gemm"), "ParallelLMHead": ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
                           "FusedMoE": ("MoeSum", "MoeExpertSum"), "SharedFusedMoE": ("MoeSum", "MoeExpertSum"), "MoERunner": ("MoeSum", "MoeExpertSum")}
 #: a row adding two partials of its rank and step is a partial too (GLM-5.3's MoE block: the routed `MoeSum` plus the shared expert's

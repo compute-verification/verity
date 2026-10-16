@@ -396,6 +396,7 @@ def test_a_flat_all_reduce_counts_one_producer_per_own_row():
 
 @pytest.mark.parametrize("ops,admitted", [
     ((("MoeSum_v1{TOPK=8,H=8}", 0), ("DeepGemmFp8Linear_v1{K=2048,N=8}", 0)), True),     # GLM-5.3's MoE block: routed + shared partials
+    ((("MoeSum_v1{TOPK=8,H=8}", 0), ("FlashInferFp8Linear_v1{K=256,N=8}", 0)), True),    # the decode steps' shared expert (FlashInfer at small M)
     ((("MoeSum_v1{TOPK=8,H=8}", 0), ("RMSNormCudaVector8_v1{N=8}", 0)), False),         # a partial plus the residual stream: no partial
     ((("MoeSum_v1{TOPK=8,H=8}", 0), ("DeepGemmFp8Linear_v1{K=2048,N=8}", 1)), False),   # an operand of another step
 ])
