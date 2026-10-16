@@ -137,7 +137,7 @@ theorem acc_decide {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : 
       act zk x ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst)
           ((List.range ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
         .decide s spec sts link c₁ mids f ∧
-      Runs H (decision zk s spec sts x link c₁ mids f) () ((Claims.run H P (V zk) x ω r).vLog.map Prod.fst) := by
+      Runs H (decision zk s x link c₁ mids f) () ((Claims.run H P (V zk) x ω r).vLog.map Prod.fst) := by
   have ha := run_acc_next H P (V zk) x ω r h
   have hl := run_acc_log H P (V zk) x ω r h
   generalize (List.range _).map (Claims.coinSeq r) = cs at ha hl
@@ -154,13 +154,21 @@ theorem acc_decide {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : 
     · simp only [next, hact, outOf_log]
       exact hp
 
-/-- **A decision within `L`**: the verdict within `L`, and the checks. -/
-theorem decision_runs {H : Claims.Msg → Claims.Msg} {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {x : Claims.Msg} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
-    {f : Final} {L : List Claims.Msg} (h : Runs H (decision zk s spec sts x link c₁ mids f) () L) :
-    Runs H (verdictM zk Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs) () L ∧
+/-- **A decision within `L`**, at SHA-512 on a statement that sets up at `(spec, sts)`: the setup over the oracle is the
+statement's, then the verdict within `L`, and the checks. -/
+theorem decision_runs {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {L : List Claims.Msg} (hs : s.setup = .ok (spec, sts)) (h : Runs sha512 (decision zk s x link c₁ mids f) () L) :
+    Runs sha512 (verdictM zk Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs) () L ∧
       checks zk s spec x link c₁ mids f = .ok () := by
   unfold decision at h
+  obtain ⟨⟨spec', sts'⟩, h0, h⟩ := Runs.bind h
+  have e : setupWith (Claims.hOf sha512) s.read = .ok (spec', sts') := by
+    rw [← (setupM_eval sha512 s.read).1]
+    exact h0.1
+  rw [hOf_sha512, setupWith_sha512, Ins.setup_read hs] at e
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj e)
+  unfold decisionAt at h
   obtain ⟨⟨⟩, h1, h2⟩ := Runs.bind h
   exact ⟨h1, Runs.lift h2⟩
 
@@ -185,7 +193,7 @@ theorem acc_within {zk : Bool} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Ms
       verdictM zk (hashesIn ((Claims.run sha512 P (V zk) x ω r).vLog.map Prod.fst)) spec (tabsOf sts) f.record
         f.proofs = .ok () := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hact, hrun⟩ := acc_decide h
-  obtain ⟨hv, hc⟩ := decision_runs hrun
+  obtain ⟨hv, hc⟩ := decision_runs (setupOf_some (act_decide hact)).2 hrun
   obtain ⟨rest, hhead⟩ := run_head sha512 P (V zk) x ω r h
   obtain ⟨rest', has, hlink⟩ := act_decide_link hact
   rw [hhead] at hlink
