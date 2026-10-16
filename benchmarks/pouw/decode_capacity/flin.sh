@@ -61,7 +61,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   done
   for c in ${FL_NCU_STEP:-}; do
     IFS=: read -r b l fw nc thr afw <<< "$c"
-    # fstep first runs layer 0's attention blocks with their filler warps, then its first linear with filler warps
+    # fstep first runs the attention blocks of layer 0 with their filler warps, then its first linear with filler warps
     ncu --clock-control none -k regex:"flin_k|fqk_k|fpv_k" --launch-count 3 \
       --metrics gpu__time_duration.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed \
       --csv "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$afw" 0 1 > "$O/ncu-fstep-$b-$l-$fw-$afw.csv" 2>&1
