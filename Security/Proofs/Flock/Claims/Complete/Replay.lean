@@ -6,6 +6,7 @@ import Proofs.Flock.Claims.Complete.Replay.Lincheck
 import Proofs.Flock.Claims.Complete.Replay.RingSwitch
 import Proofs.Flock.Claims.Complete.Replay.Trace
 import Proofs.Flock.Claims.Complete.Replay.Satisfies
+import Proofs.Flock.Claims.Complete.Replay.Ligerito
 import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
