@@ -73,6 +73,9 @@ static const char* run_cfg(const Cfg& c, int* st, long* mism) {
   const bool fp4 = c.in == CUDA_R_4F_E2M1;
   *mism = -1;
   *st = 0;
+  const bool i8 = c.in == CUDA_R_8I;
+  const bool f16 = c.in == CUDA_R_16F;
+  const bool bf16 = c.in == CUDA_R_16BF;
   std::vector<int> hA(size_t(M) * K, 0), hB(size_t(K) * N);
   for (int i = 0; i < M; ++i)
     for (int g = 0; g < K; g += 4) {
@@ -85,19 +88,32 @@ static const char* run_cfg(const Cfg& c, int* st, long* mism) {
     }
   for (size_t i = 0; i < size_t(K) * N; ++i) hB[i] = (mix64(0xABCDull ^ i) & 1) ? 1 : -1;
 
-  // Pack operands.
-  auto packed_bytes = [&](size_t elems) { return fp4 ? elems / 2 : elems; };
-  std::vector<uint8_t> pA(packed_bytes(size_t(M) * K)), pB(packed_bytes(size_t(K) * N));
-  if (fp4) {
-    for (size_t i = 0; i < size_t(M) * K / 2; ++i) pA[i] = e2m1_code(hA[2 * i]) | (e2m1_code(hA[2 * i + 1]) << 4);
-    for (size_t i = 0; i < size_t(K) * N / 2; ++i) pB[i] = e2m1_code(hB[2 * i]) | (e2m1_code(hB[2 * i + 1]) << 4);
-  } else {
-    for (size_t i = 0; i < size_t(M) * K; ++i) pA[i] = fp8_e4m3(hA[i]);
-    for (size_t i = 0; i < size_t(K) * N; ++i) pB[i] = fp8_e4m3(hB[i]);
-  }
+  // Pack operands per type.
+  size_t elemsz = fp4 ? 0 : (i8 ? 1 : 2);  // fp4: half a byte
+  auto bytes = [&](size_t elems) { return fp4 ? elems / 2 : elems * elemsz; };
+  std::vector<uint8_t> pA(bytes(size_t(M) * K)), pB(bytes(size_t(K) * N));
+  auto enc = [&](std::vector<uint8_t>& p, const std::vector<int>& h, size_t elems) {
+    if (fp4)
+      for (size_t i = 0; i < elems / 2; ++i) p[i] = e2m1_code(h[2 * i]) | (e2m1_code(h[2 * i + 1]) << 4);
+    else if (i8)
+      for (size_t i = 0; i < elems; ++i) p[i] = (uint8_t)(int8_t)h[i];
+    else if (f16)
+      for (size_t i = 0; i < elems; ++i) ((__half*)p.data())[i] = __float2half((float)h[i]);
+    else if (bf16)
+      for (size_t i = 0; i < elems; ++i) {
+        float f = (float)h[i];
+        uint32_t u;
+        memcpy(&u, &f, 4);
+        ((uint16_t*)p.data())[i] = (uint16_t)(u >> 16);
+      }
+    else
+      for (size_t i = 0; i < elems; ++i) p[i] = fp8_e4m3(h[i]);
+  };
+  enc(pA, hA, size_t(M) * K);
+  enc(pB, hB, size_t(K) * N);
   uint8_t *dA, *dB;
   void* dD;
-  size_t outsz = c.out == CUDA_R_32F ? 4 : 2;
+  size_t outsz = (c.out == CUDA_R_32F || c.out == CUDA_R_32I) ? 4 : 2;
   CK(cudaMalloc(&dA, pA.size()));
   CK(cudaMalloc(&dB, pB.size()));
   CK(cudaMalloc(&dD, size_t(M) * N * outsz));
@@ -172,8 +188,9 @@ static const char* run_cfg(const Cfg& c, int* st, long* mism) {
     for (int j = 0; j < N; ++j) {
       int64_t sref = 0;
       for (int kk = 0; kk < K; ++kk) sref += int64_t(hA[size_t(i) * K + kk]) * hB[size_t(kk) * N + j];
-      double got = c.out == CUDA_R_32F ? double(((float*)hD.data())[size_t(i) * N + j])
-                                       : double(__half2float(((__half*)hD.data())[size_t(i) * N + j]));
+      double got = c.out == CUDA_R_32F  ? double(((float*)hD.data())[size_t(i) * N + j])
+                   : c.out == CUDA_R_32I ? double(((int32_t*)hD.data())[size_t(i) * N + j])
+                                         : double(__half2float(((__half*)hD.data())[size_t(i) * N + j]));
       if (double(sref) != got) ++bad;
     }
   *mism = bad;
@@ -203,11 +220,19 @@ int main(int argc, char** argv) {
   };
   struct Case { const char* tag; Cfg c; };
   std::vector<Case> cases;
-  // FP8 e4m3 sanity (no scale, FP32 out), both orders.
+  // Controls that are known to work on Blackwell: int8 and fp16/bf16 2:4-sparse.  If these pass with mismatches==0 the API
+  // flow is correct, so an FP4 failure is a genuine sm_120 library limitation.
+  cases.push_back({"int8", {CUDA_R_8I, CUDA_R_32I, CUSPARSE_COMPUTE_32I, CUSPARSE_ORDER_ROW,
+                            CUSPARSELT_MATMUL_SCALE_NONE, false, n}});
+  cases.push_back({"fp16", {CUDA_R_16F, CUDA_R_32F, CUSPARSE_COMPUTE_32F, CUSPARSE_ORDER_ROW,
+                            CUSPARSELT_MATMUL_SCALE_NONE, false, n}});
+  cases.push_back({"bf16", {CUDA_R_16BF, CUDA_R_32F, CUSPARSE_COMPUTE_32F, CUSPARSE_ORDER_ROW,
+                            CUSPARSELT_MATMUL_SCALE_NONE, false, n}});
+  // FP8 e4m3: no-scale and with a VEC32 scale.
   cases.push_back({"fp8", {CUDA_R_8F_E4M3, CUDA_R_32F, CUSPARSE_COMPUTE_32F, CUSPARSE_ORDER_ROW,
                            CUSPARSELT_MATMUL_SCALE_NONE, false, n}});
-  cases.push_back({"fp8_col", {CUDA_R_8F_E4M3, CUDA_R_32F, CUSPARSE_COMPUTE_32F, CUSPARSE_ORDER_COL,
-                               CUSPARSELT_MATMUL_SCALE_NONE, false, n}});
+  cases.push_back({"fp8_sc", {CUDA_R_8F_E4M3, CUDA_R_32F, CUSPARSE_COMPUTE_32F, CUSPARSE_ORDER_ROW,
+                              CUSPARSELT_MATMUL_MATRIX_SCALE_VEC32_UE4M3, true, n}});
   // FP4 e2m1 sweep.
   for (cusparseOrder_t ord : {CUSPARSE_ORDER_ROW, CUSPARSE_ORDER_COL})
     for (cudaDataType out : {CUDA_R_32F, CUDA_R_16F})
@@ -220,11 +245,16 @@ int main(int argc, char** argv) {
     int st = 0;
     long mism = -2;
     const char* stage = run_cfg(cs.c, &st, &mism);
+    const char* inn = cs.c.in == CUDA_R_4F_E2M1  ? "e2m1"
+                      : cs.c.in == CUDA_R_8F_E4M3 ? "e4m3"
+                      : cs.c.in == CUDA_R_8I      ? "i8"
+                      : cs.c.in == CUDA_R_16F     ? "f16"
+                                                  : "bf16";
+    const char* outn = cs.c.out == CUDA_R_32F ? "f32" : cs.c.out == CUDA_R_32I ? "i32" : "f16";
     printf("{\"tag\":\"%s\",\"in\":\"%s\",\"order\":\"%s\",\"out\":\"%s\",\"scale\":\"%s\",\"stage\":\"%s\","
            "\"status\":%d,\"name\":\"%s\",\"mismatches\":%ld}\n",
-           cs.tag, cs.c.in == CUDA_R_4F_E2M1 ? "e2m1" : "e4m3", cs.c.order == CUSPARSE_ORDER_ROW ? "ROW" : "COL",
-           cs.c.out == CUDA_R_32F ? "f32" : "f16", SC(cs.c.scale), stage, st, cusparseLtGetErrorName((cusparseStatus_t)st),
-           mism);
+           cs.tag, inn, cs.c.order == CUSPARSE_ORDER_ROW ? "ROW" : "COL", outn, SC(cs.c.scale), stage, st,
+           cusparseLtGetErrorName((cusparseStatus_t)st), mism);
     fflush(stdout);
   }
   cusparseLtDestroy(&H);
