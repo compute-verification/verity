@@ -13,7 +13,8 @@
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
   "Proofs.Pous.Targets": "open targets: every pinned statement as a sorry stub",
   "Proofs.Pous.CheckAxioms": "the headline #print axioms list (`lake env lean CheckAxioms.lean`)",
-  "Proofs.NetworkCertifier.CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)"
+  "Proofs.NetworkCertifier.CheckAxioms": "the #print axioms list (`lake env lean CheckAxioms.lean`)",
+  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (art:5542740a), run by hand (`lake env lean --run`): a probe, not a proof"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
@@ -183,7 +184,7 @@
     "ack": []
    },
    "hm96-hiding": {
-    "about": "Assumptions.Hm96Hiding (zero knowledge's T1, hash-derived-key): (M·y, H(sp‖y)) is δ₁-close to (U, H(sp‖y)), the leftover hash lemma at the pinned key",
+    "about": "Claims.Hm96Hiding (zero knowledge's T1, hash-derived-key): (M·y, H(sp‖y)) is δ₁-close to (U, H(sp‖y)), the leftover hash lemma at the pinned key",
     "mentions": ["PMF.tvDist", "Matrix.mulVec"],
     "ack": []
    },

@@ -75,7 +75,7 @@ theorem selfCheckSilent_exe
 simulator's randomness, the honest output and the simulator's are within `2·|LeafPos z|·δ`, at any hm96 hiding bound
 `δ`. -/
 theorem table_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (w w0 : Witness C.S.m) (hv : C.Valid w)
     (hreg : ∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg) (c : CoinsZK C.Rest) {z : ZkView.Sizes} (hz : C.z = z)
     {Vw : Type} (enc : ∀ c' : CoinsZK C.Rest, OutAt C c' → Vw) {NR NS : ℕ} (eR : Fin NR ≃ RandAt C c)
@@ -116,7 +116,7 @@ theorem ns_pos (j : Fin V.S) (pc : Pub) (l : Fin V.n₂ → ZkView.Bits × ByteA
 /-- **One session at the honest context and `R₂`'s salts** (`table_close` at its table and coins, the honest prover
 `outExe` by the abort interface), at any hm96 hiding bound `δ`. -/
 theorem session_close (hOK : V.TablesOK)
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     {prover : TableProver} (hP : SelfCheckSilent prover) (x : Ctx) (hx : V.Honest x)
     (y₂ : Fin V.n₂ → ZkView.Salt) (j : Fin V.S) (E : V.Vw j → Prop) :
     prCoin (fun ρ : Fin (V.NR j) => E (V.realAt prover x y₂ j ρ))
@@ -138,7 +138,7 @@ simulator's are within `errAt δ`, at any hm96 hiding bound `δ`. At each of `R�
 simulators one by one (`ZK.prCoin_pi_close`, `session_close`); then nothing reads `R₂`'s salts but its commit strings,
 which go to ideal ones (`ZK.ideal_leaves_swap`). -/
 theorem close (hOK : V.TablesOK)
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ) {prover : TableProver}
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ) {prover : TableProver}
     (hP : SelfCheckSilent prover) (x : Ctx) (hx : V.Honest x) (E : V.View → Prop) :
     prCoin (fun q : V.Ωo => E (V.view prover x q))
       ≤ prCoin (fun s : V.Ωs => E (V.sim (V.pubOf x) s)) + V.errAt δ := by
@@ -221,7 +221,7 @@ theorem vstar_outer_zk {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows 
       pubS o (Flock.Guarantees.regLeaves rows pub P r) a (Flock.Guarantees.firewallCommits (msgs P w r a p) y))
     (hOK : V.TablesOK) {prover : TableProver} (hP : SelfCheckSilent prover)
     (hH : ∀ o P w, honest o P w → ∀ r a p y, V.Honest (hctxAt msgs P w r a p y))
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ) :
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ) :
     ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V.View → Prop),
       prCoin (fun q : V.Ωo => E (V.view prover
           (P, w, r, a, Flock.Guarantees.firewallCommits (msgs P w r a p) y, p, y) q))

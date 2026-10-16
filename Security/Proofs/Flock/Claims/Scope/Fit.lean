@@ -84,9 +84,9 @@ theorem tables_fit {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (h
 
 /-- **`RelS` at a statement the verifier parses**: every table's model statement (`Layout.model` at `regionsOf`) is
 satisfied by its share of the hidden values, `2^m` bits per table. -/
-theorem relS_layout (H : Claims.Msg → Claims.Msg) {p : Parsed} (hp : Parses p) (ht : p.tags.typed = false)
-    (hpi : p.publicInputs = none) (w : Claims.Flock.Wit) :
-    Claims.Flock.RelS H (toReadable relation p) w ↔
+theorem relS_layout {p : Parsed} (hp : Parses p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none)
+    (w : Claims.Flock.Wit) :
+    Claims.Flock.RelS (toReadable relation p) w ↔
       ∀ c (hc : c < p.sts.size), ∃ L : FlockSoundness.Layout p.sts[c],
         (L.model (Refine.regionsOf p.sts[c])).Satisfies (zOf (2 ^ (toReadable relation p).m) w c p.sts[c].m) := by
   have hs := tablesOf_of_parses hp

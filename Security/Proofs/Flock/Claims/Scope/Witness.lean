@@ -3,17 +3,17 @@ import Proofs.Flock.Claims.Scope.Fit
 /-!
 # A readable witness from the tables' model witnesses
 
-`witOf T J z`: the hidden values of `J` tables of `T` bits each, table `c`'s bit `a` from `z c a`, and no salts.
-`zOf_witOf`: each table's share of it is its own. `relS_witOf`: at a statement the verifier parses (untyped, without
-public input ports), when each table's `z c` satisfies its `Layout.model`, `witOf` satisfies `RelS` of the readable
-statement: what an extractor holding the tables' decoded witnesses returns.
+`witOf T J z`: the hidden values of `J` tables of `T` bits each, table `c`'s bit `a` from `z c a`. `zOf_witOf`: each
+table's share of it is its own. `relS_witOf`: at a statement the verifier parses (untyped, without public input ports),
+when each table's `z c` satisfies its `Layout.model`, `witOf` satisfies `RelS` of the readable statement: what an
+extractor holding the tables' decoded witnesses returns.
 -/
 
 namespace Flock.Readable
 
-/-- The hidden values of `J` tables of `T` bits each, table `c`'s bit `a` from `z c a`; no salts. -/
+/-- The hidden values of `J` tables of `T` bits each, table `c`'s bit `a` from `z c a`. -/
 def witOf (T J : ℕ) (z : ℕ → ℕ → ZMod 2) : Claims.Flock.Wit :=
-  ⟨(List.range (J * T)).map fun k => ofZ (z (k / T) (k % T)), []⟩
+  ⟨(List.range (J * T)).map fun k => ofZ (z (k / T) (k % T))⟩
 
 theorem zOf_witOf {T J : ℕ} (z : ℕ → ℕ → ZMod 2) {c m : ℕ} (hc : c < J) (hm : 2 ^ m ≤ T) (a : Fin (2 ^ m)) :
     zOf T (witOf T J z) c m a = z c a.val := by
@@ -30,12 +30,12 @@ theorem zOf_witOf {T J : ℕ} (z : ℕ → ℕ → ZMod 2) {c m : ℕ} (hc : c <
 
 /-- **The tables' model witnesses as a readable witness**: when each table's `z c` satisfies its `Layout.model` at
 `regionsOf`, `witOf` satisfies `RelS` of the readable statement. -/
-theorem relS_witOf (H : Claims.Msg → Claims.Msg) {p : Parsed} (hp : Parses p) (ht : p.tags.typed = false)
-    (hpi : p.publicInputs = none) (z : ℕ → ℕ → ZMod 2)
+theorem relS_witOf {p : Parsed} (hp : Parses p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none)
+    (z : ℕ → ℕ → ZMod 2)
     (hz : ∀ c (hc : c < p.sts.size), ∃ L : FlockSoundness.Layout p.sts[c],
       (L.model (FlockSoundness.Refine.regionsOf p.sts[c])).Satisfies fun a => z c a.val) :
-    Claims.Flock.RelS H (toReadable relation p) (witOf (2 ^ (toReadable relation p).m) p.sts.size z) := by
-  rw [relS_layout H hp ht hpi]
+    Claims.Flock.RelS (toReadable relation p) (witOf (2 ^ (toReadable relation p).m) p.sts.size z) := by
+  rw [relS_layout hp ht hpi]
   intro c hc
   obtain ⟨L, hL⟩ := hz c hc
   have h0 : 0 < p.sts.size := by omega

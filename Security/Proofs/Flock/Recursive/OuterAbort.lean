@@ -119,7 +119,7 @@ theorem coin_close_at (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flo
     have hT := leafT_hm96 C c
     have hS : (C.T c).tab.Admits (sentAt C c) :=
       ZK.Session.sent_admits (fun _ : Fin 1 => (C.T c).tab) (fun _ => (C.T c).rep) 0
-    have h1 : Assumptions.Hm96Hiding (C.T c).hm96.My (C.T c).hm96.cs ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
+    have h1 : Claims.Hm96Hiding (C.T c).hm96.My (C.T c).hm96.cs ((2 : ℝ≥0∞) ^ (-193 : ℤ)) := by
       rw [ZkView.Coined.hm96At_My (C.T c) ZkView.My rfl, ZkView.Coined.hm96At_cs (C.T c) ZkView.My rfl]
       exact hKey
     have h := ZK.Table.table_abort_hm96 (C.T c).tab (C.T c).hm96 _ hT h1 (sentAt C c) hS w hreg w0

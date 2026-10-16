@@ -581,19 +581,6 @@ class SingleRow(Row):
                                   "dirty": False if self.env.environ.get("RESEARCH_SOURCE_SHA") else None}}, f)
         return d
 
-    def serving_rows_request(self, partition: str) -> str:
-        """The Commit's serving-rows request (`pipeline.serving_rows`): its directory inside the research run dir when there is one,
-        so the run's custody preserves it, the verifier's partition file, and the run id and source the registration names (its
-        domains bind the run root)."""
-        rd = self.env.research_run_dir
-        d = os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows"
-        os.makedirs(d, exist_ok=True)
-        req = os.path.join(d, "request.json")
-        with open(req, "w") as f:
-            json.dump({"dir": d, "partition": partition, "run": self.env.environ.get("RESEARCH_RUN_ID") or self.row,
-                       "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}}, f)
-        return req
-
     def program_digest(self) -> str:
         """The Program digest the Commit is keyed by: the one named, else the Build's of record ("" when unreadable)."""
         try:
