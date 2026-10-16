@@ -268,7 +268,7 @@ def main() -> int:
     ap.add_argument("--p", type=float, default=0.75)
     ap.add_argument("--k", type=int, default=4096, help="the layer's k (the statement's KS = k / 32), held to the prover's")
     ap.add_argument("--coins", choices=("one", "per-stage"), default="one")
-    ap.add_argument("--served", choices=("pm1", "dither"), default="pm1", help="held to the prover's (prover.py --served)")
+    ap.add_argument("--served", choices=("pm1", "dither"), default="dither", help="held to the prover's (prover.py --served)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

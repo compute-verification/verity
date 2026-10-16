@@ -15,9 +15,9 @@ round protocol (challenger.py) over the loopback link:
            (derive.tile_noised, the prover's own check of its GPU), the thread's statement staged (statement.Stager), the
            public file and the paths out, then `flock-circuit prove --zk` against the challenger's server
 
---served dither is decision 29's served side: the kernel's B is the layer's activations X = floor(x / s) + b (b the coin
-bit, slice.cu built -DLP_DITHER) and its A the weights, peeled (kernel shape n x m x k); --served pm1 (the default) has the
-activations on A, peeled, and the weights on B with F ±1.
+--served dither (the default) is decision 29's served side: the kernel's B is the layer's activations X = floor(x / s) + b
+(b the coin bit, slice.cu built -DLP_DITHER) and its A the weights, peeled (kernel shape n x m x k); --served pm1 (round 1's)
+has the activations on A, peeled, and the weights on B with F ±1.
 
 --attack cancel is RT2's cancellation (decision 36's Proposition 1.2) under the noise the prover expects, call_key(sigma_0, c,
 1): with --served pm1 stage 2's A is committed as -U_2 W^T (A_ik = -U_{i, k mod 32}), so A' = A + U_2 W^T is zero; under the
@@ -286,7 +286,7 @@ def main() -> int:
     ap.add_argument("--stages", type=int, choices=(1, 2), default=1)
     ap.add_argument("--coins", choices=("one", "per-stage"), default="one")
     ap.add_argument("--attack", choices=("none", "cancel"), default="none")
-    ap.add_argument("--served", choices=("pm1", "dither"), default="pm1",
+    ap.add_argument("--served", choices=("pm1", "dither"), default="dither",
                     help="the served noise: F ±1 on the weights, or decision 29's dither b on the activations (slice.cu "
                          "-DLP_DITHER, the weights peeled)")
     ap.add_argument("--workers", type=int, default=32)

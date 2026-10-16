@@ -6,9 +6,9 @@
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=E2E \
 #     -- bash benchmarks/e2e_slice/gpu.sh
-# STAGE=build|gate|all (default all; gate: the gates only); GATE_KINDS (default "duo duos"); GATE_SERVED (default "pm1";
-# "pm1 dither" also gates a -DLP_DITHER build with the activations served, o_proj's kernel 4096 x 8192 x 4096); REPS
-# (default 7); LP_ARMS.
+# STAGE=build|gate|all (default all; gate: the gates only); GATE_KINDS (default "duo duos"); GATE_SERVED (default
+# "pm1 dither": pm1 the weights served with F ±1, dither a -DLP_DITHER build with the activations served, o_proj's kernel
+# 4096 x 8192 x 4096); REPS (default 7); LP_ARMS.
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -16,7 +16,7 @@ export D=benchmarks/e2e_slice
 export BIN=${E2E_BIN:-/tmp/e2e-slice-$$}; mkdir -p "$BIN"
 export PY=${E2E_PYTHON:-python3}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
-export GATE_SERVED=${GATE_SERVED:-pm1}
+export GATE_SERVED=${GATE_SERVED:-pm1 dither}
 for sv in $GATE_SERVED; do
   DF=""; [ "$sv" = dither ] && DF=-DLP_DITHER
   # shellcheck disable=SC2086
