@@ -131,11 +131,32 @@ __device__ __forceinline__ int kf_bar_or(int id, int v) {
 // poll that reads the flag up. Records (slot, gid, i, w) hold warp w's receipt of tile i, the XOR over its lanes and chains
 // of pf_fold(dseed(c0, c1, tile), pos, y) at the state it stopped in, and q, the (fragment group, B fragment) pairs it ran
 // (4 MMAs each; KF_PAIRS_J S / 4 when whole). cnt[slot, gid] is the tiles the group started; every one but the last is
-// whole. total[0] sums the pairs every warp ran, total[1] the pairs of whole tiles alone.
+// whole. total is 2 u64 a warp (gw = gid·PF_W + w): total[2 gw] the pairs the warp ran, total[2 gw + 1] its group's
+// whole-tile pairs once (w == 0, else 0). The host sums them (pf_total_sum). A launch overwrites a warp's slots (a
+// store-only put can't accumulate), so the count is one launch's, not the sum over time_work's repeats.
 //
-// The body is tp_dfill_k, SCORER v4's filler path: a `__noinline__` device function whose name holds dfill_k, so the scorer
-// reads it as the proved fill (its SASS is only IMMA.16832.S8.S8 with C = RZ). kfill_k is its thin wrapper, and the deferred
-// pass's combined kernel (tp_dpass_k) tail-calls it once the sub-round's deferred work is drained or the flag is up.
+// The body is tp_dfill_k, SCORER's filler path: a `__noinline__` device function whose name holds tp_dfill_k, so the
+// scorer reads it as the proved fill (its SASS is only IMMA.16832.S8.S8 with C = RZ). kfill_k is its thin wrapper. The
+// filler's four global writes are store-only `tp_dfill_k_put*` functions (their names hold tp_dfill_k too, so the scorer
+// reads each as the filler and holds it to stores of its arguments alone, SCORER v5 `filler_paths`/`_put_bad`): the
+// receipt and pair count a tile, the per-warp counters, and the per-group tile count. Because a put holds no reduction,
+// the two per-warp counters are plain stores summed on the host, not atomics.
+
+// receipt and pairs for tile i (lane 0): rec[ix] = h, qrec[ix] = q, its arguments
+__device__ __noinline__ void tp_dfill_k_put(unsigned long long* __restrict__ rec, int* __restrict__ qrec, size_t ix,
+                                            unsigned long long h, int q) {
+  rec[ix] = h;
+  qrec[ix] = q;
+}
+// the warp's per-launch counters as plain stores (lane 0): total[j] its pairs, total[j + 1] its group's whole-tile pairs
+__device__ __noinline__ void tp_dfill_k_put_total(unsigned long long* __restrict__ total, size_t j,
+                                                  unsigned long long mine, unsigned long long whole) {
+  total[j] = mine;
+  total[j + 1] = whole;
+}
+// the group's tiles started (group leader): cnt[i] = started, its argument
+__device__ __noinline__ void tp_dfill_k_put_cnt(int* __restrict__ cnt, size_t i, int started) { cnt[i] = started; }
+
 template <int NC>
 __device__ __noinline__ void tp_dfill_k(uint64_t c0, uint64_t c1, const unsigned long long* __restrict__ epoch, int slot,
                                         int nslots, int tiles, int maxcap, int S, int poll, const int* flag,
@@ -273,19 +294,17 @@ __device__ __noinline__ void tp_dfill_k(uint64_t c0, uint64_t c1, const unsigned
       h ^= pf_fold(K, (uint32_t)((w * 32 + lane) * 4 + c), NC == 2 ? (uint64_t)z[c] << 32 | y[c] : (uint64_t)y[c]);
 #pragma unroll
     for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(~0u, h, o);
-    if (lane == 0) {
-      rec[(rbase + i) * PF_W + w] = h;
-      qrec[(rbase + i) * PF_W + w] = q;
-    }
+    if (lane == 0) tp_dfill_k_put(rec, qrec, (rbase + i) * PF_W + w, h, q);
     mine += q;
     qlast = q;
   }
   const int part = kf_bar_or(bar, started > 0 && qlast < full);
-  if (lane == 0) atomicAdd(total, mine);
-  if (threadIdx.x % (32 * PF_W) == 0) {
-    cnt[(size_t)slot * ng + gid] = started;
-    atomicAdd(total + 1, (unsigned long long)(started - part) * PF_W * full);
-  }
+  // the two counters as per-warp plain stores (a store-only put holds no atomic): this warp's pairs, and its group's
+  // whole-tile pairs once (w == 0). The host sums over warps (pf_total_sum)
+  if (lane == 0)
+    tp_dfill_k_put_total(total, 2 * ((size_t)gid * PF_W + w), mine,
+                         w == 0 ? (unsigned long long)(started - part) * PF_W * full : 0ull);
+  if (threadIdx.x % (32 * PF_W) == 0) tp_dfill_k_put_cnt(cnt, (size_t)slot * ng + gid, started);
 }
 
 template <int NC>
@@ -426,19 +445,18 @@ __device__ __noinline__ void tp_defer_run(uint64_t c0, uint64_t c1, int Sd, int 
   if (lane == 0) atomicAdd(dtotal + phase, mine);
 }
 
-// the combined kernel beside a collective: the deferred pass first (its quota, stopping at the flag), then pfill-k fills the
-// gap the deferred work left (SCORER v4's tp_dfill_k). Both read the same flag, so once it is up neither does more.
+// beside a collective: the deferred pass alone (its step quota, bounded by dmaxc so it yields the SMs, stopping at the
+// flag). The filler is launched behind it (dpass_launch), not tail-called here, so no deferred MMA or store is on the
+// filler warps' path and the scorer's `filler_paths` gate passes (SCORER v5, the put split). Both read the same flag.
 template <int NC>
 __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
-    tp_dpass_k(uint64_t c0, uint64_t c1, int Sd, int poll, int dmaxc, const int* flag, const int8_t* dA, const int8_t* dB,
+    tp_dpass_k(uint64_t c0, uint64_t c1, int Sd, int dmaxc, const int* flag, const int8_t* dA, const int8_t* dB,
                const int8_t* dU, const int8_t* dBias, int dwrap, int* dctr, int dcap, unsigned long long* drec, int* dqrec,
-               unsigned long long* dtotal, const unsigned long long* epoch, int slot, int nslots, int tiles, int maxcap,
-               int Sf, unsigned long long* frec, int* fqrec, int* fcnt, unsigned long long* ftotal) {
+               unsigned long long* dtotal) {
   // the deferred pass polls the flag between chunks only (poll 0): a chunk computes a real noised product, so it is atomic —
   // none is lost to a mid-chunk cut, and the leftover goes to the drain. dmaxc bounds this launch so it yields the SMs; the
-  // filler then cuts mid-tile (poll) as before.
+  // filler (kfill_k, launched next) then cuts mid-tile as before.
   tp_defer_run<NC>(c0, c1, Sd, 0, flag, dA, dB, dU, dBias, dwrap, dctr, dcap, 0, dmaxc, drec, dqrec, dtotal);
-  tp_dfill_k<NC>(c0, c1, epoch, slot, nslots, tiles, maxcap, Sf, poll, flag, frec, fqrec, fcnt, ftotal);
 }
 
 // the drain: the deferred quota on every SM with no stop and no filler (the end-of-step overflow in the defer arm, or the
@@ -639,15 +657,30 @@ static void kfill_launch(const PFill& f, int slot, uint64_t c0, uint64_t c1, cud
                                                         f.flags + slot, f.rec, f.qrec, f.cnt, f.total);
 }
 
+// the filler's per-warp counter buffer (f.total): 2 u64 a warp, gw = (block·KF_G + grp)·PF_W + w. A store-only put can't
+// atomic-accumulate, so each warp overwrites its two slots a launch and the host sums them (over warps, one launch's work)
+static size_t pf_total_slots(const PFill& f) { return 2 * (size_t)f.grid * KF_G * PF_W; }
+static size_t pf_total_bytes(const PFill& f) { return pf_total_slots(f) * sizeof(unsigned long long); }
+static void pf_total_sum(const PFill& f, unsigned long long tot[2]) {
+  const size_t n = pf_total_slots(f);
+  std::vector<unsigned long long> buf(n);
+  CK(cudaMemcpy(buf.data(), f.total, n * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+  tot[0] = tot[1] = 0;
+  for (size_t i = 0; i < n; i += 2) { tot[0] += buf[i]; tot[1] += buf[i + 1]; }
+}
+
 static uint64_t g_tc0 = 0x0123456789abcdefull, g_tc1 = 0xfedcba9876543210ull;  // the round's coins (DFILL_COINS)
 
-// the combined kernel beside a collective: the deferred pass (its step quota, R.dp.dcap, stopping at the flag) then pfill-k
+// beside a collective: the deferred pass (its step quota, R.dp.dcap, bounded by dmaxc, stopping at the flag), then the
+// filler (kfill_k) fills the gap it left — two launches on `st`, so the filler warps' path holds no deferred MMA or store
+// (SCORER v5 `filler_paths`); both read f.flags + slot
 static void dpass_launch(Rank& R, int slot, cudaStream_t st) {
   const DPass& dp = R.dp;
   const PFill& f = R.pf;
   tp_dpass_k<TP_NC><<<dp.grid, 32 * PF_W * KF_G, KF_SMEM, st>>>(
-      g_tc0, g_tc1, dp.Sd, f.poll, dp.dmaxc, f.flags + slot, dp.dA, dp.dB, dp.dU, dp.dBias, dp.dwrap, dp.dctr, dp.dcap,
-      dp.drec, dp.dqrec, dp.dtotal, f.epoch, slot, f.nslots, f.cap(slot), f.maxcap(), f.S, f.rec, f.qrec, f.cnt, f.total);
+      g_tc0, g_tc1, dp.Sd, dp.dmaxc, f.flags + slot, dp.dA, dp.dB, dp.dU, dp.dBias, dp.dwrap, dp.dctr, dp.dcap,
+      dp.drec, dp.dqrec, dp.dtotal);
+  kfill_launch(f, slot, g_tc0, g_tc1, st);
 }
 
 // a collective at slot `slot`: side work forks beside it (1 the filler alone, 2 the deferred pass then the filler); `fn`
@@ -873,7 +906,7 @@ static int pf_gate(Rank& R) {
     CK(cudaMemset(f.rec + f.rix(slot, 0, 0, 0), 0xA5, nr * 8));
     CK(cudaMemset(f.qrec + f.rix(slot, 0, 0, 0), 0xA5, nr * 4));
     CK(cudaMemset(f.cnt + (size_t)slot * f.groups(), 0xA5, f.groups() * 4));
-    CK(cudaMemset(f.total, 0, 16));
+    CK(cudaMemset(f.total, 0, pf_total_bytes(f)));
     CK(cudaMemset(f.flags, 0, f.nslots * sizeof(int)));
     if (kd == "up") CK(cudaMemset(f.flags + slot, 1, 1));
     CK(cudaDeviceSynchronize());
@@ -883,7 +916,7 @@ static int pf_gate(Rank& R) {
     CK(cudaGetLastError());
     const KRecs k = kf_fetch(f, slot, 1);
     unsigned long long tot[2];
-    CK(cudaMemcpy(tot, f.total, 16, cudaMemcpyDeviceToHost));
+    pf_total_sum(f, tot);
     long bad = 0, partial = 0, cnt_bad = 0, untouched_bad = 0;
     KCheck ck;
     unsigned long long pairs = 0, whole = 0;
@@ -1031,7 +1064,7 @@ static int run_point(Rank& R, int B, int L, int reps) {
     if (sidework == 1 && !R.pf.on) continue;
     if ((defer || dalone) && !R.dp.on) continue;
     barrier(R);
-    if (sidework) CK(cudaMemset(R.pf.total, 0, 16));
+    if (sidework) CK(cudaMemset(R.pf.total, 0, pf_total_bytes(R.pf)));
     if (defer || dalone) CK(cudaMemset(R.dp.dtotal, 0, 16));  // dtotal accumulates over the timed steps (dprolog resets only dctr)
     const std::vector<Rep> v = dalone ? time_work(R.d, [&] { enqueue_dalone(R); }, reps)
                                       : time_work(R.d, [&] { enqueue_step(R, p, lm, kind, sidework, B, L, &wrapped); }, reps);
@@ -1039,8 +1072,8 @@ static int run_point(Rank& R, int B, int L, int reps) {
     char extra[1024] = "";
     if (sidework == 1) {
       unsigned long long tot[2], pairs_last;
-      CK(cudaMemcpy(tot, R.pf.total, 16, cudaMemcpyDeviceToHost));
-      mmas_rep = 4.0 * tot[0] / (reps + 2);  // time_work's 2 warm-ups ran it too
+      pf_total_sum(R.pf, tot);  // one launch's pairs (per-warp overwrite), not the sum over time_work's repeats
+      mmas_rep = 4.0 * tot[0];
       long shape_bad, cut_warps;
       KCheck ck;
       pf_check(R, 8, &shape_bad, &cut_warps, &ck, &pairs_last);
@@ -1049,7 +1082,7 @@ static int run_point(Rank& R, int B, int L, int reps) {
                "\"warps_checked\": %ld, \"warps_bad\": %ld, \"warps_control_equal\": %ld, \"shape_bad\": %ld, "
                "\"cut_warps\": %ld, \"pf\": [%d, %d, %d, %d, %d, %d, %d], "
                "\"fold_nc\": %d, \"fold_s\": %d, \"fold_xin\": %d",
-               4.0 * tot[1] / (reps + 2), 4.0 * pairs_last, ck.whole + ck.warps,
+               4.0 * tot[1], 4.0 * pairs_last, ck.whole + ck.warps,
                ck.whole_bad + ck.warps_bad + ck.whole_ctl + ck.warps_ctl, ck.whole, ck.whole_bad, ck.whole_ctl, ck.warps,
                ck.warps_bad, ck.warps_ctl, shape_bad, cut_warps, PF_W * KF_G, R.pf.NC, R.pf.S, R.pf.tiles, R.pf.tiles_g,
                R.pf.poll, R.pf.grid, R.pf.NC, R.pf.S, TP_XIN);
@@ -1060,8 +1093,8 @@ static int run_point(Rank& R, int B, int L, int reps) {
       const double gap_pairs = (double)dtot[0] / (reps + 2), drain_pairs = (double)dtot[1] / (reps + 2);
       if (defer) {  // the filler fill left after the deferred quota took its share of the gaps
         unsigned long long ft[2];
-        CK(cudaMemcpy(ft, R.pf.total, 16, cudaMemcpyDeviceToHost));
-        mmas_rep = 4.0 * ft[0] / (reps + 2);
+        pf_total_sum(R.pf, ft);  // one launch's pairs (per-warp overwrite)
+        mmas_rep = 4.0 * ft[0];
       }
       const DCheck dc = dp_sample(R, 8);
       snprintf(extra, sizeof extra, ", \"defer_gap_pairs_rep\": %.1f, \"defer_drain_pairs_rep\": %.1f, "
@@ -1097,8 +1130,8 @@ static int pf_setup(PFill& f) {
   CK(cudaMemset(f.flags, 0, f.nslots * sizeof(int)));
   CK(cudaMalloc(&f.epoch, 8));
   CK(cudaMemset(f.epoch, 0, 8));
-  CK(cudaMalloc(&f.total, 16));
-  CK(cudaMemset(f.total, 0, 16));
+  CK(cudaMalloc(&f.total, pf_total_bytes(f)));
+  CK(cudaMemset(f.total, 0, pf_total_bytes(f)));
   const size_t nr = (size_t)f.nslots * f.stride() * PF_W;
   CK(cudaMalloc(&f.rec, nr * 8));
   CK(cudaMalloc(&f.qrec, nr * 4));
@@ -1220,7 +1253,7 @@ static int alone_main(int argc, char** argv) {
   const std::vector<Rep> v = time_work(R.d, [&] { kfill_launch(f, 0, g_tc0, g_tc1, R.d.st); }, reps);
   unsigned long long ep, tot[2];
   CK(cudaMemcpy(&ep, f.epoch, sizeof ep, cudaMemcpyDeviceToHost));
-  CK(cudaMemcpy(tot, f.total, 16, cudaMemcpyDeviceToHost));
+  pf_total_sum(f, tot);
   const KRecs k = kf_fetch(f, 0, 1);
   long partial;
   unsigned long long pairs, whole;
@@ -1233,7 +1266,7 @@ static int alone_main(int argc, char** argv) {
   const double macs = (double)f.groups() * f.tiles * PF_W * f.full() * 4 * 4096.0;
   const double peak = 1024.0 * R.d.sms * m.mhz * 1e6;
   const bool ok = ck.clean() && ck.whole > 0 && !shape_bad && !partial && pairs == (unsigned long long)f.groups() * f.tiles * PF_W * f.full() &&
-                  tot[0] == pairs * (reps + 2);
+                  tot[0] == pairs;  // one launch's pairs (per-warp overwrite), not the sum over the repeats
   printf("{\"mode\": \"alone\", \"grid\": %d, \"groups\": %lld, \"S\": %d, \"tiles\": %d, \"ms\": %.4f, \"ms_min\": %.4f, "
          "\"ms_max\": %.4f, \"mhz\": %.1f, \"watt\": %.1f, \"macs\": %.6e, \"share_gpu\": %.4f, \"share_fill_sms\": %.4f, "
          "\"whole_checked\": %ld, \"whole_bad\": %ld, \"whole_control_equal\": %ld, \"shape_bad\": %ld, \"ok\": %s}\n",
