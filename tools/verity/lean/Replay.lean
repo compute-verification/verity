@@ -6,7 +6,7 @@ import Lean
 `lake env lean --run Replay.lean OUT M₁ M₂ … [--reused R₁ R₂ …]` reads every constant the modules `Mᵢ` and `Rⱼ` declare
 from their `.olean` files, imports once the modules they import from outside that set, and sends each constant of the
 `Mᵢ` to the kernel (`Kernel.Environment.replay`). A module `Rⱼ` passed this replay before with the same `.olean` files,
-its imports' included, on the same toolchain (`audit.py`'s replay cache): its constants go into the environment as an
+its imports' included, on the same toolchain (`check.py`'s replay cache): its constants go into the environment as an
 import adds them, unchecked, and are walked for axioms with the rest. A declaration that never passed the kernel (`debug.skipKernelTC`, `addDeclWithoutChecking`,
 a tampered `.olean`) is rejected here, which `#print axioms` cannot see.
 
@@ -21,7 +21,7 @@ are in every one of those environments, as an import puts them, and the kernel r
 mentions one.
 
 It then writes to `OUT` the axioms those constants use, found by walking their bodies (the ones the kernel accepted, not
-the axiom sets each `.olean` recorded when it was built), so `audit.py` can compare the two. Exit 0 when every constant is
+the axiom sets each `.olean` recorded when it was built), so `check.py` can compare the two. Exit 0 when every constant is
 accepted, 1 when the kernel rejects one.
 -/
 
