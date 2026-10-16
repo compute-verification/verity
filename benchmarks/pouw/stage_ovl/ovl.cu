@@ -29,10 +29,13 @@
 //   hprio     prio with the commitments at the highest priority
 //   hlo       the commitments at the lowest priority, the GEMMs at the highest
 //   rrW       hhi with the GEMMs in one static order (stage-major, chunk-minor), each after the GEMM W places before it
-//   nodraw    hhi without the draws; nohash: eq without the commitments; hashonly: the k chunks' commitments alone
+//   nodraw    hhi without the draws; nohash: eq without the commitments (nohashrrW: rrW without them); hashonly: the k
+//             chunks' commitments alone
 //   lite, liteprio, literrW, liteonly: hhi, hprio, rrW and hashonly with each commitment a stand-in of the same
 //             compressions a row (LITE_C, 367 a token-layer) in 128-thread CTAs of LITE_N (8) chained compressions, no
 //             shared memory: what a committer of that shape would cost (its latency understated, its roots not real)
+//   litec, litecprio, litecrrW, liteconly: the same, the stand-in chained as the tree is (a thread a segment, a thread a
+//             row, each CTA's 128-leaf levels, one CTA for the levels above: ~40 dependent compressions a stage at 2K)
 //
 // env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
 // kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367)
@@ -106,13 +109,44 @@ __global__ void ts_reset(unsigned long long* ts) {
   ts[0] = ~0ull;
   ts[1] = 0;
 }
+// the chained stand-in's phases: `items` threads, n chained compressions each (out: cap slots)
+__global__ void lite_items(long long items, int n, uint64_t* out, long long cap) {
+  const long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
+  if (i >= items) return;
+  uint64_t s[8], w[16];
+  s512_iv(s);
+  for (int j = 0; j < 16; j++) w[j] = (uint64_t)(i + 1) * (j + 1);
+  for (int r = 0; r < n; r++) {
+    fr_compress(s, w);
+    for (int j = 0; j < 8; j++) w[j] ^= s[j];
+  }
+  out[i % cap] = s[0];
+}
+// a tree's levels over `leaves` nodes, blockDim leaves a CTA: each level half the threads, `per` chained compressions a
+// node, a barrier between levels (the CTA's subtree, as fr_tree's shared-memory levels, without the memory)
+__global__ void lite_levels(int leaves, int per, uint64_t* out) {
+  uint64_t s[8], w[16];
+  s512_iv(s);
+  for (int j = 0; j < 16; j++) w[j] = (uint64_t)(blockIdx.x * blockDim.x + threadIdx.x + 1) * (j + 1);
+  const int mine = min(leaves - (int)(blockIdx.x * blockDim.x), (int)blockDim.x);
+  for (int width = mine / 2; width >= 1; width /= 2) {
+    if ((int)threadIdx.x < width)
+      for (int r = 0; r < per; r++) {
+        fr_compress(s, w);
+        for (int j = 0; j < 8; j++) w[j] ^= s[j];
+      }
+    __syncthreads();
+  }
+  if (threadIdx.x == 0) out[blockIdx.x] = s[0];
+}
 
 // CARVE=P: the commitments' and the draws' kernels prefer a P% shared-memory carveout (100: the most, as the GEMMs), so
 // an SM need not drain to switch its carveout between them and a GEMM's CTAs
 static int g_carve = -1;
 static void set_carve(int p) {
   const void* f[] = {(const void*)fr_salt, (const void*)fr_mid0, (const void*)fr_segments, (const void*)fr_tree,
-                     (const void*)draw_stamp, (const void*)stamp, (const void*)sha_beside};
+                     (const void*)draw_stamp, (const void*)stamp, (const void*)sha_beside, (const void*)lite_items,
+                     (const void*)lite_levels};
   for (const void* k : f) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, p));
   g_carve = p;
 }
@@ -131,24 +165,29 @@ struct Sched {
   int hp;        // the commitments' stream: 0 the chunk's own, 1 one of their own at the highest priority, -1 at the lowest
                  // with the GEMMs at the highest
   int rr;        // > 0: the GEMMs in one static order, each after the one rr places before it
-  bool lite;     // each commitment a stand-in: its stage's compressions a row (LITE_C) in 128-thread CTAs of LITE_N
-                 // chained compressions a thread, no shared memory (the shape beside's probe hides next to GEMMs)
+  int lite;      // each commitment a stand-in of its stage's compressions a row (LITE_C) in 128-thread CTAs, no shared
+                 // memory: 1 flat (LITE_N chained a thread), 2 chained as the tree (segments, the row, CTA levels, the top)
 };
 static Sched sched_of(const std::string& n) {
-  if (n == "chunked") return {n, false, false, true, false, 0, 0, false};
-  if (n == "eq") return {n, true, true, true, false, 0, 0, false};
-  if (n == "prio") return {n, true, true, true, true, 0, 0, false};
-  if (n == "hhi") return {n, true, true, true, false, 1, 0, false};
-  if (n == "hprio") return {n, true, true, true, true, 1, 0, false};
-  if (n == "hlo") return {n, true, true, true, false, -1, 0, false};
-  if (n == "nodraw") return {n, true, false, true, false, 1, 0, false};
-  if (n == "nohash") return {n, false, true, true, false, 0, 0, false};
-  if (n == "hashonly") return {n, true, false, false, false, 0, 0, false};
-  if (n.rfind("rr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 2), false};
-  if (n == "lite") return {n, true, true, true, false, 1, 0, true};
-  if (n == "liteprio") return {n, true, true, true, true, 1, 0, true};
-  if (n == "liteonly") return {n, true, false, false, false, 1, 0, true};
-  if (n.rfind("literr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 6), true};
+  if (n == "chunked") return {n, false, false, true, false, 0, 0, 0};
+  if (n == "eq") return {n, true, true, true, false, 0, 0, 0};
+  if (n == "prio") return {n, true, true, true, true, 0, 0, 0};
+  if (n == "hhi") return {n, true, true, true, false, 1, 0, 0};
+  if (n == "hprio") return {n, true, true, true, true, 1, 0, 0};
+  if (n == "hlo") return {n, true, true, true, false, -1, 0, 0};
+  if (n == "nodraw") return {n, true, false, true, false, 1, 0, 0};
+  if (n == "nohash") return {n, false, true, true, false, 0, 0, 0};
+  if (n.rfind("nohashrr", 0) == 0) return {n, false, true, true, false, 0, atoi(n.c_str() + 8), 0};
+  if (n == "hashonly") return {n, true, false, false, false, 0, 0, 0};
+  if (n.rfind("rr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 2), 0};
+  if (n == "lite") return {n, true, true, true, false, 1, 0, 1};
+  if (n == "liteprio") return {n, true, true, true, true, 1, 0, 1};
+  if (n == "liteonly") return {n, true, false, false, false, 1, 0, 1};
+  if (n.rfind("literr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 6), 1};
+  if (n == "litec") return {n, true, true, true, false, 1, 0, 2};
+  if (n == "litecprio") return {n, true, true, true, true, 1, 0, 2};
+  if (n == "liteconly") return {n, true, false, false, false, 1, 0, 2};
+  if (n.rfind("litecrr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 7), 2};
   fprintf(stderr, "unknown arm %s\n", n.c_str());
   exit(1);
 }
@@ -256,9 +295,14 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   const int lite_n = getenv("LITE_N") ? atoi(getenv("LITE_N")) : 8;
   int lite_grid[NSTAGE];
   for (int t = 0; t < NSTAGE; t++) lite_grid[t] = (int)(((long long)LITE_C[t] * M + 128LL * lite_n - 1) / (128LL * lite_n));
+  // chained: a thread a segment (LITE_SEG chained), a thread a row (the rest less the nodes' 2), the CTAs' 128-leaf levels
+  // and the levels above in one CTA, 2 compressions a node: about 40 dependent compressions a stage at 2K
+  const int LITE_S[NSTAGE] = {4, 6, 1, 4, 4, 14}, LITE_SEG[NSTAGE] = {9, 9, 3, 9, 9, 9};
+  const long long lite_cap = 1 << 20;
   uint64_t* lite_out;
   unsigned long long* lite_ts;
-  CK(cudaMalloc(&lite_out, (size_t)*std::max_element(lite_grid, lite_grid + NSTAGE) * 128 * sizeof(uint64_t)));
+  CK(cudaMalloc(&lite_out, (size_t)std::max<long long>(lite_cap, (long long)*std::max_element(lite_grid, lite_grid + NSTAGE) * 128) *
+                               sizeof(uint64_t)));
   CK(cudaMalloc(&lite_ts, 2 * sizeof(unsigned long long)));
   unsigned long long* stamps;
   const int narms = (int)arm_names.size();
@@ -372,8 +416,15 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
               const int s = l * NSTAGE + t, idx = s * k + c;
               if (S.hash) {
                 if (sh[c] != sg[c]) pool.join(sg[c], sh[c]);
-                if (S.lite) {
+                if (S.lite == 1) {
                   sha_beside<<<lite_grid[t], 128, 0, sh[c]>>>(lite_n, lite_out, lite_ts);
+                } else if (S.lite == 2) {
+                  const long long segs = (long long)M * LITE_S[t];
+                  lite_items<<<(unsigned)((segs + 127) / 128), 128, 0, sh[c]>>>(segs, LITE_SEG[t], lite_out, lite_cap);
+                  lite_items<<<(unsigned)((M + 127) / 128), 128, 0, sh[c]>>>(M, LITE_C[t] - LITE_S[t] * LITE_SEG[t] - 2, lite_out,
+                                                                           lite_cap);
+                  lite_levels<<<(unsigned)((M + 127) / 128), 128, 0, sh[c]>>>(M, 2, lite_out);
+                  if (M > 128) lite_levels<<<1, std::min(M / 128, 1024), 0, sh[c]>>>(M / 128, 2, lite_out);
                 } else {
                   if (l == 0) CK(cudaStreamWaitEvent(sh[c], salt_ev[c][t], 0));
                   commit_tree(ch[c].cm[t], l, ch[c].op[t], sh[c]);

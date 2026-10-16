@@ -44,9 +44,12 @@ def is_protocol(name: str) -> bool:
     return name in PROTOCOL or name.startswith("rr")
 
 
-def is_lite(name: str) -> bool:
-    """the protocol's schedules with each commitment a stand-in of the same compressions in small CTAs (not real roots)"""
-    return name.startswith("lite") and name != "liteonly"
+def lite_kind(name: str) -> str | None:
+    """the protocol's schedules with each commitment a stand-in of the same compressions in small CTAs (not real roots):
+    'lite' flat (understated latency), 'litec' chained as the tree is"""
+    if name in ("liteonly", "liteconly") or not name.startswith("lite"):
+        return None
+    return "litec" if name.startswith("litec") else "lite"
 
 
 def main() -> int:
@@ -115,11 +118,12 @@ def main() -> int:
                 cell["best"] = b
                 cell["best_cost"] = proto[b]["cost"]
                 cell["best_cost_sat"] = proto[b]["cost_sat"]
-            lite = {n: v for n, v in cell["arms"].items() if is_lite(n)}
-            if lite:
-                b = min(lite, key=lambda n: lite[n]["ms"])
-                cell["best_lite"] = b
-                cell["best_lite_cost"] = lite[b]["cost"]
+            for kind in ("lite", "litec"):
+                lite = {n: v for n, v in cell["arms"].items() if lite_kind(n) == kind}
+                if lite:
+                    b = min(lite, key=lambda n: lite[n]["ms"])
+                    cell[f"best_{kind}"] = b
+                    cell[f"best_{kind}_cost"] = lite[b]["cost"]
             for n, c in r.get("chunks", {}).items():
                 e = sorted(c["end_ms"])
                 cell["arms"][n]["ends_over_plain"] = {"first": e[0] / p, "median": e[len(e) // 2] / p, "last": e[-1] / p}
@@ -129,10 +133,11 @@ def main() -> int:
             print(f"  k={k:2d} plain {p:8.2f} ms ({cell['plain_ktok_s']:.1f} k tok/s, {arms['plain']['mhz']:.0f} MHz) | {line}")
             if "hashonly" in cell["arms"]:
                 print(f"        the commitments alone: {100 * cell['arms']['hashonly']['ms'] / p:.1f}% of plain's makespan")
-            if "best_lite" in cell:
-                lo = cell["arms"].get("liteonly")
-                print(f"        stand-in committer (small CTAs, same compressions): best {cell['best_lite']} "
-                      f"{100 * cell['best_lite_cost']:+.1f}%" + (f"; alone {100 * lo['ms'] / p:.1f}% of plain's makespan" if lo else ""))
+            for kind, only, what in (("lite", "liteonly", "flat"), ("litec", "liteconly", "chained")):
+                if f"best_{kind}" in cell:
+                    lo = cell["arms"].get(only)
+                    print(f"        stand-in committer, {what} (small CTAs, same compressions): best {cell[f'best_{kind}']} "
+                          f"{100 * cell[f'best_{kind}_cost']:+.1f}%" + (f"; alone {100 * lo['ms'] / p:.1f}% of plain's makespan" if lo else ""))
             if "best" in cell:
                 print(f"        best {cell['best']} {100 * cell['best_cost']:+.1f}% (vs saturated plain {100 * cell['best_cost_sat']:+.1f}%); "
                       f"draws {k * 192 / (proto[cell['best']]['ms'] * 1e-3):.0f}/s; roots {cell['roots']}")
@@ -159,16 +164,18 @@ def main() -> int:
         for M in Ms:
             ok = [c for c in cs if c["M"] == M and "best" in c and c["best_cost"] <= 0.05]
             print(f"  smallest k at <= 5% for M = {M}: " + (f"{min(ok, key=lambda c: c['k'])['k']}" if ok else "none measured"))
-        if any("best_lite" in c for c in cs):
-            print(f"  with the stand-in committer (each commitment's compressions in 128-thread CTAs, no shared memory):")
+        for kind, what in (("lite", "flat: latency understated"), ("litec", "chained as the tree: ~40 dependent compressions a stage")):
+            if not any(f"best_{kind}" in c for c in cs):
+                continue
+            print(f"  with the stand-in committer, {what} (each commitment's compressions in 128-thread CTAs, no shared memory):")
             for k in ks:
                 cells = {c["M"]: c for c in cs if c["k"] == k}
-                out = [f"{100 * cells[M]['best_lite_cost']:+.1f}% {cells[M]['best_lite']}" if M in cells and "best_lite" in cells[M]
-                       else "-" for M in Ms]
+                out = [f"{100 * cells[M][f'best_{kind}_cost']:+.1f}% {cells[M][f'best_{kind}']}"
+                       if M in cells and f"best_{kind}" in cells[M] else "-" for M in Ms]
                 print(f"  {k:5d} " + "".join(f"{x:>24s}" for x in out))
             for M in Ms:
-                ok = [c for c in cs if c["M"] == M and "best_lite" in c and c["best_lite_cost"] <= 0.05]
-                print(f"  smallest k at <= 5% with the stand-in, M = {M}: "
+                ok = [c for c in cs if c["M"] == M and f"best_{kind}" in c and c[f"best_{kind}_cost"] <= 0.05]
+                print(f"  smallest k at <= 5% with the {kind} stand-in, M = {M}: "
                       + (f"{min(ok, key=lambda c: c['k'])['k']}" if ok else "none measured"))
         lone = {}
         for c in cs:
