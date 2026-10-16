@@ -41,7 +41,8 @@
 //                                  leaves and the tree); gemm_c<k> alone
 //                         cpu<E>[p<P>] the tree stops at E nodes in pinned host memory, P host threads hash the top (a
 //                                  subtree each) and one waits the draw, the GEMM's stream waits on its mapped flag; _nd:
-//                                  no draw
+//                                  no draw; _nopdl: fr_tree after its segment pass completes (every other arm launches it
+//                                  programmatically, g_pdl)
 //                       and the phase probe: one commitment's clocks a CTA (fr_tp)
 //   shalat              a compression's latency in a dependent chain on the GPU by rotation choice (FR_ROT's bits) and split
 //                       across two warps (rounds, schedule); the host's (C++, libcrypto's) and the mapped round trip
@@ -349,6 +350,10 @@ __device__ __forceinline__ unsigned long long fr_now() {
   asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
   return t;
 }
+// programmatic dependent launch: a segment pass lets fr_tree launch once each of its threads is past its last store (or
+// exited); fr_tree reads nothing the pass wrote before fr_pdl_wait (a no-op when launched without the attribute)
+__device__ __forceinline__ void fr_pdl_trigger() { asm volatile("griddepcontrol.launch_dependents;" ::: "memory"); }
+__device__ __forceinline__ void fr_pdl_wait() { asm volatile("griddepcontrol.wait;" ::: "memory"); }
 extern "C" __global__ void __launch_bounds__(FR_SEG_THREADS) fr_segments(Args a) {
   if (fr_tps && (threadIdx.x & 31) == 0) atomicMin(fr_tps, fr_now());
   extern __shared__ uint32_t fr_sw[];
@@ -405,6 +410,7 @@ extern "C" __global__ void __launch_bounds__(FR_SEG_THREADS) fr_segments(Args a)
   fr_pad_block(st, (uint64_t)(128 + bytes));
   s512_out(st, out + g * 64);
   if (fr_tps) atomicMax(fr_tps + 1, fr_now());
+  fr_pdl_trigger();
 }
 // fr_segments over blocks [c0, c1) of every row (128 bytes each: what a column slab of the producing GEMM wrote), segment-
 // major so a warp's 32 rows share a segment and its part of the range. A segment the range starts begins from its prefix
@@ -467,6 +473,7 @@ extern "C" __global__ void __launch_bounds__(FR_SEG_THREADS) fr_segcols(Args a) 
   } else {
     for (int q = 0; q < 8; q++) slot[q] = st[q];
   }
+  fr_pdl_trigger();
 }
 // value V (8 big-endian words) into the big-endian message words w = words [base, base + 16) at byte offset o
 __device__ __forceinline__ void fr_put(uint64_t w[16], int base, int o, const uint64_t V[8]) {
@@ -794,17 +801,20 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
     if (fr_tp && tid == 0) fr_tp[cta * FR_TP_SLOTS + (k)] = fr_now();     \
   } while (0)
   FR_TP(0);
+  if (i < R) {
+    fr_pf((const uint64_t*)a.p[2] + 8 * i);
+    fr_pf((const uint64_t*)a.p[3] + 8 * i);
+    fr_pf((const uint8_t*)a.p[5] + i * 256 + 128);
+    fr_pf((const uint32_t*)a.p[6] + i);
+    if (lmid) fr_pf(lmid + 8 * i);
+  }
+  fr_pdl_wait();
   uint64_t v[8];
   if (i < R) {
     const uint64_t* q = (const uint64_t*)a.p[1];
     uint64_t st[8], w[16];
     const uint4* dg = (const uint4*)((const uint8_t*)a.p[0] + i * (long long)s * 64);
     for (int t = 0; t < s; t += 2) fr_pf(dg + 4 * t);
-    fr_pf((const uint64_t*)a.p[2] + 8 * i);
-    fr_pf((const uint64_t*)a.p[3] + 8 * i);
-    fr_pf((const uint8_t*)a.p[5] + i * 256 + 128);
-    fr_pf((const uint32_t*)a.p[6] + i);
-    if (lmid) fr_pf(lmid + 8 * i);
 #pragma unroll
     for (int t = 0; t < 8; t++) st[t] = q[t];
     int j = 0;
@@ -988,6 +998,7 @@ __global__ void ping(uint32_t* up, const uint32_t* dn, int n, uint32_t* err) {
 static bool g_fast = true;  // HASH=sz: served_zk's hm96_rows.cu as is
 static int g_mid = 1;       // the frame leaves' and nodes' first blocks compressed ahead (0: on the critical path, round 1's)
 static int g_pair = 0;      // the tree's levels in shared memory hashed by warp pairs (fr_level2)
+static int g_pdl = 1;       // fr_tree launched programmatically behind its segment pass (fr_pdl_wait)
 // the salt-only parts of `slots` layers' commitments from slot 0, in one launch
 static void commit_salt(const Commit& m, int slots, cudaStream_t st) {
   Args a{};
@@ -1051,7 +1062,22 @@ static void commit_frtree(const Commit& m, int slot, cudaStream_t st, int cta0 =
   for (int j = 0; j < 16; j++) f.p[j] = ps[j];
   f.i[0] = m.R; f.i[1] = m.s; f.i[2] = m.width; f.i[3] = cta0; f.i[4] = total; f.i[5] = x ? x->E : 0;
   f.i[6] = x ? (int)x->seq : 0; f.i[7] = g_mid; f.i[8] = g_pair && g_mid;
-  fr_tree<<<(unsigned)n, L, f.i[8] ? 2 * 4 * 16 * 32 * 8 : 0, st>>>(f);
+  const unsigned smem = f.i[8] ? 2 * 4 * 16 * 32 * 8 : 0;
+  if (!g_pdl) {
+    fr_tree<<<(unsigned)n, L, smem, st>>>(f);
+    return;
+  }
+  cudaLaunchAttribute at[1];
+  at[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
+  at[0].val.programmaticStreamSerializationAllowed = 1;
+  cudaLaunchConfig_t lc{};
+  lc.gridDim = dim3((unsigned)n);
+  lc.blockDim = dim3((unsigned)L);
+  lc.dynamicSmemBytes = smem;
+  lc.stream = st;
+  lc.attrs = at;
+  lc.numAttrs = 1;
+  CK(cudaLaunchKernelEx(&lc, fr_tree, f));
 }
 static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStream_t st, const Export* x = nullptr) {
   commit_segs(m, data, st);
@@ -2172,9 +2198,10 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   // and first-block states ahead on a side stream.
   // P: the host's threads for the top (h_top's pool); col: the k slabs are column slabs, each GEMM slab followed by the
   // segment pass over the next operand's blocks it wrote (fr_segcols, in order on h), the leaves and tree after the last
+  // nopdl: fr_tree launched after its segment pass completes, not programmatically (g_pdl)
   struct Cfg {
     std::string name;
-    int mid, k, E, draw, dus, pair, P, col;
+    int mid, k, E, draw, dus, pair, P, col, nopdl;
   };
   std::vector<Cfg> cfgs;
   std::vector<int> ks, kc;  // row and column slab counts
@@ -2203,7 +2230,9 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
                             {"s4_cpu512p16_nd", 1, 4, 512, 2, 0, 0, 16, 0},
                             {"c8_cpu512p16_nd", 1, 8, 512, 2, 0, 0, 16, 1},
                             {"c16_cpu512p16_nd", 1, 16, 512, 2, 0, 0, 16, 1},
-                            {"c8_pair_cpu512p16_nd", 1, 8, 512, 2, 0, 1, 16, 1}};
+                            {"c8_pair_cpu512p16_nd", 1, 8, 512, 2, 0, 1, 16, 1},
+                            {"cpu256p8_nopdl", 1, 1, 256, 2, du, 0, 8, 0, 1},
+                            {"cpu512p16_nd_nopdl", 1, 1, 512, 2, 0, 0, 16, 0, 1}};
     for (const Cfg& f : all)
       if (!sel || strstr(("," + std::string(sel) + ",").c_str(), ("," + f.name + ",").c_str())) cfgs.push_back(f);
     for (const Cfg& f : cfgs) {
@@ -2301,9 +2330,11 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   for (const Cfg& f : cfgs) {
     g_mid = f.mid;
     g_pair = f.pair;
+    g_pdl = !f.nopdl;
     const Graph G = capture(sm, [&] { proved(ch[0], sm, hs, as, f); });
     g_mid = 1;
     g_pair = 0;
+    g_pdl = 1;
     HostStats st;
     std::thread th;
     if (f.draw == 2) {
@@ -2477,8 +2508,9 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   }
   printf("}, \"proved_arms\": [");
   for (size_t i = 0; i < cfgs.size(); i++)
-    printf("%s{\"name\": \"%s\", \"k\": %d, \"E\": %d, \"draw\": %d, \"P\": %d, \"pair\": %d, \"col\": %d}", i ? ", " : "",
-           cfgs[i].name.c_str(), cfgs[i].k, cfgs[i].E, cfgs[i].draw, cfgs[i].P, cfgs[i].pair, cfgs[i].col);
+    printf("%s{\"name\": \"%s\", \"k\": %d, \"E\": %d, \"draw\": %d, \"P\": %d, \"pair\": %d, \"col\": %d, \"pdl\": %d}",
+           i ? ", " : "", cfgs[i].name.c_str(), cfgs[i].k, cfgs[i].E, cfgs[i].draw, cfgs[i].P, cfgs[i].pair, cfgs[i].col,
+           !cfgs[i].nopdl);
   printf("], \"arms\": {");
   for (size_t i = 0; i < arms.size(); i++) print_reps(arms[i].first.c_str(), arms[i].second, arm_macs[i], d.sms, i + 1 < arms.size());
   printf("}}\n");
