@@ -434,7 +434,7 @@ theorem MerkleOk.at {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cap : 
 /-- **The verifier's Ligerito returns** on rounds `R` that carry the model's from `t.k` on: from a transcript that has
 recorded its rounds, at a proof with the lengths fast100's `R + 1 ≥ 2` levels fix, whose level-0 cap is the
 commitment's, whose Merkle openings pass at their query coins (`hmo`) and whose final identity holds at the model's
-values (`hfin`), it ends at the model's position and pending bytes. -/
+values (`hfin`), it ends at the model's position and pending bytes, and that position is the model's round count. -/
 theorem ligeritoWith_of (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (cf : ℕ → ℕ → F128) (t : Transcript)
     (hk : t.k = t.rounds.size) {R : Array Round} (hR : Agrees R (out p cf sch T cap t).2.2.rounds t.k)
@@ -450,18 +450,19 @@ theorem ligeritoWith_of (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T 
       (FlockSoundness.Refine.resE basisAt sch.n (pre p cf sch T cap t).1 (out p cf sch T cap t).1.2.2.1
         (out p cf sch T cap t).1.2.2.2 (out p cf sch T cap t).2.1) = (out p cf sch T cap t).2.1.s) :
     (ligeritoWith hs ms sch T cap p basisAt).run ⟨R, t.k, t.pending⟩ =
-      .ok ((), ⟨R, (out p cf sch T cap t).2.2.k, (out p cf sch T cap t).2.2.pending⟩) := by
-  show ligeritoWith hs ms sch T cap p basisAt ⟨R, t.k, t.pending⟩ = _
+      .ok ((), ⟨R, (out p cf sch T cap t).2.2.k, (out p cf sch T cap t).2.2.pending⟩) ∧
+    (out p cf sch T cap t).2.2.k = (out p cf sch T cap t).2.2.rounds.size := by
+  show ligeritoWith hs ms sch T cap p basisAt ⟨R, t.k, t.pending⟩ = _ ∧ _
   unfold ligeritoWith
   simp only [Flock.With.liftTM_V, Flock.With.liftLM_V]
   rw [Flock.RecAlgebra.bind_of_ok (Flock.RecAlgebra.check_eq hcap _ _),
     Flock.RecAlgebra.bind_of_ok (Flock.RecAlgebra.label_eq _ _),
     Flock.RecAlgebra.bind_of_ok (Flock.RecAlgebra.absorbF_eq _ _),
     Flock.RecAlgebra.bind_of_ok (Flock.RecAlgebra.absorbBytes_eq _ _)]
-  refine (Flock.RecAlgebra.bind_of_ok (a := ((), (out p cf sch T cap t).2.1)) (t₁ := on R (out p cf sch T cap t).2.2)
-    ?_).trans rfl
-  refine (?_ : Runs (out p cf sch T cap t).2.2.rounds t.k _ (init T) (start cap T t) () (out p cf sch T cap t).2.1
-    (out p cf sch T cap t).2.2).2 le_rfl hk (Prefix.refl _) R hR
+  refine (fun h : Runs (out p cf sch T cap t).2.2.rounds t.k _ (init T) (start cap T t) () (out p cf sch T cap t).2.1
+      (out p cf sch T cap t).2.2 =>
+    ⟨(Flock.RecAlgebra.bind_of_ok (a := ((), (out p cf sch T cap t).2.1)) (t₁ := on R (out p cf sch T cap t).2.2)
+      (h.2 le_rfl hk (Prefix.refl _) R hR)).trans rfl, h.1.2.2 hk⟩) ?_
   refine Runs.run ?_
   refine (Runs.sampleVec hs cf hn _ _).bind ((Runs.nextOod p _ _ (by simp; omega)).bind
     ((Runs.absorbF _ _ _).bind ((Runs.claimPow p _ _ (by simp; omega)).bind ((Runs.sample hs cf _ _).bind
