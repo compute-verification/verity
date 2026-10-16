@@ -69,10 +69,10 @@ def _link(dst: Path, src: Path) -> None:
     dst.symlink_to(os.path.relpath(src, dst.parent))
 
 
-def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None) -> dict:
+def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None, reuse: bool = False) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    done = os.environ.get("VERITY_FOLD_REUSE") == "1" and all((out / f).exists() for f in ("fold_summary.json", "program.json", "instances.jsonl"))
+    done = reuse and all((out / f).exists() for f in ("fold_summary.json", "program.json", "instances.jsonl"))
     rc = 0 if done else _run([py, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(log), "--profile", profile,
                               "--out", str(out / "fold_summary.json"), "--persist-dir", str(out)], out / "fold.log", timeout)
     fs = _load(out / "fold_summary.json") or {}
@@ -177,6 +177,8 @@ class Options:
     world: int = option("--world", type=int, default=2)
     rank_workers: int = option("--rank-workers", type=int, default=0,
                                help="ranks whose fold/compare/GM-01 legs run concurrently (0 = all ranks; each leg is its own subprocess: B8 1024/128 fold 26 GB + GM-01 14 GB per rank)")
+    reuse_fold: bool = option("--reuse-fold", action="store_true", default=False,
+                              help="keep a rank's persisted fold (fold_summary.json, program.json, instances.jsonl under --out) and run only its compare and GM-01 legs")
 
 
 def main(a: Options) -> int:
@@ -225,7 +227,7 @@ def main(a: Options) -> int:
         _link(rd / "capture" / "log.jsonl.gz", log)        # the TP1 Match dir layout the comparators read (<oracle>/capture/log.jsonl.gz, tokens.json)
         if (cap / "tokens.json").exists():
             _link(rd / "capture" / "tokens.json", cap / "tokens.json")
-        pr["fold"] = fold_rank(a.python, log, a.profile, rd, a.timeout)
+        pr["fold"] = fold_rank(a.python, log, a.profile, rd, a.timeout, a.reuse_fold)
         print(f"[tp2foldmatch] rank {r} fold: ok={pr['fold']['ok']} rc={pr['fold']['rc']} instances={pr['fold']['n_instances']} steps={pr['fold']['n_steps']} "
               f"errors={pr['fold']['errors']} unresolved={pr['fold']['unresolved']} unsupported={pr['fold']['unsupported']} collectives={pr['fold']['collectives']} "
               f"{pr['fold']['collectives_by_kind']} tp={pr['fold']['tp']} {pr['fold']['seconds']}s", flush=True)
