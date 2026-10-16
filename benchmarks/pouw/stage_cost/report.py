@@ -53,13 +53,13 @@ def proved(r: dict) -> dict:
         nm, k = c["name"], c["k"]
         if nm not in a:
             continue
-        gk = a.get(f"gemm_s{k}", g)
+        gk = a.get(f"gemm_{'c' if c.get('col') else 's'}{k}", g)
         h = r.get("host", {}).get(nm, {})
         arms[nm] = {"ms": a[nm], "over_gemm": a[nm] / g - 1, "crit_ms_a_stage": (a[nm] - g) / per,
                     "over_slab_gemm_ms_a_stage": (a[nm] - gk) / per, "host_top_us": h.get("top_us_mean"),
                     "host_ok": not h or (h["host_timeouts"] == 0 and h["gpu_timeouts"] == 0)}
-    return {"M": r["M"], "draw_us": r["draw_us"], "gemm_ms": g, "slab_gemm_over": {k: a[f"gemm_s{k}"] / g - 1 for k in (4, 8)
-                                                                                 if f"gemm_s{k}" in a},
+    return {"M": r["M"], "draw_us": r["draw_us"], "gemm_ms": g,
+            "slab_gemm_over": {nm[5:]: v / g - 1 for nm, v in a.items() if nm.startswith(("gemm_s", "gemm_c"))},
             "host_sha": r.get("host_sha"), "arms": arms,
             "hash_latency_ms": {k: v["ms"] / LAYERS for k, v in r["hash_latency"].items()},
             "segments_latency_ms": {k: v["ms"] / LAYERS for k, v in r.get("segments_latency", {}).items()},
@@ -173,7 +173,7 @@ def main() -> int:
                   + (f", split equal {s['split_equal']}" if "split_equal" in s else ""))
     for p in res["proved"]:
         print(f"\nproved prefill M={p['M']} (draw {p['draw_us']} us): gemm {p['gemm_ms']:.2f} ms; slabbed gemm "
-              + ", ".join(f"k={k} {pct(v)}" for k, v in p["slab_gemm_over"].items()) + f"; host SHA {p['host_sha']}")
+              + ", ".join(f"{k} {pct(v)}" for k, v in p["slab_gemm_over"].items()) + f"; host SHA {p['host_sha']}")
         print("  arm          ms      over gemm   critical path a stage (ms)   over slabbed gemm   host top (us)")
         for nm, x in p["arms"].items():
             ht = "-" if x["host_top_us"] is None else f"{x['host_top_us']:.1f}"

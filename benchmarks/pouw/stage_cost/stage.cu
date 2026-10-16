@@ -30,13 +30,19 @@
 //                                  the C chunks' GEMMs alone on the split
 //                       Attention's QK^T and P.V are int8 GEMMs with the causal stage's MACs (m = M, n = M/2, k = 4096);
 //                       P.V's commitment is the per-row normalizers (256 bytes a token), since P is derived.
-//                       ARMS=r2: the proved forward, lockstep (commit, draw, GEMM a stage), by commitment latency lever:
-//                         before   round 1's commitment (pipe1); mid: the frame heads' first blocks compressed ahead
-//                         s<k>     every GEMM in k row slabs, the next stage's operands hashed behind each slab (an
-//                                  emulated epilogue); gemm_s<k> the slabbed GEMMs alone
-//                         cpu<E>   the tree stops at E nodes in pinned host memory, a host thread hashes the top and
-//                                  waits the draw, the GEMM's stream waits on its mapped flag (mid_host: E = 1, the
-//                                  GPU's root, the host only draws); _nd: no draw
+//                       ARMS=r2: the proved forward, lockstep (commit, draw, GEMM a stage), by commitment latency lever
+//                       (CFGS: a comma-separated subset by name):
+//                         mid      the frame heads' first blocks compressed ahead (all arms but round 1's before)
+//                         pair     the tree's levels in shared memory by warp pairs (rounds and schedule apart)
+//                         s<k>     every GEMM in k row slabs, the next stage's operands hashed behind each slab on a
+//                                  stream a slab; gemm_s<k> the slabbed GEMMs alone
+//                         c<k>     every GEMM in k column slabs, each slab's blocks of the next stage's rows hashed behind
+//                                  it (an emulated epilogue: what is left at the GEMM's end is the last slab's blocks, the
+//                                  leaves and the tree); gemm_c<k> alone
+//                         cpu<E>[p<P>] the tree stops at E nodes in pinned host memory, P host threads hash the top (a
+//                                  subtree each) and one waits the draw, the GEMM's stream waits on its mapped flag; _nd:
+//                                  no draw
+//                       and the phase probe: one commitment's clocks a CTA (fr_tp)
 //   shalat              a compression's latency in a dependent chain on the GPU by rotation choice (FR_ROT's bits) and split
 //                       across two warps (rounds, schedule); the host's (C++, libcrypto's) and the mapped round trip
 //   deferred T COMP     the noised recompute of one layer's products batched over T tokens: QKV, o, gate_up, down (in row
@@ -379,6 +385,68 @@ extern "C" __global__ void __launch_bounds__(FR_SEG_THREADS) fr_segments(Args a)
   s512_out(st, out + g * 64);
   if (fr_tps) atomicMax(fr_tps + 1, fr_now());
 }
+// fr_segments over blocks [c0, c1) of every row (128 bytes each: what a column slab of the producing GEMM wrote), segment-
+// major so a warp's 32 rows share a segment and its part of the range. A segment the range starts begins from its prefix
+// state; one it ends is padded and its digest written; one it leaves unfinished keeps its state in its digest's slot for
+// the next range. p: data, mids, digests   i: rows, stride, s, last, c0, c1, the first segment the launch covers
+extern "C" __global__ void __launch_bounds__(FR_SEG_THREADS) fr_segcols(Args a) {
+  extern __shared__ uint32_t fr_sw[];
+  const uint8_t* data = (const uint8_t*)a.p[0];
+  const uint64_t* mids = (const uint64_t*)a.p[1];
+  uint8_t* out = (uint8_t*)a.p[2];
+  const long long rows = a.i[0], stride = a.i[1];
+  const int s = a.i[2], last = a.i[3], c0 = a.i[4], c1 = a.i[5];
+  const int wid = threadIdx.x >> 5, lane = threadIdx.x & 31;
+  uint32_t* sh = fr_sw + wid * (32 * 33);
+  const long long wps = (rows + 31) / 32, gw = (long long)blockIdx.x * (blockDim.x >> 5) + wid;
+  const int j = a.i[6] + (int)(gw / wps);
+  if (j >= s) return;
+  const int nbj = (j == s - 1 ? last : 1024) / 128, lo = max(c0 - 8 * j, 0), hi = min(c1 - 8 * j, nbj);
+  if (lo >= hi) return;
+  const long long r0 = (gw % wps) * 32, r = r0 + lane;
+  uint64_t* slot = (uint64_t*)(out + (r * s + j) * 64);
+  uint64_t st[8];
+  if (r < rows)
+    for (int q = 0; q < 8; q++) st[q] = lo == 0 ? mids[8 * j + q] : slot[q];
+  // the lane's piece it of each block: 16 bytes at (lane & 7) * 16 of row r0 + it * 4 + lane / 8
+  const uint8_t* src[8];
+  bool in[8];
+#pragma unroll
+  for (int it = 0; it < 8; it++) {
+    const long long pr = r0 + it * 4 + (lane >> 3);
+    in[it] = pr < rows;
+    src[it] = data + pr * stride + (long long)j * 1024 + (lane & 7) * 16;
+  }
+  uint4 v[8];
+#pragma unroll
+  for (int it = 0; it < 8; it++) v[it] = in[it] ? *(const uint4*)(src[it] + lo * 128) : make_uint4(0, 0, 0, 0);
+#pragma unroll 1
+  for (int c = lo; c < hi; c++) {
+#pragma unroll
+    for (int it = 0; it < 8; it++) {
+      uint32_t* d = sh + (it * 4 + (lane >> 3)) * 33 + (lane & 7) * 4;
+      d[0] = v[it].x; d[1] = v[it].y; d[2] = v[it].z; d[3] = v[it].w;
+    }
+    __syncwarp();
+    if (c + 1 < hi)
+#pragma unroll
+      for (int it = 0; it < 8; it++) v[it] = in[it] ? *(const uint4*)(src[it] + (c + 1) * 128) : make_uint4(0, 0, 0, 0);
+    if (r < rows) {
+      uint64_t w[16];
+#pragma unroll
+      for (int q = 0; q < 16; q++) w[q] = s512_be(sh[lane * 33 + 2 * q], sh[lane * 33 + 2 * q + 1]);
+      fr_compress(st, w);
+    }
+    __syncwarp();
+  }
+  if (r >= rows) return;
+  if (hi == nbj) {
+    fr_pad_block(st, (uint64_t)(128 + 128 * nbj));
+    s512_out(st, out + (r * s + j) * 64);
+  } else {
+    for (int q = 0; q < 8; q++) slot[q] = st[q];
+  }
+}
 // value V (8 big-endian words) into the big-endian message words w = words [base, base + 16) at byte offset o
 __device__ __forceinline__ void fr_put(uint64_t w[16], int base, int o, const uint64_t V[8]) {
   const int q = o >> 3, r = (o & 7) * 8;
@@ -424,6 +492,13 @@ __device__ __forceinline__ void fr_put_node(uint64_t w[16], int o, const uint64_
   }
 }
 __device__ __forceinline__ void fr_pf(const void* p) { asm volatile("prefetch.global.L1 [%0];" ::"l"(p)); }
+// what node idx's hash reads besides its children (the next level's, prefetched while this one hashes)
+__device__ __forceinline__ void fr_pf_node(const uint8_t* ntpl, const uint32_t* noff, const uint64_t* nmid, long long idx) {
+  fr_pf(ntpl + idx * 384 + 128);
+  fr_pf(ntpl + idx * 384 + 256);
+  fr_pf(nmid + 8 * idx);
+  fr_pf(noff + idx);
+}
 // fr_hash from the first-block state with a head of O bytes (blocks 1.. unrolled)
 template <bool NODE, int O>
 __device__ __forceinline__ void fr_hash_mid(const uint8_t* tpl, const uint64_t* mid, const uint64_t L[8], const uint64_t R[8],
@@ -560,6 +635,7 @@ __device__ __noinline__ void fr_level(uint64_t (*sh)[8], int n, long long j0, lo
   const int t = threadIdx.x;
   const bool act = t < n / 2;
   uint64_t v[8];
+  if (nmid && t < n / 4) fr_pf_node(ntpl, noff, nmid, nb + lw / 2 + j0 / 4 + t);
   if (act) {
     uint64_t L[8], R[8];
 #pragma unroll
@@ -629,6 +705,7 @@ __device__ __noinline__ void fr_level2(uint64_t (*sh)[8], int n, long long j0, l
   const int t = threadIdx.x, p = t >> 6, role = (t >> 5) & 1, lane = t & 31, jl = 32 * p + lane;
   const bool on = 32 * p < n / 2, act = jl < n / 2;
   uint64_t v[8];
+  if (role == 0 && jl < n / 4) fr_pf_node(ntpl, noff, nmid, nb + lw / 2 + j0 / 4 + jl);
   if (on) {
     uint64_t L[8], R[8];
     const int js = act ? jl : 0;
@@ -705,6 +782,7 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
     fr_pf((const uint64_t*)a.p[2] + 8 * i);
     fr_pf((const uint64_t*)a.p[3] + 8 * i);
     fr_pf((const uint8_t*)a.p[5] + i * 256 + 128);
+    fr_pf((const uint32_t*)a.p[6] + i);
     if (lmid) fr_pf(lmid + 8 * i);
 #pragma unroll
     for (int t = 0; t < 8; t++) st[t] = q[t];
@@ -739,14 +817,19 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
     const uint64_t* cs = (const uint64_t*)a.p[3] + 8 * i;
     uint64_t* bo = (uint64_t*)((uint8_t*)a.p[10] + i * 128);
     const uint64_t* mid = (const uint64_t*)a.p[4];
-    uint64_t lt[8];
+    uint64_t lt[8], ym[8];
+    // all loads before the stores to bo, which may alias them for the compiler
 #pragma unroll
     for (int k = 0; k < 8; k++) {
-      const uint64_t b = s512_bswap(st[k]) ^ my[k];
+      ym[k] = __ldg(my + k);
+      w[8 + k] = __ldg(cs + k);
+      lt[k] = __ldg(mid + 8 + k);
+    }
+#pragma unroll
+    for (int k = 0; k < 8; k++) {
+      const uint64_t b = s512_bswap(st[k]) ^ ym[k];
       bo[k] = b;
       w[k] = s512_bswap(b);
-      w[8 + k] = cs[k];
-      lt[k] = mid[8 + k];
     }
     fr_compress(lt, w);
     fr_pad_block(lt, 256);
@@ -910,6 +993,20 @@ static void commit_segs(const Commit& m, const uint8_t* data, cudaStream_t st, l
   a.i[0] = (int)rows; a.i[1] = m.k; a.i[2] = m.s; a.i[3] = m.last;
   const long long total = rows * m.s;
   fr_segments<<<(unsigned)((total + FR_SEG_THREADS - 1) / FR_SEG_THREADS), FR_SEG_THREADS, FR_SEG_THREADS * 33 * 4, st>>>(a);
+}
+// a row's 128-byte blocks
+static int row_blocks(const Commit& m) { return ((m.s - 1) * 1024 + m.last) / 128; }
+// blocks [c0, c1) of every row's row_blocks (fr_segcols): the passes over a row's blocks in order make commit_segs' digests
+static void commit_segcols(const Commit& m, const uint8_t* data, cudaStream_t st, int c0, int c1) {
+  if (c1 <= c0) return;
+  const int j0 = c0 / 8, j1 = std::min(m.s, (c1 + 7) / 8);
+  Args a{};
+  a.p[0] = (unsigned long long)data;
+  a.p[1] = (unsigned long long)m.mids;
+  a.p[2] = (unsigned long long)m.digests;
+  a.i[0] = m.R; a.i[1] = m.k; a.i[2] = m.s; a.i[3] = m.last; a.i[4] = c0; a.i[5] = c1; a.i[6] = j0;
+  const long long threads = (long long)(j1 - j0) * ((m.R + 31) / 32) * 32;
+  fr_segcols<<<(unsigned)((threads + FR_SEG_THREADS - 1) / FR_SEG_THREADS), FR_SEG_THREADS, FR_SEG_THREADS * 33 * 4, st>>>(a);
 }
 // where a tree stops for the host: its level of E nodes into ex, then flag = seq (device views of mapped host memory)
 struct Export {
@@ -1335,7 +1432,8 @@ static void sha_latency(Dev& d) {
 // Python's leaves, b || c and root; the whole tree is copied out for the paths to be compared node by node. The fast path
 // in k slabs of rows (a launch pair a slab, as behind a slabbed GEMM), and with E stopped at the level of E nodes for the
 // host to hash the top (the root then the host's, the flag checked)
-static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_out = nullptr, int k = 1, int E = 0) {
+static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_out = nullptr, int k = 1, int E = 0,
+                        int cols = 0) {
   const HostConst& c = *m.hc;
   uint8_t* rows = dput(c.rows.data(), c.rows.size());
   CK(cudaMemset(m.x, 0xA5, (size_t)64 * m.R));
@@ -1351,7 +1449,13 @@ static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_ou
     h_store(g_link.up_h, 0);
   }
   if (path == 1) commit_run(m, rows, 0);
-  if (path == 2) {
+  if (path == 2 && cols) {
+    commit_salt(m, LAYERS, 0);
+    CK(cudaMemset(m.digests, 0xA5, (size_t)64 * m.R * m.s));
+    const int B = row_blocks(m);
+    for (int i = 0; i < cols; i++) commit_segcols(m, rows, 0, i * B / cols, (i + 1) * B / cols);
+    commit_frtree(m, LAYERS - 1, 0, 0, -1, E ? &x : nullptr);
+  } else if (path == 2) {
     commit_salt(m, LAYERS, 0);
     const int L = std::min(m.width, 128), rk = m.R / k;
     for (int i = 0; i < k; i++) {
@@ -2034,34 +2138,56 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   // (the embedding's) whole. draw 0: none; 1: DRAW_US on the GPU; 2: the host's (the tree stops at E nodes for the host to
   // hash the top, E = 1 the GPU's root; then the host waits its draw, dus, and raises the GEMM's flag). The salt-only parts
   // and first-block states ahead on a side stream.
-  // P: the host's threads for the top (h_top's pool)
+  // P: the host's threads for the top (h_top's pool); col: the k slabs are column slabs, each GEMM slab followed by the
+  // segment pass over the next operand's blocks it wrote (fr_segcols, in order on h), the leaves and tree after the last
   struct Cfg {
     std::string name;
-    int mid, k, E, draw, dus, pair, P;
+    int mid, k, E, draw, dus, pair, P, col;
   };
   std::vector<Cfg> cfgs;
-  std::vector<int> ks;
+  std::vector<int> ks, kc;  // row and column slab counts
   if (r2) {
-    ks = {4};
     const int du = draw_us;
-    cfgs = {{"mid", 1, 1, 0, 1, du, 0, 1},
-            {"pair", 1, 1, 0, 1, du, 1, 1},
-            {"cpu64", 1, 1, 64, 2, du, 0, 1},
-            {"cpu256p8", 1, 1, 256, 2, du, 0, 8},
-            {"cpu512p16", 1, 1, 512, 2, du, 0, 16},
-            {"cpu1024p32", 1, 1, 1024, 2, du, 0, 32},
-            {"pair_cpu512p16", 1, 1, 512, 2, du, 1, 16},
-            {"s4", 1, 4, 0, 1, du, 0, 1},
-            {"s4_cpu512p16", 1, 4, 512, 2, du, 0, 16},
-            {"mid_nd", 1, 1, 0, 0, 0, 0, 1},
-            {"pair_nd", 1, 1, 0, 0, 0, 1, 1},
-            {"cpu512p16_nd", 1, 1, 512, 2, 0, 0, 16},
-            {"cpu1024p32_nd", 1, 1, 1024, 2, 0, 0, 32},
-            {"pair_cpu1024p32_nd", 1, 1, 1024, 2, 0, 1, 32},
-            {"s4_cpu512p16_nd", 1, 4, 512, 2, 0, 0, 16}};
+    const char* sel = getenv("CFGS");  // a comma-separated subset by name (all by default)
+    std::vector<Cfg> all = {{"mid", 1, 1, 0, 1, du, 0, 1, 0},
+                            {"pair", 1, 1, 0, 1, du, 1, 1, 0},
+                            {"cpu64", 1, 1, 64, 2, du, 0, 1, 0},
+                            {"cpu256p8", 1, 1, 256, 2, du, 0, 8, 0},
+                            {"cpu512p16", 1, 1, 512, 2, du, 0, 16, 0},
+                            {"cpu1024p32", 1, 1, 1024, 2, du, 0, 32, 0},
+                            {"pair_cpu512p16", 1, 1, 512, 2, du, 1, 16, 0},
+                            {"s4", 1, 4, 0, 1, du, 0, 1, 0},
+                            {"s4_cpu512p16", 1, 4, 512, 2, du, 0, 16, 0},
+                            {"c8", 1, 8, 0, 1, du, 0, 1, 1},
+                            {"c8_cpu512p16", 1, 8, 512, 2, du, 0, 16, 1},
+                            {"c16_cpu512p16", 1, 16, 512, 2, du, 0, 16, 1},
+                            {"pair_cpu256p8", 1, 1, 256, 2, du, 1, 8, 0},
+                            {"c8_pair_cpu512p16", 1, 8, 512, 2, du, 1, 16, 1},
+                            {"mid_nd", 1, 1, 0, 0, 0, 0, 1, 0},
+                            {"pair_nd", 1, 1, 0, 0, 0, 1, 1, 0},
+                            {"cpu512p16_nd", 1, 1, 512, 2, 0, 0, 16, 0},
+                            {"cpu1024p32_nd", 1, 1, 1024, 2, 0, 0, 32, 0},
+                            {"pair_cpu1024p32_nd", 1, 1, 1024, 2, 0, 1, 32, 0},
+                            {"s4_cpu512p16_nd", 1, 4, 512, 2, 0, 0, 16, 0},
+                            {"c8_cpu512p16_nd", 1, 8, 512, 2, 0, 0, 16, 1},
+                            {"c16_cpu512p16_nd", 1, 16, 512, 2, 0, 0, 16, 1},
+                            {"c8_pair_cpu512p16_nd", 1, 8, 512, 2, 0, 1, 16, 1}};
+    for (const Cfg& f : all)
+      if (!sel || strstr(("," + std::string(sel) + ",").c_str(), ("," + f.name + ",").c_str())) cfgs.push_back(f);
+    for (const Cfg& f : cfgs) {
+      if (f.k > 1 && !f.col && std::find(ks.begin(), ks.end(), f.k) == ks.end()) ks.push_back(f.k);
+      if (f.col && std::find(kc.begin(), kc.end(), f.k) == kc.end()) kc.push_back(f.k);
+    }
   }
   for (int k : ks)
     for (int t = 0; t < NSTAGE; t++) plan(M / k, GN[t], GK[t], 1, 0, 0, 0, ch[0].A, P.W[0][t], ch[0].D, d.st);
+  for (int k : kc)
+    for (int t = 0; t < NSTAGE; t++) plan(M, GN[t] / k, GK[t], 1, 0, 0, 0, ch[0].A, P.W[0][t], ch[0].D, d.st);
+  // column slab i of k: weight rows [i N/k, (i+1) N/k), its output its own M x N/k block of D (the timing's, not a layout's)
+  auto col_gemm = [&](Chunk& c, int l, int t, int k, int i, cudaStream_t st) {
+    const LtB& B = g_plans.at(std::make_tuple(M, GN[t] / k, GK[t], 1));
+    ltb_run(B, c.lt, c.A, P.W[l][t] + (long long)i * (GN[t] / k) * GK[t], c.D + (long long)i * M * (GN[t] / k), st);
+  };
   auto slab_gemm = [&](Chunk& c, int l, int t, int k, int i, cudaStream_t st) {
     const LtB& B = g_plans.at(std::make_tuple(M / k, GN[t], GK[t], 1));
     const long long r0 = (long long)i * (M / k);
@@ -2100,6 +2226,17 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
       const Commit& m = c.cm[tn];
       const int L = std::min(m.width, 128), rk = M / f.k;
       const Export xn{g_link.ex_d, g_link.up_d, f.E, (uint32_t)qn + 1};
+      if (f.col) {
+        const int B = row_blocks(m);
+        if (qn < NSTAGE) CK(cudaStreamWaitEvent(h, ev[tn], 0));
+        for (int i = 0; i < f.k; i++) {
+          col_gemm(c, l, t, f.k, i, g);
+          fork(g, h);
+          commit_segcols(m, c.op[tn], h, i * B / f.k, (i + 1) * B / f.k);
+        }
+        commit_frtree(m, ln, h, 0, -1, f.draw == 2 ? &xn : nullptr);
+        continue;
+      }
       for (int i = 0; i < f.k; i++) {
         slab_gemm(c, l, t, f.k, i, g);
         fork(g, hsl[i]);
@@ -2110,7 +2247,7 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
       }
     }
     fork(h, g);
-    for (int i = 0; f.k > 1 && i < f.k; i++) fork(hsl[i], g);
+    for (int i = 0; f.k > 1 && !f.col && i < f.k; i++) fork(hsl[i], g);
     fork(ahead, g);
   };
   struct HostArm {
@@ -2123,6 +2260,11 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     for (int l = 0; l < LAYERS; l++)
       for (int t = 0; t < NSTAGE; t++)
         for (int i = 0; i < k; i++) slab_gemm(ch[0], l, t, k, i, sm);
+  }, macs);
+  for (int k : kc) add("gemm_c" + std::to_string(k), sm, [&] {
+    for (int l = 0; l < LAYERS; l++)
+      for (int t = 0; t < NSTAGE; t++)
+        for (int i = 0; i < k; i++) col_gemm(ch[0], l, t, k, i, sm);
   }, macs);
   for (const Cfg& f : cfgs) {
     g_mid = f.mid;
@@ -2303,8 +2445,8 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   }
   printf("}, \"proved_arms\": [");
   for (size_t i = 0; i < cfgs.size(); i++)
-    printf("%s{\"name\": \"%s\", \"k\": %d, \"E\": %d, \"draw\": %d, \"P\": %d, \"pair\": %d}", i ? ", " : "",
-           cfgs[i].name.c_str(), cfgs[i].k, cfgs[i].E, cfgs[i].draw, cfgs[i].P, cfgs[i].pair);
+    printf("%s{\"name\": \"%s\", \"k\": %d, \"E\": %d, \"draw\": %d, \"P\": %d, \"pair\": %d, \"col\": %d}", i ? ", " : "",
+           cfgs[i].name.c_str(), cfgs[i].k, cfgs[i].E, cfgs[i].draw, cfgs[i].P, cfgs[i].pair, cfgs[i].col);
   printf("], \"arms\": {");
   for (size_t i = 0; i < arms.size(); i++) print_reps(arms[i].first.c_str(), arms[i].second, arm_macs[i], d.sms, i + 1 < arms.size());
   printf("}}\n");
@@ -2744,13 +2886,20 @@ static int run_gate(Dev& d, const std::string& dir, const std::vector<int>& Ms) 
       g_pair = 1;
       const bool pair = commit_gate(m, 2, &t_pair, 4), pair_host = commit_gate(m, 2, nullptr, 4, 16);
       g_pair = 0;
-      const bool same = t_sz == t_fr && t_sz == t_mid && t_sz == t_slab && t_sz == t_pair;
+      std::vector<uint8_t> t_c8, t_c3;
+      const bool col8 = commit_gate(m, 2, &t_c8, 1, 0, 8), col3 = commit_gate(m, 2, &t_c3, 1, 0, 3);
+      pool_start(16);
+      const bool col8_host = commit_gate(m, 2, nullptr, 1, 512, 8);
+      pool_stop();
+      const bool same = t_sz == t_fr && t_sz == t_mid && t_sz == t_slab && t_sz == t_pair && t_sz == t_c8 && t_sz == t_c3;
       printf("{\"mode\": \"gate\", \"what\": \"hm96-sha512 row-seg frame-v3-sha512\", \"k\": %d, \"R\": %d, \"s\": %d, \"ok\": %s, "
              "\"fast_ok\": %s, \"mid_ok\": %s, \"slab4_ok\": %s, \"pair_slab4_ok\": %s, \"pair_slab4_E16_ok\": %s, "
+             "\"cols8_ok\": %s, \"cols3_ok\": %s, \"cols8_E512_P16_ok\": %s, "
              "\"fast_tree_equal\": %s, \"control_rejected\": %s, \"host_top\": {",
              c.k, c.R, c.s, ok ? "true" : "false", fast ? "true" : "false", mid ? "true" : "false", slab ? "true" : "false",
-             pair ? "true" : "false", pair_host ? "true" : "false", same ? "true" : "false", control ? "false" : "true");
-      fails += !ok || !fast || !mid || !slab || !pair || !pair_host || !same || control;
+             pair ? "true" : "false", pair_host ? "true" : "false", col8 ? "true" : "false", col3 ? "true" : "false",
+             col8_host ? "true" : "false", same ? "true" : "false", control ? "false" : "true");
+      fails += !ok || !fast || !mid || !slab || !pair || !pair_host || !col8 || !col3 || !col8_host || !same || control;
       bool fe = true;
       for (int E : {1, 16, 32, 64, 128})
         for (int k : {1, 4}) {
