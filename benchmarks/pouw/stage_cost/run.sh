@@ -6,7 +6,7 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=STAGE-COST \
 #     -- bash benchmarks/pouw/stage_cost/run.sh
 # env: PREFILL (2048 8192), DEFERRED_T, BESIDE_T (1024 4096 16384 32768), DEC_B, DEC_L (32 4096), FILL_SMS (92), DRAW_US
-# (300), PARTS (gate prefill deferred beside), MAXMIN (25)
+# (300), PARTS (gate prefill deferred beside), HASHES (fr sz: stage.cu's commitment paths for prefill), MAXMIN (25)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -14,7 +14,7 @@ D=benchmarks/pouw/stage_cost
 export B; B=$(mktemp -d /tmp/stage-cost.XXXXXX); trap 'rm -rf "$B"' EXIT
 export PREFILL=${PREFILL:-2048 8192} DEFERRED_T=${DEFERRED_T:-256 512 1024 2048 4096 8192 16384 32768}
 export BESIDE_T=${BESIDE_T:-1024 4096 16384 32768} DEC_B=${DEC_B:-32} DEC_L=${DEC_L:-4096} FILL_SMS=${FILL_SMS:-92}
-export DRAW_US=${DRAW_US:-300} PARTS=${PARTS:-gate prefill deferred beside}
+export DRAW_US=${DRAW_US:-300} PARTS=${PARTS:-gate prefill deferred beside} HASHES=${HASHES:-fr sz}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version | tail -2 > "$O/nvcc.txt"
 nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/stage" $D/stage.cu -lcublasLt -lnvidia-ml -ldl \
@@ -31,7 +31,9 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   echo "gate rc $g" >> "$O/rc.txt"
   [ "$g" -eq 0 ] || exit 5
   if has prefill; then
-    for M in $PREFILL; do "$B/stage" prefill "$B/c" "$M" 7 >> "$O/prefill.jsonl" 2>> "$O/errors.txt" || echo "rc $? prefill $M" >> "$O/errors.txt"; done
+    for h in $HASHES; do for M in $PREFILL; do
+      HASH=$h "$B/stage" prefill "$B/c" "$M" 7 >> "$O/prefill.jsonl" 2>> "$O/errors.txt" || echo "rc $? prefill $h $M" >> "$O/errors.txt"
+    done; done
     q
   fi
   if has deferred; then

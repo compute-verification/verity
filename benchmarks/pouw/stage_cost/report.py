@@ -9,7 +9,8 @@ Prefill, per chunk of M tokens (32 layers, 6 stages a layer, 192 commitments and
   and green N: on a partition of N SMs, against the GEMMs alone on the whole GPU;
 - in flight: pipe C / (C x gemm) - 1, C chunks each committing, waiting DRAW_US, then multiplying, stage by stage; pipe 1 is a
   lone request's time to first token over the clean forward;
-- the critical path a stage: (pipe1 - gemm) / 192, and the commitment's own latency (hash_latency / 32) plus the draw.
+- the critical path a stage: (pipe1 - gemm) / 192, and the commitment's own latency (hash_latency / 32) plus the draw;
+  for the fast path (hash=fr) the salt-only part, which runs ahead off the critical path, apart (salt, salt_latency).
 Deferred, per T and composition: one layer's noised recompute, ms, share of the int8 peak at the read clock, and the stored
 operands a replica (32 layers). Beside: the decode step's slowdown, and whether the pass keeps up with the tokens decode
 produces (margin = the pass's token-layers a ms in the window over the step's).
@@ -44,9 +45,13 @@ def prefill(r: dict) -> dict:
     lat = {k: v["ms"] / LAYERS for k, v in r["hash_latency"].items()}
     m = r["M"]
     sk = {"qkv": 4096, "qk": 6144, "pv": 256, "o": 4096, "gate_up": 4096, "down": 14336}
+    draw_only = a.get("pipe1_draw", a.get("pipe1_nodraw_nohash"))  # the arm's name before the fast path
     out = {
-        "M": m, "gemm_ms": g, "gemm_share": r["arms"]["gemm"]["share_of_peak"], "hash_ms": a["hash"],
+        "hash": r.get("hash", "sz"), "M": m, "gemm_ms": g, "gemm_share": r["arms"]["gemm"]["share_of_peak"], "hash_ms": a["hash"],
         "hash_over_gemm": a["hash"] / g, "hash_gb_s": m * r["op_bytes_token_layer"] * LAYERS / a["hash"] / 1e6,
+        "salt_ms": a.get("salt"), "tree_ms": a.get("tree"),
+        "salt_latency_ms": {k: v["ms"] / LAYERS for k, v in r.get("salt_latency", {}).items()},
+        "hash_only_ms_a_stage": (a["pipe1_hash"] - g) / per if "pipe1_hash" in a else None,
         "serialized": a["serial"] / g - 1, "overlapped": a["conc"] / g - 1, "overlapped_lo": a["conc_lo"] / g - 1,
         "green": [{"N": x["N"], "hash_sms": x["hash_sms"], "both_over_gemm_graph": x["both_ms"] / g - 1,
                    "both_over_gemm_split": x["both_ms"] / x["gemm_ms"] - 1, "gemm_split_over_full": x["gemm_ms"] / g - 1}
@@ -54,7 +59,7 @@ def prefill(r: dict) -> dict:
         "pipe": {c: a[f"pipe{c}"] / (c * g) - 1 for c in (1, 2, 3) if f"pipe{c}" in a},
         "lone_ttft": a["pipe1"] / g - 1,
         "crit_ms_a_stage": (a["pipe1"] - g) / per,
-        "draw_only_ms_a_stage": (a["pipe1_nodraw_nohash"] - g) / per,
+        "draw_only_ms_a_stage": (draw_only - g) / per,
         "hash_latency_ms": lat,
         "hash_latency_gb_s": {k: m * sk[k] / (v * 1e6) for k, v in lat.items()},
         "gemm_ms_a_stage": {x["stage"]: x["ms_alone"] for x in r["gemms"]},
@@ -114,15 +119,20 @@ def main() -> int:
     pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"  # noqa: E731
     print("gate:", [(g.get("what"), g.get("k"), g.get("R"), g.get("m"), g.get("ok"), g.get("control_rejected")) for g in res["gate"]])
     for p in res["prefill"]:
-        print(f"\nprefill M={p['M']}: gemm {p['gemm_ms']:.2f} ms ({100 * p['gemm_share']:.1f}% of peak), hash {p['hash_ms']:.2f} ms "
-              f"({p['hash_gb_s']:.0f} GB/s, {100 * p['hash_over_gemm']:.1f}% of gemm)")
+        print(f"\nprefill M={p['M']} hash={p['hash']}: gemm {p['gemm_ms']:.2f} ms ({100 * p['gemm_share']:.1f}% of peak), hash "
+              f"{p['hash_ms']:.2f} ms ({p['hash_gb_s']:.0f} GB/s, {100 * p['hash_over_gemm']:.1f}% of gemm)"
+              + (f", salt part {p['salt_ms']:.2f} ms, rest {p['tree_ms']:.2f} ms" if p["salt_ms"] is not None else ""))
         print(f"  serialized {pct(p['serialized'])}  overlapped {pct(p['overlapped'])}  overlapped(lo) {pct(p['overlapped_lo'])}")
         for g in p["green"]:
             print(f"  green N={g['N']} ({g['hash_sms']} SMs): vs gemm(graph) {pct(g['both_over_gemm_graph'])}, vs gemm on split "
                   f"{pct(g['both_over_gemm_split'])}, split gemm vs full {pct(g['gemm_split_over_full'])}")
         print("  in flight: " + "  ".join(f"C={c}: {pct(v)}" for c, v in p["pipe"].items()) + f"   lone TTFT {pct(p['lone_ttft'])}")
-        print(f"  critical path a stage {p['crit_ms_a_stage']:.3f} ms (draw alone {p['draw_only_ms_a_stage']:.3f}); hash latency: "
+        ho = p["hash_only_ms_a_stage"]
+        print(f"  critical path a stage {p['crit_ms_a_stage']:.3f} ms (draw alone {p['draw_only_ms_a_stage']:.3f}"
+              + (f", hash alone {ho:.3f}" if ho is not None else "") + "); hash latency: "
               + ", ".join(f"{k} {v:.3f} ms" for k, v in p["hash_latency_ms"].items()))
+        if p["salt_latency_ms"]:
+            print("  salt-only part (ahead): " + ", ".join(f"{k} {v:.3f} ms" for k, v in p["salt_latency_ms"].items()))
         print("  gemm a stage: " + ", ".join(f"{k} {v:.3f} ms" for k, v in p["gemm_ms_a_stage"].items()))
         print(f"  draws/s a GPU: {p['draws_a_s_gpu']}  node priorities: {p['node_priorities']}")
     if res["deferred"]:

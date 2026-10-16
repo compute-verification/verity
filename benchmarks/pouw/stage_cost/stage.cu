@@ -2,16 +2,20 @@
 // (STAGE-COST, cmp-13; note:20261016T0750Z-draft-rs-d1e-stage-coins).
 //
 // The GEMMs are dcap.cu's: cuBLASLt int8 (s8 x s8 -> s32), the fastest of the heuristic's top 16 among those whose output
-// equals the host's on sampled rows. The commitment is served_zk's hm96_rows.cu: a stage's operand rows (k int8 bytes a
-// token) as hm96-sha512/row-seg/v1 leaves of a frame-v3-sha512 tree, its constants written by prep.py. The decode step beside
-// the deferred pass is dcap.cu's (enqueue_step: 32 layers of linears and decode attention, B sequences of context L).
+// equals the host's on sampled rows. The commitment: a stage's operand rows (k int8 bytes a token) as hm96-sha512/row-seg/v1
+// leaves of a frame-v3-sha512 tree, its constants written by prep.py, by one of two paths that the gate holds to the same
+// bytes: served_zk's hm96_rows.cu as is (HASH=sz), or this file's fast path (the default, fr_salt and fr_tree below: the
+// same segment digests, then one launch for the leaves and the whole tree, its salt-only part computed ahead). The decode
+// step beside the deferred pass is dcap.cu's (enqueue_step: 32 layers of linears and decode attention, B sequences of
+// context L).
 //
 // Modes (one JSON line each; clocks are read, never set):
-//   gate DIR            every commitment file in DIR committed into 0xA5-poisoned buffers equals Python's leaves, b || c and
-//                       root, and a no-write control doesn't; cuBLASLt's int8 against the host (dcap's gate)
+//   gate DIR            every commitment file in DIR committed into 0xA5-poisoned buffers by both paths equals Python's leaves,
+//                       b || c and root, the two trees are equal node by node, and a no-write control doesn't; cuBLASLt's
+//                       int8 against the host (dcap's gate)
 //   prefill DIR M       one chunk's forward (32 layers, 6 stages a layer) at M tokens, by arm:
 //                         gemm     the stages' GEMMs alone
-//                         hash     the stages' operand commitments alone
+//                         hash     the stages' operand commitments alone (salt, tree: the fast path's two parts alone)
 //                         serial   each stage's commitment, then its GEMM, on one stream
 //                         conc     the GEMMs and the commitments on two streams with no dependency (the throughput cost
 //                                  of sharing the GPU, with the dependency fully hidden); conc_lo with the hashes at low
@@ -19,7 +23,8 @@
 //                         green N  the commitments on a green-context partition of N SMs, the GEMMs on the rest
 //                         pipe C   C chunks in flight, each on its own stream (chunk 0 highest priority): for every stage,
 //                                  commit its operands, wait DRAW_US for the draw, then the GEMM; C chunks' makespan
-//                                  against C x gemm
+//                                  against C x gemm. pipe1_draw: the draws without commitments; pipe1_hash: the
+//                                  commitments without draws
 //                       Attention's QK^T and P.V are int8 GEMMs with the causal stage's MACs (m = M, n = M/2, k = 4096);
 //                       P.V's commitment is the per-row normalizers (256 bytes a token), since P is derived.
 //   deferred T COMP     the noised recompute of one layer's products batched over T tokens: QKV, o, gate_up, down (in row
@@ -72,10 +77,11 @@ static void hm_load(const std::string& dir) {
   CK(cudaDeviceSynchronize());
 }
 
-// a constants file: the prefix blocks, heads, pads, and the gate's rows, salts and Python's references
+// a constants file: the prefix blocks, heads, pads, the gate's rows, salts and Python's references, and the fast path's
+// padded frame templates with their values' byte offsets
 struct HostConst {
   int k, R, s, last, width, nblk;
-  std::vector<uint8_t> blocks, leaf_heads, node_heads, pads, rows, salts, hl, bc, root;
+  std::vector<uint8_t> blocks, leaf_heads, node_heads, pads, rows, salts, hl, bc, root, ltpl, loff, ntpl, noff;
 };
 static HostConst load_const(const std::string& dir, int k, int R) {
   const std::vector<uint8_t> b = read_file(dir + "/c_" + std::to_string(k) + "_" + std::to_string(R) + ".bin");
@@ -99,6 +105,12 @@ static HostConst load_const(const std::string& dir, int k, int R) {
   take(c.hl, (size_t)64 * R);
   take(c.bc, (size_t)128 * R);
   take(c.root, 64);
+  const size_t nodes = (size_t)std::max(c.width - 1, 1);
+  take(c.ltpl, (size_t)256 * R);
+  take(c.loff, (size_t)4 * R);
+  take(c.ntpl, 384 * nodes);
+  take(c.noff, 4 * nodes);
+  if (o != b.size()) { fprintf(stderr, "constants file k %d R %d: %zu trailing bytes\n", k, R, b.size() - o); exit(2); }
   return c;
 }
 
@@ -108,10 +120,26 @@ struct Commit {
   int k, R, s, last, width;
   uint8_t *mids, *leaf_heads, *node_heads, *digests, *x, *bc, *tree, *salts;
   size_t tree_bytes;
+  uint8_t *my, *cs;                    // the fast path's salt-only parts, a slot a layer (R x 64 each)
+  const uint8_t *ltpl, *loff, *ntpl, *noff;
+  int* counter;                        // CTAs done, for the last one to take the levels above the CTAs' subtrees
 };
+struct FrConst { uint8_t *ltpl, *loff, *ntpl, *noff; };
+static std::map<std::pair<int, int>, FrConst> g_fr;  // one copy of a shape's templates for all its commitments
 static Commit make_commit(const HostConst& c) {
   Commit m;
   m.hc = &c; m.k = c.k; m.R = c.R; m.s = c.s; m.last = c.last; m.width = c.width;
+  const std::pair<int, int> key(c.k, c.R);
+  if (!g_fr.count(key))
+    g_fr[key] = {dput(c.ltpl.data(), c.ltpl.size()), dput(c.loff.data(), c.loff.size()), dput(c.ntpl.data(), c.ntpl.size()),
+                 dput(c.noff.data(), c.noff.size())};
+  if (c.s < 1 || c.width > 128 * 128) { fprintf(stderr, "fr_tree takes s >= 1 and at most 128 CTAs of 128 leaves\n"); exit(2); }
+  const FrConst& f = g_fr[key];
+  m.ltpl = f.ltpl; m.loff = f.loff; m.ntpl = f.ntpl; m.noff = f.noff;
+  CK(cudaMalloc(&m.my, (size_t)64 * c.R * LAYERS));
+  CK(cudaMalloc(&m.cs, (size_t)64 * c.R * LAYERS));
+  CK(cudaMalloc(&m.counter, sizeof(int)));
+  CK(cudaMemset(m.counter, 0, sizeof(int)));
   uint8_t* blk = dput(c.blocks.data(), c.blocks.size());
   CK(cudaMalloc(&m.mids, (size_t)64 * c.nblk));
   Args a{};
@@ -165,21 +193,271 @@ static void commit_run(const Commit& m, const uint8_t* data, cudaStream_t st) {
     w /= 2;
   }
 }
-// the commitment of the gate's rows into poisoned buffers equals Python's (run) or doesn't (the no-write control)
-static bool commit_gate(const Commit& m, bool run) {
+// ---------------------------------------------------------------- the fast path: the same leaves, b || c, nodes and root
+//   fr_salt  a thread a row, before the row exists: M_key.y and c = SHA-512(salt_prefix || y) (2 compressions, 192 table
+//            entries), into a layer's slot
+//   fr_tree  a thread a row: x from its segment digests, b = x ^ M_key.y, the hm96 leaf, and the frame leaf from its padded
+//            template with the value inserted as words (no byte assembly); then the CTA's 128-leaf subtree in shared memory,
+//            and the last CTA to finish (a counter) the levels above. One launch after sz_segments.
+// value V (8 big-endian words) into the big-endian message words w = words [base, base + 16) at byte offset o
+__device__ __forceinline__ void fr_put(uint64_t w[16], int base, int o, const uint64_t V[8]) {
+  const int q = o >> 3, r = (o & 7) * 8;
+  uint64_t U[9];
+#pragma unroll
+  for (int k = 0; k <= 8; k++) U[k] = (k < 8 ? V[k] >> r : 0) | (k > 0 && r ? V[k - 1] << (64 - r) : 0);
+#pragma unroll
+  for (int i = 0; i < 16; i++) {
+    const int d = base + i - q;
+    uint64_t u = 0;
+#pragma unroll
+    for (int k = 0; k <= 8; k++) u = d == k ? U[k] : u;
+    w[i] |= u;
+  }
+}
+// SHA-512 of a padded template of nblk blocks, value L at byte o (and R at o + 72, a node's right child)
+template <bool NODE>
+__device__ __forceinline__ void fr_hash(const uint8_t* tpl, int nblk, int o, const uint64_t L[8], const uint64_t R[8], uint64_t st[8]) {
+  s512_iv(st);
+#pragma unroll 1
+  for (int b = 0; b < nblk; b++) {
+    uint64_t w[16];
+    const uint4* t = (const uint4*)(tpl + 128 * b);
+#pragma unroll
+    for (int j = 0; j < 8; j++) {
+      const uint4 v = __ldg(t + j);
+      w[2 * j] = s512_be(v.x, v.y);
+      w[2 * j + 1] = s512_be(v.z, v.w);
+    }
+    fr_put(w, 16 * b, o, L);
+    if (NODE) fr_put(w, 16 * b, o + 72, R);
+    s512_compress(st, w);
+  }
+}
+// p: tables, salts, hm96 mids, my out, cs out, b || c (c written)   i: rows
+extern "C" __global__ void __launch_bounds__(128) fr_salt(Args a) {
+  const long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
+  if (i >= a.i[0]) return;
+  const uint64_t* tables = (const uint64_t*)a.p[0];
+  const uint32_t* y = (const uint32_t*)a.p[1] + 48 * i;
+  const uint64_t* mid = (const uint64_t*)a.p[2];
+  uint32_t yw[48];
+#pragma unroll
+  for (int t = 0; t < 48; t++) yw[t] = y[t];
+  uint64_t m[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+#pragma unroll
+  for (int qq = 0; qq < 48; qq++) {
+#pragma unroll
+    for (int r = 0; r < 4; r++) {
+      const ulonglong2* e = (const ulonglong2*)(tables + ((size_t)(4 * qq + r) * 256 + ((yw[qq] >> (8 * r)) & 0xff)) * 8);
+#pragma unroll
+      for (int k = 0; k < 4; k++) {
+        const ulonglong2 v = __ldg(e + k);
+        m[2 * k] ^= v.x;
+        m[2 * k + 1] ^= v.y;
+      }
+    }
+  }
+  uint64_t* my = (uint64_t*)a.p[3] + 8 * i;
+#pragma unroll
+  for (int k = 0; k < 8; k++) my[k] = m[k];
+  uint64_t cs[8], w[16];
+#pragma unroll
+  for (int t = 0; t < 8; t++) cs[t] = mid[t];
+#pragma unroll
+  for (int t = 0; t < 16; t++) w[t] = s512_be(yw[2 * t], yw[2 * t + 1]);
+  s512_compress(cs, w);
+#pragma unroll
+  for (int t = 0; t < 8; t++) w[t] = s512_be(yw[32 + 2 * t], yw[32 + 2 * t + 1]);
+  w[8] = 0x8000000000000000ull;
+#pragma unroll
+  for (int t = 9; t < 15; t++) w[t] = 0;
+  w[15] = (128 + 192) * 8;
+  s512_compress(cs, w);
+  uint64_t* co = (uint64_t*)a.p[4] + 8 * i;
+#pragma unroll
+  for (int k = 0; k < 8; k++) co[k] = cs[k];
+  s512_out(cs, (uint8_t*)a.p[5] + i * 128 + 64);
+}
+// one level of a subtree held in sh (big-endian words): threads t < n/2 hash sh[2t], sh[2t+1] into node j0/2 + t of the
+// level above, the current level being lw nodes wide at tree offset off with its parents' templates from nb
+__device__ __noinline__ void fr_level(uint64_t (*sh)[8], int n, long long j0, long long lw, long long off, long long nb,
+                                      const uint8_t* ntpl, const uint32_t* noff, uint8_t* tree) {
+  const int t = threadIdx.x;
+  const bool act = t < n / 2;
+  uint64_t v[8];
+  if (act) {
+    uint64_t L[8], R[8];
+#pragma unroll
+    for (int k = 0; k < 8; k++) { L[k] = sh[2 * t][k]; R[k] = sh[2 * t + 1][k]; }
+    const long long j = j0 / 2 + t, idx = nb + j;
+    fr_hash<true>(ntpl + idx * 384, 3, (int)noff[idx], L, R, v);
+    s512_out(v, tree + (off + lw + j) * 64);
+  }
+  __syncthreads();
+  if (act)
+#pragma unroll
+    for (int k = 0; k < 8; k++) sh[t][k] = v[k];
+  __syncthreads();
+}
+// p: digests, q_mid, my, cs (the layer's slot), hm96 mids, leaf tpl, leaf off, node tpl, node off, hm96 leaves out, b || c
+//    (b written), tree, counter   i: rows, s, width.  Grid width / L CTAs of L = min(width, 128) leaves, at most 128 CTAs.
+extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
+  __shared__ uint64_t sh[128][8];
+  __shared__ int last;
+  const int tid = threadIdx.x, L = blockDim.x, s = a.i[1];
+  const long long R = a.i[0], width = a.i[2], i = (long long)blockIdx.x * L + tid;
+  const uint8_t* ntpl = (const uint8_t*)a.p[7];
+  const uint32_t* noff = (const uint32_t*)a.p[8];
+  uint8_t* tree = (uint8_t*)a.p[11];
+  uint64_t v[8];
+  if (i < R) {
+    const uint64_t* q = (const uint64_t*)a.p[1];
+    uint64_t st[8], w[16];
+#pragma unroll
+    for (int t = 0; t < 8; t++) st[t] = q[t];
+    const uint4* dg = (const uint4*)((const uint8_t*)a.p[0] + i * (long long)s * 64);
+    int j = 0;
+#pragma unroll 1
+    for (; j + 1 < s; j += 2) {
+#pragma unroll
+      for (int t = 0; t < 8; t++) {
+        const uint4 u = dg[4 * j + t];
+        w[2 * t] = s512_be(u.x, u.y);
+        w[2 * t + 1] = s512_be(u.z, u.w);
+      }
+      s512_compress(st, w);
+    }
+    if (j < s) {
+#pragma unroll
+      for (int t = 0; t < 4; t++) {
+        const uint4 u = dg[4 * j + t];
+        w[2 * t] = s512_be(u.x, u.y);
+        w[2 * t + 1] = s512_be(u.z, u.w);
+      }
+      w[8] = 0x8000000000000000ull;
+#pragma unroll
+      for (int t = 9; t < 15; t++) w[t] = 0;
+      w[15] = (uint64_t)(128 + 64 * s) * 8;
+      s512_compress(st, w);
+    } else {
+      s512_pad_block(st, 128 + 64 * (uint64_t)s);
+    }
+    const uint64_t* my = (const uint64_t*)a.p[2] + 8 * i;
+    const uint64_t* cs = (const uint64_t*)a.p[3] + 8 * i;
+    uint64_t* bo = (uint64_t*)((uint8_t*)a.p[10] + i * 128);
+    const uint64_t* mid = (const uint64_t*)a.p[4];
+    uint64_t lt[8];
+#pragma unroll
+    for (int k = 0; k < 8; k++) {
+      const uint64_t b = s512_bswap(st[k]) ^ my[k];
+      bo[k] = b;
+      w[k] = s512_bswap(b);
+      w[8 + k] = cs[k];
+      lt[k] = mid[8 + k];
+    }
+    s512_compress(lt, w);
+    s512_pad_block(lt, 256);
+    s512_out(lt, (uint8_t*)a.p[9] + i * 64);
+    fr_hash<false>((const uint8_t*)a.p[5] + i * 256, 2, (int)((const uint32_t*)a.p[6])[i], lt, lt, v);
+    s512_out(v, tree + i * 64);
+  } else {
+    const uint64_t* pd = (const uint64_t*)(tree + i * 64);
+#pragma unroll
+    for (int k = 0; k < 8; k++) v[k] = s512_bswap(pd[k]);
+  }
+#pragma unroll
+  for (int k = 0; k < 8; k++) sh[tid][k] = v[k];
+  __syncthreads();
+  long long lw = width, off = 0, nb = 0, j0 = (long long)blockIdx.x * L;
+  for (int n = L; n > 1; n >>= 1) {
+    fr_level(sh, n, j0, lw, off, nb, ntpl, noff, tree);
+    nb += lw / 2; off += lw; lw /= 2; j0 /= 2;
+  }
+  if (gridDim.x == 1) return;
+  int* counter = (int*)a.p[12];
+  if (tid == 0) {
+    __threadfence();
+    last = atomicAdd(counter, 1) == (int)gridDim.x - 1;
+  }
+  __syncthreads();
+  if (!last) return;
+  __threadfence();
+  const int n0 = (int)gridDim.x;  // == lw: the CTAs' subtree roots
+  if (tid < n0) {
+    const uint64_t* pd = (const uint64_t*)(tree + (off + tid) * 64);
+#pragma unroll
+    for (int k = 0; k < 8; k++) sh[tid][k] = s512_bswap(__ldcg(pd + k));
+  }
+  __syncthreads();
+  j0 = 0;
+  for (int n = n0; n > 1; n >>= 1) {
+    fr_level(sh, n, j0, lw, off, nb, ntpl, noff, tree);
+    nb += lw / 2; off += lw; lw /= 2;
+  }
+  if (tid == 0) *counter = 0;
+}
+static bool g_fast = true;  // HASH=sz: served_zk's hm96_rows.cu as is
+static void commit_salt(const Commit& m, int slot, cudaStream_t st) {
+  Args a{};
+  const unsigned long long ps[6] = {(unsigned long long)g_tables, (unsigned long long)m.salts, (unsigned long long)g_hm_mid,
+                                    (unsigned long long)(m.my + (size_t)64 * m.R * slot),
+                                    (unsigned long long)(m.cs + (size_t)64 * m.R * slot), (unsigned long long)m.bc};
+  for (int j = 0; j < 6; j++) a.p[j] = ps[j];
+  a.i[0] = m.R;
+  fr_salt<<<(unsigned)((m.R + 127) / 128), 128, 0, st>>>(a);
+}
+static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStream_t st) {
+  Args a{};
+  a.p[0] = (unsigned long long)data;
+  a.p[1] = (unsigned long long)m.mids;
+  a.p[2] = (unsigned long long)m.digests;
+  a.i[0] = m.R; a.i[1] = m.k; a.i[2] = m.s; a.i[3] = m.last;
+  const long long total = (long long)m.R * m.s;
+  sz_segments<<<(unsigned)((total + 255) / 256), 256, 8 * 32 * 33 * 4, st>>>(a);
+  Args f{};
+  const unsigned long long ps[13] = {(unsigned long long)m.digests, (unsigned long long)(m.mids + 64 * m.s),
+                                     (unsigned long long)(m.my + (size_t)64 * m.R * slot),
+                                     (unsigned long long)(m.cs + (size_t)64 * m.R * slot), (unsigned long long)g_hm_mid,
+                                     (unsigned long long)m.ltpl, (unsigned long long)m.loff, (unsigned long long)m.ntpl,
+                                     (unsigned long long)m.noff, (unsigned long long)m.x, (unsigned long long)m.bc,
+                                     (unsigned long long)m.tree, (unsigned long long)m.counter};
+  for (int j = 0; j < 13; j++) f.p[j] = ps[j];
+  f.i[0] = m.R; f.i[1] = m.s; f.i[2] = m.width;
+  const int L = std::min(m.width, 128);
+  fr_tree<<<(unsigned)(m.width / L), L, 0, st>>>(f);
+}
+// a whole commitment on one stream: the salt-only part, then the rest (fast), or hm96_rows.cu's
+static void commit_full(const Commit& m, int slot, const uint8_t* data, cudaStream_t st) {
+  if (!g_fast) return commit_run(m, data, st);
+  commit_salt(m, slot, st);
+  commit_tree(m, slot, data, st);
+}
+// the commitment of the gate's rows into poisoned buffers by path (1 hm96_rows.cu, 2 fast; 0 the no-write control) equals
+// Python's leaves, b || c and root; the whole tree is copied out for the paths to be compared node by node
+static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_out = nullptr) {
   const HostConst& c = *m.hc;
   uint8_t* rows = dput(c.rows.data(), c.rows.size());
   CK(cudaMemset(m.x, 0xA5, (size_t)64 * m.R));
   CK(cudaMemset(m.bc, 0xA5, (size_t)128 * m.R));
   CK(cudaMemset(m.tree, 0xA5, m.tree_bytes));
+  CK(cudaMemset(m.my, 0xA5, (size_t)64 * m.R));
+  CK(cudaMemset(m.cs, 0xA5, (size_t)64 * m.R));
   if (!c.pads.empty()) CK(cudaMemcpy(m.tree + (size_t)64 * c.R, c.pads.data(), c.pads.size(), cudaMemcpyHostToDevice));
-  if (run) commit_run(m, rows, 0);
+  if (path == 1) commit_run(m, rows, 0);
+  if (path == 2) {
+    commit_salt(m, 0, 0);
+    commit_tree(m, 0, rows, 0);
+  }
   CK(cudaDeviceSynchronize());
   CK(cudaGetLastError());
   std::vector<uint8_t> hl((size_t)64 * m.R), bc((size_t)128 * m.R), root(64);
   CK(cudaMemcpy(hl.data(), m.x, hl.size(), cudaMemcpyDeviceToHost));
   CK(cudaMemcpy(bc.data(), m.bc, bc.size(), cudaMemcpyDeviceToHost));
   CK(cudaMemcpy(root.data(), m.tree + m.tree_bytes - 64, 64, cudaMemcpyDeviceToHost));
+  if (tree_out) {
+    tree_out->resize(m.tree_bytes);
+    CK(cudaMemcpy(tree_out->data(), m.tree, m.tree_bytes, cudaMemcpyDeviceToHost));
+  }
   CK(cudaFree(rows));
   return hl == c.hl && bc == c.bc && root == c.root;
 }
@@ -481,12 +759,32 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   };
   auto hashes = [&](Chunk& c, cudaStream_t st) {
     for (int l = 0; l < LAYERS; l++)
-      for (int t = 0; t < NSTAGE; t++) commit_run(c.cm[t], c.op[t], st);
+      for (int t = 0; t < NSTAGE; t++) commit_full(c.cm[t], l, c.op[t], st);
   };
-  auto stage_seq = [&](Chunk& c, cudaStream_t st, bool hash, bool draw) {
+  // ahead (the fast path): every salt-only part of the chunk's forward on a side stream at the start, each stage's
+  // commitment waiting only for its own, so they leave the critical path; otherwise each stage's whole commitment inline
+  std::vector<cudaStream_t> side;
+  for (int c = 0; c < NC; c++) side.push_back(prio_stream(std::min(hi + c, lo)));
+  auto stage_seq = [&](Chunk& c, cudaStream_t st, bool hash, bool draw, cudaStream_t ahead) {
+    std::vector<cudaEvent_t> ev;
+    if (hash && g_fast && ahead) {
+      fork(st, ahead);
+      for (int l = 0; l < LAYERS; l++)
+        for (int t = 0; t < NSTAGE; t++) {
+          commit_salt(c.cm[t], l, ahead);
+          cudaEvent_t e;
+          CK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+          CK(cudaEventRecord(e, ahead));
+          ev.push_back(e);
+        }
+    }
     for (int l = 0; l < LAYERS; l++)
       for (int t = 0; t < NSTAGE; t++) {
-        if (hash) commit_run(c.cm[t], c.op[t], st);
+        if (hash && ev.empty()) commit_full(c.cm[t], l, c.op[t], st);
+        if (hash && !ev.empty()) {
+          CK(cudaStreamWaitEvent(st, ev[(size_t)l * NSTAGE + t], 0));
+          commit_tree(c.cm[t], l, c.op[t], st);
+        }
         if (draw) draw_wait<<<1, 1, 0, st>>>((unsigned long long)draw_us * 1000ull);
         stage_gemm(P, c, l, t, st);
       }
@@ -503,7 +801,17 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   };
   add("gemm", sm, [&] { gemms(ch[0], sm); }, macs);
   add("hash", sm, [&] { hashes(ch[0], sm); }, 0);
-  add("serial", sm, [&] { stage_seq(ch[0], sm, true, false); }, macs);
+  if (g_fast) {
+    add("salt", sm, [&] {
+      for (int l = 0; l < LAYERS; l++)
+        for (int t = 0; t < NSTAGE; t++) commit_salt(ch[0].cm[t], l, sm);
+    }, 0);
+    add("tree", sm, [&] {
+      for (int l = 0; l < LAYERS; l++)
+        for (int t = 0; t < NSTAGE; t++) commit_tree(ch[0].cm[t], l, ch[0].op[t], sm);
+    }, 0);
+  }
+  add("serial", sm, [&] { stage_seq(ch[0], sm, true, false, nullptr); }, macs);
   add("conc", sm, [&] {
     fork(sm, s0);
     gemms(ch[0], s0);
@@ -521,24 +829,34 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     fork(s0hi, sm);
     fork(s1lo, sm);
   }, macs);
-  // hash latency a stage: 32 commitments of one stage's operands back to back
-  std::vector<std::pair<std::string, std::vector<Rep>>> lat;
+  // hash latency a stage: 32 commitments of one stage's operands back to back (the fast path's critical part: its salt-only
+  // part, timed apart, runs ahead)
+  std::vector<std::pair<std::string, std::vector<Rep>>> lat, salt_lat;
   for (int t = 0; t < NSTAGE; t++) {
-    const Graph G = capture(sm, [&] { for (int l = 0; l < LAYERS; l++) commit_run(ch[0].cm[t], ch[0].op[t], sm); });
+    const Graph G = capture(sm, [&] {
+      for (int l = 0; l < LAYERS; l++)
+        if (g_fast) commit_tree(ch[0].cm[t], l, ch[0].op[t], sm);
+        else commit_run(ch[0].cm[t], ch[0].op[t], sm);
+    });
     lat.push_back({SNAME[t], time_graph(d, G, sm, reps)});
     CK(cudaGraphExecDestroy(G.ge));
+    if (!g_fast) continue;
+    const Graph S = capture(sm, [&] { for (int l = 0; l < LAYERS; l++) commit_salt(ch[0].cm[t], l, sm); });
+    salt_lat.push_back({SNAME[t], time_graph(d, S, sm, reps)});
+    CK(cudaGraphExecDestroy(S.ge));
   }
   // C chunks in flight, each hash -> draw -> GEMM a stage, chunk 0 at the highest priority
   for (int C = 1; C <= NC; C++) {
     add("pipe" + std::to_string(C), sm, [&] {
       for (int c = 0; c < C; c++) {
         fork(sm, cs[c]);
-        stage_seq(ch[c], cs[c], true, true);
+        stage_seq(ch[c], cs[c], true, true, side[c]);
       }
       for (int c = 0; c < C; c++) fork(cs[c], sm);
     }, C * macs);
   }
-  add("pipe1_nodraw_nohash", sm, [&] { stage_seq(ch[0], sm, false, true); }, macs);
+  add("pipe1_draw", sm, [&] { stage_seq(ch[0], sm, false, true, nullptr); }, macs);
+  add("pipe1_hash", sm, [&] { stage_seq(ch[0], sm, true, false, side[0]); }, macs);
   // the commitments on a green partition of N SMs, the GEMMs on the rest (no graph: the two contexts' streams)
   std::vector<std::tuple<int, int, int, double, double, double>> green;  // N asked, gemm SMs, hash SMs, gemm alone, both, hash alone
   for (int N : {16, 32}) {
@@ -564,14 +882,18 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     const double ga = host_ms(true, false), both = host_ms(true, true), ha = host_ms(false, true);
     green.emplace_back(N, got[0], got[1], ga, both, ha);
   }
-  printf("{\"mode\": \"prefill\", \"M\": %d, \"layers\": %d, \"draw_us\": %d, \"chunks_max\": %d, \"macs\": %.6e, "
+  printf("{\"mode\": \"prefill\", \"hash\": \"%s\", \"M\": %d, \"layers\": %d, \"draw_us\": %d, \"chunks_max\": %d, \"macs\": %.6e, "
          "\"op_bytes_token_layer\": %d, \"rejected\": %d, \"missing_algo\": %d, \"gemms\": [",
-         M, LAYERS, draw_us, NC, macs, SK[0] + SK[1] + SK[2] + SK[3] + SK[4] + SK[5], g_rejected_total, g_missing);
+         g_fast ? "fr" : "sz", M, LAYERS, draw_us, NC, macs, SK[0] + SK[1] + SK[2] + SK[3] + SK[4] + SK[5], g_rejected_total,
+         g_missing);
   for (int t = 0; t < NSTAGE; t++)
     printf("%s{\"stage\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"algo\": %d, \"ms_alone\": %.4f}", t ? ", " : "", SNAME[t], M,
            GN[t], GK[t], P.g[t].L.algo_id, P.g[t].L.ms);
   printf("], \"hash_latency\": {");
   for (size_t i = 0; i < lat.size(); i++) print_reps(lat[i].first.c_str(), lat[i].second, 0, d.sms, i + 1 < lat.size());
+  printf("}, \"salt_latency\": {");
+  for (size_t i = 0; i < salt_lat.size(); i++)
+    print_reps(salt_lat[i].first.c_str(), salt_lat[i].second, 0, d.sms, i + 1 < salt_lat.size());
   printf("}, \"green\": [");
   for (size_t i = 0; i < green.size(); i++) {
     const auto& g = green[i];
@@ -938,11 +1260,13 @@ static int run_gate(Dev& d, const std::string& dir, const std::vector<int>& Ms) 
       if (t == 4 || t == 3) continue;  // the same width as stage 0
       const HostConst c = load_const(dir, SK[t], M);
       const Commit m = make_commit(c);
-      const bool ok = commit_gate(m, true), control = commit_gate(m, false);
+      std::vector<uint8_t> t_sz, t_fr;
+      const bool ok = commit_gate(m, 1, &t_sz), fast = commit_gate(m, 2, &t_fr), control = commit_gate(m, 0);
+      const bool same = t_sz == t_fr;
       printf("{\"mode\": \"gate\", \"what\": \"hm96-sha512 row-seg frame-v3-sha512\", \"k\": %d, \"R\": %d, \"s\": %d, \"ok\": %s, "
-             "\"control_rejected\": %s}\n",
-             c.k, c.R, c.s, ok ? "true" : "false", control ? "false" : "true");
-      fails += !ok || control;
+             "\"fast_ok\": %s, \"fast_tree_equal\": %s, \"control_rejected\": %s}\n",
+             c.k, c.R, c.s, ok ? "true" : "false", fast ? "true" : "false", same ? "true" : "false", control ? "false" : "true");
+      fails += !ok || !fast || !same || control;
     }
   fflush(stdout);
   return fails + gate(d);
@@ -954,6 +1278,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   const std::string mode = argv[1];
+  g_fast = !(getenv("HASH") && strcmp(getenv("HASH"), "sz") == 0);
   Dev d;
   CK(cudaSetDevice(0));
   CK(cudaStreamCreate(&d.st));
