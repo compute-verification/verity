@@ -118,6 +118,10 @@
         "benchmarks/fp4_sparse_tp/",
         "benchmarks/fp4_nobits/",
         "benchmarks/commit_gpu/",
+        "benchmarks/edited_gemm/",
+        "benchmarks/masked_gemm/",
+        "benchmarks/floored_gemm/",
+        "benchmarks/hashed_gemm/",
         ".agents/skills/kernel-engineering/"
       ]
     },
