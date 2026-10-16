@@ -261,6 +261,30 @@ theorem copyPos_key {g x : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.uni
   · rename_i hlt
     exact Or.inr ⟨he ▸ hlt, _, hs₀, rfl⟩
 
+/-- **Stacked inputs with one key copy one position**, or each a forced-zero row, at every template instance. -/
+theorem copyPos_of_key {g x x' : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.unit.inWords * WORD))
+    (hx' : x' < st.c.upv * (st.c.unit.inWords * WORD)) (hkey : srcKey st.c x = srcKey st.c x') :
+    copyPos L regs F hg x = copyPos L regs F hg x' ∨
+      (IsZeroPos L regs F (copyPos L regs F hg x) ∧ IsZeroPos L regs F (copyPos L regs F hg x')) := by
+  by_cases hz : srcKey st.c x = .zero
+  · exact Or.inr ⟨copyPos_zero L regs F hg hx hz, copyPos_zero L regs F hg hx' (hkey ▸ hz)⟩
+  by_cases hp : ∃ k off, srcKey st.c x = .pad k off
+  · obtain ⟨k, off, hpad⟩ := hp
+    obtain ⟨hk1, ho1⟩ := srcKey_pad hpad
+    obtain ⟨hk2, ho2⟩ := srcKey_pad (hkey ▸ hpad)
+    left
+    have : x = x' := by
+      rw [← Nat.div_add_mod x (st.c.unit.inWords * WORD), ← Nat.div_add_mod x' (st.c.unit.inWords * WORD),
+        ← hk1, ← ho1, ← hk2, ← ho2]
+    rw [this]
+  simp only [not_exists] at hp
+  rcases copyPos_key L regs F hg hx hz hp with h1 | ⟨hlt, h1⟩ <;>
+    rcases copyPos_key L regs F hg hx' (hkey ▸ hz) (fun k off => hkey ▸ hp k off) with h2 | ⟨hlt', h2⟩
+  · exact Or.inl (Fin.ext (h1.trans (hkey ▸ h2.symm)))
+  · exact absurd (h1 ▸ (copyPos L regs F hg x).isLt) (hkey ▸ hlt')
+  · exact absurd (h2 ▸ (copyPos L regs F hg x').isLt) (hkey ▸ hlt)
+  · exact Or.inr ⟨h1, h2⟩
+
 /-- **`Copies` from keys**: an instance that puts template instance `g`'s stacked unit inputs on one gate only when they
 have one key (`srcKey`, the same at every template instance) wires them as Δ copies them. -/
 theorem copies_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
@@ -269,28 +293,8 @@ theorem copies_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u
       c'.val < ((unitRows st L.unit_built).stack st.c.upv).nIn → srcKey st.c c.val = srcKey st.c c'.val) :
     Copies L regs F inst hg := by
   intro c c' hw hc hc'
-  have hkey := hk c c' hw hc hc'
   have hn := L.unitRows_nIn
-  have hx : c.val < st.c.upv * (st.c.unit.inWords * WORD) := by rw [← hn]; exact hc
-  have hx' : c'.val < st.c.upv * (st.c.unit.inWords * WORD) := by rw [← hn]; exact hc'
-  by_cases hz : srcKey st.c c.val = .zero
-  · exact Or.inr ⟨copyPos_zero L regs F hg hx hz, copyPos_zero L regs F hg hx' (hkey ▸ hz)⟩
-  by_cases hp : ∃ k off, srcKey st.c c.val = .pad k off
-  · obtain ⟨k, off, hpad⟩ := hp
-    obtain ⟨hk1, ho1⟩ := srcKey_pad hpad
-    obtain ⟨hk2, ho2⟩ := srcKey_pad (hkey ▸ hpad)
-    left
-    have : c.val = c'.val := by
-      rw [← Nat.div_add_mod c.val (st.c.unit.inWords * WORD), ← Nat.div_add_mod c'.val (st.c.unit.inWords * WORD),
-        ← hk1, ← ho1, ← hk2, ← ho2]
-    rw [this]
-  simp only [not_exists] at hp
-  rcases copyPos_key L regs F hg hx hz hp with h1 | ⟨hlt, h1⟩ <;>
-    rcases copyPos_key L regs F hg hx' (hkey ▸ hz) (fun k off => hkey ▸ hp k off) with h2 | ⟨hlt', h2⟩
-  · exact Or.inl (Fin.ext (h1.trans (hkey ▸ h2.symm)))
-  · exact absurd (h1 ▸ (copyPos L regs F hg c.val).isLt) (hkey ▸ hlt')
-  · exact absurd (h2 ▸ (copyPos L regs F hg c'.val).isLt) (hkey ▸ hlt)
-  · exact Or.inr ⟨h1, h2⟩
+  exact copyPos_of_key L regs F hg (by rw [← hn]; exact hc) (by rw [← hn]; exact hc') (hk c c' hw hc hc')
 
 end keys
 
