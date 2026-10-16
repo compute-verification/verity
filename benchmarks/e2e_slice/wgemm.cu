@@ -18,7 +18,8 @@
 //                                   [s]editedf:w_NAME, or any of egemm's arms)
 //   wgemm pipe REPS ARM BASE M N K PARAMS S   ARM's calls with their commitments beside the next call (cgpipe.cu; PARAMS
 //                                   COMMIT-GPU's params file for 16,384-bit rows), against BASE. env: WG_RESERVE=k (the
-//                                   GEMM's persistent grid on SMs - k), WG_GRID=tiles (a CTA a tile, not persistent),
+//                                   GEMM's persistent grid on SMs - k), WG_GRID=tiles (a CTA a tile, not persistent;
+//                                   or a number of CTAs, each taking every grid-th tile),
 //                                   WG_PRIO=gemm (the GEMM's stream at the highest priority and the commitments' at the
 //                                   lowest, so their CTAs go only where the GEMM's don't fit; default: the commitments'
 //                                   at the highest), WG_GREEN=k (the commitments in a green context of k SMs, the arm's
@@ -392,10 +393,11 @@ static int wpipe(int reps, const std::string& arm, const std::string& base, int 
   CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
   const int tiles = (m / 128) * (n / 128), reserve = getenv("WG_RESERVE") ? atoi(getenv("WG_RESERVE")) : 0;
   const int green = getenv("WG_GREEN") ? atoi(getenv("WG_GREEN")) : 0;
-  const bool per_tile = getenv("WG_GRID") && !strcmp(getenv("WG_GRID"), "tiles");
+  const char* wg = getenv("WG_GRID");
+  const bool per_tile = wg != nullptr;
   const bool gemm_first = getenv("WG_PRIO") && !strcmp(getenv("WG_PRIO"), "gemm");
   if (reserve < 0 || reserve >= nsm) { fprintf(stderr, "WG_RESERVE %d of %d SMs\n", reserve, nsm); exit(2); }
-  P.grid = per_tile ? tiles : std::min(tiles, nsm - reserve);
+  P.grid = !wg ? std::min(tiles, nsm - reserve) : !strcmp(wg, "tiles") ? tiles : std::max(1, std::min(tiles, atoi(wg)));
   auto fa = warm(arm), fb = warm(base);
   int lo, hi;
   CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));

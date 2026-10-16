@@ -13,7 +13,7 @@
 # IL (the pairs; none: skip), IL_REPS (41), PIPE (none: skip), PIPE_REPS (15), PIPE_CFGS: rK (the GEMM's persistent grid on
 # SMs - K, the commitments' stream at the highest priority), rKg (the same with the GEMM's stream highest and the
 # commitments' lowest, each call's commitments released with the next call's GEMM, so they get only the K SMs the GEMM
-# leaves while it runs), tiles[g] (a CTA a tile, not persistent), greenK (the
+# leaves while it runs), tiles[g] (a CTA a tile, not persistent), nG[g] (a grid of G CTAs), greenK (the
 # commitments in a green context of K SMs, the GEMMs in one of the rest), old (r0 on the committer's default path, not its
 # small one), and a leading d on any of them (the default path).
 set -uo pipefail
@@ -63,7 +63,9 @@ cfg_env() {
   [ "$c" = old ] && { echo "CG_SMALL=0"; return; }
   [[ $c == d* ]] && { e="CG_SMALL=0"; c=${c#d}; }
   [[ $c == *g ]] && { e="$e WG_PRIO=gemm"; c=${c%g}; }
-  case $c in tiles) e="$e WG_GRID=tiles" ;; green*) e="$e WG_GREEN=${c#green}" ;; r*) e="$e WG_RESERVE=${c#r}" ;; esac
+  case $c in
+    tiles) e="$e WG_GRID=tiles" ;; green*) e="$e WG_GREEN=${c#green}" ;; n*) e="$e WG_GRID=${c#n}" ;; r*) e="$e WG_RESERVE=${c#r}" ;;
+  esac
   echo "$e"
 }
 export -f cfg_env
