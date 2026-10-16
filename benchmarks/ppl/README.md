@@ -109,7 +109,7 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 |---|---|---|---|
 | `linear.smooth(alpha, kv_shared)` | real | SmoothQuant, x / m and W m; `kv_shared` is the foldable variant | D4-70B |
 | `linear.rotate(kind)` | real | x Q and W Q; `q` is exact_grid's rotation, `h` the flat Hadamard | D4-PPL |
-| `linear.int8(act, act_top, weight_top, group, gptq)` | quantize | activations per token, rounded or dithered; weights per row or per `group` inputs, capped at `weight_top`, rounded or GPTQ | D4-PPL, D4-70B |
+| `linear.int8(act, act_top, weight_top, group, gptq, density)` | quantize | activations per token, rounded or dithered (`density` < 1: dithered on a coin-chosen fraction of every k64 word's positions, rounded elsewhere); weights per row or per `group` inputs, capped at `weight_top`, rounded or GPTQ | D4-PPL, D4-70B, LOWBIT-DESIGN |
 | `attention.rotate()` | real | Q R, K R, V R and the output R⁻¹ | D4-ATTN |
 | `attention.center_keys()` | real | kc | D4-ATTN |
 | `attention.int8(q_top, k, k_top, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; K and V rounded or dithered; P per row or per key block, `p_sink` | D4-ATTN |
@@ -130,9 +130,11 @@ grid too, with no key blocks; `fp4c-dither-all-kv` dithers only K and V there, a
 floor(x / s) + b), the weights' bits drawn once per seed and layer; `GRID-sr` rounds the linears' operands up with
 probability the fraction instead (unbiased, a uniform coin). `nvfp4-MODE` puts the full E2M1 grid in blocks of 16
 with odd UE4M3 block scales (the integer operands q·σ reach 180, past int8, so their product takes the exact FP32-chunk
-route under the `grid_range` gate), `nvfp4c-MODE` the contiguous region in the same blocks, `nvfp4-qN` and `int5-qN`
-dither a coin-chosen 1/N of every k64 word's positions on both operands, and `fp8-peel-wW[-gptq]` is the int8 design
-on E4M3's exact integers: activations dithered on −16..16, weights on ±W (rounded or GPTQ) served as W + U and peeled.
+route under the `grid_range` gate), `nvfp4-int-MODE` the same with every integer scale 1–15, `nvfp4c-MODE` the
+contiguous region in the same blocks, `nvfp4-qN`, `nvfp4c-qN` and `int5-qN` dither a coin-chosen 1/N of every k64
+word's positions on both operands, and `fp8-peel-wW[-gptq]` is the int8 design on E4M3's exact integers: activations
+dithered on −16..16, weights on ±W (rounded or GPTQ) served as W + U and peeled; `fp8-peel-w15-qN` dithers the
+activations on 1/N of the positions only (U still coins every position).
 Any other file passes as a path.
 
 ## Adding an intervention

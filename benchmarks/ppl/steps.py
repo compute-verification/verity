@@ -98,14 +98,17 @@ def quant_rows(m: torch.Tensor, top: int) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.round(m / s[:, None]).clamp(-top, top), s
 
 
-def act_quant(x: torch.Tensor, mode: str, bits: torch.Tensor | None, top: int) -> tuple[torch.Tensor, torch.Tensor]:
+def act_quant(x: torch.Tensor, mode: str, bits: torch.Tensor | None, top: int,
+              coined: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
     """Integer rows and per-row scales: rounded to [-top, top], or the dither floor(v) + b with v = x / s on
-    [-top + 1, top - 1] (|X| <= top)."""
+    [-top + 1, top - 1] (|X| <= top). `coined` (a mask over k): the dither only there, round(v) on the same s elsewhere."""
     if mode == "round":
         return quant_rows(x, top)
     t = top - 1
     s = x.abs().amax(dim=1).clamp(min=1e-30) / t
-    return torch.floor((x / s[:, None]).clamp(-t, t)) + bits, s
+    v = (x / s[:, None]).clamp(-t, t)
+    q = torch.floor(v) + bits
+    return (q if coined is None else torch.where(coined, q, torch.round(v))), s
 
 
 def gptq_round(w: torch.Tensor, h: torch.Tensor, top: int, block: int = 128, damp: float = 0.01) -> tuple[torch.Tensor, torch.Tensor]:
@@ -189,16 +192,23 @@ def _check_int8_linear(p):
         raise ValueError("int8: tops within 127")
     if p["gptq"] and p["group"]:
         raise ValueError("int8: gptq runs on one scale per row")
+    per = p["density"] * WORD_K
+    if not 0 < p["density"] <= 1 or abs(per - round(per)) > 1e-9:
+        raise ValueError(f"int8.density is in (0, 1], a multiple of 1/{WORD_K}")
+    if p["density"] < 1 and p["act"] != "dither":
+        raise ValueError("int8.density thins the activations' dither: act = dither")
 
 
 @linear_step("int8", phase="quantize", seeded=lambda p: p["act"] == "dither", calib=lambda p: p["gptq"],
              check=_check_int8_linear)
 def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight_top: int = 127, group: int = 0,
-                gptq: bool = False):
+                gptq: bool = False, density: float = 1.0):
     """The int8 grid: activations one scale per token (`round` to [-act_top, act_top], or `dither`: floor(x / s) + b,
     b a fresh coin bit, s = absmax / (act_top - 1)), weights one scale per output row (or per (row, `group` inputs),
     each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded or by GPTQ (blocks of 128, on
-    the calibration windows' served inputs). The integer product is exact (s8 x s8 -> s32), scaled after."""
+    the calibration windows' served inputs). The integer product is exact (s8 x s8 -> s32), scaled after. `density`
+    < 1: the dither only on a coin-chosen density * 64 of every k64 word's positions (`coin_positions`), the rest
+    rounded on the same scale; a weight-side coin (the `peel` step's U) sits on every position."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
         if gptq:
@@ -220,7 +230,9 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight_top: 
 
     wq, sw = mm.cached("int8", weights)
     bits = mm.coins(mm.x.shape) if act == "dither" else None
-    xq, sa = act_quant(mm.x, act, bits, act_top)
+    k = mm.x.shape[1]
+    coined = mm.cached("pos", lambda: coin_positions(mm, k, density)) if density < 1 else None
+    xq, sa = act_quant(mm.x, act, bits, act_top, coined)
     if group:
         k = xq.shape[1]
         y = torch.zeros(xq.shape[0], wq.shape[0], device=xq.device)

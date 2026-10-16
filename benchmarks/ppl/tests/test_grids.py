@@ -128,6 +128,20 @@ def test_density_coins_only_the_chosen_positions():
     assert torch.equal(q[:, ~coined], steps.to_grid(v[:, ~coined], "int5", "round", None))
 
 
+def test_the_int8_dither_at_a_density_rounds_the_uncoined_positions():
+    g = torch.Generator().manual_seed(9)
+    x = torch.randn(16, 128, generator=g)
+    coined = torch.zeros(128, dtype=torch.bool)
+    coined[1::8] = True
+    q, s = steps.act_quant(x, "dither", torch.ones_like(x), 16, coined)
+    v = x / s[:, None]
+    assert torch.equal(q[:, coined], torch.floor(v[:, coined]) + 1)
+    assert torch.equal(q[:, ~coined], torch.round(v[:, ~coined]))
+    assert float(q.abs().max()) <= 16
+    with pytest.raises(ValueError, match="act = dither"):
+        spec.parse_step("linear", {"step": "int8", "density": 0.25})
+
+
 def test_a_wide_grid_takes_the_exact_fp32_route():
     """Block-scaled E2M1 operands reach 12 * 15 = 180, past int8: gated within the declared bound, and exact."""
     g = torch.Generator().manual_seed(7)
@@ -172,7 +186,7 @@ def test_the_linear_peel_serves_w_plus_u_and_gates_it(monkeypatch):
 
 ARMS = ["fp4c-dither", "fp4c-dither-all", "fp4-dither-all", "int5-round", "fp4c-dither-all-kv", "int5-sr"]
 NEW_ARMS = ["nvfp4-round", "nvfp4-dither", "nvfp4-sr", "nvfp4-q4", "nvfp4c-dither", "int5-q8", "fp8-peel-w15",
-            "fp8-peel-w8-gptq"]
+            "fp8-peel-w8-gptq", "fp8-peel-w15-q4", "nvfp4-int-round"]
 
 
 def test_the_lowbit_design_arms_pass_every_gate(llama, ids, calib):
