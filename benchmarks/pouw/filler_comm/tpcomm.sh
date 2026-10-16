@@ -10,7 +10,8 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=HC-COMM \
 #     --env TC_TP=2 -- bash benchmarks/pouw/filler_comm/tpcomm.sh
 #
-# TC_TP (2), TC_ON (the GPUs gpu-lease may take, in order; default one NUMA node's), TC_BLS ("B:L ..."), TC_REPS, TC_SETS
+# TC_TP (2), TC_ON (the GPUs gpu-lease may take, in order; default one NUMA node's), TC_BLS ("B:L ..."; default the
+# suite proposal's points for TC_TP), TC_REPS, TC_SETS
 # (";"-separated sets of VAR=VALUE settings, each a full pass over TC_BLS, e.g. "TPC_S=64;TPC_S=128"), MAXMIN, TC_WAIT
 # (1; 0 takes the lease only if its GPUs are free now, so a TP 8 attempt never queues ahead of other jobs), TC_NCU (1; 0
 # skips the alone probe and the DRAM gate).
@@ -21,7 +22,9 @@ D=benchmarks/pouw/filler_comm
 export B; B=$(mktemp -d /tmp/tpcomm.XXXXXX); trap 'rm -rf "$B"' EXIT
 export TC_TP=${TC_TP:-2} TC_REPS=${TC_REPS:-9}
 export TC_ON=${TC_ON:-4,5,6,7}
-export TC_BLS=${TC_BLS:-"32:2048 64:2048 128:2048 256:2048 32:8192 128:8192"}
+BLS="32:2048 64:2048 128:2048 256:2048 32:8192 128:8192"
+[ "$TC_TP" = 2 ] && BLS="32:2048 64:2048 128:2048 256:2048 32:8192 64:8192"  # TP 2's KV wraps at B 128, 8K
+export TC_BLS=${TC_BLS:-$BLS}
 export TC_SETS=${TC_SETS:-"NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64"}
 export TC_NCU=${TC_NCU:-1}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
