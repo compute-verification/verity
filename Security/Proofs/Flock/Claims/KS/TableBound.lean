@@ -18,7 +18,8 @@ At a statement that sets up, the old theorems bound a table of table 0's level-0
 whose witness satisfies that statement reads as a witness of the statement (`relS_of_table0`, from `relS_deployed`): the
 plain scope has one table (`plain_one`), so `not_committed_plain`'s `hwit` holds there (`plain_hwit`), and a table of
 full-width columns that does not extract is not committed (`plain_not_committed`). Under `--zk` it holds at one table
-(`zk_hwit`); the masked scope admits several, where a trace of table 0 alone does not read as a witness of the others.
+(`zk_hwit`), where a table of witness-lane columns that does not extract is not `CommittedPad` (`zk_not_committed`);
+the masked scope admits several, where a trace of table 0 alone does not read as a witness of the others.
 -/
 
 namespace Claims.Flock
@@ -473,6 +474,32 @@ theorem plain_not_committed (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s 
   have := not_committed_plain H Readable.relation x s hs
     (tables_head hset (Array.getElem?_eq_getElem h0)) ⟨sts[0].m - 22, by omega⟩ hi C hw
     (L.model (FlockSoundness.Refine.regionsOf sts[0])) (plain_hwit H hs hin hset h0 L _ hi) hg
+  rwa [hi] at this
+
+/-- **At the masked record at one table, a table that does not extract is not committed** to table 0's model
+statement, at the old padded theorems' schedule and padding (`not_committed_zk` at `zk_hwit`): at a statement in scope
+that the deployed masked parser reads at the deployed relation and the verifier sets up with one table, for every table
+of witness-lane columns. -/
+theorem zk_not_committed (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : (deployZk Readable.relation).parse x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (hone : sts.size = 1)
+    (L : FlockSoundness.Layout (sts[0]'(by omega))) (C : Fin (zkRadius.N x) → List 𝔽) (hw : ∀ q, wide true x (C q))
+    (hg : ¬ Claims.Flock.GoodTable H (deployZk Readable.relation) zkRadius x C) :
+    ¬ FlockSoundness.CommittedPad FlockSoundness.execArith
+      (L.model (FlockSoundness.Refine.regionsOf (sts[0]'(by omega))))
+      (FlockSoundness.Refine.schedOf (Claims.Flock.zkSched (sts[0]'(by omega)).m).1)
+      (Claims.Flock.zkSched (sts[0]'(by omega)).m).2 padC (Claims.Flock.oracleOf C) := by
+  have h0 : 0 < sts.size := by omega
+  have hm := parse_m hs hset h0
+  have h25 : 25 ≤ sts[0].m := by have := hin.1; simp only [↓reduceIte] at this; omega
+  have h35 : sts[0].m ≤ 35 := by have := hin.2.1; omega
+  have hi : Claims.Flock.ZkIdx.m ⟨sts[0].m - 25, by omega⟩ = sts[0].m := by
+    simp only [Claims.Flock.ZkIdx.m]
+    omega
+  have := not_committed_zk H Readable.relation x s hs
+    (tables_head hset (Array.getElem?_eq_getElem h0)) ⟨sts[0].m - 25, by omega⟩ hi C hw
+    (L.model (FlockSoundness.Refine.regionsOf sts[0])) (zk_hwit H hs hin hset hone L _ hi) hg
+  unfold Claims.Flock.zkPad at this
   rwa [hi] at this
 
 end FlockDeploy.KS

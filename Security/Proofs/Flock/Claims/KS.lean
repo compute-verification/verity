@@ -65,5 +65,5 @@ parses in scope (`FlockDeploy.KS.acc_inScope`), so at both records it is its bou
 (`FlockDeploy.KS.plain_tableBoundθ_of_acc`, `FlockDeploy.KS.zk_tableBoundθ_of_acc`,
 `FlockDeploy.KS.plain_KSθ_of_acc`, `FlockDeploy.KS.zk_KSθ_of_acc`); at the deployed relation, a table of
 full-width columns that does not extract is not committed to the plain record's table 0
-(`FlockDeploy.KS.plain_hwit`, `FlockDeploy.KS.plain_not_committed`), and under `--zk` `hwit` holds at one table
-(`FlockDeploy.KS.zk_hwit`). -/
+(`FlockDeploy.KS.plain_hwit`, `FlockDeploy.KS.plain_not_committed`), and under `--zk` at one table to the masked
+record's (`FlockDeploy.KS.zk_hwit`, `FlockDeploy.KS.zk_not_committed`). -/
