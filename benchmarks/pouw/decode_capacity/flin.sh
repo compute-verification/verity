@@ -9,12 +9,12 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=FILL \
 #     --send benchmarks/pouw/decode_capacity/flin.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/flin.sh"'
 #
-# FL_FLIN ("M:FW:NC:THR[:PDL] ..."; "none" skips), FL_STEP ("B:L:FW:NC:THR:AFW[:PDL[:FILL_SMS[:LT[:FP[:ANC]]]]] ..."), PDL 0
+# FL_FLIN ("M:FW:NC:THR[:PDL] ..."; "none" skips), FL_STEP ("B:L:FW:NC:THR:AFW[:PDL[:FILL_SMS[:LT[:FP[:ANC[:APS]]]]]] ..."), PDL 0
 # to launch each linear after the previous grid finishes (FLIN_PDL), FILL_SMS > 0 to run the fused step on a green split
 # beside the dfill pump on that many SMs, LT the linears that stay on cuBLASLt (FLIN_LT: 1 qkv, 2 o, 4 gate_up, 8 down), FP the
 # attention filler blocks' PDL (FATT_PDL: 0 none, 1 with, 2 with their filler warps starting early), ANC their warps'
-# chains (FATT_NC, 4 unless set), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP
-# ("B:L:FW:NC:THR:AFW ...", ncu's tensor-pipe counters over one step's attention blocks and first linear, each with
+# chains (FATT_NC, 4 unless set), APS 1 those blocks persistent on the step's SMs (FATT_PERSIST), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP
+# ("B:L:FW:NC:THR:AFW[:ANC[:APS]] ...", ncu's tensor-pipe counters over one step's attention blocks and first linear, each with
 # filler warps), FL_REPS, FL_GATE (0 skips CAP's gate)
 set -uo pipefail
 export O=${OUT:?}
@@ -60,17 +60,17 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
     echo "ncu flin $c rc $?" >> "$O/rc.txt"
   done
   for c in ${FL_NCU_STEP:-}; do
-    IFS=: read -r b l fw nc thr afw <<< "$c"
+    IFS=: read -r b l fw nc thr afw anc aps <<< "$c"
     # fstep first runs the attention blocks of layer 0 with their filler warps, then its first linear with filler warps
-    ncu --clock-control none -k regex:"flin_k|fqk_k|fpv_k" --launch-count 3 \
+    FATT_NC=${anc:-4} FATT_PERSIST=${aps:-0} ncu --clock-control none -k regex:"flin_k|fqk_k|fpv_k" --launch-count 3 \
       --metrics gpu__time_duration.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed \
-      --csv "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$afw" 0 1 > "$O/ncu-fstep-$b-$l-$fw-$afw.csv" 2>&1
+      --csv "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$afw" 0 1 > "$O/ncu-fstep-$b-$l-$fw-$afw-${anc:-4}-${aps:-0}.csv" 2>&1
     echo "ncu fstep $c rc $?" >> "$O/rc.txt"
   done
   q
   for c in $FL_STEP; do
-    IFS=: read -r b l fw nc thr afw pdl fsm lt fp anc <<< "$c"
-    FLIN_PDL=${pdl:-1} FLIN_LT=${lt:-0} FATT_PDL=${fp:-0} FATT_NC=${anc:-4} "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "${afw:-0}" "${fsm:-0}" "$FL_REPS" \
+    IFS=: read -r b l fw nc thr afw pdl fsm lt fp anc aps <<< "$c"
+    FLIN_PDL=${pdl:-1} FLIN_LT=${lt:-0} FATT_PDL=${fp:-0} FATT_NC=${anc:-4} FATT_PERSIST=${aps:-0} "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "${afw:-0}" "${fsm:-0}" "$FL_REPS" \
       >> "$O/fstep.jsonl" 2>> "$O/errors.txt" ||
       echo "rc $? for fstep $c" >> "$O/errors.txt"
     q

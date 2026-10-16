@@ -59,3 +59,11 @@ def test_attention_chains_are_part_of_the_config():
     assert len(pts) == 2
     k, fused, _, _ = S.fstep_pick([four, two], split=False)[(132, 5120)]
     assert k[10] == 2 and fused == pytest.approx(0.60)
+
+
+def test_persistent_attention_blocks_are_part_of_the_config():
+    blocks, persistent = _row(256, 2048, 0, 6, 28, 0.33, 0.13, 0.99), {**_row(256, 2048, 0, 6, 28, 0.40, 0.13, 1.0), "APS": 1}
+    assert len(S.fstep_points([blocks, persistent])) == 2
+    k, fused, _, _ = S.fstep_pick([blocks, persistent], split=True)[(256, 2048)]
+    assert k[11] == 1 and fused == pytest.approx(0.40)
+    assert S.afw_name(6, 2, 1) == "6 NC 2 persistent"
