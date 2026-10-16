@@ -12,15 +12,18 @@ default); `PlainIn` and `ZkIn` collect these, with `n ≤ 200`:
 
 * each table's error is at most `2^{−205}` (`tableErr_plain_le`, `tableErr_zk_le`), and `ε_table`, their sum, at most
   `n·2^{−205}` (`εtable_le`);
-* `m′ = 210` and `K = 2^256` (`waits_deploy`, `cap_deploy`), `N₀ = 2^{d₀}` with `10 ≤ d₀ ≤ 23`, and
-  `k = ⌈4N₀/e⌉ = kVal d₀` exactly (`k_plain`, `k_zk`);
+* `m′ = 210` and `K = 2^256` (`waits_deploy`, `cap_deploy`); `N₀`, the tables' level-0 lengths summed, each `2^d`
+  with `10 ≤ d ≤ 23`, is `2^10` to `n·2^23` (`N₀_le`), so `k = ⌈4N₀/e⌉ ≤ n·2^24` (`k_le_mul`); at one table
+  `N₀ = 2^{d₀}` and `k = kVal d₀` exactly (`N₀_one`, `k_plain`, `k_zk`);
 * the verifier's rounds are at most `2 + 4400·n` (`Vk_le`: each rep at most `2200`, `repRounds_plain_le`,
   `repRounds_zk_le`) and the weight at most `n·2^33` (`weight_le`);
-* `κ ≤ n·2^{−202.98}` and `λ ≥ 201.98 − log₂ n` (`κ_plain_le`, `lam_plain_ge`, `κ_zk_le`, `lam_zk_ge`); at one table
+* `κ ≤ n·2^{−202.98}` (`κ_le_mul` at `ε_table ≤ n·2^{−205}` and `N₀ ≤ n·2^23`) and `λ ≥ 201.98 − log₂ n`
+  (`lam_ge_of_rounds_mul`, and at the instances `κ_plain_le`, `lam_plain_ge`, `κ_zk_le`, `lam_zk_ge`), so
+  `λ ≥ 195.98` at up to `64` tables, the verifier's cap (`lam_plain_ge_64`, `lam_zk_ge_64`); at one table
   `ε_table ≤ 2^{−205}`, `κ ≤ 2^{−202.98}`, `γ ≤ 2^51` and `λ ≥ 201.98` (`plain_one`, `zk_one`).
 
-`ε_table` here is the session's sum over its tables, so the spec's per-table `2^{−205}` costs `log₂ n` bits of `λ` at
-`n` tables.
+`ε_table` and `N₀` here are the session's sums over its tables, so the spec's per-table `2^{−205}` costs `log₂ n` bits
+of `λ` at `n` tables.
 -/
 
 namespace Claims.Flock.Numbers
@@ -29,28 +32,67 @@ section Deploy
 
 variable {Coin Col T : Type}
 
-/-- **`κ ≤ n·2^{−202.98}`** when `ε_table ≤ n·2^{−205}`, `n ≥ 1`, at the deployed `m′`, `K` and `N₀`. -/
+/-- `k` at `0 ≤ N₀ ≤ n·2^23`, `n ≥ 1`, is at most `n·2^24`. -/
+theorem k_le_mul {N n : ℝ} (hn : 1 ≤ n) (h0 : 0 ≤ N) (hN : N ≤ n * 2 ^ 23) :
+    (⌈4 * N / Real.exp 1⌉₊ : ℝ) ≤ n * 2 ^ 24 := by
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hlo := Real.exp_one_gt_d9
+  refine (Nat.ceil_lt_add_one (by positivity)).le.trans ?_
+  have h1 : 4 * N / Real.exp 1 ≤ n * 2 ^ 24 - 1 := by
+    rw [div_le_iff₀ he0]
+    have hm : 0 ≤ n * 2 ^ 24 - 1 := by nlinarith
+    have := mul_le_mul_of_nonneg_left hlo.le hm
+    nlinarith
+  linarith
+
+/-- `2^{−203} + 2^{−210} + 2^{−231} + 2^{−250} ≤ 2^{−202.98}`. -/
+theorem terms_le : (2 : ℝ) ^ (-(203 : ℝ)) + 2 ^ (-(210 : ℝ)) + 2 ^ (-(231 : ℝ)) + 2 ^ (-(250 : ℝ)) ≤
+    2 ^ (-(202.98 : ℝ)) := by
+  have e : ∀ n : ℕ, (2 : ℝ) ^ (-((203 + n : ℕ) : ℝ)) = 2 ^ (-(203 : ℝ)) * 2⁻¹ ^ n := by
+    intro n
+    rw [Nat.cast_add, neg_add, Real.rpow_add (by norm_num), Real.rpow_neg (by norm_num) (n : ℝ),
+      Real.rpow_natCast, inv_pow]
+    norm_num
+  have e7 : (2 : ℝ) ^ (-(210 : ℝ)) = 2 ^ (-(203 : ℝ)) * 2⁻¹ ^ 7 := by rw [← e 7]; norm_num
+  have e28 : (2 : ℝ) ^ (-(231 : ℝ)) = 2 ^ (-(203 : ℝ)) * 2⁻¹ ^ 28 := by rw [← e 28]; norm_num
+  have e47 : (2 : ℝ) ^ (-(250 : ℝ)) = 2 ^ (-(203 : ℝ)) * 2⁻¹ ^ 47 := by rw [← e 47]; norm_num
+  calc (2 : ℝ) ^ (-(203 : ℝ)) + 2 ^ (-(210 : ℝ)) + 2 ^ (-(231 : ℝ)) + 2 ^ (-(250 : ℝ))
+      = 2 ^ (-(203 : ℝ)) * (1 + 2⁻¹ ^ 7 + 2⁻¹ ^ 28 + 2⁻¹ ^ 47) := by rw [e7, e28, e47]; ring
+    _ ≤ 2 ^ (-(203 : ℝ)) * 2 ^ ((1 : ℝ) / 50) := mul_le_mul_of_nonneg_left slack_le (by positivity)
+    _ = 2 ^ (-(202.98 : ℝ)) := by
+        rw [← Real.rpow_add (by norm_num)]; norm_num
+
+/-- **`κ ≤ n·2^{−202.98}`** when `ε_table ≤ n·2^{−205}` and `N₀ ≤ n·2^23`, `n ≥ 1`, at the deployed `m′` and `K`:
+each of `κ`'s four terms is at most `n` times its one-table bound (`k ≤ n·2^24`, `k_le_mul`). -/
 theorem κ_le_mul (D : Deploy Coin Col T) (x : Msg) {n : ℝ} (hn : 1 ≤ n) (hε : D.εtable x ≤ n * 2 ^ (-(205 : ℝ)))
-    (hw : 210 ≤ D.waits x) (hK : D.cap x = cap) (hN : 2 ^ 10 ≤ D.N₀ x) (hN' : D.N₀ x ≤ 2 ^ 23) :
+    (hw : 210 ≤ D.waits x) (hK : D.cap x = cap) (hN : 2 ^ 10 ≤ D.N₀ x) (hN' : D.N₀ x ≤ n * 2 ^ 23) :
     κ D x ≤ n * 2 ^ (-(202.98 : ℝ)) := by
-  have h1 := κ_le { D with εtable := fun _ => 2 ^ (-(205 : ℝ)) } x le_rfl hw hK hN hN'
-  have e : κ { D with εtable := fun _ => (2 : ℝ) ^ (-(205 : ℝ)) } x =
-      4 * 2 ^ (-(205 : ℝ)) + (κ D x - 4 * D.εtable x) := by
-    unfold κ Deploy.k
-    dsimp only
-    ring
-  have hR : 0 ≤ κ D x - 4 * D.εtable x := by
-    have : κ D x - 4 * D.εtable x =
-        2 ^ (-(D.waits x : ℝ)) + 2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8) := by
-      unfold κ; ring
-    rw [this]
-    positivity
-  rw [e] at h1
-  calc κ D x = 4 * D.εtable x + (κ D x - 4 * D.εtable x) := by ring
-    _ ≤ 4 * (n * 2 ^ (-(205 : ℝ))) + n * (κ D x - 4 * D.εtable x) :=
-        add_le_add (by linarith) (le_mul_of_one_le_left hR hn)
-    _ = n * (4 * 2 ^ (-(205 : ℝ)) + (κ D x - 4 * D.εtable x)) := by ring
-    _ ≤ n * 2 ^ (-(202.98 : ℝ)) := mul_le_mul_of_nonneg_left h1 (by linarith)
+  have hn0 : (0 : ℝ) ≤ n := by linarith
+  have hk1 : 1507 ≤ D.k x := k_ge hN
+  have hk2 : (D.k x : ℝ) ≤ n * 2 ^ 24 := k_le_mul hn (le_trans (by norm_num) hN) hN'
+  have h1 : 4 * D.εtable x ≤ n * 2 ^ (-(203 : ℝ)) := by
+    have e : (2 : ℝ) ^ (-(203 : ℝ)) = 4 * 2 ^ (-(205 : ℝ)) := by
+      rw [show (-(203 : ℝ)) = 2 + -(205 : ℝ) by norm_num, Real.rpow_add (by norm_num)]; norm_num
+    calc 4 * D.εtable x ≤ 4 * (n * 2 ^ (-(205 : ℝ))) := by linarith
+      _ = n * 2 ^ (-(203 : ℝ)) := by rw [e]; ring
+  have h2 : (2 : ℝ) ^ (-(D.waits x : ℝ)) ≤ n * 2 ^ (-(210 : ℝ)) :=
+    (Real.rpow_le_rpow_of_exponent_le (by norm_num) (neg_le_neg (by exact_mod_cast hw))).trans
+      (le_mul_of_one_le_left (by positivity) hn)
+  have h3 : 2 * (D.k x : ℝ) / D.cap x ≤ n * 2 ^ (-(231 : ℝ)) := by
+    have hc : (D.cap x : ℝ) = 2 ^ 256 := by rw [hK, cap]; push_cast; ring
+    have e : (2 : ℝ) ^ (-(231 : ℝ)) = (2 ^ 231)⁻¹ := by
+      rw [Real.rpow_neg (by norm_num), show (231 : ℝ) = ((231 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
+    rw [hc, e, div_le_iff₀ (by positivity)]
+    calc 2 * (D.k x : ℝ) ≤ 2 * (n * 2 ^ 24) := by linarith
+      _ = n * (2 ^ 231)⁻¹ * 2 ^ 256 := by ring
+  have h4 : Real.exp (-(D.k x : ℝ) / 8) ≤ n * 2 ^ (-(250 : ℝ)) :=
+    (exp_neg_k_le hk1).trans (le_mul_of_one_le_left (by positivity) hn)
+  unfold κ
+  calc 4 * D.εtable x + 2 ^ (-(D.waits x : ℝ)) + 2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8)
+      ≤ n * 2 ^ (-(203 : ℝ)) + n * 2 ^ (-(210 : ℝ)) + n * 2 ^ (-(231 : ℝ)) + n * 2 ^ (-(250 : ℝ)) :=
+        add_le_add (add_le_add (add_le_add h1 h2) h3) h4
+    _ = n * (2 ^ (-(203 : ℝ)) + 2 ^ (-(210 : ℝ)) + 2 ^ (-(231 : ℝ)) + 2 ^ (-(250 : ℝ))) := by ring
+    _ ≤ n * 2 ^ (-(202.98 : ℝ)) := mul_le_mul_of_nonneg_left terms_le hn0
 
 /-- **`λ ≥ 201.98 − log₂ n`** when `κ ≤ n·2^{−202.98}`, `n ≥ 1`, and `γ ≤ 2^105`. -/
 theorem lam_ge_mul {κ γ n : ℝ} (hn : 1 ≤ n) (hκ0 : 0 < κ) (hκ : κ ≤ n * 2 ^ (-(202.98 : ℝ))) (hγ0 : 0 ≤ γ)
@@ -72,6 +114,15 @@ theorem lam_ge_mul {κ γ n : ℝ} (hn : 1 ≤ n) (hκ0 : 0 < κ) (hκ : κ ≤ 
       exact hκ'
     have h2 : 202.98 - Real.logb 2 n ≤ min (Real.logb 2 (1 / κ)) 255.5 := le_min h1 (by linarith)
     linarith
+
+/-- **`λ ≥ 201.98 − log₂ n`** at the deployed numbers over `n ≥ 1` tables, up to `2^20` rounds and a weight up to
+`2^64`: `ε_table ≤ n·2^{−205}` and `N₀ ≤ n·2^23`, the tables' errors and level-0 lengths summed. At `n = 1` it is
+`lam_ge_of_rounds`. -/
+theorem lam_ge_of_rounds_mul (D : Deploy Coin Col T) (x : Msg) {n : ℝ} (hn : 1 ≤ n) (hε0 : 0 ≤ D.εtable x)
+    (hε : D.εtable x ≤ n * 2 ^ (-(205 : ℝ))) (hw : 210 ≤ D.waits x) (hK : D.cap x = cap) (hN : 2 ^ 10 ≤ D.N₀ x)
+    (hN' : D.N₀ x ≤ n * 2 ^ 23) (hr : D.V.k x ≤ 2 ^ 20) (hC0 : 0 ≤ D.weight x) (hC : D.weight x ≤ 2 ^ 64) :
+    201.98 - Real.logb 2 n ≤ lamOf (κ D x) (γ D x) :=
+  lam_ge_mul hn (κ_pos D x hε0) (κ_le_mul D x hn hε hw hK hN hN') (γ_nonneg D x) (γ_le_105 D x hr hC0 hC)
 
 /-- **`γ ≤ 2^51`** at up to `4402` rounds and a weight up to `2^33`. -/
 theorem γ_le_51 (D : Deploy Coin Col T) (x : Msg) (hr : D.V.k x ≤ 4402) (hC0 : 0 ≤ D.weight x)
@@ -182,24 +233,67 @@ theorem d_mem_bounds {d : ℕ} (h : d ∈ [10, 11, 12, 13, 14, 15, 18, 19, 20, 2
   simp only [List.mem_cons, List.not_mem_nil, or_false] at h
   omega
 
-theorem N₀_eq {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hs : setupOf zk x = some (s, spec, sts)) (h0 : 0 < sts.size) :
-    N₀ zk x = 2 ^ (if zk then zkLevel0 sts[0].m else plainLevel0 sts[0].m).d := by
-  have : (tables zk x).head? = some (spec, sts[0]) := by
-    simp [tables_eq hs, List.head?_eq_getElem?, h0]
-  simp [N₀, this]
-
-/-- **`N₀` and `k` without `--zk`**: `N₀ = 2^{d₀}`, table 0's plain level-0 length, `2^10 ≤ N₀ ≤ 2^23`, and
-`k = ⌈4N₀/e⌉ = kVal d₀`. -/
-theorem k_plain (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} (hs : setupOf false x = some (s, spec, sts)) (h0 : 0 < sts.size) (h1 : 22 ≤ sts[0].m)
-    (h2 : sts[0].m ≤ 35) :
-    (deployPlain rel).N₀ x = 2 ^ (plainLevel0 sts[0].m).d ∧ 2 ^ 10 ≤ (deployPlain rel).N₀ x ∧
-      (deployPlain rel).N₀ x ≤ 2 ^ 23 ∧ (deployPlain rel).k x = Claims.Flock.Numbers.kVal (plainLevel0 sts[0].m).d := by
+/-- A plain table's level-0 length is `2^10` to `2^23` at every `m` the plain verifier serves. -/
+theorem tableLen_plain_bounds (st : Stmt) (h1 : 22 ≤ st.m) (h2 : st.m ≤ 35) :
+    2 ^ 10 ≤ tableLen false st ∧ tableLen false st ≤ 2 ^ 23 := by
   obtain ⟨i, hi⟩ := plainIdx_of h1 h2
   have hd := (plain_facts i).2.2
   rw [Claims.Flock.plainLen, hi] at hd
-  have hN : (deployPlain rel).N₀ x = 2 ^ (plainLevel0 sts[0].m).d := N₀_eq hs h0
+  obtain ⟨hlo, hhi⟩ := d_mem_bounds hd
+  simp only [tableLen, Bool.false_eq_true, ite_false]
+  exact ⟨pow_le_pow_right₀ (by norm_num) hlo, pow_le_pow_right₀ (by norm_num) hhi⟩
+
+/-- A masked table's level-0 length is `2^10` to `2^23` at every `m` the masked verifier serves. -/
+theorem tableLen_zk_bounds (st : Stmt) (h1 : 25 ≤ st.m) (h2 : st.m ≤ 35) :
+    2 ^ 10 ≤ tableLen true st ∧ tableLen true st ≤ 2 ^ 23 := by
+  obtain ⟨i, hi⟩ := zkIdx_of h1 h2
+  have hd := (zk_facts i).2.2
+  rw [Claims.Flock.zkLen, hi] at hd
+  obtain ⟨hlo, hhi⟩ := d_mem_bounds hd
+  simp only [tableLen, ite_true]
+  exact ⟨pow_le_pow_right₀ (by norm_num) hlo, pow_le_pow_right₀ (by norm_num) hhi⟩
+
+/-- **`2^10 ≤ N₀ ≤ n·2^23`**: `N₀` sums the session's `n ≥ 1` tables' level-0 lengths, each `2^10` to `2^23`. -/
+theorem N₀_le {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hs : setupOf zk x = some (s, spec, sts)) (h0 : 0 < sts.size)
+    (h : ∀ st ∈ sts.toList, 2 ^ 10 ≤ tableLen zk st ∧ tableLen zk st ≤ 2 ^ 23) :
+    2 ^ 10 ≤ N₀ zk x ∧ N₀ zk x ≤ sts.size * 2 ^ 23 := by
+  unfold N₀
+  rw [tables_eq hs, List.map_map]
+  constructor
+  · have hm : tableLen zk sts[0] ∈ sts.toList.map ((fun p => tableLen zk p.2) ∘ fun st => (spec, st)) :=
+      List.mem_map.2 ⟨sts[0], Array.getElem_mem_toList h0, rfl⟩
+    refine (h _ (Array.getElem_mem_toList h0)).1.trans (List.single_le_sum (fun a ha => ?_) _ hm)
+    obtain ⟨st, hst, rfl⟩ := List.mem_map.1 ha
+    exact le_trans (by norm_num) (h st hst).1
+  · refine (List.sum_le_length_nsmul _ ((2 : ℝ) ^ 23) fun a ha => ?_).trans (le_of_eq (by simp))
+    obtain ⟨st, hst, rfl⟩ := List.mem_map.1 ha
+    exact (h st hst).2
+
+/-- **`N₀` at one table** is that table's level-0 length, `2^{d₀}`. -/
+theorem N₀_one {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hs : setupOf zk x = some (s, spec, sts)) (h1 : sts.size = 1) :
+    N₀ zk x = 2 ^ (if zk then zkLevel0 (sts[0]'(by omega)).m else plainLevel0 (sts[0]'(by omega)).m).d := by
+  have hl : sts.toList = [sts[0]'(by omega)] := by
+    apply List.ext_getElem (by simp [h1])
+    intro i hi _
+    have : i = 0 := by simp only [Array.length_toList] at hi; omega
+    subst this
+    simp
+  simp only [N₀, tables_eq hs, hl, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, tableLen]
+
+/-- **`N₀` and `k` without `--zk`, at one table**: `N₀ = 2^{d₀}`, the table's plain level-0 length,
+`2^10 ≤ N₀ ≤ 2^23`, and `k = ⌈4N₀/e⌉ = kVal d₀`. -/
+theorem k_plain (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} (hs : setupOf false x = some (s, spec, sts)) (h0 : sts.size = 1)
+    (h1 : 22 ≤ (sts[0]'(by omega)).m) (h2 : (sts[0]'(by omega)).m ≤ 35) :
+    (deployPlain rel).N₀ x = 2 ^ (plainLevel0 (sts[0]'(by omega)).m).d ∧ 2 ^ 10 ≤ (deployPlain rel).N₀ x ∧
+      (deployPlain rel).N₀ x ≤ 2 ^ 23 ∧
+      (deployPlain rel).k x = Claims.Flock.Numbers.kVal (plainLevel0 (sts[0]'(by omega)).m).d := by
+  obtain ⟨i, hi⟩ := plainIdx_of h1 h2
+  have hd := (plain_facts i).2.2
+  rw [Claims.Flock.plainLen, hi] at hd
+  have hN : (deployPlain rel).N₀ x = 2 ^ (plainLevel0 (sts[0]'(by omega)).m).d := N₀_one hs h0
   obtain ⟨hlo, hhi⟩ := d_mem_bounds hd
   refine ⟨hN, ?_, ?_, ?_⟩
   · rw [hN]; exact pow_le_pow_right₀ (by norm_num) hlo
@@ -208,17 +302,18 @@ theorem k_plain (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {
     rw [hN]
     exact Claims.Flock.Numbers.kRep_eq hd
 
-/-- **`N₀` and `k` with `--zk`**: `N₀ = 2^{d₀}`, table 0's masked level-0 length, `2^10 ≤ N₀ ≤ 2^23`, and
-`k = ⌈4N₀/e⌉ = kVal d₀`. -/
+/-- **`N₀` and `k` with `--zk`, at one table**: `N₀ = 2^{d₀}`, the table's masked level-0 length,
+`2^10 ≤ N₀ ≤ 2^23`, and `k = ⌈4N₀/e⌉ = kVal d₀`. -/
 theorem k_zk (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} (hs : setupOf true x = some (s, spec, sts)) (h0 : 0 < sts.size) (h1 : 25 ≤ sts[0].m)
-    (h2 : sts[0].m ≤ 35) :
-    (deployZk rel).N₀ x = 2 ^ (zkLevel0 sts[0].m).d ∧ 2 ^ 10 ≤ (deployZk rel).N₀ x ∧
-      (deployZk rel).N₀ x ≤ 2 ^ 23 ∧ (deployZk rel).k x = Claims.Flock.Numbers.kVal (zkLevel0 sts[0].m).d := by
+    {sts : Array Stmt} (hs : setupOf true x = some (s, spec, sts)) (h0 : sts.size = 1)
+    (h1 : 25 ≤ (sts[0]'(by omega)).m) (h2 : (sts[0]'(by omega)).m ≤ 35) :
+    (deployZk rel).N₀ x = 2 ^ (zkLevel0 (sts[0]'(by omega)).m).d ∧ 2 ^ 10 ≤ (deployZk rel).N₀ x ∧
+      (deployZk rel).N₀ x ≤ 2 ^ 23 ∧
+      (deployZk rel).k x = Claims.Flock.Numbers.kVal (zkLevel0 (sts[0]'(by omega)).m).d := by
   obtain ⟨i, hi⟩ := zkIdx_of h1 h2
   have hd := (zk_facts i).2.2
   rw [Claims.Flock.zkLen, hi] at hd
-  have hN : (deployZk rel).N₀ x = 2 ^ (zkLevel0 sts[0].m).d := N₀_eq hs h0
+  have hN : (deployZk rel).N₀ x = 2 ^ (zkLevel0 (sts[0]'(by omega)).m).d := N₀_one hs h0
   obtain ⟨hlo, hhi⟩ := d_mem_bounds hd
   refine ⟨hN, ?_, ?_, ?_⟩
   · rw [hN]; exact pow_le_pow_right₀ (by norm_num) hlo
@@ -358,7 +453,9 @@ theorem ZkIn.tab₀ {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array
 theorem κ_plain_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : PlainIn x s spec sts) :
     Claims.Flock.κ (deployPlain rel) x ≤ sts.size * 2 ^ (-(202.98 : ℝ)) := by
-  obtain ⟨-, hlo, hhi, -⟩ := k_plain rel h.setup h.size_pos h.tab₀.1 h.tab₀.2
+  obtain ⟨hlo, hhi⟩ := N₀_le h.setup h.size_pos fun st hst =>
+    have := h.tab st hst
+    tableLen_plain_bounds st this.1 this.2.1
   refine Claims.Flock.Numbers.κ_le_mul _ x (size_one_le h.size_pos) ?_ (le_of_eq rfl) rfl hlo hhi
   exact εtable_le h.setup fun st hst =>
     have := h.tab st hst
@@ -368,7 +465,9 @@ theorem κ_plain_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Ms
 theorem κ_zk_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : ZkIn x s spec sts) :
     Claims.Flock.κ (deployZk rel) x ≤ sts.size * 2 ^ (-(202.98 : ℝ)) := by
-  obtain ⟨-, hlo, hhi, -⟩ := k_zk rel h.setup h.size_pos h.tab₀.1 h.tab₀.2
+  obtain ⟨hlo, hhi⟩ := N₀_le h.setup h.size_pos fun st hst =>
+    have := h.tab st hst
+    tableLen_zk_bounds st this.1 this.2.1
   refine Claims.Flock.Numbers.κ_le_mul _ x (size_one_le h.size_pos) ?_ (le_of_eq rfl) rfl hlo hhi
   exact εtable_le h.setup fun st hst =>
     have := h.tab st hst
@@ -421,6 +520,29 @@ theorem lam_zk_ge (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg}
   Claims.Flock.Numbers.lam_ge_mul (size_one_le h.size_pos) (Claims.Flock.κ_pos _ x (εtable_nonneg true x))
     (κ_zk_le rel h) (Claims.Flock.γ_nonneg _ x)
     (γ_le_105_of _ x h.size_le (Vk_zk_le rel h) (weight_nonneg true x) (weight_zk_le rel h))
+
+theorem logb_size_le_6 {sts : Array Stmt} (h0 : 0 < sts.size) (h64 : sts.size ≤ 64) :
+    Real.logb 2 sts.size ≤ 6 := by
+  have h64' : (sts.size : ℝ) ≤ (2 : ℝ) ^ (6 : ℕ) := by norm_num; exact_mod_cast h64
+  calc Real.logb 2 sts.size ≤ Real.logb 2 ((2 : ℝ) ^ (6 : ℕ)) :=
+        Real.logb_le_logb_of_le (by norm_num) (by exact_mod_cast h0) h64'
+    _ = 6 := by rw [Real.logb_pow, Real.logb_self_eq_one (by norm_num)]; norm_num
+
+/-- **`λ ≥ 195.98`** at the deployed plain verifier at up to `64` tables, the verifier's cap (`Tags.MAX_TABLES`). -/
+theorem lam_plain_ge_64 (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} (h : PlainIn x s spec sts) (h64 : sts.size ≤ 64) :
+    195.98 ≤ Claims.lamOf (Claims.Flock.κ (deployPlain rel) x) (Claims.Flock.γ (deployPlain rel) x) := by
+  have := lam_plain_ge rel h
+  have := logb_size_le_6 h.size_pos h64
+  linarith
+
+/-- **`λ ≥ 195.98`** at the deployed masked verifier at up to `64` tables, the verifier's cap (`Tags.MAX_TABLES`). -/
+theorem lam_zk_ge_64 (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} (h : ZkIn x s spec sts) (h64 : sts.size ≤ 64) :
+    195.98 ≤ Claims.lamOf (Claims.Flock.κ (deployZk rel) x) (Claims.Flock.γ (deployZk rel) x) := by
+  have := lam_zk_ge rel h
+  have := logb_size_le_6 h.size_pos h64
+  linarith
 
 /-- **One plain table**: `ε_table ≤ 2^{−205}`, `κ ≤ 2^{−202.98}`, `γ ≤ 2^51` and `λ ≥ 201.98`. -/
 theorem plain_one (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
