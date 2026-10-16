@@ -181,7 +181,7 @@ theorem firstWait_finRange_some {R W Op : Type} (H : Msg → Msg) (run : R → T
   simp [hc, RP.eval]
 
 /-- **`firstWait` gives up** where nothing the waits can collect assembles. -/
-theorem firstWait_none {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_none_of {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (good : Seen → Prop)
     (hgood : ∀ r, (run r).out = .acc → good (run r).seen)
     (ha : ∀ vs : List Seen, (∀ v ∈ vs, good v) → assemble (vs.flatMap opens) = none) :
@@ -191,7 +191,7 @@ theorem firstWait_none {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k 
     simp only [firstWait]
     rw [(RP.eval_bind H run _ _).1,
       ha _ (waitAcc_good H run k good hgood rs [] (fun _ h => absurd h List.not_mem_nil))]
-    exact firstWait_none H run k opens assemble check good hgood ha rss
+    exact firstWait_none_of H run k opens assemble check good hgood ha rss
 
 theorem mem_take_map_finRange {R : Type} {K : ℕ} (f : Fin K → R) (k : ℕ) (j : Fin K) (hj : j.val < k) :
     f j ∈ ((List.finRange K).map f).take k := by
@@ -235,8 +235,8 @@ theorem qDec_ok : decOK qDI qDec := by
   rw [Finset.card_univ, Fintype.card_fin] at hle
   have h' : (1 - 0) * ((2 : ℕ) : ℝ) ≤
       ((Finset.univ.filter fun i : Fin 2 => (1 : ℕ) = Flock.fill 2 os i).card : ℝ) := h
-  have h2 : (Finset.univ.filter fun i : Fin 2 => (1 : ℕ) = Flock.fill 2 os i).card = (Finset.univ : Finset (Fin 2)).card
-      := by
+  have h2 : (Finset.univ.filter fun i : Fin 2 => (1 : ℕ) = Flock.fill 2 os i).card =
+      (Finset.univ : Finset (Fin 2)).card := by
     rw [Finset.card_univ, Fintype.card_fin]
     have : (2 : ℝ) ≤ ((Finset.univ.filter fun i : Fin 2 => (1 : ℕ) = Flock.fill 2 os i).card : ℝ) := by
       simpa using h'
@@ -357,7 +357,7 @@ theorem qE_abort_none (H : Msg → Msg) (ω : Unit)
     ((firstWait (qDI.k []) qCols (Flock.assemble qDI.parse qDec qDI.read []) (Flock.check qDI.parse [])
       ((List.finRange (qDI.waits [])).map fun i => (List.finRange (qDI.cap [])).map (ρ i))).eval H
         (abortRun H qP qV [] qKeep ω)).1 = none := by
-  refine firstWait_none H _ _ _ _ _ (fun v => qCols v = [(1, 1)]) (fun t ht => ?_) (fun vs hvs => ?_) _
+  refine firstWait_none_of H _ _ _ _ _ (fun v => qCols v = [(1, 1)]) (fun t ht => ?_) (fun vs hvs => ?_) _
   · unfold abortRun at ht ⊢
     split at ht
     · rename_i hkeep
@@ -419,7 +419,7 @@ theorem qKSAbort_fails (H : Msg → Msg) :
             exact id
   linarith [qκ_lt []]
 
-/-- **Flock as the inner protocol fails `Inner.KSAbort`** at `qDI` and the decoder `qDec`, which is within the radius. -/
+/-- **Flock as the inner protocol fails `Inner.KSAbort`** at `qDI` and `qDec`, a decoder within the radius. -/
 theorem qNotKSAbort (H : Msg → Msg) : ¬ (Inner.ofFlock qDI qDec).KSAbort H := fun h =>
   absurd (h [] Unit qP Unit qKeep) (not_le.2 (qKSAbort_fails H))
 
