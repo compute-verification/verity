@@ -225,3 +225,24 @@ def test_a_layer_recorded_more_often_than_its_norm_site_partials_is_still_refuse
     src, rd = _norm_src([(NORMS[0], p0)])
     r = src.compare_match_oracle(str(tmp_path), rd)
     assert r["verdict"] == "FAIL" and r["duplicate_module_steps"] == [{"step": 0, "modules": [LAYER]}]
+
+
+def _value_check(model, committed: list[tuple[str, torch.Tensor]]) -> dict:
+    com, run = commit_steps({0: [_meta(n, t) for n, t in committed]})
+    src = tps.TPPartialSource(com, model, rank=0, world=2)
+    src.ref = {0: {n: tps._bytes(t) for n, t in committed}}
+    return src.compare(OC.OpenedReader(com, run))
+
+
+def test_a_rank_with_only_norm_site_partials_passes_the_value_check_on_the_tap_alone():
+    """GLM-5.3: o_proj and the MoE leave their output un-reduced for fused_allreduce_rms_norm, so no RowParallelLinear site is there
+    to re-execute; every partial still equals its hook-time clone, opened against the run root."""
+    p0, p1, _o0, _o1 = _tensors()
+    r = _value_check(types.SimpleNamespace(named_modules=lambda: []), [(f"{NORMS[0]}/part_rank0", p0), (f"{NORMS[1]}/part_rank0", p1)])
+    assert r["verdict"] == "PASS" and r["tap_equal"] == 2 and r["reexec_tensors"] == 0 and r["reexec_due"] is False
+
+
+def test_a_rank_with_a_row_parallel_site_and_no_re_execution_still_fails():
+    p0, _p1, _o0, _o1 = _tensors()
+    r = _value_check(_model(), [(f"{OPROJ}/part_rank0", p0)])
+    assert r["verdict"] == "FAIL" and r["tap_equal"] == 1 and r["reexec_tensors"] == 0 and r["reexec_due"] is True

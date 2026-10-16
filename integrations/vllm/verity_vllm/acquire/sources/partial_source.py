@@ -446,8 +446,11 @@ class TPPartialSource:
         res["not_verified"] = res["not_verified"][:20]
         res["value_source"] = reader.record()
         res["wall_s"] = time.perf_counter() - t0
+        # (R) exists only for RowParallelLinear sites; a rank whose partials are all norm sites, the embedding or the logits shard
+        # (GLM-5.3: o_proj / MoE leave their output un-reduced for fused_allreduce_rms_norm) has no GEMM here to re-execute
+        res["reexec_due"] = any(c == "RowParallelLinear" for _n, c in self.sites)
         res["verdict"] = "PASS" if (res["tensors"] > 0 and res["tap_mismatch_n"] == 0 and res["reexec_mismatch_n"] == 0 and res["missing_n"] == 0
-                                    and res["not_verified_n"] == 0 and res["reexec_tensors"] > 0) else "FAIL"
+                                    and res["not_verified_n"] == 0 and (res["reexec_tensors"] > 0 or not res["reexec_due"])) else "FAIL"
         self.ref, self.ref_in = {}, {}
         return res
 
