@@ -95,8 +95,9 @@ proof workers' results land here as theorems or as named hypotheses.
   (`roundsHypK_of_spot`), and for one-sided affine products the floor has neither a luck nor a chain hypothesis
   (`certifiedFraction120θ_reEncodedSpot_40`; mixed under `MixedChain`, `_reEncodedSpotMixed_40`). The ¾ is tight
   (`luck_quad_tight`) and fails for one-sided operands of any form (`luck_oneSided_point`). On the integer alphabet a
-  dropped term is right with probability ½ + 1/(2|α|) (`luck_coins`, `luck_dropped`: 0.5039 at U's 128 letters); a
-  ½ bound needs a deficiency priced by dropped terms.
+  dropped term is right with probability ½ + 1/(2|α|) (`luck_coins`, `luck_dropped`); U's 128 letters are distinct
+  and never 0 (`uRe_injective`, `uRe_ne_zero`), so 0.5039 (`luck_dropped_reEncoded`), and ½ for a term dropped
+  outright (`_zero`). A ½ bound needs a deficiency priced by dropped terms.
 * Theorem H (round 6 §6, merges priced) is not needed for the re-encoded design: the chain lemma covers it in every
   arithmetic (RS-E-REF r4 IV.3). It stays proved as the alternative with merges priced, including `_H` of route (c).
   In the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
@@ -4059,7 +4060,10 @@ quarters of the cube (`luck_quad_tight`). It fails for one-sided operands of any
 one point only (`luck_oneSided_point`). On the integer alphabet (`U ∈ ±1, …, ±64`, never 0) dropping a whole term is
 right with probability about ½: an error affine in the coins vanishes with probability at most
 `½ + ½ Pr[its coin coefficients vanish]` (`luck_coins`), and a dropped term's coefficient `c + c′ U`, `c′` a unit,
-vanishes on at most one letter, so `½ + 1/(2|α|)`, `0.5039` on 128 letters (`luck_dropped`). A `PathBound` at ½
+vanishes on at most one letter, so `½ + 1/(2|α|)` (`luck_dropped`). The design's letters `U = −64 + Σ_p w_p β_p` are
+128 distinct values, none 0 (`uRe_injective`, `uRe_ne_zero`), so a dropped term is right with probability at most
+`½ + 2⁻⁸ = 0.5039` (`luck_dropped_reEncoded`), and `½` if dropped outright (`luck_dropped_reEncoded_zero`). A
+`PathBound` at ½
 thus needs a deficiency that prices an error by the terms it drops (a dropped plane is a seventh of a term), and
 `PathBound` for one-sided operands of any form needs one too; both stay named, in `RoundsHypK`'s `PathBound`. -/
 
@@ -4451,7 +4455,7 @@ theorem prob_dropped_le {α : Type} [Fintype α] (U : α → R) (hU : Function.I
 /-- **The luck on the re-encoded alphabet** (RS-E-REF r4 IV.4): a coin-affine error one of whose coin
 coefficients is a dropped term `c + c' U(a)` (`c'` a unit, `U` injective on the alphabet `α`) vanishes with
 probability at most `½ + 1 / (2 |α|)`. On U's 128 letters `±1, …, ±64` that is `½ + 2⁻⁸ = 0.5039`, RS-E-REF r4's
-best found. -/
+best found (`luck_dropped_reEncoded`). -/
 theorem luck_dropped {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] (f₀ : α → R) (f : V → α → R)
     (U : α → R) (hU : Function.Injective U) (v₀ : V) (c c' : R) (hc' : IsUnit c') (hv₀ : ∀ a, f v₀ a = c + c' * U a) :
     prob (fun x : α × Finset V => f₀ x.1 + ∑ v ∈ x.2, f v x.1 = 0) ≤ 1 / 2 + 1 / (2 * Fintype.card α) := by
@@ -4463,6 +4467,87 @@ theorem luck_dropped {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] (f�
     rw [one_div_mul_one_div]
   rw [e]
   linarith
+
+/-- The re-encoded design's plane weights over `ℕ`. -/
+def wReN : Fin 7 → ℕ := ![1, 2, 4, 8, 16, 32, 65]
+
+/-- An entry's letter from its 7 planes, over `ℕ` and shifted by 64: `Σ_{p ∈ a} w_p ∈ {0, …, 63} ∪ {65, …, 128}`. -/
+def uReN (a : Finset (Fin 7)) : ℕ := ∑ p ∈ a, wReN p
+
+/-- Reading the planes back from `uReN`: plane 6 is set iff the value is at least 65, the rest are binary. -/
+def uReDec (m : ℕ) : Finset (Fin 7) :=
+  if 65 ≤ m then insert 6 (univ.filter fun p : Fin 7 => p.val < 6 ∧ (m - 65).testBit p.val)
+  else univ.filter fun p : Fin 7 => p.val < 6 ∧ m.testBit p.val
+
+theorem uReDec_uReN : ∀ a : Finset (Fin 7), uReDec (uReN a) = a := by decide +kernel
+
+theorem uReN_le (a : Finset (Fin 7)) : uReN a ≤ 128 := by
+  calc uReN a ≤ ∑ p : Fin 7, wReN p := Finset.sum_le_sum_of_subset (Finset.subset_univ a)
+    _ = 128 := by simp [wReN, Fin.sum_univ_succ]
+
+/-- **The re-encoded design's letter** `U = −64 + Σ_p w_p β_p` of an entry's 7 planes, over `Z/2³²`. -/
+def uRe (a : Finset (Fin 7)) : ZMod (2 ^ 32) := -64 + ∑ p ∈ a, wRe p
+
+theorem uRe_eq (a : Finset (Fin 7)) : uRe a = -64 + (uReN a : ZMod (2 ^ 32)) := by
+  rw [uRe, uReN, Nat.cast_sum]
+  congr 1
+  refine Finset.sum_congr rfl fun p _ => ?_
+  fin_cases p <;> rfl
+
+/-- The 128 plane patterns give 128 distinct letters. -/
+theorem uRe_injective : Function.Injective uRe := by
+  intro a b h
+  rw [uRe_eq, uRe_eq, add_right_inj] at h
+  have hN : uReN a = uReN b := by
+    have := congrArg ZMod.val h
+    rwa [ZMod.val_natCast, ZMod.val_natCast, Nat.mod_eq_of_lt ((uReN_le a).trans_lt (by norm_num)),
+      Nat.mod_eq_of_lt ((uReN_le b).trans_lt (by norm_num))] at this
+  rw [← uReDec_uReN a, ← uReDec_uReN b, hN]
+
+/-- `U` is never 0 (`uReN a ≠ 64`). -/
+theorem uRe_ne_zero (a : Finset (Fin 7)) : uRe a ≠ 0 := by
+  have h64 : uReN a ≠ 64 := by
+    have : ∀ a : Finset (Fin 7), uReN a ≠ 64 := by decide +kernel
+    exact this a
+  rw [uRe_eq]
+  intro h
+  have h' : (uReN a : ZMod (2 ^ 32)) = ((64 : ℕ) : ZMod (2 ^ 32)) := by
+    rw [Nat.cast_ofNat]
+    linear_combination h
+  have := congrArg ZMod.val h'
+  rw [ZMod.val_natCast, ZMod.val_natCast, Nat.mod_eq_of_lt ((uReN_le a).trans_lt (by norm_num)),
+    Nat.mod_eq_of_lt (by norm_num)] at this
+  exact h64 this
+
+/-- **The luck of a dropped term on the re-encoded alphabet** (RS-E-REF r4 IV.4): an error affine in the coins, given
+the dropped entry's planes `a` and the other bits `b`, one of whose coin coefficients is `c b + c′ U(a)` with `c′` a
+unit (a whole term `U x` dropped, partly compensated by `c b`), vanishes with probability at most `½ + 2⁻⁸`. -/
+theorem luck_dropped_reEncoded {β V : Type} [Fintype β] [Fintype V] [DecidableEq V]
+    (f₀ : Finset (Fin 7) × β → ZMod (2 ^ 32)) (f : V → Finset (Fin 7) × β → ZMod (2 ^ 32)) (v₀ : V)
+    (c : β → ZMod (2 ^ 32)) (c' : ZMod (2 ^ 32)) (hc' : IsUnit c') (hv₀ : ∀ a b, f v₀ (a, b) = c b + c' * uRe a) :
+    prob (fun x : (Finset (Fin 7) × β) × Finset V => f₀ x.1 + ∑ v ∈ x.2, f v x.1 = 0) ≤ 1 / 2 + 1 / 256 := by
+  have h1 := luck_coins f₀ f
+  have h2 : prob (fun ab : Finset (Fin 7) × β => ∀ v, f v ab = 0) ≤ 1 / 128 := by
+    refine (prob_mono fun ab hab => (hv₀ ab.1 ab.2) ▸ hab v₀).trans ?_
+    refine prob_le_of_slices (fun ab : Finset (Fin 7) × β => c ab.2 + c' * uRe ab.1 = 0) (by norm_num)
+      fun b => ?_
+    have := prob_dropped_le uRe uRe_injective (c b) c' hc'
+    rwa [Fintype.card_finset, Fintype.card_fin] at this
+  linarith
+
+/-- ... and `½` when the term is dropped outright (`c = 0`): `c′ U` is never 0, since `U` never is. -/
+theorem luck_dropped_reEncoded_zero {β V : Type} [Fintype β] [Fintype V] [DecidableEq V]
+    (f₀ : Finset (Fin 7) × β → ZMod (2 ^ 32)) (f : V → Finset (Fin 7) × β → ZMod (2 ^ 32)) (v₀ : V)
+    (c' : ZMod (2 ^ 32)) (hc' : IsUnit c') (hv₀ : ∀ a b, f v₀ (a, b) = c' * uRe a) :
+    prob (fun x : (Finset (Fin 7) × β) × Finset V => f₀ x.1 + ∑ v ∈ x.2, f v x.1 = 0) ≤ 1 / 2 := by
+  have h1 := luck_coins f₀ f
+  have hF : ∀ ab : Finset (Fin 7) × β, ¬∀ v, f v ab = 0 := fun ab hab =>
+    (hc'.mul_right_eq_zero.not.mpr (uRe_ne_zero ab.1)) ((hv₀ ab.1 ab.2) ▸ hab v₀)
+  have h2 : prob (fun ab : Finset (Fin 7) × β => ∀ v, f v ab = 0) ≤ 0 := by
+    unfold prob
+    simp [hF]
+  linarith
+
 
 end LuckDesign
 
