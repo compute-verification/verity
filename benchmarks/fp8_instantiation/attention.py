@@ -26,7 +26,9 @@ Method names are '-'-joined tokens:
     noise      an alphabet for all four operands: `none`, `pm1` {+-1}, `pm13` {+-1, +-3}, `pm57` {+-5, +-7}, `u1` ... `u16`
                uniform {-k..k}, `w8`/`w64` {+-1..+-k}, `pm1245` {+-1, +-2, +-4, +-5}, `dE` sparse (+-1 each with
                probability 2^-E / 2, else 0); `qk`/`pv` limits it to that matmul's operands; `X=ALPHABET` sets the
-               operands X (any of `q`, `k`, `p`, `v`) alone
+               operands X (any of `q`, `k`, `p`, `v`) alone.  `dith` (K, V): the dither X = floor(x / s) + b, b a fresh
+               bit and s the smallest scale with x / s in [-128, 127), so X stays within int8
+               (note:20261016T0525Z-draft-fullfloor-s-r6)
     peeled     `eX=ALPHABET` (X in `q`, `p`, `qp`): low-rank noise the server sees and the model doesn't
                (note:20261016T0001Z-draft-rs-d2-attention-lowrank-peel).  E_ik = U_{i, k mod L}, L = 32, with U (tokens x L)
                one draw per layer shared by its heads; P's E only where key <= query.  The served products are
@@ -74,17 +76,22 @@ ALPHABETS = {"none": [0], "pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -
 OPERANDS = "qkpv"
 PEEL_L = 32
 LINS = {"int8_rot": "int8_rot@-"}
+#: K or V served as floor(x / s) + b, b a fresh bit (note:20261016T0525Z-draft-fullfloor-s-r6)
+DITHER = "dith"
 
 ORIG = modeling_llama.eager_attention_forward
 STATE: dict = {"spec": None}
 
 
 def is_alphabet(name: str) -> bool:
-    return name in ALPHABETS or (name[:1] == "d" and name[1:].isdigit())
+    return name in ALPHABETS or name == DITHER or (name[:1] == "d" and name[1:].isdigit())
 
 
 def alphabet_info(name: str) -> dict:
-    """Entropy (bits per entry), RMS and max magnitude (LSBs) of one entry's noise."""
+    """Entropy (bits per entry), RMS and max magnitude (LSBs) of one entry's noise; for the dither, of its error against
+    x / s (MSE 1/3)."""
+    if name == DITHER:
+        return {"bits": 1.0, "rms": math.sqrt(1 / 3), "max": 1}
     if name in ALPHABETS:
         a = ALPHABETS[name]
         return {"bits": math.log2(len(a)) if len(a) > 1 else 0.0, "rms": math.sqrt(sum(v * v for v in a) / len(a)),
@@ -135,6 +142,9 @@ def parse(method: str) -> dict:
         raise ValueError(f"{method}: peeled noise needs a one-limb grid")
     if spec["poff"] and (spec["e"]["p"] == "none" or GRID_PAIRS[spec["grid"]][1] != "int8"):
         raise ValueError(f"{method}: P's offset needs P's peeled noise on int8")
+    dithered = [x for x in OPERANDS if spec["n"][x] == DITHER]
+    if dithered and (set(dithered) - set("kv") or spec["grid"] != "int8" or spec["qk2"] or spec["v"] == "vchan2"):
+        raise ValueError(f"{method}: the dither serves K or V on one int8 limb")
     return spec
 
 
@@ -213,11 +223,27 @@ def signed_limbs(x: torch.Tensor, top: int, dims, two: bool) -> tuple[list, torc
     return [(hi, base), (q - base * hi, 1)], s
 
 
+def in_int8(x: torch.Tensor) -> bool:
+    return -128 <= float(x.min()) and float(x.max()) <= 127
+
+
+def floor_quant(x: torch.Tensor, dims) -> tuple[torch.Tensor, torch.Tensor]:
+    """floor(x / s) in [-128, 126] and s, the smallest scale (to 2^-20) that keeps x / s in [-128, 127): with a fresh bit
+    added, the served X stays within int8."""
+    s = torch.maximum(x.amax(dim=dims, keepdim=True) / 127, (-x).amax(dim=dims, keepdim=True) / 128)
+    s = s.clamp(min=1e-30) * (1 + 2 ** -20)
+    q = torch.floor(x / s)
+    assert float(q.max()) <= 126 and float(q.min()) >= -128
+    return q, s
+
+
 def add_noise(limbs: list, alphabet: str, gen, device) -> list:
     """Noise on the last (lowest) limb."""
     if alphabet == "none":
         return limbs
     last, w = limbs[-1]
+    if alphabet == DITHER:
+        return limbs[:-1] + [(last + torch.randint(0, 2, last.shape, generator=gen, device=device).float(), w)]
     return limbs[:-1] + [(last + draw(alphabet, last.shape, gen, device), w)]
 
 
@@ -275,6 +301,7 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
             raise ValueError(f"{spec['method']}: its noise does not fit the grid ({m})")
         two = {"q": spec["qk2"], "k": spec["qk2"], "p": spec["p"] == "prow2", "v": spec["v"] == "vchan2"}
         lmax = {x: (128 if x != "p" else 127) if two[x] else m[x] + nmax[x] + emax[x] for x in OPERANDS}
+        lmax.update({x: 128 for x in OPERANDS if n[x] == DITHER})
         if poff:
             lo, hi = -poff - nmax["p"] - emax["p"], m["p"] - poff + nmax["p"] + emax["p"]
             if lo < -128 or hi > 127:
@@ -307,7 +334,11 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
             qg, kg, vg = qg @ R, kg @ R, vg @ R
         if quantized:
             ql, sq = signed_limbs(qg, m["q"], -1, two["q"])
-            kl, sk = signed_limbs(kg, m["k"], -1, two["k"])
+            if n["k"] == DITHER:
+                kq, sk = floor_quant(kg, -1)
+                kl = [(kq, 1)]
+            else:
+                kl, sk = signed_limbs(kg, m["k"], -1, two["k"])
             kl = [(x.expand(rep, s, d), w) for x, w in kl]
             ql, kl = add_noise(ql, n["q"], gen, dev), add_noise(kl, n["k"], gen, dev)
             if uq is not None:
@@ -316,7 +347,7 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
                 served = exact_mm(qi + eq, ki.transpose(1, 2), term)
                 sint = served - fold_peel(uq, ki).double()
                 if first:
-                    assert float((qi + eq).abs().max()) <= 127 and float(ki.abs().max()) <= 127
+                    assert float((qi + eq).abs().max()) <= 127 and in_int8(ki)
                     STATE["peel"].append(bool(torch.equal(sint, exact_mm(qi, ki.transpose(1, 2), term))))
                 sint = sint.float()
             else:
@@ -327,7 +358,12 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
         p = torch.softmax(scores.masked_fill(~causal, float("-inf")), dim=-1)
         if quantized:
             pl, sp = edit_p(p, spec["p"], n["p"], m["p"], causal, gen, dev)
-            vl, sv = signed_limbs(vg, m["v"], (0, 1) if spec["v"] == "vhead" else 0, two["v"])
+            vdims = (0, 1) if spec["v"] == "vhead" else 0
+            if n["v"] == DITHER:
+                vq, sv = floor_quant(vg, vdims)
+                vl = [(vq, 1)]
+            else:
+                vl, sv = signed_limbs(vg, m["v"], vdims, two["v"])
             vl = add_noise([(x.expand(rep, s, d), w) for x, w in vl], n["v"], gen, dev)
             if up is not None:
                 [(pi, _)], [(vi, _)] = pl, vl
@@ -337,7 +373,7 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
                 if poff:
                     oint = oint + poff * vi.double().cumsum(-2)
                 if first:
-                    assert -128 <= float(pt.min()) and float(pt.max()) <= 127 and float(vi.abs().max()) <= 127
+                    assert in_int8(pt) and in_int8(vi)
                     STATE["peel"].append(bool(torch.equal(oint, exact_mm(pi, vi, term))))
             else:
                 oint = limb_product(pl, vl, lmax["p"] * lmax["v"])
@@ -525,6 +561,30 @@ def selftest() -> dict:
             pass
     out["bit_identical"] = {"w8_vs_u8": w8 == u8, "window0": two_w["ppl_windows"][0] == one_w["ppl"],
                             "poff64_vs_unpeeled_p": off == plain}
+    xs = torch.randn(4, 3000, 64, generator=g).to(dev) * torch.rand(1, 1, 64, generator=g).to(dev)
+    xs[0, :, 0] = xs[0, :, 0].abs()
+    fq, fs = floor_quant(xs, 1)
+    y = xs / fs
+    assert float(fq.min()) >= -128 and float(fq.max()) <= 126 and bool(((y - fq >= 0) & (y - fq < 1)).all())
+    assert bool(((y.amax(1) > 126.99) | (y.amin(1) < -127.99)).all())
+    served = fq + torch.randint(0, 2, fq.shape, generator=torch.Generator(device=dev).manual_seed(5), device=dev).float()
+    err = served - y
+    assert abs(float(err.mean())) < 5e-3 and abs(float((err ** 2).mean()) - 1 / 3) < 5e-3, (float(err.mean()), float((err ** 2).mean()))
+    for bad in ("int8-q=dith", "int8-dith", "int8-qk2-k=dith", "e4m3-v=dith"):
+        try:
+            parse(bad)
+            raise AssertionError(f"{bad} must not parse")
+        except ValueError:
+            pass
+    dith = {m: evaluate(model, ids, m) for m in ("int8-rot-eqp=w64-poff64-kv=dith", "int8-rot-eqp=w64-poff64-v=dith",
+                                                 "int8-rot-eqp=w64-poff64-k=dith", "int8-rot-eqp=w64-poff64-kv=pm1",
+                                                 "int8-rot-kv=dith")}
+    out["tiny_dither"] = {m: {k: r.get(k) for k in ("ppl", "attn_rel_err", "peel_exact", "peel_checks")} for m, r in dith.items()}
+    kv = dith["int8-rot-eqp=w64-poff64-kv=dith"]
+    assert kv["tops"] == {"q": 63, "k": 126, "p": 127, "v": 126} and kv["bound_pv"] == 96 * 128 * 128, kv
+    for m, r in dith.items():
+        assert r["exact"] and (r.get("peel_exact", True) and (r.get("peel_checks", 0) >= 4 or "eqp" not in m)), (m, out["tiny_dither"])
+    assert kv["attn_rel_err"] < dith["int8-rot-eqp=w64-poff64-kv=pm1"]["attn_rel_err"], out["tiny_dither"]
     return out
 
 

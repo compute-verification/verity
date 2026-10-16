@@ -4,7 +4,7 @@
 # WikiText-2's test window 0 that must begin with those 2048).  Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|wide|both|peel|peelabc|peeld|alph|alph8192a|alph8192b [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
+#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|wide|both|peel|peelabc|peeld|alph|alph8192a|alph8192b|dith|dith8192a|dith8192b [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
 #     [--env D4A_IDS=ids8192.npy --send ids8192.npy] --send benchmarks/fp8_instantiation/run_attention.sh \
 #     -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run_attention.sh"'
 # D4A_IDS may hold several windows (N x T, windows.py), whose window 0 must begin with those 2048 tokens.
@@ -120,7 +120,19 @@ alph_w64_plan() {
   done; done
   echo "$m"
 }
+# The adopted design (w64 peel, P offset -64) with K and V served as the dither floor(x / s) + b and as round(x / s) + F,
+# F in {+-1} (SERVED_ALPH), on both, V alone and K alone; seeds S.
+dith_plan() {
+  m=""
+  for a in ${SERVED_ALPH:-dith pm1}; do for s in ${SEEDS:-s0 s1 s2}; do for x in kv v k; do
+    m+=" int8-rot-lin8r-eqp=w64-poff64-$x=$a-$s"; done; done; done
+  echo "$m"
+}
 case "${D4A_PLAN:-}" in
+  dith) D4A_METHODS="bf16 bf16-lin8r"; for s in ${SEEDS:-s0 s1 s2}; do D4A_METHODS+=" int8-rot-lin8r-$s int8-rot-lin8r-eqp=w64-poff64-$s"; done
+        D4A_METHODS+=" $(dith_plan)" ;;
+  dith8192a) D4A_METHODS="bf16 $(SERVED_ALPH=dith dith_plan)" ;;
+  dith8192b) D4A_METHODS="$(SERVED_ALPH=pm1 dith_plan) int8-rot-lin8r-eqp=w64-poff64-s0" ;;
   alph) D4A_METHODS="bf16 bf16-lin8r"; for s in ${SEEDS:-s0 s1 s2}; do D4A_METHODS+=" int8-rot-lin8r-$s int8-rot-lin8r-eqp=w8-$s"; done
         D4A_METHODS+=" $(alph_w8_plan) $(alph_w64_plan)" ;;
   alph8192a) D4A_METHODS="bf16 $(alph_w8_plan) $(W64_SERVED=none alph_w64_plan)" ;;
