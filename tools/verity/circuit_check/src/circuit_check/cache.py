@@ -51,13 +51,18 @@ package an enumerator listed (`targets.load_registries`, the vLLM registry's ``c
 it lists by their names, each module's content used only to follow a move (`_children`), and the modules it imported are not
 pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``).  The checker's
 own version is the digest of this package's sources less `targets.py` and ``pins/``.  Beside them the key holds the
-interpreter and its optimization level, the platform, the installed distributions, ``sys.path`` (in-tree entries relative to the
-tree), the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
+interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
 entry, `descriptor`), the modules the registries import for having a sidecar (`registries`: a new or removed sidecar, or a
 moved module that has one, reruns every target, as a new import line in `targets.py` would) and the ``VERITY_*`` /
 ``CIRCUIT_CHECK_*`` environment. Each target's check runs with a memo of its own, so
 no result an earlier target computed stands in for its reads.
+
+An installed distribution is a read, not part of the key (``dists``, `_outside_tops`): each top-level module the process loaded
+from outside the tree, held by the versions of the distributions that provide it and by no file in the tree resolving its
+name, so a new workspace member or a lock entry no check imports reuses every target, and a version a check loaded reruns it.
+A module in the tree is held by its name and resolved again at lookup (``modules``), so a new ``sys.path`` entry or editable
+redirect that shadows it reruns what holds it, without ``sys.path`` in the key.
 
 A hit means every file, listing, probe, library, ``pins/`` pin and kernel registration this target's check read is unchanged
 (the tree as git has it, `visible`: a file git does not track, bytecode, a build or a fetched file inside the tree, counts as
@@ -894,25 +899,6 @@ def _redirected(root: Path) -> dict[str, str]:
     return out
 
 
-def _path_entries(root: Path) -> list[str]:
-    """``sys.path`` as the key holds it: in-tree entries relative to the tree, the interpreter's own relative to its prefix;
-    then each in-tree editable redirect (`_redirected`)."""
-    out = []
-    for e in sys.path:
-        p = os.path.realpath(e or os.getcwd())
-        rel = os.path.relpath(p, root)
-        if not rel.startswith(".."):
-            out.append(f"<tree>/{rel}")
-            continue
-        for base, tag in ((sys.prefix, "<prefix>"), (sys.base_prefix, "<base>")):
-            if p == base or p.startswith(os.path.join(base, "")):
-                out.append(tag + p[len(base):])
-                break
-        else:
-            out.append(p)
-    return out + [f"<redirect>{name}=<tree>/{rel}" for name, rel in sorted(_redirected(root).items())]
-
-
 def _resolve(root: Path, name: str) -> Path | None:
     """The tree's source file module ``name`` imports from (a package's ``__init__.py``), as the path-based finder searches
     the in-tree import path: a regular package or a module in the first entry that has one, else a namespace package's
@@ -1529,7 +1515,47 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
     return {"files": sorted(acc.files), "dirs": sorted(acc.dirs), "probes": sorted(acc.probes - acc.files - acc.dirs),
             "libs": sorted(acc.libs), "units": sorted(held), "pins": sorted(pins),
             "modules": sorted(mods), "named": sorted(acc.named & mods), "missing": sorted(acc.missing), "enums": sorted(enums),
-            "present": sorted(present - mods), "kernels": sorted(acc.kernels)}
+            "present": sorted(present - mods), "kernels": sorted(acc.kernels), "dists": _outside_tops()}
+
+
+_PACKAGES: list[dict[str, list[str]]] = []
+
+
+def _packages() -> dict[str, list[str]]:
+    """Each importable top-level name an installed distribution provides, with those distributions (read once a process)."""
+    if not _PACKAGES:
+        from importlib import metadata
+
+        _PACKAGES.append(metadata.packages_distributions())
+    return _PACKAGES[0]
+
+
+def _outside_tops() -> list[str]:
+    """The top-level modules loaded from an installed distribution outside the tree: every one in the process, a superset of
+    what this target's closure reached (an import from outside the tree isn't followed into its own imports), each held by
+    the versions of the distributions that provide it (`_dist`). The interpreter's own modules are the key's ``python``."""
+    out = set()
+    for name, m in list(sys.modules.items()):
+        f = getattr(m, "__file__", None)
+        if "." not in name and isinstance(f, str) and _rel(f) is None and _packages().get(name):
+            out.add(name)
+    return sorted(out)
+
+
+def _dist(root: Path, top: str) -> str | None:
+    """Top-level module ``top`` as an installed distribution now: ``tree`` when a file in the tree now resolves the name (a
+    package that shadows it), else each providing distribution's ``name==version``; None when none provides it."""
+    if _resolve(root, top) is not None:
+        return "tree"
+    from importlib import metadata
+
+    names = _packages().get(top)
+    if not names:
+        return None
+    try:
+        return ",".join(sorted(f"{d}=={metadata.version(d)}" for d in set(names)))
+    except metadata.PackageNotFoundError:
+        return None
 
 
 def version() -> str:
@@ -1546,15 +1572,12 @@ def version() -> str:
     return h.hexdigest()
 
 
-_DISTRIBUTIONS: list[str] = []
 #: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
 #: `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in another
 UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
 
 
 def key(request: dict) -> dict:
-    from importlib import metadata
-
     _INTERNAL.append(True)                             # the tracer's own work (`platform` runs `uname`): no input of a check
     try:
         # the system, the CPU and the C library, not `platform.platform()`: that names the host's kernel release, which differs
@@ -1562,13 +1585,8 @@ def key(request: dict) -> dict:
         plat = "-".join([platform.system(), platform.machine(), *platform.libc_ver()])
     finally:
         _INTERNAL.pop()
-    if not _DISTRIBUTIONS:                             # read once: 20 ms a key, over 3,887 targets a minute of the run
-        dists = sorted(f"{d.metadata['Name']}=={d.version}" for d in metadata.distributions())
-        _DISTRIBUTIONS.append(hashlib.sha512("\n".join(dists).encode()).hexdigest())
     return {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "optimize": sys.flags.optimize,
             "platform": plat,
-            "distributions": _DISTRIBUTIONS[0],
-            "path": _path_entries(_ROOT[0]) if _ROOT else list(sys.path),
             "registries": hashlib.sha256("\n".join(_REGISTRIES).encode()).hexdigest(),
             "environment": {k: v for k, v in sorted(os.environ.items())
                             if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED}}
@@ -1690,13 +1708,15 @@ def _digests_of(root: Path, got: dict[str, list[str]], fresh: bool) -> dict[str,
     enums = {r: memo("e", r, lambda r=r: _children(root, r)) for r in got.get("enums", [])}
     present = {r: memo("c", r, lambda r=r: _local(root, r)) for r in got.get("present", [])}
     kernels = {r: memo("k", r, lambda r=r: _kernels_now(r)) for r in got.get("kernels", [])}
+    dists = {r: memo("x", r, lambda r=r: _dist(root, r)) for r in got.get("dists", [])}
     return {"files": files, "dirs": dirs, "probes": probes, "libs": libs, "units": units, "pins": pins, "modules": modules,
-            "named": named, "missing": missing, "enums": enums, "present": present, "kernels": kernels}
+            "named": named, "missing": missing, "enums": enums, "present": present, "kernels": kernels,
+            "dists": dists}
 
 
 #: what matches by equality alone: paths and their contents, the names imports looked up by name, kernel registrations (and
 #: ``pins/``'s pins; a sidecar's are read where its module is, `_moved`)
-_EXACT = ("files", "dirs", "probes", "libs", "named", "missing", "kernels")
+_EXACT = ("files", "dirs", "probes", "libs", "named", "missing", "kernels", "dists")
 
 
 def _seen(root: Path):
