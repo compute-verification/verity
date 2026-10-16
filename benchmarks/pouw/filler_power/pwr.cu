@@ -173,7 +173,7 @@ constexpr uint32_t UE4M3_ONE = 0x38383838u;
 template <int KIND, int MAP>
 __device__ __forceinline__ void pstep(uint32_t (&a)[4], const uint32_t (&b)[2], const uint32_t (&c)[4]) {
   if constexpr (KIND == 0 && MAP == 0) {
-    dstep(a, b, c);
+    dstep<0>(a, b, c);
   } else if constexpr (KIND == 0) {
     uint32_t d0, d1, d2, d3;
     asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};"
