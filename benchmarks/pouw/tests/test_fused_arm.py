@@ -54,7 +54,7 @@ def test_contract_and_record(arm):
     else:  # pfill-k's {0,1} tile or pfill-bU's, the settings filler-scorer/v3's Theorem K entry reads
         kind = {"-DPFILL_BITS": "bits01", "-DPFILL_BU": "bitsU"}[arm.nvcc_flags.split()[0]]
         assert arm.filler.noise == kind
-        assert (arm.filler.W, arm.filler.S) == (8, 256)  # pfill's 8-warp blocks; S a multiple of 32
+        assert arm.filler.W == 8 and arm.filler.S % 32 == 0  # pfill's 8-warp blocks; S a multiple of 32
         # the fold filler-scorer/v5 reads, declared as the NC and build make it (pf_absorb): duo at NC 2; at NC 4 ram,
         # or P2-FF r9's XOR-in (13, 19) or LOP3+IMAD
         flags = arm.nvcc_flags.split()

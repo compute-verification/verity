@@ -196,10 +196,11 @@ class FusedPumpK(FusedPump):
 
 
 #: pfill-bU's chunk (pfill_arm.PFillBU's shape) with duo's receipt (NC 2), or one of P2-FF r9's at NC 4: XOR-in (13, 19)
-#: (-DPFILL_XIN13) or LOP3+IMAD (-DPFILL_LI)
+#: (-DPFILL_XIN13) or LOP3+IMAD (-DPFILL_LI). The r9 pumps take 1024 fragments a warp a tile: a tile's B hashing and its
+#: barriers then stall a block a quarter as often, 0.772 of peak alone at S 256, 0.795 at 1024 (r20261016-131052-7d48)
 BU_DUO_FILLER = A.Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bitsU", fold="duo")
-BU_XIN13_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU", fold="xor-in-13")
-BU_LI_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU", fold="lop3-imad")
+BU_XIN13_FILLER = A.Filler(W=8, NC=4, S=1024, chunk_log2=19, noise="bitsU", fold="xor-in-13")
+BU_LI_FILLER = A.Filler(W=8, NC=4, S=1024, chunk_log2=19, noise="bitsU", fold="lop3-imad")
 
 
 @dataclass
@@ -243,8 +244,8 @@ class FusedPumpBUXin13(FusedPumpBU):
 
     name: str = "fill-fused-pump-bu-xin13"
     lineage: dict = field(default_factory=lambda: _bu_lineage(
-        "receipt:xin13-k32", "XOR-in (13, 19) for duo in FusedPumpBU's pump keeps XOR-in (7, 19)'s alone rate, 0.78 of "
-        "peak (its rotation is free), with every word read in full under filler-scorer/v5"))
+        "receipt:xin13-k32", "XOR-in (13, 19) for duo in FusedPumpBU's pump keeps XOR-in (7, 19)'s alone rate (its "
+        "rotation is free), 0.80 of peak at S 1024, with every word read in full under filler-scorer/v5"))
     filler: A.Filler | None = BU_XIN13_FILLER
     choice: str = ("FusedPump's offline table of pump-only splits, a pfill-bU XOR-in (13, 19) pump, pfill's 4-SM prefill "
                    "split; at serving time a lookup, a green split and one graph a step")
@@ -259,8 +260,8 @@ class FusedPumpBULi(FusedPumpBU):
 
     name: str = "fill-fused-pump-bu-li"
     lineage: dict = field(default_factory=lambda: _bu_lineage(
-        "receipt:li-k32", "LOP3+IMAD for duo in FusedPumpBU's pump runs at ram's op count, 0.78-0.81 of peak alone, with "
-        "every word read in full under filler-scorer/v5"))
+        "receipt:li-k32", "LOP3+IMAD for duo in FusedPumpBU's pump runs at ram's op count, 0.80 of peak alone at S 1024, "
+        "with every word read in full under filler-scorer/v5"))
     filler: A.Filler | None = BU_LI_FILLER
     choice: str = ("FusedPump's offline table of pump-only splits, a pfill-bU LOP3+IMAD pump, pfill's 4-SM prefill split; "
                    "at serving time a lookup, a green split and one graph a step")
