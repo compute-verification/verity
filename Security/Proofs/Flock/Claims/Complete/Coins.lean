@@ -184,7 +184,7 @@ theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
       ready H x = true → ∀ (ω : Tape) (r : Fin ((V false).k x) → Coin), ¬ Bad x r →
         (Claims.run H (honestP w) (V false) x ω r).out = .acc) :
     Claims.Flock.Complete H (deployPlain rel) honestP (δc H) := by
-  intro x w hs hr ω
+  intro _ x w hs hr ω
   unfold δc
   split
   · rename_i hready
