@@ -5,8 +5,9 @@ Ram's step (rotl(y, 7) + d0) a0 + d1 = rotl(y, 7) a0 + Q reads a pair only throu
 alone (one product a pair) is the tile's ram receipt. A fold binds both words of a pair when no change of them maps every
 state alike: exhaustively on small analogs of each fold (n-bit words, the rotations mod n), ram's such changes are the
 2^n - 1 of the line (d0 + δ, d1 - a0 δ) at a pair; XOR-in's (-DPFILL_XIN) the one joint flip of both words' top bit
-(2^(n-1) (a0 + 1) = 0 mod 2^n for odd a0) at a pair, and at an MMA's four words a group of 16 that holds at every width,
-32 included (`_xin_group`), each element a fixed bijection of every word; duo's none, at a pair and at an MMA."""
+(2^(n-1) (a0 + 1) = 0 mod 2^n for odd a0) at a pair, and over S pairs a group of 2^(3S - 2) that holds at every width,
+32 included (`_xin_group`, checked at S = 2 and 3), each element a fixed bijection of every word, whose complement
+element flips three words' low bits; duo's none, at a pair and at an MMA."""
 
 from __future__ import annotations
 
@@ -162,16 +163,23 @@ def _mma_kernel(step, n, keys, ds):
     return [e for e in out if e != tuple(ds)]
 
 
-def _xin_group(n, a0, ds):
-    """The changes of an MMA's words that XOR-in maps alike at every width n, closed under composition: each pair's
-    joint top-bit flip P1, P2; the cross flip X = (d0 ^ m, d2 ^ rotl(m, 19)), since x ^ m = x + m passes the odd
-    multiply and the add and the rotation moves it to the next XOR-in word; and N = (~d0, a0 - 1 - d1, ~d2), since
-    (~w) a0 = -w a0 - a0 and ~ commutes with the rotation. Each maps every word by a fixed bijection."""
-    m, top = (1 << n) - 1, 1 << (n - 1)
-    gens = (lambda d: (d[0] ^ top, (d[1] + top) & m, d[2], d[3]),
-            lambda d: (d[0], d[1], d[2] ^ top, (d[3] + top) & m),
-            lambda d: (d[0] ^ top, d[1], d[2] ^ _rotl(top, 19, n), d[3]),
-            lambda d: (d[0] ^ m, (a0 - 1 - d[1]) & m, d[2] ^ m, d[3]))
+def _xin_group(n, keys, rots, ds):
+    """The changes of S pairs' words that XOR-in maps alike at every width n, closed under composition: each pair's
+    joint top-bit flip P_p = (d_p0 ^ t, d_p1 + t); the cross flip X_p = (d_p0 ^ t, d_(p+1)0 ^ rotl(t, r_(p+1))), since
+    x ^ t = x + t passes the odd multiply and the add and the rotation moves it to the next XOR-in word; and
+    N_p = (~d_p0, a_p - 1 - d_p1, ~d_(p+1)0), since (~w) a = -w a - a and ~ commutes with the rotation. Each maps every
+    word by a fixed bijection; the 3S - 2 commuting involutions make a group of 2^(3S - 2)."""
+    m, top, S = (1 << n) - 1, 1 << (n - 1), len(keys)
+
+    def edit(**at):
+        return lambda d: tuple(at[f"w{i}"](v) if f"w{i}" in at else v for i, v in enumerate(d))
+
+    gens = [edit(**{f"w{2 * p}": lambda v: v ^ top, f"w{2 * p + 1}": lambda v: (v + top) & m}) for p in range(S)]
+    for p in range(S - 1):
+        r = _rotl(top, rots[p + 1], n)
+        gens.append(edit(**{f"w{2 * p}": lambda v: v ^ top, f"w{2 * p + 2}": lambda v, r=r: v ^ r}))
+        gens.append(edit(**{f"w{2 * p}": lambda v: v ^ m, f"w{2 * p + 1}": lambda v, a=keys[p]: (a - 1 - v) & m,
+                            f"w{2 * p + 2}": lambda v: v ^ m}))
     seen, todo = {tuple(ds)}, [tuple(ds)]
     while todo:
         d = todo.pop()
@@ -182,6 +190,41 @@ def _xin_group(n, a0, ds):
     return seen - {tuple(ds)}
 
 
+def _three_pair_kernel(step, n, keys, rots, ds):
+    """The changes of three pairs' words (three steps) that map every n-bit y alike, met in the middle: the first two
+    steps' changes as permutations of the state after the first true step, against the third's inverses."""
+    m = 1 << n
+    y = np.arange(m, dtype=np.int64)
+    es = np.array([(e0, e1) for e0 in range(m) for e1 in range(m)], dtype=np.int64)
+
+    def run(p, yy, e0, e1):
+        return step(yy, e0, e1, keys[p], rots[p], n)
+
+    first = run(0, np.argsort(run(0, y, ds[0], ds[1]))[None, :], es[:, :1], es[:, 1:])
+    want = run(2, run(1, y, ds[2], ds[3]), ds[4], ds[5])
+    undo = np.take_along_axis(np.argsort(run(2, y[None, :], es[:, :1], es[:, 1:]), axis=1),
+                              np.broadcast_to(want, (len(es), m)), axis=1)
+    last = {}
+    for i, row in enumerate(undo.astype(np.uint8)):
+        last.setdefault(row.tobytes(), []).append(i)
+    out = set()
+    for i0 in range(len(es)):
+        for i1, row in enumerate(run(1, first[i0][None, :], es[:, :1], es[:, 1:]).astype(np.uint8)):
+            for i2 in last.get(row.tobytes(), ()):
+                out.add(tuple(int(v) for v in (*es[i0], *es[i1], *es[i2])))
+    return out - {tuple(ds)}
+
+
+def _f2_rank(rows):
+    rank, rows = 0, [int("".join(map(str, r)), 2) for r in rows]
+    while rows:
+        if (top := max(rows)) == 0:
+            break
+        rows = [r ^ top if r.bit_length() == top.bit_length() else r for r in rows if r != top]
+        rank += 1
+    return rank
+
+
 @pytest.mark.parametrize(("keys", "ds"), [((11, 21), (3, 30, 17, 6)), ((7, 25), (0, 0, 31, 9))])
 def test_ram_and_xin_mma_kernels(keys, ds):
     """At an MMA's four words (n = 5), every state: ram's are the product of the two Q lines, (2^n)^2 - 1, data-free
@@ -190,7 +233,18 @@ def test_ram_and_xin_mma_kernels(keys, ds):
     n = 5
     assert len(_mma_kernel(_ram, n, keys, ds)) == (1 << n) ** 2 - 1
     ker = set(_mma_kernel(_xin, n, keys, ds))
-    assert ker == _xin_group(n, keys[0], ds) and len(ker) == 15
+    assert ker == _xin_group(n, keys, (7, 19), ds) and len(ker) == 15
+
+
+@pytest.mark.parametrize(("keys", "ds"), [((11, 21, 13), (3, 30, 17, 6, 9, 20)), ((7, 25, 19), (0, 0, 31, 9, 4, 1))])
+def test_xin_kernel_grows_three_generators_a_pair(keys, ds):
+    """Over three pairs (n = 5), every state, XOR-in's kernel is `_xin_group`'s 2^7 - 1: N carries the complement across
+    pairs. Only N touches low bits, three at a time, so mod 2 the receipt fixes S + 1 of the 2S words' shadows (ram S,
+    duo 2S): the question for Theorem K, which reads V mod 2, is whether its count survives N's data-chosen flips."""
+    n, rots = 5, (7, 19, 7)
+    ker = _three_pair_kernel(_xin, n, keys, rots, ds)
+    assert ker == _xin_group(n, keys, rots, ds) and len(ker) == 2 ** 7 - 1
+    assert _f2_rank({tuple((e ^ d) & 1 for e, d in zip(k, ds)) for k in ker}) == len(keys) - 1
 
 
 @pytest.mark.parametrize(("n", "words"), [(6, 2), (4, 4)])
