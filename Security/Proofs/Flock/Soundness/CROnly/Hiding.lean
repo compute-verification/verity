@@ -5,7 +5,7 @@ import Mathlib.Algebra.Order.Chebyshev
 /-!
 # hm96 hiding from the universal hash
 
-`Assumptions.Hm96Hiding My c δ₁` holds at `δ₁ = hidingGap My c`, with no hypothesis (`hm96Hiding_gap`): every test's
+`Claims.Hm96Hiding My c δ₁` holds at `δ₁ = hidingGap My c`, with no hypothesis (`hm96Hiding_gap`): every test's
 advantage is at most the statistical distance of the two pairs. So `Hm96Hiding` is no assumption once `δ₁` is the gap,
 and what is left is the gap's size at the pinned key.
 
@@ -100,15 +100,15 @@ theorem hidingGap_nonneg (My : Y → B) (c : Y → C) : 0 ≤ hidingGap My c :=
 /-- **hm96 hiding at its gap**: `Hm96Hiding` holds with `δ₁` the statistical distance of `(My y, c y)` from `(U, c y)`,
 with no hypothesis. -/
 theorem hm96Hiding_gap [Nonempty Y] [Nonempty B] (My : Y → B) (c : Y → C) :
-    Assumptions.Hm96Hiding My c (ENNReal.ofReal (hidingGap My c)) := fun E =>
+    Claims.Hm96Hiding My c (ENNReal.ofReal (hidingGap My c)) := Assumptions.hm96Hiding_of fun E =>
   prCoin_comp_le (fun y => (My y, c y)) (fun p : B × Y => (p.1, c p.2)) ((univ : Finset B) ×ˢ univ.image c)
     (fun y => mem_product.2 ⟨mem_univ _, mem_image_of_mem c (mem_univ y)⟩)
     (fun p => mem_product.2 ⟨mem_univ _, mem_image_of_mem c (mem_univ p.2)⟩) E
 
 omit [DecidableEq B] [DecidableEq C] in
 /-- Hiding is monotone in `δ₁`. -/
-theorem hm96Hiding_mono {My : Y → B} {c : Y → C} {δ δ' : ℝ≥0∞} (h : Assumptions.Hm96Hiding My c δ) (hδ : δ ≤ δ') :
-    Assumptions.Hm96Hiding My c δ' := fun E => (h E).trans (add_le_add le_rfl hδ)
+theorem hm96Hiding_mono {My : Y → B} {c : Y → C} {δ δ' : ℝ≥0∞} (h : Claims.Hm96Hiding My c δ) (hδ : δ ≤ δ') :
+    Claims.Hm96Hiding My c δ' := fun E => (h E).trans (add_le_add le_rfl hδ)
 
 theorem card_uniform_pair (c : Y → C) (b : B) (z : C) :
     #{p : B × Y | (p.1, c p.2) = (b, z)} = #{y | c y = z} := by

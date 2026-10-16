@@ -18,8 +18,9 @@ statement id, the refusals of plain-leaf statements and of `--zk` with `--coins`
 else `--coins`), `Json.parse` then `Draw.workTableOfJson`, `Draw.closureMapOfJson` and `Registered.ofJson` on the files.
 The result is C's `Readable.Read` (`readOf`), so the claims' parser is C's `parseOf` (`parse`: `Read.parse`,
 `Stmt.setupTables` and under `--zk` every table's `Zk.shapeOk`, read as `Claims.Flock.Stmt` by `toReadable`), and the
-scope check C's `scopeCheckOf`, the verifier's own `ProvedScope.check` (`scopeCheck`); `readOf_zk` is the agreement on
-`--zk` that C's `scope_iff` and `scopeMatches_zk` take.
+scope check C's `scopeCheckOf`, the verifier's own scope refusal (`scopeCheck`: `ProvedScope.check`, then
+`ProvedScope.sizesOk` on the tables); `readOf_zk` is the agreement on `--zk` that C's `scope_iff` and `scopeMatches`
+take.
 
 `Ins.setup` is `verifyCmd`'s `setupOf` at the statement's draw, with no recursive input and no `--identifier`: the
 session's statement (`Stmt.setupTables`), each table's registered reads (`checkRegistered`) and the identifier's absence
@@ -287,8 +288,8 @@ the session's statement), read as `Claims.Flock.Stmt` (`toReadable`, with the re
 def parse (zk : Bool) (rel : Readable.Parsed → Readable.Relation) : Claims.Msg → Option Claims.Flock.Stmt :=
   Readable.parseOf rel (readOf zk)
 
-/-- **The claims' scope check**: C's `scopeCheckOf`, the statement parses and passes the verifier's own
-`ProvedScope.check`. -/
+/-- **The claims' scope check**: C's `scopeCheckOf`, the statement parses and passes the verifier's own scope refusal
+(`Readable.Parsed.scope`: `ProvedScope.check`, then `ProvedScope.sizesOk`). -/
 def scopeCheck (zk : Bool) : Claims.Msg → Bool := Readable.scopeCheckOf (readOf zk)
 
 end FlockDeploy

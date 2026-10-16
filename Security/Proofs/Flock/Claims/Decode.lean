@@ -39,6 +39,17 @@ namespace Claims
 
 open Polynomial
 
+/-! ## The `nMin` form of the list-decoding spec -/
+
+/-- **List decoding from `nMin` opened columns**: from opened columns at distinct positions, at least `nMin M` of them,
+`decode` lists every trace `M` whose encoding agrees with at least a fraction `agree` of them. The spec's form until
+16 Oct, when the radius form (`Flock.ListWithin`) replaced it; the decoders here still meet it, with `nMin M` the
+smallest count above the Johnson bound of `M`'s code. -/
+def Flock.ListComplete {Col T : Type} [DecidableEq Col] (enc : T → ℕ → Col) (agree : ℝ) (nMin : T → ℕ)
+    (decode : List (ℕ × Col) → List T) : Prop :=
+  ∀ (os : List (ℕ × Col)) (M : T), (os.map Prod.fst).Nodup → nMin M ≤ os.length →
+    agree * os.length ≤ (os.filter fun p => decide (enc M p.1 = p.2)).length → M ∈ decode os
+
 /-! ## The Johnson count -/
 
 /-- **The Johnson count**: `⌊(k+1)/agree²⌋ + 1`, the smallest number `N` of opened columns with
