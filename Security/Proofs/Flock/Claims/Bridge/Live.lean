@@ -21,6 +21,15 @@ proof files. This file runs it as a `Claims.Verifier` and transports `Claims.run
 * `Pr_acc_live`, `Pr_acc_replay_live`, `forkPr_live`: `Claims.run`'s acceptance with an event of the outcome, or of
   what the verifier reads off the transcript, is `liveSession`'s probability of `d` accepting with that event, against
   the strategy the prover's bytes decode to (`liveStrat`); `B`'s fork at round `j` is `forkX` of the session.
+
+**The correspondence.** The old games average over each `coin` node's own type (`prob`, `expect`) against a
+`Strategy`, a move at each `send` node that may read every earlier move and coin. `Claims.run H P* (liveV …) x ω r`
+averages over `r : Fin (N x + 2) → LCoin nMax`, the tape `ω` fixed. Round `j`'s message `a_j` is `P*.next x hist ω`;
+its decoding is the move (`Wire`), and its reply carries the coin the session draws next: Commit's the link points, a
+submission's its `n` coins, the proof files' the decision, which is `d x` on the outcome, its `H` queries the verifier's
+log. `P*` sees every earlier reply, so the decoded strategy (`stratG`) reads exactly what a `Strategy` reads, and the
+coin law (`Coins.ex_playOn`) gives each coin uniform, independent, after the message it answers. A stop (`none`) leaves
+the later round coins unread. The round digest `roundOf dg` computes is the coin server's, not an oracle query.
 -/
 
 namespace Claims.Bridge.Live
