@@ -906,8 +906,8 @@ GATHER = 12
 
 
 def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None = None) -> Path | None:
-    """One pack (`verdicts.py combine`) of the verdicts the newest ``limit`` recorded checks stored, for `--record` to send with
-    `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
+    """One pack (`verdicts.py combine`) of the verdicts the ``limit`` recorded checks that ended last stored, for `--record` to
+    send with `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
     recorded runs' packs are taken, a failed or cancelled run's too: its pack holds only the passes its steps stored, each
     under a key of everything it read.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
     flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse is passed over by name, so its
@@ -924,7 +924,7 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
-        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY start_utc DESC LIMIT ?",
+        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?",
                                (4 * limit,))
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
@@ -990,7 +990,11 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     beside = only is None or any(x == "pytest" or x.startswith("lean") for x in names)
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
-    tail = ["--jobs", str(a), *([] if cache else ["--fresh"]),
+    slot_gb = int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
+    with_cc = only is None or "circuit-check" in names
+    # pytest and lean-suites run at once, each with this share: what circuit-check leaves, halved
+    tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
+    tail = ["--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
@@ -1001,7 +1005,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
-          *(["--mem-gb", str(cc_mem_gb(int(m), beside))] if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else [])]
+          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside))] if slot_gb is not None else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),

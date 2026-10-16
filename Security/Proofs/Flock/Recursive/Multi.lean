@@ -15,7 +15,9 @@ included), so the composition records each session's strategy with its outcome:
 * `seqC S gs of`: the `S` games `gs j` in a row, each `committed` at its start; a strategy of `seqC` names each
   session's strategy as a function of everything before it, so it is any prover of the `S` sessions played in a row;
 * `exG_seqC_le`, `prob_seqC_exists_le`: a bound on session `j` at each of its strategies bounds it in the composition at
-  the strategy the prover names there, and some session's event is at most the expected sum of the sessions' bounds.
+  the strategy the prover names there, and some session's event is at most the expected sum of the sessions' bounds;
+* `outcome_play`, `outcome_committed`, `outcome_seqC`: an outcome of the composition plays each game to its recorded
+  outcome against the strategy its recorded name stands for.
 
 Names other than the strategies themselves let the output's type be one fixed type while the games, and so their
 strategies' types, vary with the history the sessions follow.
@@ -202,6 +204,38 @@ theorem prob_seqC_exists_le (S : ℕ) {T α : Fin S → Type} (gs : (j : Fin S) 
         exact exG_seqC_le S gs of j (fun r => if E j r then 1 else 0) (B j)
           (fun τ => (prob_eq_exG _ _ _).symm.trans_le (hB j τ)) s
     _ = _ := (exG_sum _ _ _ _).symm
+
+/-- **An outcome of `play g τ` is an outcome of `g` against `τ`**: fixing the messages only removes coins. -/
+theorem outcome_play : ∀ (g : Game α) (τ : Strategy g) (s : Strategy (play g τ)) {a : α},
+    Outcome (play g τ) s a → Outcome g τ a
+  | .ret _, _, _, _, h => h
+  | .send _ k, τ, s, _, h => outcome_play (k τ.1) τ.2 s h
+  | @Game.coin _ _ _ _ k, τ, s, _, h => by
+      obtain ⟨c, hc⟩ := h
+      exact ⟨c, outcome_play (k c) (τ c) (s c) hc⟩
+
+/-- **An outcome of `committed g of` plays `g` to its recorded outcome against the strategy its recorded name stands
+for.** -/
+theorem outcome_committed {T : Type} (g : Game α) (of : T → Strategy g) (s : Strategy (committed g of))
+    {r : T × α} (h : Outcome (committed g of) s r) : Outcome g (of r.1) r.2 := by
+  obtain ⟨a, ha, hr⟩ := Outcome.of_map (fun a => (s.1, a)) (play g (of s.1)) s.2 h
+  cases hr
+  exact outcome_play g (of s.1) _ ha
+
+/-- **An outcome of `seqC` plays each game to its recorded outcome against the strategy its recorded name stands
+for.** -/
+theorem outcome_seqC : ∀ (S : ℕ) {T α : Fin S → Type} (gs : (j : Fin S) → Game (α j))
+    (of : (j : Fin S) → T j → Strategy (gs j)) (s : Strategy (seqC S gs of)) {b : (j : Fin S) → T j × α j},
+    Outcome (seqC S gs of) s b → ∀ j, Outcome (gs j) (of j (b j).1) (b j).2
+  | 0, _, _, _, _, _, _, _, j => j.elim0
+  | S + 1, T, α, gs, of, s, b, h, j => by
+      obtain ⟨r, hr, u, hu⟩ := Outcome.of_bind (committed (gs 0) (of 0)) _ s h
+      obtain ⟨rs, hrs, hb⟩ := Outcome.of_map _ _ u hu
+      subst hb
+      cases j using Fin.cases with
+      | zero => simpa only [Fin.cons_zero] using outcome_committed (gs 0) (of 0) _ hr
+      | succ j => simpa only [Fin.cons_succ] using
+          outcome_seqC S (fun j => gs j.succ) (fun j => of j.succ) _ hrs j
 
 end Seq
 

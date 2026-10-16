@@ -67,7 +67,7 @@ open Classical in
 /-- **One coin vector, at any hm96 hiding bound `δ`**: the prover's and the simulator's probabilities at `c` are within
 `2·|LeafPos|·δ`. -/
 theorem coin_close_le (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
-    {δ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (w w0 : Witness C.S.m) (hv : C.Valid w) (hreg : ∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg)
     (E : ∀ c : CoinsZK C.Rest, (C.T c).tab.View ⊕ (C.T c).tab.Cut → Prop) (c : CoinsZK C.Rest) :
     prCoin (fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
@@ -96,7 +96,7 @@ theorem coin_close_le (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flo
     have hT := leafT_hm96 C c
     have hS : (C.T c).tab.Admits (sentAt C c) :=
       ZK.Session.sent_admits (fun _ : Fin 1 => (C.T c).tab) (fun _ => (C.T c).rep) 0
-    have h1 : Assumptions.Hm96Hiding (C.T c).hm96.My (C.T c).hm96.cs δ := by
+    have h1 : Claims.Hm96Hiding (C.T c).hm96.My (C.T c).hm96.cs δ := by
       rw [ZkView.Coined.hm96At_My (C.T c) ZkView.My rfl, ZkView.Coined.hm96At_cs (C.T c) ZkView.My rfl]
       exact hT1
     have h := ZK.Table.table_abort_hm96 (C.T c).tab (C.T c).hm96 _ hT h1 (sentAt C c) hS w (hreg c) w0

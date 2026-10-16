@@ -15,6 +15,7 @@
 #include <cuda_fp8.h>
 
 #include "../pearl_c/hash_h3.cuh"
+#include "hash_fast.cuh"
 #include "mainloop_sm120.cuh"
 
 // ---------------------------------------------------------------- formats (IEEE, nearest even, no FTZ)

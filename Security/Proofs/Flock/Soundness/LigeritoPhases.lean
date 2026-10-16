@@ -10,7 +10,8 @@ The doomed states between a level's steps:
 * `PreFold`: before a level's folds, the running claim is false for every message of the level's
   list, against the weight on its split table (`preW`);
 * `PostFold`: after the folds by `ch`, it is false for every fold of those messages, against the
-  next stage's weight (`resAt`), and no fold round was an MCA event.
+  next stage's weight (`resAt`), and no fold round was an MCA event; `PostFoldAt` the same over the
+  messages within a radius `δ` of the table, for a level 0 decoded inside the list's radius.
 
 `phaseB` is the folds (sumcheck and MCA), costing `foldError`.
 -/
@@ -33,17 +34,24 @@ structure PreFold (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (
     st.s ≠ ∑ y ∈ Finset.range (2 ^ (e + 1)),
       A.embed (flat M y) * preW A n b initial st.levels st.oods st.cons e y
 
-/-- After level `l`'s folds by `ch` (the last entry of `st.levels`, or `initial` at level 0). -/
-structure PostFold (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initial : List K)
-    (l : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K) (st : LigState F K) :
-    Prop where
+/-- After level `l`'s folds by `ch` (the last entry of `st.levels`, or `initial` at level 0), the
+doom over the messages within `δ` of the level's table; the folds' MCA events are at its radius. -/
+structure PostFoldAt (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initial : List K)
+    (l : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K) (δ : ℝ)
+    (st : LigState F K) : Prop where
   sum : st.q.eval 0 + st.q.eval 1 = st.s
   len : ch.length = lanes
   ok : PostOK initial st.levels st.oods st.cons l.logCols
   mca : MCAGood (codeK A hA l hf) l.radius lanes ch (rowsK A lanes l.logLen C)
-  doom : ∀ M ∈ closeL A l.radius lanes l.logCols l.logLen C,
+  doom : ∀ M ∈ closeL A δ lanes l.logCols l.logLen C,
     st.s ≠ ∑ x ∈ Finset.range (2 ^ l.logCols),
       foldMsg A ch M x * resAt A n b initial st.levels st.oods st.cons l.logCols x
+
+/-- After level `l`'s folds by `ch`, the doom over the level's list. -/
+abbrev PostFold (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initial : List K)
+    (l : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K) (st : LigState F K) :
+    Prop :=
+  PostFoldAt A hA n b initial l hf lanes C ch l.radius st
 
 theorem value_foldRounds_length (A : Arith F K) (hA : A.Correct) :
     ∀ (k : ℕ) (s : K) (q : Quad K),

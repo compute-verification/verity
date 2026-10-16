@@ -43,6 +43,7 @@ from types import SimpleNamespace
 import keyed
 import numpy as np
 import pytest
+from test_lean_rec_coins import built, forged  # noqa: F401
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluate import evaluate_call
 from verity.ml.circuits.ops import gemm as G
@@ -110,14 +111,10 @@ def inner(once) -> dict[str, dict]:
 
 
 @pytest.fixture(scope="module")
-def level(inner, once) -> list[str]:
-    """`flock-witness session`'s files and session at the recorded level, its statement restaged."""
-    d = once("witness-level", lambda d: S.stage(
-        SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL], algebra=False,
-        pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin"), functools.partial(
-        keyed.key, SET / "inner-honest", SET / "fold-honest.json", SET / "points-honest.json", SET / "acc-salts.bin",
-        code=[__name__]))
-    level = d / f"L{LEVEL}"
+def level(inner, forged) -> list[str]:  # noqa: F811
+    """`flock-witness session`'s files and session at the recorded level, its statement restaged (`test_lean_rec_coins`'
+    `forged`, whose circuit, program and partition do not read the coefficients)."""
+    level = forged
     assert hashlib.sha512((level / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
     return ["--circuit", str(level / "circuit.txt"), "--public", str(SET / f"L{LEVEL}" / "pub.bin"), "--partition",
             str(level / "partition.json"), "--program", str(level / "program.json"), "--registered",

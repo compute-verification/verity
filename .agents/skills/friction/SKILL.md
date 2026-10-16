@@ -22,6 +22,14 @@ If git push fails because the VM's GitHub token lapsed, hand the branch over thr
 origin/BASE..BRANCH, then research data put --kind evidence/v1 --file B --preserve), and send the art id, the branch and its
 head sha: no agent can read another agent's Cursor store.
 
+Friction in the shared infrastructure (Linear, Slack and `research msg`, `research run`, the queue, notes, the store) is
+usually everyone's, so ask in the **workflow thread** before working around it: `research msg reply --thread
+1792037552.043289`, one question per post, starting with the tool's name. Anyone who knows answers it, and the tool's owner
+decides. The owner then makes the answer stick in code or the owning skill and replies `settled: <PR or section>`, so no
+answer lives only in Slack. Read the thread in your loop rather than subscribing to it. On 14–15 Oct it settled 6 questions,
+each in one reply, among them `research queue open`, which already existed and fixed a papercut four leads had been working
+around.
+
 ## 1. Fix it, when it's clearly yours
 
 Most friction is. Fix it at the source, in the PR you're working on or in a small one of its own, instead of working around

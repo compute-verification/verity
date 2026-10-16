@@ -72,7 +72,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "noninterference": ("verity_vllm.properties.noninterference", "observer non-interference check"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
-    "padding-steps": ("verity_vllm.commit.padding_steps", "inactive rows of a padded Commit"),
     "pouw-serve": ("verity_vllm.pipeline.pouw_serve", "a workload served under pouw:ncp-v2, its calls replayed honest and tampered"),
     "predict": ("verity_vllm.predict.cli", "ahead-of-time Program prediction from φ, scored against the traced Builds"),
     "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),
@@ -88,7 +87,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "replay": ("verity_vllm.check.replay.replay", "the derived Program as its own oracle"),
     "research-outputs": ("verity_vllm.pipeline.research_outputs", "typed outputs of a sweep stage"),
     "research-result": ("verity_vllm.pipeline.research_result", "a sweep row's result.json"),
-    "resolve-decomp": ("verity_vllm.correspondence.resolve_decomp", "X-09 decomposition of a fold record"),
     "resolve-log": ("verity_vllm.observe.fold.resolve_log", "resolve an observation log against a profile"),
     "rmsnorm-fused-sweep": ("verity_vllm.program.kernels.rmsnorm_fused_sweep", "fused rms-norm summation-tree sweep"),
     "root-policy": ("verity_vllm.check.root_policy", "root closure check"),
@@ -110,7 +108,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "tp-match": ("verity_vllm.pipeline.tp.match", "tensor-parallel Match at the collective level"),
     "twins": ("verity_vllm.program.kernels.twins", "vectorized twins of the registered bodies"),
     "verdict": ("verity_vllm.pipeline.verdict_record", "a row's Commit verdict record, rebuilt from its evidence"),
-    "vu-store": ("verity_vllm.pipeline.vu_store", "the hierarchical VU store: extract instance sets, verify"),
     "weights-of-record": ("verity_vllm.check.weights_of_record", "the weights of record"),
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
 }

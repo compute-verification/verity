@@ -24,6 +24,8 @@ device's primary context:
   - ``cleanup``: A′·F_B, P_A, and the chain with its peel and y (``gemm_pearlc`` writes y into the tensor this returns);
   - ``hashing``: the tile leaves (``sha512/row-seg/v1`` over C̃ and U), into the pass's leaf buffer at the call's offset.
     No per-call tile tree is built, since the pass has one.
+  The row digests and the tile leaves run as hash_fast.cuh's segment and fold launches, over each shape's segment scratch
+  (``segdig_a``, ``segdig_t``) and, for B's tree at install, a scratch dropped after it (``segdig_b``).
 * **The records** (`pearl_c_work.UnitRecord`): each call's real rows and width, and the rows that fail the per-row rules
   (`pearl_c_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
@@ -130,7 +132,7 @@ FLAG_ROWS = 1 << 22
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "rowdig_b")
 CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "tree_a", "line_a",
-                "seed_a", "rowdig_a", "seeds_a", "lkeys_a")
+                "seed_a", "rowdig_a", "seeds_a", "lkeys_a", "segdig_a", "segdig_t")
 EPOCH_STEPS = ("pad_b", "rowdig_b", "hash_rows_b", "tree_b")
 JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b", "bf", "g", "pb")
 CALL_STEPS = ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "stats_a", "eprime_a", "form_a",
@@ -146,7 +148,7 @@ STEP_GROUPS = {"pad_a": "row_seeds", "rowdig_a": "row_seeds", "hash_rows_a": "a_
 #: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
 #: still reads.  Only the tile hashing moves, the tile leaves over C~ and U; A's tree stays on the main lane, and the screen
 #: runs on the caller.
-SIDE_IO = {"hash_leaf": StepIO("tile_hash", frozenset({"c", "u"}), frozenset())}
+SIDE_IO = {"hash_leaf": StepIO("tile_hash", frozenset({"c", "u"}), frozenset({"segdig_t"}))}
 SIDE_GROUPS = frozenset(io.group for io in SIDE_IO.values())
 
 
@@ -246,7 +248,7 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[
     for w, weight in weights.items():
         n, k = weight.shape
         size = R.Pipeline.sizes(R.BM, n, k, R.BM)
-        b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b")}
+        b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b", "segdig_b")}
         keys, const = _zeros(128, weight.device), _constants(s, weight.device, salt_key)
         _put(keys[64:], rows_domain(_weight_binding(w), -2, n, hash).domain_id)
         xb = weight.to(torch.float32).contiguous()
@@ -406,8 +408,9 @@ class PearlCDeviceRun(GraphCalls):
         kk = K.fixture.keys_of(self.scheme, self.epoch, mm, seed_b)
         _put(keys, kk["line_b"].ljust(64, b"\0") + kk["dom_b"])
         xb = weight.to(torch.float32).contiguous()
-        pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
-                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **self.const_keys},
+        seg = _zeros(size["segdig_b"], weight.device)
+        pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0, "segdig_b": seg.data_ptr()},
+                         xb.data_ptr(), {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **self.const_keys},
                          variant=self.variant, weight=w)
         stream = _stream(weight.device)
         _run(K, pipe, EPOCH_STEPS, stream)

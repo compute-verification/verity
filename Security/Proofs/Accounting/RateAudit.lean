@@ -3,6 +3,7 @@ import Proofs.Accounting.RateAudit.Chain
 import Proofs.Accounting.RateAudit.Conservation
 import Proofs.Accounting.RateAudit.Deployed
 import Proofs.Accounting.RateAudit.DeployedSketch
+import Proofs.Accounting.RateAudit.DeployedSketchSum
 import Proofs.Accounting.RateAudit.DeployedRelay
 import Proofs.Accounting.RateAudit.DeployedRun
 import Proofs.Accounting.RateAudit.Honest
@@ -53,5 +54,7 @@ bandwidth audit as deployed, one guarantee over a session of ground, chained win
 (`Accounting.SecurityProofs.RemoteSessionRoutes`) and conserving over the horizon and in each window at the same `γ`
 (`RemoteSessionRunConservation`, `RemoteWindowRunConservation`), and all three with side sources that may relay
 receipts (`RemoteSessionConservationRelay`, `RemoteSessionRunConservationRelay`, `RemoteWindowRunConservationRelay`),
-and the composed verbatim-sector tensor-sketch session (`RemoteSessionConservationSketch`, at the deployed 16-row
-parameters `RemoteSessionConservationSketchDeployed`). -/
+and the composed verbatim-sector tensor-sketch session (`RemoteSessionConservationSketch`; at the deployed 16-row
+parameters, under the per-pass hash budget, `RemoteSessionConservationSketchDeployed`, with the budgeted session bound
+`RemoteSessionConservationSketchSum` and the product form kept as
+`RemoteSessionConservationSketchDeployedProduct`). -/

@@ -48,8 +48,8 @@ theorem vbridgeRead_of_layers (F : VStarFamily T CT cls regs sch L Reg Cm Reg' R
     (hsch : F.HSch) (hfiles : F.HFilesR dg N k Rw) (hruns : F.HRuns dg N k Rw) (hcm : F.HCommits)
     (hdec : F.VDecodesRead) (hfull : F.VFullRead) :
     VBridgeRead (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
-  ⟨fun R ω t R₂ hc τ o h₀ => by
-    have h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o := ⟨h₀, hc⟩
+  ⟨fun R ω t R₂ hc τ o hout h₀ => by
+    have h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o := ⟨h₀, hc, hout⟩
     have hr := hruns R ω t R₂ τ o h fun r => by
         obtain ⟨⟨v, info, kappa, hv, hvs⟩, hw, hc⟩ := hsh R ω t R₂ τ o h r
         exact ⟨FlockVBridge.OfVStar.algebraHolds_of_decodeL (F.zs R ω t R₂) (layers F.zs dg N k Rw R ω t R₂ τ)

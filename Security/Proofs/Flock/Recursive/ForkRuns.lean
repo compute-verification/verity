@@ -8,7 +8,6 @@ the root: any two transcripts the strategy reaches. `Inner.fork_of_outcomes` rea
 the compile lemma turns a clash of two runs into a fork.
 
 * `Game.Outcome.bind_of`, `Game.Outcome.map_of`: the outcomes of a sequenced game.
-* `Game.prob_mono_outcome`: `prob_mono` with the implication needed only at outcomes the strategy reaches.
 * `Game.PlaysT.det`, `Game.PlaysT.ne_nil_of_send`: a run on one tape ends at one outcome, and a game that starts with a
   message takes at least one step.
 * `outcome_contF`, `outcome_rounds_length`: an outcome of `r` rounds is a transcript of length `r`, and an outcome of the
@@ -31,19 +30,6 @@ theorem Outcome.bind_of : ∀ (g : Game α) (f : α → Game β) (s : Strategy g
 theorem Outcome.map_of (f : α → β) (g : Game α) (s : Strategy g) {a : α} (ha : Outcome g s a) :
     Outcome (g.map f) (Strategy.map f g s) (f a) :=
   Outcome.bind_of g (fun a => .ret (f a)) s (fun _ => PUnit.unit) ha (show f a = f a from rfl)
-
-/-- **`prob_mono` at the reached outcomes**: the implication is needed only at outcomes `s` reaches. -/
-theorem prob_mono_outcome {p q : α → Prop} :
-    ∀ (g : Game α) (s : Strategy g), (∀ a, Outcome g s a → p a → q a) → prob p g s ≤ prob q g s
-  | .ret a, _, h => by
-      classical
-      simp only [prob]
-      by_cases hp : p a
-      · simp [hp, h a rfl hp]
-      · simp [hp]
-  | .send _ k, s, h => prob_mono_outcome (k s.1) s.2 h
-  | @Game.coin _ C _ _ k, s, h =>
-      Finset.sum_le_sum fun c _ => mul_le_mul_right (prob_mono_outcome (k c) (s c) fun a ha => h a ⟨c, ha⟩) _
 
 /-- **A run on one tape ends at one outcome.** -/
 theorem PlaysT.det {g : Game α} {ts : List Step} {a b : α} (ha : PlaysT g ts a) (hb : PlaysT g ts b) : a = b := by

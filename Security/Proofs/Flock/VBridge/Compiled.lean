@@ -69,14 +69,16 @@ section outer
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
 
 /-- **An accepted outer proof**: at the history `(R, ω, t)` and registration `R₂`, every session's outcome
-`flock-verify --zk --registered` accepts and every session's value layer is `Good`, and no two sessions' registrant
-records clash there (`RegColl`; `VBridgeOff RegColl`'s premise). -/
+`flock-verify --zk --registered` accepts and every session's value layer is `Good`, no two sessions' registrant
+records clash there (`RegColl`), and each session's record is a genuine session-game outcome: one its game reaches
+against `τ j` (`Game.Outcome`; `VBridgeOff RegColl`'s premise). -/
 def Accepted (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (R : Reg) (ω : L.Ω) (t : List (Cm × I.Coin)) (R₂ : Reg₂)
     (τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N))
     (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) : Prop :=
   (∀ j, LiveAcceptsZKR (zs R ω t R₂ j).I (zs R ω t R₂ j).own (o j) ∧
-    (zs R ω t R₂ j).Good ((zs R ω t R₂ j).layer dg N k Rw (τ j))) ∧ ¬ RegColl zs R ω t R₂
+    (zs R ω t R₂ j).Good ((zs R ω t R₂ j).layer dg N k Rw (τ j))) ∧ ¬ RegColl zs R ω t R₂ ∧
+    ∀ j, Game.Outcome ((zs R ω t R₂ j).game dg N) (τ j) (o j)
 
 /-- The sessions' value layers at those strategies. -/
 noncomputable def layers (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -142,8 +144,8 @@ theorem vbridge_compiled (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg)
     (hfull : VFullR (flockInnerCL T CT A H E Lf cls regs sch).r Sk) :
     Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg :=
-  ⟨fun R ω t R₂ hc τ o h => hst R ω t R₂ τ o ⟨h, hc⟩ fun r =>
-    ⟨halg R ω t R₂ τ o ⟨h, hc⟩ r, hacc R ω t R₂ τ o ⟨h, hc⟩ r⟩, hcm, hdec, hfull⟩
+  ⟨fun R ω t R₂ hc τ o hout h => hst R ω t R₂ τ o ⟨h, hc, hout⟩ fun r =>
+    ⟨halg R ω t R₂ τ o ⟨h, hc, hout⟩ r, hacc R ω t R₂ τ o ⟨h, hc, hout⟩ r⟩, hcm, hdec, hfull⟩
 
 end target
 

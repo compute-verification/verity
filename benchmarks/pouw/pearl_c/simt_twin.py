@@ -1,4 +1,5 @@
-"""A host build of `hash_h3.cuh` that runs its kernels thread for thread, for byte tests without a GPU.
+"""A host build of `hash_h3.cuh` and `pearl_c_sm120/hash_fast.cuh` that runs their kernels thread for thread, for byte tests
+without a GPU.
 
 Every CUDA thread of a block is a host thread; `__syncthreads` and `__syncwarp` are one barrier over the block (stronger than
 a warp's, which the kernels here allow: every thread of a block reaches the same syncs), which a thread leaves when it
@@ -16,7 +17,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 KERNELS = ("s512_rows", "s512_seeds", "s512_tickets", "s512_tile_leaves", "s512_pads", "s512_nodes", "s512_tree_small", "hm_leaves",
-           "s512_frame_leaves")
+           "s512_frame_leaves", "s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds")
 
 PRELUDE = r"""
 #include <cmath>
@@ -100,6 +101,7 @@ static std::vector<uint32_t> twin_dyn;
 def _source() -> str:
     body = (HERE / "hash_h3.cuh").read_text().replace("extern __shared__ uint32_t sh[];", "uint32_t* sh = twin_dyn.data();").replace(
         '#include "sha512.cuh"', (HERE / "sha512.cuh").read_text()).replace("#pragma once", "")
+    body += (HERE.parent / "pearl_c_sm120" / "hash_fast.cuh").read_text().replace("#pragma once", "")
     runs = "".join(
         f'extern "C" void run_{k}(const Args* a, int grid, int block, int smem) {{\n'
         f"  twin_dyn.assign(smem / 4 + 1, 0u); blockDim.x = block; gridDim.x = grid;\n"

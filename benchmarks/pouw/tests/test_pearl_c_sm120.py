@@ -38,7 +38,7 @@ S = load("pearl_c_sm120_sass_gate", HERE / "sass_gate.py")
 RUN = load("pearl_c_sm120_run", HERE / "run.py")
 
 SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
-HASH_SOURCE = (HERE.parent / "pearl_c" / "hash_h3.cuh").read_text()
+HASH_SOURCE = (HERE.parent / "pearl_c" / "hash_h3.cuh").read_text() + (HERE / "hash_fast.cuh").read_text()
 SM120_MAX_DYN = 101376                   # sm_120's opt-in dynamic shared memory per block (99 KB)
 UUID = "GPU-0123abcd-4567-89ef-0123-456789abcdef"
 RTX = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
@@ -227,8 +227,10 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
 # ---- the dry run ---------------------------------------------------------------------------------------------------
 
 KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
-#: the -h3 kernels (hash_h3.cuh) the pipeline launches at the dry run's shapes, every count a power of two: no pads
-H3_LAUNCHED = {"s512_rows", "hm_leaves", "s512_frame_leaves", "s512_nodes", "s512_tree_small", "s512_seeds", "s512_tile_leaves"}
+#: the -h3 kernels (hash_h3.cuh, hash_fast.cuh) the pipeline launches at the dry run's shapes, every count a power of two:
+#: no pads; the row digests and tile leaves by hash_fast.cuh's kernels (run.py's default, PEARLC_SHA=fast)
+H3_LAUNCHED = {"s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_nodes",
+               "s512_tree_small", "s512_seeds"}
 
 
 def form_kernels() -> list[str]:
@@ -294,6 +296,14 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 64 * i[0], 1: 32 * i[0], 2: 32 * i[0], 3: 104}
     if name == "s512_tile_leaves":
         return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: 64 * -(-i[0] // 64) * (i[1] // 64)}
+    if name == "s512_row_segs":
+        return {0: 4 * i[0] * i[1], 1: 64 * i[0] * (i[1] // 256)}
+    if name == "s512_tile_segs":
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: 64 * tile_segs(i)}
+    if name == "s512_folds":
+        return {0: 64 * (i[2] * i[1] + (i[0] - i[2]) * i[3]), 1: 64 * i[0]}
+    if name == "s512_heads":
+        return {}
     if name == "hm_leaves":
         return {0: 64 * i[0], 1: 64 * i[0], 2: 32, 3: 128 + 192 * 256 * 64, 5: 8}
     if name == "s512_frame_leaves":
@@ -317,12 +327,21 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     raise AssertionError(f"no footprint for {name}")
 
 
+def tile_segs(i: list[int]) -> int:
+    """s512_tile_segs' segments: 32 a tile of the full 64-row blocks, rows / 2 a tile of the last partial one."""
+    rows, cols = i[:2]
+    return rows // 64 * (cols // 64) * 32 + cols // 64 * (rows % 64 // 2)
+
+
 def threads(name: str, i: list[int]) -> int:
     """Threads the launch must cover."""
+    segs = RUN.RS_MAX_SEGS * (RUN.RS_MAX_SEGS + 1) // 2 + RUN.RS_MAX_SEGS + 1
     return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
             "pb": lambda: 32 * i[0], "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0],
             "words": lambda: i[0] // 16 * (i[1] // 8) * 32, "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "s512_rows": lambda: i[0], "s512_seeds": lambda: i[0], "s512_tile_leaves": lambda: -(-i[0] // 64) * (i[1] // 64),
+            "s512_row_segs": lambda: i[0] * (i[1] // 256), "s512_tile_segs": lambda: tile_segs(i), "s512_folds": lambda: i[0],
+            "s512_heads": lambda: segs,
             "hm_leaves": lambda: i[0], "s512_frame_leaves": lambda: i[1], "s512_pads": lambda: i[1] - i[0],
             "s512_nodes": lambda: i[1], "s512_tree_small": lambda: 1, "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
 
@@ -423,8 +442,8 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
             timed = timed or ev["name"] == "gen_f32"
             if timed:
                 launched.append(ev)
-    assert H3_LAUNCHED | {"s512_pads"} <= {ev["name"] for ev in launched}
-    assert {ev["i"][0] for ev in launched if ev["name"] == "s512_rows"} == {1008, 1024}       # A's real rows, B's
+    assert H3_LAUNCHED - {"s512_heads"} | {"s512_pads"} <= {ev["name"] for ev in launched}   # the tables: once, at the check
+    assert {ev["i"][0] for ev in launched if ev["name"] == "s512_row_segs"} == {1008, 1024}   # A's real rows, B's
     assert {tuple(ev["i"][:2]) for ev in launched if ev["name"] == "s512_pads"} == {(1008, 1024)}     # A's; 16 x 16 tiles need none
     lines_ea = [ev for ev in launched if ev["name"] == "lines" and ev["i"][4]]
     assert lines_ea and all(ev["i"][2] == 1024 and ev["i"][4] == 1008 for ev in lines_ea)
@@ -481,3 +500,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert g[0] == i[0] and i[1] % 256 == 0 and i[1] <= 256 * RUN.RS_MAX_SEGS
         if name == "s512_tile_leaves":
             assert g[0] == threads(name, i) and ev["block"] == 32 and i[0] % 16 == 0 and i[1] % 64 == 0
+        if name in ("s512_row_segs", "s512_tile_segs"):
+            assert ev["block"] == RUN.RS_FAST_NT and i[1] % (256 if name == "s512_row_segs" else 64) == 0
+        if name == "s512_folds":
+            assert ev["block"] == RUN.RS_FOLD_NT and i[1] <= RUN.RS_MAX_SEGS and i[3] <= RUN.RS_MAX_SEGS

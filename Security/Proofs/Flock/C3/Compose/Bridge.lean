@@ -29,14 +29,14 @@ theorem vbridgeOff_c3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : By
     (htape : HTape F dg N k Rw) (hreps : HReps F dg N k Rw) (hsp : HSparse F dg N k Rw)
     (hop : HOpening F dg N k Rw) (hlv : HRegLevels F dg N k Rw) :
     VBridgeOff (I := holoInnerAt T CT st hp) (RegColl F.zs) F.zs dg N k Rw (fun _ _ => xR) F.wmsg := by
-  intro R ω t R₂ hc τ o h₀
-  have ht := htape R ω t R₂ τ o ⟨h₀, hc⟩
-  obtain ⟨hr₀, hv₀, hk₀⟩ := hreps R ω t R₂ τ o ⟨h₀, hc⟩ 0
-  obtain ⟨hr₁, hv₁, hk₁⟩ := hreps R ω t R₂ τ o ⟨h₀, hc⟩ 1
-  have hs₀ := hsp R ω t R₂ τ o ⟨h₀, hc⟩ 0
-  have hs₁ := hsp R ω t R₂ τ o ⟨h₀, hc⟩ 1
-  obtain ⟨hR, ho⟩ := hop R ω t R₂ τ o ⟨h₀, hc⟩
-  obtain ⟨hl, hvR, hkR⟩ := hlv R ω t R₂ τ o ⟨h₀, hc⟩
+  intro R ω t R₂ hc τ o hout h₀
+  have ht := htape R ω t R₂ τ o ⟨h₀, hc, hout⟩
+  obtain ⟨hr₀, hv₀, hk₀⟩ := hreps R ω t R₂ τ o ⟨h₀, hc, hout⟩ 0
+  obtain ⟨hr₁, hv₁, hk₁⟩ := hreps R ω t R₂ τ o ⟨h₀, hc, hout⟩ 1
+  have hs₀ := hsp R ω t R₂ τ o ⟨h₀, hc, hout⟩ 0
+  have hs₁ := hsp R ω t R₂ τ o ⟨h₀, hc, hout⟩ 1
+  obtain ⟨hR, ho⟩ := hop R ω t R₂ τ o ⟨h₀, hc, hout⟩
+  obtain ⟨hl, hvR, hkR⟩ := hlv R ω t R₂ τ o ⟨h₀, hc, hout⟩
   obtain ⟨out, hpl, hacc⟩ := holoTableCL_plays (capReg := xR.cap) (hreg := hR) (h₀ := hr₀) (h₁ := hr₁)
     (hs₀ := hs₀) (hs₁ := hs₁) (ho := ho) (hl := hl) (hv := ⟨hv₀, hv₁, hvR⟩) (hok := ⟨hk₀, hk₁, hkR⟩)
   exact ⟨out, (congrArg (fun l => PlaysT _ l out) ht).mpr hpl, hacc⟩

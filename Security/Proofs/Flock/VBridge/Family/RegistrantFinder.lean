@@ -37,8 +37,8 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArra
 def RegClear : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ¬ RegColl (I := ℐ) F.zs R ω t R₂
 
-/-- **No two sessions clash at an accepted outer proof**: `Accepted`'s last conjunct. -/
-theorem regClear : F.RegClear dg N k Rw := fun _ _ _ _ _ _ ha => ha.2
+/-- **No two sessions clash at an accepted outer proof**: `Accepted`'s `RegColl` conjunct. -/
+theorem regClear : F.RegClear dg N k Rw := fun _ _ _ _ _ _ ha => ha.2.1
 
 /-- **`NoRegistrantCollision` where no two sessions clash**: its two collisions are `RegColl`'s two. -/
 theorem noRegistrantCollision_of_clear (h : F.RegClear dg N k Rw) : F.NoRegistrantCollision dg N k Rw := by

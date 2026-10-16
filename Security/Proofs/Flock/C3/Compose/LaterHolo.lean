@@ -13,6 +13,8 @@ import Proofs.Flock.Recursive.HPortTie
 proof and `hlt` from `srcLevelTie_of_maps`, both at R's run in V*'s sessions (`MapsAt`) at the `C3` the verifier
 builds of its hold (`C3Held`), and the reps' `henc` at the map's one-round draws (`coinsEncoded_holoMap`). The
 record facts the stages read are named below (`RecordPoints` … `RepStagesCounted`).
+`histPts`: a source with its link points set to the history's first coin under `holoMap`, where `hpts`
+(`PointsFromHistory`) is `pointsFromHistory_histPts`. At a free source it does not follow from the rest.
 -/
 
 namespace FlockC3.Compose
@@ -164,6 +166,36 @@ theorem recordPoints_of {wr : List (Cm × (ℐ).Coin) → Lean.Json × String}
   obtain ⟨spec, sess, hd⟩ := hdec
   obtain ⟨e, he⟩ : ∃ e, t[0]? = some e := ⟨t[0], List.getElem?_eq_getElem ht⟩
   exact ⟨spec, sess, hd, by rw [(hcus t).2 e he spec sess hd]; exact (hpts e he).symm⟩
+
+/-- **The source whose link points are the history's first coin under `holoMap`**: `stp` with its points set from the
+history, so `PointsFromHistory` holds at it by definition (`pointsFromHistory_histPts`). -/
+def histPts (ish : RecVStar.Inner) (tbl : String) (bc : Cm → String → Nat → List UInt8)
+    (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) :
+    Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp) := fun R ω t Lb =>
+  { stp R ω t Lb with
+    pts := (t[0]?.map fun e => holoPts (holoAt st hp).cls.mPts
+      ((Flock.Guarantees.holoMap st hp Cm ish tbl bc).points e.2)).getD (stp R ω t Lb).pts }
+
+theorem pts_histPts (ish : RecVStar.Inner) (tbl : String) (bc : Cm → String → Nat → List UInt8)
+    (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
+    (sh : Flock.Shape) (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
+    (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals)
+    (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (Lb : (j : Fin S) → (Vs j).Bits) :
+    (tiedSrc (repsOfVals (histPts ish tbl bc stp) sh rep vals) R ω t Lb).pts =
+      (t[0]?.map fun e => holoPts (holoAt st hp).cls.mPts
+        ((Flock.Guarantees.holoMap st hp Cm ish tbl bc).points e.2)).getD (stp R ω t Lb).pts := rfl
+
+/-- **`hpts` at `histPts`' source**, with no premises: the run's points are the history's first coin by definition. -/
+theorem pointsFromHistory_histPts {ish : RecVStar.Inner} {tbl : String} {bc : Cm → String → Nat → List UInt8}
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {sh : Flock.Shape} {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals} :
+    AtSrc zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bc stp) sh rep vals)) fun t u =>
+      FlockC3.HPort.PointsFromHistory ish tbl bc t u := by
+  intro R ω t R₂ τ o _ e he
+  rw [pts_histPts, he]
+  rfl
 
 /-- **Hypothesis: R's opening is in V*'s sessions at the map `M`** (`srcLevelTie_of_maps`' `h`): at every accepted
 outer proof, R's opening at the openings `opsAt` is in V*'s sessions, the claim tie holds, the source's opening is on

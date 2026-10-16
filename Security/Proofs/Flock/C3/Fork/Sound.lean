@@ -150,6 +150,40 @@ theorem holoAt_units (st : Flock.Stmt) (hp : HoloParams) :
       u < 2 ^ ((execClassAt st).cls.kLog - (if hp.EllOk (execClassAt st).cls.kLog then hp.ell else 6)) := hu
   exact (Finset.mem_filter.1 hu').2
 
+/-- **`holoAt_fast100` at the typing `τv`**: `holoAtτ`'s class and schedule are `holoAt st hp`'s own. -/
+theorem holoAtτ_fast100 {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shapeOf st))
+    (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) :
+    Accounting.fast100 (holoAtτ st hp τv).cls.m = some (holoAtτ st hp τv).sch :=
+  holoAt_fast100 hp h
+
+/-- **`holoAt_linkLayout` at the typing `τv`**: the layout reads nothing of the typing, so the proof is
+`holoAt_linkLayout`'s at `holoAtτ`'s fields. -/
+theorem holoAtτ_linkLayout {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shapeOf st))
+    (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) :
+    ∀ R : RegTable (holoAtτ st hp τv).cls,
+      (R.toStatement (holoAtτ st hp τv).τ (holoAtτ st hp τv).regs).LinkLayout (holoAtτ st hp τv).cls.ptLocal
+        (holoAtτ st hp τv).cls.mPts := by
+  obtain ⟨hwf, hr, -⟩ := ClassOk.of_shape h
+  have hl : ∀ ec : ExecClass, ec = ExecClass.ofStmt st h →
+      (∀ R ∈ ec.regs, R.free.Nodup ∧ R.free.length ≤ ec.cls.ptLocal) ∧
+        ec.cls.ptLocal + (ec.cls.m - ec.cls.kLog) ≤ ec.cls.mPts := by
+    rintro _ rfl
+    exact Refine.stmtOf_linkLayout st hwf hr
+  have e : execClassAt st = ExecClass.ofStmt st h := dif_pos h
+  exact fun _ => hl _ e
+
+/-- **`holoAt_rsch` at the typing `τv`**: R's registered schedule is `holoAt st hp`'s own. -/
+theorem holoAtτ_rsch (st : Flock.Stmt) (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) :
+    (holoAtτ st hp τv).rsch.sch.levels = [] ∨
+      Accounting.fast100 (holoAtτ st hp τv).cls.shape.mReg = some (holoAtτ st hp τv).rsch.sch :=
+  holoAt_rsch st hp
+
+/-- **`holoAt_units` at the typing `τv`**: the unit slots are `holoAt st hp`'s own. -/
+theorem holoAtτ_units (st : Flock.Stmt) (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) :
+    ∀ σ, ∀ u ∈ (holoAtτ st hp τv).cls.units σ,
+      u < 2 ^ ((holoAtτ st hp τv).cls.kLog - (holoAtτ st hp τv).cls.slotLog) :=
+  holoAt_units st hp
+
 /-- **Candidate 3's table at the executable's parameters is sound in fork form**, at a registration its registrant
 opens and a statement whose class checks pass: `holo_inner_sound_compiled` at `execArith`, SHA-512 with plain leaves
 and `holoAt st hp`. -/

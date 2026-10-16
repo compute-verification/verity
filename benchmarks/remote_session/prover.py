@@ -1,9 +1,14 @@
 """The prover's process: registers a store with the verifier, then runs chained passes over it in each session, sends
 every root as its pass ends, and opens what the verifier draws.
 
-A backend holds the store and makes the passes: `device.Device` on the GPU (the device reader's sketch-sha512 receipts
-and tree, `../codec_tensor/reader.cu`), or `CpuBackend`, the driver's own reference (`audit.Store`, `receipts`), which
-the suite runs over a loopback. Each session runs under a mode of the prover's plan, which the verifier never sees:
+A backend holds the store and makes the passes: `device.Device` on the GPUs (the store sharded across them, each pass
+every shard's sketch-sha512 receipts and the one tree over the whole store), or `CpuBackend`, the driver's own
+reference (`audit.Store`, `receipts`), which the suite runs over a loopback. Either queues a pass (`launch`, chained
+from an earlier pass's ticket) before the one ahead of it is awaited (`wait`), so the device never idles between
+passes. A boundary message (the next window's coin, or the close) is taken at the first root that reaches the host
+after it: that root is sent as its window's last if its pass started (the root before it reached the host) before the
+message arrived, and dropped otherwise, and the pass queued behind it is dropped too; the next window's first pass
+chains from the last root sent. Each session runs under a mode of the prover's plan, which the verifier never sees:
 
 ~~~text
 honest          every block held and read
@@ -20,13 +25,17 @@ import argparse
 import gc
 import hashlib
 import json
+import os
 import queue
 import random
 import sys
 import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
+from dataclasses import dataclass
 from pathlib import Path
+
+import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -40,6 +49,27 @@ import wire  # noqa: E402
 PAYLOAD_LABEL = hashlib.sha512(b"verity/remote-session/payload-salts/v0").digest()
 OPENINGS_PART = 128
 """Openings a frame: a window's go out in parts, so a root waits for one part's send, not the window's."""
+DROPPED_LISTED = 4096
+"""A session's result lists its dropped blocks up to this many, and counts them always."""
+BOUNDARIES = ("coin", "close", "end")
+
+
+@dataclass
+class _Pass:
+    t: int
+    i: int
+    ticket: object
+    start: int | None
+    discard: bool = False
+
+
+def hits(dropped: np.ndarray, positions) -> np.ndarray:
+    """Which of `positions` are in `dropped` (sorted)."""
+    pos = np.asarray(positions, dtype=np.int64)
+    if not len(dropped) or not len(pos):
+        return np.zeros(len(pos), dtype=bool)
+    k = np.searchsorted(dropped, pos)
+    return dropped[np.minimum(k, len(dropped) - 1)] == pos
 
 
 def parse_plan(plan: str) -> list[tuple[str, float]]:
@@ -74,8 +104,24 @@ class CpuBackend:
     def calibrate(self) -> dict:
         return {"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": self.read_bytes_per_s}
 
-    def arm(self, dropped: set[int]) -> None:
-        self.dropped = dropped
+    def arm(self, dropped) -> None:
+        self.dropped = {int(j) for j in dropped}
+
+    def begin_window(self, challenge: bytes, previous: bytes | None) -> None:
+        self.challenge = challenge
+        if previous is not None:
+            self.previous = previous
+
+    def launch(self, i: int, after: dict | None) -> dict:
+        """Pass i of the window, chained from `after`'s root (None: the window's previous root), run when awaited."""
+        return {"challenge": self.challenge, "i": i, "after": after, "previous": self.previous, "root": None}
+
+    def wait(self, ticket: dict):
+        after = ticket["after"]
+        prev = ticket["previous"] if after is None else after["root"]
+        root, handle = self.run_pass(rb.seed(ticket["challenge"], ticket["i"], prev))
+        ticket["root"] = root
+        return root, handle
 
     def run_pass(self, seed: bytes):
         r = rb.receipter(self.store.registration.receipt, seed, self.store.registration.rows)
@@ -107,7 +153,7 @@ class ProverSide:
         self.inbox: queue.Queue = queue.Queue()
         self.jobs: queue.Queue = queue.Queue()
         self.kept: dict[tuple[int, int], object] = {}
-        self.dropped: set[int] = set()
+        self.dropped = np.empty(0, dtype=np.int64)
         self.lock = threading.Lock()
         self.open_enabled = threading.Event()
         threading.Thread(target=self._read, daemon=True).start()
@@ -165,7 +211,7 @@ class ProverSide:
                     del self.kept[key]
             self.opened.append({"t": t, "n": n, "bytes": sent, "ns": time.perf_counter_ns() - c0,
                                 "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
-                                "on_dropped": sum(p in self.dropped for _, p in draws)})
+                                "on_dropped": int(hits(self.dropped, [p for _, p in draws]).sum())})
             self.jobs.task_done()
 
     def expect(self, kind: str):
@@ -195,7 +241,11 @@ class ProverSide:
         if commitment.registration != self.registration.digest or commitment.count != 2 * W:
             raise ValueError("the session's coins are not for this registration")
         N = self.backend.blocks
-        dropped = set(self.rng.sample(range(N), round(fraction * N))) if mode == "skip" else set()
+        if mode == "skip":
+            pick = np.random.default_rng(self.rng.getrandbits(64))
+            dropped = np.sort(pick.choice(N, size=round(fraction * N), replace=False)).astype(np.int64)
+        else:
+            dropped = np.empty(0, dtype=np.int64)
         self.backend.arm(dropped)
         # Untimed passes bring the GPU to its boost clocks and warm its caches before the window clock starts: the
         # window's released_ns is the verifier's when it sends the first coin, after this `armed`, so the first
@@ -207,9 +257,7 @@ class ProverSide:
             self.open_enabled.clear()
         self.conn.send({"type": "armed", "k": k})
         head, _, _ = self.expect("coin")
-        coin = wire.coin_of(head["coin"])
-        t, i, prev, challenge = 0, 0, self.registration.digest, None
-        passes, ended = [], None
+        t = 0
 
         def take(coin) -> bytes:
             reason = coins.coin_reason(commitment, coin, t)
@@ -217,60 +265,89 @@ class ProverSide:
                 raise ValueError(reason)
             return coin.coin
 
-        challenge = take(coin)
-        chained = getattr(self.backend, "run_chained", None)
-        begin_window = getattr(self.backend, "begin_window", None)
-        if begin_window is not None:
-            begin_window(challenge, prev)
-        closing = False
-        while not closing and ended is None:
-            c0 = time.perf_counter_ns()
-            if chained is None:
-                root, handle = self.backend.run_pass(rb.seed(challenge, i, prev))
-            else:
-                root, handle = chained(i)
-            c1 = time.perf_counter_ns()
+        backend, clock = self.backend, self.conn.clock
+        backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
+        inflight = deque([_Pass(0, 0, backend.launch(0, None), clock())])
+        pending: deque = deque()
+        passes, last, nxt, stopping, ended, discarded = [], None, 1, False, None, 0
+
+        def send(x: _Pass, root: bytes, handle, seen: int) -> None:
             with self.lock:
-                self.kept[(t, i)] = handle
-            self.conn.send({"type": "root", "t": t, "i": i, "root": root.hex()})
-            passes.append((t, i, c0, c1))
-            prev, i = root, i + 1
-            while True:
-                try:
-                    msg, _, _ = self.inbox.get_nowait()
-                except queue.Empty:
-                    break
-                if msg["type"] == "coin":
-                    t, i = t + 1, 0
-                    challenge = take(wire.coin_of(msg["coin"]))
-                    if begin_window is not None:
-                        begin_window(challenge, None)
-                    break
-                elif msg["type"] == "close":
-                    closing = True
-                elif msg["type"] == "end":
-                    ended = msg
-                elif msg["type"] in ("lost", "bye"):
-                    raise wire.Closed(msg.get("why", "bye"))
+                self.kept[(x.t, x.i)] = handle
+            self.conn.send({"type": "root", "t": x.t, "i": x.i, "root": root.hex()})
+            passes.append((x.t, x.i, x.start, seen, clock()))
+
+        while inflight:
+            if not stopping and len(inflight) < 2:
+                inflight.append(_Pass(t, nxt, backend.launch(nxt, inflight[-1].ticket), None))
+                nxt += 1
+            x = inflight.popleft()
+            root, handle = backend.wait(x.ticket)
+            seen = clock()
+            if inflight:
+                inflight[0].start = seen
+            self._drain(pending)
+            if x.discard:
+                discarded += 1
+                continue
+            if not pending:
+                send(x, root, handle, seen)
+                last = x
+                continue
+            msg, _, stamp = pending.popleft()
+            for p in inflight:
+                p.discard = True
+            if msg["type"] == "end":
+                ended, stopping = msg, True
+                discarded += 1
+                continue
+            if stamp < x.start:
+                discarded += 1
+            else:
+                send(x, root, handle, seen)
+                last = x
+            if msg["type"] == "close":
+                stopping = True
+                continue
+            t += 1
+            backend.begin_window(take(wire.coin_of(msg["coin"])), None)
+            inflight.append(_Pass(t, 0, backend.launch(0, last.ticket if last else None), None if inflight else clock()))
+            nxt = 1
         self.conn.send({"type": "closed", "k": k})
         self.open_enabled.set()
         if ended is None:
-            ended, _, _ = self.expect("end")
+            ended = next((m for m, _, _ in pending if m["type"] == "end"), None) or self.expect("end")[0]
         self.jobs.join()
-        device = getattr(self.backend, "session_stats", lambda: {})()
-        self.backend.arm(set())
+        device = getattr(backend, "session_stats", lambda: {})()
+        backend.arm(set())
         with self.lock:
             self.kept.clear()
         self.conn.send({"type": "ended", "k": k})
         per_window = defaultdict(int)
-        for tt, _, _, _ in passes:
+        for tt, *_ in passes:
             per_window[tt] += 1
-        host_ns = [b - a for _, _, a, b in passes]
-        gaps = [b[2] - a[3] for a, b in zip(passes, passes[1:])]
-        return {"k": k, "mode": mode, "fraction": fraction, "dropped": sorted(dropped), "accepted": ended["accepted"],
-                "failure": ended["failure"], "passes": [per_window[tt] for tt in range(W)],
-                "pass_host_ns": host_ns, "gap_host_ns": gaps, "opened": self.opened,
-                "warmup": self.warmup, "device": device}
+        failure = ended["failure"]
+        at = failure.get("at") if failure else None
+        return {"k": k, "mode": mode, "fraction": fraction,
+                "dropped": dropped.tolist() if len(dropped) <= DROPPED_LISTED else None, "dropped_count": len(dropped),
+                "failure_on_dropped": bool(hits(dropped, [at[1]])[0]) if at else None,
+                "accepted": ended["accepted"], "failure": failure, "passes": [per_window[tt] for tt in range(W)],
+                "pass_host_ns": [seen - start for _, _, start, seen, _ in passes],
+                "gap_host_ns": [sent - seen for _, _, _, seen, sent in passes], "discarded": discarded,
+                "opened": self.opened, "warmup": self.warmup, "device": device}
+
+    def _drain(self, pending: deque) -> None:
+        """Move the boundary messages that have arrived into `pending`, in order."""
+        while True:
+            try:
+                item = self.inbox.get_nowait()
+            except queue.Empty:
+                return
+            kind = item[0]["type"]
+            if kind in ("lost", "bye"):
+                raise wire.Closed(item[0].get("why", "bye"))
+            if kind in BOUNDARIES:
+                pending.append(item)
 
 
 def main() -> int:
@@ -299,7 +376,9 @@ def main() -> int:
                    log=lambda m: print(m, flush=True))
     cal = p.register()
     print(f"prover: registered, calibration {json.dumps(cal)}", flush=True)
-    (a.out / "prover.json").write_text(json.dumps({"calibration": cal, "gates": backend.gates}, indent=1))
+    stalls = getattr(backend, "calibration_trace", None)
+    (a.out / "prover.json").write_text(json.dumps({"calibration": cal, "gates": backend.gates,
+                                                   "calibration_trace": stalls}, indent=1))
     results = []
     for mode, fraction in p.plan:
         try:
@@ -320,8 +399,13 @@ def main() -> int:
         print(f"prover: session {r['k']} ({mode}:{fraction}): accepted={r['accepted']} passes={r['passes']}", flush=True)
         (a.out / "prover.json").write_text(json.dumps(
             {"schema": "verity/remote-session/prover/v0", "registration": wire.registration_json(p.registration),
-             "calibration": cal, "gates": backend.gates, "sessions": results, "wire": conn.totals()}, indent=1))
-    return 0
+             "calibration": cal, "gates": backend.gates, "calibration_trace": stalls, "sessions": results,
+             "wire": conn.totals()}, indent=1))
+    # Tearing down a whole-node store (every pass handle in host memory, every GPU's mapped segments) kept the process
+    # alive 12 minutes past its last output, to the end of its GPU lease (r20261015-171223-cc99).
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":

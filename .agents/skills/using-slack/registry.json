@@ -45,7 +45,7 @@
   "handles": [
     {
       "handle": "infra",
-      "holder": "the infra coordinator (bc-c12aaa73-e9b3-5552-b46a-b20fb65e9e59)",
+      "holder": "the infra coordinator (bc-5a69647d-04f7-5d94-9ff1-56593e2e1037)",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0C5APDSYF9",
@@ -59,12 +59,14 @@
         ".cursor/"
       ],
       "branch_suffixes": [
-        "558b"
+        "558b",
+        "9e59",
+        "98f5"
       ]
     },
     {
       "handle": "proofs",
-      "holder": "the proofs coordinator (bc-ba600890-a6b7-5b7c-812b-ad5d864f9b2a); the research coordinator (bc-8ece7cde) keeps running the merge trains",
+      "holder": "the proofs coordinator (bc-8f4b652b-17bc-5055-a120-b56940b7c7a9); the research coordinator (bc-8ece7cde) keeps running the merge trains",
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0C5Q6KJZTQ",
@@ -82,12 +84,14 @@
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
       ],
       "branch_suffixes": [
-        "95d4"
+        "95d4",
+        "9b2a",
+        "f39a"
       ]
     },
     {
       "handle": "circuits",
-      "holder": "the circuits coordinator (bc-cb6f399a-8db3-5399-91e2-1491d15ac491)",
+      "holder": "the circuits coordinator (bc-21f3d3de-28db-5e5d-964b-d357187449aa)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
       "usergroup": "S0C5U3LHMFT",
@@ -119,12 +123,14 @@
         "integrations/vllm/tests/check/test_capture_map_versions.py"
       ],
       "branch_suffixes": [
-        "8c79"
+        "8c79",
+        "c491",
+        "6f04"
       ]
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac)",
+      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef)",
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5U3Q04JD",
@@ -155,12 +161,15 @@
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py"
       ],
       "branch_suffixes": [
-        "e3fa"
+        "e3fa",
+        "e9ac",
+        "ea24",
+        "1de3"
       ]
     },
     {
       "handle": "memory-accounting",
-      "holder": "the memory-accounting coordinator (bc-4635cc01-e765-5c9d-9959-13885e12b0c1)",
+      "holder": "the memory-accounting coordinator (bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3)",
       "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5VRGBZFE",
@@ -194,12 +203,14 @@
         "verity/core/protocols/pous/"
       ],
       "branch_suffixes": [
-        "3cf5"
+        "3cf5",
+        "b0c1",
+        "93c1"
       ]
     },
     {
       "handle": "network-accounting",
-      "holder": "the network-accounting coordinator (bc-5ff45337-ab03-5a59-9418-8ccb0270a190)",
+      "holder": "the network-accounting coordinator (bc-5c916421-64a5-5c38-94ba-2e28fe629237)",
       "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L",
@@ -213,7 +224,9 @@
         "benchmarks/network_traces/"
       ],
       "branch_suffixes": [
-        "728f"
+        "728f",
+        "a190",
+        "061a"
       ]
     },
     {
@@ -226,7 +239,7 @@
     },
     {
       "handle": "ci",
-      "holder": "the ci coordinator (bc-1e3239d1-d0b7-5a0a-8e56-9b3b01792a98)",
+      "holder": "the ci coordinator (bc-8d3a66f8-f3da-5dae-9fb0-4a5b381b3d4e)",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": "S0C93AFCRT8",
@@ -241,12 +254,14 @@
         "tools/research/src/research/merge.py"
       ],
       "branch_suffixes": [
-        "4292"
+        "4292",
+        "2a98",
+        "1518"
       ]
     },
     {
       "handle": "lean",
-      "holder": "the lean coordinator (bc-b8aa4f87-8653-5bf1-87f8-944f12e26f1e)",
+      "holder": "the lean coordinator (bc-cfe6af97-18be-5d48-90c9-a9de869d43e5)",
       "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
       "usergroup": "S0C93AE54K0",
@@ -258,7 +273,9 @@
         "Security/"
       ],
       "branch_suffixes": [
-        "741b"
+        "741b",
+        "6f1e",
+        "fc8d"
       ]
     },
     {
@@ -282,13 +299,16 @@
     },
     {
       "handle": "top",
-      "holder": "the admin, Daniel's coordinator (bc-2b2d3505-b12f-5f7a-9a19-768dbe4d7308); until it posts stopped, its predecessor (bc-7f347b4b-6175-4b6e-84c6-731add2f8589)",
+      "holder": "the admin, Daniel's coordinator (bc-af075d78-d5b9-590b-acbb-eb47d6f88f39)",
       "remit": "Top-level: Daniel's coordinator across every lead.",
       "charter": "Daniel",
       "usergroup": "S0C977GL9R7",
       "linear": "TOP",
       "branch_suffixes": [
-        "c3b2"
+        "c3b2",
+        "7308",
+        "8589",
+        "4db4"
       ],
       "owns": [
         "AGENTS.md",
@@ -305,18 +325,22 @@
     },
     {
       "handle": "vllm",
-      "holder": "the vLLM coordinator (bc-978a9463-2354-5168-8a9a-e18df53b9411)",
+      "holder": "the vLLM coordinator (bc-bfa78636-bb35-5c4a-ac9c-cf064e6428d0)",
       "remit": "The vLLM integration: what the served model runs under verification, and its hookup to the protocols.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
         "integrations/vllm/"
       ],
-      "linear": "VLLM"
+      "linear": "VLLM",
+      "branch_suffixes": [
+        "9411",
+        "8350"
+      ]
     },
     {
       "handle": "benchmarks",
-      "holder": "the benchmarks coordinator (bc-681a0244-a22d-5924-b0a3-06223ae547e4)",
+      "holder": "the benchmarks coordinator (bc-7449b20e-c769-56a1-9ba2-ceacd3cecfc9)",
       "remit": "Benchmarks: the overhead and throughput measurements across backends, and the tables rendered from them.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C9ZLL7T88",
@@ -324,6 +348,10 @@
       "owns": [
         "benchmarks/harness/",
         "benchmarks/specs/"
+      ],
+      "branch_suffixes": [
+        "47e4",
+        "6193"
       ]
     },
     {

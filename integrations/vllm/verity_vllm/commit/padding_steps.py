@@ -35,7 +35,6 @@ from typing import Any, Iterable
 from verity_vllm.commit.binding import HIDDEN_FAMILIES, coverage_check
 from verity_vllm.check.executed_prefix import executed_prefix_of_record, request_steps_of_record
 from verity_vllm.commit import scheme
-from verity_vllm.config import option
 
 PADDING_RULES_VERSION = "padded-v1"                 # LIFTING-SPEC v0.7 B8: the padded request Program's rules version
 PADDED_MAP_SCHEMA = "padded-binding-map/1"
@@ -893,20 +892,3 @@ def write_padded_record(res: dict[str, Any], out_dir: str | Path) -> None:
                                                                          "n_leaves": ps.n_leaves, "n_bytes": ps.n_bytes, "tensors": len(ps.metas),
                                                                          "layout_digest": layout_digest(ps.metas).hex()} for ps in res["padding"]]},
                                                              indent=1))
-
-
-@dataclass(frozen=True, kw_only=True)
-class Options:
-    record_dir: str = option("record_dir")
-    out: str = option("--out")
-    run_id: str | None = option("--run-id", default=None)
-
-
-def main(a: Options) -> int:
-    res = padded_map_of_record(a.record_dir, run_id=a.run_id)
-    if not res.get("ok") and "padded_map" not in res:
-        print(json.dumps({k: v for k, v in res.items() if k != "executed_prefix"}, indent=1, default=str))
-        return 2
-    write_padded_record(res, a.out)
-    print(json.dumps(res["report"], indent=1, default=str))
-    return 0 if res["ok"] else 1

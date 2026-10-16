@@ -341,8 +341,8 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
 
 
 def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
-    """μ_rebuild is the stated squaring ceiling over the record's codec's encode, `C_sq · 4096 / (E_sq · R)`: at one
-    RTX PRO 6000's measured read rate 0.067% under p1024/k3/masked, 0.10% at k = 2 and 0.34% under p512/k2.  A model
+    """μ_rebuild is the stated squaring ceiling over the record's codec's encode, `C_sq · 4096 / (E_sq · R)`: at the
+    node's ceiling and measured R 0.062% under p1024/k3/masked, 0.093% at k = 2 and 0.31% under p512/k2.  A model
     of another codec than the record's, a bare fraction, or a ceiling that isn't a finite nonnegative rate is
     refused."""
     p512 = codec.Codec(codec.P512, 2, False)
@@ -353,7 +353,7 @@ def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
         assert ((c.field.p + 1) // 4).bit_length() - 1 == c.field.n - 3
     fractions = [audit.Rebuild(c, timing.SQUARINGS_PER_S[c.field.name]).fraction(timing.READ_BYTES_PER_S)
                  for c in (codec.DEFAULT, codec.FALLBACK, p512)]
-    assert fractions == pytest.approx([6.723e-4, 1.0085e-3, 3.3964e-3], rel=1e-4)
+    assert fractions == pytest.approx([6.195e-4, 9.292e-4, 3.1296e-3], rel=1e-4)
     r = synthetic((100, 100, 60), 5, 1e-6)
     assert r.codec == codec.DEFAULT
     rebuild = audit.Rebuild(codec.DEFAULT, timing.SQUARINGS_PER_S["p1024"])
@@ -941,23 +941,48 @@ def test_opening_size_matches_the_timing_model(store) -> None:
 
 
 def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_term() -> None:
-    """`PROTOCOL.md` §1 and §10's reading through the ledger, on one RTX PRO 6000 with its whole HBM as the store.  At
-    the stated T = 60 s and 33,273 openings a window (555 a second), a 10 min session's worst window has its whole γ_t
-    at 0.745–0.776%; over the horizon the pooled μ_sample is under 0.01% and the whole γ about 0.56%, over 0.15%,
-    which μ_chip exceeds alone and λ (0.125%) with μ_rebuild.  The 20 s option at 11,091 openings has μ_sample under
-    0.25% and a whole γ_t over 1%, and the 1 s option's μ_sample alone is under 1%, at 2,773."""
-    s, store = audit.SAMPLES, 94 * 10 ** 9
+    """`PROTOCOL.md` §1 and §10's reading through the ledger, on one node whose store spans every tier, 94 GB of each
+    GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling.  At the stated T = 60 s and 33,273
+    openings a window (555 a second), a 10 min session's worst window has its whole γ_t at 0.885–0.917%; over the
+    horizon the pooled μ_sample is under 0.01% and the whole γ about 0.66%, over 0.15%, which μ_chip exceeds alone and
+    λ (0.116%) with μ_rebuild.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 5.8%: R cancels in what is certified.
+    The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.56–5.59%.  The 20 s option at 11,091
+    openings has μ_sample under 0.25% and a whole γ_t over 1%, and the 1 s option's μ_sample alone is under 1%, at
+    2,773."""
+    s, store = audit.SAMPLES, timing.spanning(94 * 10 ** 9)
+    assert 789.0e9 < store < 789.1e9
     assert (timing.samples_for(0.0025, audit.DELTA), timing.samples_for(0.01, audit.DELTA)) == (11_091, 2_773)
     assert s == 3 * 11_091 and audit.WINDOW_NS == 60 * timing.S
+    idle = timing.HOST_READ_BYTES_PER_S / timing.READ_BYTES_PER_S
     for rtt in (1, 20):
         g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
-        assert g.worst.sample < 0.001 and 0.00744 < g.worst.gamma < 0.00777
-        assert 0.00124 < g.counting < 0.00126 and g.counting + g.rebuild > 0.0015 and g.chip > 0.0015
-        assert g.horizon < 1e-4 and 0.0056 < g.gamma_horizon < 0.0057
+        assert g.worst.sample < 0.001 and 0.00885 < g.worst.gamma < 0.00917
+        assert 0.00115 < g.counting < 0.00116 and g.counting + g.rebuild > 0.0015 and g.chip > 0.0015
+        assert g.horizon < 1e-4 and 0.0065 < g.gamma_horizon < 0.0067
+        spec = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
+                             capacity_bytes_per_s=timing.SPEC_BYTES_PER_S).worst
+        assert spec.gamma == pytest.approx(1 - (1 - g.worst.gamma) * timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
+        assert 0.058 < spec.gamma < 0.0585
+        hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
+                            read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
+        assert hbm.timing > idle and 0.0556 < hbm.gamma < 0.0560
         twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=11_091).worst
         assert twenty.sample < 0.0025 and 0.012 < twenty.gamma < 0.0135
         one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=2_773).worst
-        assert one.sample < 0.01 < 0.1 < one.gamma
+        assert one.sample < 0.01 < 0.09 < one.gamma
+
+
+def test_the_node_constants_are_the_sums_over_its_devices() -> None:
+    """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's (MEM-26): its 8 GPUs' and its host's, every
+    tier, each GPU's value kept apart for the benches that read one GPU."""
+    assert timing.GPUS == 8
+    assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597e12 + 819.2e9
+    assert timing.CHIP_BYTES == 8 * 263_163_904 + 940_435_456 == 3_045_746_688
+    assert timing.SQUARINGS_PER_S == {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()}
+    assert timing.SHA512_PER_S == 8 * timing.GPU_SHA512_PER_S
+    gpu = 94 * 10 ** 9
+    host = timing.spanning(gpu) - 8 * gpu
+    assert host / timing.HOST_READ_BYTES_PER_S == pytest.approx(gpu / timing.GPU_READ_BYTES_PER_S)
 
 
 def test_the_ledgers_count_bounds_auditros_binomial() -> None:
@@ -965,7 +990,8 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
     C(q, k)/2^λ, λ a natural number: charged `named_bits(k) + 41`, a pass's term is at most 2^-41, checked in exact
     integers against `math.comb`.  It is within 2 bits of log2(q^k/k!) (exact factorials up to 10^5), never above
     k·log2 q, and at q = 2^40 at most the 40·k + 41 AuditRO's statement reads.  At 94 GB of 4 KiB receipts and
-    q = 2^64 it is 40.99 bits a receipt, and the grid's sizing reads the same count."""
+    q = 2^64 it is 40.99 bits a receipt, at the node's 789 GB over every tier 37.92, and the grid's sizing reads the
+    same count."""
     cases = [(q_log2, k) for q_log2 in (1, 10, 40) for k in (0, 1, 2, 3, 7, 2 ** q_log2 // 2, 2 ** q_log2)
              if k <= 2 ** q_log2 and k <= 4096] + [(20, 1000), (64, 3), (64, 3000), (64, 10 ** 4), (64, 10 ** 5)]
     for q_log2, k in cases:
@@ -977,6 +1003,8 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
         assert timing._named_bits(k, q_log2, True) == named and timing._named_bits(k, q_log2, False) == k * q_log2
     k = 94 * 10 ** 9 // codec.BLOCK_BYTES
     assert 40.98 < audit.named_bits(k) / k < 41.0 and audit.named_bits(k) < 64 * k
+    k = timing.spanning(94 * 10 ** 9) // codec.BLOCK_BYTES
+    assert 37.92 < audit.named_bits(k) / k < 37.93
     for bad in (-1, 1.0, True):
         with pytest.raises(ValueError, match="nonnegative integers"):
             audit.named_bits(bad)
@@ -987,8 +1015,8 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
 def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
     and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
-    is μ_chip, λ and μ_rebuild alone, about 33 GB."""
-    assert 32.7e9 < timing.store_floor() < 32.85e9 and 41.8e9 < timing.store_floor(50 * timing.US) < 41.95e9
+    is μ_chip, λ and μ_rebuild alone, about 372 GB over the node's every tier."""
+    assert 371.8e9 < timing.store_floor() < 372.0e9 and 449.5e9 < timing.store_floor(50 * timing.US) < 449.7e9
     for scale, over in ((0.98, True), (1.02, False)):
         g = timing.stated(round(scale * timing.store_floor(50 * timing.US)), 1200 * timing.S, 1, rtt_ns=timing.MS,
                           samples=555 * 1200)

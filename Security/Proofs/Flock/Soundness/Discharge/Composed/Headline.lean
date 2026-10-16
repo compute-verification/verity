@@ -41,7 +41,7 @@ set_option maxRecDepth 8000 in
 hiding at any hm96 hiding bound `δ₁` (`hT1`), its row (ii) `padOnto_M1`'s from `PadNonvanishing`
 (`ZK.padNonvanishing40`). -/
 theorem zkViewAtReg_of_ok (C : CoinedSetup) (hC : CoinedOK execArith (fOf Zk.PAD_C) C) {δ₁ : ℝ≥0∞}
-    (hT1 : Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ₁) :
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) :
     ZkViewAtReg C δ₁ := by
   obtain ⟨hL, ht, hS, hT⟩ := hC
   intro c hc Out enc w w0 hv hreg E
@@ -57,7 +57,7 @@ theorem zkViewAtReg_of_ok (C : CoinedSetup) (hC : CoinedOK execArith (fOf Zk.PAD
 /-- `ZkViewAt` where every valid witness's registered values are the public ones (`hreg`, `coinedOf_reg`). -/
 theorem zkViewAt_of_ok (C : CoinedSetup) (hC : CoinedOK execArith (fOf Zk.PAD_C) C)
     (hreg : ∀ c w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg) {δ₁ : ℝ≥0∞}
-    (hT1 : Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ₁) : ZkViewAt C δ₁ :=
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) : ZkViewAt C δ₁ :=
   fun c hc _ enc w w0 hv E => zkViewAtReg_of_ok C hC hT1 c hc enc w w0 hv (fun j => hreg c (w j) (hv j)) E
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
@@ -97,7 +97,7 @@ theorem zk_session_view (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ :
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)
-    {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ₁) :
+    {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) :
     ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
       ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) δ₁ :=
   fun S R y => zkViewAt_of_ok _ (coinedOf_setup (Reg := Reg) P I dj y₀ ht hdm S R y).2.2.2.2.2

@@ -43,7 +43,7 @@ def summarize(out: Path) -> dict:
                         "passes_per_s": sum(passes) / (vs["windows"] * vs["window_ns"] / 1e9)})
             honest.append(row)
         else:
-            dropped = len(ps["dropped"])
+            dropped = ps["dropped_count"] if "dropped_count" in ps else len(ps["dropped"])
             # The chance this session is accepted: every one of its W windows drawn clean, at the passes each made
             # (a window a rejected session never reached, at the mean of those it did).
             mean = round(sum(passes) / len(passes))
@@ -52,7 +52,8 @@ def summarize(out: Path) -> dict:
             row["dropped"] = dropped
             if vs["failure"] is not None:
                 at = vs["failure"]["at"]
-                row["rejected_on_dropped"] = at is not None and at[1] in set(ps["dropped"])
+                row["rejected_on_dropped"] = (at is not None and at[1] in set(ps["dropped"]) if ps["dropped"] is not None
+                                              else bool(ps.get("failure_on_dropped")))
                 row["rejected_window"] = vs["failure"]["t"]
             skips[ps["fraction"]].append(row)
     table = []
