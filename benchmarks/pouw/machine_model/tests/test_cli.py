@@ -19,15 +19,16 @@ def test_solve_prints_the_numbers_and_the_check(capsys):
     out = capsys.readouterr().out
     assert "τ 0.0610   τ at 600 W 0.0477   U/F_low 1.1563   margin 2.000" in out
     assert "(reproduced)" in out and "1306 attacks in 13 families at X ≥ 1.0: pass" in out
-    assert "(π₃₂): every root-writing kind at ≥ 32 MACs a word: 84 kinds, holds" in out
+    assert "superseded by VF3k-16" in out
+    assert "(π₃₂): every root-writing kind at ≥ 32 MACs a word: 84 kinds, holds (not split out at VF3j-8: ATOME32P)" in out
 
 
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
-    assert d["vector"] == "VF3j" and round(d["tau"], 4) == 0.0634 and d["failures"] == [] and d["unreproduced"] == []
-    assert d["floors"]["loads16"]["below"] == ["LDS128 8.00 a word < 16", "LDG128 8.00 a word < 16",
-                                               "LDC64 0.00 a word < 16"]
+    assert d["vector"] == "VF3k-16" and round(d["tau"], 4) == 0.0603 and d["failures"] == [] and d["unreproduced"] == []
+    assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
+                           "loads16": {"kinds": 9, "below": [], "absent": []}}
 
 
 def test_list_census_attacks(capsys):
@@ -41,13 +42,16 @@ def test_list_census_attacks(capsys):
 
 
 def _epoch(data, rows=()):
-    """README "Add a measurement": the epoch VF3k after the last, and a vector VF3k on VF3j's rows and credits plus `rows`."""
-    m = (data / "model.toml").read_text().replace('"VF3j", "VF3j-8"]', '"VF3j", "VF3j-8", "VF3k"]')
-    (data / "model.toml").write_text(m)
-    t = (data / "vectors" / "VF3j.toml").read_text()
-    t = t.replace('name = "VF3j"', 'name = "VF3k"').replace('epoch = "VF3j"', 'epoch = "VF3k"')
+    """README "Add a measurement": the epoch TEST after the last, and a vector TEST on the current vector's rows and
+    credits plus `rows`."""
+    m = model(data)
+    last = m.epochs[-1]
+    (data / "model.toml").write_text((data / "model.toml").read_text().replace(f'"{last}"]', f'"{last}", "TEST"]'))
+    t = (data / "vectors" / f"{m.current}.toml").read_text()
+    t = t.replace(f'name = "{m.current}"', 'name = "TEST"').replace(f'epoch = "{last}"', 'epoch = "TEST"')
     t = t.replace("rows = [\n", "rows = [\n" + "".join(f'    "{r}",\n' for r in rows)).split("[published]")[0]
-    (data / "vectors" / "VF3k.toml").write_text(t)
+    (data / "vectors" / "TEST.toml").write_text(t)
+    return m.current, last
 
 
 def test_a_measurement_is_data(tmp_path, capsys):
@@ -56,15 +60,15 @@ def test_a_measurement_is_data(tmp_path, capsys):
     with open(data / "rows.csv", "a") as f:
         f.write(f'ROW_TEST,measured,{RUN},"a test row: FFMA alone at its F rate"\n')
     with open(data / "census.csv", "a") as f:
-        f.write(f"FFMA,ROW_TEST,3.885,,,,VF3k,,{RUN}\n")
-    _epoch(data, ["ROW_TEST"])
-    new, old = resolve("VF3k", data), resolve("VF3j", data)
+        f.write(f"FFMA,ROW_TEST,3.885,,,,TEST,,{RUN}\n")
+    cur, _ = _epoch(data, ["ROW_TEST"])
+    new, old = resolve("TEST", data), resolve(cur, data)
     assert new.failures == [] and len(new.vector.rows) == len(old.vector.rows) + 1
     assert "ROW_TEST" in new.census["FFMA"] and "ROW_TEST" not in old.census["FFMA"]
-    assert (old.tau, old.margin) == (resolve("VF3j").tau, resolve("VF3j").margin)
-    assert "LDSM_X1" in old.census and "JI3e_0" not in new.census["LDSM_X1"], "VF3j-8's lines close at VF3j-8"
-    assert vector("VF3k", data).published == {}
-    assert main(["--data", str(data), "solve", "VF3k"]) == 0
+    assert (old.tau, old.margin) == (resolve(cur).tau, resolve(cur).margin)
+    assert "JI3e_0" in new.census["LDSM_X1"] and "JI3e_0" not in resolve("VF3j", data).census["LDSM_X1"]
+    assert vector("TEST", data).published == {}
+    assert main(["--data", str(data), "solve", "TEST"]) == 0
     assert "published: nothing yet" in capsys.readouterr().out
 
 
@@ -74,13 +78,14 @@ def test_a_refit_closes_the_old_line(tmp_path):
     c = (data / "census.csv").read_text()
     old_line = "FFMA,F,3.885,,,,,,note:20261015T0608Z-draft-census-sm120\n"
     assert c.count(old_line) == 1
-    c = c.replace(old_line, old_line.replace(",,note:", ",VF3j-8,note:")) + f"FFMA,F,3.9,,,,VF3k,,{RUN}\n"
+    last = model(data).epochs[-1]
+    c = c.replace(old_line, old_line.replace(",,note:", f",{last},note:")) + f"FFMA,F,3.9,,,,TEST,,{RUN}\n"
     (data / "census.csv").write_text(c)
-    _epoch(data)
-    new, old = resolve("VF3k", data), resolve("VF3j", data)
+    cur, _ = _epoch(data)
+    new, old = resolve("TEST", data), resolve(cur, data)
     assert new.census["FFMA"]["F"] == new.model.cycle_u * 4 / 3.9
     assert old.census["FFMA"]["F"] == old.model.cycle_u * 4 / 3.885
-    assert (old.tau, old.margin) == (resolve("VF3j").tau, resolve("VF3j").margin) and new.failures == []
+    assert (old.tau, old.margin) == (resolve(cur).tau, resolve(cur).margin) and new.failures == []
 
 
 def _probe(path, lines):
@@ -93,22 +98,21 @@ def test_adopt_keeps_the_faster_line(tmp_path, capsys):
     """README "Adopt a probe's census": each (kind, row) at the faster of its line and the measured one."""
     data = tmp_path / "data"
     shutil.copytree(DATA, data)
-    _epoch(data)
-    last = "VF3j-8"
+    cur, last = _epoch(data)
     before = census(model(data), last, data)
     probe = _probe(tmp_path / "census.csv", ["FFMA,F,3.9,0.02,,", "FFMA,issue,0.5,,,", "IMAD,ROW_ATOMS32,1.0,,,"])
-    assert main(["--data", str(data), "adopt", str(probe), "VF3k"]) == 0
+    assert main(["--data", str(data), "adopt", str(probe), "TEST"]) == 0
     out = capsys.readouterr().out
-    assert "kept (the measurement is slower)" in out and "2 of 3 lines adopted at VF3k, 1 kept" in out
+    assert "kept (the measurement is slower)" in out and "2 of 3 lines adopted at TEST, 1 kept" in out
     m = model(data)
-    after = census(m, "VF3k", data)
+    after = census(m, "TEST", data)
     assert after["FFMA"]["F"] == m.cycle_u * 4 / (3.9 * 1.02) < before["FFMA"]["F"]
     assert after["FFMA"]["issue"] == before["FFMA"]["issue"] and census(m, last, data) == before
     assert "ROW_ATOMS32" in after["IMAD"] and "ROW_ATOMS32" not in before["IMAD"]
     runs = {r: x for r, x in (line.split(",")[:3:2] for line in (data / "rows.csv").read_text().splitlines()[1:])}
     assert runs["F"].endswith(RUN) and runs["ROW_ATOMS32"].endswith(RUN) and RUN not in runs["issue"]
-    with pytest.raises(SystemExit, match="already has a line from VF3k"):
-        adopt(probe, "VF3k", data)
+    with pytest.raises(SystemExit, match="already has a line from TEST"):
+        adopt(probe, "TEST", data)
 
 
 def test_adopt_refuses(tmp_path):

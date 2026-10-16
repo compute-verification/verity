@@ -2,18 +2,18 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3j-16) re-solves here to the τ, τ at 600 W, U/F_low and
+checks every attack against it. Each named vector (VF … VF3k-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂) and PRICES-32's load half hold at its prices (`data/floors.csv`).
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3j-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3j)
-uv run machine-model census VF3j --kind FFMA
-uv run machine-model attacks VF3j -n 3    # the cheapest attacks of every design
+uv run machine-model solve VF3k-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current` (VF3k-16, decision 17's active vector)
+uv run machine-model census VF3k-16 --kind ATOMS64
+uv run machine-model attacks VF3k-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
-uv run machine-model --data /tmp/candidate solve VF3k   # a copy of data/ with a candidate change
+uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 ~~~
 
 | Path | What |
@@ -61,7 +61,8 @@ schema, with no epochs. After steps 3 and 4 above, `uv run machine-model adopt C
 must be the last epoch. Each (kind, row) keeps the faster of its line at the epoch before and the measured one: a row's
 u must be a lower bound on what every program pays on it, so a line slower than the hardware makes a price that isn't
 sound. A faster line closes the old one at the epoch before, adds its own from `EPOCH` and adds its runs to the row's in
-`rows.csv`; a slower one changes nothing.
+`rows.csv`; a slower one changes nothing. A probe case the census has no row for (VF3k-16's peer-CTA DSMEM atomic) is a new row and, if it is
+slower than its opcode's other cases, its own kind (`ATOME32P`): a line for the old kind there would overstate it.
 
 ## Where the data came from
 

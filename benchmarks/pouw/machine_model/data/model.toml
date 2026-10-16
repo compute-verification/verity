@@ -1,17 +1,17 @@
 # The machine model's constants (rs-machine-model §8). Units: u = 1/R* SMSP-cycle; X is an attack's price over the tensor
 # MACs it replaces, at the vector's MAC price.
 
-# The vector `machine-model solve` re-solves by default: round 9's adopted vector.
-current = "VF3j"
+# The vector `machine-model solve` re-solves by default: the adopted vector (decision 17).
+current = "VF3k-16"
 # The design whose cheapest attack is a vector's margin.
 adopted = "U±64, F±1"
 
 # Each epoch is a state of the census and the attacks, named after the vector that introduced it, in order. A census line
 # or an attack holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last); a line a later
-# epoch refitted or dropped closes at the last epoch it held. VF3j-8 (the register-load variants) is a side branch: its
-# lines close at VF3j-8, so an epoch added after it builds on VF3j.
+# epoch refitted or dropped closes at the last epoch it held. VF3j-8 put the plain LDSM/STSM forms on the joint issue
+# rows (the register-load variants VF3j-8 and VF3j-16 read), and every epoch after it keeps them.
 epochs = ["VF", "VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict-r8", "VF3i-strict",
-          "VF3j", "VF3j-8"]
+          "VF3j", "VF3j-8", "VF3k-16"]
 
 # The CUDA lane kinds (i) binds, in constraint order.
 cuda = ["FFMA", "VIMNMX", "HFMA2", "IMAD", "ALU", "F2FS", "XU", "SHFL", "NOROW", "SEL"]
