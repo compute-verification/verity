@@ -10,7 +10,8 @@
 #
 # PW_ALONE ("FILL_SMS:KIND:PAT:W:NC[:SLEEP_NS] ..."), PW_POINTS ("B:L:FILL_SMS:KIND:PAT:W:NC[:SLEEP_NS] ..."), PW_CTL (a
 # control pattern run beside the step at each point, e.g. 3; empty for none), PW_WARM, PW_MEAS, PW_ROUNDS; PW_PREFILL
-# ("M:B:L:FILL_SMS:KIND:PAT:W:NC ...": prefill after heat, pwr.cu's pprefill) with PW_HEAT, PW_PRE_MEAS, PW_PRE_ROUNDS
+# ("M:B:L:FILL_SMS:KIND:PAT:W:NC ...": prefill after heat, pwr.cu's pprefill) with PW_HEAT, PW_PRE_MEAS, PW_PRE_ROUNDS;
+# PW_PSPLIT ("M:FILL_SMS:KIND:PAT:W:NC[:SPLIT_FLAGS] ...": prefill on a split beside the filler, pwr.cu's ppsplit)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -58,6 +59,12 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
     IFS=: read -r b l f k p w nc sl <<< "$a"
     PF_SLEEP_NS=${sl:-0} "$B/pwr" pfill "$b" "$l" "$f" "$k" "$p" "$w" "$nc" "$PW_WARM" "$PW_MEAS" "$PW_ROUNDS" ${PW_CTL} \
       >> "$O/arms.jsonl" 2>> "$O/errors.txt" || echo "rc $? for pfill $a" >> "$O/errors.txt"
+    q
+  done
+  for a in ${PW_PSPLIT:-}; do
+    IFS=: read -r m f k p w nc fl <<< "$a"
+    PW_SPLIT_FLAGS=${fl:-0} "$B/pwr" ppsplit "$m" "$f" "$k" "$p" "$w" "$nc" "$PW_WARM" "$PW_MEAS" "$PW_ROUNDS" \
+      >> "$O/arms.jsonl" 2>> "$O/errors.txt" || echo "rc $? for ppsplit $a" >> "$O/errors.txt"
     q
   done
   for a in ${PW_PREFILL:-}; do

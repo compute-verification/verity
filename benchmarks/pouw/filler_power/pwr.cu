@@ -19,6 +19,9 @@
 //   pprefill M B L FILL_SMS KIND PAT W NC HEAT MEAS ROUNDS
 //                                                 M-row prefill linears on all SMs right after HEAT s of the decode step on
 //                                                 its partition, alone or beside the filler (run_pprefill)
+//   ppsplit M FILL_SMS KIND PAT W NC WARM MEAS ROUNDS
+//                                                 M-row prefill linears on all SMs, on the step partition alone and beside
+//                                                 the filler, and on all SMs again (run_ppsplit)
 // KIND: 0 int8 m16n8k32 s32 (FILL v1's step), 1 FP8 e4m3 m16n8k32 f32, 2 NVFP4 m16n8k64 f32 (ue4m3 block scales 1.0).
 // Each step's D, read as the next A fragment in place (FILL's byte map); FP8 clears bit 3 of every byte (0xF7F7F7F7), so no
 // A or B byte is the e4m3 NaN; e2m1 has no NaN. PAT, the operands from the coins: 0 as FILL (B_0, B_1 uniform), 1 B_1 = B_0,
@@ -745,6 +748,45 @@ static void run_pprefill(Dev& d, int M, int B, int L, int fill_sms, int kind, in
   CK(cudaFree(f.rec));
 }
 
+// Prefill on a split: per round, M-row prefill linears on all SMs (pre_full), on the step partition with cuBLASLt
+// re-tuned on it, alone (pre_split) and beside the filler on the rest (pre_split_fill), then on all SMs again (pre_full2).
+// split ÷ full is the SM share's cost, split_fill ÷ split the filler's power at the cap.
+static void run_ppsplit(Dev& d, int M, int fill_sms, int kind, int pat, int W, int NC, double warm, double meas,
+                        int rounds) {
+  const std::vector<Lt> pp = lin_plans(d, M);
+  cudaStream_t full = d.st, ss = nullptr;
+  int got[2];
+  cudaStream_t fs = fill_stream(d, fill_sms, &ss, got);
+  d.st = ss;
+  const std::vector<Lt> p2 = lin_plans(d, M);
+  d.st = full;
+  PFill f = pfill_make(got[1], kind, pat, W, NC, 2048);
+  bool wrapped = false;
+  const cudaGraphExec_t g_full = capture(d, full, [&] { enqueue_step(d, pp, 0, M, 0, &wrapped); });
+  const cudaGraphExec_t g_split = capture(d, ss, [&] { enqueue_step(d, p2, 0, M, 0, &wrapped); });
+  d.st = full;
+  double pre_macs = 0;
+  for (int j = 0; j < 4; j++) pre_macs += (double)LAYERS * M * LN[j] * LK[j];
+  auto head = [&](const char* name, int r) {
+    print_head("ppsplit", name, r);
+    printf("\"M\": %d, \"step_sms\": %d, \"pre_macs\": %.6e, ", M, got[0], pre_macs);
+    print_fill(f, got[1]);
+  };
+  for (int r = 0; r < rounds; r++) {
+    head("pre_full", r);
+    arm(d, g_full, full, nullptr, nullptr, warm, meas, pre_macs);
+    head("pre_split", r);
+    arm(d, g_split, ss, nullptr, nullptr, warm, meas, pre_macs);
+    head("pre_split_fill", r);
+    arm(d, g_split, ss, &f, fs, warm, meas, pre_macs);
+    head("pre_full2", r);
+    arm(d, g_full, full, nullptr, nullptr, warm, meas, pre_macs);
+  }
+  CK(cudaGraphExecDestroy(g_full));
+  CK(cudaGraphExecDestroy(g_split));
+  CK(cudaFree(f.rec));
+}
+
 // dcap's device setup: weights only for pfill, KV sized to B·L
 static void setup(Dev& d, bool need_w, int B, int L) {
   CK(cudaSetDevice(0));
@@ -812,6 +854,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "usage: pwr pgate | pidle SECS | palone FILL_SMS KIND PAT W NC WARM MEAS\n"
                     "       pwr pfill B L FILL_SMS KIND PAT W NC WARM MEAS ROUNDS [CTL_PAT]\n"
                     "       pwr pprefill M B L FILL_SMS KIND PAT W NC HEAT MEAS ROUNDS\n"
+                    "       pwr ppsplit M FILL_SMS KIND PAT W NC WARM MEAS ROUNDS\n"
                     "       (DFILL_COINS=<32 hex digits>: the round's coins; PF_SLEEP_NS: sleep a tile)\n");
     return 1;
   }
@@ -837,7 +880,7 @@ int main(int argc, char** argv) {
     if (o && (atoi(argv[2]) < 1 || atoi(argv[2]) > 8192)) { fprintf(stderr, "1 <= M <= 8192\n"); return 1; }
   }
   if (mode == "pbw") B = -1;
-  setup(d, mode == "pfill" || mode == "pprefill", B, L);
+  setup(d, mode == "pfill" || mode == "pprefill" || mode == "ppsplit", B, L);
   g_samp.start(d.nv);
   int rc = 0;
   if (mode == "pgate") rc = pgate();
@@ -855,6 +898,13 @@ int main(int argc, char** argv) {
     if (fsm <= 0 || fsm >= d.sms) { fprintf(stderr, "0 < FILL_SMS < %d\n", d.sms); rc = 1; }
     else run_pfill(d, B, L, fsm, atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), atoi(argv[8]), atof(argv[9]), atof(argv[10]),
                    atoi(argv[11]), argc > 12 ? atoi(argv[12]) : -1);
+  } else if (mode == "ppsplit") {
+    const int fsm = argc > 9 ? atoi(argv[3]) : 0;
+    if (argc < 10 || fsm <= 0 || fsm >= d.sms || atoi(argv[2]) < 1 || atoi(argv[2]) > 8192) {
+      fprintf(stderr, "ppsplit M FILL_SMS KIND PAT W NC WARM MEAS ROUNDS (1 <= M <= 8192, 0 < FILL_SMS < %d)\n", d.sms);
+      rc = 1;
+    } else run_ppsplit(d, atoi(argv[2]), fsm, atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), atof(argv[8]),
+                       atof(argv[9]), atoi(argv[10]));
   } else if (mode == "pprefill") {
     const int fsm = atoi(argv[5]);
     if (fsm <= 0 || fsm >= d.sms) { fprintf(stderr, "0 < FILL_SMS < %d\n", d.sms); rc = 1; }
