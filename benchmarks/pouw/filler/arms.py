@@ -44,9 +44,10 @@ SMS = 188  # the RTX PRO 6000's SMs
 #: fresh bits A ∈ {0,1} with B = U uniform on {±1..±64} (pfill-bU, note:20261016T0710Z-draft-filler-floor-r2 §5), or
 #: the dither ⌊x/s⌋ + b (data quantized down plus a fresh uniform bit; note:20261016T0525Z-draft-fullfloor-s-r6 §2)
 NOISE = ("chained", "pm1", "bits01", "bitsU", "dither")
-#: a filler's declarable receipt folds (pfill.cuh's pf_absorb): ram (NC 4), duo (NC 2), XOR-in (NC 4 built with
-#: -DPFILL_XIN); filler-scorer/v5 reads the declaration with its build's SASS (`scoring.fold_reading`), undeclared as ram
-FOLDS = ("ram", "duo", "xor-in")
+#: a filler's declarable receipt folds (pfill.cuh's pf_absorb): ram (NC 4), duo (NC 2), and at NC 4 XOR-in (rotations 7
+#: and 19, -DPFILL_XIN; superseded), XOR-in (13, 19) (-DPFILL_XIN13) and LOP3+IMAD (-DPFILL_LI); filler-scorer/v5
+#: reads the declaration with its build's SASS (`scoring.fold_reading`), undeclared as ram
+FOLDS = ("ram", "duo", "xor-in", "xor-in-13", "lop3-imad")
 #: the `Filler` fields the driver runs and the variant's run-time config carries
 SHAPE = ("W", "NC", "S", "chunk_log2")
 
