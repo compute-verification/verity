@@ -385,11 +385,13 @@ DEV void salt_digest(const u64* Y, u64* c) {
 // M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]): for salt bytes p = 16 q + r, the 80 bytes
 // [16 q, 16 q + 80) of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m.
 // T in shared memory (TS, rows TSTRIDE apart) or read from global memory through L1 (rows 256 apart).
+// NIB: T is the nibble table (Committer::Tn). T is linear in v, so T_v = T_(v & 15) ^ T_(v & 0xF0): 31 rows, 8 KB, which
+// stays in L1 at a 100% shared-memory carveout, where all 256 rows (64 KB) came from L2. Its rows T_u and T_16u (u < 16)
+// are stored chunk-major, 16-byte chunk c of row u at 256 c + 16 u (the high nibble's 4 KB on), so a warp's lanes read one
+// chunk of at most 16 rows: 256 bytes in two lines, where row-major rows took a line a row.
 template <bool TS, bool NIB = false>
 DEV void hm96_mask(const uint8_t* T, const u64* Y, u32* m) {
   constexpr int STRIDE = TS ? TSTRIDE : 256;
-  // NIB: T_v = T_(v & 15) ^ T_(v & 0xF0) (T is linear in v), so the lookups touch 31 rows (8 KB, which stays in L1 at a
-  // 100% shared-memory carveout) instead of all 256 (64 KB, from L2)
 #pragma unroll
   for (int w = 0; w < 16; ++w) m[w] = 0;
 #pragma unroll
@@ -401,17 +403,19 @@ DEV void hm96_mask(const uint8_t* T, const u64* Y, u32* m) {
     for (int q = 0; q < 12; ++q) {
       const int p = 16 * q + r;
       const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
-      const uint8_t* t = T + (NIB ? v & 15u : v) * STRIDE + 16 * q;
-#pragma unroll
-      for (int i = 0; i < 5; ++i) {
-        const uint4 u = TS ? *reinterpret_cast<const uint4*>(t + 16 * i) : ldg16(t + 16 * i);
-        A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
-      }
       if constexpr (NIB) {
-        const uint8_t* th = T + (v & 0xF0u) * STRIDE + 16 * q;
+        const uint8_t* lo = T + 256 * q + 16 * (v & 15u);
+        const uint8_t* hi = T + 4096 + 256 * q + 16 * (v >> 4);
 #pragma unroll
         for (int i = 0; i < 5; ++i) {
-          const uint4 u = ldg16(th + 16 * i);
+          const uint4 u = ldg16(lo + 256 * i), w = ldg16(hi + 256 * i);
+          A[4 * i] ^= u.x ^ w.x; A[4 * i + 1] ^= u.y ^ w.y; A[4 * i + 2] ^= u.z ^ w.z; A[4 * i + 3] ^= u.w ^ w.w;
+        }
+      } else {
+        const uint8_t* t = T + v * STRIDE + 16 * q;
+#pragma unroll
+        for (int i = 0; i < 5; ++i) {
+          const uint4 u = TS ? *reinterpret_cast<const uint4*>(t + 16 * i) : ldg16(t + 16 * i);
           A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
         }
       }
@@ -640,12 +644,14 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
 }
 
 // The small path's data phase over the CTAs that hold data (ceil(n / SMALL_THREADS)): each thread a leaf, then its CTA's
-// levels 1 .. min(SMALL_LEVELS, depth).
+// levels 1 .. min(SMALL_LEVELS, depth). g: thread t takes the CTA's leaf (t % g) * (SMALL_THREADS / g) + t / g, so with
+// tile leaves of mr = SMALL_THREADS / g row blocks a column (Committer::lanes) the g leaves of one row block at adjacent
+// columns sit in adjacent lanes and a warp's 16-byte loads touch 32 / g lines, not 32.
 template <class Row, int SX>
 __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     leaf_small(int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width, u64* levels,
-               u64* __restrict__ bc) {
-  const u64 pos = (u64)blockIdx.x * SMALL_THREADS + threadIdx.x;
+               u64* __restrict__ bc, u32 g) {
+  const u64 pos = (u64)blockIdx.x * SMALL_THREADS + (threadIdx.x % g) * (SMALL_THREADS / g) + threadIdx.x / g;
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
 #ifdef COMMIT_GPU_DIAG_NOTREE
   u64 out[8] = {};
@@ -967,6 +973,7 @@ struct Committer {
   u64* S = nullptr;                 // the salt phase's M_key y || c, 16 words a leaf (a slot after another)
   u64* F = nullptr;                 // the small path's frame-leaf first-block states, 8 words a leaf
   uint4* T = nullptr;
+  uint4* Tn = nullptr;              // the small path's nibble table (hm96_mask's NIB layout), 8 KB
   uint8_t* D = nullptr;             // row-seg: the segment digests
   u32 segs = 0, seg_last = 0;
   std::vector<u64*> lv;
@@ -994,6 +1001,14 @@ struct Committer {
     if (small) CK(cudaMalloc(&F, n * 64));
     CK(cudaMalloc(&T, 65536));
     CK(cudaMemcpy(T, p.T.data(), 65536, cudaMemcpyHostToDevice));
+    if (small) {
+      std::vector<uint8_t> tn(8192);
+      for (int h = 0; h < 2; ++h)
+        for (int c = 0; c < 16; ++c)
+          for (int u = 0; u < 16; ++u) memcpy(&tn[4096 * h + 256 * c + 16 * u], &p.T[256 * (h ? 16 * u : u) + 16 * c], 16);
+      CK(cudaMalloc(&Tn, tn.size()));
+      CK(cudaMemcpy(Tn, tn.data(), tn.size(), cudaMemcpyHostToDevice));
+    }
     u64 off = 0;
     for (int d = 0; d <= depth; ++d) { lv.push_back(levels + 8 * off); off += width >> d; }
   }
@@ -1006,7 +1021,7 @@ struct Committer {
     if (small) {
       if (ns < 0) ns = slots - s0;
       const dim3 g((unsigned)((width + SMALL_THREADS - 1) / SMALL_THREADS), (unsigned)ns);
-      salt_small<PRF><<<g, SMALL_THREADS, 0, st>>>(dom, given, T, n, width, S, F, levels, s0);
+      salt_small<PRF><<<g, SMALL_THREADS, 0, st>>>(dom, given, Tn, n, width, S, F, levels, s0);
     } else if (n > (1u << 16)) {
       auto k = salt_kernel<PRF, true>;
       static bool attr = false;
@@ -1018,11 +1033,12 @@ struct Committer {
   }
   // The data phase's leaves (after salts(); slot: the small path's salt slot). Small path: leaf_small, which also folds each
   // CTA's levels. Otherwise blocks of 64 threads up to 2^16 leaves, so few leaves still spread over the SMs.
+  // g: leaf_small's lane order (1: thread t leaf t).
   template <class Row, int SX = 0>
-  void leaves(const Row& row, cudaStream_t st, int slot = 0) {
+  void leaves(const Row& row, cudaStream_t st, int slot = 0, u32 g = 1) {
     if (small) {
       leaf_small<Row, SX><<<(unsigned)((n + SMALL_THREADS - 1) / SMALL_THREADS), SMALL_THREADS, 0, st>>>(
-          dom, row, S + 16 * n * slot, F, n, width, levels, bc);
+          dom, row, S + 16 * n * slot, F, n, width, levels, bc, g);
       return;
     }
     const unsigned t = width > (1u << 16) ? LEAF_THREADS : 64;
@@ -1041,8 +1057,11 @@ struct Committer {
   void tiles(const uint8_t* A, u64 M, u64 K, u32 R, bool seg, cudaStream_t st, int slot = 0) {
     const TileGeom g{A, M, K, (M + R - 1) / R, R};
     if (seg) seg_leaves_from(SegTiles{g}, st, slot);
-    else leaves<RowTile>(RowTile{g}, st, slot);
+    else leaves<RowTile>(RowTile{g}, st, slot, (u32)lanes(g.mr));
   }
+  // The small path's lane order for tile leaves of mr row blocks a column: when mr divides SMALL_THREADS, a CTA's leaves
+  // are SMALL_THREADS / mr whole columns, and the leaves of one row block go to adjacent lanes.
+  static u64 lanes(u64 mr) { return mr <= (u64)SMALL_THREADS && SMALL_THREADS % mr == 0 ? SMALL_THREADS / mr : 1; }
   // Levels 1 .. top (default the root). Small path: above the CTAs' folded levels, a level a launch while a level is wider
   // than SMALL_TOP nodes, then the rest in one CTA (top_small). Otherwise a level a launch while a level is wider than 512
   // nodes (blocks of 64 threads below 2^16 nodes), then the rest in one block (COMMIT_GPU_DIAG_QUAD: the same with 4-ary
@@ -1102,5 +1121,5 @@ struct Committer {
       cur.swap(nxt);
     }
   }
-  void release() { cudaFree(levels); cudaFree(bc); cudaFree(S); cudaFree(F); cudaFree(T); cudaFree(D); lv.clear(); }
+  void release() { cudaFree(levels); cudaFree(bc); cudaFree(S); cudaFree(F); cudaFree(T); cudaFree(Tn); cudaFree(D); lv.clear(); }
 };

@@ -232,9 +232,44 @@ def main() -> int:
             ref = f" ({top * p / lone[c['M']]:.2f}x lone)" if top and c["M"] in lone else ""
             print(f"    M = {c['M']:5d}, k = {c['k']:2d}: plain {p:7.1f}; {c['best']} {med * p if med else float('nan'):7.1f}; "
                   f"hprio first {top * p if top else float('nan'):7.1f}{ref}")
+    res["breakdown"] = breakdown([Path(d) for d in a.out])
     if a.json:
         Path(a.json).write_text(json.dumps(res, indent=1) + "\n")
     return 0
+
+
+DIAG_WHAT = {"base": "the committer", "noop": "no operand loads", "nos": "no salt-record loads (S, F)",
+             "nomask": "no M_key y lookups", "notree": "a CTA's levels in registers", "all": "all four",
+             "nosalts": "no salt kernels", "notop": "no levels above the CTAs"}
+
+
+def breakdown(dirs: list[Path]) -> list[dict]:
+    """run.sh's cgdiag: cgonly (the committer alone) and cgrr2 (beside the GEMMs) in each timing-only build or CG_SKIP,
+    against the committer as built; each piece's share is base minus the build without it"""
+    out = []
+    for d in dirs:
+        for f in sorted(d.glob("diag-*.jsonl")):
+            _, M, name = f.stem.split("-", 2)
+            for r in rows(f):
+                if r.get("mode") == "ovl":
+                    out.append({"M": int(M), "name": name, "k": r["k"], "arms": {n: v["ms"] for n, v in r["arms"].items()}})
+    for M, k in sorted({(c["M"], c["k"]) for c in out}):
+        cells = {c["name"]: c["arms"] for c in out if c["M"] == M and c["k"] == k}
+        base = cells.get("base")
+        if not base or "cgonly" not in base:
+            continue
+        lite = base.get("liteconly")
+        print(f"\nbreakdown, M = {M}, k = {k}: cgonly (alone) {base['cgonly']:.1f} ms"
+              + (f", the stand-in (liteconly) {lite:.1f} ms, {base['cgonly'] / lite:.2f}x" if lite else ""))
+        for name, arms in cells.items():
+            if "cgonly" not in arms:
+                continue
+            fast = arms.get("chunked")
+            rr = f"; cgrr2 {100 * (arms['cgrr2'] / fast - 1):+.1f}% against chunked" if fast and "cgrr2" in arms else ""
+            lrr = f" (litecrr2 {100 * (arms['litecrr2'] / fast - 1):+.1f}%)" if fast and "litecrr2" in arms and name == "base" else ""
+            print(f"  {name:8s} {DIAG_WHAT.get(name, name):32s} cgonly {arms['cgonly']:6.1f} ms, saves "
+                  f"{base['cgonly'] - arms['cgonly']:5.1f} ms ({100 * (1 - arms['cgonly'] / base['cgonly']):4.1f}%){rr}{lrr}")
+    return out
 
 
 if __name__ == "__main__":
