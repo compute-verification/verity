@@ -642,6 +642,32 @@ int main(int argc, char** argv) {
       printf("{\"event\":\"floor\",\"n\":%d,\"k\":%d,\"three_sparse_nvfp4_ideal_ms\":%.5f,\"plus_drops_ms\":%.5f,"
              "\"ratio_vs_int8\":%.4f,\"note\":\"sparse NVFP4 at 2x dense (census 4094 vs 2048); no cuSPARSELt/CUTLASS kernel on sm_120\"}\n",
              n, k, 1.5 * t_one_dense, 1.5 * t_one_dense + t_drop, (1.5 * t_one_dense + t_drop) / bi);
+
+      // Drops correction cost at the per-block-scale router's drop fractions for k∈{8,32,64} (wide_peel 8w: 0, 4.0%,
+      // 11.4%): a synthetic random drops matrix at each density, CSR + the same CUDA-core spmm, timed.  This is the k-
+      // dependent term of T_method; the three MMAs above are k-independent.
+      for (double dens : {0.0, 0.04, 0.114}) {
+        std::vector<int8_t> sd(N2, 0);
+        long long nn = 0;
+        for (size_t i = 0; i < N2; ++i) {
+          uint64_t r = mix64(0xD00Dull ^ i);
+          if (double(r % 100000) / 100000.0 < dens) { int m = int((r >> 20) % k) + 1; sd[i] = int8_t((r & 1) ? -m : m); ++nn; }
+        }
+        std::vector<int> rp2(n + 1, 0), ci2; std::vector<int8_t> vv2;
+        for (int i = 0; i < n; ++i) { int c = 0; for (int l = 0; l < n; ++l) c += sd[size_t(i) * n + l] != 0; rp2[i + 1] = rp2[i] + c; }
+        ci2.resize(rp2[n]); vv2.resize(rp2[n]);
+        for (int i = 0; i < n; ++i) { int p = rp2[i]; for (int l = 0; l < n; ++l) if (sd[size_t(i) * n + l]) { ci2[p] = l; vv2[p] = sd[size_t(i) * n + l]; ++p; } }
+        int *dRp2, *dCi2; int8_t* dVv2;
+        CK(cudaMalloc(&dRp2, (n + 1) * 4)); CK(cudaMalloc(&dCi2, std::max<size_t>(1, ci2.size()) * 4)); CK(cudaMalloc(&dVv2, std::max<size_t>(1, vv2.size())));
+        CK(cudaMemcpy(dRp2, rp2.data(), (n + 1) * 4, cudaMemcpyHostToDevice));
+        if (!ci2.empty()) { CK(cudaMemcpy(dCi2, ci2.data(), ci2.size() * 4, cudaMemcpyHostToDevice)); CK(cudaMemcpy(dVv2, vv2.data(), vv2.size(), cudaMemcpyHostToDevice)); }
+        auto sp2 = [&] { k_spmm_add<<<sp_blocks, 256>>>(dRp2, dCi2, dVv2, W, Df, n); };
+        sp2(); CK(cudaDeviceSynchronize());
+        double t2 = time_calls(sp2, 5);
+        printf("{\"event\":\"drops_density\",\"n\":%d,\"density\":%.4f,\"nnz\":%lld,\"spmm_ms\":%.5f,\"ratio_vs_int8\":%.4f}\n",
+               n, dens, nn, t2, t2 / bi);
+        cudaFree(dRp2); cudaFree(dCi2); cudaFree(dVv2);
+      }
     }
   }
 
