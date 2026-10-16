@@ -63,7 +63,10 @@ class PFillKCoDep(PFillKCo):
 class PFillKDual(PFillKCoDep):
     """pfill-k itself on its decode splits (the 8-warp tile, its B and A moved from shared memory to L1, -DPFILL_DUAL) and
     the co tile at one MMA in flight for prefill co: the kernel's only shared memory is the co tile's 2 KB, so one build
-    holds both. A co chunk runs 4-warp co tiles (dfill_make sets the chunk's W, its receipts dfill_ref's 4-warp tile)."""
+    holds both. A co chunk runs 4-warp co tiles (dfill_make sets the chunk's W, its receipts dfill_ref's 4-warp tile).
+    Its L1 tile fails decode's gate where pfill-k's shared-memory tile passes (1/32K split 108: 1.067 with the filler at
+    0.83-0.89 of its alone rate, at any carveout; r20261016-101543-2c88, r20261016-103453-84b7): it loads L2 beside
+    memory-bound decode."""
 
     name: str = "hcpre-pfill-k-dual"
     lineage: dict = field(default_factory=lambda: {
