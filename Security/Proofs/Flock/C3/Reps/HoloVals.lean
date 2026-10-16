@@ -257,10 +257,47 @@ theorem stepsOfVals_norm_repsOfVals (hpr : ProofOfVals zs dg N k Rw sh rep vals)
     StepsOfVals zs dg N k Rw (tiedSrc (normSrc (repsOfVals stp sh rep vals))) sh rep vals :=
   stepsOfVals_of_woven (repStepsWoven_of_tie repWeaveAt_norm_repsOfVals hpr hs hf) hcap hos_norm_repsOfVals
 
+/-- **`FramesOfVals` at holo values** `(b R ω t Lb i).vals sh (rep R ω t Lb i)`, from `HoloSrc.OK` at each rep at
+any link points (`HoloSrc.framed`, `framesOfVals_holo'`). -/
+theorem framesOfVals_holoVals
+    {b : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → HoloSrc}
+    {pts : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → Fin (holoAt st hp).cls.mPts →
+      GF128}
+    (hok : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
+      (b R ω t Lb i).OK ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
+        (holoAt st hp).cls.mPts (pts R ω t Lb) sh (rep R ω t Lb i)) :
+    FramesOfVals zs dg N k Rw sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i) :=
+  framesOfVals_holo' fun R ω t R₂ τ o hA i halg hacc => ⟨_, HoloSrc.framed (hok R ω t R₂ τ o hA i halg hacc) halg⟩
+
+/-- **`ProofOfVals` at holo values**, from `HoloSrc.OK` at each rep at any link points (`proofFrom_of_framed` at
+`HoloSrc.framed` and the comb port). -/
+theorem proofOfVals_holoVals
+    {b : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → HoloSrc}
+    {pts : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → Fin (holoAt st hp).cls.mPts →
+      GF128}
+    (hok : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
+      (b R ω t Lb i).OK ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
+        (holoAt st hp).cls.mPts (pts R ω t Lb) sh (rep R ω t Lb i)) :
+    ProofOfVals zs dg N k Rw sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i) :=
+  proofOfVals_of_from fun R ω t R₂ τ o hA i halg hacc =>
+    proofFrom_of_framed (HoloSrc.framed (hok R ω t R₂ τ o hA i halg hacc) halg) (hok R ω t R₂ τ o hA i halg hacc).fold
+
+/-- **`SetupOfVals` at holo values, at a source `src`**, from `HoloSrc.OK` at each rep at `src`'s link points and the
+class checks (`HoloSrc.setupFrom_holo`). -/
+theorem setupOfVals_holoVals (hcls : ClassOk (Recursion.shapeOf st))
+    {b : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → HoloSrc}
+    {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    (hok : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
+      (b R ω t Lb i).OK ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
+        (holoAt st hp).cls.mPts (src R ω t Lb).pts sh (rep R ω t Lb i)) :
+    SetupOfVals zs dg N k Rw src sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i) :=
+  setupOfVals_of_from fun R ω t R₂ τ o hA i halg hacc => HoloSrc.setupFrom_holo hcls (hok R ω t R₂ τ o hA i halg hacc)
+
 -- Elaborating the four nested `AtRep` parts together exceeds the default at `whnf`.
 set_option maxHeartbeats 1000000 in
 /-- **`RepUnitOfAlg` at the reps' normalized tied source, at holo values** `(b R ω t Lb i).vals sh (rep R ω t Lb i)`:
-the four parts from `HoloSrc.OK` at each rep at the run's link points, the class checks and the values' cap. -/
+the four parts (`framesOfVals_holoVals`, `proofOfVals_holoVals`, `setupOfVals_holoVals`) from `HoloSrc.OK` at each rep
+at the run's link points, the class checks and the values' cap. -/
 theorem repUnitOfAlg_holoVals (hcls : ClassOk (Recursion.shapeOf st))
     {b : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → HoloSrc}
     (hok : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
@@ -269,18 +306,12 @@ theorem repUnitOfAlg_holoVals (hcls : ClassOk (Recursion.shapeOf st))
     (hcap : AtRep zs dg N k Rw sh rep fun R ω t Lb i => capDig (b R ω t Lb i).cap = (stp R ω t Lb).cap₀) :
     RepUnitOfAlg zs dg N k Rw
       (tiedSrc (normSrc (repsOfVals stp sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i)))) sh rep := by
-  have hf : FramesOfVals zs dg N k Rw sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i) :=
-    framesOfVals_holo' fun R ω t R₂ τ o hA i halg hacc =>
-      ⟨_, HoloSrc.framed (hok R ω t R₂ τ o hA i halg hacc) halg⟩
-  have hpr : ProofOfVals zs dg N k Rw sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i) :=
-    proofOfVals_of_from fun R ω t R₂ τ o hA i halg hacc =>
-      proofFrom_of_framed (HoloSrc.framed (hok R ω t R₂ τ o hA i halg hacc) halg)
-        (hok R ω t R₂ τ o hA i halg hacc).fold
+  have hf := framesOfVals_holoVals hok
+  have hpr := proofOfVals_holoVals hok
   have hs : SetupOfVals zs dg N k Rw
       (tiedSrc (normSrc (repsOfVals stp sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i)))) sh rep
       fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i) :=
-    setupOfVals_of_from fun R ω t R₂ τ o hA i halg hacc =>
-      HoloSrc.setupFrom_holo hcls (hok R ω t R₂ τ o hA i halg hacc)
+    setupOfVals_holoVals hcls hok
   exact repUnitOfAlg_of_parts hpr hs hf (stepsOfVals_norm_repsOfVals hpr hs hf hcap)
 
 end
