@@ -351,6 +351,25 @@ def test_clock_gate():
     assert not S.clock_gate(stats, [])["ok"]
 
 
+def test_margin_per_point():
+    """filler-scorer/v3's margin readout: the limit less each point's slowdown, with its worst and best rounds', so a
+    point whose rounds reach the limit shows it has none even where its median passes (decode 32/1K, whose serving alone
+    reads 7.69 or 7.75 ms by process, r20261016-071637-cb1f)."""
+    stats = all_points(slow=1.02)
+    thin = row("step", 32, 1024, "split", alone_ms=10.0, arm_ms=10.41, fill_sms=92)
+    thin["blocks"][0]["arm"]["reps"] = [[10.6, 2000.0, 300.0]] * 3
+    stats[("decode", 32, 1024)] = S.point_stats(thin)
+    stats[("decode", 8, 16384)] = S.point_stats(row("step", 8, 16384, "split", alone_ms=10.0, arm_ms=10.8, fill_sms=124))
+    mg = S.margins(stats)
+    m = mg["points"]["decode 32/1024"]
+    assert m["margin"] == pytest.approx(0.009) and m["rounds"] == pytest.approx([-0.01, 0.009]) and m["scored"]
+    assert mg["points"]["decode 1/2048"]["margin"] == pytest.approx(0.03)
+    assert mg["min"] == {"at": "decode 32/1024", "margin": pytest.approx(0.009)} and mg["no_margin"] == ["decode 32/1024"]
+    robust = mg["points"]["decode 8/16384"]
+    assert not robust["scored"] and robust["margin"] == pytest.approx(-0.03)  # listed, never the minimum
+    assert ok_gates(stats, S.score(stats))["slowdown"]["worst"] == pytest.approx(S.LIMIT - mg["min"]["margin"])
+
+
 def test_record_limits_are_checked_when_the_arm_loads():
     """filler-scorer/v3 refuses, before any build or lease, an arm whose record the ledger or the store would refuse
     after the run (HC-PROVED's 249-character hypothesis reached `score.record` only after a scored run)."""

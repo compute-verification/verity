@@ -533,5 +533,22 @@ def secondary(stats: dict, sc: dict) -> dict:
     }
 
 
+def margins(stats: dict) -> dict:
+    """Each measured point's serving-slowdown margin (filler-scorer/v3): LIMIT less the point's slowdown, the number the
+    slowdown gate reads, and the margins of its worst and best rounds, so a point whose rounds already reach the limit
+    shows it has none (``no_margin``); ``min`` is the smallest over the scored points (robustness points are listed,
+    unscored)."""
+    scored = set(points(robust=False))
+    pts = {}
+    for k, v in stats.items():
+        r = [x for x in v.get("slowdown_rounds") or [] if isfinite(x)]
+        pts[f"{k[0]} {k[1]}/{k[2]}"] = {"slowdown": v["slowdown"], "margin": LIMIT - v["slowdown"],
+                                        "rounds": [LIMIT - max(r), LIMIT - min(r)] if r else None, "place": v["place"],
+                                        "fill_sms": v["fill_sms"], "scored": k in scored}
+    lo = min(((m["margin"], name) for name, m in pts.items() if m["scored"] and isfinite(m["margin"])), default=None)
+    return {"limit": LIMIT, "points": pts, "min": {"at": lo[1], "margin": lo[0]} if lo else None,
+            "no_margin": [name for name, m in pts.items() if m["scored"] and m["rounds"] and m["rounds"][0] <= 0]}
+
+
 def isfinite(x) -> bool:
     return isinstance(x, (int, float)) and math.isfinite(x)

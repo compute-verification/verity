@@ -4,7 +4,7 @@ the arm contract: `arms.py`; the device driver: `dscore.cu`.
 
   python3 benchmarks/pouw/filler/score.py ARM [--rounds 8] [--reps 3] [--no-robust]   build, lease one GPU, measure, report
   python3 benchmarks/pouw/filler/score.py measure ARM --bin DIR --out DIR             the measurement, inside a lease
-  python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json]                     score a measured run's out dir
+  python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v3]           score a measured run's out dir
   python3 benchmarks/pouw/filler/score.py check ARM                                   the arm's contract and record limits
   python3 benchmarks/pouw/filler/score.py --leaderboard [--refresh] [--local DIR ...] every filler attempt, best first
 
@@ -195,7 +195,10 @@ def rows(path: Path) -> list[dict]:
     return [json.loads(ln) for ln in path.read_text().splitlines() if ln.strip().startswith("{")] if path.is_file() else []
 
 
-def report(out: Path, arm=None) -> dict:
+def report(out: Path, arm=None, version: str | None = None) -> dict:
+    """The run's result under `version` (the active `scoring.SCORER` by default), written to ``score.json`` only under the
+    active one: another version's (``report --as v3``) is a preview."""
+    version = version or S.SCORER
     doc = json.loads((out / "arm.json").read_text())
     if arm is None:
         try:
@@ -223,7 +226,7 @@ def report(out: Path, arm=None) -> dict:
     g["serving_exact"] = {"ok": bool(serving_gate) and all(r.get("ok") is not False for r in serving_gate),
                           "rows": len(serving_gate)}
     g["ok"] = g["ok"] and g["serving_exact"]["ok"]
-    res = {"scorer": S.SCORER, "arm": doc["name"], "interface": doc["interface"], "lineage": doc["lineage"],
+    res = {"scorer": version, "arm": doc["name"], "interface": doc["interface"], "lineage": doc["lineage"],
            "variant": doc["variant"]["id"], "choice": doc["choice"], "commit": read(out / "commit.txt"),
            "coins": read(out / "coins.txt"), "run": os.environ.get("RESEARCH_RUN_ID") or read(out / "run.txt"),
            "scored": g["ok"] and "SCORE" in sc, "SCORE": sc.get("SCORE") if g["ok"] else None,
@@ -232,7 +235,10 @@ def report(out: Path, arm=None) -> dict:
            "flags": sc["flags"], "certified": sc["certified"], "gates": g, "missing": sc["missing"],
            "entries": sc["entries"], "secondary": S.secondary(stats, sc),
            "points": {f"{k[0]} {k[1]}/{k[2]}": v for k, v in stats.items()}}
-    (out / "score.json").write_text(json.dumps(res, indent=1))
+    if version == S.V3:
+        res["margins"] = S.margins(stats)
+    if version == S.SCORER:
+        (out / "score.json").write_text(json.dumps(res, indent=1))
     return res
 
 
@@ -262,6 +268,10 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
                                        for k in ("beside_over_alone", "limit", "caught")}},
         "flags": res["flags"], "certified": res["certified"], "coins": res["coins"],
     }
+    if v3:
+        mg = res["margins"]
+        meta["metrics"] |= {"margin_min": mg["min"], "no_margin": mg["no_margin"],
+                            "margins": {k: m["margin"] for k, m in mg["points"].items() if m["scored"]}}
     rec = {"kind": ledger.KIND, "meta": ledger._clean(meta), "refs": {"parent": lin["parent"]}
            if str(lin.get("parent") or "").startswith("art:") else {}, "labels": [(ledger.KERNEL_OUTCOME, "screened")]}
     ledger.write(run_dir, [rec])
@@ -283,9 +293,22 @@ def control_line(c: dict | None) -> str:
             f"{fmt(c['beside_over_alone'])} vs limit {fmt(c['limit'])}, {'caught' if c['caught'] else 'NOT CAUGHT'}")
 
 
+def show_margins(mg: dict) -> None:
+    print(f"\n| point | slowdown | margin (limit {mg['limit']}) | worst / best round's | placement |\n|---|---|---|---|---|")
+    for name, m in sorted(mg["points"].items(), key=lambda x: (not x[1]["scored"], x[1]["margin"])):
+        r = m["rounds"] or [None, None]
+        print(f"| {name}{'' if m['scored'] else ' (robust, unscored)'} | {fmt(m['slowdown'])} | {fmt(m['margin'], 4)} | "
+              f"{fmt(r[0], 4)} / {fmt(r[1], 4)} | {m['place']} {m['fill_sms'] or ''} |")
+    lo = mg["min"] or {}
+    print(f"least margin {fmt(lo.get('margin'), 4)} at {lo.get('at')}; no margin (a round at or past the limit): "
+          f"{', '.join(mg['no_margin']) or 'none'}")
+
+
 def show(res: dict) -> None:
     g = res["gates"]
-    print(f"\n{res['arm']} ({res['variant']}), {S.SCORER}: SCORE {fmt(res['SCORE'])}"
+    print(f"\n{res['arm']} ({res['variant']}), {res['scorer']}"
+          + ("" if res["scorer"] == S.SCORER else f" (a preview: the active lock is {S.SCORER})")
+          + f": SCORE {fmt(res['SCORE'])}"
           + ("" if res["scored"] else f" (not scored; {fmt(res['score_if_gated'])} if gated)")
           + f", min {fmt((res['min'] or {}).get('coverage'))} at {(res['min'] or {}).get('entry')}"
           + f" (mixes: {fmt((res['min_mix'] or {}).get('coverage'))} at {(res['min_mix'] or {}).get('entry')})"
@@ -311,6 +334,8 @@ def show(res: dict) -> None:
     for e in res["entries"]:
         print(f"| {e['entry']} | {fmt(e['coverage'])} | {fmt(e['filler_share'])} | {fmt(e['time'])} | "
               + ", ".join(f"{k} {fmt(s)}" for k, s in e["slowdowns"].items()) + f" | {fmt(e['tau_vf'])} |")
+    if "margins" in res:
+        show_margins(res["margins"])
     sec = res["secondary"]
     ck = [v for v in sec["clock"].values() if all(S.isfinite(x) for x in v)]
     setup = sorted(sec["placement_setup_ms"].values())
@@ -387,8 +412,10 @@ def main(argv=None) -> int:
         ap = argparse.ArgumentParser(prog="score.py report")
         ap.add_argument("out", type=Path)
         ap.add_argument("--json", action="store_true")
+        ap.add_argument("--as", dest="version", choices=("v2", "v3"),
+                        help="score under this version (default the active lock); another's is a preview, not written")
         a = ap.parse_args(argv[1:])
-        res = report(a.out)
+        res = report(a.out, version={"v2": S.V2, "v3": S.V3}.get(a.version))
         print(json.dumps(res, indent=1)) if a.json else show(res)
         return 0
     if argv and argv[0] == "check":
