@@ -60,6 +60,16 @@
   "_private.Flock.Program.0.Flock.Program.gateIn": "partial def: a gate's inputs in an activation, resolving references through scopes (descriptor §6, §7); no proof is about it, and qword_program_agree.py covers it",
   "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it"
  },
+ "compile_time": {
+  "Flock.With.ReturnsWalk": {
+   "why": "returns_walk, a tactic macro (syntax and macro_rules only) that expands to core tactics (repeat', first, extract_lets, with_reducible apply/refine/exact, intro, assumption, split, conv whnf) and the Flock.With.Returns lemmas; it runs no IO and declares nothing a guarantee reads",
+   "digest": "a206a0d98b6fbc91a700dfa76d1f1a4f6673c81eaa39c2ba32c6adbf34fb6f7e"
+  },
+  "Flock.With.SimWalk": {
+   "why": "sim_walk, a tactic macro (syntax and macro_rules only) that expands to core tactics (repeat, first, extract_lets, with_reducible apply, assumption, split) and the Flock.With.Sim lemmas; it runs no IO and declares nothing a guarantee reads",
+   "digest": "a8e200749627e43047a3b3daead3d9bdec6666fcf581dd18463c0e4f2dd0c812"
+  }
+ },
  "layers": {
   "VStar": {
    "imports": ["Lean", "Std", "Flock", "VStar"],
