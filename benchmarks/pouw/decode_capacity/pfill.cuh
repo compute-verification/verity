@@ -27,6 +27,7 @@
 //   1  xor  y <- y ^ d0 ^ d1 ^ d2 ^ d3, the cheapest fold that reads every word: a cost reference, not a receipt (it is
 //           linear, so it binds nothing)
 //   5, 3    ram, xor with A made once a tile and reused (a probe of the SHA's cost; its receipts are not dfill_ref's)
+//   6, 7, 8 probes of the fold's pipes, A made once: ram with immediate keys, LEA.HI only, IMAD only (none a receipt)
 // Keys are the key block's row words in order, the first two that are odd, at least 2^8 + 1 away from 0 mod 2^24 and not
 // ±1 mod 32 (a0, a1); duo's k0, k1 are its rows 14 and 15. A tile's receipt is the XOR over its chains of
 // smix(smix(K ^ pos) ^ v), K = dseed(c0, c1, tile), pos = (32 w + lane) 4 + c, v the chain's state (duo: z << 32 | y).
@@ -87,6 +88,13 @@ __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uin
   if (NC == 4 || NC == 5) {
     y = (pf_rotl(y, 7) + d0) * k.a0 + d1;
     y = (pf_rotl(y, 19) + d2) * k.a1 + d3;
+  } else if (NC == 6) {
+    y = (pf_rotl(y, 7) + d0) * 0x9E3779B1u + d1;
+    y = (pf_rotl(y, 19) + d2) * 0x85EBCA77u + d3;
+  } else if (NC == 7) {
+    y = pf_rotl(y, 7) + d0; y = pf_rotl(y, 19) + d1; y = pf_rotl(y, 7) + d2; y = pf_rotl(y, 19) + d3;
+  } else if (NC == 8) {
+    y = y * k.a0 + d0; y = y * k.a1 + d1; y = y * k.a0 + d2; y = y * k.a1 + d3;
   } else if (NC == 2) {
     uint32_t u;
     u = y ^ d0 ^ k.k0; y = u * k.a0 + z; z = pf_rotl(u, 5) + y;
@@ -290,7 +298,7 @@ static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps) {
   }
   return h;
 }
-// steps need not be a multiple of 32 here (dgate's control runs S - 8); the probes (3, 5) have no host tile, and
+// steps need not be a multiple of 32 here (dgate's control runs S - 8); the probes have no host tile, and
 // dfill_check reports -1 for them
 static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
   switch (nc) {
@@ -319,7 +327,10 @@ static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
     case 3: dfill_k<3><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     case 4: dfill_k<4><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     case 5: dfill_k<5><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), or the probes 3, 5\n"); exit(1);
+    case 6: dfill_k<6><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 7: dfill_k<7><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 8: dfill_k<8><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), or the probes 3, 5, 6, 7, 8\n"); exit(1);
   }
 }
 static void dfill_prep() {
@@ -328,6 +339,9 @@ static void dfill_prep() {
   CK(cudaFuncSetAttribute(dfill_k<3>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<5>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<6>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<7>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<8>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
 }
 // PF_CTAS blocks for each of `grid` SMs, and tiles a block so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs
 // an SM
@@ -344,7 +358,7 @@ static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1
   return f;
 }
 static int dfill_check(const DFill& f, long long chunk, int n) {
-  if (f.NC == 3 || f.NC == 5) return -1;  // a probe: not checked
+  if (f.NC != 1 && f.NC != 2 && f.NC != 4) return -1;  // a probe: not checked
   std::vector<unsigned long long> h(f.per());
   CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
   int bad = 0;
