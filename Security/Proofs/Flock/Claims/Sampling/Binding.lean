@@ -10,8 +10,8 @@ extractor recovers both openings, one from each region's reruns. If they open it
 `H(u ‖ s) = H(u′ ‖ s′)` with `u ‖ s ≠ u′ ‖ s′`: a collision (`commit_collision`). So the extraction finds a collision
 whenever the values it assembled disagree, and that event is `KSLin`'s linear term at `β = 1`.
 
-* `Opening`, `Opening.Valid`, `Disagree`: a commit string, value and salt; `commit(u; s) = c`; two openings of one
-  commit string to values of one length that differ.
+* `CommitOpening`, `CommitOpening.Valid`, `Disagree`: a commit string, value and salt; `commit(u; s) = c`; two
+  openings of one commit string to values of one length that differ.
 * `findColl_isSome`, `disagree_collision`: `findColl` over the openings' evaluations `(u ‖ s, c)` finds a collision
   whenever valid openings disagree.
 * `bindFinder`, `Pr_disagree_le`: the binding finder over any coins, outputting `findColl` of the openings it collects,
@@ -35,17 +35,17 @@ theorem commit_collision {H : Msg → Msg} {u s u' s' : Msg} (hc : commit H u s 
   ⟨fun h => hne (List.append_inj h hl).1, hc⟩
 
 /-- An opening: a commit string `c`, a value `u` and a salt `s`. -/
-abbrev Opening := Msg × Msg × Msg
+abbrev CommitOpening := Msg × Msg × Msg
 
 /-- The opening is valid: `commit(u; s) = c`. -/
-def Opening.Valid (H : Msg → Msg) (o : Opening) : Prop := commit H o.2.1 o.2.2 = o.1
+def CommitOpening.Valid (H : Msg → Msg) (o : CommitOpening) : Prop := commit H o.2.1 o.2.2 = o.1
 
 /-- Two of the openings open one commit string to values of one length that differ. -/
-def Disagree (os : List Opening) : Prop :=
+def Disagree (os : List CommitOpening) : Prop :=
   ∃ o ∈ os, ∃ o' ∈ os, o.1 = o'.1 ∧ o.2.1.length = o'.2.1.length ∧ o.2.1 ≠ o'.2.1
 
 /-- The openings as evaluations of `H`: input `u ‖ s`, output `c`. -/
-def pairsOf (os : List Opening) : List (Msg × Msg) := os.map fun o => (o.2.1 ++ o.2.2, o.1)
+def pairsOf (os : List CommitOpening) : List (Msg × Msg) := os.map fun o => (o.2.1 ++ o.2.2, o.1)
 
 /-- `findColl` finds a collision whenever the list holds two different inputs with one output. -/
 theorem findColl_isSome :
@@ -72,7 +72,7 @@ theorem findColl_isSome :
       · exact ⟨p, hp, p', hp', hne, heq⟩
 
 /-- **Valid openings that disagree give a collision**, the first `findColl` finds among their evaluations. -/
-theorem disagree_collision (H : Msg → Msg) (os : List Opening) (hv : ∀ o ∈ os, o.Valid H) (hd : Disagree os) :
+theorem disagree_collision (H : Msg → Msg) (os : List CommitOpening) (hv : ∀ o ∈ os, o.Valid H) (hd : Disagree os) :
     ∃ u v, findColl (pairsOf os) = some (u, v) ∧ Collision H u v := by
   have hl : ∀ p ∈ pairsOf os, H p.1 = p.2 := by
     intro p hp
@@ -87,20 +87,20 @@ theorem disagree_collision (H : Msg → Msg) (os : List Opening) (hv : ∀ o ∈
 
 /-- **The binding finder**: on coins `S`, collect the openings `os s` and output the first collision among their
 evaluations. Its cost is the SHA-512 calls `cost s` that produce the openings, plus one per opening to evaluate it. -/
-def bindFinder (S : Type) [Fintype S] [Nonempty S] (os : S → List Opening) (cost : S → ℕ) : Finder where
+def bindFinder (S : Type) [Fintype S] [Nonempty S] (os : S → List CommitOpening) (cost : S → ℕ) : Finder where
   S := S
   out s := findColl (pairsOf (os s))
   cost s := cost s + (os s).length
 
 /-- **Valid openings disagree no more often than the binding finder finds a collision.** -/
-theorem Pr_disagree_le (H : Msg → Msg) (S : Type) [Fintype S] [Nonempty S] (os : S → List Opening)
+theorem Pr_disagree_le (H : Msg → Msg) (S : Type) [Fintype S] [Nonempty S] (os : S → List CommitOpening)
     (cost : S → ℕ) :
     Pr (fun s : S => (∀ o ∈ os s, o.Valid H) ∧ Disagree (os s)) ≤ (bindFinder S os cost).Pr H :=
   Pr_mono fun s ⟨hv, hd⟩ => disagree_collision H (os s) hv hd
 
 /-- **Under `ExpectedCR` at the binding finder**, valid openings disagree with probability at most its expected
 SHA-512 calls over `2^256`. -/
-theorem Pr_disagree_le_ecr (H : Msg → Msg) (S : Type) [Fintype S] [Nonempty S] (os : S → List Opening)
+theorem Pr_disagree_le_ecr (H : Msg → Msg) (S : Type) [Fintype S] [Nonempty S] (os : S → List CommitOpening)
     (cost : S → ℕ) (hecr : ExpectedCR H (bindFinder S os cost)) :
     Pr (fun s : S => (∀ o ∈ os s, o.Valid H) ∧ Disagree (os s)) ≤
       Ex (fun s : S => ((cost s + (os s).length : ℕ) : ℝ)) / 2 ^ (256 : ℝ) :=
@@ -120,7 +120,7 @@ either falls in an event `Q` that `κ + √(γ · Pr[B])` bounds or has valid op
 holds with `β = 1` and the binding finder over the judged run's tape and coins and the extractor's. -/
 theorem KSLin_of_binding {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
     (V : Verifier Coin) (R : Rel W) (E : Extractor Coin W V) (κ γ : Msg → ℝ)
-    (os : ∀ (x : Msg) (Ω : Type), Prover Ω → Ω × (Fin (V.k x) → Coin) × E.C x → List Opening)
+    (os : ∀ (x : Msg) (Ω : Type), Prover Ω → Ω × (Fin (V.k x) → Coin) × E.C x → List CommitOpening)
     (cost : ∀ (x : Msg) (Ω : Type), Prover Ω → Ω × (Fin (V.k x) → Coin) × E.C x → ℕ)
     (Q : ∀ (x : Msg) (Ω : Type), Prover Ω → Ω × (Fin (V.k x) → Coin) × E.C x → Prop)
     (hsplit : ∀ x (Ω : Type) (P : Prover Ω) (s : Ω × (Fin (V.k x) → Coin) × E.C x),
@@ -146,7 +146,7 @@ theorem KSLin_of_binding {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabit
 `runs(x)` reruns in expectation, the finder makes at most `t · runs(x) + 𝔼[#openings]` calls in expectation. -/
 theorem bindFinder_cost_le {Ω Coin W : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin]
     [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (P : Prover Ω) (x : Msg)
-    (os : Ω × (Fin (V.k x) → Coin) × E.C x → List Opening) (t : ℕ) (runs : Msg → ℝ)
+    (os : Ω × (Fin (V.k x) → Coin) × E.C x → List CommitOpening) (t : ℕ) (runs : Msg → ℝ)
     (hcalls : ∀ ω r₀ c, (E.eval H P x ω r₀ c).2.1 ≤ t * (E.eval H P x ω r₀ c).2.2)
     (hruns : ExtractRunsExpLe H E runs) :
     Ex (fun s : Ω × (Fin (V.k x) → Coin) × E.C x =>
@@ -168,7 +168,7 @@ theorem bindFinder_cost_le {Ω Coin W : Type} [Fintype Ω] [Nonempty Ω] [Fintyp
 openings disagree with probability at most `(t · runs(x) + 𝔼[#openings]) / 2^256`. -/
 theorem Pr_disagree_le_bits {Ω Coin W : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin]
     [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (P : Prover Ω) (x : Msg)
-    (os : Ω × (Fin (V.k x) → Coin) × E.C x → List Opening) (t : ℕ) (runs : Msg → ℝ)
+    (os : Ω × (Fin (V.k x) → Coin) × E.C x → List CommitOpening) (t : ℕ) (runs : Msg → ℝ)
     (hcalls : ∀ ω r₀ c, (E.eval H P x ω r₀ c).2.1 ≤ t * (E.eval H P x ω r₀ c).2.2)
     (hruns : ExtractRunsExpLe H E runs)
     (hecr : ExpectedCR H (bindFinder (Ω × (Fin (V.k x) → Coin) × E.C x) os
