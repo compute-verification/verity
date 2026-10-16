@@ -30,7 +30,8 @@ __global__ void __launch_bounds__(1024) k_vec(int iters, uint32_t ucount, uint32
   uint32_t acc[NACC];  // one array; FFMA path reinterprets, so 1024 threads fit without spilling
 #pragma unroll
   for (int c = 0; c < NACC; c++) acc[c] = tid * 0x9e3779b9u + c * 0x85ebca6bu + 1u;  // lane-dependent => vector regs
-  uint32_t v0 = s0, v1 = s0 ^ 0x5a5a5a5au;  // two independent keep-alive accumulators: ILP => inner loop dispatch-bound
+  // four independent keep-alive accumulators: ILP=4 (× warps) => the inner loop is dispatch-bound, not latency-bound
+  uint32_t v0 = s0, v1 = s0 ^ 0x5a5a5a5au, v2 = s0 + 0x9e3779b9u, v3 = s0 ^ 0xa5a5a5a5u;
   CLK_BEGIN
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
@@ -54,6 +55,8 @@ __global__ void __launch_bounds__(1024) k_vec(int iters, uint32_t ucount, uint32
     for (uint32_t j = 0; j < ucount; j++) {
       v0 = v0 + v0 + j;
       v1 = v1 + v1 + j;
+      v2 = v2 + v2 + j;
+      v3 = v3 + v3 + j;
     }
   }
   CLK_END(rec)
@@ -61,7 +64,7 @@ __global__ void __launch_bounds__(1024) k_vec(int iters, uint32_t ucount, uint32
 #pragma unroll
   for (int c = 0; c < NACC; c++) vs ^= acc[c];
   vsink[blockIdx.x * blockDim.x + tid] = vs;
-  if ((v0 ^ v1) == 0x1234567u) usink[blockIdx.x] = tid;
+  if ((v0 ^ v1 ^ v2 ^ v3) == 0x1234567u) usink[blockIdx.x] = tid;
 }
 
 // ---- host ----------------------------------------------------------------------------------------------------------
