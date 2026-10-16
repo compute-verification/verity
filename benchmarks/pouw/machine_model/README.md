@@ -51,9 +51,11 @@ every vector's epoch.
 
 ## Where the data came from
 
-The legacy chain (`gpu-model/rs-price-*.py` in the notes repo, kept as history) built each vector in a script that loaded
-the previous one. `data/` is those scripts' LP inputs, captured at each named vector's solve and normalized: a census
-line's value is its rate, cycles or u, whichever form reproduces the scripts' float exactly. Two differences from the
+The legacy chain (the notes repo's `lanes/compute-accounting/gpu-model/rs-price-*.py`, kept as history) built each
+vector in a script that loaded the previous one. `data/` is those scripts' LP inputs, captured at each named vector's
+solve (that directory's `machine-model-export.py`) and normalized (`machine-model-convert.py`, which regenerates
+`data/` byte for byte, all but `model.toml`): a census line's value is its rate, cycles or u, whichever form reproduces
+the scripts' float exactly. Two differences from the
 scripts: an instruction class's measured cost is the largest of its census lines at the epoch (the scripts froze it before
 VF3f added `KFFMA0`, which is FFMA's F row rounded to 10 places, 4e-10 relative above it, inside the check's 1e-9); and
 a line's runs are the runs its row's description cites, else the runs its vector's script cites.
