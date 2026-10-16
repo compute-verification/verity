@@ -247,9 +247,9 @@ theorem fast100_d0 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : (sch.
   · rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at h
     cases h
 
-/-- **The case's statement commits with `hm96-sha512/v1`**: the scope check's leaf scheme. -/
+/-- **The case's statement is one table, and commits with `hm96-sha512/v1`**: the scope check's leaf scheme. -/
 theorem Case.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
-    ∃ st, c.sts = #[st] ∧ st.merkle = MerkleScheme.hm96Sha512 := by
+    ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ st.merkle = MerkleScheme.hm96Sha512 := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployPlain rel) rel (readOf false) rfl
     (fun _ _ h => readOf_zk h) c.x).1 c.scope
   have hi := (setupOf_some c.setup).1
@@ -278,14 +278,32 @@ theorem Case.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Rea
   rw [← ht] at hset
   unfold Readable.Read.setup at hset
   rw [hpi] at hset
-  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hset with ⟨-, st, hst, -, hsts⟩ | ⟨hc1, -⟩
-  · refine ⟨st, hsts, ?_⟩
+  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hset with ⟨-, st, hst, hsp, hsts⟩ | ⟨hc1, -⟩
+  · refine ⟨st, hsts, hsp, ?_⟩
     cases hh : p.tags.hiddenOutputs
     · exact FlockSoundness.Discharge.Exec.setupH_hm96 hl
         ((FlockSoundness.Discharge.HiddenExec.setupOne_public hh).symm.trans hst)
     · exact FlockSoundness.Discharge.HiddenExec.setupHidden_hm96 hl
         ((FlockSoundness.Discharge.HiddenExec.setupOne_hidden hh).symm.trans hst)
   · omega
+
+/-- One table's schedules: its fast100 schedule. -/
+theorem schedsP_one {st : Stmt} {schs : Array Schedule} (hs : (schedsP #[Setup.ofCircuit st] : V _) = .ok schs) :
+    ∃ sch, fast100 st.m = some sch ∧ schs = #[sch] := by
+  unfold schedsP at hs
+  obtain ⟨h1, h2⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hs
+  have h0 := h2 0 (by simp) (by rw [h1]; simp)
+  simp only [List.getElem_toArray, List.getElem_cons_zero, Setup.ofCircuit] at h0
+  cases hf : fast100 st.m with
+  | none => rw [hf] at h0; cases h0
+  | some sch =>
+    rw [hf] at h0
+    refine ⟨sch, rfl, ?_⟩
+    apply Array.ext (by simpa using h1)
+    intro j hj _
+    have : j = 0 := by simp at h1; omega
+    subst this
+    exact (Except.ok.inj h0).symm
 
 /-! ## The goal -/
 
@@ -297,25 +315,10 @@ theorem linkFirst_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).length
   have h64 : ∀ b, (Claims.hOf H b).size = 64 := fun b => by
     simp [Claims.hOf, Claims.ofMsg, ByteArray.size, hH]
   obtain ⟨schs, cms, hs, hc, hh⟩ := sessionS_link o.ran
-  obtain ⟨st, hsts, hms⟩ := o.hm96
+  obtain ⟨st, hsts, -, hms⟩ := o.hm96
   have htabs : tabsOf o.sts = #[Setup.ofCircuit st] := by rw [hsts]; simp [tabsOf]
-  have hsch : ∃ sch, fast100 st.m = some sch ∧ schs = #[sch] := by
-    unfold schedsP at hs
-    rw [htabs] at hs
-    obtain ⟨h1, h2⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hs
-    have h0 := h2 0 (by simp) (by rw [h1]; simp)
-    simp only [List.getElem_toArray, List.getElem_cons_zero, Setup.ofCircuit] at h0
-    cases hf : fast100 st.m with
-    | none => rw [hf] at h0; cases h0
-    | some sch =>
-      rw [hf] at h0
-      refine ⟨sch, rfl, ?_⟩
-      apply Array.ext (by simpa using h1)
-      intro j hj _
-      have : j = 0 := by simp at h1; omega
-      subst this
-      exact (Except.ok.inj h0).symm
-  obtain ⟨sch, hf, rfl⟩ := hsch
+  rw [htabs] at hs
+  obtain ⟨sch, hf, rfl⟩ := schedsP_one hs
   unfold commitsP at hc
   obtain ⟨hcs, hcall⟩ := FlockSoundness.Discharge.Exec.range_mapM_ok hc
   rw [htabs] at hcs hcall
