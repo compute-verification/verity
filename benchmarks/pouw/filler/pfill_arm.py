@@ -320,6 +320,49 @@ class PFillKFused4(PFillKFused3):
     table = FUSED_K4
 
 
+def _fused_lineage(noise_tag: str, receipt: str, hypothesis: str) -> dict:
+    return {"parent": "pfill-k-fused4", "approach": "pouw/filler-proved",
+            "mechanism": ["filler:fresh-noise-imma", noise_tag, receipt, "place:split", "split:per-point-table",
+                          "fused:flin-serving", "fused:persistent-attention", "fused:lm-head-flin", "prefill:split"],
+            "hypothesis": hypothesis}
+
+
+@dataclass
+class PFillBUDuoFused4(PFillKFused4):
+    """pfill-k-fused4's placement (FUSED_K4) pumping pfill-bU with duo receipts (PFillBUDuo's tile): the filler of record
+    on the fold that's proved now."""
+
+    name: str = "pfill-bu-duo-fused4"
+    lineage: dict = field(default_factory=lambda: _fused_lineage(
+        "noise:sha512-coins-bU", "receipt:duo-k32",
+        "pfill-bU with duo on fused4's pump: every word certified, so K's 0.9 holds unhalved at duo's ~3/4 of ram's rate"))
+    filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bitsU")
+    nvcc_flags: str = "-DPFILL_BU -Xcompiler -mpopcnt"
+
+
+@dataclass
+class PFillBUXinFused4(PFillKFused4):
+    """pfill-k-fused4's placement pumping pfill-bU with XOR-in receipts (PFillBUXin's tile, NC 4 with -DPFILL_XIN)."""
+
+    name: str = "pfill-bu-xin-fused4"
+    lineage: dict = field(default_factory=lambda: _fused_lineage(
+        "noise:sha512-coins-bU", "receipt:xin-k32",
+        "pfill-bU with XOR-in on fused4's pump: every word certified at about ram's rate, so K's 0.9 holds unhalved"))
+    filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU")
+    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN -Xcompiler -mpopcnt"
+
+
+@dataclass
+class PFillKXinFused4(PFillKFused4):
+    """pfill-k-fused4 with XOR-in receipts (PFillKXin's tile): bU's contrast at the same fold and placement."""
+
+    name: str = "pfill-k-xin-fused4"
+    lineage: dict = field(default_factory=lambda: _fused_lineage(
+        "noise:sha512-coins-01", "receipt:xin-k32",
+        "pfill-k's bits with XOR-in on fused4's pump: bU's contrast, the packed route still on COINC"))
+    nvcc_flags: str = "-DPFILL_BITS -DPFILL_XIN"
+
+
 @dataclass
 class PFillBU(PFillPowerSplit):
     """pfill-power-split's ram tile as pfill-bU (-DPFILL_BU, note:20261016T0710Z-draft-filler-floor-r2 §5): A's entries

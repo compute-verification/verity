@@ -145,6 +145,28 @@ def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeyp
     assert fused
 
 
+@pytest.mark.parametrize(("attr", "fold"), [("PFillBUDuoFused4", "PFillBUDuo"), ("PFillBUXinFused4", "PFillBUXin"),
+                                            ("PFillKXinFused4", "PFillKXin")])
+def test_fused4_fold_arms_are_fused4_with_only_the_filler_changed(monkeypatch, attr, fold):
+    """Each fold arm on fused4's placement is pfill-k-fused4's table, fused steps, sources and prefill split with the
+    fold arm's filler, build flags and receipt, so v4 reads the tile it pumps and pfill_proved its fold share."""
+    A, S = _module("arms"), _module("scoring")
+    P = _load_file("pfill_arm")
+    monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
+    f4 = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillKFused4")
+    tile = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{fold}")
+    want = __import__("os").environ["NVCC_APPEND_FLAGS"]
+    arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
+    assert A.check_arm(arm, record=True) == [] and A.record_problems(arm) == []
+    assert __import__("os").environ["NVCC_APPEND_FLAGS"] == want
+    assert (arm.filler, arm.sources, arm.table) == (tile.filler, f4.sources, P.FUSED_K4)
+    assert [t for t in arm.lineage["mechanism"] if t.startswith(("noise:", "receipt:"))] == [
+        t for t in tile.lineage["mechanism"] if t.startswith(("noise:", "receipt:"))]
+    assert P.fold_share(arm.lineage) == 1.0 and P.theorem_k_setting(arm.lineage)
+    for ph, b, l in S.points(robust=True):
+        assert A.placed(arm, ph, b, l) == A.placed(f4, ph, b, l) and arm.fused(ph, b, l) == f4.fused(ph, b, l)
+
+
 def test_bu_arm_is_power_split_on_the_bu_tile(monkeypatch):
     """pfill-bu is pfill-power-split's filler and placement with only the tile's kind changed (-DPFILL_BU), in Theorem
     K's setting and no other arm."""
