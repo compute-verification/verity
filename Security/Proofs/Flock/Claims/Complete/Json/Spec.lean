@@ -1,5 +1,6 @@
 import Flock.Canon
 import Std.Data.TreeMap.Raw.Lemmas
+import Definitions.Claims.Json
 import Proofs.Flock.Claims.Complete.Prover.Print
 
 /-!
@@ -7,18 +8,12 @@ import Proofs.Flock.Claims.Complete.Prover.Print
 
 `Json.parse`, `Json`'s `==` and the verifier's `canon` are `partial` definitions: Lean runs them, and no proof unfolds
 them. So the session record's round trip (the prover's `printJ`, a total printer of `Json.compress`'s bytes, then
-`Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s `parse`) is proved from their specification, `JsonSpec`, a named
-assumption the record's theorems take as a hypothesis.
-
-* **Alike values** (`Same`): equal leaves, arrays alike element by element, and objects that are well-formed trees with
-  one key set and alike values at each key. A Lean object is a tree whose shape is the order its keys were inserted in:
-  `printJ` prints the keys in sorted order and `parse` inserts them in that order, so a parsed object is another tree
-  than the one printed, alike at every key lookup (`Same.getObjVal`).
-* **Printable values** (`Good`): every object a well-formed tree, every number an integer (exponent `0`). A number is
-  printed in its shortest form, so `1.50` comes back as `1.5`, another `JsonNumber`; the record's numbers are all
-  `Lean.toJson` of naturals.
-* **`JsonSpec`**: `parse` reads back what `printJ` printed of a printable value, and what `canon` printed; `parse` builds
-  only well-formed trees; `==` holds of alike values; `canon` is the same on alike values, and returns on printable ones.
+`Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s `parse`) is proved from their specification, `JsonSpec canon`, a
+named assumption the record's theorems take as a hypothesis, over alike (`Same`), printable (`Good`) and well-formed
+(`Wf`) values (`Definitions/Claims/Json.lean`). It is the spec's `Claims.JsonSpec` with the honest prover's printer,
+`printJ`, where the spec reads `Json.compress`. Here are the lemmas on alike values the proofs read: alike leaves are
+equal, and alike objects have alike values at each key (`Same.getObjVal`) and the same missing keys
+(`Same.getObjVal_none`). The record's numbers are all `Lean.toJson` of naturals, so printable.
 -/
 
 namespace FlockComplete.JsonRT
@@ -26,40 +21,13 @@ namespace FlockComplete.JsonRT
 open Lean (Json JsonNumber)
 open Flock
 
-/-- **Alike JSON values**: equal leaves, arrays alike element by element, objects (both well-formed trees) with one key
-set and alike values at each key. -/
-inductive Same : Json → Json → Prop
-  | null : Same .null .null
-  | bool (b : Bool) : Same (.bool b) (.bool b)
-  | num (n : JsonNumber) : Same (.num n) (.num n)
-  | str (s : String) : Same (.str s) (.str s)
-  | arr {a b : Array Json} (hs : a.size = b.size)
-      (he : ∀ (i : Nat) (h₁ : i < a.size) (h₂ : i < b.size), Same a[i] b[i]) : Same (.arr a) (.arr b)
-  | obj {m n : Std.TreeMap.Raw String Json} (hm : m.WF) (hn : n.WF) (hk : ∀ k, (m.get? k).isSome = (n.get? k).isSome)
-      (hv : ∀ k a b, m.get? k = some a → n.get? k = some b → Same a b) : Same (.obj m) (.obj n)
+export Claims.Json (Same Good Wf)
 
-/-- **A printable JSON value**: every object a well-formed tree, every number an integer. -/
-inductive Good : Json → Prop
-  | null : Good .null
-  | bool (b : Bool) : Good (.bool b)
-  | num (m : Int) : Good (.num ⟨m, 0⟩)
-  | str (s : String) : Good (.str s)
-  | arr {a : Array Json} (h : ∀ x ∈ a, Good x) : Good (.arr a)
-  | obj {m : Std.TreeMap.Raw String Json} (hm : m.WF) (h : ∀ k v, m.get? k = some v → Good v) : Good (.obj m)
-
-/-- **A well-formed JSON value**: every object a well-formed tree. -/
-inductive Wf : Json → Prop
-  | null : Wf .null
-  | bool (b : Bool) : Wf (.bool b)
-  | num (n : JsonNumber) : Wf (.num n)
-  | str (s : String) : Wf (.str s)
-  | arr {a : Array Json} (h : ∀ x ∈ a, Wf x) : Wf (.arr a)
-  | obj {m : Std.TreeMap.Raw String Json} (hm : m.WF) (h : ∀ k v, m.get? k = some v → Wf v) : Wf (.obj m)
-
-/-- **The JSON library's specification**, what the record's round trip assumes of the `partial` definitions:
-`Json.parse` reads back `printJ`'s and `canon`'s output, and builds only well-formed trees; `Json`'s `==` holds of
-alike values; `canon` is the same on alike values, and returns on printable ones. -/
-structure JsonSpec : Prop where
+/-- **The JSON library's specification at the honest prover's printer**, what the record's round trip assumes of the
+`partial` definitions: `Json.parse` reads back what `printJ` printed of a printable value, and what `canon` printed;
+`parse` builds only well-formed trees; `Json`'s `==` holds of alike values; `canon` is the same on alike values, and
+returns on printable ones. `Claims.JsonSpec canon`'s fields, with `printJ` where it reads `Json.compress`. -/
+structure JsonSpec (canon : Json → Except String String) : Prop where
   parse_print : ∀ j, Good j → ∃ j', Json.parse (printJ j) = .ok j' ∧ Same j j'
   parse_canon : ∀ j s, Good j → canon j = .ok s → ∃ j', Json.parse s = .ok j' ∧ Same j j'
   parse_wf : ∀ s j, Json.parse s = .ok j → Wf j
@@ -69,7 +37,7 @@ structure JsonSpec : Prop where
 
 /-! ## Alike values -/
 
-theorem Same.symm : ∀ {a b : Json}, Same a b → Same b a
+theorem _root_.Claims.Json.Same.symm : ∀ {a b : Json}, Same a b → Same b a
   | _, _, .null => .null
   | _, _, .bool b => .bool b
   | _, _, .num n => .num n
@@ -97,8 +65,8 @@ theorem same_obj {m : Std.TreeMap.Raw String Json} {j : Json} (h : Same (.obj m)
   | obj _ _ hk hv => exact ⟨_, rfl, fun k => ⟨hk k, hv k⟩⟩
 
 /-- **A key's value in alike objects**: the value at a key of one is alike the other's at that key. -/
-theorem Same.getObjVal {j j' : Json} (h : Same j j') {k : String} {v : Json} (hv : j.getObjVal? k = .ok v) :
-    ∃ v', j'.getObjVal? k = .ok v' ∧ Same v v' := by
+theorem _root_.Claims.Json.Same.getObjVal {j j' : Json} (h : Same j j') {k : String} {v : Json}
+    (hv : j.getObjVal? k = .ok v) : ∃ v', j'.getObjVal? k = .ok v' ∧ Same v v' := by
   cases j with
   | obj m =>
     obtain ⟨n, rfl, hn⟩ := same_obj h
@@ -116,8 +84,8 @@ theorem Same.getObjVal {j j' : Json} (h : Same j j') {k : String} {v : Json} (hv
   | _ => cases hv
 
 /-- **A missing key of alike objects** is missing from both. -/
-theorem Same.getObjVal_none {j j' : Json} (h : Same j j') {k : String} {m : Std.TreeMap.Raw String Json}
-    (hj : j = .obj m) (hk : m.get? k = none) : ∃ e, j'.getObjVal? k = .error e := by
+theorem _root_.Claims.Json.Same.getObjVal_none {j j' : Json} (h : Same j j') {k : String}
+    {m : Std.TreeMap.Raw String Json} (hj : j = .obj m) (hk : m.get? k = none) : ∃ e, j'.getObjVal? k = .error e := by
   subst hj
   obtain ⟨n, rfl, hn⟩ := same_obj h
   have hs := (hn k).1

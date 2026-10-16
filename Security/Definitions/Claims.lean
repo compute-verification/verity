@@ -1,5 +1,6 @@
 import Mathlib
 import Definitions.Claims.Hm96
+import Definitions.Claims.Json
 
 /-!
 # Claims: the shared definitions and Flock's claim statements (frozen before any proof work)
@@ -49,12 +50,15 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   positions. The relation splits by table, each table's units their own statement, so `assemble` checks each table's
   list once, at most `J·L` checks where every combination would be `L^J`, and `Flock.Efficient` bounds each list by
   the decoder's polynomial, which counts them. At one table this is the text it replaces.
+* (16 Oct) Completeness is at a hash whose outputs are 64 bytes (`Out64`), as the deployed oracle's are, SHA-512 with
+  its whole output, and as the random-oracle model draws them. It fixes the length only: `H` stays a parameter.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
-The named assumptions: `StrictBirthday`, `ExpectedCR`, and hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
-which the soundness proofs read). What the claims rest on and no Lean statement can say is `trustedBase`.
+The named assumptions: `StrictBirthday`, `ExpectedCR`, hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
+which the soundness proofs read), and the JSON library's specification, `JsonSpec` (`Definitions/Claims/Json.lean`,
+which only completeness reads). What the claims rest on and no Lean statement can say is `trustedBase`.
 
 Frozen by `Flock.Guarantees.ClaimsStated` (`Models/Flock/Guarantees/Claims.lean`), whose statement reads every claim
 here: the lock records each one's text under `reads`, so a changed claim is a changed record.
@@ -70,6 +74,10 @@ abbrev Msg := List UInt8
 
 /-- A collision of `H`. -/
 def Collision (H : Msg → Msg) (u v : Msg) : Prop := u ≠ v ∧ H u = H v
+
+/-- **`H`'s outputs are 64 bytes**: the deployed oracle is SHA-512 with its whole output, and the random-oracle model
+draws 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
+def Out64 (H : Msg → Msg) : Prop := ∀ m, (H m).length = 64
 
 /-! ## AND/XOR circuits -/
 
@@ -354,11 +362,13 @@ def KSLin (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : Extractor Coin 
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H V R E x P ≤ κ x + Real.sqrt (γ x * PrB H V P x) + β x * (Fe Ω P x).Pr H
 
-/-- `Complete(V, P, R, Scope, δ_c)`: on every statement in scope and witness in the relation, the honest prover
-`P(w; ω)` is accepted with probability at least `1 − δ_c(x)` over the verifier's coins, at every tape. -/
+/-- `Complete(V, P, R, Scope, δ_c)`: at a hash whose outputs are 64 bytes (`Out64`), on every statement in scope and
+witness in the relation, the honest prover `P(w; ω)` is accepted with probability at least `1 − δ_c(x)` over the
+verifier's coins, at every tape. -/
 def Complete {Ω : Type} (H : Msg → Msg) (V : Verifier Coin) (P : W → Prover Ω) (R : Rel W) (Scope : Msg → Prop)
     (δc : Msg → ℝ) : Prop :=
-  ∀ x w, Scope x → R x w → ∀ ω : Ω, 1 - δc x ≤ Pr fun r : Fin (V.k x) → Coin => (run H (P w) V x ω r).out = .acc
+  Out64 H →
+    ∀ x w, Scope x → R x w → ∀ ω : Ω, 1 - δc x ≤ Pr fun r : Fin (V.k x) → Coin => (run H (P w) V x ω r).out = .acc
 
 /-- The readable scope is the verifier's own scope check. -/
 def ScopeMatches (Scope : Msg → Prop) (check : Msg → Bool) : Prop := ∀ x, Scope x ↔ check x = true

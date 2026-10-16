@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Refine.Arith
 /-!
 # The honest reps return
 
-`proverRuns`: the hypothesis `ProverRuns` holds, so `sessionRuns_goal` proves the goal `SessionRuns` from `StmtOk`
+`proverRuns`: the hypothesis `ProverRuns` holds, so `sessionRuns_goal` proves the goal `SessionRuns` from `JsonSpec`
 alone (`sessionRuns_of`).
 No coin makes a rep throw. The one refusal on the rep's path is the lincheck's fold (`Stmt.fold`), and what it asks is
 the statement's: `ρ` of `k_log − 6` coins (the zerocheck's has `m − 6`, `zerocheckP_tot`), 64 weights
@@ -447,9 +447,9 @@ theorem proverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
     salt nonce (Transcript.init #[] d) l
   exact ⟨pt, l', e'⟩
 
-/-- **The session runs**: the goal `SessionRuns`, from `StmtOk`. -/
+/-- **The session runs**: the goal `SessionRuns`, under `JsonSpec`. -/
 theorem sessionRuns_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (hS : StmtOk H rel) : SessionRuns H rel :=
-  sessionRuns_of hS (proverRuns H rel)
+    (S : JsonSpec Flock.canon) : SessionRuns H rel :=
+  sessionRuns_of S (proverRuns H rel)
 
 end FlockComplete.JsonRT
