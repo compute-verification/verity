@@ -23,6 +23,9 @@ REF_BATCH = 4
 CHECK_WINDOW = 0
 #: one-sided level of the paired sign test over windows
 SIGN_ALPHA = 0.025
+#: how far apart two measurements of one arm on one (model, set, context) may be and still be the same measurement,
+#: relative, beyond their seed ranges: kernel shapes and RoPE tables move a deterministic arm by up to ~0.07%
+REPRODUCE_FLOOR = 0.001
 
 
 def windows(ctx: int) -> tuple[int, ...]:
@@ -68,3 +71,9 @@ def compare(a_seeds: list[float], b_seeds: list[float], a_windows: list[float], 
     if hi and losses >= need:
         return "> (weak)" if weak else ">"
     return "≈"
+
+
+def reproduces(lo: float, hi: float, other_lo: float, other_hi: float) -> bool:
+    """Whether two measurements of one arm agree: their perplexity ranges over seeds (a single value for one seed),
+    the first widened by REPRODUCE_FLOOR on each side, overlap."""
+    return lo * (1 - REPRODUCE_FLOOR) <= other_hi and other_lo <= hi * (1 + REPRODUCE_FLOOR)

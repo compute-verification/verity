@@ -1,0 +1,355 @@
+{
+ "schema": "ppl-bench-baseline/v1",
+ "design": "adopted: SmoothQuant alpha 0.5 (foldable), rotated int8 linears with dithered activations and weights on \u00b163; attention rotated, kc, one limb with psink, w64 peels on Q and P, K and V dithered",
+ "tonight": {
+  "llama-3.1-8b|c4|2048": {
+   "bf16": {
+    "ppl": 9.159025,
+    "min": 9.159025,
+    "max": 9.159025,
+    "n": 1,
+    "as": "bf16",
+    "run": "r20261016-151826-4e17"
+   },
+   "int8-linears": {
+    "ppl": 9.175328,
+    "min": 9.175328,
+    "max": 9.175328,
+    "n": 1,
+    "as": "r127",
+    "run": "r20261016-151826-4e17"
+   },
+   "adopted-linears": {
+    "ppl": 9.199121,
+    "min": 9.199121,
+    "max": 9.199121,
+    "n": 1,
+    "as": "d63-sm50-smkv",
+    "run": "r20261016-151826-4e17"
+   },
+   "adopted-attention": {
+    "ppl": 9.200723,
+    "min": 9.200723,
+    "max": 9.200723,
+    "n": 1,
+    "as": "bf16-at",
+    "run": "r20261016-151826-4e17"
+   },
+   "adopted-no-smooth": {
+    "ppl": 9.257503,
+    "min": 9.257503,
+    "max": 9.257503,
+    "n": 1,
+    "as": "d63-at",
+    "run": "r20261016-151826-4e17"
+   },
+   "adopted": {
+    "ppl": 9.233407,
+    "min": 9.233407,
+    "max": 9.233407,
+    "n": 1,
+    "as": "d63-sm50-smkv-at",
+    "run": "r20261016-151826-4e17"
+   }
+  },
+  "llama-3.1-8b|wikitext2|2048": {
+   "bf16": {
+    "ppl": 6.467416,
+    "min": 6.467416,
+    "max": 6.467416,
+    "n": 1,
+    "as": "sdpa",
+    "run": "r20261016-121921-ec96"
+   },
+   "int8-linears": {
+    "ppl": 6.474099,
+    "min": 6.474099,
+    "max": 6.474099,
+    "n": 1,
+    "as": "bf16-lin8r",
+    "run": "r20261016-091629-d9e7",
+    "note": "eager attention"
+   },
+   "int8-attention": {
+    "ppl": 6.544694,
+    "min": 6.542137,
+    "max": 6.5477,
+    "n": 3,
+    "as": "int8-rot",
+    "run": "r20261016-091629-d9e7"
+   },
+   "int8-all": {
+    "ppl": 6.547998,
+    "min": 6.545024,
+    "max": 6.550727,
+    "n": 3,
+    "as": "int8-rot-lin8r",
+    "run": "r20261016-065318-8035"
+   },
+   "adopted-no-smooth": {
+    "ppl": 6.521088,
+    "min": 6.520076,
+    "max": 6.522981,
+    "n": 3,
+    "as": "int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith",
+    "run": "r20261016-121921-ec96"
+   }
+  },
+  "llama-3.1-8b|wikitext2|8192": {
+   "bf16": {
+    "ppl": 5.568587,
+    "min": 5.568587,
+    "max": 5.568587,
+    "n": 1,
+    "as": "sdpa",
+    "run": "r20261016-121921-ec96"
+   },
+   "int8-linears": {
+    "ppl": 5.572758,
+    "min": 5.572758,
+    "max": 5.572758,
+    "n": 1,
+    "as": "bf16-lin8r",
+    "run": "r20261016-011841-01a2",
+    "note": "eager attention"
+   },
+   "int8-attention": {
+    "ppl": 5.696609,
+    "min": 5.694931,
+    "max": 5.697599,
+    "n": 3,
+    "as": "int8-rot",
+    "run": "r20261016-082150-e25a"
+   },
+   "int8-all": {
+    "ppl": 5.700431,
+    "min": 5.699957,
+    "max": 5.701187,
+    "n": 3,
+    "as": "int8-rot-lin8r",
+    "run": "r20261016-011841-01a2"
+   },
+   "adopted-no-smooth": {
+    "ppl": 5.623974,
+    "min": 5.623974,
+    "max": 5.623974,
+    "n": 1,
+    "as": "int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith-s0",
+    "run": "r20261016-121921-ec96"
+   }
+  },
+  "llama-3.1-8b|wikitext2|32768": {
+   "bf16": {
+    "ppl": 5.362252,
+    "min": 5.362252,
+    "max": 5.362252,
+    "n": 1,
+    "as": "sdpa",
+    "run": "r20261016-121921-ec96"
+   },
+   "int8-all": {
+    "ppl": 5.610587,
+    "min": 5.610587,
+    "max": 5.610587,
+    "n": 1,
+    "as": "int8-rot-lin8r-s0",
+    "run": "r20261016-105150-b602"
+   }
+  },
+  "qwen2.5-7b|wikitext2|2048": {
+   "bf16": {
+    "ppl": 6.355288,
+    "min": 6.355288,
+    "max": 6.355288,
+    "n": 1,
+    "as": "sdpa",
+    "run": "r20261016-110904-30f8"
+   },
+   "int8-linears": {
+    "ppl": 6.357661,
+    "min": 6.357661,
+    "max": 6.357661,
+    "n": 1,
+    "as": "ref-lin8r",
+    "run": "r20261016-110904-30f8",
+    "note": "FP32 attention"
+   },
+   "int8-all": {
+    "ppl": 6.397037,
+    "min": 6.395122,
+    "max": 6.398297,
+    "n": 3,
+    "as": "int8-rot-lin8r",
+    "run": "r20261016-105148-9add"
+   },
+   "adopted-attention": {
+    "ppl": 6.364165,
+    "min": 6.364165,
+    "max": 6.364165,
+    "n": 1,
+    "as": "int8-rot-eqp=w64-poff64-psink-kc-kv=dith-s1",
+    "run": "r20261016-121921-ec96"
+   },
+   "adopted-no-smooth": {
+    "ppl": 6.38687,
+    "min": 6.385171,
+    "max": 6.389068,
+    "n": 3,
+    "as": "int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith",
+    "run": "r20261016-121921-ec96"
+   }
+  },
+  "qwen2.5-7b|wikitext2|8192": {
+   "bf16": {
+    "ppl": 5.951702,
+    "min": 5.951702,
+    "max": 5.951702,
+    "n": 1,
+    "as": "sdpa",
+    "run": "r20261016-110904-30f8"
+   },
+   "int8-linears": {
+    "ppl": 5.953561,
+    "min": 5.953561,
+    "max": 5.953561,
+    "n": 1,
+    "as": "ref-lin8r",
+    "run": "r20261016-110904-30f8",
+    "note": "FP32 attention"
+   },
+   "int8-all": {
+    "ppl": 6.029608,
+    "min": 6.028152,
+    "max": 6.031229,
+    "n": 3,
+    "as": "int8-rot-lin8r",
+    "run": "r20261016-110904-30f8"
+   },
+   "adopted-no-smooth": {
+    "ppl": 5.979331,
+    "min": 5.977283,
+    "max": 5.98144,
+    "n": 3,
+    "as": "int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith",
+    "run": "r20261016-121921-ec96"
+   }
+  },
+  "llama-3.1-70b|c4|2048": {
+   "bf16": {
+    "ppl": 7.048639,
+    "min": 7.048639,
+    "max": 7.048639,
+    "n": 1,
+    "as": "bf16",
+    "run": "r20261016-150804-a17f"
+   },
+   "int8-linears": {
+    "ppl": 7.195929,
+    "min": 7.195929,
+    "max": 7.195929,
+    "n": 1,
+    "as": "r127",
+    "run": "r20261016-150804-a17f"
+   },
+   "adopted-linears": {
+    "ppl": 7.069924,
+    "min": 7.069396,
+    "max": 7.070451,
+    "n": 2,
+    "as": "d63-sm50-smkv",
+    "run": "r20261016-150804-a17f"
+   },
+   "adopted-attention": {
+    "ppl": 7.163567,
+    "min": 7.163567,
+    "max": 7.163567,
+    "n": 1,
+    "as": "bf16-at",
+    "run": "r20261016-150804-a17f"
+   },
+   "adopted-no-smooth": {
+    "ppl": 47.454947,
+    "min": 47.454947,
+    "max": 47.454947,
+    "n": 1,
+    "as": "d63-at",
+    "run": "r20261016-150804-a17f"
+   },
+   "adopted": {
+    "ppl": 7.185092,
+    "min": 7.185092,
+    "max": 7.185092,
+    "n": 1,
+    "as": "d63-sm50-smkv-at",
+    "run": "r20261016-150804-a17f"
+   }
+  }
+ },
+ "points": [
+  {
+   "model": "llama-3.1-8b",
+   "set": "c4",
+   "ctx": 2048,
+   "windows": 16,
+   "run": "r20261016-181132-a47c",
+   "arms": {
+    "bf16": {
+     "ppl": 9.158335658746081,
+     "min": 9.158335658746081,
+     "max": 9.158335658746081,
+     "n": 1,
+     "plain": ""
+    },
+    "int8-linears": {
+     "ppl": 9.168957553791667,
+     "min": 9.168957553791667,
+     "max": 9.168957553791667,
+     "n": 1,
+     "plain": "int8-linears"
+    },
+    "int8-attention": {
+     "ppl": 9.264391125290649,
+     "min": 9.257870635503352,
+     "max": 9.270245401405814,
+     "n": 3,
+     "plain": "int8-attention"
+    },
+    "int8-all": {
+     "ppl": 9.278193684133983,
+     "min": 9.275780922504822,
+     "max": 9.279795881192609,
+     "n": 3,
+     "plain": "int8-all"
+    },
+    "adopted-linears": {
+     "ppl": 9.193099914131444,
+     "min": 9.18816512559692,
+     "max": 9.198536183920677,
+     "n": 3,
+     "plain": "int8-linears"
+    },
+    "adopted-attention": {
+     "ppl": 9.209268671358487,
+     "min": 9.196609087970733,
+     "max": 9.216524875490382,
+     "n": 3,
+     "plain": "int8-attention"
+    },
+    "adopted-no-smooth": {
+     "ppl": 9.25800908817306,
+     "min": 9.252370021077581,
+     "max": 9.261043483662915,
+     "n": 3,
+     "plain": "int8-all"
+    },
+    "adopted": {
+     "ppl": 9.240223598554993,
+     "min": 9.229555834568577,
+     "max": 9.24678091775751,
+     "n": 3,
+     "plain": "int8-all"
+    }
+   }
+  }
+ ]
+}

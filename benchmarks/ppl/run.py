@@ -6,6 +6,7 @@
                                                                             (job.sh), the datasets sent with it
     run.py report RESULTS.json...                                           the tables
     run.py baseline [RESULTS.json...]                                       the locked baseline (against new results)
+    run.py baseline --lock RESULTS.json...                                  lock those points (baseline.json, README)
     run.py steps | specs                                                    the registered steps; the arms in specs/
     run.py windows --model M [--data DIR] [--write]                         every window list's digest (and the lock)
     run.py setup --data DIR                                                 stage the datasets (datasets.json) there
@@ -288,14 +289,30 @@ def cmd_report(a) -> int:
     return 0
 
 
+BASELINE = HERE / "baseline.json"
+README = HERE / "README.md"
+MARK = ("<!-- baseline -->", "<!-- /baseline -->")
+
+
+def readme_with(table: str, text: str) -> str:
+    head, rest = text.split(MARK[0])
+    return head + MARK[0] + "\n" + table + "\n" + MARK[1] + rest.split(MARK[1])[1]
+
+
 def cmd_baseline(a) -> int:
-    lock = json.loads((HERE / "baseline.json").read_text())
-    if not a.results:
-        print((HERE / "README.md").read_text().split("<!-- baseline -->")[1].split("<!-- /baseline -->")[0].strip())
+    lk = json.loads(BASELINE.read_text())
+    if a.lock:
+        lk = report.lock(lk, report.load(a.results))
+        BASELINE.write_text(json.dumps(lk, indent=1) + "\n")
+        README.write_text(readme_with(report.baseline_table(lk), README.read_text()))
+        print(report.baseline_table(lk))
         return 0
-    text = report.baseline_rows(lock, report.load(a.results))
+    if not a.results:
+        print(report.baseline_table(lk))
+        return 0
+    text, ok = report.baseline_check(lk, report.load(a.results))
     print(text)
-    return 0 if "do not reproduce" not in text else 1
+    return 0 if ok else 1
 
 
 def cmd_steps(_a) -> int:
@@ -347,6 +364,7 @@ def main(argv: list[str]) -> int:
     q.add_argument("results", nargs="+")
     q = sub.add_parser("baseline")
     q.add_argument("results", nargs="*")
+    q.add_argument("--lock", action="store_true", help="lock these results' points (baseline.json and the README)")
     sub.add_parser("steps")
     sub.add_parser("specs")
     q = sub.add_parser("windows")

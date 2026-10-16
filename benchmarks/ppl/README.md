@@ -38,8 +38,9 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
   deterministic arm runs once.
 - **The reference** is the bf16 model with PyTorch SDPA attention (`F.scaled_dot_product_attention`, causal, GQA),
   never eager: HF's eager bf16 path rounds QKᵀ to bf16 before the scale, and Qwen2.5's q and k biases make the scores
-  large, so its eager bf16 is 15% worse (WikiText-2 at 2K: 7.300 against SDPA's 6.355 and FP32's 6.354, D4-ATTN). The engine's bf16 layers are HF's `LlamaDecoderLayer` / `Qwen2DecoderLayer` with SDPA op for op, and the
-  `hf_reference` gate checks that bit for bit on every layer. TF32 is off.
+  large, so its eager bf16 is 15% worse (WikiText-2 at 2K: 7.300 against SDPA's 6.355 and FP32's 6.354, D4-ATTN).
+  The engine's bf16 layers are HF's `LlamaDecoderLayer` / `Qwen2DecoderLayer` with SDPA op for op, with HF's RoPE
+  tables (computed on the CPU), and the `hf_reference` gate checks both bit for bit on every layer. TF32 is off.
 - **Batching.** The bf16 reference and calibration streams run 4 consecutive windows per forward, as tonight's
   harnesses did. Arms run one window per forward, since their coins are drawn per window.
 - **The report** (`report.py`), per (model, set, context): each arm's perplexity as the mean over its seeds with the
@@ -201,12 +202,41 @@ put findings about it on labels (`research data label`).
 
 ## Baseline
 
-The adopted design (dither, w64 peel, psink, kc, SmoothQuant α 0.5, weights ±63) on the bench's windows, locked in
-`baseline.json`. `run.py baseline RESULTS...` says whether new results reproduce it: within the locked seed range, and
-at least 0.1%. "tonight" is the harness that measured the same thing on 16 Oct: identical windows where the context and
-set match, one seed.
+The adopted design (dither, w64 peel, psink, kc, SmoothQuant α 0.5, weights ±63), its halves, the design without
+SmoothQuant, and the plain int8 arms, locked in `baseline.json` per point the bench has run. "tonight" is the same arm
+as 16 Oct's harnesses measured it on the same windows (D4-70B's `linears_layerwise.py` on C4, D4-ATTN's `attention.py`
+on WikiText-2), read from their runs' `results.jsonl`.
+
+Two measurements of an arm reproduce each other when their seed ranges, widened by 0.1% (`methodology.reproduces`,
+`REPRODUCE_FLOOR`), overlap. `run.py baseline RESULTS...` checks new results against the lock that way, and
+`run.py baseline --lock RESULTS...` replaces their points and rewrites the table below. The floor covers what moves a
+deterministic arm between harnesses:
+
+- RoPE tables. Tonight's harnesses built them on the GPU (`LlamaRotaryEmbedding(config, device=cuda)`), whose
+  `inv_freq` differs from the CPU's in 5 of 64 entries. HF's `from_pretrained` computes them on the CPU, as the bench
+  does. HF's own `LlamaForCausalLM` (SDPA, 4 windows per forward) is the bench's bf16 end to end on Llama C4 2K, 9.15834,
+  and with GPU-built tables it is tonight's 9.15903 (`r20261016-182515-16e9`).
+- Kernel shapes. A bf16 GEMM's rounding depends on its rows: the same model at 1 window per forward is 9.16174
+  (+0.04%). The bench's arms run 1 window per forward; D4-70B's ran 4.
+- The coins. D4-70B drew a linear's coins per batch of 4 windows, the bench per window, so seeded arms agree in
+  distribution, not bit for bit.
+- The reference attention under a linears-only arm: D4-ATTN's were eager (Llama) or FP32 (Qwen2.5), marked.
 
 <!-- baseline -->
+| model · set · context | arm | perplexity | Δ% vs bf16 | Δ% vs plain int8 | tonight | tonight's method | Δ% vs tonight | reproduces |
+|---|---|---:|---:|---:|---:|---|---:|---|
+| llama-3.1-8b · c4 · 2K (16 windows) | bf16 | 9.1583 | - | - | 9.1590 | `bf16` | -0.01 | yes |
+|  | int8-linears | 9.1690 | +0.12 | - | 9.1753 | `r127` | -0.07 | yes |
+|  | int8-attention | 9.2644 (9.2579–9.2702) | +1.16 | - | - | - | - | - |
+|  | int8-all | 9.2782 (9.2758–9.2798) | +1.31 | - | - | - | - | - |
+|  | adopted-linears | 9.1931 (9.1882–9.1985) | +0.38 | +0.26 | 9.1991 | `d63-sm50-smkv` | -0.07 | yes |
+|  | adopted-attention | 9.2093 (9.1966–9.2165) | +0.56 | -0.59 | 9.2007 | `bf16-at` | +0.09 | yes |
+|  | adopted-no-smooth | 9.2580 (9.2524–9.2610) | +1.09 | -0.22 | 9.2575 | `d63-at` | +0.01 | yes |
+|  | adopted | 9.2402 (9.2296–9.2468) | +0.89 | -0.41 | 9.2334 | `d63-sm50-smkv-at` | +0.07 | yes |
+
+Runs:
+
+- llama-3.1-8b · c4 · 2K: bench `r20261016-181132-a47c`; tonight `r20261016-151826-4e17`
 <!-- /baseline -->
 
 ## Tests

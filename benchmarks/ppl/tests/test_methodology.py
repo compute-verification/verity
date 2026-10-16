@@ -30,6 +30,13 @@ def test_sign_threshold():
     assert M.sign_threshold(5) is None and M.sign_threshold(4) is None
 
 
+def test_reproduces_is_range_overlap_with_a_floor():
+    assert M.REPRODUCE_FLOOR == 0.001
+    assert M.reproduces(9.0, 9.0, 9.0085, 9.0085) and not M.reproduces(9.0, 9.0, 9.0095, 9.0095)
+    assert M.reproduces(9.0, 9.0, 8.9915, 8.9915) and not M.reproduces(9.0, 9.0, 8.9905, 8.9905)
+    assert M.reproduces(9.0, 9.1, 9.05, 9.3) and not M.reproduces(9.0, 9.1, 9.2, 9.3)
+
+
 def test_compare_needs_disjoint_seeds_and_the_windows():
     a, b = [9.20, 9.21, 9.22], [9.30, 9.31, 9.32]
     better, worse = [1.0] * 16, [1.1] * 16
