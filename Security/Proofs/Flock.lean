@@ -14,5 +14,6 @@ import Proofs.Flock.Sampled
 import Proofs.Flock.Claims
 import Proofs.Flock.SamplingClaims
 import Proofs.Flock.SamplingBoundary
+import Proofs.Flock.SamplingRedTeam
 
 /-! C-Flock's proofs: the verifier's, level3's and soundness's. -/

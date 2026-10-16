@@ -13,6 +13,8 @@ the colliding pair is a Lean term (`Classical.choice`) though nobody can print i
 * `collSim u v`: the simulator that hashes `u`, then `v`, and outputs the empty transcript; two calls (`simCost_collSim`).
 * `zkmalR_of_findColl`: `ZKmalR H k P R S 0` for every `k`, `P` and `R`, at any simulator `S` whose own calls hold a
   collision on every coin; `zkmalR_collSim`, at `collSim u v` of a collision `(u, v)`.
+* `zkmalR_of_one_le`: `ZKmalR` at any simulator once `ε_zk ≥ 1` on the relation, the form a free error parameter
+  reaches (`Recursion.RedTeam.recursionZK_id`).
 * `flockZK_collSim`: Flock's `ZK` at any masked record and any hash with a collision; at SHA-512 and the deployed
   `--zk` record, `RedTeam.Deployed.flockZK_deployZk`.
 -/
@@ -54,6 +56,19 @@ theorem zkmalR_of_findColl {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg
     rw [Pr_congr (q := fun _ => True) fun c => iff_true_intro (hS x Θ Vs θ c)]
     exact Pr_true
   rw [h1, Pi.zero_apply, zero_add, abs_sub_le_iff]
+  have := Pr_nonneg (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs)
+  have := Pr_le_one' (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs)
+  have := Pr_nonneg (fun c : S.C x => Ev (S.out H Vs θ x c))
+  have := Pr_le_one' (fun c : S.C x => Ev (S.out H Vs θ x c))
+  constructor <;> linarith
+
+/-- **`ZKmalR` at any `ε_zk ≥ 1`**, for every prover and simulator: two probabilities differ by at most `1`. -/
+theorem zkmalR_of_one_le {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover Ω) (R : Rel W)
+    (S : Simulator) (εzk : Msg → ℝ) (h : ∀ x w, R x w → 1 ≤ εzk x) : ZKmalR H k P R S εzk := by
+  intro x w hR Θ Vs θ _ Ev
+  have := h x w hR
+  have := Pr_nonneg (fun c : S.C x => findColl (simLog H S Vs θ x c) ≠ none)
+  rw [abs_sub_le_iff]
   have := Pr_nonneg (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs)
   have := Pr_le_one' (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs)
   have := Pr_nonneg (fun c : S.C x => Ev (S.out H Vs θ x c))
