@@ -49,13 +49,13 @@ segment j is
     PouwSegCheck_v2{S, FOLD}  (a: Array<64, Array<32, i8>>, asel: Array<16, bit>, u: Array<4, Array<32, i8>>,
                                b: Array<64, Array<32, i8>>, bsel: Array<8, bit>, f: Array<8, Array<32, bit>>,
                                p: Array<S + 1, Array<32, u32>>, st: Array<FW, u32>, rc: Array<512, u32>,
-                               rsel: Array<16, u32>, jsel: Array<S, bit>, first: bit) -> bit       (bits, LSB first)
+                               rsel: Array<16, u32>, jsel: Array<JW, bit>, first: bit) -> bit       (bits, LSB first)
 
 over A's and B's tile leaves at segment j with the one-hot offsets of the thread's rows in them, U's rows and F's (or the
 dither's) bits for those rows, the window's S + 1 absorbed prefix-word sets (witness), the window's fold keys (FW words:
 16 for duo, 8 for xin), the receipt leaf holding the thread's window word and its one-hot position (512 bits as 16 words),
-the one-hot position of j in its window, and whether the window is the first. It computes T_j = T_(j-1) + A'_j B'_j^T entry by entry
-from p's set at j's position, folds the window, and returns 1 exactly when the fold is the leaf's word, T_j is p's next
+the one-hot position of j in its window (its first S bits; JW = `jsel_bits`(S), the rest zero), and whether the window is
+the first. It computes T_j = T_(j-1) + A'_j B'_j^T entry by entry from p's set at j's position, folds the window, and returns 1 exactly when the fold is the leaf's word, T_j is p's next
 set, and in the first window the incoming set is 0. A statement holds ``a``, ``b`` and ``rc`` to the trees committed before
 and after the coin, recomputes ``u``, ``f``, ``st`` and the selections from the coin and the draw, and reads the result
 through a row of known content: so a proof says the thread's committed window word is that of the committed operands'
@@ -131,6 +131,7 @@ __all__ = [
     "fold_final",
     "fold_keys",
     "init",
+    "jsel_bits",
     "key_ok",
     "mix32",
     "row_slot",
@@ -548,7 +549,13 @@ def _check_signature(S):
     return ((("a", Array(RL, Array(32, I8))), ("asel", Array(16, BIT)), ("u", Array(4, Array(32, I8))),
              ("b", Array(RL, Array(32, I8))), ("bsel", Array(8, BIT)), ("f", Array(8, Array(32, BIT))),
              ("p", Array(S.S + 1, Array(32, U32))), ("st", Array(FOLDS[S.FOLD][2] // 32, U32)), ("rc", Array(RW, U32)),
-             ("rsel", Array(RW // 32, U32)), ("jsel", Array(S.S, BIT)), ("first", BIT)), BIT)
+             ("rsel", Array(RW // 32, U32)), ("jsel", Array(jsel_bits(S.S), BIT)), ("first", BIT)), BIT)
+
+
+def jsel_bits(s: int) -> int:
+    """jsel's width: S one-hot bits and zero bits up to the width that makes bsel, jsel and first whole u16 words (a
+    statement's rows are)."""
+    return 16 * -(-(s + 9) // 16) - 9
 
 
 @composite("PouwSegCheck", 2, ["S", "FOLD"], _check_signature, conformance="protocol-defined")

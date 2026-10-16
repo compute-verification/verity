@@ -153,6 +153,36 @@ def seg_receipts(seed: int, Ts: np.ndarray, tile: int) -> np.ndarray:
         return np.bitwise_xor.reduce(y ^ rotl(z, 16), axis=2)
 
 
+def win_receipts(seed: int, Ts: np.ndarray, tile: int, S: int, fold: str = "duo") -> np.ndarray:
+    """One tile's checkpointed receipts, (NCT, KS / S) u32 (`segment.PouwSegCheck_v2{S, FOLD}`): window w's word folds, from
+    the keys of (tile, thread, w, KS / S), T_(w S - 1) (0 for w = 0) and T_(w S) .. T_(w S + S - 1). Ts (KS, 128, 128)."""
+    from verity.core.protocols.pouw.circuit import segment as SG
+
+    ks = len(Ts)
+    if ks % S:
+        raise ValueError(f"{ks} segments: not whole windows of {S}")
+    nw = ks // S
+    rows, cols = thread_entries()
+    y, z = seg_keys(seed, tile, nw)
+    Te = np.concatenate([np.zeros((1, *Ts.shape[1:]), np.uint32), np.asarray(Ts, np.uint32)])
+    with np.errstate(over="ignore"):
+        for i in range(S + 1):
+            P = Te[np.arange(nw) * S + i][:, rows, cols]
+            if fold == "duo":
+                for t in range(8):
+                    h = 4 * (t % 2)
+                    u = y[:, :, h:h + 4] ^ P[:, :, 4 * t:4 * t + 4] ^ np.uint32(SG.KK[t])
+                    y[:, :, h:h + 4] = u * np.uint32(SG.KA[t]) + z[:, :, h:h + 4]
+                    z[:, :, h:h + 4] = rotl(u, SG.ROT[t]) + y[:, :, h:h + 4]
+            else:
+                for t in range(8):
+                    d = P[:, :, 4 * t:4 * t + 4]
+                    y[:, :, t] = (rotl(y[:, :, t], SG.XROT[0]) ^ d[..., 0]) * np.uint32(SG.XA0[t]) + d[..., 1]
+                    y[:, :, t] = (rotl(y[:, :, t], SG.XROT[1]) ^ d[..., 2]) * np.uint32(SG.XA1[t]) + d[..., 3]
+        R = np.bitwise_xor.reduce(y ^ rotl(z, 16) if fold == "duo" else y, axis=2)
+    return np.ascontiguousarray(R.T)
+
+
 def served_noise(F: np.ndarray, dither: bool) -> np.ndarray:
     """B's noise from F's coin bits: F itself, or decision 29's dither b = (1 - F) / 2 in {0, 1} (lpgemm.cu's fb_word)."""
     return (1 - F) // 2 if dither else F

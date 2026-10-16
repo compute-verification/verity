@@ -5,8 +5,9 @@ round protocol (challenger.py) over the loopback link:
     setup  each stage's B on the device; its tree (commit.py), the roots in hello, before any coin
     (a)    each call's stage-1 A on the device and to a file; A's tree a call; the roots out
     (b)    the coin sigma_0 in
-    (c)    stage 1: each call through the edited GEMM under call_key(sigma_0, c) and receipt_seed(sigma_0, c) (DUOS receipts,
-           plain cuBLASLt interleaved for the baseline); a receipt tree a call. With --stages 2: stage 2's A = phi(Y) a call,
+    (c)    stage 1: each call through the edited GEMM under call_key(sigma_0, c) and receipt_seed(sigma_0, c) (a receipt word
+           a thread every --window S segments under --fold, derive.win_receipts; plain cuBLASLt interleaved for the
+           baseline); a receipt tree a call. With --stages 2: stage 2's A = phi(Y) a call,
            its trees, then with --coins one-draw nothing more is drawn (sigma_1 = sigma_0), with --coins per-stage the roots
            go out and sigma_1 comes in; stage 2's calls under call_key(sigma_1, c, 1), their receipt trees, the roots out
     (d)    the draw in: a stage, a call, a tile, a thread and a segment j; the tile's receipts and served product kept, the
@@ -59,8 +60,9 @@ class Prover:
         self.out.mkdir(parents=True, exist_ok=True)
         self.pool = CM.pool(a.workers)
         self.session = os.urandom(8).hex()
-        self.salt_key = os.urandom(32)
+        self.salt_key = os.urandom(64)
         self.ks = a.k // 32
+        self.rkind = f"{a.fold}/S{a.window}"
         # the kernel's problem Y = A B'^T: the layer's activations (m x k) on A and its weights (n x k) on B, or under the
         # dither the weights on A (peeled) and the activations on B (served, X = floor(x / s) + b)
         self.dither = a.served == "dither"
@@ -96,12 +98,13 @@ class Prover:
         self.tb = [CM.commit_operand(self.pool, str(self.scratch / f"B{s}.bin"), (self.fixed_rows, a.k), CM.label_b(self.session, s),
                                      self.salt_key) for s in range(a.stages)]
         t2 = time.time()
-        self.st = ST.Stager(self.scratch / "circuit.txt", self.ks, self.dither)
+        self.st = ST.Stager(self.scratch / "circuit.txt", self.ks, self.dither, a.window, a.fold)
         t3 = time.time()
         self.wire = connect(a.port)
         self.wire.start_reader()
         self.wire.send("hello", m=self.km, n=self.kn, k=a.k, calls=a.calls, stages=a.stages, coins=a.coins, served=a.served,
-                       session=self.session, b_roots=[t.root.hex() for t in self.tb], b_count=self.tb[0].count, pin=self.st.pin)
+                       window=a.window, fold=a.fold, session=self.session, b_roots=[t.root.hex() for t in self.tb],
+                       b_count=self.tb[0].count, pin=self.st.pin)
         return {"engine": self.setup_info, "setup_s": round(t1 - t, 3), "b_commit_s": round(t2 - t1, 3),
                 "b_commit_cpu_s": round(sum(t.cpu_s for t in self.tb), 3), "b_leaves": self.tb[0].count,
                 "stager_s": round(t3 - t2, 3), "circuit": self.st.stats(), "stages": a.stages, "coins": a.coins,
@@ -113,9 +116,9 @@ class Prover:
         rpaths = [self.scratch / f"R-{w}-{s}-{c}.bin" for c in range(a.calls)]
         for c in range(a.calls):
             gpu.append(self.E.cmd("call", c, *derive.sig_words(keys[c]), derive.receipt_seed(sigmas[s], c, s), rpaths[c],
-                                  a.fused, s))
-        shape = (self.km // derive.TM * (self.kn // derive.BN), self.ks, derive.NCT)
-        trees = [CM.commit_receipts(self.pool, str(rpaths[c]), shape, CM.label_r(self.session, w, c, s), self.salt_key)
+                                  a.fused, s, a.window, a.fold))
+        shape = (self.km // derive.TM * (self.kn // derive.BN), derive.NCT, self.ks // a.window)
+        trees = [CM.commit_receipts(self.pool, str(rpaths[c]), shape, CM.label_r(self.session, w, c, s, self.rkind), self.salt_key)
                  for c in range(a.calls)]
         return gpu, rpaths, trees, sum(t.cpu_s for t in trees)
 
@@ -175,19 +178,18 @@ class Prover:
         self.E.cmd("tile", c, tm, tn, ypath, s)
         Y = np.fromfile(ypath, np.int32).reshape(derive.TM, derive.BN)
         ypath.unlink()
-        R = np.fromfile(rpaths[s][c], np.uint32).reshape(-1, self.ks, derive.NCT)[tile].copy()
-        rows, cols = derive.thread_slots(th)
-        per = self.ks
+        pl = ST.thread_place(th, a.window, self.ks, tile, j)
+        R = np.fromfile(rpaths[s][c], np.uint32).reshape(-1, derive.NCT, pl["nw"])[tile].copy()
+        rc_row = CM.leaf_row(("receipts", str(rpaths[s][c]), (-1,)), pl["r_leaf"]).copy()
         at, bt = (self.tb[s], atrees[s][c]) if self.dither else (atrees[s][c], self.tb[s])
         rt = rtrees[s][c]
-        pos_a = [(tm * derive.TM + int(r)) * per + j for r in rows]
-        pos_b = [(tn * derive.BN + int(cc)) * per + j for cc in cols]
-        pos_r = tile * derive.NCT + th
-        open_ = {"xa": [[h.hex() for h in at.path(p)] for p in pos_a], "wb": [[h.hex() for h in bt.path(p)] for p in pos_b],
-                 "rc": [h.hex() for h in rt.path(pos_r)],
-                 "salts": {**{f"xa{r}": [CM.leaf_salt(self.salt_key, at.label, p)] for r, p in enumerate(pos_a)},
-                           **{f"wb{q}": [CM.leaf_salt(self.salt_key, bt.label, p)] for q, p in enumerate(pos_b)},
-                           "rc": [CM.leaf_salt(self.salt_key, rt.label, pos_r)]}}
+        pos_a = CM.tile_pos(self.km, tm * derive.TM + CM.RL * pl["a_block"], j)
+        pos_b = CM.tile_pos(self.kn, tn * derive.BN + CM.RL * pl["b_block"], j)
+        open_ = {"xa": [h.hex() for h in at.path(pos_a)], "wb": [h.hex() for h in bt.path(pos_b)],
+                 "rc": [h.hex() for h in rt.path(pl["r_leaf"])],
+                 "salts": {"xa": [CM.leaf_salt(self.salt_key, at.label, pos_a)],
+                           "wb": [CM.leaf_salt(self.salt_key, bt.label, pos_b)],
+                           "rc": [CM.leaf_salt(self.salt_key, rt.label, pl["r_leaf"])]}}
         for ps in rpaths:
             for p in ps:
                 p.unlink()
@@ -201,7 +203,7 @@ class Prover:
         self.rec(w, gpu=gpu, a_gen_s=round(t1 - t0, 3), a_commit_s=round(t2 - t1, 3), a_commit_cpu_s=round(commit_cpu, 3),
                  coin_wait_s=round(t3 - t2, 3), **tm_, receipt_cpu_s=round(rcpu, 3), draw_wait_s=round(t8 - t7, 3),
                  open_s=round(t9 - t8, 3), draw=d)
-        self.jobs.put({"round": w, "sigma": sigmas[s], "draw": d, "apath": apaths[s][c], "Y": Y, "R": R, **open_})
+        self.jobs.put({"round": w, "sigma": sigmas[s], "draw": d, "apath": apaths[s][c], "Y": Y, "R": R, "rc_row": rc_row, **open_})
 
     def proof_worker(self) -> None:
         while (job := self.jobs.get()) is not None:
@@ -222,18 +224,20 @@ class Prover:
         key, rseed = derive.call_key(sigma, c, s), derive.receipt_seed(sigma, c, s)
         Ar, U, Bp, F, Ts = derive.tile_noised(A, B, key, tm, tn, a.k, self.dither)
         tile = tm * (self.kn // derive.BN) + tn
-        want_r = derive.seg_receipts(rseed, Ts, tile)
+        want_r = derive.win_receipts(rseed, Ts, tile, a.window, a.fold)
         self_check = {"receipts": bool((job["R"] == want_r).all()), "product": bool((job["Y"] == Ar @ Bp.T).all()),
                       "noised_product_zero": bool((Ts[-1] == 0).all())}
         t1 = time.time()
         rows, cols = derive.thread_slots(th)
         ent_r, ent_c = derive.thread_entries()
-        prev = (Ts[j - 1][ent_r[th], ent_c[th]] if j else np.zeros(32, np.uint32)).astype("<u4")
+        pl = ST.thread_place(th, a.window, self.ks, tile, j)
+        segs = [pl["w"] * a.window - 1 + i for i in range(a.window + 1)]
+        p = np.stack([Ts[q][ent_r[th], ent_c[th]] if q >= 0 else np.zeros(32, np.uint32) for q in segs]).astype("<u4")
         jj = slice(32 * j, 32 * j + 32)
-        inst = {**{f"xa{r}": ST._u16(A[tm * derive.TM + int(rw), jj].view(np.uint8)) for r, rw in enumerate(rows)},
-                **{f"wb{q}": ST._u16(B[tn * derive.BN + int(cc), jj].view(np.uint8)) for q, cc in enumerate(cols)},
-                "prev": ST._u16(prev.view(np.uint8)), "rc": ST._u16(job["R"][:, th].astype("<u4").view(np.uint8)),
-                **ST.public_rows(U[rows], F[cols, jj], rseed, {**d, "tile_index": tile}, self.ks)}
+        a0, b0 = tm * derive.TM + CM.RL * pl["a_block"], tn * derive.BN + CM.RL * pl["b_block"]
+        inst = {"xa": ST._u16(A[a0:a0 + CM.RL, jj].view(np.uint8)), "wb": ST._u16(B[b0:b0 + CM.RL, jj].view(np.uint8)),
+                "p": ST._u16(p.view(np.uint8)), "rc": job["rc_row"].reshape(1, -1),
+                **ST.public_rows(U[rows], F[cols, jj], rseed, {**d, "tile_index": tile}, a.window, self.ks, a.fold)}
         rd = self.scratch / f"r{w:04d}"
         ok = self.st.stage(rd, inst, job["salts"], sigma, s, c, self.salt_key)
         self_check["ok"] = ok
@@ -289,6 +293,8 @@ def main() -> int:
     ap.add_argument("--served", choices=("pm1", "dither"), default="dither",
                     help="the served noise: F ±1 on the weights, or decision 29's dither b on the activations (slice.cu "
                          "-DLP_DITHER, the weights peeled)")
+    ap.add_argument("--window", type=int, default=8, help="S: a committed receipt word every S segments (PouwSegCheck_v2{S})")
+    ap.add_argument("--fold", choices=("duo", "xin"), default="duo", help="the receipts' fold (P2-FF r9's XOR-in: xin)")
     ap.add_argument("--workers", type=int, default=32)
     ap.add_argument("--prove-threads", type=int, default=64)
     ap.add_argument("--max-pending", type=int, default=2)

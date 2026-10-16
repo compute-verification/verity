@@ -3,16 +3,18 @@ frozen definition v2.2 to the prover:
 
     (a) the prover commits round w's operands A (one tree a call, commit.py; each stage's B tree once, at hello)
     (b) the coin sigma_w, 64 bytes from the OS generator, only after (a), at least CADENCE seconds after the last coin
-    (c) the prover commits the products (one DUOS receipt tree a call). With two stages (decision 36), stage 1's receipt
+    (c) the prover commits the products (one receipt tree a call, a word a thread every --window S segments under
+        --fold). With two stages (decision 36), stage 1's receipt
         roots come with stage 2's operand roots; --coins per-stage then draws stage 2's own coin sigma_w,1 right after
         them (protocol (a): each stage commits its operands, then draws, then commits its outputs), --coins one draws
         nothing more (sigma_w,1 = sigma_w), and stage 2's receipt roots follow
     (d) after the last of (c), one block drawn with fresh OS coins: a stage, a call, a 128 x 128 tile, one of its 512
         threads and a 32-step segment j
-    (e) the block's statement (statement.py, `PouwSegCheck_v1{KS}`, or with --served dither `PouwSegCheckDither_v1{KS}`, the
-        activations on B under decision 29's dither and the weights on A) checked against the commitments and the coins: the
-        thread's 4 A leaves and 8 B leaves at j and its receipt leaf by their paths, the noise rows, chain keys and one-hot
-        j recomputed, the output row held to 1; then one C-Flock --zk session of the Rust verifier (`flock-circuit serve
+    (e) the block's statement (statement.py, `PouwSegCheck_v2{S, FOLD}`, or with --served dither
+        `PouwSegCheckDither_v2{S, FOLD}`, the activations on B under decision 29's dither and the weights on A) checked against
+        the commitments and the coins: the thread's A and B tile leaves at j and the receipt leaf holding its window's word
+        by their paths, the noise rows, fold keys and one-hot selections recomputed, the output row held to 1; then one
+        C-Flock --zk session of the Rust verifier (`flock-circuit serve
         --zk`, its own circuit and pin), one session at a time
 
 A round fails after its coin if it is abandoned before (c), its session started and didn't finish, or its check or proof
@@ -83,11 +85,13 @@ class Challenger:
         self.stages = m["stages"]
         self.b_roots, self.b_count = [bytes.fromhex(h) for h in m["b_roots"]], m["b_count"]
         fixed_rows = self.m if self.st.dither else self.n
-        if (self.b_count != fixed_rows * self.k // 32 or m["pin"] != self.st.pin or self.k // 32 != self.st.ks
-                or len(self.b_roots) != self.stages or m["coins"] != self.a.coins or m.get("served") != self.a.served):
+        if (self.b_count != fixed_rows // CM.RL * (self.k // 32) or m["pin"] != self.st.pin or self.k // 32 != self.st.ks
+                or len(self.b_roots) != self.stages or m["coins"] != self.a.coins or m.get("served") != self.a.served
+                or m.get("window") != self.a.window or m.get("fold") != self.a.fold):
             raise SystemExit(f"hello: the fixed trees {self.b_count} leaves, pin {m['pin'][:16]} (own {self.st.pin[:16]}), k "
                              f"{self.k}, {len(self.b_roots)} fixed roots for {self.stages} stages, coins {m['coins']} (own "
-                             f"{self.a.coins}), served {m.get('served')} (own {self.a.served})")
+                             f"{self.a.coins}), served {m.get('served')} (own {self.a.served}), window {m.get('window')} "
+                             f"{m.get('fold')} (own {self.a.window} {self.a.fold})")
         self.F = 2 * self.m * self.n * self.k * self.calls * self.stages
 
     def on_operands(self, m: dict) -> None:
@@ -144,35 +148,34 @@ class Challenger:
             return f"public file: {e}"
         if head.get("circuit_sha512") != self.st.pin or head.get("instances") != COORDS or head.get("range") != [0, COORDS]:
             return "public file: not this circuit's, or not one instance"
-        if len(m["xa"]) != 4 or len(m["wb"]) != 8:
-            return "opening: 4 xa paths and 8 wb paths"
         key, rseed = derive.call_key(sigma, c, st), derive.receipt_seed(sigma, c, st)
         tile = tm * (self.n // derive.BN) + tn
         rows, cols = derive.thread_slots(th)
         U = derive.u_noise64(key, self.m)[tm * derive.TM + rows]
         F = np.stack([derive.f_rows(key, (l := tn * derive.BN + int(cc)) - l % 4, 4, self.k)[l % 4] for cc in cols])
-        want = ST.public_rows(U, F[:, 32 * j:32 * j + 32], rseed, {**d, "tile_index": tile}, ks)
+        want = ST.public_rows(U, F[:, 32 * j:32 * j + 32], rseed, {**d, "tile_index": tile}, self.a.window, ks, self.a.fold)
+        bits = {r: b for r, _s, b, _ps in self.st.rows}
         for port, row in [*want.items(), ("o0", ST.ok_row())]:
             salt = np.frombuffer(ST.public_salt(sigma, st, c, port), np.uint8)[None]
-            if CM.commit_strings(row, salt)[0].tobytes() != bc[port][0]:
+            if CM.commit_strings(row, salt, bits.get(port))[0].tobytes() != bc[port][0]:
                 return f"{port}: not the coin's row" if port != "o0" else "o0: the statement's output is not 1"
         # the call's tree (committed in (a), before the coin) and the stage's fixed tree (at hello): A and B, or under the
         # dither (the activations served) B and A
         call_tree = (CM.label_a(self.sid, w, c, st), bytes.fromhex(r["roots"][st][c]))
         fixed_tree = (CM.label_b(self.sid, st), self.b_roots[st])
         (la, ra), (lb, rb) = (fixed_tree, call_tree) if self.st.dither else (call_tree, fixed_tree)
-        for q, rw in enumerate(rows):
-            if not CM.verify_path(la, self.m * ks, ra, (tm * derive.TM + int(rw)) * ks + j, bc[f"xa{q}"][0],
-                                  [bytes.fromhex(h) for h in m["xa"][q]]):
-                return f"xa{q}: not stage {st} A's committed leaf ({tm * derive.TM + int(rw)}, {j})"
-        for q, cc in enumerate(cols):
-            if not CM.verify_path(lb, self.n * ks, rb, (tn * derive.BN + int(cc)) * ks + j, bc[f"wb{q}"][0],
-                                  [bytes.fromhex(h) for h in m["wb"][q]]):
-                return f"wb{q}: not stage {st} B's committed leaf ({tn * derive.BN + int(cc)}, {j})"
-        nr = self.m // derive.TM * (self.n // derive.BN) * derive.NCT
-        if not CM.verify_path(CM.label_r(self.sid, w, c, st), nr, bytes.fromhex(r["receipt_roots"][st][c]),
-                              tile * derive.NCT + th, bc["rc"][0], [bytes.fromhex(h) for h in m["rc"]]):
-            return f"rc: not the committed receipt leaf (tile {tile}, thread {th})"
+        pl = ST.thread_place(th, self.a.window, ks, tile, j)
+        pos_a = CM.tile_pos(self.m, tm * derive.TM + CM.RL * pl["a_block"], j)
+        pos_b = CM.tile_pos(self.n, tn * derive.BN + CM.RL * pl["b_block"], j)
+        if not CM.verify_path(la, self.m // CM.RL * ks, ra, pos_a, bc["xa"][0], [bytes.fromhex(h) for h in m["xa"]]):
+            return f"xa: not stage {st} A's committed tile leaf {pos_a}"
+        if not CM.verify_path(lb, self.n // CM.RL * ks, rb, pos_b, bc["wb"][0], [bytes.fromhex(h) for h in m["wb"]]):
+            return f"wb: not stage {st} B's committed tile leaf {pos_b}"
+        nr = self.m // derive.TM * (self.n // derive.BN) * derive.NCT * pl["nw"] // CM.RW
+        if not CM.verify_path(CM.label_r(self.sid, w, c, st, f"{self.a.fold}/S{self.a.window}"), nr,
+                              bytes.fromhex(r["receipt_roots"][st][c]), pl["r_leaf"], bc["rc"][0],
+                              [bytes.fromhex(h) for h in m["rc"]]):
+            return f"rc: not the committed receipt leaf {pl['r_leaf']} (tile {tile}, thread {th}, window {pl['w']})"
         return None
 
     def on_opening(self, m: dict) -> None:
@@ -269,11 +272,13 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=4096, help="the layer's k (the statement's KS = k / 32), held to the prover's")
     ap.add_argument("--coins", choices=("one", "per-stage"), default="one")
     ap.add_argument("--served", choices=("pm1", "dither"), default="dither", help="held to the prover's (prover.py --served)")
+    ap.add_argument("--window", type=int, default=8, help="S, held to the prover's (prover.py --window)")
+    ap.add_argument("--fold", choices=("duo", "xin"), default="duo", help="held to the prover's (prover.py --fold)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t = time.time()
-    st = ST.Stager(Path(a.scratch) / "circuit.txt", a.k // 32, a.served == "dither")
+    st = ST.Stager(Path(a.scratch) / "circuit.txt", a.k // 32, a.served == "dither", a.window, a.fold)
     stager_s = time.time() - t
     srv, port = listen()
     Path(a.port_file).write_text(str(port))

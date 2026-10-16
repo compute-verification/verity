@@ -1,5 +1,6 @@
 """slice.cu's serve mode in numpy, for small shapes off the GPU (prover.py --engine fake): the same commands and files, the
-operands from numpy's generator (not the engine's sfill), the receipts DUOS's (derive.seg_receipts), so the round protocol,
+operands from numpy's generator (not the engine's sfill), the receipts checkpointed every S segments (derive.win_receipts,
+the call's last two arguments S and the fold), so the round protocol,
 its commitments and its statements run anywhere. ``dither`` stands for slice.cu built -DLP_DITHER."""
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ class FakeEngine:
             self.st[g] = {"m": m, "n": n, "k": k, "sb": sb, "fixed": fixed, "X": {}, "Y": {}}
             return {"ok": "setup", "m": m, "n": n, "k": k, "kind": "duos", "side": "b" if sb else "a",
                     "dither": int(self.dither), "engine": "fake"}
-        g = int(a[-1]) if op in NARGS and len(a) > NARGS[op] else 0
+        g = int(a[NARGS[op]]) if op in NARGS and len(a) > NARGS[op] else 0
         S = self.st[g]
         m, n, k, sb = S["m"], S["n"], S["k"], S["sb"]
         rows = n if sb else m
@@ -43,14 +44,15 @@ class FakeEngine:
             return {"ok": "aload", "slot": int(a[0])}
         if op == "call":
             s, key, rseed, rpath = int(a[0]), bytes.fromhex("".join(a[1:5])), int(a[5]), a[6]
+            win, fold = (int(a[9]), a[10]) if len(a) > 10 else (1, "duo")
             A, B = (S["fixed"], S["X"][s]) if sb else (S["X"][s], S["fixed"])
             tn_ = n // derive.BN
-            R = np.empty((m // derive.TM * tn_, k // 32, derive.NCT), np.uint32)
+            R = np.empty((m // derive.TM * tn_, derive.NCT, k // 32 // win), np.uint32)
             Y = np.empty((m, n), np.int64)
             for tm in range(m // derive.TM):
                 for tn in range(tn_):
                     Ar, _U, Bp, _F, Ts = derive.tile_noised(A, B, key, tm, tn, k, self.dither)
-                    R[tm * tn_ + tn] = derive.seg_receipts(rseed, Ts, tm * tn_ + tn)
+                    R[tm * tn_ + tn] = derive.win_receipts(rseed, Ts, tm * tn_ + tn, win, fold)
                     Y[tm * derive.TM:(tm + 1) * derive.TM, tn * derive.BN:(tn + 1) * derive.BN] = Ar @ Bp.T
             R.tofile(rpath)
             S["Y"][s] = Y.astype(np.int32)
