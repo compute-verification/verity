@@ -148,15 +148,19 @@ class Filler:
     interpolated in log batch. `dsms`: the decode partition's SMs, for the linears' compute floor a batch ≤ 32 run never
     reached (W11's); None when the points were measured at every batch used."""
 
-    def __init__(self, pts, dsms=None):
+    def __init__(self, pts, dsms=None, step=False):
         pts = sorted(pts)
         self.lb = [math.log(b) for b, _, _ in pts]
         self.f = [f for _, f, _ in pts]
         self.s = [s for _, _, s in pts]
         self.dsms = dsms
+        self.step = step  # between points, the next larger batch's point (an adaptive split's choice there)
 
     def at(self, b):
         x = math.log(b)
+        if self.step:
+            i = next((j for j, lb in enumerate(self.lb) if lb >= x - 1e-12), len(self.lb) - 1)
+            return self.f[i], self.s[i]
         if x <= self.lb[0] or len(self.lb) == 1:
             return self.f[0], self.s[0]
         if x >= self.lb[-1]:
@@ -196,7 +200,34 @@ def dfill_fillers(rows):
             out[name] = Filler([(r["B"], r["window"]["fill_share"], r["slowdown"]) for r in sel])
         if sel and all("tuned" in r for r in sel):
             out[name + " tuned"] = Filler([(r["B"], r["tuned"]["fill_share"], r["tuned"]["slowdown"]) for r in sel])
+    for tuned in (False, True):
+        pick = adaptive_pick(rows, tuned)
+        if pick:
+            out[f"dfree adaptive ≤ {LIMIT - 1:.0%}{' tuned' if tuned else ''}"] = Filler(
+                [(b, share, slow) for b, (_, share, slow) in pick.items()], step=True)
     return out
+
+
+LIMIT = 1.05  # the decode slowdown the adaptive split may cost
+
+
+def adaptive_pick(rows, tuned):
+    """Per batch (L = 2048), the split whose filler share is largest among those whose decode slowdown is ≤ LIMIT:
+    {B: (filler SMs, share, slowdown)}, each (split, B) averaged over the runs that measured it. `tuned`: the arms with
+    cuBLASLt re-tuned on the decode partition."""
+    acc = {}
+    for r in rows:
+        if r["place"] != "split" or r["L"] != 2048 or (tuned and "tuned" not in r):
+            continue
+        share, slow = (r["tuned"]["fill_share"], r["tuned"]["slowdown"]) if tuned else (r["window"]["fill_share"],
+                                                                                        r["slowdown"])
+        acc.setdefault((r["fill_sms"], r["B"]), []).append((share, slow))
+    best = {}
+    for (sms, b), v in acc.items():
+        share, slow = sum(s for s, _ in v) / len(v), sum(s for _, s in v) / len(v)
+        if slow <= LIMIT and share > best.get(b, (0, 0.0, 0.0))[1]:
+            best[b] = (sms, share, slow)
+    return best
 
 
 HEADLINE = [("decode", 1, 2048), ("decode", 32, 8192), ("decode", 128, 2048), ("decode", 256, 2048),
@@ -339,6 +370,7 @@ def main():
            "a_ladder": [{"what": w, "A": a} for w, a in A_LADDER],
            "filler": "measured (--fill)" if args.fill else "W11 (assumed)", "fill": fill_rows, "dfill": dfill_rows}
     res["headline"] = headline(res, list(FILLER))
+    res["adaptive"] = {("tuned" if t else "as tuned for the whole GPU"): adaptive_pick(dfill_rows, t) for t in (False, True)}
     print(f"read clock {m.mhz:.0f} MHz, C = {m.cap / 1e12:.1f} TMAC/s (C_2430 = {m.cap_max / 1e12:.1f}); "
           f"DRAM read {m.bw / 1e9:.0f} GB/s; attention fit {m.att_bw / 1e9:.0f} GB/s + {m.att_c0:.3f} ms; "
           f"step δ {m.delta:.3f} ms; FA2 η {m.eta_fa2:.3f}; A(V99) {A_V99:.4f}; pool {POOL_TOK} tokens")
@@ -365,7 +397,13 @@ def main():
             print(f"| {dfill_name(r)} | {r['B']} | {r['L']} | {fmt(r['alone']['share'])} | "
                   f"{fmt(r['window']['fill_share'])} | {fmt(r['slowdown'])} | {fmt(split)} | {tus} | "
                   f"{r['rec_checked']} ({r['rec_bad']}) |")
-    names = list(FILLER)
+        for tuned in (False, True):
+            pick = adaptive_pick(dfill_rows, tuned)
+            print(f"\nadaptive split ≤ {LIMIT - 1:.0%}{', cuBLASLt tuned on the partition' if tuned else ''}: "
+                  + "; ".join(f"B {b}: {sms} SMs, share {share:.3f}, slowdown {slow:.3f}"
+                              for b, (sms, share, slow) in sorted(pick.items())))
+    names = [n for n in FILLER if not n.startswith("dfree-co")
+             and not (n.startswith("dfree-split") and not n.endswith("tuned"))]
     print("\nHeadline: N/C, cert/C (= 0.99 N/C) and time with each filler (decode rows: the step's slowdown; mixes: the "
           "mix's time over its time without filler)\n")
     print("| phase or mix | N/C | cert/C | " + " | ".join(f"{n}: N/C, cert/C, time" for n in names) + " |")

@@ -1001,8 +1001,10 @@ static int run_dfill(Dev& d, int B, int L, int place, int fill_sms, int W, int N
   }
   double amhz, awatt;
   const double alone = dfill_alone(d, f, fs, 30, &amhz, &awatt);
-  auto work = [&] { enqueue_step(d, p, 2, B, L, &wrapped); };
-  auto work2 = [&] { enqueue_step(d, p2, 2, B, L, &wrapped); };
+  // DFILL_KIND: the step's linears only (0), attention only (1), or both (2, the default)
+  const int kind = getenv("DFILL_KIND") ? atoi(getenv("DFILL_KIND")) : 2;
+  auto work = [&] { enqueue_step(d, p, kind, B, L, &wrapped); };
+  auto work2 = [&] { enqueue_step(d, p2, kind, B, L, &wrapped); };
   d.st = full;
   const std::vector<Rep> a_full = time_work(d, work, reps);
   std::vector<Rep> a_split, a_split2, a_fill2;
@@ -1042,7 +1044,8 @@ static int run_dfill(Dev& d, int B, int L, int place, int fill_sms, int W, int N
   const Rep mf = median(a_fill), m0 = median(a_full), m2 = median(a_full2);
   const double peak = 1024.0 * d.sms * mf.mhz * 1e6;
   char shape[64];
-  snprintf(shape, sizeof shape, "dfree-%s-w%d-nc%d-t%d", place ? "co" : "split", W, NC, f.tiles);
+  snprintf(shape, sizeof shape, "dfree-%s-w%d-nc%d-t%d%s", place ? "co" : "split", W, NC, f.tiles,
+           kind == 0 ? "-lin" : kind == 1 ? "-att" : "");
   printf("{\"mode\": \"dfill\", \"place\": \"%s\", \"shape\": \"%s\", \"B\": %d, \"L\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, "
          "\"tiles\": %d, \"grid\": %d, \"coins\": [\"%016llx\", \"%016llx\"], \"prio\": [%d, %d], \"fill_sms_req\": %d, "
          "\"step_sms\": %d, \"fill_sms\": %d, \"spread\": {\"step_graph\": %d, \"fill\": %d}, \"kv_wrapped\": %s, "

@@ -7,9 +7,9 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=FILL \
 #     --send benchmarks/pouw/decode_capacity/dfill.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/dfill.sh"'
 #
-# DF_ALONE ("W:NC ..."), DF_ARMS ("split|co:FILL_SMS:W:NC[:CHUNK_LOG2] ..."), DF_BLS and DF_CO_BLS ("B:L ...", for split
-# and co arms), DF_S (steps a tile), DF_REPS, NCU (0|1), DF_T2 ("FILL_SMS ...": T2's chain, dcap fill ... big, at DF_BLS in
-# the same lease, into fill.jsonl, for the comparison)
+# DF_ALONE ("W:NC ..."), DF_ARMS ("split|co:FILL_SMS:W:NC[:CHUNK_LOG2[:KIND]] ...", KIND as DFILL_KIND), DF_BLS and
+# DF_CO_BLS ("B:L ...", for split and co arms), DF_ARMS2 with DF_BLS2 (a second set), DF_S (steps a tile), DF_REPS,
+# NCU (0|1), DF_T2 ("FILL_SMS ...": T2's chain, dcap fill ... big, at DF_BLS in the same lease, into fill.jsonl)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -59,15 +59,19 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
         > "$O/ncu-step-${bl%:*}-${bl#*:}.csv" 2>&1; echo "ncu step $bl rc $?" >> "$O/rc.txt"
     done
   fi
-  for arm in $DF_ARMS; do
-    IFS=: read -r place f w nc lg <<< "$arm"
-    bls=$DF_BLS; [ "$place" = co ] && bls=$DF_CO_BLS
-    for bl in $bls; do
-      DFILL_CHUNK_LOG2=${lg:-19} "$B/dcap" dfill "${bl%:*}" "${bl#*:}" "$place" "$f" "$w" "$nc" "$DF_S" "$DF_REPS" \
-        >> "$O/dfill.jsonl" 2>> "$O/errors.txt" || echo "rc $? for dfill $bl $arm" >> "$O/errors.txt"
+  arms() {  # $1: arms, $2: split batches
+    for arm in $1; do
+      IFS=: read -r place f w nc lg kind <<< "$arm"
+      bls=$2; [ "$place" = co ] && bls=$DF_CO_BLS
+      for bl in $bls; do
+        DFILL_CHUNK_LOG2=${lg:-19} DFILL_KIND=${kind:-2} "$B/dcap" dfill "${bl%:*}" "${bl#*:}" "$place" "$f" "$w" "$nc" "$DF_S" \
+          "$DF_REPS" >> "$O/dfill.jsonl" 2>> "$O/errors.txt" || echo "rc $? for dfill $bl $arm" >> "$O/errors.txt"
+      done
+      q
     done
-    q
-  done
+  }
+  arms "$DF_ARMS" "$DF_BLS"
+  arms "${DF_ARMS2:-}" "${DF_BLS2:-}"
   for f in ${DF_T2:-}; do
     for bl in $DF_BLS; do
       "$B/dcap" fill "${bl%:*}" "${bl#*:}" "$f" big "$DF_REPS" >> "$O/fill.jsonl" 2>> "$O/errors.txt" ||
