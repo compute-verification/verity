@@ -231,11 +231,16 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
 
 
 def _boolean_activation(g):
-    """``(scope, build)``: the activation of a Boolean Definition that the gate ``g``'s scope chain reaches, and its builder; or None."""
+    """``(scope, build)``: the activation of a Boolean Definition that the gate ``g``'s scope chain reaches, and its builder on
+    the activation's elements; or None. A Definition with statics takes them first (``build(C, S, *elements)``, as
+    `verity_vllm.program.registry.sampling_boolean.traced_family` traces it)."""
     s = getattr(g, "scope", None)
     while s is not None:
-        build = getattr(getattr(s.spec, "defn", s.spec), "build", None)
+        d = getattr(s.spec, "defn", s.spec)
+        build = getattr(d, "build", None)
         if callable(build):
+            if getattr(d, "statics", ()):
+                return s, partial(lambda S, C, *e: build(C, S, *e), s.spec.S())
             return s, build
         s = s.parent
     return None

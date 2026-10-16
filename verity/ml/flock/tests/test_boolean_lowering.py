@@ -176,6 +176,19 @@ def test_a_template_unit_holding_an_activation_lowers_it_by_its_builder() -> Non
     assert np.array_equal(got, E.evaluate_batch(d, s, x).astype(np.uint64).reshape(T, -1))
 
 
+def test_a_definition_with_statics_lowers_by_its_builder_on_them() -> None:
+    """`sampling_boolean.traced_family`'s builders take the Definition's statics before its elements (``build(C, S, *elements)``)."""
+    from verity_vllm.program.registry import sampling_boolean as SB
+
+    d, T, n = bind(SB.ArgmaxLeaf, G=8, FIRST=1, FINAL=1), 64, 8 * 16
+    C, _ = _lower(d, [1] * n)
+    assert C.counts()["ands"] == SB.ArgmaxLeaf.traced(d).counts["and"]
+    x = _bits(np.random.default_rng(5), T, 8, 16)
+    got_s, fail = C.evaluate({f"in{j}": IL.slice_words(x.reshape(T, -1)[:, j], 1) for j in range(n)}, T)
+    assert not fail
+    assert np.array_equal(IL.unslice_words(got_s["out"], T), _pack(E.evaluate_batch(d, x).astype(np.uint64)))
+
+
 @pytest.mark.parametrize("n", [2, 3, 8, 33])
 def test_an_n_input_gate_lowers_to_n_minus_1_ands_or_none(n) -> None:
     T = 64
