@@ -1272,9 +1272,10 @@ def argparse_ns(**kw):
 def test_a_handle_without_an_inbox_is_reached_through_linear_or_top_level_and_an_unknown_name_is_refused(fake, registry, routes_dirs, capsys):
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@proofs", "--text", "x")
     assert rc == 0 and "route @proofs: no Slack inbox; reach it through its Linear team PRF" in err
-    add_route(routes_dirs[0], "console", "1700000900.000300", closed="2026-10-14T22:45Z")
-    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "x")
-    assert rc == 0 and "route @console: no Slack inbox; reach it through its Linear team CON" in err
+    box = inbox(fake, routes_dirs, "console")
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "the whole brief")
+    assert rc == 0 and "route @console: rang" in err and "Linear" not in err
+    assert bells(fake, box)[0]["text"].endswith("@console the whole brief")
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-accounting", "--text", "x")
     assert rc == 0 and "route @old-accounting: no inbox (top-level forwards it)" in err
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@nobody-here", "--text", "x")
