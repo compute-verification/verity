@@ -704,7 +704,8 @@ theorem KS_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner 
     (innerKS_of_KSAbort hKS hRounds hV hC hO hAcc hpc hN0)
 
 /-- **KS of the recursion over Flock, from Flock's KS at the outer deployment and Flock's KS against provers that may
-abort at the inner one**: `KS_of_flockKS` at each inner decoder that meets the spec. -/
+abort at the inner one**: `KS_of_flockKS` at each inner decoder that meets the spec. Flock's KS against provers that
+may abort is a hypothesis of its own: it doesn't follow from `Claims.Flock.KS` at `DI` (`flockKS_not_KSAbort`). -/
 theorem KSFlock_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T)
     (opening : Msg → Msg) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
     (hKS : ∀ decI, decOK DI decI → (Inner.ofFlock DI decI).KSAbort H) (hRef : Refuses H D)
