@@ -15,20 +15,24 @@
 //                  placement (with PLACE none, serving alone again: the A/A control). Each placed block poisons the
 //                  receipts, keeps the filler queued, counts the chunks finished inside the block's window and the span
 //                  from the first to the last (the rate is completions over that span, free of the window's phase), checks 4
-//                  receipts of its last chunk on the host. Every rep's time, SM clock and board power are printed.
-//                  POINT (the point's index in the scorer's run) fixes each round's public tile range (`Round`).
+//                  receipts of its last chunk on the host. Right after it, the round's standalone block runs the filler
+//                  alone on the same SMs (serving idle) for as long (at least SOLO_CHUNKS), counted the same way: the
+//                  interleaved reference the honest gate's too-good check compares the arm with. Every rep's time, SM
+//                  clock and board power are printed; after the rounds, serving alone, the arm and the filler alone run
+//                  sustained for the settled power window (`power_window`). POINT (the point's index in the scorer's run)
+//                  fixes each round's public tile range (rounds.cuh).
+//                  DSCORE_CHEAT_S=S' (the honest gate's positive control): the arm blocks' tiles run S' < S steps and
+//                  are credited at S, their receipts checked at S'; the standalone blocks run S. No power windows.
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a dscore.cu -lcublasLt -lnvidia-ml -ldl
 #define main dcap_main
 #include "../decode_capacity/dcap.cu"
 #undef main
-
-#include <sys/random.h>
+#include "rounds.cuh"
 
 enum { PL_NONE = 0, PL_SPLIT = 1, PL_CO = 2 };
 static const char* PL_NAME[3] = {"none", "split", "co"};
 constexpr size_t MAX_BL = 786432;  // dcap's bound on batch x context
-constexpr int ALONE_CHUNKS = 200;  // the filler-alone calibration, ~0.2 s at 2^19 MMAs an SM a chunk
 
 static int setup(Dev& d, bool weights, size_t kv_want) {
   CK(cudaSetDevice(0));
@@ -119,90 +123,6 @@ static int run_sgate(Dev& d, int W, int NC, int S) {
   return ok ? 0 : 5;
 }
 
-// Anti-replay. Slot s of point POINT (s = 0 the filler-alone calibration, 1 + r round r's arm block) is round
-// R = POINT·(ROUNDS + 1) + s. Its tiles are the public range [R·2^32, (R + 1)·2^32), fixed by the scorer before the
-// round's coins, which are drawn from the OS once the range is fixed; every seed is dseed(the round's coins, tile id).
-constexpr int RANGE_LOG2 = 32;
-struct Round {
-  unsigned long long id = 0, lo = 0, hi = 0, end = 0;  // the round, its range [lo, hi), the tiles launched [lo, end)
-  uint64_t c0 = 0, c1 = 0;
-  std::vector<unsigned long long> checked;
-};
-static Round round_open(DFill& f, int point, int rounds, int slot) {
-  Round r;
-  r.id = (unsigned long long)point * (rounds + 1) + slot;
-  r.lo = r.id << RANGE_LOG2;
-  r.hi = (r.id + 1) << RANGE_LOG2;
-  uint64_t c[2];
-  if (getrandom(c, sizeof c, 0) != (ssize_t)sizeof c) {
-    fprintf(stderr, "getrandom failed\n");
-    exit(1);
-  }
-  f.c0 = r.c0 = c[0];
-  f.c1 = r.c1 = c[1];
-  return r;
-}
-static void slaunch(const DFill& f, unsigned long long t0, cudaStream_t st) {
-  const dim3 gr(f.grid), bl(32 * f.W);
-  switch (f.NC) {
-    case 1: dfill_k<1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 2: dfill_k<2><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 4: dfill_k<4><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    default: fprintf(stderr, "NC must be 1, 2 or 4\n"); exit(1);
-  }
-}
-// dcap's dpump_start, with chunk k's tiles numbered from base + k·per
-static void spump_start(DPump& p, const DFill& f, cudaStream_t fs, int depth, unsigned long long base) {
-  p.on = true;
-  p.done = 0;
-  p.t.clear();
-  p.th = std::thread([&p, &f, fs, depth, base] {
-    std::vector<cudaEvent_t> ev(depth);
-    for (auto& e : ev) CK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming | cudaEventBlockingSync));
-    long long k = 0;
-    for (; p.on.load(); k++) {
-      const int slot = (int)(k % depth);
-      if (k >= depth) {
-        CK(cudaEventSynchronize(ev[slot]));
-        p.t.push_back(now_ms());
-        p.done++;
-      }
-      slaunch(f, base + (unsigned long long)k * f.per(), fs);
-      CK(cudaEventRecord(ev[slot], fs));
-    }
-    p.launched = k;
-    CK(cudaStreamSynchronize(fs));
-    for (auto& e : ev) CK(cudaEventDestroy(e));
-  });
-}
-// after the round's pump stopped: the tiles it launched, and n receipts of its last chunk against dfill_ref (dcap's
-// dfill_check at that chunk's first tile); a round that ran past its range fails the run
-static int round_close(Round& r, const DFill& f, const DPump& p, int n) {
-  r.end = r.lo + (unsigned long long)p.launched.load() * f.per();
-  if (r.end > r.hi) {
-    fprintf(stderr, "round %llu ran past its tile range\n", r.id);
-    exit(9);
-  }
-  const unsigned long long t0 = r.end - f.per();
-  std::vector<unsigned long long> h(f.per());
-  CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
-  int bad = 0;
-  for (int i = 0; i < n; i++) {
-    const long long idx = (long long)i * f.per() / n + (i * 7919) % std::max(1LL, f.per() / n);
-    r.checked.push_back(t0 + idx);
-    bad += h[idx] != dfill_ref(f.c0, f.c1, t0 + idx, f.NC, f.S);
-  }
-  return bad;
-}
-static void print_round(const Round& r) {
-  printf("\"round\": {\"id\": %llu, \"range\": [%llu, %llu], \"tiles\": [%llu, %llu], \"coins\": [\"%016llx\", "
-         "\"%016llx\"], \"seed0\": \"%016llx\", \"checked\": [",
-         r.id, r.lo, r.hi, r.lo, r.end, (unsigned long long)r.c0, (unsigned long long)r.c1,
-         (unsigned long long)dseed(r.c0, r.c1, r.lo));
-  for (size_t i = 0; i < r.checked.size(); i++) printf("%s%llu", i ? ", " : "", r.checked[i]);
-  printf("]}");
-}
-
 struct Block {
   std::vector<Rep> reps;
   double t0 = 0, t1 = 0, span = 0;  // span: from the first to the last chunk seen done inside (t0, t1]
@@ -223,7 +143,7 @@ static void print_block(const char* name, const Block& b, bool fill, bool comma)
 }
 
 static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, int W, int NC, int S, int rounds, int K,
-                      int point) {
+                      int point, int cheat_s) {
   dfill_prep();
   const std::vector<Lt> p = lin_plans(d, B);
   bool wrapped = false;
@@ -258,7 +178,7 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
   if (fill) {
     f = dfill_make(got[1], W, NC, S, 0, 0);
     sp_fill = sm_spread(d, fs, false);
-    r0 = round_open(f, point, rounds, 0);
+    r0 = round_open(f, point, 0);
     DPump pump;
     spump_start(pump, f, fs, 3, r0.lo);
     double cs = 0, ps = 0;
@@ -286,9 +206,10 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
       alone_block(b);
       return;
     }
-    b.rd = round_open(f, point, rounds, 1 + r);
+    b.rd = round_open(f, point, 1 + r);
     CK(cudaMemsetAsync(f.rec, 0xA5, f.per() * sizeof(unsigned long long), fs));
     CK(cudaStreamSynchronize(fs));
+    g_run_s = cheat_s;
     DPump pump;
     spump_start(pump, f, fs, 3, b.rd.lo);
     while (pump.done.load() < 2) {
@@ -296,46 +217,93 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
     d.st = ss;
     b.reps = time_work(d, w_arm, K, &b.t0, &b.t1);
     dpump_stop(pump);
-    double first = 0, last = 0;
-    for (double x : pump.t)
-      if (x > b.t0 && x <= b.t1) {
-        if (!b.chunks++) first = x;
-        last = x;
-      }
-    b.span = last - first;
+    count_done(pump, b.t0, b.t1, &b.chunks, &b.span);
+    bad += round_close(b.rd, f, pump, 4);
+    checked += 4;
+    g_run_s = 0;
+  };
+  auto solo_block = [&](Block& b, int r, double win) {
+    b.rd = round_open(f, point, 1 + rounds + r);
+    CK(cudaMemsetAsync(f.rec, 0xA5, f.per() * sizeof(unsigned long long), fs));
+    CK(cudaStreamSynchronize(fs));
+    DPump pump;
+    spump_start(pump, f, fs, 3, b.rd.lo);
+    while (pump.done.load() < 2) {
+    }
+    b.t0 = now_ms();
+    while (now_ms() < b.t0 + win || pump.done.load() < 2 + SOLO_CHUNKS) {
+    }
+    b.t1 = now_ms();
+    dpump_stop(pump);
+    count_done(pump, b.t0, b.t1, &b.chunks, &b.span);
     bad += round_close(b.rd, f, pump, 4);
     checked += 4;
   };
-  std::vector<Block> a(rounds), m(rounds);
+  std::vector<Block> a(rounds), m(rounds), s(rounds);
   for (int r = 0; r < rounds; r++) {
-    if (r % 2 == 0) {
-      alone_block(a[r]);
-      arm_block(m[r], r);
-    } else {
-      arm_block(m[r], r);
-      alone_block(a[r]);
+    if (r % 2 == 0) alone_block(a[r]);
+    arm_block(m[r], r);
+    if (fill) solo_block(s[r], r, m[r].t1 - m[r].t0);
+    if (r % 2 == 1) alone_block(a[r]);
+  }
+  Pwr pw_alone, pw_arm, pw_fill;
+  const bool power = !cheat_s;
+  if (power) {
+    cudaGraphExec_t ge = graph_of(d, w_full, full);
+    pw_alone = power_window(d, ge, full);
+    CK(cudaGraphExecDestroy(ge));
+  }
+  if (power && fill) {
+    for (int w = 0; w < 2; w++) {
+      Round rd = round_open(f, point, 2 * rounds + 1 + w);
+      DPump pump;
+      spump_start(pump, f, fs, 3, rd.lo);
+      while (pump.done.load() < 2) {
+      }
+      if (w == 0) {
+        cudaGraphExec_t ge = graph_of(d, w_arm, ss);
+        pw_arm = power_window(d, ge, ss);
+        CK(cudaGraphExecDestroy(ge));
+      } else {
+        pw_fill = power_window(d, nullptr, nullptr);
+      }
+      dpump_stop(pump);
+      bad += round_close(rd, f, pump, 4);
+      checked += 4;
     }
   }
   d.st = full;
   printf("{\"mode\": \"dscore\", \"kind\": \"%s\", \"B\": %d, \"L\": %d, \"place\": \"%s\", \"fill_sms_req\": %d, "
          "\"sms\": %d, \"step_sms\": %d, \"fill_sms\": %d, \"spread\": {\"step_graph\": %d, \"fill\": %d}, \"W\": %d, "
-         "\"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"chunk_macs\": %.6e, \"point\": %d, "
-         "\"prio\": [%d, %d], \"kv_wrapped\": %s, \"setup_ms\": %.3f, \"rounds\": %d, \"K\": %d, "
+         "\"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"chunk_macs\": %.6e, \"point\": %d, \"slots\": %d, "
+         "\"cheat_S\": %d, \"prio\": [%d, %d], \"kv_wrapped\": %s, \"setup_ms\": %.3f, \"rounds\": %d, \"K\": %d, "
          "\"alone_fill\": {\"mac_per_s\": %.6e, \"mhz\": %.1f, \"watt\": %.1f",
          kind == 0 ? "prefill" : "step", B, L, PL_NAME[place], fill_sms, d.sms, fill ? got[0] : d.sms, fill ? got[1] : 0,
-         sp_step, sp_fill, W, NC, S, fill ? f.tiles : 0, fill ? f.grid : 0, fill ? f.macs() : 0.0, point, lo, hi,
-         wrapped ? "true" : "false", setup_ms, rounds, K, alone, amhz, awatt);
+         sp_step, sp_fill, W, NC, S, fill ? f.tiles : 0, fill ? f.grid : 0, fill ? f.macs() : 0.0, point, POINT_SLOTS, cheat_s,
+         lo, hi, wrapped ? "true" : "false", setup_ms, rounds, K, alone, amhz, awatt);
   if (fill) {
     printf(", ");
     print_round(r0);
   }
-  printf("}, \"rec_checked\": %d, \"rec_bad\": %d, \"algos\": [", checked, bad);
+  printf("}, \"rec_checked\": %d, \"rec_bad\": %d, ", checked, bad);
+  if (power) {
+    printf("\"power\": {\"settle_ms\": %.0f, \"meas_ms\": %.0f, ", PW_SETTLE_MS, PW_MEAS_MS);
+    print_pwr("alone", pw_alone, fill);
+    if (fill) {
+      print_pwr("arm", pw_arm, true);
+      print_pwr("filler_alone", pw_fill, false);
+    }
+    printf("}, ");
+  }
+  printf("\"algos\": [");
   for (size_t j = 0; j < p.size(); j++) printf("%s[%d, %d]", j ? ", " : "", p[j].algo_id, p2[j].algo_id);
   printf("], \"blocks\": [");
   for (int r = 0; r < rounds; r++) {
-    printf("%s{\"order\": \"%s\", ", r ? ", " : "", r % 2 == 0 ? "alone,arm" : "arm,alone");
+    printf("%s{\"order\": \"%s\", ", r ? ", " : "",
+           r % 2 == 0 ? (fill ? "alone,arm,solo" : "alone,arm") : (fill ? "arm,solo,alone" : "arm,alone"));
     print_block("alone", a[r], false, true);
-    print_block("arm", m[r], fill, false);
+    print_block("arm", m[r], fill, fill);
+    if (fill) print_block("solo", s[r], true, false);
     printf("}");
   }
   printf("]}\n");
@@ -375,15 +343,20 @@ int main(int argc, char** argv) {
   const int place = pl == "none" ? PL_NONE : pl == "split" ? PL_SPLIT : pl == "co" ? PL_CO : -1;
   const int B = atoi(argv[3]), L = atoi(argv[4]), fsm = atoi(argv[6]), W = atoi(argv[7]), NC = atoi(argv[8]),
             S = atoi(argv[9]), rounds = atoi(argv[10]), K = atoi(argv[11]), point = atoi(argv[12]);
-  if (kind < 0 || place < 0 || rounds < 2 || K < 1 || W < 1 || W > 16 || S % 8 || S <= 0 || point < 0 ||
+  if (kind < 0 || place < 0 || rounds < 2 || 2 * rounds + 3 > POINT_SLOTS || K < 1 || W < 1 || W > 16 || S % 8 || S <= 0 || point < 0 ||
       (kind == 2 && ((size_t)B * L > MAX_BL || L % 512 || L <= 0 || B < 1 || B > 256)) ||
       (kind == 0 && (B < 1 || B > 8192))) {
     fprintf(stderr, "step: B*L <= %zu, L %% 512 == 0, 1 <= B <= 256; prefill: 1 <= B <= 8192; ROUNDS >= 2, K >= 1, "
-                    "1 <= W <= 16, 8 | S, POINT >= 0\n", MAX_BL);
+                    "1 <= W <= 16, 8 | S, POINT >= 0, 2 ROUNDS + 3 <= %d\n", MAX_BL, POINT_SLOTS);
+    return 1;
+  }
+  const int cheat_s = getenv("DSCORE_CHEAT_S") ? atoi(getenv("DSCORE_CHEAT_S")) : 0;
+  if (cheat_s && (cheat_s % 8 || cheat_s <= 0 || cheat_s >= S || place == PL_NONE)) {
+    fprintf(stderr, "DSCORE_CHEAT_S: a multiple of 8 in (0, S), with a filler placed\n");
     return 1;
   }
   const size_t kv = kind == 2 ? (size_t)B * L * KV_TOKEN_BYTES + ((size_t)1 << 20) : (size_t)1 << 20;
   if (int rc = setup(d, true, kv)) return rc;
   if (place == PL_SPLIT && (fsm <= 0 || fsm >= d.sms)) { fprintf(stderr, "0 < FILL_SMS < %d\n", d.sms); return 1; }
-  return run_dscore(d, kind, B, L, place, fsm, W, NC, S, rounds, K, point);
+  return run_dscore(d, kind, B, L, place, fsm, W, NC, S, rounds, K, point, cheat_s);
 }

@@ -34,12 +34,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "decode_capacity"))
 import share  # noqa: E402  CAP's constants: MACs a token, non-GEMM times, FA2, the int8 peak
 
-SCORER = "filler-scorer/v1"
+SCORER = "filler-scorer/v2"
 LIMIT = 1.05  # serving slowdown, every entry
 DRAM_LIMIT = 0.01  # of the HBM bandwidth the same run's validated counter measures
 CONTROL_BYTES = 1 << 30  # bw_read streams 1 GiB a launch: the DRAM counter's positive control
 CONTROL_RANGE = (0.97, 1.10)  # dram__bytes.sum ÷ 1 GiB that validates the counter (FILL read 1.074–1.078 GB)
-TOO_GOOD = 1.02  # a filler faster beside serving than alone on the same SMs goes to the assessor
+TOO_GOOD = 1.02  # a filler faster beside serving than alone on the same SMs by more than this goes to the assessor
+TOO_GOOD_FLOOR = TOO_GOOD - 1  # beside ÷ the standalone blocks' median above 1 + max(this, their trimmed spread)
+CHEAT = 16  # the honest gate's positive control credits S steps a tile and runs S - S/16 beside serving
 SMS, PER_SM = share.SMS, share.PER_SM
 MAX_BL = 786432
 
@@ -96,33 +98,71 @@ def _med(xs):
     return statistics.median(xs) if xs else float("nan")
 
 
+def fill_rate(blocks: list[dict], chunk_macs: float) -> tuple[float, list[float]]:
+    """The filler's rate over `blocks` (arm or standalone block records), pooled, and each block's own: the chunks seen
+    done inside a window, less one, over the span from the first to the last (rows from before span_ms: completions over
+    the window, whose phase biases a ~20-chunk window by up to a chunk), plus any fixed work a block's filler counted on the
+    device (`fixed_macs` over `fixed_ms`: an arm-side phase filler's tiles a step)."""
+    span = all("span_ms" in b for b in blocks)
+    work = [(b["chunks"] - 1, b["span_ms"]) if span else (b["chunks"], b["window_ms"]) for b in blocks]
+    ok = [(n, ms) for n, ms in work if n > 0 and ms > 0]
+    tot = sum(ms for _, ms in ok)
+    rate = sum(n for n, _ in ok) * chunk_macs / (tot * 1e-3) if tot > 0 else 0.0
+    fx = [(b["fixed_macs"], b["fixed_ms"]) for b in blocks if b.get("fixed_ms")]
+    if fx:
+        rate += sum(m for m, _ in fx) / (sum(ms for _, ms in fx) * 1e-3)
+    per = []
+    for b, (n, ms) in zip(blocks, work):
+        x = n * chunk_macs / (ms * 1e-3) if n > 0 and ms > 0 else 0.0
+        if b.get("fixed_ms"):
+            x += b["fixed_macs"] / (b["fixed_ms"] * 1e-3)
+        if x > 0:
+            per.append(x)
+    return rate, per
+
+
+def solo_spread(rates: list[float]) -> float:
+    """The standalone blocks' spread: their range over their median, without the single highest and lowest of four or
+    more (one block whose host-side completion stamps a scheduling hiccup delayed reads up to ~15% off on a ~20-chunk
+    window; the rest of a point's blocks agree within ~0.3%)."""
+    xs = sorted(rates)
+    if len(xs) >= 4:
+        xs = xs[1:-1]
+    return (xs[-1] - xs[0]) / _med(rates)
+
+
 def point_stats(row: dict) -> dict:
     """A `dscore` row's numbers: the paired slowdown (median over rounds of the arm block's median rep over the alone
-    block's), both sides' median time, clock and power, the filler's rate over its windows and its per-block spread."""
+    block's), both sides' median time, clock and power, the filler's rate over its windows and its per-block spread, and
+    its standalone reference: the median of the interleaved standalone blocks' rates, with the too-good limit set from
+    their spread (rows without them: the one calibration and TOO_GOOD)."""
     al = [r for b in row["blocks"] for r in b["alone"]["reps"]]
     ar = [r for b in row["blocks"] for r in b["arm"]["reps"]]
     pairs = [_med([r[0] for r in b["arm"]["reps"]]) / _med([r[0] for r in b["alone"]["reps"]]) for b in row["blocks"]]
     fill = row["place"] != "none"
-    rate, cv = 0.0, None
+    rate, cv, solo = 0.0, None, []
     if fill:
-        # completions between the first and last seen inside each window over that span (rows from before span_ms:
-        # completions over the window, whose phase biases a ~20-chunk window by up to a chunk)
-        span = all("span_ms" in b["arm"] for b in row["blocks"])
-        work = [(b["arm"]["chunks"] - 1, b["arm"]["span_ms"]) if span else (b["arm"]["chunks"], b["arm"]["window_ms"])
-                for b in row["blocks"]]
-        work = [(n, ms) for n, ms in work if n > 0 and ms > 0]
-        tot = sum(ms for _, ms in work)
-        rate = sum(n for n, _ in work) * row["chunk_macs"] / (tot * 1e-3) if tot > 0 else 0.0
-        per = [n * row["chunk_macs"] / (ms * 1e-3) for n, ms in work]
+        rate, per = fill_rate([b["arm"] for b in row["blocks"]], row["chunk_macs"])
         cv = statistics.pstdev(per) / statistics.mean(per) if len(per) > 1 and statistics.mean(per) > 0 else None
-    alone_rate = row["alone_fill"]["mac_per_s"] if fill else 0.0
+        solo = [x for b in row["blocks"] if "solo" in b for x in fill_rate([b["solo"]], row["chunk_macs"])[1]]
+    cal = row["alone_fill"]["mac_per_s"] if fill else 0.0
+    if len(solo) >= 2:
+        ref = _med(solo)
+        spread = solo_spread(solo)
+        limit = 1 + max(TOO_GOOD_FLOOR, spread)
+    else:
+        ref, spread, limit = cal, None, TOO_GOOD
+    pw = row.get("power") or {}
     return {
         "slowdown": _med(pairs), "slowdown_rounds": pairs, "alone_ms": _med([r[0] for r in al]),
         "arm_ms": _med([r[0] for r in ar]), "alone_mhz": _med([r[1] for r in al]), "arm_mhz": _med([r[1] for r in ar]),
         "alone_watt": _med([r[2] for r in al]), "arm_watt": _med([r[2] for r in ar]),
         "clock_reads": sum(1 for r in al + ar if r[1] > 0), "power_reads": sum(1 for r in al + ar if r[2] > 0),
-        "reps": len(al) + len(ar), "fill_rate": rate, "fill_rate_alone": alone_rate, "fill_rate_cv": cv,
-        "beside_over_alone": rate / alone_rate if alone_rate else None,
+        "reps": len(al) + len(ar), "fill_rate": rate, "fill_rate_alone": ref, "fill_rate_cv": cv,
+        "solo_rates": solo, "solo_spread": spread, "too_good_limit": limit,
+        "beside_over_alone": rate / ref if fill and ref else None,
+        "beside_over_calibration": rate / cal if fill and cal else None,
+        "power_settled": {k: pw[k]["watt"] for k in ("alone", "arm", "filler_alone") if k in pw},
         "of_peak": rate / (PER_SM * row["fill_sms"] * _med([r[1] for r in ar]) * 1e6) if fill and row["fill_sms"] else None,
         "rec_checked": row["rec_checked"], "rec_bad": row["rec_bad"], "place": row["place"],
         "fill_sms": row["fill_sms"], "setup_ms": row["setup_ms"], "spread": row["spread"],
@@ -284,27 +324,50 @@ def dseed(c0: int, c1: int, tile: int) -> int:
     return smix(smix(c0 ^ smix(tile)) ^ c1)
 
 
+def row_rounds(r: dict) -> list[tuple[str, int, dict | None]]:
+    """Every filler round a row records, as (where, the slot it holds by position, the record or None): the calibration,
+    each arm block and each standalone block, and any `*_round` an arm-side driver adds beside them (a second filler's)."""
+    out = [("calibration", 0, r["alone_fill"].get("round"))]
+    out += [(f"calibration {k}", None, v) for k, v in r["alone_fill"].items() if k.endswith("_round")]
+    for i, b in enumerate(r["blocks"]):
+        out.append((f"arm block {i}", 1 + i, b["arm"].get("round")))
+        if "solo" in b:
+            out.append((f"standalone block {i}", 1 + r.get("rounds", len(r["blocks"])) + i, b["solo"].get("round")))
+        out += [(f"{side} block {i} {k}", None, v) for side in ("arm", "solo") for k, v in (b.get(side) or {}).items()
+                if k.endswith("_round")]
+    return out
+
+
 def replay_gate(rows: list[dict]) -> dict:
-    """Anti-replay over every filler round of the run (each point's calibration, slot 0, and each arm block, slot 1 + r):
-    the round's tile range is the scorer's, [R·2^32, (R + 1)·2^32) with R = point·(rounds + 1) + slot, so no id is the
-    prover's choice; its tiles start at the range's start and stay inside it; no two rounds' tiles overlap; no two rounds
-    share coins; the first tile's seed is dseed(the round's coins, its id) as the device printed it; and no sampled seed
-    (each round's first, last and checked tiles) repeats across rounds."""
+    """Anti-replay over every filler round of the run (`row_rounds`): the round's tile range is the scorer's,
+    [R·2^32, (R + 1)·2^32) with R = point·slots + slot (slots: rounds.cuh's POINT_SLOTS, one count for every row of the
+    run; rows from before it, rounds + 1, the slot by position), so no id is the prover's choice; its tiles start at the range's start and stay inside
+    it; no two rounds' tiles overlap; no two rounds share coins; the first tile's seed is dseed(the round's coins,
+    tag | its id) as the device printed it (tag: a high bit the filler's kernel marks its ids with, else 0); and no sampled
+    seed (each round's first, last and checked tiles) repeats across rounds."""
     bad, spans = [], []
     fill_rows = [r for r in rows if r.get("place") != "none"]
     pts = [r.get("point") for r in fill_rows]
     if len(set(pts)) != len(pts) or None in pts:
         bad.append(f"point indices missing or repeated: {pts}")
+    counts = {r.get("slots", r.get("rounds", len(r["blocks"])) + 1) for r in fill_rows}
+    if len(counts) > 1:
+        bad.append(f"rows number their rounds with different slot counts {sorted(counts)}, so two points' ids can meet")
     for r in fill_rows:
-        rds = [r["alone_fill"].get("round")] + [b["arm"].get("round") for b in r["blocks"]]
-        for s, rd in enumerate(rds):
-            where = f"{r['kind']} {r['B']}/{r['L']} slot {s}"
+        slots = r.get("slots", r.get("rounds", len(r["blocks"])) + 1)
+        for name, pos, rd in row_rounds(r):
+            where = f"{r['kind']} {r['B']}/{r['L']} {name}"
             if rd is None or r.get("point") is None:
                 bad.append(f"{where}: no round record")
                 continue
-            want = r["point"] * (r["rounds"] + 1) + s
+            slot = rd.get("slot", pos)
+            if slot is None or not 0 <= slot < slots:
+                bad.append(f"{where}: slot {slot} not in [0, {slots})")
+                continue
+            want = r["point"] * slots + slot
             lo, hi = want << RANGE_LOG2, (want + 1) << RANGE_LOG2
             t0, t1 = rd["tiles"]
+            tag = int(rd.get("tag", "0"), 16)
             if rd["id"] != want or rd["range"] != [lo, hi]:
                 bad.append(f"{where}: range {rd['range']} is not the scorer's [{lo}, {hi})")
             if not lo == t0 < t1 <= hi:
@@ -312,17 +375,17 @@ def replay_gate(rows: list[dict]) -> dict:
             if any(not t0 <= t < t1 for t in rd["checked"]):
                 bad.append(f"{where}: a checked tile outside the round's tiles")
             c0, c1 = (int(x, 16) for x in rd["coins"])
-            if f"{dseed(c0, c1, t0):016x}" != rd["seed0"]:
-                bad.append(f"{where}: seed {rd['seed0']} is not dseed(the round's coins, {t0})")
-            spans.append((t0, t1, (c0, c1), {dseed(c0, c1, t) for t in (t0, t1 - 1, *rd["checked"])}, where))
+            if f"{dseed(c0, c1, tag | t0):016x}" != rd["seed0"]:
+                bad.append(f"{where}: seed {rd['seed0']} is not dseed(the round's coins, {tag:#x} | {t0})")
+            spans.append((tag, t0, t1, (c0, c1), {dseed(c0, c1, tag | t) for t in (t0, t1 - 1, *rd["checked"])}, where))
     spans.sort()
-    overlaps = [f"{a[4]} and {b[4]}" for a, b in zip(spans, spans[1:]) if b[0] < a[1]]
-    coins = [s[2] for s in spans]
-    seeds = [x for s in spans for x in s[3]]
+    overlaps = [f"{a[5]} and {b[5]}" for a, b in zip(spans, spans[1:]) if a[0] == b[0] and b[1] < a[2]]
+    coins = [s[3] for s in spans]
+    seeds = [x for s in spans for x in s[4]]
     coin_rep, seed_rep = len(coins) - len(set(coins)), len(seeds) - len(set(seeds))
     why = bad + [f"tiles overlap: {o}" for o in overlaps] + ([f"{coin_rep} rounds reuse coins"] if coin_rep else []) + \
         ([f"{seed_rep} sampled seeds repeat"] if seed_rep else []) + ([] if spans else ["no filler rounds"])
-    return {"ok": not why, "rounds": len(spans), "tiles": sum(s[1] - s[0] for s in spans), "seeds_sampled": len(seeds),
+    return {"ok": not why, "rounds": len(spans), "tiles": sum(s[2] - s[1] for s in spans), "seeds_sampled": len(seeds),
             "overlaps": overlaps, "coin_repeats": coin_rep, "seed_repeats": seed_rep,
             "why": "; ".join(why[:5]) or None}
 
@@ -356,18 +419,38 @@ def gates(stats: dict, sc: dict, *, has_filler: bool, sgate: dict | None, dgate:
     return out
 
 
-def honesty(arm, stats: dict, phases_points) -> dict:
-    """The arm's placement is a pure function of the point (asked twice, the same answer), no filler ran faster beside
-    serving than alone on the same SMs (TOO_GOOD; such a result goes to the assessor), and none above its SMs' int8
-    tensor peak at the clock its blocks read."""
+def cheat_s(steps: int) -> int:
+    """The positive control's steps a tile beside serving: S less S/CHEAT, a multiple of 8 (dfill_k's unroll)."""
+    return steps - max(8, steps // CHEAT // 8 * 8)
+
+
+def _too_good(v: dict) -> bool:
+    return bool(v.get("beside_over_alone")) and v["beside_over_alone"] > v["too_good_limit"]
+
+
+def honesty(arm, stats: dict, phases_points, *, control: dict | None = None, has_filler: bool = False) -> dict:
+    """The arm's placement is a pure function of the point (asked twice, the same answer); no filler ran faster beside
+    serving than alone on the same SMs (beside ÷ the median of the round-interleaved standalone blocks above
+    1 + max(TOO_GOOD_FLOOR, their trimmed spread, `solo_spread`); such a result goes to the assessor), and every filler
+    point has that reference;
+    none ran above its SMs' int8 tensor peak at the clock its blocks read; and, with a filler, the positive control (a
+    filler credited for S steps a tile that runs S - S/CHEAT beside serving and S alone, `control`) is caught as too good,
+    so the check can see a dishonest arm at the run's own spread."""
     import arms as A  # noqa: PLC0415
 
     unstable = [f"{ph} {b}/{l}" for ph, b, l in phases_points if A.placed(arm, ph, b, l) != A.placed(arm, ph, b, l)]
-    fast = [f"{k[0]} {k[1]}/{k[2]}: {v['beside_over_alone']:.3f}" for k, v in stats.items()
-            if v.get("beside_over_alone") and v["beside_over_alone"] > TOO_GOOD]
+    fast = [f"{k[0]} {k[1]}/{k[2]}: {v['beside_over_alone']:.3f} > {v['too_good_limit']:.3f}" for k, v in stats.items()
+            if _too_good(v)]
     peak = [f"{k[0]} {k[1]}/{k[2]}: {v['of_peak']:.3f}" for k, v in stats.items() if (v.get("of_peak") or 0) > 1.0]
-    return {"ok": not unstable and not fast and not peak, "unstable_placement": unstable, "too_good": fast,
-            "over_peak": peak}
+    noref = [f"{k[0]} {k[1]}/{k[2]}" for k, v in stats.items() if v["place"] != "none" and len(v["solo_rates"]) < 2]
+    ctl = None
+    if has_filler:
+        ctl = {"caught": False, "why": "no control row"} if control is None else {
+            "point": control.get("at"), "cheat_S": control.get("cheat_S"), "S": control.get("S"),
+            "beside_over_alone": control["beside_over_alone"], "limit": control["too_good_limit"],
+            "solo_spread": control["solo_spread"], "of_peak": control["of_peak"], "caught": _too_good(control)}
+    return {"ok": not unstable and not fast and not peak and not noref and (ctl is None or ctl["caught"]),
+            "unstable_placement": unstable, "too_good": fast, "over_peak": peak, "no_reference": noref, "control": ctl}
 
 
 def clock_gate(stats: dict, smi: list[dict]) -> dict:
@@ -402,7 +485,8 @@ def parse_smi(text: str) -> list[dict]:
 
 
 def secondary(stats: dict, sc: dict) -> dict:
-    """Reported, not scored: τ under VF per entry, the filler's per-block rate spread (work per round), power and clock
+    """Reported, not scored: τ under VF per entry, the filler's per-block rate spread (work per round), board power (the
+    settled windows': serving alone, the arm, the filler alone; rows before them, the per-rep medians, which lag) and clock
     beside serving alone, what changing the placement costs (the split's setup), and the robustness points."""
     timed = {k: v for k, v in stats.items() if v["place"] != "none"}
     rob = []
@@ -416,7 +500,9 @@ def secondary(stats: dict, sc: dict) -> dict:
         "tau_vf": {e["entry"]: e["tau_vf"] for e in sc["entries"]},
         "work_cv": {f"{k[0]} {k[1]}/{k[2]}": v["fill_rate_cv"] for k, v in timed.items()},
         "work_cv_max": max((v["fill_rate_cv"] for v in timed.values() if v["fill_rate_cv"] is not None), default=None),
-        "power": {f"{k[0]} {k[1]}/{k[2]}": [v["alone_watt"], v["arm_watt"]] for k, v in stats.items()},
+        "power": {f"{k[0]} {k[1]}/{k[2]}": v["power_settled"] or {"alone": v["alone_watt"], "arm": v["arm_watt"]}
+                  for k, v in stats.items()},
+        "power_per_rep": {f"{k[0]} {k[1]}/{k[2]}": [v["alone_watt"], v["arm_watt"]] for k, v in stats.items()},
         "clock": {f"{k[0]} {k[1]}/{k[2]}": [v["alone_mhz"], v["arm_mhz"]] for k, v in stats.items()},
         "placement_setup_ms": {f"{k[0]} {k[1]}/{k[2]}": v["setup_ms"] for k, v in timed.items()},
         "robust": rob,
