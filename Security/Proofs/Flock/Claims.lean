@@ -13,6 +13,7 @@ import Proofs.Flock.Claims.Sampling.Binding
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.Cost
 import Proofs.Flock.Claims.Sampling.Bext
+import Proofs.Flock.Claims.Sampling.Opens
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 
@@ -28,8 +29,9 @@ draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the executable Bernoull
 (`Sampling.ExecBernoulli`), every law's live draw's (`Sampling.Live`), the sampled extractor and its reruns
 (`Sampling.Extract`), the boundary values' binding, `KSLin`'s linear term (`Sampling.Binding`), the claims block's
 escape and miss as the draws' probabilities (`Sampling.Escape`), its extractor's reruns and own calls, `Efficient`
-from the decoder (`Sampling.Cost`), and `B_ext` at the block's finder, the reduction to own-call collisions and the
-block's `Bits` from its `KS` (`Sampling.Bext`). -/
+from the decoder (`Sampling.Cost`), `B_ext` at the block's finder, the reduction to own-call collisions and the
+block's `Bits` from its `KS` (`Sampling.Bext`), and the block's openings binding the boundary values, disagreeing
+openings an own-call collision when the path check binds (`Sampling.Opens`). -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
