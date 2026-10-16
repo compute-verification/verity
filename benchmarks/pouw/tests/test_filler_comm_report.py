@@ -88,7 +88,8 @@ def _write_pfill(tmp_path, *, mma="IMMA.16832.S8.S8", app="2430", slow=41):
         lines = [json.dumps({"mode": "pf_gate", "kind": k, "rank": r, "ok": True}) for k in ("fixed", "up", "cut")]
         lines += [rec("base", [40, 40, 40]), rec("nocomm", [30, 30, 30]), rec("comm", [8, 8, 8]),
                   rec("phase", [slow] * 3, fill_mmas_rep=4e7, fill_macs_rep=4e7 * 4096.0, fill_mmas_full_rep=1e7,
-                      rec_checked=16, rec_bad=0, whole_checked=8, warps_checked=8, shape_bad=0, cut_warps=2000)]
+                      rec_checked=16, rec_bad=0, whole_checked=8, warps_checked=8, shape_bad=0, cut_warps=2000,
+                      fold_nc=2, fold_s=64, fold_xin=0)]
         (d / f"rank{r}.jsonl").write_text("\n".join(lines) + "\n")
     (tmp_path / "sass.txt").write_text(f"     16 {mma}\n")
     (tmp_path / "alone.jsonl").write_text(json.dumps({"mode": "alone", "ok": True, "share_gpu": 0.75,
@@ -108,7 +109,8 @@ def test_pfill_fill_counts_mmas_and_reads_k(tmp_path):
     _write_pfill(tmp_path)
     (row,) = R.rows(str(tmp_path))
     assert row["fill"] == pytest.approx(4e7 * 4096 / 41e-3 / PEAK)
-    assert row["fill_k"] == pytest.approx(0.9 * row["fill"])
+    assert row["fold"] == "duo"
+    assert row["fill_k"] == pytest.approx(0.9 * row["fill"])  # duo binds every word (PROVED)
     assert row["coverage_base"] == pytest.approx(0.225 * row["served"])
     assert row["coverage"] == pytest.approx(0.225 * row["served"] * 40 / 41 + row["fill_k"])
     assert row["fill_finished"] == pytest.approx(0.25 * row["fill"])
@@ -124,3 +126,49 @@ def test_pfill_gates_fail(tmp_path, kw, gate):
     _write_pfill(tmp_path, **kw)
     g = R.gates(str(tmp_path), list(R.rows(str(tmp_path))))
     assert not g[gate]["ok"] and not g["all_ok"]
+
+
+def test_proved_fraction_by_fold():
+    # decision 43: duo binds every word (PROVED), ram binds word pairs only (half), XOR-in is provisional at (S+1)/(2S)
+    assert R.proved_fraction(2, False, 64) == pytest.approx(0.9)
+    assert R.proved_fraction(4, False, 64) == pytest.approx(0.45)             # round 3's rem fill K was 2x this
+    assert R.proved_fraction(4, True, 64) == pytest.approx(0.9 * 65 / 128)    # XOR-in, provisional
+    assert R.proved_fraction(None, False, None) == pytest.approx(0.9)         # no fold recorded: word-binding reading
+    assert R.fold_label(2, False) == "duo"
+    assert R.fold_label(4, False) == "ram"
+    assert R.fold_label(4, True) == "xin(prov)"
+
+
+def _write_defer(tmp_path, nc, xin, store_bytes=25e9):
+    d = tmp_path / "set0"
+    d.mkdir()
+    (d / "settings.txt").write_text("NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64 TPC_DT=8192\n")
+    served = 1e11
+    for r in (0, 1):
+        def rec(arm, reps, **kw):
+            return json.dumps({"mode": "tp", "tp": 2, "rank": r, "B": 256, "L": 2048, "arm": arm, "mhz": MHZ,
+                               "served_macs": served, "reps": [[ms, MHZ, 300] for ms in reps], **kw})
+        lines = [rec("base", [80, 80, 80]),
+                 rec("defer", [88, 88, 88], fill_macs_rep=1e7, defer_demand_macs=served, defer_gap_macs_rep=served,
+                     defer_drain_macs_rep=0.0, dcap=10, dSd=64, dT=8192, defer_store_bytes=store_bytes,
+                     fold_nc=nc, fold_s=64, fold_xin=(1 if xin else 0),
+                     dp_whole_checked=32, dp_whole_bad=0, dp_whole_control_equal=0)]
+        (d / f"rank{r}.jsonl").write_text("\n".join(lines) + "\n")
+    return served
+
+
+def test_defer_fill_k_and_storage_duo(tmp_path):
+    _write_defer(tmp_path, nc=2, xin=False)
+    (row,) = R.rows(str(tmp_path))
+    assert row["defer_fold"] == "duo"
+    assert row["defer_fill_k"] == pytest.approx(row["defer_fill"] * 0.9)
+    assert row["defer_gap_share"] == pytest.approx(1.0) and row["defer_overflow_share"] == pytest.approx(0.0)
+    assert row["defer_store_gib"] == pytest.approx(25e9 / 2**30)
+    assert row["defer_slowdown"] == pytest.approx(88 / 80)
+
+
+def test_defer_fill_k_xin_is_provisional(tmp_path):
+    _write_defer(tmp_path, nc=4, xin=True)
+    (row,) = R.rows(str(tmp_path))
+    assert row["defer_fold"] == "xin(prov)"
+    assert row["defer_fill_k"] == pytest.approx(row["defer_fill"] * 0.9 * 65 / 128)

@@ -56,6 +56,21 @@
 
 #include <map>
 
+// The fold the TP filler path (tp_dfill_k) and the deferred pass commit their receipts with (decision 43, the filler
+// receipt break). Default duo (NC 2): it binds every word under Theorem K (c = 1 at φ 0.9), PROVED. -DTP_NC=4 is the ram
+// fold, which binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words (round 8, P2-FF); with
+// -DPFILL_XIN (FILL-SEC's drop-in 5e3b88559) the NC-4 fold is XOR-in, provisional ((S+1)/(2S) of its words under K).
+// pf_absorb and pf_fold read NC, so one macro picks the fold for every launch and every host reference.
+#ifndef TP_NC
+#define TP_NC 2
+#endif
+static_assert(TP_NC == 2 || TP_NC == 4, "TP_NC is the receipt fold: 2 (duo, PROVED) or 4 (ram; with -DPFILL_XIN, XOR-in)");
+#ifdef PFILL_XIN
+constexpr int TP_XIN = 1;
+#else
+constexpr int TP_XIN = 0;
+#endif
+
 #define NK(x)                                                                                     \
   do {                                                                                            \
     ncclResult_t r_ = (x);                                                                        \
@@ -467,11 +482,11 @@ static uint64_t kf_ref_warp(uint64_t c0, uint64_t c1, uint64_t tile, int S, int 
         const uint64_t R0 = Ar[16 * f + g], R1 = Ar[16 * f + g + 8];
         for (int j = 0; j < jn; j++) {
           const uint64_t b0 = Bb[8 * j + 2 * t], b1 = Bb[8 * j + 2 * t + 1];
-          pf_absorb<4>(y, z, pf_word<PF_BITS>(R0, b0), pf_word<PF_BITS>(R0, b1), pf_word<PF_BITS>(R1, b0),
+          pf_absorb<TP_NC>(y, z, pf_word<PF_BITS>(R0, b0), pf_word<PF_BITS>(R0, b1), pf_word<PF_BITS>(R1, b0),
                        pf_word<PF_BITS>(R1, b1), key);
         }
       }
-      h ^= pf_fold(K, pos, (uint64_t)y);
+      h ^= pf_fold(K, pos, TP_NC == 2 ? ((uint64_t)z << 32 | y) : (uint64_t)y);
     }
   }
   return h;
@@ -530,10 +545,10 @@ static uint64_t tp_defer_ref_warp(uint64_t c0, uint64_t c1, uint64_t chunk, int 
             const int b0 = B[(size_t)c0col * 32 + kb], b1 = B[(size_t)c1col * 32 + kb];
             d[0] += rg * b0; d[1] += rg * b1; d[2] += rg8 * b0; d[3] += rg8 * b1;
           }
-          pf_absorb<4>(y, z, (uint32_t)d[0], (uint32_t)d[1], (uint32_t)d[2], (uint32_t)d[3], key);
+          pf_absorb<TP_NC>(y, z, (uint32_t)d[0], (uint32_t)d[1], (uint32_t)d[2], (uint32_t)d[3], key);
         }
       }
-      h ^= pf_fold(K, pos, (uint64_t)y);
+      h ^= pf_fold(K, pos, TP_NC == 2 ? ((uint64_t)z << 32 | y) : (uint64_t)y);
     }
   }
   return h;
@@ -618,7 +633,7 @@ static void glue(Rank& R, const void* in, size_t in_bytes, void* out, size_t out
 }
 
 static void kfill_launch(const PFill& f, int slot, uint64_t c0, uint64_t c1, cudaStream_t st) {
-  kfill_k<4><<<f.grid, 32 * PF_W * KF_G, KF_SMEM, st>>>(c0, c1, f.epoch, slot, f.nslots, f.cap(slot), f.maxcap(), f.S, f.poll,
+  kfill_k<TP_NC><<<f.grid, 32 * PF_W * KF_G, KF_SMEM, st>>>(c0, c1, f.epoch, slot, f.nslots, f.cap(slot), f.maxcap(), f.S, f.poll,
                                                         f.flags + slot, f.rec, f.qrec, f.cnt, f.total);
 }
 
@@ -628,7 +643,7 @@ static uint64_t g_tc0 = 0x0123456789abcdefull, g_tc1 = 0xfedcba9876543210ull;  /
 static void dpass_launch(Rank& R, int slot, cudaStream_t st) {
   const DPass& dp = R.dp;
   const PFill& f = R.pf;
-  tp_dpass_k<4><<<dp.grid, 32 * PF_W * KF_G, KF_SMEM, st>>>(
+  tp_dpass_k<TP_NC><<<dp.grid, 32 * PF_W * KF_G, KF_SMEM, st>>>(
       g_tc0, g_tc1, dp.Sd, f.poll, dp.dmaxc, f.flags + slot, dp.dA, dp.dB, dp.dU, dp.dBias, dp.dwrap, dp.dctr, dp.dcap,
       dp.drec, dp.dqrec, dp.dtotal, f.epoch, slot, f.nslots, f.cap(slot), f.maxcap(), f.S, f.rec, f.qrec, f.cnt, f.total);
 }
@@ -713,7 +728,7 @@ static void enqueue_step(Rank& R, const std::vector<Lt>& p, const Lt& lm, int ki
   // the defer arm drains the step's deferred overflow (the quota the gaps did not reach) on every SM, no filler: its time
   // is part of the step, so the slowdown carries the overflow's cost
   if (sidework == 2)
-    tp_drain_k<4><<<R.dp.dgrid, 32 * PF_W * KF_G, KF_SMEM, st>>>(g_tc0, g_tc1, R.dp.Sd, R.dp.dA, R.dp.dB, R.dp.dU, R.dp.dBias,
+    tp_drain_k<TP_NC><<<R.dp.dgrid, 32 * PF_W * KF_G, KF_SMEM, st>>>(g_tc0, g_tc1, R.dp.Sd, R.dp.dA, R.dp.dB, R.dp.dU, R.dp.dBias,
                                                                 R.dp.dwrap, R.dp.dctr, R.dp.dcap, R.dp.drec, R.dp.dqrec,
                                                                 R.dp.dtotal);
 }
@@ -723,7 +738,7 @@ static void enqueue_step(Rank& R, const std::vector<Lt>& p, const Lt& lm, int ki
 static void enqueue_dalone(Rank& R) {
   cudaStream_t st = R.d.st;
   dprolog_k<<<1, 32, 0, st>>>(R.dp.dctr);
-  tp_drain_k<4><<<R.dp.dgrid, 32 * PF_W * KF_G, KF_SMEM, st>>>(g_tc0, g_tc1, R.dp.Sd, R.dp.dA, R.dp.dB, R.dp.dU, R.dp.dBias,
+  tp_drain_k<TP_NC><<<R.dp.dgrid, 32 * PF_W * KF_G, KF_SMEM, st>>>(g_tc0, g_tc1, R.dp.Sd, R.dp.dA, R.dp.dB, R.dp.dU, R.dp.dBias,
                                                               R.dp.dwrap, R.dp.dctr, R.dp.dcap, R.dp.drec, R.dp.dqrec,
                                                               R.dp.dtotal);
 }
@@ -985,6 +1000,12 @@ static int run_point(Rank& R, int B, int L, int reps) {
   lin += (double)B * (T_VOCAB / R.tp) * T_HID;
   const double att = 2.0 * T_LAYERS * B * (T_HQ / R.tp) * T_HD * (double)L;
   const double served = lin + att;
+  // per-shard storage decision 36's decode half holds: the served-side operand of each deferred product kept over the
+  // sub-round (the weights are resident, the KV cache is the served cache). Per token per layer, int8: the four linears'
+  // input widths (LK[j]) plus attention's Q ((HQ/tp)·HD); the lm_head input once. Independent of B and of L (the cache
+  // read isn't re-stored); it scales with the sub-round's tokens (R.dp.T) and so is the cost of a larger T.
+  const double store_tok_layer = (double)R.LK[0] + R.LK[1] + R.LK[2] + R.LK[3] + (double)(T_HQ / R.tp) * T_HD;
+  const double defer_store = (store_tok_layer * T_LAYERS + (double)T_HID) * (double)R.dp.T;
   // decision 36's deferred demand a step = the step's own served MACs (each clean step makes one step's noised products,
   // batched over the sub-round); the chunk quota rounds that to whole chunks
   if (R.dp.on) {
@@ -1013,7 +1034,7 @@ static int run_point(Rank& R, int B, int L, int reps) {
     const std::vector<Rep> v = dalone ? time_work(R.d, [&] { enqueue_dalone(R); }, reps)
                                       : time_work(R.d, [&] { enqueue_step(R, p, lm, kind, sidework, B, L, &wrapped); }, reps);
     double mmas_rep = 0;
-    char extra[768] = "";
+    char extra[1024] = "";
     if (sidework == 1) {
       unsigned long long tot[2], pairs_last;
       CK(cudaMemcpy(tot, R.pf.total, 16, cudaMemcpyDeviceToHost));
@@ -1024,11 +1045,12 @@ static int run_point(Rank& R, int B, int L, int reps) {
       snprintf(extra, sizeof extra, ", \"fill_mmas_full_rep\": %.1f, \"fill_mmas_last\": %.1f, \"rec_checked\": %ld, "
                "\"rec_bad\": %ld, \"whole_checked\": %ld, \"whole_bad\": %ld, \"whole_control_equal\": %ld, "
                "\"warps_checked\": %ld, \"warps_bad\": %ld, \"warps_control_equal\": %ld, \"shape_bad\": %ld, "
-               "\"cut_warps\": %ld, \"pf\": [%d, %d, %d, %d, %d, %d, %d]",
+               "\"cut_warps\": %ld, \"pf\": [%d, %d, %d, %d, %d, %d, %d], "
+               "\"fold_nc\": %d, \"fold_s\": %d, \"fold_xin\": %d",
                4.0 * tot[1] / (reps + 2), 4.0 * pairs_last, ck.whole + ck.warps,
                ck.whole_bad + ck.warps_bad + ck.whole_ctl + ck.warps_ctl, ck.whole, ck.whole_bad, ck.whole_ctl, ck.warps,
                ck.warps_bad, ck.warps_ctl, shape_bad, cut_warps, PF_W * KF_G, R.pf.NC, R.pf.S, R.pf.tiles, R.pf.tiles_g,
-               R.pf.poll, R.pf.grid);
+               R.pf.poll, R.pf.grid, R.pf.NC, R.pf.S, TP_XIN);
       if (!ck.clean() || shape_bad) rc = 8;
     } else if (defer || dalone) {
       unsigned long long dtot[2];
@@ -1043,10 +1065,11 @@ static int run_point(Rank& R, int B, int L, int reps) {
       snprintf(extra, sizeof extra, ", \"defer_gap_pairs_rep\": %.1f, \"defer_drain_pairs_rep\": %.1f, "
                "\"defer_gap_macs_rep\": %.6e, \"defer_drain_macs_rep\": %.6e, \"defer_demand_macs\": %.6e, \"dcap\": %d, "
                "\"dchunk_pairs\": %lld, \"dSd\": %d, \"dT\": %d, \"dwrap\": %d, \"dmaxc\": %d, \"dgrid\": %d, "
+               "\"defer_store_bytes\": %.6e, \"fold_nc\": %d, \"fold_s\": %d, \"fold_xin\": %d, "
                "\"dp_whole_checked\": %ld, \"dp_whole_bad\": %ld, \"dp_whole_control_equal\": %ld",
                gap_pairs, drain_pairs, gap_pairs * 4 * 4096.0, drain_pairs * 4 * 4096.0, served, R.dp.dcap,
-               R.dp.chunk_pairs(), R.dp.Sd, R.dp.T, R.dp.dwrap, R.dp.dmaxc, defer ? R.dp.grid : R.dp.dgrid, dc.whole,
-               dc.whole_bad, dc.whole_ctl);
+               R.dp.chunk_pairs(), R.dp.Sd, R.dp.T, R.dp.dwrap, R.dp.dmaxc, defer ? R.dp.grid : R.dp.dgrid,
+               defer_store, R.pf.NC, R.pf.S, TP_XIN, dc.whole, dc.whole_bad, dc.whole_ctl);
       if (!dc.clean()) rc = 8;
     }
     emit(R, a.c_str(), B, L, v, (dalone || kind == 2) ? 0 : served, mmas_rep, extra);
@@ -1064,7 +1087,7 @@ static int pf_setup(PFill& f) {
   f.tiles = getenv_i("TPC_TILES", 2);
   f.tiles_g = getenv_i("TPC_TILES_G", 16);
   f.poll = getenv_i("TPC_POLL", KF_PJ);
-  if (getenv_i("TPC_NC", 4) != 4) { fprintf(stderr, "pfill-k's receipt is the ram fold: TPC_NC 4\n"); return 1; }
+  f.NC = TP_NC;  // the fold is compile-time (TP_NC): duo (2, PROVED) by default, or ram/XOR-in (4, -DPFILL_XIN)
   if (f.S < 32 || f.S % 32) { fprintf(stderr, "TPC_S must be a positive multiple of 32 (pfill's)\n"); return 1; }
   if (f.poll > 0 && f.poll % KF_PJ) { fprintf(stderr, "TPC_POLL must be -1, 0 or a multiple of %d\n", KF_PJ); return 1; }
   if (f.tiles < 1 || f.tiles_g < 1 || f.grid < 1) { fprintf(stderr, "TPC_TILES, TPC_TILES_G and the grid must be >= 1\n"); return 1; }
@@ -1081,8 +1104,8 @@ static int pf_setup(PFill& f) {
   CK(cudaStreamCreateWithFlags(&f.side, cudaStreamNonBlocking));
   CK(cudaEventCreateWithFlags(&f.fork, cudaEventDisableTiming));
   CK(cudaEventCreateWithFlags(&f.join, cudaEventDisableTiming));
-  CK(cudaFuncSetAttribute(kfill_k<4>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)KF_SMEM));
-  CK(cudaFuncSetAttribute(kfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(kfill_k<TP_NC>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)KF_SMEM));
+  CK(cudaFuncSetAttribute(kfill_k<TP_NC>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   // loaded now: under lazy loading a kernel's first launch can wait for the running kernels, so the cut gate's flag
   // would rise only after the filler it should cut had finished
   cudaFuncAttributes fa;
@@ -1122,10 +1145,10 @@ static int dp_setup(Rank& R) {
   CK(cudaMalloc(&dp.dtotal, 16));
   CK(cudaMalloc(&dp.drec, (size_t)TP_DR_MAX * PF_W * 8));
   CK(cudaMalloc(&dp.dqrec, (size_t)TP_DR_MAX * PF_W * 4));
-  CK(cudaFuncSetAttribute(tp_dpass_k<4>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)KF_SMEM));
-  CK(cudaFuncSetAttribute(tp_dpass_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-  CK(cudaFuncSetAttribute(tp_drain_k<4>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)KF_SMEM));
-  CK(cudaFuncSetAttribute(tp_drain_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(tp_dpass_k<TP_NC>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)KF_SMEM));
+  CK(cudaFuncSetAttribute(tp_dpass_k<TP_NC>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(tp_drain_k<TP_NC>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)KF_SMEM));
+  CK(cudaFuncSetAttribute(tp_drain_k<TP_NC>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   cudaFuncAttributes fa;
   CK(cudaFuncGetAttributes(&fa, dprolog_k));
   CK(cudaStreamSynchronize(R.d.st));
@@ -1143,7 +1166,7 @@ static int dp_gate(Rank& R) {
   CK(cudaMemset(dp.dtotal, 0, 16));
   CK(cudaMemset(dp.drec, 0xA5, (size_t)cap * PF_W * 8));
   CK(cudaMemset(dp.dqrec, 0xA5, (size_t)cap * PF_W * 4));
-  tp_drain_k<4><<<1, 32 * PF_W * KF_G, KF_SMEM, R.d.st>>>(g_tc0, g_tc1, dp.Sd, dp.dA, dp.dB, dp.dU, dp.dBias, dp.dwrap,
+  tp_drain_k<TP_NC><<<1, 32 * PF_W * KF_G, KF_SMEM, R.d.st>>>(g_tc0, g_tc1, dp.Sd, dp.dA, dp.dB, dp.dU, dp.dBias, dp.dwrap,
                                                           dp.dctr, cap, dp.drec, dp.dqrec, dp.dtotal);
   CK(cudaDeviceSynchronize());
   CK(cudaGetLastError());

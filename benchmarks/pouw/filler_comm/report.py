@@ -8,7 +8,9 @@ Every rank times the same lockstep step, so a time is the median over the arm's 
 phase are the medians over their (interleaved) repeats. Shares are of the tensor capacity of one GPU at the clock read:
 served = the step's int8 MACs, fill = the phase filler's; idle = 1 - served; comm = (base - nocomm) / base, the exposed
 collective time; off-comm idle = idle - comm, the idle tensor time the collective windows don't reach; slowdown = phase /
-base. fill K = fill × K_FRACTION, pfill-k's proved fraction under Theorem K (c = 1 at φ = 0.9). coverage is filler-scorer
+base. fill K = fill × the fold's proved fraction under Theorem K (decision 43): duo (NC 2) binds every word, PHI = 0.9,
+PROVED; the ram fold (NC 4) binds word pairs only, 0.45; XOR-in (NC 4, -DPFILL_XIN) is provisional at 0.9·(S+1)/(2S).
+coverage is filler-scorer
 v3's per GPU at the slowest rank's step: the scorer's serving fraction × served (at base alone, at phase with the
 filler) + fill K. The fill counts every MMA
 a warp ran (partial tiles included: each word is committed as it leaves its MMA); "fill (whole tiles)" counts only tiles
@@ -29,8 +31,33 @@ import statistics
 from collections import defaultdict
 from pathlib import Path
 
-K_FRACTION = 0.9
+PHI = 0.9  # Theorem K's per-word proved fraction for a word-binding fold (c = 1 at φ 0.9)
+K_FRACTION = PHI  # the fraction of a run with no fold recorded (an old binary): the word-binding reading
 SASS_OK = {"IMMA.16832.S8.S8"}
+
+
+def proved_fraction(nc, xin, S):
+    """The fold's proved fill fraction under Theorem K (decision 43, the filler receipt break). duo (NC 2) binds every
+    word: PHI, PROVED. The ram fold (NC 4) binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words
+    (PHI/2); round 3's rem fill K, taken at PHI under ram, was 2× this. XOR-in (NC 4 with -DPFILL_XIN) is provisional: it
+    certifies (S+1)/(2S) of its words (state-independent complement flips fix only S+1 of 2S word shadows)."""
+    if nc is None:
+        return PHI
+    if nc == 2:
+        return PHI
+    if nc == 4 and xin:
+        return PHI * (S + 1) / (2 * S)
+    return PHI * 0.5
+
+
+def fold_label(nc, xin):
+    if nc is None:
+        return None
+    if nc == 2:
+        return "duo"
+    if nc == 4 and xin:
+        return "xin(prov)"
+    return "ram"
 
 _spec = importlib.util.spec_from_file_location("filler_scoring", Path(__file__).resolve().parents[1] / "filler" / "scoring.py")
 S = importlib.util.module_from_spec(_spec)
@@ -75,7 +102,15 @@ def rows(out_dir):
 
             def first(arm, k):
                 reps = by_arm.get(arm)
-                return statistics.median(r[k] for ranks in reps for r in ranks) if reps else None
+                if not reps:
+                    return None
+                vals = [r[k] for ranks in reps for r in ranks if k in r]
+                return statistics.median(vals) if vals else None
+
+            def fold_of(arm):
+                nc, xin, S = first(arm, "fold_nc"), first(arm, "fold_xin"), first(arm, "fold_s")
+                nc = int(nc) if nc is not None else None
+                return nc, bool(xin), int(S) if S is not None else None
 
             base, nocomm, comm, phase, commphase = (t(a) for a in ("base", "nocomm", "comm", "phase", "commphase"))
             row = {"set": os.path.basename(sd), "settings": settings, "tp": key[0], "B": key[1], "L": key[2],
@@ -94,7 +129,9 @@ def rows(out_dir):
                     fm = first("phase", "fill_macs_rep")
                     pm = first("phase", "mhz")
                     row["fill"] = fm / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
-                    row["fill_k"] = row["fill"] * K_FRACTION
+                    nc, xin, Sf = fold_of("phase")
+                    frac = proved_fraction(nc, xin, Sf)
+                    row["fold"], row["fill_k"] = fold_label(nc, xin), row["fill"] * frac
                     p0 = by_arm["phase"][0][0]
                     unit = "mmas" if "fill_mmas_rep" in p0 else "steps"
                     if p0.get(f"fill_{unit}_full_rep") is not None:
@@ -102,7 +139,7 @@ def rows(out_dir):
                     row["served_phase"] = macs / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
                     cs = S.CERTIFIED["serving"]["fraction"]
                     row["coverage_base"] = cs * row["served"]
-                    row["coverage"] = cs * row["served_phase"] + K_FRACTION * row["fill"]
+                    row["coverage"] = cs * row["served_phase"] + frac * row["fill"]
                     pr = [r for ranks in by_arm["phase"] for r in ranks]
                     row["rec_bad"] = sum(r.get("rec_bad", 0) for r in pr)
                     row["rec_checked"] = sum(r.get("rec_checked", 0) for r in pr)
@@ -130,7 +167,11 @@ def rows(out_dir):
                 row["defer_slowdown"] = defer / base
                 fm = first("defer", "fill_macs_rep")
                 row["defer_fill"] = fm / (defer * 1e-3) / (1024 * 188 * pm * 1e6)
-                row["defer_fill_k"] = row["defer_fill"] * K_FRACTION   # the filler's remaining proved fill
+                nc, xin, Sf = fold_of("defer")  # the filler after the deferred quota uses the same fold
+                row["defer_fold"] = fold_label(nc, xin)
+                row["defer_fill_k"] = row["defer_fill"] * proved_fraction(nc, xin, Sf)  # the filler's remaining proved fill
+                store = first("defer", "defer_store_bytes")
+                row["defer_store_gib"] = store / 2**30 if store else None  # per-shard stored operands for the sub-round
                 dr = [r for ranks in by_arm["defer"] for r in ranks]
                 row["dp_whole_bad"] = sum(r.get("dp_whole_bad", 0) for r in dr) + sum(r.get("dp_whole_control_equal", 0) for r in dr)
                 row["dp_whole_checked"] = sum(r.get("dp_whole_checked", 0) for r in dr)
@@ -223,18 +264,21 @@ def main():
         print()
         print("Decision 36's deferred decode pass: demand a step = the step's served MACs; gap share = run beside the "
               "collectives; overflow = drained after the step; slowdown = the true step-time cost (gap share 1 with "
-              "slowdown > 1 means it ran in the gap windows but did not hide); dalone = the whole step's deferred work "
-              "with no gaps.")
-        print("| set | TP | B | L | T | base ms | defer ms | defer slowdown | gap share | overflow share | rem. fill K "
-              f"(x{K_FRACTION}) | dalone ms | dalone cost (xbase) | dp bad/checked |")
-        print("|" + "---|" * 15)
+              "slowdown > 1 means it ran in the gap windows but did not hide); store GiB/shard = the served-side operands "
+              "kept over the sub-round (per shard, scales with T); fold = the receipt fold (duo PROVED, ram 0.45, "
+              "xin provisional); rem. fill K = the filler's remaining proved fill under that fold; dalone = the whole "
+              "step's deferred work with no gaps.")
+        print("| set | TP | B | L | T | store GiB/shard | base ms | defer ms | defer slowdown | gap share | overflow "
+              "share | fold | rem. fill K | dalone ms | dalone cost (xbase) | dp bad/checked |")
+        print("|" + "---|" * 16)
         for r in rs:
             if not r.get("defer_ms"):
                 continue
             L = f"{r['L']} (KV wrapped)" if r["kv_wrapped"] else r["L"]
-            print(f"| {r['set']} | {r['tp']} | {r['B']} | {L} | {f(r.get('dT'))} | {f(r['base_ms'], 2)} | "
-                  f"{f(r.get('defer_ms'), 2)} | {f(r.get('defer_slowdown'), 4)} | {f(r.get('defer_gap_share'), 4)} | "
-                  f"{f(r.get('defer_overflow_share'), 4)} | {f(r.get('defer_fill_k'), 4)} | {f(r.get('dalone_ms'), 2)} | "
+            print(f"| {r['set']} | {r['tp']} | {r['B']} | {L} | {f(r.get('dT'))} | {f(r.get('defer_store_gib'), 1)} | "
+                  f"{f(r['base_ms'], 2)} | {f(r.get('defer_ms'), 2)} | {f(r.get('defer_slowdown'), 4)} | "
+                  f"{f(r.get('defer_gap_share'), 4)} | {f(r.get('defer_overflow_share'), 4)} | {r.get('defer_fold') or '-'} | "
+                  f"{f(r.get('defer_fill_k'), 4)} | {f(r.get('dalone_ms'), 2)} | "
                   f"{f(r.get('dalone_cost'), 4)} | {r.get('dp_whole_bad', '-')}/{r.get('dp_whole_checked', '-')} |")
     for s in sorted({(r["set"], r["settings"]) for r in rs}):
         print(f"- {s[0]}: `{s[1]}`")
