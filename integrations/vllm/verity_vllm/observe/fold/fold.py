@@ -118,7 +118,7 @@ from verity_vllm.observe.events import (
     ViewDesc,
 )
 from verity_vllm.observe.log import split_steps
-from verity_vllm.observe.fold.memory import MemoryModel, Unresolved
+from verity_vllm.observe.fold.memory import MemoryModel, Unresolved, compact_refs
 from verity_vllm.observe.fold.patterns.collectives import FUSED_KIND as FUSED_COLLECTIVE_KIND, KINDS as COLLECTIVE_KINDS
 from verity_vllm.observe.fold.patterns.target import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, WeightOnlyCalls
 from verity_vllm.observe.fold.resolver import (
@@ -801,10 +801,11 @@ class _Fold:
         rank, world = self.tp["rank"], self.tp["world"]
         if not (isinstance(ptype, Array) and ptype.n == world and isinstance(ptype.elem, Array) and ptype.elem.elem == Value(16)):
             raise FoldError(f"{what}: a Collective operand needs a parameter of type Array<{world}, Array<N, Value<16>>>, got {ptype!r}")
-        N = int(ptype.elem.n)
         own = op.own
-        if own.rank != 2 or tuple(own.shape) != (c.rows, N) or own.dtype != "bfloat16" or tuple(own.strides) != (N, 1):
-            raise FoldError(f"{what}: own partial must be a row-major bf16 [{c.rows}, {N}] view, got {own!r}")
+        M = max(int(own.shape[0]), 1) if op.flat and own.rank == 2 else c.rows        # token rows: one Compute row when flat
+        N = int(ptype.elem.n) // M if op.flat else int(ptype.elem.n)
+        if own.rank != 2 or tuple(own.shape) != (M, N) or own.dtype != "bfloat16" or tuple(own.strides) != (N, 1) or (op.flat and (c.rows != 1 or M * N != ptype.elem.n)):
+            raise FoldError(f"{what}: own partial must be a row-major bf16 [{M}, {N}] view{' (one flat row)' if op.flat else ''}, got {own!r}")
         if op.kind not in (*COLLECTIVE_KINDS.values(), FUSED_COLLECTIVE_KIND):
             raise FoldError(f"{what}: unknown collective kind {op.kind!r}")
         if not op.site:
@@ -812,7 +813,7 @@ class _Fold:
         step, k = self.cur_step, self.cur_coll_k
         self.cur_coll_k += 1
         by_req: dict[int, list[int]] = {}
-        for i in range(c.rows):
+        for i in range(M):
             rp = self._attribution(c, i)
             if rp is None:
                 raise FoldError(f"{what}: collective row {i} of {c.rows} has no request attribution (the row count matches neither the step's "
@@ -842,21 +843,20 @@ class _Fold:
             for j, row in enumerate(rws):
                 row_map[row] = (pidx, base_of, j, f"s{step}_k{k}")
         event = min(c.consumed) if c.consumed else self.cur_event
-        self.collectives.append({"step": step, "k": k, "kind": op.kind, "site": op.site, "rows": c.rows, "N": N, "rank": rank, "world": world,
-                                 "event": event, "own_view": own, "fields": fields})
-        return {"step": step, "k": k, "N": N, "rank": rank, "world": world, "kind": op.kind, "site": op.site, "row_map": row_map}
+        self.collectives.append({"step": step, "k": k, "kind": op.kind, "site": op.site, "rows": M, "N": N, "rank": rank, "world": world,
+                                 "event": event, "own_view": own, "fields": fields, **({"flat": True} if op.flat else {})})
+        return {"step": step, "k": k, "N": N, "M": M, "rank": rank, "world": world, "kind": op.kind, "site": op.site, "row_map": row_map}
 
     def _collective_parts(self, prep: dict, op: Collective, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
         """Row i's `parts`: [own row, peer row] in RANK order.  The own row is read from memory (its producer must have written it: a
         collective input nobody computed is Unresolved, exactly as any other operand); the peer row is the request's `peers` parameter
         leaves at the field allocated for this collective -- a declared input of the Program, never a value the fold invents."""
-        v = row_view(op.own, i)
+        v = op.own if op.flat else row_view(op.own, i)
         own = self._mem("read", self.mem.read, v)
         self._journal("read", v, own, what=f"collective {op.kind} (step {prep['step']}, k {prep['k']}) own row {i}")
-        pidx, base_of, j, _name = prep["row_map"][i]
-        N = prep["N"]
-        # [lane vllm-tp-n] `parts` in RANK order over the whole world: this rank's own row at index `rank`, every peer's row at its rank
-        parts = [own if r == prep["rank"] else Affine("p", pidx, base_of[r] + j * N, N) for r in range(prep["world"])]
+        N, maps = prep["N"], [prep["row_map"][t] for t in (range(prep["M"]) if op.flat else (i,))]
+        peer = lambda r: compact_refs([Affine("p", pidx, base_of[r] + j * N, N) for pidx, base_of, j, _ in maps])  # noqa: E731
+        parts = [own if r == prep["rank"] else peer(r) for r in range(prep["world"])]   # [lane vllm-tp-n] RANK order over the world
         refs = concat(parts)
         if refs.count != ptype.leaves:
             raise FoldError(f"{spec_label(c.spec)}.{pname}[row {i}]: {refs.count} refs for {ptype!r} ({ptype.leaves} leaves)")
@@ -1223,7 +1223,7 @@ def _operand_capacity(op: Operand) -> int | None:
     if isinstance(op, PerRow):
         return op.view.shape[0] if op.view.shape else 1
     if isinstance(op, Collective):          # [R17 D90] one row per own-partial row
-        return op.own.shape[0] if op.own.shape else 1
+        return 1 if op.flat or not op.own.shape else op.own.shape[0]
     if isinstance(op, (Gather, GatherMany)):
         return len(op.indices)
     if isinstance(op, Param):
@@ -1244,7 +1244,7 @@ def _row_operand_view(op: Operand, i: int) -> ViewDesc | None:
     if isinstance(op, PerRow):
         return row_view(op.view, i)
     if isinstance(op, Collective):          # [R17 D90] the device view is the OWN partial row; the peer part has none (a parameter)
-        return row_view(op.own, i)
+        return op.own if op.flat else row_view(op.own, i)
     if isinstance(op, Gather):
         return row_view(op.view, op.indices[i])
     if isinstance(op, GatherMany):   # the gathered rows when they are one ascending run (KV slots of one block range), else the table

@@ -479,13 +479,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             if tp > 1:
                 # [R13 tp] rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
                 from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
+                from verity_vllm.program.registry.tp_allreduce import settings_of
                 env_now = engine_env.snapshot()
-                enabled = lambda name: str(env_now.get(name, "1")).strip().lower() not in ("0", "false", "no", "off")  # noqa: E731
-                allreduce_settings = {
-                    "custom_all_reduce": not bool(cfg.parallel_config.disable_custom_all_reduce),
-                    "symmetric_memory": enabled("VLLM_ALLREDUCE_USE_SYMM_MEM"),
-                    "flashinfer": enabled("VLLM_ALLREDUCE_USE_FLASHINFER"),
-                }
+                allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
                 observe_allreduce_settings(allreduce_settings)
                 bus = CollectiveBus(rank=rank, world=tp, settings=allreduce_settings)
                 tp_stack.enter_context(tp_group_override(rank, tp, bus))

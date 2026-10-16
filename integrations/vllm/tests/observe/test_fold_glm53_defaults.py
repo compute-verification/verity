@@ -213,3 +213,64 @@ def test_a_permuted_weight_root_answers_its_transposed_reads_from_its_own_map():
     assert len(m._allocs[2].root_maps) == 0
     assert runs(m.read(boxes[0])) == slow(m, boxes[0])
     assert m.read(boxes[0])[0] == ("n", 9, 0)
+
+
+AR_SCHEMA = "vllm::all_reduce(Tensor tensor, str group_name) -> Tensor"
+DEFAULTS = {"custom_all_reduce": True, "symmetric_memory": True, "flashinfer": True}
+
+
+def _ar(M, N=H):
+    return _node("vllm.all_reduce.default", AR_SCHEMA, [view(5630, (M, N)), "tp:0"], outs=view(5631, (M, N)), module="model.layers.0.mlp")
+
+
+def _ar_ctx(M, notes=None, flags=None):
+    ctx = _ctx(M)
+    profile = {**ctx.header.profile, **({"engine_flags": flags} if flags is not None else {})}
+    return dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, notes=notes or {}, profile=profile))
+
+
+def _build_kind(settings, M, N=H):
+    """The Definition the Build's `AllReduceRule` emits for the same call (`vllm_bindings.collectives._allreduce_kind`)."""
+    from types import SimpleNamespace
+    from verity_vllm.program.frontend.rules.vllm_bindings import collectives as BC
+    from verity_vllm.program.frontend.rules.vocab import vocabulary_for
+    from verity_vllm.program.registry import tp_allreduce as T
+
+    setting, route = T.served_route(settings, M, N)
+    plan = {"captured": T.covered(setting, N, route, M), "M": M, "N": N}
+    voc = vocabulary_for("profile", "b1-eager-v3")
+    return BC._allreduce_kind(SimpleNamespace(kind=lambda role, node, **st: voc.kind(role, **st)), None, plan, 8)
+
+
+@pytest.mark.parametrize("custom", [True, False], ids=["defaults", "custom-off"])
+@pytest.mark.parametrize("M,spec", [(256, "AllReduceMultimem_v1{WORLD=8,SIZE=1572864,"), (1, "AllReduceMnnvl_v1{WORLD=8,N=6144,SHOT=1}")])
+def test_a_covered_tp8_all_reduce_is_the_build_s_one_call_over_the_flattened_partial(custom, M, spec):
+    """vLLM's route at the capture's settings, as `AllReduceRule` binds it: one Compute over `Array<8, Array<M*N>>` (VLLM-14)."""
+    from verity_vllm.observe.fold.patterns.collectives import TpCollective
+
+    settings = {**DEFAULTS, "custom_all_reduce": custom}
+    r = TpCollective(world=8).match(_ar(M), _ar_ctx(M, {"allreduce_settings": settings}))
+    assert isinstance(r, Compute), r
+    assert spec_label(r.spec).startswith(spec) and r.spec.id == _build_kind(settings, M).id and r.rows == 1
+    (coll,), (out,) = r.operands, r.outputs
+    assert isinstance(coll, Collective) and coll.flat and coll.own == view(5630, (M, H)) and coll.site == "model.layers.0.mlp"
+    assert isinstance(out, PerRow) and out.view == view(5631, (1, M * H)) and len(r.attribution) == M
+
+
+def test_the_capture_s_settings_are_its_recorded_engine_switches_else_no_route():
+    """A header without `allreduce_settings` reads the rank's `disable_custom_all_reduce` and the manifest's engine flags; with neither,
+    or on a route no capture covers, the all-reduce stays one `AllReduce_v2` per row."""
+    from verity_vllm.observe.fold.patterns.collectives import TpCollective, allreduce_settings
+
+    facts = {"tp2": {"facts": {"parallel_config": {"disable_custom_all_reduce": True}}}}
+    assert allreduce_settings(_ar_ctx(1, facts).header) == {"custom_all_reduce": False, "symmetric_memory": True, "flashinfer": True}
+    assert allreduce_settings(_ar_ctx(1, facts, {"VLLM_ALLREDUCE_USE_SYMM_MEM": "0"}).header)["symmetric_memory"] is False
+    assert allreduce_settings(_ar_ctx(1).header) is None
+    pat = TpCollective(world=8)
+    assert pat.match(_ar(256), _ar_ctx(256, facts)).spec.id.startswith("AllReduceMultimem_v1{WORLD=8,SIZE=1572864,")
+    for M, ctx, node in ((256, _ar_ctx(256), _ar(256)),                                             # no recorded settings
+                         (4, _ar_ctx(4, {"allreduce_settings": DEFAULTS}), _ar(4, 4096)),           # N=4096: no capture covers it
+                         (4, _ar_ctx(4, facts, {"VLLM_ALLREDUCE_USE_SYMM_MEM": "0"}), _ar(4))):      # custom off, symmetric memory off
+        r = pat.match(node, ctx)
+        assert spec_label(r.spec) == f"AllReduce_v2{{WORLD=8,N={node.enter.args[0].shape[1]}}}" and r.rows == M
+        assert not r.operands[0].flat

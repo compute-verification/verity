@@ -138,26 +138,6 @@ def _tp_parts(node) -> list:
     return list(a) if isinstance(a, (list, tuple)) else [a]
 
 
-def _served_route(settings: dict, M: int, N: int) -> tuple[str | None, str]:
-    """The setting name and communicator route vLLM d9105ea80 takes for one bf16 [M,N] world-8 all-reduce."""
-    custom = bool(settings.get("custom_all_reduce"))
-    symm = bool(settings.get("symmetric_memory"))
-    flashinfer = bool(settings.get("flashinfer"))
-    setting = ("custom-off" if not custom and symm and flashinfer else
-               "defaults" if custom and symm and flashinfer else
-               "switch" if custom and not symm and flashinfer else None)
-    nbytes = M * N * 2
-    if flashinfer and nbytes <= tp_allreduce.FI_MAX_BYTES:
-        route = "fi_ar_comm"
-    elif custom and nbytes < (tp_allreduce.CUSTOM_SYMM_MAX_BYTES if symm else tp_allreduce.CUSTOM_MAX_BYTES):
-        route = "ca_comm"
-    elif symm and nbytes <= tp_allreduce.SYMM_MEM_MAX_BYTES:
-        route = "symm_mem_comm"
-    else:
-        route = "pynccl_comm"
-    return setting, route
-
-
 def _coverage(parts, node, ctx, *, fused: bool = False):
     settings = active_allreduce_settings()
     if settings is None:
@@ -166,7 +146,7 @@ def _coverage(parts, node, ctx, *, fused: bool = False):
         return None, f"world {len(parts)}: tp_allreduce.CAPTURED covers world 8 only"
     rows = [rows_of(ctx.coll(a))[0] for a in parts]
     M, N = len(rows[0]), rows[0][0].type.n
-    setting, route = _served_route(settings, M, N)
+    setting, route = tp_allreduce.served_route(settings, M, N)
     if fused:
         route = "fused" if bool(settings.get("flashinfer")) and M <= tp_allreduce.fused_max_tokens(N, len(parts)) else "unfused"
     if setting is None:
@@ -178,16 +158,12 @@ def _coverage(parts, node, ctx, *, fused: bool = False):
     return {"captured": captured, "rows": rows, "M": M, "N": N, "setting": setting, "route": route}, None
 
 
+_ROUTE_KINDS = {"AllReduceMnnvl_v1": "all_reduce_mnnvl", "AllReduceMultimem_v1": "all_reduce_multimem", "AllReduceCustom_v1": "all_reduce_custom"}
+
+
 def _allreduce_kind(ctx, node, plan, world: int):
-    c, M, N, route = plan["captured"], plan["M"], plan["N"], plan["route"]
-    size = M * N
-    if c.definition == "AllReduceMnnvl_v1":
-        return ctx.kind("all_reduce_mnnvl", node, WORLD=world, N=size, SHOT=tp_allreduce.mnnvl_shot(M, N, world))
-    if c.definition == "AllReduceMultimem_v1":
-        return ctx.kind("all_reduce_multimem", node, WORLD=world, SIZE=size, **c.statics)
-    if c.definition == "AllReduceCustom_v1":
-        return ctx.kind("all_reduce_custom", node, WORLD=world, SIZE=size, **c.statics)
-    raise ValueError(f"covered route {route!r} names unsupported definition {c.definition!r}")
+    _defn, statics = tp_allreduce.route_binding(plan["captured"], world, plan["M"], plan["N"])
+    return ctx.kind(_ROUTE_KINDS[plan["captured"].definition], node, **statics)
 
 
 class AllReduceRule(OpRule):

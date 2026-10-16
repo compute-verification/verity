@@ -297,3 +297,75 @@ def test_without_the_field_boundary_split_the_one_row_reads_differ(monkeypatch, 
             assert any(t[0] == "PEER?" for t in _canon(F)) and not r["canonical_sha256"]["equal"], (m["spec"], m["step"])
         else:
             assert _canon(F) == want and r["canonical_sha256"]["equal"], (m["spec"], m["row"])
+
+
+def _parts(rs: list[tuple], n: int) -> list[list[tuple]]:
+    """A run list cut into consecutive parts of `n` leaves each."""
+    out, cur, left = [], [], n
+    for s, i, lo, hi in rs:
+        while lo < hi:
+            take = min(hi - lo, left)
+            cur.append((s, i, lo, lo + take))
+            lo, left = lo + take, left - take
+            if not left:
+                out.append(cur)
+                cur, left = [], n
+    return out
+
+
+def _merged(rs: list[tuple]) -> list[tuple]:
+    out: list[tuple] = []
+    for r in rs:
+        if out and out[-1][:2] == r[:2] and out[-1][3] == r[2]:
+            out[-1] = (*r[:2], out[-1][2], r[3])
+        else:
+            out.append(r)
+    return out
+
+
+@functools.lru_cache(maxsize=None)
+def _folded_routed(rank: int):
+    """`_folded` with a captured route for this model's [M, 4096] all-reduces at the capture's settings (custom all-reduce off), so the
+    fold takes the Build's one call per all-reduce."""
+    from verity_vllm.program.registry import tp_allreduce as T
+
+    extra = (T.Captured("custom-off", H, "fi_ar_comm", 1, 42, "AllReduceMnnvl_v1", {}, ()),
+             T.Captured("custom-off", H, "symm_mem_comm", 43, 2048, "AllReduceMultimem_v1", {"TREES": (T.GLM53_H200_TREE,) * WORLD, "FTZ": False}, ()))
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(T, "CAPTURED", T.CAPTURED + extra)
+        f = _CutFold(profile(), False)
+        f.live_in = set()
+        return f.run(read_log(fixture(rank)), with_program=False)
+
+
+@pytest.mark.parametrize("rank", RANKS)
+def test_a_routed_all_reduce_is_one_flat_call_reading_every_rank_s_partial_whole(rank):
+    """The flat Compute (VLLM-14): the same collectives and peers fields as the per-row fold, one instance per all-reduce whose part r is
+    rank r's whole [M, N] partial in row order -- the per-row instances' parts, regrouped -- and whose peer part canonicalises as a rank
+    Program's read of each whole `peers_<k>` Input."""
+    _f, per_row = _folded(rank)
+    res = _folded_routed(rank)
+    assert {e["class"] for e in res.errors} == {"SampleEnd", "TokenWiring"}, res.errors
+    assert [(c["step"], c["k"], c["kind"], c["site"], c["rows"], c["N"]) for c in res.collectives] == COLLECTIVES
+    assert [c.get("flat", False) for c in res.collectives] == [c[2] == "all_reduce" for c in COLLECTIVES]
+    assert res.peers_layout == per_row.peers_layout
+    (layout,) = res.peers_layout
+    tree = ",".join(["((((((0,(1,2)),3),5),6),4),7)"] * WORLD)
+    for step, (M, _aligned) in STEPS.items():
+        flat = [m for m in res.instances if m.get("collective") and m["step"] == step and m["collective"]["k"] == 0]
+        rows = [m for m in per_row.instances if m.get("collective") and m["step"] == step and m["collective"]["k"] == 0]
+        assert len(flat) == 1 and len(rows) == M and flat[0]["rows"] == 1
+        assert flat[0]["spec"] == (f"AllReduceMnnvl_v1{{WORLD={WORLD},N={H},SHOT=1}}" if M == 1 else
+                                   f"AllReduceMultimem_v1{{WORLD={WORLD},SIZE={M * H},TREES=({tree}),FTZ=False}}"), flat[0]["spec"]
+        (arg,) = res.body.nodes[flat[0]["node"]].args
+        got = runs(arg.refs)
+        cut = [_parts(runs(per_row.body.nodes[m["node"]].args[0].refs), H) for m in sorted(rows, key=lambda m: m["row"])]
+        by = lambda r_: {m["node"]: (m["step"], m["name"], m["row"]) for m in r_.instances}  # noqa: E731
+        named = lambda rs, nodes: [(r[0], nodes[r[1]], *r[2:]) if r[0] == "n" else r for r in rs]  # noqa: E731
+        assert named(got, by(res)) == named(_merged([r for p in range(WORLD) for row in cut for r in row[p]]), by(per_row))
+
+        to_n = [(("n", OWN, r[2], r[3]) if r[0] == "n" else ("n", PEERS0, r[2], r[3])) for r in got if r[0] == "p"]
+        mine = [x for x in layout["fields"] if x["name"].startswith(f"s{step}_k0_")]
+        F = _prog(f"fold{rank}", flat[0]["spec"], "MoeSum_v1", M * H, {PEERS0: ("Input16_v1", layout["leaves"])},
+                  {PEERS0: [(x["offset"], x["ordinal"]) for x in layout["fields"]]}, to_n, False)
+        assert _canon(F) == [("PEER", x["ordinal"], 0, M * H) for x in mine], (step, _canon(F)[:3])

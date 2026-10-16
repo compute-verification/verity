@@ -16,6 +16,7 @@ rank Program binds through `vllm_bindings.AllReduce2Rule` / `AllGather2Rule`, so
 from __future__ import annotations
 
 from verity_vllm.program.registry import b1_tp2
+from verity_vllm.program.registry import tp_allreduce as T
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
@@ -78,8 +79,42 @@ class TpCollective:
             spec = b1_tp2.all_reduce(self.world, N)      # [lane vllm-tp-n] AllReduce2_v1{N} at world 2, AllReduce_v2{WORLD,N} beyond
         if out.alloc == x.alloc:
             return unsupported(node, f"{kind}: in-place collective (received storage is the partial's); the fold states a fresh received storage", partial=repr(x), received=repr(out))
+        routed = served_route_spec(ctx.header, self.world, M, N) if kind == "all_reduce" and self.world > 2 else None
+        if routed is not None:
+            flat = ViewDesc(out.alloc, out.offset, (1, M * N), (M * N, 1), out.dtype, out.device)
+            return Compute(routed, 1, (Collective(x, kind, site, flat=True),), (PerRow(flat),), tuple(sorted(node.ids())),
+                           hint=hint_of(node, kind), kernels=(), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
         return Compute(spec, M, (Collective(x, kind, site),), (PerRow(out),), tuple(sorted(node.ids())),
                        hint=hint_of(node, kind), kernels=(), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+
+
+def allreduce_settings(header) -> dict | None:
+    """The all-reduce switches the capture ran under: its header's ``allreduce_settings`` when recorded, else the rank's recorded
+    ``parallel_config.disable_custom_all_reduce`` (``notes.tp2.facts``) with the manifest's engine flags (`tp_allreduce.settings_of`);
+    None when the capture recorded neither."""
+    notes = getattr(header, "notes", None) or {}
+    if notes.get("allreduce_settings"):
+        return dict(notes["allreduce_settings"])
+    pc = (((notes.get("tp2") or {}).get("facts") or {}).get("parallel_config") or {})
+    if not isinstance(pc.get("disable_custom_all_reduce"), bool):
+        return None
+    return T.settings_of(pc["disable_custom_all_reduce"], (getattr(header, "profile", None) or {}).get("engine_flags") or {})
+
+
+def served_route_spec(header, world: int, M: int, N: int):
+    """The Build's Definition for one communicator all-reduce of [M,N] (`vllm_bindings.AllReduceRule`: one call over M * N words on the
+    route vLLM takes at the capture's settings), or None when the capture's settings or `tp_allreduce.covered` name no route."""
+    from verity.ml.circuits.defs import bind
+
+    settings = allreduce_settings(header)
+    if settings is None or world != 8:
+        return None
+    setting, route = T.served_route(settings, M, N)
+    c = T.covered(setting, N, route, M) if setting is not None else None
+    if c is None:
+        return None
+    defn, statics = T.route_binding(c, world, M, N)
+    return bind(defn, **statics)
 
 
 FUSED_AR_NORM_OP = "vllm.flashinfer_trtllm_fused_allreduce_norm"
@@ -104,7 +139,6 @@ class TpFusedAllReduceRmsNorm:
         if node.is_triton or base_op(node.op) != FUSED_AR_NORM_OP:
             return None
         from verity.ml.circuits.defs import bind
-        from verity_vllm.program.registry import tp_allreduce as T
 
         a = bound_args(node)
         x, res, w, out = (a.get(k) for k in ("allreduce_in", "residual", "rms_gamma", "norm_out"))
