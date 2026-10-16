@@ -428,8 +428,10 @@ __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
   tp_defer_run<NC>(c0, c1, Sd, -1, nullptr, dA, dB, dU, dBias, dwrap, dctr, dcap, 1, drec, dqrec, dtotal);
 }
 
-__global__ void dprolog_k(int* dctr, unsigned long long* dtotal) {
-  if (threadIdx.x == 0) { *dctr = 0; dtotal[0] = 0; dtotal[1] = 0; }
+// a step's deferred counter back to 0 (the step's fresh demand); dtotal accumulates across the timed steps and is zeroed
+// once before timing, so defer_gap/defer_drain average over (reps + 2) steps
+__global__ void dprolog_k(int* dctr) {
+  if (threadIdx.x == 0) *dctr = 0;
 }
 
 // warp w's receipt of tile `tile` after q pairs (pf_ref's chains, cut at q): the host's side of a record
@@ -663,7 +665,7 @@ static void enqueue_step(Rank& R, const std::vector<Lt>& p, const Lt& lm, int ki
     flag = nullptr;
   };
   if (pf) prolog_k<<<1, 256, 0, st>>>(R.pf.flags, R.pf.nslots, R.pf.epoch);
-  if (sidework == 2) dprolog_k<<<1, 32, 0, st>>>(R.dp.dctr, R.dp.dtotal);
+  if (sidework == 2) dprolog_k<<<1, 32, 0, st>>>(R.dp.dctr);
   coll_ar();  // the vocab-parallel embedding
   for (int l = 0; l < T_LAYERS; l++) {
     g(R.ar, hb, R.X, (size_t)B * T_HID);  // residual + RMSNorm + quantize
@@ -714,7 +716,7 @@ static void enqueue_step(Rank& R, const std::vector<Lt>& p, const Lt& lm, int ki
 // without the gaps (dtotal[1])
 static void enqueue_dalone(Rank& R) {
   cudaStream_t st = R.d.st;
-  dprolog_k<<<1, 32, 0, st>>>(R.dp.dctr, R.dp.dtotal);
+  dprolog_k<<<1, 32, 0, st>>>(R.dp.dctr);
   tp_drain_k<4><<<R.dp.dgrid, 32 * PF_W * KF_G, KF_SMEM, st>>>(g_tc0, g_tc1, R.dp.Sd, R.dp.dA, R.dp.dB, R.dp.dU, R.dp.dBias,
                                                               R.dp.dwrap, R.dp.dctr, R.dp.dcap, R.dp.drec, R.dp.dqrec,
                                                               R.dp.dtotal);
@@ -1001,6 +1003,7 @@ static int run_point(Rank& R, int B, int L, int reps) {
     if ((defer || dalone) && !R.dp.on) continue;
     barrier(R);
     if (sidework) CK(cudaMemset(R.pf.total, 0, 16));
+    if (defer || dalone) CK(cudaMemset(R.dp.dtotal, 0, 16));  // dtotal accumulates over the timed steps (dprolog resets only dctr)
     const std::vector<Rep> v = dalone ? time_work(R.d, [&] { enqueue_dalone(R); }, reps)
                                       : time_work(R.d, [&] { enqueue_step(R, p, lm, kind, sidework, B, L, &wrapped); }, reps);
     double mmas_rep = 0;
