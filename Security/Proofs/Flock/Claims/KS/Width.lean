@@ -208,7 +208,7 @@ theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
   | rej => rw [next_rej H hact] at ha; cases ha
   | coin c => rw [next_coin H hact] at ha; cases ha
   | decide s spec sts link c₁ mids f =>
-    obtain ⟨-, hc⟩ := (next_decide H hact).1 ha
+    obtain ⟨-, -, -, -, hc⟩ := (next_decide H hact).1 ha
     refine ⟨s, spec, sts, f, act_decide hact, ?_, (Claims.Bridge.Custody.checks_ok hc).1⟩
     have hl := act_decide_final hact
     rw [List.getLast?_map, Option.bind_map] at hl
