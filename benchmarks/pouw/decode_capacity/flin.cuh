@@ -248,7 +248,9 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
 // ---------------------------------------------------------------- attention blocks with filler warps
 // qk_dec's and pv_dec's blocks, unchanged in what their 8 warps do, each with FW filler warps more that run the chain
 // until the block's attention warps are done (the hardware still schedules the blocks, so the load stays balanced).
-// Filler warp f of block blk (x fastest) runs tile tile0 + blk·FW + f.
+// Filler warp f of block blk (x fastest) runs tile tile0 + blk·FW + f. Launched with programmatic stream serialization,
+// a block's filler warps start as soon as it is resident and its attention warps wait for the previous grid; the qk
+// blocks also zero pv's output O (on ints), which dcap's step does with a memset between the two kernels.
 struct FattArgs {
   uint64_t c0, c1;
   unsigned long long tile0;
@@ -257,15 +259,23 @@ struct FattArgs {
 };
 template <int FW, int NC>
 __global__ void __launch_bounds__(QK_W * 32 + 32 * FW, 2) fqk_k(const int8_t* __restrict__ K, const int8_t* __restrict__ q,
-                                                                 int* __restrict__ S, int L, const FattArgs fa) {
+                                                                 int* __restrict__ S, int L, int* __restrict__ O, int on,
+                                                                 const FattArgs fa) {
   __shared__ int done;
   if (threadIdx.x == 0) done = 0;
   __syncthreads();
+  asm volatile("griddepcontrol.launch_dependents;" ::: "memory");
   const int w = threadIdx.x >> 5, lane = threadIdx.x & 31;
+  const size_t blk = ((size_t)blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x;
   if (w >= QK_W) {
-    const size_t slot = (((size_t)blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x) * FW + (w - QK_W);
+    const size_t slot = blk * FW + (w - QK_W);
     filler_warp<NC>(fa.c0, fa.c1, fa.tile0 + slot, &done, &done, QK_W, 0, fa.rec + slot, fa.cnt + slot);
     return;
+  }
+  asm volatile("griddepcontrol.wait;" ::: "memory");
+  {
+    const size_t nb = (size_t)gridDim.x * gridDim.y * gridDim.z, o0 = blk * on / nb, o1 = (blk + 1) * on / nb;
+    for (size_t e = o0 + threadIdx.x; e < o1; e += QK_W * 32) O[e] = 0;
   }
   qk_body(K, q, S, L, blockIdx.x, blockIdx.y, blockIdx.z, w, lane);
   __syncwarp();
@@ -278,12 +288,14 @@ __global__ void __launch_bounds__(PV_W * 32 + 32 * FW, 2) fpv_k(const int8_t* __
   __shared__ int done;
   if (threadIdx.x == 0) done = 0;
   __syncthreads();
+  asm volatile("griddepcontrol.launch_dependents;" ::: "memory");
   const int w = threadIdx.x >> 5, lane = threadIdx.x & 31;
   if (w >= PV_W) {
     const size_t slot = (((size_t)blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x) * FW + (w - PV_W);
     filler_warp<NC>(fa.c0, fa.c1, fa.tile0 + slot, &done, &done, PV_W, 0, fa.rec + slot, fa.cnt + slot);
     return;
   }
+  asm volatile("griddepcontrol.wait;" ::: "memory");
   pv_body<true>(V, P, O, L, blockIdx.x, blockIdx.y, blockIdx.z, w, lane, red);
   __syncwarp();
   if (lane == 0) atomicAdd(&done, 1);
@@ -532,14 +544,26 @@ static void fatt_prepare(Fatt& a, int FW, int NC, int B, int L) {
   CK(cudaMalloc(&a.rec, a.per * 2 * LAYERS * sizeof(unsigned long long)));
   CK(cudaMalloc(&a.cnt, a.per * 2 * LAYERS * sizeof(int)));
 }
+template <class... P, class... A>
+static void pdl_go(void (*k)(P...), dim3 grid, int threads, cudaStream_t st, A... args) {
+  cudaLaunchConfig_t cfg = {};
+  cfg.gridDim = grid;
+  cfg.blockDim = dim3(threads);
+  cfg.stream = st;
+  cudaLaunchAttribute at[1];
+  at[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
+  at[0].val.programmaticStreamSerializationAllowed = 1;
+  cfg.attrs = at;
+  cfg.numAttrs = g_pdl ? 1 : 0;
+  CK(cudaLaunchKernelEx(&cfg, k, args...));
+}
 template <int FW, int NC>
 static void fatt_go(Dev& d, const Fatt& a, int B, int L, const int8_t* K, const int8_t* V, int layer) {
   const size_t kq = (size_t)2 * layer, kp = kq + 1;
-  fqk_k<FW, NC><<<qk_grid(B, L), QK_W * 32 + 32 * FW, 0, d.st>>>(
-      K, d.q, d.S, L, FattArgs{g_c0, g_c1, fatt_tile0((int)kq), a.rec + kq * a.per, a.cnt + kq * a.per});
-  CK(cudaMemsetAsync(d.O, 0, (size_t)B * HQ * HD * sizeof(int), d.st));
-  fpv_k<FW, NC><<<pv_grid(B, L), PV_W * 32 + 32 * FW, 0, d.st>>>(
-      V, d.P, d.O, L, FattArgs{g_c0, g_c1, fatt_tile0((int)kp), a.rec + kp * a.per, a.cnt + kp * a.per});
+  pdl_go(fqk_k<FW, NC>, qk_grid(B, L), QK_W * 32 + 32 * FW, d.st, K, (const int8_t*)d.q, d.S, L, d.O, B * HQ * HD,
+         FattArgs{g_c0, g_c1, fatt_tile0((int)kq), a.rec + kq * a.per, a.cnt + kq * a.per});
+  pdl_go(fpv_k<FW, NC>, pv_grid(B, L), PV_W * 32 + 32 * FW, d.st, V, (const int8_t*)d.P, d.O, L,
+         FattArgs{g_c0, g_c1, fatt_tile0((int)kp), a.rec + kp * a.per, a.cnt + kp * a.per});
 }
 // enqueue_att's work for `layer`, with the attention filler when a.FW > 0; false if (FW, NC) isn't built
 static bool enqueue_fatt(Dev& d, const Fatt& a, int B, int L, int layer, bool* wrapped) {
