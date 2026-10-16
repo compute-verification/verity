@@ -322,15 +322,23 @@ def breakdown(dirs: list[Path]) -> list[dict]:
 
 
 # the edited arms' increments, each the arm minus the one before it (run.sh's eovl): the edited GEMMs over the fastest
-# plain, then X's commitments, the receipts' commitments, the draws
+# plain, then X's commitments, the receipts' commitments, the draws. At k = 1 ovl.cu runs no arm with its own priority
+# streams, so the eq arms (one stream a chunk) stand in
 STEPS = (("edited GEMM", None, "E:chunked"), ("X commitments", "E:chunked", "E:cgprend-fp"),
          ("receipt commitments", "E:cgprend-fp", "ER:cgprend-fp"), ("draws", "ER:cgprend-fp", "ER:cgpre-fp"))
+
+
+def step_arm(name: str | None, arms: dict) -> str | None:
+    if name is None or name in arms:
+        return name
+    eq = name.replace("cgprend-", "cgprendeq-").replace("cgpre-", "cgpreeq-")
+    return eq if eq in arms else name
 
 
 def edited(dirs: list[Path]) -> list[dict]:
     """run.sh's eovl: at each receipt stride S, the honest prefill (every linear EGEMM's edited GEMM, X and the receipts
     committed, the draws) against the fastest plain int8 prefill of the same tokens, and its increments (STEPS); the
-    protocol arms are ER's with draws (ER:cgpre*), best their fastest. With each linear's GEMM alone (eg_setup) against
+    protocol arms are ER's and ERL's with draws (cgpre, cgprerrW, cgpreeq), best their fastest. With each linear's GEMM alone (eg_setup) against
     plain's, the gates (eg_gate), the receipts' roots (eg_roots), eref.jsonl and verify.jsonl."""
     out = []
     for d in dirs:
@@ -359,11 +367,12 @@ def edited(dirs: list[Path]) -> list[dict]:
                     continue
                 arms = {n: v["ms"] for n, v in r["arms"].items()}
                 pb = min(v for n, v in arms.items() if n == "plain" or n.startswith("chunked"))
-                proto = {n: v for n, v in arms.items() if n.startswith("ER:cgpre")}
+                proto = {n: v for n, v in arms.items() if re.match(r"ERL?:cgpre(?!nd)", n)}
                 best = min(proto, key=proto.get) if proto else None
                 cell = {"M": r["M"], "k": r["k"], "S": r.get("eg_s"), "plain_best_ms": pb, "arms": arms, "best": best,
                         "eg_roots": r.get("eg_roots", {}), "cg_roots": r.get("cg_roots", {}), "steps": {}}
                 for what, a, b in STEPS:
+                    a, b = step_arm(a, arms), step_arm(b, arms)
                     if b in arms and (a is None or a in arms):
                         cell["steps"][what] = arms[b] - (pb if a is None else arms[a])
                 off = [n for n, v in cell["eg_roots"].items() if v != ("equal" if n.startswith(("ER:", "ERL:")) else "differ")]

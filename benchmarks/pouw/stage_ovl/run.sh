@@ -35,7 +35,8 @@ export CG_RS=${CG_RS:-64} CG_KS=${CG_KS:-8 16} CG_ARMS=${CG_ARMS:-plain chunked 
 export DIAGS=${DIAGS:-noop nos nomask notree all} DIAG_R=${DIAG_R:-128} DIAG_KS=${DIAG_KS:-8}
 export DIAG_ARMS=${DIAG_ARMS:-chunked cgrr2 cgonly liteconly litecrr2}
 export EG_SS=${EG_SS:-16 32 64 128} EG_R=${EG_R:-128} EG_KS=${EG_KS:-1 8}
-export EG_ARMS=${EG_ARMS:-plain chunked chunkedrr2 E:chunked E:cgprend-fp ER:cgprend-fp ER:cgpre-fp ER:cgprerr2-fp ER:cgpreeq-fp}
+export EG_ARMS=${EG_ARMS:-plain chunked chunkedrr2 E:chunked E:cgprend-fp ER:cgprend-fp ER:cgpre-fp ER:cgprerr2-fp ERL:cgpre-fp \
+  E:cgprendeq-fp ER:cgprendeq-fp ER:cgpreeq-fp}
 export PYTHONPATH=.
 NV=(nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a -DFR_ROT="${FR_ROT:-0}")
 LIBS=(-lcuda -lcublasLt -lnvidia-ml -ldl)
