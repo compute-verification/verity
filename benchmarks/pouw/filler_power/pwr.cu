@@ -449,8 +449,9 @@ static void print_head(const char* mode, const char* arm, int round) {
 }
 static void print_fill(const PFill& f, int fill_sms) {
   printf("\"kind\": %d, \"pat\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"fill_sms\": %d, "
-         "\"sleep_ns\": %d, ",
-         f.kind, f.pat, f.W, f.NC, f.S, f.tiles, f.grid, fill_sms, f.p.sleep_ns);
+         "\"sleep_ns\": %d, \"split_flags\": %d, ",
+         f.kind, f.pat, f.W, f.NC, f.S, f.tiles, f.grid, fill_sms, f.p.sleep_ns,
+         getenv("PW_SPLIT_FLAGS") ? atoi(getenv("PW_SPLIT_FLAGS")) : 0);
 }
 // one arm: the step graph on `ss` (if any) beside the filler on `fs` (if any), warm then measured; prints the arm's tail
 static void arm(Dev& d, cudaGraphExec_t ge, cudaStream_t ss, const PFill* f, cudaStream_t fs, double warm, double meas,
@@ -558,6 +559,33 @@ static void run_pidle(Dev& d, double secs) {
   arm(d, nullptr, nullptr, nullptr, nullptr, 0.5, secs, 0);
 }
 
+// dcap's gc_split with the split's flags (PW_SPLIT_FLAGS; 1 = CU_DEV_SM_RESOURCE_SPLIT_IGNORE_SM_COSCHEDULING, finer
+// partitions), and the SM resource's partition size and alignment on stderr
+static int gc_split_flags(int n_step, cudaStream_t* s_step, cudaStream_t* s_fill, int got[2], unsigned flags) {
+  auto dget = drv<decltype(&cuDeviceGet)>("cuDeviceGet");
+  auto res = drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");
+  auto split = drv<decltype(&cuDevSmResourceSplitByCount)>("cuDevSmResourceSplitByCount");
+  if (!dget || !res || !split) return 1000;
+  CUdevice dev;
+  CUdevResource all{}, part{}, rest{};
+  unsigned nb = 1;
+  int e;
+  if ((e = dget(&dev, 0))) return 2000 + e;
+  if ((e = res(dev, &all, CU_DEV_RESOURCE_TYPE_SM))) return 2000 + e;
+  if ((e = split(&part, &nb, &all, &rest, flags, (unsigned)n_step))) return 3000 + e;
+  fprintf(stderr, "split flags %u: requested %d, step %u (min %u, align %u), rest %u (min %u, align %u)\n", flags, n_step,
+          part.sm.smCount, part.sm.minSmPartitionSize, part.sm.smCoscheduledAlignment, rest.sm.smCount,
+          rest.sm.minSmPartitionSize, rest.sm.smCoscheduledAlignment);
+  got[0] = (int)part.sm.smCount;
+  got[1] = (int)rest.sm.smCount;
+  CUstream a = nullptr, b = nullptr;
+  if ((e = green_stream(&part, dev, &a))) return e;
+  if (rest.sm.smCount && (e = green_stream(&rest, dev, &b))) return e;
+  *s_step = (cudaStream_t)a;
+  *s_fill = (cudaStream_t)b;
+  return 0;
+}
+
 // the filler's stream on fill_sms SMs: the default stream when fill_sms is the whole GPU, else a green split's rest
 static cudaStream_t fill_stream(Dev& d, int fill_sms, cudaStream_t* ss, int got[2]) {
   if (fill_sms >= d.sms) {
@@ -567,7 +595,8 @@ static cudaStream_t fill_stream(Dev& d, int fill_sms, cudaStream_t* ss, int got[
     return d.st;
   }
   cudaStream_t fs = nullptr;
-  const int e = gc_split(d.sms - fill_sms, ss, &fs, got);
+  const unsigned flags = getenv("PW_SPLIT_FLAGS") ? (unsigned)atoi(getenv("PW_SPLIT_FLAGS")) : 0u;
+  const int e = gc_split_flags(d.sms - fill_sms, ss, &fs, got, flags);
   if (e || !fs) {
     fprintf(stderr, "gc_split(%d): %d\n", d.sms - fill_sms, e);
     exit(7);
