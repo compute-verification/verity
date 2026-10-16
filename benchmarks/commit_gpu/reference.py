@@ -6,7 +6,9 @@ A leaf at position ``pos`` of an n-leaf domain (rank = position) is ``rowleaf.ro
 salt)`` and ``x = rowleaf.sha512_row_v2_digest(row, n_bits)`` (in ``seg`` mode ``x = rowleaf.sha512_row_seg_digest(row,
 n_bits)`` under ``"hm96-sha512/row-seg/v1"``); the levels are ``merkle.tree_levels``.  The domain is the e2e
 slice's operand domain (benchmarks/e2e_slice/commit.py on cursor/e2e-slice-ea24): ``CommitmentDomain(identity_digest_sha512(
-BINDING_TAG, label), -1, RangeIndexedDomain(0, n), hash="sha512")``.
+BINDING_TAG, label), -1, RangeIndexedDomain(0, n), hash="sha512")``.  The tile modes (Decision 46) commit an m x k int8
+operand's :func:`permute` rows, leaf pos the block of r rows x 32 values at (pos % ceil(m/r), pos // ceil(m/r)), so the
+spot check's 128-row tile at one 32-step is the 128/r adjacent leaves :func:`tile_leaves` names.
 
 Salts are the committer's secret.  commit_gpu takes them from a file or derives them on the device by SHA-512 alone, the
 one hash: ``y = SHA-512(Ks || u64be(pos) || u64be(0)) || ... || SHA-512(Ks || u64be(pos) || u64be(2))`` (:func:`prf_salt`),
@@ -96,6 +98,43 @@ def prf_salt(ks: bytes, pos: int) -> bytes:
     return b"".join(hashlib.sha512(ks + pos.to_bytes(8, "big") + r.to_bytes(8, "big")).digest() for r in range(3))
 
 
+def tile_count(m: int, k: int, r: int) -> int:
+    return -(-m // r) * (k // 32)
+
+
+def permute(a: bytes, m: int, k: int, r: int) -> bytes:
+    """The tile layout (Decision 46) of an m x k int8 operand (row-major, k a multiple of 32) as rows of 32 r bytes: leaf pos
+    is block (pos % ceil(m/r), pos // ceil(m/r)) of r rows x 32 values, its bytes the block's in row-major order, rows past
+    m zero.  commit_gpu's ``tile`` and ``tileseg`` modes read the operand in place in this order; the reference commits
+    these rows as sha512/row/v2 or sha512/row-seg/v1 rows of 256 r bits."""
+
+    assert m > 0 and k > 0 and k % 32 == 0 and r > 0 and len(a) == m * k
+    pad = bytes(32 * (-(-m // r) * r - m))
+    return b"".join(b"".join(a[i * k + 32 * c:i * k + 32 * c + 32] for i in range(m)) + pad for c in range(k // 32))
+
+
+def tile_leaves(m: int, r: int, m0: int, c: int) -> range:
+    """The leaves a check's 128-row tile (rows m0 .. m0 + 127, m0 and 128 multiples of r) at the 32-step c opens."""
+
+    assert m0 % r == 0 and 128 % r == 0
+    mr = -(-m // r)
+    return range(c * mr + m0 // r, c * mr + min(mr, (m0 + 128) // r))
+
+
+def check_footprint(a: bytes, rows: bytes, m: int, k: int, r: int, rng: random.Random, tiles: int = 16) -> int:
+    """Each sampled check tile's leaves hold exactly the tile's values (row-major, then zero rows past m)."""
+
+    if 128 % r:
+        return 0
+    for _ in range(tiles):
+        m0, c = 128 * rng.randrange(-(-m // 128)), rng.randrange(k // 32)
+        want = b"".join(a[i * k + 32 * c:i * k + 32 * c + 32] if i < m else bytes(32) for i in range(m0, m0 + 128))
+        span = tile_leaves(m, r, m0, c)
+        got = rows[32 * r * span.start:32 * r * span.stop]
+        assert got == want[:len(got)] and not want[len(got):].strip(b"\0"), f"tile ({m0}, {c}) at r {r}"
+    return tiles
+
+
 def e2e_row(a: bytes, pos: int) -> bytes:
     """The e2e slice's row at ``pos``: the 32 int8 at a[32 pos ..] as bf16 words, twice (1024 bits)."""
 
@@ -130,7 +169,7 @@ def _leaves(span: tuple[int, int]) -> tuple[bytes, list[bytes], list[bytes]]:
 
 
 def schema(mode: str) -> str:
-    return SEG if mode == "seg" else V2
+    return SEG if mode in ("seg", "tileseg") else V2
 
 
 def _rows_for(mode: str, n: int, n_bits: int, stride: int, rng: random.Random) -> bytes:
@@ -145,15 +184,28 @@ def _rows_for(mode: str, n: int, n_bits: int, stride: int, rng: random.Random) -
 
 
 def prepare_case(work: str, mode: str, n: int, n_bits: int, stride: int, salts: str, key: bytes, seed: int) -> dict:
-    """The case's inputs (params, rows, salts) and the reference's levels, b || c and hm96 leaf digests, under ``work``."""
+    """The case's inputs (params, rows, salts) and the reference's levels, b || c and hm96 leaf digests, under ``work``.
+    The tile modes take (m, k, r) for (n, n_bits, stride): rows.bin is the m x k operand, and the reference commits its
+    :func:`permute` rows (sha512/row/v2 for ``tile``, sha512/row-seg/v1 for ``tileseg``)."""
 
     rng = random.Random(seed)
-    rows = _rows_for(mode, n, n_bits, stride, rng)
+    tile, footprint = {}, 0
+    if mode in ("tile", "tileseg"):
+        m, k, r = n, n_bits, stride
+        operand = rng.randbytes(m * k)
+        t0 = time.perf_counter()
+        rows = permute(operand, m, k, r)
+        footprint = check_footprint(operand, rows, m, k, r, rng)
+        tile = {"m": m, "k": k, "r": r, "permute_s": round(time.perf_counter() - t0, 3)}
+        n, n_bits, stride, base = tile_count(m, k, r), 256 * r, 32 * r, "rows" if mode == "tile" else "seg"
+    else:
+        rows = operand = _rows_for(mode, n, n_bits, stride, rng)
+        base = mode
     ks = rng.randbytes(64)
     salt_bytes = None if salts == "prf" else rng.randbytes(192 * n)
     t0 = time.perf_counter()
     _CASE.clear()
-    _CASE.update(mode=mode, n=n, n_bits=n_bits, stride=stride, rows=rows, salts=salt_bytes, ks=ks, key=key)
+    _CASE.update(mode=base, n=n, n_bits=n_bits, stride=stride, rows=rows, salts=salt_bytes, ks=ks, key=key)
     step = max(1, min(4096, -(-n // (4 * (os.cpu_count() or 1)))))
     spans = [(a, min(n, a + step)) for a in range(0, n, step)]
     if n < 2048:
@@ -162,7 +214,7 @@ def prepare_case(work: str, mode: str, n: int, n_bits: int, stride: int, salts: 
         with mp.get_context("fork").Pool() as pool:   # forked after _CASE is set: the workers read it
             parts = pool.map(_leaves, spans)
     levels = tree_levels(domain(n), [x for p in parts for x in p[1]])
-    files = {"params.bin": params(n, n_bits, ks, key, mode == "seg"), "rows.bin": rows, "salts.bin": salt_bytes or b"",
+    files = {"params.bin": params(n, n_bits, ks, key, base == "seg"), "rows.bin": operand, "salts.bin": salt_bytes or b"",
              "ref_levels.bin": b"".join(b"".join(level) for level in levels), "ref_bc.bin": b"".join(p[0] for p in parts),
              "ref_h.bin": b"".join(x for p in parts for x in p[2])}
     os.makedirs(work, exist_ok=True)
@@ -170,7 +222,9 @@ def prepare_case(work: str, mode: str, n: int, n_bits: int, stride: int, salts: 
         with open(os.path.join(work, name), "wb") as f:
             f.write(data)
     case = {"mode": mode, "n": n, "n_bits": n_bits, "stride": stride, "salts": salts, "key": "default" if key == KEY else "fresh",
-            "seed": seed, "ref_s": round(time.perf_counter() - t0, 3)}
+            "seed": seed, "ref_s": round(time.perf_counter() - t0, 3), **tile}
+    if tile:
+        case["footprint_tiles"] = footprint
     with open(os.path.join(work, "case.json"), "w") as f:
         json.dump(case, f)
     return case
@@ -186,9 +240,9 @@ def check_case(binary: str, work: str, tag: str, openings: int = 64) -> dict:
     n, out = case["n"], os.path.join(work, tag)
     os.makedirs(out, exist_ok=True)
     t0 = time.perf_counter()
-    gpu = subprocess.run([binary, "check", f"{work}/params.bin", out, case["mode"], str(n), str(case["n_bits"]),
-                          str(case["stride"]), f"{work}/rows.bin", "prf" if case["salts"] == "prf" else f"{work}/salts.bin"],
-                         capture_output=True, text=True)
+    shape = (case["m"], case["k"], case["r"]) if "r" in case else (n, case["n_bits"], case["stride"])
+    gpu = subprocess.run([binary, "check", f"{work}/params.bin", out, case["mode"], *map(str, shape), f"{work}/rows.bin",
+                          "prf" if case["salts"] == "prf" else f"{work}/salts.bin"], capture_output=True, text=True)
     result = {**case, "tag": tag, "gpu_s": round(time.perf_counter() - t0, 3)}
     if gpu.returncode:
         return {**result, "ok": False, "error": gpu.stderr.strip()[-400:]}
@@ -229,7 +283,8 @@ def check_case(binary: str, work: str, tag: str, openings: int = 64) -> dict:
 
 
 def cases(kind: str) -> list[tuple]:
-    """(mode, n, n_bits, stride, salts, key): ragged leaf counts (pads), every padding boundary of a row's last block, given
+    """(mode, n, n_bits, stride, salts, key), the tile modes (mode, m, k, r, salts, key): ragged leaf counts (pads), every
+    padding boundary of a row's last block, given
     and derived salts, a fresh key; row-seg rows from the empty row (no segment) through a short, a full and a one-bit
     last segment to 64 segments; ``full`` adds the e2e slice's o_proj call (2^20 leaves) and int8 rows of 4096 values as
     v2 and as row-seg rows."""
@@ -247,10 +302,24 @@ def cases(kind: str) -> list[tuple]:
         stride = max(16, -(-((n_bits + 7) // 8) // 16) * 16)
         out += [("seg", 37, n_bits, stride, "given", KEY), ("seg", 300, n_bits, stride + 16, "prf", KEY)]
     out += [("seg", 64, 64 * 8192, 65536, "given", KEY), ("seg", 513, 8192 + 128, 1040, "prf", fresh)]
+    # tile leaves (m, k, r): ragged m, r not dividing 128, a row/v2 leaf whose padding fits its last block (r 3) or not
+    # (r 4), row-seg leaves of one partial, one full, 2, 3, 4 and 64 segments, one leaf, a fresh key
+    out += [("tile", m, k, r, s, KEY) for m, k, r, s in ((130, 96, 16, "given"), (7, 32, 4, "prf"), (7, 32, 3, "given"),
+                                                        (200, 64, 64, "prf"), (1, 32, 1, "prf"), (1000, 128, 128, "prf"),
+                                                        (256, 256, 32, "given"), (129, 64, 128, "given"))]
+    out += [("tile", 64, 32, 5, "given", fresh)]
+    out += [("tileseg", m, k, r, s, KEY) for m, k, r, s in ((31, 64, 31, "given"), (130, 96, 32, "prf"), (100, 64, 33, "prf"),
+                                                           (130, 96, 64, "given"), (300, 32, 65, "prf"), (64, 32, 2048, "given"))]
+    out += [("tileseg", 257, 32, 128, "prf", fresh)]
     if kind == "full":
         out += [("e2e", 1 << 20, E2E_BITS, 0, "prf", KEY), ("e2e", (1 << 20) - 3, E2E_BITS, 0, "given", KEY),
                 ("rows", 8192, 32768, 4096, "prf", KEY), ("rows", 100003, 256, 32, "prf", KEY),
                 ("seg", 8192, 32768, 4096, "prf", KEY), ("seg", 8189, 65536, 8192, "given", KEY)]
+        # o_proj's operand at 2K and 8K prefill chunks, as the sweep commits it
+        out += [("tile", 2048, 4096, r, "prf", KEY) for r in (16, 32, 64, 128)]
+        out += [("tile", 8192, 4096, 16, "given", KEY), ("tile", 8192, 4096, 64, "prf", KEY), ("tile", 8191, 4096, 128, "given", fresh)]
+        out += [("tileseg", 2048, 4096, r, "prf", KEY) for r in (64, 128)]
+        out += [("tileseg", 8192, 4096, 128, "prf", KEY), ("tileseg", 2047, 4096, 128, "given", KEY)]
     return out
 
 

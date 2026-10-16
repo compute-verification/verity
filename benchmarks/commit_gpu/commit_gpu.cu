@@ -20,15 +20,22 @@
 // Row sources: `e2e` (the e2e slice's leaf: 32 int8 of an operand as bf16 words twice, l = 1024, leaf pos at bytes
 // [32 pos, 32 pos + 32)), `rows` (n rows of l bits at a byte stride; an int8 operand's own memory is rows of 8 L bits) and
 // `seg` (the same rows under sha512/row-seg/v1 and schema hm96-sha512/row-seg/v1: 1 KiB segments hashed a thread each, then
-// the outer hash over their digests, so a long row's hash is not one serial chain; P is then Q(l)).
+// the outer hash over their digests, so a long row's hash is not one serial chain; P is then Q(l)). `tile` and `tileseg`
+// (Decision 46) commit an M x K int8 operand in place as tile leaves: leaf pos is block (pos % ceil(M/R), pos / ceil(M/R))
+// of R rows x 32 values, its row the block's 32 R bytes in row-major order (rows past M zero), as sha512/row/v2 or
+// sha512/row-seg/v1 rows: the reference's commitment of the permuted operand (reference.permute).
 //
 //   commit_gpu selftest
 //   commit_gpu check PARAMS OUT e2e|rows|seg N LBITS STRIDE ROWS SALTS|prf     (writes OUT/levels.bin, OUT/bc.bin)
+//   commit_gpu check PARAMS OUT tile|tileseg M K R OPERAND SALTS|prf
 //   commit_gpu bench PARAMS e2e|rows|seg N LBITS REPS [GEMM_M GEMM_N GEMM_K]     (JSON lines on stdout)
+//   commit_gpu bench PARAMS tile|tileseg M K R REPS [GEMM_M GEMM_N GEMM_K]
 //   commit_gpu sha REPS                                                      (raw compression rate)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a commit_gpu.cu -lcublasLt -lnvidia-ml [-DSHA_ADD=0|1] [-DSHA_ROT=0..15]
 // [-DSHA_ROLL=0|1] (sha512.cuh; the defaults, 0, 0 and 1, are the fastest measured)
-// (-DCOMMIT_GPU_DIAG_NOMASK: a timing-only build that skips M_key y, to measure its share; it refuses `check`)
+// (-DCOMMIT_GPU_DIAG_NOMASK: a timing-only build that skips M_key y, to measure its share; -DCOMMIT_GPU_DIAG_MERGED: one
+// that skips h's two compressions (the frame leaf takes b ^ c), the timing of a format whose one leaf hash takes b || c and
+// pos after a constant midstate (2 compressions where h and the frame leaf take 4); both refuse `check`)
 #include <cublasLt.h>
 #include <cuda_runtime.h>
 #include <nvml.h>
@@ -211,9 +218,23 @@ DEV void row_e2e(const uint8_t* A, u64 pos, u64* x) {
   sha::compress_kw(x, C.kw_xpad);
 }
 
-// SHA-512 of a 128-byte first block (its chaining value cv) and the lb bytes at `row` (16-byte aligned; reads may run up
-// to 15 bytes past the row, inside the buffer).
-DEV void hash_after_block(const u64* cv, const uint8_t* row, u32 lb, u64* x) {
+// A row's bytes as 16-byte loads: `Contig`, lb bytes at one 16-byte aligned address (reads may run up to 15 bytes past
+// the row, inside the buffer); `TileSrc`, a tile leaf's block of an int8 operand (rows K bytes apart, 32 bytes of each in
+// row-major order, rows at or past `rows` reading as zero).
+struct Contig {
+  const uint8_t* p;
+  DEV uint4 ld16(u32 off) const { return ldg16(p + off); }
+};
+struct TileSrc {
+  const uint8_t* base;
+  u64 K;
+  long long rows;
+  DEV uint4 ld16(u32 off) const { return (long long)(off >> 5) < rows ? ldg16(base + (off >> 5) * K + (off & 31)) : make_uint4(0, 0, 0, 0); }
+};
+
+// SHA-512 of a 128-byte first block (its chaining value cv) and lb row bytes from `src`.
+template <class Src>
+DEV void hash_after_block(const u64* cv, const Src& src, u32 lb, u64* x) {
   cpy8(x, cv);
   const u32 nblk = (lb + 17 + 127) / 128;
   for (u32 b = 0; b < nblk; ++b) {
@@ -221,7 +242,7 @@ DEV void hash_after_block(const u64* cv, const uint8_t* row, u32 lb, u64* x) {
 #pragma unroll
     for (int c = 0; c < 8; ++c) {
       const u32 off = 128 * b + 16 * c;
-      const uint4 v = off < lb ? ldg16(row + off) : make_uint4(0, 0, 0, 0);
+      const uint4 v = off < lb ? src.ld16(off) : make_uint4(0, 0, 0, 0);
       W[2 * c] = be64(v.x, v.y);
       W[2 * c + 1] = be64(v.z, v.w);
     }
@@ -242,16 +263,40 @@ DEV void hash_after_block(const u64* cv, const uint8_t* row, u32 lb, u64* x) {
   }
 }
 
+// The tile layout (Decision 46): an M x K int8 operand (row-major, K a multiple of 32) as ceil(M/R) x K/32 blocks of R rows
+// x 32 values; leaf pos is block (b_r, b_c) = (pos % ceil(M/R), pos / ceil(M/R)), its bytes the block's in row-major order
+// (32 R bytes; rows past M are zero), so a check's 128-row tile at one 32-step is 128/R adjacent leaves.
+struct TileGeom {
+  const uint8_t* A;
+  u64 M, K, mr;   // mr = ceil(M/R)
+  u32 R;
+  DEV TileSrc block(u64 pos, u32 row0 = 0) const {
+    const u64 br = pos % mr, bc = pos / mr, r = br * R + row0;
+    return TileSrc{A + r * K + 32 * bc, K, (long long)M - (long long)r};
+  }
+};
+
+// Segment sources for seg_kernel: rows at a byte stride, or tile leaves (segment j is the block's rows 32 j .. 32 j + 31).
+struct SegRows {
+  const uint8_t* rows;
+  u64 stride;
+  DEV Contig segment(u64 pos, u32 j) const { return Contig{rows + pos * stride + 1024ull * j}; }
+};
+struct SegTiles {
+  TileGeom g;
+  DEV TileSrc segment(u64 pos, u32 j) const { return g.block(pos, 32 * j); }
+};
+
 // sha512/row-seg/v1's segment digests: d_j = SHA-512(S(j, s, m_j) || segment j), a thread a segment, to D (64 bytes each,
 // in digest byte order, row pos's s digests contiguous: the outer hash then reads them as a row of 64 s bytes).
-__global__ void __launch_bounds__(256) seg_kernel(const uint8_t* __restrict__ rows, u64 stride, u64 n, u32 s, u32 last_bytes,
-                                                  uint8_t* __restrict__ D) {
+template <class Segs>
+__global__ void __launch_bounds__(256) seg_kernel(Segs segs, u64 n, u32 s, u32 last_bytes, uint8_t* __restrict__ D) {
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= n * s) return;
   const u64 pos = t / s;
   const u32 j = (u32)(t % s);
   u64 x[8];
-  hash_after_block(C.seg_mid[j], rows + pos * stride + 1024ull * j, j + 1 < s ? 1024u : last_bytes, x);
+  hash_after_block(C.seg_mid[j], segs.segment(pos, j), j + 1 < s ? 1024u : last_bytes, x);
   uint4* o = reinterpret_cast<uint4*>(D + 64 * t);
 #pragma unroll
   for (int i = 0; i < 4; ++i)
@@ -335,7 +380,11 @@ struct RowBytes {
   const uint8_t* base;
   u64 stride;
   u32 lb;
-  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, base + pos * stride, lb, x); }
+  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, Contig{base + pos * stride}, lb, x); }
+};
+struct RowTile {
+  TileGeom g;
+  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, g.block(pos), 32 * g.R, x); }
 };
 
 DEV void ld8(const u64* p, u64* d) {
@@ -381,6 +430,30 @@ __global__ void __launch_bounds__(LEAF_THREADS, 1)
   st8(S + 16 * pos + 8, c);
 }
 
+// The tree leaf at pos from its row digest x and the salt phase's S[pos]: b || c = (x ^ M_key y) || c (to bc when given),
+// h = SHA-512(leaf_prefix || b || c), then the frame leaf. A producer that hashes its own rows (an epilogue) ends here.
+template <int SX>
+DEV void leaf_from_digest(u64 pos, const u64* x, const u64* __restrict__ S, u64* out, u64* __restrict__ bc) {
+  u64 B[16];
+  ld8(S + 16 * pos, B);
+  ld8(S + 16 * pos + 8, B + 8);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) B[i] ^= x[i];
+  if (bc) {
+    st8(bc + 16 * pos, B);
+    st8(bc + 16 * pos + 8, B + 8);
+  }
+  u64 h[8];
+#ifdef COMMIT_GPU_DIAG_MERGED
+  for (int i = 0; i < 8; ++i) h[i] = B[i] ^ B[8 + i];
+#else
+  cpy8(h, C.mid_leaf);
+  sha::compress(h, B);
+  sha::compress_kw(h, C.kw_leafpad);
+#endif
+  frame_leaf<SX>(pos, h, out);
+}
+
 // The data phase, a thread a position: the tree leaf (or pad) to lv0[pos] from the row and S[pos]; b || c to bc[pos]
 // when bc is given.
 template <class Row, int SX>
@@ -390,21 +463,9 @@ __global__ void __launch_bounds__(LEAF_THREADS)
   if (pos >= width) return;
   u64 out[8];
   if (pos < n) {
-    u64 x[8], B[16];
+    u64 x[8];
     row.digest(pos, x);
-    ld8(S + 16 * pos, B);
-    ld8(S + 16 * pos + 8, B + 8);
-#pragma unroll
-    for (int i = 0; i < 8; ++i) B[i] ^= x[i];
-    if (bc) {
-      st8(bc + 16 * pos, B);
-      st8(bc + 16 * pos + 8, B + 8);
-    }
-    u64 h[8];
-    cpy8(h, C.mid_leaf);
-    sha::compress(h, B);
-    sha::compress_kw(h, C.kw_leafpad);
-    frame_leaf<SX>(pos, h, out);
+    leaf_from_digest<SX>(pos, x, S, out, bc);
   } else {
     pad(pos, out);
   }
@@ -609,6 +670,16 @@ static Consts build_consts(const Params& p, u32 lb, bool seg, u64 seg_bits) {
 
 static int depth_of(u64 n) { int d = 0; while ((1ull << d) < n) ++d; return d; }
 
+// The tile layout's leaf count, after checking its geometry (K a multiple of 32; a leaf of at most 64 row-seg segments).
+static u64 tile_leaves(u64 M, u64 K, u64 R) {
+  if (!M || !K || K % 32 || !R || R > 2048) {
+    fprintf(stderr, "tiles: M, K > 0, K a multiple of 32, 1 <= R <= 2048, not %llu %llu %llu\n", (unsigned long long)M,
+            (unsigned long long)K, (unsigned long long)R);
+    exit(2);
+  }
+  return (M + R - 1) / R * (K / 32);
+}
+
 // The device's node() on the CPU, from the same constants: one GPU thread takes microseconds a compression, a CPU core a
 // fraction of one, so the narrow top of a tree is faster on the host, which needs the root anyway.
 static int nbytes_host(u64 v) { int k = 1; while (k < 8 && (v >> (8 * k))) ++k; return k; }
@@ -677,9 +748,18 @@ struct Committer {
     leaf_kernel<Row, SX><<<(unsigned)((width + t - 1) / t), t, 0, st>>>(row, S, n, width, lv[0], bc);
   }
   // row-seg rows at `rows` (stride bytes apart, 16-byte aligned): the segment digests, then the leaves over them
-  void seg_leaves(const uint8_t* rows, u64 stride, cudaStream_t st) {
-    if (segs) seg_kernel<<<(unsigned)((n * segs + 255) / 256), 256, 0, st>>>(rows, stride, n, segs, seg_last, D);
+  void seg_leaves(const uint8_t* rows, u64 stride, cudaStream_t st) { seg_leaves_from(SegRows{rows, stride}, st); }
+  template <class Segs>
+  void seg_leaves_from(const Segs& sg, cudaStream_t st) {
+    if (segs) seg_kernel<<<(unsigned)((n * segs + 255) / 256), 256, 0, st>>>(sg, n, segs, seg_last, D);
     leaves<RowBytes, 4>(RowBytes{D, 64ull * segs, 64u * segs}, st);
+  }
+  // The tile layout over an M x K int8 operand at A (init with n = tile_leaves(M, K, R) and rows of 256 R bits): as
+  // sha512/row/v2 rows, or (seg) as sha512/row-seg/v1 rows.
+  void tiles(const uint8_t* A, u64 M, u64 K, u32 R, bool seg, cudaStream_t st) {
+    const TileGeom g{A, M, K, (M + R - 1) / R, R};
+    if (seg) seg_leaves_from(SegTiles{g}, st);
+    else leaves<RowTile>(RowTile{g}, st);
   }
   // Levels 1 .. top (default the root): a level a launch while a level is wider than 512 nodes (blocks of 64 threads below
   // 2^16 nodes), then the rest in one block.
@@ -732,17 +812,20 @@ static int selftest() {
 static std::string out_dir;
 
 static int check(int argc, char** argv) {
-  // check PARAMS OUT MODE N LBITS STRIDE ROWS SALTS|prf
-  if (argc < 10) { fprintf(stderr, "check PARAMS OUT e2e|rows|seg N LBITS STRIDE ROWS SALTS|prf\n"); return 2; }
+  // check PARAMS OUT MODE N LBITS STRIDE ROWS SALTS|prf; the tile modes take M K R for N LBITS STRIDE, ROWS the operand
+  if (argc < 10) { fprintf(stderr, "check PARAMS OUT e2e|rows|seg N LBITS STRIDE | tile|tileseg M K R  ROWS SALTS|prf\n"); return 2; }
   const Params p = read_params(argv[2]);
   out_dir = argv[3];
   const std::string mode = argv[4];
-  const u64 n = strtoull(argv[5], nullptr, 10), lbits = strtoull(argv[6], nullptr, 10), stride = strtoull(argv[7], nullptr, 10);
+  const bool tile = mode == "tile" || mode == "tileseg", seg = mode == "seg" || mode == "tileseg";
+  const u64 a = strtoull(argv[5], nullptr, 10), b = strtoull(argv[6], nullptr, 10), c = strtoull(argv[7], nullptr, 10);
+  const u64 n = tile ? tile_leaves(a, b, c) : a, lbits = tile ? 256 * c : b, stride = tile ? 0 : c;
   const u32 lb = (u32)((lbits + 7) / 8);
   const bool prf = !strcmp(argv[9], "prf");
-  if (mode != "e2e" && (stride % 16 || stride < lb)) { fprintf(stderr, "a row stride is a multiple of 16 bytes, at least the row\n"); return 2; }
+  if (!tile && mode != "e2e" && (stride % 16 || stride < lb)) { fprintf(stderr, "a row stride is a multiple of 16 bytes, at least the row\n"); return 2; }
   auto rows = readf(argv[8]);
-  if (rows.size() < (mode == "e2e" ? 32 * n : (n - 1) * stride + lb)) { fprintf(stderr, "rows: %zu bytes is short\n", rows.size()); return 2; }
+  const u64 need = tile ? a * b : mode == "e2e" ? 32 * n : (n - 1) * stride + lb;
+  if (rows.size() < need) { fprintf(stderr, "rows: %zu bytes is short\n", rows.size()); return 2; }
   rows.resize(rows.size() + 32, 0);
   uint8_t *drows, *dsalts = nullptr;
   CK(cudaMalloc(&drows, rows.size()));
@@ -754,9 +837,11 @@ static int check(int argc, char** argv) {
     CK(cudaMemcpy(dsalts, s.data(), s.size(), cudaMemcpyHostToDevice));
   }
   Committer cm;
-  cm.init(p, n, mode == "e2e" ? 128 : lb, true, mode == "seg", lbits);
+  cm.init(p, n, mode == "e2e" ? 128 : lb, true, seg, lbits);
   prf ? cm.salts<true>(nullptr, 0) : cm.salts<false>(dsalts, 0);
-  if (mode == "seg") {
+  if (tile) {
+    cm.tiles(drows, a, b, (u32)c, seg, 0);
+  } else if (mode == "seg") {
     cm.seg_leaves(drows, stride, 0);
   } else if (mode == "e2e") {
     if (lbits != 1024) { fprintf(stderr, "an e2e leaf is 1024 bits\n"); return 2; }
@@ -890,17 +975,29 @@ struct Gemm {   // y (m x n, s32) = A (m x k, int8, row-major) B (n x k, int8, r
   }
 };
 
+// The operand's producer, for timing: what follows on its stream is enqueued while it runs, so an interval that starts at
+// its end starts when the operand is complete, not when the host gets to a launch.
+__global__ void spin(long long cycles) {
+  const long long t0 = clock64();
+  while (clock64() - t0 < cycles) {}
+}
+constexpr long long SPIN = 400000;   // ~0.2 ms at 2 GHz
+
 static int bench(int argc, char** argv) {
-  // bench PARAMS MODE N LBITS REPS [GM GN GK]
-  if (argc < 7) { fprintf(stderr, "bench PARAMS e2e|rows|seg N LBITS REPS [GEMM_M GEMM_N GEMM_K]\n"); return 2; }
+  // bench PARAMS MODE N LBITS REPS [GM GN GK]; the tile modes take M K R for N LBITS
+  if (argc < 7) { fprintf(stderr, "bench PARAMS e2e|rows|seg N LBITS | tile|tileseg M K R  REPS [GEMM_M GEMM_N GEMM_K]\n"); return 2; }
   const Params p = read_params(argv[2]);
   const std::string mode = argv[3];
-  const u64 n = strtoull(argv[4], nullptr, 10), lbits = strtoull(argv[5], nullptr, 10);
-  const int reps = atoi(argv[6]);
-  const bool gemm = argc >= 10;
+  const bool tile = mode == "tile" || mode == "tileseg", seg = mode == "seg" || mode == "tileseg";
+  const int o = tile ? 1 : 0;
+  const u64 a = strtoull(argv[4], nullptr, 10), b = strtoull(argv[5], nullptr, 10);
+  const u32 R = tile ? (u32)atoi(argv[6]) : 0;
+  const u64 n = tile ? tile_leaves(a, b, R) : a, lbits = tile ? 256ull * R : b;
+  const int reps = atoi(argv[6 + o]);
+  const bool gemm = argc >= 10 + o;
   const u32 lb = (u32)((lbits + 7) / 8);
-  const u64 data = mode == "e2e" ? 32 * n : (u64)lb * n;   // operand bytes the commitment covers
-  if (mode != "e2e" && lb % 16) { fprintf(stderr, "bench rows and seg: a multiple of 128 bits\n"); return 2; }
+  const u64 data = tile ? a * b : mode == "e2e" ? 32 * n : (u64)lb * n;   // operand bytes the commitment covers
+  if (!tile && mode != "e2e" && lb % 16) { fprintf(stderr, "bench rows and seg: a multiple of 128 bits\n"); return 2; }
   uint8_t* src;
   CK(cudaMalloc(&src, data + 64));
   fill<<<1024, 256>>>(src, data + 64, 7u);
@@ -911,9 +1008,10 @@ static int bench(int argc, char** argv) {
   CK(cudaDeviceGetStreamPriorityRange(&prio_lo, &prio_hi));
   CK(cudaStreamCreateWithPriority(&sp, cudaStreamNonBlocking, prio_hi));
   Committer cm;
-  cm.init(p, n, mode == "e2e" ? 128 : lb, false, mode == "seg", lbits);
+  cm.init(p, n, mode == "e2e" ? 128 : lb, false, seg, lbits);
   auto leaves = [&](cudaStream_t st) {
-    if (mode == "e2e") cm.leaves<RowE2E>(RowE2E{src}, st);
+    if (tile) cm.tiles(src, a, b, R, seg, st);
+    else if (mode == "e2e") cm.leaves<RowE2E>(RowE2E{src}, st);
     else if (mode == "seg") cm.seg_leaves(src, lb, st);
     else cm.leaves<RowBytes>(RowBytes{src, lb, lb}, st);
   };
@@ -943,7 +1041,8 @@ static int bench(int argc, char** argv) {
   auto commit_graph = [&](cudaStream_t st) { CK(cudaGraphLaunch(gx[0], st)); };
   commit_graph(sc);
   CK(cudaStreamSynchronize(sc));
-  // alone: the salt phase, the data phase (its leaves, its nodes) and its graph
+  // alone: the salt phase, the data phase (its leaves, its nodes) and its graph from the producer's end (the latency from
+  // the operand's last write to the root in device memory)
   std::vector<double> t_salt, t_all, t_leaf, t_graph, mhz;
   for (int r = 0; r < reps; ++r) {
     CK(cudaEventRecord(e[0], sc));
@@ -953,13 +1052,15 @@ static int bench(int argc, char** argv) {
     CK(cudaEventRecord(e[2], sc));
     cm.nodes(sc);
     CK(cudaEventRecord(e[3], sc));
+    spin<<<1, 1, 0, sc>>>(SPIN);
+    CK(cudaEventRecord(e[5], sc));
     commit_graph(sc);
     CK(cudaEventRecord(e[4], sc));
     CK(cudaEventSynchronize(e[4]));
     t_salt.push_back(ms(e[0], e[1]));
     t_leaf.push_back(ms(e[1], e[2]));
     t_all.push_back(ms(e[1], e[3]));
-    t_graph.push_back(ms(e[3], e[4]));
+    t_graph.push_back(ms(e[5], e[4]));
     mhz.push_back(nv.sm());
   }
   // the root on the host (host clock): the graph to level depth - k, that level's 2^k nodes to pinned memory, k levels on
@@ -986,18 +1087,19 @@ static int bench(int argc, char** argv) {
   const double tc = median(t_all), tgr = median(t_graph), ts = median(t_salt);
   auto blocks = [](u64 bytes) { return (double)((bytes + 17 + 127) / 128); };   // after a first block the host folded
   const double row_comps = mode == "e2e" ? 2
-                           : mode == "seg" ? (cm.segs ? (cm.segs - 1) * blocks(1024) + blocks(cm.seg_last) : 0) + blocks(64ull * cm.segs)
-                                           : blocks(lb);
+                           : seg ? (cm.segs ? (cm.segs - 1) * blocks(1024) + blocks(cm.seg_last) : 0) + blocks(64ull * cm.segs)
+                                 : blocks(lb);
   // the data phase: row, hm96 leaf (2), frame leaf (2) a leaf, and a node (2) a node (the pads' left out); the salt phase:
   // salt (3) and c (2) a leaf
   const double comps = n * (row_comps + 4.0) + 2.0 * (cm.width - 1), salt_comps = 5.0 * n;
   printf("{\"bench\": \"%s\", \"gpu\": \"%s\", \"sms\": %d, \"sha_add\": %d, \"sha_rot\": %d, \"sha_roll\": %d, \"leaf_threads\": %d, \"n\": %llu, \"lbits\": %llu, "
+         "\"tile_m\": %llu, \"tile_k\": %llu, \"tile_r\": %u, \"graph_from\": \"producer\", "
          "\"depth\": %d, \"operand_bytes\": %llu, \"salt_ms\": %.5f, \"salt_compressions\": %.0f, \"commit_ms\": %.5f, "
          "\"leaf_ms\": %.5f, \"nodes_ms\": %.5f, \"graph_ms\": %.5f, \"mhz\": %.0f, \"compressions\": %.0f, \"gcomp_per_s\": %.3f, "
          "\"sha_gb_per_s\": %.2f, \"operand_gb_per_s\": %.2f, \"operand_gb_per_s_graph\": %.2f, \"root_on_host_best_k\": %d, "
          "\"root_on_host_best_ms\": %.5f, \"operand_gb_per_s_root_on_host\": %.2f, \"root_on_host_ms\": {",
          mode.c_str(), prop.name, prop.multiProcessorCount, SHA_ADD, SHA_ROT, SHA_ROLL, LEAF_THREADS, (unsigned long long)n,
-         (unsigned long long)lbits, cm.depth, (unsigned long long)data, ts, salt_comps, tc, median(t_leaf), tc - median(t_leaf),
+         (unsigned long long)lbits, (unsigned long long)(tile ? a : 0), (unsigned long long)(tile ? b : 0), R, cm.depth, (unsigned long long)data, ts, salt_comps, tc, median(t_leaf), tc - median(t_leaf),
          tgr, median(mhz), comps, comps / tc * 1e-6, comps * 128 / tc * 1e-6, data / tc * 1e-6, data / tgr * 1e-6, ks[kb],
          median(t_host[kb]), data / median(t_host[kb]) * 1e-6);
   for (size_t i = 0; i < ks.size(); ++i) printf("%s\"%d\": %.5f", i ? ", " : "", ks[i], median(t_host[i]));
@@ -1009,19 +1111,22 @@ static int bench(int argc, char** argv) {
   fflush(stdout);
   if (gemm) {
     Gemm G;
-    G.init(atoi(argv[7]), atoi(argv[8]), atoi(argv[9]), sg);
+    G.init(atoi(argv[7 + o]), atoi(argv[8 + o]), atoi(argv[9 + o]), sg);
     // GEMM alone, then the same GEMMs with the commitment (its graph) beside them on another stream, then both on one
     // stream, then beside again with the commitment's stream at the device's highest priority (a graph launched into a
-    // stream takes its priority), so its blocks are dispatched ahead of the GEMM's queued CTAs
+    // stream takes its priority), so its blocks are dispatched ahead of the GEMM's queued CTAs. Each starts at the end of
+    // the operand's producer (spin).
     const int ng = std::max(1, (int)(tgr / G.best_ms + 0.5));
     std::vector<double> g_alone, both_wall, both_commit, both_gemm, serial_wall, mz, hi_wall, hi_commit, hi_gemm;
     for (int r = 0; r < reps; ++r) {
+      spin<<<1, 1, 0, sg>>>(SPIN);
       CK(cudaEventRecord(e[0], sg));
       for (int i = 0; i < ng; ++i) CL(G.run(sg));
       CK(cudaEventRecord(e[1], sg));
       CK(cudaEventSynchronize(e[1]));
       g_alone.push_back(ms(e[0], e[1]) / ng);
       // concurrent: both streams wait on one start event
+      spin<<<1, 1, 0, sg>>>(SPIN);
       CK(cudaEventRecord(e[0], sg));
       CK(cudaStreamWaitEvent(sc, e[0]));
       for (int i = 0; i < ng; ++i) CL(G.run(sg));
@@ -1036,12 +1141,14 @@ static int bench(int argc, char** argv) {
       both_wall.push_back(std::max(tg, tcm));
       mz.push_back(nv.sm());
       // serial on one stream
+      spin<<<1, 1, 0, sg>>>(SPIN);
       CK(cudaEventRecord(e[3], sg));
       for (int i = 0; i < ng; ++i) CL(G.run(sg));
       commit_graph(sg);
       CK(cudaEventRecord(e[4], sg));
       CK(cudaEventSynchronize(e[4]));
       serial_wall.push_back(ms(e[3], e[4]));
+      spin<<<1, 1, 0, sg>>>(SPIN);
       CK(cudaEventRecord(e[0], sg));
       CK(cudaStreamWaitEvent(sp, e[0]));
       for (int i = 0; i < ng; ++i) CL(G.run(sg));
@@ -1102,8 +1209,8 @@ static int sha_bench(int reps) {
 
 int main(int argc, char** argv) {
   if (argc >= 2 && !strcmp(argv[1], "selftest")) return selftest();
-#ifdef COMMIT_GPU_DIAG_NOMASK
-  if (argc >= 2 && !strcmp(argv[1], "check")) { fprintf(stderr, "a timing-only build (COMMIT_GPU_DIAG_NOMASK) has no check\n"); return 2; }
+#if defined(COMMIT_GPU_DIAG_NOMASK) || defined(COMMIT_GPU_DIAG_MERGED)
+  if (argc >= 2 && !strcmp(argv[1], "check")) { fprintf(stderr, "a timing-only build (COMMIT_GPU_DIAG_*) has no check\n"); return 2; }
 #endif
   if (argc >= 2 && !strcmp(argv[1], "check")) return check(argc, argv);
   if (argc >= 2 && !strcmp(argv[1], "bench")) return bench(argc, argv);
