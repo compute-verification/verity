@@ -302,6 +302,7 @@ struct Rep {
   double ms, mhz, watt;
 };
 static bool g_graph = true;  // DCAP_NOGRAPH=1 enqueues each rep directly
+static unsigned long long g_inst_flags = 0;  // cudaGraphInstantiate flags (pfill: per-node priority)
 // the work as one CUDA graph, launched `reps` times after 2 warm-ups; each rep's time by events, its clock and power by
 // NVML polled while it runs
 static double now_ms() {
@@ -316,7 +317,7 @@ static std::vector<Rep> time_work(Dev& d, const std::function<void()>& work, int
     CK(cudaStreamBeginCapture(d.st, cudaStreamCaptureModeThreadLocal));
     work();
     CK(cudaStreamEndCapture(d.st, &g));
-    CK(cudaGraphInstantiate(&ge, g, 0));
+    CK(cudaGraphInstantiate(&ge, g, g_inst_flags));
   }
   auto launch = [&] {
     if (g_graph) CK(cudaGraphLaunch(ge, d.st));
@@ -1094,6 +1095,431 @@ static int run_dfill(Dev& d, int B, int L, int place, int fill_sms, int W, int N
   return bad ? 8 : 0;
 }
 
+// ---------------------------------------------------------------- pfill: the filler in decode's attention phase (HC-SCHED)
+// Decode's attention (qk_dec, pv_dec) runs on the CUDA cores and leaves the tensor pipe idle, and a co-resident filler
+// slows it ≤ 0.2% (FILL); only the linears suffer from a shared tensor pipe. So the step's graph forks a phase filler
+// (dfill_p, the same tile as dfill_k) on decode's own SMs after each layer's qkv, at the graph's highest node priority so
+// its blocks are resident before attention's, and joins it before the o linear. Either fixed work a layer (mode fixed:
+// `tiles` a warp, sized from the measured attention time) or capped work (mode flag: tiles until a one-thread kernel after
+// pv_dec raises the layer's stop flag, `tiles` the cap). Tile ids are PBIT | (base + slot); base, on the device, advances
+// once a step, so no step repeats a tile. Each slot keeps (tile id, receipt); st[1] counts the tiles done. pfill.cuh has its
+// own dfill_p (a slot a block's tile), which this build takes unless -DDFILL_V1.
+#ifdef DFILL_V1
+constexpr unsigned long long PBIT = 1ull << 62;
+#define DFILL_P_W 4
+template <int NC>
+__global__ void __launch_bounds__(512) dfill_p(uint64_t c0, uint64_t c1, unsigned long long* __restrict__ st,
+                                              unsigned long long off, int tiles, int steps, const int* stop,
+                                              unsigned long long* __restrict__ rec, unsigned* smbits) {
+  const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
+  const unsigned long long wid = (unsigned long long)blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
+  const unsigned long long base = *(volatile unsigned long long*)st;
+  if (threadIdx.x == 0 && smbits) {
+    unsigned s;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(s));
+    atomicOr(&smbits[(s / 32) & 7], 1u << (s % 32));
+  }
+  for (int i = 0; i < tiles; i++) {
+    if (stop) {
+      int v = lane == 0 ? *(volatile const int*)stop : 0;
+      if (__shfl_sync(0xffffffffu, v, 0)) break;
+    }
+    const unsigned long long slot = off + wid * tiles + i, tile = PBIT | (base + slot);
+    const uint64_t seed = dseed(c0, c1, tile);
+    uint32_t b[2][2], c[4], a[NC][4];
+#pragma unroll
+    for (int j = 0; j < 2; j++) {
+      b[j][0] = dword(seed, 1 + j, g, t);
+      b[j][1] = dword(seed, 1 + j, g, 4 + t);
+    }
+    c[0] = (uint32_t)dcval(seed, g, 2 * t);
+    c[1] = (uint32_t)dcval(seed, g, 2 * t + 1);
+    c[2] = (uint32_t)dcval(seed, g + 8, 2 * t);
+    c[3] = (uint32_t)dcval(seed, g + 8, 2 * t + 1);
+#pragma unroll
+    for (int ch = 0; ch < NC; ch++) {
+      a[ch][0] = dword(seed, 16 + ch, g, t);
+      a[ch][1] = dword(seed, 16 + ch, g + 8, t);
+      a[ch][2] = dword(seed, 16 + ch, g, 4 + t);
+      a[ch][3] = dword(seed, 16 + ch, g + 8, 4 + t);
+    }
+#pragma unroll 1
+    for (int s = 0; s < steps; s += 8) {
+#pragma unroll
+      for (int u = 0; u < 8; u++)
+#pragma unroll
+        for (int ch = 0; ch < NC; ch++) dstep(a[ch], b[u & 1], c);
+    }
+    uint64_t h = 0;
+#pragma unroll
+    for (int ch = 0; ch < NC; ch++)
+      h ^= drec(seed, ch, g, t, a[ch][0]) ^ drec(seed, ch, g + 8, t, a[ch][1]) ^ drec(seed, ch, g, 4 + t, a[ch][2]) ^
+           drec(seed, ch, g + 8, 4 + t, a[ch][3]);
+#pragma unroll
+    for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
+    if (lane == 0) {
+      rec[2 * slot] = tile;
+      rec[2 * slot + 1] = h;
+      atomicAdd(st + 1, 1ull);
+    }
+  }
+}
+#endif
+__global__ void pstop_k(int* stop) { *stop = 1; }
+__global__ void padv_k(unsigned long long* st, unsigned long long n) { st[0] += n; }
+
+struct PFill {
+  int mode = 0;  // 0 none, 1 fixed, 2 flag
+  int W = 8, NC = 4, S = 256, tiles = 1, grid = 0, prio = 0;
+  bool join = true;
+  uint64_t c0 = 0, c1 = 0;
+  unsigned long long* st = nullptr;  // [0] tile base, [1] tiles done
+  int* stop = nullptr;               // a flag a layer
+  unsigned long long* rec = nullptr;  // (tile id, receipt) a slot, LAYERS x per_layer() slots
+  unsigned* smbits = nullptr;
+#ifdef DFILL_V1
+  long long per_layer() const { return (long long)grid * W * tiles; }
+  double tile_macs() const { return (double)NC * S * 4096.0; }
+#else
+  long long per_layer() const { return (long long)grid * tiles; }
+  double tile_macs() const { return pf_tile_macs(S); }
+#endif
+};
+template <int NC>
+static void plaunch_nc(const PFill& f, unsigned long long off, int tiles, const int* stop, cudaStream_t st) {
+  cudaLaunchConfig_t cfg = {};
+  cfg.gridDim = dim3(f.grid);
+  cfg.blockDim = dim3(32 * f.W);
+  cfg.stream = st;
+  cudaLaunchAttribute at[1];
+  at[0].id = cudaLaunchAttributePriority;
+  at[0].val.priority = f.prio;
+  cfg.attrs = at;
+  cfg.numAttrs = 1;
+  CK(cudaLaunchKernelEx(&cfg, dfill_p<NC>, (uint64_t)f.c0, (uint64_t)f.c1, f.st, off, tiles, f.S, stop, f.rec, f.smbits));
+}
+static void plaunch(const PFill& f, unsigned long long off, int tiles, const int* stop, cudaStream_t st) {
+#ifndef DFILL_V1
+  if (f.W != PF_PW || f.S < 4 || f.S % 4) {
+    fprintf(stderr, "pfill's dfill_p: W must be PF_PW = %d (-DPF_PW=W) and S a positive multiple of 4 (W %d, S %d)\n", PF_PW,
+            f.W, f.S);
+    exit(1);
+  }
+#endif
+  switch (f.NC) {
+    case 1: plaunch_nc<1>(f, off, tiles, stop, st); break;
+    case 2: plaunch_nc<2>(f, off, tiles, stop, st); break;
+    case 4: plaunch_nc<4>(f, off, tiles, stop, st); break;
+    default: fprintf(stderr, "NC must be 1, 2 or 4\n"); exit(1);
+  }
+}
+static void pfill_alloc(PFill& f) {
+  CK(cudaMalloc(&f.st, 2 * sizeof(unsigned long long)));
+  CK(cudaMemset(f.st, 0, 2 * sizeof(unsigned long long)));
+  CK(cudaMalloc(&f.stop, LAYERS * sizeof(int)));
+  CK(cudaMemset(f.stop, 0, LAYERS * sizeof(int)));
+  const size_t n = 2 * (size_t)LAYERS * std::max(1LL, f.per_layer());
+  CK(cudaMalloc(&f.rec, n * sizeof(unsigned long long)));
+  CK(cudaMemset(f.rec, 0xA5, n * sizeof(unsigned long long)));
+  CK(cudaMalloc(&f.smbits, 32));
+  CK(cudaMemset(f.smbits, 0, 32));
+}
+static void pfill_free(PFill& f) {
+  CK(cudaFree(f.st));
+  CK(cudaFree(f.stop));
+  CK(cudaFree(f.rec));
+  CK(cudaFree(f.smbits));
+}
+static unsigned long long pdone(const PFill& f) {
+  unsigned long long h[2];
+  CK(cudaMemcpy(h, f.st, sizeof h, cudaMemcpyDeviceToHost));
+  return h[1];
+}
+// `n` of the written slots, spread over them, each slot's receipt against the host's for its tile id. Slots still poisoned
+// (0xA5: a flag-mode warp stopped before them) are not candidates; *skipped counts them. Returns the mismatches.
+static int pfill_check(const PFill& f, int n, int* checked, int* skipped) {
+  const size_t slots = (size_t)LAYERS * std::max(1LL, f.per_layer());
+  std::vector<unsigned long long> h(2 * slots);
+  CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
+  std::vector<size_t> w;
+  for (size_t s = 0; s < slots; s++) {
+    if ((h[2 * s] >> 62) == 1) w.push_back(s);
+  }
+  *skipped = (int)std::min<size_t>(slots - w.size(), 1u << 30);
+  int bad = 0;
+  *checked = 0;
+  for (int i = 0; i < n && !w.empty(); i++) {
+    const size_t s = w[((size_t)i * w.size() / n + ((size_t)i * 7919) % std::max((size_t)1, w.size() / n)) % w.size()];
+    ++*checked;
+    bad += h[2 * s + 1] != dfill_ref(f.c0, f.c1, h[2 * s], f.NC, f.S);
+  }
+  return bad;
+}
+
+// dfill_p's receipts for each NC at S = 8 and the phase S, over two launches (the base advanced between them), every slot
+// checked; the S − 8 control must differ everywhere; the flag mode with the stop raised before launch writes nothing.
+static int pgate(Dev& d, const std::vector<int>& Ss) {
+  int fails = 0;
+  std::vector<int> all = {8};
+  all.insert(all.end(), Ss.begin(), Ss.end());
+  for (int nc : {1, 2, 4})
+    for (int s : all) {
+      PFill f;
+      f.mode = 1; f.W = DFILL_P_W; f.NC = nc; f.S = s; f.tiles = 2; f.grid = 3; f.c0 = g_c0; f.c1 = g_c1;
+      pfill_alloc(f);
+      long bad = 0, ctl_equal = 0, n = 0;
+      for (int rep = 0; rep < 2; rep++) {
+        CK(cudaMemset(f.rec, 0xA5, 2 * (size_t)LAYERS * f.per_layer() * sizeof(unsigned long long)));
+        plaunch(f, (unsigned long long)rep * f.per_layer(), f.tiles, nullptr, d.st);
+        padv_k<<<1, 1, 0, d.st>>>(f.st, 1000);
+        CK(cudaStreamSynchronize(d.st));
+        CK(cudaGetLastError());
+        std::vector<unsigned long long> h(2 * (size_t)LAYERS * f.per_layer());
+        CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
+        for (long long i = 0; i < f.per_layer(); i++) {
+          const size_t slot = (size_t)rep * f.per_layer() + i;
+          const unsigned long long want = PBIT | (1000ull * rep + slot);
+          bad += h[2 * slot] != want || h[2 * slot + 1] != dfill_ref(f.c0, f.c1, want, nc, s);
+          ctl_equal += h[2 * slot + 1] == dfill_ref(f.c0, f.c1, want, nc, s - 8);
+          n++;
+        }
+      }
+      const unsigned long long done = pdone(f);
+      // the stop raised before launch: nothing written, nothing counted
+      CK(cudaMemset(f.rec, 0xA5, 2 * (size_t)LAYERS * f.per_layer() * sizeof(unsigned long long)));
+      pstop_k<<<1, 1, 0, d.st>>>(f.stop);
+      plaunch(f, 0, f.tiles, f.stop, d.st);
+      CK(cudaStreamSynchronize(d.st));
+      std::vector<unsigned long long> h(2 * (size_t)f.per_layer());
+      CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
+      long stopped_written = 0;
+      for (auto x : h) stopped_written += x != 0xA5A5A5A5A5A5A5A5ull;
+      const bool ok = !bad && !ctl_equal && done == (unsigned long long)n && pdone(f) == done && !stopped_written;
+      printf("{\"mode\": \"pgate\", \"NC\": %d, \"S\": %d, \"slots\": %ld, \"mismatches\": %ld, \"control_equal\": %ld, "
+             "\"done\": %llu, \"stopped_written\": %ld, \"ok\": %s}\n",
+             nc, s, n, bad, ctl_equal, done, stopped_written, ok ? "true" : "false");
+      fails += !ok;
+      pfill_free(f);
+    }
+  fflush(stdout);
+  return fails;
+}
+
+// the step with the phase filler forked off each layer's qkv on `s2` (a second stream on the step's SMs) and joined before o
+static void enqueue_step_phase(Dev& d, const std::vector<Lt>& p, int M, int L, const PFill& pf, cudaStream_t s2,
+                               cudaEvent_t ev[2], bool* wrapped) {
+  const cudaStream_t s = d.st;
+  if (pf.mode == 2) CK(cudaMemsetAsync(pf.stop, 0, LAYERS * sizeof(int), s));
+  for (int l = 0; l < LAYERS; l++) {
+    if (p[0].algo_id != -2) lt_run(p[0], d.X, d.W[l][0], d.D, s);
+    if (pf.mode) {
+      CK(cudaEventRecord(ev[0], s));
+      CK(cudaStreamWaitEvent(s2, ev[0], 0));
+      plaunch(pf, (unsigned long long)l * pf.per_layer(), pf.tiles, pf.mode == 2 ? pf.stop + l : nullptr, s2);
+      CK(cudaEventRecord(ev[1], s2));
+    }
+    enqueue_att(d, M, L, l, wrapped);
+    if (pf.mode == 2) pstop_k<<<1, 1, 0, s>>>(pf.stop + l);
+    if (pf.mode && pf.join) CK(cudaStreamWaitEvent(s, ev[1], 0));
+    for (int j = 1; j < 4; j++)
+      if (p[j].algo_id != -2) lt_run(p[j], d.X, d.W[l][j], d.D, s);
+  }
+  if (M <= 256 && p[4].algo_id != -2) lt_run(p[4], d.X, d.Wlm, d.D, s);
+  if (pf.mode) {
+    if (!pf.join) CK(cudaStreamWaitEvent(s, ev[1], 0));
+    padv_k<<<1, 1, 0, s>>>(pf.st, (unsigned long long)LAYERS * pf.per_layer());
+  }
+}
+
+// the step's SMs (at least n_step) with two streams, and the rest with one; as gc_split
+static int gc_split2(int n_step, cudaStream_t* s_step, cudaStream_t* s_step2, cudaStream_t* s_fill, int got[2]) {
+  auto dget = drv<decltype(&cuDeviceGet)>("cuDeviceGet");
+  auto res = drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");
+  auto split = drv<decltype(&cuDevSmResourceSplitByCount)>("cuDevSmResourceSplitByCount");
+  auto gen = drv<decltype(&cuDevResourceGenerateDesc)>("cuDevResourceGenerateDesc");
+  auto mk = drv<decltype(&cuGreenCtxCreate)>("cuGreenCtxCreate");
+  auto gst = drv<decltype(&cuGreenCtxStreamCreate)>("cuGreenCtxStreamCreate");
+  if (!dget || !res || !split || !gen || !mk || !gst) return 1000;
+  CUdevice dev;
+  CUdevResource all{}, part{}, rest{};
+  unsigned nb = 1;
+  int e;
+  if ((e = dget(&dev, 0))) return 2000 + e;
+  if ((e = res(dev, &all, CU_DEV_RESOURCE_TYPE_SM))) return 2000 + e;
+  if ((e = split(&part, &nb, &all, &rest, 0, (unsigned)n_step))) return 3000 + e;
+  got[0] = (int)part.sm.smCount;
+  got[1] = (int)rest.sm.smCount;
+  CUdevResourceDesc desc;
+  CUgreenCtx g;
+  CUstream a = nullptr, a2 = nullptr, b = nullptr;
+  if ((e = gen(&desc, &part, 1))) return 4000 + e;
+  if ((e = mk(&g, desc, dev, CU_GREEN_CTX_DEFAULT_STREAM))) return 5000 + e;
+  if ((e = gst(&a, g, CU_STREAM_NON_BLOCKING, 0))) return 6000 + e;
+  if ((e = gst(&a2, g, CU_STREAM_NON_BLOCKING, 0))) return 6000 + e;
+  if (rest.sm.smCount && (e = green_stream(&rest, dev, &b))) return e;
+  *s_step = (cudaStream_t)a;
+  *s_step2 = (cudaStream_t)a2;
+  *s_fill = (cudaStream_t)b;
+  return 0;
+}
+
+// The step beside FILL v1's partitioned filler (fill_sms SMs, W x NC x S, pumped as run_dfill; 0: no partition, the step
+// on every SM) and the phase filler on the step's SMs (pmode none|fixed|flag|tiles, PW x PNC x PS; fixed: `param` is the
+// share of the layer's attention time its tiles take, measured on the step's SMs alone; flag: `param` is the cap of tiles a
+// warp; tiles: `param` tiles a warp a layer, chosen before the run, as a scored arm must). Arms: full; split tuned; split
+// tuned + FILL v1 (the baseline); the same + the phase filler; full again.
+// PFILL_PRIO=0 drops the node priority, PFILL_JOIN=0 lets o start before the phase filler ends (it joins at the step's end).
+static int run_pfill(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, int pmode, int PW, int PNC, int PS,
+                     double param, int reps) {
+  dfill_prep();
+  CK(cudaFuncSetAttribute(dfill_p<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_p<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_p<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  const std::vector<Lt> p = lin_plans(d, B);
+  bool wrapped = false;
+  int lo, hi;
+  CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  const cudaStream_t full = d.st;
+  cudaStream_t ss = full, ss2 = nullptr, fs = nullptr;
+  int got[2] = {d.sms, 0};
+  if (fill_sms > 0) {
+    const int e = gc_split2(d.sms - fill_sms, &ss, &ss2, &fs, got);
+    if (e || !fs) {
+      fprintf(stderr, "gc_split2(%d): %d (filler SMs %d)\n", d.sms - fill_sms, e, got[1]);
+      return 7;
+    }
+  } else {
+    CK(cudaStreamCreateWithFlags(&ss2, cudaStreamNonBlocking));
+  }
+  const int sp_step = sm_spread(d, ss, true), sp_step2 = sm_spread(d, ss2, true), sp_fill = fs ? sm_spread(d, fs, false) : 0;
+  DFill f;
+  if (fs) f = dfill_make(got[1], W, NC, S, g_c0, g_c1);
+  std::vector<Lt> p2 = p;
+  if (fs) {
+    d.st = ss;
+    p2 = lin_plans(d, B);
+  }
+  double amhz = 0, awatt = 0, alone = 0;
+  if (fs) alone = dfill_alone(d, f, fs, 30, &amhz, &awatt);
+  auto work_full = [&] { enqueue_step(d, p, 2, B, L, &wrapped); };
+  auto work_part = [&] { enqueue_step(d, p2, 2, B, L, &wrapped); };
+  d.st = full;
+  const std::vector<Rep> a_full = time_work(d, work_full, reps);
+  d.st = ss;
+  const std::vector<Rep> a_part = time_work(d, work_part, reps);
+  // the phase filler: calibrate on the step's SMs (attention alone; a tile alone), then size it
+  PFill pf;
+  pf.mode = pmode; pf.W = PW; pf.NC = PNC; pf.S = PS; pf.grid = got[0]; pf.c0 = g_c0; pf.c1 = g_c1;
+  pf.prio = (getenv("PFILL_PRIO") && !atoi(getenv("PFILL_PRIO"))) ? lo : hi;
+  pf.join = !(getenv("PFILL_JOIN") && !atoi(getenv("PFILL_JOIN")));
+  double att_layer_ms = 0, tile_ms = 0;
+  {
+    d.st = ss;
+    const Rep ma = median(time_work(d, [&] { enqueue_step(d, p2, 1, B, L, &wrapped); }, reps));
+    att_layer_ms = ma.ms / LAYERS;
+    PFill cal = pf;
+    cal.tiles = 8;
+    pfill_alloc(cal);
+    const Rep mt = median(time_work(d, [&] { plaunch(cal, 0, cal.tiles, nullptr, ss); }, 5));
+    tile_ms = mt.ms / cal.tiles;
+    pfill_free(cal);
+  }
+  if (pmode == 1) pf.tiles = (int)std::floor(param * att_layer_ms / tile_ms);
+  else if (pmode == 2) pf.tiles = std::max(1, (int)param);
+  else if (pmode == 3) pf.tiles = (int)param;
+  if (pmode == 3) pf.mode = 1;  // a fixed count chosen before the run: the same graph as fixed
+  if (pmode && pf.tiles <= 0) pf.mode = 0;
+  if (pf.mode == 0) pf.tiles = 1;
+  pfill_alloc(pf);
+  cudaEvent_t ev[2];
+  CK(cudaEventCreateWithFlags(&ev[0], cudaEventDisableTiming));
+  CK(cudaEventCreateWithFlags(&ev[1], cudaEventDisableTiming));
+  auto work_phase = [&] { enqueue_step_phase(d, p2, B, L, pf, ss2, ev, &wrapped); };
+  int bad = 0;
+  // the step on `ss` (graph `w`, node priority when `prio`) beside the pumped FILL v1 filler when there is a partition
+  auto beside = [&](const std::function<void()>& w, bool prio, double* rate, long long* nwin, double* wms,
+                    unsigned long long* ptiles) {
+    DPump pump;
+    if (fs) {
+      dpump_start(pump, f, fs, 3);
+      while (pump.done.load() < 2) {
+      }
+    }
+    double t0 = 0, t1 = 0;
+    d.st = ss;
+    g_inst_flags = prio ? cudaGraphInstantiateFlagUseNodePriority : 0;
+    const unsigned long long p0 = pdone(pf);
+    const std::vector<Rep> v = time_work(d, w, reps, &t0, &t1);
+    *ptiles = pdone(pf) - p0;
+    g_inst_flags = 0;
+    *nwin = 0;
+    *rate = 0;
+    *wms = t1 - t0;
+    if (fs) {
+      dpump_stop(pump);
+      for (double x : pump.t) *nwin += x > t0 && x <= t1;
+      *rate = (double)*nwin * f.macs() / ((t1 - t0) * 1e-3);
+      bad += dfill_check(f, pump.launched.load() - 1, 8);
+    }
+    return v;
+  };
+  double rate_b = 0, wms_b = 0, rate_p = 0, wms_p = 0;
+  long long nwin_b = 0, nwin_p = 0;
+  unsigned long long pt_b = 0, pt_p = 0;
+  std::vector<Rep> a_base;
+  if (fs) a_base = beside(work_part, false, &rate_b, &nwin_b, &wms_b, &pt_b);
+  const std::vector<Rep> a_phase = beside(work_phase, pf.mode != 0, &rate_p, &nwin_p, &wms_p, &pt_p);
+  int pchecked = 0, pskipped = 0, pbad = 0;
+  if (pf.mode) pbad = pfill_check(pf, 64, &pchecked, &pskipped);
+  unsigned smb[8];
+  CK(cudaMemcpy(smb, pf.smbits, 32, cudaMemcpyDeviceToHost));
+  int psms = 0;
+  for (unsigned w : smb) psms += __builtin_popcount(w);
+  d.st = full;
+  const std::vector<Rep> a_full2 = time_work(d, work_full, reps);
+  double step_macs = 0;
+  for (int j = 0; j < 4; j++) step_macs += (double)LAYERS * B * LN[j] * LK[j];
+  step_macs += (double)B * VOCAB * HID + 2.0 * LAYERS * B * HQ * HD * (double)L;
+  const Rep m0 = median(a_full), m2 = median(a_full2), mp = median(a_phase);
+  const double ref = (m0.ms + m2.ms) / 2, peak_p = 1024.0 * d.sms * mp.mhz * 1e6;
+  const double ptiles_step = (double)pt_p / (reps + 2);  // time_work's 2 warm-ups ran the graph too
+  const double prate = ptiles_step * pf.tile_macs() / (mp.ms * 1e-3);
+  const double bshare = fs && !a_base.empty() ? rate_b / (1024.0 * d.sms * median(a_base).mhz * 1e6) : 0;
+  const double sshare = rate_p / peak_p, pshare = pf.mode ? prate / peak_p : 0;
+  static const char* PM[3] = {"none", "fixed", "flag"};
+  char shape[96];
+  snprintf(shape, sizeof shape, "psched-%d-w%d-nc%d+%s-w%d-nc%d-s%d-t%d%s%s", fill_sms, W, NC, PM[pf.mode], PW, PNC, PS,
+           pf.tiles, pf.prio == hi ? "" : "-noprio", pf.join ? "" : "-nojoin");
+  printf("{\"mode\": \"pfill\", \"shape\": \"%s\", \"B\": %d, \"L\": %d, \"fill_sms_req\": %d, \"step_sms\": %d, "
+         "\"fill_sms\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, \"coins\": [\"%016llx\", \"%016llx\"], \"prio\": [%d, %d], "
+         "\"spread\": {\"step_graph\": %d, \"step2_graph\": %d, \"fill\": %d, \"phase_sms\": %d}, \"kv_wrapped\": %s, "
+         "\"step_macs\": %.6e, \"alone\": {\"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, \"watt\": %.1f}, "
+         "\"phase\": {\"mode\": \"%s\", \"param\": %.3f, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"node_prio\": %d, "
+         "\"join\": %s, \"att_layer_ms\": %.5f, \"tile_ms\": %.5f, \"tiles_a_step\": %.1f, \"mac_per_s\": %.6e, "
+         "\"share\": %.5f, \"rec_checked\": %d, \"rec_skipped\": %d, \"rec_bad\": %d}, ",
+         shape, B, L, fill_sms, got[0], got[1], W, NC, S, (unsigned long long)g_c0, (unsigned long long)g_c1, lo, hi,
+         sp_step, sp_step2, sp_fill, psms, wrapped ? "true" : "false", step_macs, alone,
+         fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, amhz, awatt, PM[pf.mode], param, PW, PNC, PS, pf.tiles, pf.prio,
+         pf.join ? "true" : "false", att_layer_ms, tile_ms, ptiles_step, prate, pshare, pchecked, pskipped, pbad);
+  printf("\"base\": {\"window_ms\": %.3f, \"fill_chunks\": %lld, \"fill_share\": %.5f, \"slowdown\": %.4f}, "
+         "\"sched\": {\"window_ms\": %.3f, \"fill_chunks\": %lld, \"split_fill_share\": %.5f, \"phase_share\": %.5f, "
+         "\"fill_share\": %.5f, \"slowdown\": %.4f, \"mhz\": %.1f, \"watt\": %.1f}, \"split_only\": %.4f, "
+         "\"rec_checked\": %d, \"rec_bad\": %d, \"step_share_full\": %.5f, \"arms\": {",
+         wms_b, nwin_b, bshare, a_base.empty() ? 0.0 : median(a_base).ms / ref, wms_p, nwin_p, sshare, pshare,
+         sshare + pshare, mp.ms / ref, mp.mhz, mp.watt, median(a_part).ms / ref, fs ? 16 : 0, bad,
+         step_macs / (m0.ms * 1e-3) / (1024.0 * d.sms * m0.mhz * 1e6));
+  print_arm("full", a_full, true);
+  print_arm("split_tuned", a_part, true);
+  if (!a_base.empty()) print_arm("base", a_base, true);
+  print_arm("sched", a_phase, true);
+  print_arm("full2", a_full2, false);
+  printf("}}\n");
+  fflush(stdout);
+  pfill_free(pf);
+  if (fs) CK(cudaFree(f.rec));
+  return bad || pbad || (pf.mode && pchecked < 16) ? 8 : 0;
+}
+
 // ---------------------------------------------------------------- gate: every kernel and cuBLASLt bit for bit on the host
 static int gate(Dev& d) {
   int fails = 0;
@@ -1214,7 +1640,7 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&g_ws, g_wsz));
   CK(cudaMalloc(&g_ref, (size_t)256 * VOCAB * sizeof(int)));
   CK(cudaMalloc(&g_cnt, sizeof *g_cnt));
-  const bool need_w = mode == "lin" || mode == "step" || mode == "gate" || mode == "fill" || mode == "dfill";
+  const bool need_w = mode == "lin" || mode == "step" || mode == "gate" || mode == "fill" || mode == "dfill" || mode == "pfill";
   if (need_w) {
     for (int l = 0; l < LAYERS; l++)
       for (int j = 0; j < 4; j++) {
@@ -1230,11 +1656,11 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&d.D, (size_t)1 << 30));
   const size_t maxBL = 786432;  // tokens of context over the batch
   d.kv_bytes = (mode == "lin") ? ((size_t)1 << 20) : maxBL * KV_TOKEN_BYTES / LAYERS * 4;  // room for 4 layers at maxBL
-  if (mode == "att" || mode == "step" || mode == "bw" || mode == "fill" || mode == "dfill") {
+  if (mode == "att" || mode == "step" || mode == "bw" || mode == "fill" || mode == "dfill" || mode == "pfill") {
     size_t fr, tot;
     CK(cudaMemGetInfo(&fr, &tot));
     d.kv_bytes = std::min((size_t)48 << 30, fr - ((size_t)3 << 30));
-    if ((mode == "fill" || mode == "dfill") && argc > 3)  // every layer's KV distinct, and room for the filler's buffers
+    if ((mode == "fill" || mode == "dfill" || mode == "pfill") && argc > 3)  // every layer's KV distinct, and room for the filler's buffers
       d.kv_bytes = std::min(d.kv_bytes, (size_t)atoi(argv[2]) * atoi(argv[3]) * KV_TOKEN_BYTES + ((size_t)1 << 20));
   }
   CK(cudaMalloc(&d.kv, d.kv_bytes));
@@ -1285,6 +1711,27 @@ int main(int argc, char** argv) {
       return 1;
     }
     rc = run_dfill(d, B, L, place, fsm, W, NC, S, argc > 9 ? atoi(argv[9]) : 9);
+  } else if (mode == "pgate") {
+    std::vector<int> Ss;
+    for (int i = 2; i < argc; i++) Ss.push_back(atoi(argv[i]));
+    for (int s : Ss)
+      if (s <= 8 || s % 8) { fprintf(stderr, "pgate S ...: each S a multiple of 8 above 8\n"); return 1; }
+    if (Ss.empty()) Ss.push_back(256);
+    rc = pgate(d, Ss);
+  } else if (mode == "pfill") {
+    if (argc < 13) { fprintf(stderr, "pfill B L FILL_SMS W NC S none|fixed|flag|tiles PW PNC PS PARAM [reps]\n"); return 1; }
+    const int B = atoi(argv[2]), L = atoi(argv[3]), fsm = atoi(argv[4]), W = atoi(argv[5]), NC = atoi(argv[6]),
+              S = atoi(argv[7]);
+    const std::string pm = argv[8];
+    const int pmode = pm == "fixed" ? 1 : pm == "flag" ? 2 : pm == "tiles" ? 3 : 0, PW = atoi(argv[9]), PNC = atoi(argv[10]),
+              PS = atoi(argv[11]);
+    if ((size_t)B * L > maxBL || L % 512 || B > 256 || fsm < 0 || fsm >= d.sms || W < 1 || W > 16 || S % 8 || S <= 0 ||
+        PW < 1 || PW > 16 || PS % 8 || PS <= 0 || (pm != "none" && pm != "fixed" && pm != "flag" && pm != "tiles")) {
+      fprintf(stderr, "B*L <= %zu, L %% 512 == 0, B <= 256, 0 <= FILL_SMS < %d, 1 <= W, PW <= 16, 8 | S, PS\n", maxBL,
+              d.sms);
+      return 1;
+    }
+    rc = run_pfill(d, B, L, fsm, W, NC, S, pmode, PW, PNC, PS, atof(argv[12]), argc > 13 ? atoi(argv[13]) : 9);
   } else {
     fprintf(stderr, "unknown mode %s\n", mode.c_str());
     return 1;

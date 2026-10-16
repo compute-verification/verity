@@ -42,14 +42,18 @@
 // products / 2). One build holds one kind: with both in dfill_k, the s8 tile kept 0.96 of its alone rate beside decode
 // instead of 0.99.
 //
+// Built with -DPFILL_BITS instead, the tile is Theorem K's (note:20261016T0341Z-draft-fullfloor-s-r5 §3.6): every A and B
+// entry is its bit itself, the s8 byte 0 or 1, in the domain PF_DOM01, on the same s8 IMMA m16n8k32, so each word is
+// the s32 sum popcount(a & b) in [0, 32], read unscaled into the same receipt.
+//
 // Built with -DPFILL_BU instead, the tile is pfill-bU (note:20261016T0710Z-draft-filler-floor-r2 §5), in Theorem K's
 // setting: the same s8 IMMA m16n8k32 with C = 0 and the same ram receipt, in the domain PF_DOM_BU. A's entries are their
 // bits, the s8 byte 0 or 1; B's are U in {±1, ..., ±64}, one digest byte t an entry, U = (t & 0x7F) - 64 + ((t >> 6) & 1)
 // = -64 + sum_{p<6} 2^p t_p + 65 t_6 (bit 7 unused), so each word is the s32 sum of a U over the row's set bits, in
 // [-2048, 2048], read unscaled. B's block b (columns 2b, 2b + 1) is ctr = 2^56 + b, entry 32 i + k its (k, column 2b + i)
-// from digest byte 32 i + k: 512 blocks a tile, two for each of the block's 256 lanes, and thread 0 makes the keys after
-// them and hands them to the block through shared memory. dcap's dgate also runs pf_bu_uniform, the histograms of U and of A on the host generators that
-// dfill_ref (and so dgate's receipts) holds the GPU to.
+// from digest byte 32 i + k: 64 W blocks a W-warp tile, two for each lane, and thread 0 makes the keys after them and
+// hands them to the block through shared memory. dcap's dgate also runs pf_bu_uniform, the histograms of U and of A on
+// the host generators that dfill_ref (and so dgate's receipts) holds the GPU to.
 #pragma once
 #include "../pearl_c/sha512.cuh"
 
@@ -61,25 +65,33 @@
 #define PF_SHA_ROLL 1  // pf_compress (16 rounds a loop iteration); 0: rs_compress (all 80 unrolled); same digests
 #endif
 #define PF_TN 1024
+#ifndef PF_PW
+#define PF_PW 8  // the phase filler's warps a block (dfill_p): its tile is PF_PW warps x 128 PF_PW columns
+#endif
+static_assert(PF_PW == 2 || PF_PW == 4 || PF_PW == 8, "PF_PW is 2, 4 or 8");
 #define DFILL_GATE_W PF_W
 #define DFILL_GATE_S {32, 512}
 constexpr uint64_t PF_DOM = 0x5046494C4C2D7631ull;   // "PFILL-v1": the s8 tile
 constexpr uint64_t PF_DOM4 = 0x5046494C4C2D6634ull;  // "PFILL-f4": the e2m1 tile
+constexpr uint64_t PF_DOM01 = 0x5046494C4C2D6231ull; // "PFILL-b1": the s8 tile on {0,1} bits
 constexpr uint64_t PF_DOM_BU = 0x5046494C4C2D6255ull;  // "PFILL-bU": the bU tile
 constexpr uint64_t PF_B = 1ull << 56, PF_KEY = 2ull << 56;
 static_assert(PF_TN == 16 * 8 * PF_W, "lanes 0..7 (e2m1: 0..15) of every warp make B's blocks");
-static_assert(PF_TN == 2 * 2 * 32 * PF_W, "bU: every lane makes two of B's blocks, two columns each");
-enum { PF_S8 = 0, PF_E2M1 = 1, PF_BU = 3 };  // the tile kinds, as pfill_ref.py numbers them
-#if defined(PFILL_E2M1) && defined(PFILL_BU)
-#error "pfill: one tile kind a build, -DPFILL_E2M1 or -DPFILL_BU"
+enum { PF_S8 = 0, PF_E2M1 = 1, PF_BITS = 2, PF_BU = 3 };  // the tile kinds, as pfill_ref.py numbers them
+#if defined(PFILL_E2M1) + defined(PFILL_BITS) + defined(PFILL_BU) > 1
+#error "pfill: one tile kind a build, -DPFILL_E2M1, -DPFILL_BITS or -DPFILL_BU"
 #elif defined(PFILL_E2M1)
 constexpr int PF_KIND = PF_E2M1;
+#elif defined(PFILL_BITS)
+constexpr int PF_KIND = PF_BITS;
 #elif defined(PFILL_BU)
 constexpr int PF_KIND = PF_BU;
 #else
 constexpr int PF_KIND = PF_S8;
 #endif
-__host__ __device__ constexpr uint64_t pf_dom(int kd) { return kd == PF_E2M1 ? PF_DOM4 : kd == PF_BU ? PF_DOM_BU : PF_DOM; }
+__host__ __device__ constexpr uint64_t pf_dom(int kd) {
+  return kd == PF_E2M1 ? PF_DOM4 : kd == PF_BITS ? PF_DOM01 : kd == PF_BU ? PF_DOM_BU : PF_DOM;
+}
 
 __host__ __device__ inline uint32_t pf_bswap(uint32_t x) {
   return (x >> 24) | ((x >> 8) & 0xFF00u) | ((x << 8) & 0xFF0000u) | (x << 24);
@@ -97,10 +109,12 @@ __host__ __device__ inline uint32_t pf_row(const uint64_t* st, int r) {
 }
 // four entries (bits of nib, entry q in bit q) as s8 bytes 1 - 2 bit, entry q in byte q
 __host__ __device__ inline uint32_t pf_pm1(uint32_t nib) { return 0x01010101u | (((nib * 0x00204081u) & 0x01010101u) * 0xFEu); }
-// the same four entries as s8 bytes equal to their bits, 0 or 1 (the bU tile's A)
+// the same four entries as s8 bytes equal to their bits, 0 or 1 (the bits tile, and the bU tile's A)
 __host__ __device__ inline uint32_t pf_01(uint32_t nib) { return (nib * 0x00204081u) & 0x01010101u; }
 template <int KD>
-__host__ __device__ __forceinline__ uint32_t pf_s8x4(uint32_t nib) { return KD == PF_BU ? pf_01(nib) : pf_pm1(nib); }
+__host__ __device__ __forceinline__ uint32_t pf_s8x4(uint32_t nib) {
+  return KD == PF_BITS || KD == PF_BU ? pf_01(nib) : pf_pm1(nib);
+}
 // four digest bytes t (byte q of x) as the bU tile's s8 U, byte q: t_6 = 1 gives (t & 0x3F) + 1 in 1..64, t_6 = 0 gives
 // (t & 0x3F) - 64 = (t & 0x3F) | 0xC0 in -64..-1, so no byte carries into the next
 __host__ __device__ inline uint32_t pf_u4(uint32_t x) {
@@ -218,23 +232,24 @@ __device__ __forceinline__ void pf_omma(uint32_t (&d)[4], const uint32_t (&a)[4]
 // The tile loop of any kind KD (F4: the e2m1 tile). Bs: column n's 32 bytes at 32 n, s8 words in order 0 4 1 5 2 6 3 7
 // (word q holds k 4q..4q+3), e2m1 words in order (q, h) (word 2q + h holds k 32h + 8q .. 32h + 8q + 7), so a lane's B
 // fragment is one 8-byte load in both. Ab: a warp's 32 SHA blocks of A, 16 row words each: P = 32 / KH fragments a pass.
-template <int NC, int KD>
-__device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], uint64_t c0, uint64_t c1,
-                                         unsigned long long tile0, int tiles, int steps, unsigned long long* rec) {
+// One tile of W warps (B is 32 x 128 W: lanes 0..7 of each warp make its 8 W blocks; bU: every lane two of its 64 W),
+// the whole block's: its receipt in thread 0.
+template <int NC, int KD, int W = PF_W>
+__device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16], uint64_t c0, uint64_t c1,
+                                            unsigned long long tile, int steps) {
   constexpr bool regen = NC == 1 || NC == 2 || NC == 4, F4 = KD == PF_E2M1;
-  constexpr int KH = F4 ? 2 : 1, P = 32 / KH;
+  constexpr int KH = F4 ? 2 : 1, P = 32 / KH, TN = 128 * W;
   constexpr uint64_t dom = pf_dom(KD);
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
   const int S = steps;
-  for (int i = 0; i < tiles; i++) {
-    const unsigned long long idx = (unsigned long long)blockIdx.x * tiles + i, tile = tile0 + idx;
+  {
     PfKeys key{0, 0, 0, 0};
     if (KD == PF_BU) {
-      // blocks 32 w + lane and 256 + 32 w + lane, then thread 0's key block (one warp's third pass, not all eight's),
+      // blocks 32 w + lane and 32 W + 32 w + lane, then thread 0's key block (one warp's third pass, not every warp's),
       // handed over in Ab[0][0..3], which nothing reads from the tile's end until agen; one copy of the compression's code
 #pragma unroll 1
       for (int h = 0; h < 2 + (threadIdx.x == 0); h++) {
-        const int b = 32 * w + lane + 32 * PF_W * h;
+        const int b = 32 * w + lane + 32 * W * h;
         uint64_t st[8];
         pf_block(dom, c0, c1, tile, h < 2 ? PF_B + (uint64_t)b : PF_KEY, st);
         if (h == 2) {
@@ -270,8 +285,10 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
             for (int q = 0; q < 4; q++) p[2 * q + h] = pf_e2m1x8((R >> (8 * q)) & 255);
           } else {
             uint4* p = (uint4*)&Bs[(16 * bb + nn) * 32];
-            p[0] = make_uint4(pf_pm1(R & 15), pf_pm1((R >> 16) & 15), pf_pm1((R >> 4) & 15), pf_pm1((R >> 20) & 15));
-            p[1] = make_uint4(pf_pm1((R >> 8) & 15), pf_pm1((R >> 24) & 15), pf_pm1((R >> 12) & 15), pf_pm1(R >> 28));
+            p[0] = make_uint4(pf_s8x4<KD>(R & 15), pf_s8x4<KD>((R >> 16) & 15), pf_s8x4<KD>((R >> 4) & 15),
+                              pf_s8x4<KD>((R >> 20) & 15));
+            p[1] = make_uint4(pf_s8x4<KD>((R >> 8) & 15), pf_s8x4<KD>((R >> 24) & 15), pf_s8x4<KD>((R >> 12) & 15),
+                              pf_s8x4<KD>(R >> 28));
           }
         }
       } else {
@@ -333,7 +350,7 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
         }
       }
 #pragma unroll 4
-      for (int j = 0; j < PF_TN / 8; j++) {
+      for (int j = 0; j < TN / 8; j++) {
         const uint2 b = *(const uint2*)(bp + j * 256);
 #pragma unroll
         for (int c = 0; c < 4; c++) {
@@ -357,12 +374,21 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
       Ab[w][1] = (uint32_t)(h >> 32);
     }
     __syncthreads();
+    uint64_t x = 0;
     if (threadIdx.x == 0) {
-      uint64_t x = 0;
 #pragma unroll
-      for (int v = 0; v < PF_W; v++) x ^= (uint64_t)Ab[v][0] | (uint64_t)Ab[v][1] << 32;
-      rec[idx] = x;
+      for (int v = 0; v < W; v++) x ^= (uint64_t)Ab[v][0] | (uint64_t)Ab[v][1] << 32;
     }
+    return x;
+  }
+}
+template <int NC, int KD>
+__device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], uint64_t c0, uint64_t c1,
+                                         unsigned long long tile0, int tiles, int steps, unsigned long long* rec) {
+  for (int i = 0; i < tiles; i++) {
+    const unsigned long long idx = (unsigned long long)blockIdx.x * tiles + i;
+    const uint64_t x = pf_tile<NC, KD>(Bs, Ab, c0, c1, tile0 + idx, steps);
+    if (threadIdx.x == 0) rec[idx] = x;
   }
 }
 template <int NC>
@@ -371,6 +397,39 @@ __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint6
   __shared__ __align__(16) uint8_t Bs[PF_TN * 32];
   __shared__ __align__(16) uint32_t Ab[PF_W][32 * 16];
   pf_tiles<NC, PF_KIND>(Bs, Ab, c0, c1, tile0, tiles, steps, rec);
+}
+
+// The phase filler (dcap.cu's PFill, HC-SCHED's placement): the same tile at PF_PW warps under the phase ids PBIT | (base +
+// slot), a tile a block at a time, so a slot is a block's tile (slot off + blockIdx.x tiles + i) and `steps` is a warp's
+// fragments (any multiple of 4). The stop flag is read once a tile by thread 0 and taken by the whole block, since a tile
+// syncs it. Each slot keeps (tile id, receipt); st[1] counts the tiles done. A block of PF_PW warps holds PF_PW / 8 of the
+// pump block's registers (the same 128 a thread) and shared memory (6 PF_PW KB), so less of decode attention's occupancy:
+// at 8 warps, qk_dec (64 x 256) keeps 2 of its 4 blocks an SM beside it and pv_dec (70 x 256, 16 KB) 1 of 3.
+constexpr unsigned long long PBIT = 1ull << 62;
+#define DFILL_P_W PF_PW
+__host__ __device__ constexpr double pf_tile_macs(int steps) { return (double)PF_PW * steps * (16 * PF_PW) * 4096.0; }
+template <int NC>
+__global__ void __launch_bounds__(32 * PF_PW, PF_CTAS * PF_W / PF_PW)
+    dfill_p(uint64_t c0, uint64_t c1, unsigned long long* __restrict__ st, unsigned long long off, int tiles, int steps,
+            const int* stop, unsigned long long* __restrict__ rec, unsigned* smbits) {
+  __shared__ __align__(16) uint8_t Bs[128 * PF_PW * 32];
+  __shared__ __align__(16) uint32_t Ab[PF_PW][32 * 16];
+  const unsigned long long base = *(volatile unsigned long long*)st;
+  if (threadIdx.x == 0 && smbits) {
+    unsigned s;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(s));
+    atomicOr(&smbits[(s / 32) & 7], 1u << (s % 32));
+  }
+  for (int i = 0; i < tiles; i++) {
+    if (stop && __syncthreads_or(threadIdx.x == 0 && *(volatile const int*)stop)) break;
+    const unsigned long long slot = off + (unsigned long long)blockIdx.x * tiles + i, tile = PBIT | (base + slot);
+    const uint64_t x = pf_tile<NC, PF_KIND, PF_PW>(Bs, Ab, c0, c1, tile, steps);
+    if (threadIdx.x == 0) {
+      rec[2 * slot] = tile;
+      rec[2 * slot + 1] = x;
+      atomicAdd(st + 1, 1ull);
+    }
+  }
 }
 
 #endif
@@ -405,12 +464,12 @@ static void pf_block_h(uint64_t dom, uint64_t c0, uint64_t c1, uint64_t tile, ui
   }
   for (int i = 0; i < 8; i++) st[i] = iv[i] + v[i];
 }
-// B's planes a column: one (its entries' bits) for the ±1 tiles, seven for bU (plane p: bit p of each entry's byte)
+// B's planes a column: one (its entries' bits) for the bit tiles, seven for bU (plane p: bit p of each entry's byte)
 template <int KD>
 constexpr int pf_planes() { return KD == PF_BU ? 7 : 1; }
 // a word of A row bits a and B column planes b: the s8 tile's s32 sum 32 - 2 popcount(a ^ b), the e2m1 tile's f32 sum
-// 64 - 2 popcount(a ^ b) as its bits, or bU's s32 sum of U over a's set bits, -64 popcount(a) + sum_{p<6} 2^p
-// popcount(a & b_p) + 65 popcount(a & b_6)
+// 64 - 2 popcount(a ^ b) as its bits, the bits tile's s32 sum popcount(a & b), or bU's s32 sum of U over a's set bits,
+// -64 popcount(a) + sum_{p<6} 2^p popcount(a & b_p) + 65 popcount(a & b_6)
 template <int KD>
 static inline uint32_t pf_word(uint64_t a, const uint64_t* b) {
   if (KD == PF_BU) {
@@ -418,6 +477,7 @@ static inline uint32_t pf_word(uint64_t a, const uint64_t* b) {
     for (int p = 0; p < 6; p++) s += __builtin_popcountll(a & b[p]) << p;
     return (uint32_t)s;
   }
+  if (KD == PF_BITS) return (uint32_t)__builtin_popcountll(a & b[0]);
   const int s = (KD == PF_E2M1 ? 64 : 32) - 2 * __builtin_popcountll(a ^ b[0]);
   if (KD != PF_E2M1) return (uint32_t)s;
   const float v = (float)s;
@@ -425,15 +485,16 @@ static inline uint32_t pf_word(uint64_t a, const uint64_t* b) {
   memcpy(&u, &v, sizeof u);
   return u;
 }
-// B's planes, NP a column: bU's block b holds columns 2b and 2b + 1, entry (k, 2b + i) digest byte 32 i + k
+// B's planes, NP a column, of a tile of TN columns: bU's block b holds columns 2b and 2b + 1, entry (k, 2b + i) digest
+// byte 32 i + k
 template <int KD>
-static std::vector<uint64_t> pf_bcols(uint64_t c0, uint64_t c1, uint64_t tile) {
+static std::vector<uint64_t> pf_bcols(uint64_t c0, uint64_t c1, uint64_t tile, int TN) {
   constexpr int KH = KD == PF_E2M1 ? 2 : 1, NP = pf_planes<KD>();
   constexpr uint64_t dom = pf_dom(KD);
-  std::vector<uint64_t> Bb(PF_TN * NP, 0);
+  std::vector<uint64_t> Bb(TN * NP, 0);
   uint64_t st[8];
   if constexpr (KD == PF_BU) {
-    for (int b = 0; b < PF_TN / 2; b++) {
+    for (int b = 0; b < TN / 2; b++) {
       pf_block_h(dom, c0, c1, tile, PF_B + (uint64_t)b, st);
       for (int i = 0; i < 2; i++)
         for (int k = 0; k < 32; k++) {
@@ -442,7 +503,7 @@ static std::vector<uint64_t> pf_bcols(uint64_t c0, uint64_t c1, uint64_t tile) {
         }
     }
   } else {
-    for (int b = 0; b < PF_TN / 16; b++)  // bit k of Bb[n]: entry (k, n), k < 32 KH
+    for (int b = 0; b < TN / 16; b++)  // bit k of Bb[n]: entry (k, n), k < 32 KH
       for (int h = 0; h < KH; h++) {
         pf_block_h(dom, c0, c1, tile, PF_B + (uint64_t)(KH * b + h), st);
         for (int i = 0; i < 16; i++) Bb[16 * b + i] |= (uint64_t)pf_row(st, i) << (32 * h);
@@ -451,18 +512,19 @@ static std::vector<uint64_t> pf_bcols(uint64_t c0, uint64_t c1, uint64_t tile) {
   return Bb;
 }
 template <int NC, int KD>
-static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps) {
+static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps, int W) {
   constexpr int KH = KD == PF_E2M1 ? 2 : 1, NP = pf_planes<KD>();
   constexpr uint64_t dom = pf_dom(KD);
+  const int TN = 128 * W;
   pf_host_k();
   uint64_t st[8];
-  const std::vector<uint64_t> Bb = pf_bcols<KD>(c0, c1, tile);
+  const std::vector<uint64_t> Bb = pf_bcols<KD>(c0, c1, tile, TN);
   pf_block_h(dom, c0, c1, tile, PF_KEY, st);
   const PfKeys key = pf_keys(st);
   const uint64_t K = dseed(c0, c1, tile);
   std::vector<uint64_t> Ar(16 * std::max(steps, 0));  // bit k of Ar[16 f + i]: entry (row 16 f + i of the warp's rows, k)
   uint64_t h = 0;
-  for (int w = 0; w < PF_W; w++) {
+  for (int w = 0; w < W; w++) {
     for (int f = 0; f < steps; f++)
       for (int hh = 0; hh < KH; hh++) {
         pf_block_h(dom, c0, c1, tile, (uint64_t)KH * ((uint64_t)w * steps + f) + hh, st);
@@ -475,7 +537,7 @@ static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps) {
         uint32_t y = pf_y0(pos), z = pf_z0(pos);
         for (int f = c; f < steps; f += 4) {
           const uint64_t R0 = Ar[16 * f + g], R1 = Ar[16 * f + g + 8];
-          for (int j = 0; j < PF_TN / 8; j++) {
+          for (int j = 0; j < TN / 8; j++) {
             const uint64_t *b0 = &Bb[NP * (8 * j + 2 * t)], *b1 = b0 + NP;
             pf_absorb<NC>(y, z, pf_word<KD>(R0, b0), pf_word<KD>(R0, b1), pf_word<KD>(R1, b0), pf_word<KD>(R1, b1),
                           key);
@@ -490,24 +552,26 @@ static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps) {
 // steps need not be a multiple of 32 here (dgate's control runs S - 8); the probes have no host tile, and
 // dfill_check reports -1 for them
 template <int KD>
-static uint64_t pf_ref_nc(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
+static uint64_t pf_ref_nc(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int W) {
   switch (nc) {
-    case 1: return pf_ref<1, KD>(c0, c1, tile, steps);
-    case 2: return pf_ref<2, KD>(c0, c1, tile, steps);
-    case 4: return pf_ref<4, KD>(c0, c1, tile, steps);
+    case 1: return pf_ref<1, KD>(c0, c1, tile, steps, W);
+    case 2: return pf_ref<2, KD>(c0, c1, tile, steps, W);
+    case 4: return pf_ref<4, KD>(c0, c1, tile, steps, W);
     default: return 0;
   }
 }
-static uint64_t dfill_ref_kind(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int kind) {
+static uint64_t dfill_ref_kind(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int kind, int W) {
   switch (kind) {
-    case PF_S8: return pf_ref_nc<PF_S8>(c0, c1, tile, nc, steps);
-    case PF_E2M1: return pf_ref_nc<PF_E2M1>(c0, c1, tile, nc, steps);
-    case PF_BU: return pf_ref_nc<PF_BU>(c0, c1, tile, nc, steps);
+    case PF_S8: return pf_ref_nc<PF_S8>(c0, c1, tile, nc, steps, W);
+    case PF_E2M1: return pf_ref_nc<PF_E2M1>(c0, c1, tile, nc, steps, W);
+    case PF_BITS: return pf_ref_nc<PF_BITS>(c0, c1, tile, nc, steps, W);
+    case PF_BU: return pf_ref_nc<PF_BU>(c0, c1, tile, nc, steps, W);
     default: return 0;
   }
 }
+// a phase id (bit 62, dfill_p's) names a PF_PW-warp tile, any other id a pump tile of PF_W warps
 static inline uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
-  return dfill_ref_kind(c0, c1, tile, nc, steps, PF_KIND);
+  return dfill_ref_kind(c0, c1, tile, nc, steps, PF_KIND, (tile >> 62) == 1 ? PF_PW : PF_W);
 }
 
 // pfill-bU's uniformity gate (note:20261016T0710Z-draft-filler-floor-r2 §5.8): the s8 bytes of U over `tiles` tiles' B

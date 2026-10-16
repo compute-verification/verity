@@ -19,11 +19,14 @@ scorer's proved 0.225; the filler is read at
 - priced-l64, e2m1 arms only (pfill_arm.products_per_slot, read from the run's arm.json): 0.45, Theorem E's priced form
   at L = 64 with heads priced at cL/m_max = 16 int8 slots, twice a CUDA word op's ≈ 8. That price is a claim, not a
   measurement, so the reading is conditional;
-- theorem-k, pfill-bU arms only (pfill_arm.theorem_k_setting): 0.9, Theorem K's c = 1 at φ = 0.9 for straight-line,
-  cell-pure runs on int MMAs with unscaled s32 reads, operands affine in their bits and every prefix word committed, as
-  RS-E-REF r4 refereed it (note:20261015T1931Z-draft-theorem-e-referee Part IV, with G₂ over all bit pairs and the luck
-  lemma on the integer alphabet, ≈ ½ a missing product). The guarantee isn't in the Lean lock yet, so the reading is
-  projected.
+- theorem-k, arms in Theorem K's setting only (pfill_arm.theorem_k_setting: pfill-k's {0,1} bits, pfill-bU): 0.9,
+  Theorem K's c = 1 at φ = 0.9 (note:20261016T0341Z-draft-fullfloor-s-r5 §3.6, note:20261016T0525Z-draft-fullfloor-s-r6
+  §2 and §4) for straight-line, cell-pure runs on int MMAs with unscaled s32 reads (s32 wrap included), operands affine
+  in their bits and every prefix word committed, as RS-E-REF r4 refereed it (note:20261015T1931Z-draft-theorem-e-referee
+  Part IV, with G₂ over all bit pairs and the luck lemma on the integer alphabet, ≈ ½ a missing product). Routes outside
+  K are priced at VF2: FP operands or scaled reads by Lemma W (≥ 1.25 of honest at L = 32, NOBITS confirmed by
+  note:20261016T0703Z-draft-fp4-nobits-probe), lookups and bit-slicing by VF2's families (≥ 1.935). The guarantee isn't
+  in the Lean lock yet, so the reading is projected.
 
   python3 benchmarks/pouw/filler/pfill_proved.py OUT_DIR [--json]
 """
@@ -51,7 +54,8 @@ E2M1_READINGS = {
 }
 K_READINGS = {
     "theorem-k": (0.9, "projected", "Theorem K c = 1 at phi = 0.9 (RS-E-REF r4: straight-line, cell-pure, int MMAs, "
-                                    "unscaled s32 reads, affine operands, every prefix word committed)"),
+                                    "unscaled s32 reads, affine operands, every prefix word committed); FP routes by "
+                                    "Lemma W at VF2 (NOBITS confirmed)"),
 }
 
 

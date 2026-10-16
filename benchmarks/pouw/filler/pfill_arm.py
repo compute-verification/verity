@@ -1,10 +1,11 @@
 """HC-PROVED's arms (approach pouw/filler-proved): pfill, a DRAM-free filler in Theorem E's own setting, so its floor is
 proved without CH (note:20261016T0456Z-draft-hc-proved). Every MMA's operands are fresh i.i.d. ±1 noise expanded on chip
 from the round's coins and the tile id (A_M = B_M = 0), each MMA's output is a whole prefix sum (k32 on IMMA, k64 on the
-e2m1 tile's OMMA), and every one is folded at once into the receipt. pfill-bu's noise is bits on A and {±1, ..., ±64} on
-B instead (FILL-SEC). The kernel is `pfill.cuh` behind dcap.cu's dfill ABI (dcap.cu's default filler on this branch); an
-arm picks the tile's kind at build time through NVCC_APPEND_FLAGS (-DPFILL_E2M1, -DPFILL_BU or nothing), which score.py's
-nvcc inherits, since it builds after loading the arm. Placement is FILL v1's
+e2m1 tile's OMMA), and every one is folded at once into the receipt. pfill-k's noise is {0,1} bits instead of ±1,
+and pfill-bu's is bits on A and {±1, ..., ±64} on B (FILL-SEC). The kernel is `pfill.cuh` behind dcap.cu's dfill ABI
+(dcap.cu's default filler on this branch); an arm picks the tile's kind at build time through NVCC_APPEND_FLAGS
+(-DPFILL_E2M1, -DPFILL_BITS, -DPFILL_BU or nothing), which score.py's nvcc inherits, since it builds after loading the
+arm. Placement is FILL v1's
 per-point split: on a green split the filler adds ≤ 0.4% to the split's own cost, so decode's slowdown is the split's,
 whatever runs on the filler's SMs.
 
@@ -109,6 +110,24 @@ class PFillE2m1Ram(PFillRam):
 
 
 @dataclass
+class PFillK(PFillPowerSplit):
+    """pfill-power-split's tile on {0,1} bits (-DPFILL_BITS): every A and B entry its SHA-512 bit as the s8 byte 0 or 1,
+    the same s8 IMMA m16n8k32 with C = 0, each s32 word popcount(a & b) folded unscaled into the same ram receipt.
+    Theorem K's setting (note:20261016T0341Z-draft-fullfloor-s-r5 §3.6): {0,1} data with targets Σ_k a b at coefficient 1
+    in the bits, integer operands affine in the bits, s32 reads unscaled; the noise-only case (x = 0) of round 6's
+    dither ⌊x/s⌋ + b. Theorem E's c = ½ covers {0,1} as it does ±1."""
+
+    name: str = "pfill-k"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "pfill-power-split", "approach": "pouw/filler-proved",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "place:split",
+                      "split:per-point-table", "split:every-scored-point", "prefill:split"],
+        "hypothesis": "{0,1} bits on both operands at the ±1 tile's rate meet Theorem K's hypotheses (int8, affine "
+                      "bytes, s32 unscaled), so the same filler reads c = 1 (0.9 a slot) once K is refereed, 0.225 now"})
+    nvcc_flags: str = "-DPFILL_BITS"
+
+
+@dataclass
 class PFillBU(PFillPowerSplit):
     """pfill-power-split's ram tile as pfill-bU (-DPFILL_BU, note:20261016T0710Z-draft-filler-floor-r2 §5): A's entries
     their SHA-512 bits as s8 0 or 1, B's U = (t & 0x7F) - 64 + ((t >> 6) & 1) from one digest byte t an entry (uniform on
@@ -134,5 +153,6 @@ def products_per_slot(lineage: dict) -> int:
 
 
 def theorem_k_setting(lineage: dict) -> bool:
-    """Whether the arm's filler is pfill-bU, the tile Theorem K's c = 1 reads."""
-    return "noise:sha512-coins-bU" in (lineage.get("mechanism") or [])
+    """Whether the arm's filler is one Theorem K reads: {0,1} bits on both sides (pfill-k) or pfill-bU."""
+    mech = lineage.get("mechanism") or []
+    return "noise:sha512-coins-01" in mech or "noise:sha512-coins-bU" in mech
