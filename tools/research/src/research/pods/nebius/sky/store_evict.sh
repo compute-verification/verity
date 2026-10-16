@@ -36,6 +36,8 @@ srcnote=
 if [ -n "$SRCDIR" ] && grep -q -- '"--src-dir"' "$TOOL/research/store/cli.py" 2> /dev/null; then
   args+=(--src-dir "$SRCDIR")
   [ -n "${VY_EVICT_ORIGIN:-}" ] && args+=(--src-origin "$VY_EVICT_ORIGIN")
+  [ -n "${VY_EVICT_SRC_KEEP_H:-}" ] && grep -q -- '"--src-keep-h"' "$TOOL/research/store/cli.py" 2> /dev/null \
+    && args+=(--src-keep-h "$VY_EVICT_SRC_KEEP_H")
 elif [ -n "$SRCDIR" ]; then
   srcnote="; src trees: not evicted, $(basename "$TOOL") has no --src-dir"
 fi
