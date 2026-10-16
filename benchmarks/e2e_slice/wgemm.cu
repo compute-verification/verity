@@ -192,8 +192,8 @@ static const WK* wfind(const std::string& n) {
   return nullptr;
 }
 // an arm's call: its producers (pre: W's edit, or the fused quantizer and edit; none for egemm's arms) and its GEMM
-struct Arm { std::function<void(EP&)> pre, run; };
-static Arm warm2(const std::string& a) {
+struct WArm { std::function<void(EP&)> pre, run; };
+static WArm warm2(const std::string& a) {
   for (const char* pre : {"", "edited:", "editedf:", "s:", "sedited:", "seditedf:"}) {
     const std::string p = pre;
     if (a.rfind(p, 0) != 0) continue;
@@ -210,7 +210,7 @@ static Arm warm2(const std::string& a) {
   return {nullptr, earm(a)};
 }
 static std::function<void(EP&)> warm(const std::string& a) {
-  const Arm r = warm2(a);
+  const WArm r = warm2(a);
   if (!r.pre) return r.run;
   return [r](EP& P) { r.pre(P); r.run(P); };
 }
@@ -453,7 +453,7 @@ static int wpipe(int reps, const std::string& arm, const std::string& base, int 
   auto serial = [&] { for (int i = 0; i < calls; i++) call(i, true); };
   // GEMM-first: call i - 1's commitments wait for call i's producers too, so they're released with call i's GEMM, whose
   // CTAs then go first (a producer's small blocks would otherwise let the commitments' CTAs onto every SM)
-  const Arm A = warm2(arm);
+  const WArm A = warm2(arm);
   auto release = [&](int i) {
     CK(cudaEventRecord(pa.ev[i], pa.st));
     CK(cudaStreamWaitEvent(pc.st, pa.ev[i]));
