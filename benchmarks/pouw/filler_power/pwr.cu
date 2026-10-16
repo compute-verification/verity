@@ -595,6 +595,19 @@ static void run_pfill(Dev& d, int B, int L, int fill_sms, int kind, int pat, int
   PFill f = pfill_make(got[1], kind, pat, W, NC, 2048);
   PFill fc;
   if (ctl_pat >= 0) fc = pfill_make(got[1], kind, ctl_pat, W, NC, 2048);
+  // PW_CO=1: an arm with the step on all SMs at the highest stream priority beside the filler on all SMs at the lowest
+  // (FILL's co-residency), the power ceiling of any schedule that puts filler warps on the step's SMs
+  PFill fco;
+  PFill* co = nullptr;
+  cudaStream_t co_step = nullptr, co_fs = nullptr;
+  if (getenv("PW_CO") && atoi(getenv("PW_CO"))) {
+    int lo, hi;
+    CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+    CK(cudaStreamCreateWithPriority(&co_step, cudaStreamNonBlocking, hi));
+    CK(cudaStreamCreateWithPriority(&co_fs, cudaStreamNonBlocking, lo));
+    fco = pfill_make(d.sms, kind, pat, W, NC, 2048);
+    co = &fco;
+  }
   bool wrapped = false;
   const cudaGraphExec_t g_full = capture(d, full, [&] { enqueue_step(d, p, 2, B, L, &wrapped); });
   const cudaGraphExec_t g_split = capture(d, ss, [&] { enqueue_step(d, p2, 2, B, L, &wrapped); });
@@ -621,6 +634,10 @@ static void run_pfill(Dev& d, int B, int L, int fill_sms, int kind, int pat, int
     }
     head("fill", r, f);
     arm(d, nullptr, nullptr, &f, fs, warm, meas, step_macs);
+    if (co) {
+      head("co_fill", r, *co);
+      arm(d, g_full, co_step, co, co_fs, warm, meas, step_macs);
+    }
     head("full2", r, f);
     arm(d, g_full, full, nullptr, nullptr, warm, meas, step_macs);
   }
@@ -628,6 +645,7 @@ static void run_pfill(Dev& d, int B, int L, int fill_sms, int kind, int pat, int
   CK(cudaGraphExecDestroy(g_split));
   CK(cudaFree(f.rec));
   if (ctl_pat >= 0) CK(cudaFree(fc.rec));
+  if (co) CK(cudaFree(fco.rec));
 }
 
 // Prefill after heat: per round, the decode step on its partition for HEAT s, alone (heat_split) or beside the filler
