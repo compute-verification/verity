@@ -249,6 +249,9 @@ deterministic arm between harnesses:
 |  | adopted-attention | 5.5989 (5.5977–5.6001) | +0.54 | -1.72 | - | - | - | - |
 |  | adopted-no-smooth | 5.6210 (5.6188–5.6229) | +0.94 | -1.38 | 5.6240 | `int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith-s0` | -0.05 | yes |
 |  | adopted | 5.6164 (5.6144–5.6180) | +0.86 | -1.46 | - | - | - | - |
+| llama-3.1-8b · wikitext2 · 32K (4 windows) | bf16 | 5.3623 | - | - | 5.3623 | `sdpa` | +0.00 | yes |
+|  | int8-all | 5.6118 (5.6111–5.6126) | +4.65 | - | 5.6106 | `int8-rot-lin8r-s0` | +0.02 | yes |
+|  | adopted | 5.4183 (5.4174–5.4189) | +1.05 | -3.45 | - | - | - | - |
 | qwen2.5-7b · wikitext2 · 2K (16 windows) | bf16 | 6.3538 | - | - | 6.3553 | `sdpa` | -0.02 | yes |
 |  | int8-linears | 6.3583 | +0.07 | - | 6.3577 | `ref-lin8r` (FP32 attention) | +0.01 | yes |
 |  | int8-attention | 6.3940 (6.3895–6.3964) | +0.63 | - | - | - | - | - |
@@ -279,6 +282,7 @@ Runs:
 - llama-3.1-8b · c4 · 2K: bench `r20261016-181132-a47c`; tonight `r20261016-151826-4e17`
 - llama-3.1-8b · wikitext2 · 2K: bench `r20261016-182558-c0e6`; tonight `r20261016-065318-8035`, `r20261016-091629-d9e7`, `r20261016-121921-ec96`
 - llama-3.1-8b · wikitext2 · 8K: bench `r20261016-183653-00ce`; tonight `r20261016-011841-01a2`, `r20261016-082150-e25a`, `r20261016-121921-ec96`
+- llama-3.1-8b · wikitext2 · 32K: bench `r20261016-195403-b5d8`; tonight `r20261016-105150-b602`, `r20261016-121921-ec96`
 - qwen2.5-7b · wikitext2 · 2K: bench `r20261016-183113-01ee`; tonight `r20261016-105148-9add`, `r20261016-110904-30f8`, `r20261016-121921-ec96`
 - qwen2.5-7b · wikitext2 · 8K: bench `r20261016-183927-f944`; tonight `r20261016-110904-30f8`, `r20261016-121921-ec96`
 - llama-3.1-70b · c4 · 2K: bench `r20261016-192547-f3f7`; tonight `r20261016-150804-a17f`
