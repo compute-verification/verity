@@ -277,6 +277,7 @@ def main() -> int:
             print(f"    M = {c['M']:5d}, k = {c['k']:2d}: plain {p:7.1f}; {c['best']} {med * p if med else float('nan'):7.1f}; "
                   f"hprio first {top * p if top else float('nan'):7.1f}{ref}")
     res["breakdown"] = breakdown([Path(d) for d in a.out])
+    res["edited"] = edited([Path(d) for d in a.out])
     if a.json:
         Path(a.json).write_text(json.dumps(res, indent=1) + "\n")
     return 0
@@ -317,6 +318,72 @@ def breakdown(dirs: list[Path]) -> list[dict]:
                        + (f", cgprerr2 {100 * (arms['cgprerr2'] / fast - 1):+.1f}%" if fast and "cgprerr2" in arms else ""))
             print(f"  {name:8s} {DIAG_WHAT.get(name, name):32s} cgonly {arms['cgonly']:6.1f} ms, saves "
                   f"{base['cgonly'] - arms['cgonly']:5.1f} ms ({100 * (1 - arms['cgonly'] / base['cgonly']):4.1f}%){rr}{lrr}{pre}")
+    return out
+
+
+# the edited arms' increments, each the arm minus the one before it (run.sh's eovl): the edited GEMMs over the fastest
+# plain, then X's commitments, the receipts' commitments, the draws
+STEPS = (("edited GEMM", None, "E:chunked"), ("X commitments", "E:chunked", "E:cgprend-fp"),
+         ("receipt commitments", "E:cgprend-fp", "ER:cgprend-fp"), ("draws", "ER:cgprend-fp", "ER:cgpre-fp"))
+
+
+def edited(dirs: list[Path]) -> list[dict]:
+    """run.sh's eovl: at each receipt stride S, the honest prefill (every linear EGEMM's edited GEMM, X and the receipts
+    committed, the draws) against the fastest plain int8 prefill of the same tokens, and its increments (STEPS); the
+    protocol arms are ER's with draws (ER:cgpre*), best their fastest. With each linear's GEMM alone (eg_setup) against
+    plain's, the gates (eg_gate), the receipts' roots (eg_roots), eref.jsonl and verify.jsonl."""
+    out = []
+    for d in dirs:
+        for name in ("eref.jsonl", "verify.jsonl"):
+            s = [r["summary"] for r in rows(d / name) if "summary" in r]
+            if s and name == "eref.jsonl":
+                print(f"\n{d.name}/{name}: {s[-1]}")
+        for f in sorted(d.glob("eovl-*.jsonl"), key=lambda p: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", p.stem)]):
+            rs = rows(f)
+            setup = next((r for r in rs if r.get("mode") == "eg_setup"), None)
+            plain_alone = {g["stage"]: g["ms_alone"] for r in rs if r.get("mode") == "ovl_setup" for g in r["gemms"]}
+            gates = [r for r in rs if r.get("mode") == "eg_gate"]
+            bad = [g["stage"] for g in gates if not g["gate"]["ok"]]
+            if setup:
+                print(f"\nedited, M = {setup['M']}, S = {setup['S']}: receipts {setup['receipt_bytes_a_layer'] / 2**20:.1f} MiB a layer "
+                      f"({setup['receipt_leaves_a_layer']} leaves; X {setup['x_bytes_a_layer'] / 2**20:.0f} MiB); gates "
+                      f"{len(gates) - len(bad)}/{len(gates)} ok" + (f", failed {bad}" if bad else ""))
+                for s in setup["stages"]:
+                    pa = plain_alone.get(s["stage"])
+                    ms = s["ms_alone"][s["kernel"]]
+                    print(f"  {s['stage']:8s} n {s['n']:5d} k {s['k']:5d} S {s['S']:3d}: {s['kernel']} alone {ms:.3f} ms"
+                          + (f" ({ms / pa:.2f}x plain's {pa:.3f})" if pa else "")
+                          + f", w_d {s['ms_alone']['w_d']:.3f} / w_d4q {s['ms_alone']['w_d4q']:.3f}; receipts {s['receipt_bytes'] / 2**20:.1f} MiB")
+            for r in rs:
+                if r.get("mode") != "ovl":
+                    continue
+                arms = {n: v["ms"] for n, v in r["arms"].items()}
+                pb = min(v for n, v in arms.items() if n == "plain" or n.startswith("chunked"))
+                proto = {n: v for n, v in arms.items() if n.startswith("ER:cgpre")}
+                best = min(proto, key=proto.get) if proto else None
+                cell = {"M": r["M"], "k": r["k"], "S": r.get("eg_s"), "plain_best_ms": pb, "arms": arms, "best": best,
+                        "eg_roots": r.get("eg_roots", {}), "cg_roots": r.get("cg_roots", {}), "steps": {}}
+                for what, a, b in STEPS:
+                    if b in arms and (a is None or a in arms):
+                        cell["steps"][what] = arms[b] - (pb if a is None else arms[a])
+                off = [n for n, v in cell["eg_roots"].items() if v != ("equal" if n.startswith(("ER:", "ERL:")) else "differ")]
+                off += [n for n, v in cell["cg_roots"].items() if v != ("differ" if n.startswith(("nohash", "E:chunked")) else "equal")]
+                cell["roots_off"] = off
+                out.append(cell)
+                line = "  ".join(f"{n} {100 * (v / pb - 1):+.1f}%" for n, v in arms.items() if n.startswith(("E:", "ER:", "ERL:")))
+                print(f"  k={r['k']:2d} fastest plain {pb:8.2f} ms | {line}")
+                if best:
+                    steps = ", ".join(f"{w} {v:+.1f} ms ({100 * v / pb:+.1f}%)" for w, v in cell["steps"].items())
+                    print(f"        best {best} {arms[best]:.2f} ms, {100 * (arms[best] / pb - 1):+.1f}% ({arms[best] / pb:.2f}x); {steps}; "
+                          f"roots off: {off or 'none'}")
+    if out:
+        print("\nthe honest prefill against the fastest plain int8 prefill (best ER:cgpre* arm), by receipt stride S")
+        Ss = sorted({c["S"] for c in out})
+        for M, k in sorted({(c["M"], c["k"]) for c in out}):
+            cs = {c["S"]: c for c in out if c["M"] == M and c["k"] == k and c["best"]}
+            print(f"  M = {M}, k = {k}: " + "  ".join(
+                f"S {S}: {cs[S]['arms'][cs[S]['best']]:.1f} ms vs {cs[S]['plain_best_ms']:.1f} ({cs[S]['arms'][cs[S]['best']] / cs[S]['plain_best_ms']:.2f}x)"
+                for S in Ss if S in cs))
     return out
 
 
