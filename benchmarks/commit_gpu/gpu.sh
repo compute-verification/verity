@@ -7,7 +7,7 @@
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=COMMIT-GPU \
 #     -- bash benchmarks/commit_gpu/gpu.sh
-# CHECK=quick|full (default full); REPS (default 9); BUILDS (default "a1 a0 a1nomask"); SWEEP (int8 values a leaf).
+# CHECK=quick|full (default full); REPS (default 9); BUILDS (tags a<SHA_ADD>r<SHA_ROT>[nomask]); SWEEP (int8 values a leaf).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -18,19 +18,16 @@ trap 'rm -rf "$W"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nproc > "$O/nproc.txt"
 
-build() {   # build TAG SHA_ADD [FLAGS]
-  nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -DSHA_ADD="$2" ${3:-} -o "$W/commit_gpu_$1" \
-    $D/commit_gpu.cu -lcublasLt -lnvidia-ml > "$O/build-$1.log" 2>&1
-  echo "build $1 rc $?" >> "$O/rc.txt"
+build() {   # build TAG: a<SHA_ADD>r<SHA_ROT>[nomask]
+  local t=$1 add=${1:1:1} rot flags=""
+  rot=${t#a?r}; rot=${rot%nomask}
+  case $t in *nomask) flags=-DCOMMIT_GPU_DIAG_NOMASK ;; esac
+  nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -DSHA_ADD="$add" -DSHA_ROT="$rot" $flags \
+    -o "$W/commit_gpu_$t" $D/commit_gpu.cu -lcublasLt -lnvidia-ml > "$O/build-$t.log" 2>&1
+  echo "build $t rc $?" >> "$O/rc.txt"
 }
-export BUILDS=${BUILDS:-a1 a0 a1nomask}
-for t in $BUILDS; do
-  case $t in
-    a1) build a1 1 & ;;
-    a0) build a0 0 & ;;
-    a1nomask) build a1nomask 1 -DCOMMIT_GPU_DIAG_NOMASK & ;;
-  esac
-done
+export BUILDS=${BUILDS:-a0r0 a0r3 a0r7 a0r15 a1r3 a0r3nomask}
+for t in $BUILDS; do build "$t" & done
 $PY $D/reference.py prepare "$W/cases" "${CHECK:-full}" > "$O/prepare.jsonl" 2> "$O/prepare.err"
 echo "prepare rc $?" >> "$O/rc.txt"
 export SWEEP=${SWEEP:-32 64 128 256 512 1024 2048 4096}
@@ -58,19 +55,28 @@ gpu-lease 1 --wait --max-min 20 -- bash -c '
   echo "timed:$timed" >> "$O/rc.txt"
   nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu --format=csv -lms 500 -i "$GPU_LEASE_UUID" > "$O/smi.csv" 2>&1 &
   smi=$!
-  for t in $timed; do "$W/commit_gpu_$t" sha 20 >> "$O/sha.jsonl" 2>> "$O/bench.err"; done
+  for t in $timed; do "$W/commit_gpu_$t" sha 20 > "$O/sha-$t.jsonl" 2>> "$O/bench.err"; done
   for t in $timed; do
-    "$W/commit_gpu_$t" bench "$W/p-e2e.bin" e2e 1048576 1024 "$REPS" 8192 4096 4096 >> "$O/bench-e2e.jsonl" 2>> "$O/bench.err"
+    "$W/commit_gpu_$t" bench "$W/p-e2e.bin" e2e 1048576 1024 "$REPS" 8192 4096 4096 > "$O/bench-e2e-$t.jsonl" 2>> "$O/bench.err"
     echo "bench e2e $t rc $?" >> "$O/rc.txt"
   done
-  best=$(echo $timed | tr " " "\n" | grep -v nomask | head -1)
+  best=$($PY $D/summary.py best "$O")
+  echo "best: $best" >> "$O/rc.txt"
   for L in $SWEEP; do
     [ -n "$best" ] || break
     "$W/commit_gpu_$best" bench "$W/p-rows-$L.bin" rows $((33554432 / L)) $((8 * L)) "$REPS" 8192 4096 4096 \
-      >> "$O/bench-sweep.jsonl" 2>> "$O/bench.err"
+      >> "$O/bench-sweep-$best.jsonl" 2>> "$O/bench.err"
     echo "bench rows L=$L $best rc $?" >> "$O/rc.txt"
   done
-  kill $smi'
+  kill $smi
+  # the kernels'"'"' launch shapes (registers a thread, shared memory, blocks): can a commit kernel sit beside a GEMM CTA?
+  N=$(command -v nsys || ls /usr/local/cuda-13.0/bin/nsys 2>/dev/null)
+  if [ -n "$best" ] && [ -n "$N" ]; then
+    "$N" profile -o "$W/trace" -t cuda --force-overwrite true "$W/commit_gpu_$best" bench "$W/p-rows-4096.bin" rows 8192 32768 2 \
+      8192 4096 4096 > /dev/null 2> "$O/nsys.err"
+    "$N" stats -r cuda_gpu_trace -f csv -o "$O/nsys" "$W/trace.nsys-rep" >> "$O/nsys.err" 2>&1
+    echo "nsys rc $?" >> "$O/rc.txt"
+  fi'
 echo "lease rc $?" >> "$O/rc.txt"
 cat "$O/rc.txt"
 for f in "$O"/check-*.jsonl; do [ -e "$f" ] && tail -1 "$f"; done

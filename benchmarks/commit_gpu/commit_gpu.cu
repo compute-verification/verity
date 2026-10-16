@@ -20,7 +20,7 @@
 //   commit_gpu check PARAMS OUT e2e|rows N LBITS STRIDE ROWS SALTS|prf     (writes OUT/levels.bin, OUT/bc.bin)
 //   commit_gpu bench PARAMS e2e|rows N LBITS REPS [GEMM_M GEMM_N GEMM_K]     (JSON lines on stdout)
 //   commit_gpu sha REPS                                                      (raw compression rate)
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a commit_gpu.cu -lcublasLt -lnvidia-ml [-DSHA_ADD=0|1]
+// Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a commit_gpu.cu -lcublasLt -lnvidia-ml [-DSHA_ADD=0|1] [-DSHA_ROT=0..15]
 // (-DCOMMIT_GPU_DIAG_NOMASK: a timing-only build that skips M_key y, to measure its share; it refuses `check`)
 #include <cublasLt.h>
 #include <cuda_runtime.h>
@@ -270,7 +270,10 @@ DEV void salt_digest(const u64* Y, u64* c) {
 
 // M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]): for salt bytes p = 16 q + r, the 80 bytes
 // [16 q, 16 q + 80) of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m.
+// T in shared memory (TS, rows TSTRIDE apart) or read from global memory through L1 (rows 256 apart).
+template <bool TS>
 DEV void hm96_mask(const uint8_t* T, const u64* Y, u32* m) {
+  constexpr int STRIDE = TS ? TSTRIDE : 256;
 #pragma unroll
   for (int w = 0; w < 16; ++w) m[w] = 0;
 #pragma unroll
@@ -282,10 +285,10 @@ DEV void hm96_mask(const uint8_t* T, const u64* Y, u32* m) {
     for (int q = 0; q < 12; ++q) {
       const int p = 16 * q + r;
       const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
-      const uint4* t = reinterpret_cast<const uint4*>(T + v * TSTRIDE + 16 * q);
+      const uint8_t* t = T + v * STRIDE + 16 * q;
 #pragma unroll
       for (int i = 0; i < 5; ++i) {
-        const uint4 u = t[i];
+        const uint4 u = TS ? *reinterpret_cast<const uint4*>(t + 16 * i) : ldg16(t + 16 * i);
         A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
       }
     }
@@ -307,13 +310,15 @@ struct RowBytes {
 };
 
 // One thread a position: the tree leaf (or pad) to lv0[pos]; b || c to bc[pos] when bc is given.
-template <class Row, bool PRF>
+template <class Row, bool PRF, bool TS>
 __global__ void __launch_bounds__(LEAF_THREADS, 1)
     leaf_kernel(Row row, const uint8_t* __restrict__ salts, const uint4* __restrict__ Tg, u64 n, u64 width,
                 u64* __restrict__ lv0, u64* __restrict__ bc) {
   extern __shared__ uint4 smem[];
-  for (int i = threadIdx.x; i < 256 * 16; i += blockDim.x) smem[(i >> 4) * (TSTRIDE / 16) + (i & 15)] = Tg[i];
-  __syncthreads();
+  if constexpr (TS) {
+    for (int i = threadIdx.x; i < 256 * 16; i += blockDim.x) smem[(i >> 4) * (TSTRIDE / 16) + (i & 15)] = Tg[i];
+    __syncthreads();
+  }
   const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (pos >= width) return;
   u64 out[8];
@@ -325,7 +330,7 @@ __global__ void __launch_bounds__(LEAF_THREADS, 1)
 #ifdef COMMIT_GPU_DIAG_NOMASK
     for (int w = 0; w < 16; ++w) m[w] = (u32)Y[w];
 #else
-    hm96_mask(reinterpret_cast<const uint8_t*>(smem), Y, m);
+    hm96_mask<TS>(TS ? reinterpret_cast<const uint8_t*>(smem) : reinterpret_cast<const uint8_t*>(Tg), Y, m);
 #endif
     salt_digest(Y, c);
     row.digest(pos, x);
@@ -369,7 +374,18 @@ DEV void st8(u64* p, const u64* d) {
   for (int i = 0; i < 4; ++i) q[i] = make_uint4((u32)d[2 * i], (u32)(d[2 * i] >> 32), (u32)d[2 * i + 1], (u32)(d[2 * i + 1] >> 32));
 }
 
-// Levels d+1 .. d+nl from level d (n_in nodes): a block takes 512 children and keeps its levels in shared memory.
+// Level d+1 from level d (n_in nodes), a thread a node.
+__global__ void __launch_bounds__(NODE_THREADS) level_kernel(const u64* __restrict__ in, u64* __restrict__ out, u64 n_in, int d) {
+  const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n_in / 2) return;
+  u64 L[8], R[8], o[8];
+  ld8(in + 16 * i, L);
+  ld8(in + 16 * i + 8, R);
+  node(d, i, L, R, o);
+  st8(out + 8 * i, o);
+}
+
+// The top: levels d+1 .. d+nl from level d (n_in <= 512 nodes) in one block, the levels in shared memory.
 // out[l] is level d+1+l's array.
 struct LevelPtrs { u64* p[10]; };
 __global__ void __launch_bounds__(NODE_THREADS) node_kernel(const u64* __restrict__ in, LevelPtrs out, u64 n_in, int d, int nl) {
@@ -559,21 +575,32 @@ struct Committer {
     u64 off = 0;
     for (int d = 0; d <= depth; ++d) { lv.push_back(levels + 8 * off); off += width >> d; }
   }
+  // Above 2^16 leaves T sits in shared memory (one block of LEAF_THREADS an SM); at or below, where the rows dominate a
+  // leaf's work, blocks of 64 threads read T through L1, which spreads few leaves over the SMs and takes no shared memory.
   template <class Row, bool PRF>
   void leaves(const Row& row, const uint8_t* salts, cudaStream_t st) {
-    auto k = leaf_kernel<Row, PRF>;
-    static bool attr = false;
-    if (!attr) { CK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, TSMEM)); attr = true; }
-    k<<<(unsigned)((width + LEAF_THREADS - 1) / LEAF_THREADS), LEAF_THREADS, TSMEM, st>>>(row, salts, T, n, width, lv[0], bc);
+    if (width > (1u << 16)) {
+      auto k = leaf_kernel<Row, PRF, true>;
+      static bool attr = false;
+      if (!attr) { CK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, TSMEM)); attr = true; }
+      k<<<(unsigned)((width + LEAF_THREADS - 1) / LEAF_THREADS), LEAF_THREADS, TSMEM, st>>>(row, salts, T, n, width, lv[0], bc);
+    } else {
+      leaf_kernel<Row, PRF, false><<<(unsigned)((width + 63) / 64), 64, 0, st>>>(row, salts, T, n, width, lv[0], bc);
+    }
   }
+  // A level a launch while a level is wider than 512 nodes (blocks of 64 threads below 2^16 nodes, so few nodes still spread
+  // over the SMs), then the top in one block.
   void nodes(cudaStream_t st) {
-    for (int d = 0; d < depth;) {
-      const int nl = std::min(9, depth - d);
+    int d = 0;
+    for (; d < depth && (width >> d) > 2 * NODE_THREADS; ++d) {
+      const u64 n_out = width >> (d + 1);
+      const unsigned t = n_out >= (1u << 16) ? NODE_THREADS : 64;
+      level_kernel<<<(unsigned)((n_out + t - 1) / t), t, 0, st>>>(lv[d], lv[d + 1], width >> d, d);
+    }
+    if (d < depth) {
       LevelPtrs o{};
-      for (int l = 0; l < nl; ++l) o.p[l] = lv[d + 1 + l];
-      const u64 n_in = width >> d, blocks = std::max<u64>(1, n_in / (2 * NODE_THREADS));
-      node_kernel<<<(unsigned)blocks, NODE_THREADS, 0, st>>>(lv[d], o, n_in, d, nl);
-      d += nl;
+      for (int l = 0; l < depth - d; ++l) o.p[l] = lv[d + 1 + l];
+      node_kernel<<<1, NODE_THREADS, 0, st>>>(lv[d], o, width >> d, d, depth - d);
     }
   }
   void release() { cudaFree(levels); cudaFree(bc); cudaFree(T); lv.clear(); }
@@ -792,10 +819,10 @@ static int bench(int argc, char** argv) {
   }
   const double tc = median(t_all);
   const double comps = (double)n * (mode == "e2e" ? 2 : (lb + 17 + 127) / 128) + 3.0 * n + 2.0 * n + 2.0 * n + 2.0 * n + 2.0 * (cm.width - 1);
-  printf("{\"bench\": \"%s\", \"gpu\": \"%s\", \"sms\": %d, \"sha_add\": %d, \"leaf_threads\": %d, \"n\": %llu, \"lbits\": %llu, "
+  printf("{\"bench\": \"%s\", \"gpu\": \"%s\", \"sms\": %d, \"sha_add\": %d, \"sha_rot\": %d, \"leaf_threads\": %d, \"n\": %llu, \"lbits\": %llu, "
          "\"depth\": %d, \"operand_bytes\": %llu, \"commit_ms\": %.5f, \"leaf_ms\": %.5f, \"nodes_ms\": %.5f, \"mhz\": %.0f, "
          "\"compressions\": %.0f, \"gcomp_per_s\": %.3f, \"sha_gb_per_s\": %.2f, \"operand_gb_per_s\": %.2f, ",
-         mode.c_str(), prop.name, prop.multiProcessorCount, SHA_ADD, LEAF_THREADS, (unsigned long long)n,
+         mode.c_str(), prop.name, prop.multiProcessorCount, SHA_ADD, SHA_ROT, LEAF_THREADS, (unsigned long long)n,
          (unsigned long long)lbits, cm.depth, (unsigned long long)data, tc, median(t_leaf), tc - median(t_leaf), median(mhz),
          comps, comps / tc * 1e-6, comps * 128 / tc * 1e-6, data / tc * 1e-6);
   json_list("commit_ms_all", t_all);
@@ -836,7 +863,8 @@ static int bench(int argc, char** argv) {
       serial_wall.push_back(ms(e[3], e[4]));
     }
     const double ga = median(g_alone), bw = median(both_wall), sw = median(serial_wall);
-    const double hidden = (ng * ga + tc - bw) / std::min(ng * ga, tc);
+    // the share of the shorter side that concurrency hides, against both on one stream measured in the same loop
+    const double hidden = (sw - bw) / std::min(ng * ga, tc);
     printf("{\"beside_gemm\": {\"m\": %d, \"n\": %d, \"k\": %d, \"lt_algo_index\": %d, \"gemm_ms\": %.5f, \"gemms\": %d, "
            "\"commit_alone_ms\": %.5f, \"both_wall_ms\": %.5f, \"both_commit_ms\": %.5f, \"both_gemm_ms\": %.5f, "
            "\"serial_wall_ms\": %.5f, \"hidden_fraction\": %.4f, \"commit_over_gemm\": %.4f, \"commit_gb_per_s_beside\": %.2f, "
@@ -869,8 +897,8 @@ static int sha_bench(int reps) {
     if (r) { t.push_back(ms); mz.push_back(nv.sm()); }
   }
   const double comps = (double)threads * blocks * chain, tm = median(t);
-  printf("{\"sha\": {\"sha_add\": %d, \"compressions\": %.0f, \"ms\": %.5f, \"gcomp_per_s\": %.3f, \"gb_per_s\": %.2f, \"mhz\": %.0f}}\n",
-         SHA_ADD, comps, tm, comps / tm * 1e-6, comps * 128 / tm * 1e-6, median(mz));
+  printf("{\"sha\": {\"sha_add\": %d, \"sha_rot\": %d, \"compressions\": %.0f, \"ms\": %.5f, \"gcomp_per_s\": %.3f, \"gb_per_s\": %.2f, \"mhz\": %.0f}}\n",
+         SHA_ADD, SHA_ROT, comps, tm, comps / tm * 1e-6, comps * 128 / tm * 1e-6, median(mz));
   return 0;
 }
 

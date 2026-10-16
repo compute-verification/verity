@@ -80,10 +80,54 @@ HD uint64_t add3(uint64_t a, uint64_t b, uint64_t c) {
 #endif
 }
 
-HD uint64_t S0(uint64_t a) { return rotr(a, 28) ^ rotr(a, 34) ^ rotr(a, 39); }
-HD uint64_t S1(uint64_t e) { return rotr(e, 14) ^ rotr(e, 18) ^ rotr(e, 41); }
-HD uint64_t s0(uint64_t w) { return rotr(w, 1) ^ rotr(w, 8) ^ (w >> 7); }
-HD uint64_t s1(uint64_t w) { return rotr(w, 19) ^ rotr(w, 61) ^ (w >> 6); }
+#ifdef __CUDA_ARCH__
+// Rotations on the FMA pipe: with m = 2^(32-n), x >> n = mul.hi(x, m) and (y << (32-n)) | (x >> n) = mad.lo(y, m, x >> n)
+// (the two parts share no bit). m comes from constant memory, so ptxas can't turn the multiply back into a shift.
+__constant__ uint32_t POW2[33] = {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u, 1u << 10, 1u << 11, 1u << 12, 1u << 13,
+                                  1u << 14, 1u << 15, 1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22,
+                                  1u << 23, 1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31, 0u};
+__device__ __forceinline__ uint32_t mulhi(uint32_t x, uint32_t m) {
+  uint32_t r;
+  asm("mul.hi.u32 %0, %1, %2;" : "=r"(r) : "r"(x), "r"(m));
+  return r;
+}
+__device__ __forceinline__ uint32_t madlo(uint32_t y, uint32_t m, uint32_t t) {
+  uint32_t r;
+  asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(y), "r"(m), "r"(t));
+  return r;
+}
+template <int N>
+__device__ __forceinline__ uint64_t rotr_fma(uint64_t x) {
+  uint32_t lo = (uint32_t)x, hi = (uint32_t)(x >> 32);
+  if constexpr (N > 32) { const uint32_t t = lo; lo = hi; hi = t; }
+  constexpr int n = N > 32 ? N - 32 : N;
+  const uint32_t m = POW2[32 - n];
+  return (uint64_t)madlo(lo, m, mulhi(hi, m)) << 32 | madlo(hi, m, mulhi(lo, m));
+}
+template <int N>
+__device__ __forceinline__ uint64_t shr_fma(uint64_t x) {
+  const uint32_t lo = (uint32_t)x, hi = (uint32_t)(x >> 32), m = POW2[32 - N];
+  return (uint64_t)mulhi(hi, m) << 32 | madlo(hi, m, mulhi(lo, m));
+}
+#endif
+
+// SHA_ROT: which of the four sigma functions rotate on the FMA pipe (bit 0 S0, 1 S1, 2 s0, 3 s1); the rest use funnel
+// shifts. Every integer ALU instruction (SHF, LOP3, IADD3) costs the sub-partition 2 cycles, so this moves work to a pipe
+// the compression otherwise leaves idle.
+#ifndef SHA_ROT
+#define SHA_ROT 0
+#endif
+#if defined(__CUDA_ARCH__)
+#define SHA_R(mask, x, n) ((SHA_ROT & (mask)) ? rotr_fma<n>(x) : rotr(x, n))
+#define SHA_SHR(mask, x, n) ((SHA_ROT & (mask)) ? shr_fma<n>(x) : (x) >> (n))
+#else
+#define SHA_R(mask, x, n) rotr(x, n)
+#define SHA_SHR(mask, x, n) ((x) >> (n))
+#endif
+HD uint64_t S0(uint64_t a) { return SHA_R(1, a, 28) ^ SHA_R(1, a, 34) ^ SHA_R(1, a, 39); }
+HD uint64_t S1(uint64_t e) { return SHA_R(2, e, 14) ^ SHA_R(2, e, 18) ^ SHA_R(2, e, 41); }
+HD uint64_t s0(uint64_t w) { return SHA_R(4, w, 1) ^ SHA_R(4, w, 8) ^ SHA_SHR(4, w, 7); }
+HD uint64_t s1(uint64_t w) { return SHA_R(8, w, 19) ^ SHA_R(8, w, 61) ^ SHA_SHR(8, w, 6); }
 HD uint64_t ch(uint64_t e, uint64_t f, uint64_t g) { return (e & f) ^ (~e & g); }
 HD uint64_t maj(uint64_t a, uint64_t b, uint64_t c) { return (a & b) | (c & (a | b)); }
 
