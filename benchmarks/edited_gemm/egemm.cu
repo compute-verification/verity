@@ -206,7 +206,6 @@ template <bool R, int LAG, int TIE, bool IC> DEV void e_body(const Args& a) {
   __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<R, LAG, TIE, IC>(a); }
 EGEMM(e_plain, false, 0, 0, true)
 EGEMM(e_plain_nc, false, 0, 0, false)
-EGEMM(e_l1t, true, 1, 1, true)
 EGEMM(e_l1h, true, 1, 2, true)
 EGEMM(e_l2, true, 2, 0, true)
 EGEMM(e_l2h, true, 2, 2, true)
@@ -395,7 +394,7 @@ struct EP {
 };
 
 static const std::pair<const char*, Kern> EK[] = {
-    {"e_plain", e_plain}, {"e_plain_nc", e_plain_nc}, {"e_l1t", e_l1t}, {"e_l1h", e_l1h},
+    {"e_plain", e_plain}, {"e_plain_nc", e_plain_nc}, {"e_l1h", e_l1h},
     {"e_l2", e_l2}, {"e_l2h", e_l2h}, {"e_l2h_nc", e_l2h_nc}, {"e_l2q", e_l2q},
     {"e_l3h", e_l3h}, {"e_l3q", e_l3q}, {"e_l4h", e_l4h}, {"t_duo32", t_duo32}};
 static Kern ekern(const std::string& n) {
