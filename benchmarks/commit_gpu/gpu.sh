@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # commit_gpu on one leased sm_120 GPU (cwd = the source tree's root). Outside the lease: builds (by default the fastest
-# measured form; BUILDS names others, and a nomask tag a timing-only build without M_key y) and reference.py's cases on
+# measured form; BUILDS names others, a nomask tag a timing-only build without M_key y and a merged tag one without h's
+# two compressions, the timing of a one-hash leaf format) and reference.py's cases on
 # the CPU. Under one lease: the selftest, each build's bit-exactness check against the reference (a build is timed only if
 # its check passed), the raw
 # compression rate, the e2e slice's o_proj operand A (8192 x 4096 int8, 2^20 leaves) committed alone and beside cuBLASLt's
 # int8 o_proj GEMM, and the leaf-size sweep over the same operand as raw int8 rows, as sha512/row/v2 rows and (from 1 KiB) as
-# sha512/row-seg/v1 rows. Clocks are read, never set.
+# sha512/row-seg/v1 rows; then o_proj's operand at each prefill chunk (TILE_M, default 2048 8192 tokens) as e2e leaves and
+# as tile leaves of R rows x 32 values (Decision 46; TILE_R as row/v2, TILESEG_R as row-seg/v1), beside the chunk's GEMM.
+# Every latency is measured from the end of a stand-in producer kernel, the operand's last write. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=COMMIT-GPU \
 #     -- bash benchmarks/commit_gpu/gpu.sh
-# CHECK=quick|full (default full); REPS (default 9); BUILDS (default a0r0l; tags a<SHA_ADD>r<SHA_ROT>[l][nomask], l for
+# CHECK=quick|full (default full); REPS (default 9); BUILDS (default a0r0l; tags a<SHA_ADD>r<SHA_ROT>[l][nomask|merged], l for
 # SHA_ROLL=1);
-# SWEEP and SEG_SWEEP (int8 values a leaf).
+# SWEEP and SEG_SWEEP (int8 values a leaf); TILE_M, TILE_R, TILESEG_R.
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -22,11 +25,11 @@ trap 'rm -rf "$W"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nproc > "$O/nproc.txt"
 
-build() {   # build TAG: a<SHA_ADD>r<SHA_ROT>[l][nomask] (l: SHA_ROLL=1, else 0)
+build() {   # build TAG: a<SHA_ADD>r<SHA_ROT>[l][nomask|merged] (l: SHA_ROLL=1, else 0)
   local t=$1 add=${1:1:1} rot flags="-DSHA_ROLL=0"
-  rot=${t#a?r}; rot=${rot%nomask}
+  rot=${t#a?r}; rot=${rot%nomask}; rot=${rot%merged}
   case $rot in *l) rot=${rot%l}; flags="-DSHA_ROLL=1" ;; esac
-  case $t in *nomask) flags="$flags -DCOMMIT_GPU_DIAG_NOMASK" ;; esac
+  case $t in *nomask) flags="$flags -DCOMMIT_GPU_DIAG_NOMASK" ;; *merged) flags="$flags -DCOMMIT_GPU_DIAG_MERGED" ;; esac
   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -DSHA_ADD="$add" -DSHA_ROT="$rot" $flags \
     -o "$W/commit_gpu_$t" $D/commit_gpu.cu -lcublasLt -lnvidia-ml > "$O/build-$t.log" 2>&1
   echo "build $t rc $?" >> "$O/rc.txt"
@@ -40,6 +43,12 @@ $PY $D/reference.py params "$W/p-e2e.bin" 1048576 1024
 for L in $SWEEP; do $PY $D/reference.py params "$W/p-rows-$L.bin" $((33554432 / L)) $((8 * L)); done
 export SEG_SWEEP=${SEG_SWEEP:-1024 2048 4096 8192 16384}
 for L in $SEG_SWEEP; do $PY $D/reference.py params "$W/p-seg-$L.bin" $((33554432 / L)) $((8 * L)) --seg; done
+export TILE_M=${TILE_M:-2048 8192} TILE_R=${TILE_R:-16 32 64 128} TILESEG_R=${TILESEG_R:-64 128}
+for M in $TILE_M; do
+  $PY $D/reference.py params "$W/p-e2e-$M.bin" $((128 * M)) 1024
+  for R in $TILE_R; do $PY $D/reference.py params "$W/p-tile-$M-$R.bin" $(((M + R - 1) / R * 128)) $((256 * R)); done
+  for R in $TILESEG_R; do $PY $D/reference.py params "$W/p-tileseg-$M-$R.bin" $(((M + R - 1) / R * 128)) $((256 * R)) --seg; done
+done
 wait
 cat "$O/rc.txt"
 
@@ -52,7 +61,7 @@ gpu-lease 1 --wait --max-min 20 -- bash -c '
   for t in $BUILDS; do
     [ -x "$W/commit_gpu_$t" ] || continue
     case $t in
-      *nomask) timed="$timed $t" ;;
+      *nomask|*merged) timed="$timed $t" ;;
       *) "$W/commit_gpu_$t" selftest >> "$O/selftest.jsonl"; s=$?
          $PY $D/reference.py check "$W/commit_gpu_$t" "$W/cases" "$t" > "$O/check-$t.jsonl" 2> "$O/check-$t.err"; c=$?
          echo "selftest $t rc $s; check $t rc $c" >> "$O/rc.txt"
@@ -80,6 +89,24 @@ gpu-lease 1 --wait --max-min 20 -- bash -c '
     "$W/commit_gpu_$best" bench "$W/p-seg-$L.bin" seg $((33554432 / L)) $((8 * L)) "$REPS" 8192 4096 4096 \
       >> "$O/bench-seg-$best.jsonl" 2>> "$O/bench.err"
     echo "bench seg L=$L $best rc $?" >> "$O/rc.txt"
+  done
+  # o_proj'"'"'s operand (M x 4096) at each prefill chunk M: e2e leaves, then tile leaves of R rows x 32 values, beside the
+  # M x 4096 x 4096 GEMM; by the best build and by each timing-only merged build
+  tile_tags=$best
+  for t in $timed; do case $t in *merged) tile_tags="$tile_tags $t" ;; esac; done
+  for t in $tile_tags; do
+    for M in $TILE_M; do
+      "$W/commit_gpu_$t" bench "$W/p-e2e-$M.bin" e2e $((128 * M)) 1024 "$REPS" "$M" 4096 4096 >> "$O/bench-tile-$t.jsonl" 2>> "$O/bench.err"
+      echo "bench e2e M=$M $t rc $?" >> "$O/rc.txt"
+      for R in $TILE_R; do
+        "$W/commit_gpu_$t" bench "$W/p-tile-$M-$R.bin" tile "$M" 4096 "$R" "$REPS" "$M" 4096 4096 >> "$O/bench-tile-$t.jsonl" 2>> "$O/bench.err"
+        echo "bench tile M=$M R=$R $t rc $?" >> "$O/rc.txt"
+      done
+      for R in $TILESEG_R; do
+        "$W/commit_gpu_$t" bench "$W/p-tileseg-$M-$R.bin" tileseg "$M" 4096 "$R" "$REPS" "$M" 4096 4096 >> "$O/bench-tile-$t.jsonl" 2>> "$O/bench.err"
+        echo "bench tileseg M=$M R=$R $t rc $?" >> "$O/rc.txt"
+      done
+    done
   done
   kill $smi
   # the kernels'"'"' launch shapes (registers a thread, shared memory, blocks): can a commit kernel sit beside a GEMM CTA?

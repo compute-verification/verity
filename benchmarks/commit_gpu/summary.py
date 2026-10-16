@@ -1,6 +1,6 @@
 """A gpu.sh run's outputs, one line a measurement: `python3 summary.py OUT`; `python3 summary.py best OUT` prints the tag of
 the checked build whose e2e commitment was fastest; `python3 summary.py table OUT` renders the best build's measurements as
-the README's Markdown table."""
+the README's Markdown table, and `python3 summary.py tiles OUT [TAG]` a build's tile-leaf sweep."""
 from __future__ import annotations
 
 import json
@@ -18,7 +18,7 @@ def tagged(out: str, prefix: str) -> list[tuple[str, list[dict]]]:
 
 
 def best(out: str) -> str:
-    runs = [(r[0]["commit_ms"], tag) for tag, r in tagged(out, "bench-e2e-") if r and "nomask" not in tag]
+    runs = [(r[0]["commit_ms"], tag) for tag, r in tagged(out, "bench-e2e-") if r and "nomask" not in tag and "merged" not in tag]
     return min(runs)[1] if runs else ""
 
 
@@ -28,7 +28,8 @@ def bench_line(tag: str, r: dict) -> str:
         if "salt_ms" in r:
             graph += (f", root on the host {r['root_on_host_best_ms']:.3f} ms (CPU tail {r['root_on_host_best_k']} levels, "
                       f"{r['operand_gb_per_s_root_on_host']:.1f} GB/s); salt phase {r['salt_ms']:.3f} ms before the data")
-        return (f"{tag} {r['bench']} n={r['n']} bits={r['lbits']}: commit {r['commit_ms']:.3f} ms (leaves {r['leaf_ms']:.3f}, "
+        shape = f" M={r['tile_m']} K={r['tile_k']} R={r['tile_r']}" if r.get("tile_r") else ""
+        return (f"{tag} {r['bench']}{shape} n={r['n']} bits={r['lbits']}: commit {r['commit_ms']:.3f} ms (leaves {r['leaf_ms']:.3f}, "
                 f"nodes {r['nodes_ms']:.3f}){graph}, {r['operand_gb_per_s']:.1f} GB/s of operand, "
                 f"{r['gcomp_per_s']:.2f} G compressions/s, {r['mhz']:.0f} MHz")
     g = r["beside_gemm"]
@@ -67,6 +68,31 @@ def table(out: str) -> None:
             print("| " + " | ".join(cells) + " |")
 
 
+def tiles(out: str, tag: str = "") -> None:
+    """The tile-leaf sweep (bench-tile-TAG, default the best build's): per prefill chunk M and leaf, the latency from the
+    operand's last write to the root alone and beside the chunk's GEMM at high stream priority, and what each costs as a
+    fraction of the GEMM."""
+
+    tag = tag or best(out)
+    print("| chunk M | leaf | row digest | leaves | latency alone ms (GB/s) | alone x GEMM | salt phase ms | GEMM ms "
+          "| high priority: root at ms | GEMM beside ms | GEMM slowdown x GEMM |")
+    print("|" + "---|" * 11)
+    rows = lines(os.path.join(out, f"bench-tile-{tag}.jsonl"))
+    for b, s in zip(rows[::2], rows[1::2]):
+        g, p = s["beside_gemm"], s["beside_gemm"]["priority"]
+        if b["bench"] == "e2e":
+            m, leaf, digest = b["n"] // 128, "e2e: 32 values (bf16 row, 1024 bits)", "row/v2"
+        else:
+            m = b["tile_m"]
+            leaf = f"R={b['tile_r']}: {b['tile_r']} x 32 values ({size(b['lbits'] // 8)})"
+            digest = "row-seg/v1" if b["bench"] == "tileseg" else "row/v2"
+        ga = g["gemms"] * g["gemm_ms"]
+        cells = [str(m), leaf, digest, str(b["n"]), f"{b['graph_ms']:.3f} ({b['operand_gb_per_s_graph']:.0f})",
+                 f"{g['commit_over_gemm']:.2f}", f"{b['salt_ms']:.3f}", f"{ga:.3f}" + (f" ({g['gemms']})" if g["gemms"] > 1 else ""),
+                 f"{p['commit_ms']:.3f}", f"{p['gemm_ms']:.3f}", f"{p['gemm_ms'] / ga - 1:+.2f}"]
+        print("| " + " | ".join(cells) + " |")
+
+
 def main(out: str) -> None:
     for tag, rows in tagged(out, "check-"):
         done = [r for r in rows if "summary" not in r]
@@ -76,11 +102,12 @@ def main(out: str) -> None:
         for r in rows:
             s = r["sha"]
             print(f"sha {tag}: {s['gcomp_per_s']:.2f} G compressions/s ({s['gb_per_s']:.0f} GB/s of blocks) at {s['mhz']:.0f} MHz")
-    for prefix in ("bench-e2e-", "bench-sweep-", "bench-seg-"):
+    for prefix in ("bench-e2e-", "bench-sweep-", "bench-seg-", "bench-tile-"):
         for tag, rows in tagged(out, prefix):
             for r in rows:
                 print(bench_line(tag, r))
 
 
 if __name__ == "__main__":
-    {"best": lambda: print(best(sys.argv[2])), "table": lambda: table(sys.argv[2])}.get(sys.argv[1], lambda: main(sys.argv[1]))()
+    {"best": lambda: print(best(sys.argv[2])), "table": lambda: table(sys.argv[2]),
+     "tiles": lambda: tiles(*sys.argv[2:4])}.get(sys.argv[1], lambda: main(sys.argv[1]))()
