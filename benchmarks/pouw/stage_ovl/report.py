@@ -385,6 +385,19 @@ def edited(dirs: list[Path]) -> list[dict]:
                     steps = ", ".join(f"{w} {v:+.1f} ms ({100 * v / pb:+.1f}%)" for w, v in cell["steps"].items())
                     print(f"        best {best} {arms[best]:.2f} ms, {100 * (arms[best] / pb - 1):+.1f}% ({arms[best] / pb:.2f}x); {steps}; "
                           f"roots off: {off or 'none'}")
+                # the edited GEMM's split: the kernels (EN: no qwe) and qwe; and plain serving's own quantizer (Q:)
+                qs = {n: v for n, v in arms.items() if n.startswith("Q:")}
+                if "EN:chunked" in arms and "E:chunked" in arms:
+                    cell["split"] = {"kernels": arms["EN:chunked"] - pb, "qwe": arms["E:chunked"] - arms["EN:chunked"]}
+                    if qs:
+                        pq = min(qs.values())
+                        cell["plain_quant_ms"] = pq
+                        cell["split"]["plain_quant"] = pq - pb
+                    sp = cell["split"]
+                    print(f"        edited GEMM = the kernels {sp['kernels']:+.1f} ms ({100 * sp['kernels'] / pb:+.1f}%) + qwe "
+                          f"{sp['qwe']:+.1f} ms ({100 * sp['qwe'] / pb:+.1f}%)"
+                          + (f"; plain's own quantizer {sp['plain_quant']:+.1f} ms, so against the fastest plain with it "
+                             f"({cell['plain_quant_ms']:.2f} ms) best is {arms[best] / cell['plain_quant_ms']:.2f}x" if qs and best else ""))
     if out:
         print("\nthe honest prefill against the fastest plain int8 prefill (best ER:cgpre* arm), by receipt stride S")
         Ss = sorted({c["S"] for c in out})
