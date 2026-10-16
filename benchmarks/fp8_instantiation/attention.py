@@ -41,6 +41,9 @@ Method names are '-'-joined tokens:
                P's scale); `pblkB` gives P one scale per (query row, block of B keys), each block's product read and
                scaled on its own; `psink` puts key 0 alone in a block; `ptopT` sets P's top (with `poffN` to serve
                P - N within int8, the offset added back as N sum_{k <= i} V_k, peeled or not)
+    K's base   `kc` serves K - mu, mu its per-channel mean over the window (any mu leaves softmax(Q K^T) unchanged, since
+               q mu is the same for every key of q's row), so a part of K constant over tokens (Qwen2.5's k bias) no
+               longer sets K's scale
     linears    `lin8r`: every linear on exact_grid.py's `int8_rot@-` (rotated, int8 per row, s8 x s8 -> s32); `lin8rd`
                on `int8_rot@a:dither:wtop63:sN` (the activations served as floor(x / s) + b, the weights on [-63, 63])
     `rot`, `sN` (noise seed, also the linears' under `lin8rd`)
@@ -129,7 +132,7 @@ def alphabet_info(name: str) -> dict:
 def parse(method: str) -> dict:
     spec = {"method": method, "grid": None, "p": "prow", "v": "vchan", "qk2": False, "rot": False, "seed": 0,
             "lin": "bf16", "e": {"q": "none", "p": "none"}, "poff": 0, "pnorm": False, "pblk": 0, "psink": False,
-            "ptop": 0}
+            "ptop": 0, "kc": False}
     default, where, over = "none", "both", {}
     for t in method.split("-"):
         ops, _, a = t.partition("=")
@@ -159,7 +162,7 @@ def parse(method: str) -> dict:
             spec["lin"] = "int8_rot_dith63"
         elif t[:4] == "poff" and t[4:].isdigit():
             spec["poff"] = int(t[4:])
-        elif t in ("pnorm", "psink"):
+        elif t in ("pnorm", "psink", "kc"):
             spec[t] = True
         elif t[:4] in ("pblk", "ptop") and t[4:].isdigit():
             spec[t[:4]] = int(t[4:])
@@ -177,6 +180,8 @@ def parse(method: str) -> dict:
     if pbase and (spec["grid"] not in GRID_PAIRS or GRID_PAIRS[spec["grid"]][1] != "int8" or spec["p"] != "prow"
                   or spec["n"]["p"] != "none"):
         raise ValueError(f"{method}: P's offset, top, blocks and row-sum norm need P on one int8 limb (prow), unserved")
+    if spec["kc"] and spec["grid"] not in GRID_PAIRS:
+        raise ValueError(f"{method}: K's centering is an edit of the served K")
     if spec["pblk"] and (spec["pblk"] % PEEL_L or spec["pblk"] > PBLK_MAX):
         raise ValueError(f"{method}: P's blocks are a multiple of {PEEL_L} keys, at most {PBLK_MAX}")
     dithered = [x for x in OPERANDS if spec["n"][x] == DITHER]
@@ -457,6 +462,8 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
         if R is not None:
             qg, kg, vg = qg @ R, kg @ R, vg @ R
         if quantized:
+            if spec["kc"]:
+                kg = kg - kg.mean(dim=0, keepdim=True)
             ql, sq = signed_limbs(qg, m["q"], -1, two["q"])
             if n["k"] == DITHER:
                 kq, sk = floor_quant(kg, -1)
@@ -867,8 +874,9 @@ def selftest() -> dict:
             for h in hooks:
                 h.remove()
     lin_err = float(torch.linalg.norm(hooked - plain) / torch.linalg.norm(plain))
-    qw = {m: evaluate(qm, ids, m) for m in ("bf16", "sdpa", "ref", "int8-rot-lin8r",
-                                            "int8-rot-lin8rd-eqp=w64-poff64-psink-kv=dith-s1")}
+    qw = {m: evaluate(qm, ids, m) for m in ("bf16", "sdpa", "ref", "int8-rot-lin8r", "int8-rot-k=dith", "int8-rot-kc-k=dith",
+                                            "int8-rot-lin8rd-eqp=w64-poff64-psink-kv=dith-s1",
+                                            "int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith-s1")}
     out["tiny_qwen2"] = {"lin_rel_err": lin_err, **{m: {k: r.get(k) for k in ("ppl", "attn_rel_err", "peel_exact", "peel_checks")}
                                                     for m, r in qw.items()}}
     assert lin_err < 0.05, out["tiny_qwen2"]
@@ -877,6 +885,9 @@ def selftest() -> dict:
     e2e = qw["int8-rot-lin8rd-eqp=w64-poff64-psink-kv=dith-s1"]
     assert e2e["exact"] and e2e["peel_exact"] and e2e["peel_checks"] == 2 * 2 * 3 and e2e["lin_exact_all"], out["tiny_qwen2"]
     assert qw["int8-rot-lin8r"]["attn_rel_err"] < 0.1, out["tiny_qwen2"]
+    assert qw["int8-rot-kc-k=dith"]["attn_rel_err"] < qw["int8-rot-k=dith"]["attn_rel_err"], out["tiny_qwen2"]
+    kc = qw["int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith-s1"]
+    assert kc["exact"] and kc["peel_exact"] and kc["peel_checks"] == 2 * 2 * 3, out["tiny_qwen2"]
     return out
 
 
