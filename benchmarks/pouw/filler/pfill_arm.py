@@ -63,8 +63,9 @@ class PFillDuo(PFillRam):
 @dataclass
 class PFillE2m1Ram(PFillRam):
     """pfill-ram's tile on OMMA m16n8k64 e2m1 (the same ±1 noise as E2M1 codes, every block scale 1): twice the products
-    an MMA at the same receipt words an MMA. Its rate is reported in int8 slots (products / 2), the unit of the scorer's
-    peak and of Theorem E's floor, which reads it at c = 1/2 a product, 1/2 an int8 slot (pfill_proved.py)."""
+    an MMA at the same receipt words an MMA, committed at L = 64. Its rate is reported in int8 slots (products / 2), the
+    unit of the scorer's peak and of Theorem E's floor. That floor is ¼ a product, ½ a slot, only with heads priced at
+    cL/m_max = 16 slots; at a CUDA word op's ≈ 8 it is 8/L = ⅛ a product, ¼ a slot, the s8 tile's (pfill_proved.py)."""
 
     name: str = "pfill-e2m1-ram"
     lineage: dict = field(default_factory=lambda: {
@@ -72,7 +73,8 @@ class PFillE2m1Ram(PFillRam):
         "mechanism": ["filler:fresh-noise-omma", "mma:e2m1-omma-k64", "noise:sha512-coins-pm1", "receipt:ram-k64",
                       "place:split", "split:per-point-table", "prefill:none"],
         "hypothesis": "the floor is in int8 slots and an E2M1 OMMA does two products a slot, so the same tile on OMMA "
-                      "certifies 1/2 a slot (proved) against s8's 1/4, at the same receipt cost an MMA"})
+                      "certifies 1/2 a slot against s8's 1/4 at the same receipt cost an MMA, if heads are priced at "
+                      "16 slots (L = 64); at 8 a head both tiles certify 1/4 a slot"})
     mma: str = "e2m1"
 
 

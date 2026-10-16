@@ -2,16 +2,18 @@
 scorer's own arithmetic (`scoring.score`) on the run's `dscore.jsonl`, with only `certified` changed. Serving stays at the
 scorer's proved 0.225; the filler is read at
 
-- proved: Theorem E's c/m = ¼ a product (c = ½, m_max = 2 with OMMA on sm_120) at φ = 0.9, 0.225: pfill's operands are
-  fresh i.i.d. noise on {±1} for every MMA (A_M = B_M = 0) with every MMA's prefix sum committed
-  (note:20261015T1845Z-draft-rs-d1e-edited-floor);
+- proved: Theorem E's c/m = ¼ (c = ½, m_max = 2 with OMMA on sm_120) at φ = 0.9, 0.225 an int8 slot: pfill's operands
+  are fresh i.i.d. noise on {±1} for every MMA (A_M = B_M = 0) with every MMA's prefix sum committed
+  (note:20261015T1845Z-draft-rs-d1e-edited-floor). Its priced form needs every head and merge priced at ≥ cL/m_max
+  int8 slots; at L = 32 that is 8, a CUDA word op's real price. Each head costs the floor L products, so at that price
+  the floor an int8 slot is φ·min(c·m/m_max, 8 / (slots a committed word)): every sm_120 MMA writes 128 words in 4096
+  slots, so it is 0.225 for the s8 tile (L = 32) and for the e2m1 tile (L = 64, m = 2) alike;
 - 0.215: Theorem M over a week at γ_zk = 0.1; 0.2496: Theorem S (φψ = 0.9984, not yet refereed);
 - 0.99: the spec's provisional placeholder (the scorer's default, what `score.json` reports);
-- 0: a chained filler's proved floor (chained operands are heads, note:20261016T0418Z-draft-filler-floor).
-
-The floor counts int8 slots, which is what the filler's rate reports. An e2m1 arm (pfill_arm.products_per_slot, read from
-the run's arm.json) does two products a slot, so the three theorem readings are twice the per-product fraction for it:
-0.45, 0.43 and 0.4992.
+- 0: a chained filler's proved floor (chained operands are heads, note:20261016T0418Z-draft-filler-floor);
+- priced-l64, e2m1 arms only (pfill_arm.products_per_slot, read from the run's arm.json): 0.45, Theorem E's priced form
+  at L = 64 with heads priced at cL/m_max = 16 int8 slots, twice a CUDA word op's ≈ 8. That price is a claim, not a
+  measurement, so the reading is conditional.
 
   python3 benchmarks/pouw/filler/pfill_proved.py OUT_DIR [--json]
 """
@@ -26,13 +28,15 @@ sys.path.insert(0, str(HERE))
 import scoring as S
 from pfill_arm import products_per_slot
 
-#: name: (certified fraction a product, status, source, scales with products a slot)
 READINGS = {
-    "proved": (0.225, "proved", "Theorem E c/m = 1/4 at phi = 0.9", True),
-    "theorem-m-week": (0.215, "proved", "Theorem M over a week at gamma_zk = 0.1", True),
-    "theorem-s": (0.2496, "conjectural", "Theorem S, phi psi = 0.9984 (not refereed)", True),
-    "provisional": (0.99, "provisional", "the spec's placeholder", False),
-    "chained-proved": (0.0, "proved", "a chained filler's floor: its operands are heads", False),
+    "proved": (0.225, "proved", "Theorem E c/m = 1/4 at phi = 0.9, heads at 8 int8 slots"),
+    "theorem-m-week": (0.215, "proved", "Theorem M over a week at gamma_zk = 0.1"),
+    "theorem-s": (0.2496, "conjectural", "Theorem S, phi psi = 0.9984 (not refereed)"),
+    "provisional": (0.99, "provisional", "the spec's placeholder"),
+    "chained-proved": (0.0, "proved", "a chained filler's floor: its operands are heads"),
+}
+E2M1_READINGS = {
+    "priced-l64": (0.45, "conditional", "Theorem E's priced form at L = 64: heads priced at cL/m_max = 16 int8 slots"),
 }
 
 
@@ -51,13 +55,13 @@ def slot_products(out: Path) -> int:
 
 
 def readings(out: Path) -> dict:
-    st, m = stats_of(out), slot_products(out)
+    st = stats_of(out)
+    table = {**READINGS, **(E2M1_READINGS if slot_products(out) == 2 else {})}
     res = {}
-    for name, (f, status, src, scales) in READINGS.items():
-        f = f * m if scales else f
+    for name, (f, status, src) in table.items():
         sc = S.score(st, certified(f, status, src))
-        res[name] = {"filler_fraction": f, "SCORE": sc.get("SCORE"), "min": sc.get("min"), "min_mix": sc.get("min_mix"),
-                     "missing": sc["missing"]}
+        res[name] = {"filler_fraction": f, "status": status, "SCORE": sc.get("SCORE"), "min": sc.get("min"),
+                     "min_mix": sc.get("min_mix"), "missing": sc["missing"]}
     return res
 
 
@@ -70,12 +74,13 @@ def main(argv=None) -> int:
     if a.json:
         print(json.dumps(res, indent=1))
         return 0
-    print("| filler read at | c_filler | SCORE | min entry |")
-    print("|---|---|---|---|")
+    print("| filler read at | c_filler | status | SCORE | min entry |")
+    print("|---|---|---|---|---|")
     for name, r in res.items():
         m = r["min"] or {}
         s = "–" if r["SCORE"] is None else f"{r['SCORE']:.4f}"
-        print(f"| {name} | {r['filler_fraction']:.4g} | {s} | {m.get('entry')}: {m.get('coverage', float('nan')):.4f} |")
+        print(f"| {name} | {r['filler_fraction']:.4g} | {r['status']} | {s} | "
+              f"{m.get('entry')}: {m.get('coverage', float('nan')):.4f} |")
     return 0
 
 

@@ -79,20 +79,20 @@ def test_proved_readings_rescore_with_only_the_filler_fraction(tmp_path):
     assert res["proved"]["filler_fraction"] == 0.225
 
 
-def test_e2m1_arm_is_read_at_twice_the_product_fraction(tmp_path):
-    """An e2m1 run (its arm.json's lineage) reads the theorems at two products a slot; the placeholder and the chained
-    floor don't move."""
+def test_e2m1_arm_adds_only_the_conditional_l64_reading(tmp_path):
+    """An e2m1 run (its arm.json's lineage) keeps every s8 reading, the proved 0.225 a slot included (at 8 slots a head
+    both tiles' floors are a quarter of a slot), and adds the L = 64 priced reading at twice it, marked conditional."""
     S = _module("scoring")
     P = _load_file("pfill_proved")
     A = _load_file("pfill_arm")
     rows = [_row("step" if ph == "decode" else "prefill", b, l, 10.0, 10.2) for ph, b, l in S.points()]
     (tmp_path / "dscore.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
     s8 = P.readings(tmp_path)
+    assert "priced-l64" not in s8
     (tmp_path / "arm.json").write_text(json.dumps({"lineage": A.PFillE2m1Ram.__dataclass_fields__["lineage"]
                                                    .default_factory()}))
     f4 = P.readings(tmp_path)
-    for k in ("proved", "theorem-m-week", "theorem-s"):
-        assert f4[k]["filler_fraction"] == 2 * s8[k]["filler_fraction"]
-        assert f4[k]["SCORE"] > s8[k]["SCORE"]
-    for k in ("provisional", "chained-proved"):
-        assert f4[k] == s8[k]
+    assert {k: f4[k] for k in s8} == s8
+    assert f4["priced-l64"]["filler_fraction"] == 2 * s8["proved"]["filler_fraction"]
+    assert f4["priced-l64"]["status"] == "conditional"
+    assert f4["priced-l64"]["SCORE"] > s8["proved"]["SCORE"]
