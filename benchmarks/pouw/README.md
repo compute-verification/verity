@@ -16,6 +16,7 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `nvfp4_sm120/` | RTX PRO 6000 | The plain NVFP4 GEMM as harness baseline entries (`nvf4_plain.cu` on `mainloop_nvf4.cuh`), and its standalone benches |
 | `pouw_hash/` | RTX PRO 6000 | The PoUW hash kernels' bench and check (`run.sh`, `check.py`) |
 | `kernels/` | RTX 4090 | NCP's native u8xs8 route-U GEMM and Pearl's e4m3 GEMM on the `ada` device (`pouw_gemm.cu`), JIT-built as a torch extension |
+| `filler/` | RTX PRO 6000 | The DRAM-free filler beside the decode step, its arms and its locked scorer, one suite (below) |
 | `vllm_bench.py` | RTX 4090 | Overhead against plain vLLM for BF16, stock FP8, W7A7, NCP and Pearl by wrapping every `LinearBase` layer's apply; `pearl_c_vllm/` reads its prompts and model lookup |
 | `gamma.py` | CPU | γ accounting: each scheme's honest reference priced term by term under W1, split into checked and unchecked work |
 | `pearlc_census.py` | CPU | TT_OUT's falsification census for Pearl-C's ticket chain, bit-exact, on the H100's atom or sm_120's (`--atom`) |
@@ -28,3 +29,18 @@ uv run python benchmarks/pouw/gamma.py      # CPU
 
 Served claims (`pearl_c_vllm/`) are measured against graphed stock FP8: stock vLLM `quantization="fp8"` compiled with its
 CUDA graphs, `e2e.py`'s ``fp8-graphs`` mode (``--fp8-graphs``).
+
+## Where the filler's tools live
+
+Each has one copy, in `filler/`; change it there. A new arm is a class in an arm module, and a new tile or fold is a flag
+of `pfill.cuh`, not a copy of the kernel. Its tests are one suite: `uv run tools/verity/check/suites.py benchmarks/pouw/filler`.
+
+| Tool | Files |
+|---|---|
+| The decode step's driver and the filler ABI (`dfill_k`, `DFill`): pfill's filler, or FILL v1's chained one with `-DDFILL_V1` | `dcap.cu`, `dcap.sh`, `dfill.sh`, `fill.sh`, `dfill_ref.py`, `share.py` |
+| pfill, the proved filler: tiles `-DPFILL_BITS`, `-DPFILL_BU`, `-DPFILL_E2M1`; folds ram (NC 4), duo (NC 2), `-DPFILL_LI`, `-DPFILL_XIN13` | `pfill.cuh`, its host build `pfill_host.cpp` and Python twin `pfill_ref.py`, `pfill_probe.sh`, `tile_probe.sh` |
+| The locked scorer (filler-scorer/v5, SCORE-TP) and the arm contract with its baseline arms (`idle`, `fill-v1`) | `score.py`, `scoring.py`, `arms.py`, `dscore.cu`, `rounds.cuh` |
+| The phase filler's runner, HC-SCHED's arms | `psched_score.py` on `pscore.cu`, `psched_arm.py`, `psched.sh`, `psched_probe.sh`, `psched_probe.py`, `psum.py` |
+| The fused linears with filler warps, FILL's arms | `flin.cuh`, `flin.sh`, `fused_score.py` on `fscore.cu`, `fused_arm.py` |
+| HC-PROVED's arms (the leader, `PFillBUDuoFPhase3`) and their runner over both drivers | `pfill_arm.py`, `pfill_fp_score.py`, `pfill_proved.py`, `pfill_phase_screen.py` |
+| The filler in tensor-parallel decode's collectives | `comm/tpcomm.cu`, `comm/tpcomm.sh`, `comm/report.py` |
