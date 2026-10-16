@@ -20,7 +20,7 @@ class _M:
 
 
 def _row(b, l, fw, afw, fsm, fused, pump, slow):
-    return {"B": b, "L": l, "FW": fw, "NC": 4, "AFW": afw, "fill_sms": fsm, "lt_mask": 0, "pdl": 1, "fill_share": fused,
+    return {"B": b, "L": l, "FW": fw, "NC": 4, "thr": 0, "AFW": afw, "fill_sms": fsm, "lt_mask": 0, "pdl": 1, "fill_share": fused,
             "fill_share_pump": pump, "slowdown": slow}
 
 

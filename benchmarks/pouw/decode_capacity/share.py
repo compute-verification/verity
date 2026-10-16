@@ -275,7 +275,8 @@ def adaptive_pick(rows, tuned):
 
 
 def fstep_key(r):
-    return (r["B"], r["L"], r["FW"], r["NC"], r.get("AFW", 0), r.get("fill_sms", 0), r.get("lt_mask", 0), r["pdl"])
+    return (r["B"], r["L"], r["FW"], r["NC"], r.get("AFW", 0), r.get("fill_sms", 0), r.get("lt_mask", 0), r["pdl"],
+            r.get("fatt_pdl", 0), r["thr"])
 
 
 def fstep_points(rows):

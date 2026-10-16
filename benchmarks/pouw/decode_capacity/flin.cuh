@@ -248,14 +248,16 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
 // ---------------------------------------------------------------- attention blocks with filler warps
 // qk_dec's and pv_dec's blocks, unchanged in what their 8 warps do, each with FW filler warps more that run the chain
 // until the block's attention warps are done (the hardware still schedules the blocks, so the load stays balanced).
-// Filler warp f of block blk (x fastest) runs tile tile0 + blk·FW + f. Launched with programmatic stream serialization,
-// a block's filler warps start as soon as it is resident and its attention warps wait for the previous grid; the qk
-// blocks also zero pv's output O (on ints), which dcap's step does with a memset between the two kernels.
+// Filler warp f of block blk (x fastest) runs tile tile0 + blk·FW + f. Launched with programmatic stream serialization
+// (FATT_PDL 1 or 2), a block's attention warps wait for the previous grid, and so do its filler warps unless `early`
+// (FATT_PDL 2), which starts them as soon as the block is resident. The qk blocks also zero pv's output O (on ints),
+// which dcap's step does with a memset between the two kernels.
 struct FattArgs {
   uint64_t c0, c1;
   unsigned long long tile0;
   unsigned long long* rec;
   int* cnt;
+  int early;
 };
 template <int FW, int NC>
 __global__ void __launch_bounds__(QK_W * 32 + 32 * FW, 2) fqk_k(const int8_t* __restrict__ K, const int8_t* __restrict__ q,
@@ -268,6 +270,7 @@ __global__ void __launch_bounds__(QK_W * 32 + 32 * FW, 2) fqk_k(const int8_t* __
   const int w = threadIdx.x >> 5, lane = threadIdx.x & 31;
   const size_t blk = ((size_t)blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x;
   if (w >= QK_W) {
+    if (!fa.early) asm volatile("griddepcontrol.wait;" ::: "memory");
     const size_t slot = blk * FW + (w - QK_W);
     filler_warp<NC>(fa.c0, fa.c1, fa.tile0 + slot, &done, &done, QK_W, 0, fa.rec + slot, fa.cnt + slot);
     return;
@@ -291,6 +294,7 @@ __global__ void __launch_bounds__(PV_W * 32 + 32 * FW, 2) fpv_k(const int8_t* __
   asm volatile("griddepcontrol.launch_dependents;" ::: "memory");
   const int w = threadIdx.x >> 5, lane = threadIdx.x & 31;
   if (w >= PV_W) {
+    if (!fa.early) asm volatile("griddepcontrol.wait;" ::: "memory");
     const size_t slot = (((size_t)blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x) * FW + (w - PV_W);
     filler_warp<NC>(fa.c0, fa.c1, fa.tile0 + slot, &done, &done, PV_W, 0, fa.rec + slot, fa.cnt + slot);
     return;
@@ -544,6 +548,7 @@ static void fatt_prepare(Fatt& a, int FW, int NC, int B, int L) {
   CK(cudaMalloc(&a.rec, a.per * 2 * LAYERS * sizeof(unsigned long long)));
   CK(cudaMalloc(&a.cnt, a.per * 2 * LAYERS * sizeof(int)));
 }
+static int g_fatt_pdl = 0;  // FATT_PDL: the attention filler blocks without PDL (0), with it (1), with early filler warps (2)
 template <class... P, class... A>
 static void pdl_go(void (*k)(P...), dim3 grid, int threads, cudaStream_t st, A... args) {
   cudaLaunchConfig_t cfg = {};
@@ -554,16 +559,17 @@ static void pdl_go(void (*k)(P...), dim3 grid, int threads, cudaStream_t st, A..
   at[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
   at[0].val.programmaticStreamSerializationAllowed = 1;
   cfg.attrs = at;
-  cfg.numAttrs = g_pdl ? 1 : 0;
+  cfg.numAttrs = g_fatt_pdl ? 1 : 0;
   CK(cudaLaunchKernelEx(&cfg, k, args...));
 }
 template <int FW, int NC>
 static void fatt_go(Dev& d, const Fatt& a, int B, int L, const int8_t* K, const int8_t* V, int layer) {
   const size_t kq = (size_t)2 * layer, kp = kq + 1;
+  const int early = g_fatt_pdl == 2;
   pdl_go(fqk_k<FW, NC>, qk_grid(B, L), QK_W * 32 + 32 * FW, d.st, K, (const int8_t*)d.q, d.S, L, d.O, B * HQ * HD,
-         FattArgs{g_c0, g_c1, fatt_tile0((int)kq), a.rec + kq * a.per, a.cnt + kq * a.per});
+         FattArgs{g_c0, g_c1, fatt_tile0((int)kq), a.rec + kq * a.per, a.cnt + kq * a.per, early});
   pdl_go(fpv_k<FW, NC>, pv_grid(B, L), PV_W * 32 + 32 * FW, d.st, V, (const int8_t*)d.P, d.O, L,
-         FattArgs{g_c0, g_c1, fatt_tile0((int)kp), a.rec + kp * a.per, a.cnt + kp * a.per});
+         FattArgs{g_c0, g_c1, fatt_tile0((int)kp), a.rec + kp * a.per, a.cnt + kp * a.per, early});
 }
 // enqueue_att's work for `layer`, with the attention filler when a.FW > 0; false if (FW, NC) isn't built
 static bool enqueue_fatt(Dev& d, const Fatt& a, int B, int L, int layer, bool* wrapped) {
@@ -803,10 +809,10 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   const double bms = (mb.ms + mb2.ms) / 2, cap = 1024.0 * d.sms * mf.mhz * 1e6;
   const double lin_share = t.macs / (mf.ms * 1e-3) / cap, att_share = ta.macs / (mf.ms * 1e-3) / cap;
   const double pump_share = fs ? (double)nwin * pf.macs() / ((w1 - w0) * 1e-3) / cap : 0.0;
-  printf("{\"mode\": \"fstep\", \"pdl\": %d, \"lt_mask\": %d, \"fill_sms_req\": %d, \"step_sms\": %d, \"fill_sms\": %d, "
-         "\"pump\": {\"alone_share\": %.5f, \"share\": %.5f, \"chunks\": %lld, \"chunk_macs\": %.6e, \"rec_checked\": %d, "
-         "\"rec_bad\": %d}, \"fill_share_pump\": %.5f, \"fill_share_total\": %.5f, ",
-         (int)g_pdl, g_lt_mask, fill_sms, got[0], got[1], fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
+  printf("{\"mode\": \"fstep\", \"pdl\": %d, \"fatt_pdl\": %d, \"lt_mask\": %d, \"fill_sms_req\": %d, \"step_sms\": %d, "
+         "\"fill_sms\": %d, \"pump\": {\"alone_share\": %.5f, \"share\": %.5f, \"chunks\": %lld, \"chunk_macs\": %.6e, "
+         "\"rec_checked\": %d, \"rec_bad\": %d}, \"fill_share_pump\": %.5f, \"fill_share_total\": %.5f, ",
+         (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1], fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
   printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, "
          "\"coins\": [\"%016llx\", \"%016llx\"], \"kv_wrapped\": %s, \"step_macs\": %.6e, \"lin_macs\": %.6e, \"base_ms\": %.4f, "
