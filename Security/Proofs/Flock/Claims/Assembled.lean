@@ -33,7 +33,7 @@ every relation's fields `rel` and every hash `H`, the conjunction of Flock's cla
 
 namespace FlockDeploy.Assembled
 
-open Flock Polynomial
+open Flock
 
 /-- A table's error is nonnegative. -/
 theorem tableErr_nonneg (zk : Bool) (spec : SessionSpec) (st : Stmt) : 0 ≤ tableErr zk spec st := by
@@ -62,7 +62,7 @@ theorem γ_pos {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (x : Cla
   have hk' : (0 : ℝ) < D.V.k x := by exact_mod_cast hk
   have hs := Real.sqrt_nonneg (2 * D.V.k x * D.weight x)
   have h : 0 < Real.sqrt (2 * D.V.k x * D.weight x) + D.V.k x := by linarith
-  positivity
+  exact mul_pos (by norm_num) (pow_pos h 2)
 
 /-- **Flock's claims at the deployed plain verifier**, at every relation's fields and every hash: the readable scope
 is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the radius decoder at every bound
@@ -80,7 +80,7 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
         Claims.Bits H (deployPlain rel).V (Claims.Flock.R (deployPlain rel).parse)
           (Claims.Flock.E (deployPlain rel) Claims.GS.plainDecodeRD) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
       Claims.Flock.Efficient H (deployPlain rel) Claims.GS.plainDecodeRD Claims.GS.plainCountedRD
-        Claims.GS.plainSizeRD (C 14 * (Claims.GS.flockPolyR + X)) ∧
+        Claims.GS.plainSizeRD (Polynomial.C 14 * (Claims.GS.flockPolyR + Polynomial.X)) ∧
       Claims.Flock.Complete H (deployPlain rel) P δc :=
   ⟨scopeMatches_plain rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg false),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg false) hκ
@@ -105,7 +105,7 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
         Claims.Bits H (deployZk rel).V (Claims.Flock.R (deployZk rel).parse)
           (Claims.Flock.E (deployZk rel) Claims.GS.zkDecodeRD) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
       Claims.Flock.Efficient H (deployZk rel) Claims.GS.zkDecodeRD Claims.GS.zkCountedRD Claims.GS.zkSizeRD
-        (C 11 * (Claims.GS.zkPolyR + X)) ∧
+        (Polynomial.C 11 * (Claims.GS.zkPolyR + Polynomial.X)) ∧
       Claims.Flock.Complete H (deployZk rel) P δc :=
   ⟨scopeMatches_zk rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg true),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg true) hκ
