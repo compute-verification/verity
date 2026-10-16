@@ -18,7 +18,8 @@
 # ("B:L:FW:NC:THR:AFW[:ANC[:APS[:ALZ]]] ...", ncu's tensor-pipe counters over one step's attention blocks and first linear, each with
 # filler warps; FL_NCU_SECTIONS adds those ncu sections over the attention blocks only and keeps the report with its
 # details, raw and SASS pages), FL_REPS,
-# FL_GATE (0 skips CAP's gate)
+# FL_GATE (0 skips CAP's gate), FL_NVCC (more nvcc flags, -DDFILL_V1 unless set: FILL v1's filler; empty builds pfill.cuh's,
+# -DPFILL_BITS its {0,1} tile)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -29,10 +30,12 @@ export FL_STEP=${FL_STEP:-"32:2048:8:4:0:0 32:2048:8:4:0:2 32:2048:8:4:0:4 32:81
 export FL_NCU=${FL_NCU:-"32:8:4:0 128:4:4:0"}
 export FL_REPS=${FL_REPS:-15} FL_GATE=${FL_GATE:-1}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
+echo "${FL_NVCC--DDFILL_V1}" > "$O/nvcc-flags.txt"
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
 nvcc --version | tail -2 > "$O/nvcc.txt"
-nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl \
+# shellcheck disable=SC2086
+nvcc -O3 -std=c++17 ${FL_NVCC--DDFILL_V1} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 cuobjdump -sass "$B/dcap" | awk '/Function : /{p = /flin_k/} p' > "$O/sass-flin.txt" 2>&1
 echo "flin_k SASS: $(grep -c IMMA "$O/sass-flin.txt") IMMA, $(grep -cE 'LDL|STL' "$O/sass-flin.txt") local memory ops"

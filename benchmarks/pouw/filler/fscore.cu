@@ -18,7 +18,7 @@
 //        the round's coins and tile base (flin.cuh's FState), so each launch of the captured step takes the next `per`
 //        ids, and its receipts a row of a ring of K + 2 steps. An arm block's fixed work is its K timed steps' filler
 //        MACs (`fixed_macs`) over the block's window (`fixed_ms`), on the step's SMs (`fixed_sms`); 16 receipts over its
-//        K + 2 steps (warm-ups included) are checked against dfill_ref with the steps − 8 control, the device's step count
+//        K + 2 steps (warm-ups included) are checked against dchain_ref with the steps − 8 control, the device's step count
 //        must be K + 2, and the last linear's output (down, when it runs through flin) and lm_head's (with LM 1) on every
 //        row against the host's.
 //        Any failure counts in rec_bad. Slots: dscore's (0 the pump's calibration, 1 + r and 1 + R + r round r's arm and

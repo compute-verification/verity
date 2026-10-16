@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------- flin: the decode linears as a warp-specialized GEMM with filler warps
-// (FILL, round 2; included by dcap.cu after the dfill section, whose dseed/dword/dcval/drec/dstep/dfill_ref it reuses)
+// (FILL, round 2; included by dcap.cu after the dfill section, whose dseed/dword/dcval/drec/dstep/dchain_ref it reuses)
 //
 // D (M x N, row-major s32) = X (M x K s8) W^T (W N x K s8), computed as D^T = W X^T: the weights are the MMA's A operand
 // (16 output features a fragment), the tokens its B operand (8 a fragment). Weights and activations are repacked once into
@@ -619,7 +619,7 @@ struct FillLaunch {
   int NC;
 };
 // the filler's MACs over `ls`, and up to n receipts drawn from the slots that stepped, checked on the host against
-// dfill_ref at the ring's coins, each with the steps − 8 control that must differ; `ids` collects the checked tiles less
+// dchain_ref at the ring's coins, each with the steps − 8 control that must differ; `ids` collects the checked tiles less
 // `tag`
 struct FlinTally {
   double macs = 0;
@@ -654,8 +654,8 @@ static FlinTally fill_tally(const FRing& r, const std::vector<FillLaunch>& ls, i
     const auto [q, s] = cand[rng() % cand.size()];
     const unsigned long long tile = ls[q].tile0 + s;
     const size_t i = ls[q].at - lo + s;
-    t.bad += rec[i] != dfill_ref(r.c0, r.c1, tile, ls[q].NC, cnt[i]);
-    if (cnt[i] >= 8) t.ctl_equal += rec[i] == dfill_ref(r.c0, r.c1, tile, ls[q].NC, cnt[i] - 8);
+    t.bad += rec[i] != dchain_ref(r.c0, r.c1, tile, ls[q].NC, cnt[i]);
+    if (cnt[i] >= 8) t.ctl_equal += rec[i] == dchain_ref(r.c0, r.c1, tile, ls[q].NC, cnt[i] - 8);
     t.checked++;
     if (ids) ids->push_back(tile & ~tag);
   }
@@ -776,7 +776,7 @@ static bool enqueue_fatt(Dev& d, const Fatt& a, int B, int L, int layer, bool* w
 }
 
 // fgate: flin bit for bit against ref_rows (every row) for each linear's shape at M = 32, 64, 128, 160, 192, 256, alone and
-// with filler warps (whose receipts are checked against dfill_ref, with the steps − 8 control), from poisoned outputs; then
+// with filler warps (whose receipts are checked against dchain_ref, with the steps − 8 control), from poisoned outputs; then
 // the attention blocks with filler warps against the host (att_gate), with their receipts checked the same way.
 static int flin_gate(Dev& d) {
   int fails = 0;

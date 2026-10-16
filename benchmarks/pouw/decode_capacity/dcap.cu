@@ -14,7 +14,8 @@
 // (C_s = X_s W_s^T, the s32 output read as the next s8 X), on FILL_SMS SMs, kept queued by a host thread.
 // dgate, dalone, done, dfill B L PLACE FILL_SMS W NC S: the DRAM-free filler (FILL; see "dfill" below): its receipts bit
 // for bit against the host, its rate alone, one chunk for ncu, and the step beside it, on a green split (PLACE split) or
-// co-resident on every SM at the lowest stream priority with the step at the highest (PLACE co).
+// co-resident on every SM at the lowest stream priority with the step at the highest (PLACE co). The filler is pfill.cuh's
+// (HC-PROVED: fresh noise for every MMA, ram receipts at k32) unless built with -DDFILL_V1 (FILL v1's chained one).
 // fgate, flin M FW NC THR, fstep B L FW NC THR AFW [FILL_SMS]: the decode linears as a warp-specialized GEMM whose filler
 // warps run the DRAM-free chain while the consumers wait on memory, and the attention blocks with AFW filler warps each
 // (flin.cuh): outputs and receipts bit for bit, each linear's 32 layers against cuBLASLt, and the step through both, on
@@ -702,8 +703,8 @@ static int run_fill(Dev& d, int B, int L, int fill_sms, bool big, int reps) {
 //   A'[g][16+4t+q] = byte q of D[g+8][2t+1]    A'[g+8][16+4t+q] = byte q of D[g][2t+1]
 // Each A' word is an accumulator register the thread already holds, so a step is one MMA and nothing else, and step s + 1
 // can't start before step s ends. After S steps the tile's NC final states fold into an 8-byte receipt, the XOR over
-// (chain c, row r, word w) of drec(seed, c, r, w, word w of row r), which is all the tile writes. dfill_ref is the same
-// tile on the host, written from the matrices above rather than from the fragment layout.
+// (chain c, row r, word w) of drec(seed, c, r, w, word w of row r), which is all the tile writes. dchain_ref is the same
+// tile on the host (dfill_ref on a DFILL_V1 build), written from the matrices above rather than from the fragment layout.
 __host__ __device__ inline uint64_t smix(uint64_t x) {
   x += 0x9E3779B97F4A7C15ull;
   x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
@@ -711,6 +712,7 @@ __host__ __device__ inline uint64_t smix(uint64_t x) {
   return x ^ (x >> 31);
 }
 __host__ __device__ inline uint64_t dseed(uint64_t c0, uint64_t c1, uint64_t tile) { return smix(smix(c0 ^ smix(tile)) ^ c1); }
+// The chain's primitives and host tile are built either way: flin.cuh's filler warps run them beside pfill too.
 // word (i, j) of the generated matrix `tag`: 1 + b is B_b (i = column n, j = word of k), 3 is C, 16 + c chain c's A_0
 // (i = row, j = word of k); four s8 elements, element 4j + q in byte q
 __host__ __device__ inline uint32_t dword(uint64_t seed, uint32_t tag, uint32_t i, uint32_t j) {
@@ -731,6 +733,56 @@ __device__ __forceinline__ void dstep(uint32_t (&a)[4], const uint32_t (&b)[2], 
   a[2] = d3;  // A'[g][16+4t..]    = D[g+8][2t+1]
   a[3] = d1;  // A'[g+8][16+4t..]  = D[g][2t+1]
 }
+static uint64_t dchain_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
+  const uint64_t seed = dseed(c0, c1, tile);
+  int8_t Bt[2][8][32];  // Bt[b][n][k] = B_b[k][n]
+  int32_t C[16][8];
+  for (int b = 0; b < 2; b++)
+    for (int n = 0; n < 8; n++)
+      for (int w = 0; w < 8; w++) {
+        const uint32_t x = dword(seed, 1 + b, n, w);
+        for (int q = 0; q < 4; q++) Bt[b][n][4 * w + q] = (int8_t)(x >> (8 * q));
+      }
+  for (int r = 0; r < 16; r++)
+    for (int n = 0; n < 8; n++) C[r][n] = dcval(seed, r, n);
+  uint64_t h = 0;
+  for (int ch = 0; ch < nc; ch++) {
+    int8_t A[16][32];
+    for (int r = 0; r < 16; r++)
+      for (int w = 0; w < 8; w++) {
+        const uint32_t x = dword(seed, 16 + ch, r, w);
+        for (int q = 0; q < 4; q++) A[r][4 * w + q] = (int8_t)(x >> (8 * q));
+      }
+    for (int s = 0; s < steps; s++) {
+      int32_t D[16][8];
+      for (int r = 0; r < 16; r++)
+        for (int n = 0; n < 8; n++) {
+          int32_t acc = C[r][n];
+          for (int k = 0; k < 32; k++) acc += (int32_t)A[r][k] * (int32_t)Bt[s & 1][n][k];
+          D[r][n] = acc;
+        }
+      auto byte = [](int32_t v, int q) { return (int8_t)((uint32_t)v >> (8 * q)); };
+      for (int g = 0; g < 8; g++)
+        for (int t = 0; t < 4; t++)
+          for (int q = 0; q < 4; q++) {
+            A[g][4 * t + q] = byte(D[g][2 * t], q);
+            A[g + 8][4 * t + q] = byte(D[g + 8][2 * t], q);
+            A[g][16 + 4 * t + q] = byte(D[g + 8][2 * t + 1], q);
+            A[g + 8][16 + 4 * t + q] = byte(D[g][2 * t + 1], q);
+          }
+    }
+    for (int r = 0; r < 16; r++)
+      for (int w = 0; w < 8; w++) {
+        uint32_t x = 0;
+        for (int q = 0; q < 4; q++) x |= (uint32_t)(uint8_t)A[r][4 * w + q] << (8 * q);
+        h ^= drec(seed, ch, r, w, x);
+      }
+  }
+  return h;
+}
+#ifndef DFILL_V1
+#include "pfill.cuh"
+#else
 // Warp `wid` runs tiles tile0 + wid·tiles + i, i < tiles, S steps each (S a multiple of 8), and writes tile i's receipt to
 // rec[wid·tiles + i]. Lane (g, t) holds A rows g and g + 8, words t and 4 + t; B column g, words t and 4 + t; C rows g
 // and g + 8, columns 2t and 2t + 1 (the PTX fragment layout of m16n8k32 .s8).
@@ -778,51 +830,7 @@ __global__ void __launch_bounds__(512) dfill_k(uint64_t c0, uint64_t c1, unsigne
 }
 
 static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
-  const uint64_t seed = dseed(c0, c1, tile);
-  int8_t Bt[2][8][32];  // Bt[b][n][k] = B_b[k][n]
-  int32_t C[16][8];
-  for (int b = 0; b < 2; b++)
-    for (int n = 0; n < 8; n++)
-      for (int w = 0; w < 8; w++) {
-        const uint32_t x = dword(seed, 1 + b, n, w);
-        for (int q = 0; q < 4; q++) Bt[b][n][4 * w + q] = (int8_t)(x >> (8 * q));
-      }
-  for (int r = 0; r < 16; r++)
-    for (int n = 0; n < 8; n++) C[r][n] = dcval(seed, r, n);
-  uint64_t h = 0;
-  for (int ch = 0; ch < nc; ch++) {
-    int8_t A[16][32];
-    for (int r = 0; r < 16; r++)
-      for (int w = 0; w < 8; w++) {
-        const uint32_t x = dword(seed, 16 + ch, r, w);
-        for (int q = 0; q < 4; q++) A[r][4 * w + q] = (int8_t)(x >> (8 * q));
-      }
-    for (int s = 0; s < steps; s++) {
-      int32_t D[16][8];
-      for (int r = 0; r < 16; r++)
-        for (int n = 0; n < 8; n++) {
-          int32_t acc = C[r][n];
-          for (int k = 0; k < 32; k++) acc += (int32_t)A[r][k] * (int32_t)Bt[s & 1][n][k];
-          D[r][n] = acc;
-        }
-      auto byte = [](int32_t v, int q) { return (int8_t)((uint32_t)v >> (8 * q)); };
-      for (int g = 0; g < 8; g++)
-        for (int t = 0; t < 4; t++)
-          for (int q = 0; q < 4; q++) {
-            A[g][4 * t + q] = byte(D[g][2 * t], q);
-            A[g + 8][4 * t + q] = byte(D[g + 8][2 * t], q);
-            A[g][16 + 4 * t + q] = byte(D[g + 8][2 * t + 1], q);
-            A[g + 8][16 + 4 * t + q] = byte(D[g][2 * t + 1], q);
-          }
-    }
-    for (int r = 0; r < 16; r++)
-      for (int w = 0; w < 8; w++) {
-        uint32_t x = 0;
-        for (int q = 0; q < 4; q++) x |= (uint32_t)(uint8_t)A[r][4 * w + q] << (8 * q);
-        h ^= drec(seed, ch, r, w, x);
-      }
-  }
-  return h;
+  return dchain_ref(c0, c1, tile, nc, steps);
 }
 
 // one chunk: `grid` blocks of W warps, each warp `tiles` tiles of NC chains x S steps; chunk k covers tiles from k·per on
@@ -868,6 +876,11 @@ static int dfill_check(const DFill& f, long long chunk, int n) {
   }
   return bad;
 }
+#endif
+#ifndef DFILL_GATE_W
+#define DFILL_GATE_W 4
+#define DFILL_GATE_S {8, 2048}
+#endif
 
 // A host thread keeps `depth` chunks queued on `fs` and notes when each is seen done.
 struct DPump {
@@ -925,15 +938,15 @@ static double dfill_alone(Dev& d, const DFill& f, cudaStream_t fs, int n, double
 
 static uint64_t g_c0 = 0x0123456789abcdefull, g_c1 = 0xfedcba9876543210ull;  // the round's coins (DFILL_COINS)
 
-// the receipts of a few tiles for each NC at S = 8 and the timed S, every receipt checked; then a control (S - 8 on the
-// host) that must differ everywhere
+// the receipts of a few tiles for each NC at a short S and the timed S (DFILL_GATE_S), every receipt checked; then a
+// control (S - 8 on the host) that must differ everywhere
 static int dgate(Dev& d) {
   int fails = 0;
   dfill_prep();
   for (int nc : {1, 2, 4})
-    for (int S : {8, 2048}) {
+    for (int S : DFILL_GATE_S) {
       DFill f;
-      f.grid = 3; f.W = 4; f.NC = nc; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1;
+      f.grid = 3; f.W = DFILL_GATE_W; f.NC = nc; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1;
       CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
       CK(cudaMemset(f.rec, 0xA5, f.per() * sizeof(unsigned long long)));
       dfill_launch(f, 5, d.st);

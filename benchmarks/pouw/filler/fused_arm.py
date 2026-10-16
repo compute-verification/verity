@@ -3,11 +3,13 @@ through flin (dcap.cu's flin.cuh: a warp-specialized int8 GEMM whose filler warp
 consumers wait on memory) and its attention blocks carry filler warps too, on a green split's step SMs, beside FILL v1's
 filler pumped on the rest. filler-arm/v1 can't place a filler inside serving's kernels, so the arm's `placement` is its
 split, the contract's, and `fused(phase, B, L)` names the step's filler warps; fused_score.py runs the pair through
-fscore.cu and scores the out dir with the locked `score.py report`.
+fscore.cu and scores the out dir with the locked `score.py report`. dcap.cu's filler is pfill unless built with
+-DDFILL_V1, so these arms pass it through NVCC_APPEND_FLAGS (pfill_arm.py's way), which score.py's and fscore's nvcc read.
 
   python3 benchmarks/pouw/filler/fused_score.py benchmarks/pouw/filler/fused_arm.py:Fused
 """
 
+import os
 import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -76,6 +78,10 @@ class Fused:
                    "picks and holdouts, HC-SCHED's prefill co shape; at serving time a lookup, a green split and one "
                    "graph a step")
     table: dict = field(default_factory=lambda: TABLE, repr=False)
+    nvcc_flags: str = "-DDFILL_V1"
+
+    def __post_init__(self):
+        os.environ["NVCC_APPEND_FLAGS"] = self.nvcc_flags
 
     def _row(self, b, l):
         return A.point_lookup(self.table, b, l)

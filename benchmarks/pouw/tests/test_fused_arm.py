@@ -48,6 +48,7 @@ def _flin_key(b):
 def test_contract_and_record(arm):
     assert A.check_arm(arm, record=True) == []
     assert arm.filler.noise == F.CO_PREFILL.noise == "chained"  # FILL v1's chains, and flin's and attention's filler warps
+    assert arm.nvcc_flags == "-DDFILL_V1"  # dcap.cu's filler is pfill otherwise
 
 
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
