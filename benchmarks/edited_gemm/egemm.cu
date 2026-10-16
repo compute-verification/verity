@@ -68,26 +68,38 @@ __host__ __device__ inline bool xin_ok(uint32_t a) {
 // a b mod 2^30 outside [-128, 128] for every b in 1..128
 __host__ __device__ inline bool xin_ok_r9(uint32_t a) {
   if (!xin_ok(a)) return false;
+#ifdef __CUDA_ARCH__
+  // a warp-uniform and all 32 lanes active: lane l tries b = 4 l + 1 .. 4 l + 4
+  const uint32_t b0 = 4u * (threadIdx.x & 31u);
+  bool bad = false;
+#pragma unroll
+  for (uint32_t i = 1; i <= 4; i++) bad |= (((b0 + i) * a + 128u) & 0x3FFFFFFFu) <= 256u;
+  return !__any_sync(0xFFFFFFFFu, bad);
+#else
   uint32_t t = 0;
-#pragma unroll 1
   for (int b = 1; b <= 128; b++) {
     t += a;
     if (((t + 128u) & 0x3FFFFFFFu) <= 256u) return false;
   }
   return true;
+#endif
 }
 template <bool R9>
-__host__ __device__ inline void xin_keys(uint32_t seed, uint32_t& a0, uint32_t& a1) {
+__host__ __device__ inline uint2 xin_keys(uint32_t seed) {
+  uint2 k;
   int n = 0;
   for (uint32_t i = 0; n < 2; i++) {
     const uint32_t a = mix32(seed ^ (0x5A5A0000u + i));
     if (R9 ? xin_ok_r9(a) : xin_ok(a)) {
-      if (n == 0) a0 = a;
-      else a1 = a;
+      if (n == 0) k.x = a;
+      else k.y = a;
       n++;
     }
   }
+  return k;
 }
+// out of line: inlined, the vote costs the GEMM's mainloop spill loads
+__host__ __device__ __noinline__ uint2 xin_keys_r9(uint32_t seed) { return xin_keys<true>(seed); }
 
 // d ^= z & zero in one LOP3 (LUT 0x78 = a ^ (b & c); ptxas otherwise splits it into an AND and an XOR), or (FMA) d += z zero
 // in one IMAD, on the FMA pipe
@@ -345,8 +357,12 @@ template <int RK, int LAG, int TIE, bool THREE> DEV void e_body(const Args& a) {
   const int wm = warp / L::WARPS_N, wn = warp % L::WARPS_N, g = lane >> 2, q = lane & 3, ctid = threadIdx.x;
   const uint32_t zero = (uint32_t)a.KR;
   uint32_t kr[L::NKR];
-  if constexpr (L::XF) xin_keys<RK == XIN13>(a.seed, kr[0], kr[1]);
-  else if constexpr (L::TB) L::template keys<RK>(kr, lane);
+  if constexpr (L::XF) {
+    uint2 k;
+    if constexpr (RK == XIN13) k = xin_keys_r9(a.seed);
+    else k = xin_keys<false>(a.seed);
+    kr[0] = k.x, kr[1] = k.y;
+  } else if constexpr (L::TB) L::template keys<RK>(kr, lane);
   else kr[0] = 0;
   typename L::Place pl{0, 0};
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
@@ -800,8 +816,11 @@ static unsigned long long ecmp(EP& P, const void* a, const void* b, size_t words
 // key_ok_r9 on the device, on words at its boundary (a b = t mod 2^30 for each b in 1..128 and t just inside and just
 // outside [-128, 128], three lifts each) and 4096 others; egemm_ref.py holds every answer to receipt_folds_r9.key_ok_r9
 __global__ void r9_probe(const uint32_t* a, uint8_t* ok, int n) {
-  const int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < n) ok[i] = xin_ok_r9(a[i]);
+  const int w = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
+  if (w < n) {
+    const bool r = xin_ok_r9(a[w]);
+    if ((threadIdx.x & 31) == 0) ok[w] = r;
+  }
 }
 static std::vector<uint32_t> r9_words() {
   std::vector<uint32_t> v;
@@ -887,7 +906,7 @@ static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     CK(cudaMalloc(&dw, pw.size() * 4));
     CK(cudaMalloc(&dok, pw.size()));
     CK(cudaMemcpy(dw, pw.data(), pw.size() * 4, cudaMemcpyHostToDevice));
-    r9_probe<<<(unsigned)(pw.size() + 255) / 256, 256, 0, P.st>>>(dw, dok, (int)pw.size());
+    r9_probe<<<(unsigned)(pw.size() * 32 + 255) / 256, 256, 0, P.st>>>(dw, dok, (int)pw.size());
     CK(cudaStreamSynchronize(P.st));
     CK(cudaGetLastError());
     dump(dir, "r9_words.bin", dw, pw.size() * 4, true);
