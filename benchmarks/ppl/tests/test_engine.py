@@ -176,6 +176,20 @@ def test_hf_parity(llama, qwen, ids):
         assert g["checked"] == M.Config.read(snap).layers and g["failed"] == 0, g
 
 
+def test_the_readme_plugin_example_runs(llama, ids, monkeypatch, tmp_path):
+    """README's "Adding an intervention" example, as written, is a step a spec names and the engine runs and gates."""
+    monkeypatch.setattr(spec, "REGISTRY", {k: dict(v) for k, v in spec.REGISTRY.items()})
+    code = run.README.read_text().split("## Adding an intervention")[1].split("~~~python\n")[1].split("~~~")[0]
+    (tmp_path / "clip.py").write_text(code)
+    run.load_plugins([str(tmp_path / "clip.py")])
+    arm = spec.parse({"linear": [{"step": "clip", "sigmas": 1}, {"step": "int8"}]}, "clip")
+    assert arm.linear[0].kw == {"sigmas": 1.0} and arm.scope == "linears"
+    plain = spec.parse({"linear": [{"step": "int8"}]}, "unclipped")
+    r = evaluate(llama, ids[:4], [arm, plain])
+    assert passed(r) and r["gates"]["int8_range"]["checked"] > 0
+    assert not np.array_equal(r["nll"]["clip/s0"], r["nll"]["unclipped/s0"])
+
+
 def test_check_window_runs_the_costly_gates_only(llama, ids):
     r = evaluate(llama, ids[4:8], ["int8-attention"], windows=[4, 5, 6, 7])
     assert methodology.CHECK_WINDOW not in [4, 5, 6, 7]
