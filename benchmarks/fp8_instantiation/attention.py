@@ -517,6 +517,9 @@ def load(snapshot: str):
 def selftest() -> dict:
     """Exact chunked products, the alphabets, causal P noise, the rotation's invariance, and every method on a tiny Llama."""
     dev = "cuda" if torch.cuda.is_available() else "cpu"
+    if dev == "cpu":
+        # Whole-model perplexities are compared exactly; one thread fixes the CPU GEMMs' reduction order across runs.
+        torch.set_num_threads(1)
     out: dict = {"device": dev}
     g = torch.Generator().manual_seed(0)
     a = torch.randint(-127, 128, (3, 64, 3000), generator=g).float().to(dev)
