@@ -30,6 +30,10 @@ scorer's proved 0.225; the filler is read at
     L = 32, NOBITS confirmed by note:20261016T0703Z-draft-fp4-nobits-probe), lookups and bit-slicing by VF2's families
     (≥ 1.935). r4's luck lemma is stated on bU's alphabet, so this reading is pending referee.
 
+Every count-based reading (all but the placeholder and the chained floor) is at the arm's fold share (`fold_share`): ram's
+receipt reads a pair only through Q = a0 d0 + d1, so it certifies half the words and halves each floor; duo and XOR-in
+read every word (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2).
+
   python3 benchmarks/pouw/filler/pfill_proved.py OUT_DIR [--json]
 """
 
@@ -41,7 +45,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import scoring as S
-from pfill_arm import products_per_slot, theorem_k_setting
+from pfill_arm import fold_share, products_per_slot, theorem_k_setting
 
 READINGS = {
     "proved": (0.225, "proved", "Theorem E c/m = 1/4 at phi = 0.9, heads at 8 int8 slots"),
@@ -78,14 +82,20 @@ def lineage_of(out: Path) -> dict:
     return (json.loads(doc.read_text()).get("lineage") or {}) if doc.is_file() else {}
 
 
+UNFOLDED = ("provisional", "chained-proved")
+
+
 def readings(out: Path) -> dict:
     st = stats_of(out)
     lin = lineage_of(out)
     k = K_READINGS if "noise:sha512-coins-bU" in (lin.get("mechanism") or []) else K01_READINGS
     table = {**READINGS, **(E2M1_READINGS if products_per_slot(lin) == 2 else {}),
              **(k if theorem_k_setting(lin) else {})}
+    share = fold_share(lin)
     res = {}
     for name, (f, status, src) in table.items():
+        if name not in UNFOLDED and share != 1:
+            f, src = f * share, f"{src}; x{share} for the arm's receipt fold (ram certifies pairs)"
         sc = S.score(st, certified(f, status, src))
         res[name] = {"filler_fraction": f, "status": status, "SCORE": sc.get("SCORE"), "min": sc.get("min"),
                      "min_mix": sc.get("min_mix"), "missing": sc["missing"]}

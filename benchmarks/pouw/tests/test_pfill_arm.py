@@ -7,6 +7,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -71,7 +72,8 @@ def test_power_split_arms_have_a_split_at_every_scored_point(monkeypatch, attr, 
     ram = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillRam")
     assert A.check_arm(arm) == []
     assert ledger.one_line(arm.lineage["hypothesis"], "the hypothesis")
-    assert (arm.filler, arm.sources, env) == (ram.filler, ram.sources, flags)
+    assert (replace(arm.filler, noise=None), arm.sources, env) == (ram.filler, ram.sources, flags)
+    assert arm.filler.noise == ("bits01" if k else None)
     assert (P.theorem_k_setting(arm.lineage), P.products_per_slot(arm.lineage)) == (k, 1)
     for ph, b, l in S.points(robust=False):
         p = A.placed(arm, ph, b, l)
@@ -91,7 +93,9 @@ def test_bu_arm_is_power_split_on_the_bu_tile(monkeypatch):
     assert A.check_arm(arm) == []
     assert ledger.one_line(arm.lineage["hypothesis"], "the hypothesis")
     assert __import__("os").environ["NVCC_APPEND_FLAGS"].split() == ["-DPFILL_BU", "-Xcompiler", "-mpopcnt"]
-    assert (arm.filler, arm.sources, arm.lineage["approach"]) == (split.filler, split.sources, "pouw/filler-proved")
+    assert (replace(arm.filler, noise=None), arm.sources, arm.lineage["approach"]) == (split.filler, split.sources,
+                                                                                      "pouw/filler-proved")
+    assert arm.filler.noise == "bitsU"
     assert P.products_per_slot(arm.lineage) == 1 and P.theorem_k_setting(arm.lineage)
     assert not any(P.theorem_k_setting(getattr(P, c).__dataclass_fields__["lineage"].default_factory())
                    for c in ("PFillRam", "PFillDuo", "PFillPowerSplit", "PFillE2m1Ram"))
@@ -134,6 +138,8 @@ def test_e2m1_arm_adds_only_the_conditional_l64_reading(tmp_path):
     A = _load_file("pfill_arm")
     rows = [_row("step" if ph == "decode" else "prefill", b, l, 10.0, 10.2) for ph, b, l in S.points()]
     (tmp_path / "dscore.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    (tmp_path / "arm.json").write_text(json.dumps({"lineage": A.PFillRam.__dataclass_fields__["lineage"]
+                                                   .default_factory()}))
     s8 = P.readings(tmp_path)
     assert "priced-l64" not in s8
     (tmp_path / "arm.json").write_text(json.dumps({"lineage": A.PFillE2m1Ram.__dataclass_fields__["lineage"]
@@ -166,5 +172,37 @@ def test_k_arms_add_only_the_theorem_k_reading(tmp_path):
         (tmp_path / "arm.json").write_text(json.dumps({"lineage": lineage(cls)}))
         k = P.readings(tmp_path)
         assert {n: k[n] for n in pm1} == pm1 and set(k) - set(pm1) == {"theorem-k"}
-        assert (k["theorem-k"]["filler_fraction"], k["theorem-k"]["status"]) == (0.9, status)
+        assert (k["theorem-k"]["filler_fraction"], k["theorem-k"]["status"]) == (0.45, status)
         assert k["theorem-k"]["SCORE"] > k["proved"]["SCORE"]
+
+
+@pytest.mark.parametrize(("attr", "base", "nc", "noise"), [("PFillBUDuo", "PFillBU", 2, "bitsU"),
+                                                           ("PFillBUXin", "PFillBU", 9, "bitsU"),
+                                                           ("PFillKDuo", "PFillK", 2, "bits01"),
+                                                           ("PFillKXin", "PFillK", 9, "bits01")])
+def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_path, attr, base, nc, noise):
+    """pfill-bU's and pfill-k's duo (NC 2) and XOR-in (NC 9) arms are their ram arm with only the fold changed; ram's
+    receipt certifies word pairs (Q = a0 d0 + d1), so its count readings are half theirs: E 0.1125 against 0.225, K 0.45
+    against 0.9 (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
+    A, S = _module("arms"), _module("scoring")
+    P = _load_file("pfill_proved")
+    monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
+    ram = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{base}")
+    flags = __import__("os").environ["NVCC_APPEND_FLAGS"]
+    arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
+    assert A.check_arm(arm, record=True) == []
+    assert __import__("os").environ["NVCC_APPEND_FLAGS"] == flags
+    assert arm.filler == replace(ram.filler, NC=nc) and arm.filler.noise == noise
+    assert arm.sources == ram.sources and arm.lineage["parent"] == ram.name
+    for ph, b, l in S.points():
+        assert A.placed(arm, ph, b, l) == A.placed(ram, ph, b, l)
+    rows = [_row("step" if ph == "decode" else "prefill", b, l, 10.0, 10.2) for ph, b, l in S.points()]
+    (tmp_path / "dscore.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    got = {}
+    for a in (ram, arm):
+        (tmp_path / "arm.json").write_text(json.dumps({"lineage": a.lineage}))
+        got[a.name] = P.readings(tmp_path)
+    r, f = got[ram.name], got[arm.name]
+    assert (f["proved"]["filler_fraction"], f["theorem-k"]["filler_fraction"]) == (0.225, 0.9)
+    assert (r["proved"]["filler_fraction"], r["theorem-k"]["filler_fraction"]) == (0.1125, 0.45)
+    assert r["provisional"] == f["provisional"] and f["theorem-k"]["SCORE"] > r["theorem-k"]["SCORE"]

@@ -124,6 +124,7 @@ class PFillK(PFillPowerSplit):
                       "split:per-point-table", "split:every-scored-point", "prefill:split"],
         "hypothesis": "{0,1} bits on both operands at the ±1 tile's rate meet Theorem K's hypotheses (int8, affine "
                       "bytes, s32 unscaled), so the same filler reads c = 1 (0.9 a slot) once K is refereed, 0.225 now"})
+    filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bits01")
     nvcc_flags: str = "-DPFILL_BITS"
 
 
@@ -144,7 +145,69 @@ class PFillBU(PFillPowerSplit):
                       "split:per-point-table", "split:every-scored-point", "prefill:split"],
         "hypothesis": "pfill-bU: c = 1 under Theorem K (cell-pure, F₂-affine-parity operands, straight-line, full words; "
                       "Lemma W at L = 32); ¼ under Theorem E."})
+    filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU")
     nvcc_flags: str = "-DPFILL_BU -Xcompiler -mpopcnt"
+
+
+def _fold_lineage(parent: str, noise_tag: str, receipt: str, hypothesis: str) -> dict:
+    return {"parent": parent, "approach": "pouw/filler-proved",
+            "mechanism": ["filler:fresh-noise-imma", noise_tag, receipt, "place:split", "split:per-point-table",
+                          "split:every-scored-point", "prefill:split"],
+            "hypothesis": hypothesis}
+
+
+@dataclass
+class PFillBUDuo(PFillBU):
+    """pfill-bU with duo receipts (NC 2, three ops a word): a fold with no all-state kernel at a pair or an MMA, so the
+    receipt reads every word, where ram's reads a pair only through Q = a0 d0 + d1
+    (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
+
+    name: str = "pfill-bu-duo"
+    lineage: dict = field(default_factory=lambda: _fold_lineage(
+        "pfill-bu", "noise:sha512-coins-bU", "receipt:duo-k32",
+        "pfill-bU with duo for ram: every word certified, so K's c = 1 holds where ram's Q-only receipt halves it"))
+    filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bitsU")
+
+
+@dataclass
+class PFillBUXin(PFillBU):
+    """pfill-bU with XOR-in receipts (NC 9, three ops a pair: y <- (rotl(y, 7) ^ d0) a0 + d1): its all-state kernel is a
+    fixed group of 16 an MMA, each a bijection of every word, so no data-free representative such as ram's (0, Q)."""
+
+    name: str = "pfill-bu-xin"
+    lineage: dict = field(default_factory=lambda: _fold_lineage(
+        "pfill-bu", "noise:sha512-coins-bU", "receipt:xin-k32",
+        "pfill-bU with XOR-in for ram: every word certified at one op a pair more than ram, so K's c = 1 holds"))
+    filler: Filler | None = Filler(W=8, NC=9, S=256, chunk_log2=19, noise="bitsU")
+
+
+@dataclass
+class PFillKDuo(PFillK):
+    """pfill-k with duo receipts (NC 2)."""
+
+    name: str = "pfill-k-duo"
+    lineage: dict = field(default_factory=lambda: _fold_lineage(
+        "pfill-k", "noise:sha512-coins-01", "receipt:duo-k32",
+        "pfill-k with duo for ram: every word certified, so K's c = 1 holds where ram's Q-only receipt halves it"))
+    filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bits01")
+
+
+@dataclass
+class PFillKXin(PFillK):
+    """pfill-k with XOR-in receipts (NC 9)."""
+
+    name: str = "pfill-k-xin"
+    lineage: dict = field(default_factory=lambda: _fold_lineage(
+        "pfill-k", "noise:sha512-coins-01", "receipt:xin-k32",
+        "pfill-k with XOR-in for ram: every word certified at one op a pair more than ram, so K's c = 1 holds"))
+    filler: Filler | None = Filler(W=8, NC=9, S=256, chunk_log2=19, noise="bits01")
+
+
+def fold_share(lineage: dict) -> float:
+    """The share of committed words the arm's receipt certifies: ½ for ram (it reads a pair only through Q = a0 d0 +
+    d1), 1 for duo and XOR-in (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
+    mech = lineage.get("mechanism") or []
+    return 0.5 if any(t.startswith("receipt:ram") for t in mech) else 1.0
 
 
 def products_per_slot(lineage: dict) -> int:
