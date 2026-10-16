@@ -44,6 +44,24 @@ class KernM2:
 
 
 @dataclass
+class KernM2C18(KernM2):
+    """Map 2 at W 8, NC 4, S 8192 in 2^18-MMA chunks (0.51 ms): 0.988 of peak alone against 0.994 at 2^19
+    (r20261016-051127-18ab). dscore counts whole chunks in windows of 3 decode steps whose phase against the chunk
+    boundaries is the same every block, so a beside-serving rate is off by up to one chunk a window; half-length chunks
+    halve that, and two warps a sub-partition (not four, as at S 4096) keep the per-chunk prologue short."""
+
+    name: str = "kern-m2-c18"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "kern-m2", "approach": "pouw/filler-kernel",
+        "mechanism": ["filler:chained-imma-registers", "kernel:map-in-register-order", "kernel:seed-128",
+                      "kernel:c-16bit", "kernel:w8-s8192", "chunk:2^18", "place:split", "split:per-point-table",
+                      "prefill:none"],
+        "hypothesis": "kern-m2 in half-length chunks: 0.6% less filler rate alone, half the whole-chunk counting error "
+                      "in dscore's shortest windows"})
+    filler: A.Filler | None = A.Filler(W=8, NC=4, S=8192, chunk_log2=18)
+
+
+@dataclass
 class KernM1(KernM2):
     """Map 1 (in-place, unhardened) at FILL v1's own shape, W 8, NC 4, S 2048: 0.984 of peak alone."""
 

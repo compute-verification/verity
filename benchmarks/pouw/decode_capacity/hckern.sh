@@ -8,7 +8,8 @@
 #     --send benchmarks/pouw/decode_capacity/hckern.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/hckern.sh"'
 #
 # HK_ALONE ("MAP:W:NC[:S[:CHUNK_LOG2]] ..."), HK_POWER (the same, DFILL_ALONE_N=HK_POWER_N chunks each), HK_NCU (the same),
-# HK_ARMS ("MAP:FILL_SMS:W:NC[:S[:CHUNK_LOG2]] ...") at HK_BLS ("B:L ..."), HK_S (the default steps a tile), HK_REPS.
+# HK_ARMS ("MAP:FILL_SMS:W:NC[:S[:CHUNK_LOG2]] ...") at HK_BLS ("B:L ..."), HK_S (the default steps a tile), HK_REPS,
+# HK_ALONE_N (chunks a dalone times; an empty list is " ").
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -44,7 +45,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
   [ "$g" -eq 0 ] || exit 5
   for a in $HK_ALONE; do
     IFS=: read -r m w nc st lg <<< "$a"
-    DFILL_MAP=$m DFILL_CHUNK_LOG2=${lg:-19} "$B/dcap" dalone "$w" "$nc" "${st:-$HK_S}" >> "$O/dalone.jsonl" 2>> "$O/errors.txt" ||
+    DFILL_MAP=$m DFILL_CHUNK_LOG2=${lg:-19} DFILL_ALONE_N=${HK_ALONE_N:-40} "$B/dcap" dalone "$w" "$nc" "${st:-$HK_S}" >> "$O/dalone.jsonl" 2>> "$O/errors.txt" ||
       echo "rc $? for dalone $a" >> "$O/errors.txt"
   done
   q

@@ -22,7 +22,8 @@ def _load(name):
 S = _load("scoring")
 
 
-@pytest.mark.parametrize("attr, name, dmap", [("KernM2", "kern-m2", "2"), ("KernM1", "kern-m1", "1")])
+@pytest.mark.parametrize("attr, name, dmap", [("KernM2", "kern-m2", "2"), ("KernM2C18", "kern-m2-c18", "2"),
+                                              ("KernM1", "kern-m1", "1")])
 def test_hc_kern_arms(monkeypatch, attr, name, dmap):
     # the arm imports whichever `arms` module is registered when it loads, as under score.py
     A = sys.modules.get("arms") or _load("arms")
@@ -32,4 +33,5 @@ def test_hc_kern_arms(monkeypatch, attr, name, dmap):
     assert os.environ["DFILL_MAP"] == dmap
     v1 = A.load("fill-v1")
     assert all(A.placed(arm, *pt) == A.placed(v1, *pt) for pt in S.points())
-    assert arm.filler.chunk_log2 == v1.filler.chunk_log2
+    f = arm.filler
+    assert (1 << f.chunk_log2) >= f.W * f.NC * f.S, "a chunk is at least one tile a warp"
