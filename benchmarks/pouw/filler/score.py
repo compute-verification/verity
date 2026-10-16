@@ -36,6 +36,14 @@ ledger or the store would refuse (`arms.record_problems`); `check ARM` runs that
 reading: the filler at the entry `scoring.filler_entry` decides from the arm's declared `Filler.noise` and the kernel
 facts of the scorer's own build (`build.json`), with SCORE under CH (every filler at 0.99, v2's reading) beside it, and
 each point's slowdown margin. `report OUT --as v2` reads a run as v2 did, without writing `score.json`.
+
+filler-scorer/v4 (prepared, not the lock: `report OUT --as v4` previews it) reads the filler wherever it's called from.
+The build also compiles each CUDA driver the arm lists (fscore.cu, pscore.cu) and records `scoring.program_facts` over
+dscore's and the drivers' nvdisasm. The theorem entries' SASS checks read the `dfill_k`/`dfill_p` functions' bodies alone
+(kernels or __noinline__ clones in serving kernels); any MMA, global store or register call outside them on a path the
+filler warps run refuses the arm (gate `filler_paths`); other MMAs are serving's; a block's fixed work counts only from
+spot-checked public tiles of a binary the scorer read (`credit_fixed`); and the honest gate bounds the whole kernel's
+MACs, serving's and the filler warps', by its SMs' peak (`whole_of_peak`). `scoring.UNCHECKED_V4` is what it can't see.
 """
 
 from __future__ import annotations
@@ -108,8 +116,43 @@ def build(bdir: Path, out: Path) -> dict:
                          "memory_ops": sum(any(op in ln for op in ("LDG", "STG", "LDS", "STS", "LDL", "STL")) for ln in lines)}
     rec["nvcc_append_flags"] = os.environ.get("NVCC_APPEND_FLAGS") or None
     rec["kernel_facts"] = S.kernel_facts(sass)
+    rec |= program_build(bdir, out, log)
     (out / "build.json").write_text(json.dumps(rec, indent=1))
     return rec
+
+
+def nvdisasm(binary: Path) -> str:
+    """Every cubin of `binary` through ``nvdisasm -c``, which names each __noinline__ device function's clone in its
+    calling kernels (``cuobjdump -sass`` prints the clone unnamed inside the kernel)."""
+    with tempfile.TemporaryDirectory(prefix="filler-nvd.") as d:
+        subprocess.run(["cuobjdump", "-xelf", "all", str(binary.resolve())], cwd=d, capture_output=True, check=True)
+        cubins = sorted(Path(d).glob("*.cubin"))
+        if not cubins:
+            raise RuntimeError(f"no cubin in {binary.name}")
+        return "".join(subprocess.run(["nvdisasm", "-c", str(c)], capture_output=True, text=True, check=True).stdout
+                       for c in cubins)
+
+
+def program_build(bdir: Path, out: Path, log: Path) -> dict:
+    """filler-scorer/v4's part of the build: each CUDA driver the arm lists in its sources besides dcap.cu and dscore.cu
+    (fscore.cu, pscore.cu) compiled as ``bdir/<stem>`` with dscore's flags, and `scoring.program_facts` over dscore's and
+    the drivers' nvdisasm. It never fails the build: what it can't build or read is recorded, and v4 reads such a build
+    at the floor."""
+    doc = json.loads((out / "arm.json").read_text()) if (out / "arm.json").is_file() else {}
+    drivers, unbuilt = {"dscore": bdir / "dscore"}, {}
+    for s in doc.get("sources") or ():
+        p = REPO / s
+        if p.suffix == ".cu" and p.name not in ("dcap.cu", "dscore.cu"):
+            rc = sh([NVCC, *NVFLAGS, "-o", str(bdir / p.stem), str(p), *LIBS], out=log, err=log)
+            if rc:
+                unbuilt[p.stem] = f"build rc {rc}"
+            else:
+                drivers[p.stem] = bdir / p.stem
+    try:
+        pf, why = S.program_facts({k: nvdisasm(v) for k, v in drivers.items()}), None
+    except (OSError, RuntimeError, subprocess.CalledProcessError) as ex:
+        pf, why = None, f"{type(ex).__name__}: {ex}"
+    return {"program_facts": pf, "program_facts_why": why, "drivers_unbuilt": unbuilt}
 
 
 def smi(out: Path) -> None:
@@ -210,14 +253,16 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
             arm = A.load(doc.get("spec") or doc["name"])
         except (A.ArmError, OSError, AttributeError):
             arm = None
-    stats = {}
     drows = rows(out / "dscore.jsonl")
-    for r in drows:
-        stats[("decode" if r["kind"] == "step" else "prefill", r["B"], r["L"])] = S.point_stats(r)
     has_filler = doc["filler"] is not None
-    entry = None
+    build = json.loads((out / "build.json").read_text()) if (out / "build.json").is_file() else {}
+    entry, pf, credit = None, build.get("program_facts"), None
+    if version == S.V4 and has_filler:
+        drows, credit = S.credit_fixed(drows, pf)
+        unread = {r.get("driver", "dscore") for r in drows} - set(pf["binaries"] if pf else ())
+        entry = S.filler_entry_v4(doc["filler"].get("noise"), pf, unread=sorted(unread))
+    stats = {("decode" if r["kind"] == "step" else "prefill", r["B"], r["L"]): S.point_stats(r) for r in drows}
     if version == S.V3 and has_filler:
-        build = json.loads((out / "build.json").read_text()) if (out / "build.json").is_file() else {}
         fixed = any((b.get(side) or {}).get("fixed_ms") for r in drows for b in r["blocks"] for side in ("arm", "solo"))
         entry = S.filler_entry(doc["filler"].get("noise"), build.get("kernel_facts"), fixed_work=fixed)
     sc = S.score(stats, S.certified(entry["active"]) if entry else S.CERTIFIED)
@@ -230,15 +275,19 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
 
     dram = S.dram_gate(read(out / "ncu-filler.csv") if has_filler else None, read(out / "ncu-control.csv"))
     clocks = S.clock_gate(stats, S.parse_smi(read(out / "smi.csv") or ""))
-    honest = (S.honesty(arm, stats, S.points(), control=control_stats(out), has_filler=has_filler) if arm is not None
-              else {"ok": False, "why": f"arm {doc['name']} can't be loaded to check its placement"})
+    whole = ({f"{'decode' if r['kind'] == 'step' else 'prefill'} {r['B']}/{r['L']}": S.whole_of_peak(r) for r in drows}
+             if version == S.V4 else None)
+    honest = (S.honesty(arm, stats, S.points(), control=control_stats(out), has_filler=has_filler, whole=whole)
+              if arm is not None else {"ok": False, "why": f"arm {doc['name']} can't be loaded to check its placement"})
     g = S.gates(stats, sc, has_filler=has_filler, sgate=sg[0] if sg else None, dgate=rows(out / "dgate.jsonl"),
                 dram=dram, clocks=clocks, honest=honest,
                 replay=S.replay_gate(drows) if has_filler else {"ok": True, "why": "no filler"})
     serving_gate = rows(out / "gate.jsonl")
     g["serving_exact"] = {"ok": bool(serving_gate) and all(r.get("ok") is not False for r in serving_gate),
                           "rows": len(serving_gate)}
-    g["ok"] = g["ok"] and g["serving_exact"]["ok"]
+    if version == S.V4:
+        g["filler_paths"] = S.paths_gate(pf) if has_filler else {"ok": True, "why": "no filler"}
+    g["ok"] = g["ok"] and g["serving_exact"]["ok"] and g.get("filler_paths", {"ok": True})["ok"]
     res = {"scorer": version, "arm": doc["name"], "interface": doc["interface"], "lineage": doc["lineage"],
            "variant": doc["variant"]["id"], "choice": doc["choice"], "commit": read(out / "commit.txt"),
            "coins": read(out / "coins.txt"), "run": os.environ.get("RESEARCH_RUN_ID") or read(out / "run.txt"),
@@ -248,10 +297,13 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
            "flags": sc["flags"], "certified": sc["certified"], "gates": g, "missing": sc["missing"],
            "entries": sc["entries"], "secondary": S.secondary(stats, sc),
            "points": {f"{k[0]} {k[1]}/{k[2]}": v for k, v in stats.items()}}
-    if version == S.V3:
+    if version in (S.V3, S.V4):
         res["margins"] = S.margins(stats)
         res["filler_entry"] = entry
         res |= {"score_under_ch": under_ch if g["ok"] else None, "score_under_ch_if_gated": under_ch}
+    if version == S.V4:
+        res["fixed_credit"] = credit
+        res["program_facts_why"] = build.get("program_facts_why")
     if version == S.SCORER:
         (out / "score.json").write_text(json.dumps(res, indent=1))
     return res
@@ -262,7 +314,7 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
 
     lin = doc["lineage"]
     g = res["gates"]
-    v3 = res["scorer"] == S.V3
+    v3 = res["scorer"] in (S.V3, S.V4)
     meta = {
         "schema": ledger.KIND, "time": ledger.now(), "run": res["run"], "run_id": res["run"], "harness": res["commit"],
         "tier": "2a", "by": by, "arm": res["arm"], "shape": SHAPE, "phase": "serving-suite", "scorer": res["scorer"],
@@ -292,6 +344,9 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
         fe = res["filler_entry"]
         meta["filler_entry"] = fe and {k: fe.get(k) for k in ("applies", "active", "noise", "fraction", "checks",
                                                               "failed", "kernel", "score_if_active")}
+    if res.get("fixed_credit"):
+        meta["fixed_credit"] = {"credited": res["fixed_credit"]["credited"],
+                                "dropped": len(res["fixed_credit"]["dropped"])}
     rec = {"kind": ledger.KIND, "meta": ledger._clean(meta), "refs": {"parent": lin["parent"]}
            if str(lin.get("parent") or "").startswith("art:") else {}, "labels": [(ledger.KERNEL_OUTCOME, "screened")]}
     ledger.write(run_dir, [rec])
@@ -334,9 +389,10 @@ def show(res: dict) -> None:
           + f" (mixes: {fmt((res['min_mix'] or {}).get('coverage'))} at {(res['min_mix'] or {}).get('entry')})"
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
     if "score_under_ch_if_gated" in res:
-        print(f"  SCORE under CH (every filler at 0.99; CH withdrawn, decision 27; v2's reading, for comparison): "
-              f"{fmt(res['score_under_ch'])}" + ("" if res["scored"] else f" ({fmt(res['score_under_ch_if_gated'])} "
-                                                                           "if gated)"))
+        print(f"  SCORE under CH (every filler at 0.99; CH withdrawn, decision 27; "
+              + ("of the fixed work v4 credits" if res["scorer"] == S.V4 else "v2's reading, for comparison")
+              + f"): {fmt(res['score_under_ch'])}" + ("" if res["scored"] else
+                                                      f" ({fmt(res['score_under_ch_if_gated'])} if gated)"))
     for f in res["flags"]:
         print(f"  FLAG: {f}")
     fe = res.get("filler_entry")
@@ -346,15 +402,27 @@ def show(res: dict) -> None:
                  f"; inactive, so SCORE reads {fe['active']} ({fmt(fe.get('score_if_active'))} once it is active)")
               + "".join(f"\n    not {k}: {w}" for k, ws in fe["failed"].items() for w in ws)
               + ("\n    unchecked: " + "; ".join(fe["unchecked"]) if fe["unchecked"] else ""))
-    for name in GATES:
+        kf = fe.get("kernel") or {}
+        if "callers" in kf:
+            print(f"    filler functions {len(kf['functions'] or [])}, their callers {len(kf['callers'])}, serving MMAs "
+                  f"in {len(kf['serving_mma'])} functions")
+    fc = res.get("fixed_credit")
+    if fc:
+        print(f"  fixed work credited in {fc['credited']} blocks, dropped in {len(fc['dropped'])}"
+              + (f": {fc['dropped'][0]}" + (" ..." if len(fc["dropped"]) > 1 else "") if fc["dropped"] else ""))
+    for name in GATES + (("filler_paths",) if "filler_paths" in g else ()):
         v = g.get(name, {})
         extra = {"slowdown": lambda: f"worst {fmt(v.get('worst'))} at {v.get('at')} ({v.get('phase')})",
                  "replay": lambda: v.get("why") or f"{v.get('rounds')} rounds, {v.get('tiles'):.3g} tiles, ranges the "
                                    f"scorer's and disjoint, coins and {v.get('seeds_sampled')} sampled seeds distinct",
                  "receipts": lambda: v.get("why") or f"timed {v.get('timed_checked')} checked, {v.get('timed_bad')} bad",
                  "honest": lambda: v.get("why") or "; ".join(
-                     [f"{k}: {', '.join(v[k])}" for k in ("unstable_placement", "too_good", "over_peak", "no_reference")
-                      if v.get(k)] + [control_line(v.get("control"))]),
+                     [f"{k}: {', '.join(v[k])}" for k in ("unstable_placement", "too_good", "over_peak", "no_reference",
+                                                          "over_peak_whole") if v.get(k)]
+                     + ([f"whole kernel ≤ {fmt(v['whole_of_peak_max'])} of peak"] if v.get("whole_of_peak_max") else [])
+                     + [control_line(v.get("control"))]),
+                 "filler_paths": lambda: v.get("why") or f"{v.get('callers')} callers, nothing outside dfill_k on "
+                                         "their filler warps' paths",
                  "dram": lambda: v.get("why") if not v.get("share_of_hbm") else
                  f"{v['share_of_hbm']:.3%} of HBM, counter control {fmt(v.get('control_bytes_ratio'))}",
                  "clocks": lambda: f"{v.get('reps')} reps read; nvidia-smi between points: MHz {v.get('mhz')}, W "
@@ -452,10 +520,10 @@ def main(argv=None) -> int:
         ap = argparse.ArgumentParser(prog="score.py report")
         ap.add_argument("out", type=Path)
         ap.add_argument("--json", action="store_true")
-        ap.add_argument("--as", dest="version", choices=("v2", "v3"),
+        ap.add_argument("--as", dest="version", choices=("v2", "v3", "v4"),
                         help="score under this version (default the active lock); another's is a preview, not written")
         a = ap.parse_args(argv[1:])
-        res = report(a.out, version={"v2": S.V2, "v3": S.V3}.get(a.version))
+        res = report(a.out, version={"v2": S.V2, "v3": S.V3, "v4": S.V4}.get(a.version))
         print(json.dumps(res, indent=1)) if a.json else show(res)
         return 0
     if argv and argv[0] == "check":
@@ -493,7 +561,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.out is None:
         ap.error("--out (or $OUT, as research run sets it)")
-    arm = A.load(a.arm, record=S.SCORER == S.V3)
+    arm = A.load(a.arm, record=S.SCORER in (S.V3, S.V4))
     out = a.out / arm.name
     out.mkdir(parents=True, exist_ok=True)
     doc = {**arm_doc(arm), "spec": a.arm}
