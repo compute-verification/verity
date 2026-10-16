@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "filler"))
-import psched_score as P  # noqa: E402
+import psched_score as P
 
 A, S, SC = P.A, P.S, P.SC
 ARM = "benchmarks/pouw/filler/psched_arm.py:PhaseSched"

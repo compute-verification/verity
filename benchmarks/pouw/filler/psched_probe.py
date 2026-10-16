@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import scoring as S  # noqa: E402
+import scoring as S
 
 
 def main(dirs):

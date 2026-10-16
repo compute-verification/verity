@@ -35,7 +35,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import score as SC  # noqa: E402  the locked scorer
+import score as SC
 
 A, S = SC.A, SC.S
 PNCU_TILES = 32
@@ -216,7 +216,7 @@ def main(argv=None) -> int:
     (out / "arm.json").write_text(json.dumps(doc, indent=1))
     (out / "coins.txt").write_text(secrets.token_hex(16))
     (out / "commit.txt").write_text(subprocess.run(["git", "-C", str(SC.REPO), "rev-parse", "HEAD"], capture_output=True,
-                                                   text=True).stdout.strip())
+                                                   text=True, check=False).stdout.strip())
     if os.environ.get("RESEARCH_RUN_ID"):
         (out / "run.txt").write_text(os.environ["RESEARCH_RUN_ID"])
     bdir = Path(tempfile.mkdtemp(prefix="psched-score."))
@@ -226,7 +226,8 @@ def main(argv=None) -> int:
         rc = SC.sh([SC.NVCC, *SC.NVFLAGS, "-o", str(bdir / "pscore"), str(HERE / "pscore.cu"), *SC.LIBS], out=log, err=log)
         if rc:
             raise SystemExit(f"build of pscore failed (rc {rc}); see {log}")
-        sass = subprocess.run(["cuobjdump", "-sass", str(bdir / "pscore")], capture_output=True, text=True).stdout
+        sass = subprocess.run(["cuobjdump", "-sass", str(bdir / "pscore")], capture_output=True, text=True,
+                              check=False).stdout
         keep, lines = False, []
         for ln in sass.splitlines():
             if "Function : " in ln:
@@ -236,7 +237,7 @@ def main(argv=None) -> int:
         (out / "sass-dfill_p.txt").write_text("\n".join(lines))
         inner = [sys.executable, str(HERE / "psched_score.py"), "measure", a.arm, "--bin", str(bdir), "--out", str(out),
                  "--rounds", str(a.rounds), "--reps", str(a.reps)] + (["--no-robust"] if a.no_robust else [])
-        rc = subprocess.run(["gpu-lease", "1", "--wait", "--max-min", str(a.max_min), "--", *inner]).returncode
+        rc = subprocess.run(["gpu-lease", "1", "--wait", "--max-min", str(a.max_min), "--", *inner], check=False).returncode
         with open(out / "rc.txt", "a") as f:
             f.write(f"lease rc {rc}\n")
     finally:

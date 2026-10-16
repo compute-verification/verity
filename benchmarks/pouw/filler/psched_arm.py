@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import arms as A  # noqa: E402
+import arms as A
 
 
 @dataclass(frozen=True)
