@@ -31,6 +31,8 @@
 //   rrW       hhi with the GEMMs in one static order (stage-major, chunk-minor), each after the GEMM W places before it
 //   nodraw    hhi without the draws; nohash: eq without the commitments; hashonly: the k chunks' commitments alone
 //
+// env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
+// kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a [-DFR_ROT=BITS] ovl.cu -lcublasLt -lnvidia-ml -ldl
 #include <cublasLt.h>
 #include <cuda.h>
@@ -73,6 +75,16 @@ __global__ void stamp(unsigned long long* o) {
   unsigned long long t;
   asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
   *o = t;
+}
+
+// CARVE=P: the commitments' and the draws' kernels prefer a P% shared-memory carveout (100: the most, as the GEMMs), so
+// an SM need not drain to switch its carveout between them and a GEMM's CTAs
+static int g_carve = -1;
+static void set_carve(int p) {
+  const void* f[] = {(const void*)fr_salt, (const void*)fr_mid0, (const void*)fr_segments, (const void*)fr_tree,
+                     (const void*)draw_stamp, (const void*)stamp};
+  for (const void* k : f) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, p));
+  g_carve = p;
 }
 
 struct OChunk {
@@ -236,9 +248,9 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   const std::vector<uint8_t> ref = roots(K);
 
   printf("{\"mode\": \"ovl_setup\", \"M\": %d, \"k_max\": %d, \"draw_us\": %d, \"plain_rb\": %d, \"levels\": %d, "
-         "\"fr_rot\": %d, \"mid_ahead\": %d, \"macs_chunk\": %.6e, \"gemm_alone_ms_chunk\": %.4f, \"mem_bytes\": {\"before\": "
+         "\"fr_rot\": %d, \"carve\": %d, \"mid_ahead\": %d, \"macs_chunk\": %.6e, \"gemm_alone_ms_chunk\": %.4f, \"mem_bytes\": {\"before\": "
          "%zu, \"att_standins\": %zu, \"activations\": %zu, \"commit_state\": %zu}, \"gemms\": [",
-         M, K, draw_us, RB, levels, FR_ROT, g_mid, macs_chunk, gemm_alone_ms, mem0, mem_kb - mem0, mem_act - mem_kb,
+         M, K, draw_us, RB, levels, FR_ROT, g_carve, g_mid, macs_chunk, gemm_alone_ms, mem0, mem_kb - mem0, mem_act - mem_kb,
          mem_cm - mem_act);
   for (int t = 0; t < NSTAGE; t++)
     printf("%s{\"stage\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"algo\": %d, \"ms_alone\": %.4f}", t ? ", " : "", SNAME[t], M,
@@ -510,7 +522,9 @@ static int run_beside(Dev& d, int M, int k, int reps) {
   std::vector<cudaEvent_t> gev(nlaunch);
   for (auto& e : gev) CK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
   const double H = (double)C * k * M * LAYERS;
-  const int cfg[][2] = {{32, 1}, {64, 1}, {128, 1}, {128, 2}, {256, 2}};
+  // threads a CTA, CTAs a SM, the hash's preferred carveout (-1 the driver's default, 100 the GEMMs' most shared memory)
+  const int cfg[][3] = {{32, 1, -1}, {64, 1, -1}, {128, 1, -1}, {128, 2, -1}, {256, 2, -1},
+                        {32, 1, 100}, {128, 1, 100}, {128, 2, 100}, {256, 2, 100}};
   uint64_t* out;
   CK(cudaMalloc(&out, (size_t)d.sms * 512 * sizeof(uint64_t)));
   unsigned long long* ts;
@@ -577,14 +591,15 @@ static int run_beside(Dev& d, int M, int k, int reps) {
          "\"gemm_mhz\": %.0f, \"need_rate\": %.4e, \"configs\": [",
          M, k, C, H, rb, g_ms, median(gm), H / (g_ms * 1e-3));
   for (size_t ci = 0; ci < sizeof cfg / sizeof cfg[0]; ci++) {
-    const int thr = cfg[ci][0], b = cfg[ci][1];
+    const int thr = cfg[ci][0], b = cfg[ci][1], carve = cfg[ci][2];
+    CK(cudaFuncSetAttribute((const void*)sha_beside, cudaFuncAttributePreferredSharedMemoryCarveout, carve));
     const int n = (int)std::ceil(H / ((double)d.sms * b * thr));
     rep(1, thr, b, n);
     std::vector<Out> v[5];
     for (int r = 0; r < reps; r++)
       for (int o = 1; o <= 4; o++) v[o].push_back(rep(o, thr, b, n));
-    printf("%s{\"thr\": %d, \"ctas_a_sm\": %d, \"n\": %d, \"slices\": %d, \"n_slice\": %d", ci ? ", " : "", thr, b, n,
-           nlaunch, (n + nlaunch - 1) / nlaunch);
+    printf("%s{\"thr\": %d, \"ctas_a_sm\": %d, \"carve\": %d, \"n\": %d, \"slices\": %d, \"n_slice\": %d", ci ? ", " : "", thr,
+           b, carve, n, nlaunch, (n + nlaunch - 1) / nlaunch);
     const char* nm[5] = {"", "alone", "hfirst", "gfirst", "spread"};
     for (int o = 1; o <= 4; o++) {
       std::sort(v[o].begin(), v[o].end(), [](const Out& a, const Out& c) { return a.ms < c.ms; });
@@ -717,6 +732,7 @@ int main(int argc, char** argv) {
   h_init();
   link_init();
   g_mid = !(getenv("MID") && atoi(getenv("MID")) == 0);
+  if (getenv("CARVE") && *getenv("CARVE")) set_carve(atoi(getenv("CARVE")));
   if (mode == "shathru") {
     sha_throughput(d);
     return 0;

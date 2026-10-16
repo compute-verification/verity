@@ -13,7 +13,8 @@ For each chunk size M and depth k (k chunks of M tokens in flight, each its own 
 - beside.jsonl: plain's GEMMs against the same tokens' commitment compressions in small CTAs at the highest priority: its
   cost launched before (hfirst) or after (gfirst) the GEMMs as one kernel, or spread (a slice after each GEMM, waiting on
   it), its rate, and the rate the GEMMs need (need_rate);
-- cells are keyed by (FR_ROT, M): FR_ROT is the build's choice of rotations on the FMA pipe (stage.cu's bits), and
+- cells are keyed by (variant, M): the variant is the build's FR_ROT (rotations on the FMA pipe, stage.cu's bits) and
+  CARVE (the commitments' and draws' kernels' preferred shared-memory carveout, when set), and
   shathru.jsonl's SHA-512 compressions a second on the whole GPU are printed by rotation choice and CTAs a SM.
 """
 from __future__ import annotations
@@ -53,10 +54,10 @@ def main() -> int:
         gates += rows(d / "gate.jsonl")
         thru += rows(d / "shathru.jsonl")
         beside += rows(d / "beside.jsonl")
-        rot = 0
+        rot = "rot0"
         for r in rows(d / "ovl.jsonl"):
             if r["mode"] == "ovl_setup":
-                rot = r.get("fr_rot", 0)
+                rot = f"rot{r.get('fr_rot', 0)}" + (f" carve{r['carve']}" if r.get("carve", -1) >= 0 else "")
                 setups[(rot, r["M"])] = r
             else:
                 ovl.append({**r, "fr_rot": rot})
@@ -72,7 +73,7 @@ def main() -> int:
               f"{b['H']:.3e} compressions (C = {b['C']}) need {b['need_rate']:.2e}/s to keep pace")
         for c in b["configs"]:
             al, hf, gf = c["alone"], c["hfirst"], c["gfirst"]
-            print(f"  {c['thr']:3d} threads x {c['ctas_a_sm']} a SM: alone {al['ms']:.1f} ms ({100 * al['of_gemm']:.1f}% of the GEMMs, "
+            print(f"  {c['thr']:3d} threads x {c['ctas_a_sm']} a SM, carveout {c.get('carve', -1):3d}: alone {al['ms']:.1f} ms ({100 * al['of_gemm']:.1f}% of the GEMMs, "
                   f"{al['hash_rate']:.2e}/s); hash first {100 * hf['cost']:+.1f}% (hash ends {hf['hash_end_ms']:.1f}, GEMMs "
                   f"{hf['gemm_end_ms']:.1f} ms, {hf['hash_rate']:.2e}/s); GEMMs first {100 * gf['cost']:+.1f}% (hash "
                   f"{gf['hash_start_ms']:.1f}-{gf['hash_end_ms']:.1f}, GEMMs {gf['gemm_end_ms']:.1f} ms)"
@@ -90,7 +91,7 @@ def main() -> int:
         s = setups.get((rot, M), {})
         mem = s.get("mem_bytes", {})
         kmax = s.get("k_max", 1)
-        print(f"\nFR_ROT = {rot}, M = {M}: one chunk's GEMMs alone {s.get('gemm_alone_ms_chunk', 0):.2f} ms; plain at saturation "
+        print(f"\n{rot}, M = {M}: one chunk's GEMMs alone {s.get('gemm_alone_ms_chunk', 0):.2f} ms; plain at saturation "
               f"{plain_best[M]:.1f} k tokens/s; memory a chunk in flight: activations "
               f"{mem.get('activations', 0) / kmax / 2**20:.0f} MiB, commitment state {mem.get('commit_state', 0) / kmax / 2**20:.0f} MiB")
         for r in sorted((x for x in ovl if x["M"] == M and x["fr_rot"] == rot), key=lambda x: x["k"]):
@@ -130,7 +131,7 @@ def main() -> int:
     print(f"\npoisoned root check: {len(root_bad)} cells off" + (f": {root_bad}" if root_bad else " (hashing arms equal, nohash differs)"))
     for rot in sorted({c["fr_rot"] for c in res["cells"]}):
         cs = [c for c in res["cells"] if c["fr_rot"] == rot]
-        print(f"\nk x chunk, FR_ROT = {rot}: the best protocol arm's cost against plain (against saturated plain)")
+        print(f"\nk x chunk, {rot}: the best protocol arm's cost against plain (against saturated plain)")
         ks = sorted({c["k"] for c in cs})
         Ms = sorted({c["M"] for c in cs})
         print("  k \\ M " + "".join(f"{M:>24d}" for M in Ms))
