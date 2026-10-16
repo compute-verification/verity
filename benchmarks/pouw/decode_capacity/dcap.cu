@@ -946,6 +946,9 @@ static int dgate(Dev& d) {
       fails += bad != 0 || ctl_equal != 0;
       CK(cudaFree(f.rec));
     }
+#ifdef DFILL_GATE_EXTRA
+  fails += DFILL_GATE_EXTRA(g_c0, g_c1);  // the filler's own host check at the round's coins (pfill-bU's uniformity)
+#endif
   fflush(stdout);
   return fails;
 }

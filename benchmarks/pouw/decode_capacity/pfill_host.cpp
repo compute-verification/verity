@@ -21,7 +21,19 @@ inline uint64_t dseed(uint64_t c0, uint64_t c1, uint64_t tile) { return smix(smi
 
 #include "pfill.cuh"
 
-extern "C" uint64_t pfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int e2m1) {
-  return dfill_ref_kind(c0, c1, tile, nc, steps, e2m1 != 0);
+extern "C" uint64_t pfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int kind) {
+  return dfill_ref_kind(c0, c1, tile, nc, steps, kind);
 }
 extern "C" uint32_t pfill_e2m1x8(uint32_t byte) { return pf_e2m1x8(byte); }
+extern "C" uint32_t pfill_s8x4(uint32_t nib, int kind) { return kind == PF_BU ? pf_s8x4<PF_BU>(nib) : pf_s8x4<PF_S8>(nib); }
+extern "C" uint32_t pfill_u4(uint32_t x) { return pf_u4(x); }
+extern "C" void pfill_bu_hist(uint64_t c0, uint64_t c1, int tiles, int frags, uint64_t* hu, uint64_t* ha) {
+  pf_bu_hist(c0, c1, tiles, frags, hu, ha);
+}
+// the gate's verdict and statistics: ok, then u_chi2 and a_chi2 in chi2[0], chi2[1]
+extern "C" int pfill_bu_uniform(uint64_t c0, uint64_t c1, int tiles, int frags, double* chi2) {
+  const PfUniform r = pf_bu_uniform(c0, c1, tiles, frags);
+  chi2[0] = r.u_chi2;
+  chi2[1] = r.a_chi2;
+  return r.ok;
+}
