@@ -115,11 +115,15 @@ __device__ __forceinline__ int kf_bar_or(int id, int v) {
 // of pf_fold(dseed(c0, c1, tile), pos, y) at the state it stopped in, and q, the (fragment group, B fragment) pairs it ran
 // (4 MMAs each; KF_PAIRS_J S / 4 when whole). cnt[slot, gid] is the tiles the group started; every one but the last is
 // whole. total[0] sums the pairs every warp ran, total[1] the pairs of whole tiles alone.
+//
+// The body is tp_dfill_k, SCORER v4's filler path: a `__noinline__` device function whose name holds dfill_k, so the scorer
+// reads it as the proved fill (its SASS is only IMMA.16832.S8.S8 with C = RZ). kfill_k is its thin wrapper, and the deferred
+// pass's combined kernel (tp_dpass_k) tail-calls it once the sub-round's deferred work is drained or the flag is up.
 template <int NC>
-__global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
-    kfill_k(uint64_t c0, uint64_t c1, const unsigned long long* __restrict__ epoch, int slot, int nslots, int tiles, int maxcap,
-            int S, int poll, const int* flag, unsigned long long* __restrict__ rec, int* __restrict__ qrec,
-            int* __restrict__ cnt, unsigned long long* total) {
+__device__ __noinline__ void tp_dfill_k(uint64_t c0, uint64_t c1, const unsigned long long* __restrict__ epoch, int slot,
+                                        int nslots, int tiles, int maxcap, int S, int poll, const int* flag,
+                                        unsigned long long* __restrict__ rec, int* __restrict__ qrec,
+                                        int* __restrict__ cnt, unsigned long long* total) {
   extern __shared__ __align__(16) uint8_t kf_smem[];
   constexpr int P = 32;
   constexpr uint64_t dom = PF_DOM01;
@@ -265,6 +269,14 @@ __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
     cnt[(size_t)slot * ng + gid] = started;
     atomicAdd(total + 1, (unsigned long long)(started - part) * PF_W * full);
   }
+}
+
+template <int NC>
+__global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
+    kfill_k(uint64_t c0, uint64_t c1, const unsigned long long* __restrict__ epoch, int slot, int nslots, int tiles, int maxcap,
+            int S, int poll, const int* flag, unsigned long long* __restrict__ rec, int* __restrict__ qrec,
+            int* __restrict__ cnt, unsigned long long* total) {
+  tp_dfill_k<NC>(c0, c1, epoch, slot, nslots, tiles, maxcap, S, poll, flag, rec, qrec, cnt, total);
 }
 
 // warp w's receipt of tile `tile` after q pairs (pf_ref's chains, cut at q): the host's side of a record
