@@ -4,7 +4,8 @@ the arm contract: `arms.py`; the device driver: `dscore.cu`.
 
   python3 benchmarks/pouw/filler/score.py ARM [--rounds 8] [--reps 3] [--no-robust]   build, lease one GPU, measure, report
   python3 benchmarks/pouw/filler/score.py measure ARM --bin DIR --out DIR             the measurement, inside a lease
-  python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v2]           score a measured run's out dir
+  python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v5] [--coins]  score a measured run's out dir
+  python3 benchmarks/pouw/filler/score.py tp-report OUT... --bin|--nvd X [--noise]    SCORE-TP of tpcomm.sh out dirs (v5)
   python3 benchmarks/pouw/filler/score.py check ARM                                   the arm's contract and record limits
   python3 benchmarks/pouw/filler/score.py --leaderboard [--refresh] [--local DIR ...] every filler attempt, best first
 
@@ -45,6 +46,13 @@ dscore's and the drivers' nvdisasm. The theorem entries' SASS checks read the `d
 filler warps run refuses the arm (gate `filler_paths`); other MMAs are serving's; a block's fixed work counts only from
 spot-checked public tiles of a binary the scorer read (`credit_fixed`); and the honest gate bounds the whole kernel's
 MACs, serving's and the filler warps', by its SMs' peak (`whole_of_peak`). `scoring.UNCHECKED_V4` is what it can't see.
+
+filler-scorer/v5 (prepared, not active: `report OUT --as v5`) keeps v4's gates, the slowdown gate on the measured step
+against clean serving. It reads the receipt's fold (`scoring.fold_reading`) from `Filler.fold` or the lineage's receipt
+tag and the build's `fold_facts`: ram halves a theorem entry, duo and XOR-in read in full where the build confirms
+them. Its SCORE is the measured filler part plus a MODELLED served part (`scoring.score_v5`): every served MAC at
+Theorem K's 0.9 over the wall time the edited design would take (`scoring.served_model`'s named constants and their
+sources; `--coins` sets prefill's coins factor). `tp-report` reads HC-COMM's TP suite (`scoring.tp_score`).
 """
 
 from __future__ import annotations
@@ -137,8 +145,8 @@ def nvdisasm(binary: Path) -> str:
 def program_build(bdir: Path, out: Path, log: Path) -> dict:
     """filler-scorer/v4's part of the build: each CUDA driver the arm lists in its sources besides dcap.cu and dscore.cu
     (fscore.cu, pscore.cu) compiled as ``bdir/<stem>`` with dscore's flags, and `scoring.program_facts` over dscore's and
-    the drivers' nvdisasm. It never fails the build: what it can't build or read is recorded, and v4 reads such a build
-    at the floor."""
+    the drivers' nvdisasm, and filler-scorer/v5's `scoring.fold_facts` over the same at the arm's NC. It never fails the
+    build: what it can't build or read is recorded, and v4 reads such a build at the floor."""
     doc = json.loads((out / "arm.json").read_text()) if (out / "arm.json").is_file() else {}
     drivers, unbuilt = {"dscore": bdir / "dscore"}, {}
     for s in doc.get("sources") or ():
@@ -150,10 +158,12 @@ def program_build(bdir: Path, out: Path, log: Path) -> dict:
             else:
                 drivers[p.stem] = bdir / p.stem
     try:
-        pf, why = S.program_facts({k: nvdisasm(v) for k, v in drivers.items()}), None
+        listings = {k: nvdisasm(v) for k, v in drivers.items()}
+        pf, why = S.program_facts(listings), None
+        ff = S.fold_facts(listings, (doc.get("filler") or {}).get("NC", 4))
     except (OSError, RuntimeError, subprocess.CalledProcessError) as ex:
-        pf, why = None, f"{type(ex).__name__}: {ex}"
-    return {"program_facts": pf, "program_facts_why": why, "drivers_unbuilt": unbuilt}
+        pf, ff, why = None, None, f"{type(ex).__name__}: {ex}"
+    return {"program_facts": pf, "program_facts_why": why, "drivers_unbuilt": unbuilt, "fold_facts": ff}
 
 
 def smi(out: Path) -> None:
@@ -244,9 +254,10 @@ def rows(path: Path) -> list[dict]:
     return [json.loads(ln) for ln in path.read_text().splitlines() if ln.strip().startswith("{")] if path.is_file() else []
 
 
-def report(out: Path, arm=None, version: str | None = None) -> dict:
+def report(out: Path, arm=None, version: str | None = None, coins: float = S.PREFILL_COINS) -> dict:
     """The run's result under `version` (the active `scoring.SCORER` by default), written to ``score.json`` only under the
-    active one: another version's (``report --as v3``) is a preview."""
+    active one: another version's (``report --as v3``) is a preview. Under filler-scorer/v5, `coins` is prefill's
+    per-stage coins factor (`scoring.PREFILL_COINS`)."""
     version = version or S.SCORER
     doc = json.loads((out / "arm.json").read_text())
     if arm is None:
@@ -257,18 +268,30 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
     drows = rows(out / "dscore.jsonl")
     has_filler = doc["filler"] is not None
     build = json.loads((out / "build.json").read_text()) if (out / "build.json").is_file() else {}
-    entry, pf, credit = None, build.get("program_facts"), None
-    if version == S.V4 and has_filler:
+    entry, pf, credit, fold, v5 = None, build.get("program_facts"), None, None, None
+    if version in (S.V4, S.V5) and has_filler:
         drows, credit = S.credit_fixed(drows, pf)
         unread = {r.get("driver", "dscore") for r in drows} - set(pf["binaries"] if pf else ())
-        entry = S.filler_entry_v4(doc["filler"].get("noise"), pf, unread=sorted(unread))
+        if version == S.V4:
+            entry = S.filler_entry_v4(doc["filler"].get("noise"), pf, unread=sorted(unread))
+        else:
+            declared, how = S.declared_fold(doc["filler"], doc.get("lineage"))
+            flags = (build["nvcc_append_flags"] or "") if "nvcc_append_flags" in build else None
+            fold = S.fold_reading(declared, doc["filler"].get("NC"), flags, build.get("fold_facts"), how)
+            entry = S.filler_entry_v5(doc["filler"].get("noise"), pf, fold, unread=sorted(unread))
     stats = {("decode" if r["kind"] == "step" else "prefill", r["B"], r["L"]): S.point_stats(r) for r in drows}
     if version == S.V3 and has_filler:
         fixed = any((b.get(side) or {}).get("fixed_ms") for r in drows for b in r["blocks"] for side in ("arm", "solo"))
         entry = S.filler_entry(doc["filler"].get("noise"), build.get("kernel_facts"), fixed_work=fixed)
-    sc = S.score(stats, S.certified(entry["active"]) if entry else S.CERTIFIED)
-    if entry and entry["applies"] != entry["active"]:
-        entry["score_if_active"] = S.score(stats, S.certified(entry["applies"])).get("SCORE")
+    if version == S.V5:
+        sc = S.score(stats, S.certified_v5(entry) if entry else S.CERTIFIED)
+        v5 = S.score_v5(stats, entry["active_fraction"] if entry else 0.0, coins)
+        if entry and entry["applies"] != entry["active"]:
+            entry["score_if_active"] = S.score_v5(stats, entry["fraction"], coins).get("SCORE")
+    else:
+        sc = S.score(stats, S.certified(entry["active"]) if entry else S.CERTIFIED)
+        if entry and entry["applies"] != entry["active"]:
+            entry["score_if_active"] = S.score(stats, S.certified(entry["applies"])).get("SCORE")
     under_ch = S.score(stats, S.certified(S.UNDER_CH)).get("SCORE") if entry else sc.get("SCORE")
     sg = rows(out / "sgate.jsonl")
     def read(p):
@@ -277,7 +300,7 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
     dram = S.dram_gate(read(out / "ncu-filler.csv") if has_filler else None, read(out / "ncu-control.csv"))
     clocks = S.clock_gate(stats, S.parse_smi(read(out / "smi.csv") or ""))
     whole = ({f"{'decode' if r['kind'] == 'step' else 'prefill'} {r['B']}/{r['L']}": S.whole_of_peak(r) for r in drows}
-             if version == S.V4 else None)
+             if version in (S.V4, S.V5) else None)
     honest = (S.honesty(arm, stats, S.points(), control=control_stats(out), has_filler=has_filler, whole=whole)
               if arm is not None else {"ok": False, "why": f"arm {doc['name']} can't be loaded to check its placement"})
     g = S.gates(stats, sc, has_filler=has_filler, sgate=sg[0] if sg else None, dgate=rows(out / "dgate.jsonl"),
@@ -286,7 +309,7 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
     serving_gate = rows(out / "gate.jsonl")
     g["serving_exact"] = {"ok": bool(serving_gate) and all(r.get("ok") is not False for r in serving_gate),
                           "rows": len(serving_gate)}
-    if version == S.V4:
+    if version in (S.V4, S.V5):
         g["filler_paths"] = S.paths_gate(pf) if has_filler else {"ok": True, "why": "no filler"}
     g["ok"] = g["ok"] and g["serving_exact"]["ok"] and g.get("filler_paths", {"ok": True})["ok"]
     res = {"scorer": version, "arm": doc["name"], "interface": doc["interface"], "lineage": doc["lineage"],
@@ -298,13 +321,20 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
            "flags": sc["flags"], "certified": sc["certified"], "gates": g, "missing": sc["missing"],
            "entries": sc["entries"], "secondary": S.secondary(stats, sc),
            "points": {f"{k[0]} {k[1]}/{k[2]}": v for k, v in stats.items()}}
-    if version in (S.V3, S.V4):
+    if version in (S.V3, S.V4, S.V5):
         res["margins"] = S.margins(stats)
         res["filler_entry"] = entry
         res |= {"score_under_ch": under_ch if g["ok"] else None, "score_under_ch_if_gated": under_ch}
-    if version == S.V4:
+    if version in (S.V4, S.V5):
         res["fixed_credit"] = credit
         res["program_facts_why"] = build.get("program_facts_why")
+    if version == S.V5:
+        res |= {"SCORE": v5.get("SCORE") if g["ok"] else None, "score_if_gated": v5.get("SCORE"),
+                "filler_part": v5.get("filler_part"), "served_part": v5.get("served_part"), "min": v5.get("min"),
+                "scored": g["ok"] and "SCORE" in v5, "v4_form": sc.get("SCORE"), "entries_v5": v5["entries"],
+                "served_model": v5["served_model"], "fold": fold}
+        res.pop("score_under_ch")
+        res.pop("score_under_ch_if_gated")
     if version == S.SCORER:
         (out / "score.json").write_text(json.dumps(res, indent=1))
     return res
@@ -315,7 +345,7 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
 
     lin = doc["lineage"]
     g = res["gates"]
-    v3 = res["scorer"] in (S.V3, S.V4)
+    v3 = res["scorer"] in (S.V3, S.V4, S.V5)
     meta = {
         "schema": ledger.KIND, "time": ledger.now(), "run": res["run"], "run_id": res["run"], "harness": res["commit"],
         "tier": "2a", "by": by, "arm": res["arm"], "shape": SHAPE, "phase": "serving-suite", "scorer": res["scorer"],
@@ -339,9 +369,11 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
     if v3:
         mg = res["margins"]
         meta["metrics"] |= {"margin_min": mg["min"], "no_margin": mg["no_margin"],
-                            "margins": {k: m["margin"] for k, m in mg["points"].items() if m["scored"]},
-                            "score_under_ch": res["score_under_ch"],
-                            "score_under_ch_if_gated": res["score_under_ch_if_gated"]}
+                            "margins": {k: m["margin"] for k, m in mg["points"].items() if m["scored"]}}
+        meta["metrics"] |= {k: res[k] for k in ("score_under_ch", "score_under_ch_if_gated", "filler_part", "served_part",
+                                                "v4_form") if k in res}
+        if res.get("fold"):
+            meta["fold"] = {k: res["fold"][k] for k in ("declared", "signature", "fold", "share")}
         fe = res["filler_entry"]
         meta["filler_entry"] = fe and {k: fe.get(k) for k in ("applies", "active", "noise", "fraction", "checks",
                                                               "failed", "kernel", "score_if_active")}
@@ -380,6 +412,34 @@ def show_margins(mg: dict) -> None:
           f"{', '.join(mg['no_margin']) or 'none'}")
 
 
+def show_served_model(sm: dict) -> None:
+    c = sm["constants"]
+    print("  MODELLED served component (the harness serves plain int8): "
+          + ", ".join(f"{k} {fmt(v)}" for k, v in c.items()))
+    for k, src in sm["sources"].items():
+        print(f"    {k}: {src}")
+    print(f"    model: {sm['model']}")
+
+
+def show_v5(res: dict) -> None:
+    fd, fe = res.get("fold"), res.get("filler_entry") or {}
+    print(f"  SCORE = measured filler part {fmt(res['filler_part'])} + modelled served part {fmt(res['served_part'])}"
+          f" (v4's arithmetic, served plain at {S.CERTIFIED['serving']['fraction']}, with v5's fold: "
+          f"{fmt(res['v4_form'])})")
+    if fd:
+        print(f"  fold: {fd['fold']} (share {fd['share']}), declared {fd['declared']} by {fd['declared_by']}, the SASS "
+              f"shows {fd['signature']}, NC {fd['nc']}, NVCC_APPEND_FLAGS {fd['flags']!r}"
+              + "".join(f"\n    {w}" for w in fd["why"]))
+        print(f"  filler entry {fe.get('applies')}: {fe.get('unfolded')} unfolded, {fe.get('fraction')} folded")
+    show_served_model(res["served_model"])
+    print("\n| entry | coverage | filler part | served part | t1 measured ms | t1 modelled ms | filler MACs measured → "
+          "modelled |\n|---|---|---|---|---|---|---|")
+    for e in res["entries_v5"]:
+        print(f"| {e['entry']} | {fmt(e['coverage'])} | {fmt(e['filler_part'])} | {fmt(e['served_part'])} | "
+              f"{fmt(e['t1_measured_ms'], 2)} | {fmt(e['t1_ms'], 2)} | {e['filler_measured_macs']:.3g} → "
+              f"{e['filler_macs']:.3g} |")
+
+
 def show(res: dict) -> None:
     g = res["gates"]
     print(f"\n{res['arm']} ({res['variant']}), {res['scorer']}"
@@ -394,6 +454,8 @@ def show(res: dict) -> None:
               + ("of the fixed work v4 credits" if res["scorer"] == S.V4 else "v2's reading, for comparison")
               + f"): {fmt(res['score_under_ch'])}" + ("" if res["scored"] else
                                                       f" ({fmt(res['score_under_ch_if_gated'])} if gated)"))
+    if res["scorer"] == S.V5:
+        show_v5(res)
     for f in res["flags"]:
         print(f"  FLAG: {f}")
     fe = res.get("filler_entry")
@@ -507,6 +569,103 @@ def leaderboard(local: list[Path], refresh: bool, as_json: bool) -> int:
     return 0
 
 
+#: what SCORE-TP's gates can't check from tpcomm.sh's out dirs
+TP_UNCHECKED = (
+    "replay: tpcomm's filler rounds carry no tile range the scorer fixes, so no anti-replay check",
+    "serving_exact: tpcomm records no serving gate rows",
+    "honest: no positive control and no standalone blocks (the too-good check); the whole-of-peak bound is read",
+    "prefill: the TP suite is decode only, so the modelled served part has no prefill term")
+
+
+def _text(p: Path) -> str | None:
+    return p.read_text().strip() if p.is_file() else None
+
+
+def tp_report(outs: list[Path], listings: dict | None, noise: str | None, fold: str | None,
+              facts_from: str | None = None) -> dict:
+    """SCORE-TP (filler-scorer/v5, prepared): tpcomm.sh's out dirs (HC-COMM's TP suite, note:20261016T0748Z-draft-hc-comm
+    round 2), read together. The filler is read at v5's entry (`scoring.filler_entry_v5`) from the TP build's program
+    and fold facts at `scoring.TP_FILLER` (`listings`: the tpcomm binary's nvdisasm; None reads the filler at the
+    floor), with the declared noise and fold; each (TP, B, L) at `scoring.tp_entry`; the gates are `scoring.tp_gates`,
+    each out dir's DRAM (ncu, `scoring.TP_NCU_KERNEL`) and clocks (application clocks at their default, every rep's
+    clock read), and the whole kernel's MACs, served and filler, within each rank's peak."""
+    sets, by = [], {}
+    for out in outs:
+        for sd in sorted(p for p in out.glob("set*") if p.is_dir()):
+            rws = S.tp_rows({int(p.stem.removeprefix("rank")): p.read_text() for p in sd.glob("rank*.jsonl")})
+            sets.append({"dir": f"{out.parent.name}/{sd.name}", "settings": _text(sd / "settings.txt") or "", "rows": rws})
+            for k, arms_ in rws["arms"].items():
+                for arm, reps in arms_.items():
+                    by.setdefault(k, {}).setdefault(arm, []).extend(reps)
+    pf = S.program_facts(listings, S.TP_FILLER) if listings else None
+    ff = S.fold_facts(listings, 4, S.TP_FILLER) if listings else None
+    fd = S.fold_reading(fold, None, None, ff, "--fold" if fold else "undeclared")
+    entry = S.filler_entry_v5(noise, pf, fd)
+    entries = {k: S.tp_entry(v, k, entry["active_fraction"]) for k, v in sorted(by.items())
+               if v.get("base") and v.get("phase")}
+    g = S.tp_gates(sets, entries, pf)
+    dram, clocks = [], []
+    for out in outs:
+        dram.append({"dir": out.parent.name, **S.dram_gate(_text(out / "ncu-filler.csv"), _text(out / "ncu-control.csv"),
+                                                          S.TP_NCU_KERNEL)})
+        smi = S.parse_smi("\n".join(ln.split(",", 2)[2] for ln in (_text(out / "gpu.txt") or "").splitlines()
+                                    if ln.count(",") >= 8))
+        set_ = [r for r in smi if r.get("app_mhz") not in (None, r.get("default_app_mhz"))]
+        clocks.append({"dir": out.parent.name, "ok": bool(smi) and not set_, "smi_rows": len(smi),
+                       "app_clock_set": len(set_), "mhz": [min(r["mhz"] for r in smi), max(r["mhz"] for r in smi)]
+                       if smi else None})
+    unread = [f"{s['dir']} {k} {a}" for s in sets for k, by_ in s["rows"]["arms"].items() for a, reps in by_.items()
+              for ranks in reps for x in ranks if any(len(r) < 3 or not r[1] for r in x["reps"])]
+    whole = [((x["served_macs"] + x["fill_macs_rep"]) / (S.cap(x["mhz"]) * x["ms"] * 1e-3), f"{k} rank {x['rank']}")
+             for k, v in by.items() for ranks in v.get("phase", []) for x in ranks]
+    g["dram"] = {"ok": bool(dram) and all(d["ok"] for d in dram), "dirs": dram}
+    g["clocks"] = {"ok": bool(clocks) and all(c["ok"] for c in clocks) and not unread, "dirs": clocks,
+                   "reps_without_clock": unread[:4]}
+    wmax = max(whole, default=(None, None))
+    g["honest"] = {"ok": bool(whole) and wmax[0] <= 1.0, "whole_of_peak_max": wmax[0], "at": wmax[1]}
+    g["ok"] = all(v["ok"] for v in g.values())
+    sc = S.tp_score(list(entries.values()))
+    return {"scorer": S.V5, "reading": "SCORE-TP (prepared, not active)", "outs": [str(o) for o in outs],
+            "commits": sorted({_text(o / "commit.txt") or "?" for o in outs}), "facts_from": facts_from,
+            "SCORE_TP": sc.get("SCORE_TP") if g["ok"] else None, "score_tp_if_gated": sc.get("SCORE_TP"),
+            "filler_part": sc.get("filler_part"), "served_part": sc.get("served_part"), "v4_form": sc.get("v4_form"),
+            "by_tp": sc["by_tp"], "missing": sc["missing"], "entries": list(entries.values()), "gates": g,
+            "filler_entry": entry, "fold": fd, "served_model": S.served_model(), "unchecked": list(TP_UNCHECKED)}
+
+
+def show_tp(res: dict) -> None:
+    g, fe, fd = res["gates"], res["filler_entry"], res["fold"]
+    print(f"\n{res['reading']}, {res['scorer']}: SCORE-TP {fmt(res['SCORE_TP'])}"
+          + ("" if res["SCORE_TP"] is not None else f" (not scored; {fmt(res['score_tp_if_gated'])} if gated)")
+          + f" = measured filler part {fmt(res['filler_part'])} + modelled served part {fmt(res['served_part'])}; "
+          f"v4's form (served plain at {S.CERTIFIED['serving']['fraction']}) {fmt(res['v4_form'])}")
+    print(f"  runs at {', '.join(c[:9] for c in res['commits'])}; filler facts from {res['facts_from'] or 'the runs'}")
+    print(f"  filler entry {fe['applies']} ({fe['fraction']}, {fe['unfolded']} unfolded); fold {fd['fold']} (SASS "
+          f"{fd['signature']}, declared {fd['declared']})" + "".join(f"\n    not {k}: {w}" for k, ws in fe["failed"].items()
+                                                              for w in ws[:2]))
+    show_served_model(res["served_model"])
+    for name, v in g.items():
+        if name != "ok":
+            print(f"  gate {name}: {'pass' if v['ok'] else 'FAIL'}  "
+                  + {"slowdown": lambda: f"worst {fmt(v.get('worst'))} at {v.get('at')}",
+                     "filler_paths": lambda: v.get("why") or f"{v.get('callers')} callers",
+                     "honest": lambda: f"whole kernel ≤ {fmt(v.get('whole_of_peak_max'))} of peak",
+                     "receipts": lambda: f"{v['checked']} checked" + (f", bad: {v['bad']}" if v["bad"] else ""),
+                     "pf_gate": lambda: f"{v['ranks']} ranks" + (f": {v['why']}" if v["why"] else "")}.get(name, lambda: "")())
+    print("  unchecked: " + "; ".join(res["unchecked"]))
+    print("\n| entry | slowdown | coverage | filler part | served part | v4 form | step ms base / phase / modelled |\n"
+          "|---|---|---|---|---|---|---|")
+    for e in res["entries"]:
+        print(f"| {e['entry']} | {fmt(e['slowdown'], 4)} | {fmt(e['coverage'])} | {fmt(e['filler_part'])} | "
+              f"{fmt(e['served_part'])} | {fmt(e['coverage_v4_form'])} | {fmt(e['t0_ms'], 2)} / "
+              f"{fmt(e['t1_measured_ms'], 2)} / {fmt(e['t1_ms'], 2)} |")
+    for t, v in res["by_tp"].items():
+        print(f"TP {t}: coverage {fmt(v['coverage'])} = {fmt(v['filler_part'])} + {fmt(v['served_part'])} (v4 form "
+              f"{fmt(v['coverage_v4_form'])})")
+    if res["missing"]:
+        print(f"missing entries: {', '.join(res['missing'])}")
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] == "--leaderboard":
@@ -521,11 +680,29 @@ def main(argv=None) -> int:
         ap = argparse.ArgumentParser(prog="score.py report")
         ap.add_argument("out", type=Path)
         ap.add_argument("--json", action="store_true")
-        ap.add_argument("--as", dest="version", choices=("v2", "v3", "v4"),
+        ap.add_argument("--as", dest="version", choices=("v2", "v3", "v4", "v5"),
                         help="score under this version (default the active lock); another's is a preview, not written")
+        ap.add_argument("--coins", type=float, default=S.PREFILL_COINS,
+                        help="v5: prefill's per-stage coins over its GEMMs (scoring.PREFILL_COINS)")
         a = ap.parse_args(argv[1:])
-        res = report(a.out, version={"v2": S.V2, "v3": S.V3, "v4": S.V4}.get(a.version))
+        res = report(a.out, version={"v2": S.V2, "v3": S.V3, "v4": S.V4, "v5": S.V5}.get(a.version), coins=a.coins)
         print(json.dumps(res, indent=1)) if a.json else show(res)
+        return 0
+    if argv and argv[0] == "tp-report":
+        ap = argparse.ArgumentParser(prog="score.py tp-report", description="SCORE-TP (filler-scorer/v5, a preview) of "
+                                     "tpcomm.sh out dirs, together")
+        ap.add_argument("outs", type=Path, nargs="+")
+        src = ap.add_mutually_exclusive_group()
+        src.add_argument("--bin", type=Path, help="the tpcomm binary the runs ran (read with nvdisasm)")
+        src.add_argument("--nvd", type=Path, help="its nvdisasm -c listing")
+        ap.add_argument("--facts-from", help="a label: where --bin/--nvd's build comes from, if not the runs' commit")
+        ap.add_argument("--noise", default=None, help=f"the TP filler's declared operands, one of {A.NOISE}")
+        ap.add_argument("--fold", default=None, help=f"its declared fold, one of {A.FOLDS} (undeclared: ram)")
+        ap.add_argument("--json", action="store_true")
+        a = ap.parse_args(argv[1:])
+        listings = {"tpcomm": nvdisasm(a.bin)} if a.bin else {"tpcomm": a.nvd.read_text()} if a.nvd else None
+        res = tp_report(a.outs, listings, a.noise, a.fold, a.facts_from)
+        print(json.dumps(res, indent=1, default=str)) if a.json else show_tp(res)
         return 0
     if argv and argv[0] == "check":
         ap = argparse.ArgumentParser(prog="score.py check", description="an arm against the contract and its record's "
@@ -562,7 +739,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.out is None:
         ap.error("--out (or $OUT, as research run sets it)")
-    arm = A.load(a.arm, record=S.SCORER in (S.V3, S.V4))
+    arm = A.load(a.arm, record=S.SCORER in (S.V3, S.V4, S.V5))
     out = a.out / arm.name
     out.mkdir(parents=True, exist_ok=True)
     doc = {**arm_doc(arm), "spec": a.arm}
