@@ -102,6 +102,22 @@ int main(int argc, char** argv) {
   SP(cusparseLtMatmulDescriptorInit(&h, &mm, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, &mA, &mB,
                                     &mC, &mC, CUSPARSE_COMPUTE_32F));
 
+  // FP4 (E2M1) requires a block-scale mode.  A uniform scale of 1.0 (UE4M3 code 0x38) is layout-independent, so a
+  // generously-sized all-0x38 array works and the scalar alpha carries any per-operand scale.
+  cusparseLtMatmulMatrixScale_t smode = CUSPARSELT_MATMUL_MATRIX_SCALE_VEC32_UE4M3;
+  SP(cusparseLtMatmulDescSetAttribute(&h, &mm, CUSPARSELT_MATMUL_A_SCALE_MODE, &smode, sizeof smode));
+  SP(cusparseLtMatmulDescSetAttribute(&h, &mm, CUSPARSELT_MATMUL_B_SCALE_MODE, &smode, sizeof smode));
+  uint8_t *dSA, *dSB;
+  size_t scaleBytes = size_t(M) * K / 16;  // generous (VEC32 needs K/32 per row); all 1.0
+  CK(cudaMalloc(&dSA, scaleBytes));
+  CK(cudaMalloc(&dSB, size_t(K) * N / 16));
+  CK(cudaMemset(dSA, 0x38, scaleBytes));
+  CK(cudaMemset(dSB, 0x38, size_t(K) * N / 16));
+  void* pSA = dSA;
+  void* pSB = dSB;
+  SP(cusparseLtMatmulDescSetAttribute(&h, &mm, CUSPARSELT_MATMUL_A_SCALE_POINTER, &pSA, sizeof pSA));
+  SP(cusparseLtMatmulDescSetAttribute(&h, &mm, CUSPARSELT_MATMUL_B_SCALE_POINTER, &pSB, sizeof pSB));
+
   cusparseLtMatmulAlgSelection_t alg;
   SP(cusparseLtMatmulAlgSelectionInit(&h, &alg, &mm, CUSPARSELT_MATMUL_ALG_DEFAULT));
   cusparseLtMatmulPlan_t plan;
