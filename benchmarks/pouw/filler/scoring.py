@@ -150,24 +150,27 @@ def of_peak(row: dict, reps: list) -> float:
 def point_stats(row: dict) -> dict:
     """A `dscore` row's numbers: the paired slowdown (median over rounds of the arm block's median rep over the alone
     block's), both sides' median time, clock and power, the filler's rate over its windows and its per-block spread, and
-    its standalone reference: the median of the interleaved standalone blocks' rates, with the too-good limit set from
-    their spread (rows without them: the one calibration and TOO_GOOD)."""
+    its standalone reference: the median of the interleaved standalone blocks' rates of the split filler's chunks, with
+    the too-good limit set from their spread (rows without them: the one calibration, against the whole rate, and
+    TOO_GOOD). An arm-side filler's fixed work is not in that comparison: alone it runs at its full rate where beside
+    serving it gets a share, which would hide an inflated split; its tiles are a count its driver checks."""
     al = [r for b in row["blocks"] for r in b["alone"]["reps"]]
     ar = [r for b in row["blocks"] for r in b["arm"]["reps"]]
     pairs = [_med([r[0] for r in b["arm"]["reps"]]) / _med([r[0] for r in b["alone"]["reps"]]) for b in row["blocks"]]
     fill = row["place"] != "none"
-    rate, cv, solo = 0.0, None, []
+    rate, split, cv, solo = 0.0, 0.0, None, []
     if fill:
         rate, per = fill_rate([b["arm"] for b in row["blocks"]], row["chunk_macs"])
+        split = fill_parts([b["arm"] for b in row["blocks"]], row["chunk_macs"])[0]
         cv = statistics.pstdev(per) / statistics.mean(per) if len(per) > 1 and statistics.mean(per) > 0 else None
-        solo = [x for b in row["blocks"] if "solo" in b for x in fill_rate([b["solo"]], row["chunk_macs"])[1]]
+        solo = [x for b in row["blocks"] if "solo" in b if (x := fill_parts([b["solo"]], row["chunk_macs"])[0]) > 0]
     cal = row["alone_fill"]["mac_per_s"] if fill else 0.0
     if len(solo) >= 2:
-        ref = _med(solo)
+        ref, beside = _med(solo), split
         spread = solo_spread(solo)
         limit = 1 + max(TOO_GOOD_FLOOR, spread)
     else:
-        ref, spread, limit = cal, None, TOO_GOOD
+        ref, beside, spread, limit = cal, rate, None, TOO_GOOD
     pw = row.get("power") or {}
     return {
         "slowdown": _med(pairs), "slowdown_rounds": pairs, "alone_ms": _med([r[0] for r in al]),
@@ -176,7 +179,7 @@ def point_stats(row: dict) -> dict:
         "clock_reads": sum(1 for r in al + ar if r[1] > 0), "power_reads": sum(1 for r in al + ar if r[2] > 0),
         "reps": len(al) + len(ar), "fill_rate": rate, "fill_rate_alone": ref, "fill_rate_cv": cv,
         "solo_rates": solo, "solo_spread": spread, "too_good_limit": limit,
-        "beside_over_alone": rate / ref if fill and ref else None,
+        "beside_over_alone": beside / ref if fill and ref else None,
         "beside_over_calibration": rate / cal if fill and cal else None,
         "power_settled": {k: pw[k]["watt"] for k in ("alone", "arm", "filler_alone") if k in pw},
         "of_peak": of_peak(row, ar) if fill and row["fill_sms"] else None,
@@ -446,9 +449,9 @@ def _too_good(v: dict) -> bool:
 
 def honesty(arm, stats: dict, phases_points, *, control: dict | None = None, has_filler: bool = False) -> dict:
     """The arm's placement is a pure function of the point (asked twice, the same answer); no filler ran faster beside
-    serving than alone on the same SMs (beside ÷ the median of the round-interleaved standalone blocks above
-    1 + max(TOO_GOOD_FLOOR, their trimmed spread, `solo_spread`); such a result goes to the assessor), and every filler
-    point has that reference;
+    serving than alone on the same SMs (its split's chunks beside ÷ the median of the round-interleaved standalone
+    blocks' above 1 + max(TOO_GOOD_FLOOR, their trimmed spread, `solo_spread`); such a result goes to the assessor), and
+    every filler point has that reference;
     none ran above its SMs' int8 tensor peak at the clock its blocks read; and, with a filler, the positive control (a
     filler credited for S steps a tile that runs S - S/CHEAT beside serving and S alone, `control`) is caught as too good,
     so the check can see a dishonest arm at the run's own spread."""
