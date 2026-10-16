@@ -26,28 +26,15 @@ import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.RootFindGF128
 import Proofs.Flock.Claims.GS
+import Proofs.Flock.Claims.DeployRounds
+import Proofs.Flock.Claims.DeployRoundsZk
+import Proofs.Flock.Claims.DeployK
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
 
-The claims' lemmas sit under `Proofs.Flock.Claims`: uniform-coin probability (`Prob`), `B`'s soundness and the
-finders' Cauchy–Schwarz aggregation (`Finder`, `Aggregate`), the `Bits` corollary of `KS` (`Bits`), `E^rep`'s
-reruns and amplification (`ERep`), `ERepCost` (`ERepCost`), and a decoder that meets the list-decoding spec's earlier
-`nMin` form (`Flock.ListComplete`, kept in `Decode`) at the Johnson count for interleaved Reed–Solomon codes, from
-ArkLib's Guruswami–Sudan decoder (`Decode`), that decoder at Flock's level-0 code (`DecodeFlock`), and at the masked
-(`--zk`) level-0 code, with its read step (`ZkDecode`); a family of such decoders read as one (`DecodeFamily`), the
-masked verifier's deployed code at each `m` it serves (`ZkDecodeFlock`), a masked run's opened level-0 columns
-(`ZkCols`), the round whose coins place them, proved from the masked verifier's transcript (`ZkQueryRound`), and the
-verifier's statement read as `Claims.Flock.Stmt` (`Scope`). Flock's numbers at the deployed parameters: `k`, `κ` and
-`λ` (`Numbers`), `ε_table` (`NumbersTable`), the pads' domain (`NumbersPads`), the weight and `γ` (`NumbersGamma`),
-and `nMin` (`NumbersNMin`). The deployed instance of `Claims.Flock.Deploy`: the hash-parametric verdict over the
-oracle (`DeployOC`), the statement's bytes, parser and setup (`DeployInputs`), the verifier in public-coin form
-(`Deploy`), and the code with each trace's length and radius, the columns and the numbers that complete the plain and
-masked instances (`DeployCode`: `FlockDeploy.deployPlain`, `FlockDeploy.deployZk`). A counted
-Guruswami–Sudan decoder with its `DecoderComplexity`, over Berlekamp's root finder in GF(2^128) (`RootFindGF128`), is
-`GS`; `GS.Radius` proves that decoder meets the spec's list decoding (`Flock.ListWithin`) at Flock's level-0 code,
-`GS.ZkRadius` at the masked level-0 code, and `GS.RadiusDeploy` at both deployed instances' codes, lengths and
-radii. -/
+The claims' lemmas sit under `Proofs.Flock.Claims`, one module per piece, imported above; each module's docstring
+says what it proves. -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
