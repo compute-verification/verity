@@ -591,6 +591,21 @@ def test_the_allreduce_norm_partial_is_the_calls_hidden_states_and_the_returns_i
     assert run.c.acquired[f"{site}/0"] is normed and run.c.acquired[f"{site}/1"] is hs
 
 
+def test_the_unfused_path_binds_the_all_reduce_output_the_norm_reads_and_copies_it_before_the_norm_runs(monkeypatch):
+    seen: list = []
+    run = FarRun(monkeypatch, rank=0)
+    norm = run.root.model.layers[0].post_attention_layernorm
+    h = norm.register_forward_hook(lambda _m, args, _out: seen.append((args[0], len(run.c.log))))
+    run.step(256)
+    h.remove()
+    site = "model.layers.0.post_attention_layernorm"
+    (reduced, n_log), = seen                              # n_log: the log as the norm's forward returned
+    assert run.c.acquired[f"{site}/all_reduce"] is reduced
+    i = run.c.log.index(("acquire", f"{site}/all_reduce"))
+    assert run.c.log[i + 1] == ("flush", "nc") and i + 1 < n_log
+    assert run.src.far.stats["reduced_bound"] == 2 * ENV["L"] and run.src.far.order[0] == site
+
+
 @pytest.mark.parametrize("M,fused", [(42, True), (43, False)])
 def test_the_meta_export_shim_emits_the_fused_leaf_only_on_flashinfers_served_range(monkeypatch, M, fused):
     from verity_vllm.program.frontend.export_compat import fused_allreduce_rms_norm_leaf
