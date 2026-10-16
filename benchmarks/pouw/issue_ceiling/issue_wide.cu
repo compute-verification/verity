@@ -34,9 +34,13 @@ template <int X> __device__ constexpr bool is_red() { return X == X_RED64 || X =
 
 // Each op is a self-recurrence on accumulator `slot` with a fixed register addend (constant across the loop so nothing
 // hoists, but the chain is only `slot` long, giving NACC-wide ILP a warp x warps a SMSP). asm volatile keeps every op.
+// RED streams through a big global pool (POOL power of 2): op `seq` of thread `gtid` hits pool[(gtid + seq*total) & mask].
+// Consecutive lanes hit consecutive elements (coalesced); each seq step jumps `total` elements (a new line), so L2 line
+// contention is spread over the whole pool, isolating the issue-side cost from the L2-word-add throughput (VF3d's own row).
 template <int X>
-__device__ __forceinline__ void oone(uint32_t* r, uint64_t* w, double* f, uint64_t* g64, float4* gv4,
-                                     int slot, int stride, uint32_t c32, uint64_t c64, double cd, float fv) {
+__device__ __forceinline__ void oone(uint32_t* r, uint64_t* w, double* f, uint64_t* pool64, float4* poolv4,
+                                     int slot, uint32_t gtid, uint32_t total, uint32_t mask, uint32_t seq,
+                                     uint32_t c32, uint64_t c64, double cd, float fv) {
   if constexpr (is_i32<X>()) {
     if (X == X_IADD3) asm volatile("add.u32 %0,%0,%1;" : "+r"(r[slot]) : "r"(c32));
     else              asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(r[slot]) : "r"(c32), "r"(c32));
@@ -49,12 +53,13 @@ __device__ __forceinline__ void oone(uint32_t* r, uint64_t* w, double* f, uint64
   } else if constexpr (is_f64<X>()) {
     if (X == X_DADD) asm volatile("add.f64 %0,%0,%1;" : "+d"(f[slot]) : "d"(cd));
     else             asm volatile("fma.rn.f64 %0,%0,%1,%2;" : "+d"(f[slot]) : "d"(cd), "d"(cd));
-  } else {  // RED: per-thread global slots, coalesced (slot*stride + gtid), side-effecting so ptxas keeps every one
+  } else {  // RED: streaming global reduction, side-effecting so ptxas keeps every one
+    uint32_t idx = (uint32_t)(((uint64_t)gtid + (uint64_t)seq * total) & mask);
     if (X == X_RED64) {
-      uint64_t* p = g64 + (size_t)slot * stride;
+      uint64_t* p = pool64 + idx;
       asm volatile("red.global.add.u64 [%0], %1;" ::"l"(p), "l"(c64) : "memory");
     } else {
-      float4* p = gv4 + (size_t)slot * stride;
+      float4* p = poolv4 + idx;
       asm volatile("red.global.add.v4.f32 [%0], {%1,%2,%3,%4};" ::"l"(p), "f"(fv), "f"(fv), "f"(fv), "f"(fv) : "memory");
     }
   }
@@ -91,23 +96,24 @@ __device__ __forceinline__ void init_mma(uint32_t lane, uint32_t* a, uint32_t* b
 // ---- (2) standalone throughput: 8 warps a SMSP, 64 ops an iter, NACC-wide ILP, no MMA -------------------------
 template <int X, int NACC>
 __global__ void __launch_bounds__(1024) k_alone(int iters, uint32_t* sink, BlockClk* rec,
-                                                uint64_t* g64, float4* gv4, int stride) {
-  const int gtid = blockIdx.x * blockDim.x + threadIdx.x;
+                                                uint64_t* pool64, float4* poolv4, uint32_t total, uint32_t mask) {
+  const uint32_t gtid = blockIdx.x * blockDim.x + threadIdx.x;
   const uint32_t c32 = threadIdx.x | 1u;
   const uint64_t c64 = ((uint64_t)c32 << 32) | c32;
   const double cd = 1.0000001192092896;
   const float fv = (float)(c32 & 0xffff) + 1.0f;
   uint32_t r[NACC]; uint64_t w[NACC]; double f[NACC];
   init_acc<X, NACC>(r, w, f, threadIdx.x);
-  uint64_t* b64 = g64 + gtid; float4* bv4 = gv4 + gtid;
   CLK_BEGIN
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
 #pragma unroll
-    for (int q = 0; q < 64; q++) oone<X>(r, w, f, b64, bv4, q & (NACC - 1), stride, c32, c64, cd, fv);
+    for (int q = 0; q < 64; q++)
+      oone<X>(r, w, f, pool64, poolv4, q & (NACC - 1), gtid, total, mask, (uint32_t)it * 64u + (uint32_t)q,
+              c32, c64, cd, fv);
   }
   CLK_END(rec)
-  sink[gtid] = consume_acc<X, NACC>(r, w, f, b64, bv4);
+  sink[gtid] = consume_acc<X, NACC>(r, w, f, pool64, poolv4);
 }
 
 // ---- (3) MMA-alone baseline (2 MMA warps a SMSP, 8 accumulators) ----------------------------------------------
@@ -133,8 +139,8 @@ __global__ void __launch_bounds__(512) k_specmma(int iters, uint32_t* sink, Bloc
 // ---- warp-specialized: 2 MMA warps + 2 lane warps a SMSP; lane warps do R ops an iter (ratio R/8) -------------
 template <int X, int R>
 __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockClk* rec,
-                                              uint64_t* g64, float4* gv4, int stride) {
-  const int gtid = blockIdx.x * blockDim.x + threadIdx.x;
+                                              uint64_t* pool64, float4* poolv4, uint32_t total, uint32_t mask) {
+  const uint32_t gtid = blockIdx.x * blockDim.x + threadIdx.x;
   const uint32_t warp = threadIdx.x >> 5;
   const uint32_t lane = threadIdx.x & 31;
   const bool mma_role = warp < (blockDim.x >> 6);  // first half of warps
@@ -142,7 +148,6 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
   int32_t d[8][4] = {};
   uint32_t r[8]; uint64_t w[8]; double f[8];
   init_acc<X, 8>(r, w, f, threadIdx.x);
-  uint64_t* b64 = g64 + gtid; float4* bv4 = gv4 + gtid;
   const uint32_t c32 = threadIdx.x | 1u;
   const uint64_t c64 = ((uint64_t)c32 << 32) | c32;
   const double cd = 1.0000001192092896;
@@ -158,7 +163,8 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
 #pragma unroll 1
     for (int it = 0; it < iters; it++) {
 #pragma unroll
-      for (int q = 0; q < R; q++) oone<X>(r, w, f, b64, bv4, q & 7, stride, c32, c64, cd, fv);
+      for (int q = 0; q < R; q++)
+        oone<X>(r, w, f, pool64, poolv4, q & 7, gtid, total, mask, (uint32_t)it * R + (uint32_t)q, c32, c64, cd, fv);
     }
   }
   CLK_END(rec)
@@ -166,21 +172,20 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
   if (mma_role) {
 #pragma unroll
     for (int c = 0; c < 8; c++) x ^= (uint32_t)d[c][0];
-  } else x ^= consume_acc<X, 8>(r, w, f, b64, bv4);
+  } else x ^= consume_acc<X, 8>(r, w, f, pool64, poolv4);
   sink[gtid] = x;
 }
 
 // ---- unrolled single-warp interleave: per MMA, OPM ops -------------------------------------------------------
 template <int X, int OPM>
 __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockClk* rec,
-                                              uint64_t* g64, float4* gv4, int stride) {
-  const int gtid = blockIdx.x * blockDim.x + threadIdx.x;
+                                              uint64_t* pool64, float4* poolv4, uint32_t total, uint32_t mask) {
+  const uint32_t gtid = blockIdx.x * blockDim.x + threadIdx.x;
   const uint32_t lane = threadIdx.x & 31;
   uint32_t a[4], b[2]; init_mma(lane, a, b);
   int32_t d[8][4] = {};
   uint32_t r[8]; uint64_t w[8]; double f[8];
   init_acc<X, 8>(r, w, f, threadIdx.x);
-  uint64_t* b64 = g64 + gtid; float4* bv4 = gv4 + gtid;
   const uint32_t c32 = threadIdx.x | 1u;
   const uint64_t c64 = ((uint64_t)c32 << 32) | c32;
   const double cd = 1.0000001192092896;
@@ -192,11 +197,13 @@ __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockCl
     for (int c = 0; c < 8; c++) {
       mma_imma(d[c], a, b);
 #pragma unroll
-      for (int q = 0; q < OPM; q++) oone<X>(r, w, f, b64, bv4, (c + q) & 7, stride, c32, c64, cd, fv);
+      for (int q = 0; q < OPM; q++)
+        oone<X>(r, w, f, pool64, poolv4, (c + q) & 7, gtid, total, mask,
+                ((uint32_t)it * 8u + (uint32_t)c) * OPM + (uint32_t)q, c32, c64, cd, fv);
     }
   }
   CLK_END(rec)
-  uint32_t x = lane ^ consume_acc<X, 8>(r, w, f, b64, bv4);
+  uint32_t x = lane ^ consume_acc<X, 8>(r, w, f, pool64, poolv4);
 #pragma unroll
   for (int c = 0; c < 8; c++) x ^= (uint32_t)d[c][0];
   sink[gtid] = x;
@@ -205,11 +212,12 @@ __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockCl
 // ---- host -----------------------------------------------------------------------------------------------------
 static uint32_t* g_sink;
 static BlockClk* g_rec;
-static uint64_t* g_red64;
-static float4* g_redv4;
+static uint64_t* g_pool64;
+static float4* g_poolv4;
 static int g_sms;
-static const int WSM_ALONE = 32;    // 8 warps a SMSP for standalone saturation
-static const int SLOTS = 16;        // global RED slots a thread (>= max NACC)
+static const int WSM_ALONE = 32;          // 8 warps a SMSP for standalone saturation
+static const uint32_t POOL = 1u << 25;    // RED streaming pool elements (power of 2): 256 MiB u64, 512 MiB float4
+static const uint32_t POOL_MASK = POOL - 1;
 
 static int size_iters(double cyc_warm, int warm) { return std::max(64, (int)(2e7 / (cyc_warm / warm))); }
 
@@ -217,9 +225,9 @@ template <int X, int NACC>
 static void alone_case() {
   auto kern = k_alone<X, NACC>;
   CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, ONE_BLOCK_SMEM));
-  int stride = g_sms * WSM_ALONE * 32;  // total threads: slot*stride + gtid stays in [0, SLOTS*stride)
+  uint32_t total = (uint32_t)g_sms * WSM_ALONE * 32;  // grid threads: coalescing stride for the RED pool
   auto launch = [&](int it) {
-    return run_timed([&] { kern<<<g_sms, WSM_ALONE * 32, ONE_BLOCK_SMEM>>>(it, g_sink, g_rec, g_red64, g_redv4, stride); },
+    return run_timed([&] { kern<<<g_sms, WSM_ALONE * 32, ONE_BLOCK_SMEM>>>(it, g_sink, g_rec, g_pool64, g_poolv4, total, POOL_MASK); },
                      g_sms, g_rec);
   };
   Timing w = launch(64);
@@ -252,9 +260,9 @@ template <int X, int R>
 static void spec_case(double macs_alone) {
   auto kern = k_spec<X, R>;
   CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, ONE_BLOCK_SMEM));
-  int stride = g_sms * WSM * 32;
+  uint32_t total = (uint32_t)g_sms * WSM * 32;
   auto launch = [&](int it) {
-    return run_timed([&] { kern<<<g_sms, WSM * 32, ONE_BLOCK_SMEM>>>(it, g_sink, g_rec, g_red64, g_redv4, stride); },
+    return run_timed([&] { kern<<<g_sms, WSM * 32, ONE_BLOCK_SMEM>>>(it, g_sink, g_rec, g_pool64, g_poolv4, total, POOL_MASK); },
                      g_sms, g_rec);
   };
   Timing w = launch(64);
@@ -274,9 +282,9 @@ template <int X, int OPM>
 static void mixu_case(double macs_alone) {
   auto kern = k_mixu<X, OPM>;
   CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, ONE_BLOCK_SMEM));
-  int stride = g_sms * WSM * 32;
+  uint32_t total = (uint32_t)g_sms * WSM * 32;
   auto launch = [&](int it) {
-    return run_timed([&] { kern<<<g_sms, WSM * 32, ONE_BLOCK_SMEM>>>(it, g_sink, g_rec, g_red64, g_redv4, stride); },
+    return run_timed([&] { kern<<<g_sms, WSM * 32, ONE_BLOCK_SMEM>>>(it, g_sink, g_rec, g_pool64, g_poolv4, total, POOL_MASK); },
                      g_sms, g_rec);
   };
   Timing w = launch(64);
@@ -302,10 +310,10 @@ int main(int, char**) {
   size_t total_max = (size_t)g_sms * 1024;
   CK(cudaMalloc(&g_sink, total_max * 4));
   CK(cudaMalloc(&g_rec, (size_t)g_sms * sizeof(BlockClk)));
-  CK(cudaMalloc(&g_red64, total_max * SLOTS * sizeof(uint64_t)));
-  CK(cudaMalloc(&g_redv4, total_max * SLOTS * sizeof(float4)));
-  CK(cudaMemset(g_red64, 0, total_max * SLOTS * sizeof(uint64_t)));
-  CK(cudaMemset(g_redv4, 0, total_max * SLOTS * sizeof(float4)));
+  CK(cudaMalloc(&g_pool64, (size_t)POOL * sizeof(uint64_t)));
+  CK(cudaMalloc(&g_poolv4, (size_t)POOL * sizeof(float4)));
+  CK(cudaMemset(g_pool64, 0, (size_t)POOL * sizeof(uint64_t)));
+  CK(cudaMemset(g_poolv4, 0, (size_t)POOL * sizeof(float4)));
 
   // standalone at 8-way and 16-way ILP (the 16-way run shows each rate has plateaued -> dispatch-bound not latency-bound)
   alone_case<X_IADD3, 8>();  alone_case<X_IADD3, 16>();

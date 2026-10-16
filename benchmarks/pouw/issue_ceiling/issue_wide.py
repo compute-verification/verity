@@ -81,10 +81,14 @@ def slope(pairs):
 
 
 def disp(kind, mode):
-    all_pts = [(float(r["ops_per_mma"]), 1.0 - r["mma_macs_frac_of_alone"]) for r in ROWS
-               if r.get("mode") == mode and r.get("op") == kind]
-    lin = [p for p in all_pts if p[0] <= 8]  # the 16-a-MMA point is past the serialization knee
-    return slope(lin or all_pts), all_pts
+    # The issue-contention model is exact: mac_frac = 1/(1 + (a_X/a_M)·OPM), i.e. 1/mac_frac = 1 + (a_X/a_M)·OPM. So the
+    # displacement a_X/a_M is the slope of 1/mac_frac vs OPM (intercept ~1), NOT the slope of (1 - mac_frac), which
+    # saturates and understates displacement badly for slow ops. Fit over OPM <= 8 (the co-issue regime; OPM=16 bends).
+    pts = [(float(r["ops_per_mma"]), r["mma_macs_frac_of_alone"]) for r in ROWS
+           if r.get("mode") == mode and r.get("op") == kind and r["mma_macs_frac_of_alone"] > 0]
+    recip = [(x, 1.0 / f) for x, f in pts]
+    lin = [p for p in recip if p[0] <= 8] or recip
+    return slope(lin), pts
 
 
 funcs = load_funcs(f"{OUT}/sass/issue_wide.sass")
@@ -112,7 +116,7 @@ for kind in KINDS:
     rate = max(r8, r16)  # dispatch-bound = the higher of the two ILP levels
     ds, sp = disp(kind, "spec")
     dm, mp = disp(kind, "mixu")
-    fracs = " ".join(f"{int(x)}:{1.0 - y:.3f}" for x, y in sorted(mp))
+    fracs = " ".join(f"{int(x)}:{y:.3f}" for x, y in sorted(mp))  # y is mac_frac of alone
     aX_disp = dm * a_M
     aX_rate = (1.0 / rate) if rate else 0.0
     opcs = ",".join(f"{o}x{c}" for o, c in sorted(hist.items(), key=lambda kv: -kv[1]) if OP_MATCH[kind](o))[:40]
