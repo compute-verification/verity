@@ -79,7 +79,7 @@ def is_cgh(name: str) -> bool:
 def is_cgpre(name: str) -> bool:
     """the same with every layer's salt records made on the GPU before the window, so the window only reads them"""
     name = unfused(name)
-    return name in ("cgpre", "cgpreeq") or name.startswith("cgprerr")
+    return name in ("cgpre", "cgpreeq") or name.startswith(("cgprerr", "cgprelo"))
 
 
 KIND = {"cg": is_cg, "cgh": is_cgh, "cgpre": is_cgpre}

@@ -47,9 +47,11 @@
 //   cgh, cgheq, cghrrW, cghonly: the same with layers 1..31's S records made by host threads (commit_gpu's host_salt,
 //             checked equal to the GPU's) and copied in by cudaMemcpyAsync where the cg arms run salt_small; layer 0's
 //             salts, F and the pads stay on the GPU at the chunk's start
-//   cgpre, cgpreeq, cgprerrW, cgpreonly: the same with all 32 layers' salts, F and the pads made by salt_small before the
-//             window (cg_pre, its time alone printed as mode salt_pre) into the committers' slots, so the window only
-//             reads them; cg_pre runs again after each poisoning, so their poisoned check still covers the salts
+//   cgpre, cgpreeq, cgprerrW, cgpreonly, cgprelo, cgprelorrW (cgpre and cgprerrW with the commitments at the lowest
+//             priority and the GEMMs at the highest, as hlo): the same with all 32 layers' salts, F and the pads made by
+//             salt_small before the window (cg_pre, its time alone printed as mode salt_pre) into the committers' slots, so
+//             the window only reads them; cg_pre runs again after each poisoning, so their poisoned check still covers
+//             the salts
 //   NAME-f, NAME-p, NAME-fp (NAME a cg, cgh or cgpre arm): the same with commit_gpu's fuse_top (f: the last leaf CTA of
 //             each commitment folds the levels above the CTAs where top_small would be launched) and/or its prefetch (p:
 //             each leaf's next 128-byte block into L1 as its compression starts); held to the serial roots (made without)
@@ -254,6 +256,8 @@ static Sched sched_of(const std::string& n) {
   if (n == "cghonly") return {n, true, false, false, false, 1, 0, 4};
   if (n.rfind("cghrr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 5), 4};
   if (n == "cgpre") return {n, true, true, true, false, 1, 0, 5};
+  if (n.rfind("cgprelorr", 0) == 0) return {n, true, true, true, false, -1, atoi(n.c_str() + 9), 5};
+  if (n == "cgprelo") return {n, true, true, true, false, -1, 0, 5};
   if (n == "cgpreeq") return {n, true, true, true, false, 0, 0, 5};
   if (n == "cgpreonly") return {n, true, false, false, false, 1, 0, 5};
   if (n.rfind("cgprerr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 7), 5};
