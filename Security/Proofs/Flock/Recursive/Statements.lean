@@ -84,7 +84,15 @@ full, which a protocol whose last round isn't committed (candidate 3 today) does
 
 Every `∃` in a fork ranges over `σ`'s own runs and what they output, never over arbitrary strings. The bound is exact
 for a prover that never collides on a fork, and says nothing for one that collides on a single pair: no term counts
-SHA-512 evaluations. -/
+SHA-512 evaluations.
+
+**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): Its event asks that the inner statement have no witness (`¬
+holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string `b ‖ c`,
+with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right row except
+with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
+cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
+computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids
+this by extraction. -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- V*'s laws: A3
@@ -375,7 +383,15 @@ whose last round isn't committed (candidate 3 today) doesn't give.
 * $$\Pr[\text{every session of V* accepts} \wedge \neg\,\text{the statement of } p \text{ holds}]$$
   is at most `RecursiveSound`'s bound, unchanged.
 
-Every `∃` ranges over `σ`'s own runs and what they output; nothing is assumed of SHA-512. -/
+Every `∃` ranges over `σ`'s own runs and what they output; nothing is assumed of SHA-512.
+
+**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): its event, as `RecursiveSound`'s, asks that the inner
+statement have no witness (`¬ holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its
+hm96 commit string `b ‖ c`, with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also
+opens to the right row except with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`,
+`shift_reachable`, on cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds
+it, not a wrong computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40);
+`EndToEndHidden` avoids this by extraction. -/
 def RecursiveRanRegistered : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
