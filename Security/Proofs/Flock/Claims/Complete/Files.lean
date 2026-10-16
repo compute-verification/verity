@@ -144,7 +144,7 @@ def RepShaped (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readabl
       (tracesOf c.sts c.w)[0]! (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) cm e salt nonce).run
       (Transcript.init #[] d)) fun pt => FlockVBridge.Family.ProofShaped (shapeOf (Setup.ofCircuit st) sch e.size) pt.1
 
-/-- **The printed honest record is under `2^64` bytes**: `Run.json`'s `compress` of the honest record object. -/
+/-- **The printed honest record is under `2^64` bytes**: `Run.json`'s `printJ` of the honest record object. -/
 def RecordFits (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, o.record.toUTF8.size < 2 ^ 64
 

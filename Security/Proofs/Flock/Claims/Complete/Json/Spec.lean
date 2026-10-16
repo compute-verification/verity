@@ -1,22 +1,23 @@
 import Flock.Canon
 import Std.Data.TreeMap.Raw.Lemmas
+import Proofs.Flock.Claims.Complete.Prover.Print
 
 /-!
 # What the record's round trip needs from the JSON library
 
-`Json.parse`, `Json.compress`, `Json`'s `==` and the verifier's `canon` are `partial` definitions: Lean runs them, and no
-proof unfolds them. So the session record's round trip (the prover's `compress`, then `Record.decodeWith`'s, `liveOf`'s
-and `recordDraw`'s `parse`) is proved from their specification, `JsonSpec`, a named assumption the record's theorems take
-as a hypothesis.
+`Json.parse`, `Json`'s `==` and the verifier's `canon` are `partial` definitions: Lean runs them, and no proof unfolds
+them. So the session record's round trip (the prover's `printJ`, a total printer of `Json.compress`'s bytes, then
+`Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s `parse`) is proved from their specification, `JsonSpec`, a named
+assumption the record's theorems take as a hypothesis.
 
 * **Alike values** (`Same`): equal leaves, arrays alike element by element, and objects that are well-formed trees with
   one key set and alike values at each key. A Lean object is a tree whose shape is the order its keys were inserted in:
-  `compress` prints the keys in sorted order and `parse` inserts them in that order, so a parsed object is another tree
+  `printJ` prints the keys in sorted order and `parse` inserts them in that order, so a parsed object is another tree
   than the one printed, alike at every key lookup (`Same.getObjVal`).
-* **Printable values** (`Good`): every object a well-formed tree, every number an integer (exponent `0`). `compress`
-  prints a number in its shortest form, so `1.50` comes back as `1.5`, another `JsonNumber`; the record's numbers are all
+* **Printable values** (`Good`): every object a well-formed tree, every number an integer (exponent `0`). A number is
+  printed in its shortest form, so `1.50` comes back as `1.5`, another `JsonNumber`; the record's numbers are all
   `Lean.toJson` of naturals.
-* **`JsonSpec`**: `parse` reads back what `compress` printed of a printable value, and what `canon` printed; `parse` builds
+* **`JsonSpec`**: `parse` reads back what `printJ` printed of a printable value, and what `canon` printed; `parse` builds
   only well-formed trees; `==` holds of alike values; `canon` is the same on alike values, and returns on printable ones.
 -/
 
@@ -56,10 +57,10 @@ inductive Wf : Json → Prop
   | obj {m : Std.TreeMap.Raw String Json} (hm : m.WF) (h : ∀ k v, m.get? k = some v → Wf v) : Wf (.obj m)
 
 /-- **The JSON library's specification**, what the record's round trip assumes of the `partial` definitions:
-`Json.parse` reads back `Json.compress`'s and `canon`'s output, and builds only well-formed trees; `Json`'s `==` holds of
+`Json.parse` reads back `printJ`'s and `canon`'s output, and builds only well-formed trees; `Json`'s `==` holds of
 alike values; `canon` is the same on alike values, and returns on printable ones. -/
 structure JsonSpec : Prop where
-  parse_compress : ∀ j, Good j → ∃ j', Json.parse j.compress = .ok j' ∧ Same j j'
+  parse_print : ∀ j, Good j → ∃ j', Json.parse (printJ j) = .ok j' ∧ Same j j'
   parse_canon : ∀ j s, Good j → canon j = .ok s → ∃ j', Json.parse s = .ok j' ∧ Same j j'
   parse_wf : ∀ s j, Json.parse s = .ok j → Wf j
   beq_same : ∀ a b, Same a b → (a == b) = true

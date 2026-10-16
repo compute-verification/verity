@@ -6,8 +6,7 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 The goals of `Goals` on the record, proved at every honest run (`Run`) from four named hypotheses:
 
-* `JsonSpec`: the JSON library's specification (`Spec`), since `Json.parse`, `compress`, `canon` and `Json`'s `==` are
-  opaque.
+* `JsonSpec`: the JSON library's specification (`Spec`), since `Json.parse`, `canon` and `Json`'s `==` are opaque.
 * `Out64 H`: the oracle's outputs are 64 bytes, as SHA-512's. S12 compares each round digest's length with the empty
   message's, so an oracle with outputs of varying length fails the honest record.
 * `StmtOk`: the statement names no keyed coin tree, a non-empty `Σ`, a printable draw that decodes (`DrawOk`), and its
@@ -116,8 +115,8 @@ theorem Run.json (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : Prover
       o.link = ([rb], [ByteArray.empty]) ∧
       (∃ bs, o.bodies.toList = linkBody [rb] [ByteArray.empty] :: bs ∧
         Recs o.resp 1 (streams.toList.flatMap Array.toList) bs) ∧
-      o.record = (recordObj o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
-        o.proofs).compress ∧
+      o.record = printJ (recordObj o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
+        o.proofs) ∧
       Record.decodeWith o.hs o.spec o.record =
         .ok (sessOf o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs) ∧
       o.sess = sessOf o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs ∧
