@@ -88,8 +88,7 @@ private def lawKeys (kind : String) : Array String :=
 
 private def ascending (xs : Array Int) : Bool := (List.range (xs.size - 1)).all fun i => xs[i]! < xs[i + 1]!
 
-/-- One or more ASCII digits (`draw.digits`). -/
-def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
+private def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
 
 /-- `NUM/DEN` in ASCII digits with `0 < DEN` and `NUM ≤ DEN`. -/
 def probability? (p : String) : Option (Nat × Nat) :=

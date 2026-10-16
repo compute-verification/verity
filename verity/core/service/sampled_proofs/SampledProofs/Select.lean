@@ -13,6 +13,9 @@ open Lean (Json)
 open Flock (V)
 open Flock.TemplateQuery (Desc)
 
+/-- `draw.digits`: one or more ASCII digits. -/
+private def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
+
 /-- Python's `s.partition(sep)` without the separator: `s` split at its first `sep`, and `(s, "")` when it has none. -/
 private def split1 (s sep : String) : String × String :=
   match s.splitOn sep with
@@ -24,13 +27,13 @@ private def split1 (s sep : String) : String × String :=
 a Bernoulli law's `p` written without leading zeros. -/
 def parseLaw (text : String) : V Json := do
   let (kind, arg) := split1 text ":"
-  if kind == "subset" && Draw.digits arg then
+  if kind == "subset" && digits arg then
     return Json.mkObj [("law", "subset"), ("k", Lean.toJson arg.toNat!)]
-  if (kind == "stratified" || kind == "work") && Draw.digits arg && 1 ≤ arg.toNat! then
+  if (kind == "stratified" || kind == "work") && digits arg && 1 ≤ arg.toNat! then
     return Json.mkObj [("law", Json.str kind), ("k", Lean.toJson arg.toNat!)]
   if kind == "bernoulli" then
     let (num, den) := split1 arg "/"
-    if Draw.digits num && Draw.digits den && 0 < den.toNat! && num.toNat! ≤ den.toNat! then
+    if digits num && digits den && 0 < den.toNat! && num.toNat! ≤ den.toNat! then
       return Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{num.toNat!}/{den.toNat!}")]
   throw s!"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {pyRepr text}"
 
