@@ -91,15 +91,22 @@ theorem served_zk {spec : SessionSpec} {sts : Array Stmt} {record : String} {pro
 theorem zkLen_ge : ∀ i : Claims.Flock.ZkIdx, 10 ≤ Claims.Flock.zkLen i := by
   decide +kernel
 
-/-- `N₀` at a statement that sets up a table: table 0's level-0 codeword length. -/
-theorem N₀_of_setup {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+/-- `N₀` at a statement that sets up a table is at least table 0's level-0 codeword length. -/
+theorem N₀_ge_of_setup {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupOf zk x = some (s, spec, sts)) (h0 : 0 < sts.size) :
-    N₀ zk x = 2 ^ (if zk then Claims.Flock.zkLevel0 sts[0].m else Claims.Flock.plainLevel0 sts[0].m).d := by
+    (2 : ℝ) ^ (if zk then Claims.Flock.zkLevel0 sts[0].m else Claims.Flock.plainLevel0 sts[0].m).d ≤ N₀ zk x := by
   unfold N₀ tables
   rw [h]
   rcases sts with ⟨_ | ⟨a, l⟩⟩
   · simp at h0
-  · rfl
+  · show tableLen zk a ≤ (((a :: l).map fun st => (spec, st)).map fun p => tableLen zk p.2).sum
+    simp only [List.map_cons, List.sum_cons]
+    have : 0 ≤ ((l.map fun st => (spec, st)).map fun p => tableLen zk p.2).sum :=
+      List.sum_nonneg fun b hb => by
+        obtain ⟨p, -, rfl⟩ := List.mem_map.1 hb
+        unfold tableLen
+        positivity
+    linarith
 
 /-- `k ≥ 8` once `N₀ ≥ 2^10`. -/
 theorem eight_le_k {Col T : Type} {D : Claims.Flock.Deploy Coin Col T} {x : Claims.Msg} (hN : 2 ^ 10 ≤ D.N₀ x) :
@@ -138,8 +145,7 @@ theorem k_range_plain (rel : Readable.Parsed → Readable.Relation) (x : Claims.
     omega
   refine .inl (eight_le_k ?_)
   show 2 ^ 10 ≤ N₀ false x
-  rw [N₀_of_setup hs h0]
-  exact two_pow_le hlen
+  exact le_trans (two_pow_le hlen) (N₀_ge_of_setup hs h0)
 
 /-- **The masked verifier's `k` range**: at every statement, `k ≥ 8` or the verifier accepts no run at SHA-512. -/
 theorem k_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
@@ -159,17 +165,20 @@ theorem k_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg
     exact hd
   refine .inl (eight_le_k ?_)
   show 2 ^ 10 ≤ N₀ true x
-  rw [N₀_of_setup hs h0]
-  exact two_pow_le hlen
+  exact le_trans (two_pow_le hlen) (N₀_ge_of_setup hs h0)
 
-/-- **The deployed plain verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged. -/
+/-- **The deployed plain verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged, where the
+relation splits by table wherever the verifier accepts some run. -/
 theorem plain_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
+    (hsp : ∀ x, Claims.Flock.Splits (deployPlain rel) x ∨ Claims.Flock.NoAcc sha512 (deployPlain rel).V x)
     (h : Claims.Flock.OneWait sha512 (deployPlain rel)) : Claims.Flock.KS sha512 (deployPlain rel) :=
-  plain_of_oneWait sha512 rel (k_range_plain rel) h
+  plain_of_oneWait sha512 rel (fun x => (k_range_plain rel x).elim (fun hk => (hsp x).imp (fun h => ⟨hk, h⟩) id) .inr) h
 
-/-- **The deployed masked (`--zk`) verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged. -/
+/-- **The deployed masked (`--zk`) verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged,
+where the relation splits by table wherever the verifier accepts some run. -/
 theorem zk_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
+    (hsp : ∀ x, Claims.Flock.Splits (deployZk rel) x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (h : Claims.Flock.OneWait sha512 (deployZk rel)) : Claims.Flock.KS sha512 (deployZk rel) :=
-  zk_of_oneWait sha512 rel (k_range_zk rel) h
+  zk_of_oneWait sha512 rel (fun x => (k_range_zk rel x).elim (fun hk => (hsp x).imp (fun h => ⟨hk, h⟩) id) .inr) h
 
 end FlockDeploy.KS
