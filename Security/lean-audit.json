@@ -89,7 +89,16 @@
   "Pouw.Assumptions.ChargeVF3f": {
    "owner": "@compute-accounting"
   },
+  "Pouw.Assumptions.ChargeVF3fOverlap": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.Assumptions.KScopeAffine": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.KScopeOverlap": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.ServiceSoundOverlap": {
    "owner": "@compute-accounting"
   },
   "Pouw.Assumptions.ServiceSoundStaged": {
@@ -4537,7 +4546,13 @@
    "assumptions": [],
    "type_hash": "e57381cb5ec70754de5727e83fd659312830ca151e3abe1da5c28e8c03580b3b"
   },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.TheoremSSpot": {
    "owner": "@compute-accounting"
   },
   "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": {
@@ -5122,7 +5137,9 @@
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketch at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40; its q/2^96 query term remains explicit.",
    "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": "frozen (no-function): It is a theorem about every staged spot-check play (StagedPlay, its game's acceptance and deficiency) over any finite cells and bits and any ring, not about a Lean function: the service's staged check has no Lean code yet, and once it has, this is restated as that check's property.",
-   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeAffine (Theorem K's scope, K1 and E3, which no check of the service refuses a run outside of) and ChargeVF3f (VF3f's prices with B_theta complete, for stages that don't overlap)."
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeAffine (Theorem K's scope, K1 and E3, which no check of the service refuses a run outside of) and ChargeVF3f (VF3f's prices with B_theta complete, for stages that don't overlap).",
+   "Pouw.SecurityProofs.RelativeSecurity.TheoremSSpot": "frozen (no-function): It is a theorem about every spot-check play (SpotPlay, its game's acceptance and deficiency) over any finite cells and bits and any ring, not about a Lean function: the service's check over a round's overlapping draws has no Lean code yet, and once it has, this is restated as that check's property.",
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins and each round's run fixed before its first draw, E3), KScopeOverlap (Theorem K's scope across draws, K1 with operands affine on the round's bits and E3, which no check of the service refuses a run outside of) and ChargeVF3fOverlap (VF3f's prices with B_theta complete, each product counted once)."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

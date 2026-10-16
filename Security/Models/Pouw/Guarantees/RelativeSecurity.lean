@@ -36,4 +36,27 @@ def StagedFloorK : Prop :=
     ServiceFloor Mc S ((R - 160 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
 
+/-- **Theorem S for the spot check**, with no premise. In every spot-check play (`R` rounds, each round's error table
+fixed before its coins, one check a round of a drawn cell at the drawn bits), if every error is of degree at most 2 on
+the cube, the play is accepted with deficiency at least `D` with probability at most `e^{−D/4}`: the luck ¾. With the
+round's bits every stage's draw (`OBits`), this is the luck `OverlapFloorK` reads. -/
+def TheoremSSpot : Prop :=
+  ∀ (C V A : Type) [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] (R : ℕ) (P : SpotPlay C V A R),
+    (∀ x w c, CubeQuad (P.errAt x w c)) → ∀ D : ℝ,
+      prob (fun x => P.game.accepts x ∧ D ≤ P.game.deficiency x) ≤ Real.exp (-(D / 4))
+
+/-- **The overlapped window's service floor**: Theorem K∥ (K at chain factor 1 per row of one draw, Lemma G over F₂),
+the luck ¾ on the round's bits and every stage's cell-blocks counted once. In every machine `Mc` and for every service
+`S` whose seed is `R` rounds of `St` stage draws of any shapes (stage `t`: `n t` rows, `B t` blocks of `L`, `n' t`
+columns, 7 planes at `wRe`, integers mod `2^32`) overlapping at any depth, under the three premises, every adversary
+that commits first has its accepted runs charged below `(R − 160 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with
+probability at most `2^{−40} + R (δb + δz)`. -/
+def OverlapFloorK : Prop :=
+  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
+    (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
+    0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ δz →
+    ServiceSoundOverlap Mc S run e δb δz → KScopeOverlap Mc S run wRe → ChargeVF3fOverlap Mc S run e κ Vmax →
+    ServiceFloor Mc S ((R - 160 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
+
 end Pouw.Guarantees.RelativeSecurity
