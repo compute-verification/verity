@@ -161,8 +161,13 @@ def _render(name):
     return name  # temp t{n} or "P[w]"
 
 
-def emit_cuda(chunk_terms, levels_p, npar=1):
-    """Render the verified chunk IR as a __device__ CUDA reducer (first-level guard = warp-uniform 4-arm switch)."""
+def emit_cuda(chunk_terms, levels_p, npar=1, guard='branch'):
+    """Render the verified chunk IR as a __device__ CUDA reducer.
+
+    guard='branch': the first-level XOR is folded into the LOP3 immediate by a warp-uniform 4-arm switch (the referee's
+    construction, 16 MACs a lane LOP3).  guard='xor': the same full adder FA(s, p^u, q^v) with fixed SUM/MAJ immediates
+    and an explicit warp-uniform XOR mask -- bit-identical output, no branch (the unguarded lowering, ~10.7 MAC/op).
+    """
     g = build_ir(chunk_terms, levels_p, npar)
     lines = []
     for op in g.ops:
@@ -172,14 +177,20 @@ def emit_cuda(chunk_terms, levels_p, npar=1):
         else:  # first: (ds, dc, s, P{p}, P{q}, pidx)
             _, ds, dc, s, p, q, pidx = op
             S, P, Q = _render(s), _render(p), _render(q)
-            lines.append(f"  uint32_t {ds}, {dc};")
-            lines.append(f"  switch ((int(xb[{2 * pidx}] < 0) << 1) | int(xb[{2 * pidx + 1}] < 0)) {{")
-            for idx, (u, v) in enumerate([(0, 0), (0, 1), (1, 0), (1, 1)]):
-                si, ci = FIRST[(u, v)]
-                lines.append(f"    case {idx}: {ds} = L3<0x{si:02x}>({S}, {P}, {Q}); "
-                             f"{dc} = L3<0x{ci:02x}>({S}, {P}, {Q}); break;")
-            lines.append("    default: __builtin_unreachable();")
-            lines.append("  }")
+            if guard == 'xor':
+                lines.append(f"  uint32_t um{pidx} = (uint32_t)(-(int)(xb[{2 * pidx}] < 0));")
+                lines.append(f"  uint32_t vm{pidx} = (uint32_t)(-(int)(xb[{2 * pidx + 1}] < 0));")
+                lines.append(f"  uint32_t {ds} = L3<0x96>({S}, {P} ^ um{pidx}, {Q} ^ vm{pidx});")
+                lines.append(f"  uint32_t {dc} = L3<0xe8>({S}, {P} ^ um{pidx}, {Q} ^ vm{pidx});")
+            else:
+                lines.append(f"  uint32_t {ds}, {dc};")
+                lines.append(f"  switch ((int(xb[{2 * pidx}] < 0) << 1) | int(xb[{2 * pidx + 1}] < 0)) {{")
+                for idx, (u, v) in enumerate([(0, 0), (0, 1), (1, 0), (1, 1)]):
+                    si, ci = FIRST[(u, v)]
+                    lines.append(f"    case {idx}: {ds} = L3<0x{si:02x}>({S}, {P}, {Q}); "
+                                 f"{dc} = L3<0x{ci:02x}>({S}, {P}, {Q}); break;")
+                lines.append("    default: __builtin_unreachable();")
+                lines.append("  }")
     for w in sorted(g.pnames):
         lines.append(f"  P[{w}] = {g.pnames[w]};")
     body = "\n".join(lines)
@@ -213,10 +224,10 @@ __device__ __forceinline__ void bs_csa_chunk(uint32_t* __restrict__ P, const uin
 """
 
 
-def write_header(chunk_terms, levels_p, path, npar=1):
+def write_header(chunk_terms, levels_p, path, npar=1, guard='branch'):
     with open(path, "w") as f:
-        f.write(emit_cuda(chunk_terms, levels_p, npar))
-    print(f"wrote {path} (chunk={chunk_terms}, levels_p={levels_p}, npar={npar})")
+        f.write(emit_cuda(chunk_terms, levels_p, npar, guard))
+    print(f"wrote {path} (chunk={chunk_terms}, levels_p={levels_p}, npar={npar}, guard={guard})")
 
 
 def eval_chunk(chunk_terms, levels_p, terms, uv, P, npar=1):
@@ -265,6 +276,7 @@ if __name__ == "__main__":
     ap.add_argument("--chunk", type=int, default=256)
     ap.add_argument("--levels-p", type=int, default=14)
     ap.add_argument("--npar", type=int, default=1, help="independent sub-counters a chunk (ILP)")
+    ap.add_argument("--guard", choices=("branch", "xor"), default="branch", help="first-level fold lowering")
     ap.add_argument("--emit", type=str, default=None, help="write the CUDA chunk header to this path")
     args = ap.parse_args()
     assert (args.chunk // 2) % args.npar == 0, "npar must divide the pair count (chunk/2)"
@@ -272,4 +284,4 @@ if __name__ == "__main__":
     ok = verify(args.chunk, args.levels_p, sizes, args.npar)
     if args.emit:
         assert ok, "refusing to emit: verification failed"
-        write_header(args.chunk, args.levels_p, args.emit, args.npar)
+        write_header(args.chunk, args.levels_p, args.emit, args.npar, args.guard)
