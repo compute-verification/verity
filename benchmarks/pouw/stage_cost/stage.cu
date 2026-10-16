@@ -205,8 +205,8 @@ static void commit_run(const Commit& m, const uint8_t* data, cudaStream_t st) {
 //            template with the value inserted as words (no byte assembly); then the CTA's 128-leaf subtree in shared memory,
 //            and the last CTA to finish (a counter) the levels above. One launch after fr_segments (sz_segments with
 //            fr_compress).
-// s512_compress with 16 rounds unrolled, not 80: the latency path runs a warp or few a scheduler, where fully unrolled code
-// (~128 KB a compression) is bound by instruction fetch
+// s512_compress with 16 rounds unrolled, not 80: the same chain latency (shalat: 3.5-3.6 us a compression at 2.09 GHz, rolled
+// or not, bound by one warp's issue rate at ~43 instructions a round) in a fifth of the code
 __device__ __forceinline__ void fr_compress(uint64_t st[8], uint64_t w[16]) {
   uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
 #pragma unroll 1
