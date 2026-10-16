@@ -246,4 +246,117 @@ theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
     obtain ⟨u, hu, -, hn'⟩ := T.instances d hd'
     exact ⟨u, hu, by rw [hn, hn']⟩
 
+/-! ## The public header's draw -/
+
+set_option maxHeartbeats 4000000 in
+/-- The public file's header is a parsed object. -/
+theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
+    (h : HmRow.loadPublic tags c f = .ok pop) : (∃ t, Json.parse t = .ok pop.header) ∧ ∃ m, pop.header = .obj m := by
+  unfold HmRow.loadPublic at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    have hpj := ‹(pure _ : V Json) = Except.ok _›
+    simp only [pure, Except.pure, Except.ok.injEq] at hpj
+    subst hpj
+    exact ⟨⟨_, by assumption⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
+
+set_option maxHeartbeats 4000000 in
+/-- `HmRow.drawn` puts the draw in the population's header. -/
+theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeMap.Raw String Json compare}
+    (hm : m.WF) (hp : pub.header = .obj m) (h : HmRow.drawn c pub d = .ok pub') :
+    pub'.header.getObjVal? "unit_draw" = .ok d := by
+  unfold HmRow.drawn at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    dsimp only
+    rw [hp]
+    simp only [Json.setObjVal!]
+    apply getObjVal_of_get
+    rw [Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.getElem?_insert hm.insert.insert.insert,
+      Std.TreeMap.Raw.getElem?_insert hm.insert.insert, Std.TreeMap.Raw.getElem?_insert hm.insert,
+      Std.TreeMap.Raw.getElem?_insert hm]
+    simp
+
+/-- **The statement's header names its draw**: a draw's statement over a loaded public file has that draw as its
+`unit_draw`. -/
+theorem unitDraw_of (S : Claims.JsonSpec Flock.canon) {tags : Tags} {c : Circuit} {pf : ByteArray}
+    {pop pub : Public} {d : Json} (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
+    pub.header.getObjVal? "unit_draw" = .ok d := by
+  obtain ⟨⟨t, ht⟩, m, hm⟩ := loadPublic_header hl
+  have hw := S.parse_wf _ _ ht
+  rw [hm] at hw
+  cases hw with
+  | obj hwf _ => exact drawn_header hwf hm hd
+
+/-! ## The hello names no coin tree -/
+
+theorem good_nil : ∀ p ∈ ([] : List (String × Json)), Good p.2 := fun _ h => by cases h
+
+theorem good_cons {k : String} {v : Json} {l : List (String × Json)} (hv : Good v) (hl : ∀ p ∈ l, Good p.2) :
+    ∀ p ∈ (k, v) :: l, Good p.2 := by
+  intro p hp
+  rcases List.mem_cons.1 hp with rfl | hp
+  · exact hv
+  · exact hl p hp
+
+theorem good_append {l₁ l₂ : List (String × Json)} (h₁ : ∀ p ∈ l₁, Good p.2) (h₂ : ∀ p ∈ l₂, Good p.2) :
+    ∀ p ∈ l₁ ++ l₂, Good p.2 := by
+  intro p hp
+  rcases List.mem_append.1 hp with hp | hp
+  · exact h₁ p hp
+  · exact h₂ p hp
+
+theorem good_arr_strs (a : Array String) : Good (Json.arr (a.map Json.str)) :=
+  good_arr_of fun x hx => by
+    obtain ⟨y, -, rfl⟩ := Array.mem_map.1 hx
+    exact .str _
+
+/-- A canonical object whose `coins` is absent or a string names no coin tree (`CoinTree.ofHello`). -/
+theorem ofHello_none_of (S : Claims.JsonSpec Flock.canon) {L : List (String × Json)} (hd : Distinct L)
+    (hg : ∀ p ∈ L, Good p.2) (hc : (L.map Prod.fst).contains "coins" = false ∨ ∃ x, ("coins", Json.str x) ∈ L)
+    {s : String} (h : Flock.canon (Json.mkObj L) = .ok s) : CoinTree.ofHello s = none := by
+  obtain ⟨j', hp, hs⟩ := S.parse_canon _ _ (good_mkObj hd hg) h
+  unfold CoinTree.ofHello
+  rcases hc with hc | ⟨x, hx⟩
+  · obtain ⟨e, he⟩ := hs.getObjVal_none rfl (get?_mkObj_none hc)
+    have hn : ((Json.parse s).toOption.bind fun j => (j.getObjVal? "coins").toOption) = none := by
+      rw [hp]
+      simp [Except.toOption, he]
+    rw [hn]
+    rfl
+  · obtain ⟨v', he, hv⟩ := hs.getObjVal (getObjVal?_mkObj hd hx)
+    rw [same_str hv] at he
+    have hn : ((Json.parse s).toOption.bind fun j => (j.getObjVal? "coins").toOption) = some (.str x) := by
+      rw [hp]
+      simp [Except.toOption, he]
+    rw [hn]
+    rfl
+
+/-- **The plain verifier's hello names no coin tree**: at the OS's coins or a seed's, `CoinTree.ofHello` reads none. -/
+theorem ofHello_helloOf (S : Claims.JsonSpec Flock.canon) {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
+    {coins : Coins} {hello : String} (hc : coins = .os ∨ coins = .seed)
+    (h : Flock.helloOf tags sigma mPts coins = .ok hello) : CoinTree.ofHello hello = none := by
+  unfold Flock.helloOf at h
+  rcases hc with rfl | rfl <;> dsimp only at h <;> repeat' split at h
+  all_goals
+    refine ofHello_none_of S (by simp) ?hg ?hc h
+    case hc => first | (left; simp; done) | (right; exact ⟨tags.coinScheme, by simp⟩)
+    case hg =>
+    repeat' first
+      | exact good_nil
+      | apply good_append
+      | apply good_cons
+      | exact .str _
+      | exact good_toJson _
+      | exact good_arr_strs _
+      | exact good_mkObj (by simp) (by simp [good_toJson]; exact .str _)
+
 end FlockComplete.JsonRT
