@@ -183,7 +183,7 @@
     "ack": []
    },
    "hm96-hiding": {
-    "about": "Assumptions.Hm96Hiding (zero knowledge's T1, hash-derived-key): (M·y, H(sp‖y)) is δ₁-close to (U, H(sp‖y)), the leftover hash lemma at the pinned key",
+    "about": "Claims.Hm96Hiding (zero knowledge's T1, hash-derived-key): (M·y, H(sp‖y)) is δ₁-close to (U, H(sp‖y)), the leftover hash lemma at the pinned key",
     "mentions": ["PMF.tvDist", "Matrix.mulVec"],
     "ack": []
    },

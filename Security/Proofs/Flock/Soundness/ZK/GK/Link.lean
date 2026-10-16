@@ -48,7 +48,7 @@ theorem prefinalClose_hm96 {V Ωs : Type} [Fintype Ωs] [Nonempty Ωs] {n : ℕ}
     [DecidableEq M] [Fintype Ω] [Nonempty Ω] [Fintype L] [DecidableEq L]
     (T : (Fin n → Cn) → Fin J → Table F K W Salt (B × Salt) D Hi VL)
     (rep : ∀ c j, Fin (T c j).nC → Fin 2) (My : Salt → B) (cs : Salt → Cc) {δ₁ : ℝ≥0∞}
-    (hT1 : Assumptions.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (H : B × Cc → D)
+    (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (H : B × Cc → D)
     (msgs : (Fin J → W) → Ω → (Fin n → Cn) → (L → D) → Fin n → M) (dig : (Fin J → W) → Ω → (Fin n → Cn) → L → B)
     (P : (Fin J → W) → ZK.Strategy (Ω × (L → B × Cc)) M Cn n)
     (hP : ∀ w ω p c, (P w).msg (ω, p) c = msgs w ω c fun l => H (dig w ω c l + (p l).1, (p l).2))
@@ -125,7 +125,7 @@ session has at most `nH` hidden leaves: `RewindClose` holds at `2·nH·δ₁`. -
 theorem rewindClose_hm96 {V P Ω Ωd Ωs : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ωd] [Nonempty Ωd] [Fintype Ωs]
     [Nonempty Ωs] (m : Model V P Ω Ωd Ωs) (T : Ωd → Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : Type}
     (Mh : ∀ ω₀ j, (T ω₀ j).Hm96 C) (My : Salt → B) (cs : Salt → C) (hMy : ∀ ω₀ j, (Mh ω₀ j).My = My)
-    (hcs : ∀ ω₀ j, (Mh ω₀ j).cs = cs) {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
+    (hcs : ∀ ω₀ j, (Mh ω₀ j).cs = cs) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
     (w w0 : Fin J → W)
     (hrank : ∀ ω₀, m.comp (m.dummy ω₀) = true → ∀ j, (T ω₀ j).Rank)
     (hpad : ∀ ω₀, m.comp (m.dummy ω₀) = true → ∀ j, (T ω₀ j).PadOnto)
@@ -194,7 +194,7 @@ theorem gk_simulate_hm96 {V Ωs : Type} [Fintype Ωs] [Nonempty Ωs] {n : ℕ} {
     [DecidableEq M] [Fintype Ω] [Nonempty Ω] [Fintype L] [DecidableEq L]
     (Tc : (Fin n → Cn) → Fin J → Table F K W Salt (B × Salt) D Hi VL) (coins : V → Fin n → Cn)
     (rep : ∀ c j, Fin (Tc c j).nC → Fin 2) (My : Salt → B) (cs : Salt → C) {δ₁ : ℝ≥0∞}
-    (hT1 : Assumptions.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (Hl : B × C → D)
+    (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (Hl : B × C → D)
     (msgs : (Fin J → W) → Ω → (Fin n → Cn) → (L → D) → Fin n → M) (dig : (Fin J → W) → Ω → (Fin n → Cn) → L → B)
     (P : (Fin J → W) → ZK.Strategy (Ω × (L → B × C)) M Cn n)
     (hP : ∀ w ω p c, (P w).msg (ω, p) c = msgs w ω c fun l => Hl (dig w ω c l + (p l).1, (p l).2))
