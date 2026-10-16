@@ -23,7 +23,7 @@ def bind {α β : Type} : OC α → (α → OC β) → OC β
   | .ret a, f => f a
   | .query q k, f => .query q fun r => bind (k r) f
 
-instance : Monad OC where
+instance instMonad : Monad OC where
   pure := .ret
   bind := bind
 
@@ -47,7 +47,7 @@ theorem bind_assoc' {α β γ : Type} (x : OC α) (f : α → OC β) (g : β →
   | ret a => rfl
   | query q k ih => simp only [bind_query, ih]
 
-instance : LawfulMonad OC := LawfulMonad.mk' OC
+instance instLawfulMonad : LawfulMonad OC := LawfulMonad.mk' OC
   (id_map := fun x => bind_ret_right x)
   (pure_bind := fun _ _ => rfl)
   (bind_assoc := fun x f g => bind_assoc' x f g)
