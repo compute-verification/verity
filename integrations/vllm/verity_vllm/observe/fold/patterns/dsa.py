@@ -35,7 +35,7 @@ from verity_vllm.observe.fold.resolver import (
 )
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.registry import dsa
-from verity_vllm.program.registry.boolean_rope import RoPEGptJV2, RoPEHeadGptJV2
+from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
 from verity_vllm.program.registry.dsa_norm import DsaRMSNorm
 from verity_vllm.program.registry.sparse_mla import SPARSE_MLA_GLM53
 from verity_vllm.program.registry.sparse_mla_split import SparseMlaSplit, launch_num_splits
@@ -262,9 +262,15 @@ class DsaQ:
         if q.shape != (M, 8, 64) or qo.shape != (M, 8, 64) or q.dtype != "bfloat16" or qo.dtype != "bfloat16" \
                 or cs.dtype != "bfloat16" or cs.rank != 2 or cs.shape[1] != 64:
             return unsupported(node, "fused-q RoPE views differ from bf16 [M,8,64]", q=repr(q), q_out=repr(qo), cs=repr(cs))
+        # the Build calls RoPEHeadGptJ_v2 per (token, head), token-major (`vllm_dsa` dsa_q): one row per head over [M*8, 64]
+        if q.strides[0] != 8 * q.strides[1] or qo.strides[0] != 8 * qo.strides[1]:
+            return unsupported(node, "fused-q RoPE views do not flatten to [M*8, 64] head rows", q=repr(q), q_out=repr(qo))
+        qh = ViewDesc(q.alloc, q.offset, (M * 8, 64), q.strides[1:], q.dtype, q.device)
+        qoh = ViewDesc(qo.alloc, qo.offset, (M * 8, 64), qo.strides[1:], qo.dtype, qo.device)
         parts: list[Compute] = [
-            Compute(bind(RoPEGptJV2, NHEADS=8, D=64), M, (PerRow(q), Gather(cs, pos)), (PerRow(qo),), (node.id,),
-                    hint=f"{_module(node)}/q_pe", kernels=(Q_KERNEL,), attribution=tuple(ctx.start.rows), pattern=self.name)
+            Compute(bind(RoPEHeadGptJV2, D=64), M * 8, (PerRow(qh), Gather(cs, tuple(p for p in pos for _ in range(8)))), (PerRow(qoh),),
+                    (node.id,), hint=f"{_module(node)}/q_pe", kernels=(Q_KERNEL,),
+                    attribution=tuple(r for r in ctx.start.rows for _ in range(8)), pattern=self.name)
         ]
         ms = _module_state(ctx, node)
         ms.update({"q_rope": qo, "q_v": a.get("ql_nope_ptr")})
