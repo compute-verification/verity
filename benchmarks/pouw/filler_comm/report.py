@@ -9,7 +9,8 @@ phase are the medians over their (interleaved) repeats. Shares are of the tensor
 served = the step's int8 MACs, fill = the phase filler's; idle = 1 - served; comm = (base - nocomm) / base, the exposed
 collective time; off-comm idle = idle - comm, the idle tensor time the collective windows don't reach; slowdown = phase /
 base. fill K = fill × the fold's proved fraction under Theorem K (decision 43): duo (NC 2) binds every word, PHI = 0.9,
-PROVED; the ram fold (NC 4) binds word pairs only, 0.45; XOR-in (NC 4, -DPFILL_XIN) is provisional at 0.9·(S+1)/(2S).
+PROVED; the ram fold (NC 4) binds word pairs only, 0.45; r9's XOR-family (NC 4, -DPFILL_LI/-DPFILL_XIN13) is provisional,
+credited at the same proved half 0.45 (SCORER's 13:15Z correction).
 coverage is filler-scorer
 v3's per GPU at the slowest rank's step: the scorer's serving fraction × served (at base alone, at phase with the
 filler) + fill K. The fill counts every MMA
@@ -39,14 +40,14 @@ SASS_OK = {"IMMA.16832.S8.S8"}
 def proved_fraction(nc, xin, S):
     """The fold's proved fill fraction under Theorem K (decision 43, the filler receipt break). duo (NC 2) binds every
     word: PHI, PROVED. The ram fold (NC 4) binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words
-    (PHI/2); round 3's rem fill K, taken at PHI under ram, was 2× this. XOR-in (NC 4 with -DPFILL_XIN) is provisional: it
-    certifies (S+1)/(2S) of its words (state-independent complement flips fix only S+1 of 2S word shadows)."""
+    (PHI/2); round 3's rem fill K, taken at PHI under ram, was 2× this. P2-FF r9's XOR-family folds (NC 4 with -DPFILL_LI
+    or -DPFILL_XIN13) read at the same proved half (SCORER's 13:15Z correction after RS-E-REF r7: a run may pick a
+    complement flip from the data, so Theorem K certifies only >= 1/2 of the words); their fuller reading waits on r10's
+    select-charging lemma, so it isn't credited here."""
     if nc is None:
         return PHI
     if nc == 2:
         return PHI
-    if nc == 4 and xin:
-        return PHI * (S + 1) / (2 * S)
     return PHI * 0.5
 
 
@@ -56,7 +57,7 @@ def fold_label(nc, xin):
     if nc == 2:
         return "duo"
     if nc == 4 and xin:
-        return "xin(prov)"
+        return "xin13/li(prov)"
     return "ram"
 
 _spec = importlib.util.spec_from_file_location("filler_scoring", Path(__file__).resolve().parents[1] / "filler" / "scoring.py")

@@ -58,15 +58,17 @@
 
 // The fold the TP filler path (tp_dfill_k) and the deferred pass commit their receipts with (decision 43, the filler
 // receipt break). Default duo (NC 2): it binds every word under Theorem K (c = 1 at φ 0.9), PROVED. -DTP_NC=4 is the ram
-// fold, which binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words (round 8, P2-FF); with
-// -DPFILL_XIN (FILL-SEC's drop-in 5e3b88559) the NC-4 fold is XOR-in, provisional ((S+1)/(2S) of its words under K).
-// pf_absorb and pf_fold read NC, so one macro picks the fold for every launch and every host reference.
+// fold, which binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words (round 8, P2-FF). At NC 4 one
+// of P2-FF r9's XOR-family folds is built with -DPFILL_LI or -DPFILL_XIN13 (FILL-SEC's D3 pfill.cuh, 0b09c978f); each is
+// provisional and reads at Theorem K's proved half (0.45) until RS-E-REF r7's select-charging lemma lands. -DPFILL_XIN
+// (rotl 7) is retired (pfill.cuh #errors on it). pf_absorb and pf_fold read NC, so one macro picks the fold for every
+// launch and every host reference.
 #ifndef TP_NC
 #define TP_NC 2
 #endif
-static_assert(TP_NC == 2 || TP_NC == 4, "TP_NC is the receipt fold: 2 (duo, PROVED) or 4 (ram; with -DPFILL_XIN, XOR-in)");
-#ifdef PFILL_XIN
-constexpr int TP_XIN = 1;
+static_assert(TP_NC == 2 || TP_NC == 4, "TP_NC is the receipt fold: 2 (duo, PROVED) or 4 (ram; -DPFILL_LI/-DPFILL_XIN13 for r9's XOR-family)");
+#if defined(PFILL_LI) || defined(PFILL_XIN13)
+constexpr int TP_XIN = 1;  // an XOR-family r9 fold at NC 4 (li or xin13); reads at 0.45 like ram, labelled apart
 #else
 constexpr int TP_XIN = 0;
 #endif
