@@ -42,30 +42,32 @@ def main(argv=None):
         for r in rows:
             if r.get("mode") == "categories":
                 print("categories (ms alone): " + ", ".join(f"{k} {v:.2f}" for k, v in r["ms"].items()))
-        st = {}
+        by = {}
         print("| part | shape | slowdown (rounds max) | alone ms | arm ms | filler of peak | beside/alone | receipts (bad) |")
         print("|---|---|---|---|---|---|---|---|")
         for r in rows:
             if r.get("mode") != "dscore":
                 continue
             p = r["kind"].removeprefix("phase-")
-            s = st[p] = S.point_stats(r)
+            shape = f"W{r['W']} NC{r['NC']} S{r['S']} 2^{r['chunk_log2']} map {r['map']}"
+            s = by.setdefault(shape, {})[p] = S.point_stats(r)
             fp = s["fill_rate"] / S.cap(s["alone_mhz"])
             bo = s["beside_over_alone"]
-            print(f"| {p} | W{r['W']} NC{r['NC']} S{r['S']} 2^{r['chunk_log2']} map {r['map']} | {s['slowdown']:.4f} "
-                  f"({max(s['slowdown_rounds']):.4f}) | {s['alone_ms']:.2f} | {s['arm_ms']:.2f} | {fp:.3f} | "
-                  f"{'–' if bo is None else f'{bo:.3f}'} | {s['rec_checked']} ({s['rec_bad']}) |")
-        print("| prefill entry | slowdown | coverage | filler share |")
-        print("|---|---|---|---|")
-        out = []
-        if "lin" in st:
-            out.append(("v2 (lin)", S.coverage(S.prefill_entry(st["lin"]))))
-        if "lin" in st and "both" in st:
-            out.append(("lin + both", entry(S, [st["lin"], st["both"]])))
-        if "step" in st:
-            out.append(("step", entry(S, [st["step"]])))
-        for name, e in out:
-            print(f"| {name} | {e['time']:.4f} | {e['coverage']:.3f} | {e['filler_share']:.3f} |")
+            print(f"| {p} | {shape} | {s['slowdown']:.4f} ({max(s['slowdown_rounds']):.4f}) | {s['alone_ms']:.2f} | "
+                  f"{s['arm_ms']:.2f} | {fp:.3f} | {'–' if bo is None else f'{bo:.3f}'} | "
+                  f"{s['rec_checked']} ({s['rec_bad']}) |")
+        print("| shape | prefill entry | slowdown | coverage | filler share |")
+        print("|---|---|---|---|---|")
+        for shape, st in by.items():
+            out = []
+            if "lin" in st:
+                out.append(("v2 (lin)", S.coverage(S.prefill_entry(st["lin"]))))
+            if "lin" in st and "both" in st:
+                out.append(("lin + both", entry(S, [st["lin"], st["both"]])))
+            if "step" in st:
+                out.append(("step", entry(S, [st["step"]])))
+            for name, e in out:
+                print(f"| {shape} | {name} | {e['time']:.4f} | {e['coverage']:.3f} | {e['filler_share']:.3f} |")
 
 
 if __name__ == "__main__":

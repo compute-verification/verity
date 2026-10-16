@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # HC-PREFILL's phase probe runner: builds libhcpre_fill.so (dcap.cu's filler behind a C API) outside the lease, then under
-# one lease runs hcpre_phase.py in node 2's vLLM venv (VENV, default /workspace/pouw/mvp-e2e/venv312) with ARGS. Run from
-# the repository root (research run --cwd source); outputs under $OUT.
+# one lease runs hcpre_phase.py in node 2's vLLM venv (VENV, default /workspace/pouw/mvp-e2e/venv312) with ARGS, once per
+# filler shape in FILLS (space-separated W,NC,S,LOG2,MAP; one process each, 16 points apart), or once when FILLS is
+# unset. Run from the repository root (research run --cwd source); outputs under $OUT.
 set -uo pipefail
 O=${OUT:?}
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
@@ -17,9 +18,20 @@ cat > "$B/inner.sh" <<EOF
 set -uo pipefail
 smi() { nvidia-smi --query-gpu=$q --format=csv,noheader,nounits \${GPU_LEASE_UUID:+-i \$GPU_LEASE_UUID} >> "$O/smi.csv"; }
 smi
-LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:\${LD_LIBRARY_PATH:-} "$VENV/bin/python" benchmarks/pouw/filler/hcpre_phase.py \
-  --lib "$B/libhcpre_fill.so" --out "$O" ${ARGS:-} > "$O/phase.log" 2>&1
-echo "phase rc \$?" >> "$O/rc.txt"
+run() {
+  LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:\${LD_LIBRARY_PATH:-} "$VENV/bin/python" benchmarks/pouw/filler/hcpre_phase.py \
+    --lib "$B/libhcpre_fill.so" --out "$O" ${ARGS:-} "\$@" >> "$O/phase.log" 2>&1
+  echo "phase \$* rc \$?" >> "$O/rc.txt"
+}
+if [ -z "${FILLS:-}" ]; then
+  run
+else
+  p=0
+  for f in ${FILLS:-}; do
+    run --fill "\$f" --point0 "\$p"
+    p=\$((p + 16))
+  done
+fi
 smi
 EOF
 gpu-lease 1 --wait --max-min "${MAXMIN:-10}" -- bash "$B/inner.sh"
