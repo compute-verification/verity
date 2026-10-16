@@ -1195,6 +1195,33 @@ static int dgate(Dev& d) {
         fails += bad != 0 || ctl_equal != 0;
         CK(cudaFree(f.rec));
       }
+  // dtiles_one (DFILL_ONE): units of one tile and of a warp's two, each chunk launched twice (its counter must restart)
+  for (int map : {1, 2})
+    for (int one : {1, 2})
+      for (int S : {8, 2048}) {
+        DFill f;
+        f.grid = 3; f.W = 4; f.NC = 4; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1; f.map = map; f.one = one;
+        dfill_alloc(f);
+        long bad = 0, ctl_equal = 0;
+        for (int rep = 0; rep < 2; rep++) {
+          CK(cudaMemset(f.rec, 0xA5, f.per() * sizeof(unsigned long long)));
+          dfill_launch(f, 5, d.st);
+          CK(cudaStreamSynchronize(d.st));
+          CK(cudaGetLastError());
+          std::vector<unsigned long long> h(f.per());
+          CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
+          for (long long i = 0; i < f.per(); i++) {
+            const unsigned long long tile = 5ull * f.per() + i;
+            bad += h[i] != dfill_ref(f.c0, f.c1, tile, 4, S, map);
+            ctl_equal += h[i] == dfill_ref(f.c0, f.c1, tile, 4, S - 8, map);
+          }
+        }
+        printf("{\"mode\": \"dgate\", \"map\": %d, \"one\": %d, \"NC\": 4, \"S\": %d, \"tiles\": %lld, \"mismatches\": %ld, "
+               "\"control_equal\": %ld, \"ok\": %s}\n",
+               map, one, S, f.per(), bad, ctl_equal, bad || ctl_equal ? "false" : "true");
+        fails += bad != 0 || ctl_equal != 0;
+        CK(cudaFree(f.rec));
+      }
   fflush(stdout);
   return fails;
 }

@@ -13,6 +13,7 @@ the same GPU; S 256-2048 and map 2 lie on the same plateau (0.223-0.231 at 1.031
   python3 benchmarks/pouw/filler/psched_score.py benchmarks/pouw/filler/hcpre_arm.py:PrefillCo
 """
 
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,6 +23,7 @@ import arms as A
 import hc_kern_phase as KP
 
 CO_PREFILL_M1 = A.Filler(W=4, NC=4, S=512, chunk_log2=18)
+CO_PREFILL_ONE = A.Filler(W=4, NC=4, S=512, chunk_log2=20)
 
 
 @dataclass
@@ -44,3 +46,39 @@ class PrefillCo(KP.KernPhase):
 
     def filler_at(self, phase, b, l):
         return CO_PREFILL_M1 if phase == "prefill" else self.filler
+
+
+@dataclass
+class PrefillCoOne(PrefillCo):
+    """PrefillCo with DFILL_ONE: one dfill_k block running an SM at a time (dcap.cu's dtiles_one) in every process.
+
+    The co pump launches a chunk as one block an SM, but three 88-register filler blocks fit beside a prefill GEMM CTA,
+    and the dispatcher puts 2-4 of a chunk's blocks on a few SMs (at 2^18 in ~60% of chunks, at 2^20 on 9-11 SMs a chunk);
+    there a second filler warp on a sub-partition slows the GEMM's one warp for the whole chunk, and every GEMM's tail
+    waits on that SM (r20261016-081635-dcc5, r20261016-082749-0590). With DFILL_ONE a doubled block sleeps in place until
+    its SM's filler block is done and warps take `one` tiles at a time from the chunk's counter. The split filler (one
+    512-thread block an SM) runs the same tiles through the same path. On dscore's prefill point (r20261016-083326-c645)
+    that leaves 2^18 as it was (1.032 / 0.227) and makes longer chunks pass: 2^19 1.036 / 0.229 (static 1.061),
+    2^20 1.046 / 0.260; decode 1/2K's split reads 1.034 / 0.565 as before. So prefill runs 2^20-MMA chunks."""
+
+    name: str = "hcpre-m1-co-one"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "hcpre-m1-co-s512", "approach": "pouw/filler-prefill",
+        "mechanism": ["filler:chained-imma-registers", "kernel:map-in-register-order", "kernel:w16-s8192", "chunk:2^20",
+                      "place:split", "split:per-point-table", "sched:phase-att", "sched:graph-fork-join",
+                      "sched:node-priority", "prefill:co", "sched:prio-short-blocks", "co:small-blocks",
+                      "phase:s256-512", "phase:nc2", "co:s512-2^20", "kernel:one-block-an-sm"],
+        "hypothesis": "the co filler's erratic slowdown beside the prefill GEMMs is SMs where the dispatcher put two or "
+                      "more filler blocks; with one running block an SM, 2^20-MMA chunks pass the gate and fill "
+                      "~0.13 of peak there: prefill 0.227 -> ~0.26"})
+    choice: str = ("PrefillCo with DFILL_ONE=4 (one filler block running an SM, 4-tile units) for every process and "
+                   "2^20-MMA prefill chunks, from occupancy probes and a dscore screen of 2^18-2^20; DFILL_MAP=1; run "
+                   "through psched_score.py/pscore.cu")
+    one: int = 4
+
+    def __post_init__(self):
+        super().__post_init__()
+        os.environ["DFILL_ONE"] = str(self.one)
+
+    def filler_at(self, phase, b, l):
+        return CO_PREFILL_ONE if phase == "prefill" else self.filler
