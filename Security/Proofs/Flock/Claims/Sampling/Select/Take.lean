@@ -50,6 +50,10 @@ theorem bind_ok {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.o
 
 theorem bind_error {ε α β : Type} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
 
+theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} :
+    (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x <;> simp [bind, Except.bind]
+
 /-- **`onWith` on `take`**: a run from `p` that ends returns the first of the runs on `j·N` bytes from `p` that succeeds,
 at `p + j·N`. -/
 theorem onWith_take (src : ByteArray) (N : ℕ) (hN : 0 < N) (run : ByteArray → Option (Array ℕ)) (p p' : ℕ)
