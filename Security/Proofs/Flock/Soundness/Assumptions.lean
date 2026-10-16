@@ -2,6 +2,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Proofs.Flock.Soundness.Game.Expect
 import Randomness
 import Proofs.Flock.Soundness.Model.Basic
+import Definitions.Claims.Hm96
 
 /-!
 # Named assumptions
@@ -23,10 +24,10 @@ The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis 
 keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret. `HmRowComputes` is not
 cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact about the circuit that is still to prove
 (phase 2i), named here so that the value binding's theorems take it as a hypothesis. Zero knowledge's are hm96 leaf hiding
-(T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain (`PadNonvanishing`), with A3 for the salts' bytes. None of
-them is a computational property of SHA-512: hm96's hiding is statistical (`CROnly.hm96Hiding_gap`), and the one premise
-left on it, `hash-derived-key`, is a fact about one fixed key and salt hash (the common-reference-string step), not a
-hardness property.
+(T1, the spec's `Claims.Hm96Hiding`, read here by `hm96Hiding_apply`) and `X_L + κ ≠ 0` on the level-0 domain
+(`PadNonvanishing`), with A3 for the salts' bytes. None of them is a computational property of SHA-512: hm96's hiding is
+statistical (`CROnly.hm96Hiding_gap`), and the one premise left on it, `hash-derived-key`, is a fact about one fixed key
+and salt hash (the common-reference-string step), not a hardness property.
 
 Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved (`mcaError_le_bchks25`, from DKT26).
 Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
@@ -179,28 +180,33 @@ def HmRowComputes {W : Type} (H : List UInt8 → List UInt8) (saltPrefix : List 
     (sat : W → Prop) (row salt bc : W → List UInt8) : Prop :=
   ∀ w, sat w → bc w = List.zipWith (· ^^^ ·) (H (row w)) (mask (salt w)) ++ H (saltPrefix ++ salt w)
 
-/-- **Zero knowledge's T1 (`hash-derived-key`): hm96 leaves hide**, up to `δ₁` per leaf
-(`docs/zk-proof-public.md` §1.2, §1.5 HDK, §4.1 T1).
+/-- The spec's probability is `prCoin`. -/
+theorem prENNReal_eq_prCoin {α : Type} [Fintype α] (p : α → Prop) : Claims.PrENNReal p = prCoin p := rfl
 
-An hm96 leaf of digest `x` under salt `y` is `H(lp ‖ b ‖ c)` with `b = x ⊕ M·y` and `c = H(sp ‖ y)`: `My y` is `M(K*)·y` for
-the pinned key `K*`, and `c y` is the salt's own hash. An ideal leaf replaces `b` by a fresh uniform `U`. `δ₁` is the
-statistical distance between `(M·y, H(sp ‖ y))` and `(U, H(sp ‖ y))` for uniform `y` and `U`: no test tells them apart
-with advantage above `δ₁`. hm96 §3 proves `E_K[δ₁(K)] ≤ 2^-257` by the leftover hash lemma, and so `δ₁(K) ≤ 2^-193` for
-all but `2^-64` of keys; that the pinned key is one of them is the common-reference-string step (`hash-derived-key`),
-which a per-session key would remove. It is statistical: no random oracle.
+/-- **Zero knowledge's T1 (`hash-derived-key`), read in `prCoin`'s terms**: the spec's `Claims.Hm96Hiding`
+(`Definitions/Claims/Hm96.lean`; `docs/zk-proof-public.md` §1.2, §1.5 HDK, §4.1 T1), applied to one test.
 
-It is a statement about uniform salts, and it needs no computational property of SHA-512. At `δ₁ = hidingGap My c`, the
-statistical distance itself, it holds with no premise (`CROnly.hm96Hiding_gap`); hm96 §3's leftover hash lemma
-(`CROnly.sum_hidingGap_le`) reads of `c(y) = H(sp ‖ y)` only that it takes at most `2^512` values. The salts are the
-operating system's bytes, which A3 (`UniformRandomBytes`) makes uniform (`Discharge.ZkView.hm96Hiding_os`).
+`My y` is `M(K*)·y` for the pinned key `K*`, and `c y` the salt's own hash `H(sp ‖ y)`. An ideal leaf replaces `b` by a
+fresh uniform `U`. It is a statement about uniform salts, and it needs no computational property of SHA-512. At
+`δ₁ = hidingGap My c`, the statistical distance itself, it holds with no premise (`CROnly.hm96Hiding_gap`); hm96 §3's
+leftover hash lemma (`CROnly.sum_hidingGap_le`) reads of `c(y) = H(sp ‖ y)` only that it takes at most `2^512` values. The
+salts are the operating system's bytes, which A3 (`UniformRandomBytes`) makes uniform (`Discharge.ZkView.hm96Hiding_os`).
 
 It is a predicate on one pair of functions, `M(K*)·` and `H(sp ‖ ·)`. `Table.view` takes the leaves the final message
 doesn't open as ideal (world `W₁`); this assumption, through §4.1's T1, is what moves the real prover there, at `δ₁` per
 leaf, and so gives Lemma B's bound, `2·|Hid|·δ₁`, at most the paper's `2·δ₁·N_hid`. -/
-def Hm96Hiding {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) (δ₁ : ℝ≥0∞) : Prop :=
-  ∀ E : B × C → Prop, prCoin (fun y : Y => E (My y, c y)) ≤ prCoin (fun p : B × Y => E (p.1, c p.2)) + δ₁
+theorem hm96Hiding_apply {Y B C : Type} [Fintype Y] [Fintype B] {My : Y → B} {c : Y → C} {δ₁ : ℝ≥0∞}
+    (h : Claims.Hm96Hiding My c δ₁) (E : B × C → Prop) :
+    prCoin (fun y : Y => E (My y, c y)) ≤ prCoin (fun p : B × Y => E (p.1, c p.2)) + δ₁ :=
+  h E
 
-/-- **`hash-derived-key`: the pinned hm96 key hides at `2^-193`** (ruling F). `Hm96Hiding My c (2^-193)` for the keyed
+/-- `Claims.Hm96Hiding` from its `prCoin` form. -/
+theorem hm96Hiding_of {Y B C : Type} [Fintype Y] [Fintype B] {My : Y → B} {c : Y → C} {δ₁ : ℝ≥0∞}
+    (h : ∀ E : B × C → Prop, prCoin (fun y : Y => E (My y, c y)) ≤ prCoin (fun p : B × Y => E (p.1, c p.2)) + δ₁) :
+    Claims.Hm96Hiding My c δ₁ :=
+  h
+
+/-- **`hash-derived-key`: the pinned hm96 key hides at `2^-193`** (ruling F). `Claims.Hm96Hiding My c (2^-193)` for the keyed
 hash `My` of the pinned key `K*` and the salt hash `c`: hm96 §3 shows it fails for at most `2^-64` of the keys
 (`hm96_sha512_bad_keys`), and that the pinned key is not among them is the assumption. It is instantiated at
 hm96-sha512's `ZkView.My` and `ZkView.saltHash`.
@@ -215,7 +221,7 @@ is not a set an algorithm is asked to find. Where a theorem's bound is stated at
 from the operating system (A3) would replace it by the average over keys, `2^-257` (`CROnly.hm96_sha512_sum`), as the
 committed coins' bound at a fresh uniform key already is (`ZkCoins.CommittedLeHm96`). -/
 def HashDerivedKey {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) : Prop :=
-  Hm96Hiding My c ((2 : ℝ≥0∞) ^ (-193 : ℤ))
+  Claims.Hm96Hiding My c ((2 : ℝ≥0∞) ^ (-193 : ℤ))
 
 /-- **Zero knowledge's `X_L + κ ≠ 0` on the level-0 domain** (`docs/zk-proof-public.md` §1.2, gap 12).
 

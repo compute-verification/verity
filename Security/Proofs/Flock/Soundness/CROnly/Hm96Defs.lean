@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Assumptions
 /-!
 # hm96 hiding from the universal hash: the definitions
 
-`Assumptions.Hm96Hiding My c δ₁` bounds, for every test, how much the pair `(My y, c y)` of a uniform salt `y` is told
+`Claims.Hm96Hiding My c δ₁` bounds, for every test, how much the pair `(My y, c y)` of a uniform salt `y` is told
 apart from `(U, c y)` with `U` uniform. Its least `δ₁` is the statistical distance of the two pairs, `hidingGap My c`.
 hm96's `My` is the Hankel matrix of its key (`hankel`, `verity/commitments/hm96/PROTOCOL.md` §2), a universal family
 (`Universal`), and the leftover hash lemma bounds the gap's mean over a uniform key (§3).

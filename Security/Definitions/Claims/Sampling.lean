@@ -24,23 +24,23 @@ the code side's.
 4. **Scope** (`InScope`, `ScopeMatches`): a topologically ordered program; a partition of all its gates into proof units,
    each of at most 16 output bits (the literal limit), each replay unit's proof units consecutive; and a well-formed
    design, one rule per class.
-5. **Named pieces**: the commitment (`Commitment`, `Commitment.Binds`); the program and its units (`BGate`, `Prog`,
-   `Partition`, `Prog.Correct`); the universal unit (`Netlist`, `Universal`), a fact about the programs private circuits
-   run as; the acceptance probabilities (`OneStage.Pa`, `Rule.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs,
-   in each `k` accepted reruns of the second stage, in each Flock's `E^rep` on every checked unit's session; the
-   expected-time finder (`Bext`); and the parameters (`Deploy`).
+5. **Named pieces**: the commitment (`Commitment`, `Commitment.Binds`, and its published leaf layer `Commitment.layer`);
+   the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal unit (`Netlist`,
+   `Universal`), a fact about the programs private circuits run as; the acceptance probabilities (`OneStage.Pa`,
+   `Rule.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the second stage, in
+   each Flock's `E^rep` on every checked unit's session; the expected-time finder (`Bext`); and the parameters
+   (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`).
 6. **Claims**: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at the units' sessions and
    `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`; `Complete`; `ScopeMatches`;
-   `ZK`; `Bits`; `Efficient`; and `Nontrivial`.
-7. **Assumptions used**: `StrictBirthday` (for `B`), `ExpectedCR` (for `Bext`), and `trustedBase`. The roots' hiding is
-   the deployed instance's (`CommitHides` at the hm96 leaves); `ZK` is relative to `x`, which holds them.
+   `ZK`, relative to the trace's published leaf layer; `Bits`; `Efficient`; and `Nontrivial`.
+7. **Assumptions used**: `StrictBirthday` (for `B`), `ExpectedCR` (for `Bext`), and `trustedBase`. `ZK` gives the
+   simulator the leaf layer the protocol publishes, so it reads no hiding assumption of the leaves.
 8. **Status**: stated; `FaultyBoundary` is proved (`Proofs.Flock.SamplingBoundary`), no other claim is.
 
 Generic pieces this block adds, which move to `Definitions.Claims` in a later change: `LogColl`, `ofOC`, `ownLog`,
-`flatMapRP`, `waitAccC`, `forkOn`, `Bext`, `lamLin`, `BitsLin` and `ExtractOwnLe`. Two are local copies of definitions
-being moved into the frozen spec, replaced when they land: `ZKmalR` (with `spLog` and `simLog`), zero knowledge against
-the protocol's rounds with the simulator's collisions charged, and the list-decoding spec in its radius form, `fill` and
-`ListWithin`. Nothing here reads Flock's decoding threshold or count (`agree`, `nMin`).
+`flatMapRP`, `waitAccC`, `forkOn`, `Bext`, `lamLin`, `BitsLin`, `ExtractOwnLe` and `SimLeak`. Zero knowledge is the
+spec's `ZKmalR` and the decoder spec Flock's radius form, `Flock.ListWithin` at `Flock.Deploy`'s `len` and `θ`; nothing
+here reads Flock's former decoding threshold or count (`agree`, `nMin`).
 
 Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Models/Flock/Guarantees/SamplingClaims.lean`), whose statement
 reads every claim here: the lock records each one's text under `reads`, so a changed claim is a changed record.
@@ -60,10 +60,12 @@ structure Opening (α : Type) where
   data : Msg
 
 /-- **The commitment**, a named primitive: a hiding commitment to values at positions under public roots, with its
-opening check `opens`. The deployed instance is hm96 leaves in frame-v3-sha512 trees; its storage layout is behind
-`opens`. -/
+opening check `opens` and its published leaf layer: `layer H roots os`, the leaves under `roots` of the values the
+openings `os` open. The deployed instance is hm96 leaves in frame-v3-sha512 trees, its layer every hm96 leaf under the
+roots in tree order; its storage layout is behind `opens`. -/
 structure Commitment (α : Type) where
   opens : List Msg → Opening α → OC Bool
+  layer : (Msg → Msg) → List Msg → List (Opening α) → List Msg
 
 /-- Whether `o` opens under `roots`. -/
 def Commitment.Opens {α : Type} (H : Msg → Msg) (Cm : Commitment α) (roots : List Msg) (o : Opening α) : Bool :=
@@ -395,29 +397,21 @@ def Design.WellFormed (d : Design) (P : Partition) : Prop :=
   d.rules.length = P.classes.length ∧ ∀ p ∈ d.rules.zip P.classes, p.1.WellFormed p.2
 
 /-- **The sampling scope, readable**, at the statement's partition: a topologically ordered program, partitioned into
-proof units of at most 16 output bits with each replay unit's consecutive, and a well-formed design. -/
+proof units of at most 16 output bits with each replay unit's consecutive, and a well-formed design.
+
+The query: whatever its own width parameter, every unit, input units included, has at most 16 committed values, the
+literal limit. Served partitions are `Q_word` v1 at `X = 16`; `Q_call` v1 is in scope at `X ≤ 16`. Its `X = 32`, which
+circuit-check records beside `Q_word`, is not served, and a unit with more than 16 committed values is out of scope. -/
 def InScope (P : Partition) (s : Stmt) : Prop :=
   s.prog.Topological ∧ P.Partitions s.prog ∧ s.design.WellFormed P
 
 /-! ## 5. Named pieces -/
 
-/-- The zero-filled word of length `n`: at each position the first opened column there, zero where none was opened. -/
-def fill {Col : Type} [Zero Col] (n : ℕ) (os : List (ℕ × Col)) : Fin n → Col :=
-  fun i => ((os.find? fun p => p.1 == i.val).map Prod.snd).getD 0
-
-/-- **List decoding within radius `θ`**: `decode` lists every trace whose encoding agrees with the zero-filled word of
-its codeword length `len M` on at least `(1 - θ M)·len M` positions. The radius is read per trace, like the length. -/
-def ListWithin {Col T : Type} [DecidableEq Col] [Zero Col] (len : T → ℕ) (enc : T → ℕ → Col) (θ : T → ℝ)
-    (decode : List (ℕ × Col) → List T) : Prop :=
-  ∀ (os : List (ℕ × Col)) (M : T),
-    (1 - θ M) * len M ≤ ((Finset.univ : Finset (Fin (len M))).filter fun i => enc M i.val = fill (len M) os i).card →
-    M ∈ decode os
-
 /-- What the deployed sampled verifier brings, read by the claims: the verifier, its parser and scope check, its own
 evaluation of a partition query on a program (`partition`, `P = Q(C)`), the trace's commitment, the universal unit of
-each size class (the program a private circuit's units run, its arguments the private netlist), and what its sessions
-read of the Flock verifier they run: whether it is the masked one, its parser, the opened columns of a run, the code, each
-trace's codeword length and rate, and how a trace is read as a witness.
+each size class (the program a private circuit's units run, its arguments the private netlist), and the Flock verifier
+its sessions run (`flock`): whether it is the masked one, its parser, the opened columns of a run, the code, each
+trace's codeword length and decoding radius, and how a trace is read as a witness.
 
 The draw is `V`'s, from its coins, in this layout: `stage2` holds the rounds after the first stage (the proof units'
 draw under two-stage sampling, and the sessions), so runs that keep the other rounds make the same first draw and see the
@@ -436,13 +430,7 @@ structure Deploy (Coin Col T : Type) where
   partition : Prog → Query → Option Partition
   commit : Commitment Bool
   universal : SizeClass → Prog
-  flockZk : Bool
-  flockParse : Msg → Option Flock.Stmt
-  cols : Seen → List (ℕ × Col)
-  enc : T → ℕ → Col
-  len : T → ℕ
-  rate : T → ℝ
-  read : T → Flock.Wit
+  flock : Flock.Deploy Coin Col T
   stage2 : (x : Msg) → Finset (Fin (V.k x))
   checked : (x : Msg) → (Fin (V.k x) → Coin) → List (ℕ × ℕ)
   rounds : (x : Msg) → ℕ × ℕ → Finset (Fin (V.k x))
@@ -454,10 +442,6 @@ structure Deploy (Coin Col T : Type) where
   εtable : Msg → ℝ
   weight : Msg → ℝ
   openCalls : Msg → ℕ
-
-/-- **Flock's radius** at a trace, `θ = 1 − √ρ − 1/200`, `ρ` its code's rate. -/
-noncomputable def Deploy.θ {Coin Col T : Type} (D : Deploy Coin Col T) (M : T) : ℝ :=
-  1 - Real.sqrt (D.rate M) - 1 / 200
 
 /-- The statement's partition, as the verifier evaluates its query; empty when the query doesn't apply. -/
 def Deploy.part {Coin Col T : Type} (D : Deploy Coin Col T) (s : Stmt) : Partition :=
@@ -525,7 +509,7 @@ def Deploy.cap (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 128 * D.k x
 /-- The opened columns of a checked unit's session. -/
 def Deploy.sessionCols (D : Deploy Coin Col T) (x : Msg) (u : ℕ × ℕ) (v : Seen) : List (ℕ × Col) :=
   match D.session x u v with
-  | some (_, vS) => D.cols vS
+  | some (_, vS) => D.flock.cols vS
   | none => []
 
 /-- The coins of one session's `E^rep`. -/
@@ -540,14 +524,14 @@ def checkRevealed {R : Type} (Cm : Commitment Bool) :
 /-- **A checked unit's extraction at an accepted run** `(r, v)`: Flock's `E^rep` on the unit's session, at a decoder,
 without its replay (the run accepted), its reruns fresh on the session's rounds and `r`'s elsewhere, so the prover makes
 the same session; then what its witness reveals that passes its opening check. -/
-noncomputable def unitExt (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
+noncomputable def unitExt (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
     (s : Stmt) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x) :
     RP (Fin (D.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
   match D.session x u v with
   | none => .ret []
   | some (xS, _) =>
-    (firstWait (D.innerK x) (D.sessionCols x u) (Flock.assemble H D.flockParse decode D.read xS)
-        (Flock.check H D.flockParse xS)
+    (firstWait (D.innerK x) (D.sessionCols x u) (Flock.assemble D.flock.parse decode D.flock.read xS)
+        (Flock.check D.flock.parse xS)
         ((List.finRange (D.innerWaits x)).map fun i =>
           (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j))).bind fun
       | none => .ret []
@@ -567,7 +551,7 @@ abbrev ECoins (D : Deploy Coin Col T) (x : Msg) :=
 /-- **The sampling extractor** at a decoder: replay the judged run; if it accepted, rerun on fresh coins until `k`
 accepted runs are in hand; at each, rerun fresh on the second stage until `k` accepted runs are in hand (each wait giving
 up after `K`); at each of those, extract every checked unit; and assemble. -/
-noncomputable def E (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
+noncomputable def E (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
     Extractor Coin Wit D.V where
   C x := ECoins D x
   ext x r₀ c := .rerun r₀ fun v₀ =>
@@ -581,7 +565,7 @@ noncomputable def E (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
                   []).bind fun inner =>
                 flatMapRP (fun li : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen) =>
                     flatMapRP (fun iu : Fin (nPU D x) × (ℕ × ℕ) =>
-                        unitExt H D decode x s iu.2 li.2.1 li.2.2 (c.2.2 (jo.1, li.1, iu.1)))
+                        unitExt D decode x s iu.2 li.2.1 li.2.2 (c.2.2 (jo.1, li.1, iu.1)))
                       ((List.finRange (nPU D x)).zip (D.checked x li.2.1)))
                   ((List.finRange (D.k x)).zip inner))
             ((List.finRange (D.k x)).zip outer)).bind fun found => .ret (some (assemble s found))
@@ -634,27 +618,29 @@ def ExtractOwnLe (H : Msg → Msg) {V : Verifier Coin} (E : Extractor Coin W V) 
 
 end Finder
 
-/-! ### Zero knowledge against the protocol's rounds -/
+/-! ### Zero knowledge given the published leaf layer -/
 
-/-- The `H` calls of a simulator program, in order, against `H` and the verifier `ask`. -/
-def spLog {α : Type} (H : Msg → Msg) (ask : List Msg → Out) : SP α → List (Msg × Msg)
-  | .ret _ => []
-  | .hash q k => (q, H q) :: spLog H ask (k (H q))
-  | .ask as k => spLog H ask (k (ask as))
+/-- **A simulator given the leakage**: its coins, and its program, which also receives what the protocol publishes
+beyond `x` (here the trace's leaf layer). -/
+structure SimLeak where
+  C : Msg → Type
+  [fin : ∀ x, Fintype (C x)]
+  [ne : ∀ x, Nonempty (C x)]
+  prog : (x : Msg) → List Msg → C x → SP (List (Msg × Out))
 
-/-- The simulator's `H` calls against `V*` at `θ`. -/
-def simLog {Θ : Type} (H : Msg → Msg) (S : Simulator) (Vs : VStar Θ) (θ : Θ) (x : Msg) (c : S.C x) :
-    List (Msg × Msg) :=
-  spLog H (fun as => ((Vs.next x as θ).eval H).1) (S.prog x c)
+attribute [instance] SimLeak.fin SimLeak.ne
 
-/-- **`ZKmalR(k, P, R, S, ε_zk)`**: for `(x, w) ∈ R`, every verifier `V*` and tape `θ` of the protocol's `k(x)` rounds,
-the transcript of `P(w)` against `V*` is within `ε_zk(x)` of `S`'s on every event, plus the probability that `S`'s
-SHA-512 calls hold a collision. -/
-def ZKmalR {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover Ω) (R : Rel W) (S : Simulator)
-    (εzk : Msg → ℝ) : Prop :=
-  ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (Ev : List (Msg × Out) → Prop),
-    |Pr (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
-      ≤ εzk x + Pr (fun c : S.C x => findColl (simLog H S Vs θ x c) ≠ none)
+/-- The simulator given the leakage `l x` at each statement `x`, as the spec's `Simulator`. -/
+def SimLeak.given (S : SimLeak) (l : Msg → List Msg) : Simulator where
+  C := S.C
+  prog x c := S.prog x (l x) c
+
+/-- **The published leaf layer** at `(x, w)`: the leaves under the statement's roots of the values `w` opens, empty on a
+statement that doesn't parse. A fixed function of `(x, w)`. -/
+def leafLayer (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (x : Msg) (w : Wit) : List Msg :=
+  match parse x with
+  | some s => Cm.layer H s.roots w.vals
+  | none => []
 
 /-! ## 6. Claims -/
 
@@ -698,16 +684,16 @@ def Scope (D : Deploy Coin Col T) (x : Msg) : Prop :=
 radius: `Pr[acc ∧ faulty ∉ M_δ] ≤ δ + ε_ks + ε_bind`, with `ε_ks = κ − δ + √(γ·Pr[B])` (Flock's error at the units'
 sessions) and `ε_bind = Pr[B_ext]` (the openings an accepted extraction checks disagree). -/
 def KS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ (δ : ℝ) decode, 0 ≤ δ → ListWithin D.len D.enc D.θ decode →
-    Claims.KSLin H D.V (R H D.commit D.parse D.partition δ) (E H D decode) (κ D δ) (γ D) (fun _ => 1)
-      (Bext H D.V (E H D decode))
+  ∀ (δ : ℝ) decode, 0 ≤ δ → Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
+    Claims.KSLin H D.V (R H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D) (fun _ => 1)
+      (Bext H D.V (E D decode))
 
 /-- **Sampling: KS, the count form** (a corollary of `KS` at `δ = miss(t)`): fewer than `t` units are faulty, except
 with probability `miss(t) + ε_ks + ε_bind`. -/
 def KSCount (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ t decode, ListWithin D.len D.enc D.θ decode →
-    Claims.KSLin H D.V (RCount H D.commit D.parse D.partition t) (E H D decode) (fun x => κ D (missAt D t x) x)
-      (γ D) (fun _ => 1) (Bext H D.V (E H D decode))
+  ∀ t decode, Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
+    Claims.KSLin H D.V (RCount H D.commit D.parse D.partition t) (E D decode) (fun x => κ D (missAt D t x) x)
+      (γ D) (fun _ => 1) (Bext H D.V (E D decode))
 
 /-- **Sampling: binding** of the trace's commitment, as a collision reduction, at every `H`. -/
 def Binding (D : Deploy Coin Col T) : Prop := ∀ H, D.commit.Binds H
@@ -736,17 +722,22 @@ def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → 
 /-- **Sampling: the readable scope is the verifier's.** -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
 
-/-- **Sampling: zero knowledge** of the honest prover with masked sessions, when no unit is faulty, against every
-malicious verifier of the sampled verifier's rounds (`ZKmalR`). -/
-def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (S : Simulator)
+/-- **Sampling: zero knowledge, relative to the published leaf layer**, of the honest prover with masked sessions when
+no unit is faulty, against every malicious verifier of the sampled verifier's rounds. This is `ZKmalR` with the
+simulator given the trace's leaf layer under the roots (`leafLayer`), which the protocol publishes: the leakage is that
+whole layer, a fixed function of `(x, w)`. `ZKmalR` runs one simulator per statement, so the claim holds at every
+assignment `l` of a leaf layer to each statement, on the honest pairs whose layer is `l x`. -/
+def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (S : SimLeak)
     (εzk : Msg → ℝ) : Prop :=
-  D.flockZk = true ∧ ZKmalR H D.V.k P (Rhon H D.commit D.parse D.partition) S εzk
+  D.flock.zk = true ∧ ∀ l : Msg → List Msg,
+    ZKmalR H D.V.k P (fun x w => Rhon H D.commit D.parse D.partition x w ∧ leafLayer H D.commit D.parse x w = l x)
+      (S.given l) εzk
 
 /-- **Sampling: bits** at every `δ ≥ 0`, `λ_δ = min(log₂(1/κ_δ), 255.5 − ½ log₂ γ, 256 − log₂(2c)) − log₂ 3`, at every
 decoder that lists every trace within Flock's radius. -/
 def Bits (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ (δ : ℝ) decode, 0 ≤ δ → ListWithin D.len D.enc D.θ decode →
-    BitsLin H D.V (R H D.commit D.parse D.partition δ) (E H D decode) (Bext H D.V (E H D decode))
+  ∀ (δ : ℝ) decode, 0 ≤ δ → Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
+    BitsLin H D.V (R H D.commit D.parse D.partition δ) (E D decode) (Bext H D.V (E D decode))
       fun x => lamLin (κ D δ x) (γ D x) 1 (work D x)
 
 /-- **Sampling: efficiency**: the extractor's reruns, at most `1 + K + k·(K + k·n_PU·m′·K′)` and
@@ -754,12 +745,12 @@ def Bits (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
 every trace within Flock's radius, with its stated complexity. -/
 def Efficient (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) : Prop :=
-  ExtractRunsLe H (E H D decode)
+  ExtractRunsLe H (E D decode)
       (fun x => 1 + D.cap x + D.k x * (D.cap x + D.k x * (nPU D x * (D.innerWaits x * D.innerCap x)))) ∧
-    ExtractRunsExpLe H (E H D decode)
+    ExtractRunsExpLe H (E D decode)
       (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)) ∧
-    ExtractOwnLe H (E H D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x) ∧
-    ListWithin D.len D.enc D.θ decode ∧ DecoderComplexity decode counted size p
+    ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x) ∧
+    Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode ∧ DecoderComplexity decode counted size p
 
 /-- **Sampling: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
 accepts. -/

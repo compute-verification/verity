@@ -94,6 +94,18 @@ def firstFailure (rules : List (Bool × String)) : Option String := (rules.find?
 
 def refusal (why : String) : String := s!"refused: {why}: a statement form the soundness proof does not cover"
 
+/-- The least `m` the proof covers: `25` under `--zk`, else `22`. -/
+def mMin (zk : Bool) : Nat := if zk then 25 else 22
+
+/-- **The tables' sizes the proof covers**: every table's `m` (`ms`, each table's `Setup.m`) at least `mMin`. A table's
+`m` is its drawn statement's, which only the setup computes, so `verify` checks this on the session's tables right after
+`check`, not on the statement's files. Each verifier's own schedule refuses a smaller `m` before it (`fast100` below `22`,
+`Zk.schedule` at `m ≤ 24`), so this refuses no session `verify` would otherwise accept. -/
+def sizesOk (zk : Bool) (ms : Array Nat) : Except String Unit :=
+  match ms.find? (· < mMin zk) with
+  | some m => .error (refusal s!"m = {m}, below {mMin zk}{if zk then " under --zk" else " without --zk"}")
+  | none => .ok ()
+
 /-- Where a shared-row public file (header `shared_rows`) is a form the proof covers: a `--zk` session of a statement
 with hidden outputs whose verifier holds its own registered reads (`--registered F`), the setting of
 `EndToEndRegistered` (an untyped statement, which `statementRules` requires of every form). -/
@@ -103,7 +115,8 @@ def sharedRowsOk (tags : Tags) (zk registered : Bool) : Bool := zk && tags.hidde
 file as the proof reads them, a shared-row public file only where `sharedRowsOk`, and `scopeOk` (`scopeOkH` for a
 statement with hidden outputs, whose headlines also cover `sha512/row/v2` and `sha512/row-seg/v1` rows). `tags` are the
 session's (under `--zk`, `Zk.tags`'s), `count` its tables, `publicInputs` whether the verifier holds its own public
-input words and `registered` whether it holds its own registered reads. When this check moves from `scopeOk` to a format
+input words and `registered` whether it holds its own registered reads. The tables' sizes are `sizesOk`'s, which `verify`
+runs after this on the tables the session set up. When this check moves from `scopeOk` to a format
 check (`formatOk`), a tail must stay refused (`c.outNet == c.unitNet`): `formatOk` puts no condition on a tail's stage
 nets, and the session headline's `keyProg` reads the unit nets only. -/
 def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)

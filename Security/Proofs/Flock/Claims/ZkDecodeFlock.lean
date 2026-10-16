@@ -91,6 +91,13 @@ theorem zkEncD_eq (M : ZkTrace) (q : ℕ) :
   unfold zkEncD IRS.famEnc flockZkLevelZero
   rw [zkLevelZero_enc]
 
+/-- **The masked code's length** at a candidate: `2^d` at its `m`. -/
+def zkLenD (M : ZkTrace) : ℕ := 2 ^ zkLen M.1
+
+/-- **The masked code's radius** at a candidate: `1 − √ρ_zk − 1/200` at its `m`, `ρ_zk = (2^cols + t)/2^d`. -/
+noncomputable def zkThetaD (M : ZkTrace) : ℝ :=
+  1 - Real.sqrt (((2 : ℝ) ^ zkCols M.1 + zkPad M.1) / 2 ^ zkLen M.1) - 1 / 200
+
 /-- **The deployed masked code's Johnson count** at `agree`: the candidate's code's,
 `⌊(2^cols + t + 1)/agree²⌋ + 1` at its `m` (`zkNMinD_eq`). -/
 noncomputable def zkNMinD (agree : ℝ) (M : ZkTrace) : ℕ :=
