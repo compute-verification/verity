@@ -3,16 +3,20 @@
  "proved_in": ["Proofs"],
  "assumptions": {
   "Accounting.Assumptions.PouwDetection": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "3fc26faa7c656f11bfca790d2e20bd400fe1d80ed62b71c22fe2f32e056b67e1"
   },
   "Accounting.Assumptions.PouwFloorOff": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "cb69980ba4455ac7c7d3ab82f79bdb5feffc93ef386cb447f23bb32f3f2542f7"
   },
   "Accounting.Assumptions.PouwHelpBound": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "f29e9b0238ad0658794339e9247e6e746b53c7c915d232cfa44a1db23084ef10"
   },
   "Accounting.Assumptions.PouwLuck": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "0a53fdf464410f9e8d1e6a3af8793d11656045cb65e70da05e11362d45ac4c4c"
   },
   "Accounting.Assumptions.RateComputeAdditive": {
    "owner": "@memory-accounting",
@@ -903,7 +907,10 @@
    "type_hash": "31c0943a819102e21c0f851f870d2ab5a9e93937491c328813e69182e5fccce1"
   },
   "Accounting.SecurityProofs.PouwLocalOff": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.PouwLocalOff : Accounting.Guarantees.PouwLocalOff"],
+   "assumptions": [],
+   "type_hash": "14fc8839652c00b0a01f3ef7ca1a00dc6d81947286cfbe1f4de32537cd8abd99"
   },
   "Accounting.SecurityProofs.RateAudit": {
    "owner": "@memory-accounting",
@@ -5222,7 +5229,7 @@
  },
  "reads": {
   "Definitions.Accounting.Actual": {
-   "digest": "f9d20f9ec1bb25ea4db878fb5422276c4cb3dab2e3f0d6e483c6873e365033cd",
+   "digest": "501597b1939d2b6298104b1d71568eb15f3d1be16861e311fb16a0c7b693f6fe",
    "definitions": {
     "Accounting.Placed": "8e88821bb1082b7132148634f8e1329a4e2b57af20bc00f6c57ad1a0dee06ce0",
     "Accounting.Placed.Faithful": "dd1c3dc448a9eec6faab34e7ee7b67c139aa2282fd3d8aa4667febba871c3bb4",
@@ -5230,6 +5237,7 @@
     "Accounting.Placed.cell": "023af47cec2f181ace8b7830d2f1752d8b88a235bf777a56d7a8e279c403fe51",
     "Accounting.Placed.cut": "891d150c292c8c2153e75fea539db7bd81f47f21fdb3a06d4d95a1225a9c8591",
     "Accounting.Placed.declaration": "208dafa0b84502054fe4dcfae508dac8a9a1f2b06a8f8f83b2c881d6b3c81e31",
+    "Accounting.Placed.ingress": "3340b0af72432101da54dfbed17f8014fa047f69c4e7940a355dc5cdcf057c96",
     "Accounting.Placed.region": "9a00e0b16d67d8bb6a52b3d1ecb4337ea0891720392913f218ce04de54c9efb9",
     "Accounting.Placed.state": "947a5efbb5f3e50de4ecc5bf17d54a8105af813f589323646b617947283c8b0e",
     "Accounting.Placed.t": "18a96559a967f791a812307b287978fd44ff6d3c23193444916713641f88c886",
@@ -5251,6 +5259,7 @@
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
@@ -5526,6 +5535,7 @@
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
@@ -5746,6 +5756,27 @@
     "Accounting.RealizesPouw": "922e85f67672e49cc3ca153073a7750044108844f7cae926d4b88c4c25ce9c1d"
    },
    "guarantees": ["Accounting.SecurityProofs.ComputeOfPouw", "Accounting.SecurityProofs.ComputeOfPouwPerRun"]
+  },
+  "Definitions.Accounting.PouwWork": {
+   "digest": "0df5ff86b2a5b390c3d8344b1aa0d282629286856ac767960753307f94b4dc4a",
+   "definitions": {
+    "Accounting.PouwWork.Accepts": "8f2feb70aab449e9ce4616639a008129fbcc37f38194ef9924365276d041f5b6",
+    "Accounting.PouwWork.Inbox": "e73eaf6f67becf112915150afb3077086a49c8886c37fbdbcda502897e4f60ed",
+    "Accounting.PouwWork.Verdict": "436c9f5e2a143898b43ace16a15d4e85d727c968ea224cf5f1d418a91ca36704",
+    "Accounting.PouwWork.Verdict.N": "c14dc57f6abb78e34ac876832fc78a02fa3cb13b7f8deb4450f314695876e626",
+    "Accounting.PouwWork.Verdict.V": "d0300dcb65c67ec0da4e414fdd85bb45e41633c036c1a9360b6b90b14f26e1ca",
+    "Accounting.PouwWork.Verdict.accept": "6d6287e117cff33663fb99b015395960ef40521578d54aa5e0bd402280919e5b",
+    "Accounting.PouwWork.Verdict.target": "49daa07e2f2e16504936e6c50bb657af0fac584afab314963511f7d5d2e73510",
+    "Accounting.PouwWork.Verdict.td": "c35c8daed831f4f1d446afb2777a74e8211150bdb762083da6e5f371da0ae867",
+    "Accounting.PouwWork.Verdict.ts": "092d170c0d68e2d83e8e73832b9e206ddb0fe44dd5fa309b6354de4a13d259f9",
+    "Accounting.PouwWork.Verdict.word": "7983aafab7db728d33b2b8dcd1e963b4f6163a2c90f06b4d1c0d5f4e3d788229",
+    "Accounting.PouwWork.credits": "7561416760ce2f0eef508cc4be1e9da645b2e426e2640a9e2a2304ac2ab69dd0",
+    "Accounting.PouwWork.good": "136449270d0601735a8e450d8189901ae5c5d35e11502818bc29e5b18066f53c",
+    "Accounting.PouwWork.goodAll": "5445693129e4958d3b7bfeca8eed49f5298308fbfedbb16dbe14b96577fd188e",
+    "Accounting.PouwWork.help": "7a9702d97e84bca1e3e4428126f2f8262ac1e05cabfccb9a5961310fca1bd573",
+    "Accounting.PouwWork.inbox": "3624699338f625bd4606d0ecf66813147343885bd1c87a55fdf6338ab8ea8e16"
+   },
+   "guarantees": ["Accounting.SecurityProofs.PouwLocalOff"]
   },
   "Definitions.Accounting.RateAudit": {
    "digest": "dbd9158c737c887d04c2b85fc90aab289bee7fc51a569bf63d86b2cad42086a9",
@@ -6697,6 +6728,7 @@
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
@@ -7718,6 +7750,7 @@
     "Accounting.SecurityProofs.PearlCEndToEndPerRun",
     "Accounting.SecurityProofs.PearlCStopEndToEndPerRun",
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
+    "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
@@ -15738,6 +15771,16 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
+  "Models.Accounting.Assumptions.PouwWork": {
+   "digest": "c7c56c81ae1e51b82ad42c21ee71a1ef2f4b742c30549c10b8a5c741d3c13e77",
+   "definitions": {
+    "Accounting.Assumptions.PouwDetection": "3fc26faa7c656f11bfca790d2e20bd400fe1d80ed62b71c22fe2f32e056b67e1",
+    "Accounting.Assumptions.PouwFloorOff": "cb69980ba4455ac7c7d3ab82f79bdb5feffc93ef386cb447f23bb32f3f2542f7",
+    "Accounting.Assumptions.PouwHelpBound": "f29e9b0238ad0658794339e9247e6e746b53c7c915d232cfa44a1db23084ef10",
+    "Accounting.Assumptions.PouwLuck": "0a53fdf464410f9e8d1e6a3af8793d11656045cb65e70da05e11362d45ac4c4c"
+   },
+   "guarantees": ["Accounting.SecurityProofs.PouwLocalOff"]
+  },
   "Models.Accounting.Assumptions.RateAudit": {
    "digest": "618d4efa22290724ea065c4e28dfe53f6de97be709b07b84e7e1a22cb85386dc",
    "definitions": {
@@ -15973,6 +16016,13 @@
     "Accounting.Guarantees.ComputeOfPouw": "5fc05a0bf3cecc92f48c9ad1985ea4e909913f1c540c7fb9568999ce197a23fc"
    },
    "guarantees": ["Accounting.SecurityProofs.ComputeOfPouw"]
+  },
+  "Models.Accounting.Guarantees.PouwWork": {
+   "digest": "5860900bc05882e2f21dd30881c2d78f3353bb902f67d7fa8063270796729c76",
+   "definitions": {
+    "Accounting.Guarantees.PouwLocalOff": "3d4973e9bca7245702c1884ebfef300dbdf16d0f1df16e1c003c44477c771349"
+   },
+   "guarantees": ["Accounting.SecurityProofs.PouwLocalOff"]
   },
   "Models.Accounting.Guarantees.RateAudit": {
    "digest": "771e8ae0e18148b03e4cae3cbf3dedeb6f5389a4c21aa841edbe30a68218da09",
