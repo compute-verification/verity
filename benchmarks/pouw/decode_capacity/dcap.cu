@@ -1191,7 +1191,13 @@ static int gate(Dev& d) {
   return fails;
 }
 
+// flin.cuh's linears and attention blocks are MMA kernels outside the filler, so a driver that includes this file
+// (defining main away) gets them only by asking (DCAP_FLIN: fscore.cu): dscore.cu's build, whose SASS the scorer reads
+// for its kernel facts, then holds the filler's MMAs alone
+#if !defined(main) || defined(DCAP_FLIN)
+#define DCAP_HAS_FLIN
 #include "flin.cuh"
+#endif
 
 int main(int argc, char** argv) {
   if (argc < 2) {
@@ -1208,6 +1214,7 @@ int main(int argc, char** argv) {
   }
   const std::string mode = argv[1];
   g_graph = !(getenv("DCAP_NOGRAPH") && atoi(getenv("DCAP_NOGRAPH")));
+#ifdef DCAP_HAS_FLIN
   g_pdl = !(getenv("FLIN_PDL") && !atoi(getenv("FLIN_PDL")));
   g_lt_mask = getenv("FLIN_LT") ? atoi(getenv("FLIN_LT")) : 0;
   g_fatt_pdl = getenv("FATT_PDL") ? atoi(getenv("FATT_PDL")) : 0;
@@ -1219,6 +1226,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "FATT_LAZY must be 0, 2 or 4\n");
     return 1;
   }
+#endif
   if (const char* cs = getenv("DFILL_COINS")) {
     if (strlen(cs) != 32 || sscanf(cs, "%16llx%16llx", (unsigned long long*)&g_c0, (unsigned long long*)&g_c1) != 2) {
       fprintf(stderr, "DFILL_COINS must be 32 hex digits\n");
@@ -1322,6 +1330,7 @@ int main(int argc, char** argv) {
       return 1;
     }
     rc = run_dfill(d, B, L, place, fsm, W, NC, S, argc > 9 ? atoi(argv[9]) : 9);
+#ifdef DCAP_HAS_FLIN
   } else if (mode == "fgate") {
     rc = flin_gate(d);
   } else if (mode == "flin") {
@@ -1337,6 +1346,7 @@ int main(int argc, char** argv) {
       return 1;
     }
     rc = run_fstep(d, B, L, atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), fsm, argc > 9 ? atoi(argv[9]) : 9);
+#endif
   } else {
     fprintf(stderr, "unknown mode %s\n", mode.c_str());
     return 1;

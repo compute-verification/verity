@@ -26,6 +26,7 @@
 //        2R + 4 + r round r's fused work, 3R + 4 the fused power window (3R + 5 <= POINT_SLOTS).
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a fscore.cu -lcublasLt -lnvidia-ml -ldl
+#define DCAP_FLIN
 #define main dcap_main
 #include "../decode_capacity/dcap.cu"
 #undef main
