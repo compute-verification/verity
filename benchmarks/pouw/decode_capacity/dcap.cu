@@ -145,6 +145,29 @@ __global__ void __launch_bounds__(256) pv_dec(const int8_t* __restrict__ V, cons
   }
 }
 
+// R[r][j] = A[r·rs] . W[j], s8 x s8 -> s32 by dp4a, for the sampled rows r < mr (k a multiple of 16)
+__global__ void ref_rows(const int8_t* __restrict__ A, const int8_t* __restrict__ W, int* __restrict__ R, int mr, int rs,
+                         int n, int k) {
+  const size_t idx = blockIdx.x * (size_t)blockDim.x + threadIdx.x;
+  if (idx >= (size_t)mr * n) return;
+  const int r = (int)(idx / n), j = (int)(idx % n);
+  const int4* a = reinterpret_cast<const int4*>(A + (size_t)r * rs * k);
+  const int4* w = reinterpret_cast<const int4*>(W + (size_t)j * k);
+  int s = 0;
+  for (int t = 0; t < k / 16; t++) {
+    const int4 x = a[t], y = __ldg(w + t);
+    s = __dp4a(x.x, y.x, __dp4a(x.y, y.y, __dp4a(x.z, y.z, __dp4a(x.w, y.w, s))));
+  }
+  R[idx] = s;
+}
+__global__ void count_neq_rows(const int* __restrict__ D, const int* __restrict__ R, int mr, int rs, int n,
+                               unsigned long long* c) {
+  const size_t idx = blockIdx.x * (size_t)blockDim.x + threadIdx.x;
+  if (idx >= (size_t)mr * n) return;
+  const int r = (int)(idx / n), j = (int)(idx % n);
+  if (D[(size_t)r * rs * n + j] != R[idx]) atomicAdd(c, 1ull);
+}
+
 __global__ void fill_s8(int8_t* p, size_t n, uint64_t seed) {
   for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) {
     uint64_t x = (i + 1) * 0x9E3779B97F4A7C15ull ^ seed;
@@ -159,16 +182,20 @@ struct Lt {
   cublasLtMatrixLayout_t la, lb, ld;
   cublasLtMatmulAlgo_t algo;
   int algo_id = -2;
+  int rejected = 0;  // heuristic candidates whose output differed from ref_rows
   float ms = 0;
 };
 static cublasLtHandle_t g_lt;
 static void* g_ws;
 static const size_t g_wsz = 64u << 20;
+static int* g_ref;                 // ref_rows' output, up to 256 rows x VOCAB
+static unsigned long long* g_cnt;  // mismatch counter
 static void lt_run(const Lt& L, const void* A, const void* W, void* D, cudaStream_t st) {
   const int32_t one = 1, zero = 0;
   CL(cublasLtMatmul(g_lt, L.op, &one, W, L.la, A, L.lb, &zero, D, L.ld, D, L.ld, &L.algo, g_ws, g_wsz, st));
 }
-// the fastest of the heuristic's top 16 over 5 calls, timed on the given buffers
+// the fastest of the heuristic's top 16 over 5 calls, timed on the given buffers, among the candidates whose output equals
+// ref_rows on every row (m <= 256) or on 256 rows spread over m: a configuration that computes something else is never timed.
 static Lt lt_make(int m, int n, int k, const void* A, const void* W, void* D, cudaStream_t st) {
   Lt L;
   CL(cublasLtMatmulDescCreate(&L.op, CUBLAS_COMPUTE_32I, CUDA_R_32I));
@@ -190,11 +217,24 @@ static Lt lt_make(int m, int n, int k, const void* A, const void* W, void* D, cu
   float best = 1e30f;
   int bi = -1;
   const int32_t one = 1, zero = 0;
+  const int mr = std::min(m, 256), rs = m / mr;
+  const size_t nchk = (size_t)mr * n;
+  ref_rows<<<(unsigned)((nchk + 255) / 256), 256, 0, st>>>((const int8_t*)A, (const int8_t*)W, g_ref, mr, rs, n, k);
   for (int i = 0; i < got; i++) {
     if (res[i].state != CUBLAS_STATUS_SUCCESS) continue;
+    CK(cudaMemsetAsync(D, 0xA5, (size_t)m * n * sizeof(int), st));
     if (cublasLtMatmul(g_lt, L.op, &one, W, L.la, A, L.lb, &zero, D, L.ld, D, L.ld, &res[i].algo, g_ws, g_wsz, st) !=
         CUBLAS_STATUS_SUCCESS)
       continue;
+    CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, st));
+    count_neq_rows<<<(unsigned)((nchk + 255) / 256), 256, 0, st>>>((const int*)D, g_ref, mr, rs, n, g_cnt);
+    unsigned long long bad = 0;
+    CK(cudaMemcpyAsync(&bad, g_cnt, sizeof bad, cudaMemcpyDeviceToHost, st));
+    CK(cudaStreamSynchronize(st));
+    if (bad) {
+      L.rejected++;
+      continue;
+    }
     CK(cudaEventRecord(e0, st));
     for (int r = 0; r < 5; r++) cublasLtMatmul(g_lt, L.op, &one, W, L.la, A, L.lb, &zero, D, L.ld, D, L.ld, &res[i].algo, g_ws, g_wsz, st);
     CK(cudaEventRecord(e1, st));
@@ -372,8 +412,8 @@ static void run_step(Dev& d, int kind, int M, int L, int reps) {
          KN[kind], M, kind == 0 ? 0 : L, g_graph ? "true" : "false", lin_macs, att_macs, wrapped ? "true" : "false",
          missing ? "true" : "false");
   for (size_t j = 0; j < p.size(); j++)
-    printf("%s{\"name\": \"%s\", \"id\": %d, \"ms_alone\": %.4f}", j ? ", " : "", j < 4 ? LNAME[j] : "lm_head", p[j].algo_id,
-           p[j].ms);
+    printf("%s{\"name\": \"%s\", \"id\": %d, \"rejected\": %d, \"ms_alone\": %.4f}", j ? ", " : "", j < 4 ? LNAME[j] : "lm_head",
+           p[j].algo_id, p[j].rejected, p[j].ms);
   printf("]");
   emit_reps(v, lin_macs + att_macs, lin_bytes + att_bytes, d.sms);
 }
@@ -413,8 +453,9 @@ static int gate(Dev& d) {
         for (int t = 0; t < k; t++) s += (int)A[(size_t)i * k + t] * (int)W[(size_t)j * k + t];
         bad += s != Dh[(size_t)i * n + j];
       }
-    printf("{\"mode\": \"gate\", \"what\": \"cublaslt\", \"m\": %d, \"n\": %d, \"k\": %d, \"algo\": %d, \"mismatches\": %ld, \"ok\": %s}\n",
-           m, n, k, p.algo_id, bad, bad ? "false" : "true");
+    printf("{\"mode\": \"gate\", \"what\": \"cublaslt\", \"m\": %d, \"n\": %d, \"k\": %d, \"algo\": %d, \"rejected\": %d, "
+           "\"mismatches\": %ld, \"ok\": %s}\n",
+           m, n, k, p.algo_id, p.rejected, bad, bad ? "false" : "true");
     fails += bad != 0;
   }
   // attention at B = 3, L = 1536 (several blocks in x, a partial block), against the host
@@ -479,7 +520,7 @@ int main(int argc, char** argv) {
   g_graph = !(getenv("DCAP_NOGRAPH") && atoi(getenv("DCAP_NOGRAPH")));
   Dev d;
   CK(cudaSetDevice(0));
-  CK(cudaStreamCreateWithFlags(&d.st, cudaStreamNonBlocking));
+  CK(cudaStreamCreate(&d.st));  // blocking: the gate's cudaMemset and cudaMemcpy on the default stream order with it
   CK(cudaDeviceGetAttribute(&d.sms, cudaDevAttrMultiProcessorCount, 0));
   if (nvmlInit() != NVML_SUCCESS) { fprintf(stderr, "nvmlInit failed\n"); return 2; }
   char bus[32];
@@ -496,6 +537,8 @@ int main(int argc, char** argv) {
   fprintf(stderr, "device %s %s, %d SMs\n", name, uuid, d.sms);
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
+  CK(cudaMalloc(&g_ref, (size_t)256 * VOCAB * sizeof(int)));
+  CK(cudaMalloc(&g_cnt, sizeof *g_cnt));
   const bool need_w = mode == "lin" || mode == "step" || mode == "gate";
   if (need_w) {
     for (int l = 0; l < LAYERS; l++)
