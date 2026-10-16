@@ -10,8 +10,8 @@ pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the
 the zerocheck (`Zerocheck`: the prover's in closed form, `zerocheckP_go`, and the verifier's on its rounds,
 `zerocheckWith_of`; `ZerocheckAlgebra`: on an R1CS-valid trace whose outer coins avoid 1 the residual claim ends at
 final_a · final_b, `fold_final`; `ZerocheckGoal`: the skeleton's `Zerocheck` from R1CS-valid traces and the session
-walk's alignment of each rep, `zerocheck_goal`, with the coins read back, `coinOf_bytes`, and a returning rep's
-zerocheck, `repP_zerocheck`), the lincheck (`Lincheck`: the prover's in closed form, `lincheckP_go`, the verifier's
+walk's alignment of each rep, `zerocheck_goal`, no outer coin `1` at a good case, `Run.outer_ne_one`, and a returning
+rep's zerocheck, `repP_zerocheck`), the lincheck (`Lincheck`: the prover's in closed form, `lincheckP_go`, the verifier's
 on its rounds, `lincheckWith_of`, and the skeleton's `Lincheck` given the lincheck's algebra, `lincheck_goal`), and the
 ring switch (`RingSwitch`: the prover's in closed form, `ringSwitchP_go`, the verifier's on its rounds,
 `ringSwitchWith_of`, and the skeleton's `RingSwitch` given each claim's switched vector meets its value,
