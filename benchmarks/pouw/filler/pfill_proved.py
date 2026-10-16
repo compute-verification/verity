@@ -31,8 +31,10 @@ scorer's proved 0.225; the filler is read at
     (≥ 1.935). r4's luck lemma is stated on bU's alphabet, so this reading is pending referee.
 
 Every count-based reading (all but the placeholder and the chained floor) is at the arm's fold share (`fold_share`): ram's
-receipt reads a pair only through Q = a0 d0 + d1, so it certifies half the words and halves each floor; duo and XOR-in
-read every word (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2).
+receipt reads a pair only through Q = a0 d0 + d1, so it certifies half the words and halves each floor; duo, LOP3+IMAD
+and XOR-in (13, 19) read every word (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2,
+note:20261016T1117Z-draft-fullfloor-s-r9). Those readings of an arm whose fold is under referee (`fold_status`: r9's
+two folds) carry ", fold provisional" in their status.
 
   python3 benchmarks/pouw/filler/pfill_proved.py OUT_DIR [--json]
 """
@@ -45,7 +47,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import scoring as S
-from pfill_arm import fold_share, products_per_slot, theorem_k_setting
+from pfill_arm import fold_share, fold_status, products_per_slot, theorem_k_setting
 
 READINGS = {
     "proved": (0.225, "proved", "Theorem E c/m = 1/4 at phi = 0.9, heads at 8 int8 slots"),
@@ -91,11 +93,13 @@ def readings(out: Path) -> dict:
     k = K_READINGS if "noise:sha512-coins-bU" in (lin.get("mechanism") or []) else K01_READINGS
     table = {**READINGS, **(E2M1_READINGS if products_per_slot(lin) == 2 else {}),
              **(k if theorem_k_setting(lin) else {})}
-    share = fold_share(lin)
+    share, fold = fold_share(lin), fold_status(lin)
     res = {}
     for name, (f, status, src) in table.items():
         if name not in UNFOLDED and share != 1:
             f, src = f * share, f"{src}; x{share} for the arm's receipt fold (ram certifies pairs)"
+        if name not in UNFOLDED and fold:
+            status = f"{status}, fold {fold}"
         sc = S.score(st, certified(f, status, src))
         res[name] = {"filler_fraction": f, "status": status, "SCORE": sc.get("SCORE"), "min": sc.get("min"),
                      "min_mix": sc.get("min_mix"), "missing": sc["missing"]}
