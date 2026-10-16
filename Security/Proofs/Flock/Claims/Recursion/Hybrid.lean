@@ -115,23 +115,25 @@ noncomputable def PrBadGood (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R
     (run H P V x s.1 s.2.1).out = .acc ∧ ServedGood H V R₂ E₂ dec m k K opens assemble check x P s.1 s.2.1 s.2.2 ∧
       ¬ R.ext x ((servedERep V E₂ dec m k K opens assemble check).eval H P x s.1 s.2.1 s.2.2).1
 
-/-- **Some outer extraction fails at most `1 + m·k` times as often as `E₂` does** (Wald's identity at the indicator of
-`E₂`'s failure). -/
-theorem Pr_not_servedGood_le (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V)
+/-- **An event at some draw the inner stage reruns at is at most `1 + m·k` times as likely as at one draw** (Wald's
+identity at the event's indicator as the weight): for every event `Q` of the tape and a draw. -/
+theorem Pr_exists_rerun_le (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} [Fintype Ω]
-    (P : Prover Ω) :
+    (P : Prover Ω) (Q : Ω → (Fin (V.k x) → Coin) × E₂.C x → Prop) :
     Pr (fun s : Ω × (Fin (V.k x) → Coin) × (servedERep V E₂ dec m k K opens assemble check).C x =>
-      ¬ ServedGood H V R₂ E₂ dec m k K opens assemble check x P s.1 s.2.1 s.2.2) ≤
-      (1 + m x * k x) * PrBad H V R₂ E₂ x P := by
+      ∃ d ∈ (erepProg (m x) (k x) (K x) opens (assemble x) (check x) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
+        (servedRun H (outerStage E₂ dec x) (run H P V x s.1)), Q s.1 d) ≤
+      (1 + m x * k x) * Pr (fun t : Ω × (Fin (V.k x) → Coin) × E₂.C x => Q t.1 t.2) := by
   classical
-  let w : Ω → (Fin (V.k x) → Coin) × E₂.C x → ℝ := fun ω d => if OuterFails H V R₂ E₂ x P ω d then 1 else 0
+  let w : Ω → (Fin (V.k x) → Coin) × E₂.C x → ℝ := fun ω d => if Q ω d then 1 else 0
   have hw : ∀ ω d, 0 ≤ w ω d := fun ω d => by simp only [w]; split_ifs <;> norm_num
   let L : Ω → ((Fin (V.k x) → Coin) × E₂.C x) × (Fin (m x) → Fin (K x) → (Fin (V.k x) → Coin) × E₂.C x) → ℝ :=
     fun ω t => (((erepProg (m x) (k x) (K x) opens (assemble x) (check x) t.1 t.2).rerunsAt H
       (servedRun H (outerStage E₂ dec x) (run H P V x ω))).map (w ω)).sum
   have hpt : ∀ s : Ω × (Fin (V.k x) → Coin) × (servedERep V E₂ dec m k K opens assemble check).C x,
-      (if ¬ ServedGood H V R₂ E₂ dec m k K opens assemble check x P s.1 s.2.1 s.2.2 then (1 : ℝ) else 0) ≤
+      (if ∃ d ∈ (erepProg (m x) (k x) (K x) opens (assemble x) (check x) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
+        (servedRun H (outerStage E₂ dec x) (run H P V x s.1)), Q s.1 d then (1 : ℝ) else 0) ≤
         L s.1 ((s.2.1, s.2.2.1), s.2.2.2) := by
     intro s
     have hnn : ∀ y ∈ ((erepProg (m x) (k x) (K x) opens (assemble x) (check x) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
@@ -139,23 +141,20 @@ theorem Pr_not_servedGood_le (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W
       intro y hy
       obtain ⟨d, _, rfl⟩ := List.mem_map.1 hy
       exact hw _ _
-    by_cases h : ServedGood H V R₂ E₂ dec m k K opens assemble check x P s.1 s.2.1 s.2.2
-    · simp only [h, not_true_eq_false, ↓reduceIte]
-      exact List.sum_nonneg hnn
-    · simp only [h, not_false_eq_true, ↓reduceIte]
-      simp only [ServedGood, not_forall, not_not] at h
-      obtain ⟨d, hd, hb⟩ := h
+    split_ifs with h
+    · obtain ⟨d, hd, hb⟩ := h
       have h1 : w s.1 d = 1 := by simp [w, hb]
       rw [← h1]
       exact List.single_le_sum hnn _ (List.mem_map.2 ⟨d, hd, rfl⟩)
-  have hPrBad : PrBad H V R₂ E₂ x P = Ex fun ω => Ex (w ω) := by
-    unfold PrBad
+    · exact List.sum_nonneg hnn
+  have hPr : Pr (fun t : Ω × (Fin (V.k x) → Coin) × E₂.C x => Q t.1 t.2) = Ex fun ω => Ex (w ω) := by
     rw [← Ex_ind, Ex_prod]
-    exact congrArg Ex (funext fun ω => congrArg Ex (funext fun d => if_congr Iff.rfl rfl rfl))
   calc Pr (fun s : Ω × (Fin (V.k x) → Coin) × (servedERep V E₂ dec m k K opens assemble check).C x =>
-        ¬ ServedGood H V R₂ E₂ dec m k K opens assemble check x P s.1 s.2.1 s.2.2)
+        ∃ d ∈ (erepProg (m x) (k x) (K x) opens (assemble x) (check x) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
+          (servedRun H (outerStage E₂ dec x) (run H P V x s.1)), Q s.1 d)
       = Ex (fun s : Ω × (Fin (V.k x) → Coin) × (servedERep V E₂ dec m k K opens assemble check).C x =>
-          if ¬ ServedGood H V R₂ E₂ dec m k K opens assemble check x P s.1 s.2.1 s.2.2 then (1 : ℝ) else 0) :=
+          if ∃ d ∈ (erepProg (m x) (k x) (K x) opens (assemble x) (check x) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
+            (servedRun H (outerStage E₂ dec x) (run H P V x s.1)), Q s.1 d then (1 : ℝ) else 0) :=
         (Ex_ind _).symm
     _ ≤ Ex (fun s : Ω × (Fin (V.k x) → Coin) × (servedERep V E₂ dec m k K opens assemble check).C x =>
           L s.1 ((s.2.1, s.2.2.1), s.2.2.2)) := Ex_mono hpt
@@ -164,7 +163,21 @@ theorem Pr_not_servedGood_le (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W
         exact congrArg Ex (funext fun ω => (Ex_assoc (fun t => L ω ((t.1, t.2.1), t.2.2))).trans rfl)
     _ ≤ Ex fun ω => (1 + m x * k x) * Ex (w ω) :=
         Ex_mono fun ω => erepProg_cost_exp H _ (hw ω) _ _ _ _ _ _
-    _ = (1 + m x * k x) * PrBad H V R₂ E₂ x P := by rw [Ex_mul_left, hPrBad]
+    _ = (1 + m x * k x) * Pr (fun t : Ω × (Fin (V.k x) → Coin) × E₂.C x => Q t.1 t.2) := by
+        rw [Ex_mul_left, hPr]
+
+/-- **Some outer extraction fails at most `1 + m·k` times as often as `E₂` does** (`Pr_exists_rerun_le` at `E₂`'s
+failure). -/
+theorem Pr_not_servedGood_le (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V)
+    (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
+    (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} [Fintype Ω]
+    (P : Prover Ω) :
+    Pr (fun s : Ω × (Fin (V.k x) → Coin) × (servedERep V E₂ dec m k K opens assemble check).C x =>
+      ¬ ServedGood H V R₂ E₂ dec m k K opens assemble check x P s.1 s.2.1 s.2.2) ≤
+      (1 + m x * k x) * PrBad H V R₂ E₂ x P := by
+  refine (Pr_congr fun s => ?_).trans_le
+    (Pr_exists_rerun_le H V E₂ dec m k K opens assemble check x P (OuterFails H V R₂ E₂ x P))
+  simp only [ServedGood, not_forall, not_not, exists_prop]
 
 /-- **The composition's failure, every rerun charged**: the composed extractor fails on an accepted run at most
 `1 + m·k` times as often as `E₂` does, plus the inner stage's failure when every outer extraction succeeds. -/
