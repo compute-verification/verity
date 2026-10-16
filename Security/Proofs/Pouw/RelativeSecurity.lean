@@ -72,6 +72,8 @@ proof workers' results land here as theorems or as named hypotheses.
   `Slp.rank_projF2_le`). On the re-encoded design X = ⌊x/s⌋ + b (`note:20261016T0525Z-draft-fullfloor-s-r6`; `dP`,
   `dX`, `dIncr`) a cell-block's target has F₂ rank 2L (`rank_projF2_dIncr`), so a certified cell-block needs L
   products (`Slp.dIncr_products_ge`) and cell-blocks whose pieces are disjoint add up (`Slp.card_mul_le`).
+  `projF2` reads every bit pair, the same-side ("junk") pairs included: a cross-pairs-only projection would pass
+  Winograd without its corrections (`winograd_cross_only`).
 * The chain lemma (RS-E-REF r4, `note:20261015T1931Z-draft-theorem-e-referee` IV.2): with stacked identities every
   k-block reads the same U bits, so the per-block count needs the chain. A product of a function of U's bits and a
   function of the coins, of any form (`OneSided`), has a cross block of rank 1 (`OneSided.crossRankLe`), and `T`
@@ -2644,7 +2646,7 @@ at most 2, whose diagonal `2 a_u b_u` vanishes mod 2. So a word that agrees with
 target's `F₂` rank in products (`theoremK`, `Slp.rank_projF2_le`). On the re-encoded design, a cell-block's target
 has `F₂` rank `2L` (`rank_projF2_dIncr`). Each certified cell-block therefore needs `L` products
 (`Slp.dIncr_products_ge`), and a run whose cell-blocks have disjoint pieces needs `L` per certified cell-block
-(`Slp.card_mul_le`). Disjoint pieces forbid
+(`Slp.card_mul_le`). The projection reads every bit pair, and must (`winograd_cross_only`). Disjoint pieces forbid
 sharing along a cell's prefix chain; the chain lemma, after the quad runs, lifts that, and gives the window's cost
 line (`RoundsHypK`, `roundsHyp_of_K`). -/
 
@@ -2764,6 +2766,20 @@ theorem theoremK (φ : R →+* ZMod 2) {ι : Type} (S : Finset ι) (lam : ι →
   exact (rank_sum_vecMulVec_le_card _ _ _ _).trans (by simp)
 
 end
+
+/-- **Why `projF2` reads every bit pair** (RS-E-REF r4 IV.1): Winograd's product without its corrections,
+`(x₀ + y₁)(x₁ + y₀)`, one product for `L = 2`, has the target `x₀ y₀ + x₁ y₁`'s second difference on every cross
+pair `(x_a, y_b)` and differs from it on the same-side pair `(x₀, x₁)`. A projection onto cross pairs alone has rank
+`L` against the product's 2 and would let it pass; `projF2`, on every pair, has rank `2L` and does not. -/
+theorem winograd_cross_only :
+    (∀ a b : Fin 2,
+      pairDiff (fun z : Fin 2 ⊕ Fin 2 → ℤ => (z (.inl 0) + z (.inr 1)) * (z (.inl 1) + z (.inr 0))) (.inl a) (.inr b) =
+        pairDiff (fun z : Fin 2 ⊕ Fin 2 → ℤ => z (.inl 0) * z (.inr 0) + z (.inl 1) * z (.inr 1)) (.inl a) (.inr b)) ∧
+    pairDiff (fun z : Fin 2 ⊕ Fin 2 → ℤ => (z (.inl 0) + z (.inr 1)) * (z (.inl 1) + z (.inr 0))) (.inl 0) (.inl 1) ≠
+      pairDiff (fun z : Fin 2 ⊕ Fin 2 → ℤ => z (.inl 0) * z (.inr 0) + z (.inl 1) * z (.inr 1)) (.inl 0) (.inl 1) := by
+  refine ⟨fun a b => ?_, ?_⟩
+  · fin_cases a <;> fin_cases b <;> simp [pairDiff, bitInd]
+  · simp [pairDiff, bitInd]
 
 /-- **A straight-line program over `R` on the bits** (Theorem K's runs): slot `j` is a product of two bit-affine
 operands (`isProd j`: an MMA slot on bytes loaded from committed or coin data, or formed from them by adds), or a
