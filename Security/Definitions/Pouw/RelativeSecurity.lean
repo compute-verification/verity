@@ -398,12 +398,13 @@ def dFrame (p₀ : Fin np) (c : DCells n n' B) : Fin L ⊕ Fin L → DBits n L n
   Sum.elim (fun j => .inl (c.1, j, p₀)) fun j => .inr (c.2.2, j, c.2.1)
 
 /-- **Charging purity** of a run (RS-E-REF r6 VI.2.1): no product is two-sided at the frames of two cell-blocks
-whose words read it. Prefix chains, merges and partners are free: a product of block `t'` read by a later block's
-word reads none of that block's coins. -/
+whose words read it with odd coefficients (mod 2 through `φ`, RS-E-REF r8 VIII.3 item 4: a word that reads a product
+at an even scale is not charged it). Prefix chains, merges and partners are free: a product of block `t'` read by a
+later block's word reads none of that block's coins. -/
 def SlpG.ChargePure (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG (DBits n L np B n') Ar N)
     (word : DCells n n' B → Fin N) : Prop :=
-  ∀ c c' i, c ≠ c' → P.coef (word c) i ≠ 0 → TwoSidedAt (dFrame p₀ c) φ (P.prod i) → P.coef (word c') i ≠ 0 →
-    ¬TwoSidedAt (dFrame p₀ c') φ (P.prod i)
+  ∀ c c' i, c ≠ c' → φ (P.coef (word c) i) ≠ 0 → TwoSidedAt (dFrame p₀ c) φ (P.prod i) →
+    φ (P.coef (word c') i) ≠ 0 → ¬TwoSidedAt (dFrame p₀ c') φ (P.prod i)
 
 end ParityDesign
 
@@ -522,11 +523,11 @@ def OneSidedAt (π : (OBits St n L np B n' → Ar) → Ar) : Prop :=
   ∀ (W : ODraws St n L np B n') (t : Fin St), OneSided fun z => π (mergeAt W t z)
 
 /-- **Charging purity across draws**: at every bit point of the draws, no product is two-sided at the frames of two
-cell-blocks, of any stages, whose words read it. -/
+cell-blocks, of any stages, whose words read it with odd coefficients (mod 2 through `φ`). -/
 def SlpG.ChargePureAt (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG (OBits St n L np B n') Ar N)
     (word : OCells St n n' B → Fin N) : Prop :=
-  ∀ (W : ODraws St n L np B n') (c c' : OCells St n n' B) i, c ≠ c' → P.coef (word c) i ≠ 0 →
-    TwoSidedAt (dFrame p₀ c.2) φ (fun z => P.prod i (mergeAt W c.1 z)) → P.coef (word c') i ≠ 0 →
+  ∀ (W : ODraws St n L np B n') (c c' : OCells St n n' B) i, c ≠ c' → φ (P.coef (word c) i) ≠ 0 →
+    TwoSidedAt (dFrame p₀ c.2) φ (fun z => P.prod i (mergeAt W c.1 z)) → φ (P.coef (word c') i) ≠ 0 →
       ¬TwoSidedAt (dFrame p₀ c'.2) φ fun z => P.prod i (mergeAt W c'.1 z)
 
 end ParityOverlapRound

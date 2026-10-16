@@ -132,14 +132,18 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   (r2 §2.5).
 * The parity luck for one-sided operands of any form (RS-E-REF r6 VI.2, `note:20261015T1931Z-draft-theorem-e-referee`):
   mod 2 at a cell-block's frame (`dFrame`), a one-sided run's error is `⟨F x, G y⟩ + a x + b y` with a term per
-  product its word reads that is two-sided there (`SlpG.parityForm_err`), and such an error with fewer than `L` terms
+  product its word reads with an odd coefficient that is two-sided there (`charged`, `SlpG.parityForm_err`), and
+  such an error with fewer than `L` terms
   vanishes with probability at most `½ + ½ √½ < 0.854` (`parity_prob_sq`, `parity_luck_short`; ¾ two short,
   `parity_luck_two`), over `Z` or `Z/2³²`. In the product deficit (`parDef`, `ovDefP`) the staged and overlapped
   games meet Theorem S's bounds at `0.854` whatever the errors (`StagedPlay.game_stagedP`, `OvPlay.passBound_gameP`),
   and with charging purity in place of row purity (`SlpG.ChargePure`, `SlpG.ChargePureAt`) `RoundsHypKStP` and
   `RoundsHypKOvP` give `RoundsHyp` at `p = 0.854` with K's `F₀` (`roundsHyp_of_stagedP`, `roundsHyp_of_overlapP`;
   `certifiedFraction120θ_stagedP_40`, `_overlapP_40` at `D₀ = 274 ln 2`). The affine route is the sharper corollary,
-  at ¾.
+  at ¾. These two are K's proved scopes (one-sided of any form and charge-pure at 0.854; affine and row-pure at ¾).
+  Outside them `c = 1` is false even within the ledger's K1 (RS-E-REF r8 VIII): a factor `∏(1 − z_u)` in one operand
+  leaves a word wrong only at `U = 0`, so it is uncertified and passes almost always, and K's count binds certified
+  words only.
 * Theorem H (round 6 §6, merges priced) is not needed for the re-encoded design: the chain lemma covers it in every
   arithmetic (RS-E-REF r4 IV.3). It stays proved as the alternative with merges priced, including `_H` of route (c).
   In the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
@@ -5847,10 +5851,11 @@ theorem parityForm_of_split {fr : Fin K ⊕ Fin K → V} {φ : A →+* ZMod 2} {
   linear_combination he S
 
 open Classical in
-/-- **The products charged to a word at a frame**: those it reads (nonzero coefficient) that are two-sided there. -/
+/-- **The products charged to a word at a frame**: those it reads with an odd coefficient (`φ coef ≠ 0`; mod 2 an
+even one reads nothing) that are two-sided there. -/
 noncomputable def charged (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) {N : ℕ} (coef : Fin N → A)
     (π : Fin N → (V → A) → A) : Finset (Fin N) :=
-  univ.filter fun i => coef i ≠ 0 ∧ TwoSidedAt fr φ (π i)
+  univ.filter fun i => φ (coef i) ≠ 0 ∧ TwoSidedAt fr φ (π i)
 
 /-- **A sum of split products plus a bit-affine word, minus a target of the form `⟨x, y⟩` plus junk, has a parity
 form with its charged products as terms**: the uncharged products it reads are blind to one side, so junk. -/
@@ -5869,7 +5874,7 @@ theorem parityForm_sum [Fintype V] {fr : Fin K ⊕ Fin K → V} (hfr : Function.
       exact ⟨g, h, fun _ => ⟨hg, hh, hgh⟩⟩
   choose g h hgh using hπ'
   set ch := charged fr φ coef π with hch
-  have hmem : ∀ i ∈ ch, coef i ≠ 0 := fun i hi => ((mem_filter.mp hi).2).1
+  have hmem : ∀ i ∈ ch, coef i ≠ 0 := fun i hi => ne_zero_of_map ((mem_filter.mp hi).2).1
   let en := ch.equivFin
   refine parityForm_of_split (fun S k => φ (coef (en.symm k)) * g (en.symm k) S) (fun S k => h (en.symm k) S)
     (fun k => (YBlind.const fr _).mul (hgh _ (hmem _ (en.symm k).2)).1)
@@ -5877,8 +5882,8 @@ theorem parityForm_sum [Fintype V] {fr : Fin K ⊕ Fin K → V} (hfr : Function.
   have hjunk : Split fr fun S => ∑ i ∈ univ.filter (fun i => i ∉ ch), φ (coef i) * φ (π i (bitInd S)) := by
     refine Split.sum _ fun i hi => ?_
     have hi' : i ∉ ch := (mem_filter.mp hi).2
-    by_cases hc : coef i = 0
-    · exact Split.of_y ((YBlind.const fr 0).congr fun S => by rw [hc, map_zero, zero_mul])
+    by_cases hc : φ (coef i) = 0
+    · exact Split.of_y ((YBlind.const fr 0).congr fun S => by rw [hc, zero_mul])
     · have hts : ¬TwoSidedAt fr φ (π i) := fun ht => hi' (mem_filter.mpr ⟨mem_univ _, hc, ht⟩)
       unfold TwoSidedAt at hts
       rcases not_and_or.mp hts with hx | hy
@@ -6049,7 +6054,7 @@ theorem SlpG.card_full_le (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np →
       fun z => P.val z (word c) - dPrefix pc vq w c.1 c.2.1 c.2.2.val z).card ≤
       (univ.filter fun j => P.isProd j = true).card := by
   refine _root_.Pouw.RelativeSecurity.card_full_le (fun c => charged (dFrame p₀ c) φ (P.coef (word c)) P.prod) _
-    (fun c i hi => mem_filter.mpr ⟨mem_univ _, P.isProd_of_coef_ne_zero _ _ (mem_filter.mp hi).2.1⟩)
+    (fun c i hi => mem_filter.mpr ⟨mem_univ _, P.isProd_of_coef_ne_zero _ _ (ne_zero_of_map (mem_filter.mp hi).2.1)⟩)
     (fun c c' hne => disjoint_left.mpr fun i hi hi' =>
       hpure c c' i hne (mem_filter.mp hi).2.1 (mem_filter.mp hi).2.2 (mem_filter.mp hi').2.1
         (mem_filter.mp hi').2.2) _ fun c hc => ?_
@@ -6553,7 +6558,7 @@ theorem SlpG.card_full_le_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np 
       (univ.filter fun j => P.isProd j = true).card := by
   refine _root_.Pouw.RelativeSecurity.card_full_le
     (fun c => charged (dFrame p₀ c.2) φ (P.coef (word c)) fun i z => P.prod i (mergeAt W c.1 z)) _
-    (fun c i hi => mem_filter.mpr ⟨mem_univ _, P.isProd_of_coef_ne_zero _ _ (mem_filter.mp hi).2.1⟩)
+    (fun c i hi => mem_filter.mpr ⟨mem_univ _, P.isProd_of_coef_ne_zero _ _ (ne_zero_of_map (mem_filter.mp hi).2.1)⟩)
     (fun c c' hne => disjoint_left.mpr fun i hi hi' =>
       hpure W c c' i hne (mem_filter.mp hi).2.1 (mem_filter.mp hi).2.2 (mem_filter.mp hi').2.1
         (mem_filter.mp hi').2.2) _ fun c hc => ?_
