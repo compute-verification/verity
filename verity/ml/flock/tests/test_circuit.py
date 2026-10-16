@@ -10,7 +10,7 @@ import pytest
 from verity_flock import ir_lower as IL
 from verity_flock import circuit as FC
 from verity_flock import tail as TL
-from verity_flock.gf2 import Circuit
+from verity_flock.gf2 import Circuit, const_bits
 
 pytest.importorskip("verity_numerical")
 from verity_numerical.bench import templates as TM  # noqa: E402
@@ -418,6 +418,27 @@ def test_attention_tail_ops_match_the_ir(name, arity):
     for k in range(t):
         want = getattr(P, name[:-3]).evaluate(*[a[k] for a in args]) & 0xFFFFFFFF
         assert got[k] == want or (nan(got[k]) and nan(want)), (name, [hex(a[k]) for a in args], hex(got[k]), hex(want))
+
+
+#: constant divisors: 2048 and 2^-126 (an exact normal reciprocal), GLM-5.3's 6144, DeepSeek-V4's 7168, 6144 forged x 4, 3, eps,
+#: and those without a normal reciprocal: 2^127, a subnormal, -6144's sign, zero, infinity, NaN
+DIVISORS = [0x45000000, 0x00800000, 0x45C00000, 0x45E00000, 0x46C00000, 0x40400000, 0x3727C5AC, 0x7F000000, 0x00000001,
+            0xC5C00000, 0, 0x7F800000, 0x7FC00000]
+
+
+@pytest.mark.parametrize("k", DIVISORS, ids=hex)
+def test_f32_div_by_a_constant_matches_the_ir(k):
+    """A row tail's ``F32Div_v1`` by its constant (RMSNorm's ``/ N``) is the IR's division on every encoding but a NaN result's
+    payload, through the exact reciprocal or, for N = 6144, the IEEE divider: quotients rounding into the subnormals included."""
+    from verity_vllm.program.registry import prims as P
+
+    xs = _f32_samples(200, 13) + [0x00C00000, 0x01400000, 0x00800001, 0x7F7FFFFF, 0x80FFFFFF, 0x0A2AAAAB]
+    C = Circuit()
+    C.output("y", list(TL.OPS["F32Div_v1"](C, C.input("x", 32), const_bits(k, 32))))
+    got = _run(C, {"x": (xs, 32)}, len(xs))["y"]
+    nan = lambda u: (u & 0x7F800000) == 0x7F800000 and u & 0x7FFFFF  # noqa: E731
+    want = [P.F32Div.evaluate(x, k) & 0xFFFFFFFF for x in xs]
+    assert [hex(x) for x, g, w in zip(xs, got, want) if g != w and not (nan(g) and nan(w))] == []
 
 
 def test_mufu_ex2_matches_the_ir():
