@@ -7,7 +7,8 @@
 #     -- bash benchmarks/pouw/stage_ovl/run.sh
 # env: MS (512 1024 2048), KS (1 2 4 8 16 32), ARMS (ovl.cu's default), REPS (5), DRAW_US (300), PLAIN_RB (8192),
 # MAXMIN (25), CUDA_DEVICE_MAX_CONNECTIONS (32: a hardware queue per chunk), FR_ROT (0: stage.cu's bits, the commitment's
-# rotations on the FMA pipe), PARTS (thru gate ovl: shathru's SHA-512 throughput, the gate, the grid; ovl needs gate)
+# rotations on the FMA pipe), PARTS (thru gate ovl: shathru's SHA-512 throughput, the gate, the grid; ovl needs gate;
+# beside: ovl.cu's beside at each M:K of BESIDE, 2048:4 2048:16 512:32)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -15,6 +16,7 @@ export CUDA_DEVICE_MAX_CONNECTIONS=${CUDA_DEVICE_MAX_CONNECTIONS:-32}
 D=benchmarks/pouw/stage_ovl
 export B; B=$(mktemp -d /tmp/stage-ovl.XXXXXX); trap 'rm -rf "$B"' EXIT
 export MS=${MS:-512 1024 2048} KS=${KS:-1 2 4 8 16 32} REPS=${REPS:-5} PARTS=${PARTS:-thru gate ovl}
+export BESIDE=${BESIDE:-2048:4 2048:16 512:32}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version | tail -2 > "$O/nvcc.txt"
 nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -DFR_ROT="${FR_ROT:-0}" -Xptxas -v -o "$B/ovl" $D/ovl.cu \
@@ -28,6 +30,11 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   q
   if [[ " $PARTS " == *" thru "* ]]; then
     "$B/ovl" shathru > "$O/shathru.jsonl" 2>> "$O/errors.txt"; echo "shathru rc $?" >> "$O/rc.txt"
+  fi
+  if [[ " $PARTS " == *" beside "* ]]; then
+    for mk in $BESIDE; do
+      "$B/ovl" beside "${mk%%:*}" "${mk##*:}" r3 >> "$O/beside.jsonl" 2>> "$O/errors.txt"; echo "beside $mk rc $?" >> "$O/rc.txt"
+    done
   fi
   [[ " $PARTS " == *" gate "* ]] || exit 0
   "$B/ovl" gate "$B/c" $MS > "$O/gate.jsonl" 2>> "$O/errors.txt"; g=$?

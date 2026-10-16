@@ -15,6 +15,8 @@
 //                           path's, and nohash run the same way as the control that must differ
 //   shathru                 SHA-512 compressions a second on the whole GPU (stage.cu's sha_chain at 4-32 CTAs a SM, by
 //                           which rotations run on the FMA pipe; the commitments use -DFR_ROT's)
+//   beside M K [rN]         plain's GEMMs for K sequences of M tokens against the same commitments' compressions as one
+//                           small resident kernel (32-256 threads a SM): alone, and launched just before or after the GEMMs
 // Arms (k chunks of M tokens; the QK^T and P.V stand-ins are stage.cu's, m = M, n = M/2, k = 4096, against a sequence's own
 // distinct buffer a layer):
 //   plain     the k sequences plain int8 on one stream: the linears over all k * M tokens in row blocks of PLAIN_RB (8192),
@@ -426,6 +428,160 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   return fails;
 }
 
+// the commitments' compressions as one small resident kernel: b CTAs of blockDim threads a SM, n chained compressions a
+// thread; ts[0] / ts[1] take the earliest CTA start and the latest CTA end
+__global__ void sha_beside(int n, uint64_t* out, unsigned long long* ts) {
+  unsigned long long t;
+  if (threadIdx.x == 0) {
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+    atomicMin(&ts[0], t);
+  }
+  uint64_t s[8], w[16];
+  s512_iv(s);
+  for (int j = 0; j < 16; j++) w[j] = (uint64_t)(blockIdx.x * blockDim.x + threadIdx.x + 1) * (j + 1);
+  for (int i = 0; i < n; i++) {
+    fr_compress(s, w);
+    for (int j = 0; j < 8; j++) w[j] ^= s[j];
+  }
+  out[blockIdx.x * blockDim.x + threadIdx.x] = s[0];
+  __syncthreads();
+  if (threadIdx.x == 0) {
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+    atomicMax(&ts[1], t);
+  }
+}
+__global__ void ts_reset(unsigned long long* ts) {
+  ts[0] = ~0ull;
+  ts[1] = 0;
+}
+
+// beside: whether the commitments' hashing can hide next to the GEMMs if it is shaped to fit beside their CTAs. plain's
+// GEMMs for k sequences of M tokens (as in ovl) against H = C x k x M x 32 compressions (C = BESIDE_C, 367: a token-layer's
+// segment, row, leaf, node and salt compressions in stage.cu's tree) as one sha_beside launch of b CTAs of thr threads
+// a SM: alone, launched just before the GEMMs (hfirst) and just after them (gfirst), on a stream at the highest priority
+static int run_beside(Dev& d, int M, int k, int reps) {
+  const int C = getenv("BESIDE_C") ? atoi(getenv("BESIDE_C")) : 367;
+  const int RB = getenv("PLAIN_RB") ? atoi(getenv("PLAIN_RB")) : 8192;
+  const size_t kb_seq = (size_t)(M / 2) * HID;
+  std::vector<int8_t*> Kb(LAYERS);
+  for (int l = 0; l < LAYERS; l++) {
+    CK(cudaMalloc(&Kb[l], kb_seq * k));
+    fill_s8<<<1024, 256, 0, d.st>>>(Kb[l], kb_seq * k, 0x8000 + l);
+  }
+  const int rows = k * M, rb = std::min(rows, RB);
+  int8_t* Ap;
+  int* Dp;
+  CK(cudaMalloc(&Ap, (size_t)rows * FF));
+  fill_s8<<<1024, 256, 0, d.st>>>(Ap, (size_t)rows * FF, 0x5100);
+  CK(cudaMalloc(&Dp, std::max((size_t)rb * 2 * FF, (size_t)k * M * (M / 2)) * sizeof(int)));
+  LtCtx plt = lt_ctx();
+  CK(cudaStreamSynchronize(d.st));
+  const int GN[NSTAGE] = {QKV, M / 2, M / 2, HID, 2 * FF, HID}, GK[NSTAGE] = {HID, HID, HID, HID, HID, FF};
+  const int LJ[NSTAGE] = {0, -1, -1, 1, 2, 3};
+  LtB pl[NSTAGE];
+  for (int t = 0; t < NSTAGE; t++)
+    pl[t] = LJ[t] >= 0 ? plan(rb, GN[t], GK[t], 1, 0, 0, 0, Ap, d.W[0][LJ[t]], Dp, d.st)
+                       : plan(M, M / 2, HID, k, (long long)M * HID, (long long)kb_seq, (long long)M * (M / 2), Ap, Kb[0], Dp, d.st);
+  int lo, hi;
+  CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  cudaStream_t sg = prio_stream(lo), sh = prio_stream(hi);
+  auto gemms = [&](cudaStream_t s) {
+    for (int l = 0; l < LAYERS; l++)
+      for (int t = 0; t < NSTAGE; t++) {
+        if (LJ[t] >= 0)
+          for (int r0 = 0; r0 < rows; r0 += rb) ltb_run(pl[t], plt, Ap + (size_t)r0 * GK[t], d.W[l][LJ[t]], Dp, s);
+        else
+          ltb_run(pl[t], plt, Ap, Kb[t == 1 ? l : (l + 1) % LAYERS], Dp, s);
+      }
+  };
+  const double H = (double)C * k * M * LAYERS;
+  const int cfg[][2] = {{32, 1}, {64, 1}, {128, 1}, {128, 2}, {256, 2}};
+  uint64_t* out;
+  CK(cudaMalloc(&out, (size_t)d.sms * 512 * sizeof(uint64_t)));
+  unsigned long long* ts;
+  CK(cudaMalloc(&ts, 4 * sizeof(unsigned long long)));
+  cudaEvent_t e0, e1, ef, eh;
+  CK(cudaEventCreate(&e0));
+  CK(cudaEventCreate(&e1));
+  CK(cudaEventCreateWithFlags(&ef, cudaEventDisableTiming));
+  CK(cudaEventCreateWithFlags(&eh, cudaEventDisableTiming));
+  auto median = [](std::vector<double> v) {
+    std::sort(v.begin(), v.end());
+    return v[v.size() / 2];
+  };
+  // one timed rep of `order`: 0 the GEMMs alone, 1 the hash alone, 2 hash then GEMMs, 3 GEMMs then hash
+  struct Out { double ms, mhz, t_hs, t_he, t_ge; };
+  auto rep = [&](int order, int thr, int b, int n) -> Out {
+    stamp<<<1, 1, 0, sg>>>(ts + 2);
+    ts_reset<<<1, 1, 0, sg>>>(ts);
+    CK(cudaEventRecord(e0, sg));
+    CK(cudaEventRecord(ef, sg));
+    CK(cudaStreamWaitEvent(sh, ef, 0));
+    if (order == 1 || order == 2) sha_beside<<<b * d.sms, thr, 0, sh>>>(n, out, ts);
+    if (order != 1) gemms(sg);
+    stamp<<<1, 1, 0, sg>>>(ts + 3);
+    if (order == 3) sha_beside<<<b * d.sms, thr, 0, sh>>>(n, out, ts);
+    CK(cudaEventRecord(eh, sh));
+    CK(cudaStreamWaitEvent(sg, eh, 0));
+    CK(cudaEventRecord(e1, sg));
+    double cs = 0;
+    int nc = 0;
+    while (cudaEventQuery(e1) == cudaErrorNotReady) {
+      const double cl = nvml_mhz(d);
+      if (cl > 0) { cs += cl; nc++; }
+    }
+    CK(cudaEventSynchronize(e1));
+    CK(cudaGetLastError());
+    float ms;
+    CK(cudaEventElapsedTime(&ms, e0, e1));
+    unsigned long long h[4];
+    CK(cudaMemcpy(h, ts, sizeof h, cudaMemcpyDeviceToHost));
+    const double z = (double)h[2];
+    return {ms, nc ? cs / nc : nvml_mhz(d), order == 0 ? 0 : (h[0] - z) * 1e-6, order == 0 ? 0 : (h[1] - z) * 1e-6,
+            order == 1 ? 0 : (h[3] - z) * 1e-6};
+  };
+  for (int i = 0; i < 2; i++) rep(0, 128, 1, 16);
+  std::vector<double> gv, gm;
+  for (int r = 0; r < reps; r++) {
+    const Out o = rep(0, 0, 0, 0);
+    gv.push_back(o.ms);
+    gm.push_back(o.mhz);
+  }
+  const double g_ms = median(gv);
+  printf("{\"mode\": \"beside\", \"M\": %d, \"k\": %d, \"C\": %d, \"H\": %.6e, \"plain_rb\": %d, \"gemm_ms\": %.3f, "
+         "\"gemm_mhz\": %.0f, \"need_rate\": %.4e, \"configs\": [",
+         M, k, C, H, rb, g_ms, median(gm), H / (g_ms * 1e-3));
+  for (size_t ci = 0; ci < sizeof cfg / sizeof cfg[0]; ci++) {
+    const int thr = cfg[ci][0], b = cfg[ci][1];
+    const int n = (int)std::ceil(H / ((double)d.sms * b * thr));
+    rep(1, thr, b, n);
+    std::vector<Out> v[4];
+    for (int r = 0; r < reps; r++)
+      for (int o = 1; o <= 3; o++) v[o].push_back(rep(o, thr, b, n));
+    printf("%s{\"thr\": %d, \"ctas_a_sm\": %d, \"n\": %d", ci ? ", " : "", thr, b, n);
+    const char* nm[4] = {"", "alone", "hfirst", "gfirst"};
+    for (int o = 1; o <= 3; o++) {
+      std::sort(v[o].begin(), v[o].end(), [](const Out& a, const Out& c) { return a.ms < c.ms; });
+      const Out& m = v[o][v[o].size() / 2];
+      const double span = m.t_he - m.t_hs;
+      printf(", \"%s\": {\"ms\": %.3f, \"mhz\": %.0f, \"%s\": %.4f, \"hash_start_ms\": %.3f, \"hash_end_ms\": %.3f, "
+             "\"gemm_end_ms\": %.3f, \"hash_rate\": %.4e}",
+             nm[o], m.ms, m.mhz, o == 1 ? "of_gemm" : "cost", o == 1 ? m.ms / g_ms : m.ms / g_ms - 1, m.t_hs, m.t_he, m.t_ge,
+             (double)d.sms * b * thr * n / (span * 1e-3));
+    }
+    printf("}");
+    fflush(stdout);
+  }
+  printf("]}\n");
+  fflush(stdout);
+  CK(cudaFree(out));
+  CK(cudaFree(ts));
+  CK(cudaFree(Ap));
+  CK(cudaFree(Dp));
+  for (int8_t* p : Kb) CK(cudaFree(p));
+  return 0;
+}
+
 // SHA-512's throughput on the whole GPU: stage.cu's sha_chain<ROT> (n chained compressions a thread, fr_compress<ROT>
 // rolled or s512_compress unrolled) over CTAs a SM x 128 threads, (n = 65) - (n = 1) over 64 compressions a thread. ROT's
 // bits put S0, S1, s0, s1's rotations on the FMA pipe (stage.cu's FR_ROT; this binary's commitments use FR_ROT)
@@ -480,7 +636,7 @@ static void sha_throughput(Dev& d) {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: ovl gate DIR M... | ovl ovl DIR M K... [rREPS] | ovl shathru   (ARMS: the arms, DRAW_US, PLAIN_RB)\n");
+    fprintf(stderr, "usage: ovl gate DIR M... | ovl ovl DIR M K... [rREPS] | ovl shathru | ovl beside M K [rREPS]   (ARMS: the arms, DRAW_US, PLAIN_RB)\n");
     return 1;
   }
   const std::string mode = argv[1];
@@ -533,6 +689,10 @@ int main(int argc, char** argv) {
   if (mode == "shathru") {
     sha_throughput(d);
     return 0;
+  }
+  if (mode == "beside") {
+    if (argc < 4) return 1;
+    return run_beside(d, atoi(argv[2]), atoi(argv[3]), argc > 4 && argv[4][0] == 'r' ? atoi(argv[4] + 1) : 3);
   }
   if (argc < 3) return 1;
   hm_load(argv[2]);

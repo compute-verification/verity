@@ -10,6 +10,8 @@ For each chunk size M and depth k (k chunks of M tokens in flight, each its own 
 - lone TTFT: k = 1's eq over plain at k = 1; under load: each chunk's end (from the draws' stamps) over plain's makespan;
 - memory a chunk in flight: the bench's activations (operands, A, the int32 outputs, a cuBLASLt workspace) and commitment
   state (stage.cu's Commit: digests, leaves, tree, the salt-only parts of all 32 layers), measured by cudaMemGetInfo;
+- beside.jsonl: plain's GEMMs against the same tokens' commitment compressions as one small resident kernel: its cost
+  launched before (hfirst) or after (gfirst) the GEMMs, its rate beside them, and the rate the GEMMs need (need_rate);
 - cells are keyed by (FR_ROT, M): FR_ROT is the build's choice of rotations on the FMA pipe (stage.cu's bits), and
   shathru.jsonl's SHA-512 compressions a second on the whole GPU are printed by rotation choice and CTAs a SM.
 """
@@ -45,10 +47,11 @@ def main() -> int:
     ap.add_argument("out", nargs="+")
     ap.add_argument("--json")
     a = ap.parse_args()
-    gates, setups, ovl, thru = [], {}, [], []
+    gates, setups, ovl, thru, beside = [], {}, [], [], []
     for d in map(Path, a.out):
         gates += rows(d / "gate.jsonl")
         thru += rows(d / "shathru.jsonl")
+        beside += rows(d / "beside.jsonl")
         rot = 0
         for r in rows(d / "ovl.jsonl"):
             if r["mode"] == "ovl_setup":
@@ -63,7 +66,17 @@ def main() -> int:
               f"{c[best]:.3e}/s; " + ", ".join(f"{n} {v:.2e}" for n, v in c.items()))
     bad = [g for g in gates if g.get("ok") is False or g.get("fast_ok") is False or g.get("control_rejected") is False]
     print(f"gate: {len(gates)} lines, {len(bad)} failed" + (f": {bad}" if bad else ""))
-    res: dict = {"gate_lines": len(gates), "gate_failed": len(bad), "setup": setups, "cells": []}
+    for b in beside:
+        print(f"beside M = {b['M']}, k = {b['k']}: GEMMs alone {b['gemm_ms']:.1f} ms ({b['gemm_mhz']:.0f} MHz), "
+              f"{b['H']:.3e} compressions (C = {b['C']}) need {b['need_rate']:.2e}/s to keep pace")
+        for c in b["configs"]:
+            al, hf, gf = c["alone"], c["hfirst"], c["gfirst"]
+            print(f"  {c['thr']:3d} threads x {c['ctas_a_sm']} a SM: alone {al['ms']:.1f} ms ({100 * al['of_gemm']:.1f}% of the GEMMs, "
+                  f"{al['hash_rate']:.2e}/s); hash first {100 * hf['cost']:+.1f}% (hash ends {hf['hash_end_ms']:.1f}, GEMMs "
+                  f"{hf['gemm_end_ms']:.1f} ms, {hf['hash_rate']:.2e}/s); GEMMs first {100 * gf['cost']:+.1f}% (hash "
+                  f"{gf['hash_start_ms']:.1f}-{gf['hash_end_ms']:.1f}, GEMMs {gf['gemm_end_ms']:.1f} ms)")
+    res: dict = {"gate_lines": len(gates), "beside": beside, "gate_failed": len(bad), "setup": {f"{r}/{m}": v for (r, m), v in setups.items()},
+                 "cells": []}
     res["shathru"] = thru
     plain_best = {}
     for r in ovl:
