@@ -10,6 +10,7 @@ import Proofs.Flock.C3.RegLevels.SrcMaps
 import Proofs.Flock.C3.RegLevels.LgHeld
 import Proofs.Flock.C3.Compose.OffZs
 import Proofs.Flock.C3.Sparse.PubCoins
+import Proofs.Flock.C3.Sparse.SessionChecked
 
 /-!
 # `hbr_honest_reg` at the honest source
@@ -39,6 +40,8 @@ back off `Bad` (`atAcceptedOff_offZs`). What the verifier's checks give is disch
   `holoSel_opening_at`); `hshape` from `SparseIs` (`shape_holoAt`);
 * the pub read at `scOf` (`srcSparsePub_scOf`), the layout factors passing where check 5's range verdict says
   (`SparseRangeOk`, which also gives `ℓ`'s range, `ellOk_of_sparseRange`);
+* V*'s sessions and copies at the RecSparse session `sI` (`sparseSessionAt_of_checks`, `unit` and `sw` pinned), off
+  `ValueColl` (`hVB`), the rows the reads files name registered by `RegistrantCovers` (`rowsCovered_checked`);
 * `hrread`, `hsread`, `horead`, `hlread` and `hfr` at the fixed decoder (`repsRead_c3DecOf`, `sparseRead_c3DecOf`,
   `openingRead_c3DecOf`, `regLevelsRead_of_tie`, `hFrame_c3DecOf`), each tie moved to the normalized source
   (`stepsOfVals_norm_repsOfVals`, `openingReadAt_normOs`, `levelTie_normOs`; the sparse plays read no openings); `hown`
@@ -46,9 +49,10 @@ back off `Bad` (`atAcceptedOff_offZs`). What the verifier's checks give is disch
   guarantee's `_hstk`.
 
 What stays a hypothesis no check gives at this source: G's items 1–4 off `Bad` (`halg`, `hacc`), the values' parts
-(`hpr`, `hsv`, `hf`, `hvcap`) at every accepted proof, the reps' held rounds (`hrd`), V*'s sessions and copies
-(`hsess`), R's opening at the maps (`hmaps`, `hot`), the other parts' read facts (`hrp`, `hsm`,
-`hlg`, `hos`, `hall`, `hk`, `hx`, `hts`), the named `HCols` and `HAlgRows`, and the commit strings' custody (`hbc`).
+(`hpr`, `hsv`, `hf`, `hvcap`) at every accepted proof, the reps' held rounds (`hrd`), at `sI` the layer's constant
+(`hone`, G's `OneInLayer`), `v`'s registered row (`hv`) and the unit's output layout (`hlaid`), R's opening at the maps
+(`hmaps`, `hot`), the other parts' read facts (`hrp`, `hsm`, `hlg`, `hos`, `hall`, `hk`, `hx`, `hts`), the named
+`HCols` and `HAlgRows`, and the commit strings' custody (`hbc`).
 -/
 
 namespace FlockC3.Compose
@@ -201,13 +205,25 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
     (hu : UnitsOf st hp) (hrng : unitRangeOf st = .ok rng)
     (hsc : sc = fun R ω t Lb i => FlockC3.Sparse.scOf (holoAt st hp) rng sh
       (FlockC3.Sparse.csOf (heldC3 ish sp (innerCommitsAt (wr t).1 (wr t).2 st reg)) unit i.val) (rep R ω t Lb i))
-    (hsess : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ i : Fin 2,
-      FlockC3.Sparse.SparseSessionAt (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
-          (heldC3 ish sp (innerCommitsAt (wr t).1 (wr t).2 st reg)) unit i
-          (sw R ω t (layers zs dg N k Rw R ω t R₂ τ) i) (sc R ω t (layers zs dg N k Rw R ω t R₂ τ) i) ∧
-        ∃ (s : Fin (vstarCount ish)) (un : Fin (Vs s).nv) (j : ℕ) (hj : j < (Vs s).c.upv), un.val = i.val ∧
-          FlockC3.Sparse.SparseCopyAt (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
-            (sw R ω t (layers zs dg N k Rw R ω t R₂ τ) i) (sc R ω t (layers zs dg N k Rw R ω t R₂ τ) i) s un j hj)
+    (hunit : unit = Flock.RecSparse.unitName (FlockC3.Sparse.unitShape (holoAt st hp)))
+    (hsw : sw = fun _ _ _ Lb i => FlockC3.Sparse.wSparseAt Vs (holoAt st hp).cls.shape
+      (Flock.RecSparse.messagePorts (FlockC3.Sparse.unitShape (holoAt st hp))) Lb sI i)
+    (hRC : Flock.Premises.RegistrantCovers zr)
+    (hVB : ∀ R ω t R₂, ValueColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg)
+        (fun t => coins (wr t).2) bind rows zr hCust h)
+      (valueSrcAll (fun t => coins (wr t).2) fun t =>
+        Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)) R ω t R₂ → Bad R ω t R₂)
+    (hlaid : FlockC3.Sparse.SparseOutsLaid (Vs sI).c (FlockC3.Sparse.unitShape (holoAt st hp)) 0)
+    (hone : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
+      layers zs dg N k Rw R ω t R₂ τ sI
+        (FlockSoundness.Discharge.Layout.oneG (c := (Vs sI).c) (hU := (Vs sI).hU) (n := (Vs sI).nv)) = true)
+    (hv : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
+      ∀ (i : Fin 2) (u : Fin (Vs sI).nv), u.val = i.val →
+        ∀ q < 128 * Flock.RecSparse.nv (FlockC3.Sparse.unitShape (holoAt st hp)),
+          FlockVBridge.Decode.RegBit (zs R ω t R₂ sI) u 0
+            (FlockVBridge.Sparse.vBaseS (FlockC3.Sparse.unitShape (holoAt st hp)) + q)
+            (FlockVBridge.wbit ((FlockVBridge.Sparse.verifierRow (holoAt st hp).cls.shape
+              (sc R ω t (layers zs dg N k Rw R ω t R₂ τ) i))[·]!) q))
     (hcols : ∀ s : Fin (vstarCount ish), Flock.RecSparse.check (Vs s).c = .ok () →
       Flock.RecSparse.params (Vs s).c.unit.name = some (FlockC3.Sparse.unitShape (holoAt st hp)) →
       FlockC3.HPort.HCols (Vs s) (Flock.RecSparse.messagePorts (FlockC3.Sparse.unitShape (holoAt st hp))))
@@ -295,6 +311,33 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
       (fun (_ : Reg) (_ : L.Ω) (t : List (Cm × (ℐ).Coin)) (_ : (j : Fin (vstarCount ish)) → (Vs j).Bits) =>
         heldC3 ish sp (innerCommitsAt (wr t).1 (wr t).2 st reg)) :=
     c3Held_heldC3 hsp
+  -- V*'s sessions and copies at rep `i`, at the RecSparse session `sI`, off `ValueColl`
+  have hsess : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
+      ¬ Bad R ω t R₂ → ∀ i : Fin 2,
+      FlockC3.Sparse.SparseSessionAt (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
+          (heldC3 ish sp (innerCommitsAt (wr t).1 (wr t).2 st reg)) unit i
+          (sw R ω t (layers zs dg N k Rw R ω t R₂ τ) i) (sc R ω t (layers zs dg N k Rw R ω t R₂ τ) i) ∧
+        ∃ (s : Fin (vstarCount ish)) (un : Fin (Vs s).nv) (j : ℕ) (hj : j < (Vs s).c.upv), un.val = i.val ∧
+          FlockC3.Sparse.SparseCopyAt (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
+            (sw R ω t (layers zs dg N k Rw R ω t R₂ τ) i) (sc R ω t (layers zs dg N k Rw R ω t R₂ τ) i) s un j
+              hj := by
+    intro R ω t R₂ τ o hA' hb i
+    have hcs : (sc R ω t (layers zs dg N k Rw R ω t R₂ τ) i).cs = FlockC3.Sparse.csOf
+        (heldC3 ish sp (innerCommitsAt (wr t).1 (wr t).2 st reg))
+        (Flock.RecSparse.unitName (FlockC3.Sparse.unitShape (holoAt st hp))) i.val := by
+      subst hsc hunit
+      exact FlockC3.Sparse.scOf_cs ..
+    have hone' := hone R ω t R₂ τ o hA'
+    have hv' := hv R ω t R₂ τ o hA' i
+    subst hunit hsw hzs
+    exact FlockC3.Sparse.sparseSessionAt_of_checks (C3Family.checked (T := Flock.Guarantees.holoTys st hp)
+      (CT := holoCTs st hp) (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+      FlockC3.Sparse.coinsAccepted_checked FlockC3.PubRows.checksAccepted_checked
+      (FlockC3.HPort.readsOwnAt_checked dg N k Rw)
+      (C3Family.rowsRegisteredC3_of_covered _
+        (rowsCovered_checked ish hss bind hob zr hCust h coins rows own sel bc dec wr reg hRC) dg N k Rw)
+      (sessStmt_checked hF) hsi hell hi hsS hlaid hA' (fun hvc => hb (hVB R ω t R₂ hvc)) hone' i
+      (fun cs hcs' => hc3 R ω t _ cs hcs') hcs hv'
   -- the same at the sessions refusing `Bad`, with G's items 1–4 there from `halg` and `hacc` off `Bad`
   have halgZ : AlgebraDecodes (I := ℐ) (offZs zs Bad) dg N k Rw sh rep := algebraDecodes_offZs hS halg
   have haccZ : AccChains (I := ℐ) (offZs zs Bad) dg N k Rw sh rep := accChains_offZs hS hacc
@@ -348,7 +391,8 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
     rw [repsOfVals_sparseOf]
     exact FlockC3.Sparse.srcSparseTie_of_copies hu hrng halgZ haccZ hUZ hpubZ
       (fun _ _ t _ => heldC3 ish sp (innerCommitsAt (wr t).1 (wr t).2 st reg)) unit sw
-      (fun R ω t R₂ τ o hA' => hsess R ω t R₂ τ o (accepted_offZs hS hA').2) (srcHTie_offZs hS hH)
+      (fun R ω t R₂ τ o hA' => hsess R ω t R₂ τ o (accepted_offZs hS hA').2 (accepted_offZs hS hA').1)
+      (srcHTie_offZs hS hH)
   have hrtZ : FlockC3.Reps.SrcRepTie (offZs zs Bad) dg N k Rw
       (tiedSrc (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals)) :=
     FlockC3.Reps.srcRepTie_of_alg halgZ haccZ (FlockC3.Reps.repUnitOfAlg_of_parts hprZ hsvZ hfZ
@@ -356,7 +400,8 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
   have hsstZ : AtSrc (offZs zs Bad) dg N k Rw
       (tiedSrc (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals)) fun t u =>
         SparseStagesAt wr (fun x => innerCommitsAt x.1 x.2 st reg) ish unit sp t u :=
-    sparseStagesAt_sparseOf hc3 hshape fun R ω t R₂ τ o hA' i => (hsess R ω t R₂ τ o (accepted_offZs hS hA').2 i).1
+    sparseStagesAt_sparseOf hc3 hshape fun R ω t R₂ τ o hA' i =>
+      (hsess R ω t R₂ τ o (accepted_offZs hS hA').2 (accepted_offZs hS hA').1 i).1
   have hmapsZ : MapsAt (offZs zs Bad) dg N k Rw M osh unit
       (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals)
       (fun _ _ t _ => heldC3 ish sp (innerCommitsAt (wr t).1 (wr t).2 st reg)) w kap e0 sb e xR.cap :=
