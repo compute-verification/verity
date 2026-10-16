@@ -10,6 +10,7 @@ import Proofs.Flock.Claims.DecodeFlock
 import Proofs.Flock.Claims.ZkDecode
 import Proofs.Flock.Claims.DecodeFamily
 import Proofs.Flock.Claims.ZkDecodeFlock
+import Proofs.Flock.Claims.ZkCols
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
@@ -19,8 +20,8 @@ finders' Cauchy–Schwarz aggregation (`Finder`, `Aggregate`), the `Bits` coroll
 reruns and amplification (`ERep`), `ERepCost` (`ERepCost`), and a decoder that meets `ListComplete` at the Johnson
 count for interleaved Reed–Solomon codes, from ArkLib's Guruswami–Sudan decoder (`Decode`), that decoder at Flock's
 level-0 code (`DecodeFlock`), and at the masked (`--zk`) level-0 code, with its read step (`ZkDecode`); a family of
-such decoders read as one (`DecodeFamily`), and the masked verifier's deployed code at each `m` it serves
-(`ZkDecodeFlock`). -/
+such decoders read as one (`DecodeFamily`), the masked verifier's deployed code at each `m` it serves
+(`ZkDecodeFlock`), and a masked run's opened level-0 columns (`ZkCols`). -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
