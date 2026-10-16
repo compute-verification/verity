@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 LAYER = {(8192, 4096, 4096): "o_proj", (8192, 6144, 4096): "qkv", (8192, 28672, 4096): "gate_up", (8192, 4096, 14336): "down"}
-KIND = {"e_": "duo32", "t_duo32": "duo32", "d64_": "duo64", "x_": "xin", "t4_": "tb4", "t4c_": "tb4c", "t2w_": "tb2w",
+KIND = {"e_": "duo32", "t_duo32": "duo32", "d64_": "duo64", "x_": "xin", "x64_": "xin64", "t4_": "tb4", "t4c_": "tb4c", "t2w_": "tb2w",
         "t1w_": "tb1w"}
 
 

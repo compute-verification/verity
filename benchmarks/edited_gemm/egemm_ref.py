@@ -9,7 +9,7 @@ layout), and U (tag 6, lpgemm.cu's LP_UW 64, derive.py's u_noise64 on the weight
     Y  = X W^T (the served product), and C - S U^T == Y for C = X W'^T
     receipts over C's running sums T_s (s = 1 .. k / 32), each dumped kernel's by its kind (meta.json's kinds):
       duo32  derive.py's tile_receipts over every T_s;  duo64  the same over T_2, T_4, ... (the odd steps, 0-based)
-      xin    P2-FF's XOR-in fold (egemm.cu's XIN), tile t's words into chain t % 4
+      xin    P2-FF's XOR-in fold (egemm.cu's XIN), tile t's words into chain t % 4;  xin64  the same over T_2, T_4, ...
       tb4, tb2w, tb1w, tb4c  floored_gemm/ref.py's tb_receipts and tbc_receipts on the tile
 and every one is compared with the device's bytes. One JSON line a gate directory; exit 1 on any difference, on a
 device mismatch or on a control the device didn't reject.
@@ -121,6 +121,8 @@ def receipts(kind: str, seed: int, Ts: list[np.ndarray], tile: int) -> np.ndarra
         return tile_receipts(seed, Ts[1::2], tile)
     if kind == "xin":
         return xin_receipts(seed, Ts, tile)
+    if kind == "xin64":
+        return xin_receipts(seed, Ts[1::2], tile)
     kid = TB_KIND[kind]
     if kid in fref.CHAINED:
         return fref.tbc_receipts(kid, Ts, T, BN, WM, NCT, 1, 1)[0]

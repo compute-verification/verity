@@ -16,10 +16,11 @@
 //                    32 patches at once, a chunk 4096 columns)
 //   wedit            W' = W + U and the tail rows P_B = [U | U | U | 0], U's hashes in each block of 8 rows
 //   qwe<ORD>         quant<true> and wedit in one launch (block orders: the quantizer's first, the edit's, interleaved)
-//   e_*, d64_*, x_*, t*_*  the GEMM: lpgemm.cu's 16-warp 128 x 128 TMA mainloop (fgemm.cu's ML) with the receipts'
+//   e_*, d64_*, x_*, x64_*, t*_*  the GEMM: lpgemm.cu's 16-warp 128 x 128 TMA mainloop (fgemm.cu's ML) with the receipts'
 //                    absorbs interleaved with the MMAs, and the peel as a 2-atom tail (acc -= 256 S_1 U^T + S_0 U^T; with
 //                    S_2's atom a 3-atom tail at k > 4096; the rows t_duo32's 4-atom tail reads). Receipts (EL's RK): duo
-//                    every 32 steps (e_*: t_duo32's), duo every 64 (d64_*), P2-FF's XOR-in fold (x_*), and the tensor-byte
+//                    every 32 steps (e_*: t_duo32's), duo every 64 (d64_*), P2-FF's XOR-in fold every 32 (x_*) and every
+//                    64 (x64_*), and the tensor-byte
 //                    receipts TB4, TB4C, TB2W, TB1W (t4_*, t4c_*, t2w_*, t1w_*: fgemm.cu's). Interleaving: the absorb of
 //                    a running sum runs LAG MMAs after its tile's MMA (each value is still in its accumulator then, so the
 //                    absorb order and the receipts are the unscheduled ones), and with TIE every TIE-th MMA's accumulator
@@ -48,8 +49,9 @@ using MLW = ML<128, 128, 32, 3>;
 // The receipt kinds beyond fgemm.cu's DUO, TB4, TB4C, TB2W and TB1W (NONE: no receipts). DUO64: duo on every second
 // running sum only (the odd steps', so derive.py's tile_receipts on Ts[1::2]). XIN: P2-FF's XOR-in fold (pfill.cuh's NC 4
 // under -DPFILL_XIN), three ops a pair: y = (rotl(y, 7) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 on an
-// accumulator's four words, tile t into chain t % 4. Negative, so fgemm.cu's is_tb is false for them
-constexpr int DUO64 = -1, XIN = -2;
+// accumulator's four words, tile t into chain t % 4. XIN64: XIN on the odd steps' running sums only (as DUO64). Negative,
+// so fgemm.cu's is_tb is false for them
+constexpr int DUO64 = -1, XIN = -2, XIN64 = -3;
 // XIN's multipliers: pfill.cuh's key rule (odd, more than 2^8 from 0 mod 2^24, not ±1 mod 32) on the words
 // mix32(seed ^ (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (P2-FF draws them per tile from a SHA block;
 // either way two registers)
@@ -82,9 +84,9 @@ template <bool FMA> DEV void tie(int& d, uint32_t z, uint32_t zero) {
 // next). TIE: a tie before every |TIE|-th MMA (0: none; negative: the IMAD tie) on the state the last absorb wrote
 template <int RK, int LAG, int TIE> struct EL : MLW {
   static_assert(LAG >= -1 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
-  static constexpr bool R = RK != NONE, TB = is_tb(RK);
+  static constexpr bool R = RK != NONE, TB = is_tb(RK), XF = RK == XIN || RK == XIN64, HALF = RK == DUO64 || RK == XIN64;
   static constexpr int B = tb_base(RK);
-  static constexpr int NKR = RK == XIN ? 2 : TB ? NK<RK> : 1;   // key registers: XIN's a0, a1; a TB kind's B fragments
+  static constexpr int NKR = XF ? 2 : TB ? NK<RK> : 1;   // key registers: XIN's a0, a1; a TB kind's B fragments
   using MLW::MLW;
   static constexpr int NST = (SMEM - 1024) / (STAGE + 16);   // ML's STAGES
   static_assert(NST == 3, "MLW's 3 stages");
@@ -128,8 +130,8 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
     if (issuer) issue();
     __syncwarp();
   }
-  // the schedule: atom POS of a stage receipts (DUO64: the odd ones, so the odd steps), unit j's first tile and slot
-  __host__ __device__ static constexpr bool rc(int pos) { return RK != DUO64 || pos % 2 == 1; }
+  // the schedule: atom POS of a stage receipts (DUO64, XIN64: the odd ones, so the odd steps), unit j's first tile and slot
+  __host__ __device__ static constexpr bool rc(int pos) { return !HALF || pos % 2 == 1; }
   __host__ __device__ static constexpr bool unit(int j) { return B == TB2W ? j % 2 == 1 : B == TB1W ? j % NI == NI - 1 : true; }
   __host__ __device__ static constexpr int first(int j) { return B == TB2W ? j - 1 : B == TB1W ? j - (NI - 1) : j; }
   __host__ __device__ static constexpr int slot(int j) { return LAG >= 0 ? j + LAG : 2 * j + 2 < j + 7 ? 2 * j + 2 : j + 7; }
@@ -152,7 +154,7 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
     return 0;
   }
   template <int J> DEV static uint32_t tz(const St (&ch)[8]) {
-    if constexpr (RK == XIN) return ch[J % 4].y;
+    if constexpr (XF) return ch[J % 4].y;
     else if constexpr (TB) return ch[1].z;
     else return ch[4 * (J % 2) + 3].z;
   }
@@ -173,7 +175,7 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
     const int(&w)[4] = acc[mi][ni];
     if constexpr (RK == DUO || RK == DUO64) {
       absorb<DUO, mi, ni>(ch, w);
-    } else if constexpr (RK == XIN) {
+    } else if constexpr (XF) {
       St& c = ch[J % 4];
       c.y = (rotl(c.y, 7) ^ (uint32_t)w[0]) * kr[0] + (uint32_t)w[1];
       c.y = (rotl(c.y, 19) ^ (uint32_t)w[2]) * kr[1] + (uint32_t)w[3];
@@ -323,7 +325,7 @@ template <int RK, int LAG, int TIE, bool THREE> DEV void e_body(const Args& a) {
   const int wm = warp / L::WARPS_N, wn = warp % L::WARPS_N, g = lane >> 2, q = lane & 3, ctid = threadIdx.x;
   const uint32_t zero = (uint32_t)a.KR;
   uint32_t kr[L::NKR];
-  if constexpr (RK == XIN) xin_keys(a.seed, kr[0], kr[1]);
+  if constexpr (L::XF) xin_keys(a.seed, kr[0], kr[1]);
   else if constexpr (L::TB) L::template keys<RK>(kr, lane);
   else kr[0] = 0;
   typename L::Place pl{0, 0};
@@ -352,7 +354,7 @@ template <int RK, int LAG, int TIE, bool THREE> DEV void e_body(const Args& a) {
       }
     if constexpr (L::R) {
       uint4* r = reinterpret_cast<uint4*>(a.R) + ((size_t)tile_id * L::NCT + ctid) * 2;
-      if constexpr (RK == XIN) {
+      if constexpr (L::XF) {
         r[0] = make_uint4(ch[0].y, ch[1].y, ch[2].y, ch[3].y);
         r[1] = make_uint4(0, 0, 0, 0);
       } else if constexpr (L::TB) {
@@ -365,7 +367,7 @@ template <int RK, int LAG, int TIE, bool THREE> DEV void e_body(const Args& a) {
     }
   }
 }
-// <kind>_l<LAG><tie>: e duo, d64 DUO64, x XIN, t4/t4c/t2w/t1w the TB kinds; l s the spread schedule; tie h every second
+// <kind>_l<LAG><tie>: e duo, d64 DUO64, x XIN, x64 XIN64, t4/t4c/t2w/t1w the TB kinds; l s the spread schedule; tie h every second
 // MMA, q every fourth, o every eighth, none if absent; m: the IMAD tie. NAME_k3 is NAME with the 3-atom tail (k > 4096;
 // one kernel with both tails behind a branch on K spills 50 bytes more in the 2-atom one)
 #define EGEMM(NAME, RK, LAG, TIE)                                                                                         \
@@ -385,6 +387,8 @@ EGEMM(x_l2, XIN, 2, 0)
 EGEMM(x_l2q, XIN, 2, 4)
 EGEMM(x_l3qm, XIN, 3, -4)
 EGEMM(x_l2o, XIN, 2, 8)
+EGEMM(x64_l2q, XIN64, 2, 4)
+EGEMM(x64_l2o, XIN64, 2, 8)
 EGEMM(t4_l2, TB4, 2, 0)
 EGEMM(t4c_l2, TB4C, 2, 0)
 EGEMM(t2w_l0, TB2W, 0, 0)
@@ -625,7 +629,7 @@ static const EKn EK[] = {
     EKE(e_plain, ""), {"t_duo32", t_duo32, t_duo32, "duo32"}, EKE(e_l2h, "duo32"), EKE(e_l2q, "duo32"),
     EKE(e_l3qm, "duo32"), EKE(e_l2o, "duo32"), EKE(e_l4q, "duo32"),
     EKE(d64_l2q, "duo64"), EKE(d64_l7q, "duo64"), EKE(d64_lsq, "duo64"), EKE(d64_lsqm, "duo64"),
-    EKE(x_l2, "xin"), EKE(x_l2q, "xin"), EKE(x_l3qm, "xin"), EKE(x_l2o, "xin"),
+    EKE(x_l2, "xin"), EKE(x_l2q, "xin"), EKE(x_l3qm, "xin"), EKE(x_l2o, "xin"), EKE(x64_l2q, "xin64"), EKE(x64_l2o, "xin64"),
     EKE(t4_l2, "tb4"), EKE(t4c_l2, "tb4c"), EKE(t2w_l0, "tb2w"), EKE(t2w_l2, "tb2w"),
     EKE(t1w_l0, "tb1w"), EKE(t1w_l2, "tb1w")};
 static const EKn* ekern(const std::string& n) {

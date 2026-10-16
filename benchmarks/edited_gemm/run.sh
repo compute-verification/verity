@@ -78,7 +78,7 @@ fi
 export REPS=${REPS:-15} IL_REPS=${IL_REPS:-41}
 K32="e_l2q e_l3qm e_l2o e_l4q"
 K64="d64_l2q d64_l7q d64_lsq d64_lsqm"
-KX="x_l2 x_l2q x_l3qm x_l2o"
+KX="x_l2 x_l2q x_l3qm x_l2o x64_l2q x64_l2o"
 KTB="t4_l2 t4c_l2 t2w_l0 t2w_l2 t1w_l0 t1w_l2"
 KALL="$K32 $K64 $KX $KTB"
 arms="plain,plainq,qplain,qdither,wedit,qwe,e_plain,t_duo32"
@@ -96,15 +96,15 @@ for k in $lk; do lil="$lil $k:plain editedf:$k:plainq"; done
 ncu="e_plain e_l2q d64_lsq x_l2q t4_l2 t2w_l2 t1w_l2 qwe" stall="e_l2q x_l2q t1w_l2"
 # EG_SET=best: each kind's fastest kernels at o_proj, also as edited:K (wedit, then K, against plain), at every linear
 if [ "${EG_SET:-all}" = best ]; then
-  kb="e_l2q e_l4q d64_l2q d64_lsqm x_l2o x_l2q t2w_l2 t1w_l2"
+  kb="e_l2q e_l4q d64_l2q d64_lsqm x_l2o x_l2q x64_l2o x64_l2q t2w_l2 t1w_l2"
   arms="plain,plainq,wedit,qwe,e_plain" il="e_plain:plain"
   for k in $kb; do arms="$arms,$k,edited:$k,editedf:$k"; il="$il $k:plain edited:$k:plain editedf:$k:plainq"; done
   cold=""
-  for k in e_l4q d64_l2q x_l2o; do cold="$cold $k:plain editedf:$k:plainq"; done
-  lk="e_l2q e_l4q d64_l2q x_l2o x_l2q t1w_l2"
+  for k in e_l4q d64_l2q x_l2o x64_l2o; do cold="$cold $k:plain editedf:$k:plainq"; done
+  lk="e_l2q e_l4q d64_l2q x_l2o x_l2q x64_l2o x64_l2q t1w_l2"
   larms="plain,plainq,wedit,qwe,e_plain" lil=""
   for k in $lk; do larms="$larms,$k,edited:$k,editedf:$k"; lil="$lil $k:plain edited:$k:plain editedf:$k:plainq"; done
-  ncu="e_l4q d64_l2q d64_lsqm x_l2o" stall="d64_l2q x_l2o"
+  ncu="e_l4q d64_l2q x_l2o x64_l2o x64_l2q" stall="d64_l2q x_l2o x64_l2o"
 fi
 export EG_ARMS=${EG_ARMS:-$arms} IL=${IL:-$il} IL_COLD=${IL_COLD:-$cold}
 export LAYER_ARMS=${LAYER_ARMS:-$larms} LAYER_IL=${LAYER_IL:-$lil}
