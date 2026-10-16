@@ -2,17 +2,19 @@
 none of 26,686 of rank 0's): on a rank Program shaped like GLM's -- dense layer 0, MoE layers 3 and 4 with the shared expert under the
 runner's held path `_shared_experts._layer`, a prefill step on the unfused all-reduce + `RMSNormFusedCudaVector8` and DeepGEMM path
 and a decode step on the fused `AllReduceRmsNormMnnvl` and FlashInfer path -- every `instance_outputs` / `tp_rank_partials` identity is
-a name the capture map `glm-moe-dsa-eager-hopper-tp8-v0` commits, except the three this change names for the commit side to bind:
+a name the capture map `glm-moe-dsa-eager-hopper-tp8-v0` commits, except the three the committer binds per call
+(`native_host.CALL_DEPENDENT_RE`):
 
-* `<norm>/all_reduce`, the unfused path's all-reduced tensor (`allreduce_norm` binds the partial and lets the norm's hook bind
-  `<norm>/0` / `<norm>/1`, but nothing binds the all-reduce's own output);
-* `<linear>/x_q` and `<linear>/x_s`, `DeepGemmFp8Linear_v1`'s quant of its input (ports `0` / `1`), so the hook's `<linear>/0` is y."""
+* `<norm>/all_reduce`, the unfused path's all-reduced tensor (`allreduce_norm`, from the norm's pre-hook);
+* `<linear>/x_q` and `<linear>/x_s`, `DeepGemmFp8Linear_v1`'s quant of its input (ports `0` / `1`, `linear_quant_source`), so the
+  hook's `<linear>/0` is y."""
 from __future__ import annotations
 
 import pytest
 
 from tests.acquire.glm53_model import CMAP, ENV
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.commit.committer.native_host import CALL_DEPENDENT_RE
 from verity_vllm.correspondence.reader_for_query import Correspondence, held_module_paths, parse_call_name
 from verity_vllm.query.compose import merge_ranks
 from verity_vllm.query.manifest.format import committed_identity
@@ -138,8 +140,9 @@ def _manifest(rank: int) -> dict:
 NORMS = {f"model.layers.{k}.{n}" for k in DENSE + MOE for n in ("input_layernorm", "post_attention_layernorm")} - {"model.layers.0.input_layernorm"} | {"model.norm"}
 QUANT_LINEARS = {f"model.layers.{k}.self_attn.o_proj" for k in DENSE + MOE} | {f"model.layers.0.mlp.{p}" for p in ("gate_up_proj", "down_proj")} | \
     {f"model.layers.{k}.mlp.shared_experts.{p}" for k in MOE for p in ("gate_up_proj", "down_proj")}
-#: the identities this change names for the commit side to bind (module docstring)
+#: the identities the committer binds per call (the norm path, the linear's quant branch), not from a capture-map tap
 NEEDS_SOURCE = {(n, "all_reduce") for n in NORMS} | {(m, q) for m in QUANT_LINEARS for q in ("x_q", "x_s")}
+assert all(CALL_DEPENDENT_RE.search(f"{op}/{mem}") for op, mem in NEEDS_SOURCE)
 
 
 @pytest.fixture(scope="module")
