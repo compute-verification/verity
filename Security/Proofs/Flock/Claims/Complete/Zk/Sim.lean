@@ -5,9 +5,9 @@ import Flock.With.SimZk
 /-!
 # The honest masked run as a pure session
 
-C's simulation (`simS`, `Complete/Sim.lean`) on the masked prover: every masked prover function is related to its pure
-run (`zerocheckPZk_sim`, …, `sessionPZk_sim`), and the honest masked run's sends are the pure masked session's
-bodies (`sessionSZk`, `honestRunZk_eq`).
+The plain prover's simulation (`simS`, `Complete/Sim.lean`) on the masked prover: every masked prover function is
+related to its pure run (`zerocheckPZk_sim`, …, `sessionPZk_sim`), and the honest masked run's sends are the pure
+masked session's bodies (`sessionSZk`, `honestRunZk_eq`).
 -/
 
 namespace FlockComplete

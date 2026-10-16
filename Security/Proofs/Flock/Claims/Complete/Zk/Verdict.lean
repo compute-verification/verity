@@ -65,7 +65,7 @@ theorem zk_verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Set
   rw [hS]
   dsimp only
   simp only [liftM, monadLift_self, hE, hP, ok_bind, hR, hI, Bool.false_eq_true, ite_false, StateT.run_bind, hY, hW,
-    hG, hC, StateT.run_pure, pure_bind, hN, hK, hB]
+    hG, hC, pure_bind, hN, hK, hB]
   rfl
 
 /-! ## The masked verdict -/
