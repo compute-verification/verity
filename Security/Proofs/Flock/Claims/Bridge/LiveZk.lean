@@ -15,7 +15,8 @@ written as, every SHA-512 call an oracle query (`Hashes.oc`, `DeployOC`):
 * `Pr_acc_zk`: `Claims.run`'s acceptance with an event `Q` of the outcome, against SHA-512, is `liveSession`'s
   probability of `AcceptsZK I (wr x o) ∧ Q o`, the event the old theorems bound.
 * `Pr_acc_zk_le`: so the old transfer (`live_le_sessionZJ`) bounds it by the compiled session's acceptance against the
-  simulated strategy, whenever every table's decoder is right on the outcomes flock-verify accepts.
+  simulated strategy, whenever every table's decoder is right on the outcomes flock-verify accepts (`hdec`; at the
+  deployed decoders and the writer `Custody.wrD`, `Custody.decodesOnZKJ_wrD`).
 
 The setup reads `setupOf`'s pure SHA-512 (the circuit's and tables' digests), which are not oracle queries: they are
 functions of what the verifier reads (`x`), not of the prover's messages.

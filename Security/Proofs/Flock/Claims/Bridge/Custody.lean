@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Soundness.Assumptions.Zk
+import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 import Proofs.Flock.Soundness.Refine.Walk
 import Proofs.Flock.Soundness.Refine.Table
 
@@ -30,6 +31,9 @@ the record's roots, link points and rounds are the run's link message, first coi
   accepts that records it, where one exists. It satisfies `RecordsLiveZKJ` (so `RecordCustodyZKJ` is its draw file
   half alone, `recordCustodyZKJ_wrD`), and on every run whose decision accepts at SHA-512, `verify --zk` accepts what it
   writes for the run's outcome (`AcceptsZK`), the event the old theorems bound.
+* `decodesOnZKJ_wrD`, `decodesOnZKJ_wrD_file`: at `wrD` the deployed `--zk` decoders are right (`DecodesOnZKJ`,
+  `LiveZk.Pr_acc_zk_le`'s `hdec`) on untyped inputs under `TagsOkZJ` where every draw sets each table up at `mPts`
+  link points (`DrawOkZKJ`), as the draw file half of `RecordCustodyZKJ` gives.
 -/
 
 namespace Claims.Bridge.Custody
@@ -720,5 +724,35 @@ theorem acceptsZK_wrD {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json)
   unfold wrD
   rw [dite_eq_left_of_eq_true (eq_true hex)]
   exact (Classical.choose_spec hex).1
+
+/-! ## The deployed decoders at `wrD` -/
+
+/-- **The deployed `--zk` decoders are right at `wrD`** (`DecodesOnZKJ`: at each draw and registration, `LiveZk`'s
+`hdec`): `wrD` records the live session (`recordsLiveZKJ_wrD`), so the old discharge (`runsZCJ_live`) needs only the
+inputs' tags (`TagsOkZJ`, untyped) and every draw setting each table up at `mPts` link points (`DrawOkZKJ`). -/
+theorem decodesOnZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.tags.typed = false)
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} {d₀ : Json}
+    (y₀ : Composed.DrawSetupZJ (Composed.inputsJ I 0) mPts S₀ d₀) (L : Audit.Law n) (hT : Composed.TagsOkZJ I)
+    (hDraw : ∀ ω, Composed.DrawOkZKJ I dj mPts (L.draw ω)) :
+    Composed.DecodesOnZKJ execArith ZkExec.hs512 (Composed.planZJ (Reg := Reg) dj y₀) I
+      (wrD I dj fun S R => (Composed.planZJ (Reg := Reg) dj y₀ S R).length)
+      (Composed.opnAtZJ (Composed.planZJ dj y₀) I dj) (Composed.decAtZJ (Composed.planZJ dj y₀))
+      (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => Exec.capOfRoot rs[j.val]!) L :=
+  Composed.decodesOnZKJ_of_runsOnZCJ execArith ZkExec.hs512 _ I _ _ _ _ _ _
+    (Composed.runsZCJ_live I ht dj y₀ _ L hT (recordsLiveZKJ_wrD I dj _) hDraw)
+
+/-- **`decodesOnZKJ_wrD` from the draw file half**: where the circuit parses and the draw file is the coin server's
+subset draw of `kd` units (`DrawFileZK`, the half of `RecordCustodyZKJ` that `wrD` leaves, `recordCustodyZKJ_wrD`),
+every draw sets each table up at `mPtsOf c.g (kd / nTab I)` link points (`drawOkZKJ_of_file`). -/
+theorem decodesOnZKJ_wrD_file {n : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.tags.typed = false) {c : _root_.Flock.Circuit}
+    (hc : HmRow.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ) (hdiv : kd % Composed.nTab I = 0)
+    (dj : Finset (Fin n) → Json) (hdf : ZkLink.DrawFileZK dj (.subset kd) n) {S₀ : Finset (Fin n)} {d₀ : Json}
+    (y₀ : Composed.DrawSetupZJ (Composed.inputsJ I 0) (Exec.mPtsOf c.g (kd / Composed.nTab I)) S₀ d₀)
+    (L : Audit.Law n) (hT : Composed.TagsOkZJ I) :
+    Composed.DecodesOnZKJ execArith ZkExec.hs512 (Composed.planZJ (Reg := Reg) dj y₀) I
+      (wrD I dj fun S R => (Composed.planZJ (Reg := Reg) dj y₀ S R).length)
+      (Composed.opnAtZJ (Composed.planZJ dj y₀) I dj) (Composed.decAtZJ (Composed.planZJ dj y₀))
+      (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => Exec.capOfRoot rs[j.val]!) L :=
+  decodesOnZKJ_wrD I ht dj y₀ L hT fun _ => Composed.drawOkZKJ_of_file I ht hc kd n hdiv dj hdf _
 
 end Claims.Bridge.Custody
