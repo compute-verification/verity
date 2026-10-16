@@ -193,6 +193,63 @@ class PFillKPhase(PFillK):
         return None if phase == "prefill" else self._row(b, l)[1]
 
 
+def _flin(sms, lm=1, aps=1):
+    from fused_arm import FusedStep
+    return sms, FusedStep(FW=0, AFW=0, APS=aps, ALZ=0, LT=0, LM=lm)
+
+
+#: (B, L) -> (split SMs, FILL's step with no filler warps or None for cuBLASLt's): FILL's FusedPump rows (fused_arm.py
+#: TABLE_PUMP; r20261016-092208-bbfb, every gate under v3: 0.92-1.005 at B <= 32 on 48 step SMs, 0.962 at 128/2K on 88,
+#: 1.019-1.020 at 132/5K and 144/5K on 112) where they give the pump more SMs than POWER_SPLIT, POWER_SPLIT elsewhere
+#: (48/16K 132, 128/6K 108, B 256 60: FusedPump's 116, 92 and 44 are fewer). s7 (r20261016-093616-d1ed): POWER_SPLIT's
+#: B >= 128 rows are at cuBLASLt's cliff (every larger split 1.050-1.121).
+FUSED_K = {
+    (1, 2048): _flin(140, aps=0), (1, 8192): _flin(140, aps=0), (1, 32768): _flin(140), (8, 16384): _flin(140),
+    (32, 1024): _flin(140), (32, 2048): _flin(140), (32, 8192): _flin(140), (32, 24576): _flin(132),
+    (48, 16384): (132, None), (64, 4096): _flin(124),
+    (128, 2048): _flin(100, lm=0), (128, 6144): (108, None),
+    (132, 5120): _flin(76, lm=0), (144, 5120): _flin(76, lm=0), (192, 2048): _flin(60, lm=0),
+    (256, 1024): (60, None), (256, 2048): (60, None), (256, 3072): (60, None),
+}
+
+
+@dataclass
+class PFillKFused(PFillK):
+    """pfill-k's pump beside FILL's decode step with no filler warps (flin's GEMM, persistent attention, lm_head through
+    flin at B <= 64; fused_arm.FusedPump's form) where that step leaves the pump more SMs, cuBLASLt's step on POWER_SPLIT
+    elsewhere, and pfill-k's 4-SM prefill split. No arm-side fixed work, so filler-scorer/v3 reads its filler at the
+    scorer's own build (Theorem K's entry). Run through fused_score.py:
+
+      python3 benchmarks/pouw/filler/fused_score.py benchmarks/pouw/filler/pfill_arm.py:PFillKFused
+    """
+
+    name: str = "pfill-k-fused"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "pfill-k", "approach": "pouw/filler-proved",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "place:split",
+                      "split:per-point-table", "fused:flin-serving", "fused:persistent-attention", "fused:lm-head-flin",
+                      "prefill:split"],
+        "hypothesis": "FILL's step without filler warps runs B <= 32 decode on 48 SMs at 0.92-1.0 of cuBLASLt's, so "
+                      "pfill-k's pump takes 140 SMs there and 76-100 at B 128-144: Theorem K's 0.9 on more SMs, with no "
+                      "fixed work"})
+    sources: tuple = SOURCES + ("benchmarks/pouw/decode_capacity/flin.cuh", "benchmarks/pouw/filler/fscore.cu",
+                                "benchmarks/pouw/filler/fused_arm.py", "benchmarks/pouw/filler/fused_score.py")
+    choice: str = ("an offline table of 18 (B, L) points (split SMs, FILL's step or cuBLASLt's) from FILL's FusedPump rows "
+                   "and POWER_SPLIT; a lookup, a green split and one graph a step at serving time")
+    table = FUSED_K
+
+    def _row(self, b, l):
+        return point_lookup(self.table, b, l)
+
+    def placement(self, phase, b, l):
+        if phase == "prefill":
+            return Placement("split", 4)
+        return Placement("split", self._row(b, l)[0])
+
+    def fused(self, phase, b, l):
+        return None if phase == "prefill" else self._row(b, l)[1]
+
+
 def products_per_slot(lineage: dict) -> int:
     """Products the arm's filler does an int8 slot it reports: 2 for the e2m1 tile, else 1."""
     return 2 if "mma:e2m1-omma-k64" in (lineage.get("mechanism") or []) else 1
