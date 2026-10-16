@@ -560,7 +560,11 @@ def peel_table(results: list[dict]) -> str:
              "Δ% vs bf16 | Δ% vs bf16 attn | Δ% vs bare grid | Δ% vs clean | peel exact | attn rel. err |",
              "|---:|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|---:|"]
     fmt = lambda d: f"{d:+.2f}" if d is not None else "-"  # noqa: E731
-    for x in rows(results):
+    served_order = lambda x: ["qkpv", "kv", "v", "k"].index(  # noqa: E731
+        "".join(o for o in OPERANDS if x["n"][o] != "none") or "qkpv") if x["label"] != "none" else 0
+    order = lambda x: (x["ctx"], x["grid"] in GRID_PAIRS, x["lin"] != "bf16", x["e"] != {"q": "none", "p": "none"},  # noqa: E731
+                       served_order(x))
+    for x in sorted(rows(results), key=order):
         q = x["grid"] in GRID_PAIRS
         attn = (f"{x['grid']}{'-rot' if x['rot'] else ''} {x['p']}/{x['v']}" if q else x["grid"])
         tops = ", ".join(str(x["tops"][o]) for o in OPERANDS) if x["tops"] else "-"
