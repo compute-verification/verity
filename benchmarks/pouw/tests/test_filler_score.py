@@ -453,7 +453,7 @@ def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
     # an inactive entry that applies leaves SCORE at the next active one that does
     off = {**S.FILLER_ENTRIES, "theorem-k": {**S.FILLER_ENTRIES["theorem-k"], "active": False}}
     assert S.filler_entry("bits01", f, entries=off)["active"] == "unproven"
-    assert S.SCORER == S.V3 and all(e["active"] and e["status"] == "proved" for e in S.FILLER_ENTRIES.values())
+    assert S.SCORER == S.V4 and all(e["active"] and e["status"] == "proved" for e in S.FILLER_ENTRIES.values())
     stats = all_points()
     sc = {n: S.score(stats, S.certified(n)) for n in S.FILLER_ENTRIES}
     assert sc["chained"]["SCORE"] == sc["unproven"]["SCORE"] < sc["theorem-e"]["SCORE"] < sc["theorem-k"]["SCORE"]
@@ -647,7 +647,7 @@ def test_fixed_work_is_credited_from_checked_public_tiles_of_a_read_binary():
     h = S.honesty(v1, st, [], whole={"decode 32/2048": S.whole_of_peak(over)})
     assert not h["ok"] and h["over_peak_whole"] and not h["over_peak"]
     assert "over_peak_whole" not in S.honesty(v1, st, [])  # v3's honest gate is unchanged
-    assert S.SCORER == S.V3
+    assert S.SCORER == S.V4
 
 
 def test_record_limits_are_checked_when_the_arm_loads():

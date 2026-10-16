@@ -18,9 +18,10 @@ Each entry is one unit of serving-alone wall time. Per entry, with the arm:
   a SM a clock × 188) at the serving-alone SM clock, so a filler that throttles the clock gains nothing.
 
 SCORE is the time-weighted mean of the entries' coverage (weights: each entry's wall time with the arm, one unit alone),
-i.e. Σ certified ÷ Σ capacity × time. The c's are the PROVED certified fractions. Under filler-scorer/v3 (the lock) the
-filler is read at the entry of `FILLER_ENTRIES` that `filler_entry` decides from its declared noise and its build's kernel
-facts (`kernel_facts`): Theorem K's 0.9, Theorem E's 0.225, or a proved floor of 0 (a chained filler's, or any filler no
+i.e. Σ certified ÷ Σ capacity × time. The c's are the PROVED certified fractions. Under filler-scorer/v4 (the lock) the
+filler is read at the entry of `FILLER_ENTRIES` that `filler_entry_v4` decides from its declared noise and the program
+facts of its build (`program_facts`; v3's `filler_entry` read `kernel_facts`): Theorem K's 0.9, Theorem E's 0.225, or a
+proved floor of 0 (a chained filler's, or any filler no
 proved setting covers). SCORE under CH (`UNDER_CH`: every filler at 0.99, the withdrawn assumption's reading) is a
 secondary readout, comparable with filler-scorer/v2's SCORE, which read every filler at the spec's provisional 0.99
 (`CERTIFIED`) and flagged it.
@@ -43,10 +44,10 @@ import share  # noqa: E402  CAP's constants: MACs a token, non-GEMM times, FA2, 
 V2, V3, V4 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4"
 #: the active lock. V3 adds the arm's record checked before its lease (`arms.record_problems`), each point's slowdown
 #: margin (`margins`), and the filler read at its proved entry (`FILLER_ENTRIES`, `filler_entry`) with SCORE under CH
-#: beside it. `score.py report OUT --as v2` reads a run as v2 did. V4 (prepared, not active: `report OUT --as v4`
-#: previews it) reads the filler wherever it's called from, filler warps inside serving kernels included
-#: (`program_facts`, `filler_entry_v4`, `credit_fixed`, `paths_gate`, `whole_of_peak`)
-SCORER = V3
+#: beside it. V4 (active, coordinator 11:05Z) reads the filler wherever it's called from, filler warps inside serving
+#: kernels included (`program_facts`, `filler_entry_v4`, `credit_fixed`, `paths_gate`, `whole_of_peak`).
+#: `score.py report OUT --as v2|v3` reads a run as that version did
+SCORER = V4
 LIMIT = 1.05  # serving slowdown, every entry
 DRAM_LIMIT = 0.01  # of the HBM bandwidth the same run's validated counter measures
 CONTROL_BYTES = 1 << 30  # bw_read streams 1 GiB a launch: the DRAM counter's positive control
