@@ -672,6 +672,16 @@ static int hgate(const std::string& dir, int m, int n, int k, uint32_t seed, int
       CK(cudaGetLastError());
       const unsigned long long y = ecmp(P, P.Y, P.Yr, P.ny), r = ecmp(P, H.R[c % 2], H.Rw, rb / 4);
       if (c > 0) levels(c - 1);
+      if (hk == HKS + 2 && c == 0) {   // call 0's X tree (PRF offset 0) by commit_gpu's own Committer, and both salt phases
+        H.cx.salts<true>(nullptr, P.st);
+        H.cx.tiles(reinterpret_cast<const uint8_t*>(P.X), P.m, P.k, XR, false, P.st);
+        H.cx.nodes(P.st);
+        CK(cudaStreamSynchronize(P.st));
+        CK(cudaGetLastError());
+        dump(dir, "cg_X.bin", H.cx.levels, (size_t)2 * H.width[0] * 64, true);
+        dump(dir, "cgS_X.bin", H.cx.S, (size_t)H.n[0] * 128, true);
+        dump(dir, "S_X.bin", H.S[0][0], (size_t)H.n[0] * 128, true);
+      }
       const std::string tag = std::string(kn) + "_" + std::to_string(c);
       if (hk == HKS + 2) dump(dir, ("Wp_" + std::to_string(c) + ".bin").c_str(), P.Wp, wb, true);
       dump(dir, ("R_" + tag + ".bin").c_str(), H.R[c % 2], rb, true);

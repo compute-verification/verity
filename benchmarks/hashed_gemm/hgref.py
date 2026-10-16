@@ -122,6 +122,9 @@ def judge(name: str, dom: CommitmentDomain, rows: bytes, ks: bytes, off: int, g:
     n = dom.count
     depth, offs = offsets(n)
     bad = [d for d in range(depth + 1) if g[offs[d]:offs[d + 1]] != r[offs[d]:offs[d + 1]]]
+    bad0 = [i for i in range(n) if g[64 * i:64 * i + 64] != r[64 * i:64 * i + 64]]
+    # the device's levels above its own leaves, by the reference's nodes: separates a node fault from a leaf fault
+    own = b"".join(b"".join(level) for level in tree_levels(dom, [g[64 * i:64 * i + 64] for i in range(n)]))
     root = g[offs[depth]:offs[depth + 1]]
     commitment, limits = Commitment(root, n), VerificationLimits()
     picks = sorted({0, n - 1, *rng.sample(range(n), min(n, openings) - 2)})
@@ -139,6 +142,7 @@ def judge(name: str, dom: CommitmentDomain, rows: bytes, ks: bytes, off: int, g:
         if not ok:
             bad_open.append(pos)
     return {"tree": name, "leaves": n, "depth": depth, "levels_ok": not bad and len(g) >= offs[-1], "bad_levels": bad[:8],
+            "bad_leaves": len(bad0), "first_bad_leaves": bad0[:8], "nodes_ok": own == g[:offs[-1]],
             "openings": len(picks), "controls": controls, "bad_openings": bad_open[:8], "root": root.hex()[:32],
             "ok": not bad and not bad_open and len(g) >= offs[-1]}
 
@@ -199,6 +203,12 @@ def check(d: Path) -> dict:
     for c in range(calls):
         offx, offr = (2 * c) << 40, (2 * c + 1) << 40
         refx = tree(xrows, ks, offx, dx)
+        if c == 0 and (d / "cg_X.bin").exists():   # commit_gpu's Committer on the same X (PRF offset 0), and both salt phases
+            cg = (d / "cg_X.bin").read_bytes()
+            ds, cs = (d / "S_X.bin").read_bytes(), (d / "cgS_X.bin").read_bytes()
+            out["committer_X"] = {"levels_ok": cg[:len(refx[1])] == refx[1], "salts_equal": ds == cs,
+                                  "salts_bad": sum(ds[128 * i:128 * i + 128] != cs[128 * i:128 * i + 128] for i in range(nx)),
+                                  "salts_first_bad": [i for i in range(nx) if ds[128 * i:128 * i + 128] != cs[128 * i:128 * i + 128]][:8]}
         for kn in meta["kernels"]:
             gx = (d / f"lv_{kn}_{c}_X.bin").read_bytes()
             trees.append({"kernel": kn, "call": c, **judge("X", dx, xrows, ks, offx, gx, refx, rng, 1)})
