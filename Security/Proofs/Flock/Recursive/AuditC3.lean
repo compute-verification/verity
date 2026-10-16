@@ -250,8 +250,9 @@ noncomputable def regStmt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Typ
 
 /-- **`RunOpensReg` at the typing `τv`**: the same opening fact with the runs decoded against candidate 3's table at
 `τv` (`holoAtτ`, whose every field but the typing is `holoAt st hp`'s own term), and the sessions, the decoder and the
-prover typed at that table's protocol (`holoInnerAtτ`). The guarantee reads it only inside its existential over `τv`,
-so no statement of it ever compares two typings' protocols. -/
+prover typed at that table's protocol (`holoInnerAtτ`). The guarantee reads it inside `_hbr`'s existential over `τv`
+and in its conclusion at the registered typing `hp.τ`, each application explicitly at its own typing's protocol, so no
+statement of it ever compares two typings' protocols. -/
 def RunOpensRegτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
     (st : Flock.Stmt) (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) {n : ℕ} {L : Law n}
     {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
@@ -324,10 +325,11 @@ def HoloSatSome (st : Flock.Stmt) (hp : HoloParams) (x : HoloReg FlockLevel3.GF1
     (holoAt st hp).rsch.Close execArith x.w R ∧ ∃ z, (R.toStatement τ (holoAt st hp).regs).Satisfies z
 
 /- `holoAt` stays applied, never unfolded, while the statement elaborates: the statement's binders are typed at
-`schedInner`'s parameter-level `Coin` and `Msg` and the game at `rounds` literally, and every application inside the
-existential over `τv` is explicitly at that typing's protocol (`holoInnerAtτ`), so every defeq the statement forces is
-one protocol against a literal — never two typings' protocols against each other, which would make the unifier and the
-kernel unfold `holoTableCL`'s body at every failed congruence. The attribute makes any accidental crossing fail fast. -/
+`schedInner`'s parameter-level `Coin` and `Msg` and the game at `rounds` literally, and every application at a typing
+(`_hbr`'s existential `τv`, the conclusion's registered `hp.τ`) is explicitly at that typing's protocol
+(`holoInnerAtτ`), so every defeq the statement forces is one protocol against a literal — never two typings' protocols
+against each other, which would make the unifier and the kernel unfold `holoTableCL`'s body at every failed congruence.
+The attribute makes any accidental crossing fail fast. -/
 attribute [local irreducible] holoAt
 
 /-- **The recursive audit at candidate 3's soundness half, at coin types `CT` and the record map `im`**
@@ -364,13 +366,15 @@ collision (`SaltColl`) and off a held top other than `bcs'` (`TopColl`) (VBridge
 `Flock.Premises.VBridgeCOff`):
 Lean's verifier, at the records written at the outcome's history, never builds `st`, accepts its inputs at candidate 3
 and accepts every session as V*'s statement of its index with its checks at candidate 3;
-or the sessions type and there is, at some typing `τv`, a registrant fork, a held top other than `bcs'` (`topFinder`),
-a registrant's row
+or the sessions type and there is, at the registered typing `hp.τ` (`holoParamsAt`'s, every slot's type zero: check 5
+refuses `T_LOG ≠ 0`, `RecVStar.checkInnerShape`, so at every run the event counts it is the slots' one typing, the one
+`_hbr`'s `τv` is and the zero outputs pin, and each finder below is one specified reduction), a registrant fork, a held
+top other than `bcs'` (`topFinder`), a registrant's row
 off a value the verifier registers itself, at its rows and salts (`valueFinder` at `valueSrcAll`), a session's
 registered read off the table's leaf (`leafFinder`), a session's read of R's level-0 top other than its row under the
 held salts (`saltFinder`), a round fork, a session fork, or an inner fork of the transported prover's own runs at the
-checked sessions whose decoded transcripts play candidate 3's table at `τv` to outcomes that clash against each other
-(`clashPickHL`); or, with `w` the word the transported prover's runs open at the draw (`regWord`, at `τv`),
+checked sessions whose decoded transcripts play candidate 3's table at `hp.τ` to outcomes that clash against each other
+(`clashPickHL`); or, with `w` the word the transported prover's runs open at the draw (`regWord`, at `hp.τ`),
 $$\Pr[\text{Lean's verifier builds } st \wedge \text{it accepts its inputs at candidate 3} \wedge \text{every session
   verifies as V*'s statement of its index and passes its checks at candidate 3} \wedge \neg\,\exists \tau\,
   \exists R \text{ near } w,\ R\text{'s hidden statement at } \tau \text{ holds}]$$
@@ -488,78 +492,78 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
         (Game.send Reg fun R => Game.coin (drawLaw draw).Ω fun ω =>
           rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
             (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)) σ = 0 ∨
-    ∃ (h : Typed zr) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)),
-      (regFinder (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+    ∃ h : Typed zr,
+      (regFinder (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
-        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
       (topFinder wr st reg bcs' (holoAt st hp).rsch.sch.level₀ cap salt _hstk
-        (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h)
-        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
-      (valueFinder (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+      (valueFinder (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h)
         (valueSrcAll (fun t => coins (wr t).2) fun t => c3Of ish (innerHeld wr st reg t)) dg N
-        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
-      (leafFinder (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+      (leafFinder (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
-        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
       (saltFinder (holoAt st hp).rsch.sch.level₀ cap salt
-        (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h)
-        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
-      RoundFork (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+      RoundFork (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw
-        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ) cmt ∨
-      SessionFork (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+      SessionFork (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw M
-        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ) ∨
-      InnerForkRec (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+      InnerForkRec (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw
-        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ)
-        (regStmtτ (holoTys st hp) (CT st hp) st hp τv
-          (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        (regStmtτ (holoTys st hp) (CT st hp) st hp hp.τ
+          (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
             (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
-          (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+          (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
             (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap)
         wmsg Refine.H512
         (clashPickHL (holoTys st hp) (CT st hp) execArith Refine.H512 Refine.enc512 Refine.leafPlain
-          (holoAtτ st hp τv)) ∨
+          (holoAtτ st hp hp.τ)) ∨
       prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st (wr o.2.2.1).1 (wr o.2.2.1).2 reg) ∧
             VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1)
               o.2.2.2 ∧
             ¬ HoloSatSome st hp
-              (regStmtτ (holoTys st hp) (CT st hp) st hp τv
-                (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+              (regStmtτ (holoTys st hp) (CT st hp) st hp hp.τ
+                (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                   (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
-                (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+                (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                   (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap o.1 o.2.1))
           (Game.send Reg fun R => Game.coin (drawLaw draw).Ω fun ω =>
             rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
               (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)) σ ≤
-        expAt (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+        expAt (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
             (fun t => coins (wr t).2) bind rows zr _hCust h σ) (fun ω t s =>
-            sumV (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+            sumV (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
               (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t) dg N
             (fun R₂ j τ =>
-              (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+              (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                 (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t R₂
                 j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
           ((r st hp + 1 : ℕ) : ℝ≥0∞) *
-            expAt (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+            expAt (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                 (fun t => coins (wr t).2) bind rows zr _hCust h σ) (fun ω t s =>
-              sumV (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+              sumV (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                 (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t) dg N
               (fun R₂ j τ =>
-                (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp τv) ish (innerHeld wr st reg)
+                (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                   (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t R₂
                   j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (holoError (holoAt st hp))
