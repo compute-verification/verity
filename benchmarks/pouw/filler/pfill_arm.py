@@ -36,7 +36,7 @@ class PFillRam:
         "hypothesis": "fresh ±1 noise for every MMA with a ram receipt on every k32 prefix sum: Theorem E's floor "
                       "(c/m = 1/4) without CH, at 0.79 of the int8 peak alone on its SMs"})
     sources: tuple = SOURCES
-    filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19)
+    filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19, noise="pm1")
     choice: str = "FILL v1's offline table of 11 (B, L) splits; a lookup and a green split at serving time"
     nvcc_flags: str = ""
 
@@ -59,7 +59,7 @@ class PFillDuo(PFillRam):
         "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-pm1", "receipt:duo-k32", "place:split",
                       "split:per-point-table", "prefill:none"],
         "hypothesis": "pfill with duo for ram: the same proved floor with the stronger receipt, at 0.57 of peak alone"})
-    filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19)
+    filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19, noise="pm1")
 
 
 #: HC-POWER's POWER_SPLIT (cursor/hc-power-ea24 benchmarks/pouw/filler/hc_power.py): the largest split its split-only sweep
@@ -123,6 +123,7 @@ class PFillK(PFillPowerSplit):
                       "split:per-point-table", "split:every-scored-point", "prefill:split"],
         "hypothesis": "{0,1} bits on both operands at the ±1 tile's rate meet Theorem K's hypotheses (int8, affine "
                       "bytes, s32 unscaled), so the same filler reads c = 1 (0.9 a slot) once K is refereed, 0.225 now"})
+    filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bits01")
     nvcc_flags: str = "-DPFILL_BITS"
 
 

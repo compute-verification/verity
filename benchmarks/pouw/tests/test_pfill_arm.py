@@ -4,6 +4,7 @@ certified fraction changed."""
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
 import sys
@@ -52,7 +53,7 @@ def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
         assert ledger.one_line(arm.lineage["hypothesis"], "the hypothesis")
         assert __import__("os").environ["NVCC_APPEND_FLAGS"] == flags
         assert P.products_per_slot(arm.lineage) == per_slot
-        assert arm.filler == A.Filler(W=8, NC=nc, S=256, chunk_log2=19)
+        assert arm.filler == A.Filler(W=8, NC=nc, S=256, chunk_log2=19, noise="pm1")
         assert arm.filler.S % 32 == 0  # pfill's dfill_make refuses any other S
         assert "benchmarks/pouw/decode_capacity/pfill.cuh" in arm.sources
         for ph, b, l in S.points():
@@ -62,7 +63,8 @@ def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
 @pytest.mark.parametrize("attr, flags, k", [("PFillPowerSplit", "", False), ("PFillK", "-DPFILL_BITS", True)])
 def test_power_split_arms_have_a_split_at_every_scored_point(monkeypatch, attr, flags, k):
     """pfill-power-split and pfill-k are pfill-ram's filler (pfill-k's on {0,1} bits) on HC-POWER's table: an exact
-    entry at every scored decode point, and 4 filler SMs during prefill."""
+    entry at every scored decode point, and 4 filler SMs during prefill. Each declares the noise filler-scorer/v3 reads:
+    pfill-k bits01, the noise of Theorem K's entry, the ±1 tiles pm1, Theorem E's."""
     A, S = _module("arms"), _module("scoring")
     P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
@@ -71,7 +73,9 @@ def test_power_split_arms_have_a_split_at_every_scored_point(monkeypatch, attr, 
     ram = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillRam")
     assert A.check_arm(arm) == []
     assert ledger.one_line(arm.lineage["hypothesis"], "the hypothesis")
-    assert (arm.filler, arm.sources, env) == (ram.filler, ram.sources, flags)
+    noise = "bits01" if k else "pm1"
+    assert (arm.filler, arm.sources, env) == (dataclasses.replace(ram.filler, noise=noise), ram.sources, flags)
+    assert noise in S.FILLER_ENTRIES["theorem-k" if k else "theorem-e"]["noise"]
     assert (P.theorem_k_setting(arm.lineage), P.products_per_slot(arm.lineage)) == (k, 1)
     for ph, b, l in S.points(robust=False):
         p = A.placed(arm, ph, b, l)
@@ -156,9 +160,9 @@ def test_e2m1_arm_adds_only_the_conditional_l64_reading(tmp_path):
     assert "theorem-k" not in f4
 
 
-def test_k_arm_adds_only_the_pending_theorem_k_reading(tmp_path):
+def test_k_arm_adds_only_the_theorem_k_reading(tmp_path):
     """A pfill-k run keeps every reading of a ±1 run, E½'s proved 0.225 included, and adds Theorem K's c = 1 at
-    φ = 0.9, marked pending referee; a ±1 run never gets it."""
+    φ = 0.9, proved (RS-E-REF r4); a ±1 run never gets it."""
     S = _module("scoring")
     P = _load_file("pfill_proved")
     A = _load_file("pfill_arm")
@@ -174,5 +178,5 @@ def test_k_arm_adds_only_the_pending_theorem_k_reading(tmp_path):
     (tmp_path / "arm.json").write_text(json.dumps({"lineage": lineage(A.PFillK)}))
     k = P.readings(tmp_path)
     assert {n: k[n] for n in pm1} == pm1
-    assert (k["theorem-k"]["filler_fraction"], k["theorem-k"]["status"]) == (0.9, "pending referee")
+    assert (k["theorem-k"]["filler_fraction"], k["theorem-k"]["status"]) == (0.9, "proved")
     assert k["theorem-k"]["SCORE"] > k["proved"]["SCORE"]

@@ -24,7 +24,9 @@ scorer's proved 0.225; the filler is read at
   every cell-pure run on {0,1} data with integer operands affine in the bits and s32 words read unscaled, s32 wrap
   included. Routes outside K are priced at VF2: FP operands or scaled reads by Lemma W (≥ 1.25 of honest at L = 32,
   NOBITS confirmed by note:20261016T0703Z-draft-fp4-nobits-probe), lookups and bit-slicing by VF2's families (≥ 1.935).
-  K is being refereed, so the reading is pending referee.
+  RS-E-REF r4 passed K (note:20261015T1931Z-draft-theorem-e-referee Part IV), so the reading is proved, with its open
+  caveat: the luck share of non-affine bytes reused across products is still ½. filler-scorer/v3 reads the same entry
+  from the scorer's own build; this one also reads an arm whose phase filler v3 counts as an arm-side driver's work.
 
   python3 benchmarks/pouw/filler/pfill_proved.py OUT_DIR [--json]
 """
@@ -51,8 +53,8 @@ E2M1_READINGS = {
     "priced-l64": (0.45, "conditional", "Theorem E's priced form at L = 64: heads priced at cL/m_max = 16 int8 slots"),
 }
 K_READINGS = {
-    "theorem-k": (0.9, "pending referee", "Theorem K c = 1 on {0,1} data, int8 operands, s32 unscaled reads, phi = 0.9; "
-                                          "FP routes by Lemma W at VF2 (NOBITS confirmed)"),
+    "theorem-k": (0.9, "proved", "Theorem K c = 1 on {0,1} data, int8 operands, s32 unscaled reads, phi = 0.9 (RS-E-REF "
+                                 "r4; open: non-affine bytes reused across products at 1/2); FP routes by Lemma W at VF2"),
 }
 
 
