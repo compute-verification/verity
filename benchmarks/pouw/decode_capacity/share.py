@@ -3,7 +3,10 @@
 Reads one run's dcap.jsonl and prints the tables of note:20261016T0215Z-draft-capacity-share: τ for the honest kernels,
 nominal ÷ capacity over the decode grid, and the serving mixes with and without certified filler. Writes them as JSON.
 
-  python3 share.py RUN_OUT_DIR [--fill FILL_RUN_OUT_DIR] [--json OUT.json]
+  python3 share.py RUN_OUT_DIR [--fill FILL_RUN_OUT_DIR] [--dfill DFILL_RUN_OUT_DIR ...] [--json OUT.json]
+
+With --dfill, FILL's DRAM-free filler (dfill.sh) joins the fillers, read at each step's own (batch, context) point
+(`PointFiller`), and the adaptive split takes, at each measured point, the most filler SMs whose decode slowdown is ≤ 5%.
 
 With --fill, the filler is the one fill.sh measured (T2's chained int8 GEMM at m = k = 8192 on a green-context split, beside
 dcap's decode step): its share of the GPU's peak and the decode slowdown at L = 2048, by batch, the share divided by
@@ -156,7 +159,7 @@ class Filler:
         self.dsms = dsms
         self.step = step  # between points, the next larger batch's point (an adaptive split's choice there)
 
-    def at(self, b):
+    def at(self, b, l=None):
         x = math.log(b)
         if self.step:
             i = next((j for j, lb in enumerate(self.lb) if lb >= x - 1e-12), len(self.lb) - 1)
@@ -168,6 +171,25 @@ class Filler:
         i = next(j for j in range(len(self.lb) - 1) if self.lb[j] <= x <= self.lb[j + 1])
         t = (x - self.lb[i]) / (self.lb[i + 1] - self.lb[i])
         return self.f[i] + t * (self.f[i + 1] - self.f[i]), self.s[i] + t * (self.s[i + 1] - self.s[i])
+
+
+class PointFiller:
+    """A filler measured at (batch, context) points: {(B, L): (share, slowdown)}. A step at (b, l) reads the measured
+    point with the smallest B ≥ b and, among those, the longest L ≤ l: a larger batch and a shorter context leave decode
+    more linear time on the partition, so a step is never credited a slowdown smaller than one measured nearer it."""
+
+    dsms = None
+
+    def __init__(self, pts):
+        self.pts = dict(pts)
+
+    def at(self, b, l=None):
+        l = 2048 if l is None else l
+        bs = sorted({pb for pb, _ in self.pts})
+        pb = next((x for x in bs if x >= b), bs[-1])
+        ls = sorted(pl for xb, pl in self.pts if xb == pb)
+        pl = max((x for x in ls if x <= l), default=ls[0])
+        return self.pts[(pb, pl)]
 
 
 FILLER = {  # W11 (note:20261015T0713Z-draft-filler-issue-slack): 0.70 x the SM share, worst slowdown at batch ≤ 32
@@ -189,22 +211,31 @@ def dfill_name(r):
     return f"{r['shape']} {r['fill_sms']} SMs"
 
 
+def dfill_points(rows, tuned):
+    """{(name, B, L): (share, slowdown)}, each averaged over the runs that measured it. `tuned`: a split's arm with
+    cuBLASLt re-tuned on the decode partition."""
+    acc = {}
+    for r in rows:
+        if tuned and "tuned" not in r:
+            continue
+        v = (r["tuned"]["fill_share"], r["tuned"]["slowdown"]) if tuned else (r["window"]["fill_share"], r["slowdown"])
+        acc.setdefault((dfill_name(r), r["B"], r["L"]), []).append(v)
+    return {k: (sum(s for s, _ in v) / len(v), sum(s for _, s in v) / len(v)) for k, v in acc.items()}
+
+
 def dfill_fillers(rows):
-    """FILL's DRAM-free filler (dfill.sh): one filler per (shape, SMs), from its L = 2048 points, and on a split also
-    the arm with cuBLASLt re-tuned on the decode partition (" tuned"). Its whole output is an 8-byte receipt a tile of
-    NC·S MMAs, so it has no commitment factor (COMMIT applies to T2's X only)."""
+    """FILL's DRAM-free filler (dfill.sh): one filler per (shape, SMs) over its measured (B, L) points, on a split also
+    the arm with cuBLASLt re-tuned on the decode partition (" tuned"), and the adaptive split. Its whole output is an
+    8-byte receipt a tile of NC·S MMAs, so it has no commitment factor (COMMIT applies to T2's X only)."""
     out = {}
-    for name in sorted({dfill_name(r) for r in rows}):
-        sel = [r for r in rows if dfill_name(r) == name and r["L"] == 2048]
-        if sel:
-            out[name] = Filler([(r["B"], r["window"]["fill_share"], r["slowdown"]) for r in sel])
-        if sel and all("tuned" in r for r in sel):
-            out[name + " tuned"] = Filler([(r["B"], r["tuned"]["fill_share"], r["tuned"]["slowdown"]) for r in sel])
     for tuned in (False, True):
+        pts = dfill_points(rows, tuned)
+        for name in sorted({n for n, _, _ in pts}):
+            out[name + (" tuned" if tuned else "")] = PointFiller({(b, l): v for (n, b, l), v in pts.items() if n == name})
         pick = adaptive_pick(rows, tuned)
         if pick:
-            out[f"dfree adaptive ≤ {LIMIT - 1:.0%}{' tuned' if tuned else ''}"] = Filler(
-                [(b, share, slow) for b, (_, share, slow) in pick.items()], step=True)
+            out[f"dfree adaptive ≤ {LIMIT - 1:.0%}{' tuned' if tuned else ''}"] = PointFiller(
+                {bl: (share, slow) for bl, (_, share, slow) in pick.items()})
     return out
 
 
@@ -212,21 +243,16 @@ LIMIT = 1.05  # the decode slowdown the adaptive split may cost
 
 
 def adaptive_pick(rows, tuned):
-    """Per batch (L = 2048), the split whose filler share is largest among those whose decode slowdown is ≤ LIMIT:
-    {B: (filler SMs, share, slowdown)}, each (split, B) averaged over the runs that measured it. `tuned`: the arms with
-    cuBLASLt re-tuned on the decode partition."""
-    acc = {}
-    for r in rows:
-        if r["place"] != "split" or r["L"] != 2048 or (tuned and "tuned" not in r):
-            continue
-        share, slow = (r["tuned"]["fill_share"], r["tuned"]["slowdown"]) if tuned else (r["window"]["fill_share"],
-                                                                                        r["slowdown"])
-        acc.setdefault((r["fill_sms"], r["B"]), []).append((share, slow))
+    """Per measured (B, L), the split whose filler share is largest among those whose decode slowdown is ≤ LIMIT:
+    {(B, L): (filler SMs, share, slowdown)}, (0, 0.0, 1.0) where no split met it (decode keeps the whole GPU).
+    `tuned`: the arms with cuBLASLt re-tuned on the decode partition."""
+    split = [r for r in rows if r["place"] == "split" and not r["shape"].endswith(("-lin", "-att"))]
+    sms = {dfill_name(r): r["fill_sms"] for r in split}
     best = {}
-    for (sms, b), v in acc.items():
-        share, slow = sum(s for s, _ in v) / len(v), sum(s for _, s in v) / len(v)
-        if slow <= LIMIT and share > best.get(b, (0, 0.0, 0.0))[1]:
-            best[b] = (sms, share, slow)
+    for (name, b, l), (share, slow) in dfill_points(split, tuned).items():
+        cur = best.setdefault((b, l), (0, 0.0, 1.0))
+        if slow <= LIMIT and share > cur[1]:
+            best[(b, l)] = (sms[name], share, slow)
     return best
 
 
@@ -254,9 +280,9 @@ def headline(res, names):
     return out
 
 
-def with_filler(m, b, ms, lin_ms, name):
+def with_filler(m, b, ms, lin_ms, name, l=None):
     fl = FILLER[name]
-    share, slow = fl.at(b)
+    share, slow = fl.at(b, l)
     t = ms * slow
     if fl.dsms:
         floor = b * (LIN_TOK + LM_TOK) / (0.88 * m.cap * fl.dsms / SMS) * 1e3
@@ -297,7 +323,7 @@ def grid(m):
         n = decode_n(b, l)
         r = {"B": b, "L": l, "fits": b * l <= POOL_TOK, "measured": (b, l) in m.step, "ms": ms, **m.row(n, ms)}
         for name in FILLER:
-            t, f = with_filler(m, b, ms, m.lin(b), name)
+            t, f = with_filler(m, b, ms, m.lin(b), name, l)
             r[f"filler {name}"] = {"ms": t, **m.row(n + f, t, f / (m.cap * t * 1e-3))}
         out.append(r)
     return out
@@ -318,7 +344,7 @@ def mixes(m):
                 r = {**base, "schedule": "separate", "prefill_time_share": t_pre / (t_pre + t_dec),
                      **m.row(n, t_pre + t_dec)}
                 for fname in FILLER:
-                    t, f = with_filler(m, b, step, m.lin(b), fname)
+                    t, f = with_filler(m, b, step, m.lin(b), fname, lbar)
                     td = d * t / b
                     fm = f * d / b
                     r[f"filler {fname}"] = {**m.row(n + fm, t_pre + td, fm / (m.cap * (t_pre + td) * 1e-3)),
@@ -370,7 +396,8 @@ def main():
            "a_ladder": [{"what": w, "A": a} for w, a in A_LADDER],
            "filler": "measured (--fill)" if args.fill else "W11 (assumed)", "fill": fill_rows, "dfill": dfill_rows}
     res["headline"] = headline(res, list(FILLER))
-    res["adaptive"] = {("tuned" if t else "as tuned for the whole GPU"): adaptive_pick(dfill_rows, t) for t in (False, True)}
+    res["adaptive"] = {("tuned" if t else "as tuned for the whole GPU"):
+                       {f"{b}:{l}": v for (b, l), v in adaptive_pick(dfill_rows, t).items()} for t in (False, True)}
     print(f"read clock {m.mhz:.0f} MHz, C = {m.cap / 1e12:.1f} TMAC/s (C_2430 = {m.cap_max / 1e12:.1f}); "
           f"DRAM read {m.bw / 1e9:.0f} GB/s; attention fit {m.att_bw / 1e9:.0f} GB/s + {m.att_c0:.3f} ms; "
           f"step δ {m.delta:.3f} ms; FA2 η {m.eta_fa2:.3f}; A(V99) {A_V99:.4f}; pool {POOL_TOK} tokens")
@@ -400,10 +427,9 @@ def main():
         for tuned in (False, True):
             pick = adaptive_pick(dfill_rows, tuned)
             print(f"\nadaptive split ≤ {LIMIT - 1:.0%}{', cuBLASLt tuned on the partition' if tuned else ''}: "
-                  + "; ".join(f"B {b}: {sms} SMs, share {share:.3f}, slowdown {slow:.3f}"
-                              for b, (sms, share, slow) in sorted(pick.items())))
-    names = [n for n in FILLER if not n.startswith("dfree-co")
-             and not (n.startswith("dfree-split") and not n.endswith("tuned"))]
+                  + "; ".join(f"B {b} L {l}: {sms} SMs, share {share:.3f}, slowdown {slow:.3f}"
+                              for (b, l), (sms, share, slow) in sorted(pick.items())))
+    names = [n for n in FILLER if not n.startswith("dfree-") or n == "dfree-split-w8-nc4-t8 92 SMs tuned"]
     print("\nHeadline: N/C, cert/C (= 0.99 N/C) and time with each filler (decode rows: the step's slowdown; mixes: the "
           "mix's time over its time without filler)\n")
     print("| phase or mix | N/C | cert/C | " + " | ".join(f"{n}: N/C, cert/C, time" for n in names) + " |")
