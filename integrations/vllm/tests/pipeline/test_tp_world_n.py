@@ -392,3 +392,23 @@ def test_a_flat_all_reduce_counts_one_producer_per_own_row():
     assert "producer" not in RMx.cross_rank_check(colls, producers=ok)["failed"]
     one = {r: {(0, 0): ["DeepGemmFp8Linear_v1{K=2048,N=6144}"]} for r in range(W)}
     assert "producer" in RMx.cross_rank_check(colls, producers=one)["failed"]
+
+
+@pytest.mark.parametrize("ops,admitted", [
+    ((("MoeSum_v1{TOPK=8,H=8}", 0), ("DeepGemmFp8Linear_v1{K=2048,N=8}", 0)), True),     # GLM-5.3's MoE block: routed + shared partials
+    ((("MoeSum_v1{TOPK=8,H=8}", 0), ("RMSNormCudaVector8_v1{N=8}", 0)), False),         # a partial plus the residual stream: no partial
+    ((("MoeSum_v1{TOPK=8,H=8}", 0), ("DeepGemmFp8Linear_v1{K=2048,N=8}", 1)), False),   # an operand of another step
+])
+def test_a_residual_add_is_a_partial_producer_only_over_partials_of_its_rank_and_step(tmp_path, ops, admitted):
+    """`ResidualAdd_v1` producing an own partial is admitted only when every operand row is an admitted producer's of the same step."""
+    from verity_vllm.check.match import rank_match as RMx
+    N, W, rank = 8, 3, 1
+    rows = [{"node": i, "step": st, "spec": sp, "operand_refs": []} for i, (sp, st) in enumerate(ops)]
+    rows.append({"node": 2, "step": 0, "spec": f"ResidualAdd_v1{{N={N}}}", "operand_refs": [[["n", 0, 0, N]], [["n", 1, 0, N]]]})
+    rows.append({"node": 3, "step": 0, "spec": f"AllReduceMnnvl_v1{{WORLD={W},N={N},SHOT=1}}", "rows": 1,
+                 "collective": {"kind": "all_reduce", "step": 0, "k": 0, "rank": rank, "world": W, "N": N},
+                 "operand_refs": [[["p", 1, 0, N], ["n", 2, 0, N], ["p", 1, N, 2 * N]]]})
+    (tmp_path / "instances.jsonl").write_text("\n".join(json.dumps(r) for r in [{"schema": "x"}] + rows) + "\n")
+    (name,) = RMx.own_producers_from_record(tmp_path / "instances.jsonl")[(0, 0)]
+    assert name.startswith(f"ResidualAdd_v1{{N={N}}}<-") and RMx._admitted(name) is admitted, name
+    assert not RMx._admitted(f"ResidualAdd_v1{{N={N}}}<-MoeSum_v1|<not-a-node>") and not RMx._admitted("ResidualAdd_v1{N=8}")
