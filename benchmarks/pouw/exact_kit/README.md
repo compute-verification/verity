@@ -45,7 +45,9 @@ the other's argument. Fold semantics belong to FILL-SEC's receipt-fold module. M
   - Solving: `solve`, `models(over, limit)` and `count`.
 
 Every primitive is cross-checked in `tests/`, against brute force on small cases and against sympy's linear algebra over
-GF(p).
+GF(p). Run them from the repository root, with `uv run tools/verity/check/suites.py exact_kit`. Inside this directory uv
+stops at `benchmarks/pouw`'s project, takes the kit for a workspace of its own, and builds it a separate `.venv` and
+`uv.lock`.
 
 ## A script as a recorded run
 
