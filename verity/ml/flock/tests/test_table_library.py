@@ -45,6 +45,15 @@ def test_the_lean_library_list_is_cores():
     assert [(n, s, int(i), int(v)) for n, s, i, v in rows] == [(t.name, t.sha512, t.index_bits, t.value_bits) for t in L.TABLES]
 
 
+def test_the_provers_library_list_is_cores():
+    """`live/src/lookup.rs`'s `LIBRARY`, which decides a `table/v2` read's width on the prover's side, is core's list."""
+    text = (Path(__file__).resolve().parents[1] / "live" / "src" / "lookup.rs").read_text()
+    body = text[text.index("pub const LIBRARY"):]
+    body = body[:body.index("];")]
+    rows = re.findall(r'\("(\w+)",\s*"([0-9a-f]{128})",\s*(\d+),\s*(\d+)\)', body)
+    assert [(n, s, int(i), int(v)) for n, s, i, v in rows] == [(t.name, t.sha512, t.index_bits, t.value_bits) for t in L.TABLES]
+
+
 def test_derived_tables_stay_program():
     assert {"tanh_rn", "gelu_tanh_bf16"} <= set(TP.TABLE_SHA256)
     for name in ("tanh_rn", "gelu_tanh_bf16"):
