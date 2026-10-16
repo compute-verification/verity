@@ -68,6 +68,13 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
     done
     q
   done
+  for f in ${DF_T2:-}; do
+    for bl in $DF_BLS; do
+      "$B/dcap" fill "${bl%:*}" "${bl#*:}" "$f" big "$DF_REPS" >> "$O/fill.jsonl" 2>> "$O/errors.txt" ||
+        echo "rc $? for fill $bl $f big" >> "$O/errors.txt"
+    done
+    q
+  done
 '
 r=$?
 echo "lease rc $r" >> "$O/rc.txt"
