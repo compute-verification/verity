@@ -15,6 +15,7 @@ import Proofs.Flock.Claims.KS.ConflictWithin
 import Proofs.Flock.Claims.KS.PlainQueryRound
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.ConflictTied
+import Proofs.Flock.Claims.KS.TableBound
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -56,4 +57,8 @@ on tables committed under `hm96-sha512/v1` (`ConflictRun`, `FlockDeploy.KS.acc_w
 So an accepted run's column at `q` is an opening of `q` against table 0's `root_B` in the tape's link message, with
 every SHA-512 input in the run's log (`FlockDeploy.KS.Opening`, `FlockDeploy.KS.plain_opening`,
 `FlockDeploy.KS.zk_opening`), and two runs at one tape opening different columns at `q` collide
-(`FlockDeploy.KS.tiedColl_of_openings`). -/
+(`FlockDeploy.KS.tiedColl_of_openings`). `TableBoundθ` statement by statement (`TableBound`,
+`Flock.TableBoundθAt`): where the verifier accepts no run it holds with no escapes (`Flock.tableBoundθAt_of_noAcc`), as
+at every statement the deployed verifier does not set up, so at both records it is its bound at the statements that set
+up (`FlockDeploy.KS.plain_tableBoundθ_of_setup`, `FlockDeploy.KS.zk_tableBoundθ_of_setup`,
+`FlockDeploy.KS.plain_KSθ_of_setup`, `FlockDeploy.KS.zk_KSθ_of_setup`). -/
