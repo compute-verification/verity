@@ -299,7 +299,7 @@ def main(argv: list[str]) -> int:
     except ValueError as e:
         why = [f"a side is not JSON ({e})" if isinstance(e, json.JSONDecodeError) else f"a side: {e}"]
     if why:
-        print(f"merge.py: {path}: refused; regenerate the record on the merged tree (`audit.py --update`):", file=sys.stderr)
+        print(f"merge.py: {path}: refused; regenerate the record on the merged tree (`check.py --update`):", file=sys.stderr)
         print("\n".join(f"  {w}" for w in why), file=sys.stderr)
         return 1
     ours.write_text(A.text(merged))
