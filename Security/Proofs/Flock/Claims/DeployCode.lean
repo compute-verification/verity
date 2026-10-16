@@ -125,10 +125,10 @@ theorem plainReadD_hid_length (M : PlainTrace) : (plainReadD M).hid.length = 2 ^
 
 /-! ## A plain run's opened level-0 columns -/
 
-/-- **The round of level 0's query coins** in a plain rep's stream: after zerocheck's `m − 3` rounds, lincheck's
-`kLog − 3`, the ring switch's `claims + 1` and Ligerito's `k0 + 6` before level 0's queries (the out-of-domain point and
-its coin, the `k0` lane challenges, and level 1's two OOD intros of two rounds each). -/
-def plainQueryRound (m kLog k0 claims : ℕ) : ℕ := (m - 3) + (kLog - 3) + (claims + 1) + (k0 + 6)
+/-- **The round of level 0's query coins** in a plain rep's stream: after zerocheck's `3 + (m − 6)` rounds, lincheck's
+`3 + (kLog − 6)`, the ring switch's `claims + 1` and Ligerito's `k0 + 6` before level 0's queries (the out-of-domain
+point and its coin, the `k0` lane challenges, and level 1's two OOD intros of two rounds each). -/
+def plainQueryRound (m kLog k0 claims : ℕ) : ℕ := (3 + (m - 6)) + (3 + (kLog - 6)) + (claims + 1) + (k0 + 6)
 
 /-- The plain verifier's proof shape for a table (`verifyRep`'s `shape`). -/
 def plainProofShape (m kLog claims hashLen : ℕ) (saltLen : Option ℕ) : _root_.Flock.Shape :=

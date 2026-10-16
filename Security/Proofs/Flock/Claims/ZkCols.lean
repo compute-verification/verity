@@ -12,6 +12,10 @@ recorded round and no squeeze's count depends on the proof, so that round's inde
 shape (`zkQueryRound`): the masked replay's `m + kLog − 6` rounds (`Zk.replay`), the ring switch's `claims + 1`
 (`Flock.ringSwitch`), then Ligerito's `k0 + 8` before level 0's queries (`Zk.ligerito`: the OOD point and its coin, the
 `k0` lane challenges, the pair's `ρ_0, ρ_1`, and level 1's two OOD intros of two rounds each).
+`Proofs.Flock.Claims.ZkQueryRound` proves it from the verifier's transcript: in an accepted session
+(`Zk.verifyWithM`, any oracle) each rep's `zkRepColsOf` is its proof's level-0 rows at the positions of that round's
+coins, on which level 0's Merkle check passed against the table's `root_B` (`zkQueryRound_verifyWithM`). The probe
+`Proofs.Flock.Claims.ZkColsSession` checks the same on recorded `--zk` sessions, by hand.
 
 A masked column is the row's first `2^k0` symbols, the witness lanes (`zkRepColsOf`): the extra lanes are the reps'
 own, and the masked code is the padded witness-lane code (`zkEncD`).
