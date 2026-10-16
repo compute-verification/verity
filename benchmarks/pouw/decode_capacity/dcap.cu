@@ -810,16 +810,18 @@ static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int s
   return h;
 }
 
-// one chunk: `grid` blocks of W warps, each warp `tiles` tiles of NC chains x S steps; chunk k covers tiles from k·per on
+// one chunk: `grid` blocks of W warps, each warp `tiles` tiles of NC chains x S steps; chunk k covers tiles from
+// base + k·per on (base 0 but for a second pump in the same run, whose tile ids must not meet the first's)
 struct DFill {
   int W = 4, NC = 2, S = 2048, tiles = 1, grid = 0;
   uint64_t c0 = 0, c1 = 0;
+  unsigned long long base = 0;
   unsigned long long* rec = nullptr;
   long long per() const { return (long long)grid * W * tiles; }
   double macs() const { return (double)per() * NC * S * 4096.0; }
 };
 static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
-  const unsigned long long t0 = (unsigned long long)chunk * f.per();
+  const unsigned long long t0 = f.base + (unsigned long long)chunk * f.per();
   const dim3 gr(f.grid), bl(32 * f.W);
   switch (f.NC) {
     case 1: dfill_k<1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
@@ -854,7 +856,7 @@ static int dfill_check(const DFill& f, long long chunk, int n) {
   int bad = 0;
   for (int i = 0; i < n; i++) {
     const long long idx = (long long)i * f.per() / n + (i * 7919) % std::max(1LL, f.per() / n);
-    bad += h[idx] != dfill_ref(f.c0, f.c1, (unsigned long long)chunk * f.per() + idx, f.NC, f.S);
+    bad += h[idx] != dfill_ref(f.c0, f.c1, f.base + (unsigned long long)chunk * f.per() + idx, f.NC, f.S);
   }
   return bad;
 }
@@ -1308,8 +1310,9 @@ static void enqueue_step_phase(Dev& d, const std::vector<Lt>& p, int M, int L, c
   }
 }
 
-// the step's SMs (at least n_step) with two streams, and the rest with one; as gc_split
-static int gc_split2(int n_step, cudaStream_t* s_step, cudaStream_t* s_step2, cudaStream_t* s_fill, int got[2]) {
+// the step's SMs (at least n_step) with two streams (at priorities p_step, p_step2), and the rest with one; as gc_split
+static int gc_split2(int n_step, cudaStream_t* s_step, cudaStream_t* s_step2, cudaStream_t* s_fill, int got[2],
+                     int p_step = 0, int p_step2 = 0) {
   auto dget = drv<decltype(&cuDeviceGet)>("cuDeviceGet");
   auto res = drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");
   auto split = drv<decltype(&cuDevSmResourceSplitByCount)>("cuDevSmResourceSplitByCount");
@@ -1331,8 +1334,8 @@ static int gc_split2(int n_step, cudaStream_t* s_step, cudaStream_t* s_step2, cu
   CUstream a = nullptr, a2 = nullptr, b = nullptr;
   if ((e = gen(&desc, &part, 1))) return 4000 + e;
   if ((e = mk(&g, desc, dev, CU_GREEN_CTX_DEFAULT_STREAM))) return 5000 + e;
-  if ((e = gst(&a, g, CU_STREAM_NON_BLOCKING, 0))) return 6000 + e;
-  if ((e = gst(&a2, g, CU_STREAM_NON_BLOCKING, 0))) return 6000 + e;
+  if ((e = gst(&a, g, CU_STREAM_NON_BLOCKING, p_step))) return 6000 + e;
+  if ((e = gst(&a2, g, CU_STREAM_NON_BLOCKING, p_step2))) return 6000 + e;
   if (rest.sm.smCount && (e = green_stream(&rest, dev, &b))) return e;
   *s_step = (cudaStream_t)a;
   *s_step2 = (cudaStream_t)a2;

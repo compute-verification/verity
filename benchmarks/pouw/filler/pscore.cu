@@ -16,6 +16,12 @@
 //        alone on their own SMs: the split's (dfill_alone) + the phase filler's on the step's SMs.
 //        Receipts: each arm block poisons both receipt buffers; 4 of the split's last chunk, and of the phase filler's last
 //        step every slot's tile id and 8 receipts, are checked on the host.
+//   pco B L FILL_SMS W NC S CW CNC CS CLG ROUNDS K
+//        as pscore, but in place of the phase filler a second dfill_k pump (CW x CNC x CS, 2^CLG MMAs an SM a chunk,
+//        tile ids from CBASE on) free-running on the step's own SMs at the lowest stream priority, the step at the
+//        highest; nothing joins the step. "chunks" counts both pumps' chunks seen done in the window, in the split's chunk
+//        MACs; "alone_fill" is both pumps alone on their own SMs; 4 receipts of each pump's last chunk are checked.
+//        DFILL_CARVEOUT sets both pumps' carveout (the step-SM pump's is what matters).
 //   pncu PW PNC PS PT
 //        dfill_p on every SM, 4 launches of PT tiles a warp: ncu reads the phase filler's DRAM bytes from these.
 //
@@ -105,14 +111,15 @@ static int pfill_last(const PFill& f, int n, int* checked) {
 struct Block {
   std::vector<Rep> reps;
   double t0 = 0, t1 = 0;
-  long long split_chunks = 0;
+  long long split_chunks = 0, co_chunks = 0;
   unsigned long long phase_tiles = 0;
   double chunks = 0;
 };
 static void print_block(const char* name, const Block& b, bool fill, bool comma) {
   printf("\"%s\": {\"window_ms\": %.3f, ", name, b.t1 - b.t0);
   if (fill)
-    printf("\"chunks\": %.4f, \"split_chunks\": %lld, \"phase_tiles\": %llu, ", b.chunks, b.split_chunks, b.phase_tiles);
+    printf("\"chunks\": %.4f, \"split_chunks\": %lld, \"phase_tiles\": %llu, \"co_chunks\": %lld, ", b.chunks,
+           b.split_chunks, b.phase_tiles, b.co_chunks);
   printf("\"reps\": [");
   for (size_t i = 0; i < b.reps.size(); i++)
     printf("%s[%.4f, %.0f, %.1f]", i ? ", " : "", b.reps[i].ms, b.reps[i].mhz, b.reps[i].watt);
@@ -242,6 +249,105 @@ static int run_pscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
   return bad || tiles_short ? 8 : 0;
 }
 
+constexpr unsigned long long CBASE = 1ull << 61;  // the step-SM pump's tile ids start here, apart from the split's
+
+static int run_pco(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, int CW, int CNC, int CS, int CLG, int rounds,
+                   int K) {
+  dfill_prep();
+  const std::vector<Lt> p = lin_plans(d, B);
+  bool wrapped = false;
+  int lo, hi;
+  CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  const cudaStream_t full = d.st;
+  cudaStream_t ss = full, ss2 = nullptr, fs = nullptr;
+  int got[2] = {d.sms, 0};
+  const double ts0 = now_ms();
+  const int e = gc_split2(d.sms - fill_sms, &ss, &ss2, &fs, got, hi, lo);
+  if (e || !fs) {
+    fprintf(stderr, "gc_split2(%d): %d (filler SMs %d)\n", d.sms - fill_sms, e, got[1]);
+    return 7;
+  }
+  d.st = ss;
+  const std::vector<Lt> p2 = lin_plans(d, B);
+  d.st = full;
+  const double setup_ms = now_ms() - ts0;
+  const int sp_step = sm_spread(d, ss, true), sp_co = sm_spread(d, ss2, false);
+  DFill f = dfill_make(got[1], W, NC, S, g_c0, g_c1);
+  const int sp_fill = sm_spread(d, fs, false);
+  DFill c;
+  c.grid = got[0]; c.W = CW; c.NC = CNC; c.S = CS; c.c0 = g_c0; c.c1 = g_c1; c.base = CBASE;
+  c.tiles = std::max(1, (int)((1LL << CLG) / ((long long)CW * CNC * CS)));
+  CK(cudaMalloc(&c.rec, c.per() * sizeof(unsigned long long)));
+  double amhz = 0, awatt = 0, cmhz = 0, cwatt = 0;
+  const double alone_split = dfill_alone(d, f, fs, 30, &amhz, &awatt);
+  const double alone_co = dfill_alone(d, c, ss2, 30, &cmhz, &cwatt);
+  auto w_full = [&] { enqueue_step(d, p, 2, B, L, &wrapped); };
+  auto w_arm = [&] { enqueue_step(d, p2, 2, B, L, &wrapped); };
+  int bad = 0, checked = 0;
+  auto alone_block = [&](Block& b) {
+    d.st = full;
+    b.reps = time_work(d, w_full, K, &b.t0, &b.t1);
+  };
+  auto arm_block = [&](Block& b) {
+    CK(cudaMemsetAsync(f.rec, 0xA5, f.per() * sizeof(unsigned long long), fs));
+    CK(cudaStreamSynchronize(fs));
+    CK(cudaMemsetAsync(c.rec, 0xA5, c.per() * sizeof(unsigned long long), ss2));
+    CK(cudaStreamSynchronize(ss2));
+    DPump pump, cpump;
+    dpump_start(pump, f, fs, 3);
+    dpump_start(cpump, c, ss2, 3);
+    while (pump.done.load() < 2 || cpump.done.load() < 2) {
+    }
+    d.st = ss;
+    b.reps = time_work(d, w_arm, K, &b.t0, &b.t1);
+    dpump_stop(pump);
+    dpump_stop(cpump);
+    d.st = full;
+    for (double x : pump.t) b.split_chunks += x > b.t0 && x <= b.t1;
+    for (double x : cpump.t) b.co_chunks += x > b.t0 && x <= b.t1;
+    b.chunks = (double)b.split_chunks + (double)b.co_chunks * c.macs() / f.macs();
+    bad += dfill_check(f, pump.launched.load() - 1, 4);
+    bad += dfill_check(c, cpump.launched.load() - 1, 4);
+    checked += 8;
+  };
+  std::vector<Block> a(rounds), m(rounds);
+  for (int r = 0; r < rounds; r++) {
+    if (r % 2 == 0) {
+      alone_block(a[r]);
+      arm_block(m[r]);
+    } else {
+      arm_block(m[r]);
+      alone_block(a[r]);
+    }
+  }
+  d.st = full;
+  printf("{\"mode\": \"dscore\", \"driver\": \"pscore-co\", \"kind\": \"step\", \"B\": %d, \"L\": %d, \"place\": \"split\", "
+         "\"fill_sms_req\": %d, \"sms\": %d, \"step_sms\": %d, \"fill_sms\": %d, \"spread\": {\"step_graph\": %d, "
+         "\"fill\": %d, \"co\": %d}, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"chunk_macs\": %.6e, "
+         "\"coins\": [\"%016llx\", \"%016llx\"], \"prio\": [%d, %d], \"kv_wrapped\": %s, \"setup_ms\": %.3f, "
+         "\"rounds\": %d, \"K\": %d, \"co\": {\"W\": %d, \"NC\": %d, \"S\": %d, \"chunk_log2\": %d, \"tiles\": %d, "
+         "\"grid\": %d, \"base\": %llu, \"chunk_macs\": %.6e, \"carveout\": %d, \"alone_mac_per_s\": %.6e, "
+         "\"alone_mhz\": %.1f}, \"alone_fill\": {\"mac_per_s\": %.6e, \"mhz\": %.1f, \"watt\": %.1f, "
+         "\"split_mac_per_s\": %.6e, \"co_mac_per_s\": %.6e}, \"rec_checked\": %d, \"rec_bad\": %d, \"algos\": [",
+         B, L, fill_sms, d.sms, got[0], got[1], sp_step, sp_fill, sp_co, W, NC, S, f.tiles, f.grid, f.macs(),
+         (unsigned long long)g_c0, (unsigned long long)g_c1, lo, hi, wrapped ? "true" : "false", setup_ms, rounds, K, CW,
+         CNC, CS, CLG, c.tiles, c.grid, CBASE, c.macs(), dfill_carveout(), alone_co, cmhz, alone_split + alone_co, amhz,
+         awatt, alone_split, alone_co, checked, bad);
+  for (size_t j = 0; j < p.size(); j++) printf("%s[%d, %d]", j ? ", " : "", p[j].algo_id, p2[j].algo_id);
+  printf("], \"blocks\": [");
+  for (int r = 0; r < rounds; r++) {
+    printf("%s{\"order\": \"%s\", ", r ? ", " : "", r % 2 == 0 ? "alone,arm" : "arm,alone");
+    print_block("alone", a[r], false, true);
+    print_block("arm", m[r], true, false);
+    printf("}");
+  }
+  printf("]}\n");
+  fflush(stdout);
+  CK(cudaFree(c.rec));
+  CK(cudaFree(f.rec));
+  return bad ? 8 : 0;
+}
+
 static int run_pncu(Dev& d, int PW, int PNC, int PS, int PT) {
   pfill_prep();
   PFill pf;
@@ -288,8 +394,24 @@ int main(int argc, char** argv) {
     if (int rc = setup(d, false, (size_t)1 << 20)) return rc;
     return run_pncu(d, PW, PNC, PS, PT);
   }
+  if (mode == "pco") {
+    if (argc < 14) { fprintf(stderr, "pco B L FILL_SMS W NC S CW CNC CS CLG ROUNDS K\n"); return 1; }
+    const int B = atoi(argv[2]), L = atoi(argv[3]), fsm = atoi(argv[4]), W = atoi(argv[5]), NC = atoi(argv[6]),
+              S = atoi(argv[7]), CW = atoi(argv[8]), CNC = atoi(argv[9]), CS = atoi(argv[10]), CLG = atoi(argv[11]),
+              rounds = atoi(argv[12]), K = atoi(argv[13]);
+    if ((size_t)B * L > MAX_BL || L % 512 || L <= 0 || B < 1 || B > 256 || rounds < 2 || K < 1 || W < 1 || W > 16 ||
+        S % 8 || S <= 0 || CW < 1 || CW > 16 || (CNC != 1 && CNC != 2 && CNC != 4) || CS % 8 || CS <= 0 || CLG < 10 ||
+        CLG > 22) {
+      fprintf(stderr, "B*L <= %zu, L %% 512 == 0, 1 <= B <= 256, ROUNDS >= 2, K >= 1, 1 <= W, CW <= 16, 8 | S, CS; "
+                      "CNC 1|2|4, 10 <= CLG <= 22\n", MAX_BL);
+      return 1;
+    }
+    if (int rc = setup(d, true, (size_t)B * L * KV_TOKEN_BYTES + ((size_t)1 << 20))) return rc;
+    if (fsm <= 0 || fsm >= d.sms) { fprintf(stderr, "0 < FILL_SMS < %d\n", d.sms); return 1; }
+    return run_pco(d, B, L, fsm, W, NC, S, CW, CNC, CS, CLG, rounds, K);
+  }
   if (mode != "pscore" || argc < 14) {
-    fprintf(stderr, "pscore B L FILL_SMS W NC S PW PNC PS PT ROUNDS K\n");
+    fprintf(stderr, "pscore B L FILL_SMS W NC S PW PNC PS PT ROUNDS K | pco B L FILL_SMS W NC S CW CNC CS CLG ROUNDS K\n");
     return 1;
   }
   const int B = atoi(argv[2]), L = atoi(argv[3]), fsm = atoi(argv[4]), W = atoi(argv[5]), NC = atoi(argv[6]),
