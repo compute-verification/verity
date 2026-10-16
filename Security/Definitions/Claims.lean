@@ -39,9 +39,12 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   accepts: its commitments are those rows.
 * (16 Oct) Flock's claims read every table of a session: each of the statement's tables (`Flock.Stmt.tables`) commits
   its own level-0 codeword, so a run's openings are per table (`Flock.Deploy.cols`), `Flock.assemble` decodes each
-  table's with the one decoder and reads one candidate per table as one witness (`Flock.Deploy.read`), and `N₀`, like
+  table's with the one decoder, takes each table's first candidate in that table's own statement
+  (`Flock.Deploy.table`), and reads the tables' candidates as one witness (`Flock.Deploy.read`), and `N₀`, like
   `ε_table`, is summed over the tables: one wait's `k` accepted reruns open every table, so `k` counts all the tables'
-  positions. At one table this is the text it replaces.
+  positions. The relation splits by table, each table's units their own statement, so `assemble` checks each table's
+  list once, at most `J·L` checks where every combination would be `L^J`, and `Flock.Efficient` bounds each list by
+  the decoder's polynomial, which counts them. At one table this is the text it replaces.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
@@ -570,31 +573,36 @@ def ListWithin {Col T : Type} [DecidableEq Col] [Zero Col] (len : T → ℕ) (en
     M ∈ decode os
 
 /-- **Flock's assemble step**: each table's opened columns (`o j` of every opening `o`, for table `j` below the
-statement's `Stmt.tables`) as they were opened, decoded by the one decoder to candidate traces; each choice of one
-candidate per table, in table order (`List.sections`), read for its witness; the first in the relation. At one table
-the candidates are the decoded traces of table `0`'s columns, each read alone. A position opened twice needs no step
-here: `fill` reads the first. -/
-def assemble {Col T : Type} (parse : Msg → Option Stmt) (decode : List (ℕ × Col) → List T) (read : List T → Wit)
-    (x : Msg) (opens : List (ℕ → List (ℕ × Col))) : Option Wit :=
+statement's `Stmt.tables`) as they were opened, decoded by the one decoder to candidate traces; for each table, its
+first candidate that, read alone, is in the relation of that table's own statement (`table x j`); the tables' choices,
+in table order, read as one witness. Each table's list is checked once, candidate by candidate, so `assemble` makes at
+most the lists' lengths summed in checks. At one table, whose own statement is the statement, this is the first
+decoded trace of table `0`'s columns whose witness is in the relation. A position opened twice needs no step here:
+`fill` reads the first. -/
+def assemble {Col T : Type} (parse : Msg → Option Stmt) (table : Msg → ℕ → Option Stmt)
+    (decode : List (ℕ × Col) → List T) (read : List T → Wit) (x : Msg) (opens : List (ℕ → List (ℕ × Col))) :
+    Option Wit :=
   match parse x with
   | none => none
   | some s =>
-    (((List.range s.tables).map fun j => decode (opens.flatMap fun o => o j)).sections.map read).find?
-      fun w => decide (RelS s w)
+    ((List.range s.tables).mapM fun j => (table x j).bind fun t =>
+      (decode (opens.flatMap fun o => o j)).find? fun M => decide (RelS t (read [M]))).map read
 
 /-- What the deployed verifier brings, read by Flock's claims: the verifier and whether it is the masked (`--zk`) one,
-its parser and scope check, each table's opened columns of its first committed codeword in a run (`cols v j` for table
-`j`), the code (`enc`), each trace's codeword length (`len`) and decoding radius (`θ`), functions of the trace because
-one `T` holds the traces of every statement's code, how the tables' traces, one per table in table order (the units'
-order), are read as one witness (`read`), and the numbers the errors read: `ε_table`, the tables' errors summed; `N₀`,
-the tables' level-0 codeword lengths summed; the weight `C` of `γ`; `E^rep`'s waits `m′` and its truncation `K`.
-Every table is decoded by the one decoder at the one code. A single-table statement reads table `0`'s columns and one
-trace (`read [M]`), its `ε_table` and `N₀` that table's. -/
+its parser and scope check, each table's own statement (`table x j`: the statement of table `j`'s units alone, one
+table, as the verifier's parser reads it), each table's opened columns of its first committed codeword in a run
+(`cols v j` for table `j`), the code (`enc`), each trace's codeword length (`len`) and decoding radius (`θ`), functions
+of the trace because one `T` holds the traces of every statement's code, how the tables' traces, one per table in table
+order (the units' order), are read as one witness (`read`), and the numbers the errors read: `ε_table`, the tables'
+errors summed; `N₀`, the tables' level-0 codeword lengths summed; the weight `C` of `γ`; `E^rep`'s waits `m′` and its
+truncation `K`. Every table is decoded by the one decoder at the one code. A single-table statement is its own table
+`0`, and reads table `0`'s columns and one trace (`read [M]`), its `ε_table` and `N₀` that table's. -/
 structure Deploy (Coin Col T : Type) where
   zk : Bool
   V : Verifier Coin
   parse : Msg → Option Stmt
   scopeCheck : Msg → Bool
+  table : Msg → ℕ → Option Stmt
   cols : Seen → ℕ → List (ℕ × Col)
   enc : T → ℕ → Col
   len : T → ℕ
@@ -614,9 +622,9 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 noncomputable def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := ⌈4 * D.N₀ x / Real.exp 1⌉₊
 
 /-- **Flock's extractor**, `E^rep` at a decoder: an accepted rerun's opening is its tables' columns (`D.cols v`), which
-`assemble` decodes table by table. -/
+`assemble` decodes and checks table by table, each against the table's own statement (`D.table`). -/
 noncomputable def E (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) : Extractor Coin Wit D.V :=
-  ERep D.V D.waits D.k D.cap (fun v => [D.cols v]) (assemble D.parse decode D.read) (check D.parse)
+  ERep D.V D.waits D.k D.cap (fun v => [D.cols v]) (assemble D.parse D.table decode D.read) (check D.parse)
 
 /-- **Flock's knowledge error**: `κ = 4·ε_table + 2^{−m′} + 2k/K + e^{−k/8}`. -/
 noncomputable def κ (D : Deploy Coin Col T) (x : Msg) : ℝ :=
@@ -653,11 +661,13 @@ def Bits [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
     Claims.Bits H D.V (R D.parse) (E D decode) fun x => lamOf (κ D x) (γ D x)
 
 /-- **Flock: efficiency**: `E^rep`'s reruns at every decoder, and a decoder that meets the list-decoding spec, with its
-stated complexity: the one decoder of every table. -/
+stated complexity: the one decoder of every table. Its lists are at most `p(size)` long too, so `assemble`, which checks
+each table's list once, makes at most `p(size)` checks per table. -/
 def Efficient [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) : Prop :=
-  ERepCost H D.V D.waits D.k D.cap (fun v => [D.cols v]) (assemble D.parse decode D.read) (check D.parse) ∧
-    ListWithin D.len D.enc D.θ decode ∧ DecoderComplexity decode counted size p
+  ERepCost H D.V D.waits D.k D.cap (fun v => [D.cols v]) (assemble D.parse D.table decode D.read) (check D.parse) ∧
+    ListWithin D.len D.enc D.θ decode ∧ DecoderComplexity decode counted size p ∧
+    ∀ os, (decode os).length ≤ p.eval (size os)
 
 /-- **Flock: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
 accepts. -/

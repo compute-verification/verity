@@ -11,8 +11,9 @@ import Proofs.Flock.Claims.NumbersTable
 `FlockDeploy.deployPlain rel` and `FlockDeploy.deployZk rel` are the shipped verifier, plain and masked (`--zk`), as
 the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Relation`):
 
-* `V`, `parse`, `scopeCheck`: the verifier in public-coin form (`FlockDeploy.V`), the verifier's own parser and scope
-  check on the statement's bytes (`FlockDeploy.parse`, `FlockDeploy.scopeCheck`).
+* `V`, `parse`, `scopeCheck`, `table`: the verifier in public-coin form (`FlockDeploy.V`), the verifier's own parser and
+  scope check on the statement's bytes (`FlockDeploy.parse`, `FlockDeploy.scopeCheck`), and each table's own statement,
+  table `j` of the parsed statement alone (`FlockDeploy.table`).
 * `cols`: table `j`'s opened level-0 columns, its two reps', read off the run's last message (its statement, record
   and proof files) with no hash: the record's rep streams `2j` and `2j + 1` give the level-0 query round's coins, the
   proof files at the same places the opened rows (`runOf`, `Claims.Flock.plainRunCols`, `Claims.Flock.zkRunCols`).
@@ -21,10 +22,13 @@ the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Re
 * `enc`, `len`, `θ`, `read`: the level-0 code at each `m` the verifier serves, read as one (`IRS.famEnc`): the plain
   one (`plainEncD`, `22 ≤ m ≤ 35`) and the masked one (`zkEncD`, `25 ≤ m ≤ 35`), each trace's codeword length `2^d`
   and radius `1 − √ρ − 1/200` at its `m` (`plainLenD`, `plainThetaD`, `zkLenD`, `zkThetaD`), and its read step, the
-  tables' traces read in table order as one witness (`Claims.Flock.readTables`, table `c`'s from `c·2^m`:
-  `deployZk_read_getD`). A decoder meeting `ListWithin` at them exists for each (`GS.listWithin_deployPlain`,
-  `GS.listWithin_deployZk`). At one table both records read as before (`deployPlain_one`, `deployZk_one`,
-  `Claims.Flock.assemble_of_tables_eq_one`).
+  tables' traces read as one witness, interleaved as the relation reads them (`Claims.Flock.readTables`, table `c`'s
+  hidden value `a` at `a·J + c`: `deployZk_read_getD`). A decoder meeting `ListWithin` at them exists for each
+  (`GS.listWithin_deployPlain`, `GS.listWithin_deployZk`). At one table both records read as before
+  (`deployPlain_one`, `deployZk_one`, `Claims.Flock.assemble_of_tables_eq_one`).
+* `assemble`, table by table: what it returns is one decoded trace per table, each in its own statement's relation
+  read alone (`Claims.Flock.assemble_eq_some`), and it returns where every table has one
+  (`Claims.Flock.assemble_isSome`).
 * The list-decoding spec's earlier `nMin` form (`ListComplete`) is met at one agreement, `√ρ + 1/200`, at rate `1/2`
   without `--zk` (`Numbers.agree₀`) and at the masked code's largest rate `(2^12 + 554)/2^13` (`m = 25`) with it
   (`zkAgree`, `zkRate_le`): `listComplete_plain`, `listComplete_zk`.
@@ -260,42 +264,120 @@ theorem zkRunCols_length_lt_zkNMinD' {agree : ℝ} (ha0 : 0 < agree) (ha1 : agre
 
 /-! ## The tables read as one witness -/
 
-/-- **The tables' traces read as one witness**: each trace's read, concatenated in table order (the units' order). -/
+/-- **The tables' traces read as one witness**, interleaved as the relation reads them: of `J` traces, hidden value
+`a·J + c` is trace `c`'s hidden value `a`, so where a table's values sit depends on no other table's trace (each trace
+reads `2^m` values at its own `m`). -/
 def readTables {T : Type} (read : T → Wit) (Ms : List T) : Wit where
-  hid := Ms.flatMap fun M => (read M).hid
+  hid := (List.range (Ms.length * (Ms.map fun M => (read M).hid.length).sum)).map fun k =>
+    ((Ms[k % Ms.length]?).map fun M => (read M).hid.getD (k / Ms.length) false).getD false
 
 /-- **One table's trace reads as before.** -/
 theorem readTables_singleton {T : Type} (read : T → Wit) (M : T) : readTables read [M] = read M := by
-  simp [readTables]
+  rcases hM : read M with ⟨hid⟩
+  show (⟨_⟩ : Wit) = ⟨hid⟩
+  congr 1
+  apply List.ext_getElem
+  · simp [hM]
+  · intro k h1 h2
+    simp only [List.getElem_map, List.getElem_range, List.length_singleton, Nat.mod_one, Nat.div_one,
+      List.getElem?_cons_zero, Option.map_some, Option.getD_some, hM, List.getD_eq_getElem _ _ h2]
 
-/-- **Table `c`'s hidden value `a` is the witness's `c·n + a`** when every trace reads `n` hidden values. -/
-theorem readTables_hid_getD {T : Type} (read : T → Wit) (n : ℕ) :
-    ∀ (Ms : List T), (∀ M ∈ Ms, (read M).hid.length = n) → ∀ (c : ℕ) (hc : c < Ms.length) (a : ℕ), a < n →
-      (readTables read Ms).hid.getD (c * n + a) false = (read Ms[c]).hid.getD a false
-  | [], _, c, hc, _, _ => absurd hc (Nat.not_lt_zero c)
-  | M :: Ms, hl, c, hc, a, ha => by
-    have hM : (read M).hid.length = n := hl M List.mem_cons_self
-    have hrest : (readTables read (M :: Ms)).hid = (read M).hid ++ (readTables read Ms).hid := rfl
-    rw [hrest]
-    cases c with
-    | zero =>
-      rw [Nat.zero_mul, Nat.zero_add, List.getD_append _ _ _ _ (by omega)]
-      rfl
-    | succ c =>
-      rw [List.getD_append_right _ _ _ _ (by rw [hM]; nlinarith), hM,
-        show (c + 1) * n + a - n = c * n + a by rw [Nat.succ_mul]; omega]
-      exact readTables_hid_getD read n Ms (fun M' h => hl M' (List.mem_cons_of_mem _ h)) c
-        (Nat.lt_of_succ_lt_succ hc) a ha
+/-- **Table `c`'s hidden value `a` is the witness's `a·J + c`**, of `J` tables' traces. -/
+theorem readTables_getD {T : Type} (read : T → Wit) (Ms : List T) {c : ℕ} (hc : c < Ms.length) (a : ℕ) :
+    (readTables read Ms).hid.getD (a * Ms.length + c) false = (read Ms[c]).hid.getD a false := by
+  have hJ : 0 < Ms.length := by omega
+  have hmod : (a * Ms.length + c) % Ms.length = c := by
+    rw [show a * Ms.length + c = c + a * Ms.length by omega, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hc]
+  have hdiv : (a * Ms.length + c) / Ms.length = a := by
+    rw [show a * Ms.length + c = c + a * Ms.length by omega, Nat.add_mul_div_right _ _ hJ, Nat.div_eq_of_lt hc,
+      Nat.zero_add]
+  by_cases hk : a * Ms.length + c < Ms.length * (Ms.map fun M => (read M).hid.length).sum
+  · simp only [readTables, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hk, Option.map_some,
+      Option.getD_some, hmod, hdiv, List.getElem?_eq_getElem hc]
+  · have hle : (read Ms[c]).hid.length ≤ (Ms.map fun M => (read M).hid.length).sum :=
+      List.le_sum_of_mem (List.mem_map.2 ⟨Ms[c], List.getElem_mem hc, rfl⟩)
+    have ha : (read Ms[c]).hid.length ≤ a := by
+      by_contra h
+      have : (a + 1) * Ms.length ≤ Ms.length * (Ms.map fun M => (read M).hid.length).sum := by
+        rw [Nat.mul_comm Ms.length]
+        exact Nat.mul_le_mul_right _ (by omega)
+      rw [Nat.succ_mul] at this
+      omega
+    rw [List.getD_eq_default _ _ (by simp only [readTables, List.length_map, List.length_range]; omega),
+      List.getD_eq_default _ _ ha]
 
-/-- **At one table, `assemble` is the single-table step**: the decoded traces of table `0`'s columns, each read alone. -/
+/-- **At one table, `assemble` is the single-table step**: when the statement's one table is its own statement, the
+first decoded trace of table `0`'s columns whose witness, the trace read alone, is in the relation. -/
 theorem assemble_of_tables_eq_one {Col T : Type} (parse : Msg → Option Claims.Flock.Stmt)
-    (decode : List (ℕ × Col) → List T) (read : List T → Wit) (x : Msg) (opens : List (ℕ → List (ℕ × Col)))
-    (s : Claims.Flock.Stmt) (hp : parse x = some s) (h1 : s.tables = 1) :
-    assemble parse decode read x opens =
+    (table : Msg → ℕ → Option Claims.Flock.Stmt) (decode : List (ℕ × Col) → List T) (read : List T → Wit) (x : Msg)
+    (opens : List (ℕ → List (ℕ × Col))) (s : Claims.Flock.Stmt) (hp : parse x = some s) (h1 : s.tables = 1)
+    (ht : table x 0 = some s) :
+    assemble parse table decode read x opens =
       ((decode (opens.flatMap fun o => o 0)).map fun M => read [M]).find? fun w => decide (RelS s w) := by
-  simp only [assemble, hp, h1, List.range_one, List.map_cons, List.map_nil, List.sections, List.flatMap_singleton,
-    List.map_map]
-  rfl
+  rw [List.find?_map]
+  simp only [assemble, hp, h1, List.range_one, List.mapM_cons, List.mapM_nil, ht, Option.bind_some, Function.comp_def]
+  cases (decode (opens.flatMap fun o => o 0)).find? (fun M => decide (RelS s (read [M]))) <;> rfl
+
+/-- `Option`'s `mapM` returns one result per entry, each the entry's. -/
+theorem mapM_option_some {α β : Type} {f : α → Option β} :
+    ∀ {l : List α} {ys : List β}, l.mapM f = some ys →
+      ys.length = l.length ∧ ∀ i (hi : i < ys.length) (hl : i < l.length), f l[i] = some ys[i]
+  | [], ys, h => by
+    simp only [List.mapM_nil, pure, Option.some.injEq] at h
+    subst h
+    exact ⟨rfl, fun i hi => absurd hi (Nat.not_lt_zero i)⟩
+  | a :: l, ys, h => by
+    simp only [List.mapM_cons, Option.bind_eq_bind, Option.bind_eq_some_iff, pure, Option.some.injEq] at h
+    obtain ⟨b, hb, bs, hbs, rfl⟩ := h
+    obtain ⟨hlen, hall⟩ := mapM_option_some hbs
+    refine ⟨by simp [hlen], fun i hi hl => ?_⟩
+    cases i with
+    | zero => exact hb
+    | succ i => exact hall i (by simpa using hi) (by simpa using hl)
+
+/-- `Option`'s `mapM` returns where every entry does. -/
+theorem mapM_option_isSome {α β : Type} {f : α → Option β} :
+    ∀ {l : List α}, (∀ a ∈ l, (f a).isSome) → (l.mapM f).isSome
+  | [], _ => rfl
+  | a :: l, h => by
+    obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 (h a List.mem_cons_self)
+    obtain ⟨bs, hbs⟩ := Option.isSome_iff_exists.1
+      (mapM_option_isSome (l := l) fun a' ha' => h a' (List.mem_cons_of_mem _ ha'))
+    simp [List.mapM_cons, hb, hbs]
+
+/-- **What `assemble` returns, table by table**: the tables' choices read as one witness, one per table of the
+statement, each a decoded trace of its table's columns that, read alone, is in the relation of the table's own
+statement. -/
+theorem assemble_eq_some {Col T : Type} {parse : Msg → Option Claims.Flock.Stmt}
+    {table : Msg → ℕ → Option Claims.Flock.Stmt} {decode : List (ℕ × Col) → List T} {read : List T → Wit} {x : Msg}
+    {opens : List (ℕ → List (ℕ × Col))} {s : Claims.Flock.Stmt} {w : Wit} (hp : parse x = some s)
+    (h : assemble parse table decode read x opens = some w) :
+    ∃ Ms : List T, w = read Ms ∧ Ms.length = s.tables ∧ ∀ j (hj : j < Ms.length), ∃ t, table x j = some t ∧
+      Ms[j] ∈ decode (opens.flatMap fun o => o j) ∧ RelS t (read [Ms[j]]) := by
+  simp only [assemble, hp] at h
+  obtain ⟨Ms, hMs, rfl⟩ := Option.map_eq_some_iff.1 h
+  obtain ⟨hlen, hall⟩ := mapM_option_some hMs
+  rw [List.length_range] at hlen
+  refine ⟨Ms, rfl, hlen, fun j hj => ?_⟩
+  have hj' := hall j hj (by rw [List.length_range]; omega)
+  rw [List.getElem_range] at hj'
+  obtain ⟨t, ht, hf⟩ := Option.bind_eq_some_iff.1 hj'
+  have hq := List.find?_some hf
+  simp only [decide_eq_true_eq] at hq
+  exact ⟨t, ht, List.mem_of_find?_eq_some hf, hq⟩
+
+/-- **`assemble` returns where every table has a candidate**: a decoded trace of its columns that, read alone, is in
+the relation of its own statement. -/
+theorem assemble_isSome {Col T : Type} {parse : Msg → Option Claims.Flock.Stmt}
+    {table : Msg → ℕ → Option Claims.Flock.Stmt} {decode : List (ℕ × Col) → List T} {read : List T → Wit} {x : Msg}
+    {opens : List (ℕ → List (ℕ × Col))} {s : Claims.Flock.Stmt} (hp : parse x = some s)
+    (h : ∀ j < s.tables, ∃ t, table x j = some t ∧ ∃ M ∈ decode (opens.flatMap fun o => o j), RelS t (read [M])) :
+    (assemble parse table decode read x opens).isSome := by
+  simp only [assemble, hp, Option.isSome_map]
+  refine mapM_option_isSome fun j hj => ?_
+  obtain ⟨t, ht, M, hM, hR⟩ := h j (List.mem_range.1 hj)
+  rw [ht, Option.bind_some, List.find?_isSome]
+  exact ⟨M, hM, decide_eq_true hR⟩
 
 /-- A statement has one table exactly when its count is at most one. -/
 theorem Stmt.tables_eq_one_iff (s : Claims.Flock.Stmt) : s.tables = 1 ↔ s.form.tables ≤ 1 := by
@@ -418,6 +500,7 @@ noncomputable def deployPlain (rel : Readable.Parsed → Readable.Relation) :
   V := V false
   parse := parse false rel
   scopeCheck := scopeCheck false
+  table := table false rel
   cols := plainTableCols
   enc := Claims.Flock.plainEncD
   len := Claims.Flock.plainLenD
@@ -436,6 +519,7 @@ noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
   V := V true
   parse := parse true rel
   scopeCheck := scopeCheck true
+  table := table true rel
   cols := cols true
   enc := Claims.Flock.zkEncD
   len := Claims.Flock.zkLenD
@@ -516,12 +600,11 @@ theorem deployZk_one (rel : Readable.Parsed → Readable.Relation) (s : Claims.S
     (deployZk rel).cols s 0 = cols true s 0 ∧ (deployZk rel).read [M] = Claims.Flock.zkReadD M :=
   ⟨rfl, Claims.Flock.readTables_singleton _ _⟩
 
-/-- **The masked record reads table `c`'s hidden value `a` at `c·2^m + a`**, when every table's trace is at `m`: the
-session's tables in one witness, in table order. -/
-theorem deployZk_read_getD (rel : Readable.Parsed → Readable.Relation) (m : ℕ) (Ms : List Claims.Flock.ZkTrace)
-    (hm : ∀ M ∈ Ms, M.1.m = m) (c : ℕ) (hc : c < Ms.length) (a : ℕ) (ha : a < 2 ^ m) :
-    ((deployZk rel).read Ms).hid.getD (c * 2 ^ m + a) false = (Claims.Flock.zkReadD Ms[c]).hid.getD a false :=
-  Claims.Flock.readTables_hid_getD _ (2 ^ m) Ms
-    (fun M h => (Claims.Flock.zkReadD_hid_length M).trans (by rw [hm M h])) c hc a ha
+/-- **The masked record reads table `c`'s hidden value `a` at `a·J + c`**, of `J` tables' traces: the session's tables
+in one witness, interleaved, at each table's own `m`. -/
+theorem deployZk_read_getD (rel : Readable.Parsed → Readable.Relation) (Ms : List Claims.Flock.ZkTrace) {c : ℕ}
+    (hc : c < Ms.length) (a : ℕ) :
+    ((deployZk rel).read Ms).hid.getD (a * Ms.length + c) false = (Claims.Flock.zkReadD Ms[c]).hid.getD a false :=
+  Claims.Flock.readTables_getD _ Ms hc a
 
 end FlockDeploy
