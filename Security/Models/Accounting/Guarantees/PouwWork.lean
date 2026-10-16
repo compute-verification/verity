@@ -1,3 +1,4 @@
+import Models.Accounting.Assumptions.PouwFloor
 import Models.Accounting.Assumptions.PouwWork
 
 /-!
@@ -6,7 +7,7 @@ import Models.Accounting.Assumptions.PouwWork
 The converged model's `pouw_local_off` at help 0 (CMP-12 v3.1), on the actual circuit: an accepted run's node did the
 work itself, in credits, except with `δ_det + δ_luck + δ_skip`. It rests on A2 (`PouwDetection`), A2b (`PouwLuck`), A3
 (`PouwFloorOff`) and A5 at `H = 0` (`PouwHelpBound`). It reads no capacity, clock or resource: all of PoUW's GPU
-content is in A3.
+content is in A3, an open conjecture, so the guarantee is conditional on it.
 
 Proved by `Accounting.SecurityProofs.PouwLocalOff : Accounting.Guarantees.PouwLocalOff` (`Proofs.Accounting.PouwWork`).
 -/
