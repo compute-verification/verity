@@ -359,4 +359,216 @@ theorem ofHello_helloOf (S : Claims.JsonSpec Flock.canon) {tags : Tags} {sigma :
       | exact good_arr_strs _
       | exact good_mkObj (by simp) (by simp [good_toJson]; exact .str _)
 
+/-! ## A stratified draw that decodes is printable -/
+
+theorem getObj_ok {j : Json} {m : Std.TreeMap.Raw String Json compare} (h : j.getObj? = .ok m) : j = .obj m := by
+  cases j with
+  | obj m' => cases h; rfl
+  | _ => cases h
+
+theorem getStr_ok {j : Json} {s : String} (h : j.getStr? = .ok s) : j = .str s := by
+  cases j with
+  | str s' => cases h; rfl
+  | _ => cases h
+
+theorem isOk_ok {j : Json} {k : String} (h : (j.getObjVal? k).isOk = true) : ∃ v, j.getObjVal? k = .ok v := by
+  cases e : j.getObjVal? k with
+  | ok v => exact ⟨v, rfl⟩
+  | error _ => rw [e] at h; cases h
+
+/-- **An object of known keys is printable**: one with `L.length` keys, each of `L` holding a printable value. -/
+theorem good_obj_of {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : List String} (hL : L.Nodup)
+    (hs : m.toArray.size = L.length) (hk : ∀ k ∈ L, ∃ v, (Json.obj m).getObjVal? k = .ok v ∧ Good v) :
+    Good (.obj m) := by
+  refine .obj hm fun k v hv => ?_
+  have hv' := getObjVal_of_get hv
+  have hkL : k ∈ L := key_mem hm hL (fun k hk' => by
+      obtain ⟨v, hv, -⟩ := hk k hk'
+      exact (mem_of_getObjVal hm hv).1)
+    (by rw [← Std.TreeMap.Raw.size_toArray hm]; exact hs) (mem_of_getObjVal hm hv').1
+  obtain ⟨v', hv'', hg⟩ := hk k hkL
+  rw [hv'] at hv''
+  cases hv''
+  exact hg
+
+theorem good_of_asNat_mapM {a : Array Json} {c : String} {b : Array ℕ} (h : a.mapM (J.asNat · c) = .ok b) :
+    Good (.arr a) :=
+  .arr fun x hx => by
+    obtain ⟨_, hy⟩ := mapM_ok_mem h x hx
+    exact asNat_good hy
+
+/-- A stratum's `[lo, hi)` range is a pair of natural numbers. -/
+theorem good_range {p : Array Json} (hs : p.size = 2) {c₀ c₁ : String} {lo hi : ℕ} (h₀ : J.asNat p[0]! c₀ = .ok lo)
+    (h₁ : J.asNat p[1]! c₁ = .ok hi) : Good (.arr p) := by
+  refine .arr fun x hx => ?_
+  obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hx
+  have : i = 0 ∨ i = 1 := by omega
+  rcases this with rfl | rfl
+  · rw [← getElem!_pos p 0 hi]; exact asNat_good h₀
+  · rw [← getElem!_pos p 1 hi]; exact asNat_good h₁
+
+set_option maxHeartbeats 4000000 in
+/-- **A stratum that decodes is printable**: an object of exactly `template`, `units` and `k`, a string, ranges of two
+natural numbers, and a natural number. -/
+theorem good_stratum {j : Json} (hw : Wf j) {s : Draw.Stratum} (h : stratumOfJson j = .ok s) : Good j := by
+  unfold stratumOfJson at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    have hu : ∀ r ∈ _, Good r := fun r hr => by
+      obtain ⟨y, h⟩ := mapM_ok_mem ‹Array.mapM _ _ = Except.ok _› r hr
+      try dsimp only at h
+      try simp only [throw_bind'] at h
+      repeat' walk_step
+      all_goals
+        exact good_range (by simpa using ‹¬ (_ != 2) = true›) ‹J.asNat _[0]! _ = _› ‹J.asNat _[1]! _ = _›
+    have hj := getObj_ok ‹j.getObj? = _›
+    subst hj
+    cases hw with
+    | obj hm _ =>
+    have hc := ‹¬ (_ != 3 || _) = true›
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not, List.any_cons, List.any_nil, Bool.or_false,
+      Bool.not_eq_true', Bool.not_eq_false] at hc
+    obtain ⟨hs, ht, hun, hk⟩ := hc
+    refine good_obj_of hm (L := ["template", "units", "k"]) (by decide) (by simpa using hs) ?_
+    simp only [List.mem_cons, List.mem_nil_iff, or_false]
+    rintro key (rfl | rfl | rfl)
+    · obtain ⟨v, hv⟩ := isOk_ok ht
+      refine ⟨v, hv, ?_⟩
+      have hs' := ‹(Json.obj _).getObjValAs? String "template" = _›
+      simp only [Json.getObjValAs?, Json.getObjValD, hv, Except.toOption, Option.getD_some] at hs'
+      rw [getStr_ok hs']
+      exact .str _
+    · exact ⟨_, ‹(Json.obj _).getObjVal? "units" = _›, .arr hu⟩
+    · obtain ⟨v, hv⟩ := isOk_ok hk
+      refine ⟨v, hv, ?_⟩
+      have hn := ‹J.asNat _ "U2: a stratum's k" = _›
+      simp only [hv, Except.toOption, Option.getD_some] at hn
+      exact asNat_good hn
+
+set_option maxHeartbeats 4000000 in
+/-- **A stratified draw that decodes is printable**: an object of exactly `law`, `population`, `units`, `k` and
+`strata`, a string, natural numbers, an array of them, and strata that decode. -/
+theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {K : ℕ}
+    {strata : Array Draw.Stratum} (hl : D.law = .stratified K strata) : Good j := by
+  unfold Draw.UnitDraw.ofJson at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+  all_goals
+    have hp := ‹(pure _ : V Draw.Law) = Except.ok _›
+    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hp
+  all_goals
+    try simp only [reduceCtorEq] at hl
+  all_goals
+    have hj := getObj_ok ‹j.getObj? = _›
+    subst hj
+    cases hw with
+    | obj hm hwv =>
+    have hc := ‹¬ (_ != 5 || _ || _) = true›
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at hc
+    have hss := ‹(Json.obj _).getObjVal? "strata" = Except.ok (Json.arr _)›
+    refine good_obj_of hm (L := ["law", "population", "units", "k", "strata"]) (by decide) (by simpa using hc.1.1) ?_
+    simp only [List.mem_cons, List.mem_nil_iff, or_false]
+    rintro key (rfl | rfl | rfl | rfl | rfl)
+    · exact ⟨_, str_ok ‹J.str _ "law" _ = _›, .str _⟩
+    · exact ⟨_, nat_ok ‹J.nat _ "population" _ = _›, .num _⟩
+    · exact ⟨_, arr_ok ‹J.arr _ "units" _ = _›, good_of_asNat_mapM ‹Array.mapM _ _ = Except.ok _›⟩
+    · exact ⟨_, nat_ok ‹J.nat _ "k" _ = _›, .num _⟩
+    · refine ⟨_, hss, .arr fun x hx => ?_⟩
+      obtain ⟨_, hy⟩ := mapM_ok_mem ‹Array.mapM stratumOfJson _ = Except.ok _› x hx
+      have hw' := hwv "strata" _ (mem_of_getObjVal hm hss).2
+      cases hw' with
+      | arr ha => exact good_stratum (ha x hx) hy
+
+theorem stratified_of_lawWhy {D : Draw.UnitDraw} (h : ProvedScope.lawWhy false D = none) :
+    ∃ K strata, D.law = .stratified K strata := by
+  revert h
+  cases hl : D.law with
+  | stratified K s => exact fun _ => ⟨K, s, rfl⟩
+  | _ => simp [ProvedScope.lawWhy, hl]
+
+/-! ## The statement at a good case -/
+
+variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+
+/-- **What the record needs of the statement**, at every good case: no keyed coin tree, a non-empty `Σ`, a printable
+draw that decodes to the statement's instances, and the statement's draw the one it was set up at. -/
+def StmtOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+  ∀ c : Case H rel, c.spec.coinTree = none ∧ 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw
+
+/-- **The case's one table**: its statement is `setupOne`'s, at the statement's tags, coins and draw. -/
+theorem _root_.FlockComplete.Case.one (c : Case H rel) :
+    ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧
+      Discharge.HiddenExec.setupOne c.s.read.tags c.s.read.I.circuitFile c.s.read.I.publicFile c.s.read.coins
+        c.s.read.I.tables c.s.read.draw c.s.read.I.partition c.s.read.I.program = .ok st := by
+  obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployPlain rel) rel (readOf false) rfl
+    (fun _ _ h => readOf_zk h) c.x).1 c.scope
+  have hi := (setupOf_some c.setup).1
+  unfold Readable.parseBytes readOf at hp
+  rw [hi] at hp
+  have ht := Readable.toRead_of_parse (r := c.s.read) hp
+  obtain ⟨hc, -⟩ := (Readable.scope_ok_iff p).1 hsc
+  have hR := ((Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hc).1
+  have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hR.2.2.2.2.2])
+  have hset := Ins.setup_read (setupOf_some c.setup).2
+  rw [← ht] at hset
+  unfold Readable.Read.setup at hset
+  rw [hpi] at hset
+  rcases Discharge.HiddenExec.setupTables_okAny hset with ⟨-, st, h1, hs, hsts⟩ | ⟨hc1, hsz, -⟩
+  · refine ⟨st, hsts, hs, ?_⟩
+    rw [← ht]
+    exact h1
+  · obtain ⟨st0, hsts0, -⟩ := c.table
+    rw [hsts0] at hsz
+    simp only [List.size_toArray, List.length_cons, List.length_nil, zero_add] at hsz
+    omega
+
+/-- **What the record needs of the statement holds at every good case** (`StmtOk`), under the JSON library's
+specification: the plain verifier's coins name no coin tree, Σ is a SHA-512 digest, the draw is printable and decodes to
+the statement's instances, and the session's draw is the statement's. -/
+theorem stmtOk (S : Claims.JsonSpec Flock.canon) : StmtOk H rel := by
+  intro c
+  obtain ⟨st, -, hspec, h1⟩ := c.one
+  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt h1
+  obtain ⟨w, hwz, hw⟩ := insOf_false (setupOf_some c.setup).1
+  obtain ⟨hzk, hcoins, hdraw⟩ := Raw.ins_read hw
+  have hz : c.s.read.zk = false := hzk.trans hwz
+  obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 c.ready_parts.1
+  have hu := unitDraw_of S hl (hd d hdd)
+  have hU : c.spec.unitDraw = some d := by
+    rw [hspec]
+    simp [Stmt.spec, hu, Except.toOption]
+  refine ⟨?_, ?_, ?_, by rw [hU, hdd]⟩
+  · rw [hspec]
+    refine ofHello_helloOf S ?_ hhello
+    simp only [Readable.Read.coins, hz, Bool.false_eq_true, ↓reduceIte]
+    exact hcoins hwz
+  · rw [hspec]
+    exact hsig
+  · unfold DrawOk
+    rw [hU]
+    dsimp only
+    obtain ⟨D, hD, hn⟩ := hinst d hu
+    have hdl := Ins.setup_drawLaw (setupOf_some c.setup).2 c.ready_parts.1
+    rw [hdd, hz] at hdl
+    simp only [ProvedScope.drawLaw, hD] at hdl
+    have hlw : ProvedScope.lawWhy false D = none := by
+      cases e : ProvedScope.lawWhy false D with
+      | none => rfl
+      | some _ => rw [e] at hdl; cases hdl
+    obtain ⟨K, strata, hK⟩ := stratified_of_lawWhy hlw
+    obtain ⟨t, ht⟩ := draw_parse hdraw hdd
+    have hg := good_stratified (S.parse_wf _ _ ht) hD hK
+    refine ⟨fun hn' => ?_, hg, D, hD, by rw [hspec]; exact hn⟩
+    rw [hn'] at hg
+    rw [hn'] at hD
+    cases hD
+
 end FlockComplete.JsonRT
