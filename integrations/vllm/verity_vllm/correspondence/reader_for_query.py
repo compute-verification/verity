@@ -24,20 +24,32 @@ name): the export wrapper holds the served model under an attribute, so `model.m
 the collector.  It is determined from the Build's observed implementation paths (`result.json: attention_impls_observed`, keys =
 implementation module paths) by suffix match against the Program's module paths -- the one prefix every observed path is a suffix under
 -- never assumed.
+
+A HELD module path (`held_module_paths`) is resolved to the registered module it names: a module that another module holds under an
+attribute and calls by that name, outside every registered path (GLM-5.3's MoE runner calls the layer's shared expert as
+`_shared_experts._layer`, so a Build before the derive fix named all 75 layers' shared-expert Calls `_shared_experts._layer.<leaf>`).
+Held means the path's first component is no registered parameter's first component.  A held Call that reads parameters resolves to the
+module they are registered under when that module ends with the same leaf (`_shared_experts._layer.down_proj` reading
+`model.layers.4.mlp.shared_experts.down_proj.weight` is `model.layers.4.mlp.shared_experts.down_proj`: only that module reads its weight),
+which maps the holder `_shared_experts._layer` to `model.layers.4.mlp.shared_experts` for that Call; a held Call that reads no parameter
+resolves through its producers' holders (the shared expert's SiLU reads that layer's `gate_up_proj` rows, so it is that layer's
+`act_fn`).  Several or no candidates leave the path as recorded and count it (`provenance()["held_modules"]`): coverage then fails it.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import re
+from collections import Counter
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Iterable, Mapping
 
 from verity_vllm.correspondence.runtime import SCHEMA, CallCorrespondence, RuntimeCorrespondence, correspondence_digest, read_program_document
 
-from verity_vllm.query.program_view import ProgramView
+from verity_vllm.query.program_view import ProgramView, param_reads
 
-__all__ = ["CallName", "parse_call_name", "Correspondence", "implementation_prefix", "SOURCES"]
+__all__ = ["CallName", "parse_call_name", "Correspondence", "implementation_prefix", "held_module_paths", "SOURCES"]
 
 SOURCES = ("correspondence", "v1_annotations")
 _ROW_RE = re.compile(r"\[([^\[\]]*)\]$")
@@ -116,6 +128,51 @@ def implementation_prefix(program_modules: Iterable[str], implementation_paths: 
     return min(common, key=len)
 
 
+def _holder(module: str, registered: str) -> tuple[str, str] | None:
+    """(held holder, registered holder) when `module` and `registered` end with the same components below a non-empty held holder."""
+    a, b = module.split("."), registered.split(".")
+    k = 0
+    while k < min(len(a), len(b)) and a[-1 - k] == b[-1 - k]:
+        k += 1
+    if k == 0 or k == len(a) or k == len(b):
+        return None
+    return ".".join(a[:-k]), ".".join(b[:-k])
+
+
+def held_module_paths(P: ProgramView, names: Mapping[int, CallName]) -> tuple[dict[int, CallName], dict[str, Any]]:
+    """`names` with every held module path resolved (module docstring), and what was resolved: {"resolved": n, "unresolved": {path: n}}
+    (empty when the Program has no held path whose holder another Call resolved)."""
+    fields = {(p.id, port.name): port.name for p in P.params for port in p.port_table if "." in port.name}
+    roots = {f.split(".", 1)[0] for f in fields.values()}
+    if not roots:
+        return dict(names), {}
+    out = dict(names)
+    holder_of: dict[int, tuple[str, str]] = {}           # resolved held Call -> (held holder, registered holder)
+    holders: set[str] = set()                            # the held holders some Call resolved
+    unresolved: Counter = Counter()
+    held: dict[str, bool] = {}
+    for cid, n in names.items():
+        m = n.module
+        if not m or not held.setdefault(m, m.split(".", 1)[0] not in roots):
+            continue
+        c = P.call(cid)
+        pairs = {_holder(m, f.rsplit(".", 1)[0]) for v in param_reads(c) if (f := fields.get((v.call, v.port))) is not None}
+        if not pairs:
+            pairs = {holder_of[v.call] for v in c.reads if v.call >= 0 and v.call in holder_of}
+            pairs = {(h, x) for h, x in pairs if m == h or m.startswith(h + ".")}
+        if len(pairs) != 1 or None in pairs:
+            if any(m == h or m.startswith(h + ".") for h in holders):
+                unresolved[m] += 1
+            continue                                     # else no holder of this path resolved: not a held path we know
+        h, x = next(iter(pairs))
+        holder_of[cid] = (h, x)
+        holders.add(h)
+        out[cid] = dataclasses.replace(n, module=x + m[len(h):])
+    if not holder_of:
+        return out, {}
+    return out, {"resolved": len(holder_of), "unresolved": dict(unresolved)}
+
+
 class Correspondence:
     """The correspondence table of one ProgramView: Call id -> CallName (module first), plus the implementation-path map.
 
@@ -149,6 +206,7 @@ class Correspondence:
             self.names = {c.id: parse_call_name(c.name) for c in P.calls}
             self.source = "v1_annotations"
             self.digest = None
+        self.names, self.held = held_module_paths(P, self.names)
 
     @classmethod
     def of(cls, P: ProgramView, program_dir: str | None, *, implementation_paths: Iterable[str] = ()) -> "Correspondence":
@@ -178,6 +236,8 @@ class Correspondence:
             out["fallback"] = "annotations.node_hints / instance names parsed as <module>/<fx>[/<member>][<row>]"
         if self.problem:
             out["problem"] = self.problem
+        if self.held:
+            out["held_modules"] = self.held
         return out
 
     @cached_property
