@@ -335,14 +335,14 @@ static int run_pscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
   printf("{\"mode\": \"dscore\", \"driver\": \"pscore\", \"kind\": \"step\", \"B\": %d, \"L\": %d, \"place\": \"split\", "
          "\"fill_sms_req\": %d, \"sms\": %d, \"step_sms\": %d, \"fill_sms\": %d, \"spread\": {\"step_graph\": %d, "
          "\"fill\": %d, \"step2_graph\": %d, \"phase_sms\": %d}, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, "
-         "\"grid\": %d, \"chunk_macs\": %.6e, \"point\": %d, \"slots\": %d, \"cheat_S\": 0, \"prio\": [%d, %d], "
-         "\"kv_wrapped\": %s, \"setup_ms\": %.3f, \"rounds\": %d, \"K\": %d, "
+         "\"grid\": %d, \"chunk_macs\": %.6e, \"fixed_sms\": %d, \"point\": %d, \"slots\": %d, \"cheat_S\": 0, "
+         "\"prio\": [%d, %d], \"kv_wrapped\": %s, \"setup_ms\": %.3f, \"rounds\": %d, \"K\": %d, "
          "\"phase\": {\"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"node_prio\": %d, "
          "\"tile_macs\": %.6e, \"tiles_a_step\": %lld, \"tiles_short\": %lld, \"alone_mac_per_s\": %.6e, \"alone_mhz\": %.1f}, "
          "\"alone_fill\": {\"mac_per_s\": %.6e, \"mhz\": %.1f, \"watt\": %.1f, \"split_mac_per_s\": %.6e, "
          "\"phase_mac_per_s\": %.6e, ",
          B, L, fill_sms, d.sms, got[0], got[1], sp_step, sp_fill, sp_step2, psms, W, NC, S, f.tiles, f.grid, f.macs(),
-         point, POINT_SLOTS, lo, hi, wrapped ? "true" : "false", setup_ms, rounds, K, PW, PNC, PS, PT, pf.grid, pf.prio,
+         got[0], point, POINT_SLOTS, lo, hi, wrapped ? "true" : "false", setup_ms, rounds, K, PW, PNC, PS, PT, pf.grid, pf.prio,
          pf.tile_macs(), per_step, tiles_short, alone_phase, pmhz, alone_split + alone_phase, amhz, awatt, alone_split,
          alone_phase);
   print_round(r0);
