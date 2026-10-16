@@ -70,8 +70,9 @@ sha256sum "$B/ovl" | cut -c1-64 > "$O/ovl.sha256"
 python3 benchmarks/pouw/stage_cost/prep.py "$B/c" --rows "${MS// /,}" > "$O/prep.log" 2>&1 || { tail -20 "$O/prep.log"; exit 6; }
 # the cg arms' CGP1 files: stage t's operand (M x SK[t] int8, stage.cu's SK) as tile leaves of R rows, its own domain, one Ks
 SK=(4096 6144 256 4096 4096 14336)
+RS=$(printf '%s\n' $CG_RS $([[ " $PARTS " == *" eovl "* ]] && echo "$EG_R") | sort -un)
 for M in $MS; do
-  for R in $CG_RS; do
+  for R in $RS; do
     for t in 0 1 2 3 4 5; do
       python3 $G/reference.py params "$B/c/cg-$M-$R-$t.bin" $(((M + R - 1) / R * (SK[t] / 32))) $((256 * R)) --ks-seed 7 &
     done
@@ -140,7 +141,9 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
       for S in $EG_SS; do
         EG_S=$S CG_R=$EG_R CG_DUMP="$B/dump" EG_DUMP="$B/edump" ARMS="$EG_ARMS" "$B/ovl" ovl "$B/c" "$M" $EG_KS "r$REPS" \
           > "$O/eovl-$M-s$S.jsonl" 2>> "$O/errors.txt"
-        echo "eovl $M S=$S rc $?" >> "$O/rc.txt"
+        r=$?
+        echo "eovl $M S=$S rc $r" >> "$O/rc.txt"
+        [ $r = 0 ] || gf=10
         q
       done
     fi
