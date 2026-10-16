@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Level3.ArithFacts
+import Flock.With.Deployed
 
 /-!
 # Flock's deployed verifier in public-coin form (`Deploy.V`)
@@ -25,7 +26,8 @@ SHA-512 call an oracle query.
 
 `next_rej`, `next_coin` and `next_decide` are the verifier's three steps: a refusal and a coin make no query; a decision
 accepts exactly when the shipped verdict against `H` (`verifyWith (hOf H)`, `Zk.verifyWith (hOf H)`) and the custody
-checks are `.ok`, and its oracle log has `shaCalls (hOf H)` (`Zk.shaCalls`) entries.
+checks are `.ok`, and its oracle log has `shaCalls (hOf H)` (`Zk.shaCalls`) entries. At the SHA-512 oracle (`sha512`)
+the verdict is the deployed `verify` (`Zk.verify`) on every session the statement sets up (`next_decide_sha512`).
 -/
 
 namespace FlockDeploy
@@ -328,5 +330,50 @@ theorem next_decide_log (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.
   obtain ⟨-, hl⟩ := decision_eval H zk s spec sts x link c₁ mids f
   simp only [next, h, outOf, Claims.OC.eval_bind, Claims.OC.eval, List.append_nil]
   exact hl
+
+/-! ## At SHA-512 -/
+
+/-- A decision is made only on a statement that sets up, at its setup. -/
+theorem act_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    setupOf zk x = some (s, spec, sts) := by
+  unfold act at h
+  split at h
+  · cases h
+  · rename_i s' spec' sts' hs
+    repeat' split at h
+    all_goals first | (cases h; done) | (cases h; exact hs)
+
+/-- SHA-512 as an oracle on messages. -/
+def sha512 : Claims.Msg → Claims.Msg := fun m => Claims.toMsg (Sha512.hash (Claims.ofMsg m))
+
+theorem hOf_sha512 : Claims.hOf sha512 = Sha512.hash := by
+  funext b
+  simp [Claims.hOf, sha512]
+
+/-- **At SHA-512 the shipped verdict is the deployed verifier's** (`verify`, `Zk.verify`), on every session the
+statement sets up. -/
+theorem verdictWith_sha512 {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (h : setupOf zk x = some (s, spec, sts)) (record : String) (proofs : Array ByteArray) :
+    verdictWith zk (Claims.hOf sha512) spec (tabsOf sts) record proofs =
+      if zk then Zk.verify spec (tabsOf sts) record proofs else verify spec (tabsOf sts) record proofs := by
+  have hr := Ins.setup_read (setupOf_some h).2
+  rw [hOf_sha512]
+  unfold verdictWith tabsOf
+  cases zk
+  · exact (verify_eq_verifyWith_of_setupTables _ _ _ _ _ _ _ _ _ _ _ _ _ hr record proofs).symm
+  · exact (Zk.verify_eq_verifyWith_of_setupTables _ _ _ _ _ _ _ _ _ _ _ _ _ hr record proofs).symm
+
+/-- **The verifier's decision at SHA-512**: it accepts exactly when the deployed verifier (`verify`, or `Zk.verify`)
+accepts the record and proof files and the custody checks pass. -/
+theorem next_decide_sha512 {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    ((next zk x as cs).eval sha512).1 = .acc ↔
+      (if zk then Zk.verify spec (tabsOf sts) f.record f.proofs else verify spec (tabsOf sts) f.record f.proofs) =
+          .ok () ∧
+        checks zk s spec x link c₁ mids f = .ok () := by
+  rw [next_decide sha512 h, verdictWith_sha512 (act_decide h)]
 
 end FlockDeploy
