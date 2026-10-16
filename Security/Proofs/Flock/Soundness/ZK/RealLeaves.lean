@@ -33,7 +33,7 @@ set_option synthInstance.maxHeartbeats 1000000
 
 /-- **T1 over any finite set of leaves**: `ideal_leaves_swap` through an enumeration of the index. -/
 theorem ideal_leaves_swap_fintype {Y B C D ι : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
-    [Fintype ι] [DecidableEq ι] (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding My c δ₁)
+    [Fintype ι] [DecidableEq ι] (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁)
     (H : B × C → D) {Ω : Type} [Fintype Ω] [Nonempty Ω] (x : Ω → ι → B) (G : Ω → (ι → D) → Prop) :
     prCoin (fun p : Ω × (ι → Y) => G p.1 fun i => H (x p.1 i + My (p.2 i), c (p.2 i)))
       ≤ prCoin (fun p : Ω × (ι → B × Y) => G p.1 fun i => H ((p.2 i).1, c (p.2 i).2)) + Fintype.card ι * δ₁ := by
@@ -95,7 +95,7 @@ theorem prCoin_ne_top {C : Type} [Fintype C] [Nonempty C] (P : C → Prop) : prC
 /-- **T1 the other way**: ideal leaves are within `|ι|·δ₁` of real ones, by `ideal_leaves_swap_fintype` on the
 complement. -/
 theorem real_leaves_swap_fintype {Y B C D ι : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
-    [Fintype ι] [DecidableEq ι] (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding My c δ₁)
+    [Fintype ι] [DecidableEq ι] (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁)
     (H : B × C → D) {Ω : Type} [Fintype Ω] [Nonempty Ω] (x : Ω → ι → B) (G : Ω → (ι → D) → Prop) :
     prCoin (fun p : Ω × (ι → B × Y) => G p.1 fun i => H ((p.2 i).1, c (p.2 i).2))
       ≤ prCoin (fun p : Ω × (ι → Y) => G p.1 fun i => H (x p.1 i + My (p.2 i), c (p.2 i))) + Fintype.card ι * δ₁ := by
@@ -202,7 +202,7 @@ doesn't open is a real hm96 leaf of what it commits) and under `S_shvzk` with re
 leaves, level 0's and both pads trees' unopened ones, so `|Hid|` is at most the paper's `N_hid`, which counts every leaf of
 those trees: the bound is at least as strong. The proof moves each side to world `W₁` with `ideal_leaves_swap`, at `δ₁` per
 leaf, and there applies `table_shvzk`. -/
-theorem table_shvzk_hm96 {C : Type} (M : T.Hm96 C) {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding M.My M.cs δ₁)
+theorem table_shvzk_hm96 {C : Type} (M : T.Hm96 C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding M.My M.cs δ₁)
     (hrank : T.Rank) (hpad : T.PadOnto)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
     (w : W) (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w) (w0 : W) (E : T.View → Prop) :

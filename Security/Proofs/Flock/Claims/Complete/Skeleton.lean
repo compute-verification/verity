@@ -43,7 +43,7 @@ structure Case (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readab
   spec : SessionSpec
   sts : Array Flock.Stmt
   scope : Claims.Flock.Scope (deployPlain rel) x
-  rel_w : Claims.Flock.R H (deployPlain rel).parse x w
+  rel_w : Claims.Flock.R (deployPlain rel).parse x w
   ready : ready x = true
   good : ¬ Bad x r
   setup : setupOf false x = some (s, spec, sts)

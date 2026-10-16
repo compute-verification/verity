@@ -152,7 +152,7 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
     assert "preemptible" in json.loads(capsys.readouterr().out)["refused"]
     assert cli.main(["submit", NEBIUS, "--run-id", "r2", "--now", str(T), "--project", "verity", "--submitter", "w",
                      "--kind", "lean-audit"]) == 0
-    assert json.loads(capsys.readouterr().out)["max_s"] == 1200
+    assert json.loads(capsys.readouterr().out)["max_s"] == 10800
     assert cli.main(["submit", NEBIUS, "--run-id", "r3", "--now", str(T), "--project", "verity", "--submitter", "w",
                      "--kind", "lean-audit", "--node", "vy-nebius-1", "--gpu-host"]) == 0   # the old spelling, a hidden alias
     cap = capsys.readouterr()
@@ -164,10 +164,10 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
 KINDS = Path(__file__).parents[1] / "kinds"
 
 
-def test_the_repos_kinds_load_and_lean_audit_is_leans_cpu_m():
+def test_the_repos_kinds_load_and_lean_audit_is_leans_cpu_xl():
     reg = kinds.load(KINDS)
     k = reg["lean-audit"]
-    assert (k.owner, k.phase, k.max_wall_min, k.restart) == ("lean", "cpu-m", 20, "idempotent") and k.question
+    assert (k.owner, k.phase, k.max_wall_min, k.restart) == ("lean", "cpu-xl", 180, "idempotent") and k.question
     assert k.source["file"] == "kinds/lean.toml" and len(k.source["sha256"]) == 64
     assert kinds.kinds_dir(NEBIUS) == KINDS.resolve()
 
@@ -176,7 +176,7 @@ def test_a_registered_kind_supplies_what_the_job_leaves_unsaid_and_names_itself_
     out = submit.submit(model.load(NEBIUS), kinds.load(KINDS), run_id="r1", now=T, kind="lean-audit", project="verity",
                         submitter="proofs-w", custody_s=900)
     assert (out["node"], out["max_s"], out["job"]["cpus"], out["job"]["memory_gib"], out["job"]["max_s"]) == \
-        ("vy-nebius-1", 1200, 8, 32, 2100)
+        ("vy-nebius-1", 10800, 32, 280, 11700)
     assert out["kind"] == "lean-audit" and out["question"].startswith("Do core's Lean proofs") and out["warnings"] == []
     assert out["kind_source"]["file"] == "kinds/lean.toml" and "GPU_LEASE_WHO=lean-audit:proofs-w" in out["wrap"]
     assert out["disk_gb"] == kinds.DISK_GB
@@ -189,8 +189,8 @@ def test_the_held_rules_warn_and_never_refuse(tmp_path):
         submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", memory_gib=8)
     out = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=8)
     assert any("adhoc" in w for w in out["warnings"]) and any("no research question" in w for w in out["warnings"])
-    out = submit.submit(c, reg, run_id="r1", now=T, kind="lean-audit", project="verity", submitter="w", cpus=4, max_s=3600)
-    assert any("not its phase cpu-m" in w for w in out["warnings"]) and any("over its max_wall_min" in w for w in out["warnings"])
+    out = submit.submit(c, reg, run_id="r1", now=T, kind="lean-audit", project="verity", submitter="w", cpus=4, max_s=12000)
+    assert any("not its phase cpu-xl" in w for w in out["warnings"]) and any("over its max_wall_min" in w for w in out["warnings"])
     (tmp_path / "x.toml").write_text('[kinds.big]\nphase = "gpu1"\nmax_wall_min = 90\nquestion = "q"\n')
     w = kinds.warnings(kinds.load(tmp_path)["big"], "big", question="q", gpus=1, cpus=8, memory_gib=64, max_s=5400, preempt="never")
     assert w == ["a GPU job over 60 min: split it into chunks", "a GPU kind that isn't preemptible", "declares no outputs"]
@@ -203,7 +203,7 @@ def test_a_job_of_an_unregistered_kind_names_its_memory_cap():
     out = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=96)
     assert out["job"]["memory_gib"] == 96 and "MemoryMax=96G" in out["wrap"]
     out = submit.submit(c, reg, run_id="r1", now=T, kind="lean-audit", project="verity", submitter="w")
-    assert out["job"]["memory_gib"] == 32, "a registered kind's shape still gives its memory"
+    assert out["job"]["memory_gib"] == 280, "a registered kind's shape still gives its memory"
 
 
 def test_a_malformed_registry_names_its_file(tmp_path):

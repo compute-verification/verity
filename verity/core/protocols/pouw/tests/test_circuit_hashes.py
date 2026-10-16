@@ -4,11 +4,13 @@ from __future__ import annotations
 import hashlib
 import random
 import struct
+from dataclasses import replace
 
 import pytest
 
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
 from verity.ml.circuits.types import Array
 
 from verity.core.protocols.pouw.circuit import words as W
@@ -96,6 +98,19 @@ def test_route_u_step_and_c0():
     acc = rng.randrange(1 << 32)
     assert W.PouwDot16U8S8.evaluate(acc, *x, *(v & 0xFF for v in y)) == (acc + sum(a * b for a, b in zip(x, y))) & W.M32
     assert W.PouwNegBetaSum16.evaluate(acc, *(v & 0xFF for v in y)) == (acc - 128 * sum(y)) & W.M32
+
+
+def test_route_u_step_is_half_an_imma_step():
+    """The wrapping u8 x s8 IMMA step over k = 32 (`silicon.integer`, as the PRO 6000 computes it) is two route-U steps:
+    `PouwDot16U8S8_v1` over the first 16 products, then over the last 16."""
+    imma = replace(BLACKWELL_SM120_S8_M16N8K32_WRAP, dtype="u8")
+    rng = random.Random(5)
+    cases = [(acc, [xa] * 32, [yb] * 32) for acc in (0, 1, 2 ** 31 - 1, 2 ** 31, W.M32) for xa in (0, 255) for yb in (0x7F, 0x80)]
+    cases += [(rng.randrange(1 << 32), [rng.randrange(256) for _ in range(32)], [rng.randrange(256) for _ in range(32)])
+              for _ in range(20_000)]
+    for acc, x, y in cases:
+        half = W.PouwDot16U8S8.evaluate(acc, *x[:16], *y[:16])
+        assert imma.step(acc, x, y) == W.PouwDot16U8S8.evaluate(half, *x[16:], *y[16:]), (acc, x, y)
 
 
 def test_forming_primitives():

@@ -41,7 +41,7 @@ theorem recursiveZK_os_le {Ωa Ωp Ωos Ωo Ωs V : Type} [Fintype Ωa] [Nonempt
     (hOuter : ∀ a p y (E : V → Prop),
       prCoin (fun r : Ωo => E (view a (fun i => Flock.Guarantees.firewallLeaf (msgs a p i) (y i)) p y r))
         ≤ prCoin (fun s : Ωs => E (sim a (fun i => Flock.Guarantees.firewallLeaf (msgs a p i) (y i)) s)) + εo)
-    (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (E : Ωa × (Fin nh → ByteArray) × V → Prop) :
     prCoin (fun w : ((Ωa × Ωp) × Ωos) × Ωo =>
         E (w.1.1.1, (fun i => Flock.Guarantees.firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (ZkView.saltOfBytes (t w.1.2 i))),

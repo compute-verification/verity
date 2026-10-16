@@ -1,0 +1,61 @@
+{
+ "definitions": {
+  "Dsv4C128aGlobalTopk_v2{W=12,R=3,BS=2,NB=4}": {
+   "and": 417
+  },
+  "Dsv4C128aGlobalTopk_v2{W=128,R=128,BS=2,NB=16}": {
+   "and": 1730
+  },
+  "Dsv4C128aGlobalTopk_v2{W=16,R=4,BS=2,NB=8}": {
+   "and": 670
+  },
+  "Dsv4C128aLen_v2{W=128}": {
+   "and": 135
+  },
+  "Dsv4C128aLen_v2{W=12}": {
+   "and": 14
+  },
+  "Dsv4C128aLen_v2{W=16}": {
+   "and": 20
+  },
+  "Dsv4C128aLen_v2{W=8192}": {
+   "and": 8205
+  },
+  "Dsv4C128aPastSlot_v2{BS=2}": {
+   "and": 1
+  },
+  "Dsv4C128aSlot_v2{BS=2}": {
+   "and": 64
+  },
+  "Dsv4SwaIndices_v2{SW=128,BS=64,NB=64}": {
+   "and": 18743
+  },
+  "Dsv4SwaIndices_v2{SW=5,BS=2,NB=3}": {
+   "and": 1168
+  },
+  "Dsv4SwaIndices_v2{SW=8,BS=4,NB=8}": {
+   "and": 1872
+  },
+  "Dsv4SwaLanes_v2{SW=128,BS=64}": {
+   "and": 19681
+  },
+  "Dsv4SwaLanes_v2{SW=5,BS=2}": {
+   "and": 594
+  },
+  "Dsv4SwaLanes_v2{SW=8,BS=4}": {
+   "and": 1129
+  },
+  "Dsv4SwaWindow_v2{SW=128,BS=64,NB=16384}": {
+   "and": 1065318
+  },
+  "Dsv4SwaWindow_v2{SW=128,BS=64,NB=64}": {
+   "and": 4542
+  },
+  "Dsv4SwaWindow_v2{SW=5,BS=2,NB=3}": {
+   "and": 733
+  },
+  "Dsv4SwaWindow_v2{SW=8,BS=4,NB=8}": {
+   "and": 1015
+  }
+ }
+}

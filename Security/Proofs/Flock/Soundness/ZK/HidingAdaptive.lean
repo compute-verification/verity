@@ -55,7 +55,7 @@ theorem adaptiveLeaves_unique {n : ℕ} {B C D : Type} [Add B] (H : B × C → D
 `U_i` changes the probability of any event by at most `n·δ₁`. Each digest may read anything in `ω` and every earlier
 leaf; each salt is used only by its leaf. -/
 theorem ideal_leaves_adaptive {Y B C D : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
-    (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding My c δ₁) (H : B × C → D)
+    (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D)
     (n : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] (x : Ω → (i : Fin n) → (Fin i → D) → B)
     (G : Ω → (Fin n → D) → Prop) :
     prCoin (fun p : Ω × (Fin n → Y) => G p.1 (adaptiveLeaves H (x p.1) fun i => (My (p.2 i), c (p.2 i))))
