@@ -11,21 +11,26 @@
 // col % 128, b = bit e % 8 of digest byte e / 8).
 // Kernels:
 //   quant<false>, quant<true>  the activation quantizer from bf16: plain (round) and dithered (floor + b, with S's limbs
-//                    into the tail rows P_A = [S_hi | 0 | S_lo | 0], S = 256 S_hi + S_lo), so the dither is priced against
-//                    the quantizer plain serving runs anyway (k <= 4096: a warp's 4 rows hash their 32 patches at once)
-//   wedit            W' = W + U and the tail rows P_B = [U | 0 | U | 0], U's hashes in each block of 8 rows
+//                    into the tail rows P_A = [S_1 | S_2 | S_0 | 0], S = 256 (S_1 + S_2) + S_0, S_2 = 0 at k <= 4096), so
+//                    the dither is priced against the quantizer plain serving runs anyway (a warp's 4 rows hash a chunk's
+//                    32 patches at once, a chunk 4096 columns)
+//   wedit            W' = W + U and the tail rows P_B = [U | U | U | 0], U's hashes in each block of 8 rows
 //   qwe<ORD>         quant<true> and wedit in one launch (block orders: the quantizer's first, the edit's, interleaved)
-//   e_*              the GEMM: lpgemm.cu's 16-warp 128 x 128 TMA mainloop (fgemm.cu's ML) with the receipts' absorbs
-//                    interleaved with the MMAs, and the peel as a 2-atom tail (acc -= 256 S_hi U^T + S_lo U^T, the same
-//                    rows t_duo32's 4-atom tail reads). Interleaving: the absorb of tile j's running sum runs LAG MMAs
-//                    after tile j's MMA (each value is still in its accumulator then, so the absorb order and the receipts
-//                    are t_duo32's), and with TIE every TIE-th MMA's accumulator is xored with (z & zero), z the last
-//                    chain the previous absorb wrote and zero a kernel argument that is 0, so ptxas can't hoist a run of
-//                    MMAs ahead of the absorbs (without it, it issues IMMA NOP IMMA NOP ... and then the absorbs in a
-//                    burst). The refill's issuer (thread 0) computes its tile's place once a tile, not at every refill
+//   e_*, d64_*, x_*, t*_*  the GEMM: lpgemm.cu's 16-warp 128 x 128 TMA mainloop (fgemm.cu's ML) with the receipts'
+//                    absorbs interleaved with the MMAs, and the peel as a 2-atom tail (acc -= 256 S_1 U^T + S_0 U^T; with
+//                    S_2's atom a 3-atom tail at k > 4096; the rows t_duo32's 4-atom tail reads). Receipts (EL's RK): duo
+//                    every 32 steps (e_*: t_duo32's), duo every 64 (d64_*), P2-FF's XOR-in fold (x_*), and the tensor-byte
+//                    receipts TB4, TB4C, TB2W, TB1W (t4_*, t4c_*, t2w_*, t1w_*: fgemm.cu's). Interleaving: the absorb of
+//                    a running sum runs LAG MMAs after its tile's MMA (each value is still in its accumulator then, so the
+//                    absorb order and the receipts are the unscheduled ones), and with TIE every TIE-th MMA's accumulator
+//                    is xored with (z & zero), z the state the last absorb wrote and zero a kernel argument that is 0, so
+//                    ptxas can't hoist a run of MMAs ahead of the absorbs (without it, it issues IMMA NOP IMMA NOP ... and
+//                    then the absorbs in a burst). The refill's issuer (thread 0) computes its tile's place once a tile,
+//                    not at every refill
 // Modes:
 //   egemm gate DIR M N K SEED       every arm once on poisoned buffers: each GEMM's output against cuBLASLt's X W^T, each
-//                                   receipt arm's receipts against t_duo32's, a no-write control; tiles to DIR for egemm_ref.py
+//                                   duo32 kernel's receipts against t_duo32's and each other kernel's against its kind's
+//                                   first, a no-write control; tiles (every kernel's receipts) to DIR for egemm_ref.py
 //   egemm bench REPS M N K          hot items (about 20 ms each) interleaved across EG_ARMS, one JSON line
 //   egemm il REPS ARM BASE M N K    per call, ARM and BASE alternating (the slice's timing; EG_COLD=1: L2 flushed
 //                                   before each call), one JSON line
@@ -40,6 +45,30 @@
 constexpr uint32_t DITHER_TAG = 7;
 using MLW = ML<128, 128, 32, 3>;
 
+// The receipt kinds beyond fgemm.cu's DUO, TB4, TB4C, TB2W and TB1W (NONE: no receipts). DUO64: duo on every second
+// running sum only (the odd steps', so derive.py's tile_receipts on Ts[1::2]). XIN: P2-FF's XOR-in fold (pfill.cuh's NC 4
+// under -DPFILL_XIN), three ops a pair: y = (rotl(y, 7) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 on an
+// accumulator's four words, tile t into chain t % 4. Negative, so fgemm.cu's is_tb is false for them
+constexpr int DUO64 = -1, XIN = -2;
+// XIN's multipliers: pfill.cuh's key rule (odd, more than 2^8 from 0 mod 2^24, not ±1 mod 32) on the words
+// mix32(seed ^ (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (P2-FF draws them per tile from a SHA block;
+// either way two registers)
+__host__ __device__ inline bool xin_ok(uint32_t a) {
+  const uint32_t m = a & 0xFFFFFFu, r = a & 31u;
+  return (a & 1u) && m > 256u && m < (1u << 24) - 256u && r != 1u && r != 31u;
+}
+__host__ __device__ inline void xin_keys(uint32_t seed, uint32_t& a0, uint32_t& a1) {
+  int n = 0;
+  for (uint32_t i = 0; n < 2; i++) {
+    const uint32_t a = mix32(seed ^ (0x5A5A0000u + i));
+    if (xin_ok(a)) {
+      if (n == 0) a0 = a;
+      else a1 = a;
+      n++;
+    }
+  }
+}
+
 // d ^= z & zero in one LOP3 (LUT 0x78 = a ^ (b & c); ptxas otherwise splits it into an AND and an XOR), or (FMA) d += z zero
 // in one IMAD, on the FMA pipe
 template <bool FMA> DEV void tie(int& d, uint32_t z, uint32_t zero) {
@@ -47,130 +76,245 @@ template <bool FMA> DEV void tie(int& d, uint32_t z, uint32_t zero) {
   else asm("lop3.b32 %0, %0, %1, %2, 0x78;" : "+r"(d) : "r"(z), "r"(zero));
 }
 
-// TIE: a tie before every |TIE|-th MMA (0: none; negative: the IMAD tie); IC: the issuer's tile place computed once a tile
-template <int LAG, int TIE, bool IC = true> struct EL : MLW {
-  static_assert(LAG >= 0 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
+// RK: the receipt kind. A receipt's unit is the tiles one absorb reads (one tile; TB2W a pair, TB1W a row block), unit j
+// named by its last tile; LAG: unit j is absorbed after MMA j + LAG (past the atom's end, MMA j + LAG - 8 of the next), or
+// with LAG -1 after MMA min(2 j + 2, j + 7) (DUO64's spread: an absorb every second MMA over a receipting atom and the
+// next). TIE: a tie before every |TIE|-th MMA (0: none; negative: the IMAD tie) on the state the last absorb wrote
+template <int RK, int LAG, int TIE> struct EL : MLW {
+  static_assert(LAG >= -1 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
+  static constexpr bool R = RK != NONE, TB = is_tb(RK);
+  static constexpr int B = tb_base(RK);
+  static constexpr int NKR = RK == XIN ? 2 : TB ? NK<RK> : 1;   // key registers: XIN's a0, a1; a TB kind's B fragments
   using MLW::MLW;
-  // ML::issue with the refill's tile place cached: it recomputes it (raster's divisions) at every refill, in warp 0, which
-  // every warp then waits for at the next refill
   static constexpr int NST = (SMEM - 1024) / (STAGE + 16);   // ML's STAGES
   static_assert(NST == 3, "MLW's 3 stages");
+  // raster's tile place with group 8 (esetup checks tiles_m % 8 == 0, so every group has 8 rows) without its divisions,
+  // whose integer-division seed ptxas sometimes schedules so the SASS gate can't match it: a place keeps its group row
+  // blk and its rank r in the group, advanced by subtraction
+  struct Place { int blk, r; };
+  DEV void place_step(Place& p, int d) const {
+    p.r += d;
+    while (p.r >= 8 * tiles_n) { p.r -= 8 * tiles_n; p.blk++; }
+  }
+  DEV static void place_tile(const Place& p, int& tm, int& tn) { tm = 8 * p.blk + (p.r & 7); tn = p.r >> 3; }
+  // ML::issue with the refill's tile place kept: it recomputes it (raster's divisions) at every refill, in warp 0, which
+  // every warp then waits for at the next refill
   int ipt = -1, itm = 0, itn = 0;
+  Place ipl{0, 0};
   DEV void issue() {
-    if constexpr (!IC) {
-      MLW::issue();
+    if (pt >= tiles_m * tiles_n) return;
+    if (pt != ipt) { place_step(ipl, ipt < 0 ? pt : pt - ipt); place_tile(ipl, itm, itn); ipt = pt; }
+    mbar_wait(empty(ps), pph ^ 1);
+    mbar_expect_tx(full(ps), STAGE);
+    if (pkt < KT) {
+      tma_load(stage(ps), &maps->a, full(ps), pkt * BK, itm * (A_BYTES / BK));
+      tma_load(stage(ps) + A_BYTES, &maps->b, full(ps), pkt * BK, itn * ((STAGE - A_BYTES) / BK));
     } else {
-      if (pt >= tiles_m * tiles_n) return;
-      if (pt != ipt) { int b; tile_of(pt, b, itm, itn); ipt = pt; }
-      mbar_wait(empty(ps), pph ^ 1);
-      mbar_expect_tx(full(ps), STAGE);
-      if (pkt < KT) {
-        tma_load(stage(ps), &maps->a, full(ps), pkt * BK, itm * (A_BYTES / BK));
-        tma_load(stage(ps) + A_BYTES, &maps->b, full(ps), pkt * BK, itn * ((STAGE - A_BYTES) / BK));
-      } else {
-        tma_load(stage(ps), &maps->pa, full(ps), 0, pa_rows ? (itm * (A_BYTES / BK)) % pa_rows : itm * (A_BYTES / BK));
-        tma_load(stage(ps) + A_BYTES, &maps->pb, full(ps), 0, itn * ((STAGE - A_BYTES) / BK));
-      }
-      if (++pkt == steps) { pkt = 0; pt += gridDim.x; }
-      if (++ps == NST) { ps = 0; pph ^= 1; }
+      tma_load(stage(ps), &maps->pa, full(ps), 0, itm * (A_BYTES / BK));
+      tma_load(stage(ps) + A_BYTES, &maps->pb, full(ps), 0, itn * ((STAGE - A_BYTES) / BK));
     }
+    if (++pkt == steps) { pkt = 0; pt += gridDim.x; }
+    if (++ps == NST) { ps = 0; pph ^= 1; }
+  }
+  DEV void prologue() {
+    if (issuer) {
+      tma_acquire(&maps->a); tma_acquire(&maps->b); tma_acquire(&maps->pa); tma_acquire(&maps->pb);
+      for (int i = 0; i < NST; i++) issue();
+    }
+    __syncwarp();
   }
   DEV void release(uint32_t done) {
     mbar_release(done);
     if (issuer) issue();
     __syncwarp();
   }
-  template <int J> DEV static void ab(St (&ch)[8], const int (&acc)[MI][NI][4]) { absorb<DUO, J / NI, J % NI>(ch, acc[J / NI][J % NI]); }
-  template <int J> DEV static void flush(const int (&acc)[MI][NI][4], St (&ch)[8]) {
-    if constexpr (J < MI * NI) {
-      ab<J>(ch, acc);
-      flush<J + 1>(acc, ch);
+  // the schedule: atom POS of a stage receipts (DUO64: the odd ones, so the odd steps), unit j's first tile and slot
+  __host__ __device__ static constexpr bool rc(int pos) { return RK != DUO64 || pos % 2 == 1; }
+  __host__ __device__ static constexpr bool unit(int j) { return B == TB2W ? j % 2 == 1 : B == TB1W ? j % NI == NI - 1 : true; }
+  __host__ __device__ static constexpr int first(int j) { return B == TB2W ? j - 1 : B == TB1W ? j - (NI - 1) : j; }
+  __host__ __device__ static constexpr int slot(int j) { return LAG >= 0 ? j + LAG : 2 * j + 2 < j + 7 ? 2 * j + 2 : j + 7; }
+  __host__ __device__ static constexpr bool sched_ok() {
+    for (int j = 0; j < MI * NI; j++)
+      if (unit(j) && (slot(j) < j || slot(j) > first(j) + MI * NI - 1)) return false;
+    return true;
+  }
+  // the unit whose absorb ran last before MMA IDX of atom POS (the tie reads the state it wrote)
+  __host__ __device__ static constexpr int last_unit(int pos, int idx) {
+    for (int d = 1; d <= 4 * MI * NI; d++) {
+      int s = idx - d, p = pos, u = -1;
+      while (s < 0) { s += MI * NI; p = (p + 3) % 4; }
+      for (int j = 0; j < MI * NI; j++)
+        if (unit(j) && rc((p + 3) % 4) && slot(j) == s + MI * NI) u = j;
+      for (int j = 0; j < MI * NI; j++)
+        if (unit(j) && rc(p) && slot(j) == s) u = j;
+      if (u >= 0) return u;
+    }
+    return 0;
+  }
+  template <int J> DEV static uint32_t tz(const St (&ch)[8]) {
+    if constexpr (RK == XIN) return ch[J % 4].y;
+    else if constexpr (TB) return ch[1].z;
+    else return ch[4 * (J % 2) + 3].z;
+  }
+  // a TB kind's receipt accumulator R is ch[0].y, ch[0].z, ch[1].y, ch[1].z (fgemm.cu's rimma32 and rchain)
+  DEV static void rim(St (&ch)[8], uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t b0, uint32_t b1) {
+    asm("mma.sync.aligned.m16n8k32.row.col.s32.u8.s8.s32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, {%0, %1, %2, %3};"
+        : "+r"(ch[0].y), "+r"(ch[0].z), "+r"(ch[1].y), "+r"(ch[1].z)
+        : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+  }
+  DEV static void rch(St (&ch)[8], uint32_t b0, uint32_t b1) {
+    asm("mma.sync.aligned.m16n8k32.row.col.s32.u8.s8.s32 {%0, %1, %2, %3}, {%0, %1, %2, %3}, {%4, %5}, {%6, %6, %6, %6};"
+        : "+r"(ch[0].y), "+r"(ch[0].z), "+r"(ch[1].y), "+r"(ch[1].z)
+        : "r"(b0), "r"(b1), "r"(0));
+  }
+  // unit J's absorb (fgemm.cu's absorb and tb_at; XIN's fold)
+  template <int J> DEV static void ab(St (&ch)[8], const uint32_t (&kr)[NKR], const int (&acc)[MI][NI][4]) {
+    constexpr int mi = J / NI, ni = J % NI;
+    const int(&w)[4] = acc[mi][ni];
+    if constexpr (RK == DUO || RK == DUO64) {
+      absorb<DUO, mi, ni>(ch, w);
+    } else if constexpr (RK == XIN) {
+      St& c = ch[J % 4];
+      c.y = (rotl(c.y, 7) ^ (uint32_t)w[0]) * kr[0] + (uint32_t)w[1];
+      c.y = (rotl(c.y, 19) ^ (uint32_t)w[2]) * kr[1] + (uint32_t)w[3];
+    } else {
+      if constexpr (tb_chained(RK) && J == (B == TB2W ? 1 : B == TB1W ? NI - 1 : 0)) rch(ch, kr[NKP<RK>], kr[NKP<RK> + 1]);
+      if constexpr (B == TB4) {
+        rim(ch, (uint32_t)w[0], (uint32_t)w[1], (uint32_t)w[2], (uint32_t)w[3], kr[2 * J], kr[2 * J + 1]);
+      } else if constexpr (B == TB2W) {
+        const int(&x)[4] = acc[mi][ni - 1];
+        rim(ch, __byte_perm((uint32_t)x[0], (uint32_t)x[1], 0x5410), __byte_perm((uint32_t)x[2], (uint32_t)x[3], 0x5410),
+            __byte_perm((uint32_t)w[0], (uint32_t)w[1], 0x5410), __byte_perm((uint32_t)w[2], (uint32_t)w[3], 0x5410),
+            kr[2 * (J / 2)], kr[2 * (J / 2) + 1]);
+      } else if constexpr (B == TB1W) {
+        const int(&x0)[4] = acc[mi][0];
+        const int(&x1)[4] = acc[mi][1];
+        const int(&x2)[4] = acc[mi][2];
+        auto b1 = [](const int(&p)[4], const int(&q)[4], int h) {
+          return __byte_perm(__byte_perm((uint32_t)p[h], (uint32_t)p[h + 1], 0x0051), __byte_perm((uint32_t)q[h], (uint32_t)q[h + 1], 0x5100), 0x7610);
+        };
+        rim(ch, b1(x0, x1, 0), b1(x0, x1, 2), b1(x2, w, 0), b1(x2, w, 2), kr[2 * mi], kr[2 * mi + 1]);
+      }
     }
   }
-  // one atom; after MMA IDX, the absorb of tile IDX - LAG (of the previous atom's when negative; none in a tile's first)
-  template <bool R, bool FIRST, int IDX = 0>
-  DEV static void atom(int (&acc)[MI][NI][4], St (&ch)[8], const uint32_t (&fa)[MI][4], const uint32_t (&fb)[NI][2], uint32_t zero) {
+  // the absorbs at slot S: SELF, this atom's units; PREV, the previous atom's (slot S + 8)
+  template <bool SELF, bool PREV, int S, int J = 0>
+  DEV static void abs_at(St (&ch)[8], const uint32_t (&kr)[NKR], const int (&acc)[MI][NI][4]) {
+    if constexpr (J < MI * NI) {
+      if constexpr (unit(J) && ((SELF && slot(J) == S) || (PREV && slot(J) == S + MI * NI))) ab<J>(ch, kr, acc);
+      abs_at<SELF, PREV, S, J + 1>(ch, kr, acc);
+    }
+  }
+  template <int S = 0> DEV static void flush(St (&ch)[8], const uint32_t (&kr)[NKR], const int (&acc)[MI][NI][4]) {
+    if constexpr (S < MI * NI) {
+      abs_at<false, true, S>(ch, kr, acc);
+      flush<S + 1>(ch, kr, acc);
+    }
+  }
+  // atom POS of a stage: after MMA IDX, the absorbs the schedule puts at slot IDX (none of a previous atom in a tile's first)
+  template <bool FIRST, int POS, int IDX = 0>
+  DEV static void atom(int (&acc)[MI][NI][4], St (&ch)[8], const uint32_t (&kr)[NKR], const uint32_t (&fa)[MI][4],
+                       const uint32_t (&fb)[NI][2], uint32_t zero) {
     if constexpr (IDX < MI * NI) {
-      constexpr int mi = IDX / NI, ni = IDX % NI, P = IDX - LAG;
+      constexpr int mi = IDX / NI, ni = IDX % NI;
       if constexpr (FIRST) {
         imma0(acc[mi][ni], fa[mi], fb[ni]);
       } else {
-        if constexpr (R && TIE != 0 && IDX % (TIE > 0 ? TIE : TIE < 0 ? -TIE : 1) == 0) {
-          constexpr int TP = (IDX - 1 - LAG + 2 * MI * NI) % (MI * NI);   // the tile the previous absorb took
-          tie<(TIE < 0)>(acc[mi][ni][0], ch[4 * (TP % 2) + 3].z, zero);
-        }
+        if constexpr (R && TIE != 0 && IDX % (TIE > 0 ? TIE : TIE < 0 ? -TIE : 1) == 0)
+          tie<(TIE < 0)>(acc[mi][ni][0], tz<last_unit(POS, IDX)>(ch), zero);
         imma(acc[mi][ni], fa[mi], fb[ni]);
       }
-      if constexpr (R && P >= 0) ab<P>(ch, acc);
-      else if constexpr (R && !FIRST) ab<P + MI * NI>(ch, acc);
-      atom<R, FIRST, IDX + 1>(acc, ch, fa, fb, zero);
+      abs_at<false, R && !FIRST && rc((POS + 3) % 4), IDX>(ch, kr, acc);
+      abs_at<R && rc(POS), false, IDX>(ch, kr, acc);
+      atom<FIRST, POS, IDX + 1>(acc, ch, kr, fa, fb, zero);
     }
   }
-  template <bool R, bool FIRST, bool LAST>
-  DEV void stage_il(int (&acc)[MI][NI][4], St (&ch)[8], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[2][NI][2], uint32_t zero) {
+  template <bool FIRST, bool LAST>
+  DEV void stage_il(int (&acc)[MI][NI][4], St (&ch)[8], const uint32_t (&kr)[NKR], uint32_t (&fa)[2][MI][4],
+                    uint32_t (&fb)[2][NI][2], uint32_t zero) {
     const uint32_t sb = stage(s), done = empty(s);
     load(fa[1], fb[1], sb, 1);
-    atom<R, FIRST>(acc, ch, fa[0], fb[0], zero);
+    atom<FIRST, 0>(acc, ch, kr, fa[0], fb[0], zero);
     load(fa[0], fb[0], sb, 2);
-    atom<R, false>(acc, ch, fa[1], fb[1], zero);
+    atom<false, 1>(acc, ch, kr, fa[1], fb[1], zero);
     load(fa[1], fb[1], sb, 3);
-    atom<R, false>(acc, ch, fa[0], fb[0], zero);
+    atom<false, 2>(acc, ch, kr, fa[0], fb[0], zero);
     advance();
     if (!LAST) {
       mbar_wait_warp(full(s), ph);
       load(fa[0], fb[0], stage(s), 0);
     }
-    atom<R, false>(acc, ch, fa[1], fb[1], zero);
+    atom<false, 3>(acc, ch, kr, fa[1], fb[1], zero);
     release(done);
   }
-  template <bool R> DEV void tile_il(int K, int (&acc)[MI][NI][4], St (&ch)[8], uint32_t zero) {
+  DEV void tile_il(int K, int (&acc)[MI][NI][4], St (&ch)[8], const uint32_t (&kr)[NKR], uint32_t zero) {
+    static_assert(sched_ok(), "unit j is absorbed after its last tile's MMA and before its first tile's next");
     const int KT = K / BK;
     uint32_t fa[2][MI][4], fb[2][NI][2];
     mbar_wait_warp(full(s), ph);
     load(fa[0], fb[0], stage(s), 0);
     if (KT == 1) {
-      stage_il<R, true, true>(acc, ch, fa, fb, zero);
+      stage_il<true, true>(acc, ch, kr, fa, fb, zero);
     } else {
-      stage_il<R, true, false>(acc, ch, fa, fb, zero);
+      stage_il<true, false>(acc, ch, kr, fa, fb, zero);
 #pragma unroll 1
-      for (int kt = 1; kt < KT - 1; kt++) stage_il<R, false, false>(acc, ch, fa, fb, zero);
-      stage_il<R, false, true>(acc, ch, fa, fb, zero);
+      for (int kt = 1; kt < KT - 1; kt++) stage_il<false, false>(acc, ch, kr, fa, fb, zero);
+      stage_il<false, true>(acc, ch, kr, fa, fb, zero);
     }
-    if constexpr (R) flush<MI * NI - LAG>(acc, ch);
+    if constexpr (R) flush(ch, kr, acc);
   }
-  // the tail stage's rows P_A = [S_hi | 0 | S_lo | 0], P_B = [U | 0 | U | 0]: atoms 0 and 2
-  DEV void peel2(int (&acc)[MI][NI][4]) {
+  // the tail stage's rows P_A = [S_1 | S_2 | S_0 | 0], P_B = [U | U | U | 0] (S = 256 (S_1 + S_2) + S_0, S_0 the low byte
+  // as s8, S_1 the rest clamped to ±127, so S_2 = 0 while |S| <= 127 256): acc -= 256 (S_1 + S_2) U^T + S_0 U^T, atoms 0
+  // and 2, and atom 1 if THREE (atoms 0 and 1, then 2, in two passes, so it holds two atoms' fragments as the 2-atom
+  // tail does)
+  template <bool THREE> DEV void peel(int (&acc)[MI][NI][4]) {
     mbar_wait_warp(full(s), ph);
     const uint32_t tb = stage(s);
     uint32_t fb[2][NI][2];
     load_b(fb[0], tb, 0);
-    load_b(fb[1], tb, 2);
+    load_b(fb[1], tb, THREE ? 1 : 2);
 #pragma unroll
     for (int mi = 0; mi < MI; mi++) {
       uint32_t fa[2][4];
       load_a(fa[0], tb, 0, mi);
-      load_a(fa[1], tb, 2, mi);
+      load_a(fa[1], tb, THREE ? 1 : 2, mi);
 #pragma unroll
       for (int ni = 0; ni < NI; ni++) {
         int t1[4], t2[4];
         imma0(t1, fa[0], fb[0][ni]);
-        imma0(t2, fa[1], fb[1][ni]);
+        if constexpr (THREE) imma(t1, fa[1], fb[1][ni]);
+        else imma0(t2, fa[1], fb[1][ni]);
 #pragma unroll
         for (int e = 0; e < 4; e++)
-          acc[mi][ni][e] = (int)((uint32_t)acc[mi][ni][e] - ((uint32_t)t1[e] << 8) - (uint32_t)t2[e]);
+          acc[mi][ni][e] = (int)((uint32_t)acc[mi][ni][e] - ((uint32_t)t1[e] << 8) - (THREE ? 0u : (uint32_t)t2[e]));
+      }
+    }
+    if constexpr (THREE) {
+      load_b(fb[0], tb, 2);
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++) {
+        uint32_t fa[4];
+        load_a(fa, tb, 2, mi);
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++) {
+          int t2[4];
+          imma0(t2, fa, fb[0][ni]);
+#pragma unroll
+          for (int e = 0; e < 4; e++) acc[mi][ni][e] = (int)((uint32_t)acc[mi][ni][e] - (uint32_t)t2[e]);
+        }
       }
     }
     release(empty(s));
     advance();
   }
 };
+constexpr int PEEL2_MAXK = 4096;   // |S| <= 128 k / 32, so S_2 = 0 at k <= 4096; a longer k takes the 3-atom tail
 
-template <bool R, int LAG, int TIE, bool IC> DEV void e_body(const Args& a) {
-  using L = EL<LAG, TIE, IC>;
+template <int RK, int LAG, int TIE, bool THREE> DEV void e_body(const Args& a) {
+  using L = EL<RK, LAG, TIE>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, true, 1);
-  ml.pa_rows = a.pa_rows;
   ml.init(threadIdx.x);
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   ml.prologue();
@@ -178,19 +322,25 @@ template <bool R, int LAG, int TIE, bool IC> DEV void e_body(const Args& a) {
   const int tiles_m = a.M / 128, tiles_n = a.N / 128;
   const int wm = warp / L::WARPS_N, wn = warp % L::WARPS_N, g = lane >> 2, q = lane & 3, ctid = threadIdx.x;
   const uint32_t zero = (uint32_t)a.KR;
+  uint32_t kr[L::NKR];
+  if constexpr (RK == XIN) xin_keys(a.seed, kr[0], kr[1]);
+  else if constexpr (L::TB) L::template keys<RK>(kr, lane);
+  else kr[0] = 0;
+  typename L::Place pl{0, 0};
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
-    int tm, tn, bi;
-    ml.tile_of(t, bi, tm, tn);
+    int tm, tn;
+    ml.place_step(pl, t == (int)blockIdx.x ? t : (int)gridDim.x);
+    L::place_tile(pl, tm, tn);
     const uint32_t tile_id = tm * tiles_n + tn;
     St ch[8];
 #pragma unroll
     for (int e = 0; e < 8; e++) {
-      ch[e].y = mix32(a.seed ^ mix32((tile_id * L::NCT + ctid) * 8 + e));
-      ch[e].z = mix32(ch[e].y + 0x9E3779B9u);
+      ch[e].y = L::TB ? 0u : mix32(a.seed ^ mix32((tile_id * L::NCT + ctid) * 8 + e));
+      ch[e].z = L::TB ? 0u : mix32(ch[e].y + 0x9E3779B9u);
     }
     int acc[MI][NI][4];
-    ml.template tile_il<R>(a.K, acc, ch, zero);
-    ml.peel2(acc);
+    ml.tile_il(a.K, acc, ch, kr, zero);
+    ml.template peel<THREE>(acc);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
 #pragma unroll
     for (int mi = 0; mi < MI; mi++)
@@ -200,110 +350,138 @@ template <bool R, int LAG, int TIE, bool IC> DEV void e_body(const Args& a) {
         *reinterpret_cast<int2*>(p) = make_int2(acc[mi][ni][0], acc[mi][ni][1]);
         *reinterpret_cast<int2*>(p + (size_t)8 * a.N) = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
       }
-    if constexpr (R) {
+    if constexpr (L::R) {
       uint4* r = reinterpret_cast<uint4*>(a.R) + ((size_t)tile_id * L::NCT + ctid) * 2;
-      r[0] = make_uint4(finish<DUO>(ch, 0), finish<DUO>(ch, 1), finish<DUO>(ch, 2), finish<DUO>(ch, 3));
-      r[1] = make_uint4(finish<DUO>(ch, 4), finish<DUO>(ch, 5), finish<DUO>(ch, 6), finish<DUO>(ch, 7));
+      if constexpr (RK == XIN) {
+        r[0] = make_uint4(ch[0].y, ch[1].y, ch[2].y, ch[3].y);
+        r[1] = make_uint4(0, 0, 0, 0);
+      } else if constexpr (L::TB) {
+        r[0] = make_uint4(ch[0].y, ch[0].z, ch[1].y, ch[1].z);
+        r[1] = make_uint4(0, 0, 0, 0);
+      } else {
+        r[0] = make_uint4(finish<DUO>(ch, 0), finish<DUO>(ch, 1), finish<DUO>(ch, 2), finish<DUO>(ch, 3));
+        r[1] = make_uint4(finish<DUO>(ch, 4), finish<DUO>(ch, 5), finish<DUO>(ch, 6), finish<DUO>(ch, 7));
+      }
     }
   }
 }
-// e_l<LAG><tie>: tie h every second MMA, q every fourth, o every eighth, none if absent; m: the IMAD tie; _nc: ML's issuer
-#define EGEMM(NAME, R, LAG, TIE, IC) \
-  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<R, LAG, TIE, IC>(a); }
-EGEMM(e_plain, false, 0, 0, true)
-EGEMM(e_plain_nc, false, 0, 0, false)
-EGEMM(e_l1h, true, 1, 2, true)
-EGEMM(e_l2, true, 2, 0, true)
-EGEMM(e_l2h, true, 2, 2, true)
-EGEMM(e_l2h_nc, true, 2, 2, false)
-EGEMM(e_l2q, true, 2, 4, true)
-EGEMM(e_l3h, true, 3, 2, true)
-EGEMM(e_l3q, true, 3, 4, true)
-EGEMM(e_l4h, true, 4, 2, true)
-EGEMM(e_l2hm, true, 2, -2, true)
-EGEMM(e_l2qm, true, 2, -4, true)
-EGEMM(e_l3qm, true, 3, -4, true)
-EGEMM(e_l2o, true, 2, 8, true)
-EGEMM(e_l3o, true, 3, 8, true)
-EGEMM(e_l4q, true, 4, 4, true)
+// <kind>_l<LAG><tie>: e duo, d64 DUO64, x XIN, t4/t4c/t2w/t1w the TB kinds; l s the spread schedule; tie h every second
+// MMA, q every fourth, o every eighth, none if absent; m: the IMAD tie. NAME_k3 is NAME with the 3-atom tail (k > 4096;
+// one kernel with both tails behind a branch on K spills 50 bytes more in the 2-atom one)
+#define EGEMM(NAME, RK, LAG, TIE)                                                                                         \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, false>(a); } \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_k3(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, true>(a); }
+EGEMM(e_plain, NONE, 0, 0)
+EGEMM(e_l2h, DUO, 2, 2)
+EGEMM(e_l2q, DUO, 2, 4)
+EGEMM(e_l3qm, DUO, 3, -4)
+EGEMM(e_l2o, DUO, 2, 8)
+EGEMM(e_l4q, DUO, 4, 4)
+EGEMM(d64_l2q, DUO64, 2, 4)
+EGEMM(d64_l7q, DUO64, 7, 4)
+EGEMM(d64_lsq, DUO64, -1, 4)
+EGEMM(d64_lsqm, DUO64, -1, -4)
+EGEMM(x_l2, XIN, 2, 0)
+EGEMM(x_l2q, XIN, 2, 4)
+EGEMM(x_l3qm, XIN, 3, -4)
+EGEMM(x_l2o, XIN, 2, 8)
+EGEMM(t4_l2, TB4, 2, 0)
+EGEMM(t4c_l2, TB4C, 2, 0)
+EGEMM(t2w_l0, TB2W, 0, 0)
+EGEMM(t2w_l2, TB2W, 2, 0)
+EGEMM(t1w_l0, TB1W, 0, 0)
+EGEMM(t1w_l2, TB1W, 2, 0)
 
 // ---------------------------------------------------------------- the operands
 // x (rows x k bf16) to X (rows x k int8): a warp a group of 4 rows, its lanes 8 columns each (512 contiguous bytes of x a
-// step), 8 warps a block (blk); DITHER: X = clamp(floor(x inv_s), -127, 126) + b and P_A's rows [S_hi | 0 | S_lo | 0]
-// (lane c' of the warp ends with S at c = 8 (c' % 4) + c' / 4 after a reduce-scatter over the 8 lanes holding that
-// column's partial sums), else X = clamp(rint(x inv_s), -127, 127). dgs: 8 x 512 words of shared memory (DITHER)
+// step), 8 warps a block (blk), in chunks of 4096 columns (32 patches, one a lane to hash); DITHER: X = clamp(floor(x
+// inv_s), -127, 126) + b and P_A's rows [S_1 | S_2 | S_0 | 0] (EL::peel's; lane c' of the warp ends with S at
+// c = 8 (c' % 4) + c' / 4 after a reduce-scatter over the 8 lanes holding that column's partial sums), else
+// X = clamp(rint(x inv_s), -127, 127). dgs: 8 x 512 words of shared memory, sps: 8 x 128 (DITHER)
 template <bool DITHER>
-DEV void quant_blk(int blk, uint32_t* dgs, const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA, int rows,
-                   int k, float inv_s, const Sig& sg) {
+DEV void quant_blk(int blk, uint32_t* dgs, int* sps, const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
+                   int rows, int k, float inv_s, const Sig& sg) {
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blk * 8 + warp;
   if (grp * 4 >= rows) return;
-  const int kb = k / 128, steps = k / 256;
+  const int kb = k / 128;
   uint32_t* dg = dgs + (DITHER ? 512 * warp : 0);   // the warp's 32 patch digests, digest byte order
-  if constexpr (DITHER) {
-    if (lane < kb) {
-      uint64_t st[8];
-      sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | ((uint64_t)grp * kb + lane), st);
-#pragma unroll
-      for (int i = 0; i < 8; i++) {
-        dg[16 * lane + 2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
-        dg[16 * lane + 2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
-      }
-    }
-    __syncwarp();
-  }
+  int* sp = sps + (DITHER ? 128 * warp : 0);         // S over the chunks so far (k > 4096): lane c' at 32 rr + c
   const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dg);
 #pragma unroll 1
-  for (int rr = 0; rr < 4; rr++) {
-    const size_t r = (size_t)grp * 4 + rr;
-    const uint4* src = reinterpret_cast<const uint4*>(x + r * k);
-    uint2* dst = reinterpret_cast<uint2*>(X + r * k);
-    int v[8] = {0, 0, 0, 0, 0, 0, 0, 0};   // S's partial sums at c = 8 (lane % 4) + i
-#pragma unroll 4
-    for (int it = 0; it < steps; it++) {
-      const int ch = it * 32 + lane;   // columns 8 ch .. 8 ch + 7
-      const uint4 w = __ldg(src + ch);
-      uint32_t bits = 0;
-      if constexpr (DITHER) bits = bytes[64 * (ch / 16) + 16 * rr + ch % 16];
-      const uint32_t ww[4] = {w.x, w.y, w.z, w.w};
-      int qv[8];
+  for (int p0 = 0; p0 < kb; p0 += 32) {
+    const int np = min(32, kb - p0), steps = np / 2;
+    if constexpr (DITHER) {
+      if (p0) __syncwarp();
+      if (lane < np) {
+        uint64_t st[8];
+        sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | ((uint64_t)grp * kb + p0 + lane), st);
 #pragma unroll
-      for (int h = 0; h < 4; h++) {
-        const float f0 = __uint_as_float(ww[h] << 16) * inv_s, f1 = __uint_as_float(ww[h] & 0xFFFF0000u) * inv_s;
-        if constexpr (DITHER) {
-          qv[2 * h] = min(max(__float2int_rd(f0), -127), 126) + (int)((bits >> (2 * h)) & 1u);
-          qv[2 * h + 1] = min(max(__float2int_rd(f1), -127), 126) + (int)((bits >> (2 * h + 1)) & 1u);
-        } else {
-          qv[2 * h] = min(max(__float2int_rn(f0), -127), 127);
-          qv[2 * h + 1] = min(max(__float2int_rn(f1), -127), 127);
+        for (int i = 0; i < 8; i++) {
+          dg[16 * lane + 2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+          dg[16 * lane + 2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
         }
       }
-      if constexpr (DITHER) {
-#pragma unroll
-        for (int i = 0; i < 8; i++) v[i] += qv[i];
-      }
-      const uint32_t lo = __byte_perm(__byte_perm(qv[0], qv[1], 0x0040), __byte_perm(qv[2], qv[3], 0x0040), 0x5410);
-      const uint32_t hi = __byte_perm(__byte_perm(qv[4], qv[5], 0x0040), __byte_perm(qv[6], qv[7], 0x0040), 0x5410);
-      dst[ch] = make_uint2(lo, hi);
+      __syncwarp();
     }
-    if constexpr (DITHER) {
-      const bool b4 = lane & 16, b3 = lane & 8, b2 = lane & 4;
+#pragma unroll 1
+    for (int rr = 0; rr < 4; rr++) {
+      const size_t r = (size_t)grp * 4 + rr;
+      const uint4* src = reinterpret_cast<const uint4*>(x + r * k) + 16 * p0;
+      uint2* dst = reinterpret_cast<uint2*>(X + r * k) + 16 * p0;
+      int v[8] = {0, 0, 0, 0, 0, 0, 0, 0};   // S's partial sums at c = 8 (lane % 4) + i
+#pragma unroll 4
+      for (int it = 0; it < steps; it++) {
+        const int ch = it * 32 + lane;   // the chunk's columns 8 ch .. 8 ch + 7
+        const uint4 w = __ldg(src + ch);
+        uint32_t bits = 0;
+        if constexpr (DITHER) bits = bytes[64 * (ch / 16) + 16 * rr + ch % 16];
+        const uint32_t ww[4] = {w.x, w.y, w.z, w.w};
+        int qv[8];
 #pragma unroll
-      for (int i = 0; i < 4; i++) {
-        const int send = b4 ? v[i] : v[i + 4], keep = b4 ? v[i + 4] : v[i];
-        v[i] = keep + __shfl_xor_sync(~0u, send, 16);
-      }
+        for (int h = 0; h < 4; h++) {
+          const float f0 = __uint_as_float(ww[h] << 16) * inv_s, f1 = __uint_as_float(ww[h] & 0xFFFF0000u) * inv_s;
+          if constexpr (DITHER) {
+            qv[2 * h] = min(max(__float2int_rd(f0), -127), 126) + (int)((bits >> (2 * h)) & 1u);
+            qv[2 * h + 1] = min(max(__float2int_rd(f1), -127), 126) + (int)((bits >> (2 * h + 1)) & 1u);
+          } else {
+            qv[2 * h] = min(max(__float2int_rn(f0), -127), 127);
+            qv[2 * h + 1] = min(max(__float2int_rn(f1), -127), 127);
+          }
+        }
+        if constexpr (DITHER) {
 #pragma unroll
-      for (int i = 0; i < 2; i++) {
-        const int send = b3 ? v[i] : v[i + 2], keep = b3 ? v[i + 2] : v[i];
-        v[i] = keep + __shfl_xor_sync(~0u, send, 8);
+          for (int i = 0; i < 8; i++) v[i] += qv[i];
+        }
+        const uint32_t lo = __byte_perm(__byte_perm(qv[0], qv[1], 0x0040), __byte_perm(qv[2], qv[3], 0x0040), 0x5410);
+        const uint32_t hi = __byte_perm(__byte_perm(qv[4], qv[5], 0x0040), __byte_perm(qv[6], qv[7], 0x0040), 0x5410);
+        dst[ch] = make_uint2(lo, hi);
       }
-      {
-        const int send = b2 ? v[0] : v[1], keep = b2 ? v[1] : v[0];
-        v[0] = keep + __shfl_xor_sync(~0u, send, 4);
+      if constexpr (DITHER) {
+        const bool b4 = lane & 16, b3 = lane & 8, b2 = lane & 4;
+#pragma unroll
+        for (int i = 0; i < 4; i++) {
+          const int send = b4 ? v[i] : v[i + 4], keep = b4 ? v[i + 4] : v[i];
+          v[i] = keep + __shfl_xor_sync(~0u, send, 16);
+        }
+#pragma unroll
+        for (int i = 0; i < 2; i++) {
+          const int send = b3 ? v[i] : v[i + 2], keep = b3 ? v[i + 2] : v[i];
+          v[i] = keep + __shfl_xor_sync(~0u, send, 8);
+        }
+        {
+          const int send = b2 ? v[0] : v[1], keep = b2 ? v[1] : v[0];
+          v[0] = keep + __shfl_xor_sync(~0u, send, 4);
+        }
+        const int c = 8 * (lane & 3) + (lane >> 2);
+        int S = v[0];
+        if (kb > 32) {
+          if (p0) S += sp[32 * rr + c];
+          if (p0 + 32 < kb) { sp[32 * rr + c] = S; continue; }
+        }
+        const int s0 = (int)(int8_t)(S & 0xFF), sh = (S - s0) / 256, s1 = min(max(sh, -127), 127);
+        int8_t* pr = PA + r * 128;
+        pr[c] = (int8_t)s1; pr[32 + c] = (int8_t)(sh - s1); pr[64 + c] = (int8_t)s0; pr[96 + c] = 0;
       }
-      const int c = 8 * (lane & 3) + (lane >> 2), S = v[0], slo = (int)(int8_t)(S & 0xFF), shi = (S - slo) / 256;
-      int8_t* pr = PA + r * 128;
-      pr[c] = (int8_t)shi; pr[32 + c] = 0; pr[64 + c] = (int8_t)slo; pr[96 + c] = 0;
     }
   }
 }
@@ -312,11 +490,13 @@ template <bool DITHER>
 __global__ void __launch_bounds__(256) quant(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
                                              int rows, int k, float inv_s, const __grid_constant__ Sig sg) {
   __shared__ uint32_t dg[DITHER ? 8 * 512 : 1];
-  quant_blk<DITHER>(blockIdx.x, dg, x, X, PA, rows, k, inv_s, sg);
+  __shared__ int sp[DITHER ? 8 * 128 : 1];
+  quant_blk<DITHER>(blockIdx.x, dg, sp, x, X, PA, rows, k, inv_s, sg);
 }
 
-// W' = W + U (W'_jk = W_jk + U_{j, k mod 32}) and P_B's rows [U | 0 | U | 0]: a block (blk) 8 rows, its threads loading
-// W's chunks while threads 0..3 hash U's blocks (rows 2j, 2j + 1); k <= 4096. us: 64 words of shared memory
+// W' = W + U (W'_jk = W_jk + U_{j, k mod 32}) and P_B's rows [U | U | U | 0]: a block (blk) 8 rows, its threads loading
+// W's first 16-byte chunks (8 a thread, all of them at k <= 4096) while threads 0..3 hash U's blocks (rows 2j, 2j + 1).
+// us: 64 words of shared memory
 DEV void wedit_blk(int blk, uint32_t* us, const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB, int k,
                    const Sig& sg) {
   const int r0 = blk * 8, t = threadIdx.x, cpr = k / 16, total = 8 * cpr;
@@ -345,16 +525,24 @@ DEV void wedit_blk(int blk, uint32_t* us, const uint8_t* __restrict__ W, uint8_t
   __syncthreads();
   {
     const int rr = t / 32, wq = t % 32;
-    reinterpret_cast<uint32_t*>(PB + (size_t)(r0 + rr) * 128)[wq] = (wq / 8) % 2 ? 0u : us[8 * rr + wq % 8];
+    reinterpret_cast<uint32_t*>(PB + (size_t)(r0 + rr) * 128)[wq] = wq / 8 == 3 ? 0u : us[8 * rr + wq % 8];
   }
   uint4* dst = reinterpret_cast<uint4*>(Wp + (size_t)r0 * k);
+#pragma unroll 1
+  for (int c0 = 0; c0 < total; c0 += 256 * MAXC) {
+    if (c0) {
 #pragma unroll
-  for (int i = 0; i < MAXC; i++) {
-    const int c = t + 256 * i;
-    if (c < total) {
-      const uint32_t* u = us + 8 * (c / cpr) + (4 * (c % cpr)) % 8;
-      const uint4 x = w[i];
-      dst[c] = make_uint4(add_noise<false>(x.x, u[0]), add_noise<false>(x.y, u[1]), add_noise<false>(x.z, u[2]), add_noise<false>(x.w, u[3]));
+      for (int i = 0; i < MAXC; i++)
+        if (c0 + t + 256 * i < total) w[i] = __ldg(src + c0 + t + 256 * i);
+    }
+#pragma unroll
+    for (int i = 0; i < MAXC; i++) {
+      const int c = c0 + t + 256 * i;
+      if (c < total) {
+        const uint32_t* u = us + 8 * (c / cpr) + (4 * (c % cpr)) % 8;
+        const uint4 x = w[i];
+        dst[c] = make_uint4(add_noise<false>(x.x, u[0]), add_noise<false>(x.y, u[1]), add_noise<false>(x.z, u[2]), add_noise<false>(x.w, u[3]));
+      }
     }
   }
 }
@@ -371,12 +559,13 @@ __global__ void __launch_bounds__(256, 3) qwe(const uint16_t* __restrict__ x, in
                                            int k, float inv_s, int qb, const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp,
                                            uint8_t* __restrict__ PB, const __grid_constant__ Sig sg) {
   __shared__ uint32_t sm[8 * 512];
+  __shared__ int sp[8 * 128];
   const int b = blockIdx.x, nw = (int)gridDim.x - qb;
   int q, e;   // the quantizer's block, else the edit's
   if constexpr (ORD == 0) { q = b < qb ? b : -1; e = b - qb; }
   else if constexpr (ORD == 1) { q = b >= nw ? b - nw : -1; e = b; }
   else { q = b % 3 == 0 && b / 3 < qb ? b / 3 : -1; e = b - min((b + 2) / 3, qb); }
-  if (q >= 0) quant_blk<true>(q, sm, x, X, PA, rows, k, inv_s, sg);
+  if (q >= 0) quant_blk<true>(q, sm, sp, x, X, PA, rows, k, inv_s, sg);
   else wedit_blk(e, sm, W, Wp, PB, k, sg);
 }
 
@@ -422,14 +611,18 @@ struct EP {
   Maps* mF;
 };
 
-static const std::pair<const char*, Kern> EK[] = {
-    {"e_plain", e_plain}, {"e_plain_nc", e_plain_nc}, {"e_l1h", e_l1h},
-    {"e_l2", e_l2}, {"e_l2h", e_l2h}, {"e_l2h_nc", e_l2h_nc}, {"e_l2q", e_l2q},
-    {"e_l3h", e_l3h}, {"e_l3q", e_l3q}, {"e_l4h", e_l4h}, {"e_l2hm", e_l2hm},
-    {"e_l2qm", e_l2qm}, {"e_l3qm", e_l3qm}, {"e_l2o", e_l2o}, {"e_l3o", e_l3o},
-    {"e_l4q", e_l4q}, {"t_duo32", t_duo32}};
-static Kern ekern(const std::string& n) {
-  for (auto& [name, k] : EK) if (n == name) return k;
+// the GEMM kernels (k3: the 3-atom tail's twin) and their receipt kinds (egemm_ref.py's names), each kind's together
+struct EKn { const char* name; Kern k, k3; const char* kind; };
+#define EKE(NAME, KIND) {#NAME, NAME, NAME##_k3, KIND}
+static const EKn EK[] = {
+    EKE(e_plain, ""), {"t_duo32", t_duo32, t_duo32, "duo32"}, EKE(e_l2h, "duo32"), EKE(e_l2q, "duo32"),
+    EKE(e_l3qm, "duo32"), EKE(e_l2o, "duo32"), EKE(e_l4q, "duo32"),
+    EKE(d64_l2q, "duo64"), EKE(d64_l7q, "duo64"), EKE(d64_lsq, "duo64"), EKE(d64_lsqm, "duo64"),
+    EKE(x_l2, "xin"), EKE(x_l2q, "xin"), EKE(x_l3qm, "xin"), EKE(x_l2o, "xin"),
+    EKE(t4_l2, "tb4"), EKE(t4c_l2, "tb4c"), EKE(t2w_l0, "tb2w"), EKE(t2w_l2, "tb2w"),
+    EKE(t1w_l0, "tb1w"), EKE(t1w_l2, "tb1w")};
+static const EKn* ekern(const std::string& n) {
+  for (auto& e : EK) if (n == e.name) return &e;
   fprintf(stderr, "no kernel %s\n", n.c_str());
   exit(2);
 }
@@ -450,7 +643,10 @@ static void qf(EP& P, const Sig& s, QweK f = qwe<0>) {
 }
 static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
   P.m = m; P.n = n; P.k = k; P.seed = seed;
-  if (m % 128 || n % 128 || k % 256 || k > 4096) { fprintf(stderr, "shape %d %d %d: 128-tiled, k %% 256 == 0, k <= 4096\n", m, n, k); exit(2); }
+  if (m % 1024 || n % 128 || k % 256 || k > 16128) {
+    fprintf(stderr, "shape %d %d %d: m %% 1024 == 0 (EL's raster groups), n %% 128 == 0, k %% 256 == 0, k <= 16128 (S_1, S_2 in s8)\n", m, n, k);
+    exit(2);
+  }
   int nsm;
   CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
   P.grid = std::min((m / 128) * (n / 128), nsm);
@@ -485,7 +681,8 @@ static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
   for (int b = 0; b < 2; b++)
     P.mO[b] = upload_maps(Maps{tmap(P.X, k, m, 128), tmap(P.Wo[b], k, n, 128), tmap(P.PA, 128, m, 128), tmap(P.PBo[b], 128, n, 128)});
   P.mF = upload_maps(Maps{tmap(P.Xf, k, m, 128), tmap(P.Wf, k, n, 128), tmap(P.PAf, 128, m, 128), tmap(P.PBf, 128, n, 128)});
-  for (auto& [name, kern] : EK) CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
+  for (auto& e : EK)
+    for (Kern kern : {e.k, e.k3}) CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
 }
 static void efree(EP& P) {
   CK(cudaDeviceSynchronize());
@@ -497,6 +694,7 @@ static void efree(EP& P) {
   CK(cudaStreamDestroy(P.st2));
   CK(cudaStreamDestroy(P.st));
 }
+static Kern pick(const EP& P, const EKn* e) { return P.k > PEEL2_MAXK ? e->k3 : e->k; }
 static void egemm_run(EP& P, Kern kern, int* Y, uint32_t* R, const Maps* maps = nullptr) {
   Args a{maps ? maps : P.mE, Y, R, P.m, P.n, P.k, 8, P.seed, 0, 1, 0, 0, {0, 0, 0, 0}, nullptr, 0};
   kern<<<P.grid, MLW::NT, CSMEM, P.st>>>(a);
@@ -530,31 +728,31 @@ static std::function<void(EP&)> earm(const std::string& a) {
     const std::string qn = std::string("qwe") + sfx, en = std::string("editedf") + sfx + ":";
     if (a == qn) return [f](EP& P) { qf(P, sigma(P.seed, P.inst++), f); };
     if (a.rfind(en, 0) == 0) {
-      Kern k = ekern(a.substr(en.size()));
-      return [k, f](EP& P) { qf(P, sigma(P.seed, P.inst++), f); egemm_run(P, k, P.Y, P.R, P.mF); };
+      const EKn* k = ekern(a.substr(en.size()));
+      return [k, f](EP& P) { qf(P, sigma(P.seed, P.inst++), f); egemm_run(P, pick(P, k), P.Y, P.R, P.mF); };
     }
   }
   if (a.rfind("edited:", 0) == 0) {
-    Kern k = ekern(a.substr(7));
-    return [k](EP& P) { we(P, sigma(P.seed, P.inst++)); egemm_run(P, k, P.Y, P.R); };
+    const EKn* k = ekern(a.substr(7));
+    return [k](EP& P) { we(P, sigma(P.seed, P.inst++)); egemm_run(P, pick(P, k), P.Y, P.R); };
   }
   if (a.rfind("editedq:", 0) == 0) {
-    Kern k = ekern(a.substr(8));
+    const EKn* k = ekern(a.substr(8));
     return [k](EP& P) {
       const Sig s = sigma(P.seed, P.inst++);
-      qd(P, s); we(P, s); egemm_run(P, k, P.Y, P.R);
+      qd(P, s); we(P, s); egemm_run(P, pick(P, k), P.Y, P.R);
     };
   }
   if (a.rfind("overlap:", 0) == 0) {
-    Kern k = ekern(a.substr(8));
-    return [k](EP& P) { ov_call(P, k, false); };
+    const EKn* k = ekern(a.substr(8));
+    return [k](EP& P) { ov_call(P, pick(P, k), false); };
   }
   if (a.rfind("overlapq:", 0) == 0) {
-    Kern k = ekern(a.substr(9));
-    return [k](EP& P) { ov_call(P, k, true); };
+    const EKn* k = ekern(a.substr(9));
+    return [k](EP& P) { ov_call(P, pick(P, k), true); };
   }
-  Kern k = ekern(a);
-  return [k](EP& P) { egemm_run(P, k, P.Y, P.R); };
+  const EKn* k = ekern(a);
+  return [k](EP& P) { egemm_run(P, pick(P, k), P.Y, P.R); };
 }
 
 static unsigned long long ecmp(EP& P, const void* a, const void* b, size_t words) {
@@ -592,25 +790,47 @@ static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   const unsigned long long ty = ecmp(P, P.Y, P.Yr, P.ny);
   rec("t_duo32", ty, -1);
   ok &= ty == 0;
-  dump(dir, "R_t_duo32_tile0.bin", P.R2, 512 * 8 * 4, true);
-  for (auto& [name, kern] : EK) {
-    if (kern == t_duo32) continue;
+  // every kernel's output against cuBLASLt's; a duo32 kernel's receipts against t_duo32's, any other kind's against its
+  // kind's first kernel's (R3); every kernel's receipts on three tiles to DIR, for egemm_ref.py
+  const int tiles_m = m / 128, tiles_n = n / 128;
+  const int tl[3][2] = {{0, 0}, {tiles_m / 2, tiles_n / 2}, {tiles_m - 1, tiles_n - 1}};
+  auto dump_r = [&](const std::string& name, const uint32_t* R) {
+    for (int i = 0; i < 3; i++) {
+      const int tm = tl[i][0], tn = tl[i][1];
+      dump(dir, ("R_" + name + "_" + std::to_string(tm) + "_" + std::to_string(tn) + ".bin").c_str(),
+           R + (size_t)(tm * tiles_n + tn) * 512 * 8, 512 * 8 * 4, true);
+    }
+  };
+  uint32_t* R3;
+  CK(cudaMalloc(&R3, P.nr * 4));
+  CK(cudaMemsetAsync(R3, 0xA5, P.nr * 4, P.st));
+  std::string kinds, kind0;
+  const Kern l2h = pick(P, ekern("e_l2h"));
+  for (auto& e : EK) {
+    const char *name = e.name, *kind = e.kind;
+    const Kern kern = pick(P, &e);
+    if (*kind) kinds += std::string(kinds.empty() ? "" : ", ") + "\"" + name + "\": \"" + kind + "\"";
+    if (kern == t_duo32) { dump_r(name, P.R2); continue; }
     CK(cudaMemsetAsync(P.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(P.R, 0xA5, P.nr * 4, P.st));
     egemm_run(P, kern, P.Y, P.R);
     CK(cudaStreamSynchronize(P.st));
     CK(cudaGetLastError());
-    const bool rcp = std::string(name).rfind("e_plain", 0) != 0;
-    const unsigned long long y = ecmp(P, P.Y, P.Yr, P.ny), r = rcp ? ecmp(P, P.R, P.R2, P.nr) : 0;
-    rec(name, y, rcp ? (long long)r : -1);
+    const bool duo = !strcmp(kind, "duo32"), first = *kind && !duo && kind0 != kind;
+    const unsigned long long y = ecmp(P, P.Y, P.Yr, P.ny), r = *kind && !first ? ecmp(P, P.R, duo ? P.R2 : R3, P.nr) : 0;
+    if (first) { CK(cudaMemcpyAsync(R3, P.R, P.nr * 4, cudaMemcpyDeviceToDevice, P.st)); kind0 = kind; }
+    if (*kind) dump_r(name, P.R);
+    rec(name, y, *kind && !first ? (long long)r : -1);
     ok &= y == 0 && r == 0;
   }
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaFree(R3));
   // each fused producer under the same key: its X, P_A, W', P_B bitwise those of quant<true> and wedit, and e_l2h on them
   for (auto& [sfx, f] : QWE) {
     for (auto [p, b] : {std::pair<void*, size_t>{P.Xf, xb}, {P.PAf, (size_t)m * 128}, {P.Wf, wb}, {P.PBf, (size_t)n * 128},
                         {P.Y, P.ny * 4}, {P.R, P.nr * 4}})
       CK(cudaMemsetAsync(p, 0xA5, b, P.st));
     qf(P, s, f);
-    egemm_run(P, e_l2h, P.Y, P.R, P.mF);
+    egemm_run(P, l2h, P.Y, P.R, P.mF);
     CK(cudaStreamSynchronize(P.st));
     CK(cudaGetLastError());
     const unsigned long long fx = ecmp(P, P.Xf, P.X, xb / 4) + ecmp(P, P.PAf, P.PA, (size_t)m * 32) + ecmp(P, P.Wf, P.Wp, wb / 4) +
@@ -625,11 +845,10 @@ static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   const unsigned long long cy = ecmp(P, P.Y, P.Yr, P.ny), cr = ecmp(P, P.R, P.R2, P.nr);
   const bool control_rejected = cy > 0 && cr > 0;
   rec("control", cy, (long long)cr);
-  // the tiles egemm_ref.py recomputes from x, W and the key: e_l2h's output and receipts (t_duo32's equal them on device)
-  egemm_run(P, e_l2h, P.Y, P.R);
+  // the tiles egemm_ref.py recomputes from x, W and the key: the operands and e_l2h's output (every kernel's equals
+  // cuBLASLt's on device)
+  egemm_run(P, l2h, P.Y, P.R);
   CK(cudaStreamSynchronize(P.st));
-  const int tiles_m = m / 128, tiles_n = n / 128;
-  const int tl[3][2] = {{0, 0}, {tiles_m / 2, tiles_n / 2}, {tiles_m - 1, tiles_n - 1}};
   std::string tj;
   for (int i = 0; i < 3; i++) {
     const int tm = tl[i][0], tn = tl[i][1];
@@ -645,7 +864,6 @@ static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     for (int r = 0; r < 128; r++)
       CK(cudaMemcpy(yt.data() + r * 128, P.Y + (size_t)(tm * 128 + r) * n + tn * 128, 128 * 4, cudaMemcpyDeviceToHost));
     dump(dir, ("Y" + sfx).c_str(), yt.data(), yt.size() * 4, false);
-    dump(dir, ("R" + sfx).c_str(), P.R + (size_t)(tm * tiles_n + tn) * 512 * 8, 512 * 8 * 4, true);
     tj += std::string(i ? ", " : "") + "[" + std::to_string(tm) + ", " + std::to_string(tn) + "]";
   }
   // the overlap arm: three calls (both buffers, keys 1-3), each output against cuBLASLt's and its receipts against t_duo32's
@@ -654,7 +872,7 @@ static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     const int b = P.ov & 1;
     CK(cudaMemsetAsync(P.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(P.R, 0xA5, P.nr * 4, P.st));
     CK(cudaMemsetAsync(P.R2, 0xA5, P.nr * 4, P.st));
-    ov_call(P, e_l2h, false);
+    ov_call(P, l2h, false);
     egemm_run(P, t_duo32, P.Yr2, P.R2, P.mO[b]);
     CK(cudaStreamSynchronize(P.st));
     CK(cudaGetLastError());
@@ -664,9 +882,9 @@ static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   }
   FILE* fp = fopen((dir + "/meta.json").c_str(), "w");
   fprintf(fp, "{\"m\": %d, \"n\": %d, \"k\": %d, \"seed\": %u, \"inv_s\": %.9g, \"grid\": %d, \"key\": [\"%016llx\", \"%016llx\", "
-              "\"%016llx\", \"%016llx\"], \"tiles\": [%s], \"device\": {%s}, \"device_ok\": %s, \"control_rejected\": %s}\n",
+              "\"%016llx\", \"%016llx\"], \"tiles\": [%s], \"kinds\": {%s}, \"device\": {%s}, \"device_ok\": %s, \"control_rejected\": %s}\n",
           m, n, k, seed, P.inv_s, P.grid, (unsigned long long)s.w[0], (unsigned long long)s.w[1], (unsigned long long)s.w[2],
-          (unsigned long long)s.w[3], tj.c_str(), res.c_str(), ok ? "true" : "false", control_rejected ? "true" : "false");
+          (unsigned long long)s.w[3], tj.c_str(), kinds.c_str(), res.c_str(), ok ? "true" : "false", control_rejected ? "true" : "false");
   fclose(fp);
   printf("{\"gate\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"device_ok\": %s, \"control_rejected\": %s, \"device\": {%s}}\n",
          dir.c_str(), m, n, k, ok ? "true" : "false", control_rejected ? "true" : "false", res.c_str());

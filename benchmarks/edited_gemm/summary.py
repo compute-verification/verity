@@ -1,5 +1,6 @@
-"""run.sh's summary: the gates, hot items with each arm's ratio to plain cuBLASLt, the edited GEMM's time by part, the
-per-call interleaving and ncu's counters. python3 summary.py OUT_DIR"""
+"""run.sh's summary: the gates, each shape's hot items with each arm's ratio to plain cuBLASLt, the ratio table (each
+GEMM kernel against plain and each edited call, editedf:K, against plainq, hot and interleaved), the parts at o_proj and
+ncu's counters. python3 summary.py OUT_DIR"""
 from __future__ import annotations
 
 import csv
@@ -7,6 +8,10 @@ import io
 import json
 import sys
 from pathlib import Path
+
+LAYER = {(8192, 4096, 4096): "o_proj", (8192, 6144, 4096): "qkv", (8192, 28672, 4096): "gate_up", (8192, 4096, 14336): "down"}
+KIND = {"e_": "duo32", "t_duo32": "duo32", "d64_": "duo64", "x_": "xin", "t4_": "tb4", "t4c_": "tb4c", "t2w_": "tb2w",
+        "t1w_": "tb1w"}
 
 
 def jl(p: Path) -> list[dict]:
@@ -23,44 +28,71 @@ def ncu(p: Path) -> dict[str, str]:
     return {r["Metric Name"]: r["Metric Value"] for r in csv.DictReader(io.StringIO("\n".join(lines[start:])))}
 
 
+def kind(k: str) -> str:
+    if k == "e_plain":
+        return ""
+    return next((v for p, v in sorted(KIND.items(), key=lambda x: -len(x[0])) if k.startswith(p)), "")
+
+
+def shape(r: dict) -> str:
+    return LAYER.get((r["m"], r["n"], r["k"]), f"{r['m']}x{r['n']}x{r['k']}")
+
+
+def f(x: float | None, d: int = 3) -> str:
+    return "" if x is None else f"{x:.{d}f}"
+
+
 def main(o: Path) -> None:
-    print(f"# edited GEMM at o_proj ({o})\n")
+    print(f"# edited GEMM, cheaper receipts and Llama-8B's linears ({o})\n")
     print("## gates\n")
     for g in jl(o / "gate.jsonl"):
-        print(f"- device {g['m']} x {g['n']} x {g['k']}: device_ok {g['device_ok']}, control_rejected {g['control_rejected']}, {g['device']}")
+        bad = {k: v for k, v in g["device"].items() if v["y_bad"] or v["r_bad"] > 0}
+        print(f"- device {g['m']} x {g['n']} x {g['k']}: device_ok {g['device_ok']}, control_rejected {g['control_rejected']}, "
+              f"{len(g['device'])} checks, failing {bad or 'none'}")
     for r in jl(o / "ref.jsonl"):
-        print(f"- CPU ref {r['m']} x {r['n']} x {r['k']}: ok {r['ok']}, tiles {r['tiles']}")
-    b = jl(o / "bench.jsonl")
-    if b:
-        a = b[0]["arms"]
-        pl = a.get("plain", {}).get("ms")
-        print("\n## hot items (median of the reps, ms)\n\n| arm | ms | / plain | MHz |\n|---|---|---|---|")
+        nr = sum(len(t["R"]) for t in r["tiles"].values())
+        okr = sum(sum(t["R"].values()) for t in r["tiles"].values())
+        other = all(all(v for v in t.values() if isinstance(v, bool)) for t in r["tiles"].values())
+        print(f"- CPU ref {r['m']} x {r['n']} x {r['k']}: ok {r['ok']}; receipts {okr}/{nr} tile-kernels bit-exact; X, Xq, P_A, W', "
+              f"P_B, peel, Y {other}; S range {[t['S_range'] for t in r['tiles'].values()]}")
+    bench = {shape(b): b for b in jl(o / "bench.jsonl")}
+    il: dict[tuple, dict] = {}
+    for r in jl(o / "il.jsonl"):
+        il[(shape(r), r["il"], r["base"], bool(r.get("cold")))] = r
+    for sh, b in bench.items():
+        a = b["arms"]
+        pl, pq = a.get("plain", {}).get("ms"), a.get("plainq", {}).get("ms")
+        print(f"\n## {sh} ({b['m']} x {b['n']} x {b['k']}): hot items (median of the reps, ms)\n")
+        print("| arm | ms | / plain | / plainq | MHz |\n|---|---|---|---|---|")
         for name, v in a.items():
-            print(f"| {name} | {v['ms']:.4f} | {v['ms'] / pl:.3f} | {v['mhz']:.0f} |" if pl else f"| {name} | {v['ms']:.4f} | | |")
-        g = lambda n: a.get(n, {}).get("ms")  # noqa: E731
-        if pl and g("e_plain") and g("wedit"):
-            print("\n## the edited GEMM by part (hot items, ms)\n")
-            print(f"- mainloop + 2-atom tail against cuBLASLt (e_plain - plain): {g('e_plain') - pl:+.4f}")
-            for v in [n for n in a if n.startswith("e_l")] + ["t_duo32"]:
-                if g(v):
-                    print(f"- receipts in {v} ({v} - e_plain): {g(v) - g('e_plain'):+.4f}; wedit + {v} = {g('wedit') + g(v):.4f}"
-                          f" = {(g('wedit') + g(v)) / pl:.3f}x plain")
-            for v in ("e_plain", "e_l2h"):
-                if g(v) and g(v + "_nc"):
-                    print(f"- the issuer's tile place once a tile in {v} ({v} - {v}_nc): {g(v) - g(v + '_nc'):+.4f}")
-            print(f"- weights + U and P_B (wedit): {g('wedit'):.4f}")
-            if g("qdither") and g("qplain"):
-                print(f"- the dither and S in the quantizer (qdither - qplain): {g('qdither') - g('qplain'):+.4f}"
-                      f" (qplain {g('qplain'):.4f}, qdither {g('qdither'):.4f})")
-            for q in ("qwe", "qwe_w", "qwe_i"):
-                if g(q) and g("qdither"):
-                    print(f"- both producers in one launch ({q}): {g(q):.4f}, against qdither + wedit"
-                          f" {g('qdither') + g('wedit'):.4f} ({g(q) - g('qdither') - g('wedit'):+.4f})")
-    il = jl(o / "il.jsonl")
-    if il:
-        print(f"\n## per call, interleaved ({il[0]['reps']} reps, medians)\n\n| arm | base | ms | base ms | ratio | MHz (min-max) |\n|---|---|---|---|---|---|")
-        for r in il:
-            print(f"| {r['il']}{' (cold L2)' if r.get('cold') else ''} | {r['base']} | {r['ms']:.4f} | {r['base_ms']:.4f} | {r['ratio']:.4f} | {r['mhz']:.0f} ({r['mhz_min']:.0f}-{r['mhz_max']:.0f}) |")
+            print(f"| {name} | {v['ms']:.4f} | {f(v['ms'] / pl if pl else None)} | {f(v['ms'] / pq if pq else None)} | {v['mhz']:.0f} |")
+    print("\n## the ratio table\n")
+    print("GEMM: the kernel against plain cuBLASLt int8 on the same X, W; edited call: editedf:K (qwe, then K) against plainq "
+          "(the plain quantizer, then cuBLASLt). Hot: medians of interleaved items; IL: per call, alternating; cold: IL with "
+          "L2 flushed before each call.\n")
+    print("| shape | kernel | receipt | GEMM hot | GEMM IL | GEMM IL cold | edited hot | edited IL | edited IL cold |")
+    print("|---|---|---|---|---|---|---|---|---|")
+    for sh, b in bench.items():
+        a = b["arms"]
+        pl, pq = a.get("plain", {}).get("ms"), a.get("plainq", {}).get("ms")
+        for k in [n for n in a if kind(n) or n == "e_plain"]:
+            ef = a.get(f"editedf:{k}", {}).get("ms")
+            g = lambda arm, base, cold: il.get((sh, arm, base, cold), {}).get("ratio")  # noqa: E731
+            print(f"| {sh} | {k} | {kind(k) or 'none'} | {f(a[k]['ms'] / pl if pl else None)} | {f(g(k, 'plain', False))} | "
+                  f"{f(g(k, 'plain', True))} | {f(ef / pq if ef and pq else None)} | {f(g(f'editedf:{k}', 'plainq', False))} | "
+                  f"{f(g(f'editedf:{k}', 'plainq', True))} |")
+    a = bench.get("o_proj", {}).get("arms", {})
+    g = lambda n: a.get(n, {}).get("ms")  # noqa: E731
+    if g("plain") and g("e_plain"):
+        print("\n## o_proj by part (hot items, ms)\n")
+        print(f"- mainloop + 2-atom tail against cuBLASLt (e_plain - plain): {g('e_plain') - g('plain'):+.4f}")
+        for v in [n for n in a if kind(n)]:
+            print(f"- receipts in {v} ({kind(v)}; {v} - e_plain): {g(v) - g('e_plain'):+.4f}")
+        if g("qdither") and g("qplain") and g("wedit"):
+            print(f"- wedit {g('wedit'):.4f}; qdither - qplain {g('qdither') - g('qplain'):+.4f}; qwe {f(g('qwe'), 4)}")
+    leftover = [r for k, r in il.items() if k[0] not in bench]
+    for r in leftover:
+        print(f"- IL {shape(r)} {r['il']} / {r['base']}: {r['ratio']:.4f}")
     for p in sorted(o.glob("ncu-*.csv")):
         d = ncu(p)
         if d:

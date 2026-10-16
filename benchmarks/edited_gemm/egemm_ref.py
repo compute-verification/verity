@@ -3,10 +3,14 @@
 From the key (meta.json's four big-endian words, 32 bytes): b, the dither bits (tag 7, sha_noise.cuh's NS 1 patch
 layout), and U (tag 6, lpgemm.cu's LP_UW 64, derive.py's u_noise64 on the weights' rows). Then
     X  = clamp(floor(x inv_s), -127, 126) + b            Xq = clamp(rint(x inv_s), -127, 127)   (the plain quantizer)
-    S  = X Id (S_ic = sum_t X_{i, 32 t + c}),  P_A = [S_hi | 0 | S_lo | 0],  S = 256 S_hi + S_lo, S_lo the low byte as s8
-    W' = W + U Id^T,  P_B = [U | 0 | U | 0]
+    S  = X Id (S_ic = sum_t X_{i, 32 t + c}),  P_A = [S_1 | S_2 | S_0 | 0],  S = 256 (S_1 + S_2) + S_0, S_0 the low byte
+         as s8, S_1 the rest clamped to ±127
+    W' = W + U Id^T,  P_B = [U | U | U | 0]
     Y  = X W^T (the served product), and C - S U^T == Y for C = X W'^T
-    receipts: derive.py's tile_receipts over C's stride-32 running sums
+    receipts over C's running sums T_s (s = 1 .. k / 32), each dumped kernel's by its kind (meta.json's kinds):
+      duo32  derive.py's tile_receipts over every T_s;  duo64  the same over T_2, T_4, ... (the odd steps, 0-based)
+      xin    P2-FF's XOR-in fold (egemm.cu's XIN), tile t's words into chain t % 4
+      tb4, tb2w, tb1w, tb4c  floored_gemm/ref.py's tb_receipts and tbc_receipts on the tile
 and every one is compared with the device's bytes. One JSON line a gate directory; exit 1 on any difference, on a
 device mismatch or on a control the device didn't reject.
     python3 egemm_ref.py GATE_DIR...
@@ -14,6 +18,7 @@ device mismatch or on a control the device didn't reject.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import struct
 import sys
@@ -23,10 +28,15 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "e2e_slice"))
-from derive import U_TAG, tile_receipts  # noqa: E402
+from derive import BN, NCT, U_TAG, WM, mix32, tile_receipts  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location("fgemm_ref", HERE.parent / "floored_gemm" / "ref.py")
+fref = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(fref)
 
 DITHER_TAG = 7
 T = 128
+TB_KIND = {"tb4": 5, "tb4c": 8, "tb2w": 10, "tb1w": 11}   # fgemm.cu's Kind
 
 
 def block(key: bytes, tag: int, j: int) -> bytes:
@@ -52,9 +62,70 @@ def dither_rows(key: bytes, row0: int, rows: int, k: int) -> np.ndarray:
     return b
 
 
-def limbs(S: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    lo = ((S & 0xFF) ^ 0x80) - 0x80
-    return (S - lo) // 256, lo
+def limbs(S: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    s0 = ((S & 0xFF) ^ 0x80) - 0x80
+    sh = (S - s0) // 256
+    s1 = np.clip(sh, -127, 127)
+    return s1, sh - s1, s0
+
+
+def rotl(x: np.ndarray, r: int) -> np.ndarray:
+    return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
+
+
+def xin_keys(seed: int) -> tuple[int, int]:
+    """egemm.cu's xin_keys: the first two words mix32(seed ^ (0x5A5A0000 + i)) that pass pfill.cuh's key rule."""
+    out, i = [], 0
+    while len(out) < 2:
+        a = int(mix32(np.uint32((seed ^ (0x5A5A0000 + i)) & 0xFFFFFFFF)))
+        m, r = a & 0xFFFFFF, a & 31
+        if a & 1 and 256 < m < (1 << 24) - 256 and r not in (1, 31):
+            out.append(a)
+        i += 1
+    return out[0], out[1]
+
+
+def frag_words(Tw: np.ndarray, mi: int, ni: int) -> np.ndarray:
+    """Every thread's accumulator words of tile (mi, ni), [NCT, 4]: (g, 2q), (g, 2q + 1), (g + 8, 2q), (g + 8, 2q + 1)."""
+    ctid = np.arange(NCT)
+    warp, lane = ctid // 32, ctid % 32
+    wm, wn, g, q = warp // (BN // 32), warp % (BN // 32), lane >> 2, lane & 3
+    e = np.arange(4)
+    rows = wm[:, None] * WM + 16 * mi + g[:, None] + 8 * (e >> 1)[None, :]
+    cols = wn[:, None] * 32 + 8 * ni + 2 * q[:, None] + (e & 1)[None, :]
+    return Tw[rows, cols]
+
+
+def xin_receipts(seed: int, Ts: list[np.ndarray], tile: int) -> np.ndarray:
+    """XIN's receipts, (NCT, 8): chains 0..3 (y = mix32(seed ^ mix32((tile NCT + ctid) 8 + c))), then four zeros."""
+    a0, a1 = np.uint32(xin_keys(seed)[0]), np.uint32(xin_keys(seed)[1])
+    idx = ((tile * NCT + np.arange(NCT)[:, None]) * 8 + np.arange(4)[None, :]).astype(np.uint32)
+    y = mix32(np.uint32(seed) ^ mix32(idx))
+    MI, NI = WM // 16, 4
+    with np.errstate(over="ignore"):
+        for Tw in Ts:
+            for t in range(MI * NI):
+                p = frag_words(Tw, t // NI, t % NI)
+                c = t % 4
+                y[:, c] = (rotl(y[:, c], 7) ^ p[:, 0]) * a0 + p[:, 1]
+                y[:, c] = (rotl(y[:, c], 19) ^ p[:, 2]) * a1 + p[:, 3]
+    out = np.zeros((NCT, 8), np.uint32)
+    out[:, :4] = y
+    return out
+
+
+def receipts(kind: str, seed: int, Ts: list[np.ndarray], tile: int) -> np.ndarray:
+    if kind == "duo32":
+        return tile_receipts(seed, Ts, tile)
+    if kind == "duo64":
+        return tile_receipts(seed, Ts[1::2], tile)
+    if kind == "xin":
+        return xin_receipts(seed, Ts, tile)
+    kid = TB_KIND[kind]
+    if kid in fref.CHAINED:
+        return fref.tbc_receipts(kid, Ts, T, BN, WM, NCT, 1, 1)[0]
+    SB = sum(fref.u8bytes(Tw) for Tw in Ts)
+    return fref.tb_receipts(kid, SB, T, BN, WM, NCT, 1, 1)[0]
 
 
 def check(d: Path) -> dict:
@@ -62,9 +133,10 @@ def check(d: Path) -> dict:
     m, n, k, seed, inv_s = meta["m"], meta["n"], meta["k"], meta["seed"], np.float32(meta["inv_s"])
     key = b"".join(struct.pack(">Q", int(w, 16)) for w in meta["key"])
     tiles_n = n // T
+    kinds = meta.get("kinds", {})
     out = {"dir": str(d), "m": m, "n": n, "k": k, "device_ok": meta["device_ok"], "control_rejected": meta["control_rejected"],
            "tiles": {}}
-    ok = bool(meta["device_ok"]) and bool(meta["control_rejected"])
+    ok = bool(meta["device_ok"]) and bool(meta["control_rejected"]) and bool(kinds)
     z = np.zeros((T, 32), np.int64)
     for tm, tn in meta["tiles"]:
         sfx = f"_{tm}_{tn}.bin"
@@ -74,34 +146,35 @@ def check(d: Path) -> dict:
         X = np.clip(np.floor(f), -127, 126).astype(np.int64) + dither_rows(key, tm * T, T, k)
         Xq = np.clip(np.rint(f), -127, 127).astype(np.int64)
         S = X.reshape(T, k // 32, 32).sum(axis=1)
-        sh, sl = limbs(S)
-        PA = np.concatenate([sh, z, sl, z], axis=1)
+        s1, s2, s0 = limbs(S)
+        PA = np.concatenate([s1, s2, s0, z], axis=1)
         W = rd("W", np.int8).astype(np.int64).reshape(T, k)
         U = u_rows(key, tn * T, T)
         Wp = W + np.tile(U, (1, k // 32))
-        PB = np.concatenate([U, z, U, z], axis=1)
+        PB = np.concatenate([U, U, U, z], axis=1)
         Y = X @ W.T
         C = np.zeros((T, T), np.int64)
         Ts = []
         for s in range(k // 32):
             C += X[:, 32 * s:32 * s + 32] @ Wp[:, 32 * s:32 * s + 32].T
             Ts.append((C & 0xFFFFFFFF).astype(np.uint32))
-        R = tile_receipts(seed, Ts, tm * tiles_n + tn)
         res = {
             "X": bool((rd("X", np.int8).reshape(T, k) == X).all()),
             "X_range": [int(X.min()), int(X.max())],
             "Xq": bool((rd("Xq", np.int8).reshape(T, k) == Xq).all()),
             "PA": bool((rd("PA", np.int8).reshape(T, 128) == PA).all()),
+            "PA_s8": bool(-128 <= int(PA.min()) and int(PA.max()) <= 127),
             "Wp": bool((rd("Wp", np.int8).reshape(T, k) == Wp).all()),
             "Wp_range": [int(Wp.min()), int(Wp.max())],
             "PB": bool((rd("PB", np.int8).reshape(T, 128) == PB).all()),
             "peel": bool(((C - S @ U.T) == Y).all()),
             "Y": bool((rd("Y", np.int32).reshape(T, T).astype(np.int64) == Y).all()),
-            "R": bool((rd("R", np.uint32).reshape(512, 8) == R).all()),
             "S_range": [int(S.min()), int(S.max())],
         }
+        want = {kd: receipts(kd, seed, Ts, tm * tiles_n + tn) for kd in sorted(set(kinds.values()))}
+        res["R"] = {name: bool((rd("R_" + name, np.uint32).reshape(NCT, 8) == want[kd]).all()) for name, kd in kinds.items()}
         out["tiles"][f"{tm},{tn}"] = res
-        ok &= all(v for v in res.values() if isinstance(v, bool))
+        ok &= all(v for v in res.values() if isinstance(v, bool)) and all(res["R"].values())
         ok &= -127 <= res["X_range"][0] and res["X_range"][1] <= 127 and -127 <= res["Wp_range"][0] and res["Wp_range"][1] <= 127
     out["ok"] = bool(ok)
     return out
