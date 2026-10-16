@@ -206,16 +206,16 @@ __device__ __forceinline__ void pf_omma(uint32_t (&d)[4], const uint32_t (&a)[4]
 // The tile loop of any kind KD (F4: the e2m1 tile). Bs: column n's 32 bytes at 32 n, s8 words in order 0 4 1 5 2 6 3 7
 // (word q holds k 4q..4q+3), e2m1 words in order (q, h) (word 2q + h holds k 32h + 8q .. 32h + 8q + 7), so a lane's B
 // fragment is one 8-byte load in both. Ab: a warp's 32 SHA blocks of A, 16 row words each: P = 32 / KH fragments a pass.
+// One tile, the whole block's: its receipt in thread 0.
 template <int NC, int KD>
-__device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], uint64_t c0, uint64_t c1,
-                                         unsigned long long tile0, int tiles, int steps, unsigned long long* rec) {
+__device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16], uint64_t c0, uint64_t c1,
+                                            unsigned long long tile, int steps) {
   constexpr bool regen = NC == 1 || NC == 2 || NC == 4, F4 = KD == PF_E2M1;
   constexpr int KH = F4 ? 2 : 1, P = 32 / KH;
   constexpr uint64_t dom = pf_dom(KD);
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
   const int S = steps;
-  for (int i = 0; i < tiles; i++) {
-    const unsigned long long idx = (unsigned long long)blockIdx.x * tiles + i, tile = tile0 + idx;
+  {
     PfKeys key{0, 0, 0, 0};
     if (lane <= 8 * KH) {
       uint64_t st[8];
@@ -318,12 +318,21 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
       Ab[w][1] = (uint32_t)(h >> 32);
     }
     __syncthreads();
+    uint64_t x = 0;
     if (threadIdx.x == 0) {
-      uint64_t x = 0;
 #pragma unroll
       for (int v = 0; v < PF_W; v++) x ^= (uint64_t)Ab[v][0] | (uint64_t)Ab[v][1] << 32;
-      rec[idx] = x;
     }
+    return x;
+  }
+}
+template <int NC, int KD>
+__device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], uint64_t c0, uint64_t c1,
+                                         unsigned long long tile0, int tiles, int steps, unsigned long long* rec) {
+  for (int i = 0; i < tiles; i++) {
+    const unsigned long long idx = (unsigned long long)blockIdx.x * tiles + i;
+    const uint64_t x = pf_tile<NC, KD>(Bs, Ab, c0, c1, tile0 + idx, steps);
+    if (threadIdx.x == 0) rec[idx] = x;
   }
 }
 template <int NC>
@@ -332,6 +341,37 @@ __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint6
   __shared__ __align__(16) uint8_t Bs[PF_TN * 32];
   __shared__ __align__(16) uint32_t Ab[PF_W][32 * 16];
   pf_tiles<NC, PF_KIND>(Bs, Ab, c0, c1, tile0, tiles, steps, rec);
+}
+
+// The phase filler (dcap.cu's PFill, HC-SCHED's placement): the same tile under the phase ids PBIT | (base + slot), a
+// tile a block at a time, so a slot is a block's tile (slot off + blockIdx.x tiles + i) and `steps` is a warp's fragments
+// (any multiple of 4). The stop flag is read once a tile by thread 0 and taken by the whole block, since a tile syncs it.
+// Each slot keeps (tile id, receipt); st[1] counts the tiles done.
+constexpr unsigned long long PBIT = 1ull << 62;
+#define DFILL_P_W PF_W
+__host__ __device__ constexpr double pf_tile_macs(int steps) { return (double)PF_W * steps * (PF_TN / 8) * 4096.0; }
+template <int NC>
+__global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_p(uint64_t c0, uint64_t c1, unsigned long long* __restrict__ st,
+                                                       unsigned long long off, int tiles, int steps, const int* stop,
+                                                       unsigned long long* __restrict__ rec, unsigned* smbits) {
+  __shared__ __align__(16) uint8_t Bs[PF_TN * 32];
+  __shared__ __align__(16) uint32_t Ab[PF_W][32 * 16];
+  const unsigned long long base = *(volatile unsigned long long*)st;
+  if (threadIdx.x == 0 && smbits) {
+    unsigned s;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(s));
+    atomicOr(&smbits[(s / 32) & 7], 1u << (s % 32));
+  }
+  for (int i = 0; i < tiles; i++) {
+    if (stop && __syncthreads_or(threadIdx.x == 0 && *(volatile const int*)stop)) break;
+    const unsigned long long slot = off + (unsigned long long)blockIdx.x * tiles + i, tile = PBIT | (base + slot);
+    const uint64_t x = pf_tile<NC, PF_KIND>(Bs, Ab, c0, c1, tile, steps);
+    if (threadIdx.x == 0) {
+      rec[2 * slot] = tile;
+      rec[2 * slot + 1] = x;
+      atomicAdd(st + 1, 1ull);
+    }
+  }
 }
 
 #endif
