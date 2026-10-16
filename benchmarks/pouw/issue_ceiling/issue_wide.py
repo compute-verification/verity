@@ -73,15 +73,15 @@ def slope(pairs):
     # least-squares slope of y vs x through the points (x = ops a MMA, y = 1 - mac_frac_of_alone)
     n = len(pairs)
     sx = sum(x for x, _ in pairs); sy = sum(y for _, y in pairs)
-    sxx = sum(x * x for x, _ in pairs); sxy = sum(x * y for x, _ in pairs)
+    sxx = sum(x * x for x, _ in pairs); sxy = sum(x * y for x, y in pairs)
     d = n * sxx - sx * sx
     return (n * sxy - sx * sy) / d if d else 0.0
 
 def disp(kind, mode):
-    pts = [(r["ops_per_mma"], 1.0 - r["mma_macs_frac_of_alone"]) for r in ROWS
-           if r.get("mode") == mode and r.get("op") == kind]
-    pts = [(float(x), y) for x, y in pts]
-    return slope(pts), pts
+    all_pts = [(float(r["ops_per_mma"]), 1.0 - r["mma_macs_frac_of_alone"]) for r in ROWS
+               if r.get("mode") == mode and r.get("op") == kind]
+    lin = [p for p in all_pts if p[0] <= 8]  # the 16-a-MMA point is past the serialization knee
+    return slope(lin or all_pts), all_pts
 
 funcs = load_funcs(f"{OUT}/sass/issue_wide.sass")
 alone = {r["op"]: r for r in ROWS if r.get("mode") == "alone"}
@@ -117,15 +117,19 @@ for kind in KINDS:
     spo, hist, nm = sass_per_op(funcs, kind)
     thru = alone.get(kind, {}).get("ops_per_smsp_per_cyc", 0.0)
     slots = (1.0 / thru) if thru else 0.0
-    ds, _ = disp(kind, "spec")
-    dm, _ = disp(kind, "mixu")
+    ds, sp = disp(kind, "spec")
+    dm, mp = disp(kind, "mixu")
+    fracs = " ".join(f"{int(x)}:{1.0 - y:.3f}" for x, y in sorted(mp))
     opcs = ",".join(f"{o}x{c}" for o, c in sorted(hist.items(), key=lambda kv: -kv[1])
                     if o.split(".")[0] in ("IADD3", "IMAD", "MOV", "CS2R", "LOP3") or ".WIDE" in o)[:80]
     tword = two_word_ops(kind, spo or 0, hist)
     lines.append(f"| {kind} | {spo:.2f} ({opcs}) | {thru:.4f} | {slots:.2f} | {ds:.4f} | {dm:.4f} | {tword} |")
     report["kinds"][kind] = {"sass_instrs_per_op": spo, "sass_hist": hist, "standalone_ops_per_smsp_per_cyc": thru,
                              "slots_from_throughput": slots, "disp_per_op_spec": ds, "disp_per_op_mixu": dm,
-                             "two_word_ops": tword, "func": nm}
+                             "mixu_frac_of_alone_by_opm": fracs, "two_word_ops": tword, "func": nm}
+lines.append("\n_mixu IMMA MAC frac of alone by ops-a-MMA:_")
+for kind in KINDS:
+    lines.append(f"- {kind}: {report['kinds'][kind]['mixu_frac_of_alone_by_opm']}")
 
 lines.append("\n## Two-word bit-exact test (one add.u64)\n")
 lines.append(f"- carry coupling: 0xFFFFFFFF + 1 = {tw.get('add64_carry')} -> carry crosses into high word: "

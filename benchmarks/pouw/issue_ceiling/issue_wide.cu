@@ -24,17 +24,19 @@ static const double IMMA_MACS = 4096;  // 16x8x32 MACs a MMA
 enum { X_IADD3, X_IMAD, X_IADD64, X_MOV64, X_CS2R64, X_IMADWIDE, X_N };
 static const char* X_NAME[] = {"iadd3_32", "imad_32", "iadd_64", "mov_64", "cs2r_64", "imad_wide"};
 
+// Each kind is a self-recurrence on accumulator i with a fixed register addend (c32/c64): 8 independent chains a warp x 8
+// warps a SMSP = 64-wide ILP, so standalone the SMSP is dispatch-bound (not latency-bound). asm volatile keeps every op
+// and stops ptxas folding the repeated adds. mov_64 keeps a cross-copy (it is elidable either way).
 template <int X>
-__device__ __forceinline__ void oone(uint32_t* r, uint64_t* w, int i) {
-  const int j = (i + 1) & 7, k = (i + 2) & 7;
-  if (X == X_IADD3)        asm volatile("add.u32 %0,%0,%1;" : "+r"(r[i]) : "r"(r[j]));
-  else if (X == X_IMAD)    asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(r[i]) : "r"(r[j]), "r"(r[k]));
-  else if (X == X_IADD64)  asm volatile("add.u64 %0,%0,%1;" : "+l"(w[i]) : "l"(w[j]));
-  else if (X == X_MOV64)   asm volatile("mov.b64 %0,%1;" : "=l"(w[i]) : "l"(w[j]));
+__device__ __forceinline__ void oone(uint32_t* r, uint64_t* w, int i, uint32_t c32, uint64_t c64) {
+  if (X == X_IADD3)        asm volatile("add.u32 %0,%0,%1;" : "+r"(r[i]) : "r"(c32));
+  else if (X == X_IMAD)    asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(r[i]) : "r"(c32), "r"(c32));
+  else if (X == X_IADD64)  asm volatile("add.u64 %0,%0,%1;" : "+l"(w[i]) : "l"(c64));
+  else if (X == X_MOV64)   asm volatile("mov.b64 %0,%1;" : "=l"(w[i]) : "l"(w[(i + 1) & 7]));
   else if (X == X_CS2R64)  asm volatile("mov.u64 %0,%%clock64;" : "=l"(w[i]));
-  else {  // IMAD.WIDE: low words of two changing accumulators, so the multiply can't be hoisted
-    uint32_t a = (uint32_t)w[j], b = (uint32_t)w[k];
-    asm volatile("mad.wide.u32 %0,%1,%2,%0;" : "+l"(w[i]) : "r"(a), "r"(b));
+  else {  // IMAD.WIDE: low word of the changing accumulator, so the 32x32->64 multiply can't be hoisted
+    uint32_t a = (uint32_t)w[i];
+    asm volatile("mad.wide.u32 %0,%1,%2,%0;" : "+l"(w[i]) : "r"(a), "r"(c32));
   }
 }
 
@@ -60,11 +62,13 @@ __device__ __forceinline__ uint32_t consume(const uint32_t* r, const uint64_t* w
 template <int X>
 __global__ void __launch_bounds__(1024) k_alone(int iters, uint32_t* sink, BlockClk* rec) {
   uint32_t r[8]; uint64_t w[8]; init_r(r, w, threadIdx.x);
+  const uint32_t c32 = threadIdx.x | 1u;
+  const uint64_t c64 = ((uint64_t)c32 << 32) | c32;
   CLK_BEGIN
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
 #pragma unroll
-    for (int q = 0; q < 64; q++) oone<X>(r, w, q & 7);
+    for (int q = 0; q < 64; q++) oone<X>(r, w, q & 7, c32, c64);
   }
   CLK_END(rec)
   sink[blockIdx.x * blockDim.x + threadIdx.x] = consume(r, w);
@@ -99,6 +103,8 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
   uint32_t a[4], b[2]; init_mma(lane, a, b);
   int32_t d[8][4] = {};
   uint32_t r[8]; uint64_t w[8]; init_r(r, w, threadIdx.x);
+  const uint32_t c32 = threadIdx.x | 1u;
+  const uint64_t c64 = ((uint64_t)c32 << 32) | c32;
   CLK_BEGIN
   if (mma_role) {
 #pragma unroll 1
@@ -110,7 +116,7 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
 #pragma unroll 1
     for (int it = 0; it < iters; it++) {
 #pragma unroll
-      for (int q = 0; q < R; q++) oone<X>(r, w, q & 7);
+      for (int q = 0; q < R; q++) oone<X>(r, w, q & 7, c32, c64);
     }
   }
   CLK_END(rec)
@@ -129,6 +135,8 @@ __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockCl
   uint32_t a[4], b[2]; init_mma(lane, a, b);
   int32_t d[8][4] = {};
   uint32_t r[8]; uint64_t w[8]; init_r(r, w, threadIdx.x);
+  const uint32_t c32 = threadIdx.x | 1u;
+  const uint64_t c64 = ((uint64_t)c32 << 32) | c32;
   CLK_BEGIN
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
@@ -136,7 +144,7 @@ __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockCl
     for (int c = 0; c < 8; c++) {
       mma_imma(d[c], a, b);
 #pragma unroll
-      for (int q = 0; q < OPM; q++) oone<X>(r, w, (c + q) & 7);
+      for (int q = 0; q < OPM; q++) oone<X>(r, w, (c + q) & 7, c32, c64);
     }
   }
   CLK_END(rec)
