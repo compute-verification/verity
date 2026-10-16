@@ -20,6 +20,8 @@ from verity_bench.vllm.arms import Arm, Target, build_bound, plugin
 from verity_bench.vllm.presets import Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
+# Recorded for an arm at a point only when its every rep and the baseline's have it (the engine exposes its scheduler).
+OPTIONAL_METRICS = ("decode_time_per_token_s",)
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228}
 
 
@@ -214,6 +216,17 @@ def _record(
     schedule.append({"phase": "timed", "mode": mode, "arm": arm, "point": point.id, "rep": rep})
 
 
+def decode_time_per_token(steps: list[Mapping[str, Any]]) -> float | None:
+    """Host time of the engine steps that only decoded (a forward with decode tokens and no prefill tokens), over the
+    tokens they decoded: per-token decode cost with prefill left out, which time per output token mixes in under mixed
+    traffic. None when no step qualifies or the steps carry no token counts (`run_requests_arrivals` without a reachable
+    scheduler). A step's time includes device time where vLLM synchronizes in it, as it does to return sampled tokens."""
+
+    decode = [s for s in steps if s.get("forward") and s.get("prefill_tokens") == 0 and s.get("decode_tokens")]
+    tokens = sum(int(s["decode_tokens"]) for s in decode)
+    return sum(float(s["s"]) for s in decode) / tokens if tokens else None
+
+
 def _aggregate(
     arms: tuple[Arm, ...],
     points: tuple[SweepPoint, ...],
@@ -227,7 +240,8 @@ def _aggregate(
         for arm in arms:
             reps = sorted(samples[(arm.id, point.id)], key=lambda x: x["rep"])
             metrics = {}
-            for metric in METRICS:
+            present = tuple(m for m in OPTIONAL_METRICS if all(r["metrics"].get(m) is not None for r in reps + base))
+            for metric in METRICS + present:
                 absolute = _summary([float(r["metrics"][metric]) for r in reps])
                 ratios = [
                     float(r["metrics"][metric]) / float(b["metrics"][metric])
@@ -550,6 +564,7 @@ class _VllmEngine:
             requests,
             params,
             request_timing=True,
+            step_timing=True,
         )
         torch.cuda.synchronize()
         wall = time.perf_counter() - start
@@ -560,13 +575,17 @@ class _VllmEngine:
         ttft = [float(r["time_to_first_token_s"]) for r in timing["requests"].values()]
         after = self._spans()
         extras = _callback(self.obj, "extras", self.target, {}) if self.obj is not None else {}
+        metrics = {
+            "time_per_output_token_s": wall / generated,
+            "time_to_first_token_s": statistics.fmean(ttft),
+            "tokens_per_s": generated / wall,
+            "peak_gpu_memory_bytes": float(torch.cuda.max_memory_allocated()),
+        }
+        decode = decode_time_per_token(timing.get("steps") or [])
+        if decode is not None:
+            metrics["decode_time_per_token_s"] = decode
         return tokens, {
-            "metrics": {
-                "time_per_output_token_s": wall / generated,
-                "time_to_first_token_s": statistics.fmean(ttft),
-                "tokens_per_s": generated / wall,
-                "peak_gpu_memory_bytes": float(torch.cuda.max_memory_allocated()),
-            },
+            "metrics": metrics,
             "spans": _delta(after, before),
             "extras": extras or {},
             "generated_tokens": generated,
