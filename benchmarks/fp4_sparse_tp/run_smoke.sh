@@ -35,7 +35,7 @@ export LD_LIBRARY_PATH="$LTDIR:$CUDA/lib64:${LD_LIBRARY_PATH:-}"
 gpu-lease 1 --wait --max-min "${MAXMIN:-12}" -- bash -c '
   export LD_LIBRARY_PATH="'"$LTDIR"':'"$CUDA"'/lib64:${LD_LIBRARY_PATH:-}"
   nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm --format=csv,noheader -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
-  "'"$B"'/smoke" 256 0x5EED1234 > "$O/smoke.jsonl" 2>> "$O/errors.txt"
+  for N in 256 512; do "'"$B"'/smoke" "$N" >> "$O/smoke.jsonl" 2>> "$O/errors.txt"; done
 '
 rc=$?
 cat "$O/smoke.jsonl" 2>/dev/null

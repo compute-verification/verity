@@ -1,11 +1,12 @@
-// cuSPARSELt 2:4-structured NVFP4 (E2M1) GEMM smoke test on sm_120: does the library compute a bit-exact small-integer
-// product D = A·B with A 2:4-sparse E2M1 and B dense E2M1, FP32 accumulate?  Resolves the conventions the full three-piece
-// benchmark needs: FP4 nibble order, whether FP4 needs a block scale (SCALE_NONE vs VEC32_UE4M3), prune/compress, and that
-// scalar alpha recovers an integer product.  Prints each cuSPARSELt status and a CPU int64 cross-check.
+// cuSPARSELt 2:4-structured sparse GEMM config sweeper for sm_120: find which (valueType, order, out type, scale mode, n)
+// cuSPARSELt 0.9.1 accepts for E2M1 (NVFP4).  FP8 e4m3 is swept first to confirm the API flow is right, isolating FP4 as
+// the variable.  Each config runs descriptors -> matmul desc -> scales -> alg selection -> plan -> compress -> matmul and
+// reports the stage it reached and the status, non-fatally, plus a CPU int64 cross-check when it completes.
 //
-//   sp_smoke <n> <seed>     n a multiple of 256
+//   sp_smoke [n]
 #include <cusparseLt.h>
 #include <cuda_runtime.h>
+#include <cuda_fp16.h>
 
 #include <cstdint>
 #include <cstdio>
@@ -21,17 +22,7 @@
       exit(3);                                                                                 \
     }                                                                                          \
   } while (0)
-#define SP(x)                                                                                  \
-  do {                                                                                         \
-    cusparseStatus_t s_ = (x);                                                                 \
-    if (s_ != CUSPARSE_STATUS_SUCCESS) {                                                       \
-      fprintf(stderr, "%s:%d %s: cusparseStatus %d (%s)\n", __FILE__, __LINE__, #x, int(s_),   \
-              cusparseGetErrorString(s_));                                                      \
-      exit(4);                                                                                 \
-    }                                                                                          \
-  } while (0)
 
-// E2M1 code of an integer at scale 1: magnitudes 0 1 2 3 4 6 -> codes 0 2 4 5 6 7; sign bit 8.
 static int e2m1_code(int v) {
   int m = v < 0 ? -v : v, c;
   switch (m) {
@@ -45,7 +36,17 @@ static int e2m1_code(int v) {
   }
   return c | (v < 0 ? 8 : 0);
 }
-
+static uint8_t fp8_e4m3(int v) {  // small integers exactly: build via __nv_fp8 would need the header; use known codes.
+  // e4m3: 1->0x38, 2->0x40, -1->0xB8, -2->0xC0, 0->0x00.  (sign|exp(bias7)|mant)
+  switch (v) {
+    case 0: return 0x00;
+    case 1: return 0x38;
+    case 2: return 0x40;
+    case -1: return 0xB8;
+    case -2: return 0xC0;
+  }
+  return 0x00;
+}
 static uint64_t mix64(uint64_t x) {
   x += 0x9E3779B97F4A7C15ull;
   x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
@@ -53,132 +54,179 @@ static uint64_t mix64(uint64_t x) {
   return x ^ (x >> 31);
 }
 
-int main(int argc, char** argv) {
-  const int n = argc > 1 ? atoi(argv[1]) : 256;
-  const uint64_t seed = argc > 2 ? strtoull(argv[2], nullptr, 0) : 0x5EEDull;
-  const int M = n, K = n, N = n;
+static cusparseLtHandle_t H;
 
-  // Host A (M x K row-major int, 2:4 structured along K, values in {-2,-1,1,2}) and B (K x N row-major, values +-1).
+struct Cfg {
+  cudaDataType in;    // operand type
+  cudaDataType out;   // C/D type
+  cusparseComputeType comp;
+  cusparseOrder_t order;
+  cusparseLtMatmulMatrixScale_t scale;  // (cast) or 255 for NONE
+  bool use_scale;
+  int n;
+};
+
+// Returns a short description of the furthest stage reached and sets *st to the last status; *mism to CPU mismatches (-1 if
+// not reached).  Builds A 2:4-structured (values in {-2,-1,1,2}) and B dense (+-1); alpha=1.
+static const char* run_cfg(const Cfg& c, int* st, long* mism) {
+  const int M = c.n, K = c.n, N = c.n;
+  const bool fp4 = c.in == CUDA_R_4F_E2M1;
+  *mism = -1;
+  *st = 0;
   std::vector<int> hA(size_t(M) * K, 0), hB(size_t(K) * N);
   for (int i = 0; i < M; ++i)
     for (int g = 0; g < K; g += 4) {
-      uint64_t r = mix64(seed ^ (uint64_t(i) << 20) ^ g);
+      uint64_t r = mix64(0x5EEDull ^ (uint64_t(i) << 20) ^ g);
       int p0 = r & 3, p1 = (r >> 2) & 3;
       if (p1 == p0) p1 = (p1 + 1) & 3;
-      int vals[2] = {int((r >> 8) & 3), int((r >> 16) & 3)};
       static const int MAP[4] = {1, 2, -1, -2};
-      hA[size_t(i) * K + g + p0] = MAP[vals[0]];
-      hA[size_t(i) * K + g + p1] = MAP[vals[1]];
+      hA[size_t(i) * K + g + p0] = MAP[(r >> 8) & 3];
+      hA[size_t(i) * K + g + p1] = MAP[(r >> 16) & 3];
     }
-  for (size_t i = 0; i < size_t(K) * N; ++i) hB[i] = (mix64(seed ^ 0xABCDull ^ i) & 1) ? 1 : -1;
+  for (size_t i = 0; i < size_t(K) * N; ++i) hB[i] = (mix64(0xABCDull ^ i) & 1) ? 1 : -1;
 
-  // Pack to E2M1, 2 values a byte: low nibble = even column.
-  std::vector<uint8_t> pA(size_t(M) * K / 2), pB(size_t(K) * N / 2);
-  for (size_t i = 0; i < size_t(M) * K / 2; ++i) pA[i] = e2m1_code(hA[2 * i]) | (e2m1_code(hA[2 * i + 1]) << 4);
-  for (size_t i = 0; i < size_t(K) * N / 2; ++i) pB[i] = e2m1_code(hB[2 * i]) | (e2m1_code(hB[2 * i + 1]) << 4);
-
+  // Pack operands.
+  auto packed_bytes = [&](size_t elems) { return fp4 ? elems / 2 : elems; };
+  std::vector<uint8_t> pA(packed_bytes(size_t(M) * K)), pB(packed_bytes(size_t(K) * N));
+  if (fp4) {
+    for (size_t i = 0; i < size_t(M) * K / 2; ++i) pA[i] = e2m1_code(hA[2 * i]) | (e2m1_code(hA[2 * i + 1]) << 4);
+    for (size_t i = 0; i < size_t(K) * N / 2; ++i) pB[i] = e2m1_code(hB[2 * i]) | (e2m1_code(hB[2 * i + 1]) << 4);
+  } else {
+    for (size_t i = 0; i < size_t(M) * K; ++i) pA[i] = fp8_e4m3(hA[i]);
+    for (size_t i = 0; i < size_t(K) * N; ++i) pB[i] = fp8_e4m3(hB[i]);
+  }
   uint8_t *dA, *dB;
-  float* dD;
+  void* dD;
+  size_t outsz = c.out == CUDA_R_32F ? 4 : 2;
   CK(cudaMalloc(&dA, pA.size()));
   CK(cudaMalloc(&dB, pB.size()));
-  CK(cudaMalloc(&dD, size_t(M) * N * sizeof(float)));
+  CK(cudaMalloc(&dD, size_t(M) * N * outsz));
   CK(cudaMemcpy(dA, pA.data(), pA.size(), cudaMemcpyHostToDevice));
   CK(cudaMemcpy(dB, pB.data(), pB.size(), cudaMemcpyHostToDevice));
 
-  cusparseLtHandle_t h;
-  SP(cusparseLtInit(&h));
-  int ver = 0;
-  cusparseLtGetVersion(&h, &ver);
-  printf("{\"cusparseLt_version\":%d}\n", ver);
-
   cusparseLtMatDescriptor_t mA, mB, mC;
-  const int ALIGN = 16;
-  SP(cusparseLtStructuredDescriptorInit(&h, &mA, M, K, K, ALIGN, CUDA_R_4F_E2M1, CUSPARSE_ORDER_ROW,
-                                        CUSPARSELT_SPARSITY_50_PERCENT));
-  SP(cusparseLtDenseDescriptorInit(&h, &mB, K, N, N, ALIGN, CUDA_R_4F_E2M1, CUSPARSE_ORDER_ROW));
-  SP(cusparseLtDenseDescriptorInit(&h, &mC, M, N, N, ALIGN, CUDA_R_32F, CUSPARSE_ORDER_ROW));
-
+  const int AL = 16;
+  const int64_t ldA = K, ldB = N, ldC = N;  // row-major
+  cusparseStatus_t s;
+  s = cusparseLtStructuredDescriptorInit(&H, &mA, M, K, ldA, AL, c.in, c.order, CUSPARSELT_SPARSITY_50_PERCENT);
+  *st = s; if (s) return "structA";
+  s = cusparseLtDenseDescriptorInit(&H, &mB, K, N, ldB, AL, c.in, c.order);
+  *st = s; if (s) return "denseB";
+  s = cusparseLtDenseDescriptorInit(&H, &mC, M, N, ldC, AL, c.out, c.order);
+  *st = s; if (s) return "denseC";
   cusparseLtMatmulDescriptor_t mm;
-  SP(cusparseLtMatmulDescriptorInit(&h, &mm, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, &mA, &mB,
-                                    &mC, &mC, CUSPARSE_COMPUTE_32F));
-
-  // FP4 (E2M1) requires a block-scale mode.  A uniform scale of 1.0 (UE4M3 code 0x38) is layout-independent, so a
-  // generously-sized all-0x38 array works and the scalar alpha carries any per-operand scale.
-  cusparseLtMatmulMatrixScale_t smode = CUSPARSELT_MATMUL_MATRIX_SCALE_VEC32_UE4M3;
-  SP(cusparseLtMatmulDescSetAttribute(&h, &mm, CUSPARSELT_MATMUL_A_SCALE_MODE, &smode, sizeof smode));
-  SP(cusparseLtMatmulDescSetAttribute(&h, &mm, CUSPARSELT_MATMUL_B_SCALE_MODE, &smode, sizeof smode));
-  uint8_t *dSA, *dSB;
-  size_t scaleBytes = size_t(M) * K / 16;  // generous (VEC32 needs K/32 per row); all 1.0
-  CK(cudaMalloc(&dSA, scaleBytes));
-  CK(cudaMalloc(&dSB, size_t(K) * N / 16));
-  CK(cudaMemset(dSA, 0x38, scaleBytes));
-  CK(cudaMemset(dSB, 0x38, size_t(K) * N / 16));
-  void* pSA = dSA;
-  void* pSB = dSB;
-  SP(cusparseLtMatmulDescSetAttribute(&h, &mm, CUSPARSELT_MATMUL_A_SCALE_POINTER, &pSA, sizeof pSA));
-  SP(cusparseLtMatmulDescSetAttribute(&h, &mm, CUSPARSELT_MATMUL_B_SCALE_POINTER, &pSB, sizeof pSB));
-
+  s = cusparseLtMatmulDescriptorInit(&H, &mm, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, &mA, &mB,
+                                     &mC, &mC, c.comp);
+  *st = s; if (s) return "matmulDesc";
+  uint8_t *dSA = nullptr, *dSB = nullptr;
+  if (c.use_scale) {
+    s = cusparseLtMatmulDescSetAttribute(&H, &mm, CUSPARSELT_MATMUL_A_SCALE_MODE, &c.scale, sizeof c.scale);
+    *st = s; if (s) return "setAscaleMode";
+    s = cusparseLtMatmulDescSetAttribute(&H, &mm, CUSPARSELT_MATMUL_B_SCALE_MODE, &c.scale, sizeof c.scale);
+    *st = s; if (s) return "setBscaleMode";
+    size_t sb = size_t(M) * K;  // generous; uniform so layout-independent
+    CK(cudaMalloc(&dSA, sb));
+    CK(cudaMalloc(&dSB, sb));
+    if (c.scale == CUSPARSELT_MATMUL_MATRIX_SCALE_SCALAR_32F) {
+      float one = 1.f;
+      CK(cudaMemcpy(dSA, &one, 4, cudaMemcpyHostToDevice));
+      CK(cudaMemcpy(dSB, &one, 4, cudaMemcpyHostToDevice));
+    } else {
+      CK(cudaMemset(dSA, 0x38, sb));  // UE4M3 1.0; UE8M0 1.0 is 127 (0x7F) but we test UE4M3 path for NVFP4
+      CK(cudaMemset(dSB, 0x38, sb));
+    }
+    void *pSA = dSA, *pSB = dSB;
+    s = cusparseLtMatmulDescSetAttribute(&H, &mm, CUSPARSELT_MATMUL_A_SCALE_POINTER, &pSA, sizeof pSA);
+    *st = s; if (s) return "setAscalePtr";
+    s = cusparseLtMatmulDescSetAttribute(&H, &mm, CUSPARSELT_MATMUL_B_SCALE_POINTER, &pSB, sizeof pSB);
+    *st = s; if (s) return "setBscalePtr";
+  }
   cusparseLtMatmulAlgSelection_t alg;
-  SP(cusparseLtMatmulAlgSelectionInit(&h, &alg, &mm, CUSPARSELT_MATMUL_ALG_DEFAULT));
+  s = cusparseLtMatmulAlgSelectionInit(&H, &alg, &mm, CUSPARSELT_MATMUL_ALG_DEFAULT);
+  *st = s; if (s) return "algSelect";
   cusparseLtMatmulPlan_t plan;
-  SP(cusparseLtMatmulPlanInit(&h, &plan, &mm, &alg));
-
+  s = cusparseLtMatmulPlanInit(&H, &plan, &mm, &alg);
+  *st = s; if (s) return "planInit";
   size_t cSize = 0, cBuf = 0;
-  SP(cusparseLtSpMMACompressedSize(&h, &plan, &cSize, &cBuf));
-  printf("{\"compressed_bytes\":%zu,\"compress_buf_bytes\":%zu}\n", cSize, cBuf);
+  s = cusparseLtSpMMACompressedSize(&H, &plan, &cSize, &cBuf);
+  *st = s; if (s) return "compressedSize";
   uint8_t *dAc, *dAcBuf;
-  CK(cudaMalloc(&dAc, cSize));
+  CK(cudaMalloc(&dAc, cSize ? cSize : 1));
   CK(cudaMalloc(&dAcBuf, cBuf ? cBuf : 1));
-
-  // Validate the structure, then compress (no prune: the matrix is already 2:4 by construction).
-  int valid = -1, *dValid;
-  CK(cudaMalloc(&dValid, sizeof(int)));
-  SP(cusparseLtSpMMAPruneCheck2(&h, &mA, 1, CUSPARSE_OPERATION_NON_TRANSPOSE, dA, dValid, nullptr));
-  CK(cudaMemcpy(&valid, dValid, sizeof(int), cudaMemcpyDeviceToHost));
-  printf("{\"prune_check_valid(0=ok)\":%d}\n", valid);
-  SP(cusparseLtSpMMACompress(&h, &plan, dA, dAc, dAcBuf, nullptr));
-  CK(cudaDeviceSynchronize());
-
+  s = cusparseLtSpMMACompress(&H, &plan, dA, dAc, dAcBuf, nullptr);
+  *st = s; if (s) return "compress";
   size_t wsSize = 0;
-  SP(cusparseLtMatmulGetWorkspace(&h, &plan, &wsSize));
+  cusparseLtMatmulGetWorkspace(&H, &plan, &wsSize);
   void* dWs;
   CK(cudaMalloc(&dWs, wsSize ? wsSize : 1));
-
   float alpha = 1.f, beta = 0.f;
-  cudaStream_t st = nullptr;
-  CK(cudaMemset(dD, 0xA5, size_t(M) * N * sizeof(float)));
-  cusparseStatus_t mret = cusparseLtMatmul(&h, &plan, &alpha, dAc, dB, &beta, dD, dD, dWs, &st, 1);
-  printf("{\"matmul_status(0=ok)\":%d,\"name\":\"%s\"}\n", int(mret), cusparseLtGetErrorName(mret));
+  cudaStream_t str = nullptr;
+  CK(cudaMemset(dD, 0, size_t(M) * N * outsz));
+  s = cusparseLtMatmul(&H, &plan, &alpha, dAc, dB, &beta, dD, dD, dWs, &str, 1);
+  *st = s; if (s) return "matmul";
   CK(cudaDeviceSynchronize());
-
-  std::vector<float> hD(size_t(M) * N);
-  CK(cudaMemcpy(hD.data(), dD, size_t(M) * N * sizeof(float), cudaMemcpyDeviceToHost));
-
-  // CPU int64 reference D = A·B row-major; report mismatches and a sample.
-  size_t bad = 0;
-  int64_t sample_cpu = 0, sample_gpu = 0;
-  for (int i = 0; i < M; ++i) {
+  std::vector<uint8_t> hD(size_t(M) * N * outsz);
+  CK(cudaMemcpy(hD.data(), dD, hD.size(), cudaMemcpyDeviceToHost));
+  long bad = 0;
+  for (int i = 0; i < M && bad < 1000000; ++i)
     for (int j = 0; j < N; ++j) {
-      int64_t s = 0;
-      for (int kk = 0; kk < K; ++kk) s += int64_t(hA[size_t(i) * K + kk]) * hB[size_t(kk) * N + j];
-      if (float(s) != hD[size_t(i) * N + j]) {
-        if (bad < 4)
-          fprintf(stderr, "mismatch (%d,%d) cpu=%lld gpu=%.1f\n", i, j, (long long)s, hD[size_t(i) * N + j]);
-        ++bad;
-      }
-      if (i == 0 && j == 0) {
-        sample_cpu = s;
-        sample_gpu = int64_t(hD[0]);
-      }
+      int64_t sref = 0;
+      for (int kk = 0; kk < K; ++kk) sref += int64_t(hA[size_t(i) * K + kk]) * hB[size_t(kk) * N + j];
+      double got = c.out == CUDA_R_32F ? double(((float*)hD.data())[size_t(i) * N + j])
+                                       : double(__half2float(((__half*)hD.data())[size_t(i) * N + j]));
+      if (double(sref) != got) ++bad;
     }
-  }
-  printf("{\"n\":%d,\"checked\":%zu,\"mismatches\":%zu,\"sample00_cpu\":%lld,\"sample00_gpu\":%lld,\"PASS\":%s}\n", n,
-         size_t(M) * N, bad, (long long)sample_cpu, (long long)sample_gpu, bad ? "false" : "true");
-
+  *mism = bad;
   cusparseLtMatmulPlanDestroy(&plan);
-  cusparseLtMatDescriptorDestroy(&mA);
-  cusparseLtMatDescriptorDestroy(&mB);
-  cusparseLtMatDescriptorDestroy(&mC);
-  cusparseLtDestroy(&h);
-  return bad ? 1 : 0;
+  cudaFree(dA); cudaFree(dB); cudaFree(dD); cudaFree(dAc); cudaFree(dAcBuf); cudaFree(dWs);
+  if (dSA) cudaFree(dSA);
+  if (dSB) cudaFree(dSB);
+  return "DONE";
+}
+
+int main(int argc, char** argv) {
+  const int n = argc > 1 ? atoi(argv[1]) : 256;
+  cusparseStatus_t is = cusparseLtInit(&H);
+  if (is) { fprintf(stderr, "init %d\n", int(is)); return 4; }
+  int ver = 0;
+  cusparseLtGetVersion(&H, &ver);
+  printf("{\"cusparseLt_version\":%d,\"n\":%d}\n", ver, n);
+
+  auto SC = [](cusparseLtMatmulMatrixScale_t m) {
+    switch (m) {
+      case CUSPARSELT_MATMUL_SCALE_NONE: return "NONE";
+      case CUSPARSELT_MATMUL_MATRIX_SCALE_SCALAR_32F: return "SCALAR32F";
+      case CUSPARSELT_MATMUL_MATRIX_SCALE_VEC32_UE4M3: return "VEC32_UE4M3";
+      case CUSPARSELT_MATMUL_MATRIX_SCALE_VEC64_UE8M0: return "VEC64_UE8M0";
+    }
+    return "?";
+  };
+  struct Case { const char* tag; Cfg c; };
+  std::vector<Case> cases;
+  // FP8 e4m3 sanity (no scale, FP32 out), both orders.
+  cases.push_back({"fp8", {CUDA_R_8F_E4M3, CUDA_R_32F, CUSPARSE_COMPUTE_32F, CUSPARSE_ORDER_ROW,
+                           CUSPARSELT_MATMUL_SCALE_NONE, false, n}});
+  cases.push_back({"fp8_col", {CUDA_R_8F_E4M3, CUDA_R_32F, CUSPARSE_COMPUTE_32F, CUSPARSE_ORDER_COL,
+                               CUSPARSELT_MATMUL_SCALE_NONE, false, n}});
+  // FP4 e2m1 sweep.
+  for (cusparseOrder_t ord : {CUSPARSE_ORDER_ROW, CUSPARSE_ORDER_COL})
+    for (cudaDataType out : {CUDA_R_32F, CUDA_R_16F})
+      for (auto sm : {CUSPARSELT_MATMUL_MATRIX_SCALE_VEC32_UE4M3, CUSPARSELT_MATMUL_MATRIX_SCALE_SCALAR_32F,
+                      CUSPARSELT_MATMUL_SCALE_NONE})
+        cases.push_back({"fp4", {CUDA_R_4F_E2M1, out, CUSPARSE_COMPUTE_32F, ord, sm,
+                                 sm != CUSPARSELT_MATMUL_SCALE_NONE, n}});
+
+  for (auto& cs : cases) {
+    int st = 0;
+    long mism = -2;
+    const char* stage = run_cfg(cs.c, &st, &mism);
+    printf("{\"tag\":\"%s\",\"in\":\"%s\",\"order\":\"%s\",\"out\":\"%s\",\"scale\":\"%s\",\"stage\":\"%s\","
+           "\"status\":%d,\"name\":\"%s\",\"mismatches\":%ld}\n",
+           cs.tag, cs.c.in == CUDA_R_4F_E2M1 ? "e2m1" : "e4m3", cs.c.order == CUSPARSE_ORDER_ROW ? "ROW" : "COL",
+           cs.c.out == CUDA_R_32F ? "f32" : "f16", SC(cs.c.scale), stage, st, cusparseLtGetErrorName((cusparseStatus_t)st),
+           mism);
+    fflush(stdout);
+  }
+  cusparseLtDestroy(&H);
+  return 0;
 }
