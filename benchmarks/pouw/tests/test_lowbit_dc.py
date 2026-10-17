@@ -1,8 +1,9 @@
 """lowbit_dc: each emulated route's k32 word step as egemm.cu states it (k3z and k4s on tcgen05, k3h on wgmma E4M3),
 modelled in FP32 against the int64 word on every int8 pair and on the limb extremes, with the adder conditions fpx
 measured (B200: exact iff representable; H200: a 14-bit window); and analyze.py's tables on synthetic rows. emu8's
-tests cover the k3 and k4 identities themselves. `test_build_selftest` builds egemm.cu with nvcc; it skips without
-CUDA 13's nvcc. The kernels need a B200 or an H200 (`run.sh gemm`)."""
+tests cover the k3 and k4 identities themselves. `test_build_selftest` builds egemm.cu and
+`test_pgemm_build_selftest_issue` pgemm.cu with nvcc; they skip without CUDA 13's nvcc. The kernels need a B200 or an
+H200 (`run.sh gemm`; pgemm a B200, `run.sh pgemm`)."""
 from __future__ import annotations
 
 import importlib.util
@@ -171,6 +172,86 @@ def test_gemm_main_exit(tmp_path, capsys):
     assert an.gemm_main([str(tmp_path)]) == 4
 
 
+def _pg_gate(arm: str, ok: bool = True) -> dict:
+    return _gate(arm, ok) | {"m": 128, "n": 128, "k": 128, "dist": "uniform"}
+
+
+def _pg_bench() -> dict:
+    """pgemm bench's line: at both spacings every Dither route takes FULL 1.0 ms at FW 2 (k4s 2.0, i8c 1.0 at FW 1),
+    and the split arms MMA 0.4, LD 0.5, EXT 0.8, FOLDONLY 0.9 ms (k4s's fold alone 1.9)."""
+    b = {"mode": "bench", "arch": "sm_100a", "m": 4096, "n": 4096, "k": 4096, "reps": 20, "sms": 148,
+         "clock_khz": 1965000, "cublaslt_f8_out": "f32", "pf8_ms": 0.2, "pi8_ms": 0.25, "cublaslt_f8_ms": 0.125,
+         "cublaslt_i8_ms": 0.16}
+    for L in (32, 64):
+        for r in an.PG_DITHER:
+            b[f"{r}_L{L}_fw2_full_ms"] = 2.0 if r == "k4s" else 1.0
+            if r != "k4p":
+                b[f"{r}_L{L}_fw1_full_ms"] = 1.6 if r == "k4s" else 1.2
+            for md, ms in (("mma", 0.4), ("ld", 0.5), ("ext", 0.8), ("foldonly", 1.9 if r == "k4s" else 0.9)):
+                b[f"{r}_L{L}_fw2_{md}_ms"] = ms
+    return b
+
+
+def _pg_sass(arm: tuple[int, int, int, int], word: list[str], extra: int = 0) -> str:
+    """A cuobjdump kernel whose word loop is BNR copies of `word` (and `extra` lone MOVs) closed by a backward BRA."""
+    r, md, L, fw = arm
+    ops = ["S2R R0, SR_TID.X"] + [w for _ in range(128 // fw) for w in word] + ["MOV R1, R2"] * extra
+    lines = [f"        /*{16 * i:04x}*/                   {op} ;" for i, op in enumerate(ops)]
+    lines.append(f"        /*{16 * len(ops):04x}*/                   BRA 0x10 ;")
+    return f"\n\tFunction : _Z5pg100ILi{r}ELi{md}ELi{L}ELi{fw}EEvPKhS1_iiijPiPjiPKj\n" + "\n".join(lines) + "\n"
+
+
+def test_fold_mix_word_loop():
+    duo = ["LOP3.LUT R3, R3, R4, R5, 0x96, !PT", "IMAD R6, R3, R7, R8", "LEA.HI R8, R3, R6, R3, 0x5"]
+    sass = (_pg_sass((0, 0, 32, 2), ["IADD3 R9, R9, R10, -R11"] + duo, extra=64)
+            + _pg_sass((5, 0, 32, 2), ["IMAD.IADD R9, R9, 0x1, R10"] + duo)
+            + _pg_sass((1, 4, 64, 1), duo) + _pg_sass((0, 3, 32, 2), ["SYNCS.ARRIVE.TRANS64 RZ, [UR4], RZ"]))
+    mix = an.fold_mix(sass)
+    k4s, k4p = mix["k4s_L32_fw2_full"], mix["k4p_L32_fw2_full"]
+    assert k4s["alu_word"] == 3 and k4s["imad_word"] == 1 and k4s["instrs_word"] == pytest.approx(5 + 1 / 64)
+    assert k4s["model_words_sm_clk"] == pytest.approx(64 / 3)  # the ALU pipe binds: 3 ops at 2 warp instrs a clock
+    assert k4p["alu_word"] == 2 and k4p["imad_word"] == 2  # balanced, so issue binds: 4 a clock over 4 + 1/64
+    assert k4p["model_words_sm_clk"] == pytest.approx(128 / (4 + 1 / 64))
+    assert mix["i8c_L64_fw1_foldonly"]["model_words_sm_clk"] == pytest.approx(32)
+    assert mix["k4s_L32_fw2_mma"]["instrs_word"] == pytest.approx(1 + 1 / 64)
+    assert set(mix) == {"k4s_L32_fw2_full", "k4p_L32_fw2_full", "i8c_L64_fw1_foldonly", "k4s_L32_fw2_mma"}
+
+
+def test_pgemm_summary_gamma_split_binding():
+    s = an.pgemm_summary([_pg_gate("k4s_L32_fw2_full"), _pg_gate("i8c_L32_fw2_full", ok=False)], [_pg_bench()],
+                         {"k4s_L32_fw2_full": {"alu_word": 3.0}})
+    assert s["gates"] == 2 and s["gates_exact"] == 1 and len(s["bench"]) == 2
+    row = next(r for r in s["bench"] if r["L"] == 32)
+    k4s, i8c, k4p = (row["routes"][r] for r in ("k4s", "i8c", "k4p"))
+    assert k4s["fw"] == 1 and k4s["full_ms"] == 1.6 and i8c["fw"] == 2 and k4p["fw"] == 2
+    assert k4s["gamma_cublaslt_f8"] == pytest.approx(12.8) and k4s["gamma_pf8"] == pytest.approx(8)
+    assert k4s["gamma_cublaslt_i8"] == pytest.approx(10) and k4s["gamma_pi8"] == pytest.approx(6.4)
+    assert row["int8_dither"] in ("i8c", "i8r") and k4s["over_int8_dither"] == pytest.approx(1.6)
+    sp = k4s["split_ms"]  # at FW 2, whose FULL is 2.0
+    assert (sp["tensor"], sp["tensor_memory_loads"], sp["extraction"], sp["fold"]) == pytest.approx((0.4, 0.1, 0.3, 1.2))
+    assert k4s["binding"] == "fold" and k4s["binding_of_full"] == pytest.approx(0.95)
+    assert k4s["issue"] == {"alu_word": 3.0} and i8c["issue"] is None
+    words = 4096**3 / 32
+    assert k4s["words_sm_clk"] == pytest.approx(words / (1.6e-3 * 148 * 1.965e9))
+    assert row["plain_words_sm_clk"]["cublaslt_f8"] == pytest.approx(words / (0.125e-3 * 148 * 1.965e9))
+    row64 = next(r for r in s["bench"] if r["L"] == 64)
+    assert row64["routes"]["k4s"]["words_sm_clk"] == pytest.approx(k4s["words_sm_clk"] / 2)
+
+
+def test_pgemm_main_exit(tmp_path, capsys):
+    (tmp_path / "bench.jsonl").write_text(json.dumps(_pg_bench()) + "\n")
+    (tmp_path / "gate.jsonl").write_text(json.dumps(_pg_gate("k4s_L32_fw2_full")) + "\n")
+    assert an.pgemm_main([str(tmp_path), "--json", str(tmp_path / "s.json")]) == 0
+    out = capsys.readouterr().out
+    assert "gates exact (C, receipts, control rejected): 1 of 1" in out and "| 4096x4096x4096 | 32 | k4s | 1 |" in out
+    assert json.loads((tmp_path / "s.json").read_text())["bench"][0]["routes"]["k4s"]["binding"] == "fold"
+    (tmp_path / "gate.jsonl").write_text(json.dumps(_pg_gate("k4s_L32_fw2_full", ok=False)) + "\n")
+    assert an.pgemm_main([str(tmp_path)]) == 4
+    (tmp_path / "bench.jsonl").write_text("")
+    (tmp_path / "gate.jsonl").write_text(json.dumps(_pg_gate("k4s_L32_fw2_full")) + "\n")
+    assert an.pgemm_main([str(tmp_path)]) == 4
+
+
 def _rec(cfg: str, K: int, **kw) -> dict:
     r = {"cfg": cfg, "fmt": "e4m3", "grid": "int", "s": 1, "dist": "uniform", "c0": "zero", "c0bits": "0x0", "sa": 0,
          "sb": 0, "unit_num": 1, "unit_e": 0, "control": False, "K": K, "n": 10, "rep": 10, "inexact": 0, "bad_rep": 0,
@@ -220,6 +301,37 @@ def test_build_selftest(tmp_path):
             spilled
         out = json.loads(subprocess.run([str(binary), "selftest"], capture_output=True, text=True, check=True).stdout)
         assert out["encode_bad"] == 0 and out["identity_bad"] == 0 and out["identity_pairs"] == 3 * 65536
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not (_tool("nvcc") and _tool("cuobjdump")), reason="needs nvcc and cuobjdump (CUDA 13)")
+def test_pgemm_build_selftest_issue(tmp_path):
+    """What only the compiler shows: pgemm.cu's host encoding is exact (selftest), every Dither route's FULL kernel at
+    FW 2 compiles without spills (FW 1's k4s and k4p spill, FOLDONLY 4 bytes), and the word loop's issue cost is the
+    route's: k4s 3 ALU-pipe ops a word (64/3 words/SM/clk), k4p and i8r 2 ALU plus 2 IMAD, i8c duo alone. A
+    rematerialized tcgen05.st constant, which once cost k4s a move a word, fails the last."""
+    binary = tmp_path / "pgemm"
+    r = subprocess.run([_tool("nvcc"), "-std=c++17", "-O3", "-Xptxas", "-v", "-gencode",
+                        "arch=compute_100a,code=sm_100a", "-o", str(binary), str(HERE / "pgemm.cu")],
+                       capture_output=True, text=True, check=True)
+    spilled, fn = {}, None
+    for ln in r.stderr.splitlines():
+        if m := re.search(r"Compiling entry function '(\S+)'", ln):
+            fn = m.group(1)
+        elif (m := re.search(r"(\d+) bytes spill stores", ln)) and m.group(1) != "0":
+            spilled[fn] = int(m.group(1))
+    assert not [f for f in spilled if re.match(r"_Z5pg100ILi\dELi0ELi\d+ELi2E", f)], spilled
+    out = json.loads(subprocess.run([str(binary), "selftest"], capture_output=True, text=True, check=True).stdout)
+    assert out == {"mode": "selftest", "identity_pairs": 65536, "identity_bad": 0, "encode_bad": 0, "tile_bad": 0}
+    mix = an.fold_mix(subprocess.run([_tool("cuobjdump"), "-sass", str(binary)], capture_output=True, text=True,
+                                     check=True).stdout)
+    for L in (32, 64):
+        word = {r: mix[f"{r}_L{L}_fw2_full"] for r in an.PG_DITHER}
+        assert word["k4s"]["alu_word"] == pytest.approx(3, abs=0.1) and word["k4s"]["imad_word"] < 1.1
+        for r in ("k4p", "i8r"):
+            assert word[r]["alu_word"] == pytest.approx(2, abs=0.1) and word[r]["imad_word"] == pytest.approx(2, abs=0.1)
+        assert word["i8c"]["alu_word"] == pytest.approx(2, abs=0.1) and word["i8c"]["imad_word"] < 1.1
+        assert all(w["instrs_word"] < 4.7 for w in word.values()), word
 
 
 @pytest.mark.slow
