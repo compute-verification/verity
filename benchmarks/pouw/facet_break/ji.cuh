@@ -7,8 +7,9 @@
 //       the group, 2 half before and half after each MMA, 3 before each MMA
 //   FB_JSPEC(name, Form, NA, U, L1, L2, L3, MW, LQ, tpb)
 //       MW warps a SMSP: 8U MMAs a trip (OP_LOOP); the rest: LQ lane ops a trip (OP_UNTIL)
-//   FB_JMIX2(name, Form1, Form2, L1, L2, L3, Q, tpb)
-//       every warp: 8 MMAs an iteration, the two forms in turn, and Q lane ops after them as jmix's P 0
+//   FB_JMIX2(name, Form1, Form2, NA, U, L1, L2, L3, Q, tpb)
+//       every warp: 8U MMAs an iteration, the two forms in turn, each on its own NA accumulators, and Q lane ops a group
+//       of 8 MMAs as jmix's P 0
 #pragma once
 #include "mem.cuh"
 
@@ -105,21 +106,25 @@ __device__ __forceinline__ void jspec(const OpArgs& a) {
   OP_SINK((lane ^ m.fold() ^ o.template fold3<L1, L2, L3>()))
 }
 
-// Two forms in turn: MMA c of a group is F1's (c even) or F2's (c odd), each on its own 4 accumulators; lanes as jmix's P 0
-template <class F1, class F2, int L1, int L2, int L3, int Q>
+// Two forms in turn: MMA c of group g is F1's (c even) or F2's (c odd), the form's (4g + c/2)-th on its own NA
+// accumulators; lanes as jmix's P 0
+template <class F1, class F2, int NA, int U, int L1, int L2, int L3, int Q>
 __device__ __forceinline__ void jmix2(const OpArgs& a) {
   const uint32_t lane = threadIdx.x & 31;
-  MmaN<F1, 4> m1(lane);
-  MmaN<F2, 4> m2(lane);
+  MmaN<F1, NA> m1(lane);
+  MmaN<F2, NA> m2(lane);
   Lanes o(a);
   OP_BEGIN
   OP_LOOP(it) {
 #pragma unroll
-    for (int c = 0; c < 8; c++) {
-      if (c & 1) m2.go(c >> 1);
-      else m1.go(c >> 1);
+    for (int g = 0; g < U; g++) {
 #pragma unroll
-      for (int q = c * Q / 8; q < (c + 1) * Q / 8; q++) o.template op3<L1, L2, L3>(q);
+      for (int c = 0; c < 8; c++) {
+        if (c & 1) m2.go(4 * g + (c >> 1));
+        else m1.go(4 * g + (c >> 1));
+#pragma unroll
+        for (int q = g * Q + c * Q / 8; q < g * Q + (c + 1) * Q / 8; q++) o.template op3<L1, L2, L3>(q);
+      }
     }
   }
   OP_END
@@ -128,8 +133,8 @@ __device__ __forceinline__ void jmix2(const OpArgs& a) {
 
 }  // namespace fb
 
-#define FB_JMIX2(name, F1, F2, L1, L2, L3, Q, TPB) \
-  OP_KERNEL(name, TPB) { fb::jmix2<fb::F1, fb::F2, fb::L1, fb::L2, fb::L3, Q>(a); }
+#define FB_JMIX2(name, F1, F2, NA, U, L1, L2, L3, Q, TPB) \
+  OP_KERNEL(name, TPB) { fb::jmix2<fb::F1, fb::F2, NA, U, fb::L1, fb::L2, fb::L3, Q>(a); }
 #define FB_JMIX(name, F, NA, U, L1, L2, L3, Q, P, D, QD, TPB) \
   OP_KERNEL(name, TPB) { fb::jmix<fb::F, NA, U, fb::L1, fb::L2, fb::L3, Q, P, fb::D, QD>(a); }
 #define FB_JSPEC(name, F, NA, U, L1, L2, L3, MW, LQ, TPB) \

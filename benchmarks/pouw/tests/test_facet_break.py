@@ -104,11 +104,21 @@ def test_fine_grid_sweeps_the_near_frontier_and_the_ji3n_0_form():
 
 
 def test_rt_families_are_unique_and_hold_the_programs_that_broke_ji3s_and_ji3t():
-    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192, "rt7": 144}
+    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192, "rt7": 144, "rt8": 377}
     names = {f: [g["name"] for g in gen.grid(0, 0, family=f)] for f in sizes}
     assert {f: len(set(n)) for f, n in names.items()} == {f: len(n) for f, n in names.items()} == sizes
     assert "jm_i16832_fmuli_q120_p0_a3u20_w8" in names["rt4"]
     assert "jm_isp16864_fmuli_q128_p0_a2u16_w8" in names["rt5"]
+    assert {"jx_i16832_isp16864_fmuli_q128_a1u20_w8", "jx_i16832_osf16864_none_q0_a8u4_w8", "al_mufu_popc_w16",
+            "jm_isp16864_fmuli_q128_p0_a2u20_w8_k3"} <= set(names["rt8"])
+
+
+def test_two_forms_take_their_accumulators_and_unroll_and_keep_the_ji_names():
+    g = gen._jx("i16832", "isp16864", "fmuli", 128, 2, na=1, u=20)
+    assert gen.expect_of(g) == ("IMMA.16832.S8.S8=80,IMMA.SP.16864.S8.S8=80,FMUL=2560", "", 0)
+    assert "FB_JMIX2(jx_i16832_isp16864_fmuli_q128_a1u20_w8, I16832, ISP16864, 1, 20, L_FMULI, L_NONE, L_NONE, 128, 256)" \
+        in gen.emit_cu([g | {"name": gen.name_of(g)}])
+    assert gen.name_of(gen._jx("i16832", "h1688t", ("fmuli", "axi"), 96, 4)) == "jx_i16832_h1688t_fmuli_axi_q96_w16"
 
 
 def test_mem_grid_is_seeded_unique_and_counts_each_slot():

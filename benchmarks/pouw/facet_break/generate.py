@@ -105,7 +105,8 @@ def lanes_of(g: dict) -> list[str]:
 def name_of(g: dict) -> str:
     w = g["tpb"] // 32
     if g["kind"] == "jx":
-        return f"jx_{g['form']}_{g['form2']}_{'_'.join(lanes_of(g)) or 'none'}_q{g['q']}_w{w}"
+        sched = "" if (g["na"], g["u"]) == (4, 1) else f"_a{g['na']}u{g['u']}"
+        return f"jx_{g['form']}_{g['form2']}_{'_'.join(lanes_of(g)) or 'none'}_q{g['q']}{sched}_w{w}"
     if g["kind"] in ("jm", "js"):
         ls = "_".join(lanes_of(g)) or "none"
         sched = f"a{g['na']}u{g['u']}"
@@ -151,7 +152,8 @@ def expect_of(g: dict) -> tuple[str, str, int]:
 
     w = g["tpb"] // 32
     if g["kind"] == "jx":
-        return fmt(add({FORMS[g["form"]][1]: 4, FORMS[g["form2"]][1]: 4}, lane_counts(g["q"]))), "", 0
+        mmas = {FORMS[g["form"]][1]: 4 * g["u"], FORMS[g["form2"]][1]: 4 * g["u"]}
+        return fmt(add(mmas, lane_counts(g["u"] * g["q"]))), "", 0
     if g["kind"] == "jm":
         d = add({FORMS[g["form"]][1]: 8 * g["u"]}, lane_counts(g["u"] * g["q"]))
         if g.get("d"):
@@ -383,6 +385,13 @@ def _jm(form: str, ls, q: int, w: int, p: int = 0, na: int = 8, u: int = 1, d: s
     return g | ({"d": d, "qd": qd} if d else {})
 
 
+def _jx(form: str, form2: str, ls, q: int, w: int, na: int = 4, u: int = 1) -> dict:
+    """Two forms in turn (ji.cuh's jmix2), `na` accumulators each."""
+    ls = (ls,) if isinstance(ls, str) else tuple(ls)
+    g = {"kind": "jx", "form": form, "form2": form2, "q": q, "na": na, "u": u, "tpb": 128 * w}
+    return g | {f"l{i + 1}": x for i, x in enumerate(ls)}
+
+
 def _js_lq(ls) -> int:
     """A warp-specialized program's lane ops a trip unless asked: 24 for three lanes, else 16."""
     return 24 if len(ls) == 3 else 16
@@ -460,11 +469,10 @@ def targeted_ji() -> list[dict]:
     for f1, f2 in (("i16832", "h16816f16"), ("i16832", "h1688t"), ("h16816f16", "h1688t"), ("i16832", "i16816"),
                    ("i16832", "h16816")):
         for w in (2, 4, 8):
-            out.append({"kind": "jx", "form": f1, "form2": f2, "q": 0, "tpb": 128 * w, "na": 8})
+            out.append(_jx(f1, f2, (), 0, w))
             for ls in (("ffmai",), ("fmuli",), ("fmuli", "axi")):
                 for q in (64, 96, 128, 160):
-                    out.append({"kind": "jx", "form": f1, "form2": f2, "q": q, "tpb": 128 * w, "na": 8}
-                               | {f"l{i + 1}": x for i, x in enumerate(ls)})
+                    out.append(_jx(f1, f2, ls, q, w))
     return [g for g in out if g["na"] < 16 or g["tpb"] <= 512]
 
 
@@ -723,6 +731,57 @@ def targeted_rt7() -> list[dict]:
     return out
 
 
+#: RT-FACET r5's two-form pairs beside FMUL: IMMA.16832 (H1+fx1's form) with each form r3 and r3b beat and two dense
+#: ones, and sparse beside sparse
+RT8_LANE_PAIRS = (("i16832", "isp16864"), ("i16832", "hsp16832"), ("i16832", "qsp16864"), ("i16832", "h16816"),
+                  ("i16832", "q16832"), ("i16832", "h16816f16"), ("isp16864", "hsp16832"), ("isp16864", "qsp16864"))
+#: and alone (one tensor peak for every form: DS-120's DS_tensor, A3, and the measured M): those, IMMA.16832 with the
+#: rest, and each sparse form beside its dense one
+RT8_TENSOR_PAIRS = RT8_LANE_PAIRS + (("i16832", "i16816"), ("i16832", "isp16832"), ("i16832", "h1688t"),
+                                     ("i16832", "osf16864"), ("i16832", "qsf16832"), ("q16832", "qsp16864"),
+                                     ("h16816", "hsp16832"), ("q16832", "osf16864"), ("h16816f16", "h1688t"))
+#: two opcodes DS-120 prices on one pipe row (A4): MUFU and POPC on DS_xu, IMAD and IDP.4A on DS_imad
+RT8_PIPE_PAIRS = (("mufu", "popc"), ("imad", "dp4a"), ("imadi", "dp4ai"))
+RT8_BEST = ("jm_isp16864_fmuli_q128_p0_a2u20_w8", "jm_i16832_fmuli_q120_p0_a3u20_w8")
+
+
+def targeted_rt8() -> list[dict]:
+    """RT-FACET r5: two MMA forms in turn in one loop, never timed before (FACET-BREAK's ji `jx` programs were added after
+    its runs): the lane pairs beside FMUL at r3b's vector-end break (112-144 lane ops a 8 MMAs, 1-3 accumulators a form,
+    unroll 8-20, 2 warps a SMSP, and 4 at 128); every tensor pair alone at 2-8 accumulators, unroll 1 and 4, 2-8 warps a
+    SMSP; the pipe pairs alone and beside IMMA.16832; and interleaved baselines: each form and pipe lane alone, and r3b's
+    two best single-form programs, three copies each through the batch."""
+    lanes: list[dict] = []
+    for f1, f2 in RT8_LANE_PAIRS:
+        for q in (112, 120, 128, 144):
+            for na in (1, 2):
+                for u in (8, 16, 20):
+                    lanes.append(_jx(f1, f2, "fmuli", q, 2, na=na, u=u))
+        for q in (120, 128):
+            lanes.append(_jx(f1, f2, "fmuli", q, 2, na=3, u=16))
+        for na in (1, 2):
+            lanes.append(_jx(f1, f2, "fmuli", 128, 4, na=na, u=16))
+    tensor = [_jx(f1, f2, (), 0, w, na=na, u=u) for f1, f2 in RT8_TENSOR_PAIRS
+              for na, u, w in ((2, 4, 2), (4, 1, 2), (4, 1, 4), (4, 4, 4), (8, 1, 4), (8, 4, 2))]
+    pipes: list[dict] = []
+    for l1, l2 in RT8_PIPE_PAIRS:
+        for tpb in (256, 512, 1024):
+            pipes.append({"kind": "alone", "l1": l1, "l2": l2, "tpb": tpb})
+        for q in (16, 32, 64):
+            for w in (2, 4):
+                pipes.append(_jm("i16832", (l1, l2), q, w, na=4))
+    base = [{"kind": "alone", "l1": x, "l2": "", "tpb": 512} for x in ("mufu", "popc", "imad", "dp4a", "imadi", "dp4ai")]
+    base += [{"kind": "mma", "form": f, "l1": "", "l2": "", "tpb": 512}
+             for f in sorted({f for p in RT8_TENSOR_PAIRS for f in p})]
+    best = [g for g in targeted_rt4() + targeted_rt6() if name_of(g) in RT8_BEST]
+    rest = lanes + tensor + pipes
+    out: list[dict] = []
+    for k in range(3):
+        out += [g | {"rep": k + 1} for g in best] + (base if k == 1 else [])
+        out += rest[k * len(rest) // 3:(k + 1) * len(rest) // 3]
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -754,7 +813,8 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
               "r4": (targeted_r4, sampled_ji), "rt": (targeted_rt, sampled_ji),
               "rt2": (targeted_rt2, sampled_ji), "rt3": (targeted_rt3, sampled_ji),
               "rt4": (targeted_rt4, sampled_ji), "rt5": (targeted_rt5, sampled_ji),
-              "rt6": (targeted_rt6, sampled_ji), "rt7": (targeted_rt7, sampled_ji)}[family]
+              "rt6": (targeted_rt6, sampled_ji), "rt7": (targeted_rt7, sampled_ji),
+              "rt8": (targeted_rt8, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -789,7 +849,8 @@ def emit_cu(gs: list[dict]) -> str:
             ls = [LANES[x][0] for x in lanes_of(g)]
             ls += ["L_NONE"] * (3 - len(ls))
             if g["kind"] == "jx":
-                lines.append(f"FB_JMIX2({g['name']}, {f}, {FORMS[g['form2']][0]}, {', '.join(ls)}, {g['q']}, {g['tpb']})")
+                lines.append(f"FB_JMIX2({g['name']}, {f}, {FORMS[g['form2']][0]}, {g['na']}, {g['u']}, {', '.join(ls)}, "
+                             f"{g['q']}, {g['tpb']})")
                 continue
             head = f"{g['name']}, {f}, {g['na']}, {g['u']}, {', '.join(ls)}"
             if g["kind"] == "jm":
@@ -824,7 +885,7 @@ def emit_cu(gs: list[dict]) -> str:
         if g["kind"] in ("jm", "js"):
             iters = (1024 if g["kind"] == "jm" else 4096) // g["u"]
         if g["kind"] == "jx":
-            iters = 1024
+            iters = 1024 // g["u"]
         ops, fn = smem_of(g)
         sm = f', .smem_ops = "{ops}", .smem = {fn}' if ops else ""
         lines.append(f'    {{.name = "{g["name"]}", .kernel = (const void*){g["name"]}, .tpb = {g["tpb"]}, '
@@ -841,7 +902,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
     p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4", "rt", "rt2", "rt3",
-                                             "rt4", "rt5", "rt6", "rt7"),
+                                             "rt4", "rt5", "rt6", "rt7", "rt8"),
                    default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
@@ -851,7 +912,8 @@ def main(argv: list[str] | None = None) -> int:
                         "schedule axes on the low-accumulator break (na 5, unroll, placement, uniform co-issue); rt2: "
                         "rt's unroll and uniform co-issue crossed, unroll 8 for the instruction cache; rt3: the FMA "
                         "lane at unroll 8 to 32, past rt2's best; rt4: rt3's break again and around it; rt5: rt3's unroll on every other MMA form; rt6: rt5's break past its "
-                        "grid's edge; rt7: the warp-specialized programs with 64-256 lane ops a trip")
+                        "grid's edge; rt7: the warp-specialized programs with 64-256 lane ops a trip; rt8: two MMA "
+                        "forms in turn in one loop, beside FMUL and alone, and the pipe pairs DS-120 prices together")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
