@@ -53,6 +53,7 @@ import Proofs.Flock.Claims.KS.PlainWire
 import Proofs.Flock.Claims.KS.PlainClashL
 import Proofs.Flock.Claims.KS.ForkCoupling
 import Proofs.Flock.Claims.KS.PlainDraw
+import Proofs.Flock.Claims.KS.PlainSim
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -237,5 +238,9 @@ simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on the en
 `FlockDeploy.KS.forkCoinCoupling_plain`). The verdict at the statement's draw reads `verify` at the setup at that draw,
 not the record's, so an accepting run gives it at its live outcome whatever draw its record carries (`PlainDraw`:
 `Claims.Bridge.PlainDraw.AcceptsAtD`, `Claims.Bridge.PlainDraw.wrPD`, `FlockDeploy.KS.plainVerdictAt`,
-`FlockDeploy.KS.plainVerdictAt_of_run`).
+`FlockDeploy.KS.plainVerdictAt_of_run`). The plain simulator runs `P` round by round on the plain wire, at deployed
+coins it rebuilds from a tape of uniform functions of the revealed live history and the entries the live session
+revealed, which are the coins `fnAt` gives on the live history; a live prover whose messages along the live history
+are known has those rounds as its live outcome (`PlainSim`: `FlockDeploy.KS.plainSim`, `FlockDeploy.KS.plainΦ`,
+`FlockDeploy.KS.Pr_plainΦ`, `FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`).
 -/
