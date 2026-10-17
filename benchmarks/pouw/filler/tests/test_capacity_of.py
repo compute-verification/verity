@@ -11,7 +11,7 @@ HERE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE))
 import capacity_of as CO  # noqa: E402
 
-PI = CO.E.machine("")
+PI = CO.E.machine("VF3q-16")  # the vector the leader's readings below were taken on
 GHZ = 2.092e9
 
 
