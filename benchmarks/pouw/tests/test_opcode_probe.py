@@ -327,15 +327,15 @@ def test_ceiling_reads_each_knob_and_names_the_highest_host_clock(tmp_path, caps
               {"trial": "lgc-max", "clock_now": {"sm": {"value": [2422]}}, "clock_max": {"sm": {"value": [2430]}},
                "applications": {"graphics": {"value": [2430]}}}]
     (out / "states.jsonl").write_text("".join(json.dumps(s) + "\n" for s in states))
-    cal = [{"trial": "lgc-max", "probe": "p_light", "clock_mhz_host": h, "clock_mhz_gt_max": h + 0.2, "nvml_sm_mhz": 2422,
-            "nvml_mw": 150000, "throttle": "0x0"} for h in (2429.4, 2429.9)]
+    cal = [{"trial": "lgc-max", "probe": "p_light", "clock_mhz_host": h, "clock_mhz_gt_max": h + 0.2,
+            "clock_mhz_gt_min": h + 0.2, "nvml_sm_mhz": 2422, "nvml_mw": 150000, "throttle": "0x0"} for h in (2429.4, 2429.9)]
     cal += [{"trial": "gpc-offset+105", "probe": "p_light", "clock_mhz_host": 2101.0, "clock_mhz_gt_max": 2101.1,
              "nvml_sm_mhz": 2092, "nvml_mw": 140000, "throttle": "0x0"}]
     (out / "calib.jsonl").write_text("".join(json.dumps(c) + "\n" for c in cal))
     assert eps1.main(["ceiling", str(out)]) == 0
     got = capsys.readouterr().out
     assert "GPC VF offset range [0, 0], memory [0, 0]" in got
-    assert re.search(r"^lgc-max +0 +2422 +2430 +2430 p_light +2429\.9 +2430\.1 +2422 +150 +0x0 +GPU clocks", got, re.M)
+    assert re.search(r"^lgc-max +0 +2422 +2430 +2430 p_light +2429\.9 +2430\.1 +2429\.6 +2422 +150 +0x0 +GPU clocks", got, re.M)
     assert re.search(r"^gpc-offset\+105 +0 .* p_light +2101\.0", got, re.M)
     assert "highest host-timed clock: 2429.9 MHz (p_light at lgc-max), -0.004% against NVML's max 2430" in got
 

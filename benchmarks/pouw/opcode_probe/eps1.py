@@ -256,7 +256,7 @@ def cmd_ceiling(a) -> int:
           f"P0 graphics offsets {st.get('clock_offsets_p0', {}).get('graphics', '-')}, "
           f"power limit constraints (mW) {_val(st, 'power_limit_constraints_mw')}")
     print(f"\n{'trial':26s} {'rc':>3s} {'NVML now':>8s} {'max':>6s} {'app':>6s} {'kernel':9s} {'host MHz':>9s} "
-          f"{'gt MHz':>9s} {'NVML':>5s} {'W':>5s} {'reasons':>8s}  output")
+          f"{'gt MHz':>9s} {'gt min':>9s} {'NVML':>5s} {'W':>5s} {'reasons':>8s}  output")
     best = (0.0, "", "")
     for t in dict.fromkeys([*trials, *calib]):
         tr, s = trials.get(t, {}), states.get(t, {})
@@ -264,6 +264,7 @@ def cmd_ceiling(a) -> int:
         for k, cs in (calib.get(t) or {"-": []}).items():
             host = max((c["clock_mhz_host"] for c in cs), default=0.0)
             gt = max((c["clock_mhz_gt_max"] for c in cs), default=0.0)
+            gt_lo = min((c.get("clock_mhz_gt_min", c["clock_mhz_gt_max"]) for c in cs), default=0.0)
             if host > best[0]:
                 best = (host, t, k)
             nvm = max((c["nvml_sm_mhz"] for c in cs), default=0)
@@ -275,7 +276,7 @@ def cmd_ceiling(a) -> int:
                     f"{str(_val(s, 'clock_max', 'sm')):>6s} {str(_val(s, 'applications', 'graphics')):>6s}") if first \
                 else " " * 54
             msg = " ".join(tr.get("out", "").split())[:90] if first else ""
-            print(f"{head} {k:9s} {host:9.1f} {gt:9.1f} {nvm:5d} {watts:5.0f} {reasons:#8x}  {msg}")
+            print(f"{head} {k:9s} {host:9.1f} {gt:9.1f} {gt_lo:9.1f} {nvm:5d} {watts:5.0f} {reasons:#8x}  {msg}")
             first = False
     if best[0]:
         print(f"\nhighest host-timed clock: {best[0]:.1f} MHz ({best[2]} at {best[1]}), "

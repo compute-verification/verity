@@ -65,7 +65,11 @@ __device__ __forceinline__ void body(const OpArgs& a) {
   }
   OP_END
   const unsigned long long t1 = gtime();
-  if (threadIdx.x == 0) a.rec[blockIdx.x].stop = (long long)(t1 - t0);
+  if (threadIdx.x == 0) {
+    a.rec[blockIdx.x].stop = (long long)(t1 - t0);
+    reinterpret_cast<unsigned long long*>(a.g)[2 * blockIdx.x] = t0;
+    reinterpret_cast<unsigned long long*>(a.g)[2 * blockIdx.x + 1] = t1;
+  }
   uint32_t s = h.fold() ^ f.fold();
 #pragma unroll
   for (int c = 0; c < 8; c++) s ^= (uint32_t)h.d[c][0];
@@ -224,20 +228,30 @@ static int calib(const std::string& name, double seconds, int reps) {
     GK_CK(cudaDeviceSynchronize());
     const double host_ns = std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - t0).count();
     GK_CK(cudaMemcpy(h.data(), rec, sizeof(OpClk) * blocks, cudaMemcpyDeviceToHost));
-    long long cyc_max = 0, gt_max = 0;
+    std::vector<unsigned long long> ts(2 * blocks);
+    GK_CK(cudaMemcpy(ts.data(), g, sizeof(unsigned long long) * 2 * blocks, cudaMemcpyDeviceToHost));
+    long long cyc_max = 0, cyc_min = h[0].cyc, gt_max = 0, gt_of_cyc_max = 0;
+    unsigned long long t0_min = ts[0], t0_max = ts[0], t1_min = ts[1], t1_max = ts[1];
     std::vector<double> mhz;
-    for (const OpClk& r : h) {
-      cyc_max = std::max(cyc_max, r.cyc);
+    for (int b = 0; b < blocks; b++) {
+      const OpClk& r = h[b];
+      if (r.cyc > cyc_max) cyc_max = r.cyc, gt_of_cyc_max = r.stop;
+      cyc_min = std::min(cyc_min, r.cyc);
       gt_max = std::max(gt_max, r.stop);
       if (r.stop > 0) mhz.push_back(1e3 * (double)r.cyc / (double)r.stop);
+      t0_min = std::min(t0_min, ts[2 * b]), t0_max = std::max(t0_max, ts[2 * b]);
+      t1_min = std::min(t1_min, ts[2 * b + 1]), t1_max = std::max(t1_max, ts[2 * b + 1]);
     }
     printf("{\"op\": \"calib\", \"probe\": \"%s\", \"rep\": %d, \"iters\": %d, \"blocks\": %d, \"host_ns\": %.0f, "
-           "\"gt_ns_max\": %lld, \"cyc_max\": %lld, \"clock_mhz_host\": %.3f, \"clock_mhz_gt_median\": %.3f, "
-           "\"clock_mhz_gt_max\": %.3f, \"gt_over_host\": %.7f, \"nvml_sm_mhz\": %u, \"nvml_mw\": %u, \"temp_c\": %u, "
-           "\"throttle\": \"0x%llx\"}\n",
-           q->name, rep, args.iters, blocks, host_ns, gt_max, cyc_max, 1e3 * (double)cyc_max / host_ns,
-           mhz.empty() ? 0.0 : gk::median(mhz), mhz.empty() ? 0.0 : *std::max_element(mhz.begin(), mhz.end()),
-           (double)gt_max / host_ns, during.sm_mhz, mw, pw.celsius(), during.throttle);
+           "\"gt_ns_max\": %lld, \"gt_kernel_ns\": %llu, \"gt_start_spread_ns\": %llu, \"gt_end_spread_ns\": %llu, "
+           "\"cyc_max\": %lld, \"cyc_min\": %lld, \"gt_ns_of_cyc_max\": %lld, \"clock_mhz_host\": %.3f, "
+           "\"clock_mhz_gt_min\": %.3f, \"clock_mhz_gt_median\": %.3f, \"clock_mhz_gt_max\": %.3f, "
+           "\"gt_over_host\": %.7f, \"nvml_sm_mhz\": %u, \"nvml_mw\": %u, \"temp_c\": %u, \"throttle\": \"0x%llx\"}\n",
+           q->name, rep, args.iters, blocks, host_ns, gt_max, t1_max - t0_min, t0_max - t0_min, t1_max - t1_min, cyc_max,
+           cyc_min, gt_of_cyc_max, 1e3 * (double)cyc_max / host_ns,
+           mhz.empty() ? 0.0 : *std::min_element(mhz.begin(), mhz.end()), mhz.empty() ? 0.0 : gk::median(mhz),
+           mhz.empty() ? 0.0 : *std::max_element(mhz.begin(), mhz.end()), (double)(t1_max - t0_min) / host_ns,
+           during.sm_mhz, mw, pw.celsius(), during.throttle);
     fflush(stdout);
   }
   return 0;

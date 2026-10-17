@@ -26,10 +26,10 @@ smi() { sudo -n nvidia-smi -i "$UUID" "$@"; }
 nv() { sudo -n python3 "$HERE/clocks.py" "$1" "$UUID" "${@:2}"; }
 vboost() { sudo -n nvidia-smi boost-slider -i "$IDX" --vboost "$1"; }
 state() { nv state | sed "s/^{/{\"trial\": \"$1\", /" >>"$OUT/states.jsonl"; }
-calib() {  # calib TRIAL KERNEL...: two host-timed 3 s launches a kernel
+calib() {  # calib TRIAL KERNEL...: two host-timed launches a kernel, CALIB_S (3) seconds each
   local t=$1 k
   shift
-  for k in "$@"; do "$BIN" --calib "$k" 3 2 | sed "s/^{/{\"trial\": \"$t\", /" >>"$OUT/calib.jsonl"; done
+  for k in "$@"; do "$BIN" --calib "$k" "${CALIB_S:-3}" 2 | sed "s/^{/{\"trial\": \"$t\", /" >>"$OUT/calib.jsonl"; done
 }
 # do TRIAL CMD...: run one knob, record its rc and output, then the state it left
 do_() {
@@ -67,10 +67,14 @@ trap 'exit 143' TERM INT
 # (p_light, one warp an SM), IMMA on zeros (p_mma0) and the honest step (p_honest: IMMA plus the fold's lane work).
 state found
 calib locked "p_light" "p_honest"
+# a fixed host overhead shrinks with the launch's length, a clock difference doesn't
+CALIB_S=1 calib locked-1s p_light
+CALIB_S=10 calib locked-10s p_light
 do_ rgc smi -rgc
 calib rgc p_light p_mma0 p_honest
 do_ lgc-max smi -lgc "$MAXMHZ,$MAXMHZ"
 calib lgc-max p_light p_mma0 p_honest
+CALIB_S=10 calib lgc-max-10s p_light
 do_ lgc-max-m1 smi -lgc "$MAXMHZ,$MAXMHZ" -m 1
 calib lgc-max-m1 p_light p_honest
 for f in $((MAXMHZ + 8)) $((MAXMHZ + 90)) $((MAXMHZ + 500)); do
@@ -92,7 +96,8 @@ baseline
 do_ cc-override smi -cc 1
 calib cc-override p_light p_honest
 baseline
-do_ pl-above smi -pl $((FOUND_PL + 50))
+do_ pl-above smi -pl $((${FOUND_PL%.*} + 50))
+smi -pl "$FOUND_PL" >/dev/null 2>&1
 for o in 15 105 500; do
   baseline
   do_ "gpc-offset+$o" nv offset "$o"
