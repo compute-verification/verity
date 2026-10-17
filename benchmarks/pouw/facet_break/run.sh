@@ -45,7 +45,8 @@ for b in ${bins[*]}; do
 done
 exit \$rc
 EOF
-gpu-lease 1 --wait --max-min 20 -- bash "$WORK/time.sh"
+# a chunk times in about a minute: the lease is 2 minutes a chunk and 5 more, so a big batch isn't cut off mid-chunk
+gpu-lease 1 --wait --max-min $(( ${#bins[@]} * 2 + 5 )) -- bash "$WORK/time.sh"
 rc=$?
 cat "$OUT"/chunks/*/rows.jsonl >"$OUT/rows.jsonl" 2>/dev/null
 python3 "$HERE/loads.py" table "$OUT/rows.jsonl" >"$OUT/loads.jsonl"
