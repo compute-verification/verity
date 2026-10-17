@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Complete.Zk.Json.Files
+import Proofs.Flock.Claims.Complete.Walk
 
 /-!
 # The masked session's reps, by index
@@ -54,17 +55,6 @@ theorem forIn_array_idx {α β : Type} (xs : Array α) (f : α → β → PS (Fo
   have := forIn_list_idx f inv xs.toList (fun k a b l r l' ha => hs k a b l r l' (by simpa using ha))
     xs.toList 0 (by simp) b l b' l' h0 e
   simpa using this
-
-theorem Recs.bytes {resp : ℕ → Claims.Msg} :
-    ∀ {i : ℕ} {rs : List Round} {bs : List Claims.Msg}, Recs resp i rs bs → ∀ r ∈ rs, ∃ c, r.bytes = some c
-  | _, [], [], _, _, hr => by simp at hr
-  | _, _ :: _, _ :: _, h, r, hr => by
-    rcases List.mem_cons.1 hr with rfl | hr
-    · obtain ⟨c, hc, -⟩ := h.1
-      exact ⟨c, hc⟩
-    · exact Recs.bytes h.2 r hr
-  | _, [], _ :: _, h, _, _ => h.elim
-  | _, _ :: _, [], h, _, _ => h.elim
 
 theorem push_getElem!_lt {α : Type} [Inhabited α] (xs : Array α) (x : α) {j : ℕ} (hj : j < xs.size) :
     (xs.push x)[j]! = xs[j]! := by
@@ -221,17 +211,18 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The honest masked run, rep by rep**: at the run's one table, with `--zk` schedule `v`, the record decodes to two
-streams whose every round is retained, rep `r`'s recorded rounds are its stream's as the decoder reads them back, and
-rep `r`'s decoded masked proof is the proof it returned, ending at that stream. -/
+streams whose every round is retained, rep `r`'s recorded rounds are its stream's as the decoder reads them back, the
+verifier's extra claims are the prover's, the table has `25 ≤ m`, and rep `r`'s decoded masked proof is the proof it
+returned, ending at that stream. -/
 theorem RunZk.walk (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : ProverOkZk H rel)
     (hR : RepShapedZk H rel) (o : RunZk H rel) :
     ∃ (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (streams : Array (Array Round)),
       o.tabs = #[Setup.ofCircuit st] ∧ o.sch 0 = v.1 ∧ streams.size = 2 ∧
       (∀ rs ∈ streams, ∀ x ∈ rs, ∃ c, x.bytes = some c) ∧
-      (∀ r < 2, (o.stream 0 r).rounds = streams[r]!.map (roundRec o.spec (Claims.hOf H))) ∧
+      (∀ r < 2, (o.stream 0 r).rounds = streams[r]!.map (roundRec o.spec (Claims.hOf H))) ∧ o.extras 0 = e ∧ 25 ≤ st.m ∧
       ∀ r < 2, RepRunZk o.resp (Claims.hOf H) o.spec (Setup.ofCircuit st) v (tracesOf o.sts o.w)[0]! cm e o.ω r
         streams[r]! fun p => o.zp 0 r = p := by
-  obtain ⟨st, hst, hsp, -, -⟩ := o.table
+  obtain ⟨st, hst, hsp, h25, -⟩ := o.table
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS o.toCaseZk
   obtain ⟨hz, hc⟩ := S.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hc⟩
@@ -277,7 +268,7 @@ theorem RunZk.walk (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : Pr
     simp only [sessOf, hrs1, ht, List.zip_toArray, List.zip_cons_cons, List.zip_nil_right, List.map_toArray,
       List.map_cons, List.map_nil, List.find?_toArray, streamRec]
     rcases (show r = 0 ∨ r = 1 by omega) with rfl | rfl <;> simp
-  refine ⟨st, v, cm, e, #[s0, s1], hotabs, hsch0, rfl, fun rs hrs x hx => ?_, hstream, fun r hr => ?_⟩
+  refine ⟨st, v, cm, e, #[s0, s1], hotabs, hsch0, rfl, fun rs hrs x hx => ?_, hstream, hext0, h25, fun r hr => ?_⟩
   · exact Recs.bytes hrecs x (List.mem_flatMap.2 ⟨rs, Array.mem_toList_iff.2 hrs, Array.mem_toList_iff.2 hx⟩)
   · obtain ⟨p, ic, l, t', l', hic, hb, hrr, hp⟩ := hreps r hr
     have hR' := hR o.toCaseZk st v cm e hst hv (by rw [hst]; exact hcm) he r ic hic

@@ -73,7 +73,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 theorem replay_goal (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hR : JsonRT.RepShapedZk H rel) : Replay H rel := by
   intro o i hi r hr
-  obtain ⟨st, v, cm, e, streams, htabs, hsch, hss, hbytes, hstream, hrep⟩ := JsonRT.RunZk.walk S h64 hS hP hR o
+  obtain ⟨st, v, cm, e, streams, htabs, hsch, hss, hbytes, hstream, -, -, hrep⟩ := JsonRT.RunZk.walk S h64 hS hP hR o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   obtain ⟨p, ic, l, t', l', -, hzp, hst', hrun⟩ := hrep r hr
