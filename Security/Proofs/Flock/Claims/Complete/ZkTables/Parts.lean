@@ -73,8 +73,8 @@ theorem innerRest (H : Claims.Msg → Claims.Msg) : InnerRest H := by
 `innerRest`). -/
 theorem complete_jsonT_of_parts (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
     (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier)
-    (gS : ShapeRest H) (gR : RunsRest H) :
+    (gS : ShapeRest H) (gR : RunsRest H) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT H S (gS h1) (gR h0 h2 h3) (ligeritoRest H h3) (innerRest H h3)
+  complete_jsonT H S (gS h1) (gR h0 h2 h3) (ligeritoRest H h3) (innerRest H h3) hMR
 
 end FlockComplete.ZkTables
