@@ -22,6 +22,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile, parse_tar
 ROW_120 = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 ROW_89 = "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 ROW_90 = "llama32-1b__bf16__h100__tp1__b1__i1024__o128__mixed__greedy__bi-eager"
+ROW_H200_1 = "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__eager"
 
 
 def _wl(tmp_path, target=None):
@@ -35,6 +36,8 @@ def test_an_rtxpro6000_row_declares_its_whole_target_and_other_classes_keep_the_
     assert tf.declared_profile(ROW_120, {"engine": {"target": {"compilation": "piecewise"}}}) == {"compute_capability": [12, 0], "num_sms": 188, "compilation": "piecewise"}
     assert tf.declared_profile(ROW_120, {"engine": {"target": {"compute_capability": [12, 0], "num_sms": 170}}})["num_sms"] == 170, "the workload's own target wins"
     assert tf.declared_profile(ROW_89, {}) == {} and tf.declared_profile(ROW_90, {}) == {}
+    assert tf.declared_profile(ROW_H200_1, {"engine": {"target": {"batch_invariant": False}}}) == \
+        {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False}, "an H200 is 132 SMs, SXM and NVL"
     assert R.declared_target(_wl(tmp_path), row=ROW_120) == '{"compute_capability": [12, 0], "num_sms": 188}'
     assert R.declared_target(_wl(tmp_path), row=ROW_89) == "", "an l40s row's Build target stays the host GPU's"
     h100 = {"compute_capability": [9, 0], "num_sms": 132, "flash_attn_version": 2}

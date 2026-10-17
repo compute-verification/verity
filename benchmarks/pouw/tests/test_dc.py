@@ -7,6 +7,7 @@ import csv
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -229,8 +230,10 @@ def test_census_sm90_rows(tmp_path):
 
 def test_device_census_is_well_formed():
     """Every device directory's lines are lines machine_model reads (one of rate, cycles and u), each on a row rows.csv
-    states, once a row, naming its runs."""
+    states, once a row, naming its runs; a `datasheet` row and its lines name the note that cites the vendor document
+    instead, since no run measured them."""
     census = _load("census")
+    note = re.compile(r"note:\d{8}T\d{4}Z-[a-z0-9-]+")
     devices = DC.parent / "machine_model" / "data" / "devices"
     dirs = sorted(p for p in devices.iterdir() if p.is_dir()) if devices.exists() else []
     for d in dirs:
@@ -241,8 +244,10 @@ def test_device_census_is_well_formed():
         assert tuple(lines[0]) == census.rowsmod.CENSUS_COLUMNS
         by_row = _census_tables(census, lines, rows)
         assert {"issue", "M", "A", "I", "SHFL"} <= set(by_row), d
+        sheet = {r["row"] for r in rows if r["status"] == "datasheet"}
         for ln in lines + rows:
-            assert ln["runs"] and all(census.rowsmod.RUN_ID.fullmatch(r) for r in ln["runs"].split()), (d, ln)
+            cite = note if ln["row"] in sheet else census.rowsmod.RUN_ID
+            assert ln["runs"] and all(cite.fullmatch(r) for r in ln["runs"].split()), (d, ln)
 
 
 def test_analyze_sm90_pass_line(tmp_path):

@@ -9,7 +9,8 @@ one and keeping its reason when the two agree:
 * the row's execution label (`EXECUTIONS`): a ``bi-*`` row is batch invariant, an eager row eager;
 * a tensor-parallel row's transport (`engine.profiles.transport`);
 * the row file: ``engine.env``, ``engine.args``, its ``engine.target``'s `TargetProfile.env()` and ``engine_args()``, and
-  ``engine.reasons``, a reason by switch name.
+  ``engine.reasons``, a reason by switch name;
+* vLLM's own config, last: under batch invariance its ``ParallelConfig`` turns the custom all-reduce off (`BATCH_INVARIANT`).
 
 `judge` refuses a switch away from vLLM's default that nothing declares, a declaration away from the default without a reason, and a
 read-back that is not what was declared.  `require` judges every rank of a built engine (`read_rank`) and fails the Commit closed; the
@@ -76,6 +77,9 @@ EXECUTIONS: dict[str | None, tuple[dict[str, Any], str]] = {
 }
 #: The ``enforce_eager`` each row execution label builds its engine with.
 ENFORCE_EAGER = {k: v[0]["enforce_eager"] for k, v in EXECUTIONS.items() if k is not None}
+#: What vLLM's config sets under ``VLLM_BATCH_INVARIANT``, over every argument (`ParallelConfig._verify_args`), and why.
+BATCH_INVARIANT: tuple[dict[str, Any], str] = ({"disable_custom_all_reduce": True},
+                                               "vLLM's batch invariance turns its custom all-reduce off (ParallelConfig._verify_args)")
 _MISSING = object()
 
 
@@ -159,6 +163,9 @@ def declared(wl: Mapping[str, Any], target: Any = None) -> dict[str, dict[str, A
     env = {**(eng.get("env") or {}), **(target.env() if target is not None else {})}
     args = {**(target.engine_args() if target is not None else {}), **(eng.get("args") or {})}
     put("row file", settings(env, args), eng.get("reasons") or {})
+    if (out.get("VLLM_BATCH_INVARIANT") or {}).get("value") is True:
+        values, why = BATCH_INVARIANT
+        put("vLLM ParallelConfig", values, dict.fromkeys(values, why))
     return out
 
 
