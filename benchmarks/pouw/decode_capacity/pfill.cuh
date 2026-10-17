@@ -112,6 +112,13 @@ constexpr bool PF_R9 = true;
 #else
 constexpr bool PF_R9 = false;
 #endif
+// FOLD's cost dial (note:20261017T0320Z-draft-eps1-fold): PF_ROUNDS is the number of fold rounds a committed word in the
+// NC 4 (XOR-in / LI / ram) absorb. The default 1 is byte-identical to the fold of record; a build passes -DPF_ROUNDS=R
+// through NVCC_APPEND_FLAGS to measure the cost a word a round beside the saturated noise IMMA.
+#ifndef PF_ROUNDS
+#define PF_ROUNDS 1
+#endif
+static_assert(PF_ROUNDS >= 1 && PF_ROUNDS <= 64, "PF_ROUNDS is 1..64");
 __host__ __device__ constexpr uint64_t pf_dom(int kd) {
   return kd == PF_E2M1 ? PF_DOM4 : kd == PF_BITS ? PF_DOM01 : kd == PF_BU ? PF_DOM_BU : PF_DOM;
 }
@@ -170,12 +177,28 @@ template <int NC>
 __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uint32_t d0, uint32_t d1, uint32_t d2,
                                                    uint32_t d3, const PfKeys& k) {
   if (NC == 4 || NC == 5) {
+#if PF_ROUNDS > 1
+    // FOLD (note:20261017T0320Z-draft-eps1-fold): the R-round weave's cost dial. Each round re-folds the committed
+    // words into the running state with the same XOR-in / LI step, a serial u32 chain of depth PF_ROUNDS a word. The
+    // host dfill_ref shares this loop, so dgate stays bit-exact; only the throughput and the receipt value change.
+#pragma unroll 1
+    for (int rnd = 0; rnd < PF_ROUNDS; rnd++) {
+#if defined(PFILL_LI)
+      y = rf_li_step(y, d0, d1, d2, d3, k.a0, k.a1, k.k0, k.k1);
+#elif defined(PFILL_XIN13)
+      y = rf_xin13_step(y, d0, d1, d2, d3, k.a0, k.a1);
+#else
+      y = rf_ram_step(y, d0, d1, d2, d3, k.a0, k.a1);
+#endif
+    }
+#else
 #if defined(PFILL_LI)
     y = rf_li_step(y, d0, d1, d2, d3, k.a0, k.a1, k.k0, k.k1);
 #elif defined(PFILL_XIN13)
     y = rf_xin13_step(y, d0, d1, d2, d3, k.a0, k.a1);
 #else
     y = rf_ram_step(y, d0, d1, d2, d3, k.a0, k.a1);
+#endif
 #endif
   } else if (NC == 6) {
     y = (pf_rotl(y, 7) + d0) * 0x9E3779B1u + d1;
