@@ -4,7 +4,7 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src \\
       python benchmarks/one_stage/a6.py --bin flock-circuit --lean flock-verify --out DIR [--members 2048:21504,8192:2048] \\
-      [--k 32] [--delta 2^-20]
+      [--k 32] [--chunk N] [--delta 2^-20]
 
 * **Population.** `--members K:N,...`: N coordinates at each K. The default is one Llama-3.2-1B decoder layer for one token:
   qkv's 3072, o's 2048 and gate_up's 16384 coordinates at K = 2048, and down's 2048 at K = 8192. The program is
@@ -12,14 +12,17 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
 * **Stand-in values.** Each coordinate's rows are seeded N(0, 1) and N(0, 0.02) rows, each quantized to s8 as steps.py's
   `quant_rows` does (`benchmarks/served_units/stage.py`'s s8-coord draw), committed afresh. The circuit's output is held to
   that numpy twin's. The window says so; vllm's int8 Program and its served rows replace these values.
-* **Statements.** One per template, staged by C-Flock's `UnitStager` bound to the partition: META names the template, the
-  partition and the program, and the public file the member's global unit indices. The verifier derives each port's frame
-  domain itself from META's row schemas (C-Flock's set-bound domains), holds the public files to the registration, and the
-  leaf layer is the SHA-512 of the canonical map from member to the SHA-512 of its public file.
+* **Statements.** One circuit per template, staged by C-Flock's `UnitStager` bound to the partition: META names the template,
+  the partition and the program. A statement holds at most `chunk_cap` instances (flock-circuit's spec shape, m = k_log + nbl
+  <= 35: 4096 coordinates at K = 2048, 2048 at K = 8192), so a template's units are staged as consecutive chunks (`--chunk`
+  caps them lower), each a member: its own input set on the template's circuit, and a public file naming its global unit
+  indices. The verifier derives each port's frame domain itself from META's row schemas and the member's set (C-Flock's
+  set-bound domains), holds the public files to the registration, and the leaf layer is the SHA-512 of the canonical map
+  from member to the SHA-512 of its public file.
 * **One draw, the stratified law** (`stratified:K`: one stratum per template, k_s = max(1, round(k n_s / n))), made by the
-  verifier's Lean `flock-verify draw --program --partition --stratified K` over its own program and partition object. A
-  stratum is one member, so each member's server serves its stratum's draw (`serve --zk --draw-file`), a uniform
-  k_s-subset of the member, and Lean `verify --zk --partition --program` holds each session (units derived).
+  verifier's Lean `flock-verify draw --program --partition --stratified K` over its own program and partition object. Each
+  member's server serves the draw's units it holds (`serve --zk --draw-file`), and Lean `verify --zk --partition --program`
+  holds each session (units derived), so the stratum's share is proved across its template's members.
 """
 from __future__ import annotations
 
@@ -50,6 +53,9 @@ from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition 
 
 #: one Llama-3.2-1B decoder layer's W8A8 coordinates for one token, by K
 LLAMA_3_2_1B_LAYER = "2048:21504,8192:2048"
+#: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`): a statement's dense size
+#: m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
+M_MAX = 35
 WINDOW_OF = ("seeded s8 rows quantized as benchmarks/ppl/steps.py's quant_rows (benchmarks/served_units/stage.py's s8-coord "
              "draw), committed afresh")
 
@@ -75,24 +81,43 @@ def frame_ports(set_name: str, meta: dict, n: int) -> dict[str, dict]:
     return out
 
 
-def stage_member(K: int, n: int, base: int, bound: dict, out: Path) -> dict:
-    """Member K's statement: n stand-in coordinates staged by a `UnitStager` bound to the partition, as units base..base+n."""
+def chunk_cap(meta: dict) -> int:
+    """The most instances one statement of the circuit holds: `vus_per_block * 2^(M_MAX - k_log)` blocks' worth, nbl being at
+    least 3."""
+    if M_MAX - meta["k_log"] < 3:
+        raise SystemExit(f"k_log {meta['k_log']}: no statement of this circuit fits the spec's shape (m <= {M_MAX})")
+    return meta["vus_per_block"] << (M_MAX - meta["k_log"])
+
+
+def stage_template(K: int, n: int, base: int, bound: dict, out: Path, chunk: int | None) -> list[dict]:
+    """Template K's members: n stand-in coordinates, units base..base+n, staged by one `UnitStager` bound to the partition in
+    consecutive chunks of at most `chunk_cap` (and ``chunk``) units, each its own input set on the one circuit (written once,
+    under ``out``, and linked into each member's directory)."""
     t0 = time.time()
     tag = f"s8-coord-k{K}"
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/one-stage/a6/v1\0{tag}".encode()).digest()[:8], "little"))
     rows, twin = SU._s8_coord_draw({"K": K}, n, rng)
     in_rows = [("x", SEG, 16 * rows["x"].shape[1], ["x", "sx"]), ("w", V2, 16 * rows["w"].shape[1], ["wrow", "sw"])]
-    st = CS.UnitStager(template(K), f"unit/a6-{tag}", in_rows, [(V2, (0,))], bind=bound)
+    st = CS.UnitStager(template(K), f"unit/a6-{tag}", in_rows, [(V2, (0,))], circuit=out / "circuit.txt", bind=bound)
     t_build = time.time() - t0
+    cap = min(chunk_cap(st.meta), chunk or n)
     salt_key = hashlib.sha256(f"verity/one-stage/a6/salts\0{tag}".encode()).digest()
-    got = st.stage(rows, out, salt_key, indices=range(base, base + n))
-    (out / "inst.bin").rename(out / f"inst-{n}.bin")
-    (out / "pub.bin").rename(out / f"pub-{n}.bin")
-    (out / "tables").mkdir(exist_ok=True)
-    o0 = np.asarray(got["outs"]["o0"], dtype=np.uint16)[:, :twin.shape[1]]
-    return {"tag": tag, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": st.iset.name,
-            "twin": {"agrees": bool(np.array_equal(o0, twin)), "instances": n}, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
-            "seconds": {"build": round(t_build, 1), "total": round(time.time() - t0, 1)}}
+    members = []
+    for j, lo in enumerate(range(0, n, cap)):
+        t1, c, d = time.time(), min(cap, n - lo), out / f"c{j}"
+        set_name = f"{st.iset.name}-c{j}"
+        got = st.stage({r: v[lo:lo + c] for r, v in rows.items()}, d, salt_key, indices=range(base + lo, base + lo + c),
+                       set_name=set_name)
+        (d / "inst.bin").rename(d / f"inst-{c}.bin")
+        (d / "pub.bin").rename(d / f"pub-{c}.bin")
+        (d / "tables").mkdir(exist_ok=True)
+        (d / "circuit.txt").symlink_to("../circuit.txt")
+        o0 = np.asarray(got["outs"]["o0"], dtype=np.uint16)[:, :twin.shape[1]]
+        members.append({"tag": f"{tag}-c{j}", "dir": d, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name,
+                        "lo": lo, "n": c, "cap": cap, "twin": {"agrees": bool(np.array_equal(o0, twin[lo:lo + c])), "instances": c},
+                        "ands": got["ands"], "unit_nnz": got["unit_nnz"],
+                        "seconds": {"build": round(t_build, 1) if j == 0 else 0.0, "stage": round(time.time() - t1, 1)}})
+    return members
 
 
 def statement_checks(m: dict, rec: dict, want: dict) -> dict:
@@ -120,6 +145,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--members", default=LLAMA_3_2_1B_LAYER, help="K:N,...: N coordinates at each K")
     ap.add_argument("--k", type=int, default=32, help="the stratified rule's k")
+    ap.add_argument("--chunk", type=int, default=None, help="at most this many units a statement (below the spec shape's cap)")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=7561)
     a = ap.parse_args()
@@ -142,19 +168,20 @@ def main() -> int:
     strata = P.strata(program, query)
     assert [t for t, _ in strata] == [P.template_id(d) for d in defs] and all(len(rs) == 1 for _, rs in strata)
 
-    # serving commits (the stand-in): each member's statement, bound to the partition
+    # serving commits (the stand-in): each template's members, bound to the partition
     members = []
     for d, (K, n), (tid, base, cnt) in zip(defs, spec, ranges):
         assert tid == P.template_id(d) and cnt == n
-        st = stage_member(K, n, base, {"partition": pd, "program": part["program"]}, out / f"stage-k{K}")
-        st.update(partition_file=out / "partition.json", program_file=out / "program.json")
-        members.append({"name": st["tag"], "K": K, "n": n, "base": base, "defn": d, "st": st, "header": a0.public_header(st["dir"], n)})
-        print(f"A6 staged {st['tag']}: {n} units from {base}, {st['ands']} ANDs, {st['unit_nnz']} nonzeros, twin {st['twin']['agrees']}, "
-              f"{st['seconds']['total']} s", flush=True)
-    summary["members"] = [{"name": m["name"], "template": P.template_id(m["defn"]), "n": m["n"], "base": m["base"],
-                           "ands": m["st"]["ands"], "unit_nnz": m["st"]["unit_nnz"], "k_log": m["st"]["meta"].get("k_log"),
-                           "unit_log": m["st"]["meta"].get("unit_log"), "pin": m["st"]["pin"], "class": m["st"]["class"],
-                           "twin": m["st"]["twin"], "stage_s": m["st"]["seconds"]} for m in members]
+        for st in stage_template(K, n, base, {"partition": pd, "program": part["program"]}, out / f"stage-k{K}", a.chunk):
+            st.update(partition_file=out / "partition.json", program_file=out / "program.json")
+            members.append({"name": st["tag"], "K": K, "n": st["n"], "base": base + st["lo"], "defn": d, "st": st,
+                            "header": a0.public_header(st["dir"], st["n"])})
+            print(f"A6 staged {st['tag']}: {st['n']} units from {base + st['lo']} (at most {st['cap']} a statement), {st['ands']} ANDs, "
+                  f"{st['unit_nnz']} nonzeros, twin {st['twin']['agrees']}, {st['seconds']}", flush=True)
+    summary["members"] = [{"name": m["name"], "template": P.template_id(m["defn"]), "n": m["n"], "base": m["base"], "set": m["st"]["set"],
+                           "cap": m["st"]["cap"], "ands": m["st"]["ands"], "unit_nnz": m["st"]["unit_nnz"],
+                           "k_log": m["st"]["meta"].get("k_log"), "unit_log": m["st"]["meta"].get("unit_log"), "pin": m["st"]["pin"],
+                           "class": m["st"]["class"], "twin": m["st"]["twin"], "stage_s": m["st"]["seconds"]} for m in members]
 
     # one registration, before the draw
     want, roots, publics = {}, [], {}
@@ -165,7 +192,8 @@ def main() -> int:
             roots.append({"port": f"{m['name']}/{port}", "root": fv["roots"][port], "leaves": w["leaves"], "domain": fv["domain_ids"][port]})
         publics[m["name"]] = a0.sha512_file(m["st"]["dir"] / f"pub-{m['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
-    window = {"kind": "stand-in", "of": WINDOW_OF, "members": {m["name"]: {"template": P.template_id(m["defn"]), "n": m["n"]} for m in members},
+    window = {"kind": "stand-in", "of": WINDOW_OF,
+              "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "none: no served run; vllm's int8 Program and its served rows replace these values"}
     rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
@@ -246,9 +274,9 @@ def main() -> int:
     neg["public-file-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check_draw({**lean_draw, "units": lean_draw["units"][:-1] + [n_all]}, rec, rec["law"])
     neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
-    if len(members) > 1:
-        a_lo, a_hi = members[0]["base"], members[0]["base"] + members[0]["n"]
-        b_lo, b_hi = members[1]["base"], members[1]["base"] + members[1]["n"]
+    if len(ranges) > 1:
+        (_ta, a_lo, a_n), (_tb, b_lo, b_n) = ranges[:2]
+        a_hi, b_hi = a_lo + a_n, b_lo + b_n
         drop = next(u for u in lean_draw["units"] if a_lo <= u < a_hi)
         add = next((u for u in range(b_lo, b_hi) if u not in lean_draw["units"]), None)
         if add is not None:
@@ -265,8 +293,9 @@ def main() -> int:
     other_pd = P.digest(P.partition(fewer, query))
     c = statement_checks({**m0, "st": {**m0["st"], "meta": {**m0["st"]["meta"], "partition": {"rule": P.FORMAT, "digest": other_pd}}}}, rec, want)
     neg["statement-binds-another-partition"] = {"refused": not c["ok"], "codes": c["codes"]}
-    sdir = out / f"session-{m0['name']}"
-    if (sdir / "sessions").is_dir():
+    m0 = next((m for m in members if (out / f"session-{m['name']}" / "sessions").is_dir()), None)
+    if m0 is not None:
+        sdir = out / f"session-{m0['name']}"
         bad = out / "neg-other-program"
         bad.mkdir(exist_ok=True)
         (bad / "partition.json").write_text(json.dumps(P.partition(fewer, query), sort_keys=True))
