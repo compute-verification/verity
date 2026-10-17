@@ -6,15 +6,17 @@ import Proofs.Flock.Claims.KS.LiveMix
 
 `PlainLiveWrPAt`'s first clause asks that `V false`'s accepting runs with no column off `C` be no likelier than the
 average over a tape of the live session's `plainVerdict`. `plain_first_of_sim` gives that bound from two things about
-the deployed runs, each deterministic:
+the deployed runs:
 
-* a simulation (`PlainSim`): a prover `P'` of the live session at the tape `(ω, u)` and the live coins `r'`, and coins
-  `Φ (u, r')` of `V false` with the law of uniform coins, such that wherever `V false` accepts at `Φ (u, r')`, the live
-  outcome of `P'` is the run's (`viewOf`);
+* a simulation (`PlainSim`): coins `Φ (u, r')` of `V false` at the tape `u` and the live coins `r'`, with the law of
+  uniform coins, and a prover `P'` of the live session such that wherever `V false` accepts at `Φ (u, r')`, the live
+  outcome of `P'` at the tape `(ω, u)` is the run's (`PlainSimRun`, `viewOf`);
 * the record's draw (`RecordDrawVerbatim`): on `V false`'s accepting runs the record carries the statement's draw
   verbatim, which `plainVerdict_of_run` reads.
 
 Then `Pr_le_liveMix` moves the bound to the mixture of `P'`'s strategies, at the root of the prover's first message.
+At `plainCoins`, where each deployed coin takes a live coin's first entries and the rest from the tape, the law holds
+(`plainSim_of_run`), so `plain_first_of_run` asks only for `RecordDrawVerbatim` and `PlainSimRun`, both deterministic.
 -/
 
 namespace FlockDeploy.KS
@@ -45,19 +47,40 @@ theorem drawEq_ne : ∃ a b : Json, drawEq (some a) (some b) = true ∧ a ≠ b 
   have e := congrArg (fun j : Json => match j with | .obj ⟨⟨.inner _ k _ _ _⟩⟩ => k | _ => "") h
   exact absurd e (by decide)
 
-/-- **A prover of the live session at one table simulates `P`**: `Φ (u, r')`, the coins of `V false` at the tape `u`
-and the live coins `r'`, have the law of uniform coins, and wherever `V false` accepts at them, the live outcome of
-`P'` at the tape `(ω, u)` is the run's (`viewOf`). -/
-def PlainSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
-    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} [Fintype τ] [Nonempty τ]
-    (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
-  (∀ E : (Fin ((V false).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E) ∧
+/-- **A prover of the live session at one table simulates `P` on the coins `Φ`**: wherever `V false` accepts at
+`Φ (u, r')`, the coins of `V false` at the tape `u` and the live coins `r'`, the live outcome of `P'` at the tape
+`(ω, u)` and `r'` is the run's (`viewOf`). -/
+def PlainSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} (P' : Claims.Prover (Ω × τ))
+    (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
   ∀ u r', (Claims.run sha512 P (V false) x ω (Φ (u, r'))).out = .acc →
     ∀ s spec sts link c₁ mids f,
       act false x ((Claims.run sha512 P (V false) x ω (Φ (u, r'))).msgs.map Prod.fst)
           ((List.range ((Claims.run sha512 P (V false) x ω (Φ (u, r'))).msgs.map Prod.fst).length).map
             (Claims.coinSeq (Φ (u, r')))) = .decide s spec sts link c₁ mids f →
         liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r' = viewOf 1 mPts spec link c₁ f
+
+/-- **A prover of the live session at one table simulates `P`**: the coins `Φ (u, r')` have the law of uniform coins,
+and `P'` simulates `P` on them (`PlainSimRun`). -/
+def PlainSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} [Fintype τ] [Nonempty τ]
+    (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
+  (∀ E : (Fin ((V false).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E) ∧
+    PlainSimRun P x ω mPts N dg w P' Φ
+
+/-- **The deployed coins at the tape `u` and the live coins `r'`**: coin `j` takes its first `n j` field elements from
+the live coin `r' j` and the rest from `u j` (`mergeAt`). -/
+def plainCoins {x : Claims.Msg} {N : ℕ} (hk : N + 2 = (V false).k x) (n : Fin ((V false).k x) → ℕ)
+    (p : (Fin ((V false).k x) → Coin) × (Fin (N + 2) → LCoin 65536)) : Fin ((V false).k x) → Coin :=
+  @mergeAt _ _ _ 𝔽 hk n p.1 p.2
+
+/-- **`P'` simulates `P` on `plainCoins`** where it simulates the runs: the merged coins are uniform (`Pr_mergeAt`). -/
+theorem plainSim_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ} {N : Claims.Msg → ℕ}
+    {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts}
+    {P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))} (hk : N x + 2 = (V false).k x)
+    (n : Fin ((V false).k x) → ℕ) (h : PlainSimRun P x ω mPts N dg w P' (plainCoins hk n)) :
+    PlainSim P x ω mPts N dg w P' (plainCoins hk n) :=
+  ⟨fun E => @Pr_mergeAt _ _ _ 𝔽 _ _ hk n E, h⟩
 
 open Classical in
 /-- **The plain mixture's first bound, from a simulation**: at a plain statement `x` that sets up at `s₀` with inputs
@@ -102,5 +125,24 @@ theorem plain_first_of_sim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (
     rfl
   rw [hroot, hsim u r' hacc s spec sts link c₁ mids f hact]
   exact hv d (hdraw _ hacc s spec sts link c₁ mids f hact) hd hno
+
+open Classical in
+/-- **The plain mixture's first bound, from a simulation of the runs**: `plain_first_of_sim` with the deployed coins
+as the tape and `plainCoins` as the coins, whose law is uniform (`plainSim_of_run`), so it asks only for
+`RecordDrawVerbatim` and `PlainSimRun`, both deterministic. -/
+theorem plain_first_of_run {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ}
+    (C : Fin M → List 𝔽) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} {d : Json}
+    (hset : setupOf false x = some (s₀, spec₀, sts₀)) (hd : s₀.read.draw = some d) (hdraw : RecordDrawVerbatim P x ω)
+    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts)
+    (P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))) (hk : N x + 2 = (V false).k x)
+    (n : Fin ((V false).k x) → ℕ) (hrun : PlainSimRun P x ω mPts N dg w P' (plainCoins hk n)) :
+    Claims.Pr (fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
+        ¬ ∃ (p : Fin M) (v : List 𝔽),
+          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some v ∧
+            v ≠ C p) ≤
+      (∑ u, (prob (plainVerdict s₀.read.I d C ((linkOf ((P.next x [] ω).eval sha512).1).getD default).1.toArray)
+        (liveSession dg 1 mPts (N x)) (liveStrat (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u))).toReal) /
+        Fintype.card (Fin ((V false).k x) → Coin) :=
+  plain_first_of_sim P x ω C mPts hset hd hdraw N dg w P' (plainCoins hk n) (plainSim_of_run hk n hrun)
 
 end FlockDeploy.KS
