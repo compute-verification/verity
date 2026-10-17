@@ -540,6 +540,17 @@ def test_held_idle_is_stale_70_minutes_after_the_newest_hour_ends(tmp_path):
     assert M.held_idle_stale(M.Ctx(now=T0, root=tmp_path / "none"))[0].key == "stale"
 
 
+def test_an_idle_node_whose_panel_still_publishes_is_not_stale(tmp_path):
+    """17 Oct 09:13Z: node 1 held no GPU from 08:00Z, so no hour reached the jsonl while verity-console published every 5 min."""
+    write_rows(tmp_path, [held_row("2026-10-03T19:00Z")])
+    panel = tmp_path / M.HELD_IDLE_PANEL.lstrip("/")
+    panel.parent.mkdir(parents=True, exist_ok=True)
+    panel.write_text(json.dumps({"id": "held-idle-hourly", "updated_at": "2026-10-03T23:55:00Z"}))
+    assert M.held_idle_stale(M.Ctx(now=M.epoch("2026-10-04T00:00:00Z"), root=tmp_path)) == []
+    (f,) = M.held_idle_stale(M.Ctx(now=M.epoch("2026-10-04T01:06:00Z"), root=tmp_path))
+    assert f.key == "stale" and "71 minutes" in f.text
+
+
 # ---- a GPU idle while a waiter waits --------------------------------------------------------------------------------------------
 
 def lease_state(root: Path, d="/run/gpu-lease", *, t=T0, gpus=(), waiting=(), blocked=None, name="node1"):
