@@ -25,6 +25,10 @@ def test_solve_prints_the_numbers_and_the_check(capsys):
     assert "copy routes, MACs a word (price/measured), cheapest first: UNI64 1.00/" in out
 
 
+# VF3n-16's MMA forms, each its own kind from VF3n-16: an earlier vector doesn't split them out
+MMA_FORMS = ["HMMA16816", "HMMA16816F16", "HMMA1684T", "HMMA1688T", "HMMASP16832", "IMMA16816", "IMMA16832", "IMMA8816", "IMMASP16832", "IMMASP16864", "OMMASF16864", "QMMA16832", "QMMASF16832", "QMMASP16864"]
+
+
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
@@ -32,7 +36,7 @@ def test_solve_defaults_to_the_current_vector(capsys):
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
                            "loads16": {"kinds": 9, "below": [], "absent": []},
                            "copy16": {"kinds": 63, "below": ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"],
-                                      "absent": []}}
+                                      "absent": MMA_FORMS}}
     uni = d["copies"][1]
     assert [c["kind"] for c in d["copies"][:2]] == ["UNI64", "UNI"] and uni["words"] == 32
     assert round(uni["price"], 2) == 2.0 and uni["measured"] > 32 and uni["what"].startswith("UR fan-out")
@@ -74,7 +78,8 @@ def test_a_measurement_is_data(tmp_path, capsys):
     assert new.failures == [] and len(new.vector.rows) == len(old.vector.rows) + 1
     assert "ROW_TEST" in new.census["FFMA"] and "ROW_TEST" not in old.census["FFMA"]
     assert (old.tau, old.margin) == (resolve(cur).tau, resolve(cur).margin)
-    assert "JI3e_0" in new.census["LDSM_X1"] and "JI3e_0" not in resolve("VF3j", data).census["LDSM_X1"]
+    assert "JI3e_0" in resolve("VF3m-16", data).census["LDSM_X1"] and "JI3e_0" not in resolve("VF3j", data).census["LDSM_X1"]
+    assert "JI3n_0" in new.census["LDSM_X1"] and "JI3e_0" not in new.census["LDSM_X1"]
     assert vector("TEST", data).published == {}
     assert main(["--data", str(data), "solve", "TEST"]) == 0
     assert "published: nothing yet" in capsys.readouterr().out
