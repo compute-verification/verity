@@ -34,6 +34,36 @@
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
   },
+  "Accounting.Assumptions.TS.FacetCeilings": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.FillOpt": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.FoldOpt": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.LinSteer": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.LuckAt": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.NoSum": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.ProofsSound": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.ScalarRoute": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.SideUnits": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.WordsWritten": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
@@ -1346,6 +1376,42 @@
    "signature": ["Accounting.SecurityProofs.SketchRankFiber : Accounting.Guarantees.SketchRankFiber"],
    "assumptions": [],
    "type_hash": "285621bb6e07e492d607d97ac1183c00f683ca8459de8b4d593e019714144cd1"
+  },
+  "Accounting.SecurityProofs.TS.BindingFacetD1": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.CompilerC": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.DIdeal": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.DIdealFloor": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.DecompositionD": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.FloorCreditD3": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.OutputCount": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.RoutesOffD2": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.TensorSlotCount": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.TensorSlotTight": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.TimeBound": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.VectorThresholdD1": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.Tag.DigestNonCollision": {
    "owner": "@memory-accounting",
@@ -3815,6 +3881,15 @@
    "assumptions": [],
    "type_hash": "5285cb8cbec9dd6a634d4653607b825be7d9eea4c260b93e29cb3fad67b09cee"
   },
+  "Pouw.SecurityProofs.Eps1.ClassPPacked": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Eps1.WordLocalGeneral": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Eps1.WordLocalZero": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.GammaFromTT": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.GammaFromTT : Pouw.Guarantees.GammaFromTT"],
@@ -5289,7 +5364,22 @@
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins, the check's cell-block uniform among every stage's, and each round's run fixed before its first draw, E3), KScopeOverlapAffine (Theorem K's proved affine scope across draws: operands affine in each draw's own bits at every bit point of the other draws' (AffMulAt), row-pure across draws, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16Overlap (the active vector VF3j-16's prices with B_theta complete, each product counted once). It is a sibling of OverlapFloorKOneSided, a floor of record (Daniel, decision 53), proved on its own scope at the luck 3/4: the affine scope isn't inside the one-sided one; K1 is not claimed outside the two proved scopes.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeOneSided (Theorem K's proved one-sided scope, a sibling of the ledger's K1: products one-sided of any form, charging purity mod 2 (odd coefficients) at the cell-blocks' frames in place of row purity, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16 (the active vector VF3j-16's prices with B_theta complete, for stages that don't overlap). It is a floor of record (Daniel, decision 53): c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins, the check's cell-block uniform among every stage's, and each round's run fixed before its first draw, E3), KScopeOverlapOneSided (Theorem K's scope across draws for one-sided operands of any form per draw at every bit point of the other draws' (OneSidedAt), charging purity across draws (odd coefficients) in place of row purity, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16Overlap (the active vector VF3j-16's prices with B_theta complete, each product counted once). It is a floor of record (Daniel, decision 53): c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies.",
-   "Flock.SecurityProofs.SamplingClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Sampling.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed sampled verifier."
+   "Flock.SecurityProofs.SamplingClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Sampling.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed sampled verifier.",
+   "Accounting.SecurityProofs.TS.TimeBound": "frozen (no-function,world-unlisted): Lemma 1 of EPS1-SPEC over any TS machine and run, not a Lean function; its premise FacetCeilings (Models.Accounting.Assumptions.TS, measured, scoped to the stated device) is not on the premises list.",
+   "Accounting.SecurityProofs.TS.DecompositionD": "lemma: Theorem D(a) of EPS1-SPEC, the master inequality from (Pi), (RD) and (Lk) taken as hypotheses (RD and Lk are definitions, not named assumptions); DIdeal, DIdealFloor, CompilerC and FloorCreditD3 are what it is for.",
+   "Accounting.SecurityProofs.TS.DIdeal": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7) of EPS1-SPEC over every full-checking play (Accounting.TS.Play) and labelled run, not a Lean function: the service's full check has no Lean code yet. Its premises (I1)-(I8) are the named assumptions of Models.Accounting.Assumptions.TS, not on the premises list, and it takes definitional side conditions (a well-formed model, a split labelling, 0 < p < 1, delta' > 0).",
+   "Accounting.SecurityProofs.TS.DIdealFloor": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7-flat) of EPS1-SPEC under the floor credit, over every full-checking play and labelled program, not a Lean function; premises and side conditions as DIdeal's.",
+   "Accounting.SecurityProofs.TS.CompilerC": "frozen (no-function,world-unlisted): Lemma C (the compiler) of EPS1-SPEC over every sampled play, not a Lean function; its premises are DIdeal's but (L), with (C1)-(C3) in ProofsSound, and it takes Lambda's definition (Accounting.TS.RoundGame.BudgetAt) as a hypothesis.",
+   "Accounting.SecurityProofs.TS.FloorCreditD3": "lemma: Corollary D3 of EPS1-SPEC, from (Pi), (RD) and (Lk) as hypotheses like DecompositionD, with the terms' signs on a floor program on the known menu and T(H) = gamma_flat T_cred.",
+   "Accounting.SecurityProofs.TS.BindingFacetD1": "lemma: Corollary D1 of EPS1-SPEC, epsilon_machine at a binding facet is 0 when every menu costs at least honest's there; arithmetic over the terms' definitions.",
+   "Accounting.SecurityProofs.TS.VectorThresholdD1": "lemma: Corollary D1's threshold, S_V(q) costs at least T_kappa with delivery iff q >= 32(alpha + beta phi_del)/(beta omega); arithmetic over the route demands.",
+   "Accounting.SecurityProofs.TS.RoutesOffD2": "lemma: Corollary D2 of EPS1-SPEC, B(M) >= B0/(1 + sum kappa_u s_u) from its two hypotheses on the run's loads.",
+   "Accounting.SecurityProofs.TS.TensorSlotCount": "frozen (no-function): T1 of EPS1-TENSOR over any tensor run's slot writes, injective by freshness (a hypothesis), not a Lean function.",
+   "Accounting.SecurityProofs.TS.TensorSlotTight": "lemma: T1's tightness criterion (epsilon_tensor = 0 iff L = d_H and rho_H = rho_T), arithmetic.",
+   "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
+   "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
+   "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
+   "Pouw.SecurityProofs.Eps1.ClassPPacked": "frozen (no-function): Theorem C of EPS1-QSTAR, over every class-P (radix-packed) M3 program at the zero instance, not a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
