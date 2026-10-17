@@ -38,9 +38,6 @@
    "why": "cost_walk, the tactic that bounds a computation's sends by its head (Flock/Claims/Complete/Count.lean's proof of the goal SendCount), a macro that expands to repeated apply of the module's Cost lemmas, extract_lets, intro and split. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
    "digest": "31980c57d92439ebfa78113f6020236da361df92073e51a3e32ca499b163bbfb"
   },
-  "Proofs.Flock.Claims.Complete.Zk.Level0Lanes": {
-   "why": "grow_map and grow_tac, the tactics that prove each step of the masked prover's lane phase keeps or grows its state's lists (the module's grL lemmas, Level0.Lanes), macros that expand to repeated apply of the module's grL and Total lemmas, extract_lets, intro, unfold, refine and split. They run only inside the elaborator and do no IO, and the kernel replays every proof they build."
-  },
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "01a97925bc0546457b627fff99e05739c3739fe9a1366622621c7d23578e162e"
