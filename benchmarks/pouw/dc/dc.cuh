@@ -45,6 +45,9 @@ DC_DEV void mbar_wait(uint64_t* bar, uint32_t ph) {
       "mbarrier.try_wait.parity.shared::cta.b64 P1, [%0], %1;\n"
       "@!P1 bra WAIT_%=;\n}\n" ::"r"(smem_u32(bar)), "r"(ph) : "memory");
 }
+DC_DEV void mbar_arrive(uint64_t* bar) {
+  asm volatile("mbarrier.arrive.shared::cta.b64 _, [%0];" ::"r"(smem_u32(bar)) : "memory");
+}
 DC_DEV void fence_async_smem() { asm volatile("fence.proxy.async.shared::cta;" ::: "memory"); }
 DC_DEV void fence_mbar_init() { asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory"); }
 
