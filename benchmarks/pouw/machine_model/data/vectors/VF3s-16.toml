@@ -1,0 +1,54 @@
+# VF3s-16: VF3r-16 with RT-FACET's refit of the joint issue rows (note:20261017T1930Z-draft-rt-facet; runs @JI3t): FMUL or FADD beside IMMA.16832 on 3 accumulators, 120 lane ops a 8 MMAs, unrolled 16-20 deep, beats JI3s_0-5 (JI3s_2 at 1.0131); JI3s_0-16 as JI3t_0-35 (each MMA form's upper hull of JI3s's vertices and the measured programs at the 2% margin, each form at the most it carries beside each vector coefficient), JI3s_17-20 kept
+name = "VF3s-16"
+epoch = "VF3s-16"
+summary = "VF3r-16 with RT-FACET's refit of the joint issue rows (note:20261017T1930Z-draft-rt-facet; runs @JI3t): FMUL or FADD beside IMMA.16832 on 3 accumulators, 120 lane ops a 8 MMAs, unrolled 16-20 deep, beats JI3s_0-5 (JI3s_2 at 1.0131); JI3s_0-16 as JI3t_0-35 (each MMA form's upper hull of JI3s's vertices and the measured programs at the 2% margin, each form at the most it carries beside each vector coefficient), JI3s_17-20 kept"
+note = "note:20261017T1930Z-draft-rt-facet"
+rows = [
+    "issue", "M", "F", "VMNX", "H", "I", "A", "F2FS",
+    "XU", "ER6r0", "ER6r1", "LDSi", "R6w", "L2red", "UP", "IW",
+    "A64", "DP", "DPM", "ROW_TLD1", "ROW_TLD2", "ROW_TLD4w", "ROW_TLD2D1", "ROW_TLD2D4",
+    "ROW_TEX1", "ROW_TEX4", "ROW_TLD4G", "ROW_TEXBIL", "ROW_SULD1", "ROW_SULD4", "ROW_LDCUNI", "ROW_SURED",
+    "ROW_LDCDIV", "ROW_LDC64", "ROW_UTMA", "ROW_UTMA8", "ROW_UTMA512", "ROW_G4_16", "ROW_G4_32", "ROW_ATOMG32",
+    "ROW_ATOMG64", "ROW_REDG32", "ROW_REDG64", "ROW_ATOMS32", "ROW_ATOMS64", "ROW_ATOME32", "ROW_ATOME64", "ROW_REDAS32",
+    "ROW_REDAS64", "ROW_UBLKRED", "ROW_CVT64", "ROW_TEXI", "ROW_TLDW1", "ROW_TLDW2", "ROW_TLDW4", "ROW_SULDI",
+    "ROW_LDSMR1", "ROW_LDSMR2", "ROW_LDSMR4", "ROW_STSMR1", "ROW_STSMR2", "ROW_STSMR4", "ROW_SHFLM", "ROW_UTMA1K",
+    "ROW_UTMA2K", "ROW_UTMA4K", "ROW_UTMA8K", "ROW_UTMA16K", "ROW_UTMA32K", "ROW_UTMA48K", "ROW_UTMA64K", "ROW_UTMABIG",
+    "ROW_G4_256", "ROW_G4_1K", "ROW_TMAB", "ROW_ATOME32P", "ROW_LDGSTS16", "ROW_UBLKCP4K", "ROW_DSMST4P", "ELDG0",
+    "ELDG1", "ELDG2", "ROW_LDS64", "ROW_LDG64", "ROW_LDG256", "ROW_L2RD", "JI3s_17", "JI3s_18",
+    "JI3s_19", "JI3s_20", "JI3t_0", "JI3t_1", "JI3t_2", "JI3t_3", "JI3t_4", "JI3t_5",
+    "JI3t_6", "JI3t_7", "JI3t_8", "JI3t_9", "JI3t_10", "JI3t_11", "JI3t_12", "JI3t_13",
+    "JI3t_14", "JI3t_15", "JI3t_16", "JI3t_17", "JI3t_18", "JI3t_19", "JI3t_20", "JI3t_21",
+    "JI3t_22", "JI3t_23", "JI3t_24", "JI3t_25", "JI3t_26", "JI3t_27", "JI3t_28", "JI3t_29",
+    "JI3t_30", "JI3t_31", "JI3t_32", "JI3t_33", "JI3t_34", "JI3t_35", "EFFMB0", "EFFMB1",
+]
+# [kind, MACs]: the kind's price is at least that many tensor MACs
+credits = [
+    ["IMAD", 32], ["IMAD", 128], ["HFMA2", 64], ["FFMA", 32], ["ALU", 8], ["XU", 29],
+    ["NOROW", 32], ["ALU", 91], ["ALU", 112], ["ALU", 240], ["SHFL", 496], ["ALU", 512],
+    ["HFMA2", 512], ["FFMA", 512], ["NOROW", 512], ["FFMA", 1024.0], ["VIMNMX", 1024.0], ["HFMA2", 1024.0],
+    ["IMAD", 1024.0], ["ALU", 1024.0], ["F2FS", 1024.0], ["XU", 1024.0], ["SHFL", 1024.0], ["NOROW", 1024.0],
+    ["RED32", 1024.0], ["TMAred512", 4096.0], ["SEL", 32], ["SEL", 512], ["SEL", 1024], ["UNI", 16],
+    ["UNI", 32], ["UNI64", 32], ["UNI64", 64], ["IMADW", 1024], ["IMADW", 2048], ["ALU64", 1024],
+    ["ALU64", 2048], ["REDV", 2048], ["REDV", 4096], ["RED64", 1024], ["RED64", 2048], ["W2", 1024],
+    ["W2", 2048], ["DMUL", 1024], ["DMUL", 2048], ["ATOMG32", 1024], ["ATOMG64", 2048], ["REDG32", 1024],
+    ["REDG64", 2048], ["ATOMS32", 1024], ["ATOMS64", 2048], ["ATOME32", 1024], ["ATOME64", 2048], ["REDAS32", 1024],
+    ["REDAS64", 2048], ["SURED", 1024], ["TEX1", 1024], ["TEX2", 2048], ["TEX4", 4096], ["TEXBIL", 4096],
+    ["UNI", 32], ["UNI64", 64], ["CVT64", 2048], ["LDSM_X1T", 1024], ["LDSM_X2T", 2048], ["LDSM_X4T", 4096],
+    ["STSM_X1T", 1024], ["STSM_X2T", 2048], ["STSM_X4T", 4096], ["TLD2", 2048], ["TLD4w", 4096], ["TLD2D4", 4096],
+    ["TLD4G", 4096], ["SULD1", 1024], ["SULD4", 4096], ["LDCDIV", 1024], ["LDSM8T_X1", 2048], ["LDSM8T_X2", 4096],
+    ["LDSM6_X1", 1024], ["LDSM6_X2", 2048], ["LDSM6_X4", 4096], ["LDSM4_X1", 1024], ["LDSM4_X2", 2048], ["LDSM4_X4", 4096],
+    ["LDSM6T_X1", 2048], ["LDSM6T_X2", 4096], ["LDSM4T_X1", 2048], ["LDSM4T_X2", 4096], ["STSM8T_X1", 1024], ["STSM8T_X2", 2048],
+    ["STSM8T_X4", 4096], ["UTMA", 128], ["UTMA8", 256], ["UTMA512", 4096], ["G4_16", 512], ["G4_32", 1024],
+    ["UTMA1K", 8192], ["UTMA2K", 16384], ["UTMA4K", 32768], ["UTMA8K", 65536], ["UTMA16K", 131072], ["UTMA32K", 262144],
+    ["UTMA48K", 393216], ["UTMA64K", 524288], ["UTMABIG", 811008], ["G4_256", 8192], ["G4_1K", 32768], ["LDS32", 512],
+    ["LDS128", 2048], ["LDG32", 512], ["LDG128", 2048], ["LDC64", 1024], ["LDCUNI", 512], ["LDSM_X1", 512],
+    ["LDSM_X2", 1024], ["LDSM_X4", 2048], ["ATOME32P", 1024],
+    ["LDGSTS16", 4096], ["UBLKCP4K", 32768], ["DSMST4P", 4096],
+    ["LDS64", 1024], ["LDG64", 1024], ["LDG256", 4096], ["LDG128NA", 2048], ["LDG128CG", 2048], ["LDG256CG", 4096],
+]
+
+[published]  # as `machine-model solve VF3s-16` printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+tau = 0.0556
+tau_600w = 0.0435
+uf_low = 1.1563
+margin = 2.0
