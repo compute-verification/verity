@@ -237,6 +237,17 @@ def test_adapt_is_a_proof_units_term():
     assert E.eps(DUO, PI, 8, adapt=E.adapt("per-stage")).total() == pytest.approx(e0.total())
     with pytest.raises(SystemExit, match="no proof unit 'none'"):
         E.adapt("none")
+    assert all(E.adapt(n).selection for n in E.adapts())
+
+
+def test_core_and_sample_are_two_layers():
+    """Daniel (06:29Z): the core ε is the protocol with 100% checking, ε_luck = ε_adapt = 0; ε_sample = ε_luck + ε_adapt
+    is the sampling compiler's and never enters it."""
+    e = E.eps(DUO, PI, 8, adapt=E.adapt("whole"))
+    assert e.core() == pytest.approx(1 - (1 - e.skip - e.mand - e.machine_eps) * (1 - (e.sched or 0)) * (1 - e.clock))
+    assert e.sample() == pytest.approx(e.luck + 0.0035) and e.luck > 0
+    assert e.core() == pytest.approx(E.eps(DUO, PI, 8).core()) and e.core() < e.total()
+    assert e.core(sched=False) <= e.core()
 
 
 def test_luck_spends_one_budget_on_words_and_filler():
@@ -266,7 +277,7 @@ def test_the_table_route_is_bound_by_L2():
     s = E.setup(d, PI, credit="floor", table=t)
     m = s.cheat(2.16)
     assert "L2" in m.binding and m.words["table"] * t.bytes / t.per_cycle() == pytest.approx(m.T, rel=1e-9)
-    assert 0 < m.words["table"] < 0.1 and s.machine_eps(2.16) > base.machine_eps(2.16)
+    assert 0 < m.words["table"] < 0.2 and s.machine_eps(2.16) > base.machine_eps(2.16)
     assert s.floor() == pytest.approx(s.machine_eps(8.0), abs=1e-9)        # the floor keeps the table route
     measured = E.setup(d, PI, credit="floor", table=E.table(q=1.906))
     assert base.machine_eps(2.16) < measured.machine_eps(2.16) < s.machine_eps(2.16)
@@ -292,13 +303,19 @@ def test_cli(capsys):
     out = capsys.readouterr().out
     assert out.startswith("dither-duo: ") and "binding JI3e_0" in out and "ε_machine  11.171%" in out
     assert "q* threshold (ε_machine = its floor): none ≤ 64; lanes alone 2.029" in out and "ε_sched    14.121%" in out
-    assert "ε_adapt    21.000%: proof unit segment" in out
+    assert "ε core     " in out and "ε_sample" not in out and "ε_luck" not in out
+    assert main(["eps", "--vector", PIN, "--checking", "sampled"]) == 0
+    out = capsys.readouterr().out
+    assert "ε_adapt 21.000%: proof unit segment" in out and "ε_sample   21.153%" in out
+    with pytest.raises(SystemExit, match="--checking sampled"):
+        main(["eps", "--adapt", "whole"])
     assert main(["eps", "--vector", PIN, "dither-two-sided", "--upfill", "--operands", "floor", "--credit", "floor",
-                 "--adapt", "per-stage", "--json"]) == 0
+                 "--checking", "sampled", "--adapt", "per-stage", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["credit"] == "floor" and d["terms"]["machine"] == 0 and d["terms"]["sched"] is None
-    assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["total"] < 0.002
+    assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["core"] < 0.002
     assert d["adapt"]["unit"] == "per-stage" and d["terms"]["adapt"] == 0
+    assert d["sample"]["eps"] == pytest.approx(d["terms"]["luck"]) and d["sample"]["budget"]["checks"] == 48000
     assert main(["eps", "--vector", PIN, "dither-two-sided", "--upfill", "--q", "4", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-two-sided+up" and d["operands"] == "free"
@@ -327,5 +344,12 @@ def test_cli(capsys):
                  "2.16"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("Π VF3l-16, operands floor")
-    assert lines[1].split()[-6:-3] == ["ε@2", "ε@2.16", "ε@8"]
+    assert lines[1].split()[-6:-3] == ["core@2", "core@2.16", "core@8"]
     assert [x.split()[0] for x in lines[2:]] == ["dither-duo@r1.5", "dither-duo@r3"]
+    assert main(["eps", "--vector", PIN, "--table", "co-dither-pv", "--operands", "floor", "--credit", "floor",
+                 "--checking", "sampled", "--adapt", "whole"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert "checking sampled" in lines[0] and "proof unit whole" in lines[0]
+    assert lines[1].split()[-4:] == ["|", "luck", "adapt", "sample"] and lines[2].split()[-4] == "|"
+    luck, adapt, sample = (float(x.rstrip("%")) for x in lines[2].split()[-3:])
+    assert adapt == 0.35 and sample == pytest.approx(luck + adapt, abs=1e-3)

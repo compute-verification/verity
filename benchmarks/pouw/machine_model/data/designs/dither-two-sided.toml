@@ -15,8 +15,8 @@ ALU = 2
 IMAD = 1
 
 [skip.pv-strip]
-eps = 0.00065
-source = "SKIP's design A over Llama-3.1-8B and 70B x 2K, 8K, 32K, prefill and decode, by honest time: the one unchecked item is the second int8 limb of P·V's strip U·Y (prefill 0.065%, decode 0.059%; 0.060% by int8 products) (note:20261017T0340Z-draft-skip, 04:20Z)"
+eps = 0.00131
+source = "SKIP's design A (`adopted-bd-lm`) over Llama-3.1-8B and 70B x 2K, 8K, 32K by honest time, with CHECKED-STRIP Result 3's correction: at a one-hot P row adopted P·V's whole strip is free, both limbs of U·Ycum and the triangle, so 0.131% by time (0.119% by int8 products), twice the 04:20Z count (note:20261017T0340Z-draft-skip Result 3, 06:19Z; note:20261017T0030Z-draft-checked-strip)"
 
 [mand.fold]
 eps = 0.0
