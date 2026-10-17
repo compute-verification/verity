@@ -63,7 +63,7 @@ The data, each kind of thing a file or a line of its own:
 - `data/honest/NAME.toml`: an honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the
   least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA, with its source.
 - `data/counts/NAME.toml`: an honest kernel's executed warp instructions by class as a closed form in the shape (a
-  stage's, a tile's and a launch's, per variant), the ncu observations they are fitted to and the tolerance that holds
+  stage's, a tile's, a raster group crossing's and a launch's, per variant), the ncu observations they are fitted to and the tolerance that holds
   them.
 - `data/designs/NAME.toml`: one design of the registry ("Designs" below): its name, title and aliases, the noise on each
   product, its honest profile, L, the noise's operand-delivery floor φ_del, the fold and filler (lane instructions a
