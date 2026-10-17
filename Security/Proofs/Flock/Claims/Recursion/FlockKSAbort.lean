@@ -17,15 +17,17 @@ they abort:
   prover's runs whose events read only kept runs (`EscapesD.Kept`), gives the abort-law bound: a kept run is the
   prover's run, and a run accepts as it aborts exactly where it is kept and accepted (`abortRun_acc_iff`). With
   nothing refused it is `TableBoundθ` (`tableBoundθ_of_kept`). `TableBoundθ` alone doesn't give it: its escapes may
-  sit on accepted runs a `keep` refuses, where `BAbort` sees no calls, and no prover can refuse after the verifier's
-  last coin, which only its decision reads, so `keep` doesn't fold into a prover (`flockKS_not_KSAbort`).
+  sit on accepted runs a `keep` refuses, where `BAbort` sees no calls, and where the verifier's decision reads its
+  last coin no prover can refuse after it, so `keep` doesn't fold into a prover (`flockKS_not_KSAbort`). Where the
+  decision doesn't read it and the escapes are on accepted runs, `keep` folds into a prover that refuses at the last
+  round (`FlockKSAcc`).
 * **One wait over draws** (`oneWaitD`): `joint_acc_le` at `drawGame`, one coin node drawing a run's coins with its
   abort coins, at any run law, as `oneWait_of_tableBound` is at `runGame`; at the runs as they abort, with `ColsOk` and
   `ConflictTied` at the prover's runs, it gives `OneWaitAbort` (`oneWaitAbort_of_tableBound`), the conflict an escape
   at round `0` of weight `k` (`EscapesD.addFork`).
 * **KS** (`KSAbort_of_oneWaitAbort`): `PrBadAbort_trunc` and `EscapesD.le`, as `KS_of_oneWait`, at Flock's own `κ` and
-  `γ`; so `Inner.KSAbort` at `Inner.ofFlock` (`KSAbort_of_tableBoundKept`) and the recursion's KS over Flock
-  (`KSFlock_of_flockKS`) rest on `TableBoundθKept`, `ColsOk` and `ConflictTied` at the inner deployment.
+  `γ`; so `Inner.KSAbort` at `Inner.ofFlock` rests on `TableBoundθKept`, `ColsOk` and `ConflictTied` at the inner
+  deployment (`KSAbort_of_tableBoundKept`).
 -/
 
 namespace Claims.Recursion
@@ -537,35 +539,5 @@ theorem KSAbort_of_tableBoundKept (H : Msg → Msg) (D : Flock.Deploy Coin Col T
       (tableBoundθAbort_of_kept H D N Ok htab)) decode hdec
 
 end KSAbort
-
-/-! ## The recursion's KS over Flock -/
-
-section RecursionKS
-
-variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-
-/-- **KS of the recursion over Flock, from Flock's KS at the outer deployment and the KS chain's obligations at the
-inner one, read at the abort law**: `KS_of_flockKS` at each inner decoder that meets the spec, with `Inner.KSAbort` at
-Flock from `TableBoundθKept`, `ColsOk` and `ConflictTied` at `DI` (`KSAbort_of_tableBoundKept`). It doesn't follow from
-`Claims.Flock.KS` at `DI` (`flockKS_not_KSAbort`). -/
-theorem KSFlock_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T)
-    (opening : Msg → Msg) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO) (NI : Msg → ℕ) (Ok : Msg → Col → Prop)
-    (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x) (hVkI : ∀ x, 0 < DI.V.k x)
-    (hKI : ∀ x, 0 < DI.cap x) (hkI : ∀ x, (8 ≤ DI.k x ∧ Splits DI x) ∨ NoAcc H DI.V x)
-    (hone : ∀ x, (∃ s, DI.parse x = some s ∧ s.tables = 1) ∨ NoAcc H DI.V x) (hz : ∀ x, Ok x 0)
-    (hok : ColsOk H DI NI Ok) (hconf : ConflictTied H DI NI) (htab : TableBoundθKept H DI NI Ok)
-    (hRef : Refuses H D) (hRounds : ∀ x, DI.V.k (xI D x) ≤ D.V.k x) (hN : SessionNums D DO)
-    (hε : TableErrNonneg D) (hRd : ∀ decI, SessionRounds D (Inner.ofFlock DI decI) DO) (hS : SessionAccepts D)
-    (hR : ∀ decI, SessionRuns H D (Inner.ofFlock DI decI) DO)
-    (hV : ∀ decI, InnerViewRun H D (Inner.ofFlock DI decI) DO)
-    (hC : ∀ decI, CallsRecord H D (Inner.ofFlock DI decI) DO)
-    (hO : ∀ decI, CallsOpen H D (Inner.ofFlock DI decI) DO opening)
-    (hAcc : ∀ decI, InnerAccepts H D (Inner.ofFlock DI decI) DO)
-    (hpc : ∀ decI, PublicCoin H (Inner.ofFlock DI decI) decC) (hN0 : CallsNil H D) : KSFlockA H D DI DO :=
-  fun decI h => KS_of_flockKS H D _ DO opening decC hF
-    (KSAbort_of_tableBoundKept H DI NI Ok hNI hεI hVkI hKI hkI hone hz hok hconf htab decI h) hRef hRounds hN hε
-    (hRd decI) hS (hR decI) (hV decI) (hC decI) (hO decI) (hAcc decI) (hpc decI) hN0
-
-end RecursionKS
 
 end Claims.Recursion
