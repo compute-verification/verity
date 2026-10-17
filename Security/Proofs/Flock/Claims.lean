@@ -38,6 +38,7 @@ import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
 import Proofs.Flock.Claims.Recursion.VStarLinks
 import Proofs.Flock.Claims.Recursion.VStarCross
+import Proofs.Flock.Claims.Recursion.DeployLayout
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
