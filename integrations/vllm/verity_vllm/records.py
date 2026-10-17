@@ -15,6 +15,10 @@ manifest's `spec_histogram` holds), the record's `conformance.due`.  The record 
 `evidence.conformance` (a `property-record/v1`: one run's `<property>.json`, validated and holding, referring to the run's record;
 `capture` preserves them) or names it a gap with its reason under `evidence.gaps`; `publish` refuses a record that leaves one silent.
 
+A `research run` job has no store (its custody key stays with the runner): the launcher writes the row's record and the descriptors
+the job reads into one file (`bundle`), ships it (`research run --send FILE`), and the job decodes them from it (`programs(row,
+bundle=...)`), each digest checked against the record as from the store.
+
     from verity_vllm import records
     from verity.ml.circuits.evaluation.reference import evaluate
     rec = records.record(row)                         # the config record
@@ -22,20 +26,24 @@ manifest's `spec_histogram` holds), the record's `conformance.due`.  The record 
     p = progs[0]["workload"]                          # the Program the Commit binds; "build_step", "build_request_LP*_T*" beside it
     p.root, p.defs                                    # its root and its Definitions, decoded through the registry
     evaluate(p.defs[fid], *synthetic_inputs)          # any Definition on synthetic inputs
+    records.programs(row, [0], part=["workload"], bundle=Path(os.environ["RESEARCH_RUN_DIR"]) / "inputs" / "glm53.tar")  # in a job
 
     verity-vllm records publish <row dir> <row> --build art:… --tree REF@SHA --by LANE [--manifest art:…] [--match art:…]
                                 [--match-run R] [--commit art:…] [--commit-run R] [--summary FILE] [--conformance PROPERTY=art:…]
                                 [--gap PROPERTY=REASON]
     verity-vllm records capture <run> [--property P]  # preserve a capture run's property records; prints PROPERTY=art:…
     verity-vllm records show [<row>]                  # the index, or a row's record
-    verity-vllm records programs <row> [--rank R] [--part P]   # fetch, decode and check a row's Programs, one rank at a time
+    verity-vllm records programs <row> [--rank R] [--part P] [--bundle FILE]   # fetch, decode and check a row's Programs
+    verity-vllm records fetch <row> --to FILE [--rank R] [--part P]   # a job's bundle: research run --send FILE
 """
 from __future__ import annotations
 
+import io
 import json
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -84,8 +92,15 @@ def art_of(row: str) -> str:
         raise UsageError(f"{row}: not in the circuit database ({INDEX.name}; `verity-vllm records publish` adds a row)") from None
 
 
-def record(row: str) -> dict[str, Any]:
-    return json.loads(fetch(art_of(row)).read_text())
+def record(row: str, bundle: Path | None = None) -> dict[str, Any]:
+    """The row's config record, from the store or from a `bundle` (`records fetch`)."""
+    if bundle is None:
+        return json.loads(fetch(art_of(row)).read_text())
+    with tarfile.open(bundle) as tf:
+        rec = json.load(tf.extractfile(CR.NAME))
+    if rec["config"].get("row") != row:
+        raise UsageError(f"{bundle}: the record of {rec['config'].get('row')}, not {row}")
+    return rec
 
 
 def part_dir(part: str) -> str:
@@ -112,28 +127,63 @@ def descriptor(rec: dict[str, Any], rank: int, part: str) -> str:
     return f"{f'build/rank{rank}/' if rec['build'].get('per_rank') else ''}{part_dir(part)}/descriptor.json.gz"
 
 
-def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None = None, to: Path | None = None) -> dict[int, dict[str, Any]]:
-    """The row's Programs, {rank: {part: DecodedProgram}} (only `ranks` and the parts `part` names, when given), fetched from its Build
-    (`evidence.build`, only the descriptors asked for) and decoded through the registry (`program.boolean.load_program`).  A
-    descriptor whose digest is not the record's is refused."""
-    from verity_vllm.program.boolean import load_program
-    rec = record(row)
-    named = parts(rec)
+def selected(rec: dict[str, Any], ranks: list[int] | None = None, part: list[str] | None = None) -> dict[int, dict[str, str]]:
+    """`parts` of the record, only `ranks` and the parts `part` names when given; one the record does not name is refused."""
+    row, named = rec["config"].get("row"), parts(rec)
     if missing := sorted(set(ranks or ()) - set(named)):
         raise UsageError(f"{row}: no rank {missing} (the record names ranks {sorted(named)})")
     if unknown := sorted(set(part or ()) - {p for ps in named.values() for p in ps}):
         raise UsageError(f"{row}: no part {unknown} (the record names {sorted({p for ps in named.values() for p in ps})})")
-    want = {r: {p: d for p, d in ps.items() if part is None or p in part} for r, ps in named.items() if ranks is None or r in ranks}
-    root = fetch(rec["evidence"]["build"], to, [descriptor(rec, r, p) for r, ps in want.items() for p in ps])
+    return {r: {p: d for p, d in ps.items() if part is None or p in part} for r, ps in named.items() if ranks is None or r in ranks}
+
+
+def _unpack(bundle: Path, to: Path, paths: list[str]) -> Path:
+    with tarfile.open(bundle) as tf:
+        if missing := sorted(set(paths) - set(tf.getnames())):
+            raise UsageError(f"{bundle}: lacks {len(missing)} descriptor(s), e.g. {missing[0]}: `verity-vllm records fetch` it with "
+                             f"those ranks and parts")
+        for p in paths:
+            tf.extract(p, to, filter="data")
+    return to
+
+
+def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None = None, to: Path | None = None,
+             bundle: Path | None = None) -> dict[int, dict[str, Any]]:
+    """The row's Programs, {rank: {part: DecodedProgram}} (only `ranks` and the parts `part` names, when given), fetched from its Build
+    (`evidence.build`, only the descriptors asked for) or read from a `bundle` (`records fetch`), and decoded through the registry
+    (`program.boolean.load_program`).  A descriptor whose digest is not the record's is refused."""
+    from verity_vllm.program.boolean import load_program
+    rec = record(row, bundle)
+    want = selected(rec, ranks, part)
+    paths = [descriptor(rec, r, p) for r, ps in want.items() for p in ps]
     out: dict[int, dict[str, Any]] = {}
-    for r, ps in sorted(want.items()):
-        out[r] = {}
-        for part, digest in sorted(ps.items()):
-            prog, got = load_program(root / descriptor(rec, r, part))
-            if got != digest:
-                raise ValueError(f"{row} rank {r} {part}: the descriptor's digest {got[:16]}… is not the record's {digest[:16]}…")
-            out[r][part] = prog
+    with tempfile.TemporaryDirectory(prefix="records-") as tmp:
+        root = fetch(rec["evidence"]["build"], to, paths) if bundle is None else _unpack(bundle, Path(to or tmp), paths)
+        for r, ps in sorted(want.items()):
+            out[r] = {}
+            for p, digest in sorted(ps.items()):
+                prog, got = load_program(root / descriptor(rec, r, p))
+                if got != digest:
+                    raise ValueError(f"{row} rank {r} {p}: the descriptor's digest {got[:16]}… is not the record's {digest[:16]}…")
+                out[r][p] = prog
     return out
+
+
+def bundle(row: str, to: Path, ranks: list[int] | None = None, *, part: list[str] | None = None) -> Path:
+    """One file holding the row's record and the descriptors `ranks` / `part` select, at their Build paths: what a `research run` job
+    reads the row's Programs from (`programs(row, bundle=...)`) after the launcher sends it (`--send`)."""
+    rec = record(row)
+    paths = [descriptor(rec, r, p) for r, ps in selected(rec, ranks, part).items() for p in ps]
+    with tempfile.TemporaryDirectory(prefix="records-") as tmp:
+        root = fetch(rec["evidence"]["build"], Path(tmp), paths)
+        body = (json.dumps(rec, indent=1, sort_keys=True) + "\n").encode()
+        with tarfile.open(to, "w") as tf:
+            ti = tarfile.TarInfo(CR.NAME)
+            ti.size = len(body)
+            tf.addfile(ti, io.BytesIO(body))
+            for p in paths:
+                tf.add(root / p, arcname=p)
+    return to
 
 
 def capture(run: str, properties: list[str] | None = None) -> dict[str, str]:
@@ -307,10 +357,22 @@ class ProgramsOptions:
     row: str = option("row")
     rank: list[int] = option("--rank", type=int, action="append", default=[], help="these ranks only (default every rank)")
     part: list[str] = option("--part", action="append", default=[], help="these parts only, e.g. workload (default every part)")
+    bundle: str | None = option("--bundle", default=None, help="read the record and descriptors from this file (`records fetch`)")
     cmd: str = field(default="programs", init=False)
 
 
-COMMANDS = {"publish": PublishOptions, "capture": CaptureOptions, "show": ShowOptions, "programs": ProgramsOptions}
+@dataclass(frozen=True, kw_only=True)
+class FetchOptions:
+    """Write a row's record and the descriptors of the ranks and parts asked for into one file, for a research run job (--send it)."""
+
+    row: str = option("row")
+    to: str = option("--to", help="the file to write (a tar)")
+    rank: list[int] = option("--rank", type=int, action="append", default=[], help="these ranks only (default every rank)")
+    part: list[str] = option("--part", action="append", default=[], help="these parts only, e.g. workload (default every part)")
+    cmd: str = field(default="fetch", init=False)
+
+
+COMMANDS = {"publish": PublishOptions, "capture": CaptureOptions, "show": ShowOptions, "programs": ProgramsOptions, "fetch": FetchOptions}
 
 
 def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
@@ -320,7 +382,7 @@ def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
     return out
 
 
-def main(a: PublishOptions | CaptureOptions | ShowOptions | ProgramsOptions) -> int:
+def main(a: PublishOptions | CaptureOptions | ShowOptions | ProgramsOptions | FetchOptions) -> int:
     if a.cmd == "publish":
         ev = evidence_of(a.build, manifest=a.manifest, match=a.match, match_run=a.match_run, commit=a.commit, commit_run=a.commit_run,
                          conformance=_pairs("--conformance", a.conformance, "PROPERTY=art:..."),
@@ -335,8 +397,12 @@ def main(a: PublishOptions | CaptureOptions | ShowOptions | ProgramsOptions) -> 
     if a.cmd == "show":
         print(json.dumps(record(a.row) if a.row else index(), indent=1, sort_keys=True))
         return 0
-    named = parts(record(a.row))
+    if a.cmd == "fetch":
+        print(bundle(a.row, Path(a.to), a.rank or None, part=a.part or None))
+        return 0
+    src = Path(a.bundle) if a.bundle else None
+    named = parts(record(a.row, src))
     for r in a.rank or sorted(named):
-        for part, p in programs(a.row, [r], part=a.part or None)[r].items():
+        for part, p in programs(a.row, [r], part=a.part or None, bundle=src)[r].items():
             print(f"rank {r}  {part:28s} {named[r][part][:16]}  gates {p.gates}  definitions {len(p.defs)}", flush=True)
     return 0

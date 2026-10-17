@@ -1,6 +1,6 @@
 """The circuit database (`verity_vllm.records`): the index, a TP row published from its row dir and loaded back by row id, its
-conformance (captures of record, named gaps, a property left silent refused) and the in-stage manifest a manifest of record
-supersedes."""
+conformance (captures of record, named gaps, a property left silent refused), the in-stage manifest a manifest of record
+supersedes, and a job's bundle read with no store."""
 from __future__ import annotations
 
 import gzip
@@ -245,3 +245,22 @@ def test_a_build_without_construction_manifests_is_refused(tmp_path, store):
     build = _build_art(store, d, tmp_path / "run")
     with pytest.raises(UsageError, match="the conformance they need, are unknown"):
         records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+
+
+def test_a_job_reads_the_programs_from_a_bundle_with_no_store(tmp_path, store, monkeypatch):
+    d = _row_dir(tmp_path)
+    build = _build_art(store, d, tmp_path / "run")
+    records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+    b = records.bundle(ROW, tmp_path / "job.tar", [1], part=["workload"])
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "no-store"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "no-store.toml"))
+    monkeypatch.setattr(records, "INDEX", tmp_path / "no-index.json")
+    progs = records.programs(ROW, [1], part=["workload"], bundle=b)
+    assert {r: sorted(ps) for r, ps in progs.items()} == {1: ["workload"]} and progs[1]["workload"].gates == make_program().gates
+    assert records.record(ROW, b)["evidence"]["build"] == build
+    with pytest.raises(UsageError, match="lacks 1 descriptor"):
+        records.programs(ROW, [0], part=["workload"], bundle=b)
+    with pytest.raises(UsageError, match="the record of .*, not other-row"):
+        records.programs("other-row", bundle=b)
+    with pytest.raises(UsageError, match="not in the circuit database"):
+        records.programs(ROW, [1])

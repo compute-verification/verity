@@ -350,7 +350,10 @@ Program the Commit binds, and the step and request Programs it composes; `ranks=
 checked against the record's digests, ready for `verity.ml.circuits.evaluation` on synthetic inputs.  `verity-vllm records
 publish` adds a row (a FAIL record, a Commit that committed against another manifest or other Programs than the Build's, a Build
 artifact that lacks a Program the record names, or a needed property neither cited nor a gap, is refused), `records show` prints
-the index or a record, and `records programs` decodes a row one rank at a time.
+the index or a record, and `records programs` decodes a row one rank at a time.  A `research run` job has no store: the launcher
+writes the row's record and the descriptors the job needs into one file (`records fetch ROW --to FILE [--rank R] [--part P]`),
+sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/inputs/`), and the job reads them from it
+(`records.programs(row, ..., bundle=PATH)`, or `records programs ROW --bundle PATH`), each digest checked against the record.
 
 The pod runtime (Python 3.12, torch cu129, vLLM `d9105ea80`, native taps, `hidden_gpu`) is built by `verity_vllm/ops/pod_bootstrap.sh`
 and exercised through `research run --source <sha> --on <machine>`.  On a pod without a GPU (`nvidia-smi` absent, or `--cpu`)
