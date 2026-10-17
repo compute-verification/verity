@@ -67,3 +67,13 @@ def test_the_calibrator_keeps_the_amax_of_every_handed_key():
     amax = cal.close()
     assert np.array_equal(amax, seen.numpy()) and cal.tokens == 28
     assert all(m.impl.forward.__func__ is Impl.forward for m in mods.values())
+def test_the_registered_table_serves_the_int8_pin():
+    from verity_vllm.config import checkpoint_entries
+    pin = next(c for c in checkpoint_entries() if c.get("role") == "LLAMA31_8B_INT8")
+    s = K.table(pin["revision"], K.MANIFEST)
+    assert s.shape == (32, 8) and s.dtype == np.float32
+    ent = next(e for e in json.loads(K.MANIFEST.read_text())["entries"] if e["revision"] == pin["revision"])
+    amax = np.array([[float.fromhex(x) for x in row] for row in ent["amax"]], dtype=np.float32)
+    assert K.scales(amax).tobytes() == s.tobytes() and ent["recipe"] == K.RECIPE
+
+
