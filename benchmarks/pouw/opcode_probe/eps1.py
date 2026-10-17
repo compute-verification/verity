@@ -6,6 +6,7 @@
       # --emit prints the facets as rows.csv and census/EPOCH.csv lines
   python eps1.py side OUT/rows.jsonl                     # side.cu: honest alone, and each unit alone and beside it
   python eps1.py clock OUT/sustain.jsonl [--skip-s 3]    # power.cu: each kernel's clock, power and work rate a phase
+  python eps1.py ceiling OUT                             # clock_ceiling.sh: each clock knob and the clock it reached
   python eps1.py uniform OUT                             # uniform.cu: issue slots a uniform instruction, each setting
   python eps1.py l2gather OUT                            # l2gather.cu: bytes a SM a clock and TB/s a gather path, best
 
@@ -231,6 +232,57 @@ def cmd_clock(a) -> int:
     return 0
 
 
+def _val(d: dict, *path: str) -> object:
+    for k in path:
+        d = d.get(k, {}) if isinstance(d, dict) else {}
+    v = d.get("value", d.get("error", "-")) if isinstance(d, dict) and d else "-"
+    return v[0] if isinstance(v, list) and len(v) == 1 else v
+
+
+def cmd_ceiling(a) -> int:
+    """clock_ceiling.sh: each knob's rc, what NVML then reports, and the clock each kernel ran at by the host's clock."""
+    out = a.out
+    found = json.loads((out / "found.json").read_text())
+    trials = {t["trial"]: t for t in load(out / "trials.jsonl")} if (out / "trials.jsonl").exists() else {}
+    states = {s["trial"]: s for s in load(out / "states.jsonl")} if (out / "states.jsonl").exists() else {}
+    calib: dict[str, dict[str, list[dict]]] = {}
+    for c in load(out / "calib.jsonl") if (out / "calib.jsonl").exists() else []:
+        calib.setdefault(c["trial"], {}).setdefault(c["probe"], []).append(c)
+    fmax = float(found["max_mhz"])
+    print(f"GPU {found['uuid']}: NVML max SM clock {found['max_mhz']} MHz, power limit {found['found_pl_w']} W, "
+          f"vboost {found['found_vboost']} of {found['max_vboost']}")
+    st = states.get("found", {})
+    print(f"  GPC VF offset range {_val(st, 'gpc_vf_offset_range')}, memory {_val(st, 'mem_vf_offset_range')}, "
+          f"P0 graphics offsets {st.get('clock_offsets_p0', {}).get('graphics', '-')}, "
+          f"power limit constraints (mW) {_val(st, 'power_limit_constraints_mw')}")
+    print(f"\n{'trial':26s} {'rc':>3s} {'NVML now':>8s} {'max':>6s} {'app':>6s} {'kernel':9s} {'host MHz':>9s} "
+          f"{'gt MHz':>9s} {'NVML':>5s} {'W':>5s} {'reasons':>8s}  output")
+    best = (0.0, "", "")
+    for t in dict.fromkeys([*trials, *calib]):
+        tr, s = trials.get(t, {}), states.get(t, {})
+        first = True
+        for k, cs in (calib.get(t) or {"-": []}).items():
+            host = max((c["clock_mhz_host"] for c in cs), default=0.0)
+            gt = max((c["clock_mhz_gt_max"] for c in cs), default=0.0)
+            if host > best[0]:
+                best = (host, t, k)
+            nvm = max((c["nvml_sm_mhz"] for c in cs), default=0)
+            watts = max((c["nvml_mw"] for c in cs), default=0) / 1e3
+            reasons = 0
+            for c in cs:
+                reasons |= int(c["throttle"], 16)
+            head = (f"{t:26s} {str(tr.get('rc', '')):>3s} {str(_val(s, 'clock_now', 'sm')):>8s} "
+                    f"{str(_val(s, 'clock_max', 'sm')):>6s} {str(_val(s, 'applications', 'graphics')):>6s}") if first \
+                else " " * 54
+            msg = " ".join(tr.get("out", "").split())[:90] if first else ""
+            print(f"{head} {k:9s} {host:9.1f} {gt:9.1f} {nvm:5d} {watts:5.0f} {reasons:#8x}  {msg}")
+            first = False
+    if best[0]:
+        print(f"\nhighest host-timed clock: {best[0]:.1f} MHz ({best[2]} at {best[1]}), "
+              f"{100 * (best[0] / fmax - 1):+.3f}% against NVML's max {fmax:.0f}")
+    return 0
+
+
 #: VF2's UNI class: every uniform-datapath opcode, the constant and special-register loads into uniform registers, and
 #: the moves into them
 UNIFORM = re.compile(r"U[A-Z].*|LDCU|R2UR|S2UR|CS2UR|VOTEU")
@@ -339,12 +391,14 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("clock")
     c.add_argument("sustain", type=Path)
     c.add_argument("--skip-s", type=float, default=3.0)
+    ce = sub.add_parser("ceiling")
+    ce.add_argument("out", type=Path, help="a clock_ceiling.sh run's out/ (found.json, trials, states, calib)")
     u = sub.add_parser("uniform")
     u.add_argument("out", type=Path, help="a uniform.cu run's out/ (rows.jsonl, gate.json, sass/)")
     g = sub.add_parser("l2gather")
     g.add_argument("out", type=Path, help="an l2gather.cu run's out/ (rows.jsonl)")
     a = p.parse_args(argv)
-    return {"facets": cmd_facets, "side": cmd_side, "clock": cmd_clock, "uniform": cmd_uniform,
+    return {"facets": cmd_facets, "side": cmd_side, "clock": cmd_clock, "ceiling": cmd_ceiling, "uniform": cmd_uniform,
             "l2gather": cmd_l2gather}[a.cmd](a)
 
 
