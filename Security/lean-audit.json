@@ -846,11 +846,17 @@
    "assumptions": [],
    "type_hash": "0b217c8812262f71cd1d92dedfdfa361ea82bcda7daf976dcf1351d20fa42619"
   },
+  "Accounting.SecurityProofs.FanInFloor": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.Fit": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Fit.{u_1} : Accounting.Guarantees.Fit"],
    "assumptions": [],
    "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
+  },
+  "Accounting.SecurityProofs.FoldFanIn": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.HorizonSampling": {
    "owner": "@memory-accounting",
@@ -4833,6 +4839,8 @@
    "Proofs.Flock.Recursive.Premises"
   ],
   "properties": {
+   "Accounting.SecurityProofs.FanInFloor": {"function": "Accounting.Program.Prog.run", "outcome": "none"},
+   "Accounting.SecurityProofs.FoldFanIn": {"function": ["Accounting.Program.Prog.run", "Accounting.Program.foldRun"], "outcome": "none"},
    "Flock.SecurityProofs.PublicAudit": {
     "conjuncts": [
      {

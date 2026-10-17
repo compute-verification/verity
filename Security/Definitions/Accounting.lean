@@ -16,6 +16,7 @@ import Definitions.Accounting.PerRun
 import Definitions.Accounting.Physical
 import Definitions.Accounting.Pouw
 import Definitions.Accounting.PouwWork
+import Definitions.Accounting.Program
 import Definitions.Accounting.RateAudit
 import Definitions.Accounting.RateAuditDeployed
 import Definitions.Accounting.RateAuditHorizon
@@ -45,4 +46,5 @@ bandwidth audit's node and run, the actual circuit, its physical assumptions, a 
 schedule it induces, the actual circuit's runs, strategies, soundness and the confidence set, a location's window with
 the ring's oracle locations, its provers' cost model, the tags and sketches the audits read, the generic-mix game of
 receipts bound to the matmul on two locations, the deployed bound receipt's sketch as a two-party protocol, what a
-run's guarantee per run is, and PoUW's verdict, credits and help on one node of the actual circuit. -/
+run's guarantee per run is, PoUW's verdict, credits and help on one node of the actual circuit, and straight-line
+lane programs with the receipt folds they compute. -/
