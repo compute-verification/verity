@@ -245,10 +245,34 @@ def sampled_mem(seed: int, n: int) -> list[dict]:
     return out
 
 
+#: the fine sweep: lane beside IMMA.16832 and the q range around the frontier of the rows the first batch beat or came
+#: within 1% of (r20261017-060543-cc28: R1/KFFMA0 by FFMA, KW20/KDMUL0, KALU64*, KALU*, KSEL3, EIMAD5, EHFMA25, KIMADW*)
+FINE = {"ffma": range(80, 193, 8), "fmul": range(80, 193, 8), "iadd64": range(36, 97, 4), "iadd3": range(16, 129, 8),
+        "imad": range(22, 51, 2), "hfma2": range(22, 51, 2), "imadw": range(40, 97, 4), "sel": range(14, 41, 2),
+        "dfma": range(1, 7), "dmul": range(1, 7)}
+
+
+def targeted_fine() -> list[dict]:
+    """The near-frontier sweep: each FINE lane beside IMMA.16832 at every q of its range, 2 to 8 warps a SMSP, spread and
+    batched; every form beside FFMA (and IADD3+FFMA) at 64-192 a 8 MMAs (JI3n_0, beaten by HMMA.16816.F16 + FFMA)."""
+    out: list[dict] = []
+    for lane, qs in FINE.items():
+        for q in qs:
+            for tpb in (256, 512, 768, 1024):
+                out.append({"kind": "mix", "form": "i16832", "l1": lane, "l2": "", "q": q, "p": 0, "tpb": tpb})
+            out.append({"kind": "mix", "form": "i16832", "l1": lane, "l2": "", "q": q, "p": 1, "tpb": 512})
+    for form in FORMS:
+        for l1, l2 in (("ffma", ""), ("ffmai", ""), ("iadd3", "ffma")):
+            for q in range(64, 193, 16):
+                for tpb in (512, 1024):
+                    out.append({"kind": "mix", "form": form, "l1": l1, "l2": l2, "q": q, "p": 0, "tpb": tpb})
+    return out
+
+
 def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "mix") -> list[dict]:
     """The programs of one batch: the family's targeted part (if asked) and `n` sampled ones, unique by name, in order."""
     seen, out = set(), []
-    tg, sm = (targeted, sampled) if family == "mix" else (targeted_mem, sampled_mem)
+    tg, sm = {"mix": (targeted, sampled), "mem": (targeted_mem, sampled_mem), "fine": (targeted_fine, sampled)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -309,8 +333,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
-    p.add_argument("--family", choices=("mix", "mem"), default="mix",
-                   help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh)")
+    p.add_argument("--family", choices=("mix", "mem", "fine"), default="mix",
+                   help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
+                        "near-frontier sweep of the lanes the first batch beat or nearly beat")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
     a = p.parse_args(argv)

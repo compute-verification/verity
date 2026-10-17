@@ -74,6 +74,13 @@ def test_a_tld_takes_its_width_from_the_program_and_unpriced_loads_are_listed():
     assert loads.unpriced({"probe": "side_tld", "rates": {"0:TLD.LZ": 0.4}}) == pytest.approx({"TLD.LZ": 0.1})
 
 
+def test_fine_grid_sweeps_the_near_frontier_and_the_ji3n_0_form():
+    names = [g["name"] for g in gen.grid(0, 0, family="fine")]
+    assert len(set(names)) == len(names) == 968
+    assert {"mx_h16816f16_ffma_q128_p0_w16", "mx_i16832_imad_q34_p0_w16", "mx_i16832_ffma_q192_p0_w32",
+            "mx_i16832_dfma_q1_p1_w16"} <= set(names)
+
+
 def test_mem_grid_is_seeded_unique_and_counts_each_slot():
     a = gen.grid(2, 30, family="mem")
     assert a == gen.grid(2, 30, family="mem") and len({g["name"] for g in a}) == len(a)
