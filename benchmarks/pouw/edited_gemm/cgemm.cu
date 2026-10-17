@@ -58,12 +58,14 @@ __host__ __device__ inline int n_dig(int k) { return k <= 4096 ? 2 : 3; }
 // cost-split stand-ins (wrong P_A): DIG 0 neither z nor digits (P_A row 0 = S's low byte), DIG 2 the digits over a z
 // that is zeroed, not hashed. z's digest rides on lane np of the last round's patch hashes when that round leaves a lane
 // idle (k / 128 not a multiple of 32: down's k = 14,336), else it is lane 0's own hash first
-// H1 (co32c-u16, decision 82): the per-token scale `s_row[r]` (crow_s) stands in for the per-call `inv_s`, and X divides
-// by it, X = floor(clamp(x / s_row[r], lo, 126)) + b, as steps.act_quant does (s = amax / 126, v = (x / s).clamp, two
-// roundings, not one reciprocal), clamped on [`lo`, 126] (lo = -126 for H1, -127 for Dither-C's one-scale x * inv_s form).
+// H1 (co32c-u16, decision 82): the per-token amax `amax_row[r]` (crow_s) gives the scale s = amax_row[r] / tq (tq = 126),
+// and X divides by it, X = floor(clamp(x / s, lo, 126)) + b, as steps.act_quant does (s = amax / 126, v = (x / s).clamp,
+// two roundings, not one reciprocal), clamped on [`lo`, 126] (lo = -126 for H1, -127 for Dither-C's one-scale x * inv_s
+// form). Both the per-row s = amax_row / tq and the per-entry x / s divide here, so ptxas shares one generic div.rn slow
+// path (the pinned body), not the specialized copy it builds for a function whose only division it can fold.
 template <int DIG, bool H1 = false>
 DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint16_t* __restrict__ x, int8_t* __restrict__ X,
-                    int8_t* __restrict__ PA, int rows, int k, float inv_s, const float* __restrict__ s_row, int lo, const Sig& sg) {
+                    int8_t* __restrict__ PA, int rows, int k, float inv_s, const float* __restrict__ amax_row, float tq, int lo, const Sig& sg) {
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blk * 8 + warp;
   if (grp * 4 >= rows) return;
   const int kb = k / 128, m = n_dig(k);
@@ -101,7 +103,7 @@ DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint1
 #pragma unroll 1
     for (int rr = 0; rr < 4; rr++) {
       const size_t r = (size_t)grp * 4 + rr;
-      const float sc = H1 ? s_row[r] : inv_s;   // H1: the per-token scale to divide by; else inv_s to multiply by
+      const float sc = H1 ? amax_row[r] / tq : inv_s;   // H1: the per-token scale s = amax / 126 to divide by; else inv_s to multiply by
       const uint4* src = reinterpret_cast<const uint4*>(x + r * k) + 16 * p0;
       uint2* dst = reinterpret_cast<uint2*>(X + r * k) + 16 * p0;
       int v[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -178,16 +180,16 @@ DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint1
     __shared__ uint32_t dg[8 * 512];                                                                                         \
     __shared__ int sp[8 * 128];                                                                                              \
     __shared__ uint32_t zs[8 * 16];                                                                                          \
-    cquant_blk<DIG>(blockIdx.x, dg, sp, zs, x, X, PA, rows, k, inv_s, nullptr, -127, sg);                                    \
+    cquant_blk<DIG>(blockIdx.x, dg, sp, zs, x, X, PA, rows, k, inv_s, nullptr, 126.f, -127, sg);                             \
   }
 CQUANT(cquant, 1)
 CQUANT(cquant_s, 0)
 CQUANT(cquant_d, 2)
 
-// H1's per-token activation scale: s_row(row) = max(amax_row, 1e-30) / t, t = `tq` (= 126, steps.act_quant at act_top 127,
-// one bit). The numerator is a register (the row's amax), so ptxas builds a generic div.rn around the pinned slow path, not
-// the constant-numerator copy it folds (and leaves unpinned) when 126 is the numerator; cquant_h1 then divides x by s_row.
-__global__ void __launch_bounds__(256) crow_s(const uint16_t* __restrict__ x, float* __restrict__ s_row, int rows, int k, float tq) {
+// H1's per-token amax: amax_row(row) = max(|x_row|, 1e-30) (steps.act_quant at act_top 127, one bit, t = 126). crow_s only
+// reduces (no division), so it has no div.rn slow path to pin; cquant_h1 forms s = amax_row / 126 and divides x by s there,
+// among its per-entry divides, so every division shares the one pinned generic slow path.
+__global__ void __launch_bounds__(256) crow_s(const uint16_t* __restrict__ x, float* __restrict__ amax_row, int rows, int k) {
   const int w = (blockIdx.x * blockDim.x + threadIdx.x) / 32, lane = threadIdx.x % 32;
   if (w >= rows) return;
   const uint16_t* xr = x + (size_t)w * k;
@@ -195,15 +197,15 @@ __global__ void __launch_bounds__(256) crow_s(const uint16_t* __restrict__ x, fl
   for (int i = lane; i < k; i += 32) a = fmaxf(a, fabsf(__uint_as_float((uint32_t)xr[i] << 16)));
 #pragma unroll
   for (int o = 16; o; o >>= 1) a = fmaxf(a, __shfl_xor_sync(~0u, a, o));
-  if (lane == 0) s_row[w] = fmaxf(a, 1e-30f) / tq;
+  if (lane == 0) amax_row[w] = fmaxf(a, 1e-30f);
 }
-// H1's dithered activation quantizer: cquant's digits (DIG 1) dividing x by the per-token scale s_row and clamping on [-126, 126]
+// H1's dithered activation quantizer: cquant's digits (DIG 1) dividing x by s = amax_row / 126 and clamping on [-126, 126]
 __global__ void __launch_bounds__(256) cquant_h1(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
-                                                 int rows, int k, const float* __restrict__ s_row, const __grid_constant__ Sig sg) {
+                                                 int rows, int k, const float* __restrict__ amax_row, const __grid_constant__ Sig sg) {
   __shared__ uint32_t dg[8 * 512];
   __shared__ int sp[8 * 128];
   __shared__ uint32_t zs[8 * 16];
-  cquant_blk<1, true>(blockIdx.x, dg, sp, zs, x, X, PA, rows, k, 0.f, s_row, -126, sg);
+  cquant_blk<1, true>(blockIdx.x, dg, sp, zs, x, X, PA, rows, k, 0.f, amax_row, 126.f, -126, sg);
 }
 
 // W' = W + c + U and P_B's rows [-U | U | U | 0]: a block 8 rows, its threads loading W's first 16-byte chunks while
@@ -629,7 +631,7 @@ struct CP {
   bool half = false;
   bool h1 = false;    // H1's numerics (co32c-u16, decision 82): per-token scales, +-110 weights, the narrow U
   float inv7 = 0;
-  float* s_row = nullptr;   // H1's per-token activation scale (amax / 126), filled by crow_s
+  float* amax_row = nullptr;   // H1's per-token activation amax (max|x|, clamped), filled by crow_s; cquant_h1 forms amax/126
 };
 using CqK = void (*)(const uint16_t*, int8_t*, int8_t*, int, int, float, Sig);
 static void cq(CP& C, const Sig& s, CqK f = cquant) {
@@ -639,8 +641,8 @@ static void cq(CP& C, const Sig& s, CqK f = cquant) {
     return;
   }
   if (C.h1) {
-    crow_s<<<(P.m + 7) / 8, 256, 0, P.st>>>(P.x, C.s_row, P.m, P.k, 126.f);
-    cquant_h1<<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, C.s_row, s);
+    crow_s<<<(P.m + 7) / 8, 256, 0, P.st>>>(P.x, C.amax_row, P.m, P.k);
+    cquant_h1<<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, C.amax_row, s);
     return;
   }
   f<<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, P.inv_s, s);
@@ -676,7 +678,7 @@ static void csetup(CP& C, int m, int n, int k, uint32_t seed, bool gate) {
   CK(cudaMalloc(&C.Y, P.ny * 4)); CK(cudaMalloc(&C.Yr, P.ny * 4));
   CK(cudaMalloc(&C.R, P.nr * 4)); CK(cudaMalloc(&C.R2, P.nr * 4));
   CK(cudaMalloc(&C.eb, (size_t)(2 * m + n) * 4));
-  if (C.h1) CK(cudaMalloc(&C.s_row, (size_t)m * 4));
+  if (C.h1) CK(cudaMalloc(&C.amax_row, (size_t)m * 4));
   ebfill<<<256, 256, 0, P.st>>>(C.eb, m, n, mix32(seed ^ 0x7777u));
   const int wlo = C.h1 ? -110 : -64, whi = C.h1 ? 110 : 62;   // H1: W in [-110, 110]; co32c: [-64, 62]
   wfill<<<4096, 256, 0, P.st>>>(C.W7, (size_t)n * k, mix32(seed ^ 0x6666u), k, gate, wlo, whi);
@@ -693,7 +695,7 @@ static void csetup(CP& C, int m, int n, int k, uint32_t seed, bool gate) {
 static void cfree(CP& C) {
   CK(cudaDeviceSynchronize());
   for (void* p : {(void*)C.W7, (void*)C.X, (void*)C.PA, (void*)C.Wp, (void*)C.PB, (void*)C.Wh, (void*)C.Y, (void*)C.Yr, (void*)C.R,
-                  (void*)C.R2, (void*)C.eb, (void*)C.mC, (void*)C.s_row})
+                  (void*)C.R2, (void*)C.eb, (void*)C.mC, (void*)C.amax_row})
     CK(cudaFree(p));
   efree(C.E);
 }
