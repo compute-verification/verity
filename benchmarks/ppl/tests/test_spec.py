@@ -19,6 +19,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
             "adopted-bd": ("all", "int8-all", True), "adopted-bd-lm": ("all", "int8-all", True),
             "co": ("all", "int8-all", True), "ncp": ("all", "int8-all", True),
             "cb": ("all", "int8-all", True), "co32c": ("all", "int8-all", True)}
+    for b in (2, 3, 4):
+        want[f"adopted-bd-lm-d{b}"] = want[f"co32c-d{b}"] = ("all", "int8-all", True)
     for g in ("fp4c", "fp4", "int5"):
         for m in ("dither", "round"):
             want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
@@ -119,6 +121,41 @@ def test_a_dithered_operand_stays_within_its_top():
     assert torch.equal(steps.floor_quant(x, -1)[0], steps.floor_quant(x, -1, 127)[0])
 
 
+def test_the_dither_arms_widen_only_the_coins():
+    for base in ("adopted-bd-lm", "co32c"):
+        a = spec.load(base)
+        for b in (2, 3, 4):
+            d = spec.load(f"{base}-d{b}")
+            widened = [s for s in d.linear if s.defn.name == "int8"] + [s for s in d.attention if s.defn.name == "int8"]
+            assert [s.kw.get("dither_bits", s.kw.get("qk_bits")) for s in widened] == [b] * len(widened)
+            assert [s.kw for s in d.attention if s.defn.name == "int8"][0]["v"] == "dither"
+            unwiden = lambda steps: [(s.defn.name, {k: v for k, v in s.kw.items() if k not in ("dither_bits", "qk_bits")},  # noqa: E731
+                                      s.linears) for s in steps]
+            assert unwiden(d.linear) == unwiden(a.linear) and unwiden(d.attention) == unwiden(a.attention)
+
+
+@pytest.mark.parametrize("b", [1, 2, 3, 4])
+@pytest.mark.parametrize("top", [127, 63])
+def test_a_wide_dither_keeps_the_bits_mean_within_int8(b, top):
+    """Every coin value R in {0, ..., 2^b - 1} serves within the operand's range, and the mean over R is the 1-bit
+    dither's floor(v) + 1/2 given v, on the linears' and attention's scales alike."""
+    x = torch.randn(32, 64) * 3
+    x[0, 0], x[1, 0] = 50.0, -50.0                      # rows whose positive and negative ends set the scale
+    levels = 2 ** b
+    lin = [steps.act_quant(x, "dither", torch.full_like(x, r), top, dither_bits=b) for r in range(levels)]
+    s = lin[0][1]
+    v = (x / s[:, None]).clamp(-(top - 2 ** (b - 1)), top - 2 ** (b - 1))
+    served = torch.stack([q for q, _ in lin])
+    assert served.min() >= -(top - 1) and served.max() <= top
+    assert torch.equal(served.mean(0), torch.floor(v) + 0.5)
+    q, s = steps.floor_quant(x, -1, top, b)
+    att = torch.stack([q + r for r in range(levels)])
+    assert att.min() >= -top - 1 and att.max() <= top
+    assert torch.equal(att.mean(0), torch.floor(x / s) + 0.5)
+    if b == 1:
+        assert torch.equal(q, steps.floor_quant(x, -1, top)[0])
+
+
 def test_round_trip():
     for p in spec.SPECS.glob("*.toml"):
         a = spec.load(str(p))
@@ -129,7 +166,7 @@ def test_round_trip():
 def test_defaults_are_filled_and_typed():
     a = parse('[[linear]]\nstep = "int8"\nweight_top = 63\n[[linear]]\nstep = "int8"\nlayers = [0]\nact = "dither"')
     assert a.linear[0].kw == {"act": "round", "act_top": 127, "weight": "round", "weight_top": 63, "group": 0,
-                              "gptq": False, "density": 1.0}
+                              "gptq": False, "density": 1.0, "dither_bits": 1}
     assert a.linear[1].layers == frozenset({0})
     s = parse('[[linear]]\nstep = "smooth"\nalpha = 1').linear[0]
     assert s.kw["alpha"] == 1.0 and isinstance(s.kw["alpha"], float)
@@ -154,6 +191,11 @@ def test_defaults_are_filled_and_typed():
      "offset serves P"),
     ('[[attention]]\nstep = "int8"\np_block = 48', "multiple of 32"),
     ('[[attention]]\nstep = "int8"\nk = "floor"', "round or dither"),
+    ('[[linear]]\nstep = "int8"\nact = "dither"\ndither_bits = 7', "dither_bits is in 1..6"),
+    ('[[linear]]\nstep = "int8"\ndither_bits = 2', "widens a dither"),
+    ('[[linear]]\nstep = "int8"\nweight = "dither"\nweight_top = 8\ndither_bits = 4', "no room under"),
+    ('[[attention]]\nstep = "int8"\nq = "dither"\nq_top = 7\nqk_bits = 4', "no room under"),
+    ('[[attention]]\nstep = "int8"\nv = "dither"\nqk_bits = 2', "widens a dither"),
     ('[[linear]]\nstep = "int8"\n[mlp]\nx = 1', "unknown keys ['mlp']"),
 ])
 def test_rejections_name_the_problem(text, message):
