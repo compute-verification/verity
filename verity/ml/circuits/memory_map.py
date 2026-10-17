@@ -31,7 +31,7 @@ no step).
 
 from __future__ import annotations
 
-from .census import seal, step_of
+from .census import SCHEMA as CENSUS, seal, step_of
 
 SCHEMA = "verity/memory-map/v1"
 KINDS = ("computed", "registered", "run")
@@ -39,8 +39,8 @@ KINDS = ("computed", "registered", "run")
 
 def memory_map(c: dict) -> dict:
     """The memory-map/v1 of a census/v1 document."""
-    if c.get("schema") != "verity/census/v1":
-        raise ValueError(f"a memory map reads a verity/census/v1, not {c.get('schema')!r}")
+    if c.get("schema") != CENSUS:
+        raise ValueError(f"a memory map reads a {CENSUS}, not {c.get('schema')!r}")
     S, I = len(c["steps"]["ends"]), c["inputs"]
     step = step_of(c)
     binding = [c["classes"][c["callees"][i]]["binding"] for i in c["nodes"]["callee"][:I]]
