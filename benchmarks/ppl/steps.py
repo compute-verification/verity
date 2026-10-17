@@ -2,8 +2,9 @@
 foldable variant under `kv_shared`), `rotate` (one orthogonal Q per k on x and W), `int8` (activations one scale per
 token, rounded or dithered; weights one scale per output row or per group of inputs, capped at `weight_top`, rounded or
 by GPTQ). Attention (from `attention.py`): `rotate` (one random Hadamard R of the head dimension on Q, K, V and R^T on
-the output), `center_keys` (K minus its per-channel mean), `int8` (one limb: Q, K per (head, token), P per query row or
-per key block, `p_sink` putting key 0 alone, V per channel; K and V rounded or dithered) and `peel` (a low-rank noise
+the output), `center_keys` (K minus its per-channel mean), `int8` (one limb: Q, K per (head, token) or K per (layer, KV
+head), P per query row or per key block, `p_sink` putting key 0 alone, V per channel; K and V rounded or dithered; the
+float softmax or fattn.cu's integer LUT softmax, `lut_softmax`) and `peel` (a low-rank noise
 E the server adds and peels exactly, on Q or on P, with P served as P - offset + E). Low-bit grids (`GRIDS`): `grid`
 on linears and on attention puts both operands of every matmul on FP4's or FP8's integers, each rounded or dithered.
 

@@ -32,6 +32,10 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     for n in (8, 16, 32, 64):
         want[f"co32c-u{n}"] = ("all", "int8-all", True)
     want["co32c-u16-cohalf"] = ("all", "int8-all", True)
+    for v in ("", "-khead", "-lut", "-lut-sinkm", "-lut-sink", "-lut32", "-lut-cal", "-lut-sink-cal", "-lut32-sink"):
+        want[f"vllm-int8{v}"] = ("all", "int8-all", False)
+        if v:
+            want[f"co32c-u16-cohalf{v}"] = ("all", "int8-all", True)
     for g in ("fp4c", "fp4", "int5"):
         for m in ("dither", "round"):
             want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
