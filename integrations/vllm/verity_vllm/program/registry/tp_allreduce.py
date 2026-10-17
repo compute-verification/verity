@@ -110,11 +110,13 @@ _NEG_ZERO32 = const(32, 0x80000000)
 #: "defaults" are vLLM's (``disable_custom_all_reduce`` false, ``VLLM_ALLREDUCE_USE_SYMM_MEM`` and ``VLLM_ALLREDUCE_USE_FLASHINFER``
 #: 1); "custom-off" is ``disable_custom_all_reduce`` true, what the two GO runs served; "switch" is ``VLLM_ALLREDUCE_USE_SYMM_MEM=0``.
 SETTINGS = {"defaults": (True, True), "custom-off": (False, True), "switch": (True, False)}
-#: the 8-GPU capture's GO runs on vy-glm53-h8 (the first with NCCL_P2P_DISABLE=1, which only NCCL's routes read)
-CAPTURE_RUNS = ("r20261013-085842-2147", "r20261013-091723-e383", "r20261013-115512-5ff3")
+#: the 8-GPU capture's GO runs: three on vy-glm53-h8 (the first with NCCL_P2P_DISABLE=1, which only NCCL's routes read; the third
+#: with VLLM_USE_DEEP_GEMM=0, which no all-reduce route reads), and one on vy-glm53-eu2 at vLLM's served defaults, every rank's
+#: switches read back (glm53_tp8_allreduce_capture/v4)
+CAPTURE_RUNS = ("r20261013-085842-2147", "r20261013-091723-e383", "r20261013-115512-5ff3", "r20261017-152556-86a6")
 _CUSTOM_OFF_RUNS = CAPTURE_RUNS[:2]
 _DEFAULT_RUNS = CAPTURE_RUNS[2:]
-#: the tree every owner's multimem reduction took in all three runs (including the 7168-wide pass)
+#: the tree every owner's multimem reduction took in all four runs (including the 7168-wide pass)
 GLM53_H200_TREE = ((((((0, (1, 2)), 3), 5), 6), 4), 7)
 
 
