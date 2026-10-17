@@ -12,6 +12,8 @@ each late answer at each τ attributed to one cause:
                       is the largest part; the condition says which of those it is
   responder-host      the responder's time outside the copy is the largest part
   network             the time outside the responder (both kernels, the wire or loopback, both NIC paths) is the largest
+Each τ also has `audit_reject_k111`: the share of groups of 111 consecutive answers in the cell with any late, the
+strict audit's honest rejection at k = 111 with the answers' time order (and so the network's slow episodes) kept.
 Also `model`: the two-machine p(τ) as the on-node responder's server time (the condition's local cell) convolved with the
 remote cell's network time (elapsed - server of its host-memory answers, the same 4 KiB on the wire with no GPU), the two
 taken as independent."""
@@ -26,6 +28,7 @@ import numpy as np
 from scipy.stats import beta
 
 TAUS_US = (50, 100, 150, 300, 840)
+AUDIT_K = 111
 REC = np.dtype([("elapsed", "<u4"), ("server", "<u4"), ("device", "<u4"), ("op", "<u2"), ("flags", "<u2")])
 OPS = {1: "gpu", 5: "gpu_sm", 2: "host", 3: "ping"}
 LOST = 0xFFFFFFFF
@@ -71,12 +74,15 @@ def cell(r: np.ndarray) -> dict:
             out[f"{name}_quantiles_us"] = {q: round(float(np.quantile(x, float(q))), 1) for q in ("0.5", "0.99", "0.999")}
             out[f"{name}_max_us"] = round(float(x.max()), 1)
     p = {}
+    groups = n // AUDIT_K
     for t in TAUS_US:
         late = lost | (e > t * 1000)
         k = int(late.sum())
         lo, hi = cp(k, n)
         kinds, counts = np.unique(causes[late], return_counts=True)
-        p[str(t)] = {"late": k, "p": k / n, "ci95": [lo, hi], "causes": dict(zip(kinds.tolist(), counts.tolist()))}
+        p[str(t)] = {"late": k, "p": k / n, "ci95": [lo, hi], "causes": dict(zip(kinds.tolist(), counts.tolist())),
+                     "audit_reject_k111": float(late[: groups * AUDIT_K].reshape(groups, AUDIT_K).any(axis=1).mean())
+                     if groups else None}
     out["p"] = p
     out["survival"] = {"x_us": GRID_US.tolist(),
                        "p_late": [float(((e > x * 1000) | lost).mean()) for x in GRID_US]}
