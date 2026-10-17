@@ -35,7 +35,8 @@ def test_the_fingerprint_carries_the_identity_the_comparisons_need(record, hardw
     fp = point(record, hardware, LEAN)["workload_fingerprint"]
     assert (fp["K"], fp["B"], fp["profile"], fp["proof_class"], fp["zk_mode"]) == (6144, 16, W.profile, "NON_ZK_PROOF", "none")
     assert fp["security"]["target"] == -100 and fp["hardware"] == hardware
-    assert fp["instances"]["range"] == [0, 16] and fp["instances"]["tier"] == W.name
+    assert fp["instances"] is None and fp["population"]["range"] == [0, W.n_max] and fp["population"]["tier"] == W.name
+    assert fp["draw"]["law"] == "stratified" and fp["draw"]["k"] == 16
     assert fp["workload"] == W.name and fp["vu"] == W.vu and fp["config"] == "plain"
 
 
@@ -55,18 +56,22 @@ def test_a_rejection_anywhere_fails_the_point(record, hardware):
     assert contract.validate(doc) == [] and RS.value(doc, "t.total") == pytest.approx(6.6)
 
 
-def test_the_lean_leg_passes_on_the_drawless_refusal_alone_and_says_so(record, hardware):
+def test_a_drawless_refusal_fails_the_point_and_is_labelled(record, hardware):
     lean = [{**v, "accepted": False, "why": RS.DRAWLESS} for v in LEAN]
     doc = point(record, hardware, lean)
-    assert doc["validation"]["status"] == "passed" and contract.validate(doc) == []
-    assert "0 of 3 sessions accepted, 3 passed every check and were refused only for having no draw" in doc["validation"]["detail"]
+    assert doc["validation"]["status"] == "failed" and contract.validate(doc) == []
+    assert "0 of 3 sessions accepted; 3 checks pass, refused under D12 (no draw): no headline" in doc["validation"]["detail"]
     assert (RS.value(doc, "verify.lean_accepted"), RS.value(doc, "verify.lean_drawless")) == (0, 3)
-    timed = [{**v, "setup_ms": 48_000 + i, "session_ms": 104_000} for i, v in enumerate(lean)]
-    doc = point(record, hardware, timed)
-    assert (RS.value(doc, "verify.setup_s"), RS.value(doc, "verify.session_s")) == (48.001, 104.0)
     lean[1] = {**lean[1], "why": "refused: a subset draw without --zk: no soundness claim draws by this law"}
     doc = point(record, hardware, lean)
     assert doc["validation"]["status"] == "failed" and "subset draw" in doc["validation"]["detail"]
+
+
+def test_the_sessions_own_seconds_leave_out_its_setup(record, hardware):
+    timed = [{**v, "setup_ms": 48_000 + i, "session_ms": 104_000} for i, v in enumerate(LEAN)]
+    doc = point(record, hardware, timed)
+    assert doc["validation"]["status"] == "passed"
+    assert (RS.value(doc, "verify.setup_s"), RS.value(doc, "verify.session_s")) == (48.001, 55.999)
 
 
 def test_a_run_without_a_session_record_fails_with_its_reason(hardware):
