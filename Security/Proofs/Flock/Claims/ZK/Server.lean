@@ -898,57 +898,56 @@ theorem split_deferred {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W 
       cutT ask S.stop (n x - c) (n x) (interact ask (fun h => (((P w).next x h ρ).eval H).1) (n x) []) := by
   classical
   set pm : List (Msg × Msg) → Msg := fun h => (((P w).next x h ρ).eval H).1 with hpm
-  set N := n x with hN
-  set τ := interact ask pm N [] with hτ
-  set dead : Prop := N - 1 < τ.length ∧ S.live wk x w ρ κ (histOf (τ.take (N - 1))) = false with hdead
-  set t := if dead then N - 1 else N with ht
-  have hct : ∃ c : Fin 2, N - (c : ℕ) = t := by
-    by_cases hd : dead
-    · exact ⟨1, by simp [ht, hd]⟩
-    · exact ⟨0, by simp [ht, hd]⟩
+  set τ := interact ask pm (n x) [] with hτ
+  set t := if n x - 1 < τ.length ∧ S.live wk x w ρ κ (histOf (τ.take (n x - 1))) = false then n x - 1 else n x
+    with ht
+  have hct : ∃ c : Fin 2, n x - (c : ℕ) = t := by
+    by_cases hd : n x - 1 < τ.length ∧ S.live wk x w ρ κ (histOf (τ.take (n x - 1))) = false
+    · exact ⟨1, by rw [ht, if_pos hd]; rfl⟩
+    · exact ⟨0, by rw [ht, if_neg hd]; rfl⟩
   obtain ⟨c, hc⟩ := hct
   refine ⟨c, ?_⟩
   rw [hc, ← interact_stopAt]
-  refine interact_congr ask (stopAt pm t S.stop) (S.nextD fill n wk x w ρ κ) N [] fun i hi => ?_
+  refine interact_congr ask (stopAt pm t S.stop) (S.nextD fill n wk x w ρ κ) (n x) [] fun i hi => ?_
   simp only [List.nil_append]
-  set σ := interact ask (stopAt pm t S.stop) N [] with hσ
-  have hσn : σ.length ≤ N := interact_length_le ask _ N []
-  have hτn : τ.length ≤ N := interact_length_le ask pm N []
-  have hst : σ.take t = τ.take t := stopAt_take ask pm S.stop t N
+  set σ := interact ask (stopAt pm t S.stop) (n x) [] with hσ
+  have hσn : σ.length ≤ n x := interact_length_le ask _ (n x) []
+  have hτn : τ.length ≤ n x := interact_length_le ask pm (n x) []
+  have hst : σ.take t = τ.take t := stopAt_take ask pm S.stop t (n x)
   have hgl : (histOf (σ.take i)).length = i := by rw [length_histOf_take]; omega
-  have htN : N - 1 ≤ t := by simp only [ht]; split_ifs <;> omega
-  by_cases hlast : i + 1 < N
+  have htN : n x - 1 ≤ t ∧ t ≤ n x := by rw [ht]; split_ifs <;> omega
+  by_cases hlast : i + 1 < n x
   · have hit : i < t := by omega
     rw [stopAt_of_lt (by rw [hgl]; exact hit)]
-    unfold nextD
-    rw [if_pos (Or.inl (by rw [hgl]; exact hlast))]
-    exact (hRef ρ κ _ (Or.inl (by rw [hgl]; exact hlast))).symm
-  · have hiN : i = N - 1 := by omega
+    have hcond : (histOf (σ.take i)).length + 1 < n x ∨ S.live wk x w ρ κ (histOf (σ.take i)) = true :=
+      Or.inl (by rw [hgl]; exact hlast)
+    rw [nextD, if_pos hcond]
+    exact (hRef ρ κ _ hcond).symm
+  · have hiN : i = n x - 1 := by omega
     have hσt : σ.take i = τ.take i := by
       have e1 : σ.take i = (σ.take t).take i := by rw [List.take_take, Nat.min_eq_left (by omega)]
       have e2 : τ.take i = (τ.take t).take i := by rw [List.take_take, Nat.min_eq_left (by omega)]
       rw [e1, hst, ← e2]
-    by_cases hd : dead
-    · have htv : t = N - 1 := by simp [ht, hd]
+    by_cases hd : n x - 1 < τ.length ∧ S.live wk x w ρ κ (histOf (τ.take (n x - 1))) = false
+    · have htv : t = n x - 1 := by rw [ht, if_pos hd]
       rw [stopAt_of_ge (by rw [hgl]; omega)]
-      unfold nextD
-      rw [if_neg]
-      rintro (h1 | h1)
-      · rw [hgl] at h1; omega
-      · rw [hσt, hiN, hd.2] at h1; exact Bool.false_ne_true h1
-    · have htv : t = N := by simp [ht, hd]
+      have hcond : ¬ ((histOf (σ.take i)).length + 1 < n x ∨ S.live wk x w ρ κ (histOf (σ.take i)) = true) := by
+        rintro (h1 | h1)
+        · rw [hgl] at h1; omega
+        · rw [hσt, hiN, hd.2] at h1; exact Bool.false_ne_true h1
+      rw [nextD, if_neg hcond]
+    · have htv : t = n x := by rw [ht, if_neg hd]
       have hiτ : i < τ.length := by
         have := congrArg List.length hst
         simp only [List.length_take, htv] at this
         omega
-      have hlv : S.live wk x w ρ κ (histOf (τ.take (N - 1))) = true := by
+      have hlv : S.live wk x w ρ κ (histOf (τ.take (n x - 1))) = true := by
         by_contra hne
         exact hd ⟨by omega, by simpa using hne⟩
       rw [stopAt_of_lt (by rw [hgl]; omega)]
-      unfold nextD
       have hcond : (histOf (σ.take i)).length + 1 < n x ∨ S.live wk x w ρ κ (histOf (σ.take i)) = true :=
         Or.inr (by rw [hσt, hiN]; exact hlv)
-      rw [if_pos hcond]
+      rw [nextD, if_pos hcond]
       exact (hRef ρ κ _ hcond).symm
 
 end ZkServer
@@ -1008,7 +1007,7 @@ theorem zk_deferred {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [No
         refine Pr_mono fun ω hω => ?_
         obtain ⟨c, hc⟩ := S.split_deferred H P fill k x w wk hRef ask ω.1 ω.2
         refine ⟨c, Finset.mem_univ _, ?_⟩
-        rw [hP, ← hc, ← hsrv]
+        rw [hP ω.1, ← hc, ← hsrv ω]
         exact hω
     _ ≤ ∑ c : Fin 2, Pr (fun ω : (N × Ω) × S.Chk =>
           Ev (S.timed x (cutT ask S.stop (k x - (c : ℕ)) (k x) (runStar H (P w) Vs x ω.1 θ).msgs))) :=
