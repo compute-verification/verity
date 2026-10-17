@@ -1,6 +1,7 @@
 """fpx's records into the exactness tables (note:20261017T0643Z-draft-lowbit-dc).
 
-  python analyze.py OUT [--json FILE]     # OUT holds fpx's records.jsonl, windows.jsonl, summary.json; markdown to stdout
+  python analyze.py OUT [--json FILE]       # OUT holds fpx's records.jsonl, windows.jsonl, summary.json; markdown to stdout
+  python analyze.py gemm DIR [--json FILE]  # DIR holds egemm's gate.jsonl, bench.jsonl and dgemm-bench.jsonl
 
 Per chain config: the first K whose partials an FP32 can't hold (first_nonrep), the first K with a wrong output
 (first_inexact), bad_rep (wrong while every partial was representable: must be 0 for "exact iff representable"), and
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -89,7 +91,65 @@ def windows(win: list[dict]) -> list[dict]:
     return out
 
 
+def gemm_summary(gates: list[dict], bench: list[dict], dbench: list[dict]) -> dict:
+    """egemm's gates and its time: per shape, the emulated route (arm k3*) against native int8 at its own tile (the
+    like-for-like ratio), against int8 at dgemm's tile, against cuBLASLt int8 (dgemm bench), and the X split pre-pass."""
+    dg = {(d["m"], d["n"], d["k"]): d for d in dbench}
+    rows = []
+    for b in bench:
+        arms = sorted({k[: -len("_fold_ms")] for k in b if k.endswith("_fold_ms")})
+        emu = next(a for a in arms if a.startswith("k3"))
+        tile = emu.split("_")[1]
+        same = f"i8_{tile}"
+        other = next(a for a in arms if a.startswith("i8") and a != same)
+        d = dg.get((b["m"], b["n"], b["k"]), {})
+        row = {"m": b["m"], "n": b["n"], "k": b["k"], "emu": emu, "i8_same_tile": same, "i8_dgemm_tile": other}
+        for a in arms:
+            row[f"{a}_fold_ms"], row[f"{a}_nofold_ms"] = b[f"{a}_fold_ms"], b[f"{a}_nofold_ms"]
+        row |= {
+            "split_x_ms": b["split_x_ms"], "split_w_ms": b["split_w_ms"],
+            "fold_ratio_same_tile": b[f"{emu}_fold_ms"] / b[f"{same}_fold_ms"],
+            "nofold_ratio_same_tile": b[f"{emu}_nofold_ms"] / b[f"{same}_nofold_ms"],
+            "fold_ratio_dgemm_tile": b[f"{emu}_fold_ms"] / b[f"{other}_fold_ms"],
+            "split_x_over_i8_fold": b["split_x_ms"] / b[f"{same}_fold_ms"],
+        }
+        if "cublaslt_ms" in d:
+            row |= {"dgemm_fold_ms": d["fold_ms"], "dgemm_nofold_ms": d["nofold_ms"], "cublaslt_ms": d["cublaslt_ms"],
+                    "emu_fold_over_cublaslt": b[f"{emu}_fold_ms"] / d["cublaslt_ms"]}
+        rows.append(row)
+    return {
+        "gates": len(gates),
+        "gates_exact": sum(g["exact"] and g["control_rejected"] and g["split_bad"] == 0 for g in gates),
+        "gate_arms": sorted({g["arm"] for g in gates}),
+        "bench": rows,
+    }
+
+
+def gemm_main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="analyze.py gemm")
+    ap.add_argument("out", type=Path)
+    ap.add_argument("--json", type=Path)
+    a = ap.parse_args(argv)
+    s = gemm_summary(load(a.out / "gate.jsonl"), load(a.out / "bench.jsonl"), load(a.out / "dgemm-bench.jsonl"))
+    print(f"# egemm: int8 emulated in FP8 against native int8\n\ngates exact (route, receipts, control rejected, split): "
+          f"{s['gates_exact']} of {s['gates']} over arms {', '.join(s['gate_arms'])}\n")
+    print("| m x n x k | emu fold ms | i8 same tile fold ms | ratio | nofold ratio | i8 dgemm tile fold ms | ratio | "
+          "cuBLASLt ms | emu / cuBLASLt | split X ms | split X / i8 |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    for r in s["bench"]:
+        print(f"| {r['m']}x{r['n']}x{r['k']} | {r[r['emu'] + '_fold_ms']:.4f} | {r[r['i8_same_tile'] + '_fold_ms']:.4f} | "
+              f"{r['fold_ratio_same_tile']:.2f} | {r['nofold_ratio_same_tile']:.2f} | "
+              f"{r[r['i8_dgemm_tile'] + '_fold_ms']:.4f} | {r['fold_ratio_dgemm_tile']:.2f} | "
+              f"{r.get('cublaslt_ms', float('nan')):.4f} | {r.get('emu_fold_over_cublaslt', float('nan')):.1f} | "
+              f"{r['split_x_ms']:.4f} | {r['split_x_over_i8_fold']:.2f} |")
+    if a.json:
+        a.json.write_text(json.dumps(s, indent=1))
+    return 0 if s["gates"] and s["gates_exact"] == s["gates"] else 4
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["gemm"]:
+        return gemm_main(sys.argv[2:])
     ap = argparse.ArgumentParser()
     ap.add_argument("out", type=Path)
     ap.add_argument("--json", type=Path)
