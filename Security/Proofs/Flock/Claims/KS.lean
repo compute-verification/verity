@@ -144,10 +144,10 @@ one masked table is no likelier than any verdict after `Commit` the decoder is r
 escapes `Flock.oldEscZ` at injective fork rounds, and no table that does not extract committed to `T` (`ZkBound`:
 `FlockDeploy.KS.zk_tableBoundθAt_of_sessions`, `FlockDeploy.KS.zk_tableBoundθAt_of_live`, at the live sessions' bound
 `FlockDeploy.KS.ZkLiveAt`). At the deployed masked record, `T` is C-Flock ZK's padded table of the statement's table 0
-(`ZkKS`: `FlockDeploy.KS.zkTab`, `FlockDeploy.KS.zkTab_m1`), so `Flock.KS` follows from one table at every statement
-some run accepts (`FlockDeploy.KS.ZkOne`, which the masked scope's several tables do not give), the live sessions' bound
-at `zkTab` (`FlockDeploy.KS.ZkLive`) and `Extendθ` (`FlockDeploy.KS.zk_KS_of_live`). At several tables (`JointJ`), one
-wait follows from every table's bound with one family of escapes, over every table's word's positions
+(`ZkKS`: `FlockDeploy.KS.zkTab`, `FlockDeploy.KS.zkTab_m1`), so `Flock.KS` at the trimmed record follows from one
+table at every statement some run accepts (`FlockDeploy.KS.ZkOne`, which the masked scope's several tables do not give)
+and the live sessions' bound at `zkTab` (`FlockDeploy.KS.ZkLive`, `FlockDeploy.KS.zk_KS_of_live`). At several tables
+(`JointJ`), one wait follows from every table's bound with one family of escapes, over every table's word's positions
 (`Flock.TableBoundJ`, `Flock.ColsOkJ`, `Flock.ConflictTiedJ`, `Flock.oneWait_of_tableBoundJ`), and at the masked record
 accepted runs open table `j`'s columns at its width and as its level-0 openings (`ZkTables`: `FlockDeploy.KS.wordLenJ`,
 `FlockDeploy.KS.zk_colsOkJ`, `FlockDeploy.KS.zk_openingJ`, `FlockDeploy.KS.zk_conflictTiedJ`), so `Flock.KS` there

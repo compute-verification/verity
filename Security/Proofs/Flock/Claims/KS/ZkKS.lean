@@ -6,8 +6,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
 /-!
 # The deployed masked verifier's KS from the live sessions' bound at one table
 
-`PlainKS` at `--zk`. `zk_KS_of_live`: `Flock.KS` at SHA-512 at `deployZk` at the deployed relation, from three
-premises:
+`PlainKS` at `--zk`. `zk_KS_of_live`: `Flock.KS` at SHA-512 at the trimmed record `deployZkTrim` at the deployed
+relation, from two premises:
 
 * `ZkOne`: every statement some run accepts parses with one table (`zk_KS_of_table`'s `hone`). The masked scope admits
   several tables (`InScope`'s `zk ∨ tables ≤ 1`), so this holds of a masked deployment only where no run accepts a
@@ -15,15 +15,14 @@ premises:
 * `ZkLive x` at every statement some run accepts: at C-Flock ZK's padded table there (`zkTab`), every prover has
   escapes at injective fork rounds and, at each tape and each table of full-width columns, live strategies whose verdict
   bounds the deployed runs accepting on the table, a decoder right for that verdict, and escapes' events bounding their
-  `Adv`s and self-clash (`ZkLiveAt` at `hs512`, the hypothesis `zk_tableBoundθAt_of_live` reads);
-* `Extendθ` at full-width columns, which carries the bound to tables with unopened positions.
+  `Adv`s and self-clash (`ZkLiveAt` at `hs512`, the hypothesis `zk_tableBoundθAt_of_live` reads).
 
 Everything else is proved here at a statement some run accepts with one table, which parses in scope and sets up:
 table 0's layout and link layout (`zk_table0`), `Zk.schedule`'s schedule and `t_pad` at its `m` (`zk_schedule_ok`), the
 padded table `zkTab` at them with the executable's padding constant, pads layout and inner code (`DrawSetupZK.tabAt`'s
 fields, without a draw), that `zkTab` is at C-Flock ZK's parameters (`zkTab_m1`), and that a table that does not extract
 is not committed to it (`zk_not_committed`, `zkTab_committed`). `zk_tableBoundθ_live` is the bound at full-width
-columns.
+columns, the form the trimmed record reads (`zk_KS_trim`).
 -/
 
 namespace FlockDeploy.KS
@@ -244,13 +243,10 @@ theorem zk_tableBoundθ_live (hone : ZkOne) (hl : ∀ x, ¬ Claims.Flock.NoAcc s
     obtain ⟨hpst, -, -⟩ := parseBytes_setup hp hset
     exact zk_tableBoundθAt_live hs hin hset (by rw [← hpst, hsz, h1]) (hl x hno)
 
-/-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, from one table at every statement some
-run accepts, the live sessions' bound there, and `Extendθ` at full-width columns. -/
-theorem zk_KS_of_live (hone : ZkOne) (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLive x)
-    (hext : Claims.Flock.Extendθ (deployZk Readable.relation) (wordLen true) (wide true)) :
-    Claims.Flock.KS sha512 (deployZk Readable.relation) :=
-  zk_KS_of_table Readable.relation hone
-    (zk_tableBoundθ_of_extend Readable.relation (zk_colsOk sha512 Readable.relation) hext
-      (zk_tableBoundθ_live hone hl))
+/-- **The deployed masked verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, from one table at
+every statement some run accepts and the live sessions' bound there. -/
+theorem zk_KS_of_live (hone : ZkOne) (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLive x) :
+    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
+  zk_KS_trim Readable.relation hone (zk_tableBoundθ_live hone hl)
 
 end FlockDeploy.KS
