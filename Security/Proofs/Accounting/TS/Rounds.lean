@@ -25,7 +25,15 @@ theorem luck_rounds {Ω : Type} [Fintype Ω] {S : ℕ} (g : RoundGame Ω S) (p :
 theorem deficiency_le_rounds {Ω : Type} [Fintype Ω] {S : ℕ} (g : RoundGame Ω S) (p : ℝ)
     (hL : RoundGame.LuckAt p g) (x : Paths Ω S) :
     g.deficiency x ≤ Accounting.TS.RoundGame.deficientRounds g x := by
-  sorry
+  induction g with
+  | done => simp [RoundGame.deficiency, Accounting.TS.RoundGame.deficientRounds]
+  | round d pass next ih =>
+    obtain ⟨hd, -, hnext⟩ := hL
+    simp only [RoundGame.deficiency, Accounting.TS.RoundGame.deficientRounds, Nat.cast_add]
+    refine add_le_add ?_ (ih x.1 (hnext x.1) x.2)
+    split_ifs with h
+    · simpa using (hd x.1).2
+    · simpa using (not_lt.mp h)
 
 /-- `Λ` bounding the play is PoUW's exponential round bound at `c = 1/Λ`. -/
 theorem expBound_of_budgetAt {Ω : Type} [Fintype Ω] {Λ : ℝ} :
