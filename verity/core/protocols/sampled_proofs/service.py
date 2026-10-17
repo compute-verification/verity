@@ -28,6 +28,8 @@ declares them; the joint note's §6 step 0 allows that on test prompts, and hidi
 **The draw.** The challenger draws from its own bytes as the Lean verifier's `Flock.Draw.drawWith` does
 (`two_stage.draw_first` over `two_stage.OwnRandomness`), with no hash and no derivation, after the receipt. A work draw
 carries the challenger's closure map's closure (`two_stage.closure_of`), which the proof proves with the drawn units.
+From the selection rule to the draw object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
+verifier's `SampledProofs.Select` ports, held to them by its difftest on fixed coins.
 
 **The two-stage rule** (`TwoStage(replay, check="all")`): the Spec's boundary values (committed by serve time) are
 registered first, and the stream draws replay units (RUs) by `replay`; the drawn RUs' interiors (phase `interior`,
@@ -474,6 +476,36 @@ def check_verdicts(verdicts: Mapping[str, Mapping[str, Any]], sessions: Sequence
 Sampler = Callable[[Mapping[str, Any], int], Sequence[int]]
 
 
+def selection_law(rule: Selection, n: int) -> dict[str, Any]:
+    """The law a selection rule names over `n` proof units, before `draw.derive` expands it over the check's program and
+    query: `subset:n` for `All`, a `Law`'s own, and a two-stage rule's `replay` (over its RUs)."""
+    if isinstance(rule, All):
+        return {"law": "subset", "k": n}
+    return D.parse_law((rule.replay if isinstance(rule, TwoStage) else rule).text)
+
+
+def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable[[int], bytes], *,
+                closure: Mapping[int, Sequence[int]] | None = None, sampler: Sampler | None = None) -> dict[str, Any]:
+    """The challenger's draw object over [0, n) under its expanded `law`: every unit for `All`, reading no coins;
+    otherwise `sampler`'s draw, or `two_stage.draw_first` on `coins` read in order. With `closure`, the challenger's
+    closure map, a work draw carries the drawn units' closure (`two_stage.closure_of`) when it is not empty. Raises
+    `Refused` (`closure`) for a closure map on another law or outside [0, n), before any coin is read, and `ValueError`
+    where `draw_first` does. The Lean verifier's `Select.select` is this, from the rule on."""
+    if closure is not None and not (law["law"] == "work" and isinstance(closure, Mapping) and all(
+            type(u) is int and 0 <= u < n and isinstance(cs, Sequence) and all(type(c) is int and 0 <= c < n for c in cs)
+            for u, cs in closure.items())):
+        raise _refuse("closure", f"a closure map {{unit: [units]}} over [0, {n}) widens a work draw only")
+    if isinstance(rule, All):
+        units = list(range(n))
+    else:
+        units = sorted(int(u) for u in (sampler(dict(law), n) if sampler is not None
+                                        else draw_first(OwnRandomness(coins), law, n)["units"]))
+    obj = {**law, "population": n, "units": units}
+    if closure is not None and closure_of(closure, units):
+        obj["closure"] = closure_of(closure, units)
+    return obj
+
+
 @dataclass
 class _Entry:
     registration: Registration
@@ -650,9 +682,7 @@ class Stream:
         if not (type(n) is int and n >= 1):
             raise _refuse("population", n)
         program = P.population_program(self.unit, n)
-        rule = self.spec.selection
-        law = {"law": "subset", "k": n} if isinstance(rule, All) else D.parse_law(
-            (rule.replay if isinstance(rule, TwoStage) else rule).text)
+        law = selection_law(self.spec.selection, n)
         v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, self._log, None,
                     work_table, registered)
         if not v.ok:
@@ -692,7 +722,7 @@ class Stream:
 
     def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
-        the selection rule's law (`All` draws every unit and reads no coins). `closure` is the challenger's closure map
+        the selection rule's law (`select_draw`; `All` draws every unit and reads no coins). `closure` is the challenger's closure map
         (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work law only: the draw carries the
         drawn units' closure (`two_stage.closure_of`), which `draw.proved` and `draw.check_proved` count. Raises `Refused`
         for a registration drawn before (nothing redraws), a closure map on another law or outside [0, N) (before any
@@ -700,27 +730,13 @@ class Stream:
         e = self._entry(registration)
         if e.draw is not None:
             raise _refuse("drawn", {"order": registration.order})
-        n = registration.record["population"]
-        if closure is not None and not (e.law["law"] == "work" and isinstance(closure, Mapping) and all(
-                type(u) is int and 0 <= u < n and isinstance(cs, Sequence) and all(type(c) is int and 0 <= c < n for c in cs)
-                for u, cs in closure.items())):
-            raise _refuse("closure", f"a closure map {{unit: [units]}} over [0, {n}) widens a work draw only")
-        if isinstance(self.spec.selection, All):
-            units = list(range(n))
-        else:
-            units = sorted(int(u) for u in (self._sampler(dict(e.law), n) if self._sampler is not None
-                                            else self._sample(e.law, n)))
-        obj = {**e.law, "population": n, "units": units}
-        if closure is not None and closure_of(closure, units):
-            obj["closure"] = closure_of(closure, units)
+        obj = select_draw(self.spec.selection, e.law, registration.record["population"], self._coins, closure=closure,
+                          sampler=self._sampler)
         v = V.check_draw(obj, registration.record, e.law)
         if not v.ok:
             raise Refused(v)
         e.draw, e.drawn_at = Draw(registration, e.law, obj), self._clock()
         return e.draw
-
-    def _sample(self, law: Mapping[str, Any], n: int) -> list[int]:
-        return draw_first(OwnRandomness(self._coins), law, n)["units"]
 
     def register_interiors(self, draw: Draw, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *,
                            leaf_layer: str | None = None, anchors: Sequence[Any] = ()) -> Registration:
@@ -871,4 +887,4 @@ def _why(symbol: str, audit: Mapping[str, Any] | None, interior: Mapping[str, An
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "HIDING", "KINDS", "LATE", "Law", "Outcome", "PHASES", "Pending",
            "Public", "REJECT", "Refused", "Registration", "SCHEME", "SOURCES", "Selection", "Sequential", "Spec", "Stream",
-           "Terms", "TwoStage", "Value", "check_public", "check_verdicts"]
+           "Terms", "TwoStage", "Value", "check_public", "check_verdicts", "select_draw", "selection_law"]

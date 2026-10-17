@@ -1,0 +1,32 @@
+# VF3c: VF3 with one head credit for every 32-bit word an instruction writes (§15).
+name = "VF3c"
+epoch = "VF3c"
+summary = "VF3 with one head credit for every 32-bit word an instruction writes (§15)."
+note = "note:20261015T1814Z-draft-rs-machine-model"
+rows = [
+    "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
+    "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
+    "IW", "JI3_0", "JI3_1", "JI3_2",
+]
+# [kind, MACs]: the kind's price is at least that many tensor MACs
+credits = [
+    ["IMAD", 32], ["IMAD", 128], ["HFMA2", 64], ["FFMA", 32], ["ALU", 8], ["XU", 29],
+    ["NOROW", 32], ["ALU", 91], ["ALU", 112], ["ALU", 240], ["SHFL", 496], ["ALU", 512],
+    ["HFMA2", 512], ["FFMA", 512], ["NOROW", 512], ["FFMA", 1024.0], ["VIMNMX", 1024.0], ["HFMA2", 1024.0],
+    ["IMAD", 1024.0], ["ALU", 1024.0], ["F2FS", 1024.0], ["XU", 1024.0], ["SHFL", 1024.0], ["NOROW", 1024.0],
+    ["RED32", 1024.0], ["TMAred512", 4096.0], ["SEL", 32], ["SEL", 512], ["SEL", 1024], ["UNI", 16],
+    ["UNI", 32], ["UNI64", 32], ["UNI64", 64], ["IMADW", 1024], ["IMADW", 2048], ["ALU64", 1024],
+    ["ALU64", 2048], ["MOV64", 1024], ["MOV64", 2048],
+]
+
+[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+tau = 0.1208
+tau_600w = 0.0944
+uf_low = 1.1875
+margin = 2.0
+
+[legacy]  # the legacy chain's values in full, which a re-solve matches to 1e-12
+tau = 0.12078018007226844
+infl = 0.18750000000000006
+margin = 2.0
+attacks = 830

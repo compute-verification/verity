@@ -49,17 +49,22 @@ _STRATUM_KEYS = {"template", "units", "k"}
 _WORK_STRATUM_KEYS = {"template", "units", "work", "floor", "k"}
 
 
+def digits(s: str) -> bool:
+    """One or more ASCII digits, as the Lean verifier reads a number (`str.isdigit` alone admits other scripts' digits)."""
+    return s.isascii() and s.isdigit()
+
+
 def parse_law(text: str) -> dict[str, Any]:
     """`subset:K` or `bernoulli:NUM/DEN` (M0's `serve --draw` syntax), or `stratified:K` or `work:K` (rules, which `derive`
-    expands over a program and query, and for `work` a work table), as a law object."""
+    expands over a program and query, and for `work` a work table), as a law object; numbers in ASCII digits."""
     kind, _, arg = text.partition(":")
-    if kind == "subset" and arg.isdigit():
+    if kind == "subset" and digits(arg):
         return {"law": "subset", "k": int(arg)}
-    if kind in ("stratified", "work") and arg.isdigit() and int(arg) >= 1:
+    if kind in ("stratified", "work") and digits(arg) and int(arg) >= 1:
         return {"law": kind, "k": int(arg)}
     if kind == "bernoulli":
         num, _, den = arg.partition("/")
-        if num.isdigit() and den.isdigit() and 0 < int(den) and int(num) <= int(den):
+        if digits(num) and digits(den) and 0 < int(den) and int(num) <= int(den):
             return {"law": "bernoulli", "p": f"{int(num)}/{int(den)}"}
     raise ValueError(f"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {text!r}")
 
@@ -249,7 +254,7 @@ def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any
         c.fail("units-count", {"units": len(units), "k": draw["k"]})
     if draw["law"] == "bernoulli":
         num, _, den = str(draw["p"]).partition("/")
-        if not (num.isdigit() and den.isdigit() and 0 < int(den) and Fraction(int(num), int(den)) <= 1):
+        if not (digits(num) and digits(den) and 0 < int(den) and Fraction(int(num), int(den)) <= 1):
             c.fail("p", draw["p"])
     if draw["law"] in ("stratified", "work"):
         problem = strata_problem(draw, n) if _int(n) else "population"
@@ -283,5 +288,5 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["check_draw", "check_proved", "derive", "law_of", "parse_law", "proved", "same_law", "strata_problem",
+__all__ = ["check_draw", "check_proved", "derive", "digits", "law_of", "parse_law", "proved", "same_law", "strata_problem",
            "stratum_k", "total_work", "work_k", "work_table"]

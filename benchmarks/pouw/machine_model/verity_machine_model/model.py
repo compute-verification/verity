@@ -1,0 +1,193 @@
+"""The machine model's data (`data/`): the constants, the rows, the census of instruction classes, the attacks and the named
+vectors, read into what the LP takes.
+
+An *epoch* is a state of the census and the attack list, named after the vector that introduced it (`epochs` in
+`model.toml`, in order). A census line or an attack holds from its `since` epoch through its `until` epoch (empty: every
+epoch from the first, or through the last), so a refit or a new measurement is a new line and every older vector still
+re-solves on the data it was published on.
+"""
+from __future__ import annotations
+
+import csv
+import json
+import re
+import tomllib
+from dataclasses import dataclass, field
+from pathlib import Path
+
+DATA = Path(__file__).resolve().parents[1] / "data"
+
+Census = dict[str, dict[str, float]]  # instruction class: {row: u one warp instruction holds the row alone}
+STATUSES = ("measured", "ASSUMED", "provisional", "joint")
+
+
+@dataclass(frozen=True)
+class Model:
+    cycle_u: float                      # u in one SMSP-cycle (R*)
+    honest_real: float                  # u of real time a MAC for the honest kernel
+    honest_real_600w: float             # the same at the 600 W cap
+    cuda: tuple[str, ...]               # the CUDA lane kinds ρ binds, in constraint order
+    honest: dict[str, float]            # the honest GEMM's program a MMA
+    adopted: str                        # the design whose cheapest attack is the margin
+    rho: float
+    tie: float
+    x_min: float
+    epochs: tuple[str, ...]
+    current: str = ""                   # the vector `solve` re-solves by default
+
+
+@dataclass(frozen=True)
+class Row:
+    name: str
+    status: str
+    runs: tuple[str, ...]
+    description: str
+
+
+@dataclass(frozen=True)
+class Entry:
+    kind: str
+    row: str
+    u: float
+    since: str
+    until: str
+    runs: tuple[str, ...]
+
+
+@dataclass(frozen=True, eq=False)
+class Attack:
+    design: str
+    family: str
+    name: str
+    program: dict[str, float]           # warp instructions of each kind a tensor MAC replaced, in pricing order
+    on: bool = True
+    since: str = ""
+    until: str = ""
+
+
+@dataclass(frozen=True)
+class Floor:
+    kind: str
+    words: int          # words a warp instruction of the kind writes (at most)
+    floor: float        # MACs a word its price must reach
+    claim: str          # one of CLAIMS
+    what: str
+
+
+CLAIMS = {"pi32": "(π₃₂): every root-writing kind at ≥ 32 MACs a word",
+          "loads16": "PRICES-32's load half: every load into registers at ≥ 16 MACs a word",
+          "copy16": "π_c ≥ 16: every copy route (every kind that writes registers, a UR word at the 32 lanes it serves) "
+                    "at ≥ 16 MACs a word"}
+COPIES = "copy16"   # the claim whose kinds `solve` lists with their prices: the copy routes
+
+
+@dataclass(frozen=True)
+class Vector:
+    name: str
+    epoch: str
+    rows: tuple[str, ...]
+    credits: tuple[tuple[str, float], ...]
+    summary: str
+    note: str
+    superseded_by: str
+    published: dict[str, float]
+    legacy: dict[str, float] = field(default_factory=dict)
+
+
+def u_of(cycle_u: float, rate: str, noise: str, cycles: str, u: str) -> float:
+    """u one warp instruction holds a row, from exactly one of: its measured `rate` (warp instructions/SM/clk, 4 SMSPs an SM,
+    derated by `noise` when given), `cycles` (SMSP-cycles it holds the row) or `u` itself (a derived value: a fit or a joint
+    vertex)."""
+    given = [c for c in (rate, cycles, u) if c != ""]
+    if len(given) != 1:
+        raise ValueError(f"a census line gives exactly one of rate, cycles and u, not {given}")
+    if rate != "":
+        r = float(rate)
+        return cycle_u * 4 / (r * (1 + float(noise))) if noise != "" else cycle_u * 4 / r
+    if noise != "":
+        raise ValueError("noise derates a rate only")
+    return float(cycles) * cycle_u if cycles != "" else float(u)
+
+
+def model(data: Path = DATA) -> Model:
+    t = tomllib.loads((data / "model.toml").read_text())
+    c, lp = t["constants"], t["lp"]
+    return Model(cycle_u=c["cycle_u"], honest_real=c["honest_real"], honest_real_600w=c["honest_real_600w"],
+                 cuda=tuple(t["cuda"]), honest=dict(t["honest"]), adopted=t["adopted"], rho=lp["rho"], tie=lp["tie"],
+                 x_min=lp["x_min"], epochs=tuple(t["epochs"]), current=t["current"])
+
+
+def _runs(s: str) -> tuple[str, ...]:
+    return tuple(s.split())
+
+
+def rows(data: Path = DATA) -> dict[str, Row]:
+    with open(data / "rows.csv", newline="") as f:
+        return {d["row"]: Row(d["row"], d["status"], _runs(d["runs"]), d["description"]) for d in csv.DictReader(f)}
+
+
+def entries(m: Model, data: Path = DATA) -> list[Entry]:
+    with open(data / "census.csv", newline="") as f:
+        return [Entry(d["kind"], d["row"], u_of(m.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"]), d["since"],
+                      d["until"], _runs(d["runs"])) for d in csv.DictReader(f)]
+
+
+def holds(m: Model, since: str, until: str, epoch: str) -> bool:
+    i = m.epochs.index(epoch)
+    return (since == "" or m.epochs.index(since) <= i) and (until == "" or i <= m.epochs.index(until))
+
+
+def census(m: Model, epoch: str, data: Path = DATA) -> Census:
+    """Each instruction class's u on each row at `epoch`."""
+    out: Census = {}
+    for e in entries(m, data):
+        if holds(m, e.since, e.until, epoch):
+            if e.row in out.setdefault(e.kind, {}):
+                raise ValueError(f"census: two lines for {e.kind} on {e.row} at {epoch}")
+            out[e.kind][e.row] = e.u
+    return out
+
+
+def measured_cost(c: Census) -> dict[str, float]:
+    """An instruction class's measured cost: its time alone, the largest of its rows."""
+    return {k: max(v.values()) for k, v in c.items()}
+
+
+def floors(data: Path = DATA) -> list[Floor]:
+    """The per-word price floors the claims read (`data/floors.csv`): PRICES-32 is (π₃₂) and its load half together, and
+    π_c ≥ 16 (r12's copy price, per-row keys' premise) is every copy route's."""
+    with open(data / "floors.csv", newline="") as f:
+        return [Floor(d["kind"], int(d["words"]), float(d["floor"]), d["claim"], d["what"]) for d in csv.DictReader(f)]
+
+
+def all_attacks(data: Path = DATA) -> list[Attack]:
+    """Every attack in `data/attacks/*.jsonl`, a file per family, one program a line."""
+    out = []
+    for p in sorted((data / "attacks").glob("*.jsonl")):
+        for line in p.read_text().splitlines():
+            if line.strip():
+                d = json.loads(line)
+                out.append(Attack(d["design"], d["family"], d["name"], d["program"], d.get("on", True),
+                                  d.get("since", ""), d.get("until", "")))
+    return out
+
+
+def attacks(m: Model, epoch: str, data: Path = DATA) -> list[Attack]:
+    return [a for a in all_attacks(data) if holds(m, a.since, a.until, epoch)]
+
+
+def vector(name: str, data: Path = DATA) -> Vector:
+    p = data / "vectors" / f"{name}.toml"
+    if not p.is_file():
+        raise SystemExit(f"no vector {name!r}: one of {', '.join(vectors(data))}")
+    t = tomllib.loads(p.read_text())
+    return Vector(name=t["name"], epoch=t["epoch"], rows=tuple(t["rows"]), credits=tuple((k, c) for k, c in t["credits"]),
+                  summary=t.get("summary", ""), note=t.get("note", ""), superseded_by=t.get("superseded_by", ""),
+                  published=dict(t.get("published", {})), legacy=dict(t.get("legacy", {})))
+
+
+def vectors(data: Path = DATA) -> list[str]:
+    m = model(data)
+    names = [p.stem for p in (data / "vectors").glob("*.toml")]
+    return sorted(names, key=lambda n: (m.epochs.index(vector(n, data).epoch),
+                                        [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", n)]))

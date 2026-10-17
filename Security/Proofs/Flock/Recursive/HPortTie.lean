@@ -38,8 +38,10 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
 * `readsUnsegC3`: no read is of a segmented row (`VStmt.hscope`'s `v1Ports`).
 * `hKey_of_check`: at a copy of a unit `RecSparse.check` accepted, the key of `h`'s element `l`, bit `e` is bit
   `128 l + e` of the port named `h` (`rowsOk`'s row 0, `leavesOk`, `srcKey_inOrder`).
-* `srcHReads_of`: `SrcHReads` from those, the columns of the RecSparse circuit's `h` (`HCols`, named) and the algebra
-  unit's row of rep `i`'s `h` (`HAlgRows`, named).
+* `srcHReads_of`: `SrcHReads` from those, the columns of the RecSparse circuit's `h` (`HCols`, which
+  `FlockC3.Sparse.hCols_of_check` proves at every unit `RecSparse.check` accepts) and the algebra unit's row of rep
+  `i`'s `h` (`HAlgRows`, which `FlockC3.Reps.hAlgRows_of_res` proves at a holo shape from the verifier's checks and
+  the algebra parts' `ResZeroAtLH`).
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -347,7 +349,7 @@ def HPortReads (zs : (j : Fin S) → (Vs j).Outer Reg') (mp : List (String × �
             bitOf (x l) e
 
 /-- Obligation (W's `SparseCols`): each column of `h`'s element `l`, bit `e` in the RecSparse circuit is an input
-column a row reads. -/
+column a row reads. `FlockC3.Sparse.hCols_of_check` proves it at every unit `RecSparse.check` accepts. -/
 def HCols (V : VStmt) (mp : List (String × ℕ)) : Prop :=
   ∀ (l : Fin 64) (e : ℕ), e < 128 → ReadCol (FlockSoundness.Rows.ofNet V.hU) (rowCol mp 0 (128 * l.val + e))
 
@@ -640,7 +642,8 @@ theorem readsUnsegC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : Byt
 `U` of rep `i`'s steps is such that where a RecSparse copy at unit `i` holds rep `i`'s phase, its session is
 `.sparse _ hr` and some part's session reads, at unit `i`, the row port `m<hr>` (a row port of its statement, which
 `checkRows` pins), whose bit `128 l + e` is bit `e` of `hOfW U.sh U.d.w`'s element `l` (`hOfW_valOf` at `.h l`,
-`RepMaps`' columns of `U.d.w`, with `U.d` from `RepUnitOfAlg`). -/
+`RepMaps`' columns of `U.d.w`, with `U.d` from `RepUnitOfAlg`). `FlockC3.Reps.hAlgRows_of_res` proves it at a holo
+inner shape from the verifier's checks and each algebra part's `ResZeroAtLH` at the decoder's rep. -/
 def HAlgRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → C3Run (holoAt st hp))
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → Fin 2 →
@@ -718,9 +721,10 @@ theorem hSite_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows
   rw [hrb, ← hu] at hpos'
   exact Option.some.inj (Option.some.inj (hpos.symm.trans hpos'))
 
-/-- **`SrcHReads` from the verifier's checks** (`hSite_of_checked`, `readsUnsegC3`) and the named pieces: the reads at
-the units' own rows (`ReadsOwnAt`, from `ReachedChecked` by `readsOwnAt_of`), the RecSparse circuit's `h` keys
-(`HCols`; its keys `hKey_of_check`) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`). -/
+/-- **`SrcHReads` from the verifier's checks** (`hSite_of_checked`, `readsUnsegC3`) and the pieces: the reads at the
+units' own rows (`ReadsOwnAt`, from `ReachedChecked` by `readsOwnAt_of`), the RecSparse circuit's `h` keys (`HCols`,
+`hCols_of_check`; its keys `hKey_of_check`) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`,
+`hAlgRows_of_res`). -/
 theorem srcHReads_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hchk : ChecksAccepted F rows wr reg)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : ReadsOwnAt F dg N k Rw)
