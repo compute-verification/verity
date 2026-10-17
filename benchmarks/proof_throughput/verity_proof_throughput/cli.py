@@ -23,7 +23,6 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -282,12 +281,12 @@ def cmd_run(a) -> int:
 
 
 def _fetch_run_file(run: str, rel: str) -> Path:
-    d = Path(tempfile.mkdtemp(prefix="pt-"))
-    subprocess.run(["research", "fetch", run], check=False, capture_output=True)
-    for base in (Path.home() / ".research" / "runs" / run, d):
-        if (base / rel).exists():
-            return base / rel
-    raise SystemExit(f"{run}: no {rel} (research fetch {run} found none)")
+    """A file of a run's directory; ``research fetch`` brings only its records unless ``--all`` (``out/`` included)."""
+    path = Path.home() / ".research" / "runs" / run / rel
+    subprocess.run(["research", "fetch", "--all", run], check=False, capture_output=True)
+    if path.exists():
+        return path
+    raise SystemExit(f"{run}: no {rel} (research fetch --all {run} found none)")
 
 
 def cmd_verify(a) -> int:
