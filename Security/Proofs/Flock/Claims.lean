@@ -31,6 +31,8 @@ import Proofs.Flock.Claims.Recursion.DeployZK
 import Proofs.Flock.Claims.Recursion.Seq
 import Proofs.Flock.Claims.Recursion.SeqSim
 import Proofs.Flock.Claims.Recursion.SeqSession
+import Proofs.Flock.Claims.Recursion.SeqPrefix
+import Proofs.Flock.Claims.Recursion.SeqCap
 import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarKS
 import Proofs.Flock.Claims.Recursion.VStarParts
