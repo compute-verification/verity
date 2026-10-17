@@ -42,13 +42,13 @@ from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (AddScal
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (_OBSERVED, active_allreduce_settings, active_target_profile, clear_observations,
                                                                            declared_derived_accounting, observe_attention_impls, observe_export_facts,
                                                                            observe_allreduce_settings, observe_launch_context, observe_target_profile)
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, MEAN_PINS, RMS_PINS, _pins_ok, gemm_pins_for, lookup_key,
-                                                                   tuned_gemm_table_sha256)
-from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import TritonGemmRule, TritonRmsNormRule
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, MEAN_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, gemm_pins_for,
+                                                                   lookup_key, tuned_gemm_table_sha256)
+from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import FusedQKvRmsNormRule, TritonGemmRule, TritonRmsNormRule
 from verity_vllm.program.frontend.rules.vllm_bindings.views import AllocViewRule, IntIdWidenRule
 
 
-VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), CublasLinearRule(), LlBf16GemmRule(), CublasRouterRule(),
+VLLM_BINDING_RULES = [TritonRmsNormRule(), FusedQKvRmsNormRule(), TritonGemmRule(), CublasLinearRule(), LlBf16GemmRule(), CublasRouterRule(),
                       KvCacheUpdateRule(), UnifiedAttentionWithOutputRule(), AllocViewRule(), IntIdWidenRule(),
                       CachePadRule(), CudaRmsNormRule(), CudaFusedAddRmsNormRule(), FusedAddRmsNormBIRule(), ScalarTensorMulRule(),
                       GeluTanhAndMulRule(), Bf16ScalarChainRule(),
@@ -80,7 +80,7 @@ def vllm_ruleset():
                    + VLLM_DSA_RULES + list(VLLM_SAMPLING_RULES) + VLLM_MHC_RULES, list(DEFAULT_RULES.families))
 
 
-__all__ = ["AllocViewRule", "GEMM_PINS", "LayerNormAtenRule", "MEAN_PINS", "RMS_PINS", "TritonGemmRule", "VLLM_BINDING_RULES", "_OBSERVED", "_pins_ok",
+__all__ = ["AllocViewRule", "GEMM_PINS", "LayerNormAtenRule", "MEAN_PINS", "QKV_RMS_PINS", "RMS_PINS", "TritonGemmRule", "VLLM_BINDING_RULES", "_OBSERVED", "_pins_ok",
            "active_allreduce_settings", "active_target_profile", "clear_observations", "declared_derived_accounting", "gemm_pins_for", "lookup_key",
            "observe_allreduce_settings", "observe_attention_impls", "observe_export_facts", "observe_launch_context", "observe_target_profile",
            "triton_launch", "tuned_gemm_table_sha256", "vllm_ruleset"]

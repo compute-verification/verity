@@ -12,10 +12,13 @@
 * `rules/vllm_mhc.py`: the four mHC ops derive per token at the dispatch's own split counts, word for word the numpy twin's
   (`kernels.mhc_twin`) on the FMA path and the TF32 path, and what the Definitions do not take refuses by name;
 * `CublasRouterRule`: a direct `torch.mm(x, W.T, out_dtype=float32)` binds the captured f32-output route;
+* `FusedQKvRmsNormRule`: the launch of `_fused_q_kv_rmsnorm_kernel` derives per token word for word its PTX's (`test_dsa_norm`), and
+  another kernel body, a block of one element a thread or a stride outside the PTX's specialization refuses;
 * `vllm_meta.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
   leaves them."""
 from __future__ import annotations
 
+import json
 import sys
 import types
 
@@ -33,6 +36,7 @@ from verity_vllm.program.frontend.export_compat import (InertEvent, InertStream,
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_mhc
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.rules.triton_iface import triton_launch
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -40,6 +44,7 @@ from verity_vllm.program.frontend.vllm_meta import fp8_block_weights_as_the_load
 from verity_vllm.program.kernels import mhc_twin as W
 from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import hopper
+from tests.program.test_dsa_norm import ptx_block_model
 
 
 class _Overlapped(nn.Module):
@@ -497,6 +502,55 @@ def test_a_direct_f32_output_mm_binds_the_captured_f32out_route(served):
     assert rep.provenance["weight_roles"]["weight"]["role"] == "linear.weight"
     rep = _derive_mhc(_F32Out(), (torch.empty(8, 7168, dtype=torch.bfloat16, device="meta"),))
     assert "no captured vLLM-default cuBLAS f32out route for M=8, K=7168, N=1024" in rep.unsupported.hint
+
+
+class _QKvNorm(nn.Module):
+    """DeepSeek-V4's attention norms: `fused_q_kv_rmsnorm` of the q and kv column slices of one projection's output, `pad` columns
+    after them, launching `_fused_q_kv_rmsnorm_kernel` as the export captures it."""
+
+    def __init__(self, rng, Q: int, KV: int, pad: int = 0, src: str = VB.QKV_RMS_PINS["src_sha256"]) -> None:
+        super().__init__()
+        self.Q, self.KV, self.pad, self.src = Q, KV, pad, src
+        self.q_weight, self.kv_weight = (nn.Parameter(_tensor(W.bf16(_f32(rng, n))), requires_grad=False) for n in (Q, KV))
+
+    def forward(self, qkv):
+        q, kv = qkv[:, :self.Q], qkv[:, self.Q:self.Q + self.KV]
+        q_out, kv_out = (torch.empty(t.shape, dtype=t.dtype, device=t.device) for t in (q, kv))
+        block = 1 << (max(self.Q, self.KV) - 1).bit_length()
+        scalars = {"q_in_stride": qkv.stride(0), "q_out_stride": self.Q, "kv_in_stride": qkv.stride(0), "kv_out_stride": self.KV,
+                   "eps": EPS, "Q_SIZE": self.Q, "KV_SIZE": self.KV, "BLOCK_SIZE": block, "launch_pdl": True}
+        meta = {"kernel": VB.QKV_RMS_PINS["kernel"], "src_sha256": self.src, "grid": [qkv.shape[0], 2], "scalars": scalars,
+                "geometry": {"num_warps": 8 if block >= 2048 else 4},
+                "tensor_args": ["q_ptr", "q_out_ptr", "q_weight_ptr", "kv_ptr", "kv_out_ptr", "kv_weight_ptr"]}
+        triton_launch(meta["kernel"], [q, q_out, self.q_weight, kv, kv_out, self.kv_weight], json.dumps(meta))
+        return q_out, kv_out
+
+
+@pytest.mark.parametrize("T, Q, KV", [(2, 256, 64), (1, 1536, 512)])
+def test_the_fused_q_kv_rmsnorm_derives_per_token_word_for_word_its_ptxs(T, Q, KV):
+    rng = np.random.default_rng(Q)
+    model, x = _QKvNorm(rng, Q, KV), W.bf16(_f32(rng, T, Q + KV, sd=2.0))
+    rep = _derive_mhc(model, (_tensor(x),))
+    assert rep.program is not None, rep.unsupported
+    block = 1 << (Q - 1).bit_length()
+    (app,) = [a["preconditions_checked"] for a in rep.provenance["applications"] if a["rule"] == "TritonQKvRmsNorm[vllm-default]_v1"]
+    assert (app["BLOCK"], app["WARPS"], app["rows"]) == (block, 8 if block >= 2048 else 4, T)
+    roles = rep.provenance["weight_roles"]
+    assert (roles["q_weight"]["role"], roles["kv_weight"]["role"]) == ("rmsnorm.q.weight", "rmsnorm.kv.weight")
+    w = {n: _words(p) for n, p in model.named_parameters()}
+    want = [v for cols, wn in ((slice(0, Q), "q_weight"), (slice(Q, Q + KV), "kv_weight")) for row in x[:, cols]
+            for v in ptx_block_model(row.tolist(), w[wn], EPS, block, app["WARPS"])]
+    assert _run(rep, model, (_tensor(x),)) == want
+
+
+@pytest.mark.parametrize("over, refusal", [({"src": "00" * 32}, "differs from the pin"),
+                                           ({"Q": 128}, "at least two elements a thread"),
+                                           ({"pad": 8}, "another Triton specialization than the PTX")])
+def test_a_fused_q_kv_rmsnorm_launch_beyond_the_ptx_refuses(over, refusal):
+    rng = np.random.default_rng(1)
+    model = _QKvNorm(rng, **{"Q": 256, "KV": 64, **over})
+    rep = _derive_mhc(model, (_tensor(W.bf16(_f32(rng, 2, model.Q + model.KV + model.pad))),))
+    assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
 
 
 class _Fp8Linear(nn.Module):

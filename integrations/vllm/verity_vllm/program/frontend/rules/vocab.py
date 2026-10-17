@@ -445,6 +445,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_mqa_logits": lambda N, H, D: ir_bind(_dsa.DsaMqaLogitsV3, N=N, H=H, D=D),
            "dsa_topk_short_row": lambda TOPK: ir_bind(_dsa.DsaTopKShortRow, TOPK=TOPK),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
+           "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
            "dsa_q_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
            "cublas_splitk_gemm": lambda K, N, SPLIT_K, DOT:
@@ -549,6 +550,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
                                  "-- slot i = i < len ? i : -1",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
+           "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
+                                   "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",
            "dsa_kv_rope": "RoPEHeadGptJ_v2{D}: _fused_norm_rope_kernel's interleaved k_pe head",
            "dsa_q_rope": "RoPEHeadGptJ_v2{D}: _fused_q_kernel's interleaved q_pe head",
            "cublas_splitk_gemm": "CublasSplitKGemm_v1{K,N,SPLIT_K,DOT}: vLLM-default cuBLAS BF16 linear at a captured split count",
