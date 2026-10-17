@@ -64,8 +64,8 @@ def test_class_of():
             "LDG.E": "LDG32", "LDG.E.CONSTANT": "LDG32", "LDG.E.128": "LDG128", "LDS.64": "LDS64", "LDS.U8": "LDS32",
             "LDG.E.64": "LDG64", "TLD.LZ": None, "LDG.E.ENL2.256": "LDG256", "LDG.E.NA.128": "LDG128NA",
             "LDG.E.128.STRONG.GPU": "LDG128CG", "LDG.E.ENL2.256.STRONG.GPU": "LDG256CG", "ULOP3.LUT": "UNI",
-            "USHF.L.U32": "UNI", "UPRMT": "UNI", "USEL": "UNI", "UIADD3": "UNI", "UMOV": "UNI", "LDCU.64": "UNI",
-            "R2UR": "UNI"}
+            "USHF.L.U32": "UNI", "UPRMT": "UNI", "USEL": "UNI", "UIADD3": "UNI", "UMOV": "UNI", "LDCU": "UNI",
+            "R2UR": "UNI", "UIADD3.64": "UNI64", "UMOV.64": "UNI64", "UIMAD.WIDE.U32": "UNI64", "LDCU.64": "UNI64"}
     assert {op: loads.class_of(op) for op in want} == want
 
 

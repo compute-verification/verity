@@ -74,9 +74,11 @@ _IMAD = re.compile(r"\bIMAD\b|\bIMUL\b")
 _ALU = re.compile(r"\bIADD3\b|\bIADD\b|\bLOP3\b|\bLOP\b|\bSHF\b|\bPRMT\b|\bLEA\b")
 
 
-#: a uniform-datapath instruction (`opcode_probe/eps1.py`'s UNIFORM): census class UNI, ahead of the vector rules that
-#: would match ULOP3, USHF, UPRMT or USEL by their suffix
+#: a uniform-datapath instruction (`opcode_probe/eps1.py`'s UNIFORM): census class UNI, or UNI64 when it writes a UR pair
+#: (UIADD3.64, UMOV.64, UIMAD.WIDE, LDCU.64), ahead of the vector rules that would match ULOP3, USHF, UPRMT or USEL by
+#: their suffix
 UNIFORM = re.compile(r"U[A-Z].*|LDCU|R2UR|S2UR|CS2UR|VOTEU")
+UR_PAIR = re.compile(r"\.(64|WIDE)\b")
 
 
 def class_of(opcode: str) -> str | None:
@@ -84,7 +86,7 @@ def class_of(opcode: str) -> str | None:
     op = opcode.split("@")[-1].strip()
     base = op.split(".")[0]
     if UNIFORM.fullmatch(base):
-        return "UNI"
+        return "UNI64" if UR_PAIR.search(op) else "UNI"
     for pat, kind in CLASS_RULES:
         if re.search(pat, op):
             if kind == "ALU_OR_IMAD":
