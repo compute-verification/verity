@@ -99,8 +99,8 @@ struct Collector {
   std::vector<cudaEvent_t> ev_pool;            // recycled window-complete events
   std::mutex win_mu;
   std::condition_variable win_cv;
-  int64_t win_waits = 0, win_blocked_steps = 0;
-  double win_wait_s = 0.0, win_wait_timeout_s = 600.0;
+  int64_t win_waits = 0, win_blocked_steps = 0, step_win_waits = 0;
+  double win_wait_s = 0.0, win_wait_timeout_s = 600.0, step_win_wait_s = 0.0;
   bool win_dead = false;                        // a slot wait timed out: every later stage() fails immediately (no silent 600 s re-waits)
   // [R16 sys, stoch F-stoch-03 M-0646] fail-fast after "collector dead": the named throw below is the fail-closed path, but it needs the GIL
   // back and a Python frame willing to fail the run; when a worker holds the GIL inside a CUDA wait (or vLLM swallows the hook's exception)
@@ -212,7 +212,7 @@ struct Collector {
         if (ring) flush();                                          // let the worker absorb what is already staged (earlier copies are always legal)
         mark_windows(pushed_end);
         const double t0 = now_s();
-        ++win_waits;
+        ++win_waits; ++step_win_waits;
         {
           // LOCK ORDER: the GIL is dropped BEFORE win_mu is taken and win_mu is dropped BEFORE the GIL is re-taken (reverse destruction),
           // otherwise the worker (GIL held, wants win_mu in release_slot) and this thread (win_mu held, wants the GIL) deadlock
@@ -233,6 +233,7 @@ struct Collector {
           slot = win_free.back(); win_free.pop_back();
         }
         win_wait_s += now_s() - t0;
+        step_win_wait_s += now_s() - t0;
       }
       if (win_ready[slot]) {                                        // the worker's reads of the previous occupant precede our writes
         cudaError_t rc = cudaStreamWaitEvent(c10::cuda::getCurrentCUDAStream().stream(), win_ready[slot], 0);
@@ -384,6 +385,7 @@ struct Collector {
     step_copies = step_bytes = step_memsets = step_misses = step_strided = step_fallback = 0;
     step_issue_s = 0.0;
     step_flushes = 0;
+    step_win_waits = 0; step_win_wait_s = 0.0;
   }
 
   // A non-contiguous tensor whose memory is a set of equally spaced contiguous rows (e.g. RoPE's q/k views into the qkv buffer:
@@ -562,6 +564,7 @@ struct Collector {
     py::dict d;
     d["copies"] = step_copies; d["bytes"] = step_bytes; d["memsets"] = step_memsets; d["misses"] = step_misses;
     d["issue_s"] = step_issue_s; d["learning"] = learning; d["strided"] = step_strided; d["fallback"] = step_fallback; d["flushes"] = step_flushes;
+    d["window_waits"] = step_win_waits; d["window_wait_s"] = step_win_wait_s;
     return d;
   }
 

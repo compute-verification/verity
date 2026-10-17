@@ -204,13 +204,19 @@ class Options:
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it; the config run: one instrumented run)")
     all_pairs: bool = option("--all-pairs", default=False, action="store_true", help="run every pair and --value-check's run after a failed run (timing studies); "
                              "default: the Commit stops after the first failed run, FAIL, and summary.json's `stopped` names the runs not run")
+    trace_dir: str | None = option("--trace-dir", default=None, help="after the timed pairs, one more pair per --trace-tools profiler, outside runs.jsonl "
+                                   "and the summary's timing (verity_vllm.pipeline.tp.trace)")
+    trace_tools: str = option("--trace-tools", default="torch", help="with --trace-dir: comma list of torch (torch.profiler on every rank) and pyspy "
+                              "(py-spy from outside the rank's process, --trace-pyspy)")
+    trace_pyspy: str | None = option("--trace-pyspy", default=None, help="with --trace-tools pyspy: the py-spy binary")
+    trace_ranks: str = option("--trace-ranks", default="0", help="with --trace-dir: the ranks whose Kineto trace is kept and whose process py-spy samples")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: in the first instrumented run, once every rank's root is final and the TP run root fixed and before the challenge, each rank commits its units of the verifier's partition in M0's serving row format (verity_vllm.pipeline.tp.serving_rows; the row stage writes the request); needs --required-manifest and --replay-deferred")
 
 
 def main(args: Options) -> int:
     from verity_vllm.engine import engine_profile as prof, env as engine_env
     prof.apply_env()
-    from verity_vllm.pipeline.tp import lease as TPL, match as TPM, target as TT
+    from verity_vllm.pipeline.tp import lease as TPL, match as TPM, target as TT, trace as TRACE
     from vllm import LLM
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.commit import git_head, run_workload
@@ -225,6 +231,7 @@ def main(args: Options) -> int:
     if args.replay_deferred and (not args.required_manifest or args.no_sampled_replay):
         raise SystemExit("--replay-deferred defers the ranks' sampled replay: it needs --required-manifest and no --no-sampled-replay")
     deferral_skipped = C2.deferral_skipped(args)
+    trace_tools = TRACE.tools_of(args.trace_tools, args.trace_pyspy) if args.trace_dir else []
     relabel = None
     if args.relabel_rank:
         a, b = args.relabel_rank.split(":")
@@ -431,13 +438,15 @@ def main(args: Options) -> int:
                        "wall_s": r["wall_s"], "iterations": r["iterations"], "engine_steps": len(r["step_wall_s"]), "generated_tokens": r["generated_tokens"],
                        "prompt_tokens": r["prompt_tokens"], "generated_tokens_per_s": r["generated_tokens"] / r["wall_s"],
                        "step_wall_prefill_s": r["step_wall_s"][0], "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
+                       "step_wall_s": r["step_wall_s"], "step_tokens_out": r["step_tokens_out"],
                        "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "commit_started": started}
                 if tokens_ref is None:
                     tokens_ref = r["tokens"]
                 row["tokens_equal_ref"] = r["tokens"] == tokens_ref
                 if arm != "control":
                     t_f = time.perf_counter()
-                    fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}", last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check,
+                    fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}",
+                                       last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check and not args.trace_dir,
                                        defer={"out": str(out), "pair": pair} if args.replay_deferred else None)
                     t_ready = time.perf_counter() - t_f
                     if args.replay_deferred:
@@ -688,6 +697,13 @@ def main(args: Options) -> int:
                 break
         if stopped:
             break
+    if args.trace_dir and not stopped:
+        gc.collect()
+        with PH.TL.span("work.trace", tools=args.trace_tools):
+            TRACE.run(llm, lambda: run_workload(eng, reqs, sampling), Path(args.trace_dir), trace_tools, [int(x) for x in args.trace_ranks.split(",")],
+                      args.rpc_timeout, pyspy=args.trace_pyspy)
+        if not args.value_check:
+            TPL.stop(llm, args.rpc_timeout, "work.trace")
     vcheck = None
     if args.value_check and not stopped:
         # [R15 TP-04 C2] one extra instrumented run per rank (untimed): committed bytes vs hook-time reference clones + re-execution

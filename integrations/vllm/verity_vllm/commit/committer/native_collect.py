@@ -1116,6 +1116,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         job.t_step_end = time.perf_counter()
         job.backlog = self._q.qsize()
         self.spans.add("movement", float(st["issue_s"]), step=job.step, nbytes=job.acq_bytes)   # native issue time (memcpy/memset calls) -- measured
+        if st.get("window_waits"):
+            self.spans.add("wait", float(st["window_wait_s"]), step=job.step)   # blocked for a free window slot (the ring was full)
         if self.profile:
             self.spans.add("acquisition", self._prof_s - float(st["issue_s"]), step=job.step)  # Python wrapper + pybind overhead above the issue
         self.spans.add("acquisition", time.perf_counter() - t0, step=job.step)
@@ -1337,8 +1339,11 @@ class NativeCollectCommitter(NativeHostCommitter):
             begin_tree(-(-plan_used // C))
         k = 0
         leaf_ms = 0.0
+        idle = 0.0                                                              # waiting for the serving thread (a window, the step's end)
         while True:
+            tw = time.perf_counter()
             ok, used_k, slot = nc.wait_window(job.step, k, side.cuda_stream)
+            idle += time.perf_counter() - tw
             if not ok:
                 if int(used_k) < 0 or getattr(nc, "win_dead", False):
                     # [R16 sys, F-stoch-03] the serving thread's slot wait timed out mid-step: the remaining windows will never be marked, so
@@ -1443,7 +1448,9 @@ class NativeCollectCommitter(NativeHostCommitter):
                 if not keep_win:
                     transient.append(k)                                         # v1 re-hash source only: dropped from `keep` below
             k += 1
+        tw = time.perf_counter()
         job.done_evt.wait()                                                     # type: ignore[attr-defined]  plan / cursor / metas known
+        idle += time.perf_counter() - tw
         job.metas = self._metas_for(job)
         used = int(job.cursor)
         padded = -(-used // C) * C
@@ -1624,6 +1631,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
         self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
+        self.spans.add("worker_idle", idle, step=job.step)                     # inside `hashing`: the rest of it is the worker's own work
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
         self._gpu_levels[job.step] = levels
         self._gpu_blocks[job.step] = (keep, used)
