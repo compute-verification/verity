@@ -396,6 +396,54 @@ theorem plainSimProofs {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω :
   rw [plainB, ite_eq_right (lt_irrefl _), plainAcc, decide_eq_true hd.1, ite_eq_left rfl, hfin]
   rfl
 
+/-- **The lockstep's link points** (`PlainSimPts`): where `P`'s run at `plainΦ`'s coins decides, the first live coin's
+points are the link coin's, whose `2·mPts` link coordinates are the first live coin's entries. -/
+theorem plainSimPts {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} (st : Stmt) (hset : setupOf false x = some (ins, spec, sts)) (hw : 2 * spec.mPts ≤ 65536)
+    (hp : spec.points = 2) :
+    PlainSimPts P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) (plainSim P x spec st)
+      (plainΦ x spec st) := by
+  refine plainSimPts_of_coins fun u r' s spec' sts' link c₁ mids f hd => ?_
+  have hL := plainN_add hset
+  obtain ⟨hc₁, -, -⟩ := plain_decides_msgs hL hd
+  have hs := act_decide hd.2
+  rw [hset] at hs
+  simp only [Option.some.injEq, Prod.mk.injEq] at hs
+  obtain ⟨-, e, -⟩ := hs
+  subst spec' c₁
+  rw [ptsIf_proj]
+  funext k t
+  have hkt : t.val + spec.mPts * k.val < 2 * spec.mPts := by
+    have := k.isLt
+    have := t.isLt
+    rcases k with ⟨_ | _ | _, _⟩ <;> simp <;> omega
+  show ptsE spec.mPts (takeE (2 * spec.mPts) (Claims.coinSeq r' 0)) k t =
+    Refine.fOf ((pointsOf spec (Claims.coinSeq (plainΦ x spec st (u, r')) 0))[k.val]!)[t.val]!
+  have e1 : ptsE spec.mPts (takeE (2 * spec.mPts) (Claims.coinSeq r' 0)) k t =
+      takeE (2 * spec.mPts) (Claims.coinSeq r' 0) ⟨t.val + spec.mPts * k.val, hkt⟩ := rfl
+  have e2 : k.val * spec.mPts + t.val = t.val + spec.mPts * k.val := by rw [Nat.mul_comm, Nat.add_comm]
+  have hk2 : k.val < 2 := k.isLt
+  simp only [pointsOf, hp]
+  rw [e1, getElem!_pos _ k.val (by simp [hk2]), Array.getElem_map, Array.getElem_range,
+    getElem!_pos _ t.val (by simp), Array.getElem_map, Array.getElem_range, e2]
+  have he : t.val + spec.mPts * k.val < 65536 := by omega
+  simp only [takeE, Coin.at, he, ↓reduceDIte]
+  have hc : t.val + spec.mPts * k.val < plainCnt x spec st 0 := by
+    unfold plainCnt
+    simp only [↓reduceIte]
+    exact lt_max_of_lt_right hkt
+  exact (plainΦ_entry (j := 0) hL u r' (by omega) ⟨_, he⟩ hc).symm
+
+/-- **The simulation** (`PlainSimRun`): where `P`'s run at `plainΦ`'s coins decides and accepts, at a plain statement
+of one table with two link points of at most `32768` coordinates and at least one, the simulator's live outcome is the
+record's view: `P`'s roots, the link coin's points, the record's reps and its proof files. -/
+theorem plainSimRun {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {st : Stmt} (hset : setupOf false x = some (ins, spec, sts)) (h : tables false x = [(spec, st)])
+    (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (hp : spec.points = 2) :
+    PlainSimRun P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) (plainSim P x spec st) (plainΦ x spec st) :=
+  plainSimRun_of_parts (plainSimRoot_of_first hw (plainSim_first P x spec st ω)) (plainSimPts P ω st hset hw hp)
+    (plainSimReps P ω hset h hw hm1) (plainSimProofs P ω st hset hw hm1)
+
 /-! ## The link points' range -/
 
 /-- **A table's setup passed the range check, with well-formed regions**: `setupH`'s and `setupHidden`'s
@@ -409,11 +457,12 @@ theorem setupOne_range {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables
   · exact ⟨(Discharge.Hidden.setupHidden_spec' h).inRange, (Discharge.Hidden.setupHidden_wf h).2⟩
   · exact ⟨FlockVBridge.Family.setupH_inRange h, (Refine.setupH_wf h).2⟩
 
-/-- **A plain statement in scope has between 1 and 64 link points**, so its link coin fits a live coin: table 0's
-range check and regions, whose link points are the session's. -/
+/-- **A plain statement in scope has two link points of between 1 and 64 coordinates**, so its link coin fits a live
+coin: table 0's range check and regions, whose link points are the session's. -/
 theorem plain_mPts {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf false x = some (ins, spec, sts)) : 2 * spec.mPts ≤ 65536 ∧ 1 ≤ spec.mPts := by
+    (hset : setupOf false x = some (ins, spec, sts)) :
+    2 * spec.mPts ≤ 65536 ∧ 1 ≤ spec.mPts ∧ spec.points = 2 := by
   obtain ⟨p, hp, rfl, -, -, -⟩ := parsed_of_parse hs
   obtain ⟨hpst, hpr, hsr⟩ := parseBytes_setup hp hset
   subst hpst
@@ -425,12 +474,13 @@ theorem plain_mPts {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Re
   rw [hpi'] at hsr
   obtain ⟨h0, hall⟩ := Discharge.HiddenExec.setupTables_setupOne hsr
   obtain ⟨d, hd, -⟩ := hall 0 h0
-  have hpts := (Discharge.HiddenExec.setupTables_pointsAny hsr).2 0 h0
+  obtain ⟨hp2, hpts⟩ := Discharge.HiddenExec.setupTables_pointsAny hsr
+  have hpts := hpts 0 h0
   obtain ⟨hr, hwf⟩ := setupOne_range hd
   have h64 := ((checkInRange_ok _ _ _).1 hr).2.2
   have hm := hwf.mPts
   unfold PT_LOCAL at h64 hm
-  omega
+  exact ⟨by omega, by omega, hp2⟩
 
 /-! ## The lockstep at a statement -/
 
@@ -448,7 +498,8 @@ def PlainSimLockstep (x : Claims.Msg) : Prop :=
 
 /-- **The lockstep holds at every statement** (`plainSimReps`, `plainSimProofs`). -/
 theorem plainSimLockstep (x : Claims.Msg) : PlainSimLockstep x := fun _ hs hin _ _ _ hset st h _ P ω =>
-  ⟨plainSimReps P ω hset h _ (plain_mPts hs hin hset).2, plainSimProofs P ω st hset _ (plain_mPts hs hin hset).2⟩
+  ⟨plainSimReps P ω hset h _ (plain_mPts hs hin hset).2.1,
+    plainSimProofs P ω st hset _ (plain_mPts hs hin hset).2.1⟩
 
 /-! ## The abort -/
 
@@ -493,6 +544,6 @@ def PlainSimAbortAt (x : Claims.Msg) : Prop :=
 theorem plainSimAbortAt (x : Claims.Msg) : PlainSimAbortAt x :=
   fun _ hs hin _ _ _ hset st _ _ P ω I d _ C rootB₀ u r' hna =>
     not_plainVerdictAt_nil I d C rootB₀
-      (plainSim_proofs_nil P ω st hset _ (plain_mPts hs hin hset).2 u r' hna)
+      (plainSim_proofs_nil P ω st hset _ (plain_mPts hs hin hset).2.1 u r' hna)
 
 end FlockDeploy.KS
