@@ -60,7 +60,8 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
 
 An arm is a TOML file: a list of steps for the linears (`[[linear]]`: q, k, v, o, gate, up and down, each y = x Wᵀ) and
 one for attention (`[[attention]]`: S = Q Kᵀ and O = P V). Each step names a registered function and its parameters.
-`layers = [...]` and, on linears, `linears = [...]` restrict where a step applies. `specs/adopted.toml`:
+`layers = [...]` and, on linears, `linears = [...]` restrict where a step applies. The output head (`lm_head`) takes
+only the linear steps that name it in `linears`, without calibration or `layers`. `specs/adopted.toml`:
 
 ~~~toml
 description = "the adopted design end to end"
@@ -109,10 +110,10 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 |---|---|---|---|
 | `linear.smooth(alpha, kv_shared)` | real | SmoothQuant, x / m and W m; `kv_shared` is the foldable variant | D4-70B |
 | `linear.rotate(kind)` | real | x Q and W Q; `q` is exact_grid's rotation, `h` the flat Hadamard | D4-PPL |
-| `linear.int8(act, act_top, weight_top, group, gptq, density)` | quantize | activations per token, rounded or dithered (`density` < 1: dithered on a coin-chosen fraction of every k64 word's positions, rounded elsewhere); weights per row or per `group` inputs, capped at `weight_top`, rounded or GPTQ | D4-PPL, D4-70B, LOWBIT-DESIGN |
+| `linear.int8(act, act_top, weight, weight_top, group, gptq, density)` | quantize | activations per token, rounded or dithered (`density` < 1: dithered on a coin-chosen fraction of every k64 word's positions, rounded elsewhere); weights per row or per `group` inputs, capped at `weight_top`, rounded, GPTQ or dithered (`weight = "dither"`: fresh bits a call, density 1) | D4-PPL, D4-70B, LOWBIT-DESIGN, EPS-BUDGET |
 | `attention.rotate()` | real | Q R, K R, V R and the output R⁻¹ | D4-ATTN |
 | `attention.center_keys()` | real | kc | D4-ATTN |
-| `attention.int8(q_top, k, k_top, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; K and V rounded or dithered; P per row or per key block, `p_sink` | D4-ATTN |
+| `attention.int8(q, q_top, k, k_top, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; Q, K and V rounded or dithered within their tops; P per row or per key block, `p_sink` | D4-ATTN, EPS-BUDGET |
 | `attention.peel(operand, width, offset)` | integer | low-rank noise on Q or P, peeled exactly | D4-ATTN |
 | `linear.grid(grid, act, weight, block, scales, density)` | quantize | both operands on a low-bit grid (`fp4c`, `fp4`, `int5`), per token and per row, each rounded, dithered or `sr`; `block = 16` adds NVFP4's integer block scales over k (`scales`: `odd`, the UE4M3 odd integers 1–15, or `int`); `density` < 1 coins only a coin-chosen fraction of every k64 word's positions | D4-LOWBIT, LOWBIT-DESIGN |
 | `linear.peel(alphabet, width, top)` | integer | the int8 design's weight-side coin: W + U served, U low-rank (period 32 in k, {0,1} or ±1..±width), peeled exactly and gated on the check window, with \|W + U\| ≤ top | LOWBIT-DESIGN |
@@ -135,6 +136,10 @@ contiguous region in the same blocks, `nvfp4-qN`, `nvfp4c-qN` and `int5-qN` dith
 word's positions on both operands, and `fp8-peel-wW[-gptq]` is the int8 design on E4M3's exact integers: activations
 dithered on −16..16, weights on ±W (rounded or GPTQ) served as W + U and peeled; `fp8-peel-w15-qN` dithers the
 activations on 1/N of the positions only (U still coins every position).
+SKIP's designs (note:20261017T0340Z-draft-skip): `adopted-qkd` (Q Kᵀ dithered on both operands, no Q peel),
+`adopted-bd` (the linears too), `adopted-bd-lm` (and lm_head), `co` (CO-Dither's served values at r = k/2: 7-bit
+sides plus fresh bits), `co32c` (CHECKED-STRIP's: 7-bit weights and 8-bit activations on the linears, `co`'s
+attention), `ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention).
 Any other file passes as a path.
 
 ## Adding an intervention
