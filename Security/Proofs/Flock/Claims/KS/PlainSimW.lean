@@ -5,18 +5,23 @@ import Proofs.Flock.Claims.KS.PlainThird
 
 `PlainLiveWrPAt` asks, for each prover `P`, for events tied to collisions and one mixture of live strategies with three
 bounds. With the events an accepting run or fork with its collision (`plainForkEv`, `plainEv₁`) and the mixture the
-strategies of a live prover `P'` with the deployed coins as its tape, two of the three bounds come from deterministic
-facts about `P'` (`PlainSimWrPAt`):
+strategies of a live prover `P'` with a finite tape and coins `Φ` of `V false` at the tape and the live coins, of
+uniform law, two of the three bounds come from deterministic facts about `P'` (`PlainSimWrPAt`):
 
-* the first, from `P'` simulating `P`'s accepting runs at `plainCoins` (`PlainSimRun`) and the record's draw
-  (`RecordDrawVerbatim`), by `plain_first_of_run`;
-* the third, from a live self-clash at `P'`'s outcome giving an accepting run of `P` at `plainCoins` with a collision
-  among the verifier's calls (`PlainClashRun`), by `plainMix_le_of_run`;
+* the first, from `P'` simulating `P`'s accepting runs at `Φ` (`PlainSimRun`) and the record's draw
+  (`RecordDrawVerbatim`), by `plain_first_of_sim`;
+* the third, from a live self-clash at `P'`'s outcome giving an accepting run of `P` at `Φ` with a collision among the
+  verifier's calls (`PlainClashRun`), by `liveMix_le_Pr`;
 * the second, the fork bound at `P'`'s strategies, is asked as it is.
 
-So KS at the deployed plain verifier holds from `PlainSimW` at the statements some run accepts, `RecordDrawVerbatim` at
-them, and `Extendθ` (`plain_KS_of_sim`). The strategies send `P`'s roots wherever `P'`'s first message is `P`'s and the
-wire reads roots as the deployed link does (`plainRoot_of_first`).
+`Φ` may be `plainCoins` with the deployed coins as the tape, or `fnAt` with uniform functions of the live coins as the
+tape.
+
+So KS at the deployed plain verifier's trimmed record holds from `PlainSimW` at the statements some run accepts and
+`RecordDrawVerbatim` at them (`plain_KS_of_sim`). The strategies send `P`'s roots wherever `P'`'s first message is
+`P`'s and the wire reads roots as the deployed link does (`plainRoot_of_first`). Where the self-clash is at level 0, the
+collision in `PlainClashRun` follows from two different columns the run's reps open at one position
+(`PlainRawClashRun`, `plainClashRun_of_raw`).
 -/
 
 namespace FlockDeploy.KS
@@ -57,20 +62,45 @@ def plainForkEv {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables fa
       (Claims.run sha512 P (V false) x ω (Claims.forkCoins (plainJ (tables_head_one h) hsch r ℓ) s s')).vLog)
 
 /-- **A live event at `P'`'s outcome gives an accepting run of `P` with a collision**: wherever `pL` holds at the live
-outcome of `P'` at the tape `(ω, u)` and the live coins `r'`, `V false` accepts `P` at `plainCoins (u, r')` with a
-collision among its calls (`plainEv₁`). -/
+outcome of `P'` at the tape `(ω, u)` and the live coins `r'`, `V false` accepts `P` at `Φ (u, r')` with a collision
+among its calls (`plainEv₁`). -/
 def PlainClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (N : Claims.Msg → ℕ)
-    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts)
-    (P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))) (hk : N x + 2 = (V false).k x)
-    (n : Fin ((V false).k x) → ℕ) (pL : LiveOutJ 1 mPts → Prop) : Prop :=
+    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts) {τ : Type} (P' : Claims.Prover (Ω × τ))
+    (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin) (pL : LiveOutJ 1 mPts → Prop) : Prop :=
+  ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') → plainEv₁ P x ω (Φ (u, r'))
+
+/-- **A live event at `P'`'s outcome gives an accepting run of `P` whose reps open two different columns at one
+position, or a collision**: `PlainClashRun` with a self-clash at level 0 asked without the hashes (`plainRawCols`).
+`SelfClashL` also counts clashes at later levels, against the caps of the reps' pendings; those still need their
+collision. -/
+def PlainRawClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (N : Claims.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts) {τ : Type} (P' : Claims.Prover (Ω × τ))
+    (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin) (pL : LiveOutJ 1 mPts → Prop) : Prop :=
   ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →
-    plainEv₁ P x ω (plainCoins hk n (u, r'))
+    (Claims.run sha512 P (V false) x ω (Φ (u, r'))).out = .acc ∧
+      ((∃ (q : ℕ) (a b : List 𝔽),
+        (q, a) ∈ plainRawCols (Claims.run sha512 P (V false) x ω (Φ (u, r'))).seen ∧
+        (q, b) ∈ plainRawCols (Claims.run sha512 P (V false) x ω (Φ (u, r'))).seen ∧ a ≠ b) ∨
+        Claims.TiedColl sha512 (Claims.run sha512 P (V false) x ω (Φ (u, r'))).vLog)
+
+/-- **The clash gives the collision**: two different columns of an accepting run at one position collide in its log
+(`plain_selfClash_tied`), so `PlainRawClashRun` gives `PlainClashRun`. -/
+theorem plainClashRun_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
+    {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts} {τ : Type}
+    {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
+    {pL : LiveOutJ 1 mPts → Prop} (h : PlainRawClashRun P x ω mPts N dg w P' Φ pL) :
+    PlainClashRun P x ω mPts N dg w P' Φ pL := fun u r' hp => by
+  obtain ⟨hacc, ⟨q, a, b, ha, hb, hab⟩ | ht⟩ := h u r' hp
+  · exact ⟨hacc, plain_selfClash_tied hacc ha hb hab⟩
+  · exact ⟨hacc, ht⟩
 
 open Classical in
-/-- **A simulator of each prover at `wrP`'s verdict**: for each prover `P` and tape `ω`, a live prover `P'` with the
-deployed coins as its tape, whose strategies send `P`'s roots, that simulates `P`'s accepting runs at `plainCoins`
-(`PlainSimRun`), whose live self-clashes give `P`'s accepting runs with a collision there (`PlainClashRun`), and whose
-strategies' fork bound is no more than an accepting fork's with a collision (`plainForkEv`). -/
+/-- **A simulator of each prover at `wrP`'s verdict**: for each prover `P` and tape `ω`, a live prover `P'` with a
+finite tape `τ` and coins `Φ` of `V false` at the tape and the live coins, of uniform law, whose strategies send `P`'s
+roots, that simulates `P`'s accepting runs at `Φ` (`PlainSimRun`), whose live self-clashes give `P`'s accepting runs
+with a collision there (`PlainClashRun`), and whose strategies' fork bound is no more than an accepting fork's with a
+collision (`plainForkEv`). The deployed coins as the tape and `plainCoins` as `Φ` (`Pr_mergeAt`) are one such choice;
+uniform functions of the live coins as the tape (`fnAt`, `Pr_fnAt`) are another. -/
 def PlainSimWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -87,13 +117,14 @@ def PlainSimWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables 
         (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
         j) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω) (ω : Ω),
-    ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 spec.mPts)
-      (P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))) (hk : N x + 2 = (V false).k x)
-      (n : Fin ((V false).k x) → ℕ)
+    ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 spec.mPts) (τ : Type)
+      (_ : Fintype τ) (_ : Nonempty τ) (P' : Claims.Prover (Ω × τ))
+      (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin)
+      (_ : ∀ E : (Fin ((V false).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E)
       (hσ : ∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)).1 = plainRoot P x ω),
-      PlainSimRun P x ω spec.mPts N dg w P' (plainCoins hk n) ∧
+      PlainSimRun P x ω spec.mPts N dg w P' Φ ∧
       (∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) →
-        PlainClashRun P x ω spec.mPts N dg w P' hk n
+        PlainClashRun P x ω spec.mPts N dg w P' Φ
           (LiveSelfClash Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
             (plainVerdict I d C (plainRoot P x ω)) opn
             (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
@@ -107,14 +138,14 @@ def PlainSimWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables 
               (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
               (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
               (liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) (hσ u))) /
-            Fintype.card (Fin ((V false).k x) → Coin) ≤
+            Fintype.card τ ≤
           Claims.Pr fun s : (Fin ((V false).k x) → Coin) × (Fin ((V false).k x) → Coin) =>
             plainForkEv h hsch P r ℓ ω s.1 s.2)
 
 open Classical in
 /-- **A simulator gives the live sessions' bound at `wrP`'s verdict**, at a statement that sets up at `ins` and the
-draw `d` and whose provers' accepting runs carry `d` verbatim: the first bound by `plain_first_of_run`, the third by
-`plainMix_le_of_run`, the second as `PlainSimWrPAt` gives it. -/
+draw `d` and whose provers' accepting runs carry `d` verbatim: the first bound by `plain_first_of_sim`, the third by
+`liveMix_le_Pr`, the second as `PlainSimWrPAt` gives it. -/
 theorem plainLiveWrPAt_of_sim {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
@@ -137,11 +168,11 @@ theorem plainLiveWrPAt_of_sim {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} 
   intro Ω _ _ P
   refine ⟨fun r ℓ ω s s' => plainForkEv h hsch P r ℓ ω s s', plainEv₁ P x, fun _ _ _ _ _ he => he.2.2,
     fun _ _ he => he.2, fun _ _ _ _ _ he => ⟨he.1, he.2.1⟩, fun _ _ he => he.1, fun ω C hC => ?_⟩
-  obtain ⟨N, dg, w, P', hk, n, hσ, hrun, hsc, hfork⟩ := hs Ω P ω
-  exact ⟨dg, N x, plainRoot P x ω, Fin ((V false).k x) → Coin, inferInstance, inferInstance,
+  obtain ⟨N, dg, w, τ, _, _, P', Φ, hΦ, hσ, hrun, hsc, hfork⟩ := hs Ω P ω
+  exact ⟨dg, N x, plainRoot P x ω, τ, inferInstance, inferInstance,
     fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u), hσ,
-    plain_first_of_run P x ω C spec.mPts hset hd (hdraw Ω P ω) N dg w P' hk n hrun, hfork C hC,
-    plainMix_le_of_run x ω spec.mPts N dg w P' hk n _ (plainEv₁ P x ω) (hsc C hC)⟩
+    plain_first_of_sim P x ω C spec.mPts hset hd (hdraw Ω P ω) N dg w P' Φ ⟨hΦ, hrun⟩, hfork C hC,
+    liveMix_le_Pr (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x ω _ (plainEv₁ P x ω) Φ (hΦ _) (hsc C hC)⟩
 
 /-- **A simulator at a plain statement**: `PlainSimWrPAt` at the statements in scope that set up at a draw, at
 `plainOpn` where the outputs are public and at `plainOpnH` where they are hidden, as `PlainLiveW` asks. -/
@@ -170,16 +201,15 @@ theorem plainLiveW_of_sim {x : Claims.Msg}
   obtain ⟨hw, hhid⟩ := hs s hs' hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   exact ⟨fun hh => plainLiveWrPAt_of_sim hset hd hdraw (hw hh), fun hh => plainLiveWrPAt_of_sim hset hd hdraw (hhid hh)⟩
 
-/-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, at the statements some run accepts from
-a simulator of each prover (`PlainSimW`) and the record's draw verbatim (`RecordDrawVerbatim`), and `Extendθ` at
-full-width columns. A prover whose record carries the draw with its keys in another order still passes the checks
-(`drawEq_ne`), so `hdraw` holds only where the verifier reads the record's draw as the statement's term. -/
+/-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, at the statements
+some run accepts from a simulator of each prover (`PlainSimW`) and the record's draw verbatim (`RecordDrawVerbatim`).
+A prover whose record carries the draw with its keys in another order still passes the checks (`drawEq_ne`), so
+`hdraw` holds only where the verifier reads the record's draw as the statement's term. -/
 theorem plain_KS_of_sim
     (hdraw : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x →
       ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω) (ω : Ω), RecordDrawVerbatim P x ω)
-    (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimW x)
-    (hext : Claims.Flock.Extendθ (deployPlain Readable.relation) (wordLen false) (wide false)) :
-    Claims.Flock.KS sha512 (deployPlain Readable.relation) :=
-  plain_KS_of_w (fun x hno => plainLiveW_of_sim (hdraw x hno) (hs x hno)) hext
+    (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimW x) :
+    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
+  plain_KS_of_w fun x hno => plainLiveW_of_sim (hdraw x hno) (hs x hno)
 
 end FlockDeploy.KS
