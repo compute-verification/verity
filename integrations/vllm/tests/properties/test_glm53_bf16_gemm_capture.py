@@ -46,7 +46,7 @@ def _job(tmp_path, kind: str, *, M: int = 5, fma: int = 1, stress: str = "row3",
     `CUBLAS`, a DeepSeek-V4-Pro one on `DOTPROD` at `TAIL_K` (`tail`), a linear, a DeepSeek-V4-Pro compressor GEMM (`f32out`), or
     a two-head bmm."""
     rng = np.random.default_rng(3)
-    d = tmp_path / f"{kind}_{fma}_{stress}_{flip}"
+    d = tmp_path / f"{kind}_{M}_{fma}_{stress}_{flip}"
     if kind == "bmm":
         a, b = _x(rng, 2 * M, 32, stress).reshape(2, M, 32), _words(rng, (2, 32, 3), 2.0 ** -5)
         out = BC.bmm_rows(a, b)
@@ -146,6 +146,16 @@ def test_the_profiler_record_pins_grid_split_count_and_reduction() -> None:
     assert not X._profile_record({"traceEvents": trace["traceEvents"][:1]})["ok"]
 
 
+def test_a_trace_with_no_kernels_fails_the_launch() -> None:
+    """r20261014-082004-e35b: the scan's in-process profiler sessions left Kineto returning empty traces to all 77 later
+    per-launch sessions, and the empty profile passed `ok` while silently dropping the served split-K override, so the
+    comparisons modeled serial chains against split-K kernels.  Every GEMM launches at least one kernel: an empty trace is a
+    broken profiler and fails the launch, never a quiet model downgrade."""
+    empty = X._profile_record({"traceEvents": []})
+    assert empty == {"launches": [], "split_k": None, "reduction_kernels": [], "ok": False}
+    assert not X._launch_ok({"deterministic": True, "operands_ok": True, "profile": empty})
+
+
 def test_cutedsl_splitk_is_not_a_profiled_cublas_split() -> None:
     trace = {"traceEvents": [
         {"cat": "kernel", "name": "kernel_cutlass_kernel_vllmmodel_executorkernelslinearcute_dsl_ll_bf16_splitkLLBf16SplitK",
@@ -169,6 +179,114 @@ def test_the_default_cublas_split_counts_are_pinned_by_shape_and_m() -> None:
     assert [BC.default_cublas_split_k("linear", M, 6144, 160) for M in X.LINEAR_M] == [4] * len(X.LINEAR_M)
     assert [BC.default_cublas_split_k("linear", M, 7168, 64) for M in X.LINEAR_M] == [5] * len(X.LINEAR_M)
     assert BC.default_cublas_split_k("f32out", 256, 7168, 2048) is None       # c4 M256 is the non-split kernel
+
+
+def test_the_fit_reads_the_split_count_out_of_the_words() -> None:
+    """Past the pins the scan has only the words: over `splitk_count_probe`'s boundary rows and an all-ones activation row the
+    fit names exactly the split whose modeled route computes them (bf16 rounding hides the reassociation noise random rows
+    leave, so the crafted 1-against-0 differences carry the whole signal there), and names none for a route outside the
+    hypothesis family."""
+    rng = np.random.default_rng(11)
+    K = 512
+    probe = BC.splitk_count_probe(K, max_rows=64)
+    x = np.vstack([np.full((1, K), 0x3F80, np.uint16), _words(rng, (1, K), 1.0), _words(rng, (2, K), X.STRESS_SCALE)])
+    w = np.vstack([probe, _words(rng, (24, K), 2.0 ** -6)])
+    for out in ("f32", "bf16"):
+        for true in (2, 3, 8, 16):
+            got = BC.cublas_splitk_rows(x, w, true, out=out)
+            assert BC.fit_cublas_split_k(x, w, got, out=out) == [true], (out, true)
+        assert BC.fit_cublas_split_k(x, w, (BC.f32out_rows if out == "f32" else BC.linear_rows)(x, w), out=out) == []
+    assert BC.fit_cublas_split_k(x, w, BC.cublas_splitk_rows(x, w, 2, out="f32"), out="f32", candidates=range(40, 50)) == []
+    # without the probe, bf16 rounding leaves every candidate fitting these rows: the crafted rows are what decide
+    got = BC.cublas_splitk_rows(x[1:], w[len(probe):], 3, out="bf16")
+    assert len(BC.fit_cublas_split_k(x[1:], w[len(probe):], got, out="bf16")) > 1
+
+
+def test_the_count_probe_separates_every_candidate_pair_at_the_served_widths() -> None:
+    """The greedy boundary cover stays within the narrowest case's W (N = 64) at both hidden widths, and refuses a row budget
+    it cannot meet."""
+    for K in (6144, 7168):
+        probe = BC.splitk_count_probe(K, max_rows=64)
+        assert 0 < probe.shape[0] <= 16
+        nonzero = [sorted(np.nonzero(r)[0]) for r in probe.astype(np.uint16)]
+        assert all(len(c) == 3 and c[1] - c[0] == 16 and c[2] - c[1] == 16 for c in nonzero)
+    with pytest.raises(ValueError, match="rows"):
+        BC.splitk_count_probe(7168, max_rows=2)
+
+
+def test_the_scan_splits_the_trace_on_markers() -> None:
+    k = lambda name, ts: {"cat": "kernel", "name": name, "ts": ts, "args": {"grid": [1, 1, 1], "blockX": 32, "blockY": 1, "blockZ": 1}}  # noqa: E731
+    mark = lambda ts: k(f"vectorized_elementwise_kernel<4, at::native::{X.MARKER}<float> >", ts)                                         # noqa: E731
+    trace = {"traceEvents": [mark(0), k("nvjet_tst_a", 1), mark(2), k("nvjet_bz_splitK_b", 4),
+                             k("void cublasLt::splitKreduce_kernel<32>()", 5), mark(6), k("after_the_last_marker", 7)]}
+    segments = X.scan_segments(trace, 2)
+    assert [[q["name"] for q in s] for s in segments] == [["nvjet_tst_a"], ["nvjet_bz_splitK_b", "void cublasLt::splitKreduce_kernel<32>()"]]
+    sigs = [X.scan_signature(s) for s in segments]
+    assert [s["reduce"] for s in sigs] == [False, True] and sigs[0]["kernels"] == [{"name": "nvjet_tst_a", "block": [32, 1, 1]}]
+    with pytest.raises(ValueError, match="markers"):
+        X.scan_segments(trace, 3)
+
+
+def test_scan_regimes_end_where_the_signature_or_the_words_change() -> None:
+    """A kernel switch shows in the signature; a split-count switch is invisible there (grid.z reads 1) and shows only in the
+    kept words; either ends a regime."""
+    a = {"kernels": [{"name": "a", "block": [128, 1, 1]}], "reduce": True}
+    b = {"kernels": [{"name": "b", "block": [128, 1, 1]}], "reduce": False}
+    w1, w2 = np.full((2, 4), 7, np.uint32), np.full((2, 4), 9, np.uint32)
+    Ms = [256, 257, 258, 259, 260]
+    regimes = X.scan_regimes(Ms, [a, a, a, b, b], [w1, w1, w2, w2, w2])
+    assert [(r["m0"], r["m1"], r["reduce"]) for r in regimes] == [(256, 257, True), (258, 258, True), (259, 260, False)]
+    rec = {"regimes": regimes}
+    assert X.regime_of(rec, 257)["m0"] == 256 and X.regime_of(rec, 259)["m0"] == 259 and X.regime_of(rec, 1) is None
+
+
+def test_the_sweep_takes_one_case_per_model_class_plus_the_envelope() -> None:
+    """r20261014-082004-e35b: the box cycles through tens of kernel regimes across 256..1024 (114 on the glm53 gate), but
+    their words follow four models (splits 2, 3 and 4, and the serial chain).  The sweep takes each class's first M past the
+    covered 256, not both sides of all 113 boundaries, plus the endpoint."""
+    regimes = [{"m0": 256, "m1": 256, "split": 3}, {"m0": 257, "m1": 400, "split": 4}, {"m0": 401, "m1": 500, "split": 3},
+               {"m0": 501, "m1": 980, "split": None}, {"m0": 981, "m1": 1024, "split": 2}]
+    assert X.scan_sweep(regimes) == [257, 401, 501, 981, 1024]
+    assert X.scan_sweep(regimes[:1]) == [1024]                                  # the covered M 256 adds nothing
+    assert [(c["split"], c["m0"], c["regimes"], c["ms"]) for c in X.scan_classes(regimes)] == \
+        [(3, 256, 2, 101), (4, 257, 1, 144), (None, 501, 1, 480), (2, 981, 1, 44)]
+
+
+def test_scan_analyze_reads_each_regimes_model_out_of_the_kept_words(monkeypatch) -> None:
+    """Over a synthetic trace: a reduce regime's split count comes from the fit over the probe rows, a reduce-less regime must
+    equal the serial chain, matching neither (a bmm reduce among them) fails, and the sweep is one case per class plus the
+    endpoint, however many kernel regimes serve each class."""
+    rng = np.random.default_rng(5)
+    K = 512
+    monkeypatch.setattr(X, "SCAN_M", range(256, 262))
+    probe = BC.splitk_count_probe(K, max_rows=16)
+    xw = np.vstack([np.full((1, K), 0x3F80, np.uint16), _words(rng, (3, K), 1.0)])
+    ww = np.vstack([probe, _words(rng, (16 - len(probe), K), 2.0 ** -6)])
+    op = {"output": "bf16", "xw": xw, "ww": ww, "serial": BC.linear_rows(xw, ww)}
+    split2, split3 = (BC.cublas_splitk_rows(xw, ww, s, out="bf16") for s in (2, 3))
+    k = lambda name, reduce: [{"name": name, "block": [128, 1, 1]}] + ([{"name": "splitKreduce", "block": [32, 1, 1]}] if reduce else [])  # noqa: E731
+    segments = [k("a", True), k("b", True), k("b", True), k("c", False), k("c", False), k("a", True)]
+    rows = [split2, split2, split3, op["serial"], op["serial"], split2]
+    rec = X.scan_analyze(op, segments, rows)
+    assert [(r["m0"], r["m1"], r["split"], r["modeled"]) for r in rec["regimes"]] == \
+        [(256, 256, 2, True), (257, 257, 2, True), (258, 258, 3, True), (259, 260, None, True), (261, 261, 2, True)]
+    assert [c["split"] for c in rec["classes"]] == [2, 3, None]
+    assert rec["ok"] and rec["sweep"] == [257, 258, 259, X.ENVELOPE]
+    bad = X.scan_analyze(op, segments[:5] + [k("a", True)], rows[:5] + [op["serial"]])
+    assert not bad["ok"] and not bad["regimes"][-1]["modeled"]                  # a reduce whose words fit no candidate
+    monkeypatch.setattr(X, "SCAN_M", range(256, 257))
+    bmm = X.scan_analyze({"output": "bf16", "xw": None, "ww": None, "serial": split2}, segments[:1], rows[:1])
+    assert not bmm["ok"] and not bmm["regimes"][0]["modeled"]                   # a bmm reduce has no probe to fit
+    monkeypatch.setattr(X, "SCAN_M", range(256, 256 + 9))
+    churn = X.scan_analyze(op, [k("a", True)] * 9, [BC.cublas_splitk_rows(xw, ww, s, out="bf16") for s in range(2, 11)])
+    assert len(churn["classes"]) == 9 > X.MAX_CLASSES                           # more models than the family should ever serve
+    assert not churn["ok"] and churn["sweep"] == [X.ENVELOPE]
+
+
+def test_the_served_split_prefers_the_pin_and_falls_back_to_the_scan() -> None:
+    assert X.served_split("router", 256, 6144, 256, scan_split=9) == 3         # pinned M: the pin wins
+    assert X.served_split("router", 300, 6144, 256, scan_split=2) == 2         # past the pins: the scan's fit
+    assert X.served_split("router", 300, 6144, 256) is None                    # neither: the launch fails visibly
 
 
 def test_the_default_operand_dump_keeps_reduction_routes_and_deduplicates_weights(tmp_path) -> None:
@@ -218,6 +336,27 @@ def test_each_model_runs_its_own_gemms() -> None:
     assert [c for c in every if c[2] == X.PROBE] == [("glm53", "router", X.PROBE, 1), ("dsv4-pro", "router", X.PROBE, 1)]
     assert X.cases(True, {"f32out"}, ["dsv4-pro"]) == [("dsv4-pro", "f32out", n, M) for n, _, _ in X.MODELS["dsv4-pro"].f32out
                                                       for M in X.QUICK_M]
+
+
+def test_the_base_cases_and_their_word_counts_are_conserved() -> None:
+    """The scan only adds cases: the unswept expected set and each case's compared words stay the base capture's, pinned to
+    the GO run r20261013-222550-f31c (0 of 18,734,624 words different, 7,040 dotprod words), so a collection refactor that
+    drops, shrinks or re-models a previously-GO case fails here without a GPU."""
+    words, dotprod = {}, {}
+    for model, phase, case, M in X.cases(False, set(X.PHASES), list(X.MODELS)):
+        m = X.MODELS[model]
+        key = X.case_key(model, phase, case, M)
+        if phase == "router":
+            N, dot = m.experts, X.expected_kernel(M, model)["kind"] == "dotprod"
+        else:
+            N, dot = next(n for nm, _, n in getattr(m, phase) if nm == case), False
+        (dotprod if dot else words)[key] = M * N * (X.NHL if phase == "bmm" else 1)
+    assert len(words) + len(dotprod) == 76 and sum(words.values()) == 18_734_624 and sum(dotprod.values()) == 7_040
+    assert words["glm53/linear/indexer.wk_weights_proj/M16"] == 2_560          # the words the NO-GO run miscompared
+    assert words["glm53/router/mlp.gate/M17"] == 4_352
+    assert words["glm53/bmm/q_nope_absorb/M256"] == 1_048_576
+    assert words["dsv4-pro/f32out/compressor.kv_score.c4/M1"] == 2_048
+    assert dotprod[f"glm53/router/{X.PROBE}/M1"] == 256 and dotprod["dsv4-pro/router/mlp.gate/M4"] == 1_536
 
 
 def test_an_unknown_model_or_phase_is_refused(tmp_path) -> None:
@@ -278,6 +417,7 @@ def _doc() -> dict:
              {**d, "phase": "f32out", "case": "compressor.kv_score.c4", "M": 1, **NONE, "words": 4, "reference_coords": 1}]
     doc = {"schema": X.SCHEMA, "models": list(X.MODELS), "expected": [X._case(x) for x in launches], "gate": {"ok": True}, "errors": {},
            "switch": {"ok": True, "cublas_version": 120900}, "selection": {m: {"ok": True} for m in X.MODELS}, "bind": {"ok": True},
+           "scan": {"enabled": False, "cases": {}, "ok": True},
            "launches": launches,
            "comparisons": comps, "totals": dict(TOTALS)}
     doc["fma"] = X.fma_of(doc["totals"])
@@ -289,7 +429,8 @@ def _doc() -> dict:
                                         (("selection", "dsv4-pro", "ok"), False), (("selection",), {}), (("bind", "ok"), False),
                                         (("totals", "mismatch"), 1), (("totals", "reference_coords"), 0),
                                         (("totals", "twin_mismatch"), 1), (("fma",), None), (("launches", 0, "dispatch_ok"), False),
-                                        (("launches", 1, "deterministic"), False), (("launches", 3, "operands_ok"), False)])
+                                        (("launches", 1, "deterministic"), False), (("launches", 3, "operands_ok"), False),
+                                        (("scan", "ok"), False)])
 def test_the_verdict_needs_every_check(path: tuple, value) -> None:
     assert X._verdict(_doc())
     doc = copy.deepcopy(_doc())
@@ -344,10 +485,10 @@ def test_the_default_run_is_a_second_process(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(X.subprocess, "run", fake_run)
     a = X.argparse.Namespace(workers=3, only="linear,bmm", models="glm53", min_driver=575, want_cc="9.0", want_sms=132, scratch=None,
-                             quick=True, dump_operands=True)
+                             quick=True, dump_operands=True, no_scan=True)
     got = X.default_run(a, tmp_path)
     argv = seen["argv"]
-    assert {"--served-default", "--no-default", "--quick", "--dump-operands"} <= set(argv)
+    assert {"--served-default", "--no-default", "--quick", "--dump-operands", "--no-scan"} <= set(argv)
     assert argv[argv.index("--out") + 1] == str(tmp_path / "served_default") and argv[argv.index("--models") + 1] == "glm53"
     assert got["changed"] == [lm] and got["us"][va] == 3.0
     doc = {"served_default": got, "cases": {lm: {"us": 9.0}, va: {"us": 3.0}}}
@@ -382,7 +523,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
             ("glm53", "linear", 5): _job(tmp_path, "linear", flip=(1, 2)), ("glm53", "bmm", 5): _job(tmp_path, "bmm"),
             ("dsv4-pro", "router", 5): _job(tmp_path, "tail", fma=0), ("dsv4-pro", "f32out", 5): _job(tmp_path, "f32out")}
 
-    def launch(work, weights, gates, model, phase, name, M, seed, served_default):
+    def launch(work, weights, gates, model, phase, name, M, seed, served_default, scan_split=None):
         job = jobs[(model, phase, M)]
         rec = {"model": model, "phase": phase, "case": name, "M": M, "K": job["K"], "N": job["N"], "deterministic": True,
                "operands_ok": True, "us": 2.0}
@@ -394,7 +535,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     monkeypatch.setattr(X, "default_run", lambda a, outdir: {"ok": False, "changed": ["glm53/router/mlp.gate/M6"],
                                                              "us": {"glm53/router/mlp.gate/M5": 1.0}})
     out = tmp_path / "out"
-    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1"]) == 1
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-scan"]) == 1
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["digest"] == digest_of(doc) and doc["ok"] is False and not doc["errors"] and doc["fma"] == 0
     assert {k: c["ok"] for k, c in doc["cases"].items()} == {"glm53/router/mlp.gate/M5": True, "glm53/router/mlp.gate/M6": True,
@@ -407,15 +548,108 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     printed = capsys.readouterr().out
     assert "case glm53/linear/lm_head.shard/M5" in printed and "GLM53-BF16-GEMM NO-GO" in printed and "fma=0" in printed
     assert "glm53=NO-GO dsv4-pro=GO" in printed
-    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default", "--models", "dsv4-pro"]) == 0
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default", "--no-scan",
+                   "--models", "dsv4-pro"]) == 0
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["models"] == ["dsv4-pro"] and doc["model_verdicts"] == {"dsv4-pro": True} and len(doc["cases"]) == 2
     assert "GLM53-BF16-GEMM GO" in capsys.readouterr().out
     jobs[("glm53", "linear", 5)] = _job(tmp_path, "linear")
     monkeypatch.setattr(X, "default_run", lambda a, outdir: {"ok": True, "changed": [],
                                                              "us": {"glm53/router/mlp.gate/M5": 1.0}})
-    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default"]) == 0
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default", "--no-scan"]) == 0
     assert "GLM53-BF16-GEMM GO" in (printed := capsys.readouterr().out) and "glm53=GO dsv4-pro=GO" in printed
+
+
+def test_the_scan_extends_the_sweep_through_main(tmp_path, monkeypatch) -> None:
+    """The scan's boundary Ms join the expected cases, each extended launch gets the scan's fitted split for its regime (None
+    past the reduce regime), and the scan record is sealed into the document."""
+    import contextlib
+    import sys
+    import types
+
+    vc = types.ModuleType("vllm.config")
+    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
+    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
+    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    for k in (*X.SWITCH_ENV, "VLLM_BATCH_INVARIANT", "TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
+        monkeypatch.setenv(k, "")
+    monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
+    monkeypatch.setattr(X.G, "_environment", lambda: {})
+    monkeypatch.setattr(X, "switch", lambda served_default: {"ok": True, "cublas_version": 120900})
+    monkeypatch.setattr(X, "make_gate", lambda cfg, model: object())
+    monkeypatch.setattr(X, "selection", lambda gate: {"ok": True})
+    monkeypatch.setattr(X, "cases", lambda quick, only, models: [("glm53", "linear", "lm_head.shard", 5)])
+    rec = {"m": [256, 1024], "output": "bf16", "ok": True, "sweep": [613, 614, 1024],
+           "classes": [{"split": 4, "m0": 256, "regimes": 1, "ms": 358}, {"split": None, "m0": 614, "regimes": 1, "ms": 411}],
+           "regimes": [{"m0": 256, "m1": 613, "reduce": True, "kernels": [], "split_fits": [4], "split": 4},
+                       {"m0": 614, "m1": 1024, "reduce": False, "kernels": [], "split_fits": [], "split": None}]}
+    scan_doc = {"ok": True, "returncode": 0, "switch": {"ok": True}, "errors": {},
+                "cases": {"glm53/linear/lm_head.shard": rec}}
+    monkeypatch.setattr(X, "scan_subprocess", lambda a, outdir: scan_doc)
+    seen = {}
+
+    def launch(work, weights, gates, model, phase, name, M, seed, served_default, scan_split=None):
+        seen[M] = scan_split
+        job = {**_job(tmp_path, "linear", M=M), "case": name}
+        return {"model": model, "phase": phase, "case": name, "M": M, "K": job["K"], "N": job["N"], "deterministic": True,
+                "operands_ok": True, "us": 2.0}, job
+
+    monkeypatch.setattr(X, "launch", launch)
+    out = tmp_path / "out"
+    X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default", "--models", "glm53"])
+    doc = json.loads((out / X.RECORD).read_text())
+    keys = [f"glm53/linear/lm_head.shard/M{M}" for M in (5, 613, 614, 1024)]
+    assert doc["expected"] == keys and sorted(doc["cases"]) == sorted(keys)
+    assert seen == {5: None, 613: 4, 614: None, 1024: None}
+    assert doc["scan"] == {"enabled": True, "cases": {"glm53/linear/lm_head.shard": rec}, "ok": True,
+                           "switch": {"ok": True}, "returncode": 0}
+    assert all(c["ok"] for c in doc["cases"].values()) and not doc["errors"]
+    assert doc["digest"] == digest_of(doc)
+    scan_doc["ok"] = False
+    scan_doc["errors"] = {"glm53/bmm/v_absorb": "boom"}
+    X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default", "--models", "glm53"])
+    doc = json.loads((out / X.RECORD).read_text())
+    assert doc["scan"]["ok"] is False and doc["errors"]["scan/glm53/bmm/v_absorb"] == "boom" and doc["ok"] is False
+
+
+def test_the_scan_runs_in_its_own_process(tmp_path, monkeypatch) -> None:
+    """r20261014-082004-e35b: the scan's profiler sessions in the capture process left every later per-launch session an empty
+    trace.  The scan process gets `--scan-run`, the variant flag and the same models and phases, and its scan.json comes back
+    with the subprocess's exit code; a process that left no scan.json is a failed scan, never a quiet pass."""
+    seen = {}
+
+    def fake_run(argv, capture_output, text, cwd):
+        seen["argv"] = argv
+        sub = tmp_path / "scan"
+        sub.mkdir(parents=True, exist_ok=True)
+        (sub / "scan.json").write_text(json.dumps({"ok": True, "cases": {"glm53/linear/lm_head.shard": {"sweep": [1024]}},
+                                                   "errors": {}, "switch": {"ok": True}}))
+        return type("P", (), {"returncode": 0, "stdout": "scanned", "stderr": ""})()
+
+    monkeypatch.setattr(X.subprocess, "run", fake_run)
+    a = X.argparse.Namespace(models="glm53", only="linear", scratch=str(tmp_path), served_default=True)
+    got = X.scan_subprocess(a, tmp_path)
+    argv = seen["argv"]
+    assert {"--scan-run", "--served-default"} <= set(argv) and "--quick" not in argv
+    assert argv[argv.index("--out") + 1] == str(tmp_path / "scan") and argv[argv.index("--models") + 1] == "glm53"
+    assert got["ok"] is True and got["returncode"] == 0 and (tmp_path / "scan.log").read_text() == "scanned"
+    monkeypatch.setattr(X.subprocess, "run",
+                        lambda *args, **kw: type("P", (), {"returncode": 1, "stdout": "", "stderr": "died"})())
+    got = X.scan_subprocess(X.argparse.Namespace(models="glm53", only="linear", scratch=None, served_default=False), tmp_path)
+    assert got["ok"] is False and got["returncode"] == 1 and got["cases"] == {} and "scan" in got["errors"]
+    assert not (tmp_path / "scan" / "scan.json").exists()                       # the first call's record never stands in
+
+
+def test_the_scan_targets_cover_every_gemm_case() -> None:
+    got = X.scan_targets(set(X.PHASES), list(X.MODELS))
+    assert got == [("glm53", "router", "mlp.gate"), ("glm53", "linear", "lm_head.shard"), ("glm53", "linear", "indexer.wk_weights_proj"),
+                   ("glm53", "bmm", "q_nope_absorb"), ("glm53", "bmm", "v_absorb"),
+                   ("dsv4-pro", "router", "mlp.gate"), ("dsv4-pro", "linear", "lm_head.shard"),
+                   ("dsv4-pro", "linear", "indexer.weights_proj"),
+                   ("dsv4-pro", "f32out", "compressor.kv_score.c4"), ("dsv4-pro", "f32out", "compressor.kv_score.c128"),
+                   ("dsv4-pro", "f32out", "indexer.compressor.kv_score")]
+    assert X.scan_targets({"f32out"}, ["dsv4-pro"]) == [("dsv4-pro", "f32out", n) for n, _, _ in X.MODELS["dsv4-pro"].f32out]
 
 
 def test_the_record_is_a_registered_property() -> None:
