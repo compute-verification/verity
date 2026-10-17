@@ -1,9 +1,9 @@
 // The edited GEMM on sm_80 (A100, EPS1 AMPERE r2): egemm.cu's e_l7qs, lpgemm.cu's 16-warp 128 x 128 mainloop with duo
 // receipts on C's running sums (each absorb LAG = 7 MMAs after its tile's MMA, a LOP3 tie every 4th MMA) and the peel as
 // a 2-atom tail, with sm_80's loads. TMA and mbarrier transactions are sm_90+, so a stage (128 of k for the tile's A and
-// B rows) comes in by cp.async, every thread 4 16-byte copies into a 3-stage ring laid out as TMA's 128-byte swizzle
-// (16-byte chunk c of row r at c ^ (r % 8)), and the CTA meets at one __syncthreads a stage, where the stage two ahead is
-// issued. The thread layout, the fragments (ldmatrix x4), the saturating IMMA, the receipt chains, keys and finish are
+// B rows) comes in by cp.async, every thread 4 16-byte copies into an NST-stage ring (EG80_NST, 3 by default) laid out
+// as TMA's 128-byte swizzle (16-byte chunk c of row r at c ^ (r % 8)), and the CTA meets at one __syncthreads a stage,
+// where the stage NST - 1 ahead is issued. The thread layout, the fragments (ldmatrix x4), the saturating IMMA, the receipt chains, keys and finish are
 // egemm.cu's (fgemm.cu's duo), so derive.py's tile_receipts checks them over the running sums at each commit boundary.
 //   e16  L = 16: IMMA.16816, each atom's two k16 halves as 16 MMAs (every tile's low half, then every tile's high half),
 //        an absorb after each, LAG 7 in that order
@@ -57,7 +57,7 @@ DEV void cp16(uint32_t dst, const void* src) {
   asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(dst), "l"(src) : "memory");
 }
 DEV void cp_commit() { asm volatile("cp.async.commit_group;" ::: "memory"); }
-DEV void cp_wait1() { asm volatile("cp.async.wait_group 1;" ::: "memory"); }
+template <int N> DEV void cp_wait() { asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory"); }
 DEV void ldsm4(uint32_t (&r)[4], uint32_t addr) {
   asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0, %1, %2, %3}, [%4];"
                : "=r"(r[0]), "=r"(r[1]), "=r"(r[2]), "=r"(r[3])
@@ -98,7 +98,11 @@ struct Args {
   uint32_t seed, zero;
 };
 
-constexpr int BM = 128, BN = 128, BK = 128, NST = 3, NT = 512, WARPS_N = 4, MI = 2, NI = 4, NU = MI * NI;
+#ifndef EG80_NST
+#define EG80_NST 3
+#endif
+constexpr int BM = 128, BN = 128, BK = 128, NST = EG80_NST, NT = 512, WARPS_N = 4, MI = 2, NI = 4, NU = MI * NI;
+static_assert(NST >= 3, "a stage's one barrier frees only the previous step's slot for the refill");
 constexpr int A_BYTES = BM * BK, STAGE = A_BYTES + BN * BK, SMEM = NST * STAGE;
 enum Arm { P32 = 0, E16 = 1, E32 = 2, E64 = 3 };
 constexpr const char* ARM_NAME[] = {"p32", "e16", "e32", "e64"};
@@ -170,9 +174,9 @@ template <int ARM> struct G {
     cp_commit();
     if (++ps == NST) ps = 0;
   }
-  // wait for this step's stage (slot s); every warp is past the previous step, so its slot takes the step two ahead
+  // wait for this step's stage (slot s); every warp is past the previous step, so its slot takes the step NST - 1 ahead
   DEV uint32_t next_stage(int& s) {
-    cp_wait1();
+    cp_wait<NST - 2>();
     __syncthreads();
     issue();
     const uint32_t sb = sbase + s * STAGE;

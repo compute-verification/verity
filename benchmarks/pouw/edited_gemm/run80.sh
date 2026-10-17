@@ -7,16 +7,16 @@
 #     --env GPU_LEASE_WHO=ampere -- bash benchmarks/pouw/edited_gemm/run80.sh
 #
 # Every output is under $OUT: build.log, sass/, gate-sass.json, gate/ (the dump), gate.jsonl, ref.jsonl, bench.jsonl,
-# hold-<arm>.jsonl, smi-samples.csv, summary.json.
+# hold-<arm>.jsonl, smi-samples.csv, summary.json. EG80_NVCC adds nvcc flags (-DEG80_NST=4: a 4-stage ring).
 set -uo pipefail
 OUT=${OUT:?run under research run}
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CUDA=${CUDA_HOME:-/usr/local/cuda-12.4}
-M=${EG80_M:-8192} N=${EG80_N:-8192} K=${EG80_K:-4096} HOLD=${EG80_HOLD:-40}
+M=${EG80_M:-8192} N=${EG80_N:-8192} K=${EG80_K:-4096} HOLD=${EG80_HOLD:-40} FLAGS=${EG80_NVCC:-}
 mkdir -p "$OUT/sass" "$OUT/gate"
-echo "{\"run_id\":\"${RESEARCH_RUN_ID:-unknown}\",\"host\":\"$(hostname)\",\"start_utc\":\"$(date -u +%FT%TZ)\",\"nvcc\":\"$("$CUDA/bin/nvcc" --version | tail -2 | head -1)\",\"M\":$M,\"N\":$N,\"K\":$K}" >"$OUT/meta.json"
+echo "{\"run_id\":\"${RESEARCH_RUN_ID:-unknown}\",\"host\":\"$(hostname)\",\"start_utc\":\"$(date -u +%FT%TZ)\",\"nvcc\":\"$("$CUDA/bin/nvcc" --version | tail -2 | head -1)\",\"M\":$M,\"N\":$N,\"K\":$K,\"nvcc_flags\":\"$FLAGS\"}" >"$OUT/meta.json"
 
-"$CUDA/bin/nvcc" -O3 -std=c++17 -arch=sm_80 --no-compress -Xptxas -v -o "$OUT/egemm80" "$SRC/egemm80.cu" -ldl \
+"$CUDA/bin/nvcc" -O3 -std=c++17 -arch=sm_80 --no-compress -Xptxas -v $FLAGS -o "$OUT/egemm80" "$SRC/egemm80.cu" -ldl \
   >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 2; }
 "$CUDA/bin/cuobjdump" -sass "$OUT/egemm80" >"$OUT/sass/egemm80.sass" 2>&1
 python3 "$SRC/egemm80.py" gate "$OUT/sass/egemm80.sass" "$OUT/build.log" >"$OUT/gate-sass.json" 2>"$OUT/gate-sass.err"
