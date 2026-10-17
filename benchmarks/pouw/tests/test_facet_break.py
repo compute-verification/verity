@@ -98,9 +98,17 @@ def test_a_tld_takes_its_width_from_the_program_and_unpriced_loads_are_listed(ce
 
 def test_fine_grid_sweeps_the_near_frontier_and_the_ji3n_0_form():
     names = [g["name"] for g in gen.grid(0, 0, family="fine")]
-    assert len(set(names)) == len(names) == 968
+    assert len(set(names)) == len(names) == 1346
     assert {"mx_h16816f16_ffma_q128_p0_w16", "mx_i16832_imad_q34_p0_w16", "mx_i16832_ffma_q192_p0_w32",
             "mx_i16832_dfma_q1_p1_w16"} <= set(names)
+
+
+def test_rt_families_are_unique_and_hold_the_programs_that_broke_ji3s_and_ji3t():
+    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192}
+    names = {f: [g["name"] for g in gen.grid(0, 0, family=f)] for f in sizes}
+    assert {f: len(set(n)) for f, n in names.items()} == {f: len(n) for f, n in names.items()} == sizes
+    assert "jm_i16832_fmuli_q120_p0_a3u20_w8" in names["rt4"]
+    assert "jm_isp16864_fmuli_q128_p0_a2u16_w8" in names["rt5"]
 
 
 def test_mem_grid_is_seeded_unique_and_counts_each_slot():
