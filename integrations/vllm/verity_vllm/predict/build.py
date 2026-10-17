@@ -59,6 +59,12 @@ _FACTS_READ = ("QK_NORM", "QK_NORM_EPS", "RENORMALIZE", "CLIP_QKV", "SHARED_EXPE
                "layer_norms", "extra_layer_norms")
 #: the activations of the gated MLP: the `*Mul` kind's role per `hidden_act`
 _ACTS = {"silu": "silu_mul", "gelu_pytorch_tanh": "gelu_tanh_mul"}
+#: the engine environment a Program reads only as `tp_allreduce.settings_of` (above two ranks; two ranks' AllReduce2 is route-free)
+#: or not at all (the transport: `pipeline.build` records NCCL_P2P_DISABLE, never consults it); the target's own are `TargetProfile.env()`
+_ENV_MODELLED = ("VLLM_ALLREDUCE_USE_SYMM_MEM", "VLLM_ALLREDUCE_USE_FLASHINFER", "NCCL_P2P_DISABLE")
+#: the engine args a component Program does not read but through `settings_of` (the scheduler's: a component is one request's)
+_ARGS_MODELLED = ("disable_custom_all_reduce", "max_model_len", "max_num_batched_tokens", "max_num_seqs", "enable_prefix_caching",
+                  "enable_chunked_prefill")
 
 
 @dataclass(frozen=True)
@@ -618,8 +624,31 @@ def _check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, str]) -> None:
         facts.append(f"execution {phi.execution!r}")
     if (phi.model or {}).get("dtype", "bfloat16") != dtype:
         facts.append(f"checkpoint dtype {phi.model.get('dtype')!r} ({dtype} only)")
+    facts += _engine_facts(phi, world)
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
+
+
+def _engine_facts(phi: Phi, world: int) -> list[str]:
+    """What of φ's engine the Program would not be the prediction of: a target whose execution label is not the row's, an env
+    switch the target sets to another value or none models (`_ENV_MODELLED`), an engine arg the target applies at another value, the
+    eager execution contradicted, another world, or an arg none models (`_ARGS_MODELLED`)."""
+    tp, eng = phi.target_profile(), dict(phi.engine or {})
+    facts = [] if tp.execution_label == phi.execution else [
+        f"a target labelled {tp.execution_label!r} (batch invariant {tp.batch_invariant}) for the {phi.execution!r} row"]
+    target_env = tp.env()
+    for k, v in sorted((eng.pop("env", None) or {}).items()):
+        if k in target_env and str(v) != target_env[k]:
+            facts.append(f"env {k}={v} under a target that sets {target_env[k]!r}")
+        elif k not in target_env and k not in _ENV_MODELLED:
+            facts.append(f"env {k}={v} (the switches modelled: the target's {sorted(target_env)} and {list(_ENV_MODELLED)})")
+    want = {**tp.engine_args(), "enforce_eager": tp.compilation is None, "tensor_parallel_size": world}
+    for k, v in sorted(eng.items()):
+        if k in want and v != want[k]:
+            facts.append(f"engine arg {k}={v!r} where the {phi.execution!r} target applies {want[k]!r}")
+        elif k not in want and k not in _ARGS_MODELLED:
+            facts.append(f"engine arg {k}={v!r} (not modelled)")
+    return facts
 
 
 def decoder(phi: Phi, M: int = 1, history: int = 0):

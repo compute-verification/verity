@@ -70,9 +70,8 @@ class Net:
         self.C, self.tp, self.NL = C, phi.target_profile(), C["NL"]
         self.G = FLASHMLA_GEOMETRY.get((D, DR))
         facts = []
-        if self.tp.compute_capability != (9, 0) or self.tp.batch_invariant:
-            facts.append(f"target cc {self.tp.capability_str}{' batch invariant' if self.tp.batch_invariant else ''} (the served "
-                         f"defaults are stated on cc 9.0 without batch invariance)")
+        if self.tp.compute_capability != (9, 0):
+            facts.append(f"target cc {self.tp.capability_str} (the served defaults are stated on cc 9.0)")
         if hf.get("tie_word_embeddings"):
             facts.append("tied embeddings")
         if (why := analytic.quant_refusal(qc) if qc else "a checkpoint without its block-FP8 quantization_config"):

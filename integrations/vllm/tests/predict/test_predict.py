@@ -36,7 +36,7 @@ STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "s
 
 
 def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
-    return Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTXPRO6000), workload={"requests": requests or []}, **kw)
+    return Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, workload={"requests": requests or []}, **{"target": dict(RTXPRO6000), **kw})
 
 
 def _row_phi(row: str, case: str, hf_home: Path, rank: int = 0) -> Phi:
@@ -129,6 +129,19 @@ def test_dsa_refuses_outside_its_domain(tmp_path):
         build_program(Phi.from_json({**phi.to_json(), "target": {k: v for k, v in phi.target.items() if k != "device_name"}}), "step")
     with pytest.raises(Unexpressible, match=re.escape("a call of 257 query rows, a prefill (decode threshold 256 at 8 query heads")):
         build_program(phi, "step", M=257)
+
+
+def test_the_execution_label_names_the_batch_invariance(tmp_path):
+    """An `eager` row's Programs are of vLLM's default kernels and a `bi-*` row's of the batch-invariant ones, whatever TargetProfile's
+    own default: a target block that leaves `batch_invariant` out takes the label's, and a target or env that says otherwise is
+    refused, never predicted under the label."""
+    assert _phi(TINY).target_profile().batch_invariant and not _phi(TINY, execution="eager").target_profile().batch_invariant
+    phi = _row_phi(GLM53, "GLM53", tmp_path)
+    assert not phi.target_profile().batch_invariant
+    with pytest.raises(Unexpressible, match=re.escape("a target labelled 'bi-eager' (batch invariant True) for the 'eager' row")):
+        build_program(Phi.from_json({**phi.to_json(), "target": {**phi.target, "batch_invariant": True}}), "step")
+    with pytest.raises(Unexpressible, match=re.escape("env VLLM_BATCH_INVARIANT=1 under a target that sets '0'")):
+        build_program(Phi.from_json({**phi.to_json(), "engine": {**phi.engine, "env": {"VLLM_BATCH_INVARIANT": "1"}}}), "step")
 
 
 @pytest.mark.slow
@@ -240,6 +253,11 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
      "6 query and 3 key/value heads over 2 ranks"),
     ({**TINY, "vocab_size": 250}, {"tp": {"world": 2, "rank": 1}}, "a vocabulary of 250 over 2 ranks"),
     (TINY, {"tp": {"world": 2, "rank": 0}, "sampling": dict(STOCH)}, "stochastic sampling under tensor parallelism"),
+    (TINY, {"target": {**RTXPRO6000, "batch_invariant": False}}, "a target labelled 'eager' (batch invariant False) for the 'bi-eager' row"),
+    (TINY, {"engine": {"env": {"VLLM_BATCH_INVARIANT": "0"}}}, "env VLLM_BATCH_INVARIANT=0 under a target that sets '1'"),
+    (TINY, {"engine": {"env": {"VLLM_USE_DEEP_GEMM": "0"}}}, "env VLLM_USE_DEEP_GEMM=0 (the switches modelled"),
+    (TINY, {"engine": {"enforce_eager": False}}, "engine arg enforce_eager=False where the 'bi-eager' target applies True"),
+    (TINY, {"engine": {"kv_cache_dtype": "fp8"}}, "engine arg kv_cache_dtype='fp8' (not modelled)"),
 ])
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):

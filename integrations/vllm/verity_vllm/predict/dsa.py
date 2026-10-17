@@ -60,9 +60,8 @@ class Net:
         self.C, self.tp, self.device = C, phi.target_profile(), phi.target.get("device_name")
         self.indexers = frozenset(C.get("INDEXER_LAYERS") or ())
         facts = []
-        if self.tp.compute_capability != (9, 0) or self.tp.batch_invariant:
-            facts.append(f"target cc {self.tp.capability_str}{' batch invariant' if self.tp.batch_invariant else ''} (the served "
-                         f"defaults are stated on cc 9.0 without batch invariance)")
+        if self.tp.compute_capability != (9, 0):
+            facts.append(f"target cc {self.tp.capability_str} (the served defaults are stated on cc 9.0)")
         if not self.device:
             facts.append("a target without a device name (vLLM keys its tuned fused-MoE tiles by it)")
         if C["tie_word_embeddings"]:

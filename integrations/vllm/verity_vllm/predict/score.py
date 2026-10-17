@@ -104,7 +104,7 @@ def sampling_of(w: dict, phi: Phi) -> dict:
 def phi_key(phi: Phi) -> str:
     """What the predicted step / request Program depends on (the workload's requests do not enter a component)."""
     k = {"model": {k: v for k, v in phi.model.items()}, "target": phi.target, "tp": phi.tp, "sampling": phi.sampling,
-         "execution": phi.execution, "profile": phi.profile}
+         "engine": phi.engine, "execution": phi.execution, "profile": phi.profile}
     return hashlib.sha256(json.dumps(k, sort_keys=True).encode()).hexdigest()[:16]
 
 
