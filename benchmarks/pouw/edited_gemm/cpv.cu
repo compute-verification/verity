@@ -289,24 +289,24 @@ PVK(pv_l7qs_i, false, 1)
 PVK(pv_plain, true, 0)
 
 // ---------------------------------------------------------------- producers
-// a warp 4 query rows of one unit (tile t = warp / 32): lanes 0, 1 hash c's patches (the unit's two 128-key chunks),
-// lanes 2, 3 U's blocks (P_A rows 2j, 2j + 1); then 8 keys a lane a row, and P_A's row 4 bytes a lane
-__global__ void __launch_bounds__(256) pedit(const int8_t* __restrict__ P, int8_t* __restrict__ Pt, int8_t* __restrict__ PA,
-                                             const int4* __restrict__ tab, int ntiles, int s, int nB, const __grid_constant__ Sig sg) {
-  __shared__ uint32_t cds[8][32], uds[8][32];
-  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, w = blockIdx.x * 8 + warp, t = w >> 5, grp = w & 31;
-  if (t >= ntiles) return;
+// a block a unit tile, a warp 32 of its query rows: lane l < 16 hashes c's patch for rows 4 (l / 2) .. + 3 and the unit's
+// 128-key chunk l % 2, lane 16 + j U's block j (P_A rows 2j, 2j + 1); then 8 keys a lane a row, and P_A's row 4 bytes a
+// lane
+__global__ void __launch_bounds__(128) pedit(const int8_t* __restrict__ P, int8_t* __restrict__ Pt, int8_t* __restrict__ PA,
+                                             const int4* __restrict__ tab, int s, int nB, const __grid_constant__ Sig sg) {
+  __shared__ uint32_t cds[4][16][16], uds[4][16][16];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, t = blockIdx.x;
   const int4 te = __ldg(tab + t);
   const int h = te.x, qt = te.y, B = te.z;
   const bool diag = te.w & 1;
-  const int KT = diag ? (qt & 1) + 1 : 2, q0 = 128 * qt + 4 * grp;
+  const int KT = diag ? (qt & 1) + 1 : 2, q0 = 128 * qt + 32 * warp;
   const size_t prow0 = (size_t)h * s + q0, parow0 = ((size_t)h * nB + B) * s + q0;
-  if (lane < 4 && (lane >= 2 || lane < KT)) {
-    const uint64_t ctr = lane < 2 ? ((uint64_t)C_TAG << 56 | ((prow0 / 4) * (uint64_t)(s / 128) + 2 * B + lane))
-                                  : ((uint64_t)PU_TAG << 56 | (parow0 / 2 + lane - 2));
+  if (lane >= 16 || (lane & 1) < KT) {
+    const uint64_t ctr = lane < 16 ? ((uint64_t)C_TAG << 56 | ((prow0 / 4 + lane / 2) * (uint64_t)(s / 128) + 2 * B + (lane & 1)))
+                                   : ((uint64_t)PU_TAG << 56 | (parow0 / 2 + lane - 16));
     uint64_t st[8];
     sha_block(sg.w, ctr, st);
-    uint32_t* d = lane < 2 ? cds[warp] + 16 * lane : uds[warp] + 16 * (lane - 2);
+    uint32_t* d = lane < 16 ? cds[warp][lane] : uds[warp][lane - 16];
 #pragma unroll
     for (int i = 0; i < 8; i++) {
       d[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
@@ -314,17 +314,17 @@ __global__ void __launch_bounds__(256) pedit(const int8_t* __restrict__ P, int8_
     }
   }
   __syncwarp();
-  const uint8_t* cb = reinterpret_cast<const uint8_t*>(cds[warp]);
   const uint8_t* ub = reinterpret_cast<const uint8_t*>(uds[warp]);
 #pragma unroll 1
-  for (int rr = 0; rr < 4; rr++) {
+  for (int rr = 0; rr < 32; rr++) {
     const int qrel = q0 + rr - 256 * B;   // the query's place among the unit's keys (>= 256 in a full unit)
+    const uint8_t* cb = reinterpret_cast<const uint8_t*>(cds[warp][2 * (rr / 4)]);
     const uint8_t* ur = ub + 32 * rr;
     if (lane < 16 * KT) {
       const int j = 8 * lane;
       const size_t off = (prow0 + rr) * s + 256 * B + j;
       const uint2 pw = __ldg(reinterpret_cast<const uint2*>(P + off));
-      const uint32_t cbits = cb[64 * (j >> 7) + 16 * rr + ((j & 127) >> 3)];
+      const uint32_t cbits = cb[64 * (j >> 7) + 16 * (rr & 3) + ((j & 127) >> 3)];
       const uint2 uw = *reinterpret_cast<const uint2*>(ur + (j & 31));
       uint32_t lo = add_noise<false>(add_noise<false>(pw.x, bits01(cbits & 0xFu)), u4(uw.x));
       uint32_t hi = add_noise<false>(add_noise<false>(pw.y, bits01(cbits >> 4)), u4(uw.y));
@@ -500,7 +500,7 @@ static void pvfree(PV& V) {
     CK(cudaFree(p));
   CK(cudaStreamDestroy(V.st));
 }
-static void ped(PV& V, const Sig& s) { pedit<<<(V.ntiles * 32 + 7) / 8, 256, 0, V.st>>>(V.P, V.Pt, V.PA, V.tab, V.ntiles, V.s, V.nB, s); }
+static void ped(PV& V, const Sig& s) { pedit<<<V.ntiles, 128, 0, V.st>>>(V.P, V.Pt, V.PA, V.tab, V.s, V.nB, s); }
 static void ved(PV& V, const Sig& s) { vedit<<<dim3(V.s / 128, V.kvh * 128 / 32), 256, 0, V.st>>>(V.Vt, V.Xt, V.kvh * 128, V.s, s); }
 static void vdg(PV& V, const Sig& s) { vdig<<<dim3(V.nB, V.kvh), 128, 0, V.st>>>(V.Xt, V.DG, V.Sb, V.s, V.nB, s); }
 static void pvrun(PV& V, PvKern k, uint32_t* R) {
