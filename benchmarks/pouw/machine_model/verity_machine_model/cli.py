@@ -24,9 +24,10 @@
                                               datapath busy; --lookups opens the table route (data/table.toml: lane
                                               instructions and L2 bytes a word against an L2 facet; --lookup-q, --l2);
                                               --uni-issue C also charges a uniform instruction C times an ALU's cost
-                                              on the issue rows
+                                              on the issue rows; --adapt UNIT charges ε_adapt for a proof unit
+                                              (data/adapt.toml, today's segment check by default)
     machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--upfill] [--operands O] [--credit C]
-                      [--q Q] [--lookups] [--uni-issue C]
+                      [--q Q] [--lookups] [--uni-issue C] [--adapt UNIT]
                                               one line a design (every design by default; with --fold-sweep, each at
                                               each fold cost; with --upfill, each without and with it): γ, the credited
                                               time, ε_sched, ε_machine at q* = 2, 4, 8, 16 and its floor, ε_luck, ε at
@@ -179,8 +180,8 @@ def _lookups(args) -> E.Table | None:
 
 
 def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, credit: str = "H",
-                table: E.Table | None = None) -> dict:
-    e = E.eps(d, pi, q, data, operands=operands, credit=credit, table=table)
+                table: E.Table | None = None, adapt: E.Adapt | None = None) -> dict:
+    e = E.eps(d, pi, q, data, operands=operands, credit=credit, table=table, adapt=adapt)
     s = E.setup(d, pi, data, operands, credit, table)
     per_mma = e.honest.words * e.honest.depth / d.L
     return {
@@ -204,6 +205,7 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
                     "operands": d.floor_source if operands == "floor" else operands},
         "lookups": None if table is None else {"q": table.q, "bytes": table.bytes, "l2": table.l2,
                                                "bytes_per_smsp_cycle": table.per_cycle(), "source": table.source},
+        "adapt": None if adapt is None else {"unit": adapt.name, "eps": adapt.eps, "source": adapt.source},
         "curve": [[x, s.machine_eps(x)] for x in E.QS],
         "curve_uniform": [[x, s.machine_eps(q, q_uniform=x)] for x in E.QS],
         "threshold": E.threshold(s), "threshold_lanes": E.threshold(s, uniform=False),
@@ -219,9 +221,11 @@ def _eps_table(args, pi: E.Machine) -> int:
     cred = {"H": "honest's kernel (H)", "model": "honest's model bound B(H)",
             "floor": "the floor program ♭ (SPEC §0.7a)"}[args.credit]
     tb = _lookups(args)
+    ad = E.adapt(args.adapt or "", args.data)
     look = "" if tb is None else (f", the table route open at {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a "
                                   f"word (L2 {tb.l2 / 1e12:g} TB/s)")
-    print(f"Π {pi.vector}, operands {args.operands}, credit {cred}{look}: T/MMA the credited time and its binding "
+    print(f"Π {pi.vector}, operands {args.operands}, credit {cred}{look}, proof unit {ad.name} (ε_adapt "
+          f"{100 * ad.eps:.2f}%, in ε): T/MMA the credited time and its binding "
           f"rows, H/cred honest's time over it; ε_machine at q* = {', '.join(map(str, qs))} and its floor (the lane "
           f"and uniform routes closed); ε_luck; ε at q* = {', '.join(f'{q:g}' for q in qe)} (ε_sched in it where "
           f"measured); q*₀ the least q* at which ε_machine reaches its floor (all routes; lanes alone); the uniform "
@@ -238,7 +242,8 @@ def _eps_table(args, pi: E.Machine) -> int:
             d = d.with_fill(args.fill) if args.fill else d
             rows += [d, d.with_upfill()] if args.upfill else [d]
     for d in rows:
-        es = {q: E.eps(d, pi, q, args.data, operands=args.operands, credit=args.credit, table=tb) for q in {*qs, *qe}}
+        es = {q: E.eps(d, pi, q, args.data, operands=args.operands, credit=args.credit, table=tb, adapt=ad)
+              for q in {*qs, *qe}}
         e = es[8]
         s = E.setup(d, pi, args.data, args.operands, args.credit, tb)
         per_mma = e.honest.words * e.honest.depth / d.L
@@ -263,11 +268,12 @@ def _eps(args) -> int:
         raise SystemExit("eps: one design, or --table for several")
     d = _design(args, args.designs[0] if args.designs else "dither-duo")
     tb = _lookups(args)
-    rec = _eps_record(d, pi, args.q, args.data, args.operands, args.credit, tb)
+    ad = E.adapt(args.adapt or "", args.data)
+    rec = _eps_record(d, pi, args.q, args.data, args.operands, args.credit, tb, ad)
     if args.json:
         print(json.dumps(rec, ensure_ascii=False, indent=1))
         return 0
-    e = E.eps(d, pi, args.q, args.data, operands=args.operands, credit=args.credit, table=tb)
+    e = E.eps(d, pi, args.q, args.data, operands=args.operands, credit=args.credit, table=tb, adapt=ad)
     h, per_mma = e.honest, e.honest.words * e.honest.depth / d.L
     filler = ", ".join(f"{pw:.4g} a word on {f.route}" for f, pw in e.fillers) or "none"
     floor = ", ".join(f"{k} {v:g}" for k, v in d.floor.items())
@@ -307,6 +313,7 @@ def _eps(args) -> int:
           f"{100 * e.deficit:.4f}%; δ {d.delta:.3g}, p {d.p} a word"
           + "".join(f", {f.p} filler {j + 1}" for j, (f, _) in enumerate(e.fillers)) + f", S {d.checks:g}: "
           f"{d.luck_source})")
+    print(f"  ε_adapt    {_pct(t['adapt'])}: proof unit {ad.name}: {ad.source}")
     print(f"  ε_clock    {_pct(t['clock'])}: " + (d.clock.source if args.credit == "H" else "credited at f_max, in γ"))
     print(f"  ε          {_pct(e.total())} (first order {_pct(sum(v or 0.0 for v in t.values()))})")
     print(f"  q* threshold (ε_machine = its floor): {_thr(rec['threshold'])}; lanes alone "
@@ -362,6 +369,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--uni-issue", type=float, metavar="C",
                    help="put the uniform classes on the issue rows (issue, the joint JI…_0) at C times an ALU's "
                         "cost there (PREDICT's u16s_l7qs measured 0.92, r20261017-045133-67bf)")
+    e.add_argument("--adapt", metavar="UNIT",
+                   help="charge ε_adapt for this proof unit (data/adapt.toml; default: its default, today's protocol)")
     args = p.parse_args(argv)
     if args.cmd is None:
         print(__doc__)

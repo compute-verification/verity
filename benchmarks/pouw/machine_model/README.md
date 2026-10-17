@@ -80,7 +80,7 @@ value, so the lanes it serves past the first are copies, credited only by copy l
 
 ## ε in the tensor–scalar model
 
-`eps` computes 1 − ε = (1 − ε_skip − ε_mand − ε_machine − ε_luck)(1 − ε_sched)(1 − ε_clock), each term a fraction of
+`eps` computes 1 − ε = (1 − ε_skip − ε_mand − ε_machine − ε_luck − ε_adapt)(1 − ε_sched)(1 − ε_clock), each term a fraction of
 honest time. Π is the current vector's rows at its epoch, read as the price LP reads them (SMSP-cycles a warp
 instruction a row). ε_machine is one LP, SPEC's §0.8 (note:20261017T0324Z-draft-eps1-spec): a program writes every
 committed word on one of four routes, folds every word and does the filler, and its time is its largest row. The routes
@@ -111,7 +111,10 @@ value with the lane and uniform routes closed (the table route, priced by its by
 and the threshold is the least q* at which ε_machine reaches it. `--uni-issue C` charges each uniform instruction C
 times an ALU instruction's cost on the issue rows too (`issue` and the joint `JI…_0` row), which the census has left out
 since VF3 and PREDICT's u16s_l7qs measured at 0.92 (r20261017-045133-67bf). The uniform route then closes without UPFILL, and UPFILL costs honest issue
-time while the cheater does its checked work on lanes, 32 values a warp instruction.
+time while the cheater does its checked work on lanes, 32 values a warp instruction. ε_adapt is the proof unit's, SPEC's
+Theorem D under the one-σ order (`data/adapt.toml`): today's segment spot check ≈ 21%, whole dot products +0.35%, and 0
+for whole-dot-product proofs that recompute their operands one stage back or for per-stage coins. `eps` charges today's
+by default and `--adapt UNIT` another; the Python `eps()` charges none unless given one.
 
 ## Adopt a probe's census
 

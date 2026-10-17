@@ -1,6 +1,6 @@
 """ε for a PoUW design in the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2), every term from data:
 
-    1 − ε = (1 − ε_skip − ε_mand − ε_machine − ε_luck) · (1 − ε_sched) · (1 − ε_clock)
+    1 − ε = (1 − ε_skip − ε_mand − ε_machine − ε_luck − ε_adapt) · (1 − ε_sched) · (1 − ε_clock)
 
 each term a fraction of honest time.
 
@@ -36,6 +36,8 @@ each term a fraction of honest time.
   measured time plus the model's difference between the design and the profile's kernel, and else its fastest
   program's model time.
 - **ε_skip**, **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
+- **ε_adapt** is the proof unit's (data/adapt.toml, SPEC's Theorem D): what steering instances in unproved regions gains
+  when σ is drawn after the commitment and before evaluation.
 
 A warp instruction does 32 lane instructions; a uniform instruction does one. Every count is per committed word.
 """
@@ -244,6 +246,26 @@ def table(data: Path = DATA, q: float | None = None, l2: float | None = None) ->
     t = tomllib.loads((data / "table.toml").read_text())
     return Table(q=t["q"] if q is None else q, bytes=t["bytes"], l2=t["l2"] if l2 is None else l2, sms=t["sms"],
                  mhz=t["mhz"], source=t["source"])
+
+
+@dataclass(frozen=True)
+class Adapt:
+    """ε_adapt for a proof unit (`data/adapt.toml`): what steering in unproved regions gains under the one-σ order."""
+    name: str
+    eps: float
+    source: str
+
+
+def adapt(name: str = "", data: Path = DATA) -> Adapt:
+    t = tomllib.loads((data / "adapt.toml").read_text())
+    name = name or t["default"]
+    if name not in t or not isinstance(t[name], dict):
+        raise SystemExit(f"no proof unit {name!r} in adapt.toml: one of {', '.join(adapts(data))}")
+    return Adapt(name=name, eps=t[name]["eps"], source=t[name]["source"])
+
+
+def adapts(data: Path = DATA) -> list[str]:
+    return [k for k, v in tomllib.loads((data / "adapt.toml").read_text()).items() if isinstance(v, dict)]
 
 
 def designs(data: Path = DATA) -> list[str]:
@@ -533,6 +555,7 @@ class Eps:
     deficit: float                   # d̄
     luck: float                      # (T_cheat − T_lucky)/T_baseline
     clock: float
+    adapt: Adapt | None = None       # the proof unit's ε_adapt; None charges none
 
     @property
     def route(self) -> float:
@@ -548,18 +571,19 @@ class Eps:
 
     def total(self, sched: bool = True) -> float:
         s = (self.sched or 0.0) if sched else 0.0
-        return 1 - (1 - self.skip - self.mand - self.machine_eps - self.luck) * (1 - s) * (1 - self.clock)
+        a = self.adapt.eps if self.adapt else 0.0
+        return 1 - (1 - self.skip - self.mand - self.machine_eps - self.luck - a) * (1 - s) * (1 - self.clock)
 
     def terms(self) -> dict[str, float | None]:
         return {"sched": self.sched, "skip": self.skip, "mand": self.mand, "machine": self.machine_eps,
-                "luck": self.luck, "clock": self.clock}
+                "luck": self.luck, "adapt": self.adapt.eps if self.adapt else None, "clock": self.clock}
 
 
 def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = "free", credit: str = "H",
         lanes: bool | None = None, uniform: bool | None = None, q_uniform: float | None = None,
-        table: Table | None = None) -> Eps:
+        table: Table | None = None, adapt: Adapt | None = None) -> Eps:
     """Under the model and floor credits ε_sched and ε_clock leave ε (honest's time above the credit is in γ,
-    `credit_ratio`). `table` opens the cheater's table route."""
+    `credit_ratio`). `table` opens the cheater's table route; `adapt` charges a proof unit's ε_adapt."""
     s = setup(d, pi, data, operands, credit, table)
     hs = s if credit != "floor" else setup(d, pi, data, "free")
     h, base = s.honest, s.baseline
@@ -589,7 +613,7 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
                machine_as_built=max(0.0, 1 - c.T / s.as_built.T),
                cert=min(machine_eps, max(0.0, 1 - c.price(pi, base.n) / base.T)), floor=s.floor(),
                deficit=deficit(d), luck=max(0.0, (c.T - lucky.T) / base.T),
-               clock=d.clock.eps if credit == "H" else 0.0)
+               clock=d.clock.eps if credit == "H" else 0.0, adapt=adapt)
 
 
 def threshold(s: Setup, hi: float = 64.0, tol: float = 1e-9, **routes) -> float | None:

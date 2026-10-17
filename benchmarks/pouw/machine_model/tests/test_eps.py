@@ -226,6 +226,19 @@ def test_luck_and_the_total():
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
 
 
+def test_adapt_is_a_proof_units_term():
+    """ε_adapt (SPEC's Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof unit's."""
+    assert set(E.adapts()) == {"segment", "whole", "whole-recompute", "per-stage"}
+    assert E.adapt().name == "segment" and E.adapt().eps == 0.21 and E.adapt("whole").eps == 0.0035
+    e0 = E.eps(DUO, PI, 8)
+    e = E.eps(DUO, PI, 8, adapt=E.adapt("whole"))
+    assert e0.terms()["adapt"] is None and e.terms()["adapt"] == 0.0035
+    assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck - 0.0035) * (1 - e.clock))
+    assert E.eps(DUO, PI, 8, adapt=E.adapt("per-stage")).total() == pytest.approx(e0.total())
+    with pytest.raises(SystemExit, match="no proof unit 'none'"):
+        E.adapt("none")
+
+
 def test_luck_spends_one_budget_on_words_and_filler():
     """Theorem S's budget ln(1/δ)/S weights each deficient block by 1 − p (¾ a word, 0.854 a filler block): a lane
     filler is cheaper to skip than a word, so the lucky cheater leaves filler undone and saves more than d̄ of words."""
@@ -279,11 +292,13 @@ def test_cli(capsys):
     out = capsys.readouterr().out
     assert out.startswith("dither-duo: ") and "binding JI3e_0" in out and "ε_machine  11.171%" in out
     assert "q* threshold (ε_machine = its floor): none ≤ 64; lanes alone 2.029" in out and "ε_sched    14.121%" in out
+    assert "ε_adapt    21.000%: proof unit segment" in out
     assert main(["eps", "--vector", PIN, "dither-two-sided", "--upfill", "--operands", "floor", "--credit", "floor",
-                 "--json"]) == 0
+                 "--adapt", "per-stage", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["credit"] == "floor" and d["terms"]["machine"] == 0 and d["terms"]["sched"] is None
     assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["total"] < 0.002
+    assert d["adapt"]["unit"] == "per-stage" and d["terms"]["adapt"] == 0
     assert main(["eps", "--vector", PIN, "dither-two-sided", "--upfill", "--q", "4", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-two-sided+up" and d["operands"] == "free"
