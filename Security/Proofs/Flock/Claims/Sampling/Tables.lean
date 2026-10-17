@@ -23,6 +23,13 @@ size `N` through `Fin N ≃ SimAt` (`pickAt`), whose fibers are all of one size 
 * `SamplingDeploy.zk_deploy_of_tables_gap`: at the deployed record and the key's hiding gap;
   `SamplingDeploy.zk_sampled_tables`, `zk_sampled_tables_mask` and `sampling_deployed_tables`: at the sampled masked
   protocol (`Sampled.leaky`), its rounds from `HelloRounds` and its coin check by definition.
+
+**What `TMsgLink` asks of the sampled prover before its last coin.** `TPreModel.Link`, like `PreModel.Link`, asks every
+message before the last coin to be `out` of the tables' pre-final cut views at the executable leaves. A checked
+session's final message opens columns: their contents and salts, which those leaves hide, so it is no function of the
+cut views. So `TMsgLink` can hold at `Sampled.leaky` only where every checked session's final message comes after the
+run's last coin. Where the sessions run one after another, each earlier session's final message is in the prefix, and
+`PrefixHides` needs instead each earlier session's whole view hidden against coins chosen after its commitments.
 -/
 
 namespace Claims.Sampling
