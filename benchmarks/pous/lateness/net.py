@@ -4,7 +4,9 @@ variants that separate the network's causes: back-to-back pings, pings paced 1 m
 moderation follows the packet rate), and 4 KiB answers in 1,472-byte datagrams (fragmented on cpu-1's MTU-1450 path)
 and in 1,422-byte ones (whole), back to back and paced, and a five-minute ping series 1 ms apart (how the path's
 modes change with time), then that series on three paths at once: cpu-1 and node 1 to node 2, and cpu-1 to a responder
-on node 1 (`cpu1-to-node1/`). `--only NAME,...` runs only those variants (`ping-series-concurrent` the concurrent one). Writes `<challenger>/<variant>.bin|json` and `summary.json` to $OUT."""
+on node 1 (`cpu1-to-node1/`), with each machine's CPUs, receive softirqs and NIC interrupts sampled once a second
+(`cpusample.py`, `<machine>-cpus.jsonl`). `--only NAME,...` runs only those variants (`ping-series-concurrent` the
+concurrent one). Writes `<challenger>/<variant>.bin|json` and `summary.json` to $OUT."""
 
 from __future__ import annotations
 
@@ -91,6 +93,15 @@ def main() -> None:
         name, pings, rounds, max_s, extra = CONCURRENT
         if only is None or name in only:
             server = remote_serve(src, max_s + 90, os.path.join(out, "node1-responder.log"))
+            sampler = open(os.path.join(HERE, "cpusample.py"), "rb").read()
+            samplers = [subprocess.Popen([sys.executable, os.path.join(HERE, "cpusample.py"), str(max_s + 40)],
+                                         stdout=open(os.path.join(out, "node2-cpus.jsonl"), "w"))]
+            for who, (dest, _lport) in REMOTES.items():
+                s = subprocess.Popen([*SSH, dest, f"python3 - {max_s + 40}"], stdin=subprocess.PIPE,
+                                     stdout=open(os.path.join(out, f"{who}-cpus.jsonl"), "w"))
+                s.stdin.write(sampler)
+                s.stdin.close()
+                samplers.append(s)
             node1_ip = REMOTES["node1"][0].split("@")[1]
             paths = {"cpu1": ("cpu1", {}), "node1": ("node1", {}),
                      "cpu1-to-node1": ("cpu1", {"to": f"{node1_ip}:{CROSS_PORT}", "lport": CROSS_LPORT})}
@@ -109,6 +120,8 @@ def main() -> None:
             for t in threads:
                 t.join()
             server.wait()
+            for s in samplers:
+                s.wait()
             for cell, r in results.items():
                 path = os.path.join(out, cell, f"{name}.bin")
                 if os.path.exists(path):
