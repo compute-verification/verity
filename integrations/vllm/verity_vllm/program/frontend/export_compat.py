@@ -9,7 +9,7 @@ counts them as structural scaffolding.
 2. The declared target applied (`apply_target_profile`).  3. vLLM's MoE dispatcher ops traced through (`moe_ops_traced`).
 4. DeepSeek sparse attention's three kernels as leaf ops (`dsa_ops_leaf`).  5. The MoE gate's cuteDSL GEMM as a leaf op
    (`moe_gate_leaf`).  6. The default Hopper block-FP8 linear's dynamic custom op as a leaf
-   (`default_fp8_linear_leaf`).
+   (`default_fp8_linear_leaf`).  7. CUDA streams and events as inert stand-ins (`cuda_streams_inert`).
 """
 
 from __future__ import annotations
@@ -576,19 +576,74 @@ def default_fp8_linear_leaf(model=None, kernel_class=None):
         yield
 
 
+class InertStream:
+    """A CUDA stream of a meta model (`cuda_streams_inert`)."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def wait_stream(self, stream) -> None:
+        pass
+
+    def wait_event(self, event) -> None:
+        pass
+
+    def synchronize(self) -> None:
+        pass
+
+    def query(self) -> bool:
+        return True
+
+
+class InertEvent:
+    """A CUDA event of a meta model (`cuda_streams_inert`)."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def record(self, stream=None) -> None:
+        pass
+
+    def wait(self, stream=None) -> None:
+        pass
+
+    def synchronize(self) -> None:
+        pass
+
+    def query(self) -> bool:
+        return True
+
+
+@contextmanager
+def cuda_streams_inert():
+    """7. CUDA streams and events as inert stand-ins, for the meta construction and the export alike.  A model may make aux streams
+    and events in `__init__` (DeepSeek-V4's attention overlaps its input GEMMs through `multi_stream_utils.execute_in_parallel`), and
+    making one needs a driver a GPU-free Build host lacks.  A stream only says which queue a kernel joins and an event only orders
+    queues, so on meta both are nothing: `torch.cuda.stream` of a stand-in is torch's no-op `stream(None)`, and `record` / `wait`
+    do nothing.  The forward still calls its functions in the order the engine launches them (`execute_in_parallel`: the aux
+    functions, then the default one)."""
+    stream = torch.cuda.stream
+    with hooks.Hooks() as h:
+        h.patch(torch.cuda, "Stream", InertStream)
+        h.patch(torch.cuda, "Event", InertEvent)
+        h.patch(torch.cuda, "stream", lambda s: stream(None if isinstance(s, InertStream) else s))
+        yield
+
+
 @contextmanager
 def export_compat(profile=None, model=None):
     """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
     dispatcher ops traced through their bodies (`moe_ops_traced`) + DeepSeek sparse attention's kernels, the MoE gate's cuteDSL GEMM
-    and the default Hopper FP8 linear as leaf ops (`dsa_ops_leaf`, `moe_gate_leaf`, `default_fp8_linear_leaf`);
-    `model` = the instantiated module, for the per-layer entries."""
+    and the default Hopper FP8 linear as leaf ops (`dsa_ops_leaf`, `moe_gate_leaf`, `default_fp8_linear_leaf`) + inert CUDA streams
+    (`cuda_streams_inert`); `model` = the instantiated module, for the per-layer entries."""
     if profile is None:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         profile = TargetProfile.default()
     with (tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model),
-          fused_allreduce_rms_norm_leaf(model), moe_gate_leaf(model), default_fp8_linear_leaf(model)):
+          fused_allreduce_rms_norm_leaf(model), moe_gate_leaf(model), default_fp8_linear_leaf(model), cuda_streams_inert()):
         yield
 
 
 __all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "dsa_ops_leaf", "dsa_leaves",
-           "fused_allreduce_rms_norm_leaf", "moe_gate_leaf", "default_fp8_linear_leaf", "read_back_applied", "host_facts"]
+           "fused_allreduce_rms_norm_leaf", "moe_gate_leaf", "default_fp8_linear_leaf", "cuda_streams_inert", "InertStream", "InertEvent",
+           "read_back_applied", "host_facts"]

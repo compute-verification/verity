@@ -157,10 +157,13 @@ class _CudaFactoriesOnMeta(torch.overrides.TorchFunctionMode):
 
 def instantiate_meta(vllm_config) -> nn.Module:
     """The registered model class for `vllm_config.model_config` (vLLM's registry), constructed on `meta` (shapes only); a buffer
-    vLLM puts on the CUDA device explicitly is on `meta` too (`_CudaFactoriesOnMeta`)."""
+    vLLM puts on the CUDA device explicitly is on `meta` too (`_CudaFactoriesOnMeta`), and a CUDA stream or event it makes is an
+    inert stand-in (`export_compat.cuda_streams_inert`)."""
     from vllm.config import set_current_vllm_config
     from vllm.model_executor.model_loader.utils import get_model_architecture
     from vllm.utils.torch_utils import set_default_torch_dtype
+
+    from .export_compat import cuda_streams_inert
     model_cls, arch = get_model_architecture(vllm_config.model_config)
     # worker parity (vllm/v1/worker/worker_base.py: "IR op priority and torch-wrap state are constant for the worker's lifetime"):
     # without these, vLLM's `ir.ops.*` (e.g. GemmaRMSNorm's unfused norm) stay opaque `vllm_ir.*` torch ops instead of running
@@ -172,7 +175,7 @@ def instantiate_meta(vllm_config) -> nn.Module:
     except Exception:  # noqa: BLE001
         pass
     with set_current_vllm_config(vllm_config), set_default_torch_dtype(vllm_config.model_config.dtype), torch.device("meta"), \
-            _CudaFactoriesOnMeta():
+            _CudaFactoriesOnMeta(), cuda_streams_inert():
         model = model_cls(vllm_config=vllm_config)
     model.eval()
     model._verity_arch = arch  # annotation only
@@ -262,6 +265,38 @@ def mla_absorbed_weights_as_the_loader_does(model: nn.Module, vllm_config) -> di
         fact.update(dtype=str(dt).removeprefix("torch."), W_UK_T=[N, P, L], W_UV=[N, L, V],
                     rule=f"{MLAAttention.__qualname__}.process_weights_after_loading: replace_parameter(W_UV = "
                          "W_UV.transpose(0, 1), W_UK_T = W_UK.permute(1, 2, 0)) from kv_b_proj")
+    return fact
+
+
+def _plain_tensors(model: nn.Module) -> dict[tuple[str, str], torch.Tensor]:
+    return {(mname, n): v for mname, m in model.named_modules() for n, v in vars(m).items()
+            if isinstance(v, torch.Tensor) and not isinstance(v, nn.Parameter)}
+
+
+def post_load_tensors_as_the_loader_does(model: nn.Module) -> dict:
+    """Loader parity for the model-level post-load hook, the loader's last step (`model_loader/utils.py`
+    `process_weights_after_loading`: `model.process_weights_after_loading()` after the per-layer quant finalize).  A hook may make a
+    tensor from loaded weights and keep it as a plain attribute that the forward reads (DeepSeek-V4's first-layer
+    `hc_attn_fn_broadcast`, its mHC `hc_attn_fn` summed over the residual streams, `finalize_mhc_broadcast_weights`).  The hook runs
+    here on meta, and each plain tensor attribute it makes is registered as a Parameter under the same name: the Program reads it as a
+    weight under the served name, the root the collector commits (the meta inventory walks plain tensor attributes).  A model without
+    the hook is unchanged."""
+    fact: dict[str, Any] = {"applies": False}
+    hook = getattr(model, "process_weights_after_loading", None)
+    if not callable(hook):
+        return fact
+    before = _plain_tensors(model)
+    with torch.no_grad():
+        hook()
+    made = {k: v for k, v in _plain_tensors(model).items() if before.get(k) is not v}
+    modules = dict(model.named_modules())
+    for (mname, n), v in made.items():
+        m = modules[mname]
+        delattr(m, n)
+        m.register_parameter(n, nn.Parameter(v, requires_grad=False))
+    fact.update(applies=True, hook=f"{type(model).__qualname__}.process_weights_after_loading",
+                parameters={f"{mname}.{n}" if mname else n: {"shape": list(v.shape), "dtype": str(v.dtype).removeprefix("torch.")}
+                            for (mname, n), v in sorted(made.items())})
     return fact
 
 
@@ -588,7 +623,7 @@ def op_histogram(ep) -> dict[str, int]:
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
            "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
            "attention_impls", "export_facts", "BI_TRITON_KERNELS", "retie_lm_head_as_the_loader_does",
-           "mla_absorbed_weights_as_the_loader_does"]
+           "mla_absorbed_weights_as_the_loader_does", "post_load_tensors_as_the_loader_does"]
 
 
 def attention_impls(model: nn.Module) -> dict:

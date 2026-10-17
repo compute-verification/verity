@@ -500,6 +500,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `vm.retie_lm_head_as_the_loader_does`)
             res["lm_head_tying"] = vm.retie_lm_head_as_the_loader_does(model, cfg)
             res["mla_absorbed_weights"] = vm.mla_absorbed_weights_as_the_loader_does(model, cfg)
+            res["post_load_tensors"] = vm.post_load_tensors_as_the_loader_does(model)
             if tp > 1:
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
