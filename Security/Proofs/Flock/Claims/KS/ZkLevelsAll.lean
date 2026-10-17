@@ -44,7 +44,7 @@ theorem qbOut_reqs_laterA {D : Type} (r : ℕ) (sch : Flock.Schedule) (i : ℕ)
     simp only [hlen, Nat.sub_self, List.getElem_cons_zero]
     refine ⟨hlev, ?_⟩
     rw [hcw]
-    exact positions_eq _ hl _
+    exact Refine.positions_eq _ hl _
 
 set_option maxHeartbeats 4000000 in
 /-- **The hiding Ligerito's run records every level's request** (`zk_ligerito_reqs`): its requests passed, the first
@@ -205,7 +205,7 @@ theorem zk_ligerito_reqsL (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) 
           rest.length = sch.levels.size - 1 ∧ LaterAt sch t.rounds (t.k + 2) rest) ?hstep ?hlast
       (sch.levels.size - 1) 0 _ _ _ out st₁₈ t₁₈ stM₀ (by omega) (by omega)
       ⟨by rw [er₁₇]; exact hwf, by show sch.n - sch.k0 + 1 = _; omega, rfl, hlev1, by rw [hcaps1]; rfl, hreqs1,
-        er₁₇, by rw [ek₁₇]; omega, [], (List.append_nil _).symm, rfl, laterAt_nil _ _ _⟩
+        er₁₇, by omega, [], (List.append_nil _).symm, rfl, laterAt_nil _ _ _⟩
       hloop
     case hstep =>
       clear * - hn7 h2 hl0 hc0 hl4 hcols hext hlv hα1
@@ -336,7 +336,7 @@ theorem zk_ligerito_reqsL (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) 
     case hlast =>
       clear * - hn7 h2 hl0 hc0 hl4 hcols hext hlv hα1
       intro i v stE tE bv stE' tE' stM hi hrel hb
-      obtain ⟨hwfE, hsplit, hprev, hlevM, hcapsM, hreqsM, hheadM⟩ := hrel
+      obtain ⟨hwfE, hsplit, hprev, hlevM, hcapsM, hreqsM, hrE, hkE, hheadM⟩ := hrel
       have hl1 := hl4 (i + 1) (by omega) (by omega)
       try dsimp only at hb
       rw [ite_eq_right (show ¬ v.1 < 4 by omega)] at hb
