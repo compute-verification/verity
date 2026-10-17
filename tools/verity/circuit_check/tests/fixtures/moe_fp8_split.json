@@ -433,7 +433,7 @@
    "DotE4m3_v3{K=32}",
    {
     "definitions": {
-     "and": 6596
+     "and": 6560
     }
    }
   ],
@@ -442,7 +442,7 @@
    "DotE4m3_v4{K=64,DOT=BlackwellE4m3QmmaDot32_v2}",
    {
     "definitions": {
-     "and": 17984
+     "and": 17936
     }
    }
   ],
@@ -635,7 +635,7 @@
    "Fp8GroupScale_v2{G=32}",
    {
     "definitions": {
-     "and": 8544
+     "and": 5960
     }
    }
   ],
@@ -659,7 +659,7 @@
    "Fp8RowScale_v2",
    {
     "definitions": {
-     "and": 1211
+     "and": 1210
     }
    }
   ],
@@ -796,7 +796,7 @@
    "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=True}",
    {
     "definitions": {
-     "and": 28533
+     "and": 27929
     }
    }
   ],
@@ -820,7 +820,7 @@
    "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}",
    {
     "definitions": {
-     "and": 26103
+     "and": 25499
     }
    }
   ],
@@ -829,7 +829,7 @@
    "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=True}",
    {
     "definitions": {
-     "and": 26103
+     "and": 25499
     }
    }
   ],
@@ -838,7 +838,7 @@
    "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}",
    {
     "definitions": {
-     "and": 19391
+     "and": 19072
     }
    }
   ],
@@ -1461,7 +1461,7 @@
    "ScaledMmFp8BlockCoordinateGivenScale_v2{K=64,G=32}",
    {
     "definitions": {
-     "and": 21175
+     "and": 21103
     }
    }
   ],
@@ -1475,7 +1475,7 @@
    "ScaledMmFp8BlockCoordinateGivenScale_v4{K=64,G=32,DOT=BlackwellE4m3QmmaDot32_v2}",
    {
     "definitions": {
-     "and": 25779
+     "and": 25683
     }
    }
   ],
@@ -1494,7 +1494,7 @@
    "ScaledMmFp8BlockCoordinate_v2{K=32,G=32}",
    {
     "definitions": {
-     "and": 12566
+     "and": 12530
     }
    }
   ],
@@ -1508,7 +1508,7 @@
    "ScaledMmFp8BlockCoordinate_v4{K=32,G=32,DOT=BlackwellE4m3QmmaDot32_v2}",
    {
     "definitions": {
-     "and": 14868
+     "and": 14820
     }
    }
   ],
@@ -1622,7 +1622,7 @@
    "ScaledMmFp8Coordinate_v2{K=32,BIAS=False}",
    {
     "definitions": {
-     "and": 11514
+     "and": 11213
     }
    }
   ],
@@ -1636,7 +1636,7 @@
    "ScaledMmFp8NoSwapCoordinate_v2{K=64,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}",
    {
     "definitions": {
-     "and": 24832
+     "and": 24784
     }
    }
   ],
@@ -1650,7 +1650,7 @@
    "ScaledMmFp8NoSwap_v2{K=64,N=2,BIAS=True,DOT=BlackwellE4m3QmmaDot32_v2}",
    {
     "definitions": {
-     "and": 49664
+     "and": 49568
     }
    }
   ],
@@ -1679,7 +1679,7 @@
    "ScaledMmFp8_v2{K=32,N=2,BIAS=False}",
    {
     "definitions": {
-     "and": 23028
+     "and": 22426
     }
    }
   ],
@@ -1732,7 +1732,7 @@
    "SiluMulFp8BlockQuantResult_v2",
    {
     "definitions": {
-     "and": 16899
+     "and": 13334
     }
    }
   ],
