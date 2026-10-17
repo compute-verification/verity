@@ -21,26 +21,32 @@ the code side's.
    interiors are committed after the first draw: one is faulty unless some interior makes every proof unit of it correct,
    which on a topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`); `P_a` is
    then its effective form `P̄_a`.
-4. **Scope** (`InScope`, `ScopeMatches`): a topologically ordered program; a partition of all its gates into proof units,
-   each of at most 16 output bits (the literal limit), each replay unit's proof units consecutive; and a well-formed
-   design, one rule per class.
+4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
+   ordered program; a partition of all its gates into proof units, each of at most 16 output bits (the literal limit),
+   each replay unit's proof units consecutive; and a well-formed design, one rule per class. `KS`, `KSCount`, `Bits` and
+   `Complete` hold on it, and it excludes every design whose `P_a` is not its draw's miss probability: `subset K` with
+   `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
+   `num > den`. That the verifier refuses what is out of it is `ScopeMatches`, open.
 5. **Named pieces**: the commitment (`Commitment`, `Commitment.Binds`, and its published leaf layer `Commitment.layer`);
    the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal unit (`Netlist`,
    `Universal`), a fact about the programs private circuits run as; the acceptance probabilities (`OneStage.Pa`,
    `Rule.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the second stage, in
    each Flock's `E^rep` on every checked unit's session; the expected-time finder (`Bext`); and the parameters
    (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`).
-6. **Claims**: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at the units' sessions and
-   `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`; `Complete`; `ScopeMatches`;
-   `ZK`, relative to the trace's published leaf layer; `Bits`; `Efficient`; and `Nontrivial`.
+6. **Claims**, on the statements in scope: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at
+   the units' sessions and `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`;
+   `Complete`; `ScopeMatches`; `ZK`, relative to the trace's published leaf layer; `Bits`; `Efficient`; and
+   `Nontrivial`.
 7. **Assumptions used**: `StrictBirthday` (for `B`), `ExpectedCR` (for `Bext`), and `trustedBase`. `ZK` gives the
    simulator the leaf layer the protocol publishes, so it reads no hiding assumption of the leaves.
 8. **Status**: stated; `FaultyBoundary` is proved (`Proofs.Flock.SamplingBoundary`), no other claim is.
+   `Proofs.Flock.SamplingScope` shows the scope is the one `KS` needs: an out-of-scope `subset K` with `K > N` has
+   `P_a = 0` at every set, and an in-scope design has a deployment at which `KS`'s bound is below `1`.
 
 Generic pieces this block adds, which move to `Definitions.Claims` in a later change: `LogColl`, `ofOC`, `ownLog`,
-`flatMapRP`, `waitAccC`, `forkOn`, `Bext`, `lamLin`, `BitsLin`, `ExtractOwnLe` and `SimLeak`. Zero knowledge is the
-spec's `ZKmalR` and the decoder spec Flock's radius form, `Flock.ListWithin` at `Flock.Deploy`'s `len` and `θ`; nothing
-here reads Flock's former decoding threshold or count (`agree`, `nMin`).
+`flatMapRP`, `waitAccC`, `forkOn`, `Bext`, `KSLinOn`, `lamLin`, `BitsLin`, `ExtractOwnLe` and `SimLeak`. Zero knowledge
+is the spec's `ZKmalR` and the decoder spec Flock's radius form, `Flock.ListWithin` at `Flock.Deploy`'s `len` and `θ`;
+nothing here reads Flock's former decoding threshold or count (`agree`, `nMin`).
 
 Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Models/Flock/Guarantees/SamplingClaims.lean`), whose statement
 reads every claim here: the lock records each one's text under `reads`, so a changed claim is a changed record.
@@ -611,10 +617,17 @@ work in runs. -/
 noncomputable def lamLin (κ γ β c : ℝ) : ℝ :=
   min (min (Real.logb 2 (1 / κ)) (255.5 - Real.logb 2 γ / 2)) (256 - Real.logb 2 (2 * β * c)) - Real.logb 2 3
 
-/-- `λ` bits with an extraction-based finder `Fe`: as `Bits`, where `Fe` also obeys the expected-time bound. -/
-def BitsLin (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : Extractor Coin W V) (Fe : FinderFamily)
-    (lam : Msg → ℝ) : Prop :=
-  ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ), 1 ≤ t →
+/-- **`KSLin` on a scope**: `Claims.KSLin`'s bound at every statement in `Scope`. -/
+def KSLinOn (H : Msg → Msg) (V : Verifier Coin) (Scope : Msg → Prop) (R : Rel W) (E : Extractor Coin W V)
+    (κ γ β : Msg → ℝ) (Fe : FinderFamily) : Prop :=
+  ∀ x, Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
+    PrBad H V R E x P ≤ κ x + Real.sqrt (γ x * PrB H V P x) + β x * (Fe Ω P x).Pr H
+
+/-- `λ` bits with an extraction-based finder `Fe`, at every statement in `Scope`: as `Bits`, where `Fe` also obeys the
+expected-time bound. -/
+def BitsLin (H : Msg → Msg) (V : Verifier Coin) (Scope : Msg → Prop) (R : Rel W) (E : Extractor Coin W V)
+    (Fe : FinderFamily) (lam : Msg → ℝ) : Prop :=
+  ∀ (x : Msg), Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ), 1 ≤ t →
     (∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ t) →
     (∀ hk : 0 < V.k x, StrictBirthday H (B H V P x hk)) →
     ExpectedCR H (Fe Ω P x) →
@@ -693,10 +706,9 @@ noncomputable def κ (D : Deploy Coin Col T) (δ : ℝ) (x : Msg) : ℝ :=
 noncomputable def γ (D : Deploy Coin Col T) (x : Msg) : ℝ :=
   slack ^ 4 * (16 * (Real.sqrt (2 * D.V.k x * D.weight x) + D.V.k x) ^ 2)
 
-/-- The design's miss at `t` at `x`, clamped at `0`; `0` on a statement that doesn't parse. The clamp matters only
-outside scope: a well-formed design's `P_a` is a probability, so its miss is `≥ 0`, but a Bernoulli rule with
-`num > den` checking part of each replay unit makes `Rule.Pa`, and so the miss, negative, and `KSCount`'s bound must stay
-`≥ 0` at the statements the verifier refuses. -/
+/-- The design's miss at `t` at `x`, clamped at `0`; `0` on a statement that doesn't parse. In scope the clamp changes
+nothing, since a well-formed design's `P_a` is a probability; it makes `KSCount` `KS` at a `δ ≥ 0` without reading the
+design. -/
 noncomputable def missAt (D : Deploy Coin Col T) (t : ℕ) (x : Msg) : ℝ :=
   match D.parse x with
   | some s => max 0 (s.design.miss (D.part s) t)
@@ -707,23 +719,29 @@ its own SHA-512 calls. -/
 noncomputable def work (D : Deploy Coin Col T) (x : Msg) : ℝ :=
   1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x) + (D.k x : ℝ) ^ 2 * nPU D x * D.openCalls x
 
-/-- The sampling scope, on the statement's bytes. -/
+/-- **The sampling scope, on the statement's bytes**: it parses, its query evaluates, and the partition and statement are
+in scope (`InScope`). `KS`, `KSCount`, `Bits` and `Complete` hold on it. It excludes every design whose `P_a` is not its
+draw's miss probability (`Design.WellFormed`): `subset K` with `K > N` (`P_a = 0` at every set, so no witness is in `R`),
+a Bernoulli rule with `den = 0` or `num > den`, a stratified rule outside `1 ≤ K ≤ N` or with an empty stratum, a work
+rule whose weights or floors don't match its strata, with a zero floor or with no work, and a check of part of a replay
+unit under any but a Bernoulli first stage. That the verifier refuses what is out of it is `ScopeMatches`. -/
 def Scope (D : Deploy Coin Col T) (x : Msg) : Prop :=
   ∃ s P, D.parse x = some s ∧ D.partition s.prog s.query = some P ∧ InScope P s
 
-/-- **Sampling: KS**, at every `δ ≥ 0`, at the sampling extractor and every decoder that lists every trace within Flock's
-radius: `Pr[acc ∧ faulty ∉ M_δ] ≤ δ + ε_ks + ε_bind`, with `ε_ks = κ − δ + √(γ·Pr[B])` (Flock's error at the units'
-sessions) and `ε_bind = Pr[B_ext]` (the openings an accepted extraction checks disagree). -/
+/-- **Sampling: KS**, on the statements in scope, at every `δ ≥ 0`, at the sampling extractor and every decoder that
+lists every trace within Flock's radius: `Pr[acc ∧ faulty ∉ M_δ] ≤ δ + ε_ks + ε_bind`, with
+`ε_ks = κ − δ + √(γ·Pr[B])` (Flock's error at the units' sessions) and `ε_bind = Pr[B_ext]` (the openings an accepted
+extraction checks disagree). -/
 def KS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ (δ : ℝ) decode, 0 ≤ δ → Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    Claims.KSLin H D.V (R H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D) (fun _ => 1)
+    KSLinOn H D.V (Scope D) (R H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D) (fun _ => 1)
       (Bext H D.V (E D decode))
 
-/-- **Sampling: KS, the count form** (a corollary of `KS` at `δ = max(0, miss(t))`, `missAt`): fewer than `t` units are
-faulty, except with probability `max(0, miss(t)) + ε_ks + ε_bind`. -/
+/-- **Sampling: KS, the count form** (a corollary of `KS` at `δ = max(0, miss(t))`, `missAt`), on the statements in
+scope: fewer than `t` units are faulty, except with probability `max(0, miss(t)) + ε_ks + ε_bind`. -/
 def KSCount (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ t decode, Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    Claims.KSLin H D.V (RCount H D.commit D.parse D.partition t) (E D decode) (fun x => κ D (missAt D t x) x)
+    KSLinOn H D.V (Scope D) (RCount H D.commit D.parse D.partition t) (E D decode) (fun x => κ D (missAt D t x) x)
       (γ D) (fun _ => 1) (Bext H D.V (E D decode))
 
 /-- **Sampling: binding** of the trace's commitment, as a collision reduction, at every `H`. -/
@@ -750,7 +768,9 @@ the draw that every unit's session has a form Flock proves (`Flock.InScope`); th
 def Complete (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   Claims.Complete H D.V D.P (Rhon H D.commit D.parse D.partition) (Scope D) (D.δc H)
 
-/-- **Sampling: the readable scope is the verifier's.** -/
+/-- **Sampling: the readable scope is the verifier's**: the scope check the sampled verifier runs before it draws is
+`Scope`, so `KS`, `KSCount` and `Bits`, which hold on `Scope`, cover every statement it takes. Binding `scopeCheck` to
+the compiled sampled verifier is the code side's, and open. -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
 
 /-- **Sampling: zero knowledge, relative to the published leaf layer**, of the masked deployment's reference prover
@@ -766,11 +786,12 @@ def ZK (H : Msg → Msg) (D : ZkDeploy Coin Col T) (εzk γ : Msg → ℝ) : Pro
     ZKmalR H D.V.k D.prover
       (fun x w => Rhon H D.commit D.parse D.partition x w ∧ leafLayer H D.commit D.parse x w = l x) (D.S.given l) εzk γ
 
-/-- **Sampling: bits** at every `δ ≥ 0`, `λ_δ = min(log₂(1/κ_δ), 255.5 − ½ log₂ γ, 256 − log₂(2c)) − log₂ 3`, at every
-decoder that lists every trace within Flock's radius. -/
+/-- **Sampling: bits**, on the statements in scope, at every `δ ≥ 0`,
+`λ_δ = min(log₂(1/κ_δ), 255.5 − ½ log₂ γ, 256 − log₂(2c)) − log₂ 3`, at every decoder that lists every trace within
+Flock's radius. -/
 def Bits (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ (δ : ℝ) decode, 0 ≤ δ → Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    BitsLin H D.V (R H D.commit D.parse D.partition δ) (E D decode) (Bext H D.V (E D decode))
+    BitsLin H D.V (Scope D) (R H D.commit D.parse D.partition δ) (E D decode) (Bext H D.V (E D decode))
       fun x => lamLin (κ D δ x) (γ D x) 1 (work D x)
 
 /-- **Sampling: efficiency**: the extractor's reruns, at most `1 + K + k·(K + k·n_PU·m′·K′)` and

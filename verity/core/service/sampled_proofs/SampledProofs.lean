@@ -1,4 +1,5 @@
 import SampledProofs.Json
+import SampledProofs.Program
 import SampledProofs.Partition
 import SampledProofs.Draw
 import SampledProofs.Registration
