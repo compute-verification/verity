@@ -774,6 +774,7 @@ EVALUATORS |= {m.FAMILY: m.EVALUATOR for m in (softcap_rows, act_rows, dsa_norm_
 for m, fn in ((softcap_rows, attention_softcap), (act_rows, act_rows.silu_mul_expf), (dsa_norm_rows, dsa_norm_rows.row),
               (batched_gemm_rows, batched_gemm_rows.batched_gemm)):
     _row(m.FAMILY, fn, ("out",), check_targets=m.check_targets)
+EVALUATOR_PROVENANCE[batched_gemm_rows.FAMILY] = batched_gemm_rows.PROVENANCE
 deepgemm_rows.register_rows(EVALUATORS, _row)
 from verity_vllm.program.kernels import ir_rows  # noqa: E402
 

@@ -5,6 +5,8 @@ stores as "P" progressions (B*N runs of K leaves at stride N); the replay gather
 them, and names a gather that spans fields."""
 from __future__ import annotations
 
+import re
+
 import numpy as np
 import pytest
 import torch
@@ -15,7 +17,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
 from verity_vllm.program import compact as CP
-from verity_vllm.program.kernels import rows
+from verity_vllm.program.kernels import batched_gemm_rows, rows
 from verity_vllm.program.kernels.batched_gemm_rows import batched_gemm
 from verity_vllm.program.kernels.kernel_registry import Declined
 from verity_vllm.program.registry import b1, bf16_gemm_check as BC, cublas_bf16 as CB, hopper
@@ -51,6 +53,27 @@ def test_row_kernel_is_the_capture_model_at_glm53s_tp8_shapes(K, N):
     for m in range(x.shape[1]):
         got = batched_gemm({"B": 8, "K": K, "N": N, "DOT": HOP}, [x[:, m].reshape(-1), wt.transpose(0, 2, 1).reshape(-1)])["out"]
         assert got.tolist() == want[:, m].reshape(-1).tolist()
+
+
+def test_the_evaluator_cites_the_h200_capture_at_every_shape_and_m_the_capture_runs():
+    """The replay record's `evaluator_provenance` for BatchedGemm_v1 is the capture run that held cuBLAS's bmm to `bmm_rows`: GO in
+    both configurations at every (K, N) and M the capture script runs, among them the TP8 Commit's prefill (256) and decode (1) M; and
+    the Definition's conformance cites the same record."""
+    from tests.properties import glm53_bf16_gemm_capture_gpu as X
+    from verity_vllm.program.frontend.conformance import status_of
+
+    p = rows.EVALUATOR_PROVENANCE["BatchedGemm_v1"]
+    assert p is batched_gemm_rows.PROVENANCE
+    assert re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", p["run"])
+    assert all(re.fullmatch(r"[0-9a-f]{64}", p[k]) for k in ("record", "record_served_default"))
+    assert all(re.fullmatch(r"art:[0-9a-f]{64}", a) for a in p["art"].values())
+    assert p["variants"] == {"split_k_off": "GO", "served_default": "GO"}
+    assert {n: (c["B"], c["K"], c["N"], c["M"]) for n, c in p["cases"].items()} == {n: (X.NHL, k, n_, list(X.LINEAR_M)) for n, k, n_ in X.BMM}
+    assert all(c["mismatch"] == 0 and c["words"] == c["B"] * c["N"] * sum(c["M"]) for c in p["cases"].values())
+    assert {1, 256} <= set(X.LINEAR_M)
+    for d in (CB.BatchedGemmWord, CB.BatchedGemm):
+        assert status_of(d.conformance) == "exact-model-tested"
+        assert p["run"] in d.conformance and p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
 
 
 def test_an_unregistered_dot_a_non_finite_lane_and_another_shape_decline_by_name():
