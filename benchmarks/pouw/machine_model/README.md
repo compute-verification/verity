@@ -2,7 +2,7 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3l-16) re-solves here to the τ, τ at 600 W, U/F_low and
+checks every attack against it. Each named vector (VF … VF3m-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
@@ -75,6 +75,11 @@ u must be a lower bound on what every program pays on it, so a line slower than 
 sound. A faster line closes the old one at the epoch before, adds its own from `EPOCH` and adds its runs to the row's in
 `rows.csv`; a slower one changes nothing. A probe case the census has no row for (VF3k-16's peer-CTA DSMEM atomic) is a new row and, if it is
 slower than its opcode's other cases, its own kind (`ATOME32P`): a line for the old kind there would overstate it.
+
+A joint row a re-measurement finds violated (a measured point past 1) is unsound whatever the faster rule says: it closes
+at the epoch before, and the new frontier's rows replace it. `opcode_probe/eps1.py facets --prior data/rows.csv --emit
+EPOCH` prints them, the upper hull of the new points and the old rows' vertices with the 2% margin. VF3m-16 closed R2-R4,
+KIMAD, KHFMA2 and KSHFL that way for EIMAD, EHFMA2 and ESHFL, and replaced the ASSUMED SHFL by its measured 8 SMSP-cycles.
 
 ## Where the data came from
 

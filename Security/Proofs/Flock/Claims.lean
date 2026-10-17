@@ -14,6 +14,7 @@ import Proofs.Flock.Claims.NumbersGamma
 import Proofs.Flock.Claims.NumbersNMin
 import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.Claims.NumbersRadius
+import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 import Proofs.Flock.Claims.ZkDecode
@@ -26,6 +27,7 @@ import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.JsonEq
 import Proofs.Flock.Claims.Deploy
+import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.KS
