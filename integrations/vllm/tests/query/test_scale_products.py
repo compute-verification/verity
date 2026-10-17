@@ -86,7 +86,7 @@ def test_the_policy_names_the_products_of_every_linear_module_and_step():
     assert all(x["output_member"] == SP.MEMBER and x["dtype"] == "f32" and x["element_range"] == [0, x["rows"] * x["width"]]
                and x["spec"] == fp8.ScaledMmFp8BlockSharedScale.id for x in rows)
     outs = {(x["op_path"], x["output_member"]) for x in on["identities"] if x["family"] == "instance_outputs" and x["op_path"] in (GU, DN)}
-    assert outs == {(GU, "0"), (DN, "0")}, "the products sit on the op path of the linear's output"
+    assert outs == {(GU, "out"), (DN, "out")}, "the products sit on the op path of the linear's output"
     strip = lambda m: sorted(json.dumps(x, sort_keys=True) for x in m["identities"] if x["family"] != SP.FAMILY)  # noqa: E731
     assert strip(on) == strip(off) and on["complete"]
     assert SP.policy_of(on) and not SP.policy_of(off)
