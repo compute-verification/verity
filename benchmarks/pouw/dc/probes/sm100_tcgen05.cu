@@ -110,14 +110,16 @@ DC_DEV void tc_alone(const OpArgs& a) {
   OP_SINK(x ^ threadIdx.x)
 }
 
-// 8 warps; warp w reads its lane quarter (w % 4) in columns (w / 4) * 256 .. + 255. The 16-lane shapes' x16/x8/x4 read 32
-// columns each, so they step by 32 within the warp's 256 (c32), never past the 512 allocated.
-template <int SHAPE>
+// WARPS warps; warp w reads its lane quarter (w % 4) in a span of 2048 / WARPS columns (256 at 8 warps, 128 at 16). The
+// 16-lane shapes' x16/x8/x4 read 32 columns each, so they step by 32 within the span (c32), never past the 512 allocated.
+template <int SHAPE, int WARPS = 8>
 DC_DEV void ld_alone(const OpArgs& a) {
+  constexpr uint32_t SPAN = 2048 / WARPS;
   __shared__ __align__(1024) Smem s;
   const uint32_t tmem = setup<0>(s, a.mode);
-  const uint32_t w = warp_u(), base = tmem + ((32u * (w & 3u)) << 16) + (w >> 2) * 256u;
-  auto c32 = [&](int g, int j) { return base + ((128u * g + 32u * j) & 255u); };
+  const uint32_t w = warp_u(), base = tmem + ((32u * (w & 3u)) << 16) + (w >> 2) * SPAN;
+  auto c32 = [&](int g, int j) { return base + ((128u * g + 32u * j) & (SPAN - 1)); };
+  auto col = [&](uint32_t c) { return base + (c & (SPAN - 1)); };
   uint32_t r0[32], r1[32];
   uint32_t q0[16], q1[16], q2[16], q3[16];
   uint32_t v0[4], v1[4], v2[4], v3[4];
@@ -127,12 +129,12 @@ DC_DEV void ld_alone(const OpArgs& a) {
 #pragma unroll
     for (int g = 0; g < 4; g++) {
       if constexpr (SHAPE == 0) {
-        tmem_ld32(base + 64 * g, r0); tmem_ld32(base + 64 * g + 32, r1);
+        tmem_ld32(col(64 * g), r0); tmem_ld32(col(64 * g + 32), r1);
         tmem_wait_ld();
         acc += r0[0] ^ r1[1];
       } else if constexpr (SHAPE == 1) {
-        tmem_ld16(base + 64 * g, q0); tmem_ld16(base + 64 * g + 16, q1); tmem_ld16(base + 64 * g + 32, q2);
-        tmem_ld16(base + 64 * g + 48, q3);
+        tmem_ld16(col(64 * g), q0); tmem_ld16(col(64 * g + 16), q1); tmem_ld16(col(64 * g + 32), q2);
+        tmem_ld16(col(64 * g + 48), q3);
         tmem_wait_ld();
         acc += q0[0] ^ q1[1] ^ q2[2] ^ q3[3];
       } else if constexpr (SHAPE == 2) {
@@ -151,42 +153,32 @@ DC_DEV void ld_alone(const OpArgs& a) {
         tmem_wait_ld();
         acc += q0[0] ^ q1[1] ^ q2[2] ^ q3[3];
       } else if constexpr (SHAPE == 5) {
-        tmem_ld4(base + 64 * g, v0); tmem_ld4(base + 64 * g + 16, v1); tmem_ld4(base + 64 * g + 32, v2);
-        tmem_ld4(base + 64 * g + 48, v3);
+        tmem_ld4(col(64 * g), v0); tmem_ld4(col(64 * g + 16), v1); tmem_ld4(col(64 * g + 32), v2);
+        tmem_ld4(col(64 * g + 48), v3);
         tmem_wait_ld();
         acc += v0[0] ^ v1[1] ^ v2[2] ^ v3[3];
       } else {
-        tmem_ld1(base + 64 * g, v0[0]); tmem_ld1(base + 64 * g + 16, v1[0]); tmem_ld1(base + 64 * g + 32, v2[0]);
-        tmem_ld1(base + 64 * g + 48, v3[0]);
+        tmem_ld1(col(64 * g), v0[0]); tmem_ld1(col(64 * g + 16), v1[0]); tmem_ld1(col(64 * g + 32), v2[0]);
+        tmem_ld1(col(64 * g + 48), v3[0]);
         tmem_wait_ld();
         acc += v0[0] ^ v1[0] ^ v2[0] ^ v3[0];
       }
     }
   }
   OP_END
-  uint32_t x = threadIdx.x + acc;
-  if constexpr (SHAPE == 0) {
-#pragma unroll
-    for (int i = 0; i < 32; i++) x ^= r0[i] ^ r1[i];
-  } else if constexpr (SHAPE == 5) {
-#pragma unroll
-    for (int i = 0; i < 4; i++) x ^= v0[i] ^ v1[i] ^ v2[i] ^ v3[i];
-  } else if constexpr (SHAPE == 6) {
-    x ^= v0[0] ^ v1[0] ^ v2[0] ^ v3[0];
-  } else {
-#pragma unroll
-    for (int i = 0; i < 16; i++) x ^= q0[i] ^ q1[i] ^ q2[i] ^ q3[i];
-  }
+  // acc alone is the sink: reading every register of the last loads after the loop keeps them live across the back
+  // edge, and ptxas then holds a copy for each unrolled step (235 registers at 8 warps, spills at 16).
+  const uint32_t x = threadIdx.x + acc;
   teardown(tmem);
   OP_SINK(x)
 }
 
-// warp 0: tcgen05.mma i8 128x256x32 into D0 (columns 0-255); warps 4 .. 4 + LW - 1: 8 loads of 32 columns of 256-511 an
-// iteration (warps of one lane quarter offset by 64 columns). An iteration's MMAs take ~512 cycles at the data-sheet
-// rate, so LW = 4, 8 ask 64, 128 words a clock (12 and 16 loader warps, up to the 256 the MMA writes, spill: open).
-template <int LW>
+// warp 0: tcgen05.mma i8 128x256x32 into D0 (columns 0-255); warps 4 .. 4 + LW - 1: R loads of 32 columns of 256-511 an
+// iteration (warps of one lane quarter offset by 64 columns). An iteration's MMAs take 512 cycles at 256 slots a clock,
+// so the loaders ask 2 LW R words a clock. probe.py times every loop over the block, so a loader that asks less than it
+// can load reads as what it asked (with the tensor at 1): only a point that asks more than the MMA writes bounds ρ_ld.
+template <int LW, int R = 8>
 DC_DEV void ld_beside_mma(const OpArgs& a) {
-  constexpr int R = 8;
   __shared__ __align__(1024) Smem s;
   const uint32_t tmem = setup<0>(s, a.mode);
   const uint64_t da = desc_a(s), db = desc_b(s);
@@ -217,8 +209,6 @@ DC_DEV void ld_beside_mma(const OpArgs& a) {
         x += r0[0] ^ r1[1];
       }
     }
-#pragma unroll
-    for (int i = 0; i < 32; i++) x ^= r0[i] ^ r1[i];
   }
   OP_END
   mbar_wait(&s.bar, 0);
@@ -340,8 +330,13 @@ OP_KERNEL(ld_16x64b_x16, 256) { ld_alone<3>(a); }
 OP_KERNEL(ld_16x128b_x8, 256) { ld_alone<4>(a); }
 OP_KERNEL(ld_32x32b_x4, 256) { ld_alone<5>(a); }
 OP_KERNEL(ld_32x32b_x1, 256) { ld_alone<6>(a); }
+OP_KERNEL(ld16w_32x32b_x32, 512) { ld_alone<0, 16>(a); }
+OP_KERNEL(ld16w_32x32b_x16, 512) { ld_alone<1, 16>(a); }
 OP_KERNEL(ldmma_w4, 256) { ld_beside_mma<4>(a); }
 OP_KERNEL(ldmma_w8, 384) { ld_beside_mma<8>(a); }
+OP_KERNEL(ldmma_w12, 512) { ld_beside_mma<12>(a); }
+OP_KERNEL(ldmma_w8_r16, 384) { ld_beside_mma<8, 16>(a); }
+OP_KERNEL(ldmma_w12_r16, 512) { ld_beside_mma<12, 16>(a); }
 OP_KERNEL(imma_s8_k32, 512) { imma_alone<32>(a); }
 OP_KERNEL(imma_s8_k16, 512) { imma_alone<16>(a); }
 OP_KERNEL(syncmma_k32, 512) { sync_beside_mma<32>(a); }
@@ -375,10 +370,15 @@ static const OpProbe PROBES[] = {
     P_LD(ld_16x128b_x8, "LDTM.16dp128bit.x8=16"),
     P_LD(ld_32x32b_x4, "LDTM.x4=16"),
     P_LD(ld_32x32b_x1, "LDTM=16"),
+    {.name = "ld16w_32x32b_x32", .kernel = (const void*)ld16w_32x32b_x32, .tpb = 512, .expect = "LDTM.x32=8", .iters = 4096},
+    {.name = "ld16w_32x32b_x16", .kernel = (const void*)ld16w_32x32b_x16, .tpb = 512, .expect = "LDTM.x16=16", .iters = 4096},
 #undef P_TC
 #undef P_LD
     {.name = "ldmma_w4", .kernel = (const void*)ldmma_w4, .tpb = 256, .expect = UI ";LDTM.x32=8", .warps = "1;4", .iters = 2048},
     {.name = "ldmma_w8", .kernel = (const void*)ldmma_w8, .tpb = 384, .expect = UI ";LDTM.x32=8", .warps = "1;8", .iters = 2048},
+    {.name = "ldmma_w12", .kernel = (const void*)ldmma_w12, .tpb = 512, .expect = UI ";LDTM.x32=8", .warps = "1;12", .iters = 2048},
+    {.name = "ldmma_w8_r16", .kernel = (const void*)ldmma_w8_r16, .tpb = 384, .expect = UI ";LDTM.x32=16", .warps = "1;8", .iters = 2048},
+    {.name = "ldmma_w12_r16", .kernel = (const void*)ldmma_w12_r16, .tpb = 512, .expect = UI ";LDTM.x32=16", .warps = "1;12", .iters = 2048},
     {.name = "imma_s8_k32", .kernel = (const void*)imma_s8_k32, .tpb = 512, .expect = "IMMA.16832.S8.S8=8", .iters = 4096},
     {.name = "imma_s8_k16", .kernel = (const void*)imma_s8_k16, .tpb = 512, .expect = "IMMA.16816.S8.S8=8", .iters = 4096},
     {.name = "syncmma_k32", .kernel = (const void*)syncmma_k32, .tpb = 512, .expect = UI ";IMMA.16832.S8.S8=8", .warps = "1;8", .iters = 2048},

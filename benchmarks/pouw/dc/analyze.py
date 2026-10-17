@@ -26,7 +26,7 @@ K_OF = {"s8": 32, "u8s8": 32, "e4m3": 32, "e5m2": 32, "f16": 16, "bf16": 16, "tf
 SYNC_SLOTS = 128
 #: tcgen05.ld 32-bit registers a thread for each probe
 LD_REGS = {"ld_32x32b_x32": 32, "ld_32x32b_x16": 16, "ld_16x256b_x4": 16, "ld_16x64b_x16": 16, "ld_16x128b_x8": 16,
-           "ld_32x32b_x4": 4, "ld_32x32b_x1": 1}
+           "ld_32x32b_x4": 4, "ld_32x32b_x1": 1, "ld16w_32x32b_x32": 32, "ld16w_32x32b_x16": 16}
 TENSOR = ("IGMMA", "QGMMA", "HGMMA", "BGMMA", "UTC", "LDTM", "IMMA", "HMMA", "BMMA")
 LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo"}
 
@@ -92,7 +92,8 @@ def slots_sm100(name: str, row: dict) -> dict | None:
                 "macs": r * mm * n * k, "zero_data": name.startswith("tcz")}
     if name in LD_REGS:
         pat, r = loop_rate(row, 0)
-        return {"form": f"tcgen05.ld {name[3:]}", "opcode": pat, "ld_words": r * 32 * LD_REGS[name]}
+        warps, shape = (16, name[6:]) if name.startswith("ld16w_") else (8, name[3:])
+        return {"form": f"tcgen05.ld {shape}, {warps} warps", "opcode": pat, "ld_words": r * 32 * LD_REGS[name]}
     if name.startswith("imma_"):
         pat, r = loop_rate(row, 0)
         return {"form": f"mma.sync {name[5:]}", "opcode": pat, "slots": r * SYNC_SLOTS}
@@ -160,21 +161,31 @@ def analyze(family: str, d: Path) -> dict:
         for name, row in rows.items():
             if lane_of(name) or name.startswith(("ldmma_", "syncmma_")):
                 joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
+        rho5 = t5["slots"] if t5 else 256.0
         for name in [n for n in joints if n.startswith("ldmma_")]:
             ld = loop_rate(rows[name], 1, ("LDTM",))
-            if ld:
-                joints[name]["ld_words"] = ld[1] * 32 * 32
+            m = re.fullmatch(r"ldmma_w(\d+)(?:_r(\d+))?", name)
+            if ld and m:
+                j = joints[name]
+                j["ld_words"] = ld[1] * 32 * 32
+                # the MMA warp's iteration is 4 x 128x256 slots; the loaders' is R loads of 32 x 32 words a warp
+                j["ld_asked"] = int(m.group(1)) * int(m.group(2) or 8) * 1024 * rho5 / (4 * 128 * 256)
+                j["demand_limited"] = j["ld_words"] >= j["ld_asked"] * (1 - MARGIN)
+                j["honest_fraction"] = min(j.get("tensor_fraction", 0), j["ld_words"] / rho5)
         for name in [n for n in joints if n.startswith("syncmma_")]:
             sy = loop_rate(rows[name], 1, ("IMMA",))
             if sy:
                 joints[name]["sync_slots"] = sy[1] * SYNC_SLOTS
         rho_t5 = t5 and t5["slots"]
         ld_alone = max((f["ld_words"] for f in forms.values() if "ld_words" in f), default=None)
-        ld_beside = max((j["ld_words"] for j in joints.values() if "ld_words" in j), default=None)
+        # beside: the most words loaded while the tensor stays saturated; a demand-limited point is a lower bound
+        ld_beside = max((j["ld_words"] for j in joints.values()
+                         if "ld_words" in j and j.get("tensor_fraction", 0) >= 1 - MARGIN), default=None)
+        honest = max((j["honest_fraction"] for j in joints.values() if "honest_fraction" in j), default=None)
         rho_sync = max((f["slots"] for n, f in forms.items() if n.startswith("imma_")), default=None)
         rho_ld = min(x for x in (ld_alone, ld_beside) if x is not None) if (ld_alone or ld_beside) else None
         out["M4"] = {"rho_T5": rho_t5, "rho_ld_alone": ld_alone, "rho_ld_beside_mma": ld_beside, "rho_ld": rho_ld,
-                     "rho_sync": rho_sync,
+                     "rho_sync": rho_sync, "honest_tensor_fraction": honest,
                      "pass": bool(rho_t5 and rho_ld and rho_sync and rho_ld >= rho_t5 * (1 - MARGIN)
                                   and rho_sync <= rho_t5 * (1 + MARGIN))}
     out["joints"] = joints
