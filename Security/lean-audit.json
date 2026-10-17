@@ -7768,6 +7768,7 @@
     "Claims.Recursion.Deploy.innerView": "42aa754225191a3b860dd0671466378ea4617af943769579b4deccef81ff5ae3",
     "Claims.Recursion.Deploy.kS": "f795134a13b558e60942287d2316a6f21c30e4a622e9a47f5cbab5779ee215d6",
     "Claims.Recursion.Deploy.mask": "96284fbecd4f3b532d1d1f1860878d0a700c2d74f176e38046e0cb0a6ce8c05e",
+    "Claims.Recursion.Deploy.nC": "d23e2276de2e52c120614e219fbce1d4bab4311eb1c00f64194a3bfaaa648a48",
     "Claims.Recursion.Deploy.nS": "ef4ed3db6d57e2f72088914786bcaa4a1bce04975b19a0d38c66287bb3ff0ee6",
     "Claims.Recursion.Deploy.nums": "8f38351b2cbccbfa7c919a93562cbd0456bb55043a7c1e12855d7f831d818fb3",
     "Claims.Recursion.Deploy.parse": "0cd24e77fa69beeac127c9721c9977ebaa9e546fde746244f14bbbd256024b5f",
@@ -7779,6 +7780,7 @@
     "Claims.Recursion.Deploy.stage": "e8c57f29c18261b5d2591ab5545596f346d7a75d3fe8f1cf27b53877c90eab7a",
     "Claims.Recursion.Deploy.vstar": "448523cc1bc6ad6f2ed11667a8c4e9f830ab33489f6215ee3b57f8e8a9e04f0f",
     "Claims.Recursion.Deploy.zeroCommit": "f59abc45d3667ed0cd6ae5df3b2bcd9501dca74fd1046d91acd1f5deff49a775",
+    "Claims.Recursion.Deploy.zeroCommits": "fc3cf89cae18e592edd18ab0d91d672e24938b6641f9bcd3d0901bd1522ff420",
     "Claims.Recursion.Draw": "4470d39c2664f095fd33595396bf900ddfdb4f89c3dea35b31a53ba6a174daae",
     "Claims.Recursion.Draw.Full": "9637cc9943849b041a7c9b796cda9fa32ce6287f73e32f4752a6c8c628baa9e7",
     "Claims.Recursion.Draw.closure": "ae424072559b6b700041cc60647b041bf3dd0905400567534244d1b466f57e9e",
@@ -7870,6 +7872,7 @@
     "Claims.Recursion.simInner": "1d6fe47118a5014d31c6fbb430f5d1f7c2c2527f0f5bb51ec8e46a144ef39885",
     "Claims.Recursion.simOuter": "ec90b221e1dcac3d8e6fafa3f2e4a53a62d823afa08922bd50248745fca789a8",
     "Claims.Recursion.simRounds": "e6e04df87ecb28c7d7115c2ce304701ca7c945e39e6a43f306de6b370c3c701f",
+    "Claims.Recursion.simStage": "4d79799d206f0003e90eec2306e1e56fd88331260a84334a09fb7ce6cfa7af70",
     "Claims.Recursion.spBind": "3609da4643470267021c694e22243219448287548ab4289518dee4242a65e769",
     "Claims.Recursion.spOf": "aec30eba71b2d6e89c4ae0b59ae7f58bb1e5eee0dec8e17c8eb95c96ea3f8810",
     "Claims.Recursion.spUnder": "89dab3e0f4ec85aab8f5656c9654a4c95304474e1ec2605f43db544fb9c9835e",
@@ -7879,10 +7882,7 @@
     "Claims.Recursion.γe": "6a7dc27533c27a6528221dc888f457d265bb50eeb35a08c3da62dedecf2b6233",
     "Claims.Recursion.γzk": "966861bd3b08be5b8d31c557ecfc6876d004f6d06062b30cb485219d81ebbfa0",
     "Claims.Recursion.εzk": "ac807fb7a04f0a999a50bbaece23170bd35fa90c9aceb3b825daf4fcb8d45daa",
-    "Claims.Recursion.κ": "3ab1013310bb4acce30b5d46750070e246193b79970b956601b32ab97e229979",
-    "Claims.Recursion.Deploy.nC": "d23e2276de2e52c120614e219fbce1d4bab4311eb1c00f64194a3bfaaa648a48",
-    "Claims.Recursion.Deploy.zeroCommits": "fc3cf89cae18e592edd18ab0d91d672e24938b6641f9bcd3d0901bd1522ff420",
-    "Claims.Recursion.simStage": "4d79799d206f0003e90eec2306e1e56fd88331260a84334a09fb7ce6cfa7af70"
+    "Claims.Recursion.κ": "3ab1013310bb4acce30b5d46750070e246193b79970b956601b32ab97e229979"
    },
    "guarantees": [
     "Claims.Witness.Recursion.BitsFlock_fails",
