@@ -185,8 +185,11 @@ def kind_of(spec: str) -> str:
 
     from verity_numerical.bench import templates as TM
 
-    if Path(spec).exists():
-        return "row"
+    try:
+        if Path(spec).exists():
+            return "row"
+    except OSError:            # an id longer than a file name may be (AllReduceMultimem_v1's TREES), so no path
+        pass
     head = spec.partition(":")[0].partition("/")[0]
     return "template" if head in TM.TEMPLATES else "definition"
 
