@@ -245,6 +245,32 @@ theorem zk_session_soundH_custody_gen
   zk_session_soundH_gen I ht dj y₀ wr dg N hc hU hpub hgen σs ks hks St hS Kd pop Lb src hA3
     (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
 
+/-! At `J` tables, `ZkHidden.zk_session_soundHJI` and `ZkReg.checked_of_acceptsHJI` take the conditions `scopeGenH`
+gives; these are their rows with those conditions read off it. -/
+
+variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+  (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
+  (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hgen : Layout.scopeGenH c = true) {pub : Public}
+  (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hU : Built c.unit)
+
+/-- **The public plan's layout at `J` tables, at the general form** (`layShHJI`). -/
+noncomputable abbrev layShHJG :=
+  layShHJI dj y₀ ht hc (rowsFit_of_scopeGenH ((zkTags_typed I).trans ht) hc hgen) (pub := pub) (Reg := Reg)
+
+/-- **`rs` at the public plan at `J` tables, at the general form** (`rsShHJI`). -/
+noncomputable abbrev rsShHJG :=
+  rsShHJI dj y₀ ht hc (rowsFit_of_scopeGenH ((zkTags_typed I).trans ht) hc hgen) hpub hU
+    (Layout.scopeGenH_spec hU hgen).1 (Layout.scopeGenH_spec hU hgen).2 (Reg := Reg)
+
+/-- **`rs` at the hidden-output `--zk` tables of `J` tables, at the general form** (`rsZHJI`). -/
+noncomputable abbrev rsZHJG :=
+  rsZHJI dj y₀ ht hc (rowsFit_of_scopeGenH ((zkTags_typed I).trans ht) hc hgen) hpub hU
+    (Layout.scopeGenH_spec hU hgen).1 (Layout.scopeGenH_spec hU hgen).2 (Reg := Reg)
+
+theorem rsZHJG_computes : (rsZHJG dj y₀ ht hc hgen hpub hU (Reg := Reg)).Computes :=
+  rsZHJI_computes dj y₀ ht hc (rowsFit_of_scopeGenH ((zkTags_typed I).trans ht) hc hgen) hpub hU
+    (Layout.scopeGenH_spec hU hgen).1 (Layout.scopeGenH_spec hU hgen).2
+
 end Zk
 
 end FlockSoundness.Discharge.General

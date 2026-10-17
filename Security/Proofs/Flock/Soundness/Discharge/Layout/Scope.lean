@@ -218,4 +218,39 @@ theorem scopeGenH_of_scopeOkH {c : Circuit} (h : scopeOkH c = true) (hw : Proved
   simp only [Bool.and_eq_true] at h ⊢
   exact ⟨⟨⟨hw, h.1.1.2⟩, h.1.2⟩, h.2⟩
 
+/-- **What the statement check passes under hidden outputs**: `scopeGenH` without the wires' order, which the check
+requires wherever the wires feed the unit or the outputs (`ProvedScope.wiresFeed`). Where they don't, the unit reads one
+input group and returns the outputs, so the circuit is in `scopeOkH` (`scopeOkH_of_scopeOkI`); where they do, in
+`scopeGenH` (`scopeGenH_of_scopeOkI`). -/
+def scopeOkI (c : Circuit) : Bool :=
+  decide (c.unit.unitLog ≤ 32) && portReadsB c.unit && (v1Ports c || bitRows c)
+
+theorem scopeOkI_of_scopeOkH {c : Circuit} (h : scopeOkH c = true) : scopeOkI c = true := by
+  unfold scopeOkH at h
+  unfold scopeOkI
+  simp only [Bool.and_eq_true] at h ⊢
+  exact ⟨⟨h.1.1.2, h.1.2⟩, h.2⟩
+
+/-- Where the wires feed neither the unit nor the outputs, the unit returns the outputs. -/
+theorem outNet_of_wiresFeed {c : Circuit} (hf : ProvedScope.wiresFeed c = false) : c.outNet = c.unitNet := by
+  unfold ProvedScope.wiresFeed at hf
+  simp only [Bool.or_eq_false_iff, bne_eq_false_iff_eq] at hf
+  exact hf.2
+
+theorem scopeOkH_of_scopeOkI {c : Circuit} (h : scopeOkI c = true) (hf : ProvedScope.wiresFeed c = false) :
+    scopeOkH c = true := by
+  unfold ProvedScope.wiresFeed at hf
+  unfold scopeOkI at h
+  unfold scopeOkH
+  simp only [Bool.or_eq_false_iff, bne_eq_false_iff_eq] at hf
+  simp only [Bool.and_eq_true, beq_iff_eq] at h ⊢
+  exact ⟨⟨⟨⟨hf.1, hf.2⟩, h.1.1⟩, h.1.2⟩, h.2⟩
+
+theorem scopeGenH_of_scopeOkI {c : Circuit} (h : scopeOkI c = true) (hw : ProvedScope.wiresAcyclic c = true) :
+    scopeGenH c = true := by
+  unfold scopeOkI at h
+  unfold scopeGenH
+  simp only [Bool.and_eq_true] at h ⊢
+  exact ⟨⟨⟨hw, h.1.1⟩, h.1.2⟩, h.2⟩
+
 end FlockSoundness.Discharge.Layout
