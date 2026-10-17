@@ -376,8 +376,8 @@ static void fafree(FA& F) {
 }
 static void fq(FA& F, const Sig& sg) {
   const int kr = F.kvh * F.s, qr = F.H * F.s;
-  hquant<<<(kr + 31) / 32, 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, F.inv7, sg);
-  hwedit<true><<<(qr + 31) / 32, 256, 0, F.V.st>>>(reinterpret_cast<const uint8_t*>(F.W7), reinterpret_cast<uint8_t*>(F.Wp),
+  hquant<<<hq_blocks(kr), 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, F.inv7, sg);
+  hwedit<true><<<hw_blocks(qr), 256, 0, F.V.st>>>(reinterpret_cast<const uint8_t*>(F.W7), reinterpret_cast<uint8_t*>(F.Wp),
                                                    reinterpret_cast<uint8_t*>(F.PB), qr, sg, reinterpret_cast<uint8_t*>(F.Wh));
 }
 static FaArgs faargs(FA& F, const Maps* m, bool full, uint32_t* R) {
