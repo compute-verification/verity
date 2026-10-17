@@ -2863,7 +2863,18 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     });
     let ur = st.c.unit_range();
     let unit = st.c.unit();
-    let cut_flip = (plan.cut_flip && unit.in_groups.len() > 1 && st.c.typed.is_none()).then(|| (st.c.unit_net, 0, unit.in_groups[1].col * 128 + 3));
+    // the unit's first cut input of instance 0; a unit that reads no cut word (the cut feeds the stages): the first stage input a
+    // wire fills, in its slot of block 0
+    let cut_flip = if !plan.cut_flip || st.c.typed.is_some() {
+        None
+    } else if unit.in_groups.len() > 1 {
+        Some((st.c.unit_net, 0, unit.in_groups[1].col * 128 + 3))
+    } else {
+        st.c.wires.iter().find(|w| ![st.c.sha_net, st.c.hm_net, st.c.unit_net].contains(&w.dst.0)).map(|w| {
+            let (col, width) = port_cols(&st.c.nets[w.dst.0].1.in_groups)[w.dst.2];
+            (w.dst.0, w.dst.1, col + 3.min(width - 1))
+        })
+    };
     // a typed template's cut words are its parts' bound inputs: the first one of instance 0
     let typed_flip = st.c.typed.as_ref().filter(|_| plan.cut_flip).and_then(|t| t.inst.bind.iter().flatten().next()).map(|b| (0, b.0));
     let nets = if plan.tail_swapped { forged_stages(st) } else { BTreeMap::new() };
