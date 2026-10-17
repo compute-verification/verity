@@ -5,7 +5,8 @@ import Proofs.Flock.Claims.Sampling.Reference.Complete
 # Sampling completeness at the deployed record
 
 `complete_deploy`: **`Claims.Sampling.Complete H (deploy rel c)`**, of the deployed record's reference prover
-(`Reference.refP` at the code's framing) at its error (`c.sessions x · sessErrAt c.session (δcZk H) x`), from
+(`Reference.refP` at the code's framing) at its error: `c.sessions x` times the largest `δcZk H`, capped at `1`, over
+the statements of the reference prover's sessions at `x` (`Reference.sessErrAt`), from
 `Reference.complete_of_sessions` with the record's facts. What remains, each a hypothesis:
 
 * `hF : Claims.Flock.Complete H (deployZk rel)`: Flock's masked completeness, of `honestPZk` at `δcZk H`.
@@ -144,8 +145,8 @@ theorem sessionsAmong_deploy (H : Msg → Msg) (h : SessionSlots c H) : Sessions
 
 set_option synthInstance.maxSize 1024 in
 /-- **Sampling completeness at the deployed record**: the reference prover is accepted with probability at least
-`1 − c.sessions x · sessErrAt c.session (δcZk H) x`, from Flock's masked completeness and the facts the module docstring
-lists. -/
+`1 − δc H x`, `c.sessions x` times the largest `δcZk H` over its sessions' statements, from Flock's masked completeness
+and the facts the module docstring lists. -/
 theorem complete_deploy (H : Msg → Msg) (hF : Claims.Flock.Complete H (FlockDeploy.deployZk rel))
     (hfix : DrawFixed (deploy rel c)) (hslots : DrawSlots (deploy rel c)) (hframe : Framed c H)
     (haccept : AcceptsFramed c H) (hscope : SessionsScope c H) (hwit : SessionWit rel c H)
