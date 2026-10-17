@@ -7,8 +7,8 @@ import re
 
 import pytest
 
-from verity_machine_model.model import (CLAIMS, DATA, STATUSES, all_attacks, attacks, census, entries, floors, holds,
-                                        model, rows, u_of, vector, vectors)
+from verity_machine_model.model import (CLAIMS, COPIES, DATA, STATUSES, all_attacks, attacks, census, entries, floors,
+                                        holds, model, rows, u_of, vector, vectors)
 
 M = model()
 ROWS = rows()
@@ -102,12 +102,48 @@ def test_floors_name_census_kinds():
     assert all(f.kind in c and f.words > 0 and f.floor > 0 for f in fs), [f.kind for f in fs if f.kind not in c]
 
 
+# The kinds that write memory and no register. A word they write reaches registers only through a load or an atomic's
+# returned word, each a copy route π_c ≥ 16 prices itself, so its claim needn't list them.
+MEMORY_ONLY = {"STS128", "STSM_X1", "STSM_X2", "STSM_X4", "STSM_X1T", "STSM_X2T", "STSM_X4T", "STSM8T_X1", "STSM8T_X2",
+               "STSM8T_X4", "RED32", "RED64", "REDV", "REDG32", "REDG64", "REDAS32", "REDAS64", "SURED", "TMAred512",
+               "TMA512", "UTMA", "UTMA8", "UTMA512", "UTMA1K", "UTMA2K", "UTMA4K", "UTMA8K", "UTMA16K", "UTMA32K",
+               "UTMA48K", "UTMA64K", "UTMABIG", "G4_16", "G4_32", "G4_256", "G4_1K", "LDGSTS16", "UBLKCP4K", "DSMST4P"}
+
+
+def test_every_kind_is_a_copy_route_or_writes_memory_only():
+    """π_c ≥ 16 reads every kind that writes registers, so it holds for every copy route there is."""
+    kinds = set(census(M, M.epochs[-1]))
+    copies = {f.kind for f in floors() if f.claim == COPIES}
+    assert not copies & MEMORY_ONLY and MEMORY_ONLY <= kinds
+    assert kinds - MEMORY_ONLY <= copies, (f"{sorted(kinds - MEMORY_ONLY - copies)}: give each a {COPIES} line in "
+                                           f"data/floors.csv (the lane-words it writes), or add it to MEMORY_ONLY if it "
+                                           f"writes no register")
+
+
 def test_adopted_lines_are_faster():
     """Each line adopted from a probe at an epoch is cheaper than the line it closed at the epoch before."""
     with open(DATA / "census.csv", newline="") as f:
         lines = list(csv.DictReader(f))
     u = lambda d: u_of(M.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"])
-    for d in (d for d in lines if d["since"] == "VF3k-16" and "r20261016-183617-3914" in d["runs"].split()):
-        old = [e for e in lines if (e["kind"], e["row"]) == (d["kind"], d["row"]) and e["until"] == "VF3j-8"]
-        assert old == [] or u(d) < u(old[0]), f"{d['kind']} on {d['row']}"
+    for epoch, before, run in [("VF3k-16", "VF3j-8", "r20261016-183617-3914"),
+                               ("VF3l-16", "VF3k-16", "r20261016-210926-d856"),
+                               ("VF3m-16", "VF3l-16", "r20261017-034149-3f95"),
+                               ("VF3m-16", "VF3l-16", "r20261017-035245-089f")]:
+        for d in (d for d in lines if d["since"] == epoch and run in d["runs"].split()):
+            old = [e for e in lines if (e["kind"], e["row"]) == (d["kind"], d["row"]) and e["until"] == before]
+            assert old == [] or u(d) < u(old[0]), f"{d['kind']} on {d['row']}"
     assert sum(d["since"] == "VF3k-16" for d in lines) == 18 + 5
+    assert sum(d["since"] == "VF3l-16" for d in lines) == 6
+    assert sum(d["since"] == "VF3m-16" for d in lines) == 30 + 15 + 1   # the joint rows, the side units, SHFL
+
+
+def test_violated_rows_close():
+    """VF3m-16 closes every joint row EPS1's frontiers put a point past (r20261017-034143-b1de, r20261017-035229-7c35):
+    R2-R4, the KIMAD, KHFMA2 and KSHFL vertices, and the ASSUMED SHFL; KALU holds and stays."""
+    c = census(M, "VF3m-16")
+    closed = {"R2", "R3", "R4", *(f"KIMAD{i}" for i in range(4)), *(f"KHFMA2{i}" for i in range(4)),
+              *(f"KSHFL{i}" for i in range(3))}
+    assert not closed & {r for v in c.values() for r in v}
+    assert closed <= {r for v in census(M, "VF3l-16").values() for r in v}
+    assert {f"KALU{i}" for i in range(4)} <= set(c["ALU"]) and ROWS["SHFL"].status == "measured"
+    assert c["SHFL"]["SHFL"] == pytest.approx(u_of(M.cycle_u, "0.4997201", "0.02", "", ""))

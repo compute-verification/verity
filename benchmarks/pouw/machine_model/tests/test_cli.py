@@ -21,14 +21,21 @@ def test_solve_prints_the_numbers_and_the_check(capsys):
     assert "(reproduced)" in out and "1306 attacks in 13 families at X ≥ 1.0: pass" in out
     assert "superseded by VF3k-16" in out
     assert "(π₃₂): every root-writing kind at ≥ 32 MACs a word: 84 kinds, holds (not split out at VF3j-8: ATOME32P)" in out
+    assert "a UR word at the 32 lanes it serves) at ≥ 16 MACs a word: 62 kinds, fails: UNI 2.00 a word < 16;" in out
+    assert "copy routes, MACs a word (price/measured), cheapest first: UNI64 1.00/" in out
 
 
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
-    assert d["vector"] == "VF3k-16" and round(d["tau"], 4) == 0.0603 and d["failures"] == [] and d["unreproduced"] == []
+    assert d["vector"] == "VF3l-16" and round(d["tau"], 4) == 0.0603 and d["failures"] == [] and d["unreproduced"] == []
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
-                           "loads16": {"kinds": 9, "below": [], "absent": []}}
+                           "loads16": {"kinds": 9, "below": [], "absent": []},
+                           "copy16": {"kinds": 63, "below": ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"],
+                                      "absent": []}}
+    uni = d["copies"][1]
+    assert [c["kind"] for c in d["copies"][:2]] == ["UNI64", "UNI"] and uni["words"] == 32
+    assert round(uni["price"], 2) == 2.0 and uni["measured"] > 32 and uni["what"].startswith("UR fan-out")
 
 
 def test_list_census_attacks(capsys):
@@ -48,7 +55,8 @@ def _epoch(data, rows=()):
     last = m.epochs[-1]
     (data / "model.toml").write_text((data / "model.toml").read_text().replace(f'"{last}"]', f'"{last}", "TEST"]'))
     t = (data / "vectors" / f"{m.current}.toml").read_text()
-    t = t.replace(f'name = "{m.current}"', 'name = "TEST"').replace(f'epoch = "{last}"', 'epoch = "TEST"')
+    t = t.replace(f'name = "{m.current}"', 'name = "TEST"').replace(f'epoch = "{vector(m.current, data).epoch}"',
+                                                                    'epoch = "TEST"')
     t = t.replace("rows = [\n", "rows = [\n" + "".join(f'    "{r}",\n' for r in rows)).split("[published]")[0]
     (data / "vectors" / "TEST.toml").write_text(t)
     return m.current, last

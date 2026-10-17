@@ -19,6 +19,8 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `fp4_nobits/` | RTX PRO 6000 | The measurement of premise NB (NOBITS): a `kind::mxf4nvf4` MMA's FP32 accumulator holds the exact integer but, for a nonzero word, never the committed s32 word's bits, whether it starts at 0 or at the binade constant; and the cheapest exact extraction is one F2I or one IADD3 a word (SASS-counted), against the int8 IMMA whose accumulator is the word; `run.sh` under `gpu-lease 1`, clocks read |
 | `nvfp4_sm120/` | RTX PRO 6000 | The plain NVFP4 GEMM as harness baseline entries (`nvf4_plain.cu` on `mainloop_nvf4.cuh`), and its standalone benches |
 | `pouw_hash/` | RTX PRO 6000 | The PoUW hash kernels' bench and check (`run.sh`, `check.py`) |
+| `h_falsify/` | RTX PRO 6000 | The Dither transcript's zero instance (R 0/1, B̃ periodic in U): the tiled reference and its duo receipt (`ref.py`), and honest, zero-IMMA and Four Russians arms on `gpu_kit` (`hfalsify.cu`) |
+| `qstar/` | RTX PRO 6000 | q*, the fewest scalar instructions a correct fresh Dither word costs: dp4a, bit planes, Four Russians in shared memory and in L2, each against IMMA, alone and beside it in one kernel or two streams (`qstar.cu`); `count.py` counts each timed loop's instructions a word and gates its pinned histogram (`expect.json`); `run.sh` is the `research run` job |
 | `kernels/` | RTX 4090 | NCP's native u8xs8 route-U GEMM and Pearl's e4m3 GEMM on the `ada` device (`pouw_gemm.cu`), JIT-built as a torch extension |
 | `filler/` | RTX PRO 6000 | The DRAM-free filler beside the decode step, its arms and its locked scorer, one suite (below) |
 | `floored_gemm/`, `masked_gemm/`, `edited_gemm/`, `hashed_gemm/` | RTX PRO 6000 | The noised GEMMs, from the floored int8 grid to the adopted edited GEMM with its commitments hashed in its own CTAs (below) |
@@ -27,7 +29,7 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `vllm_bench.py` | RTX 4090 | Overhead against plain vLLM for BF16, stock FP8, W7A7, NCP and Pearl by wrapping every `LinearBase` layer's apply; `pearl_c_vllm/` reads its prompts and model lookup |
 | `gamma.py` | CPU | γ accounting: each scheme's honest reference priced term by term under W1, split into checked and unchecked work |
 | `pearlc_census.py` | CPU | TT_OUT's falsification census for Pearl-C's ticket chain, bit-exact, on the H100's atom or sm_120's (`--atom`) |
-| `machine_model/` | CPU | The sm_120 machine model's price vectors (VF … VF3k-16): the LP, the rows, census and attack families as data, and `machine-model solve NAME` (its own README, and its own suite) |
+| `machine_model/` | CPU | The sm_120 machine model's price vectors (VF … VF3l-16): the LP, the rows, census and attack families as data, and `machine-model solve NAME` (its own README, and its own suite) |
 | `exact_kit/` | CPU | `verity-exact-kit`, the theory and referee scripts' primitives (F_2 and F_p linear algebra, Möbius coefficients, kernel searches, SAT) and their one check registry with a JSON verdict; no theory, no folds (its own README) |
 | `workloads.json` | | The model and its linear shapes, the decode batches and prefill lengths, and the reference shapes (`gamma.py`) |
 | `run_result.py`, `tool.py` | | The runs' result record (`research/result/v0.1`) and the store's tool declaration |
