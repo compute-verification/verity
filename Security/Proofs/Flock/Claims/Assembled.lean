@@ -86,7 +86,7 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
       Claims.Flock.Complete H (deployPlainTrim rel) P δc :=
   ⟨scopeMatches_plain rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg false),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg false) hκ
-      (fun x => γ_pos (deployPlainTrim rel) x (V_k_pos false x)) hγ _ (listWithin_plain rel),
+      (fun x => γ_pos (deployPlainTrim rel) x (V_k_pos false x)) hγ _ (listWithin_plainTrim rel),
     efficient_plain H rel, hComplete⟩
 
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
@@ -108,7 +108,7 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
       Claims.Flock.Complete H (deployZkTrim rel) P δc :=
   ⟨scopeMatches_zk rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg true),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg true) hκ
-      (fun x => γ_pos (deployZkTrim rel) x (V_k_pos true x)) hγ _ (listWithin_zk rel),
+      (fun x => γ_pos (deployZkTrim rel) x (V_k_pos true x)) hγ _ (listWithin_zkTrim rel),
     efficient_zk H rel, hComplete⟩
 
 end FlockDeploy.Assembled
