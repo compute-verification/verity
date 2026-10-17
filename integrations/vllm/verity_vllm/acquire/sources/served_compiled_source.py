@@ -14,7 +14,9 @@ What one engine step commits, in one canonical order (piece, sub, index):
 Three execution paths give the committer the same sequence of (name, bytes):
   * graph capture (FULL: the whole forward under one `torch.cuda.graph`; PIECEWISE: each piece): the hook issues a device copy of
     the tensor into a static slot (one per (piece, sub, index, name), as many rows as the largest capture size), and the capture
-    records the slots its (mode, padded size) writes.  The graph replays the copies every step.
+    records the slots its (mode, padded size) writes.  The graph replays the copies every step.  Slots are allocated in the
+    uncaptured warm-up pass vLLM runs before each capture, outside the graph pool; vLLM's memory-profiling captures are discarded
+    with their slots.
   * a replayed step: nothing Python runs for captured work.  Live work inside the step (attention between PIECEWISE pieces, piece 0's
     inputs at its wrapper) copies into its slot the same way.  When the forward is complete (the logits) the step's slots are
     acquired in canonical order: `slot[:n]` for token-row tensors (n = the step's tokens; rows n.. are CUDA-graph padding, never a
@@ -52,6 +54,10 @@ def compile_cache_env() -> dict[str, str]:
     process compiles the same way).  The autotuning cache (TORCHINDUCTOR_CACHE_DIR's best configs) stays on, so processes that share
     that directory run the same kernel configurations."""
     return {"VLLM_DISABLE_COMPILE_CACHE": "1", "TORCHINDUCTOR_FX_GRAPH_CACHE": "0", "TORCHINDUCTOR_AUTOGRAD_CACHE": "0"}
+
+
+def _capturing(val: torch.Tensor) -> bool:
+    return val.is_cuda and torch.cuda.is_current_stream_capturing()
 
 
 def _label(text: str) -> str:
@@ -171,7 +177,7 @@ class ServedCompiledSource:
         self.errors: list[str] = []
         self.stats: dict[str, Any] = {}
         self.stats_reset_step_counters()
-        self.stats.update(capture_copies=0, slot_bytes=0, slot_resets=0)
+        self.stats.update(capture_copies=0, slot_bytes=0, slot_resets=0, profiling_captures=0)
 
     # ------------------------------------------------------------------ installation (before the engine compiles and captures)
 
@@ -223,7 +229,11 @@ class ServedCompiledSource:
                         finally:
                             src.capturing = None
                     return forward_fn
-                return orig(self_m, create, *a, **kw)
+                try:
+                    return orig(self_m, create, *a, **kw)
+                finally:
+                    if getattr(self_m, "_capture_mem_samples", None) is not None:
+                        src._end_profiling_capture()            # vLLM's memory profiling: its graphs are discarded, so are their slots
             return run
 
         def dispatch(orig):
@@ -307,8 +317,17 @@ class ServedCompiledSource:
         if rows > self.max_rows:
             if self.slots:
                 self.stats["slot_resets"] += 1
-            self.slots, self.plans, self.static, self.max_rows = {}, {}, set(), rows
-            self.stats["slot_bytes"] = 0
+            self._drop_slots()
+            self.max_rows = rows
+
+    def _end_profiling_capture(self) -> None:
+        self._drop_slots()
+        self.max_rows = 0
+        self.stats["profiling_captures"] += 1
+
+    def _drop_slots(self) -> None:
+        self.slots, self.plans, self.static = {}, {}, set()
+        self.stats["slot_bytes"] = 0
 
     def _note_dispatch(self, desc: Any, num_tokens: int) -> None:
         if self._job() is None:
@@ -333,12 +352,17 @@ class ServedCompiledSource:
         index = self.index.get(sub, 0)
         self.index[sub] = index + 1
         order = (self.piece, sub, index)
-        if torch.cuda.is_current_stream_capturing():
+        if _capturing(val):
             if self.capturing is None:
                 self.errors.append(f"{name}: captured outside a CudaGraphManager capture")
                 return
             self.plans[self.capturing].append(self._stage(order, name, val, self.capturing[1]))
             self.stats["capture_copies"] += 1
+            return
+        if self.capturing is not None:
+            # the uncaptured warm-up pass before each capture, and live work between PIECEWISE pieces during one: the slot is
+            # allocated here, outside the graph's memory pool, so the capture only records the copy
+            self._stage(order, name, val, self.capturing[1])
             return
         job = self._job()
         if job is None:
@@ -415,6 +439,14 @@ class ServedCompiledSource:
     def expected_modules(self) -> list[str]:
         return []
 
+    def extra_step_bytes(self, envelope: dict[str, Any], model: Any) -> dict[str, int]:  # noqa: ARG002
+        """What a step adds to the committer's staging bound (`size_arena`), read from the slots the captures allocated: bytes per token
+        row, the largest plan's fixed-shape tensors, and the tensor count."""
+        per_token = sum(s.numel() * s.element_size() // self.max_rows for k, s in self.slots.items() if len(k) == 2) if self.max_rows else 0
+        fixed = max((sum(slot.numel() * slot.element_size() for _o, _n, slot, rows in plan if not rows) for plan in self.plans.values()),
+                    default=0)
+        return {"per_token_bytes": per_token, "per_step_bytes": fixed, "tensors_per_step": len({k[:2] for k in self.slots})}
+
     def declaration_classes(self) -> list[dict]:
         return []
 
@@ -446,8 +478,10 @@ class ServedCompiledSource:
     begin_run = stats_reset_step_counters
 
     def summary(self) -> dict[str, Any]:
+        fixed = sorted({(k[1], k[2]) for k in self.slots if len(k) == 3})
         return {"short_name": self.short_name, "fault": self.fault, "max_rows": self.max_rows, "slots": len(self.slots),
                 "plans": {f"{m}:{n}": len(p) for (m, n), p in sorted(self.plans.items())}, "codegen": dict(self.codegen),
+                "fixed_shape": {"count": len(fixed), "sample": [f"{n}{list(s)}" for n, s in fixed[:12]]},
                 "stats": dict(self.stats), "errors": list(self.errors)[:20]}
 
 
@@ -458,8 +492,9 @@ def _committed(committer: Any, step: int, name: str) -> torch.Tensor | None:
     meta = next((m for m in committer._layouts.get(step, ()) if m.name == name), None)
     if blk is None or meta is None:
         return None
-    raw = blk[meta.dev_off: meta.dev_off + meta.nbytes]
-    dtype = getattr(torch, meta.dtype.rsplit(".", 1)[-1])
+    off = int(meta.dev_off) if int(getattr(meta, "dev_off", -1)) >= 0 else int(meta.stream_off)
+    raw = blk[off: off + meta.nbytes]
+    dtype = getattr(torch, str(meta.dtype).rsplit(".", 1)[-1])
     return raw.cpu().view(dtype).reshape(meta.shape)
 
 
