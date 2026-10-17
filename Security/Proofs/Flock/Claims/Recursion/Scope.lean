@@ -1,7 +1,6 @@
 import Definitions.Claims.Recursion
 import Proofs.Flock.Claims.DeployCode
-import Flock.RecCoins
-import Flock.Witness
+import Flock.RecSetup
 
 /-!
 # `Claims.Recursion.ScopeMatches` at the compiled verifier's parser and scope check
@@ -11,12 +10,12 @@ the inner statement's files where it holds them (`RecCoins.Source`), its own inn
 `--rec-inner`) and each V* session's record (`Read`). Its setup refuses an inner shape whose V* list
 `RecVStar.statements` refuses, and at candidate 3's sparse shape one whose inner statement `RecCoins.checkAtC3`
 refuses (`checkInnerRange`). Its verdict refuses a V* session whose record holds no draw (`ProvedScope.drawLaw`) or
-whose draw is not every unit of its population (`Witness.fullDraw` at the draw's population, the check
-`RecSetup.fullDraw` runs). There is no other recursion-level refusal.
+whose draw is not every unit of its population (`RecSetup.fullDraw`, #2219). There is no other recursion-level
+refusal.
 
 * `parseOf`: the deployed parser, what the verifier reads where its setup accepts the inner shape, readable (`toStmt`);
-* `scopeCheckOf`: the parser accepts, the inner scope check takes the inner statement, and every V* session's draw is
-  full (`fullDrawOk`);
+* `scopeCheckOf`: the parser accepts, the inner scope check takes the inner statement, and `RecSetup.fullDraw` takes
+  every V* session's draw at the verifier's inner shape (`fullDrawOk`);
 * `inScope_iff`: at a statement the parser accepts, `InScope` holds exactly when every V* session's draw is full, the
   setup's checks giving every condition on the inner shape (`statements_ok`, `candidate3_ok`, `checkAtC3_ok`,
   `checkInnerRange_ok`);
@@ -96,20 +95,18 @@ def parseBytes (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option R
 def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Claims.Recursion.Stmt :=
   (parseBytes decode x).map toStmt
 
-/-- **A V* session's draw passes the verdict's refusals**: its record holds a draw, which reads, and is every unit of
-its population (`Witness.fullDraw` at the draw's population, as `RecSetup.fullDraw` checks it). -/
-def fullDrawOk (record : String) : Bool :=
+/-- **A V* session's draw passes the verdict's refusals** under the verifier's inner shape `i`: its record holds a draw
+(`ProvedScope.drawLaw` refuses a session without one), and `RecSetup.fullDraw` takes it, as `verify` calls it. -/
+def fullDrawOk (i : RecVStar.Inner) (record : String) : Bool :=
   match Witness.recordDraw record with
-  | some d => match Draw.UnitDraw.ofJson d with
-    | .ok D => (Witness.fullDraw D.population record).isOk
-    | .error _ => false
+  | some d => (RecSetup.fullDraw (some i) (some d) record).isOk
   | none => false
 
 /-- **The deployed scope check**: the parser accepts, the inner scope check `ivScope` takes the inner statement, and
-every V* session's draw is full. -/
+every V* session's draw passes. -/
 def scopeCheckOf (ivScope : Claims.Msg → Bool) (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Bool :=
   match parseBytes decode x with
-  | some r => ivScope r.inner && r.records.all fullDrawOk
+  | some r => ivScope r.inner && r.records.all (fullDrawOk r.shape)
   | none => false
 
 /-! ## The shape the setup accepts -/
@@ -224,14 +221,14 @@ theorem checkAtC3_ok {i : RecVStar.Inner} {src : Option RecCoins.Source} {sp : R
 
 /-! ## The full draw -/
 
-theorem fullDrawOk_iff (record : String) :
-    fullDrawOk record = true ↔ ∃ e, recordDrawOf record = some e ∧ e.Full := by
-  unfold fullDrawOk recordDrawOf
+theorem fullDrawOk_iff (i : RecVStar.Inner) (record : String) :
+    fullDrawOk i record = true ↔ ∃ e, recordDrawOf record = some e ∧ e.Full := by
+  unfold fullDrawOk recordDrawOf RecSetup.fullDraw
   rcases hd : Witness.recordDraw record with _ | d
   · simp
   rcases hD : Draw.UnitDraw.ofJson d with e | D
-  · simp [hD]
-  simp only [hD, Option.bind_some, Option.some.injEq, exists_eq_left']
+  · simp [hD, bind, Except.bind, Except.isOk, Except.toBool]
+  simp only [hD, Option.bind_some, Option.some.injEq, exists_eq_left', bind, Except.bind]
   unfold Witness.fullDraw
   simp only [hd, hD, bind, Except.bind]
   unfold Claims.Recursion.Draw.Full drawOf
@@ -239,17 +236,17 @@ theorem fullDrawOk_iff (record : String) :
   · simp only [Option.some.injEq, true_and]
     rw [← Array.toList_range, Array.toList_inj, Array.toList_eq_nil_iff]
     by_cases hc : k = D.population ∧ D.units = Array.range D.population ∧ D.closure = #[]
-    · simp [hc, pure, Except.pure, Except.isOk, Except.toBool]
-    · simp only [hc, ↓reduceIte, throw, throwThe, MonadExceptOf.throw, Except.isOk, Except.toBool,
+    · simp [hc, pure, Except.pure, Except.mapError, Except.isOk, Except.toBool]
+    · simp only [hc, ↓reduceIte, throw, throwThe, MonadExceptOf.throw, Except.mapError, Except.isOk, Except.toBool,
         Bool.false_eq_true]
-  all_goals simp [throw, throwThe, MonadExceptOf.throw, Except.isOk, Except.toBool]
+  all_goals simp [throw, throwThe, MonadExceptOf.throw, Except.mapError, Except.isOk, Except.toBool]
 
 /-! ## The scope -/
 
-/-- **`InScope` at a statement the setup accepts** holds exactly when every V* session's draw is full: the setup's
+/-- **`InScope` at a statement the setup accepts** holds exactly when every V* session's draw passes: the setup's
 checks give every condition on the inner shape. -/
 theorem inScope_iff {r : Read} (hr : accepts r = true) :
-    Claims.Recursion.InScope (toStmt r) ↔ r.records.all fullDrawOk = true := by
+    Claims.Recursion.InScope (toStmt r) ↔ r.records.all (fullDrawOk r.shape) = true := by
   unfold accepts at hr
   simp only [Bool.and_eq_true, isOk_iff] at hr
   obtain ⟨⟨ss, hs⟩, ⟨u, hc⟩⟩ := hr
@@ -285,20 +282,20 @@ theorem inScope_iff {r : Read} (hr : accepts r = true) :
   · rintro ⟨-, -, -, -, -, -, hd⟩
     rw [List.all_eq_true]
     intro rec hrec
-    exact (fullDrawOk_iff rec).2 (hd _ (List.mem_map_of_mem hrec))
+    exact (fullDrawOk_iff r.shape rec).2 (hd _ (List.mem_map_of_mem hrec))
   · intro hall
     refine ⟨rfl, h1, h2, h3, h4, hshape, ?_⟩
     intro d hd
     obtain ⟨rec, hrec, rfl⟩ := List.mem_map.1 hd
-    exact (fullDrawOk_iff rec).1 (List.all_eq_true.1 hall rec hrec)
+    exact (fullDrawOk_iff r.shape rec).1 (List.all_eq_true.1 hall rec hrec)
 
 /-- **The readable scope at the verifier's parser**: the setup accepts what the verifier reads, the inner statement is
-in the inner scope, and every V* session's draw is full. -/
+in the inner scope, and every V* session's draw passes. -/
 theorem scope_iff {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) (decode : Claims.Msg → Option Read)
     (hparse : D.parse = parseOf decode) (x : Claims.Msg) :
     Claims.Recursion.Scope D I x ↔
-      ∃ r, parseBytes decode x = some r ∧ I.Scope r.inner ∧ r.records.all fullDrawOk = true := by
+      ∃ r, parseBytes decode x = some r ∧ I.Scope r.inner ∧ r.records.all (fullDrawOk r.shape) = true := by
   unfold Claims.Recursion.Scope
   rw [hparse]
   constructor
