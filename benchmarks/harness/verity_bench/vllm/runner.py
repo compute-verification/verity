@@ -460,8 +460,9 @@ def _kv_cache_tokens(llm: Any) -> int | None:
 def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) -> dict[str, Any]:
     """The engine options every arm of a preset shares, before an arm's own overrides.
 
-    With ``serving_defaults`` the engine compiles as vLLM serves (torch.compile, its CUDA-graph mode and capture sizes);
-    otherwise a graph engine replays decode-only CUDA graphs at the preset's ``capture_sizes``. Engines of one group
+    With ``serving_defaults`` the engine compiles as vLLM serves (torch.compile, its CUDA-graph mode and capture sizes,
+    the execution label ``compiled``, or ``eager`` for an eager engine); otherwise a graph engine replays decode-only CUDA
+    graphs at the preset's ``capture_sizes``. Engines of one group
     share one exact KV pool, ``resident_kv_cache_memory_bytes`` or ``block_kv_cache_memory_bytes``: vLLM schedules by
     free KV blocks, and an arm whose install leaves a different amount of free memory would otherwise get a different
     pool, a different schedule, and (through batch-composition-dependent kernels) different tokens than its control.
@@ -483,7 +484,9 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
         engine["quantization"] = "fp8"
     elif precision != "bfloat16":
         engine["dtype"] = precision
-    if not eager and not settings.get("serving_defaults"):
+    if settings.get("serving_defaults"):
+        engine["execution"] = "eager" if eager else "compiled"
+    elif not eager:
         engine["compilation_config"] = {
             "mode": 0,
             "cudagraph_mode": "FULL_DECODE_ONLY",
@@ -506,7 +509,7 @@ class _VllmEngine:
         from verity_vllm.engine import env as engine_env
 
         if preset.engine_settings.get("serving_defaults"):
-            engine_env.apply_served()
+            engine_env.apply_compile_fresh()
         engine_env.apply_engine(None)
         import torch
         import vllm
@@ -537,7 +540,7 @@ class _VllmEngine:
                     model=preset.model,
                     enable_prefix_caching=False,
                     seed=0,
-                    **engine,
+                    **{k: v for k, v in engine.items() if k != "execution"},
                 ),
                 {k: engine[k] for k in ("dtype", "quantization", "compilation_config", "kv_cache_memory_bytes")
                  if engine.get(k) is not None},

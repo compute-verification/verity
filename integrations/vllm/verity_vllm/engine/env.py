@@ -46,9 +46,6 @@ EXPORT = {
     "TOKENIZERS_PARALLELISM": "false",
 }
 
-#: vLLM's serving default where ``ENGINE`` pins otherwise: no batch invariance.
-SERVED = {"VLLM_BATCH_INVARIANT": "0"}
-
 #: No compile cache of any layer (vLLM's, Inductor's FX graphs, AOTAutograd's): every compiled engine generates its wrappers
 #: in-process, so hooks installed before the build are in them (``served_compiled_source``), and an engine compared with
 #: one compiles the same way. Inductor's autotuning results (TORCHINDUCTOR_CACHE_DIR) stay shared.
@@ -80,9 +77,9 @@ def apply_target(env: Mapping[str, str]) -> dict[str, str]:
     return {k: os.environ[k] for k in env}
 
 
-def apply_served() -> dict[str, str]:
-    """``SERVED`` and ``COMPILE_FRESH`` as overrides, before vLLM and torch read them (then ``apply_engine``'s pins)."""
-    return apply_target({**SERVED, **COMPILE_FRESH})
+def apply_compile_fresh() -> dict[str, str]:
+    """``COMPILE_FRESH`` as overrides, before vLLM and torch read them."""
+    return apply_target(COMPILE_FRESH)
 
 
 def hide_devices() -> None:

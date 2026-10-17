@@ -391,7 +391,8 @@ def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_comp
     for resident in (True, False):
         args = engine_args(served_preset, "bfloat16", resident=resident, eager=False)
         assert args["kv_cache_memory_bytes"] == 10 * 2**30
-        assert "compilation_config" not in args and args["enforce_eager"] is False
+        assert "compilation_config" not in args and args["enforce_eager"] is False and args["execution"] == "compiled"
+    assert engine_args(served_preset, "bfloat16", resident=True, eager=True)["execution"] == "eager"
     pinned = load_spec("llama31-8b-fp8-1gpu").preset
     resident = engine_args(pinned, "fp8", resident=True, eager=False)
     assert "kv_cache_memory_bytes" not in resident and resident["quantization"] == "fp8"

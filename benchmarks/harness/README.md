@@ -27,8 +27,9 @@ A sweep is the product of its batches, prompt lengths, traffic shapes and sampli
 engine's numerics like a greedy one's.
 
 The engine settings `serving_defaults = true` build every engine as vLLM serves (torch.compile, its CUDA-graph mode and
-capture sizes, no batch invariance), with one Inductor cache directory for all arms' processes, so they run the kernel
-configurations the first one autotuned. Without it a graph engine replays decode-only CUDA graphs at `capture_sizes`.
+capture sizes, no batch invariance: the execution label `compiled` of `verity_vllm.engine.served`), with one Inductor
+cache directory for all arms' processes, so they run the kernel configurations the first one autotuned. Without it a
+graph engine replays decode-only CUDA graphs at `capture_sizes`.
 
 ## How a point is timed
 

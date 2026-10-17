@@ -33,6 +33,9 @@ SUPPORTED: dict[str, Supported] = {
     "kv_cache_memory_bytes": Supported(int, None, "the KV cache's size in bytes, in place of sizing it from free memory "
                                                   "(default: vLLM's sizing)"),
     "enforce_eager": Supported(bool, True, "True runs eagerly; False compiles with torch.compile and CUDA graphs"),
+    "execution": Supported((str, type(None)), None, "the execution label the engine is built for (engine.served.EXECUTIONS), which "
+                                                    "sets its batch invariance and enforce_eager (default: bi-eager, or bi-compiled "
+                                                    "with enforce_eager False)"),
     "dtype": Supported((str, type(None)), None, "served dtype override (default: the checkpoint profile's)"),
     "quantization": Supported((str, type(None)), None, "vLLM quantization override, such as fp8 (default: the checkpoint's)"),
     "compilation_config": Supported((dict, type(None)), None, "vLLM compilation and CUDA-graph settings"),
@@ -66,6 +69,14 @@ def resolve_options(options: dict[str, Any]) -> dict[str, Any]:
         out[k] = v
     if out["tensor_parallel_size"] < 1 or out["max_num_seqs"] < 1:
         raise ValueError("verity_vllm.LLM: tensor_parallel_size and max_num_seqs must be at least 1")
+    if out["execution"] is not None:
+        from verity_vllm.engine import served
+
+        eager = served.execution(out["execution"])[0]["enforce_eager"]
+        if options.get("enforce_eager", eager) != eager:
+            raise ValueError(f"verity_vllm.LLM: execution {out['execution']!r} builds with enforce_eager={eager}, not "
+                             f"{options['enforce_eager']}")
+        out["enforce_eager"] = eager
     return out
 
 
@@ -137,6 +148,9 @@ class LLM:
       sizing.
     * ``enforce_eager`` (bool, default True): True runs eagerly; False compiles with torch.compile and CUDA graphs, in a
       fresh Inductor cache for this process.
+    * ``execution`` (str): the execution label the engine is built for, a key of ``engine.served.EXECUTIONS``, which sets
+      its batch invariance and ``enforce_eager`` (``"compiled"`` is vLLM's serving defaults); default ``"bi-eager"``, or
+      ``"bi-compiled"`` with ``enforce_eager=False``.  An ``enforce_eager`` the label contradicts raises ``ValueError``.
     * ``dtype`` (str): served dtype override; default the checkpoint profile's.
     * ``quantization`` (str): vLLM quantization override, such as ``"fp8"``; default the checkpoint's.
     * ``compilation_config`` (dict): vLLM compilation and CUDA-graph settings.
@@ -167,7 +181,8 @@ class LLM:
         if self.pin.world > 1:
             engine_args["tensor_parallel_size"] = self.pin.world
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
-                                       engine_args=engine_args, execution=va.execution_label_of(opts["enforce_eager"]))
+                                       engine_args=engine_args,
+                                       execution=opts["execution"] or va.execution_label_of(opts["enforce_eager"]))
         self.records: list[GenerateRecord] = []
         self.spec_digest: str | None = None
         self.protocols = None

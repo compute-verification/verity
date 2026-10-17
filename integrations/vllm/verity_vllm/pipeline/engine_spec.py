@@ -39,6 +39,7 @@ class Engine:
     gpu_memory_utilization: float | None = None
     kv_cache_memory_bytes: int | None = None
     enforce_eager: bool | None = None
+    execution: str | None = None
     dtype: str | None = None
     quantization: str | None = None
     compilation_config: Mapping[str, Any] | None = None

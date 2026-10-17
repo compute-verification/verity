@@ -216,6 +216,7 @@ Supported keyword options:
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
 | `kv_cache_memory_bytes` | vLLM's sizing | the KV cache's size in bytes, in place of sizing it from free memory |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
+| `execution` | `bi-eager`, or `bi-compiled` with `enforce_eager` False | the execution label (`engine.served.EXECUTIONS`), which sets batch invariance and `enforce_eager`; `compiled` is vLLM's serving defaults |
 | `dtype` | the profile's | served dtype override |
 | `quantization` | the checkpoint's | vLLM quantization override, such as `"fp8"` |
 | `compilation_config` | vLLM's | compilation and CUDA-graph settings |

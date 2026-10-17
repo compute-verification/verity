@@ -57,6 +57,8 @@ def test_adapter_execution_of_workload_and_labels():
     assert va.execution_of_workload({"requests": []}) is None
     assert va.execution_of_workload(None) is None
     assert va.execution_label_of(True) == "bi-eager" and va.execution_label_of(False) == "bi-compiled" and va.execution_label_of(None) is None
+    assert va.execution_label_of(True, False) == "eager" and va.execution_label_of(False, False) == "compiled"
+    assert va.execution_label_of(False, None) is None
     assert va.EXECUTION_ENFORCE_EAGER is rc.ENFORCE_EAGER          # the laptop's table is the pod's
 
 
