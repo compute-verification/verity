@@ -4,6 +4,7 @@ program's load on every sm_89 row.
   python ji.py emit K [--pins GATE.json] > jiK.cu  # IMMA.168{K}'s grid (K 16 or 32), pinned from the unpinned build's gate
   python ji.py loads OUT...                         # each timed program's load on every row ADA-89 holds, heaviest first
   python ji.py worst OUT...                         # each row's heaviest load and its program
+  python ji.py refit FORM OUT...                    # FORM's JI89 line as its per-form upper hull at the 2% margin
 
 The grid (each program `j<K>_<lane>_q<Q>_a<NA>u<U>_w<W>`: Q lane ops a 8 MMAs, NA accumulators, U groups of 8 MMAs an
 iteration, W warps a SMSP, one block a SM): FMUL by an immediate at 2-8 accumulators, Q 16-160, 1, 2 or 4 warps a SMSP;
@@ -140,6 +141,63 @@ def loads(outs: list[Path]) -> list[dict]:
     return res
 
 
+def joint_points(outs: list[Path], form: str) -> list[tuple[float, float, str]]:
+    """Each program of `form`'s (MMAs, vector issue) a SMSP-cycle: JI89's axes, every non-MMA SASS instruction counted
+    (MOV included, a uniform one at UNI's issue cost over a vector one's), as JI89's fit counts them."""
+    from verity_machine_model.model import census, device, model
+
+    d = device("sm_89")
+    m = model(d)
+    cen = census(m, m.epochs[-1], d)
+    uni = cen["UNI"]["JI89"] / cen["ALU"]["JI89"]
+    pts = []
+    for out in outs:
+        for line in (out / "rows.jsonl").read_text().splitlines():
+            r = json.loads(line)
+            x = v = 0.0
+            for key, rate in r["rates"].items():
+                op = key.split(":", 1)[1]
+                if class_of(op) == form:
+                    x += rate / 4
+                elif class_of(op) not in MMA_KINDS and op != "BRA":
+                    v += rate / 4 * (uni if op.startswith("U") else 1)
+            if x:
+                pts.append((x, v, r["probe"]))
+    return pts
+
+
+MMA_KINDS = ("IMMA16816", "IMMA16832")
+
+
+def refit(outs: list[Path], form: str, margin: float = 0.02) -> list[tuple[float, float, str]]:
+    """`form`'s JI89 line refitted as its own rows: the upper hull of the old line's two vertices and every measured
+    program at the margin (FACET-BREAK's per-form rule), each facet (a, b, through) with a·x_form + b·v ≤ 1."""
+    from verity_machine_model.model import census, device, model
+
+    d = device("sm_89")
+    m = model(d)
+    cen = census(m, m.epochs[-1], d)
+    cf, cv = cen[form]["JI89"] / m.cycle_u, cen["ALU"]["JI89"] / m.cycle_u
+    pts = [(0.0, 1 / cv, "JI89"), (1 / cf, 0.0, "JI89")]
+    pts += [(x * (1 + margin), v * (1 + margin), p) for x, v, p in joint_points(outs, form)]
+    pts.sort(key=lambda t: (t[0], -t[1]))
+    hull: list[tuple[float, float, str]] = []
+    for p in pts:  # the upper chain, left to right, of points no line through two others passes above
+        while len(hull) >= 2:
+            (x1, y1, _), (x2, y2, _) = hull[-2], hull[-1]
+            if (x2 - x1) * (p[1] - y1) - (y2 - y1) * (p[0] - x1) >= 0:
+                hull.pop()
+            else:
+                break
+        hull.append(p)
+    start = max(range(len(hull)), key=lambda i: (hull[i][1], -hull[i][0]))
+    facets = []
+    for (x1, y1, p1), (x2, y2, p2) in zip(hull[start:], hull[start + 1:]):
+        det = x1 * y2 - x2 * y1
+        facets.append(((y2 - y1) / det, (x1 - x2) / det, f"{p1} / {p2}"))
+    return facets
+
+
 def worst(res: list[dict]) -> dict[str, tuple[float, str]]:
     """Each row's heaviest load and its program."""
     out: dict[str, tuple[float, str]] = {}
@@ -158,9 +216,15 @@ def main() -> None:
     e.add_argument("--pins", type=Path)
     for c in ("loads", "worst"):
         sub.add_parser(c).add_argument("outs", nargs="+", type=Path)
+    rf = sub.add_parser("refit")
+    rf.add_argument("form", choices=MMA_KINDS)
+    rf.add_argument("outs", nargs="+", type=Path)
     a = ap.parse_args()
     if a.cmd == "emit":
         sys.stdout.write(emit(a.k, a.pins))
+    elif a.cmd == "refit":
+        for fa, fb, through in refit(a.outs, a.form):
+            print(f"{a.form} {fa:.9g} + vector {fb:.9g}  ({through})")
     elif a.cmd == "loads":
         for r in loads(a.outs):
             print(json.dumps(r))
