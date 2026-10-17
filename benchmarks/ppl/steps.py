@@ -691,6 +691,12 @@ E2M1 = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
 #: block length along k of each block-scaled format: MX (E8M0 scales) and NVFP4 (UE4M3 scales)
 BLOCKS = {"mx": 32, "nv": 16}
 FP_SCALES = ("tensor", "channel", "mx", "nv")
+#: a weight's rows are quantized (and emulated) this many at a time, so lm_head's temporaries stay small
+ROW_CHUNK = 8192
+
+
+def by_rows(fn, w: torch.Tensor) -> list:
+    return [fn(w[i:i + ROW_CHUNK]) for i in range(0, w.shape[0], ROW_CHUNK)]
 
 
 def to_format(v: torch.Tensor, fmt: str) -> torch.Tensor:
@@ -701,15 +707,16 @@ def to_format(v: torch.Tensor, fmt: str) -> torch.Tensor:
     return torch.sign(v) * t[torch.bucketize(v.abs().clamp(max=6).contiguous(), (t[1:] + t[:-1]) / 2)]
 
 
-def fake_quant(x: torch.Tensor, fmt: str, scale: str, dim: int = -1) -> torch.Tensor:
+def fake_quant(x: torch.Tensor, fmt: str, scale: str, dim: int = -1, amax: torch.Tensor | None = None) -> torch.Tensor:
     """x on the format, dequantized, scaled along `dim` (the contraction): `tensor` one scale amax / max, `channel` one
     per slice along `dim` (per token, per output row), `mx` per block of 32 a power of two (OCP's E8M0 X), `nv` per
     block of 16 a UE4M3 scale times one FP32 scale per tensor (NVIDIA's: s = amax / (448 * 6), s_b = e4m3(amax_b / 6 /
-    s))."""
+    s)). `amax`: the whole tensor's, when x is a slice of it."""
     top, emax = FORMATS[fmt]
     x = x.float()
+    amax = x.abs().amax() if amax is None else amax
     if scale in ("tensor", "channel"):
-        a = x.abs().amax() if scale == "tensor" else x.abs().amax(dim, keepdim=True)
+        a = amax if scale == "tensor" else x.abs().amax(dim, keepdim=True)
         s = a.clamp(min=1e-30) / top
         return to_format(x / s, fmt) * s
     xt = x.movedim(dim, -1)
@@ -718,7 +725,7 @@ def fake_quant(x: torch.Tensor, fmt: str, scale: str, dim: int = -1) -> torch.Te
     if scale == "mx":
         sb = torch.exp2(torch.floor(torch.log2(a.clamp(min=2 ** -126))) - emax)
     else:
-        sg = xt.abs().amax().clamp(min=1e-30) / (448 * top)
+        sg = amax.clamp(min=1e-30) / (448 * top)
         sb = (a / top / sg).clamp(max=448).to(torch.float8_e4m3fn).float() * sg
         sb = torch.where(sb > 0, sb, torch.ones_like(sb))
     return (to_format(b / sb, fmt) * sb).reshape(xt.shape).movedim(-1, dim)
@@ -738,8 +745,12 @@ def fp_linear(mm, nxt, *, fmt: str, scale: str):
     """A format's own plain quantization, no PoUW: activations and weights rounded to the nearest value of `fmt`
     (e4m3, e2m1) under `scale` along k (`fake_quant`: tensor; channel, per token and per output row; mx; nv), the
     product of the dequantized operands in FP32 (the format's MMA with its FP32 accumulator)."""
-    w = mm.cached("fp", lambda: fake_quant(mm.weight(), fmt, scale))
-    return nxt(mm.replace(x=fake_quant(mm.x, fmt, scale), w=w))
+    def weights():
+        w = mm.weight()
+        amax = w.abs().amax()
+        return torch.cat(by_rows(lambda r: fake_quant(r, fmt, scale, amax=amax), w))
+
+    return nxt(mm.replace(x=fake_quant(mm.x, fmt, scale), w=mm.cached("fp", weights)))
 
 
 @attention_step("fp", phase="quantize", check=_check_fp)
@@ -757,15 +768,16 @@ def fp_attention(mm, nxt, *, fmt: str, scale: str):
 NATIVE = {"e4m3i": "e4m3", "int5": "e4m3", "e2m1i": "e2m1"}
 
 
-def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool):
+def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool, amax: torch.Tensor | None = None):
     """v = x / (s m) within the grid's range, s one scale per tensor or row and m one per block of k: `tensor` and
     `channel` s = amax / top (m = 1); `nv` s = row amax / (top 15) and m the smallest odd UE4M3 integer that holds the
     block (`on_blocks`'); `mx` s = 1 and m the smallest power of two with |v| <= top (E8M0). A coined operand's scale
-    is wider by 2^-20, so |v| < top. Returns v, s (broadcast over rows) and m (rows x blocks, or None)."""
+    is wider by 2^-20, so |v| < top. Returns v, s (broadcast over rows) and m (rows x blocks, or None). `amax`: the
+    whole tensor's, when x is a slice of it."""
     top = LEVELS[grid][-1]
     pad = 1 + 2 ** -20 if coined else 1.0
     if scale in ("tensor", "channel"):
-        a = x.abs().amax() if scale == "tensor" else x.abs().amax(-1, keepdim=True)
+        a = (x.abs().amax() if amax is None else amax) if scale == "tensor" else x.abs().amax(-1, keepdim=True)
         s = a.clamp(min=1e-30) * pad / top
         return x / s, s, None
     *lead, k = x.shape
@@ -817,12 +829,18 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     if scale in BLOCKS and k % BLOCKS[scale]:
         raise ValueError(f"{mm.where}: k = {k} is not a multiple of {BLOCKS[scale]}")
 
-    def weights():
-        v, s, m = native_parts(mm.weight(), grid, scale, weight != "round")
+    def rows(w, amax):
+        v, s, m = native_parts(w, grid, scale, weight != "round", amax)
         lo, hi = bracket(v, grid)
         if weight == "round":
             return torch.where(v - lo <= hi - v, lo, hi).to(torch.int16), None, s, m
         return lo.to(torch.int16), (hi - lo).to(torch.int8), s, m
+
+    def weights():
+        w = mm.weight()
+        amax = w.abs().amax()
+        parts = by_rows(lambda r: rows(r, amax), w)
+        return tuple(p[0] if p[0] is None or p[0].dim() == 0 else torch.cat(p) for p in zip(*parts))
 
     wl, wg, sw, mw = mm.cached("native", weights)
     if act_grid == "int8":
@@ -886,18 +904,25 @@ def emulate(mm, nxt, route: str):
     the arm's perplexity is the emulation's."""
     from matmul import exact_mm
     acc = nxt(mm)
-    x, w = mm.x.float(), mm.weight().float()
-    a, b, pairs = route_planes(route, x, w)
+    x, w = mm.x.float(), mm.weight()
     fmt = "e2m1" if route.startswith("fp4") else "e4m3"
-    held = all(holds(fmt, p) for p in a + b)
-    if mm.kind == "linear":
-        b = [p.T for p in b]
-    elif mm.kind == "qk":
-        b = [p.transpose(-1, -2) for p in b]
-    got = None
-    for i, j, c in pairs:
-        part = c * exact_mm(a[i], b[j], int(G.absmax(a[i]) * G.absmax(b[j])))
-        got = part if got is None else got + part
+    held = True
+
+    def product(wc):
+        nonlocal held
+        a, b, pairs = route_planes(route, x, wc.float())
+        held = held and all(holds(fmt, p) for p in a + b)
+        if mm.kind == "linear":
+            b = [p.T for p in b]
+        elif mm.kind == "qk":
+            b = [p.transpose(-1, -2) for p in b]
+        got = None
+        for i, j, c in pairs:
+            part = c * exact_mm(a[i], b[j], int(G.absmax(a[i]) * G.absmax(b[j])))
+            got = part if got is None else got + part
+        return got
+
+    got = torch.cat(by_rows(product, w), -1) if mm.kind == "linear" else product(w)
     ok = G.int8_ok(x, w) and held and torch.equal(got, acc.double())
     mm.gate("emulation", bool(ok), {"route": route, "held": held})
     return got.to(acc.dtype)

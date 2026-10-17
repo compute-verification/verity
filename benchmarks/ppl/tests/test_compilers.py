@@ -87,6 +87,16 @@ def test_baselines_and_native_grids_pass_every_gate(llama, ids, calib):
     assert r["gates"]["grid_range"]["checked"] > 0
 
 
+def test_row_chunks_change_no_bit(llama, ids, calib, monkeypatch):
+    arms = ["pc-fp8-tensor", "pc-nvfp4", "pc-c2-e4m3i-t-2s", "pc-c2-nvfp4-2s", "pc-c1-e4m3-k4"]
+    whole = evaluate(llama, ids[:2], arms, calib=calib)
+    monkeypatch.setattr(steps, "ROW_CHUNK", 48)
+    chunked = evaluate(llama, ids[:2], arms, calib=calib)
+    assert passed(chunked), chunked["gates"]
+    for k, v in whole["nll"].items():
+        assert np.array_equal(v, chunked["nll"][k]), k
+
+
 def test_native_checks():
     with pytest.raises(ValueError, match="nv blocks"):
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "nv"}]}, "x")
