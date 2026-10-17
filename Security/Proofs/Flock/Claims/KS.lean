@@ -48,6 +48,8 @@ import Proofs.Flock.Claims.KS.PlainFirst
 import Proofs.Flock.Claims.KS.PlainThird
 import Proofs.Flock.Claims.KS.ForkSlack
 import Proofs.Flock.Claims.KS.PlainSimW
+import Proofs.Flock.Claims.KS.PlainWire
+import Proofs.Flock.Claims.KS.PlainClashL
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Claims.KS.ZkDrawJ
@@ -240,7 +242,14 @@ functions read at the live coins seen so far, so that a fork that redraws them r
 `Claims.Bridge.Live.fnC`, `Claims.Bridge.Live.Pr_fnC`, `Claims.Bridge.Live.Pr_fnAt`). Two different columns an accepted
 plain run's reps open at one position collide in its own log (`ConflictTied`: `FlockDeploy.KS.plainRawCols`,
 `FlockDeploy.KS.plain_opening_raw`, `FlockDeploy.KS.plain_selfClash_tied`), so the simulator's self-clashes at level 0
-need only give such columns (`PlainSimW`: `FlockDeploy.KS.PlainRawClashRun`, `FlockDeploy.KS.plainClashRun_of_raw`).
+need only give such columns (`PlainSimW`: `FlockDeploy.KS.PlainRawClashRun`, `FlockDeploy.KS.plainClashRun_of_raw`),
+and past level 0 two openings of one position to different rows against one root in the run's log
+(`PlainClashL`: `FlockDeploy.KS.PlainLevelClash`, `FlockDeploy.KS.PlainRawClashRunL`,
+`FlockDeploy.KS.plainClashRun_of_rawL`). At the deployed plain verifier's message formats (`PlainWire`:
+`FlockDeploy.KS.plainWire`), the simulation is the live outcome's roots, link points, reps' rounds and proof files at
+the view's (`FlockDeploy.KS.PlainSimRoot`, `FlockDeploy.KS.PlainSimPts`, `FlockDeploy.KS.PlainSimReps`,
+`FlockDeploy.KS.PlainSimProofs`, `FlockDeploy.KS.plainSimRun_of_parts`), and a simulator that aborts on rejected runs
+gives the clash's acceptance (`FlockDeploy.KS.PlainSimAbort`, `FlockDeploy.KS.plainRawClashRun_of_abort`).
 Where `verify --zk` sets its session up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs`
 (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's
 (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's
