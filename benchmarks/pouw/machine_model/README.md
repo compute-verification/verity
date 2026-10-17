@@ -31,6 +31,7 @@ uv run machine-model eps --device sm89 --table --credit floor --operands floor  
 | `data/model.toml` | The constants (R*, the honest kernel's u a MAC, at 600 W too), the LP's ρ, tie and x_min, the honest GEMM, the CUDA kinds, the adopted design and the epochs in order |
 | `data/rows.csv` | One line per row of the machine (a pipe, a port, a ceiling or a joint vertex): its status (`measured`, `ASSUMED`, `provisional`, `joint`), the runs or notes it rests on, and what it is |
 | `data/census.csv` | One line per instruction class on a row: its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, `until`) and its runs |
+| `data/devices/SM/` | Another family's `census.csv` and `rows.csv` in the same schema (`sm_90` H200, `sm_100` B200; written by `dc/census.py`); no epoch reads them, `rows(DIR)` and `entries(m, DIR)` do |
 | `data/vectors/NAME.toml` | A named vector: its epoch, the rows and credits it uses in LP order, its note, and the numbers it was published with |
 | `data/attacks/FAMILY.jsonl` | An attack family: one program a line, its design, and the epochs it holds |
 | `data/devices/sm_NN/` | Another device's data ("Devices" below): `sm_89`, the L40S, from EPS1 ADA |
