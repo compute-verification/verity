@@ -1,12 +1,12 @@
 import Proofs.Flock.Claims.Complete.Sim
-import Proofs.Flock.Claims.Complete.Zk.Honest
+import Proofs.Flock.Claims.Complete.ZkTables.Honest
 
 /-!
 # The deployed completeness error
 
 `deployPlain`'s and `deployZk`'s `δc` (`Claims.Flock.Deploy.δc`), the error `Claims.Flock.Complete` reads: at the hash
 `H`, `δc H x` is the bad coins' count over `2^128` (`ε`, `εZk`) on the statements the verifier can accept against `H`
-(`ready H`, `readyZk H`), and `1` on every other statement.
+(`ready H`, `ZkTables.ready H`), and `1` on every other statement.
 
 * **The bad coins** (`Coins`: `pr_bad_le`): zerocheck's outer coins (`outerSlots`): rep `q`'s second round (`rOuter`,
   after `r_skip`), elements `0` to `m − 14`, at its index among the verifier's coins (`repStart`: the link's coin, then
@@ -25,10 +25,17 @@ import Proofs.Flock.Claims.Complete.Zk.Honest
     at SHA-512. At `sha512` the two agree (`ready_sha512`);
   * have an honest record that does not fit (`RecordFitsAt`): at some witness, tape and coins, the honest session's
     printed record is `2^64` bytes or more, past the last message's 64-bit word for its length.
-* **`δcZk H x = 1` exactly where `readyZk H x` fails**: the same of the masked session (`setupOf true`, and
-  `RecordFitsZkAt` at the masked session's run), and two more. The session has one table: the masked completeness
-  proof is per table, so a `--zk` statement of several tables gets `1`. Its `Hello` names the keyed coin tree
-  (`spec.coinTree`): the masked verifier refuses any other session.
+* **`ZkTables.δc H x = 1` exactly where `ZkTables.ready H x` fails** (`deployZk`'s): the same of the masked session
+  (`setupOf true`, and `ZkTables.RecordFitsAt` at the run of the honest masked prover on each table's share,
+  `ZkTables.traces`), at any number of tables, and one more: its `Hello` names the keyed coin tree (`spec.coinTree`),
+  and the masked verifier refuses any other session. `εZk` counts every table's two reps, so it is the masked union
+  bound at every number of tables.
+* **`δcZk H x = 1` exactly where `readyZk H x` fails**, the error of `honestPZk` (the prover that reads table `i`'s
+  bits at `i·2^m + a`, `tracesOf`, the relation's only at one table): `ZkTables.ready` at the masked session's run of
+  `honestPZk` (`RecordFitsZkAt`), at one table.
+* `CompleteWith H D P δc`: `Claims.Flock.Complete`'s statement at `D` with a prover and an error of one's own, which
+  the masked proofs state `honestPZk`'s completeness at `δcZk` in, and `ZkTables.honestP`'s at `ZkTables.δc`, which is
+  `Claims.Flock.Complete H (deployZk rel)`.
 -/
 
 namespace FlockComplete
@@ -167,7 +174,85 @@ theorem readyZk_sha512 (x : Claims.Msg) :
     simp
   · rfl
 
-/-- **Flock's `δc` at the masked verifier** against `H`: `εZk` where the verifier can accept, else `1`. -/
+/-- **The error of `honestPZk`**, against `H`: `εZk` where `readyZk` holds, else `1`. -/
 noncomputable def δcZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if readyZk H x then εZk x else 1
+
+/-- **Flock's completeness at a prover and an error of one's own**: `Claims.Flock.Complete`'s statement at `D`, of `P`
+at `δc`. -/
+def CompleteWith {Coin Col T Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Nonempty Ω]
+    (H : Claims.Msg → Claims.Msg)
+    (D : Claims.Flock.Deploy Coin Col T) (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → ℝ) : Prop :=
+  Claims.Complete H D.V P (Claims.Flock.R D.parse) (Claims.Flock.Scope D) δc
+
+theorem complete_iff_with {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    (H : Claims.Msg → Claims.Msg)
+    (D : Claims.Flock.Deploy Coin Col T) : Claims.Flock.Complete H D ↔ CompleteWith H D D.P (D.δc H) :=
+  Iff.rfl
+
+namespace ZkTables
+
+/-- **The honest masked record fits its length word** at the masked session `spec`, `sts` of `x`: at every witness,
+tape and coins, a record the honest masked session on each table's share returns, run against `H` with each send
+answered by its coin (`PI.sim`), is under `2^64` bytes. -/
+def RecordFitsAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) :
+    Prop :=
+  ∀ (w : Claims.Flock.Wit) (ω : TapeZk) (r : Fin ((V true).k x) → Coin) (record : String) (proofs : Array ByteArray),
+    ((sessionPZk asks Hashes.pi spec (tabsOf sts) (traces sts w) ω).run.sim H
+      (fun j => (Claims.coinSeq r j).bytes) 0).2 = .ok (record, proofs) →
+      record.toUTF8.size < 2 ^ 64
+
+open Classical in
+/-- **The statements the masked verifier can accept** against `H`, at any number of tables: `readyZk`'s but its one
+table, at the honest masked prover on each table's share. The session draws a unit, the statement is under `2^64`
+bytes, every table's regions fit, its setup against `H` is the one at SHA-512, its `Hello` names the keyed coin tree,
+and the honest record fits. -/
+noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
+  match setupOf true x with
+  | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
+      decide (∀ st ∈ sts, RegionsFit st) && decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) &&
+      spec.coinTree.isSome && decide (RecordFitsAt H x spec sts)
+  | none => false
+
+open Classical in
+/-- **At SHA-512, `ready` asks no setup agreement.** -/
+theorem ready_sha512 (x : Claims.Msg) :
+    ready sha512 x = match setupOf true x with
+      | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
+          decide (∀ st ∈ sts, RegionsFit st) && spec.coinTree.isSome && decide (RecordFitsAt sha512 x spec sts)
+      | none => false := by
+  unfold ready
+  split
+  · rename_i s spec sts hs
+    rw [hOf_sha512, setupWith_sha512, Ins.setup_read (setupOf_some hs).2]
+    simp
+  · rfl
+
+/-- **Flock's `δc` at the masked verifier** (`deployZk`'s), at any number of tables: `εZk` where the verifier can
+accept, else `1`. -/
+noncomputable def δc (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if ready H x then εZk x else 1
+
+/-- **At one table the honest record fits exactly when `honestPZk`'s does.** -/
+theorem recordFitsAt_one {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {spec : SessionSpec} {sts : Array Flock.Stmt}
+    (h1 : sts.size = 1) : RecordFitsAt H x spec sts ↔ RecordFitsZkAt H x spec sts := by
+  unfold RecordFitsAt RecordFitsZkAt
+  simp only [traces_one h1]
+
+/-- **Where `readyZk` holds, `ready` holds.** -/
+theorem ready_of_readyZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyZk H x = true) :
+    ready H x = true := by
+  unfold readyZk at h
+  unfold ready
+  split at h
+  · simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+    simp only [Bool.and_eq_true, decide_eq_true_eq]
+    exact ⟨⟨⟨⟨⟨h.1.1.1.1.1.2, h.1.1.1.1.2⟩, h.1.1.1.2⟩, h.1.1.2⟩, h.1.2⟩,
+      (recordFitsAt_one h.1.1.1.1.1.1).2 h.2⟩
+  · cases h
+
+/-- **Where `readyZk` holds, `δc H` is `δcZk H`.** -/
+theorem δc_eq_δcZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyZk H x = true) : δc H x = δcZk H x := by
+  simp [δc, δcZk, h, ready_of_readyZk h]
+
+end ZkTables
 
 end FlockComplete
