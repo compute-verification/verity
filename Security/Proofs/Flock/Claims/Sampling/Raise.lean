@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.KS.TableBound
+import Proofs.Flock.Claims.KS.Refit
 
 /-!
 # Flock's KS at a raised `N₀`
@@ -13,6 +13,12 @@ need not hold it. Scaled with `k`, it does (`Escapes.FitsFork.raise`, `tableBoun
 
 * `FlockDeploy.KS.zk_KS_raise`: KS at `deployZk` raised to `N₀′ ≥ N₀` and a weight `C′` with `C·k′ ≤ C′·k` and
   `k′ ≤ 2C′`, from `zk_KS_of_acc`'s premises.
+
+The old masked escapes (`oldEscZ`, at multiplicity 2) need no scaling: they leave level 0's `2·2^{d₀}·Q₀` of the
+weight unused, so they fit the same weight with the fork event of weight `k′` up to `4·N₀/e + 2·2^{d₀}·Q₀`:
+
+* `FlockDeploy.KS.oldEscZ_fitsFork_zk_le`: at any such `k′`;
+* `FlockDeploy.KS.oldEscZ_fitsFork_zk_raise`: at the raised `k′`, for `N₀′ ≤ N₀ + 2^{d₀}·Q₀/2`.
 -/
 
 namespace Claims.Flock
@@ -89,5 +95,120 @@ theorem zk_KS_raise (rel : Readable.Parsed → Readable.Relation)
       (fun x => εtable_nonneg true x) (V_k_pos true)
       (fun x => (k_range_zk rel x).imp (fun hk => by have := hkle x; omega) id) hone _ (fun _ => .inl rfl)
       (Claims.Flock.colsOk_orZero _ _ _ _ (zk_colsOk sha512 rel)) (zk_conflictTied rel) htab)
+
+/-- **The old masked escapes fit the masked weight with a fork event of weight `k′ ≤ 4·N₀/e + 2·2^{d₀}·Q₀`**, under
+`oldEscZ_fitsFork_zk`'s hypotheses: at multiplicity 2 the fork events leave level 0's `2·2^{d₀}·Q₀` of the weight
+unused. -/
+theorem oldEscZ_fitsFork_zk_le (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
+    (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables true x).head? = some (spec, st))
+    {sch : FlockSoundness.Accounting.Schedule}
+    (hsch : sch = FlockSoundness.Accounting.m1Schedule st.m) (Np : ℕ)
+    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+    (j : Claims.Flock.IZ sch.levels.length → Fin ((deployZk rel).V.k x)) (hj : Function.Injective j)
+    (ev : Claims.Flock.IZ sch.levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
+      (Fin ((deployZk rel).V.k x) → Coin) → Prop)
+    (ev₁ : Ω → (Fin ((deployZk rel).V.k x) → Coin) → Prop)
+    (tied : ∀ i ω s s', ev i ω s s' → Claims.TiedColl sha512
+      ((Claims.run sha512 P (deployZk rel).V x ω s).vLog ++
+        (Claims.run sha512 P (deployZk rel).V x ω (Claims.forkCoins (j i) s s')).vLog))
+    (tied₁ : ∀ ω s, ev₁ ω s → Claims.TiedColl sha512 (Claims.run sha512 P (deployZk rel).V x ω s).vLog)
+    (k' : ℝ) (hk' : k' ≤ 4 * N₀ true x / Real.exp 1 +
+      2 * (2 ^ (sch.levels.headD default).logLen * (sch.levels.headD default).queries)) :
+    (Claims.Flock.oldEscZ sha512 (deployZk rel).V P x sch Np j ev ev₁ tied tied₁).FitsFork
+      ((deployZk rel).weight x) k' := by
+  refine ⟨2, fun r => ?_, ?_, ?_⟩
+  · have hc : (Finset.univ.filter fun i : Claims.Flock.IZ sch.levels.length => j i = r).card ≤ 1 :=
+      Finset.card_le_one.2 fun a ha b hb => by
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and] at ha hb
+        exact hj (ha.trans hb.symm)
+    have hr : (if r.val = 0 then 1 else 0) ≤ 1 := by split <;> omega
+    exact Nat.add_le_add hc hr
+  · set f : FlockSoundness.Accounting.Level → ℝ := fun l => 2 ^ l.logLen * l.queries with hf
+    have hsum : ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i =
+        2 * ∑ ℓ : Fin sch.levels.length, f (sch.levels.getD (ℓ.val + 1) default) + 2 * ((Np : ℝ) * Np) + 2 := by
+      show ∑ i : (Fin 2 × Fin sch.levels.length) ⊕ (Fin 2 ⊕ Fin 2), Claims.Flock.cZ sch Np i = _
+      rw [Fintype.sum_sum_type, Fintype.sum_sum_type, Fintype.sum_prod_type]
+      simp only [Claims.Flock.cZ, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
+        Nat.cast_ofNat, mul_one]
+      rw [add_assoc]
+      rfl
+    have hd : (default : FlockSoundness.Accounting.Level).queries = 0 := rfl
+    have hhead := Claims.Flock.head_add_sum_shift f (by simp [hf, hd]) sch.levels
+    set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)
+    have htw : tableWeight true st = Claims.Flock.Numbers.weightOf sch pd := by
+      simp only [tableWeight, ↓reduceIte, hsch, pd]
+    have hNp2 : (Np : ℝ) * Np ≤ (pd : ℝ) ^ 2 := by
+      have := Nat.mul_le_mul hNp hNp
+      rw [sq]
+      exact_mod_cast this
+    have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.m).d := rfl
+    have hfits := kFits_all true st.m
+    simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
+    have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
+      pow_le_pow_right₀ (by norm_num) hfits
+    have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 ≤
+        4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
+      gcongr
+    have hsplit := weight_split h0
+    rw [hlen] at hsplit
+    have e : 4 * (N₀ true x - 2 ^ (Claims.Flock.zkLevel0 st.m).d) / Real.exp 1 =
+        4 * N₀ true x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 := by ring
+    rw [e] at hsplit
+    show ((2 : ℕ) : ℝ) * (k' + ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i) ≤
+      2 * weight true x
+    rw [hsum]
+    rw [htw, Claims.Flock.Numbers.weightOf, weightNat_cast] at hsplit
+    simp only [hf] at hhead hk'
+    push_cast at hsplit ⊢
+    linarith
+  · show ∑ _l : Unit, (1 : ℝ) ≤ (V true).k x
+    rw [Fintype.sum_unique]
+    exact_mod_cast V_k_pos true x
+
+/-- **The old masked escapes fit the masked weight at a raised `N₀`**: at `N₀′ ≤ N₀ + 2^{d₀}·Q₀/2` the raised `k′`
+is below `4·N₀/e + 2·2^{d₀}·Q₀`, as `2^{d₀}·Q₀ ≥ 1` (`oldEscZ_fitsFork_zk_le`), so the same escapes fit the same
+weight with the fork event of weight `k′`, whatever the raised record's weight `C′`. -/
+theorem oldEscZ_fitsFork_zk_raise (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
+    (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables true x).head? = some (spec, st))
+    (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) {sch : FlockSoundness.Accounting.Schedule}
+    (hsch : sch = FlockSoundness.Accounting.m1Schedule st.m) (Np : ℕ)
+    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+    (j : Claims.Flock.IZ sch.levels.length → Fin ((deployZk rel).V.k x)) (hj : Function.Injective j)
+    (ev : Claims.Flock.IZ sch.levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
+      (Fin ((deployZk rel).V.k x) → Coin) → Prop)
+    (ev₁ : Ω → (Fin ((deployZk rel).V.k x) → Coin) → Prop)
+    (tied : ∀ i ω s s', ev i ω s s' → Claims.TiedColl sha512
+      ((Claims.run sha512 P (deployZk rel).V x ω s).vLog ++
+        (Claims.run sha512 P (deployZk rel).V x ω (Claims.forkCoins (j i) s s')).vLog))
+    (tied₁ : ∀ ω s, ev₁ ω s → Claims.TiedColl sha512 (Claims.run sha512 P (deployZk rel).V x ω s).vLog)
+    (N₀' C' : Claims.Msg → ℝ)
+    (hN : N₀' x ≤ N₀ true x + 2 ^ (sch.levels.headD default).logLen * (sch.levels.headD default).queries / 2) :
+    (Claims.Flock.oldEscZ sha512 (deployZk rel).V P x sch Np j ev ev₁ tied tied₁).FitsFork
+      ((deployZk rel).weight x) (((deployZk rel).raise N₀' C').k x) := by
+  refine oldEscZ_fitsFork_zk_le rel P x h0 hsch Np hNp j hj ev ev₁ tied tied₁ _ ?_
+  set q : ℝ := 2 ^ (sch.levels.headD default).logLen * (sch.levels.headD default).queries with hq
+  have hq1 : 1 ≤ q := by
+    have hq0 : 1 ≤ (sch.levels.headD default).queries := by
+      have := m1_queries₀_pos ⟨st.m - 25, by omega⟩
+      simp only [Nat.sub_add_cancel h25] at this
+      rw [hsch]
+      exact this
+    have h1 : (1 : ℝ) ≤ 2 ^ (sch.levels.headD default).logLen := one_le_pow₀ (by norm_num)
+    have h2 : (1 : ℝ) ≤ (sch.levels.headD default).queries := by exact_mod_cast hq0
+    nlinarith
+  have he := Real.exp_pos 1
+  have he2 : 2 ≤ Real.exp 1 := by linarith [Real.add_one_le_exp (1 : ℝ)]
+  have hb : 0 ≤ 4 * (N₀ true x + q / 2) / Real.exp 1 :=
+    div_nonneg (mul_nonneg (by norm_num) (by linarith [N₀_nonneg true x])) he.le
+  have hceil : (⌈4 * N₀' x / Real.exp 1⌉₊ : ℝ) < 4 * (N₀ true x + q / 2) / Real.exp 1 + 1 :=
+    (Nat.cast_le.2 (Nat.ceil_mono (div_le_div_of_nonneg_right (by linarith) he.le))).trans_lt
+      (Nat.ceil_lt_add_one hb)
+  have hk : (((deployZk rel).raise N₀' C').k x : ℝ) = (⌈4 * N₀' x / Real.exp 1⌉₊ : ℝ) := rfl
+  have hsplit : 4 * (N₀ true x + q / 2) / Real.exp 1 = 4 * N₀ true x / Real.exp 1 + 2 * q / Real.exp 1 := by ring
+  have hqe : 2 * q / Real.exp 1 ≤ q := by
+    rw [div_le_iff₀ he]
+    nlinarith
+  rw [hk]
+  linarith
 
 end FlockDeploy.KS
