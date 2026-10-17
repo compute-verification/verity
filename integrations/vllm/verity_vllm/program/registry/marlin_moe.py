@@ -37,8 +37,8 @@ the launch's thread config (TK, TN) (ops.cu:274-342; the H200's numRegs decide b
 (no group rounding of iters: group_blocks 2 < thread_k_blocks, the template 408-416).  `blk` and `parallel` are the launch's schedule,
 `moe_align_block_size`'s sorted_token_ids (a pair's position / moe_block_size) and num_tokens_post_padded / moe_block_size; at
 every block the template reduces a tile's W = TK / 32 warp rows as above (red_off = threads / (TN / 2) / 2, 1539-1541, per m block
-of 16).  The pairs' ranks within an expert come
-from atomicAdd (moe_align_sum_kernels.cu), so they are committed values of the run, not functions of the routing.
+of 16).  The pairs' ranks within an expert come from atomicAdd (moe_align_sum_kernels.cu), so `MoeAlignBlocks` reads them from a
+key per pair, a witness of the run (the GPU's sorted position), and is a schedule the kernel can give whatever the key.
 
 Registered functions (`_v1`):
   E2m1ToBf16, E8m0DequantBf16                 primitives: the exact e2m1 value, the e8m0 scale as bf16
@@ -49,6 +49,9 @@ Registered functions (`_v1`):
   MarlinMxfp4StepFromZero{DOT}                (x, q, s) -> f32: the same from +0 (k-tile 0)
   MarlinMoeSchedule{KT,NT,GRID}               (blk, par: i32) -> NT x (KT-1) bits: cut[J][t-1] = k-tile t of tile column J
                                               starts a segment
+  MoeAlignBlocks{E,P,BM}                      (ids, key: P i32) -> (blk: P i32, par: i32): `moe_align_block_size`'s schedule with
+                                              each expert's pairs in key order; MoeAlignRank{P} (over MoeAlignBefore),
+                                              MoeAlignStart{E,BM} and MoeAlignBlockOf{P,BM} (over MoeAlignBelow) its steps
   MarlinMxfp4Coordinate{K,TK,DOT}             (x: K bf16, cut: KT-1 bits, wq: K e2m1, ws: K/32 e8m0) -> bf16: the w13 word
   MarlinMxfp4CoordinateW{K,TK,DOT}            (x, cut, g: bf16, wq, ws) -> bf16: the w2 word, times the routed weight
   E2m1x2Lo, E2m1x2Hi                          primitives: a packed byte's low and high nibble, the codes of its even and odd k
@@ -73,9 +76,9 @@ from __future__ import annotations
 
 from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite, primitive
 from verity.ml.circuits.ops.prims import E2M1, F2fpBf16, HopperBF16WgmmaDot16, const
-from verity.ml.circuits.ops.scalar import BIT, BitAnd, I32Add, I32Eq, I32Le, SelectF32, SelectI32
-from verity.ml.circuits.refs import Coll, concat, strided_view
-from verity.ml.circuits.types import Array, Value
+from verity.ml.circuits.ops.scalar import BIT, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.ml.circuits.types import Array, Tuple, Value
 from verity_vllm.program.registry import fp8_moe_experts as X
 from verity_vllm.program.registry.dsa import I32Sub
 from verity_vllm.program.registry.prims import BF16, F32, I32, Bf16MulBf16, F32Add
@@ -339,7 +342,8 @@ class IntOps:
         return lambda *a: self.B.call(d, *a)
 
 
-WORD_INT = dict(add=I32Add, sub=I32Sub, mul=I32Mul, div=I32Div, rem=I32Rem, le=I32Le, eq=I32Eq, sel=SelectI32, band=BitAnd)
+WORD_INT = dict(add=I32Add, sub=I32Sub, mul=I32Mul, div=I32Div, rem=I32Rem, le=I32Le, eq=I32Eq, sel=SelectI32, band=BitAnd, bor=BitOr,
+                bnot=BitNot)
 
 
 def word_int_ops(B) -> IntOps:
@@ -388,6 +392,75 @@ def MarlinMoeSchedule(B, S, blk, par):
     launch's `par` = num_tokens_post_padded / moe_block_size."""
     rows = schedule(word_int_ops(B), S.KT, S.NT, S.GRID, blk, par)
     return Coll(Array(S.NT, Array(S.KT - 1, BIT)), concat([b.refs for row in rows for b in row]))
+
+
+_ALIGN_CONF = ("model-untested: read from vLLM d9105ea80's moe_align_block_size (moe_align_sum_kernels.cu: moe_align_block_size_kernel, "
+               "count_and_sort_expert_tokens_kernel); tests/properties/dsv4_marlin_capture_gpu.py is its hardware check")
+
+
+def _isum(o: IntOps, xs: Coll, n: int):
+    acc = xs[0]
+    for j in range(1, n):
+        acc = o.add(acc, xs[j])
+    return acc
+
+
+def _one_if(o: IntOps, c):
+    return o.sel(c, o.i(1), o.i(0))
+
+
+@composite("MoeAlignBefore", 1, [], lambda S: (tuple((n, I32) for n in ("e", "k", "i", "eq", "kq", "iq")), I32), conformance=_ALIGN_CONF)
+def MoeAlignBefore(B, S, e, k, i, eq, kq, iq):
+    """1 when pair q (expert eq, key kq, index iq) comes before pair p (e, k, i) in p's expert: eq = e and (kq, iq) < (k, i)."""
+    o = word_int_ops(B)
+    lt = lambda a, b: o.bnot(o.le(b, a))
+    return _one_if(o, o.band(o.eq(eq, e), o.bor(lt(kq, k), o.band(o.eq(kq, k), lt(iq, i)))))
+
+
+@composite("MoeAlignRank", 1, ["P"], lambda S: ((("e", I32), ("k", I32), ("i", I32), ("es", Array(S.P, I32)), ("ks", Array(S.P, I32)),
+                                                 ("ix", Array(S.P, I32))), I32), conformance=_ALIGN_CONF)
+def MoeAlignRank(B, S, e, k, i, es, ks, ix):
+    """Pair p's rank in its expert: how many of the P pairs come before it (`MoeAlignBefore_v1`)."""
+    return _isum(word_int_ops(B), B.batch(MoeAlignBefore, e, k, i, es, ks, ix, axes=(None, None, None, 0, 0, 0)), S.P)
+
+
+@composite("MoeAlignStart", 1, ["E", "BM"], lambda S: ((("e", I32), ("rank", I32)), I32), conformance=_ALIGN_CONF)
+def MoeAlignStart(B, S, e, rank):
+    """1 when the pair opens a moe block: its expert in [0, E) and its rank a multiple of BM."""
+    o = word_int_ops(B)
+    valid = o.band(o.le(o.i(0), e), o.le(e, o.i(S.E - 1)))
+    return _one_if(o, o.band(valid, o.eq(o.rem(rank, o.i(S.BM)), o.i(0))))
+
+
+@composite("MoeAlignBelow", 1, [], lambda S: ((("e", I32), ("eq", I32), ("start", I32)), I32), conformance=_ALIGN_CONF)
+def MoeAlignBelow(B, S, e, eq, start):
+    """`start` when expert eq is below e, else 0."""
+    o = word_int_ops(B)
+    return o.sel(o.bnot(o.le(e, eq)), start, o.i(0))
+
+
+@composite("MoeAlignBlockOf", 1, ["P", "BM"], lambda S: ((("e", I32), ("rank", I32), ("es", Array(S.P, I32)), ("starts", Array(S.P, I32))),
+                                                        I32), conformance=_ALIGN_CONF)
+def MoeAlignBlockOf(B, S, e, rank, es, starts):
+    """Pair p's moe block: the blocks the experts below e open (`MoeAlignBelow_v1` over the P pairs), then rank / BM."""
+    o = word_int_ops(B)
+    return o.add(_isum(o, B.batch(MoeAlignBelow, e, es, starts, axes=(None, 0, 0)), S.P), o.div(rank, o.i(S.BM)))
+
+
+@composite("MoeAlignBlocks", 1, ["E", "P", "BM"],
+           lambda S: ((("ids", Array(S.P, I32)), ("key", Array(S.P, I32))), Tuple(Array(S.P, I32), I32)), conformance=_ALIGN_CONF)
+def MoeAlignBlocks(B, S, ids, key):
+    """`moe_align_block_size` at moe block BM over P pairs routed to `ids`, as the Marlin launches read it: (blk, par), each pair's
+    moe block and the launch's num_tokens_post_padded / BM.  The kernel pads each expert's pairs to whole blocks in expert order
+    and places a pair at its expert's offset plus its rank, which atomicAdd hands out in an order no input fixes; `key` orders
+    each expert's pairs (ties by pair index), so any key gives a schedule of that form, and the GPU's sorted position of each
+    pair gives the GPU's.  An expert outside [0, E) opens no block (`ignore_invalid_experts`)."""
+    o = word_int_ops(B)
+    ix = array_of([o.i(p) for p in range(S.P)])
+    rank = B.batch(bind(MoeAlignRank, P=S.P), ids, key, ix, ids, key, ix, axes=(0, 0, 0, None, None, None))
+    start = B.batch(bind(MoeAlignStart, E=S.E, BM=S.BM), ids, rank, axes=(0, 0))
+    blk = B.batch(bind(MoeAlignBlockOf, P=S.P, BM=S.BM), ids, rank, ids, start, axes=(0, 0, None, None))
+    return tuple_of(blk, _isum(o, start, S.P))
 
 
 def gather_e2m1_pair(vocab: int) -> PrimitiveDefinition:

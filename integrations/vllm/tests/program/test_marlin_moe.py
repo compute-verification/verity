@@ -105,6 +105,36 @@ def test_schedule_is_total_and_the_twin_on_any_word() -> None:
         assert (got == MR.schedule(4, 3, 7, blk, par)).all(), (hex(blk), hex(par))
 
 
+def _vllm_align(ids: list[int], E: int, BM: int, order) -> tuple[list[int], int]:
+    """`moe_align_block_size_kernel` then `count_and_sort_expert_tokens_kernel`, the pairs taking their atomicAdd slots in ``order``:
+    (each pair's position in sorted_token_ids, or -1 for an expert outside [0, E); num_tokens_post_padded)."""
+    counts = [ids.count(e) for e in range(E)]
+    offset = np.concatenate([[0], np.cumsum([-(-c // BM) * BM for c in counts])]).tolist()
+    pos, nxt = [-1] * len(ids), offset[:E]
+    for p in order:
+        if 0 <= ids[p] < E:
+            pos[p], nxt[ids[p]] = nxt[ids[p]], nxt[ids[p]] + 1
+    return pos, offset[E]
+
+
+@pytest.mark.parametrize("E,P,BM", [(4, 1, 8), (5, 12, 8), (6, 23, 48), (3, 30, 4)])
+def test_align_blocks_are_the_kernel_s_in_every_atomic_order(E: int, P: int, BM: int) -> None:
+    """With the GPU's sorted positions as keys the blocks are the kernel's, whatever order atomicAdd took (hot experts over several
+    blocks, an expert with none, ids outside [0, E)); any other keys, ties and negatives included, give the kernel's blocks in
+    some order: the pairs sorted by (key, index)."""
+    align, rng = bind(MM.MoeAlignBlocks, E=E, P=P, BM=BM), np.random.default_rng(P)
+    for trial in range(6):
+        ids = rng.choice([0, 0, 0, E - 1, E - 1, 1, -1, E, 7 - 2**31], P).tolist() if trial % 3 == 2 else rng.integers(0, E, P).tolist()
+        pos, npp = _vllm_align(ids, E, BM, rng.permutation(P))
+        keys = [p if p >= 0 else int(k) for p, k in zip(pos, rng.integers(-5, 5, P))]
+        got = evaluate(align, [i & MM.M32 for i in ids], [k & MM.M32 for k in keys])
+        assert [g for g, p in zip(got[:P], pos) if p >= 0] == [p // BM for p in pos if p >= 0] and got[P] == npp // BM, ids
+        keys = rng.integers(-3, 3, P).tolist()
+        want, _ = _vllm_align(ids, E, BM, sorted(range(P), key=lambda p: (keys[p], p)))
+        got = evaluate(align, [i & MM.M32 for i in ids], [k & MM.M32 for k in keys])
+        assert [g for g, p in zip(got[:P], want) if p >= 0] == [p // BM for p in want if p >= 0] and got[P] == npp // BM, (ids, keys)
+
+
 def test_divrem_is_c_int() -> None:
     for a, b in itertools.product([0, 7, -7, 2**31 - 1, -2**31], [1, 3, -3, 2**31 - 1, -2**31, -1, 0]):
         q, r = MM.i32_divrem(a & MM.M32, b & MM.M32)
