@@ -20,8 +20,9 @@ theorem KSA_iff_KS {Coin W Col T : Type} [Fintype Coin] [Inhabited Coin] [Decida
     KSA H D I DO ↔ KS H D I DO :=
   Iff.rfl
 
-theorem KSFlockA_iff_KSFlock {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) :
+theorem KSFlockA_iff_KSFlock {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    [DecidableEq Col] [DecidableEq Col'] [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin)
+    (DI : Flock.Deploy Coin Col T) (DO : Flock.Deploy Coin Col' T') :
     KSFlockA H D DI DO ↔ KSFlock H D DI DO :=
   Iff.rfl
 
