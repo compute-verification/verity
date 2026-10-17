@@ -74,7 +74,8 @@ theorem inScope_inStmt : Flock.InScope false inStmt := by
 
 theorem relS_inStmt (w : Flock.Wit) : Flock.RelS inStmt w := fun _ _ => rfl
 
-/-- **A plain record of `rejV`**: its parser reads every message as `inStmt`, and its reference prover is `silent`. -/
+/-- **A plain record of `rejV`**: its parser reads every message as `inStmt`, its reference prover is `silent`, and its
+error `0`. -/
 def rejD : Flock.Deploy Unit Unit Unit where
   zk := false
   V := rejV Unit
@@ -94,6 +95,7 @@ def rejD : Flock.Deploy Unit Unit Unit where
   cap _ := 0
   Tape := Unit
   P := silent Flock.Wit
+  δc _ _ := 0
 
 /-! ## Sampling -/
 
@@ -105,7 +107,7 @@ theorem inScope_nilStmt : Sampling.InScope ⟨[]⟩ nilStmt := by
     simp [Sampling.Partition.rus, nilStmt]
 
 /-- **A sampling record of `rejV`**: its parser reads every message as `nilStmt`, its partition is the empty one, its
-sessions are `rejD`'s, and its reference prover is `silent`. -/
+sessions are `rejD`'s, its reference prover is `silent`, and its error `0`. -/
 def rejSD : Sampling.Deploy Unit Unit Unit where
   V := rejV Unit
   parse _ := some nilStmt
@@ -127,6 +129,7 @@ def rejSD : Sampling.Deploy Unit Unit Unit where
   openCalls _ := 0
   Tape := Unit
   P := silent Sampling.Wit
+  δc _ _ := 0
 
 theorem rhon_rejSD (H : Msg → Msg) (x : Msg) (w : Sampling.Wit) :
     Sampling.Rhon H rejSD.commit rejSD.parse rejSD.partition x w :=
@@ -143,13 +146,13 @@ theorem Claims.Complete_fails :
   not_complete_rejV out64_zeroHash _ (x := []) (w := ()) trivial trivial (by norm_num)
 
 /-- **Flock's `Complete` can fail**: at `zeroHash`, the record `rejD`'s reference prover is not accepted at the empty
-message, a statement in its scope whose relation every witness meets, at `δ_c = 0`. -/
-theorem Claims.Flock.Complete_fails : ¬ Claims.Flock.Complete zeroHash rejD (fun _ => 0) :=
+message, a statement in its scope whose relation every witness meets, at its error `δ_c = 0`. -/
+theorem Claims.Flock.Complete_fails : ¬ Claims.Flock.Complete zeroHash rejD :=
   not_complete_rejV out64_zeroHash rejD.P (x := []) (w := ⟨[]⟩) ⟨inStmt, rfl, inScope_inStmt⟩
-    ⟨inStmt, rfl, relS_inStmt _⟩ (by norm_num)
+    ⟨inStmt, rfl, relS_inStmt _⟩ (by show (0 : ℝ) < 1; norm_num)
 
 /-- **The sampling `Complete` can fail**: at `zeroHash`, the record `rejSD`'s reference prover is not accepted at the
-empty message, in scope with no faulty unit, at `δ_c = 0`. -/
-theorem Claims.Sampling.Complete_fails : ¬ Claims.Sampling.Complete zeroHash rejSD (fun _ => 0) :=
+empty message, in scope with no faulty unit, at its error `δ_c = 0`. -/
+theorem Claims.Sampling.Complete_fails : ¬ Claims.Sampling.Complete zeroHash rejSD :=
   not_complete_rejV out64_zeroHash rejSD.P (x := []) (w := ⟨[]⟩) ⟨nilStmt, ⟨[]⟩, rfl, rfl, inScope_nilStmt⟩
-    (rhon_rejSD _ _ _) (by norm_num)
+    (rhon_rejSD _ _ _) (by show (0 : ℝ) < 1; norm_num)
