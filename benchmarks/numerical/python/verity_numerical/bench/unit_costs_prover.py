@@ -170,7 +170,7 @@ HIDDEN_ZK: tuple[tuple[str, str, int, int, int, int, float, float, float, int], 
 TC_STEP_NNZ = 9473 + 120_833 + 133_627
 #: registered GEMM-coordinate sessions, the column's check (``benchmarks/pouw/hidden_zk/registered.sh``, 16 instances, sm80
 #: bf16, vy-nebius-1): K (each slot K / 16 tc-step units) and the session in :data:`HIDDEN_ZK`'s form. The verifier checks
-#: every one and refuses its form (a unit reading 2 input groups) as one the soundness proof does not cover yet.
+#: every one; it refused their form (a unit reading 2 input groups) until its scope took the general instance form.
 REGISTERED_SESSIONS: tuple[tuple[int, tuple[str, str, int, int, int, int, float, float, float, int]], ...] = (
     (16384, ('r20261010-084308-31a9', 'gemm-coordinate/tc-step/k16384/sm80-bf16', 16, 26, 30, 57_362_394, 15.5087, 78.98,
              17_677_104 / 2 ** 20, 32)),

@@ -45,7 +45,7 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
-from . import audit, draw as D, registration as R
+from . import audit, draw as D, hello as H, registration as R
 from .verdict import Verdict
 
 RECORD_VERDICT = "lean"
@@ -248,6 +248,17 @@ def check_verdicts(python: Verdict, verdicts: Mapping[str, Any], sessions: Seque
     verifier of record, on the verdicts, the delivered sessions and the check's public outputs."""
     got = lean("check_verdicts", {"verdicts": verdicts, "sessions": list(sessions), "outputs": list(outputs)})
     return _decide(got, python, whole=True)
+
+
+def hello(own: Mapping[str, Any], received: str, coin_tree: Any, seen: Sequence[str], selection: Sequence[str], slots: int,
+          session: Sequence[str]) -> Verdict:
+    """The run's Hello on its record (`hello.check_run`) by the verifier of record: R7 with the prover's nonce, the run's
+    streams (the selection streams, then each of `slots` session slots' `session` streams), the record's `coin_tree` and
+    its key unused by the runs in `seen`."""
+    py = H.check_run(own, received, coin_tree, list(seen), list(selection), slots, list(session))
+    got = lean("hello", {"own": dict(own), "hello": received, "coin_tree": coin_tree, "seen": list(seen),
+                         "selection": list(selection), "slots": slots, "session": list(session)})
+    return _decide(got, py, whole=False)
 
 
 def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], program: Program, query: Mapping[str, Any],

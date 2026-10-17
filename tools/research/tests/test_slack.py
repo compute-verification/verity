@@ -1511,6 +1511,15 @@ def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_b
     assert rc == 2 and "one of --thread TS, --since TS or --as NAME" in err
 
 
+def test_a_clone_holding_a_closed_route_rings_the_reopened_published_one(fake, registry, routes_dirs, capsys):
+    """console's inbox reopened at 21:38Z on 16 Oct; senders whose clone still held it closed rang no one (17 Oct review)."""
+    root = fake.add(COORD, text=f"{slack.INBOX_HEAD}console. pointers", username="console", bot_id=BOT)
+    add_route(routes_dirs[0], "console", root["ts"], closed="2026-10-14T22:45Z")                   # this clone: closed
+    add_route(routes_dirs[1], "console", root["ts"], holder="f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc")  # published: reopened
+    rc, _, err = run(capsys, "send", "--as", "ci", "--to", "@console", "--text", "the broker canary fails")
+    assert rc == 0 and "route @console: rang" in err and len(bells(fake, root["ts"])) == 1
+
+
 def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "old-circuits", box, closed="2026-10-01T18:00Z", forward_to="circuits")   # renamed: one inbox
