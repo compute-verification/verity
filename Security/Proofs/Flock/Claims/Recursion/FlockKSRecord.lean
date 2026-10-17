@@ -126,7 +126,7 @@ inner decoder within the radius, with `Inner.KSAbort` from `plain_KSAbort` and `
 (`coinsShown_V`). -/
 theorem plain_KSFlock (rel : Readable.Parsed → Readable.Relation) (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
-    (opening : Claims.Msg → Claims.Msg) (hF : Claims.Flock.KS sha512 DO)
+    (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)
     (hext : Claims.Flock.Extendθ (deployPlain rel) (wordLen false) (wide false))
     (htab : TableBoundθOnAcc sha512 (deployPlain rel) (wordLen false) (wide false)) (hRef : Refuses sha512 D)
     (hRounds : ∀ x, (deployPlain rel).V.k (xI D x) ≤ D.V.k x) (hN : SessionNums D DO) (hε : TableErrNonneg D)
@@ -145,7 +145,7 @@ theorem plain_KSFlock (rel : Readable.Parsed → Readable.Relation) (D : Deploy 
 `decCoin` (`coinsShown_V`). -/
 theorem zk_KSFlock (rel : Readable.Parsed → Readable.Relation) (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
-    (opening : Claims.Msg → Claims.Msg) (hF : Claims.Flock.KS sha512 DO)
+    (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)
     (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (hext : Claims.Flock.Extendθ (deployZk rel) (wordLen true) (wide true))
