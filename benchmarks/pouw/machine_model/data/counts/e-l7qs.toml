@@ -1,0 +1,101 @@
+# e_l7qs's executed warp instructions by census class as a closed form in the shape (verity_machine_model/counts.py):
+# n_c = stage_c T k/128 + tile_c T + launch_c, T = (m/128)(n/128), at the 188 persistent CTAs of an RTX PRO 6000; `fit`'s
+# coefficients on the observations below (ncu's SourceCounters, every SASS instruction's executions summed by class,
+# WAIT left out), which `check` holds them to.
+name = "e-l7qs"
+kernel = "e_l7qs"
+source = "PROFILE: ncu on e_l7qs at 11 shapes in 3 runs, `eps_profile.py OUT --mm` (note:20261017T0444Z-draft-eps1-predict, r20261017-040135-d375 r20261017-041011-0965 r20261017-044318-93a5); fitting each variant on 3 of its shapes predicts the other 8 within 3.7e-5 on ALU and 6.4e-5 on the model bound"
+ctas = 188
+tile = [128, 128, 128]
+k3_above = 4096         # a longer k runs e_l7qs_k3 (the 3-atom peel)
+shapes = [1024, 128, 256, 16128]   # egemm.cu's esetup: m % 1024 (the raster's groups), n % 128, k % 256, k <= 16128
+exact = ["LDSM_X4", "MMA", "UTMA16K"]
+bound_tolerance = 1e-4  # the model bound at n against at ncu's counts, relative
+
+[tolerance]             # |ncu - n| <= tolerance n: the timing-dependent re-issues
+default = 5e-3
+ALU = 1e-4
+IMAD = 1e-4
+SEL = 5e-4
+NOROW = 2e-3
+UNI = 2e-3
+
+[variant.k2]               # the 2-atom peel
+stage = { ALU = 4540.2, IMAD = 2051.06, LDSM_X4 = 256, MMA = 512, NOROW = 397.27, SEL = 36, UNI = 40.25, UTMA16K = 2 }
+tile = { ALU = 3707.61, IMAD = 1403.69, IMADW = 80.48, LDSM_X4 = 128, MMA = 256, NOROW = 1200.15, SEL = 52.53, UNI = 460.94, UTMA16K = 2, VIMNMX = 17.19 }
+launch = { ALU = 92233, IMAD = 32774, IMADW = -94, NOROW = 86724, SEL = -878, UNI = 55096, VIMNMX = -228 }
+
+[variant.k3]               # the 3-atom peel
+stage = { ALU = 4540.03, IMAD = 2050.99, LDSM_X4 = 256, MMA = 512, NOROW = 429.7, SEL = 36, UNI = 40.26, UTMA16K = 2 }
+tile = { ALU = 3787.84, IMAD = 1426, IMADW = 80.98, LDSM_X4 = 192, MMA = 384, NOROW = 1036.63, SEL = 52.87, UNI = 461.07, UTMA16K = 2, VIMNMX = 17.18 }
+launch = { ALU = 99323, IMAD = 33714, IMADW = -76, NOROW = 95533, SEL = -813, UNI = 38486, VIMNMX = -211 }
+
+[[obs]]
+run = "r20261017-044318-93a5"
+shape = [2048, 4096, 1024]
+counts = { ALU = 20587413, IMAD = 9152652, IMADW = 41140, LDSM_X4 = 1114112, MMA = 2228224, NOROW = 2328135, SEL = 173490, UNI = 455965, UTMA16K = 9216, VIMNMX = 8574 }
+
+[[obs]]
+run = "r20261017-044318-93a5"
+shape = [2048, 4096, 2048]
+counts = { ALU = 39183493, IMAD = 17553719, IMADW = 41125, LDSM_X4 = 2162688, MMA = 4325376, NOROW = 3956069, SEL = 320961, UNI = 620782, UTMA16K = 17408, VIMNMX = 8591 }
+
+[[obs]]
+run = "r20261017-040135-d375"
+shape = [2048, 4096, 4096]
+counts = { ALU = 76377754, IMAD = 34356255, IMADW = 41185, LDSM_X4 = 4259840, MMA = 8519680, NOROW = 7212154, SEL = 615915, UNI = 950705, UTMA16K = 33792, VIMNMX = 8591 }
+
+[[obs]]
+run = "r20261017-041011-0965"
+shape = [2048, 4096, 4096]
+counts = { ALU = 76374903, IMAD = 34355428, IMADW = 41120, LDSM_X4 = 4259840, MMA = 8519680, NOROW = 7203334, SEL = 615868, UNI = 949832, UTMA16K = 33792, VIMNMX = 8589 }
+
+[[obs]]
+run = "r20261017-041011-0965"
+shape = [2048, 6016, 4096]
+counts = { ALU = 112135988, IMAD = 50445140, IMADW = 60540, LDSM_X4 = 6256640, MMA = 12513280, NOROW = 10542401, SEL = 905018, UNI = 1369769, UTMA16K = 49632, VIMNMX = 12709 }
+
+[[obs]]
+run = "r20261017-041011-0965"
+shape = [2048, 6144, 4096]
+counts = { ALU = 114521203, IMAD = 51518242, IMADW = 61830, LDSM_X4 = 6389760, MMA = 12779520, NOROW = 10783503, SEL = 924328, UNI = 1399196, UTMA16K = 50688, VIMNMX = 13014 }
+
+[[obs]]
+run = "r20261017-040135-d375"
+shape = [2048, 28672, 4096]
+counts = { ALU = 534086252, IMAD = 240296113, IMADW = 288695, LDSM_X4 = 29818880, MMA = 59637760, NOROW = 49951885, SEL = 4316629, UNI = 6322800, UTMA16K = 236544, VIMNMX = 61501 }
+
+[[obs]]
+run = "r20261017-041011-0965"
+shape = [2048, 28672, 4096]
+counts = { ALU = 534084385, IMAD = 240294833, IMADW = 288795, LDSM_X4 = 29818880, MMA = 59637760, NOROW = 49949348, SEL = 4316519, UNI = 6323205, UTMA16K = 236544, VIMNMX = 61562 }
+
+[[obs]]
+run = "r20261017-044318-93a5"
+shape = [2048, 28672, 4096]
+counts = { ALU = 534089003, IMAD = 240296678, IMADW = 288810, LDSM_X4 = 29818880, MMA = 59637760, NOROW = 49949025, SEL = 4316648, UNI = 6322829, UTMA16K = 236544, VIMNMX = 61448 }
+
+[[obs]]
+run = "r20261017-044318-93a5"
+shape = [2048, 4096, 8192]
+counts = { ALU = 150806958, IMAD = 67969952, IMADW = 41330, LDSM_X4 = 8486912, MMA = 16973824, NOROW = 14694902, SEL = 1205844, UNI = 1592757, UTMA16K = 66560, VIMNMX = 8582 }
+
+[[obs]]
+run = "r20261017-041011-0965"
+shape = [2048, 4096, 14336]
+counts = { ALU = 262382415, IMAD = 118375524, IMADW = 41325, LDSM_X4 = 14778368, MMA = 29556736, NOROW = 25266951, SEL = 2090595, UNI = 2583124, UTMA16K = 115712, VIMNMX = 8585 }
+
+[[obs]]
+run = "r20261017-044318-93a5"
+shape = [2048, 6144, 8192]
+counts = { ALU = 226159687, IMAD = 101939512, IMADW = 62090, LDSM_X4 = 12730368, MMA = 25460736, NOROW = 22024905, SEL = 1809264, UNI = 2372417, UTMA16K = 99840, VIMNMX = 12986 }
+
+[[obs]]
+run = "r20261017-040135-d375"
+shape = [8192, 8192, 8192]
+counts = { ALU = 1205764972, IMAD = 543530688, IMADW = 331470, LDSM_X4 = 67895296, MMA = 135790592, NOROW = 117036306, SEL = 9652888, UNI = 12484945, UTMA16K = 532480, VIMNMX = 70240 }
+
+[[obs]]
+run = "r20261017-044318-93a5"
+shape = [8192, 8192, 8192]
+counts = { ALU = 1205749110, IMAD = 543525452, IMADW = 331225, LDSM_X4 = 67895296, MMA = 135790592, NOROW = 116932000, SEL = 9652563, UNI = 12475967, UTMA16K = 532480, VIMNMX = 70071 }

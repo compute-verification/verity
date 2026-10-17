@@ -27,6 +27,10 @@
                                               each fold cost; with --upfill, each without and with it): γ, the credited
                                               time, ε_sched, ε_machine at q* = 2, 4, 8, 16 and its floor, ε_luck, ε at
                                               q* = 2 and 8, and the thresholds
+    machine-model counts NAME M N K [--vector V] [--json]
+                                              an honest kernel's closed-form instruction counts at M x N x K
+                                              (data/counts): each class's, a MMA, and the model bound with its rows
+    machine-model counts NAME --check         every ncu observation against the closed form, and its bound
 
 `--data DIR` (before the command) reads another data directory, such as a copy with a candidate row. `solve` exits 1 when
 the vector fails its check or doesn't reproduce a published number.
@@ -41,6 +45,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from verity_machine_model import attacks as atk
+from verity_machine_model import counts as cf
 from verity_machine_model import eps as E
 from verity_machine_model.adopt import adopt
 from verity_machine_model.model import CLAIMS, DATA, census, model, vector, vectors
@@ -294,6 +299,34 @@ def _eps(args) -> int:
     return 0
 
 
+def _counts(args) -> int:
+    c = cf.load(args.name, args.data)
+    pi = E.machine(args.vector or "", args.data)
+    if args.check:
+        bad = c.check() + c.check_bound(pi)
+        for o in c.obs:
+            want, rows = c.bound(pi, *o.shape)
+            n = c.n(*o.shape)
+            worst = max(abs(o.counts.get(k, 0) - v) / max(v, 1) for k, v in n.items())
+            print(f"{o.run} {'x'.join(map(str, o.shape)):>17}: bound {want:.4f} on {', '.join(rows)}, "
+                  f"worst class {worst:.1e}")
+        print("\n".join(bad) if bad else f"pass: {len(c.obs)} observations within tolerance")
+        return 1 if bad else 0
+    if args.shape is None:
+        raise SystemExit("counts NAME M N K, or counts NAME --check")
+    m, n, k = args.shape
+    t, rows = c.bound(pi, m, n, k)
+    rec = {"name": c.name, "kernel": c.kernel + ("_k3" if c.variant(k) == "k3" else ""), "shape": [m, n, k],
+           "n": c.n(m, n, k), "per_mma": c.per_mma(m, n, k), "bound": t, "binding": list(rows), "vector": pi.vector}
+    if args.json:
+        print(json.dumps(rec, indent=1))
+        return 0
+    print(f"{rec['kernel']} at {m} x {n} x {k}: bound {t:.4f} SMSP-cycles a MMA on {', '.join(rows)} ({pi.vector})")
+    for k_, v in sorted(rec["n"].items(), key=lambda x: -x[1]):
+        print(f"  {k_:8s} {v:16.0f}  {rec['per_mma'][k_]:9.4f} a MMA")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="machine-model", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -330,12 +363,22 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--fill", type=float, help="add X lane instructions a word of verified filler on lanes")
     e.add_argument("--upfill", action="store_true",
                    help="add verified filler keeping the uniform datapath busy (with --table: a row beside each)")
+    n = sub.add_parser("counts")
+    n.add_argument("name")
+    n.add_argument("shape", nargs="*", type=int)
+    n.add_argument("--check", action="store_true")
+    n.add_argument("--vector")
+    n.add_argument("--json", action="store_true")
     args = p.parse_args(argv)
+    if args.cmd == "counts":
+        if args.shape and len(args.shape) != 3:
+            raise SystemExit("counts NAME M N K")
+        args.shape = tuple(args.shape) or None
     if args.cmd is None:
         print(__doc__)
         return 0
     return {"list": _list, "solve": _solve, "census": _census, "attacks": _attacks, "adopt": _adopt,
-            "eps": _eps}[args.cmd](args)
+            "eps": _eps, "counts": _counts}[args.cmd](args)
 
 
 if __name__ == "__main__":

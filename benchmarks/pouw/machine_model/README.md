@@ -21,6 +21,8 @@ uv run machine-model eps --table --upfill # every design, without and with fille
 uv run machine-model eps --table --upfill --operands floor   # the cheater's operands at the noise's floor φ_del
 uv run machine-model eps --table --upfill --credit floor     # ε a fraction of the floor program ♭, not honest's kernel
 uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
+uv run machine-model counts e-l7qs 2048 28672 4096   # H's closed-form instruction counts and model bound at a shape
+uv run machine-model counts e-l7qs --check           # every ncu observation of H against them
 ~~~
 
 | Path | What |
@@ -38,6 +40,8 @@ uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
 | `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA: `e-l7qs` is PROFILE's measured kernel, `dither-duo-l32` the provisional one the tests' hand arithmetic reads |
 | `data/designs/NAME.toml` | A protocol's parameters: its honest profile, L, its noise's operand-delivery floor φ_del, the fold and filler (lane instructions a word by class), plain (unfolded) MMAs beside its work, ε_skip's and ε_mand's parts with sources, ε_clock, Theorem S's δ, p and checks, and honest's baseline program (dp4a) |
 | `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
+| `data/counts/NAME.toml` | An honest kernel's executed warp instructions by class as a closed form in the shape (a stage's, a tile's and a launch's, per variant), the ncu observations they are fitted to and the tolerance that holds them |
+| `verity_machine_model/counts.py` | `counts`: n(H)(m, n, k) from that closed form, the model bound it gives at any shape the kernel runs, its fit and its check |
 
 An *epoch* is a state of the census and the attacks, named after the vector that introduced it. A census line or an attack
 holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector re-solves on
