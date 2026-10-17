@@ -100,7 +100,8 @@ words a block reads carry at least 224 bits, at least 7 words. -/
 theorem fiber_needs_seven {n : ℕ} (U U' : Cols n) (j : Fin n) (hU : ColsValid U) (hU' : ColsValid U')
     (h : ∀ r : Fin 32 → Bool, (∑ p, if r p then U j p else 0) = ∑ p, if r p then U' j p else 0) :
     ∀ p, U j p = U' j p := by
-  sorry
+  intro p
+  simpa using h fun q => decide (q = p)
 
 /-- The information count: six words can't tell apart the `128^32 = 2^224` columns with entries in `±1..±64`; any
 map from such columns to `k` words that is injective on them has `k ≥ 7` (`k ≥ 8` for the `2^256` int8 segments). -/
