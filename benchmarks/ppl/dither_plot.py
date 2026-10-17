@@ -131,6 +131,10 @@ def plot(rs: list[dict], png: str) -> None:
             ax.set_title(f"{pt[0]} · {pt[1]} · {pt[2] // 1024}K\n{title}", fontsize=10)
             ax.set_xlabel("dither size b (coin entries in {0..2^b−1})")
             ax.set_ylabel("perplexity increase over bf16 (%)")
+            lo = min(r["inc_min"] for r in rs if (r["model"], r["set"], r["ctx"]) == pt)
+            hi = max(r["inc_max"] for r in rs if (r["model"], r["set"], r["ctx"]) == pt)
+            if lo > 0 and hi / lo > 10:
+                ax.set_yscale("log")
             ax.set_xticks([1, 2, 3, 4])
             ax.set_xlim(0.7, 4.3)
             ax.grid(alpha=0.3)
