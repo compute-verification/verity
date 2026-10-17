@@ -116,14 +116,17 @@ def lane_ops(x: int) -> list[int]:
 
 
 def lane_counts(x: int, n: int) -> dict[str, int]:
-    """The opcode counts n lane ops of program x put in a loop, the loop counter's IADD3 included."""
+    """The opcode counts n lane ops of program x put in a loop, the loop counter included.
+
+    The counter is an IADD3, or a UIADD3 when ptxas moves it to the uniform datapath (at 8 warps a SMSP, 64 registers),
+    so a lane with IADD3 counts both (`*IADD3`)."""
     ops = lane_ops(x)
     out: dict[str, int] = {}
     for p in ops:
         pat = OPS[p][1]
         out[pat] = out.get(pat, 0) + n // len(ops)
     if "IADD3" in out:
-        out["IADD3"] += 1
+        out["*IADD3"] = out.pop("IADD3") + 1
     return out
 
 

@@ -722,9 +722,11 @@ static void form() {
   spec<F, 128, LANE_IADD3>();
   mixu<F, 8, LANE_IADD3>(); mixu<F, 16, LANE_IADD3>(); mixu<F, 32, LANE_IADD3>(); mixu<F, 64, LANE_IADD3>();
   mixu<F, 128, LANE_IADD3>();
-  // the interleaved schedule at 2 and 8 warps a SMSP, where M1's least bounds sit at 4
+  // the interleaved schedule at 2, 6 and 8 warps a SMSP, where M1's least bounds sit at 4
   mixu<F, 32, LANE_MIX, 2>(); mixu<F, 64, LANE_MIX, 2>(); mixu<F, 32, LANE_MIX, 8>(); mixu<F, 64, LANE_MIX, 8>();
   mixu<F, 16, LANE_IADD3, 2>(); mixu<F, 32, LANE_IADD3, 2>(); mixu<F, 16, LANE_IADD3, 8>(); mixu<F, 32, LANE_IADD3, 8>();
+  mixu<F, 8, LANE_MIX, 8>(); mixu<F, 16, LANE_MIX, 8>(); mixu<F, 24, LANE_MIX, 8>(); mixu<F, 40, LANE_MIX, 8>();
+  mixu<F, 48, LANE_MIX, 8>(); mixu<F, 16, LANE_MIX, 6>(); mixu<F, 32, LANE_MIX, 6>(); mixu<F, 8, LANE_IADD3, 8>();
 }
 
 // A scalar class beside a saturated MMA (2 MMA + 2 lane warps a SMSP, 8 ops a MMA): its coupling with the tensor pipe
