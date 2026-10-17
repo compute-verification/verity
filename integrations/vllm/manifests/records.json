@@ -3,13 +3,12 @@
  "about": "Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.",
  "rows": {
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
-   "record": "art:c6004685dcdb8527b0819b8bcc61d821d578ed62bd039909220dfca56af6bf39",
+   "record": "art:440154ed238eaabac0adbbc673560ae4f94aaa8abbed066d3436e1a2d5af807e",
    "tier": "heavy",
    "pinned_from": {
-    "build": "vy-glm53-eu:/workspace/fs/glm53-failfast/sweep-b3/glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager",
-    "tree": "b785f7519",
-    "utc": "2026-10-14T23:54Z",
-    "note": "the Build of the Commit of record r20261016-213336-6c35; the workload digests are manifest v5's program_digest_per_rank"
+    "record": "art:440154ed238eaabac0adbbc673560ae4f94aaa8abbed066d3436e1a2d5af807e",
+    "build": "art:5c0cdf4e86811b0e60c42b9056d88b46b3b348c4e2bfee74618d5994e9547f28",
+    "tree": "cursor/glm53-fold-moe-shared-21f3@1b53f685a81a38f649947e5f88b5ae360709a932"
    },
    "manifest_digest": "958d528b12ec4dc038e2999323152a8c6b9a625c52480ea6c3edc8ab02986f4b",
    "programs": {
