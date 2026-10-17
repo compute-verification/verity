@@ -437,6 +437,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8_vocab.block_gemm(K, N, G, SCALE, FP8_DOT),
            "flashinfer_fp8_linear": lambda K, N: ir_bind(_deepgemm.FlashInferFp8Linear, K=K, N=N),
            "deepgemm_fp8_linear": lambda K, N: ir_bind(_deepgemm.DeepGemmFp8Linear, K=K, N=N),
+           # DeepGEMM's `fp8_einsum("bhr,hdr->bhd")` on one token (DeepSeek-V4's wo_a); `rules/vllm_bindings/fp8.py` asks for it
+           "deepgemm_fp8_einsum_grouped": lambda H, K, N, G: ir_bind(_deepgemm.ScaledMmFp8BlockGrouped, H=H, K=K, N=N, G=G),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
@@ -553,6 +555,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                     "scale_1x128_kernel followed by the TRT-LLM swapAB GEMM",
            "deepgemm_fp8_linear": "DeepGemmFp8Linear_v1{K,N}: vLLM's default Hopper block-FP8 linear for M >= 32; ue8m0 group quant "
                                   "followed by DeepGEMM fp8_gemm_nt, returning the materialised q, scale and bf16 output",
+           "deepgemm_fp8_einsum_grouped": "ScaledMmFp8BlockGrouped_v1{H,K,N,G}: DeepGEMM's fp8_einsum('bhr,hdr->bhd', recipe=(1, G, G)) on one "
+                                          "token -- per group h ScaledMmFp8BlockSharedScale_v1{K,N,G} over xq[h], sx[h], w[h], ws[h]",
            "layer_norm_aten": "LayerNormAten_v1{N,EPS}: aten.layer_norm on a bf16 row with bf16 weight and bias -- torch 2.13 "
                               "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
                               "bf16(w * (rstd * (x - mean)) + b)",

@@ -21,6 +21,8 @@
   and a geometry, head padding, selection, history or target the Definitions do not take refuses by name; the o-projection
   input's inverse RoPE and quantisation derives per token and head word for word the reference (`test_dsv4_indexer.head`) in
   the wrapper's [T, G, ...] layout, and another scale layout, clamp, rotary split or target refuses by name;
+* `DeepGemmFp8EinsumRule`: the o-projection's `fp8_einsum` over that quant's words and scales derives per token word for word the
+  grouped DeepGEMM twin (`kernels.deepgemm_twins`), and another expression or recipe refuses by name;
 * `vllm_meta.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
   leaves them."""
 from __future__ import annotations
@@ -48,6 +50,7 @@ from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.vllm_meta import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
+from verity_vllm.program.kernels import deepgemm_twins as DT
 from verity_vllm.program.kernels import dsv4_compressor_twin as DC
 from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as TQ
 from verity_vllm.program.kernels import flashmla_prefill_twin as FP
@@ -402,7 +405,8 @@ def _tensor(words: np.ndarray) -> torch.Tensor:
 
 
 def _words(t: torch.Tensor) -> list[int]:
-    width = {torch.bfloat16: (torch.int16, np.uint16), torch.float32: (torch.int32, np.uint32)}[t.dtype]
+    width = {torch.bfloat16: (torch.int16, np.uint16), torch.float32: (torch.int32, np.uint32),
+             torch.float8_e4m3fn: (torch.uint8, np.uint8)}[t.dtype]
     return t.contiguous().view(width[0]).numpy().reshape(-1).astype(width[1]).tolist()
 
 
@@ -783,6 +787,65 @@ def test_an_inverse_rope_quant_launch_beyond_the_definition_refuses_by_name(over
         VB.observe_target_profile(over["target"])
     model = _OProjInput(rng, **{k: v for k, v in over.items() if k != "target"})
     rep = _derive_mhc(model, (_tensor(W.bf16(_f32(rng, 3, 4, 64))),))
+    assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
+
+class _OProj(nn.Module):
+    """`deep_gemm_fp8_o_proj` up to `wo_b`: the inverse-RoPE quant of 2 groups of 2 heads of 128 (one quantisation group each, a
+    rotary suffix of 16), then `fp8_einsum("bhr,hdr->bhd")` into `z` [T, 2, N] with wo_a's grouped weight [2, N, 256] and block
+    scales [2, 1, 2] as the loader leaves them."""
+
+    N = 64
+
+    def __init__(self, rng, expr: str = "bhr,hdr->bhd", recipe: tuple = (1, 128, 128)) -> None:
+        super().__init__()
+        self.expr, self.recipe = expr, list(recipe)
+        p = lambda t: nn.Parameter(t, requires_grad=False)
+        self.cos_sin_cache = p(_tensor(TQ._cs(rng, (16, 16), p=0.0)))
+        self.weight = p(torch.from_numpy(rng.standard_normal((2, self.N, 256)).astype(np.float32)).to(torch.float8_e4m3fn))
+        self.weight_scale_inv = p(torch.from_numpy((np.abs(rng.standard_normal((2, 1, 2))) * 0.01).astype(np.float32)))
+
+    def forward(self, o):
+        T = o.shape[0]
+        positions = torch.arange(3, 3 + T, dtype=torch.int64)
+        fp8, scale = iface.fused_inv_rope_fp8_quant_kernel(o, positions, self.cos_sin_cache, 2, 128, 1, 112, 8, False, 448.0,
+                                                           -(-T // 4) * 4, T, 2, 2 * 128, 2)
+        z = torch.empty(T, 2, self.N, dtype=torch.bfloat16)
+        iface.deep_gemm_fp8_einsum(self.expr, fp8.transpose(0, 1), scale.transpose(0, 1), self.weight, self.weight_scale_inv, z,
+                                   self.recipe)
+        return z
+
+
+def test_the_o_projections_einsum_derives_per_token_word_for_word_the_grouped_deepgemm_twin(served):
+    rng = np.random.default_rng(7)
+    model, o = _OProj(rng), W.bf16(_f32(rng, 3, 4, 128, sd=4.0))
+    rep = _derive_mhc(model, (_tensor(o),))
+    assert rep.program is not None, rep.unsupported
+    (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "DeepGemmFp8Einsum[vllm]_v1"]
+    assert app["emitted"] == "ScaledMmFp8BlockGrouped_v1{H=2,K=256,N=64,G=128} x3"
+    roles = rep.provenance["weight_roles"]
+    assert (roles["weight"]["role"], roles["weight_scale_inv"]["role"]) == ("fp8_einsum_w", "fp8_einsum_ws")
+    cs = np.array(_words(model.cos_sin_cache), np.uint32).reshape(16, 16)
+    w = np.array(_words(model.weight), np.uint8).reshape(2, _OProj.N, 256)
+    ws = np.array(_words(model.weight_scale_inv), np.uint32).reshape(2, 1, 2)
+    want = []
+    for t in range(3):
+        heads = [inv_rope_head(o[t, h].tolist(), cs[3 + t].tolist(), 128) for h in range(4)]
+        xq = np.array([heads[2 * g][:128] + heads[2 * g + 1][:128] for g in range(2)], np.uint8)
+        sx = np.array([[heads[2 * g][128], heads[2 * g + 1][128]] for g in range(2)], np.uint32)
+        y, nonfinite = DT.scaled_mm_fp8_block_grouped_row(xq, sx, w, ws)
+        assert not nonfinite.any()
+        want += [int(v) for v in y.reshape(-1)]
+    assert _run(rep, model, (_tensor(o),)) == want
+
+
+@pytest.mark.parametrize("over, refusal", [
+    ({"expr": "bhr,hdr->bdh"}, "fp8_einsum('bhr,hdr->bdh', recipe=[1, 128, 128]); the Definition is 'bhr,hdr->bhd'"),
+    ({"recipe": (1, 1, 128)}, "fp8_einsum('bhr,hdr->bhd', recipe=[1, 1, 128])"),
+])
+def test_an_fp8_einsum_beyond_the_definition_refuses_by_name(over, refusal, served):
+    rng = np.random.default_rng(0)
+    rep = _derive_mhc(_OProj(rng, **over), (_tensor(W.bf16(_f32(rng, 3, 4, 128))),))
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
 
 
