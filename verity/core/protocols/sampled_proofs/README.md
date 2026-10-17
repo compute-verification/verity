@@ -137,9 +137,9 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
   - `check_public` is the public-items rule on a registration, and `check_verdicts` what an outcome holds the verdicts
     to before the audit record (the Python; a `Stream` runs each by the verifier of record, `verifier.check_public` and
     `verifier.check_verdicts`).
-  - `Stream(spec, unit, budget=, delta=, challenger=)` has the calls `register`, `select` (with a work sampling design's
-    `closure=`), `register_interiors` (under `TwoStage`), `deliver` and `outcome`, which raise `Refused` (with its
-    `Verdict`) or `Pending`.
+  - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
+    sampling design's `closure=`), `register_interiors` (under `TwoStage`), `session` (one `Session` over up to
+    `rounds` rounds' draws), `deliver` and `outcome`, which raise `Refused` (with its `Verdict`) or `Pending`.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
     challenger's coins (or a sampler) under the expanded design, with a work draw's closure: what `register` and
     `select` run.
@@ -392,7 +392,7 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   stratum, `window`, `leaf_layer` and `anchors` when not empty, and each value's `leaves:<v>` and `domain:<v>`, with
   `words:<v>` and `word_bits:<v>` for a registered value, an entry's fields read in key order. Its codes are `keys`,
   `roots`, `unsalted`, `query` and `undeclared`; the `Stream` runs it by the verifier of record.
-- **The order.** A stream holds one open registration at a time. `register` logs the record and its receipt, whose
+- **The order.** A stream holds one open registration at a time, or up to `rounds` (below). `register` logs the record and its receipt, whose
   `received` is the record's position in the stream's log. `select` then draws once, from the challenger's coins as
   `two_stage.draw_first` reads them (the Lean verifier's `Flock.Draw.drawWith` on the same bytes, with no derivation),
   or from the stream's `sampler`; either draw is held to `draw.check_draw`. Under a work sampling design,
@@ -410,6 +410,19 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   registrations' audit records accept, `session_roots` split between them by value, and its profile is the boundary's,
   the replay sampling design's over the RUs. Its refusals are `rule`, `not-drawn`, `final`, `delivered`,
   `interior-registered`, `interior-empty` and `interior-population`, then the public-items rule's and R1 to R7's.
+- **Sessions over several rounds.** `Stream(rounds=R)`, R from 1 to `ROUNDS` (4) and 1 under `TwoStage`, holds up to R
+  registrations without a final outcome, so one proof session can prove the draws of up to R consecutive rounds, each
+  round's registration its own tables of the session's statement. `session(draws)` opens it once, after the last
+  covered draw, over consecutive registrations in order, none delivered, final or covered by another session. It
+  refuses `rule`, `rounds`, `unknown`, `not-drawn` (a covered registration not drawn yet), `final`, `delivered`,
+  `covered` (nothing reopens a draw's session) and `order`, and changes nothing when it does. Each round is committed
+  before its own draw, and so before every later round's. The first covered round's `Check.proof_deadline`, from its
+  draw, spans the session. `deliver(session, sessions)` delivers it once, for every draw it covers, and refuses one of
+  them alone (`covered`) and a session the stream didn't open (`not-session`). Past the deadline every covered draw is
+  `late`, returned in order, and a session never delivered ends `late` for each round at that deadline. Each covered
+  draw's `outcome` binds the same delivered session records and runs its own audit record, on its round's
+  `proved_units`, `instances`, `served` and `session_roots` (its own tables'), never another round's. The stream's
+  digest adds `rounds` when it is more than 1.
 - **The salt and the registration deadline.** A stream runs one epoch with one salt. `salt(n=64)` issues it, `n` bytes
   of the challenger's coins (read in order with the draws'), and reads its release on the challenger's clock
   (`salted_at`). `salt_released(salt, released_at)` instead records a salt released elsewhere, such as PoUW's epoch
@@ -435,6 +448,8 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   verifier of record has run, and each verdict of record names the delivered sessions and reports the public outputs
   alike (`check_verdicts`: `pending`, `sessions`, `public`, by the verifier of record).
 - **The failure budget.** At its `budget`-th `reject` or `late` a stream stops, and it refuses registrations from then on.
+  It holds at most `budget` minus its failures registrations open (`open`), so a session that fails, one failure for
+  each round it covers, never takes it past its budget.
 - **The log's history.** A registration's checks don't read the whole log. As the log grows, a stream keeps where each
   window was logged and each registered value's first registration, and it counts its failures as they come. Each check
   gets the log's last record (R6's `previous`), the records whose window may equal the registration's (R6's window),
@@ -447,7 +462,9 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   "verity/proof-service/outcome/v0", "stream", "order", "registration", "receipt", "draw", "sessions", "symbol",
   "public", "audit", "interior"}`, with the receipt and the draw as the SHA-512 of their canonical JSON, `audit`
   one-stage's audit record (null for `late`), and `interior` null, or under `TwoStage` `{"registration", "receipt",
-  "audit"}` for the interiors in the same forms; `Outcome.record` is its SHA-512.
+  "audit"}` for the interiors in the same forms. A draw a `Session` covers adds `session`, `{"rounds": [{"order",
+  "registration", "draw"}]}` for each round the session covers, the draw as its SHA-512: the round's lag. `Outcome.record`
+  is its SHA-512.
 
 A stream refuses a two-stage count, the `Sequential` rule, a window statement and a timed session until they are built,
 and a check with no proof deadline.
@@ -466,7 +483,12 @@ Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outc
 `test_a_two_stage_outcome_accepts_only_when_both_audits_do`, `test_a_work_draw_carries_its_closure_and_the_proof_proves_it`,
 `test_a_closure_widens_a_work_draw_only_and_stays_in_range`, `test_the_default_draw_is_draw_first_on_the_challengers_bytes`).
 What a registration reads of the log, and that its verdicts are the whole log's, is pinned by
-`tests/test_service_history.py`.
+`tests/test_service_history.py`. Sessions over several rounds are pinned by `tests/test_service_sessions.py`
+(`test_a_two_round_session_is_accepted`, `test_each_rounds_audit_record_reads_only_its_own_units_and_roots`,
+`test_a_session_opened_before_the_last_rounds_coin_is_refused`,
+`test_a_session_past_the_first_rounds_deadline_is_a_reject`,
+`test_an_undelivered_session_ends_late_at_its_first_rounds_deadline`,
+`test_open_registrations_are_bounded_by_rounds_and_the_budget`).
 
 PoUW's example runs on a two-stage `Stream` in `tests/test_service_two_stage.py`, following the architecture note
 (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, §4.1): a uniform `subset:K′` over `N`
