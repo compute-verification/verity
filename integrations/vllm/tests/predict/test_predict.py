@@ -28,6 +28,8 @@ from verity_vllm.predict.phi import Phi
 FIX = Path(__file__).parent / "fixtures"
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
+GLM53_S1 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__stoch-t0.8-p0.95__eager"
+GLM53_S8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager"
 DSV4 = "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -131,6 +133,22 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
     rows, and the first request's Program under its launch batch (its prefill alone, then decodes beside the second request's
     prefill and decodes), every token-count-dependent selection at the launch's tokens."""
     r = build_program(_row_phi(GLM53_B8, "GLM53", tmp_path), wrapper, **shape)
+    assert r.digest == digest
+
+
+@pytest.mark.parametrize("row,wrapper,shape,digest", [
+    (GLM53_S1, "step", {"M": 1, "pos0": 8},
+     "24fae34c8de54a0808878316398bcb7228e39fb073c2df31ba00cda2e17da379c8b66a147e5faa6cc1f44ce9fd3fbabe17567af138a97f3e01c361e72df05821"),
+    (GLM53_S8, "step", {"M": 8, "pos0": 8},
+     "a26c43faa02a1efcdfdbf6ed346afaf2d6552bea975592369da898827fe34399d1c4a4e2ea87cf3806f292204d8c805c0481c4ef948d1d7aad5cadf51df96e01"),
+    (GLM53_S8, "request", {"LP": 25, "T": 6},
+     "187d76b491f1dcc9ecdeb87d1e807721ab910d353c2875d2b467a2f43be0af9fd977ab42313d13e1568b115ad1ed7e6fca1b4c66175e70c1bc4afee5e956c35c"),
+])
+def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
+    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0, as the Build traced them in r20261017-224230-de2d: the B1 step at the single
+    request's constant split count, and the B8 step and second request (under its launch batch) over the derived `splits` Input,
+    the select after the vocabulary's all-gather."""
+    r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)
     assert r.digest == digest
 
 
