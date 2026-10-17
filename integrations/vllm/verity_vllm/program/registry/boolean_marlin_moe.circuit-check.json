@@ -33,6 +33,9 @@
   "MarlinMxfp4Step_v2{DOT=HopperBF16WgmmaDot16_v2}": {
    "and": 12701
   },
+  "MoeExpertE2m1Row_v2{E=3,K=128}": {
+   "and": 16896
+  },
   "MoeExpertE2m1Row_v2{E=3,K=64}": {
    "and": 8448
   },
