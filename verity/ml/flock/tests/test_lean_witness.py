@@ -380,7 +380,9 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
 
 def test_f1_verify_accepts_the_smallest_level(built, f1_gate, f1, once):  # noqa: F811
     """`flock-verify verify --zk`, the verifier of record, accepts level 3 (`rec-open/l16-h4`, 106 units) with the
-    verifier's own V* inputs and the inner statement and session its coefficients are checked against, as
+    verifier's own V* inputs, the inner statement and session its coefficients are checked against, and the coin
+    server's inner transcript (`inner/s1/public.json`), whose link points and level-3 tops the level is held to
+    (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as
     `85-rec-reprice.sh`'s STEP=lean runs it: past every refusal the verdict runs last (the form's, a draw-less session's,
     and a V* session's short of every unit, `RecSetup.fullDraw`), and not as a private circuit's. The checks above are
     the model's predicates; this is the shipped verdict, so a refusal added to it that an honest V* session meets fails
@@ -397,7 +399,8 @@ def test_f1_verify_accepts_the_smallest_level(built, f1_gate, f1, once):  # noqa
                        str(names.index(_unit(g, part))), "--rec-bindings", str(d / "bindings-L3.json"), "--rec-rows",
                        str(d / "rows.json"), "--rec-inner-circuit", str(st / "circuit.txt"), "--rec-inner-public",
                        str(st / "pub-2.bin"), "--rec-inner-partition", str(st / "partition.json"), "--rec-inner-session",
-                       str(g / "inner" / "s1" / "session"), "--session", str(g / "v-sess" / part)])
+                       str(g / "inner" / "s1" / "session"), "--rec-inner-transcript",
+                       str(g / "inner" / "s1" / "public.json"), "--session", str(g / "v-sess" / part)])
         return {"rc": p.returncode, "verdicts": [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]}
 
     r = _kept(once, "verify-f1-L3", run)

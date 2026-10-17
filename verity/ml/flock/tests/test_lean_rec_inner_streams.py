@@ -653,6 +653,48 @@ def test_each_streams_c_k_sit_at_its_schedules_message_rounds(tmp_path, change, 
     assert _covers(tmp_path, _shape(tmp_path), _changed(tmp_path, change)) == (1, f"rec inner transcript: {why}")
 
 
+@pytest.mark.parametrize("change,why", [
+    (lambda t: t["link"]["roots"]["circuit"].pop(), "circuit's root_B has 127 nodes, and its schedule's level 0 top 128"),
+    (lambda t: _round(t, "circuit/rep1", k=70)["tops"][0].pop(),
+     "rep 1's tops (round, nodes) are [(59, 64), (70, 63), (81, 32)], and its schedule's [(59, 64), (70, 64), (81, 32)]"),
+    (lambda t: _round(t, "circuit/rep0", k=81).__setitem__("tops", []),
+     "rep 0's tops (round, nodes) are [(59, 64), (70, 64)], and its schedule's [(59, 64), (70, 64), (81, 32)]"),
+], ids=["root", "top-short", "top-missing"])
+def test_the_circuit_tables_tops_sit_at_its_schedule(tmp_path, change, why):
+    """`RecVStar.checkLinkRounds`: the circuit table's `root_B` has its schedule's level-0 `2^cap` nodes, and each rep's later
+    tops (`rec-top-L<l>` past level 0, which each level's openings climb to) sit at its schedule's rounds with its node
+    counts, here `holo_rounds`' at 2d61's shape. Neither `candidate3` nor `checkCovers` counts the circuit table's tops, so
+    a `root_B` short of a node, or a rep's top short of one or missing, is refused here."""
+    assert _covers(tmp_path, _shape(tmp_path), _changed(tmp_path, change)) == (1, f"rec inner transcript: {why}")
+
+
+POINTS_WHY = ("rec inner transcript: the inner session's record's link points are not the ones the coin server drew "
+              "(link.points): check 5 would take the extra claims at points the prover chose")
+
+
+def _bit_off(h: str) -> str:
+    return f"{int(h, 16) ^ 1:032x}"
+
+
+@pytest.mark.parametrize("d", [C3, PLAIN], ids=["c3", "plain"])
+def test_the_records_link_points_are_the_coin_servers(tmp_path, d):
+    """`RecVStar.innerLink`: check 5 takes the extra claims at the inner session record's link points (the prover's record),
+    so they must be the ones the coin server drew after `root_B` (the transcript's `link.points`, `points × m` coins in
+    point order). 2d61's and rec-coins' sessions pass; a transcript whose first link coin is one bit off is refused, and so
+    is a record whose last coin is, or whose two points are swapped."""
+    assert _read(_fixture(d))[0] == 0
+    t = json.loads((d / "public.json").read_text())
+    t["link"]["points"][0] = _bit_off(t["link"]["points"][0])
+    assert _read(d, _write(tmp_path / "transcript.json", t)) == (1, None, POINTS_WHY)
+    held = json.loads(((d / "prover" if (d / "prover").is_dir() else d / "session") / "session.json").read_text())
+    for name, change in [("last", lambda p: p[-1].__setitem__(-1, _bit_off(p[-1][-1]))), ("swap", lambda p: p.reverse())]:
+        s = json.loads(json.dumps(held))
+        change(s["link"]["points"])
+        (tmp_path / name).mkdir()
+        _write(tmp_path / name / "session.json", s)
+        assert _read(d, record=tmp_path / name) == (1, None, POINTS_WHY), name
+
+
 def test_rs_c_k_off_its_schedule_is_refused(tmp_path):
     """R's stream with its second `c_k` moved to round 2, which commits none, is refused under the honest inner shape:
     `checkStackedShape` holds R's transcript rounds to `stackedRounds` of META's shape before `checkCommitRounds`
