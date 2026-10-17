@@ -1,6 +1,7 @@
 """facet_break: SASS opcodes to census classes, a program's load on every facet (IMMA.16832 through the generic MMA lines,
 every other form only through its own), the R1 and KFFMA0 violation TENSOR's interleaved points make at VF3n-16, the hull
-refit, and the generator's grid (seeded, unique names, exact SASS counts). `test_grid_slice_builds_and_gates` builds a
+refit, the L2 facet (only loads that skip L1 count), and the generator's grid (seeded, unique names, exact SASS counts).
+`test_grid_slice_builds_and_gates` builds a
 slice of the grid with nvcc and gates it; it skips without nvcc and nvdisasm.
 """
 from __future__ import annotations
@@ -60,7 +61,7 @@ def test_class_of():
             "FMUL": "FFMA", "HFMA2*": "HFMA2", "*MNMX*": "VIMNMX", "DMUL": "DMUL", "DFMA": "W2", "MUFU.EX2": "XU",
             "POPC": "XU", "SHFL.BFLY": "SHFL", "MOV": "NOROW", "NOP": None, "LDS": "LDS32", "LDS.128": "LDS128",
             "LDG.E": "LDG32", "LDG.E.CONSTANT": "LDG32", "LDG.E.128": "LDG128", "LDS.64": None, "LDS.U8": None,
-            "LDG.E.64": None, "TLD.LZ": None}
+            "LDG.E.64": None, "TLD.LZ": None, "LDG.E.ENL2.256": None, "LDG.E.NA.128": None}
     assert {op: loads.class_of(op) for op in want} == want
 
 
@@ -90,6 +91,26 @@ def test_mem_grid_is_seeded_unique_and_counts_each_slot():
     assert ops.count("LDS.128*1") == 4 and ops.count("LDS*1") == 12 and fn.startswith("fb::soff<fb::D_LDS32, ")
     g = next(g for g in a if g["name"] == "lm_i16832_ldg32_line_q4_w16")
     assert gen.expect_of(g)[0] == "IMMA.16832.S8.S8=8,LDG.E=4" and gen.smem_of(g) == ("", "")
+    assert not any("ldg256" in g["name"] for g in gen.grid(2, 120, family="mem"))
+
+
+def test_the_l2_facet_counts_only_the_bytes_of_loads_that_skip_l1(tmp_path, capsys):
+    a = gen.grid(4, 10, family="l2")
+    assert a == gen.grid(4, 10, family="l2") and len({g["name"] for g in a}) == len(a)
+    g = next(g for g in a if g["name"] == "l2_g256cg_scat_q16_w32")
+    assert gen.expect_of(g) == ("LDG.E.ENL2.256.STRONG.GPU=16", "", 0) and gen.smem_of(g) == ("", "")
+    assert "FB_L2(l2_g256cg_scat_q16_w32, D_L2G256CG, P_SCAT, 16, 1024)" in gen.emit_cu([g])
+    row = {"probe": "l2_g128na_line_q8_w16", "run": "r20261017-000000-0000", "blocks": 188, "sm_mhz": 2000.0,
+           "rates": {"0:LDG.E.NA.128": 0.03, "1:LDG.E.128": 0.5, "2:LDG.E.ENL2.256.STRONG.GPU": 0.01}}
+    bps = (0.03 * 32 * 16 + 0.01 * 32 * 32) * 188 * 2000e6
+    assert loads.l2_bytes_per_s(row) == pytest.approx(bps)
+    assert loads.program(row, {}, 300.0, l2=bps / 1.1)["load"][loads.L2_ROW] == pytest.approx(1.1)
+    assert loads.L2_ROW not in loads.program(row, {}, 300.0)["load"]
+    assert set(loads.unpriced(row)) == {"LDG.E.NA.128", "LDG.E.ENL2.256.STRONG.GPU"}
+    p = tmp_path / "rows.jsonl"
+    p.write_text(json.dumps(row) + "\n")
+    assert loads.main(["summary", str(p), "--epoch", EPOCH, "--l2", str(bps / 1.1)]) == 1
+    assert "L2tbl        load 1.1000" in capsys.readouterr().out
 
 
 def test_only_imma16832_takes_the_generic_mma_lines(census):
@@ -177,8 +198,10 @@ def test_grid_slice_builds_and_gates(tmp_path):
              "mx_h16816f16_lop3_q64_p0_w16"}
     mem = {"ld_lds32_lds128_r2_line_q16_w32", "ld_lds64_quad_q16_w32", "ld_tld4_line_q8_w16", "ld_ldgnc32_bcast_q8_w8",
            "lm_i16832_lds128_bcast_q8_w16", "lm_h16816f16_tld1_line_q16_w16"}
+    l2 = {"l2_g256cg_scat_q16_w32", "l2_g128na_line_q8_w16", "ld_ldg256_line_q8_w8"}
     gs = [g for g in gen.grid(0, 0) if g["name"] in picks] + [g for g in gen.grid(0, 0, family="mem") if g["name"] in mem]
-    assert {g["name"] for g in gs} == picks | mem
+    gs += [g for g in gen.grid(0, 0, family="l2") if g["name"] in l2]
+    assert {g["name"] for g in gs} == picks | mem | l2
     src = tmp_path / "slice.cu"
     src.write_text(gen.emit_cu(gs))
     _, verdicts = probe.gate_all(probe.build(tmp_path / "b", [src]))
