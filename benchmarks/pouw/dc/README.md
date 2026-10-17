@@ -21,10 +21,13 @@ there; the rates and the GEMM's exactness need the GPU (`run.sh`).
 | `analyze.py` | rows.jsonl → slots a SM a clock, every loop's issue rate, a (issue cycles a tensor instruction takes from the lane beside it), M3's and M4's pass lines, sm_100's TMEM model (honest at L = 32, the L that saturates the tensor, the two-stage LP's ε), the fold's words a clock; `agree A B` checks a repeat |
 | `census.py` | Runs → machine_model's census lines, a device directory a family (`../machine_model/data/devices/sm_90/`, `sm_100/`: census.csv and rows.csv), and the tables: T1 a form, ε_tensor at L = 32, the joint issue rows, q*, L_bal |
 | `run.sh` | The job for one family (below); `DC_BUILD_ONLY=1` builds and gates without a GPU |
+| `probes/uniform.cuh`, `probes/sm90_uniform.cu`, `probes/sm100_uniform.cu`, `probes/sm90_issue.cu`, `probes/sm100_issue.cu`, `probes/sm90_sat.cu`, `probes/sm100_sat.cu` | The uniform datapath: 8 warp-uniform chains of UIMAD + ULOP3, ULOP3, UIADD3 + ULOP3, USHF (funnel shift), UPRMT and ULEA/USHF alone (`uz_`), and beside the honest step (8 IMMA m16n8k32 + duo reading the accumulators: `uh_`), beside it with 64 FFMA (`ug_`) or 32 LOP3 (`ul_`), beside 32 IMMA a fold (`um_`), beside it with 256 FFMA (`ub_`, the `issue` tables), and beside issue-saturated streams (the `sat` tables: the honest step with FFMA or FADD, IADD3 and LOP3 on independent accumulators, `us_`, `uv_`, `uw_`, `ux_`, at 16 to 128 uniform instructions an iteration); each family's table pins every loop's opcodes as the gate saw them, since ptxas keeps the chains uniform only beside an MMA whose accumulators the lanes read (FACET-BREAK) |
+| `probes/imad_forms.cuh`, `probes/sm90_imad.cu`, `probes/sm100_imad.cu` | The IMAD forms of duo's ALU work: IMAD.HI.U32 alone, beside duo against IMAD and LOP3, and duo with its LEA.HI as IMAD.HI + IMAD on every word (`f_duoi`) and on one in three (`f_duom`) |
+| `uni.sh`, `uniform.py` | Their job for one family and its analysis: UP (the uniform pipe), UNI's lines (UP; an issue slot on the issue rows; no other row, each row's limit recorded), every facet checked at every point, and the IMAD forms; `census --write` puts UNI's lines in the device directory, which census.py's `--write` keeps |
 
 The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
 dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
-pipe.py's SASS profile and q*). A probe's rate is
+pipe.py's SASS profile and q*, uniform.py's tables, fit and writer). A probe's rate is
 opcode_probe's: warp instructions a SM a clock, timed only after its SASS gate, its poisoned sink and its no-write
 control pass (`../opcode_probe/README.md`).
 
@@ -39,6 +42,9 @@ python3 benchmarks/pouw/dc/analyze.py agree ~/.research/runs/RUN_A/out ~/.resear
 python3 benchmarks/pouw/dc/pipe.py analyze ~/.research/runs/RUN/out --census SM100_RUN_OUT...
 python3 benchmarks/pouw/dc/pipe.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
 python3 benchmarks/pouw/dc/census.py sm90 ~/.research/runs/RUN/out... --write benchmarks/pouw/machine_model/data/devices/sm_90
+research run --on vy-dc-b200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
+research run --on vy-dc-b200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
+python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/SAT_RUN/out... --write
 ~~~
 
 The node needs CUDA 13.0 (`/usr/local/cuda-13.0`, driver ≥ 580). Each run builds and SASS-gates everything before it
@@ -106,6 +112,39 @@ CTA pair), M4e beyond fp8acc's binade question (kind::f16/tf32/f8f6f4 accumulati
 general), lanes beside wgmma with more than one lane warp a SMSP (`wgU_` reaches only 0.3–0.4 of alone, under the
 block-timed points the sm_90 facets rest on), operand streaming (TMA) in `pgemm.cu`, and a pipelined sm_90 GEMM. On sm_90 CUDA 13.0 has no native FP8 or s4 mma.sync: e4m3 m16n8k32 is 2 HMMA.16816.F32 + 4 FADD (timed as
 that), s4 m16n8k64 a CALL (not timed).
+
+## The uniform datapath and the IMAD forms (`uni.sh`, 1× H200, 1× B200)
+
+Runs r20261017-095350-02ff, -103944-a0bf, -112709-e43e, -113207-6aa4 and -113541-675b (H200), and
+r20261017-095350-0a80, -103944-35c5, -112709-ec87, -113207-4cb8 and -113541-9d33 (B200), 115 gates each, all passing:
+every uniform chain stays uniform alone and beside the honest step, FFMA, LOP3, the MMA-heavy stream and every
+issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
+
+- **UP: one uniform instruction every 2 SMSP-cycles on both** (0.500 a SMSP-cycle for ULOP3, UIADD3, USHF, UPRMT, UIMAD
+  and ULEA alike; 1.957 and 1.961 SMSP-cycles with the 2% margin on sm_100 and sm_90).
+- **Beside the honest step the uniform pipe runs nearly free**: up to 0.48 (B200) and 0.46 (H200) uniform instructions
+  a SMSP-cycle beside the step and its lanes, and no point has issue (vector plus uniform) above 0.94. No point loads
+  a lane pipe or the tensor pipe to its limit beside the chains (the honest step is latency-bound; the MMA-heavy
+  stream reaches 0.74 of M on the B200 and 0.61 on the H200, with mma.sync, not tcgen05 or wgmma), so UNI holds UP
+  and its issue price, and no other row.
+- **A uniform instruction costs 0.92 (B200) and 0.98 (H200) of an issue slot**, its least slowdown beside an
+  issue-saturated stream, less 2%. The streams beside the honest step and the `ub_` stream leave 6–28% of issue idle,
+  and their slack absorbs the chains (0.10 to 1.08 a uniform instruction). The `sat` streams don't: on the B200 `uv_`,
+  `uw_` and `ux_` issue 0.958, 0.976 and 0.981 of their slots without chains, and each uniform instruction added slows
+  them 0.94 to 1.03 SMSP-cycles (least 0.943, `uv_64x`). On the H200 only `ux_` (FADD by an immediate: one register
+  read) reaches 0.974; FFMA streams stop at 0.92–0.93, where the chains slow them by −0.13 to 0.85. Beside `ux_` each
+  uniform instruction costs 1.00 to 1.12 (least 1.003, `ux_128x`). Every count is the loop's full SASS, not the table's
+  eight opcodes. The joint issue rows scale the price as they scale the ALU's slot (JI100_0 0.906, JI90_0 0.965).
+  Beside a saturated tcgen05.mma or wgmma stream the price isn't measured.
+- **The IMAD form of duo's LEA.HI is slower on both.** IMAD.HI.U32 costs 4.19 (B200) and 4.18 (H200) SMSP-cycles,
+  twice an IMAD, so rotl(u, r) + y′ as IMAD.HI + IMAD costs about 6 cycles of the IMAD pipe against LEA.HI's 2 of
+  the ALU's. Duo with 29% (B200) and 33% (H200) of its LEA.HI in that form takes 17% and 21% longer a word than duo.
+- **ε** (`machine-model eps --credit floor --operands floor --q 2.03`, Dither-1S / 2S / C): the B200 at L = 32 is
+  1.200 / 0.701 / 0.658% (0.6% of words on the uniform route; π* JPA100_0 0.974, issue 0.026), at L = 64 1.836 / 0.834
+  / 0.752%. Without the uniform route it was 0.721 / 0.222 / 0.179% and 1.474 / 0.472 / 0.390%; with a full issue slot
+  1.155 / 0.656 / 0.613% and 1.791 / 0.789 / 0.707%. The H200 doesn't move (5.013 / 4.514 / 4.471% at L = 32, 10.440 /
+  9.438 / 9.356% at L = 64): its binding joint issue row JI90_0 charges a uniform instruction 0.965, which closes the
+  route.
 
 ## B300 (sm_103a)
 

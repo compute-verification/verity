@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import math
 import shutil
+import tomllib
 from dataclasses import replace
 from pathlib import Path
 
@@ -33,11 +34,13 @@ DUO = provisional("dither-1s")
 
 
 def test_the_honest_profile():
-    assert H.base() == {"MMA": 1, "LDS128": 0.25, "ALU": 0.125, "TMA512": 0.125}
+    """Honest's MMA is counted under its own form's census kind, never the generic MMA."""
+    assert H.form == M.form == "IMMA16832" and "MMA" not in H.per_mma
+    assert H.base() == {"IMMA16832": 1, "LDS128": 0.25, "ALU": 0.125, "TMA512": 0.125}
     assert sum(H.per_mma.values()) - sum(H.base().values()) == 12   # duo: 12 warp instructions a MMA
     assert H.words == 128 and H.depth == 32 and H.L == 32
-    assert H.tensor("free") == {"MMA": 1} and H.tensor("floor") == {"MMA": 1, "LDS128": 0.2}
-    assert H.tensor("floor", {"LDSM_X4": 0.1}) == {"MMA": 1, "LDSM_X4": 0.1} and H.tensor("honest") == H.base()
+    assert H.tensor("free") == {"IMMA16832": 1} and H.tensor("floor") == {"IMMA16832": 1, "LDS128": 0.2}
+    assert H.tensor("floor", {"LDSM_X4": 0.1}) == {"IMMA16832": 1, "LDSM_X4": 0.1} and H.tensor("honest") == H.base()
     with pytest.raises(SystemExit, match="operands: one of"):
         H.tensor("none")
 
@@ -215,7 +218,7 @@ def test_luck_and_the_total():
     assert e.cheat.binding == ("JI3e_0",)
     assert e.luck == pytest.approx(E.deficit(DUO) * (JI + 0.375) / (JI + 12.375), rel=1e-6)
     e = E.eps(DUO, PI, 8)
-    assert e.sched is None and e.mand == 0 and e.skip == 0.164
+    assert e.sched is None and e.mand == 0 and e.skip == 0.123
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
 
 
@@ -314,7 +317,8 @@ def test_designs_read_what_exists():
         assert all(E.design(a).name == n for a in d.aliases), n
     assert {E.design(n).title for n in E.designs()} >= {"Dither-1S", "Dither-2S", "Dither-C"}
     for n in E.profiles():
-        assert set(E.honest(n).per_mma) | set(E.honest(n).floor) <= set(c), n
+        h = E.honest(n)
+        assert set(h.per_mma) - {h.form} | set(h.floor) <= set(c) and h.form in PI.c, n
     with pytest.raises(SystemExit, match="no design 'none'"):
         E.design("none")
 
@@ -373,7 +377,7 @@ def test_cli(capsys):
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-2s" and d["registry"]["aliases"] == ["dither-two-sided", "A", "adopted-bd-lm"]
     assert d["credit"] == "floor" and d["terms"]["machine"] == 0 and d["terms"]["sched"] is None
-    assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["core"] < 0.002
+    assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["core"] < 0.004
     assert d["adapt"]["unit"] == "per-stage" and d["terms"]["adapt"] == 0
     assert d["sample"]["eps"] == pytest.approx(d["terms"]["luck"]) and d["sample"]["budget"]["checks"] == 48000
     assert main(["eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--q", "4", "--json"]) == 0
@@ -448,8 +452,9 @@ def test_sm89_the_fold_binds_honest():
     ALU's measured rate, above IMMA.16816's issue, so no lane route saves time at any q*. The uniform route does: UNI
     runs on UP at 2.0 a SM-clock (uniform.cu, every form) and costs issue and JI89 its measured cost beside honest16, so
     a cheater writes words there in JI89's slack, less of them as q* grows, and ε_machine never reaches its floor. At
-    L = 32 IMMA.16832's joint facets with ALU bind, lane words on other pipes save time until q* reaches dp4a's 8.5, and
-    UNI's JI89 cost leaves the uniform route nothing."""
+    L = 32, with IMMA.16832's ALU and FFMA facets refitted to FACET-BREAK's schedule (EPS1 ADA r3, opcode_probe/sm89/
+    ji.py), JI89 binds the floor program and the cheater alike: lane words save time only below JI89's q*0 (IMMA.16832's
+    coefficient over a thread's 4 words, 1.9), and UNI's JI89 cost leaves the uniform route nothing."""
     pi = E.machine("", SM89)
     assert pi.vector == "ADA-89" and set(pi.c[E.UNI]) == {"UP", "issue", "JI89"}
     assert pi.c[E.UNI]["UP"] == pytest.approx(4 / (2.0 * 1.02), rel=1e-3)   # UNI's rate + 2%
@@ -467,9 +472,9 @@ def test_sm89_the_fold_binds_honest():
     assert e.T_honest * 128 == pytest.approx(19.069) and e.T_honest_source == "measured"
     assert e.gamma_clock == pytest.approx(e.gamma * 2520 / 1680, rel=1e-6)
     s32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor")
-    assert E.threshold(s32) == pytest.approx(8.5, abs=1e-5)   # dp4a: 8 IDP4A and 0.5 LDS.128 a word
-    assert s32.machine_eps(8.5) == pytest.approx(0, abs=1e-9) and 0 < s32.machine_eps(8) < s32.machine_eps(2)
-    assert all(s32.machine_eps(q) == pytest.approx(s32.machine_eps(q, uniform=False), abs=1e-12) for q in (2, 8, 16))
+    assert "JI89" in s32.as_built.binding and 1.8 < E.threshold(s32) < 2
+    assert all(s32.machine_eps(q) == pytest.approx(0, abs=1e-9) for q in (2, 8, 16)) and s32.machine_eps(1.5) > 0
+    assert all(s32.machine_eps(q) == pytest.approx(s32.machine_eps(q, uniform=False), abs=1e-12) for q in (1.5, 2, 8))
     t = E.table(SM89)
     assert t.l2 is None and t.per_cycle() is None and t.mhz == 2520 and t.sms == 142
     open32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor", table=t)
@@ -479,23 +484,52 @@ def test_sm89_the_fold_binds_honest():
 def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
     """EPS1 DC's H200 and B200: duo binds the floor program on each one's joint ALU facet at L = 32. On sm_90 a wgmma
     takes 62.77 SMSP-cycles of that facet and 62.74 of issue, so lane words save time at every q* (no threshold) and
-    ε_machine is 4% at q* = 2.03; on sm_100 a tcgen05.mma takes 1.09 of issue, so only dp4a's 8 IMAD bound q*. At
-    L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit spacing's cost."""
+    ε_machine is 4% at q* = 2.03; on sm_100 a tcgen05.mma takes 1.09 of issue, so on lanes only dp4a's 8 IMAD bound q*.
+    The uniform datapath (UP, and 0.92 of an issue slot a uniform instruction, its price beside an issue-saturated
+    stream: DC r5) takes 0.60% of the B200's words off JPA100_0 at q* = 2.03, so it has no threshold either; on the
+    H200 JI90_0 charges a uniform instruction 0.96, which closes it. At L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit
+    spacing's cost."""
     sm90, sm100 = DEVICES / "sm_90", DEVICES / "sm_100"
-    assert E.designs(sm90) == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
+    duo = [n for n in E.designs(sm90) if "-li-" not in n]
+    assert duo == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
     p90 = E.machine("", sm90)
     s = E.setup(E.design("dither-2s-l32", sm90), p90, sm90, "floor", "floor")
     assert s.as_built.T * 4096 == pytest.approx(62.7735919 + 256 * 1.99077535, rel=1e-6)
     assert s.as_built.binding == ("JPA90_0",) and E.threshold(s) is None
     assert s.machine_eps(2.03) > 0.04 and s.machine_eps(8) < 0.001
+    assert s.cheat(2.03).words["uniform"] == pytest.approx(0, abs=1e-9)
     p100 = E.machine("", sm100)
     s = E.setup(E.design("dither-2s-l32", sm100), p100, sm100, "floor", "floor")
     assert s.as_built.T * 32768 == pytest.approx(10.9668404 + 2048 * 1.9602715, rel=1e-6)
-    assert s.as_built.binding == ("JPA100_0",) and E.threshold(s) == pytest.approx(8, abs=1e-4)
+    assert s.as_built.binding == ("JPA100_0",) and E.threshold(s, uniform=False) == pytest.approx(8, abs=1e-4)
     assert p100.load(s.as_built.n)["TM100_0"] * 32768 == pytest.approx(19.911599 + 32 * 16.5392944, rel=1e-6)
-    assert s.machine_eps(2.03) < 0.001
+    assert s.machine_eps(2.03, uniform=False) < 0.001
+    assert E.threshold(s) is None and s.cheat(2.03).words["uniform"] == pytest.approx(0.0060, abs=1e-4)
+    assert s.machine_eps(2.03) == pytest.approx(0.00570, abs=1e-4)
     far = E.setup(E.design("dither-2s-l256", sm100), p100, sm100, "floor", "floor")
     assert far.as_built.binding == ("JPA100_1",) and far.machine_eps(2.03) > 0.2
+
+
+def test_dc_li_binds_honest_on_the_lane_facet():
+    """DC-DESIGN's LI designs at L = 32 (one lane instruction a word, LOP3 and IMAD alternating): a balanced fold binds
+    honest where duo binds one pipe with issue slack, so relocating a word to lanes stops paying below output counting's
+    q* = ½. On sm_90 LI alone leaves the ALU pipe 1.5% short of half issue; 0.02 verified FFMA a word puts honest on
+    JI90_0, whose threshold is 0.4999, no margin. On sm_100 the x128 loads are the tensor route's, honest binds issue,
+    and γ is the measured tcliU_x128 (107.7 words a SM-clock beside the saturated MMA)."""
+    for dev, binds, thr, t in (("sm_90", ("JI90_0",), 0.4999, 190.761), ("sm_100", ("issue",), 0.0088, 1216.6)):
+        d = DEVICES / dev
+        pi = E.machine("", d)
+        for n in ("1s", "2s", "c"):
+            ds = E.design(f"dither-{n}-li-l32", d)
+            h = E.honest(ds.honest, d)
+            s = E.setup(ds, pi, d, "floor", "floor")
+            assert h.fold_name == ds.fold_name == "li" and ds.fold == h.fold == {"ALU": 0.5, "IMAD": 0.5}, dev
+            assert s.as_built.binding == binds and E.threshold(s) == pytest.approx(thr, abs=1e-4), dev
+            assert s.machine_eps(0.5) == pytest.approx(0, abs=1e-9), dev
+            e = E.eps(ds, pi, 0.5, d, operands="floor", credit="floor")
+            assert e.T_honest * h.words == pytest.approx(t, rel=1e-4) and e.core() == pytest.approx(e.skip), dev
+    assert [f.mix for f in E.design("dither-2s-li-l32", DEVICES / "sm_90").filler] == [{"FFMA": 1}]
+    assert E.honest("dc100-li-l32", DEVICES / "sm_100").base() == {"UTCIMMA_M128_N256": 1, "LDTM_32X32B_X128": 8}
 
 
 def test_cli_device(capsys):
@@ -511,3 +545,102 @@ def test_cli_device(capsys):
     assert out.startswith("dither-1s-l16: ") and "L2 unbounded: unmeasured on this device" in out
     with pytest.raises(SystemExit, match="--device or --data"):
         main(["--data", str(SM89), "--device", "sm89", "eps"])
+
+
+QPIN = "VF3q-16"                   # the per-form numbers below were read on it (FACET-BREAK's JI3q rows)
+QPI = E.machine(QPIN)
+FORMS = E.forms()
+I = next(f for f in FORMS if f.kind == "IMMA16832")
+DESIGNS = ("dither-duo", "dither-two-sided", "dither-two-sided-pv", "co-dither", "co-dither-pv")
+
+
+def test_the_form_table():
+    """data/forms.toml: tensor_kinds' 19 native forms as the census's 14 per-form kinds, each with its word yield."""
+    t = tomllib.loads((E.DATA / "forms.toml").read_text())
+    assert sum(len(v["ptx"]) for v in t.values() if isinstance(v, dict)) == 19
+    c = census(model(), vector(QPIN).epoch)
+    assert {f.kind for f in FORMS} == {k for k in c if k != "MMA" and "MMA" in k}
+    assert all(set(c[f.kind]) >= {r for r in c["MMA"] if r.startswith("JI3q")} for f in FORMS)
+    by = {f.kind: f for f in FORMS}
+    assert (I.words, I.depth, I.split, I.per_word(32)) == (128, 32, 1, 1 / 128)
+    assert by["IMMA8816"].words == 64 and by["IMMASP16864"].depth == 32 and by["IMMASP16832"].depth == 16
+    assert by["HMMA16816F16"].depth == 4 and by["QMMA16832"].depth == pytest.approx(32 / 3)
+    assert by["OMMASF16864"].depth == pytest.approx(64 / 3) and all(f.split >= 1 and f.exact for f in FORMS)
+
+
+def test_a_form_reads_the_generic_line_where_it_has_none():
+    """VF3q-16's EFFMA rows were fitted for the generic MMA alone, and before VF3n-16 no form has a line."""
+    effma = [r for r in QPI.rows if r.startswith("EFFMA")]
+    assert len(effma) == 7 and all(QPI.c[f.kind][r] == QPI.c["MMA"][r] for f in FORMS for r in effma)
+    assert QPI.c["IMMA16832"]["JI3q_10"] > QPI.c["MMA"]["JI3q_10"]
+    assert all(PI.c[f.kind] == PI.c["MMA"] for f in FORMS)
+
+
+def test_honest_is_credited_at_its_own_form():
+    """The floor program ♭ on VF3q-16 pays IMMA16832's own coefficients: JI3q_10 binds, not the generic MMA's JI3q_11."""
+    s = E.setup(E.design("dither-two-sided"), QPI, operands="floor", credit="floor")
+    assert s.baseline.T * 128 == pytest.approx(19.183, abs=1e-3) and s.baseline.binding == ("JI3q_10",)
+    assert s.baseline.forms == {"IMMA16832": 1.0} and "MMA" not in s.baseline.n
+    assert s.forms == (I,)   # every other form `undominated` drops
+
+
+def test_t1_every_form_is_dominated():
+    """T1 on VF3q-16 with a class per form: on every row each form's instructions a word cost at least IMMA16832's, so
+    the tensor route alone (the lane, uniform and table routes closed) saves nothing, whatever the operands cost. The
+    ties: IMMASP16864 everywhere it has the same line; QMMA16832 would undercut IMMA16832 below split 1.0083 (JI3o_1),
+    OMMASF16864 below split 2."""
+    tie = {}
+    for f in FORMS:
+        ratio = {r: QPI.c[f.kind][r] * f.per_word(32) / (QPI.c[I.kind][r] * I.per_word(32))
+                 for r, v in QPI.c[I.kind].items() if v}
+        assert min(ratio.values()) >= 1 - 1e-12, f.kind
+        tie[f.kind] = f.split / min(ratio.values())
+    assert tie["QMMA16832"] == pytest.approx(1.0083, abs=1e-4) and tie["OMMASF16864"] == pytest.approx(2)
+    assert max(v for k, v in tie.items() if k not in ("IMMA16832", "IMMASP16864", "QMMA16832", "OMMASF16864")) <= 1 + 1e-9
+    assert E.undominated(list(FORMS), QPI) == (I,)
+    for n in DESIGNS:
+        for operands, credit in (("floor", "floor"), ("honest", "H")):
+            s = E.setup(E.design(n), QPI, operands=operands, credit=credit)
+            every = replace(s, forms=FORMS)   # the LP over all 14 forms: what `undominated` drops never helps
+            assert s.floor() == 0 and every.floor() == pytest.approx(0, abs=1e-12), n
+            assert every.cheat(0.0, lanes=False, uniform=False).forms == {"IMMA16832": 1.0}, n
+            assert every.machine_eps(2) == pytest.approx(s.machine_eps(2), abs=1e-12), n
+
+
+def test_the_cheater_mixes_forms():
+    """The LP takes a form cheaper than honest's when Π has one: IMMA16816 at a quarter of its own line writes a word
+    for at most half of IMMA16832's on every row, so the tensor route alone saves about half the MMA's share."""
+    c = dict(QPI.c, IMMA16816={r: v / 4 for r, v in QPI.c["IMMA16816"].items()})
+    pi = replace(QPI, c=c)
+    s = E.setup(E.design("dither-two-sided"), pi, operands="floor", credit="floor")
+    m = s.cheat(0.0, lanes=False, uniform=False)
+    assert m.forms == {"IMMA16816": 1.0} and s.floor() > 0.15
+    assert E.setup(E.design("dither-two-sided"), QPI, operands="floor", credit="floor").cheat(2.0).forms == {
+        "IMMA16832": pytest.approx(0.7194, abs=1e-4)}
+
+
+@pytest.mark.parametrize("n, eps2, eps3, q0, lookups", [
+    ("dither-two-sided", 0.03502, 0.00532, 3.2428, 0.05983),
+    ("dither-duo", 0.03447, 0.00457, 3.1993, 0.05883),
+])
+def test_eps_with_a_class_per_form(n, eps2, eps3, q0, lookups):
+    """Core ε's machine term on VF3q-16, credit and operands at the floor: FACET-BREAK's IMMA16832-own counterfactual
+    (#2244: 3.50%/3.45% at q* = 2, 0 at q* = 4, the floor at q* = 3.2), now with the cheater free to mix forms. With
+    the table route the floor is 5.98%/5.88% (4.81%/5.11% under the generic MMA at the minimum over forms)."""
+    s = E.setup(E.design(n), QPI, operands="floor", credit="floor")
+    assert s.machine_eps(2) == pytest.approx(eps2, abs=1e-5) and s.machine_eps(3) == pytest.approx(eps3, abs=1e-5)
+    assert s.machine_eps(4) == 0 and E.threshold(s) == pytest.approx(q0, abs=1e-4)
+    t = E.setup(E.design(n), QPI, operands="floor", credit="floor", table=E.table())
+    assert t.floor() == pytest.approx(lookups, abs=1e-5) and t.machine_eps(4) == pytest.approx(lookups, abs=1e-5)
+    assert all(set(t.cheat(q).forms) == {"IMMA16832"} and "MMA" not in t.cheat(q).n for q in (2, 3, 4))
+
+
+def test_cli_names_the_forms(capsys):
+    assert main(["eps", "--vector", QPIN, "dither-two-sided", "--credit", "floor", "--operands", "floor", "--q", "2"]) == 0
+    out = capsys.readouterr().out
+    assert "IMMA.16832.S32.S8.S8 (IMMA16832)" in out and "on any of 14 MMA forms" in out
+    assert "tensor on IMMA16832 71.9%" in out
+    assert main(["eps", "--vector", QPIN, "dither-two-sided", "--credit", "floor", "--operands", "floor", "--q", "2",
+                 "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["honest_form"] == "IMMA16832" and d["cheat"]["forms"] == {"IMMA16832": pytest.approx(0.7194, abs=1e-4)}
