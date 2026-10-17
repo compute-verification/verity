@@ -28,8 +28,9 @@ of trailing zeros (`FlockDeploy.deployPlainTrim`, `FlockDeploy.deployZkTrim`):
   (`Claims.Flock.readTables`, table `c`'s hidden value `a` at `a·J + c`: `deployZk_read_getD`). At one table both
   records read as before (`deployPlain_one`, `deployZk_one`, `Claims.Flock.assemble_of_tables_eq_one`).
 * `dec`: the counted radius decoder at that code (`GS.plainCountedRD`, `GS.zkCountedRD`: the counted Guruswami–Sudan
-  decoder at each `m`, its count summed over the `m`s). It meets `ListWithin` at the trimmed records' `len`, `enc` and
-  `θ` (`FlockDeploy.listWithin_plain`, `FlockDeploy.listWithin_zk`).
+  decoder at each `m`, its count summed over the `m`s). It meets `ListWithin` at `len`, `enc` and `θ`
+  (`FlockDeploy.listWithin_plain`, `FlockDeploy.listWithin_zk`), and at the trimmed records'
+  (`FlockDeploy.listWithin_plainTrim`, `FlockDeploy.listWithin_zkTrim`).
 * `assemble`, table by table: what it returns is one decoded trace per table, each in its own statement's relation
   read alone (`Claims.Flock.assemble_eq_some`), and it returns where every table has one
   (`Claims.Flock.assemble_isSome`).

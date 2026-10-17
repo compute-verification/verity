@@ -78,15 +78,25 @@ theorem decode_plain (rel : Readable.Parsed → Readable.Relation) :
 theorem decode_zk (rel : Readable.Parsed → Readable.Relation) : (deployZkTrim rel).decode = Claims.GS.zkDecodeRD :=
   funext Claims.GS.zkCountedRD_fst
 
-/-- **The plain radius decoder meets `ListWithin`** at the plain record's code, trimmed of trailing zeros, length and
-radius: the spec `Flock.KS` and `Flock.Bits` ask of a decoder there, and the record's own decoder (`decode_plain`). -/
+/-- **The plain radius decoder meets `ListWithin`** at the plain instance's code, length and radius. -/
 theorem listWithin_plain (rel : Readable.Parsed → Readable.Relation) :
+    Claims.Flock.ListWithin (deployPlain rel).len (deployPlain rel).enc (deployPlain rel).θ Claims.GS.plainDecodeRD :=
+  Claims.GS.listWithin_plainDecodeRD id fun _ _ => rfl
+
+/-- **The masked radius decoder meets `ListWithin`** at the masked instance's code, length and radius. -/
+theorem listWithin_zk (rel : Readable.Parsed → Readable.Relation) :
+    Claims.Flock.ListWithin (deployZk rel).len (deployZk rel).enc (deployZk rel).θ Claims.GS.zkDecodeRD :=
+  Claims.GS.listWithin_zkDecodeRD id fun _ _ => rfl
+
+/-- **The plain radius decoder meets `ListWithin`** at the plain record the claims read, its code trimmed of trailing
+zeros: the spec `Flock.KS` and `Flock.Bits` ask of a decoder there, and the record's own decoder (`decode_plain`). -/
+theorem listWithin_plainTrim (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ListWithin (deployPlainTrim rel).len (deployPlainTrim rel).enc (deployPlainTrim rel).θ
       Claims.GS.plainDecodeRD :=
   Claims.GS.listWithin_plainDecodeRD trimCol trimCol_getD
 
-/-- **The masked radius decoder meets `ListWithin`** at the masked record's code, trimmed, length and radius. -/
-theorem listWithin_zk (rel : Readable.Parsed → Readable.Relation) :
+/-- **The masked radius decoder meets `ListWithin`** at the masked record the claims read, its code trimmed. -/
+theorem listWithin_zkTrim (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ListWithin (deployZkTrim rel).len (deployZkTrim rel).enc (deployZkTrim rel).θ Claims.GS.zkDecodeRD :=
   Claims.GS.listWithin_zkDecodeRD trimCol trimCol_getD
 
@@ -109,7 +119,7 @@ theorem efficient_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
     (fun os => (Claims.GS.plainDecodeRD_complexity os).2) ?_
     (Claims.Flock.le_eval_wordLen _ _ Claims.GS.plainSizeRD_le)
   · rw [decode_plain]
-    exact listWithin_plain rel
+    exact listWithin_plainTrim rel
   · rw [decode_plain]
     exact Claims.GS.plainDecodeRD_length_le
 
@@ -122,7 +132,7 @@ theorem efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → 
     (fun os => (Claims.GS.zkDecodeRD_complexity os).2) ?_
     (Claims.Flock.le_eval_wordLen _ _ Claims.GS.zkSizeRD_le)
   · rw [decode_zk]
-    exact listWithin_zk rel
+    exact listWithin_zkTrim rel
   · rw [decode_zk]
     exact Claims.GS.zkDecodeRD_length_le
 
