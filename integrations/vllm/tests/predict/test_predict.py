@@ -27,6 +27,7 @@ from verity_vllm.predict.phi import Phi
 
 FIX = Path(__file__).parent / "fixtures"
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
+GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
 DSV4 = "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -119,6 +120,18 @@ def test_dsa_rank_step_equals_the_record(rank, tmp_path):
     r = build_program(_row_phi(GLM53, "GLM53", tmp_path, rank), "step", M=1, pos0=8)
     assert r.function.startswith("Derived[vLLMStep[DeepseekV32ForCausalLM]]_v1")
     assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53]["programs"][str(rank)]["step"]
+
+
+@pytest.mark.parametrize("wrapper,shape,digest", [
+    ("step", {"M": 8, "pos0": 8}, "6a8ea56b8f7c3f2a4c557d20dd45b86b9eda749f653f4559ee21327ca3bed830254af606c6aee98b123ccc4cb6172fb2283a96be63867331687fa0f5100e4bd2"),
+    ("request", {"LP": 11, "T": 12}, "f22d03019ee5c9324134c394b8628cf3bda5fa89d3e9e04b3fe56faf92e856bc5e05eb057ed2adb327e513dc39fa5c93597bfec0011deab079629e3c974c5bcd"),
+])
+def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_path):
+    """GLM-5.3's B8 mixed-arrivals row (no batch invariance) at rank 0, as the Build traced it in r20261017-194958-148e: the step of 8
+    rows, and the first request's Program under its launch batch (its prefill alone, then decodes beside the second request's
+    prefill and decodes), every token-count-dependent selection at the launch's tokens."""
+    r = build_program(_row_phi(GLM53_B8, "GLM53", tmp_path), wrapper, **shape)
+    assert r.digest == digest
 
 
 def test_dsa_refuses_outside_its_domain(tmp_path):

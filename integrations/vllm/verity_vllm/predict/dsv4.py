@@ -74,6 +74,8 @@ class Net:
         facts = []
         if self.tp.compute_capability != (9, 0):
             facts.append(f"target cc {self.tp.capability_str} (the served defaults are stated on cc 9.0)")
+        if self.tp.moe_backend is not None:
+            facts.append(f"moe_backend {self.tp.moe_backend!r} (the decoder writes the Marlin MXFP4 experts vLLM's selector takes)")
         if hf.get("tie_word_embeddings"):
             facts.append("tied embeddings")
         if (why := analytic.quant_refusal(qc) if qc else "a checkpoint without its block-FP8 quantization_config"):
@@ -192,7 +194,10 @@ class Net:
 class _Model(dsa._Model):
     """The forward over one call's rows, emitted into `B`: the HC residual streams and their (post, comb) mixes carried from sublayer
     to sublayer, and each layer's window, compressor state and compressed rows carried across calls as `vllm_dsv4` keeps them (its
-    history opens at the layer's first call); the collectives, linears, router GEMM and sampler are `dsa._Model`'s."""
+    history opens at the layer's first call); the collectives, linears, router GEMM and sampler are `dsa._Model`'s.  Its mHC split
+    counts, FlashMLA planner and Marlin configs read the call's own rows, so it is never given a launch batch."""
+
+    reads_launch = False
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
         super().__init__(net, B, W, peers)

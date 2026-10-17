@@ -1,7 +1,8 @@
 """The DeepSeek sparse-attention MoE decoder (`FAMILY_FACTS[...]["arch"]` "dsa-moe": GLM-5.3's `glm_moe_dsa`, which vLLM serves as
 `DeepseekV32ForCausalLM`) for `build.build_program`: one tensor-parallel rank of a block-FP8 checkpoint on cc 9.0 without batch
 invariance under vLLM d9105ea80's served defaults, written with the calls the Build's rules make (`rules.vllm_dsa`,
-`vllm_bindings.fp8`, `bf16_gemm`, `collectives`, `vllm_moe_fp8`, `vllm_moe_router`) at the selections they read: the captured cuBLAS
+`vllm_bindings.fp8`, `bf16_gemm`, `collectives`, `vllm_moe_fp8`, `vllm_moe_router`) at the selections they read, each at the call's
+launch (`common._Launch`: the batch a request's calls run in without batch invariance, else the call's own rows): the captured cuBLAS
 and all-reduce routes (`registry.bf16_gemm_check`, `registry.tp_allreduce`), vLLM's tuned fused-MoE tile for the device
 (`engine.profiles.devices`) and FA3's split count (`registry.sparse_mla_split`).  The configuration is the generic profile's
 (`generic.derive_config` at the rank) and the weights record its map (`generic._mla_weight_field`) in the family's module order.
@@ -23,7 +24,7 @@ from verity.ml.circuits.defs import Builder
 from verity.ml.circuits.refs import Coll, PartLog, Refs, concat, strided_view
 from verity.ml.circuits.types import Type, Value
 
-from .common import Unexpressible, _arr_shape, _Peers, _ptypes, kind, served_class
+from .common import Unexpressible, _arr_shape, _Launch, _Peers, _ptypes, kind, served_class
 from .phi import Phi
 
 
@@ -64,6 +65,8 @@ class Net:
             facts.append(f"target cc {self.tp.capability_str} (the served defaults are stated on cc 9.0)")
         if not self.device:
             facts.append("a target without a device name (vLLM keys its tuned fused-MoE tiles by it)")
+        if self.tp.moe_backend != "triton":
+            facts.append(f"moe_backend {self.tp.moe_backend!r} (the decoder writes the Triton experts, moe_backend 'triton')")
         if C["tie_word_embeddings"]:
             facts.append("tied embeddings")
         if C["ROPE_NEOX"] or not C["INDEX_ROPE_INTERLEAVE"]:
@@ -123,10 +126,12 @@ class Net:
 
 class _Model:
     """The forward over one call's rows, emitted into `B`, each layer's latent and index-K histories carried across calls as
-    `vllm_dsa` keeps them (one `PartLog` per history)."""
+    `vllm_dsa` keeps them (one `PartLog` per history); every token-count-dependent selection reads the call's launch (`launch`)."""
+
+    reads_launch = True
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
-        self.net, self.C, self.B, self.peers = net, net.C, B, peers
+        self.net, self.C, self.B, self.peers, self.launch = net, net.C, B, peers, _Launch()
         self.w = {key: W[i] for i, (_, _, key) in enumerate(net._leaves) if key is not None}
         self.logs: dict[int, dict[str, PartLog]] = {}
         self._kinds: dict[tuple, object] = {}
@@ -148,7 +153,7 @@ class _Model:
         V = int(C["V"])
         emb = self.k("embedding_shard", VS=V, H=self.H, START=net.rank * V)
         res = self.all_reduce([self.call(emb, t.refs, self.w["embed"].refs).refs for t in toks])
-        norm = self.k("rmsnorm", N=self.H, EPS=self.EPS, TARGET=net.tp, M=M)
+        norm = self.k("rmsnorm", N=self.H, EPS=self.EPS, TARGET=net.tp, M=self.launch.tokens(M))
         x = [self.call(norm, r, self.w[(0, "ln1")].refs).refs for r in res]
         for L in range(net.NL):
             x, res = self.reduce_norm(self.attention(L, x, pos0), res, self.w[(L, "ln2")])
@@ -159,29 +164,35 @@ class _Model:
     def sample(self, row: Refs, event: int, pos: int, policy=None) -> Coll:
         """The greedy token of the row's logits: this rank's vocabulary slice, gathered across the ranks."""
         V, W = int(self.C["V"]), self.net.world
-        lg = self.cublas([row], self.w["lm_head"])
+        lg = self.cublas([row], self.w["lm_head"], sampled=True)
         gathered = self.call(self.k("all_gather", WORLD=W, N=V), self.peers.rows(lg)[0])
         return self.call(self.k("token_select", V=V * W), gathered.refs)
 
     # -- collectives (`collectives.AllReduceRule`, `FusedAllReduceRmsNormRule`)
 
     def all_reduce(self, rows: list[Refs]) -> list[Refs]:
-        """One all-reduce over the rows on the route vLLM takes (`tp_allreduce.served_route`), the captured one -> each row's sum."""
+        """One all-reduce over the rows on the route vLLM takes at the launch's tokens (`tp_allreduce.served_route`), the captured one
+        -> each row's sum."""
         from verity_vllm.program.frontend.rules.vllm_bindings.collectives import _ROUTE_KINDS
         from verity_vllm.program.registry import tp_allreduce as AR
-        M, N = len(rows), rows[0].count
+        n, N = len(rows), rows[0].count
+        M = self.launch.tokens(n)
         setting, route = AR.served_route(self.net.settings, M, N)
         c = AR.covered(setting, N, route, M) if setting else None
         if c is None:
             _refuse(f"an all-reduce of {M} x {N} on route {route!r} under {self.net.settings} (no capture covers it: tp_allreduce.covered)")
-        out = self.call(self.k(_ROUTE_KINDS[c.definition], **AR.route_binding(c, self.net.world, M, N)[1]), self.peers.whole(rows)).refs
-        return [out.slice(i * N, (i + 1) * N) for i in range(M)]
+        try:
+            _, st = AR.route_binding(c, self.net.world, M, N, n)
+        except ValueError as e:
+            _refuse(str(e))
+        out = self.call(self.k(_ROUTE_KINDS[c.definition], **st), self.peers.whole(rows)).refs
+        return [out.slice(i * N, (i + 1) * N) for i in range(n)]
 
     def reduce_norm(self, parts: list[Refs], res: list[Refs], w: Coll) -> tuple[list[Refs], list[Refs]]:
         """The all-reduce of the rows' partials, the residual add and the RMSNorm -> (normed rows, residual rows): FlashInfer's fused
         kernel where vLLM fuses (its FlashInfer all-reduce on and M within `fused_max_tokens`), else the all-reduce then the fused norm."""
         from verity_vllm.program.registry import tp_allreduce as AR
-        M, N, W, s = len(parts), parts[0].count, self.net.world, self.net.settings
+        M, N, W, s = self.launch.tokens(len(parts)), parts[0].count, self.net.world, self.net.settings
         if s["flashinfer"] and M <= AR.fused_max_tokens(N, W):
             setting, _ = AR.served_route(s, M, N)
             c = AR.covered(setting, N, "fused", M) if setting else None
@@ -200,17 +211,17 @@ class _Model:
     def fp8_linear(self, xs: list[Refs], w: Coll, ws: Coll) -> list[Refs]:
         """vLLM's block-FP8 linear (`DynamicDeepGemmFp8LinearRule`): FlashInfer below 32 rows, else DeepGEMM (its output port 2)."""
         N, K = _arr_shape(w.type)
-        small = len(xs) < 32
+        small = self.launch.tokens(len(xs)) < 32
         fn = self.k("flashinfer_fp8_linear" if small else "deepgemm_fp8_linear", K=K, N=N)
         outs = [self.call(fn, x, w.refs, ws.refs) for x in xs]
         return [(o if small else o[2]).refs for o in outs]
 
-    def cublas(self, xs: list[Refs], w: Coll, f32: bool = False) -> list[Refs]:
-        """An unbiased bf16 GEMM on cuBLAS's captured route: bf16 out (`CublasLinearRule`), or f32 (`CublasRouterRule`: the router
-        family's route, or a direct call's where the shape has its own)."""
+    def cublas(self, xs: list[Refs], w: Coll, f32: bool = False, sampled: bool = False) -> list[Refs]:
+        """An unbiased bf16 GEMM on cuBLAS's captured route at the launch's tokens (its sequences for the `sampled` rows): bf16 out
+        (`CublasLinearRule`), or f32 (`CublasRouterRule`: the router family's route, or a direct call's where the shape has its own)."""
         from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import _f32out_phase
         from verity_vllm.program.registry.bf16_gemm_check import default_cublas_route
-        M, (N, K) = len(xs), _arr_shape(w.type)
+        M, (N, K) = self.launch.tokens(len(xs), sampled), _arr_shape(w.type)
         phase = _f32out_phase(K, N) if f32 else "linear"
         route = default_cublas_route(phase, M, K, N)
         if route is None:
@@ -223,7 +234,7 @@ class _Model:
     def router(self, xs: list[Refs], w: Coll) -> list[Refs]:
         """`GateLinear`'s f32 logits on the tier vLLM dispatches (`LlBf16GemmRule`, `CublasRouterRule`)."""
         from verity_vllm.program.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
-        M, (N, K) = len(xs), _arr_shape(w.type)
+        M, (N, K) = self.launch.tokens(len(xs)), _arr_shape(w.type)
         tier, st = dispatch_sm90(M, K, N)
         if tier == "cublas":
             return self.cublas(xs, w, f32=True)
@@ -292,7 +303,9 @@ class _Model:
                 self.call(self.k("dsa_mqa_logits", N=n, H=IH, D=ID), iq[i][0].refs, iq[i][1].refs, logs["ik"].cut(n), logs["iks"].cut(n))
                 self.call(select, self.call(self.k("const", W=32, BITS=n)).refs)
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
-        splits = launch_num_splits(keys, int(self.net.tp.num_sms), TOPK, 0)
+        batch = [min(n, TOPK) for n in self.launch.keys(keys)]
+        by_keys = dict(zip(batch, launch_num_splits(batch, int(self.net.tp.num_sms), TOPK, 0)))
+        splits = [by_keys[n] for n in keys]
         att = [self.call(self.k("sparse_mla_split", T=n, NS=ns, NH=NH, DR=R, DV=KVL, BN=G["BN"], DOT=G["DOT"], INV=G["INV"],
                                 SM_SCALE=float(C["ATTN_SCALE"])), ql[i], qpe[i], logs["latent"].cut(n)).refs
                for i, (n, ns) in enumerate(zip(keys, splits))]
@@ -320,7 +333,7 @@ class _Model:
         rt = self.k("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=float(C["ROUTED_SCALING_FACTOR"]), KERNEL=kernel)
         top = [self.call(rt, lg, w("gate_bias").refs) for lg in logits]
         xq = [self.call(self.k("fp8_group_quant_ue8m0", K=H, G=G), r) for r in x]
-        cfg = fused_moe_config(E, I, self.net.device, "fp8_w8a8", (G, G), M)
+        cfg = fused_moe_config(E, I, self.net.device, "fp8_w8a8", (G, G), self.launch.tokens(M))
         if cfg is None:
             _refuse(f"no tuned fused-MoE config for E={E}, N={I} on {self.net.device!r} (engine.profiles.devices.FUSED_MOE_CONFIGS)")
         BM, BN, KB, warps = cfg["BLOCK_SIZE_M"], cfg["BLOCK_SIZE_N"], min(cfg["BLOCK_SIZE_K"], G), cfg["num_warps"]

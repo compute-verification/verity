@@ -1,5 +1,6 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
-class, the IR types of a shape, and the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`)."""
+class, the IR types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), and the
+batch a request's calls run in (`_Launch`)."""
 
 from __future__ import annotations
 
@@ -84,3 +85,32 @@ class _Peers:
         out = self.schedule.refs.slice(self.k, self.k + n)
         self.k += n
         return out
+
+
+class _Launch:
+    """The batch a request's calls run in (`pipeline.launch_context.request_launch_batch`, parsed as `targets.parse_launch_context`
+    parses the Build's `--launch-context`): per request step, every sequence the engine step schedules as (rows, start).  `step` is
+    the request step being written; without a batch a call is its own launch."""
+
+    def __init__(self, batch: list | None = None) -> None:
+        from verity_vllm.program.frontend import targets as TG
+        self.ctx, self.step = TG.parse_launch_context({"batch": batch}) if batch else None, 0
+
+    def tokens(self, own: int, sampled: bool = False) -> int:
+        """The rows of the launch `own` rows run in (`targets.launch_tokens`); after the logits selection (`sampled`), its sequences."""
+        from verity_vllm.program.frontend import targets as TG
+        try:
+            return TG.launch_tokens(own, self.step, self.ctx, sampled=sampled)
+        except ValueError as e:
+            raise Unexpressible(f"request step {self.step}: {e}") from None
+
+    def keys(self, own: list[int]) -> list[int]:
+        """Every query row's key count in the launch (`targets.launch_keys`), `own`'s without a batch."""
+        from collections import Counter
+        from verity_vllm.program.frontend import targets as TG
+        keys = TG.launch_keys(self.step, self.ctx)
+        if keys is None:
+            return list(own)
+        if Counter(own) - Counter(keys):
+            raise Unexpressible(f"request step {self.step}: the launch batch's key counts {keys} do not hold this request's {own}")
+        return keys

@@ -38,7 +38,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
 
-from .common import Unexpressible, _arr, _arr_shape, _Peers, _ptypes, kind, served_class
+from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, kind, served_class
 from .phi import Phi
 
 BUILDER_ID = "predict-build/derived/v1"
@@ -696,6 +696,21 @@ class _Decoder:
         return _Model(B, self.specs, W, self.specs.C, peers)
 
 
+def launch_batch(phi: Phi, LP: int, T: int) -> list | None:
+    """The batch each call of φ's (LP, T) request runs in where its kernel choices read the launch (`launch_context.batch_dispatch`:
+    a target without batch invariance co-scheduling several requests), as the Build is given it (`launch_context.shape_contexts`);
+    None for a request that is its own launch.  Requests of the shape co-scheduled differently have no one Program."""
+    from verity_vllm.pipeline import launch_context as LC
+    w = {"requests": phi.requests, "engine": {"target": {"batch_invariant": phi.target_profile().batch_invariant}}}
+    if not LC.batch_dispatch(w):
+        return None
+    batch = LC.shape_contexts(w).get((int(LP), int(T)))
+    if batch is None or batch == "conflict":
+        raise Unexpressible(f"vocabulary cannot express: the launch batch of request shape LP {LP}, T {T}: "
+                            f"{'its requests are co-scheduled differently' if batch else 'no request of the workload has it'}")
+    return batch
+
+
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
                   with_desc: bool = True) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
@@ -737,6 +752,11 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
                              S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
+    if (batch := launch_batch(phi, LP, T) if wrapper == "request" else None) is not None:
+        if not getattr(model, "reads_launch", False):
+            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance, {len(phi.requests)} "
+                                f"requests), whose kernel choices the {net.model_class} decoder reads at its own rows")
+        model.launch = _Launch(batch)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     if wrapper == "step":
         hid = model.forward(rows, pos0)
@@ -746,6 +766,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         hid = model.forward(rows, 0)
         toks = [model.sample(hid[-1], 0, int(LP) - 1, policy)]
         for s in range(int(T)):
+            if batch is not None:
+                model.launch.step = s + 1
             hid = model.forward([Coll(I32, toks[-1].refs)], int(LP) + s)
             toks.append(model.sample(hid[-1], s + 1, int(LP) + s, policy))
         out = Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
