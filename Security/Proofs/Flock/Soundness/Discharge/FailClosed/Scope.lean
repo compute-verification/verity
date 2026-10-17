@@ -92,6 +92,13 @@ theorem scopeOkH_eq (c : Circuit) : ProvedScope.scopeOkH c = Layout.scopeOkH c :
   simp only [ProvedScope.scopeOkH, Layout.scopeOkH, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
     ProvedScope.bitRows, Layout.bitRows, e, e']
 
+/-- **The executable's `scopeOkI` is `Layout.scopeOkI`.** -/
+theorem scopeOkI_eq (c : Circuit) : ProvedScope.scopeOkI c = Layout.scopeOkI c := by
+  have e : ProvedScope.v2Row = Layout.v2Row := rfl
+  have e' : ProvedScope.segRow = Layout.segRow := rfl
+  simp only [ProvedScope.scopeOkI, Layout.scopeOkI, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
+    ProvedScope.bitRows, Layout.bitRows, e, e']
+
 /-! ## The check, and what it gives -/
 
 /-- **The verifier's statement check passes** at tags `t` (the session's: under `--zk`, `zkTags`'s), with no public input
@@ -157,15 +164,15 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
     cases h
   refine ⟨c, pub, hc, hp, htab, ?_, fun hf => ?_⟩
   · simp only [hw] at h
-    have hs : (if t.hiddenOutputs then ProvedScope.scopeOkH c else ProvedScope.scopeOk c) = true := by
-      generalize (if t.hiddenOutputs then ProvedScope.scopeOkH c else ProvedScope.scopeOk c) = b at h
+    have hs : (if t.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = true := by
+      generalize (if t.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = b at h
       cases b
       · cases h
       · rfl
     cases hh : t.hiddenOutputs
     · simpa [hh] using hs
     · simp only [hh, ↓reduceIte] at hs ⊢
-      exact Layout.scopeOkI_of_scopeOkH (by rw [← scopeOkH_eq, hs])
+      rw [← scopeOkI_eq, hs]
   · cases ha : ProvedScope.wiresAcyclic c
     · simp [hf, ha] at hw
     · rfl
