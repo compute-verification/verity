@@ -39,6 +39,8 @@ import Proofs.Flock.Claims.KS.OffSC
 import Proofs.Flock.Claims.KS.Entries
 import Proofs.Flock.Claims.KS.DecodeSC
 import Proofs.Flock.Claims.KS.DecodeDeploy
+import Proofs.Flock.Claims.KS.DecodeHidden
+import Proofs.Flock.Claims.KS.PlainWrP
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Claims.KS.ZkDrawJ
@@ -176,7 +178,11 @@ at one table, the deployed plain decoders are right for accepting with no level-
 self-clashes, on the outcomes flock-verify accepts at the live root where the deployed reader looks up no column off `C`
 (`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`, `Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). At a plain statement
 in scope with public outputs, that table is `plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for
-(`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`). Where `verify --zk` sets its session up at a draw
+(`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`). With hidden outputs, the hidden table is `plainTab` too, and the same
+holds at its openings (`DecodeHidden`: `Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`).
+A statement some run accepts sets up at a draw, so the plain chain asks only for the mixture at those decoders, whether
+or not the outputs are hidden (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`,
+`FlockDeploy.KS.PlainLiveW`, `FlockDeploy.KS.plain_KS_of_w`). Where `verify --zk` sets its session up at a draw
 (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`,
 `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`,
 `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's draw to the statement's only up to key order,
