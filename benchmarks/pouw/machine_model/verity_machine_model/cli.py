@@ -41,6 +41,14 @@
                                               q* = 2, 4, 8, 16 and its floor, the core ε at q* = 2, 8 and Q, and the
                                               thresholds), then with --checking sampled the sample (ε_luck, ε_adapt
                                               and ε_sample at Q)
+    machine-model capacity GROUP [GROUP ...] [--vector V] [--json]
+                                              the certified share σ of a window's capacity (capacity.py): each GROUP
+                                              is [WEIGHT/]TERM+TERM..., its share of the cell's SMSP-time (default 1)
+                                              and its certified load, TERM one of FOLD:SHARE[*R] (a noise-GEMM filler
+                                              at SHARE of the tensor peak, its words folded R times; FOLD duo, xin13,
+                                              li, arx (a cost probe) or none), lane:RATE (verified lane chains, warp instructions a
+                                              SMSP-cycle), served:SHARE[:FOLD] or CLASS=RATE; σ is read on the pooled
+                                              load, with each group's placement-attested σ beside it
 
 `--device sm_NN` (before the command, or on `eps`) reads that device's directory, `data/devices/sm_NN/` (README
 "Devices"); sm_120, `data/` itself, is the default. `--data DIR` (before the command) reads another data directory, such
@@ -56,6 +64,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from verity_machine_model import attacks as atk
+from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
 from verity_machine_model.adopt import adopt
 from verity_machine_model.model import CLAIMS, DATA, census, device, devices, model, vector, vectors
@@ -405,6 +414,34 @@ def _eps(args) -> int:
     return 0
 
 
+def _capacity(args) -> int:
+    pi = E.machine(args.vector or "", args.data)
+    groups = []
+    for g in args.groups:
+        w, _, spec = g.rpartition("/")
+        groups.append((float(w) if w else 1.0, C.parse(spec)))
+    x = C.window(pi, groups)
+    if args.json:
+        print(json.dumps(x.record(), ensure_ascii=False, indent=1))
+        return 0
+    p = x.pooled
+    print(f"Π: {pi.vector}; the empty GPU's useful capacity {x.empty:.5f} tensor slots a SMSP-cycle "
+          f"({x.empty * C.TENSOR_CYCLES:.3f}× the tensor peak)")
+    for (w, g), h in zip(x.groups, x.parts):
+        print(f"  {w:.4g} of the cell: {g.name}: σ {1 - h.hidden / x.empty:.4f} placed, B {h.credit():.4f}, tensor "
+              f"{g.tensor_share():.3f}" + (f", OVER on {', '.join(h.over)}" if h.over else ""))
+    print(f"  pooled load: " + ", ".join(f"{k} {v:.4g}" for k, v in sorted(p.work.n.items())) + " warp instructions a "
+          f"SMSP-cycle; rows " + ", ".join(f"{r} {v:.3f}" for r, v in sorted(p.load.items(), key=lambda kv: -kv[1])[:5]))
+    if p.over:
+        print(f"  OVER on {', '.join(p.over)}: the certified load alone exceeds Π (a miscount or a model violation)")
+    print(f"  hidden: {p.hidden:.5f} slots a SMSP-cycle, " + (", ".join(f"{k} {v:.4g}" for k, v in p.mix.items())
+                                                             or "nothing") +
+          f"; binding {', '.join(p.binding) or 'none'}")
+    print(f"  σ {x.sigma():.4f}  (ε_cap {x.eps_cap():.4f}; placement-attested {x.sigma_placed():.4f}; time credit B "
+          f"{x.credit():.4f}; tensor share {x.tensor():.4f})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="machine-model", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -461,6 +498,10 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--index-bits", type=int, metavar="B",
                    help="B-bit noise entries on the operand the table route indexes, which costs B times the 1-bit "
                         "route's lane instructions and bytes (default: the design's [table] bits, else 1)")
+    k = sub.add_parser("capacity")
+    k.add_argument("groups", nargs="+", metavar="GROUP")
+    k.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
+    k.add_argument("--json", action="store_true")
     args = p.parse_args(argv)
     if args.device is not None:
         if args.data != DATA:
@@ -470,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
         print(__doc__)
         return 0
     return {"list": _list, "solve": _solve, "census": _census, "attacks": _attacks, "adopt": _adopt,
-            "designs": _designs, "eps": _eps}[args.cmd](args)
+            "designs": _designs, "eps": _eps, "capacity": _capacity}[args.cmd](args)
 
 
 if __name__ == "__main__":

@@ -121,6 +121,7 @@ from __future__ import annotations
 import argparse
 import ast
 import concurrent.futures
+import contextlib
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -1573,7 +1574,25 @@ def slot_mem_gb() -> float | None:
     """The check slot's memory, when this runs in one (17 Oct: a quick tier in proofs' 480 GB pool slot ran circuit_check's suite
     on 94 workers, 784 GB, since only `check` passed `--mem-gb`)."""
     v = os.environ.get(SLOT_MEM_ENV, "")
-    return float(v) if v.replace(".", "", 1).isdigit() else None
+    return float(v) if v.replace(".", "", 1).isdigit() else cgroup_mem_gb()
+
+
+def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
+    """The tightest cgroup v2 `memory.max` over this process, in GiB, or None when none is set: a job outside a check slot
+    (the cluster queue's scope, 17 Oct: two `suites.py verity-flock --fresh` runs OOM-killed there) sizes itself to it."""
+    try:
+        rel = next(line[3:].strip() for line in (root / "proc/self/cgroup").read_text().splitlines() if line.startswith("0::"))
+    except (OSError, StopIteration):
+        return None
+    top, limits = root / "sys/fs/cgroup", []
+    d = top / rel.strip("/")
+    for c in (d, *d.parents):
+        if not c.is_relative_to(top):
+            break
+        with contextlib.suppress(OSError):
+            if (m := (c / "memory.max").read_text().strip()).isdigit():
+                limits.append(int(m))
+    return min(limits) / 2**30 if limits else None
 
 
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
