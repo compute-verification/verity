@@ -78,6 +78,9 @@ theorem VRuns.ite {cond : Prop} [Decidable cond] {y z : LP PS β} {k k' : ℕ} {
 theorem VRuns.cast {y : LP PS β} {k k₁ k₂ : ℕ} {I : LigState → Prop} {J : β → LigState → Prop}
     (h : VRuns L y k k₁ I J) (hk : k₁ = k₂) : VRuns L y k k₂ I J := hk ▸ h
 
+theorem VRuns.start {y : LP PS β} {k k₀ k' : ℕ} {I : LigState → Prop} {J : β → LigState → Prop}
+    (h : VRuns L y k₀ k' I J) (hk : k₀ = k) : VRuns L y k k' I J := hk ▸ h
+
 /-- **A loop over `[0:n]`**: step `j` from position `K j`, on a loop state and prover state with `Inv j`, yields ones
 with `Inv (j + 1)` at position `K (j + 1)`. -/
 theorem VRuns.loop (body : ℕ → σ → LP PS (ForInStep σ)) (K : ℕ → ℕ) (Inv : ℕ → σ → LigState → Prop) (n : ℕ)
@@ -914,6 +917,128 @@ theorem finStep {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule}
     unfold ConsDim at this
     rw [consFixed_size _ hDn.lv4, hDn.lvs]
     omega
+
+
+/-! ## The honest prover's Ligerito -/
+
+/-- **The level loop's invariant**: `LvInv` before each inner or last step, and after the last the final identity once
+the proof agrees with the prover and its final proof is the loop's. -/
+def LoopInv (P : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
+    (t : Transcript) (b : Array F128) (op0 : LevelProof) (basisAt : Array F256 → ℕ → Array F256) (j : ℕ)
+    (σ : LoopSt) (S : LigState) : Prop :=
+  if j < sch.levels.size - 1 then LvInv P cf sch T cap t b op0 j σ S
+  else Agree P op0 σ.2.2.2.1 S → P.finalProof = σ.2.2.2.2 → Final P cf sch T cap t basisAt
+
+/-- The level loop's positions: eleven per inner level from `k + k0 + 9`, and seven for the last. -/
+def loopK (sch : Schedule) (k j : ℕ) : ℕ :=
+  if j < sch.levels.size - 1 then k + sch.k0 + 9 + 11 * j else k + sch.k0 + 5 + 11 * (sch.levels.size - 1)
+
+/-- **The honest Ligerito meets its final identity** (`Lg.Honest`). -/
+theorem honest : Honest := by
+  intro resp h ms m sch T cm0 tb b salt nonce L basisAt t l P t' l' hsch htb hb hT hcm0 hbasis hl hrun
+  obtain ⟨hn, hL, hsd, hq, -⟩ := fast100_ligerito hsch
+  have hk0 := fast100_k0 hsch
+  have hD := (fast100_dims m sch hsch).1
+  have hS := fast100_level m sch hsch
+  unfold ligeritoP at hrun
+  rw [bind_go (liftTM_ok (Flock.RecAlgebra.label_eq _ _) l), bind_go (liftTM_ok (Flock.RecAlgebra.absorbF_eq _ _) l),
+    bind_go (liftTM_ok (Flock.RecAlgebra.absorbBytes_eq _ _) l)] at hrun
+  dsimp only at hrun
+  rw [StateT.run_bind] at hrun
+  obtain ⟨⟨⟨⟨caps, rproofs, fin, op0⟩, stF⟩, t₁⟩, l₁, h1, h2⟩ := JsonRT.go_bind_ok hrun
+  obtain ⟨h21, rfl⟩ := Prod.mk.inj h2
+  obtain ⟨hP, rfl⟩ := Prod.mk.inj (Except.ok.inj h21)
+  have key := (?prog : VRuns (β := Array (Array ByteArray) × Array LevelProof × FinalProof × LevelProof) L _ t.k
+    (t.k + sch.k0 + 5 + 11 * (sch.levels.size - 1)) (· = { tab := embedF tb, w := embedF b }) fun r st =>
+      Agree P r.2.2.2 r.2.1 st → P.finalProof = r.2.2.1 → Final P (cfOf resp L) sch T cm0.cap t basisAt)
+    _ (start cm0.cap T t) l _ _ _ _ hl h1 rfl rfl
+  case prog =>
+    refine VRuns.seqV (VRuns.sampleVec resp hn _ _) ?_
+    refine VRuns.seq (VRuns.oodPush _ _ _) ?_
+    refine VRuns.seq (VRuns.absorbF _ _ _) ?_
+    refine VRuns.seq (VRuns.powB _ _ _) ?_
+    refine VRuns.seqV (VRuns.sample resp _ _) ?_
+    refine VRuns.seq (VRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _) ?_
+    refine VRuns.seqV (VRuns.get _ _) ?_
+    refine VRuns.seq (VRuns.sendMsg _ _ _) ?_
+    refine VRuns.bind (vChals0 resp _ sch.k0 hk0 _) fun _ => VRuns.intro fun S₂ hS₂ => ?_
+    refine VRuns.seqV (VRuns.get _ _) ?_
+    refine VRuns.bind (VRuns.commit h ms _ _ _ _ _) fun cm1 => VRuns.intro fun S₂' hS₂' => ?_
+    obtain ⟨hcm1, rfl⟩ := hS₂'
+    refine VRuns.seq (VRuns.absorbBytes _ _ _) ?_
+    refine VRuns.seq (VRuns.oodIntro resp nonce _ (Nat.succ_ne_zero _) _ _) ?_
+    refine VRuns.seq (VRuns.oodIntro resp nonce _ (Nat.succ_ne_zero _) _ _) ?_
+    refine VRuns.bind (VRuns.query resp nonce ms _ cm0 (hq 0 (by omega)) _ _) fun x => VRuns.intro fun S₃ hS₃ => ?_
+    obtain ⟨rfl, rfl⟩ := hS₃
+    refine VRuns.seq (VRuns.sendMsg _ _ _) ?_
+    refine VRuns.seq (VRuns.powB _ _ _) ?_
+    refine VRuns.seqV (VRuns.sample resp _ _) ?_
+    refine VRuns.seq (VRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _) ?_
+    refine VRuns.bind (K := LoopInv P (cfOf resp L) sch T cm0.cap t b (openP ms cm0 (sch.levels.getD 0 default)
+      (qPosK (cfOf resp L) (sch.levels.getD 0 default) (t.k + 1 + 1 + sch.k0 + 2 + 2))) basisAt
+      (sch.levels.size - 1)) ?_ fun σ => VRuns.pure fun st hσ => ?_
+    · refine VRuns.mono (VRuns.cast (VRuns.start (VRuns.loop _ (loopK sch t.k) _ (sch.levels.size - 1)
+        (fun j hj s => ?_) _) (by rw [loopK, ite_eq_left (by omega)]; omega))
+        (by rw [loopK, ite_eq_right (lt_irrefl _)])) (fun st hst => ?_) fun _ _ h => h
+      · refine VRuns.intro fun S hSI => ?_
+        have hLv := hSI
+        unfold LoopInv at hLv
+        rw [ite_eq_left hj] at hLv
+        refine VRuns.start (k₀ := t.k + sch.k0 + 9 + 11 * j) ?_ (by rw [loopK, ite_eq_left hj])
+        refine VRuns.bind (vLevelChals resp _ S) fun f => VRuns.intro fun S₄ hS₄ => ?_
+        obtain ⟨rfl, h4⟩ := hS₄
+        by_cases hj1 : j + 1 < sch.levels.size - 1
+        · refine VRuns.ite (fun _ => ?_) fun hne => absurd (by simp; omega) hne
+          refine VRuns.cast (k₁ := t.k + sch.k0 + 9 + 11 * j + 4 + 2 + 2 + 2 + 1) ?_
+            (by rw [loopK, ite_eq_left hj1]; omega)
+          refine VRuns.bind (VRuns.commit h ms _ _ _ _ _) fun cmN => VRuns.intro fun S₅ hS₅ => ?_
+          obtain ⟨hcmN, rfl⟩ := hS₅
+          refine VRuns.seq (VRuns.absorbBytes _ _ _) ?_
+          refine VRuns.seq (VRuns.oodIntro resp nonce _ (Nat.succ_ne_zero _) _ _) ?_
+          refine VRuns.seq (VRuns.oodIntro resp nonce _ (Nat.succ_ne_zero _) _ _) ?_
+          refine VRuns.bind (VRuns.query resp nonce ms _ s.2.1 (hq _ (by omega)) _ _) fun x =>
+            VRuns.intro fun S₆ hS₆ => ?_
+          obtain ⟨rfl, rfl⟩ := hS₆
+          refine VRuns.seq (VRuns.sendMsg _ _ _) ?_
+          refine VRuns.seq (VRuns.powB _ _ _) ?_
+          refine VRuns.seqV (VRuns.sample resp _ _) ?_
+          refine VRuns.seq (VRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _) ?_
+          refine VRuns.pure fun st hst => ⟨_, rfl, ?_⟩
+          subst hst
+          unfold LoopInv
+          rw [ite_eq_left hj1]
+          refine lvStep hL hsd hD (seam_getD hS (by omega)) hj1 rfl rfl rfl hLv h4 rfl hcmN rfl rfl rfl ?_ ?_ ?_ ?_
+            ⟨_, _, _, rfl⟩ ⟨_, rfl⟩ ⟨_, rfl⟩
+          all_goals rfl
+        · refine VRuns.ite (fun hc => absurd hc (by simp; omega)) fun _ => ?_
+          refine VRuns.cast (k₁ := t.k + sch.k0 + 9 + 11 * j + 4 + 2 + 1) ?_
+            (by rw [loopK, ite_eq_right hj1]; omega)
+          refine VRuns.seq (VRuns.absorbAll _ _ _) ?_
+          refine VRuns.bind (VRuns.query resp nonce ms _ s.2.1 (hq _ (by omega)) _ _) fun x =>
+            VRuns.intro fun S₆ hS₆ => ?_
+          obtain ⟨rfl, rfl⟩ := hS₆
+          refine VRuns.seq (VRuns.powB _ _ _) ?_
+          refine VRuns.seqV (VRuns.sample resp _ _) ?_
+          refine VRuns.pure fun st hst => ⟨_, rfl, ?_⟩
+          subst hst
+          unfold LoopInv
+          rw [ite_eq_right hj1]
+          intro hA hfin
+          refine finStep (ms := ms) hL hsd hD (seam_getD hS (by omega)) (by omega) hbasis rfl hLv h4 ?_ ?_ ?_ hA hfin
+          · rfl
+          · rfl
+          · exact ⟨Pre.refl _, Pre.refl _, Pre.push _ _, Pre.push _ _, Pre.push _ _⟩
+      · subst hst
+        unfold LoopInv
+        rw [ite_eq_left (by omega)]
+        refine lv0Inv (K := t.k + 1 + 1 + sch.k0) hsd hD hk0 (seam_getD hS (by omega)) htb hb hT hcm0 rfl ?_ ?_ ?_
+          ?_ ?_ ?_ ?_ hS₂ (by omega) rfl rfl hcm1 rfl rfl rfl ?_ ?_ ?_ ?_ ⟨_, _, _, rfl⟩ ⟨_, rfl⟩ ⟨_, rfl⟩
+        all_goals rfl
+    · unfold LoopInv at hσ
+      rwa [ite_eq_right (lt_irrefl _)] at hσ
+  refine key.2.2.2 ?_ ?_ <;> subst hP
+  · exact ⟨⟨Pre.refl _, Pre.refl _, Pre.refl _, Pre.refl _, Pre.refl _⟩, rfl, Pre.refl _⟩
+  · rfl
 
 end Lg
 
