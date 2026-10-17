@@ -295,6 +295,8 @@ def security(b: int, k: int, masked: bool, margins: dict) -> tuple[float | None,
         low = 1.33 if k >= 3 else 1.0
         return low, (f"σ_K peel floor {margins[f'p{b}']:.2f}, free Coppersmith to b/2 → 1.0" if k == 2 else
                      "peel two roots: 2.0 (1.33)")
+    if masked and b in WIDE_C:
+        return (1.33 if k >= 3 else 1.0), "σ_K peel, analytic; the masked lattice test ran only to 2,048 bits"
     if not masked and k == 2 and b in PLAIN_K2_LOW:
         return PLAIN_K2_LOW[b], f"red team's 4D floor {MIX.PLAIN_K2[b][0]} (low {PLAIN_K2_LOW[b]})"
     if not masked and k >= 3:
