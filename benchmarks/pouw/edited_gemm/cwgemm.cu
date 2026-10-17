@@ -14,8 +14,8 @@
 //            the 4 warps of column wn edit the 32 rows they read), the next stage's edit between this stage's atoms 1
 //            and 2 and an arrival on the slot's edited mbarrier for column wn, whose 4 warps (all on one SMSP) wait on it
 //            before the first ldmatrix of that stage, after atom 2 (a named barrier there runs them in lockstep: 19%
-//            slower than c_l7qs, against 6% for the added instructions); a tile's first stage is edited before its first
-//            atom. The release's fence.proxy.async orders the edit's stores before the slot's TMA refill
+//            slower than c_l7qs at 8192^3, against 17% with the mbarrier); a tile's first stage is edited before its
+//            first atom. The release's fence.proxy.async orders the edit's stores before the slot's TMA refill
 // Modes:
 //   cwgemm gate DIR M N K SEED    cgemm.cu's gate into DIR (c_l7qs and its peers, the dumps cgemm_ref.py reads), then
 //                                 under the same key: cplane's P_B against cwedit's, cw's O against cuBLASLt's X W^T and
