@@ -32,8 +32,8 @@ MMA_FORMS = ["HMMA16816", "HMMA16816F16", "HMMA1684T", "HMMA1688T", "HMMASP16832
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
-    assert d["vector"] == "VF3n-16" and round(d["tau"], 4) == 0.0586 and d["failures"] == [] and d["unreproduced"] == []
-    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0459, 1.1563, 2.0)
+    assert d["vector"] == "VF3o-16" and round(d["tau"], 4) == 0.0588 and d["failures"] == [] and d["unreproduced"] == []
+    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0460, 1.1563, 2.0)
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
                            "loads16": {"kinds": 9, "below": [], "absent": []},
                            "copy16": {"kinds": 77, "below": ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"],
@@ -74,15 +74,15 @@ def test_a_measurement_is_data(tmp_path, capsys):
     shutil.copytree(DATA, data)
     with open(data / "rows.csv", "a") as f:
         f.write(f'ROW_TEST,measured,{RUN},"a test row: FFMA alone at its F rate"\n')
-    with open(data / "census.csv", "a") as f:
-        f.write(f"FFMA,ROW_TEST,3.885,,,,TEST,,{RUN}\n")
+    _census(data, "TEST", f"FFMA,ROW_TEST,3.885,,,,TEST,,{RUN}")
     cur, _ = _epoch(data, ["ROW_TEST"])
     new, old = resolve("TEST", data), resolve(cur, data)
     assert new.failures == [] and len(new.vector.rows) == len(old.vector.rows) + 1
     assert "ROW_TEST" in new.census["FFMA"] and "ROW_TEST" not in old.census["FFMA"]
     assert (old.tau, old.margin) == (resolve(cur).tau, resolve(cur).margin)
     assert "JI3e_0" in resolve("VF3m-16", data).census["LDSM_X1"] and "JI3e_0" not in resolve("VF3j", data).census["LDSM_X1"]
-    assert "JI3n_0" in new.census["LDSM_X1"] and "JI3e_0" not in new.census["LDSM_X1"]
+    assert "JI3n_0" in resolve("VF3n-16", data).census["LDSM_X1"]
+    assert "JI3o_0" in new.census["LDSM_X1"] and not {"JI3e_0", "JI3n_0"} & set(new.census["LDSM_X1"])
     assert vector("TEST", data).published == {}
     assert main(["--data", str(data), "solve", "TEST"]) == 0
     assert "published: nothing yet" in capsys.readouterr().out
@@ -91,17 +91,24 @@ def test_a_measurement_is_data(tmp_path, capsys):
 def test_a_refit_closes_the_old_line(tmp_path):
     data = tmp_path / "data"
     shutil.copytree(DATA, data)
-    c = (data / "census.csv").read_text()
-    old_line = "FFMA,F,3.885,,,,,,note:20261015T0608Z-draft-census-sm120\n"
+    first = data / "census" / "VF.csv"
+    c = first.read_text()
+    old_line = "FFMA,F,3.885,,,,VF,,note:20261015T0608Z-draft-census-sm120\n"
     assert c.count(old_line) == 1
     last = model(data).epochs[-1]
-    c = c.replace(old_line, old_line.replace(",,note:", f",{last},note:")) + f"FFMA,F,3.9,,,,TEST,,{RUN}\n"
-    (data / "census.csv").write_text(c)
+    first.write_text(c.replace(old_line, old_line.replace(",,note:", f",{last},note:")))
+    _census(data, "TEST", f"FFMA,F,3.9,,,,TEST,,{RUN}")
     cur, _ = _epoch(data)
     new, old = resolve("TEST", data), resolve(cur, data)
     assert new.census["FFMA"]["F"] == new.model.cycle_u * 4 / 3.9
     assert old.census["FFMA"]["F"] == old.model.cycle_u * 4 / 3.885
     assert (old.tau, old.margin) == (resolve(cur).tau, resolve(cur).margin) and new.failures == []
+
+
+def _census(data, epoch, *lines):
+    """README "Add a measurement": the census lines from `epoch`, in its own file."""
+    (data / "census" / f"{epoch}.csv").write_text("kind,row,rate,noise,cycles,u,since,until,runs\n"
+                                                  + "".join(f"{x}\n" for x in lines))
 
 
 def _probe(path, lines):
@@ -125,6 +132,9 @@ def test_adopt_keeps_the_faster_line(tmp_path, capsys):
     assert after["FFMA"]["F"] == m.cycle_u * 4 / (3.9 * 1.02) < before["FFMA"]["F"]
     assert after["FFMA"]["issue"] == before["FFMA"]["issue"] and census(m, last, data) == before
     assert "ROW_ATOMS32" in after["IMAD"] and "ROW_ATOMS32" not in before["IMAD"]
+    assert [x.split(",")[:2] for x in (data / "census" / "TEST.csv").read_text().splitlines()[1:]] == [
+        ["FFMA", "F"], ["IMAD", "ROW_ATOMS32"]]
+    assert f"FFMA,F,3.885,,,,VF,{last},note:" in (data / "census" / "VF.csv").read_text()
     runs = {r: x for r, x in (line.split(",")[:3:2] for line in (data / "rows.csv").read_text().splitlines()[1:])}
     assert runs["F"].endswith(RUN) and runs["ROW_ATOMS32"].endswith(RUN) and RUN not in runs["issue"]
     with pytest.raises(SystemExit, match="already has a line from TEST"):

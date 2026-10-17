@@ -84,14 +84,15 @@ def test_macs_a_word_pins():
     assert round(rows.macs_a_word(0.027522, 4), -1) == 68480
 
 
-@pytest.mark.skipif(not (MACHINE_MODEL / "data" / "census.csv").exists(),
-                    reason="machine_model (RS-W′'s cursor/machine-model-ea24) isn't in this tree yet")
 def test_schema_is_machine_models():
-    data = MACHINE_MODEL / "data"
-    with open(data / "census.csv", newline="") as f:
-        r = csv.DictReader(f)
-        assert tuple(r.fieldnames) == rows.CENSUS_COLUMNS
-        lines = list(r)
+    files = sorted((MACHINE_MODEL / "data" / "census").glob("*.csv"))
+    assert files
+    lines = []
+    for p in files:
+        with open(p, newline="") as f:
+            r = csv.DictReader(f)
+            assert tuple(r.fieldnames) == rows.CENSUS_COLUMNS, p.name
+            lines += r
     sys.path.insert(0, str(MACHINE_MODEL))
     try:
         from verity_machine_model import model

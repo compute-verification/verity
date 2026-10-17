@@ -66,7 +66,7 @@ by the check it names, or nothing is timed at all.
    - `expect`: each timed loop's exact opcode counts, `OP=N,OP=N` (fnmatch on the dotted SASS opcode), loops separated
      by `;`. The rate is the `counted` pattern's (the first by default).
    - `kind` and `row`: the census class and row (`row` defaults to `ROW_<kind>`). They must be machine_model's own
-     names, from its `data/census.csv` and `data/rows.csv`. With no `kind` the probe is a joint point: `rows.jsonl` only.
+     names, from its `data/census/` and `data/rows.csv`. With no `kind` the probe is a joint point: `rows.jsonl` only.
    - `words`: the 4-byte words a warp instruction of the counted class moves, for MACs a word.
    - `smem_ops` and `smem`: the loop's shared accesses in order (`LDSM.16.M88*8`) and the offset function.
    - `warps`, `iters`, `dyn_smem`, `cluster`, `blocks` (0: one block on every SM), `fn` (a second probe on one kernel).
