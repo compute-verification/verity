@@ -3,6 +3,7 @@
 # of MBT (default "8192 2048"), each its own nsys session, then timeline.py over its sqlite export. Results go to
 # $RESEARCH_RUN_DIR/out/mbt<N>/; a report under KEEP_MB (default 400) MB is kept there, a larger one is listed by size
 # and sha256. MODEL (default the 8B), TP (1), SECS (the trace, 30 s), HZ (GPU-metrics samples a second, 10000), MIX_ARGS.
+# SCRIPT=gemm_dtypes.py runs that instead, with ARGS.
 #
 #   research run --queue --gpus 1 --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 64 --max-min 30 \
 #     -- bash benchmarks/serve_bandwidth/run.sh
@@ -13,9 +14,13 @@ export PYTHONPATH=$PWD:$PWD/integrations/vllm FLASHINFER_CUDA_ARCH_LIST=12.0f HF
   CUDA_DEVICE_ORDER=PCI_BUS_ID VLLM_ENABLE_V1_MULTIPROCESSING=0 NSYS_NVTX_PROFILER_REGISTER_ONLY=0
 . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
+SB=benchmarks/serve_bandwidth
+if [ "${SCRIPT:-}" = gemm_dtypes.py ]; then
+  # shellcheck disable=SC2086
+  exec "$PY" $SB/gemm_dtypes.py --out "$O" ${ARGS:-}
+fi
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
 cat "$MODEL"/*.safetensors > /dev/null
-SB=benchmarks/serve_bandwidth
 B=$(mktemp -d /tmp/serve-bw.XXXXXX); trap 'rm -rf "$B"' EXIT
 { nsys --version; nvidia-smi --query-gpu=index,pci.bus_id,clocks.sm,clocks.mem,power.draw --format=csv;
   echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}"; } > "$O/env.txt" 2>&1
