@@ -11,9 +11,11 @@ import Mathlib.Tactic.Ring
 import Models.Accounting.Guarantees.Gates
 
 /-!
-# Lower bounds in the circuit model, proved
+# The circuit model's window and lower bounds, proved
 
-`Fooling` by induction over the gates (every free gate is 2-adically triangular in its window) and a count of the
+`ProvenWindow` by induction over the gates (each value lies in its derived interval: `Iv.add`, `Iv.scale` and
+`Iv.mul` are sound), and `ClampOrWrap` from it (in the window a clamp and a wrap are both the identity); `Fooling` by
+induction over the gates (every free gate is 2-adically triangular in its window) and a count of the
 charged gates' joint values; `SquaringCarry` from it at `j = 1` on the sparse family, whose squares have no carries
 between bytes; `EncodeBudget` and `EncodeCost` from `EncodeChainHardness` by summing the census over the windows.
 -/
@@ -24,43 +26,44 @@ open Accounting.Gates Accounting.Assumptions
 
 variable {ι : Type}
 
-/-! ## Runs -/
+/-! ## Values -/
 
-lemma foldl_length (C : Circuit ι) (x : ι → ℤ) (vs : List ℤ) :
+lemma foldl_length (C : Dag ι) (x : ι → ℤ) (vs : List ℤ) :
     (C.foldl (fun vs g => vs ++ [g.value x vs]) vs).length = vs.length + C.length := by
   induction C generalizing vs with
   | nil => simp
   | cons g C ih => simp [List.foldl_cons, ih]; omega
 
-lemma run_length (C : Circuit ι) (x : ι → ℤ) : (run C x).length = C.length := by
-  simp [run, foldl_length]
+lemma values_length (C : Dag ι) (x : ι → ℤ) : (values C x).length = C.length := by
+  simp [values, foldl_length]
 
-lemma run_take_succ (C : Circuit ι) (x : ι → ℤ) (i : ℕ) (h : i < C.length) :
-    run (C.take (i + 1)) x = run (C.take i) x ++ [C[i].value x (run (C.take i) x)] := by
+lemma values_take_succ (C : Dag ι) (x : ι → ℤ) (i : ℕ) (h : i < C.length) :
+    values (C.take (i + 1)) x = values (C.take i) x ++ [C[i].value x (values (C.take i) x)] := by
   rw [List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some]
-  simp only [run, List.foldl_append, List.foldl_cons, List.foldl_nil]
+  simp only [values, List.foldl_append, List.foldl_cons, List.foldl_nil]
 
-lemma run_take_length (C : Circuit ι) (x : ι → ℤ) (n : ℕ) (h : n ≤ C.length) : (run (C.take n) x).length = n := by
-  rw [run_length, List.length_take]; omega
+lemma values_take_length (C : Dag ι) (x : ι → ℤ) (n : ℕ) (h : n ≤ C.length) : (values (C.take n) x).length = n := by
+  rw [values_length, List.length_take]; omega
 
-lemma getD_run_take (C : Circuit ι) (x : ι → ℤ) (i : ℕ) (h : i < C.length) :
-    ∀ n, i < n → n ≤ C.length → (run (C.take n) x).getD i 0 = C[i].value x (run (C.take i) x) := by
+lemma getD_values_take (C : Dag ι) (x : ι → ℤ) (i : ℕ) (h : i < C.length) :
+    ∀ n, i < n → n ≤ C.length → (values (C.take n) x).getD i 0 = C[i].value x (values (C.take i) x) := by
   intro n hin hn
   induction n with
   | zero => omega
   | succ n ih =>
-    rw [run_take_succ C x n (by omega)]
+    rw [values_take_succ C x n (by omega)]
     rcases Nat.lt_or_ge i n with hi | hi
-    · rw [List.getD_append _ _ _ _ (by rw [run_take_length C x n (by omega)]; exact hi)]
+    · rw [List.getD_append _ _ _ _ (by rw [values_take_length C x n (by omega)]; exact hi)]
       exact ih hi (by omega)
     · have : i = n := by omega
       subst this
-      rw [List.getD_append_right _ _ _ _ (by rw [run_take_length C x i (by omega)]), run_take_length C x i (by omega)]
+      rw [List.getD_append_right _ _ _ _ (by rw [values_take_length C x i (by omega)]),
+        values_take_length C x i (by omega)]
       simp
 
-lemma val_eq (C : Circuit ι) (x : ι → ℤ) (i : ℕ) (h : i < C.length) :
-    val C x i = C[i].value x (run (C.take i) x) := by
-  have := getD_run_take C x i h C.length h le_rfl
+lemma val_eq (C : Dag ι) (x : ι → ℤ) (i : ℕ) (h : i < C.length) :
+    val C x i = C[i].value x (values (C.take i) x) := by
+  have := getD_values_take C x i h C.length h le_rfl
   rwa [List.take_length] at this
 
 /-! ## Free gates are 2-adically triangular -/
@@ -106,17 +109,18 @@ lemma value_eq_raw (g : Gate ι) (x : ι → ℤ) (vs : List ℤ) (hg : g.Ok x v
   | _ => simp [Op.out]
 
 /-- **The triangular step**: an uncharged gate in its window, on operands that agree mod `m`, takes values that agree
-mod `m`, given that a registered input it reads agrees mod `m`. -/
+mod `m`, given that a registered or coin input it reads agrees mod `m`. -/
 lemma value_congr {m : ℤ} (g : Gate ι) (x x' : ι → ℤ) (vs vs' : List ℤ)
     (hv : ∀ j, vs.getD j 0 ≡ vs'.getD j 0 [ZMOD m]) (hc : g.op.charged = false)
-    (hx : ∀ i, g.op = .input .registered i → x i ≡ x' i [ZMOD m]) (hg : g.Ok x vs) (hg' : g.Ok x' vs') :
+    (hx : ∀ b i, b ≠ .run → g.op = .input b i → x i ≡ x' i [ZMOD m]) (hg : g.Ok x vs) (hg' : g.Ok x' vs') :
     g.value x vs ≡ g.value x' vs' [ZMOD m] := by
   rw [value_eq_raw g x vs hg, value_eq_raw g x' vs' hg']
   unfold Gate.raw Gate.operands
   cases hop : g.op with
   | input b i =>
     cases b
-    · exact hx i hop
+    · exact hx _ i (by decide) hop
+    · exact hx _ i (by decide) hop
     · rw [hop] at hc; simp [Op.charged] at hc
   | const c => exact Int.ModEq.refl _
   | affine c₀ cs =>
@@ -133,21 +137,21 @@ lemma value_congr {m : ℤ} (g : Gate ι) (x x' : ι → ℤ) (vs vs' : List ℤ
   | gather => rw [hop] at hc; simp [Op.charged] at hc
   | budgeted cls f => rw [hop] at hc; simp [Op.charged] at hc
 
-/-- Two inputs on which `C` is in its window, that agree mod `m` in every registered input, and on which every
-charged gate takes one value: every gate's values agree mod `m`. -/
-lemma run_congr {m : ℤ} (C : Circuit ι) (x x' : ι → ℤ) (hw : InWindow C x) (hw' : InWindow C x')
-    (hreg : ∀ i, (∃ g ∈ C, g.op = .input .registered i) → x i ≡ x' i [ZMOD m])
+/-- Two inputs on which `C` is in its window, that agree mod `m` in every registered and coin input, and on which
+every charged gate takes one value: every gate's values agree mod `m`. -/
+lemma values_congr {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWindow C x) (hw' : InWindow C x')
+    (hreg : ∀ i, FreeInput C i → x i ≡ x' i [ZMOD m])
     (hch : ∀ i (h : i < C.length), C[i].op.charged = true → val C x i = val C x' i) :
-    ∀ n, n ≤ C.length → ∀ o, (run (C.take n) x).getD o 0 ≡ (run (C.take n) x').getD o 0 [ZMOD m] := by
+    ∀ n, n ≤ C.length → ∀ o, (values (C.take n) x).getD o 0 ≡ (values (C.take n) x').getD o 0 [ZMOD m] := by
   intro n
   induction n with
-  | zero => intro _ o; simp [run, Int.ModEq.refl]
+  | zero => intro _ o; simp [values, Int.ModEq.refl]
   | succ n ih =>
     intro hn o
     have hn' : n < C.length := hn
-    have hlen := run_take_length C x n (by omega)
-    have hlen' := run_take_length C x' n (by omega)
-    rw [run_take_succ C x n hn', run_take_succ C x' n hn']
+    have hlen := values_take_length C x n (by omega)
+    have hlen' := values_take_length C x' n (by omega)
+    rw [values_take_succ C x n hn', values_take_succ C x' n hn']
     rcases Nat.lt_trichotomy o n with ho | ho | ho
     · rw [List.getD_append _ _ _ _ (by rw [hlen]; exact ho), List.getD_append _ _ _ _ (by rw [hlen']; exact ho)]
       exact ih (by omega) o
@@ -156,13 +160,225 @@ lemma run_congr {m : ℤ} (C : Circuit ι) (x x' : ι → ℤ) (hw : InWindow C 
         hlen', Nat.sub_self, List.getD_cons_zero, List.getD_cons_zero]
       cases hc : C[o].op.charged
       · exact value_congr _ x x' _ _ (ih (by omega)) hc
-          (fun i hi => hreg i ⟨C[o], List.getElem_mem hn', hi⟩) (hw o hn') (hw' o hn')
+          (fun b i hb hi => hreg i ⟨C[o], List.getElem_mem hn', b, hb, hi⟩) (hw o hn') (hw' o hn')
       · rw [← val_eq C x o hn', ← val_eq C x' o hn', hch o hn' hc]
     · rw [List.getD_append_right _ _ _ _ (by rw [hlen]; omega), List.getD_append_right _ _ _ _ (by rw [hlen']; omega),
         hlen, hlen']
       obtain ⟨k, hk⟩ : ∃ k, o - n = k + 1 := ⟨o - n - 1, by omega⟩
       rw [hk]
       simp [Int.ModEq.refl]
+
+/-! ## The window, proven -/
+
+/-- `z` lies in interval `a`. -/
+abbrev Holds (a : Iv) (z : ℤ) : Prop := a.1 ≤ z ∧ z ≤ a.2
+
+lemma Holds.add {a b : Iv} {u v : ℤ} (hu : Holds a u) (hv : Holds b v) : Holds (Iv.add a b) (u + v) :=
+  ⟨Int.add_le_add hu.1 hv.1, Int.add_le_add hu.2 hv.2⟩
+
+lemma Holds.scale {a : Iv} {u : ℤ} (c : ℤ) (hu : Holds a u) : Holds (Iv.scale c a) (c * u) := by
+  unfold Iv.scale
+  split_ifs with hc
+  · exact ⟨Int.mul_le_mul_of_nonneg_left hu.1 hc, Int.mul_le_mul_of_nonneg_left hu.2 hc⟩
+  · exact ⟨Int.mul_le_mul_of_nonpos_left (by omega) hu.2, Int.mul_le_mul_of_nonpos_left (by omega) hu.1⟩
+
+lemma mul_between {p q t : ℤ} (v : ℤ) (h1 : p ≤ t) (h2 : t ≤ q) :
+    min (p * v) (q * v) ≤ t * v ∧ t * v ≤ max (p * v) (q * v) := by
+  rcases le_total 0 v with hv | hv
+  · exact ⟨min_le_of_left_le (Int.mul_le_mul_of_nonneg_right h1 hv),
+      le_max_of_le_right (Int.mul_le_mul_of_nonneg_right h2 hv)⟩
+  · exact ⟨min_le_of_right_le (Int.mul_le_mul_of_nonpos_right h2 hv),
+      le_max_of_le_left (Int.mul_le_mul_of_nonpos_right h1 hv)⟩
+
+lemma Holds.mul {a b : Iv} {u v : ℤ} (hu : Holds a u) (hv : Holds b v) : Holds (Iv.mul a b) (u * v) := by
+  have h := mul_between v hu.1 hu.2
+  have g1 := mul_between a.1 hv.1 hv.2
+  have g2 := mul_between a.2 hv.1 hv.2
+  rw [mul_comm b.1 a.1, mul_comm b.2 a.1, mul_comm v a.1] at g1
+  rw [mul_comm b.1 a.2, mul_comm b.2 a.2, mul_comm v a.2] at g2
+  exact ⟨le_trans (min_le_min g1.1 g2.1) h.1, le_trans h.2 (max_le_max g1.2 g2.2)⟩
+
+/-- An affine map's derived interval holds its exact value, given each operand in its interval. -/
+lemma holds_scale_sum (I : ℕ → Iv) (V : ℕ → ℤ) (hIV : ∀ j, Holds (I j) (V j)) :
+    ∀ (cs : List ℤ) (u : List ℕ) (s : Iv) (z : ℤ), Holds s z →
+      Holds ((List.zipWith Iv.scale cs (u.map I)).foldl Iv.add s) (z + (List.zipWith (· * ·) cs (u.map V)).sum)
+  | [], _, s, z, h => by simpa using h
+  | _ :: _, [], s, z, h => by simpa using h
+  | c :: cs, j :: u, s, z, h => by
+    simp only [List.map_cons, List.zipWith_cons_cons, List.foldl_cons, List.sum_cons]
+    have := holds_scale_sum I V hIV cs u _ _ (h.add ((hIV j).scale c))
+    rwa [add_assoc] at this
+
+/-- An s8-family step's derived interval holds its exact sum, given each operand in its interval. -/
+lemma holds_mul_sum (I : ℕ → Iv) (V : ℕ → ℤ) (hIV : ∀ j, Holds (I j) (V j)) :
+    ∀ (u w : List ℕ) (s : Iv) (z : ℤ), Holds s z →
+      Holds ((List.zipWith Iv.mul (u.map I) (w.map I)).foldl Iv.add s)
+        (z + (List.zipWith (· * ·) (u.map V) (w.map V)).sum)
+  | [], _, s, z, h => by simpa using h
+  | _ :: _, [], s, z, h => by simpa using h
+  | i :: u, j :: w, s, z, h => by
+    simp only [List.map_cons, List.zipWith_cons_cons, List.foldl_cons, List.sum_cons]
+    have := holds_mul_sum I V hIV u w _ _ (h.add ((hIV i).mul (hIV j)))
+    rwa [add_assoc] at this
+
+/-- A derived gate's derived interval holds its exact value, given each operand in its derived interval. -/
+lemma derive_holds (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ)
+    (hinv : ∀ j, Holds (ivs.getD j (0, 0)) (vs.getD j 0)) (hd : g.op.IsDerived) :
+    Holds (g.derive ivs) (g.raw x vs) := by
+  unfold Gate.derive Gate.raw Gate.operands
+  cases hop : g.op with
+  | const c => exact ⟨le_rfl, le_rfl⟩
+  | affine c₀ cs =>
+    simp only [Op.raw]
+    exact holds_scale_sum _ _ hinv cs g.args (c₀, c₀) c₀ ⟨le_rfl, le_rfl⟩
+  | mma a b k sat =>
+    simp only [Op.raw, dot]
+    generalize g.args = u
+    cases u with
+    | nil => simp
+    | cons j u =>
+      simp only [List.map_cons, List.headD_cons, List.tail_cons, ← List.map_take, ← List.map_drop]
+      exact holds_mul_sum _ _ hinv _ _ _ _ (hinv j)
+  | input b i => rw [hop] at hd; exact hd.elim
+  | gather => rw [hop] at hd; exact hd.elim
+  | budgeted cls f => rw [hop] at hd; exact hd.elim
+
+/-- **The window's step**: a gate whose window is proven (`Proven`'s clauses for it) and whose declared interval
+holds if it isn't derived, on operands each in its derived interval, is in its window, its value in its derived
+interval. -/
+lemma gate_window (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ)
+    (hinv : ∀ j, Holds (ivs.getD j (0, 0)) (vs.getD j 0))
+    (hP1 : g.op.IsDerived → (g.derive ivs).Within g.lo g.hi)
+    (hP2 : ∀ fa fb k sat, g.op = .mma fa fb k sat →
+      g.args.length = 2 * k + 1 ∧ s32Min ≤ g.lo ∧ g.hi ≤ s32Max ∧
+        (∀ j ∈ g.args.tail.take k, (ivs.getD j (0, 0)).Within fa.lo fa.hi) ∧
+        ∀ j ∈ g.args.tail.drop k, (ivs.getD j (0, 0)).Within fb.lo fb.hi)
+    (hD : ¬ g.op.IsDerived → g.lo ≤ g.raw x vs ∧ g.raw x vs ≤ g.hi) :
+    g.Ok x vs ∧ Holds (g.derive ivs) (g.value x vs) := by
+  have hraw : g.lo ≤ g.raw x vs ∧ g.raw x vs ≤ g.hi := by
+    by_cases hd : g.op.IsDerived
+    · have h1 := derive_holds g x ivs vs hinv hd
+      have h2 := hP1 hd
+      exact ⟨le_trans h2.1 h1.1, le_trans h1.2 h2.2⟩
+    · exact hD hd
+  have hmma : g.op.IsMma → s32Min ≤ g.lo ∧ g.hi ≤ s32Max := by
+    intro hm
+    cases hop : g.op with
+    | mma a b k sat => exact ⟨(hP2 a b k sat hop).2.1, (hP2 a b k sat hop).2.2.1⟩
+    | _ => rw [hop] at hm; exact hm.elim
+  have hfmt : ∀ (us : List ℕ) (lo hi : ℤ), (∀ j ∈ us, (ivs.getD j (0, 0)).Within lo hi) →
+      ∀ z ∈ us.map (fun j => vs.getD j 0), lo ≤ z ∧ z ≤ hi := by
+    intro us lo hi h z hz
+    obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hz
+    exact ⟨le_trans (h j hj).1 (hinv j).1, le_trans (hinv j).2 (h j hj).2⟩
+  have hok : g.Ok x vs := by
+    refine ⟨hraw.1, hraw.2, ?_, hmma⟩
+    unfold Gate.operands
+    cases hop : g.op with
+    | mma a b k sat =>
+      obtain ⟨hlen, -, -, hA, hB⟩ := hP2 a b k sat hop
+      refine ⟨by rw [List.length_map, hlen], ?_, ?_⟩
+      · rw [← List.map_tail, ← List.map_take]; exact hfmt _ _ _ hA
+      · rw [← List.map_tail, ← List.map_drop]; exact hfmt _ _ _ hB
+    | _ => trivial
+  refine ⟨hok, ?_⟩
+  rw [value_eq_raw g x vs hok]
+  by_cases hd : g.op.IsDerived
+  · exact derive_holds g x ivs vs hinv hd
+  · have : g.derive ivs = (g.lo, g.hi) := by
+      unfold Gate.derive
+      cases hop : g.op with
+      | input b i => rfl
+      | gather => rfl
+      | budgeted cls f => rfl
+      | _ => rw [hop] at hd; exact absurd trivial hd
+    rw [this]
+    exact hraw
+
+lemma foldl_derive_length (C : Dag ι) (ivs : List Iv) :
+    (C.foldl (fun ivs g => ivs ++ [g.derive ivs]) ivs).length = ivs.length + C.length := by
+  induction C generalizing ivs with
+  | nil => simp
+  | cons g C ih => simp [List.foldl_cons, ih]; omega
+
+lemma intervals_take_length (C : Dag ι) (n : ℕ) (h : n ≤ C.length) : (intervals (C.take n)).length = n := by
+  simp only [intervals, foldl_derive_length, List.length_nil, List.length_take]; omega
+
+lemma intervals_take_succ (C : Dag ι) (i : ℕ) (h : i < C.length) :
+    intervals (C.take (i + 1)) = intervals (C.take i) ++ [C[i].derive (intervals (C.take i))] := by
+  rw [List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some]
+  simp only [intervals, List.foldl_append, List.foldl_cons, List.foldl_nil]
+
+/-- Every value of a proven circuit, on an input on which its declared intervals hold, lies in its derived interval
+(and past the gates, `0` in `(0, 0)`). -/
+lemma window_inv (C : Dag ι) (x : ι → ℤ) (hP : Proven C) (hD : DeclaredHold C x) :
+    ∀ n, n ≤ C.length → ∀ j, Holds ((intervals (C.take n)).getD j (0, 0)) ((values (C.take n) x).getD j 0) := by
+  intro n
+  induction n with
+  | zero => intro _ j; simp [intervals, values]
+  | succ n ih =>
+    intro hn j
+    have hn' : n < C.length := hn
+    have hlen := values_take_length C x n (by omega)
+    have hlenI := intervals_take_length C n (by omega)
+    rw [values_take_succ C x n hn', intervals_take_succ C n hn']
+    rcases Nat.lt_trichotomy j n with hj | hj | hj
+    · rw [List.getD_append _ _ _ _ (by rw [hlenI]; exact hj), List.getD_append _ _ _ _ (by rw [hlen]; exact hj)]
+      exact ih (by omega) j
+    · subst hj
+      rw [List.getD_append_right _ _ _ _ (by rw [hlenI]), List.getD_append_right _ _ _ _ (by rw [hlen]), hlenI, hlen,
+        Nat.sub_self, List.getD_cons_zero, List.getD_cons_zero]
+      obtain ⟨h1, h2⟩ := hP j hn'
+      exact (gate_window C[j] x _ _ (ih (by omega)) h1 h2 (hD j hn')).2
+    · rw [List.getD_append_right _ _ _ _ (by rw [hlenI]; omega), List.getD_append_right _ _ _ _ (by rw [hlen]; omega),
+        hlenI, hlen]
+      obtain ⟨k, hk⟩ : ∃ k, j - n = k + 1 := ⟨j - n - 1, by omega⟩
+      rw [hk]
+      simp
+
+theorem ProvenWindow : Accounting.Guarantees.Gates.ProvenWindow := by
+  intro ι C x hP hD i hi
+  obtain ⟨h1, h2⟩ := hP i hi
+  exact (gate_window C[i] x _ _ (window_inv C x hP hD i hi.le) h1 h2 (hD i hi)).1
+
+theorem ClampOrWrap : Accounting.Guarantees.Gates.ClampOrWrap := by
+  intro ι C C' x hP hD hl hR
+  have hw := ProvenWindow C x hP hD
+  suffices h : ∀ n, n ≤ C.length → values (C'.take n) x = values (C.take n) x by
+    have := h C.length le_rfl
+    rwa [List.take_of_length_le (le_of_eq hl), List.take_length] at this
+  intro n
+  induction n with
+  | zero => intro _; simp [values]
+  | succ n ih =>
+    intro hn
+    have hn' : n < C.length := hn
+    have hn'' : n < C'.length := by omega
+    rw [values_take_succ C x n hn', values_take_succ C' x n hn'', ih (by omega)]
+    obtain ⟨hargs, hop⟩ := hR n hn' hn''
+    have hraw : C'[n].raw x (values (C.take n) x) = C[n].raw x (values (C.take n) x) := by
+      unfold Gate.raw Gate.operands
+      rw [hargs]
+      rcases hop with hop | ⟨a, b, k, s, s', h1, h2⟩
+      · rw [hop]
+      · rw [h1, h2]; rfl
+    have hval : C'[n].value x (values (C.take n) x) = C[n].value x (values (C.take n) x) := by
+      unfold Gate.value
+      rw [hraw]
+      rcases hop with hop | ⟨a, b, k, s, s', h1, h2⟩
+      · rw [hop]
+      · have hok := hw n hn'
+        have hb := hok.2.2.2 (by rw [h1]; trivial)
+        have hz1 : s32Min ≤ C[n].raw x (values (C.take n) x) := le_trans hb.1 hok.1
+        have hz2 : C[n].raw x (values (C.take n) x) ≤ s32Max := le_trans hok.2.1 hb.2
+        have hout : ∀ t, (Op.mma a b k t : Op ι).out (C[n].raw x (values (C.take n) x)) =
+            C[n].raw x (values (C.take n) x) := by
+          intro t
+          cases t
+          · exact wrapS32_of hz1 hz2
+          · exact clampS32_of hz1 hz2
+        rw [h1, h2, hout s', hout s]
+    rw [hval]
 
 /-! ## The fooling bound -/
 
@@ -189,7 +405,7 @@ theorem Fooling : Accounting.Guarantees.Gates.Fooling := by
     by_contra hne
     obtain ⟨o, -, ho⟩ := hdist s hs s' hs' hne
     apply ho
-    have h := run_congr C (x s) (x s') (hw s hs) (hw s' hs') (hreg s hs s' hs')
+    have h := values_congr C (x s) (x s') (hw s hs) (hw s' hs') (hreg s hs s' hs')
       (fun i h hc => by simpa [T, hc] using congrFun hT ⟨i, h⟩) C.length le_rfl o
     rwa [List.take_length] at h
   calc F.card ≤ box.card := Finset.card_le_card_of_injOn T hmaps hinj
@@ -374,13 +590,13 @@ theorem SquaringCarry : Accounting.Guarantees.Gates.SquaringCarry := by
 
 /-! ## The encode budget -/
 
-lemma countAt_cons (g : Gate ι) (C : Circuit ι) (s : ℕ → Prop) [DecidablePred s] (p : Gate ι → ℕ) :
+lemma countAt_cons (g : Gate ι) (C : Dag ι) (s : ℕ → Prop) [DecidablePred s] (p : Gate ι → ℕ) :
     countAt (g :: C) s p = (if s g.step then p g else 0) + countAt C s p := by
   unfold countAt
   by_cases hs : s g.step <;> simp [hs]
 
 /-- Summing a gate count over the windows: every gate is in one of them. -/
-lemma sum_countAt (C : Circuit ι) (win : ℕ → ℕ) (N : ℕ) (p : Gate ι → ℕ) (h : ∀ g ∈ C, win g.step < N) :
+lemma sum_countAt (C : Dag ι) (win : ℕ → ℕ) (N : ℕ) (p : Gate ι → ℕ) (h : ∀ g ∈ C, win g.step < N) :
     ∑ v ∈ Finset.range N, countAt C (fun t => win t = v) p = (C.map p).sum := by
   induction C with
   | nil => simp [countAt]
@@ -390,10 +606,11 @@ lemma sum_countAt (C : Circuit ι) (win : ℕ → ℕ) (N : ℕ) (p : Gate ι �
     simp only [countAt_cons, Finset.sum_add_distrib, Finset.sum_ite_eq, Finset.mem_range, hg, ite_true, ih,
       List.map_cons, List.sum_cons]
 
-lemma budgeted_eq (C : Circuit ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.windows) :
+lemma budgeted_eq (C : Dag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.windows) :
     budgeted C = ∑ v ∈ Finset.range A.windows, (census C fun t => A.win t = v).budgeted := by
   have key : ∀ g : Gate ι, (if g.op.budget.isSome then 1 else 0) =
-      g.isBudget .rounding + g.isBudget .compareSelect + g.isBudget .gather + g.isBudget .product := by
+      g.isBudget .rounding + g.isBudget .compareSelect + g.isBudget .gather + g.isBudget .product +
+        g.isBudget .fold + g.isBudget .neutral := by
     intro g
     unfold Gate.isBudget
     rcases g.op.budget with _ | b
@@ -413,13 +630,13 @@ theorem EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget := by
     rw [budgeted_eq W A hwin, Finset.mul_sum]
     apply Finset.sum_le_sum
     intro v hv
-    obtain ⟨h1, h2, h3, h4, -⟩ := hcap v (Finset.mem_range.mp hv)
+    obtain ⟨h1, h2, h3, h4, h5, h6, -⟩ := hcap v (Finset.mem_range.mp hv)
     simp only [Census.budgeted, Caps.total, add_mul]
     omega
   have hr : runBits W ≤ 8 * caps.runBytes * A.windows := by
     rw [runBits, ← sum_countAt W A.win A.windows _ hwin]
     calc _ ≤ ∑ v ∈ Finset.range A.windows, 8 * caps.runBytes :=
-          Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2
+          Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2.2.2
       _ = 8 * caps.runBytes * A.windows := by simp [mul_comm]
   calc words.length * E * (F.n - 1) ≤ budgeted W * (F.n - 1) + runBits W * E := h
     _ ≤ _ := add_le_add (Nat.mul_le_mul_right _ hb) (Nat.mul_le_mul_right _ hr)
