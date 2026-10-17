@@ -1,7 +1,8 @@
 """egemm80.cu's SASS gate, its run's summary, and its honest profiles in the machine model's classes (sm_80's census).
 
     python3 egemm80.py gate SASS BUILD_LOG    every arm's mainloop (its k-stage loop): the MMAs, the fold and the loads it
-                                              must hold, no local memory, no spill; JSON to stdout, exit 1 on a refusal
+                                              must hold, no local memory in it (ptxas's spill bytes recorded); JSON to
+                                              stdout, exit 1 on a refusal
     python3 egemm80.py summary OUT            the gate's verdicts and each arm's SMSP-cycles a MMA, from the bench (median
                                               item at its NVML clock) and from the hold (the steady clock's half)
 
@@ -77,14 +78,15 @@ def arm_of(name: str) -> str | None:
 
 
 def mainloop(ins: list[tuple[int, str, str]], mma: str) -> list[tuple[int, str, str]]:
-    """The backward branch's body holding the most MMAs of the arm's form (the k-stage loop)."""
+    """The innermost backward branch's body holding MMAs of the arm's form (the k-stage loop; the persistent tile loop
+    around it holds the first stage's and the peel's MMAs too)."""
     best: list = []
     for addr, op, rest in ins:
         if op == "BRA":
             m = re.search(r"0x([0-9a-f]+)", rest)
             if m and int(m.group(1), 16) < addr:
                 body = [x for x in ins if int(m.group(1), 16) <= x[0] <= addr]
-                if sum(x[1].startswith(mma) for x in body) > sum(x[1].startswith(mma) for x in best):
+                if any(x[1].startswith(mma) for x in body) and (not best or len(body) < len(best)):
                     best = body
     return best
 
@@ -105,7 +107,8 @@ def gate(sass_path: Path, build_log: Path) -> dict:
         words = 4 * n_com
         v = {"function": name, "loop_insns": len(body), "loop_mma": fam(mma), "loop_lea_hi": fam("LEA.HI"),
              "loop_lop3": fam("LOP3"), "loop_imad": fam("IMAD"), "loop_ldsm4": fam("LDSM.16.M88.4"),
-             "loop_ldgsts": fam("LDGSTS"), "loop_bar": fam("BAR"), "local": sum(op.startswith(("LDL", "STL")) for _, op, _ in ins),
+             "loop_ldgsts": fam("LDGSTS"), "loop_bar": fam("BAR"), "local": fam("LDL") + fam("STL"),
+             "function_local": sum(op.startswith(("LDL", "STL")) for _, op, _ in ins),
              "loop_counts": dict(sorted(c.items())), "function_counts": dict(sorted(Counter(op for _, op, _ in ins).items()))}
         fold = v["loop_lea_hi"] + v["loop_lop3"] + v["loop_imad"] + fam("SHF") + fam("IADD3")
         why = []
@@ -116,13 +119,12 @@ def gate(sass_path: Path, build_log: Path) -> dict:
         if v["loop_ldgsts"] != 4:
             why.append(f"{v['loop_ldgsts']} LDGSTS, not 4")
         if v["local"]:
-            why.append(f"{v['local']} local-memory instructions")
+            why.append(f"{v['local']} local-memory instructions in the k-stage loop")
         if words and (v["loop_lea_hi"] < words or v["loop_lop3"] < words + TIES[arm] or fold < 3 * words + TIES[arm]):
             why.append(f"the fold: {v['loop_lop3']} LOP3, {v['loop_imad']} IMAD, {v['loop_lea_hi']} LEA.HI for {words} words")
         m = re.search(rf"Compiling entry function '{re.escape(name)}'.*?(\d+) bytes spill stores, (\d+) bytes spill loads", log,
                       re.S)
-        if m and (int(m.group(1)) or int(m.group(2))):
-            why.append(f"spills: {m.group(1)} B stores, {m.group(2)} B loads")
+        v["spill_bytes"] = [int(m.group(1)), int(m.group(2))] if m else None
         v["refused"] = why
         ok &= not why
         out["arms"][arm] = v

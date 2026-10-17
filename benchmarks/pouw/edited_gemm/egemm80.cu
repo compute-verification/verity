@@ -110,12 +110,18 @@ template <int ARM> struct G {
 
   uint32_t sbase, a_off[4], b_off[4];
   const Args& a;
-  int tiles_m, tiles_n, KT, steps, ptile, pkt, ps;
+  int tiles_m, tiles_n, KT, ptile, pkt, ps;
+  // the copier's state: this thread's 4 copies a step are rows r0 and r0 + 64 of the A tile (X) and of the B tile (W) at
+  // byte offsets o[0..3] (PA, PB at the tail step), into smem at d0, d0 + 64 BK and A_BYTES past both; ta, tb: the tail's
+  uint32_t o[4], ta, tb, d0;
 
   DEV G(const Args& args, uint8_t* smem) : a(args) {
     sbase = smem_u32(smem);
-    tiles_m = a.M / BM, tiles_n = a.N / BN, KT = a.K / BK, steps = KT + 1;
+    tiles_m = a.M / BM, tiles_n = a.N / BN, KT = a.K / BK;
     ptile = blockIdx.x, pkt = 0, ps = 0;
+    const int r0 = threadIdx.x >> 3, ch = threadIdx.x & 7;
+    d0 = r0 * BK + ((ch ^ (r0 & 7)) << 4);
+    retarget();
     const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
     const int wm = warp / WARPS_N, wn = warp % WARPS_N, x = lane & 7;
     const int a_row = wm * 32 + (lane & 15), a_half = lane >> 4;
@@ -131,21 +137,35 @@ template <int ARM> struct G {
     const int g = 8 * tiles_n, blk = t / g, r = t - blk * g;
     tm = 8 * blk + (r & 7), tn = r >> 3;
   }
+  // the copier's offsets at stage 0 of tile ptile (the one division a tile)
+  DEV void retarget() {
+    if (ptile >= tiles_m * tiles_n) return;
+    int tm, tn;
+    place(ptile, tm, tn);
+    const uint32_t r0 = threadIdx.x >> 3, c16 = (threadIdx.x & 7) * 16;
+    o[0] = (tm * BM + r0) * (uint32_t)a.K + c16, o[1] = o[0] + 64u * a.K;
+    o[2] = (tn * BN + r0) * (uint32_t)a.K + c16, o[3] = o[2] + 64u * a.K;
+    ta = (tm * BM + r0) * BK + c16, tb = (tn * BN + r0) * BK + c16;
+  }
   // the next step's copies (tile ptile, stage pkt; pkt == KT: the tail rows) into slot ps, then one commit group
   DEV void issue() {
     if (ptile < tiles_m * tiles_n) {
-      int tm, tn;
-      place(ptile, tm, tn);
-      const uint32_t dst = sbase + ps * STAGE;
+      const bool tail = pkt == KT;
+      const int8_t *pa = tail ? a.PA : a.X, *pb = tail ? a.PB : a.W;
+      const uint32_t dst = sbase + ps * STAGE + d0;
+      cp16(dst, pa + o[0]);
+      cp16(dst + 64 * BK, pa + o[1]);
+      cp16(dst + A_BYTES, pb + o[2]);
+      cp16(dst + A_BYTES + 64 * BK, pb + o[3]);
+      if (++pkt < KT) {
 #pragma unroll
-      for (int i = 0; i < 4; i++) {
-        const int c = threadIdx.x + NT * i, b = c >= BM * 8, r = (c >> 3) & 127, ch = c & 7;
-        const int row = (b ? tn * BN : tm * BM) + r;
-        const int8_t* src = pkt < KT ? (b ? a.W : a.X) + (size_t)row * a.K + pkt * BK + ch * 16
-                                     : (b ? a.PB : a.PA) + (size_t)row * BK + ch * 16;
-        cp16(dst + b * A_BYTES + r * BK + ((ch ^ (r & 7)) << 4), src);
+        for (int i = 0; i < 4; i++) o[i] += BK;
+      } else if (pkt == KT) {
+        o[0] = ta, o[1] = ta + 64 * BK, o[2] = tb, o[3] = tb + 64 * BK;
+      } else {
+        pkt = 0, ptile += gridDim.x;
+        retarget();
       }
-      if (++pkt == steps) pkt = 0, ptile += gridDim.x;
     }
     cp_commit();
     if (++ps == NST) ps = 0;
