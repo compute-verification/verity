@@ -1057,7 +1057,8 @@ struct FirewallDraws {
 /// in one named way (the negative controls): `root` (its level-0 root), `witness` (set by the caller: the device proves another
 /// witness), `label` (a frame of the statement's skeleton), `opening` (a recomputed opening message), `algebra` (a masked
 /// value, in the frame and the proof alike: the relation check's case), `algebra-proof` (the proof alone) and `shape` (a
-/// value appended to the proof's `round1_ab`, past the ones the firewall compares).
+/// value appended to the proof's `round1_ab`, past the ones the firewall compares); `later-NAME` is `NAME` on every table but
+/// a several-table session's first.
 struct Firewall {
     st: Arc<Stmt>,
     lig: LigeritoProfile,
@@ -3016,8 +3017,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 (Some(r), l, s)
             };
             let firewalled = firewall_on(st);
-            if firewalled && tabs.list.len() != 1 {
-                return Err("FIREWALL-REFUSED: the firewall takes a one-table session".into());
+            if firewalled && tabs.list.len() != 1 && std::env::var("FC_FIREWALL_TRANSCRIPT").is_ok() {
+                return Err("FIREWALL-REFUSED: a firewall transcript records a one-table session".into());
             }
             // under the firewall its own salt context spans the table (`Firewall::new`)
             #[cfg(feature = "sha512")]
@@ -3039,12 +3040,22 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                         Some(z) => z[0].as_ref().expect("rep 0's pads").0.level0.clone(),
                         None => Arc::new(zk_level0.clone().expect("level 0's hiding")),
                     };
-                    Some(Arc::new(Mutex::new(Firewall::new(st, z.clone(), lig, &l0, salts, !plan.gpu))))
+                    let mut g = Firewall::new(st, z.clone(), lig, &l0, salts, !plan.gpu);
+                    if let Some(t) = g.tamper.strip_prefix("later-") {
+                        g.tamper = if j == 0 { String::new() } else { t.to_string() };
+                    }
+                    // a later table's root left in table 0's Commit (`level0_root`, the host's): the recheck must have it
+                    if let Some(r) = root0.as_ref().filter(|r| **r != g.root) {
+                        return Err(format!("FIREWALL-REFUSED: {}'s level-0 root: the session's Commit carried {} where the recheck has {}",
+                                           tb.name, hex(&r[..8]), hex(&g.root[..8])));
+                    }
+                    Some(Arc::new(Mutex::new(g)))
                 }
             };
             let t_level0 = t_level0 + if firewalled { tg.elapsed().as_secs_f64() } else { 0.0 };
             // FC_FIREWALL_TAMPER=witness: the device proves a witness one bit off the host's (its level-0 root is not the recheck's)
-            let wt_dev: Option<WitData> = (firewalled && std::env::var("FC_FIREWALL_TAMPER").as_deref() == Ok("witness")).then(|| match wt0.clone() {
+            let tampered = |t: &str| firewall.as_ref().is_some_and(|g| g.lock().unwrap_or_else(PoisonError::into_inner).tamper == t);
+            let wt_dev: Option<WitData> = tampered("witness").then(|| match wt0.clone() {
                 Some(WitData::Host((mut z, a, b, zl))) => {
                     z[0].lo ^= 1;
                     WitData::Host((z, a, b, zl))

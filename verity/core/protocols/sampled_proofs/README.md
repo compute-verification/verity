@@ -90,15 +90,22 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier of record.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
-  (`check`), `matches_public`, `check_draw`, `check_proved`, the whole audit record (`audit_record`), and the service's
-  public-items rule (`check_public`) and hold on an outcome's verdicts (`check_verdicts`). Its one line
+  (`check`), `matches_public`, the challenger's draw (`select`), `check_draw`, `check_proved`, the whole audit record
+  (`audit_record`), and the service's public-items rule (`check_public`) and hold on an outcome's verdicts
+  (`check_verdicts`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
   `benchmarks/one_stage` call it. The two are held to each other by
   `verity/core/service/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
   selection rule on (`SampledProofs/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
-  partitions; the `Stream` still draws in Python. `SampledProofs/Slots.lean` puts that draw in the claims' terms
+  partitions. It is the `Stream`'s draw of record: `Stream.select` hands it the bytes of the challenger's coins the
+  Python draw read, and refuses the draw (`disagree`) unless the Lean draws the same object from exactly those bytes.
+  The Lean also runs a registration whole, from the registration through the verdict (`SampledProofs/Run.lean`,
+  `verifier.run`): the public-items rule, R1-R7, the receipt, the draw from those bytes and its checks, under
+  `TwoStage` the interiors' registration after the draw and before the proof, the hold on the verdicts and the audit
+  records. `Stream.outcome` holds each outcome on a draw from the coins to it, and an outcome the two don't make alike
+  is a reject whose audit record fails `run`. `SampledProofs/Slots.lean` puts that draw in the claims' terms
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
@@ -137,9 +144,9 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
   - `check_public` is the public-items rule on a registration, and `check_verdicts` what an outcome holds the verdicts
     to before the audit record (the Python; a `Stream` runs each by the verifier of record, `verifier.check_public` and
     `verifier.check_verdicts`).
-  - `Stream(spec, unit, budget=, delta=, challenger=)` has the calls `register`, `select` (with a work sampling design's
-    `closure=`), `register_interiors` (under `TwoStage`), `deliver` and `outcome`, which raise `Refused` (with its
-    `Verdict`) or `Pending`.
+  - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
+    sampling design's `closure=`), `register_interiors` (under `TwoStage`), `session`, `deliver` and `outcome`, which
+    raise `Refused` (with its `Verdict`) or `Pending`.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
     challenger's coins (or a sampler) under the expanded design, with a work draw's closure: what `register` and
     `select` run.
@@ -409,7 +416,13 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   interiors is refused (`interior`), unless no RU was drawn or the proof is late. The outcome accepts only when both
   registrations' audit records accept, `session_roots` split between them by value, and its profile is the boundary's,
   the replay sampling design's over the RUs. Its refusals are `rule`, `not-drawn`, `final`, `delivered`,
-  `interior-registered`, `interior-empty` and `interior-population`, then the public-items rule's and R1 to R7's.
+  `interior-registered`, `interior-empty` and `interior-population` (a population other than the integer
+  `len(draw.proved)`), then the public-items rule's and R1 to R7's.
+- **Sessions over several rounds.** `Stream(rounds=R)` (R ≤ 4, 1 under `TwoStage`) holds up to R registrations open,
+  and `session(draws)` opens one proof session over consecutive rounds' draws after the last is drawn, the first's
+  `Check.proof_deadline` spanning it. Each draw's `outcome` is its own, its record naming the rounds (`session`).
+  C-Flock's verifier of record refuses such a session (`verity/ml/flock/verifier/PROTOCOL.md` §16.12). Refusals:
+  `Stream.session`.
 - **The salt and the registration deadline.** A stream runs one epoch with one salt. `salt(n=64)` issues it, `n` bytes
   of the challenger's coins (read in order with the draws'), and reads its release on the challenger's clock
   (`salted_at`). `salt_released(salt, released_at)` instead records a salt released elsewhere, such as PoUW's epoch
@@ -435,6 +448,7 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   verifier of record has run, and each verdict of record names the delivered sessions and reports the public outputs
   alike (`check_verdicts`: `pending`, `sessions`, `public`, by the verifier of record).
 - **The failure budget.** At its `budget`-th `reject` or `late` a stream stops, and it refuses registrations from then on.
+  It holds at most `budget` minus its failures open.
 - **The log's history.** A registration's checks don't read the whole log. As the log grows, a stream keeps where each
   window was logged and each registered value's first registration, and it counts its failures as they come. Each check
   gets the log's last record (R6's `previous`), the records whose window may equal the registration's (R6's window),
@@ -466,7 +480,7 @@ Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outc
 `test_a_two_stage_outcome_accepts_only_when_both_audits_do`, `test_a_work_draw_carries_its_closure_and_the_proof_proves_it`,
 `test_a_closure_widens_a_work_draw_only_and_stays_in_range`, `test_the_default_draw_is_draw_first_on_the_challengers_bytes`).
 What a registration reads of the log, and that its verdicts are the whole log's, is pinned by
-`tests/test_service_history.py`.
+`tests/test_service_history.py`, and sessions by `tests/test_service_sessions.py`.
 
 PoUW's example runs on a two-stage `Stream` in `tests/test_service_two_stage.py`, following the architecture note
 (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, §4.1): a uniform `subset:K′` over `N`
@@ -526,8 +540,13 @@ proof-unit draw after the interiors are.
   each of `2 k_s · width(n_s) + 64` bytes, extended by as many again and rerun whenever it runs out. The result is the
   one-stage draw object, which `draw.check_draw` holds to the registration and the sampling design; the verifier's
   closure map widens a work draw only, as `flock-verify draw --closure` does (`closure_of` is Lean's `closureOf`).
+- `select_replay_units` (a rate stage's `uniform(den) < num` per RU, a sampling design's `draw_first` over the class's
+  RUs) and `select_proof_units` (`subset(k, n_v)` of each drawn RU with `k < n_v`) are the sampled verifier's
+  `TwoStage.selectReplayUnits` and `TwoStage.selectProofUnits`, read from the same bytes in the same order and held to
+  the Python by the difftest's `replay_units` and `proof_units` pieces.
 - Nothing here derives a draw, the proof service's included (`service.Stream.select` is `draw_first` on the
-  challenger's coins, by `select_draw`; Lean's `Select.select` is the same draw, and reads the same bytes).
+  challenger's coins, by `select_draw`, and its draw of record is Lean's `Select.select` on the bytes it read, by
+  `verifier.select`).
   vLLM's legacy replay challenge derives its own (`verity_vllm.commit.challenge.replay_key`,
   under the domain `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
 
