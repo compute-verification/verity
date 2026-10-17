@@ -21,3 +21,10 @@ def test_load_bound_against_the_cap():
     """QSTAR's 6.0 / 3.5 B at κ = 32/7, and 5.3 / 3.0 B at the 8 one IMAD.WIDE reaches."""
     assert round(ic.load_bound(32 / 7, 128), 2) == 6.04 and round(ic.load_bound(32 / 7, 216), 2) == 3.53
     assert round(ic.load_bound(8, 128), 2) == 5.27 and round(ic.load_bound(8, 216), 2) == 3.04
+
+
+def test_table_route_prefers_loads_below_the_flip():
+    """The table route's saving per load falls with ALU creation below κ = 28/(1.877 − 1) and rises above it."""
+    for c_load in (128, 216, 108):
+        assert ic.table_eps(0.1, 8, c_load) < ic.table_eps(0, 8, c_load)
+        assert ic.table_eps(0.1, 33, c_load) > ic.table_eps(0, 33, c_load)

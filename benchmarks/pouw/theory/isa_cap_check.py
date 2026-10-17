@@ -69,6 +69,14 @@ def load_bound(cap, c_load, bytes_per_load=32):
     return bytes_per_load * (28 - 1.03 * cap) / (c_load - cap)
 
 
+def table_eps(a, cap, c_load, honest=1.877):
+    """SPEC's table route read as one route (D2): words at 1 + A + Ld slots and Ld = (28 − κA)/c_L loads, as many as the
+    level's bytes allow, each saving (honest − slots)/32. Up to the bandwidth and bytes a load, which scale it, this is
+    the saving per load; honest is VF3o-16's Dither-like threshold."""
+    ld = (28 - cap * a) / c_load
+    return (honest - 1 - a - ld) / ld
+
+
 def main() -> int:
     checks = Checks()
     checks.check("IMAD (r1 + 2^8 r2)·(u1 + 2^16 u2) + c writes 4 single-entry fields R[i]·U[j] in 8-bit slots of one "
@@ -103,6 +111,20 @@ def main() -> int:
                  abs(table["32/7"][0] - 6.04) < 0.01 and abs(table["32/7"][1] - 3.53) < 0.01
                  and 5.25 < table["8"][0] < 5.3 and 3.0 < table["8"][1] < 3.1 and table["27"][0] < 0.1,
                  "; ".join(f"κ = {k}: {a:.2f} / {b:.2f} B" for k, (a, b) in table.items()))
+    formats = (128, 216, 32, 108)
+
+    def best_a(cap, c_load):
+        a_max = min(28 / cap, (1.877 - 1 - 28 / c_load) / (1 - cap / c_load))
+        grid = np.linspace(0, a_max * (1 - 1e-9), 2001)
+        return grid[int(np.argmax([table_eps(a, cap, c_load) for a in grid]))]
+
+    flip = 28 / (1.877 - 1)
+    checks.check("SPEC's per-level table ε doesn't move with κ: read as one route, d(saving per load)/dA has the sign of "
+                 "κ(honest − 1) − 28 whatever c_L, so no ALU creation pays below κ = 28/0.877 ≈ 31.9; the best point "
+                 "stays at A = 0 at κ = 32/7, 5 and 8 on every format, and leaves it at κ = 33",
+                 all(best_a(cap, c) == 0 for cap in (32 / 7, 5, 8) for c in formats)
+                 and all(best_a(33, c) > 0 for c in (128, 216, 108)) and 31.8 < flip < 32,
+                 f"flip at κ = {flip:.2f}; best A at κ = 33: {[round(float(best_a(33, c)), 3) for c in (128, 216, 108)]}")
     if checks.mutations:
         checks.mutation("IMAD.WIDE.U32 (b read unsigned) breaks the high word's fields: the 6-field route needs the "
                         "signed form", not outer_imad(3, 2, 24, 64, signed=False))
