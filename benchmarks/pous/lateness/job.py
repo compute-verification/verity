@@ -5,7 +5,10 @@ on-node lower bound), from vy-nebius-cpu-1 and from vy-nebius-1 over the VPC (th
 Conditions: `quiet` (no load of ours; the node's other tenants as they are); `gemm` (back-to-back bf16 8192^3 GEMMs on
 both GPUs, and the job's other declared CPUs spinning or copying memory); `hbm` (`gemm` plus 2 GiB device-to-device
 copies); `pcie` (`hbm` plus 64 MiB pinned H2D and D2H copies, both directions at once); `pcie1m` (the same in 1 MiB
-copies); `vllm` (vLLM generation on the responder's GPU). The responder and the local challenger each hold a whole core
+copies); `vllm` (vLLM generation on the responder's GPU). Those loads run in processes of their own, so the GPU
+time-slices between their CUDA contexts and the responder's; `gemm-in`, `hbm-in` and `pcie-in` run the same GPU load
+inside the responder's process (one context, where stream priority orders the work), the second GPU's and the CPUs'
+load as before. The responder and the local challenger each hold a whole core
 of the job's cpuset that no load touches, and the load takes the job's declared CPU count less those four. Everything goes to $OUT: per cell `<cond>/<challenger>.bin|json`, the load
 reports, the responder's stats, the environment, and `summary.json`."""
 
@@ -39,6 +42,7 @@ OPS = {1: "gpu", 5: "gpu_sm", 2: "host", 3: "ping"}
 LOADS = {"gemm": ["gemm=8192"], "hbm": ["gemm=8192", "d2d_mib=2048"],
          "pcie": ["gemm=8192", "d2d_mib=2048", "pcie_mib=64", "pcie=both"],
          "pcie1m": ["gemm=8192", "d2d_mib=2048", "pcie_mib=1", "pcie=both"]}
+IN_PROCESS = {f"{k}-in": v for k, v in LOADS.items() if k in ("gemm", "hbm", "pcie")}
 
 
 def log(msg: str) -> None:
@@ -121,11 +125,15 @@ class Load:
         self.ready_file = os.path.join(scratch, f"ready-{cond}")
         half = len(cpus) // 2
         cpu_arg = ",".join(map(str, cpus))
+        hogs = [f"spin_cpus={','.join(map(str, cpus[:half]))}", f"mem_cpus={','.join(map(str, cpus[half:]))}"]
         if cond in LOADS:
             for dev in (0, 1):
-                hogs = [f"spin_cpus={','.join(map(str, cpus[:half]))}", f"mem_cpus={','.join(map(str, cpus[half:]))}"] if dev == 0 else []
-                self.spawn(["taskset", "-c", cpu_arg, lat, "load", f"device={dev}", *LOADS[cond], *hogs,
+                self.spawn(["taskset", "-c", cpu_arg, lat, "load", f"device={dev}", *LOADS[cond], *(hogs if dev == 0 else []),
                             f"report={celldir}/load-gpu{dev}.jsonl"], f"{celldir}/load-gpu{dev}.log")
+        elif cond in IN_PROCESS:
+            self.spawn(["taskset", "-c", cpu_arg, lat, "load", "device=1", *IN_PROCESS[cond], f"report={celldir}/load-gpu1.jsonl"],
+                       f"{celldir}/load-gpu1.log")
+            self.spawn(["taskset", "-c", cpu_arg, lat, "load", *hogs, f"report={celldir}/load-cpu.jsonl"], f"{celldir}/load-cpu.log")
         elif cond == "vllm":
             env = dict(os.environ, HF_HOME="/workspace/hf", HF_HUB_OFFLINE="1", CUDA_VISIBLE_DEVICES=os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0])
             self.spawn(["taskset", "-c", cpu_arg, VENV, os.path.join(HERE, "vllm_load.py"), MODEL, self.ready_file, self.stop_file,
@@ -216,20 +224,35 @@ def main() -> None:
     json.dump(env, open(os.path.join(out, "env.json"), "w"), indent=1)
     log(f"cpus: responder {resp_cpu}, challenger {chal_cpu}, load {load_cpus}")
 
-    ready = os.path.join(scratch, "ready")
     peers = [f"peer={dest.split('@')[1]}:{lport}" for dest, lport in REMOTES.values()]
-    responder = subprocess.Popen([lat, "serve", f"port={PORT}", f"cpu={resp_cpu}", f"ready={ready}",
-                                  f"stats={out}/responder-stats.json", *peers],
-                                 stdout=open(f"{out}/responder.log", "w"), stderr=subprocess.STDOUT, start_new_session=True)
-    while not os.path.exists(ready) or not open(ready).read().strip():
-        if responder.poll() is not None:
-            sys.exit(f"responder exited {responder.returncode}")
-        time.sleep(0.5)
-    log(f"responder up: {open(ready).read().strip()}")
 
+    def start_responder(args: list[str], tag: str) -> subprocess.Popen:
+        ready = os.path.join(scratch, f"ready-{tag}")
+        p = subprocess.Popen([lat, "serve", f"port={PORT}", f"cpu={resp_cpu}", f"ready={ready}",
+                              f"stats={out}/responder-stats-{tag}.json", *peers, *args],
+                             stdout=open(f"{out}/responder-{tag}.log", "w"), stderr=subprocess.STDOUT, start_new_session=True)
+        while not os.path.exists(ready) or not open(ready).read().strip():
+            if p.poll() is not None:
+                sys.exit(f"responder exited {p.returncode}")
+            time.sleep(0.5)
+        log(f"responder {tag} up: {open(ready).read().strip()} {' '.join(args)}")
+        return p
+
+    def stop_responder(p: subprocess.Popen) -> None:
+        os.killpg(p.pid, signal.SIGTERM)
+        p.wait(60)
+
+    resp_args: list[str] = []
+    responder = start_responder(resp_args, "plain")
     summary: dict = {"env": env, "cells": {}}
     try:
         for cond in ns.conditions.split(","):
+            want = IN_PROCESS.get(cond, [])
+            if want != resp_args:
+                stop_responder(responder)
+                resp_args = want
+                responder = start_responder(resp_args, cond)
+                time.sleep(5)
             celldir = os.path.join(out, cond)
             os.makedirs(celldir, exist_ok=True)
             log(f"{cond}: start load")
@@ -266,8 +289,7 @@ def main() -> None:
             cells["load_rc"] = load.stop()
             json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=1)
     finally:
-        os.killpg(responder.pid, signal.SIGTERM)
-        responder.wait(30)
+        stop_responder(responder)
         json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=1)
         subprocess.run(["rm", "-rf", scratch])
     log("done")

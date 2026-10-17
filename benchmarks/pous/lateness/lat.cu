@@ -274,6 +274,96 @@ __global__ void fill_bf16(__nv_bfloat16* p, size_t n, uint32_t seed) {
 }
 #endif
 
+// ------------------------------------------------------------------------------------------------------------- GPU load
+
+struct GpuLoad {
+  std::atomic<uint64_t> flops{0}, d2d{0}, h2d{0}, d2h{0};
+  std::vector<std::thread> threads;
+};
+
+#ifdef __CUDACC__
+// Keeps two of `enqueue`'s operations in flight on `s` until g_stop, adding `per` to `counter` for each completed.
+template <class F>
+static void looped(std::atomic<uint64_t>& counter, uint64_t per, F&& enqueue, cudaStream_t s) {
+  cudaEvent_t ev[2];
+  for (auto& e : ev) CK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming | cudaEventBlockingSync));
+  for (uint64_t i = 0; !g_stop; i++) {
+    enqueue();
+    CK(cudaEventRecord(ev[i & 1], s));
+    if (i) {
+      CK(cudaEventSynchronize(ev[(i + 1) & 1]));
+      counter += per;
+    }
+  }
+  CK(cudaStreamSynchronize(s));
+}
+#endif
+
+// bf16 GEMMs (gemm=N, N^3), device-to-device copies (d2d_mib=M) and pinned H2D/D2H copies (pcie_mib=P, pcie=both|h2d|d2h)
+// on device `dev`, each on its own default-priority stream and thread, until g_stop.
+static void start_gpu_load(const Args& a, int dev, GpuLoad& L) {
+#ifdef __CUDACC__
+  const int gemm = int(a.i("gemm", 0));
+  const size_t d2d_bytes = size_t(a.i("d2d_mib", 0)) << 20, pcie_bytes = size_t(a.i("pcie_mib", 0)) << 20;
+  const std::string pcie = a.s("pcie", "both");
+  if (gemm > 0)
+    L.threads.emplace_back([=, &L] {
+      CK(cudaSetDevice(dev));
+      cudaStream_t s;
+      CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
+      __nv_bfloat16 *A, *B, *C;
+      const size_t n2 = size_t(gemm) * gemm;
+      CK(cudaMalloc(&A, n2 * 2));
+      CK(cudaMalloc(&B, n2 * 2));
+      CK(cudaMalloc(&C, n2 * 2));
+      fill_bf16<<<1024, 256, 0, s>>>(A, n2, 1);
+      fill_bf16<<<1024, 256, 0, s>>>(B, n2, 2);
+      cublasHandle_t h;
+      cublasCreate(&h);
+      cublasSetStream(h, s);
+      const float alpha = 1.0f, beta = 0.0f;
+      looped(L.flops, 2ull * gemm * gemm * gemm, [&] {
+        cublasStatus_t st = cublasGemmEx(h, CUBLAS_OP_N, CUBLAS_OP_N, gemm, gemm, gemm, &alpha, A, CUDA_R_16BF, gemm, B,
+                                         CUDA_R_16BF, gemm, &beta, C, CUDA_R_16BF, gemm, CUBLAS_COMPUTE_32F,
+                                         CUBLAS_GEMM_DEFAULT);
+        if (st != CUBLAS_STATUS_SUCCESS) {
+          fprintf(stderr, "cublasGemmEx: %d\n", int(st));
+          exit(3);
+        }
+      }, s);
+      cublasDestroy(h);
+    });
+  if (d2d_bytes)
+    L.threads.emplace_back([=, &L] {
+      CK(cudaSetDevice(dev));
+      cudaStream_t s;
+      CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
+      uint8_t *x, *y;
+      CK(cudaMalloc(&x, d2d_bytes));
+      CK(cudaMalloc(&y, d2d_bytes));
+      looped(L.d2d, 2 * d2d_bytes, [&] { CK(cudaMemcpyAsync(y, x, d2d_bytes, cudaMemcpyDeviceToDevice, s)); }, s);
+    });
+  for (int dir = 0; dir < 2 && pcie_bytes; dir++) {
+    if ((dir == 0 && pcie == "d2h") || (dir == 1 && pcie == "h2d")) continue;
+    L.threads.emplace_back([=, &L] {
+      CK(cudaSetDevice(dev));
+      cudaStream_t s;
+      CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
+      uint8_t *hbuf, *dbuf;
+      CK(cudaHostAlloc(&hbuf, pcie_bytes, cudaHostAllocDefault));
+      memset(hbuf, 1, pcie_bytes);
+      CK(cudaMalloc(&dbuf, pcie_bytes));
+      if (dir == 0)
+        looped(L.h2d, pcie_bytes, [&] { CK(cudaMemcpyAsync(dbuf, hbuf, pcie_bytes, cudaMemcpyHostToDevice, s)); }, s);
+      else
+        looped(L.d2h, pcie_bytes, [&] { CK(cudaMemcpyAsync(hbuf, dbuf, pcie_bytes, cudaMemcpyDeviceToHost, s)); }, s);
+    });
+  }
+#else
+  (void)a, (void)dev, (void)L;
+#endif
+}
+
 // ---------------------------------------------------------------------------------------------------------------- serve
 
 static int serve(const Args& a) {
@@ -322,6 +412,10 @@ static int serve(const Args& a) {
 #else
   const bool on_gpu = false;
 #endif
+  // A load in this process shares the responder's CUDA context, so stream priority, not time slicing, orders them.
+  GpuLoad inload;
+  start_gpu_load(a, 0, inload);
+  const double load_t0 = wall_s();
   // Pinned only now, so the threads the CUDA runtime started keep the process's CPUs; then moved off ours.
   const int cpu = pin(a.s("cpu", "none"));
   const int moved = isolate(cpu, allowed);
@@ -420,6 +514,8 @@ static int serve(const Args& a) {
     max_server[req.op] = std::max<uint64_t>(max_server[req.op], server);
     max_device = std::max<uint64_t>(max_device, device);
   }
+  for (auto& t : inload.threads) t.join();
+  const double load_s = wall_s() - load_t0;
   rusage ru;
   getrusage(RUSAGE_THREAD, &ru);
   std::ofstream st(a.s("stats", "/dev/stdout"));
@@ -431,7 +527,9 @@ static int serve(const Args& a) {
      << ", \"gpu_sm\": " << max_server[OP_GPU_SM] << ", \"host\": " << max_server[OP_HOST] << ", \"ping\": "
      << max_server[OP_PING] << "}, \"max_device_ns\": " << max_device
      << ", \"requests_after_preemption\": " << preempted << ", \"nivcsw\": " << ru.ru_nivcsw
-     << ", \"nvcsw\": " << ru.ru_nvcsw << "}\n";
+     << ", \"nvcsw\": " << ru.ru_nvcsw << ", \"in_process_load\": {\"seconds\": " << load_s << ", \"gemm_tflops\": "
+     << inload.flops / load_s / 1e12 << ", \"d2d_hbm_gbps\": " << inload.d2d / load_s / 1e9 << ", \"h2d_gbps\": "
+     << inload.h2d / load_s / 1e9 << ", \"d2h_gbps\": " << inload.d2h / load_s / 1e9 << "}}\n";
   return 0;
 }
 
@@ -627,80 +725,8 @@ static int load(const Args& a) {
       }
     });
 
-  std::atomic<uint64_t> flops{0}, d2d{0}, h2d{0}, d2h{0};
-#ifdef __CUDACC__
-  const int dev = int(a.i("device", 0));
-  const int gemm = int(a.i("gemm", 0));
-  const size_t d2d_bytes = size_t(a.i("d2d_mib", 0)) << 20, pcie_bytes = size_t(a.i("pcie_mib", 0)) << 20;
-  const std::string pcie = a.s("pcie", "both");
-  CK(cudaSetDevice(dev));
-  auto looped = [&](std::atomic<uint64_t>& counter, uint64_t per, auto&& enqueue, cudaStream_t s) {
-    cudaEvent_t ev[2];
-    for (auto& e : ev) CK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming | cudaEventBlockingSync));
-    for (uint64_t i = 0; !g_stop; i++) {
-      enqueue();
-      CK(cudaEventRecord(ev[i & 1], s));
-      if (i) {
-        CK(cudaEventSynchronize(ev[(i + 1) & 1]));
-        counter += per;
-      }
-    }
-    CK(cudaStreamSynchronize(s));
-  };
-  if (gemm > 0)
-    threads.emplace_back([&] {
-      CK(cudaSetDevice(dev));
-      cudaStream_t s;
-      CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
-      __nv_bfloat16 *A, *B, *C;
-      const size_t n2 = size_t(gemm) * gemm;
-      CK(cudaMalloc(&A, n2 * 2));
-      CK(cudaMalloc(&B, n2 * 2));
-      CK(cudaMalloc(&C, n2 * 2));
-      fill_bf16<<<1024, 256, 0, s>>>(A, n2, 1);
-      fill_bf16<<<1024, 256, 0, s>>>(B, n2, 2);
-      cublasHandle_t h;
-      cublasCreate(&h);
-      cublasSetStream(h, s);
-      const float alpha = 1.0f, beta = 0.0f;
-      looped(flops, 2ull * gemm * gemm * gemm, [&] {
-        cublasStatus_t st = cublasGemmEx(h, CUBLAS_OP_N, CUBLAS_OP_N, gemm, gemm, gemm, &alpha, A, CUDA_R_16BF, gemm, B,
-                                         CUDA_R_16BF, gemm, &beta, C, CUDA_R_16BF, gemm, CUBLAS_COMPUTE_32F,
-                                         CUBLAS_GEMM_DEFAULT);
-        if (st != CUBLAS_STATUS_SUCCESS) {
-          fprintf(stderr, "cublasGemmEx: %d\n", int(st));
-          exit(3);
-        }
-      }, s);
-      cublasDestroy(h);
-    });
-  if (d2d_bytes)
-    threads.emplace_back([&] {
-      CK(cudaSetDevice(dev));
-      cudaStream_t s;
-      CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
-      uint8_t *x, *y;
-      CK(cudaMalloc(&x, d2d_bytes));
-      CK(cudaMalloc(&y, d2d_bytes));
-      looped(d2d, 2 * d2d_bytes, [&] { CK(cudaMemcpyAsync(y, x, d2d_bytes, cudaMemcpyDeviceToDevice, s)); }, s);
-    });
-  for (int dir = 0; dir < 2 && pcie_bytes; dir++) {
-    if ((dir == 0 && pcie == "d2h") || (dir == 1 && pcie == "h2d")) continue;
-    threads.emplace_back([&, dir] {
-      CK(cudaSetDevice(dev));
-      cudaStream_t s;
-      CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
-      uint8_t *hbuf, *dbuf;
-      CK(cudaHostAlloc(&hbuf, pcie_bytes, cudaHostAllocDefault));
-      memset(hbuf, 1, pcie_bytes);
-      CK(cudaMalloc(&dbuf, pcie_bytes));
-      if (dir == 0)
-        looped(h2d, pcie_bytes, [&] { CK(cudaMemcpyAsync(dbuf, hbuf, pcie_bytes, cudaMemcpyHostToDevice, s)); }, s);
-      else
-        looped(d2h, pcie_bytes, [&] { CK(cudaMemcpyAsync(hbuf, dbuf, pcie_bytes, cudaMemcpyDeviceToHost, s)); }, s);
-    });
-  }
-#endif
+  GpuLoad gl;
+  start_gpu_load(a, int(a.i("device", 0)), gl);
 
   const long long seconds = a.i("seconds", 0);
   std::ofstream rep(a.s("report", "/dev/stdout"));
@@ -710,7 +736,7 @@ static int load(const Args& a) {
   while (!g_stop && (seconds <= 0 || wall_s() - t0 < seconds)) {
     usleep(1000000);
     const double t = wall_s(), dt = t - tp;
-    const uint64_t c[6] = {flops.load(), d2d.load(), h2d.load(), d2h.load(), spun.load(), copied.load()};
+    const uint64_t c[6] = {gl.flops.load(), gl.d2d.load(), gl.h2d.load(), gl.d2h.load(), spun.load(), copied.load()};
     rep << "{\"t\": " << std::fixed << t << ", \"gemm_tflops\": " << (c[0] - p[0]) / dt / 1e12
         << ", \"d2d_hbm_gbps\": " << (c[1] - p[1]) / dt / 1e9 << ", \"h2d_gbps\": " << (c[2] - p[2]) / dt / 1e9
         << ", \"d2h_gbps\": " << (c[3] - p[3]) / dt / 1e9 << ", \"spin_gloops\": " << (c[4] - p[4]) * double(1 << 20) / dt / 1e9
@@ -720,6 +746,7 @@ static int load(const Args& a) {
   }
   g_stop = 1;
   for (auto& t : threads) t.join();
+  for (auto& t : gl.threads) t.join();
   return 0;
 }
 
