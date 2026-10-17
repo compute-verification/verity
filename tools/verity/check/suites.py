@@ -1563,6 +1563,19 @@ class Slots:
                 self.cond.notify_all()
 
 
+#: the memory a check slot gives the run it holds (`tools/verity/check/slot.py`'s SLOT_MEM_ENV)
+SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+#: after a stop's SIGINT, how long a suite's process group has to end before it is killed
+STOP_GRACE_S = 30.0
+
+
+def slot_mem_gb() -> float | None:
+    """The check slot's memory, when this runs in one (17 Oct: a quick tier in proofs' 480 GB pool slot ran circuit_check's suite
+    on 94 workers, 784 GB, since only `check` passed `--mem-gb`)."""
+    v = os.environ.get(SLOT_MEM_ENV, "")
+    return float(v) if v.replace(".", "", 1).isdigit() else None
+
+
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
     """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
     at `TEST_PROCESS_GB` (16 Oct: verity_core_protocols_pous_check's undeclared workers reached 11 GB each)."""
@@ -1658,8 +1671,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", "-j", type=int, default=default_jobs(),
                     help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use, "
                          f"at most one per {TEST_PROCESS_GB} GB of available memory)")
-    ap.add_argument("--mem-gb", type=float, default=None, metavar="GB",
-                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB undeclared)")
+    ap.add_argument("--mem-gb", type=float, default=slot_mem_gb(), metavar="GB",
+                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB "
+                         f"undeclared; default: the check slot's ${SLOT_MEM_ENV}, so a quick tier in a slot stays inside it)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
     ap.add_argument("--run", metavar="RUN", help="the recorded run this is (check passes its own): kept with each pass, so a reuse of it "
@@ -1876,6 +1890,15 @@ def main(argv: list[str] | None = None) -> int:
             with _GROUPS_LOCK:
                 for g in list(_GROUPS):
                     kill_group(g, signal.SIGINT)
+
+            def kill_rest() -> None:                        # a pytest that ignores SIGINT (a node short of memory) would hold
+                with _GROUPS_LOCK:                          # the stop until its run ended (17 Oct, cpu-2: 94 workers)
+                    for g in list(_GROUPS):
+                        kill_group(g, signal.SIGKILL)
+
+            stop = threading.Timer(STOP_GRACE_S, kill_rest)
+            stop.daemon = True
+            stop.start()
             for fut in futures:
                 if fut not in handled:
                     finish(fut)
