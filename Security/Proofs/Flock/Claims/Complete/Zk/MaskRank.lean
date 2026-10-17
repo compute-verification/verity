@@ -321,14 +321,22 @@ def claimsAt (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n : ℕ) : Array 
 def MaskRankAt (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n₀ n₁ : ℕ) : Prop :=
   maskRankOk (claimsAt st r n₀ ++ claimsAt st r n₁) (maskWordsOf st) = true
 
+/-- **What the rank bound reads of a table**, which every table of a masked session in scope has
+(`layoutOk_of_scope`): it passes `Zk.shapeOk` (`25 ≤ m ≤ 35`, a mask slot of `N ≥ 576` words), its `m` is
+`k_log + nbl`, and its mask slot is at least a word and inside the block. -/
+def LayoutOk (st : Flock.Stmt) : Prop :=
+  Flock.Zk.shapeOk st = .ok () ∧ st.m = st.c.kLog + st.nbl ∧
+    ∀ r ∈ st.c.ranges.toList, r.kind = Flock.Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog
+
+/-- **The rank bound at one table**: where rep `1`'s coins come after rep `0`'s claim points, the coins at which its
+rank checks refuse have probability at most `4·m/2^128`. -/
+def RankBoundAt (st : Flock.Stmt) : Prop :=
+  ∀ k n₀ n₁ : ℕ, n₀ + (st.m + st.c.kLog) ≤ n₁ →
+    Claims.Pr (fun r : Fin k → Coin => n₁ + (st.m + st.c.kLog) ≤ k ∧ ¬ MaskRankAt st r n₀ n₁) ≤ 4 * st.m / 2 ^ 128
+
 /-- **The rank bound at the verifier's coins** (open: `DeployedRankBound`'s argument at every table the `--zk` setup
-admits, not yet in Lean): at each table of a masked session that sets up, where rep `1`'s coins come after rep `0`'s
-claim points, the coins at which its rank checks refuse have probability at most `4·m/2^128`. -/
-def MaskRankBound : Prop :=
-  ∀ (x : Claims.Msg) (s : Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
-    setupOf true x = some (s, spec, sts) → ∀ st ∈ sts, ∀ k n₀ n₁ : ℕ, n₀ + (st.m + st.c.kLog) ≤ n₁ →
-      Claims.Pr (fun r : Fin k → Coin => n₁ + (st.m + st.c.kLog) ≤ k ∧ ¬ MaskRankAt st r n₀ n₁) ≤
-        4 * st.m / 2 ^ 128
+admits, not yet in Lean): `RankBoundAt` at every table of the layout the setup admits. -/
+def MaskRankBound : Prop := ∀ st : Flock.Stmt, LayoutOk st → RankBoundAt st
 
 /-! ## The slot's size -/
 
