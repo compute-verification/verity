@@ -403,9 +403,9 @@ def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
     """EPS1 DC's H200 and B200: duo binds the floor program on each one's joint ALU facet at L = 32. On sm_90 a wgmma
     takes 62.77 SMSP-cycles of that facet and 62.74 of issue, so lane words save time at every q* (no threshold) and
     ε_machine is 4% at q* = 2.03; on sm_100 a tcgen05.mma takes 1.09 of issue, so on lanes only dp4a's 8 IMAD bound q*.
-    The uniform datapath (UP, and an issue slot a uniform instruction: DC r4) takes 0.56% of the B200's words off
-    JPA100_0 at q* = 2.03, so it has no threshold either; on the H200 JI90_0 charges a uniform instruction as any other,
-    which closes it. At L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit
+    The uniform datapath (UP, and 0.92 of an issue slot a uniform instruction, its price beside an issue-saturated
+    stream: DC r5) takes 0.60% of the B200's words off JPA100_0 at q* = 2.03, so it has no threshold either; on the
+    H200 JI90_0 charges a uniform instruction 0.96, which closes it. At L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit
     spacing's cost."""
     sm90, sm100 = DEVICES / "sm_90", DEVICES / "sm_100"
     assert E.designs(sm90) == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
@@ -421,8 +421,8 @@ def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
     assert s.as_built.binding == ("JPA100_0",) and E.threshold(s, uniform=False) == pytest.approx(8, abs=1e-4)
     assert p100.load(s.as_built.n)["TM100_0"] * 32768 == pytest.approx(19.911599 + 32 * 16.5392944, rel=1e-6)
     assert s.machine_eps(2.03, uniform=False) < 0.001
-    assert E.threshold(s) is None and s.cheat(2.03).words["uniform"] == pytest.approx(0.0056, abs=1e-4)
-    assert s.machine_eps(2.03) == pytest.approx(0.00525, abs=1e-4)
+    assert E.threshold(s) is None and s.cheat(2.03).words["uniform"] == pytest.approx(0.0060, abs=1e-4)
+    assert s.machine_eps(2.03) == pytest.approx(0.00570, abs=1e-4)
     far = E.setup(E.design("dither-2s-l256", sm100), p100, sm100, "floor", "floor")
     assert far.as_built.binding == ("JPA100_1",) and far.machine_eps(2.03) > 0.2
 
