@@ -104,6 +104,7 @@ def plot(rs: list[dict], png: str) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.ticker import FixedLocator, FormatStrFormatter, NullFormatter
 
     pts = points(rs)
     colors = {"act": "tab:blue", "q": "tab:blue", "w": "tab:orange", "k": "tab:orange", "both": "tab:green"}
@@ -112,12 +113,11 @@ def plot(rs: list[dict], png: str) -> None:
         rec = [r for r in rs if (r["model"], r["set"], r["ctx"]) == pt and r["linears"] == "record"]
         for i, (row, title, sides) in enumerate(ROWS):
             ax = axes[i][j]
-            drawn = False
+            drawn = any(series(rs, pt, row, side) for side, _ in sides if side != "both")
             for n, (side, label) in enumerate(sides):
                 s = series(rs, pt, row, side)
-                if not s:
+                if not s or not drawn:
                     continue
-                drawn = True
                 xs, ys = [r["b"] + 0.06 * (n - 1) for r in s], [r["inc"] for r in s]
                 err = [[r["inc"] - r["inc_min"] for r in s], [r["inc_max"] - r["inc"] for r in s]]
                 ax.errorbar(xs, ys, yerr=err, marker="o", capsize=3, color=colors[side], label=label)
@@ -128,7 +128,7 @@ def plot(rs: list[dict], png: str) -> None:
                             yerr=[[r["inc"] - r["inc_min"] for r in one], [r["inc_max"] - r["inc"] for r in one]],
                             marker="s", capsize=3, color="tab:purple", linestyle="--",
                             label="one-sided everywhere (activations, K), no U")
-            if rec:
+            if rec and drawn:
                 r = rec[0]
                 ax.errorbar([1.18], [r["inc"]], yerr=[[r["inc"] - r["inc_min"]], [r["inc_max"] - r["inc"]]],
                             marker="*", markersize=11, capsize=3, color="black", linestyle="none",
@@ -143,6 +143,9 @@ def plot(rs: list[dict], png: str) -> None:
             hi = max(r["inc_max"] for r in rs if (r["model"], r["set"], r["ctx"]) == pt)
             if lo > 0 and hi / lo > 10:
                 ax.set_yscale("log")
+                ax.yaxis.set_major_locator(FixedLocator([0.2, 0.5, 1, 2, 5, 10, 20, 50, 100]))
+                ax.yaxis.set_major_formatter(FormatStrFormatter("%g"))
+                ax.yaxis.set_minor_formatter(NullFormatter())
             ax.set_xticks([1, 2, 3, 4])
             ax.set_xlim(0.7, 4.3)
             ax.grid(alpha=0.3)
