@@ -10,7 +10,8 @@ doesn't exist yet. What runs today, and what the ZK point (``job.sh ZK=1``, ``zk
 - the firewall's send check (``FC_FIREWALL=1``, PROTOCOL §10; its contract ``verity/core/service/flock/Flock/Firewall``):
   the level-0 recheck under its own salts, the statement's skeleton, the shadow opening and the end check, in the prover's
   own process on its host threads. That is the ZK server's work today (the draft's §3), so the server's CPU is the prover
-  process's CPU with the firewall on less the same sessions' with it off.
+  process's CPU with the firewall on less the same sessions' with it off. The firewall rechecks a witness the host assembled
+  (``FC_HOST_WITNESS=1``, PROTOCOL §10.2), so both arms take the host's witness.
 
 Each field names its source: ``config1`` is configuration 1 at the same B, ``stand-in`` the ZK point above.
 """
@@ -27,7 +28,8 @@ FIELDS: tuple[tuple[str, str, str, str], ...] = (
      "the worker's inner proof is configuration 1's prover at best B; the unmasked outer arithmetic is not built, so this "
      "is an upper bound"),
     ("zk_server.cpu_s_per_session", "s", "stand-in",
-     "prover.cpu_s_per_session with FC_FIREWALL=1 less with FC_FIREWALL=0, both --zk at the same B: the firewall's send check"),
+     "prover.cpu_s_per_session with FC_FIREWALL=1 less with FC_FIREWALL=0, both --zk on the host's witness at the same B: "
+     "the firewall's send check"),
     ("zk_server.cpu_s_per_vu", "s", "stand-in", "zk_server.cpu_s_per_session / B"),
     ("net.bytes_worker_to_server", "B", "stand-in",
      "the --zk session's prover-to-verifier bytes (net.bytes_out): the outer messages the worker would hand the server"),
@@ -37,7 +39,8 @@ FIELDS: tuple[tuple[str, str, str, str], ...] = (
 )
 
 STANDIN = ("today's --zk path with the firewall's send check in the prover's process (FC_FIREWALL=1), not the worker/server "
-           "split: the masks and salts are the prover host's, the firewall checks the device's values on the same node")
+           "split: the masks and salts are the prover host's, the witness is the host's (FC_HOST_WITNESS=1), the firewall "
+           "checks the device's values on the same node")
 
 
 def describe() -> str:

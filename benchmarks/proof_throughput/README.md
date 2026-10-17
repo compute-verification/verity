@@ -117,7 +117,8 @@ labelled so in its result (`proof-throughput/zk-standin/v1`): `job.sh ZK=1` prov
 contract `verity/core/service/flock/Flock/Firewall`), which runs in the prover's process on its host threads, and
 `zk-point` writes the result: the prover process's CPU seconds per session, the firewall's recheck and shadow-opening
 times, the session's bytes out and its released proof. The ZK server's CPU per session is that CPU with `FC_FIREWALL=1`
-less the same point's with `FC_FIREWALL=0`. `zk` prints each field and its source.
+less the same point's with `FC_FIREWALL=0`. The firewall rechecks a witness the host assembled (`FC_HOST_WITNESS=1`,
+§10.2), so `ZK=1` sets it in both arms. `zk` prints each field and its source.
 
 ## Placement
 
