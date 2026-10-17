@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -64,6 +65,17 @@ def test_extend_pushes_the_expiry_and_never_shortens_it(tmp_path):
     assert lease_sh({**env, "LEASE_NOW": str(NOW + 7200)}, "extend", "600", "run-r1").stdout.split()[::2] == [str(NOW + 7800), "run-r1"]
     assert lease_sh(env, "show").stdout.startswith(f"{NOW + 7800} ")
     assert lease_sh(env, "extend", "1.5", "x").returncode == 2
+
+
+def test_pods_extend_runs_lease_sh_in_the_machines_own_lease_dir(tmp_path):
+    env = lease_env(tmp_path, LEASE_NOW=str(NOW))
+    Path(env["LEASE_DIR"]).mkdir()
+    (Path(env["LEASE_DIR"]) / "lease.sh").write_bytes(L.LEASE_SH.read_bytes())
+    over_ssh = lambda argv: subprocess.run(["sh", "-c", " ".join(shlex.quote(a) for a in argv)], env=env, capture_output=True, text=True)
+    assert over_ssh(L.remote_argv("extend", "3600", "lane")).stdout.split()[::2] == [str(NOW + 3600), "lane"]
+    assert over_ssh(L.remote_argv("show")).stdout.startswith(f"{NOW + 3600} ")
+    del env["LEASE_DIR"]
+    assert "/root/.research/lease.sh" in over_ssh(L.remote_argv("show")).stderr, "a RunPod pod has no LEASE_DIR: the default path"
 
 
 def test_the_loop_ends_the_pod_only_after_the_expiry_and_its_grace(tmp_path):
