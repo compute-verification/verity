@@ -190,6 +190,19 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "
           "which sketches cost less to read than the blocks themselves, such as a table of precomputed sketches, is "
           "outside it", "Rate sketch store as blocks"),
+    # what lets the stacking guarantees treat a programmed store (blocks written after the seed) as uniform for each
+    # choice of its writers, the choices charged as advice: `Accounting.Assumptions.KeyBinding`
+    # (Security/Models/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
+    # encoding (verity/core/protocols/remote_bandwidth/tests/test_key_binding.py)
+    Entry("key-binding", "assumption",
+          "Key binding: for each choice of its writers, a store whose blocks written after the seed are encoded "
+          "with tweaks bound to their payloads' digests, b_j = H(seed || j || d_j), is within delta of a uniform "
+          "store on every event; in the ideal model a round is a random function on pairs {x, p - x} "
+          "(rho(p - x) = p - rho(x), its output's parity its input's Legendre symbol), so a bound block's encoding "
+          "is uniform given its key, tweak and payload, and delta is at most the writers' SHA-512 searches over "
+          "2^512, the chance that two round inputs agree up to sign, and the words' values at or above p; what the "
+          "writers choose by looking at encodings is advice, charged by the guarantees, not covered here",
+          "Key binding", "conjectured"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
