@@ -38,6 +38,7 @@ import Proofs.Flock.Claims.KS.LevelZeroAcc
 import Proofs.Flock.Claims.KS.OffSC
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
+import Proofs.Flock.Claims.KS.ZkDrawJ
 import Proofs.Flock.Claims.KS.ZkDecJ
 import Proofs.Flock.Claims.KS.ZkXferJ
 import Proofs.Flock.Claims.KS.ZkSessionSC
@@ -163,14 +164,20 @@ column it was given there, so an output whose level-0 openings verify and are th
 `C` without a self-clash only where the reader looks up a column off `C` (`OffSC`:
 `Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`). Where `verify --zk` sets its session
 up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`:
-`FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), so at the empty draw the deployed `--zk` decoders
-are right at them (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`); so are the hidden-output
-plan's and decoders (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`,
-`FlockDeploy.KS.decodesTableH_zkTabs`). So at every masked statement in scope that `Deploy.V` sets up at a draw, which
-every statement some run accepts carries (`FlockDeploy.KS.acc_draw`), the deployed decoders are right at `zkTabs`
-(`ZkDecJ`: `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. The masked
-session's bound reads its level-0 term only on runs that do not self-clash, a self-clash being in `ε_c⁻` already
-(`ZkSessionSC`: `FlockSoundness.Discharge.ZkLink.bad_pointwise_ofZ_sc`,
+`FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`:
+`FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's draw to the
+statement's only up to key order, so the old discharge is read at the setup at the statement's draw, which reads no draw
+in the record, with a writer that records the live session there (`ZkDrawJ`:
+`FlockSoundness.Discharge.Composed.AcceptsAt`, `FlockSoundness.Discharge.Composed.runsAtZCJ_live`,
+`FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`, `Claims.Bridge.Custody.wrS`,
+`Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted there
+(`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty draw the deployed `--zk` decoders are right at `zkTabs` at
+public and hidden outputs (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`,
+`FlockDeploy.KS.decodesTableH_zkTabs`), and so at every masked statement in scope that `Deploy.V` sets up at a draw,
+which every statement some run accepts carries (`FlockDeploy.KS.acc_draw`; `ZkDecJ`:
+`FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. The masked session's bound
+reads its level-0 term only on runs that do not self-clash, a self-clash being in `ε_c⁻` already (`ZkSessionSC`:
+`FlockSoundness.Discharge.ZkLink.bad_pointwise_ofZ_sc`,
 `FlockSoundness.Discharge.ZkLink.session_sound_of_table_accZ_sc`), so the masked and live sessions' verdicts need table
 `j` accepted with no opening off `C` only unless it self-clashes (`FlockDeploy.KS.ZkSessJ`, `FlockDeploy.KS.ZkLiveAtJ`,
 `FlockDeploy.KS.ZkLiveAccAtJ`). Read with the live outcomes whose decoded table `j` has no opening off `C` without a

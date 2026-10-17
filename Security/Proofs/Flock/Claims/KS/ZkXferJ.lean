@@ -12,8 +12,8 @@ which chooses no decoder (`ZkXferJ`):
 * `decodesTable_at`: a decoder right at `ok` on `pL` is right at `ok` and `Q` at table `j₀` on the live outcomes of
   `pL` whose table `j₀` reps play, on the decoded tapes, only to outputs of `Q`.
 * `OffNoClashZ`, `AccOffJ`, `OkOffJ`, `decodesOff_deploy`: an opening off `C` without a self-clash, the live outcomes
-  `verify --zk` accepts at `wrD` whose decoded table `j` has none, the verdict `accepted` with none at table `j`, and
-  the deployed decoders right there.
+  `verify --zk` accepts at the setup at the statement's draw at `wrS` whose decoded table `j` has none, the verdict
+  `accepted` with none at table `j`, and the deployed decoders right there.
 * `ZkXferJ`, `zkLiveAccJ_of_xferJ`, `zk_KS_of_xferJ`: the live sessions' bound at the deployed decoders gives
   `ZkLiveAccJ` where some run accepts, so `Flock.KS` at the deployed masked record follows from it and `ExtendJ`.
 -/
@@ -56,14 +56,14 @@ def OffNoClashZ {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK �
   Off₀Z Hs T cap₀ C o ∧ ¬ SelfClashZ Hs T o
 
 /-- **The deployed live verdict, with no opening off `C` at table `j` unless it self-clashes**: `verify --zk` accepts
-at `wrD` of the draw `d`, and every output table `j`'s reps play to on the tapes `decD` decodes, at the openings `opnD`
-and the cap of the outcome's `root_B[j]`, has no level-0 opening off `C` at the cap of `rootB₀[j]` without a
-self-clash (`OffNoClashZ`). -/
+at the setup at the draw `d` at `wrS` (`AcceptsAt`, which an accepting run of `Deploy.V` gives with no premise on its
+record's draw: `acceptsAt_wrS`), and every output table `j`'s reps play to on the tapes `decD` decodes, at the
+openings `opnD` and the cap of the outcome's `root_B[j]`, has no level-0 opening off `C` at the cap of `rootB₀[j]`
+without a self-clash (`OffNoClashZ`). -/
 def AccOffJ (I : Exec.Inputs) (sts : Array Stmt) {mPts : ℕ} (n : ℕ) (T : ℕ → TabZK 𝔽 mPts) (d : Lean.Json)
     {j : ℕ} (hj : j < n) (rootB₀ : Array ByteArray) (C : Model.Oracle 𝔽) (o : LiveOutJ (tabsJ n T).length mPts) :
     Prop :=
-  ZkExec.AcceptsZK I
-      (Claims.Bridge.Custody.wrD I (fun _ : Finset (Fin 0) => d) (fun _ _ => (tabsJ n T).length) ∅ () o) ∧
+  Composed.AcceptsAt I d (Claims.Bridge.Custody.wrS I d o) ∧
     ∀ pend : PendZ 𝔽 Refine.Dig (List UInt8) × PendZ 𝔽 Refine.Dig (List UInt8),
       PlaysT (repJ execArith ZkExec.hs512 (tabsJ n T) (finJ T hj) o.pts 0)
         (repTapeJ (decD (tabsJ n T)) (fun _ _ => true) (fun _ _ _ => []) o (finJ T hj) 0) pend.1 →
@@ -100,7 +100,7 @@ theorem decodesOff_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
       (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) i := by
   have h := decodesTable_at (finJ (zkTabs h0 L hz hk hlay) hj)
     (fun o => ¬ OffNoClashZ ZkExec.hs512 (zkTabs h0 L hz hk hlay j) (Exec.capOfRoot rootB₀[j]!) C o)
-    (decodesTable_deploy hs hin hset h0 L hz hk hlay hd () i)
+    (decodesTable_deploy hs hin hset h0 L hz hk hlay hd i)
   exact h
 
 open Classical in
