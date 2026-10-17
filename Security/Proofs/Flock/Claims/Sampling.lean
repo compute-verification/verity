@@ -9,6 +9,7 @@ import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.Claims.Sampling.Leaf
 import Proofs.Flock.Claims.Sampling.Live
 import Proofs.Flock.Claims.Sampling.Path
+import Proofs.Flock.Claims.Sampling.Reference
 import Proofs.Flock.Claims.Sampling.Select
 import Proofs.Flock.Claims.Sampling.Runs
 import Proofs.Flock.Claims.Sampling.RunsExp
@@ -28,4 +29,5 @@ bits from Flock's KS at the checked units' sessions and the deployed sampled ver
 Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`); the deployed draw's miss bound and `DrawLaw`
 from it (`Sampling.Select`); the universal unit's gates computing its netlist (`Sampling.Universal`); and the block's
 claims assembled, with what remains as hypotheses (`Sampling.Assembled`), and at the deployed record
-(`Sampling.Deployed`). -/
+(`Sampling.Deployed`); and the deployed record's reference prover and its completeness from Flock's
+(`Sampling.Reference`). -/

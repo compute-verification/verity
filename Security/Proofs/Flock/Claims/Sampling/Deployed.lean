@@ -243,7 +243,7 @@ set_option synthInstance.maxSize 1024 in
 discharged. The hypotheses are what remains: Flock's KS at `deployZk` (`hKS`); the draw, sessions and their scope,
 slots, session openings, interior roots and scope checks of the sampled verifier's run (`DrawFixed`, `SessionRuns`,
 `SessionsIn`, `DrawSlots`, `SessionOpens`, `InteriorFixed`, `ProgramScope`, `ChecksScope`); its reveal count
-(`RevealsLe`); completeness and zero knowledge. -/
+(`RevealsLe`); completeness (`complete_deploy` proves it from its own facts) and zero knowledge. -/
 theorem sampling_deployed (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
     (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
     (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
