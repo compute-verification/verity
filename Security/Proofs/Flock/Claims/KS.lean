@@ -62,6 +62,7 @@ import Proofs.Flock.Claims.KS.PlainLock
 import Proofs.Flock.Claims.KS.PlainStep
 import Proofs.Flock.Claims.KS.PlainParts
 import Proofs.Flock.Claims.KS.PlainClash0
+import Proofs.Flock.Claims.KS.PlainLevels
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -280,4 +281,8 @@ its fork advantage is at most its simulated fork (`PlainParts`: `FlockDeploy.KS.
 The level-0 case of that clash holds: a level-0 self-clash there is two of the reps' entries at one position with
 different columns, which are the run's raw columns, so the clash needs only its case past level 0 (`PlainClash0`:
 `FlockDeploy.KS.plainClashQ₀`, `FlockDeploy.KS.PlainSimLaterClashAt`, `FlockDeploy.KS.plain_KS_of_later`).
+Past level 0, an accepted plain rep passed every later level's Merkle check on its proof's rows at the positions of
+that level's query round, against the flattened recursive cap before it, so two rows a rep opens at one later-level
+position that differ clash in the run's log (`PlainLevels`: `FlockDeploy.KS.plainLevels_verifyWithM`,
+`FlockDeploy.KS.plain_levelClash`).
 -/
