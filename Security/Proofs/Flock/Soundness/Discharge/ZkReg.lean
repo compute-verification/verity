@@ -15,6 +15,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.NonVacuousHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
+import Proofs.Flock.Soundness.Discharge.ZkReg.PublicInst
 
 /-!
 # One `--zk` sampled session with registered reads
@@ -33,5 +34,7 @@ is drawn into (`OwnReadsHJ`, `regPathsHJ`); `BindHJ`, the `J`-table rows without
 `CheckedHJ`, `checked_of_acceptsHJ`; `SoundHJ`: `zk_session_soundHJR`; `SoundHJCustody`: `drawOkZKHJ_of_file` and
 `zk_session_soundHJR_custody`, under `live-verifier`; `NonVacuousHJ`: their reference setup and draw hypotheses
 satisfiable together; `PublicHJ`: `zk_session_soundHJR_custody_reg`, with "wrong" measured against the public file,
-and `zk_session_soundHJR_custody_drawn_reg`, at the drawn units.
+and `zk_session_soundHJR_custody_drawn_reg`, at the drawn units; `PublicInst`: those two and `checked_of_acceptsHJ` at
+the template instance's program (`instProg`), with no condition on the unit's input groups or on where the outputs are
+returned.
 -/

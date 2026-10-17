@@ -4,7 +4,9 @@
 all is named with how many, wherever it sits among held elements read in no bit. `readIns` marks the input columns the
 computed rows read and nothing past the inputs. `RecOpening.rsUnread` on m = 22's shape: w's slot 0 is a claim's ring
 switch's (`.rs 0 0`) and slots 362–365 the running sums' (`.acc0 0` to `.acc1 1`), each named unless read in all 128
-bits, and slot 256 (Ligerito's first) is neither. `RecOpening.accHeld` at m = 22's shape, on an S of one residual per
+bits, and slot 256 (Ligerito's first) is neither. `RecResiduals.hUnread` on a w of `fa`, `h 0`, `h 1` and `T`, and on
+Shape(22, 10, 2)'s holo w at `h 63`: each element of `h` is named unless read in all 128 bits, and no other element or
+slot past w is. `RecOpening.accHeld` at m = 22's shape, on an S of one residual per
 list of w slots it adds: refused with no residual, with only `acc0`'s port held, and with only a ring switch's and
 `acc1`'s; passed once some part holds both running sums' ports, in one residual or two.
 
@@ -61,6 +63,28 @@ def rsUnread (W : Array Nat) (reads : List (List Nat)) : Option (Nat × Nat) :=
 #guard rsUnread #[364] [] == some (0, 0)
 #guard rsUnread #[256, 365] [List.range 128] == some (1, 0)
 #guard rsUnread #[362, 363, 364, 365] [List.range 128, List.range' 1024 128, List.range' 2048 128] == some (3, 0)
+
+def hUnread (W : Array Nat) (reads : List (List Nat)) : Option (Nat × Nat) :=
+  RecResiduals.hUnread #[.fa, .h 0, .h 1, .T] W (RecResiduals.readIns (net (8 * W.size) reads)) (W.toList.map fun _ => 1)
+
+#guard hUnread #[1] [List.range 128] == none
+#guard hUnread #[1] [List.range 100] == some (0, 100)
+#guard hUnread #[1] [] == some (0, 0)
+#guard hUnread #[0, 3, 7] [] == none
+#guard hUnread #[0, 2] [List.range 128] == some (1, 0)
+#guard hUnread #[1, 2] [List.range 128, List.range' 1024 128] == none
+
+/-- `hUnread` at Shape(22, 10, 2)'s holo w, on one element `.h 63` read at the columns of `reads`. -/
+def hUnreadAt (reads : List (List Nat)) : Option (Nat × Nat) :=
+  match RecResiduals.shape? 22 10 2 with
+  | some sh0 => match RecAlgebra.wi { sh0 with holo := true } (.h 63) with
+    | some i => RecResiduals.hUnread (RecAlgebra.wNames { sh0 with holo := true }) #[i]
+        (RecResiduals.readIns (net 8 reads)) [1]
+    | none => some (64, 0)
+  | none => some (64, 0)
+
+#guard hUnreadAt [List.range 128] == none
+#guard hUnreadAt [List.range 127] == some (0, 127)
 
 def accHeld (ts : List (List Nat)) : Bool :=
   match RecOpening.shape? 22 2 with

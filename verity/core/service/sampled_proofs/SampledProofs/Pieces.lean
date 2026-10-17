@@ -9,6 +9,10 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `domain`: a registered value's commitment domain;
 * `check_draw`, `check_proved`: the draw's checks, each `{"ok", "codes", "detail"}`;
 * `draw`: the verifier's draw from given bytes of its own randomness;
+* `select`: the challenger's draw from a Spec's selection rule on, over a program and query, from given bytes of its
+  coins, with the number of bytes it read (`Select.select`);
+* `slots`: the claims' partition over the program and query, and that draw's checked proof units in its slots
+  (`Slots.select`);
 * `bound`: the exact bounds on wrong units at δ;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
@@ -22,6 +26,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 `check_draw`, `check_proved`, `record`, `check_public` and `check_verdicts`.
 -/
 import SampledProofs.OneStage
+import SampledProofs.Slots
 import SampledProofs.Service
 
 namespace SampledProofs.Pieces
@@ -94,6 +99,42 @@ def draw (j : Json) : V Json := do
   if !(getD j "law" matches .obj _) then throw "law is not an object"
   let some n := nat? (getD j "population") | throw "population is not a natural number"
   Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
+
+/-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's draw
+(`Select.select`) under a Spec's selection rule over the units of the program under the query, from the source's bytes,
+and how many of them it read. The program and the query are objects, the work table and the closure map
+(`Select.closureMap?`) null when absent, the source hex; refused where the Python raises. -/
+def select (j : Json) : V Json := do
+  let rule ← Select.Rule.ofJson (getD j "rule")
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .obj _ := getD j "query" | throw "query is not an object"
+  let d ← Flock.TemplateQuery.Desc.parse (← Flock.canon (getD j "program")).toUTF8
+  let table := match getD j "work_table" with
+    | .null => none
+    | t => some t
+  let cm ← match getD j "closure" with
+    | .null => pure none
+    | c => some <$> Select.closureMap? c
+  let (draw, read) ← Select.select rule d (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
+  return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
+
+/-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),
+and the proof units of the challenger's draw on the source's bytes as `[slot, index]` (`Slots.checked`); refused where
+`select` is. -/
+def slots (j : Json) : V Json := do
+  let rule ← Select.Rule.ofJson (getD j "rule")
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .obj _ := getD j "query" | throw "query is not an object"
+  let d ← Flock.TemplateQuery.Desc.parse (← Flock.canon (getD j "program")).toUTF8
+  let table := match getD j "work_table" with
+    | .null => none
+    | t => some t
+  let cm ← match getD j "closure" with
+    | .null => pure none
+    | c => some <$> Select.closureMap? c
+  let (l, checked) ← Slots.select rule d (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
+  return Json.mkObj [("classes", l.toJson),
+    ("checked", Json.arr (checked.map fun (v, i) => Json.arr #[Lean.toJson v, Lean.toJson i]))]
 
 /-- `{"draw", "proved_units", "instances"}`, a draw whose units (and closure) are integers, to `check_proved`'s codes. -/
 def checkProved (j : Json) : V Json := do
@@ -215,7 +256,9 @@ def checkVerdicts (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
-   ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("check_proved", checkProved), ("bound", bound),
+   ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("check_proved", checkProved),
+   ("bound", bound),
    ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
    ("check_public", checkPublic), ("check_verdicts", checkVerdicts)]
 

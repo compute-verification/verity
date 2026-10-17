@@ -118,6 +118,15 @@ def test_declared_verdicts():
     assert atom["redg_add32_l2"]["sass_sha256"] == atom["redg_add32"]["sass_sha256"]  # one kernel, two probes
 
 
+def test_own_rank_atome64_verdicts():
+    """64-bit EXCH and CAS at the own rank lower to one ATOM.E each; red.add.u64 nests its CAST.SPIN fallback."""
+    cl = probe.judge(Path("cl"), table("cl"), fns("cl"))
+    assert {v["probe"]: (v["passed"], v["correct"]) for v in cl} == {
+        "dsm_atom_exch64_self": (True, True), "dsm_atom_cas64_self": (True, True), "dsm_red_add64_self": (False, True)}
+    assert any(ln.startswith("REFUSED cl:dsm_red_add64_self (known-invalid, refuse by loops: as declared)")
+               for ln in probe.verdict_lines(cl))
+
+
 def test_a_known_invalid_probe_must_be_refused_by_its_check():
     t = {p["name"]: p for p in table("lm")}
     passes = dict(t["ldsm_x1"], refuse="loops")
@@ -147,6 +156,56 @@ def test_rate_is_the_median_block_then_the_median_rep():
     assert not r["throttled"] and r["distinct_sms"] == 3
     assert probe.rate_of(p, times("spec", [[1000]], 10, throttle="0x4"))["throttled"]
     assert not probe.rate_of(p, times("spec", [[1000]], 10, throttle="0x1"))["throttled"]
+    assert r["stop_gap"] is None
+
+
+def test_an_until_loop_counts_only_the_fixed_roles_time():
+    """side.cu's hs_* role runs while the honest warps do: its rate is its trips over the stop's cycles, block by block, not
+    its iterations over the kernel's; stop_gap is how far before the kernel's end the honest warps stopped."""
+    p = {"expect": "IMMA.16832.S8.S8=8;REDG*=1", "warps": "8;2", "counted": "", "tpb": 320, "until": 2}
+    t = times("hs_red32", [[1000, 1000]], iters=10)
+    t[0]["trips"], t[0]["stop"] = [450, 400], [900, 1000]
+    r = probe.rate_of(p, t)
+    assert r["rate"] == pytest.approx(8 * 10 * 8 / 1000)
+    assert r["rates"]["1:REDG*"] == pytest.approx((450 / 900 + 400 / 1000) / 2)
+    assert r["stop_gap"] == pytest.approx((0.1 + 0.0) / 2)
+
+
+# ---- EPS1's facets -----------------------------------------------------------------------------------------------------
+
+eps1 = _load("opcode_probe_eps1", POUW / "opcode_probe" / "eps1.py")
+
+
+def test_facets_are_the_upper_hull_with_the_margin():
+    pts = [(0.0, 0.5, "alone"), (0.05, 0.25, "mix"), (0.02, 0.2, "inside"), (0.0625, 0.0, "imma")]
+    fs = eps1.facets(pts, 0.02)
+    assert [f["tight"] for f in fs] == [["alone", "mix"], ["mix", "imma"]]   # each axis is an edge's end: dropped
+    assert (fs[0]["MMA"], fs[0]["X"]) == pytest.approx((9.8, 1.96)) and fs[1]["MMA"] == pytest.approx(15.68)
+    for f in fs:   # every point at or below 0.98 on every facet, and its tight points at 0.98
+        assert all(f["MMA"] * m + f["X"] * x <= 0.98 + 1e-12 for m, x, _ in pts)
+        assert all(f["MMA"] * m + f["X"] * x == pytest.approx(0.98) for m, x, n in pts if n in f["tight"])
+
+
+def test_a_near_duplicate_facet_is_dropped():
+    """A facet within 0.2% of one at least as tight on both coefficients adds nothing (the margin is 2%)."""
+    fs = eps1.facets([(0.0, 0.5, "alone"), (0.0001, 0.49999, "flat"), (0.0625, 0.0, "imma")], 0.02)
+    assert len(fs) == 1 and fs[0]["tight"] == ["flat", "imma"]
+    assert (fs[0]["MMA"], fs[0]["X"]) == pytest.approx((15.68, 1.96), rel=0.002)
+
+
+def test_prior_points_give_back_the_published_facets(tmp_path):
+    """The vertices of published facets, fed back with the alone point, rebuild those facets: --prior adds the K rows'
+    evidence to a new run's points without moving what they established."""
+    rows_csv = tmp_path / "rows.csv"
+    rows_csv.write_text("row,status,runs,description\n"
+                        f'KX0,joint,{RUN},"MMA 2.000 + X 1.960 SMSP-cycles (test)"\n'
+                        f'KX1,joint,{RUN},"MMA 15.000 + X 0.400 SMSP-cycles (test)"\n'
+                        f'KY0,joint,{RUN},"MMA 3.000 + Y 1.000 SMSP-cycles (not X)"\n')
+    pts, runs = eps1.prior_points(rows_csv, "KX", "X", 0.02)
+    assert runs == {RUN} and [n for *_, n in pts] == ["KX0/KX1", "KX1:axis"]
+    fs = eps1.facets(pts + [(0.0, 0.98 / 1.96, "alone")], 0.02)
+    got = {(round(f["MMA"], 6), round(f["X"], 6)) for f in fs}
+    assert {(2.0, 1.96), (15.0, 0.4)} <= got
 
 
 def test_one_census_line_a_kind_and_row(tmp_path):
@@ -191,4 +250,5 @@ def test_probes_build_and_gate(tmp_path):
     _, verdicts = probe.gate_all(built)
     wrong = probe.verdict_lines([v for v in verdicts if not v["correct"]])
     assert not wrong, "\n".join(wrong)
-    assert {v["probe"] for v in verdicts if not v["passed"]} == {"bad_ldsm_merged", "bad_stsm_conflict"}
+    assert {v["probe"] for v in verdicts if not v["passed"]} == {"bad_ldsm_merged", "bad_stsm_conflict",
+                                                                 "dsm_red_add64_self"}

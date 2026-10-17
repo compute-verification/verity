@@ -5,8 +5,9 @@
 // last saw. A returning form XORs its result into the sink; a reduction's side effect is its sink.
 //
 // Spaces: S shared (ATOMS), G global (ATOMG/REDG), GS generic to shared and GG generic to global (ATOM.E). The 64-bit
-// shared forms other than CAS and EXCH, and the 64-bit generic ones, lower to a CAS loop (ATOMS.CAST.SPIN.64) inside the
-// timed loop, which the gate refuses (a nested loop); they're not ported.
+// shared forms other than CAS and EXCH lower to a CAS loop (ATOMS.CAST.SPIN.64) inside the timed loop, and the 64-bit
+// generic ones other than CAS and EXCH to ATOM.E.<op>.64 with that loop as its fallback for a shared address: the gate
+// refuses both (a nested loop), so they're not ported. Generic CAS and EXCH .64 are one ATOM.E.CAS.64 / EXCH.64 each.
 #include "../probe.cuh"
 
 constexpr int TPB = 1024, U = 8, SMEM = 64 * 1024;
@@ -85,6 +86,7 @@ AT_G64(g_add64, "atom.global.add.u64") AT_G64(g_exch64, "atom.global.exch.b64") 
 AT_RED32(r_add32, "red.global.add.u32") AT_RED32(r_min32, "red.global.min.s32") AT_RED64(r_add64, "red.global.add.u64")
 AT_RED64(r_xor64, "red.global.xor.b64")
 AT_G32(gs_add32, "atom.add.u32") AT_GCAS32(gs_cas32, "atom.cas.b32") AT_G32(gg_add32, "atom.add.u32")
+AT_G64(gs_exch64, "atom.exch.b64") AT_GCAS64(gs_cas64, "atom.cas.b64")
 
 __host__ __device__ inline unsigned at_soff(int slot, int lane, int warp, int, int es) {
   return ((unsigned)(slot * TPB + warp * 32 + lane) * es) & (SMEM - 1);
@@ -154,6 +156,8 @@ AT_KERNEL(redg_xor64, r_xor64, SP_G, 64, false)
 AT_KERNEL(atome_gs_add32, gs_add32, SP_GS, 32, false)
 AT_KERNEL(atome_gs_cas32, gs_cas32, SP_GS, 32, true)
 AT_KERNEL(atome_gg_add32, gg_add32, SP_GG, 32, false)
+AT_KERNEL(atome_gs_exch64, gs_exch64, SP_GS, 64, false)
+AT_KERNEL(atome_gs_cas64, gs_cas64, SP_GS, 64, true)
 
 #define AT_S(nm, K, SASS, W, OFF)                                                                                  \
   {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .kind = K, .row = "ROW_" K, .expect = SASS "=8",         \
@@ -166,9 +170,10 @@ AT_KERNEL(atome_gg_add32, gg_add32, SP_GG, 32, false)
 #define AT_GN(nm, K, SASS, N, W, IT) \
   AT_GX(#nm, nm, K, "ROW_" K, SASS, N, W, IT, 16), AT_GX(#nm "_l2", nm, K, "L2red", SASS, N, W, IT, 0)
 #define AT_G(nm, K, SASS, W, IT) AT_GN(nm, K, SASS, 8, W, IT)
-#define AT_E(nm, SASS, IT)                                                                                         \
-  {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .kind = "ATOME32", .row = "ROW_ATOME32", .expect = SASS "=8", \
-   .words = 32, .dyn_smem = SMEM, .iters = IT}
+#define AT_EK(nm, K, SASS, W, IT)                                                                                  \
+  {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .kind = K, .row = "ROW_" K, .expect = SASS "=8", .words = W, \
+   .dyn_smem = SMEM, .iters = IT}
+#define AT_E(nm, SASS, IT) AT_EK(nm, "ATOME32", SASS, 32, IT)
 
 static const OpProbe PROBES[] = {
     AT_S(atoms_add32, "ATOMS32", "ATOMS.ADD", 32, at_soff32),
@@ -201,6 +206,8 @@ static const OpProbe PROBES[] = {
     {.name = "atome_gg_add32", .kernel = (const void*)atome_gg_add32, .tpb = TPB, .expect = "ATOM.E.ADD.STRONG.GPU=8",
      .words = 32, .dyn_smem = SMEM, .iters = 128,
      .note = "ATOM.E to a global address takes the L2's path; ROW_ATOME32 is the shared window's, so no census line"},
+    AT_EK(atome_gs_exch64, "ATOME64", "ATOM.E.EXCH.64.STRONG.GPU", 64, 256),
+    AT_EK(atome_gs_cas64, "ATOME64", "ATOM.E.CAS.64.STRONG.GPU", 64, 256),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

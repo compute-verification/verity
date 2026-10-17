@@ -1,0 +1,28 @@
+description = "NCP-INT's served values: the exact product of operands rounded to 7 bits (|x| <= 63, leaving room for A + E1 + E2 in int8 with 6-bit noise), no dither; SmoothQuant, rotations, kc and psink as in adopted"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act_top = 63
+weight_top = 63
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q_top = 63
+k_top = 63
+v_top = 63
+p_top = 63
+p_sink = true

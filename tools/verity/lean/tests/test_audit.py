@@ -423,6 +423,11 @@ def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def unclaimed(policy: dict) -> dict:
+    """The control's lock without its `claims` section, for a test that lists guarantees of its own."""
+    return {k: v for k, v in policy.items() if k != "claims"}
+
+
 def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     """`Facts.lean`'s renaming and unfolding on a real build: a guarantee lifted into a `Guarantees` definition (its old theorem
     kept as the lemma that proves it), one whose statement holds a proof Lean abstracts out of a definition (`_proof_1`), and a
@@ -436,7 +441,7 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     moves.write_text("namespace Control\ndef f (n : Nat) : Nat := n + 0\ndef g (n : Nat) : Nat := n\n"
                      "theorem a (n : Nat) : f n = n := rfl\ntheorem b (n : Nat) : g n = n := rfl\n"
                      f"theorem c (n : Nat) : {fin} := rfl\nend Control\n")
-    pol = A.load(pkg)
+    pol = unclaimed(A.load(pkg))
     A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Moves": {"imports": []}},
                        "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.a", "Control.b", "Control.c")}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
@@ -513,7 +518,7 @@ def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
         "theorem v (h : Hyp) (n : Nat) : double n = n + n := by unfold double; omega\n"
         "theorem w (n : Nat) : double n = n + n := by unfold double; omega\n"
         "end Control\n")
-    A.dump(pkg, A.load(pkg) | {"guarantees": {f"Control.{n}": {"owner": "@lean"} for n in ("main_thm", *"pqrstvw")}})
+    A.dump(pkg, unclaimed(A.load(pkg)) | {"guarantees": {f"Control.{n}": {"owner": "@lean"} for n in ("main_thm", *"pqrstvw")}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)
     build()
@@ -622,6 +627,15 @@ def test_all_neither_updates_records_nor_names_instances(capsys):
         assert "neither updates records nor names instances" in capsys.readouterr().err
 
 
+def test_update_refuses_a_shared_shipped_tree(tmp_path, capsys):
+    pkg = tmp_path / "Security"
+    pkg.mkdir()
+    (tmp_path / "READY.json").write_text("{}\n")
+    with pytest.raises(SystemExit):
+        A.main([str(pkg), "--update"])
+    assert "--cwd clone" in capsys.readouterr().err
+
+
 def test_a_theorem_s_statement_is_read_from_its_source():
     src = ("namespace P\n/-- twice -/\n@[simp] theorem t.{u} {α : Sort u} (f : α → α) -- a note\n    (h : ∀ x, f x = x) :\n"
            "    ∀ x, f (f x) = x := by\n  intro x; simp [h]\n"
@@ -652,7 +666,7 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
         "section\nvariable {k : Nat} (j : Nat) [Inhabited (Fin k)]\n"
         "open Classical in\ntheorem pick (p : Prop) : (if p then j else j) = j + 0 := by split <;> rfl\nend\n"
         "end Control.Sub\n")
-    pol = A.load(pkg)
+    pol = unclaimed(A.load(pkg))
     A.dump(pkg, pol | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.Sub.twice", "Control.Sub.refl",
                                                                         "Control.Sub.pick")},
                        "layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Defs"]}}})
@@ -973,6 +987,40 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
     assert A.verifier_failures(rule, None)[0].startswith("verifier: `Facts.lean` reported no verifier path")
     f = facts(); f["verifier"] = {**path, "missing": [], "implemented_by": [], "hash": []}
     assert A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)[0] == []
+
+
+def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecedents_are_met():
+    """LEAN-26: each predicate the spec declares under `claims.modules` names a `fails` theorem stating `¬ C …` with that
+    claim at the head, and `meets` theorems that are not `C` itself, each a guarantee; one without witnesses fails unless
+    `claims.not` gives the reason, and a named assumption is no claim."""
+    def spec(name, predicate=True):
+        return {"name": name, "module": "P.Claims", "kind": "def", "statement": False, "predicate": predicate}
+
+    def thm(head, negated):
+        return fact() | {"kind": "theorem", "body": {"head": head, "negated": negated}}
+    defs = [spec("P.KS"), spec("P.Complete"), spec("P.Helper"), spec("P.Hyp"), spec("P.size", predicate=False)]
+    pins = {"P.t": fact(), "P.KS_fails": thm("P.KS", True), "P.KS_meets": thm("P.ListWithin", False),
+            "P.Complete_fails": thm("P.KS", True), "P.Complete_meets": thm("P.Complete", False)}
+    rule = {"modules": ["P.Claims"], "not": {"P.Helper": "a collision, which the claims read"},
+            "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]},
+                          "P.Complete": {"fails": "P.Complete_fails", "meets": ["P.Complete_meets", "P.Complete_zk"]}}}
+    policy = {**POLICY, "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}
+    f = facts(pins=pins, spec_definitions=defs)
+    assert A.claim_failures(policy, f) == [
+        "claims: P.Complete_fails does not state that P.Complete fails: past its ∀ and ∃ binders its statement must be "
+        "`¬ P.Complete …`, and it is ¬ P.KS …",
+        "claims: P.Complete_meets states P.Complete itself: a `meets` witness states the claim's checkable antecedents at a "
+        "deployed record (a decoder meeting its bound, a non-empty scope), not the claim",
+        "claims: P.Complete_zk, P.Complete's `meets` witness, is not under `guarantees`: list it there, so its record shows "
+        "in the landing DM"]
+    assert A.claim_failures({**policy, "claims": {**rule, "not": {}}}, f)[0].startswith(
+        "claims: P.Helper (P.Claims) is a claim definition with no witnesses: name its `P.Helper_fails`")
+    good = {**rule, "witnesses": {"P.KS": rule["witnesses"]["P.KS"]}, "not": {**rule["not"], "P.Complete": "not yet stated"}}
+    assert A.claim_failures({**policy, "claims": good}, f) == []
+    assert A.claim_failures({**policy, "claims": {**good, "not": {**good["not"], "P.Gone": "moved"}}}, f) == [
+        "claims: P.Gone is listed under `claims` but is no predicate of the spec under P.Claims; remove the entry"]
+    assert A.claim_failures(POLICY, f) == []
+    assert A.claim_witnesses(policy) == {"P.KS_fails", "P.KS_meets", "P.Complete_fails", "P.Complete_meets", "P.Complete_zk"}
 
 
 def test_an_assumption_is_listed_by_name_with_its_record():
