@@ -16,11 +16,12 @@ decoder (`famDecodeR`): each runs on the opened columns read at its width (`IRS.
 * `famDecodeR_complexity`: the family's count (`famCountedR`) is the sum over its finitely many indices of each one's
   read (`os.length·s i`) and count; at a size `Q` above every index's size and read, it is at most
   `card ι · (p + X)` at `Q`, `p` the indices' common polynomial.
+* `length_famDecodeR_le`: the family lists at most `card ι · L` where each index lists at most `L`.
 
 At the masked verifier's code (`Flock.zkEncD`, its traces `Flock.ZkTrace`, `m = 25..35`): `zkDecodeRD` meets
 `ListWithin Flock.zkLenD zkEncD Flock.zkThetaD`, the length `2^d` and the radius `1 − √ρ_zk − 1/200` read off the
 trace's `m` (`listWithin_zkDecodeRD`), with its count at most `11·(zkPolyR + X)` at the schedules' sizes summed
-(`zkSizeRD`, `zkDecodeRD_complexity`).
+(`zkSizeRD`, `zkDecodeRD_complexity`), and its lists at most that long (`zkDecodeRD_length_le`).
 -/
 
 namespace Claims.Flock
@@ -103,6 +104,18 @@ theorem famDecodeR_complexity {F ι : Type} [Zero F] [Fintype ι] {s : ι → �
     _ = Fintype.card ι * (p.eval (Q os) + Q os) := by
         rw [Finset.sum_const, Finset.card_univ, smul_eq_mul, add_comm (Q os)]
 
+/-- **A family's radius decoder lists at most `card ι · L`** where each index's decoder lists at most `L` on the opened
+columns read at its width. -/
+theorem length_famDecodeR_le {F ι : Type} [Zero F] [Fintype ι] {s : ι → ℕ} {T : ι → Type}
+    (dec : (i : ι) → List (ℕ × (Fin (s i) → F)) → List (T i)) (os : List (ℕ × List F)) (L : ℕ)
+    (h : ∀ i, (dec i (IRS.colsAt (s i) os)).length ≤ L) : (famDecodeR dec os).length ≤ Fintype.card ι * L := by
+  unfold famDecodeR
+  rw [List.length_flatMap]
+  refine (List.sum_le_sum (g := fun _ => L) fun i _ => ?_).trans ?_
+  · rw [List.length_map]
+    exact h i
+  · simp
+
 /-! ## The masked verifier's radius decoder -/
 
 /-- **The masked verifier's radius decoder**: each `m`'s masked radius decoder (`zkDecodeR`) on the opened columns read
@@ -147,5 +160,25 @@ theorem zkDecodeRD_complexity : DecoderComplexity zkDecodeRD zkCountedRD zkSizeR
       (hle i os))
   rw [Fintype.card_fin] at this
   exact this
+
+/-- **The masked verifier's radius decoder lists at most `11·(zkPolyR + X)` at `zkSizeRD`**: each `m`'s decoder lists
+at most `2^d`, one per point of the filled word (`length_gsDecode_le`), and `2^d` is within the size. -/
+theorem zkDecodeRD_length_le (os : List (ℕ × List GF128)) :
+    (zkDecodeRD os).length ≤ (C 11 * (zkPolyR + X)).eval (zkSizeRD os) := by
+  have hi : ∀ i : Flock.ZkIdx, (zkDecodeR i (IRS.colsAt (Flock.zkWidth i) os)).length ≤ zkSizeRD os := by
+    intro i
+    unfold zkDecodeR
+    refine (length_gsDecode_le _ _ _ _ _).trans ?_
+    rw [length_fillPts, max_eq_right Nat.one_le_two_pow]
+    refine le_trans ?_ (Finset.single_le_sum
+      (f := fun i : Flock.ZkIdx => (os.length + 2 ^ Flock.zkLen i) * Flock.zkWidth i * 128)
+      (fun _ _ => Nat.zero_le _) (Finset.mem_univ i))
+    have hw : 1 ≤ Flock.zkWidth i * 128 := Nat.one_le_iff_ne_zero.2 (by positivity)
+    calc 2 ^ Flock.zkLen i ≤ os.length + 2 ^ Flock.zkLen i := Nat.le_add_left _ _
+      _ ≤ (os.length + 2 ^ Flock.zkLen i) * (Flock.zkWidth i * 128) := Nat.le_mul_of_pos_right _ hw
+      _ = (os.length + 2 ^ Flock.zkLen i) * Flock.zkWidth i * 128 := by ring
+  refine (length_famDecodeR_le zkDecodeR os _ hi).trans ?_
+  simp only [Fintype.card_fin, eval_mul, eval_C, eval_add, eval_X]
+  exact Nat.mul_le_mul_left 11 (Nat.le_add_left _ _)
 
 end Claims.GS

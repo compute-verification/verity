@@ -45,6 +45,8 @@ inputs = [
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
 ]
 parallel = true
+# an xdist worker peaked at 15.6 GB (16 Oct, vy-nebius-cpu-1: 38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
+worker_gb = 16
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
              "verity/core/service/flock/.lake/build/bin/flock-firewall",

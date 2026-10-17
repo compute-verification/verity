@@ -1,7 +1,7 @@
 """The templates of every served workload beyond #101 (``bench.templates``): FA3 attention, greedy token select, embedding row, the
-MoE router (with and without renormalisation), expert coordinates (plain and weighted), MoE sum, the FP8 block-scaled GEMM, bias-add
-and the bf16 scalar multiply.  Each evaluation path equals its subcircuit's own Definition, and every census-bound subcircuit id of
-every workload is the spine's."""
+MoE router (with and without renormalisation), expert coordinates (plain and weighted), MoE sum, the FP8 block-scaled GEMM, bias-add,
+the bf16 scalar multiply, the served SiLU·mul (SiluMul_v2) and RMSNorms (the width-8 CUDA kernels).  Each evaluation path
+equals its subcircuit's own Definition, and every census-bound subcircuit id of every workload is the spine's."""
 from __future__ import annotations
 
 import json
@@ -77,6 +77,35 @@ def test_embedding_equals_its_definition():
         assert np.array_equal(o, d.inputs["row"])
         assert np.array_equal(evaluate_batch(sub.target(), d.inputs["tok"][None], table).reshape(-1), o)
         assert np.array_equal(evaluate_batch(sub.target(), d.inputs["tok"][None], table, kernel="reference").reshape(-1), o)
+
+
+def test_silu_mul_v2_equals_its_definition():
+    """The served SiLU·mul's evaluation path (`SiluMul_v2`'s registered row kernel) equals the Definition's gate reference."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+
+    sub = TM.subcircuit("silu-mul-v2", I=32)
+    assert sub.relation["definition"] == "SiluMul_v2" and sub.set_name == "silumul-v2-i32"
+    draws = _draws(sub, 8)
+    ref = evaluate_batch(sub.definition(), np.stack([d.inputs["in0"] for d in draws]), kernel="reference")
+    assert np.array_equal(np.asarray(ref).reshape(8, 32), np.stack(_eval(sub, draws)["out.out"]).astype(np.asarray(ref).dtype))
+    assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
+
+
+@pytest.mark.parametrize("template,family", [("rmsnorm-fused-cuda-vec8", "RMSNormFusedCudaVector8_v1"),
+                                             ("rmsnorm-cuda-vec8", "RMSNormCudaVector8_v1")])
+def test_vec8_rmsnorm_equals_its_definition(template, family):
+    """The served RMSNorms' evaluation paths (vLLM's width-8 CUDA kernels) equal the Definitions' gate reference, at a launch
+    whose threads hold two vectors each; BLOCK is in the subcircuit id."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+
+    sub = TM.subcircuit(template, N=64, EPS=1e-5, BLOCK=4)
+    assert sub.relation["definition"] == family and sub.id == f"{template}/n64-b4-eps1e-05/bf16"
+    draws = _draws(sub, 8)
+    ref = np.asarray(evaluate_batch(sub.definition(), *[np.stack([d.inputs[p.name] for d in draws]) for p in sub.inputs],
+                                    kernel="reference")).reshape(8, -1)
+    got = _eval(sub, draws)
+    assert np.array_equal(ref, np.concatenate([np.stack(got[p.name]) for p in sub.outputs], axis=1).astype(ref.dtype))
+    assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
 
 
 def test_greedy_token_select_is_the_first_argmax():

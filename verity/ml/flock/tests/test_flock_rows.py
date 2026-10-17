@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -20,11 +21,17 @@ from verity_numerical.bench import lowerings, templates as TM  # noqa: E402
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 REG = lowerings.registry("C-Flock")
 #: The parameters each pinned template's `PINS` keys name, in their order.
-PIN_PARAMS = {"rope-head": ("D",), "silu-mul": ("I",), "rmsnorm-fused-cuda": ("N", "EPS"), "rmsnorm-triton": ("N", "EPS")}
+PIN_PARAMS = {"rope-head": ("D",), "silu-mul": ("I",), "silu-mul-v2": ("I",), "rmsnorm-fused-cuda": ("N", "EPS"),
+              "rmsnorm-triton": ("N", "EPS"), "rmsnorm-fused-cuda-vec8": ("N", "EPS", "BLOCK"), "rmsnorm-cuda-vec8": ("N", "EPS", "BLOCK")}
+#: Pinned units of about 3.5M rows (GLM-5.3's width-8 RMSNorms), derived only with FLOCK_IR_SLOW=1, as test_ir_lowering builds them
+SLOW_UNITS = {"rmsnorm-fused-cuda-vec8", "rmsnorm-cuda-vec8"}
+SLOW = pytest.mark.skipif(not os.environ.get("FLOCK_IR_SLOW"), reason="derives a 3.5M-row unit: set FLOCK_IR_SLOW=1")
 #: Every pinned unit with its pin, and one small unpinned unit.
 CASES = [(t, dict(zip(names, key if isinstance(key, tuple) else (key,))), pin)
          for t, names in PIN_PARAMS.items() for key, pin in sorted(REG.module(t).PINS.items())]
 CASES += [("rmsnorm-fused-cuda", {"N": 64, "EPS": 1e-5}, None)]
+CASES = [pytest.param(t, p, pin, marks=[SLOW] if t in SLOW_UNITS else [], id=f"{t}-{'-'.join(map(str, p.values()))}")
+         for t, p, pin in CASES]
 needs_lake = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 
@@ -64,7 +71,7 @@ def test_every_pinned_template_is_a_case():
 
 
 @needs_lake
-@pytest.mark.parametrize("template,params,pin", CASES, ids=[f"{t}-{'-'.join(map(str, p.values()))}" for t, p, _ in CASES])
+@pytest.mark.parametrize("template,params,pin", CASES)
 def test_flock_rows_is_the_layout(built, template, params, pin, tmp_path):
     low = REG.module(template).lowering(TM.subcircuit(template, **params))
     out = flock_rows(low, tmp_path)
@@ -74,6 +81,16 @@ def test_flock_rows_is_the_layout(built, template, params, pin, tmp_path):
     assert digest == low.sha256
     if pin is not None:
         assert digest == pin
+
+
+@needs_lake
+def test_flock_rows_is_the_grouped_circuit_unit(built, tmp_path):
+    """`silu-mul-v2`'s `verity/flock-circuit` unit at I = 1536, three elements (`CIRCUIT_PINS`)."""
+    mod = REG.module("silu-mul-v2")
+    low = mod.circuit_lowering(TM.subcircuit("silu-mul-v2", I=1536))
+    out = flock_rows(low, tmp_path)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout == low.text and hashlib.sha256(out.stdout.encode()).hexdigest() == mod.CIRCUIT_PINS[1536]
 
 
 @needs_lake

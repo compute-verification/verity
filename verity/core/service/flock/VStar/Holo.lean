@@ -63,6 +63,10 @@ def specHolo (sh : Shape) : Except String RepS := do
   checkRepS S' (whole := true)
   pure S'
 
+/-- The S of a holo or plain shape. -/
+def specOf (sh : Shape) (holo : Bool) : Except String RepS :=
+  if holo then specHolo sh else spec sh
+
 end Algebra
 
 /-- V*'s statements over a holo inner session of shape `sh`, in `stage`'s order: `statements`' levels, then one per part of

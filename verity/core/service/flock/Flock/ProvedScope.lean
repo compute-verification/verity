@@ -59,6 +59,93 @@ def scopeOkH (c : Circuit) : Bool :=
   c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit &&
     (v1Ports c || bitRows c)
 
+/-- `f` over row `i`'s entries in order: `(m.row i).foldl f init`, without building the row. -/
+@[inline] def foldRow {β : Type} (m : Sparse) (i : Nat) (f : β → Nat → β) (init : β) : β :=
+  let s := m.start.getD i 0
+  Nat.fold (m.len.getD i 0) (fun t _ acc => f acc (rd32 m.data (s + 4 * t))) init
+
+/-- What `net`'s output ports read: for each, the input ports whose bits it reads, ascending; and whether its computed rows
+and output ports read, among the input columns, only port bits, each row only earlier rows. A column's reads are a mask,
+bit `p + 1` for input port `p` and bit `0` for an input column no port carries or a row read out of order; a computed
+row's are the union of the columns' it reads, the constant reads nothing, and a column past it, which no row computes, is
+read out of order. A lookup slot, which the verifier builds from its pinned table, is taken whole: each output port reads
+every input port. -/
+def outReads (net : Net) : Array (Array Nat) × Bool :=
+  let ins := portCols net.inGroups
+  let outs := portCols net.outGroups
+  if net.lookup.isSome then (outs.map fun _ => Array.range ins.size, true)
+  else
+    let n := min (net.inWords * WORD) net.constPos
+    let inMask := (Array.range ins.size).foldl (fun m p =>
+      let q := ins.getD p default
+      let bit := 1 <<< (p + 1)
+      (Array.range q.2).foldl (fun m x => m.setIfInBounds (q.1 + x) bit) m) (Array.replicate n 1)
+    let col := fun (rows : Array Nat) (x : Nat) =>
+      if x < n then inMask.getD x 1 else if x < net.constPos then rows.getD (x - n) 1 else if x == net.constPos then 0
+      else 1
+    -- most reads add nothing to the mask so far: keep it then, rather than build an equal one
+    let union := fun (m y : Nat) => if y == 0 || y == m then m else if m == 0 then y else m ||| y
+    let rows := Nat.fold (net.constPos - n) (fun i _ rows =>
+      let m := foldRow net.b (n + i) (fun m x => union m (col rows x))
+        (foldRow net.a (n + i) (fun m x => union m (col rows x)) 0)
+      rows.push m) #[]
+    let masks := outs.map fun q => (Array.range q.2).foldl (fun m x => union m (col rows (q.1 + x))) 0
+    (masks.map fun m => (Array.range ins.size).filter fun p => m.testBit (p + 1),
+      rows.all (· % 2 == 0) && masks.all (· % 2 == 0))
+
+/-- One pass over the wires: each wire whose destination `dst` is not yet filled fills it when its source is `ready`.
+Returns the filled ports and whether the pass filled any. -/
+def fillPass (ready : Array Bool → Wire → Bool) (dst : Wire → Option Nat) (ws : Array Wire) (av : Array Bool) :
+    Array Bool × Bool :=
+  ws.foldl (fun (av, ch) w => match dst w with
+    | some d => if !av.getD d true && ready av w then (av.set! d true, true) else (av, ch)
+    | none => (av, ch)) (av, false)
+
+/-- `fillPass` until a pass fills nothing, at most `fuel` passes. -/
+def fillLoop (pass : Array Bool → Array Bool × Bool) : Nat → Array Bool → Array Bool
+  | 0, av => av
+  | fuel + 1, av => match pass av with
+    | (av', true) => fillLoop pass fuel av'
+    | (av', false) => av'
+
+/-- **Every slot computes from the leaves, in some order of the wires**: outside the rows' `sha512x3` and `hm96` slots,
+starting from the units' leaf ports and the leaf cuts, the wires fill every input port of every slot, each wire once every
+input port its source port reads in its own slot (`outReads`) is filled; and no row or output port of a unit or stage
+reads an input column that is not a port bit. Each pass fills at least one port, so `wires.size + 1` passes reach the
+fixpoint. Then every slot's rows evaluate in the order the ports filled, each reading only computed columns: the wires
+have no cycle through the rows. -/
+def wiresAcyclic (c : Circuit) : Bool :=
+  let rowNet := fun (n : Nat) => n == c.shaNet || n == c.hmNet
+  let nPorts := c.nets.map fun e => (portCols e.2.inGroups).size
+  let slots := fun (n : Nat) => if rowNet n then 0 else c.perVu.getD n 0
+  let base := (Array.range c.nets.size).foldl (fun b n => b.push (b.back?.getD 0 + slots n * nPorts.getD n 0)) #[0]
+  let node := fun (n i p : Nat) => base.getD n 0 + i * nPorts.getD n 0 + p
+  let inSlot := fun (n i p : Nat) => decide (i < slots n) && decide (p < nPorts.getD n 0)
+  let reads := (Array.range c.nets.size).map fun n =>
+    if slots n == 0 then (#[], true) else outReads (c.nets.getD n default).2
+  let g0 := (c.unit.inGroups.getD 0 default).bits.size
+  let av := (Array.range c.upv).foldl (fun av u => (Array.range g0).foldl (fun av p =>
+    if inSlot c.unitNet u p then av.set! (node c.unitNet u p) true else av) av)
+    (Array.replicate (base.getD c.nets.size 0) false)
+  let av := c.leafCuts.foldl (fun av e =>
+    if inSlot c.unitNet e.1 e.2.1 then av.set! (node c.unitNet e.1 e.2.1) true else av) av
+  let ready := fun (av : Array Bool) (w : Wire) =>
+    decide (w.src.2.1 < slots w.src.1) && match (reads.getD w.src.1 (#[], false)).1[w.src.2.2]? with
+      | some ps => ps.all fun q => av.getD (node w.src.1 w.src.2.1 q) false
+      | none => false
+  let dst := fun (w : Wire) =>
+    if inSlot w.dst.1 w.dst.2.1 w.dst.2.2 then some (node w.dst.1 w.dst.2.1 w.dst.2.2) else none
+  (fillLoop (fillPass ready dst c.wires) (c.wires.size + 1) av).all id &&
+    (Array.range c.nets.size).all fun n => slots n == 0 || (reads.getD n (#[], false)).2
+
+/-- Where the wires' order matters to what the unit computes: the unit reads input groups past its leaf group (cut inputs
+a wire may fill), or a tail stage returns the outputs. -/
+def wiresFeed (c : Circuit) : Bool := c.unit.inGroups.size != 1 || c.outNet != c.unitNet
+
+def wiresWhy : String :=
+  "a slot no order of the wires computes from the leaves: a cycle through wires, an input port no wire fills, or a read \
+    of an input column that is not a port bit"
+
 /-- Which part of `scopeOk` (`scopeOkH` for a statement with hidden outputs) a circuit fails, for the refusal. -/
 def scopeWhy (hidden : Bool) (c : Circuit) : String :=
   if c.unit.inGroups.size != 1 then s!"a unit reading {c.unit.inGroups.size} input groups"
@@ -118,7 +205,11 @@ session's (under `--zk`, `Zk.tags`'s), `count` its tables, `publicInputs` whethe
 input words and `registered` whether it holds its own registered reads. The tables' sizes are `sizesOk`'s, which `verify`
 runs after this on the tables the session set up. When this check moves from `scopeOk` to a format
 check (`formatOk`), a tail must stay refused (`c.outNet == c.unitNet`): `formatOk` puts no condition on a tail's stage
-nets, and the session headline's `keyProg` reads the unit nets only. -/
+nets, and the session headline's `keyProg` reads the unit nets only.
+
+Where the wires feed the unit or the outputs (`wiresFeed`), a circuit whose wires no order computes (`wiresAcyclic`) is
+refused before `scopeOk`. It only refuses: `scopeOk` and `scopeOkH` require `wiresFeed` false, so the statements this
+accepts are the ones it accepted without it, and it names the cycle in place of the scope rule a cyclic circuit fails. -/
 def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
     (publicInputs registered : Bool) : Except String Unit :=
   match firstFailure (statementRules tags zk count publicInputs) with
@@ -130,6 +221,7 @@ def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables
       | .ok pub =>
         if pub.tables.isSome && !sharedRowsOk tags zk registered then
           .error (refusal "a shared-row public file (header shared_rows)")
+        else if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
         else if (if tags.hiddenOutputs then scopeOkH c else scopeOk c) then .ok ()
         else .error (refusal (scopeWhy tags.hiddenOutputs c))
 

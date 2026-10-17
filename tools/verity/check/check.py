@@ -990,7 +990,11 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     beside = only is None or any(x == "pytest" or x.startswith("lean") for x in names)
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
-    tail = ["--jobs", str(a), *([] if cache else ["--fresh"]),
+    slot_gb = int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
+    with_cc = only is None or "circuit-check" in names
+    # pytest and lean-suites run at once, each with this share: what circuit-check leaves, halved
+    tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
+    tail = ["--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
@@ -1001,7 +1005,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
-          *(["--mem-gb", str(cc_mem_gb(int(m), beside))] if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else [])]
+          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside))] if slot_gb is not None else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),

@@ -41,15 +41,16 @@ done
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
 # From here a launch that registers no run says so in the merge thread, with the reason and the log's last lines, as well as
-# exiting nonzero: two launches of 9-10 Oct registered nothing and told nobody for hours.
+# exiting nonzero: two launches of 9-10 Oct registered nothing and told nobody for hours. Quiet, ringing only the poster's own
+# handle: three refused resends of one commit rang every addressee of the merge thread (16 Oct, 14:02Z).
 why=$(mktemp "${TMPDIR:-/tmp}/train-why.XXXXXX") log=
 die() { echo "train: $*" | tee -a "$why" >&2; exit 1; }
 tell() {
   local rc=$?
   if [ "$rc" -ne 0 ]; then
-    { echo "train: ${sha:-$commit} on $machine${against:+ --against $against} registered no run (exit $rc):"
+    { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${against:+ --against $against} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
-    uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" \
+    uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet \
       --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
   fi
   rm -f "$why" "$why.post"
@@ -93,7 +94,7 @@ got, why = place(sys.argv[1], Path.cwd()); print("train: --on", sys.argv[1] + ":
   wait_s=21600 run_s=10800
   # the run's command is the shipped tree's slot.py, the one form a machine with /etc/vy/runs-via-slot launches (slot_only.py)
   job="exec python3 \"\$RESEARCH_RUN_DIR/inputs/quick_tier.py\""
-  job+=" --lean verity/core/service/flock --head $sha --base $base -- uv run --locked --extra torch-cpu python tools/verity/check/suites.py"
+  job+=" --lean verity/core/service/flock --head $sha --base $base -- uv run --locked --all-packages --extra torch-cpu python tools/verity/check/suites.py"
   setsid nohup uv run -q research run --on "$machine" --project verity --source "$tree" --cwd source \
     --send tools/research/src/research/quick_tier.py --require-result \
     --timeout $((wait_s + run_s)) --custody-ttl $((wait_s + run_s + 1800)) --declared-output 'out/*' \
