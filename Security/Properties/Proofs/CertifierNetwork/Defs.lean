@@ -29,9 +29,9 @@ Python (`certificate.CertifiedRecord`); `certified` copies the Lean device's int
 **The hypotheses** are each over the configuration, the trace or the device's outputs, and each is checkable on them:
 
 * the configuration's: `Ticking` (both grids have buckets), `FieldsFit` (what a record encodes fits its field), `Distinct`
-  (two links), `Digested` (each grid has a `parameters_digest`: `Flock.canon` is a `partial def`, so this is a fact
-  about the configuration that only running it shows), `ValidKey` of the issuer's key, and `SessionFits` (its
-  session's id is 32 bytes);
+  (two links), `Digested` (each grid has a `parameters_digest`: `Flock.canon` recurses by well-founded recursion,
+  which the kernel does not reduce, so this is a fact about the configuration that only running it shows), `ValidKey`
+  of the issuer's key, and `SessionFits` (its session's id is 32 bytes);
 * the run's: `Closed` (both grids ran all their ticks), `NoFault` (every record published is complete), `SyncsDeclared`
   (one sync per window) and `SyncsAdmitted` (each in Σ_sync), and `LeavesLeft` (the signer has a leaf for every
   record). Honest timing (`HonestTiming`: each frame handed at the bucket the Program hands it) follows from `Closed`

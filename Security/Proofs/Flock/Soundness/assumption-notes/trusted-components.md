@@ -14,9 +14,10 @@ These are not assumptions of the theorem, but the verdict still depends on them.
     and on fuzzed mutations, so a miscompilation that changes a tested verdict fails the agreement job. Untested inputs
     stay exposed.
   - **Also trusted:** compiled code that no proof sees. The executable's `../../../../../verity/core/service/flock/lean-audit.json` lists it under
-    `escapes`, each entry with the test that covers it: the `partial def`s `Flock.canon` (canonical JSON of the
-    statement's objects) and `Flock.TemplateQuery.Desc.gates` (a descriptor's gate count). The audit fails on any
-    `partial def`, `opaque`, `unsafe`, `@[extern]` or `@[implemented_by]` not listed there.
+    `escapes`, each entry with the test that covers it, and lists none: C-Flock's verifier declares no `partial def`,
+    `opaque`, `unsafe`, `@[extern]` or `@[implemented_by]`, and the audit fails on any not listed there. The opaque
+    constants of Lean's own library it calls (its JSON parser and renderer among them) are compiled code no proof sees
+    too.
 - **The model against the executable verifier.** Until the refinement theorem (if `Flock.Verify` accepts, the model
   accepts on the decoded proof and record), the theorem is about `Model`. Alignment rests on shared arithmetic
   (`Model.Arith`) and step order; the refinement proofs belong to the level-3 plan.
