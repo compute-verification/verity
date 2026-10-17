@@ -258,7 +258,9 @@ def test_pgemm_summary_against_dc():
     assert s["dc_int8"][32]["committed_words_per_clk"] == 30.0 and s["dc_int8"][32]["nb"] == 2
     row = next(r for r in s["bench"] if r["L"] == 32)
     k4s = row["routes"]["k4s"]
-    assert k4s["cta_words_sm_clk"] == pytest.approx(15.0)
+    assert k4s["cta_words_sm_clk"] == pytest.approx(15.0) and k4s["gamma_fp8_peak_clk"] == pytest.approx(256 / 15)
+    assert row["dc_int8"]["gamma_fp8_peak_clk"] == pytest.approx(256 / 30)
+    assert next(r for r in s["bench"] if r["L"] == 64)["dc_int8"]["gamma_fp8_peak_clk"] == pytest.approx(128 / 29)
     assert k4s["over_dc_int8_clk"] == pytest.approx(2.0) and k4s["over_dc_int8_s"] == pytest.approx(2.0 * 1800 / 1600)
     assert "over_dc_int8_clk" not in row["routes"]["i8c"] and row["routes"]["i8c"]["cta_words_sm_clk"] is None
     dc_ms = 4096**3 / 32 / (30.0 * 148 * 1.8e9) * 1e3
@@ -365,8 +367,7 @@ def test_pgemm_build_selftest_issue(tmp_path):
             assert word[r]["alu_word"] == pytest.approx(2, abs=0.1) and word[r]["imad_word"] == pytest.approx(2, abs=0.1)
         assert word["i8c"]["alu_word"] == pytest.approx(2, abs=0.1) and word["i8c"]["imad_word"] < 1.1
         assert word["k4b"]["alu_word"] < 2.3 and word["k4b"]["imad_word"] == pytest.approx(2, abs=0.1)
-        cap = {"k4b": 6.0, "k4s": 5.0, "k4p": 5.0}  # the k4 routes' restore: 8 x4 tcgen05.st a 32 words
-        assert all(w["instrs_word"] < cap.get(r, 4.7) for r, w in word.items()), word
+        assert all(w["instrs_word"] < (5.7 if r == "k4b" else 4.7) for r, w in word.items()), word
 
 
 @pytest.mark.slow

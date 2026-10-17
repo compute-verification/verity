@@ -242,6 +242,12 @@ def fold_mix(sass: str) -> dict[str, dict]:
 
 
 PG_TILE = 128 * 128  # pgemm's CTA tile, BM x N
+SM100_F8_SLOTS = 256  # k32 slots (an output element's k32 step) of FP8 tcgen05 MMA a SM a clock, dense peak
+
+
+def gamma_peak(words_sm_clk: float | None, L: int) -> float | None:
+    """γ a clock against the FP8 tensor peak: plain FP8's time for the words' k over the route's."""
+    return SM100_F8_SLOTS * 32 / (L * words_sm_clk) if words_sm_clk else None
 
 
 def dc_best(dc: list[dict]) -> dict[int, dict]:
@@ -263,9 +269,9 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict], dc
     tensor or TMEM), the binding facet (the largest), and γ on resident operands (FULLRES over cuBLASLt FP8 and over
     pf8_res: the kernel as a perfect operand feed would leave it). Rates are at each arm's measured SM clock
     (`<arm>_mhz`) where the bench has it, else at the reported clock; the CTA rate is the tile's words over its median
-    CTA's clocks (`<arm>_cta_clk`), DC's metric. With DC's `pgemm rate` rows, each route's time against DC's honest
-    int8 kernel (its fastest configuration at that L, on resident operands) a clock and a second, and DC's γ against
-    cuBLASLt FP8."""
+    CTA's clocks (`<arm>_cta_clk`), DC's metric, and γ a clock against the FP8 tensor peak is taken at it. With DC's
+    `pgemm rate` rows, each route's time against DC's honest int8 kernel (its fastest configuration at that L, on
+    resident operands) a clock and a second, and DC's γ against cuBLASLt FP8 and the FP8 peak."""
     dcb = dc_best(dc or [])
     rows = []
     for b in bench:
@@ -305,7 +311,8 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict], dc
                                "over_dc_int8_s": d["committed_words_per_clk"] * d["mhz"] / (cta * b[f"{arm}_mhz"])
                                if b.get(f"{arm}_mhz") else None}
                 routes[r] = {"full_ms": t, "fw": fw, "full_ms_by_fw": fulls, "mhz": b.get(f"{arm}_mhz"),
-                             "words_sm_clk": rate(arm, t), "cta_words_sm_clk": cta, **over_dc,
+                             "words_sm_clk": rate(arm, t), "cta_words_sm_clk": cta,
+                             "gamma_fp8_peak_clk": gamma_peak(cta, L), **over_dc,
                              "split_ms": split, "alone_ms": alone,
                              "alone_words_sm_clk": {f: rate(f"{r}_L{L}_fw2_{facet_arm[f]}", v) for f, v in alone.items()},
                              "binding": bind, "binding_of_full": alone[bind] / t2 if bind and t2 else None,
@@ -324,6 +331,7 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict], dc
                          "cublaslt_f8_out": b.get("cublaslt_f8_out"), "int8_dither": int8, "routes": routes,
                          "dc_int8": d and {"words_sm_clk": d["committed_words_per_clk"], "mhz": d["mhz"],
                                            "nb": d["nb"], "lw": d["lw"], "mi": d["mi"], "ms_at_shape": dc_ms,
+                                           "gamma_fp8_peak_clk": gamma_peak(d["committed_words_per_clk"], L),
                                            "gamma_cublaslt_f8": dc_ms / plain["cublaslt_f8"]
                                            if dc_ms and plain["cublaslt_f8"] else None}})
     return {
@@ -372,15 +380,17 @@ def pgemm_main(argv: list[str]) -> int:
         print("\nAgainst DC's honest pipelined int8 kernel (its fastest configuration, resident operands, one CTA a "
               "SM), words a SM a clock of the median CTA:\n")
         print("| m x n x k | L | route | CTA words/SM/clk | DC int8 words/SM/clk (MHz) | time / DC's a clock | "
-              "time / DC's a second | DC's γ cuBLASLt FP8 | route's γ cuBLASLt FP8 (resident) |")
+              "time / DC's a second | DC's γ: cuBLASLt FP8, FP8 peak a clock | route's γ: cuBLASLt FP8 (resident), "
+              "FP8 peak a clock |")
         print("|---|---|---|---|---|---|---|---|---|")
         for row in s["bench"]:
             dci = row["dc_int8"]
             for r, d in row["routes"].items() if dci else ():
                 print(f"| {row['m']}x{row['n']}x{row['k']} | {row['L']} | {r} | {_f(d['cta_words_sm_clk'], '.1f')} | "
                       f"{dci['words_sm_clk']:.1f} ({dci['mhz']:.0f}) | {_f(d.get('over_dc_int8_clk'), '.2f')} | "
-                      f"{_f(d.get('over_dc_int8_s'), '.2f')} | {_f(dci['gamma_cublaslt_f8'], '.2f')} | "
-                      f"{_f(d.get('gamma_cublaslt_f8'), '.2f')} ({_f(d['gamma_resident_cublaslt_f8'], '.2f')}) |")
+                      f"{_f(d.get('over_dc_int8_s'), '.2f')} | {_f(dci['gamma_cublaslt_f8'], '.2f')}, "
+                      f"{dci['gamma_fp8_peak_clk']:.2f} | {_f(d.get('gamma_cublaslt_f8'), '.2f')} "
+                      f"({_f(d['gamma_resident_cublaslt_f8'], '.2f')}), {_f(d['gamma_fp8_peak_clk'], '.2f')} |")
     if s["fold_mix"]:
         print("\nIssue cost (SASS, word loop, per word): instructions, lane ops, ALU pipe, IMAD pipe, model bound\n")
         print("| arm | instrs | lane ops | ALU | IMAD | bound words/SM/clk |")
