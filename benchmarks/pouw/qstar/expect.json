@@ -139,5 +139,51 @@
   "LDG.E.CONSTANT": 1,
   "IMAD.WIDE": 1,
   "BRA.U": 1
+ },
+ "k_bb": {
+  "LOP3.LUT": 64,
+  "IADD3": 64,
+  "POPC": 32,
+  "IMAD": 32,
+  "SHF.L.W.U32.HI": 32,
+  "LDG.E.128.CONSTANT": 4,
+  "LDCU.64": 2,
+  "LDCU": 2,
+  "IADD.64": 2,
+  "UMOV": 1,
+  "UIADD3": 1,
+  "UISETP.GE.AND": 1,
+  "UIADD3.64": 1,
+  "BRA.U": 1
+ },
+ "k_bx": {
+  "LOP3.LUT": 128,
+  "POPC": 128,
+  "IADD3": 64,
+  "LDG.E.128.CONSTANT": 16,
+  "IADD.64": 2,
+  "UIADD3": 1,
+  "UISETP.GE.AND": 1,
+  "BRA.U": 1
+ },
+ "k_bx_hs": {
+  "LOP3.LUT": 352,
+  "LDG.E.128.CONSTANT": 16,
+  "POPC": 16,
+  "IADD3": 16,
+  "IADD.64": 2,
+  "UIADD3": 1,
+  "UISETP.GE.AND": 1,
+  "BRA.U": 1
+ },
+ "k_bx_mix": {
+  "LOP3.LUT": 240,
+  "POPC": 72,
+  "IADD3": 40,
+  "LDG.E.128.CONSTANT": 16,
+  "IADD.64": 2,
+  "UIADD3": 1,
+  "UISETP.GE.AND": 1,
+  "BRA.U": 1
  }
 }

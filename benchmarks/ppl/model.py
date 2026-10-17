@@ -9,6 +9,7 @@ import json
 import math
 import struct
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -254,16 +255,18 @@ class Layer:
         return out
 
 
-def head(cfg: Config, norm_w: torch.Tensor, head_w: torch.Tensor, h: torch.Tensor, ids: torch.Tensor) -> torch.Tensor:
-    """The NLL of every next token of one window (T - 1 of them): the final norm, the head, the cross entropy, in chunks
-    of LOSS_ROWS tokens past 8K."""
+def head(cfg: Config, norm_w: torch.Tensor, head_w: torch.Tensor, h: torch.Tensor, ids: torch.Tensor,
+         proj: Callable | None = None) -> torch.Tensor:
+    """The NLL of every next token of one window (T - 1 of them): the final norm, the head (`proj(rows, chunk)` in
+    place of rows @ head_w^T when given), the cross entropy, in chunks of LOSS_ROWS tokens past 8K."""
     T = h.shape[0]
+    proj = proj or (lambda x, _c: x @ head_w.T)
     if T <= LOSS_WHOLE:
-        logits = (rms_norm(h, norm_w, cfg.eps) @ head_w.T).float()
+        logits = proj(rms_norm(h, norm_w, cfg.eps), 0).float()
         return F.cross_entropy(logits[:-1], ids[1:], reduction="none")
     n = rms_norm(h, norm_w, cfg.eps)
-    return torch.cat([F.cross_entropy((n[i:min(i + LOSS_ROWS, T - 1)] @ head_w.T).float(), ids[i + 1:i + 1 + LOSS_ROWS],
-                                      reduction="none") for i in range(0, T - 1, LOSS_ROWS)])
+    return torch.cat([F.cross_entropy(proj(n[i:min(i + LOSS_ROWS, T - 1)], c).float(), ids[i + 1:i + 1 + LOSS_ROWS],
+                                      reduction="none") for c, i in enumerate(range(0, T - 1, LOSS_ROWS))])
 
 
 def hf_layer(cfg: Config, snapshot: Path, li: int, layer: Layer):
