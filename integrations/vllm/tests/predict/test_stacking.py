@@ -1,7 +1,8 @@
 """property/v1 (`verity.ml.circuits.stacking`) on real bf16 Programs, the weights as the registered store: Llama-3.2-1B's step (the
 traced Build `test_predict` pins) and a small request (a prefill of 3 rows, then a decode step), and Qwen3-30B-A3B's step (a
-mixture of experts). Each is refused for its bf16 tensor-core steps, every served MAC in one (``fp-mma``), with its budgeted
-units by class. A change to a Definition these Programs call moves the numbers with the Program's digest.
+mixture of experts). Each is refused for its bf16 tensor-core steps, every served MAC in one: a rounding of 33 operands, past
+fan-in f (``fan-in``), and budgeted with the rest of its units by class. A change to a Definition these Programs call moves the
+numbers with the Program's digest.
 """
 
 from __future__ import annotations
@@ -29,23 +30,25 @@ def _analysis(model: str, wrapper: str, **kw) -> tuple:
 
 @pytest.mark.parametrize("model,wrapper,kw,digest,steps,units,lifetime", [
     ("llama32-1b", "step", dict(M=1, pos0=8), "773b545605765fe9", 1,
-     {"roundings": 1312587, "compare_select": 385278, "gathers": 17}, 1),
+     {"roundings": 78581580, "compare_select": 385277, "gathers": 17, "products": 0}, 1),
     ("llama32-1b", "request", dict(LP=3, T=2), "6861bab5ba6ed6d2", 3,
-     {"roundings": 6068345, "compare_select": 1161980, "gathers": 85}, 2),
+     {"roundings": 359600254, "compare_select": 1161975, "gathers": 85, "products": 0}, 2),
     ("qwen3-30b-a3b", "step", dict(M=1, pos0=8), "98a180a562abf1d6", 1,
-     {"roundings": 8355307, "compare_select": 914302, "gathers": 2706}, 1),
+     {"roundings": 198675628, "compare_select": 906429, "gathers": 2706, "products": 0}, 1),
 ])
-def test_a_bf16_program_is_refused_for_its_fp_mma(model, wrapper, kw, digest, steps, units, lifetime):
-    """Gathers: 17 index bits a token row's embedding (V = 128256) in Llama, five rows in the request; Qwen's 18 (V = 151936)
-    and 48 layers x 8 routed experts x 7 bits (one of 128). The request's run input is its 3 prompt tokens, first read in
-    step 0, and its longest-held value lives 2 steps."""
+def test_a_bf16_program_is_refused_for_its_tensor_core_steps(model, wrapper, kw, digest, steps, units, lifetime):
+    """Roundings: each tensor-core step is one, beside the FP elementwise ops. Gathers: 17 index bits a token row's embedding
+    (V = 128256) in Llama, five rows in the request; Qwen's 18 (V = 151936) and 48 layers x 8 routed experts x 7 bits (one of
+    128). The request's run input is its 3 prompt tokens, first read in step 0, and its longest-held value lives 2 steps."""
     r, c, a = _analysis(model, wrapper, **kw)
     assert r.digest.startswith(digest)
-    assert set(a.refused) == {"fp-mma"} and set(a.refused["fp-mma"]) == {WGMMA}
-    assert 16 * a.refused["fp-mma"][WGMMA] == c["totals"]["served_macs"]
+    g = a.gates[WGMMA]
+    assert a.refused == {} and (g["class"], g["fan_in"], g["width"]) == ("roundings", 33, 32)
+    assert 16 * g["instances"] == c["totals"]["served_macs"]
     assert (a.family, a.affine, a.unproven) == (0, 0, {})
     assert len(a.steps) == steps and a.max_lifetime == lifetime
     assert [s["input_bits"] for s in a.steps] == [32 * (3 if wrapper == "request" else 1)] + [0] * (steps - 1)
     v = P.judge(a, c=dict.fromkeys(P.BUDGETED, 0), windows=[P.Window(range(steps), 1, 1)])
-    assert [x["code"] for x in v.reasons] == ["fp-mma", "roundings", "compare_select", "gathers"]
+    assert [x["code"] for x in v.reasons] == ["fan-in", "roundings", "compare_select", "gathers"]
+    assert v.reasons[0]["primitives"] == {WGMMA: 33}
     assert not v.ok and v.numbers["units"] == units

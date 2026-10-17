@@ -1,7 +1,7 @@
 """`verity.ml.circuits.stacking` (property/v1) on small synthetic Programs with their census/v1: an exact int8 Program passes,
-and a clamping, wrapping, FP-smuggling, reinterpreting, carry-computing, gather-heavy or input-holding one fails with its
-reason, or has its carries budgeted. The red team's attacks (benchmarks/property_redteam on cursor/property-redteam-6cd3) are
-cases here."""
+and a clamping, wrapping, FP-smuggling, reinterpreting, carry-computing, gather-heavy, too wide or input-holding one fails with
+its reason, or has its carries budgeted. The red team's attacks (benchmarks/property_redteam on cursor/property-redteam-6cd3)
+are cases here."""
 from __future__ import annotations
 
 import json
@@ -21,7 +21,7 @@ from verity.ml.circuits.types import Array, Tuple as TupleT, Value
 S8, S16, S32, BIT = Value(8), Value(16), Value(32), Value(1)
 IMMA = prims.BlackwellS8ImmaDot32
 QMMA = prims.BlackwellE4m3QmmaDot32
-FREE = {"roundings": 0, "compare_select": 0, "gathers": 0}
+FREE = {"roundings": 0, "compare_select": 0, "gathers": 0, "products": 0}
 
 
 def stand_in(name: str, params, ret=S32) -> PrimitiveDefinition:
@@ -39,6 +39,11 @@ I32SUB = stand_in("I32Sub", (("a", S32), ("b", S32)))
 U32GE = stand_in("U32Ge", (("a", S32), ("b", S32)), BIT)
 GATHER = stand_in("GatherBf16x16", (("i", S32), ("col", Array(16, S16))), S16)
 GATHER128 = stand_in("GatherF32x128", (("i", S32), ("col", Array(128, S32))), S32)
+BITAT = stand_in("BitAtx32", (("word", S32), ("i", S32)), BIT)
+TABLE = stand_in("TableRead8x4", (("index", S16), ("table", Array(16, Array(64, S16)))), Value(64))
+NCPDOT = stand_in("NcpDot16I7", (("acc", S32), ("a", Array(16, S8)), ("b", Array(16, S8))))
+SQACC = stand_in("PouwSqAcc", (("acc", Value(576)), ("x", S32)), Value(576))
+U8S8 = stand_in("BlackwellU8S8ImmaDot32", (("acc", S32), ("a", Array(32, S8)), ("b", Array(32, S8))))
 
 
 def comp(name: str, params, ret, body) -> CompositeDefinition:
@@ -81,10 +86,17 @@ def int8_program(S: int = 3, K: int = 64, *, mmas=None, acc0="zero", epilogue=Fa
     return Program(fn, registered=("w",)), ends
 
 
-def judge(program, ends, *, c=FREE, R_in=10 ** 9, L=None, windows=None):
+def judge(program, ends, *, c=FREE, R_in=10 ** 9, L=None, windows=None, **fw):
     cen = census(program, ends)
     ws = windows if windows is not None else [P.Window(range(len(ends)), 10 ** 9, 1)]
-    return P.check(program, cen, c=c, windows=ws, R_in=R_in, L=L)
+    return P.check(program, cen, c=c, windows=ws, R_in=R_in, L=L, **fw)
+
+
+def _one_gate_program(prim, registered=()) -> tuple[Program, list[int]]:
+    """One gate of `prim` on the Program's inputs, one a parameter (run, or registered when `registered` names it)."""
+    fn = comp(f"TestOne{prim.name}", prim.params, prim.ret, lambda B, _S, *xs: B.call(prim, *xs))
+    program = Program(fn, registered=registered)
+    return program, [len(program.root.body.nodes)]
 
 
 def one_step_windows(S: int = 3, reads: int = 64) -> list[P.Window]:
@@ -112,7 +124,10 @@ def test_an_exact_int8_program_passes():
     v = judge(program, ends, R_in=64, L=1, windows=one_step_windows())
     assert v.ok and v.reasons == (), v.reasons
     assert v.numbers["windows"][0] == {"steps": [0, 1], "reads": 64, "seconds": "1", "units": FREE, "input_bytes": "64"}
-    assert (v.numbers["family_steps"], v.numbers["macs"]) == (6, 192)
+    assert (v.numbers["family_steps"], v.numbers["macs"], v.numbers["f"], v.numbers["w"]) == (6, 192, 4, 32)
+    assert a.gates["BlackwellS8ImmaDot32_v1"] == {"class": "family", "instances": 6, "fan_in": 65, "width": 32}  # free: no fan-in
+    v = judge(program, ends, w=16)
+    assert codes(v) == ["width"] and v.reasons[0]["primitives"] == {"BlackwellS8ImmaDot32_v1": 32, "Const32[0x00000000]_v1": 32}
 
 
 def test_the_verdict_json_is_canonical_and_names_its_table():
@@ -163,15 +178,16 @@ def test_an_accumulator_from_a_run_input_is_refused():
 
 
 def test_a_wrapping_step_and_fp_mma_smuggling_are_refused():
-    """A step the table doesn't list is refused, and so is an FP tensor-core step; the step after either starts from an
-    accumulator of any word, so it isn't proven either."""
-    for mma, code in ((WRAP, "unlisted"), (QMMA, "fp-mma")):
+    """A step the table doesn't list is refused, and so is an FP tensor-core step: a rounding of 65 operands, past fan-in f,
+    and budgeted besides; the step after either starts from an accumulator of any word, so it isn't proven either."""
+    for mma, code, listed in ((WRAP, "unlisted", {WRAP.id: 2}), (QMMA, "fan-in", {QMMA.id: 65})):
         program, ends = int8_program(mmas=[IMMA, mma, IMMA])
         v = judge(program, ends)
-        assert codes(v) == [code, "s8-window"], v.reasons
-        assert v.reasons[0]["primitives"] == {mma.id: 2}
+        assert codes(v) == [code, "s8-window"] + (["roundings"] if mma is QMMA else []), v.reasons
+        assert v.reasons[0]["primitives"] == listed
         assert v.reasons[1]["steps"] == {"BlackwellS8ImmaDot32_v1": 2}  # the third step's two: the second starts from the first
         assert v.numbers["family_steps"] == 2
+    assert v.numbers["units"]["roundings"] == 2 and codes(judge(program, ends, f=65)) == ["s8-window", "roundings"]
 
 
 #: an s32 word's view as 32 s8 lanes: one Definition returns it, and so passes the reinterpretation to its callers
@@ -238,11 +254,12 @@ def test_carries_are_budgeted_and_only_proven_affine_maps_are_free():
     program, ends = _carry_program()
     a = P.analyze(program, census(program, ends))
     assert (a.family, a.affine, a.refused, a.unproven) == (4, 2, {}, {})  # the combine and the product by 256
-    # I32Rem, I32Div, U32And, the add on r and the product of two run words; I32Le and SelectI32
-    assert a.steps[0]["units"] == {"roundings": 5, "compare_select": 2, "gathers": 0}
+    # I32Rem, I32Div, U32And and the add on r; I32Le and SelectI32; the product of two run words
+    assert a.steps[0]["units"] == {"roundings": 4, "compare_select": 2, "gathers": 0, "products": 1}
     v = judge(program, ends, windows=[P.Window(range(1), 7, 1)])
-    assert codes(v) == ["roundings", "compare_select"]
-    assert judge(program, ends, c={"roundings": "5/7", "compare_select": "2/7", "gathers": 0}, windows=[P.Window(range(1), 7, 1)]).ok
+    assert codes(v) == ["roundings", "compare_select", "products"]
+    c = {"roundings": "4/7", "compare_select": "2/7", "gathers": 0, "products": "1/7"}
+    assert judge(program, ends, c=c, windows=[P.Window(range(1), 7, 1)]).ok
 
 
 def _compare_split_program() -> tuple[Program, list[int]]:
@@ -268,7 +285,7 @@ def test_a_carry_by_compares_alone_is_fully_budgeted():
     program, ends = _compare_split_program()
     a = P.analyze(program, census(program, ends))
     assert (a.family, a.affine, a.refused, a.unproven) == (2, 2, {}, {})
-    assert a.steps[0]["units"] == {"roundings": 30, "compare_select": 48, "gathers": 0}
+    assert a.steps[0]["units"] == {**FREE, "roundings": 30, "compare_select": 48}
 
 
 def test_a_gather_from_a_constant_table_counts_its_index_bits():
@@ -279,19 +296,30 @@ def test_a_gather_from_a_constant_table_counts_its_index_bits():
 
     program = Program(comp("TestTable", (("i", S32),), S32, body))
     ends = [len(program.root.body.nodes)]
-    assert P.analyze(program, census(program, ends)).steps[0]["units"] == {"roundings": 0, "compare_select": 0, "gathers": 7}
+    assert P.analyze(program, census(program, ends)).steps[0]["units"] == {**FREE, "gathers": 7}
 
 
 def test_the_red_teams_primitives_are_never_free():
     """Each of the 16 primitives the red team found computing an exact floor, mod, carry, comparison, selection or table read
-    is budgeted or refused; I32Mul is affine only with a constant operand (the test above)."""
+    is budgeted; I32Mul is affine only with a constant operand (the carry test)."""
     found = ("F32BitsShl23 F32Fabs I32Mul I32Div I32Rem U32And U32Xor F32ToU32RzByte NcpRneClampI7 Ue8m0CeilByte I32Le U32Ge "
              "SelectI32 F32Sat PouwSqGe GatherF32x128").split()
     classes = {f: P.class_of(f + "_v1") for f in found}
-    assert classes.pop("I32Mul") == "affine"
     assert set(classes.values()) <= set(P.BUDGETED), classes
     assert P.class_of("I32Add_v1") == P.class_of("I32Sub_v1") == "affine"
     assert P.class_of("BlackwellS8ImmaDot32_v1") == "family" and P.class_of("NoSuchPrimitive_v1") is None
+
+
+def test_the_table_is_leans_class_of():
+    """Spot checks against Lean's `Accounting.Gates.classOf`, which 6b difftests id for id: the FP dots are roundings (refused
+    for their fan-in, not their class), the integer dots outside the family and I32Mul products, and the families by id."""
+    assert {P.class_of(f) for f in ("HopperBF16WgmmaDot16_v1", "BlackwellNvf4OmmaDot64_v1", "DivFullScaleA_v2", "F32Fabs_v1",
+                                    "F32Sat_v1", "I64ToI32_v1")} == {"roundings"}
+    assert {P.class_of(f) for f in ("I32Mul_v1", "NcpDot16I7_v1", "PouwDot16U8S8_v1", "PouwSqAcc_v1")} == {"products"}
+    family = ("GatherBf16x128256_v1", "TableRead16x4_v1", "BitAtx32_v1", "PouwWindowWord_v1", "TopPMaskWordx151936_v1",
+              "Const8[0x7f]_v1", "BlackwellU8S8ImmaDot32_v1", "Zero_v1", "GatherBf16x16_v2")
+    assert [P.class_of(f) for f in family] == ["gathers"] * 4 + ["compare_select", "const", "family", None, None]
+    assert [P.gather(f) for f in family[:4]] == [(0, 17), (0, 16), (1, 5), (1, 4)]
 
 
 def _gather_program(indices: str) -> tuple[Program, list[int]]:
@@ -314,7 +342,40 @@ def _gather_program(indices: str) -> tuple[Program, list[int]]:
 def test_gathers_count_fresh_index_bits(indices, bits):
     """A gather of one of 16 words reads 4 index bits; one index read by many gathers counts once."""
     program, ends = _gather_program(indices)
-    assert P.analyze(program, census(program, ends)).steps[0]["units"] == {"roundings": 0, "compare_select": 0, "gathers": bits}
+    assert P.analyze(program, census(program, ends)).steps[0]["units"] == {**FREE, "gathers": bits}
+
+
+def test_a_bit_select_counts_its_index_operands_bits():
+    """`BitAtx32` reads bit i of a word, its second operand: 5 index bits when i is a run input, none when only the word is."""
+    for registered, bits in ((("word",), 5), (("i",), 0)):
+        program, ends = _one_gate_program(BITAT, registered)
+        assert P.analyze(program, census(program, ends)).steps[0]["units"]["gathers"] == bits
+
+
+@pytest.mark.parametrize("prim,registered,code,listed,units", [
+    (NCPDOT, ("b",), "fan-in", {"NcpDot16I7_v1": 33}, {"products": 1}),
+    (SQACC, (), "width", {"Input576_v1": 576, "PouwSqAcc_v1": 576}, {"products": 1}),
+    (TABLE, ("table",), "width", {"TableRead8x4_v1": 64}, {"gathers": 8}),
+])
+def test_a_gate_past_fan_in_f_or_width_w_is_refused(prim, registered, code, listed, units):
+    """Restricted f w: an integer dot outside the family (33 operands), PoUW's 576-bit square accumulator and a table read of
+    a 64-bit entry are refused at f = 4, w = 32 (a gather's column is no fan-in). At an f and w they fit, each is charged
+    its class's unit (a gather its index bits)."""
+    program, ends = _one_gate_program(prim, registered)
+    one = [P.Window(range(1), 1, 1)]
+    v = judge(program, ends, c={**FREE, **units}, windows=one)
+    assert [(r["code"], r["primitives"]) for r in v.reasons] == [(code, listed)], v.reasons
+    assert v.numbers["units"] == {**FREE, **units}
+    assert judge(program, ends, c={**FREE, **units}, windows=one, f=33, w=576).ok
+
+
+def test_the_u8_s8_step_is_proven_over_its_unsigned_operand():
+    """The u8 x s8 sibling's 32 products lie in 32 * [255 * -128, 255 * 127]: from C >= -2^31 + 32 * 32640 its D stays in s32.
+    A constant lane 0xff is 255 to it, not -1."""
+    lo = P.S32[0] + 32 * 255 * 128
+    assert P.count(U8S8, (True, True, False), [(lo, 0), None, None]).family == 1
+    assert P.count(U8S8, (True, True, False), [(lo - 1, 0), None, None]).unproven == {U8S8.id: 1}
+    assert P.count(U8S8, (True, True, False), [(P.S32[0] + 32 * 128, 0), (-1, -1), None]).unproven == {U8S8.id: 1}
 
 
 def test_roundings_are_budgeted_per_certified_byte_read():
@@ -353,6 +414,9 @@ def test_check_refuses_bad_windows_c_and_another_programs_census():
             P.check(program, cen, c=FREE, windows=ws)
     with pytest.raises(ValueError):
         P.check(program, cen, c={"roundings": 0}, windows=[P.Window(range(3), 1, 1)])
+    for fw in ({"f": 0}, {"w": 0}, {"f": True}, {"w": 32.0}):
+        with pytest.raises(ValueError):
+            P.check(program, cen, c=FREE, windows=[P.Window(range(3), 1, 1)], **fw)
     other, other_ends = int8_program(S=2)
     with pytest.raises(ValueError):
         P.check(program, census(other, other_ends), c=FREE, windows=[P.Window(range(2), 1, 1)])
@@ -372,5 +436,5 @@ def test_the_table_is_pinned():
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("a1037fbadfb9b1d643bd16dd4b68fc9098017a6962accc750a42b405337ebe6f"
-          "ff5077210aae7989a52a062e6f8eb2c7cfae6d09fb05f1b680c8088f9bb73f9b")
+PINNED = ("975193ef2bf98de7258b30a45e7b2b0c6acaa24baae0bd5ba784c379306e9d93"
+          "a6f5a06a8a37d68a475348793ec31513820b21257b8a1ad2b79634f508108eee")
