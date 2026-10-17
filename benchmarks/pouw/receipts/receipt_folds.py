@@ -242,9 +242,10 @@ FOLDS = {
                    "one, two and three words at every width (Lean Pouw.SecurityProofs.Receipt.DuoWordInjective, "
                    "DuoPairNoKernel, DuoTripleNoKernel); false at four words for odd keys with r1 + r3 = 0 mod 32, "
                    "a2 = -1 mod 2^r1 and a3 = ±1 mod 2^(33 - r1), which key_ok and both schedules' rotations exclude. "
-                   "At four words a kernel needs a2 = -1 mod 2^r1 when r1 <= 29, so both schedules' keys have none "
-                   "(paper proof, not in Lean); open for five or more words, and for the served receipt "
-                   "y ^ rotl(z, 16) at any length (note:20261017T1000Z-draft-fold-r §6.5)"},
+                   "At four words a kernel needs a2 = -1 mod 2^r1, for odd a1, a2, a3, 0 < r2, r3 < n and "
+                   "0 < r1 <= n - 3 (Lean DuoQuadNoKernel), so both schedules' keys have none; open for five or more "
+                   "words, and for the served receipt y ^ rotl(z, 16) at any length "
+                   "(note:20261017T1000Z-draft-fold-r §6.5)"},
     "xin13": {"step": xin13_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": (13, 19),
               "key_rule": {"pfill": "key_ok_r9", "egemm": "key_ok_r9", "e2e": "lambda8 (weaker: no key_ok)"},
               "status": "open", "needs": ("RT", "G3"),
