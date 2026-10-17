@@ -9,6 +9,7 @@
   python eps1.py ceiling OUT                             # clock_ceiling.sh: each clock knob and the clock it reached
   python eps1.py uniform OUT                             # uniform.cu: issue slots a uniform instruction, each setting
   python eps1.py l2gather OUT                            # l2gather.cu: bytes a SM a clock and TB/s a gather path, best
+  python eps1.py jitter OUT                              # clock_calib.sh: auditor-side u of host-timing a reference kernel
 
 A facet is a row c_M n_MMA + c_X n_X <= T over warp instructions on one SMSP in T SMSP-cycles: the upper hull of the
 measured points (x_MMA, x_X) in warp instructions a SMSP-cycle (the rows' rate / 4), each alone rate on its axis, with
@@ -379,6 +380,40 @@ def cmd_l2gather(a) -> int:
     return 0
 
 
+def cmd_jitter(a) -> int:
+    """clock_calib.sh: the auditor-side uncertainty of timing a known-length reference kernel with the host's own clock,
+    with no trust in the chip (reading C). Each (trial, length) group's host-timed SM clock over the reps: its mean, the
+    random spread (stddev and half-range), and the systematic gap below the chip's own %globaltimer clock, which is the
+    launch latency and shrinks as the kernel runs longer. Timing can only lower-bound the clock (a prover runs slower at
+    will), so u is the floor an auditor quotes for that bound: the random spread plus the residual gap at the longest
+    length."""
+    rows = [r for r in load(a.out / "jitter.jsonl") if r.get("op") == "calib"]
+    groups: dict[tuple[str, float], list[dict]] = {}
+    for r in rows:
+        groups.setdefault((r["trial"], r["len_s"]), []).append(r)
+    print(f"{'trial':8s} {'len_s':>7s} {'reps':>4s} {'host MHz':>9s} {'stddev':>7s} {'half-range':>10s} {'rel u%':>7s} "
+          f"{'gt MHz':>9s} {'gap%':>6s} {'NVML':>5s}")
+    best: dict[str, tuple[float, float, float]] = {}
+    for (t, ln), cs in sorted(groups.items()):
+        host = [c["clock_mhz_host"] for c in cs]
+        gt = [c["clock_mhz_gt_median"] for c in cs]
+        mean = statistics.fmean(host)
+        sd = statistics.stdev(host) if len(host) > 1 else 0.0
+        half = (max(host) - min(host)) / 2
+        rel = 100 * half / mean if mean else 0.0
+        gtm = statistics.fmean(gt)
+        gap = 100 * (gtm - mean) / gtm if gtm else 0.0
+        nvm = statistics.median(c["nvml_sm_mhz"] for c in cs)
+        print(f"{t:8s} {ln:7.3f} {len(cs):4d} {mean:9.1f} {sd:7.2f} {half:10.2f} {rel:7.3f} {gtm:9.1f} {gap:6.3f} "
+              f"{nvm:5.0f}")
+        if t not in best or ln > best[t][0]:
+            best[t] = (ln, rel, gap)
+    for t, (ln, rel, gap) in best.items():
+        print(f"{t}: at {ln:.3f}s the host clock pins the SM clock to within {rel:.3f}% (random) and sits {gap:.3f}% "
+              f"below the chip's timer (launch latency); u ~ {rel + gap:.3f}%")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -398,9 +433,11 @@ def main(argv: list[str] | None = None) -> int:
     u.add_argument("out", type=Path, help="a uniform.cu run's out/ (rows.jsonl, gate.json, sass/)")
     g = sub.add_parser("l2gather")
     g.add_argument("out", type=Path, help="an l2gather.cu run's out/ (rows.jsonl)")
+    j = sub.add_parser("jitter")
+    j.add_argument("out", type=Path, help="a clock_calib.sh run's out/ (jitter.jsonl)")
     a = p.parse_args(argv)
     return {"facets": cmd_facets, "side": cmd_side, "clock": cmd_clock, "ceiling": cmd_ceiling, "uniform": cmd_uniform,
-            "l2gather": cmd_l2gather}[a.cmd](a)
+            "l2gather": cmd_l2gather, "jitter": cmd_jitter}[a.cmd](a)
 
 
 if __name__ == "__main__":
