@@ -1591,12 +1591,6 @@
    "assumptions": [],
    "type_hash": "6a209c7ca35c0c87663d813e3cdd72ba1735b8675038b6ed046f1875d985113d"
   },
-  "Flock.SecurityProofs.RecursionClaimsStated": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.RecursionClaimsStated : Flock.Guarantees.RecursionClaimsStated"],
-   "assumptions": [],
-   "type_hash": "31aab8ba52132a459f17aa21b3302c05f74b988aeac456d7ceeb792514333067"
-  },
   "Flock.SecurityProofs.RecursiveAuditC3": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3"],
@@ -5295,8 +5289,7 @@
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins, the check's cell-block uniform among every stage's, and each round's run fixed before its first draw, E3), KScopeOverlapAffine (Theorem K's proved affine scope across draws: operands affine in each draw's own bits at every bit point of the other draws' (AffMulAt), row-pure across draws, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16Overlap (the active vector VF3j-16's prices with B_theta complete, each product counted once). It is a sibling of OverlapFloorKOneSided, a floor of record (Daniel, decision 53), proved on its own scope at the luck 3/4: the affine scope isn't inside the one-sided one; K1 is not claimed outside the two proved scopes.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeOneSided (Theorem K's proved one-sided scope, a sibling of the ledger's K1: products one-sided of any form, charging purity mod 2 (odd coefficients) at the cell-blocks' frames in place of row purity, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16 (the active vector VF3j-16's prices with B_theta complete, for stages that don't overlap). It is a floor of record (Daniel, decision 53): c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins, the check's cell-block uniform among every stage's, and each round's run fixed before its first draw, E3), KScopeOverlapOneSided (Theorem K's scope across draws for one-sided operands of any form per draw at every bit point of the other draws' (OneSidedAt), charging purity across draws (odd coefficients) in place of row purity, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16Overlap (the active vector VF3j-16's prices with B_theta complete, each product counted once). It is a floor of record (Daniel, decision 53): c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies.",
-   "Flock.SecurityProofs.SamplingClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Sampling.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed sampled verifier.",
-   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier."
+   "Flock.SecurityProofs.SamplingClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Sampling.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed sampled verifier."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -6588,7 +6581,7 @@
    ]
   },
   "Definitions.Claims": {
-   "digest": "f07b4701d72c528d76aa8e157c87d508af09a817d44cb517d262098a8804a7e6",
+   "digest": "065f61f7c54507b40efacfdea9d8fe9942a44cae5bb319377569b59de42988c5",
    "definitions": {
     "Claims.B": "fb3801991ccf043f813b846a36059903571dff8141ca0f402abb8a11582fa105",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -6711,7 +6704,6 @@
     "Claims.Out": "e77595ead56082966cda286d3ad60a3eef2d4a2012f43657edb1b29db1325602",
     "Claims.Out.acc": "d32255baf90ca086ed428fd71ae10493898c66339711ec95c3bf9f08110f96a4",
     "Claims.Out.casesOn": "fe8d06a8fc3ff1e1b48f33a4487bb0422db132387e2c741792d27fbea601563e",
-    "Claims.Out.ctorIdx": "0ca8ddcdfeb452e036369e013d2b2c7c19e7031eddf5d614710b090c9fcddfec",
     "Claims.Out.msg": "3c08c53a46a52b97ee40eed58de673aae98985fe343bdac89d5525d58419f6be",
     "Claims.Out.rec": "acb7a8c44e9a66422d667f4fd0314ea55c58992f25f8b3c5294bc9c59a18a074",
     "Claims.Out.rej": "ecd0be2fb93cb8c70662611f8eebcda8e8df7d68f25347d8d2984235a87e705e",
@@ -6749,7 +6741,6 @@
     "Claims.SP.ret": "21ba525c29c41517de78df207b6991f7b311f299a14fc5591a2f57c8528f0491",
     "Claims.ScopeMatches": "538116d92383dc3ca64a56e414f5c194316a39ca450d8f8be7637010c20646b8",
     "Claims.Seen": "a5a26fcf9d19ac1d8786011d3c64460317e7aae403a4244fe48b2aee8e809ca1",
-    "Claims.Seen.msgs": "08453b6bcba49ffc36070cb9fc6c4d66c5c3fa555ee081d7b9d1cfdccd0cfed4",
     "Claims.Seen.out": "ef0ddab850d3a2fd046517dc3440b26ced80bc8a31cff7b5a7d36288e8eed6ff",
     "Claims.SimCost": "245c07fe2b8f5d02b57370522f16dee53ae2eb4def1a417305a7bfec3a2101d5",
     "Claims.Simulator": "ad414bff06799b7771fe988885dda054869cec5c2ff1023135956edfe6f15735",
@@ -6785,11 +6776,7 @@
     "Claims.trustedBase": "da78771f74000413bb27b7edf566b5e665954850e41c535e8fc45d2f283842fb",
     "Claims.waitAcc": "85b751a4e882d0ce61736041f2349297297bc4eb996b472d6a6191513053bca7"
    },
-   "guarantees": [
-    "Flock.SecurityProofs.ClaimsStated",
-    "Flock.SecurityProofs.RecursionClaimsStated",
-    "Flock.SecurityProofs.SamplingClaimsStated"
-   ]
+   "guarantees": ["Flock.SecurityProofs.ClaimsStated", "Flock.SecurityProofs.SamplingClaimsStated"]
   },
   "Definitions.Claims.Hm96": {
    "digest": "1a0af7a4f0c55c58b023c3336ffdfb726648ac202948524990a2c2b96840ec44",
@@ -6797,113 +6784,7 @@
     "Claims.Hm96Hiding": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2",
     "Claims.PrENNReal": "5e884d85245e6c7c79ae257dff1612fbe5d048d84926996eb79d469f11340473"
    },
-   "guarantees": ["Flock.SecurityProofs.ClaimsStated", "Flock.SecurityProofs.RecursionClaimsStated"]
-  },
-  "Definitions.Claims.Recursion": {
-   "digest": "6e697a05d1b62bf2446a289741d03679f7e3aad9211d6cf324496d26e16a935e",
-   "definitions": {
-    "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
-    "Claims.Recursion.Bits": "a99e1e0b0f8612002140e216ba89a1ddf7c659facec23992ee59738fd9323d90",
-    "Claims.Recursion.BitsFlock": "b1fd50bf48827c34b7d6b993ae8354190ca92f191952a8345b5802272b9bc2d7",
-    "Claims.Recursion.Complete": "784484ffbd17d3e6674f856683638ff3d1507ef53f14f2826534623b3b166160",
-    "Claims.Recursion.Deploy": "23736935e721986f4cc56a819598c208cbedd7426ca99e0657c7f5891e478540",
-    "Claims.Recursion.Deploy.V": "beba28d5197c34dabcd32e08ffe0ab260e0862b8b8f5d3a9718daa6a15d5ed3c",
-    "Claims.Recursion.Deploy.calls": "90c4fcf2fede006ffe33425fdd00dd800e03c5b1876e30b2f2304bc6842e0891",
-    "Claims.Recursion.Deploy.innerView": "e4da15656be1789f0cf365e0ad7e0eac3437cd4b8fea9d2caea691cd7897ecd7",
-    "Claims.Recursion.Deploy.nS": "c57b32f8762a09ffe6d84de47e06a98c7db612917af6d6c4a3bde9b0703537df",
-    "Claims.Recursion.Deploy.nums": "cc9ae7d609d3e919c1b8a2422e84f765d6912d40db48c4ba1e699ea005fbdae9",
-    "Claims.Recursion.Deploy.parse": "0cd24e77fa69beeac127c9721c9977ebaa9e546fde746244f14bbbd256024b5f",
-    "Claims.Recursion.Deploy.saltLen": "1e5679a4432c70fe7b7eefd51eb05c50c8506bb1b8d23f348abb7ccd9e17abfa",
-    "Claims.Recursion.Deploy.scopeCheck": "835300273d99d8aef7b09436e65681efc1420dc22ce3d240f3aacf83903df4c7",
-    "Claims.Recursion.Deploy.session": "4bcf11f4fad62033b41e430448509c473e79b38aab245e4fecf87f5b43e90b78",
-    "Claims.Recursion.Deploy.vstar": "8ceefcd639527271d7adab107e03c7fa3777b5ce89387eb905f0b0bbff6e66a4",
-    "Claims.Recursion.Deploy.zeroCommit": "1d8aeae3b9064dd457d4cd6f36e557509b889b3f4d0bd22c23ee7fac510552fb",
-    "Claims.Recursion.E": "ab0e2efce2738cbf5a374db54f9cd7d9a01080a533b2020bd0dcb67b08cb2efe",
-    "Claims.Recursion.EO": "9abd045b4b14c9bd5e9537e07f4967b3061781b42f55b5bbeea2afd0f11cdfa6",
-    "Claims.Recursion.Efficient": "ed88513ea5db4b08dae60bff050e5f047333befed16a15eb3409afb8663c19c5",
-    "Claims.Recursion.Form": "15f627b3a0e196f8d6ada777be911aa9170ba0d4ced138a29a241a4af9af406f",
-    "Claims.Recursion.Form.claims": "7000278d5c77426b590b45fbf5c1a7c0b56c45260f00a367b4a01fdf0b434042",
-    "Claims.Recursion.Form.holo": "c6144b029151e29931ccbb8740ebd2ae92fabc0d6be2b136be5e3838e07f8524",
-    "Claims.Recursion.Form.kLog": "853d37e50dd7c2cb7d43fa8a1286a535d6f890139f128dfbeb7269d0b0efef12",
-    "Claims.Recursion.Form.m": "b7e750bc1b2a3d09f6f4cc311c865fed83d7fb9577001b302a1dc2a74d0a60a8",
-    "Claims.Recursion.Form.regions": "0526e46d39d8535009b9b470b964eb54048e47bd99b23de6f6ddb8b3e0c2b94a",
-    "Claims.Recursion.Form.sparse": "cdde729c2d9e0ba6c593d6510429157f057864fdf3efa550165d2ab30240888d",
-    "Claims.Recursion.Form.stacked": "1e9dd5f6621cad32c8f804f422be77b0d60f6a1fb32c20942d71223ef2695c44",
-    "Claims.Recursion.Form.unitRangeInBlock": "e8acc5c08ba23484c86f51648a5fea16fedd2347e66c4689d533b75475ad75db",
-    "Claims.Recursion.InScope": "3c8816d23748e905f9cad0125ad071b6a637c8775fc1646a0721ae459f0db01e",
-    "Claims.Recursion.Inner": "65cd0218b5669ad9b091267cdb5f14f7e38713bf6cd91c2914507cf8f017ba2c",
-    "Claims.Recursion.Inner.E": "f6beaf3000fe0d8fb3c1a91ffe977178536fe55ae558163299a0b68968cb1161",
-    "Claims.Recursion.Inner.KS": "6ad4decaf41fa1d3feb96b1b6448b340996a76240cb95405ca3f0627f617fea4",
-    "Claims.Recursion.Inner.Op": "c1c93af54c3edfe6f917c4d47cfe1bda376d1c4eff18f9b90103cb056860cae0",
-    "Claims.Recursion.Inner.R": "333dae8a3398d56aeec8c2a7fc34cd98c52df9881676b648877fe50d37e02cff",
-    "Claims.Recursion.Inner.Scope": "0c09346a180292dd175e1c1b43e69d7cf02c768536fedd7f58395f52829fe368",
-    "Claims.Recursion.Inner.V": "d6dad015a4e24ce53fafcca511a3f5b6ba9367688f89d090f2c84172119907a7",
-    "Claims.Recursion.Inner.assemble": "522067202ef5c26edaf9a4fdd7b9825b66488ace067205d5b21be600032f4771",
-    "Claims.Recursion.Inner.cap": "b8f77d3915e11b35dfeb35cb9b59ed3a6f23d6d2890ac38cb41066deeeab82c7",
-    "Claims.Recursion.Inner.check": "2ea5d8cc35e27f91f493d767393722bb1fa550bbabcb9ed7812030ce0c5113f5",
-    "Claims.Recursion.Inner.k": "5d45c1e455b39f1dae3d310cf96dbeec1d33376ccd11b7a241134d81e49ddec9",
-    "Claims.Recursion.Inner.ofFlock": "34f4819478b6fbac2484eb6f6b18ef0ac3a1b81eaf5d7e779cf274ff4cf58abb",
-    "Claims.Recursion.Inner.opens": "9093824a25f276e4044962ab2fe90cca948069491cbea2652a8df0b88b2f2e9b",
-    "Claims.Recursion.Inner.waits": "63c050b6b3f26c6a079b70b64536aa7cd895d7dc95f544e9fe4d79e8f386db82",
-    "Claims.Recursion.Inner.γ": "7bd3c240361fc3143125ac501ac67173d0e3fbf912e0f8e5937ab5c5caccbb1b",
-    "Claims.Recursion.Inner.κ": "8724a4a0cc99567c32a2e0e4de422fb97b002c657ad75ae5d63e08e11f0b8977",
-    "Claims.Recursion.KS": "1c3918108d7131e1ee355b977b680a3267b5bb95969c4ed121eb4797c90e08e0",
-    "Claims.Recursion.KSFlock": "8694dcf2bc68c08b3defa5521fde1ec873efb42f6bf88a64d0f277d5acc2aab0",
-    "Claims.Recursion.KSPriv": "3bf29bc9ded131e3f9441ac61f6cfdcfd43bf6806a58c007425b7a26248112d0",
-    "Claims.Recursion.NI": "334246b6e9ef4802ecd06c2db3aae3a494077be7e57915e2dffa67f1e25133ef",
-    "Claims.Recursion.Nontrivial": "8254008bbfe450d7f4237a68ccea9f9c212e6da8e88ac858f451dd2a6cf8d5df",
-    "Claims.Recursion.Nums": "e1dd6b5a1686182b9a636884146ce556b903df9423dd96d46e417cc981571425",
-    "Claims.Recursion.Nums.N₀": "a06582bd3145156a895fcf0470bee74341f96450722f1ed91950c4e1fdd19799",
-    "Claims.Recursion.Nums.cap": "abeb95c749b6469e5d318a32ec90d3fd3f634d7da94ea517c514d55fc7028420",
-    "Claims.Recursion.Nums.k": "80b9342b611196702718934d41b90bce5ffb416fca303a18dad41bf0c190016f",
-    "Claims.Recursion.Nums.rounds": "98ff218c64eff0056720d5d72eec501ccac5ff3e15912b811177aa70d3ac7d02",
-    "Claims.Recursion.Nums.waits": "13a77a5dacc9bf62d15aa6b198e9de7e44599de5dd4426f7e352168cd2a76b57",
-    "Claims.Recursion.Nums.weight": "6e76ed787676b571d061ed33e257c89d929fe796b2325683f55876338cfc5402",
-    "Claims.Recursion.Nums.γ": "c91f432662192a8751cd6940f4661230915bd3eecacfa1ec9439648893e38b58",
-    "Claims.Recursion.Nums.εtable": "fc9ae4115370e044c0d6984f257842d0cc7273acf3f80a94dd399ecdf6c0fae3",
-    "Claims.Recursion.Nums.κ": "1820acd11bfb3f3edc02e51113d5d63e20ae0ceeb29594ff1cc36183506a5f18",
-    "Claims.Recursion.OSim": "6f15e2bf859b10a9580595d96a82e13dfe57bac2ebcc337695593fb44682ea0b",
-    "Claims.Recursion.OSim.C": "716b829597e222f77b1186f0019f21e23d250e1e7c4f441c22a519e9acd2cc9d",
-    "Claims.Recursion.OSim.fin": "eb72ca783d6a6d5e6af338a5aaab1b21bf422568d2783ab49cc1e8793b3bc1c8",
-    "Claims.Recursion.OSim.prog": "d2045ee47d9fe9853a50351d97ba90d3e2d3cc84380eef80c0ea92a7c83c6067",
-    "Claims.Recursion.PrBe": "6f93e9bd64f6ba1cc67e0cc8223bf3b08eacb8fda204497a8f1044673d7ebaba",
-    "Claims.Recursion.R": "430094b2e8a2a403813a1ba292d8d1eeafdc9136d7b945c8e5018644c3a5ddf1",
-    "Claims.Recursion.RPriv": "dc62ecaea7236ec7992258477c1660d47149260edbf84574e9997d7d6b322511",
-    "Claims.Recursion.Scope": "c60746741c7a89a0ef7e56a5982f68ad97da91e1bbb2038a7de4f87ec05dcfd6",
-    "Claims.Recursion.ScopeMatches": "12159a1f946bf3cd1cbc2acaaa30cbd0288b8be013f7551df5037e14603b72c5",
-    "Claims.Recursion.Sim": "cb7e2ffd7506250e34025f8c6f739a4244762c033de040922b2cc87dbc4c45eb",
-    "Claims.Recursion.Stmt": "f814808e9bb87a3637928e0e2656a0fb4e8f9509b5dae19947a99d5f326f3571",
-    "Claims.Recursion.Stmt.circ": "386c9c6e17d2d2b28e1fd9f4452496b25a8461888919b3fac92576df76bbd47d",
-    "Claims.Recursion.Stmt.form": "03c3ae9baea4445629de62656489124345e174ead6601ef9939e78e9bf9c7f73",
-    "Claims.Recursion.Stmt.inner": "3f8cb0802cb9e9b2e47a7529077c8daee315a6d0bc0ae05923ad724ae0f7fa47",
-    "Claims.Recursion.Stmt.innerDims": "c8b2ac51079c1b273f939ee7022899890c83b06bcf127bd25a1d07570489a560",
-    "Claims.Recursion.ZK": "796ef859e1ca357f302c79490abfa1e520b2db0aafacb6a61882f54dcc3d469d",
-    "Claims.Recursion.ZKPriv": "18c1f9d2c58433376b2488f84edfca036abbfebff616261c69365cc76c0bec8e",
-    "Claims.Recursion.cBe": "52f1d95e6ab5f4392cfd9756997a5e17689f10faeb86d650ffa258ade0ea7067",
-    "Claims.Recursion.collect": "c476ccf837809c647b1f3333df12fc7831690bb9037dda37ab8c8085071b3708",
-    "Claims.Recursion.dec": "b0de642543c9a85f68a9e4b1079c156c830f9d39e366ca2db1ac954a8a98de32",
-    "Claims.Recursion.decOK": "8e8ac53969a11e78b92623c8d92de4fc34f0c7bac84f32e70cd0ccf97c9cd353",
-    "Claims.Recursion.erep": "90bf56ab0ce2499812a109aab754b41dc4dac5956eb815209b6eb5dd243d422c",
-    "Claims.Recursion.fork": "fbb421d91b3eefecd7f183ac7c52e92f6adb47aa61ce4f447ac082baab08e7c5",
-    "Claims.Recursion.goesOn": "4211082584ba923f700244fe105d409ae91a4b12c26c37a794a33016c8890b29",
-    "Claims.Recursion.goesOn._sparseCasesOn_1": "b3ccc6fdfa2f16b768c4507e0344a76d871e6f9f32a748207d734348e2a6a872",
-    "Claims.Recursion.lam": "9d414e47a7febbe37128d41540fb21c5dc22eb7f6145041ceb8d4cb8f2e9d92d",
-    "Claims.Recursion.outerStage": "412166b3eea1f83011e5acbc176a794e45baded8db9a0aafcbf01cc58c21f43d",
-    "Claims.Recursion.pLog": "95ca32a7bbaa87a982b4154260f3efe17eaaf3907056a8aa78c98d88ae4d839b",
-    "Claims.Recursion.serve": "d0ed223162467e1fcb4718ebfa7aef1e6de175ce8f3e76a69259ef05d468d3a5",
-    "Claims.Recursion.served": "1555d45eecfdeb0cd0e8dfa40f476b44880590c8a13bd9825ed69f77e8be8831",
-    "Claims.Recursion.simInner": "c9a70b44e042505bbbf5c42481dfcaef78c04ed594896bd1d3ee5e7088f37d10",
-    "Claims.Recursion.simOuter": "ec90b221e1dcac3d8e6fafa3f2e4a53a62d823afa08922bd50248745fca789a8",
-    "Claims.Recursion.spBind": "3609da4643470267021c694e22243219448287548ab4289518dee4242a65e769",
-    "Claims.Recursion.spOf": "aec30eba71b2d6e89c4ae0b59ae7f58bb1e5eee0dec8e17c8eb95c96ea3f8810",
-    "Claims.Recursion.spUnder": "89dab3e0f4ec85aab8f5656c9654a4c95304474e1ec2605f43db544fb9c9835e",
-    "Claims.Recursion.viewing": "afda5e97e571467069027f6f82b540f75c27de296c8d6a11917f33cb33a0699e",
-    "Claims.Recursion.xI": "89b54126d268b17c56591804916634d7d510790915ccccde670e97d6ff47600e",
-    "Claims.Recursion.γ": "aa8d6a7c07ccb625f4b1445d85f8dc2e4dbffb4dbd2d85ff36da7159b07a99b1",
-    "Claims.Recursion.γe": "7467748bbc25442d97b90816ea004d7c949e375621f1cdf5df036e197c9ccda9",
-    "Claims.Recursion.κ": "3ab1013310bb4acce30b5d46750070e246193b79970b956601b32ab97e229979"
-   },
-   "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
+   "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Sampling": {
    "digest": "a819b955f071f6de4db2dbb681039eb4ce090d75344592275b9092127b79bc89",
@@ -16838,13 +16719,6 @@
     "Flock.Guarantees.ClaimsStated": "ced384e1ae0787fb65dbf7fd5124046f60c21a369a750b83f585af065a078054"
    },
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
-  },
-  "Models.Flock.Guarantees.RecursionClaims": {
-   "digest": "bad07c60f801785f5f536b8e04d08b6b7351f526bb28d23af3f2f4289dd37d79",
-   "definitions": {
-    "Flock.Guarantees.RecursionClaimsStated": "6aed0f9c69049c2da04bdf80a90493f09d34e9244c592e96871cf16bd5c5e870"
-   },
-   "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
   "Models.Flock.Guarantees.SamplingClaims": {
    "digest": "995bf74f484636cdb26fedf49082b112f6b3501cac21d60995b8eb85f2978186",
