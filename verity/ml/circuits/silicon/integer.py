@@ -151,7 +151,11 @@ def step_s8_bits(C, model: IntegerMma, acc, a, b):
     Each product is a Baugh-Wooley array: the 49 unsigned partial products, the 14 that carry one sign bit negated, the
     sign bits' product, and a constant. The k arrays, the accumulator sign-extended to 33 bits and the k constants are
     reduced once, modulo 2^33, which holds every sum (``|acc| <= 2^31`` and ``|products| <= k * 2^14``). With ``.satfinite``
-    the sum is clamped at D: it leaves s32 exactly when its bits 31 and 32 differ, and bit 32 is then its sign."""
+    the sum is clamped at D: it leaves s32 exactly when its bits 31 and 32 differ, and bit 32 is then its sign.
+
+    The result is committed (``C.commit``, a row of a lowering and no gate): uncommitted, each accumulator bit is an XOR form
+    over every earlier step's, and a K/k-step chain's lowering grows as K^2 (C-Flock's unit at K = 256: 20.9M nonzeros, against
+    2.0M committed)."""
     if (model.dtype, model.b_dtype) != ("s8", "s8"):
         raise InvalidArtifact(f"{model.name}: step_s8_bits takes s8 x s8 models")
     if len(acc) != 32 or len(a) != model.k or len(b) != model.k:
@@ -172,6 +176,6 @@ def step_s8_bits(C, model: IntegerMma, acc, a, b):
             cols[i].append(ONE)
     s = compress_columns(C, cols)[:W]
     if not model.satfinite:
-        return s[:32]
+        return C.commit(s[:32])
     ovf = s[31] ^ s[32]
-    return [s[i] ^ C.AND(ovf, NOT(s[32]) ^ s[i]) for i in range(31)] + [s[32]]
+    return C.commit([s[i] ^ C.AND(ovf, NOT(s[32]) ^ s[i]) for i in range(31)] + [s[32]])

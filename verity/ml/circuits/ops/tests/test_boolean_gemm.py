@@ -85,13 +85,15 @@ def test_pinned_counts_and_digests(target) -> None:
                                BG.HopperE4m3MmaV2Dot32, BG.BlackwellE4m3QmmaDot32, BG.BlackwellE5m2QmmaDot32, BG.BlackwellNvf4OmmaDot64,
                                BG.BlackwellMxf4OmmaDot64, BG.BlackwellS8ImmaDot32, BG.S32ToF32Rn], ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
-    """The traced circuit has one And gate per AND the builder keeps live, with common ANDs shared (`Circuit(cse=True)`)."""
+    """The traced circuit has one And gate per AND the builder keeps live, with common ANDs shared (`Circuit(cse=True)`),
+    but for its commits (`Circuit.commit`, a row with B = 1 and no gate; `AND` folds every other constant operand)."""
     T = d.traced()
     params = [t for _, t in d.signature(None)[0]]
     C = Circuit(cse=True)
     ins = TR._elements_in(C, params)
     C.output("out", TR._flat_out(d.build(C, *ins), d.signature(None)[1]))
-    assert T.counts["and"] == C.counts()["ands"] == PINS[f"{d.name}_v{d.version}"][0]
+    commits = sum(k == "and" and v[1].is_const() for k, v in zip(C.kind, C.data))
+    assert T.counts["and"] == C.counts()["ands"] - commits == PINS[f"{d.name}_v{d.version}"][0]
 
 
 def _agree(target, inputs) -> None:
