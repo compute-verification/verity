@@ -539,12 +539,17 @@ static void form() {
   mixu<F, 32, LANE_IADD3>(); mixu<F, 64, LANE_IADD3>(); mixu<F, 96, LANE_IADD3>(); mixu<F, 128, LANE_IADD3>();
 }
 
-int main() {
+static void setup() {
   int d = 0;
   CK(cudaGetDevice(&d));
   CK(cudaDeviceGetAttribute(&g_sms, cudaDevAttrMultiProcessorCount, d));
   CK(cudaMalloc(&g_sink, (size_t)g_sms * 1024 * 4));
   CK(cudaMalloc(&g_rec, (size_t)g_sms * sizeof(BlockClk)));
+}
+
+#ifndef TENSOR_KINDS_NO_MAIN
+int main() {
+  setup();
   opalone<LANE_IADD3>("iadd3");
   opalone<LANE_FFMA>("ffma");
   opalone<LANE_MIX>("iadd3_ffma");
@@ -572,3 +577,4 @@ int main() {
   printf("{\"probe\":\"tensor_kinds\",\"done\":true,\"num_sms\":%d}\n", g_sms);
   return 0;
 }
+#endif

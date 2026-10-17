@@ -260,28 +260,140 @@ def render(summary: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def refit(outs: list[Path], sched: float = SCHED) -> dict:
-    """JI3n_0..2 from every program of the runs in `outs` and VF3e's (the module docstring)."""
+def tpl_key(name: str) -> tuple[str, str, tuple[int, ...]] | None:
+    """(kernel, form, template ints) of a mangled kernel name, e.g. _Z7k_spec2I9ImmaS8k16Li64ELi0ELi8ELi1ELi1EEviPjP8BlockClk."""
+    m = re.match(r"_Z(\d+)", name)
+    if not m:
+        return None
+    kern, rest = name[m.end():m.end() + int(m.group(1))], name[m.end() + int(m.group(1)):]
+    s = re.match(r"I(\d+)", rest)
+    if not kern.startswith("k_") or not s:
+        return None
+    struct, tail = rest[s.end():s.end() + int(s.group(1))], rest[s.end() + int(s.group(1)):]
+    ints = re.match(r"((?:Li-?\d+E)*)E", tail)
+    return kern, STRUCTS.get(struct, struct), tuple(int(x) for x in re.findall(r"Li(-?\d+)E", ints.group(1) if ints else ""))
+
+
+def search_points(out: Path) -> tuple[list[tuple[str, dict]], list[str]]:
+    """Every program of a search run (search.sh): (form, point) as `analyze` gives them, and the gate failures."""
+    kl = {}
+    for p in sorted((out / "sass").glob("search-*.sass")):
+        for fn, body in parse_sass(p.read_text()).items():
+            k = tpl_key(fn)
+            if k:
+                kl[k] = loops(body)
+    pts, fails, records, num_sms = [], [], [], None
+    for p in sorted(out.glob("search-*.jsonl")):
+        rows = [json.loads(x) for x in p.read_text().splitlines() if x.startswith("{")]
+        done = [r for r in rows if r.get("done")]
+        if not done:
+            fails.append(f"{p.name}: the binary did not finish (no done line)")
+        num_sms = done[0]["num_sms"] if done else num_sms
+        records += [r for r in rows if "kernel" in r]
+    for r in records:
+        key = (r["kernel"], r["form"], tuple(r["tpl"]))
+        spec = r["kernel"] in ("k_spec", "k_spec2")
+        per, R = (8 if spec else 64), r["tpl"][0]
+        L = kl.get(key)
+        mma_loops = [x for x in L or [] if x["mma"]]
+        op_loops = [x for x in L or [] if not x["mma"]]
+        if L is None or len(mma_loops) != 1 or len(op_loops) != (1 if spec else 0):
+            fails.append(f"{key}: loops {L} (want one MMA loop{' and one lane loop' if spec else ''})")
+            continue
+        # ptxas may fuse two lane adds into one IADD3; the count is what issues, so the gate only refuses a dead stream
+        ml = mma_loops[0]
+        lane_ops = op_loops[0]["other"] if spec else ml["other"]
+        if ml["mma"] % per or lane_ops < (R if spec else 8 * R) // 2:
+            fails.append(f"{key}: {ml['mma']} MMAs and {lane_ops} other instructions a loop (want {per}k and >= "
+                         f"{(R if spec else 8 * R) // 2})")
+            continue
+        if num_sms and r["distinct_sms"] != num_sms:
+            fails.append(f"{key}: blocks on {r['distinct_sms']} of {num_sms} SMs")
+            continue
+        it = r["iters"]
+        if spec:
+            n_mma = r["mma_warps"] * it * per
+            n_other = r["mma_warps"] * it * ml["other"] + r["lane_warps"] * it * op_loops[0]["other"]
+        else:
+            n_mma, n_other = r["warps"] * it * per, r["warps"] * it * ml["other"]
+        pts.append((r["form"], {"mode": f"{r['kernel']}{list(r['tpl'])}", "R": R, "ops_per_mma": n_other / n_mma,
+                                "cycles_per_mma": r["cyc_med"] / n_mma, "control": r["kernel"] in ("k_spec", "k_mixu"),
+                                "mhz": r["mhz"]}))
+    return pts, fails
+
+
+def _points(outs: list[Path]) -> list[tuple[str, dict]]:
     pts = []
     for out in outs:
         summary, _ = analyze(out)
         pts += [(form, p) for form, s in summary.items() if form != "lane_op_alone" for p in s["points"]]
-    rows = {}
+    return pts
+
+
+def _bounds(pts: list[tuple[str, dict]], am: float, ao: float) -> dict[str, float]:
+    """Each kind's largest MMA coefficient a with a + ao·#other <= (1 - NOISE)·cycles on every program (and VF3e's)."""
+    kinds: dict[str, float] = {}
+    for form, p in pts:
+        k = KIND[form]
+        bound = (1 - NOISE) * p["cycles_per_mma"] - ao * p["ops_per_mma"]
+        kinds[k] = min(kinds.get(k, am if k in VF3E_KINDS else float("inf")), bound)
+    return kinds
+
+
+def refit(outs: list[Path], sched: float = SCHED, search: list[Path] = ()) -> dict:
+    """The joint rows from every program of the runs in `outs` and VF3e's (the module docstring). With `search` runs
+    (M1c, VF3o-16), their programs join the fit and each row's schedule margin is measured instead of SCHED: how much
+    the search's fastest schedule lowered any searched kind's coefficient below M1's, so a search as wide again finding
+    as much again stays covered."""
+    pts = _points(outs)
+    found = [x for s in search for x in search_points(s)[0]]
+    searched = {KIND[f] for f, _ in found}
+    rows, margins = {}, {}
     for r, (am, ao) in JI3E.items():
-        kinds: dict[str, float] = {}
-        for form, p in pts:
-            k = KIND[form]
-            bound = (1 - NOISE) * p["cycles_per_mma"] - ao * p["ops_per_mma"]
-            kinds[k] = min(kinds.get(k, am if k in VF3E_KINDS else float("inf")), bound)
-        rows[r.replace("JI3e", "JI3n")] = {"MMA": min(am, *kinds.values()) / sched, "other": ao / sched,
-                                           **{k: v / sched for k, v in sorted(kinds.items())}}
-    return {"programs": len(pts), "noise": NOISE, "sched": sched, "rows": rows}
+        m1 = _bounds(pts, am, ao)
+        kinds = _bounds(pts + found, am, ao)
+        name = r.replace("JI3e", "JI3o" if search else "JI3n")
+        if search:
+            mm1, mall = min(am, *m1.values()), min(am, *kinds.values())
+            margins[name] = max([mm1 / mall] + [m1[k] / kinds[k] for k in searched if k in m1])
+        s = margins.get(name, sched)
+        rows[name] = {"MMA": min(am, *kinds.values()) / s, "other": ao / s, **{k: v / s for k, v in sorted(kinds.items())}}
+    out = {"programs": len(pts) + len(found), "noise": NOISE, "sched": margins or sched, "rows": rows}
+    return out
+
+
+def search_report(out: Path) -> tuple[str, list[str]]:
+    """Per searched (form, R): the control (M1's facet programs, first and last), the fastest and slowest schedule."""
+    pts, fails = search_points(out)
+    by = defaultdict(list)
+    for form, p in pts:
+        by[(form, p["R"])].append(p)
+    lines = ["| form | R | programs | control spec / mixu (first, last) | fastest (cycles a MMA, ops a MMA) | slowest |",
+             "|---|---|---|---|---|---|"]
+    for (form, R), ps in sorted(by.items()):
+        ctl = [f"{p['cycles_per_mma']:.3f}" for p in ps if p["control"]]
+        lo = min(ps, key=lambda p: p["cycles_per_mma"])
+        hi = max(ps, key=lambda p: p["cycles_per_mma"])
+        lines.append(f"| {form} | {R} | {len(ps)} | {', '.join(ctl)} | {lo['cycles_per_mma']:.3f} ({lo['ops_per_mma']:.2f}) "
+                     f"{lo['mode']} | {hi['cycles_per_mma']:.3f} {hi['mode']} |")
+    return "\n".join(lines) + "\n", fails
 
 
 def main(argv: list[str]) -> int:
     if argv[1] == "refit":
-        print(json.dumps(refit([Path(a) for a in argv[2:]]), indent=1))
+        args = argv[2:]
+        cut = args.index("--search") if "--search" in args else len(args)
+        print(json.dumps(refit([Path(a) for a in args[:cut]], search=[Path(a) for a in args[cut + 1:]]), indent=1))
         return 0
+    if argv[1] == "search":
+        out = Path(argv[2])
+        md, fails = search_report(out)
+        pts, _ = search_points(out)
+        (out / "search.json").write_text(json.dumps({"points": pts, "gate_failures": fails}, indent=1))
+        print(md)
+        for x in fails:
+            print("GATE", x)
+        return 3 if fails else 0
     out = Path(argv[1])
     summary, fails = analyze(out)
     (out / "tensor_kinds.json").write_text(json.dumps({"summary": summary, "gate_failures": fails}, indent=1))
