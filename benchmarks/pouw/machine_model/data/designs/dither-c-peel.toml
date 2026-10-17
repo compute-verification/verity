@@ -1,0 +1,20 @@
+# Dither-C with Dither-2S's P·V (SKIP's Bc at 04:41Z): co32c on the linears and lm_head, cohalf on QKᵀ, and the recorded
+# w64 peel on P·V, whose whole strip is free at a one-hot P row (CHECKED-STRIP Result 3), which Dither-C's pv closes
+# (note:20261017T0340Z-draft-skip 04:41Z, note:20261017T0030Z-draft-checked-strip). Its arm `co32c` is the one Dither-C
+# perplexity measured on main.
+base = "dither-c"
+name = "dither-c-peel"
+title = "Dither-C, peel P·V"
+aliases = ["co-dither", "Bc"]
+summary = "co32c linears and lm_head (every limb a checked word), cohalf QKᵀ, Dither-2S's P·V, duo at L = 32"
+ppl = "co32c"
+
+[noise]
+linears = "co32c"
+lm_head = "co32c"
+qk = "cohalf"
+pv = "peel"
+
+[skip.served]
+eps = 0.00193
+source = "eps_budget.py (benchmarks/pouw, `design_skip`): the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, of the whole-model ε_skip by honest time, every served output free; at 8B 2K prefill, P·V's peeled strip (0.128%, free at a one-hot P row) and co32c's and cohalf's tensor–scalar vector work (linears 0.061%, QKᵀ 0.005%; note:20261017T0030Z-draft-checked-strip)"
