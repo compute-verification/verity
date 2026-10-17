@@ -108,4 +108,6 @@ follows from every table's bound alone, at every number of tables (`FlockDeploy.
 batched tables' old fork events share rounds, so joined by round they fit the masked weight
 (`ZkBoundJ`: `Flock.joinEscZ`, `FlockDeploy.KS.joinEscZ_fitsFork_zk`, `Flock.oldEscZ_term_le_join`); at table `j` the
 old padded bound is at most `ε_table` (`FlockDeploy.KS.mean_epsSZ_leJ`), and a table that does not extract table `j` is
-not committed to its model statement (`FlockDeploy.KS.zk_not_committedJ`). -/
+not committed to its model statement (`FlockDeploy.KS.zk_not_committedJ`). So every table's bound at a statement
+follows from masked sessions after `Commit` at every table (`FlockDeploy.KS.ZkSessJ`,
+`FlockDeploy.KS.zk_tableBoundJAt_of_sessions`), needed only where some run accepts (`FlockDeploy.KS.zk_tableBoundJ_of_acc`). -/
