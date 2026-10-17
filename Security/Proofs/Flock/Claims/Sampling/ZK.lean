@@ -185,11 +185,13 @@ theorem zk_deploy_of_models_gap (H : Msg → Msg) (L : Leaky Wit) (t : ℕ) (ht 
   zk_deploy_of_models rel c H L t ht hK My cs (FlockSoundness.CROnly.hm96Hiding_gap My cs) ENNReal.ofReal_ne_top Mp
     Mc nL nB hnL hnB hL hS hN hI hC
 
-/-- **The code's reference prover is the protocol's**: on the masked tape `tapeOf ω`, `c.P w` sends `G.prover w`'s
-message and makes its calls at every history within the sampled verifier's rounds. -/
-def Honest (H : Msg → Msg) (G : Proto Wit) (tapeOf : G.Nonce × G.Rand → c.Tape) : Prop :=
+/-- **The code's reference prover is the protocol's**: on the masked tape `tapeOf ω`, the record's reference prover
+(`Reference.refP` at the code's framing) at `w` sends `G.prover w`'s message and makes its calls at every history within
+the sampled verifier's rounds. -/
+def Honest (H : Msg → Msg) (G : Proto Wit) (tapeOf : G.Nonce × G.Rand → Reference.Tape) : Prop :=
   ∀ w x (hist : List (Msg × Msg)) ω, hist.length < c.V.k x →
-    ((c.P w).next x hist (tapeOf ω)).eval H = ((G.prover w).next x hist ω).eval H
+    ((Reference.refP c.step c.parse c.reads (commit c) c.wit w).next x hist (tapeOf ω)).eval H =
+      ((G.prover w).next x hist ω).eval H
 
 /-- **Sampling's zero knowledge at the deployed record masked at the protocol's tapes**: `Claims.Sampling.ZK` at
 `deploy rel c` masked at `tapeOf` and `S_GK` given the leaf layer, from `zk_deploy_of_models_gap` where the code's
@@ -197,7 +199,7 @@ reference prover is the protocol's (`Honest`). -/
 theorem zk_deploy_mask_of_models_gap (H : Msg → Msg) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
     (hK : ∀ x s, c.parse x = some s → L.G.K x + 2 = c.V.k x) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B)
-    (cs : Salt → Cc) (tapeOf : L.G.Nonce × L.G.Rand → c.Tape) (hP : Honest c H L.G tapeOf)
+    (cs : Salt → Cc) (tapeOf : L.G.Nonce × L.G.Rand → Reference.Tape) (hP : Honest c H L.G tapeOf)
     (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).CoinModel x Salt B Cc) (nL nB : Msg → ℕ)
     (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x) (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)
@@ -222,7 +224,7 @@ theorem sampling_deployed_models (H : Msg → Msg) (hKS : Claims.Flock.KS H (Flo
     (hComplete : Complete H (deploy rel c)) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
     (hK : ∀ x s, c.parse x = some s → L.G.K x + 2 = c.V.k x) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B)
-    (cs : Salt → Cc) (tapeOf : L.G.Nonce × L.G.Rand → c.Tape) (hP : Honest c H L.G tapeOf)
+    (cs : Salt → Cc) (tapeOf : L.G.Nonce × L.G.Rand → Reference.Tape) (hP : Honest c H L.G tapeOf)
     (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).CoinModel x Salt B Cc) (nL nB : Msg → ℕ)
     (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x) (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)

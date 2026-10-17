@@ -79,13 +79,14 @@ theorem Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Rel
 design that checks every unit of its one class. -/
 def Sampling.scopeStmt : Claims.Sampling.Stmt := ⟨[], ⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
 
-/-- Its partition: one class of one stratum of one replay unit, the one proof unit `[0, 1)`. -/
-def Sampling.scopePartition : Claims.Sampling.Partition := ⟨[[[[(0, 1)]]]]⟩
+/-- Its partition: one class of one stratum of one replay unit, the one proof unit `{0}`. -/
+def Sampling.scopePartition : Claims.Sampling.Partition := ⟨[[[[[0]]]]]⟩
 
 /-- **The sampling scope holds a statement**: its readable form reads no field of the record. -/
 theorem Sampling.scope_meets :
     ∃ (P : Claims.Sampling.Partition) (s : Claims.Sampling.Stmt), Claims.Sampling.InScope P s := by
-  refine ⟨Sampling.scopePartition, Sampling.scopeStmt, ⟨?_, ?_⟩, ⟨?_, ?_, ?_⟩, rfl, ?_⟩
+  refine ⟨Sampling.scopePartition, Sampling.scopeStmt, ⟨?_, ?_⟩,
+    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
   · intro g x hg i hi
     cases g with
     | zero =>
@@ -96,24 +97,8 @@ theorem Sampling.scope_meets :
   · intro o ho
     simp [Sampling.scopeStmt] at ho ⊢
     exact ho
-  · decide
-  · intro r hr
-    simp only [Sampling.scopePartition, Claims.Sampling.Partition.rus, List.flatten_cons, List.flatten_nil,
-      List.append_nil, List.mem_singleton] at hr
-    subst hr
-    exact ⟨by simp, by simp, fun i h => by simp at h⟩
-  · intro r hr u hu
-    simp only [Sampling.scopePartition, Claims.Sampling.Partition.rus, List.flatten_cons, List.flatten_nil,
-      List.append_nil, List.mem_singleton] at hr
-    subst hr
-    simp only [List.mem_singleton] at hu
-    subst hu
-    decide
-  · intro p hp
-    simp only [Sampling.scopeStmt, Sampling.scopePartition, List.zip_cons_cons, List.zip_nil_left,
-      List.mem_singleton] at hp
-    subst hp
-    exact ⟨trivial, fun k hk => by cases hk⟩
+  · simp [Sampling.scopeStmt, Sampling.scopePartition, Claims.Sampling.Rule.WellFormed,
+      Claims.Sampling.OneStage.WellFormed]
 
 /-- **A private circuit of a size class**: the class of one gate over two inputs and one output, and its netlist, the
 AND of the two inputs, on inputs of its width. -/

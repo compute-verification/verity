@@ -428,12 +428,12 @@ def SessionOpensSlots (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg �
     (run H P D.V x ω r).out = .acc → p < S x → (D.checked x r)[p]? = some u' →
     D.session x u' (run H P D.V x ω r).seen = some (xS, vS) → Flock.check D.flock.parse xS wF = true →
     ∀ u, (∃ q : Fin (nPU D x), (D.checked x r)[q.val]? = some u) → D.session x u = D.session x u' →
-    ∃ rv a b, Pt.rus[u.1]? = some rv ∧ rv[u.2]? = some (a, b) ∧
+    ∃ rv pu, Pt.rus[u.1]? = some rv ∧ rv[u.2]? = some pu ∧
       ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
         (∀ q ∈ D.reveal s u (run H P D.V x ω r).seen wF, D.commit.Opens H q.1 q.2 = true →
           (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
           (q.1 = iroots x (run H P D.V x ω r).seen u.1 → ι q.2.pos = q.2.val)) →
-        s.prog.Correct (RU.ref s.prog rv val ι) a b
+        s.prog.Correct (RU.ref s.prog rv val ι) pu
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- **One session per unit covers every record.** -/

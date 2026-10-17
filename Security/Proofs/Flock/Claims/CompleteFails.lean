@@ -106,8 +106,8 @@ def rejD : Flock.Deploy Unit Unit Unit where
 def nilStmt : Sampling.Stmt := ⟨[], ⟨[], []⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
 
 theorem inScope_nilStmt : Sampling.InScope ⟨[]⟩ nilStmt := by
-  refine ⟨⟨fun _ _ h => by simp [nilStmt] at h, fun _ h => by simp [nilStmt] at h⟩, ⟨?_, ?_, ?_⟩, ⟨rfl, ?_⟩⟩ <;>
-    simp [Sampling.Partition.rus, nilStmt]
+  refine ⟨⟨fun _ _ h => by simp [nilStmt] at h, fun _ h => by simp [nilStmt] at h⟩, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩,
+    ⟨rfl, ?_⟩⟩ <;> simp [Sampling.Partition.rus, Sampling.Partition.gates, nilStmt]
 
 /-- **A sampling record of `rejV`**: its parser reads every message as `nilStmt`, its partition is the empty one, its
 sessions are `rejD`'s, its reference prover is `silent`, and its error `0`. -/

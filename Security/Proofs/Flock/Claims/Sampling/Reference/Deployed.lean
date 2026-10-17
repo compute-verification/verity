@@ -5,11 +5,11 @@ import Proofs.Flock.Claims.Sampling.Reference.Complete
 # Sampling completeness at the deployed record
 
 `complete_deploy`: **`Claims.Sampling.Complete H (deploy rel c)`**, of the deployed record's reference prover
-(`Reference.refP` at the code's framing) at its error: `c.sessions x` times the largest `δcZk H`, capped at `1`, over
-the statements of the reference prover's sessions at `x` (`Reference.sessErrAt`), from
+(`Reference.refP` at the code's framing) at its error: `c.sessions x` times the largest `ZkTables.δc H`, capped at `1`,
+over the statements of the reference prover's sessions at `x` (`Reference.sessErrAt`), from
 `Reference.complete_of_sessions` with the record's facts. What remains, each a hypothesis:
 
-* `hF : Claims.Flock.Complete H (deployZk rel)`: Flock's masked completeness, of `honestPZk` at `δcZk H`.
+* `hF : Claims.Flock.Complete H (deployZk rel)`: Flock's masked completeness, of `ZkTables.honestP` at `ZkTables.δc H`.
 * `DrawFixed` (`Sampling.Session`) and `DrawSlots` (`Sampling.Select.DrawLaw`), the sampled verifier's, as for KS: the
   checked units' sessions are in the second stage and the draw doesn't read them; the draw is `Slots.select`'s, so it
   checks at most the statement's proof units (`checkedLe_of_slots`).
@@ -30,9 +30,10 @@ the statements of the reference prover's sessions at `x` (`Reference.sessErrAt`)
   (`Reference.DeployedCode`'s `sessionSlots_of_one`); one session per unit at the proof units' count, from `DrawSlots`
   (`sessionSlots_units`).
 
-What is proved here: the reference prover's session messages are `honestPZk`'s on what it reveals (`refP_session`), it
-says the framing outside them (`refP_say`), what it reveals opens under the roots and is the committed value
-(`found_opens`, `found_val`, `found_covers`), and Flock's masked error is nonnegative (`δcZk_nonneg`).
+What is proved here: the reference prover's session messages are `ZkTables.honestP`'s on what it reveals
+(`refP_session`), it says the framing outside them (`refP_say`), what it reveals opens under the roots and is the
+committed value (`found_opens`, `found_val`, `found_covers`), and Flock's masked error is nonnegative
+(`δcZkT_nonneg`).
 -/
 
 namespace SamplingDeploy
@@ -97,11 +98,12 @@ def SessionSlots (H : Msg → Msg) : Prop :=
         c.session x u (run H P c.V x ω r).seen = c.session x u' (run H P c.V x ω r).seen
 
 /-- **Flock's masked error is nonnegative**: `εZk`, a count over `2^128`, or `1`. -/
-theorem δcZk_nonneg (H : Msg → Msg) (x : Msg) : 0 ≤ FlockComplete.δcZk H x := by
-  unfold FlockComplete.δcZk FlockComplete.εZk
+theorem δcZkT_nonneg (H : Msg → Msg) (x : Msg) : 0 ≤ FlockComplete.ZkTables.δc H x := by
+  unfold FlockComplete.ZkTables.δc FlockComplete.εZk
   split_ifs <;> positivity
 
-/-- **At the deployed record, a checked unit's session is `honestPZk`'s run** on what the reference prover reveals. -/
+/-- **At the deployed record, a checked unit's session is `ZkTables.honestP`'s run** on what the reference prover
+reveals. -/
 theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : SessionsScope c H)
     (hwit : SessionWit rel c H) : HonestSessions H (deploy rel c) := by
   rintro x w ⟨s, Pt, hs, hP, hin⟩ ⟨s', Pt', hs', hP', hf⟩ ω r u hu
@@ -115,7 +117,7 @@ theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : 
   cases hP'
   obtain ⟨xS, emb, hinj, hemb, hrun⟩ :=
     hframe x (Reference.refP c.step c.parse c.reads (commit c) c.wit w) ω r u hu
-  have hr := hrun (FlockComplete.honestPZk (c.wit s xS (found H (commit c) s.roots w (c.reads s xS)))) (ω xS)
+  have hr := hrun (FlockComplete.ZkTables.honestP (c.wit s xS (found H (commit c) s.roots w (c.reads s xS)))) (ω xS)
     fun hist hS h => refP_session H c.step c.parse c.reads (commit c) c.wit w hs h ω
   have h0 := hr r fun _ _ => rfl
   exact ⟨xS, c.wit s xS (found H (commit c) s.roots w (c.reads s xS)), ω xS, emb, hinj, hemb,
@@ -146,14 +148,14 @@ theorem sessionsAmong_deploy (H : Msg → Msg) (h : SessionSlots c H) : Sessions
 
 set_option synthInstance.maxSize 1024 in
 /-- **Sampling completeness at the deployed record**: the reference prover is accepted with probability at least
-`1 − δc H x`, `c.sessions x` times the largest `δcZk H` over its sessions' statements, from Flock's masked completeness
-and the facts the module docstring lists. -/
+`1 − δc H x`, `c.sessions x` times the largest `ZkTables.δc H` over its sessions' statements, from Flock's masked
+completeness and the facts the module docstring lists. -/
 theorem complete_deploy (H : Msg → Msg) (hF : Claims.Flock.Complete H (FlockDeploy.deployZk rel))
     (hfix : DrawFixed (deploy rel c)) (hslots : DrawSlots (deploy rel c)) (hframe : Framed c H)
     (haccept : AcceptsFramed c H) (hscope : SessionsScope c H) (hwit : SessionWit rel c H)
     (hsess : SessionSlots c H) : Complete H (deploy rel c) :=
   complete_of_sessions H (deploy rel c) hF hfix (checkedLe_of_slots _ hslots)
     (honestSessions_deploy rel c H hframe hscope hwit) (acceptsSessions_deploy rel c H haccept) c.sessions
-    (sessionsAmong_deploy rel c H hsess) (δcZk_nonneg H) fun _ => le_of_eq rfl
+    (sessionsAmong_deploy rel c H hsess) (δcZkT_nonneg H) fun _ => le_of_eq rfl
 
 end SamplingDeploy

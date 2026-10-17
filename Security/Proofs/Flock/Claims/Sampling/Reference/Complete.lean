@@ -42,8 +42,9 @@ omit [Nonempty Coin] [Inhabited Coin] in
 refused draw checks each once (`size_checked_le`, `size_allSlots`). -/
 theorem checkedLe_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : CheckedLe D := by
   rintro x ⟨s, Pt, hx, hP, -⟩ r
-  obtain ⟨rule, d, query, table, cm, l, L, bytes, hl, rfl, -, -, hch⟩ := h x s Pt hx hP
-  have hnPU : nPU D x = (slotPartition l).sizes.sum := by simp [nPU, hx, Deploy.part, hP]
+  obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, -, -, hch⟩ := h x s Pt hx hP
+  have hnPU : nPU D x = (slotPartition l).sizes.sum := by
+    simp [nPU, hx, Deploy.part, hP, Partition.sizes_of_shape hshape]
   rw [hch r, hnPU, Array.length_toList]
   unfold drawChecked
   split

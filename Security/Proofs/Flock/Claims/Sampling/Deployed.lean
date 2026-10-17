@@ -23,10 +23,11 @@ fixes set, and the sampled verifier's code (`SamplingDeploy.Code`) as its parame
   registered port.
 * `Tape`, `P`: the sampled reference prover (`Reference.refP`), at the code's framing, on a Flock tape per session
   statement: in each session, Flock's masked reference prover on what it reveals, checked by this commitment.
-* `δc`: the sessions' count (`Code.sessions`) times the largest of Flock's masked error `FlockComplete.δcZk`, capped
-  at `1`, over the statements of the reference prover's sessions at `x`, at an honest witness and coins that check
-  their units (`Reference.sessErrAt`): the union bound over the run's sessions.
-  One session that proves every drawn unit has error `δcZk` at its statement.
+* `δc`: the sessions' count (`Code.sessions`) times the largest of Flock's masked error `FlockComplete.ZkTables.δc`
+  (the masked record's own, `FlockDeploy.deployZk`'s `δc`), capped at `1`, over the statements of the reference
+  prover's sessions at `x`, at an honest witness and coins that check their units (`Reference.sessErrAt`): the union
+  bound over the run's sessions.
+  One session that proves every drawn unit has error `ZkTables.δc` at its statement.
 * The rest is the code's: the verifier in public-coin form, its parser, scope check and partition evaluation, its draw
   layout, the checked units' sessions and what their witnesses reveal, the sessions' `N₀` and count, and the reference
   prover's framing.
@@ -194,7 +195,7 @@ noncomputable def deploy (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Re
   Tape := Reference.Tape
   P := Reference.refP c.step c.parse c.reads (commit c) c.wit
   δc H x := c.sessions x * Reference.sessErrAt H (Rhon H (commit c) c.parse c.partition)
-    (Reference.refP c.step c.parse c.reads (commit c) c.wit) c.V c.checked c.session (FlockComplete.δcZk H) x
+    (Reference.refP c.step c.parse c.reads (commit c) c.wit) c.V c.checked c.session (FlockComplete.ZkTables.δc H) x
 
 variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : Code)
 
@@ -256,8 +257,8 @@ theorem sampling_deployed (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeplo
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
     (hComplete : Complete H (deploy rel c))
-    {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (tapeOf : Nz × Ωz → c.Tape) (S : SimLeak)
-    (εzk γzk : Msg → ℝ) (hZK : ZK H ((deploy rel c).mask Nz Ωz tapeOf S) εzk γzk) :
+    {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (tapeOf : Nz × Ωz → Reference.Tape)
+    (S : SimLeak) (εzk γzk : Msg → ℝ) (hZK : ZK H ((deploy rel c).mask Nz Ωz tapeOf S) εzk γzk) :
     ScopeMatches (deploy rel c) ∧ Binding (deploy rel c) ∧ Universal (deploy rel c) ∧ FaultyBoundary ∧
       KS H (deploy rel c) ∧ KSCount H (deploy rel c) ∧ Bits H (deploy rel c) ∧
       Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) ∧

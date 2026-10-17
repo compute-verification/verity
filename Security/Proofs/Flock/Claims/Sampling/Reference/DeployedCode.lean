@@ -23,10 +23,11 @@ scope check and partition, and the commitment's layout stay parameters.
 At this code:
 
 * `sessionSlots_code`: `SessionSlots` holds (`sessionSlots_of_one`).
-* `δc_code`: the record's completeness error is the largest `δcZk` over its one session's statements, with no union
-  bound factor.
-* `drawSlots_code`: `DrawSlots` from `RegMatches` (the registration's layout is the statement's partition and its
-  design is the statement's design) and `BytesUniform` (the bytes are uniform when the coins are).
+* `δc_code`: the record's completeness error is the largest `ZkTables.δc` over its one session's statements, with no
+  union bound factor.
+* `drawSlots_code`: `DrawSlots` from `RegMatches` (the registration's program is the statement's descriptor, its layout
+  the statement's partition and its design the statement's design) and `BytesUniform` (the bytes are uniform when the
+  coins are).
 * `drawFixed_code`: `DrawFixed` from `BytesFixed` (the session's rounds are second-stage, and the draw's bytes don't
   read them).
 * `framed_code_iff`, `acceptsFramed_code_iff`, `sessionsScope_code_iff`, `sessionWit_code_iff`, `sessionsIn_code_iff`:
@@ -106,12 +107,12 @@ theorem code_session (x : Msg) (u : ℕ × ℕ) (v : Seen) : (code c reg L bytes
 theorem sessionSlots_code (H : Msg → Msg) : SessionSlots (code c reg L bytes sr sess) H :=
   sessionSlots_of_one H _ (fun _ => le_rfl) fun _ _ _ _ => rfl
 
-/-- **The completeness error at the code**: the largest `δcZk H`, capped at `1`, over the statements of the one session
-of the reference prover's honest runs that check some unit. -/
+/-- **The completeness error at the code**: the largest `ZkTables.δc H`, capped at `1`, over the statements of the one
+session of the reference prover's honest runs that check some unit. -/
 theorem δc_code (H : Msg → Msg) (x : Msg) :
     (deploy rel (code c reg L bytes sr sess)).δc H x =
       sessErrAt H (Rhon H (commit c) c.parse c.partition) (refP c.step c.parse c.reads (commit c) c.wit) c.V
-        (code c reg L bytes sr sess).checked (fun x _ v => sess x v) (FlockComplete.δcZk H) x := by
+        (code c reg L bytes sr sess).checked (fun x _ v => sess x v) (FlockComplete.ZkTables.δc H) x := by
   show ((1 : ℕ) : ℝ) * _ = _
   rw [Nat.cast_one, one_mul]
   rfl
@@ -119,11 +120,12 @@ theorem δc_code (H : Msg → Msg) (x : Msg) :
 /-! ## The draw -/
 
 /-- **The registration is the statement's**: at a statement that parses and whose query evaluates, the statement names
-a registration whose layout (`Slots.layout`) is the statement's partition and whose design (`slotDesign`) is the
-statement's. -/
+a registration whose program is the statement's descriptor (`Program.parse`), whose layout (`Slots.layout`) is the
+statement's partition and whose design (`slotDesign`) is the statement's. -/
 def RegMatches : Prop :=
   ∀ x s Pt, c.parse x = some s → c.partition s = some Pt →
-    ∃ g l, reg x = some g ∧ SampledProofs.Slots.layout g.program g.query = .ok l ∧ Pt = slotPartition l ∧
+    ∃ g l, reg x = some g ∧ SampledProofs.Program.parse ⟨s.desc.toArray⟩ = .ok g.program ∧
+      SampledProofs.Slots.layout g.program g.query = .ok l ∧ Pt = slotPartition l ∧
       slotDesign g.rule g.program g.query g.table = .ok s.design
 
 /-- **The draw's bytes are uniform when the coins are.** -/
@@ -137,8 +139,9 @@ def BytesFixed : Prop :=
 theorem drawSlots_code (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes) :
     DrawSlots (deploy rel (code c reg L bytes sr sess)) := by
   intro x s Pt hx hP
-  obtain ⟨g, l, hg, hl, hPt, hds⟩ := hreg x s Pt hx hP
-  refine ⟨g.rule, g.program, g.query, g.table, g.closure, l, L x, bytes x, hl, hPt, hds, hunif x, fun r => ?_⟩
+  obtain ⟨g, l, hg, hd, hl, hPt, hds⟩ := hreg x s Pt hx hP
+  refine ⟨g.rule, g.program, g.query, g.table, g.closure, l, L x, bytes x, hd, hl, hPt ▸ rfl, hds, hunif x,
+    fun r => ?_⟩
   show ((reg x).map fun g => g.checked (bytesOf (bytes x r))).getD [] = _
   rw [hg]
   simp only [Option.map_some, Option.getD_some, Reg.checked, Reg.layout, hl]

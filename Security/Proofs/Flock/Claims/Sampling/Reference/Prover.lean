@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Complete.Zk.Honest
+import Proofs.Flock.Claims.Complete.ZkTables.Honest
 import Proofs.Flock.Claims.Sampling.Path
 
 /-!
@@ -10,8 +10,8 @@ as a `Claims.Prover` against the sampled verifier.
 The trace is committed before the run: the statement's roots, hm96 leaves under the verifier's registered
 frame-v3-sha512 path check (`SamplingDeploy.commit`, `pathCommit` at `hm96Leaf`), and the witness holds the openings.
 The prover waits for the selection coin, saying what the run's framing fixes, and in each session runs
-Flock's masked reference prover (`FlockComplete.honestPZk`) at the session's own history, on the Flock witness that
-encodes what it opens: at each position the session reads, the witness's first opening there that
+Flock's masked reference prover (`FlockComplete.ZkTables.honestP`) at the session's own history, on the Flock witness
+that encodes what it opens: at each position the session reads, the witness's first opening there that
 passes its own check under the roots (`revealOC`), with its own `H` calls. Its framing is the code's:
 
 * `step`: where the run is at a history, for the prover: a session at its own history under its statement
@@ -26,7 +26,7 @@ position with a committed value (`found_covers`).
 
 `sessErrAt`: the largest of Flock's errors, capped at `1`, over the statements of the reference prover's sessions at
 `x`, at an honest witness and coins that check the session's unit; the record's completeness error is the sessions'
-count times it at Flock's `δcZk`.
+count times it at Flock's `ZkTables.δc`.
 -/
 
 namespace Claims.Sampling.Reference
@@ -72,7 +72,7 @@ def refP (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stm
     | .session xS hS =>
       match parse x with
       | some s => ocBind (revealOC Cm s.roots w (reads s xS)) fun os =>
-          (FlockComplete.honestPZk (wit s xS os)).next xS hS (ω xS)
+          (FlockComplete.ZkTables.honestP (wit s xS os)).next xS hS (ω xS)
       | none => .ret []⟩
 
 /-- **The sessions' error at `x`**: the largest of `δ`, capped at `1`, over the statements of the sessions of `P`'s runs
@@ -160,7 +160,8 @@ theorem refP_session (H : Msg → Msg) (step : Msg → List (Msg × Msg) → Ste
     (w : Wit) {x : Msg} {s : Stmt} {hist : List (Msg × Msg)} {xS : Msg} {hS : List (Msg × Msg)}
     (hs : parse x = some s) (hstep : step x hist = .session xS hS) (ω : Tape) :
     (((refP step parse reads Cm wit w).next x hist ω).eval H).1 =
-      (((FlockComplete.honestPZk (wit s xS (found H Cm s.roots w (reads s xS)))).next xS hS (ω xS)).eval H).1 := by
+      (((FlockComplete.ZkTables.honestP (wit s xS (found H Cm s.roots w (reads s xS)))).next xS hS
+        (ω xS)).eval H).1 := by
   simp only [refP, hstep, hs, ocBind_eval, revealOC_eval]
 
 /-- **Outside the sessions, it says what the framing fixes.** -/
