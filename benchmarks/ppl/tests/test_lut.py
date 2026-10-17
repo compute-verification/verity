@@ -83,6 +83,21 @@ def test_the_sink_is_its_own_block():
     assert own[0, 3, 2] == steps.lut_table(16, 256)[(100 * A) >> 32]
 
 
+def test_round_takes_t_to_nearest():
+    """`rnd`: t = floor((m - lam + 2^31) / 2^32), on every key, the sink's negative t included."""
+    s = 3
+    S = torch.tensor([[[0.0, 0, 0], [0, 0, 0], [3000, 1000, 657]]]).double()
+    sq, sk = torch.full((1, 3, 1), 1e-3), torch.full((s, 1), 1.0)
+    A = round(float(np.float32(1e-3)) * math.log2(math.e) * 16 / math.sqrt(128) * 2 ** 32)
+    lut, up = steps.lut_table(16, 256), steps.lut_up(16)
+    mm = fake_mm(range(3), s)
+    e = steps.lut_softmax(mm, S, sq, sk, res=16, size=256, sink=True, rnd=True).extra["lut"][0]
+    assert mm.gates.passed
+    t2, t0 = (343 * A + 2 ** 31) >> 32, (-2000 * A + 2 ** 31) >> 32
+    assert t2 != (343 * A) >> 32 and t0 != (-2000 * A) >> 32
+    assert e[0, 2].tolist() == [int(up[(-t0) % 16]) << ((-t0) // 16), 127, int(lut[t2])]
+
+
 def test_key_scales():
     g = torch.Generator().manual_seed(1)
     k = torch.randn(16, 8, generator=g)
@@ -105,6 +120,7 @@ def test_key_scales():
     ('k_scale = "head"\nsoftmax = "lut"\nlut_res = 32', "raise lut_size"),
     ('k_sink = true', "k_scale = head or calib"),
     ('k_scale = "head"\nlut_sink = true', "softmax = lut"),
+    ('k_scale = "head"\nlut_round = true', "softmax = lut"),
     ('k_scale = "row"', "k_scale is one of"),
 ])
 def test_rejections(text, message):
