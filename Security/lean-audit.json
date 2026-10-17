@@ -373,6 +373,9 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  },
+  "Accounting.Assumptions.EncodeChainHardness": {
+   "owner": "@memory-accounting"
   }
  },
  "meaning": [
@@ -5471,7 +5474,11 @@
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
    "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
-   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier."
+   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
+   "Accounting.Guarantees.Gates.Fooling": "unstated: the 2-adic fooling bound over the circuit model (Definitions/Accounting/Gates); its theorem Accounting.SecurityProofs.Gates.Fooling is not proved yet.",
+   "Accounting.Guarantees.Gates.SquaringCarry": "unstated: the carry bound, a squaring's canonical bytes need 2^s joint values of the charged gates on the sparse family; its theorem Accounting.SecurityProofs.Gates.SquaringCarry is not proved yet.",
+   "Accounting.Guarantees.Gates.EncodeBudget": "unstated: a declared circuit satisfying the stacking property holds at most budget/E + run bits/(n−1) fresh encoded words, under EncodeChainHardness; its theorem Accounting.SecurityProofs.Gates.EncodeBudget is not proved yet.",
+   "Accounting.Guarantees.Gates.EncodeCost": "unstated: the encode cost of q words is at least q·E under EncodeChainHardness; its theorem Accounting.SecurityProofs.Gates.EncodeCost is not proved yet."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -5501,6 +5508,11 @@
     "status": "open",
     "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
     "why": "P2 in the ring model per round, at every block count from 2^19 to 2^25: at a boundary held at most rho*|C| bits, outside an event of mass k*eps0 over k rounds, a uniform challenge is answered with probability at most 1 - p given the earlier answers; open, and, if p is prime, it forces p = 0 at D >= 32,894 (Q >= 2, L >= 65,789) whenever eps0 < 1 and m/N <= 1 - p + eps0 at L >= 2^(t+1) for m blocks kept without t low bits (p = 0.043 false from L >= 2^167 at 2^19 when eps0 <= 2^-130), which Security/Proofs/Pous/P2/RoundTests.lean proves."
+   },
+   "Accounting.Assumptions.EncodeChainHardness": {
+    "status": "open",
+    "test": "verity/core/protocols/remote_bandwidth/tests/test_encode_chain.py::test_encode_chain_hardness_known_constructions",
+    "why": "In the circuit model (Definitions/Accounting/Gates: window proven by interval analysis, budgeted fan-in at most f, values within w bits), computing q distinct words of the masked k-round codec's encoding, less parity, on more than ε of the draws costs q·E budgeted gates less E/(n−1) per run-input bit; open, with E = k·S·e for e = 2 (the proved per-squaring carry bound composed) or e = n − 2 (one carry a limb), false without the restriction (one wide gate an output byte). Its test runs the known constructions of a p1024 squaring (ripple carries, (f−1)-limb look-ahead) and checks each costs at least n − 2."
    }
   },
   "events": ["FlockSoundness.Game.prob"]
