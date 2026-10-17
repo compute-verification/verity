@@ -20,6 +20,7 @@ uv run machine-model eps dither-two-sided --upfill --q 2.2 --json
 uv run machine-model eps --table --upfill # every design, without and with filler on the uniform datapath
 uv run machine-model eps --table --upfill --operands floor   # the cheater's operands at the noise's floor φ_del
 uv run machine-model eps --table --upfill --credit floor     # ε a fraction of the floor program ♭, not honest's kernel
+uv run machine-model eps --table --upfill --credit floor --q 2.16 --lookups   # with QSTAR's table route against L2
 uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
 ~~~
 
@@ -36,6 +37,7 @@ uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
 | `verity_machine_model/adopt.py` | Merging a measured census into `data/` at the last epoch, each (kind, row) at the faster of its two lines |
 | `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
 | `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA: `e-l7qs` is PROFILE's measured kernel, `dither-duo-l32` the provisional one the tests' hand arithmetic reads |
+| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (QSTAR's, provisional until a DATASHEET row) |
 | `data/designs/NAME.toml` | A protocol's parameters: its honest profile, L, its noise's operand-delivery floor φ_del, the fold and filler (lane instructions a word by class), plain (unfolded) MMAs beside its work, ε_skip's and ε_mand's parts with sources, ε_clock, Theorem S's δ, p and checks, and honest's baseline program (dp4a) |
 | `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
 
@@ -99,8 +101,11 @@ profile's kernel (scaled by the model's cost of any filler it adds), the model's
 `--upfill` adds verified filler that keeps the uniform datapath busy for the credited program's time, which the cheater
 must then run on lanes or leave in place, and `--fill X` adds X lane instructions a word of verified filler on lanes,
 which dilutes what the cheater saves on operands at the cost of γ (`dither-two-sided-fill` is two-sided dither with
-4.5). ε_machine's floor is its value with the scalar routes closed, which no q* lowers, and the threshold is the least q*
-at which ε_machine reaches it.
+4.5). `--lookups` opens a fifth route for the cheater, the table route (`data/table.toml`, QSTAR's register-indexed
+lookups): q_T lane instructions a word from the lanes' class pool plus 8 B of L2 reads, against an L2 facet at the
+card's bandwidth, honest's own L2 traffic uncharged (`--lookup-q`, `--l2` override the file). ε_machine's floor is its
+value with the lane and uniform routes closed (the table route, priced by its bytes, stays as set), which no q* lowers,
+and the threshold is the least q* at which ε_machine reaches it.
 
 ## Adopt a probe's census
 

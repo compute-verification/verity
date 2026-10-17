@@ -11,7 +11,7 @@
     machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) into data/ at EPOCH,
                                               the last epoch: each (kind, row) keeps the faster of its old and new line
     machine-model eps [DESIGN] [--q Q] [--q-uniform QU] [--operands O] [--credit C] [--fold-cost R] [--fill X]
-                      [--upfill] [--vector V] [--json]
+                      [--upfill] [--lookups [--lookup-q QT] [--l2 B]] [--vector V] [--json]
                                               a design's ε budget (data/designs, default dither-duo) at q* = Q (default
                                               8): every term with its source, ε_machine's LP (the credited and the
                                               cheater's mix, binding rows and certificate π*), the ε(q*) curve for q*
@@ -21,12 +21,14 @@
                                               honest's; ε is a fraction of honest's kernel (--credit H, default) or of
                                               the floor program ♭ (--credit floor); --fill adds X lane instructions a
                                               word of verified filler on lanes, --upfill filler keeping the uniform
-                                              datapath busy
+                                              datapath busy; --lookups opens the table route (data/table.toml: lane
+                                              instructions and L2 bytes a word against an L2 facet; --lookup-q, --l2)
     machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--upfill] [--operands O] [--credit C]
+                      [--q Q] [--lookups]
                                               one line a design (every design by default; with --fold-sweep, each at
                                               each fold cost; with --upfill, each without and with it): γ, the credited
                                               time, ε_sched, ε_machine at q* = 2, 4, 8, 16 and its floor, ε_luck, ε at
-                                              q* = 2 and 8, and the thresholds
+                                              q* = 2, 8 and Q, and the thresholds
 
 `--data DIR` (before the command) reads another data directory, such as a copy with a candidate row. `solve` exits 1 when
 the vector fails its check or doesn't reproduce a published number.
@@ -150,7 +152,7 @@ def _thr(t: float | None) -> str:
 
 
 def _mix(m: E.Mix, per_mma: float) -> str:
-    w = ", ".join(f"{r} {100 * max(m.words[r], 0.0) + 0.0:.1f}%" for r in E.ROUTES)
+    w = ", ".join(f"{r} {100 * max(m.words[r], 0.0) + 0.0:.1f}%" for r in E.ROUTES if r != "table" or m.words[r])
     up = "".join(f"; filler {j + 1} on UP {100 * max(x, 0.0) + 0.0:.0f}%" for j, x in enumerate(m.filler_uniform))
     return (f"{m.T * per_mma:.3f} SMSP-cycles a MMA ({w}{up}), "
             f"binding {', '.join(m.binding)}")
@@ -168,9 +170,16 @@ def _design(args, name: str) -> E.Design:
     return d if args.q_uniform is None else replace(d, name=f"{d.name}@qu{args.q_uniform:g}", q_uniform=args.q_uniform)
 
 
-def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, credit: str = "H") -> dict:
-    e = E.eps(d, pi, q, data, operands=operands, credit=credit)
-    s = E.setup(d, pi, data, operands, credit)
+def _lookups(args) -> E.Table | None:
+    if not args.lookups and (args.lookup_q is not None or args.l2 is not None):
+        raise SystemExit("eps: --lookup-q and --l2 price the table route: add --lookups")
+    return E.table(args.data, args.lookup_q, args.l2) if args.lookups else None
+
+
+def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, credit: str = "H",
+                table: E.Table | None = None) -> dict:
+    e = E.eps(d, pi, q, data, operands=operands, credit=credit, table=table)
+    s = E.setup(d, pi, data, operands, credit, table)
     per_mma = e.honest.words * e.honest.depth / d.L
     return {
         "design": d.name, "summary": d.summary, "vector": pi.vector, "honest": e.honest.name,
@@ -191,6 +200,8 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
         "sources": {"skip": {k: p.source for k, p in d.skip.items()}, "mand": {k: p.source for k, p in d.mand.items()},
                     "clock": d.clock.source, "luck": d.luck_source, "baseline": d.baseline_source,
                     "operands": d.floor_source if operands == "floor" else operands},
+        "lookups": None if table is None else {"q": table.q, "bytes": table.bytes, "l2": table.l2,
+                                               "bytes_per_smsp_cycle": table.per_cycle(), "source": table.source},
         "curve": [[x, s.machine_eps(x)] for x in E.QS],
         "curve_uniform": [[x, s.machine_eps(q, q_uniform=x)] for x in E.QS],
         "threshold": E.threshold(s), "threshold_lanes": E.threshold(s, uniform=False),
@@ -205,10 +216,14 @@ def _eps_table(args, pi: E.Machine) -> int:
     qe = sorted({2.0, 8.0, args.q})
     cred = {"H": "honest's kernel (H)", "model": "honest's model bound B(H)",
             "floor": "the floor program ♭ (SPEC §0.7a)"}[args.credit]
-    print(f"Π {pi.vector}, operands {args.operands}, credit {cred}: T/MMA the credited time and its binding rows, "
-          f"H/cred honest's time over it; ε_machine at q* = {', '.join(map(str, qs))} and its floor (the scalar routes "
-          f"closed); ε_luck; ε at q* = {', '.join(f'{q:g}' for q in qe)} (ε_sched in it where measured); q*₀ the "
-          f"least q* at which ε_machine reaches its floor (all routes; lanes alone); the uniform route alone at q* = 16")
+    tb = _lookups(args)
+    look = "" if tb is None else (f", the table route open at {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a "
+                                  f"word (L2 {tb.l2 / 1e12:g} TB/s)")
+    print(f"Π {pi.vector}, operands {args.operands}, credit {cred}{look}: T/MMA the credited time and its binding "
+          f"rows, H/cred honest's time over it; ε_machine at q* = {', '.join(map(str, qs))} and its floor (the lane "
+          f"and uniform routes closed); ε_luck; ε at q* = {', '.join(f'{q:g}' for q in qe)} (ε_sched in it where "
+          f"measured); q*₀ the least q* at which ε_machine reaches its floor (all routes; lanes alone); the uniform "
+          f"route alone at q* = 16")
     print(f"{'design':26s} {'fold':>6s} {'L':>3s} {'γ':>6s} {'T/MMA':>7s} {'binds':12s} {'H/cred':>6s} {'skip':>6s} "
           f"{'sched':>6s} " + " ".join(f"{'m@' + str(q):>7s}" for q in qs)
           + f" {'floor':>7s} {'luck':>7s} " + " ".join(f"{f'ε@{q:g}':>7s}" for q in qe)
@@ -221,9 +236,9 @@ def _eps_table(args, pi: E.Machine) -> int:
             d = d.with_fill(args.fill) if args.fill else d
             rows += [d, d.with_upfill()] if args.upfill else [d]
     for d in rows:
-        es = {q: E.eps(d, pi, q, args.data, operands=args.operands, credit=args.credit) for q in {*qs, *qe}}
+        es = {q: E.eps(d, pi, q, args.data, operands=args.operands, credit=args.credit, table=tb) for q in {*qs, *qe}}
         e = es[8]
-        s = E.setup(d, pi, args.data, args.operands, args.credit)
+        s = E.setup(d, pi, args.data, args.operands, args.credit, tb)
         per_mma = e.honest.words * e.honest.depth / d.L
         t, tl = E.threshold(s), E.threshold(s, uniform=False)
         up = s.machine_eps(16, lanes=False)
@@ -244,11 +259,12 @@ def _eps(args) -> int:
     if len(args.designs) > 1:
         raise SystemExit("eps: one design, or --table for several")
     d = _design(args, args.designs[0] if args.designs else "dither-duo")
-    rec = _eps_record(d, pi, args.q, args.data, args.operands, args.credit)
+    tb = _lookups(args)
+    rec = _eps_record(d, pi, args.q, args.data, args.operands, args.credit, tb)
     if args.json:
         print(json.dumps(rec, ensure_ascii=False, indent=1))
         return 0
-    e = E.eps(d, pi, args.q, args.data, operands=args.operands, credit=args.credit)
+    e = E.eps(d, pi, args.q, args.data, operands=args.operands, credit=args.credit, table=tb)
     h, per_mma = e.honest, e.honest.words * e.honest.depth / d.L
     filler = ", ".join(f"{pw:.4g} a word on {f.route}" for f, pw in e.fillers) or "none"
     floor = ", ".join(f"{k} {v:g}" for k, v in d.floor.items())
@@ -268,6 +284,9 @@ def _eps(args) -> int:
           + (f", {h.measured_source}" if e.T_honest_source != "model" else "") + f"); γ {e.gamma:.3f}"
           + (f"; honest over the credit {e.credit_ratio:.3f}, in γ" if args.credit != "H" else ""))
     print(f"  cheater's operand delivery: {ops[args.operands]}")
+    if tb is not None:
+        print(f"  table route: {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a word, L2 {tb.l2 / 1e12:g} TB/s = "
+              f"{tb.per_cycle():.3f} B a SMSP-cycle ({tb.source})")
     print(f"  cheater at q* = {args.q:g}: {_mix(e.cheat, per_mma)}")
     print(f"  certificate π*: {_pi(e.cheat)}")
     t = e.terms()
@@ -279,7 +298,7 @@ def _eps(args) -> int:
         for name, p in parts.items():
             print(f"      {name} {_pct(p.eps)}: {p.source}")
     print(f"  ε_machine  {_pct(t['machine'])} = ε_cert(π*) {_pct(e.cert)} + ε_route(π*) {_pct(e.route)}; floor "
-          f"{_pct(e.floor)} (the scalar routes closed); against honest as built {_pct(e.machine_as_built)}")
+          f"{_pct(e.floor)} (the lane and uniform routes closed); against honest as built {_pct(e.machine_as_built)}")
     short = ", ".join(f"{k} {100 * v:.4f}%" for k, v in e.lucky.short.items())
     print(f"  ε_luck     {_pct(t['luck'])}: the lucky cheater leaves undone {short} (words alone: d̄ "
           f"{100 * e.deficit:.4f}%; δ {d.delta:.3g}, p {d.p} a word"
@@ -333,6 +352,10 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--fill", type=float, help="add X lane instructions a word of verified filler on lanes")
     e.add_argument("--upfill", action="store_true",
                    help="add verified filler keeping the uniform datapath busy (with --table: a row beside each)")
+    e.add_argument("--lookups", action="store_true",
+                   help="open the cheater's table route: words from register-indexed L2 lookups (data/table.toml)")
+    e.add_argument("--lookup-q", type=float, help="with --lookups: lane instructions a table word (default: the file's)")
+    e.add_argument("--l2", type=float, help="with --lookups: L2 read bytes a second (default: the file's)")
     args = p.parse_args(argv)
     if args.cmd is None:
         print(__doc__)
