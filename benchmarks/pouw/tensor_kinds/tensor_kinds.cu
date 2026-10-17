@@ -547,13 +547,19 @@ struct QmmaSpE4m3k64Ada {  // 2:4 sparse FP8 (sm_89 syntax), 32 useful MACs an o
 };
 
 // Small operands of each form's type, so no accumulator chain of millions of MMAs reaches inf or NaN; the integer
-// forms wrap. The sparse metadata 0x4444 4444 selects positions (0, 1) of every group of four (ordered, valid).
+// forms wrap. The sparse metadata 0x4444 4444 selects positions (0, 1) of every group of four (ordered, valid). z is 0
+// at run time (iters >= 0) but not to ptxas: an operand it can prove constant, or equal to another, it rematerializes
+// with IMAD.MOV inside the timed loop, and the first MMA of each trip waits on those (1/64 of the m16n8 forms' rate on
+// sm_89).
 template <class F>
-__device__ __forceinline__ void init_ops(uint32_t lane, uint32_t* a, uint32_t* b, uint32_t& e) {
-  const uint32_t w = F::W;
+__device__ __forceinline__ void init_ops(uint32_t lane, int iters, uint32_t* a, uint32_t* b, uint32_t& e) {
+  const uint32_t w = F::W, z = (uint32_t)iters >> 31;
 #pragma unroll
-  for (int i = 0; i < 4; i++) { a[i] = w ^ (lane & 1u); b[i] = w; }
-  e = 0x44444444u;
+  for (int i = 0; i < 4; i++) {
+    a[i] = (w ^ (lane & 1u)) + z * (i + 1);
+    b[i] = w + z * (i + 5);
+  }
+  e = 0x44444444u + z;
 }
 
 // ---- lane ops -------------------------------------------------------------------------------------------------------
@@ -626,7 +632,7 @@ template <class F>
 __global__ void __launch_bounds__(512) k_alone(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t a[4], b[4], e;
-  init_ops<F>(lane, a, b, e);
+  init_ops<F>(lane, iters, a, b, e);
   typename F::Acc d[8][4] = {};
   CLK_BEGIN
 #pragma unroll 1
@@ -644,7 +650,7 @@ template <class F>
 __global__ void __launch_bounds__(512) k_alone4(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t a[4], b[4], e;
-  init_ops<F>(lane, a, b, e);
+  init_ops<F>(lane, iters, a, b, e);
   typename F::Acc d[8][4] = {};
   CLK_BEGIN
 #pragma unroll 1
@@ -662,7 +668,7 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
   const uint32_t warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
   const bool mma_role = warp < (blockDim.x >> 6);
   uint32_t a[4], b[4], e;
-  init_ops<F>(lane, a, b, e);
+  init_ops<F>(lane, iters, a, b, e);
   typename F::Acc d[8][4] = {};
   Lane r;
   init_r(r, threadIdx.x);
@@ -692,7 +698,7 @@ template <class F, int R, int X>
 __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t a[4], b[4], e;
-  init_ops<F>(lane, a, b, e);
+  init_ops<F>(lane, iters, a, b, e);
   typename F::Acc d[8][4] = {};
   Lane r;
   init_r(r, threadIdx.x);
