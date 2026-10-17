@@ -101,7 +101,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
   partitions. It is the `Stream`'s draw of record: `Stream.select` hands it the bytes of the challenger's coins the
   Python draw read, and refuses the draw (`disagree`) unless the Lean draws the same object from exactly those bytes.
-  `SampledProofs/Slots.lean` puts that draw in the claims' terms
+  The Lean also runs a one-stage registration whole, from the registration through the verdict (`SampledProofs/Run.lean`,
+  `verifier.run`): the public-items rule, R1-R7, the receipt, the draw from those bytes and its checks, the hold on the
+  verdicts and the audit record. `Stream.outcome` holds each outcome on a draw from the coins to it, and an outcome the
+  two don't make alike is a reject whose audit record fails `run`. `SampledProofs/Slots.lean` puts that draw in the claims' terms
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.

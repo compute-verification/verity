@@ -534,6 +534,10 @@ class _Entry:
     law: Mapping[str, Any]
     program: Program
     work_table: Mapping[str, Any] | None = None
+    #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered)
+    copies: tuple[Any, ...] = ()
+    read: bytes | None = None
+    closure: Mapping[int, Sequence[int]] | None = None
     draw: Draw | None = None
     drawn_at: float | None = None
     interior: Registration | None = None
@@ -716,13 +720,17 @@ class Stream:
             raise _refuse("population", n)
         program = P.population_program(self.unit, n)
         law = selection_law(self.spec.selection, n)
-        v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors,
-                    self._earlier(record), None, work_table, registered)
+        earlier = self._earlier(record)
+        v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
+                    work_table, registered)
         if not v.ok:
             raise Refused(v)
+        if earlier is self._log:
+            earlier = self._log[:]
         salted_at = None if d is None else self._salted_at
         reg = self._log_record(record, len(self._entries), salted_at, received_at)
-        self._entries.append(_Entry(reg, D.derive(program, self.spec.check.query, law, work_table), program, work_table))
+        self._entries.append(_Entry(reg, D.derive(program, self.spec.check.query, law, work_table), program, work_table,
+                                    (ports, leaf_layer, anchors, earlier, registered)))
         if d is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": salted_at, "received_at": received_at})
@@ -804,6 +812,7 @@ class Stream:
         if not v.ok:
             raise Refused(v)
         e.draw, e.drawn_at = Draw(registration, e.law, obj), self._clock()
+        e.read, e.closure = (None if self._sampler is not None else bytes(read)), closure
         return e.draw
 
     def register_interiors(self, draw: Draw, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *,
@@ -878,10 +887,13 @@ class Stream:
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by its verifier of
         record, `verifier.check_verdicts`); then one-stage's audit record by its verifier of record
         (`verifier.audit_record`; `proved_units` and `instances` default to the draw's, `served` and `session_roots` are
-        its, and the registered roots it reads are the verdicts' own) decides accept or reject. Under `TwoStage` with interiors, the interior registration's audit record (all of its units proved, by
-        the same statement and verdicts) must accept too, and `session_roots` (`{port: root}` from the sessions'
-        statements) is split between the two by value. Raises `Refused` for a second outcome, a verdict of record about
-        other sessions, or public outputs the verdicts of record don't report alike."""
+        its, and the registered roots it reads are the verdicts' own) decides accept or reject. Under `TwoStage` with
+        interiors, the interior registration's audit record (all of its units proved, by the same statement and
+        verdicts) must accept too, and `session_roots` (`{port: root}` from the sessions' statements) is split between
+        the two by value. Without interiors, on a draw from the coins and an audit record its two verifiers agree on, the
+        whole run is held to the verifier of record's (`verifier.run`, the Lean's `Run.run` from the registration on):
+        where they differ the outcome is a reject, its audit record failing `run`. Raises `Refused` for a second outcome,
+        a verdict of record about other sessions, or public outputs the verdicts of record don't report alike."""
         e = self._entry(draw.registration)
         if e.draw != draw:
             raise _refuse("not-drawn", {"order": draw.registration.order})
@@ -899,6 +911,7 @@ class Stream:
             raise Refused(v)
         of_record = sorted(k for k in verdicts if verdicts[k].get("of_record"))
         public = dict(verdicts[of_record[0]]["public"]) if outputs else {}
+        asked = (proved_units, instances)
         proved = list(proved_units) if proved_units is not None else D.proved(draw.draw)
         instances = len(proved) if instances is None else instances
         roots, interior_roots = session_roots, None
@@ -915,6 +928,22 @@ class Stream:
                                        list(e.interior_draw["units"]), instances, statement, verdicts, self.delta,
                                        e.sessions, None, interior_roots)
         accepted = rec["accepted"] and (inner_rec is None or inner_rec["accepted"])
+        if e.interior is None and e.read is not None and rec["verifiers"]["agree"]:
+            reg = draw.registration
+            ports, leaf_layer, anchors, earlier, registered = e.copies
+            v = V.run({"receipt": dict(reg.receipt), "draw": dict(draw.draw), "read": len(e.read),
+                       "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
+                       "audit": {k: x for k, x in rec.items() if k != "verifiers"}},
+                      reg.record, e.program, self.spec.check.query,
+                      selection_law(self.spec.selection, reg.record["population"]), SCHEME, ports, leaf_layer, anchors,
+                      earlier, e.work_table, registered, self.spec.selection.to_json(),
+                      [(x.name, x.registered) for x in self._values(interior=False)], [p.item for p in self.spec.public],
+                      self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
+                      statement, self.delta, *asked, served, roots)
+            if not v.ok:
+                accepted = False
+                rec = {**rec, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
+                       "checks": {**rec["checks"], "run": {"ok": False, "codes": list(v.codes), "detail": v.detail}}}
         return self._finish(e, ACCEPT if accepted else REJECT, rec, public if accepted else {}, inner_rec)
 
     def _finish(self, e: _Entry, symbol: str, audit: Mapping[str, Any] | None, public: Mapping[str, Any],
