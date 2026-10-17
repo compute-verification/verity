@@ -428,7 +428,7 @@
    },
    "Claims.Flock.ZK": {
     "fails": "Claims.Flock.ZK_fails",
-    "meets": ["Claims.Flock.masked_meets_zk"]
+    "meets": ["Claims.Flock.masked_meets_zk", "Claims.Witness.Flock.ZK_meets"]
    },
    "Claims.KS": {
     "fails": "Claims.KS_fails",
@@ -1816,12 +1816,11 @@
   "Claims.Flock.ZK_fails": {
    "owner": "@proofs",
    "signature": [
-    "Claims.Flock.ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg)",
-    "  (εzk γ : Claims.Msg → Real) (x : Claims.Msg) (hε : Real.instLT.lt (εzk x) 1) :",
-    "  Exists fun D => Exists fun P => Exists fun S => Not (Claims.Flock.ZK H D P S εzk γ)"
+    "Claims.Flock.ZK_fails (H : Claims.Msg → Claims.Msg) (εzk γ : Claims.Msg → Real) (x : Claims.Msg)",
+    "  (hε : Real.instLT.lt (εzk x) 1) : Exists fun D => Not (Claims.Flock.ZK H D εzk γ)"
    ],
    "assumptions": [],
-   "type_hash": "901633f695bc129ad35a729dec58a0d87c94ea4e4dd9bece30091ca931fa7a9e"
+   "type_hash": "095e09bfe4cdd32d47e7d27afae083c51eb3a2a6b12a16555dfeaa8d06db8a54"
   },
   "Claims.Flock.decoder_meets_plain": {
    "owner": "@proofs",
@@ -1992,13 +1991,12 @@
   "Claims.Sampling.ZK_fails": {
    "owner": "@proofs",
    "signature": [
-    "Claims.Sampling.ZK_fails {Coin N Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype N] [Nonempty N]",
-    "  [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg) (εzk γ : Claims.Msg → Real) (x : Claims.Msg)",
-    "  (hε : Real.instLT.lt (εzk x) 1) :",
-    "  Exists fun D => Exists fun P => Exists fun S => Not (Claims.Sampling.ZK H D P S εzk γ)"
+    "Claims.Sampling.ZK_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)",
+    "  (εzk γ : Claims.Msg → Real) (x : Claims.Msg) (hε : Real.instLT.lt (εzk x) 1) :",
+    "  Exists fun D => Not (Claims.Sampling.ZK H D εzk γ)"
    ],
    "assumptions": [],
-   "type_hash": "c65328a6d35f9896845da6a50be03b9964d4fc509bab40719f8a23d3cbc8e92a"
+   "type_hash": "7e486479b31d0cb8c8a2441bf3b7130dc9945d9a0bf4e5ae34a772da377e4760"
   },
   "Claims.Sampling.decoder_meets_plain": {
    "owner": "@proofs",
@@ -5550,6 +5548,26 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Claims.Witness.Flock.ZK_meets": {
+   "owner": "@proofs",
+   "assumptions": [],
+   "signature": [
+    "Claims.Witness.Flock.ZK_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (nr : Claims.Msg → Nat → Nat)",
+    "  (T : Claims.ZKMal.CoinLayer.TableData) (t : Nat) :",
+    "  And (Eq (Claims.ZKMal.zkDeployed rel nr T t).zk Bool.true)",
+    "    (And (Eq (Claims.ZKMal.zkDeployed rel nr T t).hello Claims.ZKMal.CoinLayer.helloD)",
+    "      (And",
+    "        (Eq (Claims.ZKMal.zkDeployed rel nr T t).chk fun x ν ρ j m =>",
+    "          Claims.ZKMal.treeChk (Claims.ZKMal.CoinLayer.treeD ρ) (Claims.ZKMal.CoinLayer.nb ν)",
+    "            (Claims.ZKMal.CoinLayer.rootD ρ) (Claims.ZKMal.CoinLayer.place nr x j).pos",
+    "            (Claims.ZKMal.CoinLayer.place nr x j).idx (Claims.ZKMal.CoinLayer.place nr x j).n",
+    "            (Claims.ZKMal.CoinLayer.place nr x j).depth",
+    "            (Claims.ZKMal.CoinLayer.parseD (Claims.ZKMal.CoinLayer.place nr x j) ρ m))",
+    "        (And (Eq (Claims.ZKMal.zkDeployed rel nr T t).coinOf Claims.ZKMal.CoinLayer.coinOfD)",
+    "          (Eq (Claims.ZKMal.zkDeployed rel nr T t).abort List.nil))))"
+   ],
+   "type_hash": "52f5b47364f4690bdf9114529dc51477c6fd881636bb104e4f2d5233e46992ac"
   }
  },
  "shape": {
@@ -7678,6 +7696,7 @@
     "Claims.Sampling.masked_meets_zk",
     "Claims.Sampling.scope_meets",
     "Claims.ScopeMatches_fails",
+    "Claims.Witness.Flock.ZK_meets",
     "Claims.Witness.Recursion.BitsFlock_fails",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_fails",
@@ -7908,7 +7927,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "9393db916be131f1345b268b63e3e06529aa8d26ee7116d99ce9e57c559d6e42",
+   "digest": "cb1fcd2b79229732df4c21ebdd17228e51433991f1755970c64ca96ef55b0c71",
    "definitions": {
     "Claims.Sampling.BGate": "63a981e57403ae475c097446b58799e6bbc6ebb87e4a1ff8911d63f602542833",
     "Claims.Sampling.BGate.and": "5e97bb022ac07b984f8303744fbc545e8aa6f37c7e6ec025083230906f800909",
@@ -8076,6 +8095,7 @@
     "Claims.Sampling.missAt": "e96275e6891fe3f8595d46abc9fa8599590e8b237ff7e4282178d02b674faf06",
     "Claims.Sampling.nPU": "758d635640d95f5a85b39f793cacad3c3e2e8c924d56d5e6af90d259ab4c92fe",
     "Claims.Sampling.nRU": "fde513c1fc31f4a713d4b7b7dba38c1c8562beaeb8b9a48f707d85ccc146146e",
+    "Claims.Sampling.nRU.match_1": "0b095b65d873975d20ad5d76fb572ec0e4b184a657a5888c8a5e04dfcb1d2547",
     "Claims.Sampling.ofOC": "d438f3f55a130d155018272891d7e2500c147459e7bf774352897170b5d40edd",
     "Claims.Sampling.ownLog": "d831bb479cd3a7a58bb73ff8f84e52e9e02c57779891142a3152c93a80ce9e3a",
     "Claims.Sampling.ruSizes": "56514b14103fc1e7244c82d0092dee5a22311c7f06d1637feee866a621941f61",
@@ -13590,6 +13610,7 @@
     "Claims.Sampling.decoder_meets_plain",
     "Claims.Sampling.decoder_meets_zk",
     "Claims.Sampling.masked_meets_zk",
+    "Claims.Witness.Flock.ZK_meets",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_meets",
     "Claims.Witness.Recursion.Efficient_meets",
@@ -19084,6 +19105,7 @@
     "Claims.Sampling.decoder_meets_plain",
     "Claims.Sampling.decoder_meets_zk",
     "Claims.Sampling.masked_meets_zk",
+    "Claims.Witness.Flock.ZK_meets",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_meets",
     "Claims.Witness.Recursion.Efficient_meets",
