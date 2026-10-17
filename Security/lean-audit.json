@@ -3484,6 +3484,15 @@
    "assumptions": [],
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
   },
+  "Nci.SecurityProofs.ThreadedReads": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.ThreadedThrottled": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.ThreadedTraining": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.Training": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.Training : Nci.Guarantees.Training"],
