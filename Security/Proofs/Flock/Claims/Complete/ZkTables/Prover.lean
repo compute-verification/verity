@@ -70,7 +70,7 @@ theorem proverOkJ (h64 : Out64 H) : ProverOkJ H rel := by
     exact commitPZk_cap (hOf_size h64) hm1 hm2 hv hcm
   · have hreg := c.points_regions.2 _ hst
     have hx : extras.size = c.sts[j].regions.size * 2 := by
-      rw [extraClaims_size hex]
+      rw [FlockDeploy.extraClaims_size hex]
       simp [JsonRT.ptsOf, c.points_regions.1]
     have hm : (Setup.ofCircuit c.sts[j]).m = c.sts[j].m := rfl
     rw [hm] at hv

@@ -179,11 +179,13 @@ noncomputable def δcZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ :
 
 /-- **Flock's completeness at a prover and an error of one's own**: `Claims.Flock.Complete`'s statement at `D`, of `P`
 at `δc`. -/
-def CompleteWith {Coin Col T Ω : Type} [Fintype Coin] [Nonempty Coin] [Nonempty Ω] (H : Claims.Msg → Claims.Msg)
+def CompleteWith {Coin Col T Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Nonempty Ω]
+    (H : Claims.Msg → Claims.Msg)
     (D : Claims.Flock.Deploy Coin Col T) (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → ℝ) : Prop :=
   Claims.Complete H D.V P (Claims.Flock.R D.parse) (Claims.Flock.Scope D) δc
 
-theorem complete_iff_with {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] (H : Claims.Msg → Claims.Msg)
+theorem complete_iff_with {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    (H : Claims.Msg → Claims.Msg)
     (D : Claims.Flock.Deploy Coin Col T) : Claims.Flock.Complete H D ↔ CompleteWith H D D.P (D.δc H) :=
   Iff.rfl
 
@@ -241,9 +243,7 @@ theorem ready_of_readyZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : r
   unfold readyZk at h
   unfold ready
   split at h
-  · rename_i s spec sts hs
-    rw [hs]
-    simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+  · simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
     simp only [Bool.and_eq_true, decide_eq_true_eq]
     exact ⟨⟨⟨⟨⟨h.1.1.1.1.1.2, h.1.1.1.1.2⟩, h.1.1.1.2⟩, h.1.1.2⟩, h.1.2⟩,
       (recordFitsAt_one h.1.1.1.1.1.1).2 h.2⟩
