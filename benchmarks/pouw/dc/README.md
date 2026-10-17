@@ -15,6 +15,7 @@ there; the rates and the GEMM's exactness need the GPU (`run.sh`).
 | `gen_wgmma.py`, `wgmma.cuh` | The wgmma wrappers (up to 128 accumulator registers an operand list), generated |
 | `dgemm.cu` | The honest Dither GEMM, s8 C = X Wᵀ with every 32-step s32 prefix word folded by duo (3 ops a word): `dg90` (wgmma m64n128k32, accumulators in registers) and `dg100` (tcgen05.mma 128×256×32 into TMEM, tcgen05.ld to registers). Modes `cpuref`, `gate` (0xA5 poisoning, no-write control, a mismatch rerun with LBO/SBO exchanged) and `bench` (fold, no fold, cuBLASLt int8) |
 | `dgemm_ref.py` | The receipt's numpy twin: C and every receipt word from X, W and the seed |
+| `fp8acc.cu` | M4e for E4M3 (sm_100a): emu8's k3 and k4 limb planes through tcgen05.mma kind::f8f6f4 from TMEM preloaded with the binade constants, on five adversarial operand classes; counts accumulators that differ from the exact C + T and k32 words that differ from the s8 dot product. `selftest` runs the same checks with ideal accumulators on the CPU (all exact) |
 | `analyze.py` | rows.jsonl → slots a SM a clock, every loop's issue rate, a (issue cycles a tensor instruction takes from the lane beside it), M3's and M4's pass lines, the fold's words a clock |
 | `run.sh` | The job for one family (below); `DC_BUILD_ONLY=1` builds and gates without a GPU |
 
@@ -38,7 +39,7 @@ run builds and SASS-gates everything before it touches the GPU, then under one l
 | Run | Measures | Gates | Pass line | GPU-hours |
 |---|---|---|---|---|
 | H200 `run.sh sm90` | ρ_T over 17 wgmma and 7 mma.sync forms; wgmma beside 5 lanes (two schedules); scalar alone and pairs; dg90 exact, fold vs no-fold vs cuBLASLt | 85 SASS gates, poisoned sinks, no-write controls; dgemm 0xA5 poison + control + twin | M3: no form above wgmma s8 m64n256k32 × 1.02 | 0.5 a run |
-| B200 `run.sh sm100` | ρ_T5 (kind::i8 128×256), 10 MMA shapes; ρ_ld over 7 load geometries alone and beside the MMA; ρ_sync alone and beside; lanes beside; scalar; dg100 exact and timed | 51 SASS gates; as above | M4: ρ_ld ≥ ρ_T5 and ρ_sync ≤ ρ_T5 at 2% | 0.5 a run |
+| B200 `run.sh sm100` | ρ_T5 (kind::i8 128×256), 10 MMA shapes; ρ_ld over 7 load geometries alone and beside the MMA; ρ_sync alone and beside; lanes beside; scalar; dg100 exact and timed; fp8acc (is kind::f8f6f4 exact in emu8's binades) | 51 SASS gates; as above; fp8acc's CPU selftest at build | M4: ρ_ld ≥ ρ_T5 and ρ_sync ≤ ρ_T5 at 2% | 0.5 a run |
 
 A run is about 10 minutes of GPU time (builds ~1 min, the GEMM gate and bench ~2, the probes ~5); the half hour covers
 deploy, sync and the build on the node. The request is **2 GPU-hours on 1× H200 and 2 GPU-hours on 1× B200 (4 in all,
@@ -47,7 +48,8 @@ reading is the one layout field no CPU check reaches; the gate reports whether e
 run whose rates must agree within 2%.
 
 Not covered yet: sparse wgmma and tcgen05 (metadata operands), the N sweep for the FP kinds (s8 only), cta_group::2 (a
-CTA pair), tcgen05.ld x64/x128, M4e (kind::f16/tf32/f8f6f4 accumulator semantics against the silicon models), and the
+CTA pair), tcgen05.ld x64/x128, M4e beyond fp8acc's binade question (kind::f16/tf32/f8f6f4 accumulation against the
+silicon models in general), and the
 pipelined (TMA, multi-stage) GEMMs whose receipts must equal these kernels'. On sm_90 CUDA 13.0 has no native FP8 or s4
 mma.sync: e4m3 m16n8k32 is 2 HMMA.16816.F32 + 4 FADD (timed as that), s4 m16n8k64 a CALL (not timed).
 
@@ -61,7 +63,7 @@ an FP kind, which the protocol states as its own T1 table (TENSOR §5: an FP des
   base-16 limbs, xy = 240hh′ + 16mm′ − 15ll′; three MMAs a k32 step into two accumulators started at binade constants
   (C1 ulp 1, C2 ulp 1/8), and the word grows by 15·bits(acc1) + 2·bits(acc2), two IMADs. k4 (four MMAs, one C0) is the
   fallback. Both are exact only if the tcgen05 FP32 adder keeps C + T exact in that binade; TENSOR's table lists that
-  adder as unmodeled, so it is M4e's first measurement, on a B200 (the same kind) before any B300.
+  adder as unmodeled, so `fp8acc.cu` measures it in the B200 run (the same kind) before any B300 time is asked.
 - **NVFP4** (kind::mxf4nvf4, K 64, twice the FP8 rate): emu8's `accounting.py` `fp4_route` writes U as two E2M1 terms
   under per-block scales; its adder matches the existing silicon model (SIL BLACKWELL_SM100_NVF4/MXF4).
 
@@ -77,7 +79,7 @@ Cost against B200's kind::i8 kernel, at the rates TENSOR's table gives every 32-
 | honest time where the tensor pipe binds | 1 | 3 |
 
 So at L = 32, where TENSOR's table has both parts fold-bound, the missing int8 costs B300 the two recombination IMADs (≈
-1.67× the fold's time a SM); where the tensor pipe binds, k3 costs 3× (k4 4×). The B300 measurements: the f8f6f4
-binade gate (exactness of k3 and k4 at K up to 16384 on emu8's adversarial operands), then sm100_tcgen05.cu's f8f6f4,
-f16 and tcgen05.ld probes and `scalar.cu`, built for sm_103a: about 2 GPU-hours on a 1× B300 once the B200 adder gate
-passes.
+1.67× the fold's time a SM); where the tensor pipe binds, k3 costs 3× (k4 4×). The B300 measurements: `fp8acc` built
+for sm_103a (its guard and device check name sm_100a today) and extended from one k32 step to emu8's K up to 16384,
+then sm100_tcgen05.cu's f8f6f4, f16 and tcgen05.ld probes (its i8 forms removed) and `scalar.cu`: about 2 GPU-hours on
+a 1× B300, asked only once fp8acc is exact on the B200.

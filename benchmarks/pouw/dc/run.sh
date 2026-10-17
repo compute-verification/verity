@@ -7,8 +7,10 @@
 #
 # Outside the lease: build every binary and SASS-gate it (gate-build.txt; a refusal stops the run). Under one lease:
 # dgemm gate on three small shapes, each dump rechecked by dgemm_ref.py (dgemm/gate-<shape>/result.json, ref.json); dgemm
-# bench only if every gate is exact (dgemm/bench.jsonl); probe.py run on the family's probes and scalar.cu (probes/, scalar/: rows.jsonl, gate.json, times.jsonl) with
-# nvidia-smi sampled every 200 ms (env/smi.csv); then analyze.py (analysis.json, verdict.json).
+# bench only if every gate is exact (dgemm/bench.jsonl); on sm100, fp8acc gate (fp8acc/: is kind::f8f6f4 exact in emu8's
+# binades, the B300 question; its CPU selftest runs at build); probe.py run on the family's probes and scalar.cu
+# (probes/, scalar/: rows.jsonl, gate.json, times.jsonl) with nvidia-smi sampled every 200 ms (env/smi.csv); then
+# analyze.py (analysis.json, verdict.json).
 # Exit: 0 all done, 1 build or gate refused, 4 a dgemm gate not exact (probes still ran), 2 wrong device or no nvcc.
 # DC_BUILD_ONLY=1 stops after the build and SASS gate and needs no GPU (any machine with CUDA 13.0).
 set -uo pipefail
@@ -45,8 +47,16 @@ if [ "${DC_LEASED:-}" != 1 ]; then
     >>"$OUT/build.log" 2>&1 \
     || "$NVCC" -O3 -std=c++17 -gencode "arch=compute_${ARCH#sm_},code=$ARCH" "$HERE/dgemm.cu" -o "$WORK/dgemm" \
     >>"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
+  extra=("$WORK/dgemm")
+  if [ "$FAM" = sm100 ]; then
+    "$NVCC" -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a "$HERE/fp8acc.cu" -o "$WORK/fp8acc" \
+      >>"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
+    mkdir -p "$OUT/fp8acc-selftest"
+    "$WORK/fp8acc" selftest "$OUT/fp8acc-selftest" | tail -1 || { echo "run.sh: fp8acc selftest failed" >&2; exit 1; }
+    extra+=("$WORK/fp8acc")
+  fi
   mapfile -t bins <"$WORK/built"
-  for b in "${bins[@]}" "$WORK/dgemm"; do cuobjdump -sass "$b" >"$OUT/sass/$(basename "$b").sass" 2>&1; done
+  for b in "${bins[@]}" "${extra[@]}"; do cuobjdump -sass "$b" >"$OUT/sass/$(basename "$b").sass" 2>&1; done
   python3 "$PROBE" gate "${bins[@]}" --json "$OUT/gate-build.json" >"$OUT/gate-build.txt" 2>&1
   rc=$?
   grep -c '^PASS' "$OUT/gate-build.txt" | xargs echo "run.sh: gate-build PASS"
@@ -81,6 +91,17 @@ if [ $exact = 1 ]; then
   for s in "${BENCH[@]}"; do "$WORK/dgemm" bench 20 $s | tee -a "$OUT/dgemm/bench.jsonl"; done
 else
   echo "run.sh: a dgemm gate is not exact; no bench (result.json's lbo_sbo_swapped says whether the descriptor fields are)" >&2
+fi
+
+if [ "$FAM" = sm100 ]; then
+  mkdir -p "$OUT/fp8acc"
+  "$WORK/fp8acc" gate "$OUT/fp8acc" | tee "$OUT/fp8acc/result.jsonl"
+  frc=${PIPESTATUS[0]}
+  case "$frc" in
+    0) ;;
+    4) echo "run.sh: kind::f8f6f4 is not exact in emu8's binades (a finding: fp8acc/summary.json)" >&2 ;;
+    *) echo "run.sh: fp8acc gate did not run (exit $frc; see above)" >&2 ;;
+  esac
 fi
 
 mapfile -t bins <"$WORK/built"

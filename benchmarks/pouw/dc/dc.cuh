@@ -104,6 +104,14 @@ DC_TMEM_LD16(tmem_ld16, "32x32b.x16")
 DC_TMEM_LD16(tmem_ld16x64, "16x64b.x16")
 DC_TMEM_LD16(tmem_ld16x128, "16x128b.x8")
 #undef DC_TMEM_LD16
+// tcgen05.st.32x32b.x16 (the store twin of tmem_ld16); tcgen05.wait::st before another thread reads what it wrote.
+DC_DEV void tmem_st16(uint32_t taddr, const uint32_t (&r)[16]) {
+  asm volatile("tcgen05.st.sync.aligned.32x32b.x16.b32 [%0], {%1,%2,%3,%4,%5,%6,%7,%8,%9,%10,%11,%12,%13,%14,%15,%16};"
+               ::"r"(taddr), "r"(r[0]), "r"(r[1]), "r"(r[2]), "r"(r[3]), "r"(r[4]), "r"(r[5]), "r"(r[6]), "r"(r[7]),
+               "r"(r[8]), "r"(r[9]), "r"(r[10]), "r"(r[11]), "r"(r[12]), "r"(r[13]), "r"(r[14]), "r"(r[15])
+               : "memory");
+}
+DC_DEV void tmem_wait_st() { asm volatile("tcgen05.wait::st.sync.aligned;" ::: "memory"); }
 // 32x32b.x4 and .x1: the narrow loads (4 and 1 words a thread), for the load's fixed cost a instruction.
 DC_DEV void tmem_ld4(uint32_t taddr, uint32_t (&r)[4]) {
   asm volatile("tcgen05.ld.sync.aligned.32x32b.x4.b32 {%0,%1,%2,%3}, [%4];"
