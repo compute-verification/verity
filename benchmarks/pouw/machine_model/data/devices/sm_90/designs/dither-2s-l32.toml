@@ -23,9 +23,9 @@ name = "duo"
 ALU = 2
 IMAD = 1
 
-[skip.pv-strip]
-eps = 0.00131
-source = "SKIP's design A over Llama-3.1-8B and 70B x 2K, 8K, 32K by honest time, CHECKED-STRIP Result 3: at a one-hot P row P·V's whole strip is free, 0.131% at L = 32 (note:20261017T0340Z-draft-skip Result 3, 06:19Z)"
+[skip.served]
+eps = 0.00316
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 17.636 SMSP-cycles a 4096-MAC MMA on DC-90; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.316%: its tail 0.187%, the sums DG, S and X(0) 0.114%, the served epilogue 0.0144%. With P·V's served output checked it is 0.255% (8B) / 0.103% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its vsum and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 9)"
 
 [mand.fold]
 eps = 0.0

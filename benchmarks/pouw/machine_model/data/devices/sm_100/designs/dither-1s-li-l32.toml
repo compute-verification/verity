@@ -1,7 +1,7 @@
 # Dither-1S with the LI fold at L = 32 on the B200 (sm_100): one-sided dither and the linears' peel, LI receipts on
-# every committed word. The noise and ε_skip are dither-1s-l32's; the fold, honest and ε_mand are DC-DESIGN's
-# (note:20261017T0805Z-draft-dc-design §3, §4): LI binds honest on the B200's lane facet, so output counting closes the
-# lane route.
+# every committed word. The noise is dither-1s-l32's, and ε_skip is this design's own at its ♭ (eps_budget's
+# `design_skip`); the fold, honest and ε_mand are DC-DESIGN's (note:20261017T0805Z-draft-dc-design §3, §4): LI binds
+# honest on the B200's lane facet, so output counting closes the lane route.
 name = "dither-1s-li-l32"
 title = "Dither-1S, LI, L = 32"
 summary = "Dither-1S on the B200 at L = 32: one-sided dither, LI receipts on every committed word, the linears' peel"
@@ -24,9 +24,9 @@ name = "li"          # LOP3 (^ d0 ^ k0) on one word, IMAD (·a0 + d1) on the nex
 ALU = 0.5
 IMAD = 0.5
 
-[skip.peel]
-eps = 0.0063
-source = "the linears' peel L/k, MAC-weighted over Llama-3.1-8B's linears (k = 4096 and 14336): 0.63% at L = 32 (note:20261017T0310Z-report-eps1-program §3, note:20261017T0031Z-draft-eps-budget)"
+[skip.served]
+eps = 0.125
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 4.035 SMSP-cycles a 4096-MAC MMA on DC-100; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 32K decode: the linears' one-sided strip 0.479%; QKᵀ's one-sided strip 11.7%; P·V's peel 0.400%: its tail 0.177%, the sums DG, S and X(0) 0.198%, the served epilogue 0.0249%. With P·V's served output checked it is 12.5% (8B) / 9.19% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its vsum and served epilogue at one an issue cycle; a one-sided strip's 2L executed products at ♭'s price a MAC, on sm_120's instruction counts for the same kernel source, on this device's Π; the clean lm_head skips nothing, its words are ♭'s (note:20261017T0320Z-draft-eps1-calc Round 9)"
 
 [mand.fold]
 eps = 0.0
