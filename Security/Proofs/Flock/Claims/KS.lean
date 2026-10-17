@@ -253,22 +253,23 @@ that verdict alone, with nothing asked of the record's draw (`PlainDrawSim`: `Fl
 `FlockDeploy.KS.PlainSimWrPAtD`, `FlockDeploy.KS.PlainSimWD`, `FlockDeploy.KS.plain_KS_of_simD`). At the coupling's
 chances with every revealed length before the last round positive, each `δ_t` there is at most `2^{-128}`, the plain
 fork rounds are before the last round, a fork's slack weights fall geometrically past its round, and the slack fits
-level 0's room in the plain weight whatever the number of rounds (`PlainSlackFit`: `Claims.Flock.sum_slackW_le`,
+level 0's room in the plain weight whatever the number of rounds, and a fork bound at most the simulated fork at
+`fnAt` is at most the plain fork's and that slack (`PlainSlackFit`: `Claims.Flock.sum_slackW_le`,
 `Claims.Flock.sum_slackC_le`, `Claims.Flock.slack_fits_fast100`, `FlockDeploy.KS.plainJ_succ_lt`,
-`FlockDeploy.KS.plain_slack_fits`). The plain simulator runs `P` round by round on the plain wire, at deployed coins it
-rebuilds from a tape of uniform functions of the revealed live history and the entries the live session revealed, which
-are the coins `fnAt` gives on the live history; a live prover whose messages along the live history are known has those
-rounds as its live outcome (`PlainSim`: `FlockDeploy.KS.plainSim`, `FlockDeploy.KS.plainΦ`, `FlockDeploy.KS.Pr_plainΦ`,
-`FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`). A deployed run's messages are `P`'s at the history of
-its coins' bytes, and its acceptance does not read its last coin (`PlainLock`: `FlockDeploy.KS.run_dep`,
-`FlockDeploy.KS.depMsg_congr`, `FlockDeploy.KS.run_acc_iff_last`); along the live history the simulator's coins are
-`plainΦ`'s wherever it has revealed them, so it sends `P`'s rounds and its live outcome is theirs
-(`FlockDeploy.KS.simCoins_agree`, `FlockDeploy.KS.plainSim_msg`, `FlockDeploy.KS.plainSim_liveOut`). Where `P`'s run
-decides and accepts, the record's two rep streams hold `P`'s round messages with their coins, each of the table's coin
-counts, so the simulator's live outcome has the record's reps and proof files at every plain statement in scope, whose
-link points fit a live coin (`PlainStep`: `FlockDeploy.KS.plain_decides_record`, `FlockDeploy.KS.plain_mPts`,
-`FlockDeploy.KS.PlainSimLockstep`, `FlockDeploy.KS.plainSimLockstep`), and with the link coin's points it is the
-record's view (`FlockDeploy.KS.plainSimPts`, `FlockDeploy.KS.plainSimRun`); where it is rejected, the simulator's last
-message is empty, and the verdict at the draw refuses an outcome without proof files (`FlockDeploy.KS.PlainSimAbortAt`,
-`FlockDeploy.KS.plainSimAbortAt`).
+`FlockDeploy.KS.plain_slack_fits`, `FlockDeploy.KS.plain_fork_le_fnAt`). The plain simulator runs `P` round by round on
+the plain wire, at deployed coins it rebuilds from a tape of uniform functions of the revealed live history and the
+entries the live session revealed, which are the coins `fnAt` gives on the live history; a live prover whose messages
+along the live history are known has those rounds as its live outcome (`PlainSim`: `FlockDeploy.KS.plainSim`,
+`FlockDeploy.KS.plainΦ`, `FlockDeploy.KS.Pr_plainΦ`, `FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`). A
+deployed run's messages are `P`'s at the history of its coins' bytes, and its acceptance does not read its last coin
+(`PlainLock`: `FlockDeploy.KS.run_dep`, `FlockDeploy.KS.depMsg_congr`, `FlockDeploy.KS.run_acc_iff_last`); along the
+live history the simulator's coins are `plainΦ`'s wherever it has revealed them, so it sends `P`'s rounds and its live
+outcome is theirs (`FlockDeploy.KS.simCoins_agree`, `FlockDeploy.KS.plainSim_msg`, `FlockDeploy.KS.plainSim_liveOut`).
+Where `P`'s run decides and accepts, the record's two rep streams hold `P`'s round messages with their coins, each of
+the table's coin counts, so the simulator's live outcome has the record's reps and proof files at every plain statement
+in scope, whose link points fit a live coin (`PlainStep`: `FlockDeploy.KS.plain_decides_record`,
+`FlockDeploy.KS.plain_mPts`, `FlockDeploy.KS.PlainSimLockstep`, `FlockDeploy.KS.plainSimLockstep`), and with the link
+coin's points it is the record's view (`FlockDeploy.KS.plainSimPts`, `FlockDeploy.KS.plainSimRun`); where it is
+rejected, the simulator's last message is empty, and the verdict at the draw refuses an outcome without proof files
+(`FlockDeploy.KS.PlainSimAbortAt`, `FlockDeploy.KS.plainSimAbortAt`).
 -/
