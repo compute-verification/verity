@@ -270,10 +270,11 @@ theorem slackEscW_term [Fintype Coin] [Nonempty Coin] (hδ : ∀ t, 0 ≤ δ t) 
     (hb i).trans (add_le_add le_rfl (forkSlack_le H V P x hδ (rd j i) ω))
   have h2 : (∑ i, Real.sqrt (cZW (sch j) (Np j) i * b i)) ≤
       (∑ i, Real.sqrt (cZW (sch j) (Np j) i * p i)) + ∑ t, Real.sqrt (slackCW sch Np rd δ j t * q t) := by
-    refine (Finset.sum_le_sum fun i _ => Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (h1 i)
-      (cZW_nonneg _ _ i))).trans ?_
-    exact sum_sqrt_slack_le (cZW (sch j) (Np j)) p (fun i t => slackW (V.k x) δ (rd j i).val t.val) q
+    have h3 := sum_sqrt_slack_le (cZW (sch j) (Np j)) p (fun i t => slackW (V.k x) δ (rd j i).val t.val) q
       (cZW_nonneg _ _) (fun _ => Pr_nonneg _) (fun _ _ => slackW_nonneg hδ _ _ _) fun _ => Pr_nonneg _
+    unfold slackCW
+    exact (Finset.sum_le_sum fun i _ => Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (h1 i)
+      (cZW_nonneg _ _ i))).trans h3
   have hA : (∑ i, Real.sqrt (cZW (sch j) (Np j) i * p i)) ≤
       ∑ t, Real.sqrt (joinCW n sch Np rd t) * Real.sqrt (R t) := by
     have hle : ∀ i, Real.sqrt (cZW (sch j) (Np j) i * p i) ≤
