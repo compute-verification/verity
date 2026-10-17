@@ -30,6 +30,7 @@ import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 import Proofs.Flock.Claims.ZK.Compose
+import Proofs.Flock.Claims.ZK.Layout
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -172,4 +173,7 @@ import Proofs.Flock.Claims.ZK.Compose
   `ε₀ + Σ_{j < n} eB j` and `(c + n)·g`: `n·g` after a prefix that rewinds nothing. Both hold at one statement
   (`zkmalAt_seqU`, `zkmalAt_iter`), so the tapes and the number of sessions may be chosen per statement: on the
   statement-indexed tapes proposed for `Definitions/` (`ZKmalRx`), `m x` sessions in turn (`zkmalRx_iter`).
+* `Layout`: a run in parts, a first part then sessions back to back, on a flat tape (the first part's and one session
+  tape per slot) is `zkmalAt_iterG`'s nested run (`Layout.iterProver_flat`), so **`zkmalAt_layout`** charges it
+  `ε₀ + Σ_{j < m} eB j` and `(c + m)·g`, each session's zero knowledge needed only at the histories that start it.
 -/
