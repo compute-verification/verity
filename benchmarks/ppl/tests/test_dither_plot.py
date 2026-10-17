@@ -14,6 +14,7 @@ def test_arms_are_read_by_side_and_size():
     assert dither_plot.classify("side-lin-w-d2") == ("w", "both", 2)
     assert dither_plot.classify("side-qk-k-d4") == ("both", "k", 4)
     assert dither_plot.classify("adopted") == ("record", "record", 1)
+    assert dither_plot.classify("side-act-k-d2") == ("act", "k", 2)
     assert dither_plot.classify("co32c-d2") is None and dither_plot.classify("int8-all") is None
 
 

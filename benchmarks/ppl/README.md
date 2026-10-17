@@ -144,8 +144,8 @@ attention), `ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`nc
 (note:20261017T0518Z-draft-ppl-dither-size).
 One-sided dither against `adopted-bd-lm`'s both-sided: `side-lin-act` and `side-lin-w` round the linears' and
 lm_head's weights, or their activations, on ±127; `side-qk-q` and `side-qk-k` round K, or Q, in Q Kᵀ; each `-dB`
-(B = 2, 3, 4) is `adopted-bd-lm-dB` with the same operand rounded. `dither_plot.py` draws perplexity against B per
-side choice.
+(B = 2, 3, 4) is `adopted-bd-lm-dB` with the same operand rounded; `side-act-k[-d2]` rounds both the weights and Q
+(the record's sides without U). `dither_plot.py` draws perplexity against B per side choice.
 Any other file passes as a path.
 
 ## Adding an intervention

@@ -25,6 +25,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         want[f"side-{side}"] = ("all", "int8-all", True)
         for b in (2, 3, 4):
             want[f"side-{side}-d{b}"] = ("all", "int8-all", True)
+    want["side-act-k"] = want["side-act-k-d2"] = ("all", "int8-all", True)
     for g in ("fp4c", "fp4", "int5"):
         for m in ("dither", "round"):
             want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
@@ -116,6 +117,10 @@ def test_side_arms_round_one_operand_of_adopted_bd_lm(b):
         (kw,) = int8(a.attention)
         assert (kw["q"], kw["k"], kw["v"], kw["q_top"], kw["k_top"], kw["qk_bits"]) == (q, k, "dither", 127, 127, b)
         assert {**kw, "q": "dither", "k": "dither"} == int8(lm.attention)[0]
+    if b <= 2:
+        one = spec.load(f"side-act-k{suffix}")
+        assert one.linear == spec.load(f"side-lin-act{suffix}").linear
+        assert one.attention == spec.load(f"side-qk-k{suffix}").attention
 
 
 def test_co_and_ncp_serve_seven_bit_sides():

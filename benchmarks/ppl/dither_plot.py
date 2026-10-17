@@ -21,10 +21,11 @@ import methodology
 import report
 
 SIDES = {"adopted-bd-lm": ("both", "both"), "side-lin-act": ("act", "both"), "side-lin-w": ("w", "both"),
-         "side-qk-q": ("both", "q"), "side-qk-k": ("both", "k")}
+         "side-qk-q": ("both", "q"), "side-qk-k": ("both", "k"), "side-act-k": ("act", "k")}
 ROWS = (("linears", "linears and lm_head", (("act", "activations only"), ("w", "weights only"), ("both", "both"))),
         ("qk", "Q Kᵀ", (("q", "Q only"), ("k", "K only"), ("both", "both"))))
-ORDER = [("act", "both"), ("w", "both"), ("both", "both"), ("both", "q"), ("both", "k"), ("record", "record")]
+ORDER = [("act", "both"), ("w", "both"), ("both", "both"), ("both", "q"), ("both", "k"), ("act", "k"),
+         ("record", "record")]
 
 
 def classify(arm: str) -> tuple[str, str, int] | None:
@@ -120,9 +121,16 @@ def plot(rs: list[dict], png: str) -> None:
                 xs, ys = [r["b"] + 0.06 * (n - 1) for r in s], [r["inc"] for r in s]
                 err = [[r["inc"] - r["inc_min"] for r in s], [r["inc_max"] - r["inc"] for r in s]]
                 ax.errorbar(xs, ys, yerr=err, marker="o", capsize=3, color=colors[side], label=label)
+            one = sorted((r for r in rs if (r["model"], r["set"], r["ctx"]) == pt and (r["linears"], r["qk"]) == ("act", "k")),
+                         key=lambda r: r["b"])
+            if one and drawn:
+                ax.errorbar([r["b"] + 0.12 for r in one], [r["inc"] for r in one],
+                            yerr=[[r["inc"] - r["inc_min"] for r in one], [r["inc_max"] - r["inc"] for r in one]],
+                            marker="s", capsize=3, color="tab:purple", linestyle="--",
+                            label="one-sided everywhere (activations, K), no U")
             if rec:
                 r = rec[0]
-                ax.errorbar([1.12], [r["inc"]], yerr=[[r["inc"] - r["inc_min"]], [r["inc_max"] - r["inc"]]],
+                ax.errorbar([1.18], [r["inc"]], yerr=[[r["inc"] - r["inc_min"]], [r["inc_max"] - r["inc"]]],
                             marker="*", markersize=11, capsize=3, color="black", linestyle="none",
                             label="record (one-sided + U on W and Q)")
             if not drawn:
