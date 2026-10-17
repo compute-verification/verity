@@ -10,7 +10,16 @@ import random
 
 import pytest
 
-from fp8_squaring import Counter, exact_sum, e4m3, fp8_sqmod, prod_floor, val_floor
+from fp8_squaring import (
+    Counter,
+    batched_column,
+    batched_floor_div4,
+    exact_sum,
+    e4m3,
+    fp8_sqmod,
+    prod_floor,
+    val_floor,
+)
 
 
 def test_prod_floor_all_nibble_pairs():
@@ -36,6 +45,28 @@ def test_exact_sum_random_columns():
         want = sum(x * y for x, y in pairs)
         got = exact_sum([(e4m3(x), e4m3(y)) for x, y in pairs], ctr)
         assert got == want, (n, want, got)
+
+
+def test_batched_column_exact():
+    """One m16n8k32 dot (acc=0) is an exact 32-term column sum: 4096 MACs an
+    instruction (128 dots) convolve the squaring's partial products exactly."""
+    ctr = Counter()
+    rng = random.Random(11)
+    for _ in range(5000):
+        raw = [(rng.randint(0, 15), rng.randint(0, 15)) for _ in range(32)]
+        got = batched_column([(e4m3(x), e4m3(y)) for x, y in raw], ctr)
+        assert got == sum(x * y for x, y in raw)
+
+
+def test_batched_floor_div4():
+    """One m16n8k32 dot with the 2^25 anchor is floor(column_sum / 4): the free
+    carry rounding, batched over 32 terms."""
+    ctr = Counter()
+    rng = random.Random(12)
+    for _ in range(5000):
+        raw = [(rng.randint(0, 15), rng.randint(0, 15)) for _ in range(32)]
+        got = batched_floor_div4([(e4m3(x), e4m3(y)) for x, y in raw], ctr)
+        assert got == sum(x * y for x, y in raw) // 4
 
 
 @pytest.mark.parametrize("limbs", [4, 16, 32])

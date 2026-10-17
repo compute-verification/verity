@@ -86,6 +86,34 @@ def exact_sum(pairs: list[tuple[int, int]], ctr: Counter) -> float:
     return bf(acc)
 
 
+def batched_column(pairs: list[tuple[int, int]], ctr: Counter) -> int:
+    """One real m16n8k32 *dot* (<=32 product pairs) with acc=0: the EXACT column
+    sum sum_i a_i*b_i (each product one tensor-core MAC, no rounding).
+
+    A full m16n8k32 *instruction* is 128 of these dots (16x8 outputs), i.e.
+    128*32 = 4096 MACs, producing 128 exact column sums at once.  This is the
+    batched form the matmul-budget pricing uses: the squaring's O(L^2) partial
+    products are convolved here, and the carry floors are free byproducts (see
+    `batched_floor_div4`)."""
+    acc = fb(0.0)
+    acc = fb(_step(acc, pairs))
+    ctr.exact_steps += 1
+    return round(bf(acc))
+
+
+def batched_floor_div4(pairs: list[tuple[int, int]], ctr: Counter) -> int:
+    """One real m16n8k32 dot with the anchor 2^25: floor((sum_i a_i*b_i) / 4).
+
+    The GroupSum truncates each of the <=32 terms to the group max exponent and
+    normalises the sum back by its rescale (width-24 = 2 bits on sm_120 E4M3),
+    so the whole dot yields a floored column sum in ONE instruction -- the free
+    carry rounding, batched.  Verified bit-exact."""
+    anchor = 2.0 ** 25
+    d = _step(fb(anchor), pairs)
+    ctr.floor_steps += 1
+    return round((d - anchor) / 4)
+
+
 def prod_floor(x: int, y: int, b: int, ctr: Counter) -> int:
     """floor(x*y / 2^b): one product term x*y, anchor acc = 2^(b+23), truncated.
 
