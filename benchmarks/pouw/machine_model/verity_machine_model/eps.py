@@ -11,7 +11,8 @@ rule, 0 at 100% sampling. Each term is a fraction of honest time.
   instructions of class k, and a program takes at least its largest row.
 - **ε_machine** is one LP over Π (SPEC's §0.8, note:20261017T0324Z-draft-eps1-spec). A program writes every committed
   word, folds every word and does the filler, and takes T ≥ every row. A word is written on one of four routes: `tensor`
-  (1/128 of the MMA with its operand delivery, folded on lanes), `lanes` (q lane instructions a word in any mix of the
+  (on any MMA form of data/forms.toml, L/(depth·words) of that form's instructions with honest's operand delivery a
+  word, folded on lanes; honest writes on its own form), `lanes` (q lane instructions a word in any mix of the
   CUDA classes, NOROW's componentwise minimum among them, folded on lanes), `baseline` (the design's `[baseline]`
   program, dp4a, folded on lanes) or `uniform` (q_u uniform instructions a word, folded there too); the cheater may
   have a fifth, `table` (QSTAR's register-indexed lookups, data/table.toml: q_T lane instructions from the lanes' pool
@@ -42,6 +43,10 @@ rule, 0 at 100% sampling. Each term is a fraction of honest time.
 - **ε_adapt** is the proof unit's (data/adapt.toml, SPEC's Theorem D): what steering instances in unproved regions gains
   when σ is drawn after the commitment and before evaluation.
 
+- **The MMA forms** are census kinds, each priced on every row by its own line; a row a form has no line on (VF3q-16's
+  EFFMA rows, every row before VF3n-16) reads the generic MMA's there. The generic MMA itself is no route: honest's
+  profile names its form (IMMA16832 on sm_120), and the cheater mixes forms.
+
 A warp instruction does 32 lane instructions; a uniform instruction does one. Every count is per committed word.
 """
 from __future__ import annotations
@@ -64,6 +69,35 @@ CREDITS = ("H", "model", "floor")
 
 
 @dataclass(frozen=True)
+class Form:
+    """An MMA form a committed word may be written on (data/forms.toml): its census kind, the fresh words and the s8
+    k-steps one warp instruction of it writes."""
+    kind: str
+    words: int
+    depth: float                 # k_dense/split: k (k/2 when 2:4 sparse) over the k-slots an exact s8 product takes
+    split: int = 1
+    sparse: bool = False
+    exact: str = ""
+
+    def per_word(self, L: int) -> float:
+        """Its warp instructions a committed word at L."""
+        return L / (self.depth * self.words)
+
+
+def forms(data: Path = DATA) -> tuple[Form, ...]:
+    t = tomllib.loads((data / "forms.toml").read_text())
+    out = []
+    for kind, f in t.items():
+        if not isinstance(f, dict):
+            continue
+        m, n, k = f["shape"]
+        sparse = f.get("sparse", False)
+        out.append(Form(kind=kind, words=m * n, depth=(k // 2 if sparse else k) / f["split"], split=f["split"],
+                        sparse=sparse, exact=f["exact"]))
+    return tuple(out)
+
+
+@dataclass(frozen=True)
 class Honest:
     """The honest kernel's instruction profile a MMA (data/honest/NAME.toml)."""
     name: str
@@ -71,6 +105,7 @@ class Honest:
     source: str
     L: int                       # the commit spacing the profile was taken at
     mma: str
+    form: str                    # the MMA's census kind (data/forms.toml), the class per_mma counts it under
     words: int                   # output words one MMA writes
     depth: int                   # k of one MMA
     per_mma: dict[str, float]    # warp instructions a MMA by class, everything the kernel issues, the fold included
@@ -99,7 +134,7 @@ class Honest:
         floor = self.floor if floor is None else floor
         if operands == "floor" and not floor:
             raise SystemExit(f"{self.name}: no [operands] floor")
-        out = {MMA: self.per_mma[MMA]}
+        out = {self.form: self.per_mma[self.form]}
         _add(out, floor if operands == "floor" else {}, 1.0)
         return out
 
@@ -193,8 +228,13 @@ def honest(name: str, data: Path = DATA) -> Honest:
     m, ops = t.get("measured", {}), t.get("operands", {})
     if MMA not in t["per_mma"]:
         raise SystemExit(f"{name}: per_mma has no {MMA}")
-    return Honest(name=t["name"], status=t["status"], source=t["source"], L=t["L"], mma=t["mma"]["kind"],
-                  words=t["mma"]["words"], depth=t["mma"]["depth"], per_mma=dict(t["per_mma"]),
+    mma, fs = t["mma"], {f.kind: f for f in forms(data)}
+    f = fs.get(mma.get("form", ""))
+    if f is None or (f.words, f.depth) != (mma["words"], mma["depth"]):
+        raise SystemExit(f"{name}: [mma] form names its census kind, one of {', '.join(fs)}, with its words and depth")
+    return Honest(name=t["name"], status=t["status"], source=t["source"], L=t["L"], mma=mma["kind"], form=f.kind,
+                  words=mma["words"], depth=mma["depth"],
+                  per_mma={f.kind if k == MMA else k: v for k, v in t["per_mma"].items()},
                   fold_name=fold.pop("name"), fold=fold, measured=m.get("cycles_per_mma"),
                   measured_source=m.get("source", ""), floor=dict(ops.get("floor", {})),
                   floor_source=ops.get("source", ""))
@@ -294,10 +334,13 @@ class Machine:
 
 
 def machine(name: str = "", data: Path = DATA) -> Machine:
+    """Π at a vector's epoch, each MMA form on the generic MMA's line wherever it has none of its own."""
     m = model(data)
     v = vector(name or m.current, data)
     cen = census(m, v.epoch, data)
     c = {k: {r: u / m.cycle_u for r, u in rs.items() if r in v.rows} for k, rs in cen.items()}
+    for f in forms(data):
+        c[f.kind] = {**c.get(MMA, {}), **c.get(f.kind, {})}
     cuda = tuple(k for k in m.cuda if k in c and any(c[k].values()))
     return Machine(vector=v.name, rows=v.rows, c=c, cuda=cuda)
 
@@ -333,6 +376,7 @@ class Mix:
     binding: tuple[str, ...]
     pi: dict[str, float]              # the certificate: each row's dual weight, summing to 1
     short: dict[str, float]           # the share of words, and of each filler, left undone (Theorem S's deficit)
+    forms: dict[str, float]           # the share of words on each MMA form's tensor route
 
     def price(self, pi: Machine, n: dict[str, float]) -> float:
         """π·n: the certificate's price of n, in SMSP-cycles (n's L2 bytes are not counted: honest's aren't charged)."""
@@ -342,19 +386,28 @@ class Mix:
 
 def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: float | None, baseline: bool,
             fillers: tuple[tuple[Filler, float], ...] = (), cheat: bool = False,
-            tensor_mma: dict[str, float] | None = None, budget: float = 0.0, table: Table | None = None) -> Mix:
-    """The fastest mix over Π: min T over [T, w_tensor, w_lanes, w_baseline, w_uniform, s_k (k in pi.cuda), a fold
-    alone on lanes, a fold alone on the uniform datapath, each filler on lanes and on the uniform datapath, the words'
-    shortfall, each filler's shortfall, w_table]. The routes write every word but the shortfall, and every word is
-    folded, the rest alone. Each filler (Filler, lane instructions a word) runs once but for its shortfall, on its own
-    route unless `cheat`. Theorem S bounds the shortfalls together: (1 − p)·words' + Σ (1 − p_f)·filler f's ≤ `budget`
-    (ln(1/δ)/S; 0 leaves none). The tensor route pays `tensor_mma` a MMA (default honest's). q None closes the lane
-    route, q_uniform None the uniform route (and the fold alone there), `baseline` opens the design's baseline
-    program, and `table` the table route: table.q lane instructions from the lanes' class pool and table.bytes on an
-    L2 facet a word, folded on lanes."""
-    tensor: dict[str, float] = {}
-    _add(tensor, h.base() if tensor_mma is None else tensor_mma, d.L / (h.depth * h.words))
-    _add(tensor, d.fold, 1 / LANES)
+            tensor_mma: dict[str, float] | None = None, budget: float = 0.0, table: Table | None = None,
+            forms: tuple[Form, ...] = ()) -> Mix:
+    """The fastest mix over Π: min T over [T, w_tensor on forms[0], w_lanes, w_baseline, w_uniform, s_k (k in
+    pi.cuda), a fold alone on lanes, a fold alone on the uniform datapath, each filler on lanes and on the uniform
+    datapath, the words' shortfall, each filler's shortfall, w_table, w_tensor on each later form]. The routes write
+    every word but the shortfall, and every word is folded, the rest alone. Each filler (Filler, lane instructions a
+    word) runs once but for its shortfall, on its own route unless `cheat`. Theorem S bounds the shortfalls together:
+    (1 − p)·words' + Σ (1 − p_f)·filler f's ≤ `budget` (ln(1/δ)/S; 0 leaves none). The tensor route pays `tensor_mma` a
+    MMA (default honest's), its MMA on any of `forms` (default honest's own) at that form's instructions a word. q None
+    closes the lane route, q_uniform None the uniform route (and the fold alone there), `baseline` opens the design's
+    baseline program, and `table` the table route: table.q lane instructions from the lanes' class pool and table.bytes
+    on an L2 facet a word, folded on lanes."""
+    own = h.base() if tensor_mma is None else tensor_mma
+    rest = {k: v for k, v in own.items() if k != h.form}
+    forms = forms or (Form(kind=h.form, words=h.words, depth=h.depth),)
+    tensors = []
+    for f in forms:
+        t: dict[str, float] = {}
+        _add(t, rest, d.L / (h.depth * h.words))
+        _add(t, {f.kind: own.get(h.form, 0.0)}, f.per_word(d.L))
+        _add(t, d.fold, 1 / LANES)
+        tensors.append(t)
     on_lanes = {k: v / LANES for k, v in d.fold.items()}
     base: dict[str, float] = {}
     _add(base, d.baseline, 1 / LANES)
@@ -362,17 +415,19 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     fl = [{k: pw * v / sum(f.mix.values()) / LANES for k, v in f.mix.items()} for f, pw in fillers]
     S = list(pi.cuda)
     nf = len(fillers)
-    nv = 9 + len(S) + 3 * nf
+    nv = 8 + len(S) + 3 * nf + len(forms)
     iT, it, il, ib, iu, i_xv, i_xu = 0, 1, 2, 3, 4, 5 + len(S), 6 + len(S)
     fv = [7 + len(S) + 2 * j for j in range(nf)]
     fu = [8 + len(S) + 2 * j for j in range(nf)]
     i_dw = 7 + len(S) + 2 * nf
     df = [i_dw + 1 + j for j in range(nf)]
-    i_tb = nv - 1
+    i_tb = i_dw + 1 + nf
+    i_f = [it, *range(i_tb + 1, nv)]
 
     def col(k: str) -> list[float]:
         a = [0.0] * nv
-        a[it] = tensor.get(k, 0.0)
+        for i, t in zip(i_f, tensors):
+            a[i] = t.get(k, 0.0)
         a[il] = a[i_xv] = a[i_tb] = on_lanes.get(k, 0.0)
         a[ib] = base.get(k, 0.0)
         if k in S:
@@ -386,7 +441,8 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
             a[i_xu] = d.fold_cost()
         return a
 
-    cols = {k: col(k) for k in set(tensor) | set(on_lanes) | set(base) | set(S) | {k for f in fl for k in f} | {UNI}}
+    cols = {k: col(k) for k in {k for t in tensors for k in t} | set(on_lanes) | set(base) | set(S)
+            | {k for f in fl for k in f} | {UNI}}
     missing = set(cols) - set(pi.c)
     if missing:
         raise SystemExit(f"{pi.vector}: no census line for {', '.join(sorted(missing))}")
@@ -415,7 +471,8 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     A_ub.append(a)                                        # Theorem S's budget, after the facets
     b_ub.append(budget)
     eq = [[0.0] * nv for _ in range(3 + nf)]
-    eq[0][it] = eq[0][il] = eq[0][ib] = eq[0][iu] = eq[0][i_dw] = eq[0][i_tb] = 1.0   # every word but the shortfall
+    for i in (*i_f, il, ib, iu, i_dw, i_tb):              # every word but the shortfall
+        eq[0][i] = 1.0
     eq[1][i_xv] = eq[1][i_xu] = 1.0                       # the shortfall folded alone
     eq[1][i_dw] = -1.0
     for i in range(len(S)):
@@ -450,9 +507,11 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     load = pi.load(n)
     if table is not None:
         load["L2"] = x[i_tb] * table.bytes / table.per_cycle()
-    return Mix(T=x[iT], words={"tensor": x[it], "lanes": x[il], "baseline": x[ib], "uniform": x[iu], "table": x[i_tb]},
+    return Mix(T=x[iT], words={"tensor": sum(x[i] for i in i_f), "lanes": x[il], "baseline": x[ib], "uniform": x[iu],
+                               "table": x[i_tb]},
                filler_uniform=tuple(x[i] for i in fu), n=n, binding=binding(load, x[iT]), pi=lam,
-               short={"words": x[i_dw], **{f"filler {j + 1}": x[df[j]] for j in range(nf)}})
+               short={"words": x[i_dw], **{f"filler {j + 1}": x[df[j]] for j in range(nf)}},
+               forms={f.kind: x[i] for f, i in zip(forms, i_f) if x[i] > 1e-12})
 
 
 def budget(d: Design) -> float:
@@ -480,6 +539,7 @@ class Setup:
     as_built: Mix                    # the credited kernel: the tensor route alone
     baseline: Mix                    # the credited program: the tensor route and the baseline program
     table: Table | None = None       # the cheater's table route, when open
+    forms: tuple[Form, ...] = ()     # the MMA forms the cheater's tensor route may mix; () honest's alone
 
     def cheat(self, q: float, *, lanes: bool | None = None, uniform: bool | None = None,
               q_uniform: float | None = None, luck: bool = False) -> Mix:
@@ -490,7 +550,7 @@ class Setup:
         return fastest(d, self.honest, self.machine, q=q if lanes else None, q_uniform=qu if uniform else None,
                        baseline=True, fillers=self.fillers, cheat=True,
                        tensor_mma=self.honest.tensor(self.operands, d.floor), budget=budget(d) if luck else 0.0,
-                       table=self.table)
+                       table=self.table, forms=self.forms)
 
     def machine_eps(self, q: float, **routes) -> float:
         return max(0.0, 1 - self.cheat(q, **routes).T / self.baseline.T)
@@ -506,8 +566,9 @@ def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", cre
     """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a):
     the tensor route at the noise's φ_del, the fold, the fillers on their own routes and the baseline program, with no
     overhead. A saturating filler fills the uniform pipe's slack in the credited program's time. `table` opens the
-    cheater's table route."""
+    cheater's table route. The cheater writes on any MMA form Π prices, honest on its own."""
     h = honest(d.honest, data)
+    fms = sorted((f for f in forms(data) if f.kind in pi.c), key=lambda f: f.kind != h.form)
     if d.L % h.depth:
         raise SystemExit(f"{d.name}: L = {d.L} is not a multiple of the MMA's depth {h.depth}")
     if credit not in CREDITS:
@@ -529,7 +590,7 @@ def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", cre
     built = fastest(d, h, pi, q=None, q_uniform=None, baseline=False, fillers=fs, tensor_mma=tm)
     base = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fs, tensor_mma=tm)
     return Setup(design=d, honest=h, machine=pi, operands=operands, credit=credit, fillers=fs, as_built=built,
-                 baseline=base, table=table)
+                 baseline=base, table=table, forms=tuple(fms))
 
 
 @dataclass(frozen=True)
