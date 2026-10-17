@@ -32,16 +32,17 @@ LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shf
 
 
 def load(d: Path) -> tuple[dict[str, dict], dict[str, dict]]:
-    """Every row by probe name, and every gate verdict by probe name, under d."""
+    """Every row by probe name under d, and the gate verdict probe.py run wrote beside each rows.jsonl."""
     rows, verdicts = {}, {}
     for f in sorted(d.rglob("rows.jsonl")):
         for ln in f.read_text().splitlines():
             if ln.strip():
                 r = json.loads(ln)
                 rows[r["probe"]] = r
-    for f in sorted(d.rglob("gate.json")):
-        for v in json.loads(f.read_text())["verdicts"]:
-            verdicts[v["probe"]] = v
+        g = f.parent / "gate.json"
+        if g.exists():
+            for v in json.loads(g.read_text())["verdicts"]:
+                verdicts[v["probe"]] = v
     return rows, verdicts
 
 
