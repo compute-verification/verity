@@ -1,3 +1,4 @@
+import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.Level3.RowV2
 
@@ -13,21 +14,22 @@ fixes set, and the sampled verifier's code (`SamplingDeploy.Code`) as its parame
   verifier's own registered frame-v3-sha512 path check (`regPath`); the row's other bits, the salt and the path are
   read off the opening's data, as the reveal encodes them.
 * `universal`: the universal unit's Definition (`universalProg`).
-* `εtable`: Flock's per-table bound `2^{-205}` (`FlockDeploy.tableErr_zk_le`) times the most tables a session at the
-  statement sets up (`Code.tables`), the form in which each session's sum is bounded (`FlockDeploy.εtable_le`).
+* `εtable`, `weight`: Flock's per-table bounds, `2^{-205}` on a table's error (`FlockDeploy.tableErr_zk_le`) and
+  `2^33` on its weight (`FlockDeploy.tableWeight_zk_le`), times the most tables a session at the statement sets up
+  (`Code.tables`): each session's sums are at most these (`FlockDeploy.εtable_le`, `FlockDeploy.weight_zk_le`).
 * `openCalls`: the most openings one session reveals (`Code.reveals`) times one opening's calls, at most
   `4 + depth own` (`opens_calls_le`): the leaf's three, the leaf's frame, and one node per level of the deepest
   registered port.
 * The rest is the code's: the verifier in public-coin form, its parser, scope check and partition evaluation, its draw
-  layout, the checked units' sessions and what their witnesses reveal, the sessions' `N₀` and weight, and the reference
-  prover on its tapes with its completeness error.
+  layout, the checked units' sessions and what their witnesses reveal, the sessions' `N₀`, and the reference prover on
+  its tapes with its completeness error.
 
 What is then a fact about the record: its sessions are `deployZk`'s (`deploy_flock`, `rfl`), its `ε_table` is
 nonnegative (`deploy_εtable_nonneg`), its commitment is hm96 leaves under the registered path check (`deploy_commit`,
 `rfl`) of rows that place the value (`row_places`), its universal unit is the Definition's (`universalIs_deploy`), its
 opening check's calls are bounded by the reveal count (`openCallsLe_deploy`, from `RevealsLe`), and the inner
-numbers' waits and truncation are Flock's (`innerNumbers_deploy`, from `InnerTables`). `sampling_deployed` is
-`sampling_assembled` at the record, those discharged.
+numbers are Flock's (`innerNumbers_deploy`: the waits and truncation by definition, the rest from `SessionsIn`, each
+session in Flock's masked scope). `sampling_deployed` is `sampling_assembled` at the record, those discharged.
 -/
 
 namespace SamplingDeploy
@@ -39,10 +41,9 @@ check and partition evaluation; its draw layout (`stage2`, `checked`, `rounds`);
 its Flock witness reveals (`session`, `reveal`); the trace commitment's registered ports (`own`), the root and leaf
 index of each position under a run's roots (`at_`) and its published leaf layer (`layer`); where each committed bit
 sits, its row's width and its place there (`place`), and how the reveal encodes an opening's data: the row's other bits,
-the salt and the path (`bits`, `salt`, `π`); and its numbers: the sessions' `N₀` and weight, the most tables a session
-at a statement sets up (`tables`) and the most openings one session reveals (`reveals`); and the reference prover, the
-honest sampled prover the deployment runs, on its tapes (`Tape`, `P`), with its completeness error at each hash (`δc`).
--/
+the salt and the path (`bits`, `salt`, `π`); and its numbers: the sessions' `N₀`, the most tables a session at a
+statement sets up (`tables`) and the most openings one session reveals (`reveals`); and the reference prover, the honest
+sampled prover the deployment runs, on its tapes (`Tape`, `P`), with its completeness error at each hash (`δc`). -/
 structure Code where
   V : Verifier FlockDeploy.Coin
   parse : Msg → Option Stmt
@@ -61,7 +62,6 @@ structure Code where
   salt : Opening Bool → Msg
   π : Opening Bool → Msg
   innerN₀ : Msg → ℝ
-  weight : Msg → ℝ
   tables : Msg → ℕ
   reveals : Msg → ℕ
   Tape : Type
@@ -173,7 +173,7 @@ noncomputable def deploy (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Re
   innerN₀ := c.innerN₀
   innerCap _ := Claims.Flock.Numbers.cap
   εtable x := c.tables x * 2 ^ (-(205 : ℝ))
-  weight := c.weight
+  weight x := c.tables x * 2 ^ 33
   openCalls x := c.reveals x * (4 + depth c.own)
   Tape := c.Tape
   tapeNonempty := c.tapeNonempty
@@ -210,25 +210,32 @@ theorem openCallsLe_deploy (H : Msg → Msg) (h : RevealsLe c) : OpenCallsLe H (
     _ = (c.reveal s u v wF).length * (4 + depth c.own) := by simp
     _ ≤ c.reveals x * (4 + depth c.own) := Nat.mul_le_mul_right _ (h x s hs u v wF)
 
-/-- **The sessions' tables**: at every session's statement, Flock's `N₀` is the record's, and its `ε_table` and weight
-are at most the record's. -/
-def InnerTables : Prop :=
+/-- **The sessions are in Flock's masked scope**: every session's statement sets up at most `tables` tables, each at
+an `m` and of a shape the masked verifier serves (`FlockDeploy.ZkIn`), and its `N₀` is the record's. -/
+def SessionsIn : Prop :=
   ∀ x u v xS vS, c.session x u v = some (xS, vS) →
-    FlockDeploy.N₀ true xS = c.innerN₀ x ∧ FlockDeploy.εtable true xS ≤ c.tables x * 2 ^ (-(205 : ℝ)) ∧
-      FlockDeploy.weight true xS ≤ c.weight x
+    (∃ s spec sts, FlockDeploy.ZkIn xS s spec sts ∧ sts.size ≤ c.tables x) ∧ FlockDeploy.N₀ true xS = c.innerN₀ x
 
-/-- **The inner numbers are Flock's**: the waits and truncation by definition, the rest by `InnerTables`. -/
-theorem innerNumbers_deploy (h : InnerTables c) : InnerNumbers (deploy rel c) := fun x u v xS vS hs =>
-  ⟨rfl, rfl, (h x u v xS vS hs).1, (h x u v xS vS hs).2.1, (h x u v xS vS hs).2.2⟩
+/-- **The inner numbers are Flock's**: the waits and truncation by definition; at a session in Flock's masked scope,
+its `ε_table` and weight are at most its tables' count times their bounds, so at most the record's. -/
+theorem innerNumbers_deploy (h : SessionsIn c) : InnerNumbers (deploy rel c) := by
+  intro x u v xS vS hs
+  obtain ⟨⟨s, spec, sts, hz, hn⟩, hN⟩ := h x u v xS vS hs
+  have hn' : (sts.size : ℝ) ≤ c.tables x := by exact_mod_cast hn
+  refine ⟨rfl, rfl, hN, ?_, ?_⟩
+  · refine (FlockDeploy.εtable_le hz.setup fun st hst => ?_).trans (mul_le_mul_of_nonneg_right hn' (by positivity))
+    have := hz.tab st hst
+    exact FlockDeploy.tableErr_zk_le spec st this.1 this.2.1 this.2.2
+  · exact (FlockDeploy.weight_zk_le rel hz).trans (mul_le_mul_of_nonneg_right hn' (by positivity))
 
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record**, at every hash: `sampling_assembled` with the record's facts
-discharged. The hypotheses are what remains: Flock's KS at `deployZk` (`hKS`); the draw, sessions, inner tables, slots,
-session openings, interior roots and scope checks of the sampled verifier's run (`DrawFixed`, `SessionRuns`,
-`InnerTables`, `DrawSlots`, `SessionOpens`, `InteriorFixed`, `ProgramScope`, `ChecksScope`); its reveal count
+discharged. The hypotheses are what remains: Flock's KS at `deployZk` (`hKS`); the draw, sessions and their scope,
+slots, session openings, interior roots and scope checks of the sampled verifier's run (`DrawFixed`, `SessionRuns`,
+`SessionsIn`, `DrawSlots`, `SessionOpens`, `InteriorFixed`, `ProgramScope`, `ChecksScope`); its reveal count
 (`RevealsLe`); completeness and zero knowledge. -/
 theorem sampling_deployed (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
-    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : InnerTables c)
+    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
     (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
