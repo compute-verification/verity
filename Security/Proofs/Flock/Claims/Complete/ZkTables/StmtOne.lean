@@ -10,8 +10,9 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 library's specification (`JsonSpec`), from the setup alone. So `StmtAt` holds at every good case of one table
 (`Case.stmtOne`), and with `Case.stmtAt` at every good case (`stmtAt_all`); `StmtOkZk` holds (`stmtOkZk`); and
 `completeRel`, `completeJRel` and `complete_zk_relation` hold without it (`completeRelS`, `completeJRelS`,
-`complete_zk_relationS`). `complete_json` is `completeRelS` in `Claims.Flock.Complete`'s form, at the masked record's
-pinned prover and error, with `Out64` the claim's own antecedent.
+`complete_zk_relationS`). `complete_json` and `complete_jsonJ` are `completeRelS` and `completeJRelS` in
+`Claims.Flock.Complete`'s form, at the masked record's pinned prover and error, with `Out64` the claim's own
+antecedent.
 
 * A setup of one table is `setupOne`'s (`setupTables_okAny`: one of several has more).
 * Its public header is the population's with the draw put in (`HmRow.drawn`), so its `unit_draw` is the statement's
@@ -398,6 +399,17 @@ theorem completeJRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)
     (hCJ : LgInnerJ H Readable.relation) : Claims.Flock.Complete H (deployZk Readable.relation) :=
   completeJRel H S h64 (stmtOkZk S) hR hPR hLg hIn hPRJ hRJ hCJ
+
+/-- **Flock's completeness at the deployed masked verifier**, at the deployed relation, of the record's reference
+prover at the record's error, at any number of tables: `completeJRelS`, from the one-table premises and the same
+three at several tables (`ProverRunsJ`, `RepShapedJ`, `LgInnerJ`), with `Out64` `Claims.Complete`'s own
+antecedent. -/
+theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+    (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
+    (hLg : FlockComplete.LigeritoZk H Readable.relation) (hIn : FlockComplete.Inner H Readable.relation)
+    (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)
+    (hCJ : LgInnerJ H Readable.relation) : Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
+  completeJRelS H S h64 hR hPR hLg hIn hPRJ hRJ hCJ h64
 
 /-- **Flock's masked verifier is complete at the deployed relation** for `honestPZk` with error `δcZk H`:
 `complete_zk_relation` with `StmtOkZk` proved (`stmtOkZk`). -/
