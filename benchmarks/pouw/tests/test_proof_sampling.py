@@ -96,6 +96,14 @@ def test_today_s_work_measure_loses_to_the_new_levers():
     assert max(r.by_attack, key=r.by_attack.get) == "o→lm_head" and r.eps > 0.0144
 
 
+def test_the_early_token_attack_steers_every_layer_of_the_first_510_tokens():
+    c = P.cell(P.LLAMA_8B, "prefill", 2048)
+    r = P.evaluate(c, "work", 1)[0]
+    pv = np.array([lab == "P·V→o" for lab in c.lev_label]) & (r.lev_used > 0)
+    assert c.lev_pos[pv].min() == 1 and c.lev_pos[pv].max() == 510
+    assert r.lev_used[pv].sum() / P.ROUNDS == pytest.approx(32 * 510, rel=1e-3)
+
+
 def test_a_session_is_the_cost_floor():
     assert P.session_gpu_s(1) == P.session_gpu_s(16) == 0.054
     assert P.session_gpu_s(64) == 0.069 and P.session_gpu_s(256) == 0.213

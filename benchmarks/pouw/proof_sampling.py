@@ -94,6 +94,7 @@ class Cell:
     lev_forced: np.ndarray
     lev_rows: np.ndarray
     lev_k: np.ndarray
+    lev_pos: np.ndarray
     lev_label: list[str]
     class_row: np.ndarray
     class_dpc: np.ndarray
@@ -121,13 +122,14 @@ class _Builder:
     k: list = field(default_factory=list)
     row: list = field(default_factory=list)
     dpc: list = field(default_factory=list)
+    pos: list = field(default_factory=list)
     levers: list = field(default_factory=list)
 
-    def add(self, comp, count, k, row=1, dpc=1, levers=()):
+    def add(self, comp, count, k, row=1, dpc=1, levers=(), pos=0):
         """Add a class (arrays over positions broadcast); each lever is (label, consumer MACs, forced wrong DPs)."""
-        shapes = [np.shape(x) for x in (count, k, row)] + [np.shape(x) for _, c, f in levers for x in (c, f)]
+        shapes = [np.shape(x) for x in (count, k, row, pos)] + [np.shape(x) for _, c, f in levers for x in (c, f)]
         n = int(np.prod(np.broadcast_shapes(*shapes)))
-        count, k, row = (np.broadcast_to(np.asarray(x, float), (n,)).copy() for x in (count, k, row))
+        count, k, row, pos = (np.broadcast_to(np.asarray(x, float), (n,)).copy() for x in (count, k, row, pos))
         if not count.any():
             return
         self.comp.append(np.full(n, COMPONENTS.index(comp)))
@@ -135,16 +137,18 @@ class _Builder:
         self.k.append(k)
         self.row.append(row)
         self.dpc.append(np.full(n, float(dpc)))
+        self.pos.append(pos)
         self.levers.append([(lab, *(np.broadcast_to(np.asarray(x, float), (n,)) for x in (c, f)))
                             for lab, c, f in levers])
 
     def build(self, label: str) -> Cell:
         sub = {key: [] for key in ("comp", "count", "k", "parent", "bits")}
-        lev = {key: [] for key in ("cls", "bit", "C", "forced", "rows", "k")}
+        lev = {key: [] for key in ("cls", "bit", "C", "forced", "rows", "k", "pos")}
         labels: list[str] = []
         base = 0
         nlev_all = []
-        for comp, count, k, row, dpc, levers in zip(self.comp, self.count, self.k, self.row, self.dpc, self.levers):
+        for comp, count, k, row, dpc, pos, levers in zip(self.comp, self.count, self.k, self.row, self.dpc, self.pos,
+                                                         self.levers):
             n, nlev = count.size, len(levers)
             nlev_all.append(np.full(n, nlev))
             idx = base + np.arange(n)
@@ -165,6 +169,7 @@ class _Builder:
                 lev["forced"].append(forced[keep])
                 lev["rows"].append(count[keep] / row[keep])
                 lev["k"].append(k[keep])
+                lev["pos"].append(pos[keep])
                 labels += [lab] * int(keep.sum())
             base += n
         cat = np.concatenate
@@ -181,6 +186,7 @@ class _Builder:
             lev_forced=cat(lev["forced"]),
             lev_rows=cat(lev["rows"]),
             lev_k=cat(lev["k"]),
+            lev_pos=cat(lev["pos"]),
             lev_label=labels,
             class_row=cat(self.row),
             class_dpc=cat(self.dpc),
@@ -211,17 +217,19 @@ def cell(model: Model, phase: str, n: int, design: Design = DESIGN_A, steps: int
         lm_tokens = steps
         label = f"{m.name} decode {n // 1024}K"
     tokens = keys.size
+    t = np.arange(1, tokens + 1, dtype=float)
     L = m.layers
     qk = design.qk_mult
     f_head = pi * hd
     b = _Builder(pi)
     # q of token t steers its scores, a head row of 128 coordinates: keys·128 consumer MACs each.
-    b.add("qkv", L * d, d, row=hd, levers=[("q→QKᵀ", keys * hd * qk, f_head)])
-    b.add("qkv", L * kv, d, row=hd, levers=[("k→QKᵀ", group * hd * future * qk, f_head)])
-    b.add("qkv", L * kv, d, row=hd, levers=[("v→P·V", group * hd * future, f_head)])
+    b.add("qkv", L * d, d, row=hd, levers=[("q→QKᵀ", keys * hd * qk, f_head)], pos=t)
+    b.add("qkv", L * kv, d, row=hd, levers=[("k→QKᵀ", group * hd * future * qk, f_head)], pos=t)
+    b.add("qkv", L * kv, d, row=hd, levers=[("v→P·V", group * hd * future, f_head)], pos=t)
     # The scores of (t, head) steer P̂·V there; P·V of token t steers o_proj's whole row.
-    b.add("qk", L * m.heads * keys, hd * qk, row=keys, levers=[("QKᵀ→P·V", hd * keys, pi * keys)])
-    b.add("pv", L * d, keys, row=d, levers=[("P·V→o", d * d, pi * d)])
+    b.add("qk", L * m.heads * keys, hd * qk, row=keys, levers=[("QKᵀ→P·V", hd * keys, pi * keys)],
+          pos=t)
+    b.add("pv", L * d, keys, row=d, levers=[("P·V→o", d * d, pi * d)], pos=t)
     qkv_next = (d + 2 * kv) * d
     gu, down_c, lm_c = 2 * m.ffn * d, d * m.ffn, m.vocab * d
     mid = [("o→gate/up", gu, pi * d), ("o→qkv′", qkv_next, pi * d)]
@@ -318,11 +326,15 @@ STRATEGIES = {"work": work, "uniform": uniform, "stratified": stratified, "fanou
 
 @dataclass
 class Response:
+    """The best response's ε and Λ (its saving in units of ln(1/δ)/S), its saving by attack, the draw, the closed
+    levers, and the rows of each lever it steers over the window."""
+
     eps: float
     lam: float
     by_attack: dict[str, float]
     rho: np.ndarray
     closure: np.ndarray
+    lev_used: np.ndarray
 
 
 def best_response(c: Cell, w: np.ndarray, s: int, closure_r: int = 0, caps: bool = True,
@@ -369,8 +381,11 @@ def best_response(c: Cell, w: np.ndarray, s: int, closure_r: int = 0, caps: bool
     for j, g in zip(labels[order][taken > 0], gain[taken > 0]):
         key = "luck" if j < 0 else c.lev_label[j]
         by[key] = by.get(key, 0.0) + float(g)
+    used = np.zeros(fan.size)
+    lev = labels[order] >= 0
+    np.add.at(used, labels[order][lev], (taken / det[order])[lev])
     saving = float(gain.sum())
-    return Response(LUCK_FACTOR * saving / ROUNDS, saving / LN_INV_DELTA, by, rho, closed)
+    return Response(LUCK_FACTOR * saving / ROUNDS, saving / LN_INV_DELTA, by, rho, closed, used)
 
 
 # ---- proof cost ----
