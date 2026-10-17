@@ -265,7 +265,7 @@ def test_uniform_tables_pin_every_loop():
     un = _load("uniform")
     for fam in ("sm90", "sm100"):
         tab = un.tables(fam)
-        assert len(tab) == 68, fam
+        assert len(tab) == 76, fam
         for name, t in tab.items():
             assert t["counted"] in t["counts"], (fam, name)
             if name.startswith("uz_"):

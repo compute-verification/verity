@@ -1,9 +1,10 @@
 """uni.sh's run into the uniform datapath's census lines on sm_90 and sm_100 (EPS1 DC r4), and the IMAD forms of duo's
 ALU work beside the fold.
 
-    python3 uniform.py analyze OUT [--json F]       the rates, each row's UNI coefficient, the IMAD forms
-    python3 uniform.py census OUT [--write]         UNI's census lines; --write puts them, the UP row and UP in the
+    python3 uniform.py analyze OUT... [--json F]    the rates, each row's UNI coefficient, the IMAD forms
+    python3 uniform.py census OUT... [--write]      UNI's census lines; --write puts them, the UP row and UP in the
                                                     current vector's rows into the family's data/devices/sm_NN/
+    python3 uniform.py tables GATE_JSON...          rewrite each gated binary's table from probe.py gate's JSON
 
 OUT is uni.sh's output (probes/rows.jsonl). Each probe's loop counts are its table's (probes/sm90_uniform.cu,
 sm100_uniform.cu, sm90_imad.cu, sm100_imad.cu: the eight most frequent opcodes, as the gate pinned them). A point's time
@@ -26,6 +27,7 @@ import argparse
 import csv
 import io
 import json
+import math
 import re
 import tomllib
 from pathlib import Path
@@ -35,15 +37,35 @@ MARGIN = 0.02
 MIN_UNI = 16
 ALU = re.compile(r"^(LOP3|LEA|IADD3|SHF|PRMT|ISETP)")
 TABLE = re.compile(r'P_[UI]\((\w+), "([^"]*)", "([^"]*)"\)')
-WARPS = {"uniform": 16, "imad": 32}
+WARPS = {"uniform": 16, "issue": 16, "imad": 32}
 
 
 def tables(fam: str) -> dict[str, dict]:
     out = {}
-    for kind in ("uniform", "imad"):
+    for kind in ("uniform", "issue", "imad"):
         for name, ex, cnt in TABLE.findall((HERE / "probes" / f"{fam}_{kind}.cu").read_text()):
             out[name] = {"counts": {k: int(v) for k, v in (p.split("=") for p in ex.split(","))}, "counted": cnt,
                          "warps": WARPS[kind], "binary": f"{fam}_{kind}"}
+    return out
+
+
+def write_table(gate: Path) -> list[Path]:
+    """Rewrite each gated binary's table (probes/<binary>.cu) so every probe expects its loop's eight most frequent
+    opcodes, the branch aside, as probe.py gate's JSON records them; an alone chain counts its uniform opcode, every other
+    probe the MMA."""
+    rows: dict[str, list[str]] = {}
+    for v in json.loads(gate.read_text())["verdicts"]:
+        (loop,) = v["verdict"]["loops"]
+        top = [(k, n) for k, n in loop["top"].items() if not k.startswith("BRA")][:8]
+        cnt = top[0][0] if v["probe"].startswith("uz_") else next(k for k, _ in top if k.startswith("IMMA.16832"))
+        ex = ",".join(f"{k}={n}" for k, n in top)
+        rows.setdefault(v["binary"], []).append(f'    P_{"I" if v["binary"].endswith("imad") else "U"}({v["probe"]}, "{ex}", "{cnt}"),')
+    out = []
+    for binary, rs in rows.items():
+        f = HERE / "probes" / f"{binary}.cu"
+        f.write_text(re.sub(r"(PROBES\[\] = \{\n).*?(\n\};)", lambda m: m[1] + "\n".join(rs) + m[2], f.read_text(),
+                            count=1, flags=re.S))
+        out.append(f)
     return out
 
 
@@ -125,9 +147,11 @@ def fit(pts: list[dict], coef: dict[str, dict[str, float]], rows: list[str], up:
             c = (p["T"] * (1 + MARGIN) - vector_load(p, coef, row)) / u
             if best is None or c < best[0]:
                 best = (c, p["probe"])
-        out[row] = {"c": coef["ALU"].get(row, 0.0) if issue_row(row) else 0.0}
+        out[row] = {"c": 0.0}
         if best:
             out[row] |= {"limit": max(0.0, best[0]), "set_by": best[1]}
+        if issue_row(row):
+            out[row]["c"] = min(coef["ALU"].get(row, 0.0), out[row].get("limit", math.inf))
     return out
 
 
@@ -142,8 +166,8 @@ def check(pts: list[dict], coef: dict[str, dict[str, float]], uni: dict[str, dic
     return bad
 
 
-def analyze(out: Path, fam: str, census: Path, rows_csv: Path) -> dict:
-    pts = points(out, fam)
+def analyze(outs: list[Path], fam: str, census: Path, rows_csv: Path) -> dict:
+    pts = [p for out in outs for p in points(out, fam)]
     coef = coefficients(census)
     rows = [d["row"] for d in csv.DictReader(rows_csv.open())]
     alone = {p["probe"]: p["n"]["UNI"] / p["T"] for p in pts if p["probe"].startswith("uz_")}
@@ -153,14 +177,14 @@ def analyze(out: Path, fam: str, census: Path, rows_csv: Path) -> dict:
     res["rows"] = fit(pts, coef, rows, res["up"]["cycles"])
     res["violations"] = check(pts, coef, res["rows"])
     issue_pts = {p["probe"]: {"T": p["T"], "vector": sum(v for k, v in p["n"].items() if k != "UNI"),
-                              "uni": p["n"].get("UNI", 0)} for p in pts if p["binary"].endswith("uniform")}
+                              "uni": p["n"].get("UNI", 0)} for p in pts if not p["binary"].endswith("imad")}
     res["points"] = issue_pts
     for p in pts:
-        if p["binary"].endswith("uniform"):
+        if not p["binary"].endswith("imad"):
             v = issue_pts[p["probe"]]
             v["issue_frac"] = v["vector"] / v["T"]
     beside = {}
-    for base in ("uh", "ug", "ul", "um"):
+    for base in ("uh", "ug", "ul", "um", "ub"):
         b0 = issue_pts.get(f"{base}_0")
         if not b0:
             continue
@@ -243,17 +267,20 @@ def write_census(dev: Path, res: dict, runs: str) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("cmd", choices=["analyze", "census"])
+    ap.add_argument("cmd", choices=["analyze", "census", "tables"])
     ap.add_argument("out", type=Path, nargs="+")
     ap.add_argument("--family", choices=["sm90", "sm100"])
     ap.add_argument("--device", type=Path)
     ap.add_argument("--json", type=Path)
     ap.add_argument("--write", action="store_true")
     a = ap.parse_args(argv)
-    out = a.out[0]
-    fam = a.family or ("sm100" if (out / "sass" / "sm100_uniform.sass").exists() else "sm90")
+    if a.cmd == "tables":
+        for g in a.out:
+            print("\n".join(map(str, write_table(g))))
+        return 0
+    fam = a.family or ("sm100" if any((o / "sass").glob("sm100_*.sass") for o in a.out) else "sm90")
     dev = a.device or HERE.parent / "machine_model" / "data" / "devices" / f"sm_{fam[2:]}"
-    res = analyze(out, fam, dev / "census.csv", dev / "rows.csv")
+    res = analyze(a.out, fam, dev / "census.csv", dev / "rows.csv")
     if a.json:
         a.json.write_text(json.dumps(res, indent=1) + "\n")
     print(text(res))

@@ -8,7 +8,8 @@
 # Outside the lease: build and SASS-gate both binaries (gate-build.txt; a refusal stops the run). Under the lease:
 # probe.py run (probes/: rows.jsonl, gate.json, times.jsonl) with nvidia-smi sampled every 200 ms (env/smi.csv), then
 # uniform.py analyze (uniform.json, uniform.txt). Exit: 0 done, 1 build or gate refused, 2 wrong device or no nvcc.
-# DC_BUILD_ONLY=1 stops after the gate (any machine with CUDA 13.0).
+# DC_BUILD_ONLY=1 stops after the gate (any machine with CUDA 13.0). UNI_TABLES picks the tables (default "uniform imad";
+# "issue" is the issue-saturated stream, the honest step beside 256 FFMA).
 set -uo pipefail
 FAM=${1:?usage: uni.sh sm90|sm100}
 OUT=${OUT:?run under research run}
@@ -34,7 +35,9 @@ if [ "${DC_LEASED:-}" != 1 ]; then
     cap=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
     [ "${cap%%.*}" = "$CC" ] || { echo "uni.sh: $FAM needs compute capability $CC.x, the device reports '$cap'" >&2; exit 2; }
   fi
-  python3 "$PROBE" build --arch "$ARCH" --out "$WORK" "$HERE/probes/${FAM}_uniform.cu" "$HERE/probes/${FAM}_imad.cu" \
+  srcs=()
+  for t in ${UNI_TABLES:-uniform imad}; do srcs+=("$HERE/probes/${FAM}_$t.cu"); done
+  python3 "$PROBE" build --arch "$ARCH" --out "$WORK" "${srcs[@]}" \
     >"$WORK/built" 2>"$OUT/build.log" || { cat "$OUT/build.log" >&2; exit 1; }
   mapfile -t bins <"$WORK/built"
   for b in "${bins[@]}"; do cuobjdump -sass "$b" >"$OUT/sass/$(basename "$b").sass" 2>&1; done

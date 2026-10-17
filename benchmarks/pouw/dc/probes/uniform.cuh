@@ -6,7 +6,8 @@
 //   u<F>_<K><S>  F, the fixed stream: z none (alone: the honest MMAs unread, which ptxas deletes after placing the chain);
 //                h the honest step (beside duo's fold); g h + 64 FFMA reading the accumulators (issue binds); l h + 32
 //                LOP3 reading them (the ALU pipe binds harder); m 32 IMMA and one fold (mma.sync binds the tensor pipe
-//                that tcgen05 and wgmma share; without a fold reading the accumulators ptxas puts the chains on lanes)
+//                that tcgen05 and wgmma share; without a fold reading the accumulators ptxas puts the chains on lanes);
+//                b h + 256 FFMA reading the accumulators (issue saturated: what a uniform instruction costs issue)
 //                S, the uniform step on each chain pair: i UIMAD + ULOP3; x ULOP3; a UIADD3 + ULOP3; f USHF + ULOP3;
 //                p UPRMT + ULOP3; s USHF/ULEA + ULOP3
 #pragma once
@@ -59,7 +60,7 @@ struct UChains {
   __device__ uint32_t fold() const { return u[0] ^ u[1] ^ u[2] ^ u[3] ^ u[4] ^ u[5] ^ u[6] ^ u[7]; }
 };
 
-enum { F_Z, F_H, F_G, F_L, F_M };
+enum { F_Z, F_H, F_G, F_L, F_M, F_B };
 
 template <int NF, int NL>
 struct UFeed {
@@ -92,7 +93,7 @@ template <int F, int S, int K>
 __device__ __forceinline__ void uni(const OpArgs& a) {
   UChains<K, S> u(0x5eed0000u ^ (uint32_t)a.mode);
   Honest h(a.mode);
-  UFeed<F == F_G ? 64 : 0, F == F_L ? 32 : 0> e(a.mode);
+  UFeed<F == F_G ? 64 : F == F_B ? 256 : 0, F == F_L ? 32 : 0> e(a.mode);
   OP_BEGIN
   OP_LOOP(it) {
     if constexpr (F == F_Z) h.step<8, false>();
@@ -134,5 +135,9 @@ UFORMS(F_L, l, 128)
 UK(um_0, F_M, S_I, 0)
 UFORMS(F_M, m, 32)
 UFORMS(F_M, m, 64)
+UK(ub_0, F_B, S_I, 0)
+UFORMS(F_B, b, 64)
+UK(ub_128i, F_B, S_I, 128)
+UK(ub_128x, F_B, S_X, 128)
 
 #define P_U(nm, EX, CNT) {.name = #nm, .kernel = (const void*)nm, .tpb = UTPB, .expect = EX, .counted = CNT, .iters = UITERS}
