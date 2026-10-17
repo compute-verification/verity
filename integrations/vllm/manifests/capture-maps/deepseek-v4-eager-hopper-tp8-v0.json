@@ -554,7 +554,7 @@
   "module_hook": "the committer's forward hooks on the modules of its acquired classes whose forward runs (commit/committer/native_host.py _make_hook, _make_pre_hook): <module> for a tensor output, <module>/<k> for tuple element k, <module>/in for an acquired input",
   "sampler": "the committer's runner.sample wrap: runner.sampler/sampled_token_ids",
   "tp_partial": "TPPartialSource (acquire/sources/partial_source.py): a collective's rank-local input, <site>/part_rank<r> or <site>/shard_rank<r>, and the MoE runner's received output, <runner>/out",
-  "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block: the two ops.moe_wna16_marlin_gemm launches, moe_sum, and the router at fused_topk_bias's return",
+  "moe": "MoeBlockSource (acquire/sources/moe_source.py): <MoE module>/<label> (at_calls: the manifest of record names no moe_block_stream plane), snapshotted after each kernel of the fused-MoE block: the two ops.moe_wna16_marlin_gemm launches, moe_sum, and the router at fused_topk_bias's return; a hash layer's router as router_w.hash, ids and in",
   "mhc": "MhcSource (acquire/sources/mhc_source.py): a wrap of the mHC call-time globals of vllm.models.deepseek_v4.nvidia.model, naming each call's returns <layer>/hc_attn_<value> or <layer>/hc_ffn_<value> (_split on the hc-split route, by the call's token count), and the final post and head model/hc_post, model/hc_head",
   "dsv4_attention": "Dsv4AttentionSource (acquire/sources/dsv4_attention_source.py): wraps each attention layer's forward (attributing the globals), _run_parallel_input_projections, _fused_qnorm_rope_kv_insert and _sparse_indexer_and_attn, and the call-time globals fused_q_kv_rmsnorm, flash_mla_with_kvcache, fused_inv_rope_fp8_quant and fp8_einsum, and binds the step's positions at the first layer's _sparse_indexer_and_attn (row_counts), naming <attn>/<value>, <compressor>/kv_score, <cache>/rows and <indexer>/<value>; cache rows are read at the step's slot mappings after its writes, a byte cache's per-block data and scale bytes regrouped per row"
  },
@@ -2976,16 +2976,16 @@
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
-   "manifest_family": "moe_block_stream",
+   "manifest_family": "call_boundaries",
    "weights": [
     {
      "param": "model.layers.{i}.ffn.gate.e_score_correction_bias",
      "provenance": "checkpoint"
     }
    ],
-   "source": "moe/L{i}/router_w",
+   "source": "model.layers.{i}.ffn.experts/router_w",
    "commit": {
-    "name": "moe/L{i}/router_w",
+    "name": "model.layers.{i}.ffn.experts/router_w",
     "binder": "moe"
    }
   },
@@ -3001,7 +3001,7 @@
     "output": 1,
     "detail": "topk_ids"
    },
-   "dtype": "int32",
+   "dtype": "float32",
    "shape": [
     "M",
     "K"
@@ -3010,12 +3010,13 @@
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
-   "manifest_family": "moe_block_stream",
-   "source": "moe/L{i}/router_ids",
+   "manifest_family": "call_boundaries",
+   "source": "model.layers.{i}.ffn.experts/router_ids",
    "commit": {
-    "name": "moe/L{i}/router_ids",
+    "name": "model.layers.{i}.ffn.experts/router_ids",
     "binder": "moe"
-   }
+   },
+   "note": "topk_ids (int32), committed as its 32-bit words: the Call's port 1 is an f32 row"
   },
   {
    "id": "moe.router_w.hash",
@@ -3038,7 +3039,7 @@
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
-   "manifest_family": "moe_block_stream",
+   "manifest_family": "call_boundaries",
    "weights": [
     {
      "param": "model.layers.{i}.ffn.gate.tid2eid",
@@ -3046,9 +3047,9 @@
      "rows": "V"
     }
    ],
-   "source": "moe/L{i}/router_w",
+   "source": "model.layers.{i}.ffn.experts/router_w.hash",
    "commit": {
-    "name": "moe/L{i}/router_w",
+    "name": "model.layers.{i}.ffn.experts/router_w.hash",
     "binder": "moe"
    }
   },
@@ -3064,7 +3065,7 @@
     "output": 1,
     "detail": "topk_ids"
    },
-   "dtype": "int32",
+   "dtype": "float32",
    "shape": [
     "M",
     "K"
@@ -3073,11 +3074,39 @@
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
-   "manifest_family": "moe_block_stream",
-   "source": "moe/L{i}/router_ids",
-   "note": "ids from tid2eid[input_ids]; reads the input_ids tap",
+   "manifest_family": "instance_outputs",
+   "source": "model.layers.{i}.ffn.experts/ids",
+   "note": "ids from tid2eid[input_ids] (int32), committed as their 32-bit words: the module's GatherI32x{V} rows, one per pair, are f32; reads the input_ids tap",
    "commit": {
-    "name": "moe/L{i}/router_ids",
+    "name": "model.layers.{i}.ffn.experts/ids",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.in.hash",
+   "op": "layers.{i}.ffn.experts.input_ids",
+   "port": 0,
+   "layers": "hash",
+   "module": "model.layers.{i}.ffn.experts",
+   "site": {
+    "kind": "function_argument",
+    "target": "vllm/model_executor/layers/fused_moe/router/fused_topk_bias_router.py:fused_topk_bias",
+    "argument": "input_tokens",
+    "detail": "the step's token ids, cast to the table's dtype, each repeated K times (pair-major)"
+   },
+   "dtype": "int32",
+   "shape": [
+    "=M * K"
+   ],
+   "program": "hash-router",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "input_token_ids",
+   "source": "model.layers.{i}.ffn.experts/in",
+   "note": "the token ids the hash router's K GatherI32x{V} calls per token read: the input_ids tap's",
+   "commit": {
+    "name": "model.layers.{i}.ffn.experts/in",
     "binder": "moe"
    }
   },
@@ -3101,7 +3130,7 @@
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
-   "manifest_family": "moe_block_stream",
+   "manifest_family": "call_boundaries",
    "weights": [
     {
      "param": "model.layers.{i}.ffn.experts.routed_experts.w13_weight",
@@ -3114,10 +3143,10 @@
      "rows": "=2 * MIL"
     }
    ],
-   "source": "moe/L{i}/up",
+   "source": "model.layers.{i}.ffn.experts/up",
    "note": "intermediate_cache1 shares its buffer with the w2 output: snapshotted after the w13 launch, before w2 overwrites it",
    "commit": {
-    "name": "moe/L{i}/up",
+    "name": "model.layers.{i}.ffn.experts/up",
     "binder": "moe"
    }
   },
@@ -3142,12 +3171,12 @@
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "moe_block_stream",
-   "source": "moe/L{i}/act",
+   "source": "model.layers.{i}.ffn.experts/act",
    "commit": {
-    "name": "moe/L{i}/act",
+    "name": "model.layers.{i}.ffn.experts/act",
     "binder": "moe"
    },
-   "note": "moe_sum's output is carved from the workspace that holds intermediate_cache2: act and down are flushed right after the w2 launch"
+   "note": "moe_sum's output is carved from the workspace that holds intermediate_cache2: act and down are flushed right after the w2 launch; the manifest of record has no row for it (the Marlin GEMMs' Calls hold it)"
   },
   {
    "id": "moe.down",
@@ -3169,7 +3198,7 @@
    "tp": "partial",
    "rank_identical": false,
    "target_only": false,
-   "manifest_family": "moe_block_stream",
+   "manifest_family": "call_boundaries",
    "weights": [
     {
      "param": "model.layers.{i}.ffn.experts.routed_experts.w2_weight",
@@ -3182,9 +3211,9 @@
      "rows": "H"
     }
    ],
-   "source": "moe/L{i}/down",
+   "source": "model.layers.{i}.ffn.experts/down",
    "commit": {
-    "name": "moe/L{i}/down",
+    "name": "model.layers.{i}.ffn.experts/down",
     "binder": "moe"
    }
   },
@@ -3209,10 +3238,10 @@
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "moe_block_stream",
-   "source": "moe/L{i}/sum",
-   "note": "each rank holds all 384 experts with a MIL-wide slice of each one's intermediate: the sum is a partial",
+   "source": "model.layers.{i}.ffn.experts/sum",
+   "note": "each rank holds all 384 experts with a MIL-wide slice of each one's intermediate: the sum is a partial; the manifest of record has no row for it (the Marlin GEMMs' Calls hold it)",
    "commit": {
-    "name": "moe/L{i}/sum",
+    "name": "model.layers.{i}.ffn.experts/sum",
     "binder": "moe"
    }
   },
@@ -3762,6 +3791,7 @@
     "moe.router_ids",
     "moe.router_w.hash",
     "moe.router_ids.hash",
+    "moe.in.hash",
     "moe.out.partial",
     "moe.out"
    ]

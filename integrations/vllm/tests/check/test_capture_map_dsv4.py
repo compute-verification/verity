@@ -417,7 +417,7 @@ def test_every_committer_name_is_unique_over_all_routes():
     list every name the map binds without knowing the step's routes."""
     every = CM.counts(CMAP, ENV)["bound_taps_per_step"]
     for rank in range(TP):
-        assert len(CM.committer_names(CMAP, ENV, rank=rank)) == every == 3509
+        assert len(CM.committer_names(CMAP, ENV, rank=rank)) == every == 3512
 
 
 def test_the_runbook_counts():
@@ -426,28 +426,29 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 11, "port": 68, "copy": 2, "committed-only": 0})
+        42, 28, {"exists": 5, "tonight": 11, "port": 69, "copy": 2, "committed-only": 0})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        71, 2783, {"exists": 125, "tonight": 518, "port": 2138, "copy": 2, "committed-only": 0}, 122)
+        72, 2786, {"exists": 125, "tonight": 518, "port": 2141, "copy": 2, "committed-only": 0}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        75, 2903, {"exists": 125, "tonight": 548, "port": 2228, "copy": 2, "committed-only": 0}, 242)
+        76, 2906, {"exists": 125, "tonight": 548, "port": 2231, "copy": 2, "committed-only": 0}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
-        70, 2720, {"exists": 125, "tonight": 548, "port": 2045, "copy": 2, "committed-only": 0}, 787)
+        71, 2723, {"exists": 125, "tonight": 548, "port": 2048, "copy": 2, "committed-only": 0}, 787)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        77, 3025, {"exists": 125, "tonight": 548, "port": 2350, "copy": 2, "committed-only": 0}, 848)
+        78, 3028, {"exists": 125, "tonight": 548, "port": 2353, "copy": 2, "committed-only": 0}, 848)
 
 
 def test_the_bound_tap_counts():
     """The taps the committer would bind by name on one rank per step, by binder: the four mHC returns of 122 calls plus the final
-    post and head, six MoE planes on every layer, and the rank-tagged partials (embedding, lm_head, wo_b and the MoE runner's)."""
+    post and head, six MoE values on every layer and a hash layer's token ids, and the rank-tagged partials (embedding, lm_head, wo_b
+    and the MoE runner's)."""
     def bound(routes):
         c = CM.counts(CMAP, ENV, routes)
         return c["bound_taps_per_step"], c["bound_taps_per_step_by_binder"]
 
-    common = {"mhc": 490, "moe": 366, "sampler": 1, "tp_partial": 185}
-    assert bound(STEPS["decode"]) == (2783, {**common, "dsv4_attention": 1280, "module_hook": 461})
-    assert bound(STEPS["decode-scored"]) == (2873, {**common, "dsv4_attention": 1340, "module_hook": 491})
-    assert bound(STEPS["prefill"]) == (2690, {**common, "dsv4_attention": 1157, "module_hook": 491})
+    common = {"mhc": 490, "moe": 369, "sampler": 1, "tp_partial": 185}
+    assert bound(STEPS["decode"]) == (2786, {**common, "dsv4_attention": 1280, "module_hook": 461})
+    assert bound(STEPS["decode-scored"]) == (2876, {**common, "dsv4_attention": 1340, "module_hook": 491})
+    assert bound(STEPS["prefill"]) == (2693, {**common, "dsv4_attention": 1157, "module_hook": 491})
 
 
 def test_target_only_taps_are_named_on_the_target_only():
@@ -501,13 +502,18 @@ def test_every_module_hook_tap_is_on_a_module_the_committer_acquires():
     assert types["model.layers.{i}.ffn.shared_experts.act_fn"] == "SiluAndMulWithClamp"
 
 
-def test_moe_source_binds_six_planes_on_every_layer():
-    sourced = [t for t in CMAP["taps"] if t.get("source", "").startswith("moe/")]
-    planes = {t["source"].rsplit("/", 1)[1] for t in sourced}
-    assert planes == {"router_w", "router_ids", "up", "act", "down", "sum"} and len(planes) == moe_source.TENSORS_PER_LAYER
-    assert all(t["commit"] == {"name": t["source"], "binder": "moe"} for t in sourced)
-    per_layer = {p: sorted(i for t in sourced if t["source"].endswith("/" + p) for i in CM.tap_layers(CMAP, t, ENV)) for p in planes}
-    assert all(layers == list(range(ENV["L"])) for layers in per_layer.values())
+def test_moe_source_binds_six_values_on_every_layer_and_a_hash_layers_token_ids():
+    """The manifest of record names no `moe_block_stream` plane, so the source binds at calls under the MoE module (`moe_source`:
+    `at_calls`): six values on every layer, a hash layer's router as router_w.hash and ids, and its token ids as in."""
+    sourced = [t for t in CMAP["taps"] if (t.get("commit") or {}).get("binder") == "moe"]
+    assert all(t["commit"]["name"] == t["source"] and t["source"].startswith("model.layers.{i}.ffn.experts/") for t in sourced)
+    labels = {t["source"].rsplit("/", 1)[1] for t in sourced}
+    assert labels == {*moe_source.LABELS} - {"in_q", "in_scale", "act_q", "act_scale"} and len(sourced) == len(labels)
+    per_layer = {x: sorted(i for t in sourced if t["source"].endswith("/" + x) for i in CM.tap_layers(CMAP, t, ENV)) for x in labels}
+    hashed, scored = list(range(ENV["HASH"])), list(range(ENV["HASH"], ENV["L"]))
+    assert per_layer == {**{x: list(range(ENV["L"])) for x in ("up", "act", "down", "sum")}, "router_w": scored, "router_ids": scored,
+                         **{x: hashed for x in ("router_w.hash", "ids", "in")}}
+    assert {*moe_source.PORTS} <= labels
     runner = _group("model.layers.{i}.ffn.experts")
     assert runner["type"] in moe_source.MOE_MODULE_CLASSES and sorted(runner["layers"]) == list(range(ENV["L"]))
 

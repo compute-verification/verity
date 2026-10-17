@@ -619,10 +619,11 @@ class TP2CaptureWorkerExtension:
         # moe_block_stream), attached exactly as commit_delta's `--moe-source auto` does: when the rank's model has MoE-runner modules.
         # Without it a TP MoE row's Commit binds no `moe/L<n>` plane (Qwen3-30B-A3B TP2 B2: 37 440 of 132 708 required identities per
         # rank unbound, coverage FAIL) -- the manifest requires the six planes per rank at shard widths, and this rank's kernel sees them.
+        # A manifest that names no plane is bound at the block's Calls (`moe_source`: `at_calls`).
         try:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
-            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1))
+            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1), manifest=man)
             if msrc.layers:
                 com.attach_source(msrc)
                 res["moe_source"] = {"layers": len(msrc.layers), "tensors_per_layer": msrc.stats.get("tensors_per_layer"),
