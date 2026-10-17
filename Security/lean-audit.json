@@ -856,6 +856,7 @@
   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
+  "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
@@ -5539,14 +5540,6 @@
    "signature": ["Claims.ScopeMatches_fails : Not (Claims.ScopeMatches (fun x => False) fun x => Bool.true)"],
    "assumptions": [],
    "type_hash": "1934be0f6ae46d344ff607936771e0bf1e3973703001f050761fb7bf78083c1c"
-  },
-  "Claims.SimCost_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.SimCost_fails (H : Claims.Msg → Claims.Msg) : Exists fun S => Not (Claims.SimCost H S fun x => 1)"
-   ],
-   "assumptions": [],
-   "type_hash": "d6fc94ba70bb9d0963b5c644c591dc12fee8fedf258a756885b115797c7315a9"
   },
   "Claims.ZKmalR_fails": {
    "owner": "@proofs",
