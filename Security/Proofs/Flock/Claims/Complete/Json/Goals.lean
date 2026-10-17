@@ -176,6 +176,16 @@ theorem liveReads_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Ou
     Run.json S h64 hP o
   exact hlv
 
+/-- **Alike values are equivalent** (`JsonEquiv`, what `drawEq` decides). -/
+theorem Same.jsonEquiv {a b : Json} (h : Same a b) : JsonEquiv a b := by
+  induction h with
+  | null => rfl
+  | bool => rfl
+  | num => rfl
+  | str => rfl
+  | arr hs _ ih => exact (jsonEquiv_arr_iff _ _).2 ⟨hs, ih⟩
+  | obj hm hn hk _ ih => exact (jsonEquiv_obj_iff hm hn).2 ⟨hk, ih⟩
+
 /-- **The record's draw is the statement's**: the goal `DrawMatches`. -/
 theorem drawMatches_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     DrawMatches H rel := by
