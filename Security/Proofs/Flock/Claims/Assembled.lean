@@ -1,6 +1,8 @@
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.DeployEfficient
+import Proofs.Flock.Claims.Complete.WalkPacked
+import Proofs.Flock.Claims.KS.PlainAcc
 import Proofs.Flock.Soundness.CompiledSound
 
 /-!
@@ -18,7 +20,8 @@ relation's fields `rel` and every hash `H`, the conjunction of Flock's claims:
 * `Efficient` at the record's own counted decoder (`GS.plainCountedRD`, `GS.zkCountedRD`): `E^rep`'s reruns at every
   deployment (`ERep_cost`), the decoder's `ListWithin`, and its count and lists at most `plainStepPoly` (`zkStepPoly`)
   at the opened word's encoded length, which bounds `assemble`'s checks (`efficient_plain`, `efficient_zk`);
-* `Complete` at the honest prover `P` with error `δc`: a hypothesis.
+* `Complete` at the record's reference prover (`honestP`, `honestPZk`) at the record's error (`δc`): a hypothesis,
+  which at the plain record and the deployed relation follows from the record's JSON (`flock_plain_assembled_relation`).
 
 ## What remains: the hypotheses
 
@@ -29,9 +32,19 @@ relation's fields `rel` and every hash `H`, the conjunction of Flock's claims:
   branch's radius form `KSθ`, not `Flock.KS`. `KSθ`'s extractor
   decodes the word filled to table 0's level-0 length with a zero column of the lanes' width (`Eθ`, `fillWord`,
   `zeroCol`), at every decoder meeting `ListCompleteθ`; `Flock.KS`'s decodes the opened columns, at every decoder
-  meeting `ListWithin`, whose word has `[]` where no column was opened. So the hypothesis is `Flock.KS` itself.
-* `hComplete : Flock.Complete H (deployPlainTrim rel) P δc`: C3, `cursor/claims-complete-c7a9`, whose honest prover
-  (`honestP`, with its `δc`) is not on main, so `P` and `δc` are any. At `deployZkTrim rel` no branch proves it yet.
+  meeting `ListWithin`, whose word has `[]` where no column was opened. So the hypothesis is `Flock.KS` itself. At the
+  plain record, SHA-512 and the deployed relation, it follows from the live sessions' bound with escapes on accepted
+  runs at the statements some run accepts (`FlockDeploy.KS.PlainLiveAcc`, `FlockDeploy.KS.plain_KS_of_liveAcc`), so
+  `flock_plain_assembled_trim` takes that bound in its place.
+* `hComplete : Flock.Complete H (deployPlainTrim rel)`, of the record's reference prover `honestP` at its error
+  `FlockComplete.δc H`. The trim reads only the columns and the code through `trimCol`, and keeps the verifier, the
+  parser, the reference prover and its error, so completeness at the trimmed record is the untrimmed record's
+  (`Flock.complete_mapCols`). At the deployed relation (`Readable.relation`) it follows from the record's JSON
+  (`Claims.JsonSpec printJ canon`, `FlockComplete.Replay.complete_plain_json`), `Out64` being `Complete`'s own
+  antecedent, so `flock_plain_assembled_relation` takes `JsonSpec` in its place. At any other `rel` it stays a
+  hypothesis: `rel` gives the readable statement's circuit, which the relation's witnesses satisfy, and where it is not
+  the verifier's tables' the honest prover's trace need not satisfy them. At `deployZkTrim rel`, of `honestPZk` at
+  `FlockComplete.δcZk H`: no proof on this tree yet.
 -/
 
 namespace FlockDeploy.Assembled
@@ -69,12 +82,11 @@ theorem γ_pos {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (x : Cla
 
 /-- **Flock's claims at the deployed plain verifier**, at every relation's fields and every hash: the readable scope
 is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the radius decoder at every bound
-on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the honest prover. `hKS` (E4) and
-`hComplete` (C3) are what remains. -/
+on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the record's reference prover.
+`hKS` (E4) and `hComplete` (C3) are what remains. -/
 theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployPlainTrim rel))
-    {Ω : Type} (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → ℝ)
-    (hComplete : Claims.Flock.Complete H (deployPlainTrim rel) P δc) :
+    (hComplete : Claims.Flock.Complete H (deployPlainTrim rel)) :
     Claims.Flock.ScopeMatches (deployPlainTrim rel) ∧
       Claims.Flock.KS H (deployPlainTrim rel) ∧
       Claims.Flock.Bits H (deployPlainTrim rel) ∧
@@ -83,20 +95,64 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
         Claims.Bits H (deployPlainTrim rel).V (Claims.Flock.R (deployPlainTrim rel).parse)
           (Claims.Flock.E (deployPlainTrim rel) Claims.GS.plainDecodeRD) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
       Claims.Flock.Efficient H (deployPlainTrim rel) plainStepPoly ∧
-      Claims.Flock.Complete H (deployPlainTrim rel) P δc :=
+      Claims.Flock.Complete H (deployPlainTrim rel) :=
   ⟨scopeMatches_plain rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg false),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg false) hκ
       (fun x => γ_pos (deployPlainTrim rel) x (V_k_pos false x)) hγ _ (listWithin_plainTrim rel),
     efficient_plain H rel, hComplete⟩
 
+/-- **Completeness at a record read through `f` is the record's**: `Deploy.mapCols` keeps the verifier, the parser,
+the reference prover and its error. -/
+theorem _root_.Claims.Flock.complete_mapCols {Coin Col T : Type} (H : Claims.Msg → Claims.Msg)
+    (D : Claims.Flock.Deploy Coin Col T) (f : Col → Col) :
+    Claims.Flock.Complete H (D.mapCols f) ↔ Claims.Flock.Complete H D :=
+  Iff.rfl
+
+/-- **Flock's claims at the deployed plain verifier at the deployed relation** (`Readable.relation`), at every hash:
+`flock_plain_assembled` with its completeness from the record's JSON (`complete_plain_json`, at the trimmed record by
+`Flock.complete_mapCols`). `hKS` (E4) is what remains. -/
+theorem flock_plain_assembled_relation (H : Claims.Msg → Claims.Msg)
+    (hKS : Claims.Flock.KS H (deployPlainTrim Readable.relation))
+    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) :
+    Claims.Flock.ScopeMatches (deployPlainTrim Readable.relation) ∧
+      Claims.Flock.KS H (deployPlainTrim Readable.relation) ∧
+      Claims.Flock.Bits H (deployPlainTrim Readable.relation) ∧
+      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployPlainTrim Readable.relation) x ≤ 2 ^ (-a x)) →
+        (∀ x, Claims.Flock.γ (deployPlainTrim Readable.relation) x ≤ 2 ^ b x) →
+        Claims.Bits H (deployPlainTrim Readable.relation).V
+          (Claims.Flock.R (deployPlainTrim Readable.relation).parse)
+          (Claims.Flock.E (deployPlainTrim Readable.relation) Claims.GS.plainDecodeRD)
+          fun x => min (a x) (255.5 - b x / 2) - 1) ∧
+      Claims.Flock.Efficient H (deployPlainTrim Readable.relation) plainStepPoly ∧
+      Claims.Flock.Complete H (deployPlainTrim Readable.relation) :=
+  flock_plain_assembled Readable.relation H hKS
+    ((Claims.Flock.complete_mapCols H _ trimCol).2 (FlockComplete.Replay.complete_plain_json H S))
+
+/-- **Flock's claims at the deployed plain verifier at the deployed relation, at SHA-512**: `flock_plain_assembled_relation`
+with KS from the live sessions' bound with escapes on accepted runs at the statements some run accepts
+(`FlockDeploy.KS.plain_KS_of_liveAcc`). The record's JSON (`JsonSpec`) and that bound are what remain. -/
+theorem flock_plain_assembled_trim (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
+    (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → FlockDeploy.KS.PlainLiveAcc x) :
+    Claims.Flock.ScopeMatches (deployPlainTrim Readable.relation) ∧
+      Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) ∧
+      Claims.Flock.Bits sha512 (deployPlainTrim Readable.relation) ∧
+      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployPlainTrim Readable.relation) x ≤ 2 ^ (-a x)) →
+        (∀ x, Claims.Flock.γ (deployPlainTrim Readable.relation) x ≤ 2 ^ b x) →
+        Claims.Bits sha512 (deployPlainTrim Readable.relation).V
+          (Claims.Flock.R (deployPlainTrim Readable.relation).parse)
+          (Claims.Flock.E (deployPlainTrim Readable.relation) Claims.GS.plainDecodeRD)
+          fun x => min (a x) (255.5 - b x / 2) - 1) ∧
+      Claims.Flock.Efficient sha512 (deployPlainTrim Readable.relation) plainStepPoly ∧
+      Claims.Flock.Complete sha512 (deployPlainTrim Readable.relation) :=
+  flock_plain_assembled_relation sha512 (FlockDeploy.KS.plain_KS_of_liveAcc hl) S
+
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
 readable scope is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the radius decoder
-at every bound on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the honest prover.
-`hKS` (E4) and `hComplete` (no owner yet) are what remains. -/
+at every bound on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the record's
+reference prover. `hKS` (E4) and `hComplete` (no owner yet) are what remains. -/
 theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployZkTrim rel))
-    {Ω : Type} (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → ℝ)
-    (hComplete : Claims.Flock.Complete H (deployZkTrim rel) P δc) :
+    (hComplete : Claims.Flock.Complete H (deployZkTrim rel)) :
     Claims.Flock.ScopeMatches (deployZkTrim rel) ∧
       Claims.Flock.KS H (deployZkTrim rel) ∧
       Claims.Flock.Bits H (deployZkTrim rel) ∧
@@ -105,7 +161,7 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
         Claims.Bits H (deployZkTrim rel).V (Claims.Flock.R (deployZkTrim rel).parse)
           (Claims.Flock.E (deployZkTrim rel) Claims.GS.zkDecodeRD) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
       Claims.Flock.Efficient H (deployZkTrim rel) zkStepPoly ∧
-      Claims.Flock.Complete H (deployZkTrim rel) P δc :=
+      Claims.Flock.Complete H (deployZkTrim rel) :=
   ⟨scopeMatches_zk rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg true),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg true) hκ
       (fun x => γ_pos (deployZkTrim rel) x (V_k_pos true x)) hγ _ (listWithin_zkTrim rel),
