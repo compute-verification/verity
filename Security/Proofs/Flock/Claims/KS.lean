@@ -33,6 +33,7 @@ import Proofs.Flock.Claims.KS.DecodeSC
 import Proofs.Flock.Claims.KS.DecodeDeploy
 import Proofs.Flock.Claims.KS.DecodeHidden
 import Proofs.Flock.Claims.KS.PlainWrP
+import Proofs.Flock.Claims.KS.PlainEvent
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -138,4 +139,6 @@ With hidden outputs, the hidden table is `plainTab` too, and the same holds at i
 `Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`). A statement some run accepts sets
 up at a draw, so the plain chain asks only for the mixture at those decoders, whether or not the outputs are hidden
 (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`, `FlockDeploy.KS.PlainLiveW`,
-`FlockDeploy.KS.plain_KS_of_w`). -/
+`FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the statement's draw, the event the
+mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
+`FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). -/
