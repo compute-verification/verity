@@ -39,13 +39,15 @@ CONCURRENT = ("ping-series-concurrent", 0, 400000, 300, ("ops=3", "k=1", "gap_us
 CROSS_PORT, CROSS_LPORT = 47330, 47313
 
 
-def remote_serve(src: bytes, seconds: int, log_path: str) -> subprocess.Popen:
-    """`lat serve` on vy-nebius-1 for `seconds`, built and run in a scratch dir that it removes on exit."""
-    dest = REMOTES["node1"][0]
-    peer = f"{REMOTES['cpu1'][0].split('@')[1]}:{CROSS_LPORT}"
+def remote_serve(src: bytes, seconds: int, log_path: str, who: str = "node1", port: int = CROSS_PORT,
+                 peers: tuple[str, ...] = (f"{REMOTES['cpu1'][0].split('@')[1]}:{CROSS_LPORT}",),
+                 host_mib: int = 1024) -> subprocess.Popen:
+    """`lat serve` on `who` (default vy-nebius-1) for `seconds`, built and run in a scratch dir that it removes on exit."""
+    dest = REMOTES[who][0]
     script = ("set -e; d=$(mktemp -d /tmp/lat-serve.XXXXXX); trap 'rm -rf \"$d\"' EXIT; cat > \"$d/lat.cu\"; "
               "g++ -O2 -std=c++17 -x c++ -o \"$d/lat\" \"$d/lat.cu\" -lpthread; "
-              f"timeout -s TERM {seconds} \"$d/lat\" serve port={CROSS_PORT} cpu=auto host_mib=1024 peer={peer} || true")
+              f"timeout -s TERM {seconds} \"$d/lat\" serve port={port} cpu=auto host_mib={host_mib} "
+              f"{' '.join(f'peer={p}' for p in peers)} || true")
     p = subprocess.Popen([*SSH, dest, script], stdin=subprocess.PIPE, stdout=open(log_path, "w"), stderr=subprocess.STDOUT)
     p.stdin.write(src)
     p.stdin.close()
