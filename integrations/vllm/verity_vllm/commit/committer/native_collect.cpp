@@ -43,6 +43,14 @@ extern "C" int verity_chunk_leaves_launch(const uint32_t* stream, uint32_t* out,
 extern "C" int verity_chunk_leaves_launch_base(const uint32_t* stream, uint32_t* out, long n_chunks, int chunk_words, uint32_t launch_tag,
                                                uint32_t src_mask, uint32_t HB, uint32_t M, uint32_t NB, long ci_base, cudaStream_t st);
 extern "C" int verity_tree_level_launch(const uint32_t* in, uint32_t* out, long n_in, cudaStream_t st);                // native_tree.cu
+extern "C" int verity_rows_params_bytes();                                                                              // native_rows.cu
+extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, const uint8_t* row_prefix, const uint8_t* salt_prefix,
+                                 const uint8_t* leaf_prefix, const char* schema, int schema_len, uint32_t lb, void* out);
+extern "C" int verity_rows_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
+                                         const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
+                                         uint8_t* hs, cudaStream_t st);
+extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_out, int level, uint64_t first_index,
+                                        cudaStream_t st);
 
 namespace {
 
@@ -1328,17 +1336,40 @@ struct Fa3Wrap {
 // (chunk_words 64, launch_tag = step, src_mask, HB = step, M = padded/4, NB = 0), same zero padding to 256 B, same retained copy, same
 // "root D2H + done event synchronised before the block is released" ordering).  The Python worker then only binds the root
 // (hashlib, ~50 us) and files the StepCommitment; nothing Python-side runs concurrently with the serving thread's hook path.
+// rows-sha512 (verity_vllm.commit.step_rows): one step's kernel parameters -- its frame domain's templates and midstates and its salt
+// key -- built once on the host (native_rows.cu) and passed by value to every launch of the step.
+struct RowStep {
+  std::vector<uint8_t> params;
+  int64_t row_bytes = 0;
+  RowStep(const py::bytes& domain_id, const py::bytes& ks, const py::bytes& row_prefix, const py::bytes& salt_prefix, const py::bytes& leaf_prefix,
+          const std::string& schema, int64_t row_bytes_)
+      : row_bytes(row_bytes_) {
+    const std::string did = domain_id, k = ks, p = row_prefix, sp = salt_prefix, lp = leaf_prefix;
+    if (did.size() != 64 || k.size() != 64 || p.size() != 128 || sp.size() != 128 || lp.size() != 128)
+      throw std::runtime_error("RowStep: the domain id and the salt key are 64 bytes, the row, salt and leaf prefixes 128");
+    if (row_bytes <= 0 || row_bytes > (1 << 20)) throw std::runtime_error("RowStep: a row is 1 byte to 1 MiB");
+    params.resize(static_cast<size_t>(verity_rows_params_bytes()));
+    if (verity_rows_build(reinterpret_cast<const uint8_t*>(did.data()), reinterpret_cast<const uint8_t*>(k.data()), reinterpret_cast<const uint8_t*>(p.data()),
+                          reinterpret_cast<const uint8_t*>(sp.data()), reinterpret_cast<const uint8_t*>(lp.data()), schema.data(), static_cast<int>(schema.size()),
+                          static_cast<uint32_t>(row_bytes), params.data()) != 0)
+      throw std::runtime_error("RowStep: the frame leaf template does not fit the schema " + schema);
+  }
+};
+
 struct StepHasher {
   cudaEvent_t ev0 = nullptr, ev1 = nullptr, ev2 = nullptr, done = nullptr;
   uint32_t* root_host = nullptr;                 // pinned, 32 B
+  uint8_t* root64_host = nullptr;                // pinned, 64 B (rows-sha512)
   StepHasher() {
     cudaEventCreateWithFlags(&ev0, cudaEventDefault); cudaEventCreateWithFlags(&ev1, cudaEventDefault); cudaEventCreateWithFlags(&ev2, cudaEventDefault);
     cudaEventCreateWithFlags(&done, cudaEventDisableTiming);
     cudaHostAlloc(reinterpret_cast<void**>(&root_host), 32, cudaHostAllocDefault);
+    cudaHostAlloc(reinterpret_cast<void**>(&root64_host), 64, cudaHostAllocDefault);
   }
   ~StepHasher() {
     if (ev0) cudaEventDestroy(ev0); if (ev1) cudaEventDestroy(ev1); if (ev2) cudaEventDestroy(ev2); if (done) cudaEventDestroy(done);
     if (root_host) cudaFreeHost(root_host);
+    if (root64_host) cudaFreeHost(root64_host);
   }
 
   // P0 windowed: leaves of ONE window of a step's packed stream.  `slot` holds the window's bytes (nbytes, a multiple of 256; the caller
@@ -1578,6 +1609,141 @@ struct StepHasher {
     for (auto& t : levels) lv.append(t);
     return py::make_tuple(lv, keep, py::bytes(reinterpret_cast<const char*>(root_host), 32), padded, static_cast<double>(leaf_ms), static_cast<double>(tree_ms));
   }
+
+  // rows-sha512: the leaves of positions first .. first + m - 1 of a step of n_total leaves (a pad at every position >= n_total), row i
+  // at rows + i * stride for i < nbytes / stride (stride 0: the step's row bytes).  Salts are derived from the step's key, or given (192 B
+  // per row: a test's).  Runs on `stream_ptr`.  -> (leaves [m, 64] uint8, b || c [m, 128] when want_bc, h [m, 64] when want_h; the last
+  // two hold the data positions' values, and are empty when not asked for)
+  py::tuple rows_leaves(const RowStep& rs, at::Tensor rows, int64_t nbytes, int64_t first, int64_t m, int64_t n_total, at::Tensor tn, int64_t stream_ptr,
+                        int64_t stride = 0, at::Tensor salts = at::Tensor(), bool want_bc = false, bool want_h = false) {
+    if (stride == 0) stride = rs.row_bytes;
+    if (!rows.is_cuda() || rows.scalar_type() != at::kByte || !rows.is_contiguous()) throw std::runtime_error("rows_leaves: rows must be a contiguous CUDA uint8 tensor");
+    if (stride % 16 || stride < (rs.row_bytes + 15) / 16 * 16 || reinterpret_cast<uintptr_t>(rows.data_ptr()) % 16)
+      throw std::runtime_error("rows_leaves: rows 16-byte aligned at a stride of whole 16-byte loads covering the row");
+    if (nbytes < 0 || nbytes > rows.numel() || nbytes % stride) throw std::runtime_error("rows_leaves: nbytes must be a stride multiple within rows");
+    if (!tn.is_cuda() || tn.scalar_type() != at::kByte || !tn.is_contiguous() || tn.numel() != 8192) throw std::runtime_error("rows_leaves: tn must be the 8 KB CUDA mask table");
+    if (first < 0 || m < 0 || n_total < 0 || first + m > (int64_t(1) << 32)) throw std::runtime_error("rows_leaves: positions below 2^32");
+    const int64_t n_rows = nbytes / stride;
+    if (salts.defined() && (!salts.is_cuda() || salts.scalar_type() != at::kByte || !salts.is_contiguous() || salts.numel() < n_rows * 192))
+      throw std::runtime_error("rows_leaves: salts must be a contiguous CUDA uint8 tensor of 192 bytes per row");
+    at::Tensor leaves, bc, hs;
+    {
+      py::gil_scoped_release nogil;
+      c10::InferenceMode inf;
+      cudaStream_t st = reinterpret_cast<cudaStream_t>(stream_ptr);
+      c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, rows.device().index());
+      c10::cuda::CUDAStreamGuard g(cs);
+      const auto opt = at::TensorOptions().dtype(at::kByte).device(rows.device());
+      leaves = at::empty({m, 64}, opt);
+      bc = want_bc ? at::empty({m, 128}, opt) : at::empty({0}, opt);
+      hs = want_h ? at::empty({m, 64}, opt) : at::empty({0}, opt);
+      int lrc = verity_rows_leaves_launch(rs.params.data(), reinterpret_cast<const uint8_t*>(rows.data_ptr()), static_cast<uint64_t>(stride),
+                                          static_cast<uint64_t>(n_rows), salts.defined() ? reinterpret_cast<const uint8_t*>(salts.data_ptr()) : nullptr,
+                                          reinterpret_cast<const uint8_t*>(tn.data_ptr()), static_cast<uint64_t>(first), static_cast<uint64_t>(m),
+                                          static_cast<uint64_t>(n_total), reinterpret_cast<uint8_t*>(leaves.data_ptr()),
+                                          want_bc ? reinterpret_cast<uint8_t*>(bc.data_ptr()) : nullptr, want_h ? reinterpret_cast<uint8_t*>(hs.data_ptr()) : nullptr, st);
+      if (lrc != 0) throw std::runtime_error(std::string("rows_leaves: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+    }
+    return py::make_tuple(leaves, bc, hs);
+  }
+
+  // rows-sha512 absorb: levels 0 .. n_levels-1 of one window's subtree from its leaves (positions first .. first + m - 1, m a power of two
+  // and first a multiple of m, so every pair is inside the window), each level copied D2H into host_dsts[L] when they are given (one event
+  // sync at the end); with none, the levels stay on the device and nothing syncs.  -> the top level (device)
+  at::Tensor rows_tree_window(const RowStep& rs, at::Tensor leaves, int64_t n_levels, int64_t first, int64_t stream_ptr, std::vector<at::Tensor> host_dsts) {
+    if (!leaves.is_cuda() || leaves.scalar_type() != at::kByte || !leaves.is_contiguous() || leaves.dim() != 2 || leaves.size(1) != 64)
+      throw std::runtime_error("rows_tree_window: leaves must be a contiguous CUDA uint8 [m, 64]");
+    if (n_levels < 1 || (!host_dsts.empty() && static_cast<int64_t>(host_dsts.size()) != n_levels))
+      throw std::runtime_error("rows_tree_window: n_levels must be positive, with one host destination per level or none");
+    at::Tensor cur = leaves;
+    py::gil_scoped_release nogil;
+    c10::InferenceMode inf;
+    cudaStream_t side = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, leaves.device().index());
+    c10::cuda::CUDAStreamGuard g(cs);
+    for (int64_t L = 0; L < n_levels; ++L) {
+      if (!host_dsts.empty()) {
+        const at::Tensor& h = host_dsts[static_cast<size_t>(L)];
+        if (h.is_cuda() || h.scalar_type() != at::kByte || !h.is_contiguous() || h.numel() != cur.numel())
+          throw std::runtime_error("rows_tree_window: level " + std::to_string(L) + " host slice must be contiguous host uint8 of " + std::to_string(cur.size(0)) + " nodes");
+        cudaError_t rc = cudaMemcpyAsync(h.data_ptr(), cur.data_ptr(), static_cast<size_t>(cur.numel()), cudaMemcpyDeviceToHost, side);
+        if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(window level->host): ") + cudaGetErrorString(rc));
+      }
+      if (L + 1 == n_levels) break;
+      const int64_t n_in = cur.size(0);
+      if (n_in % 2) throw std::runtime_error("rows_tree_window: level " + std::to_string(L) + " has an odd " + std::to_string(n_in) + " nodes");
+      at::Tensor out = at::empty({n_in / 2, 64}, leaves.options());
+      int lrc = verity_rows_level_launch(rs.params.data(), reinterpret_cast<const uint8_t*>(cur.data_ptr()), reinterpret_cast<uint8_t*>(out.data_ptr()),
+                                         static_cast<uint64_t>(n_in / 2), static_cast<int>(L), static_cast<uint64_t>(first >> (L + 1)), side);
+      if (lrc != 0) throw std::runtime_error(std::string("rows_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+      cur = out;
+    }
+    if (!host_dsts.empty()) {
+      cudaEventRecord(done, side);
+      cudaError_t rc = cudaEventSynchronize(done);
+      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
+    }
+    return cur;
+  }
+
+  // rows-sha512: the tree above `nodes` (level level0, positions 0 .. n-1, n a power of two) to its root; root D2H (64 B), the levels to
+  // pinned host when asked (into levels_dst when it holds them); one event sync.  -> (levels [nodes .. root], root: bytes(64), tree_ms)
+  py::tuple rows_tree(const RowStep& rs, at::Tensor nodes, int64_t level0, int64_t stream_ptr, bool levels_host = false, at::Tensor levels_dst = at::Tensor()) {
+    if (!nodes.is_cuda() || nodes.scalar_type() != at::kByte || !nodes.is_contiguous() || nodes.dim() != 2 || nodes.size(1) != 64)
+      throw std::runtime_error("rows_tree: nodes must be a contiguous CUDA uint8 [n, 64]");
+    const int64_t n0 = nodes.size(0);
+    if (n0 < 1 || (n0 & (n0 - 1)) || level0 < 0) throw std::runtime_error("rows_tree: a power of two of nodes at a level >= 0");
+    std::vector<at::Tensor> levels;
+    float tree_ms = 0.f;
+    {
+      py::gil_scoped_release nogil;
+      c10::InferenceMode inf;
+      cudaStream_t side = reinterpret_cast<cudaStream_t>(stream_ptr);
+      c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, nodes.device().index());
+      c10::cuda::CUDAStreamGuard g(cs);
+      cudaEventRecord(ev1, side);
+      levels.push_back(nodes);
+      for (int64_t L = level0; levels.back().size(0) > 1; ++L) {
+        const int64_t n_out = levels.back().size(0) / 2;
+        at::Tensor out = at::empty({n_out, 64}, nodes.options());
+        int lrc = verity_rows_level_launch(rs.params.data(), reinterpret_cast<const uint8_t*>(levels.back().data_ptr()), reinterpret_cast<uint8_t*>(out.data_ptr()),
+                                           static_cast<uint64_t>(n_out), static_cast<int>(L), 0, side);
+        if (lrc != 0) throw std::runtime_error(std::string("rows_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+        levels.push_back(out);
+      }
+      cudaEventRecord(ev2, side);
+      cudaError_t rc = cudaMemcpyAsync(root64_host, levels.back().data_ptr(), 64, cudaMemcpyDeviceToHost, side);
+      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(root): ") + cudaGetErrorString(rc));
+      if (levels_host) {
+        int64_t total = 0;
+        for (auto& lv : levels) total += lv.numel();
+        at::Tensor hbuf;
+        if (levels_dst.defined() && levels_dst.numel() >= total) {
+          if (levels_dst.is_cuda() || levels_dst.scalar_type() != at::kByte || !levels_dst.is_contiguous()) throw std::runtime_error("rows_tree: levels_dst must be a contiguous host uint8 tensor");
+          hbuf = levels_dst.narrow(0, 0, total);
+        } else {
+          hbuf = at::empty({total}, at::TensorOptions().dtype(at::kByte).device(at::kCPU).pinned_memory(true));
+        }
+        std::vector<at::Tensor> hl;
+        int64_t hoff = 0;
+        for (auto& lv : levels) {
+          at::Tensor h = hbuf.narrow(0, hoff, lv.numel()).view({lv.size(0), 64});
+          hoff += lv.numel();
+          rc = cudaMemcpyAsync(h.data_ptr(), lv.data_ptr(), static_cast<size_t>(lv.numel()), cudaMemcpyDeviceToHost, side);
+          if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(level->host): ") + cudaGetErrorString(rc));
+          hl.push_back(h);
+        }
+        levels.swap(hl);
+      }
+      cudaEventRecord(done, side);
+      rc = cudaEventSynchronize(done);
+      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
+      cudaEventElapsedTime(&tree_ms, ev1, ev2);
+    }
+    py::list lv;
+    for (auto& t : levels) lv.append(t);
+    return py::make_tuple(lv, py::bytes(reinterpret_cast<const char*>(root64_host), 64), static_cast<double>(tree_ms));
+  }
 };
 
 }  // namespace
@@ -1591,7 +1757,17 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("tree_window", &StepHasher::tree_window, py::arg("leaves"), py::arg("n_levels"), py::arg("stream_ptr"), py::arg("host_dsts"))
       .def("tree_window_top", &StepHasher::tree_window_top, py::arg("leaves"), py::arg("n_levels"), py::arg("stream_ptr"))
       .def("commit", &StepHasher::commit, py::arg("arena"), py::arg("used"), py::arg("step"), py::arg("src_mask"), py::arg("chunk_bytes"),
-           py::arg("side_stream_ptr"), py::arg("step_event_ptr"), py::arg("keep_mode") = 0, py::arg("keep_dst") = at::Tensor(), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor());
+           py::arg("side_stream_ptr"), py::arg("step_event_ptr"), py::arg("keep_mode") = 0, py::arg("keep_dst") = at::Tensor(), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor())
+      .def("rows_leaves", &StepHasher::rows_leaves, py::arg("rs"), py::arg("rows"), py::arg("nbytes"), py::arg("first"), py::arg("m"), py::arg("n_total"),
+           py::arg("tn"), py::arg("stream_ptr"), py::arg("stride") = 0, py::arg("salts") = at::Tensor(), py::arg("want_bc") = false, py::arg("want_h") = false)
+      .def("rows_tree_window", &StepHasher::rows_tree_window, py::arg("rs"), py::arg("leaves"), py::arg("n_levels"), py::arg("first"), py::arg("stream_ptr"),
+           py::arg("host_dsts"))
+      .def("rows_tree", &StepHasher::rows_tree, py::arg("rs"), py::arg("nodes"), py::arg("level0"), py::arg("stream_ptr"), py::arg("levels_host") = false,
+           py::arg("levels_dst") = at::Tensor());
+  py::class_<RowStep>(m, "RowStep")
+      .def(py::init<const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const std::string&, int64_t>(), py::arg("domain_id"),
+           py::arg("ks"), py::arg("row_prefix"), py::arg("salt_prefix"), py::arg("leaf_prefix"), py::arg("schema"), py::arg("row_bytes"))
+      .def_readonly("row_bytes", &RowStep::row_bytes);
   py::class_<Collector>(m, "Collector")
       .def(py::init<>())
       .def("begin_step", &Collector::begin_step, py::arg("plan_key"), py::arg("arena_ptr"), py::arg("arena_bytes"), py::arg("use_plan") = true, py::arg("step_id") = -1)
