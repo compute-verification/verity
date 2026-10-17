@@ -16,10 +16,14 @@ appeal to V*'s circuits, at every shape.
   round and at least three more (`roundsMargin_V`), each inner and staging round answered by its coin's bytes
   (`run_inner`), which `FlockDeploy.decCoin` reads back.
 * **`Staged` at `deployRec`** (`staged_deployRec`), at the coins and commit strings a V* statement's transcript shows
-  read back through the coin server's transcript (`showsTr`, `cmtTr`): wherever that transcript determines the rounds
-  (`b.tr x` injective) and the layout spans no more than the inner rounds. `VstarShows` does not hold at `deployRec`:
+  read back through the coin server's transcript (`showsTr`, `cmtTr`): wherever, at the compiled statements of the shape,
+  that transcript determines the rounds (`b.tr x` injective) and the layout spans no more than the inner rounds.
+  `VstarShows` does not hold at `deployRec`:
   a V* statement staged at rounds where its numbers aren't the part's is the one staged at `pick`, which shows `pick`'s
   coins.
+* **`Held` at `deployRec` is the layout's alone** (`held_deployRec_iff`). With `Staged`'s span it pins the layout's
+  rounds to the inner verifier's (`rounds_eq_of_held`), and over Flock's deployed verifier, which takes a round at every
+  statement, it needs a part at each compiled statement of the shape (`nS_pos_of_held`).
 * **`Decomp` over Flock's deployed verifier is a cut** (`decomp_iff_cut`, `decomp_deployed_iff`): Flock's deployed
   verifier accepts replayed inner messages exactly where `InnerAcc` says (`run_replay_acc`, `innerAcc_of_run`): the
   first `N` of tag `0`, the first the link message, the `N`-th `Final`, the setup, the shipped verdict and the checks
@@ -123,9 +127,12 @@ answered by the run's coins (`run_inner`) and their prover messages are the run'
 layout spans, which are inner rounds. -/
 theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop)
-    (htr : ∀ x, Function.Injective (b.tr x)) (hL : ∀ x, L.rounds x ≤ I.V.k (xIOf x)) :
+    (htr : ∀ x st, parse x = some st → shape st.form → Function.Injective (b.tr x))
+    (hL : ∀ x st, parse x = some st → shape st.form → L.rounds x ≤ I.V.k (xIOf x)) :
     Claims.Recursion.VStar.Staged H (deployRec I.V ivScope b) I L shape (showsTr b) (cmtTr b) := by
-  intro x _ _ _ Ω P ω r hacc s hs
+  intro x st hst hf Ω P ω r hacc s hs
+  have htr := htr x st hst hf
+  have hL := hL x st hst hf
   change (run H P (V I.V b.st) x ω r).out = .acc at hacc
   change s < nS x at hs
   have hne := staged_ne_nil H I.V b.st x P ω r hacc hs
@@ -153,7 +160,7 @@ theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inne
     rw [hd, Option.bind_some]
     show Option.map (Function.invFun (b.tr x))
       (some (b.tr x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)).dropLast)) = _
-    rw [Option.map_some, Function.leftInverse_invFun (htr x) _, hdl]
+    rw [Option.map_some, Function.leftInverse_invFun htr _, hdl]
   rw [hv]
   refine ⟨⟨_, hshown, fun i hi => ?_⟩, fun i hi => ?_⟩
   · have hi' : i < I.V.k (xIOf x) := by
@@ -162,13 +169,45 @@ theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inne
     obtain ⟨a, ha⟩ := run_inner H I.V b.st x P ω r hx (i := i) (by simp only [kS]; omega) (by omega)
     rw [List.getD_eq_getElem?_getD, List.getElem?_take_of_lt hi', ha]
     rfl
-  · have hi' : i < I.V.k (xIOf x) := lt_of_lt_of_le hi (hL x)
+  · have hi' : i < I.V.k (xIOf x) := lt_of_lt_of_le hi hL
     unfold cmtTr
     rw [hshown]
     show ((((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x))).map Prod.fst).getD i []) =
       (((run H P (V I.V b.st) x ω r).msgs.map Prod.fst).getD i [])
     rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_map,
       List.getElem?_take_of_lt hi']
+
+/-! ## Some part holds each inner round -/
+
+/-- **`Held` at `deployRec` is a fact about the layout alone**: at each compiled statement of the shape, the layout spans
+the inner verifier's rounds at its inner statement, and some part holds each round it spans. -/
+theorem held_deployRec_iff {W : Type} (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool) (b : Brings)
+    (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop) :
+    Claims.Recursion.VStar.Held (deployRec I.V ivScope b) I L shape ↔
+      ∀ x st, parse x = some st → shape st.form →
+        I.V.k (xIOf x) ≤ L.rounds x ∧ ∀ i < L.rounds x, ∃ s < nS x, (L.msgAt x s i).isSome :=
+  Iff.rfl
+
+/-- **`Held` with `Staged`'s span pins the layout's rounds** to the inner verifier's: `staged_deployRec` asks the layout
+to span no more of them, and `Held` no fewer. -/
+theorem rounds_eq_of_held {W : Type} {I : Claims.Recursion.Inner Coin W} {ivScope : Msg → Bool} {b : Brings}
+    {L : Claims.Recursion.VStar.Layout} {shape : Claims.Recursion.Form → Prop}
+    (hH : Claims.Recursion.VStar.Held (deployRec I.V ivScope b) I L shape)
+    (hL : ∀ x st, parse x = some st → shape st.form → L.rounds x ≤ I.V.k (xIOf x))
+    {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) (hf : shape st.form) :
+    L.rounds x = I.V.k (xIOf x) :=
+  le_antisymm (hL x st hst hf) ((held_deployRec_iff I ivScope b L shape).1 hH x st hst hf).1
+
+/-- **`Held` over Flock's deployed verifier needs a part** at each compiled statement of the shape: that verifier takes
+a round at every statement (`V_k_pos_flock`), which some part must hold. -/
+theorem nS_pos_of_held {W : Type} {zk : Bool} {I : Claims.Recursion.Inner Coin W} (hI : I.V = FlockDeploy.V zk)
+    {ivScope : Msg → Bool} {b : Brings} {L : Claims.Recursion.VStar.Layout} {shape : Claims.Recursion.Form → Prop}
+    (hH : Claims.Recursion.VStar.Held (deployRec I.V ivScope b) I L shape)
+    {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) (hf : shape st.form) : 0 < nS x := by
+  obtain ⟨hk, hall⟩ := (held_deployRec_iff I ivScope b L shape).1 hH x st hst hf
+  have h0 : 0 < L.rounds x := lt_of_lt_of_le (hI ▸ V_k_pos_flock zk (xIOf x)) hk
+  obtain ⟨s, hs, -⟩ := hall 0 h0
+  omega
 
 /-! ## The inner verifier's accepting step -/
 
