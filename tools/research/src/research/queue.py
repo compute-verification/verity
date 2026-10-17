@@ -541,6 +541,12 @@ class Queue:
         r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
         return r.returncode == 0 and forces_cold(r.stdout.split())
 
+    def _reruns_all(self, n: int) -> bool:
+        """Whether PR ``n``'s change makes every train it's in run cold: circuit-check's (`forces_cold`) or every suite's
+        (`reruns_suites`)."""
+        r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
+        return r.returncode == 0 and (forces_cold(files := r.stdout.split()) or reruns_suites(files))
+
     # -- building `next`
 
     def _merge(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
@@ -750,6 +756,16 @@ def forces_cold(files: Iterable[str]) -> bool:
         if f.startswith(_COLD_PREFIXES) or f in ("uv.lock", "pyproject.toml") or f.endswith(".circuit-check.py"):
             return True
     return False
+
+
+#: what decides every suite's verdict: the check's runner, its harness and the read guard (17 Oct: #2241, a change to
+#: `suites.py`, made every train above it rerun every suite)
+_RUNNER_PREFIXES = ("tools/verity/check/",)
+
+
+def reruns_suites(files: Iterable[str]) -> bool:
+    """Whether a change to ``files`` reruns every test suite once (its runner's code is in every suite's key)."""
+    return any(f.startswith(_RUNNER_PREFIXES) and "/tests/" not in f and not f.endswith(".md") for f in files)
 
 
 def conflicting_files(repo: Path, base: str, head: str) -> list[str]:

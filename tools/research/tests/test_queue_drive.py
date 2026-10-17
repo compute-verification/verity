@@ -715,3 +715,17 @@ def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to,
 
     monkeypatch.setattr(drive.subprocess, "run", run)
     assert drive.merge_thread_post(f"{' '.join(to)} queue: b22a0c54d29e on `next` (#1 #2) failed its check", to, sender=sender)
+
+
+def test_a_pr_that_reruns_every_suite_pre_warms_too(world, monkeypatch):
+    """17 Oct 09:21Z (CI-50): #2241 changed tools/verity/check/suites.py and sat low on `next`; every train above it reran every
+    suite."""
+    from research.queue import reruns_suites
+
+    assert reruns_suites(["tools/verity/check/suites.py"]) and not reruns_suites(["tools/verity/check/tests/test_x.py"])
+    assert not reruns_suites(["tools/verity/check/README.md", "Security/X.lean"])
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"tools/verity/check/suites.py": "x\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [2] and any("pre-warming #1" in x for x in world.logs)

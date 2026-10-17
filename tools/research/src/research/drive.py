@@ -591,15 +591,15 @@ class Driver:
     # -- pre-warming a cold-forcing PR off `next`
 
     def warming(self, p) -> str | None:
-        """Why ready PR ``p`` stays off `next` for now: its change makes circuit-check run cold (`queue.forces_cold`) and its
-        head's pre-warm, one recorded check of that head (`prewarm`), hasn't ended.  Its passes then reach the trains it joins,
+        """Why ready PR ``p`` stays off `next` for now: its change makes circuit-check run cold (`queue.forces_cold`) or reruns
+        every suite (`queue.reruns_suites`), and its head's pre-warm, one recorded check of that head (`prewarm`), hasn't ended.  Its passes then reach the trains it joins,
         which run warm, and no warm PR waits hours on it above it (16 Oct: #2158 and #2199, each at the bottom of `next`, made
         every train above them cold, until a lander held them by hand)."""
         if self._drive is None:
             return None
         pw, key = self._drive.setdefault("prewarm", {}), f"{p.number}@{p.head}"
         if (rec := pw.get(key)) is None:
-            if not self.q._forces_cold(p.number):
+            if not self.q._reruns_all(p.number):
                 return None
             rec = pw[key] = {"pr": p.number, "head": p.head}
         if rec.get("done"):
