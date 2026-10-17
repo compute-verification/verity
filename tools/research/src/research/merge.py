@@ -1113,9 +1113,12 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     # a PR GitHub marked merged itself (its head reached `into` by drive's landing) leaves its branch too (17 Oct: 2,119 of the
     # repository's 3,543 branches were already on main)
     merged = json.loads(gh("pr", "list", "--state", "merged", "--limit", "200", "--json", "number,headRefName,headRefOid"))
+    # only a branch still at the merged head: a lease on a branch already gone fails as "stale info" (17 Oct: 58 a tick)
+    heads = {ref.removeprefix("refs/heads/"): sha for sha, ref in (
+        line.split() for line in _git(repo, "ls-remote", "--heads", remote).stdout.splitlines())}
     for p in merged:
         head = p["headRefName"]
-        if head in used or head in KEEP_BRANCHES or not on(p["headRefOid"]):
+        if head in used or head in KEEP_BRANCHES or heads.get(head) != p["headRefOid"] or not on(p["headRefOid"]):
             continue
         log(f"research merge: {verb}delete {remote}'s branch {head} (merged #{p['number']}'s head, on {into})")
         if not dry_run:

@@ -308,6 +308,15 @@ def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) 
   if let some pinned := tags.pinnedLeafScheme then
     if (← canon leafScheme) != (← canon pinned) then throw "META: leaf_scheme is not the pinned leaf-commitment scheme"
 
+/-- A repeated last stage's returned outputs (META `out_net_ports` of `[slot, port]` pairs, each word's slot `slots`, its
+port `c.outNetPorts`): one 16-bit port (`oc`, the stage's output ports) of a slot of the stage per output word, no
+`(slot, port)` twice. -/
+def slottedOk (c : Circuit) (slots : Array Nat) (oc : Array (Nat × Nat)) : Bool :=
+  slots.size == c.outWords && c.outNetPorts.size == c.outWords &&
+    (List.range c.outWords).all (fun o => decide (slots.getD o 0 < c.perVu.getD c.outNet 0) &&
+      decide (c.outNetPorts.getD o 0 < oc.size) && (oc.getD (c.outNetPorts.getD o 0) default).2 == 16) &&
+    decide ((List.range c.outWords).map fun o => (slots.getD o 0, c.outNetPorts.getD o 0)).Nodup
+
 /-- Upstream's `Composite::check`: the layout's shape, the row slots' ports and counts, every non-row input port wired
 exactly once, the leaf maps, the pinned dummy values. -/
 def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
@@ -351,7 +360,8 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   let ur := c.ranges.filter (·.kind == Kind.net c.unitNet)
   if ur.size != 1 || ur[0]!.count != c.g * c.upv || (c.outNet == c.unitNet && !isPow2 ur[0]!.count) then
     throw "not one unit range of vus_per_block x units_per_vu (a power of two) units"
-  -- a tail that returns the outputs (PR #83 from 15260468): its last stage's only output group is the output words
+  -- a tail that returns the outputs (PR #83 from 15260468): its last stage's only output group is the output words; a
+  -- repeated last stage's (`out_net_ports` of `[slot, port]` pairs), under hidden outputs only, one port of a slot each
   let tailOut := c.outNet != c.unitNet
   let g0in := unit.inGroups.getD 0 default
   let g0out := unit.outGroups.getD 0 default
@@ -362,9 +372,14 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
     let nOut := c.outWords
     let onet := c.nets.getD c.outNet default
     let oc := portCols onet.2.outGroups
-    if !onet.1.startsWith "stage" || c.outNetPorts != Array.range oc.size || oc.size != nOut || oc.any (·.2 != 16)
-        || onet.2.outGroups.size != 1 || !isPow2 (16 * nOut) || c.leavesOut.any (!·.isEmpty) then
-      throw "the returned outputs are not the last stage's only output group: one 16-bit port per output word"
+    if !onet.1.startsWith "stage" || c.leavesOut.any (!·.isEmpty) || (match c.outNetSlots with
+        | some s => !tags.hiddenOutputs || !slottedOk c s oc
+        | none => c.outNetPorts != Array.range oc.size || oc.size != nOut || oc.any (·.2 != 16)
+            || onet.2.outGroups.size != 1 || !isPow2 (16 * nOut)) then
+      throw (if c.outNetSlots.isSome then
+        "the returned outputs are not one 16-bit port of a slot of the last stage per output word, each once, of a \
+          statement with hidden outputs"
+      else "the returned outputs are not the last stage's only output group: one 16-bit port per output word")
   for r in c.ranges do
     if let .net n := r.kind then
       if r.count != c.g * c.perVu.getD n 0 then throw s!"a range of {(c.nets.getD n default).1} is not {c.perVu.getD n 0} slots per VU"
@@ -545,6 +560,15 @@ def rowPorts (mj : Json) (typed : Bool) : V (Array Port) := do
     throw s!"META: no row has a compression before its last block (the {SHA_NET} range, the pin's, holds no slot)"
   return ports
 
+/-- META `out_net_ports`' entries: each output word's port of the last stage, and where any entry is a `[slot, port]`
+pair (a repeated last stage), each word's slot, a port alone being of slot 0. -/
+def outNetEntries (a : Array Json) : V (Array Nat × Option (Array Nat)) := do
+  let e ← a.mapM fun x => match x with
+    | .arr p => if p.size == 2 then do pure (← J.asNat p[0]! "out_net_ports", ← J.asNat p[1]! "out_net_ports")
+      else throw "META: an out_net_ports entry is not a port or a [slot, port] pair"
+    | x => do pure (0, ← J.asNat x "out_net_ports")
+  pure (e.map (·.2), if a.any (fun x => x matches .arr _) then some (e.map (·.1)) else none)
+
 /-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
 than the verifier's (`HmNets.check`), and a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…` or `rec-opening/…` unit
 other than the verifier's (`RecOpen.check`, `RecResiduals.check`, `RecSparse.check`, `RecOpening.check`). A typed
@@ -666,9 +690,9 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let shaNet ← netOf SHA_NET
   let hmNet ← netOf HM_NET
   let outNet ← if tmpl.isSome then pure unitNet else netOf ((mj.getObjValAs? String "out_net").toOption.getD "unit")
-  let outNetPorts ← match mj.getObjVal? "out_net_ports" with
-    | .ok (.arr a) => a.mapM (J.asNat · "out_net_ports")
-    | _ => pure #[]
+  let onp ← match mj.getObjVal? "out_net_ports" with
+    | .ok (.arr a) => outNetEntries a
+    | _ => pure (#[], none)
   let leafCuts ← match mj.getObjVal? "leaf_cuts" with
     | .ok (.arr a) => a.mapM fun w => do
       let x ← J.asArr w "a leaf cut"
@@ -695,7 +719,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
   let c : Circuit := { name, sha, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← kLogOf mj, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
-                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts,
+                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts := onp.1, outNetSlots := onp.2, leafCuts,
                        typed := ← tmpl.mapM fun t => pure (blockOf t) }
   check c tags leafScheme
   HmNets.check c
@@ -1435,7 +1459,8 @@ def rowBcZeroSalt (p : Port) (row : ByteArray) : ByteArray :=
     Sha512.hash (Hm96.Default512.saltPrefix ++ ByteArray.mk (Array.replicate SALT_BYTES 0))
 
 /-- `g o ↦` the first column of output word `o` of VU `g` (16 bits from it), where the circuit computes it: a typed
-instance's root's output group, the last stage's output port, or the unit that returns it. -/
+instance's root's output group, the last stage's output port (in its slot, a repeated last stage's), or the unit that
+returns it. -/
 def outCol (c : Circuit) : Nat → Nat → Nat :=
   let unit := c.unit
   let ret := (List.range c.upv).foldl (fun r u =>
@@ -1444,7 +1469,8 @@ def outCol (c : Circuit) : Nat → Nat → Nat :=
   let tailCols := portCols (c.nets.getD c.outNet default).2.outGroups
   fun g o =>
     if c.typed.isSome then c.slotCol c.unitNet g 0 + (unit.outGroups.getD 0 default).col * WORD + 16 * o
-    else if c.outNet != c.unitNet then c.slotCol c.outNet g 0 + (tailCols.getD (c.outNetPorts.getD o 0) default).1
+    else if c.outNet != c.unitNet then
+      c.slotCol c.outNet g ((c.outNetSlots.getD #[]).getD o 0) + (tailCols.getD (c.outNetPorts.getD o 0) default).1
     else
       let (u, q) := ret.getD o (0, 0)
       c.slotCol c.unitNet g u + (unitCols.getD q default).1
@@ -1992,5 +2018,172 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
             unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
+
+/-- `Stmt.setupHidden` on its circuit as `HmOut.parse` returns it (`parsed`), which the caller parses once
+(`Stmt.setupHidden_eq`). -/
+def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (coins : Coins)
+    (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
+    (publicInputs : Option ByteArray := none) : V Stmt := do
+  let c ← parsed
+  let pi ← HmIn.parse c
+  let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
+    else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
+  let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"
+  let pop ← HmIn.loadPublic tags c pi publicFile
+  HmIn.checkOwn pi pop publicInputs
+  let pub ← match draw with
+    | some d => HmIn.drawn c pi pop d
+    | none => pure pop
+  if let some d := draw then
+    if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
+        ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
+      let (law, _) ← HmRow.stratifiedLaw obj prog k
+      if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
+  HmOut.checkPublic c pub
+  let linked := J.has c.metaJ "links"
+  let finding ← match finding0, partition, program with
+    | some f, some obj, some prog =>
+      let q := (obj.getObjVal? "query").toOption.getD Json.null
+      if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
+        let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+        let note ← HmRow.deriveTemplateUnits c obj prog indices
+        let wires ← HmLinks.check c pop prog
+        let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
+          else s!"; Linking checked: {wires} cut wire(s) over the {pop.n} units of the population, each reader's link row the writer's committed output row"
+        pure (some { f with derived := true, note := note ++ linking })
+      else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
+      else HmRow.qwordFinding c pub obj prog f
+    | f, _, _ =>
+      if linked then throw "META links: Linking needs the verifier's own program and partition (--program, --partition)"
+      pure f
+  let n := pub.n
+  let blocksReal := (n + c.g - 1) / c.g
+  let nbl := max 3 (log2ceil (max blocksReal 1))
+  let m := c.kLog + nbl
+  if c.kLog > 27 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
+  let pin ← HmRow.pin c
+  let (da, db) := HmIn.delta c pi pin
+  let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
+  checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
+  let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
+  let v2Run := (List.range c.outRowPorts.size).any fun j =>
+    (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
+  let identity := if !J.has c.metaJ "out_row_ports" then identity
+    else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
+  for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
+  for d in [da, db] do
+    h := pushLe64 h d.size
+    for (i, cc) in d do h := pushLe32 (pushLe32 h i) cc
+  let digest := Sha512.hash h
+  let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
+  let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
+  return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
+           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+
+/-- `Stmt.setupTables` on its circuit as `HmOut.parse` returns it under `tags` (`parsed`), which the caller parses once: a
+one-table session sets up on it, several tables each parse their own (`Stmt.setupTables_eq`). -/
+def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
+    (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
+    (publicInputs : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
+  -- a closure draw proves more units than it draws, so what it adds must be the verifier's own closure of the draw
+  if let some d := draw then
+    if let .ok u := Draw.UnitDraw.ofJson d then
+      if let .work .. := u.law then
+        match closure with
+        | some cm =>
+          if u.closure != Draw.closureOf cm u.units then
+            throw "U3: the draw's closure is not the verifier's own (its closure map)"
+        | none =>
+          if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
+  -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  if let some d := draw then
+    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some K) := (partition, program, stratified)
+        | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
+      if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
+      let (law, _) ← HmRow.stratifiedLaw obj prog K
+      if law != Draw.Law.stratified k strata then
+        throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
+  -- a work draw's K and stated work set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  if let some d := draw then
+    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some (K, table)) := (partition, program, work)
+        | throw "U2: a work draw needs the verifier's own K, work table, program and partition (--work, --work-table, --program, --partition)"
+      if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
+      let (law, _) ← HmRow.workLaw obj prog K table
+      if law != Draw.Law.work k strata then
+        throw "U2: the draw's work law is not the verifier's own (its K, program, query and work table)"
+  if publicInputs.isSome && !tags.hiddenOutputs then
+    throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+  let setup := fun (t : Tags) (d : Option Json) => do
+    if tags.hiddenOutputs then Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
+    else
+      let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
+      if J.has st.c.metaJ "public_inputs" then
+        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      pure st
+  let setupOne := fun (d : Option Json) => do
+    if tags.hiddenOutputs then Stmt.setupHiddenOf parsed tags publicFile coins d partition program publicInputs
+    else
+      let st ← Stmt.setupH tags circuitFile publicFile coins tables d partition program
+      if J.has st.c.metaJ "public_inputs" then
+        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      pure st
+  if count ≤ 1 then
+    let st ← setupOne draw
+    return (st.spec, #[st])
+  let some tt := tags.manyTables | throw s!"{tags.name}: one table per session"
+  if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
+  let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
+    else (pure () : V Unit)
+  -- the draw's law and count are refused before the circuit is read
+  let u? ← draw.mapM Draw.UnitDraw.ofJson
+  if let some u := u? then
+    match u.law with
+    | .subset _ => splits u.units.size
+    | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
+  -- without a draw, the population's units (`setupH` checks a draw's population against the file)
+  let (population, units) ← match u? with
+    | some u => pure (u.population, u.units)
+    | none => do
+      let n ← if tags.hiddenOutputs then do
+          let c ← HmOut.parse tags circuitFile tables
+          pure (← HmIn.loadPublic tags c (← HmIn.parse c) publicFile).n
+        else do pure (← HmRow.loadPublic tags (← HmRow.parse tags circuitFile tables) publicFile).n
+      pure (n, Array.range n)
+  splits units.size
+  let k := units.size / count
+  let sts ← (Array.range count).mapM fun j =>
+    let part := Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson population), ("k", Lean.toJson k),
+      ("units", Json.arr ((units.extract (j * k) (j * k + k)).map Lean.toJson))]
+    setup { tags with identity := tags.tableIdentity count j } (some part)
+  let mPts := sts[0]!.mPts
+  if sts.any (·.mPts != mPts) then throw "tables: the tables' link points have different lengths"
+  let sigma := Sha512.hash (sts.foldl (fun h st => h ++ st.sigma) (pushLe64 tt.sigmaTag.toUTF8 count))
+  let names := tags.tableNames count
+  let hello ← helloOf tags sigma mPts coins names
+  return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
+            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
+
+set_option maxRecDepth 20000 in
+theorem Stmt.setupHidden_eq (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (draw partition : Option Json) (program publicInputs : Option ByteArray) :
+    Stmt.setupHidden tags circuitFile publicFile coins tables draw partition program publicInputs
+      = Stmt.setupHiddenOf (HmOut.parse tags circuitFile tables) tags publicFile coins draw partition program publicInputs :=
+  rfl
+
+set_option maxRecDepth 20000 in
+theorem Stmt.setupTables_eq (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
+    (tables : List (String × ByteArray)) (draw partition : Option Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray) :
+    Stmt.setupTables tags circuitFile publicFile coins count tables draw partition program work stratified closure publicInputs
+      = Stmt.setupTablesOf (HmOut.parse tags circuitFile tables) tags circuitFile publicFile coins count tables draw partition
+          program work stratified closure publicInputs :=
+  rfl
 
 end Flock

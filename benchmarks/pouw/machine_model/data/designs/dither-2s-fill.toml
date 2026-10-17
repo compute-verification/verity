@@ -11,6 +11,8 @@ per_word = 4.5
 mix = { ALU = 1, IMAD = 1 }
 route = "lanes"
 source = "CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate); FILL-OPT (μ_x = 0) is its named assumption"
+p = 0.0
+luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit: every input of a lane chain is a public function of the round's coins and its tile (lfill: K = dseed(c0, c1, tile), the keys and words from smix(K ^ ...)), and the check recomputes the drawn tile's receipt (lf_ref) and compares it with the committed one, so a wrong receipt fails whenever its tile is drawn and nothing is left to guess; what a right receipt cost is FILL-OPT's"
 
 [mand.fold]
 eps = 0.0

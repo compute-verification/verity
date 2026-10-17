@@ -20,7 +20,8 @@ SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
 REAL_ROOTS = ["tools/research/src", "tools/config", "infra/cluster/src", "infra/ops", "archive/sp1/python", "benchmarks/numerical/python",
               "benchmarks/harness", "integrations/vllm", "verity/ml/flock/python", "tools/verity/circuit_check/src",
-              "benchmarks/pouw/machine_model", "tools/verity/cli", "verity/core/difftest/python", "benchmarks/pouw/exact_kit"]
+              "benchmarks/pouw/machine_model", "tools/verity/cli", "verity/core/difftest/python", "benchmarks/pouw/exact_kit",
+              "benchmarks/proof_throughput"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):

@@ -42,6 +42,26 @@
                                               q* = 2, 4, 8, 16 and its floor, the core ε at q* = 2, 8 and Q, and the
                                               thresholds), then with --checking sampled the sample (ε_luck, ε_adapt
                                               and ε_sample at Q)
+    machine-model redteam [DESIGN ...] [--device sm_NN] [--q Q] [--operands O] [--credit C]
+                                              the red-team audit (redteam.py): each design's binding and near-binding
+                                              facets, the decision-76 move in the cheater's favour at which the core
+                                              first rises (per row), and, where Π prices no uniform datapath, the ε a
+                                              sibling-rate uniform route would open (default q* = 1.22, credit floor)
+    machine-model margin [DESIGN ...] [--device sm_NN] [--m M] [--least [--mix FFMA]] [--q Q] [--operands O] [--credit C]
+                                              decision 76's margin (redteam.margin_audit): each design's core as built,
+                                              its worst core with every near measured facet's lane coefficient moved M
+                                              in the cheater's favour at once (default 2%), the single facet that drives
+                                              it, and each near facet's own move; with --least, the cheapest filler a
+                                              word (in --mix, default the design's) that brings the worst back to the
+                                              floor (default q* = 1.22, credit floor)
+    machine-model capacity GROUP [GROUP ...] [--vector V] [--json]
+                                              the certified share σ of a window's capacity (capacity.py): each GROUP
+                                              is [WEIGHT/]TERM+TERM..., its share of the cell's SMSP-time (default 1)
+                                              and its certified load, TERM one of FOLD:SHARE[*R] (a noise-GEMM filler
+                                              at SHARE of the tensor peak, its words folded R times; FOLD duo, xin13,
+                                              li, arx (a cost probe) or none), lane:RATE (verified lane chains, warp instructions a
+                                              SMSP-cycle), served:SHARE[:FOLD] or CLASS=RATE; σ is read on the pooled
+                                              load, with each group's placement-attested σ beside it
 
 `--device sm_NN` (before the command, or on `eps`) reads that device's directory, `data/devices/sm_NN/` (README
 "Devices"); sm_120, `data/` itself, is the default. `--data DIR` (before the command) reads another data directory, such
@@ -57,6 +77,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from verity_machine_model import attacks as atk
+from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
 from verity_machine_model.adopt import adopt
 from verity_machine_model.model import CLAIMS, DATA, census, device, devices, model, vector, vectors
@@ -251,8 +272,8 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
     return {
         "design": d.name, "summary": d.summary, "registry": _registry(d), "vector": pi.vector, "honest": e.honest.name,
         "honest_status": e.honest.status, "operands": operands, "credit": credit, "L": d.L, "fold": d.fold_name,
-        "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source}
-                                                for f, pw in e.fillers], "q": q,
+        "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source,
+                                                 "p": f.p, "luck": f.luck} for f, pw in e.fillers], "q": q,
         "operand_floor": d.floor, "gamma": e.gamma, "gamma_clock": e.gamma_clock,
         "honest_cycles_per_mma": e.T_honest * per_mma,
         "honest_time": e.T_honest_source, "credit_ratio": e.credit_ratio,
@@ -426,6 +447,76 @@ def _eps(args) -> int:
     return 0
 
 
+def _capacity(args) -> int:
+    pi = E.machine(args.vector or "", args.data)
+    groups = []
+    for g in args.groups:
+        w, _, spec = g.rpartition("/")
+        groups.append((float(w) if w else 1.0, C.parse(spec)))
+    x = C.window(pi, groups)
+    if args.json:
+        print(json.dumps(x.record(), ensure_ascii=False, indent=1))
+        return 0
+    p = x.pooled
+    print(f"Π: {pi.vector}; the empty GPU's useful capacity {x.empty:.5f} tensor slots a SMSP-cycle "
+          f"({x.empty * C.TENSOR_CYCLES:.3f}× the tensor peak)")
+    for (w, g), h in zip(x.groups, x.parts):
+        print(f"  {w:.4g} of the cell: {g.name}: σ {1 - h.hidden / x.empty:.4f} placed, B {h.credit():.4f}, tensor "
+              f"{g.tensor_share():.3f}" + (f", OVER on {', '.join(h.over)}" if h.over else ""))
+    print(f"  pooled load: " + ", ".join(f"{k} {v:.4g}" for k, v in sorted(p.work.n.items())) + " warp instructions a "
+          f"SMSP-cycle; rows " + ", ".join(f"{r} {v:.3f}" for r, v in sorted(p.load.items(), key=lambda kv: -kv[1])[:5]))
+    if p.over:
+        print(f"  OVER on {', '.join(p.over)}: the certified load alone exceeds Π (a miscount or a model violation)")
+    print(f"  hidden: {p.hidden:.5f} slots a SMSP-cycle, " + (", ".join(f"{k} {v:.4g}" for k, v in p.mix.items())
+                                                             or "nothing") +
+          f"; binding {', '.join(p.binding) or 'none'}")
+    print(f"  σ {x.sigma():.4f}  (ε_cap {x.eps_cap():.4f}; placement-attested {x.sigma_placed():.4f}; time credit B "
+          f"{x.credit():.4f}; tensor share {x.tensor():.4f})")
+    return 0
+
+
+def _redteam(args) -> int:
+    from verity_machine_model import redteam as RT
+
+    names = args.designs or E.designs(args.data)
+    for name in names:
+        a = RT.audit(name, args.data, q=args.q, operands=args.operands, credit=args.credit)
+        print(f"{a.design} on {a.device}: core {_pct(a.core)}  ε_machine {_pct(a.machine_eps)}  floor {_pct(a.floor)}  "
+              f"γ {a.gamma:.3f}  binds {', '.join(a.binding)}" + ("" if a.uniform_route else "  [Π has no uniform route]"))
+        for r in a.near:
+            if r.ceiling:
+                how = "the issue ceiling, silicon cannot beat it"
+            elif r.flip_pct is None:
+                how = "no flip ≤ 10%"
+            else:
+                how = f"flips at {r.flip_pct}% → {_pct(r.core_at_flip)} (at 2%: {_pct(r.core_at_2pct)})"
+            print(f"    {r.name:12s} load {r.load:.3f}  dual {r.dual:.3f}: {how}")
+        if not a.uniform_route:
+            base, opened, binding = RT.uniform_gap(name, args.data, q=args.q, operands=args.operands, credit=args.credit)
+            print(f"    uniform-datapath gap: core {_pct(base)} → {_pct(opened)} with a sibling-rate uniform route "
+                  f"(binds {', '.join(binding) or 'none'})")
+    return 0
+
+
+def _margin(args) -> int:
+    from verity_machine_model import redteam as RT
+
+    mix = {c: 1.0 for c in args.mix.split(",")} if args.mix else None
+    for name in args.designs or E.designs(args.data):
+        mg = RT.margin_audit(name, args.data, m=args.m, q=args.q, operands=args.operands, credit=args.credit)
+        drive = f"driven by {mg.driver}" if mg.driver else "no near facet drives it"
+        print(f"{mg.design} on {mg.device}: core {_pct(mg.base)}  worst at {mg.m*100:g}% {_pct(mg.worst)}  ({drive})")
+        for r, s in mg.rows:
+            print(f"    {r:12s} alone → {_pct(s)}")
+        if args.least:
+            lf = RT.least_filler(name, args.data, mix=mix, m=args.m, q=args.q, operands=args.operands,
+                                 credit=args.credit)
+            how = (f"{lf.per_word:g} a word (worst {_pct(lf.core)}, γ {lf.gamma:.3f})" if lf.per_word is not None
+                   else f"none ≤ cap holds it (worst {_pct(lf.core)})")
+            print(f"    least {'+'.join(lf.mix)} filler that holds {mg.m*100:g}%: {how}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="machine-model", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -484,6 +575,30 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--index-bits", type=int, metavar="B",
                    help="B-bit noise entries on the operand the table route indexes, which costs B times the 1-bit "
                         "route's lane instructions and bytes (default: the design's [table] bits, else 1)")
+    k = sub.add_parser("capacity")
+    k.add_argument("groups", nargs="+", metavar="GROUP")
+    k.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
+    k.add_argument("--json", action="store_true")
+    rt = sub.add_parser("redteam")
+    rt.add_argument("designs", nargs="*", help="the designs to audit (default: every design in the data directory)")
+    rt.add_argument("--device", default=argparse.SUPPRESS, help=dev)
+    rt.add_argument("--q", type=float, default=1.22, help="q*, lane instructions a fresh word (default %(default)s)")
+    rt.add_argument("--operands", choices=E.OPERANDS, default="free",
+                    help="the cheater's operand delivery on the tensor route (default %(default)s)")
+    rt.add_argument("--credit", choices=E.CREDITS, default="floor",
+                    help="what ε is a fraction of (default %(default)s: the floor program ♭)")
+    mg = sub.add_parser("margin")
+    mg.add_argument("designs", nargs="*", help="the designs to audit (default: every design in the data directory)")
+    mg.add_argument("--device", default=argparse.SUPPRESS, help=dev)
+    mg.add_argument("--m", type=float, default=0.02, help="the margin each near facet moves in the cheater's favour "
+                    "(default %(default)s: decision 76's 2%%)")
+    mg.add_argument("--least", action="store_true", help="also find the cheapest filler a word that holds the margin")
+    mg.add_argument("--mix", help="with --least: the filler's class mix, comma-separated (default: the design's)")
+    mg.add_argument("--q", type=float, default=1.22, help="q*, lane instructions a fresh word (default %(default)s)")
+    mg.add_argument("--operands", choices=E.OPERANDS, default="free",
+                    help="the cheater's operand delivery on the tensor route (default %(default)s)")
+    mg.add_argument("--credit", choices=E.CREDITS, default="floor",
+                    help="what ε is a fraction of (default %(default)s: the floor program ♭)")
     args = p.parse_args(argv)
     if args.device is not None:
         if args.data != DATA:
@@ -493,7 +608,8 @@ def main(argv: list[str] | None = None) -> int:
         print(__doc__)
         return 0
     return {"list": _list, "solve": _solve, "census": _census, "attacks": _attacks, "adopt": _adopt,
-            "designs": _designs, "eps": _eps}[args.cmd](args)
+            "designs": _designs, "eps": _eps, "capacity": _capacity, "redteam": _redteam,
+            "margin": _margin}[args.cmd](args)
 
 
 if __name__ == "__main__":
