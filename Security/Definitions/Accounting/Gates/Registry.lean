@@ -14,19 +14,28 @@ set (note:20261017T1859Z-report-property-redteam), 210 ids: the 194 of `verity/m
   property/v1 proves from derived ranges: the two IMMA steps (s8·s8 clamped, u8·s8 wrapped, `k = 32`), PIN's
   `PouwSegDot_v1` (s8·s8 wrapped, `k = 32`) and route U's `PouwDot16U8S8_v1` (u8·s8 wrapped, `k = 16`), each the exact
   dot mod `2^32`, so in the window the exact sum; `I32Add_v1` and `I32Sub_v1` (`affine`), proven not to wrap; the
-  constants (`const`). A product with a constant operand is an affine gate of the census, whatever its primitive.
-* **budgeted**, one unit an output value: `product` (`I32Mul_v1` of two runtime values, and the integer dots outside the
-  family: `NcpDot16I7_v1`, `PouwSqAcc_v1`); `compareSelect` (comparisons, selections, min, max, the salt-dead tests
-  and PIN's `PouwSel32_v1` and `PouwWinOk_v1`); `gather` (`PouwWindowWord_v1`, and the kernel-level gathers and table
-  reads, by family); `fold` (the receipt fold's step, `PouwDuoAbsorb_v1`); and `rounding`, every other primitive: FP
-  arithmetic and casts (`Bf16ToF32_v1`, `E4m3ToF32_v1` and `F32Neg_v1` among them, which census/v1's 18:21Z draft had
-  free), the FP and FP8 dots, integer division, remainder and narrowing, bit operations, LimbSplit's limb steps (the
-  carries `Role.limbSplit` marks), and PoUW's integer helpers.
+  constants (`const`). An exact integer multiply by a constant is an affine gate only where it is proven in window
+  (`I32Mul_v1` by a constant, translated so); an FP multiply by a constant rounds, and is a rounding.
+* **gathers** (`gather`, an `Op.gather` and never any other function): the kernel-level gathers and table reads, by
+  family, counted in fresh index bits (`units`).
+* **budgeted**, in units: `compareSelect` (comparisons, selections, min, max and clamps, `F32Sat_v1` and `S32ClampS8`
+  among them, the 1-bit logic ops `And2`, `Xor2`, `BitAnd`, `BitOr`, `BitXor`, `BitNot`, `Not`, the salt-dead tests
+  and PIN's `PouwSel32_v1` and `PouwWinOk_v1`); `fold` (the receipt fold's step, `PouwDuoAbsorb_v1`); and `rounding`,
+  every other primitive: FP arithmetic and casts (`Bf16ToF32_v1`, `E4m3ToF32_v1` and `F32Neg_v1` among them), the
+  exact widenings and packings, the FP and FP8 dots, integer division, remainder and narrowing, integer products
+  reduced mod `2^w` (`I32Mul_v1`, `NcpDot16I7_v1`, `PouwSqAcc_v1`: a wrap drops a carry), bit operations on words,
+  field extractions (`PouwWindowWord_v1` and the family `BitAtx`: a field of one runtime word, not a column, so never
+  a gather, whose constant index would cost nothing), LimbSplit's limb steps (the carries `Gate.role` gives), and
+  PoUW's integer helpers.
 * **inputs**, by family: `Input` ids are run inputs and `RegisteredInput` ids registered. A coin input is an `Input` id
   whose port is kind coin (`verity/ml/circuits/ports.py`), so its binding is its port's, not its id's.
-* **refused:** any id neither list names (`classOf id = none`).
+* **refused:** any id neither list names (`classOf id = none`), and any gate whose operation isn't in its primitive's
+  class (`Classed`).
 
-`classOf` is what property/v1's closed table is to agree with, id for id.
+`classOf` is what property/v1's closed table is to agree with, id for id. It agrees with the red team's closed table
+(art:d013436943c9bd70e44e92a229805087ac531a2f59023750030d78353e7bb784) on every id but `PouwDot16U8S8_v1`, free here
+under `Proven` as the u8·s8 IMMA step is, and the table's ten `other` ids, roundings here: the ruling caps three
+classes and no fourth, and both are budgeted the same.
 -/
 
 namespace Accounting.Gates
@@ -38,23 +47,25 @@ inductive Class
   | affine
   /-- an s8-family step: `Op.mma a b k satfinite` -/
   | family (a b : Int8Fmt) (k : ℕ) (satfinite : Bool)
+  /-- a gather: `Op.gather`, its column's word at its index, never any other function -/
+  | gather
   | budgeted (cls : Budget)
   deriving DecidableEq, Repr
 
 /-- The registry's primitives, each with its class. -/
 def registry : List (String × Class) := [
   ("AmpereBF16TcDot16_v2", .budgeted .rounding),
-  ("And2_v1", .budgeted .rounding),
+  ("And2_v1", .budgeted .compareSelect),
   ("Bf16AddF2fp_v1", .budgeted .rounding),
   ("Bf16Add_v1", .budgeted .rounding),
   ("Bf16GtStrict_v1", .budgeted .compareSelect),
   ("Bf16MulBf16_v1", .budgeted .rounding),
   ("Bf16MulF32_v1", .budgeted .rounding),
   ("Bf16ToF32_v1", .budgeted .rounding),
-  ("BitAnd_v1", .budgeted .rounding),
-  ("BitNot_v1", .budgeted .rounding),
-  ("BitOr_v1", .budgeted .rounding),
-  ("BitXor_v1", .budgeted .rounding),
+  ("BitAnd_v1", .budgeted .compareSelect),
+  ("BitNot_v1", .budgeted .compareSelect),
+  ("BitOr_v1", .budgeted .compareSelect),
+  ("BitXor_v1", .budgeted .compareSelect),
   ("BlackwellE4m3QmmaDot32_v1", .budgeted .rounding),
   ("BlackwellE5m2QmmaDot32_v1", .budgeted .rounding),
   ("BlackwellMxf4OmmaDot64_v1", .budgeted .rounding),
@@ -144,7 +155,7 @@ def registry : List (String × Class) := [
   ("F32Mul_v1", .budgeted .rounding),
   ("F32Mul_v2", .budgeted .rounding),
   ("F32Neg_v1", .budgeted .rounding),
-  ("F32Sat_v1", .budgeted .rounding),
+  ("F32Sat_v1", .budgeted .compareSelect),
   ("F32Sqrt_v1", .budgeted .rounding),
   ("F32SubFtz_v1", .budgeted .rounding),
   ("F32SubFtz_v2", .budgeted .rounding),
@@ -171,7 +182,7 @@ def registry : List (String × Class) := [
   ("I32Div_v1", .budgeted .rounding),
   ("I32Eq_v1", .budgeted .compareSelect),
   ("I32Le_v1", .budgeted .compareSelect),
-  ("I32Mul_v1", .budgeted .product),
+  ("I32Mul_v1", .budgeted .rounding),
   ("I32Rem_v1", .budgeted .rounding),
   ("I32Sub_v1", .affine),
   ("I32ToF32_v1", .budgeted .rounding),
@@ -182,9 +193,9 @@ def registry : List (String × Class) := [
   ("MufuSqrtFtz_v1", .budgeted .rounding),
   ("MufuTanh_v1", .budgeted .rounding),
   ("NcpAbsMax_v1", .budgeted .compareSelect),
-  ("NcpDot16I7_v1", .budgeted .product),
+  ("NcpDot16I7_v1", .budgeted .rounding),
   ("NcpRneClampI7_v1", .budgeted .rounding),
-  ("Not_v1", .budgeted .rounding),
+  ("Not_v1", .budgeted .compareSelect),
   ("NvLogf_v1", .budgeted .rounding),
   ("NvLogf_v2", .budgeted .rounding),
   ("PouwAdd64Hi_v1", .budgeted .rounding),
@@ -221,12 +232,12 @@ def registry : List (String × Class) := [
   ("PouwSha512SmallSigma0Lo_v1", .budgeted .rounding),
   ("PouwSha512SmallSigma1Hi_v1", .budgeted .rounding),
   ("PouwSha512SmallSigma1Lo_v1", .budgeted .rounding),
-  ("PouwSqAcc_v1", .budgeted .product),
+  ("PouwSqAcc_v1", .budgeted .rounding),
   ("PouwSqCeil_v1", .budgeted .rounding),
   ("PouwSqGe_v1", .budgeted .compareSelect),
   ("PouwSub8_v1", .budgeted .rounding),
   ("PouwWinOk_v1", .budgeted .compareSelect),
-  ("PouwWindowWord_v1", .budgeted .gather),
+  ("PouwWindowWord_v1", .budgeted .rounding),
   ("PouwXor32_v1", .budgeted .rounding),
   ("RopeOutAdd_v1", .budgeted .rounding),
   ("RopeOut_v1", .budgeted .rounding),
@@ -235,8 +246,8 @@ def registry : List (String × Class) := [
   ("S32ByteCarry_v2", .budgeted .rounding),
   ("S32ClampRest_v1", .budgeted .rounding),
   ("S32ClampRest_v2", .budgeted .rounding),
-  ("S32ClampS8_v1", .budgeted .rounding),
-  ("S32ClampS8_v2", .budgeted .rounding),
+  ("S32ClampS8_v1", .budgeted .compareSelect),
+  ("S32ClampS8_v2", .budgeted .compareSelect),
   ("S32LowByte_v1", .budgeted .rounding),
   ("S32LowByte_v2", .budgeted .rounding),
   ("SelectBf16_v1", .budgeted .compareSelect),
@@ -252,16 +263,16 @@ def registry : List (String × Class) := [
   ("U32Xor_v1", .budgeted .rounding),
   ("Ue8m0CeilByte_v1", .budgeted .rounding),
   ("Ue8m0InvScale_v1", .budgeted .rounding),
-  ("Xor2_v1", .budgeted .rounding)]
+  ("Xor2_v1", .budgeted .compareSelect)]
 
 /-- The kernel-level families, by their id's prefix. -/
 def families : List (String × Class) := [
   ("Input", .input .run),
   ("RegisteredInput", .input .registered),
-  ("GatherBf16x", .budgeted .gather),
-  ("GatherF32x", .budgeted .gather),
-  ("TableRead", .budgeted .gather),
-  ("BitAtx", .budgeted .gather),
+  ("GatherBf16x", .gather),
+  ("GatherF32x", .gather),
+  ("TableRead", .gather),
+  ("BitAtx", .budgeted .rounding),
   ("TopPMaskWordx", .budgeted .compareSelect)]
 
 /-- A primitive id's class: the registry's entry, else its family's, else none (refused). -/
@@ -274,7 +285,13 @@ def Op.cls {ι : Type} : Op ι → Class
   | .const _ => .const
   | .affine .. => .affine
   | .mma a b k sat => .family a b k sat
-  | .gather => .budgeted .gather
+  | .gather => .gather
   | .budgeted cls _ => .budgeted cls
+
+/-- **Every gate is its primitive's** (what the census checks, refusing the circuit otherwise): its primitive is
+listed, its operation is in the primitive's class, and a gate at a dot step (`Site.dot`) is an s8-family step. Its
+role is then its primitive's and its statics' (`Gate.role`). -/
+def Classed {ι : Type} (C : Dag ι) : Prop :=
+  ∀ g ∈ C, classOf g.prim = some g.op.cls ∧ ∀ K L tail s, g.site = .dot K L tail s → g.op.IsMma
 
 end Accounting.Gates
