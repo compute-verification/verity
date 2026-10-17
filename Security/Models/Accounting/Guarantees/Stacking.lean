@@ -2,6 +2,7 @@ import Definitions.Accounting.Carrier
 import Models.Accounting.Assumptions.RateAudit
 import Models.Accounting.Assumptions.RateAuditDeployed
 import Models.Accounting.Assumptions.Stacking
+import Models.Accounting.Guarantees.Requirement
 
 /-!
 # Stacking: carriers are a source of bounded capacity in every pass (trusted)
@@ -9,7 +10,7 @@ import Models.Accounting.Assumptions.Stacking
 Stacking needs a carrier the audit counts: device memory whose contents were chosen after the seed (a credited KV page)
 and hold other blocks' encodings, so that one read serves several receipts. In the ideal encoding model a carrier's
 contents are a circuit's values, which depend on the encodings only through the circuit's inputs and its own encodes
-(`Definitions/Accounting/Carrier.lean`). Three guarantees, whose proofs are in
+(`Definitions/Accounting/Carrier.lean`). Five guarantees, whose proofs are in
 `Security/Proofs/Accounting/Stacking.lean`:
 
 * `CarrierBits`, the carrier lemma: memory holding a circuit's values holds at most its input and encoded bits about
@@ -22,6 +23,11 @@ contents are a circuit's values, which depend on the encodings only through the 
   windows (the property's `L`; `L` here is the side link's bits, as in every rate-audit statement).
 * `StackedSessionConservationRelay`: the relay form, in the general class (`RemoteSessionConservationRelay`), where a
   carrier's inputs may depend on the pass's oracle and so relay receipts: a carrier is a side source of the same bits.
+* `StackedRequirementSketchDeployed` and `StackedRequirementRelay`: the same sessions, with the shortfall read against a
+  declared circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) instead of the store: when the memory
+  map and every pass's plan are `W`'s at each step the passes are bound to (`Requirement.StoreMatches`,
+  `Requirement.PlanMatches`), an accepted session read at least `(1 − γ)` of the bits `W` holds over those steps
+  (`Requirement.held`) and of the bits it reads (`Requirement.read`).
 
 They rest on the remote audit's random oracle and named assumptions, and on two more:
 `Accounting.Assumptions.CircuitEncodeHardness` (encoding `x` of a block's `b` bits costs `x/b` of `rEnc` roundings) and
@@ -176,6 +182,124 @@ def StackedSessionConservationRelay : Prop :=
               (1 - (dbar + Rate.Deployed.gammaPass N b ρ S (L + C) (lam + m * b) rounds cRoot F)) * (n * P * N * b) ∨
             ∃ w, (((A.win w x.2).reads tier (store x.1) (x.2 w).1 : ℕ) : ℝ) <
               (1 - (dw + Rate.Deployed.gammaPass N b ρ S (L + C) (lam + m * b) rounds cRoot F)) * (P * N * b)))
+      ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
+        (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ (L + C) / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + δ
+
+/-- **The stacked remote audit at the deployed parameters, read against a declared circuit's requirement.**
+`StackedSessionConservationSketchDeployed`'s session, hypotheses and bound, with the session's shortfall measured
+against a declared circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) over a window `win` of engine
+steps. The window has at most `n·P` steps, one for each pass the session's passes are bound to (a pass names the step
+whose reads it covers). At each of its steps the memory map `mm` is `W`'s (`Requirement.StoreMatches`: its resident
+blocks are `W`'s live blocks, packed in 4 KiB tiles, each live value in its block's payload) with at most `N` blocks
+resident, and the plan of the pass bound to it is `W`'s reads (`Requirement.PlanMatches`), of at most `N` blocks. The
+probability that every opening passes while the session's reads fall short of `(1 − γ)` of the bits `W` keeps live over
+the window's steps (`Requirement.held`, in bit-steps) or of the bits it reads over them (`Requirement.read`), at
+
+  `γ = 0.0015 + γ_sketch(X + C)`,
+
+is at most the stacked guarantee's bound:
+
+  `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96 + δ`.
+
+**The reading.** The audit's shortfall is stated against the store's `n·P·N·32768` bits. When the store and the plans
+are `W`'s, `W`'s requirement over the bound steps is at most that, since a resident block holds at most its 32768 bits
+of `W`'s live values (`RequirementHeld`, with no block held) and a planned block at most its bits of `W`'s reads
+(`RequirementMoved`). So an accepted session read at least `(1 − γ)` of the bits `W` holds and of the bits it reads,
+counted in bits. The reads are of the session's store `store ω`, the registered one throughout. That it is the memory
+map's resident blocks at each pass's step, so that the bits read are `W`'s, is the pass-to-step binding's
+(`remote_bandwidth`'s Replay), and is not in this game.
+
+Proof: `Accounting.SecurityProofs.StackedRequirementSketchDeployed`, from
+`Accounting.SecurityProofs.StackedSessionConservationSketchDeployed`, with `W`'s held and read bits at most the store's
+by `Accounting.SecurityProofs.RequirementHeld` and `Accounting.SecurityProofs.RequirementMoved`.
+
+Frozen (no-function, hash): `StackedSessionConservationSketchDeployed`'s game, with its shortfall read against a
+declared circuit's requirement by counting bounds over its wiring, execution and store, in the random-oracle and ideal
+encoding models, under the per-pass hash budget, `CircuitEncodeHardness` and `KeyBinding`. -/
+def StackedRequirementSketchDeployed : Prop :=
+  ∀ (n P N ρ S L q G X qtot Rin cρ reads life rEnc : ℕ) (cost : ℕ → ℕ) (ε δ : ℝ≥0∞) {Ω : Type} [Fintype Ω]
+    (store : Ω → RateSketch.SketchStore N 128)
+    (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773)
+    {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V) (ℓ : Requirement.Layout V)
+    (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
+    7 ≤ n → 0 < P → 0 < N → 0 < rEnc →
+    Assumptions.SketchRank 16 128 12 ε →
+    Assumptions.KeyBinding δ store →
+    Assumptions.CircuitEncodeHardness 32768 rEnc cost →
+    (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
+    (∀ w η j ι c, ∃ K : RateSketch.Carrier N 128,
+      (∀ E σ R O,
+        let B := (A.window w η).device j ι c
+        let D := RateSketch.Data.ofParts E R
+        (B.prog σ D).rebuilds O D * 256 ≤ X + K.carried.card * 256) ∧
+      ∀ E, K.provenance.inputs E ≤ 8 * Rin * life ∧ K.provenance.roundings cost E ≤ cρ * reads * life) →
+    win.len ≤ n * P →
+    (∀ t ∈ win.ticks, Requirement.StoreMatches W e ℓ mm 32768 t ∧ (mm.resident t).card ≤ N ∧
+      Requirement.PlanMatches W e ℓ (plan t) 32768 t ∧ (plan t).card ≤ N) →
+    let C := 8 * Rin * life + 32768 * (cρ * reads * life) / rEnc
+    let γ := 0.0015 + RateSketch.gammaSketch N 128 ρ S L (X + C)
+    pr (fun x : Ω × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+      (∀ w t, (x.2 w).2.2 t ∈
+        (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
+        ((((∑ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+            (1 - γ) * Requirement.held W e win ∨
+          (((∑ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+            (1 - γ) * Requirement.read W e win))
+      ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε +
+        (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
+          (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + δ
+
+/-- **The stacked remote audit with relaying side sources, read against a declared circuit's requirement.**
+`StackedSessionConservationRelay`'s session, hypotheses and bound, with the session's tier reads measured against a
+declared circuit `W`'s requirement over a window `win` of at most `n·P` engine steps, as in
+`StackedRequirementSketchDeployed`: at each step the memory map `mm` is `W`'s (`Requirement.StoreMatches`, in blocks of
+`b` bits) with at most `N` blocks resident, and the plan of the pass bound to it is `W`'s reads
+(`Requirement.PlanMatches`), of at most `N` blocks. For every `m`, the probability that every opening passes while the
+session's tier reads fall short of `(1 − γ)` of the bits `W` holds over the window's steps (`Requirement.held`) or of
+the bits it reads over them (`Requirement.read`), at
+
+  `γ = d̄ + γ_pass(L + C, λ + m·b)`,
+
+is at most the stacked relay bound:
+
+  `(1 − d̄)^(d·n) + (1 − d_w/n)^(d·n) + n·P·G·(C(N, m)·2^(L + C)/2^(h·m) + 2^q/2^λ) + δ`.
+
+**The reading.** As in `StackedRequirementSketchDeployed`: `W`'s requirement over the bound steps is at most the
+store's `n·P·N·b` bits when the store and the plans are `W`'s (`RequirementHeld`, `RequirementMoved`), so an accepted
+session's tier reads are at least `(1 − γ)` of the bits `W` holds and reads. That the session's store is the memory
+map's resident blocks at each pass's step is the pass-to-step binding's, and is not in this game.
+
+Proof: `Accounting.SecurityProofs.StackedRequirementRelay`, from
+`Accounting.SecurityProofs.StackedSessionConservationRelay`, with `W`'s held and read bits at most the store's by
+`Accounting.SecurityProofs.RequirementHeld` and `Accounting.SecurityProofs.RequirementMoved`.
+
+Frozen (no-function, hash): `StackedSessionConservationRelay`'s game, with its shortfall read against a declared
+circuit's requirement by counting bounds over its wiring, execution and store, in the random-oracle and ideal encoding
+models, under `CircuitEncodeHardness` and `KeyBinding`. -/
+def StackedRequirementRelay : Prop :=
+  ∀ (n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc : ℕ) (cost costρ : ℕ → ℕ)
+    (tier : ℕ → Fin τ) (δ : ℝ≥0∞) {Ω : Type} [Fintype Ω] (store : Ω → Rate.Store N b)
+    (A : Rate.DeployedSession n P N b h ρ S Lall q r s d G) (dbar dw : ℝ)
+    {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V) (ℓ : Requirement.Layout V)
+    (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
+    0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 → 0 < rEnc →
+    Assumptions.KeyBinding δ store →
+    Assumptions.WorkHardness b rounds cRoot cost →
+    (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
+    Assumptions.CircuitEncodeHardness b rEnc costρ →
+    (∀ w η j ι c, ∃ K : Rate.PassProvenance N b h ρ (ℕ → Bool),
+      (∀ E R O v i, ((A.window w η).device j ι c).side E R O v (2 * i + 1) = K.run E R O i) ∧
+      (∀ st wd, (((A.window w η).device j ι c).chip st).linkBitsEven wd [] ≤ L) ∧
+      ∀ E R O, K.inputs E R O ≤ 8 * Rin * life ∧ K.roundings costρ E R O ≤ cρ * reads * life) →
+    win.len ≤ n * P →
+    (∀ t ∈ win.ticks, Requirement.StoreMatches W e ℓ mm b t ∧ (mm.resident t).card ≤ N ∧
+      Requirement.PlanMatches W e ℓ (plan t) b t ∧ (plan t).card ≤ N) →
+    let C := 8 * Rin * life + b * (cρ * reads * life) / rEnc
+    let γ := dbar + Rate.Deployed.gammaPass N b ρ S (L + C) (lam + m * b) rounds cRoot F
+    pr (fun x : Ω × (Fin n → Rate.WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
+          ((((∑ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 : ℕ)) : ℝ) < (1 - γ) * Requirement.held W e win ∨
+            (((∑ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 : ℕ)) : ℝ) < (1 - γ) * Requirement.read W e win))
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
         (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ (L + C) / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + δ
 

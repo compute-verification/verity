@@ -2,6 +2,7 @@ import Mathlib
 import Models.Accounting.Guarantees.Stacking
 import Proofs.Accounting.RateAudit.DeployedSketchSum
 import Proofs.Accounting.RateAudit.DeployedRelay
+import Proofs.Accounting.Requirement
 
 /-!
 # Stacking: the carrier lemma and the stacked session
@@ -23,6 +24,11 @@ circuit first, reading every step's bits over the side link at odd addresses (`P
 runs the device with its carrier reads answered from the circuit's values (`PIChip.answer`). The simulating device
 (`PIDevice.stack`) has the device's state, memory, receipts, tier reads and compute, and side link `L + C`, so
 `RemoteSessionConservationRelay` bounds its session, which is the stacked session's event.
+
+`Accounting.SecurityProofs.StackedRequirementSketchDeployed` and `Accounting.SecurityProofs.StackedRequirementRelay`
+bound a declared circuit's held and read bits over at most `k` steps by the store's `k·N·B` when the store and the plans
+are its own (`Requirement.cap_of_matches`, from `RequirementHeld` and `RequirementMoved` with no block held), so a
+shortfall against the requirement is one against the store.
 -/
 
 namespace Accounting.RateSketch
@@ -592,6 +598,41 @@ end DeployedSession
 
 end Accounting.Rate
 
+namespace Accounting.Requirement
+
+variable {V : Type} [DecidableEq V] (W : Wiring V) (e : Execution V) (ℓ : Layout V)
+
+/-- Over a window of at most `k` steps at each of which the store is `W`'s with at most `N` resident blocks and the plan
+is `W`'s reads of at most `N` blocks, `W` holds and reads at most `k·N·B` bits. -/
+theorem cap_of_matches (s : Store) (plan : ℕ → Finset ℕ) (B N k : ℕ) (win : Window) (hwin : win.len ≤ k)
+    (hm : ∀ t ∈ win.ticks, StoreMatches W e ℓ s B t ∧ (s.resident t).card ≤ N ∧
+      PlanMatches W e ℓ (plan t) B t ∧ (plan t).card ≤ N) :
+    held W e win ≤ k * N * B ∧ read W e win ≤ k * N * B := by
+  have hsum : ∑ _t ∈ win.ticks, N * B ≤ k * N * B := by
+    rw [Finset.sum_const, Window.ticks, Nat.card_Ico, smul_eq_mul, Nat.add_sub_cancel_left, mul_assoc]
+    exact Nat.mul_le_mul_right _ hwin
+  refine ⟨(Finset.sum_le_sum fun t ht => ?_).trans hsum, (Finset.sum_le_sum fun t ht => ?_).trans hsum⟩
+  · have h1 := SecurityProofs.RequirementHeld W e ℓ s B t ∅ (hm t ht).1
+    simp only [bitsAt, bits, Finset.notMem_empty, Finset.filter_false, Finset.sum_empty, Finset.sdiff_empty,
+      zero_add] at h1
+    exact h1.trans (Nat.mul_le_mul_right B (hm t ht).2.1)
+  · have h1 := SecurityProofs.RequirementMoved W e ℓ (plan t) B t ∅ (hm t ht).2.2.1
+    simp only [bitsAt, bits, Finset.notMem_empty, Finset.filter_false, Finset.sum_empty, Finset.sdiff_empty,
+      zero_add] at h1
+    exact h1.trans (Nat.mul_le_mul_right B (hm t ht).2.2.2)
+
+/-- A count short of `c` times a requirement's held or read bits, each at most `Y`, is short of `c·Y`. -/
+theorem lt_of_cap {a H R Y : ℕ} {c : ℝ} (hH : H ≤ Y) (hR : R ≤ Y) (h : (a : ℝ) < c * H ∨ (a : ℝ) < c * R) :
+    (a : ℝ) < c * Y := by
+  have key : ∀ {X : ℕ}, X ≤ Y → (a : ℝ) < c * X → (a : ℝ) < c * Y := by
+    intro X hX hlt
+    rcases le_or_gt 0 c with hc | hc
+    · exact hlt.trans_le (mul_le_mul_of_nonneg_left (Nat.cast_le.mpr hX) hc)
+    · nlinarith [(Nat.cast_nonneg a : (0 : ℝ) ≤ a), (Nat.cast_nonneg X : (0 : ℝ) ≤ X)]
+  exact h.elim (key hH) (key hR)
+
+end Accounting.Requirement
+
 namespace Accounting.SecurityProofs
 
 open Accounting.RateSketch
@@ -656,5 +697,33 @@ theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionCo
   have e := fun w => Rate.DeployedSession.stack_win A L C K hL hside hC tier w y.2 y.1 (y.2 w).1
   simp only [fun w => (e w).1, fun w => (e w).2]
   exact hy
+
+/-- **The stacked remote audit at the deployed parameters, read against a declared circuit's requirement**,
+`Accounting.Guarantees.StackedRequirementSketchDeployed`. -/
+theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed := by
+  intro n P N ρ S L q G X qtot Rin cρ reads life rEnc cost ε δ Ω _ store A V _ W e ℓ mm plan win hn hP hN hr hrank
+    hKB hE hB hK hwin hm C γ
+  have hcap := Requirement.cap_of_matches W e ℓ mm plan 32768 N (n * P) win hwin hm
+  have base := StackedSessionConservationSketchDeployed n P N ρ S L q G X qtot Rin cρ reads life rEnc cost ε δ store A
+    hn hP hN hr hrank hKB hE hB hK
+  dsimp only at base
+  refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
+  have h := Requirement.lt_of_cap hcap.1 hcap.2 hx.2
+  simp only [Nat.cast_mul, Nat.cast_ofNat] at h
+  exact h
+
+/-- **The stacked remote audit with relaying side sources, read against a declared circuit's requirement**,
+`Accounting.Guarantees.StackedRequirementRelay`. -/
+theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay := by
+  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc cost costρ tier δ Ω _ store A
+    dbar dw V _ W e ℓ mm plan win hn hP hN hb hrc hdw hr hKB hW hF hE hK hwin hm C γ
+  have hcap := Requirement.cap_of_matches W e ℓ mm plan b N (n * P) win hwin hm
+  have base := StackedSessionConservationRelay n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life
+    rEnc cost costρ tier δ store A dbar dw hn hP hN hb hrc hdw hr hKB hW hF hE hK
+  dsimp only at base
+  refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
+  have h := Requirement.lt_of_cap hcap.1 hcap.2 hx.2
+  simp only [Nat.cast_mul, Nat.cast_ofNat] at h
+  exact h
 
 end Accounting.SecurityProofs
