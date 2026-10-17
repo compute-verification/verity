@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.GS.RadiusDeploy
+import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Sampling.Leaf
 import Proofs.Flock.Claims.Sampling.Select.Scope
 import Proofs.Flock.Claims.Sampling.Session
@@ -19,8 +19,8 @@ import Proofs.Flock.SamplingBoundary
   (`drawLaw_of_slots`), and the verifier's refusal of what is out of scope (`refuses_of`);
 * `KSCount` from `KS` (`KSCount_of_KS`);
 * `Bits` from `KS` and the extractor's expected reruns and own calls (`Bits_of_KS`);
-* `Efficient` at Flock's masked radius decoder (`GS.zkDecodeRD`), its `ListWithin` and `DecoderComplexity` at
-  `deployZk` (`GS.radius_deployZk`), with the extractor's run bounds.
+* `Efficient` at the deployed masked record's own counted decoder: its `ListWithin` and its count at most `zkStepPoly`
+  at the opened word's encoded length (`efficient_zk`), with the extractor's run bounds.
 
 ## What remains: the hypotheses
 
@@ -48,8 +48,8 @@ import Proofs.Flock.SamplingBoundary
 * `huniv : Universal D`: the universal unit's Definition (`verity/ml/private_circuits`) against `Netlist.eval`; no
   branch proves it yet.
 * `hComplete : Complete H D P δc`: waits on the reference prover (ruling 4), so `P` and `δc` are any.
-* `hZK : ZK H D Pz S εzk`: the masked sessions' zero knowledge with the leaf layer's simulator; no branch proves it
-  yet, so `Pz`, `S` and `εzk` are any.
+* `hZK : ZK H D Pz S εzk γzk`: the masked sessions' zero knowledge with the leaf layer's simulator; no branch proves
+  it yet, so `Pz`, `S`, `εzk` and `γzk` are any.
 -/
 
 namespace Claims.Sampling
@@ -77,11 +77,10 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (hown : ∀ decode, ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x))
     (huniv : Universal D)
     {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H D P δc)
-    {Ωz : Type} [Fintype Ωz] (Pz : Wit → Prover Ωz) (S : SimLeak) (εzk : Msg → ℝ) (hZK : ZK H D Pz S εzk) :
+    {N Ωz : Type} [Fintype N] [Nonempty N] [Fintype Ωz] [Nonempty Ωz] (Pz : Wit → Prover (N × Ωz)) (S : SimLeak)
+    (εzk γzk : Msg → ℝ) (hZK : ZK H D Pz S εzk γzk) :
     ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ KS H D ∧ KSCount H D ∧ Bits H D ∧
-      Efficient H D Claims.GS.zkDecodeRD Claims.GS.zkCountedRD Claims.GS.zkSizeRD
-        (Polynomial.C 11 * (Claims.GS.zkPolyR + Polynomial.X)) ∧
-      Complete H D P δc ∧ ZK H D Pz S εzk := by
+      Efficient H D FlockDeploy.zkStepPoly ∧ Complete H D P δc ∧ ZK H D Pz S εzk γzk := by
   have hbind : Binding D := Binding_of_hm96 D own at_ row salt π layer hcommit hrow
   have hscope : ScopeMatches D := scopeMatches_of D hslots hprog
   have hrefuse : Refuses H D := refuses_of H D hscope hchecks
@@ -90,10 +89,11 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     exact hKS
   have hks : KS H D := KS_of iroots (hbind H) (SessionKS_of hKS' hfixed hsessions hnum hε) hopens hfix
     (drawLaw_of_slots D hslots) hrefuse hε
-  have hlist : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ Claims.GS.zkDecodeRD := by
+  have heff : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
+      ∀ os, (D.flock.dec os).2 ≤ FlockDeploy.zkStepPoly.eval (Claims.Flock.wordLen os) := by
     rw [hflock]
-    exact (Claims.GS.radius_deployZk rel).1
+    exact ⟨(FlockDeploy.efficient_zk H rel).2.1, (FlockDeploy.efficient_zk H rel).2.2.1⟩
   exact ⟨hscope, hbind, huniv, faultyBoundary, hks, KSCount_of_KS hks, Bits_of_KS hks hrunsExp hown hε,
-    ⟨hrunsLe _, hrunsExp _, hown _, hlist, (Claims.GS.radius_deployZk rel).2⟩, hComplete, hZK⟩
+    ⟨hrunsLe _, hrunsExp _, hown _, heff.1, heff.2⟩, hComplete, hZK⟩
 
 end Claims.Sampling
