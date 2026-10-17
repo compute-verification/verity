@@ -71,7 +71,8 @@ def ksR (Coin : Type) : Recursion.Deploy Coin where
   parse _ := none
   scopeCheck _ := true
   kS _ := 0
-  stage _ _ := .ret []
+  nC _ := 0
+  stage _ _ _ := .ret []
   vstar _ _ := []
   nS _ := 0
   session _ _ v := v
@@ -403,16 +404,16 @@ theorem sim_out_nil (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS []
     {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (c : (Sim D (zeroI Coin) SO).C []) :
     (Sim D (zeroI Coin) SO).out H Vs θ [] c = [] := by
   unfold Simulator.out Sim
-  simp only [simInner, zeroI, accI, simRounds, spBind, hk]
-  rw [simOuter_zero SO [] _ [] _ c.2 hn]
+  simp only [simInner, simStage, zeroI, accI, simRounds, spBind, hk]
+  rw [simOuter_zero SO [] _ [] _ c.2.2 hn]
   rfl
 
-theorem zk_εzk (D : Recursion.Deploy Coin) (hn : D.nS [] = 0) (t : ℕ) (δ₁ : ℝ) :
+theorem zk_εzk (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0) (t : ℕ) (δ₁ : ℝ) :
     Recursion.εzk D (zeroI Coin) t δ₁ [] = 0 := by
   have : IsEmpty (Fin (D.nS [])) := by rw [hn]; exact Fin.isEmpty'
   unfold Recursion.εzk
   rw [Finset.univ_eq_empty, Finset.sum_empty]
-  simp [zeroI]
+  simp [zeroI, hk]
 
 theorem interact_one (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (hist : List (Msg × Msg)) :
     ZKMal.interact ask pm 1 hist = [(pm hist, ask (hist.map Prod.fst ++ [pm hist]))] := by
@@ -449,7 +450,8 @@ theorem zkmalR_zeroP (circ : Option Msg) (R : Rel Flock.Wit) (H : Msg → Msg) (
     let q := fun y : Fin 1 → UInt8 => Ev (zeroT H (fun as => ((Vs.next x as θ).eval H).1) y)
     refine (Pr_fst (α := Fin 1 → Fin 1 → UInt8) (β := Unit) fun y => q (y 0)).trans (Eq.trans ?_
       (Pr_fst (α := Fin ((accI Coin).V.k (xI (zvR Coin circ) x)) → Fin (zvR Coin circ).saltLen → UInt8)
-        (β := (s : Fin ((zvR Coin circ).nS x)) → (SO x s).C) fun y => q (y ⟨0, Nat.one_pos⟩)).symm)
+        (β := (Fin ((zvR Coin circ).kS x) → Fin ((zvR Coin circ).nC x) → Fin (zvR Coin circ).saltLen → UInt8) ×
+          ((s : Fin ((zvR Coin circ).nS x)) → (SO x s).C)) fun y => q (y ⟨0, Nat.one_pos⟩)).symm)
     exact ZKMal.Pr_equiv (α := Fin 1 → Fin 1 → UInt8)
       (β := Fin ((accI Coin).V.k (xI (zvR Coin circ) x)) → Fin (zvR Coin circ).saltLen → UInt8) (Equiv.refl _)
       fun y => q (y ⟨0, Nat.one_pos⟩)
@@ -458,7 +460,8 @@ theorem zkmalR_zeroP (circ : Option Msg) (R : Rel Flock.Wit) (H : Msg → Msg) (
     have : IsEmpty (Fin ((zvR Coin circ).nS x)) := Fin.isEmpty'
     unfold Recursion.εzk
     simp only [Finset.univ_eq_empty, Finset.sum_empty, zero_add]
-    exact mul_nonneg (mul_nonneg zero_le_two (Nat.cast_nonneg _)) δ₁.2
+    have := δ₁.2
+    positivity
   calc _ = (0 : ℝ) := by simp only [e, sub_self, abs_zero]
     _ ≤ _ := by simp only [hγ, zero_mul, add_zero]; exact hε
 
@@ -561,7 +564,7 @@ theorem ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty �
     (SO : ℕ → Msg → ℕ → OSim) :
     ¬ Recursion.ZK H (zkR Coin) (zeroI Coin) (zkO Coin) (fun _ => ZKMal.quietP N Ω []) SO := fun h =>
   ZKMal.not_zkmalR_of_out H _ _ [] _ _ _ [] ⟨[]⟩ ⟨recStmt, rfl, rfl, trivial⟩ Nat.one_pos
-    (by rw [zk_εzk _ rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
+    (by rw [zk_εzk _ rfl rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
     (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -572,7 +575,7 @@ theorem ZKPriv_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonemp
     ¬ ZKPriv H (zkPR Coin) (zeroI Coin) (zkO Coin) (fun _ => ZKMal.quietP N Ω []) SO := fun h =>
   ZKMal.not_zkmalR_of_out H _ _ [] _ _ _ [] ⟨[]⟩ ⟨{ recStmt with circ := some [] }, rfl, rfl, trivial⟩
     Nat.one_pos
-    (by rw [zk_εzk _ rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
+    (by rw [zk_εzk _ rfl rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
     (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in

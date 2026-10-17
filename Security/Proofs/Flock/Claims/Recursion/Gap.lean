@@ -88,7 +88,8 @@ noncomputable def gD (H : Msg → Msg) : Deploy Bool where
   parse := fun _ => some gStmt
   scopeCheck := fun _ => false
   kS := fun _ => 0
-  stage := fun _ _ => .ret []
+  nC := fun _ => 0
+  stage := fun _ _ _ => .ret []
   vstar := fun _ _ => [[]]
   nS := fun _ => 1
   session := fun _ _ v => ⟨v.msgs.drop 1, v.out⟩
