@@ -7,11 +7,14 @@ heads; the indexer's 32 heads replicated), and the run that settles the RoPE con
 One GPU process writes `<out>/glm53_dsa_capture.json`, the property record `glm53_dsa_capture` (`properties.record`), and the two
 Triton kernels' PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one line per phase, a `ROPE`
 line, then `GLM53-DSA GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else runs when it fails
-(exit 3).  vLLM runs as GLM-5.3's eager engine does on sm_90 (`VLLM_USE_DEEP_GEMM=0` for the FP8 linears; the indexer's DeepGEMM
-kernels load regardless, `utils/deep_gemm.py` `_lazy_init`), with the Triton cache and DeepGEMM's JIT cache in the scratch directory.
-A phase that raises records its error and fails the verdict without stopping the others.
+(exit 3).  vLLM runs at its defaults, as it serves: `engine.env.served_defaults` clears every switch the process inherited before
+vLLM is imported (the indexer's DeepGEMM kernels load whatever `VLLM_USE_DEEP_GEMM` says, sparse_attn_indexer.py's `has_deep_gemm`),
+with the toolchain a served engine's stages get from `pipeline.row_driver` (`CUDA_HOME` and nvcc on `PATH`, which DeepGEMM's JIT
+builds with) and the Triton cache and DeepGEMM's JIT cache in the scratch directory.  A phase that raises records its error and fails
+the verdict without stopping the others.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
+  served     vLLM's switches read back (`served`): not batch invariant, DeepGEMM on and importable; nvcc's version recorded.
   selection  `get_valid_backends` for GLM-5.3's MLA (head size 576, bf16, kv cache "auto", block 64, sparse, 8 heads) puts
              FLASH_ATTN_MLA_SPARSE first, and `is_fused_q_cutedsl_supported` refuses the bf16 query, so `_fused_q_kernel` runs.
   k          `fused_norm_rope` as `DeepseekV32Attention.forward` calls it (attention.py:338-366), twice on fresh caches, over SEQ tokens
@@ -89,9 +92,11 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.engine.env import served_defaults
+from verity_vllm.pipeline.cli import MACHINE
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-dsa-capture/v2"
+SCHEMA = "verity-vllm/glm53-dsa-capture/v3"
 RECORD = "glm53_dsa_capture.json"
 #: GLM-5.3 (tests/check/fixtures/glm_moe_dsa/config.json) at TP8: the indexer's 32 heads of 128 with a 64-wide interleaved RoPE,
 #: top 2048, its cache row 128 e4m3 bytes and a 4-byte scale (kernels.py:63-87); MLA's 8 local heads, rope 64, latent 512, nope 192
@@ -131,12 +136,29 @@ def _error(e: BaseException) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- env
-def environment(work: Path) -> dict[str, str]:
-    """GLM-5.3's sm_90 engine env (TargetProfile `fp8_block_gemm="cutlass"`), the caches in scratch; set before vLLM is imported."""
-    env = {"VLLM_USE_DEEP_GEMM": "0", "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache"),
-           "DG_JIT_CACHE_DIR": str(work / "deep_gemm")}
+def environment(work: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """vLLM's defaults (`served_defaults`), a served engine's toolchain (`CUDA_HOME`, an exported one winning, and `RunEnv.cuda_bin`
+    on `PATH` after the interpreter's directory, as `pipeline.row_driver` sets them) and the caches in scratch, set before vLLM is
+    imported: (the env set, the switches cleared)."""
+    cleared = served_defaults()
+    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache"), "DG_JIT_CACHE_DIR": str(work / "deep_gemm"),
+           "CUDA_HOME": os.environ.get("CUDA_HOME") or MACHINE["RunEnv.cuda_home"],
+           "PATH": f"{os.path.dirname(sys.executable)}:{MACHINE['RunEnv.cuda_bin']}:{os.environ.get('PATH', '')}"}
     os.environ.update(env)
-    return env
+    return env, cleared
+
+
+def served() -> dict[str, Any]:
+    """The switches as vLLM read them: not batch invariant, DeepGEMM on and importable (the indexer's logits), and nvcc's version."""
+    import vllm.envs as envs
+    from vllm.utils.import_utils import has_deep_gemm
+
+    rec: dict[str, Any] = {k: bool(getattr(envs, k)) for k in ("VLLM_USE_DEEP_GEMM", "VLLM_BATCH_INVARIANT")}
+    rec["has_deep_gemm"] = bool(has_deep_gemm())
+    nvcc = shutil.which("nvcc")
+    rec["nvcc"] = nvcc and subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-2:]
+    rec["ok"] = rec["VLLM_USE_DEEP_GEMM"] and not rec["VLLM_BATCH_INVARIANT"] and rec["has_deep_gemm"]
+    return rec
 
 
 def stack() -> dict[str, Any]:
@@ -1263,7 +1285,8 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _verdict(doc: dict[str, Any]) -> bool:
-    return bool(doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("ok") is True and doc["ptx"].get("ok") is True
+    return bool(doc["gate"]["ok"] and doc["served"].get("ok") is True and not doc["errors"] and doc["selection"].get("ok") is True
+                and doc["ptx"].get("ok") is True
                 and doc["bind"].get("ok") is True and doc["rope"].get("ok") is True and doc["topk"].get("ok") is True
                 and all(c["ok"] for c in cases(doc).values()) and _words_ok(doc["totals"]))
 
@@ -1273,13 +1296,13 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=scratch)
     work = Path(tmp.name)
-    env = environment(work)
+    env, cleared = environment(work)
     import torch  # noqa: F401
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": quick, "environment": G._environment(),
-                           "gate": C.gate(min_driver, want_cc, want_sms), "errors": {}, "launches": []}
-    print(f"[glm53-dsa] gate {json.dumps(doc['gate'])}", flush=True)
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "env_cleared": cleared, "served": served(), "quick": quick,
+                           "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms), "errors": {}, "launches": []}
+    print(f"[glm53-dsa] gate {json.dumps(doc['gate'])} served {json.dumps(doc['served'])} cleared {sorted(cleared)}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print("GLM53-DSA GATE-FAIL", flush=True)
@@ -1330,7 +1353,7 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     names = {k: rope.get(k, {}).get("definition") for k in ("k_pe", "q_pe")}
     forms = {k: (rope.get(k, {}).get("L"), rope.get(k, {}).get("H")) for k in ("k_pe", "q_pe")}
     print(f"ROPE k_pe={names['k_pe']} q_pe={names['q_pe']} forms={json.dumps(forms)} settled={rope.get('ok')}", flush=True)
-    print(f"GLM53-DSA {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} totals={json.dumps(doc['totals'])} "
+    print(f"GLM53-DSA {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} totals={json.dumps(doc['totals'])} served={doc['served']['ok']} "
           f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}", flush=True)
     return doc
 

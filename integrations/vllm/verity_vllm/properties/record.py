@@ -76,8 +76,9 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "CublasSplitKGemmF32Out_v1 at the captured split count, every recorded compressor word the selected f32-output "
              "form, every lm_head-shard and indexer-projection word the selected core or split-K bf16-output form, and every "
              "GLM-5.3 q_nope / v absorb word BatchedGemm_v1, bit for bit."),
-    Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v2",
-             "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
+    Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v3",
+             "On the capture's Hopper GPU at vLLM's defaults (read back: not batch invariant, DeepGEMM on), with a served engine's "
+             "toolchain, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v3, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
