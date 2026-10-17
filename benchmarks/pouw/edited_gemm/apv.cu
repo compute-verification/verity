@@ -507,9 +507,9 @@ __global__ void __launch_bounds__(128) vsum(const int8_t* __restrict__ Xt, int8_
 // holds keys 32 jj + 4 t .. + 3 of its chunk (jj = l / 8, t = l % 8: block j = 4 c + jj, residues 4 t + i), forms X = V + b
 // and, with SUMS, X's bytes biased to [0, 255] as two 16-bit pairs (bytes 0 and 2, 1 and 3), scanned over jj by
 // shuffles, over the round's warps through shared memory and over earlier rounds in registers, so Yb = Ycum + 128 is
-// whole a lane a residue: Y0 = byte 0 of Yb ^ 0x80, Y1 = byte 1 of Yb, and (D3, s > 4096: 3 digits, Ycum = Y0 + 256 Y1 +
-// 65536 Y2) Y2 = byte 2 of Yb + 32768 in DG's 4th quarter, which is 0 at s <= 4096 and read by no kernel. Key 0 enters the
-// sums as 0. SUMS false is X alone: vedit's output, what a one-hot cheater still needs
+// whole a lane a residue: Y0 = byte 0 of Yb ^ 0x80, Y1 = byte 1 of Yb and Y2 = byte 2 of Yb + 32768 (D3, s > AP_Y1S;
+// else 0, as Y2 is there). Key 0 enters the sums as 0. SUMS false is X alone: vedit's output, what a one-hot cheater
+// still needs
 constexpr int VF_NT = 256, VF_SM_FIXED = 4 * (512 + 512 + 64);
 template <bool SUMS, bool D3>
 __global__ void __launch_bounds__(VF_NT, 2) vfold(const int8_t* __restrict__ Vt, int8_t* __restrict__ Xt, int8_t* __restrict__ DG,
@@ -611,9 +611,9 @@ __global__ void __launch_bounds__(VF_NT, 2) vfold(const int8_t* __restrict__ Vt,
     }
   }
 }
-// the producers' check past the GEMM's 4096 tokens: a thread a (KV head, channel, residue) walks the blocks, Ycum in full,
-// and counts each DG row whose Y0 + 256 Y1 + 65536 Y2 (the 4th quarter) is not Ycum or whose X_diag is not X, and each Sq
-// that is not the sum of Ycum
+// the producers' check against Ycum itself: a thread a (KV head, channel, residue) walks the blocks, Ycum in full, and
+// counts each DG row whose Y0 + 256 Y1 + 65536 Y2 is not Ycum or whose X_diag is not X, and each Sq that is not the sum
+// of Ycum
 __global__ void vcheck(const int8_t* __restrict__ Xt, const int8_t* __restrict__ DG, const int* __restrict__ Sq, int rows, int s,
                        unsigned long long* bad) {
   const int g = blockIdx.x * blockDim.x + threadIdx.x, row = g / 32, r = g % 32, nJ = s / 32;
@@ -740,7 +740,7 @@ static void vsm(AP& V) { vsum<<<dim3(32, V.kvh), 128, 0, V.st>>>(V.Xt, V.DG, V.S
 template <bool SUMS>
 static void vfl(const int8_t* Vt, int8_t* Xt, int8_t* DG, int* Sq, int* X0, int kvh, int s, const Sig& sg, cudaStream_t st) {
   const size_t sm = (size_t)64 * (s / 128) + VF_SM_FIXED;
-  if (SUMS && s > 4096) vfold<true, true><<<kvh * 32, VF_NT, sm, st>>>(Vt, Xt, DG, Sq, X0, s, sg);
+  if (SUMS && s > AP_Y1S) vfold<true, true><<<kvh * 32, VF_NT, sm, st>>>(Vt, Xt, DG, Sq, X0, s, sg);
   else vfold<SUMS, false><<<kvh * 32, VF_NT, sm, st>>>(Vt, Xt, DG, Sq, X0, s, sg);
 }
 static void vfd(AP& V, const Sig& s) { vfl<true>(V.Vt, V.Xt, V.DG, V.Sq, V.X0, V.kvh, V.s, s, V.st); }
@@ -979,7 +979,7 @@ static int apone(const std::string& arm, int s, int H, int rep) {
 }
 
 #ifndef APV_LIB
-// ---------------------------------------------------------------- the V producers alone, at any s (past the GEMM's 4096)
+// ---------------------------------------------------------------- the V producers alone
 struct VP {
   int s = 0, kvh = 0, rows = 0;
   uint32_t seed = 0, inst = 0;
@@ -1022,15 +1022,6 @@ static std::function<void(VP&)> vparm(const std::string& a) {
   fprintf(stderr, "no producer arm %s\n", a.c_str());
   exit(2);
 }
-// words 0 .. 23 of each 32-word DG row (Y0, Y1, X_diag: r2's vsum writes 0 in the 4th quarter, vfold Y2 past 4096)
-__global__ void dgcmp(const uint32_t* a, const uint32_t* b, size_t rows, unsigned long long* bad) {
-  unsigned long long c = 0;
-  for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < rows * 24; i += (size_t)gridDim.x * blockDim.x) {
-    const size_t w = (i / 24) * 32 + i % 24;
-    c += a[w] != b[w];
-  }
-  if (c) atomicAdd(bad, c);
-}
 static unsigned long long vpcount(VP& P, const std::function<void()>& f) {
   CK(cudaMemsetAsync(P.bad, 0, 8, P.st));
   f();
@@ -1046,7 +1037,7 @@ static unsigned long long vpbad(VP& P, const void* a, const void* b, size_t word
   });
 }
 // poisoned buffers, one key: vfold's DG digits, X_diag and Sq against Ycum recomputed in full (vcheck); its X, X(0), Sq and
-// DG's Y0, Y1 and X_diag against r2's vedit and vsum (all of DG at s <= 4096); vfold_x's X; a no-write control
+// DG against r2's vedit and vsum; vfold_x's X; a no-write control
 static int vgate(int s, int kvh, uint32_t seed) {
   VP P;
   vpsetup(P, s, kvh, seed, true);
@@ -1064,11 +1055,7 @@ static int vgate(int s, int kvh, uint32_t seed) {
   vp_ved(P, sg);
   vp_vsm(P);
   const unsigned long long x_bad = vpbad(P, P.Xt, P.Xr, P.vb / 4), x0_bad = vpbad(P, P.X0, P.X0r, P.x0b / 4),
-                           sq_bad = vpbad(P, P.Sq, P.Sqr, P.sqb / 4),
-                           dg_bad = s <= 4096 ? vpbad(P, P.DG, P.DGr, P.dgb / 4) : vpcount(P, [&] {
-                             dgcmp<<<1024, 256, 0, P.st>>>(reinterpret_cast<const uint32_t*>(P.DG), reinterpret_cast<const uint32_t*>(P.DGr),
-                                                           P.dgb / 128, P.bad);
-                           });
+                           sq_bad = vpbad(P, P.Sq, P.Sqr, P.sqb / 4), dg_bad = vpbad(P, P.DG, P.DGr, P.dgb / 4);
   CK(cudaMemsetAsync(P.Xt, 0xA5, P.vb, P.st));
   vp_vf<false>(P, sg);
   const unsigned long long fx_bad = vpbad(P, P.Xt, P.Xr, P.vb / 4);
@@ -1078,7 +1065,7 @@ static int vgate(int s, int kvh, uint32_t seed) {
   printf("{\"vgate\": true, \"s\": %d, \"kvh\": %d, \"digits\": %d, \"vfold\": {\"ycum_bad\": %llu, \"x_bad\": %llu, \"x0_bad\": %llu, "
          "\"sq_bad\": %llu, \"dg_bad\": %llu}, \"vfold_x\": {\"x_bad\": %llu}, \"control\": {\"x_bad\": %llu}, \"device_ok\": %s, "
          "\"control_rejected\": %s}\n",
-         s, kvh, s > 4096 ? 3 : 2, y_bad, x_bad, x0_bad, sq_bad, dg_bad, fx_bad, c_bad, ok ? "true" : "false",
+         s, kvh, s > AP_Y1S ? 3 : 2, y_bad, x_bad, x0_bad, sq_bad, dg_bad, fx_bad, c_bad, ok ? "true" : "false",
          control_rejected ? "true" : "false");
   vpfree(P);
   return ok && control_rejected ? 0 : 1;
@@ -1117,7 +1104,7 @@ static int vbench(int reps, int s, int kvh) {
       mhz[a].push_back(nv.sm());
     }
   CK(cudaGetLastError());
-  printf("{\"vprod\": true, \"s\": %d, \"kvh\": %d, \"entries\": %zu, \"digits\": %d, \"arms\": {", s, kvh, P.vb, s > 4096 ? 3 : 2);
+  printf("{\"vprod\": true, \"s\": %d, \"kvh\": %d, \"entries\": %zu, \"digits\": %d, \"arms\": {", s, kvh, P.vb, s > AP_Y1S ? 3 : 2);
   for (int j = 0; j < NA; j++) {
     printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"calls\": %d, \"ms_all\": [", j ? ", " : "", names[j].c_str(), median(ms[j]),
            median(mhz[j]), calls[j]);
