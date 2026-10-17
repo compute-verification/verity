@@ -51,8 +51,8 @@ its draw (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `
 masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`); `Json.Goals` proves
 the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`);
 `Json.Files` the proof files' goals, given `RepShapedZk` (`RunZk.rep`, `repDecodesZk_goal`, `repParamsZk_goal`,
-`padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal` given `RecordFitsZk`); `Json.Runs` the session
-running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Count` the sends fitting the rounds (`sendCountZk_goal`);
+`padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal`, the record's length from `readyZk`); `Json.Runs` the
+session running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Count` the sends fitting the rounds (`sendCountZk_goal`);
 `ProverOk` `ProverOkZk` from `Out64` and its rep half `RepRoundsZk` (`proverOkZk`), and `RepRounds` that half
 (`repRoundsZk_goal`); `Lanes` level 0's lane phase from the masked Ligerito returning (`laneConstraints_goal`);
 `Consumed` every recorded round consumed where the rep's steps return (`consumedZk_goal`); `Transfer` a replay
