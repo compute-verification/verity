@@ -1,6 +1,6 @@
 """The partition as a named query over a program, P = Q(C): core's `verity/partition/v1` (`verity.ml.circuits.partition_object`),
-applied here with the template queries `Q_template_instance` v0 and `Q_template_instances` v0, and the programs this
-protocol builds for them.
+applied here with the template queries `Q_template_instance` v0 and `Q_template_instances` v0, `Q_word` v1 at `X = 16`
+and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the template queries.
 
     {"format": "verity/partition/v1", "program": "<SHA-512 of the program>",
      "query": {"name": "Q_template_instance", "version": 0, "params": {"template": "<Definition id>"}}}
@@ -9,8 +9,12 @@ protocol builds for them.
   record made before the canonical envelope names `{"program", "query"}`; `digest` gives it the envelope's rule,
   `SHA-512("verity/partition/v1\\0" || canon(object))`, which the roots registered with it bind.
 * **Units** are core's evaluation (`partition_object.evaluate`) of a query of valid form (`partition_object.validate`):
-  `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries are the
-  only ones applied here; `ranges`, `units` and `strata` read their units in canonical order (node order, then member).
+  `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries,
+  `Q_word` v1 at `X = 16` (the served query) and `Q_call` v1 at `X <= 16` are the ones applied here, so that every unit
+  commits at most `UNIT_BITS` bits, the literal limit: `Q_word`'s width rule lets a unit of one value commit up to `W`
+  bits, and such a program is refused. `ranges`, `units` and `strata` read their units in canonical order (node order,
+  then member, for a template query; Call order, then the Call's own, for `Q_word` and `Q_call`), and `unit_gates` gives
+  each unit's root gates.
 * **Programs**: `population_program` (instances of one template) and `mixed_population_program` (of several).
 
 The verifier holds its own copy of the program and applies the query itself (`units`); it never takes a population or a
@@ -22,8 +26,9 @@ import hashlib
 from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits import partition_object as PO
+from verity.ml.circuits.cut import boundary_widths
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.codec import program_digest
+from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
                                         template_instance_query, template_instances_query)
 from verity.ml.circuits.program import Program
@@ -31,6 +36,9 @@ from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Tuple
 
 _PRE_CANONICAL = {"program", "query"}
+Q_WORD = ("Q_word", 1)
+#: The literal limit: the bits a unit commits.
+UNIT_BITS = 16
 
 
 def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]]) -> Program:
@@ -85,22 +93,59 @@ def digest(obj: Mapping[str, Any]) -> str:
     return PO.digest(obj)
 
 
-def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition:
+def _check_word(part: PO.Partition) -> None:
+    """`Q_word`'s cut commits at most `UNIT_BITS` bits a unit: each Definition's cut, once, on its Call's graph."""
+    seen: set[str] = set()
+    for p, (_k, c) in enumerate(part.calls):
+        fid = descriptor_id(c.fn)
+        if fid in seen:
+            continue
+        seen.add(fid)
+        g, owner = part.graph(p), c.owner()
+        if len(owner) != g.n:
+            raise QueryRefused(f"{fid}'s cut leaves a computing gate out", {"definition": fid})
+        ob, _ = boundary_widths(g, owner)
+        wide = [u for u, b in enumerate(ob) if b > UNIT_BITS]
+        if wide:
+            raise QueryRefused(f"unit {wide[0]} of {fid} commits {ob[wide[0]]} bits, more than {UNIT_BITS}",
+                               {"definition": fid, "unit": wide[0], "bits": ob[wide[0]]})
+
+
+def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition | PO.Partition | PO.CallPartition:
     """`query` applied to `program` by core, once core accepts the query's form; `QueryRefused` when the query is malformed,
-    is not a template query, or does not apply to the program (core's refusals, a program that is not topological among them)."""
+    is not one applied here (a template query, `Q_word` v1 at `X = 16` or `Q_call` v1 at `X <= 16`), does not apply to the
+    program (core's refusals, a program that is not topological among them), or is `Q_word` with a unit of more than
+    `UNIT_BITS` bits."""
     obj = PO.build(program, query)
     v, q = PO.validate(obj), obj["query"]
     if not v.ok:
         raise QueryRefused(f"not a {FORMAT} query ({', '.join(v.codes)}): {q!r}", {"query": q, "codes": list(v.codes)})
-    if (q["name"], q["version"]) not in (PO.Q_TEMPLATE_INSTANCE, PO.Q_TEMPLATE_INSTANCES):
-        raise QueryRefused(f"one-stage applies the template queries, not {q['name']} v{q['version']}", {"query": q})
-    return PO.evaluate(program, q)
+    kind, x = (q["name"], q["version"]), q["params"].get("X")
+    if kind in (PO.Q_TEMPLATE_INSTANCE, PO.Q_TEMPLATE_INSTANCES):
+        return PO.evaluate(program, q)
+    if kind == Q_WORD and x == UNIT_BITS:
+        part = PO.evaluate(program, q)
+        _check_word(part)
+        return part
+    if kind == PO.Q_CALL and x <= UNIT_BITS:
+        return PO.evaluate(program, q)
+    raise QueryRefused(f"one-stage applies the template queries, Q_word v1 at X = {UNIT_BITS} and Q_call v1 at "
+                       f"X <= {UNIT_BITS}, not {q['name']} v{q['version']} at X = {x}", {"query": q})
 
 
 def ranges(program: Program, query: Mapping[str, Any]) -> list[tuple[str, int, int]]:
-    """`query` applied to `program`: per root node computing units, (template id, first unit index, unit count), in
-    canonical order."""
-    return [(tid, lo, n) for _k, tid, lo, n in evaluate(program, query).ranges]
+    """`query` applied to `program`: (template or Definition id, first unit index, unit count) per root node computing
+    units (a template query's) or per Call with units (`Q_word`'s and `Q_call`'s), in canonical order."""
+    part = evaluate(program, query)
+    if isinstance(part, PO.TemplatePartition):
+        return [(tid, lo, n) for _k, tid, lo, n in part.ranges]
+    out, at = [], 0
+    for _k, c in part.calls:
+        n = c.units if isinstance(part, PO.Partition) else len(c.units)
+        if n:
+            out.append((descriptor_id(c.fn), at, n))
+            at += n
+    return out
 
 
 def units(program: Program, query: Mapping[str, Any]) -> int:
@@ -109,9 +154,9 @@ def units(program: Program, query: Mapping[str, Any]) -> int:
 
 
 def strata(program: Program, query: Mapping[str, Any]) -> list[tuple[str, list[list[int]]]]:
-    """`query` applied to `program`, grouped by template: one stratum per template descriptor id, its units as ascending,
-    disjoint half-open ranges `[lo, hi)` with adjacent ones merged, the strata in the order of their first unit. These are
-    the stratified law's strata, which each verifier derives from its own copies."""
+    """`query` applied to `program`, grouped by template or Definition: one stratum per descriptor id, its units as
+    ascending, disjoint half-open ranges `[lo, hi)` with adjacent ones merged, the strata in the order of their first
+    unit. These are the stratified law's strata, which each verifier derives from its own copies."""
     groups: dict[str, list[list[int]]] = {}
     for tid, lo, n in ranges(program, query):
         rs = groups.setdefault(tid, [])
@@ -122,6 +167,26 @@ def strata(program: Program, query: Mapping[str, Any]) -> list[tuple[str, list[l
     return list(groups.items())
 
 
+def unit_gates(program: Program, query: Mapping[str, Any]) -> list[tuple[int, int]]:
+    """Each unit's root gates `[lo, hi)`, by unit: an instance's (`TemplatePartition.gates`), a `Q_call` unit's interval
+    (`CallPartition.gates`), or the span of the computing gates a `Q_word` unit owns, from the least to past the greatest,
+    which another unit's gates may interleave."""
+    part = evaluate(program, query)
+    if not isinstance(part, PO.Partition):
+        return [part.gates(u) for u in range(part.population)]
+    out: list[tuple[int, int]] = []
+    offsets = program.root.body.offsets
+    for p, (k, c) in enumerate(part.calls):
+        keep, span = part.graph(p).keep, [None] * c.units
+        for i, u in enumerate(c.owner()):
+            g = offsets[k] + keep[i]
+            span[u] = (g, g + 1) if span[u] is None else (min(span[u][0], g), max(span[u][1], g + 1))
+        if None in span:
+            raise QueryRefused(f"a unit of {descriptor_id(c.fn)} owns no gate", {"definition": descriptor_id(c.fn)})
+        out += span
+    return out
+
+
 __all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "mixed_population_program", "partition",
            "population_program", "program_digest", "program_sha512", "ranges", "strata", "template_instance_query",
-           "template_instances_query", "units"]
+           "template_instances_query", "unit_gates", "units", "UNIT_BITS"]

@@ -496,7 +496,7 @@
    },
    "Claims.Sampling.Binding": {
     "fails": "Claims.Sampling.Binding_fails",
-    "meets": []
+    "meets": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
    },
    "Claims.Sampling.Bits": {
     "fails": "Claims.Sampling.Bits_fails",
@@ -5568,6 +5568,12 @@
     "          (Eq (Claims.ZKMal.zkDeployed rel nr T t).abort List.nil))))"
    ],
    "type_hash": "52f5b47364f4690bdf9114529dc51477c6fd881636bb104e4f2d5233e46992ac"
+  },
+  "Claims.Sampling.Binding_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.Binding_meets_one": {
+   "owner": "@proofs"
   }
  },
  "shape": {
