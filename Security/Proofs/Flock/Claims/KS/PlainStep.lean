@@ -450,4 +450,49 @@ def PlainSimLockstep (x : Claims.Msg) : Prop :=
 theorem plainSimLockstep (x : Claims.Msg) : PlainSimLockstep x := fun _ hs hin _ _ _ hset st h _ P ω =>
   ⟨plainSimReps P ω hset h _ (plain_mPts hs hin hset).2, plainSimProofs P ω st hset _ (plain_mPts hs hin hset).2⟩
 
+/-! ## The abort -/
+
+/-- **The verdict at the draw refuses an outcome without proof files**: what `wrPD` writes has the outcome's proof
+files wherever `verify` accepts it (`recordsLiveAtD_wrPD`), and `verify` refuses none (`not_acceptsAtD_nil`). -/
+theorem not_plainVerdictAt_nil (I : Discharge.Exec.Inputs) (d : Lean.Json) {N mPts : ℕ} (C : Fin N → List 𝔽)
+    (rootB₀ : Array ByteArray) {o : LiveOutJ 1 mPts} (h : o.proofs = #[]) : ¬ plainVerdictAt I d C rootB₀ o := by
+  rintro ⟨hA, -, -⟩
+  have hp := (Claims.Bridge.PlainDraw.recordsLiveAtD_wrPD I d o hA).1
+  rw [h] at hp
+  generalize Claims.Bridge.PlainDraw.wrPD I d o = t at hA hp
+  rcases t with ⟨record, proofs⟩
+  subst hp
+  exact Claims.Bridge.PlainDraw.not_acceptsAtD_nil I (some d) record hA
+
+/-- **Where `P`'s run at `plainΦ`'s coins is rejected, the simulator's live outcome has no proof files**: its last
+message is empty. -/
+theorem plainSim_proofs_nil {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (st : Stmt) (hset : setupOf false x = some (ins, spec, sts))
+    (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
+    (hna : (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r'))).out ≠ .acc) :
+    (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSim P x spec st) x
+      (ω, u) r').proofs = #[] := by
+  rw [plainSim_liveOut P x spec st ω hw hm1 u r' (plainN_add hset)]
+  show ((finalOf (plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r') (plainN x))).map
+      Final.proofs).getD #[] = #[]
+  rw [plainB, ite_eq_right (lt_irrefl _), plainAcc, decide_eq_false hna]
+  rfl
+
+/-- **The abort** (`PlainSimAbort`): at every plain statement in scope with one table, every prover `P` and its tape
+`ω`, the plain simulator's live outcome fails the verdict at any draw wherever `P`'s run at `plainΦ`'s coins is
+rejected. -/
+def PlainSimAbortAt (x : Claims.Msg) : Prop :=
+  ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
+    (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
+    (_ : tables false x = [(spec, st)]) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (I : Discharge.Exec.Inputs)
+    (d : Lean.Json) {N : ℕ} (C : Fin N → List 𝔽) (rootB₀ : Array ByteArray),
+    PlainSimAbort P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
+      (plainSim P x spec st) (plainΦ x spec st) (plainVerdictAt I d C rootB₀)
+
+/-- **The abort holds at every statement** (`plainSim_proofs_nil`, `not_plainVerdictAt_nil`). -/
+theorem plainSimAbortAt (x : Claims.Msg) : PlainSimAbortAt x :=
+  fun _ hs hin _ _ _ hset st _ _ P ω I d _ C rootB₀ u r' hna =>
+    not_plainVerdictAt_nil I d C rootB₀
+      (plainSim_proofs_nil P ω st hset _ (plain_mPts hs hin hset).2 u r' hna)
+
 end FlockDeploy.KS

@@ -267,5 +267,7 @@ its coins' bytes, and its acceptance does not read its last coin (`PlainLock`: `
 decides and accepts, the record's two rep streams hold `P`'s round messages with their coins, each of the table's coin
 counts, so the simulator's live outcome has the record's reps and proof files at every plain statement in scope, whose
 link points fit a live coin (`PlainStep`: `FlockDeploy.KS.plain_decides_record`, `FlockDeploy.KS.plain_mPts`,
-`FlockDeploy.KS.PlainSimLockstep`, `FlockDeploy.KS.plainSimLockstep`).
+`FlockDeploy.KS.PlainSimLockstep`, `FlockDeploy.KS.plainSimLockstep`); where it is rejected, the simulator's last
+message is empty, and the verdict at the draw refuses an outcome without proof files (`FlockDeploy.KS.PlainSimAbortAt`,
+`FlockDeploy.KS.plainSimAbortAt`).
 -/
