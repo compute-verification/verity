@@ -31,3 +31,10 @@ and store, a mutation of them or a random one, placed on a few devices with PoUW
 instances; then Programs end to end through `requirement.execution`, `pack` and a placement on three devices: the toy
 decoder, `b1.Serve` at the vLLM tests' tiny configuration and
 `b1.RMSNormFusedCudaV1` at N = 64.
+
+`tests/test_census_and_memory_map.py` holds two more producers to the same Lean through the same instance format:
+`requirement.from_census` on those Programs' censuses (a census value per value, a value of 0 bits per scheduled root
+Call), and memory-map/v1 as the Commit's builder (`verity_vllm.commit.memory_map`) records it, a session's KV rows in the
+blocks it wrote under the free convention of 21:52Z (step s's record takes effect after step s's reads), where
+`StoreMatches` and `PlanMatches` fail at exactly the steps with a live row in a block not yet complete, or a block freed
+in the record after its last read.
