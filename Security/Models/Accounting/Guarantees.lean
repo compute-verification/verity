@@ -22,6 +22,7 @@ import Models.Accounting.Guarantees.RateAuditRemote
 import Models.Accounting.Guarantees.RateAuditSketch
 import Models.Accounting.Guarantees.Responder
 import Models.Accounting.Guarantees.Remote
+import Models.Accounting.Guarantees.Requirement
 import Models.Accounting.Guarantees.Sketch
 import Models.Accounting.Guarantees.Stacking
 import Models.Accounting.Guarantees.Tag
@@ -37,4 +38,5 @@ bandwidth audit's conservation and node-level guarantees on the actual-circuit m
 theorem, runtime corollary, localization, composition and fit, the obligations B1, B2 and B4, the tag and sketch
 guarantees, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
 receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an isolated node,
-and stacking's carrier lemma with the deployed remote audit for devices that read from carriers. -/
+a declared circuit's live and read bits from the blocks the audit credits, and stacking's carrier lemma with the
+deployed remote audit for devices that read from carriers, also read against a declared circuit's requirement. -/
