@@ -32,6 +32,7 @@ import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.Complete.Zk.Extras
 import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
 import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
+import Proofs.Flock.Claims.Complete.Zk.LaneAgree
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
@@ -63,6 +64,7 @@ masked replay that returns stops and the coins its claims read (`replayWith_ret`
 passing on the replay's claims, given the extra claims' algebra `RsExtrasZk` (`ringSwitchZk_goal`); `Extras` that
 algebra at the deployed relation, from `RelS` (`CaseZk.model`, `rsExtrasZk`); `LigeritoPos` what a masked Ligerito
 that returns gives, by coin position: its record and where it stops (`zkLigeritoWith_pos`, `RunZk.lg_pos`), and
-`LigeritoProverPos` what the masked prover records, by send position (`ligeritoPZk_pos`); `Complete` assembles them
-into `complete_zk`, from those premises and the goals not yet proved, and `complete_zk_relation` at the deployed
-relation. -/
+`LigeritoProverPos` what the masked prover records, by send position (`ligeritoPZk_pos`); `LaneAgree` the two records
+giving the same lane constraints where the rounds' coins are the sends' replies and the two Ligeritos start together
+(`lanes_agree`); `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved, and
+`complete_zk_relation` at the deployed relation. -/

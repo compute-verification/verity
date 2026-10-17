@@ -163,7 +163,8 @@ theorem transcript_eq {t : Transcript} {R : Array Round} {k : ℕ} {p : ByteArra
 set_option maxHeartbeats 4000000 in
 /-- **What the masked Ligerito returns, by coin position**: the target, level 0's out-of-domain coin (round
 `t.k + 1`'s) with the proof's first out-of-domain value, the lane rounds' `K` coins and the pair's, and it ends at round
-`t.k + k0 + 7 + 11 R` of the same rounds with nothing pending, whatever the hashes and the proof. -/
+`t.k + k0 + 7 + 11 R` of the same rounds with nothing pending, whatever the hashes and the proof; those rounds issued
+one coin, then two each. -/
 theorem zkLigeritoWith_pos (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0)
     (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (h2 : 2 ≤ sch.levels.size)
@@ -172,7 +173,9 @@ theorem zkLigeritoWith_pos (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) 
     rc.target = T ∧ rc.ood = #[((t.rounds[t.k + 1]!).coins.getD 0 0, p.oodValues[0]!)] ∧
       rc.challenges.size = sch.k0 ∧ (∀ j < sch.k0, rc.challenges[j]! = coinK (t.rounds[t.k + 2 + j]!).coins) ∧
       rc.rho = (coinK (t.rounds[t.k + 2 + sch.k0]!).coins, coinK (t.rounds[t.k + 3 + sch.k0]!).coins) ∧
-      t' = ⟨t.rounds, t.k + (sch.k0 + 7 + 11 * (sch.levels.size - 1)), ByteArray.empty⟩ := by
+      t' = ⟨t.rounds, t.k + (sch.k0 + 7 + 11 * (sch.levels.size - 1)), ByteArray.empty⟩ ∧
+      (t.rounds[t.k + 1]!).n = 1 ∧ (∀ j < sch.k0, (t.rounds[t.k + 2 + j]!).n = 2) ∧
+      (t.rounds[t.k + 2 + sch.k0]!).n = 2 ∧ (t.rounds[t.k + 3 + sch.k0]!).n = 2 := by
   obtain ⟨hrE, hkE⟩ := zkLigeritoWith_rounds hs ms sch T cap p basisAt zl hn hk0 h2 hq h
   unfold Zk.ligeritoWith at h
   simp only [liftTM_V, liftLM_V] at h
@@ -190,13 +193,13 @@ theorem zkLigeritoWith_pos (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) 
   obtain ⟨_, t₆, h₆, h₄⟩ := lift_bind h₄
   have k₆ := absorbF_ok h₆
   obtain ⟨t₇, k₇, h₄⟩ := claimPow_bind h₄
-  obtain ⟨-, bc, t₈, ebc, hr₈, hk₈, -, h₄⟩ := lsampleWith_eq hs h₄
+  obtain ⟨hn₈, bc, t₈, ebc, hr₈, hk₈, -, h₄⟩ := lsampleWith_eq hs h₄
   have h₄ := lmodify_bind h₄
   obtain ⟨m₀, t₉, -, k₉, h₄⟩ := nextMsg_bind h₄
   have h₄ := lmodify_bind h₄
   obtain ⟨lane, st₁₀, t₁₀, h₁₀, h₄⟩ := lbind_ok h₄
   rw [lforIn_range_eq] at h₁₀
-  obtain ⟨hr₁₀, hk₁₀, ho₁₀, hsz₁₀, -, hch₁₀, hρ₁₀, -⟩ := lane_rec _ sch.k0 (by
+  obtain ⟨hr₁₀, hk₁₀, ho₁₀, hsz₁₀, -, hch₁₀, hρ₁₀, hnl₁₀, hnρ₀, hnρ₁⟩ := lane_rec _ sch.k0 (by
       intro i v st tE bv st' tE' hiB hb
       obtain ⟨hnR, r, tR, rfl, hrR, hkR, -, hb⟩ := lsampleKWith_eq hs hb
       have hb := lmodify_bind hb
@@ -337,18 +340,27 @@ theorem zkLigeritoWith_pos (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) 
   have eb : (st₁₈.oods[0]!).beta = (t.rounds[t.k + 1]!).coins.getD 0 0 := by
     rw [getElem!_of_getElem? hI₁₈, ← er₇, ← ek₇]
     exact ebc
-  refine ⟨rfl, ?_, by simpa using hsz₁₀, fun j hj => ?_, ?_, transcript_eq hrE hkE hp₁₈⟩
+  refine ⟨rfl, ?_, by simpa using hsz₁₀, fun j hj => ?_, ?_, transcript_eq hrE hkE hp₁₈, ?_, fun j hj => ?_, ?_, ?_⟩
   · show #[((st₁₈.oods[0]!).beta, p.oodValues[0]!)] = _
     rw [eb]
   · have := hch₁₀ j hj
     simp only [Array.size_empty, Nat.zero_add] at this
     rw [this, er₉, ek₉]
   · rw [hρ₁₀, er₉, ek₉, show t.k + 2 + sch.k0 + 1 = t.k + 3 + sch.k0 by omega]
+  · rw [← er₇, ← ek₇]
+    exact hn₈
+  · rw [← er₉, ← ek₉]
+    exact hnl₁₀ j hj
+  · rw [← er₉, ← ek₉]
+    exact hnρ₀
+  · rw [show t.k + 3 + sch.k0 = t.k + 2 + sch.k0 + 1 by omega, ← er₉, ← ek₉]
+    exact hnρ₁
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The run's masked Ligerito, by coin position**, at table 0's `--zk` schedule: its record is the coins of the rounds
-the ring switch left it, and it ends `k0 + 7 + 11 R` rounds on with nothing pending. -/
+the ring switch left it, and it ends `k0 + 7 + 11 R` rounds on with nothing pending; those rounds issued one coin, then
+two each. -/
 theorem RunZk.lg_pos (hLg : LigeritoZk H rel) (o : RunZk H rel) {st : Flock.Stmt}
     (htabs : o.tabs = #[Setup.ofCircuit st]) {v : Schedule × ℕ} (hv : Zk.schedule st.m = .ok v) (hsch : o.sch 0 = v.1)
     {r : ℕ} (hr : r < 2) :
@@ -360,7 +372,11 @@ theorem RunZk.lg_pos (hLg : LigeritoZk H rel) (o : RunZk H rel) {st : Flock.Stmt
       (o.lg 0 r).1.rho = (coinK ((o.sw 0 r).2.rounds[(o.sw 0 r).2.k + 2 + v.1.k0]!).coins,
         coinK ((o.sw 0 r).2.rounds[(o.sw 0 r).2.k + 3 + v.1.k0]!).coins) ∧
       (o.lg 0 r).2 = ⟨(o.sw 0 r).2.rounds, (o.sw 0 r).2.k + (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)),
-        ByteArray.empty⟩ := by
+        ByteArray.empty⟩ ∧
+      ((o.sw 0 r).2.rounds[(o.sw 0 r).2.k + 1]!).n = 1 ∧
+      (∀ j < v.1.k0, ((o.sw 0 r).2.rounds[(o.sw 0 r).2.k + 2 + j]!).n = 2) ∧
+      ((o.sw 0 r).2.rounds[(o.sw 0 r).2.k + 2 + v.1.k0]!).n = 2 ∧
+      ((o.sw 0 r).2.rounds[(o.sw 0 r).2.k + 3 + v.1.k0]!).n = 2 := by
   have h0 : 0 < o.tabs.size := by rw [htabs]; simp
   obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams st.m v.1 v.2 hv
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
