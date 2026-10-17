@@ -180,9 +180,9 @@ def FinalFitsZk : Prop :=
 
 /-! ### B's checks -/
 
-/-- **The record's draw is the statement's.** -/
+/-- **The record's draw is the statement's**, whatever its key order (`drawEq`). -/
 def DrawMatchesZk : Prop :=
-  ∀ o : RunZk H rel, (FlockSoundness.Discharge.Exec.recordDraw o.record == o.s.read.draw) = true
+  ∀ o : RunZk H rel, drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
 /-- **The record's live session reads** (`liveOf`: the record is JSON with its link, points and streams). -/
 def LiveReadsZk : Prop := ∀ o : RunZk H rel, liveOf o.spec o.record = .ok o.live
