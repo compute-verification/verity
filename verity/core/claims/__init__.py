@@ -190,14 +190,15 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "
           "which sketches cost less to read than the blocks themselves, such as a table of precomputed sketches, is "
           "outside it", "Rate sketch store as blocks"),
-    # stacking's bridge from a carrier's rounding budget to the blocks its circuit can encode, q <= b * R / rEnc:
+    # stacking's bridge from a carrier's budgeted gates to the blocks its circuit can encode, q <= b * R / rEnc:
     # `Accounting.Assumptions.CircuitEncodeHardness` (Security/Models/Accounting/Assumptions/Stacking.lean), read by
-    # Accounting.Guarantees.StackedSessionConservationSketchDeployed and StackedSessionConservationRelay; false for
-    # circuits with FP8 or BF16 matmuls
+    # the stacking guarantees at the circuit model's cost (`encodeBitsCost`); it follows from encode-chain hardness
+    # where the model has an honest circuit (Accounting.Guarantees.CircuitEncodeHardnessOfChain)
     Entry("circuit-encode-hardness", "assumption",
-          "Circuit encode hardness: an exact-integer circuit (integer matrix products that neither wrap nor clamp, linear "
-          "maps, roundings) computing x of a block's b encoded bits, from the block's payload and anything else it holds, "
-          "uses at least x * rEnc / b roundings, with no amortization across blocks",
+          "Circuit encode hardness: in the circuit model (Definitions/Accounting/Gates), computing x of a block's b "
+          "encoded bits, charged as the codec words those bits fill, costs at least x * rEnc / b budgeted gates, with no "
+          "amortization across blocks; a function of a block's encoding cheaper than its words (a word's parity) is "
+          "outside the charge",
           "Circuit encode hardness", "conjectured"),
     # what lets the stacking guarantees treat a programmed store (blocks written after the seed) as uniform:
     # `Accounting.Assumptions.KeyBinding` (Security/Models/Accounting/Assumptions/Stacking.lean); the seed's key alone
