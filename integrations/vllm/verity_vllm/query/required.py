@@ -7,7 +7,8 @@ What this module DECIDES (structure + correspondence, no by-name table):
   module reads (F-r19-int-20) is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
   that reads no Value, `module_body.literal_calls`) is the descriptor's: never a boundary Value, never protocol-required.
 * WHERE a Value lives: the producing Call's recorded owning module (correspondence), mapped to the implementation's path; a
-  collective SITE's at its enclosing module, invocation k (`collective_sites`).
+  collective SITE's at its enclosing module, invocation k (`collective_sites`); at `<module>/<fx node>` when another fx node of the
+  module produces a member of the same name at the step (`Population.contested`): two producers never share an identity.
 * WHAT the member is called, structurally (`member_name`): the port name when the Definition returns a tuple (`<hint>.<port>` when
   the Build recorded a hint, which names the Call); else the recorded return-slot hint; else `out`.  How a runtime tensor carries
   it (vLLM's return slots, a tap's label) is the binding's (`verity_vllm.query.manifest.bind`), never a spelling here.
@@ -386,9 +387,10 @@ class Population:
 
     def program_path(self, cid: int) -> str:
         """The Program module path the required Values of Call `cid` are spelt under: its site path for a collective SITE, `<module>/<fx
-        node>` for a Call whose required Values are all Call boundaries inside its module body, else its owning module.
-        `collective_sites` aliases a site path to its (enclosing module, k)."""
-        if cid in self.interior_calls:
+        node>` for a Call whose required Values are all Call boundaries inside its module body or whose member another fx node of its
+        module produces at its step (`contested`), else its owning module.  `collective_sites` aliases a site path to its (enclosing
+        module, k)."""
+        if cid in self.interior_calls or cid in self.contested:
             return f"{self.corr.module_of(cid)}/{self.corr.name(cid).node}"
         return self.norm_site.get(cid) or self.site.get(cid) or self.corr.module_of(cid)
 
@@ -396,6 +398,25 @@ class Population:
     def interior_calls(self) -> frozenset[int]:
         """The Calls all of whose required Values are `interior`."""
         return frozenset({v.call for v in self.interior} - {v.call for v in self.required.values if v.call >= 0 and v not in self.interior})
+
+    @functools.cached_property
+    def contested(self) -> frozenset[int]:
+        """The Calls spelt at their fx node though they are spelt at their module otherwise: two fx nodes of one module produce a member
+        of the same name at one step (DeepSeek-V4's compressor kv_score Gemm and wo_a einsum, both `out` of the attention module; a
+        layer's two mHC post-pres).  Two producers never share an identity, and the binder tells them apart by Definition and port, in
+        Program order.  The UNRETURNED Calls count, so an omission is never spelt as a required Value."""
+        keyed: list[tuple[int, tuple[int, str, str]]] = []
+        for cid in self.producers():
+            if cid in self.interior_calls or cid in self.site or cid in self.norm_site:
+                continue
+            keyed += [(cid, (self.step_of(cid), self.corr.module_of(cid), cm.member)) for cm in self.members_of(cid)]
+        for cid in self.unreturned:
+            c = self.P.call(cid)
+            keyed += [(cid, (self.step_of(cid), self.corr.module_of(cid), member_name(c, p, self.corr.name(cid)))) for p in c.port_table]
+        nodes: dict[tuple[int, str, str], set[str]] = defaultdict(set)
+        for cid, key in keyed:
+            nodes[key].add(self.corr.name(cid).node)
+        return frozenset(cid for cid, key in keyed if len(nodes[key]) > 1)
 
     def member(self, v: ValueRef) -> CallMember:
         """The manifest member of the required Value `v` of a (non-sampling) Call."""
