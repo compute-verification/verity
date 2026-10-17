@@ -162,11 +162,14 @@ the simulation of the runs alone (`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.
 to it (`FlockDeploy.KS.RecordDrawEquiv`, `FlockDeploy.KS.recordDrawEquiv`). At those coins, a deployed event
 that the live event implies bounds the mixture, the third bound's form (`PlainThird`:
 `FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision as the events, KS at the
-deployed plain verifier's trimmed record holds from a live prover for each prover that simulates its accepting runs,
-whose self-clashes give its accepting runs with a collision and whose fork bound holds, and the record's draw verbatim
-(`PlainSimW`: `FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
-`FlockDeploy.KS.plainLiveWrPAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). Two different columns an accepted plain
-run's reps open at one position collide in its own log (`ConflictTied`: `FlockDeploy.KS.plainRawCols`,
+deployed plain verifier's trimmed record holds from a live prover for each prover, with a finite tape and coins of
+uniform law, that simulates its accepting runs, whose self-clashes give its accepting runs with a collision and whose
+fork bound holds, and the record's draw verbatim (`PlainSimW`: `FlockDeploy.KS.PlainClashRun`,
+`FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`, `FlockDeploy.KS.plainLiveWrPAt_of_sim`,
+`FlockDeploy.KS.plain_KS_of_sim`). The tape may hold the rest of each deployed coin (`plainCoins`) or uniform functions
+read at the live coins seen so far, so that a fork that redraws them reads fresh entries (`LiveMix`:
+`Claims.Bridge.Live.fnC`, `Claims.Bridge.Live.Pr_fnC`, `Claims.Bridge.Live.Pr_fnAt`). Two different columns an
+accepted plain run's reps open at one position collide in its own log (`ConflictTied`: `FlockDeploy.KS.plainRawCols`,
 `FlockDeploy.KS.plain_opening_raw`, `FlockDeploy.KS.plain_selfClash_tied`), so the simulator's self-clashes at level
 0 need only give such columns (`PlainSimW`: `FlockDeploy.KS.PlainRawClashRun`, `FlockDeploy.KS.plainClashRun_of_raw`).
 -/
