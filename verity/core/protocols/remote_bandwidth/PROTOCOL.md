@@ -757,6 +757,28 @@ and each window's, from it plus the node's capacities.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
     on one clock would.
+- **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
+  circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three
+  of its gaps are on the audit's side. `ledger` takes the link as `requirement`, a `RequirementLink`: whether its
+  proofs hold, the density \(D\) and the circuit's read bits at each step. On it, a pass's credit is its credited
+  receipts at \(D\) bits each, at most the circuit's read bits at the pass's step, and the ledger says it is linked
+  (`Ledger.linked`); without it, the credit is the store's, flagged as such. The checks behind the link belong to the
+  units named below, and the ledger takes them as given.
+  - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
+    gather's unselected rows, requests absent from the step's batch, unrouted experts. Their receipts are capped at
+    the circuit's reads at the pass's step (`read_bits`, `requirement.Requirement.read_bits`). That each receipted
+    block is one the circuit reads at that step (`plan = readBlocks s`, so a block of an unread row is in no plan)
+    is the plan unit's to prove (I4), against the memory map and the requirement, inside zero knowledge.
+  - *Partly filled blocks.* A block holding fewer than \(B\) bits of the circuit's values (a request's last block,
+    values of different lifetimes sharing a block) would overstate the credit by \(B/D\) if it counted whole. On the
+    link, a receipt counts \(D\) bits, the fewest any planned block carries. \(D\) is the census's to prove from its
+    layout rule (`Packs`), and \(D = B\) is the rule "full blocks only". The sampling term still charges a whole
+    block for a wrong receipt.
+  - *Registered blocks past their last read.* memory-map/v1 frees a registered block like a written one: a free of a
+    slot below \(N\) releases it, and no later plan may hold it (`Session.release`). The writer records the free at
+    the step that reads the block's values for the last time. That each free is at its values' last read is the
+    memory-map unit's to prove (I4). Until it does, a dense decoder's weights, which every step reads, need no free,
+    and the census must show it.
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
   its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
   but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that
