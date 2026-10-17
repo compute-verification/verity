@@ -4656,6 +4656,12 @@
    "assumptions": [],
    "type_hash": "e57381cb5ec70754de5727e83fd659312830ca151e3abe1da5c28e8c03580b3b"
   },
+  "Pouw.SecurityProofs.Receipt.DuoPairNoKernel": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoWordInjective": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK : Pouw.Guarantees.RelativeSecurity.OverlapFloorK"],
@@ -4817,6 +4823,14 @@
    },
    "Accounting.SecurityProofs.B4Covered": {
     "function": "Accounting.Actual.Run.acts",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoWordInjective": {
+    "function": "Pouw.Receipt.duoWord",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoPairNoKernel": {
+    "function": "Pouw.Receipt.duoPair",
     "outcome": "none"
    }
   },
