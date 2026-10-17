@@ -14,7 +14,8 @@ of a good case, its rep `r` from the sends after the link's and the `2 i + r` ea
   `Readable.relS_only`).
 * `RepIn`: the rep's inputs: the table's `--zk` schedule, its masked level-0 commitment of its packed trace under the
   tape's row, its extra claims at link points of its `m_pts`, and its pads' commitment.
-* `CoinsT`: the coins `¬ BadZk` gives a rep from `n` sends (`Case.coinsT`): its zerocheck outer coins are not `1`, its
+* `CoinsT`: the coins a good case gives a rep from `n` sends (`Case.coinsT`): its sends fit the verifier's coins (the
+  last rep ends at `1 + rounds`, `repStart_last`), and, from `¬ BadZk`, its zerocheck outer coins are not `1`, its
   level-0 pair coins are independent, and its inner `β` is not `0`.
 * `repRoundsT`: a rep's recorded rounds, `repRounds true` at its extra claims (`repRoundsT_eq`). `ProverRunsT` says a
   returning rep records that many, so table `i`'s rep `r` starts at `repStartZk` (`Run.start_eq`).
@@ -62,11 +63,11 @@ def piopT (st : Flock.Stmt) (e : Array Claim) : ℕ := (st.m + st.c.kLog - 6) + 
 def repRoundsT (st : Flock.Stmt) (v : Schedule × ℕ) (e : Array Claim) : ℕ :=
   (st.m + (st.c.kLog - 6)) + ((2 + e.size) + 1) + (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)) + 4
 
-/-- **The rep's good coins** from `n` sends (`¬ BadZk`'s at a rep starting there): its zerocheck outer coins (its
-second round, elements `0` to `m − 14`) are not `1`, its level-0 pair coins (Ligerito's rounds `k_0 + 2` and
-`k_0 + 3`) are independent, and its inner `β` is not `0`. -/
+/-- **The rep's good coins** from `n` sends (`¬ BadZk`'s at a rep starting there): its sends fit the coins, its
+zerocheck outer coins (its second round, elements `0` to `m − 14`) are not `1`, its level-0 pair coins (Ligerito's
+rounds `k_0 + 2` and `k_0 + 3`) are independent, and its inner `β` is not `0`. -/
 def CoinsT (st : Flock.Stmt) (v : Schedule × ℕ) (e : Array Claim) {k : ℕ} (r : Fin k → Coin) (n : ℕ) : Prop :=
-  (∀ j < st.m - 13, (Claims.coinSeq r (n + 1)).at j ≠ 1) ∧
+  n + repRoundsT st v e < k ∧ (∀ j < st.m - 13, (Claims.coinSeq r (n + 1)).at j ≠ 1) ∧
     ¬ rhoDep r (n + piopT st e + (v.1.k0 + 2)) ∧
     (n + piopT st e + (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)) + 2 < k →
       (Claims.coinSeq r (n + piopT st e + (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)) + 2)).at 0 ≠ 0)
@@ -195,8 +196,29 @@ theorem repStart_succ (spec : SessionSpec) (sts : Array Flock.Stmt) (q : ℕ) :
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
   omega
 
-/-- **Table `q / 2`'s rep `q % 2` of a good case has good coins** (`CoinsT`) from `repStartZk` sends: its slots are
-`BadZk`'s. -/
+theorem repStart_mono (spec : SessionSpec) (sts : Array Flock.Stmt) {a b : ℕ} (h : a ≤ b) :
+    repStartZk spec sts a ≤ repStartZk spec sts b := by
+  induction h with
+  | refl => exact le_rfl
+  | step _ ih => rw [repStart_succ]; omega
+
+/-- The last rep ends at the session's recorded rounds, after the link's send. -/
+theorem repStart_last (spec : SessionSpec) (sts : Array Flock.Stmt) :
+    repStartZk spec sts (2 * sts.size) = 1 + rounds true spec sts := by
+  have h : ∀ n, repStartZk spec sts (2 * n) =
+      1 + 2 * ((List.range n).map fun i => repRounds true spec sts[i]!).sum := by
+    intro n
+    induction n with
+    | zero => simp [repStartZk]
+    | succ n ih =>
+      rw [show 2 * (n + 1) = 2 * n + 1 + 1 by omega, repStart_succ, repStart_succ, ih, List.range_succ,
+        List.map_append, List.sum_append, show (2 * n + 1) / 2 = n by omega, show 2 * n / 2 = n by omega]
+      simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+      omega
+  rw [h, rounds_eq]
+
+/-- **Table `q / 2`'s rep `q % 2` of a good case has good coins** (`CoinsT`) from `repStartZk` sends: its sends end
+by the last rep's, inside the verifier's coins, and its slots are `BadZk`'s. -/
 theorem Case.coinsT (c : Case H rel) {q : ℕ} (hq : q < 2 * c.sts.size) {v : Schedule × ℕ}
     (hv : Zk.schedule c.sts[q / 2]!.m = .ok v) {e : Array Claim}
     (he : e.size = c.spec.points * c.sts[q / 2]!.regions.size) :
@@ -204,7 +226,17 @@ theorem Case.coinsT (c : Case H rel) {q : ℕ} (hq : q < 2 * c.sts.size) {v : Sc
   rcases v with ⟨sch, tp⟩
   have hp : piopT c.sts[q / 2]! e = piopRoundsZk c.spec c.sts[q / 2]! := by
     simp only [piopT, piopRoundsZk, he]
-  refine ⟨fun j hj h1 => c.good (Or.inl ⟨(repStartZk c.spec c.sts q + 1, j), ?_, h1⟩),
+  have hk : (V true).k c.x = 2 + rounds true c.spec c.sts := by
+    show (match setupOf true c.x with
+      | some (_, spec, sts) => 2 + rounds true spec sts
+      | none => 1) = _
+    rw [c.setup]
+  have hfit : repStartZk c.spec c.sts q + repRoundsT c.sts[q / 2]! (sch, tp) e < (V true).k c.x := by
+    rw [repRoundsT_eq hv he, ← repStart_succ, hk]
+    have h1 := repStart_mono c.spec c.sts (show q + 1 ≤ 2 * c.sts.size by omega)
+    have h2 := repStart_last c.spec c.sts
+    omega
+  refine ⟨hfit, fun j hj h1 => c.good (Or.inl ⟨(repStartZk c.spec c.sts q + 1, j), ?_, h1⟩),
     fun hd => c.good (Or.inr (Or.inr ⟨_, ?_, hd⟩)), fun hb h0 => c.good (Or.inr (Or.inl ⟨_, ?_, hb, h0⟩))⟩
   · unfold outerSlotsZk
     rw [c.setup]
