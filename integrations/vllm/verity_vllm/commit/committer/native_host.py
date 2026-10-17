@@ -2049,18 +2049,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
 
-        # unless padding, a step-reading source or the attention declarations are in play, a step's verdict reads only its names, step 0's
-        # and the manifest: the steps of one plan-name tuple share it, so a run checks each distinct tuple once (not once per step)
-        step_free = not padded_run and rt_src is None and cb_src is None and not (decls and man["fa2_hidden_per_layer"])
-        verdicts: dict[tuple[str, ...], dict[str, Any] | None] = {}
+        # no padding, step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
+        step_free, verdicts = not padded_run and rt_src is None and cb_src is None and not (decls and man["fa2_hidden_per_layer"]), {}
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
             cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
-            if step_free and cols is not None and cols in verdicts:
-                if man["fa2_hidden_per_layer"]:
-                    fa2_rules_used["uniform"] += 1
-                if verdicts[cols] is not None:
-                    violations.append({**verdicts[cols], "step": step})
+            if step_free and cols in verdicts:                         # a plan-name tuple already judged (None is never a key)
+                fa2_rules_used.update({"uniform": 1} if man["fa2_hidden_per_layer"] else {})
+                violations.extend([{**verdicts[cols], "step": step}] if verdicts[cols] else [])
                 continue
             ps = self._padding.get(step) if padded_run else None
             # a padding meta: the step has a PaddingStep, the meta sits in the padding block of the step stream (`stream_off >= stream_base`;
@@ -2140,17 +2136,15 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) ^ set(ref_names)}
             else:
                 diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) | set(ref_names) if mod_names.get(n, 0) != ref_names.get(n, 0)}
-            violation = None
             if missing or unknown or fa2_bad or moe_bad or tp_bad or sampler_bad or diff or split_bad:
-                violation = {"step": step, "missing_modules": missing[:8], "unknown_modules": unknown[:8], "fa2_layers_bad": fa2_bad,
-                             "moe_layers_bad": moe_bad, "tp_sites_bad": dict(list(tp_bad.items())[:8]), "tp_sites_bad_n": len(tp_bad),
-                             "sampler_ids": n_ids, "multiplicity_vs_step0": dict(sorted(diff.items())[:8]),
-                             **{k: v for sn, bad in split_bad.items() for k, v in ((f"{sn}_bad", dict(sorted(bad.items())[:8])), (f"{sn}_bad_n", len(bad)))},
-                             **({"fa2_detail": fa2_detail} if fa2_detail else {}),
-                             **({"padding_only": padding_only, "padding_tensors": len(pad_metas)} if pad_metas else {})}
-                violations.append(violation)
+                violations.append({"step": step, "missing_modules": missing[:8], "unknown_modules": unknown[:8], "fa2_layers_bad": fa2_bad,
+                                   "moe_layers_bad": moe_bad, "tp_sites_bad": dict(list(tp_bad.items())[:8]), "tp_sites_bad_n": len(tp_bad),
+                                   "sampler_ids": n_ids, "multiplicity_vs_step0": dict(sorted(diff.items())[:8]),
+                                   **{k: v for sn, bad in split_bad.items() for k, v in ((f"{sn}_bad", dict(sorted(bad.items())[:8])), (f"{sn}_bad_n", len(bad)))},
+                                   **({"fa2_detail": fa2_detail} if fa2_detail else {}),
+                                   **({"padding_only": padding_only, "padding_tensors": len(pad_metas)} if pad_metas else {})})
             if step_free and cols is not None:
-                verdicts[cols] = violation
+                verdicts[cols] = violations[-1] if violations and violations[-1]["step"] == step else None
         return {"ok": not violations, "steps_checked": len(self._layouts),
                 **({"padding": {"steps_with_padding": len(self._padding), "padding_only_steps": padding_only_steps, "padding_tensors": padding_tensors_n,
                                 "rule": "padding tensors (<name>/<rid>/bot, host-only) are counted apart: a mixed step's executed metas are checked as an unpadded step's; "
