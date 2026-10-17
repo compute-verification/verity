@@ -303,6 +303,7 @@ def moe_ops_traced(model=None):
         # `_OpNamespace.__getattr__` caches resolved packets as instance attributes; a plain function in its place is what callers
         # of `torch.ops.vllm.fused_experts(**kw)` now reach, and the packet is restored below.
         h.patch(ns, "fused_experts", _fm.fused_experts_op)
+    _moe_config_at_launch(_fm, h)
     # the engine's MoE workspace (`v1/worker/workspace.py`): ONE persistent device buffer per worker that every layer's
     # intermediate caches are views of (`get_simultaneous`).  Under export a buffer that outlives the trace is hidden state (a lifted
     # constant); a fresh allocation per request is the same computation (every workspace word is written before it is read within the
@@ -315,6 +316,22 @@ def moe_ops_traced(model=None):
         h.patch(_ws, "_manager", _ExportWorkspaceManager())
     with h:
         yield
+
+
+def _moe_config_at_launch(fused_moe_module, h) -> None:
+    """Under a declared launch batch, the Triton experts' tile config (`try_get_optimal_moe_config`, read at trace time from the
+    token count) is the one for the launch's tokens, every module that imported it by name included."""
+    from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_batch_declared, traced_launch_tokens
+    if not launch_batch_declared():
+        return
+    original = fused_moe_module.try_get_optimal_moe_config
+
+    def config_at_launch(w1_shape, w2_shape, top_k, dtype, M, block_shape=None):
+        return original(w1_shape, w2_shape, top_k, dtype, traced_launch_tokens(M), block_shape=block_shape)
+
+    for name, module in list(sys.modules.items()):
+        if name.startswith(fused_moe_module.__package__) and getattr(module, "try_get_optimal_moe_config", None) is original:
+            h.patch(module, "try_get_optimal_moe_config", config_at_launch)
 
 
 def _expert_weight_scales_through_owner(layer, quant_method, h) -> None:
@@ -483,10 +500,11 @@ def fused_allreduce_rms_norm_leaf(model=None):
     """Author the leaf that meta execution otherwise misses when the served call takes FlashInfer's fused TP8 path.
 
     `_can_use_flashinfer` rejects every meta tensor because it checks ``is_cuda``.  The other dispatch facts are static:
-    world 8, bf16 ``[M,6144]`` with M <= 42, and FlashInfer all-reduce enabled.  The construction's ``TPStub`` carries
-    those workload settings and authors the rank-ordered peer operands through its ``CollectiveBus``.  Calls outside that
-    path keep vLLM's original fallback (ordinary all-reduce followed by the norm).
+    world 8, bf16 ``[M,6144]`` with M <= 42 (M the launch's tokens, `traced_launch_tokens`), and FlashInfer all-reduce enabled.
+    The construction's ``TPStub`` carries those workload settings and authors the rank-ordered peer operands through its
+    ``CollectiveBus``.  Calls outside that path keep vLLM's original fallback (ordinary all-reduce followed by the norm).
     """
+    from verity_vllm.program.frontend.rules.vllm_bindings.observations import traced_launch_tokens
     home = sys.modules.get(_FUSED_AR_NORM_MODULE)
     original = getattr(home, _FUSED_AR_NORM_NAME, None) if home is not None else None
     if original is None or model is None:
@@ -500,6 +518,7 @@ def fused_allreduce_rms_norm_leaf(model=None):
         return
 
     def shim(hidden_states, residual, norm, *args, **kwargs):
+        M = traced_launch_tokens(hidden_states.shape[0])
         try:
             from vllm.distributed.parallel_state import get_tp_group
             group = get_tp_group()
@@ -507,7 +526,7 @@ def fused_allreduce_rms_norm_leaf(model=None):
             shape = tuple(hidden_states.shape)
             fused = (bus is not None and int(getattr(group, "world_size", 1)) == 8
                      and bool(bus.settings.get("flashinfer")) and hidden_states.dtype == torch.bfloat16
-                     and len(shape) == 2 and shape[1] == 6144 and shape[0] <= 42
+                     and len(shape) == 2 and shape[1] == 6144 and M <= 42
                      and tuple(residual.shape) == shape and tuple(norm.weight.shape) == (6144,))
             if fused:
                 return bus.fused_allreduce_rms_norm(hidden_states, residual, norm.weight, float(norm.variance_epsilon))
@@ -531,18 +550,29 @@ def moe_gate_leaf(model=None, site=None):
     `ll_bf16_gemm`, a CUTLASS DSL kernel that checks its operands are on a CUDA device and leaves no dispatcher op behind.  When a
     module of ``model`` would take that tier (`allow_ll_bf16_gemm`), for the duration ``site``'s (default vLLM's `cute_dsl.ll_bf16`,
     which `forward` imports it from at every call) is `vllm_iface.ll_bf16_gemm(x, w)`, so the tier the declared target takes is the
-    node the rules bind; any output dtype but f32 refuses at export.  A model without such a gate is unchanged."""
-    if not any(getattr(m, "allow_ll_bf16_gemm", False) for m in (model.modules() if model is not None else ())):
+    node the rules bind; any output dtype but f32 refuses at export.  A model without such a gate is unchanged.  Past 16 launch rows
+    (`traced_launch_tokens`: the request's own rows sit in a larger batch) vLLM takes the cuBLAS tier, ``torch.mm(x, W.T,
+    out_dtype=float32)``, which the call then authors; a gate that would take another tier there refuses."""
+    gates = [m for m in (model.modules() if model is not None else ()) if getattr(m, "allow_ll_bf16_gemm", False)]
+    if not gates:
         yield
         return
     if site is None:
         import importlib
         site = importlib.import_module(_LL_BF16_SITE)
     from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the op)
+    from verity_vllm.program.frontend.rules.vllm_bindings.observations import traced_launch_tokens
+    from verity_vllm.program.registry.bf16_gemm_check import LL_MAX_M
+    cublas_tier = all(getattr(g, "allow_cublas_router_gemm", False) and not getattr(g, "allow_fp32_router_gemm", False)
+                      and not getattr(g, "allow_bf16x3_router_gemm", False) for g in gates)
 
     def ll_bf16_gemm(hidden_states, router_weight, output_dtype=torch.float32):
         if output_dtype != torch.float32:
             raise NotImplementedError(f"moe_gate_leaf: ll_bf16_gemm with output dtype {output_dtype} (only f32 is modelled)")
+        if traced_launch_tokens(hidden_states.shape[0]) > LL_MAX_M:
+            if not cublas_tier:
+                raise NotImplementedError("moe_gate_leaf: past 16 launch rows a gate without the cuBLAS tier alone takes another tier")
+            return torch.mm(hidden_states, router_weight.T, out_dtype=torch.float32)
         return torch.ops.vllm_iface.ll_bf16_gemm(hidden_states, router_weight)
 
     with hooks.patched(site, "ll_bf16_gemm", ll_bf16_gemm):

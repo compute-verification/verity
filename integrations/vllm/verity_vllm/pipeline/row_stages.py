@@ -234,22 +234,6 @@ class SingleRow(Row):
         return self.cli("build", "--model", self.repo, "--revision", self.rev, "--wrapper", "request", "--LP", str(lp), "--T", str(t),
                         "--max-model-len", str(self.MML), "--workload", self.wl, "--out", out, *self.tgt_args, *(lctx or []))
 
-    def launch_args(self, lp: int, t: int) -> list[str] | None:
-        """A B >= 2 request Program is built under its launch context (``launch-context``); None = the context did not
-        read, which FAILS that shape's Build (it is not "no context")."""
-        if self.B <= 1:
-            return []
-        err = f"{self.d}/launch_context_LP{lp}_T{t}.err"
-        with open(err, "w") as f:
-            r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t)), stdout=subprocess.PIPE, stderr=f, text=True,
-                               cwd=self.tree, env=self.child_env)
-        if r.returncode != 0:
-            self.log(f"Build FAIL shape LP{lp} T{t}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
-            return None
-        os.remove(err)
-        lc = r.stdout.rstrip("\n")
-        return ["--launch-max-seqlen-q", *lc.split("\n")] if lc else []
-
     def derive_all(self, to: int) -> tuple[int, int]:
         """The step, request and extra-shape derives, ``--build-jobs`` wide (auto: `row_records.build_jobs_auto`) -> (step rc, request rc)."""
         cmd_s = self.cli("build", "--model", self.repo, "--revision", self.rev, "--wrapper", "step", "--M", str(self.B), "--pos0", "8",
