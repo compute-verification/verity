@@ -79,6 +79,7 @@ import Proofs.Flock.Claims.KS.ZkSlackW
 import Proofs.Flock.Claims.KS.ForkCoupling
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.ZkSlackFit
+import Proofs.Flock.Claims.KS.ZkSim
 import Proofs.Flock.Claims.KS.PlainDraw
 import Proofs.Flock.Claims.KS.PlainDrawAcc
 import Proofs.Flock.Claims.KS.PlainDrawDec
@@ -439,5 +440,12 @@ message is empty, and the verdict at the draw refuses an outcome without proof f
 `FlockDeploy.KS.plainSimAbortAt`). So KS at the deployed plain verifier's trimmed record holds from two parts of the
 concrete simulator: its live self-clashes give `P`'s accepting runs a raw clash, and its fork advantage is at most its
 simulated fork (`PlainParts`: `FlockDeploy.KS.PlainSimClashAt`, `FlockDeploy.KS.PlainSimForkLe`,
-`FlockDeploy.KS.plainSimWrPAtD_of_parts`, `FlockDeploy.KS.plain_KS_of_parts`).
+`FlockDeploy.KS.plainSimWrPAtD_of_parts`, `FlockDeploy.KS.plain_KS_of_parts`). The masked simulator runs each prover
+round by round at uniform functions of the live coins' history, its rounds on the masked wire at their stream and count,
+with each table's fork rounds at its reps' caps, pads and `τ` and level 0 at the link coin; it meets `ZkSimWJ`, so
+masked KS and the recursion's premise hold, from four named Props: its lockstep, its abort, its fork bounds and a view's
+self-clash giving a column clash (`ZkSim`: `FlockDeploy.KS.zkSim`, `FlockDeploy.KS.zkΦ`, `FlockDeploy.KS.zkRd`,
+`FlockDeploy.KS.zk_simFork_le`, `FlockDeploy.KS.ZkSimRunAt`, `FlockDeploy.KS.ZkSimAbortAt`,
+`FlockDeploy.KS.ZkSimForkLe`, `FlockDeploy.KS.ZkViewClash`, `FlockDeploy.KS.zkSimWJ_of_parts`,
+`FlockDeploy.KS.zk_KS_of_parts`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_parts`, `FlockDeploy.KS.zk_KSFlock_of_parts`).
 -/
