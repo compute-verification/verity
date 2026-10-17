@@ -32,6 +32,9 @@ using u32 = uint32_t;
 constexpr int MAX_NB = 4;            // positions and node indices below 2^32
 constexpr int LEVELS = 33;
 constexpr int THREADS = 256;
+#ifndef VERITY_ROWS_MIN_BLOCKS       // the leaf kernel's __launch_bounds__ min blocks per SM (benchmarks/served_commit/rows_floor.py times others)
+#define VERITY_ROWS_MIN_BLOCKS 1
+#endif
 
 struct LeafK {
   u64 mid_P[8];                      // after P(l)
@@ -262,10 +265,10 @@ DEV void hm96_mask(const uint8_t* T, const u64* Y, u32* m) {
 
 // A thread a position first + i (i < m): the tree leaf when i < n_rows and pos < n_total (row i of `rows`), else the pad; b || c to
 // bc[i] and h to hs[i] for a leaf when they are given.  salts: row i's given salt at 192 i, or null for derived salts.
-__global__ void __launch_bounds__(THREADS) rows_leaf_kernel(const __grid_constant__ LeafK K, const uint8_t* __restrict__ rows, u64 stride,
-                                                            u64 n_rows, const uint8_t* __restrict__ salts, const uint8_t* __restrict__ Tn,
-                                                            u64 first, u64 m, u64 n_total, uint8_t* __restrict__ out,
-                                                            uint8_t* __restrict__ bc, uint8_t* __restrict__ hs) {
+__global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
+    rows_leaf_kernel(const __grid_constant__ LeafK K, const uint8_t* __restrict__ rows, u64 stride, u64 n_rows,
+                     const uint8_t* __restrict__ salts, const uint8_t* __restrict__ Tn, u64 first, u64 m, u64 n_total,
+                     uint8_t* __restrict__ out, uint8_t* __restrict__ bc, uint8_t* __restrict__ hs) {
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= m) return;
   const u64 pos = first + i;
