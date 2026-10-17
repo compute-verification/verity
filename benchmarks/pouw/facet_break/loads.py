@@ -1,4 +1,4 @@
-"""FACET-BREAK: a measured program's load on every facet of Π, and a seeded generator of mixes to try to beat them.
+"""FACET-BREAK: a measured program's load on every facet of Π, the facets it beats, and the refit a beaten facet needs.
 
 The standing adversary for the sm_120 data sheet (note:20261017T0524Z-draft-eps1-facet-break). A facet is a row of the
 machine model (`../machine_model/data/`): row r holds Σ_k c_kr·x_k SMSP-cycles for a program that issues x_k warp
@@ -15,7 +15,10 @@ bound and a reported violation is real.
   python loads.py loads OUT/rows.jsonl... [--epoch E] [--probe NAME] [--top N]   # each program's heaviest facets
   python loads.py summary OUT/rows.jsonl... [--epoch E] [--margin 0] [--json]    # every violation (load > 1 + margin)
   python loads.py refit OUT/rows.jsonl... --row R [--epoch E]                    # the refit line a violation needs
-  python loads.py gen [--seed S] [--emit mix.cu]                                 # the seeded mix grid (a probe source)
+  python loads.py table OUT/rows.jsonl... [--epoch E]                            # every program's loads, a JSON line each
+
+`--generic` loads every MMA form through the generic `MMA` lines where its own kind has none (advisory). The generator of
+the programs is `generate.py`, the batch `run.sh`.
 """
 from __future__ import annotations
 
@@ -45,11 +48,12 @@ CLASS_RULES: list[tuple[str, str]] = [
     (r"QMMA\.SF\.16832", "QMMASF16832"), (r"QMMA\.SP\.16864", "QMMASP16864"), (r"QMMA\.16832", "QMMA16832"),
     (r"OMMA\.SF\.16864|OMMA", "OMMASF16864"),
     # scalar / CUDA lane classes (floors.csv and census share these names)
-    (r"IMAD\.WIDE", "IMADW"), (r"IMAD|IMUL|IADD3|IADD|LEA\b|LEA\.HI", "ALU_OR_IMAD"),  # resolved below
+    (r"IMAD\.WIDE", "IMADW"), (r"IADD\.64", "ALU64"), (r"DFMA|DADD", "W2"), (r"DMUL", "DMUL"),
+    (r"IMAD|IMUL|IADD3|IADD|LEA\b|LEA\.HI", "ALU_OR_IMAD"),  # resolved below
     (r"LOP3|SHF\b|SHF\.|PRMT|LOP\b", "ALU"),
     (r"HFMA2", "HFMA2"), (r"HADD2|HMUL2", "HFMA2"),
     (r"FFMA|FADD|FMUL", "FFMA"),
-    (r"VIMNMX|IMNMX|VMNMX", "VIMNMX"),
+    (r"VIMNMX|IMNMX|VMNMX|MNMX", "VIMNMX"),
     (r"F2F|F2I|I2F|I2I|FRND|F2FP", "F2FS"),
     (r"MUFU", "XU"),
     (r"SHFL", "SHFL"),
@@ -202,6 +206,20 @@ def cmd_loads(a) -> int:
     return 0
 
 
+def cmd_table(a) -> int:
+    """Every program as a JSON line: its mix, its load on every row and its heaviest row (the results table)."""
+    m = model()
+    epoch = a.epoch or m.current
+    c = census(m, epoch)
+    vrows = in_vector(epoch)
+    for row in load_rows(a.rows):
+        p = program(row, c, m.cycle_u, a.generic)
+        top = max(p["load"].items(), key=lambda t: t[1]) if p["load"] else ("", 0.0)
+        print(json.dumps({"epoch": epoch, **p, "max_row": top[0], "max_load": top[1], "max_in_vector": top[0] in vrows,
+                          "load": {r: round(v, 6) for r, v in sorted(p["load"].items())}}))
+    return 0
+
+
 def cmd_summary(a) -> int:
     m = model()
     epoch = a.epoch or m.current
@@ -287,22 +305,10 @@ def cmd_refit(a) -> int:
     return 0
 
 
-def cmd_gen(a) -> int:
-    from generate import grid, emit_cu  # noqa: E402
-    g = grid(a.seed)
-    if a.emit:
-        Path(a.emit).write_text(emit_cu(g))
-        print(f"{len(g)} mixes -> {a.emit}")
-    else:
-        for spec in g:
-            print(json.dumps(spec))
-    return 0
-
-
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("loads", "summary", "refit"):
+    for name in ("loads", "summary", "refit", "table"):
         s = sub.add_parser(name)
         s.add_argument("rows", type=Path, nargs="+")
         s.add_argument("--epoch")
@@ -316,12 +322,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["summary"].add_argument("--worst", action="store_true", help="only the worst program of each row")
     sub.choices["refit"].add_argument("--row", required=True)
     sub.choices["refit"].add_argument("--margin", type=float, default=0.02)
-    g = sub.add_parser("gen")
-    g.add_argument("--seed", type=int, default=0)
-    g.add_argument("--emit")
     a = p.parse_args(argv)
     sys.path.insert(0, str(HERE))
-    return {"loads": cmd_loads, "summary": cmd_summary, "refit": cmd_refit, "gen": cmd_gen}[a.cmd](a)
+    return {"loads": cmd_loads, "summary": cmd_summary, "refit": cmd_refit, "table": cmd_table}[a.cmd](a)
 
 
 if __name__ == "__main__":
