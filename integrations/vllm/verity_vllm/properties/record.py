@@ -89,7 +89,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "read from, and every q_c and kv_c word of GLM-5.3's MLA RMSNorms (N 2048 and 512, eps 1e-5) on served and on probe rows "
              "equals DsaRMSNorm_v1{N,EPS=1e-05}, bit for bit, the MLA cache holding the kv_c words, while each competing model "
              "(RMSNormTriton_v1's reduction and epilogue among them) is refuted."),
-    Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v2",
+    Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v3",
              "On the capture's Hopper GPU and driver (the capture map's target.driver), vLLM selects MARLIN (MarlinExperts) for "
              "the 384-expert TP8 row's MXFP4 experts at bf16 activations and defaults the LLM entrypoint's max_num_seqs to 1024, "
              "each launch's kernel (its thread config and blocks per SM, profiled) is the one served at its decode batch and the "
@@ -97,8 +97,11 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "of the moe block edges, to 1024), each served kernel's SASS is the "
              "driver's JIT of its compute_80 PTX that the record names by sha256, at the profiled registers and with no f32 "
              "multiply, and every output word of every launch, and of every accepted forced config on an input whose summation "
-             "orders show, equals MarlinMoeExpertGemm_v1 (w13) or MarlinMoeExpertGemmW_v1 (w2) at the launch's statics, bit for "
-             "bit."),
+             "orders show, equals MarlinMoeExpertGemm_v1 (w13) or MarlinMoeExpertGemmW_v1 (w2) at the launch's statics and its "
+             "run's recorded (pair -> moe block, expert) assignment, bit for bit; a launch replayed at its recorded call writes "
+             "the same words, and the record's two runs agree on every pair their align draws placed in the same moe block (the "
+             "within-expert placement of vLLM's moe_align_block_size is atomic-order, and a moved pair's words follow its own "
+             "block's k-slice schedule, which the Programs take as input)."),
     Property("dsv4_indexer_capture", "verity-vllm/dsv4-indexer-capture/v1",
              "On the capture's Hopper GPU, from the vLLM sources the Definitions were read from, vLLM selects the FP8 indexer cache, "
              "the one-stage head-128 compressor and f32 o-projection scales for the DSV4 indexer row, and at the row's TP8 statics "
