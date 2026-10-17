@@ -5,9 +5,10 @@ faithful (the Match on live data, the Commit's gates, the conformance captures) 
 A row's entry is one preserved `vllm-config-record/v1` artifact labelled `row=<id>`.  Its payload is the row's config record
 (`config_record.json`, `verity-vllm/config-record/v1`, `pipeline.config_record`) and its refs are the evidence the record names under
 `evidence`: `build` (the `vllm-build/v1` holding every rank's Program descriptors, `research_outputs`), `manifest`, `match`,
-`commit`, and one ref per conformance capture, named by its property.  `manifests/records.json` indexes the database: row id -> the
-record's art: id.  The store is reached through the research CLI (`python -m research data ...`), so `RESEARCH_STORE` /
-`RESEARCH_STORE_CONFIG` select it.
+`commit`, and one ref per conformance capture, named by its property.  `manifests/records.json` indexes the database
+(`config_record.load_index`): per row id the record's art: id and its circuit's pins, every rank's Program digests as the Build made
+them, which `publish` writes and `verity-vllm neutrality` rebuilds and compares.  The store is reached through the research CLI
+(`python -m research data ...`), so `RESEARCH_STORE` / `RESEARCH_STORE_CONFIG` select it.
 
 Conformance: the properties a row's Programs need are those its capture map (`commit.capture_map.of_checkpoint`, the Build's
 checkpoint and world) names for the Programs the Build uses (`captures` of each map Program one of whose Definitions a construction
@@ -28,11 +29,11 @@ bundle=...)`), each digest checked against the record as from the store.
     evaluate(p.defs[fid], *synthetic_inputs)          # any Definition on synthetic inputs
     records.programs(row, [0], part=["workload"], bundle=Path(os.environ["RESEARCH_RUN_DIR"]) / "inputs" / "glm53.tar")  # in a job
 
-    verity-vllm records publish <row dir> <row> --build art:… --tree REF@SHA --by LANE [--manifest art:…] [--match art:…]
-                                [--match-run R] [--commit art:…] [--commit-run R] [--summary FILE] [--conformance PROPERTY=art:…]
-                                [--gap PROPERTY=REASON]
+    verity-vllm records publish <row dir> <row> --build art:… --tree REF@SHA --by LANE [--tier fast|heavy] [--manifest art:…]
+                                [--match art:…] [--match-run R] [--commit art:…] [--commit-run R] [--summary FILE]
+                                [--conformance PROPERTY=art:…] [--gap PROPERTY=REASON]
     verity-vllm records capture <run> [--property P]  # preserve a capture run's property records; prints PROPERTY=art:…
-    verity-vllm records show [<row>]                  # the index, or a row's record
+    verity-vllm records show [<row>]                  # the rows and their records, or a row's record
     verity-vllm records programs <row> [--rank R] [--part P] [--bundle FILE]   # fetch, decode and check a row's Programs
     verity-vllm records fetch <row> --to FILE [--rank R] [--part P]   # a job's bundle: research run --send FILE
 """
@@ -49,10 +50,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import MANIFESTS, UsageError, option
+from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline import epoch
 
-INDEX = MANIFESTS / "records.json"
+INDEX = CR.INDEX
 ART = re.compile(r"art:[0-9a-f]{64}")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 TREE = re.compile(r"\S+@[0-9a-f]{7,40}")
@@ -89,16 +91,17 @@ def listing(art: str) -> list[str]:
     return [f["path"] for f in json.loads(data("fetch", art, "--list", "--json"))]
 
 
-def index() -> dict[str, str]:
-    """Row id -> its record's art: id."""
-    return json.loads(INDEX.read_text()) if INDEX.is_file() else {}
+def index() -> dict[str, dict[str, Any]]:
+    """Row id -> its index entry: `record`, its record's art: id (None for a row pinned before it has one), and its circuit's pins."""
+    return CR.load_index(INDEX)["rows"]
 
 
 def art_of(row: str) -> str:
-    try:
-        return index()[row]
-    except KeyError:
-        raise UsageError(f"{row}: not in the circuit database ({INDEX.name}; `verity-vllm records publish` adds a row)") from None
+    e = index().get(row)
+    if not (e or {}).get("record"):
+        raise UsageError(f"{row}: not in the circuit database ({INDEX.name}{' pins its Programs but names no record' if e else ''}; "
+                         f"`verity-vllm records publish` adds a row)")
+    return e["record"]
 
 
 def record(row: str, bundle: Path | None = None) -> dict[str, Any]:
@@ -281,13 +284,18 @@ def evidence_of(build: str, *, manifest: str | None = None, match: str | None = 
     return ev
 
 
-def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by: str, summary: dict[str, Any] | None = None) -> str:
+def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by: str, summary: dict[str, Any] | None = None,
+            tier: str | None = None) -> str:
     """Write the row's config record from its row dir `d` (the stages' files, or a copy of them) and its Commit of record's
     `summary`, refuse it unless it is PASS, the Commit committed against the Build's manifest and Programs, its Build artifact
     holds every Program it names, and every conformance property its Programs need (`due`) is cited by a holding capture of
-    record or named a gap, then label it `row=<id>`, preserve it with its label and index it.  Returns its art: id."""
+    record or named a gap, then label it `row=<id>`, preserve it with its label and index it with its Programs as the row's pins
+    (`tier`: its neutrality rebuild's, by default the index's).  Returns its art: id."""
     if not TREE.fullmatch(tree):
         raise UsageError(f"--tree {tree!r}: REF@SHA, the code the row was built and served from")
+    if (tier := tier or (index().get(row) or {}).get("tier")) not in CR.TIERS:
+        raise UsageError(f"{row}: a row new to {INDEX.name} needs --tier {'|'.join(CR.TIERS)}, the tier of its rebuild "
+                         f"(`verity-vllm neutrality`)")
     rec = CR.record(d, row, tree=tree, summary=summary, evidence=evidence)
     if rec["outcome"] != "PASS":
         raise UsageError(f"{row}: the record is {rec['outcome']} ({rec['why']}): the database keeps rows whose circuit is faithful")
@@ -316,19 +324,24 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
                                *(f"--ref={k}={v}" for k, v in refs.items())))[-1]
     data("label", art, "row", row, "--by", by)
     data("push", art)
-    INDEX.write_text(json.dumps(dict(sorted({**index(), row: art}.items())), indent=1) + "\n")
+    doc = CR.load_index(INDEX)
+    doc["rows"][row] = {"record": art, "tier": tier, "pinned_from": {"record": art, "build": evidence["build"], "tree": tree},
+                        "manifest_digest": rec["build"].get("manifest_digest"), "programs": epoch.build_programs(Path(d))}
+    CR.write_index(doc, INDEX)
     return art
 
 
 @dataclass(frozen=True, kw_only=True)
 class PublishOptions:
-    """Write a row's config record, preserve it labelled row=<id> and add it to manifests/records.json."""
+    """Write a row's config record, preserve it labelled row=<id> and index it with its Programs' pins in manifests/records.json."""
 
     row_dir: str = option("row_dir", help="the row dir, or a copy of the stages' files the record reads")
     row: str = option("row")
     build: str = option("--build", help="the vllm-build/v1 holding every rank's Program descriptors")
     tree: str = option("--tree", help="the code the row was built and served from, REF@SHA")
     by: str = option("--by", help="the label's author (a lane)")
+    tier: str | None = option("--tier", choices=CR.TIERS, default=None,
+                              help="the tier of the row's neutrality rebuild (`verity-vllm neutrality`); default the index's")
     manifest: str | None = option("--manifest", default=None)
     match: str | None = option("--match", default=None, help="the Match's record")
     match_run: str | None = option("--match-run", default=None)
@@ -353,7 +366,7 @@ class CaptureOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class ShowOptions:
-    """Print the index, or a row's config record."""
+    """Print the rows of record and their records' art: ids, or a row's config record."""
 
     row: str | None = option("row", nargs="?", default=None)
     cmd: str = field(default="show", init=False)
@@ -397,14 +410,14 @@ def main(a: PublishOptions | CaptureOptions | ShowOptions | ProgramsOptions | Fe
                          conformance=_pairs("--conformance", a.conformance, "PROPERTY=art:..."),
                          gaps=_pairs("--gap", a.gap, "PROPERTY=REASON"))
         summary = json.loads(Path(a.summary).read_text()) if a.summary else None
-        print(publish(a.row_dir, a.row, evidence=ev, tree=a.tree, by=a.by, summary=summary))
+        print(publish(a.row_dir, a.row, evidence=ev, tree=a.tree, by=a.by, summary=summary, tier=a.tier))
         return 0
     if a.cmd == "capture":
         for prop, art in capture(a.run, a.property or None).items():
             print(f"{prop}={art}")
         return 0
     if a.cmd == "show":
-        print(json.dumps(record(a.row) if a.row else index(), indent=1, sort_keys=True))
+        print(json.dumps(record(a.row) if a.row else {r: e.get("record") for r, e in index().items()}, indent=1, sort_keys=True))
         return 0
     if a.cmd == "fetch":
         print(bundle(a.row, Path(a.to), a.rank or None, part=a.part or None))

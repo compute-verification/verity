@@ -1,5 +1,6 @@
 """`verity-vllm neutrality`: a rebuilt row is compared rank by rank, Program by Program, with its pins; any moved, missing or unpinned
-Program fails by name, the manifest is reported and never compared, and `--update` re-pins from what was built."""
+Program fails by name, the manifest is reported and never compared, and `--update` re-pins from what was built and keeps the row's
+record.  The pins are the circuit database's index, `manifests/records.json`."""
 from __future__ import annotations
 
 import json
@@ -11,12 +12,14 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.config import UsageError
+from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import epoch
 from verity_vllm.pipeline import neutrality as N
 from verity_vllm.pipeline.cli import main as cli
 
 ROW = "qwen3-14b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 REQ = "build_request_LP256_T31"
+REC = "art:" + "c" * 64
 
 
 def _programs(world: int = 2, tag: str = "") -> dict[str, dict]:
@@ -35,7 +38,8 @@ def _build(d: Path, programs: dict[str, dict], manifest: str = "m0") -> Path:
 
 def _pins(tmp_path: Path, programs: dict[str, dict]) -> Path:
     p = tmp_path / "pins.json"
-    p.write_text(json.dumps({"schema": N.SCHEMA, "rows": {ROW: {"tier": "fast", "manifest_digest": "m0", "programs": programs}}}))
+    p.write_text(json.dumps({"schema": CR.INDEX_SCHEMA, "rows": {ROW: {"record": REC, "tier": "fast", "manifest_digest": "m0",
+                                                                  "programs": programs}}}))
     return p
 
 
@@ -74,7 +78,7 @@ def test_update_re_pins_the_row_from_its_build(tmp_path: Path, monkeypatch) -> N
     monkeypatch.delenv("RESEARCH_SOURCE_SHA", raising=False)
     assert cli(["neutrality", ROW, "--compare", "--update", "--out", str(out), "--pins", str(pins)]) == 0
     row = json.loads(pins.read_text())["rows"][ROW]
-    assert (row["tier"], row["manifest_digest"], row["programs"]) == ("fast", "m2", _programs(tag="n"))
+    assert (row["record"], row["tier"], row["manifest_digest"], row["programs"]) == (REC, "fast", "m2", _programs(tag="n"))
     assert row["pinned_from"] == {"build": str((out / ROW).resolve()), "run": "r1"}
     assert cli(["neutrality", ROW, "--compare", "--out", str(out), "--pins", str(pins)]) == 0
 
@@ -128,11 +132,11 @@ def test_selection_is_by_row_or_tier_and_refuses_a_row_not_of_record() -> None:
 
 
 def test_every_row_of_record_resolves_and_pins_every_ranks_programs() -> None:
-    doc = N.load()
+    doc = CR.load_index(N.PINS)
     assert doc["rows"], "no row of record"
     for row, e in doc["rows"].items():
         role, repo, rev, world = epoch.resolve(row)
-        assert e["tier"] in N.TIERS and e["pinned_from"], row
+        assert e["tier"] in CR.TIERS and e["pinned_from"], row
         assert sorted(e["programs"], key=int) == [str(r) for r in range(world)], row
         for r, p in e["programs"].items():
             digests = [p["step"], *p["requests"].values()] + ([p["workload"]] if world > 1 or "__b1__" not in row else [])

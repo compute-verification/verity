@@ -28,7 +28,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import WORKLOADS, RowConfig, RowId
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowConfig, RowId, UsageError
 from verity_vllm.pipeline.research_outputs import verdicts
 
 SCHEMA = "verity-vllm/config-record/v1"
@@ -36,6 +36,31 @@ NAME = "config_record.json"
 #: The evidence store's kind of a published record (`verity_vllm.records`).
 KIND = "vllm-config-record/v1"
 MANIFEST_RC = re.compile(r"\bmanifest_rc=(-?\d+)\b")
+INDEX = MANIFESTS / "records.json"
+INDEX_SCHEMA = "verity-vllm/records-index/v1"
+#: The tiers of a row's rebuild (`pipeline.neutrality.TIER_FLAGS`).
+TIERS = ("fast", "heavy")
+INDEX_ABOUT = ("Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned "
+               "before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) "
+               "as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier "
+               "of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose "
+               "re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.")
+
+
+def load_index(path: Path) -> dict[str, Any]:
+    """The circuit database's index (`manifests/records.json`, `INDEX_SCHEMA`, `INDEX_ABOUT`): `rows`, per row of record its
+    `record` and its circuit's pins (`programs` per rank as `epoch.build_programs` reads them, `manifest_digest`, `tier`,
+    `pinned_from`), which `verity_vllm.records` publishes and `verity-vllm neutrality` compares.  No file is an empty index."""
+    if not path.is_file():
+        return {"schema": INDEX_SCHEMA, "about": INDEX_ABOUT, "rows": {}}
+    doc = json.loads(path.read_text())
+    if doc.get("schema") != INDEX_SCHEMA:
+        raise UsageError(f"{path}: schema {doc.get('schema')!r}, not {INDEX_SCHEMA}")
+    return doc
+
+
+def write_index(doc: dict[str, Any], path: Path) -> None:
+    path.write_text(json.dumps({**doc, "rows": dict(sorted(doc["rows"].items()))}, indent=1) + "\n")
 
 
 def _json(p: Path) -> Any:

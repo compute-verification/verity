@@ -340,7 +340,9 @@ faithful, by row id; committed values are never kept.  A row's entry is a preser
 its requests and its sha256, the κ profile, each rank's Program digests, the Match and Commit verdicts, every Commit gate, the run
 roots and the code it ran), and its refs are the evidence: the `vllm-build/v1` holding every rank's Program descriptors
 (`research-outputs write ... build`), the manifest, the Match and Commit records and the conformance captures by property.
-`manifests/records.json` maps row ids to those artifacts.  The record's `conformance.due` is every property its capture map's
+`manifests/records.json` indexes them: per row id the record's art: id and the circuit's pins, every rank's Program digests (step,
+request shapes, GP-01's workload) as the record's Build made them, with the tier of the row's rebuild (`records publish --tier`;
+neutrality below).  The record's `conformance.due` is every property its capture map's
 Programs name (`captures`) for the Programs the Build uses, by the Definitions its construction manifests hold; each is cited by a
 capture of record (`records capture RUN` preserves a capture run's `<property>.json` as a `property-record/v1`, validated and
 holding) or named a gap with its reason (`--gap PROPERTY=REASON`), and none is left silent.  The record's `stages` is each stage's
@@ -350,16 +352,17 @@ Program the Commit binds, and the step and request Programs it composes; `ranks=
 checked against the record's digests, ready for `verity.ml.circuits.evaluation` on synthetic inputs.  `verity-vllm records
 publish` adds a row (a FAIL record, a Commit that committed against another manifest or other Programs than the Build's, a Build
 artifact that lacks a Program the record names, or a needed property neither cited nor a gap, is refused), `records show` prints
-the index or a record, and `records programs` decodes a row one rank at a time.  A `research run` job has no store: the launcher
+the rows and their records' ids or a record, and `records programs` decodes a row one rank at a time.  A `research run` job has no store: the launcher
 writes the row's record and the descriptors the job needs into one file (`records fetch ROW --to FILE [--rank R] [--part P]`),
 sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/inputs/`), and the job reads them from it
 (`records.programs(row, ..., bundle=PATH)`, or `records programs ROW --bundle PATH`), each digest checked against the record.
 
 A refactor that is meant to leave the circuits alone keeps two sets of pins.  The suite's `tests/program/test_derive_neutrality.py`
 derives GLM-5.3's constructions on vLLM-free stand-ins, in seconds.  `verity-vllm neutrality --tier fast|heavy`
-(`pipeline/neutrality.py`) rebuilds the rows of record in `manifests/programs_of_record.json` on a CPU pod and fails when a
-per-rank Program digest moved: fast is the small TP1/TP2 rows (about 10 minutes with the bootstrap), heavy is GLM-5.3's 8 ranks
-(about 50 minutes on a 256-CPU pod; its Build ends at GP-01, `--build-programs-only 1`, since its manifest takes hours).
+(`pipeline/neutrality.py`) rebuilds the rows `manifests/records.json` pins (a row may be pinned before it has a record) on a CPU
+pod and fails when a per-rank Program digest moved: fast is the small TP1/TP2 rows (about 10 minutes with the bootstrap), heavy is
+GLM-5.3's 8 ranks (about 50 minutes on a 256-CPU pod; its Build ends at GP-01, `--build-programs-only 1`, since its manifest takes
+hours).  `--update` re-pins a row from its rebuild and keeps its record, which the same PR re-publishes.
 
 `verity-vllm rejudge RUN` (`pipeline/tp/rejudge.py`) recomputes a finished TP Commit's gates that need no GPU from what it saved
 (its runs in the row's `runs.jsonl`, each run's verdict from its ranks', manifest agreement, the cross-rank check, `summary.pass`),

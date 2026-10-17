@@ -3,15 +3,16 @@
     verity-vllm neutrality [ROW ...] [--tier fast|heavy|all] [--out DIR] [--compare] [--update] [--pins FILE] [--row-flag=FLAG ...]
 
 A circuit is its per-rank Program digests: the step Program, each request shape's and GP-01's workload Program, as
-`epoch.row_digests` reads them from a row's `build_summary.json`.  `manifests/programs_of_record.json` pins them for each row of
-record, with the tier of its rebuild and the Build they were taken from.  Each selected row (the ROWs named, else every row of
-`--tier`) is rebuilt by its own Build, `verity-vllm row run ROW ROLE REPO REV --stages build` (`epoch.resolve`), into OUT/<row>, and
-its digests compared with the pins; `--compare` compares the Builds already under OUT instead.  The manifest digest is reported, not
-compared: a naming change moves the manifest and leaves the circuit; a heavy row's Build builds none (`TIER_FLAGS`).  Exit 0 when
-every pinned digest is reproduced, 1 when one moved or is missing (each named), 2 on a usage error.  `--update` rewrites the
-selected rows' pins from what was built: the PR that changes a circuit on purpose re-pins it, and its diff names what moved
-(`pinned_from`: the Build, and under `research run` its run and source commit).  A row whose Build failed or left a Program
-undigested keeps its pins, is named, and the exit is 1.
+`epoch.row_digests` reads them from a row's `build_summary.json`.  The circuit database's index, `manifests/records.json`
+(`config_record.load_index`), pins them for each row of record beside its record, with the tier of its rebuild and the Build they
+were taken from (`records publish` pins a record's Programs).  Each selected row (the ROWs named, else every row of `--tier`) is
+rebuilt by its own Build, `verity-vllm row run ROW ROLE REPO REV --stages build` (`epoch.resolve`), into OUT/<row>, and its digests
+compared with the pins; `--compare` compares the Builds already under OUT instead.  The manifest digest is reported, not compared: a
+naming change moves the manifest and leaves the circuit; a heavy row's Build builds none (`TIER_FLAGS`).  Exit 0 when every pinned
+digest is reproduced, 1 when one moved or is missing (each named), 2 on a usage error.  `--update` rewrites the selected rows' pins
+from what was built and keeps their `record`: the PR that changes a circuit on purpose re-pins it and re-publishes its record, and its
+diff names what moved (`pinned_from`: the Build, and under `research run` its run and source commit).  A row whose Build failed or
+left a Program undigested keeps its pins, is named, and the exit is 1.
 
 The rebuild needs the pinned vLLM (`ops/pod_bootstrap.sh --cpu`) and each row's checkpoint metadata (the derive runs on the meta
 device and reads no weights), so it runs on a CPU pod, never in `check`; the suite's tier is `tests/program/test_derive_neutrality.py`.
@@ -28,21 +29,13 @@ from typing import Any
 
 from verity_vllm.config import ROOT, UsageError, option
 from verity_vllm.engine import env as engine_env
+from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import epoch
 
-PINS = ROOT / "manifests" / "programs_of_record.json"
-SCHEMA = "verity-vllm/programs-of-record/v1"
-TIERS = ("fast", "heavy")
+PINS = CR.INDEX
 #: `row run` flags a tier's rebuild adds: GLM-5.3's Build manifest (the word check over 8 ranks) takes hours at 200-450 GB a worker
 #: and decides no Program digest, so the heavy tier's Build ends at GP-01.
 TIER_FLAGS = {"fast": [], "heavy": ["--build-programs-only=1"]}
-
-
-def load(path: Path = PINS) -> dict[str, Any]:
-    doc = json.loads(path.read_text())
-    if doc.get("schema") != SCHEMA:
-        raise UsageError(f"{path}: schema {doc.get('schema')!r}, not {SCHEMA}")
-    return doc
 
 
 def select(doc: dict[str, Any], rows: list[str], tier: str) -> list[str]:
@@ -92,18 +85,18 @@ class Options:
     """Rebuild the rows of record's Programs and compare their digests with the pins."""
 
     rows: list[str] = option("rows", nargs="*", default=[], help="rows of record (default: every row of --tier)")
-    tier: str = option("--tier", choices=(*TIERS, "all"), default="fast")
+    tier: str = option("--tier", choices=(*CR.TIERS, "all"), default="fast")
     out: str = option("--out", default="out/neutrality", help="the rebuilt rows live in OUT/<row>")
     compare_only: bool = option("--compare", default=False, action="store_true", help="compare the Builds under OUT, no rebuild")
     update: bool = option("--update", default=False, action="store_true", help="re-pin the selected rows from what was built")
-    pins: str = option("--pins", default=str(PINS))
+    pins: str = option("--pins", default=str(PINS), help="the index whose pins are compared (default the circuit database's)")
     row_flags: list[str] = option("--row-flag", action="append", default=[], help="passed to `row run` (repeat), e.g. --row-flag=--build-jobs=4")
     run_id: str | None = option("--run-id", env="RESEARCH_RUN_ID", default=None, help="the research run the re-pin's Build is from")
     source_sha: str | None = option("--source-sha", env="RESEARCH_SOURCE_SHA", default=None, help="the tree commit the re-pin's Build is from")
 
 
 def main(a: Options) -> int:
-    doc = load(Path(a.pins))
+    doc = CR.load_index(Path(a.pins))
     out, report, failed, unpinned = Path(a.out), {"schema": "verity-vllm/neutrality/v1", "pins": a.pins, "rows": {}}, False, []
     out.mkdir(parents=True, exist_ok=True)
     for row in select(doc, a.rows, a.tier):
@@ -125,7 +118,7 @@ def main(a: Options) -> int:
             unpinned.append(row)
     (out / "neutrality.json").write_text(json.dumps(report, indent=1) + "\n")
     if a.update:
-        Path(a.pins).write_text(json.dumps(doc, indent=1) + "\n")
+        CR.write_index(doc, Path(a.pins))
         pinned = [r for r in report["rows"] if r not in unpinned]
         print(f"[neutrality] re-pinned {', '.join(pinned) or 'no row'} in {a.pins}"
               + (f"; not re-pinned, their Build did not finish: {', '.join(unpinned)}" if unpinned else ""), flush=True)

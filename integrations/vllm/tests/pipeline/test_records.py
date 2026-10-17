@@ -1,4 +1,4 @@
-"""The circuit database (`verity_vllm.records`): the index, a TP row published from its row dir and loaded back by row id, its
+"""The circuit database (`verity_vllm.records`): the index, a TP row published from its row dir, pinned and loaded back by row id, its
 conformance (captures of record, named gaps, a property left silent refused), the in-stage manifest a manifest of record
 supersedes, and a job's bundle read with no store."""
 from __future__ import annotations
@@ -16,6 +16,7 @@ from verity.ml.circuits.evaluation.reference import evaluate
 from verity_vllm import records
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import WORKLOADS, RowId, UsageError
+from verity_vllm.pipeline import epoch
 from verity_vllm.pipeline import research_outputs as ro
 from verity_vllm.properties.record import REGISTRY, seal
 
@@ -34,10 +35,10 @@ SUMMARY = {"schema": "verity/commit-integ/delta-tp/v1", "pass": True, "pairs": 1
 
 
 def test_index_names_rows_of_record():
-    for row, art in records.index().items():
+    for row, e in records.index().items():
         RowId.parse(row)
         assert (WORKLOADS / f"{row}.json").is_file(), row
-        assert records.ART.fullmatch(art), (row, art)
+        assert e["record"] is None or records.ART.fullmatch(e["record"]), (row, e["record"])
 
 
 def _w(p: Path, doc) -> None:
@@ -128,8 +129,12 @@ def test_a_published_row_loads_back_by_id(tmp_path, store):
     cap = records.capture(_capture_run(store, tmp_path))
     ev = records.evidence_of(build, manifest="art:" + "1" * 64, match="art:" + "2" * 64, match_run="r20261016-083240-d76e",
                              commit="art:" + "3" * 64, commit_run="r20261016-213336-6c35", conformance=cap)
-    art = records.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
-    assert records.index() == {ROW: art}
+    with pytest.raises(UsageError, match=r"a row new to records.json needs --tier fast\|heavy"):
+        records.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+    art = records.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d))
+    assert records.index() == {ROW: {"record": art, "tier": "fast", "pinned_from": {"record": art, "build": build, "tree": "cursor/x@1b53f685a"},
+                                     "manifest_digest": "mm", "programs": epoch.build_programs(d)}}
+    assert sorted(records.index()[ROW]["programs"]) == ["0", "1"]
     m = store.get_manifest(art)
     assert m.kind == "vllm-config-record/v1" and m.meta == {"row": ROW, "outcome": "PASS", "world": 2, "tree": "cursor/x@1b53f685a"}
     assert m.refs == {"build": build, "manifest": ev["manifest"], "match": ev["match"], "commit": ev["commit"], PROP: cap[PROP]}
@@ -158,12 +163,19 @@ def test_a_published_row_loads_back_by_id(tmp_path, store):
         records.programs(ROW, [2])
     with pytest.raises(UsageError, match="no part"):
         records.programs(ROW, part=["build_request"])
+    assert records.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", summary=_served(d)) == art
+    assert records.index()[ROW]["tier"] == "fast", "a re-publish keeps the row's tier"
+    doc = json.loads(records.INDEX.read_text())
+    doc["rows"]["pinned-row"] = {**doc["rows"][ROW], "record": None}
+    records.INDEX.write_text(json.dumps(doc))
+    with pytest.raises(UsageError, match=r"pinned-row: not in the circuit database \(records.json pins its Programs but names no record"):
+        records.art_of("pinned-row")
 
 
 def test_a_descriptor_that_is_not_the_records_is_refused(tmp_path, store):
     d = _row_dir(tmp_path, digest="0" * 128)
     build = _build_art(store, d, tmp_path / "run")
-    records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=SUMMARY)
+    records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=SUMMARY)
     with pytest.raises(ValueError, match="build_step: the descriptor's digest"):
         records.programs(ROW, [0])
 
@@ -172,18 +184,18 @@ def test_publish_refuses_a_failed_row_another_builds_commit_and_a_build_without_
     d = _row_dir(tmp_path)
     build = _build_art(store, d, tmp_path / "run")
     with pytest.raises(UsageError, match="FAIL"):
-        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits",
+        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast",
                         summary={**SUMMARY, "pass": False})
     served = _served(d)
     for rm in ({**served["required_manifest"], "manifest_digest": "other"},
                {**served["required_manifest"], "program_digest_per_rank": {"0": "0" * 128}}):
         with pytest.raises(UsageError, match="not the one served"):
-            records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits",
+            records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast",
                             summary={**served, "required_manifest": rm})
     (d / "build" / "rank1" / "build_workload" / "descriptor.json.gz").unlink()
     short = _build_art(store, d, tmp_path / "run2")
     with pytest.raises(UsageError, match="lacks 1 Program descriptor"):
-        records.publish(d, ROW, evidence=records.evidence_of(short), tree="cursor/x@1b53f685a", by="circuits", summary=SUMMARY)
+        records.publish(d, ROW, evidence=records.evidence_of(short), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=SUMMARY)
     assert records.index() == {}
 
 
@@ -225,14 +237,14 @@ def test_publish_refuses_a_needed_property_left_silent_and_records_a_named_gap(t
     d = _row_dir(tmp_path)
     build = _build_art(store, d, tmp_path / "run")
     with pytest.raises(UsageError, match=f"need {PROP} \\(llama-test-tp2\\), which the record neither cites nor names a gap"):
-        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d))
     other = records.capture(_capture_run(store, tmp_path, prop="glm53_dsa_capture"))["glm53_dsa_capture"]
     with pytest.raises(UsageError, match=f"not a holding property-record/v1 of {PROP}"):
         records.publish(d, ROW, evidence=records.evidence_of(build, conformance={PROP: other}), tree="cursor/x@1b53f685a",
-                        by="circuits", summary=_served(d))
+                        by="circuits", tier="fast", summary=_served(d))
     assert records.index() == {}
     ev = records.evidence_of(build, gaps={PROP: "no capture of the tree's harness"})
-    records.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+    records.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d))
     rec = records.record(ROW)
     assert rec["conformance"] == {"map": "llama-test-tp2", "due": {PROP: ["mul"]}}
     assert rec["evidence"]["gaps"] == {PROP: "no capture of the tree's harness"} and rec["evidence"]["conformance"] == {}
@@ -244,13 +256,13 @@ def test_a_build_without_construction_manifests_is_refused(tmp_path, store):
         p.unlink()
     build = _build_art(store, d, tmp_path / "run")
     with pytest.raises(UsageError, match="the conformance they need, are unknown"):
-        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d))
 
 
 def test_a_job_reads_the_programs_from_a_bundle_with_no_store(tmp_path, store, monkeypatch):
     d = _row_dir(tmp_path)
     build = _build_art(store, d, tmp_path / "run")
-    records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+    records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d))
     b = records.bundle(ROW, tmp_path / "job.tar", [1], part=["workload"])
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "no-store"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "no-store.toml"))
