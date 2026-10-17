@@ -20,6 +20,13 @@ import kv_twin as T  # noqa: E402
 SEED = hashlib.sha256(b"verity/word-codec/kv/vectors").digest()
 NAMES = sorted(K.FIELDS)
 VECTORS = HERE / "kv_vectors.json"
+BOUND_LABEL = b"verity/word-codec/kv/bound-vectors"
+BOUND_SLOT, BOUND_LAYER = 3, 17
+
+
+def _bound_data() -> bytes:
+    """A token-layer: SHA512(BOUND_LABEL ‖ u32be c) for c = 0 … 63."""
+    return b"".join(hashlib.sha512(BOUND_LABEL + c.to_bytes(4, "big")).digest() for c in range(64))
 
 
 def _probable_prime(n: int) -> bool:
@@ -166,6 +173,48 @@ def test_token_layer_layout(name):
         K.payloads(data[:-1], f)
 
 
+def test_the_digest_is_sha512_row_v2():
+    from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+
+    data = _bound_data()
+    assert K.digest(data) == sha512_row_v2_digest(data, 8 * K.TOKEN_LAYER_BYTES)
+    with pytest.raises(ValueError, match="token-layer"):
+        K.digest(data[:-1])
+
+
+@pytest.mark.parametrize("name,rounds,mask", [(n, 2, False) for n in NAMES] + [("p1024", 3, True)])
+def test_a_bound_token_layer_round_trips_under_its_digest(name, rounds, mask):
+    """Under its own key a token-layer decodes with the digest kept beside it, and with nothing else: not the seed's
+    key, another digest or another slot.  Every word differs from the seed's key's encoding."""
+    k, data = K.key(name, SEED, rounds, mask=mask), _bound_data()
+    d = K.digest(data)
+    words = K.encode_token_layer(data, 3, 17, k, bound=True)
+    assert K.decode_token_layer(words, 3, 17, k, d) == data
+    assert K.decode_token_layer(words, 3, 17, k) != data
+    assert K.decode_token_layer(words, 3, 17, k, K.digest(bytes(K.TOKEN_LAYER_BYTES))) is None
+    assert K.decode_token_layer(words, 4, 17, k, d) is None
+    assert all(a != b for a, b in zip(words, K.encode_token_layer(data, 3, 17, k)))
+    with pytest.raises(ValueError, match="digest"):
+        K.binding(d[:-1], 3 * K.LAYERS + 17, k)
+
+
+@pytest.mark.parametrize("name", ["p512", "p1024"])
+def test_a_picked_encoding_takes_a_token_layer_under_the_seeds_key_only(name):
+    """The KV path's attack: under the seed's key the writer picks a token-layer's encoding (all zeros) and writes the
+    token-layer one decode gives, which encodes to it.  Under the bound key the same decode under a digest d gives a
+    token-layer of another digest, for each of 16 tries (d ← its digest, from the zeros'), so the pair is refused."""
+    k = K.key(name, SEED, 3, mask=True)
+    zeros = [0] * K.token_layer_words(k.field)
+    data = K.decode_token_layer(zeros, 3, 17, k)
+    assert K.encode_token_layer(data, 3, 17, k) == zeros
+    d = K.digest(bytes(K.TOKEN_LAYER_BYTES))
+    for _ in range(16):
+        b, w0 = K.binding(d, 3 * K.LAYERS + 17, k), (3 * K.LAYERS + 17) * len(zeros)
+        one = b"".join(K.decode_word(0, w0 + w, k, b).to_bytes(k.field.word_bytes, "little") for w in range(len(zeros)))
+        assert K.decode_token_layer(zeros, 3, 17, k, d) is None and K.digest(one) != d
+        d = K.digest(one)
+
+
 @pytest.mark.parametrize("name", NAMES)
 def test_twin_squaring_and_folds_over_the_lazy_range(name):
     f = K.field(name)
@@ -258,7 +307,18 @@ def _vectors() -> dict:
                 "c": [format(v, "x") for v in k.c], "tau": format(k.tau, "x"),
                 "words": [{"i": i, "payload": format(m, "x"), "word": format(K.encode_word(m, i, k), "x")}
                           for i, m in words]}
-    return {"seed": SEED.hex(), "domain": K.DOMAIN.decode(), "vectors": out}
+    data, block = _bound_data(), BOUND_SLOT * K.LAYERS + BOUND_LAYER
+    d, bound = K.digest(data), {}
+    for name, rounds, mask in [(n, 2, False) for n in NAMES] + [("p1024", 3, True)]:
+        k = K.key(name, SEED, rounds, mask=mask)
+        words = K.encode_token_layer(data, BOUND_SLOT, BOUND_LAYER, k, bound=True)
+        raw = b"".join(w.to_bytes(k.field.word_bytes, "little") for w in words)
+        bound[f"{name}/k{rounds}" + ("/masked" if mask else "")] = {
+            "b": format(K.binding(d, block, k), "x"), "word_0": format(words[0], "x"),
+            "words_sha512": hashlib.sha512(raw).hexdigest()}
+    return {"seed": SEED.hex(), "domain": K.DOMAIN.decode(), "vectors": out,
+            "bound": {"index": K.BIND_INDEX, "label": BOUND_LABEL.decode(), "slot": BOUND_SLOT, "layer": BOUND_LAYER,
+                      "block": block, "digest": d.hex(), "keys": bound}}
 
 
 def test_pinned_vectors():
