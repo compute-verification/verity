@@ -24,6 +24,12 @@ At `deployRec`, both sides are a `prefixRun`: `Sim`'s first part at the zero dig
 part's prover `preP` where its inner messages are commit strings (`preP_eval`). So the first part is `ZKmalAt` within
 `2(k_I + k_S·n_C)·δ₁` (`zkAt_pre`), `zkBoundM_of`'s `h₀` holds where the first part commits by hm96 under fresh salts at
 every statement (`PreCommits`, `h0_of_commits`), and `zkBoundM_of_commits` is `zkBoundM_of_tables` without `h₀`.
+
+`PreCommits` holds at the reference prover whose inner prover commits (`RefParts.commit`: each inner message hm96's
+commit string of a digest of the witness, its other randomness and the history, under that round's salt), on each
+statement's own first-part tape (`preTape`: the other randomness, one salt per inner round, one per commit string),
+which reads as the inner prover's tape and the staging salts with the zero salt past them (`preOf`;
+`preCommits_commit`). On one tape for every statement, it would bound the inner rounds and the commit strings.
 -/
 
 namespace Claims.ZKMal
@@ -606,44 +612,98 @@ def PreCommits (H : Claims.Msg → Claims.Msg) (T₀ : SeqTape) (pre : T₀.N ×
 /-- **`zkBoundM_of`'s first part (`h₀`)**, where the inner protocol's rounds are the inner verifier's and the first
 part commits by hm96 under fresh salts at every statement. -/
 theorem h0_of_commits (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
-    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
-    (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x)) (hpre : ∀ x, PreCommits IV b H T₀ pre x) :
+    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape)
+    (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
+    (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x)) (hpre : ∀ x, PreCommits IV b H (T₀ x) (pre x) x) :
     ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
       Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ → ∀ x,
-        ZKmalAt H (kPre IV x) (preP IV b pre) (Claims.Recursion.R (deployRec IV ivScope b) I x) x
+        ZKmalAt H (kPre IV x) (preP IV b (pre x)) (Claims.Recursion.R (deployRec IV ivScope b) I x) x
           ((simPre (deployRec IV ivScope b) I).C x) ((simPre (deployRec IV ivScope b) I).prog x)
           (2 * (I.V.k (xIOf x) + kS x * b.nC x) * δ₁) 0 := by
   intro _ _ δ₁ hδ x
   obtain ⟨R, _, _, split, m, dI, dS, hs, hPI, hdig, hsalt⟩ := hpre x
-  exact zkAt_pre IV b H ivScope I T₀ pre x (hI x) split hs dI dS hPI hdig hsalt hδ
+  exact zkAt_pre IV b H ivScope I (T₀ x) (pre x) x (hI x) split hs dI dS hPI hdig hsalt hδ
 
 /-- **The recursion's zero knowledge at the masked record, from the masked session's models and the first part's
 commit strings**: `zkBoundM_of_tables` with its first part (`h₀`) from `PreCommits` at every statement. -/
 theorem zkBoundM_of_commits (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
-    (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
+    (T₀ : Claims.Msg → SeqTape) (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
     (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
     (G : Proto Claims.Flock.Wit) [Fintype G.Coin] (Mp : ∀ x, G.Nonce → G.TPreModel x)
     (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Claims.Msg → ℕ)
     (CB : ℕ → Claims.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
-    (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x)) (hpre : ∀ x, PreCommits IV b H T₀ pre x)
+    (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x)) (hpre : ∀ x, PreCommits IV b H (T₀ x) (pre x) x)
     (hkey : ∀ δ₁ : ℝ≥0, Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
       Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
     (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink H (Claims.Flock.R (deployZkRec relO).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.Binding H)
-    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
+    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+      u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
       nL (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).1 ∧
         nB (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).2)
     (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
-      u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
+      u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
         Nonempty (CB t x j ≃ ((G.withSim Mc).simulatorE t (t * 3 ^ t)).C (xsOf IV b x j u)))
-    (hW : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → ∀ j < nS x, ∀ (t₀ : T₀.N × T₀.Ω)
-      (u : List (Claims.Msg × Claims.Msg)), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
-        Claims.Flock.R (deployZkRec relO).parse (xsOf IV b x j u) (wit w (pre t₀) (u.take (IV.k (xIOf x))) j)) :
+    (hW : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → ∀ j < nS x, ∀ (t₀ : (T₀ x).N × (T₀ x).Ω)
+      (u : List (Claims.Msg × Claims.Msg)), u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
+        Claims.Flock.R (deployZkRec relO).parse (xsOf IV b x j u) (wit w (pre x t₀) (u.take (IV.k (xIOf x))) j)) :
     ZKBoundM IV b H ivScope I T₀ G.Nonce G.Rand pre wit G.prover
       fun t => soOf ((G.withSim Mc).simulatorE t (t * 3 ^ t)) (CB t) :=
   zkBoundM_of_tables IV b H ivScope I relO T₀ pre wit G Mp Mc nL nB CB hI
     (h0_of_commits IV b H ivScope I T₀ pre hI hpre) hkey hK hnL hnB hL hOK hC hzl hCB hW
+
+/-! ## A reference prover whose inner prover commits -/
+
+/-- **The inner prover that commits**: at each inner round, hm96's commit string of the digest `dI` reads (the
+witness, the other randomness `R` and the history) under that round's salt, on a tape of `R` and one salt per round;
+the staged values' digests (`dg`) and the outer witnesses (`wo`) read that tape. -/
+def RefParts.commit (R : Type) [Nonempty R]
+    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
+    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
+    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit) : RefParts where
+  TI := R × (ℕ → Salt)
+  PI w := ⟨fun _ h ρ => .query (Claims.toMsg Hm96.Default512.saltPrefix ++ List.ofFn (ρ.2 h.length)) fun c =>
+    .ret (List.ofFn (fun i => dI w ρ.1 h i ^^^ maskOf (ρ.2 h.length) i) ++ c)⟩
+  digests := dg
+  wit := wo
+
+/-- What the deployment brings, its inner prover the one that commits. -/
+abbrev Brings.commit (b : Brings) (R : Type) [Nonempty R]
+    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
+    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
+    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit) : Brings :=
+  { b with ref := RefParts.commit R dI dg wo }
+
+/-- **The first part's tape at `x`** for an inner prover that commits: the other randomness and one salt per inner
+round, then one staging salt per commit string. -/
+def preTape (R : Type) [Fintype R] [Nonempty R] (x : Claims.Msg) : SeqTape where
+  N := R × (Fin (IV.k (xIOf x)) → Salt)
+  Ω := Fin (b.nC x) → Salt
+
+/-- Salts on `Fin n` read on `ℕ`, the zero salt past `n`. -/
+def saltsOn {n : ℕ} (y : Fin n → Salt) (i : ℕ) : Salt := if h : i < n then y ⟨i, h⟩ else fun _ => 0
+
+/-- **The first part's tape at `x` read as the inner prover's tape and the staging salts.** -/
+def preOf (R : Type) [Fintype R] [Nonempty R] (x : Claims.Msg) :
+    (preTape IV b R x).N × (preTape IV b R x).Ω → (R × (ℕ → Salt)) × (ℕ → Salt) :=
+  fun t => ((t.1.1, saltsOn t.1.2), saltsOn t.2)
+
+/-- **The first part commits by hm96 under fresh salts** at the inner prover that commits, on `x`'s first-part tape:
+the tape is the split itself, so each fiber is one point. -/
+theorem preCommits_commit (H : Claims.Msg → Claims.Msg) (R : Type) [Fintype R] [Nonempty R]
+    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
+    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
+    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+    (x : Claims.Msg) : PreCommits IV (b.commit R dI dg wo) H (preTape IV b R x) (preOf IV b R x) x := by
+  refine ⟨R, inferInstance, inferInstance, id, 1, dI, fun w p h j => (dg w (p.1, saltsOn p.2) h).getD j 0,
+    fun p => ?_, fun w t h hh => ?_, fun _ _ _ _ _ => rfl, fun t j hj => dite_eq_left hj⟩
+  · exact Nat.card_eq_one_iff_unique.2 ⟨⟨fun a a' => Subtype.ext (a.2.trans a'.2.symm)⟩, ⟨⟨p, rfl⟩⟩⟩
+  · have e : saltsOn t.1.2 h.length = t.1.2 ⟨h.length, hh⟩ := dite_eq_left hh
+    show List.ofFn (fun i => dI w t.1.1 h i ^^^ maskOf (saltsOn t.1.2 h.length) i) ++
+      H (Claims.toMsg Hm96.Default512.saltPrefix ++ List.ofFn (saltsOn t.1.2 h.length)) = _
+    rw [e]
+    rfl
 
 end RecDeploy

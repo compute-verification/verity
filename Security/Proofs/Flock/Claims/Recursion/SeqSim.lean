@@ -323,16 +323,17 @@ open scoped NNReal
 
 /-- **`ZKBound` at the masked record**: `ZKBound`'s statement with the masked reference prover (`refPM` on the nested
 tape read flat, `nS x` sessions at `x`, on statement-indexed tapes: `ZKmalRx`) at the masked run's rounds `kM` (the
-compiled verifier's and one `Hello` per V\* session). `Sim`, `εzk` and `γzk` are the claim's. -/
+compiled verifier's and one `Hello` per V\* session), the first part on `x`'s own tape `T₀ x`, which `pre x` reads as
+the inner prover's tape and the staging salts. `Sim`, `εzk` and `γzk` are the claim's. -/
 def ZKBoundM (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
-    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
-    [Fintype ΩB] [Nonempty ΩB] (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
+    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape) (NB ΩB : Type) [Fintype NB]
+    [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
     (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) : Prop :=
   ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
     Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
-      Claims.ZKMal.ZKmalRx (fun x => (T₀.iter 0 NB ΩB (nS x)).N) (fun x => (T₀.iter 0 NB ΩB (nS x)).Ω) H (kM IV b)
-        (fun w x => (refPM IV b pre wit PS w).comap (Layout.flatten T₀ 0 NB ΩB (nS x)))
+      Claims.ZKMal.ZKmalRx (fun x => ((T₀ x).iter 0 NB ΩB (nS x)).N) (fun x => ((T₀ x).iter 0 NB ΩB (nS x)).Ω) H
+        (kM IV b) (fun w x => (refPM IV b (pre x) wit PS w).comap (Layout.flatten (T₀ x) 0 NB ΩB (nS x)))
         (Claims.Recursion.R (deployRec IV ivScope b) I) (Claims.Recursion.Sim (deployRec IV ivScope b) I (SO t))
         (Claims.Recursion.εzk (deployRec IV ivScope b) I t δ₁) (Claims.Recursion.γzk (deployRec IV ivScope b) t)
 
@@ -346,31 +347,32 @@ hide: the first part is `ZKmalAt` at `Sim`'s first two parts within `2δ₁` per
 at every history that starts it, is `ZKmalAt` at `SO t` within its proved `--zk` error and `4t·3^t` on the sessions'
 relation `RF` (`hS`); and there the witness `wit` gives is in `RF` (`hW`). -/
 theorem zkBoundM_of (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
-    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
-    [Fintype ΩB] [Nonempty ΩB] (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
+    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape) (NB ΩB : Type) [Fintype NB]
+    [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
     (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
     (RF : Claims.Rel Claims.Flock.Wit) (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x))
     (h₀ : ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
       Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ → ∀ x,
-        ZKmalAt H (kPre IV x) (preP IV b pre) (Claims.Recursion.R (deployRec IV ivScope b) I x) x
+        ZKmalAt H (kPre IV x) (preP IV b (pre x)) (Claims.Recursion.R (deployRec IV ivScope b) I x) x
           ((simPre (deployRec IV ivScope b) I).C x) ((simPre (deployRec IV ivScope b) I).prog x)
           (2 * (I.V.k (xIOf x) + kS x * b.nC x) * δ₁) 0)
     (hS : ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
       Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
-        ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
+        ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+          u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
           ZKmalAt H ((nums b.st x j).rounds + 1) PS (RF (xsOf IV b x j u)) (xsOf IV b x j u) (SO t x j).C
             ((SO t x j).prog (xsOf IV b x j u)) (((deployRec IV ivScope b).nums x j).εzk t δ₁) (4 * t * 3 ^ t))
-    (hW : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → ∀ j < nS x, ∀ (t₀ : T₀.N × T₀.Ω)
-      (u : List (Claims.Msg × Claims.Msg)), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
-        RF (xsOf IV b x j u) (wit w (pre t₀) (u.take (IV.k (xIOf x))) j)) :
+    (hW : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → ∀ j < nS x, ∀ (t₀ : (T₀ x).N × (T₀ x).Ω)
+      (u : List (Claims.Msg × Claims.Msg)), u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
+        RF (xsOf IV b x j u) (wit w (pre x t₀) (u.take (IV.k (xIOf x))) j)) :
     ZKBoundM IV b H ivScope I T₀ NB ΩB pre wit PS SO := by
   intro t ht δ₁ hδ x
-  have h := zkAt IV b H T₀ pre wit PS (Claims.Recursion.R (deployRec IV ivScope b) I) RF
+  have h := zkAt IV b H (T₀ x) (pre x) wit PS (Claims.Recursion.R (deployRec IV ivScope b) I) RF
     (simPre (deployRec IV ivScope b) I) (SO t) x (2 * (I.V.k (xIOf x) + kS x * b.nC x) * δ₁) (4 * t * 3 ^ t)
     (fun j => ((deployRec IV ivScope b).nums x j).εzk t δ₁) (h₀ t ht δ₁ hδ x) (hS t ht δ₁ hδ x) (hW x)
     (fun j _ => nums_εzk_nonneg _ t δ₁) (by positivity)
-  refine (zkAt_sim IV b ivScope I T₀ NB ΩB (SO t) x (hI x) h).mono (le_of_eq ?_) (le_of_eq ?_)
+  refine (zkAt_sim IV b ivScope I (T₀ x) NB ΩB (SO t) x (hI x) h).mono (le_of_eq ?_) (le_of_eq ?_)
   · simp only [Claims.Recursion.εzk]
     rw [Fin.sum_univ_eq_sum_range (fun j => ((deployRec IV ivScope b).nums x j).εzk t δ₁)]
     simp only [xI_deployRec]
