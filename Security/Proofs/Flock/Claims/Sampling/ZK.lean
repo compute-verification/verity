@@ -24,8 +24,9 @@ sessions, and no term of the sampled claim bounds those.
   coins, and the reveals are the sessions' witnesses. The leaf layer is the leakage, so the claim reads no hiding of it;
   that it hides the unopened rows is the leaf's own hm96 hiding, outside this claim.
 * `zk_deploy_of_models`, `zk_deploy_of_models_gap`: at the deployed record `SamplingDeploy.deploy rel c`, whose rounds
-  are the protocol's when `K + 2 = c.V.k`, the second at the key's hiding gap (`CROnly.hm96Hiding_gap`), and
-  `SamplingDeploy.sampling_deployed_models`, `sampling_deployed` with its zero knowledge from them.
+  are the protocol's when `K + 2 = c.V.k` at every statement that parses, the second at the key's hiding gap
+  (`CROnly.hm96Hiding_gap`), and `SamplingDeploy.sampling_deployed_models`, `sampling_deployed` with its zero
+  knowledge from them.
 -/
 
 namespace Claims.Sampling
@@ -67,33 +68,37 @@ def RAt (H : Msg → Msg) (D : Deploy Coin Col T) (lx : List Msg) : Rel Wit :=
 
 /-- **Sampling's zero knowledge from a committed-coin protocol with leakage**, through `S_Flock` with `N` rewinds:
 `ZK` at `P = L.G.prover`, at `ε_zk = 1/(N+1) + δ_A + N·δ_B` and `γ = N`, when the sampled verifier's rounds are the
-protocol's. -/
+protocol's at every statement that parses (`ZKmalR` reads only the honest pairs, whose statements parse). -/
 theorem zk_of_leaky (H : Msg → Msg) (D : Deploy Coin Col T) (L : Leaky Wit) (N : ℕ) (δA δB : Msg → ℝ)
-    (hzk : D.flock.zk = true) (hk : ∀ x, L.G.k x = D.V.k x)
+    (hzk : D.flock.zk = true) (hk : ∀ x s, D.parse x = some s → L.G.k x = D.V.k x)
     (hA : ∀ lx, (L.proto lx).PrefixHides H (RAt H D lx) δA) (hB : ∀ lx, (L.proto lx).SHVZK H (RAt H D lx) δB)
     (hB0 : ∀ x, 0 ≤ δB x) (hC : L.G.Binding H) :
     ZK H D L.G.prover (L.simLeak N) (fun x => 1 / ((N : ℝ) + 1) + δA x + N * δB x) fun _ => N := by
   refine ⟨hzk, fun l x w hR Θ Vs θ hkV Ev => ?_⟩
-  exact (L.proto (l x)).gk_zk H (RAt H D (l x)) N δA δB (hA _) (hB _) hB0 hC x w hR Θ Vs θ (hkV.trans (hk x).symm) Ev
+  obtain ⟨s, _, hs, _⟩ := hR.1
+  exact (L.proto (l x)).gk_zk H (RAt H D (l x)) N δA δB (hA _) (hB _) hB0 hC x w hR Θ Vs θ
+    (hkV.trans (hk x s hs).symm) Ev
 
 /-- **The same through `S_GK`** at `t` and the cap `t·3^t`: at `ε_zk = 4δ_A + 4t·δ_B + 2·3^{-t}` and `γ = 4t·3^t`. -/
 theorem zk_of_leakyE (H : Msg → Msg) (D : Deploy Coin Col T) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
-    (δA δB : Msg → ℝ) (hzk : D.flock.zk = true) (hk : ∀ x, L.G.k x = D.V.k x)
+    (δA δB : Msg → ℝ) (hzk : D.flock.zk = true) (hk : ∀ x s, D.parse x = some s → L.G.k x = D.V.k x)
     (hA : ∀ lx, (L.proto lx).PrefixHides H (RAt H D lx) δA) (hB : ∀ lx, (L.proto lx).SHVZK H (RAt H D lx) δB)
     (hB0 : ∀ x, 0 ≤ δB x) (hC : L.G.Binding H) :
     ZK H D L.G.prover (L.simLeakE t (t * 3 ^ t)) (fun x => 4 * δA x + 4 * t * δB x + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t := by
   refine ⟨hzk, fun l x w hR Θ Vs θ hkV Ev => ?_⟩
+  obtain ⟨s, _, hs, _⟩ := hR.1
   exact (L.proto (l x)).gkE_zk_pow H (RAt H D (l x)) t ht δA δB (hA _) (hB _) hB0 hC x w hR Θ Vs θ
-    (hkV.trans (hk x).symm) Ev
+    (hkV.trans (hk x s hs).symm) Ev
 
 /-- **Sampling's zero knowledge from the models**: `ZK` at `P = L.G.prover` and `S_GK` given the leakage, at
 `ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`, under `Claims.Hm96Hiding` and, at each leakage `lx`, the
 message link, the simulator, the tables' non-degeneracy and `InnerHolds` on the honest pairs whose leaf layer is `lx`,
 and the coin check. -/
 theorem zk_of_models (H : Msg → Msg) (D : Deploy Coin Col T) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
-    (hzk : D.flock.zk = true) (hk : ∀ x, L.G.k x = D.V.k x) {Salt B Cc : Type} [AddCommGroup Salt]
-    [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (My : Salt → B) (cs : Salt → Cc)
+    (hzk : D.flock.zk = true) (hk : ∀ x s, D.parse x = some s → L.G.k x = D.V.k x) {Salt B Cc : Type}
+    [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (My : Salt → B)
+    (cs : Salt → Cc)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
     (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).CoinModel x Salt B Cc) (nL nB : Msg → ℕ)
@@ -124,10 +129,12 @@ open Claims Claims.Sampling Claims.ZKMal
 variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : Code)
 
 /-- **Sampling's zero knowledge at the deployed record, from the models**: `zk_of_models` at `deploy rel c`, whose
-sessions are `deployZk`'s, masked, when the sampled verifier's rounds are the protocol's (`K + 2 = c.V.k`). -/
-theorem zk_deploy_of_models (H : Msg → Msg) (L : Leaky Wit) (t : ℕ) (ht : 0 < t) (hK : ∀ x, L.G.K x + 2 = c.V.k x)
-    {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
-    [DecidableEq B] (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
+sessions are `deployZk`'s, masked, when the sampled verifier's rounds are the protocol's (`K + 2 = c.V.k`) at every
+statement that parses. -/
+theorem zk_deploy_of_models (H : Msg → Msg) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
+    (hK : ∀ x s, c.parse x = some s → L.G.K x + 2 = c.V.k x) {Salt B Cc : Type} [AddCommGroup Salt]
+    [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (My : Salt → B) (cs : Salt → Cc)
+    {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
     (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).CoinModel x Salt B Cc) (nL nB : Msg → ℕ)
     (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x) (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)
@@ -141,9 +148,9 @@ theorem zk_deploy_of_models (H : Msg → Msg) (L : Leaky Wit) (t : ℕ) (ht : 0 
 /-- **The same at the key's hiding gap** (`CROnly.hm96Hiding_gap`), with `Claims.Hm96Hiding` discharged: what remains is
 the protocol's rounds, the four models' Props at each leakage and the coin check. -/
 theorem zk_deploy_of_models_gap (H : Msg → Msg) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
-    (hK : ∀ x, L.G.K x + 2 = c.V.k x) {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt]
-    [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc)
-    (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
+    (hK : ∀ x s, c.parse x = some s → L.G.K x + 2 = c.V.k x) {Salt B Cc : Type} [AddCommGroup Salt]
+    [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B)
+    (cs : Salt → Cc) (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).CoinModel x Salt B Cc) (nL nB : Msg → ℕ)
     (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x) (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)
     (hL : ∀ lx, (L.proto lx).MsgLink H (RAt H (deploy rel c) lx) My cs (Mp lx) (Mc lx))
@@ -165,9 +172,10 @@ theorem sampling_deployed_models (H : Msg → Msg) (hKS : Claims.Flock.KS H (Flo
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
     {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H (deploy rel c) P δc)
-    (L : Leaky Wit) (t : ℕ) (ht : 0 < t) (hK : ∀ x, L.G.K x + 2 = c.V.k x) {Salt B Cc : Type} [AddCommGroup Salt]
-    [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B)
-    (cs : Salt → Cc) (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
+    (L : Leaky Wit) (t : ℕ) (ht : 0 < t) (hK : ∀ x s, c.parse x = some s → L.G.K x + 2 = c.V.k x)
+    {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
+    [DecidableEq B] [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc)
+    (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).CoinModel x Salt B Cc) (nL nB : Msg → ℕ)
     (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x) (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)
     (hL : ∀ lx, (L.proto lx).MsgLink H (RAt H (deploy rel c) lx) My cs (Mp lx) (Mc lx))
