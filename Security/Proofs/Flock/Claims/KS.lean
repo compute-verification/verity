@@ -259,5 +259,7 @@ are the coins `fnAt` gives on the live history; a live prover whose messages alo
 rounds as its live outcome (`PlainSim`: `FlockDeploy.KS.plainSim`, `FlockDeploy.KS.plainΦ`, `FlockDeploy.KS.Pr_plainΦ`,
 `FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`). A deployed run's messages are `P`'s at the history
 of its coins' bytes, and its acceptance does not read its last coin (`PlainLock`: `FlockDeploy.KS.run_dep`,
-`FlockDeploy.KS.depMsg_congr`, `FlockDeploy.KS.run_acc_iff_last`).
+`FlockDeploy.KS.depMsg_congr`, `FlockDeploy.KS.run_acc_iff_last`); along the live history the simulator's coins are
+`plainΦ`'s wherever it has revealed them, so it sends `P`'s rounds and its live outcome is theirs
+(`FlockDeploy.KS.simCoins_agree`, `FlockDeploy.KS.plainSim_msg`, `FlockDeploy.KS.plainSim_liveOut`).
 -/
