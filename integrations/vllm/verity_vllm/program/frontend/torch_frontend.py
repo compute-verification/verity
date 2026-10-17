@@ -382,17 +382,13 @@ def _tracing() -> bool:
     return _DEPTH.get() > 0
 
 
-def _hex16(key: bytes) -> str:
-    return hashlib.sha256(key).hexdigest()[:16]
-
-
 def _no_semantics(*_a, **_k):
     raise NotImplementedError("Verity ops have no torch execution semantics; export them to a Program")
 
 
 def _mint(kind: str, fn, arg_types: Sequence[Type], axes: tuple, n: int, n_xs: int, out_type: Type) -> str:
     key = canonical_json([kind, _spec_id(fn), [t.to_json() for t in arg_types], list(axes), n, n_xs])
-    opname = f"{kind}_{_hex16(key)}"
+    opname = f"{kind}_{hashlib.sha256(key).hexdigest()[:16]}"
     info = _OPINFO.get(opname)
     if info is not None and info.fn is not fn:
         # another definition object already claims this fully qualified specialisation: it must be the same body
@@ -999,23 +995,12 @@ def _permute(x: Coll, dims: Sequence[int], where: str) -> Coll:
     dims = tuple(d + len(shape) if d < 0 else d for d in dims)
     if dims == tuple(range(len(shape))):
         return x
-    strides = _row_major(shape)
-    k = len(dims)
-    while dims[k - 1] == k - 1:
-        k -= 1
-    lead = math.prod(shape[:k])
-    # past the Explicit limit only: below it the Explicit form stays, so the Programs that derive today keep their bytes
-    if (not isinstance(x.refs, Affine) and _constant_run(x.refs) is None and x.type.leaves > _EXPLICIT_LIMIT
-            and k < len(shape) and lead <= _VIEW_PARTS_LIMIT):
-        L, rows = x.type.leaves // lead, _row_major(shape[:k])
-        parts = []
-        for j in range(lead):     # a permute of the leading axes reorders whole rows of the trailing ones
-            rem, row = j, 0
-            for d in reversed(dims[:k]):
-                rem, q = divmod(rem, shape[d])
-                row += q * rows[d]
-            parts.append(x.refs.slice(row * L, (row + 1) * L))
-        return Coll(_tensor_type([shape[d] for d in dims], w), concat(parts))
+    strides, k = _row_major(shape), max(i + 1 for i, d in enumerate(dims) if d != i)  # axes k.. stay in place
+    # whole rows of axes k.., reordered; past the Explicit limit only, so the Programs that derive today keep their bytes
+    if (x.type.leaves > _EXPLICIT_LIMIT and k < len(shape) and (lead := math.prod(shape[:k])) <= _VIEW_PARTS_LIMIT
+            and _constant_run(x.refs) is None and not isinstance(x.refs, Affine)):
+        L, rows = x.type.leaves // lead, torch.arange(lead).reshape(shape[:k]).permute(dims[:k]).reshape(-1).tolist()
+        return Coll(_tensor_type([shape[d] for d in dims], w), concat([x.refs.slice(r * L, (r + 1) * L) for r in rows]))
     return _view(x, [shape[d] for d in dims], [strides[d] for d in dims], 0, where, f"permute {dims}")
 
 
@@ -1331,7 +1316,7 @@ def export_report(fn: Function | Bound | Callable | torch.nn.Module, example_inp
                f"{unreachable.total} with no path to a protected output); first ids {dead.ids[:8]}. Dead gates are legal and "
                f"are not boundary values; pass dead_gates='ignore' to suppress or 'error' to forbid")
         if dead_gates == "error":
-            raise FrontendError("E_DEAD_GATES", msg, target_id(sd))
+            raise FrontendError("E_DEAD_GATES", msg, _spec_id(sd))
         if dead_gates == "warn":
             warnings.warn(DeadGateWarning(msg), stacklevel=3)
     for r in rules:
@@ -1339,10 +1324,6 @@ def export_report(fn: Function | Bound | Callable | torch.nn.Module, example_inp
     prov = {"frontend": FRONTEND_VERSION, "torch": torch.__version__, "mode": mode, "registry": registry_version(),
             "rules": [r.to_json() for r in rules]}
     return ExportReport(program, digest, _spec_id(sd), program.gates, program.input_gates, dead, unreachable, prov, dead_gates)
-
-
-def target_id(sd: SpecializedDefinition) -> str:
-    return _spec_id(sd)
 
 
 def definition_digest(sd: SpecializedDefinition) -> str:
