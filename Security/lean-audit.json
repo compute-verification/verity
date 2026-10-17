@@ -7369,7 +7369,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "43d52e480f535b1b9bd9a58cc2d1f26a444fbf8b0898e8517aae351dea862a6a",
+   "digest": "70ceacc8d84cf285be89be4f5bc884818cb7f8d2c02a774e28f0831367a0391c",
    "definitions": {
     "Claims.Sampling.BGate": "63a981e57403ae475c097446b58799e6bbc6ebb87e4a1ff8911d63f602542833",
     "Claims.Sampling.BGate.and": "5e97bb022ac07b984f8303744fbc545e8aa6f37c7e6ec025083230906f800909",
@@ -7384,8 +7384,8 @@
     "Claims.Sampling.BGate.xor": "ffcfb099869784fa5e844b41261cfad381f38bd652c0f2d4619de82a550c6e27",
     "Claims.Sampling.Bext": "92900257638348d49c154a593348589ff5c5dcf19db07008a2bf2abb573fd658",
     "Claims.Sampling.Binding": "f0b5d68e7ef26dcf3f41116ddeb9dc002f662d98ca03b7cf9b754b02d8afbff8",
-    "Claims.Sampling.Bits": "b851036e6627f45d3cf9aa1bd8c23e6fc242a4e950588c07cc7ac915c526c1a2",
-    "Claims.Sampling.BitsLin": "9f8509a977053bae027de023c1975dc7cb4d09bfd8bedee1ad2b23baaef3e56c",
+    "Claims.Sampling.Bits": "32127d04d1abb75b3b4b6338f14750f5b6108b2f69d3cbd8b969c35e07cfed91",
+    "Claims.Sampling.BitsLin": "12104e21f4e2f56bfd5155466aa311b5bb32a85e1a8487d7f7dcabd2598f5e16",
     "Claims.Sampling.BoundaryFaulty": "bae6eddf2b56d3d7e64877fbd0f784905eb38b3fcb3c3e780592919f2afab6a3",
     "Claims.Sampling.Commitment": "6f21adfbc654f6e71de5b6f338e836ed805fcb50b98a77646b11e96fbc01b65f",
     "Claims.Sampling.Commitment.Binds": "3d281bc90d41540bc59fac317c7704f40034ecf5b92268542b66de988a289858",
@@ -7431,8 +7431,9 @@
     "Claims.Sampling.Faulty": "57b98736ecb3cdc04e1587091e96e47a3a04e709cff385a3a1336df475ad72de",
     "Claims.Sampling.FaultyBoundary": "8a397c204f7d38ce20239f9f4aad82a81b446511f87032250974a69c55d67b2f",
     "Claims.Sampling.InScope": "6a434dab6346dce2714b06fbc817a2fdd95a02dc108afb688aef4b145da91aef",
-    "Claims.Sampling.KS": "f6c87246797d3221c09ac232eaa7397b3ecaa59c85a586800c38104feaa431b5",
-    "Claims.Sampling.KSCount": "8748e91db164932c915928e9a5037f2c108e0e3e742b226af52e08b314d9d659",
+    "Claims.Sampling.KS": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2",
+    "Claims.Sampling.KSCount": "2efbb9432a8bc328bb911364ff9eceba711c48f28c6a06625967f2ae42354688",
+    "Claims.Sampling.KSLinOn": "3cd3242c014dcfc2396edb1804401628881a6073f98b1da31842b3655b58e08b",
     "Claims.Sampling.LogColl": "556b27152133c315374dc4629cb20ba9925e4044187c7529eb9fb9c86de3ce30",
     "Claims.Sampling.Netlist": "a5715809f46a4bb1974daf0b51e94642c1eb1b849c47def7d144b613e20c7af7",
     "Claims.Sampling.Netlist.Fits": "459dc5d554c6c82dd0dac7534ecd4a6b485ebaa8f5f67a340674b4b37812a8a7",
@@ -17323,9 +17324,9 @@
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
   "Models.Flock.Guarantees.SamplingClaims": {
-   "digest": "32d81478bad36ee1155b0b5e62fc2b39cbe38968e50c57c34ed8287b56f4bfd5",
+   "digest": "a5b53ab127f85f12b420093bd1bb1a2c238325aaa14b3ebf8a79add124d534d1",
    "definitions": {
-    "Flock.Guarantees.SamplingClaimsStated": "0308d483c5dd279960fdbd65e1f30108bedb361d493cbed0e3cb362753e6100e"
+    "Flock.Guarantees.SamplingClaimsStated": "1e0fc5c38949339e91de0405310b1ab3387f6310c860ba6841f745ce4dc16309"
    },
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
