@@ -324,6 +324,176 @@ impl Challenger for Framer<'_> {
     }
 }
 
+/// The outer firewall's release (PROTOCOL.md §10.1): one rep's `flock-firewall frame` process (`Flock.Firewall.Frame` in the
+/// Lean verifier), which computes each round that leaves from the device's unmasked round the firewall passed, the rep's
+/// pads and the pads' root.
+#[cfg(feature = "sha512")]
+pub struct LeanFrame {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+    stdout: std::io::BufReader<std::process::ChildStdout>,
+}
+
+/// The `flock-firewall` the firewall releases through: `FC_FIREWALL_LEAN`, else the Lean verifier's build in this checkout.
+#[cfg(feature = "sha512")]
+pub fn lean_frame_exe() -> std::path::PathBuf {
+    std::env::var_os("FC_FIREWALL_LEAN").map(Into::into)
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../core/service/flock/.lake/build/bin/flock-firewall"))
+}
+
+#[cfg(feature = "sha512")]
+impl LeanFrame {
+    /// Starts the rep's release on layout `lay`, pads `h` and the pads' root.
+    pub fn start(exe: &std::path::Path, lay: &crate::zk_veil::Layout, h: &[F128], root: &[u8]) -> Result<Self, String> {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(exe).arg("frame").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+            .map_err(|e| refused(format!("the Lean frame {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
+        let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), std::io::BufReader::new(child.stdout.take().expect("piped stdout")));
+        let mut f = LeanFrame { child, stdin, stdout };
+        let pads: Vec<String> = h.iter().map(|v| crate::hex(&[v.lo.to_le_bytes(), v.hi.to_le_bytes()].concat())).collect();
+        let start = serde_json::json!({"layout": {"n_mlv": lay.n_mlv, "n_lc": lay.n_lc, "n_ood0": lay.n_ood0, "k0": lay.k0},
+                                       "pads": pads, "root": crate::hex(root)});
+        writeln!(f.stdin, "{start}").and_then(|_| f.stdin.flush()).map_err(|e| refused(format!("the Lean frame's start: {e}")))?;
+        f.reply()?;
+        Ok(f)
+    }
+
+    fn reply(&mut self) -> Result<Option<usize>, String> {
+        use std::io::BufRead;
+        let mut line = String::new();
+        self.stdout.read_line(&mut line).map_err(|e| refused(format!("the Lean frame's answer: {e}")))?;
+        let line = line.trim_end();
+        if line == "ok" {
+            return Ok(None);
+        }
+        if let Some(n) = line.strip_prefix("ok ") {
+            return n.parse().map(Some).map_err(|_| refused(format!("the Lean frame's answer {line:?}")));
+        }
+        Err(refused(format!("the Lean frame: {}", line.strip_prefix("err ").unwrap_or(if line.is_empty() { "no answer" } else { line }))))
+    }
+
+    /// The round that leaves for the device's round `content` (which squeezes `n` coins), or the Lean frame's refusal.
+    pub fn round(&mut self, content: &[u8], n: usize) -> Result<Vec<u8>, String> {
+        use std::io::{Read, Write};
+        write!(self.stdin, "round {n} {}\n", content.len()).and_then(|_| self.stdin.write_all(content)).and_then(|_| self.stdin.flush())
+            .map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
+        let len = self.reply()?.ok_or_else(|| refused("the Lean frame answered a round without its length"))?;
+        let mut out = vec![0u8; len];
+        self.stdout.read_exact(&mut out).map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
+        Ok(out)
+    }
+
+    /// Whether the rep ended with every masked phase closed and every pad of the layout used.
+    pub fn finish(&mut self) -> Result<(), String> {
+        use std::io::Write;
+        writeln!(self.stdin, "finish").and_then(|_| self.stdin.flush()).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
+        self.reply().map(|_| ())
+    }
+}
+
+#[cfg(feature = "sha512")]
+impl Drop for LeanFrame {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// The masking challenger's inner challenger under the firewall. While a round's `release` is set (the Lean frame's round for
+/// the device round the firewall passed), it frames what the masking challenger hands it, as the device's challenger frames,
+/// and at the round's squeeze holds that (the speed reference) to the release byte for byte, then hands the release, and
+/// only the release, to the stream. With no release set it passes every call through: unfirewalled reps, and the rep's
+/// inner phase, which is the firewall's own.
+pub struct Gate<C: Challenger> {
+    pub inner: C,
+    pub release: Option<Vec<u8>>,
+    pending: Vec<u8>,
+}
+
+impl<C: Challenger> Gate<C> {
+    pub fn new(inner: C) -> Self {
+        Gate { inner, release: None, pending: Vec::new() }
+    }
+
+    fn held(&self) -> bool {
+        self.release.is_some()
+    }
+
+    fn squeeze(&mut self, kind: u8, n: usize) -> Vec<F128> {
+        push_header(&mut self.pending, OP_SQUEEZE, kind, n as u64);
+        if n == 0 && kind == KIND_SLICE {
+            return Vec::new();
+        }
+        let release = self.release.take().expect("a held round");
+        let mine = std::mem::take(&mut self.pending);
+        if mine != release {
+            let at = mine.iter().zip(&release).position(|(a, b)| a != b).unwrap_or(mine.len().min(release.len()));
+            panic!("{}", refused(format!("the masking challenger's round ({} bytes) and the Lean frame's ({} bytes) differ from byte {at}",
+                                         mine.len(), release.len())));
+        }
+        crate::replay_round(&mut self.inner, &release, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"))
+    }
+}
+
+impl<C: Challenger> Challenger for Gate<C> {
+    fn observe_label(&mut self, l: &[u8]) {
+        if !self.held() {
+            return self.inner.observe_label(l);
+        }
+        push_header(&mut self.pending, OP_LABEL, 0, l.len() as u64);
+        push_padded(&mut self.pending, l);
+    }
+    fn observe_f128(&mut self, v: F128) {
+        if !self.held() {
+            return self.inner.observe_f128(v);
+        }
+        push_header(&mut self.pending, OP_OBSERVE, KIND_SCALAR, 1);
+        self.pending.extend_from_slice(&v.lo.to_le_bytes());
+        self.pending.extend_from_slice(&v.hi.to_le_bytes());
+    }
+    fn observe_f128_slice(&mut self, vs: &[F128]) {
+        if !self.held() {
+            return self.inner.observe_f128_slice(vs);
+        }
+        push_header(&mut self.pending, OP_OBSERVE, KIND_SLICE, vs.len() as u64);
+        for v in vs {
+            self.pending.extend_from_slice(&v.lo.to_le_bytes());
+            self.pending.extend_from_slice(&v.hi.to_le_bytes());
+        }
+    }
+    fn observe_bytes(&mut self, b: &[u8]) {
+        if !self.held() {
+            return self.inner.observe_bytes(b);
+        }
+        push_header(&mut self.pending, OP_BYTES, 0, b.len() as u64);
+        push_padded(&mut self.pending, b);
+    }
+    fn sample_f128(&mut self) -> F128 {
+        if !self.held() {
+            return self.inner.sample_f128();
+        }
+        self.squeeze(KIND_SCALAR, 1)[0]
+    }
+    fn sample_f128_vec(&mut self, n: usize) -> Vec<F128> {
+        if !self.held() {
+            return self.inner.sample_f128_vec(n);
+        }
+        self.squeeze(KIND_SLICE, n)
+    }
+    fn grind_pow(&mut self, bits: u32) -> u64 {
+        assert!(!self.held(), "a held round grinds: the device frames its nonce as a message");
+        self.inner.grind_pow(bits)
+    }
+    fn verify_pow(&mut self, nonce: u64, bits: u32) -> bool {
+        self.inner.verify_pow(nonce, bits)
+    }
+    fn fork_from_seed(&self, seed: [F128; 2], label: &'static [u8]) -> Self {
+        assert!(!self.held(), "a fork inside a held round");
+        Gate::new(self.inner.fork_from_seed(seed, label))
+    }
+}
+
 /// This process's CPU seconds so far (user and system, every thread), from `/proc/self/stat` in clock ticks of 1/100 s (Linux's
 /// `USER_HZ`); 0 where there is no procfs.
 pub fn cpu_seconds() -> f64 {

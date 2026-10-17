@@ -31,7 +31,7 @@ use flock_core::{
 use flock_field::F128;
 use flock_live::{
     circuit::*,
-    firewall::Framer,
+    firewall::{Framer, Gate},
     session_verify as sverify,
     zk_hooks::{Hooks, NoMask, ProverSeed},
     zk_veil::{self as zkv, InnerProof, Layout},
@@ -1004,14 +1004,20 @@ fn claim_word_points(st: &Stmt, lay: &Layout, coins: &[F128]) -> Result<[Vec<F12
     Ok([zkv::point_parts(&ab).1[1..].to_vec(), zkv::point_parts(&c).1[1..].to_vec()])
 }
 
-/// A rep's masking challenger (M1) in front of its live stream: the pads it adds (a dishonest prover's other ones), and the
-/// rank check at the opening's label (the prover stops on degenerate coins).
-fn zk_masking<C: flock_transcript::challenger::Challenger>(st: &Arc<Stmt>, ch: C, zk: &ZkRep) -> (zkv::Masking<C>, zkv::Pads) {
+/// The pads a rep's values are sent under: its own (a dishonest prover's other ones).
+fn sent_pads(zk: &ZkRep) -> zkv::Pads {
     let mut sent = zkv::Pads { h: zk.pads.h.clone(), mu: vec![], pad_h: vec![], pad_mu: vec![], tau_salt: vec![] };
     if zk.pad_mismatch {
         sent.h[zk.lay.ml(0, 0)] += F128::ONE;
     }
-    let mut mch = zkv::Masking::new(ch, &zk.lay, &sent, zk.ic.root());
+    sent
+}
+
+/// A rep's masking challenger (M1) in front of its live stream: the pads it adds (a dishonest prover's other ones), and the
+/// rank check at the opening's label (the prover stops on degenerate coins).
+fn zk_masking<C: flock_transcript::challenger::Challenger>(st: &Arc<Stmt>, ch: C, zk: &ZkRep) -> (zkv::Masking<Gate<C>>, zkv::Pads) {
+    let sent = sent_pads(zk);
+    let mut mch = zkv::Masking::new(Gate::new(ch), &zk.lay, &sent, zk.ic.root());
     let (st2, lay, pts, words) = (st.clone(), zk.lay, zk.points.clone(), mask_words(st));
     mch.at_open = Some(Box::new(move |coins: &[F128]| {
         let tr = Instant::now();
@@ -1079,6 +1085,8 @@ struct FirewallRep {
     shadow: Option<std::thread::JoinHandle<(flock_core::pcs::BatchOpeningProofLigerito, f64)>>,
     t_wait: f64,
     algebra_tampered: bool,
+    /// the rep's release: every round that leaves is this Lean frame's
+    lean: flock_live::firewall::LeanFrame,
 }
 
 /// Flips the low bit of the first payload byte of `content`'s first frame of op `op`; whether there was one.
@@ -1158,8 +1166,9 @@ impl Firewall {
                                                &mut flock_live::firewall::Recorder::default()).map(|r| r.cons.iter().map(|c| c.0).collect()).unwrap_or_default();
             t.begin_rep(rep, lay, &zk.pads, &zk.ic.root(), &domain(&st.c, rep), &self.cm, &items, &names)
         });
+        let lean = flock_live::firewall::LeanFrame::start(&flock_live::firewall::lean_frame_exe(), &lay, &sent_pads(zk).h, &zk.ic.root())?;
         self.rep = Some(FirewallRep { rep, lay, zk0: zk.level0.clone(), checker: flock_live::firewall::Checker::new(items, lay.piop_exposed()), coins: Vec::new(),
-                                  extras: None, link: None, shadow: None, t_wait: 0.0, algebra_tampered: false });
+                                  extras: None, link: None, shadow: None, t_wait: 0.0, algebra_tampered: false, lean });
         Ok(())
     }
 
@@ -1185,9 +1194,12 @@ impl Firewall {
     }
 
     /// One device round before it is sent: the skeleton's in the algebraic phase, the shadow's in the opening. Returns the
-    /// round to send (the device's own bytes).
-    fn round(&mut self, content: &[u8], n: usize) -> Result<Vec<u8>, String> {
-        let r = self.round_inner(content, n);
+    /// round it passed (the device's own bytes) and the round that leaves, the Lean frame's (`Flock.Firewall.Frame.round`).
+    fn round(&mut self, content: &[u8], n: usize) -> Result<(Vec<u8>, Vec<u8>), String> {
+        let r = self.round_inner(content, n).and_then(|c| {
+            let release = self.rep.as_mut().expect("a firewalled rep").lean.round(&c, n)?;
+            Ok((c, release))
+        });
         r.map_err(|e| self.refuse(e))
     }
 
@@ -1288,6 +1300,7 @@ impl Firewall {
         if r.link.is_none() {
             return Err(refused("the device returned before its opening"));
         }
+        r.lean.finish()?;
         if !proof.zerocheck.grinding_nonces.is_empty() || !proof.lincheck.grinding_nonces.is_empty() || !proof.lincheck.matrix_evals.is_empty() {
             return Err(refused("the proof carries grinding nonces or matrix evaluations the transcript did not"));
         }
@@ -1378,9 +1391,11 @@ fn opening_diff(a: &flock_core::pcs::BatchOpeningProofLigerito, b: &flock_core::
 
 /// One round of a firewalled rep's device (or of the rep's device without a firewall): the firewall's check, then the masking challenger's
 /// replay of the round onto the stream, and the coins back to the firewall.
-fn firewalled_round<C: flock_transcript::challenger::Challenger>(firewall: &Option<Arc<Mutex<Firewall>>>, mch: &mut C, c: &[u8], n: usize) -> Vec<F128> {
+fn firewalled_round<C: flock_transcript::challenger::Challenger>(firewall: &Option<Arc<Mutex<Firewall>>>, mch: &mut zkv::Masking<Gate<C>>, c: &[u8],
+                                                                 n: usize) -> Vec<F128> {
     let Some(g) = firewall else { return replay_round(mch, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}")) };
-    let c = g.lock().unwrap_or_else(PoisonError::into_inner).round(c, n).unwrap_or_else(|why| panic!("{why}"));
+    let (c, release) = g.lock().unwrap_or_else(PoisonError::into_inner).round(c, n).unwrap_or_else(|why| panic!("{why}"));
+    mch.inner.release = Some(release);
     let coins = replay_round(mch, &c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
     g.lock().unwrap_or_else(PoisonError::into_inner).answer(&coins);
     coins
@@ -3157,7 +3172,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                             // opens rep 1's stream; otherwise (sequential) the rep's stream is open already
                             Some(z) => {
                                 let mut first = rep0_finish.take();
-                                let mut opened: Option<(zkv::Masking<LiveChallenger>, zkv::Pads)> = lch.take().map(|l| zk_masking(st, l, &z));
+                                let mut opened: Option<(zkv::Masking<Gate<LiveChallenger>>, zkv::Pads)> = lch.take().map(|l| zk_masking(st, l, &z));
                                 let mut r0: Option<Result<(Vec<u8>, Value), String>> = None;
                                 let tp = Instant::now();
                                 let dev = catch_unwind(AssertUnwindSafe(|| {
