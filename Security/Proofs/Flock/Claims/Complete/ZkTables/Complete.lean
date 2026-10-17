@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Discharge
 import Proofs.Flock.Claims.Complete.ZkTables.Link
-import Proofs.Flock.Claims.Complete.ZkTables.Count
+import Proofs.Flock.Claims.Complete.ZkTables.Runs
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-!
@@ -11,12 +11,13 @@ import Proofs.Flock.Claims.Complete.Zk.Complete
   every goal `complete_zk` rests on, or proves, holds at a run of one table.
 * **At every number of tables**: the scope's goals (`tables_goal`, `schedules_goal`, `proofCount_goal`), the link
   message first (`linkFirst_goal`) and the sends (`sends_goal`).
-* **Several tables**: what `complete_zk` asks or proves at one table, at a run of several, as named `Prop`s: the session
-  runs (`SessionRunsJ`), the record checks that `Zk/Json/` proves at one table from the record's premises
-  (`RecordAt`, `RecordJ`), and the checks still open at one table (`OpenAt`, `OpenJ`: per rep the masked replay, the
-  ring switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed).
+* **Several tables**: the session runs from `StmtOkJ` and `ProverRunsJ` (`sessionRunsJ_goal`, `complete_zk`'s
+  `StmtOkZk` and `ProverRunsZk` at several tables, the latter per table); and what `complete_zk` asks or proves at one
+  table, at a run of several, as named `Prop`s: the record checks that `Zk/Json/` proves at one table from the record's
+  premises (`RecordAt`, `RecordJ`), and the checks still open at one table (`OpenAt`, `OpenJ`: per rep the masked
+  replay, the ring switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed).
 * `complete`: Flock's masked verifier is complete for `honestP` with error `δc H`
-  (`Claims.Flock.Complete H (deployZk rel) honestP (δc H)`), from `complete_zk`'s premises and these three.
+  (`Claims.Flock.Complete H (deployZk rel) honestP (δc H)`), from `complete_zk`'s premises and these four.
 -/
 
 open Flock FlockDeploy Transcript
@@ -56,11 +57,6 @@ def Run.toZk (o : Run H rel) (h1 : o.sts.size = 1) : RunZk H rel :=
 section Several
 
 variable (H rel)
-
-/-- **The masked session runs** at every good case of several tables. -/
-def SessionRunsJ : Prop :=
-  ∀ c : Case H rel, 1 < c.sts.size →
-    ∃ record proofs bodies, sessionS H c.resp c.spec c.sts c.w c.ω = (.ok (record, proofs), bodies)
 
 /-- **The record's checks at a run**: `Goals`' checks on the record and the proof files, which `Zk/Json/` proves at one
 table from the record's premises. -/
@@ -123,14 +119,15 @@ theorem Case.one_or_several (c : Case H rel) : c.sts.size = 1 ∨ 1 < c.sts.size
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: from `complete_zk`'s premises, which give every check at one table, and at several tables the
-session running (`SessionRunsJ`), the record's checks (`RecordJ`) and the checks open at one table (`OpenJ`). -/
+statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the record's checks (`RecordJ`) and the checks open
+at one table (`OpenJ`). -/
 theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hRR : JsonRT.RepRoundsZk H rel)
     (hR : JsonRT.RepShapedZk H rel) (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel)
     (hRp : FlockComplete.Replay H rel) (hRS : FlockComplete.RingSwitchZk H rel)
     (hLg : FlockComplete.LigeritoZk H rel) (hLC : FlockComplete.LaneConstraints H rel)
-    (hIn : FlockComplete.Inner H rel) (hCo : FlockComplete.ConsumedZk H rel) (hSRJ : SessionRunsJ H rel)
-    (hRec : RecordJ H rel) (hOp : OpenJ H rel) :
+    (hIn : FlockComplete.Inner H rel) (hCo : FlockComplete.ConsumedZk H rel) (hSJ : StmtOkJ H rel)
+    (hPRJ : ProverRunsJ H rel) (hRec : RecordJ H rel) (hOp : OpenJ H rel) :
     Claims.Flock.Complete H (deployZk rel) honestP (δc H) := by
   have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 hRR
   have hSR : FlockComplete.SessionRunsZk H rel := JsonRT.sessionRunsZk_goal S hS hPR
@@ -165,7 +162,7 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
   have openAll : ∀ o : Run H rel, OpenAt H rel o := fun o =>
     (o.one_or_several).elim (open1 o) (hOp o)
   refine complete_of_goals H rel
-    { session := fun c => (c.one_or_several).elim (fun h1 => ?_) (hSRJ c)
+    { session := fun c => (c.one_or_several).elim (fun h1 => ?_) (sessionRunsJ_goal S hSJ hPRJ c)
       sends := sends_goal H rel
       linkFirst := linkFirst_goal H h64 rel
       finalFits := fun o => (recAll o).finalFits
