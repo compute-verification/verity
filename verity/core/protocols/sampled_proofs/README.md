@@ -458,7 +458,10 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   "audit"}` for the interiors in the same forms; `Outcome.record` is its SHA-512.
 
 A stream refuses a two-stage count, the `Sequential` rule, a window statement and a timed session until they are built,
-and a check with no proof deadline.
+and a check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies
+(`shapes`, `count_varies`): `bernoulli` at `0 < p < 1`, one-stage or as a two-stage replay, whose draws would give
+one registration's sessions tables of different shapes. A work draw's closure varies too and is not refused: the work
+draw with a producer closure is a planned design.
 Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outcome`,
 `test_the_rule_refuses_an_extra_field` and the other `test_the_rule_refuses_*`,
 `test_no_retries_nothing_redraws_and_an_outcome_is_final`, `test_a_late_proof_is_a_reject`,
@@ -472,7 +475,8 @@ Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outc
 `test_two_stage_round_trip_registers_the_interiors_between_the_draw_and_the_proof`,
 `test_the_interiors_are_registered_once_after_select_before_deliver_over_the_proved_rus`,
 `test_a_two_stage_outcome_accepts_only_when_both_audits_do`, `test_a_work_draw_carries_its_closure_and_the_proof_proves_it`,
-`test_a_closure_widens_a_work_draw_only_and_stays_in_range`, `test_the_default_draw_is_draw_first_on_the_challengers_bytes`).
+`test_a_closure_widens_a_work_draw_only_and_stays_in_range`, `test_the_default_draw_is_draw_first_on_the_challengers_bytes`,
+`test_a_law_whose_count_varies_is_refused_at_register`).
 What a registration reads of the log, and that its verdicts are the whole log's, is pinned by
 `tests/test_service_history.py`.
 
