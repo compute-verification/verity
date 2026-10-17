@@ -68,10 +68,11 @@ def test_layout_matches_reference_and_gaps_are_zero(mod, gather):
 
 @pytest.mark.parametrize("bpd,auto", [(1, False), (4, False), (32, False), (32, True), (1024, True)])
 def test_gather_writes_the_reference_layout_at_every_alignment_and_grid(mod, bpd, auto):
-    """The gather kernel's paths (16 B words between byte heads and tails when source and destination share their offset mod 16, 4 B
-    words when both are 4 B aligned, pitched rows by 16 B or 4 B words, bytes otherwise) write exactly the reference layout's bytes:
-    tensors of every length and source offset (slices of one buffer), three dtypes, pitched views, small ones and ones that take many
-    grid-stride rounds, under any grid."""
+    """The gather kernel's paths (16 B words between byte heads and tails when source and destination share their offset mod 16, 16 B
+    words joined from two source loads when both are 4 B aligned at other offsets, pitched rows by 16 B or 4 B words, bytes otherwise)
+    write exactly the reference layout's bytes: tensors of every length and source offset (slices of one buffer), three dtypes, pitched
+    views, small ones and ones that take many grid-stride rounds, every (source, destination) offset pair mod 16 of the 4 B aligned
+    ones, under any grid."""
     c = mod.Collector()
     c.enable_gather(256)
     c.blocks_per_desc, c.auto_blocks = bpd, auto
@@ -82,11 +83,15 @@ def test_gather_writes_the_reference_layout_at_every_alignment_and_grid(mod, bpd
                                              (0, 300_001), (5, 262_147), (4, 524_292), (16, 65_536)]]
     ts += [f32[1:1001], f32[3:70_003], bf16[3:2000], bf16[1:40_001], f32[:16_384].view(128, 128)[:, 3:67],
            f32[:16_384].view(128, 128)[:, 4:68], bf16[:16_384].view(128, 128)[:, 1:4], bf16[:65_536].view(256, 256)[:, 2:200]]
+    ts += [f32[k // 4:k // 4 + 4097] for k in range(16)]           # each moves the next destination by 4 B: 4 sources x 4 destinations
     arena = torch.full((4 << 20,), 0xAB, dtype=torch.uint8, device="cuda")
     used, n, _changed, _version = _run_step(c, arena, ts, key=1, gather=True)
     torch.cuda.synchronize()
     ref, total = _reference_layout(ts)
     assert (used, n) == (total, len(ts))
+    pairs = {(t.data_ptr() % 16, (arena.data_ptr() + off) % 16) for t, (off, _g, nb) in zip(ts, ref)
+             if t.is_contiguous() and t.data_ptr() % 4 == 0 and off % 4 == 0 and nb >= 64}
+    assert pairs == {(s, d) for s in range(0, 16, 4) for d in range(0, 16, 4)}
     for k, (t, (off, gap, nb)) in enumerate(zip(ts, ref)):
         if gap:
             assert int(arena[off - gap:off].max()) == 0, f"tensor {k}: alignment gap not zero-filled"

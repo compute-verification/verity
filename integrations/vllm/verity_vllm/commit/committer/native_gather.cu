@@ -37,11 +37,23 @@ __global__ void gather_copy_kernel(const GatherDesc* __restrict__ d, int n) {
     return;
   }
   if (contiguous && ((sa | da) & 3) == 0) {
-    const int64_t n4 = nb / 4;
-    const uint32_t* s = reinterpret_cast<const uint32_t*>(g.src);
-    uint32_t* t = reinterpret_cast<uint32_t*>(g.dst);
-    for (int64_t i = tid; i < n4; i += nthr) t[i] = s[i];
-    for (int64_t i = n4 * 4 + tid; i < nb; i += nthr) g.dst[i] = g.src[i];
+    // offsets differ by r 4 B words mod 16: 16 B stores to the aligned destination, each joined from two aligned 16 B source loads (the
+    // second is the next thread's first, so DRAM reads each byte once).  Both loaded 16 B blocks hold a byte of the source range: no
+    // read leaves its pages
+    const int64_t head = static_cast<int64_t>((16 - da) & 15) < nb ? static_cast<int64_t>((16 - da) & 15) : nb;
+    const int64_t n16 = (nb - head) / 16;
+    if (tid < head) g.dst[tid] = g.src[tid];
+    const int r = static_cast<int>(((sa + head) & 15) >> 2);
+    const uint4* s = reinterpret_cast<const uint4*>(g.src + head - 4 * r);
+    uint4* t = reinterpret_cast<uint4*>(g.dst + head);
+    if (r == 1) {
+      for (int64_t i = tid; i < n16; i += nthr) { const uint4 a = s[i], b = s[i + 1]; t[i] = make_uint4(a.y, a.z, a.w, b.x); }
+    } else if (r == 2) {
+      for (int64_t i = tid; i < n16; i += nthr) { const uint4 a = s[i], b = s[i + 1]; t[i] = make_uint4(a.z, a.w, b.x, b.y); }
+    } else {
+      for (int64_t i = tid; i < n16; i += nthr) { const uint4 a = s[i], b = s[i + 1]; t[i] = make_uint4(a.w, b.x, b.y, b.z); }
+    }
+    for (int64_t i = head + n16 * 16 + tid; i < nb; i += nthr) g.dst[i] = g.src[i];
     return;
   }
   if (contiguous) {
