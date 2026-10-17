@@ -16,7 +16,8 @@ import verity.ml.circuits.ops.scalar  # noqa: F401
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value
+from verity.ml.circuits.refs import tuple_of
+from verity.ml.circuits.types import Array, Tuple, Value
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -65,6 +66,41 @@ def test_the_query_refuses_what_it_does_not_describe():
                                 lambda B, S, x: B.call(XOR8, B.call(PAIR, x), x[0]), register=False)
     with pytest.raises(P.QueryRefused):
         P.units(Program(bind(other)), q)
+
+
+def test_a_unit_wider_than_the_literal_limit_or_of_no_gate_is_refused():
+    """A template instance commits at most `UNIT_BITS` bits, and so does a `Q_call` unit counting the constants it holds:
+    a template returning 24 bits, one of no gate, and a Call whose first unit at `X = 16` returns 16 bits and holds a
+    constant a later unit reads are refused; at `X = 8` that constant is in no unit, and the program is taken."""
+    v8x3 = Tuple(Value(8), Value(8), Value(8))
+    const = PrimitiveDefinition("OneStageTestConst8", 1, (), Value(8), lambda: 0x5A, register=False)
+    wide = bind(CompositeDefinition("OneStageTestWide", 0, (), lambda S: ((("x", Array(2, Value(8))),), v8x3),
+                                    lambda B, S, x: tuple_of(B.call(XOR8, x[0], x[1]), B.call(XOR8, x[1], x[0]),
+                                                             B.call(XOR8, x[0], x[0])), register=False))
+    empty = bind(CompositeDefinition("OneStageTestEmpty", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+                                     lambda B, S, x: x[0], register=False))
+    for t, why in ((wide, "commits 24 bits, more than 16"), (empty, "has no gate")):
+        with pytest.raises(P.QueryRefused, match=why):
+            P.units(P.population_program(t, 3), P.template_instance_query(t.id))
+
+    def held(B, S, x):
+        a = B.call(XOR8, x[0], x[1])
+        return tuple_of(a, B.call(XOR8, a, x[1]), B.call(const))
+
+    inner = bind(CompositeDefinition("OneStageTestHeld", 0, (), lambda S: ((("x", Array(2, Value(8))),), v8x3), held,
+                                     register=False))
+
+    def shared(B, S, x):
+        s = B.call(inner, x)
+        return tuple_of(s[0], s[1], B.call(XOR8, s[0], s[2]))
+
+    call = bind(CompositeDefinition("OneStageTestShared", 0, (), lambda S: ((("x", Array(2, Value(8))),), v8x3), shared,
+                                    register=False))
+    prog = Program(bind(CompositeDefinition("OneStageTestSharedProgram", 0, (), lambda S: call.signature(),
+                                            lambda B, S, x: B.call(call, x), register=False)))
+    with pytest.raises(P.QueryRefused, match="unit 0 of .* commits 24 bits, more than 16"):
+        P.units(prog, PO.call_query(16))
+    assert P.unit_gates(prog, PO.call_query(8)) == [(2, 3), (3, 4), (5, 6)]
 
 
 XOR3 = bind(CompositeDefinition("OneStageTestTriple", 0, (), lambda S: ((("x", Array(3, Value(8))),), Value(8)),
@@ -502,11 +538,17 @@ def test_the_partition_is_cores_on_the_pinned_q_word_vector():
 
 @pytest.mark.parametrize("n", range(len(TEMPLATE["cases"])), ids=[c[0] for c in TEMPLATE["cases"]])
 def test_the_partition_is_cores_on_the_pinned_template_vectors(n):
+    """One-stage names each pinned template vector's object as core does, and refuses its units: the vectors' templates
+    return 32-bit words, more than `UNIT_BITS` bits an instance."""
     _label, name, q, want = TEMPLATE["cases"][n]
     prog = _template_program(name)
     pinned = {"object": codec.canonical_json(want["object"]), "digest": want["digest"], "program": want["object"]["program"],
               "population": want["population"], "ranges": [(t, lo, c) for _k, t, lo, c in want["ranges"]]}
-    assert _one_stage(prog, q) == pinned == _core(prog, q)
+    obj = P.partition(prog, q)
+    assert {"object": codec.canonical_json(obj), "digest": P.digest(obj), "program": P.program_digest(prog)} == \
+        {k: pinned[k] for k in ("object", "digest", "program")} and _core(prog, q) == pinned
+    with pytest.raises(P.QueryRefused, match="commits 64 bits, more than 16"):
+        P.units(prog, q)
 
 
 def test_the_partition_is_cores_on_this_protocols_programs():
