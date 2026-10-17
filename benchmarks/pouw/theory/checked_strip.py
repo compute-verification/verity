@@ -186,6 +186,8 @@ def sat_products(targets, nb, S, budget=None):
     ell = [cnf.word(f"l{s}", nb) for s in range(S)]
     m = [cnf.word(f"m{s}", nb) for s in range(S)]
     g = [[cnf.var(f"g{w},{s}") for s in range(S)] for w in range(len(targets))]
+    for s in range(S):
+        _echelon(cnf, ell[s], m[s])
     for s in range(S - 1):
         _lex_le(cnf, ell[s] + m[s], ell[s + 1] + m[s + 1])
     for u, v in itertools.combinations(range(nb), 2):
@@ -208,6 +210,18 @@ def sat_products(targets, nb, S, budget=None):
     M_ = [[val(x) for x in m[s]] for s in range(S)]
     G_ = [[val(g[w][s]) for s in range(S)] for w in range(len(targets))]
     return True, (L_, M_, G_)
+
+
+def _echelon(cnf: Cnf, ell, m):
+    """(ℓ, m) is the reduced echelon basis of its span: ℓ ≠ 0, m's leading one after ℓ's, ℓ zero at m's leading one.
+    A product's alternating form ℓ_u m_v + ℓ_v m_u is ℓ ∧ m, which depends only on span{ℓ, m}, so every product has
+    this form (m = 0 is the zero product, kept for padding)."""
+    cnf.add(ell)
+    seen_l = seen_m = -cnf.true
+    for v in range(len(ell)):
+        cnf.add([-m[v], seen_l])
+        cnf.add([-m[v], seen_m, -ell[v]])
+        seen_l, seen_m = cnf.or_(seen_l, ell[v]), cnf.or_(seen_m, m[v])
 
 
 def _lex_le(cnf: Cnf, a, b):
@@ -386,6 +400,36 @@ def ts_tile(design, k, n, fold):
     else:
         raise ValueError(design)
     return honest, cheat
+
+
+#: SMSP-cycles a warp b1 and.popc m16n8k256 MMA takes on sm_120, which emulates it (note:20261015T0608Z-draft-census-sm120).
+B1_EMULATED = 193.0
+
+
+def ts_mix(design, k, n, fold, dM, dO):
+    """(honest's time, the best cheater's) at A = B = 0 when the cheater may move any fraction φ of its cells' O off
+    its strip, changing a tile's (MMAs, other instructions) by φ·(dM, dO). The time is convex and piecewise linear in
+    φ, so its minimum is at φ ∈ {0, 1} or where two facets meet."""
+    hon, (Mc, Oc) = ts_tile(design, k, n, fold)
+    cands = {0.0, 1.0}
+    for (_, a1, b1), (_, a2, b2) in itertools.combinations(TS_FACETS, 2):
+        den = (a1 - a2) * dM + (b1 - b2) * dO
+        if den:
+            phi = -((a1 - a2) * Mc + (b1 - b2) * Oc) / den
+            if 0 < phi < 1:
+                cands.add(phi)
+    return ts_time(*hon), min(ts_time(Mc + p * dM, Oc + p * dO) for p in cands)
+
+
+def o_routes(design, k):
+    """At A = B = 0, O = c·b is a depth-k binary product with no commit inside. Each route replaces the cheater's
+    strip (1 IMMA at r = 32, k/64 at r = k/2) by: `scalar(x)`, bit-sliced on the CUDA cores at x warp instructions per
+    32 × 128 bit products; `b1_emulated`, sm_120's b1 MMAs priced as issue; `b1_native`, b1 MMAs at an IMMA's cost
+    (sm_80 to sm_89); `fp4`, FP4 k64 MMAs plus NOBITS (one instruction a word). Returns {route: (dM, dO)} with
+    `scalar` a function of x."""
+    strip = 1 if design == "co32" else k // 64
+    return {"scalar": lambda x: (-strip, x * k / 32), "b1_emulated": (-strip, B1_EMULATED * k / 256),
+            "b1_native": (-strip + k / 256, 0.0), "fp4": (-strip + k / 64, 4.0)}
 
 
 def main():
@@ -661,6 +705,51 @@ def main():
                  "issue (8.115 + 4) rather than its 16 tensor cycles",
                  ts_binding(*k4[0]) == "JI3e_0", f"binding {ts_binding(*k4[0])}, times {ts_time(*k4[0]):.1f} vs "
                                                   f"{ts_time(*k4[1]):.1f} SMSP-cycles a tile")
+
+    def weighted(design, route_of_k, mname):
+        h = c_ = 0.0
+        for _, kk, nn in TS_SHAPES[mname]:
+            th, tb = ts_mix(design, kk, nn, 3, *route_of_k(kk))
+            h, c_ = h + th * nn, c_ + tb * nn
+        return h / c_ - 1
+
+    def breakeven(design, kk, nn):
+        """The least x (to 0.01) at which moving O to scalar units gains nothing over the strip-only cheater."""
+        strip_only = ts_time(*ts_tile(design, kk, nn, 3)[1])
+        lo, hi = 0.0, 256.0
+        while hi - lo > 0.01:
+            mid = (lo + hi) / 2
+            if ts_mix(design, kk, nn, 3, *o_routes(design, kk)["scalar"](mid))[1] < strip_only - 1e-9:
+                lo = mid
+            else:
+                hi = mid
+        return hi
+
+    zero = {}
+    for design in ("co32", "cohalf"):
+        for mname in TS_SHAPES:
+            for x in (8, 12, 16, 24):
+                zero[f"{design} {mname} scalar x={x}"] = weighted(design, lambda kk: o_routes(design, kk)["scalar"](x),
+                                                                  mname)
+            for route in ("b1_emulated", "b1_native", "fp4"):
+                zero[f"{design} {mname} {route}"] = weighted(design, lambda kk: o_routes(design, kk)[route], mname)
+            zero[f"{design} {mname} breakeven x"] = max(breakeven(design, kk, nn) for _, kk, nn in TS_SHAPES[mname])
+        for x in (8, 12, 16, 24):
+            th, tb = ts_mix(design, 128, 4096, 3, *o_routes(design, 128)["scalar"](x))
+            zero[f"{design} QK^T scalar x={x}"] = th / tb - 1
+    out["ts_zero_instance_O"] = {kk_: (f"{v:.4%}" if "breakeven" not in kk_ else f"{v:.2f}") for kk_, v in zero.items()}
+    base = {(d, m): weighted(d, lambda kk: (0.0, 0.0), m) for d in ("co32", "cohalf") for m in TS_SHAPES}
+    checks.check("H co32 at A = B = 0: making O = c·b on scalar units (any x ≥ 2), with b1 MMAs (emulated or native) "
+                 "or with FP4 gains nothing over the 1-limb strip",
+                 all(abs(zero[f"co32 {m} {r}"] - base[("co32", m)]) < 1e-12 for m in TS_SHAPES
+                     for r in ("scalar x=8", "b1_emulated", "b1_native", "fp4"))
+                 and all(breakeven("co32", kk, nn) <= 2 for m in TS_SHAPES for _, kk, nn in TS_SHAPES[m]),
+                 str({k_: v for k_, v in out["ts_zero_instance_O"].items() if k_.startswith("co32")}))
+    checks.check("H cohalf at A = B = 0: a cheater that makes a fraction of O = c·b on scalar units beats co32's ε "
+                 "for x ≤ 16 warp instructions per IMMA-equivalent (Llama-3.1-8B and 70B, weighted); FP4 never helps",
+                 all(zero[f"cohalf {m} scalar x={x}"] > base[("co32", m)] for m in TS_SHAPES for x in (8, 12, 16))
+                 and all(abs(zero[f"cohalf {m} fp4"] - base[("cohalf", m)]) < 1e-12 for m in TS_SHAPES),
+                 str({k_: v for k_, v in out["ts_zero_instance_O"].items() if k_.startswith("cohalf")}))
 
     import json
     print("\nRESULTS " + json.dumps(out, default=str, sort_keys=True))
