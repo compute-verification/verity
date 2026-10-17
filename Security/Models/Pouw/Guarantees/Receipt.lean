@@ -43,14 +43,12 @@ def DuoTripleNoKernel : Prop :=
   ∀ (n : ℕ) (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : Rotation n) (k₂ : BitVec n) (a₂ : OddKey n) (r₂ : Rotation n)
     (k₃ a₃ : BitVec n) (r₃ : ℕ), Function.Injective (duoTriple k₁ a₁.1 r₁.1 k₂ a₂.1 r₂.1 k₃ a₃ r₃)
 
-/-- **Four duo words have no all-state kernel.** For every width, odd first, second and third multipliers, a first
-rotation `0 < r₁ ≤ n − 3`, a second multiplier with `a₂ + 1` not divisible by `2^r₁`, second and third rotations that
-move every bit and any keys for the fourth word, two word quadruples whose final states agree on every start state are
-equal. -/
+/-- **Four duo words have no all-state kernel.** For every width, odd first and third multipliers, a first rotation
+`0 < r₁ ≤ n − 3`, an odd second multiplier that is not `−1` modulo `2^r₁`, second and third rotations that move every
+bit and any keys for the fourth word, two word quadruples whose final states agree on every start state are equal. -/
 def DuoQuadNoKernel : Prop :=
-  ∀ (n : ℕ) (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : ℕ), 0 < r₁ → r₁ + 3 ≤ n →
-    ∀ (k₂ : BitVec n) (a₂ : OddKey n), (a₂.1.toNat + 1) % 2 ^ r₁ ≠ 0 →
-    ∀ (r₂ : Rotation n) (k₃ : BitVec n) (a₃ : OddKey n) (r₃ : Rotation n) (k₄ a₄ : BitVec n) (r₄ : ℕ),
-      Function.Injective (duoQuad k₁ a₁.1 r₁ k₂ a₂.1 r₂.1 k₃ a₃.1 r₃.1 k₄ a₄ r₄)
+  ∀ (n : ℕ) (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : ShortRotation n) (k₂ : BitVec n) (a₂ : OddKeyNotNegOne n r₁.1)
+    (r₂ : Rotation n) (k₃ : BitVec n) (a₃ : OddKey n) (r₃ : Rotation n) (k₄ a₄ : BitVec n) (r₄ : ℕ),
+    Function.Injective (duoQuad k₁ a₁.1 r₁.1 k₂ a₂.1 r₂.1 k₃ a₃.1 r₃.1 k₄ a₄ r₄)
 
 end Pouw.Guarantees.Receipt

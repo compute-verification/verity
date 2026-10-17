@@ -26,6 +26,12 @@ def OddKey (n : ℕ) : Type := {a : BitVec n // a.toNat % 2 = 1}
 /-- A rotation that moves every bit: `0 < r < n`. -/
 def Rotation (n : ℕ) : Type := {r : ℕ // 0 < r ∧ r < n}
 
+/-- A rotation that leaves the top three bits clear of its wrap: `0 < r ≤ n − 3`. -/
+def ShortRotation (n : ℕ) : Type := {r : ℕ // 0 < r ∧ r + 3 ≤ n}
+
+/-- An odd multiplier that is not `−1` modulo `2^r`. -/
+def OddKeyNotNegOne (n r : ℕ) : Type := {a : BitVec n // a.toNat % 2 = 1 ∧ (a.toNat + 1) % 2 ^ r ≠ 0}
+
 /-- Two words `d = (d₁, d₂)` from the state `s`, the first with keys `(k₁, a₁, r₁)` and the second with `(k₂, a₂, r₂)`. -/
 def duoPair {n : ℕ} (k₁ a₁ : BitVec n) (r₁ : ℕ) (k₂ a₂ : BitVec n) (r₂ : ℕ) (d : BitVec n × BitVec n)
     (s : BitVec n × BitVec n) : BitVec n × BitVec n :=

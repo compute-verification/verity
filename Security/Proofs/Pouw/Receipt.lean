@@ -19,7 +19,7 @@ theorem DuoTripleNoKernel : Pouw.Guarantees.Receipt.DuoTripleNoKernel :=
   fun _ k₁ a₁ r₁ k₂ a₂ r₂ k₃ a₃ r₃ => Pouw.ReceiptProofs.duoTriple_injective k₁ a₁ r₁ k₂ a₂ r₂ k₃ a₃ r₃
 
 theorem DuoQuadNoKernel : Pouw.Guarantees.Receipt.DuoQuadNoKernel :=
-  fun _ k₁ a₁ r₁ h0 h3 k₂ a₂ ha₂ r₂ k₃ a₃ r₃ k₄ a₄ r₄ =>
-    Pouw.ReceiptProofs.duoQuad_injective k₁ a₁ r₁ h0 h3 k₂ a₂ ha₂ r₂ k₃ a₃ r₃ k₄ a₄ r₄
+  fun _ k₁ a₁ r₁ k₂ a₂ r₂ k₃ a₃ r₃ k₄ a₄ r₄ =>
+    Pouw.ReceiptProofs.duoQuad_injective k₁ a₁ r₁.1 r₁.2.1 r₁.2.2 k₂ ⟨a₂.1, a₂.2.1⟩ a₂.2.2 r₂ k₃ a₃ r₃ k₄ a₄ r₄
 
 end Pouw.SecurityProofs.Receipt
