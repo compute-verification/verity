@@ -1,9 +1,0 @@
-row,status,runs,description
-M,measured,r20261017-072121-3924 r20261017-074340-2dc5 r20261017-075006-6dba r20261017-075541-3c04,"tensor pipe: SMSP-cycles a MMA of each kind alone (best of 2, 4 and 8 warps a SMSP and of 8, 32 and 64 MMAs a loop iteration, 8 accumulators a warp; the loop's 3 instructions included)"
-A,measured,r20261017-074340-2dc5,"ALU pipe: IADD3 and LOP3 (IADD3+LOP3 issue 0.506 a SMSP-cycle: one pipe)"
-FMA,measured,r20261017-074340-2dc5,"FMA pipe: FFMA, IMAD and IDP.4A (IMAD+FFMA 0.522, IDP.4A+FFMA 0.523 a SMSP-cycle: one pipe)"
-XU,measured,r20261017-074340-2dc5,"XU: POPC"
-SHFL,measured,r20261017-074340-2dc5,"SHFL.BFLY"
-LDSi,measured,r20261017-074340-2dc5,"LDS.32 (one warp a SM-cycle: 128 B/SM/clk)"
-JIM,joint,r20261017-072600-1397 r20261017-073620-0273 r20261017-074340-2dc5 r20261017-075006-6dba r20261017-075541-3c04,"M1's issue facet: a(kind) #MMA + every other warp instruction 1 <= T SMSP-cycles, a the least (T - #other)/#MMA over the gated spec and mixu programs beside IADD3+FFMA (0.973 issue a SMSP-cycle alone); no noise margin"
-JIA,joint,r20261017-072121-3924 r20261017-072600-1397 r20261017-073620-0273 r20261017-074340-2dc5 r20261017-075006-6dba r20261017-075541-3c04,"the same facet beside IADD3 alone (on its pipe at 0.492 a SMSP-cycle), a the least (T - #other)/#MMA"
