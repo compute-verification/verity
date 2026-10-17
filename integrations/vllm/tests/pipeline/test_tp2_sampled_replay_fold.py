@@ -177,9 +177,9 @@ if __name__ == "__main__":
 # ---- [MAN-09 per rank] the weights-pin fold ------------------------------------------------------------------------------------------
 
 def _rows_with_pins(p0, p1):
-    from verity_vllm.pipeline.tp.commit import _weights_pin_component
+    from verity_vllm.pipeline.tp.c2 import weights_pin_component
     rows = [{"arm": "control"}, {"arm": "instrumented", "commit": {"per_rank": {"0": {"weights_pin": p0}, "1": {"weights_pin": p1}}}}]
-    return _weights_pin_component(rows, {"weights_pin": {"checkpoint_dir": "/ck"}})
+    return weights_pin_component(rows, {"weights_pin": {"checkpoint_dir": "/ck"}})
 
 
 def test_weights_pin_true_only_when_every_rank_compared_equal():

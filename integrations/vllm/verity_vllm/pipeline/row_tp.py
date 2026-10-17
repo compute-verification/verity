@@ -5,7 +5,8 @@
   memory holds, at most ranks x (shapes + 1), as the single-GPU Build sizes them; the composes likewise, at most one per rank).  A PASS Build
   also builds the required-value manifest over the W ranks (``manifest build-global --programs-root build/rank<r>``), and
   the row stops (exit 21) when it names call boundaries (``Row.call_boundaries``: a TP Commit attaches no call-boundary source).
-  With ``--build-relabel on`` one template rank's request derives write the other ranks' (`pipeline.tp.relabel_build`).
+  With ``--build-relabel on`` one template rank's request derives write the other ranks' (`pipeline.tp.relabel_build`); with
+  ``--build-programs-only 1`` the Build ends at GP-01, with no manifest and no call-boundary check (`pipeline.neutrality`'s heavy tier).
 * **Match**: the capture under the observer and collective recorder, the ``--no-observer`` control, the collective-level
   check (``tp-match --arm check``); a request that stopped before its cap gets its served-shape Program derived per rank
   and GP-01 recomposed (``eos-truncated``); then, with a rank profile (default ``derived_<ROLE>_tp<W>``; ``--fold-profile ''``
@@ -281,8 +282,8 @@ class TpRow(Row):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
         self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step")])
-        ok, rc = self.guarded_summary(), None
-        if ok == "PASS":                    # the Build's manifest, as SingleRow's: an incomplete one (rc 4) fails the Build its Commit would refuse
+        ok, rc, programs_only = self.guarded_summary(), None, self.cb.build_programs_only == "1"
+        if ok == "PASS" and not programs_only:   # the Build's manifest, as SingleRow's: an incomplete one (rc 4) fails the Build its Commit would refuse
             rc = self.manifest_global("build.required_manifest", self.to_b)
             self.log(f"build manifest rc={rc}: {R.tp_manifest_line(self.d) or 'no manifest.json'}")
             ok = "PASS" if rc == 0 else "FAIL"
@@ -298,7 +299,8 @@ class TpRow(Row):
             self.log(f"BUILD FAIL -> stop ({top})")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10)
-        self.call_boundaries(self.to_b)      # the Build passed, so its manifest was complete
+        if not programs_only:
+            self.call_boundaries(self.to_b)      # the Build passed, so its manifest was complete
 
     def guarded_summary(self) -> str:
         try:

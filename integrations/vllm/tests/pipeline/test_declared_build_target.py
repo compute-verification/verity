@@ -8,9 +8,11 @@ import sys
 import types
 
 import pytest
+import torch
 
 from verity_vllm import target_family as tf
 from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.engine.profiles import devices
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
@@ -111,6 +113,10 @@ class NonNvmlCudaPlatform:
     def device_count(cls):
         return 0   # the GPU-free host's visible count (`CUDA_VISIBLE_DEVICES=`)
 
+    @classmethod
+    def get_device_name(cls, device_id=0):
+        raise RuntimeError("No CUDA GPUs are available")   # `torch.cuda.get_device_properties` with no device
+
 
 CudaPlatform = NonNvmlCudaPlatform
 """,
@@ -142,7 +148,7 @@ def vllm_without_nvml(tmp_path, monkeypatch):
         del sys.modules[name]
 
 
-def _build(tmp_path, monkeypatch, target, tp=1, rank=0, seen=None):
+def _build(tmp_path, monkeypatch, target, tp=1, rank=0, seen=None, device_name=None):
     seen = {} if seen is None else seen
 
     def construct(out, res, *a, **k):
@@ -150,10 +156,16 @@ def _build(tmp_path, monkeypatch, target, tp=1, rank=0, seen=None):
         seen["platform"] = type(current_platform).__name__
         if hasattr(current_platform, "device_count"):
             seen["device_count"] = current_platform.device_count()
+        if hasattr(current_platform, "get_device_name"):
+            try:
+                seen["device_name"] = current_platform.get_device_name()
+            except RuntimeError as e:
+                seen["device_name"] = str(e)
     monkeypatch.setattr(B, "_construct", construct)
     monkeypatch.setattr(B.engine_env, "apply_target", lambda env: None)
     monkeypatch.setattr(B, "_cuda_available", lambda: False)
-    B.run(str(tmp_path / "out"), 1, 8, "b1-eager-v3", "gloo", target=target, tp=tp, rank=rank)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    B.run(str(tmp_path / "out"), 1, 8, "b1-eager-v3", "gloo", target=target, tp=tp, rank=rank, device_name=device_name)
     return seen["platform"]
 
 
@@ -197,3 +209,19 @@ def test_a_tp2_build_without_a_declared_target_counts_the_host_s_devices(tmp_pat
     assert _build(tmp_path, monkeypatch, None, tp=2) == "UnspecifiedPlatform"
     from vllm.platforms.cuda import CudaPlatform
     assert CudaPlatform.device_count() == 0, "no declared target: the host's count, as before"
+
+
+ROW_H200 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
+
+
+@pytest.mark.parametrize("row, name", [(ROW_H200, "NVIDIA H200"), (ROW_90, "No CUDA GPUs are available")])
+def test_a_gpu_free_build_answers_the_device_name_its_row_class_reports(tmp_path, monkeypatch, vllm_without_nvml, row, name):
+    """vLLM reads its tuned fused-MoE config by `current_platform.get_device_name()` (`get_config_file_name`: GLM-5.3's Build), which
+    raises with no device; a GPU-free Build answers the name its row's class reports, and a class `DEVICE_NAME` does not list fails there."""
+    wl = tmp_path / "row.json"
+    wl.write_text(json.dumps({"sweep": {"row_id": row}}))
+    assert devices.device_name(None) is None and devices.device_name(_wl(tmp_path)) is None, "no row id: no name"
+    target = parse_target_arg(json.dumps({"compute_capability": [9, 0], "num_sms": 132}))
+    seen: dict = {}
+    _build(tmp_path, monkeypatch, target, tp=8, seen=seen, device_name=devices.device_name(str(wl)))
+    assert seen["device_name"] == name
