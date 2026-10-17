@@ -17,7 +17,6 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
 import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
 import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
-import Proofs.Flock.Claims.Complete.Replay.LigeritoResidual
 import Proofs.Flock.Claims.Complete.Replay.RepRounds
 import Proofs.Flock.Claims.Complete.Replay.ProverOk
 import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
@@ -28,8 +27,6 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
 import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
 import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
 import Proofs.Flock.Claims.Complete.Replay.LigeritoHonest
-import Proofs.Flock.Claims.Complete.Replay.LigeritoJoint
-import Proofs.Flock.Claims.Complete.Replay.LigeritoExact
 import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
@@ -78,12 +75,6 @@ batched basis, `Lg.rsSum_eq`, `RsSum` holds at the deployed relation, `rsSum_rel
 honest prover's sum of table against weight, `Lg.Sync`: a challenge, `Lg.Sync.chal`, one that splits,
 `Lg.Sync.chalSplit`, an out-of-domain or consistency claim, `Lg.Sync.ood`, `Lg.Sync.add`, and the final check's sum is
 the claim, `Lg.lhsE_honest`;
-`LigeritoResidual`: every step of the honest prover keeps its weight the verifier's residual weight at the stage, `Lg.WAt`,
-`Lg.WPre`: the start, `Lg.WAt.start`, level 0's out-of-domain sample and challenges, `Lg.WAt.oodHead`, `Lg.WAt.chal0`,
-a split, `Lg.WAt.lift`, an out-of-domain or consistency claim on the split table, `Lg.WPre.ood`, `Lg.WPre.cons` (the
-prover's `X̂_c(ω_q)` are the model's, `Lg.fOf_xhats`), and a level's four challenges, `Lg.WPre.fold`; at the end the
-verifier's `resE` is the model's `resAt`, `Lg.gOf_resE`, so it is the prover's weight plus the last consistency weight,
-`Lg.WAt.final`, and the final check's sum against it is the claim, `Lg.lhsE_resE`;
 `LigeritoCons`: on rows the prover committed, the consistency value is its F-table folded
 at the level's challenges against its consistency weight, `Lg.consE_honest`, `Lg.consE_fold`, the prover's folds are the
 model's, `Lg.gv_foldKs`, and a level's consistency claim keeps `Lg.Sync`, `Lg.Sync.close`; `LigeritoWeight`: the
