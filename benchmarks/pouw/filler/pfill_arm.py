@@ -432,8 +432,9 @@ def _fold_lineage(parent: str, noise_tag: str, receipt: str, hypothesis: str) ->
 
 @dataclass
 class PFillBUDuo(PFillBU):
-    """pfill-bU with duo receipts (NC 2, three ops a word): a fold with no all-state kernel at a pair or an MMA, so the
-    receipt reads every word, where ram's reads a pair only through Q = a0 d0 + d1
+    """pfill-bU with duo receipts (NC 2, three ops a word): a fold proved to have no all-state kernel at one word or a
+    pair (an MMA's four words and longer runs are open), so the receipt reads every word, where ram's reads a pair only
+    through Q = a0 d0 + d1
     (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
 
     name: str = "pfill-bu-duo"
