@@ -343,6 +343,63 @@ def budgets(model: str, hf: dict, tp, fp8: bool, decode_T: list[int], prefill_LP
     return out
 
 
+def per_kv_byte(res: dict, kv_bytes: int = 2) -> list[dict]:
+    """Rows of per-KV-byte budgets: decode tokens at each history T, prefill requests of LP tokens, and a chat request of
+    2,048 prompt tokens then 512 generated ones (its decode rows interpolated exactly between the counted T)."""
+    sh = res["shape"]
+    kvt = sh["NL"] * 2 * sh["KVH"] * sh["D"] * kv_bytes
+    rows = []
+
+    def row(label, tot, att, tokens, inputs):
+        nb = tokens * kvt
+        r = {"shape": label, "kv_bytes": nb}
+        r["R_cast"] = tot["cast"] / nb
+        r["R_act"] = (tot["act"] - tot["act_ex2"]) / nb
+        r["R_ex2"] = tot["act_ex2"] / nb
+        r["R_explicit"] = r["R_cast"] + r["R_act"]
+        r["R_attn_cast"] = att["cast"] / nb
+        r["R_f32"] = tot["f32_arith"] / nb
+        r["R_tc"] = (tot["tc_acc_rs"] + tot["tc_acc_rr"] + tot["tc_acc_rsel"]) / nb
+        r["P_rr"] = (tot["prod_rr"] - att["prod_rr"]) / nb
+        r["P_rr_attn"] = att["prod_rr"] / nb
+        r["P_rsel"] = tot["prod_rsel"] / nb
+        r["P_rs"] = tot["prod_rs"] / nb
+        r["CMP"] = tot["cmp"] / nb
+        r["CMP_attn"] = att["cmp"] / nb
+        r["G_gates"] = tot["gather"] / nb
+        r["IN"] = inputs / nb
+        rows.append(r)
+
+    for T, d in res["decode"].items():
+        row(f"decode T={int(T):,}", d["per_token"], d["attention_per_token"], 1, 4)
+    for LP, d in res["prefill"].items():
+        row(f"prefill LP={int(LP):,}", d["per_request"], d["attention_per_request"], int(LP), 4 * int(LP))
+    return rows
+
+
+def render(results: list[dict]) -> str:
+    cols = ["R_cast", "R_act", "R_ex2", "R_attn_cast", "R_f32", "R_tc", "P_rr", "P_rr_attn", "P_rsel", "CMP", "CMP_attn", "G_gates", "IN"]
+    out = []
+    for res in results:
+        name = res["model"] + (" FP8 linears" if res["fp8_linears"] else " BF16")
+        out.append(f"\n{name}, bf16 KV ({res['shape']['NL'] * 2 * res['shape']['KVH'] * res['shape']['D'] * 2:,} B a token)\n")
+        out.append("| shape | " + " | ".join(cols) + " |")
+        out.append("|---" * (len(cols) + 1) + "|")
+        for r in per_kv_byte(res):
+            out.append(f"| {r['shape']} | " + " | ".join(_fmt(r[c]) for c in cols) + " |")
+    return "\n".join(out)
+
+
+def _fmt(x: float) -> str:
+    if x == 0:
+        return "0"
+    if x >= 100:
+        return f"{x:,.0f}"
+    if x >= 1:
+        return f"{x:.1f}"
+    return f"{x:.1e}"
+
+
 def validate(hf: dict, tp, log=print) -> bool:
     """The per-row assembly `budgets` uses equals the census of the whole Program `predict.build` emits: a prefill step of M
     rows, and a request of LP prompt rows then T decode steps (each decode row's attention at its own history)."""
@@ -402,6 +459,7 @@ def main(argv=None) -> int:
         for fp8 in variants:
             results.append(budgets(m, hf, tp, fp8, dT, pL))
             Path(a.out).write_text(json.dumps({"schema": "stacking-budgets/v1", "results": results}, indent=1, sort_keys=True))
+    Path(a.out).with_suffix(".md").write_text(render(results) + "\n")
     return 0
 
 
