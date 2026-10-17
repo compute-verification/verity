@@ -12,7 +12,9 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries,
   `Q_word` v1 at `X = 16` (the served query) and `Q_call` v1 at `X <= 16` are the ones applied here, so that every unit
   commits at most `UNIT_BITS` bits, the literal limit: `Q_word`'s width rule lets a unit of one value commit up to `W`
-  bits, and such a program is refused. `ranges`, `units` and `strata` read their units in canonical order (node order,
+  bits, a template query has no width rule, and `Q_call`'s counts computing gates only, so a program with a wider unit
+  (a template instance's or `Q_call` unit's committed bits counting the constants it holds) is refused, as is one with a
+  template instance of no gate. `ranges`, `units` and `strata` read their units in canonical order (node order,
   then member, for a template query; Call order, then the Call's own, for `Q_word` and `Q_call`), and `unit_gates` gives
   each unit's root gates.
 * **Programs**: `population_program` (instances of one template) and `mixed_population_program` (of several).
@@ -31,9 +33,9 @@ from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, 
 from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
                                         template_instance_query, template_instances_query)
-from verity.ml.circuits.program import Program
+from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.types import Array, Tuple, Value
 
 _PRE_CANONICAL = {"program", "query"}
 Q_WORD = ("Q_word", 1)
@@ -111,24 +113,50 @@ def _check_word(part: PO.Partition) -> None:
                                {"definition": fid, "unit": wide[0], "bits": ob[wide[0]]})
 
 
+def _check_intervals(program: Program, part: PO.TemplatePartition | PO.CallPartition) -> None:
+    """A template instance's or `Q_call` unit's gates are an interval `[lo, hi)` of root gates: refused when it has none,
+    or commits more than `UNIT_BITS` bits, the summed declared widths of its gates that the program returns, that are Input
+    gates, or that a gate at or past `hi` reads, constants included (the claims' `Prog.Boundary`; `Q_call`'s width rule
+    counts computing gates only)."""
+    C = program.circuit
+    gates = [C.gate(i) for i in range(C.size)]
+    last = [-1] * C.size
+    for g in gates:
+        for o in g.operands:
+            last[o] = max(last[o], g.index)
+    outs = set(C.root_outputs())
+    for u in range(part.population):
+        lo, hi = part.gates(u)
+        if hi <= lo:
+            raise QueryRefused(f"unit {u} has no gate", {"unit": u})
+        bits = sum(gates[g].prim.ret.w if isinstance(gates[g].prim.ret, Value) else 0 for g in range(lo, hi)
+                   if g in outs or is_input(gates[g].prim) or last[g] >= hi)
+        if bits > UNIT_BITS:
+            raise QueryRefused(f"unit {u} commits {bits} bits, more than {UNIT_BITS}", {"unit": u, "bits": bits})
+
+
 def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition | PO.Partition | PO.CallPartition:
     """`query` applied to `program` by core, once core accepts the query's form; `QueryRefused` when the query is malformed,
     is not one applied here (a template query, `Q_word` v1 at `X = 16` or `Q_call` v1 at `X <= 16`), does not apply to the
-    program (core's refusals, a program that is not topological among them), or is `Q_word` with a unit of more than
-    `UNIT_BITS` bits."""
+    program (core's refusals, a program that is not topological among them), or has a unit of more than `UNIT_BITS` bits
+    (`_check_word`, `_check_intervals`) or, a template instance, of no gate."""
     obj = PO.build(program, query)
     v, q = PO.validate(obj), obj["query"]
     if not v.ok:
         raise QueryRefused(f"not a {FORMAT} query ({', '.join(v.codes)}): {q!r}", {"query": q, "codes": list(v.codes)})
     kind, x = (q["name"], q["version"]), q["params"].get("X")
     if kind in (PO.Q_TEMPLATE_INSTANCE, PO.Q_TEMPLATE_INSTANCES):
-        return PO.evaluate(program, q)
+        part = PO.evaluate(program, q)
+        _check_intervals(program, part)
+        return part
     if kind == Q_WORD and x == UNIT_BITS:
         part = PO.evaluate(program, q)
         _check_word(part)
         return part
     if kind == PO.Q_CALL and x <= UNIT_BITS:
-        return PO.evaluate(program, q)
+        part = PO.evaluate(program, q)
+        _check_intervals(program, part)
+        return part
     raise QueryRefused(f"one-stage applies the template queries, Q_word v1 at X = {UNIT_BITS} and Q_call v1 at "
                        f"X <= {UNIT_BITS}, not {q['name']} v{q['version']} at X = {x}", {"query": q})
 
