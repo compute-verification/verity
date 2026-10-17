@@ -1,7 +1,8 @@
 # Dither-C with the LI fold at L = 32 on the H200 (sm_90): CO-Dither (co32c, cohalf) with P·V on committed digit limbs,
-# LI receipts on every committed word and 0.02 verified FFMA a word. The noise and ε_skip are dither-c-l32's; the fold,
-# honest and ε_mand are DC-DESIGN's (note:20261017T0805Z-draft-dc-design §3, §4): LI binds honest on the H200's lane
-# facet, so output counting closes the lane route.
+# LI receipts on every committed word and 0.02 verified FFMA a word. The noise is dither-c-l32's, and ε_skip is this
+# design's own at its ♭ (eps_budget's `design_skip`); the fold, honest and ε_mand are DC-DESIGN's
+# (note:20261017T0805Z-draft-dc-design §3, §4): LI binds honest on the H200's lane facet, so output counting closes the
+# lane route.
 name = "dither-c-li-l32"
 title = "Dither-C, LI, L = 32"
 summary = "Dither-C on the H200 at L = 32: CO-Dither (co32c, cohalf), P·V on committed digit limbs, LI receipts"

@@ -1,7 +1,7 @@
 # Dither-1S with the LI fold at L = 32 on the H200 (sm_90): one-sided dither and the linears' peel, LI receipts on every
-# committed word and 0.02 verified FFMA a word. The noise and ε_skip are dither-1s-l32's; the fold, honest and ε_mand
-# are DC-DESIGN's (note:20261017T0805Z-draft-dc-design §3, §4): LI binds honest on the H200's lane facet, so output
-# counting closes the lane route.
+# committed word and 0.02 verified FFMA a word. The noise is dither-1s-l32's, and ε_skip is this design's own at its ♭
+# (eps_budget's `design_skip`); the fold, honest and ε_mand are DC-DESIGN's (note:20261017T0805Z-draft-dc-design §3,
+# §4): LI binds honest on the H200's lane facet, so output counting closes the lane route.
 name = "dither-1s-li-l32"
 title = "Dither-1S, LI, L = 32"
 summary = "Dither-1S on the H200 at L = 32: one-sided dither, LI receipts on every committed word, the linears' peel"
