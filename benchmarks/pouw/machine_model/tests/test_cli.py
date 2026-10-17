@@ -36,15 +36,17 @@ VF3Q_LOADS = ["LDS64", "LDG64", "LDG256", "LDG128NA", "LDG128CG", "LDG256CG"]
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
-    assert d["vector"] == "VF3p-16" and round(d["tau"], 4) == 0.0588 and d["failures"] == [] and d["unreproduced"] == []
-    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0460, 1.1563, 2.0)
+    assert d["vector"] == "VF3q-16" and round(d["tau"], 4) == 0.0566 and d["failures"] == [] and d["unreproduced"] == []
+    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0442, 1.1563, 2.0)
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
-                           "loads16": {"kinds": 9, "below": [], "absent": VF3Q_LOADS},
-                           "copy16": {"kinds": 77, "below": ["UNI64 1.00 a word < 16"], "absent": VF3Q_LOADS}}
+                           "loads16": {"kinds": 15, "below": [], "absent": []},
+                           "copy16": {"kinds": 83, "below": ["UNI64 1.00 a word < 16"], "absent": []}}
     assert d["copies"][0]["kind"] == "UNI64"
     uni = next(c for c in d["copies"] if c["kind"] == "UNI")
-    assert uni["words"] == 32 and round(uni["price"], 2) == 29.91 and uni["measured"] > 32
+    assert uni["words"] == 32 and round(uni["price"], 2) == 27.96 and uni["measured"] > 32
     assert uni["what"].startswith("UR fan-out")
+    assert main(["solve", "VF3p-16", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["floors"]["copy16"]["absent"] == VF3Q_LOADS
     assert main(["solve", "VF3l-16", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["floors"]["copy16"]["absent"] == MMA_FORMS + VF3Q_LOADS
 

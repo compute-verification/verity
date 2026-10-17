@@ -9,10 +9,10 @@ price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3p-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3p-16, the vector of record since 17 Oct after VF3n-16 and VF3o-16; VF3l-16 by decision 62 before them)
-uv run machine-model census VF3p-16 --kind ATOMS64
-uv run machine-model attacks VF3p-16 -n 3 # the cheapest attacks of every design
+uv run machine-model solve VF3q-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current` (VF3q-16, the vector of record since 17 Oct after VF3n-16, VF3o-16 and VF3p-16; VF3l-16 by decision 62 before them)
+uv run machine-model census VF3q-16 --kind ATOMS64
+uv run machine-model attacks VF3q-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 uv run machine-model eps                  # Dither's ε budget at q* = 8: every term, the LP's mixes, the ε(q*) curve
