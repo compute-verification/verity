@@ -14,6 +14,7 @@
 // dc/analyze.py turns rows.jsonl into words a cycle and the joint facets.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
+#include "lanes.cuh"
 
 constexpr int KB = 32;  // 32 bytes of K a row: i8/e4m3 K = 32, bf16 K = 16
 constexpr int AROWS = 128, BROWS = 256, TMEM_COLS = 512;
@@ -294,56 +295,6 @@ DC_DEV void sync_beside_mma(const OpArgs& a) {
 }
 
 // ---- lane ops beside tcgen05.mma ---------------------------------------------------------------------------------------
-enum { L_MIX, L_IMAD, L_LOP3, L_DUO };
-struct Lane {
-  uint32_t r[8];
-  float f[8];
-  DC_DEV explicit Lane(uint32_t tid) {
-#pragma unroll
-    for (int i = 0; i < 8; i++) {
-      r[i] = (tid * 0x9e3779b9u + i * 0x85ebca6bu) | 1u;
-      f[i] = 1.0f + (float)(r[i] & 0xffu) * 0x1p-12f;
-    }
-  }
-  template <int X>
-  DC_DEV void op(int i) {
-    const int s = i & 7, t = (i + 1) & 7;
-    if constexpr (X == L_MIX) {
-      if (i & 1) asm volatile("fma.rn.f32 %0,%0,%1,0f3F800000;" : "+f"(f[(i >> 1) & 7]) : "f"(f[((i >> 1) + 1) & 7]));
-      else asm volatile("add.u32 %0,%0,%1;" : "+r"(r[(i >> 1) & 7]) : "r"(r[((i >> 1) + 1) & 7]));
-    }
-    if constexpr (X == L_IMAD) asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(r[s]) : "r"(r[t]), "r"(0x9E3779B9u));
-    if constexpr (X == L_LOP3) asm volatile("lop3.b32 %0,%0,%1,%2,0x96;" : "+r"(r[s]) : "r"(r[t]), "r"(0x85EBCA6Bu));
-  }
-  template <int T>
-  DC_DEV void duo_op(int i) {
-    DuoSt st{r[i & 7], r[(i + 4) & 7]};
-    duo<T>(st, r[(i + 1) & 7]);
-    r[i & 7] = st.y;
-    r[(i + 4) & 7] = st.z;
-  }
-  DC_DEV uint32_t fold() const {
-    uint32_t x = 0;
-#pragma unroll
-    for (int i = 0; i < 8; i++) x += r[i] ^ __float_as_uint(f[i]);
-    return x;
-  }
-};
-template <int Q, int N>
-DC_DEV void duo_ops(Lane& l) {
-  if constexpr (Q < N) {
-    l.duo_op<Q % DUO_NPOS>(Q);
-    duo_ops<Q + 1, N>(l);
-  }
-}
-template <int X, int R>
-DC_DEV void lane_ops(Lane& l) {
-  if constexpr (X == L_DUO) duo_ops<0, R / 3>(l);
-  else {
-#pragma unroll
-    for (int q = 0; q < R; q++) l.op<X>(q);
-  }
-}
 // thread 0: tcgen05.mma; warps 4-15 (3 a SMSP): R lane ops an iteration.
 template <int X, int R>
 DC_DEV void lane_beside_mma(const OpArgs& a) {

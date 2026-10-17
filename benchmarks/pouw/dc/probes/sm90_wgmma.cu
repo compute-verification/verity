@@ -11,11 +11,12 @@
 //   imma_s8_k32 / _k16    mma.sync on sm_90 (TENSOR's table: k16 full rate, k32 at 2/3 per [LUO])
 //   sync_<form>           the other mma.sync shapes. CUDA 13.0 lowers e4m3 m16n8k32 to 2 HMMA.16816.F32 + 4 FADD (no
 //                         native FP8 mma.sync on sm_90) and s4 m16n8k64 to a CALL into an emulation routine (not timed)
-// Lanes: mix (add.u32 and FFMA alternating; ptxas on sm_90 splits the adds between IADD3 and IMAD.IADD, the FMA pipe),
-// imad, lop3, shfl (interleaved only: warp-specialized, ptxas pulls the clock read into a loop), duo (the fold's 3 ops a word).
+// Lanes (lanes.cuh): mix, imad, lop3, shfl (interleaved only: warp-specialized, ptxas pulls the clock read into a loop),
+// duo (the fold's 3 ops a word). Their alone rates and pipe pairs are scalar.cu's.
 // dc/analyze.py turns rows.jsonl into words a tensor-pipe cycle and the issue cost a beside each lane.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
+#include "lanes.cuh"
 #include "../wgmma.cuh"
 
 constexpr int KB = 32;  // every form's K tile is 32 bytes of a row: s8/e4m3 k32, bf16 k16, tf32 k8
@@ -96,62 +97,6 @@ DC_DEV void group4(typename F::Acc (&d)[F::NA], const Tiles& t) {
   F::mma(d, t, 1);
   F::mma(d, t, 1);
   wgmma_commit();
-}
-
-// ---- lane ops ---------------------------------------------------------------------------------------------------------
-enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO };
-struct Lane {
-  uint32_t r[8];
-  float f[8];
-  DC_DEV explicit Lane(uint32_t tid) {
-#pragma unroll
-    for (int i = 0; i < 8; i++) {
-      r[i] = (tid * 0x9e3779b9u + i * 0x85ebca6bu) | 1u;
-      f[i] = 1.0f + (float)(r[i] & 0xffu) * 0x1p-12f;
-    }
-  }
-  template <int X>
-  DC_DEV void op(int i) {
-    const int s = i & 7, t = (i + 1) & 7;
-    if constexpr (X == L_MIX) {
-      if (i & 1) asm volatile("fma.rn.f32 %0,%0,%1,0f3F800000;" : "+f"(f[(i >> 1) & 7]) : "f"(f[((i >> 1) + 1) & 7]));
-      else asm volatile("add.u32 %0,%0,%1;" : "+r"(r[(i >> 1) & 7]) : "r"(r[((i >> 1) + 1) & 7]));
-    }
-    if constexpr (X == L_IMAD) asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(r[s]) : "r"(r[t]), "r"(0x9E3779B9u));
-    if constexpr (X == L_LOP3) asm volatile("lop3.b32 %0,%0,%1,%2,0x96;" : "+r"(r[s]) : "r"(r[t]), "r"(0x85EBCA6Bu));
-    if constexpr (X == L_SHFL) asm volatile("shfl.sync.bfly.b32 %0,%0,1,0x1f,0xffffffff;" : "+r"(r[s]));
-  }
-  // The duo fold, three ops a word: p is a word of the chain's own state, so ptxas can't fold it to a constant.
-  template <int T>
-  DC_DEV void duo_op(int i) {
-    DuoSt st{r[i & 7], r[(i + 4) & 7]};
-    duo<T>(st, r[(i + 1) & 7]);
-    r[i & 7] = st.y;
-    r[(i + 4) & 7] = st.z;
-  }
-  DC_DEV uint32_t fold() const {
-    uint32_t x = 0;
-#pragma unroll
-    for (int i = 0; i < 8; i++) x += r[i] ^ __float_as_uint(f[i]);
-    return x;
-  }
-};
-template <int Q, int N>
-DC_DEV void duo_ops(Lane& l) {
-  if constexpr (Q < N) {
-    l.duo_op<Q % DUO_NPOS>(Q);
-    duo_ops<Q + 1, N>(l);
-  }
-}
-// R lane ops (the duo lane: R/3 words of three ops each)
-template <int X, int R>
-DC_DEV void lane_ops(Lane& l) {
-  if constexpr (X == L_DUO) {
-    duo_ops<0, R / 3>(l);
-  } else {
-#pragma unroll
-    for (int q = 0; q < R; q++) l.op<X>(q);
-  }
 }
 
 // ---- kernels ----------------------------------------------------------------------------------------------------------
