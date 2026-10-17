@@ -253,7 +253,8 @@ def test_cli(capsys):
     base = PI.load(M.base())["JI3e_0"]   # honest's MMA and its other issue a MMA, the fold aside
     assert d["terms"]["machine"] == 0 and d["threshold_lanes"] == pytest.approx(base / 4, abs=1e-5)
     assert d["threshold"] >= d["threshold_lanes"] - 1e-6
-    assert main(["eps", "--table", "dither-duo", "--fold-sweep", "1.5,3", "--operands", "floor"]) == 0
+    assert main(["eps", "--table", "dither-duo", "--fold-sweep", "1.5,3", "--operands", "floor", "--q", "2.16"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("Π VF3l-16, operands floor")
+    assert lines[1].split()[-6:-3] == ["ε@2", "ε@2.16", "ε@8"]
     assert [x.split()[0] for x in lines[2:]] == ["dither-duo@r1.5", "dither-duo@r3"]

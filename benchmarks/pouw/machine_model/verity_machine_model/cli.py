@@ -202,15 +202,17 @@ def _eps_table(args, pi: E.Machine) -> int:
     names = args.designs or E.designs(args.data)
     sweep = [float(x) for x in args.fold_sweep.split(",")] if args.fold_sweep else [None]
     qs = (2, 4, 8, 16)
+    qe = sorted({2.0, 8.0, args.q})
     cred = {"H": "honest's kernel (H)", "model": "honest's model bound B(H)",
             "floor": "the floor program ♭ (SPEC §0.7a)"}[args.credit]
     print(f"Π {pi.vector}, operands {args.operands}, credit {cred}: T/MMA the credited time and its binding rows, "
           f"H/cred honest's time over it; ε_machine at q* = {', '.join(map(str, qs))} and its floor (the scalar routes "
-          f"closed); ε_luck; ε at q* = 2 and 8 (ε_sched in it where measured); q*₀ the least q* at which ε_machine "
-          f"reaches its floor (all routes; lanes alone); the uniform route alone at q* = 16")
+          f"closed); ε_luck; ε at q* = {', '.join(f'{q:g}' for q in qe)} (ε_sched in it where measured); q*₀ the "
+          f"least q* at which ε_machine reaches its floor (all routes; lanes alone); the uniform route alone at q* = 16")
     print(f"{'design':26s} {'fold':>6s} {'L':>3s} {'γ':>6s} {'T/MMA':>7s} {'binds':12s} {'H/cred':>6s} {'skip':>6s} "
           f"{'sched':>6s} " + " ".join(f"{'m@' + str(q):>7s}" for q in qs)
-          + f" {'floor':>7s} {'luck':>7s} {'ε@2':>7s} {'ε@8':>7s} {'q*₀':>9s} {'lanes':>6s} {'UP@16':>6s}")
+          + f" {'floor':>7s} {'luck':>7s} " + " ".join(f"{f'ε@{q:g}':>7s}" for q in qe)
+          + f" {'q*₀':>9s} {'lanes':>6s} {'UP@16':>6s}")
     rows = []
     for n in names:
         for r in sweep:
@@ -219,7 +221,7 @@ def _eps_table(args, pi: E.Machine) -> int:
             d = d.with_fill(args.fill) if args.fill else d
             rows += [d, d.with_upfill()] if args.upfill else [d]
     for d in rows:
-        es = {q: E.eps(d, pi, q, args.data, operands=args.operands, credit=args.credit) for q in qs}
+        es = {q: E.eps(d, pi, q, args.data, operands=args.operands, credit=args.credit) for q in {*qs, *qe}}
         e = es[8]
         s = E.setup(d, pi, args.data, args.operands, args.credit)
         per_mma = e.honest.words * e.honest.depth / d.L
@@ -229,8 +231,9 @@ def _eps_table(args, pi: E.Machine) -> int:
         print(f"{d.name:26s} {d.fold_cost():6.3g} {d.L:3d} {e.gamma:6.3f} {e.baseline.T * per_mma:7.3f} "
               f"{','.join(e.baseline.binding)[:12]:12s} {e.credit_ratio:6.3f} {100 * e.skip:5.2f}% {sched:>6s} "
               + " ".join(f"{100 * es[q].machine_eps:6.2f}%" for q in qs)
-              + f" {100 * e.floor:6.2f}% {100 * e.luck:6.3f}% {100 * es[2].total():6.2f}% "
-              f"{100 * e.total():6.2f}% {_thr(t):>9s} {_thr(tl):>6s} {100 * up:5.2f}%")
+              + f" {100 * e.floor:6.2f}% {100 * e.luck:6.3f}% "
+              + " ".join(f"{100 * es[q].total():6.2f}%" for q in qe)
+              + f" {_thr(t):>9s} {_thr(tl):>6s} {100 * up:5.2f}%")
     return 0
 
 
