@@ -15,6 +15,7 @@ import Proofs.Flock.Claims.ZK.Hypotheses
 import Proofs.Flock.Claims.ZK.Prefinal
 import Proofs.Flock.Claims.ZK.Deployed
 import Proofs.Flock.Claims.ZK.Reference
+import Proofs.Flock.Claims.ZK.Tape
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.NonVacuous
@@ -81,13 +82,22 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   admit the coins); `CoinCheck` holds of it by definition, `TablesOK` from `Tables` and `TMsgLink` from `Complete`,
   `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is the cut view the round
   messages encode): **`Flock.zk_deployZk_ref`**, and at the pinned key's hiding gap (`Flock.zk_deployZk_ref_gap`).
+* `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
+  tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
+  (`RefSession.not_tapeOK`): the masked scope bounds no table count.
+* `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
+  where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
+  `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
+  (`swView_outer`).
 * `Server`: the ZK server (`ZkServer`) that releases untrusted workers' values in four kinds (`fixed`, `own`,
   `recomputed`, `masked`), masks added after its checks, on a public schedule. For every worker it releases the
   reference prover's run cut at some round, but with probability the masked checks' errors (`ZkServer.split`), from
   two obligations of its definition (`Ref`, `CheckSound`); so zero knowledge carries over within a factor `k + 1`, the
   stop's leak, of the simulator that guesses the stop round (`ZkServer.zk_server`; **`Flock.zk_server_ref`** at
   `refP`), and over a stream with at most `b` stops the leak is at most `log₂ ∑_{i ≤ b} C(m, i)·r^i` bits
-  (`stream_leak`).
+  (`stream_leak`). At the worker's own values the split is exact and the checks' errors drop out
+  (`ZkServer.split_own`, `ZkServer.zk_server_own`), and a pad-blind worker (`ZkServer.BWorker`) is handed neither the
+  server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail Flock's `ZK` at
