@@ -33,7 +33,7 @@ REASONS = {
     "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "a shared expert runs on the main stream, in the order a Build (EXPORT) gives it; otherwise vLLM "
                                           "moves it to an aux stream at <= VLLM_SHARED_EXPERTS_STREAM_TOKEN_THRESHOLD (256) tokens and the "
                                           "log's order is no longer the execution order operand_provenance (G5) takes it to be; costs the "
-                                          "shared/routed overlap there, on shared-expert models only",
+                                          "shared/routed overlap there, on shared-expert models only; value- and Program-neutral",
 }
 
 #: The meta-device instantiation of the pinned model class (``program/frontend/vllm_meta.py``).

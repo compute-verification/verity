@@ -102,6 +102,17 @@ def test_a_switch_not_read_back_is_a_problem_and_one_vllm_resolves_may_be_anythi
     assert SV.judge({**resolved, "VLLM_USE_V2_MODEL_RUNNER": False, "compilation_mode": "VLLM_COMPILE", "cudagraph_mode": "FULL"}, {}) == []
 
 
+def test_a_variable_that_selects_no_kernel_is_no_switch():
+    """VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS is the multiproc executor's RPC deadline (vllm/v1/executor/multiproc_executor.py): set in a
+    row file or carried by a rank, the rail neither declares nor judges it."""
+    k = "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS"
+    wl, target = _glm()
+    wl = {**wl, "engine": {**wl["engine"], "env": {**(wl["engine"].get("env") or {}), k: "1800"}}}
+    d = SV.declared(wl, target)
+    assert k not in SV.DEFAULTS and k not in d
+    assert SV.judge({**GLM_SERVED, k: 1800}, d) == []
+
+
 def test_a_record_with_no_rank_is_not_ok():
     rec = SV.record([], {})
     assert (rec["ok"], rec["problems"], rec["schema"]) == (False, ["no rank answered"], SV.SCHEMA)
