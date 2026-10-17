@@ -98,6 +98,29 @@ def test_round_takes_t_to_nearest():
     assert e[0, 2].tolist() == [int(up[(-t0) % 16]) << ((-t0) // 16), 127, int(lut[t2])]
 
 
+def test_norm_keeps_the_denominator():
+    """`norm` = 7: P = e as before, L over rint(127 2^7 2^(-t / 16)) (key 0 above the max: its weight times 2^7), so a
+    thousand keys whose e rounds to 0 still count in L, as in the float softmax."""
+    s, n = 1002, 1000
+    S = torch.zeros(1, 1, s).double()
+    S[0, 0, 0], S[0, 0, 1], S[0, 0, 2:] = 70_000, 68_627, 0
+    sq, sk = torch.full((1, 1, 1), 1e-3), torch.full((s, 1), 1.0)
+    A = round(float(np.float32(1e-3)) * math.log2(math.e) * 16 / math.sqrt(128) * 2 ** 32)
+    t, u = (68_627 * A) >> 32, -((-1373 * A) >> 32)
+    assert steps.lut_table(16, 256)[t] == 0 and steps.lut_norm_size(16, 7) == 241
+    base = steps.lut_softmax(fake_mm(range(s - 1, s), s), S, sq, sk, res=16, size=256, sink=True).extra["lut"]
+    mm = fake_mm(range(s - 1, s), s)
+    e, s_q, z_q = steps.lut_softmax(mm, S, sq, sk, res=16, size=256, sink=True, norm=7).extra["lut"]
+    assert mm.gates.passed and torch.equal(e, base[0])
+    e0 = int(steps.lut_up(16)[u % 16]) << (u // 16)
+    L = (e0 << 7) + (127 << 7) + n * int(steps.lut_table(16, 241, top=127 << 7)[t])
+    f32 = np.float32
+    assert s_q.numpy().tobytes() == (f32(2 ** 7) / f32(L)).tobytes()
+    assert z_q.numpy().tobytes() == (f32(e0 << 7) / f32(L)).tobytes()
+    p = torch.softmax(S[0, 0].double() * float(np.float32(1e-3)) / math.sqrt(128), -1)
+    assert abs(float(z_q) - float(p[0])) < 0.01 * float(p[0]) and abs(float(base[2]) - float(p[0])) > 0.05 * float(p[0])
+
+
 def test_key_scales():
     g = torch.Generator().manual_seed(1)
     k = torch.randn(16, 8, generator=g)
@@ -121,6 +144,8 @@ def test_key_scales():
     ('k_sink = true', "k_scale = head or calib"),
     ('k_scale = "head"\nlut_sink = true', "softmax = lut"),
     ('k_scale = "head"\nlut_round = true', "softmax = lut"),
+    ('k_scale = "head"\nlut_norm = 7', "softmax = lut"),
+    ('k_scale = "head"\nsoftmax = "lut"\nlut_norm = 17', "lut_norm in 0..16"),
     ('k_scale = "row"', "k_scale is one of"),
 ])
 def test_rejections(text, message):
