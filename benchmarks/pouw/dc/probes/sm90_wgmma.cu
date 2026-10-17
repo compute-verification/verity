@@ -429,6 +429,12 @@ static const OpProbe PROBES[] = {
     P_UNTILF(wgUb1_lif_r512, "BGMMA.64x256x256.AND.POPC*=4", "LOP3.LUT=224,IMAD=224,FFMA=64"),
     P_UNTILF(wgUe4_lif_r512, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "LOP3.LUT=224,IMAD=224,FFMA=64"),
 #undef P_UNTILF
+#define P_MIXF(NAME, WPAT, LPAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 256, .expect = WPAT "," LPAT, .iters = 4096}
+    P_MIXF(wgmixb1_mix_r256, "BGMMA.64x256x256.AND.POPC*=4", "I*ADD*=128,FFMA=128"),
+    P_MIXF(wgmixb1_mix_r512, "BGMMA.64x256x256.AND.POPC*=4", "I*ADD*=256,FFMA=256"),
+    P_MIXF(wgmixe4_mix_r256, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "I*ADD*=128,FFMA=128"),
+    P_MIXF(wgmixe4_mix_r512, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "I*ADD*=256,FFMA=256"),
+#undef P_MIXF
 #undef WGI
     {.name = "imma_s8_k32", .kernel = (const void*)imma_s8_k32, .tpb = 512, .expect = "IMMA.16832.S8.S8=8", .iters = 4096},
     {.name = "imma_s8_k16", .kernel = (const void*)imma_s8_k16, .tpb = 512, .expect = "IMMA.16816.S8.S8=8", .iters = 4096},
