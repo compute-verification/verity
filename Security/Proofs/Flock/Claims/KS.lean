@@ -18,6 +18,7 @@ import Proofs.Flock.Claims.KS.Refit
 import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Claims.KS.PlainBound
+import Proofs.Flock.Claims.KS.PlainKS
 import Proofs.Flock.Claims.KS.MixtureZk
 import Proofs.Flock.Claims.KS.ZkBound
 
