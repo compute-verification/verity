@@ -5,13 +5,14 @@ the manifest names them: the blockwise FP8 GEMM's scale products (`scale_product
 for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank workers of a TP Commit: `pipeline.tp.commit` hands
 `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  Each rank also
-attaches the route source (`route_source`) when a capture map describes its model, and every rank must have; beside it the attention
-source (`attention_source`), which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap, when the rank's
-rows name `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`), and, when they name the
-MoE align Definitions, the Marlin experts' align schedule (`moe_align_source`).  The single-rank
-`attach` also attaches the call-boundary source (`call_boundary_source`) whenever the manifest names `call_boundaries` identities;
-`attached` names what it attaches for a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`).  Both
-`attach` and every rank's `attach_rank` arm a derived-S Program's prescribed split count (`prescribe_idle_splits`), taps or none."""
+attaches the route source (`route_source`) when a capture map describes its model, and beside it the attention source
+(`attention_source`), which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap; when the rank's rows name
+`DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); and when they name the MoE align
+Definitions, the Marlin experts' align schedule (`moe_align_source`).  The route, linear quant and align sources: once one rank has
+one, every rank must have it.  The single-rank `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the
+manifest names `call_boundaries` identities; `attached` names what it attaches for a row's manifest, constructing nothing (the CPU
+gate's `call-boundaries`, `acquire.gate`).  Both `attach` and every rank's `attach_rank` arm a derived-S Program's prescribed split
+count (`prescribe_idle_splits`), taps or none."""
 from __future__ import annotations
 
 import json
@@ -153,17 +154,20 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
                           explicit_classes: bool) -> tuple[str, ...]:
     """The TP driver's side, once every rank made its committer: every tap that is on attached on every rank (else SystemExit, fail
     closed), its family added to the required classes unless they were given, and each rank's state recorded in `versions`; the route
-    source, when any rank's model has a capture map, attached on every rank (else SystemExit); the attention hidden class every rank
-    reports (`hidden_source.require_hidden_on_every_rank`)."""
+    source (when any rank's model has a capture map), the linear quant source and the MoE align source (when any rank's rows name their
+    Definitions) attached on every rank (else SystemExit); the attention hidden class every rank reports
+    (`hidden_source.require_hidden_on_every_rank`)."""
     from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
 
     required_classes = require_hidden_on_every_rank(made, required_classes, versions, explicit_classes=explicit_classes)
-    routes = {int(m["rank"]): (m.get("tap_sources") or {}).get("route_source") for m in made}
-    if any(routes.values()):
-        bad = sorted(r for r, v in routes.items() if not v or v.get("error"))
-        if bad:
-            raise SystemExit(f"fail-closed: the route source did not attach on ranks {bad} of {len(made)}: {[routes[r] for r in bad][:2]}")
-        versions["route_source"] = routes
+    for key in ("route_source", "linear_quant_source", "moe_align_source"):
+        states = {int(m["rank"]): (m.get("tap_sources") or {}).get(key) for m in made}
+        if any(states.values()):
+            bad = sorted(r for r, v in states.items() if not v or v.get("error"))
+            if bad:
+                raise SystemExit(f"fail-closed: the {key.replace('_', ' ')} did not attach on ranks {bad} of {len(made)}: "
+                                 f"{[states[r] for r in bad][:2]}")
+            versions[key] = states
     for f, key, _mod, fam, _cls in SOURCES:
         if not getattr(taps, f):
             continue
