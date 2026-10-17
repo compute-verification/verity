@@ -34,6 +34,9 @@ import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
 import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
 import Proofs.Flock.Claims.Complete.Zk.LaneAgree
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+import Proofs.Flock.Claims.Complete.Zk.InnerGo
+import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
@@ -69,5 +72,10 @@ that returns gives, by coin position: its record and where it stops (`zkLigerito
 giving the same lane constraints where the rounds' coins are the sends' replies and the two Ligeritos start together
 (`lanes_agree`); `PadAlgebra` the honest pads' algebra: at a rep's pads the triple's constraints vanish at every
 sacrifice coin, so the batched constraint `innerP` checks holds at every coin once the rep's own constraints vanish
-(`triple_holds`, `innerP_batched`); `Complete` assembles them into `complete_zk`, from those premises and the goals
-not yet proved, and `complete_zk_relation` at the deployed relation. -/
+(`triple_holds`, `innerP_batched`), and the verifier's batched and column checks hold on the honest `Y`
+(`innerY_batched`, `innerY_column`); `InnerMerkle` the pads' commitment opening at every column, each column's siblings
+climbing from its leaf to the root (`innerCommitP_tree`, `inner_column_opens`); `InnerGo` the masked prover's inner
+proof in closed form at the replies' coins, where the batched constraint holds on the pads and `β ≠ 0` (`innerP_go`),
+and the verifier's inner check passing on it, on rounds carrying its sends, at a rep's pads whose constraints vanish
+(`verifyInnerWith_of`); `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved,
+and `complete_zk_relation` at the deployed relation. -/

@@ -1,9 +1,9 @@
 """The machine model's sm_89 census (`benchmarks/pouw/machine_model/data/devices/sm_89/`) from a run of `run.sh`
-(scalar.cu), a run of tensor_kinds with TK_ARCH=89 and a run of `SRC=uniform run.sh` (uniform.cu), in the machine
-model's schema with one epoch (no `since` or `until`).
+(scalar.cu), a run of tensor_kinds with TK_ARCH=89, a run of `SRC=uniform run.sh` (uniform.cu) and runs of `SRC=ji32
+run.sh` (ji.py's grid), in the machine model's schema with one epoch (no `since` or `until`).
 
-  python census.py SCALAR_OUT TENSOR_KINDS_OUT [--uniform UNIFORM_OUT] [--write DIR]   # prints rows.csv and census.csv,
-                                                                                      # or writes them in DIR
+  python census.py SCALAR_OUT TENSOR_KINDS_OUT [--uniform UNIFORM_OUT] [--ji JI32_OUT...] [--write DIR]
+      # prints rows.csv and census.csv, or writes them in DIR
 
 Every kind is one warp instruction; MMA kinds are tensor_kinds' (one a SASS form, `KIND`). The rows:
 
@@ -16,7 +16,9 @@ Every kind is one warp instruction; MMA kinds are tensor_kinds' (one a SASS form
   so it is the pipe's own rate, not the probe's. Kinds share a row only where that pipe accounting shows it (`A`).
 - the `E*` facets of each MMA + X family (eps1.py `facets`), with every non-MMA instruction of a probe's loops counted
   as X: an overhead instruction could be an X in an attacker's program, so the facets stay sound, and loose at the X
-  axis, where the pipe row binds.
+  axis, where the pipe row binds. With `--ji`, FACET-BREAK's schedule (2-3 accumulators, 2 warps a SMSP) beside
+  IMMA.16832 joins the families it beat (`JI_FAMILIES`), each program whose loop holds only the family's class and loop
+  overhead beside its MMAs.
 - `UP` (with the uniform run): the uniform pipe, UNI (one uniform instruction, any form) at the largest rate its alone
   loops reach, every uniform instruction of a loop counted. UNI is on `issue` at the least SMSP-cycles a uniform
   instruction adds beside honest16 (the fold binding) or beside honest16 with 64 FFMA, less the noise margin, and on
@@ -117,7 +119,7 @@ def pipe_rate(row: dict, verdict: dict) -> float:
     return per_iter * sum(lp["top"][op] for op in ops)
 
 
-def build(scalar: Path, tk: Path) -> tuple[list[list[str]], list[list[str]]]:
+def build(scalar: Path, tk: Path, ji: list[Path] = ()) -> tuple[list[list[str]], list[list[str]]]:
     rows = {r["probe"]: r for r in E.load(scalar / "rows.jsonl")}
     gate = {v["probe"]: v["verdict"] for v in json.loads((scalar / "gate.json").read_text())["verdicts"]}
     s_run = next(iter(rows.values()))["run"]
@@ -173,18 +175,48 @@ def build(scalar: Path, tk: Path) -> tuple[list[list[str]], list[list[str]]]:
     for name, r in rows.items():
         m, x = loop_rates(r, gate[name])
         pts_rows.append({"probe": name, "run": r["run"], "rates": {f"0:{E.IMMA}": m, "0:*": x}})
+    extra = ji_points(ji)
     for x, _ in E.OPS.items():
         kind, _, new = E.FAMILY[x]
-        fs = E.facets(E.frontier_points(pts_rows, x, "*"), MARGIN)
+        fs = E.facets(E.frontier_points(pts_rows, x, "*") + extra.get(x, []), MARGIN)
         for i, f in enumerate(fs):
             tight = " and ".join(t.split("@")[0] for t in f["tight"])
-            rws.append([f"{new}{i}", "joint", s_run, f"IMMA16832 {f['MMA']:.3f} + {kind} {f['X']:.3f} SMSP-cycles (sm89/"
-                        f"scalar.cu's {x} frontier, every non-MMA instruction of the loops counted as {kind}, 2% noise "
-                        f"margin; tight at {tight})"])
+            ji_runs = sorted({t.split("@")[1] for t in f["tight"] if t.startswith("j32_")})
+            run = " ".join([s_run, *ji_runs])
+            src = f"sm89/scalar.cu's {x} frontier" + (" and ji.py's IMMA.16832 programs" if ji_runs else "")
+            rws.append([f"{new}{i}", "joint", run, f"IMMA16832 {f['MMA']:.3f} + {kind} {f['X']:.3f} SMSP-cycles ({src}, "
+                        f"every non-MMA instruction of the loops counted as {kind}, 2% noise margin; tight at {tight})"])
             for k, c in (("IMMA16832", f["MMA"]), (kind, f["X"])):
                 if c > 0:
-                    cen.append([k, f"{new}{i}", "", "", f"{c:.9g}", "", "", "", s_run])
+                    cen.append([k, f"{new}{i}", "", "", f"{c:.9g}", "", "", "", run])
     return rws, cen
+
+
+#: a ji.py lane: the E families its IMMA.16832 programs join, the ones a ji32 program beat (r20261017-102743-9e4d: EFFMA0
+#: 1.097, EALU2 and EIADD32 1.075; IMAD lanes reach EIMAD2 0.988, so EIMAD keeps scalar.cu's fit). Both ALU families
+#: bound IMMA16832 + ALU.
+JI_FAMILIES = {"fmuli": ("ffma",), "faddi": ("ffma",), "ffmai": ("ffma",), "ffma": ("ffma",), "iadd3": ("iadd3", "lop3"),
+               "axi": ("iadd3", "lop3"), "lop3": ("iadd3", "lop3")}
+#: the opcodes a family's point may hold beside its MMAs: its own class and the loop's overhead. A long add stream that
+#: ptxas splits onto the IMAD pipe (IMAD.IADD) is a three-class program, off the family's (MMA, X) section.
+JI_OPS = {"ffma": {"FFMA", "FMUL", "FADD"}, "iadd3": {"IADD3", "LOP3.LUT"}, "lop3": {"IADD3", "LOP3.LUT"}}
+JI_OVERHEAD = {"IADD3", "ISETP.GE.AND", "MOV", "IMAD.MOV.U32", "UIADD3", "UISETP.GE.AND", "BRA"}
+
+
+def ji_points(outs: list[Path]) -> dict[str, list[tuple[float, float, str]]]:
+    """Each E family's (IMMA.16832, every non-MMA instruction) points a SMSP-cycle from runs of `SRC=ji32 run.sh`."""
+    out: dict[str, list[tuple[float, float, str]]] = {}
+    for d in outs:
+        gate = {v["probe"]: v["verdict"] for v in json.loads((d / "gate.json").read_text())["verdicts"]}
+        for r in E.load(d / "rows.jsonl"):
+            if not r["probe"].startswith("j32_"):
+                continue
+            (lp,) = gate[r["probe"]]["loops"]
+            m, x = loop_rates(r, gate[r["probe"]])
+            for fam in JI_FAMILIES.get(r["probe"].split("_")[1], ()):
+                if all(TK.MMA.match(op) or op in JI_OPS[fam] | JI_OVERHEAD for op in lp["top"]):
+                    out.setdefault(fam, []).append((m / E.SMSPS, x / E.SMSPS, f"{r['probe']}@{r['run']}"))
+    return out
 
 
 def warp_iter(row: dict, verdict: dict) -> tuple[float, int]:
@@ -239,9 +271,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("scalar", type=Path)
     ap.add_argument("tensor_kinds", type=Path)
     ap.add_argument("--uniform", type=Path, metavar="UNIFORM_OUT", help="a run of `SRC=uniform run.sh`: UNI and UP")
+    ap.add_argument("--ji", type=Path, nargs="+", default=[], metavar="JI32_OUT",
+                    help="runs of `SRC=ji32 run.sh`: their programs join the E families' points")
     ap.add_argument("--write", type=Path, metavar="DIR")
     a = ap.parse_args(argv)
-    rws, cen = build(a.scalar, a.tensor_kinds)
+    rws, cen = build(a.scalar, a.tensor_kinds, a.ji)
     if a.uniform:
         uniform(a.uniform, rws, cen)
     out = {"rows.csv": csv_text(["row", "status", "runs", "description"], rws),

@@ -1546,3 +1546,30 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
     assert p.returncode == 0, p.stdout + p.stderr
     assert "1 parallel suites one at a time on 2 processes, beside 1 others on 1" in p.stdout, p.stdout
     assert re.search(r"passed  wide .* on 2 workers", p.stdout) and "passed  one" in p.stdout, p.stdout
+
+
+def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
+    """17 Oct 11:21Z, cpu-2: a quick tier in a 480 GB pool slot ran circuit_check's suite on 94 workers (784 GB), since only
+    `check` passed `--mem-gb`."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "480")
+    assert S.slot_mem_gb() == 480.0
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "")
+    monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
+    assert S.slot_mem_gb() is None
+
+
+def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
+    """17 Oct 13:02Z, vy-nebius-1: two queued `suites.py verity-flock --fresh` runs, in no check slot, were OOM-killed in
+    their queue scopes."""
+    S = _suites(monkeypatch, tmp_path)
+    root = tmp_path / "fs"
+    (root / "proc/self").mkdir(parents=True)
+    (root / "proc/self/cgroup").write_text("0::/research.slice/job.scope\n")
+    for d, v in (("sys/fs/cgroup/research.slice", str(700 * 2**30)), ("sys/fs/cgroup/research.slice/job.scope", str(64 * 2**30))):
+        (root / d).mkdir(parents=True)
+        (root / d / "memory.max").write_text(v + "\n")
+    assert S.cgroup_mem_gb(root) == 64.0
+    (root / "sys/fs/cgroup/research.slice/job.scope/memory.max").write_text("max\n")
+    assert S.cgroup_mem_gb(root) == 700.0
+    assert S.cgroup_mem_gb(tmp_path / "nowhere") is None
