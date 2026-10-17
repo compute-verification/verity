@@ -477,14 +477,14 @@ theorem gκ (H : Msg → Msg) (x : Msg) : κ (gD H) gI x = 2 * gNums.κ := by
 theorem gNotKS (H : Msg → Msg) : ¬ KS H (gD H) gI gDO := by
   intro hK
   have h := hK gDecO gDecOK [] Unit (gP H)
-  rw [gPrB, gPrBe, gPrBr, mul_zero, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, add_zero, gκ] at h
+  rw [gPrB, gPrBe, gPrBr, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, add_zero, gκ] at h
   linarith [gPrBad_ge H gDecO, gNums_κ_lt]
 
 /-- **The recursion's KS fails at the errors its proof gives**, as `B`, `Be` and `Br` find nothing there either. -/
 theorem gNotKSA (H : Msg → Msg) : ¬ KSA H (gD H) gI gDO := by
   intro hK
   have h := hK gDecO gDecOK [] Unit (gP H)
-  rw [gPrB, gPrBe, gPrBr, mul_zero, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, add_zero, gκ] at h
+  rw [gPrB, gPrBe, gPrBr, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, add_zero, gκ] at h
   linarith [gPrBad_ge H gDecO, gNums_κ_lt]
 
 /-! ## `Inner.KSAbort` fails -/

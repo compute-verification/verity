@@ -181,9 +181,8 @@ theorem ksR_expectedCR {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Ms
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 /-- `ksR`'s setup makes no evaluation. -/
 theorem ksR_setupCalls (H : Msg → Msg) (xs : List Msg) : setupCalls H (ksR Coin) xs = [] := by
-  induction xs with
-  | nil => rfl
-  | cons _ _ ih => simpa [setupCalls, List.flatMap_cons] using ih
+  simp only [setupCalls, List.flatMap_eq_nil_iff, List.map_eq_nil_iff]
+  exact fun _ _ => rfl
 
 omit [DecidableEq Col] in
 /-- `Br` finds nothing at `ksR`: the outer witnesses record no call, and its setup makes no evaluation. -/
