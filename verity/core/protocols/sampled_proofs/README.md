@@ -98,7 +98,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `verity/core/service/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
   selection rule on (`SampledProofs/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
-  partitions; the `Stream` still draws in Python.
+  partitions; the `Stream` still draws in Python. `SampledProofs/Slots.lean` puts that draw in the claims' terms
+  (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
+  root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
+  checked proof units as `(slot, index)` in class, stratum and replay-unit order.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is two-stage sampling and the
@@ -432,6 +435,13 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   verifier of record has run, and each verdict of record names the delivered sessions and reports the public outputs
   alike (`check_verdicts`: `pending`, `sessions`, `public`, by the verifier of record).
 - **The failure budget.** At its `budget`-th `reject` or `late` a stream stops, and it refuses registrations from then on.
+- **The log's history.** A registration's checks don't read the whole log. As the log grows, a stream keeps where each
+  window was logged and each registered value's first registration, and it counts its failures as they come. Each check
+  gets the log's last record (R6's `previous`), the records whose window may equal the registration's (R6's window),
+  and those first registrations (R7's held roots) (`Stream._earlier`). On these both verifiers of record give the whole
+  log's verdict, and the work doesn't grow with the stream's length. The exceptions are windows that aren't plain JSON:
+  a record whose window holds a float or a tuple is read by every check, and one whose own window does gets the whole
+  log.
 - **The records.** The stream's digest is the SHA-512 of `{"format": "verity/proof-service/stream/v0", "spec": <the
   Spec's digest>, "budget", "delta", "challenger"}`. An outcome's record is `{"format":
   "verity/proof-service/outcome/v0", "stream", "order", "registration", "receipt", "draw", "sessions", "symbol",
@@ -455,6 +465,8 @@ Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outc
 `test_the_interiors_are_registered_once_after_select_before_deliver_over_the_proved_rus`,
 `test_a_two_stage_outcome_accepts_only_when_both_audits_do`, `test_a_work_draw_carries_its_closure_and_the_proof_proves_it`,
 `test_a_closure_widens_a_work_draw_only_and_stays_in_range`, `test_the_default_draw_is_draw_first_on_the_challengers_bytes`).
+What a registration reads of the log, and that its verdicts are the whole log's, is pinned by
+`tests/test_service_history.py`.
 
 PoUW's example runs on a two-stage `Stream` in `tests/test_service_two_stage.py`, following the architecture note
 (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, §4.1): a uniform `subset:K′` over `N`

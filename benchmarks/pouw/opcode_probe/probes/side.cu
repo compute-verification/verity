@@ -1,8 +1,8 @@
 // Side units beside the honest kernel (EPS1's eps_side, note:20261017T0310Z-report-eps1-program): the words a cycle a unit
 // that works off the SM's vector pipes (L2 reductions and atomics, cp.async, TMA bulk copies and reductions, DSMEM,
 // texture point fetch and bilinear filtering over 32 MB, and tld1c/texc over a window the texture cache holds; tld1d,
-// texd, atomgd: tld1, texbil, atomg32 with 4x, 2x, 4x the fetches in flight; texr: texd on two rows (32 KB); tld1w, texw:
-// tld1d and texr with 12 side warps; redblk: REDG.32 and a 1 KB bulk reduce a warp in one trip, both L2 paths) adds
+// texd, atomgd, tld1cd: tld1, texbil, atomg32, tld1c with 4x, 2x, 4x, 4x the fetches in flight; texr: texd on two rows
+// (32 KB); tld1w, texw, tld1cw: tld1d, texr and tld1cd with 12 side warps; redblk: REDG.32 and a 1 KB bulk reduce a warp in one trip, both L2 paths) adds
 // beside a saturated int8 IMMA kernel that folds every output word with duo (receipt_folds.cuh, the served fold), and
 // whether the MMAs keep their rate. Joint points, rows.jsonl only.
 //   honest        16 warps: 8 IMMA an iteration, then rf_duo_step on each accumulator's 4 words (side warps idle)
@@ -21,13 +21,13 @@ typedef unsigned long long u64;
 
 enum {
   S_RED32, S_RED64, S_REDV4, S_REDV4H, S_ATOMG32, S_LDGSTS, S_BLKRED512, S_BLKRED4K, S_BLKCP4K, S_DSM_ST4, S_DSM_RED,
-  S_TLD1, S_TEXBIL, S_REDBLK, S_TLD1C, S_TEXC, S_TLD1D, S_TEXD, S_ATOMGD, S_TEXR
+  S_TLD1, S_TEXBIL, S_REDBLK, S_TLD1C, S_TEXC, S_TLD1D, S_TEXD, S_ATOMGD, S_TEXR, S_TLD1CD
 };
 
 __host__ __device__ constexpr bool bulk(int s) { return s == S_BLKRED512 || s == S_BLKRED4K || s == S_BLKCP4K; }
 // ops a trip: R, but the deep roles (TLD, TEX, ATOMG with a result) keep 4x or 2x as many fetches in flight a warp
 __host__ __device__ constexpr int ops(int s) {
-  return s == S_TLD1D || s == S_ATOMGD ? 4 * R : s == S_TEXD || s == S_TEXR ? 2 * R : R;
+  return s == S_TLD1D || s == S_ATOMGD || s == S_TLD1CD ? 4 * R : s == S_TEXD || s == S_TEXR ? 2 * R : R;
 }
 __host__ __device__ constexpr unsigned bulk_bytes(int s) { return s == S_BLKRED512 ? 512u : 4096u; }
 
@@ -118,6 +118,8 @@ struct Side {
     // the same two fetches inside a 32 KB (TLD) or 20 KB (TEX) window every block shares, so they hit the texture cache
     if constexpr (S == S_TLD1C)
       acc ^= tex1Dfetch<unsigned>(tex1, (int)(((sw * R + q) * 32u + lane + (trip & 7u) * 1024u) & 8191u));
+    if constexpr (S == S_TLD1CD)
+      acc ^= tex1Dfetch<unsigned>(tex1, (int)(((sw * 4u * R + q) * 32u + lane + (trip & 7u) * 1024u) & 8191u));
     if constexpr (S == S_TEXC) {
       const float x = (float)((((sw * R + q) * 8u + (lane & 7u)) + (trip & 7u) * 32u) & 255u) + 0.25f,
                   y = (float)(lane >> 3) + 0.75f;
@@ -241,6 +243,7 @@ SIDE(tld1d, S_TLD1D, NOCL)
 SIDE(texd, S_TEXD, NOCL)
 SIDE(atomgd, S_ATOMGD, NOCL)
 SIDE(texr, S_TEXR, NOCL)
+SIDE(tld1cd, S_TLD1CD, NOCL)
 // the wide side roles: SWW warps beside the same 16 honest warps (the honest block's registers fit (HW + SWW) * 32)
 constexpr int SWW = 12;
 #define SIDEW(s, S)                                                                                                \
@@ -248,6 +251,7 @@ constexpr int SWW = 12;
   extern "C" __global__ void __launch_bounds__(SWW * 32, 1) sa_##s(OpArgs a) { side_alone<S>(a); }
 SIDEW(tld1w, S_TLD1D)
 SIDEW(texw, S_TEXR)
+SIDEW(tld1cw, S_TLD1CD)
 
 #define IMMA "IMMA.16832.S8.S8"
 #define HTPB ((HW + SW) * 32)
@@ -294,6 +298,8 @@ static const OpProbe PROBES[] = {
     P_SIDE(texr, "TEX*", 16, 128, 1, 256, 4),
     P_SIDE_W(tld1w, "TLD*", 32, 32, 256),
     P_SIDE_W(texw, "TEX*", 16, 128, 256),
+    P_SIDE(tld1cd, "TLD*", 32, 32, 1, 256, 4),
+    P_SIDE_W(tld1cw, "TLD*", 32, 32, 256),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

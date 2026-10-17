@@ -4,7 +4,8 @@ vectors, read into what the LP takes.
 An *epoch* is a state of the census and the attack list, named after the vector that introduced it (`epochs` in
 `model.toml`, in order). A census line or an attack holds from its `since` epoch through its `until` epoch (empty: every
 epoch from the first, or through the last), so a refit or a new measurement is a new line and every older vector still
-re-solves on the data it was published on.
+re-solves on the data it was published on. The census is a file for each epoch (`data/census/EPOCH.csv`, the lines
+from that epoch), so a new epoch adds a file and closes older lines in theirs.
 """
 from __future__ import annotations
 
@@ -126,10 +127,32 @@ def rows(data: Path = DATA) -> dict[str, Row]:
         return {d["row"]: Row(d["row"], d["status"], _runs(d["runs"]), d["description"]) for d in csv.DictReader(f)}
 
 
+def census_files(m: Model, data: Path = DATA) -> list[Path]:
+    """`data/census/EPOCH.csv`: a file for each epoch that brought census lines, in model.toml's order, each line's `since`
+    its file's epoch."""
+    return [p for e in m.epochs if (p := data / "census" / f"{e}.csv").is_file()]
+
+
+def run_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
+    """`data/census/runs.toml`: the run lists many census lines share (a refit's every line cites every run its fit read),
+    each cited in a line's `runs` as `@NAME`."""
+    return {k: tuple(v) for k, v in tomllib.loads((data / "census" / "runs.toml").read_text()).items()}
+
+
+def census_lines(m: Model, data: Path = DATA) -> list[dict[str, str]]:
+    """Every census line as written, the files in epoch order."""
+    out: list[dict[str, str]] = []
+    for p in census_files(m, data):
+        with open(p, newline="") as f:
+            out += csv.DictReader(f)
+    return out
+
+
 def entries(m: Model, data: Path = DATA) -> list[Entry]:
-    with open(data / "census.csv", newline="") as f:
-        return [Entry(d["kind"], d["row"], u_of(m.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"]), d["since"],
-                      d["until"], _runs(d["runs"])) for d in csv.DictReader(f)]
+    named = run_lists(data)
+    cites = lambda s: tuple(x for c in _runs(s) for x in (named[c[1:]] if c.startswith("@") else (c,)))
+    return [Entry(d["kind"], d["row"], u_of(m.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"]), d["since"],
+                  d["until"], cites(d["runs"])) for d in census_lines(m, data)]
 
 
 def holds(m: Model, since: str, until: str, epoch: str) -> bool:

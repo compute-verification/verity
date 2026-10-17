@@ -7,6 +7,8 @@ import Proofs.Flock.Claims.Prob
 * Uniform averages: a bijection keeps `Pr` (`Pr_equiv`), a product's `Pr` is the average of the sections in either order
   (`Pr_prod_left`, `Pr_prod_right`), independent coordinates multiply (`Pr_and_prod`), and averages of pointwise close
   functions are close (`Ex_abs_sub_le`).
+* The union bound (`Pr_exists_le`), and one of `n` independent samples has one sample's law (`Pr_coord`), so an event
+  of the first sample and one of `n` others is at most `n` times one of two samples (`Pr_exists_coord_le`).
 * `Pr_hybrid`: `N` independent samples of `A` and of `B`, each within `δ` on every event, are within `N·δ` on every
   event.
 * `rewind_close`: the first run's transcript is within `1/(N+1) + Pr[binding failure]` of the output of `N` rewinds that
@@ -104,6 +106,49 @@ theorem Ex_abs_sub_le {α : Type} [Fintype α] {f g b : α → ℝ} (h : ∀ a, 
   refine ⟨?_, Ex_mono fun a => (abs_le.mp (h a)).2⟩
   have := Ex_mono (f := fun a => -b a) (g := fun a => f a - g a) fun a => (abs_le.mp (h a)).1
   linarith
+
+/-- **The union bound.** -/
+theorem Pr_exists_le {α : Type} [Fintype α] : ∀ (n : ℕ) (p : Fin n → α → Prop),
+    Pr (fun a => ∃ i, p i a) ≤ ∑ i, Pr (p i)
+  | 0, p => by simp [Pr_false]
+  | n + 1, p => by
+      have e : (fun a => ∃ i : Fin (n + 1), p i a) = fun a => p 0 a ∨ ∃ i : Fin n, p i.succ a := by
+        funext a
+        refine propext ⟨fun ⟨i, h⟩ => ?_, fun h => h.elim (fun h => ⟨0, h⟩) fun ⟨i, h⟩ => ⟨i.succ, h⟩⟩
+        cases i using Fin.cases with
+        | zero => exact Or.inl h
+        | succ i => exact Or.inr ⟨i, h⟩
+      rw [e, Fin.sum_univ_succ]
+      exact (Pr_or_le _ _).trans (add_le_add le_rfl (Pr_exists_le n _))
+
+/-- **One of `n` independent samples** has the law of one sample. -/
+theorem Pr_coord {α β : Type} [Fintype α] [Fintype β] [Nonempty β] {n : ℕ} (i : Fin n) (p : α → β → Prop) :
+    Pr (fun q : α × (Fin n → β) => p q.1 (q.2 i)) = Pr fun q : α × β => p q.1 q.2 := by
+  classical
+  rw [Pr_prod_left, Pr_prod_left]
+  congr 1
+  funext a
+  have e := Pr_equiv (Equiv.funSplitAt i β) fun s => p a s.1
+  rw [Pr_fst (β := {j // j ≠ i} → β) (p a)] at e
+  exact e
+
+/-- **An event that does not read the middle coordinate** has its probability over the other two. -/
+theorem Pr_mid {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] [Nonempty β] (p : α → γ → Prop) :
+    Pr (fun q : α × β × γ => p q.1 q.2.2) = Pr fun q : α × γ => p q.1 q.2 := by
+  rw [Pr_prod_left, Pr_prod_left]
+  congr 1
+  funext a
+  have e := Pr_equiv (Equiv.prodComm γ β) fun b : β × γ => p a b.2
+  rw [← e]
+  exact Pr_fst (β := β) (p a)
+
+/-- **An event of the first sample and one of `n` others** is at most `n` times the event of two samples. -/
+theorem Pr_exists_coord_le {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (n : ℕ) (p : α → β → Prop) :
+    Pr (fun q : α × (Fin n → β) => ∃ i, p q.1 (q.2 i)) ≤ n * Pr fun q : α × β => p q.1 q.2 := by
+  have e : ∀ i : Fin n, Pr (fun q : α × (Fin n → β) => p q.1 (q.2 i)) = Pr fun q : α × β => p q.1 q.2 :=
+    fun i => Pr_coord i p
+  refine (Pr_exists_le (α := α × (Fin n → β)) n fun i q => p q.1 (q.2 i)).trans (le_of_eq ?_)
+  simp only [e, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 /-- `Q·(1−Q)^N ≤ 1/(N+1)` on `[0, 1]`. -/
 theorem mul_one_sub_pow_le (Q : ℝ) (h0 : 0 ≤ Q) (h1 : Q ≤ 1) (N : ℕ) : Q * (1 - Q) ^ N ≤ 1 / (N + 1) := by
