@@ -5,7 +5,7 @@
 //!
 //! The live build writes only hm96-sha512 row statements with retained rounds and `hm96-sha512/v1` leaves, so the Lean
 //! check's rules on those hold of every statement it sets up, as do its parse and its public file's load. Its statements
-//! all have hidden outputs, so the circuit's check is `scopeOkH`.
+//! all have hidden outputs, so the circuit's check is `scopeOkI` once the wires passed: the general instance form.
 
 use crate::circuit::{port_cols, seg_shape, Composite, Instances, Port, STATEMENT};
 use crate::ir_block::IrUnitNet;
@@ -182,14 +182,16 @@ fn bit_rows(ports: &[Port], out_row_ports: &[usize]) -> bool {
         (0..out_row_ports.len()).all(|j| ports.get(n_in + j).is_some_and(v2_row))
 }
 
-/// `ProvedScope.scopeWhy hidden` of a circuit outside `scopeOkH` (`scopeOk` when not `hidden`), `None` inside: the unit
-/// reads only its leaf group, returns the outputs, has at most `2^32` rows and reads only port bits among its inputs, and
-/// every row is a `sha512/row/v1` row, or, with hidden outputs, its rows are [`bit_rows`].
+/// `ProvedScope.scopeWhy hidden` of a circuit outside `scopeOkI` (`scopeOk` when not `hidden`), `None` inside: the unit has
+/// at most `2^32` rows and reads only port bits among its inputs, and every row is a `sha512/row/v1` row, or, with hidden
+/// outputs, its rows are [`bit_rows`]. Without hidden outputs the unit also reads only its leaf group and returns the
+/// outputs; with them it may read any number of input groups and any stage may return the outputs, the general instance
+/// form, which [`check`] takes once the wires are acyclic ([`wires_acyclic`]) wherever they feed the unit or the outputs.
 pub fn circuit_why(c: &Composite, hidden: bool) -> Option<String> {
     let unit = c.unit();
-    if unit.in_groups.len() != 1 {
+    if !hidden && unit.in_groups.len() != 1 {
         Some(format!("a unit reading {} input groups", unit.in_groups.len()))
-    } else if c.out_net != c.unit_net {
+    } else if !hidden && c.out_net != c.unit_net {
         Some("a circuit whose outputs a tail stage computes (META out_net)".into())
     } else if unit.unit_log > 32 {
         Some(format!("a unit of 2^{} rows", unit.unit_log))
@@ -471,6 +473,25 @@ mod tests {
         assert_eq!(refusal(WIRES_WHY), "refused: a slot no order of the wires computes from the leaves: a cycle through wires, an input \
                                         port no wire fills, or a read of an input column that is not a port bit: a statement form the \
                                         soundness proof does not cover");
+    }
+
+    /// Lean's `tail`: a unit of one group and a stage it feeds, the stage returning the outputs.
+    fn tail() -> Composite {
+        let mut c = circ(vec![wnet(vec![Group { col: 0, words: 1, bits: vec![1] }], 1, vec![1], vec![(vec![0], vec![0])]), stage(1)],
+                         vec![1, 1], &[(1, 0, 0, 0, 0, 0)], vec![], vec![]);
+        c.out_net = 1;
+        c
+    }
+
+    #[test]
+    fn hidden_outputs_take_the_general_instance_form() {
+        // Lean's Flock/Test/Wires.lean: a unit reading a cut group, or a stage returning the outputs, once the wires are
+        // acyclic; with public outputs, the unit's form alone
+        assert!(wires_acyclic(&tail()) && wires_feed(&tail()));
+        assert_eq!(circuit_why(&rms(0), true), None);
+        assert_eq!(circuit_why(&tail(), true), None);
+        assert_eq!(circuit_why(&rms(0), false).as_deref(), Some("a unit reading 2 input groups"));
+        assert_eq!(circuit_why(&tail(), false).as_deref(), Some("a circuit whose outputs a tail stage computes (META out_net)"));
     }
 
     #[test]
