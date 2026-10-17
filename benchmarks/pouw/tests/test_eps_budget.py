@@ -63,10 +63,11 @@ def test_the_hybrids_meet_the_target_everywhere(design):
     assert E.products("CB", "P·V", 1024) == E.products("A", "P·V", 1024)
 
 
-def test_committed_pv_digits_leave_bc_nothing_to_skip():
-    assert E.products("Bc", "P·V", 1024) == (1024, 3 * 33, 0)
+@pytest.mark.parametrize("design", ["Bc", "Ap"])
+def test_committed_pv_digits_leave_nothing_to_skip(design):
+    assert E.products(design, "P·V", 1024) == (1024, 3 * 33, 0)
     for m, c, ph in CELLS:
-        s, a = E.summary(m, c, ph, "Bc"), E.summary(m, c, ph, "A")
+        s, a = E.summary(m, c, ph, design), E.summary(m, c, ph, "A")
         assert s.eps_mac == 0 and s.eps_time == 0, (m, c, ph)
         assert s.gamma >= a.gamma - 1e-9, (m, c, ph)
 

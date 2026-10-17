@@ -223,13 +223,14 @@ SKIP_DESIGNS = {
           "committed, so every limb is checked; 7-bit weights, 8-bit activations), B (cohalf) on Q Kᵀ, and P V with "
           "its strip's digits committed the same way (P peeled with U and a fresh bit, V served, its residue sums' "
           "digits committed)",
+    "Ap": "A with Bc's P V (its strip's digits committed)",
     "C": "NCP-INT on k32 IMMA: three noised copies cancelling in one depth-3k product, the exact output the last "
          "checked word, so at the zero instance the last segment (L of 3k) is known",
     "CB": "NCP-INT on the linears and lm_head, CO-Dither at r = d/2 (7-bit) on Q Kᵀ, P V as in A: wide noise on every "
           "product",
 }
 #: hybrids: (design for the linears and lm_head, for Q Kᵀ, for P V); `pv` is P V with its strip's digits committed
-HYBRIDS = {"CB": ("C", "B", "A"), "Bc": ("co32c", "B", "pv")}
+HYBRIDS = {"CB": ("C", "B", "A"), "Bc": ("co32c", "B", "pv"), "Ap": ("A", "A", "pv")}
 #: co32c's digit limbs: the residue sums of an 8-bit served side over k / 32 terms take up to 3 base-128 digits
 CO32C_DIGITS = 3
 #: Every SKIP design but `record` derives each stage's operand by C1′ from the previous stage's served output (the
