@@ -165,10 +165,11 @@ DEV void mbar_sleep_warp(uint32_t bar, uint32_t parity) {
 // named by its last tile; LAG: unit j is absorbed after MMA j + LAG (past the atom's end, MMA j + LAG - 8 of the next), or
 // with LAG -1 after MMA min(2 j + 2, j + 7) (DUO64's spread: an absorb every second MMA over a receipting atom and the
 // next). TIE: a tie before every |TIE|-th MMA (0: none; negative: the IMAD tie) on the state the last absorb wrote.
-// SLEEP: a consumer waits for its stage with mbar_sleep_warp. UF: UF uniform-datapath instructions a MMA after each atom
-// (two pairs of dependent warp-uniform chains from the seed, folded into the receipt at the tile's end), the uniform
-// filler's stand-in
-template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0> struct EL : MLW {
+// SLEEP: a consumer waits for its stage with mbar_sleep_warp. UF: UF instructions a MMA after each atom on two pairs of
+// dependent warp-uniform chains from the seed, folded into the receipt at the tile's end, the uniform filler's stand-in;
+// ptxas keeps them on the vector datapath unless USH broadcasts the chains from lane 0 (__shfl_sync, which ptxas reads as
+// warp-uniform) before each atom's (1) or each tile's (2)
+template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0> struct EL : MLW {
   static_assert(LAG >= -1 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
   static constexpr bool R = RK != NONE, TB = is_tb(RK), XF = RK == XIN || RK == XIN64 || RK == XIN13,
                         HALF = RK == DUO64 || RK == XIN64;
@@ -223,7 +224,12 @@ template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0> struct EL : 
     else mbar_wait_warp(full(s), ph);
   }
   uint32_t uf[4] = {0, 0, 0, 0};
+  DEV void ubcast() {
+#pragma unroll
+    for (int i = 0; i < 4; i++) uf[i] = __shfl_sync(0xFFFFFFFFu, uf[i], 0);
+  }
   DEV void ufill() {
+    if constexpr (USH == 1) ubcast();
 #pragma unroll
     for (int i = 0; i < UF * MI * NI / 4; i++) {
       uf[0] = uf[0] * 0x9E3779B1u + uf[1];
@@ -431,8 +437,8 @@ template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0> struct EL : 
 };
 constexpr int PEEL2_MAXK = 4096;   // |S| <= 128 k / 32, so S_2 = 0 at k <= 4096; a longer k takes the 3-atom tail
 
-template <int RK, int LAG, int TIE, bool THREE, bool SLEEP = false, int UF = 0> DEV void e_body(const Args& a) {
-  using L = EL<RK, LAG, TIE, SLEEP, UF>;
+template <int RK, int LAG, int TIE, bool THREE, bool SLEEP = false, int UF = 0, int USH = 0> DEV void e_body(const Args& a) {
+  using L = EL<RK, LAG, TIE, SLEEP, UF, USH>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, true, 1);
@@ -467,6 +473,7 @@ template <int RK, int LAG, int TIE, bool THREE, bool SLEEP = false, int UF = 0> 
       ch[e].z = L::TB ? 0u : mix32(ch[e].y + 0x9E3779B9u);
     }
     int acc[MI][NI][4];
+    if constexpr (USH == 2) ml.ubcast();
     ml.tile_il(a.K, acc, ch, kr, zero);
     ml.template peel<THREE>(acc);
     if constexpr (UF > 0) ch[0].y ^= ml.uf[0] ^ ml.uf[1], ch[1].y ^= ml.uf[2] ^ ml.uf[3];
@@ -540,17 +547,20 @@ EGEMM(f20_l2q, FR20, 2, 4)
 EGEMM(f25_l2q, FR25, 2, 4)
 EGEMM(f40_l2q, FR40, 2, 4)
 // the model's predictions against H's schedule (e_l7qs): r = 2 (f20), duo on x-op filler chains (fx<x>), duo with UF
-// uniform-datapath instructions a MMA (u<UF>)
-#define EGEMMU(NAME, RK, LAG, TIE, UF)                                                                                             \
-  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, false, true, UF>(a); } \
-  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_k3(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, true, true, UF>(a); }
+// warp-uniform instructions a MMA (u<UF>; s: broadcast before each atom's, t: before each tile's)
+#define EGEMMU(NAME, RK, LAG, TIE, UF, USH)                                                                                             \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, false, true, UF, USH>(a); } \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_k3(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, true, true, UF, USH>(a); }
 EGEMMS(f20_l7qs, FR20, 7, 4)
 EGEMMS(fx45_l7qs, FX45, 7, 4)
 EGEMMS(fx8_l7qs, FX8, 7, 4)
 EGEMMS(fx12_l7qs, FX12, 7, 4)
 EGEMMS(fx24_l7qs, FX24, 7, 4)
-EGEMMU(u8_l7qs, DUO, 7, 4, 8)
-EGEMMU(u16_l7qs, DUO, 7, 4, 16)
+EGEMMU(u8_l7qs, DUO, 7, 4, 8, 0)
+EGEMMU(u16_l7qs, DUO, 7, 4, 16, 0)
+EGEMMU(u8s_l7qs, DUO, 7, 4, 8, 1)
+EGEMMU(u16s_l7qs, DUO, 7, 4, 16, 1)
+EGEMMU(u16t_l7qs, DUO, 7, 4, 16, 2)
 
 // ---------------------------------------------------------------- the operands
 // x (rows x k bf16) to X (rows x k int8): a warp a group of 4 rows, its lanes 8 columns each (512 contiguous bytes of x a
@@ -791,7 +801,8 @@ static const EKn EK[] = {
     EKE(t4_l2, "tb4"), EKE(t4c_l2, "tb4c"), EKE(t2w_l0, "tb2w"), EKE(t2w_l2, "tb2w"),
     EKE(t1w_l0, "tb1w"), EKE(t1w_l2, "tb1w"),
     EKE(f10_l2q, ""), EKE(f15_l2q, ""), EKE(f20_l2q, ""), EKE(f25_l2q, ""), EKE(f40_l2q, ""), EKE(f20_l7qs, ""),
-    EKE(fx45_l7qs, ""), EKE(fx8_l7qs, ""), EKE(fx12_l7qs, ""), EKE(fx24_l7qs, ""), EKE(u8_l7qs, ""), EKE(u16_l7qs, "")};
+    EKE(fx45_l7qs, ""), EKE(fx8_l7qs, ""), EKE(fx12_l7qs, ""), EKE(fx24_l7qs, ""), EKE(u8_l7qs, ""), EKE(u16_l7qs, ""),
+    EKE(u8s_l7qs, ""), EKE(u16s_l7qs, ""), EKE(u16t_l7qs, "")};
 static const EKn* ekern(const std::string& n) {
   for (auto& e : EK) if (n == e.name) return &e;
   fprintf(stderr, "no kernel %s\n", n.c_str());

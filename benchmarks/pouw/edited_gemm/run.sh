@@ -11,7 +11,8 @@
 # gate_up at m = 2048, with ncu's sections on every arm at every shape (out/ncu/, read by eps_profile.py), EG_SET=eps1lag
 # duo's absorb lag and tie spacing there, EG_SET=eps1sleep consumers that sleep on a stage's mbarrier, EG_SET=eps1wave
 # the best of them at all four linears at m = 2048 and at a shape whose tiles fill whole waves, EG_SET=eps1pred the machine
-# model's predictions against kernels with extra scalar work and duo's counts across k. The small gate's seed has
+# model's predictions against kernels with extra scalar work and duo's counts across k, EG_SET=eps1uni the uniform
+# filler's stand-ins. The small gate's seed has
 # a key that key_ok_r9 rejects. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
@@ -61,6 +62,7 @@ export LAYERS=${LAYERS:-"qkv:8192:6144:4096 gate_up:8192:28672:4096 down:8192:40
 case "${EG_SET:-all}" in
   eps1 | eps1lag | eps1sleep) O_SHAPE="8192 8192 8192" LAYERS="o2k:2048:4096:4096 gu2k:2048:28672:4096" ;;
   eps1wave) O_SHAPE="2048 6016 4096" LAYERS="q2k:2048:6144:4096 o2k:2048:4096:4096 gu2k:2048:28672:4096 dn2k:2048:4096:14336" ;;
+  eps1uni) O_SHAPE="8192 8192 8192" LAYERS="gu2k:2048:28672:4096" ;;
   eps1pred) O_SHAPE="8192 8192 8192" LAYERS="gu2k:2048:28672:4096 k1k:2048:4096:1024 k2k:2048:4096:2048 k8k:2048:4096:8192 q8k:2048:6144:8192" ;;
 esac
 gzip -c "$BIN/egemm.sass" > "$O/egemm.sass.gz"
@@ -168,6 +170,13 @@ if [ "${EG_SET:-all}" = eps1pred ]; then
   arms="plain,e_plains,e_l7qs,f20_l7qs,fx45_l7qs,fx8_l7qs,fx12_l7qs,fx24_l7qs,u8_l7qs,u16_l7qs" il=""
   cold="" larms=$arms lil="" ncu="" stall=""
   NCU_ONE=${arms//,/ } NCU_SHAPES="o gu2k" NCU_EVERY="e_plains e_l7qs"
+fi
+# EG_SET=eps1uni: the uniform filler's stand-ins with the chains broadcast from lane 0 (u8s, u16s before each atom's
+# instructions, u16t before each tile's) beside u16 (ptxas's vector datapath) at 8192^3 and gate_up, ncu on every arm
+if [ "${EG_SET:-all}" = eps1uni ]; then
+  arms="plain,e_l7qs,u16_l7qs,u8s_l7qs,u16s_l7qs,u16t_l7qs" il=""
+  cold="" larms=$arms lil="" ncu="" stall=""
+  NCU_ONE=${arms//,/ }
 fi
 export EG_ARMS=${EG_ARMS:-$arms} IL=${IL:-$il} IL_COLD=${IL_COLD:-$cold}
 export LAYER_ARMS=${LAYER_ARMS:-$larms} LAYER_IL=${LAYER_IL:-$lil}
