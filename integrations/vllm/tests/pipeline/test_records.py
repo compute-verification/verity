@@ -79,13 +79,20 @@ def _build_art(st: LocalStore, d: Path, run: Path) -> str:
     return st.put_artifact(build["kind"], {"row": ROW}, tree=run / build["tree"])
 
 
+def _served(d: Path) -> dict:
+    """SUMMARY with the per-rank Program digests its manifest was built for: the row dir's own."""
+    ranks = json.loads((d / "build_summary.json").read_text())["ranks"]
+    per = {r.removeprefix("rank"): v["workload"]["workload_digest"] for r, v in ranks.items()}
+    return {**SUMMARY, "required_manifest": {**SUMMARY["required_manifest"], "program_digest_per_rank": per}}
+
+
 def test_a_published_row_loads_back_by_id(tmp_path, store):
     d = _row_dir(tmp_path)
     build = _build_art(store, d, tmp_path / "run")
     ev = records.evidence_of(build, manifest="art:" + "1" * 64, match="art:" + "2" * 64, match_run="r20261016-083240-d76e",
                              commit="art:" + "3" * 64, commit_run="r20261016-213336-6c35",
                              conformance={"glm53_bf16_gemm_capture": "art:" + "4" * 64})
-    art = records.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", summary=SUMMARY)
+    art = records.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
     assert records.index() == {ROW: art}
     m = store.get_manifest(art)
     assert m.kind == "vllm-config-record/v1" and m.meta == {"row": ROW, "outcome": "PASS", "world": 2, "tree": "cursor/x@1b53f685a"}
@@ -120,12 +127,18 @@ def test_a_descriptor_that_is_not_the_records_is_refused(tmp_path, store):
         records.programs(ROW, [0])
 
 
-def test_publish_refuses_a_failed_row_and_a_build_without_its_programs(tmp_path, store):
+def test_publish_refuses_a_failed_row_another_builds_commit_and_a_build_without_its_programs(tmp_path, store):
     d = _row_dir(tmp_path)
     build = _build_art(store, d, tmp_path / "run")
     with pytest.raises(UsageError, match="FAIL"):
         records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits",
                         summary={**SUMMARY, "pass": False})
+    served = _served(d)
+    for rm in ({**served["required_manifest"], "manifest_digest": "other"},
+               {**served["required_manifest"], "program_digest_per_rank": {"0": "0" * 128}}):
+        with pytest.raises(UsageError, match="not the one served"):
+            records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits",
+                            summary={**served, "required_manifest": rm})
     (d / "build" / "rank1" / "build_workload" / "descriptor.json.gz").unlink()
     short = _build_art(store, d, tmp_path / "run2")
     with pytest.raises(UsageError, match="lacks 1 Program descriptor"):

@@ -135,13 +135,19 @@ def evidence_of(build: str, *, manifest: str | None = None, match: str | None = 
 
 def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by: str, summary: dict[str, Any] | None = None) -> str:
     """Write the row's config record from its row dir `d` (the stages' files, or a copy of them) and its Commit of record's
-    `summary`, refuse it unless it is PASS and its Build artifact holds every Program it names, then label it `row=<id>`, preserve
-    it with its label and index it.  Returns its art: id."""
+    `summary`, refuse it unless it is PASS, the Commit committed against the Build's manifest and Programs, and its Build artifact
+    holds every Program it names, then label it `row=<id>`, preserve it with its label and index it.  Returns its art: id."""
     if not TREE.fullmatch(tree):
         raise UsageError(f"--tree {tree!r}: REF@SHA, the code the row was built and served from")
     rec = CR.record(d, row, tree=tree, summary=summary, evidence=evidence)
     if rec["outcome"] != "PASS":
         raise UsageError(f"{row}: the record is {rec['outcome']} ({rec['why']}): the database keeps rows whose circuit is faithful")
+    cm = (rec["commit"].get("manifest") or {}) if summary is not None else {}
+    workloads = {str(r): ps.get("workload") for r, ps in parts(rec).items()}
+    if cm.get("manifest_digest") not in (None, rec["build"].get("manifest_digest")) or any(
+            workloads.get(str(r)) != v for r, v in (cm.get("program_digest_per_rank") or {}).items()):
+        raise UsageError(f"{row}: the Commit committed against manifest {str(cm.get('manifest_digest'))[:16]}… and its Programs, not the "
+                         f"Build's ({str(rec['build'].get('manifest_digest'))[:16]}…): the record's Build is not the one served")
     listed = {f["path"] for f in json.loads(data("fetch", evidence["build"], "--list", "--json"))}
     if missing := [p for r, ps in parts(rec).items() for p in (descriptor(rec, r, q) for q in ps) if p not in listed]:
         raise UsageError(f"{row}: the Build {evidence['build']} lacks {len(missing)} Program descriptor(s): {', '.join(missing[:4])}")
