@@ -36,6 +36,7 @@ import Proofs.Flock.Claims.Complete.Zk.LaneAgree
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
 import Proofs.Flock.Claims.Complete.Zk.InnerGo
+import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
