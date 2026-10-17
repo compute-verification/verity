@@ -34,7 +34,9 @@ s32; every other step is ``unproven`` and listed in ``may_overflow`` by its Defi
 Steps. A Program's Calls (its root's non-input nodes) are split into steps at the Call indices `census(program, steps)`
 names (one step if none). Per step the census gives the classes of its Calls and its memory: the input bits it reads first
 (run and registered), the dynamic bits it writes that a later step reads, by the distance in steps to their last read
-(``lifetimes``), and the output bits it writes.
+(``lifetimes``), the run input bits it first reads that a later step reads again (``held_input_bits``, by distance in
+``input_lifetimes``: a run input is dynamic memory too), and the output bits it writes. The total adds them up, with the
+longest distance (``max_lifetime``).
 
 The table is fixed and versioned: changing an entry is a new `VERSION`, and so a new `digest()`.
 """
