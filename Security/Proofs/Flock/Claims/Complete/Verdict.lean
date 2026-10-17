@@ -180,7 +180,7 @@ session. -/
 theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} {lv : Live}
     (hS : (f.stmt == x) = true)
-    (hD : (FlockSoundness.Discharge.Exec.recordDraw f.record == s.read.draw) = true)
+    (hD : drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw = true)
     (hL : liveOf spec f.record = .ok lv) (hC : custody spec lv link c₁ mids = .ok ())
     (hQ : s.read.check = .ok ()) (hN : s.read.draw.isNone = false) :
     checks zk s spec x link c₁ mids f = .ok () := by
