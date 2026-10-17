@@ -138,8 +138,8 @@ def test_adopted_lines_are_faster():
 
 
 def test_sm89_census_is_well_formed():
-    """data/sm89/ (opcode_probe/sm89/census.py): one epoch, every line on a row it defines, every kind on issue and JI89."""
-    d = DATA / "sm89"
+    """data/devices/sm_89/ (opcode_probe/sm89/census.py): one epoch, every line on a row it defines, every kind on issue and JI89."""
+    d = DATA / "devices" / "sm_89"
     rs = rows(d)
     assert all(r.status in STATUSES and r.runs and all(CITE.fullmatch(x) for x in r.runs) for r in rs.values())
     with open(d / "census.csv", newline="") as f:
