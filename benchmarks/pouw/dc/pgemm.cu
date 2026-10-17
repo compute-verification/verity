@@ -7,9 +7,9 @@
 //
 // A CTA computes a 128 x 512 block as NB tiles of 128 x BN (BN = 512 / NB: NB = 2 is two 256-column accumulators, NB = 4
 // four of 128; either way TMEM's 512 columns). The running sum lives in TMEM, so the buffers are the tiles:
-//   the MMA warp (the last; one elected thread), for each group g of lm k-steps and each tile b: waits empty[b] (tile b's
-//     loaders have read group g - 1), issues lm tcgen05.mma kind::i8 128xBNx32 accumulating into tile b, and
-//     tcgen05.commit's full[b];
+//   the MMA warp (after the loaders; one elected thread; MI: one MMA warp a tile), for each group g of lm k-steps and
+//     each tile b: waits empty[b] (tile b's loaders have read group g - 1), issues lm tcgen05.mma kind::i8 128xBNx32
+//     accumulating into tile b, and tcgen05.commit's full[b];
 //   loader warpgroup w of LW (tiles b with b % LW == w; a thread owns one row): waits full[b], reads the row with
 //     tcgen05.ld.32x32b.x32 and tcgen05.wait::ld, arrives on empty[b] after the last load, and folds the words.
 // MODE 0: the loaders only hand the barrier back (the pipeline's own rate); 1: they load every word and don't fold (the
@@ -20,10 +20,10 @@
 // rate is the tensor, TMEM and fold stage's; operand streaming (TMA) is not in it.
 //
 // Modes:
-//   pgemm gate DIR M N K SEED LM NB LW   K-periodic inputs, C and R poisoned with 0xA5, MODE 2, compared with the host
-//                                        reference; X, W, C, R and meta.json to DIR for dgemm_ref.py
-//   pgemm rate REPS KSTEPS               every (NB, LW, MODE) at lm 1, 2, 4, 8 on one CTA a SM, REPS interleaved
-//                                        launches; one JSON line a configuration (cycles from clock64 a CTA)
+//   pgemm gate DIR M N K SEED LM NB LW [MI]  K-periodic inputs, C and R poisoned with 0xA5, MODE 2, compared with the
+//                                            host reference; X, W, C, R and meta.json to DIR for dgemm_ref.py
+//   pgemm rate REPS KSTEPS                   every (NB, LW, MODE, MI) at lm 1, 2, 4, 8 on one CTA a SM, REPS
+//                                            interleaved launches; one JSON line a configuration (clock64 a CTA)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a pgemm.cu -o pgemm
 #include <cuda_runtime.h>
 
@@ -100,14 +100,19 @@ DC_DEV void load_pass(uint32_t ta, int32_t* crow, uint32_t& sink) {
   }
 }
 
-// The register cap a block of 4 LW + 1 warps can launch with: an SMSP's 16K registers over the most warps it holds (LW = 4,
-// 17 warps, would get 96, and the honest loader spills there).
-template <int NB, int LW, int MODE>
-__global__ void __maxnreg__(LW == 2 ? 168 : 255)
+// The register cap a block of `warps` can launch with: an SMSP's 16K registers over the most warps it holds (LW = 4, 17
+// warps, would get 96, and the honest loader spills there).
+__host__ __device__ constexpr int reg_cap(int warps) {
+  return 16384 / ((warps + 3) / 4 * 32) / 8 * 8 > 255 ? 255 : 16384 / ((warps + 3) / 4 * 32) / 8 * 8;
+}
+__host__ __device__ constexpr int mma_warps(int nb, bool mi) { return mi ? nb : 1; }
+// MI: one MMA warp a tile (each commits only its own tile's MMAs) instead of one for all.
+template <int NB, int LW, int MODE, bool MI>
+__global__ void __maxnreg__(reg_cap(4 * LW + mma_warps(NB, MI)))
     pg100(const int8_t* X, const int8_t* W, int ldx, int n, int k, int lm, uint32_t seed, int32_t* C, uint32_t* R,
           long long* clk) {
 #if defined(__CUDA_ARCH_FEAT_SM100_ALL)
-  constexpr int BN = CTA_N / NB, TPW = NB / LW, MMA_WARP = 4 * LW;
+  constexpr int BN = CTA_N / NB, TPW = NB / LW, MMA_WARP = 4 * LW, NMW = mma_warps(NB, MI);
   static_assert(NB % LW == 0 && NB <= 4 && LW <= 2, "tiles a loader warpgroup");
   extern __shared__ __align__(1024) unsigned char dsm[];
   unsigned char* sA = dsm;
@@ -141,12 +146,12 @@ __global__ void __maxnreg__(LW == 2 ? 168 : 255)
   const uint32_t tmem = bars.tslot;
   const int groups = k / (32 * lm);
   const long long t0 = clock64();
-  if (w == MMA_WARP) {
+  if (w >= MMA_WARP) {
     constexpr uint32_t idesc = umma_idesc(2, 1, 1, BM, BN);
-    const uint32_t a0 = smem_u32(sA), b0 = smem_u32(sB);
+    const uint32_t a0 = smem_u32(sA), b0 = smem_u32(sB), mw = w - MMA_WARP;
     for (int g = 0; g < groups; g++) {
 #pragma unroll
-      for (int b = 0; b < NB; b++) {
+      for (int b = (int)mw; b < NB; b += NMW) {
         if (g > 0) mbar_wait(MODE == 3 ? &bars.full[b] : &bars.empty[b], (uint32_t)((g - 1) & 1));
         tc_after_sync();
         if (elect_one()) {
@@ -162,7 +167,7 @@ __global__ void __maxnreg__(LW == 2 ? 168 : 255)
     }
     if constexpr (MODE == 3) {
 #pragma unroll
-      for (int b = 0; b < NB; b++) mbar_wait(&bars.full[b], (uint32_t)((groups - 1) & 1));
+      for (int b = (int)mw; b < NB; b += NMW) mbar_wait(&bars.full[b], (uint32_t)((groups - 1) & 1));
     }
   } else if constexpr (MODE != 3) {
     const uint32_t wg = w >> 2, q = w & 3;
@@ -226,17 +231,19 @@ __global__ void __maxnreg__(LW == 2 ? 168 : 255)
 // ---- host ------------------------------------------------------------------------------------------------------------------
 using Kern = void (*)(const int8_t*, const int8_t*, int, int, int, int, uint32_t, int32_t*, uint32_t*, long long*);
 struct Cfg {
-  int nb, lw, mode;
+  int nb, lw, mode, mi;
   Kern k;
+  int threads() const { return 32 * (4 * lw + mma_warps(nb, mi)); }
 };
-#define CFG(NB, LW)                                                                                   \
-  {NB, LW, 0, pg100<NB, LW, 0>}, {NB, LW, 1, pg100<NB, LW, 1>}, {NB, LW, 2, pg100<NB, LW, 2>}, \
-      {NB, LW, 3, pg100<NB, LW, 3>}
-static const Cfg CFGS[] = {CFG(2, 1), CFG(2, 2), CFG(4, 1), CFG(4, 2)};
+#define CFG(NB, LW, MI)                                                                                               \
+  {NB, LW, 0, MI, pg100<NB, LW, 0, MI>}, {NB, LW, 1, MI, pg100<NB, LW, 1, MI>}, {NB, LW, 2, MI, pg100<NB, LW, 2, MI>}, \
+      {NB, LW, 3, MI, pg100<NB, LW, 3, MI>}
+static const Cfg CFGS[] = {CFG(2, 1, false), CFG(2, 2, false), CFG(4, 1, false), CFG(4, 2, false),
+                           CFG(2, 1, true),  CFG(2, 2, true),  CFG(4, 1, true),  CFG(4, 2, true)};
 #undef CFG
-static const Cfg* find(int nb, int lw, int mode) {
+static const Cfg* find(int nb, int lw, int mode, int mi) {
   for (const Cfg& c : CFGS)
-    if (c.nb == nb && c.lw == lw && c.mode == mode) return &c;
+    if (c.nb == nb && c.lw == lw && c.mode == mode && c.mi == mi) return &c;
   return nullptr;
 }
 static void prepare() {
@@ -295,11 +302,12 @@ static void dump(const std::string& dir, const char* name, const std::vector<T>&
   fclose(f);
 }
 
-static int run_gate(const std::string& dir, int m, int n, int k, uint32_t seed, int lm, int nb, int lw) {
-  const Cfg* cfg = find(nb, lw, 2);
+static int run_gate(const std::string& dir, int m, int n, int k, uint32_t seed, int lm, int nb, int lw, int mi) {
+  const Cfg* cfg = find(nb, lw, 2, mi);
   const int L = 32 * lm, bn = CTA_N / nb;
   if (!cfg || m % BM || n % CTA_N || k % L || k % PER) {
-    fprintf(stderr, "ERR gate: (nb, lw) in (2,1) (2,2) (4,1) (4,2); m %% %d, n %% %d, k %% L and %% %d\n", BM, CTA_N, PER);
+    fprintf(stderr, "ERR gate: (nb, lw) in (2,1) (2,2) (4,1) (4,2), mi 0 or 1; m %% %d, n %% %d, k %% L and %% %d\n", BM,
+            CTA_N, PER);
     return 2;
   }
   std::vector<int8_t> X, W;
@@ -321,7 +329,7 @@ static int run_gate(const std::string& dir, int m, int n, int k, uint32_t seed, 
   CK(cudaMemcpy(dW, W.data(), W.size(), cudaMemcpyHostToDevice));
   CK(cudaMemset(dC, 0xA5, Cr.size() * 4));
   CK(cudaMemset(dR, 0xA5, Rr.size() * 4));
-  cfg->k<<<grid, 32 * (4 * lw + 1), SMEM>>>(dX, dW, k, n, k, lm, seed, dC, dR, dclk);
+  cfg->k<<<grid, cfg->threads(), SMEM>>>(dX, dW, k, n, k, lm, seed, dC, dR, dclk);
   CK(cudaGetLastError());
   CK(cudaDeviceSynchronize());
   C.resize(Cr.size());
@@ -338,13 +346,13 @@ static int run_gate(const std::string& dir, int m, int n, int k, uint32_t seed, 
   FILE* f = fopen((dir + "/meta.json").c_str(), "w");
   fprintf(f,
           "{\"m\": %d, \"n\": %d, \"k\": %d, \"bm\": %d, \"bn\": %d, \"seed\": %u, \"L\": %d, \"nch\": %d, \"period\": %d, "
-          "\"nb\": %d, \"lw\": %d, \"arch\": \"sm_100a\", \"source\": \"gpu\", \"c_bad\": %zu, \"r_bad\": %zu}\n",
-          m, n, k, BM, bn, seed, L, NCH, PER, nb, lw, bc, br);
+          "\"nb\": %d, \"lw\": %d, \"mi\": %d, \"arch\": \"sm_100a\", \"source\": \"gpu\", \"c_bad\": %zu, \"r_bad\": %zu}\n",
+          m, n, k, BM, bn, seed, L, NCH, PER, nb, lw, mi, bc, br);
   fclose(f);
   const bool ok = bc == 0 && br == 0;
-  printf("{\"mode\": \"gate\", \"m\": %d, \"n\": %d, \"k\": %d, \"L\": %d, \"nb\": %d, \"lw\": %d, \"exact\": %s, "
-         "\"c_bad\": %zu, \"r_bad\": %zu, \"words\": %zu, \"receipts\": %zu}\n",
-         m, n, k, L, nb, lw, ok ? "true" : "false", bc, br, C.size(), R.size());
+  printf("{\"mode\": \"gate\", \"m\": %d, \"n\": %d, \"k\": %d, \"L\": %d, \"nb\": %d, \"lw\": %d, \"mi\": %d, "
+         "\"exact\": %s, \"c_bad\": %zu, \"r_bad\": %zu, \"words\": %zu, \"receipts\": %zu}\n",
+         m, n, k, L, nb, lw, mi, ok ? "true" : "false", bc, br, C.size(), R.size());
   CK(cudaFree(dX));
   CK(cudaFree(dW));
   CK(cudaFree(dC));
@@ -387,7 +395,7 @@ static int run_rate(int reps, int ksteps) {
   for (int r = 0; r <= reps; r++)
     for (Point& p : pts) {
       CK(cudaEventRecord(e0));
-      p.c->k<<<dim3(1, nsm), 32 * (4 * p.c->lw + 1), SMEM>>>(dX, dW, PER, n, k, p.lm, 7, dC, dR, dclk);
+      p.c->k<<<dim3(1, nsm), p.c->threads(), SMEM>>>(dX, dW, PER, n, k, p.lm, 7, dC, dR, dclk);
       CK(cudaEventRecord(e1));
       CK(cudaEventSynchronize(e1));
       CK(cudaGetLastError());
@@ -409,10 +417,10 @@ static int run_rate(int reps, int ksteps) {
       return v[v.size() / 2];
     };
     const double cyc = median(p.med), slots = (double)ksteps * BM * CTA_N, ms = median(p.ms);
-    printf("{\"mode\": \"rate\", \"nb\": %d, \"lw\": %d, \"arm\": %d, \"L\": %d, \"ksteps\": %d, \"ctas\": %d, "
-           "\"reps\": %d, \"cycles\": %.0f, \"cycles_lo\": %.0f, \"cycles_hi\": %.0f, \"ms\": %.4f, \"mhz\": %.1f, "
-           "\"slots_per_clk\": %.3f, \"committed_words_per_clk\": %.3f, \"group_clk\": %.1f}\n",
-           p.c->nb, p.c->lw, p.c->mode, 32 * p.lm, ksteps, nsm, reps, cyc, median(p.lo), median(p.hi), ms,
+    printf("{\"mode\": \"rate\", \"nb\": %d, \"lw\": %d, \"mi\": %d, \"arm\": %d, \"L\": %d, \"ksteps\": %d, "
+           "\"ctas\": %d, \"reps\": %d, \"cycles\": %.0f, \"cycles_lo\": %.0f, \"cycles_hi\": %.0f, \"ms\": %.4f, "
+           "\"mhz\": %.1f, \"slots_per_clk\": %.3f, \"committed_words_per_clk\": %.3f, \"group_clk\": %.1f}\n",
+           p.c->nb, p.c->lw, p.c->mi, p.c->mode, 32 * p.lm, ksteps, nsm, reps, cyc, median(p.lo), median(p.hi), ms,
            cyc / (ms * 1e3), slots / cyc, slots / cyc / p.lm, cyc / (ksteps / p.lm));
   }
   return 0;
@@ -421,17 +429,17 @@ static int run_rate(int reps, int ksteps) {
 int main(int argc, char** argv) {
   const std::string mode = argc > 1 ? argv[1] : "";
   if (mode != "gate" && mode != "rate") {
-    fprintf(stderr, "usage: pgemm gate DIR M N K SEED LM NB LW | rate REPS KSTEPS\n");
+    fprintf(stderr, "usage: pgemm gate DIR M N K SEED LM NB LW [MI] | rate REPS KSTEPS\n");
     return 2;
   }
   cudaDeviceProp p;
   CK(cudaGetDeviceProperties(&p, 0));
   if (p.major != 10) { fprintf(stderr, "ERR device sm_%d%d: this binary runs on sm_100a\n", p.major, p.minor); return 2; }
   prepare();
-  if (mode == "gate" && argc == 10)
+  if (mode == "gate" && (argc == 10 || argc == 11))
     return run_gate(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), (uint32_t)strtoul(argv[6], 0, 10),
-                    atoi(argv[7]), atoi(argv[8]), atoi(argv[9]));
+                    atoi(argv[7]), atoi(argv[8]), atoi(argv[9]), argc == 11 ? atoi(argv[10]) : 0);
   if (mode == "rate" && argc == 4) return run_rate(atoi(argv[2]), atoi(argv[3]));
-  fprintf(stderr, "usage: pgemm gate DIR M N K SEED LM NB LW | rate REPS KSTEPS\n");
+  fprintf(stderr, "usage: pgemm gate DIR M N K SEED LM NB LW [MI] | rate REPS KSTEPS\n");
   return 2;
 }

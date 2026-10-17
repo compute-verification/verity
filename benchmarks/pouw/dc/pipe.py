@@ -56,12 +56,12 @@ def machine(path: Path = CENSUS) -> dict:
 
 
 # ---- SASS ----------------------------------------------------------------------------------------------------------------
-FUNC = re.compile(r"Function : _Z5pg100ILi(\d)ELi(\d)ELi(\d)E")
+FUNC = re.compile(r"Function : _Z5pg100ILi(\d)ELi(\d)ELi(\d)ELb(\d)E")
 INSTR = re.compile(r"/\*[0-9a-f]{4,}\*/\s+(@!?U?P\w+\s+)?([A-Z][A-Za-z0-9_.]*)")
 
 
-def kernels(sass: str) -> dict[tuple[int, int, int], list[str]]:
-    """(NB, LW, MODE) -> the kernel's opcodes in order."""
+def kernels(sass: str) -> dict[tuple[int, int, int, int], list[str]]:
+    """(NB, LW, MODE, MI) -> the kernel's opcodes in order."""
     out, cur = {}, None
     for line in sass.splitlines():
         m = FUNC.search(line)
@@ -102,15 +102,15 @@ def fold_profile(ops: list[str], nb: int, lw: int) -> dict:
     return {"instructions": len(seg) / words, **{k: v / words for k, v in sorted(by.items())}, "words": words}
 
 
-KERNELS = 16   # (NB, LW) in (2, 1) (2, 2) (4, 1) (4, 2), four modes each
+KERNELS = 32   # (NB, LW) in (2, 1) (2, 2) (4, 1) (4, 2), four modes, one MMA warp or one a tile
 REGS_SMSP = 16384
 
 
 def gate_build(out: Path) -> int:
     log = (out / "build.log").read_text()
     spills = re.findall(r"(\d+) bytes spill stores, (\d+) bytes spill loads", log)
-    regs = {tuple(int(x) for x in m.groups()[:3]): int(m.group(4)) for m in re.finditer(
-        r"Compiling entry function '_Z5pg100ILi(\d)ELi(\d)ELi(\d)E[^']*'.*?Used (\d+) registers", log, re.S)}
+    regs = {tuple(int(x) for x in m.groups()[:4]): int(m.group(5)) for m in re.finditer(
+        r"Compiling entry function '_Z5pg100ILi(\d)ELi(\d)ELi(\d)ELb(\d)E[^']*'.*?Used (\d+) registers", log, re.S)}
     ks = kernels((out / "sass" / "pgemm.sass").read_text())
     bad = []
     if len(ks) != KERNELS or len(spills) < KERNELS or len(regs) != KERNELS:
@@ -118,17 +118,18 @@ def gate_build(out: Path) -> int:
                    f"{KERNELS} expected")
     if any(s != ("0", "0") for s in spills):
         bad.append(f"ptxas reports spills: {spills}")
-    for (nb, lw, mode), ops in sorted(ks.items()):
+    for (nb, lw, mode, mi), ops in sorted(ks.items()):
         n_mma = sum(op.startswith("UTCIMMA") for op in ops)
         n_ld = sum(op == "LDTM.x32" for op in ops)
         local = sum(op.split(".")[0] in ("LDL", "STL") for op in ops)
-        r = regs.get((nb, lw, mode), 0)
-        cap = min(255, REGS_SMSP // (-(-(4 * lw + 1) // 4) * 32) // 8 * 8)
+        r = regs.get((nb, lw, mode, mi), 0)
+        cap = min(255, REGS_SMSP // (-(-(4 * lw + (nb if mi else 1)) // 4) * 32) // 8 * 8)
         ok = n_mma > 0 and local == 0 and (mode in (0, 3) or n_ld > 0) and 0 < r <= cap
-        print(f"{'PASS' if ok else 'REFUSED'} pg100<{nb},{lw},{mode}>: UTCIMMA {n_mma}, LDTM.x32 {n_ld}, LDL/STL {local}, "
-              f"registers {r} (launchable {cap})")
+        name = f"pg100<{nb},{lw},{mode},{mi}>"
+        print(f"{'PASS' if ok else 'REFUSED'} {name}: UTCIMMA {n_mma}, LDTM.x32 {n_ld}, LDL/STL {local}, registers {r} "
+              f"(launchable {cap})")
         if not ok:
-            bad.append(f"pg100<{nb},{lw},{mode}>")
+            bad.append(name)
     for b in bad:
         print(f"REFUSED {b}", file=sys.stderr)
     return 1 if bad else 0
@@ -174,31 +175,39 @@ def qstar(mach: dict, L: int, ld_issue_word: float) -> dict:
 def honest_profile(ks: dict) -> tuple[tuple[int, int], dict]:
     """The fold's issue a word from the honest kernel whose straight-line group holds the most words (duo is the same code
     in every (NB, LW); a short group's range misses fold ptxas scheduled after its last load)."""
-    profs = {(nb, lw): fold_profile(ops, nb, lw) for (nb, lw, mode), ops in ks.items() if mode == 2}
+    profs = {(nb, lw): fold_profile(ops, nb, lw) for (nb, lw, mode, mi), ops in ks.items() if mode == 2 and not mi}
     key = max(profs, key=lambda t: profs[t].get("words", 0))
     return key, profs[key]
 
 
 def eps_tensor_l32(census_dirs: list[Path], rates: list[dict], rho5: float) -> dict:
-    """TENSOR's two-stage LP at L = 32 with the kernel's points added to the probes' TMEM region: the adversary keeps the
-    region's balanced tcgen05 words and fills the shared pipe's slack with mma.sync; honest is the best measured TMEM
-    stage (arm 1) and the best honest kernel (arm 2)."""
+    """ε_tensor at L = 32 with honest's measured TMEM stage (arm 1: every word loaded, the fold off) against TENSOR's
+    two-stage adversary, who keeps t ρ_T5 tcgen05 words and fills the shared pipe's slack at t with mma.sync. Three t:
+    T1's (the adversary has the whole pipe: ε = 1 − honest / ρ_T5), the probes' TMEM region's balanced point (load
+    bandwidth only, the kernel's points added), and that capped by the round trip: a tcgen05 word at L = 32 must leave
+    TMEM before the next k-step lands on it, so no program keeps more than TMEM's 128 x 512 words in flight, and arm 3
+    (the MMA waiting on its own commit, no read) bounds any program's tcgen05 words from above."""
     census = _module("dc_census", HERE / "census.py")
     analyze = census.analyze
     dev = census.Device("sm100", census_dirs)
     base = dev.model()
     region = list(base["tmem_points"]) + [(r["slots_per_clk"] / rho5, r["committed_words_per_clk"] / rho5)
-                                          for r in rates if r["arm"] in (1, 2)]
+                                          for r in rates if r["arm"] in (1, 2) and r["L"] == 32]
     h = analyze.balanced(region)
     rho_sync = max(v["rate"] * v["slots_per"] for k, v in dev.tensor().items() if k.startswith("IMMA"))
-    extra = analyze.upper(base["sync_points"], h) * rho_sync
-    adversary = h * rho5 + extra
-    out = {"region_balanced_probes": base["honest_fraction_L32"], "region_balanced": h, "rho_sync": rho_sync,
-           "adversary_words": adversary, "eps_probes_lp": base.get("eps_tensor_L32")}
-    for arm in (1, 2):
-        b = best(rates, arm, 32)
-        if b:
-            out[f"eps_{ARMS[arm].replace(' ', '_')}"] = 1 - b["committed_words_per_clk"] / adversary
+    honest = best(rates, 1, 32)
+    if not honest:
+        return {}
+    w = honest["committed_words_per_clk"]
+    out = {"honest_TMEM_stage": w, "honest_fraction": w / rho5, "rho_sync": rho_sync,
+           "region_balanced_probes": base["honest_fraction_L32"], "eps_probes_lp": base.get("eps_tensor_L32"),
+           "T1": 1 - w / rho5}
+    rt = best(rates, 3, 32)
+    caps = {"bandwidth": h} | ({"round_trip": min(h, rt["slots_per_clk"] / rho5)} if rt else {})
+    for name, t in caps.items():
+        extra = analyze.upper(base["sync_points"], t) * rho_sync
+        out[name] = {"t": t, "tcgen05_words": t * rho5, "mma_sync_words": extra, "adversary_words": t * rho5 + extra,
+                     "eps": 1 - w / (t * rho5 + extra)}
     return out
 
 
@@ -219,8 +228,8 @@ def analyze_run(out: Path, census_dirs: list[Path]) -> dict:
         for arm in ARMS:
             b = best(rates, arm, L)
             if b:
-                row[ARMS[arm]] = {k: b[k] for k in ("nb", "lw", "slots_per_clk", "committed_words_per_clk",
-                                                     "tensor_fraction", "mhz")}
+                row[ARMS[arm]] = {k: b.get(k) for k in ("nb", "lw", "mi", "slots_per_clk", "committed_words_per_clk",
+                                                         "tensor_fraction", "mhz", "group_clk")}
         h = best(rates, 2, L)
         if h and prof:
             row["issue_beside"] = issue_beside(h["committed_words_per_clk"], prof, mach, L)
@@ -233,13 +242,15 @@ def analyze_run(out: Path, census_dirs: list[Path]) -> dict:
 
 def text(res: dict) -> str:
     lines = [f"rho_T5 {res['rho_T5']:.2f} slots/SM/clk (census); gates exact {res['gates']['exact']}/{res['gates']['n']}",
-             "", "| L | arm | (NB, LW) | slots/SM/clk | committed words/SM/clk | of rho_T5 |", "|---|---|---|---|---|---|"]
+             "", "| L | arm | (NB, LW, MI) | slots/SM/clk | committed words/SM/clk | of rho_T5 | clk a group |",
+             "|---|---|---|---|---|---|---|"]
     for L, row in res["by_L"].items():
         for arm in ARMS.values():
             b = row.get(arm)
             if b:
-                lines.append(f"| {L} | {arm} | ({b['nb']}, {b['lw']}) | {b['slots_per_clk']:.2f} | "
-                             f"{b['committed_words_per_clk']:.2f} | {b['tensor_fraction']:.4f} |")
+                g = f"{b['group_clk']:.0f}" if b.get("group_clk") else ""
+                lines.append(f"| {L} | {arm} | ({b['nb']}, {b['lw']}, {b.get('mi') or 0}) | {b['slots_per_clk']:.2f} | "
+                             f"{b['committed_words_per_clk']:.2f} | {b['tensor_fraction']:.4f} | {g} |")
     lines.append("")
     p = res.get("fold_profile")
     if p:
@@ -257,10 +268,15 @@ def text(res: dict) -> str:
         lines.append(line)
     e = res.get("eps_L32")
     if e:
-        lines += ["", f"eps_tensor at L = 32 (two-stage LP): region balanced {e['region_balanced']:.4f} (probes alone "
-                  f"{e['region_balanced_probes']:.4f}), adversary {e['adversary_words']:.2f} words/SM/clk; probes' LP "
-                  f"{e['eps_probes_lp']:.4f}; with the measured TMEM stage {e.get('eps_TMEM_stage', float('nan')):.4f}, "
-                  f"with the honest kernel (fold) {e.get('eps_honest', float('nan')):.4f}"]
+        lines += ["", f"eps_tensor at L = 32, honest's measured TMEM stage {e['honest_TMEM_stage']:.2f} words/SM/clk "
+                  f"({e['honest_fraction']:.4f} of rho_T5; the probes' LP assumed {e['region_balanced_probes']:.4f} and "
+                  f"gave {e['eps_probes_lp']:.4f}): T1 {e['T1']:.4f}"]
+        for name in ("bandwidth", "round_trip"):
+            c = e.get(name)
+            if c:
+                lines.append(f"- adversary capped by {name.replace('_', ' ')}: t {c['t']:.4f}, tcgen05 "
+                             f"{c['tcgen05_words']:.2f} + mma.sync {c['mma_sync_words']:.2f} = "
+                             f"{c['adversary_words']:.2f} words/SM/clk, eps {c['eps']:.4f}")
     return "\n".join(lines)
 
 

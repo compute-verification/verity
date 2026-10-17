@@ -57,16 +57,18 @@ smi_pid=$!
 trap 'kill "$smi_pid" 2>/dev/null' EXIT
 
 exact=1
-for t in "${TILES[@]}"; do
-  read -r nb lw <<<"$t"
-  for lm in 1 2; do
-    for s in "${SHAPES[@]}"; do
-      read -r m n k seed <<<"$s"
-      d="$OUT/gate/${m}x${n}x${k}-L$((32 * lm))-nb${nb}-lw${lw}"
-      mkdir -p "$d"
-      "$WORK/pgemm" gate "$d" "$m" "$n" "$k" "$seed" "$lm" "$nb" "$lw" | tee "$d/result.json" || exact=0
-      python3 "$HERE/dgemm_ref.py" "$d" | tee "$d/ref.json" || exact=0
-      rm -f "$d"/*.bin
+for mi in 0 1; do
+  for t in "${TILES[@]}"; do
+    read -r nb lw <<<"$t"
+    for lm in 1 2; do
+      for s in "${SHAPES[@]}"; do
+        read -r m n k seed <<<"$s"
+        d="$OUT/gate/${m}x${n}x${k}-L$((32 * lm))-nb${nb}-lw${lw}-mi${mi}"
+        mkdir -p "$d"
+        "$WORK/pgemm" gate "$d" "$m" "$n" "$k" "$seed" "$lm" "$nb" "$lw" "$mi" | tee "$d/result.json" || exact=0
+        python3 "$HERE/dgemm_ref.py" "$d" | tee "$d/ref.json" || exact=0
+        rm -f "$d"/*.bin
+      done
     done
   done
 done

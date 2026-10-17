@@ -77,11 +77,11 @@ def test_receipt_twin_matches_word_loop():
     assert (T == T2).all() and (R == R2).all() and not (R == ref.receipts(X, W, 11, 32)[1]).all()
 
 
-def _pg_sass(kernels: dict[tuple[int, int, int], list[str]]) -> str:
+def _pg_sass(kernels: dict[tuple[int, int, int, int], list[str]]) -> str:
     """cuobjdump's form of pgemm's kernels: a Function line, then one opcode a line."""
     out = []
-    for (nb, lw, mode), ops in kernels.items():
-        out.append(f"\t\tFunction : _Z5pg100ILi{nb}ELi{lw}ELi{mode}EEvPKaS1_iiiijPiPjPx")
+    for (nb, lw, mode, mi), ops in kernels.items():
+        out.append(f"\t\tFunction : _Z5pg100ILi{nb}ELi{lw}ELi{mode}ELb{mi}EEvPKaS1_iiiijPiPjPx")
         out += [f"        /*{16 * i:04x}*/                   {op} R0, R1 ;  /* 0x0 */" for i, op in enumerate(ops)]
     return "\n".join(out) + "\n"
 
@@ -92,9 +92,9 @@ def test_pipe_fold_profile_and_qstar(tmp_path):
     pipe = _load("pipe")
     fold = ["LOP3.LUT", "IMAD", "LEA.HI"] * 32
     ops = ["S2R", "SYNCS.PHASECHK.TRANS64.TRYWAIT"] + (["LDTM.x32"] + fold) * 4 + ["BRA"]
-    ks = pipe.kernels(_pg_sass({(4, 4, 2): ops, (4, 4, 0): ["UTCIMMA", "EXIT"]}))
-    assert set(ks) == {(4, 4, 2), (4, 4, 0)} and ks[(4, 4, 2)] == ops
-    p = pipe.fold_profile(ks[(4, 4, 2)], 4, 4)
+    ks = pipe.kernels(_pg_sass({(4, 4, 2, 0): ops, (4, 4, 0, 1): ["UTCIMMA", "EXIT"]}))
+    assert set(ks) == {(4, 4, 2, 0), (4, 4, 0, 1)} and ks[(4, 4, 2, 0)] == ops
+    p = pipe.fold_profile(ks[(4, 4, 2, 0)], 4, 4)
     assert p["words"] == 96 and abs(p["instructions"] - (3 * 96 + 3) / 96) < 1e-12
     assert p["ALU"] == 2 and p["IMAD"] == 1 and p["LDTM"] == 3 / 96
     mach = {"c_M": 1.0, "c_X": 1.0}
