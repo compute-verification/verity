@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -42,16 +43,36 @@ CROSS_PORT, CROSS_LPORT = 47330, 47313
 def remote_serve(src: bytes, seconds: int, log_path: str, who: str = "node1", port: int = CROSS_PORT,
                  peers: tuple[str, ...] = (f"{REMOTES['cpu1'][0].split('@')[1]}:{CROSS_LPORT}",),
                  host_mib: int = 1024) -> subprocess.Popen:
-    """`lat serve` on `who` (default vy-nebius-1) for `seconds`, built and run in a scratch dir that it removes on exit."""
+    """`lat serve` on `who` (default vy-nebius-1) for `seconds`, built and run in a scratch dir that it removes on exit.
+    The log gets `PID n` (for `remote_stop`: a killed ssh client leaves the remote server running) and `READY` once it
+    is bound (`remote_ready`)."""
     dest = REMOTES[who][0]
     script = ("set -e; d=$(mktemp -d /tmp/lat-serve.XXXXXX); trap 'rm -rf \"$d\"' EXIT; cat > \"$d/lat.cu\"; "
               "g++ -O2 -std=c++17 -x c++ -o \"$d/lat\" \"$d/lat.cu\" -lpthread; "
-              f"timeout -s TERM {seconds} \"$d/lat\" serve port={port} cpu=auto host_mib={host_mib} "
-              f"{' '.join(f'peer={p}' for p in peers)} || true")
+              f"timeout -s TERM {seconds} \"$d/lat\" serve port={port} cpu=auto host_mib={host_mib} ready=\"$d/ready\" "
+              f"{' '.join(f'peer={p}' for p in peers)} & pid=$!; echo \"PID $pid\"; "
+              "while [ ! -s \"$d/ready\" ] && kill -0 $pid 2>/dev/null; do sleep 0.2; done; "
+              "[ -s \"$d/ready\" ] && echo READY; wait $pid || true")
     p = subprocess.Popen([*SSH, dest, script], stdin=subprocess.PIPE, stdout=open(log_path, "w"), stderr=subprocess.STDOUT)
     p.stdin.write(src)
     p.stdin.close()
     return p
+
+
+def remote_ready(proc: subprocess.Popen, log_path: str) -> bool:
+    """Whether `remote_serve`'s server bound its port: False once the remote script ended without `READY`."""
+    while "READY" not in open(log_path).read():
+        if proc.poll() is not None:
+            return "READY" in open(log_path).read()
+        time.sleep(0.5)
+    return True
+
+
+def remote_stop(who: str, log_path: str) -> None:
+    """Stop `remote_serve`'s server by the PID it logged."""
+    m = re.search(r"^PID (\d+)$", open(log_path).read(), re.M)
+    if m:
+        subprocess.run([*SSH, REMOTES[who][0], f"kill {m.group(1)} 2>/dev/null || true"], timeout=60)
 
 
 def main() -> None:

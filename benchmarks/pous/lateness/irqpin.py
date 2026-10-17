@@ -26,7 +26,7 @@ import threading
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from job import HERE, REMOTES, SSH, log, remote_probe, summarize  # noqa: E402
-from net import remote_serve  # noqa: E402
+from net import remote_ready, remote_serve, remote_stop  # noqa: E402
 
 PORT = 47340
 LPORTS = tuple(range(47341, 47357))
@@ -107,8 +107,10 @@ def main() -> None:
     cpu1_ip, node1_ip = (REMOTES[w][0].split("@")[1] for w in ("cpu1", "node1"))
     to = f"{cpu1_ip}:{PORT}"
     total = 120 + 2 * (ns.seconds + 60)
-    server = remote_serve(src, total, os.path.join(out, "cpu1-responder.log"), who="cpu1", port=PORT,
-                          peers=tuple(f"{node1_ip}:{L}" for L in LPORTS), host_mib=64)
+    server_log = os.path.join(out, "cpu1-responder.log")
+    server = remote_serve(src, total, server_log, who="cpu1", port=PORT, peers=tuple(f"{node1_ip}:{L}" for L in LPORTS))
+    if not remote_ready(server, server_log):
+        sys.exit(f"cpu-1's responder did not start: {open(server_log).read()[-500:]}")
     sampler = open(os.path.join(HERE, "cpusample.py"), "rb").read()
     samplers = []
     for who in REMOTES:
@@ -162,10 +164,10 @@ def main() -> None:
                     f"{json.dumps(r.get('summary', r))[:300]}")
             json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=1)
     finally:
-        server.terminate()
+        remote_stop("cpu1", server_log)
         for s in samplers:
             s.terminate()
-        server.wait(30)
+        server.wait(60)
         for s in samplers:
             s.wait(30)
         json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=1)
