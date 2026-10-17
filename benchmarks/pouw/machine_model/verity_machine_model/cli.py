@@ -10,15 +10,18 @@
                                               the N cheapest attacks of each design (or of D) at NAME's prices
     machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) into data/ at EPOCH,
                                               the last epoch: each (kind, row) keeps the faster of its old and new line
-    machine-model eps [DESIGN] [--q Q] [--fold-cost R] [--upfill] [--vector V] [--json]
+    machine-model eps [DESIGN] [--q Q] [--operands O] [--fold-cost R] [--upfill] [--vector V] [--json]
                                               a design's ε budget (data/designs, default dither-duo) at q* = Q (default
                                               8): every term with its source, ε_machine's LP (honest's and the
-                                              cheater's mix and binding rows), the ε(q*) curve for q* in [1, 16] and
-                                              its q* threshold; --upfill adds filler keeping the uniform datapath busy
-    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--upfill]
+                                              cheater's mix, binding rows and certificate π*), the ε(q*) curve for q*
+                                              in [0.5, 16] and the q* at which ε_machine reaches its floor; the
+                                              cheater's operand delivery is free (default), at the floor, or honest's;
+                                              --upfill adds filler keeping the uniform datapath busy
+    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--upfill] [--operands O]
                                               one line a design (every design by default; with --fold-sweep, each at
                                               each fold cost; with --upfill, each without and with it): γ, ε_machine
-                                              at q* = 2, 4, 8, 16, ε at q* = 2 and 8, and the thresholds
+                                              at q* = 2, 4, 8, 16 and its floor, ε_luck, ε at q* = 2 and 8, and the
+                                              thresholds
 
 `--data DIR` (before the command) reads another data directory, such as a copy with a candidate row. `solve` exits 1 when
 the vector fails its check or doesn't reproduce a published number.
@@ -146,32 +149,40 @@ def _mix(m: E.Mix, per_mma: float) -> str:
             f"binding {', '.join(m.binding)}")
 
 
+def _pi(m: E.Mix) -> str:
+    return ", ".join(f"{r} {w:.3f}" for r, w in sorted(m.pi.items(), key=lambda t: -t[1]))
+
+
 def _design(args, name: str) -> E.Design:
     d = E.design(name, args.data)
     d = d.with_fold_cost(args.fold_cost) if args.fold_cost is not None else d
     return d.with_upfill() if args.upfill else d
 
 
-def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path) -> dict:
-    e = E.eps(d, pi, q, data)
+def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str) -> dict:
+    e = E.eps(d, pi, q, data, operands=operands)
+    s = E.setup(d, pi, data, operands)
     per_mma = e.honest.words * e.honest.depth / d.L
     return {
         "design": d.name, "summary": d.summary, "vector": pi.vector, "honest": e.honest.name,
-        "honest_status": e.honest.status, "L": d.L, "fold": d.fold_name, "fold_cost": d.fold_cost(),
-        "filler_per_word": e.filler_per_word, "filler_route": d.filler.route, "q": q, "gamma": e.gamma,
+        "honest_status": e.honest.status, "operands": operands, "L": d.L, "fold": d.fold_name,
+        "fold_cost": d.fold_cost(), "filler_per_word": e.filler_per_word, "filler_route": d.filler.route, "q": q,
+        "gamma": e.gamma,
         "as_built": {"cycles_per_mma": e.as_built.T * per_mma, "binding": e.as_built.binding},
         "baseline": {"cycles_per_mma": e.baseline.T * per_mma, "binding": e.baseline.binding,
                      "words": e.baseline.words, "program": d.baseline_name},
         "cheat": {"cycles_per_mma": e.cheat.T * per_mma, "binding": e.cheat.binding, "words": e.cheat.words,
-                  "filler_uniform": e.cheat.filler_uniform},
+                  "filler_uniform": e.cheat.filler_uniform, "pi": e.cheat.pi},
+        "lucky_cycles_per_mma": e.lucky.T * per_mma, "deficit": e.deficit,
         "measured_cycles_per_mma": e.T_honest_measured * per_mma if e.T_honest_measured else None,
-        "terms": e.terms(), "machine_as_built": e.machine_as_built, "total": e.total(),
-        "total_certified": e.total(sched=False),
+        "terms": e.terms(), "cert": e.cert, "route": e.route, "floor": e.floor,
+        "machine_as_built": e.machine_as_built, "total": e.total(), "total_certified": e.total(sched=False),
         "sources": {"skip": {k: p.source for k, p in d.skip.items()}, "mand": {k: p.source for k, p in d.mand.items()},
-                    "clock": d.clock.source, "luck": d.luck_source, "baseline": d.baseline_source},
-        "curve": [[x, E.eps(d, pi, x, data).machine_eps] for x in E.QS],
-        "threshold": E.threshold(d, pi, data), "threshold_lanes": E.threshold(d, pi, data, uniform=False),
-        "uniform_at_16": E.eps(d, pi, 16, data, lanes=False).machine_eps,
+                    "clock": d.clock.source, "luck": d.luck_source, "baseline": d.baseline_source,
+                    "operands": e.honest.floor_source if operands == "floor" else operands},
+        "curve": [[x, s.machine_eps(x)] for x in E.QS],
+        "threshold": E.threshold(s), "threshold_lanes": E.threshold(s, uniform=False),
+        "uniform_at_16": s.machine_eps(16, lanes=False),
     }
 
 
@@ -179,12 +190,12 @@ def _eps_table(args, pi: E.Machine) -> int:
     names = args.designs or E.designs(args.data)
     sweep = [float(x) for x in args.fold_sweep.split(",")] if args.fold_sweep else [None]
     qs = (2, 4, 8, 16)
-    print(f"Π {pi.vector}; ε_machine at q* = {', '.join(map(str, qs))}; ε at q* = 2 and 8 (ε_sched 0: honest "
-          f"certified at the model bound); q*₀ the least q* with ε_machine = 0 (all routes; lanes alone); the uniform "
-          f"route alone at q* = 16")
+    print(f"Π {pi.vector}, operands {args.operands}; ε_machine at q* = {', '.join(map(str, qs))} and its floor (the "
+          f"scalar routes closed); ε_luck; ε at q* = 2 and 8 (ε_sched 0: honest certified at the model bound); q*₀ the "
+          f"least q* at which ε_machine reaches its floor (all routes; lanes alone); the uniform route alone at q* = 16")
     print(f"{'design':26s} {'fold':>6s} {'L':>3s} {'γ':>6s} {'T_H/MMA':>8s} {'binds':8s} {'skip':>6s} "
-          + " ".join(f"{'m@' + str(q):>7s}" for q in qs) + f" {'ε@2':>7s} {'ε@8':>7s} {'q*₀':>9s} {'lanes':>6s} "
-          f"{'UP@16':>6s}")
+          + " ".join(f"{'m@' + str(q):>7s}" for q in qs) + f" {'floor':>7s} {'luck':>7s} {'ε@2':>7s} {'ε@8':>7s} "
+          f"{'q*₀':>9s} {'lanes':>6s} {'UP@16':>6s}")
     rows = []
     for n in names:
         for r in sweep:
@@ -192,16 +203,17 @@ def _eps_table(args, pi: E.Machine) -> int:
             d = d.with_fold_cost(r) if r is not None else d
             rows += [d, d.with_upfill()] if args.upfill else [d]
     for d in rows:
-        es = {q: E.eps(d, pi, q, args.data) for q in qs}
+        es = {q: E.eps(d, pi, q, args.data, operands=args.operands) for q in qs}
         e = es[8]
+        s = E.setup(d, pi, args.data, args.operands)
         per_mma = e.honest.words * e.honest.depth / d.L
-        t, tl = E.threshold(d, pi, args.data), E.threshold(d, pi, args.data, uniform=False)
-        up = E.eps(d, pi, 16, args.data, lanes=False).machine_eps
+        t, tl = E.threshold(s), E.threshold(s, uniform=False)
+        up = s.machine_eps(16, lanes=False)
         print(f"{d.name:26s} {d.fold_cost():6.3g} {d.L:3d} {e.gamma:6.3f} {e.baseline.T * per_mma:8.3f} "
               f"{e.baseline.binding[0]:8s} {100 * e.skip:5.2f}% "
               + " ".join(f"{100 * es[q].machine_eps:6.2f}%" for q in qs)
-              + f" {100 * es[2].total(sched=False):6.2f}% {100 * e.total(sched=False):6.2f}% {_thr(t):>9s} "
-              f"{_thr(tl):>6s} {100 * up:5.2f}%")
+              + f" {100 * e.floor:6.2f}% {100 * e.luck:6.3f}% {100 * es[2].total(sched=False):6.2f}% "
+              f"{100 * e.total(sched=False):6.2f}% {_thr(t):>9s} {_thr(tl):>6s} {100 * up:5.2f}%")
     return 0
 
 
@@ -212,13 +224,15 @@ def _eps(args) -> int:
     if len(args.designs) > 1:
         raise SystemExit("eps: one design, or --table for several")
     d = _design(args, args.designs[0] if args.designs else "dither-duo")
-    rec = _eps_record(d, pi, args.q, args.data)
+    rec = _eps_record(d, pi, args.q, args.data, args.operands)
     if args.json:
         print(json.dumps(rec, ensure_ascii=False, indent=1))
         return 0
-    e = E.eps(d, pi, args.q, args.data)
+    e = E.eps(d, pi, args.q, args.data, operands=args.operands)
     h, per_mma = e.honest, e.honest.words * e.honest.depth / d.L
     filler = (f"{e.filler_per_word:.4g} a word on {d.filler.route}" if e.filler_per_word else "none")
+    ops = {"free": "free (SPEC's conservative default)", "honest": "at honest's",
+           "floor": f"at the floor, {', '.join(f'{k} {v:g}' for k, v in h.floor.items())} a MMA ({h.floor_source})"}
     print(f"{d.name}: {d.summary}")
     print(f"  Π: {pi.vector}'s {len(pi.rows)} rows; honest {h.name} ({h.status}): {h.mma}, {h.words} words a MMA; "
           f"L {d.L}; fold {d.fold_name} {d.fold_cost():g} a word ({', '.join(f'{k} {v:g}' for k, v in d.fold.items())});"
@@ -229,7 +243,9 @@ def _eps(args) -> int:
           f"{_mix(e.baseline, per_mma)}; γ {e.gamma:.3f}")
     if e.T_honest_measured:
         print(f"  measured: {e.T_honest_measured * per_mma:.3f} SMSP-cycles a MMA ({h.measured_source})")
+    print(f"  cheater's operand delivery: {ops[args.operands]}")
     print(f"  cheater at q* = {args.q:g}: {_mix(e.cheat, per_mma)}")
+    print(f"  certificate π*: {_pi(e.cheat)}")
     t = e.terms()
     print(f"  ε_sched    {_pct(t['sched'])}" + ("" if t["sched"] is not None else
                                                 " (0: honest certified at the model bound, moving it into γ)"))
@@ -237,12 +253,14 @@ def _eps(args) -> int:
         print(f"  ε_{k:9s}{_pct(t[k])}")
         for name, p in parts.items():
             print(f"      {name} {_pct(p.eps)}: {p.source}")
-    print(f"  ε_machine  {_pct(t['machine'])} (against honest as built {_pct(e.machine_as_built)})")
-    print(f"  ε_luck     {_pct(t['luck'])}: δ {d.delta:.3g}, p {d.p}, S {d.checks:g} ({d.luck_source})")
+    print(f"  ε_machine  {_pct(t['machine'])} = ε_cert(π*) {_pct(e.cert)} + ε_route(π*) {_pct(e.route)}; floor "
+          f"{_pct(e.floor)} (the scalar routes closed); against honest as built {_pct(e.machine_as_built)}")
+    print(f"  ε_luck     {_pct(t['luck'])}: d̄ {100 * e.deficit:.4f}% of the words unwritten (δ {d.delta:.3g}, p {d.p}, "
+          f"S {d.checks:g}: {d.luck_source})")
     print(f"  ε_clock    {_pct(t['clock'])}: {d.clock.source}")
     print(f"  ε          {_pct(e.total())} (first order {_pct(sum(v or 0.0 for v in t.values()))})")
-    print(f"  q* threshold (ε_machine = 0): {_thr(rec['threshold'])}; lanes alone {_thr(rec['threshold_lanes'])}; "
-          f"the uniform route alone at q* = 16: {_pct(rec['uniform_at_16'])}")
+    print(f"  q* threshold (ε_machine = its floor): {_thr(rec['threshold'])}; lanes alone "
+          f"{_thr(rec['threshold_lanes'])}; the uniform route alone at q* = 16: {_pct(rec['uniform_at_16'])}")
     print(textwrap.fill("ε_machine(q*): " + ", ".join(f"{x:g} {100 * y:.2f}%" for x, y in rec["curve"]), width=120,
                         initial_indent="  ", subsequent_indent="    "))
     return 0
@@ -270,6 +288,8 @@ def main(argv: list[str] | None = None) -> int:
     e = sub.add_parser("eps")
     e.add_argument("designs", nargs="*")
     e.add_argument("--q", type=float, default=8.0, help="q*, lane instructions a fresh word (default %(default)s)")
+    e.add_argument("--operands", choices=E.OPERANDS, default="free",
+                   help="the cheater's operand delivery on the tensor route (default %(default)s)")
     e.add_argument("--fold-cost", type=float, help="scale the design's fold to R lane instructions a word")
     e.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
     e.add_argument("--json", action="store_true")

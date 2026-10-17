@@ -18,6 +18,7 @@ uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a
 uv run machine-model eps                  # Dither's ε budget at q* = 8: every term, the LP's mixes, the ε(q*) curve
 uv run machine-model eps dither-two-sided --upfill --q 2.2 --json
 uv run machine-model eps --table --upfill # every design, without and with filler on the uniform datapath
+uv run machine-model eps --table --upfill --operands floor   # the cheater's operands at the register-capacity floor
 uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
 ~~~
 
@@ -33,7 +34,7 @@ uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
 | `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, what is under its floor, and a claim's kinds priced a word beside their measured cost |
 | `verity_machine_model/adopt.py` | Merging a measured census into `data/` at the last epoch, each (kind, row) at the faster of its two lines |
 | `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
-| `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it) and, once PROFILE measures it, its SMSP-cycles a MMA |
+| `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the least operand delivery any program pays a MMA, and, once PROFILE measures it, its SMSP-cycles a MMA |
 | `data/designs/NAME.toml` | A protocol's parameters: its honest profile, L, the fold and filler (lane instructions a word by class), ε_skip's and ε_mand's parts with sources, ε_clock, Theorem S's δ, p and checks, and honest's baseline program (dp4a) |
 | `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
 
@@ -77,14 +78,19 @@ value, so the lanes it serves past the first are copies, credited only by copy l
 
 `eps` computes 1 − ε = (1 − ε_skip − ε_mand − ε_machine − ε_luck)(1 − ε_sched)(1 − ε_clock), each term a fraction of
 honest time. Π is the current vector's rows at its epoch, read as the price LP reads them (SMSP-cycles a warp
-instruction a row). ε_machine is one LP: a program writes every committed word on one of four routes, folds every word
-and does the filler, and its time is its largest row. The routes are the tensor pipe (the honest profile's cost a MMA,
-`L/32` MMAs for 128 words), CUDA lanes at q* lane instructions a word in any mix of the CUDA classes, the design's
-baseline program (dp4a: 8 IDP4A and its loads a word) and the uniform datapath (q* uniform instructions a word, the fold
-there too). Honest is the tensor route plus the baseline, whose words belong to the baseline and not to ε, and the
-cheater is every route at q*. ε_sched needs a measured profile (`[measured]`) and is otherwise 0, honest certified at
-the model's bound. `--upfill` adds verified filler that keeps the uniform datapath busy for honest's time, which the
-cheater must then run on lanes or leave in place. The threshold is the least q* at which ε_machine is 0.
+instruction a row). ε_machine is one LP, SPEC's §0.8 (note:20261017T0324Z-draft-eps1-spec): a program writes every
+committed word on one of four routes, folds every word and does the filler, and its time is its largest row. The routes
+are the tensor pipe (`L/32` MMAs for 128 words, with their operand delivery), CUDA lanes at q* lane instructions a word
+in any mix of the CUDA classes, the design's baseline program (dp4a: 8 IDP4A and its loads a word) and the uniform
+datapath (q* uniform instructions a word, the fold there too). Honest is the tensor route at the profile's cost plus the
+baseline, whose words belong to the baseline and not to ε, and the cheater is every route at q*. The cheater's operand
+delivery is free by default (SPEC's conservative choice), `--operands floor` prices it at the profile's `[operands]`
+floor and `--operands honest` at honest's. The LP's duals are the certificate π*, at which ε_machine is ε_cert + ε_route.
+ε_luck is the same LP with d̄ of the words unwritten but still folded (Theorem S), so the terms add up to its time
+exactly. ε_sched needs a measured profile (`[measured]`) and is otherwise 0, honest certified at the model's bound.
+`--upfill` adds verified filler that keeps the uniform datapath busy for honest's time, which the cheater must then run
+on lanes or leave in place. ε_machine's floor is its value with the scalar routes closed, which no q* lowers, and the
+threshold is the least q* at which ε_machine reaches it.
 
 ## Adopt a probe's census
 
