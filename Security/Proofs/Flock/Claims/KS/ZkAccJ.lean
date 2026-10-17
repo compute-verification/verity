@@ -259,8 +259,8 @@ def ZkLiveAccAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabite
           (fin : Fin (tabsJ (tables true x).length T).length → Fin 2 → Array ByteArray → List Msg)
           (capOf : Array ByteArray → Fin (tabsJ (tables true x).length T).length → Model.Cap D) (N : ℕ)
           (rootB₀ : Array ByteArray)
-          (_hok : ∀ o, ok (finJ T hj) o →
-            o.accepted = true ∧ ¬ Off₀Z Hs (T j) (capOf rootB₀ (finJ T hj)) (Claims.Flock.oracleOf C) o)
+          (_hok : ∀ o, ok (finJ T hj) o → o.accepted = true ∧
+            ¬ (Off₀Z Hs (T j) (capOf rootB₀ (finJ T hj)) (Claims.Flock.oracleOf C) o ∧ ¬ SelfClashZ Hs (T j) o))
           (hdec : ∀ i, DecodesTable (outJ Hs (tabsJ (tables true x).length T)) ok pL opn dec one fin capOf
             (repJ A Hs (tabsJ (tables true x).length T)) i)
           (τ : Type) (_ : Fintype τ) (_ : Nonempty τ)
