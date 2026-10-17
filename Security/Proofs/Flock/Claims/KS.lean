@@ -304,6 +304,6 @@ deployed masked verifier is KS from `ZkLiveAccWJ` where some run accepts and `Ex
 (`FlockDeploy.KS.zk_KS_of_tableBoundJR`, `FlockDeploy.KS.zk_KS_of_liveAccWJ`). At a masked statement in scope table
 `j`'s word has level 0's `2^logLen` columns (`ZkXferW`: `FlockDeploy.KS.zkLevel0_d_eq`,
 `FlockDeploy.KS.wordLenJ_zkTabs`), so the live sessions' bound at the deployed decoders right at the witness-lane
-verdict (`FlockDeploy.KS.ZkXferWJ`) gives `ZkLiveAccWJ` (`FlockDeploy.KS.zkLiveAccWJ_of_xferWJ`), and with it `Flock.KS` at the deployed masked record and
-`ExtendJ` (`FlockDeploy.KS.zk_KS_of_xferWJ`) and table 0's bound counted per round
-(`FlockDeploy.KS.zk_tableBoundθAccAtR_of_xferWJ`). -/
+verdict (`FlockDeploy.KS.ZkXferWJ`) gives `ZkLiveAccWJ` (`FlockDeploy.KS.zkLiveAccWJ_of_xferWJ`): with `ExtendJ`,
+`Flock.KS` at the deployed masked record (`FlockDeploy.KS.zk_KS_of_xferWJ`), and alone, table 0's bound counted per
+round (`FlockDeploy.KS.zk_tableBoundθAccAtR_of_xferWJ`). -/
