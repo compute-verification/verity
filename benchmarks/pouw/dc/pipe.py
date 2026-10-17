@@ -102,21 +102,31 @@ def fold_profile(ops: list[str], nb: int, lw: int) -> dict:
     return {"instructions": len(seg) / words, **{k: v / words for k, v in sorted(by.items())}, "words": words}
 
 
+KERNELS = 12   # (NB, LW) in (2, 1) (2, 2) (4, 1) (4, 2), three modes each
+REGS_SMSP = 16384
+
+
 def gate_build(out: Path) -> int:
     log = (out / "build.log").read_text()
     spills = re.findall(r"(\d+) bytes spill stores, (\d+) bytes spill loads", log)
+    regs = {tuple(int(x) for x in m.groups()[:3]): int(m.group(4)) for m in re.finditer(
+        r"Compiling entry function '_Z5pg100ILi(\d)ELi(\d)ELi(\d)E[^']*'.*?Used (\d+) registers", log, re.S)}
     ks = kernels((out / "sass" / "pgemm.sass").read_text())
     bad = []
-    if len(ks) != 15 or len(spills) < 15:
-        bad.append(f"{len(ks)} pg100 kernels in the SASS and {len(spills)} ptxas reports; 15 expected")
+    if len(ks) != KERNELS or len(spills) < KERNELS or len(regs) != KERNELS:
+        bad.append(f"{len(ks)} pg100 kernels in the SASS, {len(spills)} ptxas spill and {len(regs)} register reports; "
+                   f"{KERNELS} expected")
     if any(s != ("0", "0") for s in spills):
         bad.append(f"ptxas reports spills: {spills}")
     for (nb, lw, mode), ops in sorted(ks.items()):
         n_mma = sum(op.startswith("UTCIMMA") for op in ops)
         n_ld = sum(op == "LDTM.x32" for op in ops)
         local = sum(op.split(".")[0] in ("LDL", "STL") for op in ops)
-        ok = n_mma > 0 and local == 0 and (mode == 0 or n_ld > 0)
-        print(f"{'PASS' if ok else 'REFUSED'} pg100<{nb},{lw},{mode}>: UTCIMMA {n_mma}, LDTM.x32 {n_ld}, LDL/STL {local}")
+        r = regs.get((nb, lw, mode), 0)
+        cap = min(255, REGS_SMSP // (-(-(4 * lw + 1) // 4) * 32) // 8 * 8)
+        ok = n_mma > 0 and local == 0 and (mode == 0 or n_ld > 0) and 0 < r <= cap
+        print(f"{'PASS' if ok else 'REFUSED'} pg100<{nb},{lw},{mode}>: UTCIMMA {n_mma}, LDTM.x32 {n_ld}, LDL/STL {local}, "
+              f"registers {r} (launchable {cap})")
         if not ok:
             bad.append(f"pg100<{nb},{lw},{mode}>")
     for b in bad:

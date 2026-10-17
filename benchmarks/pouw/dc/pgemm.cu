@@ -99,14 +99,15 @@ DC_DEV void load_pass(uint32_t ta, int32_t* crow, uint32_t& sink) {
   }
 }
 
-// The register cap a block of 32 (4 LW + 1) threads can launch with (launch_bounds would give LW = 4 only 96, and spill).
+// The register cap a block of 4 LW + 1 warps can launch with: an SMSP's 16K registers over the most warps it holds (LW = 4,
+// 17 warps, would get 96, and the honest loader spills there).
 template <int NB, int LW, int MODE>
-__global__ void __maxnreg__(LW == 4 ? 120 : LW == 2 ? 224 : 255)
+__global__ void __maxnreg__(LW == 2 ? 168 : 255)
     pg100(const int8_t* X, const int8_t* W, int ldx, int n, int k, int lm, uint32_t seed, int32_t* C, uint32_t* R,
           long long* clk) {
 #if defined(__CUDA_ARCH_FEAT_SM100_ALL)
   constexpr int BN = CTA_N / NB, TPW = NB / LW, MMA_WARP = 4 * LW;
-  static_assert(NB % LW == 0 && NB <= 4, "tiles a loader warpgroup");
+  static_assert(NB % LW == 0 && NB <= 4 && LW <= 2, "tiles a loader warpgroup");
   extern __shared__ __align__(1024) unsigned char dsm[];
   unsigned char* sA = dsm;
   unsigned char* sB = dsm + STAGES * A_STAGE;
@@ -224,7 +225,7 @@ struct Cfg {
   Kern k;
 };
 #define CFG(NB, LW) {NB, LW, 0, pg100<NB, LW, 0>}, {NB, LW, 1, pg100<NB, LW, 1>}, {NB, LW, 2, pg100<NB, LW, 2>}
-static const Cfg CFGS[] = {CFG(2, 1), CFG(2, 2), CFG(4, 1), CFG(4, 2), CFG(4, 4)};
+static const Cfg CFGS[] = {CFG(2, 1), CFG(2, 2), CFG(4, 1), CFG(4, 2)};
 #undef CFG
 static const Cfg* find(int nb, int lw, int mode) {
   for (const Cfg& c : CFGS)
@@ -291,8 +292,7 @@ static int run_gate(const std::string& dir, int m, int n, int k, uint32_t seed, 
   const Cfg* cfg = find(nb, lw, 2);
   const int L = 32 * lm, bn = CTA_N / nb;
   if (!cfg || m % BM || n % CTA_N || k % L || k % PER) {
-    fprintf(stderr, "ERR gate: (nb, lw) in (2,1) (2,2) (4,1) (4,2) (4,4); m %% %d, n %% %d, k %% L and %% %d\n", BM, CTA_N,
-            PER);
+    fprintf(stderr, "ERR gate: (nb, lw) in (2,1) (2,2) (4,1) (4,2); m %% %d, n %% %d, k %% L and %% %d\n", BM, CTA_N, PER);
     return 2;
   }
   std::vector<int8_t> X, W;
