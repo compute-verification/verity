@@ -1,8 +1,8 @@
 // lfill: FILLER's register-only lane filler (note:20261017T0652Z-draft-filler §4), for the SMs a served step holds. No
 // shared memory beyond a block's 32 words of reduction, no MMA, a few registers a thread, so it co-resides with every
 // decode kernel at the lowest stream priority and takes only the issue slots and scalar pipes the step leaves. Its work
-// is verified lane chains under FILL-OPT, pfill's lane step (pf_lane_step: LOP3 IMAD SHF IMAD) on words fresh from the
-// round's coins:
+// is verified lane chains under FILL-OPT, a lane step (lf_step: LOP3 IMAD SHF IMAD) on words fresh from the round's
+// coins:
 //
 // A tile is one block of T threads. K = dseed(c0, c1, tile); the tile's keys (a0, a1) are the first two u32 halves of
 // smix(K ^ LF_KEYS ^ i), i = 0, 1, ..., that pass pf_key_ok (odd, far from 0 mod 2^24, not ±1 mod 32); thread u's words
@@ -18,6 +18,11 @@
 static_assert(LF_CH == 1 || LF_CH == 2 || LF_CH == 4 || LF_CH == 8 || LF_CH == 16, "LF_CH is 1, 2, 4, 8 or 16");
 constexpr uint32_t LF_POS = 0x20000000u;
 constexpr uint64_t LF_KEYS = 0x4C46494C4C4B4559ull;  // "LFILLKEY"
+
+__host__ __device__ __forceinline__ uint32_t lf_step(uint32_t v, uint32_t x, uint32_t y, uint32_t a0, uint32_t a1) {
+  v = (v ^ x) * a0 + y;
+  return pf_rotl(v, 13) * a1 + x;
+}
 
 __host__ __device__ inline void lf_keys(uint64_t K, uint32_t* a0, uint32_t* a1) {
   int n = 0;
@@ -41,7 +46,7 @@ __host__ __device__ __forceinline__ uint64_t lf_thread(uint64_t K, uint32_t a0, 
 #pragma unroll 1
   for (int s = 0; s < steps; s++) {
 #pragma unroll
-    for (int q = 0; q < LF_CH; q++) v[q] = pf_lane_step(v[q], x, y, a0, a1);
+    for (int q = 0; q < LF_CH; q++) v[q] = lf_step(v[q], x, y, a0, a1);
   }
   uint64_t h = 0;
 #pragma unroll

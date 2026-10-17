@@ -5,9 +5,10 @@ it, and the SM clock. Their certified load, pooled over the step and the GPU's 4
 placement), is read by machine_model's `capacity` (note:20261017T0652Z-draft-filler §3): filler MMAs with their fold's
 lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f_max (decision 74) and at the run clock.
 
-With --lfill it reads dcap's lfill lines instead (capfill_probe.sh): each one's window beside the pump alone and beside
-the pump and the lane filler, the pump's MMAs carrying the build's PF_LANE lane instructions each. With --dfill, dcap's
-dfill lines (capfill_co_probe.sh): the step beside the pump on a split, or co-scheduled on every SM.
+With --lfill it reads dcap's lfill lines instead (capfill_fold_probe.sh): each one's window beside the pump alone and
+beside the pump and the lane filler (lines from a -DPF_LANE build, retired after r20261017-072934-dd50, carry its lane
+instructions a pump MMA as pf_lane). With --dfill, dcap's dfill lines (capfill_co_probe.sh): the step beside the pump on a
+split, or co-scheduled on every SM.
 
   python3 benchmarks/pouw/filler/capacity_of.py RUN_OUT_DIR [--fold duo] [--lane-per-mma X] [--served-fold none] [--json]
   python3 benchmarks/pouw/filler/capacity_of.py --lfill LFILL_JSONL [--fold duo] [--json]
@@ -49,7 +50,8 @@ def sigma(pi, entry: dict, mhz: float | None = None, **kw) -> C.Window:
 
 def lfill_load(rec: dict, arm: str, mhz: float, fold: str = "duo", served_fold: str = "none") -> C.Work:
     """One lfill arm's pooled certified load a SMSP-cycle at `mhz`: the served step at its measured time, the pump's
-    MMAs with their fold and PF_LANE lane instructions, and the lane filler's instructions (arm "lane" only)."""
+    MMAs with their fold (and pf_lane lane instructions, if the line has them), and the lane filler's instructions
+    (arm "lane" only)."""
     a = rec[arm]
     pump = a["mac_per_s"] if arm == "pump" else a["pump_mac_per_s"]
     lane = a.get("lane_instr_per_s", 0.0) if arm == "lane" else 0.0
@@ -57,8 +59,9 @@ def lfill_load(rec: dict, arm: str, mhz: float, fold: str = "duo", served_fold: 
     mma = pump / MACS_A_MMA / cyc
     w = C.tensor_filler(mma * C.TENSOR_CYCLES, fold)
     w = w + C.served(rec["step_macs"] / (a["step_ms"] * 1e-3) / MACS_A_MMA / cyc * C.TENSOR_CYCLES, served_fold)
-    if rec["pf_lane"] * mma + lane / cyc:
-        w = w + C.lane_filler(rec["pf_lane"] * mma + lane / cyc)
+    lanes = rec.get("pf_lane", 0) * mma + lane / cyc
+    if lanes:
+        w = w + C.lane_filler(lanes)
     return w
 
 
@@ -71,7 +74,7 @@ def lfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
             a = r[arm]
             run = C.window(pi, [(1.0, lfill_load(r, arm, a["mhz"], fold, served_fold))])
             top = C.window(pi, [(1.0, lfill_load(r, arm, F_MAX_MHZ, fold, served_fold))])
-            rows.append({"B": r["B"], "L": r["L"], "fill_sms": r["fill_sms"], "pf_lane": r["pf_lane"], "blk": r["blk"],
+            rows.append({"B": r["B"], "L": r["L"], "fill_sms": r["fill_sms"], "pf_lane": r.get("pf_lane", 0), "blk": r["blk"],
                          "T": r["T"], "CH": r["CH"], "arm": arm, "slowdown": a["slowdown"], "mhz": a["mhz"],
                          "watt": a.get("watt"), "sigma": top.sigma(), "sigma_run_clock": run.sigma(),
                          "tensor": top.tensor(), "binding": list(top.pooled.binding),

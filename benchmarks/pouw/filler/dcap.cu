@@ -21,8 +21,8 @@
 // (flin.cuh): outputs and receipts bit for bit, each linear's 32 layers against cuBLASLt, and the step through both, on
 // the whole GPU or beside the dfill pump on FILL_SMS SMs of a green split.
 // lgate, lalone T STEPS BLK, lfill B L FILL_SMS W NC S T LSTEPS BLK: FILLER's lane filler (lfill.cuh): its receipts bit for
-// bit against the host, its issue rate alone, and the step on its green partition beside the pump (FILL_SMS SMs, pfill
-// with its -DPF_LANE lane chains) and the lane filler (BLK blocks of T threads an SM in the step's partition at the
+// bit against the host, its issue rate alone, and the step on its green partition beside the pump (FILL_SMS SMs) and
+// the lane filler (BLK blocks of T threads an SM in the step's partition at the
 // lowest stream priority, LSTEPS steps of LF_CH chains a thread; LFILL_ON=pump: on the pump's SMs instead, beside its
 // PF_CTAS blocks an SM, -DPF_MINB above PF_CTAS leaving it the registers). FILL_SMS 0: no pump, the step and the lane
 // filler on every SM.
@@ -1286,7 +1286,7 @@ static int run_lalone(Dev& d, int T, int steps, int blk) {
   CK(cudaFree(f.rec));
   return bad ? 8 : 0;
 }
-// The step beside the pump (fill_sms SMs of a green split, W x NC x S, pfill with its -DPF_LANE) and the lane filler
+// The step beside the pump (fill_sms SMs of a green split, W x NC x S) and the lane filler
 // (blk blocks of T threads an SM at the lowest priority of its green context): on the step's SMs, the step at the
 // highest priority (LFILL_ON=step, the default), or on the pump's, beside its PF_CTAS blocks an SM (LFILL_ON=pump);
 // fill_sms 0: no pump, the lane filler on every SM beside the step. Arms: full; the step alone on its SMs; beside the
@@ -1369,12 +1369,12 @@ static int run_lfill(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, i
   const Rep m0 = median(a_full), m2 = median(a_full2), ms = median(a_step), ml = median(a_lane);
   const double base = (m0.ms + m2.ms) / 2;
   printf("{\"mode\": \"lfill\", \"B\": %d, \"L\": %d, \"fill_sms_req\": %d, \"step_sms\": %d, \"fill_sms\": %d, \"W\": %d, "
-         "\"NC\": %d, \"S\": %d, \"pf_lane\": %d, \"pf_ctas\": %d, \"T\": %d, \"CH\": %d, \"lsteps\": %d, \"blk\": %d, "
+         "\"NC\": %d, \"S\": %d, \"pf_ctas\": %d, \"T\": %d, \"CH\": %d, \"lsteps\": %d, \"blk\": %d, "
          "\"lane_on\": \"%s\", \"lane_grid\": %d, "
          "\"lane_tiles\": %d, \"prio\": [%d, %d], \"coins\": [\"%016llx\", \"%016llx\"], \"kv_wrapped\": %s, "
          "\"step_macs\": %.6e, \"chunk_macs\": %.6e, \"lane_chunk_instr\": %.6e, \"pump_alone\": {\"mac_per_s\": %.6e, "
          "\"mhz\": %.1f, \"watt\": %.1f}, ",
-         B, L, fill_sms, got[0], got[1], W, NC, S, PF_LANE, PF_CTAS, T, LF_CH, lsteps, blk, on_pump ? "pump" : "step",
+         B, L, fill_sms, got[0], got[1], W, NC, S, PF_CTAS, T, LF_CH, lsteps, blk, on_pump ? "pump" : "step",
          lf.grid, lf.tiles, lo, hi,
          (unsigned long long)g_c0, (unsigned long long)g_c1, wrapped ? "true" : "false", step_macs,
          fill_sms > 0 ? f.macs() : 0.0, lf.instr(), palone, amhz, awatt);

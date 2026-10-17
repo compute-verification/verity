@@ -74,7 +74,7 @@
 #define PF_CTAS 2  // blocks an SM: 2 x 48 KB, 4 warps an SMSP
 #endif
 #ifndef PF_MINB
-#define PF_MINB PF_CTAS  // the pump's launch-bounds blocks an SM, its register cap; above PF_CTAS, room for lfill beside it
+#define PF_MINB PF_CTAS  // the pump's launch-bounds blocks an SM, its register cap; above PF_CTAS, room beside it
 #endif
 #ifndef PF_SHA_ROLL
 #define PF_SHA_ROLL 1  // pf_compress (16 rounds a loop iteration); 0: rs_compress (all 80 unrolled); same digests
@@ -125,20 +125,6 @@ constexpr bool PF_R9 = false;
 #define PF_ROUNDS 1
 #endif
 static_assert(PF_ROUNDS >= 1 && PF_ROUNDS <= 64, "PF_ROUNDS is 1..64");
-// FILLER's lane chains (note:20261017T0652Z-draft-filler §4): -DPF_LANE=k adds k verified lane steps a B fragment j
-// (each a double step of four lane instructions, LOP3 IMAD SHF IMAD, so k lane instructions a MMA) to every lane, on
-// PF_LC chains independent of the MMAs, so they take the issue slots the latency-bound pump leaves. Chain q (q < min(k,
-// PF_LC)) of lane (g, t) in warp w starts at pf_y0(PF_LPOS | pos), pos = (32 w + lane) 4 + q, and step s of fragment j
-// sends chain s % PF_LC through v <- (v ^ x) a0 + y; v <- rotl(v, 13) a1 + x, with (x, y) the lane's B operand of j (its
-// column 8 j + g at k = 4 t .. 4 t + 3 and 16 + 4 t .. 19 + 4 t, s8 bytes little-endian) and (a0, a1) the tile's keys,
-// for every pass f of the tile. Each chain is folded into the tile's receipt as pf_fold(K, PF_LPOS | pos, v), and
-// dfill_ref replays them, so dgate holds them bit for bit; the default 0 is byte-identical to the filler of record.
-#ifndef PF_LANE
-#define PF_LANE 0
-#endif
-static_assert(PF_LANE >= 0 && PF_LANE <= 64, "PF_LANE is 0..64");
-#define PF_LC 4
-constexpr uint32_t PF_LPOS = 0x40000000u;
 __host__ __device__ constexpr uint64_t pf_dom(int kd) {
   return kd == PF_E2M1 ? PF_DOM4 : kd == PF_BITS ? PF_DOM01 : kd == PF_BU ? PF_DOM_BU : PF_DOM;
 }
@@ -236,11 +222,6 @@ __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uin
 __host__ __device__ inline uint32_t pf_y0(uint32_t pos) { return rf_pfill_y0(pos); }
 __host__ __device__ inline uint32_t pf_z0(uint32_t pos) { return rf_pfill_z0(pos); }
 __host__ __device__ inline uint64_t pf_fold(uint64_t K, uint32_t pos, uint64_t v) { return smix(smix(K ^ pos) ^ v); }
-__host__ __device__ __forceinline__ uint32_t pf_lane_step(uint32_t v, uint32_t x, uint32_t y, uint32_t a0, uint32_t a1) {
-  v = (v ^ x) * a0 + y;
-  return pf_rotl(v, 13) * a1 + x;
-}
-constexpr int PF_LCN = PF_LANE < PF_LC ? PF_LANE : PF_LC;  // the lane chains a lane keeps
 
 #ifdef __CUDACC__
 // rs_compress's rounds, 16 a loop iteration: a fifth of its code, so the hashing phases fetch fewer instructions
@@ -380,15 +361,13 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
       }
       __syncwarp();
     };
-    uint32_t y[4], z[4], lv[PF_LC];
+    uint32_t y[4], z[4];
 #pragma unroll
     for (int c = 0; c < 4; c++) {
       const uint32_t pos = (uint32_t)((w * 32 + lane) * 4 + c);
       y[c] = pf_y0(pos);
       z[c] = pf_z0(pos);
-      lv[c] = pf_y0(PF_LPOS | pos);
     }
-    static_assert(PF_LANE == 0 || !F4, "PF_LANE: the s8 tiles only (the e2m1 tile's B operand is two registers a k64)");
     int f0 = 0, next = (w >> 2) & 1 ? P / 2 : P;
     agen(0);
     const uint8_t* bp = Bs + g * 32 + 8 * t;
@@ -427,8 +406,6 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
           else pf_mma(d, a[c], b);
           pf_absorb<NC>(y[c], z[c], d[0], d[1], d[2], d[3], key);
         }
-#pragma unroll
-        for (int s = 0; s < PF_LANE; s++) lv[s % PF_LC] = pf_lane_step(lv[s % PF_LC], b.x, b.y, key.a0, key.a1);
       }
     }
     const uint64_t K = dseed(c0, c1, tile);
@@ -436,8 +413,6 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
 #pragma unroll
     for (int c = 0; c < 4; c++)
       h ^= pf_fold(K, (uint32_t)((w * 32 + lane) * 4 + c), NC == 2 ? (uint64_t)z[c] << 32 | y[c] : (uint64_t)y[c]);
-#pragma unroll
-    for (int q = 0; q < PF_LCN; q++) h ^= pf_fold(K, PF_LPOS | (uint32_t)((w * 32 + lane) * 4 + q), lv[q]);
 #pragma unroll
     for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(~0u, h, o);
     __syncwarp();
@@ -583,29 +558,6 @@ static std::vector<uint64_t> pf_bcols(uint64_t c0, uint64_t c1, uint64_t tile, i
   }
   return Bb;
 }
-// the lane chains' words (PF_LANE) from B's planes: lane t's B operand of column n, (x, y) = its s8 bytes at k = 4 t ..
-// 4 t + 3 and 16 + 4 t .. 19 + 4 t, at L[2 (4 n + t)] and L[2 (4 n + t) + 1]
-template <int KD>
-static std::vector<uint32_t> pf_lane_words(const std::vector<uint64_t>& Bb, int TN) {
-  constexpr int NP = pf_planes<KD>();
-  std::vector<uint32_t> L(8 * TN);
-  for (int n = 0; n < TN; n++)
-    for (int t = 0; t < 4; t++)
-      for (int h = 0; h < 2; h++) {
-        const int k0 = 16 * h + 4 * t;
-        uint32_t v;
-        if constexpr (KD == PF_BU) {
-          uint32_t raw = 0;
-          for (int i = 0; i < 4; i++)
-            for (int p = 0; p < NP; p++) raw |= (uint32_t)((Bb[NP * n + p] >> (k0 + i)) & 1u) << (8 * i + p);
-          v = pf_u4(raw);
-        } else {
-          v = pf_s8x4<KD>((uint32_t)(Bb[n] >> k0) & 15u);
-        }
-        L[2 * (4 * n + t) + h] = v;
-      }
-  return L;
-}
 template <int NC, int KD>
 static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps, int W) {
   constexpr int KH = KD == PF_E2M1 ? 2 : 1, NP = pf_planes<KD>();
@@ -614,7 +566,6 @@ static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps, int W
   pf_host_k();
   uint64_t st[8];
   const std::vector<uint64_t> Bb = pf_bcols<KD>(c0, c1, tile, TN);
-  const std::vector<uint32_t> LW = PF_LANE > 0 && KD != PF_E2M1 ? pf_lane_words<KD>(Bb, TN) : std::vector<uint32_t>();
   pf_block_h(dom, c0, c1, tile, PF_KEY, st);
   const PfKeys key = pf_keys(st);
   const uint64_t K = dseed(c0, c1, tile);
@@ -640,16 +591,6 @@ static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps, int W
           }
         }
         h ^= pf_fold(K, pos, NC == 2 ? (uint64_t)z << 32 | y : (uint64_t)y);
-      }
-      if constexpr (PF_LANE > 0 && KD != PF_E2M1) {
-        uint32_t lv[PF_LC];
-        for (int q = 0; q < PF_LC; q++) lv[q] = pf_y0(PF_LPOS | (uint32_t)((w * 32 + lane) * 4 + q));
-        for (int f = 0; f < steps; f += 4)
-          for (int j = 0; j < TN / 8; j++) {
-            const uint32_t* xy = &LW[2 * (4 * (8 * j + g) + t)];
-            for (int s = 0; s < PF_LANE; s++) lv[s % PF_LC] = pf_lane_step(lv[s % PF_LC], xy[0], xy[1], key.a0, key.a1);
-          }
-        for (int q = 0; q < PF_LCN; q++) h ^= pf_fold(K, PF_LPOS | (uint32_t)((w * 32 + lane) * 4 + q), lv[q]);
       }
     }
   }
@@ -765,7 +706,8 @@ struct DFill {
   long long per() const { return (long long)grid * tiles; }
   double macs() const { return (double)per() * W * S * (PF_TN / 8) * 4096.0; }
 };
-// DFILL_PAD_KB: unused dynamic shared memory a pump block, so that PF_CTAS blocks an SM is all that fits (lfill beside it)
+// DFILL_PAD_KB: unused dynamic shared memory a pump block, so that PF_CTAS blocks an SM is all that fits (lfill, or the
+// step's blocks, beside it)
 static size_t g_pf_pad = 0;
 static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
   const unsigned long long t0 = (unsigned long long)chunk * f.per();
