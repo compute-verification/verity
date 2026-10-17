@@ -259,6 +259,9 @@ def toyFlock : Flock.Deploy Bool ℕ Unit where
   weight _ := 0
   waits _ := 0
   cap _ := 0
+  Tape := Unit
+  P _ := ⟨fun _ _ _ => .ret []⟩
+  δc _ _ := 0
 
 /-- **A sampled deployment with the toy's numbers** at every statement. -/
 def toyD : Deploy Bool ℕ Unit where
@@ -280,6 +283,9 @@ def toyD : Deploy Bool ℕ Unit where
   εtable _ := 0
   weight _ := 0
   openCalls _ := 0
+  Tape := Unit
+  P _ := ⟨fun _ _ _ => .ret []⟩
+  δc _ _ := 0
 
 theorem toyNumbers_toyD (x : Msg) : ToyNumbers toyD x := ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
