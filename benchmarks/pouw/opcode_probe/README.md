@@ -21,6 +21,7 @@ by the check it names, or nothing is timed at all.
 | `probes/honest.cuh`, `probes/power.cu` | The honest kernel (8 IMMA on drawn int8 operands, m16n8k32 or m16n8k16, then the duo fold of their words), and EPS1's clock kernels, which `power.sh` (`power_lease.sh` inside the lease) sustains at the node's lock and, given clock permission, at the default clocks |
 | `sm89/clock.sh` | power.cu on the L40S: clocks reset (`sudo nvidia-smi -rgc`), every kernel sustained at the power limit as found and at the board's default limit, then `eps1.py clock` |
 | `sm89/scalar.cu`, `sm89/run.sh` | The sm_89 (L40S) census: every scalar pipe alone (IADD3, LOP3, SHF, PRMT, IMAD, IDP.4A, FFMA, HFMA2, IMNMX, SHFL, POPC, FLO), LDSM, LDS and STS.128, IMMA beside eight scalar classes (mixes and warp-specialized points), and the honest step at m16n8k32 and m16n8k16 with its MMAs alone; built for sm_89 by its own `run.sh`, census lines `since` sm89 |
+| `sm89/census.py` | `machine_model/data/sm89/` from a `sm89/run.sh` run and a tensor_kinds `TK_ARCH=89` run: each pipe row at its pipe's rate (the loop's instructions on the pipe counted), the tensor pipe and joint issue row of every MMA form, and each MMA + X family's facets with every non-MMA loop instruction counted as X |
 | `eps1.py` | EPS1's readings: `facets` (the upper hull of frontier.cu's points with the 2% margin; `--prior` adds machine_model's K rows' vertices, `--emit` prints rows and census lines), `side` (words a clock alone and beside honest, MMA kept), `clock` |
 
 ## Write a probe

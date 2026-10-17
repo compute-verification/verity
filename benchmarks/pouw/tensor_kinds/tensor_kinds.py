@@ -53,7 +53,15 @@ KIND = {"imma_s8_m16n8k32": "IMMA16832", "imma_u8s8_m16n8k32": "IMMA16832", "imm
         "hmma_tf32_m16n8k8": "HMMA1688T", "hmma_tf32_m16n8k4": "HMMA1684T", "qmma_e4m3_m16n8k32_f32": "QMMA16832",
         "qmma_e5m2_m16n8k32_f32": "QMMA16832", "qmma_e2m1_m16n8k32_f32": "QMMA16832",
         "qmma_sf_e4m3_m16n8k32_f32": "QMMASF16832", "qmma_sp_e4m3_m16n8k64_f32": "QMMASP16864",
-        "omma_nvf4_m16n8k64": "OMMASF16864"}
+        "omma_nvf4_m16n8k64": "OMMASF16864",
+        # sm_89's other forms
+        "imma_s4_m16n8k64": "IMMA16864S4", "imma_s4_m16n8k32": "IMMA16832S4", "imma_s4_m8n8k32": "IMMA8832S4",
+        "bmma_and_m16n8k256": "BMMA168256", "bmma_xor_m16n8k256": "BMMA168256", "bmma_and_m16n8k128": "BMMA168128",
+        "bmma_and_m8n8k128": "BMMA88128", "hmma_f16_m16n8k8_f32": "HMMA1688", "hmma_bf16_m16n8k8_f32": "HMMA1688",
+        "hmma_f16_m16n8k8_f16": "HMMA1688F16", "qmma_e4m3_m16n8k16_f32": "QMMA16816",
+        "qmma_e4m3_m16n8k16_f16": "QMMA16816F16", "qmma_e4m3_m16n8k32_f16": "QMMA16832F16",
+        "imma_sp_s4_m16n8k64": "IMMASP16864S4", "imma_sp_s4_m16n8k128": "IMMASP168128S4",
+        "hmma_sp_f16_m16n8k16_f32": "HMMASP16816", "hmma_sp_tf32_m16n8k16": "HMMASP16816T"}
 #: The kinds VF3e's programs counted as MMA, so VF3e's coefficient bounds theirs too.
 VF3E_KINDS = {"IMMA16832", "OMMASF16864"}
 STRUCTS = {
