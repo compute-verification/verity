@@ -461,50 +461,28 @@ __global__ void __launch_bounds__(256) vedit(const int8_t* __restrict__ Vt, int8
     *reinterpret_cast<uint32_t*>(Xt + off) = add_noise<false>(__ldg(reinterpret_cast<const uint32_t*>(Vt + off)), bits01(bits));
   }
 }
-// DG's rows [Y0 | Y1 | X_diag | 0] and Sq for the 8 query blocks of one 256-key chunk of one KV head a CTA, a channel a
-// thread: Ycum from the keys 1 .. 256 c - 1 first, then a block a step; chunk 0 also writes X(0)
-constexpr int VS_CH = 8;
+// DG's rows [Y0 | Y1 | X_diag | 0] and Sq of every query block of one KV head, a warp a channel and a lane a residue r:
+// each lane walks the blocks once, Ycum[r] before block j its running sum of keys 32 j' + r (j' < j, key 0 left out),
+// S its warp sum; the block with j = 0 also writes X(0). Grid (128 / 4, KV heads), 4 warps a CTA
 __global__ void __launch_bounds__(128) vsum(const int8_t* __restrict__ Xt, int8_t* __restrict__ DG, int* __restrict__ Sq,
                                             int* __restrict__ X0, int s) {
-  const int c = blockIdx.x, kvh = blockIdx.y, ch = threadIdx.x, nJ = s / 32;
-  const uint4* xr = reinterpret_cast<const uint4*>(Xt + (size_t)(kvh * 128 + ch) * s);
-  int Y[32];
+  const int kvh = blockIdx.y, ch = blockIdx.x * 4 + threadIdx.x / 32, r = threadIdx.x % 32, nJ = s / 32;
+  const int8_t* xr = Xt + (size_t)(kvh * 128 + ch) * s;
+  int Y = 0, S = 0;
+#pragma unroll 4
+  for (int j = 0; j < nJ; j++) {
+    const int xv = __ldg(xr + 32 * j + r);
+    int8_t* dst = DG + ((size_t)(kvh * nJ + j) * 128 + ch) * 128;
+    const int y0 = (int)(int8_t)(Y & 0xFF), y1 = (Y - y0) >> 8;
+    dst[r] = (int8_t)y0; dst[32 + r] = (int8_t)y1; dst[64 + r] = (int8_t)xv; dst[96 + r] = 0;
+    if (r == 0) Sq[(size_t)(kvh * nJ + j) * 128 + ch] = S;
+    if (j == 0 && r == 0) X0[kvh * 128 + ch] = xv;
+    const int v = (j == 0 && r == 0) ? 0 : xv;
+    Y += v;
+    int t = v;
 #pragma unroll
-  for (int r = 0; r < 32; r++) Y[r] = 0;
-  int S = 0;
-  auto add = [&](uint4 x0, uint4 x1, bool first) {
-    const uint32_t xw[8] = {x0.x, x0.y, x0.z, x0.w, x1.x, x1.y, x1.z, x1.w};
-#pragma unroll
-    for (int r = 0; r < 32; r++) {
-      const int v = (first && r == 0) ? 0 : (int)(int8_t)(xw[r / 4] >> (8 * (r % 4)));
-      Y[r] += v;
-      S += v;
-    }
-  };
-#pragma unroll 1
-  for (int j = 0; j < VS_CH * c; j++) add(__ldg(xr + 2 * j), __ldg(xr + 2 * j + 1), j == 0);
-#pragma unroll 1
-  for (int j = VS_CH * c; j < VS_CH * (c + 1); j++) {
-    const uint4 x0 = __ldg(xr + 2 * j), x1 = __ldg(xr + 2 * j + 1);
-    uint32_t y0w[8], y1w[8];
-#pragma unroll
-    for (int w4 = 0; w4 < 8; w4++) {
-      y0w[w4] = 0; y1w[w4] = 0;
-#pragma unroll
-      for (int i = 0; i < 4; i++) {
-        const int R = Y[4 * w4 + i], y0 = (int)(int8_t)(R & 0xFF), y1 = (R - y0) >> 8;
-        y0w[w4] |= (uint32_t)(y0 & 0xFF) << (8 * i);
-        y1w[w4] |= (uint32_t)(y1 & 0xFF) << (8 * i);
-      }
-    }
-    uint4* dst = reinterpret_cast<uint4*>(DG + ((size_t)(kvh * nJ + j) * 128 + ch) * 128);
-    dst[0] = make_uint4(y0w[0], y0w[1], y0w[2], y0w[3]); dst[1] = make_uint4(y0w[4], y0w[5], y0w[6], y0w[7]);
-    dst[2] = make_uint4(y1w[0], y1w[1], y1w[2], y1w[3]); dst[3] = make_uint4(y1w[4], y1w[5], y1w[6], y1w[7]);
-    dst[4] = x0; dst[5] = x1;
-    dst[6] = make_uint4(0, 0, 0, 0); dst[7] = make_uint4(0, 0, 0, 0);
-    Sq[(size_t)(kvh * nJ + j) * 128 + ch] = S;
-    if (j == 0) X0[kvh * 128 + ch] = (int)(int8_t)(x0.x & 0xFF);
-    add(x0, x1, j == 0);
+    for (int o = 16; o; o >>= 1) t += __shfl_xor_sync(0xFFFFFFFFu, t, o);
+    S += t;
   }
 }
 // the scales: s_q in [2^-11, 2^-10), z_q in [2^-12, 2^-11), s_ch in [2^-10, 2^-9)
@@ -609,7 +587,7 @@ static void apfree(AP& V) {
 static void ued(AP& V, const Sig& s) { uedit<<<(V.s / 2 + 127) / 128, 128, 0, V.st>>>(V.Um, V.PA, V.Uf, V.s, s); }
 static void ped(AP& V) { pedit<<<V.ntiles, 128, 0, V.st>>>(V.P, V.Pt, V.Um, V.tab, V.s); }
 static void ved(AP& V, const Sig& s) { vedit<<<dim3(V.s / 128, V.kvh * 128 / 32), 256, 0, V.st>>>(V.Vt, V.Xt, V.kvh * 128, V.s, s); }
-static void vsm(AP& V) { vsum<<<dim3(V.s / 256, V.kvh), 128, 0, V.st>>>(V.Xt, V.DG, V.Sq, V.X0, V.s); }
+static void vsm(AP& V) { vsum<<<dim3(32, V.kvh), 128, 0, V.st>>>(V.Xt, V.DG, V.Sq, V.X0, V.s); }
 static void producers(AP& V, const Sig& s) { ued(V, s); ped(V); ved(V, s); vsm(V); }
 static void aprun(AP& V, ApKern k, uint32_t* R) {
   const bool plain = k == apv_plain;
