@@ -390,7 +390,7 @@
    },
    "Claims.Recursion.Complete": {
     "fails": "Claims.Witness.Recursion.Complete_fails",
-    "meets": ["Claims.Witness.Recursion.Complete_meets"]
+    "meets": ["Claims.Witness.Recursion.Complete_meets", "Claims.Witness.Recursion.Complete_meets_deployed"]
    },
    "Claims.Recursion.Efficient": {
     "fails": "Claims.Witness.Recursion.Efficient_fails",
@@ -1640,6 +1640,9 @@
    ],
    "assumptions": [],
    "type_hash": "0fa0c94d38cd2aa7013c2a2487b6e4890c2b69f192b0bbfae653665fba55f9b2"
+  },
+  "Claims.Witness.Recursion.Complete_meets_deployed": {
+   "owner": "@proofs"
   },
   "Claims.Witness.Recursion.Efficient_fails": {
    "owner": "@proofs",
