@@ -347,20 +347,26 @@ theorem zkSub_round (J k n : ℕ) (a : Claims.Msg) (hk : k / 2 < J) (hn : n ≤ 
   have ho := zkOnes_replicate (k / 2) (UInt8.ofNat (k % 2) :: UInt8.ofNat (n % 256) :: UInt8.ofNat (n / 256 % 256) ::
     UInt8.ofNat (n / 65536) :: a.tail)
   unfold zkRound zkSub
-  rw [ho]
-  unfold zkSubAt
   split
-  · rename_i r n₀ n₁ n₂ rest heq
-    injection heq with _ heq
-    injection heq with e₀ heq
-    injection heq with e₁ heq
-    injection heq with e₂ heq
-    injection heq with e₃ heq
-    subst e₀ e₁ e₂ e₃ heq
-    rw [dite_eq_left (by rw [h₀, h₁, h₂, h₃, hsum]; exact ⟨hk, Nat.mod_lt _ (by norm_num), hn⟩)]
-    simp only [h₀, h₁, h₂, h₃, hsum]
+  · rename_i rest' heq'
+    injection heq' with _ heq'
+    subst heq'
+    rw [ho]
+    unfold zkSubAt
+    split
+    · rename_i r n₀ n₁ n₂ rest heq
+      injection heq with _ heq
+      injection heq with e₀ heq
+      injection heq with e₁ heq
+      injection heq with e₂ heq
+      injection heq with e₃ heq
+      subst e₀ e₁ e₂ e₃ heq
+      rw [dite_eq_left (by rw [h₀, h₁, h₂, h₃, hsum]; exact ⟨hk, Nat.mod_lt _ (by norm_num), hn⟩)]
+      simp only [h₀, h₁, h₂, h₃, hsum]
+    · rename_i hne
+      exact (hne _ _ _ _ _ rfl).elim
   · rename_i hne
-    exact (hne _ _ _ _ _ rfl).elim
+    exact (hne _ rfl).elim
 
 theorem zkCnt_le (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) {i : ℕ} (h0 : i ≠ 0) :
     zkCnt x spec sts i ≤ 65536 := by
