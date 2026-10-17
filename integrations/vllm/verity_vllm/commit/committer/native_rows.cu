@@ -32,8 +32,10 @@ using u32 = uint32_t;
 constexpr int MAX_NB = 4;            // positions and node indices below 2^32
 constexpr int LEVELS = 33;
 constexpr int THREADS = 256;
-#ifndef VERITY_ROWS_MIN_BLOCKS       // the leaf kernel's __launch_bounds__ min blocks per SM (benchmarks/served_commit/rows_floor.py times others)
-#define VERITY_ROWS_MIN_BLOCKS 1
+// The leaf kernel's __launch_bounds__ min blocks per SM: 2 caps it at 128 registers, the fastest form on H200 at 256-byte rows
+// (benchmarks/served_commit/rows_floor.py times 1, 2 and 3).
+#ifndef VERITY_ROWS_MIN_BLOCKS
+#define VERITY_ROWS_MIN_BLOCKS 2
 #endif
 
 struct LeafK {
