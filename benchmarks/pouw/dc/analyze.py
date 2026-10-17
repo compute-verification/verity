@@ -58,15 +58,17 @@ def loop_rate(row: dict, loop: int, prefixes=TENSOR) -> tuple[str, float] | None
 
 
 def issue_rates(row: dict, verdict: dict | None) -> list[float] | None:
-    """Warp instructions issued a SM a clock in each timed loop: a pattern's rate times loop length over its count."""
+    """Warp instructions issued a SM a clock in each timed loop (SASS order): its most counted pattern's rate times the
+    loop's length over that count. Rates are keyed by `expect`'s loop order, which ptxas need not keep, so the pattern
+    finds its rate."""
     if not verdict:
         return None
     out = []
-    for i, lp in enumerate(verdict["verdict"].get("loops", [])):
+    for lp in verdict["verdict"].get("loops", []):
         length = (int(lp["tail"], 16) - int(lp["head"], 16)) // 16 + 1
-        pat, n = next(((p, c) for p, c in lp["counts"].items() if c), (None, 0))
-        rate = row["rates"].get(f"{i}:{pat}")
-        out.append(rate * length / n if pat and rate else float("nan"))
+        pat, n = max(lp["counts"].items(), key=lambda pc: pc[1], default=(None, 0))
+        rate = next((r for k, r in row["rates"].items() if k.split(":", 1)[1] == pat), None) if n else None
+        out.append(rate * length / n if rate else float("nan"))
     return out
 
 
@@ -103,8 +105,8 @@ def slots_sm100(name: str, row: dict) -> dict | None:
 
 
 def lane_of(name: str) -> str | None:
-    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+", name)
-    return m.group(1) if m else None
+    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|tclaneU_([a-z0-9]+)", name)
+    return (m.group(1) or m.group(2)) if m else None
 
 
 def joint(name: str, row: dict, rows: dict, verdict: dict | None, t_alone: float | None) -> dict:
@@ -126,6 +128,8 @@ def joint(name: str, row: dict, rows: dict, verdict: dict | None, t_alone: float
             out["a"] = (la - lane[1]) / t[1]
     if t and t_alone:
         out["tensor_fraction"] = t[1] / t_alone
+    if "U_" in name:
+        out["exact"] = True
     return out
 
 

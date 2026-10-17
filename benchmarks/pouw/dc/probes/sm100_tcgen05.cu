@@ -430,6 +430,35 @@ DC_DEV void lane_beside_mma(const OpArgs& a) {
   teardown(tmem);
   OP_SINK(v ^ threadIdx.x)
 }
+// lane_beside_mma exact on both sides: the MMA warp fixed, the lane warps running only while it does (OP_UNTIL).
+template <int X, int R>
+DC_DEV void lane_until_mma(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  const uint32_t tmem = setup<0>(s, a.mode);
+  const uint64_t da = desc_a(s), db = desc_b(s);
+  Lane l(threadIdx.x);
+  OP_BEGIN_STOP
+  if (warp_u() == 0) {
+    OP_LOOP(it) {
+      if (elect_one()) mma4<0, 128, 256>(tmem, da, db);
+      __syncwarp();
+    }
+    OP_DONE
+  } else if (warp_u() >= 4) {
+    OP_UNTIL(n) { lane_ops<X, R>(l); }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  if (warp_u() == 0) {
+    if (elect_one()) umma_commit(&s.bar);
+    __syncwarp();
+  }
+  mbar_wait(&s.bar, 0);
+  tc_after_sync();
+  const uint32_t v = sink_ld(tmem, 0) ^ l.fold();
+  teardown(tmem);
+  OP_SINK(v ^ threadIdx.x)
+}
 
 OP_KERNEL(tc_i8_m128_n32, 128) { tc_alone<0, 128, 32>(a); }
 OP_KERNEL(tc_i8_m128_n64, 128) { tc_alone<0, 128, 64>(a); }
@@ -473,6 +502,9 @@ OP_KERNEL(tclane_mix_r256, 512) { lane_beside_mma<L_MIX, 256>(a); }
 OP_KERNEL(tclane_imad_r128, 512) { lane_beside_mma<L_IMAD, 128>(a); }
 OP_KERNEL(tclane_lop3_r128, 512) { lane_beside_mma<L_LOP3, 128>(a); }
 OP_KERNEL(tclane_duo_r192, 512) { lane_beside_mma<L_DUO, 192>(a); }
+OP_KERNEL(tclaneU_mix, 512) { lane_until_mma<L_MIX, 64>(a); }
+OP_KERNEL(tclaneU_imad, 512) { lane_until_mma<L_IMAD, 64>(a); }
+OP_KERNEL(tclaneU_duo, 512) { lane_until_mma<L_DUO, 48>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -524,6 +556,9 @@ static const OpProbe PROBES[] = {
     {.name = "tclane_imad_r128", .kernel = (const void*)tclane_imad_r128, .tpb = 512, .expect = UI ";IMAD=128", .warps = "1;12", .iters = 2048},
     {.name = "tclane_lop3_r128", .kernel = (const void*)tclane_lop3_r128, .tpb = 512, .expect = UI ";LOP3.LUT=128", .warps = "1;12", .iters = 2048},
     {.name = "tclane_duo_r192", .kernel = (const void*)tclane_duo_r192, .tpb = 512, .expect = UI ";LOP3.LUT=64,IMAD=64", .warps = "1;12", .iters = 2048},
+    {.name = "tclaneU_mix", .kernel = (const void*)tclaneU_mix, .tpb = 512, .expect = UI ";FFMA=32", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_imad", .kernel = (const void*)tclaneU_imad, .tpb = 512, .expect = UI ";IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_duo", .kernel = (const void*)tclaneU_duo, .tpb = 512, .expect = UI ";LOP3.LUT=16,IMAD=16", .warps = "1;12", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
