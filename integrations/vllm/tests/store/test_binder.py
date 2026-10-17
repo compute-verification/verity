@@ -194,20 +194,23 @@ def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_reg
     assert recs[1].passes[0].seed == rb.seed(sigma[1], 0, b"\x02" * 64) and b.windows == 2
 
 
-def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote():
+@pytest.mark.parametrize("passes", [True, False])
+def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     """The binder appends at `Scheduler.schedule`, before the step's forward writes its KV; the memory map takes the
     step's digests at `end` (`Scheduler.update_from_output`), from the bytes the forward wrote.  A page vLLM frees after
     that (a finished request's, in `update_from_output`) is freed at the same step, whose line closes when the next
-    step opens; each pass names the step it covers."""
+    step opens; each pass names the step it covers.  Without passes (a remote session runs them), the map is the
+    same."""
     from verity.core.protocols.remote_bandwidth import codec, memory_map
 
     s = Store()
-    b = Binder(s)
+    b = Binder(s, passes=passes)
     r = runner()
     r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)]
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     m = s.record_memory_map(registration=bytes(range(64)))
+    open_step = lambda: s._open_pass and s._open_pass.step
     page = Block(1)
     page.ref_cnt = 1
     s.kv_alloc([1, 2])
@@ -215,13 +218,13 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote():
     sched = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(single_type_managers=[stm])),
                             requests={"a": SimpleNamespace(num_computed_tokens=SLOTS)})
     b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={"a": SLOTS}))
-    assert s._open_pass.step == 0
+    assert open_step() == (0 if passes else None)
     r.kv_caches[0][:, 1] = 1.5
     b.end()
     s.kv_free([2])
     assert m.text().count("\n") == 1
     b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={}))
-    assert s._open_pass.step == 1
+    assert open_step() == (1 if passes else None)
     (step,) = memory_map.parse(m.text().splitlines())[1]
     kv = s.region("kv/0")
     want = r.kv_caches[0][0, 1].contiguous().view(torch.uint8).numpy().tobytes()

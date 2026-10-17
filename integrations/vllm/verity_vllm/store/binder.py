@@ -233,17 +233,19 @@ class Binder:
     `Registration.digest`).  Each window's record goes to ``on_window``; without a reader, a window's receipts are the
     reference's, every block read on the CPU.  With ``tiles`` (the driver's `audit.Tiles`), each receipt is bound to
     ``tiles.output(seed, j)``, PoUW's tile output before block ``j`` is read, and the default receipt is the driver's
-    (`RemoteBandwidthReceipt`); without them, the tag receipt, which binds only the block."""
+    (`RemoteBandwidthReceipt`); without them, the tag receipt, which binds only the block.  With ``passes=False`` the
+    binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.store.remote.serve`)."""
 
     def __init__(self, store: Store, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
                  reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
                  messages: Callable[[], Sequence[bytes | None]] | None = None, registration: bytes | None = None,
-                 on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None) -> None:
+                 on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None,
+                 passes: bool = True) -> None:
         self.store, self.block_bytes, self.kv_codec = store, block_bytes, kv_codec
         self.receipt = receipt or (RemoteBandwidthReceipt() if tiles is not None else default_receipt())
         self.weights, self.reader, self.fifo, self.tiles = weights, reader, fifo, tiles
-        self.messages, self.registration, self.on_window = messages, registration, on_window
+        self.messages, self.registration, self.on_window, self.passes = messages, registration, on_window, passes
         self.hooks: Hooks | None = None
         self.step = 0
         self.windows = 0
@@ -339,8 +341,9 @@ class Binder:
         self.store.counters.add("appends", time.perf_counter() - t)
         s, self.step = self.step, self.step + 1
         self.store.kv_append(apps, s)
-        ps = self.store.begin_pass(None, step=s)
-        self._segments, self._seed = ps.segments, ps.seed
+        if self.passes:
+            ps = self.store.begin_pass(None, step=s)
+            self._segments, self._seed = ps.segments, ps.seed
 
     def z(self, seed: bytes) -> Callable[[str, int], bytes]:
         """The tile outputs a pass under ``seed`` binds its receipts to, by region and region block."""
