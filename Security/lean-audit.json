@@ -382,7 +382,7 @@
   "Models.Accounting.Guarantees.Bandwidth"
  ],
  "claims": {
-  "modules": ["Definitions.Claims", "Definitions.Claims.Recursion"],
+  "modules": ["Definitions.Claims"],
   "witnesses": {
    "Claims.Bits": {
     "fails": "Claims.Bits_fails",
@@ -5388,7 +5388,8 @@
     "  Exists fun V =>",
     "    Exists fun Scope =>",
     "      Exists fun R =>",
-    "        Exists fun E => Exists fun Fe => Exists fun lam => Not (Claims.Sampling.BitsLin H V Scope R E Fe lam)"
+    "        Exists fun E => Exists fun Fe => Exists fun lam => Not (Claims.Sampling.BitsLin H V Scope R E Fe lam)",
+    "    Exists fun R => Exists fun E => Exists fun Fe => Exists fun lam => Not (Claims.Sampling.BitsLin H V R E Fe lam)"
    ],
    "assumptions": [],
    "type_hash": "e47885553e8f5fb861ed3c170fa7009becd9e97691bf14e6e64a4ed8e488f828"
