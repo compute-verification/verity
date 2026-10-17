@@ -227,7 +227,8 @@ and proof files at the view's (`FlockDeploy.KS.PlainSimRoot`, `FlockDeploy.KS.Pl
 that aborts on rejected runs gives the clash's acceptance (`FlockDeploy.KS.PlainSimAbort`,
 `FlockDeploy.KS.plainRawClashRun_of_abort`). At a tape of uniform functions read at a key that reads and tells
 apart the revealed live history, the simulated fork at round `t` is at most the deployed fork there and `δ_t` times the
-simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on the entries the key reads, `|X|^{-min (n t) M}`,
-which is `ForkCoinCoupling`'s shape (`FnFork`: `Claims.Flock.FnFork.PrefixKey`, `Claims.Flock.FnFork.prefixKey_histKey`,
-`Claims.Flock.FnFork.fnC_coupling`, `Claims.Flock.FnFork.fnAt_coupling`, `Claims.Flock.FnFork.δAt_eq`).
+simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on the entries the key reads,
+`|X|^{-min (n t) M}`, which is `ForkCoinCoupling`'s shape (`FnFork`: `Claims.Flock.FnFork.PrefixKey`,
+`Claims.Flock.FnFork.prefixKey_histKey`, `Claims.Flock.FnFork.fnC_coupling`, `Claims.Flock.FnFork.fnAt_coupling`,
+`Claims.Flock.FnFork.δAt_eq`).
 -/
