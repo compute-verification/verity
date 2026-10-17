@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.Zk.Run
 import Proofs.Flock.Claims.Complete.Coins
+import Proofs.Flock.Claims.Complete.Runs
 
 /-!
 # δcZk: where the honest masked prover can fail

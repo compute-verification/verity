@@ -9,7 +9,7 @@ import Proofs.Flock.Claims.Complete.Zk.Complete
 * **One table is `Zk/`'s**: a good case of one table is a `CaseZk` (`Case.toZk`: `ready` gives `readyZk`), its session
   `sessionSZk`'s (`sessionS_one`), and a run of one table a `RunZk` (`Run.toZk`), at which every method is the same. So
   every goal `complete_zk` rests on, or proves, holds at a run of one table, the record's size from `ready`
-  (`Run.recordFits`) in place of `RecordFitsZk`.
+  (`Run.recordFits`), as `complete_zk`'s from `readyZk` (`RunZk.recordFits`).
 * **At every number of tables**: the scope's goals (`tables_goal`, `schedules_goal`, `proofCount_goal`), the link
   message first (`linkFirst_goal`) and the sends (`sends_goal`).
 * **Several tables**: the session runs from `StmtOkJ` and `ProverRunsJ` (`sessionRunsJ_goal`, `complete_zk`'s
@@ -19,7 +19,7 @@ import Proofs.Flock.Claims.Complete.Zk.Complete
   switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed), of which `complete_zk`
   takes the ring switch, the masked Ligerito and the inner proof at one table and proves the rest.
 * `complete`: Flock's masked verifier is complete for `honestP` with error `δc H`
-  (`Claims.Flock.Complete H (deployZk rel)`), from `complete_zk`'s premises but `RecordFitsZk` and
+  (`Claims.Flock.Complete H (deployZk rel)`), from `complete_zk`'s premises and
   these four.
 -/
 
@@ -158,7 +158,7 @@ theorem complete_of_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
       capCommitted := fun o => (hRec o).capCommitted }
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables: from `complete_zk`'s premises but the record's size (`ready`'s), which give every check at one
+any number of tables: from `complete_zk`'s premises, which give every check at one
 table, and at several tables the statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the record's checks
 (`RecordJ`) and the rep's checks (`OpenJ`). -/
 theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)

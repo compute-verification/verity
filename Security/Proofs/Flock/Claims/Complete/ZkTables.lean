@@ -34,7 +34,7 @@ table's trace is its share's and satisfies its block R1CS (`Trace`: `Case.traceR
 `Readable.relS_only`), which `tracesOf` reads only at one table. The session runs at a good case from the statement's
 `hello` and the prover's pieces, its reps run in stream order (`Runs`: `Case.sessionRuns` from `StmtAt`,
 `ProverRunsAt`; at several tables `sessionRunsJ_goal`). `Complete` composes them (`complete_of_at`; `complete`: from
-`complete_zk`'s premises but `RecordFitsZk`, which give every check at one table, and at several tables `StmtOkJ`,
+`complete_zk`'s premises, which give every check at one table, and at several tables `StmtOkJ`,
 `ProverRunsJ`, `RecordJ` and `OpenJ`). The bound at several tables loses nothing at one (`One`: `completeZk_of`,
 `honestP`'s completeness with error `δc H` gives `honestPZk`'s with error `δcZk H`). Toward `RecordAt`, the tables'
 names and the rep streams' are distinct (`Names`: `tableNames_nodup`, `repNames_nodup`, `rootBList_distinct`,

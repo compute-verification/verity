@@ -398,7 +398,7 @@ theorem openJ_of (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepSh
   openAt_of S h64 o (hS o.toCase hc) (hR o.toCase hc) (hC o hc)
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables: from `complete_zk`'s premises but `RecordFitsZk` (`ready` gives the record's size), and at
+any number of tables: from `complete_zk`'s premises, and at
 several tables the statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the proof files' (`RepShapedJ`),
 and per rep the ring switch, the masked Ligerito and the inner proof (`RepChecksJ`), the premises `complete_zk` takes
 at one table. -/

@@ -186,7 +186,7 @@ variable (H rel) in
 def LgInnerJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → LgInnerAt H rel o
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
-share, with error `δc H`, at any number of tables: from `complete_zk_relation`'s premises but `RecordFitsZk`, and at
+share, with error `δc H`, at any number of tables: from `complete_zk_relation`'s premises, and at
 several tables the prover's pieces (`ProverRunsJ`), the proof files' (`RepShapedJ`), and per rep the masked Ligerito
 and the inner proof (`LgInnerJ`). -/
 theorem completeJRel (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
