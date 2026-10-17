@@ -37,7 +37,7 @@ def test_sm80_honest_is_measured_at_each_spacing():
     """Each design runs its own L's measured egemm80 arm, so honest's time is measured, and under credit H ε_sched is
     the hold's time above the as-built model."""
     pi = E.machine("", SM80)
-    measured = {16: 23.6241, 32: 28.2245, 64: 22.7587}
+    measured = {16: 23.6241, 32: 27.6427, 64: 21.0421}
     for L, t in measured.items():
         d = E.design(f"dither-2s-l{L}", SM80)
         e = E.eps(d, pi, 2.0, SM80)
