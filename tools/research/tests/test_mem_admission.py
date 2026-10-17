@@ -181,3 +181,14 @@ def test_cli_mem_gb_needs_a_machine_and_research_mem_prints_the_reading(machine,
     assert "--mem-gb admits a run on a shared machine" in capsys.readouterr().err
     assert main(["mem", "--ramlock", str(machine["ram"]), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["available_gb"] == 50
+
+
+def test_a_runs_own_reservation_and_its_check_slots_count_once():
+    """17 Oct, cpu-3 (INF-51): r20261017-162016-cb2e held 96 GB from `research run --mem-gb` and 279 GB for the check slot it took,
+    one tree of processes; summed, they refused a 96 GB job with 390 GB free."""
+    G = M.GB
+    res = [{"file": "research-r1.json", "live": True, "run_id": "r1", "outstanding": 96 * G},
+           {"file": "check-p0.json", "live": True, "run_id": "r1", "outstanding": 279 * G},
+           {"file": "research-r2.json", "live": True, "run_id": "r2", "outstanding": 50 * G},
+           {"file": "check-t.json", "live": False, "run_id": "r0", "outstanding": 0}]
+    assert M.reserved_bytes(res) == (279 + 50) * G
