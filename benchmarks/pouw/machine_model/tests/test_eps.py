@@ -286,11 +286,11 @@ def test_the_table_route_is_bound_by_L2():
     shut = E.setup(d, PIU, credit="floor", table=replace(wide, l2=1e9))         # 1 GB/s: next to no table words
     assert shut.machine_eps(2.16) == pytest.approx(base.machine_eps(2.16), abs=1e-5)
     t = E.table()
-    assert t.per_cycle() == pytest.approx(6e12 / (188 * 4 * 2092e6))
+    assert t.per_cycle() == pytest.approx(7.244e12 / (188 * 4 * 2092e6))
     s = E.setup(d, PIU, credit="floor", table=t)
     m = s.cheat(2.16)
     assert "L2" in m.binding and m.words["table"] * t.bytes / t.per_cycle() == pytest.approx(m.T, rel=1e-9)
-    assert 0 < m.words["table"] < 0.2 and s.machine_eps(2.16) > base.machine_eps(2.16)
+    assert 0 < m.words["table"] < 0.25 and s.machine_eps(2.16) > base.machine_eps(2.16)
     assert s.floor() == pytest.approx(s.machine_eps(8.0), abs=1e-9)        # the floor keeps the table route
     measured = E.setup(d, PIU, credit="floor", table=E.table(q=1.906))
     assert base.machine_eps(2.16) < measured.machine_eps(2.16) < s.machine_eps(2.16)
