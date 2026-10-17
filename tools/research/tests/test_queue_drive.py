@@ -238,7 +238,9 @@ def test_a_failure_only_one_trains_change_reaches_ejects_that_pr_and_tells_ci_an
     assert [m.pr for m in h.q.chain()] == [1] and len(h.posts) == 1
 
 
-def test_a_failure_two_changes_reach_rings_ci_and_ejects_nothing(world, monkeypatch, tmp_path):
+def test_a_failure_two_changes_reach_ejects_both(world, monkeypatch, tmp_path):
+    """16 Oct (Daniel, through top): every failed train that waited on a lander stalled landing for hours; drive ejects every
+    PR whose change the failure reaches, and the rest of the train goes on."""
     h = Harness(world, monkeypatch)
     h.d.train_size = 2
     world.gh.put(1, world.change({"pkg/helpers.py": "X = 2\n"}))
@@ -247,9 +249,83 @@ def test_a_failure_two_changes_reach_rings_ci_and_ejects_nothing(world, monkeypa
     _check(world, monkeypatch, _tip(world), ("false",))
     h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/workspace/research/src/abc/pkg/helpers.py", line 1')]
     h.tick()
-    assert len(h.posts) == 1 and "Not ejected: 2 PRs (#1 #2) touch pkg/helpers.py, pkg/tests/test_x.py" in h.posts[0], h.posts
+    assert len(h.posts) == 1 and "Ejected #1 #2: their change touches pkg/helpers.py, pkg/tests/test_x.py" in h.posts[0], h.posts
     h.tick()
-    assert [m.pr for m in h.q.chain()] == [1, 2]
+    assert [m.pr for m in h.q.chain()] == []
+
+
+LEAN_AUDIT_LOG = """lean-audit: verity/core/primitives/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
+AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_/Security/Proofs: FAIL; built WITHOUT a sandbox
+  build: exit 1
+    warning: ../Proofs/Flock/Recursive/PartTie.lean:168:47: Used `tac1 <;> tac2`
+    error: ../Proofs/Flock/Claims/NumbersRadius.lean:100:2: Tactic `rfl` failed: The left-hand side
+    error: build failed
+AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_/Security: FAIL; built WITHOUT a sandbox
+    error: Definitions/Claims/Sampling.lean:512:20: Type mismatch
+"""
+
+
+def _lean_run(tmp_path, log: str = LEAN_AUDIT_LOG):
+    d = tmp_path / "run"
+    d.mkdir(parents=True)
+    (d / "steps.jsonl").write_text('{"step": "lean-audit", "status": "failed", "rc": 1, "log": "lean-audit.log"}\n')
+    (d / "lean-audit.log").write_text(log)
+    return d
+
+
+def test_a_lean_audit_failure_names_the_lean_files_its_build_errors_are_in(tmp_path):
+    """16 Oct: three trains failed in lean-audit (#2143, #2168, #2174), each told as naming no file, each attributed by hand."""
+    from research.drive import implicated, lean_errors
+
+    assert lean_errors(LEAN_AUDIT_LOG) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean",
+                                           "Security/Definitions/Claims/Sampling.lean"}
+    assert implicated(_lean_run(tmp_path)) == lean_errors(LEAN_AUDIT_LOG)
+    assert implicated(_lean_run(tmp_path / "b", "AUDIT /x/lean-audit-scratch-1/Security: FAIL\n    error: build failed\n")) is None
+
+
+def test_a_lean_audit_failure_ejects_the_pr_that_changed_the_failing_file(world, monkeypatch, tmp_path):
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"Security/Definitions/Claims/Sampling.lean": "theorem x : True := trivial\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    h.evidence = [_lean_run(tmp_path)]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "Sampling.lean" in h.posts[0], h.posts
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1]
+
+
+def _killed_run(tmp_path, name: str):
+    d = tmp_path / name
+    d.mkdir(parents=True)
+    (d / "steps.jsonl").write_text('{"step": "circuit-check", "status": "failed", "rc": -9, "log": "circuit-check.log"}\n')
+    (d / "circuit-check.log").write_text("")
+    return d
+
+
+def test_a_killed_check_that_names_no_file_is_resent_once_and_told_when_killed_again(world, monkeypatch, tmp_path):
+    """16 Oct 21:22Z and 00:09Z: a node stop and an OOM kill failed three trains; each waited on a hand resend."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    tip = _tip(world)
+    _check(world, monkeypatch, tip, ("false",))
+    h.evidence = [_killed_run(tmp_path, "one")]
+    launched = len(h.launched)
+    h.tick()
+    assert not h.posts and len(h.launched) == launched + 1 and h.launched[-1][0] == tip     # resent, nothing told or ejected
+    assert any("resent" in x and "no PR is ejected" in x for x in world.logs)
+    assert "running" in h.tick() and [m.pr for m in h.q.chain()] == [1, 2]
+    rid = h.d.q.load_state()["drive"]["launched"][tip]["ids"][0]
+    h.run_state[rid] = ("done", 1, None)
+    h.clock += PUBLISH_GRACE_S + 1                                       # killed again, and no attempt of it published
+    h.evidence = [_killed_run(tmp_path, "two")]
+    h.tick()
+    assert len(h.posts) == 1 and "killed again on its resend" in h.posts[0] and len(h.launched) == launched + 1, h.posts
 
 
 LINT_LOG = """..........F........                                                      [100%]
