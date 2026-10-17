@@ -1,23 +1,25 @@
-"""GLM-5.3's TP8 manifest spells every required identity as the runtime commits it (the Commit of record r20261016-124321-8e1d bound
-none of 26,686 of rank 0's): on a rank Program shaped like GLM's -- dense layer 0, MoE layers 3 and 4 with the shared expert under the
-runner's held path `_shared_experts._layer`, a prefill step on the unfused all-reduce + `RMSNormFusedCudaVector8` and DeepGEMM path
-and a decode step on the fused `AllReduceRmsNormMnnvl` and FlashInfer path -- every `instance_outputs` / `tp_rank_partials` identity is
-a name the capture map `glm-moe-dsa-eager-hopper-tp8-v0` commits, except the three the committer binds per call
-(`native_host.CALL_DEPENDENT_RE`):
+"""Every identity of GLM-5.3's TP8 manifest binds from what the runtime commits (the Commit of record r20261016-124321-8e1d bound none
+of 26,686 of rank 0's, by name): on a rank Program shaped like GLM's -- dense layer 0, MoE layers 3 and 4 with the shared expert under
+the runner's held path `_shared_experts._layer`, a prefill step on the unfused all-reduce + `RMSNormFusedCudaVector8` and DeepGEMM path
+and a decode step on the fused `AllReduceRmsNormMnnvl` and FlashInfer path -- every `instance_outputs` / `tp_rank_partials` identity
+binds (`verity_vllm.query.manifest.bind`) from the names the capture map `glm-moe-dsa-eager-hopper-tp8-v0` commits and the ones the committer
+commits per call (`native_host.CALL_DEPENDENT_RE`):
 
-* `<norm>/all_reduce`, the unfused path's all-reduced tensor (`allreduce_norm`, from the norm's pre-hook);
-* `<linear>/x_q` and `<linear>/x_s`, `DeepGemmFp8Linear_v1`'s quant of its input (ports `0` / `1`, `linear_quant_source`), so the
-  hook's `<linear>/0` is y."""
+* `<norm>/all_reduce`, the unfused path's all-reduced tensor (`allreduce_norm`, from the norm's pre-hook), the norm site's member;
+* `<linear>/x_q` and `<linear>/x_s`, `DeepGemmFp8Linear_v1`'s quant of its input, which `linear_quant_source` declares as its ports
+  `0` / `1`, so the hook's `<linear>/0` binds the one left, y."""
 from __future__ import annotations
 
 import pytest
 
 from tests.acquire.glm53_model import CMAP, ENV
+from verity_vllm.acquire.sources import linear_quant_source as LQ
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.commit.committer.native_host import CALL_DEPENDENT_RE
 from verity_vllm.correspondence.reader_for_query import Correspondence, held_module_paths, parse_call_name
+from verity_vllm.query.collective_names import NORM_SITE_MEMBER
 from verity_vllm.query.compose import merge_ranks
-from verity_vllm.query.manifest.format import committed_identity
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import Population, request_manifest
 from verity_vllm.query.units import ValueRef as R
@@ -140,9 +142,9 @@ def _manifest(rank: int) -> dict:
 NORMS = {f"model.layers.{k}.{n}" for k in DENSE + MOE for n in ("input_layernorm", "post_attention_layernorm")} - {"model.layers.0.input_layernorm"} | {"model.norm"}
 QUANT_LINEARS = {f"model.layers.{k}.self_attn.o_proj" for k in DENSE + MOE} | {f"model.layers.0.mlp.{p}" for p in ("gate_up_proj", "down_proj")} | \
     {f"model.layers.{k}.mlp.shared_experts.{p}" for k in MOE for p in ("gate_up_proj", "down_proj")}
-#: the identities the committer binds per call (the norm path, the linear's quant branch), not from a capture-map tap
-NEEDS_SOURCE = {(n, "all_reduce") for n in NORMS} | {(m, q) for m in QUANT_LINEARS for q in ("x_q", "x_s")}
-assert all(CALL_DEPENDENT_RE.search(f"{op}/{mem}") for op, mem in NEEDS_SOURCE)
+#: what the committer commits per call at the prefill (the norm path, the linear's quant branch), not from a capture-map tap
+PER_CALL = [f"{n}/{NORM_SITE_MEMBER}" for n in sorted(NORMS)] + [f"{m}/{q}" for m in sorted(QUANT_LINEARS) for q in LQ.MEMBERS]
+assert all(CALL_DEPENDENT_RE.search(n) for n in PER_CALL)
 
 
 @pytest.fixture(scope="module")
@@ -150,11 +152,11 @@ def manifests() -> list[dict]:
     return [_manifest(rank) for rank in range(WORLD)]
 
 
-def _committed(rank: int) -> set[tuple[str, str]]:
-    out = set()
-    for routes in (("sparse-mqa",), ("dense-mha",)):
-        out |= {committed_identity(n) for n in CM.committer_names(CMAP, ENV, routes=routes, rank=rank)}
-    return out
+def _events(rank: int, step: int) -> list[str]:
+    """What one step commits on `rank`: the capture map's names (both attention routes; this Program has no attention module), and at
+    the prefill the per-call names."""
+    names = {n for routes in (("sparse-mqa",), ("dense-mha",)) for n in CM.committer_names(CMAP, ENV, routes=routes, rank=rank)}
+    return sorted(names) + (PER_CALL if step == 0 else [])
 
 
 def _named(m: dict) -> set[tuple[int, str, str]]:
@@ -162,13 +164,16 @@ def _named(m: dict) -> set[tuple[int, str, str]]:
 
 
 @pytest.mark.parametrize("rank", [0, 5])
-def test_every_required_identity_is_a_name_the_capture_map_commits(manifests, rank):
+def test_every_required_identity_binds_from_what_the_rank_commits(manifests, rank):
     m = manifests[rank]
     assert m["complete"], m["unmodelled"]
+    binder = Binder(m["identities"], rank=rank, ports=LQ.PORTS)
+    for step in (0, 1):
+        bound = [(step, op, mem) for op, mem, _k, how in binder.bind(step, _events(rank, step)) if how != "unbound"]
+        assert len(bound) == len(set(bound)), "an identity bound twice"
+        missing = {x for x in _named(m) if x[0] == step} - set(bound)
+        assert not missing, sorted(missing)
     named = {(op, mem) for _s, op, mem in _named(m)}
-    missing = named - _committed(rank) - NEEDS_SOURCE
-    assert not missing, sorted(missing)
-    assert NEEDS_SOURCE <= named, sorted(NEEDS_SOURCE - named)
     assert not [op for op, _m in named if op in ("model", *(f"model.layers.{k}" for k in DENSE + MOE)) or op.startswith(HELD)]
     assert m["op_path_aliases"] == {}, "no collective site is left at its enclosing module"
 
@@ -198,19 +203,20 @@ def test_each_norms_collective_is_spelt_under_the_norm_on_both_paths(manifests):
         assert {v[1] for v in (*pre.values(), *dec.values())} == {0}
 
 
-def test_a_linear_reading_its_own_weight_returns_slot_0_on_every_route(manifests):
-    rows = {(r["step"], r["op_path"], r["output_member"]): r for r in manifests[0]["identities"] if r["family"] == "instance_outputs"}
+def test_deepgemms_quant_branch_binds_its_ports_so_the_hooks_slot_0_is_y(manifests):
+    """At the prefill a quantized linear is `DeepGemmFp8Linear_v1`, whose ports (x_q, x_s, y) the manifest names `0` / `1` / `2`; the
+    quant source's `x_q` / `x_s` bind ports 0 / 1 and the hook's slot 0 the one left.  Without the quant branch slot 0 binds nothing,
+    never q.  At the decode FlashInfer's one output is `out`, which slot 0 binds."""
+    m = manifests[0]
+    rows = {(r["step"], r["op_path"], r["output_member"]): r for r in m["identities"] if r["family"] == "instance_outputs"}
+    binder = Binder(m["identities"], rank=0, ports=LQ.PORTS)
     for lin in QUANT_LINEARS:
-        y = rows[(0, lin, "0")]
-        assert (y["spec"], y["width"], y["dtype"], y["boundary"]["structural_member"]) == (DEEPGEMM, N, "bf16", "2"), "slot 0 is y, never q"
-        assert (rows[(0, lin, "x_q")]["dtype"], rows[(0, lin, "x_s")]["dtype"]) == ("w8", "f32")
-        assert rows[(1, lin, "0")]["spec"] == FLASHINFER and (1, lin, "out") not in rows
+        assert [(rows[(0, lin, p)]["spec"], rows[(0, lin, p)]["dtype"]) for p in "012"] == [(DEEPGEMM, "w8"), (DEEPGEMM, "f32"), (DEEPGEMM, "bf16")]
+        assert binder.bind(0, [f"{lin}/x_q", f"{lin}/0", f"{lin}/x_s"]) == [(lin, "0", 0, "port"), (lin, "2", 0, "slot"), (lin, "1", 0, "port")]
+        assert binder.bind(0, [f"{lin}/0"]) == [(lin, "", 0, "unbound")]
+        assert rows[(1, lin, "out")]["spec"] == FLASHINFER and binder.bind(1, [f"{lin}/0"]) == [(lin, "out", 0, "slot")]
     for k in MOE:
-        assert {s: rows[(s, f"model.layers.{k}.mlp.gate", "0")]["spec"] for s in (0, 1)} == GATE
-    applied = manifests[0]["query"]["residuals_applied"]
-    for key in ("FlashInferFp8Linear_v1:out->0", "DeepGemmFp8Linear_v1:2->0", "DeepGemmFp8Linear_v1:0->x_q", "DeepGemmFp8Linear_v1:1->x_s",
-                "LlBf16DotprodGemm_v1:out->0", "CublasSplitKGemmF32Out_v1:out->0", "encoding:norm site"):
-        assert applied.get(key), key
+        assert {s: rows[(s, f"model.layers.{k}.mlp.gate", "out")]["spec"] for s in (0, 1)} == GATE
 
 
 def test_the_shared_expert_is_each_layers_own(manifests):
@@ -218,8 +224,8 @@ def test_the_shared_expert_is_each_layers_own(manifests):
     rows = {(r["step"], r["op_path"], r["output_member"]): r["rows"] for r in manifests[0]["identities"] if r["family"] == "instance_outputs"}
     for k in MOE:
         sh = f"model.layers.{k}.mlp.shared_experts"
-        assert [rows[(0, f"{sh}.{leaf}", mem)] for leaf, mem in (("gate_up_proj", "0"), ("act_fn", "out"), ("down_proj", "0"))] == [2, 2, 2]
-        assert [rows[(1, f"{sh}.{leaf}", mem)] for leaf, mem in (("gate_up_proj", "0"), ("act_fn", "out"), ("down_proj", "0"))] == [1, 1, 1]
+        assert [rows[(0, f"{sh}.{leaf}", mem)] for leaf, mem in (("gate_up_proj", "2"), ("act_fn", "out"), ("down_proj", "2"))] == [2, 2, 2]
+        assert [rows[(1, f"{sh}.{leaf}", mem)] for leaf, mem in (("gate_up_proj", "out"), ("act_fn", "out"), ("down_proj", "out"))] == [1, 1, 1]
     corr = manifests[0]["correspondence"]
     assert corr["held_modules"] == {"resolved": 3 * 2 * len(MOE) + 3 * len(MOE), "unresolved": {}}
 

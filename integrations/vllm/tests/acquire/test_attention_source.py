@@ -25,6 +25,7 @@ from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.commit import binding as B
+from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
 
 NORM_ROPE = G.fused_norm_rope
@@ -268,11 +269,11 @@ PD = "f" * 64
 
 
 def boundary(step: int, layer: int, rows: int, **kw: Any) -> dict[str, Any]:
-    """A sparse MLA call boundary of rank 3 as the GLM-5.3 TP manifest spells it: the Build's export-wrapper prefix, fx node
-    `dsa_indexer_attn_<step * L + layer>`, [rows, NHL * KVL] bf16 words."""
+    """A sparse MLA call boundary of rank 3 as the GLM-5.3 TP manifest spells it: fx node `dsa_indexer_attn_<step * L + layer>`,
+    [rows, NHL * KVL] bf16 words."""
     k = step * L + layer
     return {"family": "call_boundaries", "request_id": "r0", "step": step, "engine_step": step, "invocation": 0, "rank": 3,
-            "op_path": f"inner.model.model.layers.{layer}.self_attn/dsa_indexer_attn" + (f"_{k}" if k else ""), "output_member": "out",
+            "op_path": f"model.layers.{layer}.self_attn/dsa_indexer_attn" + (f"_{k}" if k else ""), "output_member": "out",
             "element_range": [0, rows * WIDTH], "rows": rows, "width": WIDTH, "dtype": "bf16", "spec": "SparseMlaSplit_v1{T=1,NH=8}", **kw}
 
 
@@ -295,25 +296,27 @@ def bruns() -> dict[bool, AttnRun]:
     return out
 
 
-def test_the_source_claims_a_layers_sparse_mla_output_and_nothing_else():
+def test_the_source_claims_the_attention_bodys_call_boundaries_its_taps_bind_and_nothing_else():
+    """By the Call's Definition and the layer's attention module: the fx node's name does not enter."""
     b = boundary(1, 2, 1)
     assert AS.claims(b) == AS.BINDER and CB.claimed(b) == AS.BINDER and not CB.manifest_sites({"identities": [b]})
-    assert AS.sparse_mla_layer(b) == 2 and AS.sparse_mla_layer(boundary(0, 0, 3)) == 0
-    for other in ({"spec": "SparseMla_v1{T=1}"},):
-        assert AS.claims({**b, **other}) == AS.BINDER
+    assert AS.call_tap(b) == (AS.ATTN_MQA, 2) and AS.call_tap(boundary(0, 0, 3)) == (AS.ATTN_MQA, 0)
+    for other in ({"spec": "SparseMla_v1{T=1}"}, {"op_path": "model.layers.2.self_attn/dsa_norm_rope_9"}):
+        assert AS.call_tap({**b, **other}) == (AS.ATTN_MQA, 2), other
+    assert AS.call_tap({**b, "spec": "BatchedGemm_v1{B=8}", "op_path": "model.layers.2.self_attn/bmm_3"}) == (AS.ARGUMENTS["ql_nope"], 2)
     for other in ({"spec": "DsaMqaLogits_v3{N=2}"}, {"output_member": "lse"}, {"dtype": "f32"}, {"family": "instance_outputs"},
-                  {"op_path": "inner.model.model.layers.2.self_attn/dsa_norm_rope_9"}, {"op_path": "inner.model.model.layers.2.mlp/dsa_indexer_attn_9"}):
+                  {"op_path": "model.layers.2.mlp/dsa_indexer_attn_9"}, {"op_path": "model.layers.2.self_attn"}):
         assert AS.claims({**b, **other}) is None, other
 
 
-def test_each_sparse_mla_call_boundary_binds_the_attn_tensor_of_its_layer_and_step(bruns):
+def test_each_sparse_mla_call_boundary_holds_the_attn_tensor_of_its_layer_and_step(bruns):
     on = bruns[True]
-    attn = on.att.names[AS.ATTN_MQA]
-    want = {attn[i]: {1: (boundary(1, i, 1)["op_path"], "out"), 3: (boundary(3, i, 3)["op_path"], "out")} for i in range(L)}
-    assert on.att.name_bindings() == want and on.att.stats["call_boundaries_held"] == 2 * L
-    assert len(on.com.errors) == 1 and on.com.errors[0].startswith("attention: layer 0 at engine step 2: forward_mqa returned (1, ")
+    labels = {n.rsplit("/", 1)[1] for n in on.att.names[AS.ATTN_MQA].values()}
+    assert len(labels) == 1 and all(on.att.ports()[x] == AS.TAP_PORTS[AS.ATTN_MQA] for x in labels)
+    assert on.att.stats["call_boundaries_held"] == 2 * L
+    assert len(on.com.errors) == 1 and on.com.errors[0].startswith(f"attention: layer 0 at engine step 2: tap {AS.ATTN_MQA} is (1, ")
     off = bruns[False]
-    assert off.att.name_bindings() == {} and off.com.errors == [], "off the target the attn tap is not bound, so neither are they"
+    assert off.att.stats["call_boundaries_held"] == 0 and off.com.errors == [], "off the target the attn tap is not bound, so neither are they"
 
 
 def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_rest(bruns):
@@ -327,24 +330,20 @@ def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_re
             m.stream_off, off = off, off + nb
             layouts[k].append(m)
     steps = [types.SimpleNamespace(root=bytes([k]) * 32) for k in range(len(STEPS))]
-    bmap = B.build_binding_map(layouts, steps, b"\0" * 32, PD, rank=3, name_bindings=B.source_name_bindings([on.att]))
+    bmap = B.build_binding_map(layouts, steps, b"\0" * 32, PD, rank=3, binder=Binder(BOUNDARIES, rank=3, ports=source_ports([on.att])))
     pop = [B.identity(PD, r["request_id"], r["engine_step"], 0, r["op_path"], "out", *r["element_range"], 3) for r in BOUNDARIES]
     cov = B.coverage_check(pop, bmap)
     assert (cov["expected_n"], cov["bound_n"], cov["ambiguous_n"]) == (len(BOUNDARIES), 2 * L, 0)
     assert sorted((m["step"], m["op_path"]) for m in cov["missing"]) == [(0, boundary(0, 0, 3)["op_path"]), (2, boundary(2, 0, 4)["op_path"])]
     attn = on.att.names[AS.ATTN_MQA]
-    tapped = [e for e in bmap["entries"] if e.get("observation") == "tap"]
-    assert len(tapped) == 2 * L
+    tapped = [e for e in bmap["entries"] if e.get("observation") == "port"]
+    assert len(tapped) == 2 * L + 1, "every attn tensor at a step whose layer has its call boundary, the mixed step's among them"
     for e in tapped:
-        i, st, rows = AS.sparse_mla_layer({**e["identity"], "family": CB.FAMILY, "dtype": "bf16", "spec": "SparseMlaSplit_v1"}), e["identity"]["step"], e["encoding"]["shape"][0]
-        assert e["name"] == attn[i] and st in (1, 3) and e["encoding"]["shape"] == [rows, G.NHL, G.KVL]
-        assert e["identity"]["element_range"] == [0, rows * WIDTH] == boundary(st, i, rows)["element_range"]
-    assert not [e for e in bmap["entries"] if e["name"] == attn[0] and e["identity"]["step"] == 2 and e["identity"]["op_path"] != split_attn(attn[0])], \
-        "the mixed step's 1-row tensor stays under its own name"
-
-
-def split_attn(name: str) -> str:
-    return B.split_name(name)[0]
+        i, st, rows = AS.call_tap({**e["identity"], "family": CB.FAMILY, "dtype": "bf16", "spec": "SparseMlaSplit_v1"})[1], e["identity"]["step"], e["encoding"]["shape"][0]
+        assert e["name"] == attn[i] and e["encoding"]["shape"] == [rows, G.NHL, G.KVL]
+        assert e["identity"]["op_path"] == next(r["op_path"] for r in BOUNDARIES if r["step"] == st and AS.call_tap(r)[1] == i)
+    mixed = next(e for e in tapped if e["identity"]["step"] == 2)
+    assert mixed["identity"]["element_range"] == [0, WIDTH] != boundary(2, 0, 4)["element_range"], "bound, and short of the 4 rows it must hold"
 
 
 def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step():
