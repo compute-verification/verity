@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.ZK.Tape
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
+import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 
@@ -103,6 +104,11 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`stream_leak`). At the worker's own values the split is exact and the checks' errors drop out
   (`ZkServer.split_own`, `ZkServer.zk_server_own`), and a pad-blind worker (`ZkServer.BWorker`) is handed neither the
   server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`).
+* `Blind`: the switched prover at the reference session (`RefSession.swP`, at values `RefSession.SwVals` indexed by what
+  a pad-blind worker sees), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
+  **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZK` at the same `ε_zk`, `γ` and simulator as `Flock.zk_deployZk_ref` for
+  any values whose round encoding is causal (`RefSession.SwCausal`); and **`Flock.zk_server_blind`**, the server at
+  every pad-blind worker within `D.V.k x + 2` of the guessing simulator, with no term for the masked checks.
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail Flock's `ZK` at
