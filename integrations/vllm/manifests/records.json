@@ -3,10 +3,10 @@
  "about": "Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.",
  "rows": {
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
-   "record": "art:021390b07c06a4885cba7c80c8acc7d62b276505da656984586288ad5b577c82",
+   "record": "art:d00c1efb534986a51074aad4b19edf7dbe418923c674fef70e0313f49b04e952",
    "tier": "heavy",
    "pinned_from": {
-    "record": "art:021390b07c06a4885cba7c80c8acc7d62b276505da656984586288ad5b577c82",
+    "record": "art:d00c1efb534986a51074aad4b19edf7dbe418923c674fef70e0313f49b04e952",
     "build": "art:5c0cdf4e86811b0e60c42b9056d88b46b3b348c4e2bfee74618d5994e9547f28",
     "tree": "cursor/glm53-fold-moe-shared-21f3@1b53f685a81a38f649947e5f88b5ae360709a932"
    },
