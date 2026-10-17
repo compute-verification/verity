@@ -50,6 +50,7 @@ import Proofs.Flock.Claims.Complete.Zk.Level0Shape
 import Proofs.Flock.Claims.Complete.Zk.Level0Premises
 import Proofs.Flock.Claims.Complete.Zk.Level0Model
 import Proofs.Flock.Claims.Complete.Zk.Level0Honest
+import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
 the masked record's prover `ZkTables.honestP`): the honest masked prover (`Honest`: `honestPZk`, on
@@ -102,4 +103,5 @@ Ligerito prover returning where its pair's coins are independent (`ligeritoPZk_r
 closed form (`ligeritoPZk_lanes`); `Level0Shape` its proof's lengths (`ligeritoPZk_shape`); `Level0Premises` the
 premises of `ZkTables.Level0` proved (`proverRuns`, `proverShape`, `lanes`); `Level0Model` the masked verifier's
 Ligerito returning on rounds carrying its closed-form model, given its openings and final identity at the model's values
-(`ligeritoWithZ_of`); `Level0Honest` the honest masked prover's Ligerito against that model (`mid_lv0Z`). -/
+(`ligeritoWithZ_of`); `Level0Honest` the honest masked prover's Ligerito against that model (`mid_lv0Z`), and
+`Level0HonestRun` its whole walk: it ends at the model's transcript and meets the model's final identity (`honestZ`). -/
