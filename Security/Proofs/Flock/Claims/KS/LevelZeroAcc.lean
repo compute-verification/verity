@@ -9,7 +9,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 `accepts_req0`: when `Accepts I t` with plain outputs, at every table `j` and rep `r`, every result of the rep's
 compiled game played with its proof file's messages and its stream's coins requests level 0 first, at the positions of
 the coins of the stream's round `plainQueryRound` (`rep_refines_req0` at `verifyRep`'s acceptance; a run has one
-result, `plays_det`).
+result, `plays_det`), where the proof opens one level-0 row per position (`merkleCheck_rows`), and every request has
+its level's lanes and path length in the model's schedule `schedOf sch` (`ReqOK`, `lvOf_schedOf`).
 -/
 
 namespace FlockSoundness.Discharge.Exec
@@ -18,10 +19,16 @@ open Flock Refine Model Game
 
 local notation "𝔽" => FlockLevel3.GF128
 
+/-- A level of an executable schedule is the model schedule's. -/
+theorem lvOf_schedOf {s : Flock.Schedule} {i : ℕ} (hi : i < s.levels.size) :
+    lvOf (schedOf s) i = levelOf (s.levels.getD i default) := by
+  simp [lvOf, schedOf, Array.getD, hi, List.getD_eq_getElem?_getD]
+
 /-- **An accepted rep requests level 0 first** (§9–§14). When `Accepts I t` with plain outputs, at every table `j`,
 its `fast100` schedule and rep `r < 2`, every result of the rep's compiled game,
 played with its proof file's messages and its stream's coins, has level 0's request first, at the positions of the
-coins of the stream's round `plainQueryRound` at the table's `m`, `kLog`, `k0` and claims. -/
+coins of the stream's round `plainQueryRound` at the table's `m`, `kLog`, `k0` and claims, where the proof opens one
+level-0 row per position, and every request has its level's lanes and path length in the model's schedule. -/
 theorem accepts_req0 {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
@@ -38,11 +45,14 @@ theorem accepts_req0 {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = 
             (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
               PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p capDig)
             (s.rounds.toList.map (·.coins)) pend →
-          ∃ (R : Req) (rest : List Req), pend.reqs = R :: rest ∧ R.level = 0 ∧
+          (∃ (R : Req) (rest : List Req), pend.reqs = R :: rest ∧ R.level = 0 ∧
             R.positions = (Flock.positions (sch.levels.getD 0 default)
               (s.rounds[Claims.Flock.plainQueryRound sts[j].m sts[j].c.kLog sch.k0
                 (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
-                  (ptsOf sts[j].mPts sess.points)).length)]!).coins).toList := by
+                  (ptsOf sts[j].mPts sess.points)).length)]!).coins).toList ∧
+            p.ligerito.initialProof.rows.size = R.positions.length) ∧
+          ∀ R ∈ pend.reqs, R.lanes = (lvOf (schedOf sch) R.level).lanes ∧
+            R.depth = Model.pathLen (lvOf (schedOf sch) R.level) := by
   obtain ⟨spec, sts, hs, hv⟩ := h
   obtain ⟨sess, schs, hsess, -, -, -, hall⟩ := verify_ok_tables hv
   obtain ⟨hp2, hmp⟩ := setupTables_points hh hs
@@ -69,10 +79,16 @@ theorem accepts_req0 {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = 
     hα1 hsm (decode_roundsWF hsess) j r _ _ hrep
   obtain rfl : s' = s := Option.some.inj (hs''.symm.trans hsr)
   obtain rfl : p' = p := Except.ok.inj (hp'.symm.trans hp)
-  obtain ⟨pend', hpl', -, -, -, R, rest, hRe, hRl, hRp⟩ :=
+  obtain ⟨pend', hpl', -, hok, -, R, rest, hRe, hRl, hRp⟩ :=
     hk capDig (fun _ ℓ k => (((openAt p'.ligerito (schs[j].levels.size - 1) ℓ).1)[k]!.toList.map fOf, []))
       (fun _ _ _ _ => rfl)
   obtain rfl := ZkExec.plays_det hpl hpl'
-  exact ⟨R, rest, hRe, hRl, hRp⟩
+  have hmc := (hok R (by rw [hRe]; exact List.mem_cons_self)).2.2.2
+  rw [hRl] at hmc
+  simp only [openAt, ↓reduceIte] at hmc
+  refine ⟨⟨R, rest, hRe, hRl, hRp, by simpa using (merkleCheck_rows hmc).1⟩, fun R' hR' => ?_⟩
+  obtain ⟨hlt, hl, hd, -⟩ := hok R' hR'
+  rw [lvOf_schedOf hlt]
+  exact ⟨hl, hd⟩
 
 end FlockSoundness.Discharge.Exec

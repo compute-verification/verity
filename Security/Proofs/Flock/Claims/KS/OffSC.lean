@@ -11,7 +11,9 @@ column it was given there (`lookCol_distinctBelow_of_mem`). So a salted output w
 against its own cap, sit below `2^d`, and are, with their rows, the reader's entries, opens a position off the oracle of
 `C` without a self-clash only where the reader looks up a column off `C` (`exists_ne_of_off₀L_sc`): two verifying
 openings of one position with different rows are a self-clash, so the opening off `C` and the column looked up there
-have one row. Only which entries the reader is given matters, not their order.
+have one row. Only which entries the reader is given matters, not their order. An accepted salted table's level-0
+openings verify against its cap when both reps' level-0 requests have level 0's lanes and path length
+(`verified_slotOpensL`, `verified_opens₀L`).
 -/
 
 namespace Claims.Flock
@@ -75,5 +77,51 @@ theorem exists_ne_of_off₀L_sc {D Sl : Type} (H : List UInt8 → D) (E : Merkle
   rw [hcap]
   refine ⟨y, hyo, x, hxo, hy1, hver y hyo, hver x hxo, fun h => hne ?_⟩
   rw [← hy2, h]
+
+/-- **A rep's level-0 openings verify** against the output's cap when its openings are `OpensOKL` and its level-0
+requests have `lanes` lanes and paths of length `depth`. -/
+theorem verified_slotOpensL {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (out : Model.OutCL 𝔽 D Sl) (r Q lanes depth : ℕ)
+    (hok : Model.OpensOKL H E Lf out.cap₀ r (if r = 0 then out.pend.1 else out.pend.2) out.opens out.salts)
+    (h0 : ∀ R ∈ (if r = 0 then out.pend.1 else out.pend.2).reqs, R.level = 0 → R.lanes = lanes ∧ R.depth = depth) :
+    ∀ x ∈ slotOpensL out r 0 Q, VerifiedL H E Lf out.cap₀ lanes depth x := by
+  intro x hx
+  unfold slotOpensL at hx
+  split at hx
+  · simp at hx
+  · rename_i req hreq
+    have hlv : req.level = 0 := by simpa using List.find?_some hreq
+    have hmem := List.mem_of_find?_eq_some hreq
+    obtain ⟨hl, hd⟩ := h0 req hmem hlv
+    obtain ⟨cap, hcap, hall⟩ := hok req hmem
+    rw [hlv] at hcap hall
+    obtain rfl : out.cap₀ = cap := by simpa [Model.capOf] using hcap
+    obtain ⟨pj, hpj, rfl⟩ := List.mem_map.1 hx
+    have hg := List.mem_zipIdx_iff_getElem?.1 hpj
+    rw [List.getElem?_take] at hg
+    split_ifs at hg with hq
+    have hjl : pj.2 < req.positions.length := (List.getElem?_eq_some_iff.1 hg).1
+    have hpos : req.positions.getD pj.2 0 = pj.1 := by simp [List.getD, hg]
+    obtain ⟨h1, h2⟩ := hall pj.2 hjl
+    rw [hl] at h1
+    rw [hd, hpos] at h2
+    exact ⟨h1, h2⟩
+
+/-- **An accepted salted table's level-0 openings verify** against its cap, at level 0's lanes and path length, when
+both reps' level-0 requests have them: acceptance is both reps' `OpensOKL` at the cap. -/
+theorem verified_opens₀L {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : Accounting.Schedule) (cap : Model.Cap D)
+    (pend : Model.PendL 𝔽 D × Model.PendL 𝔽 D) (os : Model.Opens 𝔽 D × Model.Salts Sl)
+    (hacc : (tableOutL H E Lf cap pend os).accepted = true)
+    (h0 : ∀ r < 2, ∀ R ∈ (if r = 0 then pend.1 else pend.2).reqs, R.level = 0 →
+      R.lanes = (lvOf sch 0).lanes ∧ R.depth = Model.pathLen (lvOf sch 0)) :
+    ∀ x ∈ opens₀L sch (tableOutL H E Lf cap pend os),
+      VerifiedL H E Lf cap (lvOf sch 0).lanes (Model.pathLen (lvOf sch 0)) x := by
+  have hok := hacc
+  simp only [tableOutL, Bool.and_eq_true, decide_eq_true_eq] at hok
+  intro x hx
+  rcases List.mem_append.1 hx with hx | hx
+  · exact verified_slotOpensL H E Lf _ 0 _ _ _ hok.2.1 (h0 0 (by norm_num)) x hx
+  · exact verified_slotOpensL H E Lf _ 1 _ _ _ hok.2.2 (h0 1 (by norm_num)) x hx
 
 end Claims.Flock
