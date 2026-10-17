@@ -11,10 +11,6 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
 * `check`: R1-R7 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes);
 * `matches_public`, `check_draw`, `check_proved`, and the proof service's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
-* `select`: the challenger's draw (`service.select_draw`, which the service passes in with the bytes of its coins that
-  draw read), compared whole with the number of bytes read; the draw of record is the Lean's;
-* `run`: the stream's run of one registration from its public check through its verdict (`Run.run`), which `Stream.outcome`
-  passes in with everything it read on the way: compared whole;
 * `audit_record`: the whole record, equal under `canonical_json`. The registered roots the record's `registered` check
   reads are the verdicts' own on both sides, for the registration's own values (`audit.session_registered`), never an
   argument. One field is Python's on both: `wrong_units.bound` under a Bernoulli law, a float relaxation
@@ -250,87 +246,6 @@ def check_verdicts(python: Verdict, verdicts: Mapping[str, Any], sessions: Seque
     return _decide(got, python, whole=True)
 
 
-def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], program: Program, query: Mapping[str, Any],
-           work_table: Mapping[str, Any] | None = None,
-           closure: Mapping[int, Sequence[int]] | None = None) -> tuple[dict[str, Any], Verdict]:
-    """The challenger's draw by the verifier of record: the Lean's `Select.select` on `read`, the bytes of the challenger's
-    coins that the Python draw `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
-    `to_json`) over the population `program` and the check's `query`, with the work table and the closure map. The two
-    agree when the Lean draws the same object and reads exactly `read`; the draw of record is then `RECORD_VERDICT`'s. Where
-    they disagree, or the Lean refuses, the verdict fails with `DISAGREE` alone (the draw returned is Python's, and the
-    caller refuses it)."""
-    got = lean("select", {"rule": dict(rule), "program": codec.encode_program(program), "query": dict(query),
-                          "work_table": None if work_table is None else dict(work_table),
-                          "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
-                          "source": read.hex()})
-    mine = {"draw": dict(python), "read": len(read)}
-    verifiers = {"of_record": RECORD_VERDICT, "lean": {"refused": got["refused"]} if "refused" in got else
-                 {"read": got.get("read")}, "python": {"read": len(read)}}
-    if "refused" in got or got.get("read") != len(read) or not _same(got.get("draw"), python):
-        return dict(python), Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers)
-    return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
-
-
-def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, query: Mapping[str, Any],
-        law: Mapping[str, Any], scheme: str, ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None,
-        anchors: Sequence[Any], log: Iterable[Mapping[str, Any]], work_table: Mapping[str, Any] | None,
-        registered: Mapping[str, int] | None, rule: Mapping[str, Any], values: Iterable[tuple[str, bool]],
-        declared: Iterable[str], challenger: str, received: str, read: bytes,
-        closure: Mapping[int, Sequence[int]] | None, sessions: Sequence[str], verdicts: Mapping[str, Mapping[str, Any]],
-        outputs: Sequence[str], statement: Mapping[str, Any], delta: float, proved_units: Sequence[int] | None = None,
-        instances: int | None = None, served: Sequence[int] | None = None,
-        session_roots: Mapping[str, str] | None = None, *, interior_values: Iterable[tuple[str, bool]] = (),
-        interior: Mapping[str, Any] | None = None) -> Verdict:
-    """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
-    `python`, the stream's own (`{"receipt", "draw", "read", "interior", "symbol", "public", "audit"}`, each audit record
-    without its `verifiers`, `interior` null or the interiors' `{"receipt", "audit"}`): on `check`'s copies,
-    `check_public`'s boundary values and declared items, the receipt's challenger and place in the log, `select`'s rule,
-    the bytes of the coins the draw read and the closure map, `audit_record`'s arguments with the sessions' roots whole,
-    and under a two-stage rule the interior values and the interiors' registration (`{"program", "law", "ports",
-    "leaf_layer", "anchors", "log", "record", "received"}`, `register_interiors`' copies). A Bernoulli draw's
-    `wrong_units.bound` is Python's on both, as in `audit_record`. Where the two differ, or the Lean refuses a step, the
-    verdict fails with `DISAGREE` alone."""
-    exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
-    inner = None if interior is None else {
-        "params": _params(interior["program"], query, interior["law"], scheme, interior["ports"], interior["leaf_layer"],
-                          interior["anchors"], interior["log"], None, None, None),
-        "record": dict(interior["record"]), "received": interior["received"]}
-    got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                                         registered),
-                       "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
-                       "interior_values": [{"name": n, "registered": r} for n, r in interior_values],
-                       "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
-                       "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
-                       "interior": inner,
-                       "sessions": list(sessions), "verdicts": {k: dict(verdicts[k]) for k in sorted(verdicts)},
-                       "outputs": list(outputs), "statement": dict(statement), "delta": exact,
-                       "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
-                       "served": None if served is None else list(served),
-                       "session_roots": None if session_roots is None else dict(session_roots)})
-    if isinstance(got.get("audit"), str):
-        try:
-            got = {**got, "audit": json.loads(got["audit"])}
-        except ValueError:
-            got = {"refused": f"{EXE} answered a run whose record is not JSON: {got['audit'][:500]}"}
-        mine, wrong = python.get("audit") or {}, (got.get("audit") or {}).get("wrong_units")
-        if got.get("draw", {}).get("law") == "bernoulli" and isinstance(wrong, dict) and wrong.get("bound") is None \
-                and mine.get("wrong_units"):
-            got["audit"] = {**got["audit"], "wrong_units": {**wrong, "bound": mine["wrong_units"]["bound"]}}
-    if isinstance(got.get("interior"), dict) and isinstance(got["interior"].get("audit"), str):
-        try:
-            got = {**got, "interior": {**got["interior"], "audit": json.loads(got["interior"]["audit"])}}
-        except ValueError:
-            got = {"refused": f"{EXE} answered a run whose interiors' record is not JSON: {got['interior']['audit'][:500]}"}
-    side = (lambda r: {"refused": r["refused"]} if "refused" in r else
-            {"step": r["step"], "codes": r["codes"]} if "step" in r else {"symbol": r.get("symbol")})
-    verifiers = {"of_record": RECORD_VERDICT, "lean": side(got), "python": side(python)}
-    if "refused" in got or "step" in got or not _same(got, python):
-        fields = sorted(k for k in set(python) | set(got) if not _same(got.get(k), python.get(k)))
-        return Verdict(False, (DISAGREE,), {DISAGREE: {"fields": fields, "lean": {k: got.get(k) for k in fields},
-                                                       "python": {k: python.get(k) for k in fields}}}, verifiers)
-    return Verdict(True, (), {}, verifiers)
-
-
 def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any]) -> Verdict:
     """`draw.check_draw` by the verifier of record."""
     py = D.check_draw(draw, registration, law)
@@ -392,4 +307,4 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
 
 
 __all__ = ["BUILD_LOCK", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record", "check", "check_draw",
-           "check_proved", "check_public", "check_verdicts", "executable", "lean", "matches_public", "run", "select"]
+           "check_proved", "check_public", "check_verdicts", "executable", "lean", "matches_public"]

@@ -58,9 +58,8 @@ import Proofs.Flock.SamplingBoundary
   port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
   gates compute `Netlist.eval` is proved (`universal_correct`); the deployed record's unit is the Definition's
   (`SamplingDeploy.universalIs_deploy`).
-* `hComplete : Complete H D`: of the record's reference prover (`D.P`) at its error (`D.δc H`); at the deployed
-  record, from Flock's masked completeness and the sampled verifier's and the code's facts
-  (`SamplingDeploy.complete_deploy`).
+* `hComplete : Complete H D`: of the record's reference prover (`D.P`) at its error (`D.δc H`); it waits on that
+  prover (ruling 4).
 * `hZK : ZK H D Pz S εzk γzk`: the masked sessions' zero knowledge with the leaf layer's simulator, its binding term
   `γzk` times `Fork`'s collisions among the honest prover's calls in two real runs on one nonce (#2201); no branch
   proves it yet, so `Pz`, `S`, `εzk` and `γzk` are any.
