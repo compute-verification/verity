@@ -644,6 +644,28 @@ def targeted_rt3() -> list[dict]:
     return out
 
 
+def targeted_rt4() -> list[dict]:
+    """RT-FACET r2b beside IMMA.16832: r2's break again and around it (r20261017-191843-eb32: FMUL at 3 accumulators, 120
+    lane ops a 8 MMAs, unroll 16, loaded JI3s_2 1.0127, falling past unroll 16 as the loop outgrows the instruction
+    cache): 104-132 lane ops at unroll 10-20 on 3 accumulators, 2 on 2, FADD and FFMA beside, and 1 and 3 warps a SMSP."""
+    i = "i16832"
+    out: list[dict] = []
+    for q in (104, 108, 112, 116, 118, 120, 122, 124, 126, 128, 132):
+        for u in (10, 12, 14, 16, 18, 20):
+            out.append(_jm(i, "fmuli", q, 2, na=3, u=u))
+    for q in (116, 120, 124):
+        for u in (14, 16, 18, 20):
+            out.append(_jm(i, "fmuli", q, 2, na=2, u=u))
+        for u in (14, 16, 18):
+            out.append(_jm(i, "faddi", q, 2, na=3, u=u))
+    for q in (112, 120, 128):
+        for u in (8, 16):
+            out.append(_jm(i, "ffmai", q, 2, na=3, u=u))
+    for w in (1, 3):
+        out.append(_jm(i, "fmuli", 120, w, na=3, u=16))
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -673,7 +695,8 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
               "l2": (targeted_l2, sampled_l2), "ji": (targeted_ji, sampled_ji),
               "jifine": (targeted_jifine, sampled_ji), "jipair": (targeted_jipair, sampled_ji),
               "r4": (targeted_r4, sampled_ji), "rt": (targeted_rt, sampled_ji),
-              "rt2": (targeted_rt2, sampled_ji), "rt3": (targeted_rt3, sampled_ji)}[family]
+              "rt2": (targeted_rt2, sampled_ji), "rt3": (targeted_rt3, sampled_ji),
+              "rt4": (targeted_rt4, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -759,7 +782,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
-    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4", "rt", "rt2", "rt3"),
+    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4", "rt", "rt2", "rt3",
+                                             "rt4"),
                    default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
@@ -768,7 +792,7 @@ def main(argv: list[str] | None = None) -> int:
                         "the break on every other form, its repeats, and ALU work beside the MMA; rt: RT-FACET's "
                         "schedule axes on the low-accumulator break (na 5, unroll, placement, uniform co-issue); rt2: "
                         "rt's unroll and uniform co-issue crossed, unroll 8 for the instruction cache; rt3: the FMA "
-                        "lane at unroll 8 to 32, past rt2's best")
+                        "lane at unroll 8 to 32, past rt2's best; rt4: rt3's break again and around it")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
