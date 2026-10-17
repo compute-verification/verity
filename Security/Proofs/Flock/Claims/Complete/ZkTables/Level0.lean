@@ -18,9 +18,9 @@ them. These are the facts about those two functions, stated once, that `RepShape
   Ligerito conjuncts) and `t_pad` padding coefficients.
 * `Lanes`: its lane phase in closed form (`LaneForm`): its record, its masked out-of-domain value and lane messages, the
   pair's sums and the blinded claim, over the folds of its table and weights at the lane coins.
-* `Verifier`: the verifier's masked Ligerito returns on the honest masked proof, from rounds that carry the prover's and
-  the prover's position and pending bytes, at a claim `Σ tb·b = T` and a basis that extends `b` (plain's `Lg.Honest` and
-  `ligeritoWith_of` together).
+* `Verifier`: the verifier's masked Ligerito returns the prover's record on the honest masked proof, from rounds that
+  carry the prover's and the prover's position and pending bytes, at a claim `Σ tb·b = T` and a basis that extends `b`,
+  and ends where the prover's did (plain's `Lg.Honest` and `ligeritoWith_of` together).
 
 Each is stated over the functions' own inputs, with every hypothesis a rep supplies: SHA-512 digests of 64 bytes, the
 `--zk` schedule of a table with `25 ≤ m ≤ 35` (`Zk.schedule`, `t_pad = v.2`), hm96-SHA-512, tables of `2^n` entries,
@@ -148,7 +148,8 @@ at a `--zk` schedule from a transcript that has recorded its rounds and `L + k` 
 `rep < 2`, on a table `tb` and weights `b` of `2^n` entries with `Σ tb·b = T`, committed at level 0 by `commitPZk`, with
 a basis whose value at every original point `q ‖ bits(y)` is the multilinear extension of `b` there, the verifier's
 masked Ligerito, on rounds that carry the prover's from its position on, from that position and the prover's pending
-bytes, returns. -/
+bytes, returns the prover's record and ends at the prover's final position and pending bytes, which is its round count
+(as plain's `ligeritoWith_of` ends at its model's). -/
 def Verifier : Prop :=
   ∀ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (m : ℕ) (v : Schedule × ℕ) (T : F128) (cm0 : Commit)
     (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ) (extra lanePad : ℕ → ℕ → F128)
@@ -168,7 +169,7 @@ def Verifier : Prop :=
     ((ligeritoPZk (asksS resp) (Hashes.ofSha512 h) MerkleScheme.hm96Sha512 v.1 T cm0 tb b lay hv rep v.2 extra
       lanePad salt nonce).run t).go l = (.ok ((P, zl, rc), t'), l') →
     Agrees R t'.rounds t.k →
-    ∃ lg, (Zk.ligeritoWith (Hashes.ofSha512 h : Hashes V) MerkleScheme.hm96Sha512 v.1 T cm0.cap P basisAt
-      ⟨v.2, rep, zl⟩).run ⟨R, t.k, t.pending⟩ = .ok lg
+    (Zk.ligeritoWith (Hashes.ofSha512 h : Hashes V) MerkleScheme.hm96Sha512 v.1 T cm0.cap P basisAt
+      ⟨v.2, rep, zl⟩).run ⟨R, t.k, t.pending⟩ = .ok (rc, ⟨R, t'.k, t'.pending⟩) ∧ t'.k = t'.rounds.size
 
 end FlockComplete.ZkTables.Level0
