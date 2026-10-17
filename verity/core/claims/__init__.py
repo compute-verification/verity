@@ -190,6 +190,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "
           "which sketches cost less to read than the blocks themselves, such as a table of precomputed sketches, is "
           "outside it", "Rate sketch store as blocks"),
+    # stacking's bridge from a carrier's rounding budget to the blocks its circuit can encode, q <= b * R / rEnc:
+    # `Accounting.Assumptions.CircuitEncodeHardness` (Security/Models/Accounting/Assumptions/Stacking.lean), read by
+    # Accounting.Guarantees.StackedSessionConservationSketchDeployed; false for circuits with FP8 or BF16 matmuls
+    Entry("circuit-encode-hardness", "assumption",
+          "Circuit encode hardness: an exact-integer circuit (integer matrix products that neither wrap nor clamp, linear "
+          "maps, roundings) computing x of a block's b encoded bits, from the block's payload and anything else it holds, "
+          "uses at least x * rEnc / b roundings, with no amortization across blocks",
+          "Circuit encode hardness", "conjectured"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "

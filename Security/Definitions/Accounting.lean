@@ -6,6 +6,7 @@ import Definitions.Accounting.BoundReceipt
 import Definitions.Accounting.BoundSketch
 import Definitions.Accounting.Bridge
 import Definitions.Accounting.Capacity
+import Definitions.Accounting.Carrier
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
 import Definitions.Accounting.Device
@@ -45,4 +46,5 @@ bandwidth audit's node and run, the actual circuit, its physical assumptions, a 
 schedule it induces, the actual circuit's runs, strategies, soundness and the confidence set, a location's window with
 the ring's oracle locations, its provers' cost model, the tags and sketches the audits read, the generic-mix game of
 receipts bound to the matmul on two locations, the deployed bound receipt's sketch as a two-party protocol, what a
-run's guarantee per run is, and PoUW's verdict, credits and help on one node of the actual circuit. -/
+run's guarantee per run is, PoUW's verdict, credits and help on one node of the actual circuit, and stacking's carriers:
+device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes. -/
