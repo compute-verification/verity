@@ -6,10 +6,11 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 
 `Zk/Json/Runs.lean` at every table: the goal `SessionRunsJ` (the masked session runs at a good case of several
 tables), from the masked record's `hello` printing (`StmtOkJ`, `StmtOkZk`'s statement at several tables) and the masked
-prover's pieces returning at each table (`ProverRunsJ`, `ProverRunsZk`'s at table `i`, on table `i`'s trace of its
-share). Every table's regions fit (`ready`), so its extra claims return (`JsonRT.extraClaims_ok`); its `--zk` schedule
-returns (`zkSchedule_ok`), and through `Hashes.ofSha512` so do its masked level-0 commitment (`commitPZk_ok`) and its
-pads' (`innerCommitP_ok`).
+prover's pieces returning (`ProverRunsJ`, `ProverRunsZk`'s at several tables: on table `i`'s trace of its share, the
+session's `2·|tables|` reps each return from where the one before stopped, `repRunJ`). Every table's regions fit
+(`ready`), so its extra claims return (`JsonRT.extraClaims_ok`); its `--zk` schedule returns (`zkSchedule_ok`), and
+through `Hashes.ofSha512` so do its masked level-0 commitment (`commitPZk_ok`) and its pads' (`innerCommitP_ok`); the
+session walks its rep streams in order (`JsonRT.Runs.forIn_idx`).
 -/
 
 namespace FlockComplete.ZkTables
@@ -50,25 +51,36 @@ def StmtOkJ : Prop :=
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m))
 
-/-- **The masked prover's pieces return** (`ProverRunsZk`), at every table `i` of every good case of several tables,
-with its `--zk` schedule: each rep returns on table `i`'s masked level-0 commitment of its trace's packed table under
-the tape's level `i`, its extra claims at the link's points, and the tape's pads committed, under any domain, from any
-sends. -/
+/-- Rep `rep` of table `i` of a good case as the session runs it, from its stream's domain: on the table's `--zk`
+schedule `v`, its masked level-0 commitment `cm`, its extra claims `e` and its pads' commitment `ic`. -/
+def repRunJ (c : Case H rel) (i : ℕ) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (rep : ℕ)
+    (ic : InnerCommit) : PS (Zk.ZkProof × Transcript) :=
+  (repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit c.sts[i]!) v.1 v.2 rep
+    (c.spec.domain c.spec.tables[i]! rep).toUTF8 (traces c.sts c.w)[i]!
+    (packed (traces c.sts c.w)[i]! (Setup.ofCircuit c.sts[i]!).m) cm e
+    (padsOf c.ω i rep (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]!).m (Setup.ofCircuit c.sts[i]!).kLog v.1.k0)) ic
+    (c.ω.extra i) (c.ω.lanePad i) (c.ω.salt i rep) (c.ω.nonce i rep)).run
+    (Transcript.init #[] (c.spec.domain c.spec.tables[i]! rep).toUTF8)
+
+/-- **The masked prover's pieces return** (`ProverRunsZk`), at every good case of several tables: on each table `i`'s
+`--zk` schedule `v i`, its masked level-0 commitment `cm i` of its trace's packed table under the tape's level `i`, its
+extra claims `e i` at the link's points and its pads' commitments `ic i`, the session's `2·|tables|` reps in its rep
+streams' order (table `k / 2`'s rep `k % 2`) each return from where the one before stopped, the first from the link's
+send. The reps' coins are the case's at the session's rounds, where the masked prover's coin checks pass by
+`¬ BadZk`. -/
 def ProverRunsJ : Prop :=
-  ∀ c : Case H rel, 1 < c.sts.size → ∀ i (_ : i < c.sts.size), ∀ v,
-    Zk.schedule (Setup.ofCircuit c.sts[i]).m = .ok v →
-    ∀ cm e, commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit c.sts[i]).merkle
-      (v.1.levels.getD 0 default) v.2 (packed (traces c.sts c.w)[i]! (Setup.ofCircuit c.sts[i]).m) (c.ω.extra i)
-      (c.ω.lanePad i) (c.ω.salt i 0 0) = .ok cm →
-    (Setup.ofCircuit c.sts[i]).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e →
-    ∀ rep ic, innerCommitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V)
-      (padsOf c.ω i rep (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]).m (Setup.ofCircuit c.sts[i]).kLog v.1.k0))
-      (c.ω.innerSalt i rep) = .ok ic →
-    ∀ d l, ∃ pt l', ((repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit c.sts[i]) v.1 v.2 rep
-      d (traces c.sts c.w)[i]! (packed (traces c.sts c.w)[i]! (Setup.ofCircuit c.sts[i]).m) cm e
-      (padsOf c.ω i rep (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]).m (Setup.ofCircuit c.sts[i]).kLog v.1.k0)) ic
-      (c.ω.extra i) (c.ω.lanePad i) (c.ω.salt i rep) (c.ω.nonce i rep)).run (Transcript.init #[] d)).go l =
-      (.ok pt, l')
+  ∀ c : Case H rel, 1 < c.sts.size → ∀ (v : ℕ → Schedule × ℕ) (cm : ℕ → Commit) (e : ℕ → Array Claim)
+    (ic : ℕ → ℕ → InnerCommit), (∀ i < c.sts.size, Zk.schedule (Setup.ofCircuit c.sts[i]!).m = .ok (v i) ∧
+      commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit c.sts[i]!).merkle
+        ((v i).1.levels.getD 0 default) (v i).2 (packed (traces c.sts c.w)[i]! (Setup.ofCircuit c.sts[i]!).m)
+        (c.ω.extra i) (c.ω.lanePad i) (c.ω.salt i 0 0) = .ok (cm i) ∧
+      (Setup.ofCircuit c.sts[i]!).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok (e i) ∧
+      ∀ rep, innerCommitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (padsOf c.ω i rep
+        (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]!).m (Setup.ofCircuit c.sts[i]!).kLog (v i).1.k0))
+        (c.ω.innerSalt i rep) = .ok (ic i rep)) →
+    ∀ l₀ : Array Claims.Msg, l₀.size = 1 → ∃ ls : ℕ → Array Claims.Msg, ls 0 = l₀ ∧ ∀ k < 2 * c.sts.size, ∃ pt,
+      (repRunJ H rel c (k / 2) (v (k / 2)) (cm (k / 2)) (e (k / 2)) (k % 2) (ic (k / 2) (k % 2))).go (ls k) =
+        (.ok pt, ls (k + 1))
 
 end Several
 
@@ -135,43 +147,69 @@ theorem sessionRunsJ_goal (S : JsonSpec) (hS : StmtOkJ H rel) (hR : ProverRunsJ 
     ⟨cms, #[], by rw [commitsPZk_quiet _ _ _ _ _ #[], hcms], rfl, rfl⟩ fun s l hq => ?_
   obtain ⟨hs, hl⟩ := hq
   subst s l
-  refine Runs.bind (Q := fun c1 _ => c1 = coinOf (c.resp 0)) (Runs.of_go (link_go _ _ _ _) rfl) fun c1 l hq => ?_
-  subst hq
+  refine Runs.bind (Q := fun c1 l => c1 = coinOf (c.resp 0) ∧ l.size = 1) (Runs.of_go (link_go _ _ _ _)
+    ⟨rfl, rfl⟩) fun c1 l₀ hq => ?_
+  obtain ⟨rfl, hl₀⟩ := hq
+  have hst : ∀ i (hi : i < c.sts.size), c.sts[i]! = c.sts[i] := fun i hi => getElem!_pos c.sts i hi
+  have htab' : ∀ i (hi : i < c.sts.size), (tabsOf c.sts)[i]! = Setup.ofCircuit c.sts[i]! := fun i hi => by
+    rw [hst i hi]
+    exact htab i hi
+  have htp' : ∀ i (hi : i < c.sts.size), (tablesP (tabsOf c.sts) (traces c.sts c.w))[i]! =
+      packed (traces c.sts c.w)[i]! (Setup.ofCircuit c.sts[i]!).m := fun i hi => by
+    rw [hst i hi]
+    exact htp i hi
+  have hex : ∀ i, ∃ ei, i < c.sts.size →
+      (Setup.ofCircuit c.sts[i]!).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok ei := by
+    intro i
+    by_cases hi : i < c.sts.size
+    · rw [hst i hi]
+      obtain ⟨ei, h⟩ := extraClaims_ok c.sts[i] (hfit _ (Array.getElem_mem hi)) (pointsOf c.spec (Claims.coinSeq c.r 0))
+      exact ⟨ei, fun _ => h⟩
+    · exact ⟨#[], fun h => absurd h hi⟩
+  choose e he using hex
+  choose ic hic using fun i rep => innerCommitP_ok (Claims.hOf H) (padsOf c.ω i rep
+    (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]!).m (Setup.ofCircuit c.sts[i]!).kLog schs[i]!.1.k0))
+    (c.ω.innerSalt i rep)
+  obtain ⟨ls, hls0, hls⟩ := hR c hc (fun i => schs[i]!) (fun i => cms[i]!) e ic
+    (fun i hi => ⟨by rw [hst i hi]; exact hv i hi, by rw [hst i hi]; exact hcmi i hi, he i hi, hic i⟩) l₀ hl₀
   unfold afterLinkPZk
-  refine Runs.bind (Q := fun _ _ => True) (Runs.forIn_array _ _ (fun _ _ => True) ?_ trivial) fun b l _ => ?_
-  · rintro ⟨i, r, name⟩ hmem ⟨ss, ps⟩ l -
-    have hi : i < c.sts.size := by
-      rw [← Array.mem_toList_iff, FlockDeploy.repStreams_toList, List.mem_map] at hmem
-      obtain ⟨k, hk, he⟩ := hmem
-      rw [List.mem_range, hspec] at hk
-      simp only [Prod.mk.injEq] at he
-      obtain ⟨rfl, -, -⟩ := he
-      omega
+  refine Runs.bind (Q := fun _ _ => True) ?_ fun b l _ => ?_
+  · rw [← Array.forIn_toList, FlockDeploy.repStreams_toList, hspec]
+    refine Runs.weaken (Runs.forIn_idx _ (fun j _ l => l = ls j) _ 0 ?_ _ _ hls0.symm) fun _ _ _ => trivial
+    intro j ⟨i, k, name⟩ ha ⟨ss, ps⟩ l hinv
+    obtain ⟨hj, rfl, rfl⟩ : j < 2 * c.sts.size ∧ i = j / 2 ∧ k = j % 2 := by
+      rw [List.getElem?_map] at ha
+      by_cases hj : j < 2 * c.sts.size
+      · rw [List.getElem?_range hj] at ha
+        simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at ha
+        exact ⟨hj, ha.1.symm, ha.2.1.symm⟩
+      · rw [List.getElem?_eq_none (by simpa using hj)] at ha
+        cases ha
+    have hi : j / 2 < c.sts.size := by omega
+    obtain ⟨pt, hpt⟩ := hls j hj
+    simp only [Nat.zero_add] at hinv
+    subst hinv
     dsimp only
-    obtain ⟨e, he⟩ := extraClaims_ok c.sts[i] (hfit _ (Array.getElem_mem hi)) (ptsOf c.spec (coinOf (c.resp 0)))
-    rw [htab i hi]
-    refine Runs.bind (Q := fun ex _ => ex = e) ⟨e, l, ?_, rfl⟩ fun ex l hq => ?_
+    rw [htab' _ hi]
+    refine Runs.bind (Q := fun ex l' => ex = e (j / 2) ∧ l' = ls j) ⟨e (j / 2), ls j, ?_, rfl, rfl⟩
+      fun ex l' hq => ?_
     · rw [monadLift_go]
-      show ((Setup.ofCircuit c.sts[i]).extra (ptsOf c.spec (coinOf (c.resp 0))), l) = _
-      rw [show (Setup.ofCircuit c.sts[i]).extra = c.sts[i].extraClaims from rfl, he]
-    subst ex
-    obtain ⟨ic, hic⟩ := innerCommitP_ok (Claims.hOf H) (padsOf c.ω i r (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]).m
-      (Setup.ofCircuit c.sts[i]).kLog schs[i]!.1.k0)) (c.ω.innerSalt i r)
-    refine Runs.bind (Q := fun ic' l' => ic' = ic ∧ l' = l) ⟨ic, l, ?_, rfl, rfl⟩ fun ic' l₁ hq => ?_
-    · have := innerCommitP_pureS (Claims.hOf H) (padsOf c.ω i r (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]).m
-        (Setup.ofCircuit c.sts[i]).kLog schs[i]!.1.k0)) (c.ω.innerSalt i r) l
+      show ((Setup.ofCircuit c.sts[j / 2]!).extra (ptsOf c.spec (coinOf (c.resp 0))), ls j) = _
+      rw [show c.resp 0 = (Claims.coinSeq c.r 0).bytes from rfl, ptsOf_coin, he _ hi]
+    obtain ⟨rfl, rfl⟩ := hq
+    refine Runs.bind (Q := fun ic' l'' => ic' = ic (j / 2) (j % 2) ∧ l'' = ls j)
+      ⟨ic (j / 2) (j % 2), ls j, ?_, rfl, rfl⟩ fun ic' l₁ hq => ?_
+    · have := innerCommitP_pureS (Claims.hOf H) (padsOf c.ω (j / 2) (j % 2) (Zk.PadLayout.new
+        (Setup.ofCircuit c.sts[j / 2]!).m (Setup.ofCircuit c.sts[j / 2]!).kLog schs[j / 2]!.1.k0))
+        (c.ω.innerSalt (j / 2) (j % 2)) (ls j)
       rw [hic] at this
       simpa using this
-    rw [hq.1, hq.2, htp i hi]
-    refine Runs.bind (Q := fun _ _ => True) ?_ fun pt l _ => ?_
-    · have he' : (Setup.ofCircuit c.sts[i]).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e := by
-        rw [← ptsOf_coin]
-        exact he
-      obtain ⟨pt, l', e'⟩ := hR c hc i hi schs[i]! (hv i hi) cms[i]! e (hcmi i hi) he' r ic hic
-        (c.spec.domain c.spec.tables[i]! r).toUTF8 l
-      exact ⟨pt, l', e', trivial⟩
+    obtain ⟨rfl, rfl⟩ := hq
+    rw [htp' _ hi]
+    refine Runs.bind (Q := fun _ l'' => l'' = ls (j + 1)) ⟨pt, ls (j + 1), hpt, rfl⟩ fun pt l'' hl'' => ?_
     obtain ⟨p, t⟩ := pt
-    exact Runs.pure ⟨_, rfl, trivial⟩
+    subst hl''
+    exact Runs.pure ⟨_, rfl, by simp only [Nat.zero_add]⟩
   obtain ⟨ss, ps⟩ := b
   dsimp only
   rw [recordJson_eqZk _ hct hown hcn]
