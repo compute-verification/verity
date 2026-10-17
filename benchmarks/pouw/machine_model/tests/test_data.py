@@ -165,6 +165,22 @@ def test_adopted_lines_are_faster():
     assert sum(d["since"] == "VF3m-16" for d in lines) == 30 + 15 + 1   # the joint rows, the side units, SHFL
 
 
+def test_sm89_census_is_well_formed():
+    """data/sm89/ (opcode_probe/sm89/census.py): one epoch, every line on a row it defines, every kind on issue and JI89."""
+    d = DATA / "sm89"
+    rs = rows(d)
+    assert all(r.status in STATUSES and r.runs and all(CITE.fullmatch(x) for x in r.runs) for r in rs.values())
+    with open(d / "census.csv", newline="") as f:
+        lines = list(csv.DictReader(f))
+    for x in lines:
+        assert x["row"] in rs and not x["since"] and not x["until"], x
+        assert sum(x[c] != "" for c in ("rate", "cycles", "u")) == 1 and all(CITE.fullmatch(r) for r in x["runs"].split())
+    c = census(M, M.epochs[-1], d)   # raises on two lines for one kind and row
+    assert all(u > 0 for v in c.values() for u in v.values())
+    assert all({"issue", "JI89"} <= set(v) for v in c.values())
+    assert {r for v in c.values() for r in v} == set(rs)
+
+
 def test_violated_rows_close():
     """VF3m-16 closes every joint row EPS1's frontiers put a point past (r20261017-034143-b1de, r20261017-035229-7c35):
     R2-R4, the KIMAD, KHFMA2 and KSHFL vertices, and the ASSUMED SHFL; KALU holds and stays."""

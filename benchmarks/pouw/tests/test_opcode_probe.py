@@ -209,6 +209,30 @@ def test_prior_points_give_back_the_published_facets(tmp_path):
     assert {(2.0, 1.96), (15.0, 0.4)} <= got
 
 
+sm89 = _load("opcode_probe_sm89_census", POUW / "opcode_probe" / "sm89" / "census.py")
+
+
+def test_sm89_pipe_rate_counts_the_loops_instructions_on_its_pipe():
+    """An ALU probe's loop counter runs on the ALU pipe, so the pipe's rate counts it; SHFL's doesn't (SHF isn't SHFL)."""
+    loop = lambda pat, n: {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1,
+                                                                    "BRA": 1}}]}
+    assert sm89.pipe_rate({"rates": {"0:LOP3.LUT": 1.6}}, loop("LOP3.LUT", 16)) == pytest.approx(1.6 * 18 / 16)
+    assert sm89.pipe_rate({"rates": {"0:SHFL.BFLY": 0.5}}, loop("SHFL.BFLY", 16)) == pytest.approx(0.5)
+    assert sm89.pipe_rate({"rates": {"0:IMAD": 1.9}}, loop("IMAD", 16)) == pytest.approx(1.9)
+    fold = {"loops": [{"counts": {"LOP3.LUT": 32, "IMAD": 32, "LEA.HI": 32},
+                       "top": {"LOP3.LUT": 32, "IMAD": 32, "LEA.HI": 32, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+    rates = {"0:LOP3.LUT": 0.96, "0:IMAD": 0.96, "0:LEA.HI": 0.96}
+    assert sm89.pipe_rate({"rates": rates}, fold) == pytest.approx(0.96 * 66 / 32)   # LOP3, LEA.HI and the counter
+
+
+def test_sm89_frontier_counts_every_non_mma_instruction_as_x():
+    """A mix's loop overhead could be X in an attacker's program, so the facet points count it."""
+    v = {"loops": [{"counts": {"IMMA.16832.S8.S8": 8, "LOP3.LUT": 4},
+                    "top": {"IMMA.16832.S8.S8": 8, "LOP3.LUT": 4, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+    m, x = sm89.loop_rates({"rates": {"0:IMMA.16832.S8.S8": 0.25, "0:LOP3.LUT": 0.125}}, v)
+    assert (m, x) == pytest.approx((0.25, 0.25 * 7 / 8))
+
+
 def test_one_census_line_a_kind_and_row(tmp_path):
     binary = tmp_path / "atom"
     binary.write_bytes(b"\x7fELF")
