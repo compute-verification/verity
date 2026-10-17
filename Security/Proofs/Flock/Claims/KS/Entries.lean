@@ -13,12 +13,11 @@ with their rows, the deployed reader's entries. This file proves all three at fl
 * `Claims.Flock.plainRepColsOf_ok`, `Claims.Flock.lt_of_mem_positions`: the deployed plain reader's entries at a proof
   that decodes are `zkRepCols`'s, and a drawn position is below `2^d` at a level `fast100` uses.
 * `Claims.Flock.exists_ne_of_entries`: `exists_ne_of_off₀L_sc` with the entries given as one list equation.
-* `accepts_opens₀L`: when `Accepts I t`, whether or not the outputs are hidden, at every table, every pair of the
-  reps' runs on the proof files' messages and the streams' coins whose salted output accepts at a cap has every level-0
-  opening verifying against that cap, at level 0's lanes and path length, below `2^d`, and its level-0 openings'
-  positions and rows are its reps' `plainRepColsOf` entries at the session's shape, stream rounds and proof files
-  (`accepts_req0`, `verified_opens₀L`); `accepts_verdict_hm96` gives such runs, accepted at `capOfRoot` of the table's
-  `root_B`.
+* `accepts_opens₀L`: when `Accepts I t` with plain outputs, at every table, every pair of the reps' runs on the proof
+  files' messages and the streams' coins whose salted output accepts at a cap has every level-0 opening verifying
+  against that cap, at level 0's lanes and path length, below `2^d`, and its level-0 openings' positions and rows are
+  its reps' `plainRepColsOf` entries at the session's shape, stream rounds and proof files (`accepts_req0`,
+  `verified_opens₀L`); `accepts_verdict_hm96` gives such runs, accepted at `capOfRoot` of the table's `root_B`.
 -/
 
 namespace Claims.Flock
@@ -104,12 +103,12 @@ open Flock Refine Model Game
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **At flock-verify's acceptance, each table's level-0 openings are its reps' deployed entries** (§9–§14). When
-`Accepts I t`, at every table `j`, its `fast100` schedule and the statement read off its layout,
+`Accepts I t` with plain outputs, at every table `j`, its `fast100` schedule and the statement read off its layout,
 every pair of the reps' runs on the proof files' messages and the streams' coins whose salted output accepts at a cap
 has its level-0 openings verifying against that cap at level 0's lanes and path length, below `2^d`, and its level-0
 openings' positions and rows are the reps' `plainRepColsOf` entries, rep 0's then rep 1's, at the table's shape, the
 reps' stream rounds and the proof files. -/
-theorem accepts_opens₀L {I : Inputs} {t : Transcript} (h : Accepts I t) :
+theorem accepts_opens₀L {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
@@ -149,7 +148,7 @@ theorem accepts_opens₀L {I : Inputs} {t : Transcript} (h : Accepts I t) :
               Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
                 (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
                   (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! := by
-  obtain ⟨spec, sts, sess, hs, hsess, hall⟩ := accepts_req0 h
+  obtain ⟨spec, sts, sess, hs, hsess, hall⟩ := accepts_req0 hh h
   refine ⟨spec, sts, sess, hs, hsess, fun j hj => ?_⟩
   obtain ⟨sch, hf, hk⟩ := hall j hj
   refine ⟨sch, hf, fun hwf hr hm p₀ p₁ s₀ s₁ pend₀ pend₁ cap out hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ hout hacc => ?_⟩
