@@ -428,11 +428,7 @@ interior roots the run showed).
 
 The numbers: the session's `E^rep` makes `m′` waits (`innerWaits`) of `K′` reruns (`innerCap`) with `N₀` (`innerN₀`),
 `ε_table` and the weight `C` of `γ`, each good for every session at `x`; `openCalls` bounds the SHA-512 calls of checking
-what one session's witness reveals.
-
-And the reference prover (`P`), the honest sampled prover the deployment runs, on its tapes (`Tape`, a nonempty type):
-completeness is its (`Complete`), at its completeness error as the deployment states it at each hash (`δc H x` at
-`H`). -/
+what one session's witness reveals. -/
 structure Deploy (Coin Col T : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
@@ -452,12 +448,6 @@ structure Deploy (Coin Col T : Type) where
   εtable : Msg → ℝ
   weight : Msg → ℝ
   openCalls : Msg → ℕ
-  Tape : Type
-  [tapeNonempty : Nonempty Tape]
-  P : Wit → Prover Tape
-  δc : (Msg → Msg) → Msg → ℝ
-
-instance Deploy.instNonemptyTape {Coin Col T : Type} (D : Deploy Coin Col T) : Nonempty D.Tape := D.tapeNonempty
 
 /-- The statement's partition, as the verifier evaluates its query; empty when the query doesn't apply. -/
 def Deploy.part {Coin Col T : Type} (D : Deploy Coin Col T) (s : Stmt) : Partition :=
@@ -746,9 +736,9 @@ def FaultyBoundary : Prop :=
 
 /-- **Sampling: Complete**, on the statements in scope, when no unit is faulty. It needs the verifier to check before
 the draw that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference prover
-(ruling 4). It is of the deployed record's reference prover (`D.P`), at the deployed error (`D.δc H`). -/
-def Complete (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  Claims.Complete H D.V D.P (Rhon H D.commit D.parse D.partition) (Scope D) (D.δc H)
+(ruling 4). -/
+def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (δc : Msg → ℝ) : Prop :=
+  Claims.Complete H D.V P (Rhon H D.commit D.parse D.partition) (Scope D) δc
 
 /-- **Sampling: the readable scope is the verifier's**: the scope check the sampled verifier runs before it draws is
 `Scope`, so `KS`, `KSCount` and `Bits`, which hold on `Scope`, cover every statement it takes. Binding `scopeCheck` to

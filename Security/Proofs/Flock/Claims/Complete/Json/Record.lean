@@ -5,9 +5,9 @@ import Proofs.Flock.Claims.Complete.Verdict
 /-!
 # The honest session record as a JSON value
 
-`recordJson` (the honest prover's record) builds one `Json` object and prints it with `printJ`. `recordObj` is that
+`recordJson` (the honest prover's record) builds one `Json` object and prints it with `compress`. `recordObj` is that
 object, written as a pure value of the record's parts with every digest `dgOf spec h`: `recordJson` through
-`Hashes.ofSha512 h` returns `recordObj`, printed, when the statement names no keyed coin tree (`Bridge`).
+`Hashes.ofSha512 h` returns `recordObj`'s `compress` when the statement names no keyed coin tree (`Bridge`).
 
 * **The record's parts**: a round (`roundObj`), a rep stream (`streamObj`), a proof digest (`proofObj`), the link
   (`linkObj`, with `y = 0`, `yOf`) and the bytes `link_*` digests (`lbOf`).

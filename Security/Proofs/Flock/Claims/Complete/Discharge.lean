@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 The goals of `Goals` proved at every honest run, from the scope alone:
 
 * `Case.table`: the case's statement has one table, of `22 ≤ m ≤ 35`, and the session spec is its own (the scope's
-  `count ≤ 1` and table-0 bounds, through `setupTables_okAny`); its circuit is an untyped row circuit the scope parsed.
+  `count ≤ 1` and table-0 bounds, through `setupTables_okAny`).
 * `tables_goal` (`Tables`, §3): one statement per table.
 * `schedules_goal` (`Schedules`): `fast100` has a schedule at the table's `m` (`fast100_isSome`).
 -/
@@ -16,12 +16,9 @@ open Flock FlockDeploy
 
 namespace FlockComplete
 
-/-- **The scope at the case's setup**: one table, of `22 ≤ m ≤ 35`, and the session spec is its own; its circuit is an
-untyped row circuit the scope parsed, of `m = k_log + nbl` and `6 ≤ k_log`. -/
+/-- **The scope at the case's setup**: one table, of `22 ≤ m ≤ 35`, and the session spec is its own. -/
 theorem Case.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
-    ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ 22 ≤ st.m ∧ st.m ≤ 35 ∧
-      (∃ tags file tables, tags.typed = false ∧ ProvedScope.circuitOf tags file tables = .ok st.c) ∧
-      st.m = st.c.kLog + st.nbl ∧ 6 ≤ st.c.kLog := by
+    ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ 22 ≤ st.m ∧ st.m ≤ 35 := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployPlain rel) rel (readOf false) rfl
     (fun _ _ h => readOf_zk h) c.x).1 c.scope
   have hi := (setupOf_some c.setup).1
@@ -48,17 +45,19 @@ theorem Case.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Re
     rcases hR.2.2.2.2.1 with h | h
     · rw [hzk] at h; cases h
     · exact h
-  obtain ⟨st0, h0, hcirc, -, hm, hk, -, hm35, -⟩ := Readable.table0 htab hR.2.1 hpi
+  obtain ⟨st0, h0, -, -, -, -, -, hm35, -⟩ := Readable.table0 htab hR.2.1 hpi
   have hset2 := hset
   rw [← ht] at hset2
   unfold Readable.Read.setup at hset2
   rw [hpi] at hset2
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hset2 with ⟨-, st, -, hs, hsts⟩ | ⟨hc1, -⟩
-  · rw [hsts] at h0
-    simp only [List.getElem?_toArray, List.getElem?_cons_zero, Option.some.injEq] at h0
-    subst h0
-    refine ⟨_, hsts, hs, ?_, hm35, ⟨_, _, _, hR.2.1, hcirc⟩, hm, hk⟩
-    exact (Readable.mMin_ge _).trans ((Readable.sizesOk_iff _ _).1 hsz _ (by rw [hsts]; simp [Setup.ofCircuit]))
+  · refine ⟨st, hsts, hs, ?_, ?_⟩
+    · have := (Readable.sizesOk_iff _ _).1 hsz st.m (by rw [hsts]; simp [Setup.ofCircuit])
+      exact (Readable.mMin_ge _).trans this
+    · rw [hsts] at h0
+      simp only [List.getElem?_toArray, List.getElem?_cons_zero, Option.some.injEq] at h0
+      rw [h0]
+      exact hm35
   · omega
 
 /-- `fast100` has a schedule at every `m` from 22 to 35. -/
@@ -79,7 +78,7 @@ theorem tables_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
 theorem schedules_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Schedules H rel := by
   intro o st hst
-  obtain ⟨st0, hsts, -, h1, h2, -⟩ := o.table
+  obtain ⟨st0, hsts, -, h1, h2⟩ := o.table
   unfold Run.tabs tabsOf at hst
   rw [hsts] at hst
   simp only [Array.map_singleton, List.mem_singleton] at hst

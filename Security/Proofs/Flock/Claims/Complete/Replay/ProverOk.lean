@@ -69,7 +69,7 @@ theorem opsWith_lookup {M : Type → Type} [Monad M] [MonadExceptOf String M] {h
   rw [h]
 
 /-- **Every registered scheme's digests have its width** through `Hashes.ofSha512` at an oracle of 64-byte outputs. -/
-theorem opsWith_widths {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms : MerkleScheme}
+theorem opsWith_widths {H : Claims.Msg → Claims.Msg} (h64 : JsonRT.Out64 H) {ms : MerkleScheme}
     (hms : ms ∈ MerkleScheme.all) :
     (∀ l r v, (ms.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).node l r = .ok v → v.size = ms.digestLen) ∧
     ∀ row salt v, (ms.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).leaf row salt = .ok v →
@@ -112,7 +112,7 @@ theorem opsWith_widths {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {m
 
 /-- **Each table's Merkle scheme returns digests of its width** (`SchemeWidths`), at an oracle of 64-byte outputs. -/
 theorem schemeWidths {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (h64 : Claims.Out64 H) : SchemeWidths H rel := by
+    (h64 : JsonRT.Out64 H) : SchemeWidths H rel := by
   intro o i hi
   obtain ⟨st, hst, -, hall, -⟩ := o.toCase.schemeOk
   have htabs : o.tabs = #[Setup.ofCircuit st] := by simp [Run.tabs, tabsOf, hst]
@@ -145,7 +145,7 @@ theorem fast100_cap0 {m : ℕ} {s : Schedule} (h : fast100 m = some s) : (s.leve
 
 /-- **The level-0 commitment's cap is non-empty and under `2^64` bytes**, through a registered scheme at an oracle of
 64-byte outputs, at `fast100`'s first level. -/
-theorem commitP_cap {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms : MerkleScheme}
+theorem commitP_cap {H : Claims.Msg → Claims.Msg} (h64 : JsonRT.Out64 H) {ms : MerkleScheme}
     (hms : ms ∈ MerkleScheme.all) {m : ℕ} {sch : Schedule} (hsch : fast100 m = some sch) {g : Array F128}
     {salt : ℕ → ByteArray} {cm : Commit}
     (h : commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) ms (sch.levels.getD 0 default) g salt = .ok cm) :
@@ -168,7 +168,7 @@ theorem commitP_cap {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms :
 
 /-- **What the record needs of the prover's pieces holds at every good case** (`ProverOk`), at an oracle of 64-byte
 outputs. -/
-theorem proverOk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (h64 : Claims.Out64 H) :
+theorem proverOk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (h64 : JsonRT.Out64 H) :
     JsonRT.ProverOk H rel := by
   intro c st hst
   obtain ⟨st', hst', hspec, hm22, -⟩ := c.table

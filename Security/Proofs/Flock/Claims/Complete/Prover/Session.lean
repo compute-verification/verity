@@ -1,5 +1,4 @@
 import Proofs.Flock.Claims.Complete.Prover.Ligerito
-import Proofs.Flock.Claims.Complete.Prover.Print
 import Proofs.Flock.VBridge.Family.Encode
 
 /-!
@@ -18,8 +17,7 @@ PROTOCOL.md §4–§8 and §16 from the prover's side, for the plain verifier (`
   `hello` (the statement's, or under a keyed coin tree its `Hello` with a zero nonce, canonical, and a `coin_tree` of a
   zero key and root), `config.require_link`, the exchange link (`Σ` as `root_F`, each `root_B`, the points, `y = 0`),
   the statement's `unit_draw`, every rep stream's rounds with their coins and retained bytes, and every digest the
-  record binds (`root_b_*`, `root_f_*`, `msg_*`, `root_*`, `link_*`, `proof_*`) through the hashes, printed by the
-  total `printJ` (the bytes `Json.compress` prints).
+  record binds (`root_b_*`, `root_f_*`, `msg_*`, `root_*`, `link_*`, `proof_*`) through the hashes.
 
 In deployment the coin server writes the record and draws the coin tree's key; here the prover writes what the server
 would, so the record is the honest server's.
@@ -111,7 +109,7 @@ def recordJson (hs : Hashes M) (spec : SessionSpec) (rootB : Array ByteArray) (p
     ("config", Json.mkObj [("require_link", Json.bool true)]), ("link_mode", Json.str "exchange"), ("link", link),
     ("unit_draw", draw), ("streams", Json.arr ss), (s!"link_{dk}", hexJ (← spec.dgWith hs lb)),
     (s!"proof_{dk}", Json.arr pf)] ++ coinTree)
-  pure (printJ j)
+  pure j.compress
 
 /-- **The honest session** on each table's trace and packed table: the level-0 commitments, the link, the rep streams;
 the record and the proof files (`spec.repStreams` order). -/
