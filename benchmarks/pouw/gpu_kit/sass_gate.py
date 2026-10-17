@@ -9,7 +9,9 @@ names (fnmatch on the mangled name, or on the name the mangling holds), it check
   read. There are as many as `--expect` gives, and each matches one `--expect` exactly: OP=N says the loop body holds N
   instructions whose dotted opcode (`LDSM.16.M88.4`, without guard) matches the fnmatch pattern OP. Fewer means ptxas
   merged, hoisted or eliminated some; more means it duplicated them. So the body must be one iteration (`#pragma unroll 1`)
-  for the count to be exact.
+  for the count to be exact. An ELECT loop (`@P ELECT` ... `@P BRA.U.ANY` back to it: ptxas's lowering of a per-thread
+  op with uniform operands, such as UBLKRED) is not a loop here: it runs once per active lane, which SASS doesn't show,
+  so a probe issues such an op from one lane (side.cu's bulk roles), and the record lists it under `elect`.
 - **forbid:** no instruction anywhere in the kernel has a `--forbid` opcode (default LDL,STL: spills).
 - **sink:** the timed work is observable. An expected instruction writes memory (a reduction, an atomic, a store), or a
   store after the timed region stores a value an expected instruction computed. The second is traced on the kernel's
@@ -62,7 +64,7 @@ FORBID = ("LDL", "STL")
 CLOCK = re.compile(r"\bSR_CLOCKLO\b")
 SHARED = frozenset({"LDS", "STS", "LDSM", "STSM", "ATOMS"})
 #: instructions whose effect outlives the kernel or the iteration: their execution is the sink
-WRITES = frozenset({"ST", "STG", "STS", "STSM", "RED", "REDG", "ATOM", "ATOMG", "ATOMS", "SUST", "SURED"})
+WRITES = frozenset({"ST", "STG", "STS", "STSM", "RED", "REDG", "ATOM", "ATOMG", "ATOMS", "SUST", "SURED", "LDGSTS"})
 WRITE_PREFIX = ("UBLK", "UTMASTG", "UTMARED", "REDAS")
 #: a store after the timed region whose value can carry the loop's results out of the kernel
 STORES = frozenset({"ST", "STG", "RED", "REDG", "ATOM", "ATOMG"})
@@ -125,6 +127,11 @@ def loops(fn) -> list[tuple[int, int]]:
             if j is not None and j <= k:
                 tails[j] = max(tails.get(j, k), k)
     return sorted(tails.items())
+
+
+def elect_loop(fn, j: int, k: int) -> bool:
+    """ptxas's one-trip-a-lane loop around a uniform op: it opens with ELECT and closes with BRA.U.ANY."""
+    return fn.insns[j].op[0] == "ELECT" and fn.insns[k].op[:3] == ["BRA", "U", "ANY"]
 
 
 def _addr(fn, k: int) -> str:
@@ -240,7 +247,8 @@ def judge_kernel(fn, expect: list[dict[str, int]], forbid=FORBID, smem: list[dic
     lo, hi = clocks[0], clocks[-1]
     rec["timed"] = [_addr(fn, lo), _addr(fn, hi)]
 
-    every = loops(fn)
+    every = [(j, k) for j, k in loops(fn) if not elect_loop(fn, j, k)]
+    rec["elect"] = [_addr(fn, j) for j, k in loops(fn) if elect_loop(fn, j, k) and lo < j and k < hi]
     timed = [(j, k) for j, k in every if lo < j and k < hi]
     straddle = [(j, k) for j, k in every if (j <= lo <= k or j <= hi <= k)]
     for j, k in straddle:
