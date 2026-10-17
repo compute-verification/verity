@@ -82,6 +82,7 @@ import Proofs.Flock.Claims.KS.ZkSlackFit
 import Proofs.Flock.Claims.KS.ZkSim
 import Proofs.Flock.Claims.KS.ZkLock
 import Proofs.Flock.Claims.KS.ZkStep
+import Proofs.Flock.Claims.KS.ZkClash0
 import Proofs.Flock.Claims.KS.PlainDraw
 import Proofs.Flock.Claims.KS.PlainDrawAcc
 import Proofs.Flock.Claims.KS.PlainDrawDec
@@ -93,6 +94,9 @@ import Proofs.Flock.Claims.KS.PlainParts
 import Proofs.Flock.Claims.KS.PlainClash0
 import Proofs.Flock.Claims.KS.PlainLevels
 import Proofs.Flock.Claims.KS.LevelsAll
+import Proofs.Flock.Claims.KS.ZkLevelsAll
+import Proofs.Flock.Claims.KS.ZkLevels
+import Proofs.Flock.Claims.KS.ZkClashL
 import Proofs.Flock.Claims.KS.PlainClashLater
 import Proofs.Flock.Claims.KS.ForkSim
 import Proofs.Flock.Claims.KS.PlainFork
@@ -482,4 +486,19 @@ four named Props: its lockstep, its abort, its fork bounds and a view's self-cla
 read back stream by stream (`ZkStep`: `FlockDeploy.KS.zkSim_reps`, `FlockDeploy.KS.zkSimRun`,
 `FlockDeploy.KS.zkSimRunAt`), so masked KS and the recursion's premise rest on its fork bounds and view clashes alone
 (`FlockDeploy.KS.zk_KS_of_fork`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_fork`, `FlockDeploy.KS.zk_KSFlock_of_fork`).
+The view's clash splits along the self-clash's three cases (`ZkClash0`: `FlockDeploy.KS.ZkViewClashQ`,
+`FlockDeploy.KS.zkViewClash_of_Q`). At level 0, where the clash compares whole rows, the deployed decoders are right at
+the reps' opened rows at the view (`ZkRows`: `FlockDeploy.KS.decodesTableR_deploy`), which are the run's rows, each a
+Merkle opening in its log, so two that differ at one position collide there (`FlockDeploy.KS.rawRows_zk`,
+`FlockDeploy.KS.zk_rowClash_tiedJ`, `FlockDeploy.KS.zkViewClashQ₀`); masked KS and the recursion's premise rest on the
+fork bounds and the view's clashes past level 0 and at the pads (`FlockDeploy.KS.zk_KS_of_later`,
+`FlockDeploy.KS.zk_tableBoundJOnAccR_of_later`, `FlockDeploy.KS.zk_KSFlock_of_later`). Past level 0, each of an accepted
+masked rep's later requests is one level's (`ZkLevelsAll`: `FlockSoundness.Discharge.ZkExec.zk_rep_reqsL`), whose
+queries sit at round `zkLevelRound` of the rep's stream and pass the level's Merkle check against the proof's recursive
+cap (`ZkLevels`: `FlockDeploy.KS.zkLevelRound`, `FlockDeploy.KS.zkLevels_verifyWithM`), so two of one rep's level-`ℓ`
+rows at one position that differ collide in its log (`FlockDeploy.KS.zk_levelClash_tiedJ`). The decoders are right at
+those rows at the view too (`FlockSoundness.Discharge.ZkExec.zk_rep_rowsL`), so the view's clash past level 0 is such a
+collision (`ZkClashL`: `FlockDeploy.KS.zkViewClashQL`), and masked KS and the recursion's premise rest on the fork
+bounds and the view's pads clash alone (`FlockDeploy.KS.zk_KS_of_pads`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_pads`,
+`FlockDeploy.KS.zk_KSFlock_of_pads`).
 -/
