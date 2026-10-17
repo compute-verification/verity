@@ -88,6 +88,7 @@ import Proofs.Flock.Claims.KS.PlainSim
 import Proofs.Flock.Claims.KS.PlainLock
 import Proofs.Flock.Claims.KS.PlainStep
 import Proofs.Flock.Claims.KS.PlainParts
+import Proofs.Flock.Claims.KS.PlainClash0
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -440,10 +441,13 @@ message is empty, and the verdict at the draw refuses an outcome without proof f
 `FlockDeploy.KS.plainSimAbortAt`). So KS at the deployed plain verifier's trimmed record holds from two parts of the
 concrete simulator: its live self-clashes give `P`'s accepting runs a raw clash, and its fork advantage is at most its
 simulated fork (`PlainParts`: `FlockDeploy.KS.PlainSimClashAt`, `FlockDeploy.KS.PlainSimForkLe`,
-`FlockDeploy.KS.plainSimWrPAtD_of_parts`, `FlockDeploy.KS.plain_KS_of_parts`). The masked simulator runs each prover
-round by round at uniform functions of the live coins' history, its rounds on the masked wire at their stream and count,
-with each table's fork rounds at its reps' caps, pads and `τ` and level 0 at the link coin; it meets `ZkSimWJ`, so
-masked KS and the recursion's premise hold, from four named Props: its lockstep, its abort, its fork bounds and a view's
+`FlockDeploy.KS.plainSimWrPAtD_of_parts`, `FlockDeploy.KS.plain_KS_of_parts`). The level-0 case of that clash holds: a
+level-0 self-clash there is two of the reps' entries at one position with different columns, which are the run's raw
+columns, so the clash needs only its case past level 0 (`PlainClash0`: `FlockDeploy.KS.plainClashQ₀`,
+`FlockDeploy.KS.PlainSimLaterClashAt`, `FlockDeploy.KS.plain_KS_of_later`). The masked simulator runs each prover round
+by round at uniform functions of the live coins' history, its rounds on the masked wire at their stream and count, with
+each table's fork rounds at its reps' caps, pads and `τ` and level 0 at the link coin; it meets `ZkSimWJ`, so masked KS
+and the recursion's premise hold, from four named Props: its lockstep, its abort, its fork bounds and a view's
 self-clash giving a column clash (`ZkSim`: `FlockDeploy.KS.zkSim`, `FlockDeploy.KS.zkΦ`, `FlockDeploy.KS.zkRd`,
 `FlockDeploy.KS.zk_simFork_le`, `FlockDeploy.KS.ZkSimRunAt`, `FlockDeploy.KS.ZkSimAbortAt`,
 `FlockDeploy.KS.ZkSimForkLe`, `FlockDeploy.KS.ZkViewClash`, `FlockDeploy.KS.zkSimWJ_of_parts`,
