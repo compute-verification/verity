@@ -59,6 +59,7 @@ import Proofs.Flock.Claims.KS.PlainDrawSim
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainSim
 import Proofs.Flock.Claims.KS.PlainLock
+import Proofs.Flock.Claims.KS.PlainStep
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -262,5 +263,9 @@ rounds as its live outcome (`PlainSim`: `FlockDeploy.KS.plainSim`, `FlockDeploy.
 its coins' bytes, and its acceptance does not read its last coin (`PlainLock`: `FlockDeploy.KS.run_dep`,
 `FlockDeploy.KS.depMsg_congr`, `FlockDeploy.KS.run_acc_iff_last`); along the live history the simulator's coins are
 `plainΦ`'s wherever it has revealed them, so it sends `P`'s rounds and its live outcome is theirs
-(`FlockDeploy.KS.simCoins_agree`, `FlockDeploy.KS.plainSim_msg`, `FlockDeploy.KS.plainSim_liveOut`).
+(`FlockDeploy.KS.simCoins_agree`, `FlockDeploy.KS.plainSim_msg`, `FlockDeploy.KS.plainSim_liveOut`). Where `P`'s run
+decides and accepts, the record's two rep streams hold `P`'s round messages with their coins, each of the table's coin
+counts, so the simulator's live outcome has the record's reps and proof files at every plain statement in scope, whose
+link points fit a live coin (`PlainStep`: `FlockDeploy.KS.plain_decides_record`, `FlockDeploy.KS.plain_mPts`,
+`FlockDeploy.KS.PlainSimLockstep`, `FlockDeploy.KS.plainSimLockstep`).
 -/
