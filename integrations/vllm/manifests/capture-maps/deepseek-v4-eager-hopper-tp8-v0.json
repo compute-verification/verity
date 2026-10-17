@@ -3170,13 +3170,13 @@
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
-   "manifest_family": "moe_block_stream",
+   "manifest_family": "call_boundaries",
    "source": "model.layers.{i}.ffn.experts/act",
    "commit": {
     "name": "model.layers.{i}.ffn.experts/act",
     "binder": "moe"
    },
-   "note": "moe_sum's output is carved from the workspace that holds intermediate_cache2: act and down are flushed right after the w2 launch; the manifest of record has no row for it (the Marlin GEMMs' Calls hold it)"
+   "note": "moe_sum's output is carved from the workspace that holds intermediate_cache2: act and down are flushed right after the w2 launch"
   },
   {
    "id": "moe.down",
@@ -3237,9 +3237,9 @@
    "tp": "partial",
    "rank_identical": false,
    "target_only": false,
-   "manifest_family": "moe_block_stream",
+   "manifest_family": "call_boundaries",
    "source": "model.layers.{i}.ffn.experts/sum",
-   "note": "each rank holds all 384 experts with a MIL-wide slice of each one's intermediate: the sum is a partial; the manifest of record has no row for it (the Marlin GEMMs' Calls hold it)",
+   "note": "each rank holds all 384 experts with a MIL-wide slice of each one's intermediate: the sum is a partial",
    "commit": {
     "name": "model.layers.{i}.ffn.experts/sum",
     "binder": "moe"

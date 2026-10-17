@@ -67,10 +67,11 @@ function is left to the launches it reaches (`topk_softmax`).
 A manifest of record without `moe_block_stream` rows (DeepSeek-V4-Pro's: the Marlin launches and the routers are Calls under the MoE
 module, `<module>/<fx node>`) is bound at those Calls: the source commits each value as `<module>/<label>` (`at_calls`), and
 `bind.Binder` binds a label `PORTS` declares at its port of one of the module's call boundaries: up and down at the Marlin GEMMs,
-router_w and router_ids at `dsv4_topk`'s, and on a hash layer router_w.hash at `MoeRouterHash_v1`'s.  A hash layer's ids are the
-module's `GatherI32x{V}` rows, committed as `ids`, and the token ids those gathers read as `in` (`hash_router_input`); router_ids
-and ids are committed as their 32-bit words, as those rows are (`f32`).  act and sum are committed as on the planes, for no row.
-`layer_of` tells `identity_check` the source's names, a hash layer holding one more.
+act at `SiluMulClamp_v1`'s, sum at `MoeSum_v1`'s, router_w and router_ids at `dsv4_topk`'s, and on a hash layer router_w.hash at
+`MoeRouterHash_v1`'s (a module without router rows of `format.MOE_PLANE_FAMILIES` has no planes: `format.moe_plane_modules`).  A hash
+layer's ids are the module's `GatherI32x{V}` rows, committed as `ids`, and the token ids those gathers read as `in`
+(`hash_router_input`); router_ids and ids are committed as their 32-bit words, as those rows are (`f32`).  `layer_of` tells
+`identity_check` the source's names, a hash layer holding one more.
 
 `<k>` is the layer index of the MoE module whose forward is executing (forward pre-hooks on every `MoERunner`-family module set it, and
 forward hooks clear it).  Exactly `planes` tensors per MoE layer per step are expected (six bf16, seven on Marlin with a scaled
@@ -118,7 +119,7 @@ def _call(family: str, port: str) -> Port:
 #: `bind.Binder`'s declared labels at calls (`at_calls`): each label -> the port of the MoE module's Call whose value it commits
 PORTS = {"router_w": _call("MoeRouterSqrtSoftplus_v1", "0"), "router_ids": _call("MoeRouterSqrtSoftplus_v1", "1"),
          "router_w.hash": _call("MoeRouterHash_v1", "out"), "up": _call("MarlinMoeExpertGemm_v1", "out"),
-         "down": _call("MarlinMoeExpertGemmW_v1", "out")}
+         "act": _call("SiluMulClamp_v1", "out"), "down": _call("MarlinMoeExpertGemmW_v1", "out"), "sum": _call("MoeSum_v1", "out")}
 #: every label the source commits at calls under a MoE module
 LABELS = frozenset({*MOE_FP8_PLANES, *PORTS, "ids", "in"})
 
