@@ -18,6 +18,11 @@ route the map's `hc` decision (`route_site`) gives for the call's own token coun
 the route it recorded at the decoder layer.  A call whose `fn` is no side's parameter fails the step.  Taps the map marks
 `target_only` are bound on the target only (`route_source.on_target`).  `capture-map ids --binder mhc --names` prints what a step
 binds.
+
+The map commits each return under its identity's spelling or a label the source declares (`ports_of`): the broadcast pre's returns
+as layer 0's `streams` and `pre.<port>` and the post's and the head's as the model's `post` and `head`, the members the manifest
+names; each post_pre return under a side's label, declared as its port of the fused post_pre (`POST_PRE_PORTS`), a Call one of the
+layer's two, so the binding takes a layer's attention side and FFN side in commit order (`bind.Binder`).
 """
 from __future__ import annotations
 
@@ -29,12 +34,16 @@ import torch
 
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.engine.hooks import Hooks
+from verity_vllm.query.manifest.bind import Port
 
 BINDER = "mhc"
 PRE, POST_PRE, POST, HEAD = ("mhc_pre_broadcast_tilelang", "mhc_fused_post_pre_tilelang", "mhc_post_tilelang",
                              "hc_head_fused_kernel_tilelang")
 FUNCTIONS = (PRE, POST_PRE, POST, HEAD)
 DECISION = "hc"
+#: the post_pre's returns (residual, post mix, comb mix, sublayer input) are ports 0, 2, 3, 1 of either path's Definition
+POST_PRE_FAMILIES = frozenset({"MhcFusedPostPre_v1", "MhcPostPreTf32_v1"})
+POST_PRE_PORTS = ("0", "2", "3", "1")
 
 
 def binds(cmap: Mapping[str, Any]) -> bool:
@@ -44,6 +53,12 @@ def binds(cmap: Mapping[str, Any]) -> bool:
 def function_of(tap: Mapping[str, Any]) -> str:
     """The function whose return the tap is: its site's target after the path."""
     return tap["site"]["target"].rsplit(":", 1)[-1]
+
+
+def ports_of(cmap: Mapping[str, Any]) -> dict[str, Port]:
+    """`bind.Binder`'s declared labels: each post_pre tap's, its return's port of the fused post_pre (`POST_PRE_PORTS`)."""
+    return {t["commit"]["name"].rsplit("/", 1)[1]: Port(POST_PRE_FAMILIES, POST_PRE_PORTS[int(t["site"]["output"])], call_boundary=True)
+            for t in cmap["taps"] if (t.get("commit") or {}).get("binder") == BINDER and function_of(t) == POST_PRE}
 
 
 class MhcSource:
@@ -113,6 +128,9 @@ class MhcSource:
     def declaration_classes(self) -> list[dict]:
         return []
 
+    def ports(self) -> dict[str, Port]:
+        return ports_of(self.cmap)
+
     def extra_step_bytes(self, envelope: Mapping[str, Any], model: Any) -> dict[str, int]:
         """The taps this source binds, as bytes per token: those on no route, and the larger of the hc routes' (a step takes one)."""
         free = self.cmap.get("free_symbols", {})
@@ -177,4 +195,4 @@ class MhcSource:
         return make
 
 
-__all__ = ["MhcSource", "BINDER", "FUNCTIONS", "binds", "function_of"]
+__all__ = ["MhcSource", "BINDER", "FUNCTIONS", "POST_PRE_PORTS", "binds", "function_of", "ports_of"]

@@ -693,7 +693,7 @@
    ],
    "note": "residual is the embedding broadcast to the HC streams (MhcResidualBroadcast_v1, a copy without arithmetic); the mixes and x come from DeepGEMM's TF32 GEMM at every token count, decode included",
    "commit": {
-    "name": "model.layers.{i}/hc_attn_residual",
+    "name": "model.layers.{i}/streams",
     "binder": "mhc"
    }
   },
@@ -721,7 +721,7 @@
    "target_only": false,
    "manifest_family": "instance_outputs",
    "commit": {
-    "name": "model.layers.{i}/hc_attn_post_mix",
+    "name": "model.layers.{i}/pre.1",
     "binder": "mhc"
    }
   },
@@ -749,7 +749,7 @@
    "target_only": false,
    "manifest_family": "instance_outputs",
    "commit": {
-    "name": "model.layers.{i}/hc_attn_comb_mix",
+    "name": "model.layers.{i}/pre.2",
     "binder": "mhc"
    }
   },
@@ -776,7 +776,7 @@
    "target_only": false,
    "manifest_family": "instance_outputs",
    "commit": {
-    "name": "model.layers.{i}/hc_attn_x",
+    "name": "model.layers.{i}/pre.0",
     "binder": "mhc"
    }
   },
@@ -1340,7 +1340,7 @@
    "target_only": false,
    "manifest_family": "instance_outputs",
    "commit": {
-    "name": "model/hc_post",
+    "name": "model/post",
     "binder": "mhc"
    }
   },
@@ -1382,7 +1382,7 @@
     }
    ],
    "commit": {
-    "name": "model/hc_head",
+    "name": "model/head",
     "binder": "mhc"
    }
   },

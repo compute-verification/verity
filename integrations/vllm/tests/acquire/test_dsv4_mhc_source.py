@@ -105,8 +105,8 @@ def test_every_step_binds_the_map_names_of_its_hc_route_once(runs, capsys):
     assert split == [2, 4] and {m for r in runs.values() for f, m, fma in r.fma if f == MS.POST_PRE and not fma} == {20}
     on, off = runs[True], runs[False]
     assert len(on.names(0)) == len(on.names(2)) == 4 * 2 * L + 2 and sum(n.endswith("_split") for n in on.names(2)) == 4 * (2 * L - 1)
-    first = {f"model.layers.0/hc_attn_{v}" for v in ("residual", "post_mix", "comb_mix", "x")}
-    assert sorted(off.names(2)) == sorted(first | {"model/hc_post", "model/hc_head"}), "off the target no TF32 return is bound"
+    first = {f"model.layers.0/{m}" for m in ("streams", "pre.0", "pre.1", "pre.2")}
+    assert sorted(off.names(2)) == sorted(first | {"model/post", "model/head"}), "off the target no TF32 return is bound"
 
 
 def test_each_bound_value_is_the_return_it_names(runs):
@@ -163,6 +163,18 @@ def test_the_arena_bound_counts_one_hc_route():
         finally:
             r.close()
         assert got == {"per_token_bytes": 2 * L * side + (HC + 1) * ENV["H"] * 2, "per_seq_bytes": 0, "tensors_per_step": 8 * L + 2}
+
+
+def test_post_pre_returns_are_declared_as_their_ports_and_the_rest_committed_as_members():
+    """DeepSeek-V4-Pro's manifest of record names layer 0's broadcast pre `model.layers.0/{streams, pre.0..2}`, the model's
+    `model/{post, head}`, and every other post_pre `<layer>[/<fx node>]` `post_pre.<port>` (residual', out, post', comb')."""
+    ports = MS.ports_of(CMAP)
+    assert {label: p.port for label, p in ports.items()} == {
+        f"hc_{side}_{v}{split}": port for side in ("attn", "ffn") for split in ("", "_split")
+        for v, port in zip(("residual", "post_mix", "comb_mix", "x"), ("0", "2", "3", "1"))}
+    assert all(p.call_boundary and p.families == MS.POST_PRE_FAMILIES for p in ports.values())
+    others = {CM.at_layer(t["commit"]["name"], 0) for t in TAPS_ if MS.function_of(t) != MS.POST_PRE}
+    assert others == {"model.layers.0/streams", "model.layers.0/pre.0", "model.layers.0/pre.1", "model.layers.0/pre.2", "model/post", "model/head"}
 
 
 def test_attach_attaches_the_mhc_source_beside_the_route_source():
