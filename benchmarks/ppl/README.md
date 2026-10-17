@@ -113,7 +113,7 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 | `linear.int8(act, act_top, weight, weight_top, group, gptq, density)` | quantize | activations per token, rounded or dithered (`density` < 1: dithered on a coin-chosen fraction of every k64 word's positions, rounded elsewhere); weights per row or per `group` inputs, capped at `weight_top`, rounded, GPTQ or dithered (`weight = "dither"`: fresh bits a call, density 1) | D4-PPL, D4-70B, LOWBIT-DESIGN, EPS-BUDGET |
 | `attention.rotate()` | real | Q R, K R, V R and the output R⁻¹ | D4-ATTN |
 | `attention.center_keys()` | real | kc | D4-ATTN |
-| `attention.int8(q, q_top, k, k_top, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; Q, K and V rounded or dithered within their tops; P per row or per key block, `p_sink` | D4-ATTN, EPS-BUDGET |
+| `attention.int8(q, q_top, k, k_top, p, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; Q, K, P and V rounded or dithered within their tops (P's bits only where key <= query); P per row or per key block, `p_sink` | D4-ATTN, EPS-BUDGET |
 | `attention.peel(operand, width, offset)` | integer | low-rank noise on Q or P, peeled exactly | D4-ATTN |
 | `linear.grid(grid, act, weight, block, scales, density)` | quantize | both operands on a low-bit grid (`fp4c`, `fp4`, `int5`), per token and per row, each rounded, dithered or `sr`; `block = 16` adds NVFP4's integer block scales over k (`scales`: `odd`, the UE4M3 odd integers 1–15, or `int`); `density` < 1 coins only a coin-chosen fraction of every k64 word's positions | D4-LOWBIT, LOWBIT-DESIGN |
 | `linear.peel(alphabet, width, top)` | integer | the int8 design's weight-side coin: W + U served, U low-rank (period 32 in k, {0,1} or ±1..±width), peeled exactly and gated on the check window, with \|W + U\| ≤ top | LOWBIT-DESIGN |
@@ -139,7 +139,9 @@ activations on 1/N of the positions only (U still coins every position).
 SKIP's designs (note:20261017T0340Z-draft-skip): `adopted-qkd` (Q Kᵀ dithered on both operands, no Q peel),
 `adopted-bd` (the linears too), `adopted-bd-lm` (and lm_head), `co` (CO-Dither's served values at r = k/2: 7-bit
 sides plus fresh bits), `co32c` (CHECKED-STRIP's: 7-bit weights and 8-bit activations on the linears, `co`'s
-attention), `ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention).
+attention), `co32c-pv` (`co32c` with P·V as CO-Dither serves it: P dithered with a fresh bit under the w64 peel; `co32c-pvN`
+in blocks of N = 256, 512 or 1,024 keys; `adopted-bd-lm-pv` is design A with that P·V, `adopted-bd-lm-pvN` in blocks),
+`ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention).
 Any other file passes as a path.
 
 ## Adding an intervention
