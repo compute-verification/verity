@@ -16,7 +16,17 @@ K          a masked key's (`key(..., mask=True)`): LE(XOF(DOMAIN ‖ frame ‖ s
            reduced mod p
 σ_K(x)     x ⊕ K if that is below p, else x: an involution on [0, p), applied to x before each round j ≥ 1 of a masked
            word's encode and after each inverted round j ≥ 1 of its decode
+d          a bound token-layer's digest: sha512/row/v2 of its 4,096 bytes, SHA512(P(32768) ‖ data)
+b          its offset: LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be 2^32 − 3 ‖ u64be block ‖ d)[0 : 64]) mod p, block = slot ·
+           LAYERS + layer, added to t(i) in every round of its words (0 under the seed's key)
 ~~~
+
+A KV token-layer is written after the codec seed, so it is encoded under its bound key (`encode_token_layer(...,
+bound=True)`), with d kept beside it and given to `decode_token_layer`.  Under the seed's key alone its writer could
+pick its encoding (all zeros, or another block's) and write the token-layer that decodes from it, holding nothing for
+it; under the bound key a chosen encoding decodes to a token-layer with the digest it was decoded under only by a
+search over SHA-512.  The bound key is `verity.core.protocols.remote_bandwidth.codec`'s for block slot · LAYERS + layer,
+byte for byte; `kv.cu` and `kv_twin.py` take the seed's key only.
 
 The derivation is `benchmarks/codec_tensor/wide.py`'s (ra-codec-tensor) under a domain of its own, at the fields
 ra-codec-theory chose (2^1536 − 3453 its operating point), whose words have no slack. A payload is any word below p. For p = 2^n − c
@@ -42,8 +52,10 @@ from dataclasses import dataclass
 
 DOMAIN = b"verity/word-codec/kv/v0\0"
 SEED_BYTES = 32
+DIGEST_BYTES = 64
 TWEAK_INDEX = (1 << 32) - 1
 MASK_INDEX = (1 << 32) - 2
+BIND_INDEX = (1 << 32) - 3
 LOW_MIN = 8
 
 # Llama-3.1-70B's attention: 80 layers, 8 KV heads of 128, bf16.
@@ -53,6 +65,8 @@ HEAD_DIM = 128
 KV_ELEMENT_BYTES = 2
 TOKEN_LAYER_BYTES = 2 * KV_HEADS * HEAD_DIM * KV_ELEMENT_BYTES
 TOKEN_BYTES = LAYERS * TOKEN_LAYER_BYTES
+# sha512/row/v2's first block for a row of TOKEN_LAYER_BYTES (`verity.ml.commitments.rowleaf`, held to it by the tests).
+ROW_PREFIX = (b"verity/sha512-row/v2\0" + (8 * TOKEN_LAYER_BYTES).to_bytes(8, "big")).ljust(128, b"\0")
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +136,7 @@ class Key:
     c: tuple[int, ...]
     tau: int
     mask: int | None = None
+    seed: bytes | None = None
 
     @property
     def rounds(self) -> int:
@@ -157,10 +172,27 @@ def key(name: str, seed: bytes, rounds: int, mask: bool = False) -> Key:
     f = field(name)
     if type(seed) is not bytes or len(seed) != SEED_BYTES:
         raise ValueError(f"a seed is {SEED_BYTES} bytes")
-    if not 1 <= rounds < MASK_INDEX:
+    if not 1 <= rounds < BIND_INDEX:
         raise ValueError("a word has at least one round")
     k = int.from_bytes(xof(_message(f, seed, MASK_INDEX), f.word_bytes), "little") if mask else None
-    return Key(f, tuple(_element(f, seed, j) for j in range(rounds)), _element(f, seed, TWEAK_INDEX) or 1, k)
+    return Key(f, tuple(_element(f, seed, j) for j in range(rounds)), _element(f, seed, TWEAK_INDEX) or 1, k, seed)
+
+
+def digest(data: bytes) -> bytes:
+    """`d`, a token-layer's digest: sha512/row/v2 of its bytes."""
+    if len(data) != TOKEN_LAYER_BYTES:
+        raise ValueError(f"a token-layer is {TOKEN_LAYER_BYTES} bytes")
+    return hashlib.sha512(ROW_PREFIX + bytes(data)).digest()
+
+
+def binding(d: bytes, block: int, k: Key) -> int:
+    """`b`, the offset of block `block`'s bound key from its token-layer's digest `d`."""
+    if type(d) is not bytes or len(d) != DIGEST_BYTES:
+        raise ValueError(f"a token-layer's digest is {DIGEST_BYTES} bytes")
+    if not 0 <= block < 1 << 64 or k.seed is None:
+        raise ValueError("a bound key is of a u64 block, under its codec seed")
+    f = k.field
+    return int.from_bytes(xof(_message(f, k.seed, BIND_INDEX) + struct.pack(">Q", block) + d, DIGEST_BYTES), "little") % f.p
 
 
 def rho(a: int, f: Field) -> int:
@@ -182,11 +214,11 @@ def rho_inv(y: int, f: Field) -> int:
     return q if y & 1 == 0 else (p - q) % p
 
 
-def encode_word(m: int, i: int, k: Key) -> int:
+def encode_word(m: int, i: int, k: Key, b: int = 0) -> int:
     f = k.field
     if not 0 <= m < f.p:
         raise ValueError("a payload is a word below p")
-    t = k.tweak(i)
+    t = (k.tweak(i) + b) % f.p
     x = m
     for j, c in enumerate(k.c):
         if j and k.mask is not None:
@@ -195,9 +227,9 @@ def encode_word(m: int, i: int, k: Key) -> int:
     return x
 
 
-def decode_word(y: int, i: int, k: Key) -> int:
+def decode_word(y: int, i: int, k: Key, b: int = 0) -> int:
     f = k.field
-    t = k.tweak(i)
+    t = (k.tweak(i) + b) % f.p
     x = y
     for j in reversed(range(k.rounds)):
         x = (rho_inv(x, f) - k.c[j] - t) % f.p
@@ -223,18 +255,27 @@ def payloads(data: bytes, f: Field) -> list[int]:
     return [int.from_bytes(padded[s * w : s * (w + 1)], "little") for w in range(token_layer_words(f))]
 
 
-def encode_token_layer(data: bytes, slot: int, layer: int, k: Key) -> list[int]:
+def encode_token_layer(data: bytes, slot: int, layer: int, k: Key, bound: bool = False) -> list[int]:
+    """Slot `slot`'s layer `layer` encoded under the seed's key, or, `bound`, under its own, which keeps
+    `digest(data)` beside it."""
     f = k.field
-    w0 = (slot * LAYERS + layer) * token_layer_words(f)
-    return [encode_word(m, w0 + w, k) for w, m in enumerate(payloads(data, f))]
+    block = slot * LAYERS + layer
+    w0 = block * token_layer_words(f)
+    words = payloads(data, f)
+    b = binding(digest(data), block, k) if bound else 0
+    return [encode_word(m, w0 + w, k, b) for w, m in enumerate(words)]
 
 
-def decode_token_layer(words: list[int], slot: int, layer: int, k: Key) -> bytes:
+def decode_token_layer(words: list[int], slot: int, layer: int, k: Key, d: bytes | None = None) -> bytes | None:
+    """The token-layer under the seed's key, or under the bound key of the digest `d` kept beside it: None if it does
+    not have that digest."""
     f = k.field
-    w0 = (slot * LAYERS + layer) * token_layer_words(f)
+    block = slot * LAYERS + layer
+    w0 = block * token_layer_words(f)
+    b = 0 if d is None else binding(d, block, k)
     s = f.word_bytes
-    out = b"".join(decode_word(y, w0 + w, k).to_bytes(s, "little") for w, y in enumerate(words))
-    return out[:TOKEN_LAYER_BYTES]
+    out = b"".join(decode_word(y, w0 + w, k, b).to_bytes(s, "little") for w, y in enumerate(words))[:TOKEN_LAYER_BYTES]
+    return None if d is not None and digest(out) != d else out
 
 
 def to_limbs(x: int, f: Field) -> list[int]:
