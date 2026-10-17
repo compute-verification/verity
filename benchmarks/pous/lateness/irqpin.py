@@ -10,7 +10,8 @@ hashes each UDP 4-tuple to one of 11 channels, whose interrupt is on CPU 96 + ch
    interrupt count rises with it is that port's receive channel (`discovery.json`).
 3. Two ports L1, L2 with different receive channels r1, r2, both off the fixed CPU's transmit channel. Phase 1 times
    L1 with its challenger on CPU 96 + r1 (`on`) and L2 on the fixed CPU (`off`) at once; phase 2 swaps them. 1 ms-paced
-   pings, `--seconds` per phase. Each machine's CPUs are sampled once a second (`cpusample.py`).
+   pings (or `--ops 2`, 4 KiB answers from cpu-1's host memory), `--seconds` per phase. Each machine's CPUs are sampled
+   once a second (`cpusample.py`).
 Writes `phase<N>/<on|off>.bin|json`, `discovery.json`, `<machine>-cpus.jsonl` and `summary.json` to $OUT."""
 
 from __future__ import annotations
@@ -94,6 +95,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seconds", type=int, default=180)
     ap.add_argument("--discovery-pings", type=int, default=2000)
+    ap.add_argument("--ops", default="3", help="the phases' challenge ops: 3 pings (default), 2 4 KiB host-memory answers")
     ns = ap.parse_args()
     out = os.environ.get("OUT") or sys.exit("$OUT is unset: run under research run")
     src = open(os.path.join(HERE, "lat.cu"), "rb").read()
@@ -137,7 +139,7 @@ def main() -> None:
             def probe(role: str) -> None:
                 L, cpu = cells[role]
                 results[role] = remote_probe("node1", src, d, 0, 1000000, ns.seconds,
-                                             ("warm=500", "ops=3", "k=1", "gap_us=1000", f"cpu={cpu}"),
+                                             ("warm=500", f"ops={ns.ops}", "k=1", "gap_us=1000", f"cpu={cpu}"),
                                              out=role, to=to, lport=L)
 
             threads = [threading.Thread(target=probe, args=(role,)) for role in cells]
