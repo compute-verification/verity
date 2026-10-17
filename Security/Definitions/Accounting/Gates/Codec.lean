@@ -1,0 +1,138 @@
+import Mathlib.Data.Fintype.Pi
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Data.Finset.Prod
+import Mathlib.Order.Interval.Finset.Nat
+import Mathlib.Order.Lattice.Nat
+import Definitions.Accounting.Gates.Model
+
+/-!
+# The word codec in the circuit model: what computing a block's encoding means (trusted)
+
+The codec of `verity/core/protocols/remote_bandwidth/codec.py` (masked, at `k` rounds over `p = 2^n − c`), and what a
+circuit of the model (`Model.lean`) computing its words is:
+
+* **The codec.** `rho p a` is `codec.rho`: `s = a^((p+1)/4) mod p`, the root of `a` or of `−a`, taken even when `a` is
+  a square and odd when it isn't. `encodeWord p K t m` is `codec.encode_word`: `x ← m`, then for each round `r`,
+  `x ← σ_K(x)` when `r ≥ 1` and `x ← ρ((x + c_r + t) mod p)`. Word `i`'s tweak is `t_i = τ·i mod p` (an unbound block,
+  `b = 0`; word `i` of block `j` is `i = 32j + w` at p1024).
+* **Draws.** A key is drawn after the circuit is declared: its round constants `c_r ∈ [0, p)`, its mask `K ∈ [0, 2^n)`
+  and its tweak multiplier `τ ∈ [1, p)`, uniform (`draws`): the codec's seed expanded by an ideal XOF.
+* **Inputs.** The circuit's registered inputs are bytes of the payload `m`, bytes of the draw (each round constant's,
+  the mask's, each word's tweak), or values fixed before the draw (`CodecInputs`); its run inputs may be anything, a
+  function of the draw among them, and the bounds charge their bits.
+* **Targets.** Word `i`'s target is its encoding less its parity (`lessParity`: the low bit cleared), byte for byte in
+  the store's layout (`byte`, little-endian). The parity is left out because each round's output parity is the Jacobi
+  symbol of its input, which a circuit gets without the root.
+* **Computing.** A circuit computes words `words` on a draw when it is in its window there and its output gates
+  `out i l` hold the targets' bytes (`Encodes`). `encodeCost` is the fewest budgeted gates of any circuit of the model,
+  with its window proven, budgeted fan-in at most `f`, values within `w` bits and no run input, that computes `q`
+  distinct words on more than `ε` of the draws: the cost `CircuitEncodeHardness` names.
+-/
+
+namespace Accounting.Gates
+
+/-- A codec's field, `p = 2^n − c`. -/
+structure Field where
+  n : ℕ
+  c : ℕ
+
+/-- The prime. -/
+def Field.p (F : Field) : ℕ := 2 ^ F.n - F.c
+
+/-- A word's bytes. -/
+def Field.bytes (F : Field) : ℕ := F.n / 8
+
+/-- The deployed field `p1024`: `2^1024 − 105`. -/
+def p1024 : Field := ⟨1024, 105⟩
+
+/-- Byte `l` of `N`, little-endian. -/
+def byte (N l : ℕ) : ℕ := N / 256 ^ l % 256
+
+/-- `codec.rho`: the root of `a` or of `−a`, even when `a` is a square mod `p` and odd when it isn't. -/
+def rho (p a : ℕ) : ℕ :=
+  let s := a ^ ((p + 1) / 4) % p
+  if s % 2 = (if s * s % p = a then 0 else 1) then s else if s = 0 then 0 else p - s
+
+/-- A key's round constants and its mask. -/
+structure Key where
+  c : List ℕ
+  mask : ℕ
+
+/-- `σ_K(x)`: `x xor K` when that is below `p`, else `x`. -/
+def sigma (p mask x : ℕ) : ℕ := if x ^^^ mask < p then x ^^^ mask else x
+
+/-- `codec.encode_word` of payload word `m` at tweak `t`, masked. -/
+def encodeWord (p : ℕ) (K : Key) (t m : ℕ) : ℕ :=
+  K.c.zipIdx.foldl (fun x e => rho p (((if e.2 = 0 then x else sigma p K.mask x) + e.1 + t) % p)) m
+
+/-- A word less its parity: its low bit cleared. -/
+def lessParity (y : ℕ) : ℕ := y / 2 * 2
+
+/-- A draw of a `k`-round key: its round constants, its mask and its tweak multiplier. -/
+abbrev Draw (k : ℕ) := (Fin k → ℕ) × ℕ × ℕ
+
+/-- The draws, uniform: `c_r ∈ [0, p)`, `K ∈ [0, 2^n)`, `τ ∈ [1, p)`. -/
+def draws (F : Field) (k : ℕ) : Finset (Draw k) :=
+  Fintype.piFinset (fun _ => Finset.range F.p) ×ˢ (Finset.range (2 ^ F.n) ×ˢ Finset.Ico 1 F.p)
+
+/-- A draw's key. -/
+def Draw.key {k : ℕ} (d : Draw k) : Key := ⟨List.ofFn d.1, d.2.1⟩
+
+/-- Word `i`'s tweak under a draw, `τ·i mod p`. -/
+def Draw.tweak {k : ℕ} (F : Field) (d : Draw k) (i : ℕ) : ℕ := d.2.2 * i % F.p
+
+/-- A registered input's canonical slot: a byte of a payload word, of a round constant, of the mask, or of a word's
+tweak. -/
+inductive Slot
+  | payload (i l : ℕ)
+  | const (r l : ℕ)
+  | mask (l : ℕ)
+  | tweak (i l : ℕ)
+
+/-- A slot's value under a draw, for payload `m`. -/
+def Slot.value {k : ℕ} (F : Field) (d : Draw k) (m : ℕ → ℕ) : Slot → ℤ
+  | .payload i l => byte (m i) l
+  | .const r l => if h : r < k then byte (d.1 ⟨r, h⟩) l else 0
+  | .mask l => byte d.2.1 l
+  | .tweak i l => byte (d.tweak F i) l
+
+variable {ι : Type} {k : ℕ}
+
+/-- The codec's inputs over draws `D`: each registered input is a canonical slot's byte on every draw, or one value
+on every draw (fixed before it). -/
+def CodecInputs (F : Field) (C : Circuit ι) (D : Finset (Draw k)) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) : Prop :=
+  ∀ g ∈ C, ∀ i, g.op = .input .registered i →
+    (∃ s : Slot, ∀ d ∈ D, x d i = s.value F d m) ∨ ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i
+
+/-- On draw `d`, `C` is in its window and its outputs `out i l` hold the bytes of words `words`' encodings, less their
+parity. -/
+def Encodes (F : Field) (C : Circuit ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
+    (d : Draw k) : Prop :=
+  InWindow C (x d) ∧
+    ∀ i ∈ words, ∀ l < F.bytes,
+      val C (x d) (out i l) = byte (lessParity (encodeWord F.p d.key (d.tweak F i) (m i))) l
+
+/-- `C` computes words `words` on more than `ε = εnum/εden` of the draws: on a set `good` of draws that large. -/
+def ComputesWords (F : Field) (k : ℕ) (C : Circuit ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ)
+    (out : ℕ → ℕ → ℕ) (εnum εden : ℕ) : Prop :=
+  ∃ good ⊆ draws F k, MoreThan (draws F k) good εnum εden ∧ ∀ d ∈ good, Encodes F C x m words out d
+
+/-- A circuit of the restricted class: its window proven, budgeted fan-in at most `f`, values within `w` bits. -/
+def Restricted (f w : ℕ) (C : Circuit ι) : Prop := Proven C ∧ FanIn f C ∧ Width w C
+
+/-- The budgeted gate counts of the restricted circuits with no run-input bits that compute `q` distinct words (each
+below `p`) of the codec's encoding, less parity, on more than `ε` of the draws, from the payload and whatever they
+registered before the draw. -/
+def encodeCosts (F : Field) (k f w εnum εden q : ℕ) : Set ℕ :=
+  {c | ∃ (ι : Type) (C : Circuit ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+    words.length = q ∧ words.Nodup ∧ (∀ i ∈ words, i < F.p) ∧ Restricted f w C ∧ runBits C = 0 ∧
+      CodecInputs F C (draws F k) m x ∧ ComputesWords F k C x m words out εnum εden ∧ budgeted C = c}
+
+/-- **The encode cost**: the fewest budgeted gates of any circuit of `encodeCosts`. -/
+noncomputable def encodeCost (F : Field) (k f w εnum εden q : ℕ) : ℕ := sInf (encodeCosts F k f w εnum εden q)
+
+/-- The carry bound's fooling family: `a_S = 16 · Σ_{i ∈ S} 256^i`, bit 4 of byte `i` set for `i ∈ S`, so every byte
+of `a_S` is even and byte `2i + 1` of `a_S²` is odd exactly when `i ∈ S`. -/
+def sparse (S : Finset ℕ) : ℕ := 16 * ∑ i ∈ S, 256 ^ i
+
+end Accounting.Gates

@@ -7,6 +7,7 @@ import Models.Accounting.Guarantees.BoundSketch
 import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Capacity
 import Models.Accounting.Guarantees.Confidence
+import Models.Accounting.Guarantees.Gates
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Localization
 import Models.Accounting.Guarantees.Memory
