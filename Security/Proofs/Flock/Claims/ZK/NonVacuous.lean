@@ -167,6 +167,7 @@ def toyD : Flock.Deploy Unit Unit Unit where
   enc _ _ := ()
   len _ := 0
   θ _ := 0
+  dec _ := ([], 0)
   read _ := ⟨[]⟩
   εtable _ := 0
   N₀ _ := 0
