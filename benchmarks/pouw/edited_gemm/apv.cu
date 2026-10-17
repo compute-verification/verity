@@ -454,28 +454,32 @@ __global__ void __launch_bounds__(128) pedit(const int8_t* __restrict__ P, int8_
     }
   }
 }
-// X^T = V^T + b, a warp a patch (4 rows x 128 keys): grid (s / 128, rows / 32) (cpv.cu's vedit)
+// X^T = V^T + b over patches (4 rows x 128 keys, cpv.cu's vedit's digests): grid (s / 128, rows / (4 VE_G)), a block
+// VE_G patches of one key chunk, thread g < VE_G hashing patch g's digest, then a warp a patch at a time
+constexpr int VE_G = 32;
 __global__ void __launch_bounds__(256) vedit(const int8_t* __restrict__ Vt, int8_t* __restrict__ Xt, int rows, int s,
                                              const __grid_constant__ Sig sg) {
-  __shared__ uint32_t dgs[8][16];
-  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, chunk = blockIdx.x, grp = blockIdx.y * 8 + warp;
-  if (grp * 4 >= rows) return;
-  if (lane == 0) {
+  __shared__ uint32_t dgs[VE_G][16];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, chunk = blockIdx.x, g0 = blockIdx.y * VE_G;
+  if (threadIdx.x < VE_G && (g0 + (int)threadIdx.x) * 4 < rows) {
     uint64_t st[8];
-    sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | ((uint64_t)grp * gridDim.x + chunk), st);
+    sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | ((uint64_t)(g0 + threadIdx.x) * gridDim.x + chunk), st);
 #pragma unroll
     for (int i = 0; i < 8; i++) {
-      dgs[warp][2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
-      dgs[warp][2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+      dgs[threadIdx.x][2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+      dgs[threadIdx.x][2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
     }
   }
-  __syncwarp();
-  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dgs[warp]);
+  __syncthreads();
+#pragma unroll 1
+  for (int gi = warp; gi < VE_G && (g0 + gi) * 4 < rows; gi += 8) {
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dgs[gi]);
 #pragma unroll
-  for (int rr = 0; rr < 4; rr++) {
-    const size_t off = (size_t)(4 * grp + rr) * s + 128 * chunk + 4 * lane;
-    const uint32_t bits = (bytes[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
-    *reinterpret_cast<uint32_t*>(Xt + off) = add_noise<false>(__ldg(reinterpret_cast<const uint32_t*>(Vt + off)), bits01(bits));
+    for (int rr = 0; rr < 4; rr++) {
+      const size_t off = (size_t)(4 * (g0 + gi) + rr) * s + 128 * chunk + 4 * lane;
+      const uint32_t bits = (bytes[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
+      *reinterpret_cast<uint32_t*>(Xt + off) = add_noise<false>(__ldg(reinterpret_cast<const uint32_t*>(Vt + off)), bits01(bits));
+    }
   }
 }
 // DG's rows [Y0 | Y1 | X_diag | Y2] and Sq of every query block of one KV head, a warp a channel and a lane a residue r:
@@ -603,7 +607,9 @@ static void apfree(AP& V) {
 }
 static void ued(AP& V, const Sig& s) { uedit<<<(V.s / 2 + 127) / 128, 128, 0, V.st>>>(V.Um, V.PA, V.Uf, V.s, s); }
 static void ped(AP& V) { pedit<<<V.ntiles, 128, 0, V.st>>>(V.P, V.Pt, V.Um, V.tab, V.s); }
-static void ved(AP& V, const Sig& s) { vedit<<<dim3(V.s / 128, V.kvh * 128 / 32), 256, 0, V.st>>>(V.Vt, V.Xt, V.kvh * 128, V.s, s); }
+static void ved(AP& V, const Sig& s) {
+  vedit<<<dim3(V.s / 128, (V.kvh * 128 + 4 * VE_G - 1) / (4 * VE_G)), 256, 0, V.st>>>(V.Vt, V.Xt, V.kvh * 128, V.s, s);
+}
 static void vsm(AP& V) { vsum<<<dim3(32, V.kvh), 128, 0, V.st>>>(V.Xt, V.DG, V.Sq, V.X0, V.s); }
 static void producers(AP& V, const Sig& s) { ued(V, s); ped(V); ved(V, s); vsm(V); }
 static void aprun(AP& V, ApKern k, uint32_t* R) {
