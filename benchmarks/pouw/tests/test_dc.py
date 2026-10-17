@@ -257,3 +257,90 @@ def test_analyze_sm90_pass_line(tmp_path):
     assert j["lane_fraction"] == 0.25 and j["a"] == (2.0 - 0.5) / (128 / 4096) and j["tensor_fraction"] == 1.0
     _rows(tmp_path / "b", {"wg_s8_n256_a1": wg, "imma_s8_k16": {"0:IMMA.16816.S8.S8": 1.1}})
     assert not an.analyze("sm90", tmp_path / "b")["M3"]["pass"]
+
+
+def test_uniform_tables_pin_every_loop():
+    """Each family's tables pin every probe's loop: the alone chains count a uniform opcode, every other uniform probe
+    the MMA beside them, and each IMAD-form probe an opcode of its loop."""
+    un = _load("uniform")
+    for fam in ("sm90", "sm100"):
+        tab = un.tables(fam)
+        assert len(tab) == 115, fam
+        for name, t in tab.items():
+            assert t["counted"] in t["counts"], (fam, name)
+            if name.startswith("uz_"):
+                assert un.kind_of(t["counted"]) == "UNI" and set(map(un.kind_of, t["counts"])) <= {"UNI", "ALU"}
+            elif t["binary"].endswith(("uniform", "issue", "sat")):
+                assert t["counted"].startswith("IMMA.16832"), (fam, name)
+
+
+def test_uniform_fit_and_check():
+    """UP at its alone rate, an issue slot on the issue rows, 0 on a pipe row with its limit beside it; a point UP's line
+    exceeds is reported."""
+    un = _load("uniform")
+    coef = {"ALU": {"issue": 1.0, "A": 2.0, "JI9_0": 0.98}, "IMAD": {"issue": 1.0, "I": 2.0}}
+    pts = [{"probe": "uz", "T": 200.0, "n": {"UNI": 100}},
+           {"probe": "uh", "T": 300.0, "n": {"ALU": 64, "IMAD": 32, "UNI": 64, "other": 4}}]
+    f = un.fit(pts, coef, ["issue", "A", "I", "JI9_0", "UP"], 1.96)
+    assert f["UP"] == {"c": 1.96} and f["issue"]["c"] == 1.0 and f["JI9_0"]["c"] == 0.98
+    assert f["A"]["c"] == 0.0 and abs(f["A"]["limit"] - min((306 - 128) / 64, 204 / 100)) < 1e-12
+    assert abs(f["issue"]["limit"] - 2.04) < 1e-12 and f["issue"]["set_by"] == "uz"
+    pts[0]["T"] = 400.0
+    assert un.fit(pts, coef, ["A"], 1.96)["A"] == {"c": 0.0, "limit": (306 - 128) / 64, "set_by": "uh"}
+    assert un.check(pts, coef, f) == []
+    assert un.check(pts + [{"probe": "bad", "T": 100.0, "n": {"UNI": 60}}], coef, f) == \
+        ["bad: UP 117.60 > T 100.00 (1 + 0.02)"]
+    g = un.fit(pts, coef, ["issue", "JI9_0"], 1.96, price=0.9)
+    assert g["issue"]["c"] == 0.9 and abs(g["JI9_0"]["c"] - 0.98 * 0.9) < 1e-12
+
+
+def test_uniform_issue_price_reads_only_saturated_streams(tmp_path):
+    """The issue price is the least slowdown a uniform instruction adds, counted in full from the SASS (a loop-control
+    uniform instruction the tables drop is still subtracted), over the streams whose baseline issues ≥ 0.95, less 2%."""
+    un = _load("uniform")
+    out = tmp_path / "out"
+    (out / "probes").mkdir(parents=True)
+    (out / "sass").mkdir()
+    loops = {"uv_0": (98, 0), "uv_32x": (98, 48), "uv_64x": (98, 96), "uw_0": (98, 0), "uw_64x": (98, 96)}
+    T = {"uv_0": 100.0, "uv_32x": 140.0, "uv_64x": 196.0, "uw_0": 110.0, "uw_64x": 120.0}
+    sass, verdicts, rows = [], [], []
+    for name, (vec, uni) in loops.items():
+        ops = ["FFMA R1, R1, 1, R1"] * (vec - 3) + ["UIADD3 UR4, UR4, 1, URZ", "UISETP.NE.AND UP0, PT, UR4, 8, PT"] + \
+              ["ULOP3.LUT UR5, UR5, UR6, 3, 0x96, !UPT"] * uni + ["@P0 BRA 0x10"]
+        sass.append(f"\t\tFunction : {name}\n" + "\n".join(f"        /*{16 * (i + 1):04x}*/   {op} ;   /* 0x0 */"
+                                                           for i, op in enumerate(ops)))
+        verdicts.append({"binary": "sm90_sat", "probe": name,
+                         "verdict": {"loops": [{"head": "0x0010", "tail": hex(16 * len(ops))}]}})
+        rows.append(json.dumps({"probe": name, "run": "r1", "rates": {"0:IMMA.16832.S8.S8": 4 * 8 / T[name]}}))
+    (out / "sass" / "sm90_sat.sass").write_text("\n".join(sass) + "\n")
+    (out / "gate-build.json").write_text(json.dumps({"verdicts": verdicts}))
+    (out / "probes" / "rows.jsonl").write_text("\n".join(rows) + "\n")
+    assert un.loop_counts(out)["uv_32x"] == {"FFMA": 95, "UIADD3": 1, "UISETP.NE.AND": 1, "ULOP3.LUT": 48, "BRA": 1}
+    s = un.saturated([out], "sm90")
+    uv = next(v for k, v in s["streams"].items() if k.startswith("uv "))
+    uw = next(v for k, v in s["streams"].items() if k.startswith("uw "))
+    assert abs(uv["issue0"] - 0.98) < 1e-12 and uw["issue0"] < 0.95
+    assert uv["points"]["uv_32x"]["added"] == 48 and abs(uv["points"]["uv_32x"]["dT"] - 40 / 48) < 1e-12
+    assert abs(uw["points"]["uw_64x"]["dT"] - 10 / 96) < 1e-12
+    assert s["set_by"] == "uv_32x" and abs(s["price"] - 40 / 48 / 1.02) < 1e-12
+
+
+def test_uniform_write_census_is_idempotent(tmp_path):
+    """--write replaces UNI's lines and the UP row, puts UP in the current vector's rows once, and census.py --write
+    keeps both."""
+    import shutil
+    un, census = _load("uniform"), _load("census")
+    dev = tmp_path / "sm_90"
+    shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
+    res = {"up": {"rate": 0.5, "by": "uz_64i", "cycles": 1.96}, "uniform_alone": {"uz_64i": 0.5}, "violations": [],
+           "rows": {"UP": {"c": 1.96}, "issue": {"c": 1.0, "limit": 1.2, "set_by": "uh_64i"},
+                    "A": {"c": 0.0, "limit": 0.9, "set_by": "uh_64i"}}}
+    for _ in range(2):
+        un.write_census(dev, res, "r20261017-000000-abcd")
+    cen = (dev / "census.csv").read_text().splitlines()
+    assert [ln for ln in cen if ln.startswith("UNI,")] == ["UNI,UP,,,1.96,,,,r20261017-000000-abcd",
+                                                         "UNI,issue,,,1,,,,r20261017-000000-abcd"]
+    assert sum(ln.startswith("UP,") for ln in (dev / "rows.csv").read_text().splitlines()) == 1
+    import tomllib
+    assert tomllib.loads((dev / "vectors" / "DC-90.toml").read_text())["rows"].count("UP") == 1
+    assert len(census.uniform_kept(dev, "census.csv", "kind")) == 2 and len(census.uniform_kept(dev, "rows.csv", "row")) == 1

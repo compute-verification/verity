@@ -19,6 +19,7 @@ from research.store import attempt as A
 from research.store import canon
 from research.store import cli_prov
 from research.store import derivation as D
+from research.store import model as M
 from research.store import tools_registry
 from research.store.tool import Tool, content_identity, parse_argv, tree_listing
 from waits import wait_runner
@@ -454,6 +455,21 @@ def test_attempt_build_from_fixture_run_dir(tmp_path):
     assert m["status"]["state"] == "done" and m["status"]["rc"] == 0 and m["status"]["class"] == "SUCCESS" and m["status"]["validation"] == "passed"
     assert m["outputs"] == {"result": None, "run_files": None} and m["telemetry"] == {"events": None, "resources": None}
     canon.dumps(m)                                                                    # the manifest is canonical-JSON clean
+
+
+def test_a_result_too_big_for_a_manifest_publishes_its_largest_fields_as_the_payload(tmp_path):
+    """INF-43: r20261010-162750-3ea6's 593 KB result.json made a 358 KB meta, over META_MAX_BYTES, so its attempt never published."""
+    d = _run_copy(tmp_path)
+    doc = json.loads((d / "result.json").read_text())
+    doc["findings"] = ["x" * 1000] * 400
+    (d / "result.json").write_text(json.dumps(doc))
+    st = FakeStore(tmp_path / "store")
+    out = A.publish(d, store=st)
+    assert out["published"] is True, out
+    res = st.artifacts[out["outputs"]["result"]]
+    assert res["meta"]["payload_fields"] == ["findings"] and "findings" not in res["meta"]
+    assert res["meta"]["validation"]["status"] == "passed", "the small fields readers filter on stay in the meta"
+    assert len(canon.dumps(res["meta"])) <= M.META_MAX_BYTES and res["payload"] is not None
 
 
 def test_publish_against_fake_store_is_complete_and_idempotent(tmp_path):
