@@ -18,13 +18,14 @@ pass.
 * **The goals** (`GoalsZk`). `Goals`' own, by field name, where the masked verifier's check is the plain one's: the
   session runs, its sends fit `k(x)`, the first is the link message, the last message's lengths fit their words; B's
   checks; §3, S1–S14, the public words, the proof count, S17 twice; per rep, S11, the extra claims, S15 and S16. The
-  masked checks in place of the plain ones: the keyed coin tree (`CoinTree`), each table's `--zk` schedule
-  (`SchedulesZk`), the masked proof file's decoding (`RepDecodesZk`), R7/F2 at the `--zk` schedule (`RepParamsZk`), the
-  pads' root (`PadsRoot`), the masked replay of zerocheck and lincheck (`Replay`, in place of `Goals`' `zerocheck` and
-  `lincheck`), the ring switch on the claims valued by their checks (`RingSwitchZk`), the masked Ligerito
-  (`LigeritoZk`), level 0's lane phase (`LaneConstraints`) and the inner proof (`Inner`).
+  masked checks in place of the plain ones: each table's `--zk` schedule (`SchedulesZk`), the masked proof file's
+  decoding (`RepDecodesZk`), R7/F2 at the `--zk` schedule (`RepParamsZk`), the pads' root (`PadsRoot`), the masked
+  replay of zerocheck and lincheck (`Replay`, in place of `Goals`' `zerocheck` and `lincheck`), the ring switch on the
+  claims valued by their checks (`RingSwitchZk`), the masked Ligerito (`LigeritoZk`), level 0's lane phase
+  (`LaneConstraints`) and the inner proof (`Inner`).
 * **Proved here**, as in `Skeleton`: the last message's statement, the scope check (`CaseZk.scope_ok`), a drawn
-  session, the link and last messages read back given their lengths, and S18 from S16.
+  session, the link and last messages read back given their lengths, and S18 from S16; and the keyed coin tree
+  (`coinTree_goal`, from `readyZk`).
 * **The composition**: `RunZk.rep_ok` (`zk_verifyRepWith_ok`), `RunZk.verdict_ok` (`zk_verifyWith_ok`),
   `RunZk.checks_ok'` (`checks_ok`), then `RunZk.acc` (`run_acc_of_zk`), and `complete_zk_of_goals` (`complete_zk_of`).
 -/
@@ -180,9 +181,9 @@ def FinalFitsZk : Prop :=
 
 /-! ### B's checks -/
 
-/-- **The record's draw is the statement's.** -/
+/-- **The record's draw is the statement's**, whatever its key order (`drawEq`). -/
 def DrawMatchesZk : Prop :=
-  ∀ o : RunZk H rel, (FlockSoundness.Discharge.Exec.recordDraw o.record == o.s.read.draw) = true
+  ∀ o : RunZk H rel, drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
 /-- **The record's live session reads** (`liveOf`: the record is JSON with its link, points and streams). -/
 def LiveReadsZk : Prop := ∀ o : RunZk H rel, liveOf o.spec o.record = .ok o.live
@@ -295,9 +296,9 @@ def ConsumedZk : Prop :=
 def CapCommittedZk : Prop :=
   ∀ o : RunZk H rel, ∀ i < o.tabs.size, ∀ r < 2, (flat (o.zp i r).proof.cap != o.sess.rootB[i]!) = false
 
-/-- **The masked goals**, every check but the five proved here (the statement, the scope, a drawn session, the link and
-last messages read back given their lengths, and S18 from S16). The fields are `Goals`' where the check is the plain
-one's. -/
+/-- **The masked goals**, every check but the six proved here (the statement, the scope, a drawn session, the link and
+last messages read back given their lengths, S18 from S16, and the coin tree). The fields are `Goals`' where the check
+is the plain one's. -/
 structure GoalsZk : Prop where
   session : SessionRunsZk H rel
   sends : SendCountZk H rel
@@ -311,7 +312,6 @@ structure GoalsZk : Prop where
   count : CustodyCountZk H rel
   rounds : CustodyRoundsZk H rel
   tables : TablesZk H rel
-  coinTree : CoinTree H rel
   decodes : DecodesZk H rel
   publics : PublicsZk H rel
   schedules : SchedulesZk H rel
@@ -339,15 +339,22 @@ section Proved
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^56` bytes, and the
-setup against `H` is the case's. -/
+/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^56` bytes, the
+setup against `H` is the case's, and the session's coins are the keyed coin tree. -/
 theorem CaseZk.ready_parts (c : CaseZk H rel) :
     c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧
-      setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) := by
+      setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true := by
   have h := c.ready
   unfold readyZk at h
   rw [c.setup] at h
   simpa [and_assoc] using h
+
+/-- **The session's coins are the keyed coin tree**: the goal `CoinTree`, from `readyZk`. -/
+theorem coinTree_goal : CoinTree H rel := fun o => by
+  have := o.ready_parts.2.2.2.2
+  cases h : o.spec.coinTree
+  · rw [h] at this; cases this
+  · rfl
 
 /-- **A drawn session**: `checks` never reaches `drawLaw zk none`. -/
 theorem CaseZk.drawn (c : CaseZk H rel) : c.s.read.draw.isNone = false := by
@@ -411,7 +418,7 @@ theorem RunZk.rep_ok (g : GoalsZk H rel) (o : RunZk H rel) {i : ℕ} (hi : i < o
 /-- **The masked verdict accepts** (`zk_verifyWith_ok`); S18 from S16, both reps' caps the committed `root_B`. -/
 theorem RunZk.verdict_ok (g : GoalsZk H rel) (o : RunZk H rel) :
     verdictWith true (Claims.hOf H) o.spec (tabsOf o.sts) o.record o.proofs = .ok () :=
-  zk_verifyWith_ok (Claims.hOf H) o.spec o.tabs o.record o.proofs (g.tables o) (g.coinTree o) (g.decodes o)
+  zk_verifyWith_ok (Claims.hOf H) o.spec o.tabs o.record o.proofs (g.tables o) (coinTree_goal o) (g.decodes o)
     (g.publics o) (g.schedules o) (g.proofCount o) (g.proofList o) (g.proofDigests o)
     fun i hi => ⟨o.sess.rootB[i]!, o.rep_ok g hi (by decide), o.rep_ok g hi (by decide)⟩
 
@@ -432,7 +439,7 @@ theorem RunZk.acc (g : GoalsZk H rel) (o : RunZk H rel) :
     rw [o.setup]
   have hlen : (honestRunZk H o.x o.w o.ω o.r).1.length = o.bodies.size := by
     rw [he]; simp
-  refine run_acc_of_zk H o.w o.x o.ω o.r (link := o.link) (F := o.final) o.setup o.ready_parts.2.2.2 ?_ ?_ ?_ ?_ ?_
+  refine run_acc_of_zk H o.w o.x o.ω o.r (link := o.link) (F := o.final) o.setup o.ready_parts.2.2.2.1 ?_ ?_ ?_ ?_ ?_
     (o.verdict_ok g) ?_
   · rw [hlen, hk]
     have := g.sends o
