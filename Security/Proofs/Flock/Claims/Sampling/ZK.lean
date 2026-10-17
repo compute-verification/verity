@@ -166,7 +166,8 @@ theorem sampling_deployed_models (H : Msg → Msg) (hKS : Claims.Flock.KS H (Flo
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
     (hComplete : Complete H (deploy rel c)) (L : Leaky Wit) (t : ℕ) (ht : 0 < t) (hK : ∀ x, L.G.K x + 2 = c.V.k x)
     {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
-    [DecidableEq B] [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc) (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
+    [DecidableEq B] [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc)
+    (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).CoinModel x Salt B Cc) (nL nB : Msg → ℕ)
     (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x) (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)
     (hL : ∀ lx, (L.proto lx).MsgLink H (RAt H (deploy rel c) lx) My cs (Mp lx) (Mc lx))
