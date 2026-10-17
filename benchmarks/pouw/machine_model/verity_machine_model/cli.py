@@ -42,7 +42,7 @@
                                               is [WEIGHT/]TERM+TERM..., its share of the cell's SMSP-time (default 1)
                                               and its certified load, TERM one of FOLD:SHARE[*R] (a noise-GEMM filler
                                               at SHARE of the tensor peak, its words folded R times; FOLD duo, xin13,
-                                              li or none), lane:RATE (verified lane chains, warp instructions a
+                                              li, arx (a cost probe) or none), lane:RATE (verified lane chains, warp instructions a
                                               SMSP-cycle), served:SHARE[:FOLD] or CLASS=RATE; σ is read on the pooled
                                               load, with each group's placement-attested σ beside it
 

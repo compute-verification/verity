@@ -89,6 +89,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
   for run in $CP_RUNS; do
     IFS=, read -r b bb l kind pdl pump fsm <<< "$run"
     fold=duo; case $b in fitx*) fold=xin13 ;; esac
+    case $pump in *:9:*) fold=arx ;; esac
     FSTEP_KIND=$kind FLIN_PDL=$pdl FSTEP_PUMP=$pump DFILL_PAD_KB=$CP_PAD FLIN_LM=1 "$B/dcap_$b" fstep "$bb" "$l" 0 2 0 0 \
       "${fsm:--1}" 2>> "$O/errors.txt" \
       | sed "s/^{\"mode\": \"fstep\"/{\"mode\": \"fstep\", \"build\": \"$b\", \"fold\": \"$fold\", \"pad_kb\": $CP_PAD/" \

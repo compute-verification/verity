@@ -38,6 +38,8 @@
 //           linear, so it binds nothing)
 //   5, 3    ram, xor with A made once a tile and reused (a probe of the SHA's cost; its receipts are not dfill_ref's)
 //   6, 7, 8 probes of the fold's pipes, A made once: ram with immediate keys, LEA.HI only, IMAD only (none a receipt)
+//   9  arx  y <- rotl(y ^ d0, 13) + d1;  y <- rotl(y ^ d2, 19) + d3 (LOP3, LEA.HI a word, no IMAD), A by SHA as a receipt
+//           fold's is: the cost of an IMAD-free fold, not a receipt (whether such a fold binds every word is FOLD-OPT's)
 // Keys are the key block's row words in order, the first two that are odd, at least 2^8 + 1 away from 0 mod 2^24 and not
 // ±1 mod 32 (a0, a1), and in an LI or XIN13 build (every fold's keys there) with no a b within 128 of 0 mod 2^30 for
 // b in 1..128 (pf_key_ok_r9); k0, k1 (duo's and LI's) are its rows 14 and 15. A tile's receipt is the XOR over its
@@ -213,6 +215,9 @@ __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uin
     y = pf_rotl(y, 7) + d0; y = pf_rotl(y, 19) + d1; y = pf_rotl(y, 7) + d2; y = pf_rotl(y, 19) + d3;
   } else if (NC == 8) {
     y = y * k.a0 + d0; y = y * k.a1 + d1; y = y * k.a0 + d2; y = y * k.a1 + d3;
+  } else if (NC == 9) {
+    y = pf_rotl(y ^ d0, 13) + d1;
+    y = pf_rotl(y ^ d2, 19) + d3;
   } else if (NC == 2) {
     rf_duo_step(y, z, d0, d1, d2, d3, k.a0, k.a1, k.k0, k.k1);
   } else {
@@ -284,7 +289,7 @@ __device__ __forceinline__ void pf_omma(uint32_t (&d)[4], const uint32_t (&a)[4]
 template <int NC, int KD, int W = PF_W>
 __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16], uint64_t c0, uint64_t c1,
                                             unsigned long long tile, int steps) {
-  constexpr bool regen = NC == 1 || NC == 2 || NC == 4, F4 = KD == PF_E2M1;
+  constexpr bool regen = NC == 1 || NC == 2 || NC == 4 || NC == 9, F4 = KD == PF_E2M1;
   constexpr int KH = F4 ? 2 : 1, P = 32 / KH, TN = 128 * W;
   constexpr uint64_t dom = pf_dom(KD);
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
@@ -722,7 +727,8 @@ static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
     case 6: dfill_k<6><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     case 7: dfill_k<7><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     case 8: dfill_k<8><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), or the probes 3, 5, 6, 7, 8\n"); exit(1);
+    case 9: dfill_k<9><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), or the probes 3, 5, 6, 7, 8, 9\n"); exit(1);
   }
 }
 template <int NC> static void dfill_pad_attr() {
@@ -732,7 +738,7 @@ static void dfill_prep() {
   if (getenv("DFILL_PAD_KB")) {
     g_pf_pad = (size_t)atoi(getenv("DFILL_PAD_KB")) << 10;
     dfill_pad_attr<1>(); dfill_pad_attr<2>(); dfill_pad_attr<3>(); dfill_pad_attr<4>();
-    dfill_pad_attr<5>(); dfill_pad_attr<6>(); dfill_pad_attr<7>(); dfill_pad_attr<8>();
+    dfill_pad_attr<5>(); dfill_pad_attr<6>(); dfill_pad_attr<7>(); dfill_pad_attr<8>(); dfill_pad_attr<9>();
   }
   CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
@@ -742,6 +748,7 @@ static void dfill_prep() {
   CK(cudaFuncSetAttribute(dfill_k<6>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<7>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<8>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<9>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
 }
 // PF_CTAS blocks for each of `grid` SMs, and tiles a block so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs
 // an SM

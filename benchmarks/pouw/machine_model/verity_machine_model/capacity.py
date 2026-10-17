@@ -41,6 +41,7 @@ FOLDS = {
     "duo": {"ALU": 2.0, "IMAD": 1.0},     # u = y ^ p ^ k (LOP3); y = u a + z (IMAD); z = rotl(u, r) + y (LEA.HI)
     "xin13": {"ALU": 1.0, "IMAD": 0.5},   # a pair: SHF, LOP3, IMAD
     "li": {"ALU": 0.5, "IMAD": 0.5},      # a pair: LOP3, IMAD
+    "arx": {"ALU": 1.0},                  # a pair: LOP3, LEA.HI (pfill's NC 9: a cost probe, not a receipt fold)
 }
 LANE_MIX = {"ALU": 0.5, "IMAD": 0.5}      # a lane filler's LOP3 and IMAD alternating (FILL-OPT, CALC's lane_fill)
 
