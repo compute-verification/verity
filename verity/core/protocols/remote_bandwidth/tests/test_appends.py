@@ -75,7 +75,8 @@ def pages(first: int, count: int) -> list[bytes]:
 
 class Run:
     """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
-    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends."""
+    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each pass's
+    seed binding every append it sent before the pass's root (`head`)."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
                  samples: int = 10**6, lifetime: int = audit.LIFETIME) -> None:
@@ -89,11 +90,18 @@ class Run:
         self.prover = audit.Prover(prover_store or store, None, self.s.commitment, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
+        self.head: bytes | None = None
         self.passes: dict[tuple[int, int], audit.Pass] = {}
+
+    def commit(self, root: bytes, count: int) -> int:
+        """An append's root sent (`Session.append`): the index the verifier assigns."""
+        first = self.s.append(root, count)
+        self.head = audit.append_head(self.head, first, count, root)
+        return first
 
     def append(self, count: int) -> audit.Append:
         a = self.store.append(pages(self.store.extent, count), salts(b"page salts %d" % self.store.extent, count))
-        assert self.s.append(a.root, a.count) == a.first
+        assert self.commit(a.root, a.count) == a.first
         return a
 
     def run(self, plan: Plan | None = None, change: tuple | None = None, sent=None, step: int | None = None
@@ -102,7 +110,7 @@ class Run:
         `step` (None: the step after the last pass's)."""
         if change is not None:
             plan = self.plan.changed(*change, self.store.extent)
-        ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan)
+        ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan, head=self.head)
         self.passes[self.t, self.i], self.previous, self.plan = ps, ps.root, ps.plan
         self.i += 1
         self.step = self.step + 1 if step is None else step
@@ -331,7 +339,7 @@ def test_an_append_s_leaves_bind_the_indices_the_verifier_assigns() -> None:
     ys = salts(b"page salts", 2)
     a = st.append(pages(N, 2), ys)
     shifted = audit.append_tree(st.registration.digest, N + 1, a.digests, ys)
-    assert r.s.append(shifted.commitment.root, 2) == N
+    assert r.commit(shifted.commitment.root, 2) == N
     assert len(shifted.open(N + 1).path) == len(a.tree.open(N).path)
     assert r.run(change=(((N, 2),), ())) is None
     r.boundary()
@@ -388,7 +396,7 @@ def test_an_appended_block_leaves_every_plan_within_the_lifetime_unless_re_keyed
 
     r = two_windows_under_a_lifetime_of_two()
     a = r.store.append(pages(N, 2), salts(b"re-keyed", 2))
-    assert r.s.append(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
+    assert r.commit(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
     assert r.run(change=(((N + 3, 2),), ((N, 2),))) is None
     r.boundary()
     v = copy.deepcopy(r).run(change=((), ()))

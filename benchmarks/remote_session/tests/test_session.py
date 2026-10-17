@@ -225,6 +225,21 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     assert pd["kv"]["appended"] > 0 and min(pd["dropped"]) == 16 and dropping["appended"] > 0
 
 
+def test_kv_pages_are_checked_by_worker_processes_under_seeds_that_bind_the_appends(monkeypatch):
+    """Each pass's seed binds the appends sent before its root, and the verifier's check workers recompute it from
+    the window's snapshot (`checks.Checks.snapshot`, the appends' head at each root among it): a kv session checked
+    by one worker process is accepted, as `Session.verify` accepts it."""
+    from checks import Checks
+
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    checks = Checks(1)
+    try:
+        (r,), (p,) = run("kv:2", samples=16, kv_every=2, kv_pool=8, checks=checks)
+    finally:
+        checks.close(wait=True)
+    assert r["accepted"] and p["accepted"] and r["failure"] is None and r["appended"] > 0
+
+
 def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is_rejected(monkeypatch):
     """Under L = 1 window, sent with the session, every appended page is stale in the window after the one it joined.
     The honest prover re-keys each before that window's first pass (writes its payload again in its slot, at a fresh

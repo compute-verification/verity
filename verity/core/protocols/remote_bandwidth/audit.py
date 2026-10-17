@@ -17,16 +17,18 @@ many reads of a node's registered blocks the node made in each window, from rece
    window's challenge, or the close after the last (`Session.boundary`), one-way.  A window lasts at least the stated
    `T` (`Params.window_ns`, 60 s by default).
 4. Chained passes.  Pass i of window t reads the blocks of its plan (`receipts.Plan`: distinct blocks, the whole store by
-   default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`), each of its
-   block alone, or under a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it
-   commits them in a tree bound to the plan and sends the root and the plan, whole or as its change from the previous
-   pass's (`Plan.changed`), with the step it covers, as soon as the pass ends (`Session.receive`).  A pass covers one
+   default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`; the root
+   before chained to every append received before the pass's own root, `chained`), each of its block alone, or under
+   a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it commits them in a tree
+   bound to the plan and sends the root and the plan, whole or as its change from the previous pass's
+   (`Plan.changed`), with the step it covers, as soon as the pass ends (`Session.receive`).  A pass covers one
    step `s` of the served circuit's execution (the engine step), and its plan is the blocks the circuit reads at `s`:
    the steps are public, and strictly increase over the session's passes.  The chain runs across the session's windows: a window's first
    pass follows the root of the previous window's last.  On a boundary message the prover finishes the pass in flight,
    which is its window's last, and starts the next window's chain.  Blocks written after the codec seed (KV pages)
    join the store mid-session: their payloads committed (`append_tree`, `Session.append`) before any pass whose plan
-   holds them, at fresh store indices from N up, each encoded under its bound key (`codec.encode(..., bound=True)`);
+   holds them, and so bound into its seed, at fresh store indices from N up, each encoded under its bound key
+   (`codec.encode(..., bound=True)`);
    a block released (`Session.release`) is in no later plan; and an appended block is in no plan of a window L or more
    after the window it joined (`Params.lifetime`): one kept longer is released and appended again, under a fresh index
    and so a fresh bound key.
@@ -90,6 +92,8 @@ CODEC_DOMAIN = "verity/remote-bandwidth/codec/v0"
 OPENINGS_DOMAIN = "verity/remote-bandwidth/openings/v0"
 PAYLOAD_DOMAIN = b"verity/remote-bandwidth/payload/v0\0"
 APPEND_DOMAIN = b"verity/remote-bandwidth/append/v0\0"
+APPENDS_DOMAIN = b"verity/remote-bandwidth/appends/v0\0"
+CHAINED_DOMAIN = b"verity/remote-bandwidth/chained/v0\0"
 REGISTRATION_DOMAIN = b"verity/remote-bandwidth/registration/v0\0"
 TILE_DOMAIN = b"verity/remote-bandwidth/stub-tile/v0\0"
 PAYLOAD_SCHEMA = receipts.SCHEMA
@@ -205,6 +209,31 @@ def append_tree(registration: bytes, first: int, digests: Sequence[bytes], salts
     return MerkleTree(append_domain(registration, first, len(digests)),
                       {first + u: receipts.hidden_digest(d, y) for u, (d, y) in enumerate(zip(digests, salts))},
                       lambda _j: PAYLOAD_SCHEMA)
+
+
+def append_head(head: bytes | None, first: int, count: int, root: bytes) -> bytes:
+    """The chain over a session's appends, in the order the verifier receives them, after one more:
+    SHA512(APPENDS_DOMAIN ‖ head ‖ u64be first ‖ u64be count ‖ root), `head` 64 zero bytes (None) before the first."""
+    if type(first) is not int or type(count) is not int or first < 0 or count < 1:
+        raise ValueError("an append is of count ≥ 1 blocks from a nonnegative first index")
+    if type(root) is not bytes or len(root) != DIGEST_BYTES or (head is not None and (
+            type(head) is not bytes or len(head) != DIGEST_BYTES)):
+        raise ValueError(f"an append's root and the chain's head are {DIGEST_BYTES} bytes")
+    return hashlib.sha512(APPENDS_DOMAIN + (head or bytes(DIGEST_BYTES)) + first.to_bytes(8, "big")
+                          + count.to_bytes(8, "big") + root).digest()
+
+
+def chained(previous: bytes, head: bytes | None) -> bytes:
+    """What a pass's seed takes as the root before it (`receipts.seed`'s `previous`): that root itself while no block
+    has been appended before the pass's own root (`head` None), else SHA512(CHAINED_DOMAIN ‖ root ‖ head), `head` the
+    chain over every append received before the pass's root (`append_head`).  So the seed of a pass comes after every
+    block its plan can hold: a block appended after it is in no plan of the pass, and one that carried the pass's
+    receipts of other blocks would be a fixed point of SHA-512."""
+    if head is None:
+        return previous
+    if type(previous) is not bytes or len(previous) != DIGEST_BYTES or type(head) is not bytes or len(head) != DIGEST_BYTES:
+        raise ValueError(f"the root before a pass and the appends' head are {DIGEST_BYTES} bytes")
+    return hashlib.sha512(CHAINED_DOMAIN + previous + head).digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -350,6 +379,15 @@ class Store:
         """The store's next fresh index: N, and every block appended since."""
         return self.registration.blocks + sum(a.count for a in self.appends)
 
+    @property
+    def head(self) -> bytes | None:
+        """The chain over the store's appends (`append_head`), None without one: what the seed of a pass binds once
+        the verifier has every one of them (`chained`)."""
+        out = None
+        for a in self.appends:
+            out = append_head(out, a.first, a.count, a.root)
+        return out
+
     def append(self, payloads: Sequence[bytes], salts: Sequence[bytes]) -> Append:
         """Payload blocks written after the codec seed, at the next fresh store indices: each encoded under its bound
         key (`codec.encode(..., bound=True)`), its digest kept beside it, all of them committed in one `append_tree`."""
@@ -427,16 +465,19 @@ class Prover:
         self.store, self.commitment, self.entropy = store, commitment, entropy
         self.tiles = _tiles(tiles, store.registration.bind)
 
-    def run(self, challenge: coins.CoinOpening, i: int, previous: bytes, plan: Plan | None = None) -> Pass:
-        """Pass i of the window whose challenge is `challenge`, after the root `previous`: refused unless the coin is a
-        window's challenge and opens against the session's commitment."""
+    def run(self, challenge: coins.CoinOpening, i: int, previous: bytes, plan: Plan | None = None, *,
+            head: bytes | None = None) -> Pass:
+        """Pass i of the window whose challenge is `challenge`, after the root `previous`, its seed binding `head`, the
+        chain over every append the verifier will have received before this pass's root (`chained`; None without
+        one, the honest prover's `Store.head`): refused unless the coin is a window's challenge and opens against the
+        session's commitment."""
         t = getattr(challenge, "index", None)
         reason = coins.coin_reason(self.commitment, challenge, t)
         if reason is None and t >= self.commitment.count // 2:
             reason = f"coin {t} is an openings coin, not a window's challenge"
         if reason is not None:
             raise ValueError(reason)
-        return self.pass_under(t, i, receipts.seed(challenge.coin, i, previous), plan)
+        return self.pass_under(t, i, receipts.seed(challenge.coin, i, chained(previous, head)), plan)
 
     def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> Pass:
         """Pass i of `window`'s receipts and tree under `seed`, however it was derived."""
@@ -593,6 +634,7 @@ class _Window:
     plans: list[Plan] = field(default_factory=list)
     post: list[int] = field(default_factory=list)
     steps: list[int] = field(default_factory=list)
+    heads: list[bytes | None] = field(default_factory=list)
     boundary_ns: int | None = None
     final: bool = False
     draws: tuple[tuple[int, int], ...] | None = None
@@ -632,6 +674,7 @@ class Session:
         self.extent = registration.blocks
         self.released = 0
         self._appends: list[tuple[int, CommitmentDomain, Commitment]] = []
+        self._head: bytes | None = None
         self._joined: list[int] = []
         self._gone: list[tuple[int, int]] = []
         self._plan = Plan.whole(registration.blocks)
@@ -690,14 +733,15 @@ class Session:
         """The root of an append's payload tree (`append_tree`), `count` blocks written after the codec seed: they take
         the store's next fresh indices, from the one returned, and a plan received after this may hold them, until the
         lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
-        more after it may hold them.  Its rejection, `append`, if it is malformed or would take the store past its
-        codec's `max_blocks`."""
+        more after it may hold them.  The seed of every pass whose root comes after this binds it (`chained`).  Its
+        rejection, `append`, if it is malformed or would take the store past its codec's `max_blocks`."""
         self._live()
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
                 or self.extent + count > self.params.codec.max_blocks):
             return self._fail(self.filling, "append")
         first = self.extent
         self._appends.append((first, append_domain(self.registration.digest, first, count), Commitment(root, count)))
+        self._head = append_head(self._head, first, count, root)
         self.extent += count
         return first
 
@@ -780,6 +824,7 @@ class Session:
         self.windows[t].plans.append(plan)
         self.windows[t].post.append(0 if extent == N else sum(max(0, f + c - max(f, N)) for f, c in plan.runs))
         self.windows[t].steps.append(step)
+        self.windows[t].heads.append(self._head)
         self._plan, self._step = plan, step
         return None
 
@@ -811,9 +856,13 @@ class Session:
         return w.draws
 
     def _previous(self, t: int, i: int) -> bytes:
+        """What pass i of window t's seed takes as the root before it: that root, chained to the appends received
+        before the pass's own root (`chained`)."""
         if i > 0:
-            return self.windows[t].roots[i - 1]
-        return self.windows[t - 1].roots[-1] if t > 0 else self.registration.digest
+            root = self.windows[t].roots[i - 1]
+        else:
+            root = self.windows[t - 1].roots[-1] if t > 0 else self.registration.digest
+        return chained(root, self.windows[t].heads[i])
 
     def verify(self, t: int, openings: Sequence[Opening]) -> Verdict:
         """Window t's verdict on the prover's openings of its draws, in the order drawn."""
