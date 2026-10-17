@@ -177,27 +177,28 @@ def _pg_gate(arm: str, ok: bool = True) -> dict:
 
 
 def _pg_bench() -> dict:
-    """pgemm bench's line: at both spacings every Dither route takes FULL 1.0 ms at FW 2 (k4s 2.0, i8c 1.0 at FW 1),
-    and the split arms MMARES 0.3, MMA 0.4, LD 0.5, EXT 0.8, FOLDONLY 0.9 ms (k4s's fold alone 1.9), FULLRES 0.8 (k4s
-    1.5)."""
+    """pgemm bench's line: at both spacings every Dither route takes FULL 1.0 ms at FW 2 (k4s 2.0, i8c 1.0 at FW 1;
+    k4t only FW 1, 1.2), and the split arms (k4t's at FW 1) MMARES 0.3, MMA 0.4, LD 0.5, EXT 0.8, FOLDONLY 0.9 ms
+    (k4s's fold alone 1.9), FULLRES 0.8 (k4s 1.5)."""
     b = {"mode": "bench", "arch": "sm_100a", "m": 4096, "n": 4096, "k": 4096, "reps": 20, "sms": 148,
          "clock_khz": 1965000, "cublaslt_f8_out": "f32", "pf8_ms": 0.2, "pi8_ms": 0.25, "cublaslt_f8_ms": 0.125,
          "cublaslt_i8_ms": 0.16, "pf8_res_ms": 0.15}
     for L in (32, 64):
         for r in an.PG_DITHER:
-            b[f"{r}_L{L}_fw2_full_ms"] = 2.0 if r == "k4s" else 1.0
+            if r != "k4t":
+                b[f"{r}_L{L}_fw2_full_ms"] = 2.0 if r == "k4s" else 1.0
             if r != "k4p":
                 b[f"{r}_L{L}_fw1_full_ms"] = 1.6 if r == "k4s" else 1.2
             for md, ms in (("mmares", 0.3), ("mma", 0.4), ("ld", 0.5), ("ext", 0.8),
                            ("foldonly", 1.9 if r == "k4s" else 0.9), ("fullres", 1.5 if r == "k4s" else 0.8)):
-                b[f"{r}_L{L}_fw2_{md}_ms"] = ms
+                b[f"{r}_L{L}_fw{an.PG_SPLIT_FW.get(r, 2)}_{md}_ms"] = ms
     return b
 
 
-def _pg_sass(arm: tuple[int, int, int, int], word: list[str], extra: int = 0) -> str:
+def _pg_sass(arm: tuple[int, int, int, int], word: list[str], extra: int = 0, bnr: int | None = None) -> str:
     """A cuobjdump kernel whose word loop is BNR copies of `word` (and `extra` lone MOVs) closed by a backward BRA."""
     r, md, L, fw = arm
-    ops = ["S2R R0, SR_TID.X"] + [w for _ in range(128 // fw) for w in word] + ["MOV R1, R2"] * extra
+    ops = ["S2R R0, SR_TID.X"] + [w for _ in range(bnr or 128 // fw) for w in word] + ["MOV R1, R2"] * extra
     lines = [f"        /*{16 * i:04x}*/                   {op} ;" for i, op in enumerate(ops)]
     lines.append(f"        /*{16 * len(ops):04x}*/                   BRA 0x10 ;")
     return f"\n\tFunction : _Z5pg100ILi{r}ELi{md}ELi{L}ELi{fw}EEvPKhS1_iiijPiPjiPKj\n" + "\n".join(lines) + "\n"
@@ -207,8 +208,11 @@ def test_fold_mix_word_loop():
     duo = ["LOP3.LUT R3, R3, R4, R5, 0x96, !PT", "IMAD R6, R3, R7, R8", "LEA.HI R8, R3, R6, R3, 0x5"]
     sass = (_pg_sass((0, 0, 32, 2), ["IADD3 R9, R9, R10, -R11"] + duo, extra=64)
             + _pg_sass((5, 0, 32, 2), ["IMAD.IADD R9, R9, 0x1, R10"] + duo)
-            + _pg_sass((1, 4, 64, 1), duo) + _pg_sass((0, 3, 32, 2), ["SYNCS.ARRIVE.TRANS64 RZ, [UR4], RZ"]))
+            + _pg_sass((1, 4, 64, 1), duo) + _pg_sass((0, 3, 32, 2), ["SYNCS.ARRIVE.TRANS64 RZ, [UR4], RZ"])
+            + _pg_sass((7, 0, 64, 2), ["IMAD.IADD R9, R10, 0x1, R11"] + duo, bnr=128))
     mix = an.fold_mix(sass)
+    k4t = mix.pop("k4t_L64_fw1_full")  # template FW 2, one warpgroup a 128-column receipt tile: 128 words a trip
+    assert k4t["alu_word"] == 2 and k4t["imad_word"] == 2 and k4t["instrs_word"] == pytest.approx(4 + 1 / 128)
     k4s, k4p = mix["k4s_L32_fw2_full"], mix["k4p_L32_fw2_full"]
     assert k4s["alu_word"] == 3 and k4s["imad_word"] == 1 and k4s["instrs_word"] == pytest.approx(5 + 1 / 64)
     assert k4s["model_words_sm_clk"] == pytest.approx(64 / 3)  # the ALU pipe binds: 3 ops at 2 warp instrs a clock
@@ -267,6 +271,16 @@ def test_pgemm_summary_against_dc():
     assert row["dc_int8"]["ms_at_shape"] == pytest.approx(dc_ms)
     assert row["dc_int8"]["gamma_cublaslt_f8"] == pytest.approx(dc_ms / 0.125)
     assert an.pgemm_summary([], [b], {})["bench"][0]["dc_int8"] is None
+
+
+def test_pgemm_summary_k4t():
+    """k4t's CTA is 128 x 256, and its kernel of record, time split and issue cost are its FW 1 arms."""
+    b = _pg_bench() | {"k4t_L32_fw1_full_cta_clk": 128 * 256 * 4096 / 32 / 28.0}
+    s = an.pgemm_summary([], [b], {"k4t_L32_fw1_full": {"alu_word": 2.1}}, [_dc_rate(2, 32, 29.4)])
+    k4t = next(r for r in s["bench"] if r["L"] == 32)["routes"]["k4t"]
+    assert k4t["fw"] == 1 and k4t["full_ms"] == 1.2 and k4t["cta_words_sm_clk"] == pytest.approx(28.0)
+    assert k4t["split_ms"]["fold"] == pytest.approx(0.4) and k4t["binding_of_full"] == pytest.approx(0.75)
+    assert k4t["issue"] == {"alu_word": 2.1} and k4t["over_dc_int8_clk"] == pytest.approx(1.05)
 
 
 def test_pgemm_main_exit(tmp_path, capsys):
@@ -344,7 +358,8 @@ def test_pgemm_build_selftest_issue(tmp_path):
     """What only the compiler shows: pgemm.cu's host encoding is exact (selftest), every Dither route's FULL kernel at
     FW 2 compiles without spills (FW 1's k4s and k4p spill, FOLDONLY a few bytes), and the word loop's issue cost is
     the route's: k4s 3 ALU-pipe ops a word (64/3 words/SM/clk), k4p and i8r 2 ALU plus 2 IMAD, k4b those and a VIADD,
-    i8c duo alone. A rematerialized tcgen05.st constant, which once cost k4s a move a word, fails the last."""
+    i8c duo alone, k4t 2 ALU plus 2 IMAD (its extraction an IMAD-pipe add; its plain words, the rebase word apart). A
+    rematerialized tcgen05.st constant, which once cost k4s a move a word, fails the last."""
     binary = tmp_path / "pgemm"
     r = subprocess.run([_tool("nvcc"), "-std=c++17", "-O3", "-Xptxas", "-v", "-gencode",
                         "arch=compute_100a,code=sm_100a", "-o", str(binary), str(HERE / "pgemm.cu")],
@@ -361,7 +376,9 @@ def test_pgemm_build_selftest_issue(tmp_path):
     mix = an.fold_mix(subprocess.run([_tool("cuobjdump"), "-sass", str(binary)], capture_output=True, text=True,
                                      check=True).stdout)
     for L in (32, 64):
-        word = {r: mix[f"{r}_L{L}_fw2_full"] for r in an.PG_DITHER}
+        word = {r: mix[f"{r}_L{L}_fw{an.PG_SPLIT_FW.get(r, 2)}_full"] for r in an.PG_DITHER}
+        assert word["k4t"]["alu_word"] == pytest.approx(2, abs=0.15) and word["k4t"]["imad_word"] == pytest.approx(2, abs=0.1)
+        assert word["k4t"]["instrs_word"] < 4.4
         assert word["k4s"]["alu_word"] == pytest.approx(3, abs=0.1) and word["k4s"]["imad_word"] < 1.1
         for r in ("k4p", "i8r"):
             assert word[r]["alu_word"] == pytest.approx(2, abs=0.1) and word[r]["imad_word"] == pytest.approx(2, abs=0.1)
