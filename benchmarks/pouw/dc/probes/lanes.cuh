@@ -4,8 +4,8 @@
 #include "../dc.cuh"
 
 // mix: add.u32 and FFMA alternating (ptxas splits the adds between IADD3 and IMAD.IADD); duo: the fold, 3 ops a word;
-// li: LOP3 and IMAD alternating, LI's op mix.
-enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO, L_IADD, L_FFMA, L_SHF, L_LEA, L_LI };
+// li: LOP3 and IMAD alternating, LI's op mix; lif: LI with FFMA filler.
+enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO, L_IADD, L_FFMA, L_SHF, L_LEA, L_LI, L_LIF };
 struct Lane {
   uint32_t r[8];
   float f[8];
@@ -64,13 +64,21 @@ DC_DEV void lane_pair(Lane& l) {
     l.op<Y>((q >> 1) + 4);
   }
 }
-// R lane ops (the duo lane: R/3 words of three ops each; the LI lane: LI's LOP3 + IMAD pair, R/2 of each)
+// R lane ops (the duo lane: R/3 words of three ops each; the LI lane: LI's LOP3 + IMAD pair, R/2 of each; lif: LI with
+// one FFMA filler op in eight, 7 LOP3 + 7 IMAD + 2 FFMA a 16)
 template <int X, int R>
 DC_DEV void lane_ops(Lane& l) {
   if constexpr (X == L_DUO) {
     duo_ops<0, R / 3>(l);
   } else if constexpr (X == L_LI) {
     lane_pair<L_LOP3, L_IMAD, R>(l);
+  } else if constexpr (X == L_LIF) {
+#pragma unroll
+    for (int q = 0; q < R; q++) {
+      if (q % 8 == 7) l.op<L_FFMA>(q / 8);
+      else if ((q % 8 + q / 8) % 2 == 0) l.op<L_LOP3>(q);
+      else l.op<L_IMAD>(q);
+    }
   } else {
 #pragma unroll
     for (int q = 0; q < R; q++) l.op<X>(q);
