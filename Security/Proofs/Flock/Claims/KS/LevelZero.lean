@@ -639,30 +639,6 @@ theorem lincheck_moves (c : CircuitFold) (zc : Flock.ZcOut) (p : LincheckProof) 
     rw [kk₇, k₆.1, hk₅, kk₃, kk₂, k₁.1]
     omega
 
-/-- **The ring switch's rounds**: `claims + 1` (one per claim and the batching coin). -/
-theorem ringSwitch_moves (m : ℕ) (claims : Array Flock.Claim) (rs : Array (Array F128)) {t t' : Transcript}
-    {T : F128} {sws : Array Switched} (hn : 0 < claims.size) (h : ringSwitch m claims rs t = .ok ((T, sws), t')) :
-    t'.rounds = t.rounds ∧ t'.k = t.k + claims.size + 1 := by
-  unfold ringSwitch at h
-  obtain ⟨t₁, k₁, h⟩ := label_bind h
-  obtain ⟨s, t₂, hloop, h⟩ := bind_ok h
-  obtain ⟨-, -, t₃, r₃, kk₃, h⟩ := sampleVec_bind (by omega) h
-  obtain ⟨-, rfl⟩ := pure_ok h
-  rw [forIn_range_eq] at hloop
-  obtain ⟨hr₂, hk₂, -, -⟩ := forIn_roundsQ _ (oStep claims rs) 7 (RsCheck claims rs) (by
-      intro k st tt b tt' hb
-      obtain ⟨tt₁, kk₁, hb⟩ := label_bind hb
-      obtain ⟨tt₂, kk₂, hb⟩ := absorbSlice_bind hb
-      obtain ⟨hval, hb⟩ := check_bind hb
-      obtain ⟨-, nn, tt₃, rr₃, kk₃, hb⟩ := sampleVec_bind (by omega) hb
-      obtain ⟨rfl, rfl⟩ := pure_ok hb
-      have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
-      have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
-      refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_, hval⟩
-      rw [← e1, ← e2]
-      rfl) claims.size 0 t₁.k _ t₁ t₂ s (by omega) hloop
-  exact ⟨by rw [r₃, hr₂, k₁.2], by rw [kk₃, hk₂, k₁.1]⟩
-
 /-- **One rep refines the model's, level 0's request first** (§9–§14): `rep_refines`, and the result's first request
 is level 0's, at the positions of the coins of the stream's round after zerocheck's `3 + (m − 6)` rounds, lincheck's
 `3 + (kLog − 6)`, the ring switch's `claims + 1` and Ligerito's `k0 + 6`. -/
