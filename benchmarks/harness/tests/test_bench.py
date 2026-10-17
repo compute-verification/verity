@@ -125,7 +125,7 @@ def test_every_toml_spec_strictly_loads():
     for path in sorted(SPEC_ROOT.glob("*.toml")):
         first = path.read_text().splitlines()[0]
         loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
-    assert len(loaded) == 8
+    assert len(loaded) == 9
 
 
 def test_plan_identity_binds_resolved_spec_commit_lock_pin_and_point_but_not_admission():
