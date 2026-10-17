@@ -862,7 +862,8 @@ def _receipt(rec, challenger: str, received: str) -> dict:
 def run(j):
     """`Run.run`: a `Stream`'s run of one registration from its public check through its verdict, the pieces above in its
     order. `register`: `check_public` on the boundary values and declared items, the population, R1-R7 under
-    `service.selection_law` over it, and the receipt; `select`: the draw from the source's bytes (`select`); `interior`
+    `service.selection_law` over it, a law whose drawn count varies (`service.count_varies`: `shapes`), and the
+    receipt; `select`: the draw from the source's bytes (`select`); `interior`
     (`register_interiors`): a two-stage rule that drew some RU, `check_public` on the interior values, the K proved RUs'
     population, R1-R7 on the interiors' copies under the run's query and `subset:K`, and the receipt; `deliver`: one or
     more sessions, each matching `service._DIGEST`, and the interiors registered first when a two-stage rule drew some RU;
