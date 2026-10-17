@@ -19,12 +19,14 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.config import UsageError
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, UsageError
+from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.predict import score as S
 from verity_vllm.predict.build import Unexpressible, build_program, weight_leaves, model_shape
 from verity_vllm.predict.phi import Phi
 
 FIX = Path(__file__).parent / "fixtures"
+GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
@@ -34,6 +36,17 @@ STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "s
 
 def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
     return Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTXPRO6000), workload={"requests": requests or []}, **kw)
+
+
+def _row_phi(row: str, case: str, hf_home: Path, rank: int = 0) -> Phi:
+    """A row of record's φ at `rank` as `score.phi_of` makes it, the checkpoint's config.json the package's byte copy of it
+    (`hf_configs/<case>.config.json`)."""
+    w = json.loads((WORKLOADS / f"{row}.json").read_text())
+    cp = Path(S.hf_config_path(str(hf_home), w["model"], RowEngine.of(w).revision))
+    cp.parent.mkdir(parents=True, exist_ok=True)
+    cp.write_bytes((HF_CONFIG_DIR / f"{case}.config.json").read_bytes())
+    phi = S.phi_of({"row": row, "workload": w}, hf_home=str(hf_home))
+    return Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": rank}})
 
 
 @pytest.mark.parametrize("model,digest", [
@@ -95,6 +108,26 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     phi = _phi(json.loads((FIX / "llama32-1b.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}], tp={"world": 2, "rank": 1})
     assert S.predict_workload(phi)["digest"] == "4cd839563c959eee6f1abaf647bd7d771a842cb8940ed5a92443e85e2ca48cd7f5aecfa1f80d8084c276d3c32a59b1dbf36770a18cb8015ec6ebc8c62cb9c1da"
+
+
+@pytest.mark.parametrize("rank", range(8))
+def test_dsa_rank_step_equals_the_record(rank, tmp_path):
+    """GLM-5.3 at TP8 on H200 (block FP8, cc 9.0): each rank's step through the DeepSeek sparse-attention decoder (`predict.dsa`)
+    is the rank's step Program `records.json` pins for the row (its FlashInfer fused all-reduce + RMSNorm, the decode-path sparse
+    MLA, the indexer on its layers, the tuned fused-MoE tile at M = 1)."""
+    r = build_program(_row_phi(GLM53, "GLM53", tmp_path, rank), "step", M=1, pos0=8)
+    assert r.function.startswith("Derived[vLLMStep[DeepseekV32ForCausalLM]]_v1")
+    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53]["programs"][str(rank)]["step"]
+
+
+def test_dsa_refuses_outside_its_domain(tmp_path):
+    phi = _row_phi(GLM53, "GLM53", tmp_path)
+    with pytest.raises(Unexpressible, match=re.escape("tensor parallel world 2 (TP8, the worlds a Build has traced)")):
+        build_program(Phi.from_json({**phi.to_json(), "tp": {"world": 2, "rank": 0}}), "step")
+    with pytest.raises(Unexpressible, match=re.escape("a target without a device name")):
+        build_program(Phi.from_json({**phi.to_json(), "target": {k: v for k, v in phi.target.items() if k != "device_name"}}), "step")
+    with pytest.raises(Unexpressible, match=re.escape("a call of 257 query rows, a prefill (decode threshold 256 at 8 query heads")):
+        build_program(phi, "step", M=257)
 
 
 @pytest.mark.parametrize("sampling,M,digest", [
