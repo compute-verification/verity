@@ -9,6 +9,8 @@
 //   wgmix_<lane>_r<R>     each of 2 warpgroups issues its 4 wgmma, then R lane ops, then waits (the honest kernel's
 //                         shape: the fold runs while the group is in flight)
 //   imma_s8_k32 / _k16    mma.sync on sm_90 (TENSOR's table: k16 full rate, k32 at 2/3 per [LUO])
+//   sync_<form>           the other mma.sync shapes. CUDA 13.0 lowers e4m3 m16n8k32 to 2 HMMA.16816.F32 + 4 FADD (no
+//                         native FP8 mma.sync on sm_90) and s4 m16n8k64 to a CALL into an emulation routine (not timed)
 // Lanes: mix (add.u32 and FFMA alternating; ptxas on sm_90 splits the adds between IADD3 and IMAD.IADD, the FMA pipe),
 // imad, lop3, shfl (interleaved only: warp-specialized, ptxas pulls the clock read into a loop), duo (the fold's 3 ops a word).
 // dc/analyze.py turns rows.jsonl into words a tensor-pipe cycle and the issue cost a beside each lane.
@@ -27,6 +29,7 @@ DC_DEV uint32_t operand_word(uint32_t i, int mode) {
   if constexpr (TY == 0) return x;                                   // s8/u8: every code
   if constexpr (TY == 1) return x & 0x77777777u;                     // e4m3/e5m2: no NaN or inf code
   if constexpr (TY == 2) return (x & 0x807F807Fu) | 0x3F003F00u;     // bf16 in ±[0.5, 1)
+  if constexpr (TY == 4) return (x & 0x83FF83FFu) | 0x38003800u;     // f16 in ±[0.5, 1)
   return (x & 0x007FFFFFu) | 0x3F800000u;                            // tf32 in [1, 2)
 }
 
@@ -50,15 +53,22 @@ DC_DEV Tiles fill_tiles(unsigned char* sm, int mode) {
     static constexpr int NA = NACC, TYPE = TY;                                                    \
     DC_DEV static void mma(Acc (&d)[NACC], const Tiles& t, int sd) { wgmma_##NAME(d, t.da, t.db, sd); } \
   };
+FORM(s8_n8, int, 4, 0)
+FORM(s8_n16, int, 8, 0)
+FORM(s8_n32, int, 16, 0)
 FORM(s8_n64, int, 32, 0)
 FORM(s8_n128, int, 64, 0)
+FORM(s8_n192, int, 96, 0)
 FORM(s8_n256, int, 128, 0)
 FORM(u8s8_n256, int, 128, 0)
+FORM(e4m3_n128, float, 64, 1)
 FORM(e4m3_n256, float, 128, 1)
 FORM(e5m2_n256, float, 128, 1)
+FORM(f16_n256, float, 128, 4)
 FORM(bf16_n256, float, 128, 2)
 FORM(bf16_n128, float, 64, 2)
 FORM(tf32_n256, float, 128, 3)
+FORM(b1_n256, int, 128, 0)
 #undef FORM
 struct F_s8_n256_rs {  // A from registers: each thread's 4 words of the 64 x 32 A fragment
   using Acc = int;
@@ -210,6 +220,46 @@ DC_DEV void mma_s8k16(int32_t* d, const uint32_t* a, const uint32_t* b) {
                : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
                : "r"(a[0]), "r"(a[1]), "r"(b[0]));
 }
+// The other mma.sync shapes with 4 A, 2 B and 4 D registers a thread (TENSOR's M3: every mma.sync shape on sm_90).
+#define SYNC_FORM(NAME, PTX, ACC, CON, TY)                                                                   \
+  struct S_##NAME {                                                                                          \
+    using Acc = ACC;                                                                                         \
+    static constexpr int TYPE = TY;                                                                          \
+    DC_DEV static void mma(Acc* d, const uint32_t* a, const uint32_t* b) {                                   \
+      asm volatile("mma.sync.aligned." PTX " {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"          \
+                   : "+" CON(d[0]), "+" CON(d[1]), "+" CON(d[2]), "+" CON(d[3])                              \
+                   : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));                      \
+    }                                                                                                        \
+  };
+SYNC_FORM(b1_k256, "m16n8k256.row.col.s32.b1.b1.s32.and.popc", int, "r", 0)
+SYNC_FORM(e4m3_k32, "m16n8k32.row.col.f32.e4m3.e4m3.f32", float, "f", 1)
+SYNC_FORM(f16_k16, "m16n8k16.row.col.f32.f16.f16.f32", float, "f", 4)
+SYNC_FORM(bf16_k16, "m16n8k16.row.col.f32.bf16.bf16.f32", float, "f", 2)
+SYNC_FORM(tf32_k8, "m16n8k8.row.col.f32.tf32.tf32.f32", float, "f", 3)
+#undef SYNC_FORM
+template <class S>
+DC_DEV void sync_alone(const OpArgs& a) {
+  const uint32_t lane = threadIdx.x & 31;
+  uint32_t x[4], y[2];
+#pragma unroll
+  for (int i = 0; i < 4; i++) x[i] = operand_word<S::TYPE>(lane + 32 * i, a.mode);
+#pragma unroll
+  for (int i = 0; i < 2; i++) y[i] = operand_word<S::TYPE>(lane + 128 + 32 * i, a.mode);
+  typename S::Acc d[8][4] = {};
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int c = 0; c < 8; c++) S::mma(d[c], x, y);
+  }
+  OP_END
+  uint32_t s = lane;
+#pragma unroll
+  for (int c = 0; c < 8; c++)
+#pragma unroll
+    for (int e = 0; e < 4; e++) s ^= *reinterpret_cast<const uint32_t*>(&d[c][e]);
+  OP_SINK(s)
+}
+
 template <int K>
 DC_DEV void imma_alone(const OpArgs& a) {
   const uint32_t lane = threadIdx.x & 31;
@@ -234,16 +284,23 @@ DC_DEV void imma_alone(const OpArgs& a) {
 #define ALONE(NAME)                                                         \
   OP_KERNEL(wg_##NAME##_a0, 256) { wg_alone<F_##NAME, 0>(a); }               \
   OP_KERNEL(wg_##NAME##_a1, 256) { wg_alone<F_##NAME, 1>(a); }
+ALONE(s8_n8)
+ALONE(s8_n16)
+ALONE(s8_n32)
 ALONE(s8_n64)
 ALONE(s8_n128)
+ALONE(s8_n192)
 ALONE(s8_n256)
 ALONE(s8_n256_rs)
 ALONE(u8s8_n256)
+ALONE(e4m3_n128)
 ALONE(e4m3_n256)
 ALONE(e5m2_n256)
+ALONE(f16_n256)
 ALONE(bf16_n256)
 ALONE(bf16_n128)
 ALONE(tf32_n256)
+ALONE(b1_n256)
 #undef ALONE
 #define JOINT(LN, X, R)                                                       \
   OP_KERNEL(wgspec_##LN##_r##R, 384) { wg_spec<X, R>(a); }                    \
@@ -262,22 +319,36 @@ JOINT(duo, L_DUO, 384)
 #undef JOINT
 OP_KERNEL(imma_s8_k32, 512) { imma_alone<32>(a); }
 OP_KERNEL(imma_s8_k16, 512) { imma_alone<16>(a); }
+#define SYNC(NAME) OP_KERNEL(sync_##NAME, 512) { sync_alone<S_##NAME>(a); }
+SYNC(b1_k256)
+SYNC(e4m3_k32)
+SYNC(f16_k16)
+SYNC(bf16_k16)
+SYNC(tf32_k8)
+#undef SYNC
 
 // SASS opcodes (CUDA 13.0, sm_90a): IGMMA for s8, QGMMA for fp8, HGMMA for bf16/tf32.
 #define P_ALONE(NAME, PAT, ...) \
   {.name = "wg_" #NAME "_a0", .kernel = (const void*)wg_##NAME##_a0, .tpb = 256, .expect = PAT, .iters = 4096, ##__VA_ARGS__}, \
   {.name = "wg_" #NAME "_a1", .kernel = (const void*)wg_##NAME##_a1, .tpb = 256, .expect = PAT, .iters = 4096, ##__VA_ARGS__}
 static const OpProbe PROBES[] = {
+    P_ALONE(s8_n8, "IGMMA.64x8x32.S8.S8*=4"),
+    P_ALONE(s8_n16, "IGMMA.64x16x32.S8.S8*=4"),
+    P_ALONE(s8_n32, "IGMMA.64x32x32.S8.S8*=4"),
     P_ALONE(s8_n64, "IGMMA.64x64x32.S8.S8*=4"),
     P_ALONE(s8_n128, "IGMMA.64x128x32.S8.S8*=4"),
+    P_ALONE(s8_n192, "IGMMA.64x192x32.S8.S8*=4"),
     P_ALONE(s8_n256, "IGMMA.64x256x32.S8.S8*=4"),
     P_ALONE(s8_n256_rs, "IGMMA.64x256x32.S8.S8*=4"),
     P_ALONE(u8s8_n256, "IGMMA.64x256x32.U8.S8*=4"),
+    P_ALONE(e4m3_n128, "QGMMA.64x128x32.F32.E4M3.E4M3*=4"),
     P_ALONE(e4m3_n256, "QGMMA.64x256x32.F32.E4M3.E4M3*=4"),
     P_ALONE(e5m2_n256, "QGMMA.64x256x32.F32.E5M2.E5M2*=4"),
+    P_ALONE(f16_n256, "HGMMA.64x256x16.F32*=4"),
     P_ALONE(bf16_n256, "HGMMA.64x256x16.F32.BF16*=4"),
     P_ALONE(bf16_n128, "HGMMA.64x128x16.F32.BF16*=4"),
     P_ALONE(tf32_n256, "HGMMA.64x256x8.F32.TF32*=4"),
+    P_ALONE(b1_n256, "BGMMA.64x256x256.AND.POPC*=4"),
     {.name = "wgz_s8_n256_a1", .kernel = (const void*)wg_s8_n256_a1, .tpb = 256,
      .expect = "IGMMA.64x256x32.S8.S8*=4", .mode = 1, .iters = 4096, .fn = "wg_s8_n256_a1"},
     {.name = "wgz_e4m3_n256_a1", .kernel = (const void*)wg_e4m3_n256_a1, .tpb = 256,
@@ -303,6 +374,14 @@ static const OpProbe PROBES[] = {
 #undef P_JOINT
     {.name = "imma_s8_k32", .kernel = (const void*)imma_s8_k32, .tpb = 512, .expect = "IMMA.16832.S8.S8=8", .iters = 4096},
     {.name = "imma_s8_k16", .kernel = (const void*)imma_s8_k16, .tpb = 512, .expect = "IMMA.16816.S8.S8=8", .iters = 4096},
+#define P_SYNC(NAME, PAT) \
+  {.name = "sync_" #NAME, .kernel = (const void*)sync_##NAME, .tpb = 512, .expect = PAT, .iters = 4096}
+    P_SYNC(b1_k256, "BMMA.168256.AND.POPC=8"),
+    P_SYNC(e4m3_k32, "HMMA.16816.F32=16,FADD=32"),
+    P_SYNC(f16_k16, "HMMA.16816.F32=8"),
+    P_SYNC(bf16_k16, "HMMA.16816.F32.BF16=8"),
+    P_SYNC(tf32_k8, "HMMA.1688.F32.TF32=8"),
+#undef P_SYNC
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

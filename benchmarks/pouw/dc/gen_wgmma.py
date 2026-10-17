@@ -11,16 +11,17 @@ HERE = Path(__file__).resolve().parent
 
 #: (name, shape, PTX types, accumulator C type and constraint, extra immediates after scale-d, A from registers)
 FORMS = [
-    ("s8_n64", "m64n64k32", "s32.s8.s8", "int", "r", "", False),
-    ("s8_n128", "m64n128k32", "s32.s8.s8", "int", "r", "", False),
-    ("s8_n256", "m64n256k32", "s32.s8.s8", "int", "r", "", False),
+    *[(f"s8_n{n}", f"m64n{n}k32", "s32.s8.s8", "int", "r", "", False) for n in (8, 16, 32, 64, 128, 192, 256)],
     ("s8_n256_rs", "m64n256k32", "s32.s8.s8", "int", "r", "", True),
     ("u8s8_n256", "m64n256k32", "s32.u8.s8", "int", "r", "", False),
+    ("e4m3_n128", "m64n128k32", "f32.e4m3.e4m3", "float", "f", ", 1, 1", False),
     ("e4m3_n256", "m64n256k32", "f32.e4m3.e4m3", "float", "f", ", 1, 1", False),
     ("e5m2_n256", "m64n256k32", "f32.e5m2.e5m2", "float", "f", ", 1, 1", False),
+    ("f16_n256", "m64n256k16", "f32.f16.f16", "float", "f", ", 1, 1, 0, 0", False),
     ("bf16_n256", "m64n256k16", "f32.bf16.bf16", "float", "f", ", 1, 1, 0, 0", False),
     ("bf16_n128", "m64n128k16", "f32.bf16.bf16", "float", "f", ", 1, 1, 0, 0", False),
     ("tf32_n256", "m64n256k8", "f32.tf32.tf32", "float", "f", ", 1, 1", False),
+    ("b1_n256", "m64n256k256", "s32.b1.b1.and.popc", "int", "r", "", False),
 ]
 
 
