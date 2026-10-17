@@ -47,9 +47,10 @@ def test_dither_1s_skips_its_peels_and_the_clean_lm_head_but_not_forming():
 
 
 def test_two_sided_meets_the_target_everywhere():
+    """The program's target, ε < 1% (note:20261017T0013Z-report-epsilon-program)."""
     for m, c, ph in CELLS:
         s = E.summary(m, c, ph, design("dither-2s"))
-        assert s.eps_mac < 3e-3 and s.eps_time < 3e-3, (m, c, ph)
+        assert s.eps_mac < 1e-2 and s.eps_time < 1e-2, (m, c, ph)
         assert s.gamma < 2.2, (m, c, ph)
         skipped = {r["component"] for r in s.rows if r["eps_mac"] or r["eps_time"]}
         assert skipped == {"P·V"}, (m, c, ph)
@@ -67,10 +68,10 @@ def test_checked_designs_skip_no_product_only_vector_work(name):
 
 
 def test_the_designs_reproduce_skips_figures():
-    """SKIP's calculator before the registry (#2234): A 0.131% at 8B 2K by honest time, P in one block and every served
-    output free; Ap 0.155% and Bc 0.217%, both at 8B 2K, at BC-KERNEL's measured pv costs (0.078% at 8B 2K and 0.145% at
-    8B 8K at the model's)."""
-    for name, eps, ctx in (("dither-2s", 0.0013098, 2048), ("dither-2s-pv", 0.0015473, 2048),
+    """SKIP's calculator before the registry (#2234), by honest time, P in one block and every served output free, all
+    at 8B 2K: A 0.557% with its peel at BC-KERNEL r2's measured apv_l7qs (0.131% at the model's tail and no sums); Ap
+    0.155% and Bc 0.217% at BC-KERNEL's measured pv costs (0.078% at 8B 2K and 0.145% at 8B 8K at the model's)."""
+    for name, eps, ctx in (("dither-2s", 0.0055742, 2048), ("dither-2s-pv", 0.0015473, 2048),
                            ("dither-c", 0.0021662, 2048)):
         q = E.design_skip(design(name))
         assert (q.model, q.ctx, q.phase) == ("llama-3.1-8b", ctx, "prefill"), name
@@ -86,6 +87,23 @@ def test_the_registry_skip_is_eps_budgets_number():
         assert got == pytest.approx(want, rel=5e-3), (
             f"{name}: [skip] is {got:.3g}, eps_budget.py's design_skip gives {want:.3g}: write "
             f"[skip.served] eps = {float(f'{want:.3g}')} in data/designs/{name}.toml (or its base's)")
+
+
+def test_the_peel_is_priced_at_bc_kernels_measured_kernel():
+    """BC-KERNEL r2's apv_l7qs: the tail at 2.8 mainloop MACs a strip product, the sums a one-hot P row frees, and the
+    served epilogue. Checked downstream, the cheater pays the 4th IMMA and the epilogue and still skips the sums; at the
+    model's tail with no sums, H1's 0.193% (8B 2K) comes back."""
+    d, m, c = design("dither-c-peel"), "llama-3.1-8b", 2048
+    free, chk = E.summary(m, c, "prefill", d), E.summary(m, c, "prefill", d, checked=True)
+    assert chk.eps_time < free.eps_time and chk.gamma == free.gamma
+    assert free.eps_time == pytest.approx(0.0060859, rel=1e-4) and chk.eps_time == pytest.approx(0.0055510, rel=1e-4)
+    model = {**E.RATES, "tail_pv": E.RATES["tail"], "t_vsum": 0.0, "t_apv_serve": 0.0}
+    assert E.summary(m, c, "prefill", d, model).eps_time == pytest.approx(0.0019336, rel=1e-4)
+    s = E.MODELS[m]
+    with_sums = next(p for p in E.parts(m, c, "prefill", d.noise) if p.component == "P·V")
+    no_sums = next(p for p in E.parts(m, c, "prefill", d.noise, {**E.RATES, "t_vsum": 0.0}) if p.component == "P·V")
+    assert with_sums.seconds_skip - no_sums.seconds_skip == pytest.approx(E.RATES["t_vsum"] * s.kv * s.d)
+    assert E.summary(m, c, "decode", d).eps_time == E.summary(m, c, "decode", d, {**E.RATES, "t_vsum": 0.0}).eps_time
 
 
 def test_pv_units_price_as_checked_strip_without_the_scaling_and_the_sink(monkeypatch):

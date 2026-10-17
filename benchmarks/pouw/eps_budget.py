@@ -19,8 +19,10 @@ The designs are the registry's (benchmarks/pouw/machine_model/data/designs/, `ma
 noised as its design's `[noise]` names, a leaf of the registry's NOISE, and priced per component in executed int8
 products and honest seconds, with γ (`products`, `parts`, `summary`, `skip_table`, `component_table`). A checked leaf's
 vector work that only the served output needs is priced in CHECKED-STRIP's tensor–scalar model (`TS_EPS`, `pv_ts`), and
-`pv_block_table` prices P·V's block size for the designs whose P·V is `pv`. A design's ε_skip (`design_skip`) is the
-most over the models, contexts and phases; the registry's `[skip]` is that number (test_eps_budget holds them equal).
+`pv_block_table` prices P·V's block size for the designs whose P·V is `pv`. The peel's P·V is priced at BC-KERNEL r2's
+measured kernel (apv_l7qs): its tail a strip product, its sums and its served epilogue. A design's ε_skip
+(`design_skip`) is the most over the models, contexts and phases; the registry's `[skip]` is that number
+(test_eps_budget holds them equal).
 """
 
 from __future__ import annotations
@@ -69,6 +71,14 @@ RATES = {
     "r_receipt": 1.638,  # edited GEMM kernels / plain at S = 128: 1.668 (COMMIT-GPU r5 r20261016-183051-a379), less the
                          # 2-atom tail's 0.030 (EGEMM r20261016-090505-596b: 4 atoms 0.024 ms of 0.405 at o_proj)
     "tail": 1.9,         # a strip MAC costs 1.9 mainloop MACs (that 4-atom tail: 0.006 ms an atom against 32/4096 of 0.405)
+    "tail_pv": 2.8,      # adopted P·V's tail stage, mainloop MACs a strip product: 2.6-2.8, apv - cc against cf's time
+                         # a mainloop IMMA, latency-exposed (the issue model gives 1.57; BC-KERNEL r2, runs
+                         # r20261017-092503-35ff and r20261017-094903-3733, note:20261017T0837Z-draft-bc-kernel-r2)
+    "tail_pv_served": 0.7,   # of it, the 4th IMMA (64·S_diag), which only the served output needs: 2.0-2.1 without it
+    "t_vsum": 0.0103e-3 / (8 * 2048 * 128),  # s an entry (KV head, key, channel), adopted P·V's sums DG, S and X(0):
+                         # BC-KERNEL r2's linear vsum, 0.0103 ms at 8B 2K, latency-bound at 13.5% issue (same run 4)
+    "t_apv_serve": 4.4 / 128 / (4 * 188 * 2.092e9),  # s a cell, adopted P·V's served f over a plain epilogue: 4.4 warp
+                         # instructions a 128-cell tile (exact ncu counts, r20261017-092503-35ff), one a SMSP-cycle
     "t_quant": 0.56e-12,     # s an element, plain activation quantizer (COMMIT-GPU r5: +23 ms at 8 x 4K, 40.8 G elements)
     "t_dither": 0.48e-12,    # s an element, the dither's bits (EGEMM r20261016-104404-700b: qdither - qplain 0.016 ms, 8192 x 4096)
     "t_wedit": 0.86e-12,     # s a weight element a draw, W' = W + U written (EGEMM: wedit 0.0144 ms, 4096 x 4096)
@@ -156,13 +166,16 @@ class Part:
     plain: float         # GPU-seconds of the same component served as plain int8
 
 
-def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = RATES, block: int = 0) -> list[Part]:
+def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = RATES, block: int = 0,
+          checked: bool = False) -> list[Part]:
     """Per component, a token-layer: honest int8 products, the skippable ones, honest seconds, skippable seconds and plain
     int8 seconds, each product noised as `noise` (a design's `[noise]`) says. Prefill adds a checked leaf's vector work
     that only the served output needs, in the tensor–scalar model (`TS_EPS`; pv's `pv_ts`, P in blocks of `block` keys,
-    P V's honest seconds then plain int8 × pv_ts's γ), every served output free (no downstream check assumed); decode
-    prices products only. Decode's seconds are the GEMMs' compute, which the DRAM-bound step hides (`decode_gamma`);
-    decode's binding facet is DRAM (`decode_dram`)."""
+    P V's honest seconds then plain int8 × pv_ts's γ), every served output free (no downstream check assumed), and the
+    peel's sums (`t_vsum`, free at a one-hot P row) and served epilogue (`t_apv_serve`). With `checked` the peel's
+    served output is checked downstream, so the cheater pays its 4th IMMA (`tail_pv_served`) and epilogue; the
+    tensor–scalar leaves stay served free. Decode prices products only. Decode's seconds are the GEMMs' compute, which the DRAM-bound
+    step hides (`decode_gamma`); decode's binding facet is DRAM (`decode_dram`)."""
     s, r = MODELS[name], rates
     keys = (ctx + 1) / 2 if phase == "prefill" else ctx
     t_lin = 1 / (r["eta_lin"] * r["peak"])
@@ -177,9 +190,11 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
         else:
             tr, st, sk = products(leaf, comp, k)
             short = st and (leaf != "cohalf" or st <= 2 * (L + 1))     # limbs of L or L + 1 terms
-            strip_t = t * (r["tail"] if short else 1)
+            peel = leaf == "peel"
+            strip_t = t * ((r["tail_pv"] if peel else r["tail"]) if short else 1)
+            skip_t = strip_t - (t * r["tail_pv_served"] if peel and checked else 0)
             row = [words * (tr + st), words * sk, words * (tr * t * r["r_receipt"] + st * strip_t),
-                   words * sk * (strip_t if st else t * r["r_receipt"]), words * k * t]
+                   words * sk * (skip_t if st else t * r["r_receipt"]), words * k * t]
         acc[comp] = [a + b for a, b in zip(acc.get(comp, [0] * 5), row)]
 
     for _, k, n in s.linears:
@@ -190,6 +205,11 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
     if phase == "prefill":
         for comp, row in acc.items():
             leaf = noise[COMP[comp]]
+            if leaf == "peel":
+                sums, serve = r["t_vsum"] * s.kv * s.d, r["t_apv_serve"] * s.heads * s.d
+                row[2] += sums + serve
+                row[3] += sums + (0 if checked else serve)
+                continue
             if leaf == "pv":
                 e, g = pv_ts(name, ctx, block)
                 row[2] = row[4] * g
@@ -374,10 +394,11 @@ class Summary:
     rows: list
 
 
-def summary(name: str, ctx: int, phase: str, d: Design, rates: dict = RATES, block: int = 0) -> Summary:
+def summary(name: str, ctx: int, phase: str, d: Design, rates: dict = RATES, block: int = 0,
+            checked: bool = False) -> Summary:
     """ε_skip = skippable / (honest - skippable), by int8 products and by honest seconds, whole and per component (each
     component's skippable share over the same whole denominator); γ = honest / plain int8 time."""
-    ps = parts(name, ctx, phase, d.noise, rates, block)
+    ps = parts(name, ctx, phase, d.noise, rates, block, checked)
     macs, secs = sum(p.macs for p in ps), sum(p.seconds for p in ps)
     skip_m, skip_t = sum(p.macs_skip for p in ps), sum(p.seconds_skip for p in ps)
     rows = [{"component": p.component, "mac_share": p.macs / macs, "eps_mac": p.macs_skip / (macs - skip_m),

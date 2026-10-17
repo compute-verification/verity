@@ -16,5 +16,5 @@ qk = "cohalf"
 pv = "peel"
 
 [skip.served]
-eps = 0.00193
-source = "eps_budget.py (benchmarks/pouw, `design_skip`): the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, of the whole-model ε_skip by honest time, every served output free; at 8B 2K prefill, P·V's peeled strip (0.128%, free at a one-hot P row) and co32c's and cohalf's tensor–scalar vector work (linears 0.061%, QKᵀ 0.005%; note:20261017T0030Z-draft-checked-strip)"
+eps = 0.00609
+source = "eps_budget.py (benchmarks/pouw, `design_skip`): the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, of the whole-model ε_skip by honest time, every served output free; at 8B 2K prefill, P·V at BC-KERNEL r2's measured apv_l7qs, all of it free at a one-hot P row: the peeled strip's tail stage at 2.8 mainloop MACs a strip product (0.188%), the sums DG, S and X(0) at the measured vsum (0.349%) and the served epilogue (0.006%); and co32c's and cohalf's tensor–scalar vector work (linears 0.060%, QKᵀ 0.005%; note:20261017T0837Z-draft-bc-kernel-r2, note:20261017T0030Z-draft-checked-strip). With P·V's served output checked downstream it is 0.555% (8B) / 0.216% (70B) (note:20261017T0320Z-draft-eps1-calc Round 7)"
