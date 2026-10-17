@@ -31,7 +31,6 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
-import os
 import urllib.request
 from collections import Counter
 from collections.abc import Callable
@@ -106,11 +105,8 @@ def _model_type(role: str) -> str | None:
 
 
 def hub_config(repo: str, revision: str) -> bytes:
-    """`config.json` alone from the hub at `revision` (never a weight file)."""
-    req = urllib.request.Request(f"https://huggingface.co/{repo}/resolve/{revision}/config.json")
-    if os.environ.get("HF_TOKEN"):
-        req.add_header("Authorization", f"Bearer {os.environ['HF_TOKEN']}")
-    with urllib.request.urlopen(req, timeout=60) as r:
+    """`config.json` alone from the hub at `revision` (never a weight file), unauthenticated: a gated repo's refusal is the reason."""
+    with urllib.request.urlopen(f"https://huggingface.co/{repo}/resolve/{revision}/config.json", timeout=60) as r:
         return r.read()
 
 
