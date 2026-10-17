@@ -38,6 +38,7 @@ import Proofs.Flock.Claims.KS.PlainEvent
 import Proofs.Flock.Claims.KS.LiveMix
 import Proofs.Flock.Claims.KS.PlainFirst
 import Proofs.Flock.Claims.KS.PlainThird
+import Proofs.Flock.Claims.KS.ForkSlack
 import Proofs.Flock.Claims.KS.PlainSimW
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
@@ -165,10 +166,16 @@ that the live event implies bounds the mixture, the third bound's form (`PlainTh
 `FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision as the events, KS at the
 deployed plain verifier's trimmed record holds from a live prover for each prover, with a finite tape and coins of
 uniform law, that simulates its accepting runs, whose self-clashes give its accepting runs with a collision and whose
-fork bound holds, and the record's draw verbatim (`PlainSimW`: `FlockDeploy.KS.PlainClashRun`,
-`FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`, `FlockDeploy.KS.plainLiveWrPAt_of_sim`,
-`FlockDeploy.KS.plain_KS_of_sim`). The tape may hold the rest of each deployed coin (`plainCoins`) or uniform functions
-read at the live coins seen so far, so that a fork that redraws them reads fresh entries (`LiveMix`:
+fork bound holds up to a slack, and the record's draw verbatim (`PlainSimW`: `FlockDeploy.KS.PlainClashRun`,
+`FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`, `FlockDeploy.KS.plain_tableBoundθAt_of_sim`,
+`FlockDeploy.KS.plain_KS_of_sim`). The slack is the later rounds' forks and the one-run collision at the chances
+`δ_t` that a fork's coins at round `t` agree where the simulator's tape reads them,
+`Σ_{j<i<K} Δ_{j,i} Pr[F_i] + Δ_{j,K} Pr[F_K]` with `Δ_{j,i} = Π_{j≤t<i} δ_t` and `F_K` the one-run collision; a
+coupling of the fork's coin law gives it (`ForkSlack`: `Claims.Flock.ForkCoinCoupling`,
+`Claims.Flock.slack_of_coupling`), and it folds into one combined fork event per round with the old escapes, which fit
+the plain weight in level 0's room (`Claims.Flock.slackEsc`, `Claims.Flock.slackEsc_term`,
+`FlockDeploy.KS.slackEsc_fitsFork_plain`). The tape may hold the rest of each deployed coin (`plainCoins`) or uniform
+functions read at the live coins seen so far, so that a fork that redraws them reads fresh entries (`LiveMix`:
 `Claims.Bridge.Live.fnC`, `Claims.Bridge.Live.Pr_fnC`, `Claims.Bridge.Live.Pr_fnAt`). Two different columns an
 accepted plain run's reps open at one position collide in its own log (`ConflictTied`: `FlockDeploy.KS.plainRawCols`,
 `FlockDeploy.KS.plain_opening_raw`, `FlockDeploy.KS.plain_selfClash_tied`), so the simulator's self-clashes at level
