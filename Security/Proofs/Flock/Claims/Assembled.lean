@@ -147,18 +147,18 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
 `flock_plain_assembled` with its completeness from the record's JSON (`complete_plain_json`). `hKS` (E4) is what
 remains. -/
 theorem flock_plain_assembled_relation (H : Claims.Msg → Claims.Msg)
-    (hKS : Claims.Flock.KS H (deployPlainTrim Readable.relation))
+    (hKS : Claims.Flock.KS H (deployPlain Readable.relation))
     (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) :
-    Claims.Flock.ScopeMatches (deployPlainTrim Readable.relation) ∧
-      Claims.Flock.KS H (deployPlainTrim Readable.relation) ∧
-      Claims.Flock.Bits H (deployPlainTrim Readable.relation) ∧
-      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployPlainTrim Readable.relation) x ≤ 2 ^ (-a x)) →
-        (∀ x, Claims.Flock.γ (deployPlainTrim Readable.relation) x ≤ 2 ^ b x) →
-        Claims.Bits H (deployPlainTrim Readable.relation).V (Claims.Flock.R (deployPlainTrim Readable.relation).parse)
-          (Claims.Flock.E (deployPlainTrim Readable.relation) (deployPlainTrim Readable.relation).decode)
+    Claims.Flock.ScopeMatches (deployPlain Readable.relation) ∧
+      Claims.Flock.KS H (deployPlain Readable.relation) ∧
+      Claims.Flock.Bits H (deployPlain Readable.relation) ∧
+      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployPlain Readable.relation) x ≤ 2 ^ (-a x)) →
+        (∀ x, Claims.Flock.γ (deployPlain Readable.relation) x ≤ 2 ^ b x) →
+        Claims.Bits H (deployPlain Readable.relation).V (Claims.Flock.R (deployPlain Readable.relation).parse)
+          (Claims.Flock.E (deployPlain Readable.relation) (deployPlain Readable.relation).decode)
           fun x => min (a x) (255.5 - b x / 2) - 1) ∧
-      Claims.Flock.Efficient H (deployPlainTrim Readable.relation) plainStepPoly ∧
-      Claims.Flock.Complete H (deployPlainTrim Readable.relation) :=
+      Claims.Flock.Efficient H (deployPlain Readable.relation) plainStepPoly ∧
+      Claims.Flock.Complete H (deployPlain Readable.relation) :=
   flock_plain_assembled Readable.relation H hKS (FlockComplete.Replay.complete_plain_json H S)
 
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
