@@ -156,3 +156,17 @@ TLD2D1,32,16,copy16,"a landed word: texture point fetch / gather, format-convert
 TLD2D4,128,16,copy16,"a landed word: texture point fetch / gather, format-converting (UNORM/SNORM/sRGB/half texels)"
 TLD4G,128,16,copy16,"a landed word: texture point fetch / gather, format-converting (UNORM/SNORM/sRGB/half texels)"
 TLD4w,128,16,copy16,"a landed word: texture point fetch / gather, format-converting (UNORM/SNORM/sRGB/half texels)"
+HMMA16816,128,16,copy16,HMMA.16816.F32/HMMA.16816.F32.BF16 with A or B zero: D = C
+HMMA16816F16,64,16,copy16,HMMA.16816.F16 with A or B zero: D = C
+HMMA1684T,128,16,copy16,HMMA.1684.F32.TF32 with A or B zero: D = C
+HMMA1688T,128,16,copy16,HMMA.1688.F32.TF32 with A or B zero: D = C
+HMMASP16832,128,16,copy16,HMMA.SP.16832.F32 with A or B zero: D = C
+IMMA16816,128,16,copy16,IMMA.16816.S8.S8 with A or B zero: D = C
+IMMA16832,128,16,copy16,IMMA.16832.S8.S8/IMMA.16832.S8.S8.SAT/IMMA.16832.U8.S8 with A or B zero: D = C
+IMMA8816,64,16,copy16,IMMA.16816.S8.S8 with A or B zero: D = C
+IMMASP16832,128,16,copy16,IMMA.SP.16832.S8.S8 with A or B zero: D = C
+IMMASP16864,128,16,copy16,IMMA.SP.16864.S8.S8 with A or B zero: D = C
+OMMASF16864,128,16,copy16,OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X with A or B zero: D = C
+QMMA16832,128,16,copy16,QMMA.16832.F32.E2M1.E2M1/QMMA.16832.F32.E4M3.E4M3/QMMA.16832.F32.E5M2.E5M2 with A or B zero: D = C
+QMMASF16832,128,16,copy16,QMMA.SF.16832.F32.E4M3.E4M3.E8 with A or B zero: D = C
+QMMASP16864,128,16,copy16,QMMA.SP.16864.F32.E4M3.E4M3 with A or B zero: D = C

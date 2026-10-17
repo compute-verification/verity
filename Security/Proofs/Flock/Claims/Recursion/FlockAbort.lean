@@ -57,6 +57,7 @@ noncomputable def qDI : Flock.Deploy Bool ℕ Unit where
   enc := fun _ _ => 1
   len := fun _ => 2
   θ := fun _ => 0
+  dec := fun _ => ([], 0)
   read := fun _ => ⟨[]⟩
   εtable := fun _ => 0
   N₀ := fun _ => 100 * Real.exp 1

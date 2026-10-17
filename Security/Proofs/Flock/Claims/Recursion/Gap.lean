@@ -60,6 +60,7 @@ noncomputable def gDO : Flock.Deploy Bool ℕ Unit where
   enc := fun _ _ => 0
   len := fun _ => 0
   θ := fun _ => 0
+  dec := fun _ => ([], 0)
   read := fun _ => ⟨[]⟩
   εtable := fun _ => 0
   N₀ := fun _ => 100 * Real.exp 1
