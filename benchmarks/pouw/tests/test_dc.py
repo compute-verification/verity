@@ -257,3 +257,57 @@ def test_analyze_sm90_pass_line(tmp_path):
     assert j["lane_fraction"] == 0.25 and j["a"] == (2.0 - 0.5) / (128 / 4096) and j["tensor_fraction"] == 1.0
     _rows(tmp_path / "b", {"wg_s8_n256_a1": wg, "imma_s8_k16": {"0:IMMA.16816.S8.S8": 1.1}})
     assert not an.analyze("sm90", tmp_path / "b")["M3"]["pass"]
+
+
+def test_uniform_tables_pin_every_loop():
+    """Each family's tables pin every probe's loop: the alone chains count a uniform opcode, every other uniform probe
+    the MMA beside them, and each IMAD-form probe an opcode of its loop."""
+    un = _load("uniform")
+    for fam in ("sm90", "sm100"):
+        tab = un.tables(fam)
+        assert len(tab) == 68, fam
+        for name, t in tab.items():
+            assert t["counted"] in t["counts"], (fam, name)
+            if name.startswith("uz_"):
+                assert un.kind_of(t["counted"]) == "UNI" and set(map(un.kind_of, t["counts"])) <= {"UNI", "ALU"}
+            elif t["binary"].endswith("uniform"):
+                assert t["counted"].startswith("IMMA.16832"), (fam, name)
+
+
+def test_uniform_fit_and_check():
+    """UP at its alone rate, an issue slot on the issue rows, 0 on a pipe row with its limit beside it; a point UP's line
+    exceeds is reported."""
+    un = _load("uniform")
+    coef = {"ALU": {"issue": 1.0, "A": 2.0, "JI9_0": 0.98}, "IMAD": {"issue": 1.0, "I": 2.0}}
+    pts = [{"probe": "uz", "T": 200.0, "n": {"UNI": 100}},
+           {"probe": "uh", "T": 300.0, "n": {"ALU": 64, "IMAD": 32, "UNI": 64, "other": 4}}]
+    f = un.fit(pts, coef, ["issue", "A", "I", "JI9_0", "UP"], 1.96)
+    assert f["UP"] == {"c": 1.96} and f["issue"]["c"] == 1.0 and f["JI9_0"]["c"] == 0.98
+    assert f["A"]["c"] == 0.0 and abs(f["A"]["limit"] - min((306 - 128) / 64, 204 / 100)) < 1e-12
+    assert abs(f["issue"]["limit"] - 2.04) < 1e-12 and f["issue"]["set_by"] == "uz"
+    pts[0]["T"] = 400.0
+    assert un.fit(pts, coef, ["A"], 1.96)["A"] == {"c": 0.0, "limit": (306 - 128) / 64, "set_by": "uh"}
+    assert un.check(pts, coef, f) == []
+    assert un.check(pts + [{"probe": "bad", "T": 100.0, "n": {"UNI": 60}}], coef, f) == \
+        ["bad: UP 117.60 > T 100.00 (1 + 0.02)"]
+
+
+def test_uniform_write_census_is_idempotent(tmp_path):
+    """--write replaces UNI's lines and the UP row, puts UP in the current vector's rows once, and census.py --write
+    keeps both."""
+    import shutil
+    un, census = _load("uniform"), _load("census")
+    dev = tmp_path / "sm_90"
+    shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
+    res = {"up": {"rate": 0.5, "by": "uz_64i", "cycles": 1.96}, "uniform_alone": {"uz_64i": 0.5}, "violations": [],
+           "rows": {"UP": {"c": 1.96}, "issue": {"c": 1.0, "limit": 1.2, "set_by": "uh_64i"},
+                    "A": {"c": 0.0, "limit": 0.9, "set_by": "uh_64i"}}}
+    for _ in range(2):
+        un.write_census(dev, res, "r20261017-000000-abcd")
+    cen = (dev / "census.csv").read_text().splitlines()
+    assert [ln for ln in cen if ln.startswith("UNI,")] == ["UNI,UP,,,1.96,,,,r20261017-000000-abcd",
+                                                         "UNI,issue,,,1,,,,r20261017-000000-abcd"]
+    assert sum(ln.startswith("UP,") for ln in (dev / "rows.csv").read_text().splitlines()) == 1
+    import tomllib
+    assert tomllib.loads((dev / "vectors" / "DC-90.toml").read_text())["rows"].count("UP") == 1
+    assert len(census.uniform_kept(dev, "census.csv", "kind")) == 2 and len(census.uniform_kept(dev, "rows.csv", "row")) == 1

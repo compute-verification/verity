@@ -5,7 +5,8 @@
 RUN_OUT is a DC run's `out/` (`research fetch RUN --all` puts it at ~/.research/runs/RUN/out; the run id is the name of
 a directory on its path). analyze.py reads each run; a kind's line takes its fastest run (as machine_model's adopt.py
 merges two lines) and names every run that measured it, and the joint rows are the upper hull of every run's points.
---write puts `census.csv` and `rows.csv` in DIR (machine_model's `data/devices/sm_90/` or `sm_100/`); else they print.
+--write puts `census.csv` and `rows.csv` in DIR (machine_model's `data/devices/sm_90/` or `sm_100/`), keeping the
+uniform datapath's lines (UNI, and the row UP) that uniform.py wrote there; else they print.
 
 The rows (warp instructions/SM/clk, derated by the 2% noise; facets in SMSP-cycles at 1 - 2%, eps1.py's convention):
 - issue: every kind holds 1 SMSP-cycle.
@@ -435,6 +436,14 @@ def tables(dev: Device) -> str:
     return "\n".join(out) + "\n"
 
 
+def uniform_kept(d: Path, name: str, key: str) -> list[dict[str, str]]:
+    """The lines uniform.py owns in DIR/NAME (UNI's census lines, the UP row), which --write keeps."""
+    if not (d / name).is_file():
+        return []
+    with open(d / name, newline="") as f:
+        return [r for r in csv.DictReader(f) if r[key] in ("UNI", "UP")]
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("family", choices=tuple(DEVICE))
@@ -446,6 +455,7 @@ def main(argv: list[str] | None = None) -> int:
     print(tables(dev))
     if a.write:
         a.write.mkdir(parents=True, exist_ok=True)
+        lines, rows = lines + uniform_kept(a.write, "census.csv", "kind"), rows + uniform_kept(a.write, "rows.csv", "row")
         (a.write / "census.csv").write_text(rowsmod.census_csv(lines))
         (a.write / "rows.csv").write_text(rows_csv(rows))
         print(f"wrote {a.write / 'census.csv'} ({len(lines)} lines) and {a.write / 'rows.csv'} ({len(rows)} rows)")
