@@ -123,8 +123,7 @@ SPECIAL = (("special1", 3, 1), ("special2", 11, 2))
 SCALE_LOG2 = (-8.0, 2.0)
 SCREEN_CHUNK, SCREEN_MAX = 500, 20_000
 #: the row's `engine.env`, and vLLM's defaults for the all-reduce's routes stated
-SERVED_ENV = {"VLLM_BATCH_INVARIANT": "0", "VLLM_USE_DEEP_GEMM": "0", "VLLM_ALLREDUCE_USE_SYMM_MEM": "1",
-              "VLLM_ALLREDUCE_USE_FLASHINFER": "1"}
+SERVED_ENV = {"VLLM_BATCH_INVARIANT": "0", "VLLM_ALLREDUCE_USE_SYMM_MEM": "1", "VLLM_ALLREDUCE_USE_FLASHINFER": "1"}
 SWITCH_ENV = {**SERVED_ENV, "VLLM_ALLREDUCE_USE_SYMM_MEM": "0"}
 #: each setting's environment (`tp_allreduce.SETTINGS`); its custom all-reduce is `set_custom_all_reduce`'s, as vLLM's worker sets
 #: it from ``disable_custom_all_reduce`` (`vllm/v1/worker/gpu_worker.py:1492`)
