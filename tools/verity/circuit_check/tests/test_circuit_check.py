@@ -564,6 +564,33 @@ def test_a_declared_interval_the_reference_leaves_is_named():
                                                                   Value(32), mul, register=False), OPTS, as_call=False)
 
 
+def test_a_transfer_the_reference_leaves_is_named():
+    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on drawn operand
+    intervals, so an exact sum of two s8 operands holds in [a0 + b0, a1 + b1] and a transfer one short of it is named."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.ports import Ports, as_reading
+    from verity.ml.circuits.types import Value
+
+    def add(a, b):
+        return (((a ^ 0x80) - 0x80) + ((b ^ 0x80) - 0x80)) & 0xFFFF
+
+    def transfer(short):
+        def f(a, b):
+            a, b = as_reading(a, 8), as_reading(b, 8)
+            return None if a is None or b is None else (a[0] + b[0], a[1] + b[1] - short)
+        return f
+
+    def prim(name, short):
+        return PrimitiveDefinition(name, 1, (("a", Value(8)), ("b", Value(8))), Value(16), add, register=False,
+                                   ports=Ports(transfer=transfer(short)))
+
+    e = CK.check_definition(prim("CircuitCheckS8Add", 0), OPTS, as_call=False)
+    t = e["ports"]["transfer"]
+    assert t["draws"] == CK.TRANSFER_DRAWS and t["intervals"] > 0 and t["outside"] == 0 and not e["failures"]
+    fails = CK.check_definition(prim("CircuitCheckS8AddShort", 1), OPTS, as_call=False)["failures"]
+    assert fails and all(f["name"].startswith("ports/transfer CircuitCheckS8AddShort_v1") for f in fails)
+
+
 def test_a_kernel_wrong_only_on_edge_words_is_caught():
     """A kernel that returns 0 for a NaN operand: uniform random words rarely hold a NaN, the edge vectors always do."""
     from verity.ml.circuits.evaluation import register_kernel
