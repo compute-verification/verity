@@ -23,19 +23,17 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
 * `replay_units`, `proof_units`: the two-stage law's samplers on given bytes of the verifier's own coins
-  (`TwoStage.selectReplayUnits`, `TwoStage.selectProofUnits`);
-* `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
+  (`TwoStage.selectReplayUnits`, `TwoStage.selectProofUnits`).
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
-`check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it) and `hello`.
+`check_proved`, `record`, `check_public`, `check_verdicts` and `run` (`Stream.outcome` holds its outcome to it).
 -/
 import SampledProofs.OneStage
 import SampledProofs.Slots
 import SampledProofs.Service
 import SampledProofs.Run
 import SampledProofs.TwoStage
-import SampledProofs.Hello
 
 namespace SampledProofs.Pieces
 
@@ -341,11 +339,11 @@ def table : List (String × (Json → V Json)) :=
    ("bound", bound),
    ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
    ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("replay_units", replayUnits),
-   ("proof_units", proofUnits), ("hello", Hello.check)]
+   ("proof_units", proofUnits)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
    ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check)]
+   ("check_verdicts", checkVerdicts), ("run", run)]
 
 end SampledProofs.Pieces

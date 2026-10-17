@@ -65,9 +65,7 @@ construction (:func:`rate_measurements`); :func:`validate` recomputes each of th
 
 Other measurements: ``vu.count`` (count), ``vu.seconds_per_vu`` (s), ``vu.per_second`` (1/s), ``mem.peak_host_bytes``,
 ``mem.peak_device_bytes``, ``bytes.moved``, ``transcript.bytes`` (B; the total communication), ``verifier.seconds``,
-``fixed.setup_seconds`` (s).  The verifier's derived numbers (:func:`verifier_rates`, which :func:`validate` recomputes):
-``verifier.cpu_seconds_per_vu`` = verify.cpu_s / vu.count (s) and ``verifier.cores_per_gpu`` = verify.cpu_s / t.total
-(ratio), the verifier cores that keep pace with one prover.  Latency (a first-class axis): ``rounds.protocol`` (count of protocol rounds) and
+``fixed.setup_seconds`` (s).  Latency (a first-class axis): ``rounds.protocol`` (count of protocol rounds) and
 ``rounds.sequential_depth`` (network round trips on the critical path after all parallelism/batching -- what the
 network floor depth x RTT is made of), and the end-to-end wall time at the RTT sweep ``t.e2e.rtt_0ms``,
 ``t.e2e.rtt_0.1ms``, ``t.e2e.rtt_1ms``, ``t.e2e.rtt_10ms``, ``t.e2e.rtt_50ms`` (s; predicted or measured, say which in
@@ -154,7 +152,6 @@ __all__ = [
     "validate",
     "validate_fingerprint",
     "validate_measurements",
-    "verifier_rates",
 ]
 
 RESULT_SCHEMA = "research/result/v0.1"
@@ -281,9 +278,6 @@ UNITS: dict[str, str] = {
     "net.wait_seconds": "s",
     "verify.wall_s": "s",
     "verify.cpu_s": "s",
-    # derived from verify.cpu_s (verifier_rates): its CPU seconds per VU, and the verifier cores one prover keeps busy
-    "verifier.cpu_seconds_per_vu": "s",
-    "verifier.cores_per_gpu": "ratio",
     "fixed.setup_seconds": "s",
     "rate.proved_flop_per_second": "FLOP/s",
     "rate.native_peak_flop_per_second": "FLOP/s",
@@ -293,9 +287,6 @@ _RESERVED_PREFIXES = ("t.", "vu.", "mem.", "fixed.", "bytes.", "transcript.", "v
 RATE_PROVED = "rate.proved_flop_per_second"
 RATE_NATIVE = "rate.native_peak_flop_per_second"
 OVERHEAD = "overhead.vs_native_peak"
-VERIFY_CPU = "verify.cpu_s"
-VERIFIER_CPU_PER_VU = "verifier.cpu_seconds_per_vu"
-VERIFIER_CORES_PER_GPU = "verifier.cores_per_gpu"
 #: A reported rate must agree with its formula to this relative tolerance (they are computed, not measured).
 RATE_TOLERANCE = 1e-6
 
@@ -365,17 +356,6 @@ def rate_measurements(t_total: float, vu_count: int, K: int, profile: str = PROF
     proved = proved_flop_per_second(t_total, vu_count, K)
     native = native_reference(profile).flop_per_second
     return [measurement(RATE_PROVED, proved), measurement(RATE_NATIVE, native), measurement(OVERHEAD, native / proved)]
-
-
-def verifier_rates(verify_cpu_s: float, vu_count: int, t_total: float) -> list[dict[str, Any]]:
-    """The verifier's derived numbers, from one session's ``verify.cpu_s``: ``verifier.cpu_seconds_per_vu`` =
-    verify.cpu_s / vu.count, and ``verifier.cores_per_gpu`` = verify.cpu_s / t.total, the verifier cores that keep pace
-    with one prover proving sessions back to back (its own GPU, or whatever ``hardware`` names)."""
-
-    for name, v in (("verify_cpu_s", verify_cpu_s), ("vu_count", vu_count), ("t_total", t_total)):
-        if not _is_number(v) or v <= 0:
-            raise ValueError(f"{name} must be positive, got {v!r}")
-    return [measurement(VERIFIER_CPU_PER_VU, verify_cpu_s / vu_count), measurement(VERIFIER_CORES_PER_GPU, verify_cpu_s / t_total)]
 
 #: Sentinel for an identity field a fingerprint does not carry (distinct from a recorded ``null``).
 MISSING = object()
@@ -776,26 +756,7 @@ def validate(result: Any) -> list[str]:
     pc = fp.get("proof_class") if isinstance(fp, Mapping) else None
     p += validate_measurements(result.get("measurements"), pc if pc in PROOF_CLASSES else None)
     p += _check_rates(fp, result.get("measurements"))
-    p += _check_verifier_rates(result.get("measurements"))
     return p
-
-
-def _check_verifier_rates(measurements: Any) -> list[str]:
-    """``verifier.cpu_seconds_per_vu`` and ``verifier.cores_per_gpu``, when reported, must be :func:`verifier_rates` of the
-    result's ``verify.cpu_s``, ``vu.count`` and ``t.total``, to :data:`RATE_TOLERANCE`."""
-
-    if not isinstance(measurements, list):
-        return []
-    values = {m.get("name"): m.get("value") for m in measurements if isinstance(m, Mapping)}
-    reported = [n for n in (VERIFIER_CPU_PER_VU, VERIFIER_CORES_PER_GPU) if values.get(n) is not None]
-    if not reported:
-        return []
-    cpu, count, total = values.get(VERIFY_CPU), values.get("vu.count"), values.get(T_TOTAL)
-    if not all(_is_number(v) and v > 0 for v in (cpu, count, total)):
-        return [f"{' and '.join(reported)} needs positive {VERIFY_CPU}, vu.count and t.total to be checked against"]
-    want = {VERIFIER_CPU_PER_VU: (cpu / count, "verify.cpu_s / vu.count"), VERIFIER_CORES_PER_GPU: (cpu / total, "verify.cpu_s / t.total")}
-    return [f"{n} {values[n]!r} is not {want[n][1]} = {want[n][0]:.6g}" for n in reported
-            if not _is_number(values[n]) or abs(values[n] - want[n][0]) > RATE_TOLERANCE * want[n][0]]
 
 
 def _check_rates(fp: Any, measurements: Any) -> list[str]:
