@@ -59,7 +59,7 @@ both, so `served_default` is first-class rather than timing-only.
   bind       every Definition binds at each model's statics.
   timing     each case's kernel time, the median of `REPS` CUDA-event-timed launches.
   profile    every CUDA kernel name and launch grid, the separate cuBLASLt reduction kernel, the `SPLIT_K` pinned by shape and M
-             (`BC.default_cublas_split_k`, M <= 256, default route only) or read from the scan's fit past the pins (Kineto
+             (`BC.default_cublas_split_k`, the route table, default route only) or read from the scan's fit past it (Kineto
              reports grid.z = 1 for these launches), and the runtime cuBLAS version.  A trace with no kernels fails the launch
              (`_profile_record`).  Each default split-K case includes a crafted cancellation row fit against the stated
              contiguous/f32/forward hypothesis and strided, reverse, tree and bf16-partial alternatives.
@@ -534,7 +534,7 @@ def _cublas_split_k(job: dict[str, Any]) -> int | None:
 
 
 def served_split(phase: str, M: int, K: int, N: int, scan_split: int | None = None) -> int | None:
-    """The default reduce route's split count at these statics: the pinned table (M <= 256), else the scan's fit at this M."""
+    """The default reduce route's split count at these statics: the route table, else the scan's fit at this M."""
     from verity_vllm.program.registry import bf16_gemm_check as BC
 
     pinned = BC.default_cublas_split_k(phase, M, K, N)
@@ -588,6 +588,17 @@ def scan_classes(regimes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         c["regimes"] += 1
         c["ms"] += r["m1"] - r["m0"] + 1
     return list(classes.values())
+
+
+def scan_routes(regimes: list[dict[str, Any]]) -> list[list[int | None]]:
+    """The regimes as `bf16_gemm_check`'s route table rows: maximal [m0, m1, split] runs (split None: the serial chain)."""
+    runs: list[list[int | None]] = []
+    for r in regimes:
+        if runs and runs[-1][2] == r["split"] and runs[-1][1] + 1 == r["m0"]:
+            runs[-1][1] = r["m1"]
+        else:
+            runs.append([r["m0"], r["m1"], r["split"]])
+    return runs
 
 
 def scan_sweep(regimes: list[dict[str, Any]], covered: int = SCAN_M[0]) -> list[int]:
@@ -694,7 +705,7 @@ def scan_analyze(op: dict[str, Any], segments: list[list[dict[str, Any]]], rows:
         r["modeled"] = bool(fits) if r["reduce"] else (serial and not fits)
     classes = scan_classes(regimes)
     return {"m": [SCAN_M[0], SCAN_M[-1]], "output": op["output"], "regimes": regimes, "classes": classes,
-            "sweep": scan_sweep(regimes) if len(classes) <= MAX_CLASSES else [ENVELOPE],
+            "routes": scan_routes(regimes), "sweep": scan_sweep(regimes) if len(classes) <= MAX_CLASSES else [ENVELOPE],
             "ok": all(r["modeled"] for r in regimes) and len(classes) <= MAX_CLASSES}
 
 

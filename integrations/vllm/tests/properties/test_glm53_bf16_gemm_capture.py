@@ -179,14 +179,34 @@ def test_the_default_cublas_split_counts_are_pinned_by_shape_and_m() -> None:
     assert [BC.default_cublas_split_k("linear", M, 6144, 160) for M in X.LINEAR_M] == [4] * len(X.LINEAR_M)
     assert [BC.default_cublas_split_k("linear", M, 7168, 64) for M in X.LINEAR_M] == [5] * len(X.LINEAR_M)
     assert BC.default_cublas_split_k("f32out", 256, 7168, 2048) is None       # c4 M256 is the non-split kernel
+    assert [BC.default_cublas_split_k("f32out", M, 7168, 2048) for M in (1, 4, 16, 128)] == [3, 3, 3, 2]
+    assert [BC.default_cublas_split_k("f32out", M, 7168, 1024) for M in X.LINEAR_M] == [5, 5, 5, 3, 2]
+    assert [BC.default_cublas_split_k("f32out", M, 7168, 512) for M in X.LINEAR_M] == [5, 5, 5, 3, 3]
+
+
+def test_the_route_table_covers_every_decode_batch_once() -> None:
+    """Each shape's runs tile its scanned M range (the router's from 17, past the ll_bf16 tier) with no gap or overlap."""
+    top = BC.CUBLAS_ROUTES["m_max"]
+    for key, runs in BC.CUBLAS_ROUTES["routes"].items():
+        lo = 17 if key.startswith("router") else 1
+        assert [r[0] for r in runs] == [lo] + [r[1] + 1 for r in runs[:-1]] and runs[-1][1] == top, key
+        assert all(r[0] <= r[1] and (r[2] is None or 1 < r[2] <= int(key.split()[1]) // 16) for r in runs), key
 
 
 def test_the_default_cublas_route_does_not_confuse_unrecorded_with_non_split() -> None:
     for M in X.LINEAR_M:
         assert BC.default_cublas_route("linear", M, 6144, 160) == ("splitk", {"SPLIT_K": 4})
         assert BC.default_cublas_route("linear", M, 6144, 19360) == ("non_split", {})
-    assert BC.default_cublas_route("linear", 5, 6144, 19360) is None
+    assert BC.default_cublas_route("linear", 393, 6144, 160) == ("splitk", {"SPLIT_K": 3})
+    assert BC.default_cublas_route("linear", BC.CUBLAS_ROUTES["m_max"] + 1, 6144, 19360) is None
+    assert BC.default_cublas_route("router", 16, 6144, 256) is None
     assert BC.default_cublas_route("linear", 1, 6144, 161) is None
+
+
+def test_scan_routes_merges_adjacent_regimes_of_one_model() -> None:
+    regimes = [{"m0": 1, "m1": 3, "split": 4}, {"m0": 4, "m1": 9, "split": 4}, {"m0": 10, "m1": 10, "split": None},
+               {"m0": 11, "m1": 12, "split": 4}]
+    assert X.scan_routes(regimes) == [[1, 9, 4], [10, 10, None], [11, 12, 4]]
 
 
 def test_the_fit_reads_the_split_count_out_of_the_words() -> None:
@@ -292,9 +312,10 @@ def test_scan_analyze_reads_each_regimes_model_out_of_the_kept_words(monkeypatch
 
 
 def test_the_served_split_prefers_the_pin_and_falls_back_to_the_scan() -> None:
+    top = BC.CUBLAS_ROUTES["m_max"]
     assert X.served_split("router", 256, 6144, 256, scan_split=9) == 3         # pinned M: the pin wins
-    assert X.served_split("router", 300, 6144, 256, scan_split=2) == 2         # past the pins: the scan's fit
-    assert X.served_split("router", 300, 6144, 256) is None                    # neither: the launch fails visibly
+    assert X.served_split("router", top + 1, 6144, 256, scan_split=2) == 2     # past the pins: the scan's fit
+    assert X.served_split("router", top + 1, 6144, 256) is None                # neither: the launch fails visibly
 
 
 def test_the_default_operand_dump_keeps_reduction_routes_and_deduplicates_weights(tmp_path) -> None:

@@ -11,15 +11,19 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   `Gemm_v2` (lm_head, GLM-5.3's indexer `wk_weights_proj`, DeepSeek-V4-Pro's `weights_proj`); `bmm_rows`: `BatchedGemm_v1`,
   `mla_check.bmm_rows`;
 * `cublas_splitk_rows`: cuBLAS 12.9.1's H200 route in `cublas_bf16`: equal 64-element-aligned contiguous chunks, a final
-  remainder, f32 partials and a serial increasing-order f32 reduction. `default_cublas_split_k` pins the selected split count
-  where the capture pinned it (M <= 256); past the pins `fit_cublas_split_k` names the split counts whose route computes a
-  launch's observed words exactly, so the capture's decode-batch scan reads the split count out of the words (Kineto reports
-  grid.z = 1 for these launches, so no profile field carries it).
+  remainder, f32 partials and a serial increasing-order f32 reduction. `default_cublas_route` reads the selected route at
+  every decode batch to `CUBLAS_ROUTES["m_max"]` tokens out of `cublas_routes.json`, the capture's decode-batch scan
+  (`glm53_bf16_gemm_capture_gpu.scan_routes`), in which `fit_cublas_split_k` names the split counts whose route computes a
+  launch's observed words exactly, so the split count is read out of the words (Kineto reports grid.z = 1 for these launches,
+  so no profile field carries it).
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
 """
 from __future__ import annotations
+
+import json
+from pathlib import Path
 
 import numpy as np
 
@@ -38,33 +42,28 @@ SM90_SPLITK = {(4096, 256): {**{m: 8 for m in range(5, 8)}, 10: 8, 11: 8, 13: 8,
                (7168, 384): {m: (8 if m in (6, 8, 12) else 7) for m in range(6, 17)}}
 LL_MAX_M = 16
 DEFAULT_LL_BF16_FMA = 1
-DEFAULT_CUBLAS_SPLIT_K = {
-    ("router", 6144, 256): {17: 4, 32: 4, 128: 4, 256: 3},
-    ("router", 7168, 384): {17: 5, 32: 5, 128: 4, 256: 4},
-    ("linear", 6144, 160): {m: 4 for m in (1, 4, 16, 128, 256)},
-    ("linear", 7168, 64): {m: 5 for m in (1, 4, 16, 128, 256)},
-    ("f32out", 7168, 2048): {1: 3, 4: 3, 16: 3, 128: 2},
-    ("f32out", 7168, 1024): {1: 5, 4: 5, 16: 5, 128: 3, 256: 2},
-    ("f32out", 7168, 512): {1: 5, 4: 5, 16: 5, 128: 3, 256: 3},
-}
-DEFAULT_CUBLAS_NON_SPLIT = {
-    ("linear", 6144, 19360): frozenset((1, 4, 16, 128, 256)),
-}
+#: cuBLAS 12.9.1's default route on the H200 by "phase K N": [m0, m1, split] runs over M (split None: the non-split serial
+#: chain), as the capture's decode-batch scan (run `run`) mapped them
+CUBLAS_ROUTES = json.loads(Path(__file__).with_name("cublas_routes.json").read_text())
+_ROUTES = {(p, int(k), int(n)): runs for (p, k, n), runs in ((key.split(), v) for key, v in CUBLAS_ROUTES["routes"].items())}
+
+
+def _route_run(phase: str, M: int, K: int, N: int) -> list | None:
+    return next((r for r in _ROUTES.get((phase, K, N), ()) if r[0] <= M <= r[1]), None)
 
 
 def default_cublas_split_k(phase: str, M: int, K: int, N: int) -> int | None:
     """The split count selected by cuBLAS 12.9.1 on the pinned H200, or None for its non-split routes."""
-    return DEFAULT_CUBLAS_SPLIT_K.get((phase, K, N), {}).get(M)
+    run = _route_run(phase, M, K, N)
+    return run[2] if run else None
 
 
 def default_cublas_route(phase: str, M: int, K: int, N: int) -> tuple[str, dict[str, int]] | None:
     """The captured default cuBLAS route, distinguishing a known non-split launch from a shape/M with no record."""
-    split = default_cublas_split_k(phase, M, K, N)
-    if split is not None:
-        return "splitk", {"SPLIT_K": split}
-    if M in DEFAULT_CUBLAS_NON_SPLIT.get((phase, K, N), ()):
-        return "non_split", {}
-    return None
+    run = _route_run(phase, M, K, N)
+    if run is None:
+        return None
+    return ("splitk", {"SPLIT_K": run[2]}) if run[2] is not None else ("non_split", {})
 
 
 SPLITK_CANDIDATES = range(2, 17)
