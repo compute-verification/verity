@@ -61,12 +61,12 @@ noncomputable def EOs (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Co
   C x := Fin (D.nums x s).waits → Fin (D.nums x s).cap → Fin (D.V.k x) → Coin
   ext x r₀ c := .rerun r₀ fun v₀ =>
     if v₀.out = .acc then
-      let xs := D.vstar x (v₀.msgs.take (I.V.k (xI D x)))
+      let xs := D.vstar x (v₀.msgs.take (I.V.k (xI D x) + D.kS x))
       (serve (viewing (D.session x s))
-          (firstWait (D.nums x s).k DO.cols (Flock.assemble DO.parse decO DO.read (xs.getD s []))
-            (Flock.check DO.parse (xs.getD s []))
+          (firstWait (D.nums x s).k (fun v => [DO.cols v])
+            (Flock.assemble DO.parse DO.table decO DO.read (xs.getD s [])) (Flock.check DO.parse (xs.getD s []))
             ((List.finRange (D.nums x s).waits).map fun i => (List.finRange (D.nums x s).cap).map fun j =>
-              fork (I.V.k (xI D x) + ((xs.take s).map DO.V.k).sum) r₀ (c i j)))).bind
+              fork (I.V.k (xI D x) + D.kS x + ((xs.take s).map DO.V.k).sum) r₀ (c i j)))).bind
         fun o => .ret (o.map fun w => (xs.getD s [], w))
     else .ret none
 
@@ -267,7 +267,7 @@ verifier's calls are recorded in the outer witnesses only), and, at each of the 
 the inner rounds' differing openings, each at most `√(Pr[a differing opening at a fork at that round])`. -/
 def InnerKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
-    PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
+    PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
         (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
         (fun x => I.check (xI D x)) x P ≤
       I.κ (xI D x) + Real.sqrt (I.γ (xI D x) * PrBI H D I DO decO P x) +
@@ -300,7 +300,7 @@ noncomputable def γeA (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
 /-- **The recursion's KS at the errors its proof gives**: the draft's `KS` with `γ_A` and `γ_eA` for `γ` and `γ_e`. -/
 def KSA [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
-    PrBad H D.V (R D I) (E D I DO decO) x P ≤
+    PrBad H D.V (R D I) (E H D I DO decO) x P ≤
       κ D I x + Real.sqrt (γA D I x * PrB H D.V P x) + Real.sqrt (γeA D I x * PrBe H D I DO decO P x)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
@@ -330,14 +330,14 @@ theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
   have hq0 : 0 ≤ q := PrBe_nonneg H D I DO decO P x
   have hG0 : 0 ≤ G := Finset.sum_nonneg fun s _ => Real.sqrt_nonneg _
   -- the split: `E_O` fails at one of the inner stage's draws, or the inner stage fails
-  have hsplit := servedERep_bad_le_good H D.V (R D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
+  have hsplit := servedERep_bad_le_good H D.V (R D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
     (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
     (fun x => I.check (xI D x)) x P
   rw [hA] at hsplit
-  have hgood : PrBadGood H D.V (R D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
+  have hgood : PrBadGood H D.V (R D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
       (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
       (fun x => I.check (xI D x)) x P ≤
-      PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
+      PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
       (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
       (fun x => I.check (xI D x)) x P := by
     refine Pr_mono fun t h => ⟨h.1, h.2.1, fun hi => h.2.2 ?_⟩
@@ -377,7 +377,7 @@ theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
       Real.sqrt_mul' (_ ^ 2) hq0, Real.sqrt_sq (add_nonneg (Real.sqrt_nonneg _) (mul_nonneg hA0 (Real.sqrt_nonneg _)))]
     ring
   have hκ : κ D I x = I.κ (xI D x) + A * ∑ s : Fin (D.nS x), (D.nums x s).κ := rfl
-  show PrBad H D.V (R D I) (served D.V (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
+  show PrBad H D.V (R D I) (served D.V (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
     (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
     (fun x => I.check (xI D x))) x P ≤ _
   rw [served_eq, hκ]

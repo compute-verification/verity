@@ -174,15 +174,17 @@ statements read off the run's inner messages. -/
 def offO {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ) (r : Fin (D.V.k x) → Coin) :
     ℕ :=
-  I.V.k (xI D x) + (((D.vstar x ((run H P D.V x ω r).msgs.take (I.V.k (xI D x)))).take s).map DO.V.k).sum
+  I.V.k (xI D x) + D.kS x +
+    (((D.vstar x ((run H P D.V x ω r).msgs.take (I.V.k (xI D x) + D.kS x))).take s).map DO.V.k).sum
 
-/-- Session `s`'s first round is read off the coins before it: the V* statements read only the inner rounds' messages,
-which read only the inner rounds' coins. -/
+/-- Session `s`'s first round is read off the coins before it: the V* statements read only the inner and staging
+rounds' messages, which read only those rounds' coins. -/
 theorem offO_prefixDet {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ) :
     PrefixDet (offO H D I DO P x ω s) := by
   intro r r' h
-  have hm := run_msgs_take H P D.V x ω (I.V.k (xI D x)) (r := r) (r' := r') fun i hi => h i (by unfold offO; omega)
+  have hm := run_msgs_take H P D.V x ω (I.V.k (xI D x) + D.kS x) (r := r) (r' := r') fun i hi =>
+    h i (by unfold offO; omega)
   simp only [offO, hm]
 
 theorem serve_viewing_runs {R α : Type} (H : Msg → Msg) (run : R → Trace) (f : Seen → Seen) (p : RP R α) :

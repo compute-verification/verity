@@ -283,7 +283,7 @@ noncomputable def eoOut (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (
 noncomputable def eoMsg (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) (j : ℕ) : Msg :=
-  ((dec D x d.1 (eoOut H D I DO decO P x ω d)).msgs.map Prod.fst).getD j []
+  ((dec H D x d.1 (eoOut H D I DO decO P x ω d)).msgs.map Prod.fst).getD j []
 
 /-- **The inner prover's message at inner round `j`**, on the inner coins `l` so far: the inner view's message `j`
 that extractions most often open over the draws with those coins first, where `E_O` gives witnesses (`plur`). -/
@@ -384,7 +384,7 @@ theorem innerF_eq_innerRun {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     have hc := hpc (xI D x) (as ++ [a]) _ _ m (by simp [hl]) hv
     rw [List.map_append, hd, List.length_append, List.length_singleton, List.range_succ, List.map_append,
       List.map_singleton, List.map_singleton, hc]
-  refine stepWith_congr H (innerP H D I DO decO P x decC) (replay ((D.innerView x d.1 ws).msgs.map Prod.fst)) (xI D x)
+  refine stepWith_congr H (innerP H D I DO decO P x decC) (replay ((D.innerView H x d.1 ws).msgs.map Prod.fst)) (xI D x)
     ω () _ (fun M hist as => hist.length + M = I.V.k (xI D x) ∧ as.length = hist.length ∧
       hist.map (fun h => decC (xI D x) h.2) = (List.range hist.length).map (coinSeq (innerCoins D I x d.1)))
     ?_ ?_ _ _ _ _ ⟨by simp, rfl, rfl⟩
@@ -406,10 +406,10 @@ theorem servedRun_seen_eq {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} {decC : Msg → Msg → Coin}
     (hV : InnerViewRun H D I DO) (hpc : PublicCoin H I decC) {ω : Ω}
     {d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x} (hb : ¬ Bad H D I DO decO P x ω d) :
-    (servedRun H (Claims.outerStage (EO D I DO decO) (dec D) x) (run H P D.V x ω) d).seen =
+    (servedRun H (Claims.outerStage (EO D I DO decO) (dec H D) x) (run H P D.V x ω) d).seen =
       (innerF H D I DO decO P x decC ω d).seen := by
   rw [servedRun_seen, outerStage_eval]
-  change dec D x d.1 (eoOut H D I DO decO P x ω d) = _
+  change dec H D x d.1 (eoOut H D I DO decO P x ω d) = _
   rcases ho : eoOut H D I DO decO P x ω d with _ | ws
   · have hk : keepD H D I DO decO P x ω d = false := by
       unfold keepD
@@ -471,7 +471,7 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     {decC : Msg → Msg → Coin} (hV : InnerViewRun H D I DO) (hAcc : InnerAccepts H D I DO)
     (hpc : PublicCoin H I decC) (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type}
     [Fintype Ω] (P : Prover Ω) :
-    PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
+    PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
         (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
         (fun x => I.check (xI D x)) x P ≤
       I.PrBadAbort H (xI D x) (innerP H D I DO decO P x decC) (keepA H D I DO decO P x) +
@@ -487,8 +487,8 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
       (Fin (I.waits (xI D x)) → Fin (I.cap (xI D x)) → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) → Prop :=
     fun s => ∃ d ∈ (erepProg (I.waits (xI D x)) (I.k (xI D x)) (I.cap (xI D x)) I.opens (I.assemble (xI D x))
       (I.check (xI D x)) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
-        (servedRun H (Claims.outerStage (EO D I DO decO) (dec D) x) (run H P D.V x s.1)), Bad H D I DO decO P x s.1 d
-  have hYZ : PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
+        (servedRun H (Claims.outerStage (EO D I DO decO) (dec H D) x) (run H P D.V x s.1)), Bad H D I DO decO P x s.1 d
+  have hYZ : PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
       (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
       (fun x => I.check (xI D x)) x P ≤ Pr Y + Pr Z := by
     refine (Pr_mono fun s hs => ?_).trans (Pr_or_le Y Z)
@@ -497,13 +497,13 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     · left
       have hnb : ∀ d ∈ (erepProg (I.waits (xI D x)) (I.k (xI D x)) (I.cap (xI D x)) I.opens (I.assemble (xI D x))
           (I.check (xI D x)) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
-            (servedRun H (Claims.outerStage (EO D I DO decO) (dec D) x) (run H P D.V x s.1)),
+            (servedRun H (Claims.outerStage (EO D I DO decO) (dec H D) x) (run H P D.V x s.1)),
           ¬ Bad H D I DO decO P x s.1 d := fun d hd hb => hz ⟨d, hd, hb⟩
       have heq := RP.eval_congr H _ (innerF H D I DO decO P x decC s.1) _ fun d hd =>
         servedRun_seen_eq hV hpc (hnb d hd)
       have hd₀ : (s.2.1, s.2.2.1) ∈ (erepProg (I.waits (xI D x)) (I.k (xI D x)) (I.cap (xI D x)) I.opens
           (I.assemble (xI D x)) (I.check (xI D x)) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
-            (servedRun H (Claims.outerStage (EO D I DO decO) (dec D) x) (run H P D.V x s.1)) := List.mem_cons_self
+            (servedRun H (Claims.outerStage (EO D I DO decO) (dec H D) x) (run H P D.V x s.1)) := List.mem_cons_self
       have hgood := hs.2.1 _ hd₀
       obtain ⟨ws, hws⟩ : ∃ ws, eoOut H D I DO decO P x s.1 (s.2.1, s.2.2.1) = some ws := by
         rcases ho : eoOut H D I DO decO P x s.1 (s.2.1, s.2.2.1) with _ | ws
@@ -521,7 +521,7 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
         exact hacc
       · show (innerR D I).ext x (((erepProg (I.waits (xI D x)) (I.k (xI D x)) (I.cap (xI D x)) I.opens
           (I.assemble (xI D x)) (I.check (xI D x)) (s.2.1, s.2.2.1) s.2.2.2).serve
-            (Claims.outerStage (EO D I DO decO) (dec D) x)).eval H (run H P D.V x s.1)).1
+            (Claims.outerStage (EO D I DO decO) (dec H D) x)).eval H (run H P D.V x s.1)).1
         rw [(RP.serve_eval H _ _ _).1, heq]
         exact (innerR_ext D I x _).2 hI
   have hY : Pr Y = I.PrBadAbort H (xI D x) (innerP H D I DO decO P x decC) (keepA H D I DO decO P x) := by
@@ -555,7 +555,7 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     have hN : (NI D I x : ℝ) = 1 + (I.waits (xI D x) : ℝ) * (I.k (xI D x) : ℝ) := by
       simp only [NI]; push_cast; ring
     rw [hN]
-    exact Pr_exists_rerun_le H D.V (EO D I DO decO) (dec D) (fun x => I.waits (xI D x)) (fun x => I.k (xI D x))
+    exact Pr_exists_rerun_le H D.V (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x)) (fun x => I.k (xI D x))
       (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x)) (fun x => I.check (xI D x)) x P
       (Bad H D I DO decO P x)
   linarith
@@ -673,7 +673,7 @@ theorem innerKS_of_KSAbort [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : D
     · exact Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left h3 hγ)
     · rw [Real.sqrt_eq_zero'.2 (mul_nonpos_of_nonpos_of_nonneg (not_le.1 hγ).le hBA0)]
       exact Real.sqrt_nonneg _
-  calc PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
+  calc PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
         (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
         (fun x => I.check (xI D x)) x P
       ≤ I.PrBadAbort H (xI D x) (innerP H D I DO decO P x decC) (keepA H D I DO decO P x) +
@@ -702,23 +702,6 @@ theorem KS_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner 
     (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) : KSA H D I DO :=
   KS_of H D I DO hRef hRounds (outerKS_of_flockKS hF hN hε hRd hS hR)
     (innerKS_of_KSAbort hKS hRounds hV hC hO hAcc hpc hN0)
-
-/-- **KS of the recursion over Flock, from Flock's KS at the outer deployment and Flock's KS against provers that may
-abort at the inner one**: `KS_of_flockKS` at each inner decoder that meets the spec. Flock's KS against provers that
-may abort is a hypothesis of its own: it doesn't follow from `Claims.Flock.KS` at `DI` (`flockKS_not_KSAbort`). -/
-theorem KSFlock_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T)
-    (opening : Msg → Msg) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
-    (hKS : ∀ decI, decOK DI decI → (Inner.ofFlock DI decI).KSAbort H) (hRef : Refuses H D)
-    (hRounds : ∀ x, DI.V.k (xI D x) ≤ D.V.k x) (hN : SessionNums D DO) (hε : TableErrNonneg D)
-    (hRd : ∀ decI, SessionRounds D (Inner.ofFlock DI decI) DO) (hS : SessionAccepts D)
-    (hR : ∀ decI, SessionRuns H D (Inner.ofFlock DI decI) DO)
-    (hV : ∀ decI, InnerViewRun H D (Inner.ofFlock DI decI) DO)
-    (hC : ∀ decI, CallsRecord H D (Inner.ofFlock DI decI) DO)
-    (hO : ∀ decI, CallsOpen H D (Inner.ofFlock DI decI) DO opening)
-    (hAcc : ∀ decI, InnerAccepts H D (Inner.ofFlock DI decI) DO)
-    (hpc : ∀ decI, PublicCoin H (Inner.ofFlock DI decI) decC) (hN0 : CallsNil H D) : KSFlockA H D DI DO :=
-  fun decI h => KS_of_flockKS H D _ DO opening decC hF (hKS decI h) hRef hRounds hN hε (hRd decI) hS (hR decI)
-    (hV decI) (hC decI) (hO decI) (hAcc decI) (hpc decI) hN0
 
 end RecursionKS
 

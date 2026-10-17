@@ -55,10 +55,12 @@ noncomputable def gDO : Flock.Deploy Bool ℕ Unit where
   V := gVO
   parse := fun _ => some gs₀
   scopeCheck := fun _ => false
-  cols := fun _ => []
+  table := fun _ _ => some gs₀
+  cols := fun _ _ => []
   enc := fun _ _ => 0
   len := fun _ => 0
   θ := fun _ => 0
+  dec := fun _ => ([], 0)
   read := fun _ => ⟨[]⟩
   εtable := fun _ => 0
   N₀ := fun _ => 100 * Real.exp 1
@@ -67,7 +69,7 @@ noncomputable def gDO : Flock.Deploy Bool ℕ Unit where
   cap := fun _ => 204800
 
 /-- The outer session's numbers, `gDO`'s. -/
-noncomputable def gNums : Nums := ⟨0, 100 * Real.exp 1, 0, 1, 8, 204800⟩
+noncomputable def gNums : Nums := ⟨0, 100 * Real.exp 1, 0, 1, 8, 204800, 0, 0⟩
 
 /-- The compiled verifier's answer: the first message must be `H []` (the commit string `D.calls` opens), the second
 round decides at the outer session's coin. -/
@@ -85,14 +87,19 @@ noncomputable def gD (H : Msg → Msg) : Deploy Bool where
   V := gV
   parse := fun _ => some gStmt
   scopeCheck := fun _ => false
+  kS := fun _ => 0
+  stage := fun _ _ => .ret []
   vstar := fun _ _ => [[]]
   nS := fun _ => 1
   session := fun _ _ v => ⟨v.msgs.drop 1, v.out⟩
-  innerView := fun _ _ _ => ⟨[([], .acc)], .acc⟩
+  innerView := fun _ _ _ _ => ⟨[([], .acc)], .acc⟩
   calls := fun _ _ => [([], H [])]
   nums := fun _ _ => gNums
-  zeroCommit := fun _ _ _ => .ret []
   saltLen := 0
+  saltPrefix := []
+  mask := fun _ _ => 0
+  Tape := Unit
+  P := fun _ => ⟨fun _ _ _ => .ret []⟩
 
 /-! ## The compiled verifier's runs -/
 
@@ -286,10 +293,15 @@ theorem gDO_E_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
   have hm : () ∈ decode [] := hdec [] () (by simp [gDO])
   obtain ⟨a, l, hdl⟩ := List.exists_cons_of_ne_nil (List.ne_nil_of_mem hm)
   refine firstWait_const_some H _ _ _ _ _ (⟨[]⟩ : Flock.Wit) (fun vs => ?_) ?_ rs rss
-  · have hf : vs.flatMap (fun _ => ([] : List (ℕ × ℕ))) = [] := List.flatMap_eq_nil_iff.2 fun _ _ => rfl
-    simp only [Flock.assemble, gDO]
-    rw [hf, hdl]
-    rfl
+  · have hf : ((vs.flatMap fun v => [gDO.cols v]).flatMap fun o => o 0) = [] :=
+      List.flatMap_eq_nil_iff.2 fun o ho => by
+        obtain ⟨v, -, hv⟩ := List.mem_flatMap.1 ho
+        rw [List.mem_singleton.1 hv]
+        rfl
+    have h1 : gs₀.tables = 1 := rfl
+    simp only [Flock.assemble, show gDO.parse x = some gs₀ from rfl, h1, List.range_one, List.mapM_cons,
+      List.mapM_nil, show gDO.table x 0 = some gs₀ from rfl, Option.bind_some, hf, hdl]
+    simp [gDO, gRelS]
   · simp [Flock.check, gDO, gRelS]
 
 theorem gFlockKS (H : Msg → Msg) : Flock.KS H gDO := by
@@ -343,25 +355,25 @@ theorem servedRun_out_none {Coin W₂ : Type} {V : Verifier Coin} (H : Msg → M
 def at00 {X : Type} (ρ : Fin 1 → Fin 1 → X) : X := ρ 0 0
 
 /-- `E*`'s one inner rerun's draw: the compiled verifier's coins and `E_O`'s. -/
-def gDraw (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) (x : Msg) (c : (E (gD H) gI gDO decO).C x) :
+def gDraw (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) (x : Msg) (c : (E H (gD H) gI gDO decO).C x) :
     (Fin ((gD H).V.k x) → Bool) × (EO (gD H) gI gDO decO).C x :=
   at00 c.2
 
 /-- **`E*` gives up when its inner rerun's outer coin rejects**: `E_O` gives up at a rejected run, so the inner stage
 sees its one rerun rejected. -/
 theorem gE_none (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r₀ : Fin ((gD H).V.k x) → Bool) (c : (E (gD H) gI gDO decO).C x) (h : coinSeq (gDraw H decO x c).1 1 = true) :
-    ((E (gD H) gI gDO decO).eval H P x ω r₀ c).1 = none := by
+    (r₀ : Fin ((gD H).V.k x) → Bool) (c : (E H (gD H) gI gDO decO).C x) (h : coinSeq (gDraw H decO x c).1 1 = true) :
+    ((E H (gD H) gI gDO decO).eval H P x ω r₀ c).1 = none := by
   have hrej : (run H P (gD H).V x ω (gDraw H decO x c).1).out ≠ .acc := fun h' => by
     have := ((gD_out H P x ω _).1 h').2
     rw [h] at this
     exact Bool.noConfusion this
-  have hserved := servedRun_out_none H (EO (gD H) gI gDO decO) (dec (gD H)) x (run H P (gD H).V x ω)
+  have hserved := servedRun_out_none H (EO (gD H) gI gDO decO) (dec H (gD H)) x (run H P (gD H).V x ω)
     (gDraw H decO x c) (EO_ext_none H (gD H) gI gDO decO P x ω _ hrej)
   simp only [Extractor.eval, E, served]
   rw [serve_eq, (RP.serve_eval H _ _ _).1]
   refine erep_one_none H _ gI.opens (gI.assemble _) (gI.check _) rfl (r₀, c.1) c.2 ?_
-  change (servedRun H (outerStage (EO (gD H) gI gDO decO) (dec (gD H)) x) (run H P (gD H).V x ω)
+  change (servedRun H (outerStage (EO (gD H) gI gDO decO) (dec H (gD H)) x) (run H P (gD H).V x ω)
     (gDraw H decO x c)).out ≠ .acc
   rw [hserved]
   simp [dec]
@@ -376,15 +388,15 @@ theorem gPr_quarter : Pr (fun b : Bool × Bool => b.1 = false ∧ b.2 = true) = 
 /-- **`E*` fails on a quarter of the draws**: the judged run accepts at its coin `false`, and the inner rerun's outer
 coin `true` rejects it. -/
 theorem gPrBad_ge (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) :
-    1 / 4 ≤ PrBad H (gD H).V (R (gD H) gI) (E (gD H) gI gDO decO) [] (gP H) := by
+    1 / 4 ≤ PrBad H (gD H).V (R (gD H) gI) (E H (gD H) gI gDO decO) [] (gP H) := by
   have h1 : (1 : ℕ) < (gD H).V.k [] := by show 1 < 2; omega
   have hc : ∀ r : Fin ((gD H).V.k []) → Bool, coinSeq r 1 = r ⟨1, h1⟩ := fun r => dite_eq_left h1
-  let φ : Unit × (Fin ((gD H).V.k []) → Bool) × (E (gD H) gI gDO decO).C [] → Bool × Bool :=
+  let φ : Unit × (Fin ((gD H).V.k []) → Bool) × (E H (gD H) gI gDO decO).C [] → Bool × Bool :=
     fun s => (coinSeq s.2.1 1, coinSeq (gDraw H decO [] s.2.2).1 1)
   have hcoin : UnifMap (fun r : Fin ((gD H).V.k []) → Bool => coinSeq r 1) := by
     simp only [hc]
     exact UnifMap.coord _
-  have hd : UnifMap (fun c : (E (gD H) gI gDO decO).C [] => (gDraw H decO [] c).1) :=
+  have hd : UnifMap (fun c : (E H (gD H) gI gDO decO).C [] => (gDraw H decO [] c).1) :=
     ((UnifMap.snd.comp (UnifMap.coord (0 : Fin 1))).comp (UnifMap.coord (0 : Fin 1))).comp UnifMap.fst
   have hp := hcoin.prod (hd.comp hcoin)
   have hφ : UnifMap φ := fun G => by

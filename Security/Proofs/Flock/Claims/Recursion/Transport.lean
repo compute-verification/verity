@@ -1,5 +1,5 @@
 import Proofs.Flock.Claims.Recursion.Compose
-import Proofs.Flock.Claims.Aggregate
+import Proofs.Flock.Claims.KS.Fork
 
 /-!
 # The recursive audit's fork form, in the claims' error terms
@@ -21,7 +21,7 @@ prover by `κ + √(γ·Pr[B]) + β·Pr[Fe]`. Each kind of disjunct lands in one
 namespace Claims
 
 /-- `findColl` finds a collision whenever its list of evaluations of `H` has one. -/
-theorem findColl_isSome (H : Msg → Msg) :
+theorem findColl_isSome_mem (H : Msg → Msg) :
     ∀ (l : List (Msg × Msg)), (∀ p ∈ l, H p.1 = p.2) → ∀ u v, u ∈ l.map Prod.fst → v ∈ l.map Prod.fst →
       Collision H u v → (findColl l).isSome := by
   intro l
@@ -65,18 +65,6 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 def VColl (H : Msg → Msg) (t : Trace) : Prop :=
   ∃ u v, u ∈ t.vLog.map Prod.fst ∧ v ∈ t.vLog.map Prod.fst ∧ Collision H u v
 
-theorem PrB_nonneg {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω)
-    (x : Msg) : 0 ≤ PrB H V P x := by
-  unfold PrB; split
-  · exact Pr_nonneg _
-  · exact le_rfl
-
-theorem PrB_le_one {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω)
-    (x : Msg) : PrB H V P x ≤ 1 := by
-  unfold PrB; split
-  · exact Pr_le_one _
-  · exact zero_le_one
-
 /-- **One run's collision is `B`'s**: `B`'s first run is the prover's at a uniform tape and coins, and `B` outputs a
 collision whenever the verifier's calls in it have one. -/
 theorem Pr_VColl_le_PrB {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω)
@@ -93,7 +81,7 @@ theorem Pr_VColl_le_PrB {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
         exact (Pr_drop (γ := Fin (V.k x) → Coin) fun ω r => VColl H (run H P V x ω r)).symm
     _ ≤ _ := by
         refine Pr_mono fun s ⟨u, v, hu, hv, hc⟩ => ?_
-        refine findColl_isSome H _ (fun p hp => ?_) u v (by simp [hu]) (by simp [hv]) hc
+        refine findColl_isSome_mem H _ (fun p hp => ?_) u v (by simp [hu]) (by simp [hv]) hc
         rcases List.mem_append.1 hp with hp | hp
         · exact (run_logs H P V x _ _).2 p hp
         · exact (run_logs H P V x _ _).2 p hp

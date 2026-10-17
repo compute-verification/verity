@@ -3,10 +3,11 @@ import Proofs.Flock.Claims.Recursion.OuterKS
 /-!
 # The inner protocol's KS against provers that may abort
 
-`E*` sees each inner rerun through `E_O` at fresh outer coins, rejected wherever the compiled run rejects there. The outer
-sessions come after the inner rounds, so the compiled prover decides there, on the inner coins and on coins the inner
-verifier never reads, whether `E*` sees an inner rerun accepted (`Recursion/Gap.lean`). The recursion's `KS` rests on the
-inner protocol's KS against such provers, `Inner.KSAbort`:
+`E*` sees each inner rerun through `E_O` at fresh outer coins, rejected wherever the compiled run rejects there. The
+outer sessions come after the inner rounds, so the compiled prover decides there, on the inner coins and on coins the
+inner verifier never reads, whether `E*` sees an inner rerun accepted (`Recursion/Gap.lean`). The recursion's `KS` rests
+on the inner protocol's KS against such provers, `Inner.KSAbort`, which the claims spec states with its abort model
+(`Definitions/Claims/Recursion.lean`):
 
 * **The abort model** (`abortRun`): after the inner rounds, a prover may abort its run, reading its tape, every coin of
   the run and fresh coins of its own for that run (`A`), which the inner verifier doesn't read. An aborted run sends
@@ -21,61 +22,6 @@ inner protocol's KS against such provers, `Inner.KSAbort`:
 namespace Claims.Recursion
 
 open Claims
-
-/-! ## The abort model -/
-
-/-- An aborted run: nothing sent, rejected. -/
-def abortTrace : Trace := ⟨[], [], [], .rej⟩
-
-/-- **A run that may abort after the inner rounds**: `P`'s run at the tape `ω` and the coins `t.1`, unless `keep`, which
-reads the tape, every coin of the run and the run's fresh coins `t.2`, refuses it; then the run aborts. -/
-def abortRun {Coin : Type} [Inhabited Coin] {Ω A : Type} (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin)
-    (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (ω : Ω) (t : (Fin (V.k x) → Coin) × A) : Trace :=
-  if keep ω t.1 t.2 then run H P V x ω t.1 else abortTrace
-
-/-- **`Pr[run = acc ∧ ¬R(x, E^rep(x))]` at a prover that may abort**, over the tape, the judged run's coins with its
-abort coins, and `E^rep`'s draws, each a run's coins with its abort coins: `E^rep` at the inner protocol's waits reruns at
-the judged draw, then at its draws, and sees each run as it aborts. -/
-noncomputable def Inner.PrBadAbort {Coin W : Type} [Fintype Coin] [Inhabited Coin] (H : Msg → Msg)
-    (I : Inner Coin W) (x : Msg) {Ω A : Type} [Fintype Ω] [Fintype A] (P : Prover Ω)
-    (keep : Ω → (Fin (I.V.k x) → Coin) → A → Bool) : ℝ :=
-  Pr fun s : Ω × ((Fin (I.V.k x) → Coin) × A) × (Fin (I.waits x) → Fin (I.cap x) → (Fin (I.V.k x) → Coin) × A) =>
-    (abortRun H P I.V x keep s.1 s.2.1).out = .acc ∧
-      ¬ I.R.ext x ((erep (I.waits x) (I.k x) (I.cap x) I.opens (I.assemble x) (I.check x) s.2.1 s.2.2).eval H
-        (abortRun H P I.V x keep s.1)).1
-
-/-- **`B` at runs that may abort**: `B`'s fork (guess `j`, draw `ω, r_1..r_j`, run twice from the shared start with
-fresh continuations), each run with its own abort coins, and the first collision among the verifier's SHA-512 calls in
-the two runs as they abort. Its cost is both runs' calls, both parties'. -/
-def BAbort {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Ω A : Type} [Fintype Ω] [Nonempty Ω]
-    [Fintype A] [Nonempty A] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
-    (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (hk : 0 < V.k x) : Finder where
-  S := BCoins Ω Coin (V.k x) × A × A
-  ne := ⟨(⟨⟨0, hk⟩, Classical.arbitrary _, fun _ => default, fun _ => default⟩, Classical.arbitrary _,
-    Classical.arbitrary _)⟩
-  out s := findColl ((abortRun H P V x keep s.1.2.1 (s.1.2.2.1, s.2.1)).vLog ++
-    (abortRun H P V x keep s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2, s.2.2)).vLog)
-  cost s :=
-    (abortRun H P V x keep s.1.2.1 (s.1.2.2.1, s.2.1)).pLog.length +
-      (abortRun H P V x keep s.1.2.1 (s.1.2.2.1, s.2.1)).vLog.length +
-      (abortRun H P V x keep s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2, s.2.2)).pLog.length +
-      (abortRun H P V x keep s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2, s.2.2)).vLog.length
-
-/-- `Pr[B^{P*}(x) outputs a collision]` at runs that may abort, `0` for a verifier that takes no rounds at `x`. -/
-noncomputable def PrBAbort {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Ω A : Type} [Fintype Ω]
-    [Nonempty Ω] [Fintype A] [Nonempty A] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
-    (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) : ℝ :=
-  if hk : 0 < V.k x then (BAbort H V P x keep hk).Pr H else 0
-
-/-- **The inner protocol's KS against provers that may abort**: for every prover `P*` (any finite tape) and every way it
-may abort after the inner rounds (`keep`, on any finite fresh coins `A` per run),
-`Pr[run = acc ∧ ¬R(x, E^rep(x))] ≤ κ(x) + √(γ(x) · Pr[B^{P*}(x) outputs a collision])`, `E^rep` and `B` seeing each run
-as it aborts. With no aborts it is `Inner.KS` (`KSAbort_KS`). -/
-def Inner.KSAbort {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
-    (I : Inner Coin W) : Prop :=
-  ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (A : Type) [Fintype A] [Nonempty A]
-    (keep : Ω → (Fin (I.V.k x) → Coin) → A → Bool),
-    I.PrBadAbort H x P keep ≤ I.κ x + Real.sqrt (I.γ x * PrBAbort H I.V P x keep)
 
 /-! ## With no aborts, `Inner.KS` -/
 

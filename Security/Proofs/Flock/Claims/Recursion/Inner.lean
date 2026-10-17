@@ -47,7 +47,7 @@ def innerCoins (D : Deploy Coin) (I : Inner Coin W) (x : Msg) (r : Fin (D.V.k x)
 messages. -/
 def innerRun (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (x : Msg) (r : Fin (D.V.k x) → Coin)
     (ws : List Flock.Wit) : Trace :=
-  run H (replay ((D.innerView x r ws).msgs.map Prod.fst)) I.V (xI D x) () (innerCoins D I x r)
+  run H (replay ((D.innerView H x r ws).msgs.map Prod.fst)) I.V (xI D x) () (innerCoins D I x r)
 
 /-- **The inner view at `r` and `E_O`'s witnesses is the inner verifier's run** (a code fact): wherever `E_O` gives
 witnesses on an accepted run, the inner view read off them is `I.V`'s run of its own messages at the compiled
@@ -55,7 +55,7 @@ verifier's first `k_I` coins, so its answers and its decision are the inner veri
 def InnerViewRun (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
-    D.innerView x r ws = (innerRun H D I x r ws).seen
+    D.innerView H x r ws = (innerRun H D I x r ws).seen
 
 /-- **`D.calls` records the inner verifier's SHA-512 calls** (a code fact): wherever `E_O` gives witnesses on an
 accepted run, `I.V`'s calls in the inner view's run are among the calls the witnesses record, and every recorded call
@@ -73,14 +73,14 @@ def CallsOpen (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
     ∀ j < I.V.k (xI D x), ∃ q, (q, ((run H P D.V x ω r).msgs.map Prod.fst).getD j []) ∈ D.calls x ws ∧
-      opening q = ((D.innerView x r ws).msgs.map Prod.fst).getD j []
+      opening q = ((D.innerView H x r ws).msgs.map Prod.fst).getD j []
 
 /-- **The compiled verifier accepts only where the inner view does** (a code fact): wherever `E_O` gives witnesses on
 an accepted run, the inner view read off them is accepted. -/
 def InnerAccepts (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
-    (D.innerView x r ws).out = .acc
+    (D.innerView H x r ws).out = .acc
 
 /-- **The inner verifier is public-coin** (a code fact about `I`): its message at a round shows that round's coin,
 which `decC` reads off it. -/
@@ -102,7 +102,7 @@ theorem findColl_two_openings (H : Msg → Msg) {l l' : List (Msg × Msg)} (hl :
     (hl' : ∀ e ∈ l', H e.1 = e.2) {q q' a : Msg} (hq : (q, a) ∈ l) (hq' : (q', a) ∈ l') (hne : q ≠ q') :
     ∃ u v, findColl (l ++ l') = some (u, v) ∧ Collision H u v := by
   have hall : ∀ e ∈ l ++ l', H e.1 = e.2 := fun e he => (List.mem_append.1 he).elim (hl e) (hl' e)
-  have hs := findColl_isSome H (l ++ l') hall q q' (List.mem_map.2 ⟨(q, a), List.mem_append_left _ hq, rfl⟩)
+  have hs := findColl_isSome_mem H (l ++ l') hall q q' (List.mem_map.2 ⟨(q, a), List.mem_append_left _ hq, rfl⟩)
     (List.mem_map.2 ⟨(q', a), List.mem_append_right _ hq', rfl⟩) ⟨hne, (hl _ hq).trans (hl' _ hq').symm⟩
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hs
   exact ⟨u, v, huv, findColl_spec H _ hall u v huv⟩
@@ -120,7 +120,7 @@ theorem opening_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO 
     {ws ws' : List Flock.Wit} (h : EOGives H D I DO decO P x ω r c ws) (h' : EOGives H D I DO decO P x ω r' c' ws')
     {j : ℕ} (hj : j < I.V.k (xI D x))
     (hm : ((run H P D.V x ω r).msgs.map Prod.fst).getD j [] = ((run H P D.V x ω r').msgs.map Prod.fst).getD j [])
-    (hd : ((D.innerView x r ws).msgs.map Prod.fst).getD j [] ≠ ((D.innerView x r' ws').msgs.map Prod.fst).getD j []) :
+    (hd : ((D.innerView H x r ws).msgs.map Prod.fst).getD j [] ≠ ((D.innerView H x r' ws').msgs.map Prod.fst).getD j []) :
     ∃ u v, findColl (D.calls x ws ++ D.calls x ws') = some (u, v) ∧ Collision H u v := by
   obtain ⟨q, hq, hoq⟩ := hO decO x Ω P ω r c ws h j hj
   obtain ⟨q', hq', hoq'⟩ := hO decO x Ω P ω r' c' ws' h' j hj
@@ -201,8 +201,8 @@ def OpensDiffer (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flo
     Prop :=
   ∃ ws ws', EOGives H D I DO decO P x t.1 t.2.1 t.2.2.2.1 ws ∧
     EOGives H D I DO decO P x t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' ∧
-    ((D.innerView x t.2.1 ws).msgs.map Prod.fst).getD j [] ≠
-      ((D.innerView x (fork j t.2.1 t.2.2.1) ws').msgs.map Prod.fst).getD j []
+    ((D.innerView H x t.2.1 ws).msgs.map Prod.fst).getD j [] ≠
+      ((D.innerView H x (fork j t.2.1 t.2.2.1) ws').msgs.map Prod.fst).getD j []
 
 /-- **Binding at a fork**: a differing opening at inner round `j` is a collision `Be` finds at its fork at `j`, since
 the two runs share their coins before `j` and so their message `j`. -/

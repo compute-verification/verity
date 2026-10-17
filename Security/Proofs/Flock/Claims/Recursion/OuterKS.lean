@@ -87,10 +87,10 @@ def sessProver {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (pre : List (Msg 
 def sessCoins {Coin : Type} [Inhabited Coin] {k : ℕ} (o : ℕ) (d : Fin k → Coin) (n : ℕ) : Fin n → Coin :=
   fun i => coinSeq d (o + i.val)
 
-/-- Session `s`'s V* statement in the run at coins `r`, read off its inner rounds' messages. -/
+/-- Session `s`'s V* statement in the run at coins `r`, read off its inner and staging rounds' messages. -/
 def sessStmt {Coin W : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) {Ω : Type}
     (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ) (r : Fin (D.V.k x) → Coin) : Msg :=
-  (D.vstar x ((run H P D.V x ω r).msgs.take (I.V.k (xI D x)))).getD s []
+  (D.vstar x ((run H P D.V x ω r).msgs.take (I.V.k (xI D x) + D.kS x))).getD s []
 
 /-- **Session `s`'s prover at the coins `r`**: `P` after the run's messages before the session's first round. -/
 def sessP {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
@@ -121,7 +121,7 @@ def SessionNums {Coin Col T : Type} (D : Deploy Coin) (DO : Flock.Deploy Coin Co
 and the earlier sessions', end by `k(x)`. -/
 def SessionRounds {Coin W Col T : Type} (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (x : Msg) (s : Fin (D.nS x)) (ms : List (Msg × Out)),
-    I.V.k (xI D x) + (((D.vstar x ms).take s).map DO.V.k).sum + DO.V.k ((D.vstar x ms).getD s []) ≤ D.V.k x
+    I.V.k (xI D x) + D.kS x + (((D.vstar x ms).take s).map DO.V.k).sum + DO.V.k ((D.vstar x ms).getD s []) ≤ D.V.k x
 
 /-- **Each session's table error is nonnegative.** -/
 def TableErrNonneg {Coin : Type} (D : Deploy Coin) : Prop :=
@@ -174,7 +174,7 @@ theorem fork_sessCoins {Coin : Type} [Inhabited Coin] {k : ℕ} (o j n : ℕ) (d
 
 theorem le_offO {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ) (r : Fin (D.V.k x) → Coin) :
-    I.V.k (xI D x) ≤ offO H D I DO P x ω s r := Nat.le_add_right _ _
+    I.V.k (xI D x) + D.kS x ≤ offO H D I DO P x ω s r := Nat.le_add_right _ _
 
 theorem offO_fork {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ) (r d : Fin (D.V.k x) → Coin) :
@@ -245,7 +245,8 @@ theorem EOs_eval_acc {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhab
     (decO : List (ℕ × Col) → List T) (x : Msg) (s : ℕ) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r : Fin (D.V.k x) → Coin) (c : (EOs D I DO decO s).C x) (hacc : (run H P D.V x ω r).out = .acc) :
     ((EOs D I DO decO s).eval H P x ω r c).1 =
-      ((firstWait (D.nums x s).k DO.cols (Flock.assemble DO.parse decO DO.read (sessStmt H D I P x ω s r))
+      ((firstWait (D.nums x s).k (fun v => [DO.cols v])
+        (Flock.assemble DO.parse DO.table decO DO.read (sessStmt H D I P x ω s r))
         (Flock.check DO.parse (sessStmt H D I P x ω s r))
         ((List.finRange (D.nums x s).waits).map fun i => (List.finRange (D.nums x s).cap).map fun j =>
           fork (offO H D I DO P x ω s r) r (c i j))).eval H
@@ -258,7 +259,8 @@ theorem flockE_eval_acc {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
     (H : Msg → Msg) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Q : Prover Unit) (y : Msg)
     (σ₀ : Fin (DO.V.k y) → Coin) (ρ : (Flock.E DO decO).C y) (hacc : (run H Q DO.V y () σ₀).out = .acc) :
     ((Flock.E DO decO).eval H Q y () σ₀ ρ).1 =
-      ((firstWait (DO.k y) DO.cols (Flock.assemble DO.parse decO DO.read y) (Flock.check DO.parse y)
+      ((firstWait (DO.k y) (fun v => [DO.cols v]) (Flock.assemble DO.parse DO.table decO DO.read y)
+        (Flock.check DO.parse y)
         ((List.finRange (DO.waits y)).map fun i => (List.finRange (DO.cap y)).map (ρ i))).eval H
         (run H Q DO.V y ())).1 := by
   simp only [Extractor.eval, Flock.E, ERep, RP.eval, Trace.seen, hacc, ↓reduceIte]
@@ -393,7 +395,7 @@ theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
         ¬ (sessR DO).ext x ((EOs D I DO decO s).eval H P x ω (fork (offO H D I DO P x ω s r) r p.1) p.2).1) ≤
       (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * sessPrB H D I DO P x ω s r) := by
   classical
-  obtain ⟨hk', hW, hK, hN₀, hεt, hwt⟩ := hN x s ((run H P D.V x ω r).msgs.take (I.V.k (xI D x)))
+  obtain ⟨hk', hW, hK, hN₀, hεt, hwt⟩ := hN x s ((run H P D.V x ω r).msgs.take (I.V.k (xI D x) + D.kS x))
   change DO.V.k (sessStmt H D I P x ω s r) = _ at hk'
   change DO.waits (sessStmt H D I P x ω s r) = _ at hW
   change DO.cap (sessStmt H D I P x ω s r) = _ at hK
@@ -482,7 +484,7 @@ theorem findColl_isSome_of_sub (H : Msg → Msg) {l l' : List (Msg × Msg)} (hl'
   have hm : ∀ w ∈ l.map Prod.fst, w ∈ l'.map Prod.fst := fun w hw => by
     obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hw
     exact List.mem_map.2 ⟨p, hsub p hp, rfl⟩
-  exact findColl_isSome H l' hl' u v (hm u hu) (hm v hv) hc
+  exact findColl_isSome_mem H l' hl' u v (hm u hu) (hm v hv) hc
 
 theorem sum_range_shift_le (f : ℕ → ℝ) (hf : ∀ j, 0 ≤ f j) {o m k : ℕ} (h : o + m ≤ k) :
     ∑ j ∈ Finset.range m, f (o + j) ≤ ∑ j ∈ Finset.range k, f j := by
@@ -506,7 +508,7 @@ theorem sessPrB_mul_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inh
   unfold sessPrB
   split_ifs with hA
   · obtain ⟨d₁, hacc⟩ := hA
-    have hk' := (hN x s ((run H P D.V x ω r).msgs.take (I.V.k (xI D x)))).1
+    have hk' := (hN x s ((run H P D.V x ω r).msgs.take (I.V.k (xI D x) + D.kS x))).1
     change DO.V.k (sessStmt H D I P x ω s r) = _ at hk'
     have hle : offO H D I DO P x ω s r + DO.V.k (sessStmt H D I P x ω s r) ≤ D.V.k x := hRd x s _
     rw [← hk', PrB_mul_eq]
@@ -562,7 +564,7 @@ theorem Ex_sessPrB_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
           exact Finset.sum_congr rfl fun j _ => Pr_prod _
       _ = Ex G := Ex_fork (offO_prefixDet H D I DO P x ω s) G
       _ ≤ _ := Ex_mono fun R => ?_
-    have hk' := (hN x s ((run H P D.V x ω R).msgs.take (I.V.k (xI D x)))).1
+    have hk' := (hN x s ((run H P D.V x ω R).msgs.take (I.V.k (xI D x) + D.kS x))).1
     have hle : offO H D I DO P x ω s R + DO.V.k (sessStmt H D I P x ω s R) ≤ D.V.k x := hRd x s _
     change DO.V.k (sessStmt H D I P x ω s R) = _ at hk'
     rw [hk'] at hle
@@ -602,7 +604,7 @@ theorem outerKS_sharp {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
         intro p
         unfold sessPrB
         split_ifs
-        · have hk' := (hN x s ((run H P D.V x p.1 p.2).msgs.take (I.V.k (xI D x)))).1
+        · have hk' := (hN x s ((run H P D.V x p.1 p.2).msgs.take (I.V.k (xI D x) + D.kS x))).1
           change DO.V.k (sessStmt H D I P x p.1 s p.2) = _ at hk'
           simp [PrB, hk', h0]
         · rfl

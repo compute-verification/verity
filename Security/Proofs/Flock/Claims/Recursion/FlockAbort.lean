@@ -52,10 +52,12 @@ noncomputable def qDI : Flock.Deploy Bool ℕ Unit where
   V := qV
   parse := fun _ => some gs₀
   scopeCheck := fun _ => false
-  cols := qCols
+  table := fun _ _ => some gs₀
+  cols := fun v _ => qCols v
   enc := fun _ _ => 1
   len := fun _ => 2
   θ := fun _ => 0
+  dec := fun _ => ([], 0)
   read := fun _ => ⟨[]⟩
   εtable := fun _ => 0
   N₀ := fun _ => 100 * Real.exp 1
@@ -86,9 +88,35 @@ theorem qCols_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : 
   · exact h
   · exact congrArg List.length (ite_eq_left h)
 
-theorem qCols_runD (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin (qDI.V.k x) → Bool) :
-    qDI.cols (run H P qDI.V x ω r).seen = [(if coinSeq r 0 then 1 else 0, 1)] :=
+theorem qCols_runD (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin (qDI.V.k x) → Bool)
+    (j : ℕ) : qDI.cols (run H P qDI.V x ω r).seen j = [(if coinSeq r 0 then 1 else 0, 1)] :=
   qCols_run H P x ω r
+
+/-- Each run's one opening, read at table `j`. -/
+theorem flatMap_open {α β : Type} (f : α → ℕ → List β) (j : ℕ) :
+    ∀ vs : List α, ((vs.flatMap fun v => [f v]).flatMap fun o => o j) = vs.flatMap fun v => f v j
+  | [] => rfl
+  | v :: vs => by
+    simp only [List.flatMap_cons, List.cons_append, List.nil_append]
+    rw [flatMap_open f j vs]
+
+/-- `qDI`'s assembly at its one table: the decoder's list at the openings, its first entry read. -/
+theorem qAssemble (decode : List (ℕ × ℕ) → List Unit) (x : Msg) (vs : List Seen) (a : Unit) (l : List Unit)
+    (hdl : decode (vs.flatMap fun v => qDI.cols v 0) = a :: l) :
+    Flock.assemble qDI.parse qDI.table decode qDI.read x (vs.flatMap fun v => [qDI.cols v]) = some ⟨[]⟩ := by
+  have h1 : gs₀.tables = 1 := rfl
+  simp only [Flock.assemble, show qDI.parse x = some gs₀ from rfl, h1, List.range_one, List.mapM_cons,
+    List.mapM_nil, show qDI.table x 0 = some gs₀ from rfl, Option.bind_some, flatMap_open, hdl]
+  simp [qDI, gRelS]
+
+/-- `qDI`'s assembly gives up where the decoder lists nothing. -/
+theorem qAssemble_none (decode : List (ℕ × ℕ) → List Unit) (x : Msg) (vs : List Seen)
+    (hdl : decode (vs.flatMap fun v => qDI.cols v 0) = []) :
+    Flock.assemble qDI.parse qDI.table decode qDI.read x (vs.flatMap fun v => [qDI.cols v]) = none := by
+  have h1 : gs₀.tables = 1 := rfl
+  simp only [Flock.assemble, show qDI.parse x = some gs₀ from rfl, h1, List.range_one, List.mapM_cons,
+    List.mapM_nil, show qDI.table x 0 = some gs₀ from rfl, Option.bind_some, flatMap_open, hdl]
+  rfl
 
 theorem qDI_k (x : Msg) : qDI.k x = 400 := by
   unfold Flock.Deploy.k
@@ -263,17 +291,17 @@ theorem qE_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
     ((Flock.E qDI decode).eval H P x ω r₀ ρ).1 = some ⟨[]⟩ := by
   have hacc : ∀ r, (run H P qDI.V x ω r).out = .acc := fun r => qV_out H P x ω r
   simp only [Flock.E, ERep, Extractor.eval, RP.eval, Trace.seen, hacc, ↓reduceIte]
-  refine firstWait_finRange_some H (run H P qDI.V x ω) (qDI.k x) (qDI.waits x) (qDI.cap x) qDI.cols _ _ hacc hw ρ
-    (⟨[]⟩ : Flock.Wit) ?_ (by simp [Flock.check, qDI, gRelS])
+  refine firstWait_finRange_some H (run H P qDI.V x ω) (qDI.k x) (qDI.waits x) (qDI.cap x)
+    (fun v => [qDI.cols v]) _ _ hacc hw ρ (⟨[]⟩ : Flock.Wit) ?_ (by simp [Flock.check, qDI, gRelS])
   have hall : ∀ p ∈ ((((List.finRange (qDI.cap x)).map (ρ ⟨0, hw⟩)).take (qDI.k x)).map
-      (fun r => (run H P qDI.V x ω r).seen)).flatMap qDI.cols, p.2 = 1 := by
+      (fun r => (run H P qDI.V x ω r).seen)).flatMap (fun v => qDI.cols v 0), p.2 = 1 := by
     intro p hp
     obtain ⟨v, hv, hpv⟩ := List.mem_flatMap.1 hp
     obtain ⟨r, -, rfl⟩ := List.mem_map.1 hv
     rw [qCols_runD H P x ω r, List.mem_singleton] at hpv
     rw [hpv]
   have hpos : ∀ b : Bool, ∃ p ∈ ((((List.finRange (qDI.cap x)).map (ρ ⟨0, hw⟩)).take (qDI.k x)).map
-      (fun r => (run H P qDI.V x ω r).seen)).flatMap qDI.cols, p.1 = if b then 1 else 0 := by
+      (fun r => (run H P qDI.V x ω r).seen)).flatMap (fun v => qDI.cols v 0), p.1 = if b then 1 else 0 := by
     intro b
     obtain ⟨j, hj⟩ := bool3 (q3 hw hK ρ) hne b
     have hj' : coinSeq (ρ ⟨0, hw⟩ (Fin.castLE hK j)) 0 = b := hj
@@ -287,9 +315,7 @@ theorem qE_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
   have hm : () ∈ decode _ := qDecodes decode hdec _ (fill_of_all _ 1 0 hall (hpos false))
     (fill_of_all _ 1 1 hall (hpos true))
   obtain ⟨a, l, hdl⟩ := List.exists_cons_of_ne_nil (List.ne_nil_of_mem hm)
-  unfold Flock.assemble
-  rw [hdl]
-  rfl
+  exact qAssemble decode x _ a l hdl
 
 /-- `E^rep`'s first wait's first three query coins are uniform. -/
 theorem unifMap_q3 (decode : List (ℕ × ℕ) → List Unit) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -354,7 +380,8 @@ theorem qPrBAbort (H : Msg → Msg) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fi
 /-- **`E^rep` gives up at the kept runs**: they open position `1` alone, so the decoder lists nothing. -/
 theorem qE_abort_none (H : Msg → Msg) (ω : Unit)
     (ρ : Fin (qDI.waits []) → Fin (qDI.cap []) → (Fin (qV.k []) → Bool) × Unit) :
-    ((firstWait (qDI.k []) qCols (Flock.assemble qDI.parse qDec qDI.read []) (Flock.check qDI.parse [])
+    ((firstWait (qDI.k []) (fun v => [qDI.cols v]) (Flock.assemble qDI.parse qDI.table qDec qDI.read [])
+      (Flock.check qDI.parse [])
       ((List.finRange (qDI.waits [])).map fun i => (List.finRange (qDI.cap [])).map (ρ i))).eval H
         (abortRun H qP qV [] qKeep ω)).1 = none := by
   refine firstWait_none_of H _ _ _ _ _ (fun v => qCols v = [(1, 1)]) (fun t ht => ?_) (fun vs hvs => ?_) _
@@ -364,13 +391,14 @@ theorem qE_abort_none (H : Msg → Msg) (ω : Unit)
       rw [ite_eq_left hkeep, qCols_run H qP [] ω t.1, show coinSeq t.1 0 = true from hkeep]
       rfl
     · exact absurd ht (by simp [abortTrace])
-  · have hos : ∀ p ∈ vs.flatMap qCols, p = (1, 1) := fun p hp => by
+  · have hos : ∀ p ∈ vs.flatMap fun v => qDI.cols v 0, p = (1, 1) := fun p hp => by
       obtain ⟨v, hv, hpv⟩ := List.mem_flatMap.1 hp
-      rw [hvs v hv, List.mem_singleton] at hpv
+      rw [show qDI.cols v 0 = qCols v from rfl, hvs v hv, List.mem_singleton] at hpv
       exact hpv
-    have h0 : Flock.fill 2 (vs.flatMap qCols) 0 = 0 :=
+    have h0 : Flock.fill 2 (vs.flatMap fun v => qDI.cols v 0) 0 = 0 :=
       fill_of_none _ _ fun p hp => by rw [hos p hp]; decide
-    simp [Flock.assemble, qDI, qDec, h0]
+    refine qAssemble_none qDec [] vs ?_
+    simp [qDec, h0]
 
 /-- The judged run's coin 0 is `true` half the time, whatever else is drawn. -/
 theorem Pr_coin0 {n : ℕ} (h0 : 0 < n) {Y : Type} [Fintype Y] [Nonempty Y] :
@@ -411,9 +439,9 @@ theorem qKSAbort_fails (H : Msg → Msg) :
               show (if qKeep s.1 s.2.1.1 s.2.1.2 then run H qP qV [] s.1 s.2.1.1 else abortTrace).out = .acc
               simp only [qKeep, hs, ↓reduceIte]
               exact qV_out H qP [] s.1 s.2.1.1
-            show ¬ (Flock.R qDI.parse).ext [] ((erep (qDI.waits []) (qDI.k []) (qDI.cap []) qCols
-              (Flock.assemble qDI.parse qDec qDI.read []) (Flock.check qDI.parse []) s.2.1 s.2.2).eval H
-                (abortRun H qP qV [] qKeep s.1)).1
+            show ¬ (Flock.R qDI.parse).ext [] ((erep (qDI.waits []) (qDI.k []) (qDI.cap [])
+              (fun v => [qDI.cols v]) (Flock.assemble qDI.parse qDI.table qDec qDI.read [])
+                (Flock.check qDI.parse []) s.2.1 s.2.2).eval H (abortRun H qP qV [] qKeep s.1)).1
             simp only [erep, RP.eval, hacc, ↓reduceIte]
             rw [qE_abort_none H s.1 s.2.2]
             exact id
