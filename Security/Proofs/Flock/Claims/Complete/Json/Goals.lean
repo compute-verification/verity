@@ -181,6 +181,16 @@ theorem liveReads_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : 
     Run.json S h64 hS hP o
   exact hlv
 
+/-- **Alike values are equivalent** (`JsonEquiv`, what `drawEq` decides). -/
+theorem Same.jsonEquiv {a b : Json} (h : Same a b) : JsonEquiv a b := by
+  induction h with
+  | null => rfl
+  | bool => rfl
+  | num => rfl
+  | str => rfl
+  | arr hs _ ih => exact (jsonEquiv_arr_iff _ _).2 ⟨hs, ih⟩
+  | obj hm hn hk _ ih => exact (jsonEquiv_obj_iff hm hn).2 ⟨hk, ih⟩
+
 /-- **The record's draw is the statement's**: the goal `DrawMatches`. -/
 theorem drawMatches_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
     DrawMatches H rel := by
@@ -197,7 +207,7 @@ theorem drawMatches_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP 
   | some d =>
     rintro ⟨d', hd', hs⟩
     rw [hd']
-    exact S.beq_same d' d hs.symm
+    exact (drawEq_iff _ _).2 (.some hs.symm.jsonEquiv)
 
 theorem list_bytes_beq_self (l : List ByteArray) : (l == l) = true := by
   induction l with
