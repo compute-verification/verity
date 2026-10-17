@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Discharge
 import Proofs.Flock.Claims.Complete.ZkTables.Link
+import Proofs.Flock.Claims.Complete.ZkTables.Count
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-!
@@ -8,10 +9,12 @@ import Proofs.Flock.Claims.Complete.Zk.Complete
 * **One table is `Zk/`'s**: a good case of one table is a `CaseZk` (`Case.toZk`: `ready` gives `readyZk`), its session
   `sessionSZk`'s (`sessionS_one`), and a run of one table a `RunZk` (`Run.toZk`), at which every method is the same. So
   every goal `complete_zk` rests on, or proves, holds at a run of one table.
+* **At every number of tables**: the scope's goals (`tables_goal`, `schedules_goal`, `proofCount_goal`), the link
+  message first (`linkFirst_goal`) and the sends (`sends_goal`).
 * **Several tables**: what `complete_zk` asks or proves at one table, at a run of several, as named `Prop`s: the session
   runs (`SessionRunsJ`), the record checks that `Zk/Json/` proves at one table from the record's premises
-  (`RecordAt`, `RecordJ`), and the checks still open at one table (`OpenAt`, `OpenJ`: the sends fit, and per rep the
-  masked replay, the ring switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed).
+  (`RecordAt`, `RecordJ`), and the checks still open at one table (`OpenAt`, `OpenJ`: per rep the masked replay, the
+  ring switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed).
 * `complete`: Flock's masked verifier is complete for `honestP` with error `δc H`
   (`Claims.Flock.Complete H (deployZk rel) honestP (δc H)`), from `complete_zk`'s premises and these three.
 -/
@@ -89,10 +92,9 @@ structure RecordAt (o : Run H rel) : Prop where
 /-- **The record's checks at every run of several tables.** -/
 def RecordJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → RecordAt H rel o
 
-/-- **The checks open at one table, at a run**: the sends fit `k(x)`, and per rep the masked replay, the ring switch, the
-masked Ligerito, level 0's lane phase, the inner proof and every round consumed. -/
+/-- **The checks open at one table, at a run**: per rep the masked replay, the ring switch, the masked Ligerito, level
+0's lane phase, the inner proof and every round consumed. -/
 structure OpenAt (o : Run H rel) : Prop where
-  sends : o.bodies.size ≤ 1 + rounds true o.spec o.sts
   replay : ∀ i < o.tabs.size, ∀ r < 2,
     (Zk.replayWith o.hs o.tabs[i]! (o.lay i) (o.zp i r).proof (o.zp i r).inner.root).run (o.t₀ i r) = .ok (o.rp i r)
   ringSwitch : ∀ i < o.tabs.size, ∀ r < 2,
@@ -132,7 +134,6 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
     Claims.Flock.Complete H (deployZk rel) honestP (δc H) := by
   have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 hRR
   have hSR : FlockComplete.SessionRunsZk H rel := JsonRT.sessionRunsZk_goal S hS hPR
-  have hN : FlockComplete.SendCountZk H rel := sendCountZk_goal H rel
   have rec1 : ∀ o : Run H rel, (h1 : o.sts.size = 1) → RecordAt H rel o := fun o h1 =>
     { finalFits := JsonRT.finalFitsZk_goal S h64 hS hP hR hF (o.toZk h1)
       draw := JsonRT.drawMatchesZk_goal S h64 hS hP (o.toZk h1)
@@ -153,8 +154,7 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
       padsRoot := JsonRT.padsRoot_goal S h64 hS hP hR (o.toZk h1)
       capCommitted := JsonRT.capCommittedZk_goal S h64 hS hP hR (o.toZk h1) }
   have open1 : ∀ o : Run H rel, (h1 : o.sts.size = 1) → OpenAt H rel o := fun o h1 =>
-    { sends := hN (o.toZk h1)
-      replay := hRp (o.toZk h1)
+    { replay := hRp (o.toZk h1)
       ringSwitch := hRS (o.toZk h1)
       ligerito := hLg (o.toZk h1)
       lanes := hLC (o.toZk h1)
@@ -166,7 +166,7 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
     (o.one_or_several).elim (open1 o) (hOp o)
   refine complete_of_goals H rel
     { session := fun c => (c.one_or_several).elim (fun h1 => ?_) (hSRJ c)
-      sends := fun o => (openAll o).sends
+      sends := sends_goal H rel
       linkFirst := linkFirst_goal H h64 rel
       finalFits := fun o => (recAll o).finalFits
       draw := fun o => (recAll o).draw
