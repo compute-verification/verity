@@ -10,7 +10,8 @@
 #     --env PLAN=honest --env GIB=16 -- taskset -c 48-95 bash benchmarks/remote_session/run.sh
 #
 # PLAN is the prover's sessions (honest, skip:F; comma-separated, one session each); GIB the store across every GPU
-# (whole 1 GiB chunks); WINDOWS, WINDOW_MS, SAMPLES, JITTER_MS the sessions'; VERIFIER_CPUS and PROVER_CPUS the cores
+# (whole 1 GiB chunks); WINDOWS, WINDOW_MS, SAMPLES, JITTER_MS the sessions'; CHECK_WORKERS the verifier's opening
+# checkers (default a core less than it may use); VERIFIER_CPUS and PROVER_CPUS the cores
 # each process is pinned to; MAXMIN the lease's minutes; PY the Python (default the fill's torch venv; a verifier needs
 # only numpy, so on a CPU node any venv with it).
 #
@@ -51,7 +52,8 @@ export WINDOW_MS=${WINDOW_MS:-1000} SAMPLES=${SAMPLES:-2773} JITTER_MS=${JITTER_
 export VERIFIER_CPUS=${VERIFIER_CPUS:-88-95} PROVER_CPUS=${PROVER_CPUS:-48-87} PORT=${PORT:-$((7700 + RANDOM % 200))}
 export SESSIONS=${SESSIONS:-$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))} ROLE=${ROLE:-both}
 VERIFY=(--port "$PORT" --out "$O" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES"
-  --jitter-ms "$JITTER_MS" --sessions "$SESSIONS" ${QUANTILE:+--quantile "$QUANTILE"})
+  --jitter-ms "$JITTER_MS" --sessions "$SESSIONS" ${QUANTILE:+--quantile "$QUANTILE"}
+  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"})
 if [ "$ROLE" = verifier ]; then
   read -ra TO <<< "$(grep "^${PEER:?} " /etc/vy/peers | cut -d' ' -f2-)"
   [ ${#TO[@]} -gt 0 ] || { echo "no peer $PEER in /etc/vy/peers"; exit 3; }
