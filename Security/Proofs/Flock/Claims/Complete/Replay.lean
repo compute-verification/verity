@@ -21,6 +21,8 @@ import Proofs.Flock.Claims.Complete.Replay.ProverOk
 import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
 import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
 import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
+import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
+import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`, `Agrees`),
@@ -62,8 +64,13 @@ coordinates, `claims_xsize`, so the verifier's basis is the extension of the pro
 `Lg.fOf_basisVals`, `Lg.basis_bHat`, and `BasisOk` holds at the deployed relation, `basisOk_relation`; `LigeritoSum`: a
 bit of a sum is the sum of the bits, `Lg.bF_bit_sumF`, so ring switching's `T` is the packed table's sum against the
 batched basis, `Lg.rsSum_eq`, `RsSum` holds at the deployed relation, `rsSum_relation`, and `LgFinal` there rests on
-`RepWalkP` and `Lg.Honest`, `lgFinal_relation`), and the prover's pieces (`RepRounds`: a returning rep records a round,
-each of at most `65536` coins, `repP_repOk`, every squeeze of the models being few coins, `Bnd`; `ProverOk`: the case's
-table has a registered scheme and at most 1,024 regions, `Case.schemeOk`, so at an oracle of 64-byte outputs its digests
-have the scheme's width, `opsWith_widths`, `schemeWidths`, its level-0 cap is non-empty and under `2^64` bytes,
-`commitP_cap`, and `ProverOk` holds, `proverOk`). -/
+`RepWalkP` and `Lg.Honest`, `lgFinal_relation`; `LigeritoSync`: every step of the verifier's model keeps its claim the
+honest prover's sum of table against weight, `Lg.Sync`: a challenge, `Lg.Sync.chal`, one that splits,
+`Lg.Sync.chalSplit`, an out-of-domain or consistency claim, `Lg.Sync.ood`, `Lg.Sync.add`, and the final check's sum is
+the claim, `Lg.lhsE_honest`; `LigeritoCons`: on rows the prover committed, the consistency value is its F-table folded
+at the level's challenges against its consistency weight, `Lg.consE_honest`, `Lg.consE_fold`, the prover's folds are the
+model's, `Lg.gv_foldKs`, and a level's consistency claim keeps `Lg.Sync`, `Lg.Sync.close`), and the prover's pieces
+(`RepRounds`: a returning rep records a round, each of at most `65536` coins, `repP_repOk`, every squeeze of the models
+being few coins, `Bnd`; `ProverOk`: the case's table has a registered scheme and at most 1,024 regions, `Case.schemeOk`,
+so at an oracle of 64-byte outputs its digests have the scheme's width, `opsWith_widths`, `schemeWidths`, its level-0
+cap is non-empty and under `2^64` bytes, `commitP_cap`, and `ProverOk` holds, `proverOk`). -/
