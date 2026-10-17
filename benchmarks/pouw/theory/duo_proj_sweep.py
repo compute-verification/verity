@@ -18,6 +18,7 @@ many had a kernel element, the kappas seen and up to one kernel element an assig
 
     python duo_proj_sweep.py --set quick            # seconds: the tests' rows
     python duo_proj_sweep.py --set pod --out DIR    # the pod rows (see the note)
+    python duo_proj_sweep.py --set pod-big --out DIR  # served n = 6, L = 6: a 32 GiB table
 """
 from __future__ import annotations
 
@@ -70,10 +71,10 @@ def invoke(exe: Path, job: dict) -> dict:
             "kappas": [int(x) for x in f[f.index("kappas") + 2:f.index("kappas") + 2 + nk]], "hit_lines": lines[:-1][:400]}
 
 
-def served(n: int, Lmax: int, modes=("xor", "add"), curve: bool = False) -> list[dict]:
+def served(n: int, Lmax: int, modes=("xor", "add"), curve: bool = False, Lmin: int = 1) -> list[dict]:
     jobs = []
     for g in (0, 1):
-        for L in range(1, Lmax + 1):
+        for L in range(Lmin, Lmax + 1):
             for end in range(4):
                 keys, rot = served_keys(n, g, L, end)
                 for mode in modes:
@@ -116,13 +117,15 @@ def plan(name: str) -> list[dict]:
                 + served_any_keys(6, 2, ("xor",)))
     if name == "pod":
         jobs = served(6, 5) + served(8, 4) + served(10, 3) + served(12, 3)
-        jobs += served(6, 3, ("xor",), curve=True) + served(8, 2, ("xor",), curve=True)
-        jobs += served_any_keys(6, 3) + served_any_keys(8, 2) + served_any_keys(10, 2, ("xor",))
+        jobs += served(6, 4, ("xor",), curve=True) + served(8, 3, ("xor",), curve=True)
+        jobs += served_any_keys(6, 3) + served_any_keys(8, 2)
         jobs += generic(6, 1) + generic(6, 2) + generic(6, 3) + generic(8, 1) + generic(8, 2, ("xor",))
         jobs += generic(4, 4, ("xor",)) + generic(4, 5, ("xor",))
         jobs += sample(8, 3, 300, 11) + sample(10, 2, 200, 12) + sample(10, 3, 40, 13) + sample(12, 2, 100, 14)
         jobs += sample(6, 4, 300, 15) + sample(6, 5, 30, 16)
         return jobs
+    if name == "pod-big":
+        return served(6, 6, ("xor",), Lmin=6)
     raise SystemExit(f"unknown set {name}")
 
 
