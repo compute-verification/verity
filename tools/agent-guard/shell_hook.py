@@ -8,8 +8,9 @@ of the Nebius key reached agents' transcripts at least five times by 6 Oct. Refu
 secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, reading `/proc/*/environ`, and
 `tmux show-environment` (`showenv`) with no name or a secret's (11 Oct: piping tmux's global environment through `cut -d= -f1`
 printed the Nebius key's lines again).
-`compgen -e` lists names only and passes. Also refused: every process's full command line (`ps aux`, `ps -ef`, `ps -eo args`,
-`/proc/*/cmdline`), where a daemon's token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
+`compgen -e` lists names only and passes. Also refused: full command lines of every process or of any selection beyond one pid
+(`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
+token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
 `grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
 """
 import json
@@ -109,18 +110,29 @@ def unwrap(words: list[str]) -> list[str]:
     return words
 
 
+def one_pid(args: list[str]) -> bool:
+    """Whether `ps ARGS` selects exactly one process by pid (`-p PID`, `--pid PID`) and nothing else."""
+    sel = [(a, args[i + 1]) for i, a in enumerate(args[:-1]) if a in ("-p", "--pid", "-q", "--quick-pid")]
+    others = any(a in ("--ppid", "-C", "-u", "-U", "-g", "-G", "-t", "--user", "--group", "--sid", "-s") or a.startswith("--ppid=")
+                 for a in args)
+    return len(sel) == 1 and re.fullmatch(r"\d+", sel[0][1]) is not None and not others
+
+
 def every_argv(args: list[str]) -> bool:
-    """Whether `ps ARGS` prints every process's full command line."""
+    """Whether `ps ARGS` prints full command lines of more than one named process: of every process, or of a selection such as
+    `--ppid N`, `-C NAME` or `-u USER` (17 Oct, INF-52: `ps -o pid,etime,cmd --ppid N` printed a git child's token-bearing URL)."""
     fmt = next((args[i + 1] for i, a in enumerate(args[:-1])
                 if a == "--format" or re.fullmatch(r"-?[a-zA-Z]*[oO]", a)), None)
     fmt = fmt or next((a.split("=", 1)[1] for a in args if a.startswith("--format=")), None)
     shown = fmt is None or bool(re.search(r"\b(args|cmd|command)\b", fmt))
-    bsd = [a for a in args if not a.startswith("-") and re.fullmatch(r"[a-zA-Z]+", a) and a != fmt]
+    bsd = [a for i, a in enumerate(args) if not a.startswith("-") and re.fullmatch(r"[a-zA-Z]+", a) and a != fmt
+           and not (i and args[i - 1].startswith("-"))]
     short = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
     if any(set(b) & set("ax") for b in bsd):
         return shown and not any("c" in b for b in bsd)
-    everyone = bool(set(short) & set("eA")) or "--everyone" in args or "--deselect" in args
-    return everyone and (bool(set(short) & set("fF")) if fmt is None else shown)
+    if one_pid(args):
+        return False
+    return bool(set(short) & set("fF")) if fmt is None else shown
 
 
 def refused(words: list[str], filtered: bool = False) -> bool:
