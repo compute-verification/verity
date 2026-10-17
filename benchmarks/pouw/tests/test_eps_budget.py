@@ -72,19 +72,21 @@ def test_checked_designs_skip_no_product_only_vector_work(name):
 def test_the_designs_reproduce_skips_figures():
     """Corollary D3's ε_skip, P in one block and every served output free: A's 0.327% at 8B 2K on VF3q-16 (SPEC §2.9's
     vector, its peel at BC-KERNEL r2's apv_l7qs), and each design's on VF3r-16, the vector of record, whose ♭ is about
-    10% cheaper (note:20261017T0320Z-draft-eps1-calc Round 9). Dither-1S binds at 8B 32K decode: QKᵀ's one-sided strip
-    is 2L of its d = 128 products a word."""
+    10% cheaper, each at its own ♭ (decision 90: dither-2s-fill's filler takes ♭ from 17.221 to 34.000 and halves its
+    share) (note:20261017T0320Z-draft-eps1-calc Round 10). Dither-1S binds at 8B 32K decode: QKᵀ's one-sided strip is
+    2L of its d = 128 products a word."""
     q = E.design_skip(design("dither-2s"), vector="VF3q-16")
     assert (q.ctx, q.phase) == (2048, "prefill") and q.eps_time == pytest.approx(0.0032750, rel=1e-4)
     for name, eps, ctx, phase in (("dither-2s", 0.0036468, 2048, "prefill"),
+                                  ("dither-2s-fill", 0.0018504, 2048, "prefill"),
                                   ("dither-2s-pv", 0.0024783, 2048, "prefill"),
                                   ("dither-c", 0.0034120, 8192, "prefill"),
                                   ("dither-c-peel", 0.0045657, 2048, "prefill"),
+                                  ("co-dither-l16", 0.0017670, 2048, "prefill"),
                                   ("dither-1s", 0.1232346, 32768, "decode")):
         q = E.design_skip(design(name))
         assert (q.model, q.ctx, q.phase) == ("llama-3.1-8b", ctx, phase), name
         assert q.eps_time == pytest.approx(eps, rel=1e-4) and q.credit == "floor", name
-    assert E.design_skip(design("dither-2s-fill")).eps_time == E.design_skip(design("dither-2s")).eps_time
 
 
 def test_the_registry_skip_is_eps_budgets_number():
@@ -97,17 +99,19 @@ def test_the_registry_skip_is_eps_budgets_number():
             got, want = sum(p.eps for p in d.skip.values()), E.design_skip(d, data=data).eps_time
             assert got == pytest.approx(want, rel=5e-3), (
                 f"{dev} {name}: [skip] is {got:.3g}, eps_budget.py's design_skip gives {want:.3g}: write "
-                f"[skip.served] eps = {want:#.3g} in {data / 'designs' / name}.toml (or its base's)")
+                f"[skip.served] eps = {want:#.3g} in {data / 'designs' / name}.toml")
 
 
 def test_each_device_prices_its_own_floor_and_the_same_skippable_work():
     """♭ on each device's own Π (`prices`): SPEC's 19.049 and 19.183 on VF3q-16, the LI designs' 5.961 (H200) and 4.035
-    (B200). The peel's tail is Π's price of BC-KERNEL r2's instructions where that exceeds 1.57 of ♭'s MACs, as on the
-    H200 and B200, whose mma.sync m16n8k32 takes 5.98 and 7.85 SMSP-cycles. The checked leaves' vector work is the same
-    cycles on every device (a vector instruction is one issue cycle on each Π), so only B_♭ moves it."""
+    (B200), and each variant's own (decision 90), dither-2s-fill's with its 4.5 filler instructions a word. The peel's
+    tail is Π's price of BC-KERNEL r2's instructions where that exceeds 1.57 of ♭'s MACs, as on the H200 and B200, whose
+    mma.sync m16n8k32 takes 5.98 and 7.85 SMSP-cycles. The checked leaves' vector work is the same cycles on every
+    device (a vector instruction is one issue cycle on each Π), so only B_♭ moves it."""
     assert E.prices("dither-c-peel", vector="VF3q-16").mma == pytest.approx(19.049, abs=1e-3)
     assert E.prices("dither-2s", vector="VF3q-16").mma == pytest.approx(19.183, abs=1e-3)
-    assert E.prices("dither-2s-fill") == E.prices("dither-2s") and E.prices("dither-2s").vector == "VF3r-16"
+    assert E.prices("dither-2s").vector == "VF3r-16" and E.prices("dither-2s").mma == pytest.approx(17.221, abs=1e-3)
+    assert E.prices("dither-2s-fill").mma == pytest.approx(34.000, abs=1e-3)
     sm90, sm100 = device("sm_90"), device("sm_100")
     assert E.prices("dither-2s-li-l32", sm90).mma == pytest.approx(5.961, abs=1e-3)
     p = E.prices("dither-2s-li-l32", sm100)

@@ -327,7 +327,7 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
     """A variant states what it changes: the rest comes from its base and data/designs.toml, but never its name, title,
     summary or aliases, which would collide."""
     two, fill = E.design("dither-2s"), E.design("dither-2s-fill")
-    assert fill.base == "dither-2s" and fill.skip == two.skip and fill.floor == two.floor and fill.ppl == two.ppl
+    assert fill.base == "dither-2s" and fill.noise == two.noise and fill.floor == two.floor and fill.ppl == two.ppl
     assert fill.aliases == ("dither-two-sided-fill",) and fill.title != two.title and fill.filler and not two.filler
     assert E.design("dither-2s-pv").ppl == "adopted-bd-lm-pv" and E.design("dither-c-peel").noise["pv"] == "peel"
     assert E.design("A") == two and E.design("dither-duo").name == "dither-1s" and E.aliases()["Bc"] == "dither-c-peel"
