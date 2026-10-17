@@ -5,9 +5,9 @@ import Proofs.Flock.Claims.Complete.ZkTables.Ready
 
 `honestP` and `honestPZk` send the same messages on every statement whose setup has one table (`honestP_one`), so
 against any verifier their runs there are the same (`run_congr`). Where `readyZk` holds the setup has one table and,
-its regions fitting, `δc H` is `δcZk H` (`δc_eq_δcZk`); elsewhere `δcZk H` is `1`. So `honestP`'s completeness with
-error `δc H` gives `honestPZk`'s with error `δcZk H` (`completeZk_of`): the bound at several tables loses nothing at
-one.
+`ready` holding there too, `δc H` is `δcZk H` (`δc_eq_δcZk`); elsewhere `δcZk H` is `1`. So `honestP`'s completeness
+with error `δc H` gives `honestPZk`'s with error `δcZk H` (`completeZk_of`): the bound at several tables loses nothing
+at one.
 -/
 
 namespace FlockComplete.ZkTables
@@ -39,17 +39,16 @@ theorem readyZk_one {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyZ
   · cases h
 
 /-- **Completeness at any number of tables gives it at one**: if the honest masked prover on each table's share is
-complete with error `δc H`, and the regions fit wherever `readyZk` holds, then `honestPZk` is complete with error
+complete with error `δc H`, and `ready` holds wherever `readyZk` does, then `honestPZk` is complete with error
 `δcZk H`. -/
 theorem completeZk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (hfit : ∀ x, readyZk H x = true → ∀ s spec sts, setupOf true x = some (s, spec, sts) →
-      ∀ st ∈ sts, JsonRT.RegionsFit st)
+    (hready : ∀ x, readyZk H x = true → ready H x = true)
     (h : Claims.Flock.Complete H (deployZk rel) honestP (δc H)) :
     Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H) := by
   intro x w hs hr ω
   by_cases hz : readyZk H x = true
   · obtain ⟨s, spec, sts, hset, h1⟩ := readyZk_one hz
-    rw [← δc_eq_δcZk hz (hfit x hz)]
+    rw [← δc_eq_δcZk hz (hready x hz)]
     have hrun := fun r => run_congr H (deployZk rel).V (fun hist => honestP_one hset h1 w hist ω) r
     simpa only [hrun] using h x w hs hr ω
   · simp only [δcZk, hz, Bool.false_eq_true, ↓reduceIte, sub_self]

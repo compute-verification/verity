@@ -8,7 +8,8 @@ import Proofs.Flock.Claims.Complete.Zk.Complete
 
 * **One table is `Zk/`'s**: a good case of one table is a `CaseZk` (`Case.toZk`: `ready` gives `readyZk`), its session
   `sessionSZk`'s (`sessionS_one`), and a run of one table a `RunZk` (`Run.toZk`), at which every method is the same. So
-  every goal `complete_zk` rests on, or proves, holds at a run of one table.
+  every goal `complete_zk` rests on, or proves, holds at a run of one table, the record's size from `ready`
+  (`Run.recordFits`) in place of `RecordFitsZk`.
 * **At every number of tables**: the scope's goals (`tables_goal`, `schedules_goal`, `proofCount_goal`), the link
   message first (`linkFirst_goal`) and the sends (`sends_goal`).
 * **Several tables**: the session runs from `StmtOkJ` and `ProverRunsJ` (`sessionRunsJ_goal`, `complete_zk`'s
@@ -18,7 +19,8 @@ import Proofs.Flock.Claims.Complete.Zk.Complete
   switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed), of which `complete_zk`
   takes the ring switch, the masked Ligerito and the inner proof at one table and proves the rest.
 * `complete`: Flock's masked verifier is complete for `honestP` with error `δc H`
-  (`Claims.Flock.Complete H (deployZk rel) honestP (δc H)`), from `complete_zk`'s premises and these four.
+  (`Claims.Flock.Complete H (deployZk rel) honestP (δc H)`), from `complete_zk`'s premises but `RecordFitsZk` and
+  these four.
 -/
 
 open Flock FlockDeploy Transcript
@@ -37,7 +39,7 @@ theorem readyZk_of_ready {x : Claims.Msg} (h : ready H x = true) {s : Ins} {spec
   rw [hs] at h ⊢
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
-  exact ⟨⟨⟨⟨h1, h.1.1.1.1⟩, h.1.1.1.2⟩, h.1.2⟩, h.2⟩
+  exact ⟨⟨⟨⟨h1, h.1.1.1.1.1⟩, h.1.1.1.1.2⟩, h.1.1.2⟩, h.1.2⟩
 
 /-- **A good case of one table is a good masked case.** -/
 def Case.toZk (c : Case H rel) (h1 : c.sts.size = 1) : CaseZk H rel :=
@@ -119,13 +121,13 @@ theorem Case.one_or_several (c : Case H rel) : c.sts.size = 1 ∨ 1 < c.sts.size
   omega
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables: from `complete_zk`'s premises, which give every check at one table, and at several tables the
-statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the record's checks (`RecordJ`) and the rep's checks
-(`OpenJ`). -/
+any number of tables: from `complete_zk`'s premises but the record's size (`ready`'s), which give every check at one
+table, and at several tables the statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the record's checks
+(`RecordJ`) and the rep's checks (`OpenJ`). -/
 theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
-    (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel)
-    (hLg : FlockComplete.LigeritoZk H rel) (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
+    (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
+    (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
     (hPRJ : ProverRunsJ H rel) (hRec : RecordJ H rel) (hOp : OpenJ H rel) :
     Claims.Flock.Complete H (deployZk rel) honestP (δc H) := by
   have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H rel)
@@ -133,7 +135,9 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
   have hRp : FlockComplete.Replay H rel := replay_goal S h64 hS hP hR
   have hSR : FlockComplete.SessionRunsZk H rel := JsonRT.sessionRunsZk_goal S hS hPR
   have rec1 : ∀ o : Run H rel, (h1 : o.sts.size = 1) → RecordAt H rel o := fun o h1 =>
-    { finalFits := JsonRT.finalFitsZk_goal S h64 hS hP hR hF (o.toZk h1)
+    { finalFits := by
+        obtain ⟨-, -, -, -, -, -, hsz, hb, -⟩ := JsonRT.RunZk.rep S h64 hS hP hR (o.toZk h1)
+        exact ⟨o.recordFits, by change o.proofs.size = 2 at hsz; omega, hb⟩
       draw := JsonRT.drawMatchesZk_goal S h64 hS hP (o.toZk h1)
       liveReads := JsonRT.liveReadsZk_goal S h64 hS hP (o.toZk h1)
       rootB := JsonRT.custodyRootBZk_goal S h64 hS hP (o.toZk h1)

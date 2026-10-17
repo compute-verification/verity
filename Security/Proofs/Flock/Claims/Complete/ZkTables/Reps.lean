@@ -16,7 +16,7 @@ the inner proof (`RepChecksAt`).
   ends at its table's `repRounds` within its stream (`Run.inner_kJ`), and the streams together fit the session's
   rounds, `2 · repRounds` per table (`sends_goal`, `rounds_eq`), so each stream ends there (`eq_of_sum_le`).
 * `openJ_of`, `completeJO`: `complete` at several tables from the ring switch, the masked Ligerito and the inner proof
-  there (`RepChecksJ`), with `RepShapedJ` and `RecordFitsJ` for the proof files.
+  there (`RepChecksJ`), with `RepShapedJ` for the proof files.
 -/
 
 namespace FlockComplete.ZkTables
@@ -391,15 +391,15 @@ theorem openJ_of (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepSh
     consumed := consumedJ S h64 hS hR o hc (hC o hc).ringSwitch (hC o hc).ligerito (hC o hc).inner }
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables: from `complete_zk`'s premises and at several tables the statement's and the prover's pieces'
-(`StmtOkJ`, `ProverRunsJ`), the proof files' (`RepShapedJ`, `RecordFitsJ`), and per rep the ring switch, the masked
-Ligerito and the inner proof (`RepChecksJ`), the premises `complete_zk` takes at one table. -/
+any number of tables: from `complete_zk`'s premises but `RecordFitsZk` (`ready` gives the record's size), and at
+several tables the statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the proof files' (`RepShapedJ`),
+and per rep the ring switch, the masked Ligerito and the inner proof (`RepChecksJ`), the premises `complete_zk` takes
+at one table. -/
 theorem completeJO (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
-    (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel)
-    (hLg : FlockComplete.LigeritoZk H rel) (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
-    (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel) (hFJ : RecordFitsJ H rel) (hCJ : RepChecksJ H rel) :
-    Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
-  completeJR H rel S h64 hS hR hF hPR hRS hLg hIn hSJ hPRJ hRJ hFJ (openJ_of S h64 hSJ hRJ hCJ)
+    (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
+    (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
+    (hCJ : RepChecksJ H rel) : Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
+  completeJR H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ hRJ (openJ_of S h64 hSJ hRJ hCJ)
 
 end FlockComplete.ZkTables

@@ -317,14 +317,31 @@ section Proved
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- `ready` at the case's setup: the session draws a unit, the statement is under `2^56` bytes, every table's regions
-fit, the setup against `H` is the case's, and the session's coins are the keyed coin tree. -/
-theorem Case.ready_parts (c : Case H rel) :
+fit, the setup against `H` is the case's, the session's coins are the keyed coin tree, and the honest record fits. -/
+theorem Case.ready_all (c : Case H rel) :
     c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧ (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧
-      setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true := by
+      setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true ∧
+      RecordFitsAt H c.x c.spec c.sts := by
   have h := c.ready
   unfold ZkTables.ready at h
   rw [c.setup] at h
   simpa [and_assoc] using h
+
+/-- `ready`'s parts but the record's. -/
+theorem Case.ready_parts (c : Case H rel) :
+    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧ (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧
+      setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true :=
+  have h := c.ready_all
+  ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2.1⟩
+
+/-- **The printed honest masked record is under `2^64` bytes**, from `ready` (`RecordFitsAt`). -/
+theorem Run.recordFits (o : Run H rel) : o.record.toUTF8.size < 2 ^ 64 := by
+  obtain ⟨bs, h1, -⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)
+    (traces o.sts o.w) o.ω #[]
+  have hran := o.ran
+  unfold sessionS at hran
+  rw [hran] at h1
+  exact o.ready_all.2.2.2.2.2 o.w o.ω o.r o.record o.proofs (by simpa using congrArg Prod.snd h1)
 
 /-- **The session's coins are the keyed coin tree**: the goal `CoinTree`, from `ready`. -/
 theorem coinTree_goal : CoinTree H rel := fun o => by

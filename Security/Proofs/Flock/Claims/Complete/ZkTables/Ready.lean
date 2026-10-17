@@ -5,44 +5,57 @@ import Proofs.Flock.Claims.Complete.Runs
 /-!
 # The masked verifier's error at any number of tables
 
-`readyZk` with its one-table condition dropped and the tables' regions asked to fit (`ready`), and `δc H`, `εZk` where
-`ready` holds and `1` elsewhere. `εZk` already counts every table's reps (`outerSlotsZk`, `betaSlotsZk`, `rhoSlotsZk`
-run over `2·|tables|` reps), so `δc H` is the masked verifier's union bound at every number of tables.
+`readyZk` with its one-table condition dropped, the tables' regions asked to fit and the honest record asked to fit
+(`ready`), and `δc H`, `εZk` where `ready` holds and `1` elsewhere. `εZk` already counts every table's reps
+(`outerSlotsZk`, `betaSlotsZk`, `rhoSlotsZk` run over `2·|tables|` reps), so `δc H` is the masked verifier's union
+bound at every number of tables.
 
 * **The regions** (`JsonRT.RegionsFit`, the plain `ready`'s): where some region's bytes at some block are not its free
   bits, the extra claims refuse (`Stmt.regionValue`), the honest prover's as the verifier's, so the honest masked
   session cannot run; where they fit, the extra claims return (`JsonRT.extraClaims_ok`).
+* **The record** (`RecordFitsAt`): at some witness, tape and coins the honest masked session's printed record may be
+  `2^64` bytes or more, past the last message's 64-bit word for its length.
 * `complete_of`: if the honest masked prover (`honestP`) is accepted at every coin outside `BadZk`, on every statement
   in scope, ready, with a witness in the relation, it is complete with error `δc H`.
 * **Against `readyZk`**: a setup with several tables is never `readyZk` (`readyZk_tables`), so `δcZk H` is `1` there;
-  where `readyZk` holds and the regions fit, `ready` holds (`ready_of_readyZk`) and `δc H` is `δcZk H`
-  (`δc_eq_δcZk`).
+  where `readyZk` holds, the regions fit and the record fits, `ready` holds (`ready_of_readyZk`), and where both hold
+  `δc H` is `δcZk H` (`δc_eq_δcZk`).
 -/
 
 namespace FlockComplete.ZkTables
 
 open Flock FlockDeploy
 
+/-- **The honest masked record fits its length word** at the masked session `spec`, `sts` of `x`: at every witness,
+tape and coins, a record the honest masked session on each table's share returns, run against `H` with each send
+answered by its coin (`PI.sim`), is under `2^64` bytes. -/
+def RecordFitsAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) :
+    Prop :=
+  ∀ (w : Claims.Flock.Wit) (ω : TapeZk) (r : Fin ((V true).k x) → Coin) (record : String) (proofs : Array ByteArray),
+    ((sessionPZk asks Hashes.pi spec (tabsOf sts) (traces sts w) ω).run.sim H
+      (fun j => (Claims.coinSeq r j).bytes) 0).2 = .ok (record, proofs) →
+      record.toUTF8.size < 2 ^ 64
+
 open Classical in
 /-- **The statements the masked verifier can accept** against `H`, at any number of tables: the session draws a unit,
-the statement is under `2^56` bytes, every table's regions fit, its setup against `H` is the one at SHA-512, and its
-`Hello` names the keyed coin tree. -/
+the statement is under `2^56` bytes, every table's regions fit, its setup against `H` is the one at SHA-512, its
+`Hello` names the keyed coin tree, and the honest record fits. -/
 noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
   match setupOf true x with
   | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
       decide (∀ st ∈ sts, JsonRT.RegionsFit st) && decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) &&
-      spec.coinTree.isSome
+      spec.coinTree.isSome && decide (RecordFitsAt H x spec sts)
   | none => false
 
 /-- **Flock's `δc` at the masked verifier**, at any number of tables: `εZk` where the verifier can accept, else `1`. -/
 noncomputable def δc (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if ready H x then εZk x else 1
 
 open Classical in
-/-- **At SHA-512, `ready` asks only for a drawn session, the statement's length, the regions and the coin tree.** -/
+/-- **At SHA-512, `ready` asks no setup agreement.** -/
 theorem ready_sha512 (x : Claims.Msg) :
     ready sha512 x = match setupOf true x with
       | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
-          decide (∀ st ∈ sts, JsonRT.RegionsFit st) && spec.coinTree.isSome
+          decide (∀ st ∈ sts, JsonRT.RegionsFit st) && spec.coinTree.isSome && decide (RecordFitsAt sha512 x spec sts)
       | none => false := by
   unfold ready
   split
@@ -80,9 +93,10 @@ theorem readyZk_tables {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {s : Ins
   have : (sts.size == 1) = false := by simp; omega
   simp [this]
 
-/-- **Where `readyZk` holds and the regions fit, `ready` holds.** -/
+/-- **Where `readyZk` holds, the regions fit and the honest record fits, `ready` holds.** -/
 theorem ready_of_readyZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyZk H x = true)
-    (hfit : ∀ s spec sts, setupOf true x = some (s, spec, sts) → ∀ st ∈ sts, JsonRT.RegionsFit st) :
+    (hfit : ∀ s spec sts, setupOf true x = some (s, spec, sts) →
+      (∀ st ∈ sts, JsonRT.RegionsFit st) ∧ RecordFitsAt H x spec sts) :
     ready H x = true := by
   unfold readyZk at h
   unfold ready
@@ -92,13 +106,12 @@ theorem ready_of_readyZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : r
     have := hfit s spec sts hs
     simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
     simp only [Bool.and_eq_true, decide_eq_true_eq]
-    exact ⟨⟨⟨⟨h.1.1.1.2, h.1.1.2⟩, this⟩, h.1.2⟩, h.2⟩
+    exact ⟨⟨⟨⟨⟨h.1.1.1.2, h.1.1.2⟩, this.1⟩, h.1.2⟩, h.2⟩, this.2⟩
   · cases h
 
-/-- **Where `readyZk` holds and the regions fit, `δc H` is `δcZk H`.** -/
+/-- **Where `readyZk` and `ready` both hold, `δc H` is `δcZk H`.** -/
 theorem δc_eq_δcZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyZk H x = true)
-    (hfit : ∀ s spec sts, setupOf true x = some (s, spec, sts) → ∀ st ∈ sts, JsonRT.RegionsFit st) :
-    δc H x = δcZk H x := by
-  simp [δc, δcZk, h, ready_of_readyZk h hfit]
+    (h' : ready H x = true) : δc H x = δcZk H x := by
+  simp [δc, δcZk, h, h']
 
 end FlockComplete.ZkTables

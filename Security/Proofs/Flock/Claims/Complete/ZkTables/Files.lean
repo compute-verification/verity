@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Complete.Zk.Walk
 # The honest masked run's proof files, at several tables
 
 `Zk/Json/Files.lean` at a run of several tables: what the record's checks ask of the proof files (`FilesJ`) from the
-per-table forms of `RepShapedZk` and `RecordFitsZk` (`RepShapedJ`, `RecordFitsJ`).
+per-table form of `RepShapedZk` (`RepShapedJ`) and the record's size, which `ready` gives (`Run.recordFits`).
 
 * `sessionPZk_filesJ`: `Zk/Walk.lean`'s `sessionPZk_walk` at several tables. The masked session's `j`th proof file
   encodes a masked proof that table `j / 2`'s rep `j % 2` returned on its share's trace, its masked level-0 commitment
@@ -16,7 +16,7 @@ per-table forms of `RepShapedZk` and `RecordFitsZk` (`RepShapedJ`, `RecordFitsJ`
 * `Run.repJ`: at a run of several tables, each table's `root_B` is its commitment's cap, and each rep's file decodes at
   the masked verifier's shape to that rep's proof, of the commitment's cap, the table's PCS parameters, and its pads'
   root (`repPZk_fields`), a 64-byte digest (`innerCommitP_root`).
-* `filesJ`: `FilesJ` from `RepShapedJ` and `RecordFitsJ`; so `complete` holds with them for `RecordJ` (`completeJR`).
+* `filesJ`: `FilesJ` from `RepShapedJ`; so `complete` holds with it for `RecordJ` (`completeJR`).
 -/
 
 namespace FlockComplete.ZkTables
@@ -189,9 +189,6 @@ def RepShapedJ : Prop :=
     Ret (repRunJ H rel c i v cm e rep ic) fun pt =>
       FlockSoundness.Discharge.ZkView.Shaped (shapeZk (Setup.ofCircuit c.sts[i]!) v.1 e.size) pt.1
 
-/-- **The printed honest masked record is under `2^64` bytes** (`RecordFitsZk`), at every run of several tables. -/
-def RecordFitsJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → o.record.toUTF8.size < 2 ^ 64
-
 end Several
 
 /-- **Each rep's decoded masked proof is the honest one**, at a run of several tables: two proof files per table, each
@@ -314,16 +311,15 @@ theorem Run.repJ (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepSh
     rw [hzp, htabi, hsch i hi', hroot i hi']
     exact ⟨by rw [← htabi, ← hsch i hi', hdec], hpar, by rw [hcp], hrt⟩
 
-/-- **What the record's checks ask of the proof files**, at every run of several tables, from `RepShapedJ` and
-`RecordFitsJ`. -/
-theorem filesJ (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShapedJ H rel)
-    (hF : RecordFitsJ H rel) : FilesJ H rel := by
+/-- **What the record's checks ask of the proof files**, at every run of several tables, from `RepShapedJ` and the
+record's size (`Run.recordFits`, `ready`'s). -/
+theorem filesJ (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShapedJ H rel) : FilesJ H rel := by
   intro o hc
   obtain ⟨hsz, hb, hrep⟩ := Run.repJ S h64 hS hR o hc
   obtain ⟨-, hmax, -, -⟩ := o.toCase.tables
   unfold Tags.MAX_TABLES at hmax
   have ht : o.tabs.size = o.sts.size := tabsOf_size _
-  refine ⟨⟨hF o hc, by omega, hb⟩, fun i hi r hr => (hrep i hi r hr).1, fun i hi r hr => ?_,
+  refine ⟨⟨o.recordFits, by omega, hb⟩, fun i hi r hr => (hrep i hi r hr).1, fun i hi r hr => ?_,
     fun i hi r hr => ?_, fun i hi r hr => ?_⟩
   · rw [(hrep i hi r hr).2.1]
     exact FlockVBridge.Family.pcs_bne_self _
@@ -333,14 +329,12 @@ theorem filesJ (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShap
     rfl
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables: `completeJ` with what the record's checks ask of the proof files from `RepShapedJ` and
-`RecordFitsJ` (`filesJ`). -/
+any number of tables: `completeJ` with what the record's checks ask of the proof files from `RepShapedJ` (`filesJ`). -/
 theorem completeJR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
-    (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel)
-    (hLg : FlockComplete.LigeritoZk H rel) (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
-    (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel) (hFJ : RecordFitsJ H rel) (hOp : OpenJ H rel) :
-    Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
-  completeJ H rel S h64 hS hR hF hPR hRS hLg hIn hSJ hPRJ (filesJ S h64 hSJ hRJ hFJ) hOp
+    (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
+    (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
+    (hOp : OpenJ H rel) : Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
+  completeJ H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (filesJ S h64 hSJ hRJ) hOp
 
 end FlockComplete.ZkTables

@@ -20,17 +20,19 @@ import Proofs.Flock.Claims.Complete.ZkTables.Reps
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
-verifier's error drops `readyZk`'s one-table condition (`Ready`: `ready`, `δc`, `complete_of`; `δc H` is `δcZk H` where
-`readyZk` holds and the regions fit); the honest run is the pure masked session (`Run`: `run_acc_of`, `honestRun_eq`);
-the skeleton is `Zk/Skeleton.lean`'s at this run (`Skeleton`: `complete_of_goals`). The scope holds per table
+verifier's error drops `readyZk`'s one-table condition and asks the regions and the honest record to fit (`Ready`:
+`ready`, `RecordFitsAt`, `δc`, `complete_of`; `δc H` is `δcZk H` where both `readyZk` and `ready` hold); the honest run
+is the pure masked session (`Run`: `run_acc_of`, `honestRun_eq`); the skeleton is `Zk/Skeleton.lean`'s at this run
+(`Skeleton`: `complete_of_goals`, and the record's size from `ready`, `Run.recordFits`). The scope holds per table
 (`Scope`: `Case.tables`, every table of `25 ≤ m ≤ 35` and `hm96-sha512/v1`, the spec naming one table per statement)
 and discharges five goals at any number of tables (`Discharge`: `tables_goal`, `schedules_goal`, `proofCount_goal`;
 `Link`: `linkFirst_goal`; `Count`: `sends_goal`, each table's two reps' rounds summed). At the deployed relation each
 table's trace is its share's and satisfies its block R1CS (`Trace`: `Case.traceR1CS`, `traceR1CS_goal`, from
 `Readable.relS_only`), which `tracesOf` reads only at one table. The session runs at several tables from the statement's
 `hello` and the prover's pieces, its reps run in stream order (`Runs`: `sessionRunsJ_goal` from `StmtOkJ`,
-`ProverRunsJ`). `Complete` composes them (`complete`): from `complete_zk`'s premises, which give every check at one
-table, and at several tables `StmtOkJ`, `ProverRunsJ`, `RecordJ` and `OpenJ`. The bound at several tables loses nothing
+`ProverRunsJ`). `Complete` composes them (`complete`): from `complete_zk`'s premises but `RecordFitsZk`, which give
+every check at one table, and at several tables `StmtOkJ`, `ProverRunsJ`, `RecordJ` and `OpenJ`. The bound at several
+tables loses nothing
 at one (`One`: `completeZk_of`, `honestP`'s completeness with error `δc H` gives `honestPZk`'s with error `δcZk H`).
 Toward `RecordJ`, the tables' names and the rep streams' are distinct (`Names`: `tableNames_nodup`, `repNames_nodup`,
 `rootBList_distinct`, `Case.tables_nodup`), and the session returns the printed honest masked record of one `root_B` per
@@ -41,7 +43,7 @@ the record needs (`Prover`: `Case.points_regions`, `proverOkJ`), so the record's
 they ask of the proof files (`Goals`: `Run.jsonJ`, `recordJsonJ`, `FilesJ`, `recordJ_of`), and `complete` holds with
 `FilesJ` for `RecordJ` (`completeJ`). Each table's reps' proof files decode to proofs of its parameters, its `root_B` as
 their cap and a 64-byte pads' root (`Files`: `sessionPZk_filesJ`, `Run.repJ`), so `FilesJ` holds from each table's
-`RepShapedZk` and the record's size (`filesJ` from `RepShapedJ`, `RecordFitsJ`; `completeJR`). Each proof file is
+`RepShapedZk` (`filesJ` from `RepShapedJ`; `completeJR`). Each proof file is
 the proof its rep returned, ending at its stream (`Reps`: `Run.walkJ`), so the masked replay passes (`replayJ`), level
 0's lanes follow from the masked Ligerito (`lanesJ`), and every round is consumed (`consumedJ`) at every table; so the
 rep's checks reduce to what `complete_zk` takes at one table, per rep the ring switch, the masked Ligerito and the
