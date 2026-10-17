@@ -6,6 +6,8 @@ the output), `center_keys` (K minus its per-channel mean), `int8` (one limb: Q, 
 per key block, `p_sink` putting key 0 alone, V per channel; K and V rounded or dithered) and `peel` (a low-rank noise
 E the server adds and peels exactly, on Q or on P, with P served as P - offset + E). Low-bit grids (`GRIDS`): `grid`
 on linears and on attention puts both operands of every matmul on FP4's or FP8's integers, each rounded or dithered.
+FP formats and the int8 compilers: `fp` (a format's own plain quantization), `native` (Dither's coins on a format's
+integer grid) and `emulate` (the int8 product recomputed exactly from limbs a format holds).
 
 A new intervention is one more function here (or in any module `run.py --plugin` imports) under `@linear_step` or
 `@attention_step`; `spec.py` says what it receives."""
@@ -457,9 +459,22 @@ SCALES = {"odd": tuple(range(1, 16, 2)), "int": tuple(range(1, 16))}
 WORD_K = 64
 
 
+def _e4m3_integers() -> tuple:
+    pos, lo, step = set(range(17)), 16, 2
+    for hi in (32, 64, 128, 256, 448):
+        pos |= set(range(lo, hi + 1, step))
+        lo, step = hi, step * 2
+    return tuple(sorted(pos | {-v for v in pos}))
+
+
+#: every grid a quantizer may put integers on: GRIDS, every integer E4M3 holds (0..16, then E4M3's spacing to 448) and
+#: E2M1's integers
+LEVELS = {**GRIDS, "e4m3i": _e4m3_integers(), "e2m1i": (-6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6)}
+
+
 def bracket(v: torch.Tensor, grid: str) -> tuple[torch.Tensor, torch.Tensor]:
     """The grid's levels lo <= v < hi around each v in [min, max) (hi = max at v = max)."""
-    levels = GRIDS[grid]
+    levels = LEVELS[grid]
     if levels == tuple(range(levels[0], levels[-1] + 1)):
         lo = torch.floor(v).clamp(levels[0], levels[-1] - 1)
         return lo, lo + 1
@@ -490,7 +505,7 @@ def on_grid(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, di
     (1 + 2^-20) so that |v| < top (on a uniform grid, floor(v) + b); `sr` the level above with probability
     (v - lo) / (hi - lo), `bits` holding uniform draws in [0, 1), the same s (unbiased: E q = v). `coined`: the coin
     only at those positions, the rest rounded on the same s."""
-    top = GRIDS[grid][-1]
+    top = LEVELS[grid][-1]
     a = x.abs().amax(dim=dims, keepdim=True).clamp(min=1e-30)
     s = a / top if mode == "round" else a * (1 + 2 ** -20) / top
     return to_grid(x / s, grid, mode, bits, coined), s
@@ -503,7 +518,7 @@ def on_blocks(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, 
     block's |x / s| <= top * sigma; each element x / (s sigma) on the grid (`to_grid`). Returns the integers q sigma
     (the FP4 code times its block scale: the integer the block-scaled MMA multiplies) and s."""
     m, k = x.shape
-    top, table = GRIDS[grid][-1], torch.tensor(SCALES[scales], dtype=x.dtype, device=x.device)
+    top, table = LEVELS[grid][-1], torch.tensor(SCALES[scales], dtype=x.dtype, device=x.device)
     s = x.abs().amax(dim=1, keepdim=True).clamp(min=1e-30) * (1 + 2 ** -20) / (top * table[-1])
     v = (x / s).view(m, k // block, block)
     need = (v.abs().amax(-1) / top).contiguous()
@@ -666,3 +681,241 @@ def grid_attention(mm, nxt, *, grid: str, q: str = "dither", k: str = "dither", 
         part = sb.double() * nxt(mm.integer(pi, vi[..., a:b, :], keys=(a, b), v_full=vi))
         num = part if num is None else num + part
     return (num * sv.double()).float()
+
+
+# ================================================================ FP formats and the int8 compilers
+
+#: each element format's largest magnitude and the emax of its OCP MX scale (X = 2^(floor(log2 amax) - emax))
+FORMATS = {"e4m3": (448.0, 8), "e2m1": (6.0, 2)}
+E2M1 = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
+#: block length along k of each block-scaled format: MX (E8M0 scales) and NVFP4 (UE4M3 scales)
+BLOCKS = {"mx": 32, "nv": 16}
+FP_SCALES = ("tensor", "channel", "mx", "nv")
+
+
+def to_format(v: torch.Tensor, fmt: str) -> torch.Tensor:
+    """v rounded to the nearest value of the element format, saturating at its largest."""
+    if fmt == "e4m3":
+        return v.clamp(-448, 448).to(torch.float8_e4m3fn).float()
+    t = torch.tensor(E2M1, dtype=v.dtype, device=v.device)
+    return torch.sign(v) * t[torch.bucketize(v.abs().clamp(max=6).contiguous(), (t[1:] + t[:-1]) / 2)]
+
+
+def fake_quant(x: torch.Tensor, fmt: str, scale: str, dim: int = -1) -> torch.Tensor:
+    """x on the format, dequantized, scaled along `dim` (the contraction): `tensor` one scale amax / max, `channel` one
+    per slice along `dim` (per token, per output row), `mx` per block of 32 a power of two (OCP's E8M0 X), `nv` per
+    block of 16 a UE4M3 scale times one FP32 scale per tensor (NVIDIA's: s = amax / (448 * 6), s_b = e4m3(amax_b / 6 /
+    s))."""
+    top, emax = FORMATS[fmt]
+    x = x.float()
+    if scale in ("tensor", "channel"):
+        a = x.abs().amax() if scale == "tensor" else x.abs().amax(dim, keepdim=True)
+        s = a.clamp(min=1e-30) / top
+        return to_format(x / s, fmt) * s
+    xt = x.movedim(dim, -1)
+    b = xt.reshape(*xt.shape[:-1], -1, BLOCKS[scale])
+    a = b.abs().amax(-1, keepdim=True)
+    if scale == "mx":
+        sb = torch.exp2(torch.floor(torch.log2(a.clamp(min=2 ** -126))) - emax)
+    else:
+        sg = xt.abs().amax().clamp(min=1e-30) / (448 * top)
+        sb = (a / top / sg).clamp(max=448).to(torch.float8_e4m3fn).float() * sg
+        sb = torch.where(sb > 0, sb, torch.ones_like(sb))
+    return (to_format(b / sb, fmt) * sb).reshape(xt.shape).movedim(-1, dim)
+
+
+def _check_fp(p):
+    if p["fmt"] not in FORMATS:
+        raise ValueError(f"fp.fmt is one of {sorted(FORMATS)}")
+    if p["scale"] not in FP_SCALES:
+        raise ValueError(f"fp.scale is one of {FP_SCALES}")
+    if p["scale"] == "nv" and p["fmt"] != "e2m1":
+        raise ValueError("fp: nv blocks hold E2M1")
+
+
+@linear_step("fp", phase="quantize", check=_check_fp)
+def fp_linear(mm, nxt, *, fmt: str, scale: str):
+    """A format's own plain quantization, no PoUW: activations and weights rounded to the nearest value of `fmt`
+    (e4m3, e2m1) under `scale` along k (`fake_quant`: tensor; channel, per token and per output row; mx; nv), the
+    product of the dequantized operands in FP32 (the format's MMA with its FP32 accumulator)."""
+    w = mm.cached("fp", lambda: fake_quant(mm.weight(), fmt, scale))
+    return nxt(mm.replace(x=fake_quant(mm.x, fmt, scale), w=w))
+
+
+@attention_step("fp", phase="quantize", check=_check_fp)
+def fp_attention(mm, nxt, *, fmt: str, scale: str):
+    """Both attention matmuls in a format, plain: Q and K scaled along the head dimension (`channel`: per head and
+    token), P and V along the keys (`channel`: per query row, per KV head and channel), rounded; products in FP32."""
+    if mm.kind == "qk":
+        k = mm.cached("k", lambda: fake_quant(mm.weight(), fmt, scale, -1))
+        return nxt(mm.replace(x=fake_quant(mm.x, fmt, scale, -1), w=k))
+    v = mm.cached("v", lambda: fake_quant(mm.weight(), fmt, scale, -2))
+    return nxt(mm.replace(x=fake_quant(mm.x, fmt, scale, -1), w=v))
+
+
+#: the format each native grid's integers are exact in
+NATIVE = {"e4m3i": "e4m3", "int5": "e4m3", "e2m1i": "e2m1"}
+
+
+def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool):
+    """v = x / (s m) within the grid's range, s one scale per tensor or row and m one per block of k: `tensor` and
+    `channel` s = amax / top (m = 1); `nv` s = row amax / (top 15) and m the smallest odd UE4M3 integer that holds the
+    block (`on_blocks`'); `mx` s = 1 and m the smallest power of two with |v| <= top (E8M0). A coined operand's scale
+    is wider by 2^-20, so |v| < top. Returns v, s (broadcast over rows) and m (rows x blocks, or None)."""
+    top = LEVELS[grid][-1]
+    pad = 1 + 2 ** -20 if coined else 1.0
+    if scale in ("tensor", "channel"):
+        a = x.abs().amax() if scale == "tensor" else x.abs().amax(-1, keepdim=True)
+        s = a.clamp(min=1e-30) * pad / top
+        return x / s, s, None
+    *lead, k = x.shape
+    xb = x.reshape(*lead, k // BLOCKS[scale], BLOCKS[scale])
+    a = xb.abs().amax(-1)
+    if scale == "nv":
+        table = torch.tensor(SCALES["odd"], dtype=x.dtype, device=x.device)
+        s = x.abs().amax(-1, keepdim=True).clamp(min=1e-30) * pad / (top * table[-1])
+        m = table[torch.searchsorted(table, (a / (s * top)).contiguous()).clamp(max=len(table) - 1)]
+        return (xb / (s[..., None] * m[..., None])).reshape(x.shape), s, m
+    m = torch.exp2(torch.ceil(torch.log2(a.clamp(min=1e-30) * pad / top)))
+    m = torch.where(a * pad > m * top, 2 * m, m)
+    return (xb / m[..., None]).reshape(x.shape), torch.ones((), device=x.device), m
+
+
+def with_blocks(q: torch.Tensor, m: torch.Tensor | None) -> torch.Tensor:
+    """q times its block multiplier m (rows x blocks)."""
+    if m is None:
+        return q
+    return (q.reshape(*q.shape[:-1], m.shape[-1], -1) * m[..., None]).reshape(q.shape)
+
+
+def _check_native(p):
+    if p["grid"] not in NATIVE:
+        raise ValueError(f"native.grid is one of {sorted(NATIVE)}")
+    if p["scale"] not in FP_SCALES:
+        raise ValueError(f"native.scale is one of {FP_SCALES}")
+    if p["scale"] == "nv" and p["grid"] != "e2m1i":
+        raise ValueError("native: nv blocks hold E2M1")
+    for o in ("act", "weight"):
+        if p[o] not in GRID_MODES:
+            raise ValueError(f"native.{o} is one of {GRID_MODES}")
+    if p["act_grid"] not in ("", "int8"):
+        raise ValueError("native.act_grid is '' (the weights' grid and scale) or int8 (Dither's activations)")
+    if p["act_grid"] == "int8" and (p["act"] != "dither" or p["scale"] == "mx"):
+        raise ValueError("native: int8 activations are Dither's, dithered, beside integer weights (not mx)")
+
+
+@linear_step("native", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_native)
+def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dither", weight: str = "dither",
+                  act_grid: str = ""):
+    """Dither's coins on a format's exact integer grid (`NATIVE`: e4m3i, int5 on E4M3; e2m1i on E2M1), both operands
+    scaled by `scale` along k (`native_parts`) and `round`ed or `dither`ed (the level below or above by a fresh bit),
+    the activations' coins first, then the weights', fresh every call (Dither-2S's order). `act_grid = int8`: the
+    activations Dither's own (`act_quant` at top 127, the int8 design's draws), the weights native: the hybrid that
+    serves int8 activations as limbs. tensor, channel and nv scales give integers, so the product is the gated exact
+    one; mx's power-of-two blocks give dyadic operands, multiplied dequantized in FP32 (the MX MMA)."""
+    k = mm.x.shape[1]
+    if scale in BLOCKS and k % BLOCKS[scale]:
+        raise ValueError(f"{mm.where}: k = {k} is not a multiple of {BLOCKS[scale]}")
+
+    def weights():
+        v, s, m = native_parts(mm.weight(), grid, scale, weight != "round")
+        lo, hi = bracket(v, grid)
+        if weight == "round":
+            return torch.where(v - lo <= hi - v, lo, hi).to(torch.int16), None, s, m
+        return lo.to(torch.int16), (hi - lo).to(torch.int8), s, m
+
+    wl, wg, sw, mw = mm.cached("native", weights)
+    if act_grid == "int8":
+        xq, sa = act_quant(mm.x, "dither", mm.coins(mm.x.shape), 127)
+        sa, ma, xtop = sa[:, None], None, 127
+    else:
+        v, sa, ma = native_parts(mm.x, grid, scale, act != "round")
+        xq = to_grid(v, grid, act, mm.coins(mm.x.shape) if act == "dither" else None)
+        xtop = LEVELS[grid][-1] * (SCALES["odd"][-1] if scale == "nv" else 1)
+    wq = wl.float() if wg is None else wl.float() + mm.coins(wl.shape) * wg.float()
+    xq, wq = with_blocks(xq, ma), with_blocks(wq, mw)
+    if scale == "mx":
+        return nxt(mm.replace(x=xq, w=wq))
+    sw = sw if sw.dim() == 0 else sw[:, 0]
+    top = max(xtop, LEVELS[grid][-1] * (SCALES["odd"][-1] if scale == "nv" else 1))
+    wide = {"top": top} if top > 127 else {}
+    return nxt(mm.integer(xq, wq.to(torch.int8) if top <= 127 else wq, **wide)).float() * sa * sw
+
+
+#: the emulation routes: int8 operands as limbs a format multiplies exactly, the limb products recombined
+ROUTES = ("e4m3-k3", "e4m3-k4", "fp4-k9")
+
+
+def limbs16(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """x = 16 h + l for integer x in [-128, 127]: h = floor((x + 8) / 16) in [-8, 8], l in [-8, 7]."""
+    h = torch.floor((x + 8) / 16)
+    return h, x - 16 * h
+
+
+def digits8(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """x = 64 a + 8 b + c for integer x in [-128, 127]: balanced base-8 digits b, c in [-4, 3], a in [-2, 2]."""
+    c = torch.remainder(x + 4, 8) - 4
+    y = (x - c) / 8
+    b = torch.remainder(y + 4, 8) - 4
+    return (y - b) / 8, b, c
+
+
+def route_planes(route: str, x: torch.Tensor, w: torch.Tensor):
+    """Each operand's planes and the plane pairs (i, j, weight) whose weighted products sum to x w: `e4m3-k4` [16 h, l]
+    on both sides, all four pairs; `e4m3-k3` (Karatsuba) [4 h, m, -l] and [4 h', m', l'] with m = h + l, 15 (P00 + P22)
+    + 16 P11; `fp4-k9` the three base-8 digits on both sides, P_ij at 8^((2 - i) + (2 - j))."""
+    if route == "fp4-k9":
+        return list(digits8(x)), list(digits8(w)), [(i, j, 8.0 ** (4 - i - j)) for i in range(3) for j in range(3)]
+    (h, lo), (h2, lo2) = limbs16(x), limbs16(w)
+    if route == "e4m3-k4":
+        return [16 * h, lo], [16 * h2, lo2], [(i, j, 1.0) for i in range(2) for j in range(2)]
+    return [4 * h, h + lo, -lo], [4 * h2, h2 + lo2, lo2], [(0, 0, 15.0), (2, 2, 15.0), (1, 1, 16.0)]
+
+
+def holds(fmt: str, p: torch.Tensor) -> bool:
+    """Every value of p is exact in the element format."""
+    if fmt == "e4m3":
+        return bool(p.abs().max() <= 448 and torch.equal(p.to(torch.float8_e4m3fn).float(), p))
+    return bool(torch.isin(p, torch.tensor((-6., -4., -3., -2., -1., 0., 1., 2., 3., 4., 6.), device=p.device)).all())
+
+
+def emulate(mm, nxt, route: str):
+    """The int8 product the chain returns, recomputed from `route`'s limb planes: every plane exact in the format,
+    each plane pair's product exact (FP32 chunks, `matmul.exact_mm`), recombined in float64. Gated (`emulation`) on
+    every call: the planes held and the recombined product equal to the int8 one. Returns the emulated product, so
+    the arm's perplexity is the emulation's."""
+    from matmul import exact_mm
+    acc = nxt(mm)
+    x, w = mm.x.float(), mm.weight().float()
+    a, b, pairs = route_planes(route, x, w)
+    fmt = "e2m1" if route.startswith("fp4") else "e4m3"
+    held = all(holds(fmt, p) for p in a + b)
+    if mm.kind == "linear":
+        b = [p.T for p in b]
+    elif mm.kind == "qk":
+        b = [p.transpose(-1, -2) for p in b]
+    got = None
+    for i, j, c in pairs:
+        part = c * exact_mm(a[i], b[j], int(G.absmax(a[i]) * G.absmax(b[j])))
+        got = part if got is None else got + part
+    ok = G.int8_ok(x, w) and held and torch.equal(got, acc.double())
+    mm.gate("emulation", bool(ok), {"route": route, "held": held})
+    return got.to(acc.dtype)
+
+
+def _check_emulate(p):
+    if p["route"] not in ROUTES:
+        raise ValueError(f"emulate.route is one of {ROUTES}")
+
+
+@linear_step("emulate", phase="integer", check=_check_emulate)
+def emulate_linear(mm, nxt, *, route: str):
+    """int8 run on FP8 or FP4 hardware by limb splitting (`route_planes`): the quantizer's int8 product recomputed
+    exactly from limb planes the format holds, gated equal on every call (`emulate`), and returned."""
+    return emulate(mm, nxt, route)
+
+
+@attention_step("emulate", phase="integer", check=_check_emulate)
+def emulate_attention(mm, nxt, *, route: str):
+    """Both attention matmuls' int8 products by limb splitting, as `linear.emulate`."""
+    return emulate(mm, nxt, route)

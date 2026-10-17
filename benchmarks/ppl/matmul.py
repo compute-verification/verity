@@ -14,6 +14,7 @@ import gates as G
 import methodology
 
 FP32_EXACT = 2 ** 24
+FP64_EXACT = 2 ** 53
 #: rows of each product recomputed in float64 on the check window
 CHECK_ROWS = {"linear": 32, "qk": 64, "pv": 64}
 
@@ -31,11 +32,14 @@ def int_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 
 def exact_mm(a: torch.Tensor, b: torch.Tensor, term: int) -> torch.Tensor:
     """a @ b for integer-valued FP32 a, b with |a_ik b_kj| <= term: FP32 GEMMs over k-chunks whose every partial sum is
-    <= 2^24 (so exact in any order), summed in float64."""
+    <= 2^24 (so exact in any order), summed in float64; one float64 GEMM when the chunks would be shorter than 1024
+    (exact too while k term < 2^53, which the accumulator gate bounds)."""
     c = max(1, FP32_EXACT // max(1, term))
     k = a.shape[-1]
     if k <= c:
         return (a @ b).double()
+    if c < 1024:
+        return a.double() @ b.double()
     out = None
     for i in range(0, k, c):
         part = (a[..., i:i + c] @ b[..., i:i + c, :]).double()
@@ -179,7 +183,8 @@ class MM:
     def int_product(self, x: torch.Tensor | None = None, w: torch.Tensor | None = None) -> torch.Tensor:
         """The exact integer product of x and w (default: this matmul's), gated: both within int8 (or, when the
         quantizer declared a wider grid with `integer(..., top=T)`, within +-T: `grid_range`) and the accumulator
-        within s32 by k max|x| max|w| on every call, and on the check window against float64 on CHECK_ROWS rows."""
+        within s32 (a wider grid's FP32-chunk route: within 2^53) by k max|x| max|w| on every call, and on the check
+        window against float64 on CHECK_ROWS rows."""
         x = self.x if x is None else x
         w = self.weight() if w is None else w
         top = self.extra.get("top", 127)
@@ -189,7 +194,7 @@ class MM:
             self.gate("int8_range", G.int8_ok(x, w))
         k = x.shape[-1]
         bound = k * G.absmax(x) * G.absmax(w)
-        self.gate("accumulator", bound <= G.S32, bound)
+        self.gate("accumulator", bound <= (G.S32 if top <= 127 else FP64_EXACT), bound)
         if self.kind == "linear" and top > 127:
             acc = exact_mm(x.float(), w.float().T, int(G.absmax(x) * G.absmax(w)))
         elif self.kind == "linear":

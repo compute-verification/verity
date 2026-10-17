@@ -30,6 +30,11 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
                  + tuple(f"{g}-q{d}" for g in ("nvfp4", "int5", "fp8-peel-w15") for d in (2, 4, 8))):
         want[name] = ("all", "int8-all", True)
     want["nvfp4-round"] = want["nvfp4c-round"] = want["nvfp4-int-round"] = ("all", "int8-all", True)
+    for name in ("pc-int8", "pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4", "pc-c3-fp8",
+                 "pc-c3-fp4", *(f"pc-c1-{r}" for r in steps.ROUTES),
+                 *(f"pc-c2-{g}-{s}" for g in ("int5", "e4m3i", "mx8", "nvfp4", "mxfp4") for s in ("2s", "1s")),
+                 "pc-c2-e4m3i-t-2s"):
+        want[name] = ("all", "int8-all", True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
