@@ -508,6 +508,10 @@
     "fails": "Claims.Sampling.KSCount_fails",
     "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
    },
+   "Claims.Sampling.KSLinOn": {
+    "fails": "Claims.Sampling.KSLinOn_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
    "Claims.Sampling.Nontrivial": {
     "fails": "Claims.Sampling.Nontrivial_fails",
     "meets": ["Claims.Sampling.scope_meets"]
@@ -5516,6 +5520,9 @@
    "owner": "@proofs"
   },
   "Claims.Sampling.Binding_meets_one": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.KSLinOn_fails": {
    "owner": "@proofs"
   }
  },

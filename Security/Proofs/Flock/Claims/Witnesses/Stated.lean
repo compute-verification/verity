@@ -115,14 +115,25 @@ theorem Sampling.Bits_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
     ∃ D : Claims.Sampling.Deploy Coin Unit Unit, ¬ Claims.Sampling.Bits H D :=
   ⟨_, Witness.Sampling.Bits_fails H⟩
 
+/-- **`KSLinOn` fails** somewhere: else the sampling `KS`, which is `KSLinOn` at each of its decoders, would hold at
+every record. -/
+theorem Sampling.KSLinOn_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    ∃ (V : Verifier Coin) (Scope : Msg → Prop) (R : Rel Claims.Sampling.Wit)
+      (E : Extractor Coin Claims.Sampling.Wit V) (κ γ β : Msg → ℝ) (Fe : FinderFamily),
+      ¬ Claims.Sampling.KSLinOn H V Scope R E κ γ β Fe := by
+  by_contra h
+  push Not at h
+  exact Witness.Sampling.KS_fails H fun _ _ _ _ => h _ _ _ _ _ _ _ _
+
 /-- **`BitsLin` fails** somewhere: else the sampling `Bits`, which is `BitsLin` at each of its decoders, would hold at
 every record. -/
 theorem Sampling.BitsLin_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ (V : Verifier Coin) (R : Rel Claims.Sampling.Wit) (E : Extractor Coin Claims.Sampling.Wit V)
-      (Fe : FinderFamily) (lam : Msg → ℝ), ¬ Claims.Sampling.BitsLin H V R E Fe lam := by
+    ∃ (V : Verifier Coin) (Scope : Msg → Prop) (R : Rel Claims.Sampling.Wit)
+      (E : Extractor Coin Claims.Sampling.Wit V) (Fe : FinderFamily) (lam : Msg → ℝ),
+      ¬ Claims.Sampling.BitsLin H V Scope R E Fe lam := by
   by_contra h
   push Not at h
-  exact Witness.Sampling.Bits_fails H fun _ _ _ _ => h _ _ _ _ _
+  exact Witness.Sampling.Bits_fails H fun _ _ _ _ => h _ _ _ _ _ _
 
 /-- **The sampling `Binding` fails** at some record. -/
 theorem Sampling.Binding_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :
