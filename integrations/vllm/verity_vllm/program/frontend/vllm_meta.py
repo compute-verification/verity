@@ -634,7 +634,9 @@ def attention_impls(model: nn.Module) -> dict:
     `MLAAttention` layer has an entry with `"kind": "mla"`: its impl, backend name, kv dtype, heads, scale, context-parallel sizes,
     dense-MHA prefill backend, the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
     `engine.sparse_mla`'s pin marks, None for vLLM's heuristic), and from the layer's vLLM config the query heads per rank its
-    metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads."""
+    metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads.  Any other attention
+    layer (`AttentionLayerBase`: DeepSeek-V4's sparse MLA, its window, indexer and compressor-state caches) has an entry with `"kind":
+    "layer"` under its prefix: its class, its backend's name and its kv cache dtype."""
     from vllm.model_executor.layers.attention import Attention, MLAAttention
     out = {}
     for name, mod in model.named_modules():
@@ -671,6 +673,12 @@ def attention_impls(model: nn.Module) -> dict:
             "use_sparse": getattr(mod, "use_sparse", None), "num_splits": getattr(fa, "verity_sparse_mla_splits", None),
             "q_heads_per_rank": vc.model_config.get_num_attention_heads(vc.parallel_config),
             "sparse_mla_force_mqa": bool(vc.attention_config.sparse_mla_force_mqa)}
+    base = getattr(sys.modules.get("vllm.model_executor.layers.attention_layer_base"), "AttentionLayerBase", None)
+    for name, mod in model.named_modules():
+        if base is None or isinstance(mod, (Attention, MLAAttention)) or not isinstance(mod, base):
+            continue
+        out[getattr(mod, "prefix", name)] = {"kind": "layer", "impl": f"{type(mod).__module__}.{type(mod).__qualname__}",
+                                             "backend": mod.get_attn_backend().get_name(), "kv_cache_dtype": getattr(mod, "kv_cache_dtype", None)}
     return out
 
 

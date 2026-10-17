@@ -171,6 +171,41 @@ _define_once("hc_head_fused_kernel_tilelang(Tensor hs_flat, Tensor fn, Tensor hc
              "hc_head_fused_kernel_tilelang", lambda hs_flat, fn, hc_scale, hc_base, rms_eps, hc_eps:
                  hs_flat.new_empty((hs_flat.shape[0], hs_flat.shape[-1]), dtype=torch.bfloat16))
 
+
+# [DSV4] DeepSeek-V4's sparse MLA (vllm/models/deepseek_v4/attention.py, nvidia/flashmla.py) as three ops, the leaves
+# `dsv4_leaves.dsv4_attention_leaves` puts in place of the kernels that write and read its caches through the forward context:
+#   dsv4_qnorm_rope_kv_insert -> (q with its heads padded to NHP [T, NHP, D] bf16, the fp8_ds_mla window row: NoPE [T, D - DR] e4m3,
+#                                 its scale bytes [T, (D - DR) / QB + 1] u8, RoPE [T, DR] bf16); DR the rotary width of cos_sin
+#   dsv4_compressor_state     -> the compressor's state row (`save_partial_states`): kv [T, W] f32, score [T, W] f32, W = ape's width
+#   dsv4_sparse_attn          -> the rank's live heads [T, heads, D] bf16
+# The window rows, the compressor's state rows and the compressed rows are each layer's history, keyed by `layer_name`.
+def _dsv4_insert_fake(q, kv, positions, cos_sin, padded_heads, eps, quant_block):
+    T, D, DR = q.shape[0], q.shape[-1], cos_sin.shape[-1]
+    return (q.new_empty((T, padded_heads, D)), q.new_empty((T, D - DR), dtype=torch.float8_e4m3fn),
+            q.new_empty((T, (D - DR) // quant_block + 1), dtype=torch.uint8), q.new_empty((T, DR)))
+
+
+_define_once("dsv4_qnorm_rope_kv_insert(Tensor q, Tensor kv, Tensor positions, Tensor cos_sin, SymInt padded_heads, float eps, "
+             "SymInt quant_block) -> (Tensor, Tensor, Tensor, Tensor)", "dsv4_qnorm_rope_kv_insert", _dsv4_insert_fake)
+_define_once("dsv4_compressor_state(Tensor kv_score, Tensor positions, Tensor ape) -> (Tensor, Tensor)", "dsv4_compressor_state",
+             lambda kv_score, positions, ape: (kv_score.new_empty((kv_score.shape[0], ape.shape[1])),
+                                               kv_score.new_empty((kv_score.shape[0], ape.shape[1]))))
+_define_once("dsv4_sparse_attn(Tensor q, Tensor nope, Tensor scale, Tensor rope, Tensor positions, Tensor cos_sin, Tensor sink, "
+             "Tensor? state_kv, Tensor? state_score, Tensor? norm_weight, str layer_name, SymInt heads, SymInt ratio, SymInt window, "
+             "SymInt topk, float softmax_scale, float eps) -> Tensor", "dsv4_sparse_attn",
+             lambda q, nope, scale, rope, positions, cos_sin, sink, state_kv, state_score, norm_weight, layer_name, heads, ratio, window,
+                  topk, softmax_scale, eps: q.new_empty((q.shape[0], heads, q.shape[-1])))
+# DeepGEMM's `fp8_einsum(expr, (a, a_scale), (b, b_scale), d, c=None, recipe)` (csrc/apis/einsum.hpp), which writes `d`
+# (`export_compat.deep_gemm_fp8_einsum_leaf`)
+_define_once("deep_gemm_fp8_einsum(str expr, Tensor a, Tensor a_scale, Tensor b, Tensor b_scale, Tensor(a!) d, int[] recipe) -> ()",
+             "deep_gemm_fp8_einsum", lambda expr, a, a_scale, b, b_scale, d, recipe: None)
+# one `moe_wna16_marlin_gemm` launch of `fused_marlin_moe` on W4A16 float4_e2m1f experts, over the logical weights w [E, N, K/2] and
+# their e8m0 scales [E, N, K/32] (`marlin_moe_leaf`): rows [x rows * top_k, N] bf16
+_define_once("marlin_moe_mxfp4_gemm(Tensor x, Tensor w, Tensor w_scale, Tensor sorted_token_ids, Tensor expert_ids, "
+             "Tensor num_tokens_post_padded, Tensor topk_weights, int moe_block_size, int top_k, bool mul_topk_weights) -> Tensor",
+             "marlin_moe_mxfp4_gemm", lambda x, w, w_scale, sorted_token_ids, expert_ids, num_tokens_post_padded, topk_weights, moe_block_size,
+             top_k, mul_topk_weights: x.new_empty((x.shape[0] * top_k, w.shape[1])))
+
 iface = torch.ops.vllm_iface
 
 

@@ -11,7 +11,9 @@ counts them as structural scaffolding.
    (`moe_gate_leaf`).  6. The default Hopper block-FP8 linear's dynamic custom op as a leaf
    (`default_fp8_linear_leaf`).  7. CUDA streams and events as inert stand-ins (`cuda_streams_inert`).  8. A registered op's
    Python body, called directly by a model module, as the op (`registered_op_bodies_as_ops`).  9. DeepSeek-V4's layer-0 mHC
-   broadcast pre as a leaf op (`mhc_pre_broadcast_leaf`).
+   broadcast pre as a leaf op (`mhc_pre_broadcast_leaf`).  10. DeepSeek-V4's sparse MLA kernels as leaf ops
+   (`dsv4_leaves.dsv4_attention_leaves`).  11. DeepGEMM's `fp8_einsum` as a leaf op (`deep_gemm_fp8_einsum_leaf`).  12. The MXFP4
+   Marlin MoE's expert GEMMs as leaf ops over the logical weights (`marlin_moe_leaf.mxfp4_marlin_moe_leaf`).
 """
 
 from __future__ import annotations
@@ -24,6 +26,8 @@ from contextlib import contextmanager
 import torch
 
 from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
+from verity_vllm.program.frontend.marlin_moe_leaf import mxfp4_marlin_moe_leaf
 
 _ORIG_DATA = torch._C.TensorBase.data
 
@@ -698,22 +702,51 @@ def mhc_pre_broadcast_leaf(model=None, original=None):
         yield
 
 
+_DEEP_GEMM = "vllm.utils.deep_gemm"
+
+
+@contextmanager
+def deep_gemm_fp8_einsum_leaf(model=None):
+    """11. DeepGEMM's `fp8_einsum` (vLLM's `utils.deep_gemm` entry; DeepSeek-V4's o-projection `bhr,hdr->bhd`) JIT-compiles its
+    kernel through the CUDA driver and leaves no dispatcher op behind.  For the duration, that entry and every vLLM module's global
+    bound to it is `vllm_iface.deep_gemm_fp8_einsum`, which writes `d` as DeepGEMM does; an accumulator `c` refuses at export."""
+    original = getattr(sys.modules.get(_DEEP_GEMM), "fp8_einsum", None)
+    if model is None or original is None:
+        yield
+        return
+    from verity_vllm.program.frontend.rules.vllm_iface import iface
+
+    def fp8_einsum(expr, a, b, d, c=None, recipe=(1, 128, 128)):
+        if c is not None:
+            raise NotImplementedError("deep_gemm_fp8_einsum_leaf: fp8_einsum with an accumulator c")
+        iface.deep_gemm_fp8_einsum(expr, a[0], a[1], b[0], b[1], d, [int(r) for r in recipe])
+
+    users = [m for n, m in list(sys.modules.items()) if n.startswith("vllm.") and getattr(m, "fp8_einsum", None) is original]
+    with hooks.Hooks() as h:
+        for module in users:
+            h.patch(module, "fp8_einsum", fp8_einsum)
+        yield
+
+
 @contextmanager
 def export_compat(profile=None, model=None):
     """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
     dispatcher ops traced through their bodies (`moe_ops_traced`) + DeepSeek sparse attention's kernels, the MoE gate's cuteDSL GEMM
     and the default Hopper FP8 linear as leaf ops (`dsa_ops_leaf`, `moe_gate_leaf`, `default_fp8_linear_leaf`) + inert CUDA streams
-    (`cuda_streams_inert`) + registered op bodies called as their ops (`registered_op_bodies_as_ops`) and layer 0's mHC broadcast
-    pre as a leaf (`mhc_pre_broadcast_leaf`); `model` = the instantiated module, for the per-layer entries."""
+    (`cuda_streams_inert`) + registered op bodies called as their ops (`registered_op_bodies_as_ops`), layer 0's mHC broadcast
+    pre, DeepSeek-V4's sparse MLA, DeepGEMM's einsum and the MXFP4 Marlin MoE's GEMMs as leaves (`mhc_pre_broadcast_leaf`,
+    `dsv4_attention_leaves`, `deep_gemm_fp8_einsum_leaf`, `mxfp4_marlin_moe_leaf`, which builds the kernel objects `moe_ops_traced`
+    then reads); `model` = the instantiated module, for the per-layer entries."""
     if profile is None:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         profile = TargetProfile.default()
-    with (tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model),
+    with (tensor_data_as_detach(), apply_target_profile(profile), mxfp4_marlin_moe_leaf(model), moe_ops_traced(model), dsa_ops_leaf(model),
           fused_allreduce_rms_norm_leaf(model), moe_gate_leaf(model), default_fp8_linear_leaf(model), cuda_streams_inert(),
-          registered_op_bodies_as_ops(model), mhc_pre_broadcast_leaf(model)):
+          registered_op_bodies_as_ops(model), mhc_pre_broadcast_leaf(model), dsv4_attention_leaves(model),
+          deep_gemm_fp8_einsum_leaf(model)):
         yield
 
 
 __all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "dsa_ops_leaf", "dsa_leaves",
            "fused_allreduce_rms_norm_leaf", "moe_gate_leaf", "default_fp8_linear_leaf", "cuda_streams_inert", "InertStream", "InertEvent",
-           "registered_op_bodies_as_ops", "mhc_pre_broadcast_leaf", "read_back_applied", "host_facts"]
+           "registered_op_bodies_as_ops", "mhc_pre_broadcast_leaf", "deep_gemm_fp8_einsum_leaf", "read_back_applied", "host_facts"]
