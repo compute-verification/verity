@@ -88,7 +88,12 @@ def DIdealFloor : Prop :=
 adaptive work share and whose check is the drawn units' proofs, under (I1)–(I6) as in `DIdeal`, (C1)–(C3) with (I8)
 as `ProofsSound`, and any `Λ > 0` bounding the round's saving per unit of detection (`RoundGame.BudgetAt Λ`, Λ's
 definition): for every certificate `π`, outside an event of probability at most `δ`, every accepted run satisfies
-(2.7) with `ε_sample = (Λ − 1/ln(1/p))·(ln(1/δ′)/S)·κ(π)` subtracted in the first factor. -/
+(2.7) with `ε_sample = (Λ − 1/ln(1/p))·(ln(1/δ′)/S)·κ(π)` subtracted in the first factor. This is Lemma C(b), at a
+given `Λ`. Lemma C(a), `Λ ≤ max(Λ_luck, Fan_Q/s)`, is not stated: it needs (C4), that every unit holding a C1′
+derivation a steer passes through (residual adds included) has `Q`-weight at least its consumers' work share over a
+stated Fan cap, or a closure that checks `h = h_prev + y` (REFEREE S13). Without it, a direct write to the residual
+steers every consumer from a unit of near-zero `Q`-mass, and `BudgetAt` holds only at a `Λ` of about the steered
+share over that mass: this bound stays true, and is vacuous there. -/
 def CompilerC : Prop :=
   ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
     [Nonempty R] [Nonempty F] [Nonempty X]
