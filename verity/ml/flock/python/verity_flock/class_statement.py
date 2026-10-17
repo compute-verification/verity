@@ -1092,13 +1092,17 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
     FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once, by FC_VERIFY_SERVERS (default 1,
     at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port`` and the rest on ports the
     system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them), for ``points``
-    provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits."""
+    provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits. FLOCK_DRAW_LAW (a
+    law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier draws by that law at its
+    Register, the staged statement their population."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
     logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
+    law = ["--draw-law", os.environ["FLOCK_DRAW_LAW"]] if os.environ.get("FLOCK_DRAW_LAW") else []
     srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),
                               "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", operator,
-                              "--concurrency", str(concurrency)] + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else []),
+                              "--concurrency", str(concurrency)] + law
+                             + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else []),
                              stdout=open(log, "w"), stderr=subprocess.STDOUT)
             for i, log in enumerate(logs)]
     addrs = []
