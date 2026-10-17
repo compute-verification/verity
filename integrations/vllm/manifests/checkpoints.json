@@ -200,7 +200,7 @@
   {
    "at": "2026-10-17T18:48:33Z",
    "by": "vllm-int8-profile",
-   "note": "new entry only (role LLAMA31_8B_INT8, the verity-int8-channel63/v1 recipe pin made from LLAMA31_8B on vy-nebius-1 by run r20261017-184410-6373); frozen entries unchanged",
+   "note": "new entry only (role LLAMA31_8B_INT8, made on vy-nebius-1 by run r20261017-184410-6373); frozen entries unchanged",
    "repos": [
     "verity-int8/Llama-3.1-8B-INT8"
    ]
