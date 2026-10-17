@@ -6,7 +6,8 @@
   python fp_exact.py limits DIR/verdicts.json          # the K limits per format, grid and C0, as a table
 
 `fp_exact.cu` chains K / k_step MMAs of one format into one FP32 accumulator from the word C0, with operands from one
-of GRIDS, and counts every output whose word isn't the exact sum's. Here the host regenerates the first tiles of every
+of GRIDS and per-block scales from one of SCALES (NVFP4's UE4M3 odd integers, MXFP4's UE8M0 powers 2^k, and two draws
+that straddle the 27-bit anchor), and counts every output whose word isn't the exact sum's. Here the host regenerates the first tiles of every
 config from the same counter hash, recomputes their sums in int64 and judges their words itself; a config whose device
 reference disagrees with the host's is refused, and so is every config of the no-write control. For K <= REPLAY_K the
 host also replays the first tile's identity-order chain through `verity.ml.circuits.silicon`'s model of the firing,
@@ -36,6 +37,8 @@ FMTS = ("e4m3", "e4m3_kind", "mxf4", "mxf4nv", "nvf4", "sp_mxf4", "sp_nvf4")
 KSTEP = {"e4m3": 32, "e4m3_kind": 32, "mxf4": 64, "mxf4nv": 64, "nvf4": 64, "sp_mxf4": 128, "sp_nvf4": 128}
 MACS = {"e4m3": 4096, "e4m3_kind": 4096, "mxf4": 8192, "mxf4nv": 8192, "nvf4": 8192, "sp_mxf4": 16384, "sp_nvf4": 16384}
 DISTS = ("U", "MAX", "MAXSIGN", "RAMP", "CANCEL", "EDGE")
+# Per-block scales, mirroring fp_exact.cu's Scale enum. UE4M3 (nvf4) carries odd integers; UE8M0 (mxf4) carries 2^k.
+SCALES = ("unit", "lo", "hi", "mix", "bind", "bind26")
 NORD = 3
 SPARSE = {"sp_mxf4", "sp_nvf4"}
 PAT0 = (0, 0, 0, 1, 1, 2)
@@ -92,6 +95,63 @@ def codes(g: GridDef, vals) -> list[int]:
     return [e2m1_code(v) if g.e2m1 else e4m3_code(v * 2.0 ** -g.s) for v in vals]
 
 
+def ue8m0_code(k: int) -> int:
+    return 127 + k  # 2^k, k in [-127, 127]
+
+
+@dataclass(frozen=True)
+class ScaleSet:
+    """A per-block scale set (fp_exact.cu's ScaleSet). The scale value is num * 2^exp: UE4M3 odd integers have num odd
+    and exp 0; UE8M0 powers 2^k have num 1 and exp k. Both operands draw from one set."""
+
+    mode: int                  # 0 fixed (index 0); 1 drawn per block and operand; 2 alternating (block & 1)
+    code: tuple[int, ...]      # the UE4M3 / UE8M0 byte
+    num: tuple[int, ...]
+    exp: tuple[int, ...]
+
+    @property
+    def n(self) -> int:
+        return len(self.code)
+
+    @property
+    def sh(self) -> int:
+        """The reference's extra fraction bits: -2 x the most negative scale exponent (so every shift is >= 0), else 0."""
+        return max(0, -2 * min(self.exp))
+
+
+def make_scale(fmt: str, scale: str) -> ScaleSet:
+    """Must match fp_exact.cu's make_scale. UE4M3 (nvf4): odd integers; UE8M0 (mxf4): powers 2^k."""
+    ue4m3 = fmt in ("nvf4", "sp_nvf4")
+    unit = 0x7F if fmt in ("mxf4", "mxf4nv", "sp_mxf4") else 0x38  # UE8M0 2^0 / UE4M3 (or E4M3) 1.0
+    if scale == "unit":
+        return ScaleSet(0, (unit,), (1,), (0,))
+    if scale == "lo":
+        return ScaleSet(0, (e4m3_code(3),), (3,), (0,)) if ue4m3 else ScaleSet(0, (ue8m0_code(-3),), (1,), (-3,))
+    if scale == "hi":
+        return ScaleSet(0, (e4m3_code(15),), (15,), (0,)) if ue4m3 else ScaleSet(0, (ue8m0_code(3),), (1,), (3,))
+    if scale == "mix":
+        if ue4m3:
+            vs = tuple(range(1, 16, 2))
+            return ScaleSet(1, tuple(e4m3_code(v) for v in vs), vs, (0,) * len(vs))
+        kk = tuple(range(-3, 4))
+        return ScaleSet(1, tuple(ue8m0_code(k) for k in kk), (1,) * len(kk), kk)
+    if scale == "bind":
+        return ScaleSet(2, (ue8m0_code(7), ue8m0_code(-7)), (1, 1), (7, -7))
+    if scale == "bind26":
+        return ScaleSet(2, (ue8m0_code(7), ue8m0_code(-6)), (1, 1), (7, -6))
+    raise ValueError(f"unknown scale {scale}")
+
+
+def scale_block(fmt: str) -> int:
+    """Elements a scale block: 16 (UE4M3, nvf4), 32 (UE8M0, mxf4); 0 when the format carries no block scale."""
+    return 16 if fmt in ("nvf4", "sp_nvf4") else 32 if fmt in ("mxf4", "mxf4nv", "sp_mxf4") else 0
+
+
+def max_scale(fmt: str, scale: str) -> float:
+    s = make_scale(fmt, scale)
+    return max(n * 2.0 ** e for n, e in zip(s.num, s.exp))
+
+
 def word(x: float) -> int:
     return struct.unpack("<I", struct.pack("<f", x))[0]
 
@@ -101,22 +161,37 @@ def word_units(w: int, s_tot: int) -> int:
     return int(struct.unpack("<f", struct.pack("<I", w))[0] * 2 ** s_tot)
 
 
-def c0_words(g: GridDef) -> dict[str, int]:
-    """The initial accumulators: zero; the binade whose ulp is the grid's product resolution (NOBITS' form, generalized);
-    NOBITS' own 0x4B400000 (ulp 1); and the binade above the first (ulp twice the resolution: FP32 must round)."""
-    s_tot = 2 * g.s
-    out = {"zero": 0, "binade": 0x4B400000 - (s_tot << 23), "over": 0x4BC00000 - (s_tot << 23)}
-    if s_tot:
+def c0_words(g: GridDef, sh: int = 0) -> dict[str, int]:
+    """The initial accumulators: zero; the binade whose ulp is the scaled product resolution 2^-(2s + sh) (NOBITS' form,
+    generalized to carry the blocks' extra fraction bits); NOBITS' own 0x4B400000 (ulp 1); and the binade above the first
+    (ulp twice the resolution: FP32 must round)."""
+    u = 2 * g.s + sh
+    out = {"zero": 0, "binade": 0x4B400000 - (u << 23), "over": 0x4BC00000 - (u << 23)}
+    if u:
         out["nobits"] = 0x4B400000
     return out
 
 
-def ks(fmt: str, quick: bool) -> list[int]:
+def ks(fmt: str, quick: bool, scale: str = "unit") -> list[int]:
+    # A non-unit scale stretches the product magnitude, so its representability limit is reached well below the unit
+    # sweep's top; a short span keeps the sweep inside one lease while still crossing every scaled limit.
+    cap = 4096 if scale in ("bind", "bind26") else 65536 if scale != "unit" else 262144
     k, out = KSTEP[fmt], []
-    while k <= 262144:
+    while k <= cap:
         out.append(k)
         k *= 2
     return out[::3] if quick else out
+
+
+# The scales each format sweeps: NVFP4 the UE4M3 odd integers, MXFP4 (both mnemonics) the UE8M0 powers and the two
+# anchor-binding draws; E4M3 and the 2:4-sparse route (whose MMA takes unit scales) stay on unit scales.
+SCALED = {"nvf4": ("unit", "lo", "hi", "mix"),
+          "mxf4": ("unit", "lo", "hi", "mix", "bind", "bind26"),
+          "mxf4nv": ("unit", "lo", "hi", "mix", "bind", "bind26")}
+
+
+def scales_of(fmt: str) -> tuple[str, ...]:
+    return SCALED.get(fmt, ("unit",))
 
 
 @dataclass(frozen=True)
@@ -124,6 +199,7 @@ class Config:
     fmt: str
     grid: str
     dist: str
+    scale: str
     c0: str
     c0_word: int
     K: int
@@ -133,11 +209,11 @@ class Config:
 
     @property
     def name(self) -> str:
-        return f"{self.fmt}/{self.grid}/{self.dist}/{self.c0}/K{self.K}"
+        return f"{self.fmt}/{self.grid}/{self.scale}/{self.dist}/{self.c0}/K{self.K}"
 
     def line(self) -> str:
-        return (f"{self.name} {FMTS.index(self.fmt)} {GRID[self.grid]} {DISTS.index(self.dist)} {self.c0_word:08x} "
-                f"{self.K} {self.tiles} {self.seed} {self.nrec}")
+        return (f"{self.name} {FMTS.index(self.fmt)} {GRID[self.grid]} {DISTS.index(self.dist)} "
+                f"{SCALES.index(self.scale)} {self.c0_word:08x} {self.K} {self.tiles} {self.seed} {self.nrec}")
 
 
 def configs(quick: bool = False) -> list[Config]:
@@ -145,16 +221,20 @@ def configs(quick: bool = False) -> list[Config]:
     for fmt in FMTS:
         for gname in (n for n in GRID if n.startswith("e2m1") == (fmt not in ("e4m3", "e4m3_kind"))):
             g = GRIDS[GRID[gname]]
-            for dist in DISTS:
-                c0s = dict(c0_words(g))
-                if dist == "CANCEL":
-                    c0s["negzero"] = 0x80000000
-                for c0, w in c0s.items():
-                    for K in ks(fmt, quick):
-                        tiles = max(128, min(4096, (1 << 23) // K))
-                        seed = (len(out) + 1) * 0x9E3779B1 & 0xFFFFFFFFFFFF
-                        nrec = 2 if K <= 1024 else 1 if K <= 16384 or len(out) % 4 == 0 else 0
-                        out.append(Config(fmt, gname, dist, c0, w, K, tiles, seed, nrec))
+            for scale in scales_of(fmt):
+                sh = make_scale(fmt, scale).sh
+                for dist in DISTS:
+                    c0s = c0_words(g, sh)
+                    if scale != "unit":  # a non-unit scale carries only the K-limit's two cases
+                        c0s = {k: v for k, v in c0s.items() if k in ("zero", "binade")}
+                    if dist == "CANCEL":
+                        c0s["negzero"] = 0x80000000
+                    for c0, w in c0s.items():
+                        for K in ks(fmt, quick, scale):
+                            tiles = max(128, min(4096, (1 << 23) // K))
+                            seed = (len(out) + 1) * 0x9E3779B1 & 0xFFFFFFFFFFFF
+                            nrec = 2 if K <= 1024 else 1 if K <= 16384 or len(out) % 4 == 0 else 0
+                            out.append(Config(fmt, gname, dist, scale, c0, w, K, tiles, seed, nrec))
     return out
 
 
@@ -178,6 +258,63 @@ def hkey(seed: int, tile: int, mat: int, rc, k):
 
 def pick(n: int, h):
     return ((h >> U64(32)) * U64(n)) >> U64(32)
+
+
+def skey(seed: int, tile: int, op: int, rc, block):
+    """fp_exact.cu's skey: the salt and layout keep a block's scale draw apart from the element hash (hkey)."""
+    key = (U64(seed) ^ U64(0x5CA1E5CA1E000000) ^ (U64(tile) << U64(40)) ^ (U64(op) << U64(38))
+           ^ (np.asarray(rc, dtype=U64) << U64(30)) ^ np.asarray(block, dtype=U64))
+    return mix64(key)
+
+
+def scale_arrays(c: "Config", tile: int):
+    """The per-k scale factors of A (16 x K) and B (8 x K) in logical (order 0) k order, as positive int64 multipliers
+    that fold num x 2^(exp + sh/2) so A's factor times B's is num_a num_b 2^(exp_a + exp_b + sh); and sh itself. The
+    device scales each logical block of each operand row (A by its row, B by its column)."""
+    s = make_scale(c.fmt, c.scale)
+    scblk = scale_block(c.fmt) or c.K
+    sh = s.sh
+    nblk = c.K // scblk
+    num = np.array(s.num, dtype=np.int64)
+    shift = np.array(s.exp, dtype=np.int64) + sh // 2  # >= 0: the set's own exponents minus the most negative
+    kblk = np.arange(c.K) // scblk
+
+    def factor(op: int, n_rc: int):
+        blk = np.arange(nblk)
+        if s.mode == 0:
+            idx = np.zeros((n_rc, nblk), dtype=np.int64)
+        elif s.mode == 2:
+            idx = np.broadcast_to((blk & 1).astype(np.int64), (n_rc, nblk))
+        else:
+            idx = pick(s.n, skey(c.seed, tile, op, np.arange(n_rc)[:, None], blk[None, :])).astype(np.int64)
+        idxk = idx[:, kblk]
+        return num[idxk] * np.left_shift(np.int64(1), shift[idxk])
+
+    return factor(0, 16), factor(1, 8), sh
+
+
+def scale_codes(c: "Config", tile: int):
+    """The scale byte of each (row / column, logical block), for the silicon-model replay. None when the format is
+    unscaled on the host side (E4M3, whose replay passes no scale bytes)."""
+    g = GRIDS[GRID[c.grid]]
+    if not g.e2m1:
+        return None, None
+    s = make_scale(c.fmt, c.scale)
+    scblk = scale_block(c.fmt) or c.K
+    nblk = c.K // scblk
+    code = np.array(s.code, dtype=np.int64)
+
+    def bytes_of(op: int, n_rc: int):
+        blk = np.arange(nblk)
+        if s.mode == 0:
+            idx = np.zeros((n_rc, nblk), dtype=np.int64)
+        elif s.mode == 2:
+            idx = np.broadcast_to((blk & 1).astype(np.int64), (n_rc, nblk))
+        else:
+            idx = pick(s.n, skey(c.seed, tile, op, np.arange(n_rc)[:, None], blk[None, :])).astype(np.int64)
+        return code[idx]
+
+    return bytes_of(0, 16), bytes_of(1, 8)
 
 
 @dataclass(frozen=True)
@@ -243,18 +380,21 @@ def exact_words(ref: np.ndarray, s_tot: int) -> np.ndarray:
 
 def recheck(c: Config, c0_units: int, recs: np.ndarray) -> dict:
     """The host's own sums and verdicts for the config's recorded tiles."""
-    s_tot = 2 * GRIDS[GRID[c.grid]].s
+    units = 2 * GRIDS[GRID[c.grid]].s + make_scale(c.fmt, c.scale).sh
     nsteps, KS = c.K // KSTEP[c.fmt], KSTEP[c.fmt]
     out = {"tiles": int(c.nrec), "outputs": 0, "unwritten": 0, "ref_disagree": 0, "flag_disagree": 0, "exact": 0,
            "bad_rep": 0, "order_diff": 0, "in_binade": 0, "binade_linear": 0}
     for t in range(c.nrec):
         r = recs[t * 128:(t + 1) * 128].reshape(16, 8)
         A, B = values(c, t)
-        part = np.einsum("isk,jsk->ijs", A.reshape(16, nsteps, KS), B.reshape(8, nsteps, KS)).cumsum(axis=2) + c0_units
+        fA, fB, _ = scale_arrays(c, t)
+        sA = (A * fA).reshape(16, nsteps, KS)
+        sB = (B * fB).reshape(8, nsteps, KS)
+        part = np.einsum("isk,jsk->ijs", sA, sB).cumsum(axis=2) + c0_units
         ref = part[:, :, -1]
         rep_all = representable(part).all(axis=2)
         frep = representable(ref)
-        want = exact_words(ref, s_tot)
+        want = exact_words(ref, units)
         d0 = r["d"][:, :, 0].astype(np.uint64)
         ex = frep & (d0 == want)
         out["outputs"] += 128
@@ -274,7 +414,6 @@ def recheck(c: Config, c0_units: int, recs: np.ndarray) -> dict:
 
 
 REPLAY_K = 256
-UNIT_SCALE = {"ue8m0": 0x7F, "ue4m3": 0x38}
 
 
 def model(fmt: str):
@@ -297,23 +436,28 @@ def model(fmt: str):
 
 def replay(c: Config, recs: np.ndarray) -> dict:
     """The silicon model's words for the config's first recorded tile, chained in the identity order from C0, against
-    the device's: every output, and the inexact ones among them."""
+    the device's: every output, and the inexact ones among them. Each firing carries its blocks' scale bytes (block b
+    of firing f is logical scale block f * scales_per_step + b, the order-0 layout of fp_exact.cu's pack_sf)."""
     g = GRIDS[GRID[c.grid]]
     m, step = model(c.fmt), KSTEP[c.fmt]
-    scales = [UNIT_SCALE[m.scale]] * m.scales_per_step if g.e2m1 else []
+    nbf = m.scales_per_step if g.e2m1 else 0
     code = dict(zip(g.vals, codes(g, g.vals)))
     A, B = values(c, 0)
     a = [[code[int(v)] for v in row] for row in A]
     b = [[code[int(v)] for v in row] for row in B]
+    sca, scb = scale_codes(c, 0)
     r = recs[:128].reshape(16, 8)
     ref = r["ref"].astype(np.int64)
-    exact = representable(ref) & (r["d"][:, :, 0].astype(np.uint64) == exact_words(ref, 2 * g.s))
+    units = 2 * g.s + make_scale(c.fmt, c.scale).sh
+    exact = representable(ref) & (r["d"][:, :, 0].astype(np.uint64) == exact_words(ref, units))
     out = {"model": m.name, "outputs": 0, "agree": 0, "inexact": 0, "inexact_agree": 0}
     for i in range(16):
         for j in range(8):
             w = c.c0_word
-            for s in range(0, c.K, step):
-                w = m.step(w, a[i][s:s + step] + scales, b[j][s:s + step] + scales)
+            for f, s in enumerate(range(0, c.K, step)):
+                fa = [int(x) for x in sca[i, f * nbf:(f + 1) * nbf]] if g.e2m1 else []
+                fb = [int(x) for x in scb[j, f * nbf:(f + 1) * nbf]] if g.e2m1 else []
+                w = m.step(w, a[i][s:s + step] + fa, b[j][s:s + step] + fb)
             agree = w == int(r["d"][i, j, 0])
             out["outputs"] += 1
             out["agree"] += agree
@@ -349,7 +493,8 @@ def refusal(c: Config, row: dict, recs: np.ndarray) -> str:
         return f"the kernel didn't write its counts (tag 0x{row['tag']:08x})"
     if row["out"] != c.tiles * 128:
         return f"{row['out']} outputs counted, {c.tiles * 128} expected"
-    if row["c0_units"] != (u := word_units(c.c0_word, 2 * GRIDS[GRID[c.grid]].s)):
+    units = 2 * GRIDS[GRID[c.grid]].s + make_scale(c.fmt, c.scale).sh
+    if row["c0_units"] != (u := word_units(c.c0_word, units)):
         return f"the device started from {row['c0_units']} units, not C0's {u}"
     if int(((recs["flags"] & 0xFF000000) != TAG).sum()):
         return "a recorded tile left poisoned words"
@@ -357,13 +502,13 @@ def refusal(c: Config, row: dict, recs: np.ndarray) -> str:
 
 
 def verdicts(rows: list[dict], cfgs: list[Config]) -> dict:
-    """Per format and grid: where every output was exact, where rounding first appeared, and whether any output lost
-    bits while every partial was representable."""
+    """Per format, grid and scale: where every output was exact, where rounding first appeared, and whether any output
+    lost bits while every partial was representable."""
     by: dict[tuple, list] = {}
     for c, r in zip(cfgs, rows):
-        by.setdefault((c.fmt, c.grid), []).append((c, r))
+        by.setdefault((c.fmt, c.grid, c.scale), []).append((c, r))
     out = {}
-    for (fmt, grid), xs in by.items():
+    for (fmt, grid, scale), xs in by.items():
         refused = [c.name for c, r in xs if r["refused"]]
         ok = [(c, r) for c, r in xs if not r["refused"]]
         series = {}
@@ -386,8 +531,9 @@ def verdicts(rows: list[dict], cfgs: list[Config]) -> dict:
                                   if first else None),
                 "max_partial": max(r["max_partial"] for _, r in ser),
             }
-        out[f"{fmt}/{grid}"] = {
+        out[f"{fmt}/{grid}/{scale}"] = {
             "configs": len(xs),
+            "max_scale": max_scale(fmt, scale),
             "refused": refused,
             "outputs": sum(r["out"] for _, r in ok),
             "exact": sum(r["exact"] for _, r in ok),
@@ -414,9 +560,13 @@ def verdicts(rows: list[dict], cfgs: list[Config]) -> dict:
 
 
 def limits(v: dict) -> list[str]:
-    """Per format, grid and C0: the largest K through which every draw was exact, and the first K any draw rounded."""
-    out = ["| format/grid | C0 | exact for every draw through K | first inexact K (draws) |", "|---|---|---|---|"]
+    """Per format, grid, scale and C0: the largest K through which every draw was exact, and the first K any draw rounded.
+    The max scale product is the largest scale a block times itself (both operands draw from the one set)."""
+    out = ["| format/grid | scale | max scale product | C0 | exact for every draw through K | first inexact K (draws) |",
+           "|---|---|---|---|---|---|"]
     for key, x in v.items():
+        fmt, grid, scale = key.split("/")
+        msp = max_scale(fmt, scale) ** 2
         by: dict[str, list] = {}
         for s, y in x["series"].items():
             by.setdefault(s.split("/")[1], []).append((s.split("/")[0], y))
@@ -424,16 +574,21 @@ def limits(v: dict) -> list[str]:
             first = [y["first_inexact_K"] for _, y in ys if y["first_inexact_K"]]
             k1 = min(first) if first else None
             cell = f"{k1} ({','.join(d for d, y in ys if y['first_inexact_K'] == k1)})" if k1 else "-"
-            out.append(f"| {key} | {c0} | {min(y['exact_through_K'] for _, y in ys)} | {cell} |")
+            out.append(f"| {fmt}/{grid} | {scale} | {msp:g} | {c0} | "
+                       f"{min(y['exact_through_K'] for _, y in ys)} | {cell} |")
     return out
 
 
 PROBE_MACS = {"imma_s8": 4096, "qmma_e4m3": 4096, "omma_mxf4": 8192, "omma_nvf4": 8192, "omma_sp_mxf4": 16384,
-              "omma_sp_nvf4": 16384}
+              "omma_sp_nvf4": 16384,
+              # the same opcodes on the sweep's drawn operands (a data-dependent-clock check against the fixed probes)
+              "qmma_e4m3_data": 4096, "omma_mxf4_data": 8192, "omma_nvf4_data": 8192, "omma_sp_mxf4_data": 16384,
+              "omma_sp_nvf4_data": 16384}
 
 
 def rates(rows: list[dict], sms: int = 188) -> dict[str, dict]:
-    """opcode_probe's rows for probes/mma.cu as MACs an SM a clock, against the same run's IMMA."""
+    """opcode_probe's rows for probes/mma.cu as MACs an SM a clock, against the same run's IMMA. A `_data` probe runs the
+    same opcode on the sweep's drawn operands; `vs_fixed` (its rate over the fixed probe's) rules out a data clock."""
     by = {r["probe"]: r for r in rows if r["probe"] in PROBE_MACS}
     if "imma_s8" not in by:
         raise SystemExit("fp_exact: no imma_s8 row to compare with")
@@ -442,8 +597,10 @@ def rates(rows: list[dict], sms: int = 188) -> dict[str, dict]:
     for name, r in by.items():
         m = r["rate"] * PROBE_MACS[name]
         n = r.get("distinct_sms") or sms
+        fixed = by.get(name[:-5]) if name.endswith("_data") else None
         out[name] = {"rate": r["rate"], "macs_sm_clk": m, "vs_imma": m / base, "sm_mhz": r.get("sm_mhz"), "sms": n,
                      "tmacs": m * n * (r.get("sm_mhz") or 0) * 1e6 / 1e12, "tags": r.get("tags", []),
+                     "vs_fixed": r["rate"] / fixed["rate"] if fixed else None,
                      "run": r.get("run", ""), "sass_sha256": r.get("sass_sha256", "")}
     return out
 
@@ -517,8 +674,9 @@ def main(argv: list[str] | None = None) -> int:
         r = rates([json.loads(x) for x in a.rows.read_text().splitlines() if x.strip()])
         (a.rows.parent / "rates.json").write_text(json.dumps(r, indent=1))
         for name, x in r.items():
+            vf = f", {x['vs_fixed']:.4f}x the fixed probe" if x["vs_fixed"] is not None else ""
             print(f"{name}: {x['rate']:.5f} instructions/SM/clk, {x['macs_sm_clk']:.0f} MACs/SM/clk, "
-                  f"{x['vs_imma']:.3f}x IMMA, {x['tmacs']:.1f} TMAC/s at {x['sm_mhz']} MHz, tags {x['tags']}")
+                  f"{x['vs_imma']:.3f}x IMMA, {x['tmacs']:.1f} TMAC/s at {x['sm_mhz']} MHz{vf}, tags {x['tags']}")
         return 0
     quick = json.loads((a.dir / "sweep.json").read_text())["quick"]
     cfgs = configs(quick)
