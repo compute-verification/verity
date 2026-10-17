@@ -118,5 +118,5 @@ for r in "$O"/ncu/*.ncu-rep; do
 done
 cat "$O/rc.txt"
 $PY $D/eps_profile.py "$O" --mm benchmarks/pouw/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
-  --toml-arms "apv,plain" > "$O/profile.md" 2> "$O/profile.err"
+  --toml-arms "apv,fu,plain" > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" | tee -a "$O/rc.txt"
