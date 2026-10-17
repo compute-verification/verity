@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.KS.PlainKS
+import Proofs.Flock.Claims.KS.Escapes
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -83,4 +84,7 @@ At one table the model does not commit to, a live verdict is no likelier than th
 live strategies, `FlockDeploy.KS.mean_live_le`). At a plain statement of one table, `TableBoundθAt` follows from, at
 each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C` bounds the deployed
 runs accepting on `C`, and whose `Adv` and self-clash the escapes' events bound, the escapes at the plain fork rounds
-(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). -/
+(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). `Flock.KS` at the plain record follows from the live
+sessions' bound at table 0 and `Extendθ` (`PlainKS`: `FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit`
+against the simulated strategy arises only on live runs the live verdict accepts, whose decoded outputs self-clash
+(`Escapes`: `FlockDeploy.KS.selfClash_le_live`, `FlockDeploy.KS.mean_selfClash_le_live`). -/
