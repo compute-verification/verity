@@ -449,7 +449,7 @@ theorem proverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
 
 /-- **The session runs**: the goal `SessionRuns`, under `JsonSpec`. -/
 theorem sessionRuns_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : JsonSpec Flock.canon) : SessionRuns H rel :=
+    (S : Claims.JsonSpec printJ Flock.canon) : SessionRuns H rel :=
   sessionRuns_of S (proverRuns H rel)
 
 end FlockComplete.JsonRT

@@ -50,8 +50,8 @@ theorem live_stream {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB : 
 
 /-- **`liveOf` reads the printed honest record** at one table: its `root_B`, no public words, its points and each rep
 stream's rounds without digests. -/
-theorem live_recordObj (S : JsonSpec Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec} {t : String}
-    (ht : spec.tables = #[t]) (hd : Good (spec.unitDraw.getD Json.null)) {rb : ByteArray}
+theorem live_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec}
+    {t : String} (ht : spec.tables = #[t]) (hd : Good (spec.unitDraw.getD Json.null)) {rb : ByteArray}
     {points : Array (Array F128)} {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size)
     (proofs : Array ByteArray) :
     liveOf spec (printJ (recordObj spec h #[rb] points streams proofs)) =
@@ -135,8 +135,8 @@ theorem live_recordObj (S : JsonSpec Flock.canon) {h : ByteArray → ByteArray} 
   rfl
 
 /-- **The record's draw is the statement's**, up to `Same`. -/
-theorem recordDraw_recordObj (S : JsonSpec Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec} {t : String}
-    (ht : spec.tables = #[t]) (hdraw : DrawOk spec) (rb : ByteArray) (points : Array (Array F128))
+theorem recordDraw_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec}
+    {t : String} (ht : spec.tables = #[t]) (hdraw : DrawOk spec) (rb : ByteArray) (points : Array (Array F128))
     (streams : Array (Array Round)) (proofs : Array ByteArray) :
     match spec.unitDraw with
     | none => FlockSoundness.Discharge.Exec.recordDraw (printJ (recordObj spec h #[rb] points streams proofs)) = none

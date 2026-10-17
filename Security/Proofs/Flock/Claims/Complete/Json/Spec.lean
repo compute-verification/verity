@@ -9,13 +9,12 @@ import Proofs.Flock.Claims.Complete.Prover.Print
 
 `Json.parse`, `Json`'s `==` and the verifier's `canon` are `partial` definitions: Lean runs them, and no proof unfolds
 them. So the session record's round trip (the prover's `printJ`, a total printer of `Json.compress`'s bytes, then
-`Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s `parse`) is proved from their specification, `JsonSpec canon`, a
-named assumption the record's theorems take as a hypothesis, over alike (`Same`), printable (`Good`) and well-formed
-(`Wf`) values (`Definitions/Claims/Json.lean`). It is the spec's `Claims.JsonSpec` with the honest prover's printer,
-`printJ`, where the spec reads `Json.compress`. Here are the lemmas on alike values the proofs read: alike leaves are
-equal, and alike objects have alike values at each key (`Same.getObjVal`) and the same missing keys
-(`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's draw check (`drawEq`)
-passes on them. The record's numbers are all `Lean.toJson` of naturals, so printable.
+`Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s `parse`) is proved from their specification, the spec's
+`Claims.JsonSpec printJ canon`, a named assumption the record's theorems take as a hypothesis, over alike (`Same`),
+printable (`Good`) and well-formed (`Wf`) values (`Definitions/Claims/Json.lean`). Here are the lemmas on alike values
+the proofs read: alike leaves are equal, and alike objects have alike values at each key (`Same.getObjVal`) and the same
+missing keys (`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's draw check
+(`drawEq`) passes on them. The record's numbers are all `Lean.toJson` of naturals, so printable.
 -/
 
 namespace FlockComplete.JsonRT
@@ -24,18 +23,6 @@ open Lean (Json JsonNumber)
 open Flock
 
 export Claims.Json (Same Good Wf)
-
-/-- **The JSON library's specification at the honest prover's printer**, what the record's round trip assumes of the
-`partial` definitions: `Json.parse` reads back what `printJ` printed of a printable value, and what `canon` printed;
-`parse` builds only well-formed trees; `Json`'s `==` holds of alike values; `canon` is the same on alike values, and
-returns on printable ones. `Claims.JsonSpec canon`'s fields, with `printJ` where it reads `Json.compress`. -/
-structure JsonSpec (canon : Json → Except String String) : Prop where
-  parse_print : ∀ j, Good j → ∃ j', Json.parse (printJ j) = .ok j' ∧ Same j j'
-  parse_canon : ∀ j s, Good j → canon j = .ok s → ∃ j', Json.parse s = .ok j' ∧ Same j j'
-  parse_wf : ∀ s j, Json.parse s = .ok j → Wf j
-  beq_same : ∀ a b, Same a b → (a == b) = true
-  canon_same : ∀ a b, Same a b → canon a = canon b
-  canon_ok : ∀ j, Good j → ∃ s, canon j = .ok s
 
 /-! ## Alike values -/
 

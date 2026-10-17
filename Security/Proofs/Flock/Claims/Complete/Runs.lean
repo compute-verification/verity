@@ -178,7 +178,7 @@ def ProverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readab
       (Transcript.init #[] d)).go l = (.ok pt, l')
 
 /-- **The session runs** where the reps return: the goal `SessionRuns`. -/
-theorem sessionRuns_of (S : JsonSpec Flock.canon) (hR : ProverRuns H rel) : SessionRuns H rel := by
+theorem sessionRuns_of (S : Claims.JsonSpec printJ Flock.canon) (hR : ProverRuns H rel) : SessionRuns H rel := by
   intro c
   obtain ⟨st, hst, hsp, hm1, hm2, -⟩ := c.table
   obtain ⟨hct, -, -, -⟩ := stmtOk S c

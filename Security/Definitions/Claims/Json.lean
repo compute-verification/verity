@@ -3,20 +3,21 @@ import Mathlib
 /-!
 # The JSON library's specification: completeness's JSON assumption
 
-The honest prover sends its session record as JSON, and the verifier reads it back: `Json.compress` prints it, then
-`Json.parse` reads it, and what the verifier compares is `Json`'s `==` and the canonical printer's output (`canon`, the
-verifier's `Flock.canon`). Those four are `partial` definitions: Lean runs them, and the kernel sees each as an opaque
-constant, so no proof unfolds them. `JsonSpec` states what completeness needs of them, over JSON values that are alike
-(`Json.Same`), printable (`Json.Good`) and well-formed (`Json.Wf`).
+The honest prover sends its session record as JSON, and the verifier reads it back: the prover's printer (`print`)
+prints it, then `Json.parse` reads it, and what the verifier compares is `Json`'s `==` and the canonical printer's
+output (`canon`, the verifier's `Flock.canon`). `Json.parse`, `==` and `canon` are `partial` definitions: Lean runs
+them, and the kernel sees each as an opaque constant, so no proof unfolds them. `JsonSpec` states what completeness
+needs of them, over JSON values that are alike (`Json.Same`), printable (`Json.Good`) and well-formed (`Json.Wf`).
 
 * **Alike values** (`Same`): equal leaves, arrays alike element by element, and objects that are well-formed trees with
   one key set and alike values at each key. A Lean object is a tree whose shape is the order its keys were inserted in:
-  `compress` prints the keys in sorted order and `parse` inserts them in that order, so a parsed object is another tree
-  than the one printed, alike at every key lookup.
-* **Printable values** (`Good`): every object a well-formed tree, every number an integer (exponent `0`). `compress`
+  the printer prints the keys in sorted order and `parse` inserts them in that order, so a parsed object is another
+  tree than the one printed, alike at every key lookup.
+* **Printable values** (`Good`): every object a well-formed tree, every number an integer (exponent `0`). The printer
   prints a number in its shortest form, so `1.50` comes back as `1.5`, another `JsonNumber`.
 
-Mathlib only, as `Definitions/` is: the printer is a parameter, which the completeness proofs instantiate at
+Mathlib only, as `Definitions/` is: the printers are parameters, which the completeness proofs instantiate at the honest
+prover's `FlockComplete.printJ` (a total printer of the bytes `Json.compress` prints, so proofs read its length) and
 `Flock.canon`.
 -/
 
@@ -58,15 +59,16 @@ inductive Wf : Json → Prop
 
 end Json
 
-/-- **`JsonSpec`: the JSON library does what its source says**, at the canonical printer `canon`: `Json.parse` reads
-back what `Json.compress` printed of a printable value, and what `canon` printed; `parse` builds only well-formed trees;
-`Json`'s `==` holds of alike values; `canon` is the same on alike values, and returns on printable ones.
+/-- **`JsonSpec`: the JSON library does what its source says**, at the prover's printer `print` and the canonical
+printer `canon`: `Json.parse` reads back what `print` printed of a printable value, and what `canon` printed; `parse`
+builds only well-formed trees; `Json`'s `==` holds of alike values; `canon` is the same on alike values, and returns on
+printable ones.
 
-It can't be proved: `Json.parse`, `Json.compress`, `Json`'s `==` and `canon` are `partial` definitions, opaque to the
-kernel, so no proof unfolds them. It affects completeness only, never soundness: it says that the honest prover's record
-reads back, and no soundness guarantee takes it. -/
-structure JsonSpec (canon : Json → Except String String) : Prop where
-  parse_compress : ∀ j, Json.Good j → ∃ j', Json.parse j.compress = .ok j' ∧ Json.Same j j'
+It can't be proved: `Json.parse`, `Json`'s `==` and `canon` are `partial` definitions, opaque to the kernel, so no proof
+unfolds them. It affects completeness only, never soundness: it says that the honest prover's record reads back, and no
+soundness guarantee takes it. -/
+structure JsonSpec (print : Json → String) (canon : Json → Except String String) : Prop where
+  parse_print : ∀ j, Json.Good j → ∃ j', Json.parse (print j) = .ok j' ∧ Json.Same j j'
   parse_canon : ∀ j s, Json.Good j → canon j = .ok s → ∃ j', Json.parse s = .ok j' ∧ Json.Same j j'
   parse_wf : ∀ s j, Json.parse s = .ok j → Json.Wf j
   beq_same : ∀ a b, Json.Same a b → (a == b) = true

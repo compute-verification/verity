@@ -34,7 +34,7 @@ theorem Run.mids_eq {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
 
 /-- **Custody: the record has one round per round message**: the goal `CustodyCount`. -/
 theorem custodyCount_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : JsonSpec Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) : CustodyCount H rel := by
+    (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) : CustodyCount H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, ⟨bs, hbs, hrecs⟩, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hP o
