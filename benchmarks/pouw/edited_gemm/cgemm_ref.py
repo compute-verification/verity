@@ -111,6 +111,12 @@ def u_rows_half(key: bytes, row0: int, rows: int) -> np.ndarray:
     return -64 + np.unpackbits(v[..., None], axis=-1, bitorder="little")[..., :7] @ cs.W_RE
 
 
+def u_rows16_half(key: bytes, row0: int, rows: int) -> np.ndarray:
+    """H1 cohalf's narrow U, rows x 64: tag-11 per row (like u_rows_half, cgemm.cu's hwedit) but five planes (u_beta16)."""
+    v = np.stack([np.frombuffer(block(key, HBETA_TAG, i), np.uint8) for i in range(row0, row0 + rows)])
+    return -16 + np.unpackbits(v[..., None], axis=-1, bitorder="little")[..., :5] @ W_RE16
+
+
 def check_half(d: Path, meta: dict) -> dict:
     """cohalf (QK^T, k = 128, r = 64): K (the served side, 7-bit) and Q (the peeled, in [-64, 62]); words T_0..T_3 and
     O = T_last - U Y (`checked_strip.honest_words` at r = 64, L = 32), absorbed in that order."""
@@ -119,7 +125,7 @@ def check_half(d: Path, meta: dict) -> dict:
     tiles_n = n // T
     # H1 (co32c-u16, decision 82): Q/K per (head, token) asymmetric floor at top 111, s = max(max(x) / 111, max(-x) / 112)
     # clamped to 1e-30 then * (1 + 2^-20), X = floor(x / s) + b in [-112, 111] (matching hrow_s + hquant_h1 and
-    # steps.floor_quant: one divide, no clamp); the narrow U (u_rows16); Y = X_lo + X_hi in [-224, 222] split as
+    # steps.floor_quant: one divide, no clamp); the narrow U (u_rows16_half); Y = X_lo + X_hi in [-224, 222] split as
     # Y0 = ((Y + 64) & 127) - 64, Y1 = (Y - Y0) >> 7 with P_A = [Y0 | Y1], P_B = [-U | -U]. Else Dither-C's 7-bit cohalf.
     h1 = meta.get("numerics") == "h1"
     km = next(iter(meta["kinds"]))   # the main kernel's name: h_l7qs (7-bit) or h_l7qs_h1 (H1)
@@ -136,7 +142,7 @@ def check_half(d: Path, meta: dict) -> dict:
             s = (np.maximum(np.maximum(x.max(axis=1) / np.float32(111.0), (-x).max(axis=1) / np.float32(112.0)),
                             np.float32(1e-30)) * np.float32(1.0 + 2.0 ** -20)).astype(np.float32)
             Vq = np.floor(x / s[:, None]).astype(np.int64)
-            U = u_rows16(key, tn * T, T)
+            U = u_rows16_half(key, tn * T, T)
         else:
             Vq = np.clip(np.floor(x * inv_s), -64, 62).astype(np.int64)
             U = u_rows_half(key, tn * T, T)
