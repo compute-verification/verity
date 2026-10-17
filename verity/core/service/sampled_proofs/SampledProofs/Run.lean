@@ -5,7 +5,8 @@ check the stream ran on it, in the stream's order.
 
 * `register`: the public-items rule on the boundary values (`Service.checkPublic`), the population (a positive integer),
   then R1–R7 (`Registration.check`) against the challenger's copies under the law the rule names over that population
-  (`Select.Rule.lawOver`, whatever law the copies carry), and the receipt (`registration.receipt`);
+  (`Select.Rule.lawOver`, whatever law the copies carry), a law whose drawn count varies (`countVaries`: `shapes`), and
+  the receipt (`registration.receipt`);
 * `select`: the draw of record on the bytes of the challenger's coins (`Select.select`), held to the registration and
   the expanded law (`Draw.checkDraw`);
 * `interior` (`Stream.register_interiors`, two-stage only): the drawn RUs' interiors, after the draw and before any proof:
@@ -87,6 +88,16 @@ private def every (k : Nat) : Json × Json :=
   (law, Json.mkObj [("law", "subset"), ("k", Lean.toJson k), ("population", Lean.toJson k),
     ("units", natsJson (Array.range k))])
 
+/-- `service.count_varies`: the law draws a count that varies from draw to draw, so the sessions of one registration set
+up tables of different shapes: `bernoulli` at `0 < p < 1`. A work law's closure varies too, but the work draw with a
+producer closure is a planned design, so it is not refused. -/
+def countVaries (law : Json) : Bool :=
+  match getD law "law", getD law "p" with
+  | .str "bernoulli", .str p => match Draw.probability? p with
+    | some (num, den) => 0 < num && num < den
+    | none => false
+  | _, _ => false
+
 /-- The run, step by step; an error where the Python raises. -/
 def run (i : Input) : V Json := do
   let v := i.params.verifier
@@ -99,6 +110,7 @@ def run (i : Input) : V Json := do
   let v := { v with law }
   let codes := Registration.check i.record v
   if !codes.isEmpty then return refused "register" codes
+  if countVaries law then return refused "register" #["shapes"]
   let receipt ← receipt i.record i.challenger i.received
   let derived ← Draw.derive v.program v.query law v.workTable
   let (draw, _, read) ← Select.select i.rule v.program v.query v.workTable i.closure i.source

@@ -1,6 +1,6 @@
-"""`verity.ml.circuits.ops.boolean.s8`: the Boolean s8 IMMA steps, `S8Dot_v2`, the limb steps and `LimbSplit_v2` agree with their
-word Definitions (`word_of`) on sampled words and on the clamp, carry and wrap edges, and the steps carry exactly their
-builders' live ANDs, pinned."""
+"""`verity.ml.circuits.ops.boolean.s8`: the Boolean s8 IMMA steps (`ops.boolean.gemm`'s s8 step and this module's u8 x s8 one),
+`S8Dot_v2`, the limb steps and `LimbSplit_v2` agree with their word Definitions (`word_of`) on sampled words and on the clamp,
+carry and wrap edges, and this module's steps carry exactly their builders' live ANDs, pinned."""
 from __future__ import annotations
 
 import numpy as np
@@ -12,20 +12,22 @@ from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops import s8 as S8
+from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import s8 as BS8
 
-STEPS = [BS8.BlackwellS8ImmaDot32, BS8.BlackwellU8S8ImmaDot32]
+STEPS = [BG.BlackwellS8ImmaDot32, BS8.BlackwellU8S8ImmaDot32]
 LIMB_STEPS = [BS8.S32LowByte, BS8.S32ByteCarry, BS8.S32ClampS8, BS8.S32ClampRest]
-BOOLEAN = {"DOT": BS8.BlackwellS8ImmaDot32, "TDOT": None}
+BOOLEAN = {"DOT": BG.BlackwellS8ImmaDot32, "TDOT": None}
 DOTS = [bind(BS8.S8Dot, **S8.SMOKE_PLAIN | BOOLEAN),
         bind(BS8.S8Dot, **S8.SMOKE_PLAIN | {"T0": "input", "C": (-(1 << 30), 1 << 30)} | BOOLEAN),
-        bind(BS8.S8Dot, **S8.SMOKE_EDITED | BOOLEAN | {"TDOT": BS8.BlackwellS8ImmaDot32})]
+        bind(BS8.S8Dot, **S8.SMOKE_PLAIN | {"DOT": BS8.BlackwellU8S8ImmaDot32, "TDOT": None, "A": (0, 255), "B": (-128, 127)}),
+        bind(BS8.S8Dot, **S8.SMOKE_EDITED | BOOLEAN | {"TDOT": BG.BlackwellS8ImmaDot32})]
 SPLITS = [bind(BS8.LimbSplit, FORM="bytes", N=3, Y=(-127 * 65793, 127 * 65793)),
           bind(BS8.LimbSplit, FORM="bytes", N=4, Y=(-(1 << 30), 1 << 30)),
           bind(BS8.LimbSplit, FORM="byteclamp", N=3, Y=(-65152, 65151))]
 #: id -> And gates
-PINS = {"BlackwellS8ImmaDot32_v2": 4157, "BlackwellU8S8ImmaDot32_v2": 4125, "S32LowByte_v2": 0, "S32ByteCarry_v2": 31,
-        "S32ClampS8_v2": 59, "S32ClampRest_v2": 57}
+PINS = {"BlackwellU8S8ImmaDot32_v2": 4125, "S32LowByte_v2": 0, "S32ByteCarry_v2": 31, "S32ClampS8_v2": 59,
+        "S32ClampRest_v2": 57}
 
 
 def _agree(target, inputs) -> None:
@@ -71,14 +73,16 @@ def test_the_limb_split_on_bits_agrees_with_its_word_definition(target) -> None:
     assert TR.word_of(target).id == target.id.replace("LimbSplit_v2", "LimbSplit_v1")
 
 
-@pytest.mark.parametrize("d", STEPS + LIMB_STEPS, ids=lambda d: d.name)
+@pytest.mark.parametrize("d", [BS8.BlackwellU8S8ImmaDot32] + LIMB_STEPS, ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
+    """As `test_boolean_gemm`'s: one And gate per live AND of the builder, but for its commits (a row, no gate)."""
     T = d.traced()
     params = [t for _, t in d.signature(None)[0]]
     C = Circuit(cse=True)
     ins = TR._elements_in(C, params)
     C.output("out", TR._flat_out(d.build(C, *ins), d.signature(None)[1]))
-    assert T.counts["and"] == C.counts()["ands"] == PINS[d.id]
+    commits = sum(k == "and" and v[1].is_const() for k, v in zip(C.kind, C.data))
+    assert T.counts["and"] == C.counts()["ands"] - commits == PINS[d.id]
 
 
 @pytest.mark.parametrize("target", DOTS, ids=lambda t: t.id[:60])

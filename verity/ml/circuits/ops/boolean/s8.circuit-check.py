@@ -6,15 +6,16 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """Both Boolean IMMA steps, the family on bits (the plain arm at K = 64 and the egemm-shaped edited arm: T every 32, two
-    fresh tail words), and the limb splits on bits at the bindings `ops.s8`'s sidecar checks, with their four steps."""
+    """The u8 x s8 step on bits, the family on bits over `ops.boolean.gemm`'s s8 step (the plain arm at K = 64 and the
+    egemm-shaped edited arm: T every 32, two fresh tail words), and the limb splits on bits at the bindings `ops.s8`'s sidecar
+    checks, with their four steps."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops import s8 as S8
+    from verity.ml.circuits.ops.boolean import gemm as BG
     from verity.ml.circuits.ops.boolean import s8 as BS8
 
-    step = BS8.BlackwellS8ImmaDot32
+    step = BG.BlackwellS8ImmaDot32
     return [
-        bind(step),
         bind(BS8.BlackwellU8S8ImmaDot32),
         bind(BS8.S8Dot, **S8.SMOKE_PLAIN | {"DOT": step}),
         bind(BS8.S8Dot, **S8.SMOKE_EDITED | {"DOT": step, "TDOT": step}),
