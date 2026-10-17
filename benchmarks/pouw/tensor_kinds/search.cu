@@ -59,7 +59,7 @@ __global__ void __launch_bounds__(768) k_spec2(int iters, uint32_t* sink, BlockC
   const uint32_t warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
   const bool mma_role = warp < 4 * MW;
   uint32_t a[4], b[4], e;
-  init_ops<F>(lane, a, b, e);
+  init_ops<F>(lane, iters, a, b, e);
   typename F::Acc d[8][4] = {};
   LaneN<CH> r;
   init_n<X, CH>(r, threadIdx.x);
@@ -90,7 +90,7 @@ template <class F, int R, int X, int CH, int W, int POS>
 __global__ void __launch_bounds__(768) k_mix2(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t a[4], b[4], e;
-  init_ops<F>(lane, a, b, e);
+  init_ops<F>(lane, iters, a, b, e);
   typename F::Acc d[8][4] = {};
   LaneN<CH> r;
   init_n<X, CH>(r, threadIdx.x);
