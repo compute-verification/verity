@@ -377,6 +377,69 @@
   "Definitions.Accounting.Bandwidth",
   "Models.Accounting.Guarantees.Bandwidth"
  ],
+ "claims": {
+  "modules": ["Definitions.Claims.Recursion"],
+  "witnesses": {
+   "Claims.Recursion.Bits": {
+    "fails": "Claims.Witness.Recursion.Bits_fails",
+    "meets": ["Claims.Witness.Recursion.Bits_meets"]
+   },
+   "Claims.Recursion.BitsFlock": {
+    "fails": "Claims.Witness.Recursion.BitsFlock_fails",
+    "meets": ["Claims.Witness.Recursion.BitsFlock_meets"]
+   },
+   "Claims.Recursion.Complete": {
+    "fails": "Claims.Witness.Recursion.Complete_fails",
+    "meets": ["Claims.Witness.Recursion.Complete_meets"]
+   },
+   "Claims.Recursion.Efficient": {
+    "fails": "Claims.Witness.Recursion.Efficient_fails",
+    "meets": ["Claims.Witness.Recursion.Efficient_meets"]
+   },
+   "Claims.Recursion.Inner.KS": {
+    "fails": "Claims.Witness.Recursion.Inner.KS_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KS_meets"]
+   },
+   "Claims.Recursion.Inner.KSAbort": {
+    "fails": "Claims.Witness.Recursion.Inner.KSAbort_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets"]
+   },
+   "Claims.Recursion.KS": {
+    "fails": "Claims.Witness.Recursion.KS_fails",
+    "meets": ["Claims.Witness.Recursion.KS_meets"]
+   },
+   "Claims.Recursion.KSFlock": {
+    "fails": "Claims.Witness.Recursion.KSFlock_fails",
+    "meets": ["Claims.Witness.Recursion.KSFlock_meets"]
+   },
+   "Claims.Recursion.KSPriv": {
+    "fails": "Claims.Witness.Recursion.KSPriv_fails",
+    "meets": ["Claims.Witness.Recursion.KSPriv_meets"]
+   },
+   "Claims.Recursion.Nontrivial": {
+    "fails": "Claims.Witness.Recursion.Nontrivial_fails",
+    "meets": ["Claims.Witness.Recursion.Nontrivial_meets"]
+   },
+   "Claims.Recursion.ScopeMatches": {
+    "fails": "Claims.Witness.Recursion.ScopeMatches_fails",
+    "meets": ["Claims.Witness.Recursion.ScopeMatches_meets"]
+   },
+   "Claims.Recursion.ZK": {
+    "fails": "Claims.Witness.Recursion.ZK_fails",
+    "meets": ["Claims.Witness.Recursion.ZK_meets"]
+   },
+   "Claims.Recursion.ZKPriv": {
+    "fails": "Claims.Witness.Recursion.ZKPriv_fails",
+    "meets": ["Claims.Witness.Recursion.ZKPriv_meets"]
+   }
+  },
+  "not": {
+   "Claims.Recursion.Draw.Full": "a V* session's draw that takes every unit, a clause of the readable scope (`InScope`), no claim",
+   "Claims.Recursion.InScope": "the readable scope's form, which the claims read through `Scope`, no claim",
+   "Claims.Recursion.Scope": "the recursion's scope, which `ScopeMatches` and `Complete` read, no claim",
+   "Claims.Recursion.decOK": "the decoders a claim quantifies over (`Flock.ListWithin` at the deployment), a domain, no claim"
+  }
+ },
  "layers": {
   "Definitions.Core": {
    "imports": ["Mathlib", "Definitions.Core"],
@@ -1499,6 +1562,84 @@
    "assumptions": [],
    "type_hash": "14543c855bb73081fb225a17c7df7478387af02155c806d46e19367db0d5f2f6"
   },
+  "Claims.Witness.Recursion.BitsFlock_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.BitsFlock_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Bits_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Bits_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Complete_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Complete_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Efficient_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Efficient_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KS_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlock_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlock_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPriv_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPriv_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KS_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Nontrivial_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Nontrivial_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ScopeMatches_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ScopeMatches_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKPriv_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKPriv_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZK_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZK_meets": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.ClaimsStated": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated"],
@@ -1590,6 +1731,9 @@
    "signature": ["Flock.SecurityProofs.RanRegisteredRun : Flock.Guarantees.RanRegisteredRun"],
    "assumptions": [],
    "type_hash": "6a209c7ca35c0c87663d813e3cdd72ba1735b8675038b6ed046f1875d985113d"
+  },
+  "Flock.SecurityProofs.RecursionClaimsStated": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.RecursiveAuditC3": {
    "owner": "@proofs",
