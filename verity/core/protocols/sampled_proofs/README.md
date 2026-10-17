@@ -90,15 +90,18 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier of record.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
-  (`check`), `matches_public`, `check_draw`, `check_proved`, the whole audit record (`audit_record`), and the service's
-  public-items rule (`check_public`) and hold on an outcome's verdicts (`check_verdicts`). Its one line
+  (`check`), `matches_public`, the challenger's draw (`select`), `check_draw`, `check_proved`, the whole audit record
+  (`audit_record`), and the service's public-items rule (`check_public`) and hold on an outcome's verdicts
+  (`check_verdicts`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
   `benchmarks/one_stage` call it. The two are held to each other by
   `verity/core/service/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
   selection rule on (`SampledProofs/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
-  partitions; the `Stream` still draws in Python. `SampledProofs/Slots.lean` puts that draw in the claims' terms
+  partitions. It is the `Stream`'s draw of record: `Stream.select` hands it the bytes of the challenger's coins the
+  Python draw read, and refuses the draw (`disagree`) unless the Lean draws the same object from exactly those bytes.
+  `SampledProofs/Slots.lean` puts that draw in the claims' terms
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
@@ -527,7 +530,8 @@ proof-unit draw after the interiors are.
   one-stage draw object, which `draw.check_draw` holds to the registration and the sampling design; the verifier's
   closure map widens a work draw only, as `flock-verify draw --closure` does (`closure_of` is Lean's `closureOf`).
 - Nothing here derives a draw, the proof service's included (`service.Stream.select` is `draw_first` on the
-  challenger's coins, by `select_draw`; Lean's `Select.select` is the same draw, and reads the same bytes).
+  challenger's coins, by `select_draw`, and its draw of record is Lean's `Select.select` on the bytes it read, by
+  `verifier.select`).
   vLLM's legacy replay challenge derives its own (`verity_vllm.commit.challenge.replay_key`,
   under the domain `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
 

@@ -532,6 +532,8 @@ def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable
 class _Entry:
     registration: Registration
     law: Mapping[str, Any]
+    program: Program
+    work_table: Mapping[str, Any] | None = None
     draw: Draw | None = None
     drawn_at: float | None = None
     interior: Registration | None = None
@@ -720,7 +722,7 @@ class Stream:
             raise Refused(v)
         salted_at = None if d is None else self._salted_at
         reg = self._log_record(record, len(self._entries), salted_at, received_at)
-        self._entries.append(_Entry(reg, D.derive(program, self.spec.check.query, law, work_table)))
+        self._entries.append(_Entry(reg, D.derive(program, self.spec.check.query, law, work_table), program, work_table))
         if d is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": salted_at, "received_at": received_at})
@@ -777,14 +779,27 @@ class Stream:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
         the selection rule's law (`select_draw`; `All` draws every unit and reads no coins). `closure` is the challenger's closure map
         (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work law only: the draw carries the
-        drawn units' closure (`two_stage.closure_of`), which `draw.proved` and `draw.check_proved` count. Raises `Refused`
-        for a registration drawn before (nothing redraws), a closure map on another law or outside [0, N) (before any
-        coin is read), and a draw that isn't well formed under the law (`draw.check_draw`, by `verifier.check_draw`)."""
+        drawn units' closure (`two_stage.closure_of`), which `draw.proved` and `draw.check_proved` count. The draw of
+        record is the verifier of record's (`verifier.select`: the Lean's `Select.select` on the bytes of the coins this
+        draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before (nothing redraws), a
+        closure map on another law or outside [0, N) (before any coin is read), the two verifiers drawing differently
+        (`disagree`), and a draw that isn't well formed under the law (`draw.check_draw`, by `verifier.check_draw`)."""
         e = self._entry(registration)
         if e.draw is not None:
             raise _refuse("drawn", {"order": registration.order})
-        obj = select_draw(self.spec.selection, e.law, registration.record["population"], self._coins, closure=closure,
+        read = bytearray()
+
+        def coins(n: int) -> bytes:
+            b = self._coins(n)
+            read.extend(b)
+            return b
+        obj = select_draw(self.spec.selection, e.law, registration.record["population"], coins, closure=closure,
                           sampler=self._sampler)
+        if self._sampler is None:
+            obj, v = V.select(obj, bytes(read), self.spec.selection.to_json(), e.program, self.spec.check.query,
+                              e.work_table, closure)
+            if not v.ok:
+                raise Refused(v)
         v = V.check_draw(obj, registration.record, e.law)
         if not v.ok:
             raise Refused(v)

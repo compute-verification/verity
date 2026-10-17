@@ -11,6 +11,8 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
 * `check`: R1-R7 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes);
 * `matches_public`, `check_draw`, `check_proved`, and the proof service's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
+* `select`: the challenger's draw (`service.select_draw`, which the service passes in with the bytes of its coins that
+  draw read), compared whole with the number of bytes read; the draw of record is the Lean's;
 * `audit_record`: the whole record, equal under `canonical_json`. The registered roots the record's `registered` check
   reads are the verdicts' own on both sides, for the registration's own values (`audit.session_registered`), never an
   argument. One field is Python's on both: `wrong_units.bound` under a Bernoulli law, a float relaxation
@@ -246,6 +248,27 @@ def check_verdicts(python: Verdict, verdicts: Mapping[str, Any], sessions: Seque
     return _decide(got, python, whole=True)
 
 
+def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], program: Program, query: Mapping[str, Any],
+           work_table: Mapping[str, Any] | None = None,
+           closure: Mapping[int, Sequence[int]] | None = None) -> tuple[dict[str, Any], Verdict]:
+    """The challenger's draw by the verifier of record: the Lean's `Select.select` on `read`, the bytes of the challenger's
+    coins that the Python draw `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
+    `to_json`) over the population `program` and the check's `query`, with the work table and the closure map. The two
+    agree when the Lean draws the same object and reads exactly `read`; the draw of record is then `RECORD_VERDICT`'s. Where
+    they disagree, or the Lean refuses, the verdict fails with `DISAGREE` alone (the draw returned is Python's, and the
+    caller refuses it)."""
+    got = lean("select", {"rule": dict(rule), "program": codec.encode_program(program), "query": dict(query),
+                          "work_table": None if work_table is None else dict(work_table),
+                          "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
+                          "source": read.hex()})
+    mine = {"draw": dict(python), "read": len(read)}
+    verifiers = {"of_record": RECORD_VERDICT, "lean": {"refused": got["refused"]} if "refused" in got else
+                 {"read": got.get("read")}, "python": {"read": len(read)}}
+    if "refused" in got or got.get("read") != len(read) or not _same(got.get("draw"), python):
+        return dict(python), Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers)
+    return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
+
+
 def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any]) -> Verdict:
     """`draw.check_draw` by the verifier of record."""
     py = D.check_draw(draw, registration, law)
@@ -307,4 +330,4 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
 
 
 __all__ = ["BUILD_LOCK", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record", "check", "check_draw",
-           "check_proved", "check_public", "check_verdicts", "executable", "lean", "matches_public"]
+           "check_proved", "check_public", "check_verdicts", "executable", "lean", "matches_public", "select"]

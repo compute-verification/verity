@@ -23,7 +23,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`).
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
-`check_draw`, `check_proved`, `record`, `check_public` and `check_verdicts`.
+`select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
+`check_proved`, `record`, `check_public` and `check_verdicts`.
 -/
 import SampledProofs.OneStage
 import SampledProofs.Slots
@@ -263,7 +264,7 @@ def table : List (String × (Json → V Json)) :=
    ("check_public", checkPublic), ("check_verdicts", checkVerdicts)]
 
 def verifier : List (String × (Json → V Json)) :=
-  [("registration", registration), ("matches_public", matchesPublic), ("check_draw", checkDraw),
+  [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
    ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts)]
 
