@@ -235,8 +235,10 @@ leaf hashes the payload once for both (34 compressions), and \(b_j\) is one SHA-
 keeps \(d_j\), or \(b_j\) in its place, beside the block: 64 bytes a 4 KiB block, 1.6%. Blocks under the seed's key are
 unchanged, byte for byte. The bound key is `kv.py`'s
 `encode_token_layer(..., bound=True)` for \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\), byte for byte, and
-the tests pin it (`kv_vectors.json`'s "bound", and `vectors.json`'s `codec.bound`); `kv.cu`, `kv_twin.py` and
-vLLM's encoded store take the seed's key only (§8).
+the tests pin it (`kv_vectors.json`'s "bound", and `vectors.json`'s `codec.bound`). `kv.cu` and `paged.cu` take it as
+a per-block offset added to the tweak, \(b_j + \tau W (j - j')\) for a block written at another block's indices \(j'\)
+(`kv_encode_bound`, `paged.cu`'s offset table; gated against both pins by `kv_bench.py` and `paged_gate.py`);
+`kv_twin.py` and vLLM's encoded store take the seed's key only (§8).
 
 Three properties of registration matter:
 
