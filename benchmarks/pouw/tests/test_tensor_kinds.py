@@ -18,6 +18,8 @@ def test_kernel_key_reads_the_struct_by_its_length():
     assert TK.kernel_key("_Z6k_specI11QmmaE4m3k32Li32EEviPjP8BlockClk") == ("spec", "qmma_e4m3_m16n8k32_f32", 32)
     assert TK.kernel_key("_Z7k_aloneI9ImmaS8k32EviPjP8BlockClk") == ("alone", "imma_s8_m16n8k32", 0)
     assert TK.kernel_key("_Z9k_opaloneILi2EEviPjP8BlockClk") == ("opalone", "iadd3_ffma", 64)
+    assert TK.kernel_key("_Z6k_mixuI9ImmaS8k16Li64ELi0EEviPjP8BlockClk") == ("mixu_iadd3", "imma_s8_m16n8k16", 64)
+    assert TK.kernel_key("_Z6k_specI9ImmaS8k16Li64ELi2EEviPjP8BlockClk") == ("spec", "imma_s8_m16n8k16", 64)
     assert TK.kernel_key("_Z4mainv") is None
 
 
@@ -94,6 +96,24 @@ def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
     assert summary["hmma_f16_m16n8k16_f32"]["below_ref"] and not summary["imma_s8_m16n8k32"]["below_ref"]
     assert TK.main(["tensor_kinds.py", str(tmp_path)]) == 0
     assert "**below**" in (tmp_path / "tensor_kinds.md").read_text()
+
+
+def test_a_program_faster_than_a_joint_row_is_marked_over(tmp_path: Path):
+    # r20261017-040022-5e4d's IMMA.16816 + IADD3 x8 (spec): 17.563 SMSP-cycles a MMA at 9.125 others a MMA, where
+    # JI3e_1 (15.030 + 0.317 a other) asks at least 17.92
+    k16 = ["IMMA.16816.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    lane = ["IADD3 R3, R3, R4, RZ"] * 64 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    # spec: 2 x 1000 x 8 = 16000 MMAs; 2 x 1000 x (3 + 67) = 140000 others, 8.75 a MMA
+    cases = [_opalone(1000, 8 * 67 / 0.98),
+             _case("spec", "imma_s8_m16n8k16", "ImmaS8k16", 64, 1000, 16000 * 17.4, k16, lane)]
+    _write(tmp_path, cases)
+    summary, fails = TK.analyze(tmp_path)
+    assert fails == []
+    j = summary["imma_s8_m16n8k16"]["ji3e"]
+    assert j["JI3e_1"]["over"] and abs(j["JI3e_1"]["load"] - (15.030 + 0.317 * 8.75) / 17.4) < 1e-9
+    assert not j["JI3e_0"]["over"]
+    TK.main(["tensor_kinds.py", str(tmp_path)])
+    assert "**over** (spec R=64)" in (tmp_path / "tensor_kinds.md").read_text()
 
 
 def test_a_lane_op_slower_than_issue_fails_the_gate(tmp_path: Path):

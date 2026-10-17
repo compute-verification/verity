@@ -244,7 +244,6 @@ __device__ __forceinline__ void lane_op(Lane& s, int i) {
   else if (i & 1) ffma(s, i >> 1);
   else iadd(s, i >> 1);
 }
-__device__ __forceinline__ void op(Lane& s, int i) { lane_op<LANE_MIX>(s, i); }
 __device__ __forceinline__ void init_r(Lane& s, uint32_t tid) {
 #pragma unroll
   for (int i = 0; i < 8; i++) {
@@ -306,7 +305,7 @@ __global__ void __launch_bounds__(512) k_alone(int iters, uint32_t* sink, BlockC
 }
 
 // Warp-specialized: with 16 warps a SM, SMSP r hosts warps {r, r+4} (MMA) and {r+8, r+12} (lane); R/8 ops a MMA.
-template <class F, int R>
+template <class F, int R, int X>
 __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
   const bool mma_role = warp < (blockDim.x >> 6);
@@ -326,7 +325,7 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
 #pragma unroll 1
     for (int it = 0; it < iters; it++) {
 #pragma unroll
-      for (int q = 0; q < R; q++) op(r, q);
+      for (int q = 0; q < R; q++) lane_op<X>(r, q);
     }
   }
   CLK_END(rec)
@@ -337,7 +336,7 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
 }
 
 // Interleaved: every warp issues a MMA then R/8 lane ops, 8 accumulators, body unrolled x8 (64 MMAs an iteration).
-template <class F, int R>
+template <class F, int R, int X>
 __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t a[4], b[4], e;
@@ -354,7 +353,7 @@ __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockCl
       for (int c = 0; c < 8; c++) {
         F::mma(d[c], a, b, e);
 #pragma unroll
-        for (int q = 0; q < R / 8; q++) op(r, c * (R / 8) + q);
+        for (int q = 0; q < R / 8; q++) lane_op<X>(r, c * (R / 8) + q);
       }
     }
   }
@@ -407,24 +406,27 @@ static void alone() {
   Timing t = timed(k_alone<F>, warps, &iters);
   emit("alone", F::NAME, F::MACS, F::SLOTS, 0, warps, 0, iters, (double)warps * iters * 8, 0, t);
 }
-template <class F, int R>
+template <class F, int R, int X>
 static void spec() {
   int iters;
-  Timing t = timed(k_spec<F, R>, WSM, &iters);
-  emit("spec", F::NAME, F::MACS, F::SLOTS, R, WSM / 2, WSM / 2, iters, (double)(WSM / 2) * iters * 8,
+  Timing t = timed(k_spec<F, R, X>, WSM, &iters);
+  emit(X == LANE_MIX ? "spec" : "spec_iadd3", F::NAME, F::MACS, F::SLOTS, R, WSM / 2, WSM / 2, iters, (double)(WSM / 2) * iters * 8,
        (double)(WSM / 2) * iters * R, t);
 }
-template <class F, int R>
+template <class F, int R, int X>
 static void mixu() {
   int iters;
-  Timing t = timed(k_mixu<F, R>, WSM, &iters);
-  emit("mixu", F::NAME, F::MACS, F::SLOTS, R, WSM, 0, iters, (double)WSM * iters * 64, (double)WSM * iters * 8 * R, t);
+  Timing t = timed(k_mixu<F, R, X>, WSM, &iters);
+  emit(X == LANE_MIX ? "mixu" : "mixu_iadd3", F::NAME, F::MACS, F::SLOTS, R, WSM, 0, iters, (double)WSM * iters * 64, (double)WSM * iters * 8 * R, t);
 }
 template <class F>
 static void form() {
   alone<F>();
-  spec<F, 32>(); spec<F, 64>(); spec<F, 96>(); spec<F, 128>();
-  mixu<F, 32>(); mixu<F, 64>(); mixu<F, 96>(); mixu<F, 128>();
+  spec<F, 32, LANE_MIX>(); spec<F, 64, LANE_MIX>(); spec<F, 96, LANE_MIX>(); spec<F, 128, LANE_MIX>();
+  mixu<F, 32, LANE_MIX>(); mixu<F, 64, LANE_MIX>(); mixu<F, 96, LANE_MIX>(); mixu<F, 128, LANE_MIX>();
+  // IADD3 alone binds on its pipe; these points enter the fit and the JI3e check, since a row must hold on every program
+  spec<F, 32, LANE_IADD3>(); spec<F, 64, LANE_IADD3>(); spec<F, 96, LANE_IADD3>(); spec<F, 128, LANE_IADD3>();
+  mixu<F, 32, LANE_IADD3>(); mixu<F, 64, LANE_IADD3>(); mixu<F, 96, LANE_IADD3>(); mixu<F, 128, LANE_IADD3>();
 }
 
 int main() {
