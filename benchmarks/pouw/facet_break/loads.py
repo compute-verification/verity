@@ -308,6 +308,10 @@ def cmd_refit(a) -> int:
     support = sorted(k for k in c if a.row in c[k])
     others = [k for k in support if k != "MMA" and k not in MMA_FORMS]
     form = a.form or max((k for k in hit["x"] if k in MMA_FORMS or k == "MMA"), key=lambda k: hit["x"][k], default=None)
+    if form is None and len(others) >= 2:
+        # a row over loads or lanes alone (LDG: LDG32 and LDG128): the worst program's heaviest class is the first axis
+        form = max((k for k in hit["x"] if k in others), key=lambda k: hit["x"][k] * c[k][a.row])
+        others = [k for k in others if k != form]
     if form in support:
         cf, mma_ok, fname = c[form][a.row], {form}, form
     elif form in (MMA_MEASURED_WITH, "MMA", None) and "MMA" in support:
@@ -322,8 +326,10 @@ def cmd_refit(a) -> int:
         cref = max(set(c[k][a.row] for k in others), key=lambda u: sum(c[k][a.row] == u for k in others))
         X = others[0] if len(others) == 1 else "V"
         pts = []
+        on_row = set(support) | ({MMA_MEASURED_WITH} if "MMA" in support else set())
         for p in progs:
-            if any(k in MMA_FORMS and k not in mma_ok and v > 0 for k, v in p["x"].items()):
+            # a program with a class the row prices that is on neither axis can't be placed in the section
+            if any(v > 0 and k in on_row and k not in mma_ok and k not in others for k, v in p["x"].items()):
                 continue
             mm = sum(v for k, v in p["x"].items() if k in mma_ok)
             vv = sum(c[k][a.row] / cref * v for k, v in p["x"].items() if k in others)
