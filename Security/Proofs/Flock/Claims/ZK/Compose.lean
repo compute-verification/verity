@@ -24,7 +24,8 @@ coins for every unit (`ZKmalR.at_pi`) or on coins in bijection with its simulato
 Both are proved at one statement (`zkmalAt_seqU`, `zkmalAt_iter`, from `A`'s and `B`'s `ZKmalAt` there) and read at
 every statement: nothing at `x` reads another statement, so the tapes and the number of sessions may be chosen per
 statement. A session whose tape is its own type at each unit's statement is one prover on one tape at `x` through
-bijections of the nonces and of the rests (`ZKmalAt.of_equiv`).
+bijections of the nonces and of the rests (`ZKmalAt.of_equiv`). `ZKmalRx` is the statement-indexed form proposed for
+`Definitions/` (`ZKmalR` its constant case, `zkmalRx_const`), and `zkmalRx_iter` meets it with `m x` sessions.
 -/
 
 namespace Claims.ZKMal
@@ -809,5 +810,53 @@ theorem zkmalR_iter_const {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fint
     (fun _ => eB) h₀ hB hR hk hγ₀ (fun _ => he0) hg n
   simp only [Finset.sum_const, Finset.card_range, nsmul_eq_mul] at h
   exact h
+
+/-! ## Statement-indexed tapes -/
+
+/-- **`ZKmalR` on statement-indexed tapes** (proposed for `Definitions/`): the prover at `x` runs on `N x × Ω x`, so
+its tape may grow with the statement. `ZKmalR` is its constant case (`zkmalRx_const`). -/
+def ZKmalRx {W : Type} (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
+    [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x)) (R : Rel W)
+    (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
+  ∀ x, ZKmalAt H (k x) (fun w => P w x) (R x) x (S.C x) (S.prog x) (εzk x) (γ x)
+
+theorem zkmalRx_const {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
+    (k : Msg → ℕ) (P : W → Prover (N × Ω)) (R : Rel W) (S : Simulator) (εzk γ : Msg → ℝ) :
+    ZKmalRx (fun _ => N) (fun _ => Ω) H k (fun w _ => P w) R S εzk γ ↔ ZKmalR H k P R S εzk γ :=
+  Iff.rfl
+
+/-- The simulator of `m x + 1` sessions at each `x`, on `x`'s tapes. -/
+def iterSimX {WA WB : Type} (T₀ : Msg → SeqTape) (c : ℕ) (NB ΩB : Msg → Type) [∀ x, Fintype (NB x)]
+    [∀ x, Nonempty (NB x)] [∀ x, Fintype (ΩB x)] [∀ x, Nonempty (ΩB x)]
+    (Q : (x : Msg) → (n : ℕ) → Seq WA WB ((T₀ x).at c (NB x) (ΩB x) n)) (S₀ : Simulator) (CB : ℕ → Msg → Type)
+    [∀ n x, Fintype (CB n x)] [∀ n x, Nonempty (CB n x)]
+    (progB : (x : Msg) → (n : ℕ) → (x' : Msg) → (Q x n).U x' → CB n x' → SP (List (Msg × Out))) (m : Msg → ℕ) :
+    Simulator where
+  C x := (iterSim (T₀ x) c (NB x) (ΩB x) (Q x) S₀ CB (progB x) (m x)).C x
+  prog x := (iterSim (T₀ x) c (NB x) (ΩB x) (Q x) S₀ CB (progB x) (m x)).prog x
+
+/-- **`m x + 1` sessions in turn on statement-indexed tapes**: at each `x`, `zkmalAt_iter` on `x`'s tapes with
+`m x` sessions after the first, so the number of sessions and every tape may grow with the statement. -/
+theorem zkmalRx_iter {WA WB : Type} (T₀ : Msg → SeqTape) (c : ℕ) (NB ΩB : Msg → Type) [∀ x, Fintype (NB x)]
+    [∀ x, Nonempty (NB x)] [∀ x, Fintype (ΩB x)] [∀ x, Nonempty (ΩB x)]
+    (Q : (x : Msg) → (n : ℕ) → Seq WA WB ((T₀ x).at c (NB x) (ΩB x) n)) (H : Msg → Msg) (nB : ℕ → Msg → ℕ)
+    (m : Msg → ℕ) (P₀ : WA → (x : Msg) → Prover ((T₀ x).N × (T₀ x).Ω))
+    (PB : (x : Msg) → ℕ → WB → Prover (NB x × ΩB x)) (RA : Rel WA) (RB : ℕ → Rel WB) (S₀ : Simulator)
+    (CB : ℕ → Msg → Type) [∀ n x, Fintype (CB n x)] [∀ n x, Nonempty (CB n x)]
+    (progB : (x : Msg) → (n : ℕ) → (x' : Msg) → (Q x n).U x' → CB n x' → SP (List (Msg × Out)))
+    (ε₀ γ₀ g : Msg → ℝ) (eB : ℕ → Msg → ℝ)
+    (h₀ : ZKmalRx (fun x => (T₀ x).N) (fun x => (T₀ x).Ω) H (fun x => (Q x 0).kA x) P₀ RA S₀ ε₀ γ₀)
+    (hB : ∀ x n u, ZKmalAt H (nB n x) (PB x n) (RB n ((Q x n).xB x u)) ((Q x n).xB x u) (CB n x) (progB x n x u)
+      (eB n x) (g x))
+    (hR : ∀ x n, (Q x n).RelOnAt H (iterProver (T₀ x) c (NB x) (ΩB x) (Q x) (fun w => P₀ w x) (PB x) n) RA (RB n) x)
+    (hk : ∀ x n, (Q x (n + 1)).kA x = (Q x n).kA x + nB n x) (hγ₀ : ∀ x, γ₀ x ≤ c * g x)
+    (he0 : ∀ n x, 0 ≤ eB n x) (hg : ∀ x, 0 ≤ g x) :
+    ZKmalRx (fun x => ((T₀ x).iter c (NB x) (ΩB x) (m x)).N) (fun x => ((T₀ x).iter c (NB x) (ΩB x) (m x)).Ω) H
+      (fun x => (Q x (m x)).kA x)
+      (fun w x => iterProver (T₀ x) c (NB x) (ΩB x) (Q x) (fun w => P₀ w x) (PB x) (m x) w) RA
+      (iterSimX T₀ c NB ΩB Q S₀ CB progB m) (fun x => ε₀ x + ∑ j ∈ Finset.range (m x), eB j x)
+      (fun x => (c + m x) * g x) :=
+  fun x => zkmalAt_iter (T₀ x) c (Q x) H x nB (fun w => P₀ w x) (PB x) RA RB S₀ CB (progB x) (ε₀ x) (γ₀ x) (g x)
+    (fun j => eB j x) (h₀ x) (hB x) (hR x) (hk x) (hγ₀ x) (fun n => he0 n x) (hg x) (m x)
 
 end Claims.ZKMal

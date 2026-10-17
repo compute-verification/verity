@@ -128,5 +128,6 @@ import Proofs.Flock.Claims.ZK.Compose
   and giving `V*` its messages as tape, and the composed tape (`forkTape`) guesses which session's `Fork` to charge
   (`Seq.fork_ge`). A first protocol with `γ₀ ≤ c·g`, then `n` sessions in turn (**`zkmalR_iter`**), cost
   `ε₀ + Σ_{j < n} eB j` and `(c + n)·g`: `n·g` after a prefix that rewinds nothing. Both hold at one statement
-  (`zkmalAt_seqU`, `zkmalAt_iter`), so the tapes and the number of sessions may be chosen per statement.
+  (`zkmalAt_seqU`, `zkmalAt_iter`), so the tapes and the number of sessions may be chosen per statement: on the
+  statement-indexed tapes proposed for `Definitions/` (`ZKmalRx`), `m x` sessions in turn (`zkmalRx_iter`).
 -/
