@@ -1,6 +1,9 @@
 import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 import Proofs.Flock.Claims.Complete.Zk.Count
 import Proofs.Flock.Claims.Complete.Zk.RepRounds
+import Proofs.Flock.Claims.Complete.Zk.Lanes
+import Proofs.Flock.Claims.Complete.Zk.Consumed
+import Proofs.Flock.Claims.Complete.Zk.Replay
 
 /-!
 # Masked completeness from named premises
@@ -9,8 +12,9 @@ import Proofs.Flock.Claims.Complete.Zk.RepRounds
 (δcZk H)`), from `complete_zk_of_goals` with every goal proved so far discharged, so it rests on the record's
 premises (`JsonSpec`, `Out64`, `StmtOkZk`; `ProverOkZk` follows from `Out64`), the proof files' (`RepShapedZk`,
 `RecordFitsZk`), the masked prover's pieces returning (`ProverRunsZk`), and the goals not yet proved, each a named
-`Prop`: per rep the masked replay (`Replay`), the ring switch (`RingSwitchZk`), the masked Ligerito (`LigeritoZk`),
-level 0's lane phase (`LaneConstraints`), the inner proof (`Inner`), and every round consumed (`ConsumedZk`).
+`Prop`: per rep the ring switch (`RingSwitchZk`), the masked Ligerito (`LigeritoZk`, which gives level 0's lane
+phase, `laneConstraints_goal`) and the inner proof (`Inner`). The masked replay passes (`replay_goal`), and where the
+rep's steps return every recorded round is consumed (`consumedZk_goal`).
 -/
 
 namespace FlockComplete
@@ -21,10 +25,11 @@ open Flock FlockDeploy
 theorem complete_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hR : JsonRT.RepShapedZk H rel) (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel)
-    (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : LigeritoZk H rel)
-    (hLC : LaneConstraints H rel) (hIn : Inner H rel) (hCo : ConsumedZk H rel) :
+    (hRS : RingSwitchZk H rel) (hLg : LigeritoZk H rel) (hIn : Inner H rel) :
     Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H) :=
   have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H rel)
+  have hD : RepDecodesZk H rel := JsonRT.repDecodesZk_goal S h64 hS hP hR
+  have hRp : Replay H rel := replay_goal S h64 hS hP hR
   complete_zk_of_goals H rel
     { session := JsonRT.sessionRunsZk_goal S hS hPR
       sends := sendCountZk_goal H rel
@@ -46,15 +51,15 @@ theorem complete_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
       proofDigests := JsonRT.proofDigestsZk_goal S h64 hS hP
       repStream := JsonRT.repStreamZk_goal S h64 hS hP
       repExtras := JsonRT.repExtrasZk_goal S h64 hS hP
-      repDecodes := JsonRT.repDecodesZk_goal S h64 hS hP hR
+      repDecodes := hD
       repParams := JsonRT.repParamsZk_goal S h64 hS hP hR
       padsRoot := JsonRT.padsRoot_goal S h64 hS hP hR
       replay := hRp
       ringSwitch := hRS
       ligerito := hLg
-      lanes := hLC
+      lanes := laneConstraints_goal hLg hD
       inner := hIn
-      consumed := hCo
+      consumed := consumedZk_goal S h64 hS hP hRp hRS hLg hIn
       capCommitted := JsonRT.capCommittedZk_goal S h64 hS hP hR }
 
 end FlockComplete
