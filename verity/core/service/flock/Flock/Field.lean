@@ -47,10 +47,13 @@ is `(a >>> 1) >>> (63 − i)`, `0` at `i = 0`). -/
   let r2 := clmulStep a bb 2 (s + 2) r1.lo r1.hi
   clmulStep a bb 3 (s + 3) r2.lo r2.hi
 
-/-- `clmulGo` four bits at a time: `fuel` windows of `bb`, from bit `s`. -/
+/-- `clmulGo` four bits at a time: `fuel` windows of `bb`, from bit `s`, stopping once no bit of `bb` is left. That
+`if` is also where a definitional check (`congr`, `rfl`) on symbolic words stops, as it stops at `clmulGo`'s; without it
+the check unfolds all sixteen windows. -/
 def clmulWin (a : UInt64) : Nat → UInt64 → UInt64 → UInt64 → UInt64 → F128
   | 0, _, _, lo, hi => ⟨lo, hi⟩
   | fuel + 1, s, bb, lo, hi =>
+    if bb = 0 then ⟨lo, hi⟩ else
     let r := clmulWindow a bb s lo hi
     clmulWin a fuel (s + 4) (bb >>> 4) r.lo r.hi
 

@@ -191,7 +191,10 @@ theorem clmulWin_spec (a : UInt64) : ∀ (fuel : ℕ) (s bb lo hi : UInt64), s.t
     have e4 : (s + 4).toNat = s.toNat + 4 := by rw [UInt64.toNat_add]; simp; omega
     have hshr : (bb >>> 4).toNat = bb.toNat >>> 4 := by simp [UInt64.toNat_shiftRight]
     simp only [F128.clmulWin]
-    rw [ih _ _ _ _ (by omega), clmulWindow_spec a bb s lo hi (by omega), e4, hshr, natPoly_mod_four_succ]
+    by_cases hb : bb = 0
+    · subst hb
+      simp [natPoly]
+    rw [if_neg hb, ih _ _ _ _ (by omega), clmulWindow_spec a bb s lo hi (by omega), e4, hshr, natPoly_mod_four_succ]
     ring
 
 theorem clmulFast_spec (a b : UInt64) :
