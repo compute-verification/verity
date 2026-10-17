@@ -65,10 +65,11 @@ theorem cols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins :
     List.append_nil]
 
 /-- **The deployed event gives `wrP`'s verdict**: an accepting run of `V false` at SHA-512 decides on its messages and
-coins, and where the statement has no `--public-inputs` and the record's draw is the statement's `d`, if the run's
-reader looks up no column off `C` at table 0, `plainVerdict` holds at the run's live outcome (`viewOf`, at any `mPts`)
-and its link's root: flock-verify accepts what `wrP` writes for it (`accepts_wrP`), and that transcript records the
-run's streams and proof files (`RecordsLiveAtP`), whose columns are the reader's (`cols_plain`). -/
+coins, and where the record's draw is the statement's `d`, if the run's reader looks up no column off `C` at table 0,
+`plainVerdict` holds at the run's live outcome (`viewOf`, at any `mPts`) and its link's root: the checks refuse
+`--public-inputs` (`publicInputs_none_of_checks`), flock-verify accepts what `wrP` writes for the run (`accepts_wrP`),
+and that transcript records the run's streams and proof files (`RecordsLiveAtP`), whose columns are the reader's
+(`cols_plain`). -/
 theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽)
     (h : (Claims.run sha512 P (V false) x ω r).out = .acc) :
@@ -76,17 +77,18 @@ theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x :
       act false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
           ((List.range ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
         .decide s spec sts link c₁ mids f ∧
-      ∀ d, s.read.publicInputs = none → Exec.recordDraw f.record = s.read.draw → s.read.draw = some d →
+      ∀ d, Exec.recordDraw f.record = s.read.draw → s.read.draw = some d →
         (¬ ∃ (p : Fin N) (u : List 𝔽),
           Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p) →
         plainVerdict s.read.I d C link.1.toArray (viewOf 1 mPts spec link c₁ f) := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hact, hrun⟩ := acc_decide h
-  refine ⟨s, spec, sts, link, c₁, mids, f, hact, fun d hpi hdraw hd hno => ?_⟩
+  refine ⟨s, spec, sts, link, c₁, mids, f, hact, fun d hdraw hd hno => ?_⟩
   have hacc := run_acc_next sha512 P (V false) x ω r h
   replace hacc : ((next false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
       ((List.range ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst).length).map
         (Claims.coinSeq r))).eval sha512).1 = .acc := hacc
   obtain ⟨hv, hc⟩ := (next_decide_sha512 hact).1 hacc
+  have hpi := publicInputs_none_of_checks hc
   simp only [Bool.false_eq_true, ite_false] at hv
   obtain ⟨hins, hsu⟩ := setupOf_some (act_decide hact)
   have hzk : s.read.zk = false := readOf_zk (x := x) (by simp [readOf, hins])
