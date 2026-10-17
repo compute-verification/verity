@@ -4,9 +4,11 @@ H200 PTX (its module docstring), and against the models it was chosen over (`ALT
 
 One GPU process writes `<out>/glm53_fused_rmsnorm_capture.json`, the property record `glm53_fused_rmsnorm_capture`
 (`properties.record`), and the kernel's PTX under `<out>/ptx/`.  The device gate runs first and nothing else runs when it fails
-(exit 3).  vLLM runs as in `glm53_dsa_capture_gpu` (its `environment`: the Triton cache in the scratch directory).
+(exit 3).  vLLM runs as in `glm53_dsa_capture_gpu`, at its defaults (its `environment`: `served_defaults`, a served engine's
+toolchain, the Triton cache in the scratch directory), its switches read back by that capture's `served`.
 
   gate     `fa2_target_capture_gpu.gate`: driver, compute capability 9.0, 132 SMs.
+  switches `glm53_dsa_capture_gpu.served` (the record's `served`): not batch invariant, DeepGEMM on and importable.
   served   `fused_norm_rope` as `DeepseekV32Attention.forward` calls it (`glm53_dsa_capture_gpu.norm_rope`) on that capture's operands
            (`operands`: SEQ + EXTRA tokens, each row of q_c and kv_c at a scale 2^U(-3, 3), weights 1 + 0.1 N(0, 1)) with
            `special_rows` planted at tokens SPECIAL: twice on fresh caches, the words equal, and every written MLA cache row's first
@@ -21,8 +23,9 @@ One GPU process writes `<out>/glm53_fused_rmsnorm_capture.json`, the property re
            `.file`) is the PTX the Definition was read from (PTX_CODE_SHA256; PTX_COUNTS are its loads, reductions and epilogue).
   bind     DsaRMSNorm_v1 and its Boolean version bind at N 2048 and 512, EPS 1e-5.
 
-GO = the gate, both launches deterministic with the cache rows, every word of every row equal to the twin, the reference equal to
-the twin on every sampled row, every alternative refuted on at least PER_ALT words of each norm, the PTX and the bindings, no error.
+GO = the gate, the switches, both launches deterministic with the cache rows, every word of every row equal to the twin, the
+reference equal to the twin on every sampled row, every alternative refuted on at least PER_ALT words of each norm, the PTX and the
+bindings, no error.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_fused_rmsnorm_capture_gpu.py --out DIR --scratch /tmp --want-cc 9.0 --want-sms 132 --min-driver 575
@@ -53,7 +56,7 @@ from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import dsa_norm_rows as NR
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-fused-rmsnorm-capture/v1"
+SCHEMA = "verity-vllm/glm53-fused-rmsnorm-capture/v2"
 RECORD = "glm53_fused_rmsnorm_capture.json"
 EPS = DS.RMS_EPS
 #: (output, its width, its weight, its index in `norm_rope`'s result)
@@ -407,7 +410,8 @@ def _case_ok(t: dict[str, Any]) -> bool:
 
 def _verdict(doc: dict[str, Any]) -> bool:
     s = doc["summary"]
-    return bool(doc["gate"]["ok"] and not doc["errors"] and doc["ptx"].get("ok") is True and doc["bind"].get("ok") is True
+    return bool(doc["gate"]["ok"] and doc["served"].get("ok") is True and not doc["errors"] and doc["ptx"].get("ok") is True
+                and doc["bind"].get("ok") is True
                 and {x["case"] for x in doc["launches"]} == set(CASES)
                 and all(x["checks"] and all(v is True for v in x["checks"].values()) for x in doc["launches"])
                 and len(s["cases"]) == len(CASES) * len(NORMS) and all(_case_ok(t) for t in s["cases"].values())
@@ -419,10 +423,11 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=scratch)
     work = Path(tmp.name)
-    env = DS.environment(work)
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "environment": G._environment(),
-                           "gate": C.gate(min_driver, want_cc, want_sms), "errors": {}, "launches": []}
-    print(f"[glm53-rmsnorm] gate {json.dumps(doc['gate'])}", flush=True)
+    env, cleared = DS.environment(work)
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "env_cleared": cleared, "served": DS.served(),
+                           "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms), "errors": {},
+                           "launches": []}
+    print(f"[glm53-rmsnorm] gate {json.dumps(doc['gate'])} served {json.dumps(doc['served'])} cleared {sorted(cleared)}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print("GLM53-FUSED-RMSNORM GATE-FAIL", flush=True)
@@ -457,8 +462,8 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     tmp.cleanup()
     totals = {k: sum(t[k] for t in doc["summary"]["cases"].values()) for k in TOTALS}
     ls = doc["launches"]
-    print(f"GLM53-FUSED-RMSNORM {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} words={json.dumps(totals)} "
-          f"refuted={json.dumps(doc['summary']['refuted'])} launches_ok={sum(all(x['checks'].values()) for x in ls)}/{len(CASES)} "
+    print(f"GLM53-FUSED-RMSNORM {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} served={doc['served'].get('ok')} "
+          f"words={json.dumps(totals)} refuted={json.dumps(doc['summary']['refuted'])} launches_ok={sum(all(x['checks'].values()) for x in ls)}/{len(CASES)} "
           f"ptx={doc['ptx'].get('ok')} bind={doc['bind'].get('ok')} errors={sorted(doc['errors'])}", flush=True)
     return doc
 
