@@ -165,14 +165,17 @@ class Decode:
         self.kv = {lib: v for lib, v in kv["libs"].items()}
         self.sq = {r["n"]: r["squarings_s_cuda"] for r in tensor}
         self.bytes = {r["n"]: 1 / r["words_per_plain_byte"] for r in tensor}
-        # wt.cu's standalone store decode (wide_decode.sh): {(n, masked): {k: (store GB/s, chain words/s)}} at k = 1, 2
-        self.wide, self.wide_read = {}, wide["read"]["gbps"] if wide else None
-        for name, e in (wide or {}).get("libs", {}).items():
-            rates = e.get("rates", {}).get("decode", {})
-            ks = {int(k): (v["cuda"]["gbps_stored"], rates[k]["per_s"])
-                  for k, v in e.get("decode", {}).items() if v.get("cuda", {}).get("ok") and k in rates}
-            if ks:
-                self.wide[(e["constants"]["n"], name.endswith("-masked"))] = ks
+        # wt.cu's standalone store decode (wide_decode.sh): {(n, masked): (S, {k: (store GB/s, chain words/s)})}, k = 1, 2
+        self.wide, self.wide_read = {}, {}
+        for w in wide or []:
+            for name, e in w.get("libs", {}).items():
+                rates = e.get("rates", {}).get("decode", {})
+                ks = {int(k): (v["cuda"]["gbps_stored"], rates[k]["per_s"])
+                      for k, v in e.get("decode", {}).items() if v.get("cuda", {}).get("ok") and k in rates}
+                if {1, 2} <= set(ks):
+                    n = e["constants"]["n"]
+                    self.wide[(n, name.endswith("-masked"))] = (e["constants"]["S"], ks)
+                    self.wide_read[n] = w["read"]["gbps"]
         fits = [self._fit(lib) for lib in ("p512", "p768", "p1024")]
         self.alpha = sum(f[1] * self.kv[lib]["rates"]["square_s"] for f, lib in zip(fits, ("p512", "p768", "p1024"))) / 3
         self.t0_bit = sum(f[0] / b for f, b in zip(fits, (512, 768, 1024))) / 3
@@ -206,19 +209,24 @@ class Decode:
         lib = self.lib(b, masked)
         if lib:
             return self.time_kv(lib, k), k in (2, 3)
-        if (b, masked) in self.wide:   # wt.cu runs every round past the first in one loop: k = 2's half a round
-            w = self.wide[(b, masked)]
-            return (1 / w[k][1], True) if k in w else (k / (2 * w[2][1]), False)
+        if (b, masked) in self.wide:
+            w = self.wide[(b, masked)][1]
+            return (1 / w[k][1], True) if k in w else (1 / w[2][1] + (k - 2) * self.wide_round(b, masked), False)
         t = self.t0_bit * b + k * self.alpha / self.squarings_s(b)
         return t * (self.mask if masked else 1.0), False
+
+    def wide_round(self, b: int, masked: bool) -> float:
+        """A round's compute-only seconds a word in wt.cu (its chain at k = 2 less k = 1)."""
+        w = self.wide[(b, masked)][1]
+        return 1 / w[2][1] - 1 / w[1][1]
 
     def gbps(self, b: int, k: int, masked: bool) -> float:
         lib = self.lib(b, masked)
         if lib and str(k) in self.kv[lib].get("store", {}):
             return self.kv[lib]["store"][str(k)]["decode_gbps"]
-        if (b, masked) in self.wide:
-            w = self.wide[(b, masked)]
-            return w[k][0] if k in w else 2 * w[2][0] / k
+        if (b, masked) in self.wide:   # past k = 2: the k = 2 store decode plus a compute-only round each
+            s, w = self.wide[(b, masked)]
+            return w[k][0] if k in w else s / (s / w[2][0] + (k - 2) * self.wide_round(b, masked) * 1e9)
         return self.word_bytes(b) / self.time(b, k, masked)[0] / 1e9
 
     def reads(self, b: int, k: int, masked: bool) -> float:
@@ -226,7 +234,7 @@ class Decode:
         if lib and str(k) in self.kv[lib].get("store", {}):
             return self.kv[lib]["store"][str(k)]["decode_over_read"]
         if (b, masked) in self.wide:
-            return max(1.0, self.wide_read / self.gbps(b, k, masked))
+            return max(1.0, self.wide_read[b] / self.gbps(b, k, masked))
         return max(1.0, self.read / self.gbps(b, k, masked))
 
     def model_reads(self, b: int, k: int, masked: bool) -> float:
@@ -298,18 +306,20 @@ def build(a: argparse.Namespace) -> dict:
     v5 = json.loads(Path(a.table).read_text())
     kv = json.loads(Path(a.kv).read_text())
     tensor_list = json.loads(Path(a.tensor).read_text())
-    wide = json.loads(Path(a.wide).read_text()) if a.wide else None
+    wides = [json.loads(Path(p).read_text()) for p in a.wide or []]
     known = {r["n"] for r in tensor_list}
-    for name, e in (wide or {}).get("libs", {}).items():   # codec_tensor's rates rows for widths it hadn't run
-        if not name.endswith("-masked") and e["constants"]["n"] not in known and "rates" in e:
-            tensor_list.append({"n": e["constants"]["n"], "words_per_plain_byte": e["analysis"]["words_per_plain_byte"],
-                                "squarings_s_cuda": e["analysis"]["squarings_s"]["cuda"], "run": a.wide})
+    for w in wides:   # codec_tensor's rates rows for widths it hadn't run (σ_K leaves the squaring as it is)
+        for name, e in sorted(w.get("libs", {}).items()):
+            if e["constants"]["n"] not in known and "analysis" in e:
+                known.add(e["constants"]["n"])
+                tensor_list.append({"n": e["constants"]["n"], "squarings_s_cuda": e["analysis"]["squarings_s"]["cuda"],
+                                    "words_per_plain_byte": e["analysis"]["words_per_plain_byte"]})
     tensor = {r["n"]: r for r in tensor_list}
     margins = {d["field"]: d["margin"] for d in jsonl(Path(a.attack)) if d["experiment"] == "floor"}
-    dec = Decode(kv, tensor_list, wide)
+    dec = Decode(kv, tensor_list, wides)
     cpu = cpu_cycles([Path(d) for d in a.cpu])
     gpu = gpu_latency(Path(a.gpu))
-    fields = FIELDS + [(f"p{n}", n, WIDE_C[n]) for n in sorted(WIDE_C) if (n, False) in dec.wide]
+    fields = FIELDS + [(f"p{n}", n, WIDE_C[n]) for n in sorted(WIDE_C) if n in dec.wide_read]
 
     def t_sq(w: int) -> dict:
         """A width no CPU run measured takes the nearest measured one's cycles, scaled by the floor's ratio."""
@@ -470,7 +480,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--attack", required=True)
     ap.add_argument("--cpu", action="append", required=True)
     ap.add_argument("--gpu", required=True)
-    ap.add_argument("--wide", help="wide_decode.sh's codec-tensor.json: wt.cu's store decode at 1,536 to 4,096 bits")
+    ap.add_argument("--wide", action="append",
+                    help="wide_decode.sh's codec-tensor.json (repeated): wt.cu's store decode at 1,536 to 4,096 bits")
     ap.add_argument("--json")
     a = ap.parse_args(argv)
     t = build(a)
