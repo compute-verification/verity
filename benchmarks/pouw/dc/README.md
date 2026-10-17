@@ -59,7 +59,7 @@ sm_103 has no tcgen05 kind::i8: ptxas refuses it (`Feature '.kind::i8' not suppo
 13.0), so `dg100` and the i8 probes don't build there (`scalar.cu` does). The honest kernel needs an exact route through
 an FP kind, which the protocol states as its own T1 table (TENSOR §5: an FP design or kind::ti16, sm_107f only):
 
-- **k3 on kind::f8f6f4 (E4M3)**, emu8's Karatsuba (`benchmarks/pouw/emu8/`, branch `cursor/emu8-ea24`): balanced
+- **k3 on kind::f8f6f4 (E4M3)**, emu8's Karatsuba (its own branch, `cursor/emu8-ea24`, not on main): balanced
   base-16 limbs, xy = 240hh′ + 16mm′ − 15ll′; three MMAs a k32 step into two accumulators started at binade constants
   (C1 ulp 1, C2 ulp 1/8), and the word grows by 15·bits(acc1) + 2·bits(acc2), two IMADs. k4 (four MMAs, one C0) is the
   fallback. Both are exact only if the tcgen05 FP32 adder keeps C + T exact in that binade; TENSOR's table lists that
