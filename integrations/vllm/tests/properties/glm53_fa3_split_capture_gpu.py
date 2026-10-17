@@ -9,6 +9,8 @@ and nothing else runs when it fails (exit 3).  A phase that raises records its e
 others.
 
   gate     `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
+  switches vLLM at its defaults, as it serves (`environment`: `engine.env.served_defaults` clears every switch the process
+           inherited), and `served` reads batch invariance back from vLLM, off.
   mufu     lg2.approx.ftz.f32 on every word of the exponents LG2_EXPONENTS (FA3 takes the log of a split's sum, in [1 - 2^-24,
            2^12): exponents 126 to 138), on the sm_120 measurement's 2^20-word sweep, and on the powers of two below 1: each word
            against `MufuLg2Ftz_v1` (twin `mufu_lg2_words`, the reference on a sample) but the words the model leaves open
@@ -26,7 +28,7 @@ others.
            blocks (``matching_ns``, a diagnosis, not a check).  A launch of SAME gives its counterpart's words.
   bind     the Programs bind at the served statics.
 
-GO needs every case's launch checks, its words compared with 0 mismatches and 0 unresolved, the reference sampled with 0
+GO needs the switches, every case's launch checks, its words compared with 0 mismatches and 0 unresolved, the reference sampled with 0
 disagreements with the twin, and the bindings.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
@@ -52,9 +54,10 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.engine.env import served_defaults
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-fa3-split-capture/v1"
+SCHEMA = "verity-vllm/glm53-fa3-split-capture/v2"
 RECORD = "glm53_fa3_split_capture.json"
 TAG = "glm53-fa3-split"
 #: GLM-5.3 (tests/check/fixtures/glm_moe_dsa/config.json) at TP8: 8 local MLA heads, rope 64, latent 512, nope 192, top 2048
@@ -389,10 +392,23 @@ def bind_check() -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- run
-def environment(work: Path) -> dict[str, str]:
+def environment(work: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """vLLM's defaults (`served_defaults`) and the Triton cache in scratch, set before vLLM is imported: (the env set, the switches
+    cleared)."""
+    cleared = served_defaults()
     env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache")}
     os.environ.update(env)
-    return env
+    return env, cleared
+
+
+def served() -> dict[str, Any]:
+    """The one switch on the decode's path, as vLLM read it: batch invariance, off (`forward_mqa` passes fa_version 3 and reads no
+    switch; `fa_utils` reads batch invariance for FA4 only)."""
+    import vllm.envs as envs
+
+    rec: dict[str, Any] = {"VLLM_BATCH_INVARIANT": bool(envs.VLLM_BATCH_INVARIANT)}
+    rec["ok"] = not rec["VLLM_BATCH_INVARIANT"]
+    return rec
 
 
 def gpu(work: Path, quick: bool, doc: dict[str, Any]) -> list[dict[str, Any]]:
@@ -437,7 +453,8 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def _verdict(doc: dict[str, Any]) -> bool:
     c = cases(doc)
     want = {"mufu/lg2", "mufu/ex2", "mufu/rcp"} | {f"attn/{n}" for n in (QUICK_LAUNCHES if doc.get("quick") else LAUNCHES)}
-    return bool(doc["gate"]["ok"] and not doc["errors"] and doc["bind"].get("ok") is True and want <= set(c)
+    return bool(doc["gate"]["ok"] and doc["served"].get("ok") is True and not doc["errors"] and doc["bind"].get("ok") is True
+                and want <= set(c)
                 and all(v["ok"] for v in c.values()) and _words_ok(doc["totals"]) and doc["totals"]["reference"] > 0)
 
 
@@ -446,10 +463,11 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=scratch)
     work = Path(tmp.name)
-    env = environment(work)
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": quick, "environment": G._environment(),
-                           "gate": C.gate(min_driver, want_cc, want_sms), "errors": {}, "launches": []}
-    print(f"[{TAG}] gate {json.dumps(doc['gate'])}", flush=True)
+    env, cleared = environment(work)
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "env_cleared": cleared, "served": served(), "quick": quick,
+                           "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms), "errors": {},
+                           "launches": []}
+    print(f"[{TAG}] gate {json.dumps(doc['gate'])} served {json.dumps(doc['served'])} cleared {sorted(cleared)}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print("GLM53-FA3-SPLIT GATE-FAIL", flush=True)
@@ -482,7 +500,8 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     doc = seal_record(doc, _verdict(doc))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
-    print(f"GLM53-FA3-SPLIT {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} totals={json.dumps(doc['totals'])} "
+    print(f"GLM53-FA3-SPLIT {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} served={doc['served'].get('ok')} "
+          f"totals={json.dumps(doc['totals'])} "
           f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}", flush=True)
     return doc
 

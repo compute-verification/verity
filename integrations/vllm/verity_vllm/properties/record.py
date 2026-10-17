@@ -144,8 +144,9 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "MUFU ex2 / rcp are core's tables on every input, and vLLM's fused sigmoid noaux_tc router "
              "(_moe_C.grouped_topk, 256 experts, top-8, renormalized, x2.5) returns through its block and its warp kernel exactly the "
              "ids and weights of MoeRouterSigmoidBias_v1 for that kernel on every captured row and every logit whose sigmoid reads MUFU."),
-    Property("glm53_fa3_split_capture", "verity-vllm/glm53-fa3-split-capture/v1",
-             "On the capture's Hopper GPU, at GLM-5.3's TP8 statics, every compared output word of vLLM's FA3 sparse MLA decode "
+    Property("glm53_fa3_split_capture", "verity-vllm/glm53-fa3-split-capture/v2",
+             "On the capture's Hopper GPU at vLLM's defaults (read back: not batch invariant), at GLM-5.3's TP8 statics, every "
+             "compared output word of vLLM's FA3 sparse MLA decode "
              "(FLASH_ATTN_MLA_SPARSE without num_splits, as vLLM calls it, and with an explicit one) equals SparseMlaHeadSplit_v1 at "
              "the token's valid count and the split count launch_num_splits derives from the batch and the SM count, bit for bit; "
              "lg2.approx.ftz.f32 equals MufuLg2Ftz_v1 on every word of the compared exponents and the sweep but the powers of two "
