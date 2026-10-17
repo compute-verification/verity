@@ -63,6 +63,7 @@ import Proofs.Flock.Claims.KS.PlainStep
 import Proofs.Flock.Claims.KS.PlainParts
 import Proofs.Flock.Claims.KS.PlainClash0
 import Proofs.Flock.Claims.KS.PlainLevels
+import Proofs.Flock.Claims.KS.LevelsAll
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -284,5 +285,7 @@ different columns, which are the run's raw columns, so the clash needs only its 
 Past level 0, an accepted plain rep passed every later level's Merkle check on its proof's rows at the positions of
 that level's query round, against the flattened recursive cap before it, so two rows a rep opens at one later-level
 position that differ clash in the run's log (`PlainLevels`: `FlockDeploy.KS.plainLevels_verifyWithM`,
-`FlockDeploy.KS.plain_levelClash`).
+`FlockDeploy.KS.plain_levelClash`). On the model's side, the same accepted rep's requests after level 0's are
+levels `1, …, R` in order, each at the positions of the coins of its query round (`LevelsAll`:
+`FlockSoundness.Refine.LaterAt`, `FlockSoundness.Refine.find?_later`, `FlockSoundness.Refine.rep_refines_reqs`).
 -/
