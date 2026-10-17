@@ -67,6 +67,7 @@ import Proofs.Flock.Claims.KS.LevelsAll
 import Proofs.Flock.Claims.KS.PlainClashLater
 import Proofs.Flock.Claims.KS.ForkSim
 import Proofs.Flock.Claims.KS.PlainFork
+import Proofs.Flock.Claims.KS.PlainForkClash
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -304,4 +305,9 @@ fork at the round's table node is at most the fork after as many coins of two ru
 position of it to different rows, and that live event gives `P`'s two accepting runs a collision (`PlainFork`:
 `FlockDeploy.KS.forkC_simAt_le`, `FlockDeploy.KS.forkC_liveStrat`, `FlockDeploy.KS.PlainForkAlign`,
 `FlockDeploy.KS.PlainForkClash`, `FlockDeploy.KS.plainSimForkLe_of`, `FlockDeploy.KS.plain_KS_of_align`).
+That live event's collision holds: each live outcome is its run's, whose rep records its proof's recursive caps and
+opens its deployed later rows, each an `Opening` in the run's log, so one recorded cap is one root and two rows opened
+at one position of it collide, and KS at the deployed plain verifier's trimmed record holds from the simulated fork's
+alignment alone (`PlainForkClash`: `FlockDeploy.KS.plain_liveOpening`, `FlockDeploy.KS.capDig_inj`,
+`FlockDeploy.KS.plainForkQ_of`, `FlockDeploy.KS.plainForkClash`, `FlockDeploy.KS.plain_KS_of_forkAlign`).
 -/
