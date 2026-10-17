@@ -27,6 +27,7 @@ from verity_vllm.predict.phi import Phi
 
 FIX = Path(__file__).parent / "fixtures"
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
+DSV4 = "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
@@ -128,6 +129,33 @@ def test_dsa_refuses_outside_its_domain(tmp_path):
         build_program(Phi.from_json({**phi.to_json(), "target": {k: v for k, v in phi.target.items() if k != "device_name"}}), "step")
     with pytest.raises(Unexpressible, match=re.escape("a call of 257 query rows, a prefill (decode threshold 256 at 8 query heads")):
         build_program(phi, "step", M=257)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("rank,digest", [
+    (0, "84c39fac2fc2018712751846d53b12b077c6ba8f22b53e95ca24f4c9f541d4724264893b6a8f8b29aa917a46305c740a330f6a9779fa25938c542cc9d2027beb"),
+    (7, "f7b56f581431ed6ff565dd7be13f7cf24d3d12156fbb1b7011188d194be552f82bc3c536cb694b4103e1b9f41a831946d460fe89a00163152e1bfd6cf2765dff"),
+])
+def test_mhc_rank_step_equals_the_traced_build(rank, digest, tmp_path):
+    """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
+    decoder (`predict.dsv4`) is the Program the Build traced at 98c10539e (`records.json` has no row for it yet): the mHC pre and
+    post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and sqrtsoftplus routers,
+    the Marlin experts over the schedule's align keys.  About 25 s a rank, nearly all of it encoding the mHC Definitions' bodies for
+    the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order GLM-5.3's ranks pin."""
+    r = build_program(_row_phi(DSV4, "DSV4_PRO", tmp_path, rank), "step", M=1, pos0=8)
+    assert r.function.startswith("Derived[vLLMStep[DeepseekV4ForCausalLM]]_v1")
+    assert r.digest == digest
+
+
+def test_mhc_refuses_outside_its_domain(tmp_path):
+    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
+    with pytest.raises(Unexpressible, match=re.escape("a call of 2 rows, a prefill")):
+        build_program(phi, "step", M=2)
+    with pytest.raises(Unexpressible, match=re.escape("position 127 completes compressed row 0 of layer 0 (ratio 128)")):
+        build_program(phi, "step", M=1, pos0=127)
+    cfg = {**phi.hf_config, "compress_ratios": [1] + phi.hf_config["compress_ratios"][1:]}
+    with pytest.raises(Unexpressible, match=re.escape("compress ratios [1] (the compressors: [4, 128]")):
+        build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": cfg}}), "step")
 
 
 @pytest.mark.parametrize("sampling,M,digest", [

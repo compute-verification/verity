@@ -624,12 +624,16 @@ def _check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, str]) -> None:
 
 def decoder(phi: Phi, M: int = 1, history: int = 0):
     """φ's decoder at launches of M rows over a history of `history` keys: the family's constructor (`FAMILY_FACTS[...]["arch"]`), a
-    DeepSeek sparse-attention MoE (`dsa.Net`) or the dense / fused-MoE Llama-family one (`_Decoder`).  Its `leaves()` are the weights
-    record, `peer_shapes(rows)` one forward pass's peer Inputs in collective order, `model(B, W, peers)` the forward and the sampler."""
+    DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
+    Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
+    collective order, `schedule_words(rows)` (when it has one) the schedule words a pass reads, `model(B, W, peers)` the forward and
+    the sampler."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
     ff = FAMILY_FACTS.get(str(phi.hf_config.get("model_type", "")).lower()) or {}
     if ff.get("arch") == "dsa-moe":
         from .dsa import Net
+    elif ff.get("arch") == "mhc-moe":
+        from .dsv4 import Net
     else:
         Net = _Decoder
     _check_phi(phi, Net.DOMAIN)
@@ -676,22 +680,27 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     wrec = Record(*net.leaves())
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
+    passes = [n] + [1] * (events - 1)
     params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
         if phi.sampling["splits"] == "derived":
             params.append(("splits", Array(events, I32)))
+    words = sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0
+    if words:
+        params.append(("schedule", Array(words, I32)))       # `vllm_meta.ScheduledWithPeers`
     n_user = len(params)
     if world > 1:
         # `vllm_meta.WithPeers`: world - 1 peer Inputs per collective of each forward pass, in call order
-        shapes = [s for r in [n] + [1] * (events - 1) for s in net.peer_shapes(r) for _ in range(world - 1)]
+        shapes = [s for r in passes for s in net.peer_shapes(r) for _ in range(world - 1)]
         params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
     params.append(("weights", wrec))
     params = tuple(params)
     B = Builder(params, Value(1))
     ids = Coll(params[0][1], Affine("p", 0, 0, n))
     W = Coll(wrec, Affine("p", len(params) - 1, 0, wrec.leaves))
-    peers = _Peers([Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[n_user:-1], start=n_user)], world, rank)
+    schedule = Coll(params[n_user - 1][1], Affine("p", n_user - 1, 0, words)) if words else None
+    peers = _Peers([Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[n_user:-1], start=n_user)], world, rank, schedule)
     policy = None
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits

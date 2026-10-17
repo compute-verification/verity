@@ -54,9 +54,10 @@ MARLIN_SERVED = {(384, 6, 7168, 768, 6): {1: (128, 64, 2), 2: (128, 64, 4), 3: (
 MARLIN_TARGET = ((9, 0), 132)
 
 
-def served_config(E: int, TOPK: int, K: int, N: int, top_k: int, M: int) -> tuple[int, int, int] | str:
-    """The (TK, TN, GRID) a launch of N columns over K, top_k, runs at for M tokens routed top TOPK of E, or a refusal."""
-    target = active_target_profile()
+def served_config(E: int, TOPK: int, K: int, N: int, top_k: int, M: int, target=None) -> tuple[int, int, int] | str:
+    """The (TK, TN, GRID) a launch of N columns over K, top_k, runs at for M tokens routed top TOPK of E on `target` (the active
+    target profile when None), or a refusal."""
+    target = target or active_target_profile()
     if (tuple(target.compute_capability), target.num_sms) != MARLIN_TARGET:
         return (f"numerics_unregistered: the Marlin configs are the capture's target's (cc {MARLIN_TARGET[0]}, {MARLIN_TARGET[1]} SMs); "
                 f"the target is cc {tuple(target.compute_capability)}, {target.num_sms} SMs")
