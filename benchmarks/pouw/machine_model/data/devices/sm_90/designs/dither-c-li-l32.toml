@@ -30,9 +30,9 @@ mix = { FFMA = 1 }
 route = "lanes"
 source = "DC-DESIGN (note:20261017T0805Z-draft-dc-design §3): LI's ALU ½ + IMAD ½ leaves the ALU pipe 1.5% short of half issue on the H200, so 0.02 verified FFMA a word puts honest on JI90_0, whose lane threshold is 0.4999 at L = 32; FILL-OPT is its named assumption"
 
-[skip.ts-time]
-eps = 0.00088
-source = "SKIP's Result 3 (calculator @07f901181): 0 by int8 products; <= 0.088% (8B) of prefill time with CHECKED-STRIP's TS vector work (co32c's recombination, cohalf's x = 12 route, pv's digits and epilogue), at L = 32 (note:20261017T0340Z-draft-skip, 06:19Z)"
+[skip.served]
+eps = 0.00976
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 5.961 SMSP-cycles a 4096-MAC MMA on DC-90; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 8K prefill: the linears' co32c recombination 0.217%; lm_head's co32c recombination 1.28e-07%; QKᵀ's cohalf sums 0.0738%; P·V's pv digits, epilogue and scaling 0.685%. With P·V's served output checked it is 0.976% (8B) / 0.473% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts), on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 9)"
 
 [mand.fold]
 eps = 0.0

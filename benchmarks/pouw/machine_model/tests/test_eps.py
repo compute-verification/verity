@@ -218,7 +218,7 @@ def test_luck_and_the_total():
     assert e.cheat.binding == ("JI3e_0",)
     assert e.luck == pytest.approx(E.deficit(DUO) * (JI + 0.375) / (JI + 12.375), rel=1e-6)
     e = E.eps(DUO, PI, 8)
-    assert e.sched is None and e.mand == 0 and e.skip == 0.164
+    assert e.sched is None and e.mand == 0 and e.skip == 0.123
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
 
 
