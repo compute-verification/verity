@@ -266,27 +266,6 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-nosum", "assumption",
           "NOSUM: on the stated device no unit outside the route menu heads a fresh committed word", "NOSUM",
           "measured"),
-    Entry("accounting-ts-fold-opt", "assumption",
-          "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π), for every "
-          "certificate π", "FOLD-OPT", "conjectured"),
-    Entry("accounting-ts-fill-opt", "assumption",
-          "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
-          "certificate π", "FILL-OPT", "conjectured"),
-    Entry("accounting-ts-fan-in", "assumption",
-          "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, by its register operands as "
-          "SASS gives them on sm_80, sm_89, sm_90, sm_100 and sm_120 (LOP3, IADD3, IMAD, IDP.4A, FFMA: 2 a lane, 64 a "
-          "warp instruction), memory a node each access reads (a load 1 a lane; STS.128 and STSM.x4 5 a lane, 160 a "
-          "warp instruction)", "TS fan-in", "measured"),
-    Entry("accounting-ts-luck", "assumption",
-          "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
-          "most p", "TS luck at p", "proven"),
-    Entry("accounting-ts-proofs-sound", "assumption",
-          "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
-          "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
-          "round's share", "TS proofs sound", "standard"),
-    Entry("accounting-ts-lin-steer", "assumption",
-          "LIN-STEER: zeroing a fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
-          "LIN-STEER", "conjectured"),
     # The data-sheet axioms A1–A7 (Security/Models/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
@@ -312,6 +291,27 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "A7 SEMANTICS: each instruction computes the function its ISA defines and writes nothing else, so no unit "
           "outside the route menu heads a fresh committed word and a side unit's words cost its per-word vector",
           "A7 semantics (PTX ISA)", "measured"),
+    Entry("accounting-ts-fold-opt", "assumption",
+          "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π), for every "
+          "certificate π", "FOLD-OPT", "conjectured"),
+    Entry("accounting-ts-fill-opt", "assumption",
+          "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
+          "certificate π", "FILL-OPT", "conjectured"),
+    Entry("accounting-ts-fan-in", "assumption",
+          "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, by its register operands as "
+          "SASS gives them on sm_80, sm_89, sm_90, sm_100 and sm_120 (LOP3, IADD3, IMAD, IDP.4A, FFMA: 2 a lane, 64 a "
+          "warp instruction), memory a node each access reads (a load 1 a lane; STS.128 and STSM.x4 5 a lane, 160 a "
+          "warp instruction)", "TS fan-in", "measured"),
+    Entry("accounting-ts-luck", "assumption",
+          "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
+          "most p", "TS luck at p", "proven"),
+    Entry("accounting-ts-proofs-sound", "assumption",
+          "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
+          "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
+          "round's share", "TS proofs sound", "standard"),
+    Entry("accounting-ts-lin-steer", "assumption",
+          "LIN-STEER: zeroing a fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
+          "LIN-STEER", "conjectured"),
 )}
 
 
