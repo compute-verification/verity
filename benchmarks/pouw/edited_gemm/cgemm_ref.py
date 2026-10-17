@@ -28,7 +28,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "e2e_slice"))
-from derive import NCT, tile_receipts  # noqa: E402
+from derive import NCT, tile_receipts
 
 _spec = importlib.util.spec_from_file_location("checked_strip", HERE.parent / "theory" / "checked_strip.py")
 cs = importlib.util.module_from_spec(_spec)
@@ -86,7 +86,9 @@ def check_half(d: Path, meta: dict) -> dict:
     ok = bool(meta["device_ok"]) and bool(meta["control_rejected"]) and k == 128
     for tm, tn in meta["tiles"]:
         sfx = f"_{tm}_{tn}.bin"
-        rd = lambda name, dt: np.fromfile(d / (name + sfx), dt)  # noqa: E731
+        def rd(name: str, dt, sfx=sfx) -> np.ndarray:
+            return np.fromfile(d / (name + sfx), dt)
+
         x = (rd("x", np.uint16).astype(np.uint32) << 16).view(np.float32).reshape(T, k)
         Vq = np.clip(np.floor(x * inv_s), -64, 62).astype(np.int64)
         b = patch_bits(key, DITHER_TAG, tm * T, T, k)
@@ -134,7 +136,9 @@ def check(d: Path) -> dict:
     ok = bool(meta["device_ok"]) and bool(meta["control_rejected"])
     for tm, tn in meta["tiles"]:
         sfx = f"_{tm}_{tn}.bin"
-        rd = lambda name, dt: np.fromfile(d / (name + sfx), dt)  # noqa: E731
+        def rd(name: str, dt, sfx=sfx) -> np.ndarray:
+            return np.fromfile(d / (name + sfx), dt)
+
         x = (rd("x", np.uint16).astype(np.uint32) << 16).view(np.float32).reshape(T, k)
         Vq = np.clip(np.floor(x * inv_s), -127, 126).astype(np.int64)
         b = patch_bits(key, DITHER_TAG, tm * T, T, k)
