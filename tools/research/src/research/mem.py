@@ -159,10 +159,22 @@ def reservations(ramlock_dir: Path) -> list[dict[str, Any]]:
     return out
 
 
+def reserved_bytes(res: list[dict[str, Any]]) -> float:
+    """The live reservations' outstanding bytes, each run's counted once (its largest): a run that reserves with `research run
+    --mem-gb` and then takes a check slot holds two files for one tree of processes (17 Oct, cpu-3: 96 + 279 GB for
+    r20261017-162016-cb2e refused a 96 GB job with 390 GB free, INF-51)."""
+    by: dict[str, float] = {}
+    for x in res:
+        if x["live"]:
+            k = x.get("run_id") or x["file"]
+            by[k] = max(by.get(k, 0.0), x["outstanding"])
+    return sum(by.values())
+
+
 def snapshot(ramlock_dir: Path) -> dict[str, Any]:
     r = reading()
     res = reservations(ramlock_dir)
-    reserved = sum(x["outstanding"] for x in res if x["live"])
+    reserved = reserved_bytes(res)
     return {"limit_gb": round(r["limit"] / GB, 1), "in_use_gb": round(r["in_use"] / GB, 1), "reserved_gb": round(reserved / GB, 1),
             "available_gb": round((r["limit"] - r["in_use"] - reserved) / GB, 1), "source": r["source"], "cgroup": r["cgroup"],
             "ramlock_dir": str(ramlock_dir), "reservations": res}
