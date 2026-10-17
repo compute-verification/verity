@@ -17,6 +17,8 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `pearl_c4/` | RTX PRO 6000 | Pearl-C4 (NVFP4 and MXFP4) and its harness arms |
 | `nvfp4_sm120/` | RTX PRO 6000 | The plain NVFP4 GEMM as harness baseline entries (`nvf4_plain.cu` on `mainloop_nvf4.cuh`), and its standalone benches |
 | `pouw_hash/` | RTX PRO 6000 | The PoUW hash kernels' bench and check (`run.sh`, `check.py`) |
+| `h_falsify/` | RTX PRO 6000 | The Dither transcript's zero instance (R 0/1, B̃ periodic in U): the tiled reference and its duo receipt (`ref.py`), and honest, zero-IMMA and Four Russians arms on `gpu_kit` (`hfalsify.cu`) |
+| `qstar/` | RTX PRO 6000 | q*, the fewest scalar instructions a correct fresh Dither word costs: dp4a, bit planes, Four Russians in shared memory and in L2, each against IMMA, alone and beside it in one kernel or two streams (`qstar.cu`); `count.py` counts each timed loop's instructions a word and gates its pinned histogram (`expect.json`); `run.sh` is the `research run` job |
 | `kernels/` | RTX 4090 | NCP's native u8xs8 route-U GEMM and Pearl's e4m3 GEMM on the `ada` device (`pouw_gemm.cu`), JIT-built as a torch extension |
 | `vllm_bench.py` | RTX 4090 | Overhead against plain vLLM for BF16, stock FP8, W7A7, NCP and Pearl by wrapping every `LinearBase` layer's apply; `pearl_c_vllm/` reads its prompts and model lookup |
 | `gamma.py` | CPU | γ accounting: each scheme's honest reference priced term by term under W1, split into checked and unchecked work |

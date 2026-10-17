@@ -11,9 +11,11 @@
 //   fr8        Four Russians, four 8-bit groups of R_ℓ, tables of U-row sums in shared memory (zero instance)
 //   fr16       Four Russians, two 16-bit groups, tables in L2 read with 256-bit loads: one IADD3 a word (zero)
 //   co_*       a fused kernel: IMMA warps on the zero instance beside scalar warps of one arm, sharing every SM
+//   imma_p*    persistent IMMA on the zero instance, 8-warp blocks two an SM (imma_p) or 4-warp blocks three (imma_p3)
+//   co2_*, co3_*  that IMMA on n - co2 columns, and on a second stream fr16 on the other co2 (none: the control)
 //
-// Each timed loop is one segment an iteration between two SR_CLOCKLO reads, so `sass_gate.py --expect` pins its
-// instructions and run.sh turns them into instructions a word. gpu_kit carries poisoning and the timed items.
+// Each timed loop is one segment an iteration (two for IMMA) between two SR_CLOCKLO reads, so count.py pins its
+// instructions (expect.json) and turns them into instructions a word. gpu_kit carries poisoning and the timed items.
 #include "../gpu_kit/bench.cuh"
 #include "../receipts/receipt_folds.cuh"
 
