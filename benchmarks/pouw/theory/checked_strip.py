@@ -628,11 +628,18 @@ def word_routes(design, k, x):
 #: r20261017-075345-b394, note:20261017T0645Z-draft-bc-kernel). PV_DIGIT_OPS is per-thread instructions an entry a digit
 #: (4 entries a lane, so 4·m·PV_DIGIT_OPS warp instructions a tile): vdig's 7 without z's hashing, which any prover
 #: committing the D_d words does (11.0 with it; co32c's quantizer 6.0). PV_SERVE_OPS is warp instructions a tile, the
-#: served epilogue's 2.8 a cell over a dequantizing one (2O, 127S and the add). PV_LIMB_OPS, adopted P·V's limb split an
-#: entry a limb, is unmeasured.
+#: served epilogue's 2.8 a cell over a dequantizing one (2O, 127S and the add).
 PV_DIGIT_OPS = 7.0
 PV_SERVE_OPS = 11.2
-PV_LIMB_OPS = 1.0
+#: Adopted P·V's tile as BC-KERNEL r2 measured apv_l7qs (exact ncu counts, r20261017-090559-fd46 and
+#: r20261017-092503-35ff, note:20261017T0837Z-draft-bc-kernel-r2). PV_LIMB_OPS is per-thread instructions an entry a
+#: limb, 7.16 for Ycum's two limbs in the in-register sum loop. APV_SERVE_OPS is warp instructions a tile, the served
+#: f over a plain epilogue (the O + 64S IMAD and its loads; at most 8.1). APV_TAIL_OPS is the tail stage's warp
+#: instructions a tile besides its IMMAs: the 256·Y1 combine's 4 IMADs, 3 LDGs, 2.4 NOPs, an LDSM and 1.5 of control.
+#: The tail's 4th IMMA, 64·S_diag, only the served f needs.
+PV_LIMB_OPS = 7.16 / 2
+APV_SERVE_OPS = 4.4
+APV_TAIL_OPS = 15.5
 
 
 def ts_pv(k, fold, rep):
@@ -652,13 +659,16 @@ def ts_pv(k, fold, rep):
 
 
 def ts_pv_adopted(k, fold, rep):
-    """(honest, cheater) for adopted P·V's tile in the same units: T's k/32 IMMAs, the peel's strip U·Ycum on two int8
-    limbs and its diagonal triangle (3 IMMAs), folds of T and the checked O (k/32 + 1 words), the offset and the
-    epilogue, and Ycum's and S's adds and limb split. At a one-hot P row O is a copy (127·X(κ*)), so the cheater
-    serves it and does T alone: the strip, the sums and the epilogue are free."""
+    """(honest, cheater with the served output free, cheater with it checked downstream) for adopted P·V's tile in the
+    same units: T's k/32 IMMAs, the tail stage (the peel's strip U·Ycum on two int8 limbs and its diagonal triangle, 3
+    IMMAs, its other instructions, and the 4th IMMA, 64·S_diag, for f), folds of T and the checked O (k/32 + 1 words),
+    the served epilogue, and Ycum's and S's adds and limb split. At a one-hot P row O is a copy (127·X(κ*)), so the
+    cheater does T alone: the tail, the sums and the epilogue are free. With the served output checked it also pays the
+    4th IMMA and the epilogue."""
     folds = 4 * fold * (k // 32 + 1)
-    honest = (k // 32 + (3 if k > 32 else 1), folds + PV_SERVE_OPS + (4 + 4 + 4 * 2 * PV_LIMB_OPS) / rep)
-    return honest, (k // 32, folds)
+    honest = (k // 32 + (3 if k > 32 else 1) + 1,
+              folds + APV_TAIL_OPS + APV_SERVE_OPS + (4 + 4 + 4 * 2 * PV_LIMB_OPS) / rep)
+    return honest, (k // 32, folds), (k // 32 + 1, folds + APV_SERVE_OPS)
 
 
 def pv_routes(k, x):
@@ -1243,18 +1253,19 @@ def main():
     for rep, mname in ((4, "Llama-3.1-8B"), (8, "Llama-3.1-70B")):
         for ctx in (2048, 8192, 32768):
             for f in (3, 2, 1.5, 1):
-                acc = np.zeros(8)
+                acc = np.zeros(9)
                 for beta in range(ctx // 32):
                     if beta >= 256 and beta % 8:
                         continue
                     wt = 1 if beta < 256 else 8
                     kk = 32 * (beta + 1)
                     hon, cht, serve, _ = ts_pv(kk, f, rep)
-                    ah, ac = ts_pv_adopted(kk, f, rep)
+                    ah, ac, ak = ts_pv_adopted(kk, f, rep)
                     acc += wt * np.array([ts_time(*hon), ts_time(*cht), ts_time(cht[0], cht[1] + serve),
                                           16 * (kk // 32), ts_best(None, kk, 0, f, pv_routes(kk, 12), (hon, cht))[1],
                                           ts_best(None, kk, 0, f, pv_routes(kk, 12),
-                                                  (hon, (cht[0], cht[1] + serve)))[1], ts_time(*ah), ts_time(*ac)])
+                                                  (hon, (cht[0], cht[1] + serve)))[1], ts_time(*ah), ts_time(*ac),
+                                          ts_time(*ak)])
                 key = f"{mname} prefill ctx={ctx} fold={f}"
                 pv_ts[f"{key} eps served free"] = acc[0] / acc[1] - 1
                 pv_ts[f"{key} eps served checked"] = acc[0] / acc[2] - 1
@@ -1262,23 +1273,25 @@ def main():
                 pv_ts[f"{key} eps served checked, zero-instance routes x=12"] = acc[0] / acc[5] - 1
                 pv_ts[f"{key} gamma over plain int8"] = acc[0] / acc[3]
                 pv_ts[f"{key} eps adopted P·V at a one-hot P"] = acc[6] / acc[7] - 1
+                pv_ts[f"{key} eps adopted P·V at a one-hot P, its served output checked"] = acc[6] / acc[8] - 1
                 pv_ts[f"{key} gamma adopted P·V over plain int8"] = acc[6] / acc[3]
     out["ts_pv"] = {k_: (f"{v:.4%}" if " eps " in k_ else f"{v:.4f}") for k_, v in pv_ts.items()}
     sel = lambda tail: [v for k_, v in pv_ts.items() if k_.endswith(tail)]
     checks.check("P7 TS model, P·V prefill (Llama-3.1 8B and 70B, 2K–32K; past 8K every 8th query block, weighted) at "
                  "the measured digit and epilogue costs: with the sums, digits and served output given to the cheater "
                  "free ε < 4.5% (< 1.4% from 8K), with the served output checked downstream < 2.3% (< 0.75% from 8K); "
-                 "the zero-instance routes at x = 12 add < 0.2%; below adopted P·V's ε at a one-hot P at fold ≤ 2 and "
-                 "through 8K, and within 0.02% of it at 32K and fold 3, where adopted's unmeasured limb split decides; "
-                 "γ ≤ 1.41 at fold 3, ≤ 1.22 at fold ≤ 2",
+                 "the zero-instance routes at x = 12 add < 0.2%; below adopted P·V's ε at a one-hot P at its measured "
+                 "costs everywhere, served free and served checked; γ ≤ 1.41 at fold 3, ≤ 1.22 at fold ≤ 2",
                  max(sel("eps served free")) < 0.045 and max(sel("eps served checked")) < 0.023
                  and all(v < 0.014 for k_, v in pv_ts.items() if k_.endswith("eps served free") and "2048" not in k_)
                  and all(v < 0.0075 for k_, v in pv_ts.items() if k_.endswith("eps served checked") and "2048" not in k_)
                  and all(pv_ts[k_] - pv_ts[k_.replace(", zero-instance routes x=12", "")] < 0.002
                          for k_ in pv_ts if k_.endswith("routes x=12"))
-                 and all(pv_ts[k_.replace("eps adopted P·V at a one-hot P", "eps served free")]
-                         < v + (2e-4 if "ctx=32768 fold=3 " in k_ else 0.0)
+                 and all(pv_ts[k_.replace("eps adopted P·V at a one-hot P", "eps served free")] < v
                          for k_, v in pv_ts.items() if k_.endswith("one-hot P"))
+                 and all(pv_ts[k_.replace("eps adopted P·V at a one-hot P, its served output checked",
+                                          "eps served checked")] < v
+                         for k_, v in pv_ts.items() if k_.endswith("its served output checked"))
                  and all(v <= 1.41 if "fold=3 " in k_ else v <= 1.22 for k_, v in pv_ts.items()
                          if k_.endswith("gamma over plain int8")), str(out["ts_pv"]))
 
