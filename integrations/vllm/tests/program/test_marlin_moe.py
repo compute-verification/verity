@@ -15,7 +15,8 @@ import itertools
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.codec import lookup_primitive
+from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops.prims import F2fpBf16
 from verity_vllm.program.frontend.rules.vllm_marlin_moe import MARLIN_SERVED
@@ -211,6 +212,13 @@ def test_an_expert_row_unpacks_the_checkpoint_s_bytes() -> None:
     assert [evaluate(bind(MM.E2m1x2Codes), [b]) for b in (0x00, 0x8F, 0x1E)] == [(0, 0), (0xF, 0x8), (0xE, 0x1)]
     with pytest.raises(ValueError):
         bind(MM.MoeExpertE2m1Row, E=E, K=63).body
+
+
+def test_a_cold_decode_resolves_the_expert_gathers_by_id() -> None:
+    """GP-01 and the Match decode the request descriptor in a process that never built its expert-row gathers (one per expert
+    count): their ids resolve to the gathers the derive builds.  385 experts: a count nothing here builds first."""
+    for fid, make in (("GatherE2m1Pairx385_v1", MM.gather_e2m1_pair), ("GatherE8m0x385_v1", MM.gather_e8m0)):
+        assert lookup_primitive(REGISTRY, fid) is make(385), fid
 
 
 def test_pair_launch_over_three_experts_is_the_twin() -> None:
