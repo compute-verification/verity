@@ -6,8 +6,9 @@ Arms are read by name: `adopted-bd-lm` (both operands dithered everywhere), `sid
 and lm_head's weights, or activations, rounded), `side-qk-q` / `side-qk-k` (K, or Q, rounded in Q Kᵀ), each with an
 optional `-dB` suffix for a b-bit dither (no suffix: b = 1), and `adopted` (the record, at b = 1). The top row varies
 the linears' side with Q Kᵀ both-sided, the bottom row Q Kᵀ's with the linears both-sided. Each point is the mean over
-seeds of the arm's increase over its run's bf16, the bar the seeds' range. When an arm appears in several results, the
-last one given wins."""
+seeds of the arm's increase over its run's bf16, the bar the seeds' range. The table sets each one-sided arm against
+the both-sided arm at its b by the significance rule (`methodology.compare`; every run of a point has the same
+windows). When an arm appears in several results, the last one given wins."""
 from __future__ import annotations
 
 import argparse
@@ -16,6 +17,7 @@ import re
 import statistics
 from pathlib import Path
 
+import methodology
 import report
 
 SIDES = {"adopted-bd-lm": ("both", "both"), "side-lin-act": ("act", "both"), "side-lin-w": ("w", "both"),
@@ -53,8 +55,21 @@ def rows(paths: list[str]) -> list[dict]:
                 "b": c[2], "seeds": len(s["seeds"]), "ppl": s["ppl"], "ppl_min": s["min"], "ppl_max": s["max"],
                 "ppl_sd": statistics.stdev(s["seeds"]) if len(s["seeds"]) > 1 else 0.0, "bf16": bf["ppl"],
                 "inc": sum(inc) / len(inc), "inc_min": min(inc), "inc_max": max(inc),
-                "run": r.get("env", {}).get("run", str(p))}
+                "run": r.get("env", {}).get("run", str(p)), "seed_ppl": s["seeds"], "windows": s["windows"]}
     return list(out.values())
+
+
+def against_both(rs: list[dict], r: dict) -> tuple[float, str] | None:
+    """A one-sided arm against the both-sided arm at its point and b: the difference of their increases over bf16
+    (percentage points) and the significance rule's verdict (`<`: the one-sided arm is better)."""
+    if (r["linears"], r["qk"]) in (("both", "both"), ("record", "record")):
+        return None
+    both = [o for o in rs if (o["model"], o["set"], o["ctx"], o["b"], o["linears"], o["qk"])
+            == (r["model"], r["set"], r["ctx"], r["b"], "both", "both")]
+    if not both:
+        return None
+    o = both[0]
+    return r["inc"] - o["inc"], methodology.compare(r["seed_ppl"], o["seed_ppl"], r["windows"], o["windows"])
 
 
 def points(rs: list[dict]) -> list[tuple[str, str, int]]:
@@ -69,14 +84,17 @@ def series(rs: list[dict], point, row: str, side: str) -> list[dict]:
 
 
 def table(rs: list[dict]) -> str:
-    lines = ["| model · set · context | arm | linears | Q Kᵀ | b | seeds | perplexity mean (range) | sd | Δ% vs bf16 (range) | run |",
-             "|---|---|---|---|---:|---:|---:|---:|---:|---|"]
+    lines = ["| model · set · context | arm | linears | Q Kᵀ | b | seeds | perplexity mean (range) | sd | Δ% vs bf16 (range) "
+             "| vs both-sided (points, verdict) | run |",
+             "|---|---|---|---|---:|---:|---:|---:|---:|---:|---|"]
     for pt in points(rs):
         for r in sorted((r for r in rs if (r["model"], r["set"], r["ctx"]) == pt),
                         key=lambda r: (r["b"], r["linears"] == "record", r["qk"] != "both", r["linears"], r["qk"])):
+            vs = against_both(rs, r)
             lines.append(f"| {pt[0]} · {pt[1]} · {pt[2] // 1024}K | {r['arm']} | {r['linears']} | {r['qk']} | {r['b']} "
                          f"| {r['seeds']} | {r['ppl']:.4f} ({r['ppl_min']:.4f}–{r['ppl_max']:.4f}) | {r['ppl_sd']:.4f} "
-                         f"| {r['inc']:+.2f} ({r['inc_min']:+.2f} to {r['inc_max']:+.2f}) | {r['run']} |")
+                         f"| {r['inc']:+.2f} ({r['inc_min']:+.2f} to {r['inc_max']:+.2f}) "
+                         f"| {'-' if vs is None else f'{vs[0]:+.2f} {vs[1]}'} | {r['run']} |")
     return "\n".join(lines) + "\n"
 
 
