@@ -1974,7 +1974,8 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     eid = hashlib.sha512(body.encode()).hexdigest()
     d = _dir(cache, k)
     d.mkdir(parents=True, exist_ok=True)
-    tmp = d / f".{eid}.tmp"
+    # a temporary name of this writer's own: two checks may store the same entry at once
+    tmp = d / f".{eid}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
     tmp.write_text(body)
     os.replace(tmp, d / f"{eid}.json")
     return eid
