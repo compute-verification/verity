@@ -23,8 +23,9 @@
 // lgate, lalone T STEPS BLK, lfill B L FILL_SMS W NC S T LSTEPS BLK: FILLER's lane filler (lfill.cuh): its receipts bit for
 // bit against the host, its issue rate alone, and the step on its green partition beside the pump (FILL_SMS SMs, pfill
 // with its -DPF_LANE lane chains) and the lane filler (BLK blocks of T threads an SM in the step's partition at the
-// lowest stream priority, LSTEPS steps of LF_CH chains a thread). FILL_SMS 0: no pump, the step and the lane filler on
-// every SM.
+// lowest stream priority, LSTEPS steps of LF_CH chains a thread; LFILL_ON=pump: on the pump's SMs instead, beside its
+// PF_CTAS blocks an SM, -DPF_MINB above PF_CTAS leaving it the registers). FILL_SMS 0: no pump, the step and the lane
+// filler on every SM.
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a dcap.cu -lcublasLt -lnvidia-ml -ldl
 #include <cublasLt.h>
@@ -1193,9 +1194,9 @@ static long long in_window(const std::vector<double>& t, double t0, double t1) {
   return n;
 }
 // the step's SMs (at least n_step) with two streams, the step's at priority `hi` and the lane filler's at `lo`, and the
-// rest with one (the pump's); 1000 x the failing stage + its CUresult on failure
+// rest with two, the pump's at `hi` and the lane filler's at `lo`; 1000 x the failing stage + its CUresult on failure
 static int gc_split_prio(int n_step, int hi, int lo, cudaStream_t* s_step, cudaStream_t* s_lane, cudaStream_t* s_fill,
-                         int got[2]) {
+                         cudaStream_t* s_fill_lane, int got[2]) {
   auto dget = drv<decltype(&cuDeviceGet)>("cuDeviceGet");
   auto res = drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");
   auto split = drv<decltype(&cuDevSmResourceSplitByCount)>("cuDevSmResourceSplitByCount");
@@ -1212,17 +1213,23 @@ static int gc_split_prio(int n_step, int hi, int lo, cudaStream_t* s_step, cudaS
   if ((e = split(&part, &nb, &all, &rest, 0, (unsigned)n_step))) return 3000 + e;
   got[0] = (int)part.sm.smCount;
   got[1] = (int)rest.sm.smCount;
-  CUdevResourceDesc desc;
-  CUgreenCtx g;
-  CUstream a = nullptr, a2 = nullptr, b = nullptr;
+  CUdevResourceDesc desc, desc2;
+  CUgreenCtx g, g2;
+  CUstream a = nullptr, a2 = nullptr, b = nullptr, b2 = nullptr;
   if ((e = gen(&desc, &part, 1))) return 4000 + e;
   if ((e = mk(&g, desc, dev, CU_GREEN_CTX_DEFAULT_STREAM))) return 5000 + e;
   if ((e = gst(&a, g, CU_STREAM_NON_BLOCKING, hi))) return 6000 + e;
   if ((e = gst(&a2, g, CU_STREAM_NON_BLOCKING, lo))) return 6000 + e;
-  if (rest.sm.smCount && (e = green_stream(&rest, dev, &b))) return e;
+  if (rest.sm.smCount) {
+    if ((e = gen(&desc2, &rest, 1))) return 4000 + e;
+    if ((e = mk(&g2, desc2, dev, CU_GREEN_CTX_DEFAULT_STREAM))) return 5000 + e;
+    if ((e = gst(&b, g2, CU_STREAM_NON_BLOCKING, hi))) return 6000 + e;
+    if ((e = gst(&b2, g2, CU_STREAM_NON_BLOCKING, lo))) return 6000 + e;
+  }
   *s_step = (cudaStream_t)a;
   *s_lane = (cudaStream_t)a2;
   *s_fill = (cudaStream_t)b;
+  *s_fill_lane = (cudaStream_t)b2;
   return 0;
 }
 // the lane filler's receipts against lf_ref at two widths and step counts, every tile checked, and a control (steps - 1
@@ -1280,24 +1287,31 @@ static int run_lalone(Dev& d, int T, int steps, int blk) {
   return bad ? 8 : 0;
 }
 // The step beside the pump (fill_sms SMs of a green split, W x NC x S, pfill with its -DPF_LANE) and the lane filler
-// (blk blocks of T threads an SM on the step's SMs, at the lowest priority of the step's green context, the step at the
-// highest); fill_sms 0: no pump, the lane filler on every SM beside the step. Arms: full; the step alone on its SMs;
-// beside the pump; beside the pump and the lane filler; full again. Rates over each window; 8 receipts of each filler's
-// last chunk checked on the host.
+// (blk blocks of T threads an SM at the lowest priority of its green context): on the step's SMs, the step at the
+// highest priority (LFILL_ON=step, the default), or on the pump's, beside its PF_CTAS blocks an SM (LFILL_ON=pump);
+// fill_sms 0: no pump, the lane filler on every SM beside the step. Arms: full; the step alone on its SMs; beside the
+// pump; beside the pump and the lane filler; full again. Rates over each window; 8 receipts of each filler's last chunk
+// checked on the host.
 static int run_lfill(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, int T, int lsteps, int blk, int reps) {
   dfill_prep();
   const std::vector<Lt> p = lin_plans(d, B);
   bool wrapped = false;
   int lo, hi;
   CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
-  cudaStream_t full = d.st, ss = nullptr, sl = nullptr, fs = nullptr;
+  const bool on_pump = getenv("LFILL_ON") && !strcmp(getenv("LFILL_ON"), "pump");
+  if (on_pump && fill_sms <= 0) {
+    fprintf(stderr, "LFILL_ON=pump needs FILL_SMS > 0\n");
+    return 1;
+  }
+  cudaStream_t full = d.st, ss = nullptr, sl = nullptr, fs = nullptr, fsl = nullptr;
   int got[2] = {d.sms, 0};
   if (fill_sms > 0) {
-    const int e = gc_split_prio(d.sms - fill_sms, hi, lo, &ss, &sl, &fs, got);
+    const int e = gc_split_prio(d.sms - fill_sms, hi, lo, &ss, &sl, &fs, &fsl, got);
     if (e || !fs) {
       fprintf(stderr, "gc_split_prio(%d): %d (filler SMs %d)\n", d.sms - fill_sms, e, got[1]);
       return 7;
     }
+    if (on_pump) sl = fsl;
   } else {
     CK(cudaStreamCreateWithPriority(&ss, cudaStreamNonBlocking, hi));
     CK(cudaStreamCreateWithPriority(&sl, cudaStreamNonBlocking, lo));
@@ -1306,7 +1320,7 @@ static int run_lfill(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, i
   const std::vector<Lt> p2 = lin_plans(d, B);  // cuBLASLt tuned on the step's SMs, as an operator running the split would
   DFill f;
   if (fill_sms > 0) f = dfill_make(got[1], W, NC, S, g_c0, g_c1);
-  LFill lf = lfill_make(got[0] * blk, T, lsteps, g_c0, g_c1);
+  LFill lf = lfill_make(got[on_pump ? 1 : 0] * blk, T, lsteps, g_c0, g_c1);
   const int kind = getenv("DFILL_KIND") ? atoi(getenv("DFILL_KIND")) : 2;
   auto work = [&] { enqueue_step(d, p, kind, B, L, &wrapped); };
   auto work2 = [&] { enqueue_step(d, p2, kind, B, L, &wrapped); };
@@ -1355,11 +1369,13 @@ static int run_lfill(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, i
   const Rep m0 = median(a_full), m2 = median(a_full2), ms = median(a_step), ml = median(a_lane);
   const double base = (m0.ms + m2.ms) / 2;
   printf("{\"mode\": \"lfill\", \"B\": %d, \"L\": %d, \"fill_sms_req\": %d, \"step_sms\": %d, \"fill_sms\": %d, \"W\": %d, "
-         "\"NC\": %d, \"S\": %d, \"pf_lane\": %d, \"T\": %d, \"CH\": %d, \"lsteps\": %d, \"blk\": %d, \"lane_grid\": %d, "
+         "\"NC\": %d, \"S\": %d, \"pf_lane\": %d, \"pf_ctas\": %d, \"T\": %d, \"CH\": %d, \"lsteps\": %d, \"blk\": %d, "
+         "\"lane_on\": \"%s\", \"lane_grid\": %d, "
          "\"lane_tiles\": %d, \"prio\": [%d, %d], \"coins\": [\"%016llx\", \"%016llx\"], \"kv_wrapped\": %s, "
          "\"step_macs\": %.6e, \"chunk_macs\": %.6e, \"lane_chunk_instr\": %.6e, \"pump_alone\": {\"mac_per_s\": %.6e, "
          "\"mhz\": %.1f, \"watt\": %.1f}, ",
-         B, L, fill_sms, got[0], got[1], W, NC, S, PF_LANE, T, LF_CH, lsteps, blk, lf.grid, lf.tiles, lo, hi,
+         B, L, fill_sms, got[0], got[1], W, NC, S, PF_LANE, PF_CTAS, T, LF_CH, lsteps, blk, on_pump ? "pump" : "step",
+         lf.grid, lf.tiles, lo, hi,
          (unsigned long long)g_c0, (unsigned long long)g_c1, wrapped ? "true" : "false", step_macs,
          fill_sms > 0 ? f.macs() : 0.0, lf.instr(), palone, amhz, awatt);
   if (fill_sms > 0) {

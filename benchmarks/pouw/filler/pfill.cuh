@@ -73,6 +73,9 @@
 #ifndef PF_CTAS
 #define PF_CTAS 2  // blocks an SM: 2 x 48 KB, 4 warps an SMSP
 #endif
+#ifndef PF_MINB
+#define PF_MINB PF_CTAS  // the pump's launch-bounds blocks an SM, its register cap; above PF_CTAS, room for lfill beside it
+#endif
 #ifndef PF_SHA_ROLL
 #define PF_SHA_ROLL 1  // pf_compress (16 rounds a loop iteration); 0: rs_compress (all 80 unrolled); same digests
 #endif
@@ -81,7 +84,7 @@
 #define PF_PW 8  // the phase filler's warps a block (dfill_p): its tile is PF_PW warps x 128 PF_PW columns
 #endif
 #ifndef PF_PMIN
-#define PF_PMIN (PF_CTAS * PF_W / PF_PW)  // dfill_p's launch-bounds blocks an SM: its register cap, 128 by default
+#define PF_PMIN (PF_MINB * PF_W / PF_PW)  // dfill_p's launch-bounds blocks an SM: its register cap, 128 by default
 #endif
 static_assert(PF_PW == 2 || PF_PW == 4 || PF_PW == 8, "PF_PW is 2, 4 or 8");
 #define DFILL_GATE_W PF_W
@@ -461,7 +464,7 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
   }
 }
 template <int NC>
-__global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
+__global__ void __launch_bounds__(32 * PF_W, PF_MINB) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
                                                        int steps, unsigned long long* __restrict__ rec) {
   __shared__ __align__(16) uint8_t Bs[PF_TN * 32];
   __shared__ __align__(16) uint32_t Ab[PF_W][32 * 16];
@@ -762,22 +765,33 @@ struct DFill {
   long long per() const { return (long long)grid * tiles; }
   double macs() const { return (double)per() * W * S * (PF_TN / 8) * 4096.0; }
 };
+// DFILL_PAD_KB: unused dynamic shared memory a pump block, so that PF_CTAS blocks an SM is all that fits (lfill beside it)
+static size_t g_pf_pad = 0;
 static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
   const unsigned long long t0 = (unsigned long long)chunk * f.per();
   const dim3 gr(f.grid), bl(32 * PF_W);
+  const size_t pad = g_pf_pad;
   switch (f.NC) {
-    case 1: dfill_k<1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 2: dfill_k<2><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 3: dfill_k<3><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 4: dfill_k<4><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 5: dfill_k<5><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 6: dfill_k<6><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 7: dfill_k<7><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 8: dfill_k<8><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 1: dfill_k<1><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 2: dfill_k<2><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 3: dfill_k<3><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 4: dfill_k<4><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 5: dfill_k<5><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 6: dfill_k<6><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 7: dfill_k<7><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 8: dfill_k<8><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), or the probes 3, 5, 6, 7, 8\n"); exit(1);
   }
 }
+template <int NC> static void dfill_pad_attr() {
+  CK(cudaFuncSetAttribute(dfill_k<NC>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)g_pf_pad));
+}
 static void dfill_prep() {
+  if (getenv("DFILL_PAD_KB")) {
+    g_pf_pad = (size_t)atoi(getenv("DFILL_PAD_KB")) << 10;
+    dfill_pad_attr<1>(); dfill_pad_attr<2>(); dfill_pad_attr<3>(); dfill_pad_attr<4>();
+    dfill_pad_attr<5>(); dfill_pad_attr<6>(); dfill_pad_attr<7>(); dfill_pad_attr<8>();
+  }
   CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<3>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
