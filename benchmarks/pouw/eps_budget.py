@@ -403,16 +403,16 @@ def ts_best(hon: tuple, cheat: tuple, routes: list) -> tuple[float, float]:
     ok = np.abs(np.linalg.det(A)) > 1e-9
     phi = np.linalg.solve(A[ok], y[ok][..., None])[..., :R, 0]
     phi = np.vstack([phi[np.all((phi >= -1e-12) & (phi <= 1 + 1e-12), axis=1)], np.zeros((1, R))])
-    M, O = cheat[0] + phi @ d[:, 0], cheat[1] + phi @ d[:, 1]
-    return ts_time(*hon), float(np.max([a * M + b * O for a, b in TS_FACETS], axis=0).min())
+    mm, ops = cheat[0] + phi @ d[:, 0], cheat[1] + phi @ d[:, 1]
+    return ts_time(*hon), float(np.max([a * mm + b * ops for a, b in TS_FACETS], axis=0).min())
 
 
 def pv_ts(name: str, ctx: int, block: int, sink: bool = True, fold: float = TS_FOLD,
           x: float = X_BITSLICED) -> tuple[float, float]:
-    """pv's P V in a prefill of ctx tokens with P in blocks of `block` keys (0: one block): (ε_skip with the served output
-    free, γ over plain int8), each query block's tile weighed (past 256 every 8th, weighted 8, as CHECKED-STRIP). Each
-    block of P is its own unit (scale, T words, Ycum digits, served output); with `sink` key 0 is one more, priced as a
-    unit of depth 32 (the arms' p_sink)."""
+    """pv's P V in a prefill of ctx tokens with P in blocks of `block` keys (0: one block): (ε_skip with the served
+    output free, γ over plain int8), each query block's tile weighed (past 256 every 8th, weighted 8, as
+    CHECKED-STRIP). Each block of P is its own unit (scale, T words, Ycum digits, served output); with `sink` key 0 is
+    one more, priced as a unit of depth 32 (the arms' p_sink)."""
     s = MODELS[name]
     rep = s.heads // s.kv
     hon = cheat = plain = 0.0
@@ -422,22 +422,22 @@ def pv_ts(name: str, ctx: int, block: int, sink: bool = True, fold: float = TS_F
         wt, k = (1 if beta < 256 else 8), 32 * (beta + 1)
         full = (k - 1) // block if block else 0
         units = ([(32, 1)] if sink else []) + ([(block, full)] if full else []) + [(k - full * block, 1)]
-        M = O = F = 0.0
+        mmas = folds = free = 0.0
         routes: dict = {}
         for depth, n in units:
             mm, fo, fr, rs = pv_unit(depth, rep, fold, x)
-            M, O, F = M + n * mm, O + n * fo, F + n * fr
+            mmas, folds, free = mmas + n * mm, folds + n * fo, free + n * fr
             for key, (dm, do) in rs.items():
                 pm, po = routes.get(key, (0.0, 0.0))
                 routes[key] = (pm + n * dm, po + n * do)
-        th, tc = ts_best((M, O + F), (M, O), list(routes.values()))
+        th, tc = ts_best((mmas, folds + free), (mmas, folds), list(routes.values()))
         hon, cheat, plain = hon + wt * th, cheat + wt * tc, plain + wt * 16 * (k // 32)
     return hon / cheat - 1, hon / plain
 
 
 def pv_block_point(name: str, ctx: int, design: str, block: int, rates: dict = RATES) -> dict:
-    """Prefill's whole-model ε_skip (every served output free: no downstream check assumed) and γ for `Ap` (A with pv) or
-    `Bc`, P in blocks of `block` keys: each component's TS ε (TS_EPS_BC; A's 0 off P V) weighed by its honest seconds,
+    """Prefill's whole-model ε_skip (every served output free: no downstream check assumed) and γ for `Ap` (A with pv)
+    or `Bc`, P in blocks of `block` keys: each component's TS ε (TS_EPS_BC; A's 0 off P V) weighed by its honest seconds,
     P V's taken as plain int8 × pv_ts's γ."""
     ps = parts(name, ctx, "prefill", design, rates)
     e_pv, g_pv = pv_ts(name, ctx, block)
