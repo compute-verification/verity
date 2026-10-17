@@ -58,7 +58,7 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
             "bf16 input [M,K], e4m3 weight [N,K], f32 weight scales [ceil(N/128),K/128]",
             "group_size=128 and use_deep_gemm_e8m0=True",
         ),
-        evidence_domain="deepgemm_sm90_capture/v1; GLM-5.3 f32 checkpoint scales are load-time requantised to ue8m0",
+        evidence_domain="deepgemm_sm90_capture/v2 (r20261017-134740-47df); GLM-5.3 f32 checkpoint scales are load-time requantised to ue8m0",
     )
 
     def targets(self):

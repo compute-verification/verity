@@ -17,7 +17,7 @@
    "config_sha256": "3ac72612095574542f7fff847ada8e59d9199dd8af44bdf625d7e02615572e69"
   },
   "inventory_runs": {
-   "default": "r20261003-072626-b966 (inv-tp8-default.json, rank 0) and r20261003-062327-45fd (ranks 0-7), with the pinned source's dynamic FlashInfer/DeepGEMM class and GLM-5.3 shapes confirmed by deepgemm_sm90_capture/v1 GO r20261013-115825-d357",
+   "default": "r20261003-072626-b966 (inv-tp8-default.json, rank 0) and r20261003-062327-45fd (ranks 0-7), with the pinned source's dynamic FlashInfer/DeepGEMM class and GLM-5.3 shapes confirmed by deepgemm_sm90_capture/v2 GO r20261017-134740-47df (vLLM's defaults read back, a served engine's nvcc on PATH)",
    "VLLM_BATCH_INVARIANT=1": "r20261003-062327-45fd (log-bi.txt: refused, no sparse MLA backend supports batch invariance)"
   }
  },
@@ -161,7 +161,7 @@
    "captures": [
     "deepgemm_sm90_capture"
    ],
-   "note": "The default FlashInferFp8DeepGEMMDynamicBlockScaledKernel: FlashInferFp8Linear_v1 below 32 tokens and DeepGemmFp8Linear_v1 from 32. GLM-5.3's f32 weight scales and e4m3 weights are requantized to ue8m0 at load and declared as the served weight operands.",
+   "note": "The default FlashInferFp8DeepGEMMDynamicBlockScaledKernel: FlashInferFp8Linear_v1 below 32 tokens and DeepGemmFp8Linear_v1 from 32. GLM-5.3's f32 weight scales and e4m3 weights are requantized to ue8m0 at load and declared as the served weight operands. GO (v2, run r20261017-134740-47df, art:ed32605612a39b3a0f4cad575e5b6a325385f28657ddb7f7dbcdb768406a9d01): 28,196,352 words of both branches at vLLM's defaults with a served engine's toolchain, 0 mismatches; FlashInfer's GEMM keeps subnormals (its ftz probe refutes every FTZ model) and both branches compose FFMA(temp, FMUL(sx, ws), acc). vLLM offers FlashInfer's branch only with nvcc on PATH (has_flashinfer), as the row driver gives a served engine.",
    "branch": "cursor/deepgemm-sm90-8c79",
    "when": "vLLM's defaults on sm_90"
   },

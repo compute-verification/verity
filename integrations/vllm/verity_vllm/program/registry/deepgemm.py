@@ -23,7 +23,11 @@ csrc/apis/layout.hpp:41-47) runs four `wgmma.m64nNk32.f32.e4m3.e4m3` steps per 1
 `final += (sfa * sfb) * accum` (FMUL, then an FFMA: nvcc contracts, no fast-math in the JIT, csrc/jit/compiler.hpp:212-213) from +0 in
 ascending k, then `__float22bfloat162_rn`; TRT-LLM's swapAB kernel and `sm90_fp8_bmm` (`GemmType::Batched` of the same template,
 csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp:291-330) are the same chain.  So the GEMM is `fp8_vocab.block_gemm(K, N, 128, scale)`,
-`ScaledMmFp8BlockSharedScale_v1` by default.
+`ScaledMmFp8BlockSharedScale_v1` by default.  FlashInfer's library is built with `-use_fast_math`, yet its GEMM keeps subnormals
+at the FMUL, the FFMA and the cvt (the capture's `ftz` probe).  On DeepGEMM's branch FTZ cannot show: sx (ue8m0, >= 2^-42) and ws
+(>= 2^-22) are powers of two, so `temp * s` is exact and every accumulator a multiple of 2^-95; FFMA and FMUL + FADD part only where
+`temp * s` overflows f32 and the sum does not, where the `fma` probe finds FFMA.  vLLM offers FlashInfer's branch only with nvcc on
+`PATH` (`has_flashinfer`), as a served engine has it; without, every M is `DeepGemmFp8BlockScaledMMKernel`.
 
 FlashInfer's `scale_1x128_kernel`, one 128-element group per warp, as its sm_90 PTX has it:
 
@@ -75,14 +79,24 @@ FI_LANES = 32
 #: (bf16, e4m3, f32): the word types; `boolean_deepgemm` passes their bits
 WORD_TYPES = (BF16, E4M3, F32)
 
-_UE8M0_CONF = ("model-untested: read from vLLM d9105ea80 per_token_group_quant.cu:42-160 (nvcc without fast-math); the ue8m0 rounding "
-               "written as the bit form of per_token_group_quant.cu:381-387, equal on every reachable scale (Fp8Ue8m0Ceil_v1's doc); "
-               "tests/properties/deepgemm_sm90_capture_gpu.py is its hardware check")
-_FI_CONF = ("model-untested: read from FlashInfer 0.6.18 fp8_blockscale_gemm_kernel.cuh:820-895 and its sm_90 PTX (-use_fast_math); "
-            "MufuRcpFtz_v1's table is the RTX 4090's; tests/properties/deepgemm_sm90_capture_gpu.py is its hardware check")
-_GEMM_CONF = ("model-untested as composed: the GEMM is ScaledMmFp8BlockSharedScale_v1 (exact-model-tested against CUTLASS's blockwise "
-              "kernel on the H100), read from DeepGEMM 8b1392b9 sm90_fp8_gemm_1d2d.cuh:283-347 and 405-420 as the same chain; "
-              "tests/properties/deepgemm_sm90_capture_gpu.py is its hardware check")
+#: the H200 capture at vLLM's defaults with a served engine's toolchain that every conformance below cites
+_CAPTURE = "deepgemm_sm90_capture/v2, run r20261017-134740-47df, art:ed32605612a39b3a0f4cad575e5b6a325385f28657ddb7f7dbcdb768406a9d01"
+_UE8M0_CONF = ("exact-model-tested: vLLM d9105ea80's per_token_group_quant_8bit_kernel (ue8m0) on the H200 at vLLM's defaults, every "
+               f"(q, s) of 5,312 rows (both models' TP8 linears at M >= 32 and the fma probe) equal ({_CAPTURE}); read from "
+               "per_token_group_quant.cu:42-160 (nvcc without fast-math), the ue8m0 rounding written as the bit form of "
+               "per_token_group_quant.cu:381-387, equal on every reachable scale (Fp8Ue8m0Ceil_v1's doc)")
+_FI_CONF = ("exact-model-tested inside FlashInferFp8Linear_v1 (the quant's words never leave the op): FlashInfer 0.6.18's "
+            "fp8_blockscale_gemm on the H200 at vLLM's defaults, its module built by the served toolchain (CUDA 13.0, -use_fast_math), "
+            "equals FlashInferFp8Linear_v1 on every word at M 1, 8, 16 and 31, the all-subnormal groups its FTZ compare decides "
+            f"included, and the H200's rcp.approx.ftz table is MufuRcpFtz_v1's ({_CAPTURE}); read from fp8_blockscale_gemm_kernel.cuh:"
+            "820-895 and its sm_90 PTX")
+_GEMM_CONF = ("exact-model-tested: both branches' GEMMs and DeepSeek-V4's wo_a einsum on the H200 at vLLM's defaults, 28,196,352 words "
+              "with 0 mismatches over DeepSeek-V4-Pro's and GLM-5.3's TP8 linears at M 1, 8, 16, 31, 32, 64 and 256, wo_a at M 1, 31 "
+              "and 64, and two probes; on the probes "
+              "FFMA(temp, FMUL(sx, ws), acc) with subnormals kept is the kernels' composition, where FTZ at the FMUL, the FFMA, both or "
+              "the cvt, FMUL + FADD, and either scale applied first each differ on FlashInfer's branch, and FMUL + FADD and either "
+              f"scale first at DeepGEMM's f32 overflow edge ({_CAPTURE}); read from DeepGEMM 8b1392b9 sm90_fp8_gemm_1d2d.cuh:283-347 "
+              "and 405-420 as ScaledMmFp8BlockSharedScale_v1's chain")
 
 
 @primitive("F32LtFtz", 1, [("a", F32), ("b", F32)], BIT, conformance="exact-model-tested")
