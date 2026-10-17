@@ -28,7 +28,6 @@ not read by the Build, Match or Commit (`program.frontend.inputs_trace` lists `v
 from __future__ import annotations
 
 import hashlib
-import re
 import time
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -39,6 +38,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
 
+from .common import Unexpressible, _arr, _arr_shape, _Peers, _ptypes, kind, served_class
 from .phi import Phi
 
 BUILDER_ID = "predict-build/derived/v1"
@@ -59,30 +59,6 @@ _FACTS_READ = ("QK_NORM", "QK_NORM_EPS", "RENORMALIZE", "CLIP_QKV", "SHARED_EXPE
                "layer_norms", "extra_layer_norms")
 #: the activations of the gated MLP: the `*Mul` kind's role per `hidden_act`
 _ACTS = {"silu": "silu_mul", "gelu_pytorch_tanh": "gelu_tanh_mul"}
-
-
-class Unexpressible(Exception):
-    """φ asks for a structure the vocabulary cannot express.  The message names the fact precisely."""
-
-
-def kind(role: str, **statics):
-    """The vocabulary's kind for `role` at `statics` (the object the rules' `ctx.kind` returns), or `Unexpressible` naming why not."""
-    from verity_vllm.program.frontend import targets as TG
-    from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as VOC
-    try:
-        fn = VOC.kind(role, **statics)
-    except TG.UnregisteredTarget as e:
-        raise Unexpressible(f"numerics_unregistered: {e}") from None
-    if fn is None:
-        raise Unexpressible(f"vocabulary {VOC.name!r} has no kind for role {role!r} with {statics}")
-    return fn
-
-
-def served_class(vllm_class: str) -> str:
-    """The class vLLM instantiates for a family (`FAMILY_FACTS[...]["vllm_class"]`): the one its registry maps the architecture to
-    ("X (= Y)" is Y), else the named class."""
-    alias = re.search(r"\(= (\w+)\)", vllm_class)
-    return alias.group(1) if alias else re.match(r"\w+", vllm_class).group(0)
 
 
 @dataclass(frozen=True)
@@ -237,21 +213,6 @@ def rank_shape(C: ModelShape, world: int) -> ModelShape:
     return replace(C, NH=C.NH // world, KVH=1 if replicated_kv else C.KVH // world, I=C.I // world)
 
 
-def _arr(shape: tuple[int, ...], w: int) -> Type:
-    t: Type = Value(w)
-    for n in reversed(shape):
-        t = Array(int(n), t)
-    return t
-
-
-def _arr_shape(t: Type) -> tuple[int, ...]:
-    shape = []
-    while isinstance(t, Array):
-        shape.append(t.n)
-        t = t.elem
-    return tuple(shape)
-
-
 def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
     """The weights record of the model class on meta, as `derive._weights_of` lists it: the distinct parameters in module order
     (the tied `lm_head.weight` is the embedding's leaf), then the distinct buffers (the embedding's 0-d bf16 `normalizer` where the
@@ -288,11 +249,6 @@ def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
     for L in range(C.NL):
         out += [(f"model.model.layers.{L}.self_attn.attn.{s}", Value(32)) for s in ("_k_scale", "_v_scale", "_q_scale", "_prob_scale")]
     return out
-
-
-def _ptypes(spec) -> tuple:
-    params, _ = spec.signature()
-    return tuple(t for _, t in params)
 
 
 class _Specs:
@@ -434,31 +390,6 @@ class BuildResult:
     def summary(self) -> dict:
         return {"wrapper": self.wrapper, "function": self.function, "digest": self.digest,
                 "n_root_nodes": self.n_root_nodes, "gates": getattr(self.program, "gates", None), "timings": self.timings}
-
-
-class _Peers:
-    """A tensor-parallel rank's view of the other ranks' partials (`vllm_meta.WithPeers`): world - 1 peer Inputs per collective, in
-    call order, the other ranks in rank order; `n` counts the Inputs the collectives have read."""
-
-    def __init__(self, inputs: list[Coll], world: int, rank: int) -> None:
-        self.inputs, self.world, self.rank, self.n = list(inputs), world, rank, 0
-
-    def take(self, own: list) -> list[list]:
-        """One collective's rows per rank, in rank order: this rank's `own` rows (refs) and each of the next world - 1 peer Inputs'."""
-        peers = self.inputs[self.n:self.n + self.world - 1]
-        self.n += self.world - 1
-        N = own[0].count
-        others = [[p.refs.slice(i * N, (i + 1) * N) for i in range(len(own))] for p in peers]
-        return others[:self.rank] + [list(own)] + others[self.rank:]
-
-    def rows(self, own: list) -> list:
-        """Each row's operand of a per-row collective: that row of every rank, rank order."""
-        ranks = self.take(own)
-        return [concat([r[i] for r in ranks]) for i in range(len(own))]
-
-    def whole(self, own: list):
-        """The operand of one collective over all rows: every rank's rows, rank-major (`collectives.AllReduceRule`'s parts)."""
-        return concat([concat(r) for r in self.take(own)])
 
 
 class _Model:
@@ -614,7 +545,7 @@ class _Model:
         """The fused-MoE block over the rows `x` as `rules.vllm_moe` binds its launches: each row's router logits and top-k, then
         each (token, slot) pair p = t * TOPK + k in pair order: the w13 expert GEMM (expert id ids[t][k]), the activation, the w2
         expert GEMM with the routed weight w[t][k]; then each row's sum of its TOPK down rows."""
-        S, C, M, K = self.S, self.C, len(x), self.C.TOPK
+        S, M, K = self.S, len(x), self.C.TOPK
         pr, pt, pu, pa, pw, pm = (_ptypes(fn) for fn in (S.router, S.topk, S.expert_up, S.silu, S.expert_down, S.moe_sum))
         lg = [self.call(S.router, Coll(pr[0], x[t].refs), Coll(pr[1], lw["gate_w"].refs)) for t in range(M)]
         r = [self.call(S.topk, Coll(pt[0], lg[t].refs)) for t in range(M)]
@@ -780,14 +711,14 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
             hid = model.forward([Coll(I32, toks[-1].refs)], int(LP) + s)
             toks.append(model.sample(hid[-1], s + 1, int(LP) + s, policy))
         out = Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
-    if peers.n != len(peers.inputs):
-        raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs")
+    if peers.n != len(peers.inputs) or peers.k != words:
+        raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
     B.ret_type = out.type
     body = B.finish(out)
     t_body = time.time()
     src_class, derive_name = WRAPPERS[(wrapper, kind)]
     if world > 1:
-        src_class = f"verity-vllm/with-peers/v1[{src_class}]"
+        src_class = f"verity-vllm/{'scheduled-with-peers' if words else 'with-peers'}/v1[{src_class}]"
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile, "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({})).hexdigest()[:16]}

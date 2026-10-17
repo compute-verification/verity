@@ -23,7 +23,7 @@ from verity.ml.circuits.defs import Builder
 from verity.ml.circuits.refs import Coll, PartLog, Refs, concat, strided_view
 from verity.ml.circuits.types import Type, Value
 
-from .build import Unexpressible, _arr_shape, _Peers, _ptypes, kind, served_class
+from .common import Unexpressible, _arr_shape, _Peers, _ptypes, kind, served_class
 from .phi import Phi
 
 
@@ -160,7 +160,7 @@ class _Model:
     def sample(self, row: Refs, event: int, pos: int, policy=None) -> Coll:
         """The greedy token of the row's logits: this rank's vocabulary slice, gathered across the ranks."""
         V, W = int(self.C["V"]), self.net.world
-        lg = self.linear([row], self.w["lm_head"])
+        lg = self.cublas([row], self.w["lm_head"])
         gathered = self.call(self.k("all_gather", WORLD=W, N=V), self.peers.rows(lg)[0])
         return self.call(self.k("token_select", V=V * W), gathered.refs)
 
@@ -187,7 +187,7 @@ class _Model:
             setting, _ = AR.served_route(s, M, N)
             c = AR.covered(setting, N, "fused", M) if setting else None
             if c is None:
-                _refuse(f"a fused all-reduce + RMSNorm of {M} x {N} under {s} (no capture covers it: tp_allreduce.covered)")
+                _refuse(f"a fused all-reduce + norm of {M} x {N} under {s} (no capture covers it: tp_allreduce.covered)")
             fn = self.k("all_reduce_rmsnorm_mnnvl", WORLD=W, N=N, SHOT=AR.mnnvl_shot(M, N, W), CLUSTER=AR.mnnvl_grid(M, N)[1], EPS=self.EPS,
                         FMA=bool(c.statics["FMA"]))
             outs = [self.call(fn, p, r, w.refs) for p, r in zip(self.peers.rows(parts), res)]
@@ -206,30 +206,32 @@ class _Model:
         outs = [self.call(fn, x, w.refs, ws.refs) for x in xs]
         return [(o if small else o[2]).refs for o in outs]
 
-    def linear(self, xs: list[Refs], w: Coll) -> list[Refs]:
-        """An unbiased bf16 linear on cuBLAS's captured route (`CublasLinearRule`)."""
+    def cublas(self, xs: list[Refs], w: Coll, f32: bool = False) -> list[Refs]:
+        """An unbiased bf16 GEMM on cuBLAS's captured route: bf16 out (`CublasLinearRule`), or f32 (`CublasRouterRule`: the router
+        family's route, or a direct call's where the shape has its own)."""
+        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import _f32out_phase
         from verity_vllm.program.registry.bf16_gemm_check import default_cublas_route
-        N, K = _arr_shape(w.type)
-        route = default_cublas_route("linear", len(xs), K, N)
+        M, (N, K) = len(xs), _arr_shape(w.type)
+        phase = _f32out_phase(K, N) if f32 else "linear"
+        route = default_cublas_route(phase, M, K, N)
         if route is None:
-            _refuse(f"a bf16 linear of M={len(xs)}, K={K}, N={N} (no captured vLLM-default cuBLAS route)")
-        fn = self.k("cublas_splitk_gemm" if route[0] == "splitk" else "gemm_dot", K=K, N=N, DOT=self.net.dot, **route[1])
+            _refuse(f"a bf16 {phase} GEMM of M={M}, K={K}, N={N} (no captured vLLM-default cuBLAS route)")
+        split = route[0] == "splitk"
+        role = ("cublas_splitk_gemm_f32out" if split else "cublas_gemm_f32out") if f32 else ("cublas_splitk_gemm" if split else "gemm_dot")
+        fn = self.k(role, K=K, N=N, DOT=self.net.dot, **route[1])
         return [self.call(fn, x, w.refs).refs for x in xs]
 
     def router(self, xs: list[Refs], w: Coll) -> list[Refs]:
         """`GateLinear`'s f32 logits on the tier vLLM dispatches (`LlBf16GemmRule`, `CublasRouterRule`)."""
-        from verity_vllm.program.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, default_cublas_route, dispatch_sm90
+        from verity_vllm.program.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
         M, (N, K) = len(xs), _arr_shape(w.type)
         tier, st = dispatch_sm90(M, K, N)
+        if tier == "cublas":
+            return self.cublas(xs, w, f32=True)
         if tier == "dotprod":
             fn = self.k("ll_bf16_dotprod", N=N, K=K, FMA=DEFAULT_LL_BF16_FMA, **st)
-        elif tier == "splitk":
-            fn = self.k("ll_bf16_splitk", N=N, K=K, DOT=self.net.dot, **st)
         else:
-            route = default_cublas_route("router", M, K, N)
-            if route is None:
-                _refuse(f"a router GEMM of M={M}, K={K}, N={N} (no captured vLLM-default cuBLAS route)")
-            fn = self.k("cublas_splitk_gemm_f32out" if route[0] == "splitk" else "cublas_gemm_f32out", K=K, N=N, DOT=self.net.dot, **route[1])
+            fn = self.k("ll_bf16_splitk", N=N, K=K, DOT=self.net.dot, **st)
         return [self.call(fn, x, w.refs).refs for x in xs]
 
     def absorb(self, xs: list[Refs], w: Coll, B: int, K: int, N: int) -> list[Refs]:
@@ -265,7 +267,7 @@ class _Model:
             _refuse(f"a row of {keys[-1]} keys > TOPK {TOPK} (the top-k kernels' radix selection)")
         cs = [self.w["cos_sin"].refs.slice((pos0 + i) * R, (pos0 + i + 1) * R) for i in range(M)]
         qkv = self.fp8_linear(x, w("qkv_a_w"), w("qkv_a_ws"))
-        wkp = self.linear(x, w("wk_w")) if indexer else None
+        wkp = self.cublas(x, w("wk_w")) if indexer else None
         qn, kn, kr = self.k("dsa_rmsnorm", N=QL, EPS=self.EPS), self.k("dsa_rmsnorm", N=KVL, EPS=self.EPS), self.k("dsa_kv_rope", D=R)
         qc = [self.call(qn, q.slice(0, QL), w("q_a_ln").refs).refs for q in qkv]
         kvc = [self.call(kn, q.slice(QL, QL + KVL), w("kv_a_ln").refs).refs for q in qkv]
