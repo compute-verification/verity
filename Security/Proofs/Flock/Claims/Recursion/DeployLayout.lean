@@ -25,8 +25,9 @@ definition), its V* statements number `nS` (`vstarLen_atPorts`), and every call 
 (`partCallsTrue_layoutOf`: there are none). `ksA_deployed_concrete` and `ksFlock_deployed_concrete` are
 `ksA_deployed_parts` there, with no layout parameter.
 
-**What `layoutOf` leaves open.** No port holds the link message (round `0`) or the last message, and a port holds the
-row its round's commit string opens to, not the round's framed message (`0 :: …`, `FlockDeploy.act`). `Held` asks that
+**What `layoutOf` leaves open.** No port holds the link message (round `0`), the last message, or a stream round that
+absorbs no message (at `m = 22`, `k_log = 10`, `claims = 4`: 28 of the 128 stream rounds), and a port holds the row
+its round's commit string opens to, not the round's framed message (`0 :: …`, `FlockDeploy.act`). `Held` asks that
 some part hold every inner round, so it fails at `layoutOf` wherever a compiled statement parses at the shape
 (`not_held_layoutOf`), and `VStarParts` with it (`not_vstarParts_layoutOf`): the concrete theorems' V* hypotheses hold
 only at a shape no compiled statement parses at.
