@@ -5,7 +5,7 @@
   "K": 20000000.0,
   "Gamma": 6.4e+16,
   "b_tok": 20,
-  "description": "The thread draft's policy: K = S* = a million 20-bit tokens, Gamma = 2 N D for a 1M-token session at 32B active parameters. Kimi K2 shapes: 32B active of 1.04T parameters, d_model 7168, routed-expert width 2048, 61 layers. Assumes the committed parameters are capped at the registered models' size, so no noise tables or corpora can be committed.",
+  "description": "The thread draft's policy: K = S* = a million 20-bit tokens, Gamma = 2 N D for a 1M-token session at 32B active parameters. Kimi K2 shapes: 32B active of 1.04T parameters, d_model 7168, routed-expert width 2048, 61 layers. Assumes a public cap on the committed parameters' size, a few times the largest permitted model, proved inside the zero-knowledge proof, so no noise tables or corpora of that size can be committed.",
   "theta_cap": true
  },
  {
@@ -23,7 +23,7 @@
   "K": 2200000.0,
   "Gamma": 6.4e+16,
   "b_tok": 2.2,
-  "description": "The same sessions with prompts arithmetic-coded against the committed base model (b_tok = 2.2, b_tok/entropy-coded central): K shrinks 9x for the same inference allowance. The auditor's lever. Assumes the committed parameters are capped at the registered models' size, so no noise tables or corpora can be committed.",
+  "description": "The same sessions with prompts arithmetic-coded against the committed base model (b_tok = 2.2, b_tok/entropy-coded central): K shrinks 9x for the same inference allowance. The auditor's lever. Assumes a public cap on the committed parameters' size, a few times the largest permitted model, proved inside the zero-knowledge proof, so no noise tables or corpora of that size can be committed.",
   "theta_cap": true
  },
  {
@@ -32,7 +32,7 @@
   "K": 91000000.0,
   "Gamma": 2.9e+17,
   "b_tok": 20,
-  "description": "The Oct 17 write-up's K (about 11 MB), with Gamma rescaled so that Kimi K2 inference at 20 bits per token complies as declared: Gamma = K x 2 N_active / b_tok = 2.9e17. The write-up's own Gamma, 9.5e17, is calibrated to Kimi-K3, whose shapes are unconfirmed. Assumes the committed parameters are capped at the registered models' size, so no noise tables or corpora can be committed.",
+  "description": "The Oct 17 write-up's K (about 11 MB), with Gamma rescaled so that Kimi K2 inference at 20 bits per token complies as declared: Gamma = K x 2 N_active / b_tok = 2.9e17. The write-up's own Gamma, 9.5e17, is calibrated to Kimi-K3, whose shapes are unconfirmed. Assumes a public cap on the committed parameters' size, a few times the largest permitted model, proved inside the zero-knowledge proof, so no noise tables or corpora of that size can be committed.",
   "theta_cap": true
  },
  {
@@ -41,7 +41,7 @@
   "K": 20000000.0,
   "Gamma": 2e+17,
   "b_tok": 20,
-  "description": "The thread draft's dense example: the thread draft's dense example: 100B active parameters, smallest inner dimension 3072, e = 7168; K = 2e7, Gamma = 2 N D at 1M tokens. Assumes the committed parameters are capped at the registered models' size, so no noise tables or corpora can be committed.",
+  "description": "The thread draft's dense example: the thread draft's dense example: 100B active parameters, smallest inner dimension 3072, e = 7168; K = 2e7, Gamma = 2 N D at 1M tokens. Assumes a public cap on the committed parameters' size, a few times the largest permitted model, proved inside the zero-knowledge proof, so no noise tables or corpora of that size can be committed.",
   "theta_cap": true
  }
 ]

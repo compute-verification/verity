@@ -143,21 +143,32 @@ A developer may commit a noise table, one entry per parameter per direction, and
 multiply-add per parameter instead of a PRNG draw.
 
 - **Without a cap** (`kimi-k2-1m-raw-uncapped`), `zo-seed-pool` costs about 1.1 and `es-population-30` about 1.5.
-- **With θ capped** at the registered models' size, which every other calibration assumes (`theta_cap`), they cost 970
-  and 7,070.
+- **With a cap**, which every other calibration assumes (`theta_cap`), they cost 970 and 7,070.
 
-Three restrictions are proposed, all checkable from structure:
+**Design constraint.** The policy serves an agreement between rivals, so a rule on θ must neither reveal nor narrow the
+architecture. Checks run inside the zero-knowledge proof, and the verifier learns only that they pass.
 
-- θ holds only registered inputs.
-- Its total width is capped.
-- Committed text enters only as tokens at the embedding lookup, charged like a prompt.
+**Recommended rule: two public budgets.**
 
-They don't close one gap. Structure can't tell weights from data: a one-hot activation copies any θ entry. A corpus
-can also hide in a checkpoint's slack bits, about 2×10¹¹ tokens for a 1T-parameter model requantized within 1% loss.
-So small-model training on smuggled data stays bounded, not closed.
+- At most `B_matrix` bits of θ may be read only as a multiplication's operand against a value not in θ (matrix weights,
+  in any architecture).
+- At most `B_other` bits may be anything else.
 
-The thread guarantees say nothing about a developer whose data is in θ, since `Declaration.Contains` fails. A lemma
-for data that enters as tokens (`contains_of_tokenChannel`) would extend them.
+Both budgets are set alike for all parties and generously, a few times the largest permitted model, so they reveal
+nothing about any party's model. A noise table for a 1T-parameter model costs about 125 GB per direction, so a budget
+of a few TB leaves room for too few directions to train with. Frontier corpora don't fit either.
+
+**Rejected** because they would reveal or narrow the architecture: typed roles, declared shapes or layers, and a
+per-model registry. A rule that committed text enter only through the embedding lookup is optional. It is generic, but
+it needs the proof to identify that operation.
+
+**Not closed.** Structure can't tell weights from data: a one-hot activation copies any θ entry. A corpus can also hide
+in a checkpoint's slack bits, about 2×10¹¹ tokens for a 1T-parameter model requantized within 1% loss. So small-model
+training on smuggled data stays bounded, not closed.
+
+**The proof gap.** The thread guarantees say nothing about a developer whose data is in θ, since
+`Declaration.Contains` fails. The fix to pursue states the guarantee with a term for the committed data, degrading by
+at most the bits of data the budgets allow.
 
 ## What changed from the prior draft's appendix
 
