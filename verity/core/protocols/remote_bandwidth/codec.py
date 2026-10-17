@@ -16,16 +16,30 @@ c_r        LE(XOF(DOMAIN ‖ u8 len(name) ‖ name ‖ seed ‖ u32be r)[0 : S +
 τ          the same at r = 2^32 − 1, and 1 in place of 0;  t(i) = τ · i mod p
 K          a masked codec's: LE(XOF(DOMAIN ‖ u8 len(name) ‖ name ‖ seed ‖ u32be 2^32 − 2)[0 : S]), n bits, not reduced
 σ_K(x)     x ⊕ K if that is below p, else x: an involution on [0, p)
-encode     x ↦ ρ(x + c_r + t(i)) for r = 0 … k − 1, from the payload word; masked, x ↦ σ_K(x) before each round r ≥ 1
-decode     x ↦ ρ⁻¹(x) − c_r − t(i) for r = k − 1 … 0; masked, x ↦ σ_K(x) after each round r ≥ 1
+d_j        a bound block's digest: sha512/row/v2 of its payload, SHA512(P(32768) ‖ payload_j), its payload leaf's x_j
+b_j        a bound block's offset: LE(XOF(DOMAIN ‖ u8 len(name) ‖ name ‖ seed ‖ u32be 2^32 − 3 ‖ u64be j ‖ d_j)[0 : 64])
+           mod p; under the seed's key b_j = 0
+encode     x ↦ ρ(x + c_r + t(i) + b_j) for r = 0 … k − 1, from the payload word; masked, x ↦ σ_K(x) before each round
+           r ≥ 1
+decode     x ↦ ρ⁻¹(x) − c_r − t(i) − b_j for r = k − 1 … 0; masked, x ↦ σ_K(x) after each round r ≥ 1
 ~~~
 
+A block's key is the seed's (b_j = 0) or its own, bound (`encode(..., bound=True)`, `decode(..., d)`).  The seed's key
+is for blocks whose payloads were committed before the codec seed was drawn (a registration's): such a block's
+encoding costs k roots a word whatever the payload.  A block written after the seed (a KV page) takes its bound key,
+with d_j kept beside it, since under the seed's key its writer could pick its encoding E (all zeros, or another
+block's) and write the payload `decode(E)`, holding nothing for it; under the bound key a chosen E decodes to a
+payload of that digest only by a search over SHA-512.
+
 Encoding costs k square roots a word (n − 3 squarings each), decoding k squarings and, masked, k − 1 masks: at the
-default a block is 96 roots of 1,021 squarings to encode and 96 squarings of 1,024 bits to decode.  `rounds` below 2
-is refused: at k = 1 a word can be partly kept and completed for less than an encode (red team F27).  ρ and σ_K permute
-the canonical words, so `decode` is a bijection from canonical blocks to payload blocks, and a payload commitment with
-the codec seed fixes the encoded store.  A payload word at or above p is refused: c is below 2^16, so its top 16 bits
-are all ones, a NaN under bf16 (and its top byte 0xFF, one under E4M3), and every block of finite values encodes.
+default a block is 96 roots of 1,021 squarings to encode and 96 squarings of 1,024 bits to decode.  A bound block
+adds d_j (34 SHA-512 compressions over the payload, which its payload leaf hashes anyway) and b_j (2) to its encode,
+and b_j to its decode unless b_j is kept in d_j's place.  `rounds` below 2 is refused: at k = 1 a word can be partly
+kept and completed for less than an encode (red team F27).  ρ and σ_K permute the canonical words, so `decode` under
+the seed's key is a bijection from canonical blocks to payload blocks, and a payload commitment with the codec seed
+fixes the encoded store; under a bound key, a block and a digest decode to the payload only if it has that digest.  A
+payload word at or above p is refused: c is below 2^16, so its top 16 bits are all ones, a NaN under bf16 (and its top
+byte 0xFF, one under E4M3), and every block of finite values encodes.
 """
 
 from __future__ import annotations
@@ -34,11 +48,15 @@ import hashlib
 import struct
 from dataclasses import dataclass
 
+from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+
 DOMAIN = b"verity/word-codec/kv/v0\0"
 BLOCK_BYTES = 4096
 SEED_BYTES = 32
+DIGEST_BYTES = 64
 TWEAK_INDEX = (1 << 32) - 1
 MASK_INDEX = (1 << 32) - 2
+BIND_INDEX = (1 << 32) - 3
 MIN_ROUNDS = 2
 WORD_INDICES = 1 << 64
 
@@ -80,7 +98,7 @@ class Codec:
     def __post_init__(self) -> None:
         if type(self.field) is not Field or FIELDS.get(self.field.name) != self.field:
             raise ValueError(f"a codec's field is one of {sorted(FIELDS)}")
-        if type(self.rounds) is not int or not MIN_ROUNDS <= self.rounds < MASK_INDEX:
+        if type(self.rounds) is not int or not MIN_ROUNDS <= self.rounds < BIND_INDEX:
             raise ValueError(f"the codec runs at least {MIN_ROUNDS} rounds: at one a word is completed for less than an encode")
         if type(self.masked) is not bool:
             raise ValueError("a codec is masked or not")
@@ -131,12 +149,14 @@ def _element(f: Field, seed: bytes, r: int) -> int:
 
 @dataclass(frozen=True, slots=True)
 class Key:
-    """A codec seed's round constants `c_0 … c_(k−1)`, its tweak multiplier `τ` and, masked, its mask `K`."""
+    """A codec seed's round constants `c_0 … c_(k−1)`, its tweak multiplier `τ`, masked, its mask `K`, and the seed,
+    which a bound block's offset `b_j` is derived from."""
 
     codec: Codec
     c: tuple[int, ...]
     tau: int
     mask: int | None = None
+    seed: bytes | None = None
 
     @property
     def rounds(self) -> int:
@@ -154,7 +174,27 @@ def key(seed: bytes, codec: Codec = DEFAULT) -> Key:
         raise ValueError("a key is of a Codec")
     f = codec.field
     mask = int.from_bytes(_xof(_message(f, seed, MASK_INDEX), f.word_bytes), "little") if codec.masked else None
-    return Key(codec, tuple(_element(f, seed, r) for r in range(codec.rounds)), _element(f, seed, TWEAK_INDEX) or 1, mask)
+    c = tuple(_element(f, seed, r) for r in range(codec.rounds))
+    return Key(codec, c, _element(f, seed, TWEAK_INDEX) or 1, mask, seed)
+
+
+def digest(payload: bytes) -> bytes:
+    """`d_j`, a payload's digest: sha512/row/v2 of its 4,096 bytes, the `x_j` its payload leaf hides (`receipts.hidden`)."""
+    if type(payload) is not bytes or len(payload) != BLOCK_BYTES:
+        raise ValueError(f"a block is {BLOCK_BYTES} bytes")
+    return sha512_row_v2_digest(payload, 8 * BLOCK_BYTES)
+
+
+def binding(d: bytes, j: int, k: Key) -> int:
+    """`b_j`, the offset of block `j`'s bound key from the digest `d` of its payload: one SHA-512 output, `K_j =
+    H(seed ‖ j ‖ H(m_j))` in the codec's framing, added to every round of the block's words."""
+    if type(d) is not bytes or len(d) != DIGEST_BYTES:
+        raise ValueError(f"a block's digest is {DIGEST_BYTES} bytes")
+    if k.seed is None:
+        raise ValueError("a bound key needs its codec seed")
+    f = k.codec.field
+    message = _message(f, k.seed, BIND_INDEX) + _index(j, k.codec).to_bytes(8, "big") + d
+    return int.from_bytes(_xof(message, DIGEST_BYTES), "little") % f.p
 
 
 def rho(a: int, f: Field) -> int:
@@ -172,12 +212,12 @@ def rho_inv(y: int, f: Field) -> int:
     return q if y & 1 == 0 else (p - q) % p
 
 
-def encode_word(m: int, i: int, k: Key) -> int:
+def encode_word(m: int, i: int, k: Key, b: int = 0) -> int:
     f = k.codec.field
     p = f.p
     if not 0 <= m < p:
         raise ValueError("a payload word is below p")
-    t = k.tau * i % p
+    t = (k.tau * i + b) % p
     x = m
     for r, c in enumerate(k.c):
         if r and k.mask is not None:
@@ -186,12 +226,12 @@ def encode_word(m: int, i: int, k: Key) -> int:
     return x
 
 
-def decode_word(y: int, i: int, k: Key) -> int:
+def decode_word(y: int, i: int, k: Key, b: int = 0) -> int:
     f = k.codec.field
     p = f.p
     if not 0 <= y < p:
         raise ValueError("an encoded word is canonical, below p")
-    t = k.tau * i % p
+    t = (k.tau * i + b) % p
     x = y
     for r in reversed(range(k.rounds)):
         x = (rho_inv(x, f) - k.c[r] - t) % p
@@ -211,21 +251,28 @@ def _block(words: list[int], f: Field) -> bytes:
     return b"".join(x.to_bytes(f.word_bytes, "little") for x in words)
 
 
-def encode(payload: bytes, j: int, k: Key) -> bytes:
-    """`E_j`, block `j` of the store, from its payload."""
+def encode(payload: bytes, j: int, k: Key, *, bound: bool = False) -> bytes:
+    """`E_j`, block `j` of the store, from its payload: under the seed's key, or, `bound`, under the block's own key,
+    for a block written after the codec seed, which keeps `digest(payload)` beside it."""
     f = k.codec.field
     i0 = f.block_words * _index(j, k.codec)
-    return _block([encode_word(m, i0 + w, k) for w, m in enumerate(_words(payload, f))], f)
+    words = _words(payload, f)
+    b = binding(digest(payload), j, k) if bound else 0
+    return _block([encode_word(m, i0 + w, k, b) for w, m in enumerate(words)], f)
 
 
-def decode(block: bytes, j: int, k: Key) -> bytes | None:
-    """Block `j`'s payload, or None if a word of it is not canonical (no payload encodes to it)."""
+def decode(block: bytes, j: int, k: Key, d: bytes | None = None) -> bytes | None:
+    """Block `j`'s payload, under the seed's key, or under the bound key of the digest `d` kept beside it.  None if a
+    word of it is not canonical, or if `d` is given and the payload decoded under it does not have that digest: no
+    payload encodes to it."""
     f = k.codec.field
     i0 = f.block_words * _index(j, k.codec)
     words = _words(block, f)
+    b = 0 if d is None else binding(d, j, k)
     if any(y >= f.p for y in words):
         return None
-    return _block([decode_word(y, i0 + w, k) for w, y in enumerate(words)], f)
+    payload = _block([decode_word(y, i0 + w, k, b) for w, y in enumerate(words)], f)
+    return None if d is not None and digest(payload) != d else payload
 
 
 def _index(j: int, codec: Codec) -> int:
