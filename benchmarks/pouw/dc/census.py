@@ -420,11 +420,11 @@ def tables(dev: Device) -> str:
     out += ["", f"q*: c_M {c_m:.3f} SMSP-cycles over {lane_words:.0f} words a lane = {q:.4f}"]
     if fam == "sm100":
         c_x = fs[0]["X"] if fs else 1.0
-        # 32 lanes x 32 words a tcgen05.ld 32x32b.x32; DC's loaders wait once every 2 loads
+        # 32 lanes x 32 words a tcgen05.ld 32x32b.x32; tcgen05.wait::ld is a scoreboard wait in SASS, no instruction
         n_ld = h["slots_per"] / (32 * 32)
-        q_ld = (c_m + n_ld * 1.5 * c_x) / lane_words
-        out[-1] += (f"; with the {n_ld:.0f} tcgen05.ld.x32 (and a wait every 2) that bring them to registers: "
-                    f"{q_ld:.4f} (x128 loads: {(c_m + n_ld / 4 * 1.5 * c_x) / lane_words:.4f})")
+        q_ld = (c_m + n_ld * c_x) / lane_words
+        out[-1] += (f"; with the {n_ld:.0f} tcgen05.ld.x32 that bring them to registers: "
+                    f"{q_ld:.4f} (x128 loads: {(c_m + n_ld / 4 * c_x) / lane_words:.4f})")
     duo = max((a["duo_words"] or 0) for a in dev.analyses)
     beside = max(((j["lane_rate"] * 32, n) for _, n, j in dev.joints if analyze.lane_of(n) == "duo"
                   and (j.get("tensor_fraction") or 0) >= 1 - MARGIN), default=None)
