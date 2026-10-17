@@ -10,6 +10,7 @@ export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/pouw/filler
 export B; B=$(mktemp -d /tmp/capfillt.XXXXXX); trap 'rm -rf "$B"' EXIT
 export CP_POINTS=${CP_POINTS:-"1:2048 32:2048 128:2048 256:2048"} CP_NCU=${CP_NCU:-"1:2048 32:2048 256:2048"}
+[ "$CP_NCU" = none ] && CP_NCU=""
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
