@@ -309,7 +309,8 @@ def cmd_verify(a) -> int:
     if not bundle:
         raise SystemExit(f"{a.prove_run}: its out/bundle.json names no artifact")
     root = P.repository_root()
-    cmd = P.verifier_command(root, bundle if bundle.startswith("art:") else f"art:{bundle}", a.prove_run, node=a.node)
+    cmd = P.verifier_command(root, bundle if bundle.startswith("art:") else f"art:{bundle}", a.prove_run, node=a.node,
+                             mem_gb=a.mem_gb)
     print(" ".join(cmd), flush=True)
     return 0 if a.dry_run else subprocess.run(cmd, cwd=root, check=False).returncode
 
@@ -438,6 +439,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--store", action="store_true", help="skip points that already have a passing run")
     p = sub.add_parser("verify"); p.add_argument("--prove-run", required=True); p.add_argument("--bundle", default=None)
     p.add_argument("--node", default=P.VERIFIER_NODES[0], choices=P.VERIFIER_NODES); p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--mem-gb", type=int, default=16, help="the Lean verifier peaks near 5 GB on a 2^25-bit block circuit")
     p = sub.add_parser("compare"); p.add_argument("baseline"); p.add_argument("candidate")
     p.add_argument("--allow", action="append", default=[], help="an identity field the comparison deliberately varies")
     p = sub.add_parser("table"); p.add_argument("results", nargs="*"); p.add_argument("--store", action="store_true")

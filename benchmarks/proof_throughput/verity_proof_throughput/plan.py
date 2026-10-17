@@ -117,7 +117,7 @@ def prover_command(root: Path, item: Planned, *, mem_gb: int = 96, cpus: int = 3
             f"RUNS={pt.runs}", f"IDENTITY={item.identity}"]
 
 
-def verifier_command(root: Path, bundle: str, prove_run: str, *, node: str = VERIFIER_NODES[0], mem_gb: int = 64,
+def verifier_command(root: Path, bundle: str, prove_run: str, *, node: str = VERIFIER_NODES[0], mem_gb: int = 16,
                      timeout: str = "3h") -> list[str]:
     return ["research", "run", "--on", node, "--project", "verity", "--campaign", "proof-throughput", "--source", str(root),
             "--cwd", "source", "--mem-gb", str(mem_gb), "--timeout", timeout, "--require-result",

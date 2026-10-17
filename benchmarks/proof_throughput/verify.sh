@@ -3,7 +3,7 @@
 # point's bundle (job.sh's out/bundle.json), each under /usr/bin/time, then the point's contract result from the prover's records
 # and these verdicts. The verifier's `--partition` is its own: derived from the workload's program and checked against the
 # digest the circuit binds (`partition`), never read from the bundle. Runs on a CPU node (vy-nebius-cpu-2 or -cpu-3), never on the prover's:
-#   research run --on vy-nebius-cpu-3 --project verity --source . --cwd source --mem-gb 64 \
+#   research run --on vy-nebius-cpu-3 --project verity --source . --cwd source --mem-gb 16 \
 #     --tool verity_proof_throughput.tool:VERIFIER_POINT -- bash benchmarks/proof_throughput/verify.sh BUNDLE=art:... PROVE_RUN=r...
 # env: BUNDLE=art:... PROVE_RUN= (the prover point's run id, recorded in the result)  BUILD_ONLY=1 (build the verifier, stop)
 #      JOBS=1 (sessions verified at once: more share the node's memory bandwidth, so the timings are one session's alone
