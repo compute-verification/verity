@@ -210,6 +210,43 @@ theorem zk_verify_eq_verifyWith_of_buildSession (tags : Tags) (circuitB pubB com
   Zk.verify_eq_verifyWith_of_returns (buildSession_named tags circuitB pubB compB coins tables count draw partition program
     work stratified closure registered publicInputs identifier) h record proofs
 
+/-- `buildSession` on the circuit `ProvedScope.circuitOf` returns (`parsed`), which `verifyCmd` parses once for the scope
+check and every setup: a statement with hidden outputs sets up on it (`Stmt.setupTablesOf`), any other as `buildSession`
+does (`buildSessionOf_eq`). -/
+def buildSessionOf (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none)
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
+    (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none)
+    (identifier : Option String := none) : V (SessionSpec × Array Stmt) :=
+  if tags.hiddenOutputs && tags.hm96Rows then do
+    let (spec, sts) ← Stmt.setupTablesOf parsed tags circuitB pubB coins count tables draw partition program work stratified
+      closure publicInputs
+    for st in sts do
+      checkRegistered st registered
+      checkIdentifier st identifier
+    Registered.checkFull registered draw
+    return (spec, sts)
+  else buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
+    publicInputs identifier
+
+/-- **`verifyCmd`'s one parse sets up what `buildSession` sets up**: `buildSessionOf` on `ProvedScope.circuitOf`'s circuit is
+`buildSession`. -/
+theorem buildSessionOf_eq (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Lean.Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) :
+    buildSessionOf (ProvedScope.circuitOf tags circuitB tables) tags circuitB pubB compB coins tables count draw partition
+        program work stratified closure registered publicInputs identifier
+      = buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
+        publicInputs identifier := by
+  unfold buildSessionOf
+  cases hh : tags.hiddenOutputs <;> cases hr : tags.hm96Rows <;> simp only [Bool.and_false, Bool.and_true, Bool.false_eq_true,
+    ↓reduceIte]
+  unfold buildSession
+  simp only [hr, ↓reduceIte, ProvedScope.circuitOf, hh, Stmt.setupTables_eq]
+
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
 def programInput (args : List String) : IO (Except String (Option ByteArray)) := do
@@ -678,11 +715,13 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- a drawn statement that sets up is still refused when no soundness claim draws by its draw's law
   -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
-  let scope := ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome registered.isSome
+  -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`)
+  let parsed := ProvedScope.circuitOf tags circuitB tables
+  let scope := ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         RecSetup.checkInner recInner recCoins recBound
-        let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
+        let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows

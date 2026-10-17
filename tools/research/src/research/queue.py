@@ -1251,6 +1251,10 @@ def main(argv: list[str]) -> int:
             repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
             if not repo:
                 raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            if a.dry_run:                                   # 17 Oct (CI-52): --dry-run opened a real PR (#2276)
+                print(f"research queue open: would open {a.head}{'@' + a.sha[:12] if a.sha else ''} onto {a.base} in {repo}"
+                      f"{' as a draft' if a.draft else ''}: {a.title!r} ({len(a.body_file.read_text())} bytes of body; dry run)")
+                return 0
             print(open_pr(top, repo, a.head, a.title, a.body_file.read_text(), base=a.base, sha=a.sha, draft=a.draft))
             return 0
         except (QueueError, OSError) as e:

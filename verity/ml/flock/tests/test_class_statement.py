@@ -602,6 +602,44 @@ def test_each_selftest_case_keeps_its_stderr_beside_the_class_records(monkeypatc
     assert (tmp_path / "selftest-all.err").read_text() == "thread 'main' panicked: None: out of memory\n"
 
 
+@pytest.mark.slow
+def test_the_selftest_swaps_the_tail_that_circuit_stage_forged(monkeypatch, tmp_path: Path):
+    """`prove`'s selftest names the forged circuit and the tables `circuit.stage` wrote beside the circuit, so `tail_swapped`
+    runs from any working directory: flock-circuit reads both from its own otherwise, and skipped the case without saying so
+    when the forged file wasn't there. Its record lists the cases flock-circuit skipped. The statement is rmsnorm-fused-cuda
+    at N = 64, whose tail's eps forges to another circuit (about 30 s to stage). When ``FLOCK_CIRCUIT`` names a selftest
+    build (sha512, glue), its `tail_swapped` runs on that statement and passes."""
+    pytest.importorskip("verity_numerical")
+    from verity_numerical.bench import templates as TM
+    from verity_numerical.bench.generate import generate
+    from verity_numerical.bench.input_sets import InputSet
+
+    s = InputSet.open(generate(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5), 2, 3, tmp_path / "set")["path"])
+    low = FC.lowering_for_set(s)
+    d = tmp_path / "st"
+    FC.stage(low, s, 0, 2, d)
+    assert low.units.cut and (d / "circuit-forged.txt").read_text() != (d / "circuit.txt").read_text() and (d / "tables").is_dir()
+    (tmp_path / "elsewhere").mkdir()
+    monkeypatch.chdir(tmp_path / "elsewhere")
+    seen, real = [], CS.subprocess.run
+
+    def run(cmd, **_kw):
+        seen.append(cmd)
+        return CS.subprocess.CompletedProcess(cmd, 0, stderr="", stdout='SKIP\t{"case": "chaining_value_forged"}\n'
+                                              'NEG\t{"case": "tail_swapped", "pass": true}\nSELFTEST\t{"all_pass": true}\n')
+
+    monkeypatch.setattr(CS.subprocess, "run", run)
+    rec = CS.prove("flock-circuit", d, 2, 0, selftest=True)
+    cmd = seen[0]
+    assert cmd[cmd.index("--forged") + 1] == str(d / "circuit-forged.txt") and cmd[cmd.index("--tables") + 1] == str(d / "tables")
+    assert rec["all_pass"] is True and rec["skipped"] == ["chaining_value_forged"] and rec["failed"] == []
+    binary = os.environ.get("FLOCK_CIRCUIT")
+    if binary and Path(binary).exists():
+        monkeypatch.setattr(CS.subprocess, "run", real)
+        live = CS.prove(binary, d, 2, 0, selftest="tail_swapped")
+        assert (live["all_pass"], live["cases"], live["failed"]) == (True, 1, []), live
+
+
 def test_a_verifier_pod_serves_every_point_of_a_gpu_session_on_the_same_processes(monkeypatch, tmp_path: Path):
     """Each prover process sends its session k to verifier process k mod S from k = 0, so a pod bounded for P points serves
     P provers one after another: each process exits after exactly the sessions the P provers send it."""
