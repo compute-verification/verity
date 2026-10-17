@@ -185,8 +185,9 @@ def local_probe(lat: str, cpu: int, celldir: str, pings: int, rounds: int, max_s
 
 
 def remote_probe(name: str, src: bytes, celldir: str, pings: int, rounds: int, max_s: int, extra: tuple[str, ...] = (),
-                 out: str | None = None, port: int = PORT, to: str | None = None) -> dict:
-    dest, lport = REMOTES[name]
+                 out: str | None = None, port: int = PORT, to: str | None = None, lport: int | None = None) -> dict:
+    dest, default_lport = REMOTES[name]
+    lport = lport or default_lport
     out = out or name
     to = to or f"{NODE_IP}:{port}"
     script = ("set -e; d=$(mktemp -d /tmp/lat-probe.XXXXXX); trap 'rm -rf \"$d\"' EXIT; cat > \"$d/lat.cu\"; "
