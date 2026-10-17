@@ -20,6 +20,11 @@
 // warps run the DRAM-free chain while the consumers wait on memory, and the attention blocks with AFW filler warps each
 // (flin.cuh): outputs and receipts bit for bit, each linear's 32 layers against cuBLASLt, and the step through both, on
 // the whole GPU or beside the dfill pump on FILL_SMS SMs of a green split.
+// lgate, lalone T STEPS BLK, lfill B L FILL_SMS W NC S T LSTEPS BLK: FILLER's lane filler (lfill.cuh): its receipts bit for
+// bit against the host, its issue rate alone, and the step on its green partition beside the pump (FILL_SMS SMs, pfill
+// with its -DPF_LANE lane chains) and the lane filler (BLK blocks of T threads an SM in the step's partition at the
+// lowest stream priority, LSTEPS steps of LF_CH chains a thread). FILL_SMS 0: no pump, the step and the lane filler on
+// every SM.
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a dcap.cu -lcublasLt -lnvidia-ml -ldl
 #include <cublasLt.h>
@@ -783,6 +788,7 @@ static uint64_t dchain_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int 
 }
 #ifndef DFILL_V1
 #include "pfill.cuh"
+#include "lfill.cuh"
 #else
 // Warp `wid` runs tiles tile0 + wid·tiles + i, i < tiles, S steps each (S a multiple of 8), and writes tile i's receipt to
 // rec[wid·tiles + i]. Lane (g, t) holds A rows g and g + 8, words t and 4 + t; B column g, words t and 4 + t; C rows g
@@ -1114,6 +1120,269 @@ static int run_dfill(Dev& d, int B, int L, int place, int fill_sms, int W, int N
   CK(cudaFree(f.rec));
   return bad ? 8 : 0;
 }
+
+#ifndef DFILL_V1
+// ---------------------------------------------------------------- lfill (FILLER): the lane filler beside the step
+constexpr unsigned long long LBIT = 1ull << 61;  // the lane filler's tile ids: LBIT | (chunk per + block tiles + i)
+struct LFill {
+  int grid = 0, T = 128, steps = 1024, tiles = 1;
+  uint64_t c0 = 0, c1 = 0;
+  unsigned long long* rec = nullptr;
+  long long per() const { return (long long)grid * tiles; }
+  double instr() const { return (double)per() * lf_tile_instr(T, steps); }
+};
+// tiles a block so that a chunk is about 2^LFILL_CHUNK_LOG2 (default 22) warp instructions a block
+static LFill lfill_make(int grid, int T, int steps, uint64_t c0, uint64_t c1) {
+  LFill f;
+  f.grid = grid; f.T = T; f.steps = steps; f.c0 = c0; f.c1 = c1;
+  const int lg = getenv("LFILL_CHUNK_LOG2") ? atoi(getenv("LFILL_CHUNK_LOG2")) : 22;
+  f.tiles = std::max(1, (int)((double)(1LL << lg) / lf_tile_instr(T, steps)));
+  CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
+  return f;
+}
+static void lfill_launch(const LFill& f, long long chunk, cudaStream_t st) {
+  lfill_k<<<f.grid, f.T, 0, st>>>(f.c0, f.c1, LBIT | (unsigned long long)chunk * f.per(), f.tiles, f.steps, f.rec);
+}
+static int lfill_check(const LFill& f, long long chunk, int n) {
+  std::vector<unsigned long long> h(f.per());
+  CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
+  int bad = 0;
+  for (int i = 0; i < n; i++) {
+    const long long idx = (long long)i * f.per() / n + (i * 7919) % std::max(1LL, f.per() / n);
+    bad += h[idx] != lf_ref(f.c0, f.c1, LBIT | ((unsigned long long)chunk * f.per() + idx), f.T, f.steps);
+  }
+  return bad;
+}
+// a host thread keeping `depth` chunks of `launch` queued on `st` (DPump's loop for any filler)
+struct GPump {
+  std::thread th;
+  std::atomic<bool> on{false};
+  std::atomic<long long> done{0}, launched{0};
+  std::vector<double> t;
+};
+static void gpump_start(GPump& p, std::function<void(long long, cudaStream_t)> launch, cudaStream_t st, int depth) {
+  p.on = true;
+  p.done = 0;
+  p.t.clear();
+  p.th = std::thread([&p, launch, st, depth] {
+    std::vector<cudaEvent_t> ev(depth);
+    for (auto& e : ev) CK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming | cudaEventBlockingSync));
+    long long k = 0;
+    for (; p.on.load(); k++) {
+      const int slot = (int)(k % depth);
+      if (k >= depth) {
+        CK(cudaEventSynchronize(ev[slot]));
+        p.t.push_back(now_ms());
+        p.done++;
+      }
+      launch(k, st);
+      CK(cudaEventRecord(ev[slot], st));
+    }
+    p.launched = k;
+    CK(cudaStreamSynchronize(st));
+    for (auto& e : ev) CK(cudaEventDestroy(e));
+  });
+}
+static void gpump_stop(GPump& p) {
+  p.on = false;
+  p.th.join();
+}
+static long long in_window(const std::vector<double>& t, double t0, double t1) {
+  long long n = 0;
+  for (double x : t) n += x > t0 && x <= t1;
+  return n;
+}
+// the step's SMs (at least n_step) with two streams, the step's at priority `hi` and the lane filler's at `lo`, and the
+// rest with one (the pump's); 1000 x the failing stage + its CUresult on failure
+static int gc_split_prio(int n_step, int hi, int lo, cudaStream_t* s_step, cudaStream_t* s_lane, cudaStream_t* s_fill,
+                         int got[2]) {
+  auto dget = drv<decltype(&cuDeviceGet)>("cuDeviceGet");
+  auto res = drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");
+  auto split = drv<decltype(&cuDevSmResourceSplitByCount)>("cuDevSmResourceSplitByCount");
+  auto gen = drv<decltype(&cuDevResourceGenerateDesc)>("cuDevResourceGenerateDesc");
+  auto mk = drv<decltype(&cuGreenCtxCreate)>("cuGreenCtxCreate");
+  auto gst = drv<decltype(&cuGreenCtxStreamCreate)>("cuGreenCtxStreamCreate");
+  if (!dget || !res || !split || !gen || !mk || !gst) return 1000;
+  CUdevice dev;
+  CUdevResource all{}, part{}, rest{};
+  unsigned nb = 1;
+  int e;
+  if ((e = dget(&dev, 0))) return 2000 + e;
+  if ((e = res(dev, &all, CU_DEV_RESOURCE_TYPE_SM))) return 2000 + e;
+  if ((e = split(&part, &nb, &all, &rest, 0, (unsigned)n_step))) return 3000 + e;
+  got[0] = (int)part.sm.smCount;
+  got[1] = (int)rest.sm.smCount;
+  CUdevResourceDesc desc;
+  CUgreenCtx g;
+  CUstream a = nullptr, a2 = nullptr, b = nullptr;
+  if ((e = gen(&desc, &part, 1))) return 4000 + e;
+  if ((e = mk(&g, desc, dev, CU_GREEN_CTX_DEFAULT_STREAM))) return 5000 + e;
+  if ((e = gst(&a, g, CU_STREAM_NON_BLOCKING, hi))) return 6000 + e;
+  if ((e = gst(&a2, g, CU_STREAM_NON_BLOCKING, lo))) return 6000 + e;
+  if (rest.sm.smCount && (e = green_stream(&rest, dev, &b))) return e;
+  *s_step = (cudaStream_t)a;
+  *s_lane = (cudaStream_t)a2;
+  *s_fill = (cudaStream_t)b;
+  return 0;
+}
+// the lane filler's receipts against lf_ref at two widths and step counts, every tile checked, and a control (steps - 1
+// on the host) that must differ everywhere
+static int lgate(Dev& d) {
+  int fails = 0;
+  for (int T : {64, 256})
+    for (int steps : {3, 64}) {
+      LFill f;
+      f.grid = 3; f.T = T; f.steps = steps; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1;
+      CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
+      CK(cudaMemset(f.rec, 0xA5, f.per() * sizeof(unsigned long long)));
+      lfill_launch(f, 5, d.st);
+      CK(cudaStreamSynchronize(d.st));
+      CK(cudaGetLastError());
+      std::vector<unsigned long long> h(f.per());
+      CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
+      long bad = 0, ctl = 0;
+      for (long long i = 0; i < f.per(); i++) {
+        const unsigned long long tile = LBIT | (5ull * f.per() + i);
+        bad += h[i] != lf_ref(f.c0, f.c1, tile, T, steps);
+        ctl += h[i] == lf_ref(f.c0, f.c1, tile, T, steps - 1);
+      }
+      printf("{\"mode\": \"lgate\", \"T\": %d, \"CH\": %d, \"steps\": %d, \"tiles\": %lld, \"mismatches\": %ld, "
+             "\"control_equal\": %ld, \"ok\": %s}\n", T, LF_CH, steps, f.per(), bad, ctl, bad || ctl ? "false" : "true");
+      fails += bad != 0 || ctl != 0;
+      CK(cudaFree(f.rec));
+    }
+  fflush(stdout);
+  return fails;
+}
+// the lane filler alone, `blk` blocks of T threads an SM on every SM: warp instructions a SMSP-cycle at the read clock
+static int run_lalone(Dev& d, int T, int steps, int blk) {
+  LFill f = lfill_make(d.sms * blk, T, steps, g_c0, g_c1);
+  GPump p;
+  gpump_start(p, [&f](long long k, cudaStream_t st) { lfill_launch(f, k, st); }, d.st, 3);
+  double cs = 0, ws = 0;
+  long long n = 0;
+  while (p.done.load() < 40) {
+    cs += nvml_mhz(d);
+    ws += nvml_w(d);
+    n++;
+  }
+  gpump_stop(p);
+  const double mhz = n ? cs / n : nvml_mhz(d), w = n ? ws / n : nvml_w(d);
+  const size_t ia = 1, ib = p.t.size() - 1;
+  const double ips = (double)(ib - ia) * f.instr() / ((p.t[ib] - p.t[ia]) * 1e-3);
+  const int bad = lfill_check(f, p.launched.load() - 1, 8);
+  printf("{\"mode\": \"lalone\", \"T\": %d, \"CH\": %d, \"steps\": %d, \"blk\": %d, \"grid\": %d, \"tiles\": %d, "
+         "\"chunk_instr\": %.6e, \"instr_per_s\": %.6e, \"per_smsp_cycle\": %.5f, \"mhz\": %.1f, \"watt\": %.1f, "
+         "\"rec_checked\": 8, \"rec_bad\": %d}\n", T, LF_CH, steps, blk, f.grid, f.tiles, f.instr(), ips,
+         ips / (4.0 * d.sms * mhz * 1e6), mhz, w, bad);
+  fflush(stdout);
+  CK(cudaFree(f.rec));
+  return bad ? 8 : 0;
+}
+// The step beside the pump (fill_sms SMs of a green split, W x NC x S, pfill with its -DPF_LANE) and the lane filler
+// (blk blocks of T threads an SM on the step's SMs, at the lowest priority of the step's green context, the step at the
+// highest); fill_sms 0: no pump, the lane filler on every SM beside the step. Arms: full; the step alone on its SMs;
+// beside the pump; beside the pump and the lane filler; full again. Rates over each window; 8 receipts of each filler's
+// last chunk checked on the host.
+static int run_lfill(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, int T, int lsteps, int blk, int reps) {
+  dfill_prep();
+  const std::vector<Lt> p = lin_plans(d, B);
+  bool wrapped = false;
+  int lo, hi;
+  CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  cudaStream_t full = d.st, ss = nullptr, sl = nullptr, fs = nullptr;
+  int got[2] = {d.sms, 0};
+  if (fill_sms > 0) {
+    const int e = gc_split_prio(d.sms - fill_sms, hi, lo, &ss, &sl, &fs, got);
+    if (e || !fs) {
+      fprintf(stderr, "gc_split_prio(%d): %d (filler SMs %d)\n", d.sms - fill_sms, e, got[1]);
+      return 7;
+    }
+  } else {
+    CK(cudaStreamCreateWithPriority(&ss, cudaStreamNonBlocking, hi));
+    CK(cudaStreamCreateWithPriority(&sl, cudaStreamNonBlocking, lo));
+  }
+  d.st = ss;
+  const std::vector<Lt> p2 = lin_plans(d, B);  // cuBLASLt tuned on the step's SMs, as an operator running the split would
+  DFill f;
+  if (fill_sms > 0) f = dfill_make(got[1], W, NC, S, g_c0, g_c1);
+  LFill lf = lfill_make(got[0] * blk, T, lsteps, g_c0, g_c1);
+  const int kind = getenv("DFILL_KIND") ? atoi(getenv("DFILL_KIND")) : 2;
+  auto work = [&] { enqueue_step(d, p, kind, B, L, &wrapped); };
+  auto work2 = [&] { enqueue_step(d, p2, kind, B, L, &wrapped); };
+  double amhz = 0, awatt = 0, palone = 0;
+  if (fill_sms > 0) palone = dfill_alone(d, f, fs, 30, &amhz, &awatt);
+  d.st = full;
+  const std::vector<Rep> a_full = time_work(d, work, reps);
+  d.st = ss;
+  const std::vector<Rep> a_step = time_work(d, work2, reps);
+  int bad_p = 0, bad_l = 0;
+  struct Win { double ms = 0, pump = 0, lane = 0; long long np = 0, nl = 0; };
+  auto beside = [&](bool pump_on, bool lane_on, Win* w) {
+    DPump pp;
+    GPump lp;
+    if (pump_on) dpump_start(pp, f, fs, 3);
+    if (lane_on) gpump_start(lp, [&lf](long long k, cudaStream_t st) { lfill_launch(lf, k, st); }, sl, 3);
+    while ((pump_on && pp.done.load() < 2) || (lane_on && lp.done.load() < 2)) {
+    }
+    double t0 = 0, t1 = 0;
+    d.st = ss;
+    const std::vector<Rep> v = time_work(d, work2, reps, &t0, &t1);
+    if (pump_on) dpump_stop(pp);
+    if (lane_on) gpump_stop(lp);
+    w->ms = t1 - t0;
+    if (pump_on) {
+      w->np = in_window(pp.t, t0, t1);
+      w->pump = (double)w->np * f.macs() / (w->ms * 1e-3);
+      bad_p += dfill_check(f, pp.launched.load() - 1, 8);
+    }
+    if (lane_on) {
+      w->nl = in_window(lp.t, t0, t1);
+      w->lane = (double)w->nl * lf.instr() / (w->ms * 1e-3);
+      bad_l += lfill_check(lf, lp.launched.load() - 1, 8);
+    }
+    return v;
+  };
+  Win wp, wl;
+  std::vector<Rep> a_pump;
+  if (fill_sms > 0) a_pump = beside(true, false, &wp);
+  const std::vector<Rep> a_lane = beside(fill_sms > 0, true, &wl);
+  d.st = full;
+  const std::vector<Rep> a_full2 = time_work(d, work, reps);
+  double step_macs = 0;
+  for (int j = 0; j < 4; j++) step_macs += (double)LAYERS * B * LN[j] * LK[j];
+  step_macs += (double)B * VOCAB * HID + 2.0 * LAYERS * B * HQ * HD * (double)L;
+  const Rep m0 = median(a_full), m2 = median(a_full2), ms = median(a_step), ml = median(a_lane);
+  const double base = (m0.ms + m2.ms) / 2;
+  printf("{\"mode\": \"lfill\", \"B\": %d, \"L\": %d, \"fill_sms_req\": %d, \"step_sms\": %d, \"fill_sms\": %d, \"W\": %d, "
+         "\"NC\": %d, \"S\": %d, \"pf_lane\": %d, \"T\": %d, \"CH\": %d, \"lsteps\": %d, \"blk\": %d, \"lane_grid\": %d, "
+         "\"lane_tiles\": %d, \"prio\": [%d, %d], \"coins\": [\"%016llx\", \"%016llx\"], \"kv_wrapped\": %s, "
+         "\"step_macs\": %.6e, \"chunk_macs\": %.6e, \"lane_chunk_instr\": %.6e, \"pump_alone\": {\"mac_per_s\": %.6e, "
+         "\"mhz\": %.1f, \"watt\": %.1f}, ",
+         B, L, fill_sms, got[0], got[1], W, NC, S, PF_LANE, T, LF_CH, lsteps, blk, lf.grid, lf.tiles, lo, hi,
+         (unsigned long long)g_c0, (unsigned long long)g_c1, wrapped ? "true" : "false", step_macs,
+         fill_sms > 0 ? f.macs() : 0.0, lf.instr(), palone, amhz, awatt);
+  if (fill_sms > 0) {
+    const Rep mp = median(a_pump);
+    printf("\"pump\": {\"window_ms\": %.3f, \"chunks\": %lld, \"mac_per_s\": %.6e, \"step_ms\": %.4f, \"mhz\": %.1f, "
+           "\"slowdown\": %.4f}, ", wp.ms, wp.np, wp.pump, mp.ms, mp.mhz, mp.ms / base);
+  }
+  printf("\"lane\": {\"window_ms\": %.3f, \"pump_chunks\": %lld, \"pump_mac_per_s\": %.6e, \"lane_chunks\": %lld, "
+         "\"lane_instr_per_s\": %.6e, \"step_ms\": %.4f, \"mhz\": %.1f, \"watt\": %.1f, \"slowdown\": %.4f}, "
+         "\"split_only\": %.4f, \"rec_bad_pump\": %d, \"rec_bad_lane\": %d, \"arms\": {",
+         wl.ms, wl.np, wl.pump, wl.nl, wl.lane, ml.ms, ml.mhz, ml.watt, ml.ms / base, ms.ms / base, bad_p, bad_l);
+  print_arm("full", a_full, true);
+  print_arm("step", a_step, true);
+  if (fill_sms > 0) print_arm("pump", a_pump, true);
+  print_arm("lane", a_lane, true);
+  print_arm("full2", a_full2, false);
+  printf("}}\n");
+  fflush(stdout);
+  if (fill_sms > 0) CK(cudaFree(f.rec));
+  CK(cudaFree(lf.rec));
+  return bad_p || bad_l ? 8 : 0;
+}
+#endif
 
 // the attention kernels that `run` enqueues for layer 0 at B = 3, L = 1536 (several blocks in x, a partial block), S and O
 // against the host from poisoned outputs; 1 on any mismatch
@@ -1645,6 +1914,7 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: dcap gate | bw GiB | lin M | att B L | step B L | fill B L FILL_SMS big|l2  [reps]\n"
                     "       dcap dgate | dalone W NC S | done W NC S | dfill B L split|co FILL_SMS W NC S [reps]\n"
+                    "       dcap lgate | lalone T STEPS BLK | lfill B L FILL_SMS W NC S T LSTEPS BLK [reps]\n"
                     "       dcap fgate | flin M FW NC THR [reps] | fstep B L FW NC THR AFW [FILL_SMS [reps]]   (M in 32 64 128 160 192 256, B <= 256)\n"
                     "       dcap walone S [reps]   (a pfill build: dfill_k_warp alone, S steps a warp)\n"
                     "       (DFILL_COINS=<32 hex digits>: the round's coins for the d* and f* modes; FLIN_PDL=0: no programmatic\n"
@@ -1700,7 +1970,7 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&g_ref, (size_t)256 * VOCAB * sizeof(int)));
   CK(cudaMalloc(&g_cnt, sizeof *g_cnt));
   const bool need_w = mode == "lin" || mode == "step" || mode == "gate" || mode == "fill" || mode == "dfill" ||
-                      mode == "fgate" || mode == "flin" || mode == "fstep" || mode == "pfill";
+                      mode == "fgate" || mode == "flin" || mode == "fstep" || mode == "pfill" || mode == "lfill";
   if (need_w) {
     for (int l = 0; l < LAYERS; l++)
       for (int j = 0; j < 4; j++) {
@@ -1718,14 +1988,14 @@ int main(int argc, char** argv) {
   d.kv_bytes = (mode == "lin" || mode == "flin") ? ((size_t)1 << 20)
                                                                      : maxBL * KV_TOKEN_BYTES / LAYERS * 4;  // room for 4 layers at maxBL
   if (mode == "att" || mode == "step" || mode == "bw" || mode == "fill" || mode == "dfill" || mode == "fstep" ||
-      mode == "pfill") {
+      mode == "pfill" || mode == "lfill") {
     size_t fr, tot;
     CK(cudaMemGetInfo(&fr, &tot));
     // fstep: room for the tiled copy of every layer's weights
     const size_t keep = ((size_t)3 << 30) + (mode == "fstep" ? (size_t)7600 << 20 : 0);
     d.kv_bytes = std::min((size_t)48 << 30, fr - keep);
     // every layer's KV distinct, and room for the filler's buffers
-    if ((mode == "fill" || mode == "dfill" || mode == "fstep" || mode == "pfill") && argc > 3)
+    if ((mode == "fill" || mode == "dfill" || mode == "fstep" || mode == "pfill" || mode == "lfill") && argc > 3)
       d.kv_bytes = std::min(d.kv_bytes, (size_t)atoi(argv[2]) * atoi(argv[3]) * KV_TOKEN_BYTES + ((size_t)1 << 20));
   }
   CK(cudaMalloc(&d.kv, d.kv_bytes));
@@ -1776,6 +2046,26 @@ int main(int argc, char** argv) {
       return 1;
     }
     rc = run_dfill(d, B, L, place, fsm, W, NC, S, argc > 9 ? atoi(argv[9]) : 9);
+#ifndef DFILL_V1
+  } else if (mode == "lgate") {
+    rc = lgate(d);
+  } else if (mode == "lalone") {
+    if (argc < 5) { fprintf(stderr, "lalone T STEPS BLK\n"); return 1; }
+    const int T = atoi(argv[2]), steps = atoi(argv[3]), blk = atoi(argv[4]);
+    if (T < 32 || T > 1024 || T % 32 || steps < 1 || blk < 1) { fprintf(stderr, "32 | T <= 1024, STEPS, BLK >= 1\n"); return 1; }
+    rc = run_lalone(d, T, steps, blk);
+  } else if (mode == "lfill") {
+    if (argc < 11) { fprintf(stderr, "lfill B L FILL_SMS W NC S T LSTEPS BLK [reps]\n"); return 1; }
+    const int B = atoi(argv[2]), L = atoi(argv[3]), fsm = atoi(argv[4]), W = atoi(argv[5]), NC = atoi(argv[6]),
+              S = atoi(argv[7]), T = atoi(argv[8]), ls = atoi(argv[9]), blk = atoi(argv[10]);
+    if ((size_t)B * L > maxBL || L % 512 || B > 256 || fsm < 0 || fsm >= d.sms || W < 1 || W > 16 || S % 8 || S <= 0 ||
+        T < 32 || T > 1024 || T % 32 || ls < 1 || blk < 1) {
+      fprintf(stderr, "B*L <= %zu, L %% 512 == 0, B <= 256, 0 <= FILL_SMS < %d, 1 <= W <= 16, 8 | S, 32 | T <= 1024\n",
+              maxBL, d.sms);
+      return 1;
+    }
+    rc = run_lfill(d, B, L, fsm, W, NC, S, T, ls, blk, argc > 11 ? atoi(argv[11]) : 9);
+#endif
   } else if (mode == "pgate") {
     std::vector<int> Ss;
     for (int i = 2; i < argc; i++) Ss.push_back(atoi(argv[i]));
