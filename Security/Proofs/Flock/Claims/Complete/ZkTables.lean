@@ -18,6 +18,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Goals
 import Proofs.Flock.Claims.Complete.ZkTables.Files
 import Proofs.Flock.Claims.Complete.ZkTables.Reps
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
@@ -53,4 +54,8 @@ tables, so completeness holds at every number of tables from the four per-table 
 (`completeAll`: `StmtAt`, `ProverRunsAt`, `RepShapedAt`, `RepChecksAt`), with no premise of `complete_zk`'s. The
 statement's premise holds at every case of several tables (`Stmt`: `Case.stmtAt`, `stmtOkJ`, from the setup of several
 tables, `setupTables_spec`, a printable subset draw, `good_subset`, and the masked `Hello`'s read-back, `hello_ok`), so
-`completeJS` and `completeAllS` drop it, keeping `StmtOkZk` at one table. -/
+`completeJS` and `completeAllS` drop it, keeping `StmtOkZk` at one table. The ring switch replays at every table given
+the extra claims' algebra (`RingSwitch`: `ringSwitchJ`, `RsExtrasAt`), which holds at the deployed relation from
+`RelS`, each table satisfied by its share (`Case.model`, `Run.rsExtras`), so there completeness asks per rep only the
+masked Ligerito and the inner proof (`LgInnerAt`; `completeRel`, and `completeJRel` from `complete_zk_relation`'s
+premises at one table). -/
