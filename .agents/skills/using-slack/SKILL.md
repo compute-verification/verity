@@ -27,7 +27,8 @@ The coordination API has one place, three interactions and one lifecycle.
   ask to `@console` files there, and `send` says so where it would ring an inbox). A handle's current holder is its
   inbox's holder: `names open --succeeds` records the successor's agent id and its working branch's suffix in the route,
   and routing reads them (`--as`, the owners of PRs and runs). Run `names open --as HANDLE` again on a new branch: it
-  adds that branch's suffix. So a handover edits nothing in the repo; the registry's `holder` is a description. One agent may hold several handles, and posts as whichever
+  adds that branch's suffix. A second agent working under a handle (a lane that posts as it) subscribes to that handle's
+  inbox thread itself: the holder has no channel to relay to it. So a handover edits nothing in the repo; the registry's `holder` is a description. One agent may hold several handles, and posts as whichever
   it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them, and
   Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
@@ -188,7 +189,8 @@ An alert in `#agent-alerts` takes the same `pickup` and `close` from `@infra`, w
 done-condition, pointers — goes in the issue itself, filed into the owning team at creation; no brief-in-Slack with a
 link. The issue is its own doorbell: every holder subscribes to its team's issue events (Subscriptions above), so
 filing it wakes the owner. `research msg ask --as ME --to @OWNER --file BRIEF.md` files it and rings the owner's inbox
-too. Taking an issue is a workflow-state change out of the backlog — that change is the guarantee the work was seen,
+too. Landing a PR that names an issue doesn't close it: Done is the owner's move (the merge-to-Done Git automation is off on
+every lead team since 16 Oct, after it closed unfinished issues). Taking an issue is a workflow-state change out of the backlog — that change is the guarantee the work was seen,
 and the watcher flags issues that sit untouched. No holder subscribes to comments, so comment with
 `research msg linear comment ISSUE 'TEXT' --as ME`: it rings the inbox of the issue's team's handle and of each name the
 text starts with (never yours), as `send` would (COMM-30). A comment made any other way wakes no one. Slack carries what it is good at:
