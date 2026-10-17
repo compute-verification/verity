@@ -287,6 +287,9 @@ def _eps_table(args, pi: E.Machine) -> int:
 
 def _eps(args) -> int:
     pi = E.machine(args.vector or "", args.data)
+    if args.uni_issue is not None and E.uniform_issue_charged(pi):
+        print(f"eps: {pi.vector}'s census charges a uniform instruction on the issue rows already; --uni-issue "
+              f"{args.uni_issue:g} changes nothing", file=sys.stderr)
     pi = pi if args.uni_issue is None else E.uniform_on_issue(pi, args.uni_issue)
     if args.table:
         return _eps_table(args, pi)

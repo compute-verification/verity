@@ -304,10 +304,17 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
     return Machine(vector=v.name, rows=v.rows, c=c, cuda=cuda)
 
 
+def uniform_issue_charged(pi: Machine) -> bool:
+    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73)."""
+    return any(v > 0 and (r == "issue" or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
+
+
 def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
     """Π with each uniform class (UNI, UNI64) also on the issue rows at `cycles` times an ALU instruction's cost there:
-    `issue`, and the joint row pricing every other vector-pipe instruction (JI3e_0, JI3n_0), where the census since VF3
-    has it on UP alone."""
+    `issue`, and the joint row pricing every other vector-pipe instruction (JI3e_0, JI3n_0), where the census from VF3
+    to VF3o-16 has it on UP alone. Π itself where its census charges it there already, so it is never charged twice."""
+    if uniform_issue_charged(pi):
+        return pi
     c = {k: dict(v) for k, v in pi.c.items()}
     rows = [r for r in pi.rows if r == "issue" or (r.startswith("JI") and r.endswith("_0"))]
     for k in ("UNI", "UNI64"):
