@@ -305,11 +305,18 @@ theorem WAt.final {w : Array F256} {initial : List 𝕂} {levels : List (List �
   rw [he]
   ring
 
+theorem gOf_map_mul_get (a : Array F256) (c : F256) (y : ℕ) : gOf (a.map (· * c))[y]! = gOf a[y]! * gOf c := by
+  by_cases hy : y < a.size
+  · rw [getElem!_pos (a.map (· * c)) y (by simpa using hy), Array.getElem_map, gOf_mul, getElem!_pos a y hy]
+  · rw [getElem!_neg (a.map (· * c)) y (by simpa using hy), getElem!_neg a y hy]
+    show gOf default = gOf default * gOf c
+    rw [show gOf (default : F256) = 0 from gOf_zero, zero_mul]
+
 /-- **The verifier's residual weights are the model's `resAt`** at its lists, when its basis is `bHat` at the original
 point (`hbasis`) and its contexts have the final check's dimensions. -/
 theorem gOf_resE {basisAt : Array F256 → ℕ → Array F256} {initCh : Array F256} {levels : Array (Array F256)}
     {ext : ℕ} {st : LState} (b : ℕ → 𝔽) (hl : ∀ l ∈ levels.toList, l.size = 4)
-    (horig : (origE initCh levels).size + ext = n) (hbres : (basisAt (origE initCh levels) ext).size = 2 ^ ext)
+    (horig : (origE initCh levels).size + ext = n)
     (hpos : ∀ cs ∈ st.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size)
     (hbasis : ∀ y < 2 ^ ext, gOf (basisAt (origE initCh levels) ext)[y]! =
       Model.bHat execArith n b ((origE initCh levels).toList.map gOf ++ Model.bitsK ext y))
@@ -321,8 +328,7 @@ theorem gOf_resE {basisAt : Array F256 → ℕ → Array F256} {initCh : Array F
         (st.conss.toList.map consOf) ext y := by
   unfold resE resAt
   rw [consFold_get _ _ _ hy, gOf_foldl_add, oodFold_get _ _ hy, gOf_foldl_add,
-    getElem!_pos _ y (by simpa [hbres] using hy), Array.getElem_map, gOf_mul,
-    ← getElem!_pos _ y (by simpa [hbres] using hy), hbasis y hy, prodFromE_eq levels hl, origOf, ← origE_toList]
+    gOf_map_mul_get, hbasis y hy, prodFromE_eq levels hl, origOf, ← origE_toList]
   refine congrArg₂ (· + ·) (congrArg₂ (· + ·) rfl ?_) ?_
   · rw [List.map_map]
     refine congrArg List.sum (List.map_congr_left fun o ho => ?_)
@@ -357,7 +363,7 @@ recorded last at the last level, the final check's sum over `splitK f` against t
 theorem lhsE_resE {basisAt : Array F256 → ℕ → Array F256} {initCh : Array F256} {levels : Array (Array F256)}
     {ext : ℕ} {st : LState} {oods : List (Model.OodCtx 𝔽)} {cons : List (Model.ConsCtx 𝔽)} {f w : Array F256}
     (hl : ∀ l ∈ levels.toList, l.size = 4)
-    (horig : (origE initCh levels).size + ext = n) (hbres : (basisAt (origE initCh levels) ext).size = 2 ^ ext)
+    (horig : (origE initCh levels).size + ext = n)
     (hpos : ∀ cs ∈ st.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size)
     (hbasis : ∀ y < 2 ^ ext, gOf (basisAt (origE initCh levels) ext)[y]! =
       Model.bHat execArith n bF ((origE initCh levels).toList.map gOf ++ Model.bitsK ext y))
@@ -373,7 +379,7 @@ theorem lhsE_resE {basisAt : Array F256 → ℕ → Array F256} {initCh : Array 
   have hpc : cc.pos.size ≤ 2 ^ cc.alpha.size := hpos cc (by rw [hcs]; simp)
   refine lhsE_honest f w _ _ ext s val cc.beta hf hsum hval ?_
   refine hW.final cc.pos cc.alpha hpc cc.beta (start := cc.start) (by rw [hstart]; simp [levelsOf]) fun y hy => ?_
-  rw [gOf_resE bF hl horig hbres hpos hbasis hood hcons hy, hoods, hcs, List.map_append, hcons₀, List.map_singleton]
+  rw [gOf_resE bF hl horig hpos hbasis hood hcons hy, hoods, hcs, List.map_append, hcons₀, List.map_singleton]
   obtain ⟨c1, c2, c3, c4, c5⟩ := cc
   simp only at hcols
   subst hcols
