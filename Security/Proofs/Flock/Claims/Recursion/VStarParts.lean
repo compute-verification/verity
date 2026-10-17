@@ -32,6 +32,9 @@ circuit file byte for byte with `RecVStar.circuitFile`, and `RecResiduals.check`
   the circuit's (`ResLinks`): the staging (the V* statement the part's coins are shown on is an accepted algebra part),
   the input tie (a copy's input columns hold the messages the part holds and the coins' coefficients) and the output
   tie (the part's residuals there give its inner check).
+* **`PartChecks` at a rec-open part** (`partChecks_of_open`): the same, with the rec-open links (`OpenLinks`): an
+  accepted rec-open table, a copy whose inputs hold the row, siblings, sums, coefficients and position (`OpenIns`), and
+  the climb and consistency term on its outputs (`OpenOuts`) giving the inner check.
 * **`PartLogs` at an algebra part** (`partLogs_of_nil`): its inner check, the part's residuals, makes no SHA-512 call,
   so at `logs s = []` the part records every call its check makes.
 -/
@@ -230,6 +233,29 @@ theorem climb_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w
   exact climb_of_satisfies L regs hz ho hg hu hv ms hms hrec hp r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc
     hcoef hdir
 
+/-- **A rec-open copy's inputs** at `laid_unit`'s offsets: the columns `v` hold a row `r` of `LANES` elements, `H`
+64-byte siblings `ss`, the running sums `a` and 96 bytes `rest`, the `2 LANES` coefficients `cf` and the low `H` bits
+of the position `idx`. -/
+def OpenIns (v : ℕ → Bool) (LANES H : ℕ) (r a cf : Array Flock.F128) (rest : ByteArray) (idx : ℕ)
+    (ss : List ByteArray) : Prop :=
+  r.size = LANES ∧ a.size = 2 ∧ cf.size = 2 * LANES ∧ rest.size = 96 ∧ ss.length = H ∧
+    FlockVBridge.ColsHold v 0 (Flock.MerkleScheme.rowBytes r) ∧
+    (∀ i (hi : i < ss.length), ss[i].size = 64 ∧ FlockVBridge.ColsHold v (128 * LANES + 512 * i) ss[i]) ∧
+    FlockVBridge.ColsHold v (128 * LANES + 1024 * max 1 ((H + 1) / 2)) (Flock.MerkleScheme.rowBytes a ++ rest) ∧
+    FlockVBridge.ColsHold v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024) (Flock.MerkleScheme.rowBytes cf) ∧
+    ∀ h < H, v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + h) = idx.testBit h
+
+/-- **A rec-open copy's outputs**: from `outStart`, the climb from the row's leaf through `ss` under `ms` and 64 zero
+bytes, then the consistency term at `k = 0, 1` and `rest`. -/
+def OpenOuts (v : ℕ → Bool) (ms : Flock.MerkleScheme) (LANES H : ℕ) (r a cf : Array Flock.F128) (rest : ByteArray)
+    (idx : ℕ) (ss : List ByteArray) : Prop :=
+  FlockVBridge.ColsHold v
+    (outStart ((Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)).run Flock.HmNets.St.empty).2
+      (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))
+    ((Flock.climb ms (Flock.Sha512.hash (Flock.MerkleScheme.rowBytes r)) idx ss ++ ⟨Array.replicate 64 0⟩) ++
+      (Flock.MerkleScheme.rowBytes #[FlockVBridge.consTerm LANES r a cf 0, FlockVBridge.consTerm LANES r a cf 1] ++
+        rest))
+
 end Flock.Readable
 
 namespace Claims.Recursion.VStar
@@ -285,6 +311,54 @@ theorem partChecks_of_res {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy
   obtain ⟨W, vv, hw0, hv0, hin, hout⟩ := hlink w ms hms
   rw [hDO] at hck
   exact hout (Flock.Readable.partCols_of_check hck hx ht hpi htl hrc hp hsh hh hpart ho hg hu W vv hw0 hv0 hin)
+
+/-- **A rec-open part's links** (a code fact about V*'s staging, the layout and the inner check at part `s`, none of
+it the circuit's semantics): wherever a V* statement `xO` of a compiled statement `x` of the shape shows the coins `c`
+for part `s`,
+* the staging: `xO` decodes (`decode`) to an untyped statement without public input words one of whose tables
+  `RecOpen.check` accepts, its unit named for `LANES` lanes and height `Ht` (`RecOpen.params`);
+* the input tie: the statement names a copy of that table's unit (block `o`, VU `g`, copy `u`) whose input columns, on
+  every witness and every list of inner messages that agrees with the messages the part holds, hold a row, its
+  siblings, the running sums, the coefficients and the position's bits (`OpenIns`), under a Merkle scheme whose node
+  is SHA-512 of its two sides;
+* the output tie: the climb and the consistency term on that copy's output columns (`OpenOuts`) give the inner check
+  `chk s`. -/
+def OpenLinks (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
+    (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
+  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+    ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
+      ∃ t, ∃ ht : t < p.sts.size, ∃ LANES Ht : ℕ,
+        _root_.Flock.RecOpen.check p.sts[t].c = .ok () ∧
+        _root_.Flock.RecOpen.params p.sts[t].c.unit.name = some (LANES, Ht) ∧
+        ∃ o g u, o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) ∧ g < p.sts[t].c.g ∧ u < p.sts[t].c.upv ∧
+          ∀ (w : Flock.Wit) (ms : List Msg), (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
+            ∃ (msch : _root_.Flock.MerkleScheme) (r a cf : Array _root_.Flock.F128) (rest : ByteArray) (idx : ℕ)
+              (ss : List ByteArray), (∀ l r, msch.node l r = _root_.Flock.Sha512.hash (l ++ r)) ∧
+              Flock.Readable.OpenIns (Flock.Readable.copyCol p.sts.size t w p.sts[t].c.kLog o
+                (p.sts[t].c.unitRange.slot (g * p.sts[t].c.upv + u)) p.sts[t].c.unit.constPos) LANES Ht r a cf rest
+                idx ss ∧
+              (Flock.Readable.OpenOuts (Flock.Readable.copyCol p.sts.size t w p.sts[t].c.kLog o
+                (p.sts[t].c.unitRange.slot (g * p.sts[t].c.upv + u)) p.sts[t].c.unit.constPos) msch LANES Ht r a cf
+                rest idx ss → chk s x c ms)
+
+/-- **`PartChecks` at a rec-open part, from the shipped circuit's semantics**: at the deployed parser
+(`Readable.parseOf relation decode`), a rec-open part's links (`OpenLinks`) give `PartChecks s`, its inner check
+holding on every agreeing list of messages with no appeal to a collision. The outer relation makes the named copy
+climb from the row's leaf and compute the consistency term (`climb_of_check`), which the output tie reads as the inner
+check. -/
+theorem partChecks_of_open {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
+    {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
+    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} {decode : Msg → Option Flock.Readable.Read}
+    (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
+    (hR : OpenLinks D decode L shape shows chk s) : PartChecks H D DO L shape shows chk s := by
+  intro x st hst hf xO w hck _
+  refine Or.inl fun c hc ms hms => ?_
+  obtain ⟨p, hx, ht, hpi, t, htl, LANES, Ht, hrec, hp, o, g, u, ho, hg, hu, hlink⟩ := hR x st hst hf xO c hc
+  obtain ⟨msch, r, a, cf, rest, idx, ss, hmsch, ⟨hr, ha, hcf, hrest, hss, hrow, haux, hacc, hcoef, hdir⟩, hout⟩ :=
+    hlink w ms hms
+  rw [hDO] at hck
+  exact hout (Flock.Readable.climb_of_check hck hx ht hpi htl ho hg hu rfl msch hmsch hrec hp r a cf rest idx ss hr
+    ha hcf hrest hss hrow haux hacc hcoef hdir)
 
 /-- **`PartLogs` at a part whose inner check logs no call**: an algebra part's inner check (its residuals) makes no
 SHA-512 call, so at `logs s = []` every call it logs is recorded. -/
