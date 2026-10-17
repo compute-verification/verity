@@ -81,6 +81,7 @@
         "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
+        "benchmarks/multi_unit/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
       ],
       "branch_suffixes": [
