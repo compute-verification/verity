@@ -525,18 +525,20 @@ theorem partLogs_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coi
 
 /-- **`PartOpens` at a part that holds no message**: no round's message is held, so there is nothing to open. -/
 theorem partOpens_of_none {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
-    {shape : Form → Prop} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
+    {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {opening : Opening}
+    {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     (h : ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ i, L.msgAt x s i = none) :
-    PartOpens H D DO L shape opening cmt s := by
-  intro x st hst hf xO w _ _ i _ m hm
-  simp [Layout.held, h x st hst hf i] at hm
+    PartOpens H D DO L shape shows opening cmt s := by
+  intro x st hst hf xO w _ _
+  exact Or.inl fun _ _ i _ m hm => by simp [Layout.held, h x st hst hf i] at hm
 
 /-- **`PartOpens` at every part of the holo shape, through registered climbs**: M's `partOpens_of_climbs` (any part
 of any shape) at `Form.Holo`: each part opens what it holds to the digest its public file names (`HeldOpens`), and the
 setup climbs that digest and the round's commit string to one registered root (`RegClimbs`). -/
 theorem partOpens_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
-    {opening : Opening} {cmt dig : Msg → ℕ → Msg → Msg} (hO : ∀ s, HeldOpens D DO L Form.Holo opening dig s)
-    (hC : ∀ s, RegClimbs H D DO L Form.Holo cmt dig s) : ∀ s, PartOpens H D DO L Form.Holo opening cmt s :=
+    {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {opening : Opening} {cmt dig : Msg → ℕ → Msg → Msg}
+    (hO : ∀ s, HeldOpens D DO L Form.Holo shows opening dig s)
+    (hC : ∀ s, RegClimbs H D DO L Form.Holo shows cmt dig s) : ∀ s, PartOpens H D DO L Form.Holo shows opening cmt s :=
   fun s => partOpens_of_climbs (hO s) (hC s)
 
 /-! ## A part at the holo shape -/
@@ -579,7 +581,8 @@ theorem vstarAccepts_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : Deplo
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D)
     (hC : ∀ s, PartsLinksOr H D DO decode L Form.Holo shows chk s)
-    (hO : ∀ s, HeldOpens D DO L Form.Holo opening dig s) (hRC : ∀ s, RegClimbs H D DO L Form.Holo cmt dig s)
+    (hO : ∀ s, HeldOpens D DO L Form.Holo shows opening dig s)
+    (hRC : ∀ s, RegClimbs H D DO L Form.Holo shows cmt dig s)
     (hS : Staged H D I L Form.Holo shows cmt) (hD : Decomp H D IV Form.Holo chk) :
     VStarAcceptsR H D I DO Form.Holo :=
   vstarAccepts_holo hR hVL (partChecks_holo hDO hC) (partOpens_holo hO hRC) hS hD
@@ -594,7 +597,8 @@ theorem vstarParts_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : Deploy 
     {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hP : ∀ s, HoloPart H D DO decode L shows chk logs s)
-    (hO : ∀ s, HeldOpens D DO L Form.Holo opening dig s) (hRC : ∀ s, RegClimbs H D DO L Form.Holo cmt dig s)
+    (hO : ∀ s, HeldOpens D DO L Form.Holo shows opening dig s)
+    (hRC : ∀ s, RegClimbs H D DO L Form.Holo shows cmt dig s)
     (hS : Staged H D I L Form.Holo shows cmt) (hD : Decomp H D I.V Form.Holo chk)
     (hLD : LogDecomp H D I.V Form.Holo logs) (hH : Held D I L Form.Holo) : VStarParts H D I DO L opening Form.Holo :=
   ⟨shows, chk, cmt, logs, partChecks_holo hDO fun s => (hP s).1, partOpens_holo hO hRC,
@@ -610,7 +614,8 @@ theorem vstarPartsStaging_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : 
     {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hP : ∀ s, HoloPart H D DO decode L shows chk logs s)
-    (hO : ∀ s, HeldOpens D DO L Form.Holo opening dig s) (hRC : ∀ s, RegClimbs H D DO L Form.Holo cmt dig s)
+    (hO : ∀ s, HeldOpens D DO L Form.Holo shows opening dig s)
+    (hRC : ∀ s, RegClimbs H D DO L Form.Holo shows cmt dig s)
     (hV : VstarShows D I L Form.Holo decC shows cmt) (hD : Decomp H D I.V Form.Holo chk)
     (hLD : LogDecomp H D I.V Form.Holo logs) (hH : Held D I L Form.Holo) :
     VStarPartsStaging D I DO H L opening decC Form.Holo :=
@@ -637,9 +642,9 @@ theorem vstarAccepts_holo_deployRec {L : Layout} (hb : b.rd = RecDeploy.readersO
     (hC : ∀ s, PartsLinksOr H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
       RecDeploy.readOfO L Form.Holo shows chk s)
     (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      Form.Holo opening dig s)
+      Form.Holo shows opening dig s)
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      Form.Holo cmt dig s)
+      Form.Holo shows cmt dig s)
     (hS : Staged H (RecDeploy.deployRec I.V ivScope b) I L Form.Holo shows cmt)
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk) :
     VStarAcceptsR H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) Form.Holo :=
@@ -654,9 +659,9 @@ theorem vstarParts_holo_deployRec {L : Layout} {opening : Opening}
     (hP : ∀ s, HoloPart H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
       RecDeploy.readOfO L shows chk logs s)
     (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      Form.Holo opening dig s)
+      Form.Holo shows opening dig s)
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      Form.Holo cmt dig s)
+      Form.Holo shows cmt dig s)
     (hS : Staged H (RecDeploy.deployRec I.V ivScope b) I L Form.Holo shows cmt)
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk)
     (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs)
@@ -673,9 +678,9 @@ theorem vstarPartsStaging_holo_deployRec {L : Layout} {opening : Opening} {decC 
     (hP : ∀ s, HoloPart H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
       RecDeploy.readOfO L shows chk logs s)
     (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      Form.Holo opening dig s)
+      Form.Holo shows opening dig s)
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      Form.Holo cmt dig s)
+      Form.Holo shows cmt dig s)
     (hV : VstarShows (RecDeploy.deployRec I.V ivScope b) I L Form.Holo decC shows cmt)
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk)
     (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs)
