@@ -8,8 +8,18 @@ A point's time T is SMSP-cycles a warp-iteration of the stream (4 n / rate, as u
 the run's SASS between the bounds the gate recorded. Each load adds its LDTM and what ptxas puts beside it (the wait's NOP,
 the R2UR and LOP3 of the next load's address; probes/sm100_ldtm.cu): `all` charges the whole slowdown to the load,
 `ldtm` first charges every other added instruction a whole issue slot, the most one costs, so it is the least the load is
-left with. The price is the least `ldtm` over every point of a stream that issues at least 0.95 of its slots without
-the loads, less 2% (decision 76, as uniform.py prices a uniform instruction); it passes at 0.98 of an issue slot.
+left with. The price is the least `ldtm` over the priced points of a read stream (issue ≥ 0.95 without the loads), less 2%
+(decision 76, as uniform.py prices a uniform instruction); it passes at 0.98 of an issue slot.
+
+A priced point has at least two loads and still issues ≥ 0.95 of its slots. The single-load point is dropped: at one load
+ptxas restructures the loop (an extra LDC and LOP3 appear, then vanish at two or more), so its added-opcode count against
+the no-load loop is inflated and `ldtm` there is spuriously low. Past about four loads an iteration the TMEM load path, not
+the issue slot, binds (the point's own issue falls below 0.95), so those points are dropped too. The finding: the least
+`ldtm` is near zero (negative on the FFMA stream that reads its accumulators), so one LDTM.32x32b.x128 costs well under an
+issue slot and fails 0.98. It issues its address on the uniform datapath (the R2UR) and reads over the load path, both idle
+while the vector issue port is saturated, so a load hides under saturated vector work. The repeats agree in sign and size
+but not to r5's 0.002: the saturated load density is capped near four loads an iteration, so the least rests on a low-density
+marginal, not r5's 16-128-instruction streams.
 """
 
 from __future__ import annotations
@@ -123,6 +133,16 @@ def streams(out: Path) -> dict[str, dict]:
     return res
 
 
+def priced(s: dict):
+    """A read stream's points that set the price: at least two loads, the point still issue-saturated (the single-load
+    restructure and the load-path-bound points above it are dropped; the docstring says why)."""
+    if not s["read"]:
+        return
+    for name, q in s["points"].items():
+        if q["K"] >= 2 and q["issue"] >= SAT_MIN:
+            yield name, q
+
+
 def analyze(outs: list[Path]) -> dict:
     runs = {}
     for out in outs:
@@ -131,9 +151,7 @@ def analyze(outs: list[Path]) -> dict:
     least = None
     for rid, ss in runs.items():
         for fam, s in ss.items():
-            if not s["read"]:
-                continue
-            for name, q in s["points"].items():
+            for name, q in priced(s):
                 if least is None or q["ldtm"] < least[0]:
                     least = (q["ldtm"], name, rid)
     res = {"runs": runs, "min_issue": SAT_MIN, "margin": MARGIN, "pass_at": PASS}
@@ -144,12 +162,12 @@ def analyze(outs: list[Path]) -> dict:
         per = {}
         for rid, ss in runs.items():
             for fam, s in ss.items():
-                for name, q in s["points"].items():
+                for name, q in priced(s):
                     per.setdefault(name, []).append(q["ldtm"])
         res["repeat_spread"] = max((max(v) - min(v) for v in per.values() if len(v) > 1), default=None)
         lows = []
         for rid, ss in runs.items():
-            vals = [q["ldtm"] for s in ss.values() if s["read"] for q in s["points"].values()]
+            vals = [q["ldtm"] for s in ss.values() for _, q in priced(s)]
             if vals:
                 lows.append(min(vals) / (1 + MARGIN))
         res["price_by_run"] = lows
@@ -161,17 +179,20 @@ def text(res: dict) -> str:
     L = []
     for rid, ss in res["runs"].items():
         L.append(f"run {rid}: streams (baseline issue; then K loads: ΔT a load all-in / less the other added at a slot "
-                 "each, the loop's issue)")
+                 "each, the loop's issue; * a priced point)")
         for fam, s in ss.items():
             tc = f", tensor {s['tc0']:.1f} words/clk" if s.get("tc0") else ""
             L.append(f"  {fam}: issue {s['issue0']:.3f}{'' if s['read'] else ' (below 0.95, not read)'}, T0 {s['T0']:.1f}{tc}")
+            pr = {name for name, _ in priced(s)}
             for name, q in sorted(s["points"].items(), key=lambda kv: kv[1]["K"]):
                 tcq = f" tensor {q['tc']:.1f}" if q.get("tc") else ""
-                L.append(f"    K {q['K']:2d}: ΔT/load {q['all']:+.3f} / {q['ldtm']:+.3f} (issue {q['issue']:.3f}){tcq}  "
-                         f"added {q['added']}")
+                L.append(f"    {'*' if name in pr else ' '}K {q['K']:2d}: ΔT/load {q['all']:+.3f} / {q['ldtm']:+.3f} "
+                         f"(issue {q['issue']:.3f}){tcq}  added {q['added']}")
     if "price" in res:
         L.append(f"LDTM.x128 issue price: {res['price']:.4f} of an issue slot (least {res['least']:.4f} at {res['set_by']}, "
-                 f"run {res['run']}, less 2%): {'PASS' if res['pass'] else 'FAIL'} at {PASS}")
+                 f"run {res['run']}, less 2%): {'PASS' if res['pass'] else 'FAIL'} at {PASS} "
+                 "(a load hides under saturated vector work: it issues on the uniform/load path, idle while the vector "
+                 "port is full)")
     else:
         L.append("LDTM.x128 issue price: no stream issues at 0.95")
     if "price_by_run" in res:
