@@ -206,4 +206,166 @@ theorem mem_pushes {α : Type} {f : ℕ → α} {n : ℕ} {x : α} (h : x ∈ pu
       exact ⟨j, by omega, rfl⟩
     · exact ⟨n, by omega, rfl⟩
 
+/-- **The masked inner proof's shape**, at a rep's pads of at most `1024` symbols, for a SHA-512 of 64-byte outputs:
+its salts are 192 bytes and its path entries 64 (columns below the width, `log₂ n ≤ 13` entries each), and its bytes
+are at most `424 + 16·1024 + 168·(232 + 64·13)`. -/
+theorem inZ_shape {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (lay : Zk.PadLayout) (tape : TapeZk)
+    (i r : ℕ) {ic : InnerCommit}
+    (hic : innerCommitP (Hashes.ofSha512 h : Hashes V) (padsOf tape i r lay) (tape.innerSalt i r) = .ok ic)
+    (cons : Array (String × Zk.Lin)) (cs : InZ.Coins) (hlen : lay.len + Zk.K_PAD ≤ 1024) :
+    (∀ x ∈ (InZ.proof lay (padsOf tape i r lay) cons h ic cs).salts, x.size = 192) ∧
+    (∀ q ∈ (InZ.proof lay (padsOf tape i r lay) cons h ic cs).paths, ∀ x ∈ q, x.size = 64) ∧
+    (ZkView.wInner (InZ.proof lay (padsOf tape i r lay) cons h ic cs)).size ≤
+      424 + 16 * 1024 + 168 * (232 + 64 * 13) := by
+  have htree := innerCommitP_tree hic
+  have hsalts := innerCommitP_salts hic
+  rw [padsOf_symbols] at htree hsalts
+  have hNpow := innerCols_pow (lay.len + Zk.K_PAD)
+  have hch := htree.ch
+  have hNpos : 0 < (lay.len + Zk.K_PAD).nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE := by
+    rw [hNpow]
+    exact Nat.two_pow_pos _
+  have hlog : Nat.log2 ((lay.len + Zk.K_PAD).nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE) ≤ 13 := by
+    have h1 : (lay.len + Zk.K_PAD).nextPowerOfTwo ≤ 1024 := Nat.nextPowerOfTwo_le hlen ⟨10, by norm_num⟩
+    have h2 : (lay.len + Zk.K_PAD).nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE < 2 ^ 14 := by
+      unfold Zk.INNER_LOG_INV_RATE
+      omega
+    have := (Nat.log2_lt hNpos.ne').2 h2
+    omega
+  have hqs : ∀ j ∈ InZ.qs ic cs, j < ic.ch.size := by
+    intro j hj
+    obtain ⟨w, -, rfl⟩ := Array.mem_map.1 hj
+    exact Nat.mod_lt _ (by omega)
+  have hsalt : ∀ x ∈ (InZ.proof lay (padsOf tape i r lay) cons h ic cs).salts, x.size = 192 := by
+    intro x hx
+    obtain ⟨j, hj, rfl⟩ := Array.mem_map.1 hx
+    have hjN := hqs j hj
+    rw [hch] at hjN
+    rw [hsalts, getElem!_pos _ j (by simpa using hjN), Array.getElem_map, Array.getElem_range]
+    exact Lg.fitBytes_size' _ _
+  have hpath : ∀ q ∈ (InZ.proof lay (padsOf tape i r lay) cons h ic cs).paths,
+      q.size = Nat.log2 ic.ch.size ∧ ∀ x ∈ q, x.size = 64 := by
+    intro q hq
+    obtain ⟨j, hj, rfl⟩ := Array.mem_map.1 hq
+    have hjN := hqs j hj
+    refine ⟨by simp, fun x hx => ?_⟩
+    obtain ⟨k, hk, rfl⟩ := Array.mem_map.1 hx
+    rw [Array.mem_range, hch] at hk
+    rw [hch] at hjN
+    exact innerTree_entry h64 htree hNpow hk.le (sibling_lt (lt_of_lt_of_eq hjN hNpow) hk)
+  refine ⟨hsalt, fun q hq => (hpath q hq).2, wInner_size_le _ (JsonRT.innerCommitP_root h64 _ _ hic)
+    (tcOf_size h64 _ _) (padsOf_tauSalt_size tape i r lay) ?_ ?_ ?_ hsalt ?_ (fun q hq => ?_)
+    fun q hq => (hpath q hq).2⟩
+  · show (InZ.y (padsOf tape i r lay) cs).size ≤ 1024
+    simp only [InZ.y, Array.size_map, Array.size_range, padsOf_symbols]
+    exact hlen
+  · simp [InZ.proof, InZ.qs, Zk.Q]
+  · simp [InZ.proof, InZ.qs, Zk.Q]
+  · simp [InZ.proof, InZ.qs, Zk.Q]
+  · rw [(hpath q hq).1, hch]
+    exact hlog
+
+/-! ## The masked rep's shape -/
+
+/-- **`RepShapedT` beyond level 0's shape holds**: a returning masked rep (`repPZk_split`) has level 0's cap
+(`commitRowsP_capSize`), the masked PIOP's closed-form lengths, level 0's Ligerito lengths and `t_pad` padding
+coefficients (`Level0.ProverShape`), the inner proof's salts and paths (`inZ_shape`), and a file under `2^64` bytes:
+`schedPartZk` under `2^32` (`zkSchedule_file`), `m, k_log ≤ 35` and at most 2,050 claims. -/
+theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
+  intro h1 h64 st tr hT ω i d k r v cm pts e rep ic hin he l pt l' hgo
+  obtain ⟨P, t'⟩ := pt
+  show ZkView.Shaped _ P
+  have h25 := hT.1
+  have h35 := hT.2.1
+  have hmerk : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := hT.2.2.1
+  obtain ⟨w, hwf, -⟩ := hT.model
+  have hk6 := hwf.hk6
+  have hkm := hwf.hk
+  have hm14 : 14 ≤ (Setup.ofCircuit st).m := by show 14 ≤ st.m; omega
+  have hn : v.1.n = st.m - 7 := zkSchedule_n hin.schedule
+  obtain ⟨hk0, hlv⟩ := zkSchedule_shape hin.schedule
+  have hkn : v.1.k0 ≤ v.1.n := zkSchedule_k0n h25 h35 hin.schedule
+  unfold repT at hgo
+  obtain ⟨full, lL, lg, zl, rec, tI, lI, rp, x, lgc, -, -, hlg, -, -, hinn, hP, hzl⟩ :=
+    repPZk_split _ (Claims.hOf H) (Setup.ofCircuit st) v.1 v.2 rep d tr _ cm e _ ic (ω.extra i) (ω.lanePad i)
+      (ω.salt i rep) (ω.nonce i rep) hm14 _ l hgo
+  have hcm := hin.commit
+  rw [hmerk] at hcm hlg
+  have hH : (shapeZk (Setup.ofCircuit st) v.1 e.size).hashLen = 64 := by
+    show (Setup.ofCircuit st).merkle.digestLen = 64
+    rw [hmerk]
+    rfl
+  have hS : (shapeZk (Setup.ofCircuit st) v.1 e.size).saltLen = some 192 := by
+    show (if (Setup.ofCircuit st).merkle.saltBytes = 0 then none else some (Setup.ofCircuit st).merkle.saltBytes) =
+      some 192
+    rw [hmerk]
+    rfl
+  have htb : (packed tr (Setup.ofCircuit st).m).size = 2 ^ v.1.n := by simp [packed, hn]; rfl
+  obtain ⟨hLg, hyb⟩ := h1 _ (Claims.hOf H) (Setup.ofCircuit st).m v (shapeZk (Setup.ofCircuit st) v.1 e.size) _ cm
+    _ _ _ _ rep (ω.extra i) (ω.lanePad i) (ω.salt i 0 0) (ω.salt i rep) (ω.nonce i rep) _ tI lL lI lg zl rec
+    (JsonRT.hOf_size h64) h25 h35 hin.schedule rfl (by rw [hH]; rfl) (by rw [hS]; rfl) htb
+    (by simp [basisVals, hn]; rfl) hcm hlg
+  obtain ⟨-, -, hpi, -⟩ := innerP_ret _ (Claims.hOf H) _ _ ic _ _ tI lI hinn
+  have hcd := (JsonRT.zkSchedule_cap0 h25 h35 hin.schedule).1
+  obtain ⟨hcs, hc64⟩ := JsonRT.commitRowsP_capSize (JsonRT.hOf_size h64) _ hcd _ _ hcm
+  have hcap : ZkView.CapOk (shapeZk (Setup.ofCircuit st) v.1 e.size) (v.1.levels.getD 0 default) P.proof.cap := by
+    rw [hP]
+    exact ⟨hcs, fun b hb => (hc64 b hb).trans hH.symm⟩
+  have h1ab : P.proof.zerocheck.round1ab.size = 64 := by rw [hP]; simp [proofR, ZcZ.proof, ZcZ.r1ab]
+  have h1c : P.proof.zerocheck.round1c.size = 64 := by rw [hP]; simp [proofR, ZcZ.proof, ZcZ.r1c]
+  have hrounds : P.proof.zerocheck.rounds.size = st.m - 6 := by
+    rw [hP]
+    simp only [proofR, ZcZ.proof, pushes_size]
+    rfl
+  have hlr : P.proof.lincheck.rounds.size = st.c.kLog - 6 := by
+    rw [hP]
+    simp only [proofR, LcZ.proof, pushes_size]
+    rfl
+  have hzp : P.proof.lincheck.zPartial.size = 64 := by rw [hP]; simp [proofR, LcZ.proof, LcZ.zp]
+  have hrs : P.proof.ringSwitches.size = 2 + e.size := by
+    rw [hP]
+    simp [proofR, Rs.proof, pushes_size, claimsR, abcClaims]
+  have hrs128 : ∀ u ∈ P.proof.ringSwitches, u.size = 128 := by
+    rw [hP]
+    intro u hu
+    obtain ⟨j, -, rfl⟩ := mem_pushes hu
+    simp [switchVec]
+  have hlg' : Level0.LgShaped (shapeZk (Setup.ofCircuit st) v.1 e.size) P.proof.ligerito := by
+    rw [hP]
+    exact hLg
+  have hsm : (Setup.ofCircuit st).m = st.m := rfl
+  have hsk : (Setup.ofCircuit st).kLog = st.c.kLog := rfl
+  have hlen : (Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0).len + Zk.K_PAD ≤ 1024 := by
+    simp only [Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.hab, Zk.PadLayout.zp, Zk.PadLayout.lc,
+      Zk.PadLayout.fc, Zk.PadLayout.fa, Zk.PadLayout.new, Zk.K_PAD]
+    omega
+  obtain ⟨hsalt, hpath, hinner⟩ := inZ_shape (JsonRT.hOf_size h64) _ ω i rep hin.innerCommit _ _ hlen
+  rw [← hpi] at hsalt hpath hinner
+  obtain ⟨g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13⟩ := hlg'
+  have hw := wProofZk_size_le (shapeZk (Setup.ofCircuit st) v.1 e.size) P.proof hcap h1ab h1c hrounds hlr hzp hrs
+    hrs128 ⟨g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13⟩
+  have hl0 := wLevel0_size P.level0
+  rw [show P.level0.ybar.size = v.2 by rw [hzl]; exact hyb] at hl0
+  have hfile := zkSchedule_file h25 h35 hin.schedule
+  have hsp : schedPartZk (shapeZk (Setup.ofCircuit st) v.1 e.size).sched
+      (shapeZk (Setup.ofCircuit st) v.1 e.size).hashLen (shapeZk (Setup.ofCircuit st) v.1 e.size).saltLen =
+      schedPartZk v.1 64 (some 192) := by
+    rw [hH, hS]
+    rfl
+  rw [hsp] at hw
+  have hfit : (ZkView.encZk (shapeZk (Setup.ofCircuit st) v.1 e.size) P).size < 2 ^ 64 := by
+    unfold ZkView.encZk
+    rw [ByteArray.size_append, ByteArray.size_append]
+    change _ ≤ _ + 32 * (st.m - 6) + 32 * (st.c.kLog - 6) + 2064 * (2 + e.size) at hw
+    omega
+  exact ⟨by rw [hH]; norm_num, by show 1 ≤ v.1.levels.size - 1; omega, hfit, hcap, h1ab, h1c, hrounds, hlr, hzp, hrs, hrs128, g1, g2, g3, g4, g5,
+    g6, g7, g8, g9, g10, g11, g12, g13, hsalt, hpath⟩
+
+/-- **Masked completeness from level 0**: `complete_jsonT` from level 0's four premises (`Level0`) alone;
+`RepShapedT` beyond level 0's shape (`shapeRest`) and `ProverRunsT` beyond level 0 (`runsRest`) hold. -/
+theorem complete_jsonT_of_level0 (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+    (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier) :
+    Claims.Flock.Complete H (deployZk Readable.relation) :=
+  complete_jsonT_of_parts H S h0 h1 h2 h3 (shapeRest H) (runsRest H)
+
 end FlockComplete.ZkTables
