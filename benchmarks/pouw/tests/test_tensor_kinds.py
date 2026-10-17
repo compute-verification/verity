@@ -110,10 +110,20 @@ def test_a_program_faster_than_a_joint_row_is_marked_over(tmp_path: Path):
     summary, fails = TK.analyze(tmp_path)
     assert fails == []
     j = summary["imma_s8_m16n8k16"]["ji3e"]
-    assert j["JI3e_1"]["over"] and abs(j["JI3e_1"]["load"] - (15.030 + 0.317 * 8.75) / 17.4) < 1e-9
+    a, b = TK.JI3E["JI3e_1"]
+    assert j["JI3e_1"]["over"] and abs(j["JI3e_1"]["load"] - (a + b * 8.75) / 17.4) < 1e-9
     assert not j["JI3e_0"]["over"]
     TK.main(["tensor_kinds.py", str(tmp_path)])
     assert "**over** (spec R=64)" in (tmp_path / "tensor_kinds.md").read_text()
+
+    # refit: JI3e_1's MMA comes down to what this program allows at the noise margin, then the row ÷ SCHED; JI3e_0
+    # holds at VF3e's (8.302 allowed), and IMMA s8 m16n8k32, absent here, would keep VF3e's on every row
+    rows = TK.refit([tmp_path])["rows"]
+    assert abs(rows["JI3n_1"]["MMA"] - (0.98 * 17.4 - b * 8.75) / 1.07) < 1e-9
+    assert abs(rows["JI3n_1"]["other"] - b / 1.07) < 1e-12
+    assert rows["JI3n_1"]["IMMA16816"] == rows["JI3n_1"]["MMA"] and set(rows["JI3n_1"]) == {"MMA", "other", "IMMA16816"}
+    assert abs(rows["JI3n_0"]["MMA"] - TK.JI3E["JI3e_0"][0] / 1.07) < 1e-9
+    assert abs(rows["JI3n_0"]["IMMA16816"] - (0.98 * 17.4 - 8.75) / 1.07) < 1e-9
 
 
 def test_a_lane_op_slower_than_issue_fails_the_gate(tmp_path: Path):

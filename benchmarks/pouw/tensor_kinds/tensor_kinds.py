@@ -1,6 +1,7 @@
 """M1 of EPS1 TENSOR: fit each sm_120 MMA form's joint issue coefficient from a tensor_kinds run.
 
-    python tensor_kinds.py OUT_DIR    # reads OUT_DIR/tensor_kinds.jsonl and OUT_DIR/sass/tensor_kinds.sass
+    python tensor_kinds.py OUT_DIR            # reads OUT_DIR/tensor_kinds.jsonl and OUT_DIR/sass/tensor_kinds.sass
+    python tensor_kinds.py refit OUT_DIR...   # VF3n-16's JI3n rows from every program of these runs, as JSON
 
 For every timed case it reads the kernel's loops in the SASS (a loop is the instructions from a label to the backward
 branch that targets it), counts MMA and other instructions an iteration, and turns the run's per-SM counts into
@@ -13,6 +14,11 @@ form's programs also load VF3e's joint rows JI3e_0/1/2, fitted beside IMMA s8 m1
 0.98 is a program the row says can't run that fast (marked **over**).
 
 Writes OUT_DIR/tensor_kinds.json and OUT_DIR/tensor_kinds.md; exits 3 when a gate fails (the case is named).
+
+`refit` writes the machine model's JI3n_0..2 (VF3n-16): each JI3e row's MMA coefficient refit over every program of the
+runs (a program constrains a row whatever the lane gate says) and VF3e's, at the noise margin with the row's other
+coefficient kept, then the whole row divided by SCHED, the schedule spread between builds of one program. MMA takes every
+form's least; each form's kind (KIND) gets its own.
 """
 from __future__ import annotations
 
@@ -30,9 +36,25 @@ NOISE = 0.02
 LANE_MIN = 0.9
 LANES = ("iadd3", "ffma", "iadd3_ffma")
 MIXED_LANE = "iadd3_ffma"
-#: VF3e's joint issue rows (note:20261016T0751Z-draft-rs-vf3e), fitted beside IMMA s8 m16n8k32 and OMMA: SMSP-cycles a
-#: MMA and a other instruction. Every program of every form must load each at most 1 - NOISE.
-JI3E = {"JI3e_0": (8.115, 1.0), "JI3e_1": (15.030, 0.317), "JI3e_2": (15.539, 0.172)}
+#: VF3e's joint issue rows (note:20261016T0751Z-draft-rs-vf3e) as the machine model's census holds them, fitted beside
+#: IMMA s8 m16n8k32 and OMMA: SMSP-cycles a MMA and a other instruction. Every program of every form must load each at
+#: most 1 - NOISE.
+JI3E = {"JI3e_0": (8.115163161, 1.0), "JI3e_1": (4510.17215313632 / 300.08, 0.317063107),
+        "JI3e_2": (4662.85212194032 / 300.08, 0.171692378)}
+#: The schedule spread `refit` covers: one program's time varied up to 6.91% between builds (M1, programs within 5% of a
+#: JI3e facet: r20261017-040022-5e4d against r20261017-041103-d35d and r20261017-041754-7630).
+SCHED = 1.07
+#: Each form's kind in the machine model (VF3n-16): one a SASS form.
+KIND = {"imma_s8_m16n8k32": "IMMA16832", "imma_u8s8_m16n8k32": "IMMA16832", "imma_s8_m16n8k32_sat": "IMMA16832",
+        "imma_s8_m16n8k16": "IMMA16816", "imma_s8_m8n8k16": "IMMA8816", "imma_sp_s8_m16n8k64": "IMMASP16864",
+        "imma_sp_s8_m16n8k32": "IMMASP16832", "hmma_f16_m16n8k16_f32": "HMMA16816", "hmma_bf16_m16n8k16_f32": "HMMA16816",
+        "hmma_f16_m16n8k16_f16": "HMMA16816F16", "hmma_sp_f16_m16n8k32_f32": "HMMASP16832",
+        "hmma_tf32_m16n8k8": "HMMA1688T", "hmma_tf32_m16n8k4": "HMMA1684T", "qmma_e4m3_m16n8k32_f32": "QMMA16832",
+        "qmma_e5m2_m16n8k32_f32": "QMMA16832", "qmma_e2m1_m16n8k32_f32": "QMMA16832",
+        "qmma_sf_e4m3_m16n8k32_f32": "QMMASF16832", "qmma_sp_e4m3_m16n8k64_f32": "QMMASP16864",
+        "omma_nvf4_m16n8k64": "OMMASF16864"}
+#: The kinds VF3e's programs counted as MMA, so VF3e's coefficient bounds theirs too.
+VF3E_KINDS = {"IMMA16832", "OMMASF16864"}
 STRUCTS = {
     "ImmaS8k32": "imma_s8_m16n8k32",
     "ImmaU8S8k32": "imma_u8s8_m16n8k32",
@@ -238,7 +260,28 @@ def render(summary: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def refit(outs: list[Path], sched: float = SCHED) -> dict:
+    """JI3n_0..2 from every program of the runs in `outs` and VF3e's (the module docstring)."""
+    pts = []
+    for out in outs:
+        summary, _ = analyze(out)
+        pts += [(form, p) for form, s in summary.items() if form != "lane_op_alone" for p in s["points"]]
+    rows = {}
+    for r, (am, ao) in JI3E.items():
+        kinds: dict[str, float] = {}
+        for form, p in pts:
+            k = KIND[form]
+            bound = (1 - NOISE) * p["cycles_per_mma"] - ao * p["ops_per_mma"]
+            kinds[k] = min(kinds.get(k, am if k in VF3E_KINDS else float("inf")), bound)
+        rows[r.replace("JI3e", "JI3n")] = {"MMA": min(am, *kinds.values()) / sched, "other": ao / sched,
+                                           **{k: v / sched for k, v in sorted(kinds.items())}}
+    return {"programs": len(pts), "noise": NOISE, "sched": sched, "rows": rows}
+
+
 def main(argv: list[str]) -> int:
+    if argv[1] == "refit":
+        print(json.dumps(refit([Path(a) for a in argv[2:]]), indent=1))
+        return 0
     out = Path(argv[1])
     summary, fails = analyze(out)
     (out / "tensor_kinds.json").write_text(json.dumps({"summary": summary, "gate_failures": fails}, indent=1))
