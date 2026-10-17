@@ -5,9 +5,10 @@
 #   research run --on vy-nebius-cpu-3 --project verity --source . --cwd source --mem-gb 64 \
 #     --tool verity_proof_throughput.tool:VERIFIER_POINT -- bash benchmarks/proof_throughput/verify.sh BUNDLE=art:... PROVE_RUN=r...
 # env: BUNDLE=art:... PROVE_RUN= (the prover point's run id, recorded in the result)  BUILD_ONLY=1 (build the verifier, stop)
-#      JOBS=1 (sessions verified at once: more
-#      share the node's memory bandwidth, so the timings are one session's alone only at 1)
-#      PT_WORK=/workspace/jobs/proof-throughput (the Lean build, keyed by verity/core/service/flock's files, and the venv)
+#      JOBS=1 (sessions verified at once: more share the node's memory bandwidth, so the timings are one session's alone
+#      only at 1)
+#      PT_WORK=/workspace/cache/proof-throughput (the Lean build, keyed by verity/core/service/flock's files, and the venv;
+#      the CPU nodes' /workspace is root's, its cache/ the research user's)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 [ "${BUILD_ONLY:-0}" = 1 ] || : "${BUNDLE:?BUNDLE=art:... is required}"
