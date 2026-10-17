@@ -312,4 +312,143 @@ theorem Seq.pLog_B {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB) (PA : WA → Prover
     rw [← hl, List.take_left, List.drop_left]
     exact he
 
+/-! ## The composed tape -/
+
+/-- **The composed tape**: the guess `j`, `A`'s and `B`'s nonces, and `A`'s first rest, with `A`'s second rest and
+`B`'s rest as the rest. `A` reads its second rest when `j < a`, so `Fork`'s two runs differ in `A`, and its first when
+`j = a`, so they share `A`'s run and differ in `B`. -/
+def forkTape (a : ℕ) {NA ΩA NB ΩB : Type} (s : (Fin (a + 1) × NA × NB × ΩA) × (ΩA × ΩB)) :
+    (NA × ΩA) × (NB × ΩB) :=
+  ((s.1.2.1, if (s.1.1 : ℕ) < a then s.2.1 else s.1.2.2.2), (s.1.2.2.1, s.2.2))
+
+/-- `forkTape` with the guess and the rest it leaves unread. -/
+def forkEquiv (a : ℕ) (NA ΩA NB ΩB : Type) :
+    (Fin (a + 1) × NA × NB × ΩA) × (ΩA × ΩB) ≃ Fin (a + 1) × ((NA × ΩA) × (NB × ΩB)) × ΩA where
+  toFun s := (s.1.1, forkTape a s, if (s.1.1 : ℕ) < a then s.1.2.2.2 else s.2.1)
+  invFun q := ((q.1, q.2.1.1.1, q.2.1.2.1, if (q.1 : ℕ) < a then q.2.2 else q.2.1.1.2),
+    (if (q.1 : ℕ) < a then q.2.1.1.2 else q.2.2, q.2.1.2.2))
+  left_inv s := by
+    obtain ⟨⟨j, νA, νB, r0⟩, r1, rB⟩ := s
+    by_cases h : (j : ℕ) < a <;> simp [forkTape, h]
+  right_inv q := by
+    obtain ⟨j, ⟨⟨νA, r⟩, νB, rB⟩, o⟩ := q
+    by_cases h : (j : ℕ) < a <;> simp [forkTape, h]
+
+/-- **`forkTape` reads a uniform tape**: an event of the two sessions' tapes has its probability. -/
+theorem Pr_forkTape (a : ℕ) {NA ΩA NB ΩB : Type} [Fintype NA] [Fintype ΩA] [Nonempty ΩA] [Fintype NB] [Fintype ΩB]
+    (p : (NA × ΩA) × (NB × ΩB) → Prop) : Pr (fun s => p (forkTape a s)) = Pr p := by
+  have e := Pr_equiv (forkEquiv a NA ΩA NB ΩB) fun q => p q.2.1
+  simp only [forkEquiv, Equiv.coe_fn_mk] at e
+  rw [e, Pr_prod_left]
+  simp only [Pr_fst p]
+  exact Ex_const _
+
+/-- **One unit's coins among every unit's** have the law of that unit's. -/
+theorem Pr_pi_at {ι : Type} [Fintype ι] [DecidableEq ι] {β : ι → Type} [∀ i, Fintype (β i)]
+    [∀ i, Nonempty (β i)] (i : ι) (p : β i → Prop) : Pr (fun c : (j : ι) → β j => p (c i)) = Pr p := by
+  have e := Pr_equiv (Equiv.piSplitAt i β) fun q => p q.1
+  rw [← Pr_fst (β := (j : {j // j ≠ i}) → β j) p, ← e]
+  rfl
+
+/-! ## The composed `Fork` -/
+
+theorem findColl_ne_none_mono {l₁ l₂ m₁ m₂ : List (Msg × Msg)} (h₁ : ∀ e ∈ l₁, e ∈ m₁) (h₂ : ∀ e ∈ l₂, e ∈ m₂)
+    (h : findColl (l₁ ++ l₂) ≠ none) : findColl (m₁ ++ m₂) ≠ none := by
+  rw [findColl_ne_none_iff] at h ⊢
+  obtain ⟨p, hp, q, hq, hne, heq⟩ := h
+  have sub : ∀ e ∈ l₁ ++ l₂, e ∈ m₁ ++ m₂ := fun e he => by
+    rcases List.mem_append.mp he with h | h
+    exacts [List.mem_append_left _ (h₁ e h), List.mem_append_right _ (h₂ e h)]
+  exact ⟨p, sub p hp, q, sub q hq, hne, heq⟩
+
+theorem Fork_pr_le {N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
+    (P : Prover (N × Ω)) (Vs : VStar Θ) (θ : Θ) (x : Msg) :
+    (Fork H P Vs θ x).Pr H ≤ Pr (fun s : N × Ω × Ω => findColl ((runStar H P Vs x (s.1, s.2.1) θ).pLog ++
+      (runStar H P Vs x (s.1, s.2.2) θ).pLog) ≠ none) :=
+  Pr_mono fun s ⟨u, v, h, _⟩ => by
+    change findColl _ = some (u, v) at h
+    rw [h]; simp
+
+/-- **The composed `Fork` is at least `A`'s at `a` of its `a + 1` guesses, and `B`'s at the last**, where `B`'s is
+charged at `A`'s real run, and only where that run goes on. -/
+theorem Seq.fork_ge {WA WB NA ΩA NB ΩB Θ : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
+    [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
+    (Q : Seq WA WB) (PA : WA → Prover (NA × ΩA)) (PB : WB → Prover (NB × ΩB)) (w : WA) (H : Msg → Msg)
+    (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB nB : Msg → ℕ) (hk : ∀ u, kB (Q.xB x u) = nB x)
+    (hV : Vs.k x = Q.kA x + nB x) (a : ℕ) :
+    a * (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H +
+      Ex (fun ωA : NA × ΩA => if goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs then
+        (Fork H (PB (Q.wB w x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))
+          (Vs.after x kB) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)
+          (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)))).Pr H else 0) ≤
+      (a + 1) * (Fork H ((Q.prover PA PB w).comap (forkTape a)) Vs θ x).Pr H := by
+  classical
+  refine le_trans ?_ (mul_le_mul_of_nonneg_left (Fork_pr_ge H _ Vs θ x) (by positivity))
+  simp only [runStar_comap]
+  let e : (Fin (a + 1) × NA × NB × ΩA) × (ΩA × ΩB) × (ΩA × ΩB) ≃
+      Fin (a + 1) × (NA × NB × ΩA × ΩA × ΩB × ΩA × ΩB) :=
+    { toFun := fun s => (s.1.1, s.1.2.1, s.1.2.2.1, s.1.2.2.2, s.2.1.1, s.2.1.2, s.2.2.1, s.2.2.2)
+      invFun := fun q => ((q.1, q.2.1, q.2.2.1, q.2.2.2.1), (q.2.2.2.2.1, q.2.2.2.2.2.1),
+        (q.2.2.2.2.2.2.1, q.2.2.2.2.2.2.2))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  rw [← Pr_equiv e.symm, Pr_guess, Nat.cast_add_one, mul_div_cancel₀ _ (by positivity), Fin.sum_univ_castSucc]
+  refine add_le_add ?_ ?_
+  · -- `j < a`: `A`'s collision
+    have hA : (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H ≤ Pr fun b : NA × NB × ΩA × ΩA × ΩB × ΩA × ΩB =>
+        findColl ((runStar H (PA w) (Vs.head Q.kA) x (b.1, b.2.2.2.1) θ).pLog ++
+          (runStar H (PA w) (Vs.head Q.kA) x (b.1, b.2.2.2.2.2.1) θ).pLog) ≠ none := by
+      refine (Fork_pr_le H (PA w) (Vs.head Q.kA) θ x).trans (le_of_eq ?_)
+      let e' : NA × NB × ΩA × ΩA × ΩB × ΩA × ΩB ≃ (NA × ΩA × ΩA) × (NB × ΩA × ΩB × ΩB) :=
+        { toFun := fun b => ((b.1, b.2.2.2.1, b.2.2.2.2.2.1), (b.2.1, b.2.2.1, b.2.2.2.2.1, b.2.2.2.2.2.2))
+          invFun := fun q => (q.1.1, q.2.1, q.2.2.1, q.1.2.1, q.2.2.2.1, q.1.2.2, q.2.2.2.2)
+          left_inv := fun _ => rfl
+          right_inv := fun _ => rfl }
+      rw [← Pr_fst (β := NB × ΩA × ΩB × ΩB), ← Pr_equiv e']
+      rfl
+    have hle : ∀ i : Fin a, (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H ≤
+        Pr fun b => findColl ((runStar H (Q.prover PA PB w) Vs x (forkTape a ((e.symm (i.castSucc, b)).1,
+          (e.symm (i.castSucc, b)).2.1)) θ).pLog ++ (runStar H (Q.prover PA PB w) Vs x (forkTape a
+            ((e.symm (i.castSucc, b)).1, (e.symm (i.castSucc, b)).2.2)) θ).pLog) ≠ none := by
+      intro i
+      refine hA.trans (Pr_mono fun b hb => ?_)
+      have hi : ((i.castSucc : Fin (a + 1)) : ℕ) < a := by simp
+      simp only [e, Equiv.coe_fn_symm_mk, forkTape, hi, ite_true] at hb ⊢
+      exact findColl_ne_none_mono (Q.pLog_A PA PB w H Vs θ x kB nB hk hV _ _)
+        (Q.pLog_A PA PB w H Vs θ x kB nB hk hV _ _) hb
+    refine le_trans (le_of_eq ?_) (Finset.sum_le_sum fun i _ => hle i)
+    simp
+  · -- `j = a`: `B`'s collision at `A`'s real run
+    have hlast : ¬ ((Fin.last a : Fin (a + 1)) : ℕ) < a := by simp
+    let pB : (NA × ΩA) × (NB × ΩB × ΩB) → Prop := fun q =>
+      goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x q.1 θ).msgs = true ∧
+        findColl ((runStar H (PB (Q.wB w x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x q.1 θ).msgs))))
+            (Vs.after x kB) (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x q.1 θ).msgs)))
+            (q.2.1, q.2.2.1) (θ, (runStar H (PA w) (Vs.head Q.kA) x q.1 θ).msgs.map Prod.fst)).pLog ++
+          (runStar H (PB (Q.wB w x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x q.1 θ).msgs))))
+            (Vs.after x kB) (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x q.1 θ).msgs)))
+            (q.2.1, q.2.2.2) (θ, (runStar H (PA w) (Vs.head Q.kA) x q.1 θ).msgs.map Prod.fst)).pLog) ≠ none
+    have h1 : Ex (fun ωA : NA × ΩA => if goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs then
+        (Fork H (PB (Q.wB w x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))
+          (Vs.after x kB) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)
+          (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)))).Pr H else 0) ≤ Pr pB := by
+      rw [Pr_prod_left]
+      refine Ex_mono fun ωA => ?_
+      split
+      · rename_i hgo
+        refine (Fork_pr_le H _ _ _ _).trans (le_of_eq (Pr_congr fun s => ?_))
+        simp only [pB, hgo, true_and]
+      · exact Pr_nonneg _
+    let e'' : NA × NB × ΩA × ΩA × ΩB × ΩA × ΩB ≃ ((NA × ΩA) × (NB × ΩB × ΩB)) × (ΩA × ΩA) :=
+      { toFun := fun b => (((b.1, b.2.2.1), (b.2.1, b.2.2.2.2.1, b.2.2.2.2.2.2)), (b.2.2.2.1, b.2.2.2.2.2.1))
+        invFun := fun q => (q.1.1.1, q.1.2.1, q.1.1.2, q.2.1, q.1.2.2.1, q.2.2, q.1.2.2.2)
+        left_inv := fun _ => rfl
+        right_inv := fun _ => rfl }
+    have h2 : Pr (fun b => pB (e'' b).1) = Pr pB := (Pr_equiv e'' fun q => pB q.1).trans (Pr_fst pB)
+    refine h1.trans (h2.symm.le.trans (Pr_mono fun b hb => ?_))
+    obtain ⟨hgo, hc⟩ := hb
+    simp only [e, Equiv.coe_fn_symm_mk, forkTape, hlast, ite_false]
+    exact findColl_ne_none_mono (Q.pLog_B PA PB w H Vs θ x kB nB hk hV _ _ hgo)
+      (Q.pLog_B PA PB w H Vs θ x kB nB hk hV _ _ hgo) hc
+
 end Claims.ZKMal
