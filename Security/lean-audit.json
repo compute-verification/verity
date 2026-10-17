@@ -390,7 +390,12 @@
    },
    "Claims.Complete": {
     "fails": "Claims.Complete_fails",
-    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+    "meets": [
+     "Claims.Flock.scope_meets_plain",
+     "Claims.Flock.scope_meets_zk",
+     "Claims.Flock.Complete_meets_plain",
+     "Claims.Flock.Complete_meets_zk"
+    ]
    },
    "Claims.Flock.Bits": {
     "fails": "Claims.Flock.Bits_fails",
@@ -398,7 +403,12 @@
    },
    "Claims.Flock.Complete": {
     "fails": "Claims.Flock.Complete_fails",
-    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+    "meets": [
+     "Claims.Flock.scope_meets_plain",
+     "Claims.Flock.scope_meets_zk",
+     "Claims.Flock.Complete_meets_plain",
+     "Claims.Flock.Complete_meets_zk"
+    ]
    },
    "Claims.Flock.Efficient": {
     "fails": "Claims.Flock.Efficient_fails",
@@ -546,6 +556,10 @@
    "Claims.Flock.ListWithin": "the list-decoding spec Flock's KS, Bits and Efficient ask of a decoder, proved of both deployed decoders (`FlockDeploy.listWithin_plain`, `listWithin_zk`)",
    "Claims.Flock.RelS": "a helper the claims read: a statement's relation, which `Flock.R` reads",
    "Claims.Flock.Scope": "a helper the claims read: the scope Flock's claims read",
+   "Claims.Json.Good": "a helper the claims read: a printable JSON value, which `JsonSpec` reads",
+   "Claims.Json.Same": "a helper the claims read: two JSON values alike, which `JsonSpec` reads",
+   "Claims.Json.Wf": "a helper the claims read: a well-formed JSON value, which `JsonSpec` reads",
+   "Claims.Out64": "a hypothesis `Complete` reads (the oracle's outputs are 64 bytes, SHA-512's whole output), no claim",
    "Claims.Recursion.Draw.Full": "a V* session's draw that takes every unit, a clause of the readable scope (`InScope`), no claim",
    "Claims.Recursion.InScope": "the readable scope's form, which the claims read through `Scope`, no claim",
    "Claims.Recursion.Scope": "the recursion's scope, which `ScopeMatches` and `Complete` read, no claim",
@@ -831,7 +845,10 @@
   "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.ZK.NonVacuous": "the quiet prover (`Claims.ZKMal.quietP`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
@@ -1725,7 +1742,7 @@
     "  Exists fun H => Exists fun V => Not (Claims.Complete H V P R Scope δc)"
    ],
    "assumptions": [],
-   "type_hash": "da863c78e48aaca44e3a208e5e7b0f1bbb16381ed10e86cbd748228d32e9a200"
+   "type_hash": "e86b6a5c8d782b36c2d267a21922072d48ac66e3c6d0bf33243e0c456d4f4f7c"
   },
   "Claims.Flock.Bits_fails": {
    "owner": "@proofs",
@@ -1734,17 +1751,39 @@
     "  Exists fun D => Not (Claims.Flock.Bits H D)"
    ],
    "assumptions": [],
-   "type_hash": "7baa5b9d74590d849b8bff625081fecdc6ffbf5fc59aff2f918ec08c8ef8459d"
+   "type_hash": "012c8a125ac3146270e721bc1229dd39de9a20f4e1c431d4b02bbd01851ce57f"
   },
   "Claims.Flock.Complete_fails": {
    "owner": "@proofs",
+   "signature": ["Claims.Flock.Complete_fails : Exists fun H => Exists fun D => Not (Claims.Flock.Complete H D)"],
+   "assumptions": [],
+   "type_hash": "cac2abd82728bbf257c1ca34c9b6940c777f68a5a3da26a1d3c14efc5f240524"
+  },
+  "Claims.Flock.Complete_meets_plain": {
+   "owner": "@proofs",
    "signature": [
-    "Claims.Flock.Complete_fails {Coin Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]",
-    "  (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → Real) (x : Claims.Msg) (hδ : Real.instLT.lt (δc x) 1) :",
-    "  Exists fun H => Exists fun D => Not (Claims.Flock.Complete H D P δc)"
+    "Claims.Flock.Complete_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (H : Claims.Msg → Claims.Msg)",
+    "  {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}",
+    "  (hin : FlockDeploy.PlainIn x s spec sts) (hready : Eq (FlockComplete.ready H x) Bool.true) :",
+    "  And",
+    "    (Real.instLE.le ((FlockDeploy.deployPlain rel).δc H x)",
+    "      (instHDiv.hDiv (instHMul.hMul 44 sts.size.cast) (instHPow.hPow 2 128)))",
+    "    (Real.instLT.lt ((FlockDeploy.deployPlain rel).δc H x) 1)"
    ],
    "assumptions": [],
-   "type_hash": "41fcaae98a2e881638f9bc77b3fb5e519b60ef00794e55aba46f62460aee62c8"
+   "type_hash": "e38f76d8779aaece96248453c0902fe920f100d264dba4dda100da0e7fc9a4a7"
+  },
+  "Claims.Flock.Complete_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.Complete_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (H : Claims.Msg → Claims.Msg)",
+    "  {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}",
+    "  (hin : FlockDeploy.ZkIn x s spec sts) (hready : Eq (FlockComplete.readyZk H x) Bool.true) :",
+    "  And (Real.instLE.le ((FlockDeploy.deployZk rel).δc H x) (instHDiv.hDiv 50 (instHPow.hPow 2 128)))",
+    "    (Real.instLT.lt ((FlockDeploy.deployZk rel).δc H x) 1)"
+   ],
+   "assumptions": [],
+   "type_hash": "64e8fdd77513f3e46276e8072000748f33543d2ec9fba13227fba9f760356865"
   },
   "Claims.Flock.Efficient_fails": {
    "owner": "@proofs",
@@ -1753,7 +1792,7 @@
     "  (H : Claims.Msg → Claims.Msg) : Exists fun z => Exists fun D => Not (Claims.Flock.Efficient H D 0)"
    ],
    "assumptions": [],
-   "type_hash": "772074801c726993c19b182871793d43f25eb5b1abcc37aec5bd7b4616804af4"
+   "type_hash": "0759a70bbd6545c1088cb7165cd6e06810ba0fa9758373812e93f22b1a2dc804"
   },
   "Claims.Flock.KS_fails": {
    "owner": "@proofs",
@@ -1762,7 +1801,7 @@
     "  Exists fun D => Not (Claims.Flock.KS H D)"
    ],
    "assumptions": [],
-   "type_hash": "484af4a47096122fbcefaa7b4fc4a4a94e4bb0a2a1da497fbb429efdb2b642e1"
+   "type_hash": "8b2ee850371fb6b46618c3186f3041eedac0c161f16fd80f4b9bcb07dcc13bc2"
   },
   "Claims.Flock.Nontrivial_fails": {
    "owner": "@proofs",
@@ -1771,13 +1810,13 @@
     "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Exists fun recs => Not (Claims.Flock.Nontrivial H D recs)"
    ],
    "assumptions": [],
-   "type_hash": "5771063b99cb35d1908cfd8470ac2e1035dd2efacb2da659dfb6263f7118b8ef"
+   "type_hash": "b50449e44d8157319c1b4812541b65217e413e512c563fb96162750832b0c1ba"
   },
   "Claims.Flock.ScopeMatches_fails": {
    "owner": "@proofs",
    "signature": ["Claims.Flock.ScopeMatches_fails {Coin : Type} : Exists fun D => Not (Claims.Flock.ScopeMatches D)"],
    "assumptions": [],
-   "type_hash": "32747c6f2e45b685e5c82535e07e7f241cbb4538b2396e1ab3888da2b558993a"
+   "type_hash": "962da82e7cd55a8f2a3785ef7825a0278b34d2f7b642699a747d6e429c11f91d"
   },
   "Claims.Flock.ZK_fails": {
    "owner": "@proofs",
@@ -1787,7 +1826,7 @@
     "  Exists fun D => Exists fun P => Exists fun S => Not (Claims.Flock.ZK H D P S εzk γ)"
    ],
    "assumptions": [],
-   "type_hash": "be054d0e89d219cdd66d91bdf7852c9104c9af1c64e90f0bf495ddbbb9ab3072"
+   "type_hash": "901633f695bc129ad35a729dec58a0d87c94ea4e4dd9bece30091ca931fa7a9e"
   },
   "Claims.Flock.decoder_meets_plain": {
    "owner": "@proofs",
@@ -1873,7 +1912,7 @@
     "  Exists fun D => Not (Claims.Sampling.Binding D)"
    ],
    "assumptions": [],
-   "type_hash": "a0af16afd13fdb6a80be4748a99693cd056ee1f3912bfa7d12db858ea48ee06d"
+   "type_hash": "9de3756acca2c0371ebe858dbef4fb09986590604299e770146481c5a28666f3"
   },
   "Claims.Sampling.BitsLin_fails": {
    "owner": "@proofs",
@@ -1893,17 +1932,13 @@
     "  Exists fun D => Not (Claims.Sampling.Bits H D)"
    ],
    "assumptions": [],
-   "type_hash": "5a484969c254f12c7e57350d1fc893154c78287185b46ecf3ab11b63e5df1cea"
+   "type_hash": "d088654d81287a19e9e0bee30810f5cbe1ffd5eb3d0dc5772070391cf73d65e2"
   },
   "Claims.Sampling.Complete_fails": {
    "owner": "@proofs",
-   "signature": [
-    "Claims.Sampling.Complete_fails {Coin Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]",
-    "  (P : Claims.Sampling.Wit → Claims.Prover Ω) (δc : Claims.Msg → Real) (x : Claims.Msg) (hδ : Real.instLT.lt (δc x) 1) :",
-    "  Exists fun H => Exists fun D => Not (Claims.Sampling.Complete H D P δc)"
-   ],
+   "signature": ["Claims.Sampling.Complete_fails : Exists fun H => Exists fun D => Not (Claims.Sampling.Complete H D)"],
    "assumptions": [],
-   "type_hash": "b97a4439dd19cc817fbd3dc80a91c08e6fab0670e940a4123dbc5ec1970b855f"
+   "type_hash": "51f15575e138606bb751aa5659ed0f9d16761c596d011a5035a2df9bcf6d4be4"
   },
   "Claims.Sampling.Efficient_fails": {
    "owner": "@proofs",
@@ -1912,7 +1947,7 @@
     "  (H : Claims.Msg → Claims.Msg) : Exists fun z => Exists fun D => Not (Claims.Sampling.Efficient H D 0)"
    ],
    "assumptions": [],
-   "type_hash": "e6fee080a0a0fdd851f04b5bc8f495b6adadfaf2c8da896e19119409f50b879c"
+   "type_hash": "4198130083bf4a4c93fa88d9a4f9a93a5c3b3259d18d82ed0453302fa0f3e6f4"
   },
   "Claims.Sampling.KSCount_fails": {
    "owner": "@proofs",
@@ -1921,7 +1956,7 @@
     "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Not (Claims.Sampling.KSCount H D)"
    ],
    "assumptions": [],
-   "type_hash": "0a1d567b0f5f769748e539b68a476ffb10390532c09210c21a31b6e8ab090bb4"
+   "type_hash": "00bed36c39eaf751988e2f5c811ddd0388920d22c4ec06ce5259e93d25247341"
   },
   "Claims.Sampling.KS_fails": {
    "owner": "@proofs",
@@ -1930,7 +1965,7 @@
     "  Exists fun D => Not (Claims.Sampling.KS H D)"
    ],
    "assumptions": [],
-   "type_hash": "258f4c779d989e5863d431b04195b080e48d24114ed77dd994a20f063820be98"
+   "type_hash": "0c24d825666e50b5dfec654647c28f4cb69de8c85fda043d2c001ec550de95a1"
   },
   "Claims.Sampling.Nontrivial_fails": {
    "owner": "@proofs",
@@ -1939,7 +1974,7 @@
     "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Exists fun recs => Not (Claims.Sampling.Nontrivial H D recs)"
    ],
    "assumptions": [],
-   "type_hash": "74f4375bcaab2b1a82a8e3df9bd89bc188e292ffb5b14e85acc8732557798d2c"
+   "type_hash": "97071868b1432de09da8c5b407436a59513e769039c961a0aa361e0c64fa838e"
   },
   "Claims.Sampling.ScopeMatches_fails": {
    "owner": "@proofs",
@@ -1948,7 +1983,7 @@
     "  Exists fun z => Exists fun D => Not (Claims.Sampling.ScopeMatches D)"
    ],
    "assumptions": [],
-   "type_hash": "5a97d2eb7088febc4bde6c6877022207d5e4e30052537ae1254eaa255c5819f4"
+   "type_hash": "d5433326f8a18aaa16be952daab90237cfc77bd2c8683f0c4e6c8c3f6325f31b"
   },
   "Claims.Sampling.Universal_fails": {
    "owner": "@proofs",
@@ -1957,7 +1992,7 @@
     "  Exists fun D => Not (Claims.Sampling.Universal D)"
    ],
    "assumptions": [],
-   "type_hash": "b183fd073df66b479bba7eeb3703198469a5b049c28f7a2fa4a9157ba4e5fcd4"
+   "type_hash": "b3c99531f78b0450021ffd3f9f0418e9afdb2e466df76ac3217c99c4b1d453de"
   },
   "Claims.Sampling.ZK_fails": {
    "owner": "@proofs",
@@ -1968,7 +2003,7 @@
     "  Exists fun D => Exists fun P => Exists fun S => Not (Claims.Sampling.ZK H D P S εzk γ)"
    ],
    "assumptions": [],
-   "type_hash": "c9d43b7a56001b14ce7531f53eca6ebae0b44431738191689e103087ecde311a"
+   "type_hash": "c65328a6d35f9896845da6a50be03b9964d4fc509bab40719f8a23d3cbc8e92a"
   },
   "Claims.Sampling.decoder_meets_plain": {
    "owner": "@proofs",
@@ -1979,7 +2014,7 @@
     "  Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode"
    ],
    "assumptions": [],
-   "type_hash": "3b6d24bdc5b41e2c9ad39f6bd2e33b8759ec3fbf14f72bc788b216400d48a182"
+   "type_hash": "f4117b5686527685337236d77e5184df521a9340a171678a3aa7075372b07619"
   },
   "Claims.Sampling.decoder_meets_zk": {
    "owner": "@proofs",
@@ -1990,7 +2025,7 @@
     "  Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode"
    ],
    "assumptions": [],
-   "type_hash": "cf166287f891663417f8cf853af3518f2019b166d57cfd37ebe81a5864d89c61"
+   "type_hash": "beeee44eec92c2982d3cf77ea7dbb118e9922acfbc3fde4dccf2dba41d7ebf70"
   },
   "Claims.Sampling.masked_meets_zk": {
    "owner": "@proofs",
@@ -2000,7 +2035,7 @@
     "  (hD : Eq D.flock (FlockDeploy.deployZk rel)) : Eq D.flock.zk Bool.true"
    ],
    "assumptions": [],
-   "type_hash": "bd502b58f795b48c8708eb50525eec087e6cdb98c6d89927dab5439b91f88a61"
+   "type_hash": "5e3957ad3c7dce3c188ac4f7a831d7aef0195778f3dec5f99fcc85db62bee6a3"
   },
   "Claims.Sampling.scope_meets": {
    "owner": "@proofs",
@@ -7617,6 +7652,8 @@
     "Claims.Complete_fails",
     "Claims.Flock.Bits_fails",
     "Claims.Flock.Complete_fails",
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Claims.Flock.Efficient_fails",
     "Claims.Flock.KS_fails",
     "Claims.Flock.Nontrivial_fails",
@@ -7720,13 +7757,13 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "28eca57d0fa43811b24cea7ba8b5f2ed277e533bcb62e92de2eb917e713b5267",
+   "digest": "7567843fa94dcec8ebdd05a8091926bfe0e3451c3d8a468b9f728d5a01162731",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
     "Claims.Recursion.Bits": "8a8dd1e63c47b45cbb5c955be2e52c2582b083746395eb3d806a8d5b53b4b21e",
     "Claims.Recursion.BitsFlock": "b1fd50bf48827c34b7d6b993ae8354190ca92f191952a8345b5802272b9bc2d7",
-    "Claims.Recursion.Complete": "c477c5845e419390ea97ef55b78d4b3615421fa5a0f986232677e2d9d5aa5aec",
+    "Claims.Recursion.Complete": "a6223a2a373f68d1584ef13fa42275adf9f4230120ffb2ad4e98ffc1d1bfe309",
     "Claims.Recursion.Deploy": "5439f7936ab4da6fcd71c8e628c8d40c24a7721ac6da3e5680392e22e2bdd591",
     "Claims.Recursion.Deploy.P": "ab68a98b5d3d796eb4f2ce45e75fc2fc61255552d37ed827393b30b42b415744",
     "Claims.Recursion.Deploy.Tape": "a00352dd357dc4ccb7ebe98d6d6203ae5989c8635ab84ce9481c4301513e7d38",
@@ -12564,6 +12601,8 @@
     "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -12762,6 +12801,8 @@
     "Flock.instInhabitedWire.default": "e9f25bc5c2c2da965cfb4d19d740bd50159c32e1c96797e9df4c8ec6e7b0f5a7"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -12864,6 +12905,8 @@
     "_private.Flock.CircuitType.0.Flock.CircuitType.portsOfJson": "85a1e80d9ab12ab9944d8f9e4ae23e0c8e42bf3a119a63e3d3a46be5c46ee99f"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -12925,6 +12968,8 @@
     "Flock.CoinTree.ofHello": "a145ee007c12826ee60aca145efa20c71dc9439960cbb439e48cf12ffb7fa6da"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -12997,6 +13042,8 @@
     "Flock.rd32": "1023ca573b2f5767610f1a96d09b95c162b412865dc098ab0b52fcfc817c3098"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -13043,6 +13090,8 @@
     "Flock.Derive.ceilPow2": "cff16037ede34ed07b6b641f362f23fe908fb00ef0a5c361b12c3d6a4c1df4e0"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -13163,6 +13212,8 @@
     "Flock.DeriveAll.xorCols": "8513b9a13c7edc534fcea36661c4bb85f82d4a03bbf60a1be1a24956d344412e"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -13250,6 +13301,8 @@
     "Flock.DeriveAll.walk._sparseCasesOn_3": "2287c60cb4cbc4629081a9aa0db5774e702e1de63c7f7352719eae3f5d899bba"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -13533,6 +13586,8 @@
     "Flock.phi8Table": "c843996d571e5071f33e1788901951831ea8ffbcfc2f615881a46ee626da9154"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Claims.Flock.decoder_meets_plain",
     "Claims.Flock.decoder_meets_zk",
     "Claims.Flock.masked_meets_zk",
@@ -14278,6 +14333,8 @@
     "_private.Flock.Layout.0.Flock.Layout.natArr": "1908b58b2178b82233146f7d2ab2142db10b35eee48f9b7ff6721ce79d97aaba"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14331,6 +14388,8 @@
     "Flock.libraryTable?": "2e4f5eb96b2eaa7ac47dad86353794bc75e4ba83998eb37a6b6780b50bc321cf"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14554,6 +14613,8 @@
     "Flock.sibsOf": "35ad17c257b59414cec25e4a24c9bcbcf4d5fc94e6451016d84fff8ba8cd403b"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14650,6 +14711,8 @@
     "_private.Flock.Net.0.Flock.Net.num": "3eabe4a40fe243c1336f63a815a8766ef8f2f271de028d86056f366d4e139592"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -15254,6 +15317,8 @@
     "Flock.instInhabitedPublic.default": "32d7220c79f8cee269c9c870fbbb12ec7d42e4e3e3c4c03d7555d33400da438b"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -16403,6 +16468,8 @@
     "Flock.StreamRec.rounds": "5b146dec61efbb297a72cb7578d80cbb1da9e81ebd64fae52b0edb5b4919f4f3"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -16511,6 +16578,8 @@
     "Flock.mkRegion": "5f114dc12db36808d8d8d876a67e06d165ba81c44eb0ca2cd345fdadd66b5188"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -16677,6 +16746,8 @@
     "Flock.instInhabitedStmt.default": "2cc8a24a64bf8126a8f5ba4bbc778b1917a99776b220735bfaa7cd4f041eba7d"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -16800,6 +16871,8 @@
     "_private.Flock.Tags.0.Flock.Tags.s": "a4a190d4a37066637be18f3ca5b4adc590b08525521438547f56b4222a5775ff"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -17025,6 +17098,8 @@
     "_private.Flock.Typed.0.Flock.Typed.ctx": "35fd1c8fb7bc6ab93cf2e1f04c60788cdda858e75b8e305bb3d35a34ee42c844"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -17859,9 +17934,9 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Models.Flock.Guarantees.RecursionClaims": {
-   "digest": "af3119679cad14cd3ba040ada5bc7956c110dc59ab1acf05eb15cc52f0345aaa",
+   "digest": "5cf839d7f6e388951300e4057d74bfc64f22fa18ed6202c0a4f5d05c4d8c0051",
    "definitions": {
-    "Flock.Guarantees.RecursionClaimsStated": "03fabce94fc721e002cb1402a04ff430a94d62ca25a011ac8c6c7c6ef72bac84"
+    "Flock.Guarantees.RecursionClaimsStated": "29d4d4a4aeb5e606ff8b2cb2c703b0ec456dc4ecfde8a512f44b4e33d4376bc2"
    },
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
@@ -19005,6 +19080,8 @@
     "FlockLevel3.instFieldGF128": "8d89e3a068c342c818866b82d507901b8cea23772c0345b39cc1467af187f955"
    },
    "guarantees": [
+    "Claims.Flock.Complete_meets_plain",
+    "Claims.Flock.Complete_meets_zk",
     "Claims.Flock.decoder_meets_plain",
     "Claims.Flock.decoder_meets_zk",
     "Claims.Flock.masked_meets_zk",
