@@ -109,10 +109,13 @@ def prior_points(rows_csv: Path, prefix: str, kind: str, margin: float) -> tuple
     return pts + [(s / fs[-1][0], 0.0, f"{fs[-1][2]}:axis")], runs
 
 
-OPS = {"imad": "IMAD", "hfma2": "HFMA2*", "lop3": "LOP3.LUT", "shfl": "SHFL.BFLY"}
-#: each family's census kind, its published rows (VF3f, r20261016-093909-ac84) and the rows its facets become
+OPS = {"imad": "IMAD", "hfma2": "HFMA2*", "lop3": "LOP3.LUT", "shfl": "SHFL.BFLY", "iadd3": "IADD3", "ffma": "FFMA",
+       "idp4a": "IDP.4A*", "popc": "POPC"}
+#: each family's census kind, its published rows (VF3f, r20261016-093909-ac84) and the rows its facets become; iadd3,
+#: ffma, idp4a and popc are sm89/scalar.cu's
 FAMILY = {"imad": ("IMAD", "KIMAD", "EIMAD"), "hfma2": ("HFMA2", "KHFMA2", "EHFMA2"), "lop3": ("ALU", "KALU", "EALU"),
-          "shfl": ("SHFL", "KSHFL", "ESHFL")}
+          "shfl": ("SHFL", "KSHFL", "ESHFL"), "iadd3": ("ALU", "KIADD3", "EIADD3"), "ffma": ("FFMA", "KFFMA", "EFFMA"),
+          "idp4a": ("IDP4A", "KIDP4A", "EIDP4A"), "popc": ("XU", "KXU", "EXU")}
 
 
 def cmd_facets(a) -> int:
