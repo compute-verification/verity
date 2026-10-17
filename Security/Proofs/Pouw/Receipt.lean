@@ -1,14 +1,15 @@
 import Models.Pouw.Guarantees.Receipt
 import Proofs.Pouw.Receipt.Duo
+import Proofs.Pouw.Receipt.Li
 import Proofs.Pouw.Receipt.Fx1
 import Proofs.Pouw.Receipt.Run
 
 /-!
-# The receipt folds duo's and fx1's guarantees
+# The receipt folds duo's, fx1's and li's guarantees
 
 Each statement of `Models/Pouw/Guarantees/Receipt.lean`: duo's words, pairs, triples and quadruples in
-`Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, and fx1's transport of each in
-`Receipt/Fx1.lean`.
+`Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, fx1's transport of each in
+`Receipt/Fx1.lean`, and li's half steps and checkpoints in `Receipt/Li.lean`.
 -/
 
 namespace Pouw.SecurityProofs.Receipt
@@ -53,5 +54,14 @@ theorem Fx1StepBijective : Pouw.Guarantees.Receipt.Fx1StepBijective :=
 
 theorem Fx1RunWordInjective : Pouw.Guarantees.Receipt.Fx1RunWordInjective :=
   fun _ _ k a r m s w i => Pouw.ReceiptProofs.fx1Run_update_injective k a r m s w i
+
+theorem LiHalfBijective : Pouw.Guarantees.Receipt.LiHalfBijective :=
+  fun _ k a d => Pouw.ReceiptProofs.liHalf_bijective k a d
+
+theorem LiCheckpointWordInjective : Pouw.Guarantees.Receipt.LiCheckpointWordInjective :=
+  fun _ before after pre k a d post y => Pouw.ReceiptProofs.liCheckpoint_word_injective before after pre k a d post y
+
+theorem LiCheckpointLowBit : Pouw.Guarantees.Receipt.LiCheckpointLowBit :=
+  fun _ _ x before after pre k a d post y => Pouw.ReceiptProofs.liCheckpoint_lowBit x before after pre k a d post y
 
 end Pouw.SecurityProofs.Receipt
