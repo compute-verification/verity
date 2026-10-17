@@ -111,9 +111,9 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "counts, RSQ, EX2 and expf are core's words, tf32_hc_prenorm_gemm's words on the probe are HopperTf32WgmmaDot8_v1's "
              "candidate step alone (B rounded RNE to TF32, the squared sum's GPU FMUL/FFMA/FADD lo contraction), and at the served "
              "statics (4 streams, hidden 7168, 20 Sinkhorn iterations) every word of every compared launch of the fused post + pre "
-             "(TileLang's FP32 path at <= 16 tokens, DeepGEMM's TF32 path above), the layer-0 broadcast pre and hc_head equals "
-             "mhc_twin, and the evaluated pieces (MhcFusedSplit_v1, MhcPost_v1, MhcPrenormTf32_v1, MhcPreBigFuse(Broadcast)_v1, "
-             "HcHead_v1) equal the kernel's words, bit for bit."),
+             "(TileLang's FP32 path at <= 16 tokens, DeepGEMM's TF32 path above, every split-count regime to 1024 tokens), the "
+             "layer-0 broadcast pre (likewise to 1024) and hc_head equals mhc_twin, and the evaluated pieces (MhcFusedSplit_v1, "
+             "MhcPost_v1, MhcPrenormTf32_v1, MhcPreBigFuse(Broadcast)_v1, HcHead_v1) equal the kernel's words, bit for bit."),
     Property("glm53_cuda_rmsnorm_capture", "verity-vllm/glm53-cuda-rmsnorm-capture/v1",
              "On the capture's cc 9.0 GPU, vLLM's default non-batch-invariant BF16 rms_norm and fused_add_rms_norm launch their pinned "
              "width-8 paths and block sizes at hidden sizes 6144 and 7168, and every output and residual word equals the "
