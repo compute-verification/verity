@@ -75,11 +75,11 @@ _STEP_FORMATS: dict[str, tuple[tuple[int, int], tuple[int, int]]] = {
 }
 
 
-def _formats(step: Any) -> tuple[tuple[int, int], tuple[int, int]]:
+def _formats(step: Any, boolean: bool) -> tuple[tuple[int, int], tuple[int, int]]:
     word = getattr(getattr(step, "defn", step), "word", None)
-    fid = getattr(word, "id", None) or getattr(step, "id", None)
+    fid = getattr(word if boolean else step, "id", None)
     if fid not in _STEP_FORMATS:
-        raise ValueError(f"an s8 family step is one of {sorted(_STEP_FORMATS)} (or a Boolean Definition computing one), "
+        raise ValueError(f"an s8 family step is one of {sorted(_STEP_FORMATS)}{' as a Boolean Definition' if boolean else ''}, "
                          f"not {getattr(step, 'id', step)!r}")
     return _STEP_FORMATS[fid]
 
@@ -98,7 +98,7 @@ def _products(a: tuple[int, int], b: tuple[int, int]) -> tuple[int, int]:
     return min(corners), max(corners)
 
 
-def _groups(S: Any) -> list[tuple[int, str, tuple[int, int], tuple[int, int]]]:
+def _groups(S: Any, boolean: bool) -> list[tuple[int, str, tuple[int, int], tuple[int, int]]]:
     tail = S.TAIL
     if not isinstance(tail, (list, tuple)):
         raise ValueError(f"TAIL is a tuple of groups (atoms, mode, A_g, B_g), not {tail!r}")
@@ -106,7 +106,7 @@ def _groups(S: Any) -> list[tuple[int, str, tuple[int, int], tuple[int, int]]]:
         raise ValueError("a tail names its step: bind TDOT to the s8 step its atoms run")
     if not tail and S.TDOT is not None:
         raise ValueError("TDOT is None without a tail")
-    fa, fb = _formats(S.TDOT) if tail else (S8_RANGE, S8_RANGE)
+    fa, fb = _formats(S.TDOT, boolean) if tail else (S8_RANGE, S8_RANGE)
     out = []
     for i, g in enumerate(tail):
         if not (isinstance(g, (list, tuple)) and len(g) == 4):
@@ -120,10 +120,10 @@ def _groups(S: Any) -> list[tuple[int, str, tuple[int, int], tuple[int, int]]]:
     return out
 
 
-def no_wrap(S: Any) -> dict[str, tuple[int, int]]:
+def no_wrap(S: Any, boolean: bool = False) -> dict[str, tuple[int, int]]:
     """The interval of every word the binding's chain computes ({"T_t" | "D_g": (lo, hi)}), each within s32: the theorem that
     no step clamps or wraps, so every word is the exact sum.  Raises ValueError, naming the first word that could leave s32,
-    and on any binding outside the family."""
+    and on any binding outside the family (``boolean``: the steps are the Boolean Definitions, as `S8Dot_v2` binds)."""
     K, L = S.K, S.L
     if isinstance(K, bool) or not isinstance(K, int) or K < 32 or K % 32:
         raise ValueError(f"K is a positive multiple of 32, not {K!r}")
@@ -137,7 +137,7 @@ def no_wrap(S: Any) -> dict[str, tuple[int, int]]:
         raise ValueError(f"NOISE is one of {NOISES}, not {S.NOISE!r}")
     if S.LIMBS not in LIMBS:
         raise ValueError(f"LIMBS is one of {LIMBS}, not {S.LIMBS!r}")
-    groups = _groups(S)
+    groups = _groups(S, boolean)
     if bool(groups) != (S.LIMBS != "none"):
         raise ValueError(f"a tail carries split operands and only a tail does: TAIL {S.TAIL!r} with LIMBS {S.LIMBS!r}")
     if S.NOISE == "none" and groups:
@@ -150,7 +150,7 @@ def no_wrap(S: Any) -> dict[str, tuple[int, int]]:
         start = _interval(S.C, "C, the incoming accumulator's interval", (S32_MIN, S32_MAX))
     else:
         raise ValueError(f"T0 is 'zero' or 'input', not {S.T0!r}")
-    fa, fb = _formats(S.DOT)
+    fa, fb = _formats(S.DOT, boolean)
     lo_p, hi_p = _products(_interval(S.A, "A", fa), _interval(S.B, "B", fb))
     words: dict[str, tuple[int, int]] = {}
 
@@ -172,7 +172,7 @@ def no_wrap(S: Any) -> dict[str, tuple[int, int]]:
 
 
 def _signature(S: Any, acc_t: Type, op_t: Type) -> tuple[tuple[tuple[str, Type], ...], Type]:
-    no_wrap(S)
+    no_wrap(S, boolean=acc_t != S32)
     m = 32 * sum(g[0] for g in S.TAIL)
     params: list[tuple[str, Type]] = [("acc", acc_t)] if S.T0 == "input" else []
     params += [("a", Array(S.K, op_t)), ("b", Array(S.K, op_t))]
