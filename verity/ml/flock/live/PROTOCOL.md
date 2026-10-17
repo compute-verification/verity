@@ -620,8 +620,8 @@ rest of the schedule released by the firewall itself. Then the session's `Finish
 sees the stop there. What leaves before `Finish` has the form and the distribution of an honest session's, wherever the
 check failed: under pads `h + v` a stopped rep releases byte for byte what the honest rep with values `v` releases under `h`
 (`tests/test_firewall_frame.py`). So the stop reveals one bit a session (stop at `Finish` or not), and `log₂ Σ_{i≤b}
-C(m, i)` bits over `m` sessions with at most `b` stopped (`Security/Proofs/Flock/Claims/ZK/Server.lean`). A firewall that
-refuses is evidence against its rack.
+C(m, i)` bits over `m` sessions with at most `b` stopped (the claims' `ZkServer.zk_deferred` and
+`stream_leak_deferred`). A firewall that refuses is evidence against its rack.
 
 What the deferral costs: a bad worker is caught only at its session's `Finish`, one session's latency later than at its
 first bad message, and the rest of a doomed session's device and firewall work is spent for nothing (the firewall's share
