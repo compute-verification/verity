@@ -14,9 +14,9 @@ whose count and lists are at most `14·(flockPolyR + X)` (`11·(zkPolyR + X)` ma
 is at most its value on no columns times one more than their number (`GS.plainSizeRD_le`), and their number is at most
 the word's encoded length (`Flock.length_le_wordLen`). So, at every `H`:
 
-* `efficient_plain`: the plain record `deployPlain rel` at `plainStepPoly`, `14·(flockPolyR + X)` composed with
-  `plainSizeRD [] · (X + 1)`;
-* `efficient_zk`: the masked record `deployZk rel` at `zkStepPoly`, `11·(zkPolyR + X)` composed with
+* `efficient_plain`: the plain record the claims read, `deployPlainTrim rel`, at `plainStepPoly`, `14·(flockPolyR + X)`
+  composed with `plainSizeRD [] · (X + 1)`;
+* `efficient_zk`: the masked record `deployZkTrim rel` at `zkStepPoly`, `11·(zkPolyR + X)` composed with
   `zkSizeRD [] · (X + 1)`. The masked columns and code are the `2^k0` witness lanes of each opened row (`zkRepColsOf`,
   `Flock.zkWidth i = 2^k0`), so `zkDecodeRD` decodes those lanes only.
 
@@ -71,23 +71,24 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- The plain record's decoder is the plain radius decoder. -/
 theorem decode_plain (rel : Readable.Parsed → Readable.Relation) :
-    (deployPlain rel).decode = Claims.GS.plainDecodeRD :=
+    (deployPlainTrim rel).decode = Claims.GS.plainDecodeRD :=
   funext Claims.GS.plainCountedRD_fst
 
 /-- The masked record's decoder is the masked radius decoder. -/
-theorem decode_zk (rel : Readable.Parsed → Readable.Relation) : (deployZk rel).decode = Claims.GS.zkDecodeRD :=
+theorem decode_zk (rel : Readable.Parsed → Readable.Relation) : (deployZkTrim rel).decode = Claims.GS.zkDecodeRD :=
   funext Claims.GS.zkCountedRD_fst
 
-/-- **The plain radius decoder meets `ListWithin`** at the plain record's code, length and radius: the spec
-`Flock.KS` and `Flock.Bits` ask of a decoder there, and the record's own decoder (`decode_plain`). -/
+/-- **The plain radius decoder meets `ListWithin`** at the plain record's code, trimmed of trailing zeros, length and
+radius: the spec `Flock.KS` and `Flock.Bits` ask of a decoder there, and the record's own decoder (`decode_plain`). -/
 theorem listWithin_plain (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ListWithin (deployPlain rel).len (deployPlain rel).enc (deployPlain rel).θ Claims.GS.plainDecodeRD :=
-  Claims.GS.listWithin_plainDecodeRD
+    Claims.Flock.ListWithin (deployPlainTrim rel).len (deployPlainTrim rel).enc (deployPlainTrim rel).θ
+      Claims.GS.plainDecodeRD :=
+  Claims.GS.listWithin_plainDecodeRD trimCol trimCol_getD
 
-/-- **The masked radius decoder meets `ListWithin`** at the masked record's code, length and radius. -/
+/-- **The masked radius decoder meets `ListWithin`** at the masked record's code, trimmed, length and radius. -/
 theorem listWithin_zk (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ListWithin (deployZk rel).len (deployZk rel).enc (deployZk rel).θ Claims.GS.zkDecodeRD :=
-  Claims.GS.listWithin_zkDecodeRD
+    Claims.Flock.ListWithin (deployZkTrim rel).len (deployZkTrim rel).enc (deployZkTrim rel).θ Claims.GS.zkDecodeRD :=
+  Claims.GS.listWithin_zkDecodeRD trimCol trimCol_getD
 
 /-- **The plain record's step polynomial**: `14·(flockPolyR + X)`, the plain family's bound at its size, composed with
 `plainSizeRD [] · (X + 1)`, that size's bound at the word's encoded length. -/
@@ -103,8 +104,8 @@ noncomputable def zkStepPoly : Polynomial ℕ :=
 counted plain radius decoder, meets `ListWithin` at the record's `len`, `enc` and `θ`, with its count and its lists at
 most `plainStepPoly` at the opened word's encoded length. -/
 theorem efficient_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.Efficient H (deployPlain rel) plainStepPoly := by
-  refine Claims.Flock.Efficient_of_size H (deployPlain rel) Claims.GS.plainSizeRD _ _ ?_
+    Claims.Flock.Efficient H (deployPlainTrim rel) plainStepPoly := by
+  refine Claims.Flock.Efficient_of_size H (deployPlainTrim rel) Claims.GS.plainSizeRD _ _ ?_
     (fun os => (Claims.GS.plainDecodeRD_complexity os).2) ?_
     (Claims.Flock.le_eval_wordLen _ _ Claims.GS.plainSizeRD_le)
   · rw [decode_plain]
@@ -116,8 +117,8 @@ theorem efficient_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
 decoder, the counted masked radius decoder, meets `ListWithin` at the record's `len`, `enc` and `θ`, with its count and
 its lists at most `zkStepPoly` at the opened word's encoded length. -/
 theorem efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.Efficient H (deployZk rel) zkStepPoly := by
-  refine Claims.Flock.Efficient_of_size H (deployZk rel) Claims.GS.zkSizeRD _ _ ?_
+    Claims.Flock.Efficient H (deployZkTrim rel) zkStepPoly := by
+  refine Claims.Flock.Efficient_of_size H (deployZkTrim rel) Claims.GS.zkSizeRD _ _ ?_
     (fun os => (Claims.GS.zkDecodeRD_complexity os).2) ?_
     (Claims.Flock.le_eval_wordLen _ _ Claims.GS.zkSizeRD_le)
   · rw [decode_zk]
@@ -128,18 +129,18 @@ theorem efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → 
 /-- **A bound too small fails at the plain record**: its decoder counts a step on no columns, whose encoded length is
 `0`, so it is not `Efficient` at any `p` with `p(0) = 0`. -/
 theorem not_efficient_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (p : Polynomial ℕ) (hp : p.eval 0 = 0) : ¬ Claims.Flock.Efficient H (deployPlain rel) p :=
+    (p : Polynomial ℕ) (hp : p.eval 0 = 0) : ¬ Claims.Flock.Efficient H (deployPlainTrim rel) p :=
   Claims.Flock.not_efficient_of_nil H _ p (by rw [hp]; exact Claims.GS.plainCountedRD_nil_pos)
 
 /-- **A bound too small fails at the masked record**: not `Efficient` at any `p` with `p(0) = 0`. -/
 theorem not_efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (p : Polynomial ℕ) (hp : p.eval 0 = 0) : ¬ Claims.Flock.Efficient H (deployZk rel) p :=
+    (p : Polynomial ℕ) (hp : p.eval 0 = 0) : ¬ Claims.Flock.Efficient H (deployZkTrim rel) p :=
   Claims.Flock.not_efficient_of_nil H _ p (by rw [hp]; exact Claims.GS.zkCountedRD_nil_pos)
 
 /-- **Neither record is `Efficient` at `0` or at `X`.** -/
 theorem not_efficient_zero_X (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
-    ¬ Claims.Flock.Efficient H (deployPlain rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployPlain rel) Polynomial.X ∧
-      ¬ Claims.Flock.Efficient H (deployZk rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployZk rel) Polynomial.X :=
+    ¬ Claims.Flock.Efficient H (deployPlainTrim rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployPlainTrim rel) Polynomial.X ∧
+      ¬ Claims.Flock.Efficient H (deployZkTrim rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployZkTrim rel) Polynomial.X :=
   ⟨not_efficient_plain H rel 0 (eval_zero), not_efficient_plain H rel Polynomial.X (eval_X),
     not_efficient_zk H rel 0 (eval_zero), not_efficient_zk H rel Polynomial.X (eval_X)⟩
 
@@ -147,8 +148,8 @@ theorem not_efficient_zero_X (H : Claims.Msg → Claims.Msg) (rel : Readable.Par
 `1 + 210·⌈4·N₀/e⌉` in expectation. -/
 theorem erepRuns_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (decode : List (ℕ × List 𝔽) → List Claims.Flock.PlainTrace) :
-    Claims.ExtractRunsLe H (Claims.Flock.E (deployPlain rel) decode) (fun _ => 1 + 210 * 2 ^ 256) ∧
-      Claims.ExtractRunsExpLe H (Claims.Flock.E (deployPlain rel) decode)
+    Claims.ExtractRunsLe H (Claims.Flock.E (deployPlainTrim rel) decode) (fun _ => 1 + 210 * 2 ^ 256) ∧
+      Claims.ExtractRunsExpLe H (Claims.Flock.E (deployPlainTrim rel) decode)
         (fun x => 1 + 210 * (⌈4 * N₀ false x / Real.exp 1⌉₊ : ℝ)) :=
   Claims.ERep_cost H _ _ _ _ _ _ _
 
@@ -156,8 +157,8 @@ theorem erepRuns_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
 `1 + 210·⌈4·N₀/e⌉` in expectation. -/
 theorem erepRuns_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (decode : List (ℕ × List 𝔽) → List Claims.Flock.ZkTrace) :
-    Claims.ExtractRunsLe H (Claims.Flock.E (deployZk rel) decode) (fun _ => 1 + 210 * 2 ^ 256) ∧
-      Claims.ExtractRunsExpLe H (Claims.Flock.E (deployZk rel) decode)
+    Claims.ExtractRunsLe H (Claims.Flock.E (deployZkTrim rel) decode) (fun _ => 1 + 210 * 2 ^ 256) ∧
+      Claims.ExtractRunsExpLe H (Claims.Flock.E (deployZkTrim rel) decode)
         (fun x => 1 + 210 * (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ)) :=
   Claims.ERep_cost H _ _ _ _ _ _ _
 
