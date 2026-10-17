@@ -19,7 +19,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
             "adopted-bd": ("all", "int8-all", True), "adopted-bd-lm": ("all", "int8-all", True),
             "co": ("all", "int8-all", True), "ncp": ("all", "int8-all", True),
             "cb": ("all", "int8-all", True), "co32c": ("all", "int8-all", True),
-            "co32c-pv": ("all", "int8-all", True), "co32c-pv256": ("all", "int8-all", True)}
+            "co32c-pv": ("all", "int8-all", True), "co32c-pv256": ("all", "int8-all", True),
+            "adopted-bd-lm-pv": ("all", "int8-all", True)}
     for g in ("fp4c", "fp4", "int5"):
         for m in ("dither", "round"):
             want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
@@ -115,6 +116,9 @@ def test_co_and_ncp_serve_seven_bit_sides():
     assert pkw["peel"] == {s.defn.name: s.kw for s in co32c.attention}["peel"]
     pb = spec.load("co32c-pv256")
     assert {**{s.defn.name: s.kw for s in pb.attention}["int8"], "p_block": 0} == pkw["int8"]
+    a, apv = spec.load("adopted-bd-lm"), spec.load("adopted-bd-lm-pv")
+    assert apv.linear == a.linear and [s.kw for s in apv.attention] == [
+        {**s.kw, "p": "dither"} if s.defn.name == "int8" else s.kw for s in a.attention]
 
 
 def test_a_dithered_operand_stays_within_its_top():
