@@ -188,9 +188,10 @@ def test_a_dry_run_tells_nobody_and_a_real_tick_after_it_still_does(world, monke
     assert len(h.posts) == 1 and "failed its check" in h.posts[0]
 
 
-def test_a_check_that_has_already_failed_is_told_while_it_keeps_going_and_its_rebuild_cancels_it_not(world, monkeypatch):
+def test_a_check_that_has_already_failed_is_told_while_it_keeps_going_and_its_rebuild_cancels_it(world, monkeypatch):
     """12 Oct: cc39's repository suite failed at 20:25Z and drive told it at 20:55Z, when `--keep-going` let the check end.  What
-    a running check has failed so far is a failure now; once the PR is ejected, the check runs on for the full picture."""
+    a running check has failed so far is a failure now.  Once the PR is ejected the rebuild cancels it (17 Oct: two such checks,
+    kept for the full picture, held train slots 40 min with 32 PRs queued)."""
     h = Harness(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
@@ -204,8 +205,7 @@ def test_a_check_that_has_already_failed_is_told_while_it_keeps_going_and_its_re
     assert len(h.posts) == 1 and h.cancelled == []
     h.q.eject(2, "breaks the repository suite", "ci")
     h.tick()
-    assert [m.pr for m in h.q.chain()] == [1] and h.cancelled == []
-    assert any("keeps going for the full picture" in x for x in world.logs)
+    assert [m.pr for m in h.q.chain()] == [1] and h.cancelled == [rid]
 
 
 def _failed_run(tmp_path, test: str, trace: str, steps: str = '{"step": "lean-suites", "status": "failed"}\n'):
@@ -743,6 +743,149 @@ def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to,
 
     monkeypatch.setattr(drive.subprocess, "run", run)
     assert drive.merge_thread_post(f"{' '.join(to)} queue: b22a0c54d29e on `next` (#1 #2) failed its check", to, sender=sender)
+
+
+def test_a_pr_that_reruns_every_suite_pre_warms_too(world, monkeypatch):
+    """17 Oct 09:21Z (CI-50): #2241 changed tools/verity/check/suites.py and sat low on `next`; every train above it reran every
+    suite."""
+    from research.queue import reruns_suites
+
+    assert reruns_suites(["tools/verity/check/suites.py"]) and not reruns_suites(["tools/verity/check/tests/test_x.py"])
+    assert not reruns_suites(["tools/verity/check/README.md", "Security/X.lean"])
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"tools/verity/check/suites.py": "x\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [2] and any("pre-warming #1" in x for x in world.logs)
+
+
+def test_a_twin_stopped_by_sigterm_is_no_verdict_and_its_sibling_still_decides(world, monkeypatch):
+    """17 Oct 11:47Z: twin 30ce of train bd74745daa5f, SIGTERMed while it waited for a slot, was read as the train failing,
+    while its sibling 4af6 ran on cpu-2."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    (rid,) = h.run_state
+    h.run_state[rid] = ("done", 143, None)
+    assert h.d.verdict(_tip(world), _git(world.origin, "rev-parse", "main"), h.d.q.load_state()["drive"]).state == "none"
+    h.tick()
+    assert len(h.launched) == 2 and not h.posts                          # launched again, nothing told
+
+
+def _steps_run(tmp_path, name: str, steps: dict[str, str]):
+    import json
+
+    d = tmp_path / name
+    d.mkdir(parents=True)
+    (d / "steps.jsonl").write_text("".join(json.dumps({"step": k, "status": v}) + "\n" for k, v in steps.items()))
+    return d
+
+
+def test_defer_lands_a_train_whose_other_steps_passed_and_reverts_it_when_a_deferred_step_fails(world, monkeypatch, tmp_path):
+    """17 Oct (CI-30's interim, Daniel through top): a train lands on the Lean check and the fast steps, with circuit-check
+    running on after landing; a deferred step that fails reverts the landing."""
+    from research.drive import CHECK_STEPS
+
+    h = Harness(world, monkeypatch)
+    h.d.defer = frozenset({"circuit-check"})
+    base = _git(world.origin, "rev-parse", "main")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    (rid,) = h.run_state
+    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "circuit-check"})]
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == tip and h.cancelled == []      # landed; its check runs on
+    h.run_state[rid] = ("done", 1, None)
+    h.evidence = [_steps_run(tmp_path, rid + "-end", {"circuit-check": "failed"})]
+    h.tick()
+    assert _git(world.origin, "diff", "--stat", base, "main") == "" and any("reverted on `main`" in x for x in h.posts), h.posts
+
+
+def test_the_lean_check_is_never_deferred(world, monkeypatch):
+    h = Harness(world, monkeypatch)
+    from research.drive import Driver
+
+    d = Driver(h.q, on="m1", defer=frozenset({"lean-audit", "circuit-check"}))
+    assert d.defer == {"circuit-check", "flock-rust-tests"}                 # the step after circuit-check in its group
+
+
+def test_with_circuit_check_deferred_no_pr_pre_warms_and_running_pre_warms_are_cancelled(world, monkeypatch):
+    """17 Oct 13:40Z: under --defer, eight pre-warms took every slot drive counts, and no train ran."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"verity/ml/circuits/x.py": "1\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [] and len(h.launched) == 1          # pre-warming
+    h.d.defer = frozenset({"circuit-check", "flock-rust-tests"})
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1] and h.cancelled                   # admitted; the pre-warm is cancelled
+
+
+def test_a_collection_error_names_its_test_module(tmp_path):
+    """17 Oct 14:19Z: filler's suite failed collecting #2299's tests/test_capacity_of.py (a vector only #2286 adds); the
+    failure named no file, and the fallback on the suite's inputs ejected 8 PRs instead of #2299."""
+    import json
+
+    from research.drive import implicated
+
+    d = tmp_path / "run"
+    (d / "suites").mkdir(parents=True)
+    (d / "steps.jsonl").write_text('{"step": "pytest", "status": "failed"}\n')
+    (d / "suites.json").write_text(json.dumps([{"name": "filler", "suite": "benchmarks/pouw/filler", "status": "failed",
+                                                "failed_tests": [], "log": "/x/suites/filler.log"}]))
+    (d / "suites" / "filler.log").write_text("ERROR tests/test_capacity_of.py - KeyError: 'VF3r-16'\n1 error in 2.1s\n")
+    assert "benchmarks/pouw/filler/tests/test_capacity_of.py" in implicated(d)
+
+
+def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
+    """17 Oct 15:10Z: three trains' lean-audit failed with the build's error lines scrolled out of the step's log; drive found
+    no Lean file, fell back on every PR touching Lean, and ejected nine."""
+    from research.drive import lean_errors
+
+    log = ("AUDIT /w/lean-audit-scratch-1-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
+           "    Some required targets logged failures:\n    - Proofs.Flock.Claims.NumbersRadius\n    error: build failed\n"
+           "AUDIT /w/lean-audit-scratch-1-x/Security: FAIL\n    Some required targets logged failures:\n"
+           "    - Definitions.Claims.Sampling\n")
+    assert lean_errors(log) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean", "Security/Definitions/Claims/Sampling.lean"}
+
+
+def test_a_new_head_keeps_the_running_train_at_the_head_it_checks_and_rejoins_above_it(world, monkeypatch):
+    """17 Oct 07:56Z: two re-marked heads (#2222, #2235) took their PRs off `next` and cancelled two running trains; top ruled a
+    new head no longer cancels a running train: it runs on at the head the owner marked, and the new head rejoins above."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 1
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    running = h.q.chain()[1].commit
+    world.gh.put(1, world.change({"a.txt": "1 fixed\n"}, base=old))                # #1's owner pushes a new head
+    h.tick()
+    chain = h.q.chain()
+    assert [(m.pr, m.head) for m in chain[:1]] == [(1, old)] and chain[1].commit == running and h.cancelled == []
+
+
+def test_a_new_head_after_its_own_train_failed_rebuilds_without_waiting(world, monkeypatch, tmp_path):
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()                                                              # #1's own train, and the one above it with #2
+    own = h.q.chain()[0].commit
+    _check(world, monkeypatch, own, ("false",))
+    h.evidence = [_killed_run(tmp_path, "one")]
+    h.tick()                                                              # resent
+    rid = h.d.q.load_state()["drive"]["launched"][own]["ids"][0]
+    h.run_state[rid] = ("done", 1, None)
+    h.clock += PUBLISH_GRACE_S + 1
+    h.evidence = [_killed_run(tmp_path, "two")]
+    h.tick()                                                              # failed again: told, nobody ejected
+    assert len(h.posts) == 1 and "failed again on its resend" in h.posts[0], h.posts
+    fixed = world.change({"a.txt": "1 fixed\n"}, base=old)
+    world.gh.put(1, fixed)                                                # the train above still runs, but #1's own failed
+    h.tick()
+    assert [m.head for m in h.q.chain() if m.pr == 1] == [fixed]
 
 
 def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
