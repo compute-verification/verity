@@ -45,12 +45,16 @@ TRACE_RE = re.compile(r'^\s*([\w./+-]+\.py):\d+:|File "([^"]+\.py)", line \d+', 
 NAMED_RE = re.compile(r"(?<![\w./-])((?:[\w+-]+/)+[\w+.-]*\w\.\w+)")
 #: pytest's failing tests in its short summary
 FAILED_RE = re.compile(r"^FAILED ([^\s:]+)::", re.M)
+#: a test module pytest couldn't collect, in its short summary (`ERROR tests/x.py - KeyError: ...`)
+ERROR_RE = re.compile(r"^ERROR ([^\s:]+\.py)", re.M)
 #: in lean-audit's log: the package an audit failed (its path under the audit's scratch tree), and a Lean error's file, relative
 #: to that package
 LEAN_AUDIT_RE = re.compile(r"^AUDIT \S*?/lean-audit-scratch-[^/\s]+/(\S+?): FAIL", re.M)
 LEAN_ERROR_RE = re.compile(r"^\s*error: (\S+?\.lean):\d+", re.M)
 #: a run's or a step's exit that a kill gave, not a failure of what it checked: SIGHUP, SIGKILL, SIGTERM as 128+N, or a signal
 KILLED_RC = (129, 137, 143)
+#: what the Lean check says of a process of its own that was killed (`tools/verity/lean/check.py`: the replay, `--fresh`)
+KILLED_SAYS = "not a kernel verdict"
 #: how often drive sweeps the repository's branches (`merge.sweep_branches`)
 BRANCH_SWEEP_S = 86400
 #: what `Driver.culprit` says of a failure that names no file and was a kill
@@ -65,6 +69,13 @@ ACTIVE = ("submitted", "waiting", "running", "unknown")
 PUBLISH_GRACE_S = 1800
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
+#: the steps of a check (`tools/verity/check/check.py`), for `--defer`: a train lands once each one not deferred has passed
+CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
+               "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests")
+#: what a verdict says when it passed with `--defer`'s steps still running
+DEFERRED = "every step but the deferred ones passed"
+#: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
+SIGTERM_RC = 143
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
 CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
 RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
@@ -278,21 +289,34 @@ def under(f: str, paths: list[str]) -> bool:
 def lean_errors(log: str) -> set[str]:
     """The repository paths of the Lean files lean-audit's ``log`` reports errors in: each `error: FILE.lean:LINE` after an
     `AUDIT .../PKG: FAIL` line, FILE relative to PKG."""
-    out, pkg = set(), None
+    out, pkg, failures = set(), None, False
     for line in log.splitlines():
         if m := LEAN_AUDIT_RE.match(line):
-            pkg = m[1]
+            pkg, failures = m[1], False
         elif pkg and (m := LEAN_ERROR_RE.match(line)):
             out.add(os.path.normpath(os.path.join(pkg, m[1])))
+        elif pkg and "Some required targets logged failures:" in line:
+            failures = True                                 # lake's own list: the step's log keeps it when the errors scroll by
+        elif pkg and failures and (m := re.match(r"^\s*- ([A-Za-z][\w.]*)\s*$", line)):
+            parts = m[1].split(".")                         # a module of a package rooted at its own name sits beside it
+            root = os.path.dirname(pkg) if parts[0] == os.path.basename(pkg) else pkg
+            out.add(os.path.normpath(os.path.join(root, *parts) + ".lean"))
+        elif failures and not line.strip().startswith("-"):
+            failures = False
     return out
 
 
 def killed(run_dir: Path, why: str = "") -> bool:
     """Whether a check failed by being killed rather than by what it checked: a failed step that exited by a signal or 128+N,
     or the run's own exit (``why``, the verdict's `rc=N`) one of those."""
-    rcs = [st.get("rc") for st in failed_steps(run_dir)]
-    if any(isinstance(rc, int) and (rc < 0 or rc in KILLED_RC) for rc in rcs):
+    steps = failed_steps(run_dir)
+    if any(isinstance(rc, int) and (rc < 0 or rc in KILLED_RC) for rc in (st.get("rc") for st in steps)):
         return True
+    for st in steps:                                     # a step that says one of its own processes was killed (17 Oct: the
+        if st.get("log"):                                # Lean check's kernel replay, exit 137 on cpu-2, ejected #2224, #2231)
+            with contextlib.suppress(OSError):
+                if KILLED_SAYS in (run_dir / Path(st["log"]).name).read_text(errors="replace"):
+                    return True
     return any(f"rc={rc}" in why for rc in (*KILLED_RC, -9, -15))
 
 
@@ -331,6 +355,12 @@ def implicated(run_dir: Path) -> set[str] | None:
         return None
     for s in suites:
         base, tests = s.get("suite") or "", s.get("failed_tests") or []
+        log = ""
+        if s.get("log"):
+            with contextlib.suppress(OSError):
+                log = (run_dir / "suites" / Path(s["log"]).name).read_text(errors="replace")
+        if not tests and (errors := ERROR_RE.findall(log)):     # 17 Oct: a collection error (#2299's test of a vector only
+            tests = errors                                       # #2286 adds) named no file, and 8 PRs were ejected by inputs
         if not tests:
             out, child = s.get("outside") or {}, s.get("child_outside") or {}
             modules = list(out.values() if isinstance(out, dict) else ()) + list(child)
@@ -340,9 +370,8 @@ def implicated(run_dir: Path) -> set[str] | None:
             paths |= {os.path.normpath(p) for p in files} | {os.path.normpath(m) for m in modules if m and m != "*"}
             continue
         paths |= {os.path.normpath(os.path.join(base, t.split("::")[0])) for t in tests}
-        if s.get("log"):
-            with contextlib.suppress(OSError):
-                paths |= _named((run_dir / "suites" / Path(s["log"]).name).read_text(errors="replace"), base)
+        if log:
+            paths |= _named(log, base)
     return paths
 
 
@@ -357,8 +386,12 @@ class Driver:
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs,
-                 evidence: Callable[[Path, list[str]], list[Path]] = evidence):
+                 evidence: Callable[[Path, list[str]], list[Path]] = evidence, defer: frozenset[str] = frozenset()):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
+        #: steps a train lands without (Daniel through top, 17 Oct, CI-30's interim): they run on after the landing, and one
+        #: that fails reverts it.  The Lean check's steps are never deferred.
+        defer = {x for x in defer if not x.startswith("lean")}
+        self.defer = frozenset(defer | ({"flock-rust-tests"} if "circuit-check" in defer else set()))  # it runs after it
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
@@ -391,7 +424,10 @@ class Driver:
                 return Verdict("passed", rid)
         rows = store.index.sql("SELECT id, state, rc FROM attempts WHERE tool = 'check' AND source_commit = ?", (commit,))
         old = set(drive.get("resent", {}).get(commit, ()))
-        ran = [(rid, st, rc) for rid, st, rc in rows if rc != NOT_STARTED and rid not in old]
+        # a cancel or a SIGTERM is a decision, not a verdict: a twin a sibling won the slot from, or a run someone stopped
+        # (17 Oct 11:47Z: bd74745daa5f read as failed from twin 30ce, SIGTERMed unstarted, while twin 4af6 ran on)
+        ran = [(rid, st, rc) for rid, st, rc in rows
+               if rc not in (NOT_STARTED, SIGTERM_RC) and st != "cancelled" and rid not in old]
         if ids:
             return Verdict("failed", ids[0], f"{ids[0]} passed without {', '.join(need)}, which the gate needs for "
                                             f"{', '.join(sorted({p for ps in need.values() for p in ps}))}")
@@ -408,15 +444,67 @@ class Driver:
             return Verdict("failed", " ".join(launch["ids"]), f"{' '.join(launch['ids'])} is still running (`--keep-going`, for "
                                                               f"the full picture) and has already failed: {early}")
         if any(st in ACTIVE for st, *_ in states.values()):
+            if self.defer and (rid := self._passed_but_deferred(launch["ids"])):
+                return Verdict("passed", rid, f"{DEFERRED} ({', '.join(sorted(self.defer))} run on after landing)")
             return Verdict("running", " ".join(launch["ids"]))
-        if all(rc == NOT_STARTED for _, rc, *_ in states.values()):
-            return Verdict("none", why="every twin exited without starting")
+        if all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
+            return Verdict("none", why="every twin exited without starting, or was stopped")
         ended = max((_utc(e) or launch["at"] for _, _, e, *_ in states.values()), default=launch["at"])
         if self.now() - ended < PUBLISH_GRACE_S:
             return Verdict("running", " ".join(launch["ids"]), "ended; its attempt isn't in the store yet")
         return Verdict("failed", " ".join(launch["ids"]),
                        f"{' '.join(launch['ids'])} ended ({', '.join(f'{s} rc={rc}' for s, rc, *_ in states.values())}) "
                        f"and no attempt reached the store in {PUBLISH_GRACE_S // 60} min")
+
+    def _passed_but_deferred(self, ids: list[str]) -> str | None:
+        """The running check among ``ids`` whose every step but the deferred ones has passed (or was skipped), none failed."""
+        need = [x for x in CHECK_STEPS if x not in self.defer]
+        for d in self.evidence(self.repo, ids):
+            got: dict[str, str] = {}
+            with contextlib.suppress(OSError):
+                for line in (d / PROGRESS[0]).read_text().splitlines():
+                    with contextlib.suppress(ValueError):
+                        rec = json.loads(line)
+                        got[rec.get("step")] = rec.get("status")
+            if any(v == "failed" for v in got.values()):
+                continue
+            if all(got.get(x) in ("passed", "skipped") for x in need):
+                return d.name
+        return None
+
+    def follow_deferred(self, drive: dict) -> None:
+        """Each landing made with `--defer`: once its check ends, drop it if its deferred steps passed; else revert it on
+        `main` (`git revert -m 1` of each merge it landed, newest first) and tell `CI` and the owners."""
+        q = self.q
+        for tip, rec in list(drive.get("deferred", {}).items()):
+            states = self._states(rec["ids"])
+            if any(st in ACTIVE for st, *_ in states.values()):
+                continue
+            failed = [st.get("step") for d in self.evidence(self.repo, rec["ids"]) for st in failed_steps(d)]
+            if not failed:
+                q.log(f"research queue drive: {rec['prs']}'s deferred steps passed ({' '.join(rec['ids'])})")
+                del drive["deferred"][tip]
+                continue
+            if self.dry_run or q.shadow:
+                q.log(f"research queue drive: would revert {rec['prs']} ({tip[:12]}): {', '.join(failed)} failed after landing")
+                continue
+            _git(self.repo, "checkout", "-q", "-B", "main", "refs/remotes/origin/main")
+            ok = True
+            for c in _out(self.repo, "rev-list", "--first-parent", f"{rec['base']}..{tip}").split():
+                merge = len(_out(self.repo, "rev-list", "--parents", "-n", "1", c).split()) > 2
+                r = _git(self.repo, "revert", "--no-edit", *(["-m", "1"] if merge else []), c, check=False, env=IDENTITY)
+                if r.returncode:
+                    _git(self.repo, "revert", "--abort", check=False)
+                    ok = False
+                    break
+            pushed = ok and not q._remote(self.repo, "push", "-q", "--no-verify", "origin", "main:refs/heads/main", ok=None).returncode
+            _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
+            what = (f"{rec['prs']} reverted on `main`: {', '.join(failed)} failed after landing ({' '.join(rec['ids'])}). "
+                    "Fix and re-mark") if pushed else (f"{rec['prs']} must be reverted by hand: {', '.join(failed)} failed after "
+                                                         f"landing ({' '.join(rec['ids'])}), and the revert didn't apply or push")
+            self.refuse(drive, f"deferred:{tip}", what, *(self._handle(int(n.lstrip('#'))) for n in rec["prs"].split()))
+            if pushed:
+                del drive["deferred"][tip]
 
     # -- landing
 
@@ -511,6 +599,8 @@ class Driver:
                 return None
             tip = _out(self.repo, "rev-parse", "HEAD")
             q.log(f"research queue drive: landed {prs} on `main` at {tip[:12]} (check {v.attempt})")
+            if v.why.startswith(DEFERRED):
+                drive.setdefault("deferred", {})[tip] = {"ids": v.attempt.split(), "base": main, "prs": prs}
             from .merge import _sweep_after, caught_up
 
             with authed(q.auth):
@@ -643,15 +733,15 @@ class Driver:
     # -- pre-warming a cold-forcing PR off `next`
 
     def warming(self, p) -> str | None:
-        """Why ready PR ``p`` stays off `next` for now: its change makes circuit-check run cold (`queue.forces_cold`) and its
-        head's pre-warm, one recorded check of that head (`prewarm`), hasn't ended.  Its passes then reach the trains it joins,
+        """Why ready PR ``p`` stays off `next` for now: its change makes circuit-check run cold (`queue.forces_cold`) or reruns
+        every suite (`queue.reruns_suites`), and its head's pre-warm, one recorded check of that head (`prewarm`), hasn't ended.  Its passes then reach the trains it joins,
         which run warm, and no warm PR waits hours on it above it (16 Oct: #2158 and #2199, each at the bottom of `next`, made
         every train above them cold, until a lander held them by hand)."""
-        if self._drive is None:
+        if self._drive is None or "circuit-check" in self.defer:      # deferred, a cold circuit-check holds no landing up
             return None
         pw, key = self._drive.setdefault("prewarm", {}), f"{p.number}@{p.head}"
         if (rec := pw.get(key)) is None:
-            if not self.q._forces_cold(p.number):
+            if not self.q._reruns_all(p.number):
                 return None
             rec = pw[key] = {"pr": p.number, "head": p.head}
         if rec.get("done"):
@@ -670,6 +760,11 @@ class Driver:
         active = 0
         for key, rec in pw.items():
             if rec.get("done"):
+                continue
+            if "circuit-check" in self.defer:                          # nothing waits on it: its slot goes to trains
+                rec["done"] = True
+                if live := [r for r, (st, *_) in self._states(rec.get("ids") or []).items() if st in ACTIVE]:
+                    self.cancel(self.repo, live, "drive: circuit-check is deferred, so a pre-warm holds nothing up")
                 continue
             if rec.get("ids"):
                 states = self._states(rec["ids"])
@@ -710,6 +805,7 @@ class Driver:
         drive.setdefault("launched", {})
         drive.setdefault("told", [])
         self._drive = drive
+        self.follow_deferred(drive)
         landed = self.land(drive, dry_run)
         if not dry_run and not q.shadow and self.now() - drive.get("branches_swept", 0) > BRANCH_SWEEP_S:
             from .merge import sweep_branches
@@ -727,29 +823,34 @@ class Driver:
         # and a train whose check is running, or has ended without its attempt in the store yet, keeps its place (19:47Z: a
         # rebuild in the seconds between 5897's end and its attempt's publication dropped a passing check)
         chain, main = q.chain(), _out(self.repo, "rev-parse", "origin/main")
-        q.hold = 0
+        q.hold, failed_at, checked = 0, set(), []
         for i, m in enumerate(chain):
             if m.commit not in drive["launched"]:
                 continue
+            checked.append(i)
             v = self.verdict(m.commit, main, drive)
             if v.state == "failed":
                 self.failed(drive, m, chain[: i + 1], v)
+                failed_at.add(i)
             elif v.state == "running":
                 q.hold = i + 1
+        # a member a running check covers keeps its place at the head that check runs, though its PR has a new head, unless
+        # its own train (the lowest checked one above it) failed: then the push is the fix (top, 17 Oct)
+        q.frozen = {m.pr for i, m in enumerate(chain[:q.hold])
+                    if next((c for c in checked if c >= i), None) not in failed_at}
         members, entries = q.sync(dry_run)
         state = {**q.load_state(), "drive": drive}
         for n, c in state.get("conflicts", {}).items():
             self.refuse(drive, f"conflict:{n}@{c['head']}", f"#{n} at {c['head'][:8]} is out of `{q.branch}`: {c['why']}",
                         c.get("handle"))
         on_chain = {m.commit for m in members}
+        following = {rid for rec in drive.get("deferred", {}).values() for rid in rec["ids"]}
         for c, v in drive["launched"].items():
-            if c not in on_chain and not dry_run:
+            if c not in on_chain and not dry_run and not set(v["ids"]) & following:
                 live = [rid for rid, (st, *_) in self._states(v["ids"]).items()
                         if st in ACTIVE and st != "unknown"]
-                if live and v.get("failing"):
-                    q.log(f"research queue drive: {' '.join(live)} of {c[:12]}, no longer on `{q.branch}`, keeps going for the "
-                          f"full picture of its failure ({v['failing']})")
-                elif live:
+                if live:                                   # a failed one too: drive acted on its failure, and its slot is a
+                                                           # train's (17 Oct 14:41Z: two held slots 40 min with 32 PRs queued)
                     self.cancel(self.repo, live, f"drive: {c[:12]} is no longer on `{q.branch}` (rebuilt); no check of it lands")
                     q.log(f"research queue drive: cancelled {' '.join(live)}: {c[:12]} is no longer on `{q.branch}`")
         drive["launched"] = {c: v for c, v in drive["launched"].items() if c in on_chain}
