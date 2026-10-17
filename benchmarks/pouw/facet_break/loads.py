@@ -55,6 +55,20 @@ CLASS_RULES: list[tuple[str, str]] = [
     (r"^LDG\.E\.ENL2\.256\.STRONG\.GPU$", "LDG256CG"), (r"^LDG\.E\.ENL2\.256(\.CONSTANT)?$", "LDG256"),
     (r"^LDG\.E(\.[US](8|16))?(\.CONSTANT)?$", "LDG32"), (r"^LDG\.E\.64(\.CONSTANT)?$", "LDG64"),
     (r"^LDG\.E\.128(\.CONSTANT)?$", "LDG128"),
+    # the side units (floors.csv's RED*, ATOM*, LDSM*, STSM*): a reduction's width is its class, an L2 select op
+    # (min, max, and, or, xor) its own; ATOM.E is ATOME32 whatever its window, since SASS doesn't show a peer CTA's
+    (r"^REDG\.E\.ADD\.[A-Z0-9_]+x4\b", "REDV"), (r"^REDG\.E\.ADD\.64(\.|$)", "RED64"), (r"^REDG\.E\.ADD(\.STRONG|$)", "RED32"),
+    (r"^REDG\.E\.(MIN|MAX|AND|OR|XOR)\b.*\.64(\.|$)", "REDG64"), (r"^REDG\.E\.(MIN|MAX|AND|OR|XOR)\b", "REDG32"),
+    (r"^ATOMG\.E\..*\.64(\.|$)", "ATOMG64"), (r"^ATOMG\.E\.", "ATOMG32"),
+    (r"^ATOMS\..*\.64$", "ATOMS64"), (r"^ATOMS\.", "ATOMS32"),
+    (r"^ATOM\.E\..*\.64(\.|$)", "ATOME64"), (r"^ATOM\.E\.", "ATOME32"),
+    (r"^STS\.128$", "STS128"), (r"^LDGSTS\.E\.BYPASS\.128$", "LDGSTS16"),
+    (r"^LDSM\.16\.M88$", "LDSM_X1"), (r"^LDSM\.16\.M88\.2$", "LDSM_X2"), (r"^LDSM\.16\.M88\.4$", "LDSM_X4"),
+    (r"^LDSM\.16\.MT88$", "LDSM_X1T"), (r"^LDSM\.16\.MT88\.2$", "LDSM_X2T"), (r"^LDSM\.16\.MT88\.4$", "LDSM_X4T"),
+    (r"^LDSM\.8\.MT1616$", "LDSM8T_X1"), (r"^LDSM\.8\.MT1616\.2$", "LDSM8T_X2"),
+    (r"^STSM\.16\.M88$", "STSM_X1"), (r"^STSM\.16\.M88\.2$", "STSM_X2"), (r"^STSM\.16\.M88\.4$", "STSM_X4"),
+    (r"^STSM\.16\.MT88$", "STSM_X1T"), (r"^STSM\.16\.MT88\.2$", "STSM_X2T"), (r"^STSM\.16\.MT88\.4$", "STSM_X4T"),
+    (r"^STSM\.8\.MT1616$", "STSM8T_X1"), (r"^STSM\.8\.MT1616\.2$", "STSM8T_X2"), (r"^STSM\.8\.MT1616\.4$", "STSM8T_X4"),
     # scalar / CUDA lane classes (floors.csv and census share these names)
     (r"IMAD\.WIDE", "IMADW"), (r"IADD\.64", "ALU64"), (r"DFMA|DADD", "W2"), (r"DMUL", "DMUL"),
     (r"IMAD|IMUL|IADD3|IADD|LEA\b|LEA\.HI", "ALU_OR_IMAD"),  # resolved below
@@ -110,13 +124,29 @@ JI_ROW = re.compile(r"^JI\d")
 TLD_BY_NAME = {"tld1": "TLD1", "tld2": "TLD2", "tld4": "TLD4w", "tld4n": "TLD4w"}
 _TLD_NAME = re.compile(r"_(tld4n|tld4|tld2|tld1)_")
 
+#: side.cu counts its side unit by a wildcard (`REDG*`, `UBLKRED*`), so its unit's name (`hs_red64`, `sa_red64`) is the
+#: class; a unit missing here (a 4 KB bulk op is several TMAred512) stays unclassed
+SIDE_BY_NAME = {"red32": {"REDG*": "RED32"}, "red64": {"REDG*": "RED64"}, "redv4": {"REDG*": "REDV"},
+                "redv4h": {"REDG*": "REDV"}, "redblk": {"REDG*": "RED32"}, "atomg32": {"ATOMG*": "ATOMG32"},
+                "atomgd": {"ATOMG*": "ATOMG32"}, "ldgsts": {"LDGSTS*": "LDGSTS16"},
+                "blkred512": {"UBLKRED*": "TMAred512"}, "blkcp4k": {"UBLKCP*": "UBLKCP4K"},
+                "dsm_red": {"ATOM*": "ATOME32P"}, "dsm_st4": {"ST*": "DSMST4P"},
+                **{t: {"TLD*": "TLD1"} for t in ("tld1", "tld1c", "tld1d", "tld1cd", "tld1w", "tld1cw")},
+                **{t: {"TEX*": "TEXBIL"} for t in ("texbil", "texc", "texd", "texr", "texw")}}
+_SIDE_NAME = re.compile(r"^(?:hs|sa)_(\w+)$")
+
+
+def side_class(probe: str, pat: str) -> str | None:
+    m = _SIDE_NAME.match(probe or "")
+    return SIDE_BY_NAME.get(m.group(1), {}).get(pat) if m else None
+
 
 def rates_by_class(row: dict) -> dict[str, float]:
     """x_k a SMSP-cycle for each census class k the probe's loops touched (its `rates`, keyed `loop:pattern`)."""
     out: dict[str, float] = {}
     for key, rate in row["rates"].items():
         pat = key.split(":", 1)[1]
-        k = class_of(pat)
+        k = side_class(row.get("probe"), pat) or class_of(pat)
         if k is None and pat.startswith("TLD") and (t := _TLD_NAME.search(row.get("probe") or "")):
             k = TLD_BY_NAME[t.group(1)]
         if k is not None:

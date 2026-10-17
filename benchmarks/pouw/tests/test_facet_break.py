@@ -65,8 +65,23 @@ def test_class_of():
             "LDG.E.64": "LDG64", "TLD.LZ": None, "LDG.E.ENL2.256": "LDG256", "LDG.E.NA.128": "LDG128NA",
             "LDG.E.128.STRONG.GPU": "LDG128CG", "LDG.E.ENL2.256.STRONG.GPU": "LDG256CG", "ULOP3.LUT": "UNI",
             "USHF.L.U32": "UNI", "UPRMT": "UNI", "USEL": "UNI", "UIADD3": "UNI", "UMOV": "UNI", "LDCU": "UNI",
-            "R2UR": "UNI", "UIADD3.64": "UNI64", "UMOV.64": "UNI64", "UIMAD.WIDE.U32": "UNI64", "LDCU.64": "UNI64"}
+            "R2UR": "UNI", "UIADD3.64": "UNI64", "UMOV.64": "UNI64", "UIMAD.WIDE.U32": "UNI64", "LDCU.64": "UNI64",
+            "REDG.E.ADD.STRONG.GPU": "RED32", "REDG.E.ADD.64.STRONG.GPU": "RED64",
+            "REDG.E.ADD.F32x4.FTZ.RN.STRONG.GPU": "REDV", "REDG.E.ADD.F32.FTZ.RN.STRONG.GPU": None,
+            "REDG.E.MAX.STRONG.GPU": "REDG32", "REDG.E.XOR.64.STRONG.GPU": "REDG64",
+            "ATOMG.E.ADD.STRONG.GPU": "ATOMG32", "ATOMG.E.CAS.64.STRONG.GPU": "ATOMG64", "ATOMS.ADD": "ATOMS32",
+            "ATOMS.CAST.SPIN.64": "ATOMS64", "ATOM.E.ADD.STRONG.GPU": "ATOME32", "ATOM.E.EXCH.64.STRONG.GPU": "ATOME64",
+            "STS.128": "STS128", "STS": None, "LDGSTS.E.BYPASS.128": "LDGSTS16", "LDSM.16.M88": "LDSM_X1",
+            "LDSM.16.MT88.4": "LDSM_X4T", "LDSM.8.MT1616.2": "LDSM8T_X2", "STSM.16.M88.2": "STSM_X2",
+            "STSM.8.MT1616.4": "STSM8T_X4"}
     assert {op: loads.class_of(op) for op in want} == want
+
+
+def test_a_side_unit_counted_by_wildcard_takes_its_class_from_its_name():
+    row = {"probe": "hs_red64", "rates": {"0:IMMA.16832.S8.S8": 0.4, "1:REDG*": 0.08}}
+    assert loads.rates_by_class(row) == pytest.approx({"IMMA16832": 0.1, "RED64": 0.02})
+    assert loads.rates_by_class({"probe": "sa_blkred512", "rates": {"0:UBLKRED*": 0.04}}) == {"TMAred512": 0.01}
+    assert loads.rates_by_class({"probe": "sa_blkred4k", "rates": {"0:UBLKRED*": 0.04}}) == {"UNI": 0.01}
 
 
 def test_a_tld_takes_its_width_from_the_program_and_unpriced_loads_are_listed(census):
