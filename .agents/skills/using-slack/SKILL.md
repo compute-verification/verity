@@ -23,11 +23,14 @@ The coordination API has one place, three interactions and one lifecycle.
   `@vllm`, `@benchmarks`, `@console` and `@top` (the admin, Daniel's coordinator), plus two advisors,
   `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. Since
   14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own subagents.
-  `@console` is Daniel's desktop agent on his laptop, which holds no Slack inbox: reach it through its Linear team CON (an
-  ask to `@console` files there, and `send` says so where it would ring an inbox). A handle's current holder is its
+  `@console` is Daniel's desktop agent on his laptop, beside the console's dev server. Nothing wakes it: its inbox holds
+  your ask until Daniel opens it, and then it reads every unread doorbell (`names read --as console`) and answers in your
+  thread. So put the whole brief in the ask, since it can't open Linear, and card `#ask-daniel` when it can't wait for
+  him to open console. A handle's current holder is its
   inbox's holder: `names open --succeeds` records the successor's agent id and its working branch's suffix in the route,
   and routing reads them (`--as`, the owners of PRs and runs). Run `names open --as HANDLE` again on a new branch: it
-  adds that branch's suffix. So a handover edits nothing in the repo; the registry's `holder` is a description. One agent may hold several handles, and posts as whichever
+  adds that branch's suffix. A second agent working under a handle (a lane that posts as it) subscribes to that handle's
+  inbox thread itself: the holder has no channel to relay to it. So a handover edits nothing in the repo; the registry's `holder` is a description. One agent may hold several handles, and posts as whichever
   it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them, and
   Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
@@ -93,7 +96,7 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 ~~~
 
 - **A holder subscribes to its own inbox thread, not to `#agent-coordination`'s top level.** The sender rings the inbox of
-  each handle a post addresses (`routes.d`, mode `cli`); no agent forwards. The registry's `subscribers` lists the holders
+  each handle a post addresses (`routes.d`); no agent forwards. The registry's `subscribers` lists the holders
   that still take the channel top level as well (the `old-*` advisors). A doorbell for a
   post that turns out not to be for you ends the turn silently. **Timers are for schedules and absence checks** (a
   deadline, a renewal), **never for polling** your inbox, the channel or Linear: what's addressed to you rings your
@@ -188,7 +191,8 @@ An alert in `#agent-alerts` takes the same `pickup` and `close` from `@infra`, w
 done-condition, pointers — goes in the issue itself, filed into the owning team at creation; no brief-in-Slack with a
 link. The issue is its own doorbell: every holder subscribes to its team's issue events (Subscriptions above), so
 filing it wakes the owner. `research msg ask --as ME --to @OWNER --file BRIEF.md` files it and rings the owner's inbox
-too. Taking an issue is a workflow-state change out of the backlog — that change is the guarantee the work was seen,
+too. Landing a PR that names an issue doesn't close it: Done is the owner's move (the merge-to-Done Git automation is off on
+every lead team since 16 Oct, after it closed unfinished issues). Taking an issue is a workflow-state change out of the backlog — that change is the guarantee the work was seen,
 and the watcher flags issues that sit untouched. No holder subscribes to comments, so comment with
 `research msg linear comment ISSUE 'TEXT' --as ME`: it rings the inbox of the issue's team's handle and of each name the
 text starts with (never yours), as `send` would (COMM-30). A comment made any other way wakes no one. Slack carries what it is good at:

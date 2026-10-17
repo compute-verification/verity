@@ -5,18 +5,22 @@ on drawn programs, laws, records, draws and verdicts, valid ones and one or two 
 The reference is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
 `wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `two_stage.draw_first` on
-`OwnRandomness` over the given bytes, and for `check_public` and `check_verdicts` the proof service's own
-(`service.check_public`, `service.check_verdicts`). Records are v1 and, on the programs with root parameters to register
+`OwnRandomness` over the given bytes, for the `select` piece the challenger's draw from a Spec's selection rule on
+(`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), and for
+`check_public` and `check_verdicts` the proof service's own (`service.check_public`, `service.check_verdicts`). The
+`partition` and `select` pieces also run on random partitions: mixed population programs of random members of three
+templates under template queries over them. Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries.
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
-stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, ASCII digits
-in a probability, and integer populations in a draw.
+stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, and integer
+populations in a draw.
 """
 
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import json
 import re
@@ -50,6 +54,10 @@ PAIR = bind(CompositeDefinition("CoreSampledProofsPair", 0, (), lambda S: ((("x"
                                 lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False))
 TRIPLE = bind(CompositeDefinition("CoreSampledProofsTriple", 0, (), lambda S: ((("x", Array(3, Value(8))),), Value(8)),
                                   lambda B, S, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
+QUAD = bind(CompositeDefinition("CoreSampledProofsQuad", 0, (), lambda S: ((("x", Array(4, Value(8))),), Value(8)),
+                                lambda B, S, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), B.call(XOR8, x[2], x[3])),
+                                register=False))
+TEMPLATES = [PAIR, TRIPLE, QUAD]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LEAF = "ee" * 64
 ROOTS = {"out": "cd" * 64, "x": "ab" * 64}
@@ -133,6 +141,41 @@ QUERIES = [s.query for s in SETUPS] + [
     {}, PO.query(), PO.query(version=2), {**PO.query(), "params": {"W": 32, "X": 70000}}, P.template_instance_query("Other_v1"),
     P.template_instances_query([PAIR.id]), {"name": "Q_template_instance", "version": 1, "params": {"template": PAIR.id}},
     {"name": "Nope", "version": 0, "params": {}}, {"name": "Q_template_instance", "version": 0, "params": {}}]
+
+
+@functools.cache
+def _population(members: tuple[tuple[int, int], ...]) -> str:
+    """The canonical descriptor of the mixed population of `members`, `(template, instances)` pairs with the template an
+    index into `TEMPLATES`, its program put among `PROGRAMS`."""
+    program = P.mixed_population_program([(TEMPLATES[t], n) for t, n in members])
+    PROGRAMS[PO.program_sha512(program)] = program
+    return D.canonical(codec.encode_program(program))
+
+
+@st.composite
+def partitions(draw) -> tuple[dict, dict, int]:
+    """A random partition P = Q(C): a mixed population program of one to four members, each some instances of one of
+    `TEMPLATES` (one template's members apart, adjacent or alone), and a template query over it, mostly one that applies
+    (the members' templates, in any order); the program's descriptor, the query and the population, 0 where the query
+    doesn't apply."""
+    members = tuple(draw(st.lists(st.tuples(st.integers(0, len(TEMPLATES) - 1), st.integers(1, 6)), min_size=1,
+                                  max_size=4)))
+    ids = [t.id for t in TEMPLATES]
+    kind = draw(st.integers(0, 9))
+    if kind < 8:
+        templates = draw(st.permutations(list(dict.fromkeys(TEMPLATES[t].id for t, _ in members))))
+        one = len(templates) == 1 and draw(st.booleans())
+        query = P.template_instance_query(templates[0]) if one else P.template_instances_query(templates)
+    elif kind == 8:
+        query = P.template_instances_query(draw(st.lists(st.sampled_from(ids), min_size=1, unique=True)))
+    else:
+        query = draw(st.sampled_from(QUERIES))
+    desc = json.loads(_population(members))
+    try:
+        n = P.units(PROGRAMS[PO.program_sha512(desc)], query)
+    except (P.QueryRefused, ValueError):
+        n = 0
+    return desc, _json(query), n
 
 
 # --- the protocol's decoders, as `OneStage` reads them ---------------------------------------------------------------
@@ -460,6 +503,67 @@ def draw(j):
         return draw_first(OwnRandomness(source), j["law"], j["population"])
     except (ValueError, TypeError) as e:
         raise D.Reject(str(e)) from None
+
+
+def _rule(j) -> service.Selection:
+    """`Select.Rule.ofJson`: a selection rule as `to_json` writes it, exactly its keys, of the kinds a `Stream` runs (a
+    two-stage rule at `check="all"`)."""
+    kind = j.get("rule") if isinstance(j, dict) else None
+    try:
+        if kind == "all" and set(j) == {"rule"}:
+            return service.All()
+        if kind == "law" and set(j) == {"law", "rule"} and isinstance(j["law"], str):
+            return service.Law(j["law"])
+        if kind == "two-stage" and set(j) == {"check", "replay", "rule"} and isinstance(j["replay"], str):
+            rule = service.TwoStage(service.Law(j["replay"]), j["check"])
+            if rule.check == "all":
+                return rule
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    raise D.Reject("not a selection rule the stream runs")
+
+
+def select(j):
+    """The challenger's draw as `Stream.register` and `Stream.select` make it: `service.selection_law` over the
+    population of the program under the query, `draw.derive`, `service.select_draw` on the source's bytes read in order
+    (the closure map `[[unit, [units]], ...]` as the `{unit: [units]}` it names, each unit once), then `draw.check_draw`;
+    with the number of bytes read."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    rule = _rule(j.get("rule"))
+    desc, query = _obj(j.get("program"), "program"), _obj(j.get("query"), "query")
+    if not desc:
+        raise D.Reject("not a program descriptor")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    closure = j.get("closure")
+    if closure is not None:
+        if not (isinstance(closure, list) and all(isinstance(p, list) and len(p) == 2 and _int(p[0]) and isinstance(p[1], list)
+                                                  and all(map(_int, p[1])) for p in closure)):
+            raise D.Reject("a closure map is a list of [unit, [units]], integers")
+        if len({u for u, _ in closure}) != len(closure):
+            raise D.Reject("a closure map names a unit once")
+        closure = {u: cs for u, cs in closure}
+    if not isinstance(j.get("source"), str):
+        raise D.Reject("source is not hex")
+    src, at = PR.unhex(j["source"]), 0
+
+    def coins(n: int) -> bytes:
+        nonlocal at
+        at += n
+        return src[at - n:at]
+    program = PROGRAMS[sha]
+    try:
+        n = P.units(program, query)
+        law = DR.derive(program, query, service.selection_law(rule, n), j.get("work_table"))
+        obj = service.select_draw(rule, law, n, coins, closure=closure)
+    except (P.QueryRefused, ValueError, service.Refused) as e:
+        raise D.Reject(str(e)) from None
+    if not DR.check_draw(obj, {"population": n}, law).ok:
+        raise D.Reject("the draw is not well formed under the law")
+    return {"draw": obj, "read": at}
 
 
 def bound(j):
@@ -1054,6 +1158,11 @@ PARTITION = D.Port(PIECES, "partition", partition, st.one_of(
         changed_audits(most=0), st.sampled_from(QUERIES), st.one_of(laws(6), st.just({"k": 1, "law": "stratified"})),
         st.one_of(st.none(), st.dictionaries(st.sampled_from(PROGRAMS_TEMPLATES + ["Other_v1"]), WORK_ENTRY | BAD_WORK_ENTRY,
                                              max_size=3)), st.booleans()),
+    st.builds(lambda a, pq, law, t, pre: {"params": a["params"] | {
+        "program": pq[0], "query": pq[1], "law": law, "work_table": t,
+        "partition": {"program": PO.program_sha512(pq[0]), "query": pq[1]} if pre else None}},
+        changed_audits(most=0, setups=SETUPS), partitions(), laws(24),
+        st.one_of(st.none(), st.fixed_dictionaries({t.id: WORK_ENTRY for t in TEMPLATES})), st.booleans()),
     JSON), package=PACKAGE)
 _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
@@ -1145,6 +1254,93 @@ DRAW = D.Port(PIECES, "draw", draw, st.one_of(
               st.integers(0, 40), SHORT_SOURCE),
     st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, JSON, st.integers(0, 6) | JSON,
               SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON)), package=PACKAGE)
+#: Law texts `draw.parse_law` refuses or reads oddly: digits of other scripts, signs, spaces, a second separator,
+#: leading zeros, a missing or zero argument.
+ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
+                 "bernoulli:\u00b9/2", "bernoulli:01/04", "bernoulli:0/0", "bernoulli:3/2", "bernoulli:1", "bernoulli:1/2/3",
+                 "subset:1:2", "subset:+1", "subset: 1", "subset:-1", "stratified:0", "work:007", "subset:007", "nope:1",
+                 "Subset:1", "bernoulli:", "bernoulli:/2"]
+LAW_TEXTS = st.one_of(
+    st.builds(lambda kind, k: f"{kind}:{k}", st.sampled_from(["subset", "stratified", "work"]), st.integers(0, 30)),
+    st.builds(lambda num, den: f"bernoulli:{num}/{den}", st.integers(0, 12), st.integers(0, 12)),
+    st.sampled_from(ODD_LAW_TEXTS))
+#: Rules a stream doesn't run, or that aren't rules as `to_json` writes them.
+ODD_RULES = [{"check": 2, "replay": "subset:1", "rule": "two-stage"}, {"check": "some", "replay": "subset:1", "rule": "two-stage"},
+             {"check": True, "replay": "subset:1", "rule": "two-stage"}, {"replay": "subset:1", "rule": "two-stage"},
+             {"law": "uniform:3", "population": "n", "rule": "sequential"}, {"rule": "all", "x": 1}, {"law": 5, "rule": "law"},
+             {"rule": "law"}, {"law": "subset:1", "rule": "law", "x": 1}, {"law": ["subset:1"], "rule": "law"},
+             {"check": "all", "replay": 1, "rule": "two-stage"}, {"rule": "All"}, {"rule": None}, {}]
+
+
+@st.composite
+def closure_maps(draw, n: int) -> list:
+    """A closure map over [0, n) as `[[unit, [units]], ...]`, each unit once, sometimes with a unit outside it."""
+    units = st.integers(0, max(n - 1, 0))
+    pairs = draw(st.lists(st.tuples(units, st.lists(units, min_size=1, max_size=4)), min_size=1, max_size=n + 1,
+                          unique_by=lambda p: p[0]))
+    out = [[u, cs] for u, cs in pairs]
+    if draw(st.integers(0, 7)) == 7:
+        out.append([draw(st.sampled_from([n, -1, n + 3])), [0]] if draw(st.booleans()) else [n + 9, [draw(st.sampled_from([n, -1]))]])
+    return out
+
+
+@st.composite
+def selections(draw) -> dict:
+    """The select piece's input on a random partition: a rule of each kind the stream runs (its k within the population),
+    a two-stage rule's replay law as often as a law, the work table naming every template for a work law (sometimes
+    with a template's work 0, or a bad entry), mostly a closure map for a work law, and the coins."""
+    desc, query, n = draw(partitions())
+    kind = draw(st.sampled_from(["work", "stratified", "subset", "bernoulli", "work", "all"]))
+    if kind == "all":
+        rule = {"rule": "all"}
+    else:
+        den = draw(st.integers(1, 12))
+        text = (f"bernoulli:{draw(st.integers(0, den))}/{den}" if kind == "bernoulli"
+                else f"{kind}:{draw(st.integers(1, max(n, 1)))}")
+        rule = draw(st.sampled_from([{"law": text, "rule": "law"}, {"check": "all", "replay": text, "rule": "two-stage"}]))
+    table = None
+    if kind == "work":
+        table = {t.id: draw(st.integers(1, 4) | WORK_ENTRY) for t in TEMPLATES}
+        if draw(st.integers(0, 9)) == 9:
+            table[draw(st.sampled_from([t.id for t in TEMPLATES]))] = draw(BAD_WORK_ENTRY)
+    closure = draw(closure_maps(n)) if kind == "work" and draw(st.integers(0, 3)) < 3 else None
+    return {"closure": closure, "program": desc, "query": query, "rule": rule, "source": draw(SOURCE), "work_table": table}
+
+
+def _with(field: str, values):
+    return lambda c, v: {**c, field: v}
+
+
+#: One change each to the select piece's input: the rule (a law text of any form, a rule the stream doesn't run, or
+#: junk), the work table (none, empty, junk), the closure map (any law's, malformed, a unit twice), the query, the
+#: program, the coins (short, junk) or a field missing.
+SELECT_CHANGES = [
+    (_with("rule", None), st.one_of(LAW_TEXTS.map(lambda t: {"law": t, "rule": "law"}),
+                                    LAW_TEXTS.map(lambda t: {"check": "all", "replay": t, "rule": "two-stage"}))),
+    (_with("rule", None), st.sampled_from(ODD_RULES) | JSON),
+    (_with("work_table", None), st.sampled_from([None, {}, 5, [], {PAIR.id: 1}]) | JSON),
+    (_with("closure", None), st.sampled_from([[], [[0, []]], [[0, [1]], [0, [2]]], [[0, 1]], [[0]], [["0", [1]]], [[0, [True]]],
+                                              [[True, [0]]], {"0": [1]}, "c", 5])),
+    (_with("closure", None), st.integers(0, 6).flatmap(closure_maps)),
+    (_with("query", None), st.sampled_from(QUERIES) | JSON),
+    (_with("program", None), st.sampled_from([{}, 5, "program", [], SETUPS[0].desc])),
+    (_with("source", None), SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd", 5, None])),
+    (lambda c, k: {kk: v for kk, v in c.items() if kk != k},
+     st.sampled_from(["closure", "program", "query", "rule", "source", "work_table"])),
+]
+
+
+@st.composite
+def changed_selections(draw, most: int = 2) -> dict:
+    c = draw(selections())
+    for _ in range(draw(st.integers(1, most))):
+        change, values = draw(st.sampled_from(SELECT_CHANGES))
+        c = change(c, draw(values))
+    return c
+
+
+SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
+                                                     changed_selections(2), JSON), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -1332,15 +1528,45 @@ RECORD_PORT = D.Port(PIECES, "record", record, st.one_of(
 pieces = D.server_fixture(DECODE)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 400), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300), (MATCHES_PUBLIC, 400),
-              (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400)]
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300),
+              (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
+
+
+def test_the_select_piece_draws_every_rule(pieces):
+    """One draw under each rule the stream runs, on a partition whose `PAIR` stratum is two ranges apart, Lean's the
+    Python's whole: `All` every unit, reading no coins, and each law's draw (a work law's with its closure) reading them,
+    each stratum's count its k, which the drawn runs reach only probably. Then the same with every non-ASCII digit
+    `str.isdigit` admits in place of an ASCII one, which both refuse."""
+    desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
+    query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
+    table = {PAIR.id: 2, TRIPLE.id: {"floor": 2, "work": 1}, QUAD.id: 0}
+    closure = [[u, [(u + 1) % 10, (u + 5) % 10]] for u in range(10)]
+    source = hashlib.shake_256(b"select").hexdigest(1500)
+    rules = [({"rule": "all"}, None), ({"law": "subset:4", "rule": "law"}, None), ({"law": "bernoulli:1/3", "rule": "law"}, None),
+             ({"law": "stratified:5", "rule": "law"}, None), ({"law": "work:4", "rule": "law"}, closure),
+             ({"check": "all", "replay": "stratified:5", "rule": "two-stage"}, None),
+             ({"check": "all", "replay": "work:4", "rule": "two-stage"}, closure)]
+    for rule, cm in rules:
+        case = {"closure": cm, "program": desc, "query": query, "rule": rule, "source": source,
+                "work_table": table if "work" in str(rule) else None}
+        out = select(copy.deepcopy(case))
+        assert D.replay(SELECT, case, pieces) == ("output", D.canonical(out)), rule
+        assert (out["read"] == 0) == (rule["rule"] == "all") and bool(cm) == ("closure" in out["draw"]), (rule, out)
+        for s in out["draw"].get("strata", []):
+            assert sum(any(lo <= u < hi for lo, hi in s["units"]) for u in out["draw"]["units"]) == s["k"] >= 1
+    for text in ("subset:\u0663", "stratified:\u0665", "work:\u0664", "bernoulli:\u0661/3", "bernoulli:1/\u0663"):
+        case = {"closure": None, "program": desc, "query": query, "rule": {"law": text, "rule": "law"}, "source": source,
+                "work_table": table}
+        assert D.replay(SELECT, case, pieces)[0] == "reject", text
+        with pytest.raises(D.Reject):
+            select(case)
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held"}

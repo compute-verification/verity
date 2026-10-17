@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import multiprocessing
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -177,7 +178,20 @@ def test_a_ranks_window_over_its_committed_values_binds_the_tp_run_root(tmp_path
           "replay": {"programs": {"0": str(c["row_dir"] / "build_request")}, "of_record": {"0": [c["inst"]["digest"]]}, "requests": reqs}}
     tp = {"world": 1, "tp_run_root": root.hex(), "roots": {"0": rank_root.hex()}, "root_tag": TP_ROOT_TAG.decode()}
     req = {"dir": str(tmp_path / "tp"), "partition": str(pf), "run": "r-tp", "committer": {"source": "t"}, "row": "row-t"}
-    got = SRT.write(st, req, tp)
+    ctx = multiprocessing.get_context("fork")
+    q = ctx.SimpleQueue()
+
+    def on_a_rank():
+        try:
+            q.put(SRT.write(st, req, tp))
+        except BaseException as e:  # noqa: BLE001 -- reported to the test, which fails on it
+            q.put(repr(e))
+
+    p = ctx.Process(target=on_a_rank, daemon=True)     # as vLLM's TP workers run: a daemonic process, which can fork no pool
+    p.start()
+    got = q.get()
+    p.join()
+    assert isinstance(got, dict), got
     rec = json.loads((tmp_path / "tp" / "rank0" / "registration.json").read_text())
     w = rec["window"]
     assert (w["kind"], w["run"], got["run"], w["research_run"], w["row"]) == ("served", f"{root.hex()}/rank0", f"{root.hex()}/rank0", "r-tp", "row-t")

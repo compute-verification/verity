@@ -26,6 +26,7 @@ gpu-lease 1 --wait --max-min 25 -- bash -c '
 rc=$?
 python3 "$HERE/fp_exact.py" summarize "$OUT/exact" | tee "$OUT/exact/verdicts.txt"
 src=${PIPESTATUS[0]}
+python3 "$HERE/fp_exact.py" limits "$OUT/exact/verdicts.json" | tee "$OUT/exact/limits.txt"
 python3 "$HERE/fp_exact.py" rates "$OUT/rates/rows.jsonl" | tee "$OUT/rates/rates.txt"
 [ $rc -ne 0 ] && exit $rc
 exit "$src"

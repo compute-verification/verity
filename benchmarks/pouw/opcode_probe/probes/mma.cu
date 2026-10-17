@@ -1,7 +1,9 @@
 // The exact MMA configurations of ../../fp_exact/ beside int8 IMMA: 16 warps, 8 independent accumulators a warp, one
 // MMA each an iteration, so the rate is the tensor pipe's and not one chain's latency. Operands are on fp_exact's exact
-// grids (E4M3 integers, E2M1 x2 values) with unit block scales. Joint points: rows.jsonl only (machine_model has one
-// MMA kind, the honest GEMM's). MACs an instruction: m16n8k32 4096, m16n8k64 8192, 2:4 sparse m16n8k128 16384.
+// grids (E4M3 integers, E2M1 x2 values) with unit block scales. Each format also has a `_data` probe: the same opcode on
+// the sweep's drawn operands and mix block scales, whose rate (and SM clock) against the fixed probe rules out a
+// data-dependent clock. Joint points: rows.jsonl only (machine_model has one MMA kind, the honest GEMM's). MACs an
+// instruction: m16n8k32 4096, m16n8k64 8192, 2:4 sparse m16n8k128 16384.
 #include "../probe.cuh"
 
 constexpr int TPB = 512;
@@ -65,6 +67,50 @@ __device__ __forceinline__ uint32_t fold(const float (*d)[4], uint32_t lane) {
 #pragma unroll
   for (int c = 0; c < 8; c++) s ^= __float_as_uint(d[c][0]) ^ __float_as_uint(d[c][3]);
   return s;
+}
+
+// ---- the sweep's own operands (not fixed bit patterns): each thread draws finite grid operands and mix scales from a
+// counter hash, so a data-dependent clock (if any) would show as a rate or SM-clock change against the probes above.
+__device__ __forceinline__ unsigned long long smix(unsigned long long z) {
+  z += 0x9E3779B97F4A7C15ull;
+  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+  z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+  return z ^ (z >> 31);
+}
+__device__ const uint8_t E4M3I[17] = {0x00, 0x38, 0x40, 0x44, 0x48, 0x4A, 0x4C, 0x4E, 0x50,
+                                      0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58};  // |0|..|16|
+__device__ const uint8_t UE8M0MIX[7] = {124, 125, 126, 127, 128, 129, 130};            // 2^-3 .. 2^3
+__device__ const uint8_t UE4M3MIX[8] = {0x38, 0x44, 0x4A, 0x4E, 0x51, 0x53, 0x55, 0x57};  // 1, 3, 5, ..., 15
+
+// The draws run once before the timed loop, so their loops roll (#pragma unroll 1) to keep live registers low.
+__device__ __forceinline__ uint32_t draw_e4m3(unsigned long long& s) {  // four E4M3 bytes of integers in [-16, 16]
+  uint32_t w = 0;
+#pragma unroll 1
+  for (int j = 0; j < 4; j++) {
+    s = smix(s);
+    const uint32_t mag = (uint32_t)(s % 17u), code = E4M3I[mag];
+    w |= (uint32_t)((mag && ((s >> 8) & 1)) ? code | 0x80u : code) << (8 * j);
+  }
+  return w;
+}
+__device__ __forceinline__ uint32_t draw_nibbles(unsigned long long& s) {  // eight E2M1 nibbles (all are grid values)
+  uint32_t w = 0;
+#pragma unroll 1
+  for (int j = 0; j < 8; j++) {
+    s = smix(s);
+    w |= (uint32_t)(s & 0xF) << (4 * j);
+  }
+  return w;
+}
+template <bool NV>
+__device__ __forceinline__ uint32_t draw_scale(unsigned long long& s) {  // four mix-scale bytes a firing
+  uint32_t w = 0;
+#pragma unroll 1
+  for (int j = 0; j < 4; j++) {
+    s = smix(s);
+    w |= (uint32_t)(NV ? UE4M3MIX[s % 8u] : UE8M0MIX[s % 7u]) << (8 * j);
+  }
+  return w;
 }
 
 OP_KERNEL(imma_s8, TPB) {
@@ -136,6 +182,70 @@ __device__ __forceinline__ void omma_sp_body(const OpArgs& a) {
 OP_KERNEL(omma_sp_mxf4, TPB) { omma_sp_body<false>(a); }
 OP_KERNEL(omma_sp_nvf4, TPB) { omma_sp_body<true>(a); }
 
+// The same opcodes on the sweep's drawn operands and mix scales (data-dependent-clock check).
+OP_KERNEL(qmma_e4m3_data, TPB) {
+  const uint32_t lane = threadIdx.x & 31;
+  unsigned long long s = smix(((unsigned long long)blockIdx.x << 32) ^ lane ^ 0xE4A3ull);
+  uint32_t x[4], y[2];
+#pragma unroll
+  for (int r = 0; r < 4; r++) x[r] = draw_e4m3(s);
+#pragma unroll
+  for (int r = 0; r < 2; r++) y[r] = draw_e4m3(s);
+  float d[8][4] = {};
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int c = 0; c < 8; c++) qmma(d[c], x, y);
+  }
+  OP_END
+  OP_SINK(fold(d, lane))
+}
+
+template <bool NV>
+__device__ __forceinline__ void omma_data_body(const OpArgs& a) {
+  const uint32_t lane = threadIdx.x & 31;
+  unsigned long long s = smix(((unsigned long long)blockIdx.x << 32) ^ lane ^ (NV ? 0x7F4Bull : 0xE803ull));
+  uint32_t x[4], y[4];
+#pragma unroll
+  for (int r = 0; r < 4; r++) x[r] = draw_nibbles(s);
+#pragma unroll
+  for (int r = 0; r < 4; r++) y[r] = draw_nibbles(s);
+  const uint32_t sc = draw_scale<NV>(s);
+  float d[8][4] = {};
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int c = 0; c < 8; c++) omma<NV>(d[c], x, y, sc);
+  }
+  OP_END
+  OP_SINK(fold(d, lane))
+}
+OP_KERNEL(omma_mxf4_data, TPB) { omma_data_body<false>(a); }
+OP_KERNEL(omma_nvf4_data, TPB) { omma_data_body<true>(a); }
+
+template <bool NV>
+__device__ __forceinline__ void omma_sp_data_body(const OpArgs& a) {
+  const uint32_t lane = threadIdx.x & 31;
+  unsigned long long s = smix(((unsigned long long)blockIdx.x << 32) ^ lane ^ (NV ? 0x5A4Bull : 0x1203ull));
+  uint32_t x[4], y[4];
+#pragma unroll
+  for (int r = 0; r < 4; r++) x[r] = draw_nibbles(s);
+#pragma unroll
+  for (int r = 0; r < 4; r++) y[r] = draw_nibbles(s);
+  const uint32_t sc = draw_scale<NV>(s);
+  const uint32_t e = 0x4E4E4E4Eu;  // a valid 2:4 metadata (pairs {0,1} and {2,3}); the draw varies the values, not it
+  float d[8][4] = {};
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int c = 0; c < 8; c++) omma_sp<NV>(d[c], x, y, e, sc);
+  }
+  OP_END
+  OP_SINK(fold(d, lane))
+}
+OP_KERNEL(omma_sp_mxf4_data, TPB) { omma_sp_data_body<false>(a); }
+OP_KERNEL(omma_sp_nvf4_data, TPB) { omma_sp_data_body<true>(a); }
+
 #define OMMA "OMMA.SF.16864.F32.E2M1.E2M1"
 #define OMMA_SP "OMMA.SF.SP.168128.F32.E2M1.E2M1"
 static const OpProbe PROBES[] = {
@@ -151,6 +261,18 @@ static const OpProbe PROBES[] = {
      .note = "2:4 sparse MXFP4 m16n8k128, UE8M0 unit scales: 16384 MACs an instruction"},
     {.name = "omma_sp_nvf4", .kernel = (const void*)omma_sp_nvf4, .tpb = TPB, .expect = OMMA_SP ".UE4M3.4X=8",
      .iters = 4096, .note = "2:4 sparse NVFP4 m16n8k128, UE4M3 unit scales: 16384 MACs an instruction"},
+    {.name = "qmma_e4m3_data", .kernel = (const void*)qmma_e4m3_data, .tpb = TPB,
+     .expect = "QMMA.16832.F32.E4M3.E4M3=8", .iters = 4096,
+     .note = "QMMA E4M3 on the sweep's drawn integer operands: a data-dependent-clock check"},
+    {.name = "omma_mxf4_data", .kernel = (const void*)omma_mxf4_data, .tpb = TPB, .expect = OMMA ".E8=8", .iters = 4096,
+     .note = "MXFP4 on drawn E2M1 operands and UE8M0 mix scales: a data-dependent-clock check"},
+    {.name = "omma_nvf4_data", .kernel = (const void*)omma_nvf4_data, .tpb = TPB, .expect = OMMA ".UE4M3.4X=8",
+     .iters = 4096, .note = "NVFP4 on drawn E2M1 operands and UE4M3 mix scales: a data-dependent-clock check"},
+    {.name = "omma_sp_mxf4_data", .kernel = (const void*)omma_sp_mxf4_data, .tpb = TPB, .expect = OMMA_SP ".E8=8",
+     .iters = 4096, .note = "2:4 sparse MXFP4 on drawn operands and UE8M0 mix scales: a data-dependent-clock check"},
+    {.name = "omma_sp_nvf4_data", .kernel = (const void*)omma_sp_nvf4_data, .tpb = TPB,
+     .expect = OMMA_SP ".UE4M3.4X=8", .iters = 4096,
+     .note = "2:4 sparse NVFP4 on drawn operands and UE4M3 mix scales: a data-dependent-clock check"},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
