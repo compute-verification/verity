@@ -28,6 +28,7 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
 import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
 import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
 import Proofs.Flock.Claims.Complete.Replay.LigeritoHonest
+import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
 import Proofs.Flock.Claims.Complete.Replay.LigeritoJoint
 import Proofs.Flock.Claims.Complete.Replay.LigeritoExact
 
@@ -95,15 +96,17 @@ the model's own steps a challenge, `Lg.HRuns.challenge`, an out-of-domain intro,
 query, `Lg.HRuns.query`; `LigeritoHonest`: the claim and the weight kept through the model's steps, `Lg.sync_close`,
 `Lg.WOK`, `Lg.wok_level`, the challenge loops, `Lg.HRuns.initChals`, `Lg.HRuns.levelChals`, and the prover between
 levels, `Lg.Mid`, reached after level 0, `Lg.mid_lv0`, kept by an inner level's step, `Lg.mid_stepN`, from which the
-last level meets the final identity, `Lg.goal_last`; `LigeritoJoint`: on the honest prover's values each step of the
-verifier's model keeps its claim the prover's sum and the prover's weight its residual weight, `Lg.JPre`: level 0,
-`Lg.JPre.pre0`, an out-of-domain intro, `Lg.JPre.oodStep`, a level's query and close, `Lg.JPre.closeStep`, a level's
-four challenges, `Lg.JPre.chalsStep`, and the last level's final identity, `Lg.JPre.final`; `LigeritoExact`: the
-honest prover's Ligerito walked on its own state, each step's value and state exact, `Lg.Exact.VRuns`, keeps `Lg.JPre`
-on the proof it returns from level 0, `Lg.Exact.lv0Inv`, through each inner level, `Lg.Exact.lvStep`, to the last
-level's final identity, `Lg.Exact.finStep`, so the honest Ligerito meets it, `Lg.Exact.honest : Lg.Honest`), and the
-prover's pieces (`RepRounds`: a returning rep records a round, each of at most `65536` coins, `repP_repOk`, every
-squeeze of the models being few coins, `Bnd`; `ProverOk`: the case's table has a registered scheme and at most 1,024
-regions, `Case.schemeOk`, so at an oracle of 64-byte outputs its digests have the scheme's width, `opsWith_widths`,
-`schemeWidths`, its level-0 cap is non-empty and under `2^64` bytes, `commitP_cap`, and `ProverOk` holds,
-`proverOk`). -/
+last level meets the final identity, `Lg.goal_last`; `LigeritoHonestRun`: the honest Ligerito meets it, `Lg.honest`, so
+`Lg.Honest` holds, and at the deployed relation `LgFinal` rests on `RepWalkP` alone, `lgFinal_walkP`, and `Ligerito` and
+`Consumed` on the walk's facts and the schemes' widths, `ligerito_walkP`, `consumed_walkP`; `LigeritoJoint`: on the
+honest prover's values each step of the verifier's model keeps its claim the prover's sum and the prover's weight its
+residual weight, `Lg.JPre`: level 0, `Lg.JPre.pre0`, an out-of-domain intro, `Lg.JPre.oodStep`, a level's query and
+close, `Lg.JPre.closeStep`, a level's four challenges, `Lg.JPre.chalsStep`, and the last level's final identity,
+`Lg.JPre.final`; `LigeritoExact`: the honest prover's Ligerito walked on its own state, each step's value and state
+exact, `Lg.Exact.VRuns`, keeps `Lg.JPre` on the proof it returns from level 0, `Lg.Exact.lv0Inv`, through each inner
+level, `Lg.Exact.lvStep`, to the last level's final identity, `Lg.Exact.finStep`, so `Lg.Honest` holds a second way,
+`Lg.Exact.honest`), and the prover's pieces (`RepRounds`: a returning rep records a round, each of at most `65536`
+coins, `repP_repOk`, every squeeze of the models being few coins, `Bnd`; `ProverOk`: the case's table has a registered
+scheme and at most 1,024 regions, `Case.schemeOk`, so at an oracle of 64-byte outputs its digests have the scheme's
+width, `opsWith_widths`, `schemeWidths`, its level-0 cap is non-empty and under `2^64` bytes, `commitP_cap`, and
+`ProverOk` holds, `proverOk`). -/
