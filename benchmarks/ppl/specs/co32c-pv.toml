@@ -1,0 +1,37 @@
+description = "co32c with P·V as CO-Dither specifies it (note:20261017T0030Z-draft-checked-strip, round 3): P the peeled side, round(P / s) + c on [0, 127] with c a fresh bit where key <= query and c's mean (half the causal sum of V) taken off in the epilogue, under the adopted w64 peel (U and its offset 64); V the served side, dithered on 8 bits (committing its residue sums' digits changes no served value); the linears and Q K^T as in co32c"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+weight_top = 63
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+q_top = 63
+k = "dither"
+k_top = 63
+p = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64
