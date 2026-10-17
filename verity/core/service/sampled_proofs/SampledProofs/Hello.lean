@@ -49,12 +49,14 @@ private def strings (j : Json) (what : String) : V (Array String) := do
 /-- `{"own", "hello", "coin_tree", "seen", "selection", "slots", "session"}` to a verdict `{"ok", "codes", "detail"}`: no
 code, or the one failing check's (`hello`, `streams`, `coin_tree`, `fresh`) with its reason. -/
 def check (j : Json) : V Json := do
+  let own := getD j "own"
+  let .obj _ := getD own "coins" | throw "the verifier's own Hello is not an object with an object coins"
   let hello ← Flock.J.str j "hello" "the run"
   let seen ← strings (getD j "seen") "seen"
   let selection ← strings (getD j "selection") "selection"
   let session ← strings (getD j "session") "session"
   let slots ← Flock.J.nat j "slots" "the run"
-  return match checkRun (getD j "own") hello (getD j "coin_tree") seen selection slots session with
+  return match checkRun own hello (getD j "coin_tree") seen selection slots session with
     | .ok _ => Json.mkObj [("ok", Json.bool true), ("codes", Json.arr #[]), ("detail", Json.mkObj [])]
     | .error (code, why) => Json.mkObj [("ok", Json.bool false), ("codes", Json.arr #[Json.str code]),
         ("detail", Json.mkObj [(code, Json.str why)])]
