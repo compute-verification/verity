@@ -79,7 +79,7 @@ def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tu
     challenge, previous, out = s.start(), reg.digest, []
     for i in range(passes):
         out.append(prover.run(challenge, i, previous))
-        assert s.receive(0, i, out[-1].root) is None
+        assert s.receive(0, i, out[-1].root, step=i) is None
         previous = out[-1].root
     clock.now = p.window_ns
     assert s.boundary() is None
