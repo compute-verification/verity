@@ -13,7 +13,8 @@ bad event the simulated fork at round `t` is the simulated fork at `t + 1`.
   `histKey`, the revealed history itself, is one (`prefixKey_histKey`).
 * `fnC_coupling`: for every pair event `E`, the simulated fork at round `t` (`simF`) is at most the deployed fork there
   (`depF`) and `δ_t` times the simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on their first
-  `n t` entries (`δAt`), and past the last round it is the one-run event `E s s`.
+  `n t` entries (`δAt`, which is `|X|^{-min (n t) M}`, `δAt_eq`), and past the last round it is the one-run event
+  `E s s`.
   - On agreement at `t`, the forks at `t` and `t + 1` are the same coins (`fnC_fork_succ`), and agreement is
     independent of the rest with chance `δ_t` whatever the first coin (`Pr_agree`, `Pr_and_agree`).
   - Otherwise the keys differ from round `t` on and agree before it, so the tape's values at the two keys are
@@ -228,6 +229,46 @@ theorem Pr_agree [Fintype X] [DecidableEq X] [Nonempty X] (k : ℕ) (c : Fin M �
   unfold δAt
   rw [Pr_prod (fun a b => AgreeAt k a b)]
   exact (Ex_const (α := Fin M → X) _).symm.trans (congrArg Ex (funext fun a => hswap c a))
+
+theorem prod_range_ite (c : ℝ) (k : ℕ) :
+    ∀ N : ℕ, (∏ i ∈ Finset.range N, if i < k then (1 : ℝ) else c) = c ^ (N - min k N)
+  | 0 => by simp
+  | N + 1 => by
+    rw [Finset.prod_range_succ, prod_range_ite c k N]
+    by_cases h : N < k
+    · rw [ite_eq_left h, mul_one, show N + 1 - min k (N + 1) = N - min k N by omega]
+    · rw [ite_eq_right h, ← pow_succ, show N + 1 - min k (N + 1) = N - min k N + 1 by omega]
+
+/-- **The agreement's chance in closed form**: two uniform coins agree on their first `k` entries with chance
+`|X|^{-min k M}`. -/
+theorem δAt_eq [Fintype X] [DecidableEq X] [Nonempty X] (k : ℕ) :
+    δAt X M k = (Fintype.card X : ℝ)⁻¹ ^ min k M := by
+  classical
+  obtain ⟨x₀⟩ := ‹Nonempty X›
+  rw [← Pr_agree k (fun _ : Fin M => x₀), Pr_eq_sum]
+  have hX : (0 : ℝ) < Fintype.card X := by exact_mod_cast Fintype.card_pos
+  have hsum : (∑ b : Fin M → X, if AgreeAt k (fun _ => x₀) b then (1 : ℝ) else 0) =
+      (Fintype.card X : ℝ) ^ (M - min k M) := by
+    have e : ∀ b : Fin M → X, (if AgreeAt k (fun _ => x₀) b then (1 : ℝ) else 0) =
+        ∏ m : Fin M, if (m.val < k → x₀ = b m) then (1 : ℝ) else 0 := fun b => by
+      rw [Finset.prod_boole]
+      split_ifs with h1 h2 h2
+      · rfl
+      · exact absurd (fun m _ => h1 m) h2
+      · exact absurd (fun m => h2 m (Finset.mem_univ m)) h1
+      · rfl
+    rw [Finset.sum_congr rfl fun b _ => e b,
+      ← Fintype.prod_sum (fun (m : Fin M) (y : X) => if (m.val < k → x₀ = y) then (1 : ℝ) else 0)]
+    have f : ∀ m : Fin M, (∑ y : X, if (m.val < k → x₀ = y) then (1 : ℝ) else 0) =
+        if m.val < k then 1 else (Fintype.card X : ℝ) := fun m => by
+      by_cases hm : m.val < k <;> simp [hm]
+    rw [Finset.prod_congr rfl fun m _ => f m,
+      Fin.prod_univ_eq_prod_range (fun i => if i < k then (1 : ℝ) else (Fintype.card X : ℝ)) M, prod_range_ite]
+  rw [hsum, Fintype.card_fun, Fintype.card_fin]
+  push_cast
+  rw [show (Fintype.card X : ℝ) ^ M = (Fintype.card X : ℝ) ^ (M - min k M) * (Fintype.card X : ℝ) ^ min k M by
+      rw [← pow_add, Nat.sub_add_cancel (min_le_right k M)],
+    div_mul_cancel_left₀ (pow_ne_zero _ hX.ne'), inv_pow]
 
 /-- **On agreement at round `t`, the forks at `t` and `t + 1` are the same coins**: they differ only at round `t`,
 where the key reads only the agreeing entries and the merge takes only those from the live coin. -/
