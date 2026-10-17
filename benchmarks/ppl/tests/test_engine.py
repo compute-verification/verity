@@ -117,6 +117,16 @@ def test_a_noised_head_passes_every_gate(llama, ids, calib):
     assert not np.array_equal(r["nll"]["adopted-bd-lm/s0"], r["nll"]["adopted-bd/s0"])
 
 
+def test_wide_dithers_pass_every_gate(llama, ids, calib):
+    arms = ["adopted-bd-lm", "adopted-bd-lm-d2", "adopted-bd-lm-d4", "co32c-d4"]
+    r = evaluate(llama, ids[:4], arms, calib=calib)
+    assert passed(r), r["gates"]
+    bf = ppl(r["nll"]["bf16/s0"])
+    for a in arms:
+        assert abs(ppl(r["nll"][f"{a}/s0"]) / bf - 1) < 0.1, a
+    assert not np.array_equal(r["nll"]["adopted-bd-lm/s0"], r["nll"]["adopted-bd-lm-d2/s0"])
+
+
 def test_linear_variants_pass_their_gates(llama, ids, calib):
     arms = [spec.parse({"linear": [{"step": "rotate", "kind": "h"}, {"step": "int8", "group": 32}]}, "grouped"),
             spec.parse({"linear": [{"step": "smooth", "alpha": 0.5}, {"step": "rotate"},

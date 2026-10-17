@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+import Proofs.Flock.Claims.Complete.Zk.Json.Files
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 import Proofs.Flock.Claims.Complete.Replay.Steps
 
@@ -7,10 +8,11 @@ import Proofs.Flock.Claims.Complete.Replay.Steps
 
 * **The prover** (`innerP_go`): the masked prover's inner proof (`innerP`) in the pure session, at the coins of the
   replies to its four sends (`ε`, the batching coins, `β`, the query coins), where its two refusals don't fire: the
-  batched constraint holds on the pads, and `β ≠ 0`. Its proof is `InZ.proof` and its transcript `InZ.tEnd`.
+  batched constraint holds on the pads, and `β ≠ 0`. Its proof is `InZ.proof` and its transcript `InZ.tEnd`. At a
+  rep's pads whose constraints vanish, the first refusal never fires, whatever the coins (`innerP_go_pads`).
 * **The verifier** (`verifyInnerWith_of`): on rounds carrying those four sends, from the prover's round and pending
   bytes, `Zk.verifyInnerWith` passes on `InZ.proof` at a rep's pads whose constraints vanish (`ConsHold`), where
-  `β ≠ 0` and the hash's digests are 64 bytes: the proof has its sizes (`innerRoot_size`, `tcOf_size`), the coins are
+  `β ≠ 0` and the hash's digests are 64 bytes: the proof has its sizes (`innerCommitP_root`, `tcOf_size`), the coins are
   the prover's, `τ` opens its commitment, the batched check holds (`innerP_batched`, `innerY_batched`), and each
   query's column is consistent with `Y` (`innerY_column`) and climbs to the pads' root (`innerTree_climb`).
 -/
@@ -121,6 +123,21 @@ theorem innerP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay
   rw [pure_go]
   exact ⟨_, by simp, rfl⟩
 
+/-- **At a rep's pads, the masked prover's inner proof refuses only at `β = 0`**: where the rep's constraints vanish at
+its pads (`ConsHold`), the batched constraint holds at every sacrifice and batching coin (`innerP_batched`), so `innerP`
+returns in closed form at every reply but one whose `β` is `0`. -/
+theorem innerP_go_pads (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (tape : TapeZk)
+    (i r : ℕ) (ic : InnerCommit) (finalC : F128) {cons : Array (String × Zk.Lin)}
+    (hc : ConsHold cons (padsOf tape i r lay).h) (t : Transcript) (l : Array Claims.Msg)
+    (hb : (coinOf (resp (l.size + 2)) 0).isZero = false) :
+    ∃ l', l'.size = l.size + 4 ∧
+      ((innerP (asksS resp) (Hashes.ofSha512 h) lay (padsOf tape i r lay) ic finalC cons).run t).go l =
+        (.ok (InZ.proof lay (padsOf tape i r lay) cons h ic (InZ.coinsAt resp l.size),
+          InZ.tEnd lay (padsOf tape i r lay) finalC cons h (InZ.coinsAt resp l.size) t), l') :=
+  innerP_go resp h lay _ ic finalC cons t l
+    (innerP_batched tape i r lay hc _ ((Array.range (InZ.all lay (padsOf tape i r lay) cons
+      (InZ.coinsAt resp l.size)).size).map (InZ.coinsAt resp l.size).cg)) hb
+
 /-! ## The verifier's inner check on the prover's inner proof -/
 
 theorem bytes_beq_refl (b : ByteArray) : (b == b) = true := by
@@ -141,27 +158,6 @@ theorem forIn_keep (body : ℕ → PUnit → TM (ForInStep PUnit)) (n : ℕ) (u 
     intro a ha
     rw [FlockSoundness.Refine.forIn_range'_cons, Flock.RecAlgebra.bind_of_ok (h a (by omega))]
     exact ih (a + 1) (by omega)
-
-/-- The pads' root is a digest of `h`, so 64 bytes where `h`'s digests are. -/
-theorem innerRoot_size {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) {p : PadsZk} {salt : ℕ → ByteArray}
-    {ic : InnerCommit} (hic : innerCommitP (Hashes.ofSha512 h : Hashes V) p salt = .ok ic) : ic.root.size = 64 := by
-  have ht := innerCommitP_tree hic
-  set n := (p.h ++ p.padH).size.nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE
-  have hpow : n = 2 ^ Nat.log2 n := innerCols_pow _
-  have hL : 1 ≤ Nat.log2 n := by
-    have h1 : 1 ≤ (p.h ++ p.padH).size.nextPowerOfTwo := by
-      obtain ⟨k, hk⟩ := Nat.isPowerOfTwo_nextPowerOfTwo (p.h ++ p.padH).size
-      rw [hk]
-      exact Nat.one_le_two_pow
-    by_contra h0
-    have : Nat.log2 n = 0 := by omega
-    rw [this] at hpow
-    have : n = (p.h ++ p.padH).size.nextPowerOfTwo * 8 := rfl
-    omega
-  have hn := ht.node (Nat.log2 n - 1) (by omega) 0 (by simp)
-  rw [show Nat.log2 n - 1 + 1 = Nat.log2 n by omega] at hn
-  rw [ht.root, ← (Except.ok.inj hn)]
-  exact h64 _
 
 theorem tcOf_size {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (tau : F128) (salt : ByteArray) :
     (InZ.tcOf h tau salt).size = 64 :=
@@ -236,8 +232,8 @@ theorem verifyInnerWith_of (h : ByteArray → ByteArray) (h64 : ∀ b, (h b).siz
   simp only [Flock.With.liftTM_V]
   refine Eq.trans (Flock.RecAlgebra.bind_of_ok (Flock.RecAlgebra.check_eq ?sz _ _)) ?_
   case sz =>
-    simp only [InZ.proof, InZ.y, InZ.qs, Array.size_map, Array.size_range, padsOf_symbols, innerRoot_size h64 hic,
-      tcOf_size h64, padsOf_tauSalt_size, hp, beq_self_eq_true, Bool.and_self]
+    simp only [InZ.proof, InZ.y, InZ.qs, Array.size_map, Array.size_range, padsOf_symbols,
+      JsonRT.innerCommitP_root h64 _ _ hic, tcOf_size h64, padsOf_tauSalt_size, hp, beq_self_eq_true, Bool.and_self]
   refine Eq.trans (Flock.RecAlgebra.bind_of_ok (Flock.RecAlgebra.label_eq _ _)) ?_
   refine Eq.trans (Flock.RecAlgebra.bind_of_ok (Flock.RecAlgebra.absorbF_eq _ _)) ?_
   refine Eq.trans (Flock.RecAlgebra.bind_of_ok (sampleWith_sent_at _ _ (by rfl) (by rfl) (by rfl) c1)) ?_

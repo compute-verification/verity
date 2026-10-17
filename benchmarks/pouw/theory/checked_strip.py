@@ -624,10 +624,15 @@ def word_routes(design, k, x):
     return routes
 
 
-#: P·V's vector work a tile beyond the folds, in warp instructions (unmeasured estimates): extracting one digit of one
-#: Ycum entry (mask or shift, then the carry), and the epilogue's one extra op a cell for the offset and the centring.
-PV_DIGIT_OPS = 2.0
-PV_SERVE_OPS = 4.0
+#: P·V's vector work a tile beyond the folds, as BC-KERNEL measured cpv.cu's pv_l7qs (exact ncu counts,
+#: r20261017-075345-b394, note:20261017T0645Z-draft-bc-kernel). PV_DIGIT_OPS is per-thread instructions an entry a digit
+#: (4 entries a lane, so 4·m·PV_DIGIT_OPS warp instructions a tile): vdig's 7 without z's hashing, which any prover
+#: committing the D_d words does (11.0 with it; co32c's quantizer 6.0). PV_SERVE_OPS is warp instructions a tile, the
+#: served epilogue's 2.8 a cell over a dequantizing one (2O, 127S and the add). PV_LIMB_OPS, adopted P·V's limb split an
+#: entry a limb, is unmeasured.
+PV_DIGIT_OPS = 7.0
+PV_SERVE_OPS = 11.2
+PV_LIMB_OPS = 1.0
 
 
 def ts_pv(k, fold, rep):
@@ -652,7 +657,7 @@ def ts_pv_adopted(k, fold, rep):
     epilogue, and Ycum's and S's adds and limb split. At a one-hot P row O is a copy (127·X(κ*)), so the cheater
     serves it and does T alone: the strip, the sums and the epilogue are free."""
     folds = 4 * fold * (k // 32 + 1)
-    honest = (k // 32 + (3 if k > 32 else 1), folds + PV_SERVE_OPS + (4 + 4 + 4 * 2 * PV_DIGIT_OPS / 2) / rep)
+    honest = (k // 32 + (3 if k > 32 else 1), folds + PV_SERVE_OPS + (4 + 4 + 4 * 2 * PV_LIMB_OPS) / rep)
     return honest, (k // 32, folds)
 
 
@@ -1260,18 +1265,21 @@ def main():
                 pv_ts[f"{key} gamma adopted P·V over plain int8"] = acc[6] / acc[3]
     out["ts_pv"] = {k_: (f"{v:.4%}" if " eps " in k_ else f"{v:.4f}") for k_, v in pv_ts.items()}
     sel = lambda tail: [v for k_, v in pv_ts.items() if k_.endswith(tail)]
-    checks.check("P7 TS model, P·V prefill (Llama-3.1 8B and 70B, 2K–32K; past 8K every 8th query block, weighted): "
-                 "with the sums, digits and served output given to the cheater free ε < 2% (< 0.7% from 8K), with "
-                 "the served output checked downstream < 0.9% (< 0.3% from 8K); the zero-instance routes at x = 12 "
-                 "add < 0.2%; below adopted P·V's ε at a one-hot P everywhere; γ ≤ 1.38 at fold 3, ≤ 1.21 at fold ≤ 2",
-                 max(sel("eps served free")) < 0.02 and max(sel("eps served checked")) < 0.009
-                 and all(v < 0.007 for k_, v in pv_ts.items() if k_.endswith("eps served free") and "2048" not in k_)
-                 and all(v < 0.003 for k_, v in pv_ts.items() if k_.endswith("eps served checked") and "2048" not in k_)
+    checks.check("P7 TS model, P·V prefill (Llama-3.1 8B and 70B, 2K–32K; past 8K every 8th query block, weighted) at "
+                 "the measured digit and epilogue costs: with the sums, digits and served output given to the cheater "
+                 "free ε < 4.5% (< 1.4% from 8K), with the served output checked downstream < 2.3% (< 0.75% from 8K); "
+                 "the zero-instance routes at x = 12 add < 0.2%; below adopted P·V's ε at a one-hot P at fold ≤ 2 and "
+                 "through 8K, and within 0.02% of it at 32K and fold 3, where adopted's unmeasured limb split decides; "
+                 "γ ≤ 1.41 at fold 3, ≤ 1.22 at fold ≤ 2",
+                 max(sel("eps served free")) < 0.045 and max(sel("eps served checked")) < 0.023
+                 and all(v < 0.014 for k_, v in pv_ts.items() if k_.endswith("eps served free") and "2048" not in k_)
+                 and all(v < 0.0075 for k_, v in pv_ts.items() if k_.endswith("eps served checked") and "2048" not in k_)
                  and all(pv_ts[k_] - pv_ts[k_.replace(", zero-instance routes x=12", "")] < 0.002
                          for k_ in pv_ts if k_.endswith("routes x=12"))
-                 and all(pv_ts[k_.replace("eps adopted P·V at a one-hot P", "eps served free")] < v
+                 and all(pv_ts[k_.replace("eps adopted P·V at a one-hot P", "eps served free")]
+                         < v + (2e-4 if "ctx=32768 fold=3 " in k_ else 0.0)
                          for k_, v in pv_ts.items() if k_.endswith("one-hot P"))
-                 and all(v <= 1.38 if "fold=3 " in k_ else v <= 1.21 for k_, v in pv_ts.items()
+                 and all(v <= 1.41 if "fold=3 " in k_ else v <= 1.22 for k_, v in pv_ts.items()
                          if k_.endswith("gamma over plain int8")), str(out["ts_pv"]))
 
     import json
