@@ -486,7 +486,8 @@ def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
     which closes it. At L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit
     spacing's cost."""
     sm90, sm100 = DEVICES / "sm_90", DEVICES / "sm_100"
-    assert E.designs(sm90) == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
+    duo = [n for n in E.designs(sm90) if "-li-" not in n]
+    assert duo == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
     p90 = E.machine("", sm90)
     s = E.setup(E.design("dither-2s-l32", sm90), p90, sm90, "floor", "floor")
     assert s.as_built.T * 4096 == pytest.approx(62.7735919 + 256 * 1.99077535, rel=1e-6)
@@ -503,6 +504,28 @@ def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
     assert s.machine_eps(2.03) == pytest.approx(0.00525, abs=1e-4)
     far = E.setup(E.design("dither-2s-l256", sm100), p100, sm100, "floor", "floor")
     assert far.as_built.binding == ("JPA100_1",) and far.machine_eps(2.03) > 0.2
+
+
+def test_dc_li_binds_honest_on_the_lane_facet():
+    """DC-DESIGN's LI designs at L = 32 (one lane instruction a word, LOP3 and IMAD alternating): a balanced fold binds
+    honest where duo binds one pipe with issue slack, so relocating a word to lanes stops paying below output counting's
+    q* = ½. On sm_90 LI alone leaves the ALU pipe 1.5% short of half issue; 0.02 verified FFMA a word puts honest on
+    JI90_0, whose threshold is 0.4999, no margin. On sm_100 the x128 loads are the tensor route's, honest binds issue,
+    and γ is the measured tcliU_x128 (107.7 words a SM-clock beside the saturated MMA)."""
+    for dev, binds, thr, t in (("sm_90", ("JI90_0",), 0.4999, 190.761), ("sm_100", ("issue",), 0.0088, 1216.6)):
+        d = DEVICES / dev
+        pi = E.machine("", d)
+        for n in ("1s", "2s", "c"):
+            ds = E.design(f"dither-{n}-li-l32", d)
+            h = E.honest(ds.honest, d)
+            s = E.setup(ds, pi, d, "floor", "floor")
+            assert h.fold_name == ds.fold_name == "li" and ds.fold == h.fold == {"ALU": 0.5, "IMAD": 0.5}, dev
+            assert s.as_built.binding == binds and E.threshold(s) == pytest.approx(thr, abs=1e-4), dev
+            assert s.machine_eps(0.5) == pytest.approx(0, abs=1e-9), dev
+            e = E.eps(ds, pi, 0.5, d, operands="floor", credit="floor")
+            assert e.T_honest * h.words == pytest.approx(t, rel=1e-4) and e.core() == pytest.approx(e.skip), dev
+    assert [f.mix for f in E.design("dither-2s-li-l32", DEVICES / "sm_90").filler] == [{"FFMA": 1}]
+    assert E.honest("dc100-li-l32", DEVICES / "sm_100").base() == {"UTCIMMA_M128_N256": 1, "LDTM_32X32B_X128": 8}
 
 
 def test_cli_device(capsys):
