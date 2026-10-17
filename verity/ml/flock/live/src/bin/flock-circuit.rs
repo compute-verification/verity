@@ -1087,6 +1087,9 @@ struct FirewallRep {
     algebra_tampered: bool,
     /// the rep's release: every round that leaves is this Lean frame's
     lean: flock_live::firewall::LeanFrame,
+    /// seconds spent waiting on the Lean frame, and the bytes it released
+    t_lean: f64,
+    lean_bytes: usize,
 }
 
 /// Flips the low bit of the first payload byte of `content`'s first frame of op `op`; whether there was one.
@@ -1168,7 +1171,7 @@ impl Firewall {
         });
         let lean = flock_live::firewall::LeanFrame::start(&flock_live::firewall::lean_frame_exe(), &lay, &sent_pads(zk).h, &zk.ic.root())?;
         self.rep = Some(FirewallRep { rep, lay, zk0: zk.level0.clone(), checker: flock_live::firewall::Checker::new(items, lay.piop_exposed()), coins: Vec::new(),
-                                  extras: None, link: None, shadow: None, t_wait: 0.0, algebra_tampered: false, lean });
+                                  extras: None, link: None, shadow: None, t_wait: 0.0, algebra_tampered: false, lean, t_lean: 0.0, lean_bytes: 0 });
         Ok(())
     }
 
@@ -1197,7 +1200,11 @@ impl Firewall {
     /// round it passed (the device's own bytes) and the round that leaves, the Lean frame's (`Flock.Firewall.Frame.round`).
     fn round(&mut self, content: &[u8], n: usize) -> Result<(Vec<u8>, Vec<u8>), String> {
         let r = self.round_inner(content, n).and_then(|c| {
-            let release = self.rep.as_mut().expect("a firewalled rep").lean.round(&c, n)?;
+            let r = self.rep.as_mut().expect("a firewalled rep");
+            let t = Instant::now();
+            let release = r.lean.round(&c, n)?;
+            r.t_lean += t.elapsed().as_secs_f64();
+            r.lean_bytes += release.len();
             Ok((c, release))
         });
         r.map_err(|e| self.refuse(e))
@@ -1347,7 +1354,8 @@ impl Firewall {
         // what leaves is the firewall's own: the zerocheck and lincheck rebuilt from the passed values (no comb_partial: zk_finish
         // folds the firewall's comb), the shadow's opening
         (proof.zerocheck, proof.lincheck) = zkv::from_exposed(&vals, &lay);
-        let mut v = json!({"t.firewall_shadow": t_shadow, "t.firewall_wait": r.t_wait, "firewall_opening_rounds": link.round});
+        let mut v = json!({"t.firewall_shadow": t_shadow, "t.firewall_wait": r.t_wait, "firewall_opening_rounds": link.round,
+                           "t.firewall_lean": r.t_lean, "firewall_lean_bytes": r.lean_bytes});
         if r.rep == 0 {
             v["t.firewall_recheck"] = json!(self.t_recheck);
             v["cpu.firewall_recheck"] = json!(self.cpu_recheck);
