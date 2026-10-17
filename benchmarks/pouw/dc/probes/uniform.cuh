@@ -91,7 +91,8 @@ struct UFeed {
   }
 };
 
-template <int NF, int NI>
+// ONE: each FFMA reads only its own accumulator (f·c + f), so no FFMA waits on a register bank
+template <int NF, int NI, bool ONE = false>
 struct UVec {
   float f[16], g;
   uint32_t v[16];
@@ -106,7 +107,9 @@ struct UVec {
   }
   __device__ __forceinline__ void step() {
 #pragma unroll
-    for (int q = 0; q < NF; q++) f[q & 15] = __fmaf_rn(f[q & 15], 0.99993896484375f, g);
+    for (int q = 0; q < NF; q++)
+      f[q & 15] = ONE ? __fmaf_rn(f[q & 15], -6.103515625e-05f, f[q & 15])
+                      : __fmaf_rn(f[q & 15], 0.99993896484375f, g);
 #pragma unroll
     for (int q = 0; q < NI / 2; q++) {
       const int p = (q & 7) * 2;
@@ -123,11 +126,11 @@ struct UVec {
   }
 };
 
-template <int S, int K>
+template <int S, int K, int NF = 512, int NI = 128, bool ONE = false>
 __device__ __forceinline__ void uni_sat(const OpArgs& a) {
   UChains<K, S> u(0x5eed0000u ^ (uint32_t)a.mode);
   Honest h(a.mode);
-  UVec<512, 128> w(a.mode);
+  UVec<NF, NI, ONE> w(a.mode);
   OP_BEGIN
   OP_LOOP(it) {
     h.step();
@@ -202,5 +205,19 @@ USAT(64)
 USAT(128)
 USK(us_64f, S_F, 64)
 USK(us_64p, S_P, 64)
+
+#define UVK(nm, S, K, NF, NI) \
+  OP_KERNEL(nm, UTPB) { uni_sat<S, K, NF, NI, true>(a); }
+#define UVSAT(N, NF, NI)                 \
+  UVK(u##N##_0, S_I, 0, NF, NI)          \
+  UVK(u##N##_32x, S_X, 32, NF, NI)       \
+  UVK(u##N##_64x, S_X, 64, NF, NI)       \
+  UVK(u##N##_64a, S_A, 64, NF, NI)       \
+  UVK(u##N##_64i, S_I, 64, NF, NI)       \
+  UVK(u##N##_128x, S_X, 128, NF, NI)     \
+  UVK(u##N##_128a, S_A, 128, NF, NI)     \
+  UVK(u##N##_128i, S_I, 128, NF, NI)
+UVSAT(v, 512, 128)
+UVSAT(w, 1024, 256)
 
 #define P_U(nm, EX, CNT) {.name = #nm, .kernel = (const void*)nm, .tpb = UTPB, .expect = EX, .counted = CNT, .iters = UITERS}
