@@ -96,8 +96,8 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2
         (packed trs[0]! st.m) (tape.extra 0) (tape.lanePad 0) (tape.salt 0 0 0) = .ok cm ∧
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok e ∧
-      r.1 = (recordObjZk spec (Claims.hOf H) hz ct #[flat cm.cap] (ptsOf spec (coinOf (resp 0))) streams
-        r.2).compress ∧
+      r.1 = (printJ (recordObjZk spec (Claims.hOf H) hz ct #[flat cm.cap] (ptsOf spec (coinOf (resp 0))) streams
+        r.2)) ∧
       0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64 ∧ streams.size = 2 ∧ r.2.size = 2 ∧
       (∀ rs ∈ streams, RoundsOk rs) ∧
       (∃ bs, bodies.toList = linkBody [flat cm.cap] [ByteArray.empty] :: bs ∧

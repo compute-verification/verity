@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.Complete.Zk.Verdict
 # The masked completeness proof's skeleton, at any number of tables
 
 `complete_of_goals`: Flock's masked verifier is complete for `honestP` with error `δc H`
-(`Claims.Flock.Complete H (deployZk rel) honestP (δc H)`), given one goal per check the honest masked run must pass.
+(`Claims.Flock.Complete H (deployZk rel)`), given one goal per check the honest masked run must pass.
 This is `Zk/Skeleton.lean`'s at a good case whose readiness is `ready` (any number of tables) in place of `readyZk`,
 and whose run is the masked session on each table's share of the witness (`sessionS`): each goal is `GoalsZk`'s of the
 same name, at `Run`, and already stated per table (`∀ i < |tables|, ∀ r < 2`).
@@ -316,10 +316,10 @@ section Proved
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- `ready` at the case's setup: the session draws a unit, the statement is under `2^56` bytes, every table's regions
+/-- `ready` at the case's setup: the session draws a unit, the statement is under `2^64` bytes, every table's regions
 fit, the setup against `H` is the case's, the session's coins are the keyed coin tree, and the honest record fits. -/
 theorem Case.ready_all (c : Case H rel) :
-    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧ (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧
+    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
       setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true ∧
       RecordFitsAt H c.x c.spec c.sts := by
   have h := c.ready
@@ -329,7 +329,7 @@ theorem Case.ready_all (c : Case H rel) :
 
 /-- `ready`'s parts but the record's. -/
 theorem Case.ready_parts (c : Case H rel) :
-    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧ (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧
+    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
       setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true :=
   have h := c.ready_all
   ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2.1⟩
@@ -390,7 +390,7 @@ theorem Run.link_ok (hL : LinkFirstZk H rel) (o : Run H rel) : linkOf (o.sends.h
 /-- **The last message reads back.** -/
 theorem Run.final_ok (hF : FinalFitsZk H rel) (o : Run H rel) : finalOf o.final.encode = some o.final := by
   obtain ⟨h1, h2, h3⟩ := hF o
-  exact finalOf_encode (o.ready_parts.2.1.trans (by norm_num)) h1 h2 h3
+  exact finalOf_encode o.ready_parts.2.1 h1 h2 h3
 
 /-! ## The composition -/
 
@@ -464,7 +464,7 @@ end Proved
 /-- **Masked completeness from the goals, at any number of tables**: Flock's masked verifier is complete for `honestP`
 with error `δc H`, given each goal. -/
 theorem complete_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (g : Goals H rel) : Claims.Flock.Complete H (deployZk rel) honestP (δc H) := by
+    (g : Goals H rel) : Claims.Flock.Complete H (deployZk rel) := by
   refine complete_of H rel fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf true x = some (s, spec, sts) := by
     unfold ZkTables.ready at hready

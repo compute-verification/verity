@@ -19,7 +19,7 @@ import Proofs.Flock.Claims.Complete.Zk.Complete
   switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed), of which `complete_zk`
   takes the ring switch, the masked Ligerito and the inner proof at one table and proves the rest.
 * `complete`: Flock's masked verifier is complete for `honestP` with error `δc H`
-  (`Claims.Flock.Complete H (deployZk rel) honestP (δc H)`), from `complete_zk`'s premises but `RecordFitsZk` and
+  (`Claims.Flock.Complete H (deployZk rel)`), from `complete_zk`'s premises but `RecordFitsZk` and
   these four.
 -/
 
@@ -39,7 +39,7 @@ theorem readyZk_of_ready {x : Claims.Msg} (h : ready H x = true) {s : Ins} {spec
   rw [hs] at h ⊢
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
-  exact ⟨⟨⟨⟨h1, h.1.1.1.1.1⟩, h.1.1.1.1.2⟩, h.1.1.2⟩, h.1.2⟩
+  exact ⟨⟨⟨⟨⟨⟨h1, h.1.1.1.1.1⟩, h.1.1.1.1.2⟩, h.1.1.1.2⟩, h.1.1.2⟩, h.1.2⟩, (recordFitsAt_one h1).1 h.2⟩
 
 /-- **A good case of one table is a good masked case.** -/
 def Case.toZk (c : Case H rel) (h1 : c.sts.size = 1) : CaseZk H rel :=
@@ -124,7 +124,7 @@ theorem Case.one_or_several (c : Case H rel) : c.sts.size = 1 ∨ 1 < c.sts.size
 checks and the rep's checks at every run. -/
 theorem complete_of_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hSR : SessionRunsZk H rel) (hRec : ∀ o : Run H rel, RecordAt H rel o)
-    (hOp : ∀ o : Run H rel, OpenAt H rel o) : Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
+    (hOp : ∀ o : Run H rel, OpenAt H rel o) : Claims.Flock.Complete H (deployZk rel) :=
   complete_of_goals H rel
     { session := hSR
       sends := sends_goal H rel
@@ -166,7 +166,7 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
     (hPRJ : ProverRunsJ H rel) (hRec : RecordJ H rel) (hOp : OpenJ H rel) :
-    Claims.Flock.Complete H (deployZk rel) honestP (δc H) := by
+    Claims.Flock.Complete H (deployZk rel) := by
   have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H rel)
   have hD : FlockComplete.RepDecodesZk H rel := JsonRT.repDecodesZk_goal S h64 hS hP hR
   have hRp : FlockComplete.Replay H rel := replay_goal S h64 hS hP hR

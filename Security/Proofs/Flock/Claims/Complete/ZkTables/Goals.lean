@@ -34,8 +34,8 @@ theorem Run.jsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
       o.link = (rbs.toList, (o.tabs.map fun _ => ByteArray.empty).toList) ∧
       (∃ bs, o.bodies.toList = linkBody rbs.toList (o.tabs.map fun _ => ByteArray.empty).toList :: bs ∧
         Recs o.resp 1 (streams.toList.flatMap Array.toList) bs) ∧
-      o.record = (recordObjZk o.spec (Claims.hOf H) hz ct rbs (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
-        o.proofs).compress ∧
+      o.record = (printJ (recordObjZk o.spec (Claims.hOf H) hz ct rbs (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
+        o.proofs)) ∧
       o.sess = sessOf o.spec (Claims.hOf H) rbs (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs ∧
       Record.decodeWith o.hs o.spec o.record = .ok o.sess ∧
       liveOf o.spec o.record = .ok o.live ∧
@@ -304,7 +304,7 @@ theorem completeJ (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Rea
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hFJ : FilesJ H rel)
-    (hOp : OpenJ H rel) : Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
+    (hOp : OpenJ H rel) : Claims.Flock.Complete H (deployZk rel) :=
   complete H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (recordJ_of S h64 hSJ hFJ) hOp
 
 end FlockComplete.ZkTables

@@ -10,7 +10,8 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 library's specification (`JsonSpec`), from the setup alone. So `StmtAt` holds at every good case of one table
 (`Case.stmtOne`), and with `Case.stmtAt` at every good case (`stmtAt_all`); `StmtOkZk` holds (`stmtOkZk`); and
 `completeRel`, `completeJRel` and `complete_zk_relation` hold without it (`completeRelS`, `completeJRelS`,
-`complete_zk_relationS`).
+`complete_zk_relationS`). `complete_json` is `completeRelS` in `Claims.Flock.Complete`'s form, at the masked record's
+pinned prover and error, with `Out64` the claim's own antecedent.
 
 * A setup of one table is `setupOne`'s (`setupTables_okAny`: one of several has more).
 * Its public header is the population's with the draw put in (`HmRow.drawn`), so its `unit_draw` is the statement's
@@ -376,8 +377,18 @@ share, with error `δc H`, at any number of tables: `completeRel` with the state
 theorem completeRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
     (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
     (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) :
-    Claims.Flock.Complete H (deployZk Readable.relation) honestP (δc H) :=
+    Claims.Flock.Complete H (deployZk Readable.relation) :=
   completeR H Readable.relation S h64 (stmtAt_all S) hPR hR Run.rsExtras hC
+
+/-- **Flock's completeness at the deployed masked verifier**, at the deployed relation, of the record's reference
+prover (`(deployZk Readable.relation).P`, `honestP`) at the record's error (`(deployZk Readable.relation).δc`, `δc H`),
+at any number of tables: `completeRelS`, the oracle's 64-byte outputs (`Out64`) being `Claims.Complete`'s own
+antecedent. -/
+theorem complete_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+    (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
+    (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) :
+    Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
+  completeRelS H S h64 hPR hR hC h64
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
 share, with error `δc H`, at any number of tables: `completeJRel` with `StmtOkZk` proved (`stmtOkZk`). -/
@@ -385,7 +396,7 @@ theorem completeJRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
     (hLg : FlockComplete.LigeritoZk H Readable.relation) (hIn : FlockComplete.Inner H Readable.relation)
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)
-    (hCJ : LgInnerJ H Readable.relation) : Claims.Flock.Complete H (deployZk Readable.relation) honestP (δc H) :=
+    (hCJ : LgInnerJ H Readable.relation) : Claims.Flock.Complete H (deployZk Readable.relation) :=
   completeJRel H S h64 (stmtOkZk S) hR hPR hLg hIn hPRJ hRJ hCJ
 
 /-- **Flock's masked verifier is complete at the deployed relation** for `honestPZk` with error `δcZk H`:
@@ -394,7 +405,7 @@ theorem complete_zk_relationS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSp
     (hR : JsonRT.RepShapedZk H Readable.relation) (hF : JsonRT.RecordFitsZk H Readable.relation)
     (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)
     (hIn : FlockComplete.Inner H Readable.relation) :
-    Claims.Flock.Complete H (deployZk Readable.relation) honestPZk (δcZk H) :=
+    CompleteWith H (deployZk Readable.relation) honestPZk (δcZk H) :=
   FlockComplete.complete_zk_relation H S h64 (stmtOkZk S) hR hF hPR hLg hIn
 
 end FlockComplete.ZkTables

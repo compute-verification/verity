@@ -59,8 +59,8 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
         commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) tabs[i]!.merkle (schs[i]!.1.levels.getD 0 default)
           schs[i]!.2 (packed trs[i]! tabs[i]!.m) (tape.extra i) (tape.lanePad i) (tape.salt i 0 0) = .ok cms[i]!) ∧
       cms.size = tabs.size ∧
-      r.1 = (recordObjZk spec (Claims.hOf H) hz ct (cms.map fun c => flat c.cap) (ptsOf spec (coinOf (resp 0)))
-        streams r.2).compress ∧
+      r.1 = (printJ (recordObjZk spec (Claims.hOf H) hz ct (cms.map fun c => flat c.cap) (ptsOf spec (coinOf (resp 0)))
+        streams r.2)) ∧
       streams.size = spec.repStreams.size ∧ (∀ rs ∈ streams, RoundsOk rs) ∧
       (∃ bs, bodies.toList = linkBody (cms.map fun c => flat c.cap).toList (tabs.map fun _ => ByteArray.empty).toList ::
         bs ∧ Recs resp 1 (streams.toList.flatMap Array.toList) bs) ∧
@@ -338,7 +338,7 @@ theorem completeJR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
-    (hOp : OpenJ H rel) : Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
+    (hOp : OpenJ H rel) : Claims.Flock.Complete H (deployZk rel) :=
   completeJ H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (filesJ S h64 hSJ hRJ) hOp
 
 end FlockComplete.ZkTables

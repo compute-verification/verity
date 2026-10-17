@@ -19,11 +19,10 @@ fail.
 * **The inner proof's `β`** (`betaSlotsZk`): refused at `0` (round `2` of the inner proof), by the verifier and the
   prover alike.
 
-`εZk` is their count, each pair coin twice, over `2^128`; `pr_badZk_le` is the union bound. `δcZk H` is `εZk` on the
-statements the masked verifier can accept against `H` at one table (`readyZk H`, as `ready H`: the setup against `H`
-is the one at SHA-512, which at `sha512` asks no more, `readyZk_sha512`), and `1` elsewhere. The slots read the
-statement's `m`, `k_log`, regions and points, as Deploy's `repRounds true`, and the `--zk` schedule's `k_0` and levels;
-rep `q` is table `q / 2`'s rep `q % 2`, its first coin after the link's and every earlier rep's rounds (`repStartZk`).
+`εZk` is their count, each pair coin twice, over `2^128` (`Complete.Ready`, with the slots and `δcZk`); `pr_badZk_le` is
+the union bound. The slots read the statement's `m`, `k_log`, regions and points, as Deploy's `repRounds true`, and the
+`--zk` schedule's `k_0` and levels; rep `q` is table `q / 2`'s rep `q % 2`, its first coin after the link's and every
+earlier rep's rounds (`repStartZk`).
 -/
 
 namespace FlockComplete
@@ -132,80 +131,13 @@ theorem pr_rho_le {k : ℕ} (a : ℕ) : Claims.Pr (fun r : Fin k → Coin => rho
     · simp only [rhoDep, ha, false_and]
     · rw [Claims.Pr_false]; positivity
 
-/-! ## δcZk -/
-
-/-- **Rep `q`'s first coin's index** at the masked verifier (table `q / 2`'s rep `q % 2`): the link's coin, then every
-earlier rep's recorded rounds. -/
-def repStartZk (spec : SessionSpec) (sts : Array Flock.Stmt) (q : ℕ) : ℕ :=
-  1 + ((List.range q).map fun q' => repRounds true spec sts[q' / 2]!).sum
-
-/-- A masked rep's rounds before Ligerito: the masked replay's `m + k_log − 6`, the ring switch's `claims + 1`. -/
-def piopRoundsZk (spec : SessionSpec) (st : Flock.Stmt) : ℕ :=
-  (st.m + st.c.kLog - 6) + (2 + spec.points * st.regions.size + 1)
-
-/-- **The zerocheck outer coins** of the masked session: rep `q`'s second round, elements `0` to `m − 14`. -/
-def outerSlotsZk (x : Claims.Msg) : List (ℕ × ℕ) :=
-  match setupOf true x with
-  | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      (List.range (sts[q / 2]!.m - 13)).map fun i => (repStartZk spec sts q + 1, i)
-  | none => []
-
-/-- **Level 0's pair coins**: rep `q`'s `ρ_0` (`ρ_1` the next), Ligerito's round `k_0 + 2`. -/
-def rhoSlotsZk (x : Claims.Msg) : List ℕ :=
-  match setupOf true x with
-  | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      match Zk.schedule sts[q / 2]!.m with
-      | .ok (sch, _) => [repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (sch.k0 + 2)]
-      | .error _ => []
-  | none => []
-
-/-- **The inner proof's `β`**: rep `q`'s inner round `2`, after Ligerito's `k_0 + 7 + 11R` rounds. -/
-def betaSlotsZk (x : Claims.Msg) : List ℕ :=
-  match setupOf true x with
-  | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      match Zk.schedule sts[q / 2]!.m with
-      | .ok (sch, _) =>
-        [repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 2]
-      | .error _ => []
-  | none => []
+/-! ## The bad coins -/
 
 /-- **The bad coins** of the masked verifier: a zerocheck outer coin is `1`, an inner `β` is `0`, or a pair of
 level-0 coins is dependent. -/
 def BadZk (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop :=
   (∃ p ∈ outerSlotsZk x, (Claims.coinSeq r p.1).at p.2 = 1) ∨
     (∃ b ∈ betaSlotsZk x, b < k ∧ (Claims.coinSeq r b).at 0 = 0) ∨ ∃ a ∈ rhoSlotsZk x, rhoDep r a
-
-/-- `εZk`: the outer coins, the `β`s and twice the pairs, over `2^128`. -/
-noncomputable def εZk (x : Claims.Msg) : ℝ :=
-  ((outerSlotsZk x).length + (betaSlotsZk x).length + 2 * (rhoSlotsZk x).length) / 2 ^ 128
-
-open Classical in
-/-- **The statements the masked verifier can accept** against `H`, at one table: it sets up the session at one table,
-its setup against `H` is the one at SHA-512, the session draws a unit, the statement is under `2^56` bytes (`ready H`'s
-reasons), and its `Hello` names the keyed coin tree (the masked verifier refuses any other session). The `--zk` scope
-admits several tables, whose masked record is per table; `δcZk H` is `1` there until it is. -/
-noncomputable def readyZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
-  match setupOf true x with
-  | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
-      decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) && spec.coinTree.isSome
-  | none => false
-
-/-- **At SHA-512, `readyZk` asks only for one table, a drawn session, the statement's length and the coin tree**
-(`ready_sha512`). -/
-theorem readyZk_sha512 (x : Claims.Msg) :
-    readyZk sha512 x = match setupOf true x with
-      | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
-          spec.coinTree.isSome
-      | none => false := by
-  unfold readyZk
-  split
-  · rename_i s spec sts hs
-    rw [hOf_sha512, setupWith_sha512, Ins.setup_read (setupOf_some hs).2]
-    simp
-  · rfl
-
-/-- **Flock's `δc` at the masked verifier** against `H`: `εZk` where the verifier can accept, else `1`. -/
-noncomputable def δcZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if readyZk H x then εZk x else 1
 
 theorem pr_list_le {k : ℕ} {β : Type} (E : β → (Fin k → Coin) → Prop) (L : List β) (c : ℝ)
     (h : ∀ b ∈ L, Claims.Pr (E b) ≤ c) : Claims.Pr (fun r => ∃ b ∈ L, E b r) ≤ L.length * c := by
@@ -237,8 +169,8 @@ theorem complete_zk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
     (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →
       readyZk H x = true → ∀ (ω : TapeZk) (r : Fin ((V true).k x) → Coin), ¬ BadZk x r →
         (Claims.run H (honestPZk w) (V true) x ω r).out = .acc) :
-    Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H) := by
-  intro x w hs hr ω
+    CompleteWith H (deployZk rel) honestPZk (δcZk H) := by
+  intro _ x w hs hr ω
   unfold δcZk
   split
   · rename_i hready

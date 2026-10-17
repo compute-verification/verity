@@ -204,7 +204,7 @@ def RepShapedZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
       (c.ω.extra 0) (c.ω.lanePad 0) (c.ω.salt 0 rep) (c.ω.nonce 0 rep)).run (Transcript.init #[] d)) fun pt =>
       FlockSoundness.Discharge.ZkView.Shaped (shapeZk (Setup.ofCircuit st) v.1 e.size) pt.1
 
-/-- **The printed honest masked record is under `2^64` bytes**: `RunZk.json`'s `compress` of the honest record
+/-- **The printed honest masked record is under `2^64` bytes**: `printJ` of `RunZk.json` of the honest record
 object. -/
 def RecordFitsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : RunZk H rel, o.record.toUTF8.size < 2 ^ 64

@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Session
 # What the honest masked session returns and sends, at any number of tables
 
 `Zk/Json/Session.lean`'s `sessionPZk_facts` at every number of tables (`sessionPZk_factsJ`): with the keyed coin tree,
-a run of the pure masked session from no sends returns the printed honest masked record (`recordObjZk`'s `compress`)
+a run of the pure masked session from no sends returns the printed honest masked record (`printJ` of `recordObjZk`)
 of one non-empty `root_B` under `2^64` bytes per table, the link's points off the first reply's coin, and one
 well-formed stream per rep stream; and its sends are the link of those `root_B`s and no public words, then the
 streams' rounds in order (`SessionFactsJ`). Each table's masked commitment and reps are asked for what `ProverOkZk`
@@ -23,7 +23,7 @@ index `1` on (`Recs`). -/
 def SessionFactsJ (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (tabs : Array Setup)
     (hz : String) (ct : CoinTree.Spec) (r : String × Array ByteArray) (bodies : Array Claims.Msg) : Prop :=
   ∃ rbs streams, rbs.size = tabs.size ∧
-    r.1 = (recordObjZk spec h hz ct rbs (ptsOf spec (coinOf (resp 0))) streams r.2).compress ∧
+    r.1 = (printJ (recordObjZk spec h hz ct rbs (ptsOf spec (coinOf (resp 0))) streams r.2)) ∧
     (∀ rb ∈ rbs, 0 < rb.size ∧ rb.size < 2 ^ 64) ∧ streams.size = spec.repStreams.size ∧
     (∀ rs ∈ streams, RoundsOk rs) ∧
     ∃ bs, bodies.toList = linkBody rbs.toList (tabs.map fun _ => ByteArray.empty).toList :: bs ∧

@@ -167,7 +167,7 @@ extra claims' algebra (`RsExtrasAt`), and per rep the masked Ligerito and the in
 theorem completeR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (S : JsonRT.JsonSpec)
     (h64 : JsonRT.Out64 H) (hS : ∀ c : Case H rel, StmtAt c) (hPR : ∀ c : Case H rel, ProverRunsAt c)
     (hR : ∀ c : Case H rel, RepShapedAt c) (hX : ∀ o : Run H rel, RsExtrasAt o)
-    (hC : ∀ o : Run H rel, LgInnerAt H rel o) : Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
+    (hC : ∀ o : Run H rel, LgInnerAt H rel o) : Claims.Flock.Complete H (deployZk rel) :=
   completeAll H rel S h64 hS hPR hR fun o =>
     repChecksAt_of S h64 o (hS o.toCase) (hR o.toCase) (hX o) (hC o)
 
@@ -178,7 +178,7 @@ inner proof (`LgInnerAt`). -/
 theorem completeRel (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
     (hS : JsonRT.StmtOkZk H Readable.relation) (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c)
     (hR : ∀ c : Case H Readable.relation, RepShapedAt c) (hC : ∀ o : Run H Readable.relation, LgInnerAt H _ o) :
-    Claims.Flock.Complete H (deployZk Readable.relation) honestP (δc H) :=
+    Claims.Flock.Complete H (deployZk Readable.relation) :=
   completeR H Readable.relation S h64 (stmtAt_of S hS) hPR hR Run.rsExtras hC
 
 variable (H rel) in
@@ -194,7 +194,7 @@ theorem completeJRel (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 
     (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)
     (hIn : FlockComplete.Inner H Readable.relation) (hPRJ : ProverRunsJ H Readable.relation)
     (hRJ : RepShapedJ H Readable.relation) (hCJ : LgInnerJ H Readable.relation) :
-    Claims.Flock.Complete H (deployZk Readable.relation) honestP (δc H) :=
+    Claims.Flock.Complete H (deployZk Readable.relation) :=
   have hP : JsonRT.ProverOkZk H Readable.relation :=
     JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H Readable.relation)
   completeJS H Readable.relation S h64 hS hR hPR (ringSwitchZk_goal S h64 hS hP hR (rsExtrasZk H)) hLg hIn hPRJ hRJ
