@@ -80,6 +80,28 @@ def test_one_value_per_kind_and_row_at_each_epoch(epoch):
     assert set(M.honest) <= set(c) and "MMA" in c
 
 
+def test_sm80_census_is_well_formed():
+    """data/devices/sm_80/ (tensor_kinds/sm80.py census): one epoch, every line on a row it defines with one value, every
+    MMA kind on M and the joint row JIM."""
+    d = DATA / "devices" / "sm_80"
+    rows80 = rows(d)
+    assert all(r.status in STATUSES and r.runs and all(CITE.fullmatch(x) for x in r.runs) for r in rows80.values())
+    with open(d / "census.csv", newline="") as f:
+        lines = list(csv.DictReader(f))
+    for x in lines:
+        where = f"devices/sm_80/census.csv: {x['kind']} on {x['row']}"
+        assert x["row"] in rows80, f"{where}: add the row to devices/sm_80/rows.csv"
+        assert sum(x[c] != "" for c in ("rate", "cycles", "u")) == 1, f"{where}: give one of rate, cycles and u"
+        assert x["noise"] == "" or x["rate"] != "", f"{where}: noise derates a rate only"
+        assert not x["since"] and not x["until"], f"{where}: a device directory has one epoch, no since or until"
+        assert x["runs"] and all(CITE.fullmatch(r) for r in x["runs"].split()), f"{where}: cite its runs or note"
+    assert len(lines) == len(entries(M, d))
+    c = census(M, M.epochs[-1], d)   # raises on two lines for one kind and row
+    assert all(u > 0 for v in c.values() for u in v.values())
+    mma = {k for k, v in c.items() if "M" in v}
+    assert mma and all("JIM" in c[k] for k in mma) and {r for v in c.values() for r in v} == set(rows80)
+
+
 def test_u_of():
     assert u_of(M.cycle_u, "", "", "1", "") == M.cycle_u
     assert u_of(M.cycle_u, "2", "", "", "") == M.cycle_u * 4 / 2
