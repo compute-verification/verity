@@ -8,7 +8,7 @@ by the check it names, or nothing is timed at all.
 | File | What |
 |---|---|
 | `probe.cuh` | `OP_KERNEL`, `OP_BEGIN`/`OP_LOOP`/`OP_END`, `OP_SINK`, the `OpProbe` table entry and `op_main` (`--list`: the table as JSON, host only; `--time`: the sink's poisoned pass and control, then `gpu_kit/bench.cuh`'s interleaved items) |
-| `probe.py` | `build` (nvcc, sm_120a), `gate` (CPU only), `run` (gate, time, write the rows) |
+| `probe.py` | `build` (nvcc; `--arch` sm_120a, or sm_90a / sm_100a for `../dc/`'s probes), `gate` (CPU only), `run` (gate, time, write the rows) |
 | `rows.py` | The census line (`kind,row,rate,noise,cycles,u,since,until,runs`), machine_model's `u_of`, and MACs a word |
 | `run.sh` | The job: build and gate outside the lease, then gate and time under one `gpu-lease` |
 | `probes/lm.cu` | LDSM and STSM by register count, LDS.128, STS.128, and the two known-invalid round-7 forms |
