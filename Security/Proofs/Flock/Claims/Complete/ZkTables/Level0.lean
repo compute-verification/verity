@@ -8,14 +8,14 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Wire
 
 The masked prover's Ligerito (`ligeritoPZk`) and the verifier's (`Zk.ligeritoWith`) differ from the plain ones at level
 0 (live PROTOCOL.md §7, VEIL Figs. 8–9): the commitment's rows carry four extra lanes and every lane's padding
-(`commitPZk`), the out-of-domain value and the first `k_0` sumcheck messages are masked, the pair's sums, `ρ`, the blinded
-claim and the padding's combination follow the last lane challenge, and the level-0 rows are checked against them. These
-are the facts about those two functions, stated once, that `RepShapedT`, `ProverRunsT`, `LigeritoT` and `InnerT` need
-beyond what the plain proofs transfer (`ZkTables.Parts`):
+(`commitPZk`), the out-of-domain value and the first `k_0` sumcheck messages are masked, the pair's sums, `ρ`, the
+blinded claim and the padding's combination follow the last lane challenge, and the level-0 rows are checked against
+them. These are the facts about those two functions, stated once, that `RepShapedT`, `ProverRunsT`, `LigeritoT` and
+`InnerT` need beyond what the plain proofs transfer (`ZkTables.Parts`):
 
 * `ProverRuns`: the masked prover's Ligerito returns wherever its pair coins are independent (its one refusal).
-* `ProverShape`: its proof has the lengths `Zk.decode` checks of a Ligerito proof (`LgShaped`, `ZkView.Shaped`'s Ligerito
-  conjuncts) and `t_pad` padding coefficients.
+* `ProverShape`: its proof has the lengths `Zk.decode` checks of a Ligerito proof (`LgShaped`, `ZkView.Shaped`'s
+  Ligerito conjuncts) and `t_pad` padding coefficients.
 * `Lanes`: its lane phase in closed form (`LaneForm`): its record, its masked out-of-domain value and lane messages, the
   pair's sums and the blinded claim, over the folds of its table and weights at the lane coins.
 * `Verifier`: the verifier's masked Ligerito returns on the honest masked proof, from rounds that carry the prover's and
@@ -73,9 +73,9 @@ def blinded (f : Array F256) (rho : F256 × F256) (r0 r1 : Array F128) : Array F
 
 /-- **The masked Ligerito's lane phase in closed form**, from `L` sends, at the replies `resp`: with `f_j` and `W_j` the
 table `tb` and the weights `laneW0` folded at the first `j` lane coins, the record is the target, `(β, y)` for the sent
-out-of-domain value `y = mle(tb)(z) + h_ood`, the lane coins and the pair's; lane message `j < k_0` is `roundPoly f_j W_j`
-masked by round `j`'s pads; the pair's sums are `⟨W_{k_0}, R_{2r+i}⟩` masked by theirs; the blinded claim is
-`⟨W_{k_0}, f_{k_0} + ρ_0 R_{2r} + ρ_1 R_{2r+1}⟩`. -/
+out-of-domain value `y = mle(tb)(z) + h_ood`, the lane coins and the pair's; lane message `j < k_0` is
+`roundPoly f_j W_j` masked by round `j`'s pads; the pair's sums are `⟨W_{k_0}, R_{2r+i}⟩` masked by theirs; the
+blinded claim is `⟨W_{k_0}, f_{k_0} + ρ_0 R_{2r} + ρ_1 R_{2r+1}⟩`. -/
 structure LaneForm (resp : ℕ → Claims.Msg) (sch : Schedule) (T : F128) (tb b : Array F128) (lay : Zk.PadLayout)
     (hv : Array F128) (rep : ℕ) (extra : ℕ → ℕ → F128) (L : ℕ) (P : LigeritoProof) (zl : Zk.Level0Msgs)
     (rc : Zk.L0Rec) : Prop where
