@@ -62,7 +62,10 @@ def test_sr_is_unbiased_between_adjacent_levels(grid):
     assert torch.allclose(q.mean(0), (x / s)[0], atol=0.1 * (hi - lo).amax().item())
 
 
-def test_a_dithered_p_serves_no_future_key():
+@pytest.mark.parametrize("step, kw", [
+    (steps.grid_attention, {"grid": "fp4c", "q": "dither", "k": "dither", "p": "dither", "v": "dither"}),
+    (steps.int8_attention, {"p": "dither", "p_top": 126, "v": "dither", "v_top": 63})])
+def test_a_dithered_p_serves_no_future_key(step, kw):
     rep, s, d = 2, 12, 8
     g = torch.Generator().manual_seed(3)
     causal = torch.ones(s, s, dtype=torch.bool).tril()
@@ -77,8 +80,9 @@ def test_a_dithered_p_serves_no_future_key():
         served.append(m.x)
         return m.int_product()
 
-    out = steps.grid_attention(mm, nxt, grid="fp4c", q="dither", k="dither", p="dither", v="dither")
+    out = step(mm, nxt, **kw)
     assert len(served) == 1 and bool((served[0][:, ~causal] == 0).all()) and bool((served[0][:, causal] >= 0).all())
+    assert served[0].max() <= kw.get("p_top", 127)
     assert out.shape == (rep, s, d) and run.gates.passed and run.gates.log["int8_range"]["checked"] == 1
 
 

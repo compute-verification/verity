@@ -128,7 +128,8 @@ def test_linear_variants_pass_their_gates(llama, ids, calib):
                                    {"step": "peel", "alphabet": "bit"}],
                         "attention": [{"step": "int8", "q": "dither", "k": "dither", "v": "dither"}]}, "dither-peel"),
             spec.parse({"linear": [{"step": "int8", "act": "dither", "density": 0.5}],
-                        "attention": [{"step": "int8", "q": "dither", "q_top": 63, "k": "dither"}]}, "thin-q")]
+                        "attention": [{"step": "int8", "q": "dither", "q_top": 63, "k": "dither", "p": "dither",
+                                       "p_sink": True, "v": "dither", "v_top": 63}]}, "thin-q-pv")]
     r = evaluate(llama, ids[:4], arms, calib=calib)
     assert passed(r), r["gates"]
     bf = ppl(r["nll"]["bf16/s0"])
