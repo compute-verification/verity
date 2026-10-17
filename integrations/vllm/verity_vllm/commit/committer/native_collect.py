@@ -690,6 +690,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             return
         self._check_skip()
         self._start_worker()
+        self.gc_pauses.install()
         for src in self.sources:
             src.install()
         if getattr(self, "external_acquisition", False):

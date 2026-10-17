@@ -95,14 +95,15 @@ def _jsonable(x: Any) -> Any:
 
 def _commit_timing(com: Any, rc: Any) -> dict[str, Any]:
     """Where a rank's Commit spent its time in the run that ended: per step, the root's lag behind the step's end, the worker's
-    hashing and the queue behind it; the span accounting (per step too); the staging ring's waits; and each source's own counters."""
+    hashing and the queue behind it; the span accounting (per step too); the staging ring's waits; the Python collections that paused
+    the process (on the steps' clock, `t_end`); and each source's own counters."""
     sources = {}
     for s in getattr(com, "sources", ()):
         st = getattr(s, "stats", None)
         sources[getattr(s, "short_name", type(s).__name__)] = st() if callable(st) else st
-    return {"steps": [{"step": s.step, "lag_s": s.t_root_ready - s.t_step_end, "hashing_s": s.hashing_s, "backlog": s.backlog_at_step_end,
-                       "bytes": s.n_bytes, "tensors": s.n_tensors} for s in rc.steps],
-            "spans": rc.spans, "windows": rc.extra.get("windows"),
+    return {"steps": [{"step": s.step, "t_end": s.t_step_end, "lag_s": s.t_root_ready - s.t_step_end, "hashing_s": s.hashing_s,
+                       "backlog": s.backlog_at_step_end, "bytes": s.n_bytes, "tensors": s.n_tensors} for s in rc.steps],
+            "spans": rc.spans, "windows": rc.extra.get("windows"), "gc": rc.extra.get("gc"),
             "collector": {k: v for k, v in (rc.extra.get("native_collect") or {}).items() if k != "fa2_wrap"}, "sources": sources}
 
 

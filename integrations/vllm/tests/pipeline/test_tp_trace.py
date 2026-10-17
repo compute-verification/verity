@@ -120,8 +120,10 @@ def test_commit_timing_projects_steps_spans_ring_and_source_counters():
     com = SimpleNamespace(sources=[_Moe(), _Route()])
     rc = SimpleNamespace(steps=[StepCommitment(0, b"", b"", 4, 1024, 3, b"", 10.0, 10.25, 1, hashing_s=0.2)],
                          spans={"total_s": {"wait": 0.5}, "per_step": {0: {"wait": 0.5, "worker_idle": 0.1}}},
-                         extra={"windows": {"waits": 2, "wait_s": 0.5}, "native_collect": {"copies": 9, "fa2_wrap": {"x": 1}}})
+                         extra={"windows": {"waits": 2, "wait_s": 0.5}, "native_collect": {"copies": 9, "fa2_wrap": {"x": 1}},
+                                "gc": {"min_s": 1e-3, "pauses": [(2, 10.1, 0.7, "MainThread")], "total_s": 0.7}})
     t = _commit_timing(com, rc)
-    assert t["steps"] == [{"step": 0, "lag_s": 0.25, "hashing_s": 0.2, "backlog": 1, "bytes": 1024, "tensors": 3}]
+    assert t["steps"] == [{"step": 0, "t_end": 10.0, "lag_s": 0.25, "hashing_s": 0.2, "backlog": 1, "bytes": 1024, "tensors": 3}]
     assert t["spans"]["per_step"][0]["worker_idle"] == 0.1 and t["windows"] == {"waits": 2, "wait_s": 0.5}
+    assert t["gc"]["pauses"] == [(2, 10.1, 0.7, "MainThread")]
     assert t["collector"] == {"copies": 9} and t["sources"] == {"moe": {"calls": 3}, "route": {"layers": 2}}

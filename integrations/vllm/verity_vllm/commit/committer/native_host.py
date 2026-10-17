@@ -37,6 +37,7 @@ import json
 import re
 import queue
 import ctypes
+import gc
 import os
 import threading
 import time
@@ -257,6 +258,33 @@ def value_family(name: str) -> str:
         if sub in name:
             return fam
     return "other"
+
+
+class GcPauses:
+    """`gc.callbacks` while a run is installed: each collection of at least `min_s`, as (generation, start, seconds, thread), the start on
+    `time.perf_counter` like the steps' `t_step_end`, so a pause lands on its step."""
+
+    def __init__(self, min_s: float = 1e-3) -> None:
+        self.min_s = min_s
+        self.pauses: list[tuple[int, float, float, str]] = []
+        self._t0 = 0.0
+
+    def __call__(self, phase: str, info: dict) -> None:
+        if phase == "start":
+            self._t0 = time.perf_counter()
+        elif (dt := time.perf_counter() - self._t0) >= self.min_s:
+            self.pauses.append((int(info["generation"]), self._t0, dt, threading.current_thread().name))
+
+    def install(self) -> None:
+        if self not in gc.callbacks:
+            gc.callbacks.append(self)
+
+    def uninstall(self) -> None:
+        if self in gc.callbacks:
+            gc.callbacks.remove(self)
+
+    def record(self) -> dict[str, Any]:
+        return {"min_s": self.min_s, "pauses": list(self.pauses), "total_s": sum(p[2] for p in self.pauses)}
 
 
 class _Footprint:
@@ -687,6 +715,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.program_digest = program_digest or hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest()
         self.acquire_classes = acquire_classes or ACQUIRE_CLASSES
         self.spans = Spans(scheme.NAME)
+        self.gc_pauses = GcPauses()
         self.x03_expected = 0
         self.x03_committed = 0
         # [X-03 F-r19-int-22] the Program's per-layer attention Call statics (fa2_plane_classes.AttnLayerDecl, set by the driver from the
@@ -1074,6 +1103,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return
         self._check_skip()
         self._start_worker()
+        self.gc_pauses.install()
         for src in self.sources:
             src.install()
         for name, m in self._modules:
@@ -1126,6 +1156,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if not self.installed:
             return
         self._end_step()
+        self.gc_pauses.uninstall()
         for src in self.sources:
             src.uninstall()
         for h in self._handles:
@@ -1150,6 +1181,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.padding_stats = None
         self._step_index = 0
         self.spans = Spans(scheme.NAME)
+        self.gc_pauses.pauses = []
         self.pool.reset()
         self.errors = []
 
@@ -1896,7 +1928,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                                     "pinned_register_s": self.pool.times.get("register_s", 0.0), "pinned_populate_threads": self.pool.populate_threads,
                                     "pinned_reserved_bytes": self.pool.reserved_bytes, "pinned_reserve_unused": self.pool.reserve_unused,
                                     "pinned_pool_blocks": len(self.pool.all), "errors": self.errors[:10],
-                                    "errors_n": len(self.errors),
+                                    "errors_n": len(self.errors), "gc": self.gc_pauses.record(),
                                     # X-03 reference integrity (Python acquisition path; the native collector overrides these in its finalize)
                                     "expected_tensors": self.x03_expected, "committed_tensors": self.x03_committed,
                                     "identity_check": self.identity_check() if self._layouts else None,
