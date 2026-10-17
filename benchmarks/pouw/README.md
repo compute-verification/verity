@@ -4,6 +4,10 @@ The measuring side of `verity/core/protocols/pouw`: Pearl-C's kernels on the RTX
 harness, the served vLLM path and its audits, and the CPU accounting. How a kernel is designed, gated, timed and landed is
 the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 
+Compute accounting's standards are in `machine_model/README.md`: the design registry (one file a design under decision
+79's names, Dither-1S, Dither-2S and Dither-C, which `eps_budget.py` prices and `machine-model eps` reads), the ε
+vocabulary, how a facet is measured (gates, noise, margins, clocks, row status), and the per-device data layout.
+
 | Path | Runs on | What |
 |---|---|---|
 | `harness/` | RTX PRO 6000 | One harness for every PoUW prover arm and plain GEMM baseline: each gated at the exact shape and flags it is timed at, then timed the same way (its own README) |
@@ -30,10 +34,10 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `filler/` | RTX PRO 6000 | The DRAM-free filler beside the decode step, its arms and its locked scorer, one suite (below) |
 | `floored_gemm/`, `masked_gemm/`, `edited_gemm/`, `hashed_gemm/` | RTX PRO 6000 | The noised GEMMs, from the floored int8 grid to the adopted edited GEMM with its commitments hashed in its own CTAs (below) |
 | `commit_gpu/` | RTX PRO 6000 | The GPU hm96-sha512 committer, its small path beside a GEMM, and its byte gate against `verity.ml.commitments` (`reference.py`) |
-| `stage_cost/`, `stage_ovl/` | RTX PRO 6000 | What the stage coins and the deferred edit cost at Llama-3.1-8B's shapes, and their overlap in prefill with the committer |
+| `stage_cost/`, `stage_ovl/` | RTX PRO 6000 | What decision 36's stage coins and deferred edit cost at Llama-3.1-8B's shapes, and their overlap in prefill with the committer. One σ a request (decision 72) retired both, so these are the measurements of record; the committer's latency and overlap still apply |
 | `vllm_bench.py` | RTX 4090 | Overhead against plain vLLM for BF16, stock FP8, W7A7, NCP and Pearl by wrapping every `LinearBase` layer's apply; `pearl_c_vllm/` reads its prompts and model lookup |
 | `gamma.py` | CPU | γ accounting: each scheme's honest reference priced term by term under W1, split into checked and unchecked work |
-| `eps_budget.py` | CPU | Dither's skippable share of honest work as served (Llama-3.1-8B and 70B, 2K–32K, prefill and decode), by int8 products and by time, per component and design, with γ and decode's zero-weight gap, and P·V's block size for A and Bc in the tensor–scalar model (SKIP, note:20261017T0340Z-draft-skip) |
+| `eps_budget.py` | CPU | Dither's skippable share of honest work as served, for each design of the registry (`machine_model/data/designs/`): Llama-3.1-8B and 70B, 2K–32K, prefill and decode, by int8 products and by time, per component, with γ and decode's zero-weight gap; P·V's block size for the designs whose P·V is `pv`; and each design's ε_skip, the number its `[skip]` records (SKIP, note:20261017T0340Z-draft-skip) |
 | `int8_toggle.py` | RTX PRO 6000 | Sustained int8 GEMM throughput, SM clock and power by operand pattern (wide, U against a bit, bit against bit, zero): what a zero instance's narrow operands gain on the clock (SKIP) |
 | `proof_sampling.py` | CPU | The whole-dot-product proof draw under one σ (Llama-3.1-8B and 70B, prefill and decode, designs A and Bc): the cheater's best response to a draw (skips, steering levers and their Fan), the minimax draw in closed form and as an LP, the producer closure, and ε against PRF-57's proof cost (SAMPLING, note:20261017T0608Z-draft-eps1-sampling) |
 | `pearlc_census.py` | CPU | TT_OUT's falsification census for Pearl-C's ticket chain, bit-exact, on the H100's atom or sm_120's (`--atom`) |
@@ -79,7 +83,7 @@ directory's `*.sh` builds and runs it through `research run`, and each `*ref.py`
 | That GEMM with its windowed receipts and X's tile leaves hashed in its CTAs | `hashed_gemm/hgemm.cu`, `hgref.py`, `segment_e2e.py`, `run.sh` | `edited_gemm/egemm.cu`, `commit_gpu/commit_gpu.cuh` |
 | Dither-2S's linear (decision 79): both operands dithered a call, no peel, the last checked word served, on egemm.cu's mainloop; its Q K^T, Q and K dithered, a head a problem | `edited_gemm/d2sgemm.cu`, `d2sgemm_ref.py`, `d2srun.sh` | `edited_gemm/egemm.cu` |
 | The committer: hm96-sha512 row leaves in frame-v3-sha512 trees | `commit_gpu/commit_gpu.cuh`, `sha512.cuh`, `commit_gpu.cu`, `reference.py`, `gpu.sh` | |
-| Stage coins and the deferred edit | `stage_cost/stage.cu`, `prep.py`, `report.py`, `run.sh` | `filler/dcap.cu`, `served_zk/hm96_rows.cu` |
+| Stage coins and the deferred edit (retired by decision 72) | `stage_cost/stage.cu`, `prep.py`, `report.py`, `run.sh` | `filler/dcap.cu`, `served_zk/hm96_rows.cu` |
 | Their overlap in prefill, with the committer's small path, and the edited arms (EGEMM's GEMM with windowed receipts) | `stage_ovl/ovl.cu`, `eg.cu`, `eg.h`, `eref.py`, `report.py`, `run.sh` | `stage_cost/stage.cu`, `commit_gpu/commit_gpu.cuh`, `edited_gemm/egemm.cu` |
 
 `edited_gemm/egemm_ref.py` imports the E2E slice's `derive.py` from `e2e_slice/` beside it (the slice's receipt and noise
