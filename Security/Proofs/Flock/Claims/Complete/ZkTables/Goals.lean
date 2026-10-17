@@ -297,15 +297,13 @@ theorem recordJ_of (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hF : Fil
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables, the record's checks discharged: from `complete_zk`'s premises and at several tables `StmtOkJ`,
-`ProverRunsJ`, what the record's checks ask of the proof files (`FilesJ`) and the checks open at one table (`OpenJ`). -/
+`ProverRunsJ`, what the record's checks ask of the proof files (`FilesJ`) and the rep's checks (`OpenJ`). -/
 theorem completeJ (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
-    (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel)
-    (hRp : FlockComplete.Replay H rel) (hRS : FlockComplete.RingSwitchZk H rel)
-    (hLg : FlockComplete.LigeritoZk H rel) (hLC : FlockComplete.LaneConstraints H rel)
-    (hIn : FlockComplete.Inner H rel) (hCo : FlockComplete.ConsumedZk H rel) (hSJ : StmtOkJ H rel)
+    (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel)
+    (hLg : FlockComplete.LigeritoZk H rel) (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
     (hPRJ : ProverRunsJ H rel) (hFJ : FilesJ H rel) (hOp : OpenJ H rel) :
     Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
-  complete H rel S h64 hS hR hF hPR hRp hRS hLg hLC hIn hCo hSJ hPRJ (recordJ_of S h64 hSJ hFJ) hOp
+  complete H rel S h64 hS hR hF hPR hRS hLg hIn hSJ hPRJ (recordJ_of S h64 hSJ hFJ) hOp
 
 end FlockComplete.ZkTables

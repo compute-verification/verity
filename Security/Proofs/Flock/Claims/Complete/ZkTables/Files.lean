@@ -1,5 +1,5 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Goals
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
+import Proofs.Flock.Claims.Complete.Zk.Walk
 
 /-!
 # The honest masked run's proof files, at several tables
@@ -10,7 +10,7 @@ per-table forms of `RepShapedZk` and `RecordFitsZk` (`RepShapedJ`, `RecordFitsJ`
 * `sessionPZk_filesJ`: the masked session's `j`th proof file encodes a masked proof that table `j / 2`'s rep `j % 2`
   returned on its share's trace, its masked level-0 commitment and its extra claims at the link's points, with the
   tape's pads committed (`RepFileJ`); the first send is the link of the commitments' caps. The session's loop is walked
-  by index (`forIn_array_idx`).
+  by index (`Zk/Walk.lean`'s `forIn_array_idx`).
 * `Run.repJ`: at a run of several tables, each table's `root_B` is its commitment's cap, and each rep's file decodes at
   the masked verifier's shape to that rep's proof, of the commitment's cap, the table's PCS parameters, and its pads'
   root (`repPZk_fields`), a 64-byte digest (`innerCommitP_root`).
@@ -21,38 +21,6 @@ namespace FlockComplete.ZkTables
 
 open Flock Transcript FlockComplete FlockDeploy JsonRT
 open Lean (Json JsonNumber)
-
-/-- A `for` loop over a list from index `k`, with an invariant of the index, the loop's state and the sends, each step
-taking the list's element at its index. -/
-theorem forIn_list_idx {α β : Type} (L : List α) (f : α → β → PS (ForInStep β))
-    (inv : ℕ → β → Array Claims.Msg → Prop)
-    (hs : ∀ k (hk : k < L.length) b l r l', inv k b l → (f L[k] b).go l = (.ok r, l') →
-      ∃ b', r = .yield b' ∧ inv (k + 1) b' l') :
-    ∀ k, k ≤ L.length → ∀ b l b' l', inv k b l → (forIn (L.drop k) b f).go l = (.ok b', l') → inv L.length b' l'
-  | k, hk, b, l, b', l', h, e => by
-    by_cases hlt : k < L.length
-    · rw [List.drop_eq_getElem_cons hlt, List.forIn_cons] at e
-      obtain ⟨r, l₁, e1, e2⟩ := go_bind_ok e
-      obtain ⟨b₁, rfl, h₁⟩ := hs k hlt b l r l₁ h e1
-      exact forIn_list_idx L f inv hs (k + 1) hlt b₁ l₁ b' l' h₁ e2
-    · obtain rfl : k = L.length := by omega
-      simp only [List.drop_length, List.forIn_nil, go_pure, Prod.mk.injEq, Except.ok.injEq] at e
-      obtain ⟨rfl, rfl⟩ := e
-      exact h
-termination_by k => L.length - k
-
-/-- A `for` loop over an array, with an invariant of the index, the loop's state and the sends, each step taking the
-array's element at its index. -/
-theorem forIn_array_idx {α β : Type} (xs : Array α) (f : α → β → PS (ForInStep β))
-    (inv : ℕ → β → Array Claims.Msg → Prop)
-    (hs : ∀ k (hk : k < xs.size) b l r l', inv k b l → (f xs[k] b).go l = (.ok r, l') →
-      ∃ b', r = .yield b' ∧ inv (k + 1) b' l')
-    {b : β} {l : Array Claims.Msg} {b' : β} {l' : Array Claims.Msg} (h0 : inv 0 b l)
-    (e : (forIn xs b f).go l = (.ok b', l')) : inv xs.size b' l' := by
-  rw [← Array.forIn_toList] at e
-  have := forIn_list_idx xs.toList f inv (fun k hk b l r l' h e => hs k (by simpa using hk) b l r l' h
-    (by simpa using e)) 0 (Nat.zero_le _) b l b' l' h0 (by simpa using e)
-  simpa using this
 
 /-- Table `i`'s rep `rep`'s masked proof file: at the table's extra claims `e` at the points `pts`, it encodes, at the
 rep's shape, a masked proof the rep returned on the table's trace, its packed table, its masked level-0 commitment, and
@@ -138,7 +106,8 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
     obtain ⟨rfl, rfl⟩ := hJ
     obtain ⟨rfl, rfl⟩ := hrun
     exact ⟨schs, cms, fun i hi => ⟨hv i hi, hcm i hi⟩, by omega, ⟨bs, hbs⟩, h₁, h₂⟩
-  · rintro k hk ⟨ss, ps⟩ l res l' ⟨h₁, h₂, bs, hl⟩ e
+  · rintro k a ⟨ss, ps⟩ l res l' ha ⟨h₁, h₂, bs, hl⟩ e
+    obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.1 ha
     have hi : k / 2 < tabs.size := by
       have := hst _ (Array.getElem_mem hk)
       rwa [repStreams_getElem _ hk] at this
@@ -337,12 +306,10 @@ any number of tables: `completeJ` with what the record's checks ask of the proof
 `RecordFitsJ` (`filesJ`). -/
 theorem completeJR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
-    (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel)
-    (hRp : FlockComplete.Replay H rel) (hRS : FlockComplete.RingSwitchZk H rel)
-    (hLg : FlockComplete.LigeritoZk H rel) (hLC : FlockComplete.LaneConstraints H rel)
-    (hIn : FlockComplete.Inner H rel) (hCo : FlockComplete.ConsumedZk H rel) (hSJ : StmtOkJ H rel)
+    (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel)
+    (hLg : FlockComplete.LigeritoZk H rel) (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
     (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel) (hFJ : RecordFitsJ H rel) (hOp : OpenJ H rel) :
     Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
-  completeJ H rel S h64 hS hR hF hPR hRp hRS hLg hLC hIn hCo hSJ hPRJ (filesJ S h64 hSJ hRJ hFJ) hOp
+  completeJ H rel S h64 hS hR hF hPR hRS hLg hIn hSJ hPRJ (filesJ S h64 hSJ hRJ hFJ) hOp
 
 end FlockComplete.ZkTables

@@ -14,8 +14,9 @@ import Proofs.Flock.Claims.Complete.Zk.Complete
 * **Several tables**: the session runs from `StmtOkJ` and `ProverRunsJ` (`sessionRunsJ_goal`, `complete_zk`'s
   `StmtOkZk` and `ProverRunsZk` at several tables, the latter per table); and what `complete_zk` asks or proves at one
   table, at a run of several, as named `Prop`s: the record checks that `Zk/Json/` proves at one table from the record's
-  premises (`RecordAt`, `RecordJ`), and the checks still open at one table (`OpenAt`, `OpenJ`: per rep the masked
-  replay, the ring switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed).
+  premises (`RecordAt`, `RecordJ`), and the rep's checks (`OpenAt`, `OpenJ`: per rep the masked replay, the ring
+  switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed), of which `complete_zk`
+  takes the ring switch, the masked Ligerito and the inner proof at one table and proves the rest.
 * `complete`: Flock's masked verifier is complete for `honestP` with error `δc H`
   (`Claims.Flock.Complete H (deployZk rel) honestP (δc H)`), from `complete_zk`'s premises and these four.
 -/
@@ -88,8 +89,8 @@ structure RecordAt (o : Run H rel) : Prop where
 /-- **The record's checks at every run of several tables.** -/
 def RecordJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → RecordAt H rel o
 
-/-- **The checks open at one table, at a run**: per rep the masked replay, the ring switch, the masked Ligerito, level
-0's lane phase, the inner proof and every round consumed. -/
+/-- **The rep's checks, at a run**: per rep the masked replay, the ring switch, the masked Ligerito, level 0's lane
+phase, the inner proof and every round consumed. -/
 structure OpenAt (o : Run H rel) : Prop where
   replay : ∀ i < o.tabs.size, ∀ r < 2,
     (Zk.replayWith o.hs o.tabs[i]! (o.lay i) (o.zp i r).proof (o.zp i r).inner.root).run (o.t₀ i r) = .ok (o.rp i r)
@@ -106,7 +107,7 @@ structure OpenAt (o : Run H rel) : Prop where
       (repConsZk (o.rp i r).1 (o.zp i r).proof ++ o.lanes i r)).run (o.lg i r).2 = .ok (o.inner i r)
   consumed : ∀ i < o.tabs.size, ∀ r < 2, ((o.inner i r).2.k != (o.stream i r).rounds.size) = false
 
-/-- **The checks open at one table, at every run of several tables.** -/
+/-- **The rep's checks, at every run of several tables.** -/
 def OpenJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → OpenAt H rel o
 
 end Several
@@ -119,17 +120,17 @@ theorem Case.one_or_several (c : Case H rel) : c.sts.size = 1 ∨ 1 < c.sts.size
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: from `complete_zk`'s premises, which give every check at one table, and at several tables the
-statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the record's checks (`RecordJ`) and the checks open
-at one table (`OpenJ`). -/
+statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the record's checks (`RecordJ`) and the rep's checks
+(`OpenJ`). -/
 theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
-    (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel)
-    (hRp : FlockComplete.Replay H rel) (hRS : FlockComplete.RingSwitchZk H rel)
-    (hLg : FlockComplete.LigeritoZk H rel) (hLC : FlockComplete.LaneConstraints H rel)
-    (hIn : FlockComplete.Inner H rel) (hCo : FlockComplete.ConsumedZk H rel) (hSJ : StmtOkJ H rel)
+    (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel)
+    (hLg : FlockComplete.LigeritoZk H rel) (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
     (hPRJ : ProverRunsJ H rel) (hRec : RecordJ H rel) (hOp : OpenJ H rel) :
     Claims.Flock.Complete H (deployZk rel) honestP (δc H) := by
   have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H rel)
+  have hD : FlockComplete.RepDecodesZk H rel := JsonRT.repDecodesZk_goal S h64 hS hP hR
+  have hRp : FlockComplete.Replay H rel := replay_goal S h64 hS hP hR
   have hSR : FlockComplete.SessionRunsZk H rel := JsonRT.sessionRunsZk_goal S hS hPR
   have rec1 : ∀ o : Run H rel, (h1 : o.sts.size = 1) → RecordAt H rel o := fun o h1 =>
     { finalFits := JsonRT.finalFitsZk_goal S h64 hS hP hR hF (o.toZk h1)
@@ -154,9 +155,9 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
     { replay := hRp (o.toZk h1)
       ringSwitch := hRS (o.toZk h1)
       ligerito := hLg (o.toZk h1)
-      lanes := hLC (o.toZk h1)
+      lanes := laneConstraints_goal hLg hD (o.toZk h1)
       inner := hIn (o.toZk h1)
-      consumed := hCo (o.toZk h1) }
+      consumed := consumedZk_goal S h64 hS hP hRp hRS hLg hIn (o.toZk h1) }
   have recAll : ∀ o : Run H rel, RecordAt H rel o := fun o =>
     (o.one_or_several).elim (rec1 o) (hRec o)
   have openAll : ∀ o : Run H rel, OpenAt H rel o := fun o =>
