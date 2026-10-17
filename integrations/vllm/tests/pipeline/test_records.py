@@ -115,8 +115,11 @@ def test_a_published_row_loads_back_by_id(tmp_path, store):
     assert all(p.gates == P.gates for ps in progs.values() for p in ps.values())
     assert evaluate(progs[0]["workload"].defs["Mul16_v1"], 3, 5) == (15,)
     assert sorted(records.programs(ROW, [1])) == [1]
+    assert {r: sorted(ps) for r, ps in records.programs(ROW, part=["workload"]).items()} == {0: ["workload"], 1: ["workload"]}
     with pytest.raises(UsageError, match="no rank"):
         records.programs(ROW, [2])
+    with pytest.raises(UsageError, match="no part"):
+        records.programs(ROW, part=["build_request"])
 
 
 def test_a_descriptor_that_is_not_the_records_is_refused(tmp_path, store):

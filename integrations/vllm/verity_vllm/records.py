@@ -12,7 +12,7 @@ record's art: id.  The store is reached through the research CLI (`python -m res
     from verity_vllm import records
     from verity.ml.circuits.evaluation.reference import evaluate
     rec = records.record(row)                         # the config record
-    progs = records.programs(row, ranks=[0])          # {rank: {part: DecodedProgram}}, each digest checked against the record
+    progs = records.programs(row, ranks=[0], part=["workload"])   # {rank: {part: DecodedProgram}}, each digest checked
     p = progs[0]["workload"]                          # the Program the Commit binds; "build_step", "build_request_LP*_T*" beside it
     p.root, p.defs                                    # its root and its Definitions, decoded through the registry
     evaluate(p.defs[fid], *synthetic_inputs)          # any Definition on synthetic inputs
@@ -20,7 +20,7 @@ record's art: id.  The store is reached through the research CLI (`python -m res
     verity-vllm records publish <row dir> <row> --build art:… --tree REF@SHA --by LANE [--manifest art:…] [--match art:…]
                                 [--match-run R] [--commit art:…] [--commit-run R] [--summary FILE] [--conformance PROPERTY=art:…]
     verity-vllm records show [<row>]                  # the index, or a row's record
-    verity-vllm records programs <row> [--rank R]     # fetch, decode and check a row's Programs, one rank at a time
+    verity-vllm records programs <row> [--rank R] [--part P]   # fetch, decode and check a row's Programs, one rank at a time
 """
 from __future__ import annotations
 
@@ -97,15 +97,18 @@ def descriptor(rec: dict[str, Any], rank: int, part: str) -> str:
     return f"{f'build/rank{rank}/' if rec['build'].get('per_rank') else ''}{part_dir(part)}/descriptor.json.gz"
 
 
-def programs(row: str, ranks: list[int] | None = None, *, to: Path | None = None) -> dict[int, dict[str, Any]]:
-    """The row's Programs, {rank: {part: DecodedProgram}}, fetched from its Build (`evidence.build`, only the descriptors asked for)
-    and decoded through the registry (`program.boolean.load_program`).  A descriptor whose digest is not the record's is refused."""
+def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None = None, to: Path | None = None) -> dict[int, dict[str, Any]]:
+    """The row's Programs, {rank: {part: DecodedProgram}} (only `ranks` and the parts `part` names, when given), fetched from its Build
+    (`evidence.build`, only the descriptors asked for) and decoded through the registry (`program.boolean.load_program`).  A
+    descriptor whose digest is not the record's is refused."""
     from verity_vllm.program.boolean import load_program
     rec = record(row)
     named = parts(rec)
     if missing := sorted(set(ranks or ()) - set(named)):
         raise UsageError(f"{row}: no rank {missing} (the record names ranks {sorted(named)})")
-    want = {r: ps for r, ps in named.items() if ranks is None or r in ranks}
+    if unknown := sorted(set(part or ()) - {p for ps in named.values() for p in ps}):
+        raise UsageError(f"{row}: no part {unknown} (the record names {sorted({p for ps in named.values() for p in ps})})")
+    want = {r: {p: d for p, d in ps.items() if part is None or p in part} for r, ps in named.items() if ranks is None or r in ranks}
     root = fetch(rec["evidence"]["build"], to, [descriptor(rec, r, p) for r, ps in want.items() for p in ps])
     out: dict[int, dict[str, Any]] = {}
     for r, ps in sorted(want.items()):
@@ -195,6 +198,7 @@ class ProgramsOptions:
 
     row: str = option("row")
     rank: list[int] = option("--rank", type=int, action="append", default=[], help="these ranks only (default every rank)")
+    part: list[str] = option("--part", action="append", default=[], help="these parts only, e.g. workload (default every part)")
     cmd: str = field(default="programs", init=False)
 
 
@@ -216,6 +220,6 @@ def main(a: PublishOptions | ShowOptions | ProgramsOptions) -> int:
         return 0
     named = parts(record(a.row))
     for r in a.rank or sorted(named):
-        for part, p in programs(a.row, [r])[r].items():
+        for part, p in programs(a.row, [r], part=a.part or None)[r].items():
             print(f"rank {r}  {part:28s} {named[r][part][:16]}  gates {p.gates}  definitions {len(p.defs)}", flush=True)
     return 0

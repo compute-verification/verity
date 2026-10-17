@@ -341,8 +341,8 @@ its requests and its sha256, the κ profile, each rank's Program digests, the Ma
 roots and the code it ran), and its refs are the evidence: the `vllm-build/v1` holding every rank's Program descriptors
 (`research-outputs write ... build`), the manifest, the Match and Commit records and the conformance captures by property.
 `manifests/records.json` maps row ids to those artifacts.  `records.programs(row)` returns `{rank: {part: DecodedProgram}}` (the
-workload Program the Commit binds, and the step and request Programs it composes), fetched by row id and checked against the
-record's digests, ready for `verity.ml.circuits.evaluation` on synthetic inputs.  `verity-vllm records publish` adds a row (a FAIL
+workload Program the Commit binds, and the step and request Programs it composes; `ranks=` and `part=` select), fetched by row id
+and checked against the record's digests, ready for `verity.ml.circuits.evaluation` on synthetic inputs.  `verity-vllm records publish` adds a row (a FAIL
 record, a Commit that committed against another manifest or other Programs than the Build's, or a Build artifact that lacks a
 Program the record names, is refused), `records show` prints the index or a record, and `records programs` decodes a row one rank
 at a time.
