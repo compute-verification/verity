@@ -148,12 +148,16 @@ def plainN (x : Claims.Msg) : ℕ := (V false).k x - 2
 def plainNsOne (spec : SessionSpec) (st : Stmt) : List ℕ := plainRepNs spec st ++ plainRepNs spec st
 
 /-- **The live coins of deployed round `i`**: the link's `2·mPts` link coordinates, a round's count (at most a live
-coin's `65536`), none at the last message. -/
+coin's `65536`), and at least one, so one at the last message, whose coin the session never reads. -/
 def plainCnt (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (i : ℕ) : ℕ :=
-  if i = 0 then 2 * spec.mPts else if i ≤ plainN x then min ((plainNsOne spec st).getD (i - 1) 0) 65536 else 0
+  max 1 (if i = 0 then 2 * spec.mPts else if i ≤ plainN x then min ((plainNsOne spec st).getD (i - 1) 0) 65536 else 0)
 
 /-- `plainCnt` at the deployed rounds. -/
 def plainNOf (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (i : Fin ((V false).k x)) : ℕ := plainCnt x spec st i.val
+
+theorem plainNOf_pos (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (i : Fin ((V false).k x)) :
+    1 ≤ plainNOf x spec st i :=
+  le_max_left _ _
 
 /-- The revealed history a deployed round's tape entry is read at (`FnFork.histKey`). -/
 abbrev plainD (x : Claims.Msg) : Type := Fin ((V false).k x) → Fin 65536 → Option 𝔽
