@@ -308,6 +308,15 @@ def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) 
   if let some pinned := tags.pinnedLeafScheme then
     if (← canon leafScheme) != (← canon pinned) then throw "META: leaf_scheme is not the pinned leaf-commitment scheme"
 
+/-- A repeated last stage's returned outputs (META `out_net_ports` of `[slot, port]` pairs, each word's slot `slots`, its
+port `c.outNetPorts`): one 16-bit port (`oc`, the stage's output ports) of a slot of the stage per output word, no
+`(slot, port)` twice. -/
+def slottedOk (c : Circuit) (slots : Array Nat) (oc : Array (Nat × Nat)) : Bool :=
+  slots.size == c.outWords && c.outNetPorts.size == c.outWords &&
+    (List.range c.outWords).all (fun o => decide (slots.getD o 0 < c.perVu.getD c.outNet 0) &&
+      decide (c.outNetPorts.getD o 0 < oc.size) && (oc.getD (c.outNetPorts.getD o 0) default).2 == 16) &&
+    decide ((List.range c.outWords).map fun o => (slots.getD o 0, c.outNetPorts.getD o 0)).Nodup
+
 /-- Upstream's `Composite::check`: the layout's shape, the row slots' ports and counts, every non-row input port wired
 exactly once, the leaf maps, the pinned dummy values. -/
 def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
@@ -351,7 +360,8 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   let ur := c.ranges.filter (·.kind == Kind.net c.unitNet)
   if ur.size != 1 || ur[0]!.count != c.g * c.upv || (c.outNet == c.unitNet && !isPow2 ur[0]!.count) then
     throw "not one unit range of vus_per_block x units_per_vu (a power of two) units"
-  -- a tail that returns the outputs (PR #83 from 15260468): its last stage's only output group is the output words
+  -- a tail that returns the outputs (PR #83 from 15260468): its last stage's only output group is the output words; a
+  -- repeated last stage's (`out_net_ports` of `[slot, port]` pairs), under hidden outputs only, one port of a slot each
   let tailOut := c.outNet != c.unitNet
   let g0in := unit.inGroups.getD 0 default
   let g0out := unit.outGroups.getD 0 default
@@ -362,9 +372,14 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
     let nOut := c.outWords
     let onet := c.nets.getD c.outNet default
     let oc := portCols onet.2.outGroups
-    if !onet.1.startsWith "stage" || c.outNetPorts != Array.range oc.size || oc.size != nOut || oc.any (·.2 != 16)
-        || onet.2.outGroups.size != 1 || !isPow2 (16 * nOut) || c.leavesOut.any (!·.isEmpty) then
-      throw "the returned outputs are not the last stage's only output group: one 16-bit port per output word"
+    if !onet.1.startsWith "stage" || c.leavesOut.any (!·.isEmpty) || (match c.outNetSlots with
+        | some s => !tags.hiddenOutputs || !slottedOk c s oc
+        | none => c.outNetPorts != Array.range oc.size || oc.size != nOut || oc.any (·.2 != 16)
+            || onet.2.outGroups.size != 1 || !isPow2 (16 * nOut)) then
+      throw (if c.outNetSlots.isSome then
+        "the returned outputs are not one 16-bit port of a slot of the last stage per output word, each once, of a \
+          statement with hidden outputs"
+      else "the returned outputs are not the last stage's only output group: one 16-bit port per output word")
   for r in c.ranges do
     if let .net n := r.kind then
       if r.count != c.g * c.perVu.getD n 0 then throw s!"a range of {(c.nets.getD n default).1} is not {c.perVu.getD n 0} slots per VU"
@@ -545,6 +560,15 @@ def rowPorts (mj : Json) (typed : Bool) : V (Array Port) := do
     throw s!"META: no row has a compression before its last block (the {SHA_NET} range, the pin's, holds no slot)"
   return ports
 
+/-- META `out_net_ports`' entries: each output word's port of the last stage, and where any entry is a `[slot, port]`
+pair (a repeated last stage), each word's slot, a port alone being of slot 0. -/
+def outNetEntries (a : Array Json) : V (Array Nat × Option (Array Nat)) := do
+  let e ← a.mapM fun x => match x with
+    | .arr p => if p.size == 2 then do pure (← J.asNat p[0]! "out_net_ports", ← J.asNat p[1]! "out_net_ports")
+      else throw "META: an out_net_ports entry is not a port or a [slot, port] pair"
+    | x => do pure (0, ← J.asNat x "out_net_ports")
+  pure (e.map (·.2), if a.any (fun x => x matches .arr _) then some (e.map (·.1)) else none)
+
 /-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
 than the verifier's (`HmNets.check`), and a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…` or `rec-opening/…` unit
 other than the verifier's (`RecOpen.check`, `RecResiduals.check`, `RecSparse.check`, `RecOpening.check`). A typed
@@ -666,9 +690,9 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let shaNet ← netOf SHA_NET
   let hmNet ← netOf HM_NET
   let outNet ← if tmpl.isSome then pure unitNet else netOf ((mj.getObjValAs? String "out_net").toOption.getD "unit")
-  let outNetPorts ← match mj.getObjVal? "out_net_ports" with
-    | .ok (.arr a) => a.mapM (J.asNat · "out_net_ports")
-    | _ => pure #[]
+  let onp ← match mj.getObjVal? "out_net_ports" with
+    | .ok (.arr a) => outNetEntries a
+    | _ => pure (#[], none)
   let leafCuts ← match mj.getObjVal? "leaf_cuts" with
     | .ok (.arr a) => a.mapM fun w => do
       let x ← J.asArr w "a leaf cut"
@@ -695,7 +719,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
   let c : Circuit := { name, sha, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← kLogOf mj, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
-                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts,
+                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts := onp.1, outNetSlots := onp.2, leafCuts,
                        typed := ← tmpl.mapM fun t => pure (blockOf t) }
   check c tags leafScheme
   HmNets.check c
@@ -1435,7 +1459,8 @@ def rowBcZeroSalt (p : Port) (row : ByteArray) : ByteArray :=
     Sha512.hash (Hm96.Default512.saltPrefix ++ ByteArray.mk (Array.replicate SALT_BYTES 0))
 
 /-- `g o ↦` the first column of output word `o` of VU `g` (16 bits from it), where the circuit computes it: a typed
-instance's root's output group, the last stage's output port, or the unit that returns it. -/
+instance's root's output group, the last stage's output port (in its slot, a repeated last stage's), or the unit that
+returns it. -/
 def outCol (c : Circuit) : Nat → Nat → Nat :=
   let unit := c.unit
   let ret := (List.range c.upv).foldl (fun r u =>
@@ -1444,7 +1469,8 @@ def outCol (c : Circuit) : Nat → Nat → Nat :=
   let tailCols := portCols (c.nets.getD c.outNet default).2.outGroups
   fun g o =>
     if c.typed.isSome then c.slotCol c.unitNet g 0 + (unit.outGroups.getD 0 default).col * WORD + 16 * o
-    else if c.outNet != c.unitNet then c.slotCol c.outNet g 0 + (tailCols.getD (c.outNetPorts.getD o 0) default).1
+    else if c.outNet != c.unitNet then
+      c.slotCol c.outNet g ((c.outNetSlots.getD #[]).getD o 0) + (tailCols.getD (c.outNetPorts.getD o 0) default).1
     else
       let (u, q) := ret.getD o (0, 0)
       c.slotCol c.unitNet g u + (unitCols.getD q default).1

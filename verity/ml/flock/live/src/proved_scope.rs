@@ -492,6 +492,21 @@ mod tests {
         assert_eq!(circuit_why(&tail(), true), None);
         assert_eq!(circuit_why(&rms(0), false).as_deref(), Some("a unit reading 2 input groups"));
         assert_eq!(circuit_why(&tail(), false).as_deref(), Some("a circuit whose outputs a tail stage computes (META out_net)"));
+        assert!(wires_acyclic(&slotted()) && wires_feed(&slotted()));
+        assert_eq!(circuit_why(&slotted(), true), None);
+    }
+
+    /// Lean's `slotted`: a repeated last stage, two units each wiring its own slot of a stage of two 16-bit output ports,
+    /// the stage's slots returning the output words (`out_net_ports` of `[slot, port]` pairs).
+    fn slotted() -> Composite {
+        let one = || vec![Group { col: 0, words: 1, bits: vec![1] }];
+        let stage = wnet(one(), 1, vec![16, 16], vec![(vec![0], vec![0]); 32]);
+        let mut c = circ(vec![wnet(one(), 1, vec![1], vec![(vec![0], vec![0])]), stage], vec![2, 2],
+                         &[(1, 0, 0, 0, 0, 0), (1, 1, 0, 0, 1, 0)], vec![], vec![]);
+        c.out_net = 1;
+        c.out_ports = vec![(0, 0), (1, 0)];
+        c.out_slotted = true;
+        c
     }
 
     #[test]
