@@ -241,7 +241,20 @@ def fold_mix(sass: str) -> dict[str, dict]:
     return out
 
 
-def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict]) -> dict:
+PG_TILE = 128 * 128  # pgemm's CTA tile, BM x N
+
+
+def dc_best(dc: list[dict]) -> dict[int, dict]:
+    """DC's pipelined int8 kernel (`pgemm rate`): per L, its fastest honest configuration (arm 2: load and fold)."""
+    out = {}
+    for r in dc:
+        if r.get("mode") == "rate" and r.get("arm") == 2 and r["committed_words_per_clk"] > out.get(r["L"], {}).get(
+                "committed_words_per_clk", 0):
+            out[r["L"]] = r
+    return out
+
+
+def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict], dc: list[dict] | None = None) -> dict:
     """pgemm's gates and time. Per shape, spacing L and Dither route: the kernel of record (the faster receipt tile
     width), its words a SM a clock, γ against plain FP8 (cuBLASLt and the same pipeline's pf8) and plain int8, its ratio
     to int8 Dither (the faster of i8c and i8r), the time split at FW 2 (tensor: MMARES, the MMAs on resident operands;
@@ -249,7 +262,11 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict]) ->
     of the facets (each the pipeline up to it: tensor, + operand feed, + TMEM traffic; and the fold's lane work without
     tensor or TMEM), the binding facet (the largest), and γ on resident operands (FULLRES over cuBLASLt FP8 and over
     pf8_res: the kernel as a perfect operand feed would leave it). Rates are at each arm's measured SM clock
-    (`<arm>_mhz`) where the bench has it, else at the reported clock."""
+    (`<arm>_mhz`) where the bench has it, else at the reported clock; the CTA rate is the tile's words over its median
+    CTA's clocks (`<arm>_cta_clk`), DC's metric. With DC's `pgemm rate` rows, each route's time against DC's honest
+    int8 kernel (its fastest configuration at that L, on resident operands) a clock and a second, and DC's γ against
+    cuBLASLt FP8."""
+    dcb = dc_best(dc or [])
     rows = []
     for b in bench:
         sms, nominal = b.get("sms", 0), b.get("clock_khz", 0) / 1e3
@@ -280,8 +297,16 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict]) ->
                              "fold": t2 - md["ext"]}
                 arm = f"{r}_L{L}_fw{fw}_full"
                 res = md["fullres"]
+                cta = PG_TILE * b["k"] / L / b[f"{arm}_cta_clk"] if b.get(f"{arm}_cta_clk") else None
+                d = dcb.get(L)
+                over_dc = {}
+                if d and cta:
+                    over_dc = {"over_dc_int8_clk": d["committed_words_per_clk"] / cta,
+                               "over_dc_int8_s": d["committed_words_per_clk"] * d["mhz"] / (cta * b[f"{arm}_mhz"])
+                               if b.get(f"{arm}_mhz") else None}
                 routes[r] = {"full_ms": t, "fw": fw, "full_ms_by_fw": fulls, "mhz": b.get(f"{arm}_mhz"),
-                             "words_sm_clk": rate(arm, t), "split_ms": split, "alone_ms": alone,
+                             "words_sm_clk": rate(arm, t), "cta_words_sm_clk": cta, **over_dc,
+                             "split_ms": split, "alone_ms": alone,
                              "alone_words_sm_clk": {f: rate(f"{r}_L{L}_fw2_{facet_arm[f]}", v) for f, v in alone.items()},
                              "binding": bind, "binding_of_full": alone[bind] / t2 if bind and t2 else None,
                              "issue": mix.get(f"{r}_L{L}_fw2_full"), "full_resident_ms": res,
@@ -292,9 +317,15 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict]) ->
             int8 = min((r for r in ("i8c", "i8r") if r in routes), key=lambda r: routes[r]["full_ms"], default=None)
             for r in routes:
                 routes[r]["over_int8_dither"] = routes[r]["full_ms"] / routes[int8]["full_ms"] if int8 else None
+            d = dcb.get(L)
+            dc_ms = words / (d["committed_words_per_clk"] * sms * d["mhz"] * 1e3) if d and sms else None
             rows.append({"m": b["m"], "n": b["n"], "k": b["k"], "L": L, "plain_ms": plain,
                          "plain_words_sm_clk": {p: rate(p, v) for p, v in plain.items()},
-                         "cublaslt_f8_out": b.get("cublaslt_f8_out"), "int8_dither": int8, "routes": routes})
+                         "cublaslt_f8_out": b.get("cublaslt_f8_out"), "int8_dither": int8, "routes": routes,
+                         "dc_int8": d and {"words_sm_clk": d["committed_words_per_clk"], "mhz": d["mhz"],
+                                           "nb": d["nb"], "lw": d["lw"], "mi": d["mi"], "ms_at_shape": dc_ms,
+                                           "gamma_cublaslt_f8": dc_ms / plain["cublaslt_f8"]
+                                           if dc_ms and plain["cublaslt_f8"] else None}})
     return {
         "gates": len(gates),
         "gates_exact": sum(g["exact"] and g["control_rejected"] for g in gates),
@@ -302,6 +333,7 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict]) ->
         "gate_shapes": sorted({(g["m"], g["n"], g["k"], g["dist"]) for g in gates}),
         "bench": rows,
         "fold_mix": mix,
+        "dc_int8": dcb,
     }
 
 
@@ -312,7 +344,7 @@ def pgemm_main(argv: list[str]) -> int:
     a = ap.parse_args(argv)
     sass = a.out / "pgemm.sass"
     s = pgemm_summary(load(a.out / "gate.jsonl"), load(a.out / "bench.jsonl"),
-                      fold_mix(sass.read_text()) if sass.exists() else {})
+                      fold_mix(sass.read_text()) if sass.exists() else {}, load(a.out / "dc-rate.jsonl"))
     print(f"# pgemm: the k4s Dither GEMM pipelined on B200\n\ngates exact (C, receipts, control rejected): "
           f"{s['gates_exact']} of {s['gates']} over {len(s['gate_arms'])} arms and {len(s['gate_shapes'])} shapes\n")
     print("| m x n x k | L | route | fw | ms | MHz | words/SM/clk | γ cuBLASLt FP8 | γ pf8 | γ cuBLASLt i8 | / int8 Dither | "
@@ -336,6 +368,19 @@ def pgemm_main(argv: list[str]) -> int:
         print(f"- {row['m']}x{row['n']}x{row['k']}: " + ", ".join(
             f"{p} {_f(v, '.4f')} ({_f(row['plain_words_sm_clk'][p], '.1f')})" for p, v in row["plain_ms"].items())
               + f"; cuBLASLt FP8 out {row['cublaslt_f8_out']}")
+    if s["dc_int8"]:
+        print("\nAgainst DC's honest pipelined int8 kernel (its fastest configuration, resident operands, one CTA a "
+              "SM), words a SM a clock of the median CTA:\n")
+        print("| m x n x k | L | route | CTA words/SM/clk | DC int8 words/SM/clk (MHz) | time / DC's a clock | "
+              "time / DC's a second | DC's γ cuBLASLt FP8 | route's γ cuBLASLt FP8 (resident) |")
+        print("|---|---|---|---|---|---|---|---|---|")
+        for row in s["bench"]:
+            dci = row["dc_int8"]
+            for r, d in row["routes"].items() if dci else ():
+                print(f"| {row['m']}x{row['n']}x{row['k']} | {row['L']} | {r} | {_f(d['cta_words_sm_clk'], '.1f')} | "
+                      f"{dci['words_sm_clk']:.1f} ({dci['mhz']:.0f}) | {_f(d.get('over_dc_int8_clk'), '.2f')} | "
+                      f"{_f(d.get('over_dc_int8_s'), '.2f')} | {_f(dci['gamma_cublaslt_f8'], '.2f')} | "
+                      f"{_f(d.get('gamma_cublaslt_f8'), '.2f')} ({_f(d['gamma_resident_cublaslt_f8'], '.2f')}) |")
     if s["fold_mix"]:
         print("\nIssue cost (SASS, word loop, per word): instructions, lane ops, ALU pipe, IMAD pipe, model bound\n")
         print("| arm | instrs | lane ops | ALU | IMAD | bound words/SM/clk |")

@@ -44,7 +44,8 @@
 //                                    (must be rejected); plain PF8 / PI8 on C; one JSON line each; exit 4 unless all hold
 //   pgemm bench REPS M N K           every arm interleaved (cuBLASLt int8 and FP8 with -DPG_CUBLASLT), median ms, and
 //                                    each pgemm arm's SM clock under its own load (clock64 over globaltimer in every
-//                                    CTA), one JSON line
+//                                    CTA) and its median CTA clocks (one CTA a SM: DC's pipelined int8 kernel's rate
+//                                    metric), one JSON line
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a pgemm.cu [-DPG_CUBLASLT -lcublasLt]
 #include <cuda_runtime.h>
 
@@ -843,7 +844,7 @@ static int run_bench(int reps, int m, int n, int k) {
   // globaltimer deltas, summed over CTAs.
   const size_t ctas = (size_t)(n / N) * (m / BM);
   std::vector<uint64_t> ck(2 * ctas);
-  std::vector<double> mhz(runs.size(), 0.0);
+  std::vector<double> mhz(runs.size(), 0.0), cta_clk(runs.size(), 0.0);
   CK(cudaMalloc(&g_clk, ck.size() * 8));
   uint64_t* clk_buf = g_clk;
   for (size_t i = 0; i < runs.size(); i++) {
@@ -855,8 +856,11 @@ static int run_bench(int reps, int m, int n, int k) {
     CK(cudaDeviceSynchronize());
     CK(cudaMemcpy(ck.data(), clk_buf, ck.size() * 8, cudaMemcpyDeviceToHost));
     double c = 0, ns = 0;
-    for (size_t q = 0; q < ctas; q++) c += (double)ck[2 * q], ns += (double)ck[2 * q + 1];
+    std::vector<double> per(ctas);
+    for (size_t q = 0; q < ctas; q++) c += (double)ck[2 * q], ns += (double)ck[2 * q + 1], per[q] = (double)ck[2 * q];
     mhz[i] = ns > 0 ? 1e3 * c / ns : 0.0;
+    std::sort(per.begin(), per.end());
+    cta_clk[i] = per[ctas / 2];
   }
   g_clk = nullptr;
   CK(cudaFree(clk_buf));
@@ -869,7 +873,8 @@ static int run_bench(int reps, int m, int n, int k) {
   for (size_t i = 0; i < runs.size(); i++) {
     std::sort(ms[i].begin(), ms[i].end());
     printf(", \"%s_ms\": %.6f", runs[i].name.c_str(), ms[i][ms[i].size() / 2]);
-    if (mhz[i] > 0) printf(", \"%s_mhz\": %.1f", runs[i].name.c_str(), mhz[i]);
+    if (mhz[i] > 0) printf(", \"%s_mhz\": %.1f, \"%s_cta_clk\": %.0f", runs[i].name.c_str(), mhz[i], runs[i].name.c_str(),
+                           cta_clk[i]);
   }
   printf("}\n");
   return 0;

@@ -245,6 +245,28 @@ def test_pgemm_summary_gamma_split_binding():
     assert timed["mhz"] == 1500.0 and timed["words_sm_clk"] == pytest.approx(words / (1.6e-3 * 148 * 1.5e9))
 
 
+def _dc_rate(arm: int, L: int, wpc: float, mhz: float = 1800.0, nb: int = 4) -> dict:
+    return {"mode": "rate", "nb": nb, "lw": 2, "mi": 0, "arm": arm, "L": L, "committed_words_per_clk": wpc, "mhz": mhz}
+
+
+def test_pgemm_summary_against_dc():
+    """The CTA rate is a tile's words over the median CTA's clocks; DC's best honest (arm 2) row at each L sets the
+    per-clock and per-second ratios and DC's own γ against cuBLASLt FP8 at the shape."""
+    b = _pg_bench() | {"k4s_L32_fw1_full_mhz": 1600.0, "k4s_L32_fw1_full_cta_clk": 128 * 128 * 4096 / 32 / 15.0}
+    dc = [_dc_rate(2, 32, 25.0), _dc_rate(2, 32, 30.0, nb=2), _dc_rate(0, 32, 90.0), _dc_rate(2, 64, 29.0)]
+    s = an.pgemm_summary([], [b], {}, dc)
+    assert s["dc_int8"][32]["committed_words_per_clk"] == 30.0 and s["dc_int8"][32]["nb"] == 2
+    row = next(r for r in s["bench"] if r["L"] == 32)
+    k4s = row["routes"]["k4s"]
+    assert k4s["cta_words_sm_clk"] == pytest.approx(15.0)
+    assert k4s["over_dc_int8_clk"] == pytest.approx(2.0) and k4s["over_dc_int8_s"] == pytest.approx(2.0 * 1800 / 1600)
+    assert "over_dc_int8_clk" not in row["routes"]["i8c"] and row["routes"]["i8c"]["cta_words_sm_clk"] is None
+    dc_ms = 4096**3 / 32 / (30.0 * 148 * 1.8e9) * 1e3
+    assert row["dc_int8"]["ms_at_shape"] == pytest.approx(dc_ms)
+    assert row["dc_int8"]["gamma_cublaslt_f8"] == pytest.approx(dc_ms / 0.125)
+    assert an.pgemm_summary([], [b], {})["bench"][0]["dc_int8"] is None
+
+
 def test_pgemm_main_exit(tmp_path, capsys):
     (tmp_path / "bench.jsonl").write_text(json.dumps(_pg_bench()) + "\n")
     (tmp_path / "gate.jsonl").write_text(json.dumps(_pg_gate("k4s_L32_fw2_full")) + "\n")
@@ -252,6 +274,10 @@ def test_pgemm_main_exit(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "gates exact (C, receipts, control rejected): 1 of 1" in out and "| 4096x4096x4096 | 32 | k4s | 1 | 1.6000 | - |" in out
     assert json.loads((tmp_path / "s.json").read_text())["bench"][0]["routes"]["k4s"]["binding"] == "fold"
+    assert "Against DC's" not in out
+    (tmp_path / "dc-rate.jsonl").write_text(json.dumps(_dc_rate(2, 32, 30.0)) + "\n")
+    assert an.pgemm_main([str(tmp_path)]) == 0
+    assert "| 4096x4096x4096 | 32 | k4s | - | 30.0 (1800) | - | - | " in capsys.readouterr().out
     (tmp_path / "gate.jsonl").write_text(json.dumps(_pg_gate("k4s_L32_fw2_full", ok=False)) + "\n")
     assert an.pgemm_main([str(tmp_path)]) == 4
     (tmp_path / "bench.jsonl").write_text("")
