@@ -19,7 +19,7 @@
 // fgate, flin M FW NC THR, fstep B L FW NC THR AFW [FILL_SMS]: the decode linears as a warp-specialized GEMM whose filler
 // warps run the DRAM-free chain while the consumers wait on memory, and the attention blocks with AFW filler warps each
 // (flin.cuh): outputs and receipts bit for bit, each linear's 32 layers against cuBLASLt, and the step through both, on
-// the whole GPU or beside the dfill pump on FILL_SMS SMs of a green split.
+// the whole GPU or beside the dfill pump on FILL_SMS SMs of a green split, or (FILL_SMS -1) co-scheduled on every SM.
 // lgate, lalone T STEPS BLK, lfill B L FILL_SMS W NC S T LSTEPS BLK: FILLER's lane filler (lfill.cuh): its receipts bit for
 // bit against the host, its issue rate alone, and the step on its green partition beside the pump (FILL_SMS SMs) and
 // the lane filler (BLK blocks of T threads an SM in the step's partition at the
@@ -1939,7 +1939,8 @@ int main(int argc, char** argv) {
                     "       FATT_NC=n: the attention filler warps' chains, 4 unless set; FATT_PERSIST=1: the attention filler\n"
                     "       blocks persistent on the step's SMs; FATT_LAZY=2|4: their filler warps test a read of done issued a\n"
                     "       round earlier, stepping 8·FATT_LAZY at a time; FLIN_LM=1: fstep's lm_head through flin too; FLIN_STOP=n:\n"
-                    "       a pfill build's flin filler warps start no step once consumer warp 0 has n or fewer units left)\n");
+                    "       a pfill build's flin filler warps start no step once consumer warp 0 has n or fewer units left;\n"
+                    "       FILL_SMS -1: fstep beside the pump co-scheduled on every SM, FSTEP_PUMP=W:NC:S its shape)\n");
     return 1;
   }
   const std::string mode = argv[1];
@@ -2114,8 +2115,8 @@ int main(int argc, char** argv) {
   } else if (mode == "fstep") {
     if (argc < 8) { fprintf(stderr, "fstep B L FW NC THR AFW [FILL_SMS [reps]]\n"); return 1; }
     const int B = atoi(argv[2]), L = atoi(argv[3]), fsm = argc > 8 ? atoi(argv[8]) : 0;
-    if ((size_t)B * L > maxBL || L % 512 || B < 1 || B > 256 || fsm < 0 || fsm >= d.sms) {
-      fprintf(stderr, "B*L <= %zu, L %% 512 == 0, 1 <= B <= 256, 0 <= FILL_SMS < %d\n", maxBL, d.sms);
+    if ((size_t)B * L > maxBL || L % 512 || B < 1 || B > 256 || fsm < -1 || fsm >= d.sms) {
+      fprintf(stderr, "B*L <= %zu, L %% 512 == 0, 1 <= B <= 256, -1 (co) <= FILL_SMS < %d\n", maxBL, d.sms);
       return 1;
     }
     rc = run_fstep(d, B, L, atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), fsm, argc > 9 ? atoi(argv[9]) : 9);

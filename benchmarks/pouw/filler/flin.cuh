@@ -18,6 +18,14 @@
 // the same bytes. Partial tiles meet in D by integer red.add, exact in any order; D must start at zero, so each CTA also
 // zeroes its share of the next linear's output (Z, zn ints, a multiple of 4).
 constexpr int FLIN_BN = 128;
+// FLIN_FIT: tiles whose GEMM-only CTA (FW = 0) fits beside one pump block on its SM (≤ 32 K registers, ≤ 40 KB of shared
+// memory, 41 KB at M 32), so a co-scheduled pump never holds a linear off (flin_cfg); M > 128 keeps its tile, whose accumulators alone are
+// BN · M = 32 K registers at M 256.
+#ifdef FLIN_FIT
+#define FLIN_MINB 2
+#else
+#define FLIN_MINB 1
+#endif
 
 __device__ __forceinline__ uint32_t sa(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
 __device__ __forceinline__ void mb_init(uint64_t* b, unsigned n) {
@@ -320,7 +328,7 @@ struct FlinArgs {
 };
 
 template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
-__global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const FlinArgs a) {
+__global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB : 1) flin_k(const FlinArgs a) {
   constexpr int BN = FLIN_BN, CW = CWN * CWM, FM = BN / CWN / 16, TN = M / CWM / 8, KC = BK / 32;
   constexpr int WB = BN * BK, XB = M * BK, SB = WB + XB;
   static_assert(FM >= 1 && TN >= 1 && KC % 2 == 0, "flin tile shape");
@@ -575,6 +583,11 @@ static bool flin_m_ok(int M) { return M == 32 || M == 64 || M == 128 || M == 160
 // the flin tile height a batch of B rows runs at (its rows past B are computed and ignored)
 static int flin_m_for(int B) { return B <= 32 ? 32 : B <= 64 ? 64 : B <= 128 ? 128 : B <= 160 ? 160 : B <= 192 ? 192 : 256; }
 static FlinCfg flin_cfg(int M) {
+#ifdef FLIN_FIT
+  if (M == 32) return {128, 2, 4};
+  if (M == 64) return {64, 3, 4};
+  if (M == 128) return {64, 2, 8};
+#endif
   if (M == 32 || M == 64) return {128, 4, 4};
   if (M == 128) return {128, 3, 8};
   return {64, 4, 8};
@@ -591,6 +604,10 @@ static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
   static bool attr = false;
   if (!attr) {
     CK(cudaFuncSetAttribute(flin_k<M, BK, ST, CWN, CWM, FW, NC>, cudaFuncAttributeMaxDynamicSharedMemorySize, flin_smem(M)));
+#ifdef FLIN_FIT
+    CK(cudaFuncSetAttribute(flin_k<M, BK, ST, CWN, CWM, FW, NC>, cudaFuncAttributePreferredSharedMemoryCarveout,
+                            cudaSharedmemCarveoutMaxShared));
+#endif
     attr = true;
   }
   cudaLaunchConfig_t cfg = {};
@@ -653,9 +670,15 @@ static bool flin_fw(const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st
 }
 static bool flin_launch(int M, const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st) {
   switch (M) {
+#ifdef FLIN_FIT
+    case 32: return flin_fw<32, 128, 2, 4, 1>(a, grid, FW, NC, st);
+    case 64: return flin_fw<64, 64, 3, 4, 1>(a, grid, FW, NC, st);
+    case 128: return flin_fw<128, 64, 2, 4, 2>(a, grid, FW, NC, st);
+#else
     case 32: return flin_fw<32, 128, 4, 4, 1>(a, grid, FW, NC, st);
     case 64: return flin_fw<64, 128, 4, 4, 1>(a, grid, FW, NC, st);
     case 128: return flin_fw<128, 128, 3, 4, 2>(a, grid, FW, NC, st);
+#endif
     case 160: return flin_fw<160, 64, 4, 4, 2>(a, grid, FW, NC, st);
     case 192: return flin_fw<192, 64, 4, 4, 2>(a, grid, FW, NC, st);
     case 256: return flin_fw<256, 64, 4, 4, 2>(a, grid, FW, NC, st);
@@ -1214,8 +1237,10 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
 // bit is set in FLIN_LT (1 qkv, 2 o, 4 gate_up, 8 down), which stay on cuBLASLt, and its attention blocks with AFW filler warps
 // each (0: dcap's kernels); lm_head stays on cuBLASLt unless FLIN_LM=1 runs it through flin too. Arms: the cuBLASLt step on the whole GPU, flin alone with dcap's
 // attention, both with filler warps, the cuBLASLt step again. With FILL_SMS > 0 the two flin arms run on a green split's
-// other SMs and the last beside round 1's pump (W 8, NC 4, S 2048) on FILL_SMS SMs, whose window share and receipts are
-// reported with the rest. A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
+// other SMs and the last beside round 1's pump (FSTEP_PUMP=W:NC:S, default 8:4:2048) on FILL_SMS SMs, whose window share and
+// receipts are reported with the rest. FILL_SMS -1 (co): the pump on every SM at the lowest stream priority and the flin
+// arms on the whole GPU at the highest, so with FW = AFW = 0 the last arm is the step beside a co-resident pump (a
+// FLIN_FIT build with a 1-block pump, PF_CTAS=1). A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
 // step at B. The filler warps' MACs are their step counts over the last rep's launches (each step's tiles are the next
 // `per` ids, fused_layout); the last linear's output is checked on every row when down runs through flin, and so is
 // lm_head's when it does.
@@ -1262,8 +1287,16 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   f.NC = NC;
   Fatt a0, a;
   cudaStream_t full = d.st, ss = d.st, fs = nullptr;
-  int got[2] = {d.sms, 0};
-  if (fill_sms > 0) {
+  int got[2] = {d.sms, 0}, lo = 0, hi = 0, pw = 8, pnc = 4, ps = 2048, smem_sm = 0;
+  if (const char* e = getenv("FSTEP_PUMP")) sscanf(e, "%d:%d:%d", &pw, &pnc, &ps);
+  CK(cudaDeviceGetAttribute(&smem_sm, cudaDevAttrMaxSharedMemoryPerMultiprocessor, 0));
+  const bool co = fill_sms < 0;
+  if (co) {
+    CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+    CK(cudaStreamCreateWithPriority(&ss, cudaStreamNonBlocking, hi));
+    CK(cudaStreamCreateWithPriority(&fs, cudaStreamNonBlocking, lo));
+    got[1] = d.sms;
+  } else if (fill_sms > 0) {
     const int e = gc_split(d.sms - fill_sms, &ss, &fs, got);
     if (e || !fs) {
       fprintf(stderr, "gc_split(%d): %d (filler SMs %d)\n", d.sms - fill_sms, e, got[1]);
@@ -1279,7 +1312,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   DFill pf;
   if (fs) {
     dfill_prep();
-    pf = dfill_make(got[1], 8, 4, 2048, g_c0, g_c1);
+    pf = dfill_make(got[1], pw, pnc, ps, g_c0, g_c1);
   }
   bool wrapped = false;
   d.st = ss;
@@ -1347,10 +1380,13 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   const double bms = (mb.ms + mb2.ms) / 2, cap = 1024.0 * d.sms * mf.mhz * 1e6;
   const double lin_share = t.macs / (mf.ms * 1e-3) / cap, att_share = ta.macs / (mf.ms * 1e-3) / cap;
   const double pump_share = fs ? (double)nwin * pf.macs() / ((w1 - w0) * 1e-3) / cap : 0.0;
-  printf("{\"mode\": \"fstep\", \"pdl\": %d, \"fatt_pdl\": %d, \"lt_mask\": %d, \"fill_sms_req\": %d, \"step_sms\": %d, "
-         "\"fill_sms\": %d, \"pump\": {\"alone_share\": %.5f, \"share\": %.5f, \"chunks\": %lld, \"chunk_macs\": %.6e, "
-         "\"rec_checked\": %d, \"rec_bad\": %d}, \"fill_share_pump\": %.5f, \"fill_share_total\": %.5f, ",
-         (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1], fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
+  printf("{\"mode\": \"fstep\", \"place\": \"%s\", \"prio\": [%d, %d], \"smem_sm\": %d, \"flin_smem\": %d, \"pdl\": %d, "
+         "\"fatt_pdl\": %d, \"lt_mask\": %d, \"fill_sms_req\": %d, \"step_sms\": %d, "
+         "\"fill_sms\": %d, \"pump\": {\"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"alone_share\": %.5f, \"share\": %.5f, "
+         "\"chunks\": %lld, \"chunk_macs\": %.6e, \"rec_checked\": %d, \"rec_bad\": %d}, \"fill_share_pump\": %.5f, "
+         "\"fill_share_total\": %.5f, ",
+         co ? "co" : "split", lo, hi, smem_sm, flin_smem(f.M), (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1],
+         pw, pnc, ps, fs ? pf.tiles : 0, fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
   printf("\"M\": %d, ", f.M);
   printf("\"APS\": %d, \"ALZ\": %d, \"LM\": %d, \"lm_mismatches\": %llu, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.lazy,
