@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.Complete.Zk.Lanes
 import Proofs.Flock.Claims.Complete.Zk.Consumed
 import Proofs.Flock.Claims.Complete.Zk.Replay
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.Complete.Zk.Extras
 
 /-!
 # Masked completeness from named premises
@@ -17,6 +18,9 @@ premises (`JsonSpec`, `Out64`, `StmtOkZk`; `ProverOkZk` follows from `Out64`), t
 gives level 0's lane phase, `laneConstraints_goal`) and the inner proof (`Inner`). The masked replay passes
 (`replay_goal`), so does the ring switch on its claims (`ringSwitchZk_goal`), and where the rep's steps return every
 recorded round is consumed (`consumedZk_goal`).
+
+`complete_zk_relation`: the same at the deployed relation (`deployZk Readable.relation`), where the extra claims'
+algebra holds from `RelS` (`rsExtrasZk`).
 -/
 
 namespace FlockComplete
@@ -64,5 +68,14 @@ theorem complete_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
       inner := hIn
       consumed := consumedZk_goal S h64 hS hP hRp hRS hLg hIn
       capCommitted := JsonRT.capCommittedZk_goal S h64 hS hP hR }
+
+/-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover with error `δcZk H`,
+from named premises. -/
+theorem complete_zk_relation (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
+    (hS : JsonRT.StmtOkZk H Readable.relation) (hR : JsonRT.RepShapedZk H Readable.relation)
+    (hF : JsonRT.RecordFitsZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
+    (hLg : LigeritoZk H Readable.relation) (hIn : Inner H Readable.relation) :
+    Claims.Flock.Complete H (deployZk Readable.relation) honestPZk (δcZk H) :=
+  complete_zk H Readable.relation S h64 hS hR hF hPR (rsExtrasZk H) hLg hIn
 
 end FlockComplete
