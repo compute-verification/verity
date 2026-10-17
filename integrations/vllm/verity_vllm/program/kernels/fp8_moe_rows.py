@@ -7,6 +7,7 @@ against them."""
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Callable
 
 import numpy as np
 
@@ -62,7 +63,7 @@ TWIN_DOT_OF = {HopperE4m3QgmmaDot32.id: "hopper", BlackwellE4m3QmmaDot32.id: "bl
 
 
 def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, G: int = 128, KB: int = 32,
-                             swap: bool = False, g: int | None = None, dot: str = "hopper",
+                             swap: bool = False, g: int | None = None, dot: str | Callable = "hopper",
                              chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
     """`MoeExpertFp8BlockCoordinate_v1{K,G,KB,SWAP}` (g None) or `MoeExpertFp8BlockCoordinateW_v1` (g the pair's f32 topk weight
     word) on ONE (token, expert) pair of `fused_moe_kernel`: xq (K,) e4m3 bytes, sx (K/G,) f32 words, w (N, K) the expert's e4m3
@@ -70,8 +71,9 @@ def moe_expert_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: 
     for each K tile k ascending, `d` = KB/32 `tc_dot32_e4m3` steps from +0, then `acc` = FFMA(FMUL(d, sx[kb]), ws[n // G][kb], acc)
     from +0 (the two scales swapped under `swap`), kb = k*KB // G; then FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`.
     `dot` = "blackwell" is the `_v3{DOT=BlackwellE4m3QmmaDot32_v1}` forms, `qmma_dot32_e4m3` for the step, and "mmav2" the
-    `_v3{DOT=HopperE4m3MmaV2Dot32_v1}` forms (cc 9.0's small-batch tiles), `mmav2_dot32_e4m3`."""
-    step = TWIN_DOTS[dot]
+    `_v3{DOT=HopperE4m3MmaV2Dot32_v1}` forms (cc 9.0's small-batch tiles), `mmav2_dot32_e4m3`.  A callable `dot` is a step of
+    `TWIN_DOTS`' signature that no Definition registers (a capture's competing model)."""
+    step = dot if callable(dot) else TWIN_DOTS[dot]
     xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
     K = xq.size
     check_statics(K, G, KB)
