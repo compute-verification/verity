@@ -59,6 +59,12 @@ def Sim.All {β α : Type} {pL : β → Prop} {pg : α → Prop} (R : β → α 
   | _, _, .coin _ k => ∀ c, Sim.All R D (k c)
   | _, g, .dead _ σ => D g σ
 
+theorem Sim.all_coin {β α C C' : Type} {iF : Fintype C} {iN : Nonempty C} {iF' : Fintype C'} {iN' : Nonempty C'}
+    {pL : β → Prop} {pg : α → Prop} {R : β → α → Prop} {D : (g : Game α) → Strategy g → Prop} {k : C → Game β}
+    {k' : C' → Game α} (e : C' ≃ C) (f : ∀ c', Sim pL pg (k (e c')) (k' c')) (h : ∀ c', Sim.All R D (f c')) :
+    Sim.All R D (@Sim.coin _ _ pL pg C C' iF iN iF' iN' k k' e f) :=
+  h
+
 theorem Sim.All.mono {β α : Type} {pL : β → Prop} {pg : α → Prop} {R R' : β → α → Prop}
     {D D' : (g : Game α) → Strategy g → Prop} (hR : ∀ b a, R b a → R' b a) (hD : ∀ g σ, D g σ → D' g σ) :
     ∀ {L : Game β} {g : Game α} (d : Sim pL pg L g), Sim.All R D d → Sim.All R' D' d
