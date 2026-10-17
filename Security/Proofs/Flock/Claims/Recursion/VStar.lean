@@ -52,6 +52,9 @@ the inner verifier.
   the inner verifier's calls split among the parts' checks, `LogDecomp`, and each part recording its check's calls,
   `PartLogs`). It serves its consumer as the first half does (`PrBAbort_le_PrBI_coll`): a collision among the recorded
   calls at either draw is one `B_I` finds.
+* `codeFacts_of_parts`: all of it at once. With `ReadsThrough`, `PartCallsTrue` at every part and V*'s parts at each
+  shape (`VStarParts`: the part facts above at one layout and opening), the readers give `InnerViewRun`, `CallsNil`,
+  `CallsTrue`, `CallsOpenPlayed`, `CallsLogColl` and `InnerAcceptsColl`.
 * `Opening.twoCalls`: an opening of a commit string `b ‖ c` through two recorded calls, its salt's hash `c` and its
   message's digest under the salt's mask, as hm96 rows open (`Deploy.zeroCommit`'s form). It binds wherever the salt's
   and the message's encodings are injective.
@@ -618,12 +621,27 @@ theorem vstarAccepts_sparse {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin 
     (hD : Decomp H D IV Form.Sparse chk) : VStarAccepts H D I DO Form.Sparse :=
   vstarAccepts_of_parts hR hC hO hS hD
 
-/-- **`InnerAcceptsColl` from V*'s parts at the three shapes** (`innerAcceptsColl_of_vstar`), each shape with its own
-inner checks and the coins and commit strings its V* statements show, at one layout and one opening. -/
+/-- **`InnerAcceptsColl` from `VStarAccepts` at the three shapes**, as `innerAcceptsColl_of_vstar`, which reads only
+`CallsRecord`'s second half (`CallsTrue`). -/
+theorem innerAcceptsColl_of_vstar_true {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
+    {DO : Flock.Deploy Coin Col T} (hRef : Refuses H D) (hT : CallsTrue H D I DO)
+    (hD : VStarAccepts H D I DO Form.Dense) (hH : VStarAccepts H D I DO Form.Holo)
+    (hS : VStarAccepts H D I DO Form.Sparse) : InnerAcceptsColl H D I DO := by
+  intro decO x Ω P ω r c ws hg
+  obtain ⟨s, hs, -⟩ := hRef x Ω P ω r hg.1
+  have ho := eoGives_outerHolds hg
+  have ht := hT decO x Ω P ω r c ws hg
+  rcases Form.shape_cases s.form with hf | hf | hf
+  · exact hD x s hs hf Ω P ω r hg.1 ws ho ht
+  · exact hH x s hs hf Ω P ω r hg.1 ws ho ht
+  · exact hS x s hs hf Ω P ω r hg.1 ws ho ht
+
+/-- **`InnerAcceptsColl` from V*'s parts at the three shapes** (`innerAcceptsColl_of_vstar_true`), each shape with its
+own inner checks and the coins and commit strings its V* statements show, at one layout and one opening. -/
 theorem innerAcceptsColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {IV : Verifier Coin} {L : Layout} {opening : Opening}
     {showsD showsH showsS : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chkD chkH chkS : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
-    {cmtD cmtH cmtS : Msg → ℕ → Msg → Msg} (hRef : Refuses H D) (hCR : CallsRecord H D I DO)
+    {cmtD cmtH cmtS : Msg → ℕ → Msg → Msg} (hRef : Refuses H D) (hT : CallsTrue H D I DO)
     (hR : ReadsThrough H D IV L.msgs L.calls)
     (hCD : ∀ s, PartChecks H D DO L Form.Dense showsD chkD s) (hOD : ∀ s, PartOpens D DO L Form.Dense opening cmtD s)
     (hSD : Staged H D I L Form.Dense showsD cmtD) (hDD : Decomp H D IV Form.Dense chkD)
@@ -632,8 +650,8 @@ theorem innerAcceptsColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner
     (hCS : ∀ s, PartChecks H D DO L Form.Sparse showsS chkS s)
     (hOS : ∀ s, PartOpens D DO L Form.Sparse opening cmtS s) (hSS : Staged H D I L Form.Sparse showsS cmtS)
     (hDS : Decomp H D IV Form.Sparse chkS) : InnerAcceptsColl H D I DO :=
-  innerAcceptsColl_of_vstar hRef hCR (vstarAccepts_dense hR hCD hOD hSD hDD) (vstarAccepts_holo hR hCH hOH hSH hDH)
-    (vstarAccepts_sparse hR hCS hOS hSS hDS)
+  innerAcceptsColl_of_vstar_true hRef hT (vstarAccepts_dense hR hCD hOD hSD hDD)
+    (vstarAccepts_holo hR hCH hOH hSH hDH) (vstarAccepts_sparse hR hCS hOS hSS hDS)
 
 /-! ## Openings at the rounds the inner view plays -/
 
@@ -950,6 +968,43 @@ theorem PrBAbort_le_PrBI_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     obtain ⟨u, v, huv, -⟩ := hs
     exact hcoll s.1.1 s.1.2.1 s.1.2.2.1 s.1.2.2.2 s.2.1 s.2.2 (Option.isSome_iff_exists.2 ⟨(u, v), huv⟩)
   · simp only [hk, ↓reduceDIte, le_refl]
+
+/-! ## The code facts about the readers and V*, together -/
+
+/-- **V\*'s parts at one shape** (the code facts about V*'s parts, the staged V* statements and the inner verifier at
+the shape, at one layout and one opening): some inner check and calls per part, and the coins and commit strings the
+V* statements show, at which every part checks its inner check, opens what it holds and records its check's calls
+(`PartChecks`, `PartOpens`, `PartLogs`), the staged V* statements show the run (`Staged`), the parts' checks are the
+inner verifier and its calls are theirs (`Decomp`, `LogDecomp`), and some part holds each inner round (`Held`). -/
+def VStarParts (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (L : Layout)
+    (opening : Opening) (shape : Form → Prop) : Prop :=
+  ∃ (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop)
+    (cmt : Msg → ℕ → Msg → Msg) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)),
+    (∀ s, PartChecks H D DO L shape shows chk s) ∧ (∀ s, PartOpens D DO L shape opening cmt s) ∧
+      (∀ s, PartLogs H D DO L shape shows logs s) ∧ Staged H D I L shape shows cmt ∧ Decomp H D I.V shape chk ∧
+      LogDecomp H D I.V shape logs ∧ Held D I L shape
+
+/-- **The code facts the recursion's KS reads about the readers and V\*, from V*'s parts**: wherever the compiled
+verifier reads through the deployed readers at the inner verifier (`ReadsThrough`, which `deployRec` at
+`⟨L.msgs, L.calls⟩` does by its definition), every part's SHA-512 gadgets compute `H` (`PartCallsTrue`), and V*'s parts
+meet `VStarParts` at each shape: the inner view is the inner verifier's run (`InnerViewRun`), no witnesses record no
+calls (`CallsNil`), every recorded call is a true evaluation (`CallsTrue`), the played rounds' openings are recorded
+(`CallsOpenPlayed`), and off a collision the inner verifier's calls are recorded (`CallsLogColl`) and the inner view
+accepts (`InnerAcceptsColl`). -/
+theorem codeFacts_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    {L : Layout} {opening : Opening} (hRef : Refuses H D) (hR : ReadsThrough H D I.V L.msgs L.calls)
+    (hT : ∀ s, PartCallsTrue H D DO L s) (hD : VStarParts H D I DO L opening Form.Dense)
+    (hH : VStarParts H D I DO L opening Form.Holo) (hS : VStarParts H D I DO L opening Form.Sparse) :
+    InnerViewRun H D I DO ∧ CallsNil H D ∧ CallsTrue H D I DO ∧ CallsOpenPlayed H D I DO opening ∧
+      CallsLogColl H D I DO ∧ InnerAcceptsColl H D I DO := by
+  obtain ⟨showsD, chkD, cmtD, logsD, hCD, hOD, hLD, hSD, hDD, hLDD, hHD⟩ := hD
+  obtain ⟨showsH, chkH, cmtH, logsH, hCH, hOH, hLH, hSH, hDH, hLDH, hHH⟩ := hH
+  obtain ⟨showsS, chkS, cmtS, logsS, hCS, hOS, hLS, hSS, hDS, hLDS, hHS⟩ := hS
+  have hTr : CallsTrue H D I DO := callsTrue_of_parts hRef hR hT
+  exact ⟨innerViewRun_of_readsThrough hR, callsNil_of_readsThrough hR, hTr,
+    callsOpenPlayed_of_parts hRef hR hHD hOD hSD hHH hOH hSH hHS hOS hSS,
+    callsLogColl_of_parts hRef hTr hR hLD hOD hSD hLDD hLH hOH hSH hLDH hLS hOS hSS hLDS,
+    innerAcceptsColl_of_parts hRef hTr hR hCD hOD hSD hDD hCH hOH hSH hDH hCS hOS hSS hDS⟩
 
 end Facts
 
