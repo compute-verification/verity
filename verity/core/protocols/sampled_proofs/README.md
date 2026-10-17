@@ -148,7 +148,8 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
     sampling design's `closure=`), `register_interiors` (under `TwoStage`), `session`, `deliver` and `outcome`, which
     raise `Refused` (with its `Verdict`) or `Pending`.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
-    challenger's coins (or a sampler) under the expanded design, with a work draw's closure.
+    challenger's coins (or a sampler) under the expanded design, with a work draw's closure: what `register` and
+    `select` run.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `served_domain` is a
   served root's commitment domain.
@@ -164,8 +165,7 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
   sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
 - `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
   (and `verifiers`, both verifiers' outcomes, from `verifier`).
-- `hello`: `check_run`, the run's Hello and its one coin tree over `run_streams`.
-- `verifier`: the verifier of record, `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record` and
+- `verifier`: the verifier of record, `check`, `matches_public`, `check_draw`, `check_proved`, `audit_record` and
   `check_public` and `check_verdicts` (given the service's Python verdict) by the Lean and the Python, `RECORD_VERDICT`
   naming whose is the record's.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
@@ -213,8 +213,9 @@ named with each. A rule leaves this list in the change whose Lean states it.
 - The receipt is `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier": ..., "received":
   "<UTC, %Y-%m-%dT%H:%M:%SZ>"}`, and the draw names it.
 - The verifier holds its own public file (scheme, roots, their domains, its instance count) to the record
-  (`matches_public`). That they are the proved rows' is flock-verify's check of the public file (`checkPublic`), stated
-  by the Lean guarantee `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
+  (`matches_public`). That those roots, domains and instance count are the proved rows' is flock-verify's check of the
+  public file (`checkPublic`), stated deterministically by the Lean guarantee
+  `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
 - `window` is provenance only: `served` roots are what serving committed, and `stand-in` roots a fresh commitment to
   values captured from serving, whose link to the served root is provenance, not proof.
 - A served root's domain (`served_domain`, agreed with vllm-serving-commit) binds the program, the partition, the port,
