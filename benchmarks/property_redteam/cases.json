@@ -287,5 +287,82 @@
       "verity.ml.circuits.ops.s8"
     ],
     "size": {}
+  },
+  {
+    "id": "pv-132096",
+    "kind": "honest",
+    "verdict": "pass",
+    "charge": null,
+    "allow": {
+      "any": 396288
+    },
+    "computes": "P\u00b7V at 132,096 keys, the most a family K holds within s32 for P in [0, 127] against V in [-128, 127]",
+    "rule": "the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte; 21:08Z); without them P reads as s8 and the window ends at 131,071",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {
+      "K": 132096
+    }
+  },
+  {
+    "id": "pv-132128",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "any": 396512
+    },
+    "allow": null,
+    "computes": "P\u00b7V at 132,128 keys over PQUANT's P in [0, 127], bound with A = (0, 126): from runs at -128 the last step clamps at S32_MIN, one comparison a channel",
+    "rule": "operand ranges come from the producer, never declared (19:15Z); the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte; 21:08Z) prove the window to 132,104 keys only",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "pv-no-fmaxf-132096",
+    "kind": "honest",
+    "verdict": "pass",
+    "charge": null,
+    "allow": {
+      "any": 264192
+    },
+    "computes": "P\u00b7V at 132,096 keys with P = RzByte(fminf(p, 127)), no fmaxf: RzByte takes every negative and NaN to 0",
+    "rule": "F32ToU32RzByte's rule is cvt.rzi.u32.f32's, which saturates below at 0; a rule that reads a negative input as a wrapped byte refuses this, over-strict",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "pv-no-fminf-131072",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "any": 262272
+    },
+    "allow": null,
+    "computes": "P\u00b7V at 131,072 keys with P = RzByte(fmaxf(p, 0)), no fminf: P is the truncation's whole low byte, read as s8, so the last step clamps at S32_MAX, one comparison a channel",
+    "rule": "F32ToU32RzByte's output is [0, 255] unless its input is below 256: the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte; 21:08Z)",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "pv-clamp128-132096",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "any": 400512
+    },
+    "allow": null,
+    "computes": "P\u00b7V at 132,096 keys with P = RzByte(fminf(fmaxf(p, 0), 128)): the byte 128 is s8 -128, so the last 33 steps may clamp at S32_MAX, 33 comparisons a channel",
+    "rule": "P's interval is its producer's, [0, 128], and its s8 reading [-128, 127]: the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte; 21:08Z)",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
   }
 ]

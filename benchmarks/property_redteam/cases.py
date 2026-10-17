@@ -3,7 +3,8 @@ ruling, with 19:10Z's family and limb rules) must refuse or fully budget, and th
 
 A check is any function from a `verity.ml.circuits.program.Program` to a verdict, a mapping ``{"refused": bool, "charged":
 {class: units}}`` over `CLASSES`: ``roundings`` (casts, special functions, FP arithmetic, integer floors, mods and wraps, carries
-and limb splits), ``compare_select`` (comparisons, clamps, selects), ``gathers`` (in fresh runtime index bits) and ``other``.
+and limb splits), ``compare_select`` (comparisons, clamps, selects), ``gathers`` (in fresh runtime index bits), ``products``
+(products of two runtime values) and ``other``.
 `CASES` are the cases, each built at full size by `Case.build()`; `run.py` grades a check against them, and `cases.json` is
 their metadata as data (`run.py --json`).
 
@@ -46,7 +47,7 @@ except ModuleNotFoundError as e:
         raise
     FAMILY = None
 
-CLASSES = ("roundings", "compare_select", "gathers", "other")
+CLASSES = ("roundings", "compare_select", "gathers", "products", "other")
 NEEDS_FAMILY = "verity.ml.circuits.ops.s8"
 M32 = (1 << 32) - 1
 S8, S32, F32 = Value(8), Value(32), Value(32)
@@ -447,13 +448,58 @@ def _pquant_body(B, _S, p):
 PQUANT = _fn("RedteamPQuant", [("p", F32)], S8, _pquant_body)
 
 
-def pv(K: int = 131_072, N: int = 128) -> Program:
-    """P (one query row's probabilities over K keys, quantized by PQUANT) against the N value channels."""
-    mm = _matmul(N=N, K=K, A=(0, 127))
+def _quant(name: str, lo: float | None, hi: float | None) -> CompositeDefinition:
+    """P's producer with either clamp left out or moved: RzByte(fminf(fmaxf(p, lo), hi))."""
+    def body(B, _S, p):
+        k, x = _Consts(B), p
+        if lo is not None:
+            x = B.call(_p("F32Fmaxf_v1"), x, k.word(32, _f32(lo)))
+        if hi is not None:
+            x = B.call(_p("F32Fminf_v1"), x, k.word(32, _f32(hi)))
+        return B.call(_p("F32ToU32RzByte_v1"), x)
+    return _fn(name, [("p", F32)], S8, body)
+
+
+#: F32ToU32RzByte takes every negative, -0 and NaN to 0, so P is in [0, 127] without the fmaxf
+PQUANT_NO_FMAXF = _quant("RedteamPQuantNoFmaxf", None, 127.0)
+#: without the fminf P is the truncation's low byte, the whole byte (0xFF from 2^32 and +inf)
+PQUANT_NO_FMINF = _quant("RedteamPQuantNoFminf", 0.0, None)
+#: a clamp at 128, whose byte the s8 step reads as -128
+PQUANT_128 = _quant("RedteamPQuant128", 0.0, 128.0)
+
+#: the most keys a family P·V holds within s32 with P in [0, 127] against V in [-128, 127]: 127·128·K <= 2^31 gives
+#: K <= 132,104, and the family's K is a multiple of 32
+PV_LIMIT = 132_096
+
+
+def _pv(K: int, N: int, quant: CompositeDefinition, A: tuple[int, int], name: str) -> Program:
+    mm = _matmul(N=N, K=K, A=A)
 
     def body(B, _S, p, v):
-        return B.call(mm, B.batch(PQUANT, p, axes=[0]), v)
-    return Program(_fn("RedteamPV", [("p", Array(K, F32)), ("v", Array(N, Array(K, S8)))], Array(N, S32), body))
+        return B.call(mm, B.batch(quant, p, axes=[0]), v)
+    return Program(_fn(name, [("p", Array(K, F32)), ("v", Array(N, Array(K, S8)))], Array(N, S32), body))
+
+
+def pv(K: int = 131_072, N: int = 128) -> Program:
+    """P (one query row's probabilities over K keys, quantized by PQUANT) against the N value channels."""
+    return _pv(K, N, PQUANT, (0, 127), "RedteamPV")
+
+
+def pv_past(K: int = PV_LIMIT + 32, N: int = 128) -> Program:
+    """P·V one family step past the limit, bound with A = (0, 126) so that its no_wrap holds for the declaration."""
+    return _pv(K, N, PQUANT, (0, 126), "RedteamPVPast")
+
+
+def pv_no_fmaxf(K: int = PV_LIMIT, N: int = 128) -> Program:
+    return _pv(K, N, PQUANT_NO_FMAXF, (0, 127), "RedteamPVNoFmaxf")
+
+
+def pv_no_fminf(K: int = 131_072, N: int = 128) -> Program:
+    return _pv(K, N, PQUANT_NO_FMINF, (0, 127), "RedteamPVNoFminf")
+
+
+def pv_clamp128(K: int = PV_LIMIT, N: int = 128) -> Program:
+    return _pv(K, N, PQUANT_128, (0, 127), "RedteamPVClamp128")
 
 
 def pv_splitk(K: int = 131_072, N: int = 128) -> Program:
@@ -472,6 +518,24 @@ def pquant(p: int) -> int:
     """PQUANT on an f32 encoding: NaN and every value below 0 to 0, above 127 to 127, else truncated."""
     x = struct.unpack("<f", struct.pack("<I", p))[0]
     return 0 if x != x else int(min(max(x, 0.0), 127.0))
+
+
+def rz_byte(x: float) -> int:
+    """F32ToU32RzByte on a value: the low byte of cvt.rzi.u32.f32, which takes a NaN and every negative to 0 and every
+    x >= 2^32 to 0xFFFFFFFF."""
+    if x != x or x < 0:
+        return 0
+    return 0xFF if x >= 2.0 ** 32 else int(x) & 0xFF
+
+
+def quant(p: int, lo: float | None, hi: float | None) -> int:
+    """`_quant(lo, hi)` on an f32 encoding: fmaxf and fminf return the operand that is not NaN."""
+    x = struct.unpack("<f", struct.pack("<I", p))[0]
+    if lo is not None:
+        x = lo if x != x else max(x, lo)
+    if hi is not None:
+        x = hi if x != x else min(x, hi)
+    return rz_byte(x)
 
 
 def _rows(N: int, K: int, seed: int) -> list[list[int]]:
@@ -496,15 +560,32 @@ def _linear_samples() -> list[tuple[dict, tuple, tuple]]:
             ({"K": 64}, ([0x80] * 64, [0x80] * 64), (64 * 128 * 128,))]
 
 
-def _pv_reference(p: list[int], v: list[list[int]]) -> tuple[int, ...]:
-    P = [pquant(x) for x in p]
-    return tuple(s32_word(sum(a * _sext8(b) for a, b in zip(P, row))) for row in v)
+def _pv_reference(p: list[int], v: list[list[int]], q: Callable[[int], int] = pquant) -> tuple[int, ...]:
+    """P's bytes against V's, both read as s8 by the step, so a P byte of 128 or more is negative."""
+    P = [q(x) for x in p]
+    return tuple(s32_word(sum(_sext8(a) * _sext8(b) for a, b in zip(P, row))) for row in v)
 
 
 def _pv_samples() -> list[tuple[dict, tuple, tuple]]:
     N, K = 2, 64
     p, v = _ps(K), _rows(N, K, 4)
     return [({"N": N, "K": K}, (p, [c for row in v for c in row]), _pv_reference(p, v))]
+
+
+def _ps_edges(K: int) -> list[int]:
+    """P's inputs at the variants' edges: past 127 and 128, past a byte, at 2^32, the infinities, -0 and NaNs."""
+    vals = [-3.5, 0.0, 0.4, 126.6, 127.9, 128.0, 128.5, 200.0, 255.9, 256.0, 300.0, 2.0 ** 32, float("inf"),
+            float("-inf"), -0.0]
+    return [_f32(vals[k % len(vals)]) if k % 4 else 0x7FC00000 + k for k in range(K)]
+
+
+def _pv_variant_samples(lo: float | None, hi: float | None, seed: int) -> Callable[[], list[tuple[dict, tuple, tuple]]]:
+    def samples() -> list[tuple[dict, tuple, tuple]]:
+        N, K = 2, 64
+        p, v = _ps_edges(K), _rows(N, K, seed)
+        return [({"N": N, "K": K}, (p, [c for row in v for c in row]),
+                 _pv_reference(p, v, lambda x: quant(x, lo, hi)))]
+    return samples
 
 
 def _pv_splitk_samples() -> list[tuple[dict, tuple, tuple]]:
@@ -519,6 +600,7 @@ def _pv_splitk_samples() -> list[tuple[dict, tuple, tuple]]:
 
 _FAM = (NEEDS_FAMILY,)
 _BARE = "a bare IMMA outside the s8 family is refused (19:15Z)"
+_RULES = "the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte; 21:08Z)"
 
 CASES: tuple[Case, ...] = (
     Case("carry-idiv", "attack", "budget", "a carry: (t mod 256, t div 256) of a run word, by I32Rem and I32Div",
@@ -603,6 +685,31 @@ CASES: tuple[Case, ...] = (
     Case("pv-131072-splitk", "honest", "pass", "P·V at 131,072 keys split at 65,536, the halves added by I32Add",
          "free-family halves; the combine is free-affine, its interval within s32", pv_splitk,
          allow={"any": 3 * 131_072}, needs=_FAM, samples=_pv_splitk_samples),
+    Case("pv-132096", "honest", "pass",
+         f"P·V at {PV_LIMIT:,} keys, the most a family K holds within s32 for P in [0, 127] against V in [-128, 127]",
+         _RULES + "; without them P reads as s8 and the window ends at 131,071", pv, allow={"any": 3 * PV_LIMIT},
+         needs=_FAM, size={"K": PV_LIMIT}, samples=_pv_samples),
+    Case("pv-132128", "attack", "refuse",
+         f"P·V at {PV_LIMIT + 32:,} keys over PQUANT's P in [0, 127], bound with A = (0, 126): from runs at -128 the "
+         "last step clamps at S32_MIN, one comparison a channel",
+         "operand ranges come from the producer, never declared (19:15Z); " + _RULES + " prove the window to 132,104 "
+         "keys only", pv_past, charge={"any": 3 * (PV_LIMIT + 32) + 128}, needs=_FAM,
+         samples=_pv_variant_samples(0.0, 127.0, 6)),
+    Case("pv-no-fmaxf-132096", "honest", "pass",
+         f"P·V at {PV_LIMIT:,} keys with P = RzByte(fminf(p, 127)), no fmaxf: RzByte takes every negative and NaN to 0",
+         "F32ToU32RzByte's rule is cvt.rzi.u32.f32's, which saturates below at 0; a rule that reads a negative input as "
+         "a wrapped byte refuses this, over-strict", pv_no_fmaxf, allow={"any": 2 * PV_LIMIT}, needs=_FAM,
+         samples=_pv_variant_samples(None, 127.0, 7)),
+    Case("pv-no-fminf-131072", "attack", "refuse",
+         "P·V at 131,072 keys with P = RzByte(fmaxf(p, 0)), no fminf: P is the truncation's whole low byte, read as s8, "
+         "so the last step clamps at S32_MAX, one comparison a channel",
+         "F32ToU32RzByte's output is [0, 255] unless its input is below 256: " + _RULES, pv_no_fminf,
+         charge={"any": 2 * 131_072 + 128}, needs=_FAM, samples=_pv_variant_samples(0.0, None, 8)),
+    Case("pv-clamp128-132096", "attack", "refuse",
+         f"P·V at {PV_LIMIT:,} keys with P = RzByte(fminf(fmaxf(p, 0), 128)): the byte 128 is s8 -128, so the last 33 "
+         "steps may clamp at S32_MAX, 33 comparisons a channel",
+         "P's interval is its producer's, [0, 128], and its s8 reading [-128, 127]: " + _RULES, pv_clamp128,
+         charge={"any": 3 * PV_LIMIT + 33 * 128}, needs=_FAM, samples=_pv_variant_samples(0.0, 128.0, 9)),
 )
 
 BY_ID = {c.id: c for c in CASES}

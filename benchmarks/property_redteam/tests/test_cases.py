@@ -97,6 +97,20 @@ def test_pquant_keeps_p_in_its_interval():
         assert got == C.pquant(p) and 0 <= got <= 127, hex(p)
 
 
+@pytest.mark.parametrize("q, lo, hi, top", [(C.PQUANT_NO_FMAXF, None, 127.0, 127), (C.PQUANT_NO_FMINF, 0.0, None, 255),
+                                            (C.PQUANT_128, 0.0, 128.0, 128)], ids=["no-fmaxf", "no-fminf", "clamp-128"])
+def test_p_s_producer_variants_take_the_intervals_their_cases_claim(q, lo, hi, top):
+    """The variants against `quant` on every edge class, and their ranges: RzByte saturates negatives to 0, so without
+    fmaxf P stays in [0, 127]; without fminf it is the whole byte; clamped at 128 it reaches the byte the s8 step reads as
+    -128."""
+    edges = [0x7FC00000, 0xFFC00001, _f32(float("inf")), _f32(float("-inf")), _f32(-0.0), _f32(0.0), 1, 0x80000001,
+             _f32(-3.5), _f32(126.6), _f32(127.9), _f32(128.0), _f32(128.5), _f32(200.0), _f32(255.9), _f32(256.0),
+             _f32(300.0), _f32(2.0 ** 32), _f32(3e38), _f32(-3e38)]
+    got = [evaluate(q, p)[0] for p in edges]
+    assert got == [C.quant(p, lo, hi) for p in edges]
+    assert min(got) == 0 and max(got) == top
+
+
 # ---- the runner ----------------------------------------------------------------------------------------------------------
 
 
