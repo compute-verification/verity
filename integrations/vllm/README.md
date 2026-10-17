@@ -372,12 +372,6 @@ pod and fails when a per-rank Program digest moved: fast is the small TP1/TP2 ro
 GLM-5.3's 8 ranks (about 50 minutes on a 256-CPU pod; its Build ends at GP-01, `--build-programs-only 1`, since its manifest takes
 hours).  `--update` re-pins a row from its rebuild and keeps its record, which the same PR re-publishes.
 
-A module that exists for particular models says so with a module-level `__models__ = ("<HF repo id>", ...)`, after its docstring
-(P8 and the by-name lint skip it; its circuit-check sidecar goes with it).  `verity-vllm glue [REPO ...] [--json]` (`glue.py`) reports
-per model the code those markers tie to it (files and lines by area, the rules they define, the lint allowlist entries on them, the
-profile patterns they supply), its family facts and capture maps, and the hours from the store's first run on its staged weights to
-its first PASS record.  A new model's module carries the marker from its first commit.
-
 `verity-vllm rejudge RUN` (`pipeline/tp/rejudge.py`) recomputes a finished TP Commit's gates that need no GPU from what it saved
 (its runs in the row's `runs.jsonl`, each run's verdict from its ranks', manifest agreement, the cross-rank check, `summary.pass`),
 so a fix to gate code can be judged against a failed Commit without rerunning it; it names the gates that need the live values.

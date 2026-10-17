@@ -6,8 +6,6 @@ its scale is not `RMSNormTriton_v1`'s on served-like rows.  The Boolean version'
 (`boolean_dsa_norm.circuit-check.py`)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 

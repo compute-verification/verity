@@ -48,8 +48,6 @@ NS is the token's split count (`launch_num_splits`), the boundaries `split_block
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 from functools import cache
 from importlib import resources

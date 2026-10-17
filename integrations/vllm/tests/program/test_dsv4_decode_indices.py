@@ -4,8 +4,6 @@ max_model_len, the int32 ends, a block number whose product wraps), the extensio
 the statics, and each Boolean Definition against its word."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import numpy as np
 import pytest
 

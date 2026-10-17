@@ -3,8 +3,6 @@ twins the run compares every launch with are `registry.dsv4_moe`'s Programs, the
 MUFU probe's expectations are the Definitions' models, and `--check` finds a changed output."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import hashlib
 import json
 

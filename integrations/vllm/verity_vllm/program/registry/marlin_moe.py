@@ -66,8 +66,6 @@ MarlinMoeExpertGemm(W) reads the schedule once and every column of a tile its cu
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite, primitive
 from verity.ml.circuits.ops.prims import E2M1, F2fpBf16, HopperBF16WgmmaDot16, const
 from verity.ml.circuits.ops.scalar import BIT, BitAnd, I32Add, I32Eq, I32Le, SelectF32, SelectI32

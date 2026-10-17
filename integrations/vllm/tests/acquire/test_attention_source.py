@@ -10,8 +10,6 @@ or a step off it that commits one; and a sparse MLA call boundary bound at a ste
 bound to another step's tensor or a layer's other output, or claimed without the attention source attached."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import copy
 import types
 from collections import Counter

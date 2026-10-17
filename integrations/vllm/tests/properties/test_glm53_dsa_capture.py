@@ -5,8 +5,6 @@ PTX scan, the bindings, the verdict and `main` end to end (the GPU run is `tests
 an H200)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import copy
 import json
 from pathlib import Path

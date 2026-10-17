@@ -6,8 +6,6 @@ pattern; a pair launch of both kinds over two experts, one outside the expert ax
 version."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import itertools
 from types import SimpleNamespace
 

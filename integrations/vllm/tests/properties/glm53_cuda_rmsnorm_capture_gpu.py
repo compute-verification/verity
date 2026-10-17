@@ -13,8 +13,6 @@ Exit 0 is GO, 1 is NO-GO, and 3 is a device-gate failure (cc 9.0, 132 SMs, drive
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import hashlib
 import json

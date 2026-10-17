@@ -1,8 +1,8 @@
 """P8: model and target facts live only in ``program/registry/quarantine/`` and ``engine/profiles/``.
 
-The rule's literal scan: a string literal in code (docstrings and a module's ``__models__`` marker excepted) naming a model
-(``model``), a vLLM layer class (``layer-class``), a GPU (``gpu``) or an ``sm_8x``/``sm_9x``/``sm_10x``/``sm_12x``
-architecture (``sm-arch``), outside the two homes.  Keyed by the normalized token, counted per function, in ``allowlists/p08_facts.json``.
+The rule's literal scan: a string literal in code (docstrings excepted) naming a model (``model``), a vLLM layer class
+(``layer-class``), a GPU (``gpu``) or an ``sm_8x``/``sm_9x``/``sm_10x``/``sm_12x`` architecture (``sm-arch``), outside
+the two homes.  Keyed by the normalized token, counted per function, in ``allowlists/p08_facts.json``.
 
 The scan lives here rather than in ``tests/properties/test_quarantine_lint.py``, which tests the quarantine lint itself.
 """
@@ -40,7 +40,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
     if rel.startswith(HOMES):
         return []
     tree = R.parse_src(src)
-    docs = R.docstring_ids(tree) | R.marker_ids(tree)
+    docs = R.docstring_ids(tree)
     out: list[R.Violation] = []
     for node, symbol in R.walk(tree):
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs:
@@ -81,4 +81,3 @@ def test_detectors_on_examples() -> None:
                    ("model", "qwen"), ("sm-arch", "sm_90a")], got
     assert file_violations(bad, "verity_vllm/engine/profiles/x.py") == []
     assert file_violations("x = ('bf16', 'float32', 'tp1', 'layers.0.mlp')\n", "verity_vllm/tp/x.py") == []
-    assert file_violations("__models__ = ('deepseek-ai/DeepSeek-V4-Pro',)\n", "verity_vllm/tp/x.py") == []

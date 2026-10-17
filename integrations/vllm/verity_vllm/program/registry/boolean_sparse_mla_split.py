@@ -18,8 +18,6 @@ count, the 23 bits below the leading one and the exponent 133 - count, and the s
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from functools import cache
 
 import numpy as np

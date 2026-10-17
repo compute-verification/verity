@@ -3,8 +3,6 @@
 and the X-03 identity check expects no `fa2.m1/L<k>` row; a FlashAttention model (Llama / Qwen) keeps its FA2 / FA3 class."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import types
 
 import pytest
