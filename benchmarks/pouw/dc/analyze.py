@@ -232,6 +232,10 @@ def analyze(family: str, d: Path) -> dict:
                 if rate_of(row, "IMMA"):
                     j["sync_slots"] = rate_of(row, "IMMA") * SYNC_SLOTS
                 joints[name] = j
+            elif name.startswith("tcfU_") and "tc_mxf4_m128_n256" in rows:
+                # kind::mxf4 beside lanes: its fraction of mxf4 alone
+                joints[name] = {"tensor_fraction": rate_of(row, "UTC") / rate_of(rows["tc_mxf4_m128_n256"], "UTC"),
+                                "exact": True, "issue": issue_rates(row, verdicts.get(name))}
             elif name.startswith("tcliU_") and t_alone and rate_of(row, "LDTM"):
                 # words loaded and folded (one LI op each) a SM a clock; L = 64 commits one slot in two of UTCIMMA's
                 cols = int(re.fullmatch(r"tcliU_[xp](\d+)f?(?:_t\d+)?", name).group(1))

@@ -666,6 +666,11 @@ OP_KERNEL(tcfU_li, 512) { lane_until_mma<L_LI, 64, true>(a); }
 OP_KERNEL(tcfU_mix, 512) { lane_until_mma<L_MIX, 64, true>(a); }
 OP_KERNEL(tcfU_li_r512, 512) { lane_until_mma<L_LI, 512, true>(a); }
 OP_KERNEL(tcfU_mix_r512, 512) { lane_until_mma<L_MIX, 512, true>(a); }
+OP_KERNEL(tclaneU_li_r128, 512) { lane_until_mma<L_LI, 128>(a); }
+OP_KERNEL(tclaneU_li_r256, 512) { lane_until_mma<L_LI, 256>(a); }
+OP_KERNEL(tcfU_li_r128, 512) { lane_until_mma<L_LI, 128, true>(a); }
+OP_KERNEL(tcfU_li_r256, 512) { lane_until_mma<L_LI, 256, true>(a); }
+OP_KERNEL(tcfU_li_r1024, 512) { lane_until_mma<L_LI, 1024, true>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -737,6 +742,11 @@ static const OpProbe PROBES[] = {
     {.name = "tcfU_mix", .kernel = (const void*)tcfU_mix, .tpb = 512, .expect = "UTC*MMA*=4;FFMA=32", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcfU_li_r512", .kernel = (const void*)tcfU_li_r512, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=256,IMAD=256", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcfU_mix_r512", .kernel = (const void*)tcfU_mix_r512, .tpb = 512, .expect = "UTC*MMA*=4;FFMA=256", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_li_r128", .kernel = (const void*)tclaneU_li_r128, .tpb = 512, .expect = UI ";LOP3.LUT=64,IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_li_r256", .kernel = (const void*)tclaneU_li_r256, .tpb = 512, .expect = UI ";LOP3.LUT=128,IMAD=128", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcfU_li_r128", .kernel = (const void*)tcfU_li_r128, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=64,IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcfU_li_r256", .kernel = (const void*)tcfU_li_r256, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=128,IMAD=128", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcfU_li_r1024", .kernel = (const void*)tcfU_li_r1024, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=512,IMAD=512", .warps = "1;12", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
