@@ -28,15 +28,15 @@ def canonStr (s : String) : String := Id.run do
   return out ++ "\""
 
 /-- An object's values are smaller than it: `canon`'s termination on objects. -/
-theorem sizeOf_lt_of_mem_toArray {kvs : Std.TreeMap.Raw String Json} {k : String} {v : Json}
-    (h : (k, v) ∈ kvs.toArray) : sizeOf v < sizeOf (Json.obj kvs) := by
+theorem sizeOf_lt_of_mem_toArray {kvs : Std.TreeMap.Raw String Json} {p : String × Json}
+    (h : p ∈ kvs.toArray) : sizeOf p.2 < sizeOf (Json.obj kvs) := by
   rw [← Array.mem_toList_iff, Std.TreeMap.Raw.toList_toArray] at h
   obtain ⟨⟨t⟩⟩ := kvs
   simp only [Std.TreeMap.Raw.toList, Std.DTreeMap.Raw.Const.toList,
     Std.DTreeMap.Internal.Impl.Const.toList_eq_toListModel_map, List.mem_map] at h
-  obtain ⟨p, hm, he⟩ := h
-  have hv : p.2 = v := congrArg Prod.snd he
-  suffices hs : ∀ t : Std.DTreeMap.Internal.Impl String (fun _ => Json), p ∈ t.toListModel → sizeOf p.2 < sizeOf t by
+  obtain ⟨q, hm, he⟩ := h
+  have hv : q.2 = p.2 := congrArg Prod.snd he
+  suffices hs : ∀ t : Std.DTreeMap.Internal.Impl String (fun _ => Json), q ∈ t.toListModel → sizeOf q.2 < sizeOf t by
     have := hs t hm
     rw [hv] at this
     simp only [Json.obj.sizeOf_spec, Std.TreeMap.Raw.mk.sizeOf_spec, Std.DTreeMap.Raw.mk.sizeOf_spec]
@@ -52,26 +52,27 @@ theorem sizeOf_lt_of_mem_toArray {kvs : Std.TreeMap.Raw String Json} {k : String
     · subst ht; simp only [sizeOf]; omega
     · have := ihr ht; omega
 
-/-- Total by `sizeOf`: an array's elements and an object's values are smaller than it, and `attach` carries the
-membership through the sort; the sort still compares keys only, so the output is the order `qsort` gives the keys. -/
+/-- Total by `sizeOf`: an array's elements and an object's values are smaller than it. An object's values are printed
+in the tree's order and the pairs then sorted by key: `qsort` compares keys only, so it puts the keys in the order it
+always did, and its one error is the same whichever value fails first. -/
 def canon : Json → V String
   | Json.null => pure "null"
   | Json.bool b => pure (if b then "true" else "false")
   | Json.num n => if n.exponent == 0 then pure (toString n.mantissa) else throw "canonical JSON: a non-integer number"
   | Json.str s => pure (canonStr s)
   | Json.arr a => do
-    let parts ← a.attach.mapM fun ⟨x, _⟩ => canon x
+    let parts ← a.attach.mapM fun x => canon x.1
     pure ("[" ++ ",".intercalate parts.toList ++ "]")
   | Json.obj kvs => do
-    let items := kvs.toArray.attach.qsort (fun a b => a.1.1 < b.1.1)
-    let parts ← items.mapM fun ⟨(k, v), _⟩ => do pure (canonStr k ++ ":" ++ (← canon v))
-    pure ("{" ++ ",".intercalate parts.toList ++ "}")
+    let vals ← kvs.toArray.attach.mapM fun p => do pure (p.1.1, ← canon p.1.2)
+    let items := vals.qsort (fun a b => a.1 < b.1)
+    pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStr kv.1 ++ ":" ++ kv.2) ++ "}")
 termination_by j => sizeOf j
 decreasing_by
-  · have := Array.sizeOf_lt_of_mem ‹_›
+  · have := Array.sizeOf_lt_of_mem x.2
     simp only [Json.arr.sizeOf_spec]
     omega
-  · exact sizeOf_lt_of_mem_toArray ‹_›
+  · exact sizeOf_lt_of_mem_toArray p.2
 
 /- Total accessors over parsed JSON; every failure names the field. -/
 namespace J
