@@ -14,7 +14,8 @@ pass          before each pass `Serving.advance` runs the engine's next step aga
               `kv_append`, which closes the step before's memory-map line with its re-keys for the pass's window), turns
               each closed line into the audit's append (each written block's payload encoded under its bound key) and
               releases (`memory_map.Replay`, the map's), and the pass reads every live block in store order; its
-              ticket carries the step (`step_of`), which the root's message names
+              ticket carries the step (`step_of`), which the root's message names, and the head of the appends so
+              far, which its seed chains (`audit.chained`: unchanged in a session without appends)
 openings      as the driver's reference: the block, its receipt leaf, and its payload's salt, path and d_j
 ~~~
 
@@ -181,16 +182,17 @@ class StoreBackend:
 
     def launch(self, i: int, after: dict | None, plan: rb.Plan | None = None) -> dict:
         """Pass i of the window over ``plan`` (None: every registered block) at the step the trace last advanced to,
-        chained from ``after``'s root (None: the window's previous root), run when awaited."""
+        chained from ``after``'s root (None: the window's previous root) and the head of every append so far
+        (`audit.Store.head`, all sent with this pass's root or before it), run when awaited."""
         return {"challenge": self.challenge, "i": i, "after": after, "previous": self.previous, "root": None,
-                "plan": plan, "step": None if self.trace is None else self.trace.step}
+                "plan": plan, "step": None if self.trace is None else self.trace.step, "head": self.audit.head}
 
     def step_of(self, ticket: dict) -> int | None:
         return ticket["step"]
 
     def wait(self, ticket: dict):
         after = ticket["after"]
-        prev = ticket["previous"] if after is None else after["root"]
+        prev = audit.chained(ticket["previous"] if after is None else after["root"], ticket["head"])
         root, handle = self.run_pass(rb.seed(ticket["challenge"], ticket["i"], prev), ticket["plan"])
         ticket["root"] = root
         return root, handle
@@ -217,15 +219,30 @@ class StoreBackend:
         return out
 
 
+class Refused(RuntimeError):
+    """The verifier refused the store's registration, answering its hello with ``bye``: a node has one live
+    registration (`audit.Registry`), which only the verifier closes.  ``why`` is the verifier's reason."""
+
+    def __init__(self, verifier: str, why: str) -> None:
+        super().__init__(f"the verifier at {verifier} refused the store's registration: {why}")
+        self.verifier, self.why = verifier, why
+
+
 def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: bytes = b"verity-vllm/store",
           codec: rcodec.Codec = rcodec.DEFAULT, log: Callable[[str], None] = print, **kw: Any) -> list[dict]:
     """The prover's side of a remote session against the verifier at ``verifier`` (``HOST:PORT``): register the
     store, then run each session of ``plan`` (`ProverSide`'s modes: ``serve``, or ``servedrop:K``, which withholds the
-    first K blocks appended) as the verifier starts it.  Returns each session's result."""
+    first K blocks appended) as the verifier starts it.  Returns each session's result; raises `Refused` with the
+    verifier's reason if it refuses the registration."""
     host, port = address(verifier)
     prover, wire = session_module("prover"), session_module("wire")
     p = prover.ProverSide(wire.connect(host, port), backend, node, prover.parse_plan(plan), log=log, **kw)
-    p.register(codec=codec)
+    try:
+        p.register(codec=codec)
+    except wire.Closed as e:
+        if str(e).startswith("refused"):
+            raise Refused(verifier, str(e)) from None
+        raise
     out = []
     for mode, fraction in p.plan:
         head, _, _ = p.expect("session")

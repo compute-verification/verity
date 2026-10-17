@@ -2,8 +2,10 @@
 Commit's hook) connects over localhost TCP to `benchmarks/remote_session`'s verifier, registers the store, records its
 memory map against the registration, and runs each pass after an engine step of a serving-like trace (pages written
 over two steps, held, freed and reused, and one long-lived page re-keyed under L = 1 window).  The honest session is
-accepted with the appends, releases, re-keys and steps the verifier saw; one whose prover withholds a block it appended
-is rejected at a draw on that block.  The verifier's clock is the prover's passes, a tick each (`PassClock`)."""
+accepted with the appends, releases, re-keys and steps the verifier saw, each pass's seed chaining the appends sent
+before its root; one whose prover seeds without them, or withholds a block it appended, is rejected; a second
+registration of a node the verifier holds live is refused with its reason.  The verifier's clock is the prover's
+passes, a tick each (`PassClock`)."""
 from __future__ import annotations
 
 import os
@@ -82,12 +84,24 @@ def store() -> Store:
 class TickingBackend(remote.StoreBackend):
     def __init__(self, clock: PassClock, *args, **kw) -> None:
         super().__init__(*args, **kw)
-        self.clock = clock
+        self.clock, self.heads = clock, []
+
+    def wait(self, ticket: dict):
+        self.heads.append(ticket["head"])
+        return super().wait(ticket)
 
     def run_pass(self, seed: bytes, plan=None):
         out = super().run_pass(seed, plan)
         self.clock.tick()
         return out
+
+
+class HeadlessBackend(TickingBackend):
+    """A prover whose seeds chain only the root before each pass, not the appends sent before it (the seed before
+    the red team's KB-1)."""
+
+    def launch(self, i: int, after, plan=None) -> dict:
+        return {**super().launch(i, after, plan), "head": None}
 
 
 def engine(s: Store):
@@ -109,11 +123,12 @@ def engine(s: Store):
     return step
 
 
-def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096, lifetime: int = 1):
+def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096, lifetime: int = 1,
+        backend=TickingBackend):
     """One session of ``plan``, every receipt of a window drawn at the default ``samples``."""
     clock = PassClock()
     s = store()
-    backend = TickingBackend(clock, s, engine(s), randbytes=random.Random(7).randbytes)
+    backend = backend(clock, s, engine(s), randbytes=random.Random(7).randbytes)
     lsock = wire.listen("127.0.0.1", 0)
     results = []
     th = threading.Thread(target=lambda: results.extend(remote.prove(
@@ -129,12 +144,15 @@ def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096,
     r = v.session(0, v.allowance(v.ping(4)), None)
     th.join()
     sock.close()
-    return r, results[0], s
+    return r, results[0], s, backend
 
 
 def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
-    r, p, s = run("serve")
+    r, p, s, backend = run("serve")
     assert r["accepted"] and p["accepted"] and r["failure"] is None
+    # pass 0 has no append before it (step 0's line closes when step 1 opens), so its seed is the unchained one; every
+    # later pass's seed chains the head of the appends sent before its root (`audit.chained`)
+    assert backend.heads[0] is None and len(backend.heads) > 2 and all(h is not None for h in backend.heads[1:])
     kv, pub = p["kv"], r["record"]["public"]
     assert kv["lifetime"] == pub["lifetime"] == 1 and kv["rekeyed"] > 0
     assert kv["sent_appended"] == pub["appended"] > 0 and kv["sent_released"] == pub["released"] > 0
@@ -153,8 +171,14 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     assert rekeys and min(rekeys) > 1 and kv["rekeyed"] >= 4 * len(rekeys)
 
 
+def test_a_store_session_whose_prover_seeds_without_the_appends_head_is_rejected():
+    r, p, _, backend = run("serve", backend=HeadlessBackend)
+    assert not r["accepted"] and not p["accepted"] and all(h is None for h in backend.heads)
+    assert r["failure"]["failure"] == "receipt-path"
+
+
 def test_a_store_session_whose_prover_withholds_an_appended_block_is_rejected():
-    r, p, _ = run("servedrop:1")
+    r, p, _, _ = run("servedrop:1")
     assert not r["accepted"] and not p["accepted"]
     assert r["failure"]["failure"] == "receipt" and p["failure_on_dropped"] is True and p["dropped"] == [18]
 
@@ -180,3 +204,35 @@ def test_the_hook_takes_a_verifier_address_and_one_session_a_store(monkeypatch):
     b.serving(reg, 1)
     with pytest.raises(RuntimeError, match="one session"):
         b.begin_session()
+
+
+def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reason():
+    """One live registration a node (`audit.Registry`): a hello for a node whose registration the verifier holds live
+    is answered `bye`, and `prove` raises `remote.Refused` with the verifier's reason."""
+    registry, s = audit.Registry(), store()
+    b = remote.StoreBackend(s, engine(s))
+    registry.register(os.urandom(32), b"test-node", b.blocks, b.payload_root(b"test-node"), P512)
+    lsock = wire.listen("127.0.0.1", 0)
+    address = f"127.0.0.1:{lsock.getsockname()[1]}"
+    raised = []
+
+    def prover() -> None:
+        try:
+            remote.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
+        except remote.Refused as e:
+            raised.append(e)
+
+    th = threading.Thread(target=prover, daemon=True)
+    th.start()
+    sock, _ = lsock.accept()
+    lsock.close()
+    v = verifier.Verifier(wire.Conn(sock, clock=PassClock().now), source=os.urandom(32), windows=1, window_ns=5,
+                          samples=64, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=PassClock(), log=lambda m: None,
+                          registry=registry)
+    with pytest.raises(audit.RegistryError, match="live registration") as refused:
+        v.register()
+    th.join()
+    sock.close()
+    (e,) = raised
+    assert e.why == f"refused: {refused.value}" and address in str(e) and e.why in str(e)
+    assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
