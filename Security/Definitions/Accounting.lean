@@ -51,4 +51,4 @@ receipts bound to the matmul on two locations, the deployed bound receipt's sket
 run's guarantee per run is, PoUW's verdict, credits and help on one node of the actual circuit, stacking's carriers:
 device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes, a declared
 circuit's requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are
-its, and the circuit model the lower bounds on a declared circuit are proved over (`Gates`). -/
+its, and the gate model the lower bounds on a declared circuit are proved over (`Gates`). -/
