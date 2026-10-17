@@ -1110,9 +1110,71 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
                      check=False)
             if r.returncode:
                 log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
+    # a PR GitHub marked merged itself (its head reached `into` by drive's landing) leaves its branch too (17 Oct: 2,119 of the
+    # repository's 3,543 branches were already on main)
+    merged = json.loads(gh("pr", "list", "--state", "merged", "--limit", "200", "--json", "number,headRefName,headRefOid"))
+    for p in merged:
+        head = p["headRefName"]
+        if head in used or head in KEEP_BRANCHES or not on(p["headRefOid"]):
+            continue
+        log(f"research merge: {verb}delete {remote}'s branch {head} (merged #{p['number']}'s head, on {into})")
+        if not dry_run:
+            r = _git(repo, "push", "-q", f"--force-with-lease=refs/heads/{head}:{p['headRefOid']}", remote, f":refs/heads/{head}",
+                     check=False)
+            if r.returncode and "remote ref does not exist" not in (r.stderr or ""):
+                log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
     if not done and not moved:
         log(f"research merge: no open pull request is on {remote}/{into} ({tip[:12]}) or based on a branch that is")
     return [p["number"] for p in done], [p["number"] for p in moved]
+
+
+#: branches no sweep touches: the trunk, drive's train branch and its shadow
+KEEP_BRANCHES = frozenset({"main", "next", "queue-shadow"})
+#: a lead's run branch (`cursor/verity-<lead>-XXXX`), which its agent pushes to again
+RUN_BRANCH_RE = re.compile(r"cursor/verity-[a-z0-9-]+-[0-9a-f]{4}")
+MERGED_IDLE_S, UNMERGED_IDLE_S = 86400, 3 * 86400
+
+
+def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: float | None = None, dry_run: bool = False,
+                   gh=None, log=print, chunk: int = 100) -> tuple[int, int]:
+    """The branch sweep (CI-48, 17 Oct, after Daniel asked why the repository had 4,000 branches): delete each branch whose tip
+    is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
+    `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
+    run branches (`RUN_BRANCH_RE`) and every branch an open PR uses as its head or base.  Each push leases the tip it saw, so a
+    branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
+    gh = gh or (lambda *a: _gh_cli(repo, *a))
+    now = time.time() if now is None else now
+    _git(repo, "fetch", "-q", "--prune", remote, f"+refs/heads/*:refs/sweep/{remote}/*")
+    tip = _git(repo, "rev-parse", f"refs/sweep/{remote}/{into}").stdout.strip()
+    prs = json.loads(gh("pr", "list", "--state", "open", "--limit", "1000", "--json", "headRefName,baseRefName"))
+    used = {p["headRefName"] for p in prs} | {p["baseRefName"] for p in prs}
+    rows = _git(repo, "for-each-ref", "--format=%(refname:lstrip=3) %(objectname) %(committerdate:unix)",
+                f"refs/sweep/{remote}/").stdout.splitlines()
+    delete, archive = [], []
+    for name, sha, when in (r.split() for r in rows):
+        if name in KEEP_BRANCHES or name in used or RUN_BRANCH_RE.fullmatch(name):
+            continue
+        idle = now - int(when)
+        if _git(repo, "merge-base", "--is-ancestor", sha, tip, check=False).returncode == 0:
+            if idle > MERGED_IDLE_S:
+                delete.append((name, sha))
+        elif idle > UNMERGED_IDLE_S:
+            archive.append((name, sha))
+    verb = "would " if dry_run else ""
+    log(f"research merge: {verb}delete {len(delete)} branch(es) on {into} a day idle, {verb}archive {len(archive)} unmerged "
+        f"branch(es) three days idle to refs/archive/heads/")
+    if not dry_run:
+        for i in range(0, len(delete), chunk):
+            part = delete[i:i + chunk]
+            _git(repo, "push", "-q", *(f"--force-with-lease=refs/heads/{n}:{s}" for n, s in part), remote,
+                 *(f":refs/heads/{n}" for n, _ in part), check=False)
+        for i in range(0, len(archive), chunk):
+            part = archive[i:i + chunk]
+            _git(repo, "push", "-q", "--atomic", *(f"--force-with-lease=refs/heads/{n}:{s}" for n, s in part), remote,
+                 *(f"{s}:refs/archive/heads/{n}" for n, s in part), *(f":refs/heads/{n}" for n, _ in part), check=False)
+    for line in _git(repo, "for-each-ref", "--format=%(refname)", f"refs/sweep/{remote}/").stdout.split():
+        _git(repo, "update-ref", "-d", line, check=False)
+    return len(delete), len(archive)
 
 
 def _sweep_after(repo: Path, into: str, remote: str) -> None:

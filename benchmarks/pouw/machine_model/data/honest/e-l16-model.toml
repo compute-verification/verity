@@ -1,7 +1,6 @@
 # Honest at L = 16 on the RTX PRO 6000 (sm_120), unmeasured: e_l7qs's schedule with IMMA.16816 (k = 16) for IMMA.16832,
 # so a MMA writes the same 128 words and commits every MMA. The fold is e_l7qs's (duo, 12 warp instructions a MMA); every
-# other class is e_l7qs's a k-step, half its count a MMA. Price it with `--mma-form IMMA16816` (its own line) as well as
-# the least over forms.
+# other class is e_l7qs's a k-step, half its count a MMA.
 name = "e-l16-model"
 status = "provisional"
 source = "SAT-120 from PROFILE's e_l7qs (r20261017-040135-d375): the fold kept a MMA, the rest halved a MMA at k = 16 (note:20261017T0842Z-draft-sat-120)"
@@ -11,6 +10,7 @@ L = 16
 kind = "IMMA.16816.S32.S8.S8"   # mma.sync m16n8k16 s8: the same tensor-pipe time as IMMA.16832 on sm_120 (16.25 vs 16.50 SMSP-cycles alone), half its MACs
 words = 128
 depth = 16
+form = "IMMA16816"              # its census kind (data/forms.toml)
 
 [per_mma]       # warp instructions a MMA by class, everything the kernel issues (the fold included)
 MMA = 1

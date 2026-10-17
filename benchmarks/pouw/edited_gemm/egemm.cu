@@ -176,8 +176,9 @@ DEV void mbar_sleep_warp(uint32_t bar, uint32_t parity) {
 // SLEEP: a consumer waits for its stage with mbar_sleep_warp. UF: UF instructions a MMA after each atom on two pairs of
 // dependent warp-uniform chains from the seed, folded into the receipt at the tile's end, the uniform filler's stand-in;
 // ptxas keeps them on the vector datapath unless USH broadcasts the chains from lane 0 (__shfl_sync, which ptxas reads as
-// warp-uniform) before each atom's (1) or each tile's (2)
-template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0> struct EL : MLW {
+// warp-uniform) before each atom's (1) or each tile's (2). BAT: problems stacked in rows, 2^bsh row tiles of A each against
+// their own tiles_n row tiles of B (d2sgemm.cu's Q K^T, a problem a head)
+template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0, bool BAT = false> struct EL : MLW {
   static_assert(LAG >= -1 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
   static constexpr bool R = RK != NONE, TB = is_tb(RK), XF = RK == XIN || RK == XIN64 || RK == XIN13,
                         HALF = RK == DUO64 || RK == XIN64;
@@ -198,7 +199,7 @@ template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0>
   DEV static void place_tile(const Place& p, int& tm, int& tn) { tm = 8 * p.blk + (p.r & 7); tn = p.r >> 3; }
   // ML::issue with the refill's tile place kept: it recomputes it (raster's divisions) at every refill, in warp 0, which
   // every warp then waits for at the next refill
-  int ipt = -1, itm = 0, itn = 0;
+  int ipt = -1, itm = 0, itn = 0, bsh = 31;
   Place ipl{0, 0};
   DEV void issue() {
     if (pt >= tiles_m * tiles_n) return;
@@ -206,8 +207,9 @@ template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0>
     mbar_wait(empty(ps), pph ^ 1);
     mbar_expect_tx(full(ps), STAGE);
     if (pkt < KT) {
+      const int btn = BAT ? itn + (itm >> bsh) * tiles_n : itn;
       tma_load(stage(ps), &maps->a, full(ps), pkt * BK, itm * (A_BYTES / BK));
-      tma_load(stage(ps) + A_BYTES, &maps->b, full(ps), pkt * BK, itn * ((STAGE - A_BYTES) / BK));
+      tma_load(stage(ps) + A_BYTES, &maps->b, full(ps), pkt * BK, btn * ((STAGE - A_BYTES) / BK));
     } else {
       tma_load(stage(ps), &maps->pa, full(ps), 0, itm * (A_BYTES / BK));
       tma_load(stage(ps) + A_BYTES, &maps->pb, full(ps), 0, itn * ((STAGE - A_BYTES) / BK));

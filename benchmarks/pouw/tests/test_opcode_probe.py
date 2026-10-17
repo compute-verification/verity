@@ -234,6 +234,36 @@ def test_sm89_frontier_counts_every_non_mma_instruction_as_x():
     assert (m, x) == pytest.approx((0.25, 0.25 * 7 / 8))
 
 
+def test_sm89_uniform_lines(tmp_path):
+    """UNI runs on UP at its fastest alone loop's rate, every uniform instruction counted, and costs issue the least SMSP-
+    cycles a uniform instruction adds beside a base loop, less the margin (JI89 that over SCHED)."""
+    rows_, verdicts = [], []
+
+    def put(name, top, counted, cycles):   # cycles: SMSP-cycles a warp-iteration
+        rows_.append({"probe": name, "run": RUN, "counted": counted, "rates": {f"0:{counted}": 4 / cycles * top[counted]}})
+        verdicts.append({"probe": name, "verdict": {"loops": [{"top": {**top, "IADD3": 1, "BRA": 1}}]}})
+
+    for i, p in enumerate(sm89.UNI_ALONE):
+        put(p, {"ULOP3.LUT": 64}, "ULOP3.LUT", 128 * (1 + i / 100))          # 2.0 a SM-clock at best
+    put("ut_0", {"IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 64)
+    for p in sm89.UNI_TENSOR[1:]:
+        put(p, {"ULOP3.LUT": 48, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 100)   # UP's 96, 4% over
+    for base, ps in sm89.UNI_BESIDE.items():
+        put(base, {"LOP3.LUT": 32, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 150)
+        for p in ps:
+            put(p, {"ULOP3.LUT": 64, "LOP3.LUT": 32, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8",
+                150 + 64 * (0.8 if p == "uh_64m" else 1.0))
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows_))
+    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    rws, cen = [["issue", "measured", "r0", "i"], ["JI89", "joint", "r0", "j"]], []
+    sm89.uniform(tmp_path, rws, cen)
+    c = 0.8 / 1.02
+    assert cen == [["UNI", "UP", "2", "0.02", "", "", "", "", RUN], ["UNI", "issue", "", "", f"{c:.6g}", "", "", "", RUN],
+                   ["UNI", "JI89", "", "", f"{c / sm89.TK.SCHED:.9g}", "", "", "", RUN]]
+    assert rws[0][2] == f"r0 {RUN}" and "least at uh_64m" in rws[0][3] and rws[1][2] == f"r0 {RUN}"
+    assert rws[2][:3] == ["UP", "measured", RUN] and "within 4.2%" in rws[2][3]
+
+
 def test_one_census_line_a_kind_and_row(tmp_path):
     binary = tmp_path / "atom"
     binary.write_bytes(b"\x7fELF")
@@ -280,6 +310,32 @@ def test_uniform_reads_each_loop_from_its_sass(tmp_path, capsys):
     assert re.search(r"^ux_16 +3 +17 +26\.000 .* 1\.000 *$", got, re.M)
     assert re.search(r"^ux_16s +3 +17 +18\.000 .* 0\.500 *$", got, re.M)
     assert "  ux: 1->17:1.000  fit 1.000 over U 1..17" in got
+
+
+def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
+    """`eps1.py l2gather`: bytes a SM a clock (rate * words * 4) and TB/s (* nSM * clock) a gather path, the best alone
+    and beside, the MMA kept beside the honest step, and whether any path beats QSTAR's 3.3 TB/s."""
+    out = tmp_path / "out"
+    out.mkdir()
+    imma, ldg = "IMMA.16832.S8.S8", "LDG.E.ENL2.256.STRONG.GPU"
+    jl = [
+        {"probe": "honest", "rate": 2.0, "words": None, "blocks": 100, "sm_mhz": 2000, "rates": {f"0:{imma}": 2.0}},
+        {"probe": "gl_w32", "rate": 0.01, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s128",
+         "rates": {f"0:{ldg}": 0.01}},
+        {"probe": "gl_w32_fast", "rate": 0.02, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s16",
+         "rates": {f"0:{ldg}": 0.02}},
+        {"probe": "gh_w32", "rate": 0.008, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s128 beside",
+         "rates": {f"0:{imma}": 1.0, f"1:{ldg}": 0.008}},
+    ]
+    (out / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in jl))
+    assert eps1.main(["l2gather", str(out)]) == 0
+    got = capsys.readouterr().out
+    assert "honest alone: IMMA 2.00000/SM/clk" in got
+    assert re.search(r"^gl_w32 +s128 +32 +0\.0100 +10\.240 +2\.048 +nan", got, re.M)
+    assert re.search(r"^gh_w32 .* 8\.192 +1\.638 +0\.5000", got, re.M)
+    assert "best alone:  gl_w32_fast 20.480 B/SM/clk = 4.096 TB/s" in got
+    assert "best beside: gh_w32 8.192 B/SM/clk = 1.638 TB/s, MMA kept 0.5000" in got
+    assert "fastest path 4.096 TB/s beats QSTAR's 3.3 TB/s table kernel" in got
 
 
 # ---- the probes themselves -------------------------------------------------------------------------------------------
