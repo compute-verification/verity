@@ -25,13 +25,24 @@ filled with the commit strings of fixed digests under its own salts, kinds `fixe
 
 * `split_exact`: where every masked check along the reference prover's run is faithful (`ZkServer.Faithful`), the
   server releases the reference prover's run cut at some round `t ≤ k` and then the stop (`cutT`). It needs one
-  obligation of the server's definition, `ZkServer.Ref`: at honest worker values, its frame is `P`'s message.
+  obligation of the server's definition, `ZkServer.RefLive`: at honest worker values, after every history on which the
+  run is live, its frame is `P`'s message (`ZkServer.Ref`, the same on every history, gives it).
 * `split`: for every worker, that holds but with probability `∑ ε` over the check coins, the masked checks' soundness
   `ZkServer.CheckSound ε`, a second obligation of the server's definition (exact recomputation meets it at `ε = 0`,
   `checkSound_exact`; the server that recomputes everything meets both, `solo_ok`).
 * `zk_server`: zero knowledge carries over from `ZKmalR` of the reference prover with a guessing loss: the released,
   scheduled transcript is within a factor `k + 1` of `leaky`'s, the simulator that guesses the stop round, plus
   `(k + 1)·(ε_zk + γ·Fork)` and `∑ ε`. `Flock.zk_server_ref` is it at `refP` and `Flock.zk_deployZk_ref`.
+* At the worker's own values (`withHonest`, `srcOf`) every round is faithful (`faithful_own`), so for every worker the
+  server releases, with no probability, the run cut at some round of any prover whose message is its frame at the
+  worker's values where the run is live (`split_own`), and zero knowledge carries over from that prover's with no term
+  for the masked checks (`zk_server_own`). At a masked table that prover is `Worker`'s switched prover
+  (`Table.swView`), whose final message has `S_shvzk`'s distribution at any values that don't read the pads
+  (`Table.worker_shvzk`).
+* The workers never see the pads: the server runs a pad-blind worker (`BWorker`), handed the shared part of the tape
+  and the verifier's answers, never the server's draws or its released messages (`lift`; every `Blind` worker is one,
+  `Blind.eq_lift`), so the values its reference reads (`srcOf_lift`) and its copy (`copy_lift`) are functions of those
+  alone.
 * The stop's leak: `Pr_choice_le`, an event at a stop pattern the worker chooses is within the sum over the patterns
   of the event at each fixed one; `stream_leak`, on a stream of `m` sessions of which at most `b` stop, each in one of
   `r` forms, there are at most `∑_{i ≤ b} C(m, i)·r^i` patterns (`card_pattern_le`), so at most that many times the
@@ -144,6 +155,16 @@ def timed {W R : Type} (S : ZkServer W R) (x : Msg) (τ : List (Msg × Out)) : L
 /-- **The server's frame at honest workers is `P`'s message**, at `(x, w)`. -/
 def Ref {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R) (x : Msg) (w : W) : Prop :=
   ∀ ρ h, (((P w).next x h ρ).eval H).1 = S.refMsg x w ρ h
+
+/-- **`Ref` where the worker's run is live**: after every history on which every round so far passed, the frame at
+honest workers is `P`'s message. -/
+def RefLive {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R) (wk : S.Worker) (x : Msg) (w : W) :
+    Prop :=
+  ∀ ρ κ h, S.live wk x w ρ κ h = true → (((P w).next x h ρ).eval H).1 = S.refMsg x w ρ h
+
+theorem Ref.live {W R : Type} {S : ZkServer W R} {H : Msg → Msg} {P : W → Prover R} {x : Msg} {w : W}
+    (hRef : S.Ref H P x w) (wk : S.Worker) : S.RefLive H P wk x w :=
+  fun ρ _ h _ => hRef ρ h
 
 /-- **The masked checks are sound**: over the check coins, a wrong value passes slot `s` of round `j` with probability
 at most `ε x j s`, at every copy. -/
@@ -314,7 +335,7 @@ theorem next_stop {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w :
 /-- **The split, exactly**: where every masked check along `P`'s run is faithful, the server releases `P`'s run cut
 at some round `t ≤ n`. -/
 theorem split_exact {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R) (x : Msg) (w : W)
-    (hRef : S.Ref H P x w) (wk : S.Worker) (ask : List Msg → Out) (n : ℕ) (ρ : R) (κ : S.Chk)
+    (wk : S.Worker) (hRef : S.RefLive H P wk x w) (ask : List Msg → Out) (n : ℕ) (ρ : R) (κ : S.Chk)
     (hF : ∀ i < (interact ask (fun h => (((P w).next x h ρ).eval H).1) n []).length,
       S.Faithful wk x w ρ κ (histOf ((interact ask (fun h => (((P w).next x h ρ).eval H).1) n []).take i))) :
     ∃ t ≤ n, interact ask (S.next wk x w ρ κ) n [] =
@@ -356,16 +377,17 @@ theorem split_exact {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W →
       have := congrArg List.length hst
       simp only [List.length_take] at this
       omega
-    rw [stopAt_of_lt (by rw [hgl]; exact hit), e,
-      show pm (histOf (τ.take i)) = S.refMsg x w ρ (histOf (τ.take i)) from hRef ρ _]
-    refine S.next_eq wk x w ρ κ _ ?_ fun i' hi' => ?_
-    · refine List.all_eq_true.mpr fun i' hi' => ?_
+    have hlv : S.live wk x w ρ κ (histOf (τ.take i)) = true := by
+      refine List.all_eq_true.mpr fun i' hi' => ?_
       rw [List.mem_range, hlen i hiτ.le] at hi'
       rw [histOf_take_take τ (by omega : i' ≤ i)]
       exact hgood i' (by omega) (by omega)
-    · rw [hlen i hiτ.le] at hi'
-      rw [histOf_take_take τ hi']
-      exact hF i' (by omega)
+    rw [stopAt_of_lt (by rw [hgl]; exact hit), e,
+      show pm (histOf (τ.take i)) = S.refMsg x w ρ (histOf (τ.take i)) from hRef ρ κ _ hlv]
+    refine S.next_eq wk x w ρ κ _ hlv fun i' hi' => ?_
+    rw [hlen i hiτ.le] at hi'
+    rw [histOf_take_take τ hi']
+    exact hF i' (by omega)
   · have hin : i < n := lt_of_lt_of_le hi hσn
     obtain ⟨-, hpf⟩ := hbad (by omega)
     rw [stopAt_of_ge (by rw [hgl]; exact hit)]
@@ -432,7 +454,7 @@ theorem split {W R : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H : Msg 
       ∃ i ∈ Finset.range n, ∃ s ∈ (Finset.range (S.nS x i)).filter (fun s => S.kind x i s = .masked), E i s ω := by
     intro ω hω
     by_contra hno
-    refine hω (S.split_exact H P x w hRef wk ask n ω.1 ω.2 fun i hi s hs hm hc => ?_)
+    refine hω (S.split_exact H P x w wk (hRef.live wk) ask n ω.1 ω.2 fun i hi s hs hm hc => ?_)
     change i < (τ ω.1).length at hi
     change s < S.nS x (hP ω.1 i).length at hs
     change S.kind x (hP ω.1 i).length s = .masked at hm
@@ -477,24 +499,26 @@ theorem split {W R : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H : Msg 
                 exact hc
         · exact (Pr_mono fun κ (hκ : E i s (ρ, κ)) => absurd hκ.1 hiτ).trans (le_of_eq_of_le Pr_false (hε i s))
 
-/-- **The released transcript against `P`'s**: for every worker and every verifier, an event of the server's scheduled
-transcript is within the sum over the stop rounds `t ≤ k` of the event at `P`'s run cut at `t`, plus the masked
-checks' errors. -/
-theorem real_le {W R Θ : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
-    (x : Msg) (w : W) (hRef : S.Ref H P x w) (ε : Msg → ℕ → ℕ → ℝ) (hε : ∀ j s, 0 ≤ ε x j s)
-    (hS : S.CheckSound ε) (wk : S.Worker) (Vs : VStar Θ) (θ : Θ) (Ev : List ((Msg × Out) × ℕ) → Prop) :
+/-- **The released transcript against `P`'s, from a split**: if the server's run is `P`'s run cut at some round but
+with probability at most `e`, an event of the server's scheduled transcript is within the sum over the stop rounds
+`t ≤ k` of the event at `P`'s run cut at `t`, plus `e`. -/
+theorem real_le_of_split {W R Θ : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H : Msg → Msg)
+    (P : W → Prover R) (x : Msg) (w : W) (wk : S.Worker) (Vs : VStar Θ) (θ : Θ) (e : ℝ)
+    (hsplit : Pr (fun ω : R × S.Chk => ¬ ∃ t ≤ Vs.k x,
+      interact (fun as => ((Vs.next x as θ).eval H).1) (S.next wk x w ω.1 ω.2) (Vs.k x) [] =
+        cutT (fun as => ((Vs.next x as θ).eval H).1) S.stop t (Vs.k x)
+          (interact (fun as => ((Vs.next x as θ).eval H).1) (fun h => (((P w).next x h ω.1).eval H).1)
+            (Vs.k x) [])) ≤ e)
+    (Ev : List ((Msg × Out) × ℕ) → Prop) :
     Pr (fun ω : R × S.Chk => Ev (S.timed x (runStar H (S.prover wk w) Vs x ω θ).msgs)) ≤
       ∑ t ∈ Finset.range (Vs.k x + 1), Pr (fun ρ : R => Ev (S.timed x
-        (cutT (fun as => ((Vs.next x as θ).eval H).1) S.stop t (Vs.k x) (runStar H (P w) Vs x ρ θ).msgs))) +
-      ∑ i ∈ Finset.range (Vs.k x),
-        ∑ s ∈ (Finset.range (S.nS x i)).filter (fun s => S.kind x i s = .masked), ε x i s := by
+        (cutT (fun as => ((Vs.next x as θ).eval H).1) S.stop t (Vs.k x) (runStar H (P w) Vs x ρ θ).msgs))) + e := by
   set ask : List Msg → Out := fun as => ((Vs.next x as θ).eval H).1 with hask
   have hsrv : ∀ ω : R × S.Chk, (runStar H (S.prover wk w) Vs x ω θ).msgs =
       interact ask (S.next wk x w ω.1 ω.2) (Vs.k x) [] := fun ω => by
     rw [runStar_msgs]; rfl
   have hP : ∀ ρ : R, (runStar H (P w) Vs x ρ θ).msgs =
       interact ask (fun h => (((P w).next x h ρ).eval H).1) (Vs.k x) [] := fun ρ => runStar_msgs H (P w) Vs x ρ θ
-  have hsplit := S.split H P x w hRef ε hε hS wk ask (Vs.k x)
   calc _ ≤ Pr (fun ω : R × S.Chk => (¬ ∃ t ≤ Vs.k x, interact ask (S.next wk x w ω.1 ω.2) (Vs.k x) [] =
           cutT ask S.stop t (Vs.k x) (interact ask (fun h => (((P w).next x h ω.1).eval H).1) (Vs.k x) [])) ∨
           ∃ t ∈ Finset.range (Vs.k x + 1),
@@ -513,6 +537,19 @@ theorem real_le {W R Θ : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H :
         congr 1
         refine Finset.sum_congr rfl fun t _ => ?_
         exact Pr_fst (fun ρ : R => Ev (S.timed x (cutT ask S.stop t (Vs.k x) (runStar H (P w) Vs x ρ θ).msgs)))
+
+/-- **The released transcript against `P`'s**: for every worker and every verifier, an event of the server's scheduled
+transcript is within the sum over the stop rounds `t ≤ k` of the event at `P`'s run cut at `t`, plus the masked
+checks' errors. -/
+theorem real_le {W R Θ : Type} [Fintype R] [Nonempty R] (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
+    (x : Msg) (w : W) (hRef : S.Ref H P x w) (ε : Msg → ℕ → ℕ → ℝ) (hε : ∀ j s, 0 ≤ ε x j s)
+    (hS : S.CheckSound ε) (wk : S.Worker) (Vs : VStar Θ) (θ : Θ) (Ev : List ((Msg × Out) × ℕ) → Prop) :
+    Pr (fun ω : R × S.Chk => Ev (S.timed x (runStar H (S.prover wk w) Vs x ω θ).msgs)) ≤
+      ∑ t ∈ Finset.range (Vs.k x + 1), Pr (fun ρ : R => Ev (S.timed x
+        (cutT (fun as => ((Vs.next x as θ).eval H).1) S.stop t (Vs.k x) (runStar H (P w) Vs x ρ θ).msgs))) +
+      ∑ i ∈ Finset.range (Vs.k x),
+        ∑ s ∈ (Finset.range (S.nS x i)).filter (fun s => S.kind x i s = .masked), ε x i s :=
+  S.real_le_of_split H P x w wk Vs θ _ (S.split H P x w hRef ε hε hS wk _ (Vs.k x)) Ev
 
 end ZkServer
 
@@ -534,6 +571,54 @@ theorem leaky_out {Θ : Type} (H : Msg → Msg) (Sim : Simulator) (k : Msg → �
 
 namespace ZkServer
 
+/-- **Zero knowledge of the server from a bound against `P`'s cut runs**: if an event of the server's scheduled
+transcript is within the sum over the stop rounds of the event at `P`'s cut run, plus `e`, and `P` meets `ZKmalR`, it
+has probability at most `k + 1` times its probability at the guessing simulator `leaky` plus `ε_zk + γ·Fork`, plus
+`e`. -/
+theorem zk_of_real {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (S : ZkServer W (N × Ω))
+    (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover (N × Ω)) (Rl : Rel W) (Sim : Simulator) (εzk γ : Msg → ℝ)
+    (hZK : ZKmalR H k P Rl Sim εzk γ) (x : Msg) (w : W) (hR : Rl x w) (wk : S.Worker) (Vs : VStar Θ) (θ : Θ)
+    (hk : Vs.k x = k x) (Ev : List ((Msg × Out) × ℕ) → Prop) (e : ℝ)
+    (hr : Pr (fun ω : (N × Ω) × S.Chk => Ev (S.timed x (runStar H (S.prover wk w) Vs x ω θ).msgs)) ≤
+      ∑ t ∈ Finset.range (Vs.k x + 1), Pr (fun ρ : N × Ω => Ev (S.timed x
+        (cutT (fun as => ((Vs.next x as θ).eval H).1) S.stop t (Vs.k x) (runStar H (P w) Vs x ρ θ).msgs))) + e) :
+    Pr (fun ω : (N × Ω) × S.Chk => Ev (S.timed x (runStar H (S.prover wk w) Vs x ω θ).msgs)) ≤
+      (k x + 1) * (Pr (fun c : (leaky Sim k S.stop).C x => Ev (S.timed x ((leaky Sim k S.stop).out H Vs θ x c))) +
+        εzk x + γ x * (Fork H (P w) Vs θ x).Pr H) + e := by
+  rw [hk] at hr
+  set ask : List Msg → Out := fun as => ((Vs.next x as θ).eval H).1 with hask
+  set e₀ := εzk x + γ x * (Fork H (P w) Vs θ x).Pr H with he₀
+  set B : ℕ → ℝ := fun t => Pr (fun c : Sim.C x => Ev (S.timed x (cutT ask S.stop t (k x) (Sim.out H Vs θ x c))))
+    with hB
+  have hA : ∀ t, Pr (fun ρ : N × Ω => Ev (S.timed x (cutT ask S.stop t (k x) (runStar H (P w) Vs x ρ θ).msgs))) ≤
+      B t + e₀ := fun t => by
+    have := hZK x w hR Θ Vs θ hk (fun τ => Ev (S.timed x (cutT ask S.stop t (k x) τ)))
+    rw [he₀]
+    linarith [le_abs_self (Pr (fun ρ : N × Ω => Ev (S.timed x (cutT ask S.stop t (k x)
+      (runStar H (P w) Vs x ρ θ).msgs))) - B t)]
+  have hsim : Pr (fun c : (leaky Sim k S.stop).C x => Ev (S.timed x ((leaky Sim k S.stop).out H Vs θ x c))) =
+      (∑ t ∈ Finset.range (k x + 1), B t) / (k x + 1 : ℕ) := by
+    rw [Finset.sum_range (fun t => B t)]
+    simp only [leaky_out]
+    exact Pr_guess (fun c : Fin (k x + 1) × Sim.C x =>
+      Ev (S.timed x (cutT ask S.stop c.1 (k x) (Sim.out H Vs θ x c.2))))
+  have hpos : (0 : ℝ) < (k x + 1 : ℕ) := by exact_mod_cast Nat.succ_pos _
+  have hsum : ∑ t ∈ Finset.range (k x + 1), Pr (fun ρ : N × Ω => Ev (S.timed x
+      (cutT ask S.stop t (k x) (runStar H (P w) Vs x ρ θ).msgs))) ≤
+      (k x + 1) * (Pr (fun c : (leaky Sim k S.stop).C x => Ev (S.timed x ((leaky Sim k S.stop).out H Vs θ x c))) +
+        e₀) := by
+    calc _ ≤ ∑ t ∈ Finset.range (k x + 1), (B t + e₀) := Finset.sum_le_sum fun t _ => hA t
+      _ = (∑ t ∈ Finset.range (k x + 1), B t) + (k x + 1) * e₀ := by
+          rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_range, nsmul_eq_mul]
+          push_cast
+          ring
+      _ = _ := by
+          rw [hsim]
+          field_simp
+          push_cast
+          ring
+  linarith
+
 /-- **Zero knowledge of the server**, from `P`'s: for every worker, if `P` is zero knowledge against a malicious
 verifier (`ZKmalR`), an event of the server's scheduled transcript has probability at most `k + 1` times its
 probability at the guessing simulator `leaky` plus `ε_zk + γ·Fork`, plus the masked checks' errors. The factor `k + 1`
@@ -549,39 +634,8 @@ theorem zk_server {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [None
       ∑ i ∈ Finset.range (k x),
         ∑ s ∈ (Finset.range (S.nS x i)).filter (fun s => S.kind x i s = .masked), ε x i s := by
   have hr := S.real_le H P x w hRef ε hε hS wk Vs θ Ev
-  rw [hk] at hr
-  set ask : List Msg → Out := fun as => ((Vs.next x as θ).eval H).1 with hask
-  set e := εzk x + γ x * (Fork H (P w) Vs θ x).Pr H with he
-  set B : ℕ → ℝ := fun t => Pr (fun c : Sim.C x => Ev (S.timed x (cutT ask S.stop t (k x) (Sim.out H Vs θ x c))))
-    with hB
-  have hA : ∀ t, Pr (fun ρ : N × Ω => Ev (S.timed x (cutT ask S.stop t (k x) (runStar H (P w) Vs x ρ θ).msgs))) ≤
-      B t + e := fun t => by
-    have := hZK x w hR Θ Vs θ hk (fun τ => Ev (S.timed x (cutT ask S.stop t (k x) τ)))
-    rw [he]
-    linarith [le_abs_self (Pr (fun ρ : N × Ω => Ev (S.timed x (cutT ask S.stop t (k x)
-      (runStar H (P w) Vs x ρ θ).msgs))) - B t)]
-  have hsim : Pr (fun c : (leaky Sim k S.stop).C x => Ev (S.timed x ((leaky Sim k S.stop).out H Vs θ x c))) =
-      (∑ t ∈ Finset.range (k x + 1), B t) / (k x + 1 : ℕ) := by
-    rw [Finset.sum_range (fun t => B t)]
-    simp only [leaky_out]
-    exact Pr_guess (fun c : Fin (k x + 1) × Sim.C x =>
-      Ev (S.timed x (cutT ask S.stop c.1 (k x) (Sim.out H Vs θ x c.2))))
-  have hpos : (0 : ℝ) < (k x + 1 : ℕ) := by exact_mod_cast Nat.succ_pos _
-  have hsum : ∑ t ∈ Finset.range (k x + 1), Pr (fun ρ : N × Ω => Ev (S.timed x
-      (cutT ask S.stop t (k x) (runStar H (P w) Vs x ρ θ).msgs))) ≤
-      (k x + 1) * (Pr (fun c : (leaky Sim k S.stop).C x => Ev (S.timed x ((leaky Sim k S.stop).out H Vs θ x c))) +
-        e) := by
-    calc _ ≤ ∑ t ∈ Finset.range (k x + 1), (B t + e) := Finset.sum_le_sum fun t _ => hA t
-      _ = (∑ t ∈ Finset.range (k x + 1), B t) + (k x + 1) * e := by
-          rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_range, nsmul_eq_mul]
-          push_cast
-          ring
-      _ = _ := by
-          rw [hsim]
-          field_simp
-          push_cast
-          ring
-  linarith
+  have h := S.zk_of_real H k P Rl Sim εzk γ hZK x w hR wk Vs θ hk Ev _ hr
+  rwa [hk] at h
 
 /-- **The server that recomputes everything**: one recomputed slot a round, `P`'s message. -/
 def solo {W R : Type} (H : Msg → Msg) (P : W → Prover R) : ZkServer W R where
@@ -612,6 +666,114 @@ theorem checkSound_exact {W R : Type} (S : ZkServer W R)
   refine le_of_eq (Eq.trans (Pr_congr fun κ => ?_) Pr_false)
   rw [hrel]
   simp [hv]
+
+/-! ## At the worker's own values -/
+
+/-- **The worker's values as the honest ones**: slot `s` of round `j` after `h` is the worker's value there, `cst`
+where it misses its time. -/
+def srcOf {W R : Type} (S : ZkServer W R) (wk : S.Worker) : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val :=
+  fun x j s w ρ h => (wk x w ρ h s).getD (S.cst x j s)
+
+/-- The server with `src` as its honest worker: what it runs and releases doesn't read `honest`, only `Ref`,
+`RefLive`, `Faithful` and `CheckSound` do. -/
+def withHonest {W R : Type} (S : ZkServer W R) (src : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) :
+    ZkServer W R :=
+  { S with honest := src }
+
+set_option smartUnfolding false in
+theorem next_withHonest {W R : Type} (S : ZkServer W R) (src : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val)
+    (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk) :
+    (S.withHonest src).next wk x w ρ κ = S.next wk x w ρ κ :=
+  rfl
+
+/-- **At its own values every round is faithful**: a masked value that passes its check is the worker's. -/
+theorem faithful_own {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
+    (h : List (Msg × Msg)) : (S.withHonest (S.srcOf wk)).Faithful wk x w ρ κ h := by
+  intro s _ hm hc
+  rcases hu : wk x w ρ h s with _ | v
+  · rw [hu] at hc
+    simp only [check, hm] at hc
+    exact absurd hc Bool.false_ne_true
+  · show some v = some ((wk x w ρ h s).getD (S.cst x h.length s))
+    rw [hu, Option.getD_some]
+
+/-- **The split at the worker's own values, exactly**: for every worker, check coins and tape, the server releases the
+run cut at some round `t ≤ n` of any prover whose message is the server's frame at the worker's values where the run
+is live. No masked check needs to be sound. -/
+theorem split_own {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R) (x : Msg) (w : W)
+    (wk : S.Worker) (hRef : (S.withHonest (S.srcOf wk)).RefLive H P wk x w) (ask : List Msg → Out) (n : ℕ) (ρ : R)
+    (κ : S.Chk) :
+    ∃ t ≤ n, interact ask (S.next wk x w ρ κ) n [] =
+      cutT ask S.stop t n (interact ask (fun h => (((P w).next x h ρ).eval H).1) n []) := by
+  have h := (S.withHonest (S.srcOf wk)).split_exact H P x w wk hRef ask n ρ κ fun _ _ => S.faithful_own wk x w ρ κ _
+  rw [next_withHonest] at h
+  exact h
+
+/-- **Zero knowledge of the server at the worker's own values**: for every worker, if a prover `P` whose message is
+the server's frame at the worker's values where the run is live meets `ZKmalR`, an event of the server's scheduled
+transcript has probability at most `k + 1` times its probability at the guessing simulator `leaky` plus
+`ε_zk + γ·Fork`, with no term for the masked checks. -/
+theorem zk_server_own {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (S : ZkServer W (N × Ω))
+    (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover (N × Ω)) (Rl : Rel W) (Sim : Simulator) (εzk γ : Msg → ℝ)
+    (hZK : ZKmalR H k P Rl Sim εzk γ) (x : Msg) (w : W) (hR : Rl x w) (wk : S.Worker)
+    (hRef : (S.withHonest (S.srcOf wk)).RefLive H P wk x w) (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = k x)
+    (Ev : List ((Msg × Out) × ℕ) → Prop) :
+    Pr (fun ω : (N × Ω) × S.Chk => Ev (S.timed x (runStar H (S.prover wk w) Vs x ω θ).msgs)) ≤
+      (k x + 1) * (Pr (fun c : (leaky Sim k S.stop).C x => Ev (S.timed x ((leaky Sim k S.stop).out H Vs θ x c))) +
+        εzk x + γ x * (Fork H (P w) Vs θ x).Pr H) := by
+  have hsplit : Pr (fun ω : (N × Ω) × S.Chk => ¬ ∃ t ≤ Vs.k x,
+      interact (fun as => ((Vs.next x as θ).eval H).1) (S.next wk x w ω.1 ω.2) (Vs.k x) [] =
+        cutT (fun as => ((Vs.next x as θ).eval H).1) S.stop t (Vs.k x)
+          (interact (fun as => ((Vs.next x as θ).eval H).1) (fun h => (((P w).next x h ω.1).eval H).1)
+            (Vs.k x) [])) ≤ 0 :=
+    le_of_eq (Eq.trans (Pr_congr fun ω => iff_false_intro
+      (not_not_intro (S.split_own H P x w wk hRef _ (Vs.k x) ω.1 ω.2))) Pr_false)
+  have h := S.zk_of_real H k P Rl Sim εzk γ hZK x w hR wk Vs θ hk Ev 0
+    (S.real_le_of_split H P x w wk Vs θ 0 hsplit Ev)
+  rwa [add_zero] at h
+
+/-! ## Workers never see the pads -/
+
+/-- **A pad-blind worker** on the server's tape `Rw × Rp`, `Rp` the server's own draws (the pads, their masks, the
+salts): a function of the statement, the witness, the part `Rw` of the tape the workers are given, and the verifier's
+answers so far, to each slot's value. -/
+abbrev BWorker {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) : Type := Msg → W → Rw → List Msg → ℕ → Option S.Val
+
+/-- **The worker the server runs** at a pad-blind one: it is handed `ρ.1` and the answers `h.map Prod.snd`, never the
+server's draws `ρ.2` or its released messages. -/
+def lift {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (bw : S.BWorker) : S.Worker :=
+  fun x w ρ h s => bw x w ρ.1 (h.map Prod.snd) s
+
+/-- **A worker never sees the server's draws**: what it returns is the same at two tapes with the same shared part and
+two histories with the same answers. -/
+def Blind {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (wk : S.Worker) : Prop :=
+  ∀ x w (ρ ρ' : Rw × Rp) (h h' : List (Msg × Msg)) s, ρ.1 = ρ'.1 → h.map Prod.snd = h'.map Prod.snd →
+    wk x w ρ h s = wk x w ρ' h' s
+
+theorem lift_blind {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (bw : S.BWorker) : S.Blind (S.lift bw) :=
+  fun _ _ _ _ _ _ _ hρ hh => by simp only [lift, hρ, hh]
+
+/-- **Every pad-blind worker is one the server runs**, at any fixed draws `rp`. -/
+theorem Blind.eq_lift {W Rw Rp : Type} {S : ZkServer W (Rw × Rp)} {wk : S.Worker} (hb : S.Blind wk) (rp : Rp) :
+    wk = S.lift fun x w r as s => wk x w (r, rp) (as.map fun a => (([] : Msg), a)) s := by
+  funext x w ρ h s
+  refine hb x w ρ (ρ.1, rp) h _ s rfl ?_
+  simp only [List.map_map, Function.comp_def]
+
+/-- **The values the server's reference reads never read its draws**: at a pad-blind worker, `srcOf` at round `j` is
+the worker's value from `x`, `w`, `ρ.1` and the answers alone. -/
+theorem srcOf_lift {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (bw : S.BWorker) (x : Msg) (j s : ℕ) (w : W)
+    (ρ : Rw × Rp) (h : List (Msg × Msg)) :
+    S.srcOf (S.lift bw) x j s w ρ h = (bw x w ρ.1 (h.map Prod.snd) s).getD (S.cst x j s) :=
+  rfl
+
+/-- **The server's copy never reads its draws** at a pad-blind worker. -/
+theorem copy_lift {W Rw Rp : Type} (S : ZkServer W (Rw × Rp)) (bw : S.BWorker) (x : Msg) (w : W)
+    (ρ ρ' : Rw × Rp) (h h' : List (Msg × Msg)) (hρ : ρ.1 = ρ'.1) (hh : h.map Prod.snd = h'.map Prod.snd) :
+    S.copy (S.lift bw) x w ρ h = S.copy (S.lift bw) x w ρ' h' := by
+  have hl : h.length = h'.length := by simpa only [List.length_map] using congrArg List.length hh
+  funext i s
+  simp only [copy, lift, hl, hρ, List.map_take, hh]
 
 end ZkServer
 
