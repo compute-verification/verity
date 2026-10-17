@@ -3,7 +3,8 @@
 stage, which returns the row scalar to every unit; GEMM's: the units chained through their accumulators): the wires pass
 where some order fills every slot's input ports from the leaves, port by port, and are refused at a cycle through a
 slot's rows, at an input port no wire or leaf cut fills, and at a row or output reading an input column no port carries.
-`proved_scope.rs`'s `wires_are_lean_acyclic` runs the same circuits.
+With hidden outputs those circuits are in scope (`scopeOkI`), with public outputs not (`scopeOk`). `proved_scope.rs`'s
+`wires_are_lean_acyclic` and `hidden_outputs_take_the_general_instance_form` run the same circuits.
 -/
 import Flock.ProvedScope
 
@@ -103,5 +104,17 @@ def lookup (back : Bool) : Circuit :=
 -- where the wires feed the unit (a cut group) the check refuses a cycle; a unit of one group does not
 #guard ProvedScope.wiresFeed (rms 1)
 #guard !ProvedScope.wiresFeed (circ #[net #[⟨0, 1, #[1]⟩] 1 #[1] #[(#[0], #[0])]] #[1] #[])
+
+/-- A unit of one group and a stage it feeds, the stage returning the outputs. -/
+def tail : Circuit :=
+  { circ #[net #[⟨0, 1, #[1]⟩] 1 #[1] #[(#[0], #[0])], stage 1] #[1, 1] #[(1, 0, 0, 0, 0, 0)] with outNet := 1 }
+
+-- with hidden outputs, the general instance form: a unit reading a cut group, or a stage returning the outputs, once the
+-- wires are acyclic; with public outputs, the unit's form alone
+#guard ProvedScope.wiresAcyclic tail && ProvedScope.wiresFeed tail
+#guard ProvedScope.scopeOkI (rms 0) && ProvedScope.scopeOkI tail
+#guard !ProvedScope.scopeOk (rms 0) && !ProvedScope.scopeOk tail
+#guard ProvedScope.scopeWhy false (rms 0) == "a unit reading 2 input groups"
+#guard ProvedScope.scopeWhy false tail == "a circuit whose outputs a tail stage computes (META out_net)"
 
 end Flock.Test.Wires

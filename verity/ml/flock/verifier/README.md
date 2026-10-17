@@ -21,8 +21,10 @@ with `refused: <why>: a statement form the soundness proof does not cover` (`Flo
 has passed, so a session that fails a check keeps that check's reason. That refuses every version before `hm96-sha512`
 rows, the typed statements, public input ports, several tables without `--zk`, shared-row public files (except under
 `--zk` at hidden outputs with the verifier's own `--registered F`, which `FailClosed.SoundZHJR` covers), and circuits
-outside `Layout.scopeOk` (`Layout.scopeOkH` under hidden outputs, which also covers unsegmented `sha512/row/v2` rows: a unit
-reading more than one input group, a tail that computes the outputs, a segmented row, among others).
+outside `Layout.scopeOk` (with public outputs: a unit reading more than one input group, a tail that computes the outputs,
+a `sha512/row/v2` or segmented row, among others). Under hidden outputs the circuit check is `ProvedScope.scopeOkI`, the
+general instance form: a unit reading any number of input groups and tail stages returning the outputs, once the wires
+compute every slot from the leaves (`ProvedScope.wiresAcyclic`), with `sha512/row/v2` and `sha512/row-seg/v1` rows.
 Those statements still parse, set up and verify (`statement` prints their digest and Σ), and the agreement check
 compares a session refused for its form alone as accepted (D12, `vectors.json`'s `lean_refuses`). A session drawn by a
 sampling design no soundness claim draws by is refused at setup, with
@@ -229,8 +231,9 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   `ci.py --live`: 20/20, 21/21, 20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`). On flat RoPE the honest
   sessions pass every check, so digest and Σ are the prover's (they have no draw, so their verdict is that refusal, D12),
   and every negative is refused by its check, `output_row_committed_false` (an
-  output row's `b ‖ c` not the circuit's outputs) included; flat GEMM (a unit reading two input groups) and both typed
-  sets are D12 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
+  output row's `b ‖ c` not the circuit's outputs) included. Flat GEMM (a unit reading two input groups, a tail stage
+  returning the outputs) is the general instance form, which the check passes, so its honest sessions meet the same
+  draw-less refusal (set 3: 21/21); both typed sets are D12 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
   cases (the honest session and the three false statements) from a fetched fixture
   (`verity/ml/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable set needs a pinned upstream build
   with `flock-circuit replay` (the selftest's `record_replays_offline` already replays in process).
