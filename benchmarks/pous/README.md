@@ -19,6 +19,8 @@ scheme's certified parameters.
     - `certificate`: the scheme's certificate covers the audit's k and deadline.
   - Each run reports the storage profile the certificate gives the accepted audit, gaps included.
 - `pod.sh` runs it on a pod as a research Attempt.
+- `lateness/` measures how late honest answers to timed challenges arrive, on-node and from another machine, quiet and
+  under load (its README).
 - `explorer.py` builds the average-memory explorer's data file (`pous-explorer/v1`): the certified average-ε bound's
   reference math, the honest-latency presets as survival curves, the schemes' serving overhead, ε_proof by in-degree, and
   test vectors the console page reproduces. `--histograms` pools the vLLM e2e series' `verify-honest.json` histograms
