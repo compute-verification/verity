@@ -817,6 +817,19 @@ def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_pat
             assert r.child_env["VERITY_INSTANCES_FORM"] == form
 
 
+def test_a_row_declaring_prefix_caching_is_refused_before_any_stage(tmp_path, monkeypatch):
+    """Every stage's engine runs with prefix caching off, so a row whose file declares it is refused at its precheck, by either row."""
+    prefix = "glm53__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager"
+    single, tp = _row(tmp_path, row=prefix), _tp_row(tmp_path, prefix)
+    monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
+    for r in (single, tp):
+        monkeypatch.setattr(r, "release_line", lambda *a: pytest.fail("a stage after the precheck"))
+        with pytest.raises(Stop) as e:
+            r.prepare()
+        last = open(f"{r.d}/stages.txt").read().splitlines()[-1].split(" ", 3)
+        assert e.value.rc == 3 and last[:2] == ["precheck", "FAIL"] and "enable_prefix_caching" in last[3]
+
+
 @pytest.mark.parametrize("row, off", [
     (GLM53, False),                                  # an H box: vLLM's default, the custom all-reduce on
     (TP_DENSE, True),
