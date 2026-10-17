@@ -393,6 +393,9 @@ def test_the_linears_are_both_models_tp8_fp8_linears() -> None:
     assert len(X.linear_cases()) == len(X.DSV4_LINEARS) + 9 == 15
     assert all(K % GQ == 0 for _, _, K, _ in X.linear_cases())
     assert dict((n, (K, N_)) for n, K, N_ in X.DSV4_LINEARS)["fused_wqa_wkv"] == (7168, 2048)
+    glm = X.GLM53_LINEARS
+    assert len(glm) == 9 and dict((n, (K, N_)) for n, K, N_ in glm)["kv_b_proj"] == (512, 3584)
+    assert [n for n, _, N_ in glm if N_ % GQ] == ["fused_qkv_a_proj"]
 
 
 # --- verdict ---------------------------------------------------------------------------------------------------------------------
