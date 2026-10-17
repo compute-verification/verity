@@ -48,6 +48,8 @@ DEFAULT_CUBLAS_NON_SPLIT = {
     ("linear", 6144, 19360): frozenset((1, 4, 16, 128, 256)),
     # DeepSeek-V4-Pro's lm_head shard: one nvjet launch, no reduction kernel, every word Gemm_v2's (r20261016-234133-bbc8, served default)
     ("linear", 7168, 16160): frozenset((1, 4, 16, 128, 256)),
+    # its ratio-4 compressor's kv_score at M 256 (split-K below it): one nvjet launch, every word GemmF32Out_v1's (the same capture)
+    ("f32out", 7168, 2048): frozenset((256,)),
 }
 
 

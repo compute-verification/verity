@@ -548,11 +548,11 @@ def test_what_the_mhc_definitions_do_not_take_refuses_by_name(over, refusal, ser
 
 
 class _F32Out(nn.Module):
-    """DeepSeek-V4's compressor GEMM: a direct `torch.mm(x, W.T, out_dtype=float32)`, W [1024, 7168] bf16."""
+    """DeepSeek-V4's compressor GEMM: a direct `torch.mm(x, W.T, out_dtype=float32)`, W [N, 7168] bf16."""
 
-    def __init__(self) -> None:
+    def __init__(self, N: int = 1024) -> None:
         super().__init__()
-        self.weight = _meta(1024, 7168)
+        self.weight = _meta(N, 7168)
 
     def forward(self, x):
         return torch.mm(x, self.weight.T, out_dtype=torch.float32)
@@ -566,6 +566,10 @@ def test_a_direct_f32_output_mm_binds_the_captured_f32out_route(served):
     assert rep.provenance["weight_roles"]["weight"]["role"] == "linear.weight"
     rep = _derive_mhc(_F32Out(), (torch.empty(8, 7168, dtype=torch.bfloat16, device="meta"),))
     assert "no captured vLLM-default cuBLAS f32out route for M=8, K=7168, N=1024" in rep.unsupported.hint
+    rep = _derive_mhc(_F32Out(2048), (torch.empty(256, 7168, dtype=torch.bfloat16, device="meta"),))
+    assert rep.program is not None, rep.unsupported
+    want = PROFILE_B1_EAGER_V3.kind("cublas_gemm_f32out", K=7168, N=2048, DOT=hopper.HopperBF16WgmmaDot16).id
+    assert {n.fn.id for n in rep.program.fn.body.nodes} == {want}
 
 
 class _QKvNorm(nn.Module):

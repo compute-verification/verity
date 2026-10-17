@@ -177,6 +177,8 @@ def test_the_default_cublas_route_does_not_confuse_unrecorded_with_non_split() -
         assert BC.default_cublas_route("linear", M, 6144, 19360) == BC.default_cublas_route("linear", M, 7168, 16160) == ("non_split", {})
     assert BC.default_cublas_route("linear", 5, 6144, 19360) is None
     assert BC.default_cublas_route("linear", 1, 6144, 161) is None
+    assert BC.default_cublas_route("f32out", 256, 7168, 2048) == ("non_split", {})
+    assert BC.default_cublas_route("f32out", 128, 7168, 2048) == ("splitk", {"SPLIT_K": 2})
 
 
 def test_the_default_operand_dump_keeps_reduction_routes_and_deduplicates_weights(tmp_path) -> None:
