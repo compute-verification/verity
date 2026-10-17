@@ -21,22 +21,33 @@ def test_every_observation_within_tolerance():
 
 
 def test_the_coefficients_are_the_fit_of_the_observations():
-    for v in C.variants:
-        assert cf.fit(variant(v), C.tile) == C.variants[v], v
+    """k2's four terms are fitted; k3 runs the same place_step loop, so it takes k2's cross and fits the other three."""
+    assert cf.fit(variant("k2"), C.tile, C.ctas) == C.variants["k2"]
+    assert cf.fit(variant("k3"), C.tile, C.ctas, cross=C.variants["k2"]["cross"]) == C.variants["k3"]
 
 
-BASE = {"k2": [(2048, 4096, 1024), (2048, 4096, 4096), (2048, 28672, 4096)],
+def test_the_crossings_are_the_rasters():
+    """At m = 2048 every CTA crosses into the second group once; the 28672-row gate_up's 28 groups take 27 crossings a
+    CTA."""
+    assert cf.crossings(2048, 4096, C.tile, C.ctas) == C.ctas
+    assert cf.crossings(28672, 6016, C.tile, C.ctas) == 27 * C.ctas
+    assert cf.crossings(8192, 8192, C.tile, C.ctas) == 1316
+
+
+BASE = {"k2": [(2048, 4096, 1024), (2048, 4096, 4096), (2048, 28672, 4096), (28672, 6016, 4096)],
         "k3": [(2048, 4096, 8192), (2048, 4096, 14336), (8192, 8192, 8192)]}
 
 
-def test_three_shapes_predict_the_rest():
-    """Each variant fitted on one observation at each of three shapes (its stage, tile and launch terms apart) predicts
-    every other observation within tolerance, its model bound too."""
+def test_a_few_shapes_predict_the_rest():
+    """Each variant fitted on one observation at each of a few shapes (its terms apart: k2's four, k3's three with k2's
+    cross) predicts every other observation within tolerance, its model bound too: k2 the crossings at m = 4096 and 6144
+    from m = 2048 and 28672."""
     for v, shapes in BASE.items():
         base = [next(o for o in variant(v) if o.shape == s) for s in shapes]
-        held = cf.Counts(**{**C.__dict__, "variants": {**C.variants, v: cf.fit(base, C.tile)},
+        cross = None if v == "k2" else C.variants["k2"]["cross"]
+        held = cf.Counts(**{**C.__dict__, "variants": {**C.variants, v: cf.fit(base, C.tile, C.ctas, cross)},
                             "obs": tuple(o for o in variant(v) if o not in base)})
-        assert len(held.obs) >= 2 and held.check() == [] and held.check_bound(PI) == [], v
+        assert len(held.obs) >= 4 and held.check() == [] and held.check_bound(PI) == [], v
 
 
 def test_the_exact_classes_are_the_kernels_structure():
@@ -66,6 +77,6 @@ def test_refuses_what_the_kernel_does_not_run():
 
 def test_cli(capsys):
     assert main(["counts", "e-l7qs", "--check"]) == 0
-    assert "pass: 14 observations" in capsys.readouterr().out
+    assert "pass: 22 observations" in capsys.readouterr().out
     assert main(["counts", "e-l7qs", "2048", "28672", "4096"]) == 0
     assert "e_l7qs at 2048 x 28672 x 4096: bound 22.5157" in capsys.readouterr().out

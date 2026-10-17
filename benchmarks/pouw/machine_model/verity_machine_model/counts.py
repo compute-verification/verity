@@ -4,11 +4,13 @@
 The kernel (egemm.cu's e_body) runs C persistent CTAs over the T = (m/BM)(n/BN) tiles, each tile k/BK stages and a peel,
 and what it issues depends on the shape alone, so each class c's count is
 
-    n_c(m, n, k) = stage_c · T · k/BK + tile_c · T + launch_c
+    n_c(m, n, k) = stage_c · T · k/BK + tile_c · T + cross_c · X + launch_c
 
-with stage_c a stage's instructions over a CTA's warps, tile_c a tile's outside its stages (the peel's included) and
-launch_c the grid's outside its tiles, one set a variant: k ≤ k3_above runs the kernel, a longer k its _k3 twin (the
-3-atom peel). What a warp issues because of time is left out: WAIT, a barrier's retry loop, and the re-issue of a per-tile
+with stage_c a stage's instructions over a CTA's warps, tile_c a tile's outside its stages (the peel's included), cross_c
+a raster group crossing's and launch_c the grid's outside its tiles, one set a variant: k ≤ k3_above runs the kernel, a
+longer k its _k3 twin (the 3-atom peel). X = `crossings(m, n)`: a CTA's tile place advances its group row by a loop of
+subtractions (EL::place_step, the same code in both variants, so they share cross_c), one pass a group of 8 tile rows
+crossed. What a warp issues because of time is left out: WAIT, a barrier's retry loop, and the re-issue of a per-tile
 block when a warp's lanes leave a barrier's poll apart (8237 against 8224 executions of an 8192-execution block at one
 shape in two runs). ncu's counts scatter around n by up to their class's `tolerance`; MMA, LDSM and TMA, outside any such
 block, match it exactly. The coefficients are `fit`'s on the observations, which `check` holds them to.
@@ -24,7 +26,16 @@ import numpy as np
 from verity_machine_model.eps import MMA, Machine, binding
 from verity_machine_model.model import DATA
 
-TERMS = ("stage", "tile", "launch")
+TERMS = ("stage", "tile", "cross", "launch")
+GROUP = 8   # the raster's group: tile rows a group
+
+
+def crossings(m: int, n: int, tile: tuple[int, int, int], ctas: int) -> int:
+    """The raster's group crossings over the grid: each CTA's group row at its last tile (it starts at 0, and its tiles
+    are its index plus multiples of the grid)."""
+    tn = n // tile[1]
+    t = m // tile[0] * tn
+    return sum((b + ctas * ((t - 1 - b) // ctas)) // (GROUP * tn) for b in range(ctas))
 
 
 @dataclass(frozen=True)
@@ -61,7 +72,7 @@ class Counts:
         t = m // bm * (n // bn)
         if t < self.ctas:
             raise SystemExit(f"{self.name}: {t} tiles leave some of the {self.ctas} CTAs idle, which n does not cover")
-        return {"stage": t * (k // bk), "tile": t, "launch": 1}
+        return {"stage": t * (k // bk), "tile": t, "cross": crossings(m, n, self.tile, self.ctas), "launch": 1}
 
     def n(self, m: int, n: int, k: int) -> dict[str, float]:
         """Each class's executed warp instructions at m x n x k."""
@@ -103,16 +114,26 @@ class Counts:
         return bad
 
 
-def fit(obs: list[Obs], tile: tuple[int, int, int]) -> dict[str, dict[str, float]]:
-    """One variant's coefficients from its observations: least squares on (T k/BK, T, 1), stage_c and tile_c to 0.01,
-    launch_c to 1."""
+def fit(obs: list[Obs], tile: tuple[int, int, int], ctas: int,
+        cross: dict[str, float] | None = None) -> dict[str, dict[str, float]]:
+    """One variant's coefficients from its observations: least squares on (T k/BK, T, X, 1), stage_c, tile_c and
+    cross_c to 0.01, launch_c to 1; with `cross` given (another variant's), cross_c is that and the rest is fitted."""
     bm, bn, bk = tile
-    x = np.array([[m // bm * (n // bn) * (k // bk), m // bm * (n // bn), 1] for m, n, k in (o.shape for o in obs)], float)
+    terms = TERMS if cross is None else tuple(t for t in TERMS if t != "cross")
+    rows = []
+    for m, n, k in (o.shape for o in obs):
+        t = m // bm * (n // bn)
+        x = {"stage": t * (k // bk), "tile": t, "cross": crossings(m, n, tile, ctas), "launch": 1}
+        rows.append((x["cross"], [x[term] for term in terms]))
+    a_ = np.array([r for _, r in rows], float)
     out: dict[str, dict[str, float]] = {t: {} for t in TERMS}
+    if cross is not None:
+        out["cross"] = dict(cross)
     for c in sorted({c for o in obs for c in o.counts}):
-        sol, *_ = np.linalg.lstsq(x, np.array([o.counts.get(c, 0) for o in obs], float), rcond=None)
-        for t, a, d in zip(TERMS, sol, (2, 2, 0)):
-            a = round(float(a), d)
+        y = np.array([o.counts.get(c, 0) - (cross or {}).get(c, 0) * x for o, (x, _) in zip(obs, rows)], float)
+        sol, *_ = np.linalg.lstsq(a_, y, rcond=None)
+        for t, a in zip(terms, sol):
+            a = round(float(a), 0 if t == "launch" else 2)
             if a:
                 out[t][c] = int(a) if a == int(a) else a
     return out
