@@ -335,16 +335,33 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 
 
 def _served_kind_statics() -> dict[str, dict[str, Any]]:
-    """The kinds no small table binds (launch blocks, collective routes, split counts, the DSA and sparse-MLA shapes), each at a
-    binding its Definition module's sidecar already checks, so they add no task."""
+    """The kinds no small table binds (launch blocks, collective routes, split counts, the DSA and sparse-MLA shapes; DeepSeek-V4's
+    mHC, FlashMLA, compressors, routers and Marlin MoE), each at a binding its Definition module's sidecar already checks, so they
+    add no task."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity_vllm.program.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
+    from verity_vllm.program.registry import flashmla as FM, flashmla_prefill as FP
+    from verity_vllm.program.registry import marlin_moe as MM
     from verity_vllm.program.registry import sparse_mla as SM
     from verity_vllm.program.registry import tp_allreduce as TA
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     mla = {k: SM.SPARSE_MLA_GLM53[k] for k in ("NH", "DR", "DV", "BN", "DOT", "INV")} | {"SM_SCALE": SM.SPARSE_MLA_GLM53["SCALE"]}
     trees = (TA.chain(8),) * 4 + ((((0, 1), (2, 3)), ((4, 5), (6, 7))),) * 4
+    mhc = {"HC": 4, "REPEAT": 20, "EPS": 1e-6, "HC_EPS": 1e-6, "TN": 64}
+    router = {"E": 8, "SCALE": 2.5}
+    marlin = {"E": 3, "K": 256, "N": 16, "TK": 128, "TN": 8, "GRID": 5, "DOT": MM.DOT}
+    dsv4 = {"triton_block_rmsnorm": {"N": 512, "BLOCK": 2048, "WARPS": 8, "EPS": 1e-6},
+            "mhc_pre_broadcast": {**mhc, "H": 7168, "NS": 28}, "mhc_residual_broadcast": {"HC": 2, "H": 8},
+            "mhc_fused_post_pre": {**mhc, "H": 1024, "NS": 4, "TH": 256}, "mhc_post_pre_tf32": {**mhc, "H": 1024, "NS": 4},
+            "mhc_post": {"HC": 4, "N": 7168}, "hc_head": {**mhc, "H": 7168, "TH": 128},
+            "dsv4_qnorm_rope_kv_insert": DQ.DSV4_INSERT, "dsv4_compress_c4": DC.DSV4_COMPRESSOR,
+            "dsv4_compress_c128": DC.DSV4_COMPRESSOR, "dsv4_inv_rope_quant_head": {"CHUNKS": 4, "QG": 128, "ROPE": 64},
+            "flashmla_decode": {**FM.FLASHMLA_DSV4, "NH": 1, "SPLITS": (0, 1), "NW": 64},
+            "flashmla_gather_row": FP.FLASHMLA_GATHER_DSV4, "flashmla_prefill": {**FP.FLASHMLA_PREFILL_DSV4, "NH": 1, "NP": 1},
+            "silu_mul_clamp": {"I": 4, "LIMIT": 10.0}, "moe_router_hash": router, "moe_router_sqrtsoftplus": router,
+            "marlin_moe_align": {"E": 3, "P": 30, "BM": 4}, "marlin_moe_gemm": marlin, "marlin_moe_gemm_w": marlin}
     return {"rmsnorm_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256}, "rmsnorm_fused_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256},
             "all_reduce_mnnvl": {"WORLD": 8, "N": 8, "SHOT": 2},
             "all_reduce_rmsnorm_mnnvl": {"WORLD": 8, "N": 512, "SHOT": 1, "CLUSTER": 2, "EPS": 1e-5, "FMA": False},
@@ -357,7 +374,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "batched_gemm": {"B": 2, "K": 32, "N": 3, "DOT": hop},
             "ll_bf16_dotprod": {"N": 2, "K": 256, "BS": 64, "VEC": 2, "FMA": 1},
             "ll_bf16_splitk": {"N": 2, "K": 128, "SPLIT_K": 2, "TILE_K": 32, "WARPS": 2, "DOT": hop},
-            "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla}}
+            "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla}, **dsv4}
 
 
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
