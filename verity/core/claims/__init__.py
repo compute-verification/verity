@@ -272,6 +272,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-fill-opt", "assumption",
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
           "certificate π", "FILL-OPT", "conjectured"),
+    Entry("accounting-ts-fan-in", "assumption",
+          "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, by its register operands as "
+          "SASS gives them on sm_80, sm_89, sm_90, sm_100 and sm_120 (LOP3, IADD3, IMAD, IDP.4A, FFMA: 2 a lane, 64 a "
+          "warp instruction)", "TS fan-in", "measured"),
     Entry("accounting-ts-luck", "assumption",
           "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
           "most p", "TS luck at p", "proven"),

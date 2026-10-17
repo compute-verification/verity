@@ -26,7 +26,9 @@ Which form each takes:
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
   `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
   `benchmarks/pouw/theory/fold_opt.py`, #2240) is a mechanical fact; the multi-round residual, that no program folds
-  below the menu's price across rounds, is what stays assumed.
+  below the menu's price across rounds, is what stays assumed. `FanIn`, the ISA's operand counts, gives both at the
+  fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`, `FillOptOfFanIn`): for a fold or filler presented as
+  a straight-line dataflow over the words it absorbs, priced at least the menu's routes of `a_k/m_k` a word.
 * (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round.
 * (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
   `δ_bind` and proof soundness `δ_ZK`, with Lemma E1(c) (every adaptive word lies below a committed value wrong for its
@@ -90,6 +92,17 @@ def FoldOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
 `(1 − μ_x)·χ*(π)`. -/
 def FillOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muX) * Z.chiStar lam ≤ Z.G.price lam A.nfill
+
+/-- `accounting-ts-fan-in` (ISA; register operands read from SASS on sm_80, sm_89, sm_90, sm_100 and sm_120). **An
+instruction merges at most `m` components**: the nodes a straight-line dataflow issues as instruction `j` (its lanes,
+or the one node of a warp-wide instruction) merge at most `m_{cls j}` components into one, `Σ (sources − 1)`. A lane
+of LOP3, IADD3, IMAD, IDP.4A or FFMA reads three 32-bit registers (2 a lane, 64 a warp instruction); counted by
+dependence its predicate and 64-bit operands count too (IADD3.X: three registers and two carry-ins, 4 a lane;
+IMAD.WIDE: 3); a warp-wide instruction counts its whole operand set (SHFL 63; IMMA.16832: ten registers a thread, 319);
+memory is a node each access reads, so a load or store merges its address, value and that node. -/
+def FanIn {ι W J : Type} [DecidableEq J] (D : Dataflow ι W) (ins : Fin D.n → J) (cls : J → K) (m : K → ℝ) :
+    Prop :=
+  ∀ j, (D.issued ins j : ℝ) ≤ m (cls j)
 
 /-- `accounting-ts-luck` ([P+R] per noise; ¾ in Lean for affine operands). **(L) at `p`, with freshness (F1)–(F2)**:
 the ideal game is one bet a round, a deficient round passing with probability at most `p` given the past. -/

@@ -42,6 +42,9 @@
    "owner": "@compute-accounting",
    "digest": "32e6f1ad9b1cd5704affa13c87dae03fad67a20aa3acd62efdde326a1702a503"
   },
+  "Accounting.Assumptions.TS.FanIn": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.Assumptions.TS.FoldOpt": {
    "owner": "@compute-accounting",
    "digest": "68ce0cf852f288923e7ba2879c1a6ecb92a012defbe6b431c1b6ebb6ffbbe3b3"
@@ -1424,6 +1427,26 @@
    "signature": ["Accounting.SecurityProofs.TS.OutputCount : Accounting.Guarantees.TS.OutputCount"],
    "assumptions": [],
    "type_hash": "f63122b9d09208627838844f85921930911249f025c810b9936cfc84542bef96"
+  },
+  "Accounting.SecurityProofs.TS.FanInCount": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.FanInCount : Accounting.Guarantees.TS.FanInCount"]
+  },
+  "Accounting.SecurityProofs.TS.SeesOfInjective": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.SeesOfInjective : Accounting.Guarantees.TS.SeesOfInjective"]
+  },
+  "Accounting.SecurityProofs.TS.ThinFoldInjective": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.ThinFoldInjective : Accounting.Guarantees.TS.ThinFoldInjective"]
+  },
+  "Accounting.SecurityProofs.TS.FoldOptOfFanIn": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.FoldOptOfFanIn : Accounting.Guarantees.TS.FoldOptOfFanIn"]
+  },
+  "Accounting.SecurityProofs.TS.FillOptOfFanIn": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.FillOptOfFanIn : Accounting.Guarantees.TS.FillOptOfFanIn"]
   },
   "Accounting.SecurityProofs.TS.RoutesOffD2": {
    "owner": "@compute-accounting",
@@ -5468,6 +5491,11 @@
    "Accounting.SecurityProofs.TS.TensorSlotCount": "frozen (no-function): T1 of EPS1-TENSOR over any tensor run's slot writes, injective by freshness (a hypothesis), not a Lean function.",
    "Accounting.SecurityProofs.TS.TensorSlotTight": "lemma: T1's tightness criterion (epsilon_tensor = 0 iff L = d_H and rho_H = rho_T), arithmetic.",
    "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
+   "Accounting.SecurityProofs.TS.FanInCount": "frozen (no-function): the fan-in count over any straight-line dataflow whose outputs see its inputs, not a Lean function.",
+   "Accounting.SecurityProofs.TS.SeesOfInjective": "lemma: a receipt injective in each input sees it, over any dataflow and receipt map.",
+   "Accounting.SecurityProofs.TS.ThinFoldInjective": "lemma: the thin fold's state is injective in each absorbed word and in its start, BitVec arithmetic.",
+   "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
+   "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
    "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
