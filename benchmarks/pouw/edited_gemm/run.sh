@@ -7,8 +7,9 @@
 # hot items (EG_ARMS), the slice's per-call interleaving (IL pairs ARM:BASE; IL_COLD the same with L2 flushed before each
 # call), each other linear's hot items and interleaving (LAYER_ARMS, LAYER_IL), and ncu's issue and pipe counters at
 # o_proj. EG_SET=best times each receipt kind's fastest kernels instead, also after wedit alone (edited:K); EG_SET=x13
-# r9's XOR-in (13, 19) beside x_l2o and e_l4q. The small gate's seed has a key that key_ok_r9 rejects. Clocks are
-# read, never set.
+# r9's XOR-in (13, 19) beside x_l2o and e_l4q; EG_SET=eps1 the fold-cost sweep at 8192^3 and Llama-3.1-8B's o_proj and
+# gate_up at m = 2048, with ncu's sections on every arm at every shape (out/ncu/, read by eps_profile.py). The small
+# gate's seed has a key that key_ok_r9 rejects. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
 #     -- bash benchmarks/pouw/edited_gemm/run.sh
@@ -50,8 +51,14 @@ echo "sass_gate rc $?" | tee -a "$O/rc.txt"
 cuobjdump -sass "$BIN/egemm" > "$BIN/egemm.sass" 2>/dev/null
 awk '/Function :/{f=$3} /[[:space:]](LDL|STL)[.[:space:]]/{n[f]++} END{for (f in n) print n[f], f}' "$BIN/egemm.sass" | sort -k2 \
   > "$O/sass_local_mem_ops.txt" 2>&1
-export O_SHAPE="8192 4096 4096"
+export O_SHAPE=${O_SHAPE:-"8192 4096 4096"}
 export LAYERS=${LAYERS:-"qkv:8192:6144:4096 gate_up:8192:28672:4096 down:8192:4096:14336"}
+# EG_SET=eps1, the fold-cost sweep (note:20261017T0320Z-draft-eps1-profile): 8192^3, and Llama-3.1-8B's o_proj and gate_up
+# at m = 2048
+if [ "${EG_SET:-all}" = eps1 ]; then
+  O_SHAPE="8192 8192 8192" LAYERS="o2k:2048:4096:4096 gu2k:2048:28672:4096"
+fi
+gzip -c "$BIN/egemm.sass" > "$O/egemm.sass.gz"
 export W="$BIN/gates"
 mkdir -p "$W/small" "$W/o"
 # shellcheck disable=SC2016
@@ -116,6 +123,17 @@ if [ "${EG_SET:-all}" = x13 ]; then
   larms=$arms lil=$il
   ncu="x13_l2o x_l2o" stall="x13_l2o"
 fi
+# EG_SET=eps1: the fold-cost sweep at r = 0 (e_plain), 1, 1.5, 2, 2.5, 3 (duo, e_l2q), 4 ops a word, all at e_l2q's
+# schedule, beside cuBLASLt, duo's e_l4q and XIN's x_l2o; ncu on every arm at every shape (NCU_ONE: its sections;
+# NCU_FULL: --set full)
+export NCU_ONE="" NCU_FULL=""
+if [ "${EG_SET:-all}" = eps1 ]; then
+  sweep="e_plain f10_l2q f15_l2q f20_l2q f25_l2q e_l2q f40_l2q"
+  arms="plain" il="e_plain:plain e_l2q:plain edited:e_l2q:plain"
+  for k in $sweep e_l4q x_l2o; do arms="$arms,$k"; done
+  cold="" larms=$arms lil=$il ncu="" stall=""
+  NCU_ONE="f10_l2q f15_l2q f20_l2q f25_l2q f40_l2q e_l4q x_l2o" NCU_FULL="plain e_plain e_l2q"
+fi
 export EG_ARMS=${EG_ARMS:-$arms} IL=${IL:-$il} IL_COLD=${IL_COLD:-$cold}
 export LAYER_ARMS=${LAYER_ARMS:-$larms} LAYER_IL=${LAYER_IL:-$lil}
 export NCU=${NCU:-$ncu} NCU_STALL=${NCU_STALL:-$stall}
@@ -150,7 +168,28 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
     EG_ARMS=$a ncu --clock-control none --kernel-name "regex:^${a}\$" --launch-skip 4 --launch-count 1 --csv \
       --metrics "regex:^smsp__average_warps_issue_stalled_.*_per_issue_active\.ratio$" \
       "$BIN/egemm" bench 1 $O_SHAPE > "$O/ncu-stall-$a.csv" 2>&1 || echo "ncu stall $a rc $?" >> "$O/rc.txt"
-  done'
+  done
+  if [ -n "$NCU_ONE$NCU_FULL" ]; then
+    mkdir -p "$O/ncu"
+    S=(--section SpeedOfLight --section ComputeWorkloadAnalysis --section InstructionStats --section WarpStateStats
+       --section SchedulerStats --section SourceCounters --section LaunchStats --section Occupancy)
+    for sh in "o:$(echo $O_SHAPE | tr " " :)" $LAYERS; do
+      IFS=: read -r name m n k <<< "$sh"
+      for a in $NCU_FULL $NCU_ONE; do
+        case " $NCU_FULL " in *" $a "*) set_=(--set full) ;; *) set_=("${S[@]}") ;; esac
+        ncu --clock-control none --profile-from-start off --import-source no "${set_[@]}" -f -o "$O/ncu/$name-${a//:/_}" \
+          "$BIN/egemm" one "$a" "$m" "$n" "$k" > "$O/ncu/$name-${a//:/_}.log" 2>&1 || echo "ncu one $name $a rc $?" >> "$O/rc.txt"
+      done
+    done
+  fi'
 echo "lease 2 rc $?" >> "$O/rc.txt"
+for r in "$O"/ncu/*.ncu-rep; do
+  [ -e "$r" ] || continue
+  b=${r%.ncu-rep}
+  ncu -i "$r" --page raw --csv --print-metric-instances values > "$b.raw.csv" 2> "$b.raw.err" ||
+    ncu -i "$r" --page raw --csv > "$b.raw.csv" 2>> "$b.raw.err"
+  ncu -i "$r" --page details --csv > "$b.details.csv" 2> "$b.details.err"
+  ncu -i "$r" --page source --csv --print-source sass > "$b.sass.csv" 2> "$b.sass.err"
+done
 cat "$O/rc.txt"
 $PY $D/summary.py "$O" | tee "$O/summary.md"

@@ -21,7 +21,8 @@
 //                    S_2's atom a 3-atom tail at k > 4096; the rows t_duo32's 4-atom tail reads). Receipts (EL's RK): duo
 //                    every 32 steps (e_*: t_duo32's), duo every 64 (d64_*), P2-FF's XOR-in fold every 32 (x_*) and every
 //                    64 (x64_*), r9's XOR-in with rotations (13, 19) (x13_*), and the tensor-byte
-//                    receipts TB4, TB4C, TB2W, TB1W (t4_*, t4c_*, t2w_*, t1w_*: fgemm.cu's). Interleaving: the absorb of
+//                    receipts TB4, TB4C, TB2W, TB1W (t4_*, t4c_*, t2w_*, t1w_*: fgemm.cu's), and the fold-cost sweep's
+//                    timing variants at r = 1, 1.5, 2, 2.5, 4 ops a word (f10_*, ..., f40_*; FR10's). Interleaving: the absorb of
 //                    a running sum runs LAG MMAs after its tile's MMA (each value is still in its accumulator then, so the
 //                    absorb order and the receipts are the unscheduled ones), and with TIE every TIE-th MMA's accumulator
 //                    is xored with (z & zero), z the state the last absorb wrote and zero a kernel argument that is 0, so
@@ -36,6 +37,7 @@
 //   egemm bench REPS M N K          hot items (about 20 ms each) interleaved across EG_ARMS, one JSON line
 //   egemm il REPS ARM BASE M N K    per call, ARM and BASE alternating (the slice's timing; EG_COLD=1: L2 flushed
 //                                   before each call), one JSON line
+//   egemm one ARM M N K             three warm-up calls, then one between cudaProfilerStart and Stop (for ncu)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a egemm.cu -lcuda -lcublasLt -lnvidia-ml
 #define LP_LIB
 #define LP_NO_ROUTES
@@ -100,6 +102,31 @@ __host__ __device__ inline uint2 xin_keys(uint32_t seed) {
 }
 // out of line: inlined, the vote costs the GEMM's mainloop spill loads
 __host__ __device__ __noinline__ uint2 xin_keys_r9(uint32_t seed) { return xin_keys<true>(seed); }
+
+// The fold-cost sweep's kinds (note:20261017T0320Z-draft-eps1-profile): duo's chains (tile t's word e into chain
+// 4 (t % 2) + e), keys and finish with r scalar ops a word, timing variants and not receipts. A is y ^ p ^ kx (LOP3), M
+// y a + p (IMAD), AM (y ^ p ^ kx) a + z (LOP3, IMAD; duo without its rotate-add), D duo (LOP3, IMAD, LEA.HI). FR10 (r = 1):
+// M and A alternating along each chain, so no two XORs meet and fuse into one LOP3; FR15: AM on words 0 and 2, FR10's op
+// on 1 and 3; FR20: AM; FR25: D on words 0 and 2, AM on 1 and 3; FR40: D, then one more dependent op on z (z b + y on words
+// 0 and 2, z ^ y ^ k2 on 1 and 3)
+constexpr int FR10 = -10, FR15 = -15, FR20 = -20, FR25 = -25, FR40 = -40;
+__host__ __device__ constexpr bool is_fr(int k) { return k == FR10 || k == FR15 || k == FR20 || k == FR25 || k == FR40; }
+template <int RK, int T, int E> DEV void fr_word(St& s, uint32_t p) {
+  constexpr uint32_t a = key_mul(0, T), kx = key_xor(0, T), b = key_mul(2, T), k2 = key_xor(2, T);
+  constexpr bool even = E % 2 == 0, alt = (T / 2 + E) % 2 == 0;
+  if constexpr (RK == FR10 || (RK == FR15 && !even)) {
+    if constexpr (alt) s.y = s.y * a + p;
+    else s.y = s.y ^ p ^ kx;
+  } else if constexpr (RK == FR20 || RK == FR15 || (RK == FR25 && !even)) {
+    s.y = (s.y ^ p ^ kx) * a + s.z;
+  } else {
+    duo<DUO, 0, T>(s, p);
+    if constexpr (RK == FR40) {
+      if constexpr (even) s.z = s.z * b + s.y;
+      else s.z = s.z ^ s.y ^ k2;
+    }
+  }
+}
 
 // d ^= z & zero in one LOP3 (LUT 0x78 = a ^ (b & c); ptxas otherwise splits it into an AND and an XOR), or (FMA) d += z zero
 // in one IMAD, on the FMA pipe
@@ -188,6 +215,7 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
   template <int J> DEV static uint32_t tz(const St (&ch)[8]) {
     if constexpr (XF) return ch[J % 4].y;
     else if constexpr (TB) return ch[1].z;
+    else if constexpr (is_fr(RK) && RK != FR40) return ch[4 * (J % 2) + 3].y;
     else return ch[4 * (J % 2) + 3].z;
   }
   // a TB kind's receipt accumulator R is ch[0].y, ch[0].z, ch[1].y, ch[1].z (fgemm.cu's rimma32 and rchain)
@@ -207,6 +235,12 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
     const int(&w)[4] = acc[mi][ni];
     if constexpr (RK == DUO || RK == DUO64) {
       absorb<DUO, mi, ni>(ch, w);
+    } else if constexpr (is_fr(RK)) {
+      constexpr int H = 4 * (J % 2);
+      fr_word<RK, J, 0>(ch[H], (uint32_t)w[0]);
+      fr_word<RK, J, 1>(ch[H + 1], (uint32_t)w[1]);
+      fr_word<RK, J, 2>(ch[H + 2], (uint32_t)w[2]);
+      fr_word<RK, J, 3>(ch[H + 3], (uint32_t)w[3]);
     } else if constexpr (XF) {
       St& c = ch[J % 4];
       c.y = (rotl(c.y, ROT0) ^ (uint32_t)w[0]) * kr[0] + (uint32_t)w[1];
@@ -432,6 +466,11 @@ EGEMM(t2w_l0, TB2W, 0, 0)
 EGEMM(t2w_l2, TB2W, 2, 0)
 EGEMM(t1w_l0, TB1W, 0, 0)
 EGEMM(t1w_l2, TB1W, 2, 0)
+EGEMM(f10_l2q, FR10, 2, 4)
+EGEMM(f15_l2q, FR15, 2, 4)
+EGEMM(f20_l2q, FR20, 2, 4)
+EGEMM(f25_l2q, FR25, 2, 4)
+EGEMM(f40_l2q, FR40, 2, 4)
 
 // ---------------------------------------------------------------- the operands
 // x (rows x k bf16) to X (rows x k int8): a warp a group of 4 rows, its lanes 8 columns each (512 contiguous bytes of x a
@@ -669,7 +708,8 @@ static const EKn EK[] = {
     EKE(x_l2, "xin"), EKE(x_l2q, "xin"), EKE(x_l3qm, "xin"), EKE(x_l2o, "xin"), EKE(x64_l2q, "xin64"), EKE(x64_l2o, "xin64"),
     EKE(x13_l2o, "xin13"),
     EKE(t4_l2, "tb4"), EKE(t4c_l2, "tb4c"), EKE(t2w_l0, "tb2w"), EKE(t2w_l2, "tb2w"),
-    EKE(t1w_l0, "tb1w"), EKE(t1w_l2, "tb1w")};
+    EKE(t1w_l0, "tb1w"), EKE(t1w_l2, "tb1w"),
+    EKE(f10_l2q, ""), EKE(f15_l2q, ""), EKE(f20_l2q, ""), EKE(f25_l2q, ""), EKE(f40_l2q, "")};
 static const EKn* ekern(const std::string& n) {
   for (auto& e : EK) if (n == e.name) return &e;
   fprintf(stderr, "no kernel %s\n", n.c_str());
@@ -1089,12 +1129,30 @@ static int eil(int reps, const std::string& arm, const std::string& base, int m,
   return 0;
 }
 
+// three warm-up calls of ARM, then one between cudaProfilerStart and Stop, for ncu --profile-from-start off
+static int eone(const std::string& arm, int m, int n, int k) {
+  EP P;
+  esetup(P, m, n, k, 0x5EED0000u + m + n + k, false);
+  auto f = earm(arm);
+  for (int i = 0; i < 3; i++) f(P);
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaProfilerStart());
+  f(P);
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaProfilerStop());
+  CK(cudaGetLastError());
+  printf("{\"one\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"grid\": %d}\n", arm.c_str(), m, n, k, P.grid);
+  efree(P);
+  return 0;
+}
+
 int main(int argc, char** argv) {
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
   if (argc >= 7 && !strcmp(argv[1], "gate")) return egate(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), (uint32_t)strtoul(argv[6], 0, 0));
   if (argc >= 6 && !strcmp(argv[1], "bench")) return ebench(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
   if (argc >= 8 && !strcmp(argv[1], "il")) return eil(atoi(argv[2]), argv[3], argv[4], atoi(argv[5]), atoi(argv[6]), atoi(argv[7]));
-  fprintf(stderr, "usage: egemm gate DIR M N K SEED | bench REPS M N K | il REPS ARM BASE M N K\n");
+  if (argc >= 6 && !strcmp(argv[1], "one")) return eone(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
+  fprintf(stderr, "usage: egemm gate DIR M N K SEED | bench REPS M N K | il REPS ARM BASE M N K | one ARM M N K\n");
   return 2;
 }
