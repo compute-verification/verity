@@ -32,6 +32,8 @@ ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
 WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
+#: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
+REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
 
 
 def checkpoints_hf_home() -> str | None:
