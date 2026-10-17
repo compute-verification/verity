@@ -13,10 +13,12 @@ Each job is a key pair and a word at width n; `fold_root_kernel` finds K_1 .. K_
              random (d0, d2) a pair: every word where an add-limb condition could open the kernel
   xorsweep   the same over every XOR-limb pair (d0, d2), with one seeded random (d1, d3) a pair
   symmetric  `--keys` seeded random pairs passing the scaled KJ, the four NOT-symmetric words (`not_symmetric`) a pair
+  recut      the jobs an earlier output (`--from`, a .txt) flagged degenerate, rerun with `--probes` and `--log2cap`
 
 Writes `<set>-n<n>.txt` (the enumerator's S and E lines) and `<set>-n<n>.json` (counts) under --out.
 
   python3 fold_root_sweep.py --set all --n 10 --out DIR [--threads T]
+  python3 fold_root_sweep.py --set recut --n 10 --from DIR/filtered-n10.txt --probes 6 --log2cap 28 --out DIR
 """
 from __future__ import annotations
 
@@ -83,8 +85,11 @@ def build(tmp: Path) -> Path:
     return exe
 
 
-def jobs_for(kind: str, n: int, rng: random.Random, nkeys: int, nrand: int, word=None) -> list[tuple[int, ...]]:
+def jobs_for(kind: str, n: int, rng: random.Random, nkeys: int, nrand: int, word=None, src=None) -> list[tuple[int, ...]]:
     r1, r2 = ROT[n]
+    if kind == "recut":
+        return [tuple(map(int, p[1:7])) for p in (line.split() for line in Path(src).read_text().splitlines())
+                if p and p[0] == "S" and p[-1] == "1"]
     rw = lambda: tuple(rng.randrange(1 << n) for _ in range(4))
     odd = range(1, 1 << n, 2)
     if kind == "all":
@@ -128,7 +133,8 @@ def jobs_for(kind: str, n: int, rng: random.Random, nkeys: int, nrand: int, word
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--set", required=True, choices=("all", "filtered", "lastsample", "sample", "addsweep", "xorsweep", "symmetric"))
+    ap.add_argument("--set", required=True,
+                    choices=("all", "filtered", "lastsample", "sample", "addsweep", "xorsweep", "symmetric", "recut"))
     ap.add_argument("--n", type=int, required=True)
     ap.add_argument("--rmax", type=int, default=6)
     ap.add_argument("--keys", type=int, default=1000)
@@ -136,14 +142,19 @@ def main() -> int:
     ap.add_argument("--word", default=None, help="with --set all: this word (w0,w1,w2,w3) at every pair instead of a random one")
     ap.add_argument("--threads", type=int, default=len(os.sched_getaffinity(0)))
     ap.add_argument("--seed", type=int, default=20261017)
+    ap.add_argument("--from", dest="src", default=None, help="with --set recut: an earlier <set>-n<n>.txt")
+    ap.add_argument("--probes", type=int, default=3)
+    ap.add_argument("--log2cap", type=int, default=16)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    if (a.set == "recut") != (a.src is not None):
+        ap.error("--from goes with --set recut")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     r1, r2 = ROT[a.n]
     rng = random.Random(a.seed + a.n)
     word = tuple(int(x, 0) for x in a.word.split(",")) if a.word else None
-    jobs = jobs_for(a.set, a.n, rng, a.keys, a.random_words, word)
+    jobs = jobs_for(a.set, a.n, rng, a.keys, a.random_words, word, a.src)
     tag = f"{a.set}-n{a.n}" + (f"-w{'_'.join(map(str, word))}" if word else "")
     print(f"{tag}: {len(jobs)} jobs, rotations ({r1}, {r2}), R = 1..{a.rmax}, {a.threads} threads", file=sys.stderr, flush=True)
     t0 = time.time()
@@ -152,11 +163,11 @@ def main() -> int:
         inp = "".join(" ".join(map(str, j)) + "\n" for j in jobs)
         env = dict(os.environ, OMP_NUM_THREADS=str(a.threads))
         with open(out / f"{tag}.txt", "w") as f:
-            subprocess.run([str(exe), str(a.n), str(r1), str(r2), str(a.rmax)], input=inp, stdout=f, text=True,
-                           check=True, env=env)
+            subprocess.run([str(exe), "-p", str(a.probes), "-c", str(a.log2cap), str(a.n), str(r1), str(r2), str(a.rmax)],
+                           input=inp, stdout=f, text=True, check=True, env=env)
     res = (out / f"{tag}.txt").read_text()
     summ = {"set": a.set, "n": a.n, "rotations": [r1, r2], "rmax": a.rmax, "jobs": len(jobs), "seconds": round(time.time() - t0, 1),
-            "threads": a.threads}
+            "threads": a.threads, "probes": a.probes, "log2cap": a.log2cap}
     S = [line.split() for line in res.splitlines() if line.startswith("S ")]
     summ["reported"] = len(S)
     bad = []

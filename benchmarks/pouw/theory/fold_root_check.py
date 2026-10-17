@@ -13,7 +13,9 @@ middle with 2^(2n) half-round maps a side (REFEREE's `fold_kernel.c` enumerates 
       pair clause, admits 4,096 pairs and K_R = K_1 = P/X/N holds at every one;
   (5) the exception no key rule removes: when 2·d1 ≡ a0 − 1 and 2·d3 ≡ a1 − 1 (mod 2^n), both half-rounds commute with
       bitwise NOT, and w with d0 complemented has F_{w'} = NOT ∘ F_w, so it fixes every even fold. At n = 8 and 10 under
-      the scaled KJ that orbit is all depth adds (|K_even| = 32), and at 32 bits it holds at key_ok_r11 keys.
+      the scaled KJ that orbit is all depth adds (|K_even| = 32), and at 32 bits it holds at key_ok_r11 keys;
+  (6) at n = 10, K_R for R = 1, 2, 3 is the part of the 2R-pair chain group that keeps the word the same every round;
+  (7) the enumerator's -p and -c settle a join cut at a structured Φ^R (two of the filtered n = 10 sweep's cut jobs).
 Mutations: a brute-force comparison against a different word is caught; a kernel that drops P1's doubling is caught;
 a NOT-symmetric word with d1 one off keeps K_2 = K_1.
 
@@ -50,7 +52,7 @@ def build(tmp: Path, src: str = "fold_root_kernel.c", edit: tuple[str, str] | No
     return exe
 
 
-def root_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, jobs) -> tuple[dict, dict]:
+def root_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, jobs, flags=()) -> tuple[dict, dict]:
     """({job: [|K_1|, .., pxn, g3bad, degenerate]}, {(job, R): set of w' != w in K_R}) for jobs (a0, a1, *w). The
     enumerator's K lines name only the keys, so each call gets jobs with distinct key pairs."""
     summ, elems, pending = {}, collections.defaultdict(set), [tuple(j) for j in dict.fromkeys(map(tuple, jobs))]
@@ -59,7 +61,7 @@ def root_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, jobs) -> tuple[
         for j in pending:
             (rest.append(j) if j[:2] in batch else batch.__setitem__(j[:2], j))
         inp = "".join(" ".join(map(str, j)) + "\n" for j in batch.values())
-        out = subprocess.run([str(exe), "-a", str(n), str(r1), str(r2), str(rmax)], input=inp, capture_output=True,
+        out = subprocess.run([str(exe), "-a", *flags, str(n), str(r1), str(r2), str(rmax)], input=inp, capture_output=True,
                              text=True, check=True, env=dict(os.environ, OMP_NUM_THREADS=THREADS)).stdout
         for p in map(str.split, out.splitlines()):
             if p[0] == "S":
@@ -233,6 +235,15 @@ def main() -> int:
                      "group (P_p, X_p, N_p: pfill-fold §2.1)", not bad, f"mismatches {bad[:2]}")
         if checks.mutations:
             checks.mutation("the chain group without its N_p generators", off, f"{len(off)} mismatches")
+
+        # (7) a join cut at a structured Φ^R settles with more probe states and a higher cap
+        cut = [(77, 219, 0, 0, 0, 0), (409, 681, 1023, 1023, 1023, 1023)]
+        before, _ = root_kernels(exe, n, r1, r2, 6, cut)
+        after, _ = root_kernels(exe, n, r1, r2, 6, cut, ("-p", "6", "-c", "28"))
+        checks.check("n10, two structured words at scaled-KJ pairs that the filtered sweep cut: cut with 3 probes and "
+                     "cap 2^16", all(before[j][-1] == 1 for j in cut), str([before[j] for j in cut]))
+        checks.check("the same with 6 probes and cap 2^28: uncut, and K_R = K_1 = P/X/N for R = 1..6",
+                     all(good(after[j], 6) and after[j][0] == 16 for j in cut), str([after[j] for j in cut]))
     return checks.finish()
 
 

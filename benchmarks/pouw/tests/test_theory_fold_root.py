@@ -65,6 +65,18 @@ def test_not_symmetric_words_open_k2(tmp_path):
         assert q == p ^ 0xFFFFFFFF and fr.fold32(q, w2, a0, a1) == fr.fold32(p, w, a0, a1)
 
 
+def test_cut_join_settles(tmp_path):
+    """A structured word at a scaled-KJ pair cuts the join at the default 3 probes and cap 2^16; 6 probes and cap 2^28
+    settle it as K_R = K_1 = P/X/N, and the sweep's recut set picks out exactly the cut jobs."""
+    exe, job = fr.build(tmp_path), (77, 219, 0, 0, 0, 0)
+    cut, _ = fr.root_kernels(exe, 10, 4, 6, 6, [job])
+    settled, _ = fr.root_kernels(exe, 10, 4, 6, 6, [job], ("-p", "6", "-c", "28"))
+    assert cut[job][-1] == 1 and settled[job] == [16] * 6 + [1, 0, 0]
+    prior = tmp_path / "prior.txt"
+    prior.write_text(f"S {' '.join(map(str, job))} {' '.join(map(str, cut[job]))}\nS 3 5 1 2 3 4 16 16 1 0 0\n")
+    assert sw.jobs_for("recut", 10, random.Random(0), 0, 0, src=prior) == [job]
+
+
 @pytest.mark.slow
 def test_n8_bad_pairs_fail_kj_last(tmp_path):
     """Over 1,024 random n = 8 key pairs, a random word each, every pair where K_R = K_1 = P/X/N fails for some R <= 6 has

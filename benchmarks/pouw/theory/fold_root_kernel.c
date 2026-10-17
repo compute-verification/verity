@@ -15,8 +15,10 @@
    union of the K_R that break (G3) against w; degenerate = 1 if some join passed `cap` candidates and was cut short),
    and one line "E a0 a1 w0 w1 w2 w3 R d0 d1 d2 d3" for each word of K_R outside K_1 (R >= 2) or of K_1 outside the
    orbit (R = 1). With -a it also prints "K a0 a1 R d0 d1 d2 d3" for every w' != w in K_R, as fold_kernel.c does.
+   -p sets the number of probe states (default 3, at most 64 / n) and -c the cap as log2 (default 16): more probes
+   and a higher cap settle a cut join at a structured Φ^R.
 
-   usage: fold_root_kernel [-a] n r1 r2 rmax < jobs
+   usage: fold_root_kernel [-a] [-p probes] [-c log2cap] n r1 r2 rmax < jobs
    build: gcc -O2 -fopenmp -o fold_root_kernel fold_root_kernel.c */
 #include <stdint.h>
 #include <stdio.h>
@@ -24,7 +26,7 @@
 #include <string.h>
 
 #define RMAX 8
-#define NPROBE 3
+#define MAXPROBES 21
 #define MAXPROBE 256
 
 typedef struct { uint32_t a0, a1, w[4]; } job_t;
@@ -36,7 +38,7 @@ static int fpidx_cmp(const void *p, const void *q) {
     return a->fp < b->fp ? -1 : a->fp > b->fp ? 1 : (a->idx > b->idx) - (a->idx < b->idx);
 }
 
-static int n, r1, r2, rmax, all_out;
+static int n, r1, r2, rmax, all_out, nprobe = 3;
 static uint32_t mask, top, ns;
 
 static inline uint32_t rotl(uint32_t x, int r) { return ((x << r) | (x >> (n - r))) & mask; }
@@ -106,15 +108,15 @@ static int kernel_r(const job_t *j, int R, scratch_t *s, size_t cap) {
         for (int q = 0; q < R; q++) t = s->phi[t];
         sig[y] = t;
     }
-    uint32_t probe[NPROBE];
-    for (int k = 0; k < NPROBE; k++) probe[k] = (uint32_t)(mix64(0x9E3779B97F4A7C15ULL * (k + 1)) & mask);
+    uint32_t probe[MAXPROBES];
+    for (int k = 0; k < nprobe; k++) probe[k] = (uint32_t)(mix64(0x9E3779B97F4A7C15ULL * (k + 1)) & mask);
     size_t half_n = (size_t)(ns / 2) * ns, hsize = (size_t)ns * ns, hmask = hsize - 1;
     memset(s->slot, 0, hsize * sizeof(uint32_t));
     int hashed = 1;
     for (size_t idx = 0; idx < half_n; idx++) {
         uint32_t x = (uint32_t)(idx >> n), c = (uint32_t)(idx & mask);
         uint64_t fp = 0;
-        for (int k = 0; k < NPROBE; k++)
+        for (int k = 0; k < nprobe; k++)
             fp |= (uint64_t)half(sig[half_inv(probe[k], r1, x, c, a0i)], r1, x, c, a0) << (k * n);
         s->fpa[idx] = fp;
         if (!hashed) continue;
@@ -137,7 +139,7 @@ static int kernel_r(const job_t *j, int R, scratch_t *s, size_t cap) {
     for (size_t idx = 0; idx < half_n && !cut; idx++) {
         uint32_t x = (uint32_t)(idx >> n), c = (uint32_t)(idx & mask);
         uint64_t fp = 0;
-        for (int k = 0; k < NPROBE; k++)
+        for (int k = 0; k < nprobe; k++)
             fp |= (uint64_t)half_inv(sig[half(probe[k], r2, x, c, a1)], r2, x, c, a1i) << (k * n);
         size_t h = 0, lo = 0;
         if (hashed) {
@@ -187,16 +189,28 @@ static int contains(const word_t *set, size_t cnt, const word_t *v) {
 }
 
 int main(int argc, char **argv) {
-    int ai = 1;
-    if (argc > 1 && !strcmp(argv[1], "-a")) { all_out = 1; ai = 2; }
-    if (argc - ai != 4) { fprintf(stderr, "usage: fold_root_kernel [-a] n r1 r2 rmax < jobs\n"); return 2; }
+    int ai = 1, log2cap = 16;
+    for (; ai < argc && argv[ai][0] == '-'; ai++) {
+        if (!strcmp(argv[ai], "-a")) all_out = 1;
+        else if (!strcmp(argv[ai], "-p") && ai + 1 < argc) nprobe = atoi(argv[++ai]);
+        else if (!strcmp(argv[ai], "-c") && ai + 1 < argc) log2cap = atoi(argv[++ai]);
+        else break;
+    }
+    if (argc - ai != 4) {
+        fprintf(stderr, "usage: fold_root_kernel [-a] [-p probes] [-c log2cap] n r1 r2 rmax < jobs\n");
+        return 2;
+    }
     n = atoi(argv[ai]); r1 = atoi(argv[ai + 1]); r2 = atoi(argv[ai + 2]); rmax = atoi(argv[ai + 3]);
     if (n < 3 || n > 16 || r1 < 1 || r1 >= n || r2 < 1 || r2 >= n || rmax < 1 || rmax > RMAX) {
         fprintf(stderr, "need 3 <= n <= 16, 0 < r1, r2 < n, 1 <= rmax <= %d\n", RMAX);
         return 2;
     }
+    if (nprobe < 1 || nprobe > MAXPROBES || nprobe * n > 64 || log2cap < 0 || log2cap > 40) {
+        fprintf(stderr, "need 1 <= probes <= 64 / n and 0 <= log2cap <= 40\n");
+        return 2;
+    }
     mask = (1u << n) - 1; top = 1u << (n - 1); ns = 1u << n;
-    size_t cap = (size_t)1 << 16;
+    size_t cap = (size_t)1 << log2cap;
     size_t njobs = 0, capjobs = 1024;
     job_t *jobs = malloc(capjobs * sizeof(job_t));
     unsigned long v[6];
