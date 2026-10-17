@@ -48,6 +48,7 @@ import Proofs.Flock.Claims.KS.ZkSessionSC
 import Proofs.Flock.Claims.KS.ZkPads
 import Proofs.Flock.Claims.KS.ZkSessionW
 import Proofs.Flock.Claims.KS.ZkOffSC
+import Proofs.Flock.Claims.KS.ZkEntries
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -208,4 +209,8 @@ term `√(2^{d₀}·2Q₀·Adv₀)` (`ZkSessionW`: `FlockSoundness.Discharge.ZkL
 lanes, so a masked output whose level-0 openings verify and are, with those lanes, the reader's entries opens a position
 off `C` on a witness lane without a self-clash only where the reader looks up a column off `C` (`ZkOffSC`:
 `Claims.Flock.exists_ne_of_offW₀Z_sc`); an accepted masked table's level-0 openings verify at `width₀`
-(`Claims.Flock.verified_opens₀Z`). -/
+(`Claims.Flock.verified_opens₀Z`). A compiled masked rep's first request is level 0's, at the positions of the coins of
+its stream's round `zkQueryRound` (`FlockSoundness.Discharge.ZkExec.zk_rep_reqs`), so at a rep's run its level-0
+openings, on the witness lanes, are the masked reader's entries (`ZkEntries`: `Claims.Flock.slotOpensZ_entries`,
+`Claims.Flock.zkRepColsOf_ok`, `FlockSoundness.Discharge.ZkExec.zk_rep_entries`,
+`Claims.Flock.exists_ne_of_zk_entries`). -/
