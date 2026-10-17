@@ -16,10 +16,17 @@ through the repo's bit-exact sm_120 accumulation model
 `fp8_squaring_test.py` checks every primitive bit-exact and the full
 `a^2 mod (2^1024 - 105)` against `pow`.
 
-Finding: the free rounding is real but a throughput dead end.  The sm_120 step
-floors only a *single* E4M3-range operand per instruction, so a squaring needs
-O(limbs^2) tensor-core floor steps (~131k per 1024-bit squaring, ~1021/byte),
-all data-dependent and LSU-bound.  The fastest known big-integer squaring does
-carries on the CUDA cores (`kv.cu`, 1.5e10/s); routing them through tensor-core
-accumulations to harvest the "free" rounding is far slower (int8-TC products
-alone are 0.25x kv.cu, note:20261015T0731Z-draft-model-constants / W12).
+Finding: the free rounding is real but it does not help the cheater.  The sm_120
+step floors only a *single* E4M3-range operand per instruction (<=448, exact
+integers only 0..16), not a column sum, so a squaring needs O(limbs^2)
+tensor-core floor steps (~1.4e5 per 1024-bit squaring, ~1100/byte for a dense
+input; data-dependent because zero nibbles are skipped), against the
+carry-bound encoder's O(limbs).  So counted as roundings it is *worse*, not
+cheaper.  And on throughput the fastest big-integer squaring does its carries on
+the CUDA cores (`kv.cu`, 1.499e10/s/GPU at 1024 bits; the adversary's best is
+FOLD 6 at 1.970e10/s, ra-squaring-ceiling r20261012-194557-c72f): that report
+measured that an int8/FP8 tensor-core (Toeplitz) squaring is *slower* than the
+CUDA-core column form (~8 SM-clocks vs FOLD 5's 6.0 at 512 bits), so routing the
+encoder through FP8/FP32 tensor cores lowers r_enc.  Only a single pinned
+m16n8k32 step is a circuit; library split-K/stream-K GEMMs reassociate the
+reduction and are not the attested chain.
