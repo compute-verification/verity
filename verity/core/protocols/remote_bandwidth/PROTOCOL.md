@@ -9,7 +9,8 @@ window's challenge and the prover's previous root, so the passes are chained. Da
 live-coin design and what it would cost.
 
 The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (seeds, plans, receipts and trees),
-`codec.py` (the store's encoding) and `timing.py` (the honest schedule, and where the sketch's bound is read). Every byte format below is pinned by
+`codec.py` (the store's encoding), `memory_map.py` (serving's record of the KV blocks it wrote and freed, the audit's
+input from serving) and `timing.py` (the honest schedule, and where the sketch's bound is read). Every byte format below is pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
 checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8).
 
@@ -738,7 +739,10 @@ and each window's, from it plus the node's capacities.
     Carrying appends over needs the next session to take the previous one's append roots and releases as its
     starting store.
   - *The device side.* A KV page's index is the store's next fresh one, not \(\text{slot} \cdot \text{LAYERS} +
-    \text{layer}\): the prover keeps the map from slots to indices (the memory map, I3). A KV block under the seed's
+    \text{layer}\): serving records each block it completes, with its slot, the index it gave it and its \(d_j\), and
+    each slot it frees, step by step (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its
+    slot held), and the prover's audit side turns the record into appends, releases and plan changes (`Replay`). The record is the prover's: \(d_j\) is witness, and the
+    verifier sees only the append roots, the releases and the plans. A KV block under the seed's
     key, as `kv.cu` and vLLM's encoded store (whose `Codec` is keyed by the store index alone) encode them today, is
     not to be credited: its writer may have picked its encoding, and then its receipts need no read.
 - **Multi-GPU trees.** Each GPU's blocks should be an aligned power-of-two range of leaves, so that a pass's root is
