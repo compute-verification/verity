@@ -1,0 +1,48 @@
+/-
+`RecSetup.fullDraw` on a population of four units, under F1's inner shape (m 27, k_log 24, claims 8 over 3 regions):
+the `subset` draw of all four passes, and a draw of fewer units, a stratified draw of all four and a subset draw with a
+closure are refused; with no inner shape, or no draw, it passes whatever the record holds.
+-/
+import Flock.RecSetup
+
+namespace Flock.Test.FullDraw
+
+open Lean (Json)
+open Flock
+
+def n (x : Nat) : Json := Lean.toJson x
+
+def nats (xs : List Nat) : Json := Json.arr (xs.toArray.map n)
+
+def subset (units : List Nat) : Json := Json.mkObj [("law", "subset"), ("population", n 4), ("k", n units.length),
+  ("units", nats units)]
+
+def stratified : Json := Json.mkObj [("law", "stratified"), ("population", n 4), ("k", n 4),
+  ("strata", Json.arr #[Json.mkObj [("template", "t"), ("units", Json.arr #[nats [0, 4]]), ("k", n 4)]]),
+  ("units", nats [0, 1, 2, 3])]
+
+def withClosure : Json := Json.mkObj [("law", "subset"), ("population", n 4), ("k", n 3), ("units", nats [0, 1, 2]),
+  ("closure", nats [3])]
+
+def inner : RecVStar.Inner := { m := 27, kLog := 24, claims := 8, regions := 3 }
+
+def record (d : Json) : String := (Json.mkObj [("unit_draw", d)]).compress
+
+def why (i : Option RecVStar.Inner) (d : Option Json) : Option String :=
+  match RecSetup.fullDraw i d (record (d.getD Json.null)) with
+  | .ok () => none
+  | .error e => some e
+
+def tail : String := ": a V* session draws every unit of its population, the only draw the recursion's proof covers"
+
+#guard why inner (some (subset [0, 1, 2, 3])) == none
+#guard why inner (some (subset [1, 3])) == some ("refused: the draw is subset:2 of 2 units over 4, not every one of 4" ++ tail)
+#guard why inner (some (subset [0, 1, 2])) == some ("refused: the draw is subset:3 of 3 units over 4, not every one of 4" ++ tail)
+#guard why inner (some stratified) == some ("refused: the draw's law is not subset" ++ tail)
+#guard why inner (some withClosure) == some "U2: unit_draw's keys are not law, population, k, units"
+#guard why (some { inner with holo := true }) (some (subset [0, 1])) ==
+  some ("refused: the draw is subset:2 of 2 units over 4, not every one of 4" ++ tail)
+#guard why none (some (subset [1, 3])) == none
+#guard why inner none == none
+
+end Flock.Test.FullDraw
