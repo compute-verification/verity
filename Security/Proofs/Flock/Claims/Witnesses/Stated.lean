@@ -50,10 +50,6 @@ theorem ZKmalR_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonemp
     ∃ (P : Unit → Prover (N × Ω)) (S : Simulator), ¬ Claims.ZKmalR H (fun _ => 1) P (fun _ _ => True) S εzk γ :=
   ⟨_, _, Witness.ZKmalR_fails H [] [] εzk γ x hε⟩
 
-/-- **`SimCost` fails**: some simulator makes more than one call. -/
-theorem SimCost_fails (H : Msg → Msg) : ∃ S : Simulator, ¬ Claims.SimCost H S fun _ => 1 :=
-  ⟨_, Witness.SimCost_fails H [] []⟩
-
 /-- **`Nontrivial` fails**: some verifier rejects a recorded run. -/
 theorem Nontrivial_fails {Coin : Type} [Inhabited Coin] (H : Msg → Msg) :
     ∃ (V : Verifier Coin) (recs : List (Claims.Recorded V)), ¬ Claims.Nontrivial H V recs :=
