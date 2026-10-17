@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.DeployEfficient
+import Proofs.Flock.Claims.Complete.WalkPacked
 import Proofs.Flock.Soundness.CompiledSound
 
 /-!
@@ -17,7 +18,8 @@ every relation's fields `rel` and every hash `H`, the conjunction of Flock's cla
 * `Efficient` at the record's own counted decoder (`GS.plainCountedRD`, `GS.zkCountedRD`): `E^rep`'s reruns at every
   deployment (`ERep_cost`), the decoder's `ListWithin`, and its count and lists at most `plainStepPoly` (`zkStepPoly`)
   at the opened word's encoded length, which bounds `assemble`'s checks (`efficient_plain`, `efficient_zk`);
-* `Complete` at the record's reference prover (`honestP`, `honestPZk`) at the record's error (`δc`): a hypothesis.
+* `Complete` at the record's reference prover (`honestP`, `honestPZk`) at the record's error (`δc`): a hypothesis,
+  which at the plain record and the deployed relation follows from the record's JSON (`flock_plain_assembled_relation`).
 
 ## What remains: the hypotheses
 
@@ -28,8 +30,12 @@ every relation's fields `rel` and every hash `H`, the conjunction of Flock's cla
   `zeroCol`), at every decoder meeting `ListCompleteθ`; `Flock.KS`'s decodes the opened columns, at every decoder
   meeting `ListWithin`, whose word has `[]` where no column was opened. So the hypothesis is `Flock.KS` itself.
 * `hComplete : Flock.Complete H (deployPlain rel)`, of the record's reference prover `honestP` at its error
-  `FlockComplete.δc H`: `FlockComplete.Replay.complete_plain` proves it at the deployed relation from named premises. At
-  `deployZk rel`, of `honestPZk` at `FlockComplete.δcZk H`: no proof on this tree yet.
+  `FlockComplete.δc H`: at the deployed relation (`Readable.relation`) it follows from the record's JSON
+  (`Claims.JsonSpec printJ canon`, `FlockComplete.Replay.complete_plain_json`), `Out64` being `Complete`'s own
+  antecedent, so `flock_plain_assembled_relation` takes `JsonSpec` in its place. At any other `rel` it stays a
+  hypothesis: `rel` gives the readable statement's circuit, which the relation's witnesses satisfy, and where it is not
+  the verifier's tables' the honest prover's trace need not satisfy them. At `deployZk rel`, of `honestPZk` at
+  `FlockComplete.δcZk H`: no proof on this tree yet.
 -/
 
 namespace FlockDeploy.Assembled
@@ -85,6 +91,24 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg false) hκ
       (fun x => γ_pos (deployPlain rel) x (V_k_pos false x)) hγ _ (listWithin_plain rel),
     efficient_plain H rel, hComplete⟩
+
+/-- **Flock's claims at the deployed plain verifier at the deployed relation** (`Readable.relation`), at every hash:
+`flock_plain_assembled` with its completeness from the record's JSON (`complete_plain_json`). `hKS` (E4) is what
+remains. -/
+theorem flock_plain_assembled_relation (H : Claims.Msg → Claims.Msg)
+    (hKS : Claims.Flock.KS H (deployPlain Readable.relation))
+    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) :
+    Claims.Flock.ScopeMatches (deployPlain Readable.relation) ∧
+      Claims.Flock.KS H (deployPlain Readable.relation) ∧
+      Claims.Flock.Bits H (deployPlain Readable.relation) ∧
+      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployPlain Readable.relation) x ≤ 2 ^ (-a x)) →
+        (∀ x, Claims.Flock.γ (deployPlain Readable.relation) x ≤ 2 ^ b x) →
+        Claims.Bits H (deployPlain Readable.relation).V (Claims.Flock.R (deployPlain Readable.relation).parse)
+          (Claims.Flock.E (deployPlain Readable.relation) Claims.GS.plainDecodeRD)
+          fun x => min (a x) (255.5 - b x / 2) - 1) ∧
+      Claims.Flock.Efficient H (deployPlain Readable.relation) plainStepPoly ∧
+      Claims.Flock.Complete H (deployPlain Readable.relation) :=
+  flock_plain_assembled Readable.relation H hKS (FlockComplete.Replay.complete_plain_json H S)
 
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
 readable scope is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the radius decoder
