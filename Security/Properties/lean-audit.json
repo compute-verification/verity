@@ -2495,6 +2495,47 @@
     "Properties.SampledProofs.bernoulliBoundsNothing"
    ]
   },
+  "Definitions.Claims": {
+   "digest": "4c89bb9e29a36a5684af69a69f2a713a3757cca256ab843a79183e6a3ec68de9",
+   "definitions": {
+    "Claims.Pr": "27c2a2e48a7f290e37323352d7f3f414ac2db95d6a888a4b1abb226570449e1d"
+   },
+   "guarantees": ["Properties.SampledProofs.SecurityProofs.drawMisses"]
+  },
+  "Definitions.Claims.Sampling": {
+   "digest": "d1cb281030b6d78795cfe5225866da37b9c591b73063a187131c6ce118bc1422",
+   "definitions": {
+    "Claims.Sampling.Design": "7705bf8484bd16af798ed67639f82eb759a1661ca325d4c83651cf477482c67e",
+    "Claims.Sampling.Design.Pa": "c8979b7d81f43badf43e5fda2a38af635d8aee22efcf8f02fa0b4de2c40f1ffb",
+    "Claims.Sampling.Design.rules": "762f2a2b57ec0b5a06816c723410593b9821d8655a9a5849dd416d37aeb44dae",
+    "Claims.Sampling.OneStage": "cb6f56d99cbeb7b90e49aad0236a7e95d8bced32274eddffb6f4d26787814637",
+    "Claims.Sampling.OneStage.Pa": "95b64751bb03cee2fbc0a999b82c0002e34f83f6ba13ba49ce3c651333ee1cb4",
+    "Claims.Sampling.OneStage.all": "18919f46a2fd852ec78ee3a993acd8a9f46dcae24e754500354660cbfd73f98d",
+    "Claims.Sampling.OneStage.bernoulli": "591c88f68150f30ba65aa1ae3fc662389d9942434e3b92b5ebe0d61c40ce8d23",
+    "Claims.Sampling.OneStage.casesOn": "96c76634dae868a160a12a5f767bdeac8f88c693d26031bb3f4ae459dc604dad",
+    "Claims.Sampling.OneStage.ctorIdx": "b05e734892bdf56982bd9afb6bdaf537225f7640d33479ce3ef33797cfabdf08",
+    "Claims.Sampling.OneStage.rec": "8fa858c57ca3a056b9029041d5a706c31554641f60bcb03436d48ec6a801a2fb",
+    "Claims.Sampling.OneStage.stratified": "d9381a4be911f35df0d3a5f704650b068d7d42f928bbcaadd88f9a038cc4fb7c",
+    "Claims.Sampling.OneStage.subset": "bf2e04f44f50b7c46497a525b37c17110b9ffb1da46b7fc563c8984c3a1ff6ba",
+    "Claims.Sampling.OneStage.work": "8371d99c71acdc6403911795a192f890cc51ebfa95347e6824acd0b75ae721ae",
+    "Claims.Sampling.Partition": "89ca73a3d4b7f12df2a368f1a85701e5d58cad086a49645866ef5eb81c161634",
+    "Claims.Sampling.Partition.classes": "ba7ad7d00e035e3ff1b9b23d98e928b0309721026f3188f02bf8ac04cce1e1a8",
+    "Claims.Sampling.RU": "8bfd0dbe5b553b6adcaf8d1b00bc3040bdbb4c6fe0bb0604deb7f30a064408bd",
+    "Claims.Sampling.Rule": "119a7e1a4042d032cbd72e9f835beec48a384651205f0f9f4945b96358e9d3ed",
+    "Claims.Sampling.Rule.Pa": "8075d8e8f5e3ce076e0fbb88da2b209d88eef7d8d7099195f75ce29c784e457c",
+    "Claims.Sampling.Rule.Pa._sparseCasesOn_1": "bde3b99871e72ebf871a41005112686b2e8836e0c1d1aeb54b9a8b91cddffc30",
+    "Claims.Sampling.Rule.Pa._sparseCasesOn_2": "4313bfca944fa2d73686e5366ae0a7211711e07634cc3791c46ae50a955ade96",
+    "Claims.Sampling.Rule.check": "aa06bd5138c0b70b37184bf7387876ba40c0cf3546d7ba002283d67b7a45e691",
+    "Claims.Sampling.Rule.first": "b1fdf6cd63af06591942938dd58f331784a85f2774eebe1cc7532fafc60351ea",
+    "Claims.Sampling.classesPa": "9eb65f965643f70fdc9e9ba91409c53e8ae9d27e2b519d8ae244e7707e7eb3fb",
+    "Claims.Sampling.classesPa._sparseCasesOn_1": "4741fd7a40dab4dc667f81d0b784966659776dad758f504959ea1b541d966c19",
+    "Claims.Sampling.ruSizes": "56514b14103fc1e7244c82d0092dee5a22311c7f06d1637feee866a621941f61",
+    "Claims.Sampling.strataPa": "4066df1a938977271f39b9ef03423176dba7f7a74bbb7dc0c3d70a84f894e88d",
+    "Claims.Sampling.strataSizes": "28107e2665f3cbaf1697879cf2a180e586b13d51dd3d7e997e5ef8a921d2ee91",
+    "Claims.Sampling.window": "d11d808843864bb4dc6ce0ebb8a26c85eb2d72bf5f633396f7e6f269d091137d"
+   },
+   "guarantees": ["Properties.SampledProofs.SecurityProofs.drawMisses"]
+  },
   "Definitions.Core.Circuit": {
    "digest": "f463bd9c6e109b58644bd7fd3bc72db1cd65b21a820a3486f99af9e44f920e86",
    "definitions": {
