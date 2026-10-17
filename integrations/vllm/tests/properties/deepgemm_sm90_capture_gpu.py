@@ -9,13 +9,16 @@ prints one line per case and then `DEEPGEMM-SM90 GO` or `NO-GO`.  `ok` (GO) = ev
 nothing else runs when it fails (exit 3).  vLLM runs at its defaults, as a served engine does: `engine.env.served_defaults` clears
 every switch the process inherited before vLLM is imported, so DeepGEMM is on with its ue8m0 scales, FlashInfer's branch is on and
 the run is not batch invariant, and M < 32 takes FlashInfer's branch; `--batch-invariant` (not what vLLM serves) sets
-`VLLM_BATCH_INVARIANT=1`, which sends every M to DeepGEMM's (flashinfer.py:309-310).  A served GLM-5.3 engine runs these defaults
-too, so GLM-5.3's dense linears are this kernel at its shapes (`GLM53_LINEARS`).  A phase that raises records its error and fails
-the verdict without stopping the others.
+`VLLM_BATCH_INVARIANT=1`, which sends every M to DeepGEMM's (flashinfer.py:309-310).  The run gets a served engine's toolchain too
+(`environment`: `pipeline.row_driver`'s `CUDA_HOME` and nvcc on `PATH`): without nvcc vLLM's `has_flashinfer` is False and every M
+takes `DeepGemmFp8BlockScaledMMKernel`, which no served engine runs (GLM-5.3's record applies `FlashInferFp8Linear_v1`).  A served
+GLM-5.3 engine runs these defaults, so GLM-5.3's dense linears are this kernel at its shapes (`GLM53_LINEARS`).  A phase that
+raises records its error and fails the verdict without stopping the others.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
   served     vLLM reads the switches back (`served`): `VLLM_USE_DEEP_GEMM`, `VLLM_USE_DEEP_GEMM_E8M0`, `is_deep_gemm_e8m0_used()`,
-             `VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER`, and `VLLM_BATCH_INVARIANT` exactly as asked.
+             `VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER` with FlashInfer's block-scale GEMM available, and `VLLM_BATCH_INVARIANT` exactly
+             as asked; the record keeps nvcc's version and the FlashInfer module the run loaded (`flashinfer_module`).
   selection  `init_fp8_linear_kernel` with Fp8LinearMethod's keys for 128x128 blocks (fp8.py:276-287) under a model config (DeepGEMM's
              `can_implement` reads one, deep_gemm.py:69-76) selects FlashInferFp8DeepGEMMDynamicBlockScaledKernel at every shape,
              `is_deep_gemm_e8m0_used()` holds, and `compute_fp8_einsum_recipe()` is ((1, 128, 128), False).
@@ -89,6 +92,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as B
 from verity_vllm.engine.env import served_defaults
+from verity_vllm.pipeline.cli import MACHINE
 from verity_vllm.program.kernels import derived_rows as R
 from verity_vllm.properties.record import seal as seal_record
 
@@ -167,10 +171,14 @@ def cdiv(a: int, b: int) -> int:
 # ------------------------------------------------------------------------------------------------------------------------- env
 def environment(batch_invariant: bool, work: Path) -> tuple[dict[str, str], dict[str, str]]:
     """vLLM's defaults (`served_defaults`, before vLLM is imported: DeepGEMM on with its ue8m0 scales and FlashInfer's M < 32 branch),
-    `VLLM_BATCH_INVARIANT=1` only under `--batch-invariant`, and DeepGEMM's JIT cache in the scratch directory (vLLM keeps a set
+    `VLLM_BATCH_INVARIANT=1` only under `--batch-invariant`, the toolchain a served engine's stages get from `pipeline.row_driver`
+    (`CUDA_HOME`, an exported one winning, and `RunEnv.cuda_bin` on `PATH` after the interpreter's directory: vLLM offers FlashInfer
+    only with nvcc on `PATH`, `has_flashinfer`), and DeepGEMM's JIT cache in the scratch directory (vLLM keeps a set
     `DG_JIT_CACHE_DIR`, deep_gemm.py:266-270): (the env set, the switches cleared)."""
     cleared = served_defaults()
-    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache"), "DG_JIT_CACHE_DIR": str(work / "deep_gemm")}
+    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache"), "DG_JIT_CACHE_DIR": str(work / "deep_gemm"),
+           "CUDA_HOME": os.environ.get("CUDA_HOME") or MACHINE["RunEnv.cuda_home"],
+           "PATH": f"{os.path.dirname(sys.executable)}:{MACHINE['RunEnv.cuda_bin']}:{os.environ.get('PATH', '')}"}
     if batch_invariant:
         env["VLLM_BATCH_INVARIANT"] = "1"
     os.environ.update(env)
@@ -178,17 +186,38 @@ def environment(batch_invariant: bool, work: Path) -> tuple[dict[str, str], dict
 
 
 def served(batch_invariant: bool) -> dict[str, Any]:
-    """The switches as vLLM read them: DeepGEMM on, its ue8m0 scales on and in use, FlashInfer's branch on, and batch invariance
-    exactly as asked (off unless `--batch-invariant`)."""
+    """The switches as vLLM read them: DeepGEMM on, its ue8m0 scales on and in use, FlashInfer's branch on and its block-scale GEMM
+    available (nvcc found: `nvcc` its version), and batch invariance exactly as asked (off unless `--batch-invariant`)."""
+    import shutil
+    import subprocess
+
     import vllm.envs as envs
     from vllm.utils.deep_gemm import is_deep_gemm_e8m0_used
+    from vllm.utils.flashinfer import is_flashinfer_fp8_blockscale_gemm_supported
 
-    rec = {k: bool(getattr(envs, k)) for k in ("VLLM_USE_DEEP_GEMM", "VLLM_USE_DEEP_GEMM_E8M0", "VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER",
-                                               "VLLM_BATCH_INVARIANT")}
+    rec: dict[str, Any] = {k: bool(getattr(envs, k)) for k in ("VLLM_USE_DEEP_GEMM", "VLLM_USE_DEEP_GEMM_E8M0",
+                                                               "VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER", "VLLM_BATCH_INVARIANT")}
     rec["deep_gemm_e8m0"] = bool(is_deep_gemm_e8m0_used())
+    rec["flashinfer_blockscale_gemm"] = bool(is_flashinfer_fp8_blockscale_gemm_supported())
+    nvcc = shutil.which("nvcc")
+    rec["nvcc"] = nvcc and subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-2:]
     rec["ok"] = (rec["VLLM_USE_DEEP_GEMM"] and rec["VLLM_USE_DEEP_GEMM_E8M0"] and rec["VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER"]
-                 and rec["deep_gemm_e8m0"] and rec["VLLM_BATCH_INVARIANT"] == batch_invariant)
+                 and rec["deep_gemm_e8m0"] and rec["flashinfer_blockscale_gemm"] and rec["VLLM_BATCH_INVARIANT"] == batch_invariant)
     return rec
+
+
+def flashinfer_module() -> dict[str, Any]:
+    """FlashInfer's JIT-built block-scale GEMM module as the run loaded it: each `.so`'s sha256 and the `cuda_home` its build.ninja
+    names."""
+    import hashlib
+
+    from flashinfer.jit import env as fe
+
+    d = Path(fe.FLASHINFER_JIT_DIR) / "fp8_blockscale_gemm_90"
+    ninja = d / "build.ninja"
+    home = re.search(r"^cuda_home = (.*)$", ninja.read_text(), re.M) if ninja.is_file() else None
+    return {"dir": str(d), "cuda_home": home and home.group(1),
+            "so_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(d.glob("*.so"))}}
 
 
 @contextlib.contextmanager
@@ -1026,6 +1055,11 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
             except Exception as e:  # noqa: BLE001
                 doc["errors"]["einsum/dsv4/wo_a"] = B._error(e)
                 print(f"[deepgemm-sm90] einsum ERROR {doc['errors']['einsum/dsv4/wo_a'][:400]}", flush=True)
+    try:
+        doc["flashinfer_module"] = flashinfer_module()
+    except Exception as e:  # noqa: BLE001
+        doc["errors"]["flashinfer_module"] = B._error(e)
+    print(f"[deepgemm-sm90] flashinfer module {json.dumps(doc.get('flashinfer_module'))}", flush=True)
     doc["jit"] = jit(Path(env["DG_JIT_CACHE_DIR"]))
     print(f"[deepgemm-sm90] jit files={doc['jit']['files']} gemms={doc['jit']['gemms']} layouts={doc['jit']['layouts']} "
           f"types={doc['jit']['gemm_types']} ok={doc['jit']['ok']}", flush=True)

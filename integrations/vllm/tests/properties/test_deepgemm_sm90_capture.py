@@ -644,7 +644,10 @@ def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False
         monkeypatch.setenv(k, "0")
     for k in RUN_ENV:
         monkeypatch.setenv(k, "")
+    monkeypatch.setenv("PATH", X.os.environ.get("PATH", ""))
+    monkeypatch.delenv("CUDA_HOME", raising=False)
     seen: dict = {"mufu": [], "jit": [], "linear": [], "served": [], "probe": []}
+    monkeypatch.setattr(X, "flashinfer_module", lambda: {"cuda_home": "/usr/local/cuda", "so_sha256": {"fp8_blockscale_gemm_90.so": "f5"}})
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": gate_ok, "torch_capability": "9.0"})
     monkeypatch.setattr(X.C, "mufu", lambda work, arch: (seen["mufu"].append(arch), copy.deepcopy(MUFU))[1])
     monkeypatch.setattr(X.G, "_environment", lambda: {})
@@ -689,6 +692,25 @@ def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False
     return seen
 
 
+def test_the_environment_is_a_served_engines(tmp_path, monkeypatch) -> None:
+    """vLLM's switches cleared, and the row driver's toolchain: without nvcc on PATH vLLM never offers FlashInfer's branch."""
+    import os
+
+    for k in SERVED_DEFAULTS:
+        monkeypatch.setenv(k, "0")
+    for k in RUN_ENV:
+        monkeypatch.setenv(k, "")
+    monkeypatch.setenv("PATH", "/bin")
+    monkeypatch.delenv("CUDA_HOME", raising=False)
+    env, cleared = X.environment(False, tmp_path)
+    assert cleared == {k: "0" for k in SERVED_DEFAULTS} and not any(k in os.environ for k in SERVED_DEFAULTS)
+    assert X.MACHINE["RunEnv.cuda_home"] == "/usr/local/cuda" and env["CUDA_HOME"] == os.environ["CUDA_HOME"] == "/usr/local/cuda"
+    assert env["PATH"] == os.environ["PATH"] == f"{os.path.dirname(sys.executable)}:/usr/local/cuda/bin:/bin"
+    monkeypatch.setenv("CUDA_HOME", "/opt/cuda-x")
+    env, cleared = X.environment(True, tmp_path)
+    assert env["CUDA_HOME"] == "/opt/cuda-x" and env["VLLM_BATCH_INVARIANT"] == "1" and cleared == {}
+
+
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
     """`main` with the GPU's pieces stood in for and vLLM's config module stubbed: the comparison jobs through the spawned worker
     pool, the per-case verdicts, the sealed record, the printed line and the exit status, so a slip in the orchestration shows here
@@ -703,7 +725,9 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert {k: c["ok"] for k, c in doc["cases"].items()} == {"weights/dsv4/small": True, "linear/dsv4/small/M1": True,
                                                              "linear/dsv4/small/M32": True, "weights/dsv4/wo_a": True,
                                                              "einsum/dsv4/wo_a/M5": True, **PROBE_CASES}
-    assert sorted(doc["env"]) == sorted(RUN_ENV) and doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS}
+    assert sorted(doc["env"]) == sorted(RUN_ENV + ("CUDA_HOME", "PATH")) and doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS}
+    assert doc["env"]["CUDA_HOME"] == "/usr/local/cuda" and doc["env"]["PATH"].split(":")[1] == "/usr/local/cuda/bin"
+    assert doc["flashinfer_module"]["cuda_home"] == "/usr/local/cuda"
     assert seen["served"] == [{k: None for k in SERVED_DEFAULTS}] and doc["served"]["ok"] is True
     assert seen["probe"] == [("ftz", False), ("fma", False)]
     assert all(v > 0 for c in ("probe/glm53/ftz/M16", "probe/glm53/fma/M32") for v in doc["cases"][c]["refuted"].values())
