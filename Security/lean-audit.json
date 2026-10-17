@@ -7,7 +7,8 @@
    "digest": "cdd35e79a4b367be9dcb441f6d61dbfe860834b165d39dbe5df28008bccaa821"
   },
   "Accounting.Assumptions.KeyBinding": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "55e9c82a339072a3c882023d26f02ec93e38263f0a24d26e97df1c695a8af2d5"
   },
   "Accounting.Assumptions.PouwDetection": {
    "owner": "@compute-accounting",
@@ -1397,7 +1398,12 @@
    "type_hash": "285621bb6e07e492d607d97ac1183c00f683ca8459de8b4d593e019714144cd1"
   },
   "Accounting.SecurityProofs.StackedSessionConservationRelay": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionConservationRelay"
+   ],
+   "assumptions": [],
+   "type_hash": "abbda191195b22010fd4cf807c97045ad931470745f8a4d9626348d71ea6c14c"
   },
   "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": {
    "owner": "@memory-accounting",
@@ -5798,8 +5804,21 @@
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
   "Definitions.Accounting.Carrier": {
-   "digest": "a769846cb25081e65e5948fa909c66b4af4e9c6cbc8d2f126fc39da8f6401a3f",
+   "digest": "6508cf583f26320360238dbcfe5b9fd22ff1b9dcc4d3aba7d7138373b8ce1c22",
    "definitions": {
+    "Accounting.Rate.PIChip.linkBitsEven": "664fdfcc22cb307c84e0dced36156f3512a82bd18bac34e67c7f1b1b3020dca6",
+    "Accounting.Rate.PassProvenance": "ee44265e1c690be67eb25e35098885dc2a5c05ae23924c5202dbff4731579ede",
+    "Accounting.Rate.PassProvenance.below": "e0f64354213cb9437ab2256d50a1f7705f8c248ee6e8c03e76665937a9a34926",
+    "Accounting.Rate.PassProvenance.brecOn": "9c0a75028147e728ff9436860fce058f9d281c7507a426f5d4847d16f7effad7",
+    "Accounting.Rate.PassProvenance.brecOn.go": "73d2c36f86637e39368dbc2fd2e9c129554a8f2094a8446f0fc0de969137f2f0",
+    "Accounting.Rate.PassProvenance.casesOn": "7c649aa79f61df3592fe4b0b6ea86be7f6dc648e85a40ab61eabe617bee0765d",
+    "Accounting.Rate.PassProvenance.done": "41f61ddea59c5c57735261a4c21b9d5d5338d6237932765be1b9099b3a58f9f5",
+    "Accounting.Rate.PassProvenance.encode": "046d544635d238ff4d3bf67e62f038f1be30170795d686e4dda23c34779a0d2b",
+    "Accounting.Rate.PassProvenance.input": "8c27a11bdcfc9f88eae3285adcd02684babe08dcce80929b752956529f66ca6a",
+    "Accounting.Rate.PassProvenance.inputs": "fdc089e292097297574b8cec1c92539e55c6625126eb9418c5214341ef0a4c4f",
+    "Accounting.Rate.PassProvenance.rec": "ecc12463377f3d9270b1a297cdf2b8288673685e43cf65d552ec27dbecdc7f9d",
+    "Accounting.Rate.PassProvenance.roundings": "a8f55c50c8c548d6fa1746f506974083459745a6adea7e9caf0fbbda901adc23",
+    "Accounting.Rate.PassProvenance.run": "b52a34a71a5c906868cde1e48e5b000aecf4545496aff88a376fce87f4a9d8a0",
     "Accounting.RateSketch.Carrier": "959c9fa52081612967bc475abfb0112b80743b558b7330254d408762e8e2fdfa",
     "Accounting.RateSketch.Carrier.carried": "10f81ebb2467e3794edeb76d3fed9cf3936e3dbc6e271b22f256dd8593daeaeb",
     "Accounting.RateSketch.Carrier.provenance": "83fe2280f4e4a4cafcf9e61259f2d053aec04fb3fc65a15873296a8a3d6a0df4",
@@ -5819,6 +5838,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
@@ -6203,7 +6223,8 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditDeployed": {
@@ -6263,7 +6284,8 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditHorizon": {
@@ -6290,7 +6312,8 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditInteractive": {
@@ -6371,7 +6394,8 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditJoint": {
@@ -6489,7 +6513,8 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditSketch": {
@@ -8075,6 +8100,7 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
     "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
@@ -16818,7 +16844,8 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Models.Accounting.Assumptions.RateAuditDeployed": {
@@ -16839,15 +16866,20 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
     "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Models.Accounting.Assumptions.Stacking": {
-   "digest": "b021616f9dcb6ca305ea8fa00622fa5cab5bf73a83c0c9001b71a41f6d2f17c3",
+   "digest": "4d321934e01e605ee688546e75b1a7cb28f2533879e5e3edab72cbff4b04b99a",
    "definitions": {
-    "Accounting.Assumptions.CircuitEncodeHardness": "cdd35e79a4b367be9dcb441f6d61dbfe860834b165d39dbe5df28008bccaa821"
+    "Accounting.Assumptions.CircuitEncodeHardness": "cdd35e79a4b367be9dcb441f6d61dbfe860834b165d39dbe5df28008bccaa821",
+    "Accounting.Assumptions.KeyBinding": "55e9c82a339072a3c882023d26f02ec93e38263f0a24d26e97df1c695a8af2d5"
    },
-   "guarantees": ["Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"]
+   "guarantees": [
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
+   ]
   },
   "Models.Accounting.Assumptions.TS": {
    "digest": "1dc280d7e8e68052be922d55c6fe791e9b49a76282ad2f6e4e8c247f6b6c5746",
@@ -17285,13 +17317,15 @@
    ]
   },
   "Models.Accounting.Guarantees.Stacking": {
-   "digest": "5601d942cc865d732ed07c428bb74d49800a8782d7e245437afc0505d10f9815",
+   "digest": "98382dbd99c326ebbf973faafcf918ad5febf334455c7d0c954cf22b5826f2f1",
    "definitions": {
     "Accounting.Guarantees.CarrierBits": "20428995c2321369af63229df03218efa0f480d915fc3d6b52a08f798f159c97",
-    "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "7eb5de957da4ecf4d9255a781da50968d14423b902c316aa87950945cad91b00"
+    "Accounting.Guarantees.StackedSessionConservationRelay": "96639ff0f04d27752b914df1d70e416b8f8926d7ae7163a5835c15c1b0ff4038",
+    "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "4b65b04a019a8435296841f9905b49718675faf03620e5a925a59890b946d4ca"
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
