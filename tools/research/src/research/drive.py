@@ -53,6 +53,10 @@ LEAN_ERROR_RE = re.compile(r"^\s*error: (\S+?\.lean):\d+", re.M)
 KILLED_RC = (129, 137, 143)
 #: what `Driver.culprit` says of a failure that names no file and was a kill
 KILLED = "it was killed (a signal or 128+N) and names no file: a machine's fault"
+#: what it says of one whose files, and the declared inputs of what failed, no PR's change touches: a machine's fault too
+UNTOUCHED = "no PR's change touches what failed or its declared inputs: a machine's fault"
+#: Lean's own inputs, for a Lean step that failed with no file named
+LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json", "lean-audit.json")
 #: states `research status` reports for a run that may still publish an attempt
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: after a launched run ends, how long its attempt may take to reach the store before the launch counts as lost
@@ -251,6 +255,24 @@ def failed_steps(run_dir: Path) -> list[dict]:
     return out
 
 
+def suite_inputs(repo: Path, commit: str, suite: str) -> list[str]:
+    """The paths suite ``suite`` (its directory) reads at ``commit``: its directory and its `[tool.verity.tests] inputs`; the
+    repository's own suite (``.``) only its inputs."""
+    import tomllib
+
+    own = "pyproject.toml" if suite.strip("/") in ("", ".") else f"{suite.strip('/')}/pyproject.toml"
+    r = _git(repo, "show", f"{commit}:{own}", check=False)
+    try:
+        inputs = tomllib.loads(r.stdout).get("tool", {}).get("verity", {}).get("tests", {}).get("inputs", []) if not r.returncode else []
+    except tomllib.TOMLDecodeError:
+        inputs = []
+    return [i for i in ([] if suite in ("", ".") else [suite]) + [str(x) for x in inputs] if i]
+
+
+def under(f: str, paths: list[str]) -> bool:
+    return any(f == p or f.startswith(p.rstrip("/") + "/") for p in paths)
+
+
 def lean_errors(log: str) -> set[str]:
     """The repository paths of the Lean files lean-audit's ``log`` reports errors in: each `error: FILE.lean:LINE` after an
     `AUDIT .../PKG: FAIL` line, FILE relative to PKG."""
@@ -339,6 +361,8 @@ class Driver:
             launch = functools.partial(train_launch, auth=q.auth)
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
         self.repo, self.dry_run, self._seen, self._prs = q.workdir, False, {}, None
+        self._drive: dict | None = None
+        q.warming = self.warming
 
     # -- what the store says of a commit
 
@@ -521,20 +545,48 @@ class Driver:
         failure points at (`implicated`), else None; with the members that touch one, and what the failure points at.  A
         failure that names no file and was a kill (`killed`) says `KILLED`."""
         found: set[str] = set()
-        for d in self.evidence(self.repo, v.attempt.split()):
+        dirs = self.evidence(self.repo, v.attempt.split())
+        for d in dirs:
             if (paths := implicated(d)) is None:
                 if killed(d, v.why):
                     return None, [], KILLED
-                return None, [], "the failure names no file (a step failed with no failing test)"
+                continue
             found |= paths
-        if not found:
+        own = {x.commit: changed(self.repo, f"{x.commit}^1", x.commit) for x in members}
+        hits = [(x, t) for x in members if (t := touches(own[x.commit], found))] if found else []
+        if hits:
+            what = ", ".join(sorted({f for _, t in hits for f in t}))
+            return (hits[0][0] if len(hits) == 1 else None), [x for x, _ in hits], what
+        if not dirs:
             return None, [], "no failed suite's report reached drive"
-        hits = [(x, touches(changed(self.repo, f"{x.commit}^1", x.commit), found)) for x in members]
-        hits = [(x, t) for x, t in hits if t]
-        if not hits:
-            return None, [], f"no PR's change touches a file the failure names ({', '.join(sorted(found)[:4])})"
-        what = ", ".join(sorted({f for _, t in hits for f in t}))
-        return (hits[0][0] if len(hits) == 1 else None), [x for x, _ in hits], what
+        back, what = self.by_inputs(members, own, dirs)
+        if back:
+            return (back[0] if len(back) == 1 else None), back, what
+        return None, [], UNTOUCHED
+
+    def by_inputs(self, members: list[Member], own: dict[str, set[str]], dirs: list[Path]) -> tuple[list[Member], str]:
+        """The members whose change touches the declared inputs of what failed, when the failure's own files touch none
+        (16 Oct: #2164's suite failed in tests/, and the cause was its benchmarks/pouw/pyproject.toml): a failed suite's
+        directory and `[tool.verity.tests] inputs`, a Lean step's Lean sources, circuit-check's (`queue.forces_cold`)."""
+        from .queue import forces_cold
+
+        tip, rules = members[-1].commit, []
+        for d in dirs:
+            for s in failed_suites(d):
+                ins = suite_inputs(self.repo, tip, s.get("suite") or "")
+                rules.append((f"suite {s.get('name') or s.get('suite')}'s inputs", lambda f, ins=ins: under(f, ins)))
+            for st in failed_steps(d):
+                step = st.get("step") or ""
+                if step.startswith("lean") and step != "lean-suites":
+                    rules.append(("Lean sources", lambda f: f.endswith(LEAN_INPUTS)))
+                elif step == "circuit-check":
+                    rules.append(("circuit-check's inputs", lambda f: forces_cold([f])))
+        out, why = [], set()
+        for x in members:
+            if t := {label for label, ok in rules for f in own[x.commit] if ok(f)}:
+                out.append(x)
+                why |= t
+        return out, ", ".join(sorted(why))
 
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
         """Act on a failed train with no lander (16 Oct, Daniel through top): eject every member whose change touches what the
@@ -545,7 +597,7 @@ class Driver:
             return
         head = f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}"
         _, hit, what = self.culprit(members, v)
-        if what == KILLED and m.commit not in drive.setdefault("resent", {}):
+        if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}):
             self.resend(drive, m, prs, v)
             return
         ejected, why = [], what
@@ -565,8 +617,8 @@ class Driver:
                                     f"the next sync rebuilds without {'it' if len(ejected) == 1 else 'them'}. Fix and re-mark",
                         *(self._handle(x.pr) for x in ejected))
             return
-        if what == KILLED:
-            why = "it was killed again on its resend, and it names no file"
+        if what in (KILLED, UNTOUCHED):
+            why = f"it failed again on its resend ({what})"
         self.refuse(drive, key, f"{head}. Not ejected: {why}. Eject the PR that broke it (`research queue eject N --reason ...`); "
                                 "the next sync rebuilds without it", *(self._handle(x.pr) for x in hit))
 
@@ -583,8 +635,61 @@ class Driver:
             return
         drive["resent"][m.commit] = v.attempt.split()
         drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": needs_agreement(self.repo, main, m.commit)}
-        self.q.log(f"research queue drive: resent {m.commit[:12]} ({prs}) as {' '.join(ids)}: {v.attempt} was killed ({v.why}) "
-                   f"and its failure names no file, so no PR is ejected")
+        self.q.log(f"research queue drive: resent {m.commit[:12]} ({prs}) as {' '.join(ids)}: {v.attempt} failed ({v.why}), and "
+                   f"no PR's change touches what failed, so no PR is ejected")
+
+    # -- pre-warming a cold-forcing PR off `next`
+
+    def warming(self, p) -> str | None:
+        """Why ready PR ``p`` stays off `next` for now: its change makes circuit-check run cold (`queue.forces_cold`) and its
+        head's pre-warm, one recorded check of that head (`prewarm`), hasn't ended.  Its passes then reach the trains it joins,
+        which run warm, and no warm PR waits hours on it above it (16 Oct: #2158 and #2199, each at the bottom of `next`, made
+        every train above them cold, until a lander held them by hand)."""
+        if self._drive is None:
+            return None
+        pw, key = self._drive.setdefault("prewarm", {}), f"{p.number}@{p.head}"
+        if (rec := pw.get(key)) is None:
+            if not self.q._forces_cold(p.number):
+                return None
+            rec = pw[key] = {"pr": p.number, "head": p.head}
+        if rec.get("done"):
+            return None
+        ids = rec.get("ids")
+        return (f"pre-warming its circuit-check off `{self.q.branch}`: " + (f"{' '.join(ids)} of {p.head[:12]}" if ids else
+                "its check of the head launches when a check slot frees") + "; it joins once that check ends")
+
+    def prewarm(self, drive: dict, running: int) -> int:
+        """Launch and follow each pre-warm `warming` asked for (one `train.sh` check of the PR's head, in a check slot, while fewer
+        than `max_running` checks run) and mark it done once it ends, passed or not: the train's check is the gate.  Returns
+        how many run now, for the running count."""
+        q = self.q
+        heads = {f"{p.number}@{p.head}" for p in q.github.open_prs()}
+        pw = drive["prewarm"] = {k: v for k, v in drive.get("prewarm", {}).items() if k in heads}
+        active = 0
+        for key, rec in pw.items():
+            if rec.get("done"):
+                continue
+            if rec.get("ids"):
+                states = self._states(rec["ids"])
+                if any(st in ACTIVE for st, *_ in states.values()):
+                    active += 1
+                    continue
+                if not all(rc == NOT_STARTED for _, rc, *_ in states.values()):
+                    rec["done"] = True
+                    q.log(f"research queue drive: #{rec['pr']}'s pre-warm {' '.join(rec['ids'])} ended; it joins `{q.branch}`")
+                    continue
+                rec.pop("ids")
+            if running + active >= self.max_running or self.dry_run or q.shadow:
+                continue
+            ids, tail = self.launch(self.repo, rec["head"], self.on, False)
+            if not ids:
+                rec["done"] = True
+                q.log(f"research queue drive: #{rec['pr']}'s pre-warm registered no run ({tail[-200:]}); it joins cold")
+                continue
+            rec.update(ids=ids, at=self.now())
+            active += 1
+            q.log(f"research queue drive: pre-warming #{rec['pr']} ({rec['head'][:12]}): {' '.join(ids)}")
+        return active
 
     # -- the tick
 
@@ -602,6 +707,7 @@ class Driver:
         drive = state.setdefault("drive", {})
         drive.setdefault("launched", {})
         drive.setdefault("told", [])
+        self._drive = drive
         landed = self.land(drive, dry_run)
         if landed is None and (why := self.held(drive)):
             if not dry_run:
@@ -642,6 +748,7 @@ class Driver:
         what = [f"landed #{landed.pr}"] if landed else []
         main = _out(self.repo, "rev-parse", "origin/main")
         running = sum(self.verdict(c, main, drive).state == "running" for c in drive["launched"])
+        running += self.prewarm(drive, running)
         for i in self.trains(len(members), self._cold(members)):
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
             v = self.verdict(m.commit, main, drive)
