@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+import SampledProofs.Run
 
 /-!
 # The sampled verifier's sessions at the code with its Lean draw
@@ -12,6 +13,11 @@ and `SessionRuns`, `SessionOpens` and `InnerNumbers` are one statement about the
 * `SessionOpensOne`: at an accepted run that checks some unit and shows the session, one Flock witness in its relation
   reveals, for every checked unit, openings that make it correct; it is `SessionOpens` (`sessionOpens_code_iff`).
 * `innerNumbers_code_iff`: `InnerNumbers` is Flock's numbers at the one session's statement.
+
+And of `SampledProofs.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
+the population and R1–R7 (`Registration.check`) under the rule's law, ran the draw of record (`Select.select`) on the
+challenger's bytes (`source`) and held it to the registration (`Draw.checkDraw`), and its `draw` and `read` are that
+draw's.
 -/
 
 namespace SamplingDeploy
@@ -89,3 +95,46 @@ theorem innerNumbers_code_iff :
   innerNumbers_one_iff _ fun _ _ _ => rfl
 
 end SamplingDeploy
+
+namespace SampledProofs.Run
+
+open Lean (Json)
+open Flock (V)
+
+/-- **An `if` whose branch is a result** gave that result where its condition holds, and its other branch's otherwise. -/
+theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
+    (h : (if c then Except.ok a else rest) = .ok j) : (c ∧ a = j) ∨ (¬c ∧ rest = .ok j) := by
+  by_cases hc : c
+  · left; rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h; exact ⟨hc, Except.ok.inj h⟩
+  · right; rw [ite_eq_right_of_eq_false _ _ (eq_false hc)] at h; exact ⟨hc, h⟩
+
+-- `run` unfolds to 48 decided leaves under one `match` or `if` per step; splitting them takes about 3 minutes.
+set_option maxHeartbeats 4000000 in
+/-- **A decided run passed its registration and ran the draw of record**: `run` either refuses at a step or passed the
+population, R1–R7 under the rule's law over it, and the draw's own check, with its `draw` and `read` those of
+`Select.select` on the challenger's bytes. -/
+theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
+    (∃ (step : String) (codes : Array String),
+      j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
+    ∃ n law, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.lawOver n = .ok law ∧
+      ¬(!(Registration.check i.record { i.params.verifier with law }).isEmpty) = true ∧
+      ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query law i.params.verifier.workTable =
+          .ok derived ∧
+        ∃ draw rest read, Select.select i.rule i.params.verifier.program i.params.verifier.query
+            i.params.verifier.workTable i.closure i.source = .ok (draw, rest, read) ∧
+          ¬(!(Draw.checkDraw draw (getD i.record "population") derived).isEmpty) = true ∧
+          ∃ receipt interior symbol pub audit, j = Json.mkObj [("receipt", receipt), ("draw", draw),
+            ("read", Lean.toJson read), ("interior", interior), ("symbol", symbol), ("public", pub),
+            ("audit", audit)] := by
+  unfold run at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat'
+    first
+    | split at h
+    | focus (cases h; done)
+    | (obtain ⟨_, h⟩ | ⟨_, h⟩ := ite_eq_ok h; exact Or.inl ⟨_, _, h.symm⟩)
+    | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
+    | exact Or.inr ⟨_, _, by assumption, by assumption, by assumption, by assumption, _, by assumption, _, _, _,
+        by assumption, by assumption, _, _, _, _, _, (Except.ok.inj h).symm⟩
+
+end SampledProofs.Run
