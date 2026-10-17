@@ -6,8 +6,8 @@ A row's entry is one preserved `vllm-config-record/v1` artifact labelled `row=<i
 (`config_record.json`, `verity-vllm/config-record/v1`, `pipeline.config_record`) and its refs are the evidence the record names under
 `evidence`: `build` (the `vllm-build/v1` holding every rank's Program descriptors, `research_outputs`), `manifest`, `match`,
 `commit`, and one ref per conformance capture, named by its property.  `manifests/records.json` indexes the database: row id -> the
-record's art: id.  The store is reached through the research CLI (`research data ...`, `pipeline.research.research_argv`), so
-`RESEARCH_STORE` / `RESEARCH_STORE_CONFIG` select it.
+record's art: id.  The store is reached through the research CLI (`python -m research data ...`), so `RESEARCH_STORE` /
+`RESEARCH_STORE_CONFIG` select it.
 
     from verity_vllm import records
     from verity.ml.circuits.evaluation.reference import evaluate
@@ -25,7 +25,6 @@ record's art: id.  The store is reached through the research CLI (`research data
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import sys
@@ -45,10 +44,9 @@ REFS = ("build", "manifest", "match", "commit")
 
 
 def data(*args: str) -> str:
-    """`research data ARGS`'s stdout; a refusal raises with what the CLI said."""
-    from verity_vllm.pipeline.research import abs_store_env, research_argv
-    argv, env = research_argv(None, sys.executable, abs_store_env(dict(os.environ)))
-    p = subprocess.run([*argv, "data", *args], capture_output=True, text=True, env=env)
+    """`research data ARGS`'s stdout (this interpreter's research, in this process's environment); a refusal raises with what the CLI
+    said."""
+    p = subprocess.run([sys.executable, "-m", "research", "data", *args], capture_output=True, text=True)
     if p.returncode != 0:
         raise RuntimeError(f"research data {' '.join(args[:2])}: rc={p.returncode}: {p.stderr.strip()[-1500:]}")
     return p.stdout
