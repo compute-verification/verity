@@ -8720,20 +8720,12 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Eps1.M3": {
-   "digest": "f2a4753a8120ee2b478c5e8d3b731c9883a623c8e75b7ac4249250e683dc48d6",
+   "digest": "a67b81a16f2b045d3188008e9a925674ee8de25636b0c0f4704e981ea852a74e",
    "definitions": {
-    "Pouw.Eps1.ClassP": "a701827ced69a6601de286c0a09f129a13cb0c797905954636c3ae3ad8bb16d2",
     "Pouw.Eps1.Cols": "ddd2433ba8ded7d37960c6fe6dd23b4f66e5d14cffc795d7dad1fa886eaa440b",
     "Pouw.Eps1.ColsValid": "dd8588c5c8ca89bca32ad7f49e4e8b3288ef73448a382d2f6d4d65c0c7dff962",
     "Pouw.Eps1.Dither": "9fddd81cf94ff83c46caaddfe6ad4615561c7d4623d3e25087ef56da13f6e11c",
-    "Pouw.Eps1.Field": "0e82f1248eca0cb501cf334a51da7233a4d5c816c4f5a375936de4e2848aaf9d",
-    "Pouw.Eps1.Field.E": "dd9a7a0b966e462f2d17a25fbb89c12940ff71048fd17bb21658bb99e708d764",
-    "Pouw.Eps1.Field.range": "bb53451fc74b08592d15741a5153a84ccf1efe038d29973f841e5d92be5d6dbe",
-    "Pouw.Eps1.Field.val": "ad7830d4f4c6ee95eab8ae377ff01ce48d8ffe820f08d75f7c0ee1a87e5ae45b",
-    "Pouw.Eps1.Field.β": "499ffab8d6d7b398996a4959a7859300e9e31f8d2c647f573dfd05831587b3a9",
-    "Pouw.Eps1.Field.τ": "dbb7fb660a13c4b0ca794421f62c03c87f4550c77897364c202777864a4295d8",
     "Pouw.Eps1.GCols": "42178af7d97934917ea654c155fff4636d5eedd9d2ccaa72c410a44036e56add",
-    "Pouw.Eps1.Holds": "01f45b6308168cb7598df365d4154138da03a9e707cc7c4090fc7d2da6d586ee",
     "Pouw.Eps1.Int8Valid": "3c4084db5783f85e7c97d3fd14e1ff170607fe359289740c1609f8084aac60d0",
     "Pouw.Eps1.M3": "ac86c8c2429196e11767d29693e97c27dfad981e8397bd55101236366d0283f4",
     "Pouw.Eps1.M3.IsRun": "b4d51e1aed9022ba775b6c6892a54a43203f84c5871f5c924b17f9cd871f628b",
@@ -8741,10 +8733,6 @@
     "Pouw.Eps1.M3.argVal": "51575cbc9d04b5488781fe6be2415ab5949993e4cd88052d16d958078a462215",
     "Pouw.Eps1.M3.earlier": "8fc1ce3ba363d446fa4d4d2844b16805dc485a306455601b17e0446f27451c45",
     "Pouw.Eps1.M3.op": "e83647ae3decddd1f8090a9aaf486ebb9a94aee2fce55f966ee475ed464d28a3",
-    "Pouw.Eps1.Packing": "6553fcd1dd47b06d4a14c6e466006f56b22d0a65af6a88ae3ec76938eb251440",
-    "Pouw.Eps1.Packing.MixedRadix": "eea8ecbb7cbdfaf79a321a048eb4b0794b21b308fd7f76a0a8fbd56c0c44915f",
-    "Pouw.Eps1.Packing.fields": "cdd0be679aeec5c15e3f089fa9069dd80f38ff5c37e3635df8d64b8f22268dce",
-    "Pouw.Eps1.Packing.word": "8655ac24cef8987f18dc11e4a76430f8d0cca294cca3fc9344e9d0fd294c51c6",
     "Pouw.Eps1.Prog": "25af16756c6dd4bca5f7ebd4adaaee42b23516685027fb26b3e58bebe67cdb9f",
     "Pouw.Eps1.Prog.Computes": "ffff66c5bde493310dc6025e78119be1af37edac280dd2d9ab8a0b2d345e0a4a",
     "Pouw.Eps1.Prog.WordLocal": "f3abe9b84f3c126dc7b0b28b2157e4c51160affdf35719dec932891e97319957",
@@ -17939,9 +17927,8 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Models.Pouw.Guarantees.Eps1": {
-   "digest": "fe68bb314bcc23332c95ad345b58b2997d715cd54ff3818eeb5dba7b64b6a44d",
+   "digest": "aa16867d11fcc653ae115f995e369927346d45f04bb50164491a40332af01866",
    "definitions": {
-    "Pouw.Guarantees.Eps1.ClassPPacked": "7d7859a0a3745e4a9be3461c60568a0661fb48841dce1e244275db1b821fd030",
     "Pouw.Guarantees.Eps1.WordLocalGeneral": "06b1ba2c4f60b3a0a2072cfbddedd342e3660c3110e75667c92473c62c892b4f",
     "Pouw.Guarantees.Eps1.WordLocalZero": "8605a67a07179eaac27dc2366f8f349c0ef6ec8cf34acbe87292092454859e2e"
    },
