@@ -542,10 +542,6 @@
     "fails": "Claims.ScopeMatches_fails",
     "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
    },
-   "Claims.SimCost": {
-    "fails": "Claims.SimCost_fails",
-    "meets": []
-   },
    "Claims.ZKmalR": {
     "fails": "Claims.ZKmalR_fails",
     "meets": ["Claims.Flock.masked_meets_zk"]
@@ -586,7 +582,8 @@
    "Claims.Sampling.RU.Consecutive": "a helper the claims read: a replay unit of consecutive gate intervals",
    "Claims.Sampling.RelS": "a helper the claims read: a statement's sampling relation",
    "Claims.Sampling.Rule.WellFormed": "a helper the claims read: a well-formed rule on its class",
-   "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read"
+   "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read",
+   "Claims.SimCost": "a simulator's expected calls; `ClaimsStated` records it, but no claim reads it, so no ZK claim bounds its simulator's cost"
   }
  },
  "layers": {
@@ -2030,21 +2027,19 @@
    "type_hash": "1fcd7c9a0265579d8a38c4942be635556fb0e8c0944d603de7c409ca33183ef1"
   },
   "Claims.Sampling.universal_meets": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.universal_meets :",
+    "  Exists fun c => Exists fun n => Exists fun x => And (Claims.Sampling.Netlist.Fits c n) (Eq x.length c.nIn)"
+   ],
+   "assumptions": [],
+   "type_hash": "b08360cf751d2b6dd16de075df1216368538d3c6302577877fb8206d4f0b89fc"
   },
   "Claims.ScopeMatches_fails": {
    "owner": "@proofs",
    "signature": ["Claims.ScopeMatches_fails : Not (Claims.ScopeMatches (fun x => False) fun x => Bool.true)"],
    "assumptions": [],
    "type_hash": "1934be0f6ae46d344ff607936771e0bf1e3973703001f050761fb7bf78083c1c"
-  },
-  "Claims.SimCost_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.SimCost_fails (H : Claims.Msg → Claims.Msg) : Exists fun S => Not (Claims.SimCost H S fun x => 1)"
-   ],
-   "assumptions": [],
-   "type_hash": "d6fc94ba70bb9d0963b5c644c591dc12fee8fedf258a756885b115797c7315a9"
   },
   "Claims.Witness.Recursion.BitsFlock_fails": {
    "owner": "@proofs",
@@ -7918,6 +7913,7 @@
     "Claims.Sampling.decoder_meets_zk",
     "Claims.Sampling.masked_meets_zk",
     "Claims.Sampling.scope_meets",
+    "Claims.Sampling.universal_meets",
     "Flock.SecurityProofs.SamplingClaimsStated"
    ]
   },
