@@ -1,5 +1,14 @@
 {
  "definitions": {
+  "BlackwellU8S8ImmaDot32_v2": {
+   "and": 4157
+  },
+  "LimbSplit_v2{FORM='byteclamp',N=3,Y=(-65152,65151)}": {
+   "and": 104
+  },
+  "LimbSplit_v2{FORM='bytes',N=3,Y=(-8355711,8355711)}": {
+   "and": 22
+  },
   "S32ByteCarry_v2": {
    "and": 31
   },
