@@ -739,9 +739,9 @@ and each window's, from it plus the node's capacities.
     Carrying appends over needs the next session to take the previous one's append roots and releases as its
     starting store.
   - *The device side.* A KV page's index is the store's next fresh one, not \(\text{slot} \cdot \text{LAYERS} +
-    \text{layer}\): serving records each block it completes, with the index it gave it and its \(d_j\), and each slot
-    it frees, step by step (memory-map/v1, the program's I3, `memory_map.py`), and the prover's audit side turns the
-    record into appends, releases and plan changes (`Replay`). The record is the prover's: \(d_j\) is witness, and the
+    \text{layer}\): serving records each block it completes, with its slot, the index it gave it and its \(d_j\), and
+    each slot it frees, step by step (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its
+    slot held), and the prover's audit side turns the record into appends, releases and plan changes (`Replay`). The record is the prover's: \(d_j\) is witness, and the
     verifier sees only the append roots, the releases and the plans. A KV block under the seed's
     key, as `kv.cu` and vLLM's encoded store (whose `Codec` is keyed by the store index alone) encode them today, is
     not to be credited: its writer may have picked its encoding, and then its receipts need no read.

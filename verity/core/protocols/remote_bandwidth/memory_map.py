@@ -7,21 +7,26 @@ line 1       {"schema": "verity/memory-map/v1", "registration": hex(Registration
               "block_bytes": 4096}
 line 2, …    {"step": s, "freed": [slot, …], "written": [[slot, j, hex(d_j)], …]}, one per serving step that wrote or
               freed a block, steps strictly increasing
-slot         the device's address of a 4,096-byte block of the encoded store (vLLM: its registry's region block index),
-              opaque to the audit, below 2^63; a slot is live from the step that writes it until one frees it
+slot         4,096 bytes of the node's memory, named by the registered block it held at registration (vLLM: its
+              registry's region block index, a KV pool's pages registered as filler), or from N up for memory outside
+              the registered store, below 2^63.  A slot below N starts live, holding registered block `slot`; one at
+              or above N is live once written
 j            the store index the writer gave the block: the store's next fresh one, N plus every block written before
               in the session, in record order
 d_j          codec.digest(payload_j), the sha512/row/v2 digest of the block's 4,096-byte payload, 64 bytes: the device
               encodes the payload under its bound key (codec.binding(d_j, j, key)) at index j
 ~~~
 
-A step's frees apply before its writes, so a step may free a slot and write it again.  A freed slot must be live, and
-a written slot must not be after the step's frees.  A block is written once, complete: a KV block the step's tokens
+A write puts block j in its slot and releases the block the slot held, if it was live: the write overwrote it.  A
+free releases the slot's block and leaves the slot not live, its memory out of the store, until a write; a slot whose
+bytes stay as they were (vLLM's `kv_free`, which returns pages to filler with their last record) is not freed, and its
+block stays live until a write overwrites it.  A step's frees apply before its writes; a step frees a slot at most
+once, only a live one, and writes a slot at most once.  A block is written once, complete: a KV block the step's tokens
 are still filling is not in the record until the step that completes it (the prover-side registry's dirty blocks).
 
 The record is the prover's: `d_j` is a hash of user data, a witness, never public (AGENTS.md's zero-knowledge rule).
 The prover's audit side (`Replay`) commits each step's digests in an append tree (`audit.append_tree`, under fresh
-salts) and sends its root and size (`Session.append`), and the freed blocks' indices as runs (`Session.release`); the
+salts) and sends its root and size (`Session.append`), and the released blocks' indices as runs (`Session.release`); the
 verifier sees those and the plans, never the record.  The appends of a step are sent before the root of any pass
 whose plan holds them; `Replay.take` is the plan's change since the last pass (`Plan.changed`, the root's
 `Session.receive(..., change=...)`), the blocks appended and released between them, of which a block appended and
@@ -155,7 +160,7 @@ def _runs(indices: Iterable[int]) -> tuple[tuple[int, int], ...]:
 @dataclass(frozen=True, slots=True)
 class Change:
     """What one step does to the audit's store: blocks `first` … appended with digests `digests` (none if empty), and
-    the store indices it released, as canonical runs."""
+    the store indices it released, freed or overwritten, as canonical runs."""
 
     step: int
     first: int
@@ -173,40 +178,44 @@ class Change:
 
 
 class Replay:
-    """The prover's audit side of a memory map: the live slots and the store indices they hold, each step's `Change`
-    (`apply`), and the plan's change since the last pass (`take`).  Refuses (`MemoryMapError`) a map that breaks
-    memory-map/v1's rules across lines: steps out of order, a freed slot not live, a written slot live, an index that
-    is not the store's next fresh one, or a header of another registration."""
+    """The prover's audit side of a memory map: the block each slot holds, each step's `Change` (`apply`), and the
+    plan's change since the last pass (`take`).  Refuses (`MemoryMapError`) a map that breaks memory-map/v1's rules
+    across lines: steps out of order, a freed slot not live, an index that is not the store's next fresh one, or a
+    header of another registration; a refused step changes nothing."""
 
     def __init__(self, head: Header, registration: audit.Registration | None = None) -> None:
         if registration is not None and (head.registration != registration.digest or head.blocks != registration.blocks):
             raise MemoryMapError("the memory map is beside another registration: its header names "
                                  f"{head.registration.hex()[:16]}… of {head.blocks} blocks")
         self.header, self.extent, self.last = head, head.blocks, -1
-        self.live: dict[int, int] = {}
+        self.moved: dict[int, int | None] = {}
         self._added: set[int] = set()
         self._removed: set[int] = set()
+
+    def holds(self, slot: int) -> int | None:
+        """The store index of the block `slot` holds, or None if it isn't live."""
+        return self.moved.get(slot, slot if slot < self.header.blocks else None)
 
     def apply(self, s: Step) -> Change:
         if s.step <= self.last:
             raise MemoryMapError(f"step {s.step} follows step {self.last}: steps strictly increase")
-        freed = set(s.freed)
-        if len(freed) != len(s.freed):
+        if len(set(s.freed)) != len(s.freed):
             raise MemoryMapError(f"step {s.step} frees a slot twice")
         for slot in s.freed:
-            if slot not in self.live:
-                raise MemoryMapError(f"step {s.step} frees slot {slot}, which no step wrote since it was last freed")
+            if self.holds(slot) is None:
+                raise MemoryMapError(f"step {s.step} frees slot {slot}, which holds no block: a slot at or above N "
+                                     "is live once written, and a freed one until it is written again")
         if len({w.slot for w in s.written}) != len(s.written):
             raise MemoryMapError(f"step {s.step} writes a slot twice")
         first = self.extent
         for u, w in enumerate(s.written):
-            if w.slot in self.live and w.slot not in freed:
-                raise MemoryMapError(f"step {s.step} writes slot {w.slot}, live since an earlier write: free it first")
             if w.index != first + u:
                 raise MemoryMapError(f"step {s.step}'s block at slot {w.slot} has index {w.index}, not the store's next "
                                      f"fresh one, {first + u}: N plus every block written before, in record order")
-        gone = [self.live.pop(slot) for slot in s.freed]
-        self.live.update((w.slot, w.index) for w in s.written)
+        gone = [self.holds(slot) for slot in s.freed]
+        self.moved.update((slot, None) for slot in s.freed)
+        gone += [j for w in s.written if (j := self.holds(w.slot)) is not None]
+        self.moved.update((w.slot, w.index) for w in s.written)
         self.extent = first + len(s.written)
         self.last = s.step
         for j in gone:
@@ -218,8 +227,8 @@ class Replay:
         return Change(s.step, first, tuple(w.digest for w in s.written), _runs(gone))
 
     def take(self) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
-        """The plan's change since the last `take`: (added, removed) runs of store indices, the blocks appended since
-        and those released since that a pass before may hold."""
+        """The plan's change since the last `take`, for a prover whose plans hold every live block: (added, removed)
+        runs of store indices, the blocks appended since and those released since that the last plan held."""
         out = _runs(self._added), _runs(self._removed)
         self._added, self._removed = set(), set()
         return out

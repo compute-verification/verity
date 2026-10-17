@@ -25,13 +25,14 @@ def written(step: int, slots: list[int], first: int) -> tuple[Written, ...]:
 
 
 def serving(head: Header) -> list[Step]:
-    """Three slots written at step 0; at step 3 slot 101 freed, and slots 103 and 101 written; at step 5 slots 100 and
-    103 freed and slot 104 written; at step 6 slot 104 freed."""
+    """Registered blocks 4 … 7 are a KV pool's pages, registered as filler; slots 100 and up are memory outside the
+    store.  Step 0 writes slots 4, 5 and 100; step 3 frees slot 100 and writes slots 6 and 4 (4 again, over the block
+    step 0 wrote there); step 5 frees slot 5 and writes slot 101; step 6 frees slot 101."""
     n = head.blocks
-    return [Step(0, (), written(0, [100, 101, 102], n)),
-            Step(3, (101,), written(3, [103, 101], n + 3)),
-            Step(5, (100, 103), written(5, [104], n + 5)),
-            Step(6, (104,), ())]
+    return [Step(0, (), written(0, [4, 5, 100], n)),
+            Step(3, (100,), written(3, [6, 4], n + 3)),
+            Step(5, (5,), written(5, [101], n + 5)),
+            Step(6, (101,), ())]
 
 
 def test_a_memory_map_round_trips_through_its_lines() -> None:
@@ -41,31 +42,34 @@ def test_a_memory_map_round_trips_through_its_lines() -> None:
     lines = text.splitlines()
     assert json.loads(lines[0]) == {"block_bytes": 4096, "blocks": N, "registration": bytes(range(64)).hex(),
                                     "schema": "verity/memory-map/v1"}
-    assert json.loads(lines[2]) == {"freed": [101], "step": 3,
-                                    "written": [[103, N + 3, codec.digest(page(103, 3)).hex()],
-                                                [101, N + 4, codec.digest(page(101, 3)).hex()]]}
+    assert json.loads(lines[2]) == {"freed": [100], "step": 3,
+                                    "written": [[6, N + 3, codec.digest(page(6, 3)).hex()],
+                                                [4, N + 4, codec.digest(page(4, 3)).hex()]]}
     parsed_head, parsed = memory_map.parse(text.splitlines(keepends=True) + ["\n"])
     assert parsed_head == head and list(parsed) == steps
     assert memory_map.dumps(parsed_head, steps) == text
 
 
 def test_replay_turns_each_step_into_appends_releases_and_plan_changes() -> None:
-    """Indices are the store's next fresh ones; a step's frees come before its writes, so step 3 rewrites slot 101 at a
-    new index; a block appended and released between two passes is in neither side of the plan's change."""
+    """Indices are the store's next fresh ones.  A write releases the block its slot held (registered filler, or a
+    block written before), a free releases its slot's block and leaves the slot empty, and a block appended and
+    released between two passes is in neither side of the plan's change."""
     head = Header(bytes(64), N)
     r = Replay(head)
+    assert [r.holds(s) for s in (0, 7, N, 100)] == [0, 7, None, None]
     c0 = r.apply(serving(head)[0])
-    assert (c0.first, c0.count, c0.released) == (N, 3, ())
-    assert r.take() == (((N, 3),), ())
+    assert (c0.first, c0.count, c0.released) == (N, 3, ((4, 2),))
+    assert r.take() == (((N, 3),), ((4, 2),))
     c3 = r.apply(serving(head)[1])
-    assert (c3.first, c3.count, c3.released, r.live) == (N + 3, 2, ((N + 1, 1),), {100: N, 102: N + 2, 103: N + 3,
-                                                                                    101: N + 4})
+    assert (c3.first, c3.count, c3.released) == (N + 3, 2, ((6, 1), (N, 1), (N + 2, 1)))
+    assert [r.holds(s) for s in (4, 5, 6, 7, 100)] == [N + 4, N + 1, N + 3, 7, None]
     c5 = r.apply(serving(head)[2])
-    assert (c5.first, c5.count, c5.released) == (N + 5, 1, ((N, 1), (N + 3, 1)))
+    assert (c5.first, c5.count, c5.released) == (N + 5, 1, ((N + 1, 1),))
     c6 = r.apply(serving(head)[3])
     assert (c6.first, c6.count, c6.released, c6.append_tree(bytes(64), [])) == (N + 6, 0, ((N + 5, 1),), None)
-    assert r.take() == (((N + 4, 1),), ((N, 2),))
-    assert r.take() == ((), ()) and r.extent == N + 6 and r.live == {102: N + 2, 101: N + 4}
+    assert r.take() == (((N + 3, 2),), ((6, 1), (N, 3)))
+    assert r.take() == ((), ()) and r.extent == N + 6
+    assert [r.holds(s) for s in (4, 5, 6, 7, 100, 101)] == [N + 4, None, N + 3, 7, None, None]
     tree = c3.append_tree(bytes(64), salts(b"s", 2))
     assert tree.commitment.root == audit.append_tree(bytes(64), N + 3, c3.digests, salts(b"s", 2)).commitment.root
 
@@ -94,18 +98,19 @@ def test_a_session_driven_by_a_memory_map_is_accepted() -> None:
     run.boundary()
     assert run.finish() == [audit.Verdict(0, True), audit.Verdict(1, True)]
     rec = run.s.record()
-    assert (rec.appended, rec.released) == (6, 6 - 2)
-    assert [w.post_seed for w in rec.windows] == [(0, 3, 4), (3, 2)]
+    assert [w.lengths for w in rec.windows] == [(8, 9, 8), (8, 7)]
+    assert [w.post_seed for w in rec.windows] == [(0, 3, 3), (3, 2)]
+    assert (rec.appended, rec.released) == (6, 7)
 
 
 @pytest.mark.parametrize("steps, match", [
     ([Step(0, (), ()), Step(0, (), ())], "strictly increase"),
-    ([Step(1, (7,), ())], "frees slot 7, which no step wrote"),
-    ([Step(0, (), (Written(7, N, bytes(64)),)), Step(1, (7, 7), ())], "frees a slot twice"),
-    ([Step(0, (), (Written(7, N, bytes(64)),)), Step(1, (), (Written(7, N + 1, bytes(64)),))], "free it first"),
+    ([Step(1, (100,), ())], "frees slot 100, which holds no block"),
+    ([Step(0, (7,), ()), Step(1, (7,), ())], "frees slot 7, which holds no block"),
+    ([Step(0, (7, 7), ())], "frees a slot twice"),
     ([Step(0, (), (Written(7, N, bytes(64)), Written(7, N + 1, bytes(64))))], "writes a slot twice"),
     ([Step(0, (), (Written(7, N + 1, bytes(64)),))], "not the store's next fresh one, 8"),
-], ids=["order", "not-live", "freed-twice", "live", "written-twice", "index"])
+], ids=["order", "outside", "freed", "freed-twice", "written-twice", "index"])
 def test_replay_refuses_a_map_that_breaks_its_rules(steps, match) -> None:
     r = Replay(Header(bytes(64), N))
     with pytest.raises(MemoryMapError, match=match):
@@ -115,10 +120,10 @@ def test_replay_refuses_a_map_that_breaks_its_rules(steps, match) -> None:
 
 def test_a_refused_step_changes_nothing() -> None:
     r = Replay(Header(bytes(64), N))
-    r.apply(Step(0, (), (Written(7, N, bytes(64)),)))
+    r.apply(Step(0, (), (Written(100, N, bytes(64)),)))
     with pytest.raises(MemoryMapError, match="next fresh"):
-        r.apply(Step(1, (7,), (Written(8, N + 5, bytes(64)),)))
-    assert (r.live, r.extent, r.last) == ({7: N}, N + 1, 0)
+        r.apply(Step(1, (100,), (Written(3, N + 5, bytes(64)),)))
+    assert (r.moved, r.extent, r.last, r.holds(3)) == ({100: N}, N + 1, 0, 3)
 
 
 @pytest.mark.parametrize("line, match", [
