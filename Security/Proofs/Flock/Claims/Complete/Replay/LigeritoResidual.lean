@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
+import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
 import Proofs.Flock.Soundness.LigeritoRes
 
 /-!
@@ -15,11 +15,11 @@ before the level's lanes are folded. `WAt w … ext` says the prover's `2^ext` e
 * **a split** (`WAt.lift`): the lifted weight is `preW`'s first part (`gv_liftU`);
 * **an out-of-domain sample on the split table** (`WPre.ood`): `preW`'s second part gains its `eq(z, ·)`;
 * **a level's consistency claim** (`WPre.cons`): the lifted `consW` is the new context's `consTerm` (`consTerm_new`,
-  from `xhats_get`: the prover's `X̂_c(ω_q)` are the model's);
+  from `fOf_xhats`: the prover's `X̂_c(ω_q)` are the model's);
 * **a level's four challenges** (`WPre.fold`): folding `preW` is the next stage's `resAt` (`foldLoL_preW`);
-* **the end** (`WAt.final`, `gOf_resE`): the verifier's `resE` is `resAt` with the last consistency context, so it is the
-  prover's weight plus that context's `consW`, scaled by its coin: the residual hypothesis of `lhsE_honest`, which with it
-  gives the final identity at the verifier's own weights (`lhsE_resE`).
+* **the end** (`WAt.final`, with `gOf_resE`): the verifier's `resE` is `resAt` with the last consistency context, so
+  it is the prover's weight plus that context's `consW`, scaled by its coin: the residual hypothesis of `lhsE_honest`,
+  which with it gives the final identity at the verifier's own weights (`lhsE_resE`).
 -/
 
 namespace FlockComplete.Replay
@@ -48,47 +48,8 @@ theorem gv_eqTable (z : Array F128) {y : ℕ} (hy : y < 2 ^ z.size) :
   rw [gv_embedF _ (by rw [FlockLevel3.eqTable_size]; exact hy), eqTable_eqList z y hy, eqList_map]
   rfl
 
-/-- Doubling a table by each coordinate's factor: entry `c` is the product of the factors at `c`'s bits. -/
-theorem doubling_get (wh : Array F128) : ∀ i : ℕ,
-    ((List.range i).foldl (fun t k => t ++ t.map (· * wh[k]!)) #[(1 : F128)]).size = 2 ^ i ∧
-    ∀ c < 2 ^ i, fOf ((List.range i).foldl (fun t k => t ++ t.map (· * wh[k]!)) #[(1 : F128)])[c]! =
-      ∏ k ∈ Finset.range i, if c.testBit k then fOf wh[k]! else 1
-  | 0 => ⟨rfl, fun c hc => by
-      obtain rfl : c = 0 := by simpa using hc
-      simp [fOf_one]⟩
-  | i + 1 => by
-      obtain ⟨hs, hg⟩ := doubling_get wh i
-      rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil]
-      generalize (List.range i).foldl (fun t k => t ++ t.map (· * wh[k]!)) #[(1 : F128)] = t at hs hg
-      refine ⟨by simp [hs, pow_succ]; ring, fun c hc => ?_⟩
-      rw [Finset.prod_range_succ]
-      by_cases hci : c < 2 ^ i
-      · rw [getElem!_pos _ c (by simp; omega), Array.getElem_append_left (by omega), ← getElem!_pos t c (by omega),
-          hg c hci, Nat.testBit_eq_false_of_lt hci]
-        simp
-      · obtain ⟨c', rfl⟩ : ∃ c', c = 2 ^ i + c' := ⟨c - 2 ^ i, by omega⟩
-        have hc' : c' < 2 ^ i := by rw [pow_succ] at hc; omega
-        rw [getElem!_pos _ _ (by simp; omega), Array.getElem_append_right (by omega), Array.getElem_map, fOf_mul]
-        have hidx : 2 ^ i + c' - t.size = c' := by omega
-        simp only [hidx]
-        rw [← getElem!_pos t c' (by omega), hg c' hc', Nat.testBit_two_pow_add_eq, Nat.testBit_eq_false_of_lt hc']
-        simp only [Bool.not_false, ↓reduceIte]
-        congr 1
-        refine Finset.prod_congr rfl fun k hk => ?_
-        rw [Nat.testBit_two_pow_add_gt (Finset.mem_range.1 hk)]
-
 theorem xhats_size (sv : Array F128) (q cols : ℕ) : (xhats sv q cols).size = 2 ^ cols :=
-  (doubling_get _ cols).1
-
-/-- **The prover's `X̂_c(ω_q)`** (`xhats`) are the model's, for `c < 2^cols`. -/
-theorem xhats_get (q cols : ℕ) {c : ℕ} (hc : c < 2 ^ cols) :
-    fOf (xhats (svTable (cols + 1)) q cols)[c]! = execArith.Xhat c cols (execArith.omega q) := by
-  unfold xhats
-  rw [(doubling_get _ cols).2 c hc, Model.Arith.Xhat, ← Fin.prod_univ_eq_prod_range]
-  refine Finset.prod_congr rfl fun k _ => ?_
-  split_ifs
-  · exact whats_get (cols + 1) q cols k (by omega) k.2
-  · rfl
+  (xhats_go _ cols).1
 
 /-- **The consistency weight** `consW` is the model's `Σ_j eq(α)[j]·X̂_c(ω_{pos_j})`. -/
 theorem consW_get (cols : ℕ) (pos : Array ℕ) (alpha : Array F128) (hpos : pos.size ≤ 2 ^ alpha.size) {c : ℕ}
@@ -103,17 +64,7 @@ theorem consW_get (cols : ℕ) (pos : Array ℕ) (alpha : Array F128) (hpos : po
   have hj' := Finset.mem_range.1 hj
   show fOf _ = _
   rw [fOf_mul, eqTable_eqList _ _ (by omega), getElem!_pos (pos.map _) j (by simpa using hj'), Array.getElem_map,
-    xhats_get _ _ hc, List.getD_eq_getElem _ _ (by simpa using hj'), Array.getElem_toList]
-
-/-- `mleAt` on the cube is the table. -/
-theorem mleAt_bitsK (N : ℕ) (c : ℕ → 𝕂) {y : ℕ} (hy : y < 2 ^ N) : mleAt N c (Model.bitsK N y) = c y := by
-  unfold mleAt
-  rw [Finset.sum_eq_single_of_mem y (Finset.mem_range.2 hy)]
-  · rw [eqList_bitsK N y y hy hy]
-    simp
-  · intro w hw hwy
-    rw [eqList_bitsK N y w hy (Finset.mem_range.1 hw)]
-    simp [hwy]
+    fOf_xhats _ _ _ hc, List.getD_eq_getElem _ _ (by simpa using hj'), Array.getElem_toList]
 
 /-! ## The invariants -/
 
@@ -147,7 +98,7 @@ theorem WAt.start (b : Array F128) (hb : b.size = 2 ^ n) :
   rw [gv_embedF _ (by omega)]
   simp only [resAt, origOf, List.map_nil, List.flatten_nil, List.append_nil, List.nil_append, List.sum_nil,
     add_zero, Model.cffFrom, List.drop_nil, List.prod_nil, mul_one]
-  rw [bHat_eq, mleAt_bitsK n _ hy]
+  rw [bHat_eq, mleAt_bits n _ hy]
   rfl
 
 /-- Before level 0's lanes split, every claim is level 0's out-of-domain sample, on the original point. -/
@@ -187,7 +138,7 @@ theorem WAt.oodHead {w : Array F256} {initial : List 𝕂} {oods : List (Model.O
   refine ⟨⟨by rw [addScaled_size, h.size], fun y hy => ?_⟩, ho'⟩
   rw [gv_addScaled _ _ _ (by rw [h.size]; exact hy), h.get y hy, gv_eqTable _ (by rw [hz]; exact hy),
     resAt_orig ho, resAt_orig ho', List.map_append, List.sum_append, List.map_singleton, List.sum_singleton,
-    List.length_map, Array.length_toList, hz, List.nil_append, mleAt_bitsK ext _ hy]
+    List.length_map, Array.length_toList, hz, List.nil_append, mleAt_bits ext _ hy]
   rw [show execArith.embed = FlockLevel3.embed from rfl]
   ring
 
@@ -305,58 +256,6 @@ theorem WAt.final {w : Array F256} {initial : List 𝕂} {levels : List (List �
   rw [he]
   ring
 
-theorem gOf_map_mul_get (a : Array F256) (c : F256) (y : ℕ) : gOf (a.map (· * c))[y]! = gOf a[y]! * gOf c := by
-  by_cases hy : y < a.size
-  · rw [getElem!_pos (a.map (· * c)) y (by simpa using hy), Array.getElem_map, gOf_mul, getElem!_pos a y hy]
-  · rw [getElem!_neg (a.map (· * c)) y (by simpa using hy), getElem!_neg a y hy]
-    show gOf default = gOf default * gOf c
-    rw [show gOf (default : F256) = 0 from gOf_zero, zero_mul]
-
-/-- **The verifier's residual weights are the model's `resAt`** at its lists, when its basis is `bHat` at the original
-point (`hbasis`) and its contexts have the final check's dimensions. -/
-theorem gOf_resE {basisAt : Array F256 → ℕ → Array F256} {initCh : Array F256} {levels : Array (Array F256)}
-    {ext : ℕ} {st : LState} (b : ℕ → 𝔽) (hl : ∀ l ∈ levels.toList, l.size = 4)
-    (horig : (origE initCh levels).size + ext = n)
-    (hpos : ∀ cs ∈ st.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size)
-    (hbasis : ∀ y < 2 ^ ext, gOf (basisAt (origE initCh levels) ext)[y]! =
-      Model.bHat execArith n b ((origE initCh levels).toList.map gOf ++ Model.bitsK ext y))
-    (hood : ∀ o ∈ st.oods.toList, o.z.size = (Refine.oodFixed levels (origE initCh levels) o).1.size + ext)
-    (hcons : ∀ cs ∈ st.conss.toList, (Refine.consFixed levels cs.start).size + ext = cs.cols) {y : ℕ}
-    (hy : y < 2 ^ ext) :
-    gOf (resE basisAt n initCh levels ext st)[y]! =
-      resAt execArith n b (initCh.toList.map gOf) (levelsOf levels) (st.oods.toList.map oodOf)
-        (st.conss.toList.map consOf) ext y := by
-  unfold resE resAt
-  rw [consFold_get _ _ _ hy, gOf_foldl_add, oodFold_get _ _ hy, gOf_foldl_add,
-    gOf_map_mul_get, hbasis y hy, prodFromE_eq levels hl, origOf, ← origE_toList]
-  refine congrArg₂ (· + ·) (congrArg₂ (· + ·) rfl ?_) ?_
-  · rw [List.map_map]
-    refine congrArg List.sum (List.map_congr_left fun o ho => ?_)
-    have hz := hood o ho
-    cases hsp : o.split with
-    | none =>
-        have hfs : Refine.oodFixed levels (origE initCh levels) o = (origE initCh levels, prodFromE levels 0) := by
-          simp [Refine.oodFixed, hsp]
-        rw [hfs] at hz
-        simp only [Function.comp, hfs]
-        rw [gOf_oodTerm ext _ o y hz, prodFromE_eq levels hl]
-        simp only [oodOf, FlockSoundness.oodTerm, FlockSoundness.oodFixed, oodScale, hsp, origOf, origE_toList]
-    | some a =>
-        have hfs : Refine.oodFixed levels (origE initCh levels) o = ((levels.extract a levels.size).foldl
-            (fun acc l => if acc.isEmpty then l else acc ++ l.extract 1 l.size) #[], prodFromE levels (a + 1)) := by
-          simp [Refine.oodFixed, hsp]
-        rw [hfs] at hz
-        simp only [Function.comp, hfs]
-        rw [gOf_oodTerm ext _ o y hz, prodFromE_eq levels hl, oodFixed_some levels hl a]
-        simp only [oodOf, FlockSoundness.oodTerm, FlockSoundness.oodFixed, oodScale, hsp]
-  · rw [List.map_map]
-    refine congrArg List.sum (List.map_congr_left fun cs hcs' => ?_)
-    have hc := hcons cs hcs'
-    have hle := consFixed_size_le initCh levels cs.start
-    simp only [Function.comp]
-    rw [gOf_consTerm (n + 1) ext levels hl cs y hy hc (by omega) (hpos cs hcs')]
-    simp only [consOf, FlockSoundness.consTerm, FlockSoundness.consFixed]
-
 /-- **The final identity at the verifier's own weights**: on the last folded table `f` with the claim `s = Σ f·w`, the
 prover's weight `w` the model's `resAt` (`WAt`), and the last consistency claim `val = Σ f·consW` with coin `β`
 recorded last at the last level, the final check's sum over `splitK f` against the verifier's `resE` is `s + β·val`. -/
@@ -379,7 +278,8 @@ theorem lhsE_resE {basisAt : Array F256 → ℕ → Array F256} {initCh : Array 
   have hpc : cc.pos.size ≤ 2 ^ cc.alpha.size := hpos cc (by rw [hcs]; simp)
   refine lhsE_honest f w _ _ ext s val cc.beta hf hsum hval ?_
   refine hW.final cc.pos cc.alpha hpc cc.beta (start := cc.start) (by rw [hstart]; simp [levelsOf]) fun y hy => ?_
-  rw [gOf_resE bF hl horig hpos hbasis hood hcons hy, hoods, hcs, List.map_append, hcons₀, List.map_singleton]
+  rw [gOf_resE basisAt n initCh levels ext st bF hl horig hpos hood hcons hbasis hy, hoods, hcs, List.map_append,
+    hcons₀, List.map_singleton]
   obtain ⟨c1, c2, c3, c4, c5⟩ := cc
   simp only at hcols
   subst hcols

@@ -11,8 +11,12 @@ the honest prover sends from its table and weight there, each model step keeps t
 
 * **challenges** (`chal_sync`, `chals_sync`, `chals_split_sync`): the model's challenges are the coin pairs of their
   rounds (`chs`, `chals_fst`), and each message the folded tables' round polynomial;
-* **an out-of-domain intro** (`ood_sync`, `JPre.ood`) and **a level's query and close** (`close_sync`, `JPre.close`);
-* **a level's four challenges** (`JPre.chals`): the fold, then the split (`WPre.fold`, `WAt.lift`).
+* **level 0** (`head_sync`, `JPre.pre0`): the out-of-domain sample on the table, then level 0's challenges and split;
+* **an out-of-domain intro** (`ood_sync`, `JPre.oodStep`) and **a level's query and close** (`close_sync`,
+  `JPre.closeStep`);
+* **a level's four challenges** (`JPre.chalsStep`): the fold, then the split (`WPre.fold`, `WAt.lift`);
+* **the last level** (`JPre.final`): its four challenges and query, after which the final check's sum against the
+  verifier's residual weights is the model's claim (`lhsE_resE`).
 -/
 
 namespace FlockComplete.Replay

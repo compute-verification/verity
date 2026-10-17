@@ -26,6 +26,7 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
 import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
 import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
 import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
+import Proofs.Flock.Claims.Complete.Replay.LigeritoJoint
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`, `Agrees`),
@@ -76,7 +77,7 @@ the claim, `Lg.lhsE_honest`;
 `LigeritoResidual`: every step of the honest prover keeps its weight the verifier's residual weight at the stage, `Lg.WAt`,
 `Lg.WPre`: the start, `Lg.WAt.start`, level 0's out-of-domain sample and challenges, `Lg.WAt.oodHead`, `Lg.WAt.chal0`,
 a split, `Lg.WAt.lift`, an out-of-domain or consistency claim on the split table, `Lg.WPre.ood`, `Lg.WPre.cons` (the
-prover's `X̂_c(ω_q)` are the model's, `Lg.xhats_get`), and a level's four challenges, `Lg.WPre.fold`; at the end the
+prover's `X̂_c(ω_q)` are the model's, `Lg.fOf_xhats`), and a level's four challenges, `Lg.WPre.fold`; at the end the
 verifier's `resE` is the model's `resAt`, `Lg.gOf_resE`, so it is the prover's weight plus the last consistency weight,
 `Lg.WAt.final`, and the final check's sum against it is the claim, `Lg.lhsE_resE`;
 `LigeritoCons`: on rows the prover committed, the consistency value is its F-table folded
@@ -85,7 +86,10 @@ model's, `Lg.gv_foldKs`, and a level's consistency claim keeps `Lg.Sync`, `Lg.Sy
 prover's weight is the model's at every stage: level 0's, `Lg.gv_w0`, after level 0's challenges, `Lg.fold_init`, on a
 split table, `Lg.gv_liftU_preW`, with an out-of-domain or consistency claim on it, `Lg.gv_addOod`, `Lg.gv_addCons` (the
 consistency weight being the model's, `Lg.embed_consW`), and the final residual weights are the model's, `Lg.gOf_resE`,
-the last weight plus the last consistency claim, `Lg.res_honest`), and the prover's pieces (`RepRounds`: a returning rep
+the last weight plus the last consistency claim, `Lg.res_honest`; `LigeritoJoint`: on the honest prover's values each
+step of the verifier's model keeps its claim the prover's sum and the prover's weight its residual weight, `Lg.JPre`:
+level 0, `Lg.JPre.pre0`, an out-of-domain intro, `Lg.JPre.oodStep`, a level's query and close, `Lg.JPre.closeStep`, a
+level's four challenges, `Lg.JPre.chalsStep`, and the last level's final identity, `Lg.JPre.final`), and the prover's pieces (`RepRounds`: a returning rep
 records a round, each of at most `65536` coins, `repP_repOk`, every squeeze of the models being few coins, `Bnd`;
 `ProverOk`: the case's table has a registered scheme and at most 1,024 regions, `Case.schemeOk`, so at an oracle of
 64-byte outputs its digests have the scheme's width, `opsWith_widths`, `schemeWidths`, its level-0 cap is non-empty and
