@@ -147,11 +147,69 @@ def tile_words(c0: int, c1: int, tile: int, steps: int, kind: int = S8, w: int =
 
 
 def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, kind: int = S8, w: int = W,
-            r9: bool | None = None) -> int:
+            r9: bool | None = None, lanes: int = 0) -> int:
     """The tile's receipt: warp v's fragments v S .. v S + S - 1 (16 rows each) against all 128 w columns (w warps: the
     pump's tile is 8, dfill_p's PF_PW), fragment f's outputs absorbed by chain f % 4 of each lane in order of f, then of
-    the B fragment j. r9: the keys of an LI or XIN13 build (by default, iff fold `nc` is one of those)."""
-    return fold(c0, c1, tile, nc, steps, tile_words(c0, c1, tile, steps, kind, w), kind, w, r9)
+    the B fragment j. r9: the keys of an LI or XIN13 build (by default, iff fold `nc` is one of those). lanes: a
+    -DPF_LANE build's lane steps a B fragment (`lane_receipt`)."""
+    r9 = nc in R9 if r9 is None else r9
+    h = fold(c0, c1, tile, nc, steps, tile_words(c0, c1, tile, steps, kind, w), kind, w, r9)
+    return h ^ lane_receipt(c0, c1, tile, steps, lanes, kind, w, r9) if lanes else h
+
+
+LPOS = 0x40000000  # the lane chains' positions (pfill.cuh's PF_LPOS)
+LC = 4  # the lane chains a lane keeps (PF_LC)
+
+
+def b_bytes(c0: int, c1: int, tile: int, kind: int, tn: int) -> np.ndarray:
+    """B as the s8 bytes the MMA reads, [32, tn] uint8: bU's U, the s8 tile's 1 - 2 bit, the bits tile's bit."""
+    kind = int(kind)
+    if kind == E2M1:
+        raise ValueError("PF_LANE: the s8 tiles only")
+    if kind == BU:
+        return (bu_columns(c0, c1, tile, tn) & 0xFF).astype(np.uint8)
+    bits = ((b_cols(c0, c1, tile, kind, tn)[None, :] >> np.arange(32, dtype=np.uint64)[:, None]) & np.uint64(1))
+    return (((1 - 2 * bits.astype(np.int64)) & 0xFF) if kind == S8 else bits).astype(np.uint8)
+
+
+def lane_step(v, x, y, a0, a1):
+    """One lane step (pfill.cuh's pf_lane_step): v <- (v ^ x) a0 + y; v <- rotl(v, 13) a1 + x, all uint32."""
+    v = ((v ^ x) * a0 + y).astype(np.uint32)
+    return (rotl(v, 13) * a1 + x).astype(np.uint32)
+
+
+def lane_receipt(c0: int, c1: int, tile: int, steps: int, lanes: int, kind: int = S8, w: int = W,
+                 r9: bool = False) -> int:
+    """The lane chains' part of a -DPF_LANE=lanes tile's receipt, from B's matrix: lane (g, t)'s words at B fragment j are
+    the MMA's B operand, (x, y) = column 8 j + g's s8 bytes at k = 4 t .. 4 t + 3 and 16 + 4 t .. 19 + 4 t, little-endian;
+    each pass f of the tile sends chain s % LC through `lane_step` for s < lanes, and chain q < min(lanes, LC) of warp v's
+    lane is folded as smix(smix(K ^ pos) ^ v), pos = LPOS | (32 v + lane) 4 + q."""
+    if lanes <= 0:
+        return 0
+    tn = 128 * w
+    bb = b_bytes(c0, c1, tile, kind, tn).astype(np.uint32)
+    lane = np.arange(32)
+    g, t = lane >> 2, lane & 3
+    sh = (8 * np.arange(4, dtype=np.uint32))[:, None, None]
+    kk = 4 * t[None, None, :] + np.arange(4)[:, None, None]
+    cols = 8 * np.arange(tn // 8)[None, :, None] + g[None, None, :]
+    X = (bb[kk, cols] << sh).sum(axis=0, dtype=np.uint64).astype(np.uint32)  # [j, lane]
+    Y = (bb[16 + kk, cols] << sh).sum(axis=0, dtype=np.uint64).astype(np.uint32)
+    kb = block(c0, c1, tile, CTR_KEY, dom_of(kind))
+    a0, a1, _, _ = (np.uint32(v) for v in keys(kb, r9))
+    pos = LPOS | ((np.arange(w)[:, None, None] * 32 + lane[None, :, None]) * 4 + np.arange(LC)[None, None, :])
+    lv = RF.pfill_start(pos.astype(np.uint64))[0].astype(np.uint32)
+    with np.errstate(over="ignore"):
+        for _ in range((steps + 3) // 4):
+            for j in range(tn // 8):
+                for s in range(lanes):
+                    q = s % LC
+                    lv[:, :, q] = lane_step(lv[:, :, q], X[j][None, :], Y[j][None, :], a0, a1)
+    key = dseed(c0, c1, tile)
+    h = 0
+    for p, x in zip(pos[:, :, :min(lanes, LC)].ravel().tolist(), lv[:, :, :min(lanes, LC)].ravel().tolist()):
+        h ^= smix(smix(key ^ p) ^ x)
+    return h
 
 
 def fold(c0: int, c1: int, tile: int, nc: int, steps: int, cw: np.ndarray, kind: int = S8, w: int = W,
