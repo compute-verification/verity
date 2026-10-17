@@ -1,4 +1,4 @@
-import Definitions.Claims
+import Proofs.Flock.Claims.Counted
 import ArkLib.Data.CodingTheory.GuruswamiSudan.GuruswamiSudan
 
 /-!
