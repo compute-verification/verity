@@ -26,26 +26,31 @@ of them at once, and each window's share, except with \(\delta\) for the session
 
 `ledger` turns that into γ, given the node's capacity \(R\) (its read bandwidth over every registered tier, its GPUs'
 HBM plus its host's DRAM; specified or measured, §1 "The node, and its one \(R\)" and "Which \(R\) is the headline")
-and its on-chip storage \(S_{\text{chip}}\). Over the session's span \(\Sigma = D_{W-1} - b_{-1}\), the reads of registered
-data are at least \((1 - \gamma) R \Sigma\), with
+and its on-chip storage \(S_{\text{chip}}\). Over the session's span \(\Sigma = D_{W-1} - b_{-1}\), the credited reads
+are at least \((1 - \gamma) R \Sigma\), with
 
 \[
-\gamma = \mu_{\text{timing}} + \mu_{\text{sample}} + \mu_{\text{chip}} + \lambda + \mu_{\text{rebuild}} + \mu_{\text{host}} + \mu_{\text{link}} .
+\gamma = \mu_{\text{timing}} + \mu_{\text{sample}} + \mu_{\text{chip}} + \lambda + \mu_{\text{rebuild}} + \mu_{\text{host}} + \mu_{\text{link}} + \mu_{\text{carrier}} .
 \]
+
+A receipt of a registered block is credited. One of a block appended after the codec seed (§4) is credited only on
+the property's verdict on the circuits that wrote it (`credit_post_seed`, §3); without one it is certified, drawn and
+opened like any other, but not credited.
 
 | term | what it is | where it comes from |
 | --- | --- | --- |
-| \(\mu_{\text{timing}}\) | \(1 - \sum_t U_t b / (R\Sigma)\): the span the receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out) | the record |
+| \(\mu_{\text{timing}}\) | \(1 - \sum_t U^{c}_t b / (R\Sigma)\), \(U^{c}_t\) window \(t\)'s credited receipts: the span the credited receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out, post-seed blocks without a verdict) | the record |
 | \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`Ledger.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`Ledger.horizon`, §10) | the record's profiles, at δ |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
 | \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2`; 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
 | \(\mu_{\text{rebuild}}\) | \(C_{\text{sq}} b / (E_{\text{sq}} R)\): blocks re-encoded from their payloads in place of reads, each at least the record's codec's \(E_{\text{sq}}\) squarings (`Codec.encode_squarings`: 98,016 at p1024/k3/masked, 65,344 at k = 2, 65,152 at p512/k2) at the node's stated ceiling of \(C_{\text{sq}}\) squarings a second at that width (`Rebuild`) | the record's codec, and assumption 5 stated per width (`WorkHardness(p, k)`) |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | under a registration that binds \(z\) only (0 otherwise): relays that meet \(z\) and a copy of the block over a link (§4) | a model |
+| \(\mu_{\text{carrier}}\) | only when post-seed receipts are credited (0 otherwise): \(\sum_{t,i} \min(C_t, a_{t,i} b) / (R\Sigma)\), \(a_{t,i}\) pass \((t, i)\)'s post-seed blocks and \(C_t = R_{\text{in}} L + (c_\rho \cdot U_t b \cdot L / E) b\) the verdict's carrier bytes: a credited post-seed block may hold another block's encoding, and one read of it then serves two credited receipts of the pass (§3) | the property's verdict (I2's `P(c, R_in, L)`) |
 
 The protocol bounds the first four, prices \(\mu_{\text{rebuild}}\) from the record's codec (its name and parameters)
-at a stated squaring ceiling, and passes the last two through: the record can't bound them (a protocol carries no
-policy parameter). `ledger` takes the rebuild model as a `Rebuild(codec, squarings_per_s)` and refuses one of another
+at a stated squaring ceiling, passes \(\mu_{\text{host}}\) and \(\mu_{\text{link}}\) through (the record can't bound
+them; a protocol carries no policy parameter), and reads \(\mu_{\text{carrier}}\) off the property's verdict. `ledger` takes the rebuild model as a `Rebuild(codec, squarings_per_s)` and refuses one of another
 codec than the record's, or a bare fraction. The stated ceiling is the node's, the sum over its devices: 1.597 ×
 `kv.cu`'s 1.499·10^10 squarings a second at 1,024 bits for each RTX PRO 6000 with its share of the host
 (ra-squaring-ceiling, #1887; 1.567 × 5.13·10^10 at 512 bits), 1.915·10^11 for the node's eight. There, and at the
@@ -229,8 +234,12 @@ encoding in the circuit, or take it as input, and write it (or any cheap inverti
 payload. Decoding that carrier then yields the other block's encoding, and one read serves both blocks' receipts. A
 carrier costs one encode, what the honest prover pays a write, so binding doesn't price it. So a block written after
 the seed is credited only once the share of the store its writers can program is bounded (the stacking campaign,
-note:20261017T0723Z-draft-stacking-model); until then no plan holds one, and the credited store is the registration's,
-whose payloads no writer chose after the seed. \(d_j\) is the payload leaf's \(x_j\), so the
+note:20261017T0723Z-draft-stacking-model): on the property's verdict on the circuits that wrote it (I2, property/v1,
+\(P(c, R_{\text{in}}, L)\), note:20261017T1752Z-draft-program-credited-kv), which `ledger` takes as `credit_post_seed`
+and which charges what its carriers can hold (\(\mu_{\text{carrier}}\), §1). Without a verdict (None) such a block may
+still be appended and read (§4), and its receipts are certified but not credited: one read of a carrier then serves
+one credited receipt, its passenger's, so the credited reads are the registration's, whose payloads no writer chose
+after the seed. A verdict that the property fails is refused. \(d_j\) is the payload leaf's \(x_j\), so the
 leaf hashes the payload once for both (34 compressions), and \(b_j\) is one SHA-512 output, 2 compressions. The prover
 keeps \(d_j\), or \(b_j\) in its place, beside the block: 64 bytes a 4 KiB block, 1.6%. Blocks under the seed's key are
 unchanged, byte for byte. The bound key is `kv.py`'s
@@ -302,9 +311,25 @@ root_(t,i)  frame-v3-sha512, CommitmentDomain(SHA512("verity/remote-bandwidth/re
 seed, and the seed exists only once the root before it does. The pass index stays in the seed, so two passes never
 share one even if their previous roots collide.
 
-The prover sends each root with its pass's plan as the pass ends (`Session.receive`). A root out of turn rejects with
-`order`: a window's roots come in index order, and a window's first root makes the window before it final. A plan
-that breaks its format rejects with `plan`.
+The prover sends each root with its pass's plan as the pass ends (`Session.receive`), the plan whole or as its change
+from the session's previous pass's plan (`Plan.changed`: the blocks it adds and removes, the result in store order;
+before the first pass, the registered store's). A root out of turn rejects with `order`: a window's roots come in
+index order, and a window's first root makes the window before it final. A plan that breaks its format, or a change
+that removes a block its plan doesn't hold or adds one it does, rejects with `plan`.
+
+**Appends and releases.** Blocks written after the codec seed (KV pages) join the store mid-session. The prover commits
+their payloads in an append tree (`append_tree`: the payload tree's leaves, \(x_j = d_j\), in a frame-v3-sha512 domain
+bound to the registration's digest over the indices it takes) and sends its root and size (`Session.append`). The
+verifier assigns the store's next fresh indices, from \(N\) up, so each block's index, and with \(d_j\) its bound
+key and its encoding (§3), is fixed before any pass whose plan holds it: a plan received before the append that
+commits one of its blocks rejects with `plan`. The prover encodes each under its bound key and keeps \(d_j\) beside it
+(`Store.append`). A block the prover stops holding is released (`Session.release`, runs of the store), and a plan
+received after its release that holds it rejects with `plan`; its receipts from earlier passes can still be drawn, so
+the prover keeps it until its windows are drawn. An append that is malformed or would take the store past its
+codec's `max_blocks` rejects with `append`, and a release of a block outside the store or released already with
+`release`. Appends are a session's: the next session over the store starts again from \(N\) (§8). A late append
+buys nothing: a block whose payload is chosen after a pass's seed still costs an encode for any receipt of it, which
+\(\mu_{\text{rebuild}}\) prices, and its root still precedes the root of the pass that reads it.
 
 **Fiat–Shamir, and what grinding buys.** A seed after the first depends on the prover's own root, so the prover can
 grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path and no read. A
@@ -591,18 +616,21 @@ after the roots, which the verifier is waiting for anyway. So the protocol keeps
 
 The prover opens each draw (`Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
 leaf's receipts \(v_c\) with the leaf's salt and path to \(\text{root}_{(t,i)}\), the payload's salt and path to the
-payload root, and under a registration that binds \(z\), PoUW's evidence for \(z_{(i,j)}\). Openings aren't timed,
+payload root (to its append's root, for a block appended after the seed, which also carries its payload's digest
+\(d_j\)), and under a registration that binds \(z\), PoUW's evidence for \(z_{(i,j)}\). Openings aren't timed,
 because the roots already bind every receipt, and the next window's passes run while they are checked.
 
 The verifier checks each opening in order (`Session.verify`):
 
 1. the indices are the draw's and every field has its size, the tile evidence empty unless the registration binds
-   \(z\) (`malformed`);
+   \(z\), and the digest 64 bytes for an appended block (\(j \ge N\)) and empty for a registered one (`malformed`);
 2. the leaf, under \(\text{seed}_{(t,i)}\) (from \(\sigma_t\), \(i\) and the root received before
    \(\text{root}_{(t,i)}\)), the plan received with the root and the leaf's salt, has its path to
    \(\text{root}_{(t,i)}\) (`receipt-path`);
 3. the block, read as the registered codec's words, has every word below \(p\) (`codec`), and its decoding's leaf under
-   the payload salt has its path to the payload root at \(j\) (`payload-path`);
+   the payload salt has its path to the payload root at \(j\) (`payload-path`). An appended block is decoded under the
+   bound key of the \(d_j\) it carries, refused (`codec`) unless its decoding's digest is \(d_j\), and its leaf's path
+   goes to the root of the append that holds \(j\);
 4. under a registration that binds \(z\), PoUW's check recomputes \(z_{(i,j)}\) from the evidence (`tile`);
 5. \(y_{(i,p)}\), recomputed from \(j\) and \(e_{(i,j)}\) (the block, with \(z\) if the registration binds it) under
    the registration's kind, is the leaf's receipt at \(p\) (`receipt`). Under sketch-sha512 the verifier derives the
@@ -618,9 +646,9 @@ rounds \(r = 2\) and \(r = 1\) (XOR with \(K\), kept only if the result is below
 a 1,024-bit prime and 64 masks, where it was 128 mod a 512-bit prime. In the proof unit (§8), where a product's cost
 grows about as the square of its width, that is about three times the decode check's multiplications; the fallback is
 64 squarings and 32 masks, about twice. The opening is the same size: a block is 4,096 bytes under every codec. Every
-block of a v0 registration is under the seed's key; a bound block (§3, appended as §8 says) is decoded less
+block of a v0 registration is under the seed's key; a bound block (§3, appended as §4 says) is decoded less
 \(c_r + t(i) + b_j\), with \(b_j\) 2 compressions from \(d_j = x_j\), which the payload leaf's check hashes anyway, and
-refused (`codec`) unless its decoding's digest is \(d_j\).
+refused (`codec`) unless its decoding's digest is \(d_j\). Its opening is 64 bytes longer, the digest.
 
 A window is accepted only if every opening checks. A rejected window ends its session: every later call is refused,
 and nothing of the session is recorded. A pass whose seed is not the chain's (passes of a window run at once, a window
@@ -632,12 +660,15 @@ opening.
 `Session.record()` returns a `Record` once every window is accepted. `public()` holds the registration digest, the coin
 commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z\), the codec's name and parameters
 (`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), the block layout, the sketch's rows
-(`rows`), each window's passes and receipts \(U_t\), and the session's span. The digest binds the kind, `bind`, the
+(`rows`), each window's passes and receipts \(U_t\) and how many of them are of blocks appended after the seed
+(`post_seed`), the blocks the session appended and released (`appended`, `released`), and the session's span. The
+digest binds the kind, `bind`, the
 codec, the layout and the rows already, but the record names them as well: what its receipts rest on depends on the
 kind, `bind` and the rows (§4), and `ledger` takes a link term only from a record that binds \(z\);
 \(\mu_{\text{rebuild}}\) is priced from the record's codec (§1, §3), and `ledger` refuses a rebuild model of any
 other; and the layout says which bytes a credited block is (§4). Each
-`WindowRecord` carries its passes' lengths \(L_{t,i}\), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so
+`WindowRecord` carries its passes' lengths \(L_{t,i}\) and their post-seed reads \(a_{t,i}\) (`post_seed`, which
+`ledger` credits only on a verdict, §1), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so
 its span \(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`. That is every input of
 \(\gamma_t\) but the node's measured \(R\) and \(S_{\text{chip}}\) and the models, so the every-window claim is
 checkable from the record (§1). `Record.end_ns` is the last deadline, which the next session over the store waits
@@ -677,14 +708,15 @@ and each window's, from it plus the node's capacities.
 - **The plan on the wire.** The reference takes \(4 + 16R\) bytes a pass, which is too many for KV. Listed in store
   order, the weights are a run per region and a full pass is one run, but live KV pages are scattered through the
   pool. At worst (every other page live) a 60 GB pool of 64 KiB layer-pages (16 tokens, 8 KV heads of 128, bf16 K and
-  V) is 458k runs, 7.3 MB a pass: 2.9 Gb/s per GPU at 20 ms passes, twice that for a plane-major cache. Deployed, a
-  plan is sent as its change from the previous pass's plan. A decode step at batch 64 allocates or frees about 4
-  pages a layer, 128 runs over 32 layers, about 4 KB a step, and the verifier updates its sorted copy and checks
-  distinctness in \(O(\text{changes} \cdot \log R)\). Checked whole, a plan of 245k runs takes about 300 ms as
+  V) is 458k runs, 7.3 MB a pass: 2.9 Gb/s per GPU at 20 ms passes, twice that for a plane-major cache. So a plan
+  may be sent as its change from the previous pass's plan (§4, `Plan.changed`). A decode step at batch 64 allocates
+  or frees about 4 pages a layer, 128 runs over 32 layers, about 4 KB a step. The reference applies a change in
+  \(O(R + \text{changes})\), in Python; deployed, the verifier updates its sorted copy and checks distinctness in
+  \(O(\text{changes} \cdot \log R)\). Checked whole, a plan of 245k runs takes about 300 ms as
   `Plan` on tuples, more than a 7–120 ms pass, and about 11 ms as `Plan.from_array` on the store's (R, 2) array,
   about 5 ms of it the digest. Its checks and encoding are numpy in `verity.ml.kernels.plans`, since a protocol
   imports no third-party package, and the suite holds it to `Plan`'s digests and refusals on the same rows.
-  `Session.receive` takes either.
+  `Session.receive` takes any of the three.
 - **What the plan shows.** v0's plans are in the clear, so the verifier sees which KV pages were live in each pass: the
   batch's shape and context lengths over time, not their contents. Hiding them goes with the zero-knowledge openings:
   the plan committed, its distinctness and each opening's \(j = \text{plan}[p]\) proved, only \(L\) public (the draws
@@ -693,14 +725,22 @@ and each window's, from it plus the node's capacities.
   its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
   but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that
   can learn the key can compute another registered block's encoding as that payload. So a KV page is credited only
-  once the share its writers can program is bounded (§3); until then it stays out of every plan. Only bound blocks may
-  be registered after the seed. The reference registers a fixed store, every
-  block under the seed's key. Appending pages needs their payload roots committed before the passes that read them,
-  fresh store indices, each page encoded under its bound key with \(d_j\) kept beside it, and an opening of one that
-  carries \(d_j\), its payload leaf's \(x_j\), which check 3 decodes under. Until then, a block being rewritten stays
-  out of every plan, as the prover-side registry already does with blocks a write has touched. A KV block under the
-  seed's key, as `kv.cu` and vLLM's encoded store (whose `Codec` is keyed by the store index alone) encode them today,
-  is not to be credited: its writer may have picked its encoding, and then its receipts need no read.
+  on the property's verdict on its writers (§3, `credit_post_seed`), and then \(\mu_{\text{carrier}}\) charges what
+  its carriers can hold (§1). Only bound blocks may be registered after the seed. The reference appends them (§4):
+  payload roots committed before the passes that read them, fresh store indices, each page encoded under its bound
+  key with \(d_j\) kept beside it, an opening of one carrying \(d_j\), which check 3 decodes under, and releases that
+  keep a block out of every later plan. Open:
+  - *The verdict's binding.* `ledger` takes the verdict as given (`PostSeedVerdict`: whether it holds, and its carrier
+    bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, that their
+    payloads are those circuits' values (sampled proofs), and that no page outlives \(L\) are I2's and I4's to check.
+  - *Appends across sessions.* A session's appends end with it, and the next session starts again from \(N\), so a
+    page that outlives its session is appended again in the next, its encoding recomputed under its new index.
+    Carrying appends over needs the next session to take the previous one's append roots and releases as its
+    starting store.
+  - *The device side.* A KV page's index is the store's next fresh one, not \(\text{slot} \cdot \text{LAYERS} +
+    \text{layer}\): the prover keeps the map from slots to indices (the memory map, I3). A KV block under the seed's
+    key, as `kv.cu` and vLLM's encoded store (whose `Codec` is keyed by the store index alone) encode them today, is
+    not to be credited: its writer may have picked its encoding, and then its receipts need no read.
 - **Multi-GPU trees.** Each GPU's blocks should be an aligned power-of-two range of leaves, so that a pass's root is
   its GPUs' subtree roots combined. That keeps \(g\) to an all-gather, a few hashes and the next seed's broadcast.
 - **Sketch receipts** (a ±1 projection hashed, `RateAuditSketch`) are the stated receipt, sketch-sha512 (§4). Three
