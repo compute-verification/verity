@@ -141,7 +141,9 @@ def expect(kern: str, struct: str, targs: list[int]) -> list[dict[str, int]]:
     s = SASS_PER_PTX.get(struct, 1)
     if kern == "k_opalone":
         return [lane_counts(targs[0], 64)]
-    if kern in ("k_alone", "k_duo"):
+    if kern == "k_alone":
+        return [{fam: 8 * (targs[1] if len(targs) > 1 else 1) * s}]
+    if kern == "k_duo":
         return [{fam: 8 * s}]
     if kern == "k_duofold":
         return [{"IMAD": 32}]
@@ -375,7 +377,7 @@ def _f(v, d=3):
 
 def render(s: dict) -> str:
     L = [f"Run {s.get('run_id', '?')}; clocks read, never set (default boost).", "",
-         "## Forms (alone: least SMSP-cycles a PTX MMA over 2, 4 and 8 warps a SMSP)", "",
+         "## Forms (alone: least SMSP-cycles a PTX MMA over 2, 4 and 8 warps a SMSP, 8 and 32 MMAs a loop iteration)", "",
          "| form | SASS | slots | alone SMSP-cyc a MMA | slots/SM/clk | MACs/SM/clk | a, IADD3+FFMA | a, IADD3 (issue) | "
          "a, IADD3 (pipe) | a a slot vs IMMA.16832 (mix / IADD3) | word | MHz clock64 / NVML |",
          "|---|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -424,8 +426,8 @@ EPOCH = "sm80-1"
 SCALAR = {"ALU": ("A", ["iadd3", "lop3"]), "FFMA": ("FMA", ["ffma"]), "IMAD": ("FMA", ["imad", "dp4a"]),
           "XU": ("XU", ["popc"]), "SHFL": ("SHFL", ["shfl"]), "LDS32": ("LDSi", ["lds"])}
 ROWS = {
-    "M": "tensor pipe: SMSP-cycles a MMA of each kind alone (best of 2, 4 and 8 warps a SMSP, 8 accumulators a warp; "
-         "the loop's 3 instructions a 8 MMAs included)",
+    "M": "tensor pipe: SMSP-cycles a MMA of each kind alone (best of 2, 4 and 8 warps a SMSP and of 8 and 32 MMAs a loop "
+         "iteration, 8 accumulators a warp; the loop's 3 instructions included)",
     "A": "ALU pipe: IADD3 and LOP3 (IADD3+LOP3 issue {iadd3+lop3} a SMSP-cycle: one pipe)",
     "FMA": "FMA pipe: FFMA, IMAD and IDP.4A (IMAD+FFMA {imad+ffma}, IDP.4A+FFMA {dp4a+ffma} a SMSP-cycle: one pipe)",
     "XU": "XU: POPC",

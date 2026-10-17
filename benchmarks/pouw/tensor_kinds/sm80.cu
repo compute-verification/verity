@@ -336,8 +336,9 @@ __global__ void __launch_bounds__(1024) k_opalone(int iters, uint32_t* sink, Blo
   sink[blockIdx.x * blockDim.x + threadIdx.x] = threadIdx.x + consume<X>(r);
 }
 
-// MMA alone: NW warps a SMSP, 8 independent accumulators a warp.
-template <class F, int NW>
+// MMA alone: NW warps a SMSP, 8 independent accumulators a warp, 8U MMAs a loop iteration (U > 1 thins the loop's
+// 3 instructions a 8 MMAs, so the pipe's own rate shows).
+template <class F, int NW, int U>
 __global__ void __launch_bounds__(128 * NW) k_alone(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t a[4], b[4], e;
@@ -347,7 +348,9 @@ __global__ void __launch_bounds__(128 * NW) k_alone(int iters, uint32_t* sink, B
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
 #pragma unroll
-    for (int c = 0; c < 8; c++) F::mma(d[c], a, b, e);
+    for (int u = 0; u < U; u++)
+#pragma unroll
+      for (int c = 0; c < 8; c++) F::mma(d[c], a, b, e);
   }
   CLK_END(rec)
   sink[blockIdx.x * blockDim.x + threadIdx.x] = fold_acc<F>(d) ^ lane;
@@ -602,13 +605,14 @@ static void opalone() {
   Timing t = timed(k_opalone<X>, 1024, &iters, &ok);
   emit("opalone", "k_opalone", "", "", {X}, 0, 0, 0, 0, 8, 0, 64, X, iters, ok, t);
 }
-template <class F, int NW>
+template <class F, int NW, int U = 1>
 static void alone() {
   int iters;
   bool ok;
-  Timing t = timed(k_alone<F, NW>, 4 * NW * 32, &iters, &ok);
-  emit(NW == 2 ? "alone" : NW == 4 ? "alone4" : "alone8", "k_alone", F::SNAME, F::NAME, {NW}, F::MACS, F::SLOTS, F::WORDS, NW, 0, 8, 0, -1,
-       iters, ok, t);
+  Timing t = timed(k_alone<F, NW, U>, 4 * NW * 32, &iters, &ok);
+  char mode[16];
+  snprintf(mode, sizeof mode, NW == 2 && U == 1 ? "alone" : U == 1 ? "alone%d" : "alone%du%d", NW, U);
+  emit(mode, "k_alone", F::SNAME, F::NAME, {NW, U}, F::MACS, F::SLOTS, F::WORDS, NW, 0, 8 * U, 0, -1, iters, ok, t);
 }
 template <class F, int R, int X>
 static void spec() {
@@ -715,6 +719,9 @@ static void form() {
   alone<F, 2>();
   alone<F, 4>();
   alone<F, 8>();
+  alone<F, 2, 4>();
+  alone<F, 4, 4>();
+  alone<F, 8, 4>();
   spec<F, 8, LANE_MIX>(); spec<F, 16, LANE_MIX>(); spec<F, 32, LANE_MIX>(); spec<F, 64, LANE_MIX>(); spec<F, 128, LANE_MIX>();
   mixu<F, 8, LANE_MIX>(); mixu<F, 16, LANE_MIX>(); mixu<F, 32, LANE_MIX>(); mixu<F, 64, LANE_MIX>(); mixu<F, 128, LANE_MIX>();
   // IADD3 alone binds on its pipe; these programs still bound any joint row, which must hold on every program

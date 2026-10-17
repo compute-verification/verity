@@ -45,7 +45,8 @@ def test_expect_follows_the_templates():
     assert SM.expect("k_mixu", "ImmaS8k32", [128, LANE_IADD3, 4]) == [{"IMMA*": 8, "*IADD3": 129}]
     assert SM.expect("k_spec", "ImmaS8k32", [64, LANE_IADD3]) == [{"IMMA*": 8}, {"*IADD3": 65}]
     assert SM.expect("k_opalone", "", [LANE_LOP3]) == [{"LOP3*": 64}]
-    assert SM.expect("k_alone", "HmmaTf32k8", [8]) == [{"HMMA*": 8}]
+    assert SM.expect("k_alone", "HmmaTf32k8", [8]) == [{"HMMA*": 8}]   # before k_alone took U
+    assert SM.expect("k_alone", "BmmaAndK256", [4, 4]) == [{"BMMA*": 32}]
     assert [SM.mixu_u(r) for r in (8, 16, 24, 32, 40, 48, 64, 128)] == [8, 8, 6, 4, 4, 3, 2, 1]
 
 
@@ -104,7 +105,7 @@ def _run(tmp_path: Path, mix_rate: float) -> Path:
     n_mma, n_other = 4 * 1000 * 32, 4 * 1000 * 131
     cases = [(_row("k_opalone", "", [LANE_MIX], 8000 * 67 / mix_rate, lane_w=8, lane=LANE_MIX), mix),
              (_row("k_opalone", "", [LANE_IADD3], 8000 * 67 / 0.508, lane_w=8, lane=LANE_IADD3), iadd3),
-             (_row("k_alone", "ImmaS8k32", [2], 2 * 1000 * 8 * 8.375, mma_w=2, mma_ptx=8), ALONE_LOOP),
+             (_row("k_alone", "ImmaS8k32", [2, 1], 2 * 1000 * 8 * 8.375, mma_w=2, mma_ptx=8), ALONE_LOOP),
              (_row("k_mixu", "ImmaS8k32", [32, LANE_MIX, 4], n_mma * 5.125 + n_other, mma_w=4, mma_ptx=32, lane=LANE_MIX),
               MIXU_LOOP)]
     keys = [f"g0:{SM.mangle(r['kern'], r['struct'], r['targs'])}" for r, _ in cases]
