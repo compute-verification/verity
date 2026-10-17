@@ -150,7 +150,7 @@ def toyStmt : Flock.Stmt where
   inp _ := []
   out _ := []
   pub := []
-  form := ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false⟩
+  form := ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false⟩
 
 theorem toy_relS (w : Flock.Wit) : Flock.RelS toyStmt w := by
   intro b _
