@@ -1,0 +1,16 @@
+# The property red team's refusal suite: Programs a stacking property (property/v1) must refuse or fully budget, the honest
+# steps.py shapes it must pass (`cases.py`), and a runner that grades any check, a function from a Program to a verdict
+# (`run.py`). Not a package: the tests put this directory on sys.path, like benchmarks/word_codec. `demo.py` is round 1's
+# registry-evaluator demo.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The cases are built from the circuits IR and evaluated by its reference evaluator, from core's registered primitives (ops,
+# PoUW's words) and vLLM's integer, gather and cast primitives (its program registry, which imports its kernel twins).
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
+          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
+          "verity/core/protocols/pouw/circuit", "integrations/vllm/verity_vllm/__init__.py",
+          "integrations/vllm/verity_vllm/program/__init__.py", "integrations/vllm/verity_vllm/program/registry",
+          "integrations/vllm/verity_vllm/program/kernels"]
