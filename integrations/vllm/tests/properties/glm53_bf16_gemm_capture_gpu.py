@@ -328,9 +328,10 @@ def _kernels(fn, trace_path: Path) -> dict[str, Any]:
     return _profile_record(json.loads(trace_path.read_text()))
 
 
-def cublas_version() -> int | None:
-    """The runtime cuBLAS version selected by this process, via cuBLAS's public API."""
-    paths = [p for p in (ctypes.util.find_library("cublas"), "libcublas.so.12", "libcublas.so") if p]
+def cublas_version(maps: str = "/proc/self/maps") -> int | None:
+    """The version of the cuBLAS this process has mapped (torch's, loaded with torch), via cuBLAS's public API. The linker's
+    search order is read only when none is mapped: it can name another CUDA install's library than the one torch runs."""
+    paths = loaded_cublas(maps) or [p for p in (ctypes.util.find_library("cublas"), "libcublas.so.12", "libcublas.so") if p]
     lib = next((lib for p in paths if (lib := _load_library(p)) is not None), None)
     if lib is None:
         return None
@@ -347,6 +348,16 @@ def cublas_version() -> int | None:
         return int(version.value) if lib.cublasGetVersion_v2(handle, ctypes.byref(version)) == 0 else None
     finally:
         lib.cublasDestroy_v2(handle)
+
+
+def loaded_cublas(maps: str) -> list[str]:
+    """The libcublas files (not libcublasLt) a `/proc/<pid>/maps` lists."""
+    try:
+        lines = Path(maps).read_text().splitlines()
+    except OSError:
+        return []
+    files = (ln.split()[-1] for ln in lines if ln.split())
+    return sorted({f for f in files if f.rsplit("/", 1)[-1].startswith("libcublas.so")})
 
 
 def _load_library(path: str):
