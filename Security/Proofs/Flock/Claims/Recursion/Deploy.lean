@@ -14,9 +14,13 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
 * **Statement.** `x` is the canonical bytes (`RecX.encode`) of what the verifier holds before the run: the inner
   statement's bytes (a `FlockDeploy.Raw` encoding: its circuit, public and partition files), the verifier's own inner
   shape (`--rec-inner`) and bindings (`--rec-bindings`), the circuit registration, and per V* part its Flock statement
-  and `--rec-rows`. `parse` (`readX`) reads the inner statement's dimensions with the shipped `RecVStar.innerOf`, the
-  form off the verifier's own inner shape, and refuses unless there is one part per V* statement of that shape
-  (`RecVStar.statements`). It reads no circuit commitment: the shipped verifier has no private-circuit form of the
+  and `--rec-rows`. `parse` and `scopeCheck` are the deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at
+  `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, and
+  there is one part per V* statement of the verifier's inner shape, `RecVStar.statements`), as the verifier's inner
+  shape and the inner statement's files with no records (`readOf`), where the setup's checks accept that shape
+  (`RecScope.accepts`). The V* records are run messages, so the statement carries no draws, and `scopeCheck` reads
+  only the inner scope check: the compiled verifier refuses the draw and shape conditions at each session's decision
+  (`DeployScope`). `parse` reads no circuit commitment: the shipped verifier has no private-circuit form of the
   compiled statement.
 * **Rounds.** The inner session's `k_I = IV.k (x_I)` rounds, then one staging round (`kS`), each message answered by
   its live coin, then each V* session in order, part `s` at its V* statement (`vstar`), over `VO.k` rounds, each step
@@ -37,7 +41,8 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
 `next_rej`, `next_coin` and `next_sess` are the steps; `next_decide_sha512` is the acceptance theorem: at a session's
 decision, the compiled verifier accepts the session exactly when it is the session's last round and the deployed
 `Zk.verify` at the part's recursive setup accepts the record and proof files with the custody checks
-(`FlockDeploy.checks`), the part's statement being the one the prover staged (`ract_sess`). `next_acc`: the whole run
+(`FlockDeploy.checks`) and the verdict's full-draw refusal (`fullDrawO`, `RecSetup.fullDraw`), the part's statement
+being the one the prover staged (`ract_sess`). `next_acc`: the whole run
 accepts only at the last session's last round, where the outer verifier accepts.
 
 `deployRec IV ivScope b` is the record the recursion's claims read, at the inner verifier `IV`, its scope check and
@@ -122,24 +127,6 @@ theorem decodeX_injective {x y : Claims.Msg} {w : RecX} (hx : decodeX x = some w
 
 /-! ## Its parser -/
 
-/-- The inner statement's first table, set up as `RecVStar.innerOf` sets it up: plain leaves on the coin server's
-coins. -/
-def innerStmt (ri : Raw) (partition : Option Json) : Option Stmt :=
-  match Stmt.setupTables RecVStar.innerTags ri.circuit ri.publicFile Coins.os 1 (partition := partition)
-      (program := ri.program) with
-  | .ok (_, sts) => sts[0]?
-  | .error _ => none
-
-/-- Whether the RecSparse unit range's slots lie inside the block: `layoutFactors` at the inner statement's unit range,
-as `RecCoins.checkInnerRange` runs it. -/
-def inBlock (i : RecVStar.Inner) (st : Option Stmt) : Bool :=
-  match i.sparse, st with
-  | some sp, some st =>
-    (do
-      let rng ← RecCoins.unitRangeOf st
-      RecCoins.layoutFactors sp (Array.replicate (st.c.kLog - 6) 0) (Array.replicate (st.c.kLog - 6) 0) rng).isOk
-  | _, _ => false
-
 /-- The compiled statement as read: its fields, the inner statement's, the verifier's own inner shape and the inner
 statement's shape as `RecVStar.innerOf` reads it. -/
 structure XR where
@@ -161,38 +148,28 @@ def readX (x : Claims.Msg) : Option XR := do
   if w.parts.length ≠ vs.size then none
   pure ⟨w, ri, partition, shape, dims⟩
 
-/-- The recursion's form, off the verifier's own inner shape. -/
-def formOf (r : XR) : Claims.Recursion.Form where
-  m := r.shape.m
-  kLog := r.shape.kLog
-  regions := r.shape.regions
-  claims := r.shape.claims
-  holo := r.shape.holo
-  sparse := r.shape.sparse.map fun sp => (sp.nu, sp.ell, sp.sLog, sp.tLog)
-  stacked := r.shape.stacked.map fun sh => (sh.m, sh.claims)
-  unitRangeInBlock := inBlock r.shape (innerStmt r.innerRaw r.partition)
+/-- The inner statement's files as each staged V* statement hands them to check 5 (`--rec-inner-circuit`,
+`--rec-inner-public`, `--rec-inner-partition`), with no record (`RecCoins.Files.stmt` reads none); none without a
+partition, where no staged statement sets up. -/
+def filesOf (r : XR) : Option RecCoins.Source :=
+  r.partition.map fun p => .files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none⟩
 
-/-- A part's draw file (`--draw`), readable (`RecScope.drawOf`); `none` where it holds none, or one that doesn't
-read. -/
-def partDraw (p : PartX) : Option Claims.Recursion.Draw :=
-  p.base.draw.bind fun b => match (do Draw.UnitDraw.ofJson (← jsonOf "draw" b)) with
-    | .ok D => some (RecScope.drawOf D)
-    | .error _ => none
+/-- **What the compiled verifier reads of the statement**, as `RecScope` reads it: the inner statement's bytes and
+files, its own inner shape, and no V* session's record, each being a run message. -/
+def readOf (r : XR) : RecScope.Read := ⟨r.w.inner, filesOf r, r.shape, []⟩
 
-/-- **The claims' parser**: the inner statement's bytes, its `(m, k_log, regions)` as `RecVStar.innerOf` reads them, no
-circuit commitment, the form, and each part's draw as its draw file holds it. -/
-def parse (x : Claims.Msg) : Option Claims.Recursion.Stmt :=
-  (readX x).map fun r =>
-    { inner := r.w.inner, innerDims := some (r.dims.m, r.dims.kLog, r.dims.regions), circ := none, form := formOf r
-      draws := r.w.parts.map partDraw }
+/-- The statement's reading, where `readX` reads it. -/
+def decodeR (x : Claims.Msg) : Option RecScope.Read := (readX x).map readOf
 
-open Classical in
-/-- **The claims' scope check**: the statement parses, its inner statement passes the inner verifier's scope check, and
-its form is candidate 3's (`InScope`). -/
-noncomputable def scopeCheck (ivScope : Claims.Msg → Bool) (x : Claims.Msg) : Bool :=
-  match parse x with
-  | some s => ivScope s.inner && decide (Claims.Recursion.InScope s)
-  | none => false
+/-- **The claims' parser**: the deployed parser (`RecScope.parseOf`) at `decodeR`: where the setup's checks accept the
+inner shape (`RecScope.accepts`), the inner statement's bytes, its dimensions as check 5 sets it up, no circuit
+commitment, the form off the verifier's own inner shape, and no draw (the V* records are run messages; their draws are
+refused at the run, `DeployScope`). -/
+def parse (x : Claims.Msg) : Option Claims.Recursion.Stmt := RecScope.parseOf decodeR x
+
+/-- **The claims' scope check**: the deployed one (`RecScope.scopeCheckOf`) at `decodeR`, which reads only what the
+statement carries: the setup's checks accept its inner shape and the inner scope check takes its inner statement. -/
+def scopeCheck (ivScope : Claims.Msg → Bool) (x : Claims.Msg) : Bool := RecScope.scopeCheckOf ivScope decodeR x
 
 /-- The inner statement's bytes. -/
 def xIOf (x : Claims.Msg) : Claims.Msg := ((parse x).map Claims.Recursion.Stmt.inner).getD []
@@ -259,12 +236,16 @@ def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Cla
   transcript := some (st.transcript x ms)
   registration := r.w.registration
 
-/-- **Part `s`'s statement as staged** at the rounds `ms` before the sessions. -/
-def staged (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) : Claims.Msg :=
+open Classical in
+/-- **Part `s`'s statement as staged** at the rounds `ms` before the sessions: its encoding, where that reads back as
+it (`decodeRec`), as every statement short of `2^64`-byte fields does; else none. -/
+noncomputable def staged (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) : Claims.Msg :=
   match readX x with
   | some r =>
     match r.w.parts[s]? with
-    | some p => (partRaw r st x ms s p).encode
+    | some p =>
+      if decodeRec (partRaw r st x ms s p).encode = some (partRaw r st x ms s p) then (partRaw r st x ms s p).encode
+      else []
     | none => []
   | none => []
 
@@ -643,14 +624,15 @@ theorem next_acc (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval
 outer verifier decides, the compiled verifier accepts the session (`.acc` at the last session, `.msg []` before it)
 exactly when this is the session's last round and the deployed `flock-verify verify --zk` with part `s`'s recursive
 inputs, `Zk.verify` at the statement's recursive setup (`actO_decide`, `RecIns.setup`), accepts the record and proof
-files with the custody checks; else it refuses. The statement is the part's as the prover staged it (`ract_sess`). -/
+files with the custody checks and the full-draw refusal; else it refuses. The statement is the part's as the prover
+staged it (`ract_sess`). -/
 theorem next_decide_sha512 {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin} {i : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
     (ha : actO xO as' cs' = .decide i spec sts link c₁ mids f) :
     ((next IV st x as cs).eval sha512).1 = (if s + 1 = nS x then .acc else .msg []) ↔
       j + 1 = VO.k xO ∧ Zk.verify spec (tabsOf sts) f.record f.proofs = .ok () ∧
-        checks true i spec xO link c₁ mids f = .ok () := by
+        checks true i spec xO link c₁ mids f = .ok () ∧ fullDrawO xO f = true := by
   rw [next_sess sha512 h]
   simp only
   rcases nextO_decide_out sha512 ha with ho | ho
@@ -658,7 +640,7 @@ theorem next_decide_sha512 {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
     rw [ho]
     by_cases hj : j + 1 = VO.k xO <;> by_cases hl : s + 1 = nS x <;> simp [sessOut, hj, hl, hv]
   · have hv : ¬ (Zk.verify spec (tabsOf sts) f.record f.proofs = .ok () ∧
-        checks true i spec xO link c₁ mids f = .ok ()) := fun hv => by
+        checks true i spec xO link c₁ mids f = .ok () ∧ fullDrawO xO f = true) := fun hv => by
       have := (nextO_decide_sha512 ha).2 hv
       rw [ho] at this
       cases this

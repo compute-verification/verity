@@ -8,7 +8,8 @@ What the recursion's claims read of the compiled verifier, at `deployRec IV ivSc
 `DeployFacts`, `DeploySessions` and `DeployMargin` prove there:
 
 * **`ScopeMatches`** holds wherever the inner scope check matches the inner scope (`scopeMatches`), so with no
-  hypothesis at the deployed plain inner record (`scopeMatches_deployed`).
+  hypothesis at the deployed plain inner record (`scopeMatches_deployed`): both are the deployed parser's
+  (`Flock.RecScope`).
 * **The V\* facts** (`CallsRecord`, `CallsOpen`, `VStarAccepts` at each shape) quantify over the compiled verifier's
   accepted runs. On such a run each V* statement is the one staged at the run's inner and staging rounds
   (`runVstar_staged`, from `run_round`), and the inner view is the inner verifier's run of the readers' messages at the
@@ -32,32 +33,20 @@ variable {W : Type}
 
 /-! ## Scope -/
 
-open Classical in
-/-- **`ScopeMatches` at `deployRec`**, wherever the inner scope check `ivScope` matches the inner scope: the scope check
-is the inner one and `InScope`, decided. -/
+/-- **`ScopeMatches` at `deployRec`**, wherever the inner scope check `ivScope` matches the inner scope: `parse` and
+`scopeCheck` are the deployed parser's (`RecScope.parseOf`, `RecScope.scopeCheckOf` at `decodeR`), so this is
+`RecScope.scopeMatches`. -/
 theorem scopeMatches (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool) (b : Brings)
-    (hI : Claims.ScopeMatches I.Scope ivScope) : Claims.Recursion.ScopeMatches (deployRec I.V ivScope b) I := by
-  intro x
-  show (∃ s, parse x = some s ∧ I.Scope s.inner ∧ Claims.Recursion.InScope s) ↔ scopeCheck ivScope x = true
-  unfold scopeCheck
-  constructor
-  · rintro ⟨s, hs, hIs, hin⟩
-    rw [hs, Bool.and_eq_true, decide_eq_true_iff]
-    exact ⟨(hI s.inner).1 hIs, hin⟩
-  · intro h
-    split at h
-    · rename_i s hs
-      rw [Bool.and_eq_true, decide_eq_true_iff] at h
-      exact ⟨s, hs, (hI s.inner).2 h.1, h.2⟩
-    · cases h
+    (hI : Claims.ScopeMatches I.Scope ivScope) : Claims.Recursion.ScopeMatches (deployRec I.V ivScope b) I :=
+  Flock.RecScope.scopeMatches _ I decodeR ivScope rfl rfl hI
 
 /-- **`ScopeMatches` at `deployRec` over the deployed plain inner record**, with no hypothesis: its scope check is its
-readable scope (`FlockDeploy.scopeMatches_plain`). -/
+readable scope (`RecScope.scopeMatches_deployed`). -/
 theorem scopeMatches_deployed (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (b : Brings) :
     Claims.Recursion.ScopeMatches (deployRec (FlockDeploy.V false) (FlockDeploy.deployPlain rel).scopeCheck b)
       (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) :=
-  scopeMatches _ _ b (FlockDeploy.scopeMatches_plain rel)
+  Flock.RecScope.scopeMatches_deployed rel _ decI decodeR rfl rfl
 
 /-! ## The staged V* statements -/
 
@@ -65,7 +54,7 @@ theorem scopeMatches_deployed (rel : Flock.Readable.Parsed → Flock.Readable.Re
 def roundsOf (as : List Msg) (cs : List Coin) : List (Msg × Out) := as.zip (cs.map fun c => .msg c.bytes)
 
 /-- **The V\* statements staged at the inner and staging messages `as` and coins `cs`**: each part's. -/
-def stagedAll (st : Stage) (x : Msg) (as : List Msg) (cs : List Coin) : List Msg :=
+noncomputable def stagedAll (st : Stage) (x : Msg) (as : List Msg) (cs : List Coin) : List Msg :=
   (List.range (nS x)).map (staged st x (roundsOf as cs))
 
 /-- The calls the outer witnesses record. -/

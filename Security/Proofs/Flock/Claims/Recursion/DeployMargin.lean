@@ -121,7 +121,7 @@ theorem VO_k_of_acc (H : Msg → Msg) {xO : Msg} {as : List Msg} {cs : List Coin
   | coin c => rw [nextO_coin H ha] at h; cases h
   | decide s spec sts link c₁ mids f =>
     obtain ⟨i, hi, rfl⟩ := actO_decide ha
-    obtain ⟨spec', sts', -, -, hc⟩ := (nextO_decide H ha).1 h
+    obtain ⟨⟨spec', sts', -, -, hc⟩, -⟩ := (nextO_decide H ha).1 h
     exact VO_k_ge_three hi (publicInputs_none_of_scope (scope_of_checks hc))
 
 /-! ## The margin -/

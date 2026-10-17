@@ -8,11 +8,13 @@ import Proofs.Flock.Claims.NumbersDeploy
 flags) as a `Claims.Verifier`, built as `FlockDeploy.V true` is: the same messages and coins (the link message, the
 rounds, the last message, each round answered by its live coin) and the same decision (`FlockDeploy.decision`: the
 shipped verdict over `OC`, `Zk.verifyWithM Hashes.oc`, then the custody checks), at the recursive setup
-(`RecIns.setup`) where `FlockDeploy.V` has Flock's (`Ins.setup`), which refuses every V* statement.
+(`RecIns.setup`) where `FlockDeploy.V` has Flock's (`Ins.setup`), which refuses every V* statement; then the verdict's
+last refusal under `--rec-inner` (`fullDrawO`: `RecSetup.fullDraw` at the record's draw), which `FlockDeploy.V` doesn't
+run.
 
 `nextO_rej`, `nextO_coin` and `nextO_decide` are its three steps; at the SHA-512 oracle a decision accepts exactly when
-the deployed `Zk.verify` accepts the record and proof files at the recursive setup's tables and the custody checks pass
-(`nextO_decide_sha512`).
+the deployed `Zk.verify` accepts the record and proof files at the recursive setup's tables, the custody checks pass and
+so does the full-draw refusal (`nextO_decide_sha512`).
 
 `deployZkRec rel` is the record Flock's claims read at that verifier: `deployZk rel`'s code, decoder spec and numbers,
 each read at the recursive setup's tables (`Readable.tableOf`, `colsO`, `εtableO`, `N₀O`, `weightO`).
@@ -48,12 +50,22 @@ def actO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Act :=
   | none => .rej
   | some (s, spec, sts) => actAt s.base spec sts as cs
 
-/-- The outer verifier's next message. -/
+/-- The verifier's own inner shape (`--rec-inner`) at the statement, where it reads. -/
+def innerOfO (x : Claims.Msg) : Option RecVStar.Inner := (insO x).bind (·.inner)
+
+/-- **The verdict's last refusal** (`RecSetup.fullDraw`, as `verifyCmd` calls it at the record's draw): under the
+verifier's inner shape, a V* session whose record's draw is not every unit of its population. -/
+def fullDrawO (x : Claims.Msg) (f : Final) : Bool :=
+  (RecSetup.fullDraw (innerOfO x) (Witness.recordDraw f.record) f.record).isOk
+
+/-- The outer verifier's next message: at a decision, the decision, then the verdict's full-draw refusal, which makes no
+SHA-512 call. -/
 def nextO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Claims.OC Claims.Out :=
   match actO x as cs with
   | .rej => .ret .rej
   | .coin c => .ret (.msg c.bytes)
-  | .decide s _ _ link c₁ mids f => outOf (decision true s x link c₁ mids f)
+  | .decide s _ _ link c₁ mids f =>
+    (outOf (decision true s x link c₁ mids f)).bind fun o => .ret (if fullDrawO x f then o else .rej)
 
 /-- **The outer verifier in public-coin form**: `k(x)` is the link message, the session's recorded rounds and the last
 message (one round where the statement does not set up). -/
@@ -73,17 +85,26 @@ theorem nextO_coin (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List C
     {c : Coin} (h : actO x as cs = .coin c) : (nextO x as cs).eval H = (.msg c.bytes, []) := by
   simp only [nextO, h, Claims.OC.eval]
 
-/-- **The outer verifier's decision against `H`**: it accepts exactly when Flock's setup with SHA-512 replaced by `H`
-is `.ok`, and at its session `Zk.verifyWith (hOf H)` and the custody checks are `.ok`. -/
-theorem nextO_decide (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+/-- At a decision, the step is the decision's, refused where the full-draw refusal fails, with the decision's oracle
+log. -/
+theorem nextO_decide_eval (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
-    ((nextO x as cs).eval H).1 = .acc ↔
+    (nextO x as cs).eval H =
+      (if fullDrawO x f then ((outOf (decision true s x link c₁ mids f)).eval H).1 else .rej,
+        ((outOf (decision true s x link c₁ mids f)).eval H).2) := by
+  simp only [nextO, h, Claims.OC.eval_bind, Claims.OC.eval, List.append_nil]
+
+/-- **The decision itself against `H`**: it accepts exactly when Flock's setup with SHA-512 replaced by `H` is `.ok`,
+and at its session `Zk.verifyWith (hOf H)` and the custody checks are `.ok`. -/
+theorem outO_decide (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (s : Ins) (link : List ByteArray × List ByteArray)
+    (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) :
+    ((outOf (decision true s x link c₁ mids f)).eval H).1 = .acc ↔
       ∃ spec' sts', FlockDeploy.setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
         verdictWith true (Claims.hOf H) spec' (tabsOf sts') f.record f.proofs = .ok () ∧
           checks true s spec' x link c₁ mids f = .ok () := by
   obtain ⟨he, -⟩ := FlockDeploy.decision_eval H true s x link c₁ mids f
-  simp only [nextO, h, outOf, Claims.OC.eval_bind, Claims.OC.eval]
+  simp only [outOf, Claims.OC.eval_bind, Claims.OC.eval]
   rw [he]
   cases hs : FlockDeploy.setupWith (Claims.hOf H) s.read with
   | error e => simp [bind, Except.bind]
@@ -96,13 +117,28 @@ theorem nextO_decide (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List
       | error e => simp [bind, Except.bind, hv, hc]
       | ok u' => simp [bind, Except.bind, hv, hc]
 
+/-- **The outer verifier's decision against `H`**: it accepts exactly when the decision does (`outO_decide`) and the
+verdict's full-draw refusal passes. -/
+theorem nextO_decide (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
+    ((nextO x as cs).eval H).1 = .acc ↔
+      (∃ spec' sts', FlockDeploy.setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
+        verdictWith true (Claims.hOf H) spec' (tabsOf sts') f.record f.proofs = .ok () ∧
+          checks true s spec' x link c₁ mids f = .ok ()) ∧ fullDrawO x f = true := by
+  rw [nextO_decide_eval H h, ← outO_decide]
+  by_cases hf : fullDrawO x f = true <;> simp [hf]
+
 /-- A decision accepts or rejects. -/
 theorem nextO_decide_out (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     ((nextO x as cs).eval H).1 = .acc ∨ ((nextO x as cs).eval H).1 = .rej := by
-  simp only [nextO, h, outOf, Claims.OC.eval_bind, Claims.OC.eval]
-  split <;> simp
+  rw [nextO_decide_eval H h]
+  simp only [outOf, Claims.OC.eval_bind, Claims.OC.eval]
+  split
+  · split <;> simp
+  · simp
 
 /-- **The decision's oracle log**: Flock's setup's `setupCallsOf (hOf H)` entries, then, where it is `.ok`, the
 shipped verdict's `Zk.shaCalls (hOf H)` at its session. -/
@@ -115,7 +151,8 @@ theorem nextO_decide_log (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : 
         | .ok (spec', sts') => FlockDeploy.shaCallsOf true (Claims.hOf H) spec' (tabsOf sts') f.record f.proofs
         | .error _ => 0 := by
   obtain ⟨-, hl⟩ := FlockDeploy.decision_eval H true s x link c₁ mids f
-  simp only [nextO, h, outOf, Claims.OC.eval_bind, Claims.OC.eval, List.append_nil]
+  rw [nextO_decide_eval H h]
+  simp only [outOf, Claims.OC.eval_bind, Claims.OC.eval, List.append_nil]
   exact hl
 
 /-! ## At SHA-512 -/
@@ -153,20 +190,22 @@ theorem actO_decide_setupWith {x : Claims.Msg} {as : List Claims.Msg} {cs : List
   exact RecIns.setup_read (setupO_some hi).2
 
 /-- **The outer verifier's decision at SHA-512**: it accepts exactly when the deployed `verify --zk` with the recursive
-inputs (`Zk.verify` at the recursive setup's tables) accepts the record and proof files and the custody checks pass. -/
+inputs (`Zk.verify` at the recursive setup's tables) accepts the record and proof files, the custody checks pass, and
+the verdict's full-draw refusal passes. -/
 theorem nextO_decide_sha512 {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     ((nextO x as cs).eval sha512).1 = .acc ↔
-      Zk.verify spec (tabsOf sts) f.record f.proofs = .ok () ∧ checks true s spec x link c₁ mids f = .ok () := by
+      Zk.verify spec (tabsOf sts) f.record f.proofs = .ok () ∧ checks true s spec x link c₁ mids f = .ok () ∧
+        fullDrawO x f = true := by
   obtain ⟨i, hi, -⟩ := actO_decide h
   rw [nextO_decide sha512 h, actO_decide_setupWith h, ← verdictWithO_sha512 hi]
   constructor
-  · rintro ⟨spec', sts', he, hv, hc⟩
+  · rintro ⟨⟨spec', sts', he, hv, hc⟩, hf⟩
     cases he
-    exact ⟨hv, hc⟩
-  · rintro ⟨hv, hc⟩
-    exact ⟨spec, sts, rfl, hv, hc⟩
+    exact ⟨hv, hc, hf⟩
+  · rintro ⟨hv, hc, hf⟩
+    exact ⟨⟨spec, sts, rfl, hv, hc⟩, hf⟩
 
 /-! ## The columns a run opens -/
 

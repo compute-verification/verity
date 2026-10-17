@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.Deploy
+import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Refine.Paths
@@ -10,8 +11,9 @@ The code facts the recursion's analysis reads of a deployment that follow from `
 the analysis' own Prop (`Refuses`, `InnerRounds`, `SessionNums`, `SessionRounds`, `TableErrNonneg`,
 `SessionAccepts`, `InnerViewRun`, `CallsNil`), at `deployRec I.V ivScope b` and the outer record `deployZkRec rel`:
 
-* `refuses`: a run accepts only at a step where the compiled verifier's does (`stepWith_acc`), which is a session's
-  (`next_acc`), so the statement parses (`readX`) and `parse` reads no circuit commitment.
+* `refuses`: a run accepts only at a step where the compiled verifier's does (`stepWith_acc`), which is the last
+  session's decision, so the statement parses (`DeployScope.acc_parse`) and `parse` reads no circuit commitment;
+  `run_acc_inScope`: and what it reads is in `InScope`.
 * `innerRounds`, `sessionRounds`: `k(x)` is the inner rounds, the staging round and every session's rounds at `x`'s
   numbers, and every V* statement `vstar` gives has those numbers (`vstar_map_k`).
 * `sessionNums`, `tableErrNonneg`: `vstar`'s statements have `nums`' numbers (`numsOf_vstarAt`), which are
@@ -117,16 +119,26 @@ theorem ract_readX {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as
   · cases h
   · exact ⟨_, by assumption⟩
 
-/-- **`Refuses`**: every accepted run is of a statement that parses, with no circuit commitment. -/
+/-- **The compiled verifier refuses an accepted run out of scope**: every accepted run is of a statement that `parse`
+reads, and what it reads is in `InScope` (`acc_parse`: the last session's decision refuses an inner shape the setup
+doesn't accept, and a record that doesn't draw every unit). -/
+theorem run_acc_inScope (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
+    (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {ω : Ω}
+    {r : Fin ((deployRec IV ivScope b).V.k x) → Coin}
+    (h : (Claims.run H P (deployRec IV ivScope b).V x ω r).out = .acc) :
+    ∃ s, parse x = some s ∧ Claims.Recursion.InScope s := by
+  obtain ⟨as', ha⟩ := stepWith_acc H P x ω _ _ _ _ _ h
+  obtain ⟨_, -, hp, hin⟩ := acc_parse (IV := IV) (st := b.st) H ha
+  exact ⟨_, hp, hin⟩
+
+/-- **`Refuses`**: every accepted run is of a statement that parses, with no circuit commitment (`RecScope.toStmt`
+reads none). -/
 theorem refuses (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (H : Claims.Msg → Claims.Msg) :
     Claims.Recursion.Refuses H (deployRec IV ivScope b) := by
   intro x Ω P ω r h
   obtain ⟨as', ha⟩ := stepWith_acc H P x ω _ _ _ _ _ h
-  obtain ⟨s, j, xO, as'', cs', hr, -⟩ := next_acc (IV := IV) (st := b.st) H ha
-  obtain ⟨xr, hx⟩ := ract_readX hr
-  refine ⟨{ inner := xr.w.inner, innerDims := some (xr.dims.m, xr.dims.kLog, xr.dims.regions), circ := none
-            form := formOf xr, draws := xr.w.parts.map partDraw }, ?_, rfl⟩
-  simp only [deployRec, parse, hx, Option.map_some]
+  obtain ⟨_, -, hp, -⟩ := acc_parse (IV := IV) (st := b.st) H ha
+  exact ⟨_, hp, rfl⟩
 
 /-- **`InnerRounds`**: the compiled verifier takes at least the inner verifier's rounds. -/
 theorem innerRounds (I : Claims.Recursion.Inner Coin W) (ivScope : Claims.Msg → Bool) (b : Brings) :
@@ -237,7 +249,7 @@ theorem nextO_acc_length (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : 
   | rej => rw [nextO_rej H ha] at h; cases h
   | coin c => rw [nextO_coin H ha] at h; cases h
   | decide s spec sts link c₁ mids f =>
-  obtain ⟨spec', sts', hsu, hv, hc⟩ := (nextO_decide H ha).1 h
+  obtain ⟨⟨spec', sts', hsu, hv, hc⟩, -⟩ := (nextO_decide H ha).1 h
   obtain ⟨lv, hlv, hcus⟩ := FlockDeploy.checks_custody hc
   obtain ⟨hsz, hk⟩ := FlockDeploy.streams_size true (Flock.Hashes.ofSha512 (Claims.hOf H)) hv hlv
   obtain ⟨i, hi, rfl⟩ := actO_decide ha
