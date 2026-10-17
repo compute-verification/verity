@@ -18,7 +18,9 @@ The old masked escapes (`oldEscZ`, at multiplicity 2) need no scaling: they leav
 weight unused, so they fit the same weight with the fork event of weight `k′` up to `4·N₀/e + 2·2^{d₀}·Q₀`:
 
 * `FlockDeploy.KS.oldEscZ_fitsFork_zk_le`: at any such `k′`;
-* `FlockDeploy.KS.oldEscZ_fitsFork_zk_raise`: at the raised `k′`, for `N₀′ ≤ N₀ + 2^{d₀}·Q₀/2`.
+* `FlockDeploy.KS.oldEscZ_fitsFork_zk_raise`: at the raised `k′`, for `N₀′ ≤ N₀ + 2^{d₀}·Q₀/2`;
+* `FlockDeploy.KS.oldEscZ_fitsFork_zk_raise_len`: so for `N₀′ ≤ N₀ + 109·2^{d₀}`, as `Q₀ ≥ 218`; at one table,
+  `N₀′ ≤ 110·N₀`.
 -/
 
 namespace Claims.Flock
@@ -210,5 +212,44 @@ theorem oldEscZ_fitsFork_zk_raise (rel : Readable.Parsed → Readable.Relation) 
     nlinarith
   rw [hk]
   linarith
+
+/-- C-Flock ZK's level 0 reads at least 218 positions at every `m` it serves. -/
+theorem m1_queries₀_ge : ∀ m : Fin 11,
+    218 ≤ ((FlockSoundness.Accounting.m1Schedule (m.val + 25)).levels.headD default).queries := by
+  decide +kernel
+
+/-- **The old masked escapes fit the masked weight at `N₀′ ≤ N₀ + 109·2^{d₀}`**, table 0's length `2^{d₀}`: level 0
+reads at least 218 positions (`m1_queries₀_ge`) of a word at least table 0's length (`kFits_all`), so this is within
+`oldEscZ_fitsFork_zk_raise`'s `N₀ + 2^{d₀}·Q₀/2`. At one table, `N₀′ ≤ 110·N₀`. -/
+theorem oldEscZ_fitsFork_zk_raise_len (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
+    (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables true x).head? = some (spec, st))
+    (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) {sch : FlockSoundness.Accounting.Schedule}
+    (hsch : sch = FlockSoundness.Accounting.m1Schedule st.m) (Np : ℕ)
+    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+    (j : Claims.Flock.IZ sch.levels.length → Fin ((deployZk rel).V.k x)) (hj : Function.Injective j)
+    (ev : Claims.Flock.IZ sch.levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
+      (Fin ((deployZk rel).V.k x) → Coin) → Prop)
+    (ev₁ : Ω → (Fin ((deployZk rel).V.k x) → Coin) → Prop)
+    (tied : ∀ i ω s s', ev i ω s s' → Claims.TiedColl sha512
+      ((Claims.run sha512 P (deployZk rel).V x ω s).vLog ++
+        (Claims.run sha512 P (deployZk rel).V x ω (Claims.forkCoins (j i) s s')).vLog))
+    (tied₁ : ∀ ω s, ev₁ ω s → Claims.TiedColl sha512 (Claims.run sha512 P (deployZk rel).V x ω s).vLog)
+    (N₀' C' : Claims.Msg → ℝ) (hN : N₀' x ≤ N₀ true x + 109 * tableLen true st) :
+    (Claims.Flock.oldEscZ sha512 (deployZk rel).V P x sch Np j ev ev₁ tied tied₁).FitsFork
+      ((deployZk rel).weight x) (((deployZk rel).raise N₀' C').k x) := by
+  refine oldEscZ_fitsFork_zk_raise rel P x h0 h25 h35 hsch Np hNp j hj ev ev₁ tied tied₁ N₀' C' (hN.trans ?_)
+  have hq : (218 : ℝ) ≤ (sch.levels.headD default).queries := by
+    have := m1_queries₀_ge ⟨st.m - 25, by omega⟩
+    simp only [Nat.sub_add_cancel h25] at this
+    rw [hsch]
+    exact_mod_cast this
+  have hfits := kFits_all true st.m
+  simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
+  have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
+    pow_le_pow_right₀ (by norm_num) hfits
+  have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.m).d := rfl
+  have h2 : (0 : ℝ) ≤ 2 ^ (Claims.Flock.zkLevel0 st.m).d := by positivity
+  rw [hlen]
+  nlinarith
 
 end FlockDeploy.KS
