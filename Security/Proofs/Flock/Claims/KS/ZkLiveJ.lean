@@ -17,10 +17,10 @@ acceptance with no level-0 opening off `C`, and table `j`'s events bounding its 
 `ZkSessJ` (`zkSessJ_of_liveJ`), so every table's bound (`zk_tableBoundJAt_of_liveJ`).
 
 At the deployed masked record, `T j` is C-Flock ZK's padded table of the statement's table `j` (`zkTabs`, `zkTab` at
-table `j`'s layout, link layout and `Zk.schedule`'s schedule), at C-Flock ZK's parameters (`zkTabs_m1`) and
-committed to table `j`'s model statement (`zkTabs_committed`). `ZkLiveJ x` is `ZkLiveAtJ` there at every layout, and
-`Flock.KS` at the deployed relation follows from it at every statement some run accepts and `ExtendJ`
-(`zk_KS_of_liveJ`), at every number of tables.
+table `j`'s layout, link layout and `Zk.schedule`'s schedule), at C-Flock ZK's parameters (`zkTab_m1`) and
+committed to table `j`'s model statement (`zkTab_committed`; together, `zk_atTabs`). `ZkLiveJ x` is `ZkLiveAtJ` there
+at every layout, and `Flock.KS` at the deployed relation follows from it at every statement some run accepts and
+`ExtendJ` (`zk_KS_of_liveJ`), at every number of tables.
 -/
 
 namespace FlockDeploy.KS
@@ -318,16 +318,32 @@ def ZkLiveJ (x : Claims.Msg) : Prop :=
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts),
     ZkLiveAtJ execArith Discharge.ZkExec.hs512 (wideJ true) x (zkTabs h0 L hz hk hlay)
 
-/-- **Every masked table's bound at a statement in scope, from the live sessions' bound**: at tables of full-width
-columns, where the statement parses in scope and sets up at least one table. Each table `j` has C-Flock ZK's `m`,
-`k_log`, a layout and a link layout (`zk_scopeJ`), and `Zk.schedule` accepts its `m` (`zk_schedule_ok`), so `zkTab`
-there is at C-Flock ZK's parameters (`zkTab_m1`) and a table that does not extract table `j` is not committed to it
-(`zk_not_committedJ`, `zkTab_committed`). -/
-theorem zk_tableBoundJAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
+/-- **C-Flock ZK's padded tables at a statement in scope**: where the statement parses in scope and sets up at least
+one table, each table `j` has C-Flock ZK's `m`, `k_log`, a layout and a link layout (`zk_scopeJ`), and `Zk.schedule`
+accepts its `m` (`zk_schedule_ok`), so `zkTabs` there has every property `zk_tableBoundJAt_of_liveJ` asks of the
+masked tables: table `j` of the setup is `stJ h0 j`, `zkTab` is at C-Flock ZK's parameters (`zkTab_m1`), and a table
+of full-width columns that does not extract table `j` is not committed to it (`zk_not_committedJ`,
+`zkTab_committed`). -/
+theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (hl : ZkLiveJ x) :
-    Claims.Flock.TableBoundJAt sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) x := by
+    {B : (ℕ → TabZK 𝔽 spec.mPts) → Prop}
+    (hB : ∀ T : ℕ → TabZK 𝔽 spec.mPts,
+      Claims.Flock.nTab (deployZk Readable.relation) x = (tables true x).length →
+      (∀ j < (tables true x).length, (tables true x)[j]? = some (spec, stJ h0 j)) →
+      (∀ j < (tables true x).length, 25 ≤ (stJ h0 j).m ∧ (stJ h0 j).m ≤ 35 ∧
+        (T j).sch = Accounting.m1Schedule (stJ h0 j).m ∧ (T j).t = Accounting.m1Pad (stJ h0 j).m ∧ (T j).e = 2 ∧
+        (T j).S.shape spec.mPts = acct spec (stJ h0 j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
+        (T j).N ≤ Claims.Flock.Numbers.padDomain
+          (Zk.PadLayout.new (stJ h0 j).m (stJ h0 j).c.kLog (Claims.Flock.zkSched (stJ h0 j).m).1.k0)) →
+      (∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, wideJ true x j (C p)) →
+        ¬ Claims.Flock.GoodTableAt (deployZk Readable.relation) (wordLenJ true) x j C →
+          ¬ (T j).Committed execArith (Claims.Flock.oracleOf C)) → B T) :
+    ∃ (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+      (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+      (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+      (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts),
+      B (zkTabs h0 L hz hk hlay) := by
   have hsc : ∀ j (h : j < sts.size), 25 ≤ sts[j].m ∧ sts[j].m ≤ 35 ∧ sts[j].c.kLog ≤ 27 ∧
       ∃ L : Layout sts[j], (L.model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts :=
     fun j h => zk_scopeJ hs hin hset h
@@ -340,9 +356,7 @@ theorem zk_tableBoundJAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     simp
   have hn : Claims.Flock.nTab (deployZk Readable.relation) x = (tables true x).length := by
     rw [Claims.Flock.nTab_of_parse (D := deployZk Readable.relation) hs, tables_length hs (by rw [hset]; rfl)]
-  refine zk_tableBoundJAt_of_liveJ execArith execArith_correct Discharge.ZkExec.hs512 Readable.relation (wideJ true)
-    hn (stJ h0) (fun j hj => ?_) (zkTabs h0 L hz hk hlay) (fun j hj => ?_) (fun j hj C hw hg hc => ?_)
-    (hl ins spec sts hset h0 L hz hk hlay)
+  refine ⟨L, hz, hk, hlay, hB _ hn (fun j hj => ?_) (fun j hj => ?_) (fun j hj C hw hg hc => ?_)⟩
   · rw [hlen] at hj
     refine tables_getElem? hset ?_
     rw [stJ, dite_eq_left hj]
@@ -356,6 +370,21 @@ theorem zk_tableBoundJAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     rw [zkTabs_of_lt h0 L hz hk hlay hj] at hc
     exact zk_not_committedJ hs hin hset hj (L j hj) C hw hg
       ((zkTab_committed (L j hj) (hz j hj) (hk j hj) (hlay j hj) _).1 hc)
+
+/-- **Every masked table's bound at a statement in scope, from the live sessions' bound**: at tables of full-width
+columns, where the statement parses in scope and sets up at least one table, `zk_tableBoundJAt_of_liveJ` at C-Flock
+ZK's padded tables (`zk_atTabs`). -/
+theorem zk_tableBoundJAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (hl : ZkLiveJ x) :
+    Claims.Flock.TableBoundJAt sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) x := by
+  obtain ⟨L, hz, hk, hlay, hb⟩ := zk_atTabs hs hin hset h0
+    (B := fun T => ZkLiveAtJ execArith Discharge.ZkExec.hs512 (wideJ true) x T →
+      Claims.Flock.TableBoundJAt sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) x)
+    fun T hn hst hT hnc => zk_tableBoundJAt_of_liveJ execArith execArith_correct Discharge.ZkExec.hs512
+      Readable.relation (wideJ true) hn (stJ h0) hst T hT hnc
+  exact hb (hl ins spec sts hset h0 L hz hk hlay)
 
 /-- **Every masked table's bound at full-width columns, from the live sessions' bound** at the statements some run
 accepts, at every number of tables. -/
