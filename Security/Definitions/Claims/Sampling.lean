@@ -652,6 +652,24 @@ def leafLayer (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option S
   | some s => Cm.layer H s.roots w.vals
   | none => []
 
+/-- **A masked deployment**: a deployment with the reference prover's tape in its masked runs, a nonce and the rest
+(`Nonce`, `Rest`, finite types), read as its tape `tapeOf (ν, r)`, and the simulator `ZK` is at (`S`). -/
+structure ZkDeploy (Coin Col T : Type) extends Deploy Coin Col T where
+  Nonce : Type
+  Rest : Type
+  [nonceFin : Fintype Nonce]
+  [nonceNe : Nonempty Nonce]
+  [restFin : Fintype Rest]
+  [restNe : Nonempty Rest]
+  tapeOf : Nonce × Rest → Tape
+  S : SimLeak
+
+attribute [instance] ZkDeploy.nonceFin ZkDeploy.nonceNe ZkDeploy.restFin ZkDeploy.restNe
+
+/-- **The masked deployment's reference prover** at the witness `w`: `D.P w` at the tape `tapeOf (ν, r)`. -/
+def ZkDeploy.prover {Coin Col T : Type} (D : ZkDeploy Coin Col T) (w : Wit) : Prover (D.Nonce × D.Rest) :=
+  (D.P w).comap D.tapeOf
+
 /-! ## 6. Claims -/
 
 section Claims
@@ -735,18 +753,18 @@ def Complete (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
 /-- **Sampling: the readable scope is the verifier's.** -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
 
-/-- **Sampling: zero knowledge, relative to the published leaf layer**, of the honest prover with masked sessions when
-no unit is faulty, against every malicious verifier of the sampled verifier's rounds. This is `ZKmalR` with the
+/-- **Sampling: zero knowledge, relative to the published leaf layer**, of the masked deployment's reference prover
+(`D.prover`, the deployment's `D.P` on its masked tapes) with masked sessions when no unit is faulty, at the deployment's
+simulator (`D.S`), against every malicious verifier of the sampled verifier's rounds. This is `ZKmalR` with the
 simulator given the trace's leaf layer under the roots (`leafLayer`), which the protocol publishes: the leakage is that
 whole layer, a fixed function of `(x, w)`. `ZKmalR` runs one simulator per statement, so the claim holds at every
 assignment `l` of a leaf layer to each statement, on the honest pairs whose layer is `l x`. Its binding term is `γ`
 times `Fork`'s collision probability among the honest prover's calls in two real runs on one nonce, never the
 simulator's calls. -/
-def ZK {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (D : Deploy Coin Col T)
-    (P : Wit → Prover (N × Ω)) (S : SimLeak) (εzk γ : Msg → ℝ) : Prop :=
+def ZK (H : Msg → Msg) (D : ZkDeploy Coin Col T) (εzk γ : Msg → ℝ) : Prop :=
   D.flock.zk = true ∧ ∀ l : Msg → List Msg,
-    ZKmalR H D.V.k P (fun x w => Rhon H D.commit D.parse D.partition x w ∧ leafLayer H D.commit D.parse x w = l x)
-      (S.given l) εzk γ
+    ZKmalR H D.V.k D.prover
+      (fun x w => Rhon H D.commit D.parse D.partition x w ∧ leafLayer H D.commit D.parse x w = l x) (D.S.given l) εzk γ
 
 /-- **Sampling: bits** at every `δ ≥ 0`, `λ_δ = min(log₂(1/κ_δ), 255.5 − ½ log₂ γ, 256 − log₂(2c)) − log₂ 3`, at every
 decoder that lists every trace within Flock's radius. -/

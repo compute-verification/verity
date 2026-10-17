@@ -137,6 +137,11 @@ def OC.eval (H : Msg → Msg) {α : Type} : OC α → α × List (Msg × Msg)
   | .ret a => (a, [])
   | .query q k => ((OC.eval H (k (H q))).1, (q, H q) :: (OC.eval H (k (H q))).2)
 
+/-- `OC`'s bind: run `x`, then `f` on its result, every query in order. -/
+def OC.bind {α β : Type} : OC α → (α → OC β) → OC β
+  | .ret a, f => f a
+  | .query q k, f => .query q fun r => OC.bind (k r) f
+
 /-! ## Interaction -/
 
 /-- `b_j ∈ Msg ∪ {acc, rej}`. -/
@@ -149,6 +154,9 @@ inductive Out where
 /-- A prover with tape `Ω`: `a_j = P*^H(x, a_1, b_1, …, b_{j−1}; ω)`. -/
 structure Prover (Ω : Type) where
   next : Msg → List (Msg × Msg) → Ω → OC Msg
+
+/-- `P` on the tapes `Ω'`, each read as `P`'s tape `f ω`. -/
+def Prover.comap {Ω Ω' : Type} (P : Prover Ω) (f : Ω' → Ω) : Prover Ω' := ⟨fun x hist ω => P.next x hist (f ω)⟩
 
 /-- A verifier with coins `Coin`: `b_j = V^H(x, a_1, …, a_j; r_1, …, r_j)`; it decides within `k(x)` rounds. -/
 structure Verifier (Coin : Type) where
@@ -666,6 +674,43 @@ instance Deploy.instNonemptyTape {Coin Col T : Type} (D : Deploy Coin Col T) : N
 /-- The deployed decoder's list, without its count. -/
 def Deploy.decode {Coin Col T : Type} (D : Deploy Coin Col T) (os : List (ℕ × Col)) : List T := (D.dec os).1
 
+/-- **A masked record**: a record with what its masked interaction (`--zk`) adds, which commits every coin at `Hello`
+(`coin-tree/hm96-sha512/v2`) and opens them round by round. The reference prover's tape there is a nonce, which its
+`Hello` sends, and the rest (`Nonce`, `Rest`, finite types), read as its tape `tapeOf (ν, r)`; `hello` is its `Hello` at
+a nonce and `abort` its message once an opening fails; `chk x ν ρ j m` is its check of the verifier's opening `m` of coin
+`j` against the commitment `ρ`, an oracle program whose `H` calls are the prover's, and `coinOf m` the coin `m` opens, as
+the public-coin verifier `V` sends it. `S` is the simulator `ZK` is at. -/
+structure ZkDeploy (Coin Col T : Type) extends Deploy Coin Col T where
+  Nonce : Type
+  Rest : Type
+  [nonceFin : Fintype Nonce]
+  [nonceNe : Nonempty Nonce]
+  [restFin : Fintype Rest]
+  [restNe : Nonempty Rest]
+  tapeOf : Nonce × Rest → Tape
+  hello : Msg → Nonce → Msg
+  abort : Msg
+  chk : Msg → Nonce → Msg → ℕ → Msg → OC Bool
+  coinOf : Msg → Msg
+  S : Simulator
+
+attribute [instance] ZkDeploy.nonceFin ZkDeploy.nonceNe ZkDeploy.restFin ZkDeploy.restNe
+
+/-- Whether every opening from coin `j` on passes `chk`, checked in order up to the first that fails. -/
+def allPass (chk : ℕ → Msg → OC Bool) : ℕ → List Msg → OC Bool
+  | _, [] => .ret true
+  | j, m :: ms => (chk j m).bind fun b => if b then allPass chk (j + 1) ms else .ret false
+
+/-- **The masked record's reference prover** in its masked interaction, at the witness `w` and the tape `(ν, r)`:
+`Hello` at `ν` first; then, if every opening so far passes `chk` against the commitment `ρ` (the verifier's answer to
+`Hello`), the record's reference prover `D.P w` at the history with each opening read as its coin (`coinOf`), at the tape
+`tapeOf (ν, r)`; else `abort`. -/
+def ZkDeploy.prover {Coin Col T : Type} (D : ZkDeploy Coin Col T) (w : Wit) : Prover (D.Nonce × D.Rest) :=
+  ⟨fun x hist ω => match hist with
+    | [] => .ret (D.hello x ω.1)
+    | (_, ρ) :: ops => (allPass (D.chk x ω.1 ρ) 0 (ops.map Prod.snd)).bind fun ok =>
+        if ok then (D.P w).next x (ops.map fun p => (p.1, D.coinOf p.2)) (D.tapeOf ω) else .ret D.abort⟩
+
 section Claims
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
@@ -701,13 +746,13 @@ def Complete (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
 /-- **Flock: the readable scope is the verifier's.** -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
 
-/-- **Flock: zero knowledge** of the masked verifier's honest prover, against every malicious verifier of the deployed
-interaction's `D.V.k + 1` rounds: the extra round is the `Hello`, at which the masked verifier sends its commitment to
-every coin, and then come `D.V`'s rounds, which open the coins. `D.V` models the coins in the clear; the commitment's
-hiding is the live-coins assumption of `trustedBase`. The prover's tape is the nonce its `Hello` sends and the rest. -/
-def ZK {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (D : Deploy Coin Col T)
-    (P : Wit → Prover (N × Ω)) (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
-  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) P (R D.parse) S εzk γ
+/-- **Flock: zero knowledge** of the masked record's reference prover (`D.prover`, the record's `D.P` in the masked
+interaction) at the record's simulator (`D.S`), against every malicious verifier of the deployed interaction's
+`D.V.k + 1` rounds: the extra round is the `Hello`, at which the masked verifier sends its commitment to every coin, and
+then come `D.V`'s rounds, which open the coins. `D.V` models the coins in the clear; the commitment's hiding is the
+live-coins assumption of `trustedBase`. The prover's tape is the nonce its `Hello` sends and the rest. -/
+def ZK (H : Msg → Msg) (D : ZkDeploy Coin Col T) (εzk γ : Msg → ℝ) : Prop :=
+  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) D.prover (R D.parse) D.S εzk γ
 
 /-- **Flock: bits**, `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ) − 1`, at every decoder that meets the spec, the one decoder
 of every table. -/
