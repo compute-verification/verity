@@ -237,4 +237,7 @@ outcome `verify --zk` accepts at the setup at the draw (`FlockSoundness.Discharg
 `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_entries`). There, where the deployed masked reader looks up no column
 of table `j` off `C`, table `j`'s accepted output opens no position off `C` on a witness lane without a self-clash
 (`ZkDecodeW`: `FlockSoundness.Discharge.Composed.ZkTxNoOff`, `FlockSoundness.Discharge.Composed.not_offW_of_entries`,
-`FlockSoundness.Discharge.Composed.runsAtZCJ_live_offW`, `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_offW`). -/
+`FlockSoundness.Discharge.Composed.runsAtZCJ_live_offW`, `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_offW`),
+and the deployed decoders are right at that verdict on those outcomes, at a masked statement in scope
+(`FlockDeploy.KS.OkOffWJ`, `FlockDeploy.KS.AccTxJ`, `FlockDeploy.KS.decodesTableW_zkTabs`,
+`FlockDeploy.KS.decodesTableHW_zkTabs`, `FlockDeploy.KS.decodesTableW_deploy`). -/
