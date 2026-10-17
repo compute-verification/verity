@@ -146,6 +146,10 @@ One-sided dither against `adopted-bd-lm`'s both-sided: `side-lin-act` and `side-
 lm_head's weights, or their activations, on ±127; `side-qk-q` and `side-qk-k` round K, or Q, in Q Kᵀ; each `-dB`
 (B = 2, 3, 4) is `adopted-bd-lm-dB` with the same operand rounded; `side-act-k[-d2]` rounds both the weights and Q
 (the record's sides without U). `dither_plot.py` draws perplexity against B per side choice.
+`co32c-uN` (N = 8, 16, 32, 64) is `adopted-bd-lm` with the linears' and lm_head's weights capped at ±(127 − N): co32c's
+linears with the peeled U on ±N (`benchmarks/pouw/theory/narrow_u.py`) and design A's attention.
+`frontier_plot.py` draws perplexity against core ε (`machine-model eps --checking full`) under each reading of the table
+route, and writes the table.
 Any other file passes as a path.
 
 ## Adding an intervention
