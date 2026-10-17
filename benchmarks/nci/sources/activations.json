@@ -428,6 +428,38 @@
   ]
  },
  {
+  "id": "fishman-2024-fp8-trillion",
+  "title": "Scaling FP8 training to trillion-token LLMs",
+  "authors": "Maxim Fishman, Brian Chmiel, Ron Banner, Daniel Soudry",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2409.12517",
+  "topics": [
+   "activations",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "fishman-2024-fp8-trillion/1",
+    "claim": "A 7B model trained in FP8 on 2T tokens, with FP8 Adam moments, matches BF16 with up to 34% higher throughput.",
+    "quote": "we successfully train a 7B parameter model using FP8 precision on 256 Intel Gaudi2 accelerators, achieving on-par results with the BF16 baseline while delivering up to a ∼ 34% throughput improvement",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "activation and optimizer-moment precision"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "FP8 matmuls and FP8 optimizer moments at m_A about 1 per FLOP, about 8.4e22 FLOP.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "he-2025-tahquant",
   "title": "TAH-Quant: Effective Activation Quantization in Pipeline Parallelism over Slow Network",
   "authors": "Guangxin He, Yuan Cao, Yutong He, Tianyi Bai, Kai Chen, Kun Yuan, et al.",
@@ -816,6 +848,62 @@
   ]
  },
  {
+  "id": "liu-2025-cola",
+  "title": "CoLA: Compute-Efficient Pre-Training of LLMs via Low-Rank Activation",
+  "authors": "Ziyue Liu, Ruijie Zhang, Zhengyang Wang, Mingsong Yan, Zi Yang, Paul Hovland et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2502.10940",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2025-cola/1",
+    "claim": "CoLA's low-rank bottleneck layers halve computing cost without hurting performance (60M-7B).",
+    "quote": "The default rank choices reduce half the computing cost, without harming the model performance.",
+    "location": "Section 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x",
+      "condition": "CoLA vs full-rank, compute to equal perplexity"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "m_A about 2 on GaLore-style short budgets; low-rank activations also narrow internal boundaries.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "micikevicius-2022-fp8",
+  "title": "FP8 Formats for Deep Learning",
+  "authors": "Paulius Micikevicius, Dusan Stosic, Neil Burgess, Marius Cornea, Pradeep Dubey, Richard Grisenthwaite et al.",
+  "year": 2022,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2209.05433",
+  "topics": [
+   "activations",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "micikevicius-2022-fp8/1",
+    "claim": "FP8 (E4M3/E5M2) training matches 16-bit result quality on models up to 175B with unchanged hyperparameters.",
+    "quote": "We demonstrate the efficacy of the FP8 format on a variety of image and language tasks, effectively matching the result quality achieved by 16-bit training sessions.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "8-bit activations and weights in matmuls at m_A about 1 per FLOP.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "ramasinghe-2025-protocolmodels",
   "title": "Protocol Models: Scaling Decentralized Training with Communication-Efficient Model Parallelism",
   "authors": "Sameera Ramasinghe, Thalaiyasingam Ajanthan, Gil Avraham, Yan Zuo, Alexander Long",
@@ -941,6 +1029,30 @@
     "grade": "measured-small",
     "bears_on": "100x requires the architectural change; post-hoc codecs on standard models do not reach it.",
     "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "raposo-2024-mod",
+  "title": "Mixture-of-Depths: Dynamically allocating compute in transformer-based language models",
+  "authors": "David Raposo, Sam Ritter, Blake Richards, Timothy Lillicrap, Peter Conway Humphreys, Adam Santoro",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2404.02258",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "raposo-2024-mod/1",
+    "claim": "Mixture-of-Depths can improve the training objective by up to 1.5% at equal training FLOPs and wall-clock.",
+    "quote": "one can train an MoD transformer that improves upon vanilla transformers by as much as 1.5% on the final log probability training objective for equivalent training FLOPs (isoFLOP)",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Token-level conditional depth: m_A slightly above 1.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1402,6 +1514,54 @@
     "grade": "measured-at-scale",
     "bears_on": "1 bit per KV entry is reachable only with clear quality loss; the low end of b_a.kv is ~1-1.25 bits.",
     "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "zhu-2024-hyperconnections",
+  "title": "Hyper-Connections",
+  "authors": "Defa Zhu, Hongzhi Huang, Zihao Huang, Yutao Zeng, Yunyao Mao, Banggu Wu et al.",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2409.19606",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhu-2024-hyperconnections/1",
+    "claim": "Hyper-connections make OLMoE-1B-7B converge 1.8x faster than residual connections, with the gain kept at 500B tokens.",
+    "quote": "Our method converges 1.8 times faster compared to the baseline and maintains a significant advantage at the 500B tokens.",
+    "location": "Figure 1 caption",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.8,
+      "unit": "x",
+      "condition": "convergence speed vs residual, OLMoE-1B-7B, 500B tokens"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "m_A about 1.8 for an MoE at 1B active parameters.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "zhu-2024-hyperconnections/2",
+    "claim": "The hidden state is replicated n times into an n x d hyper hidden matrix (n is the expansion rate).",
+    "quote": "Initially, h0 ∈ Rd is replicated n times to form the initial hyper hidden matrix",
+    "location": "Section 2.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "x",
+      "condition": "expansion rate n of the OLMoE-1B-7B-DHC result"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "The residual stream crossing a layer boundary is n times wider, so boundary bits per token grow n-fold.",
+    "from_review": "scaling-corpus"
    }
   ]
  },

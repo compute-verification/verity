@@ -1,6 +1,8 @@
 """A library of training algorithms and what the NCI policy costs each, with where every block's reads go.
 
-An algorithm (``algorithms.json``) is described by architecture-agnostic traits: the fraction of parameters it
+An algorithm (``algorithms.json``) carries its measured scaling (``scaling``: compute-equivalent multipliers over a
+dense AdamW Chinchilla-optimal reference, each citing findings, and ``multiplier``, the one at the largest compute) and
+its ``convention`` (see ``CONVENTIONS``), and is described by architecture-agnostic traits: the fraction of parameters it
 updates, the bits of state a reader needs per updated parameter and whether that state splits across slices of the
 model, the width and precision of what crosses a layer boundary and how often per token, the work per token, the
 novel data a token brings, and any decoding work. A model (``models.json``) is a shape. A policy is a calibration
@@ -52,9 +54,12 @@ TRAITS = {
     "fanout_override": "the theorem's e if not the model's fan-out",
 }
 MODEL_FIELDS = ("n_total", "n_active", "d_model", "entry_fee", "fanout")
-FAMILIES = frozenset({"reference", "architecture", "optimizer", "data", "parallel-communication", "local-learning",
-                      "fine-tuning", "low-rank", "rl-adapter", "seed-based", "distillation", "sparsity-moe",
-                      "precision", "growth-reuse", "retrieval"})
+FAMILIES = frozenset({"reference", "architecture", "optimizer", "data", "objective", "parallel-communication",
+                      "local-learning", "fine-tuning", "low-rank", "rl-adapter", "seed-based", "zeroth-order",
+                      "distillation", "sparsity-moe", "precision", "growth-reuse", "retrieval"})
+#: ``attacker``: state at the cheapest rate an attacker could use (weights at the retained-quality rate, no optimizer
+#: state); ``as-published``: state at the precision the method is published with (weights and optimizer moments).
+CONVENTIONS = frozenset({"attacker", "as-published"})
 
 
 def load_json(name: str) -> list[dict]:
@@ -76,8 +81,24 @@ class Profile:
     decode: float          # work to decode the whole update
 
 
-def profile(alg: dict, model: dict, policy: dict, data: str) -> Profile:
-    tr = alg["traits"]
+ATTACKER_RATES = {"state_bits_per_param": "b_w.pretrained/frontier-lossy:central",
+                  "boundary_bits": "b_a.activation/boundary-training:central"}
+
+
+def traits(alg: dict, convention: str = "attacker") -> dict:
+    """An algorithm's traits under a convention: ``as-published`` keeps them; ``attacker`` caps its state and boundary
+    bits at the literature's central rates (``ATTACKER_RATES``), the cheapest an attacker could use at about the same
+    quality, so that every algorithm is compared alike."""
+    tr = dict(alg["traits"])
+    if convention == "attacker":
+        params = catalog.load("parameters")
+        for key, ref in ATTACKER_RATES.items():
+            tr[key] = min(tr[key], catalog.resolve(ref, params))
+    return tr
+
+
+def profile(alg: dict, model: dict, policy: dict, data: str, convention: str = "attacker") -> Profile:
+    tr = traits(alg, convention)
     if tr["state_splits"]:
         U = tr["state_bits_per_param"] * model["n_active"] * tr["updated_fraction"]
     else:
@@ -93,8 +114,8 @@ def construct(p: Profile, K: float, Gamma: float) -> dict:
     return slowdown.search(p.U_slice_total, p.splits, p.flops, p.w, p.t, p.decode, K, Gamma)
 
 
-def _theorem_inputs(alg: dict, model: dict, p: Profile) -> dict:
-    tr = alg["traits"]
+def _theorem_inputs(alg: dict, model: dict, p: Profile, convention: str) -> dict:
+    tr = traits(alg, convention)
     n_updated = tr["updated_fraction"] * model["n_total"]
     U_bits = tr["description_bits"] if not tr["state_splits"] else tr["state_bits_per_param"] * n_updated
     return {"kappa": tr["kappa"], "b_w": tr["state_bits_per_param"], "b_a": tr["boundary_bits"],
@@ -104,42 +125,48 @@ def _theorem_inputs(alg: dict, model: dict, p: Profile) -> dict:
             "flops_per_token": p.flops}
 
 
-def lower(alg: dict, model: dict, policy: dict, data: str) -> tuple[float, str]:
+def lower(alg: dict, model: dict, policy: dict, data: str, convention: str = "attacker") -> tuple[float, str]:
     if not alg["traits"]["theorem_applies"]:
         return 1.0, "the thread theorem does not cover this algorithm"
     if data == "committed":
         return 1.0, "data committed: the theorem's containment hypothesis fails (the coverage gap)"
-    p = profile(alg, model, policy, data)
+    p = profile(alg, model, policy, data, convention)
     # A block that holds a token's whole state generates the tokens it does not read (rollouts), so a thread value
     # costs it no more than the novel data per token.
     token_rate = p.t if p.U_slice_total <= policy["K"] else policy["b_tok"]
-    return slowdown.thread_lower(_theorem_inputs(alg, model, p), policy["K"], policy["Gamma"], token_rate), \
+    return slowdown.thread_lower(_theorem_inputs(alg, model, p, convention), policy["K"], policy["Gamma"], token_rate), \
         slowdown.THREAD_THEOREM
 
 
-def query(alg_id: str, model_id: str, policy_id: str, data: str = "novel") -> dict:
+def query(alg_id: str, model_id: str, policy_id: str, data: str = "novel", convention: str = "attacker") -> dict:
     """The bracket and the read breakdown for one algorithm on one model under one policy."""
     alg, model, policy = by_id("algorithms")[alg_id], by_id("models")[model_id], by_id("calibrations")[policy_id]
-    p = profile(alg, model, policy, data)
+    p = profile(alg, model, policy, data, convention)
     c = construct(p, policy["K"], policy["Gamma"])
-    lo, why = lower(alg, model, policy, data)
+    lo, why = lower(alg, model, policy, data, convention)
     total = sum(c["reads"].values())
-    return {"algorithm": alg_id, "model": model_id, "policy": policy_id, "data": data, "lower": lo, "lower_basis": why,
+    m = (alg.get("multiplier") or {}).get("value")
+    return {"algorithm": alg_id, "model": model_id, "policy": policy_id, "data": data, "convention": convention,
+            "multiplier": m, "efficiency_achievable": m / c["rho"] if m else None,
+            "efficiency_ceiling": m / lo if m else None, "lower": lo, "lower_basis": why,
             "upper": c["rho"], "slices": 1 / c["phi"], "tokens_per_block": c["tokens"],
             "read_shares": {k: v / total for k, v in c["reads"].items()}, "reads": c["reads"], "work": c["work"]}
 
 
-def data_importance(alg_id: str, model_id: str, policy_id: str) -> dict:
+def data_importance(alg_id: str, model_id: str, policy_id: str, convention: str = "attacker") -> dict:
     """How big a deal training data is: the cost with data novel over the cost with it committed, and where a block's
     reads go when it is novel."""
-    novel, committed = query(alg_id, model_id, policy_id, "novel"), query(alg_id, model_id, policy_id, "committed")
+    novel = query(alg_id, model_id, policy_id, "novel", convention)
+    committed = query(alg_id, model_id, policy_id, "committed", convention)
     return {"algorithm": alg_id, "model": model_id, "policy": policy_id, "factor": novel["upper"] / committed["upper"],
             "upper_committed": committed["upper"], "upper_novel": novel["upper"], "read_shares": novel["read_shares"]}
 
 
 def problems() -> list[str]:
     out = []
-    sources = {s["id"] for s in catalog.load("sources")}
+    srcs = catalog.load("sources")
+    sources = {s["id"] for s in srcs}
+    findings = catalog.findings(srcs)
     for m in load_json("models"):
         for f in MODEL_FIELDS:
             if not isinstance(m.get(f), (int, float)) or m[f] <= 0:
@@ -164,6 +191,15 @@ def problems() -> list[str]:
         for s in a.get("sources", []):
             if s not in sources:
                 out.append(f"algorithm {aid}: source {s} is not in sources/")
+        if a.get("convention") not in CONVENTIONS:
+            out.append(f"algorithm {aid}: convention must be one of {sorted(CONVENTIONS)}")
+        for e in a.get("scaling", []):
+            for ref in e.get("evidence", []):
+                if ref not in findings:
+                    out.append(f"algorithm {aid}: scaling evidence {ref} is no finding")
+        m = a.get("multiplier")
+        if m is not None and not isinstance(m.get("value"), (int, float)):
+            out.append(f"algorithm {aid}: multiplier needs a value")
     return out
 
 
@@ -178,23 +214,36 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--model", default="kimi-k2")
     t.add_argument("--policy", default="kimi-k2-1m-raw")
     t.add_argument("--data", choices=("novel", "committed"), default="novel")
+    t.add_argument("--convention", choices=sorted(CONVENTIONS), default="attacker")
     d = sub.add_parser("data", help="how big a deal training data is: every algorithm on every model")
     d.add_argument("--policy", default="kimi-k2-1m-raw")
     d.add_argument("--algorithm", action="append")
+    d.add_argument("--convention", choices=sorted(CONVENTIONS), default="attacker")
     q = sub.add_parser("query", help="one algorithm on one model under one policy, as JSON")
     q.add_argument("algorithm")
     q.add_argument("--model", default="kimi-k2")
     q.add_argument("--policy", default="kimi-k2-1m-raw")
     q.add_argument("--data", choices=("novel", "committed"), default="novel")
+    q.add_argument("--convention", choices=sorted(CONVENTIONS), default="attacker")
     args = ap.parse_args(argv)
     if args.cmd == "query":
-        print(json.dumps(query(args.algorithm, args.model, args.policy, args.data), indent=1))
+        print(json.dumps(query(args.algorithm, args.model, args.policy, args.data, args.convention), indent=1))
     elif args.cmd == "table":
-        print(f"{'algorithm':26} {'lower':>8} {'upper':>9} {'slices':>8}  reads: state / activations / data")
+        print("m: measured multiplier over the reference recipe; efficiency = m / slowdown (achievable at the "
+              "construction, ceiling at the lower bound)")
+        print(f"{'algorithm':32} {'conv':>4} {'m':>6} {'lower':>8} {'upper':>9} {'eff. achv':>10} {'eff. ceil':>10}  "
+              "reads: state / activations / data")
         for a in load_json("algorithms"):
-            r = query(a["id"], args.model, args.policy, args.data)
+            try:
+                r = query(a["id"], args.model, args.policy, args.data, args.convention)
+            except ValueError:
+                print(f"{a['id']:32} no compliant construction in the family")
+                continue
             s = r["read_shares"]
-            print(f"{a['id']:26} {_fmt(r['lower']):>8} {_fmt(r['upper']):>9} {_fmt(r['slices']):>8}  "
+            m = r["multiplier"]
+            eff = (lambda x: _fmt(x) if x else "-")
+            print(f"{a['id']:32} {a['convention'][:4]:>4} {(_fmt(m) if m else '-'):>6} {_fmt(r['lower']):>8} "
+                  f"{_fmt(r['upper']):>9} {eff(r['efficiency_achievable']):>10} {eff(r['efficiency_ceiling']):>10}  "
                   f"{s['state']:6.1%} / {s['activations']:6.1%} / {s['data']:6.1%}")
     else:
         algs = args.algorithm or [a["id"] for a in load_json("algorithms")]
@@ -205,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
             cells = []
             for m in models:
                 try:
-                    cells.append(_fmt(data_importance(a, m, args.policy)["factor"]))
+                    cells.append(_fmt(data_importance(a, m, args.policy, args.convention)["factor"]))
                 except ValueError:
                     cells.append("n/a")
             print(f"{a:26} " + " ".join(f"{c:>11}" for c in cells))

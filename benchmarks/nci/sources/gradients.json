@@ -304,6 +304,127 @@
     "grade": "measured-small",
     "bears_on": "Trend suggests the quality cost of compressed synchronization falls at frontier scale.",
     "from_review": "gradients"
+   },
+   {
+    "id": "charles-2025-diloco-scaling/4",
+    "claim": "DiLoCo with 4 replicas goes from 2% higher loss than data-parallel at 35M parameters to 0.26% at 2.4B.",
+    "quote": "DiLoCo with M = 4 goes from attaining 2% higher evaluation loss for N = 35M parameters to only a 0.26% higher evaluation loss at N = 2.4B parameters.",
+    "location": "Section 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.26,
+      "unit": "%",
+      "condition": "loss gap vs data-parallel, M = 4, 2.4B"
+     },
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "%",
+      "condition": "loss gap, M = 4, 35M"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "DiLoCo's m_A rises toward 1 with scale; about 0.95 at 2.4B by a Chinchilla-slope conversion.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "charles-2025-diloco-scaling/5",
+    "claim": "The scaling-law runs fix the synchronization cadence at H = 30.",
+    "quote": "Unless otherwise specified, we set H = 30.",
+    "location": "Section 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 30,
+      "unit": "steps",
+      "condition": "synchronization cadence H"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Sync interval of the measured multipliers.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "charles-2025-diloco-scaling/6",
+    "claim": "The laws predict DiLoCo with 2 replicas beats data-parallel above several billion parameters, confirmed at 4B and 10B.",
+    "quote": "Scaling laws predict DiLoCo with M = 2 achieves lower loss than Data-Parallel above several billion parameters, a phenomenon validated by both the largest model over which we performed tuning and our 4B and 10B model training runs (Table 5).",
+    "location": "Section 4, Finding 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "DiLoCo m_A crosses 1 at a few billion parameters (M = 2).",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "charles-2025-diloco-scaling/7",
+    "claim": "Data-parallel evaluation loss runs from 3.485 at 35M to 2.326 at 2.4B at Chinchilla allocation.",
+    "quote": "N 35M 90M 180M 335M 550M 1.3B 2.4B DiLoCo DP 3.485 3.167 2.950 2.784 2.653 2.460 2.326",
+    "location": "Table 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.95,
+      "unit": "x",
+      "condition": "derived m_A, DiLoCo M = 4, 2.4B"
+     },
+     {
+      "param": "other",
+      "value": 0.66,
+      "unit": "x",
+      "condition": "derived m_A, DiLoCo M = 4, 35M"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Slope 0.109 nats per e-fold of compute at 1.3-2.4B (0.168 at 35-90M) converts DiLoCo's gaps: M = 4 is m_A about 0.95 at 2.4B and 0.66 at 35M; M = 1-2 are about 1.0-1.1 at 2.4B.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "chen-2023-lion",
+  "title": "Symbolic Discovery of Optimization Algorithms",
+  "authors": "Xiangning Chen, Chen Liang, Da Huang, Esteban Real, Kaiyuan Wang, Yao Liu et al.",
+  "year": 2023,
+  "venue": "NeurIPS 2023",
+  "url": "https://arxiv.org/abs/2302.06675",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "chen-2023-lion/1",
+    "claim": "Lion keeps only momentum and matches or beats Adam on autoregressive and masked language modeling.",
+    "quote": "For autoregressive, masked language modeling, and fine-tuning, Lion exhibits a similar or better performance compared to Adam.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "One state word per parameter instead of two at m_A about 1.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "dettmers-2021-8bit-optimizers",
+  "title": "8-bit Optimizers via Block-wise Quantization",
+  "authors": "Tim Dettmers, Mike Lewis, Sam Shleifer, Luke Zettlemoyer",
+  "year": 2021,
+  "venue": "ICLR 2022",
+  "url": "https://arxiv.org/abs/2110.02861",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dettmers-2021-8bit-optimizers/1",
+    "claim": "Block-wise 8-bit optimizer states keep 32-bit performance, including 1.5B-parameter language modeling.",
+    "quote": "our 8-bit optimizers maintain 32-bit performance with a small fraction of the memory footprint on a range of tasks, including 1.5B parameter language modeling",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Adam state at 16 bits per parameter instead of 64, m_A about 1.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -472,6 +593,64 @@
     "grade": "measured-small",
     "bears_on": "Per-sync pseudo-gradient values tolerate 4 bits, so per-sync U per parameter is about 4 bits before entropy coding.",
     "from_review": "gradients"
+   },
+   {
+    "id": "douillard-2025-streamingdiloco/4",
+    "claim": "Streaming DiLoCo with overlapped FP4 communication matches data-parallel at billion scale with two orders of magnitude less bandwidth.",
+    "quote": "we show experimentally that we can distribute training of billion-scale parameters and reach similar quality as before, but reducing required bandwidth by two orders of magnitude.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "m_A about 1 with partial, staggered, 4-bit synchronization.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "douillard-2025-streamingdiloco/5",
+    "claim": "At 1B overtrained on Dolma, it beats data-parallel while exchanging 400x fewer bits.",
+    "quote": "The latter performs slightly better despite exchanging in total 400× fewer bits, reducing the peak bandwidth by 8×",
+    "location": "Table 1",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 400,
+      "unit": "x",
+      "condition": "total bits exchanged vs data-parallel, 1B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Communicated update bits fall 400x at m_A at or above 1.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "essential-2025-muon-practical",
+  "title": "Practical Efficiency of Muon for Pretraining",
+  "authors": "Essential AI, :, Ishaan Shah, Anthony M. Polloreno, Karl Stratos, Philip Monk et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.02222",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "essential-2025-muon-practical/1",
+    "claim": "Muon needs 10-15% fewer tokens than AdamW for identical loss, with the advantage constant or growing with batch size.",
+    "quote": "Concretely, Muon requires 10–15 % fewer tokens than AdamW to reach an identical loss and converts these savings into faster wall-clock convergence, with the advantage staying constant or growing as the batch size increases.",
+    "location": "Section 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.15,
+      "unit": "x",
+      "condition": "derived: 10-15% fewer tokens, 100M-4B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Muon m_A about 1.1-1.2 up to 4B parameters.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -657,6 +836,44 @@
     "grade": "theoretical",
     "bears_on": "The guarantee depends on a dense per-worker error memory that is re-added locally, so a block that cannot hold that memory must either read it (full width) or lose the guarantee.",
     "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "kasimbeg-2025-algoperf",
+  "title": "Accelerating Neural Network Training: An Analysis of the AlgoPerf Competition",
+  "authors": "Priya Kasimbeg, Frank Schneider, Runa Eschenhagen, Juhan Bae, Chandramouli Shama Sastry, Mark Saroufim et al.",
+  "year": 2025,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2502.15015",
+  "topics": [
+   "gradients",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kasimbeg-2025-algoperf/1",
+    "claim": "In AlgoPerf, Distributed Shampoo trained 28% faster in wall-clock than the NadamW baseline across eight workloads; Schedule-Free AdamW was 8% faster in the self-tuning ruleset.",
+    "quote": "provides significantly accelerated training than the external tuning Baseline, with an average speed-up of ≈ 28%. It was also ≈ 2% and 19% faster compared to the second- and third-place submissions, respectively. In the self-tuning ruleset, Schedule Free AdamW provides ≈ 8% faster hyperparameter-free",
+    "location": "Section 3, Table 6",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.28,
+      "unit": "x",
+      "condition": "Distributed Shampoo vs NadamW, wall-clock, 8 workloads"
+     },
+     {
+      "param": "other",
+      "value": 1.08,
+      "unit": "x",
+      "condition": "Schedule-Free AdamW vs self-tuning baseline"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Wall-clock optimizer gains on a fixed-hardware benchmark are about 1.1-1.3x.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -957,6 +1174,68 @@
   ]
  },
  {
+  "id": "liu-2023-sophia",
+  "title": "Sophia: A Scalable Stochastic Second-order Optimizer for Language Model Pre-training",
+  "authors": "Hong Liu, Zhiyuan Li, David Hall, Percy Liang, Tengyu Ma",
+  "year": 2023,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2305.14342",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2023-sophia/1",
+    "claim": "Sophia claims a 2x speed-up over Adam in steps, compute and wall-clock for GPT models of 125M-1.5B.",
+    "quote": "On language modeling with GPT models of sizes ranging from 125M to 1.5B, Sophia achieves a 2x speed-up compared to Adam in the number of steps, total compute, and wall-clock time",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x",
+      "condition": "Sophia vs Adam, 125M-1.5B, claimed"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Claimed m_A 2; tuned-baseline studies find about 1.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "liu-2025-muon-scalable",
+  "title": "Muon is Scalable for LLM Training",
+  "authors": "Jingyuan Liu, Jianlin Su, Xingcheng Yao, Zhejun Jiang, Guokun Lai, Yulun Du et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2502.16982",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2025-muon-scalable/1",
+    "claim": "Moonshot's scaling-law runs put Muon at about 52% of AdamW's training FLOPs for equal loss.",
+    "quote": "As shown in Figure 1a, Muon only requires about 52% training FLOPs to match the performance of AdamW under compute-optimal setting.",
+    "location": "Section 3.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.92,
+      "unit": "x",
+      "condition": "derived 1/0.52: Muon vs AdamW, compute-optimal"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Claimed m_A about 1.9; Wen 2025 and Essential AI measure 1.1-1.4 against tuned AdamW.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "lu-2022-01adam",
   "title": "Maximizing Communication Efficiency for Large-scale Training via 0/1 Adam",
   "authors": "Yucheng Lu, Conglong Li, Minjia Zhang, Christopher De Sa, Yuxiong He",
@@ -1024,6 +1303,114 @@
     "grade": "measured-small",
     "bears_on": "Early training needs near-dense per-step updates, so a per-block policy bites hardest at the start of a run.",
     "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "ma-2024-swan",
+  "title": "SWAN: SGD with Normalization and Whitening Enables Stateless LLM Training",
+  "authors": "Chao Ma, Wenbo Gong, Meyer Scetbon, Edward Meeds",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2412.13148",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ma-2024-swan/1",
+    "claim": "SWAN, a stateless normalized and whitened SGD, claims 2x token efficiency over Adam at 350M and 1.3B.",
+    "quote": "when pre-training the LLaMA model with 350M and 1.3B parameters, SWAN achieves a 2x speedup by reaching the same evaluation perplexity using half as many tokens",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x",
+      "condition": "SWAN vs Adam, tokens to equal perplexity, claimed"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "No optimizer state; the 2x claim is below Chinchilla budgets (Wen 2025).",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "moon-2026-greedy-local",
+  "title": "Greedy Local Learning for Language Model Pretraining: Gaps and Objective Design",
+  "authors": "Jihwan Moon, Sheir A. Zaheer, Jinmyoung Lee, Gunhee Kim, Chan Y. Park",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2610.04867",
+  "topics": [
+   "gradients",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "moon-2026-greedy-local/1",
+    "claim": "In greedy block-wise local learning at Chinchilla budgets, the gap to end-to-end more than doubles from K=2 to K=4 blocks but at K=4 shrinks from 125M to 400M.",
+    "quote": "the gap to end-to-end training more than doubles from K=2 to K=4, but at K=4 shrinks from 125M to 400M",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Local learning's m_A falls with block count and rises with scale; it deletes inter-block backward crossings.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "moon-2026-greedy-local/2",
+    "claim": "End-to-end NLL is 2.771 at 125M and 2.418 at 400M; at 400M the K=2 gaps are +0.027 to +0.041 nats and the K=4 gaps +0.062 to +0.112 (first-block MTP, Transformer-aux, MLP-aux).",
+    "quote": "125M-class K=2 (∆) K=4 (∆) (end-to-end K=1: 2.771) +0.046 +0.028 +0.132 +0.078 +0.017 +0.074 400M-class K=2 (∆) K=4 (∆) (end-to-end K=1: 2.418) +0.041 +0.032 +0.112 +0.075 +0.027 +0.062",
+    "location": "Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.771,
+      "unit": "nats",
+      "condition": "end-to-end NLL, 125M"
+     },
+     {
+      "param": "other",
+      "value": 2.418,
+      "unit": "nats",
+      "condition": "end-to-end NLL, 400M"
+     },
+     {
+      "param": "other",
+      "value": 0.84,
+      "unit": "x",
+      "condition": "derived m_A, K=2, first-block MTP auxiliary, 400M"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "0.353 nats per about 10.2x Chinchilla compute (125M to 400M) converts a gap g to m_A = 10.2^(-g/0.353): about 0.84 for the best K=2 (+0.027) and 0.67 for the best K=4 (+0.062).",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "moon-2026-greedy-local/3",
+    "claim": "First-block multi-token prediction gives the best K=4 setting, +0.062 vs +0.075 nats at 400M.",
+    "quote": "restricting it to the first block yields the best K=4 configuration (+0.062 vs. +0.075 nats at 400M)",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.67,
+      "unit": "x",
+      "condition": "derived m_A, K=4, best auxiliary, 400M"
+     },
+     {
+      "param": "other",
+      "value": 0.61,
+      "unit": "x",
+      "condition": "derived m_A, K=4, 400M"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Derived m_A for K=4 at 400M: about 0.61-0.67.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1185,6 +1572,23 @@
     "grade": "measured-small",
     "bears_on": "Aggregate-side rate around 1 bit/param/step, about 8x larger than the upload rate.",
     "from_review": "gradients"
+   },
+   {
+    "id": "peng-2024-demo/5",
+    "claim": "DeMo transmits up to 85x less data per GPU than AdamW-DDP at comparable loss for 300M and 1B models.",
+    "quote": "Experiments on 300M and 1B-parameter DeMo language models show DeMo transmits up to 85x less data per GPU than AdamW-DDP while achieving comparable loss and accuracy.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 85,
+      "unit": "x",
+      "condition": "data per GPU vs AdamW-DDP"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Sparse DCT momentum components at m_A about 1.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1538,6 +1942,23 @@
     "grade": "measured-at-scale",
     "bears_on": "Shows extreme pseudo-gradient compression is usable at frontier-adjacent scale, so NCI cannot assume dense update traffic for low-communication training.",
     "from_review": "prior"
+   },
+   {
+    "id": "sarfi-2025-sparseloco/6",
+    "claim": "SparseLoCo reaches 97-99% sparsity with 2-bit quantization of the pseudo-gradient and lower loss than dense DiLoCo.",
+    "quote": "can effectively leverage Top-k sparsification and 2-bit quantization to reach extreme sparsity in the communicated pseudo-gradient, as high as 97-99%, while achieving lower final loss than dense DiLoCo",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.02,
+      "unit": "fraction",
+      "condition": "share of pseudo-gradient entries sent (97-99% sparsity)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Each outer update carries 1-3% of coordinates at 2 bits at m_A at or above 1.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1590,6 +2011,54 @@
   ]
  },
  {
+  "id": "shazeer-2018-adafactor",
+  "title": "Adafactor: Adaptive Learning Rates with Sublinear Memory Cost",
+  "authors": "Noam Shazeer, Mitchell Stern",
+  "year": 2018,
+  "venue": "ICML 2018",
+  "url": "https://arxiv.org/abs/1804.04235",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shazeer-2018-adafactor/1",
+    "claim": "Factored second moments and no momentum match Adam on WMT14 En-De with very little optimizer storage.",
+    "quote": "Combining these methods and dropping momentum, we achieve comparable results to the published Adam regime in training the Transformer model on the WMT 2014 English-German machine translation task, while using very little auxiliary storage in the optimizer.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Optimizer state sublinear in parameters at m_A about 1.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "siddiqui-2023-blockwise-ssl",
+  "title": "Blockwise Self-Supervised Learning at Scale",
+  "authors": "Shoaib Ahmed Siddiqui, David Krueger, Yann LeCun, Stéphane Deny",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2302.01647",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "siddiqui-2023-blockwise-ssl/1",
+    "claim": "Four independently trained ResNet-50 blocks with a Barlow Twins loss each reach 70.48% linear-probe accuracy, 1.1% below end-to-end.",
+    "quote": "a linear probe trained on top of our blockwise pretrained model obtains a top-1 classification accuracy of 70.48%, only 1.1% below the accuracy of an end-to-end pretrained network (71.57% accuracy)",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Blockwise self-supervised training is close to end-to-end in vision.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "song-2024-sgdsubspace",
   "title": "Does SGD really happen in tiny subspaces?",
   "authors": "Minhak Song, Kwangjun Ahn, Chulhee Yun",
@@ -1612,6 +2081,41 @@
     "bears_on": "The useful part of a step lives in the bulk, not a tiny subspace, which raises the per-step U a low-rank description would need.",
     "from_review": "gradients",
     "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   }
+  ]
+ },
+ {
+  "id": "su-2025-galore2",
+  "title": "GaLore 2: Large-Scale LLM Pre-Training by Gradient Low-Rank Projection",
+  "authors": "DiJia Su, Andrew Gu, Jane Xu, Yuandong Tian, Jiawei Zhao",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2504.20437",
+  "topics": [
+   "gradients",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "su-2025-galore2/1",
+    "claim": "GaLore 2 pre-trains Llama 7B from scratch on up to 500B tokens.",
+    "quote": "we demonstrate the scalability of GaLore 2 by pre-training Llama 7B from scratch using up to 500 billion training tokens",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The largest low-rank-gradient pretraining run (about 2e22 FLOP).",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "su-2025-galore2/2",
+    "claim": "At 7B/500B tokens GaLore lags 8-bit Adam for the first 150B tokens and passes it around 200B.",
+    "quote": "Initially, during the first 150 billion tokens, GaLore’s performance slightly lags behind the baseline.",
+    "location": "Section 5",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Low-rank update m_A about 1 at frontier-adjacent scale (rank 1024).",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1844,6 +2348,37 @@
   ]
  },
  {
+  "id": "vyas-2024-soap",
+  "title": "SOAP: Improving and Stabilizing Shampoo using Adam",
+  "authors": "Nikhil Vyas, Depen Morwani, Rosie Zhao, Mujin Kwun, Itai Shapira, David Brandfonbrener et al.",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2409.11321",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "vyas-2024-soap/1",
+    "claim": "SOAP cuts iterations by over 40% and wall-clock by over 35% versus AdamW at 360M-660M in the large-batch regime.",
+    "quote": "In the large batch regime, SOAP reduces the number of iterations by over 40% and wall clock time by over 35% compared to AdamW",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.67,
+      "unit": "x",
+      "condition": "derived 1/0.6: iterations, 360M-660M, large batch"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Claimed m_A about 1.5-1.7 on steps; Wen 2025 measures 1.2-1.3.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "wen-2017-terngrad",
   "title": "TernGrad: Ternary Gradients to Reduce Communication in Distributed Deep Learning",
   "authors": "Wei Wen, Cong Xu, Feng Yan, Chunpeng Wu, Yandan Wang, Yiran Chen, et al.",
@@ -1894,6 +2429,193 @@
     "grade": "measured-small",
     "bears_on": "Shows ~16x stateless compression is near-lossless only on some CNNs; no LLM evidence.",
     "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "wen-2025-fantastic-optimizers",
+  "title": "Fantastic Pretraining Optimizers and Where to Find Them",
+  "authors": "Kaiyue Wen, David Hall, Tengyu Ma, Percy Liang",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2509.02046",
+  "topics": [
+   "gradients",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wen-2025-fantastic-optimizers/1",
+    "claim": "Matrix-preconditioned optimizers' speedup over well-tuned AdamW falls from 1.4x at 0.1B to 1.1x at 1.2B.",
+    "quote": "However, the speedup of matrix-based optimizers is inversely proportional to model scale, decreasing from 1.4× over AdamW for 0.1B parameter models to merely 1.1× for 1.2B parameter models.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.4,
+      "unit": "x",
+      "condition": "Muon/Soap vs AdamW at 0.1B"
+     },
+     {
+      "param": "other",
+      "value": 1.1,
+      "unit": "x",
+      "condition": "Muon/Soap vs AdamW at 1.2B, 8x Chinchilla"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Optimizer m_A shrinks with scale; at frontier C it is near 1.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "wen-2025-fantastic-optimizers/2",
+    "claim": "Against a well-tuned AdamW baseline no optimizer exceeds 1.4x.",
+    "quote": "Against our well-tuned AdamW baseline, the speedup of alternative optimizers does not exceed 1.4×",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.4,
+      "unit": "x",
+      "condition": "maximum speedup of 10 optimizers, 0.1-1.2B, 1-8x Chinchilla"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Caps published optimizer m_A claims of 2x at about 1.4x.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "wen-2025-fantastic-optimizers/3",
+    "claim": "Lion and Adam-mini, with reduced optimizer state, are within 5% of AdamW; Lion's gap widens with scale and Adam-mini's narrows.",
+    "quote": "The two memory-efficient AdamW variants (Lion, Adam-mini)—despite their reduced auxiliary state—closely track the performance of AdamW, with a slowdown of at most 5% and sometimes even perform better than AdamW. Interestingly, Lion and Adam-mini show different scaling trends regarding model size: the disadvantage of Lion relative to AdamW widens while the disadvantage of Adam-mini over AdamW narrows.",
+    "location": "Section 4.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.95,
+      "unit": "x",
+      "condition": "lower bound of Lion/Adam-mini relative efficiency vs AdamW, derived: 5% slowdown"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Cutting optimizer state (lower state_bits_per_param) costs at most about 5% in m_A at these scales.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "wen-2025-fantastic-optimizers/4",
+    "claim": "A fitted law predicts Muon falls behind AdamW at 7B in the 1x Chinchilla regime.",
+    "quote": "This scaling law predicts that when the parameter scale reaches 7B, Muon will actually result in a higher loss compared to AdamW in 1× Chinchilla regime.",
+    "location": "Appendix B.1",
+    "quantities": [],
+    "grade": "extrapolated",
+    "bears_on": "Muon's m_A may fall below 1 near frontier scale.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "wen-2025-fantastic-optimizers/5",
+    "claim": "Sophia underperforms AdamW at small compute and slightly outperforms it at larger model or data size.",
+    "quote": "We found that Sophia tends to underperform AdamW in smaller compute regimes and eventually slightly outperforms AdamW when either the model size or the data size increases.",
+    "location": "Appendix B.2",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Sophia's m_A is near 1, growing slightly with scale.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "wen-2025-fantastic-optimizers/6",
+    "claim": "Soap's measured speedup is 1.2-1.3x at 300M-520M versus the claimed 1.4x.",
+    "quote": "The actual speedup of Soap on 300M and 520M models are 1.2 to 1.3×, which is only slightly lower than the claimed 1.4× speedup.",
+    "location": "Appendix G",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.25,
+      "unit": "x",
+      "condition": "Soap vs AdamW at 300M-520M, midpoint of 1.2-1.3"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Soap m_A about 1.2-1.3 at sub-billion scale.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "wen-2025-fantastic-optimizers/7",
+    "claim": "Independent measurement puts Muon's token efficiency over AdamW at 1.1-1.2x.",
+    "quote": "It is later shown independently in the work of Essential AI AI et al. [2025] that Muon’s token efficiency compared to AdamW is only 1.1 to 1.2×.",
+    "location": "Appendix G",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Muon m_A about 1.1-1.2.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "wen-2025-fantastic-optimizers/8",
+    "claim": "SWAN's and Dion's 2-3x claims come from below-Chinchilla budgets where matrix optimizers gain most.",
+    "quote": "SWAN Ma et al. [2025] and DION Ahn et al. [2025] report 2-3× speedup over AdamW. The comparison between these two optimizers and AdamW is carried out on a smaller than 1× Chinchilla regime, where the speed-up of matrix-based optimizer may be larger.",
+    "location": "Appendix G",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Discounts SWAN and Dion m_A claims.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "wen-2025-fantastic-optimizers/9",
+    "claim": "Tuned scalar optimizers average under 1.2x over AdamW.",
+    "quote": "After proper tuning, all scalar-based optimizers achieve similar optimization speeds to AdamW, with an average speedup ratio of less than 1.2×.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Scalar optimizer variants give m_A near 1.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2024-adam-mini",
+  "title": "Adam-mini: Use Fewer Learning Rates To Gain More",
+  "authors": "Yushun Zhang, Congliang Chen, Ziniu Li, Tian Ding, Chenwei Wu, Diederik P. Kingma et al.",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2406.16793",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2024-adam-mini/1",
+    "claim": "Adam-mini matches AdamW with 50% less memory by sharing one second-moment value per parameter block.",
+    "quote": "We propose Adam-mini, an optimizer that achieves on par or better performance than AdamW with 50% less memory footprint.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Optimizer state falls from 2 words to about 1 per parameter at m_A about 1.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "zhao-2024-deconstructing-optimizers",
+  "title": "Deconstructing What Makes a Good Optimizer for Language Models",
+  "authors": "Rosie Zhao, Depen Morwani, David Brandfonbrener, Nikhil Vyas, Sham Kakade",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2407.07972",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhao-2024-deconstructing-optimizers/1",
+    "claim": "Apart from SGD, Adam, Adafactor, Lion and Sophia perform comparably in optimum and hyperparameter robustness.",
+    "quote": "Our findings indicate that, except for SGD, these algorithms all perform comparably both in their optimal performance and also in terms of how they fare across a wide range of hyperparameter choices.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Optimizer m_A clusters near 1; SGD is the outlier below.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1959,6 +2681,30 @@
     "grade": "theoretical",
     "bears_on": "Supports a low update.rank per step, but the practical rank needed (d/4) is high.",
     "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "zhu-2024-apollo",
+  "title": "APOLLO: SGD-like Memory, AdamW-level Performance",
+  "authors": "Hanqing Zhu, Zhenyu Zhang, Wenyan Cong, Xi Liu, Sem Park, Vikas Chandra et al.",
+  "year": 2024,
+  "venue": "MLSys 2025",
+  "url": "https://arxiv.org/abs/2412.05270",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhu-2024-apollo/1",
+    "claim": "APOLLO-Mini (rank 1) beats AdamW in pre-training with SGD-level memory.",
+    "quote": "Even its rank-1 variant, APOLLO-Mini, achieves superior pre-training performance compared to AdamW with SGD-level memory costs.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Optimizer state near zero at m_A about 1 (up to 7B, short budgets).",
+    "from_review": "scaling-corpus"
    }
   ]
  }

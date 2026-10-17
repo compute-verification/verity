@@ -178,6 +178,23 @@
     "grade": "measured-small",
     "bears_on": "Each seed-step carries much less information than a gradient step in pretraining.",
     "from_review": "seed-based"
+   },
+   {
+    "id": "allaire-2025-zo-pretraining/5",
+    "claim": "Training Llama2-20M for 2 epochs with q = 100 ZO queries takes about 6 days versus hours with FO SGD; FO variance is about 1000x smaller at q = 1.",
+    "quote": "FO-variance is roughly 1 000 times smaller than ZO-variance with q = 1 and 100 times smaller for q = 20.",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1000,
+      "unit": "x",
+      "condition": "ZO/FO gradient variance ratio, q = 1, Llama2-20M"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "ZO per-FLOP m_A is orders of magnitude below 1 even at 20M parameters.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -230,6 +247,26 @@
     "grade": "measured-small",
     "bears_on": "From-scratch ZO training is still behind backprop at 270K parameters, far from LLM pretraining.",
     "from_review": "seed-based"
+   },
+   {
+    "id": "chen-2024-deepzero/4",
+    "claim": "Before DeepZero, no work had trained deep networks with zeroth-order optimization without a large accuracy loss.",
+    "quote": "To our best knowledge, no prior work has demonstrated the effectiveness of ZO optimization in training deep neural networks (DNNs) without a significant decrease in performance.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "ZO training is far behind backprop beyond small networks.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "chen-2024-deepzero/5",
+    "claim": "DeepZero approaches first-order accuracy on ResNet-20/CIFAR-10.",
+    "quote": "Our extensive experiments show that DeepZero achieves state-of-the-art (SOTA) accuracy on ResNet-20 trained on CIFAR-10, approaching FO training performance for the first time.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The largest ZO-from-scratch success is a 0.27M-parameter CNN.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1095,6 +1132,23 @@
     "grade": "measured-at-scale",
     "bears_on": "Seed-based reasoning fine-tuning is competitive with RL at 7B.",
     "from_review": "seed-based"
+   },
+   {
+    "id": "sarkar-2025-eggroll/8",
+    "claim": "Its largest population (2^20) beats a backprop-SGD baseline at equal data but needs about 180x the GPU-hours.",
+    "quote": "requires around 180 times more GPU-hours than the backprop baseline, demonstrating the potential for compute-only scaling in limited data regimes using EGGROLL",
+    "location": "Section 6.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 180,
+      "unit": "x",
+      "condition": "GPU-hours vs backprop baseline, population 2^20, int8 RNN LM"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A data-efficiency gain at a large compute cost: per-FLOP m_A well below 1 at tiny scale.",
+    "from_review": "scaling-corpus"
    }
   ]
  },

@@ -130,6 +130,61 @@
   ]
  },
  {
+  "id": "bae-2024-relaxed-recursive",
+  "title": "Relaxed Recursive Transformers: Effective Parameter Sharing with Layer-wise LoRA",
+  "authors": "Sangmin Bae, Adam Fisch, Hrayr Harutyunyan, Ziwei Ji, Seungyeon Kim, Tal Schuster",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2410.20672",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bae-2024-relaxed-recursive/1",
+    "claim": "Recursive Transformers initialized from pretrained models (e.g. recursive Gemma 1B) beat similar-sized vanilla models and recover most of the full-size model's performance.",
+    "quote": "We show that our recursive models (e.g., recursive Gemma 1B) outperform both similar-sized vanilla pretrained models (such as TinyLlama 1.1B and Pythia 1B) and knowledge distillation baselines",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Layer tying cuts unique updated weights by the loop count.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "bae-2025-mor",
+  "title": "Mixture-of-Recursions: Learning Dynamic Recursive Depths for Adaptive Token-Level Computation",
+  "authors": "Sangmin Bae, Yujin Kim, Reza Bayat, Sungnyun Kim, Jiyoun Ha, Tal Schuster et al.",
+  "year": 2025,
+  "venue": "NeurIPS 2025",
+  "url": "https://arxiv.org/abs/2507.10524",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bae-2025-mor/1",
+    "claim": "At an equal 16.5e18 training FLOPs, Mixture-of-Recursions beats the vanilla Transformer with nearly 50% fewer parameters.",
+    "quote": "achieves a lower validation loss and surpasses the vanilla baseline in average few-shot accuracy (43.1% vs. 42.3%). Remarkably, this superior performance is achieved despite using nearly 50% fewer parameters.",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.65e+19,
+      "unit": "FLOP",
+      "condition": "equal training budget of the comparison"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Shared-weight recursion with token routing: m_A slightly above 1 with half the updated weights.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "brown-2026-weight-theft",
   "title": "Aggressive Compression Enables LLM Weight Theft",
   "authors": "Davis Brown, Juan-Pablo Rivera, Dan Hendrycks, Mantas Mazeika",
@@ -364,6 +419,26 @@
     "grade": "measured-small",
     "bears_on": "Limits the weight of this source for frontier-scale b_a.",
     "from_review": "activations"
+   },
+   {
+    "id": "castro-2025-quartet/4",
+    "claim": "Quartet's fully FP4 linear layers are a competitive alternative to FP16 and FP8 training.",
+    "quote": "demonstrating that fully FP4-based training is a competitive alternative to FP16 half-precision and to FP8 training",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "4-bit forward and backward matmuls.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "castro-2025-quartet/5",
+    "claim": "Quartet's law separates a precision's parameter efficiency (forward error) and data efficiency (gradient bias).",
+    "quote": "We find that the parameter efficiency is directly linked to the forward compression error of each training method, whereas data efficiency is linked to the bias in the method’s gradient estimator",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Per-FLOP m_A of FP4 is below 1; per-gate it is far above.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -677,6 +752,37 @@
   ]
  },
  {
+  "id": "du-2024-gstack",
+  "title": "Stacking Your Transformers: A Closer Look at Model Growth for Efficient LLM Pre-Training",
+  "authors": "Wenyu Du, Tongxu Luo, Zihan Qiu, Zeyu Huang, Yikang Shen, Reynold Cheng et al.",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2405.15319",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "du-2024-gstack/1",
+    "claim": "Depthwise stacking (G_stack) reaches a conventionally trained 7B model's 300B-token loss with 194B tokens, a 54.6% speedup.",
+    "quote": "For example, compared to a conventionally trained 7B model using 300B tokens, our Gstack model converges to the same loss with 194B tokens, resulting in a 54.6% speedup.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.546,
+      "unit": "x",
+      "condition": "G_stack 7B tokens to equal loss vs 300B baseline"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "m_A about 1.5 at about 1.3e22 FLOP.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "egiazarian-2024-aqlm",
   "title": "Extreme Compression of Large Language Models via Additive Quantization",
   "authors": "Vage Egiazarian, Andrei Panferov, Denis Kuznedelev, Elias Frantar, Artem Babenko, Dan Alistarh",
@@ -852,6 +958,47 @@
     "grade": "measured-at-scale",
     "bears_on": "Quantization and entropy coding stack: ternary at high sparsity is ~0.6 bits, the main route below 1 bit.",
     "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "frantar-2023-sparsity-scaling",
+  "title": "Scaling Laws for Sparsely-Connected Foundation Models",
+  "authors": "Elias Frantar, Carlos Riquelme, Neil Houlsby, Dan Alistarh, Utku Evci",
+  "year": 2023,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2309.08520",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "frantar-2023-sparsity-scaling/1",
+    "claim": "Training well past Chinchilla makes increasingly sparse models optimal for a fixed number of non-zero parameters.",
+    "quote": "The key take-away from these results is that as one trains significantly longer than Chinchilla (dense compute optimal), more and more sparse models start to become optimal in terms of loss for the same number of non-zero parameters.",
+    "location": "Section 3.3",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Weight sparsity pays only in over-trained regimes; at Chinchilla allocation m_A about 1.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "frantar-2023-sparsity-scaling/2",
+    "claim": "In the capacity-bound limit, 75% sparsity equals about a 2.15x larger dense model.",
+    "quote": "Remarkably, sparsity gains are very similar across vision and text domains, with the sweet-spot being around 75% sparsity at around ≈ 2.15× gain.",
+    "location": "Section 3.3.1, Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.15,
+      "unit": "x",
+      "condition": "equivalent dense size, 75% sparsity, infinite-data limit"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "A parameter (not compute) multiplier; it shrinks updated weights per FLOP by 4x at 75% sparsity.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1088,6 +1235,30 @@
   ]
  },
  {
+  "id": "kaushal-2024-spectra",
+  "title": "Spectra: Surprising Effectiveness of Pretraining Ternary Language Models at Scale",
+  "authors": "Ayush Kaushal, Tejas Vaidhya, Arnab Kumar Mondal, Tejas Pandey, Aaryan Bhagat, Irina Rish",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2407.12327",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kaushal-2024-spectra/1",
+    "claim": "A 3.9B ternary LM trained on 300B tokens matches the 3.9B float model despite fewer bits than an 830M float model.",
+    "quote": "Notably, the 3.9B parameter TriLM matches the performance of the FloatLM 3.9B across all benchmarks, despite having fewer bits than FloatLM 830M.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Ternary forward weights cost little at about 4B parameters.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "kim-2023-squeezellm",
   "title": "SqueezeLLM: Dense-and-Sparse Quantization",
   "authors": "Sehoon Kim, Coleman Hooper, Amir Gholami, Zhen Dong, Xiuyu Li, Sheng Shen, et al.",
@@ -1121,6 +1292,30 @@
     "grade": "measured-at-scale",
     "bears_on": "Scalar quantization with outlier handling reaches ~3.2 bits at small loss.",
     "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "komatsuzaki-2022-sparse-upcycling",
+  "title": "Sparse Upcycling: Training Mixture-of-Experts from Dense Checkpoints",
+  "authors": "Aran Komatsuzaki, Joan Puigcerver, James Lee-Thorp, Carlos Riquelme Ruiz, Basil Mustafa, Joshua Ainslie et al.",
+  "year": 2022,
+  "venue": "ICLR 2023",
+  "url": "https://arxiv.org/abs/2212.05055",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "komatsuzaki-2022-sparse-upcycling/1",
+    "claim": "Upcycled MoEs from dense T5 checkpoints beat their dense counterparts using about 50% of the dense sunk cost.",
+    "quote": "significantly outperform their dense counterparts on SuperGLUE and ImageNet, using only ~50% of the initial dense pretraining sunk cost",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Reuse multiplier on a sunk run, not an m_A for a fresh one.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1186,6 +1381,33 @@
     "grade": "extrapolated",
     "bears_on": "Implies a practical floor near 4 bits for trained weight precision, and near ~1-2 bits per effective parameter.",
     "from_review": "weights"
+   },
+   {
+    "id": "kumar-2024-precision-scaling/4",
+    "claim": "Fitted precision-aware laws put compute-optimal training precision at about 7-8 bits, independent of compute.",
+    "quote": "Our fits imply that 7-8 bits are compute-optimal.",
+    "location": "Section 4.3",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 7.5,
+      "unit": "bits",
+      "condition": "compute-optimal pretraining precision, integer quantization"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Training below 16 bits is compute-optimal when bits per gate count; 4-bit needs a larger model.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "kumar-2024-precision-scaling/5",
+    "claim": "The laws suggest training larger models in lower precision may be compute-optimal.",
+    "quote": "For training, our scaling laws allow us to predict the loss of a model with different parts in different precisions, and suggest that training larger models in lower precision may be compute optimal.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Low precision lowers bits per value at near-constant m_A.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1322,6 +1544,40 @@
     "grade": "measured-small",
     "bears_on": "With training-time quantization, 1.58 bits per weight suffices at small scale; this sets the from-scratch rate, not a compression of an existing model.",
     "from_review": "weights"
+   },
+   {
+    "id": "ma-2024-bitnet-b158/2",
+    "claim": "Ternary-weight BitNet b1.58 matches an FP16 Transformer of the same size and tokens from 3B parameters.",
+    "quote": "It matches the full-precision (i.e., FP16 or BF16) Transformer LLM with the same model size and training tokens in terms of both perplexity and end-task performance",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_w.capacity",
+      "value": 1.58,
+      "unit": "bits",
+      "condition": "forward weight precision"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Forward weights 1.58 bits at m_A about 1; latent weights and optimizer state stay high precision.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "ma-2024-bitnet-b158/3",
+    "claim": "BitNet b1.58 is trained from scratch with 1.58-bit weights and 8-bit activations.",
+    "quote": "It is trained from scratch, with 1.58-bit weights and 8-bit activations.",
+    "location": "Section 2",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "activation precision"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Activations crossing layer boundaries are 8 bits.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1505,6 +1761,43 @@
   ]
  },
  {
+  "id": "muralidharan-2024-minitron",
+  "title": "Compact Language Models via Pruning and Knowledge Distillation",
+  "authors": "Saurav Muralidharan, Sharath Turuvekere Sreenivas, Raviraj Joshi, Marcin Chochowski, Mostofa Patwary, Mohammad Shoeybi et al.",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2407.14679",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "muralidharan-2024-minitron/1",
+    "claim": "Pruning Nemotron-4 15B and distilling into 8B and 4B needs up to 40x fewer tokens per model, saving 1.8x on the family.",
+    "quote": "Deriving 8B and 4B models from an already pretrained 15B model using our approach requires up to 40x fewer training tokens per model compared to training from scratch; this results in compute cost savings of 1.8x for training the full model family (15B, 8B, and 4B).",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.8,
+      "unit": "x",
+      "condition": "family compute saving, 15B/8B/4B"
+     },
+     {
+      "param": "other",
+      "value": 40,
+      "unit": "x",
+      "condition": "fewer tokens per derived model"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "m_A 1.8 for a family; for one student the teacher's sunk compute dominates.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "nvidia-2025-nvfp4",
   "title": "Pretraining Large Language Models with NVFP4",
   "authors": "NVIDIA",
@@ -1594,6 +1887,33 @@
     "grade": "measured-at-scale",
     "bears_on": "FP4 training has not yet been shown for tensors sent between devices (the NCI boundary case).",
     "from_review": "activations"
+   },
+   {
+    "id": "nvidia-2025-nvfp4/6",
+    "claim": "A 12B model trained in NVFP4 on 10T tokens matches the FP8 baseline in loss and downstream accuracy.",
+    "quote": "Our results show that the model trained with our NVFP4-based pretraining technique achieves training loss and downstream task accuracies comparable to an FP8 baseline.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "4-bit matmuls at about 7e23 FLOP; m_A about 1 per FLOP.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "nvidia-2025-nvfp4/7",
+    "claim": "The 12B NVFP4 run ends about 1.5% above the FP8 loss (MXFP4: 2.5%); switching the forward pass to higher precision at 8.2T tokens recovers most of it (0.5%).",
+    "quote": "most of the loss in the 12B model is recovered (from 1.5% to 0.5% relative error) by switching to higher precision for the forward pass starting at 8.2T tokens",
+    "location": "Appendix",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.5,
+      "unit": "%",
+      "condition": "NVFP4 relative loss error vs FP8, 12B, 10T tokens"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The residual loss gap of 4-bit training, mostly from the forward pass.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1636,6 +1956,43 @@
     "grade": "extrapolated",
     "bears_on": "Frontier models trained on 15-40T tokens may need about 4 bits per weight for retained quality, raising the central b_w.pretrained.",
     "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "samragh-2024-hypercloning",
+  "title": "Scaling Smart: Accelerating Large Language Model Pre-training with Small Model Initialization",
+  "authors": "Mohammad Samragh, Iman Mirzadeh, Keivan Alizadeh Vahid, Fartash Faghri, Minsik Cho, Moin Nabi et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2409.12903",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "samragh-2024-hypercloning/1",
+    "claim": "HyperCloning initialization reaches the random-init final accuracy 2.2-4x faster.",
+    "quote": "HyperCloning enables the network to reach the final accuracy of the random initialization baseline much faster, with a speedup ranging from 2.2x to 4x across different model types.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.2,
+      "unit": "x",
+      "condition": "lower end"
+     },
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "x",
+      "condition": "upper end"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "m_A 2.2-4 excluding the small model's sunk cost.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -1833,6 +2190,61 @@
     "grade": "measured-at-scale",
     "bears_on": "In MoE models, the expert weights set the average b_w, and they tolerate lower rates than attention.",
     "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "wang-2023-ligo",
+  "title": "Learning to Grow Pretrained Models for Efficient Transformer Training",
+  "authors": "Peihao Wang, Rameswar Panda, Lucas Torroba Hennigen, Philip Greengard, Leonid Karlinsky, Rogerio Feris et al.",
+  "year": 2023,
+  "venue": "ICLR 2023",
+  "url": "https://arxiv.org/abs/2303.00980",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2023-ligo/1",
+    "claim": "A learned linear growth operator from a smaller pretrained model saves up to 50% of training compute.",
+    "quote": "our learned Linear Growth Operator (LiGO) can save up to 50% computational cost of training from scratch",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x",
+      "condition": "derived 1/0.5: LiGO vs scratch"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "m_A up to 2, excluding the small model's sunk cost.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "xia-2023-sheared-llama",
+  "title": "Sheared LLaMA: Accelerating Language Model Pre-training via Structured Pruning",
+  "authors": "Mengzhou Xia, Tianyu Gao, Zhiyuan Zeng, Danqi Chen",
+  "year": 2023,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2310.06694",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "xia-2023-sheared-llama/1",
+    "claim": "Structured pruning of LLaMA2-7B to 1.3B and 2.7B with continued training needs 3% of from-scratch compute.",
+    "quote": "while requiring only 3% of compute compared to training such models from scratch",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Reuse of a sunk 7B run; not an m_A for a fresh run.",
+    "from_review": "scaling-corpus"
    }
   ]
  },

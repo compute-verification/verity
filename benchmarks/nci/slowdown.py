@@ -117,7 +117,8 @@ def search(U: float, splits: bool, flops: float, w: float, t: float, decode: flo
     At ``phi = 1`` this is the fit construction; at the best ``phi`` with ``t = 0`` and no decoding it is ``shard``. One
     sequential chain of blocks is assumed, so no gradient aggregation is charged and wall-clock time is ignored."""
     best = None
-    for phi in _phis():
+    phis = _phis() + ([K / (2 * U)] if splits and U > K / 2 else [])
+    for phi in phis:
         state = phi * U if splits else U
         dec = phi * decode
         if state >= K or dec >= Gamma:

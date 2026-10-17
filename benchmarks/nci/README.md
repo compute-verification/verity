@@ -19,7 +19,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `parameters.json` | parameters, each with estimates: `low`, `central`, `high`, `confidence`, `evidence` (finding ids), `merge` |
 | `calibrations.json` | a policy (`K` bits a block may read besides committed parameters, `Gamma` gates per block, `b_tok`) and the model it is calibrated to |
 | `rows.json` | the board's rows: method, configuration, state representation, calculator inputs (a number or `estimate-id:low|central|high`), notes, sources, demonstrated capability |
-| `algorithms.json` | the algorithm library: training algorithms by architecture-agnostic traits (`library.TRAITS`) |
+| `algorithms.json` | the algorithm library: training algorithms by architecture-agnostic traits (`library.TRAITS`), measured multipliers and their evidence |
 | `models.json` | model shapes the library queries against |
 | `catalog.py` | loading, and `problems()`: every rule below that a file breaks |
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
@@ -42,8 +42,12 @@ Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`
 - A source goes in the file of its first topic.
 
 Agents writing from memory produce plausible but wrong citations. Every source here was found and checked by a
-web-search agent, and an auditor re-fetched a seeded random sample of 40 findings (2026-10-17). All 40 quotes were
-verbatim; three findings were corrected, and those carry an `audit` field saying what changed.
+web-search agent.
+
+- An auditor re-fetched a seeded random sample of 40 of the first 611 findings (2026-10-17). All 40 quotes were
+  verbatim; three findings were corrected, and those carry an `audit` field saying what changed.
+- The scaling corpus (findings marked `from_review: scaling-corpus`) was checked by its agent's script against the
+  fetched pages but not yet audited.
 
 ## How estimates merge findings
 
@@ -120,8 +124,17 @@ All values below are from `parameters.json`; render the index for the findings b
 
 ## The algorithm library
 
-`library.py` answers questions across training algorithms. An algorithm is a set of traits that scale with the model's
-shape (`algorithms.json`; `library.TRAITS` lists them):
+`library.py` answers questions across training algorithms.
+
+- **The library holds 71 algorithms in 17 families.** 59 come from a scaling corpus of 91 sources.
+- **47 algorithms carry a measured `multiplier`:** a compute-equivalent gain over a dense AdamW Chinchilla-optimal
+  reference, citing its findings, with the full `scaling` evidence beside it.
+- **Each algorithm states its `convention`.** `as-published` keeps the method's state at its stored precision
+  (weights and optimizer moments). `attacker` assumes the cheapest rates at about the same quality. Queries default
+  to the attacker convention, which caps every algorithm's state and boundary bits at the literature's central rates,
+  so all compare alike.
+
+An algorithm is a set of traits that scale with the model's shape (`algorithms.json`; `library.TRAITS` lists them):
 
 - the fraction of parameters it updates;
 - the bits of state per updated parameter, and whether that state splits across slices;
@@ -131,13 +144,23 @@ shape (`algorithms.json`; `library.TRAITS` lists them):
 - the theorem's own parameters.
 
 A query takes an algorithm, a model (`models.json`), a policy and whether the training data is committed or novel. It
-returns the bracket and where a block's reads go: state, activations, data.
+returns:
+
+- the bracket;
+- where a block's reads go: state, activations, data;
+- the efficiency under the policy, multiplier ÷ slowdown, both achievable and at the ceiling.
 
 ~~~sh
 python benchmarks/nci/library.py table --model kimi-k2 --policy kimi-k2-1m-raw    # brackets and read shares
 python benchmarks/nci/library.py data                                             # what training data is worth, per model
 python benchmarks/nci/library.py query lora-16 --model dense-7b --data committed  # one query, as JSON
 ~~~
+
+**What the multipliers say.** Most algorithmic changes are worth 1–2×, constant with scale, and they don't stack.
+Optimizer gains shrink to about 1.1× near 1B. Fine-grained MoE is the one large multiplier that grows with scale, about
+20× at 10²⁰ FLOP. Against slowdowns of 10⁵–10⁷, a better recipe matters only if it also lowers the slowdown. The
+algorithms that lower it (compressed boundaries, low-rank updates, local learning, zeroth-order) all have multipliers
+of 1 or less.
 
 **How big a deal is training data?** Not much, once a model doesn't fit in a block.
 

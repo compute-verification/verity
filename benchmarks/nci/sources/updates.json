@@ -90,6 +90,38 @@
   ]
  },
  {
+  "id": "ahn-2025-dion",
+  "title": "Dion: Distributed Orthonormalized Updates",
+  "authors": "Kwangjun Ahn, Byron Xu, Natalie Abreu, Ying Fan, Gagik Magakyan, Pratyusha Sharma et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2504.05295",
+  "topics": [
+   "updates",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ahn-2025-dion/1",
+    "claim": "Dion's low-rank orthonormalized updates (r = d/2 to d/16) approach full-rank Muon more closely as models grow from 354M to 3B.",
+    "quote": "Figure 2: Validation loss for Dion at three low-rank settings (r = d/2, d/4, d/16) versus full-rank Muon. Larger models are increasingly robust to low-rank update.",
+    "location": "Figure 2",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 0.0625,
+      "unit": "fraction",
+      "condition": "smallest rank fraction r/d tested"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The cost of rank-reduced updates shrinks with scale, so low-rank m_A rises toward 1.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "balazy-2025-lora-xs",
   "title": "LoRA-XS: Low-Rank Adaptation with Extremely Small Number of Parameters",
   "authors": "Klaudia Bałazy, Mohammadreza Banaei, Karl Aberer, Jacek Tabor",
@@ -379,6 +411,30 @@
     "bears_on": "Adapter mixtures give incremental gains at best (largest +5.8 for MoLA-8888 on OpenbookQA), so the draft's 'incrementally outperform' holds, but only for the best allocation.",
     "from_review": "prior",
     "audit": "2026-10-17 sample audit: quote yes, claim overstated, quantities derived-ok; corrected here: The quote is verbatim, but the paper's Table 1 contradicts it for most variants: only MoLA-2468 beats LoRA on all six tasks (by 0.35-3.44, matching the derived numbers), the other four variants fall below LoRA on CoLA (85.43-86.28 vs 86.29) and two also on RTE, and the largest variant gain is +5.8 (MoLA-8888 OpenbookQA 82.8 vs 77.0)."
+   }
+  ]
+ },
+ {
+  "id": "glentis-2025-param-efficient-survey",
+  "title": "Scalable Parameter and Memory Efficient Pretraining for LLM: Recent Algorithmic Advances and Benchmarking",
+  "authors": "Athanasios Glentis, Jiaxiang Li, Qiulin Shang, Andi Han, Ioannis Tsaknakis, Quan Wei et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.22922",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "glentis-2025-param-efficient-survey/1",
+    "claim": "With a proper optimizer and hyperparameters, full-rank training beats memory-efficient methods; high-rank updates are key for low-rank methods.",
+    "quote": "We observe that with a proper choice of optimizer and hyperparameters, full-rank training delivers the best performance, as expected. We also notice that incorporating high-rank updates in low-rank approaches is the key to improving their performance.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Low-rank methods have m_A at or below 1 against tuned full-rank training.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -849,6 +905,37 @@
     "grade": "measured-small",
     "bears_on": "Memorization (pretraining-like novel information) needs subspace dimension proportional to data, unlike fine-tuning.",
     "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "li-2022-btm",
+  "title": "Branch-Train-Merge: Embarrassingly Parallel Training of Expert Language Models",
+  "authors": "Margaret Li, Suchin Gururangan, Tim Dettmers, Mike Lewis, Tim Althoff, Noah A. Smith et al.",
+  "year": 2022,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2208.03306",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2022-btm/1",
+    "claim": "Branch-Train-Merge over 64 domains gives a 22.4B-parameter LM equal to a Transformer trained with 2.5x the compute, with gains growing with domain count.",
+    "quote": "the resulting LM (22.4B total parameters) performs as well as a Transformer LM trained with 2.5 times more compute. These gains grow with the number of domains",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.5,
+      "unit": "x",
+      "condition": "BTM vs Transformer LM, 64 domains, 192B tokens"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Embarrassingly parallel experts with no synchronization: m_A about 2.5 in perplexity.",
+    "from_review": "scaling-corpus"
    }
   ]
  },

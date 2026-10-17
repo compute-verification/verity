@@ -170,6 +170,30 @@
   ]
  },
  {
+  "id": "beck-2025-xlstm-scaling",
+  "title": "xLSTM Scaling Laws: Competitive Performance with Linear Time-Complexity",
+  "authors": "Maximilian Beck, Kajetan Schweighofer, Sebastian Böck, Sebastian Lehner, Sepp Hochreiter",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2510.02228",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "beck-2025-xlstm-scaling/1",
+    "claim": "Across 80M-7B parameters and 2B-2T tokens, xLSTM Pareto-dominates Transformers in loss per compute.",
+    "quote": "Notably, xLSTM models consistently Pareto-dominate Transformer models, delivering lower cross-entropy loss for the same compute budget.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Recurrent m_A slightly above 1; the authors' own comparison.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "bennett-1988-logical-depth",
   "title": "Logical Depth and Physical Complexity",
   "authors": "Charles H. Bennett",
@@ -201,6 +225,30 @@
     "grade": "theoretical",
     "bears_on": "Suggests a per-block invariant (depth gained relative to theta is at most the block's work) that NCI could aim for; depth is uncomputable, so NCI's cap on novel input is the enforceable proxy.",
     "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "besiroglu-2024-chinchilla-replication",
+  "title": "Chinchilla Scaling: A replication attempt",
+  "authors": "Tamay Besiroglu, Ege Erdil, Matthew Barnett, Josh You",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2404.10102",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "besiroglu-2024-chinchilla-replication/1",
+    "claim": "Chinchilla's Approach 3 fit is inconsistent with its other two methods; a refit agrees with them.",
+    "quote": "We find that the reported estimates are inconsistent with their first two estimation methods, fail at fitting the extracted data, and report implausibly narrow confidence intervals",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The reference allocation is robust (Approaches 1-2), though fitted constants carry wide uncertainty.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -254,6 +302,30 @@
   ]
  },
  {
+  "id": "busbridge-2025-distillation-scaling",
+  "title": "Distillation Scaling Laws",
+  "authors": "Dan Busbridge, Amitis Shidani, Floris Weers, Jason Ramapuram, Etai Littwin, Russ Webb",
+  "year": 2025,
+  "venue": "ICML 2025",
+  "url": "https://arxiv.org/abs/2502.08606",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "busbridge-2025-distillation-scaling/1",
+    "claim": "With an existing teacher, distillation beats supervised training up to a compute level that grows with student size; if the teacher must also be trained, supervised training is generally better.",
+    "quote": "In settings involving many students or an existing teacher, distillation outperforms supervised learning up to a compute level that scales predictably with student size. Conversely, if only one student is to be distilled and a teacher also requires training, supervised learning is generally preferable.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Distillation's m_A exceeds 1 only below a crossover compute and only when the teacher is sunk cost.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "christ-2013-hbl-comm-bounds",
   "title": "Communication lower bounds and optimal algorithms for programs that reference arrays -- Part 1",
   "authors": "Michael Christ, James Demmel, Nicholas Knight, Thomas Scanlon, Katherine Yelick",
@@ -274,6 +346,102 @@
     "grade": "theoretical",
     "bears_on": "HBL inequalities with weights let one projection be free and still bound the others, a possible way to bound attention and convolution work per NCI block when only the activation projections are capped.",
     "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "clark-2022-routed-scaling",
+  "title": "Unified Scaling Laws for Routed Language Models",
+  "authors": "Aidan Clark, Diego de las Casas, Aurelia Guy, Arthur Mensch, Michela Paganini, Jordan Hoffmann et al.",
+  "year": 2022,
+  "venue": "ICML 2022",
+  "url": "https://arxiv.org/abs/2202.01169",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "clark-2022-routed-scaling/1",
+    "claim": "All three routing techniques predict diminishing improvement from routing as base model size grows.",
+    "quote": "All three routing techniques considered therefore predict diminishing improvements from routing when increasing scale.",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Older routing (fixed 130B tokens, coarse experts) gives MoE m_A that shrinks with scale.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "clark-2022-routed-scaling/2",
+    "claim": "Routing stops helping beyond a cutoff size of 937B (S-BASE), 85B (RL-R) and 83B (HASH) parameters at 130B tokens.",
+    "quote": "Ncutoff equals 937B, 85B and 83B for S - BASE, RL - R and HASH respectively. These values are highly dependent on the number of tokens seen",
+    "location": "Section 5.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 937000000000.0,
+      "unit": "parameters",
+      "condition": "routing cutoff, S-BASE, 130B tokens"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The counterpoint to Krajewski: MoE m_A could vanish at large N under fixed-token training.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "dai-2024-deepseekmoe",
+  "title": "DeepSeekMoE: Towards Ultimate Expert Specialization in Mixture-of-Experts Language Models",
+  "authors": "Damai Dai, Chengqi Deng, Chenggang Zhao, R. X. Xu, Huazuo Gao, Deli Chen et al.",
+  "year": 2024,
+  "venue": "ACL 2024",
+  "url": "https://arxiv.org/abs/2401.06066",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dai-2024-deepseekmoe/1",
+    "claim": "DeepSeekMoE 16B matches LLaMA2 7B with about 40% of the computation.",
+    "quote": "Subsequently, we scale up DeepSeekMoE to 16B parameters and show that it achieves comparable performance with LLaMA2 7B, with only about 40% of computations.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.5,
+      "unit": "x",
+      "condition": "derived 1/0.40: DeepSeekMoE 16B vs LLaMA2 7B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Fine-grained plus shared experts: m_A about 2.5 against a dense model on different data.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "dao-2024-mamba2",
+  "title": "Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality",
+  "authors": "Tri Dao, Albert Gu",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2405.21060",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dao-2024-mamba2/1",
+    "claim": "Mamba-2's SSD layer is 2-8x faster than Mamba's selective SSM and stays competitive with Transformers.",
+    "quote": "a new architecture (Mamba-2) whose core layer is an a refinement of Mamba's selective SSM that is 2-8X faster, while continuing to be competitive with Transformers on language modeling",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Throughput gain, not a per-FLOP m_A; loss per FLOP is about the reference.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -312,6 +480,86 @@
   ]
  },
  {
+  "id": "davidson-2023-ceg",
+  "title": "AI capabilities can be significantly improved without expensive retraining",
+  "authors": "Tom Davidson, Jean-Stanislas Denain, Pablo Villalobos, Guillem Bas",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2312.07413",
+  "topics": [
+   "theory",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "davidson-2023-ceg/1",
+    "claim": "Defines compute-equivalent gain as the extra training compute that would match an enhancement's benefit.",
+    "quote": "the compute-equivalent gain: how much additional training compute would be needed to improve performance by the same amount as the enhancement",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The unit of m_A used throughout this corpus.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "de-2024-griffin",
+  "title": "Griffin: Mixing Gated Linear Recurrences with Local Attention for Efficient Language Models",
+  "authors": "Soham De, Samuel L. Smith, Anushan Fernando, Aleksandar Botev, George Cristian-Muraru, Albert Gu et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2402.19427",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "de-2024-griffin/1",
+    "claim": "Griffin (gated linear recurrence plus local attention) has the lowest held-out loss at every FLOP budget against an MQA Transformer baseline, up to 14B parameters.",
+    "quote": "Hawk, Griffin and our MQA Transformer baseline all show power law scaling between held-out loss and training FLOPs, with Griffin achieving the lowest held-out loss at all FLOPs budgets.",
+    "location": "Figure 1 caption",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Hybrid recurrent m_A slightly above 1 and constant across about 1e18-1e21 FLOP.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "fedus-2021-switch",
+  "title": "Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity",
+  "authors": "William Fedus, Barret Zoph, Noam Shazeer",
+  "year": 2021,
+  "venue": "JMLR 2022",
+  "url": "https://arxiv.org/abs/2101.03961",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "fedus-2021-switch/1",
+    "claim": "Switch Transformers based on T5-Base and T5-Large get up to 7x pre-training speedups at equal compute.",
+    "quote": "We design models based off T5-Base and T5-Large to obtain up to 7x increases in pre-training speed with the same computational resources.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 7,
+      "unit": "x",
+      "condition": "Switch vs T5-Base, step-time speedup to equal quality"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Top-1 MoE m_A up to 7 at T5-Base scale.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "garg-2018-extractor-time-space",
   "title": "Extractor-Based Time-Space Lower Bounds for Learning",
   "authors": "Sumegha Garg, Ran Raz, Avishay Tal",
@@ -343,6 +591,440 @@
     "grade": "theoretical",
     "bears_on": "Suggests the memory threshold scales like (bits per sample) x (bits per concept), which for LLM training would be (b_tok x context) x (bits of model), far above K; whether real LLM training has extractor structure is open.",
     "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "geiping-2025-recurrent-depth",
+  "title": "Scaling up Test-Time Compute with Latent Reasoning: A Recurrent Depth Approach",
+  "authors": "Jonas Geiping, Sean McLeish, Neel Jain, John Kirchenbauer, Siddharth Singh, Brian R. Bartoldson et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2502.05171",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "geiping-2025-recurrent-depth/1",
+    "claim": "A 3.5B recurrent-depth model trained on 800B tokens can use test-time iterations up to a compute load equivalent to 50B parameters.",
+    "quote": "We scale a proof-of-concept model to 3.5 billion parameters and 800 billion tokens. We show that the resulting model can improve its performance on reasoning benchmarks, sometimes dramatically, up to a computation load equivalent to 50 billion parameters.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Looping raises FLOPs per updated parameter; few updated weights carry many gates of work.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "gloeckle-2024-mtp",
+  "title": "Better & Faster Large Language Models via Multi-token Prediction",
+  "authors": "Fabian Gloeckle, Badr Youbi Idrissi, Baptiste Rozière, David Lopez-Paz, Gabriel Synnaeve",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2404.19737",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gloeckle-2024-mtp/1",
+    "claim": "Multi-token prediction becomes more useful with model size.",
+    "quote": "The method is increasingly useful for larger model sizes, and keeps its appeal when training for multiple epochs.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "An objective whose benefit grows with N, though on generative benchmarks.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gloeckle-2024-mtp/2",
+    "claim": "13B models trained with multi-token prediction solve 12% more HumanEval and 17% more MBPP problems.",
+    "quote": "Our 13B parameter models solves 12 % more problems on HumanEval and 17 % more on MBPP than comparable next-token models.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Task gain, not a loss-based compute ratio.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "gu-2023-mamba",
+  "title": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+  "authors": "Albert Gu, Tri Dao",
+  "year": 2023,
+  "venue": "COLM 2024",
+  "url": "https://arxiv.org/abs/2312.00752",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gu-2023-mamba/1",
+    "claim": "Under the Chinchilla protocol from about 125M to 1.3B parameters, Mamba matches a Transformer++ recipe.",
+    "quote": "Mamba is the first attention-free model to match the performance of a very strong Transformer recipe (Transformer++) that has now become standard, particularly as the sequence length grows.",
+    "location": "Section 4.2.1, Figure 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Selective SSMs give m_A about 1 at small scale; their per-token state is a fixed-size recurrent state.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gu-2023-mamba/2",
+    "claim": "Mamba-3B outperforms same-size Transformers and matches Transformers twice its size.",
+    "quote": "On language modeling, our Mamba-3B model outperforms Transformers of the same size and matches Transformers twice its size, both in pretraining and downstream evaluation.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Against a Pythia-style baseline at fixed tokens; not a compute-optimal comparison.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "gundlach-2025-origin",
+  "title": "On the Origin of Algorithmic Progress in AI",
+  "authors": "Hans Gundlach, Alex Fogelson, Jayson Lynch, Ana Trisovic, Jonathan Rosenfeld, Anmol Sandhu et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2511.21622",
+  "topics": [
+   "theory",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gundlach-2025-origin/1",
+    "claim": "Small-scale ablations account for under 10x of the estimated 22,000x algorithmic gain; most of the gain is scale-dependent, dominated by the LSTM-to-Transformer transition.",
+    "quote": "Running small-scale ablation experiments on key innovations from this time period, we are able to account for less than 10× of these gains.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10,
+      "unit": "x",
+      "condition": "upper bound on the product of ablated scale-invariant gains at 3.6M parameters"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Most catalogued innovations give small constant m_A; only a few scale-dependent ones matter at frontier C.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/2",
+    "claim": "SwiGLU gives a 1.17x compute-equivalent gain over GeLU in a 3.6M-parameter transformer.",
+    "quote": "we find that SwiGLU, has a measurable 1.17× efficiency gain over GeLU even taking into account its increased parameter requirements",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.17,
+      "unit": "x",
+      "condition": "SwiGLU vs GeLU at 3.6M parameters, loss threshold 5.3"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Small constant m_A for an architecture tweak; no change to NCI state.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/3",
+    "claim": "Rotary position encoding gives about 1.44x over sinusoidal encoding.",
+    "quote": "We estimate that rotary encoding constitutes an improvement of 44% in training efficiency over sinusoidal encoding originally employed in Vaswani et al. [2017].",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.44,
+      "unit": "x",
+      "condition": "RoPE vs sinusoidal at 3.6M parameters"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Small constant m_A; no change to NCI state.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/4",
+    "claim": "Learning-rate schedule choice changes training efficiency by under 5%.",
+    "quote": "We observe very small training efficiency gains between any learning rate schedules (< 5%).",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.05,
+      "unit": "x",
+      "condition": "upper bound across inverse-sqrt, linear and cosine schedules"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Schedules give m_A near 1.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/5",
+    "claim": "Pre-RMSNorm gives 1.87x over post-RMSNorm, and 1.09x over pre-LayerNorm.",
+    "quote": "We observe substantial improvements of 87% transitioning from post-RMSNorm to pre-RMSNorm, with more modest improvements of 9% switching from a pre-layernorm model to a pre-RMSNorm model.",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.87,
+      "unit": "x",
+      "condition": "pre-RMSNorm vs post-RMSNorm"
+     },
+     {
+      "param": "other",
+      "value": 1.09,
+      "unit": "x",
+      "condition": "pre-RMSNorm vs pre-LayerNorm"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Moderate constant m_A from normalization placement.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/6",
+    "claim": "AdamW is 1.87x more compute-efficient than well-tuned momentum SGD, and the gap is roughly scale-invariant.",
+    "quote": "we observe smoother scaling behavior and a sizable 1.87× gap in training efficiency compared to AdamW",
+    "location": "Section 3.1 and Appendix C",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.87,
+      "unit": "x",
+      "condition": "AdamW vs SGD (momentum 0.98, batch 64) at 3.6M parameters"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Adaptive optimizer state (2 extra fp32 words per parameter) buys about 1.9x; dropping it (SGD) lowers state_bits_per_param at that cost.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/7",
+    "claim": "Gains do not multiply: reverting four post-2017 changes predicts 3.43x but measures 1.33x.",
+    "quote": "Using the estimates in Figure 1 and assuming multiplicative improvement we would expect CEG gains of 3.43×. However, the efficiency gain is only 1.33×.",
+    "location": "Section 3.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.33,
+      "unit": "x",
+      "condition": "Modern vs Retro transformer measured; 3.43x predicted by multiplying ablations"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Composite m_A for stacked tweaks is sub-multiplicative; summing log-multipliers overstates C_eff.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/8",
+    "claim": "MoE's FLOP-efficiency gain is estimated at or below 2x at a fixed number of experts.",
+    "quote": "However, we estimate that this is at or below a 2× factor in FLOP efficiency holding the number of experts constant.",
+    "location": "Section 3.3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x",
+      "condition": "MoE vs dense, literature estimate, fixed expert count"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Conservative m_A for MoE, against Krajewski's larger scale-dependent figures.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/9",
+    "claim": "The LSTM-to-Transformer gap grows from 6.28x at the smallest scale to 26x at a lower loss threshold.",
+    "quote": "Interestingly, our LSTM model at the smallest scales we measure is only 6.28× less compute-efficient than our transformer model (using a loss threshold of 5.3 or above, see Section 3.1). While at a validation threshold of 4.4, the efficiency gap is 26×",
+    "location": "Section 4.1.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 6.28,
+      "unit": "x",
+      "condition": "Modern transformer vs LSTM, loss threshold 5.3"
+     },
+     {
+      "param": "other",
+      "value": 26,
+      "unit": "x",
+      "condition": "Modern transformer vs LSTM, loss threshold 4.4"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A scale-dependent (exponent-change) multiplier: m_A grows with C, so it matters most to a well-resourced adversary.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/10",
+    "claim": "Moving from Kaplan to Chinchilla allocation is scale-dependent but stays under 10x over 1e16-1e24 FLOP.",
+    "quote": "Furthermore, the Chinchilla training efficiency gains are large but remain below 10x for much of the scale used in contemporary machine learning (i.e., 10^16 − 10^24 FLOPs).",
+    "location": "Section 4.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10,
+      "unit": "x",
+      "condition": "upper bound of Chinchilla vs Kaplan allocation gain, 1e16-1e24 FLOP"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Compute allocation is a data/size choice with no NCI cost of its own; its m_A grows with C.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/11",
+    "claim": "Adam vs SGD and modern vs retro transformer gains are roughly scale-invariant.",
+    "quote": "Meanwhile, the choice between Adam and SGD, as well as the difference between a modern and a Retro Transformer, seems to be relatively scale-invariant.",
+    "location": "Section 4.1.2",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Optimizer and tweak multipliers are constant in C.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "hagele-2024-wsd",
+  "title": "Scaling Laws and Compute-Optimal Training Beyond Fixed Training Durations",
+  "authors": "Alexander Hägele, Elie Bakouch, Atli Kosson, Loubna Ben Allal, Leandro Von Werra, Martin Jaggi",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2405.18392",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hagele-2024-wsd/1",
+    "claim": "A constant learning rate with a cooldown scales predictably and like cosine.",
+    "quote": "We investigate the training behavior of a direct alternative -- constant learning rate and cooldowns -- and find that it scales predictably and reliably similar to cosine.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Schedules give m_A about 1; their gain is reusable runs for fitting laws.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "hernandez-2020-algorithmic-efficiency",
+  "title": "Measuring the Algorithmic Efficiency of Neural Networks",
+  "authors": "Danny Hernandez, Tom B. Brown",
+  "year": 2020,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2005.04305",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hernandez-2020-algorithmic-efficiency/1",
+    "claim": "Compute to reach AlexNet-level ImageNet accuracy fell 44x from 2012 to 2019.",
+    "quote": "the number of floating-point operations required to train a classifier to AlexNet-level performance on ImageNet has decreased by a factor of 44x between 2012 and 2019",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 44,
+      "unit": "x",
+      "condition": "ImageNet AlexNet-level compute reduction 2012-2019"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Measures m_A at a fixed old capability, which favours scale-invariant innovations.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "ho-2024-algorithmic-progress",
+  "title": "Algorithmic progress in language models",
+  "authors": "Anson Ho, Tamay Besiroglu, Ege Erdil, David Owen, Robi Rahman, Zifan Carl Guo et al.",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2403.05812",
+  "topics": [
+   "theory",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ho-2024-algorithmic-progress/1",
+    "claim": "Across 200+ evaluations on WikiText and Penn Treebank (2012-2023), the compute to reach a fixed perplexity halved about every 8 months.",
+    "quote": "we find that the compute required to reach a set performance threshold has halved approximately every 8 months, with a 95% confidence interval of around 5 to 14 months",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 8,
+      "unit": "months",
+      "condition": "halving time of compute to fixed perplexity; 95% CI 5-14 months"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Sets the background rate of m_A growth an adversary could ride under a fixed compute cap; the estimate pools all innovations and does not say which ones survive at frontier scale.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "ho-2024-algorithmic-progress/2",
+    "claim": "The transformer's compute-equivalent gain over earlier architectures is about 7x (CI 3-46x) at frontier budgets, and 6.6x at lower budgets.",
+    "quote": "Based on 100 bootstraps, we obtain a median estimate of 7.2× [95% CI: 3.3×, 45.7×] for the transformer’s compute-equivalent gain.",
+    "location": "Section 3.3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 7.2,
+      "unit": "x",
+      "condition": "transformer vs LSTM/RNN/SSM compute-equivalent gain, 95% CI 3.3-45.7"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The largest single architecture multiplier in the record; m_A for the reference recipe already includes it.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "hoffmann-2022-chinchilla",
+  "title": "Training Compute-Optimal Large Language Models",
+  "authors": "Jordan Hoffmann, Sebastian Borgeaud, Arthur Mensch, Elena Buchatskaya, Trevor Cai, Eliza Rutherford et al.",
+  "year": 2022,
+  "venue": "NeurIPS 2022",
+  "url": "https://arxiv.org/abs/2203.15556",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hoffmann-2022-chinchilla/1",
+    "claim": "Compute-optimal training scales parameters and tokens equally.",
+    "quote": "we find that for compute-optimal training, the model size and the number of training tokens should be scaled equally: for every doubling of model size the number of training tokens should also be doubled",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.5,
+      "unit": "exponent",
+      "condition": "N_opt ∝ C^0.5, D_opt ∝ C^0.5"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Defines the reference allocation (about 20 tokens per parameter).",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -466,6 +1148,149 @@
   ]
  },
  {
+  "id": "kaddour-2023-no-train-no-gain",
+  "title": "No Train No Gain: Revisiting Efficient Training Algorithms For Transformer-based Language Models",
+  "authors": "Jean Kaddour, Oscar Key, Piotr Nawrot, Pasquale Minervini, Matt J. Kusner",
+  "year": 2023,
+  "venue": "NeurIPS 2023",
+  "url": "https://arxiv.org/abs/2307.06440",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kaddour-2023-no-train-no-gain/1",
+    "claim": "Layer stacking, layer dropping, selective backprop, RHO loss, Lion and Sophia lose their gains against a fully-decayed learning-rate baseline at fixed compute.",
+    "quote": "When pre-training BERT and T5 with a fixed computation budget using such methods, we find that their training, validation, and downstream gains vanish compared to a baseline with a fully-decayed learning rate.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Many efficient-training m_A claims fall to about 1 against a tuned baseline.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "kaplan-2020-scaling-laws",
+  "title": "Scaling Laws for Neural Language Models",
+  "authors": "Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B. Brown, Benjamin Chess, Rewon Child et al.",
+  "year": 2020,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2001.08361",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kaplan-2020-scaling-laws/1",
+    "claim": "LSTMs match Transformers on early-context tokens but fall behind on later tokens.",
+    "quote": "We see from these figures that the LSTMs perform as well as Transformers for tokens appearing early in the context, but cannot match the Transformer performance for later tokens.",
+    "location": "Section 3.2.1, Figure 7",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The transformer's advantage is concentrated in long-context use, part of why its m_A grows with scale.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "kaplan-2020-scaling-laws/2",
+    "claim": "Kaplan's compute-optimal model size grows as C^0.73, spending extra compute mostly on parameters.",
+    "quote": "can be fit very well with a power-law N(C_min) ∝ (C_min)^0.73",
+    "location": "Section 6, eq. 6.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.73,
+      "unit": "exponent",
+      "condition": "N_opt ∝ C^0.73 (Kaplan)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The allocation Chinchilla replaced; the reference recipe here is Chinchilla-optimal.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "krajewski-2024-finegrained-moe",
+  "title": "Scaling Laws for Fine-Grained Mixture of Experts",
+  "authors": "Jakub Krajewski, Jan Ludziejewski, Kamil Adamczewski, Maciej Pióro, Michał Krutul, Szymon Antoniak et al.",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2402.07871",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "krajewski-2024-finegrained-moe/1",
+    "claim": "A compute-optimal fine-grained MoE at 1e20 FLOP matches a dense Transformer with 20x the compute; the saving exceeds 40x past 1e25 FLOP.",
+    "quote": "Our results suggest that a compute-optimal MoE model trained with a budget of 10^20 FLOPs will achieve the same quality as a dense Transformer trained with a 20× greater computing budget, with the compute savings rising steadily, exceeding 40× when budget of 10^25 FLOPs is surpassed",
+    "location": "Section 1, Figure 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 20,
+      "unit": "x",
+      "condition": "MoE vs dense compute-equivalent, 1e20 FLOP"
+     },
+     {
+      "param": "other",
+      "value": 40,
+      "unit": "x",
+      "condition": "MoE vs dense, beyond 1e25 FLOP"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The largest growing m_A in the record; fitted on 129M-3.7B models with E = 64 experts and extrapolated.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "krajewski-2024-finegrained-moe/2",
+    "claim": "The fits fix the expansion rate at E = 64 and span 129M-3.7B parameters and 16B-130B tokens.",
+    "quote": "To constrain the search space, E = 64 is fixed, following the recommendations of Clark et al. (2022).",
+    "location": "Section 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 64,
+      "unit": "experts",
+      "condition": "expansion rate E in all fits"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The measured range is about 1e19-3e21 FLOP; the 40x figure is extrapolation.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "liew-2025-upcycling-scaling",
+  "title": "Scaling Laws for Upcycling Mixture-of-Experts Language Models",
+  "authors": "Seng Pei Liew, Takuya Kato, Sho Takase",
+  "year": 2025,
+  "venue": "ACL 2025",
+  "url": "https://arxiv.org/abs/2502.03009",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liew-2025-upcycling-scaling/1",
+    "claim": "An interaction between dense and upcycled dataset sizes limits upcycling's efficiency at large budgets.",
+    "quote": "there is a novel interaction term between the dense and upcycled training dataset that limits the efficiency of upcycling at large computational budgets",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Upcycling's gain shrinks with C.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "loomis-1949-inequality",
   "title": "An inequality related to the isoperimetric inequality",
   "authors": "L. H. Loomis, H. Whitney",
@@ -496,6 +1321,194 @@
     "grade": "theoretical",
     "bears_on": "Tightness by boxes suggests the matching NCI attack is a blocked decomposition along the token, layer and weight axes.",
     "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "loshchilov-2024-ngpt",
+  "title": "nGPT: Normalized Transformer with Representation Learning on the Hypersphere",
+  "authors": "Ilya Loshchilov, Cheng-Ping Hsieh, Simeng Sun, Boris Ginsburg",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2410.01131",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "loshchilov-2024-ngpt/1",
+    "claim": "nGPT, with every vector normalized to the hypersphere, needs 4-20x fewer training steps for equal accuracy.",
+    "quote": "Experiments show that nGPT learns much faster, reducing the number of training steps required to achieve the same accuracy by a factor of 4 to 20, depending on the sequence length.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "x",
+      "condition": "steps saved, lower end"
+     },
+     {
+      "param": "other",
+      "value": 20,
+      "unit": "x",
+      "condition": "steps saved, upper end, longest context"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Step count, not FLOPs: nGPT's per-step cost is higher; the claimed m_A is unreplicated at scale.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "ludziejewski-2025-joint-moe",
+  "title": "Joint MoE Scaling Laws: Mixture of Experts Can Be Memory Efficient",
+  "authors": "Jan Ludziejewski, Maciej Pióro, Jakub Krajewski, Maciej Stefaniak, Michał Krutul, Jan Małaśnicki et al.",
+  "year": 2025,
+  "venue": "ICML 2025",
+  "url": "https://arxiv.org/abs/2502.05172",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ludziejewski-2025-joint-moe/1",
+    "claim": "Under joint memory and compute budgets, MoE models can be more memory-efficient than dense ones.",
+    "quote": "Surprisingly, we show that MoE models can be more memory-efficient than dense models, contradicting conventional wisdom.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "MoE's gain survives a cap on total parameters, which matters if the policy bounds committed state.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "mcleish-2025-gemstones",
+  "title": "Gemstones: A Model Suite for Multi-Faceted Scaling Laws",
+  "authors": "Sean McLeish, John Kirchenbauer, David Yu Miller, Siddharth Singh, Abhinav Bhatele, Micah Goldblum et al.",
+  "year": 2025,
+  "venue": "NeurIPS 2025",
+  "url": "https://arxiv.org/abs/2502.06857",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "mcleish-2025-gemstones/1",
+    "claim": "Scaling-law prescriptions are highly sensitive to experimental design and the checkpoints used in fitting.",
+    "quote": "we find that the prescriptions of scaling laws can be highly sensitive to the experimental design process and the specific model checkpoints used during fitting",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Multipliers read off fitted laws carry design-dependent error; small differences in m_A are not robust.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "narang-2021-transformer-modifications",
+  "title": "Do Transformer Modifications Transfer Across Implementations and Applications?",
+  "authors": "Sharan Narang, Hyung Won Chung, Yi Tay, William Fedus, Thibault Fevry, Michael Matena et al.",
+  "year": 2021,
+  "venue": "EMNLP 2021",
+  "url": "https://arxiv.org/abs/2102.11972",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "narang-2021-transformer-modifications/1",
+    "claim": "In a shared codebase most proposed Transformer modifications do not meaningfully improve performance.",
+    "quote": "Surprisingly, we find that most modifications do not meaningfully improve performance.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Discounts single-paper m_A claims for architecture tweaks; most are near 1 once re-implemented.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "nie-2024-mdm",
+  "title": "Scaling up Masked Diffusion Models on Text",
+  "authors": "Shen Nie, Fengqi Zhu, Chao Du, Tianyu Pang, Qian Liu, Guangtao Zeng et al.",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2410.18514",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "nie-2024-mdm/1",
+    "claim": "Masked diffusion models scale at the autoregressive rate but need about 16x more compute for equal validation loss.",
+    "quote": "However, MDMs still require approximately 16 times more computational resources than ARMs to achieve comparable validation losses.",
+    "location": "Section 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.0625,
+      "unit": "x",
+      "condition": "derived 1/16: MDM vs ARM, equal validation loss"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Masked diffusion m_A about 1/16, constant in C (same exponent).",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "peng-2023-rwkv",
+  "title": "RWKV: Reinventing RNNs for the Transformer Era",
+  "authors": "Bo Peng, Eric Alcaide, Quentin Anthony, Alon Albalak, Samuel Arcadinho, Stella Biderman et al.",
+  "year": 2023,
+  "venue": "Findings of EMNLP 2023",
+  "url": "https://arxiv.org/abs/2305.13048",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "peng-2023-rwkv/1",
+    "claim": "RWKV, a linear-attention RNN, performs on par with similarly sized Transformers up to 14B parameters.",
+    "quote": "We scale our models as large as 14 billion parameters, by far the largest dense RNN ever trained, and find RWKV performs on par with similarly sized Transformers",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Linear-attention RNN m_A about 1 at matched size.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "porian-2024-resolving-discrepancies",
+  "title": "Resolving Discrepancies in Compute-Optimal Scaling of Language Models",
+  "authors": "Tomer Porian, Mitchell Wortsman, Jenia Jitsev, Ludwig Schmidt, Yair Carmon",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2406.19146",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "porian-2024-resolving-discrepancies/1",
+    "claim": "The Kaplan-Chinchilla discrepancy comes from last-layer cost, warmup duration and scale-dependent optimizer tuning; corrected, Kaplan's setup reproduces Chinchilla.",
+    "quote": "identifying three factors causing the difference: last layer computational cost, warmup duration, and scale-dependent optimizer tuning",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The Kaplan-to-Chinchilla multiplier is a methodology fix, available to anyone at no NCI cost.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -585,6 +1598,30 @@
   ]
  },
  {
+  "id": "ruan-2024-observational-scaling",
+  "title": "Observational Scaling Laws and the Predictability of Language Model Performance",
+  "authors": "Yangjun Ruan, Chris J. Maddison, Tatsunori Hashimoto",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2405.10938",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ruan-2024-observational-scaling/1",
+    "claim": "Across about 100 public models, families differ mainly in how efficiently they convert training compute into a low-dimensional capability space.",
+    "quote": "we show that these variations are consistent with a simple, generalized scaling law where language model performance is a function of a low-dimensional capability space, and model families only vary in their efficiency in converting training compute to capabilities",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Supports modelling a recipe as a single compute multiplier m_A on log C, the form used for C_eff.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
   "id": "saha-2024-io-attention",
   "title": "The I/O Complexity of Attention, or How Optimal is Flash Attention?",
   "authors": "Barna Saha, Christopher Ye",
@@ -622,6 +1659,437 @@
     "grade": "theoretical",
     "bears_on": "The most directly borrowable technique: NCI already measures information in bits, so a communication complexity lower bound for the update function would transfer to NCI regardless of how the adversary writes the circuit.",
     "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "sanderson-2025-compute-paths",
+  "title": "Rethinking LLM Advancement: Compute-Dependent and Independent Paths to Progress",
+  "authors": "Jack Sanderson, Teddy Foley, Spencer Guo, Anqi Qu, Henry Josephson",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.04075",
+  "topics": [
+   "theory",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sanderson-2025-compute-paths/1",
+    "claim": "In nanoGPT experiments, compute-independent innovations give combined CEG up to 3.5x at both scales, while compute-dependent ones hurt at small scale and approach parity as size grows.",
+    "quote": "Experimental validation with nanoGPT models confirms that compute-independent advancements yield significant performance gains (e.g., with combined CEG up to 3.5×) across the tested scales. In contrast, compute-dependent advancements were detrimental to performance at smaller experimental scales, but showed improved CEG (on par with the baseline) as model size increased",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3.5,
+      "unit": "x",
+      "condition": "combined CEG of compute-independent innovations, nanoGPT"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Separates constant from scale-dependent m_A; under a compute cap the constant ones remain usable.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "sanderson-2025-compute-paths/2",
+    "claim": "Multi-query and sparse attention have CEG well below 1 in a compact model and near 1 in the full model.",
+    "quote": "Multi-Query Attention 3.846 0.673 3.535 0.931 Sparse Attention 3.886 0.515 3.418 0.964 None 3.799 1.000 3.542 1.000",
+    "location": "Table 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.673,
+      "unit": "x",
+      "condition": "MQA CEG, compact nanoGPT"
+     },
+     {
+      "param": "other",
+      "value": 0.931,
+      "unit": "x",
+      "condition": "MQA CEG, full nanoGPT"
+     },
+     {
+      "param": "other",
+      "value": 0.515,
+      "unit": "x",
+      "condition": "sparse attention CEG, compact"
+     },
+     {
+      "param": "other",
+      "value": 0.964,
+      "unit": "x",
+      "condition": "sparse attention CEG, full"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Inference-oriented attention changes have m_A at or below 1 for training, rising toward 1 with scale.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "shazeer-2020-glu",
+  "title": "GLU Variants Improve Transformer",
+  "authors": "Noam Shazeer",
+  "year": 2020,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2002.05202",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shazeer-2020-glu/1",
+    "claim": "GEGLU and SwiGLU feed-forward variants give the best perplexities among the GLU variants tested in T5.",
+    "quote": "The GEGLU and SwiGLU variants produce the best perplexities.",
+    "location": "Section 3.2, Table 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Gated FFNs are a small constant m_A with no NCI change.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "shen-2024-linear-scaling",
+  "title": "Scaling Laws for Linear Complexity Language Models",
+  "authors": "Xuyang Shen, Dong Li, Ruitao Leng, Zhen Qin, Weigao Sun, Yiran Zhong",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2406.16690",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shen-2024-linear-scaling/1",
+    "claim": "Linear-complexity models (70M-7B, 300B tokens) scale like LLaMA and beat it on perplexity and commonsense reasoning at equal FLOPs, but are weaker at retrieval.",
+    "quote": "Our findings reveal that linear complexity models exhibit similar scaling trends to conventional transformer-based models and consistently outperform LLaMA in cross-domain perplexity and average accuracy in commonsense reasoning under the same FLOPs budget but demonstrate weakness in retrieval tasks.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "m_A about 1 or slightly above on loss, below 1 on retrieval; same exponent as softmax attention.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "so-2021-primer",
+  "title": "Primer: Searching for Efficient Transformers for Language Modeling",
+  "authors": "David R. So, Wojciech Mańke, Hanxiao Liu, Zihang Dai, Noam Shazeer, Quoc V. Le",
+  "year": 2021,
+  "venue": "NeurIPS 2021",
+  "url": "https://arxiv.org/abs/2109.08668",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "so-2021-primer/1",
+    "claim": "Primer's gains over the Transformer increase with compute and follow a power law.",
+    "quote": "Experiments show Primer's gains over Transformer increase as compute scale grows and follow a power law with respect to quality at optimal model sizes.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "A rare architecture tweak whose m_A grows with C.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "so-2021-primer/2",
+    "claim": "At 1.9B parameters Primer uses one third of the compute for the same one-shot performance; against the original T5 at 500M it cuts training cost 4x.",
+    "quote": "For instance, in a 1.9B parameter configuration similar to GPT-3 XL, Primer uses 1/3 of the training compute to achieve the same one-shot performance as Transformer.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3,
+      "unit": "x",
+      "condition": "Primer vs Transformer, 1.9B, one-shot"
+     },
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "x",
+      "condition": "Primer vs original T5, 500M, C4 LM"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "m_A about 3 against a 2021 baseline; against a modern (SwiGLU, RoPE) baseline the gain is smaller.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "sorscher-2022-beyond-scaling",
+  "title": "Beyond neural scaling laws: beating power law scaling via data pruning",
+  "authors": "Ben Sorscher, Robert Geirhos, Shashank Shekhar, Surya Ganguli, Ari S. Morcos",
+  "year": 2022,
+  "venue": "NeurIPS 2022",
+  "url": "https://arxiv.org/abs/2206.14486",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sorscher-2022-beyond-scaling/1",
+    "claim": "With a good pruning metric, error can in theory fall exponentially rather than as a power law in pruned dataset size.",
+    "quote": "show how in theory we can break beyond power law scaling and potentially even reduce it to exponential scaling instead if we have access to a high-quality data pruning metric",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The one mechanism proposed for an exponent change from data selection.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "sorscher-2022-beyond-scaling/2",
+    "claim": "Most existing pruning metrics scale poorly to ImageNet.",
+    "quote": "We find most existing high performing metrics scale poorly to ImageNet",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The exponent change has not been shown for LM pretraining.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "tay-2022-scaling-vs-architectures",
+  "title": "Scaling Laws vs Model Architectures: How does Inductive Bias Influence Scaling?",
+  "authors": "Yi Tay, Mostafa Dehghani, Samira Abnar, Hyung Won Chung, William Fedus, Jinfeng Rao et al.",
+  "year": 2022,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2207.10551",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "tay-2022-scaling-vs-architectures/1",
+    "claim": "Of ten architectures, the vanilla Transformer scales best even where it is not best in absolute terms.",
+    "quote": "It turns out that amongst all ten architectures that we consider, the vanilla Transformer has the best scaling behaviour, even if its absolute performance at each compute region is not the greatest.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Small-scale wins of alternative architectures often reverse with scale (m_A shrinks with C).",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "tay-2022-scaling-vs-architectures/2",
+    "claim": "Linear-attention Performer fails to scale: perplexity drops 2.7% base-to-large vs 8.4% for the Transformer.",
+    "quote": "Another interesting trend is that “linear\" Transformers such as Performer fail to scale as shown in Figure 2(i). The pre-training perplexity metric only decreases by 2.7% going from base to large scale compared to 8.4% of the vanilla Transformer.",
+    "location": "Section 3.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.7,
+      "unit": "%",
+      "condition": "Performer perplexity drop base->large"
+     },
+     {
+      "param": "other",
+      "value": 8.4,
+      "unit": "%",
+      "condition": "vanilla Transformer perplexity drop"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Kernel linear attention has a worse exponent: m_A falls with C.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "tay-2022-scaling-vs-architectures/3",
+    "claim": "Parameter sharing (Universal Transformer, ALBERT) warps scaling in performance, FLOPs and parameters.",
+    "quote": "a distinct feature of Universal Transformers (and ALBERT) is parameter sharing. Hence, compared with standard Transformers, this architectural choice significantly warps the scaling behaviour not only with respect to performance but also amongst compute metrics such as FLOPs, speed and number of parameters",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Shared-parameter (looped) models have few updated parameters per FLOP, which lowers updated state.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "tay-2022-ul2r",
+  "title": "Transcending Scaling Laws with 0.1% Extra Compute",
+  "authors": "Yi Tay, Jason Wei, Hyung Won Chung, Vinh Q. Tran, David R. So, Siamak Shakeri et al.",
+  "year": 2022,
+  "venue": "EMNLP 2023",
+  "url": "https://arxiv.org/abs/2210.11399",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "tay-2022-ul2r/1",
+    "claim": "Continuing PaLM 540B with UL2's mixture of denoisers for 0.1% extra compute gives about 2x compute savings.",
+    "quote": "Impressively, at 540B scale, we show an approximately 2x computational savings rate where U-PaLM achieves the same performance as the final PaLM 540B model at around half its computational budget",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x",
+      "condition": "U-PaLM 540B vs PaLM 540B, downstream"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "m_A about 2 at about 2.5e24 FLOP on downstream metrics.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "tian-2025-efficiency-leverage",
+  "title": "Towards Greater Leverage: Scaling Laws for Efficient Mixture-of-Experts Language Models",
+  "authors": "Changxin Tian, Kunlong Chen, Jia Liu, Ziqi Liu, Zhiqiang Zhang, Jun Zhou",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2507.17702",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "tian-2025-efficiency-leverage/1",
+    "claim": "On 1T identical tokens, a 0.85B-active MoE matched a 6.1B dense model with over 7x less compute.",
+    "quote": "When trained on an identical 1T high-quality token dataset, Ling-mini-beta matched the performance of the 6.1B dense model while consuming over 7x fewer computational resources",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 7,
+      "unit": "x",
+      "condition": "Ling-mini-beta (0.85B active) vs 6.1B dense, 1T tokens"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "MoE m_A above 7 at about 5e21 FLOP.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "tian-2025-efficiency-leverage/2",
+    "claim": "Efficiency leverage grows with the compute budget at a fixed activation ratio.",
+    "quote": "Second, for a fixed activation ratio, the EL grows with the computational budget, demonstrating that the MoE advantage is amplified at larger scales.",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "MoE m_A grows with C (300+ models up to 28B).",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "waleffe-2024-mamba-empirical",
+  "title": "An Empirical Study of Mamba-based Language Models",
+  "authors": "Roger Waleffe, Wonmin Byeon, Duncan Riach, Brandon Norick, Vijay Korthikanti, Tri Dao et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2406.07887",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "waleffe-2024-mamba-empirical/1",
+    "claim": "At 8B parameters and 1.1T tokens, pure Mamba and Mamba-2 are about 15 points behind a Transformer on 5-shot MMLU.",
+    "quote": "For the former, after training for 1.1T tokens, both Mamba and Mamba-2 models produce nearly 15 points lower accuracy when compared to a Transformer model on this task.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Pure SSMs lose in-context and copying ability at scale: m_A below 1 on those tasks.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "waleffe-2024-mamba-empirical/2",
+    "claim": "An 8B hybrid of 43% Mamba-2, 7% attention and 50% MLP layers beats the 8B Transformer on all 12 standard tasks, by 2.65 points on average.",
+    "quote": "In contrast, we find that the 8B Mamba-2-Hybrid exceeds the 8B Transformer on all 12 standard tasks we evaluated (+2.65 points on average) and is predicted to be up to 8x faster when generating tokens at inference time.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.65,
+      "unit": "points",
+      "condition": "Mamba-2-Hybrid vs Transformer, 8B, 3.5T tokens, 12-task average"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Hybrid m_A above 1 at 8B/3.5T tokens; no equal-loss compute ratio is reported.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "yang-2024-gated-deltanet",
+  "title": "Gated Delta Networks: Improving Mamba2 with Delta Rule",
+  "authors": "Songlin Yang, Jan Kautz, Ali Hatamizadeh",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2412.06464",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yang-2024-gated-deltanet/1",
+    "claim": "Gated DeltaNet surpasses Mamba2 and DeltaNet on language modeling, reasoning and retrieval; hybrids with sliding-window attention add training efficiency.",
+    "quote": "Our proposed architecture, Gated DeltaNet, consistently surpasses existing models like Mamba2 and DeltaNet across multiple benchmarks",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Delta-rule recurrences improve on SSMs; m_A vs Transformer not reported.",
+    "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "ye-2024-diff-transformer",
+  "title": "Differential Transformer",
+  "authors": "Tianzhu Ye, Li Dong, Yuqing Xia, Yutao Sun, Yi Zhu, Gao Huang et al.",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2410.05258",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ye-2024-diff-transformer/1",
+    "claim": "Differential attention needs about 65% of the parameters or tokens of a Transformer for equal loss.",
+    "quote": "The scaling curves indicate that Diff Transformer requires only about 65% of model size or training tokens needed by Transformer to achieve comparable language modeling performance.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.54,
+      "unit": "x",
+      "condition": "derived 1/0.65: parameter or token efficiency vs Transformer, 830M-13B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "m_A about 1.5 (1/0.65) on parameters or tokens separately, from 830M to 13B.",
+    "from_review": "scaling-corpus"
+   },
+   {
+    "id": "ye-2024-diff-transformer/2",
+    "claim": "Fitted curves put a 6.8B Diff Transformer level with an 11B Transformer (62.2% of parameters).",
+    "quote": "According to the fitted curves, 6.8B-size Diff Transformer achieves a validation loss comparable to 11B-size Transformer, requiring only 62.2% of parameters.",
+    "location": "Section 3.2",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Constant parameter-efficiency gain across the tested sizes.",
+    "from_review": "scaling-corpus"
    }
   ]
  },
@@ -673,6 +2141,37 @@
     "grade": "theoretical",
     "bears_on": "A per-shard floor, comparable to NCI's per-block cap K: when d/log m exceeds K, a shard's contribution cannot fit in one block's input.",
     "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2020-pld",
+  "title": "Accelerating Training of Transformer-Based Language Models with Progressive Layer Dropping",
+  "authors": "Minjia Zhang, Yuxiong He",
+  "year": 2020,
+  "venue": "NeurIPS 2020",
+  "url": "https://arxiv.org/abs/2010.13369",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2020-pld/1",
+    "claim": "Progressive layer dropping pre-trains BERT 2.5x faster to similar downstream accuracy.",
+    "quote": "Extensive experiments on BERT show that the proposed method achieves a 24% time reduction on average per sample and allows the pre-training to be 2.5 times faster than the baseline to get a similar accuracy on downstream tasks.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.5,
+      "unit": "x",
+      "condition": "PLD vs BERT baseline, downstream accuracy"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Claimed m_A 2.5 for BERT; Kaddour 2023 finds layer-dropping gains vanish.",
+    "from_review": "scaling-corpus"
    }
   ]
  }
