@@ -703,23 +703,6 @@ theorem KS_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner 
   KS_of H D I DO hRef hRounds (outerKS_of_flockKS hF hN hε hRd hS hR)
     (innerKS_of_KSAbort hKS hRounds hV hC hO hAcc hpc hN0)
 
-/-- **KS of the recursion over Flock, from Flock's KS at the outer deployment and Flock's KS against provers that may
-abort at the inner one**: `KS_of_flockKS` at each inner decoder that meets the spec. Flock's KS against provers that
-may abort is a hypothesis of its own: it doesn't follow from `Claims.Flock.KS` at `DI` (`flockKS_not_KSAbort`). -/
-theorem KSFlock_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T)
-    (opening : Msg → Msg) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
-    (hKS : ∀ decI, decOK DI decI → (Inner.ofFlock DI decI).KSAbort H) (hRef : Refuses H D)
-    (hRounds : ∀ x, DI.V.k (xI D x) ≤ D.V.k x) (hN : SessionNums D DO) (hε : TableErrNonneg D)
-    (hRd : ∀ decI, SessionRounds D (Inner.ofFlock DI decI) DO) (hS : SessionAccepts D)
-    (hR : ∀ decI, SessionRuns H D (Inner.ofFlock DI decI) DO)
-    (hV : ∀ decI, InnerViewRun H D (Inner.ofFlock DI decI) DO)
-    (hC : ∀ decI, CallsRecord H D (Inner.ofFlock DI decI) DO)
-    (hO : ∀ decI, CallsOpen H D (Inner.ofFlock DI decI) DO opening)
-    (hAcc : ∀ decI, InnerAccepts H D (Inner.ofFlock DI decI) DO)
-    (hpc : ∀ decI, PublicCoin H (Inner.ofFlock DI decI) decC) (hN0 : CallsNil H D) : KSFlockA H D DI DO :=
-  fun decI h => KS_of_flockKS H D _ DO opening decC hF (hKS decI h) hRef hRounds hN hε (hRd decI) hS (hR decI)
-    (hV decI) (hC decI) (hO decI) (hAcc decI) (hpc decI) hN0
-
 end RecursionKS
 
 end Claims.Recursion
