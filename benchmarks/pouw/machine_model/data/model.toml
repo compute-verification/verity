@@ -2,8 +2,9 @@
 # MACs it replaces, at the vector's MAC price.
 
 # The vector `machine-model solve` re-solves by default: the adopted vector (decision 17; VF3l-16 by decision 62, then
-# VF3n-16 by the compute-accounting coordinator, 17 Oct, once the JI3e refit was approved; VF3o-16 its measured margin).
-current = "VF3o-16"
+# VF3n-16 by the compute-accounting coordinator, 17 Oct, once the JI3e refit was approved; VF3o-16 its measured margin;
+# VF3p-16 by decision 73, a uniform instruction on the issue rows).
+current = "VF3p-16"
 # The design whose cheapest attack is a vector's margin.
 adopted = "U±64, F±1"
 

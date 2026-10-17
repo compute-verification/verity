@@ -2,17 +2,17 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3o-16) re-solves here to the τ, τ at 600 W, U/F_low and
+checks every attack against it. Each named vector (VF … VF3p-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3o-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3o-16, the vector of record since 17 Oct after VF3n-16; VF3l-16 by decision 62 before them)
-uv run machine-model census VF3o-16 --kind ATOMS64
-uv run machine-model attacks VF3o-16 -n 3 # the cheapest attacks of every design
+uv run machine-model solve VF3p-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current` (VF3p-16, the vector of record since 17 Oct after VF3n-16 and VF3o-16; VF3l-16 by decision 62 before them)
+uv run machine-model census VF3p-16 --kind ATOMS64
+uv run machine-model attacks VF3p-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 ~~~
@@ -88,7 +88,12 @@ the 1.07 with a measured margin (EPS1 TENSOR's M1c, r20261017-052102-d832, the t
 600 schedules of the forms that set JI3n (lane op, register layout, 2 to 6 warps a SMSP, placement) join the refit, and
 each JI3o row is divided by the most a searched program loads the row fitted to M1 alone, over 0.98 (1.038, 1.026,
 1.025), so a search as wide again finding as much again stays covered; the probe's refit with its search runs prints
-the rows.
+the rows. VF3p-16 put a uniform-datapath instruction on the issue rows (decision 73; EPS1 P10, `opcode_probe/eps1.py
+uniform` over `probes/uniform.cu`, r20261017-055801-e051): in the honest step at 60-68% issue it costs 0.6-1.1
+SMSP-cycles, so UNI is 1 on issue and 0.7416 of a vector instruction's coefficient on each JI3o row, the share that holds
+every uniform.cu point at the 2% margin (0.8168 holds them exactly), and UP rises to the fastest form alone, 0.766 a
+SMSP-cycle. A uniform row's measurement is valid only on ptxas 13.0 with the uniform chain gated by its exact uniform and
+MMA counts in SASS, inside a loop whose vector work reads the MMAs' results (ptxas moves the chain to lanes otherwise).
 
 ## Where the data came from
 
