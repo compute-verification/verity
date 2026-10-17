@@ -94,6 +94,17 @@ def test_baseline_pins_a_sweep_and_the_table_renders_it(tmp_path, record, hardwa
     monkeypatch.setattr(cli, "BASELINE", tmp_path / "baseline.json")
     monkeypatch.setattr(cli, "_load_result", lambda ref: doc)
     assert cli.main(["baseline"]) == 1
+    assert cli.main(["baseline", "--lock", "r20261017-000000-abcd", "--commit", "c" * 40]) == 2
+
+    lean = tmp_path / "lean.jsonl"
+    lean.write_text("".join(json.dumps({"session": f"l000{i}-1", "accepted": True, "wall_s": 3.0, "cpu_s": 2.5}) + "\n"
+                            for i in range(4)))
+    cli.main(["point-result", "--workload", "bf16-k6144", "--B", "16", "--dir", str(tmp_path), "--lean", str(lean),
+              "--out", str(out)])
+    doc = json.loads(out.read_text()) | {"run_id": "r20261017-000000-abcd"}
+    assert contract.validate(doc) == []
+    names = {m["name"]: m["value"] for m in doc["measurements"]}
+    assert names["verifier.cpu_seconds_per_vu"] == 2.5 / 16
     assert cli.main(["baseline", "--lock", "r20261017-000000-abcd", "--commit", "c" * 40]) == 0
     pin = json.loads((tmp_path / "baseline.json").read_text())["bf16-k6144"]
     assert pin["points"] == {"16": "r20261017-000000-abcd"} and pin["commit"] == "c" * 40

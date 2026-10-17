@@ -53,18 +53,20 @@ cp "$BD/gpu-mem.txt" "$O/" 2>/dev/null
 WORKLOAD=$("$PYBIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["workload"])' "$BD/point.json")
 B=$("$PYBIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["B"])' "$BD/point.json")
 PUB=$(ls "$BD"/pub-*.bin | head -1)
-# the verifier's own copy of the partition object the circuit binds, derived from the workload's program, not the bundle's
-PART=$S/partition.json
-"$PYBIN" -m verity_proof_throughput partition --workload "$WORKLOAD" --circuit "$BD/circuit.txt" --out "$PART" > "$O/partition.txt" 2>&1 \
-  || { tail -5 "$O/partition.txt"; log "the workload's partition object is not the circuit's"; exit 1; }
+# the verifier's own copies of the partition object the circuit binds and of its program, derived from the workload, not the
+# bundle's; from them and its own K = B it derives the stratified law each session's draw must be by (U2)
+PART=$S/partition.json PROG=$S/program.json
+"$PYBIN" -m verity_proof_throughput partition --workload "$WORKLOAD" --circuit "$BD/circuit.txt" --out "$PART" --program-out "$PROG" \
+  > "$O/partition.txt" 2>&1 || { tail -5 "$O/partition.txt"; log "the workload's partition object is not the circuit's"; exit 1; }
 cp "$PART" "$O/partition.json"
-DRAW_FLAGS=()
+DRAW_FLAGS="--program $PROG --stratified $B"
 log "verifying $WORKLOAD B=$B: $(ls -d "$BD"/sessions/*/ | wc -l) sessions, circuit $(stat -c %s "$BD/circuit.txt") B, partition $(tail -1 "$O/partition.txt" | cut -c1-16)"
 
 verify_one() {   # verify_one SESSION_DIR: one VERDICT line with the session's time and peak memory
   local s=${1%/} t; t=$(mktemp "$S/time.XXXXXX")
+  # shellcheck disable=SC2086
   /usr/bin/time -f '%e %U %S %M' -o "$t" "$LEAN" verify --statement verity/flock-circuit --coins os --circuit "$BD/circuit.txt" \
-    --public "$PUB" --partition "$PART" --session "$s" > "$t.out" 2> "$t.err"
+    --public "$PUB" --partition "$PART" $DRAW_FLAGS --session "$s" > "$t.out" 2> "$t.err"
   local rc=$?
   "$PYBIN" -m verity_proof_throughput lean-verdict --session "$(basename "$s")" --rc $rc --time "$t" --stdout "$t.out" --stderr "$t.err"
 }
@@ -72,9 +74,10 @@ if [ "${PROFILE:-0}" = 1 ]; then
   # one timed session under perf (DWARF call graphs: Lean's C keeps no frame pointers), with the verifier's own phase times
   s=$(ls -d "$BD"/sessions/*/ | grep -v warm | head -1); s=${s%/}
   log "profiling $(basename "$s")"
+  # shellcheck disable=SC2086
   /usr/bin/time -f '%e %U %S %M' -o "$O/profile.time" perf record -F "${PERF_HZ:-49}" --call-graph dwarf,32768 -o "$S/perf.data" \
     "$LEAN" verify --statement verity/flock-circuit --coins os --circuit "$BD/circuit.txt" --public "$PUB" --partition "$PART" \
-    "${DRAW_FLAGS[@]}" --session "$s" > "$O/profile.stdout" 2> "$O/profile.stderr"
+    $DRAW_FLAGS --session "$s" > "$O/profile.stdout" 2> "$O/profile.stderr"
   log "perf: exit $?, $(cat "$O/profile.time")"
   perf report -i "$S/perf.data" --no-children --sort symbol --stdio --percent-limit 0.2 2> /dev/null | head -400 > "$O/perf-self.txt"
   perf report -i "$S/perf.data" --children --sort symbol --stdio -g none --percent-limit 0.5 2> /dev/null | head -600 > "$O/perf-children.txt"
@@ -83,7 +86,7 @@ if [ "${PROFILE:-0}" = 1 ]; then
     --stderr "$O/profile.stderr" --stdout "$O/profile.stdout" --out "${RESEARCH_RUN_DIR:-$O}/result.json" --bundle "$BUNDLE" --prove-run "${PROVE_RUN:-}"
   exit $?
 fi
-export -f verify_one; export LEAN BD PUB PART S PYBIN
+export -f verify_one; export LEAN BD PUB PART S PYBIN DRAW_FLAGS
 ls -d "$BD"/sessions/*/ | xargs -P "${JOBS:-1}" -I{} bash -c 'verify_one {}' > "$O/lean.jsonl"
 log "Lean: $(grep -c '"accepted": true' "$O/lean.jsonl") of $(wc -l < "$O/lean.jsonl") sessions accepted"
 "$PYBIN" -m verity_proof_throughput point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --lean "$O/lean.jsonl" \

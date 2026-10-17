@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# proof_throughput's prover point: one workload's statement of B coordinates, proved by C-Flock's native prover (ZK off) on one
-# leased GPU with live coins from a loopback `flock-circuit serve`, WARM warm and RUNS timed sessions. Build, staging and the
-# instance check run outside the lease; the lease covers the sessions alone. The timed sessions, the circuit and the public
-# file go to the store as one bundle (out/bundle.json names it) for verify.sh, which runs the Lean verifier on a CPU node and
-# writes the point's contract result. This run's own result.json is the same contract result with the Lean verifier not run.
+# proof_throughput's prover point: sessions that each prove B coordinates of one workload's population, the B its loopback
+# `flock-circuit serve` draws at the session's Register by the stratified law (`serve --draw-law`, the law verify.sh's Lean
+# verifier derives for itself), proved by C-Flock's native prover (ZK off) on one leased GPU with live coins, WARM warm and RUNS
+# timed sessions. The population (n_max instances) is staged once, whatever B (FLOCK_STAGE_CACHE). Build, staging and the
+# instance check run outside the lease; the lease covers the sessions alone. The timed sessions, the circuit, the population's
+# public file and the law go to the store as one bundle (out/bundle.json names it) for verify.sh, which runs the Lean verifier
+# on a CPU node and writes the point's contract result. This run's own result.json is the same contract result with the Lean
+# verifier not run.
 # Run from the verity tree on a GPU node, as a GPU host job (its CPUs at a GPU job's weight, the GPU taken by gpu-lease):
 #   research run --queue --on vy-nebius-1 --gpu-host --project verity --source . --cwd source --mem-gb 96 --cpus 32 \
 #     --tool verity_proof_throughput.tool:PROVER_POINT -- bash benchmarks/proof_throughput/job.sh WORKLOAD=bf16-k6144 B=64
@@ -36,7 +39,7 @@ done
 export PT_CUDA=13.3
 SWEEP=verity/ml/flock/pod/70-class-sweep.sh
 # this run's records the bundle carries for verify.sh, beside the circuit, the public file and the sessions
-BUNDLED="results.jsonl defs.json gpu-mem.txt gpu.csv hardware.json software.json binary.sha256 staged.jsonl instances.json
+BUNDLED="results.jsonl law.json gpu-mem.txt gpu.csv hardware.json software.json binary.sha256 staged.jsonl instances.json
 stage-rec.json phases.tsv point.json index.jsonl"
 
 ph build start
@@ -53,14 +56,17 @@ sha256sum "$BIN" | cut -d' ' -f1 > "$O/binary.sha256"
 ph build end
 export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 PT() { "$PYBIN" -m verity_proof_throughput "$@"; }
-PT defs --workload "$WORKLOAD" --out "$O/defs.json" > "$O/defs.txt" || { log "no such workload"; exit 1; }
+# the population (the class sweep's PT_VU, PT_N) and the verifier's stratified law for B (law.json)
+read -r PT_VU PT_N < <(PT population --workload "$WORKLOAD" --B "$B" --out "$O") && [ -n "${PT_N:-}" ] || { log "no such workload or B"; exit 1; }
+export PT_VU PT_N
 
-# the instances: ids [0, B) of the workload's frozen set, recomputed and checked against its manifest
+# the instances: the workload's frozen population, recomputed and checked against its manifest
 ph instances start
-PT check-instances --workload "$WORKLOAD" --B "$B" --out "$O/instances.json" || { log "instances [0, $B) don't match the manifest"; exit 1; }
+PT check-instances --workload "$WORKLOAD" --out "$O/instances.json" || { log "the population doesn't match the manifest"; exit 1; }
 ph instances end
 
-ARGS=(DEFS="$O/defs.json" BATCH=fixed N="$B" MAX_STATEMENT_BITS=34359738368 MAX_ANDS=33554432 SELFTEST=0 WARM="${WARM:-1}" RUNS="${RUNS:-3}"
+ARGS=(PROGRAM="$REPO/benchmarks/proof_throughput/verity_proof_throughput/population.py:program" PARTITION=q-template-instance
+      BATCH=fixed N="$PT_N" MAX_STATEMENT_BITS=34359738368 MAX_ANDS=33554432 SELFTEST=0 WARM="${WARM:-1}" RUNS="${RUNS:-3}"
       BINARY="$BIN" SELFTEST_BINARY="$SBIN" PYBIN="$PYBIN")
 ph stage start
 OUT=$S/stage RESEARCH_RUN_DIR=$S/stage bash $SWEEP "${ARGS[@]}" STAGE_ONLY=1 SM=120 > "$O/stage.txt" 2>&1
@@ -89,7 +95,7 @@ flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" 1 --wait --max-min "${LEASE_MAX_
   "$@"; rc=$?
   kill $SM_ 2>/dev/null; wait $SM_ 2>/dev/null
   printf "lease\tend\t%s\n" "$(date +%s.%N)" >> "$O/phases.tsv"
-  exit $rc' _ "$O" env OUT="$S/prove" RESEARCH_RUN_DIR="$S/prove" bash $SWEEP "${ARGS[@]}" GPU=1 > "$O/prove.txt" 2>&1
+  exit $rc' _ "$O" env OUT="$S/prove" RESEARCH_RUN_DIR="$S/prove" bash $SWEEP "${ARGS[@]}" GPU=1 FLOCK_DRAW_LAW="$O/law.json" > "$O/prove.txt" 2>&1
 rc=$?
 log "sessions: exit $rc"
 D=$(ls -d "$S"/prove/classes/*/ 2>/dev/null | head -1)
@@ -104,7 +110,7 @@ PT point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESEARCH_RUN
 # the bundle verify.sh needs: the statement as the verifier builds it (circuit, public file), every session and this run's records
 if [ "${BUNDLE:-1}" = 1 ] && [ -n "$D" ] && [ -n "$C" ] && [ -s "$O/results.jsonl" ]; then
   BD=$S/bundle; mkdir -p "$BD"
-  cp "$C/circuit.txt" "$C/pub-$B.bin" "$BD/" && cp -r "$D/sessions" "$BD/sessions"
+  cp "$C/circuit.txt" "$C/pub-$PT_N.bin" "$BD/" && cp -r "$D/sessions" "$BD/sessions"
   for f in $BUNDLED; do [ -e "$O/$f" ] && cp "$O/$f" "$BD/"; done
   du -sb "$BD" | tee -a "$O/job.log"
   PT put-bundle --tree "$BD" --out "$O/bundle.json" \

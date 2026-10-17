@@ -1,8 +1,11 @@
 """A point's ``result.json``: the campaign contract's (``verity_numerical.bench.contract``), used as it is.
 
-One point is one statement of B coordinates of one workload, proved by C-Flock's native prover with live coins from a loopback
-``flock-circuit serve``, warm ``warm`` times and timed ``runs`` times, then each timed session verified by the compiled Lean
-verifier (``flock-verify verify``). The VU is one coordinate (K MACs, 2K FLOP), ``vu.count`` = B.
+One point is sessions of one workload that each prove the B coordinates a loopback ``flock-circuit serve`` draws from the
+workload's population by the stratified law (``instances``), proved by C-Flock's native prover with live coins, warm
+``warm`` times and timed ``runs`` times, then each timed session verified by the compiled Lean verifier (``flock-verify
+verify --stratified B``, its own law). The VU is one coordinate (K MACs, 2K FLOP), ``vu.count`` = B. The fingerprint's
+``instances`` is null (the contract's names the B ids a statement proves, which a draw doesn't fix); ``population`` names the
+frozen population and ``draw`` the law.
 
 - ``t.total``: the median timed statement's prover seconds, the witness wait plus both reps (``statement_seconds``, the
   hill-climb's T_prove); its buckets are both reps' device phases. ``t.total_live`` adds the waits on the live verifier
@@ -13,9 +16,10 @@ verifier (``flock-verify verify``). The VU is one coordinate (K MACs, 2K FLOP), 
   sampled every 200 ms (a lower bound on the device peak).
 - ``transcript.bytes``: both directions of the session (``net.bytes_out`` the prover's, ``net.bytes_in`` the verifier's);
   ``proof_bytes`` the proof the prover sent, both reps.
-- ``verifier.seconds``: the Lean verifier's wall seconds on one timed session (median), ``verify.cpu_s`` its CPU seconds;
-  the live verifier's own ``verify_s`` is ``verify.live_s``.
-- ``fixed.setup_seconds``: staging the statement (lowering, lanes, witness and public files), done once per B.
+- ``verifier.seconds``: the Lean verifier's wall seconds on one timed session (median), ``verify.cpu_s`` its CPU seconds,
+  its setup (the drawn statement, once per distinct draw) included; the live verifier's own ``verify_s`` is
+  ``verify.live_s``. ``verifier.cpu_seconds_per_vu`` and ``verifier.cores_per_gpu`` are the contract's ``verifier_rates``.
+- ``fixed.setup_seconds``: staging the population (lowering, lanes, witness and public files), done once for every B.
 
 The prover run's result passes when the live verifier accepted every session; the verifier run's, the point's result of
 record, only when the Lean verifier also accepted every timed session. A session the Lean verifier refused for having no draw
@@ -34,10 +38,11 @@ from . import instances as I
 from .workloads import Workload
 
 SECURITY = {"target": -100, "profile": "fast100", "reps": 2, "coins": "live-os: the verifier's OS draws, round by round"}
-PREPROCESSING = ("none amortised: the statement is lowered and staged once per B (fixed.setup_seconds); every timed session "
-                 "builds its witness and proves both reps afresh")
-CONFIGS = {"plain": "C-Flock native prover, ZK off (flock-circuit prove --gpu), live coins from a loopback flock-circuit serve; "
-                    "then the compiled Lean verifier (flock-verify verify --coins os) on each timed session"}
+PREPROCESSING = ("the population is lowered and staged once for every B (fixed.setup_seconds); every timed session builds "
+                 "its drawn statement and witness and proves both reps afresh")
+CONFIGS = {"plain": "C-Flock native prover, ZK off (flock-circuit prove --gpu), live coins and the stratified draw of B units "
+                    "from a loopback flock-circuit serve --draw-law; then the compiled Lean verifier (flock-verify verify "
+                    "--coins os --stratified B) on each timed session"}
 
 
 #: the prover's per-rep phases (``flock-circuit``'s ``gpu_buckets``) beyond the contract's buckets, each kept as ``prove.*_s``
@@ -139,7 +144,8 @@ def fingerprint(w: Workload, B: int, rec: Mapping[str, Any], *, hardware: Mappin
     return contract.fingerprint(
         profile=w.profile, domain=rec.get("domain") or "total", K=w.K, B=B, proof_class="NON_ZK_PROOF",
         authentication="included-hash", zk_mode=contract.ZK_NONE, security=SECURITY, hardware=hardware, software=software,
-        preprocessing=PREPROCESSING, retention="retained", instances=I.instances_ref(w, B),
+        preprocessing=PREPROCESSING, retention="retained", instances=None, population=I.population_ref(w),
+        draw={"law": "stratified", "k": B, "population": w.n_max, "verifier": "flock-verify --stratified B, its own law"},
         workload=w.name, vu=w.vu, sites=w.sites, config=config, configuration=CONFIGS[config],
         statement_digest=lv.get("statement_digest"), k_log=lv.get("k_log"), dense_m=lv.get("dense_m"),
         coins=lv.get("coins"), **extra)
@@ -165,6 +171,9 @@ def point(w: Workload, B: int, rec: Mapping[str, Any], *, run_id: str, hardware:
     lean_ok = bool(lean) and all(lean_passed(v) for v in lean)
     ms = prover_measurements(w, B, rec, gpu_peak_mib) if lv.get("prove_total_s") is not None else []
     ms += verifier_measurements(lean)
+    cpu, total = next((x["value"] for x in ms if x["name"] == "verify.cpu_s"), None), next((x["value"] for x in ms if x["name"] == "t.total"), None)
+    if cpu and total:
+        ms += contract.verifier_rates(cpu, B, total)
     why = []
     if not live_ok:
         why.append(f"live verifier: {lv.get('why') or rec.get('broke') or 'no record'}")
