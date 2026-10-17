@@ -630,7 +630,7 @@ def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(t
 
 
 def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_work(tmp_path):
-    import time
+    now = 1_800_000_000                                                   # the sweep's clock, injected
 
     repo, gh, tips, _merge = _world(tmp_path)
     env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
@@ -639,7 +639,7 @@ def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_wor
         _git(repo, "checkout", "-q", "-b", name, base)
         (repo / f"{name.replace('/', '_')}.txt").write_text(name)
         _git(repo, "add", "-A")
-        when = f"@{int(time.time()) - days * 86400} +0000"
+        when = f"@{now - days * 86400} +0000"
         subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", name], cwd=repo, check=True,
                        env={**env, "GIT_COMMITTER_DATE": when, "GIT_AUTHOR_DATE": when})
         _git(repo, "push", "-q", "origin", name)
@@ -648,6 +648,8 @@ def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_wor
         _git(repo, "merge", "-q", "--no-ff", "-m", f"land {name}", name)
     _git(repo, "push", "-q", "origin", "main")
     del gh.open[1], gh.open[2]                                            # A and B landed; C, D and E stay open
-    assert M.sweep_branches(repo, gh=gh, log=[].append) == (1, 1)        # old-landed deleted, old-work archived
-    assert _heads(repo) == {"main", "A", "B", "C", "D", "E", "new-landed", "new-work", "cursor/verity-ci-3d4e"}  # A, B: a day yet
+    for name in ("A", "B"):                                               # landed with the train, and fresh at ``now``
+        _git(repo, "push", "-q", "origin", f":refs/heads/{name}")
+    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (1, 1)  # old-landed deleted, old-work archived
+    assert _heads(repo) == {"main", "C", "D", "E", "new-landed", "new-work", "cursor/verity-ci-3d4e"}
     assert "refs/archive/heads/old-work" in _git(repo, "ls-remote", "origin", "refs/archive/*")
