@@ -60,6 +60,28 @@ def test_set_since_is_what_the_process_set_or_changed_after_the_snapshot(monkeyp
     assert env.set_since(before) == {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"}
 
 
+def test_a_capture_at_served_defaults_never_pins_a_switch_back() -> None:
+    """A capture that clears `SERVED_DEFAULTS` imports no module that pins the engine's switches (`vllm_meta` pins `EXPORT` at
+    import, batch invariance among it; `engine_profile` pins `ENGINE`) and calls no pinning function, at any level of its code."""
+    import ast
+    from pathlib import Path
+
+    pinning = {"verity_vllm.program.frontend.vllm_meta", "verity_vllm.program.frontend.export_compat",
+               "verity_vllm.engine.engine_profile", "pin", "apply_engine", "apply_target", "apply_env"}
+    captures = [p for p in sorted((Path(__file__).parents[1] / "properties").glob("*_gpu.py")) if "served_defaults" in p.read_text()]
+    assert len(captures) >= 9
+    for p in captures:
+        used = set()
+        for n in ast.walk(ast.parse(p.read_text())):
+            if isinstance(n, ast.Import):
+                used |= {a.name for a in n.names}
+            elif isinstance(n, ast.ImportFrom) and n.module:
+                used |= {n.module, *(f"{n.module}.{a.name}" for a in n.names)}
+            elif isinstance(n, ast.Call):
+                used.add(getattr(n.func, "attr", getattr(n.func, "id", None)))
+        assert not used & pinning, (p.name, sorted(used & pinning))
+
+
 def test_an_engine_records_what_its_build_wrote_into_the_environment() -> None:
     import dataclasses
     import inspect

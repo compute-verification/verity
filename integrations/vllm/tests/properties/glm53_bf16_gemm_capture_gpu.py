@@ -11,9 +11,10 @@ for every model run.  The device gate runs first and nothing else runs when it f
 error and fails the verdict without stopping the others.
 
 The process runs vLLM's served cuBLAS configuration: `environment` clears every switch it inherited (`engine.env.served_defaults`, and
-the variant's workspace variables) before torch is imported, and `configuration` reads it back (`served`, before the first GEMM, and
-`served_after`, after the last): not batch invariant, no workspace variable, torch's reduced-precision reductions at their default
-(True) and cuBLAS the preferred BLAS.  The split-K-off variant (`SWITCH_ENV` and `switch()`, `--variant`, read back as `switch`) is
+the variant's workspace variables) before torch is imported, nothing it imports sets one back (vLLM's process groups come from
+`distributed`), and `configuration` reads it back (`served`, before the first GEMM, and `served_after`, after the last): not batch
+invariant, no workspace variable, torch's reduced-precision reductions at their default (True) and cuBLAS the preferred BLAS.  The
+split-K-off variant (`SWITCH_ENV` and `switch()`, `--variant`, read back as `switch`) is
 vLLM's batch-invariant cuBLAS configuration on cc 9.0 without the rest of that mode (determinism/batch_invariant.py:1076-1080 and
 1127-1138): CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before torch creates a cuBLAS handle, fp16 and bf16
 reduced-precision reductions off with split-K off (``(False, False)``, torch >= 2.10), and cuBLASLt preferred.  vLLM's Triton bmm
@@ -376,12 +377,20 @@ def _load_library(path: str):
 
 
 # ------------------------------------------------------------------------------------------------------------------- selection
-def make_gate(vllm_config, model: str):
+def distributed(work: Path) -> None:
+    """vLLM's TP and PP groups at world size 1 (`ReplicatedLinear` reads the TP group's rank), under the current vLLM config.  Not
+    `vllm_meta.ensure_distributed`: importing that module pins `engine.env.EXPORT`, VLLM_BATCH_INVARIANT=1 among it."""
+    from vllm.distributed import ensure_model_parallel_initialized, init_distributed_environment
+
+    init_distributed_environment(world_size=1, rank=0, distributed_init_method=f"file://{work / 'dist_store'}", local_rank=0,
+                                 backend="gloo")
+    ensure_model_parallel_initialized(1, 1)
+
+
+def make_gate(model: str):
     import torch
     from vllm.model_executor.layers.fused_moe.router.gate_linear import GateLinear
-    from verity_vllm.program.frontend.vllm_meta import ensure_distributed
 
-    ensure_distributed(vllm_config)                                                # ReplicatedLinear reads the TP group's rank
     m = MODELS[model]
     return GateLinear(m.hidden, m.experts, bias=False, out_dtype=torch.float32, params_dtype=torch.bfloat16,
                       prefix="model.layers.3.mlp.gate").cuda()
@@ -917,9 +926,13 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     vllm_config = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     with set_current_vllm_config(vllm_config):
         gates: dict[str, Any] = {}
+        try:
+            distributed(work)
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["distributed"] = _error(e)
         for model in models:
             try:
-                gates[model] = make_gate(vllm_config, model)
+                gates[model] = make_gate(model)
                 doc["selection"][model] = selection(gates[model])
             except Exception as e:  # noqa: BLE001
                 doc["errors"][f"selection/{model}"] = _error(e)

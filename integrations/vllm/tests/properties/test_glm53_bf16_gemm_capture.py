@@ -308,6 +308,21 @@ def test_the_configuration_read_back_is_the_served_default_or_the_variant(monkey
         assert not X.configuration(True)["ok"]
 
 
+def test_the_process_groups_are_vllms_own_at_world_size_one(tmp_path, monkeypatch) -> None:
+    import sys
+    import types
+
+    seen = []
+    vd = types.ModuleType("vllm.distributed")
+    vd.init_distributed_environment = lambda **kw: seen.append(kw)
+    vd.ensure_model_parallel_initialized = lambda tp, pp: seen.append((tp, pp))
+    monkeypatch.setitem(sys.modules, "vllm", sys.modules.get("vllm") or types.ModuleType("vllm"))
+    monkeypatch.setitem(sys.modules, "vllm.distributed", vd)
+    X.distributed(tmp_path)
+    assert seen == [{"world_size": 1, "rank": 0, "distributed_init_method": f"file://{tmp_path / 'dist_store'}", "local_rank": 0,
+                     "backend": "gloo"}, (1, 1)]
+
+
 def test_the_programs_bind_at_every_models_shapes() -> None:
     """GLM-5.3: the gate, the dotprod at BS 128 at each FMA, split-K at 6 and 8, two linears and two absorbs; DeepSeek-V4-Pro: the
     gate, the dotprod at BS 128 and 256 at each FMA, split-K at 6, 7 and 8, two linears and three compressor GEMMs."""
@@ -458,7 +473,8 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
         return {"ok": True, "cublas_version": 120900}
 
     monkeypatch.setattr(X, "configuration", configuration)
-    monkeypatch.setattr(X, "make_gate", lambda cfg, model: object())
+    monkeypatch.setattr(X, "distributed", lambda work: calls.append("distributed"))
+    monkeypatch.setattr(X, "make_gate", lambda model: object())
     monkeypatch.setattr(X, "selection", lambda gate: {"ok": True})
     todo = [("glm53", "router", "mlp.gate", 5), ("glm53", "router", "mlp.gate", 6), ("glm53", "linear", "lm_head.shard", 5),
             ("glm53", "bmm", "v_absorb", 5), ("dsv4-pro", "router", "mlp.gate", 5), ("dsv4-pro", "f32out", "compressor.kv_score.c4", 5)]
@@ -491,7 +507,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert doc["totals"]["mismatch"] == 1 and doc["switch_cost"] == {"glm53/router/mlp.gate/M5": 0.5}
     assert doc["variant"] == "served_default" and doc["require_variant"] and doc["env_cleared"] == inherited
     assert doc["served"]["ok"] and doc["served_after"]["ok"] and not set(X.SWITCH_ENV) & set(doc["env"])
-    assert calls == ["read False", *["launch True"] * len(todo), "read False"]
+    assert calls == ["read False", "distributed", *["launch True"] * len(todo), "read False"]
     printed = capsys.readouterr().out
     assert "case glm53/linear/lm_head.shard/M5" in printed and "GLM53-BF16-GEMM NO-GO" in printed and "fma=0" in printed
     assert "served=True glm53=NO-GO dsv4-pro=GO" in printed and printed.rstrip().endswith("variant=NO-GO")
@@ -508,7 +524,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["variant"] == "split_k_off" and doc["switch"]["ok"] and doc["switch_after"]["ok"] and "served" not in doc
     assert {k: doc["env"][k] for k in X.SWITCH_ENV} == X.SWITCH_ENV
-    assert calls == ["switch", "read True", *["launch False"] * len(todo), "read True"]
+    assert calls == ["switch", "read True", "distributed", *["launch False"] * len(todo), "read True"]
     assert "GLM53-BF16-GEMM (split-K-off variant) GO" in (printed := capsys.readouterr().out) and "switch=True" in printed
 
 
