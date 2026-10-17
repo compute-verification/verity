@@ -495,7 +495,7 @@ def _committed(committer: Any, step: int, name: str) -> torch.Tensor | None:
     off = int(meta.dev_off) if int(getattr(meta, "dev_off", -1)) >= 0 else int(meta.stream_off)
     raw = blk[off: off + meta.nbytes]
     dtype = getattr(torch, str(meta.dtype).rsplit(".", 1)[-1])
-    return raw.cpu().view(dtype).reshape(meta.shape)
+    return raw.cpu().clone().view(dtype).reshape(meta.shape)
 
 
 def linkage(committer: Any, ids_name: str = "c00.input/ids", sampled_name: str = "runner.sampler/sampled_token_ids") -> dict[str, Any]:

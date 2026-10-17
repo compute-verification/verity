@@ -237,8 +237,9 @@ def _linkage_committer(sampled_at_0: list[int], ids_at_1: list[int]):
     blocks, layouts = {}, {}
     for step, (name, vals) in {0: ("runner.sampler/sampled_token_ids", sampled_at_0), 1: ("c00.input/ids", ids_at_1)}.items():
         raw = torch.tensor(vals, dtype=torch.int64).view(torch.uint8)
-        blocks[step] = (raw, raw.numel())
-        layouts[step] = [_Meta(name=name, dev_off=0, nbytes=raw.numel(), dtype="torch.int64", shape=(len(vals),))]
+        block = torch.cat([torch.zeros(4, dtype=torch.uint8), raw])           # a value need not sit at an aligned stream offset
+        blocks[step] = (block, block.numel())
+        layouts[step] = [_Meta(name=name, dev_off=4, nbytes=raw.numel(), dtype="torch.int64", shape=(len(vals),))]
     return SimpleNamespace(step_rows=rows, _gpu_blocks=blocks, _layouts=layouts)
 
 
