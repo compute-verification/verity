@@ -13,19 +13,19 @@ import Proofs.Flock.Claims.DeployCode
 last) meets the spec's claim `Claims.Flock.ZK` at the protocol's honest prover `P_zk = G.prover` and the Goldreich–Kahan
 simulator `S_Flock = G.simulator N`, at
 
-  `ε_zk(x) = 1/(N+1) + 2·δ_A(x) + 2·N·δ_B(x)`
+  `ε_zk(x) = 1/(N+1) + δ_A(x) + N·δ_B(x)` and `γ(x) = N`,
 
-plus the probability of a collision among `S_Flock`'s own SHA-512 calls, with cost `G.simBound N`
-(`Flock.simCost_of_proto`). The verifier's decision does not enter: zero knowledge reads only its rounds and that it
-is the masked one.
+plus `γ` times the probability that `Fork`, the honest prover's runs on one nonce and two tapes against `V*`, finds a
+collision among the prover's SHA-512 calls, with cost `G.simBound N` (`Flock.simCost_of_proto`). The verifier's
+decision does not enter: zero knowledge reads only its rounds and that it is the masked one.
 
 `Flock.zkR_gkE_of_proto`: from the same hypotheses, the session analysis's simulator with estimation,
 `S_GK = G.simulatorE t (t·3^t)`, meets `Claims.Flock.ZK` at
 
-  `ε_zk(x) = 3·δ_A(x) + 8t·δ_B(x) + 2·3^{-t}`
+  `ε_zk(x) = 4·δ_A(x) + 4t·δ_B(x) + 2·3^{-t}` and `γ(x) = 4t·3^t`,
 
-plus its own collision probability, at `(1 + 5t)` runs in expectation (`Flock.simCostExp_of_proto`) and `1 + 5t·3^t`
-at worst (`Flock.simCost_gkE_of_proto`); at a cap `M`, `Proto.gkE_zk` gives `3·δ_A + 8t·δ_B + 3^{-t} + t/M`.
+at `(1 + 5t)` runs in expectation (`Flock.simCostExp_of_proto`) and `1 + 5t·3^t` at worst
+(`Flock.simCost_gkE_of_proto`); at a cap `M`, `Proto.gkE_zk` gives `4·δ_A + 4t·δ_B + 3^{-t} + t/M` and `γ = 4M`.
 
 **The rounds.** A simulator against a malicious `V*` needs the coins fixed before the prover's first message, which only
 the coin commitment at `Hello` does (`verity/ml/flock/live/PROTOCOL.md` §9). `FlockDeploy.V` is the public-coin form,
@@ -39,28 +39,29 @@ knowledge at each fixed coin vector the prover does not refuse, on runs its self
 
 * the coins: `V*` chooses them, so the server commits every coin at `Hello` and the prover checks each opening before it
   uses the coin (`Proto.chk`); the simulator rewinds `V*` on the same `Hello` until it opens the same coins again;
-* the error gains `1/(N+1)` (the rewinds' truncation, `rewind_close`) and `2·δ_A` (the extraction run on the dummy
-  witness, `PrefixHides`), and `δ_B` (the old result's term) is paid once per rewind and twice over (the output and the
-  binding failure both move through the hybrids);
-* the binding of the coin commitment is computational: a rewind that opens another coin is a SHA-512 collision among
-  the simulator's own calls (`mm_coll`), so the claim carries that probability (`ZKmalR`), and ZK bits follow from
-  `StrictBirthday` at `Bzk` (`ZKmalR.bits`);
+* the error gains `1/(N+1)` (the rewinds' truncation, `rewind_close`) and `δ_A` (the extraction run on the dummy
+  witness, `PrefixHides`), and `δ_B` (the old result's term) is paid once per rewind;
+* the binding of the coin commitment is computational: a rewind that opens another coin is, in the real game, a
+  SHA-512 collision among the honest prover's calls in two of its runs on one nonce (`mism_coll`), so the claim carries
+  `γ` times `Fork`'s success (`ZKmalR`), a finder built from `V*` and the honest prover alone, and ZK bits follow from
+  `StrictBirthday` at `Fork` (`ZKmalR.bits`);
 * the claim fixes `V*`'s rounds to the protocol's (`Vs.k = D.V.k + 1`).
 
 **Against the session analysis's Theorem GK** (`FlockSoundness.ZK.GK.gk_simulate_hm96`). It bounds the simulator with
 threshold `t` and cap `M` at `3δ_C + 8t·δ_B + 3^{-t} + t/M + q²/2^513`, over a `Model` of one session whose rewinds are
 functions of a view. `GKExp` builds that `Model` from the protocol at each nonce, with `V*`'s answers as an oracle
 (`Proto.model`), and runs the same simulator as a `Claims.Simulator` on tapes fixed in advance (`Proto.simulatorE`), so
-the old `gk_close` gives `ZKmalR` with the simulator's collision probability in place of `q²/2^513` (`Proto.gkE_zk`),
-and the old `sim_runs_ev` and `sim_runs_le` its expected and worst-case cost. Its inputs are this module's three
+the old hybrids give `ZKmalR` with hybrid 1's binding failure in place of `q²/2^513`, which `PrefixHides` moves to the
+real run, where it is `Fork`'s (`Proto.gkE_zk`), and the old `sim_runs_ev` and `sim_runs_le` its expected and
+worst-case cost. Its inputs are this module's three
 hypotheses, each from the old result's: Lemma C (`Session.adaptive_prefinal_hm96`, `δ_C = 2|L|·δ₁`) is `PrefixHides`
 once a `V*` run's first `K + 1` messages are the old model's run (`Proto.prefixHides_of_runs`,
 `Proto.runs_close_hm96`); Lemma B (`Session.session_shvzk_hm96`, `δ_B = 2·n_hid·δ₁`) is `SHVZK` where the prover goes
 on (`Proto.shvzk_at_hm96`), and Lemma C at fixed answers where it refuses (`Proto.shvzk_refused_hm96`, `2|L|·δ₁`);
 T6 (`coinPairs_coll`) is `Binding` once `chk` is the keyed coin tree's walk with its hash calls logged
 (`Proto.binding_of_tree`). `δ₁` is `Hm96Hiding` (`hash-derived-key`, `2^-193`). `Flock.zkR_gkE_hm96` is the three
-together: `ε_zk = 6·|L|·δ₁ + 16t·n_B·δ₁ + 2·3^{-t}` with `n_B ≥ max(n_hid, |L|)`.
-`S_Flock`'s `N` rewinds cost `1/(N+1)` at `N + 1` runs and `2N·δ_B`; `S_GK`'s estimation costs `3^{-t}` and `8t·δ_B`
+together: `ε_zk = 8·|L|·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` with `n_B ≥ max(n_hid, |L|)`, and `γ = 4t·3^t`.
+`S_Flock`'s `N` rewinds cost `1/(N+1)` at `N + 1` runs and `N·δ_B`; `S_GK`'s estimation costs `3^{-t}` and `4t·δ_B`
 at `1 + 5t` runs in expectation, and its cap `t/M` at `1 + 5M` at worst. A `Claims.Simulator` has finitely many coins,
 so `S_GK` keeps the cap the deployed `gk_simulate` does not have; at `M = t·3^t` it costs another `3^{-t}`, and nothing
 in expectation. `S_GK` fails at a binding failure, where `S_Flock` goes on to the next rewind, and both are in the
@@ -94,13 +95,13 @@ namespace Claims.ZKMal
 open Claims
 
 /-- **Flock's zero knowledge against a malicious verifier, from a committed-coin protocol**: the spec's claim
-`Claims.Flock.ZK` at `P_zk = G.prover` and `S_Flock = G.simulator N`, at `ε_zk = 1/(N+1) + 2·δ_A + 2·N·δ_B`, when the
-deployed verifier's rounds with `Hello` are the protocol's (`Hello`, its `K` coins, the last message). -/
+`Claims.Flock.ZK` at `P_zk = G.prover` and `S_Flock = G.simulator N`, at `ε_zk = 1/(N+1) + δ_A + N·δ_B` and `γ = N`,
+when the deployed verifier's rounds with `Hello` are the protocol's (`Hello`, its `K` coins, the last message). -/
 theorem Flock.zkR_of_proto {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (G : Proto Flock.Wit)
     (N : ℕ) (δA δB : Msg → ℝ) (hzk : D.zk = true) (hk : ∀ x, D.V.k x + 1 = G.k x)
     (hA : G.PrefixHides H (Flock.R D.parse) δA) (hB : G.SHVZK H (Flock.R D.parse) δB) (hB0 : ∀ x, 0 ≤ δB x)
     (hC : G.Binding H) :
-    Claims.Flock.ZK H D G.prover (G.simulator N) fun x => 1 / ((N : ℝ) + 1) + 2 * δA x + 2 * N * δB x := by
+    Claims.Flock.ZK H D G.prover (G.simulator N) (fun x => 1 / ((N : ℝ) + 1) + δA x + N * δB x) fun _ => N := by
   refine ⟨hzk, ?_⟩
   rw [show (fun x => D.V.k x + 1) = G.k from funext hk]
   exact G.gk_zk H _ N δA δB hA hB hB0 hC
@@ -127,14 +128,14 @@ theorem deployZk_proto_k (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Re
   rfl
 
 /-- **Flock's zero knowledge against a malicious verifier, at the deployed masked verifier** `FlockDeploy.deployZk`:
-`Claims.Flock.ZK` at `P_zk = G.prover` and `S_Flock = G.simulator N`, at `ε_zk = 1/(N+1) + 2·δ_A + 2·N·δ_B`, for a
-committed-coin protocol whose coins are the deployed verifier's. -/
+`Claims.Flock.ZK` at `P_zk = G.prover` and `S_Flock = G.simulator N`, at `ε_zk = 1/(N+1) + δ_A + N·δ_B` and `γ = N`,
+for a committed-coin protocol whose coins are the deployed verifier's. -/
 theorem Flock.zkR_deployZk (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (G : Proto Flock.Wit) (N : ℕ) (δA δB : Msg → ℝ) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1)
     (hA : G.PrefixHides H (Flock.R (FlockDeploy.deployZk rel).parse) δA)
     (hB : G.SHVZK H (Flock.R (FlockDeploy.deployZk rel).parse) δB) (hB0 : ∀ x, 0 ≤ δB x) (hC : G.Binding H) :
     Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover (G.simulator N)
-      fun x => 1 / ((N : ℝ) + 1) + 2 * δA x + 2 * N * δB x :=
+      (fun x => 1 / ((N : ℝ) + 1) + δA x + N * δB x) fun _ => N :=
   Flock.zkR_of_proto H _ G N δA δB rfl (fun x => (deployZk_proto_k rel G hK x).symm) hA hB hB0 hC
 
 /-- `S_Flock`'s cost (`SimCost`), at `simBound`: its worst case. -/
@@ -147,12 +148,14 @@ theorem Flock.simCost_of_proto (H : Msg → Msg) (G : Proto Flock.Wit) (N : ℕ)
 
 /-- **Flock's zero knowledge against a malicious verifier, from a committed-coin protocol, at expected cost**: the
 spec's claim `Claims.Flock.ZK` at `P_zk = G.prover` and `S_GK = G.simulatorE t (t·3^t)`, the session analysis's simulator,
-at `ε_zk = 3·δ_A + 8t·δ_B + 2·3^{-t}`, when the deployed verifier's rounds with `Hello` are the protocol's. -/
+at `ε_zk = 4·δ_A + 4t·δ_B + 2·3^{-t}` and `γ = 4t·3^t`, when the deployed verifier's rounds with `Hello` are the
+protocol's. -/
 theorem Flock.zkR_gkE_of_proto {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (G : Proto Flock.Wit)
     (t : ℕ) (ht : 0 < t) (δA δB : Msg → ℝ) (hzk : D.zk = true) (hk : ∀ x, D.V.k x + 1 = G.k x)
     (hA : G.PrefixHides H (Flock.R D.parse) δA) (hB : G.SHVZK H (Flock.R D.parse) δB) (hB0 : ∀ x, 0 ≤ δB x)
     (hC : G.Binding H) :
-    Claims.Flock.ZK H D G.prover (G.simulatorE t (t * 3 ^ t)) fun x => 3 * δA x + 8 * t * δB x + 2 * (1 / 3) ^ t := by
+    Claims.Flock.ZK H D G.prover (G.simulatorE t (t * 3 ^ t)) (fun x => 4 * δA x + 4 * t * δB x + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t := by
   refine ⟨hzk, ?_⟩
   rw [show (fun x => D.V.k x + 1) = G.k from funext hk]
   exact G.gkE_zk_pow H _ t ht δA δB hA hB hB0 hC
@@ -164,7 +167,7 @@ theorem Flock.zkR_gkE_deployZk (H : Msg → Msg)
     (hA : G.PrefixHides H (Flock.R (FlockDeploy.deployZk rel).parse) δA)
     (hB : G.SHVZK H (Flock.R (FlockDeploy.deployZk rel).parse) δB) (hB0 : ∀ x, 0 ≤ δB x) (hC : G.Binding H) :
     Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover (G.simulatorE t (t * 3 ^ t))
-      fun x => 3 * δA x + 8 * t * δB x + 2 * (1 / 3) ^ t :=
+      (fun x => 4 * δA x + 4 * t * δB x + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
   Flock.zkR_gkE_of_proto H _ G t ht δA δB rfl (fun x => (deployZk_proto_k rel G hK x).symm) hA hB hB0 hC
 
 /-! ## From the session analysis -/
@@ -172,7 +175,7 @@ theorem Flock.zkR_gkE_deployZk (H : Msg → Msg)
 /-- **Flock's zero knowledge against a malicious verifier, from the session analysis**: `Claims.Flock.ZK` at
 `P_zk = G.prover` and `S_GK = G.simulatorE t (t·3^t)`, at
 
-  `ε_zk(x) = 6·n_L(x)·δ₁ + 16t·n_B(x)·δ₁ + 2·3^{-t}`,
+  `ε_zk(x) = 8·n_L(x)·δ₁ + 8t·n_B(x)·δ₁ + 2·3^{-t}` and `γ(x) = 4t·3^t`,
 
 when the deployed verifier's rounds with `Hello` are the protocol's and
 
@@ -183,7 +186,8 @@ when the deployed verifier's rounds with `Hello` are the protocol's and
   `Proto.shvzk_refused_hm96` where it refuses, `n_B` at least the hidden leaves and the pre-final ones);
 * (T6) the opening check is the coin-tree walk and the coin is read from the opening's coins (`hchk`, `hdec`).
 
-`δ₁` is `Hm96Hiding`'s; the binding term is the collision probability among `S_GK`'s own calls (`ZKmalR`). -/
+`δ₁` is `Hm96Hiding`'s; the binding term is `γ` times `Fork`'s collision probability among the honest prover's calls
+(`ZKmalR`). -/
 theorem Flock.zkR_gkE_hm96 {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (G : Proto Flock.Wit)
     (t : ℕ) (ht : 0 < t) (hzk : D.zk = true) (hk : ∀ x, D.V.k x + 1 = G.k x) (δ₁ : ENNReal) (nL nB : Msg → ℕ)
     (hA : ∀ x w, Flock.R D.parse x w → ∀ (ν : G.Nonce) (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1))
@@ -198,12 +202,12 @@ theorem Flock.zkR_gkE_hm96 {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Depl
       treeChk (Tr x ρ) (nb ν) (root x ρ) (pos x ρ j) (idx x ρ j) (n x ρ j) (depth x ρ j) (parse m))
     (hdec : ∀ m op, parse m = some op → G.dec m = dc op.cs) :
     Claims.Flock.ZK H D G.prover (G.simulatorE t (t * 3 ^ t))
-      fun x => 6 * nL x * δ₁.toReal + 16 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t := by
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
   have h := Flock.zkR_gkE_of_proto H D G t ht (fun x => 2 * nL x * δ₁.toReal) (fun x => 2 * nB x * δ₁.toReal) hzk hk
     (G.prefixHides_of_runs H _ _ hA) hB (fun x => by positivity)
     (G.binding_of_tree H Tr nb root parse pos idx n depth dc hchk hdec)
-  have e : (fun x => 6 * nL x * δ₁.toReal + 16 * t * nB x * δ₁.toReal + 2 * (1 / 3 : ℝ) ^ t) =
-      fun x => 3 * (2 * nL x * δ₁.toReal) + 8 * t * (2 * nB x * δ₁.toReal) + 2 * (1 / 3) ^ t :=
+  have e : (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3 : ℝ) ^ t) =
+      fun x => 4 * (2 * nL x * δ₁.toReal) + 4 * t * (2 * nB x * δ₁.toReal) + 2 * (1 / 3) ^ t :=
     funext fun x => by ring
   rw [e]
   exact h
@@ -224,7 +228,7 @@ theorem Flock.zkR_gkE_hm96_deployZk (H : Msg → Msg)
       treeChk (Tr x ρ) (nb ν) (root x ρ) (pos x ρ j) (idx x ρ j) (n x ρ j) (depth x ρ j) (parse m))
     (hdec : ∀ m op, parse m = some op → G.dec m = dc op.cs) :
     Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover (G.simulatorE t (t * 3 ^ t))
-      fun x => 6 * nL x * δ₁.toReal + 16 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t :=
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
   Flock.zkR_gkE_hm96 H _ G t ht rfl (fun x => (deployZk_proto_k rel G hK x).symm) δ₁ nL nB hA hB Tr nb root parse
     pos idx n depth dc hchk hdec
 

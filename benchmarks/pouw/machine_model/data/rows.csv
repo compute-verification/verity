@@ -1,0 +1,171 @@
+row,status,runs,description
+issue,measured,r20261016-021315-23c1 note:20261016T0150Z-draft-issue-ceiling r20261017-034149-3f95 r20261017-035245-089f,"1 vector-pipe warp instruction a SMSP-cycle in any mix (UNI not counted: UP); peak 0.658 over ISSUE's 90 tensor+CUDA mixes (note:20261016T0150Z-draft-issue-ceiling, r20261016-021315-23c1)"
+M,measured,note:20261015T0608Z-draft-census-sm120,tensor pipe: every MMA kind holds it 16 SMSP-cycles
+R1,measured,note:20261015T0608Z-draft-census-sm120,"M + F <= 1.02, the tensor+FP32 frontier"
+F,measured,note:20261015T0608Z-draft-census-sm120,FFMA/FADD/FMUL 3.885 /SM/clk
+VMNX,measured,note:20261015T0608Z-draft-census-sm120,VIMNMX 3.916 /SM/clk
+H,measured,note:20261015T0608Z-draft-census-sm120,"HFMA2 1.967 /SM/clk; refitted: HFMA2 × 0.9642 (hfma2 alone at 1.0168, + 2%)"
+I,measured,note:20261015T0608Z-draft-census-sm120,IMAD/IDP.4A 2.0 /SM/clk
+A,measured,note:20261015T0608Z-draft-census-sm120,"ALU group (IADD3, LOP3, SHF, PRMT, I2FP, F2FP pack) 2.0 /SM/clk"
+F2FS,measured,note:20261015T0608Z-draft-census-sm120,F2FP.SATFINITE 1.0 /SM/clk
+XU,measured,note:20261015T0608Z-draft-census-sm120,"XU group (POPC, BREV, FLO, MUFU.EX2) 0.5 /SM/clk"
+R6r,measured,note:20261015T0608Z-draft-census-sm120 r20261017-034149-3f95,"smem reads 128 B/SM/clk (LDS.128 127.6); refitted: LDS128 × 0.5711 (lds128 alone at 1.7168, + 2%)"
+LDSi,measured,note:20261015T0608Z-draft-census-sm120,LDS.32 0.5 warp instructions/SM/clk (64 B/SM/clk)
+R6w,measured,note:20261015T0608Z-draft-census-sm120 r20261016-183617-3914,smem writes 128 B/SM/clk (STS.128; TMA writes assumed to share it)
+LDG,measured,note:20261015T0608Z-draft-census-sm120,LDG into registers 86 B/SM/clk (L1 path)
+L2red,measured,note:20261015T0608Z-draft-census-sm120 r20261016-183617-3914 r20261016-210926-d856 r20261017-034149-3f95 r20261017-035245-089f,"L2 reductions 1.91 adds/SM/clk (coalesced); refitted: RED64 × 0.9671 (red64 alone, ILP 8 (r6 b53b) at 1.0137, + 2%); REDV × 0.9705 (IMMA+redh2x4×8 (mixu, rm 0fd9) at 1.0102, + 2%); TMAred512 from VF3m-16 at 0.01518764/SM/clk + 2% (UBLKRED 512 B alone, 1.944 words/SM/clk, r20261017-034149-3f95), and RED32 + 1 KB UBLKRED together 1.906 words/SM/clk (r20261017-035245-089f): one pool"
+SHFL,measured,note:20261015T0608Z-draft-census-sm120 r20261017-034143-b1de r20261017-035229-7c35,"SHFL.BFLY 0.49972/SM/clk + 2%, 8 SMSP-cycles a warp instruction (EPS1's alone_shfl, r20261017-034143-b1de, r20261017-035229-7c35; ROW_SHFLM's any-mode rate); until VF3l-16 the ASSUMED 32 lanes/SM/clk (CUDA guide, 4 SMSP-cycles), which no vector read"
+R2,provisional,note:20261015T0608Z-draft-census-sm120 r20261017-034143-b1de r20261017-035229-7c35,M + 0.18 I <= 1; closed at VF3l-16: EPS1's mix_imad_48 reaches 1.017 (r20261017-034143-b1de); EIMAD0-5 replace it
+R3,provisional,note:20261015T0608Z-draft-census-sm120 r20261017-034143-b1de r20261017-035229-7c35,M + 0.24 H <= 1; closed at VF3l-16: EPS1's mix_hfma2_48 reaches 1.060 (r20261017-035229-7c35); EHFMA20-5 replace it
+R4,provisional,note:20261015T0608Z-draft-census-sm120 r20261017-034143-b1de r20261017-035229-7c35,M + 0.18 A <= 1; closed at VF3l-16: EPS1's mix_lop3_48 reaches 1.008 (r20261017-035229-7c35); KALU0-3 hold (max 0.980) and stay
+JI2_0,joint,r20261016-021315-23c1 r20261016-032420-7778,"MMA 9.781 + every other warp instruction 1.000 SMSP-cycles (ISSUE r1 + r2, every SASS instruction counted)"
+JI2_1,joint,r20261016-021315-23c1 r20261016-032420-7778,"MMA 10.009 + every other warp instruction 0.993 SMSP-cycles (ISSUE r1 + r2, every SASS instruction counted)"
+JI2_2,joint,r20261016-021315-23c1 r20261016-032420-7778,"MMA 13.484 + every other warp instruction 0.697 SMSP-cycles (ISSUE r1 + r2, every SASS instruction counted)"
+JI2_3,joint,r20261016-021315-23c1 r20261016-032420-7778,"MMA 14.594 + every other warp instruction 0.500 SMSP-cycles (ISSUE r1 + r2, every SASS instruction counted)"
+JI2_4,joint,r20261016-021315-23c1 r20261016-032420-7778,"MMA 15.742 + every other warp instruction 0.194 SMSP-cycles (ISSUE r1 + r2, every SASS instruction counted)"
+JI2_5,joint,r20261016-021315-23c1 r20261016-032420-7778,"MMA 15.896 + every other warp instruction 0.138 SMSP-cycles (ISSUE r1 + r2, every SASS instruction counted)"
+JI2_6,joint,r20261016-021315-23c1 r20261016-032420-7778,"MMA 16.000 + every other warp instruction 0.052 SMSP-cycles (ISSUE r1 + r2, every SASS instruction counted)"
+JI3_0,joint,r20261016-021315-23c1 r20261016-032420-7778 r20261016-040448-5846,"MMA 8.557 + every other vector-pipe warp instruction 1.000 SMSP-cycles (ISSUE r1-r3, UNI not counted, 2% noise margin)"
+JI3_1,joint,r20261016-021315-23c1 r20261016-032420-7778 r20261016-040448-5846,"MMA 14.797 + every other vector-pipe warp instruction 0.384 SMSP-cycles (ISSUE r1-r3, UNI not counted, 2% noise margin)"
+JI3_2,joint,r20261016-021315-23c1 r20261016-032420-7778 r20261016-040448-5846,"MMA 15.539 + every other vector-pipe warp instruction 0.172 SMSP-cycles (ISSUE r1-r3, UNI not counted, 2% noise margin)"
+UP,measured,r20261016-053739-92cd,"uniform pipe: #UNI <= 0.66 a SMSP-cycle (ISSUE r4's ≈ 0.6 when it binds, r20261016-053739-92cd, + 10%; highest rate measured 0.547)"
+IW,measured,r20261012-181304-f51c r20261012-111055-77a2 note:20261012T1919Z-report-squaring-ceiling-final,"IMAD.WIDE 1.02 /SM/clk (0.994 measured alone, r20261012-181304-f51c, note:20261012T1919Z-report-squaring-ceiling-final; 0.972 in r20261012-111055-77a2)"
+JI3e_0,joint,r20261016-064548-6098 r20261016-065415-a98f r20261016-080836-b53b r20261016-081844-09bc r20261016-083126-75cf r20261016-084106-0fd9 r20261016-084241-b3f0 r20261016-084616-7147 r20261016-085401-a289 r20261017-034149-3f95 r20261017-035245-089f,"MMA 8.115 + every other vector-pipe warp instruction 1.000 SMSP-cycles (ISSUE r1-r3, r5, r6, UNI not counted, 2% noise margin)"
+JI3e_1,joint,r20261016-064548-6098 r20261016-065415-a98f r20261016-080836-b53b r20261016-081844-09bc r20261016-083126-75cf r20261016-084106-0fd9 r20261016-084241-b3f0 r20261016-084616-7147 r20261016-085401-a289 r20261017-034149-3f95 r20261017-035245-089f,"MMA 15.030 + every other vector-pipe warp instruction 0.317 SMSP-cycles (ISSUE r1-r3, r5, r6, UNI not counted, 2% noise margin)"
+JI3e_2,joint,r20261016-064548-6098 r20261016-065415-a98f r20261016-080836-b53b r20261016-081844-09bc r20261016-083126-75cf r20261016-084106-0fd9 r20261016-084241-b3f0 r20261016-084616-7147 r20261016-085401-a289 r20261017-034149-3f95 r20261017-035245-089f,"MMA 15.539 + every other vector-pipe warp instruction 0.172 SMSP-cycles (ISSUE r1-r3, r5, r6, UNI not counted, 2% noise margin)"
+A64,measured,r20261016-064548-6098 r20261016-065415-a98f r20261016-080836-b53b r20261016-081844-09bc r20261016-083126-75cf r20261016-084106-0fd9 r20261016-084241-b3f0 r20261016-084616-7147 r20261016-085401-a289,"IADD.64 2.000 /SM/clk: r5's and r6's 1.954 alone (8 warps a SMSP, 8- to 64-wide ILP) + 2%, and at least the ALU pipe's 2.0"
+DP,measured,r20261016-064548-6098 r20261016-065415-a98f r20261016-080836-b53b r20261016-081844-09bc r20261016-083126-75cf r20261016-084106-0fd9 r20261016-084241-b3f0 r20261016-084616-7147 r20261016-085401-a289,"FP64 pipe: W2 (DADD, DFMA) 62.75 SMSP-cycles: dfma alone, ILP 8 (r6 09bc) at 64.00 (the fastest W2 program alone: DADD, DFMA, or the two interleaved, every ILP) + 2%"
+DPM,measured,r20261016-064548-6098 r20261016-065415-a98f r20261016-080836-b53b r20261016-081844-09bc r20261016-083126-75cf r20261016-084106-0fd9 r20261016-084241-b3f0 r20261016-084616-7147 r20261016-085401-a289,"DMUL 74.51 SMSP-cycles: dmul alone, ILP 8 (rw 75cf) at 76.00 (max over ILP) + 2%"
+KALU0,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 1.997 + ALU 1.960 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); holds at EPS1's points (max 0.980, r20261017-034143-b1de, r20261017-035229-7c35)"
+KALU1,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 2.638 + ALU 1.920 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); holds at EPS1's points (max 0.960, r20261017-034143-b1de, r20261017-035229-7c35)"
+KALU2,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 15.454 + ALU 0.343 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); holds at EPS1's points (max 0.972, r20261017-034143-b1de, r20261017-035229-7c35)"
+KALU3,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 15.743 + ALU 0.199 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); holds at EPS1's points (max 0.975, r20261017-034143-b1de, r20261017-035229-7c35)"
+KIMAD0,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 3.259 + IMAD 1.960 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_imad_96 reaches 1.017 (r20261017-035229-7c35); EIMAD0-5 replace it"
+KIMAD1,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 4.458 + IMAD 1.885 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_imad_96 reaches 1.028 (r20261017-035229-7c35); EIMAD0-5 replace it"
+KIMAD2,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 15.059 + IMAD 0.560 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_imad_48 reaches 1.031 (r20261017-034143-b1de); EIMAD0-5 replace it"
+KIMAD3,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 15.743 + IMAD 0.389 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_imad_48 reaches 1.012 (r20261017-034143-b1de); EIMAD0-5 replace it"
+KHFMA20,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 3.840 + HFMA2 1.960 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_hfma2_96 reaches 1.039 (r20261017-035229-7c35); EHFMA20-5 replace it"
+KHFMA21,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 4.314 + HFMA2 1.930 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_hfma2_96 reaches 1.043 (r20261017-035229-7c35); EHFMA20-5 replace it"
+KHFMA22,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 14.841 + HFMA2 0.615 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_hfma2_48 reaches 1.037 (r20261017-035229-7c35); EHFMA20-5 replace it"
+KHFMA23,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 15.743 + HFMA2 0.389 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_hfma2_48 reaches 1.012 (r20261017-035229-7c35); EHFMA20-5 replace it"
+KSHFL0,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 8.711 + SHFL 4.000 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_shfl_16 reaches 1.020 (r20261017-035229-7c35); ESHFL0-2 replace it"
+KSHFL1,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 15.527 + SHFL 0.592 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_shfl_16 reaches 1.020 (r20261017-035229-7c35); ESHFL0-2 replace it"
+KSHFL2,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 15.743 + SHFL 0.377 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin); closed at VF3l-16: EPS1's mix_shfl_16 reaches 1.007 (r20261017-035229-7c35); ESHFL0-2 replace it"
+EIMAD0,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 2.085 + IMAD 1.961 SMSP-cycles (EPS1 frontier, imad for IMAD, with KIMAD's points, 2% noise margin; tight at alone_imad and mix_imad_128)"
+EIMAD1,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 2.898 + IMAD 1.910 SMSP-cycles (EPS1 frontier, imad for IMAD, with KIMAD's points, 2% noise margin; tight at mix_imad_128 and mix_imad_96)"
+EIMAD2,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 6.409 + IMAD 1.618 SMSP-cycles (EPS1 frontier, imad for IMAD, with KIMAD's points, 2% noise margin; tight at mix_imad_96 and mix_imad_64)"
+EIMAD3,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 10.305 + IMAD 1.130 SMSP-cycles (EPS1 frontier, imad for IMAD, with KIMAD's points, 2% noise margin; tight at mix_imad_64 and mix_imad_56)"
+EIMAD4,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 13.229 + IMAD 0.713 SMSP-cycles (EPS1 frontier, imad for IMAD, with KIMAD's points, 2% noise margin; tight at mix_imad_56 and mix_imad_48)"
+EIMAD5,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 15.743 + IMAD 0.294 SMSP-cycles (EPS1 frontier, imad for IMAD, with KIMAD's points, 2% noise margin; tight at mix_imad_48 and KIMAD3:axis)"
+EHFMA20,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 2.085 + HFMA2 1.961 SMSP-cycles (EPS1 frontier, hfma2 for HFMA2, with KHFMA2's points, 2% noise margin; tight at alone_hfma2 and mix_hfma2_128)"
+EHFMA21,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 2.900 + HFMA2 1.910 SMSP-cycles (EPS1 frontier, hfma2 for HFMA2, with KHFMA2's points, 2% noise margin; tight at mix_hfma2_128 and mix_hfma2_96)"
+EHFMA22,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 6.408 + HFMA2 1.618 SMSP-cycles (EPS1 frontier, hfma2 for HFMA2, with KHFMA2's points, 2% noise margin; tight at mix_hfma2_96 and mix_hfma2_64)"
+EHFMA23,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 10.305 + HFMA2 1.131 SMSP-cycles (EPS1 frontier, hfma2 for HFMA2, with KHFMA2's points, 2% noise margin; tight at mix_hfma2_64 and mix_hfma2_56)"
+EHFMA24,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 13.230 + HFMA2 0.713 SMSP-cycles (EPS1 frontier, hfma2 for HFMA2, with KHFMA2's points, 2% noise margin; tight at mix_hfma2_56 and mix_hfma2_48)"
+EHFMA25,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 15.743 + HFMA2 0.294 SMSP-cycles (EPS1 frontier, hfma2 for HFMA2, with KHFMA2's points, 2% noise margin; tight at mix_hfma2_48 and KHFMA23:axis)"
+ESHFL0,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 0.019 + SHFL 7.834 SMSP-cycles (EPS1 frontier, shfl for SHFL, with KSHFL's points, 2% noise margin; tight at mix_shfl_20 and mix_shfl_18)"
+ESHFL1,joint,r20261017-034143-b1de r20261017-035229-7c35,"MMA 3.314 + SHFL 6.370 SMSP-cycles (EPS1 frontier, shfl for SHFL, with KSHFL's points, 2% noise margin; tight at mix_shfl_18 and mix_shfl_16)"
+ESHFL2,joint,r20261016-093909-ac84 r20261017-034143-b1de r20261017-035229-7c35,"MMA 15.743 + SHFL 0.155 SMSP-cycles (EPS1 frontier, shfl for SHFL, with KSHFL's points, 2% noise margin; tight at mix_shfl_16 and KSHFL2:axis)"
+KFFMA0,joint,r20261016-093909-ac84,"MMA 15.743 + FFMA 1.030 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KSEL0,joint,r20261016-093909-ac84,"MMA 9.818 + SEL 1.000 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KSEL1,joint,r20261016-093909-ac84,"MMA 11.725 + SEL 0.940 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KSEL2,joint,r20261016-093909-ac84,"MMA 12.964 + SEL 0.863 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KSEL3,joint,r20261016-093909-ac84,"MMA 15.743 + SEL 0.516 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KALU640,joint,r20261016-093909-ac84,"MMA 6.908 + ALU64 2.000 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KALU641,joint,r20261016-093909-ac84,"MMA 7.687 + ALU64 1.951 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KALU642,joint,r20261016-093909-ac84,"MMA 15.743 + ALU64 0.801 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KIMADW0,joint,r20261016-093909-ac84,"MMA 9.900 + IMADW 3.922 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KIMADW1,joint,r20261016-093909-ac84,"MMA 15.743 + IMADW 3.191 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KW20,joint,r20261016-093909-ac84,"MMA 15.743 + W2 46.979 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KDMUL0,joint,r20261016-093909-ac84,"MMA 15.743 + DMUL 58.739 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KRED640,joint,r20261016-093909-ac84,"MMA 0.457 + RED64 129.574 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KRED641,joint,r20261016-093909-ac84,"MMA 15.743 + RED64 114.289 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KREDV0,joint,r20261016-093909-ac84,"MMA 0.148 + REDV 260.039 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+KREDV1,joint,r20261016-093909-ac84,"MMA 15.743 + REDV 244.444 SMSP-cycles (ISSUE r1-r6 and RS-W′'s runs, 2% noise margin)"
+ROW_TLD1,measured,r20261016-093909-ac84,"texture point fetch, 1 word (TLD.LZ, tex1Dfetch 1D) 0.4937/SM/clk + 2%"
+ROW_TLD2,measured,r20261016-093909-ac84,"texture point fetch, 2 words (TLD.LZ) 0.4232/SM/clk + 2%"
+ROW_TLD4w,measured,r20261016-093909-ac84,"texture point fetch, 4 words (TLD.LZ.v4) 0.3804/SM/clk + 2%"
+ROW_TLD2D1,measured,r20261016-093909-ac84,"texture 2D integer-coord fetch, 1 word (TLD.LZ.2D) 0.2749/SM/clk + 2%"
+ROW_TLD2D4,measured,r20261016-093909-ac84,"texture 2D integer-coord fetch, 4 words (TLD.LZ.2D.v4) 0.0666/SM/clk + 2%"
+ROW_TEX1,measured,r20261016-093909-ac84,"texture filtered/point fetch, 1 word (TEX) 0.2492/SM/clk + 2%"
+ROW_TEX4,measured,r20261016-093909-ac84,"texture filtered fetch, 4 words (TEX.v4) 0.0624/SM/clk + 2%"
+ROW_TLD4G,measured,r20261016-093909-ac84,"texture gather, 4 words (TLD4.R, tex2Dgather) 0.1247/SM/clk + 2%"
+ROW_TEXBIL,measured,r20261016-093909-ac84,"texture bilinear u8x4 (TEX, the census's 4.00 fetches/SM/clk) 0.1248/SM/clk + 2%"
+ROW_SULD1,measured,r20261016-093909-ac84,"surface load, 1 word (SULD.D.BA.2D) 0.2492/SM/clk + 2%"
+ROW_SULD4,measured,r20261016-093909-ac84,"surface load, 4 words (SULD.D.BA.2D.128) 0.0832/SM/clk + 2%"
+ROW_LDCUNI,measured,r20261016-093909-ac84,"constant-bank load, uniform address (LDC, broadcast) 0.4749/SM/clk + 2%"
+ROW_SURED,measured,r20261016-093909-ac84,"surface reduce-add (SURED.D.BA.2D.ADD), a memory adder 0.0164/SM/clk + 2%"
+ROW_LDCDIV,measured,r20261016-093909-ac84,"constant-bank load, per-lane (divergent) address (LDC, serialised) 0.0054/SM/clk + 2%"
+ROW_LDC64,measured,r20261016-093909-ac84,"constant-bank 64-bit load, per-lane address (LDC.64) 0.0031/SM/clk + 2%"
+ROW_UTMA,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 16 B: 0.027522/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_UTMA8,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 32 B: 0.027638/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_UTMA512,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 48-512 B: 0.027638/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_G4_16,measured,r20261016-163751-6447,"TMA gather4, 4 rows of at most 16 B: 0.025962/SM/clk + 2% (r20261016-163751-6447; VF3f)"
+ROW_G4_32,measured,r20261016-163751-6447,"TMA gather4, 4 rows of at most 32 B: 0.025966/SM/clk + 2% (r20261016-163751-6447; VF3f)"
+ROW_LDSM_X1,measured,r20261016-112703-0297,"ldmatrix m8n8.x1.b16  (LDSM.16.M88,   1 reg a lane) 1.751737/SM/clk + 2%"
+ROW_LDSM_X2,measured,r20261016-112703-0297,"ldmatrix m8n8.x2.b16  (LDSM.16.M88.2, 2 regs a lane) 0.874046/SM/clk + 2%"
+ROW_LDSM_X4,measured,r20261016-112703-0297,"ldmatrix m8n8.x4.b16  (LDSM.16.M88.4, 4 regs a lane) 0.221674/SM/clk + 2%"
+ROW_LDSM_X1T,measured,r20261016-112703-0297,"ldmatrix m8n8.x1.trans.b16 (LDSM.16.MT88,   transpose) 1.752463/SM/clk + 2%"
+ROW_LDSM_X2T,measured,r20261016-112703-0297,"ldmatrix m8n8.x2.trans.b16 (LDSM.16.MT88.2, transpose) 0.874204/SM/clk + 2%"
+ROW_LDSM_X4T,measured,r20261016-112703-0297,"ldmatrix m8n8.x4.trans.b16 (LDSM.16.MT88.4, transpose) 0.221692/SM/clk + 2%"
+ROW_STSM_X1,measured,r20261016-112703-0297,"stmatrix m8n8.x1.b16  (STSM.16.M88,   1 reg a lane) 0.124971/SM/clk + 2%"
+ROW_STSM_X2,measured,r20261016-112703-0297,"stmatrix m8n8.x2.b16  (STSM.16.M88.2, 2 regs a lane) 0.062496/SM/clk + 2%"
+ROW_STSM_X4,measured,r20261016-112703-0297,"stmatrix m8n8.x4.b16  (STSM.16.M88.4, 4 regs a lane) 0.031249/SM/clk + 2%"
+ROW_STSM_X1T,measured,r20261016-112703-0297,"stmatrix m8n8.x1.trans.b16 (STSM.16.MT88,   transpose) 0.124971/SM/clk + 2%"
+ROW_STSM_X2T,measured,r20261016-112703-0297,"stmatrix m8n8.x2.trans.b16 (STSM.16.MT88.2, transpose) 0.062496/SM/clk + 2%"
+ROW_STSM_X4T,measured,r20261016-112703-0297,"stmatrix m8n8.x4.trans.b16 (STSM.16.MT88.4, transpose) 0.031249/SM/clk + 2%"
+ROW_ATOMG32,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,ATOMG.E.<op> .32 (returning; select ops min/max/cas/exch/and/or/xor) 0.0727/SM/clk + 2%; from VF3k-16 the gated probe's 0.0998499
+ROW_ATOMG64,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914 r20261016-210926-d856,"ATOMG.E.<op>.64 0.0498/SM/clk + 2%; from VF3k-16 the gated probe's 0.0499395, from VF3l-16 its replicate's 0.0499401"
+ROW_REDG32,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,REDG.E.<op> .32 (min/max/and/or/xor and add) 0.0999/SM/clk + 2%; from VF3k-16 the gated probe's 0.100065
+ROW_REDG64,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,REDG.E.<op>.64 0.05/SM/clk + 2%; from VF3k-16 the gated probe's 0.0500398
+ROW_ATOMS32,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,"ATOMS.<op> .32 (atom.shared, red.shared) 0.4946/SM/clk + 2%; from VF3k-16 the gated probe's 0.497461"
+ROW_ATOMS64,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914 r20261016-210926-d856,"ATOMS.CAS.64 / EXCH.64 / CAST.SPIN.64 (shared and DSMEM-own-CTA 64-bit) 0.29523/SM/clk + 2%; from VF3k-16 the gated probe's 0.480156 (EXCH.64), from VF3l-16 its replicate's 0.480171"
+ROW_ATOME32,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,"ATOM.E.<op> .32 (generic or DSMEM address, any window) 0.47767/SM/clk + 2%; from VF3k-16 the gated generic-to-shared add 0.497945, and a peer CTA's window is ROW_ATOME32P's class"
+ROW_ATOME64,measured,r20261016-144147-4597 r20261016-145213-5ed0,"ATOM.E.<op>.64 (generic or DSMEM address, any window) 0.29523/SM/clk + 2%, ungated (red.shared::cluster.add.u64 at the own rank, whose CAST.SPIN fallback loop the gate refuses); the gated EXCH.64 and CAS.64 forms are slower (r20261016-210926-d856: generic to shared 0.155495 and 0.133670, own rank 0.153850 and 0.133354), so the ungated line stays"
+ROW_ATOME32P,measured,r20261016-183617-3914 r20261017-035245-089f,"ATOM.E.<op> .32 into a peer CTA's shared memory (atom/red.shared::cluster at the other rank of a 2-CTA cluster; red.add the fastest of add, cas and red) 0.0108515/SM/clk + 2%; from VF3m-16 0.01149419 (sa_dsm_red, red.shared::cluster.add.u32 to the peer rank as ATOM.E.ADD, r20261017-035245-089f; replicate 0.01149416, r20261017-034149-3f95)"
+ROW_REDAS32,measured,r20261016-144147-4597 r20261016-145213-5ed0,REDAS.<op> .32 (red.async to shared::cluster) 0.01086/SM/clk + 2%
+ROW_REDAS64,measured,r20261016-144147-4597 r20261016-145213-5ed0,REDAS.ADD.64 0.00543/SM/clk + 2%
+ROW_UBLKRED,measured,r20261016-145213-5ed0 r20261017-034149-3f95,"UBLKRED.G.S.<op> 512 B 0.01486/SM/clk + 2% (r20261016-145213-5ed0); from VF3m-16 0.01518764 (sa_blkred512, r20261017-034149-3f95; replicate 0.01512787, r20261017-035245-089f)"
+ROW_CVT64,measured,r20261016-151430-a2aa,64-bit-destination F2F/F2I/I2F/FRND 0.06252/SM/clk + 2% (r20261016-151430-a2aa)
+ROW_TEXI,measured,r20261016-151430-a2aa r20261016-153241-fb87,"any TEX instruction (any width/format/filter) 0.249292/SM/clk + 2% (tex2, tex3, tex3b, VF3f)"
+ROW_LDSM8T_X1,measured,r20261016-152445-483c,LDSM.8.MT1616 (ldmatrix m16n16.x1.trans.b8) 0.875448/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM8T_X2,measured,r20261016-152445-483c,LDSM.8.MT1616.2 0.221747/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM6_X1,measured,r20261016-152445-483c,LDSM.U6x16P32TO8.M816 (ldmatrix m8n16.x1 b6x16_p32 -> b8) 1.752674/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM6_X2,measured,r20261016-152445-483c,LDSM.U6x16P32TO8.M816.2 0.874245/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM6_X4,measured,r20261016-152445-483c,LDSM.U6x16P32TO8.M816.4 0.221646/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM4_X1,measured,r20261016-152445-483c,LDSM.U4x16P64TO8.M816 (ldmatrix m8n16.x1 b4x16_p64 -> b8) 1.752792/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM4_X2,measured,r20261016-152445-483c,LDSM.U4x16P64TO8.M816.2 0.874554/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM4_X4,measured,r20261016-152445-483c,LDSM.U4x16P64TO8.M816.4 0.221711/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM6T_X1,measured,r20261016-152445-483c,LDSM.U6x16P32TO8.MT1616 0.874881/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM6T_X2,measured,r20261016-152445-483c,LDSM.U6x16P32TO8.MT1616.2 0.221768/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM4T_X1,measured,r20261016-152445-483c,LDSM.U4x16P64TO8.MT1616 0.875138/SM/clk + 2% (r20261016-152445-483c)
+ROW_LDSM4T_X2,measured,r20261016-152445-483c,LDSM.U4x16P64TO8.MT1616.2 0.221744/SM/clk + 2% (r20261016-152445-483c)
+ROW_STSM8T_X1,measured,r20261016-152445-483c,STSM.8.MT168 (stmatrix m16n8.x1.trans.b8) 0.124971/SM/clk + 2% (r20261016-152445-483c)
+ROW_STSM8T_X2,measured,r20261016-152445-483c,STSM.8.MT168.2 0.062496/SM/clk + 2% (r20261016-152445-483c)
+ROW_STSM8T_X4,measured,r20261016-152445-483c,STSM.8.MT168.4 0.031249/SM/clk + 2% (r20261016-152445-483c)
+ROW_TLDW1,measured,r20261016-152445-483c r20261016-152916-75d5,"any TLD writing 1 word(s) a lane 0.851997/SM/clk + 2% (tex2, tldc, VF3f)"
+ROW_TLDW2,measured,r20261016-152445-483c r20261016-152916-75d5,"any TLD writing 2 word(s) a lane 0.424598/SM/clk + 2% (tex2, tldc, VF3f)"
+ROW_TLDW4,measured,r20261016-152445-483c r20261016-152916-75d5,"any TLD writing 4 word(s) a lane 0.3804/SM/clk + 2% (tex2, tldc, VF3f)"
+ROW_SULDI,measured,r20261016-152445-483c r20261016-152916-75d5,any SULD instruction 0.2492/SM/clk + 2% (VF3f SULD1; the TEX cap)
+ROW_LDSMR1,measured,r20261016-155818-6862 r20261016-160400-26d0 r20261016-183617-3914,"any LDSM form with 1 register(s) a lane, plain or converting, 0.499414/SM/clk + 2% (lmmix, r20261016-155818-6862, r20261016-160400-26d0)"
+ROW_STSMR1,measured,r20261016-155818-6862 r20261016-160400-26d0 r20261016-183617-3914,"any STSM form with 1 register(s) a lane, plain or converting, 0.499071/SM/clk + 2% (lmmix, r20261016-155818-6862, r20261016-160400-26d0)"
+ROW_LDSMR2,measured,r20261016-155818-6862 r20261016-160400-26d0,"any LDSM form with 2 register(s) a lane, plain or converting, 0.499477/SM/clk + 2% (lmmix, r20261016-155818-6862, r20261016-160400-26d0)"
+ROW_STSMR2,measured,r20261016-155818-6862 r20261016-160400-26d0 r20261016-183617-3914,"any STSM form with 2 register(s) a lane, plain or converting, 0.499115/SM/clk + 2% (lmmix, r20261016-155818-6862, r20261016-160400-26d0)"
+ROW_LDSMR4,measured,r20261016-155818-6862 r20261016-160400-26d0 r20261016-183617-3914,"any LDSM form with 4 register(s) a lane, plain or converting, 0.249722/SM/clk + 2% (lmmix, r20261016-155818-6862, r20261016-160400-26d0)"
+ROW_STSMR4,measured,r20261016-155818-6862 r20261016-160400-26d0,"any STSM form with 4 register(s) a lane, plain or converting, 0.249771/SM/clk + 2% (lmmix, r20261016-155818-6862, r20261016-160400-26d0)"
+ROW_SHFLM,measured,r20261016-155818-6862 r20261016-160122-bbb1 r20261016-160400-26d0 r20261016-160613-dd7b r20261016-161042-6f8a r20261016-162016-64d3 r20261016-162712-6517 r20261016-163016-ff2d r20261016-163459-8890 r20261016-163751-6447,"SHFL, any mode (data-dependent IDX/UP/DOWN/BFLY) 0.499815/SM/clk + 2% (shfl)"
+ROW_UTMA1K,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 528 B - 1 KB: 0.025178/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_UTMA2K,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 1-2 KB: 0.02284/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_UTMA4K,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 2-4 KB: 0.015532/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_UTMA8K,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 4-8 KB: 0.007777/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_UTMA16K,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 8-16 KB: 0.003891/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_UTMA32K,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 16-32 KB: 0.001945/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_UTMA48K,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 32-48 KB: 0.000964/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_UTMA64K,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 48-64 KB: 0.000964/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_UTMABIG,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d,"TMA box load 64 KB to shared memory's 99 KB: 0.00038/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d; VF3f)"
+ROW_G4_256,measured,r20261016-163751-6447,"TMA gather4, 4 rows of at most 256 B: 0.025966/SM/clk + 2% (r20261016-163751-6447; VF3f)"
+ROW_G4_1K,measured,r20261016-163751-6447,"TMA gather4, 4 rows of at most 1024 B: 0.022739/SM/clk + 2% (r20261016-163751-6447; VF3f)"
+ROW_TMAB,measured,r20261016-160613-dd7b r20261016-162712-6517 r20261016-163016-ff2d r20261016-163459-8890,"TMA tiled box loads, any sizes mixed: 31.88 B/SM/clk + 2% (tma2 r20261016-160613-dd7b, r20261016-162712-6517, r20261016-163016-ff2d, r20261016-163459-8890)"
+ROW_LDGSTS16,measured,r20261017-034149-3f95 r20261017-035245-089f,"cp.async 16 B a lane into shared memory (LDGSTS.E.BYPASS.128, 128 words a warp instruction) 0.1000485/SM/clk + 2% (sa_ldgsts, r20261017-034149-3f95; replicate 0.0995351, r20261017-035245-089f)"
+ROW_UBLKCP4K,measured,r20261017-034149-3f95 r20261017-035245-089f,"TMA bulk copy 4 KB shared to global (UBLKCP.G.S, cp.async.bulk.global.shared::cta from one lane, 1024 words) 0.002344728/SM/clk + 2% (sa_blkcp4k, r20261017-034149-3f95; replicate 0.002332999, r20261017-035245-089f)"
+ROW_DSMST4P,measured,r20261017-034149-3f95 r20261017-035245-089f,"st.shared::cluster.v4 into a peer CTA's shared memory (ST.E.128 at the other rank of a 2-CTA cluster, 128 words) 0.003129526/SM/clk + 2% (sa_dsm_st4, r20261017-035245-089f; replicate 0.003129525, r20261017-034149-3f95)"

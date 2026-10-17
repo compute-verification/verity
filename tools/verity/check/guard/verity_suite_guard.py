@@ -2,7 +2,8 @@
 nothing else, so putting it on `sys.path` shadows no module).
 
 It records every repository file the tests open outside the suite's inputs (`VERITY_SUITE_ALLOW`, paths relative to
-`VERITY_SUITE_ROOT`), every test whose call took over 5 s without the `slow` mark, and the outcome counts, and writes them to
+`VERITY_SUITE_ROOT`, less the nested suites `VERITY_SUITE_DENY` names), every test whose call took over 5 s without the `slow`
+mark, and the outcome counts, and writes them to
 `VERITY_SUITE_REPORT` when the session ends. `suites.py` fails a suite that read outside its inputs or wrote no report: a
 cached pass is only sound when everything the tests read is part of the key. Opens go through Python's audit hook (`open`
 events), installed when pytest loads this module, before any conftest: it sees every file Python opens, imports included, but

@@ -15,6 +15,17 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
             "int8-all": ("all", "int8-all", True), "adopted-linears": ("linears", "int8-linears", True),
             "adopted-attention": ("attention", "int8-attention", True), "adopted": ("all", "int8-all", True),
             "adopted-no-smooth": ("all", "int8-all", True)}
+    for g in ("fp4c", "fp4", "int5"):
+        for m in ("dither", "round"):
+            want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
+        want[f"{g}-dither-act"] = ("all", "int8-all", True)
+    want["fp4-sr"] = want["int5-sr"] = ("all", "int8-all", True)
+    want["fp4c-dither-all-kv"] = ("all", "int8-all", True)
+    for name in (("nvfp4-dither", "nvfp4-sr", "nvfp4c-dither", "fp8-peel-w15", "fp8-peel-w15-gptq", "fp8-peel-w8",
+                  "fp8-peel-w8-gptq", "nvfp4-int-dither", "nvfp4c-q2", "nvfp4c-q4")
+                 + tuple(f"{g}-q{d}" for g in ("nvfp4", "int5", "fp8-peel-w15") for d in (2, 4, 8))):
+        want[name] = ("all", "int8-all", True)
+    want["nvfp4-round"] = want["nvfp4c-round"] = want["nvfp4-int-round"] = ("all", "int8-all", True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
@@ -47,7 +58,8 @@ def test_round_trip():
 
 def test_defaults_are_filled_and_typed():
     a = parse('[[linear]]\nstep = "int8"\nweight_top = 63\n[[linear]]\nstep = "int8"\nlayers = [0]\nact = "dither"')
-    assert a.linear[0].kw == {"act": "round", "act_top": 127, "weight_top": 63, "group": 0, "gptq": False}
+    assert a.linear[0].kw == {"act": "round", "act_top": 127, "weight_top": 63, "group": 0, "gptq": False,
+                              "density": 1.0}
     assert a.linear[1].layers == frozenset({0})
     s = parse('[[linear]]\nstep = "smooth"\nalpha = 1').linear[0]
     assert s.kw["alpha"] == 1.0 and isinstance(s.kw["alpha"], float)

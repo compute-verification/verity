@@ -21,6 +21,22 @@ The grids (`GRIDS`, which `fp_exact.cu`'s `grids()` mirrors):
 - E4M3 has the integers in [−16, 16] and their halves and quarters (`e4m3_int16`, `e4m3_half8`, `e4m3_quarter4`).
 - E2M1 has the grid ×2 = {0, ±1, ±2, ±3, ±4, ±6, ±8, ±12} halves (`e2m1_x2`) and its integer subset (`e2m1_int`).
 
+The per-block scales (`SCALES`, which `fp_exact.cu`'s `make_scale()` mirrors; both operands draw from the one set, a
+scale a 16-element block for NVFP4 / a 32-element block for MXFP4):
+
+- `unit`: 1.0 on every block (E4M3 and the 2:4-sparse route, whose MMA takes unit scales, use only this).
+- `lo`, `hi`: one fixed scale a block — NVFP4's UE4M3 3 / 15, MXFP4's UE8M0 2^−3 / 2^3.
+- `mix`: a scale drawn per block and per operand — NVFP4 the odd integers 1..15 (Theorem K's 2-adic form keeps c = 1
+  under odd-integer scales), MXFP4 the powers 2^k, k in [−3, 3] (a cheater's range stretch).
+- `bind`, `bind26`: MXFP4 blocks alternate 2^7 and 2^−7 (scale-exponent spread 28, one past the 27-bit frac anchor) /
+  2^7 and 2^−6 (spread 26). They probe whether a wide intra-firing spread makes the align-add's 27-bit anchor truncate
+  a product beyond what FP32's 24-bit significand already drops.
+
+The reference keeps the integer dot in units of 2^−(2s + sh), where `sh` carries the blocks' most negative scale
+exponent so every shift is non-negative; the binade C0 is matched to that scaled resolution. The K-limit table
+(`limits`) reports, per format, grid and scale, the largest K exact for every draw and the first K that rounds, with
+the max scale product.
+
 The distributions (`DISTS`) are:
 
 - uniform;
@@ -44,8 +60,8 @@ Each value of C0 (`c0_words`) has a role:
 | File | What |
 |---|---|
 | `fp_exact.cu` | One kernel a format: 3 accumulation orders of the chain, the int64 reference and its representability, the counts, the first tiles' words (`gpu_kit/bench.cuh`'s 0xA5 poisoning and no-write control). `--dump` writes a config's operands from the device's generator, without a GPU |
-| `fp_exact.py` | `configs` (the sweep), `run` (the SASS gate, then the sweep and its control), `summarize` (the host's own regeneration and recheck of the recorded tiles, a replay of them through `verity.ml.circuits.silicon`'s models, the verdicts), `rates` (`../opcode_probe/probes/mma.cu`'s rows as MACs per SM per clock against IMMA) |
-| `run.sh` | The job: build and gate outside the lease, then under one `gpu-lease` the sweep and the MMA rates, then the summary |
+| `fp_exact.py` | `configs` (the sweep over formats, grids, scales, distributions, C0 and K), `run` (the SASS gate, then the sweep and its control), `summarize` (the host's own regeneration and recheck of the recorded tiles, a replay of them through `verity.ml.circuits.silicon`'s models, the verdicts), `limits` (the K-limit table per format, grid and scale), `rates` (`../opcode_probe/probes/mma.cu`'s rows as MACs per SM per clock against IMMA, each format's `_data` probe against its fixed one to rule out a data-dependent clock) |
+| `run.sh` | The job: build and gate outside the lease, then under one `gpu-lease` the sweep and the MMA rates, then the summary and the K-limit table |
 
 ~~~text
 research run --on vy-nebius-2 --project verity --cwd source -- bash benchmarks/pouw/fp_exact/run.sh [--quick]

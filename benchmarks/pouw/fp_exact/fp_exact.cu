@@ -24,6 +24,10 @@
 
 enum Fmt : int { E4M3 = 0, E4M3_KIND = 1, MXF4 = 2, MXF4NV = 3, NVF4 = 4, SP_MXF4 = 5, SP_NVF4 = 6, NFMT };
 enum Dist : int { D_U = 0, D_MAX = 1, D_MAXSIGN = 2, D_RAMP = 3, D_CANCEL = 4, D_EDGE = 5 };
+// Per-block scales. UNIT: 1.0 on every block. LO/HI: one fixed scale a block (UE4M3 3 / 15; UE8M0 2^-3 / 2^3).
+// MIX: a scale a block, drawn per block and per operand (UE4M3 the odd integers 1..15; UE8M0 2^k, k in [-3, 3]).
+// BIND / BIND26: UE8M0 blocks alternate 2^7 and 2^-7 (spread 28, one past the 27-bit anchor) / 2^7 and 2^-6 (spread 26).
+enum Scale : int { SC_UNIT = 0, SC_LO = 1, SC_HI = 2, SC_MIX = 3, SC_BIND = 4, SC_BIND26 = 5 };
 constexpr int NORD = 3;
 constexpr int NSAMPLE = 8;
 constexpr uint32_t TAG = 0x5A000000u;
@@ -35,13 +39,24 @@ struct Grid {
   uint8_t neg[40];  // the index of -val
 };
 
+struct ScaleSet {
+  int n;              // 1 for a fixed scale; the set size for MIX; 2 for BIND
+  int mode;           // 0 fixed (index 0); 1 drawn per block; 2 alternating (block & 1)
+  uint8_t code[8];    // the UE4M3 / UE8M0 byte
+  int num[8], exp[8]; // the scale value is num * 2^exp (UE4M3 odd: num odd, exp 0; UE8M0 2^k: num 1, exp k)
+};
+
 struct Params {
   Grid ga1, ga2, gb1, gb2;  // k < ksplit draws from *1, else *2
   int K, tiles, ksplit, cancel, s_tot, nrec;
+  int sh;                   // the reference's unit is 2^-(s_tot + sh): sh carries the blocks' most negative scale
+  int scblk;                // elements a scale block (16 UE4M3, 32 UE8M0; K when there is no block scale)
+  int sblk_chunks;          // chunks of 8 a scale block (scblk / 8): the orders permute whole scale blocks
+  ScaleSet sa, sb;          // the scale set of each operand
   uint32_t c0;
-  long long c0_units;  // C0 in units of 2^-s_tot
+  long long c0_units;  // C0 in units of 2^-(s_tot + sh)
   unsigned long long seed;
-  uint32_t pmul[NORD], padd[NORD];  // order o: physical chunk p holds logical chunk (pmul p + padd) mod (K / 8)
+  uint32_t pmul[NORD], padd[NORD];  // order o: physical block p holds logical block (pmul p + padd) mod (K / scblk)
 };
 
 struct Sample {
@@ -107,10 +122,24 @@ __host__ __device__ inline El elB(const Params& P, int tile, int col, int k) {
   return {g.code[i], g.val[i]};
 }
 
+// Order o permutes whole scale blocks (sblk_chunks chunks each), so a block's scale travels with its elements, and only
+// the block order changes. Within a block the chunk offset is kept.
 __host__ __device__ inline int lchunk(const Params& P, int o, int pchunk) {
-  return (int)((P.pmul[o] * (uint32_t)pchunk + P.padd[o]) & (uint32_t)((P.K >> 3) - 1));
+  const int u = P.sblk_chunks, nblk = (P.K >> 3) / u;
+  const int m = pchunk / u, r = pchunk % u;
+  const int mm = (int)((P.pmul[o] * (uint32_t)m + P.padd[o]) & (uint32_t)(nblk - 1));
+  return mm * u + r;
 }
 __host__ __device__ inline int logical(const Params& P, int o, int p) { return (lchunk(P, o, p >> 3) << 3) | (p & 7); }
+
+// The scale of a logical block: op 0 is A (rc = row), op 1 is B (rc = col).
+__host__ __device__ inline uint64_t skey(const Params& P, int tile, int op, int rc, int block) {
+  return mix64(P.seed ^ 0x5CA1E5CA1E000000ull ^ ((uint64_t)tile << 40) ^ ((uint64_t)op << 38) ^ ((uint64_t)rc << 30) ^
+               (uint64_t)block);
+}
+__host__ __device__ inline int scale_idx(const ScaleSet& s, const Params& P, int tile, int op, int rc, int block) {
+  return s.mode == 0 ? 0 : s.mode == 2 ? (block & 1) : pick(s.n, skey(P, tile, op, rc, block));
+}
 
 // ---- the MMAs (mnemonics and fragment layouts as benchmarks/tc_probe_fp4/mma_fp4.cu's) ----
 
@@ -177,6 +206,20 @@ __host__ __device__ constexpr uint32_t unit_scale() {
   return F == NVF4 || F == SP_NVF4 ? 0x38383838u : 0x7F7F7F7Fu;
 }
 
+// The scale fragment of one firing (tc_probe_fp4's layout): byte b is K-block b of this lane's row / column. SFA's lane
+// supplies row 8(lane&1)+(lane>>2) (thread-id selector 0 broadcasts lane bit 1); SFB's supplies column lane>>2.
+template <int F>
+__device__ __forceinline__ uint32_t pack_sf(const Params& P, const ScaleSet& s, int tile, int op, int rc, int o, int pb) {
+  constexpr int KS = kstep<F>();
+  const int nbf = KS / (F == NVF4 || F == SP_NVF4 ? 16 : 32);  // blocks a firing: 4 UE4M3, 2 UE8M0
+  uint32_t v = 0;
+  for (int b = 0; b < nbf; b++) {
+    const int lb = lchunk(P, o, (pb >> 3) + P.sblk_chunks * b) / P.sblk_chunks;
+    v |= (uint32_t)s.code[scale_idx(s, P, tile, op, rc, lb)] << (8 * b);
+  }
+  return v;
+}
+
 // One MMA of the chain, at physical K offset pb in order o.
 template <int F>
 __device__ __forceinline__ void step(const Params& P, int tile, int o, int pb, int lane, float* d) {
@@ -219,10 +262,11 @@ __device__ __forceinline__ void step(const Params& P, int tile, int o, int pb, i
         v |= (uint32_t)(elB(P, tile, g, logical(P, o, pb + 8 * t + j + 32 * r)).code & 0xF) << (4 * j);
       b[r] = v;
     }
-    constexpr uint32_t s = unit_scale<F>();
-    if constexpr (F == MXF4) mma_mxf4(d, a, b, s, s);
-    else if constexpr (F == MXF4NV) mma_mxf4nv(d, a, b, s, s);
-    else mma_nvf4(d, a, b, s, s);
+    const uint32_t sa = pack_sf<F>(P, P.sa, tile, 0, 8 * (lane & 1) + (lane >> 2), o, pb);
+    const uint32_t sb = pack_sf<F>(P, P.sb, tile, 1, lane >> 2, o, pb);
+    if constexpr (F == MXF4) mma_mxf4(d, a, b, sa, sb);
+    else if constexpr (F == MXF4NV) mma_mxf4nv(d, a, b, sa, sb);
+    else mma_nvf4(d, a, b, sa, sb);
   } else {
     // Stored A: the dense K = 64 layout over stored columns; stored column sc is logical chunk lc's (sc & 3)-th kept
     // element, pair p0 first. B: reg r, nibble j -> col g, k = 8t + j + 32r. Metadata: lane 4g+q holds row g + 8(q&1),
@@ -294,13 +338,15 @@ __global__ void __launch_bounds__(128) exact_kernel(Params P, Counts* C, Rec* R)
   for (int i = 0; i < 4; i++) ref[i] = P.c0_units, rep[i] = true;
 #pragma unroll 1
   for (int p = 0; p < P.K; p++) {
-    const int k = logical(P, 0, p);
+    const int k = logical(P, 0, p), blk = k / P.scblk;
+    const int ia0 = scale_idx(P.sa, P, tile, 0, rows[0], blk), ia1 = scale_idx(P.sa, P, tile, 0, rows[1], blk);
+    const int ib0 = scale_idx(P.sb, P, tile, 1, cols[0], blk), ib1 = scale_idx(P.sb, P, tile, 1, cols[1], blk);
     const El a0 = elA<SPARSE>(P, tile, rows[0], k), a1 = elA<SPARSE>(P, tile, rows[1], k);
     const El b0 = elB(P, tile, cols[0], k), b1 = elB(P, tile, cols[1], k);
-    ref[0] += (long long)a0.val * b0.val;
-    ref[1] += (long long)a0.val * b1.val;
-    ref[2] += (long long)a1.val * b0.val;
-    ref[3] += (long long)a1.val * b1.val;
+    ref[0] += ((long long)a0.val * b0.val * P.sa.num[ia0] * P.sb.num[ib0]) << (P.sa.exp[ia0] + P.sb.exp[ib0] + P.sh);
+    ref[1] += ((long long)a0.val * b1.val * P.sa.num[ia0] * P.sb.num[ib1]) << (P.sa.exp[ia0] + P.sb.exp[ib1] + P.sh);
+    ref[2] += ((long long)a1.val * b0.val * P.sa.num[ia1] * P.sb.num[ib0]) << (P.sa.exp[ia1] + P.sb.exp[ib0] + P.sh);
+    ref[3] += ((long long)a1.val * b1.val * P.sa.num[ia1] * P.sb.num[ib1]) << (P.sa.exp[ia1] + P.sb.exp[ib1] + P.sh);
     if ((p + 1) % KS == 0)
       for (int i = 0; i < 4; i++) {
         rep[i] = rep[i] && representable(ref[i]);
@@ -312,8 +358,8 @@ __global__ void __launch_bounds__(128) exact_kernel(Params P, Counts* C, Rec* R)
   for (int i = 0; i < 4; i++) {
     const int row = rows[i >> 1], col = cols[i & 1];
     const bool frep = representable(ref[i]);
-    const uint32_t want = ref[i] == 0 ? 0u : scaled_word(__ll2float_rn(ref[i]), P.s_tot);
-    const uint32_t rz = ref[i] == 0 ? 0u : scaled_word(__ll2float_rz(ref[i]), P.s_tot);
+    const uint32_t want = ref[i] == 0 ? 0u : scaled_word(__ll2float_rn(ref[i]), P.s_tot + P.sh);
+    const uint32_t rz = ref[i] == 0 ? 0u : scaled_word(__ll2float_rz(ref[i]), P.s_tot + P.sh);
     const uint32_t w0 = __float_as_uint(d[0][i]);
     const bool ex = frep && w0 == want;
     c[0]++;
@@ -414,10 +460,35 @@ static Grid make_grid(const GridDef& gd, const std::vector<int>& vals) {
 
 struct Config {
   std::string name;
-  int fmt, grid, dist, K, tiles, nrec;
+  int fmt, grid, dist, scale, K, tiles, nrec;
   uint32_t c0;
   unsigned long long seed;
 };
+
+static int ue8m0_code(int k) { return 127 + k; }  // 2^k, k in [-127, 127]
+
+// The scale set of one format and Scale enum (both operands draw from it); the UE4M3 odd integers 1..15 and the UE8M0
+// powers 2^k are exact. Returns the set; sh (the extra fraction bits) is -2 * min exponent, clamped at 0.
+static ScaleSet make_scale(int fmt, int scale) {
+  const bool ue4m3 = fmt == NVF4 || fmt == SP_NVF4, ue8m0 = fmt == MXF4 || fmt == MXF4NV || fmt == SP_MXF4;
+  ScaleSet s{};
+  auto add = [&](int code, int num, int exp) { s.code[s.n] = (uint8_t)code; s.num[s.n] = num; s.exp[s.n] = exp; s.n++; };
+  const int unit = ue8m0 ? 0x7F : 0x38;  // 2^0 / 1.0 (unused but set for E4M3)
+  switch (scale) {
+    case SC_UNIT: s.mode = 0; add(unit, 1, 0); break;
+    case SC_LO: s.mode = 0; ue4m3 ? add(e4m3_code(3), 3, 0) : add(ue8m0_code(-3), 1, -3); break;
+    case SC_HI: s.mode = 0; ue4m3 ? add(e4m3_code(15), 15, 0) : add(ue8m0_code(3), 1, 3); break;
+    case SC_MIX:
+      s.mode = 1;
+      if (ue4m3) for (int v = 1; v <= 15; v += 2) add(e4m3_code(v), v, 0);
+      else for (int k = -3; k <= 3; k++) add(ue8m0_code(k), 1, k);
+      break;
+    case SC_BIND: s.mode = 2; add(ue8m0_code(7), 1, 7); add(ue8m0_code(-7), 1, -7); break;
+    case SC_BIND26: s.mode = 2; add(ue8m0_code(7), 1, 7); add(ue8m0_code(-6), 1, -6); break;
+    default: std::fprintf(stderr, "fp_exact: bad scale %d\n", scale); std::exit(2);
+  }
+  return s;
+}
 
 static Params make_params(const Config& c) {
   const GridDef gd = grids().at(c.grid);
@@ -435,18 +506,25 @@ static Params make_params(const Config& c) {
   if (c.dist == D_EDGE) P.ga1 = P.gb1 = top, P.ga2 = make_grid(gd, {mn, 0}), P.gb2 = low, P.ksplit = c.K / 2;
   P.cancel = c.dist == D_CANCEL;
   P.K = c.K, P.tiles = c.tiles, P.nrec = c.nrec, P.s_tot = 2 * gd.s, P.c0 = c.c0, P.seed = c.seed;
+  P.sa = P.sb = make_scale(c.fmt, c.scale);
+  int minexp = 0;
+  for (int i = 0; i < P.sa.n; i++) minexp = std::min(minexp, P.sa.exp[i]);
+  P.sh = minexp < 0 ? -2 * minexp : 0;
+  const bool ue4m3 = c.fmt == NVF4 || c.fmt == SP_NVF4, ue8m0 = c.fmt == MXF4 || c.fmt == MXF4NV || c.fmt == SP_MXF4;
+  P.scblk = ue4m3 ? 16 : ue8m0 ? 32 : c.K;              // elements a scale block
+  P.sblk_chunks = (c.fmt <= E4M3_KIND) ? 1 : P.scblk / 8;  // E4M3 keeps the fine 8-chunk permutation
   float f;
   std::memcpy(&f, &c.c0, 4);
-  const double u = std::ldexp((double)f, P.s_tot);
+  const double u = std::ldexp((double)f, P.s_tot + P.sh);
   if (u != std::floor(u) || std::fabs(u) > 9e15) {
     std::fprintf(stderr, "fp_exact: %s: C0 0x%08x is not a whole number of units\n", c.name.c_str(), c.c0);
     std::exit(2);
   }
   P.c0_units = (long long)u;
-  const uint32_t nch = (uint32_t)c.K / 8;
+  const uint32_t nblk = (uint32_t)(c.K >> 3) / (uint32_t)P.sblk_chunks;  // scale blocks the orders permute
   P.pmul[0] = 1, P.padd[0] = 0;
-  P.pmul[1] = nch - 1, P.padd[1] = nch - 1;
-  P.pmul[2] = 5, P.padd[2] = nch / 2 + 3;
+  P.pmul[1] = nblk - 1, P.padd[1] = nblk - 1;
+  P.pmul[2] = 5, P.padd[2] = nblk / 2 + 3;
   return P;
 }
 
@@ -471,7 +549,7 @@ int main(int argc, char** argv) {
       std::istringstream ss(line);
       Config c;
       std::string c0;
-      ss >> c.name >> c.fmt >> c.grid >> c.dist >> c0 >> c.K >> c.tiles >> c.seed >> c.nrec;
+      ss >> c.name >> c.fmt >> c.grid >> c.dist >> c.scale >> c0 >> c.K >> c.tiles >> c.seed >> c.nrec;
       c.c0 = (uint32_t)std::stoul(c0, nullptr, 16);
       if (!ss || c.fmt < 0 || c.fmt >= NFMT || c.K % KSTEP[c.fmt] || (c.K & (c.K - 1)) || c.K < 32) {
         std::fprintf(stderr, "fp_exact: bad config line: %s\n", line.c_str());

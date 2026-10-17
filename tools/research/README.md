@@ -76,7 +76,7 @@ uv run pytest                            # all tests
 
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
-research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [...] -- CMD...
+research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [--wait] [...] -- CMD...
 research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
 research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N]
@@ -494,9 +494,9 @@ channels; `channels:history` for a public one), `reactions:write` (`close`), and
 `usergroups:write`. It must be a member of both channels (`chat:write.public` does not reach private channels), and Cursor's
 Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
-Routing: each handle holder subscribes to its own inbox thread, not to the top level. The site's router
-(`/api/agent-slack/events`) rings the doorbells of the names a post addresses, by the rule in `route_targets` (`slack.py`),
-which `tests/slack_routing_vectors.json` pins for both.
+Routing: each handle holder subscribes to its own inbox thread, not to the top level. The sender rings the doorbells of
+the names a post addresses right after posting, by the rule in `route_targets` (`slack.py`), which
+`tests/slack_routing_vectors.json` pins.
 
 ### Notes and evidence over MCP
 
