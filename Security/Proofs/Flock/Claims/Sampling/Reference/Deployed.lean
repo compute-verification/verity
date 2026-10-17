@@ -26,8 +26,9 @@ the statements of the reference prover's sessions at `x` (`Reference.sessErrAt`)
   in that statement's relation; the code's. The session's statement may be several drawn units', as in the one-stage
   audit, whose one session proves every drawn unit.
 * `SessionSlots`: on a statement in scope, every checked unit's session is the session of the unit checked at a slot
-  below `c.sessions x`; the code's. One session that proves every drawn unit has it at `sessions = 1`; one session per
-  unit at the proof units' count, from `DrawSlots` (`sessionSlots_units`).
+  below `c.sessions x`; the code's. One session that proves every drawn unit has it at `sessions = 1`
+  (`Reference.DeployedCode`'s `sessionSlots_of_one`); one session per unit at the proof units' count, from `DrawSlots`
+  (`sessionSlots_units`).
 
 What is proved here: the reference prover's session messages are `honestPZk`'s on what it reveals (`refP_session`), it
 says the framing outside them (`refP_say`), what it reveals opens under the roots and is the committed value
