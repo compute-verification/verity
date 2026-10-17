@@ -163,11 +163,11 @@ theorem tz_of_pow2 {x : ℕ} (h : isPow2 x = true) (hx : x < 2 ^ 64) : 2 ^ tz x 
   conv_lhs => rw [← h.2, tz_two_pow hl]
   exact h.2
 
-/-- **What `HmRow.check` checks of a tail that returns the outputs**, in an untyped circuit: the last stage's output
-ports are one per output word, each 16 bits, in its only output group; `16 · nOut` and `vus_per_block` are powers of
-two. -/
+/-- **What `HmRow.check` checks of a tail that returns the outputs**, in an untyped circuit whose META lists them as
+ports (`outNetSlots = none`, not a repeated last stage's `[slot, port]` pairs): the last stage's output ports are one
+per output word, each 16 bits, in its only output group; `16 · nOut` and `vus_per_block` are powers of two. -/
 theorem check_tail {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none) (ho : c.outNet ≠ c.unitNet)
-    (h : HmRow.check c tags ls = .ok ()) :
+    (hs : c.outNetSlots = none) (h : HmRow.check c tags ls = .ok ()) :
     (portCols (netOf c c.outNet).outGroups).size = c.outWords ∧
       (∀ x ∈ (portCols (netOf c c.outNet).outGroups).toList, x.2 = 16) ∧ (netOf c c.outNet).outGroups.size = 1 ∧
       isPow2 (16 * c.outWords) = true ∧ isPow2 c.g = true := by
@@ -195,10 +195,10 @@ theorem check_tail {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = 
   obtain ⟨-, h⟩ := Layout.ite_throw_cond h
   obtain ⟨-, h⟩ := Layout.ite_throw_cond h
   obtain ⟨hg, -⟩ := Layout.ite_throw_cond h
-  simp only [Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, not_not, Array.any_eq_true', not_exists, not_and,
+  simp only [hs, Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, not_not, Array.any_eq_true', not_exists, not_and,
     Bool.not_eq_true', Bool.not_eq_false] at hbad
   simp only [Bool.not_eq_true', Bool.not_eq_false] at hg
-  obtain ⟨⟨⟨⟨⟨⟨-, -⟩, hsz⟩, h16⟩, h1⟩, hp⟩, -⟩ := hbad
+  obtain ⟨⟨-, -⟩, ⟨⟨⟨⟨-, hsz⟩, h16⟩, h1⟩, hp⟩⟩ := hbad
   exact ⟨hsz, fun x hx => h16 x (Array.mem_toList_iff.1 hx), h1, hp, hg⟩
 
 /-- **A lookup slot's output group**: one word of its output bits. -/
@@ -246,10 +246,10 @@ theorem check_outT {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = 
     (h : HmRow.check c tags ls = .ok ()) :
     (c.outNet = c.unitNet → (∀ b ∈ (outGrp c).bits.toList, b = 16) ∧ c.leavesOut.size = c.upv ∧
       ∀ u < c.upv, (outsOf c u).size = (outGrp c).bits.size ∧ ∀ o ∈ (outsOf c u).toList, o < c.outWords) ∧
-    (c.outNet ≠ c.unitNet → (portCols (netOf c c.outNet).outGroups).size = c.outWords ∧
+    (c.outNet ≠ c.unitNet → c.outNetSlots = none → (portCols (netOf c c.outNet).outGroups).size = c.outWords ∧
       (∀ x ∈ (portCols (netOf c c.outNet).outGroups).toList, x.2 = 16) ∧ (netOf c c.outNet).outGroups.size = 1 ∧
       isPow2 (16 * c.outWords) = true ∧ isPow2 c.g = true) := by
-  refine ⟨fun ho => ?_, fun ho => check_tail ht ho h⟩
+  refine ⟨fun ho => ?_, fun ho hs => check_tail ht ho hs h⟩
   obtain ⟨h16, hsz, hlo⟩ := Layout.check_out ht ho h
   rw [outGrp_unit ho]
   refine ⟨h16, hsz, fun u hu => ?_⟩
@@ -261,14 +261,15 @@ theorem check_outT {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = 
 
 /-- **The returned outputs' shape, at the output net's group** (`Layout.OutShape` where the unit returns them): where
 the unit returns them, the group's words are a power of two, and each copy's leaf's outputs are 16-bit ports, output
-words below `nOut`, that fit in the group's words; at a tail, the last stage's only output group is one 16-bit port
-per output word, `16 · nOut` (a power of two) fits in its slot, and `vus_per_block` is a power of two. -/
+words below `nOut`, that fit in the group's words; at a tail whose META lists them as ports (`outNetSlots = none`),
+the last stage's only output group is one 16-bit port per output word, `16 · nOut` (a power of two) fits in its slot,
+and `vus_per_block` is a power of two. -/
 def OutShapeT (c : Circuit) : Prop :=
   (c.outNet = c.unitNet → (outGrp c).words = 2 ^ (outGrp c).words.log2 ∧
     ∀ u' < c.upv, (∀ j < (outsOf c u').size, (outGrp c).bits.getD j 0 = 16 ∧ (outsOf c u')[j]! < c.outWords) ∧
       16 * (outsOf c u').size ≤ 128 * (outGrp c).words) ∧
-  (c.outNet ≠ c.unitNet → (netOf c c.outNet).outGroups.size = 1 ∧ (outGrp c).bits.size = c.outWords ∧
-    (∀ j < c.outWords, (outGrp c).bits.getD j 0 = 16) ∧ isPow2 (16 * c.outWords) = true ∧
+  (c.outNet ≠ c.unitNet → c.outNetSlots = none → (netOf c c.outNet).outGroups.size = 1 ∧
+    (outGrp c).bits.size = c.outWords ∧ (∀ j < c.outWords, (outGrp c).bits.getD j 0 = 16) ∧ isPow2 (16 * c.outWords) = true ∧
     16 * c.outWords ≤ 2 ^ (netOf c c.outNet).unitLog ∧ isPow2 c.g = true)
 
 /-- **The returned outputs' shape is the parse's**, in an untyped circuit: `Layout.outShape_of_parse` where the unit
@@ -278,7 +279,7 @@ theorem outShape_of_parseT {tags : Tags} {bytes : ByteArray} {tables : List (Str
     (h : HmRow.parse tags bytes tables = .ok c) : OutShapeT c := by
   have P := parse_facts h
   obtain ⟨ls, hls⟩ := P.check
-  refine ⟨fun ho => ?_, fun ho => ?_⟩
+  refine ⟨fun ho => ?_, fun ho hs => ?_⟩
   · have C := check_facts P.typed hls
     have hU : Built c.unit := by
       rcases P.nets _ (getD_mem_toList P.unitNet) with hb | ⟨nm, tb, n, lo, bits, hb⟩
@@ -295,7 +296,7 @@ theorem outShape_of_parseT {tags : Tags} {bytes : ByteArray} {tables : List (Str
     rw [e]
     obtain ⟨hb, hfit⟩ := hsh u' hu'
     exact ⟨fun j hj => hb j hj, hfit⟩
-  · obtain ⟨hsz, h16, h1, hp, hg⟩ := check_tail P.typed ho hls
+  · obtain ⟨hsz, h16, h1, hp, hg⟩ := check_tail P.typed ho hs hls
     have hog := eq_singleton_getD h1
     rw [hog] at hsz h16
     have hb16 : ∀ b ∈ (outGrp c).bits.toList, b = 16 := by
@@ -510,9 +511,11 @@ theorem outValT_tail {c : Circuit} {pub : Public} {b g i j : ℕ} (ho : c.outNet
   unfold outValT tailVal
   rw [e, hr]
 
-/-- **A tail has one slot of its last stage per VU** (a condition on the circuit: the prover lays a tail out so, and
-`HmRow.regions` pins the out range's slot `g` with VU `g`'s outputs). -/
-def TailOne (c : Circuit) : Prop := c.outNet ≠ c.unitNet → c.perVu.getD c.outNet 0 = 1
+/-- **A tail has one slot of its last stage per VU**, which returns the outputs as its ports (META `out_net_ports` of
+ports, `outNetSlots = none`): a condition on the circuit, the prover lays a tail out so, and `HmRow.regions` pins the
+out range's slot `g` with VU `g`'s outputs. -/
+def TailOne (c : Circuit) : Prop :=
+  c.outNet ≠ c.unitNet → c.perVu.getD c.outNet 0 = 1 ∧ c.outNetSlots = none
 
 /-- **What region "out" needs to pin the returned outputs at a slot of the output net**: their shape (`OutShapeT`);
 where the unit returns them, a power of two of unit slots, `upv` per VU; at a tail, one slot per VU (`TailOne`), and
@@ -547,8 +550,8 @@ theorem pinShape_of {tags : Tags} {bytes : ByteArray} {tables : List (String × 
       rw [hpow, L.unit_count] at this
       exact Nat.pos_of_ne_zero fun h0 => by rw [h0, zero_mul] at this; omega
     exact ⟨hpow, perVu_unit C L.unit_mem L.unit_kind L.unit_count hg0⟩
-  · obtain ⟨h1, -, -, hp16, hbound, hgp⟩ := hS.2 ho
-    have hpv := hone ho
+  · obtain ⟨h1, -, -, hp16, hbound, hgp⟩ := hS.2 ho (hone ho).2
+    have hpv := (hone ho).1
     have hn := outNet_lt h1
     have hg0 : 0 < st.c.g := by
       simp only [isPow2, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hgp
