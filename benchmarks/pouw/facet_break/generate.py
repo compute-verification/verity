@@ -550,6 +550,57 @@ def targeted_r4() -> list[dict]:
     return out
 
 
+#: RT-FACET r1: the schedule axes the ji, jifine and r4 batches left at a single value on the low-accumulator break (2-3
+#: accumulators, 2 warps a SMSP, where IMMA.16832 and FMUL by an immediate reach every JI3s row's 0.98): na 5, 1 and 3
+#: warps a SMSP, unroll and placement (ji swept them on 8 accumulators only), and the uniform datapath beside the FMA and
+#: ALU pipes at low na (ji timed it on 8 accumulators only, where it traded 1:1 with the FMA pipe instead of co-issuing)
+RT_CEIL = ("fmuli", "faddi", "ffmai")
+RT_UNI = (("fmuli", "uaxi"), ("faddi", "uaxi"), ("ffmai", "uaxi"))
+RT_TRI = (("fmuli", "axi", "uaxi"), ("fmuli", "shfi", "uaxi"), ("faddi", "prmti", "uaxi"))
+RT_PIPE = (("fmuli", "axi"), ("fmuli", "dp4ai"), ("axi", "dp4ai"), ("fmuli", "imadi"), ("axi", "imadi"))
+
+
+def targeted_rt() -> list[dict]:
+    """RT-FACET r1 beside IMMA.16832 (H1+fx1's binding form): the ceiling of the FMA-pipe lanes at 2-6 accumulators and
+    1-4 warps a SMSP around honest's 16-20 lane ops a MMA; unroll 2 and 4 and placements 1-3 on 2-4 accumulators; the
+    FMA lane beside the uniform datapath, then FMA, ALU and uniform in turn, at 2-4 accumulators; and two dispatch pipes
+    (FMA, ALU, IMAD) at 2-4 accumulators across the binding ratio."""
+    i = "i16832"
+    out: list[dict] = []
+    for lane in RT_CEIL:
+        for na in ((2, 3, 4, 5, 6) if lane != "ffmai" else (3, 4, 5)):
+            for q in (96, 112, 128, 144, 160, 192):
+                for w in (1, 2, 3, 4):
+                    out.append(_jm(i, lane, q, w, na=na))
+    for lane in ("fmuli", "faddi"):
+        for na in (2, 3, 4):
+            for q in (112, 128, 160):
+                for w in (2, 4):
+                    for u in (2, 4):
+                        out.append(_jm(i, lane, q, w, na=na, u=u))
+    for na in (2, 3, 4):
+        for q in (112, 128, 160):
+            for w in (2, 4):
+                for p in (1, 2, 3):
+                    out.append(_jm(i, "fmuli", q, w, p=p, na=na))
+    for ls in RT_UNI:
+        for na in (2, 3, 4):
+            for q in (96, 128, 160, 192, 224, 256):
+                for w in (2, 4):
+                    out.append(_jm(i, ls, q, w, na=na))
+    for ls in RT_TRI:
+        for na in (3, 4):
+            for q in (96, 128, 160, 192, 256):
+                for w in (2, 4):
+                    out.append(_jm(i, ls, q, w, na=na))
+    for ls in RT_PIPE:
+        for na in (2, 3, 4):
+            for q in (112, 128, 144, 160):
+                for w in (2, 4):
+                    out.append(_jm(i, ls, q, w, na=na))
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -578,7 +629,7 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
     tg, sm = {"mix": (targeted, sampled), "mem": (targeted_mem, sampled_mem), "fine": (targeted_fine, sampled),
               "l2": (targeted_l2, sampled_l2), "ji": (targeted_ji, sampled_ji),
               "jifine": (targeted_jifine, sampled_ji), "jipair": (targeted_jipair, sampled_ji),
-              "r4": (targeted_r4, sampled_ji)}[family]
+              "r4": (targeted_r4, sampled_ji), "rt": (targeted_rt, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -664,12 +715,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
-    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4"), default="mix",
+    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4", "rt"), default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
                         "against the table route's L2 facet; ji: the joint issue rows' schedule search (ji.cuh); "
                         "jifine: the sweep around its break; jipair: two dispatch pipes beside the HMMA forms; r4: "
-                        "the break on every other form, its repeats, and ALU work beside the MMA")
+                        "the break on every other form, its repeats, and ALU work beside the MMA; rt: RT-FACET's "
+                        "schedule axes on the low-accumulator break (na 5, unroll, placement, uniform co-issue)")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
