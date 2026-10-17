@@ -13,6 +13,7 @@ import Proofs.Flock.Claims.ZK.Shvzk
 import Proofs.Flock.Claims.ZK.Flock
 import Proofs.Flock.Claims.ZK.Hypotheses
 import Proofs.Flock.Claims.ZK.NonVacuous
+import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -65,4 +66,7 @@ import Proofs.Flock.Claims.ZK.NonVacuous
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail Flock's `ZK` at
   a masked record whose relation holds everywhere (`toyD`).
+* `SamplingNonVacuous`: the same for the sampling `ZK`: it fails at the colliding simulator given the leaf layer
+  (`not_samplingZK_collSim`), and for the witness-sending prover at two honest witnesses of one leaf layer
+  (`not_samplingZK_leak`).
 -/
