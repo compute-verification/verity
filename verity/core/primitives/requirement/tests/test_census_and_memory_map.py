@@ -217,7 +217,7 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], moved: bool) 
             freed[t] = frozenset(j for f, n in change.released for j in range(f, f + n) if j >= head.blocks)
             index.update(((t, w.slot), w) for w in by[t].written)
 
-    (nl, sb), = {(len(rs.layers), rs.row_bytes) for rs in rows.values()}
+    (sb,) = {rs.row_bytes for rs in rows.values()}
     tables = MM.tables_of(rows, arrive, BLOCK_SIZE)
     ids, lo, hi = _page_blocks(PageLayout(1 + max(max(t) for t in tables.values()), BLOCK_SIZE, sb), codec.BLOCK_BYTES)
     per_plane, region = ids.shape[1] // 2, int(ids.max()) + 1
