@@ -98,4 +98,6 @@ live sessions' bound at escapes on accepted runs, whose events bound the decoded
 (`PlainAcc`: `FlockDeploy.KS.PlainLiveAcc`, which gives `PlainLive`, `FlockDeploy.KS.plainLive_of_acc`), the plain
 table bound holds with escapes on accepted runs at every statement (`FlockDeploy.KS.plain_tableBoundθAccAt`). Each
 round of an accepted plain rep issued the coins its statement fixes (`RoundsN`: `FlockDeploy.repNs`,
-`FlockDeploy.verifyRepWith_readsN`; per rep stream, `FlockDeploy.plainRepNs`, `FlockDeploy.streams_ns_plain`). -/
+`FlockDeploy.verifyRepWith_readsN`; per rep stream, `FlockDeploy.plainRepNs`, `FlockDeploy.streams_ns_plain`), and
+custody reads each round message's coin at the session's count (`FlockDeploy.plainNs`,
+`FlockDeploy.custody_vals_plain`). -/
