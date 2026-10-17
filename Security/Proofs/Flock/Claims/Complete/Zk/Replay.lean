@@ -47,14 +47,15 @@ theorem innerP_pre (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (la
 theorem repPZk_replay (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
-    (nonce : ℕ → ℕ → UInt64) (t₀ : Transcript) :
+    (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript) :
     Ret ((repPZk (asksS resp) (Hashes.ofSha512 h) st sch tPad rep dom tr t cm0 extras pads ic extra lanePad
-      salt nonce).run t₀) fun pt => ∃ R rp t₁,
+      salt nonce prior words).run t₀) fun pt => ∃ R rp t₁,
         (Zk.replay st (Zk.PadLayout.new st.m st.kLog sch.k0) pt.1.proof ic.root).run (Transcript.init R dom) =
           .ok (rp, t₁) ∧ Prefix R pt.2.rounds := by
   unfold repPZk
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨zp, zc⟩ _ _ => ?_
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨lp, lc⟩ _ _ => ?_
+  refine Replay.Ret.run_bind (Ret.true _) fun _ _ _ => ?_
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨ss, T, sws⟩ _ _ => ?_
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨lg, zl, rec⟩ s₄ _ => ?_
   refine Replay.Ret.run_bind (get_ret s₄) fun tr' s₅ ⟨h1, h2⟩ => ?_
@@ -76,9 +77,9 @@ theorem replay_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64
   obtain ⟨st, v, cm, e, streams, htabs, hsch, hss, hbytes, hstream, -, -, hrep⟩ := JsonRT.RunZk.walk S h64 hS hP hR o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
-  obtain ⟨p, ic, l, t', l', -, hzp, hst', hrun⟩ := hrep r hr
-  have hroot := (JsonRT.Ret.go (JsonRT.repPZk_fields _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun).2.2
-  obtain ⟨R, rp, t₁, hre, C, hC⟩ := JsonRT.Ret.go (repPZk_replay _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
+  obtain ⟨p, ic, l, t', l', prior, ws, -, hzp, hst', hrun⟩ := hrep r hr
+  have hroot := (JsonRT.Ret.go (JsonRT.repPZk_fields _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun).2.2
+  obtain ⟨R, rp, t₁, hre, C, hC⟩ := JsonRT.Ret.go (repPZk_replay _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
   refine Replay.ok_val ?_
   have hlay : o.lay 0 = Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0 := by
     simp [RunZk.lay, htabs, hsch]

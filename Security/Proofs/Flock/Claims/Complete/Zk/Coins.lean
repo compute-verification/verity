@@ -18,9 +18,13 @@ fail.
   dependent.
 * **The inner proof's `β`** (`betaSlotsZk`): refused at `0` (round `2` of the inner proof), by the verifier and the
   prover alike.
+* **The mask slot's rank** (`rankSlotsZk`, `MaskRank.MaskRankAt`): the prover refuses coins at which the mask slot's
+  weights at its claim points so far are rank-deficient (`rankCheckP`), one event per table, at its rep `1`'s four
+  points. At most `4·m·2^-128` per table: the open premise `MaskRank.MaskRankBound`.
 
-`εZk` is their count, each pair coin twice, over `2^128` (`Complete.Ready`, with the slots and `δcZk`); `pr_badZk_le` is
-the union bound. The slots read the statement's `m`, `k_log`, regions and points, as Deploy's `repRounds true`, and the
+`εZk` is their count, each pair coin twice and each table's rank checks `4·m` times, over `2^128` (`Complete.Ready`,
+with the slots and `δcZk`); `pr_badZk_le` is the union bound. The slots read the statement's `m`, `k_log`, regions and
+points, as Deploy's `repRounds true`, and the
 `--zk` schedule's `k_0` and levels; rep `q` is table `q / 2`'s rep `q % 2`, its first coin after the link's and every
 earlier rep's rounds (`repStartZk`).
 -/
@@ -133,11 +137,12 @@ theorem pr_rho_le {k : ℕ} (a : ℕ) : Claims.Pr (fun r : Fin k → Coin => rho
 
 /-! ## The bad coins -/
 
-/-- **The bad coins** of the masked verifier: a zerocheck outer coin is `1`, an inner `β` is `0`, or a pair of
-level-0 coins is dependent. -/
+/-- **The bad coins** of the masked verifier: a zerocheck outer coin is `1`, an inner `β` is `0`, a pair of
+level-0 coins is dependent, or a table's rank checks refuse at coins inside the verifier's. -/
 def BadZk (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop :=
   (∃ p ∈ outerSlotsZk x, (Claims.coinSeq r p.1).at p.2 = 1) ∨
-    (∃ b ∈ betaSlotsZk x, b < k ∧ (Claims.coinSeq r b).at 0 = 0) ∨ ∃ a ∈ rhoSlotsZk x, rhoDep r a
+    (∃ b ∈ betaSlotsZk x, b < k ∧ (Claims.coinSeq r b).at 0 = 0) ∨ (∃ a ∈ rhoSlotsZk x, rhoDep r a) ∨
+    ∃ s ∈ rankSlotsZk x, s.2.2 + (s.1.m + s.1.c.kLog) ≤ k ∧ ¬ MaskRank.MaskRankAt s.1 r s.2.1 s.2.2
 
 theorem pr_list_le {k : ℕ} {β : Type} (E : β → (Fin k → Coin) → Prop) (L : List β) (c : ℝ)
     (h : ∀ b ∈ L, Claims.Pr (E b) ≤ c) : Claims.Pr (fun r => ∃ b ∈ L, E b r) ≤ L.length * c := by
@@ -147,16 +152,55 @@ theorem pr_list_le {k : ℕ} {β : Type} (E : β → (Fin k → Coin) → Prop) 
     exact h b hb
   · rw [List.length_map, nsmul_eq_mul]
 
-/-- **`Pr[BadZk] ≤ εZk`**: the union bound over the outer coins, the `β`s and the pairs. -/
-theorem pr_badZk_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin => BadZk x r) ≤ εZk x := by
+/-- A table's rank checks: a table of the session that sets up, rep `1`'s coins after rep `0`'s claim points. -/
+theorem mem_rankSlotsZk {x : Claims.Msg} {s : Flock.Stmt × ℕ × ℕ} (hs : s ∈ rankSlotsZk x) :
+    ∃ ins spec sts, setupOf true x = some (ins, spec, sts) ∧ s.1 ∈ sts ∧ s.2.1 + (s.1.m + s.1.c.kLog) ≤ s.2.2 := by
+  unfold rankSlotsZk at hs
+  split at hs
+  · rename_i ins spec sts hx
+    obtain ⟨i, hi, hs⟩ := List.mem_flatMap.1 hs
+    rw [List.mem_range] at hi
+    split at hs
+    · rename_i v hv
+      rw [List.mem_singleton] at hs
+      subst hs
+      refine ⟨ins, spec, sts, hx, by rw [getElem!_pos sts i hi]; exact Array.getElem_mem hi, ?_⟩
+      have h : repStartZk spec sts (2 * i + 1) = repStartZk spec sts (2 * i) + repRounds true spec sts[i]! := by
+        unfold repStartZk
+        rw [List.range_succ, List.map_append, List.sum_append]
+        simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, show 2 * i / 2 = i by omega]
+        omega
+      rw [h]
+      unfold repRounds
+      rcases v with ⟨sch, tp⟩
+      simp only [hv, ite_true]
+      omega
+    · simp at hs
+  · simp at hs
+
+/-- **`Pr[BadZk] ≤ εZk`**: the union bound over the outer coins, the `β`s, the pairs and, at the rank bound
+(`MaskRank.MaskRankBound`), each table's rank checks. -/
+theorem pr_badZk_le (hMR : MaskRank.MaskRankBound) (x : Claims.Msg) {k : ℕ} :
+    Claims.Pr (fun r : Fin k → Coin => BadZk x r) ≤ εZk x := by
   have ho := pr_list_le (fun (p : ℕ × ℕ) (r : Fin k → Coin) => (Claims.coinSeq r p.1).at p.2 = 1) (outerSlotsZk x)
     (1 / 2 ^ 128) fun p _ => pr_slot_le p.1 p.2
   have hb := pr_list_le (fun (b : ℕ) (r : Fin k → Coin) => b < k ∧ (Claims.coinSeq r b).at 0 = 0) (betaSlotsZk x)
     (1 / 2 ^ 128) fun b _ => pr_slot_eq_le b (by norm_num) 0
   have hr := pr_list_le (fun (a : ℕ) (r : Fin k → Coin) => rhoDep r a) (rhoSlotsZk x) (2 / 2 ^ 128)
     fun a _ => pr_rho_le a
+  have hm : Claims.Pr (fun r : Fin k → Coin => ∃ s ∈ rankSlotsZk x, s.2.2 + (s.1.m + s.1.c.kLog) ≤ k ∧
+      ¬ MaskRank.MaskRankAt s.1 r s.2.1 s.2.2) ≤ (((rankSlotsZk x).map fun s => 4 * s.1.m).sum : ℕ) / 2 ^ 128 := by
+    refine le_trans (Pr_exists_le _ _) (le_of_le_of_eq
+      (List.sum_le_sum (g := fun s : Flock.Stmt × ℕ × ℕ => (4 * s.1.m : ℝ) / 2 ^ 128) fun s hs => ?_) ?_)
+    · obtain ⟨ins, spec, sts, hx, hst, hn⟩ := mem_rankSlotsZk hs
+      exact hMR x ins spec sts hx s.1 hst k s.2.1 s.2.2 hn
+    · simp only [div_eq_mul_inv, List.sum_map_mul_right, Nat.cast_list_sum, List.map_map]
+      congr 2
+      refine List.map_congr_left fun s _ => ?_
+      simp
   refine le_trans (Pr_or_le _ _) (le_trans (add_le_add ho (Pr_or_le _ _)) ?_)
-  refine le_trans (add_le_add le_rfl (add_le_add hb hr)) (le_of_eq ?_)
+  refine le_trans (add_le_add le_rfl (add_le_add hb (Pr_or_le _ _))) ?_
+  refine le_trans (add_le_add le_rfl (add_le_add le_rfl (add_le_add hr hm))) (le_of_eq ?_)
   unfold εZk
   ring
 
@@ -166,6 +210,7 @@ theorem pr_badZk_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Co
 can accept and every witness in the relation, the honest masked prover is accepted at every tape and every coin outside
 `BadZk`, then Flock's masked verifier is complete for `honestPZk` at the record's error, `δcZk H`. -/
 theorem complete_zk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+    (hMR : MaskRank.MaskRankBound)
     (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →
       readyZk H x = true → ∀ (ω : TapeZk) (r : Fin ((V true).k x) → Coin), ¬ BadZk x r →
         (Claims.run H (honestPZk w) (V true) x ω r).out = .acc) :
@@ -175,7 +220,7 @@ theorem complete_zk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
   split
   · rename_i hready
     calc 1 - εZk x ≤ 1 - Claims.Pr (fun r : Fin ((V true).k x) → Coin => BadZk x r) := by
-          linarith [pr_badZk_le x (k := (V true).k x)]
+          linarith [pr_badZk_le hMR x (k := (V true).k x)]
       _ = Claims.Pr (fun r : Fin ((V true).k x) → Coin => ¬ BadZk x r) := (Pr_not _).symm
       _ ≤ Claims.Pr (fun r : Fin ((V true).k x) → Coin =>
             (Claims.run H (honestPZk w) (V true) x ω r).out = .acc) :=

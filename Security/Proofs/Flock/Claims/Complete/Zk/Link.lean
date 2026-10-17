@@ -40,7 +40,8 @@ def commitsPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
 
 /-- The masked session from the link message's coin `c1` on: the rep streams, the record and the proof files. -/
 def afterLinkPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M)
-    (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (trs : Array Trace) (tape : TapeZk)
+    (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace)
+    (tape : TapeZk)
     (schs : Array (Schedule × ℕ)) (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) :
     M (String × Array ByteArray) := do
   let rootB := cms.map fun c => flat c.cap
@@ -55,7 +56,8 @@ def afterLinkPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLi
     let ic ← innerCommitP hs pads (tape.innerSalt i r)
     let dom := (spec.domain spec.tables[i]! r).toUTF8
     let (p, t) ← (repPZk io hs st sch schs[i]!.2 r dom trs[i]! tbls[i]! cms[i]! extras pads ic (tape.extra i)
-      (tape.lanePad i) (tape.salt i r) (tape.nonce i r)).run (Transcript.init #[] dom)
+      (tape.lanePad i) (tape.salt i r) (tape.nonce i r) (priorOf st streams r) words[i]!).run
+      (Transcript.init #[] dom)
     streams := streams.push t.rounds
     proofs := proofs.push (FlockSoundness.Discharge.ZkView.encZk (shapeZk st sch extras.size) p)
   let record ← recordJson hs spec rootB points streams proofs
@@ -63,12 +65,13 @@ def afterLinkPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLi
 
 /-- **The masked session in three parts**: the schedules, the level-0 commitments, the link message, and the rest. -/
 theorem sessionPZk_eq {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M)
-    (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (trs : Array Trace) (tape : TapeZk) :
-    sessionPZk io hs spec tabs trs tape = (do
+    (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace)
+    (tape : TapeZk) :
+    sessionPZk io hs spec tabs words trs tape = (do
       let schs ← schedsPZk tabs
       let cms ← commitsPZk hs tabs schs (tablesP tabs trs) tape
       let c1 ← io.link (cms.map fun c => flat c.cap) (tabs.map fun _ => ByteArray.empty)
-      afterLinkPZk io hs spec tabs trs tape schs (tablesP tabs trs) cms c1) := rfl
+      afterLinkPZk io hs spec tabs words trs tape schs (tablesP tabs trs) cms c1) := rfl
 
 theorem schedsPZk_quiet (tabs : Array Setup) : quietS.R (schedsPZk tabs : V _) (schedsPZk tabs : PS _) := by
   unfold schedsPZk
@@ -90,10 +93,10 @@ theorem commitsPZk_quiet (h : ByteArray → ByteArray) (tabs : Array Setup) (sch
   sim_walk [commitRowsP_quiet h]
 
 theorem afterLinkPZk_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
-    (tabs : Array Setup) (trs : Array Trace) (tape : TapeZk) (schs : Array (Schedule × ℕ))
+    (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) (schs : Array (Schedule × ℕ))
     (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) :
-    (simS H resp).R (afterLinkPZk asks Hashes.pi spec tabs trs tape schs tbls cms c1)
-      (afterLinkPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs trs tape schs tbls cms c1) := by
+    (simS H resp).R (afterLinkPZk asks Hashes.pi spec tabs words trs tape schs tbls cms c1)
+      (afterLinkPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs words trs tape schs tbls cms c1) := by
   unfold afterLinkPZk
   sim_walk [innerCommitP_sim H resp, repPZk_sim H resp, recordJson_sim H resp]
 
@@ -125,8 +128,8 @@ theorem sessionSZk_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.M
       dsimp only at h
       rw [Array.size_empty] at h
       refine ⟨schs, cms, rfl, hc, ?_⟩
-      obtain ⟨bs, -, hl⟩ := afterLinkPZk_sim H resp spec (tabsOf sts) (tracesOf sts w) ω schs
-        (tablesP (tabsOf sts) (tracesOf sts w)) cms (coinOf (resp 0)) (#[].push (linkBody
+      obtain ⟨bs, -, hl⟩ := afterLinkPZk_sim H resp spec (tabsOf sts) (MaskRank.masksOf sts) (tracesOf sts w) ω
+        schs (tablesP (tabsOf sts) (tracesOf sts w)) cms (coinOf (resp 0)) (#[].push (linkBody
           (cms.map fun c => flat c.cap).toList ((tabsOf sts).map fun _ => ByteArray.empty).toList))
       rw [h] at hl
       dsimp only at hl

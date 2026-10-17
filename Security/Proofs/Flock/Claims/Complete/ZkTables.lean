@@ -72,10 +72,11 @@ statement, its header's draw the statement's, a printable stratified or subset d
 holds at every good case (`stmtAt_all`) and `StmtOkZk` holds (`stmtOkZk`), and `completeRelS`, `completeJRelS` and
 `complete_zk_relationS` drop it. The four premises left each say something of one rep of one table, so they are
 stated once at a table, its trace, its tape row, its domain and its coins from the rep's first send (`Table`:
-`TableT`, `RepIn`, `CoinsT`; `RepShapedT`, `ProverRunsT`, `LigeritoT`, `InnerT`), and give `RepShapedAt`,
+`TableT`, `RepIn`, `CoinsT`, `MaskRankT`; `RepShapedT`, `ProverRunsT`, `LigeritoT`, `InnerT`), and give `RepShapedAt`,
 `ProverRunsAt` and `LgInnerAt` at each table `i` of every good case, its rep `r` starting after the `2 i + r` earlier
-reps (`repStartZk`; `Case.coinsT`, `Run.start_eq`), so masked completeness at any number of tables follows from the
-JSON specification and those four (`complete_jsonT`); at table `0` of a good masked case or run
+reps (`repStartZk`; `Case.coinsT`, `Run.start_eq`), its rank check passing by `¬ BadZk` (`Case.maskRankT`) at its rep
+`0`'s claim points read off rep `0`'s rounds (`repT_points`), so masked completeness at any number of tables follows
+from the JSON specification and those four (`complete_jsonT`); at table `0` of a good masked case or run
 (`CaseZk.toCase`, `RunZk.toRun`) they give `complete_zk`'s `RepShapedZk`, `ProverRunsZk`, `LigeritoZk` and `Inner`
 (`repShapedZk_of`, `proverRunsZk_of`, `lgInnerZk_of`). Each of the four splits into level 0's masked Ligerito,
 stated once (`Level0`: `ProverRuns`, `ProverShape`, `Lanes`, `Verifier`), and the rest (`Parts`); a returning rep runs
