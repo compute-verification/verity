@@ -418,10 +418,22 @@ HEAVY_GB = 16
 PEAKS_REPORTED = 50
 
 
+#: tools/verity/check/slot.py's SLOT_MEM_ENV: the GiB the check slot this process runs in may take
+SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+
+
+def slot_gb() -> int | None:
+    """The enclosing check slot's mem=, so a raw `circuit-check` in a slot keeps to it without `--mem-gb` (CIR-21: two runs in one
+    node's slots each budgeted the whole machine's MemAvailable and took it down)."""
+    v = os.environ.get(SLOT_MEM_ENV, "")
+    return int(v) if v.isdigit() else None
+
+
 def budget_gb(mem_gb: int | None) -> float:
     """What the targets' processes may take together, in GiB: what `memory_gb` leaves (this process's use taken off already),
-    and with ``mem_gb`` (all of circuit-check: a check slot's mem=) at most that less what this process holds now (its own copy
-    of the task list)."""
+    and with ``mem_gb`` (all of circuit-check: a check slot's mem=, `slot_gb` when not given) at most that less what this process
+    holds now (its own copy of the task list)."""
+    mem_gb = slot_gb() if mem_gb is None else mem_gb
     return memory_gb() if mem_gb is None else min(mem_gb - (_rss_gb() or 0.0), memory_gb())
 
 
@@ -456,8 +468,9 @@ def memory_gb(root: Path = Path("/")) -> int:
 
 
 def auto_jobs(root: Path = Path("/")) -> int:
-    """`--jobs 0`: one worker per core this process may run on, at most one per `GB_PER_JOB` of its memory."""
-    return max(1, min(len(os.sched_getaffinity(0)), memory_gb(root) // GB_PER_JOB))
+    """`--jobs 0`: one worker per core this process may run on, at most one per `GB_PER_JOB` of its memory (its slot's, in one)."""
+    gb = min(memory_gb(root), slot_gb() or memory_gb(root))
+    return max(1, min(len(os.sched_getaffinity(0)), gb // GB_PER_JOB))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -467,7 +480,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, help="write the JSON report here")
     ap.add_argument("-j", "--jobs", type=int, default=1, help="targets checked in parallel by this many workers (0: one per core, at most one per GB_PER_JOB of memory)")
     ap.add_argument("--mem-gb", type=int, default=None, help="the memory circuit-check may take, in GiB, this process included "
-                    "(default: what this process may use, `memory_gb`); see `run`")
+                    "(default: the enclosing check slot's CHECK_SLOT_MEM_GB, else what this process may use, `memory_gb`); see `run`")
     ap.add_argument("--vectors", type=int, default=CK.Options.vectors)
     ap.add_argument("--seed", type=int, default=CK.Options.seed)
     ap.add_argument("-X", type=int, default=CK.Options.X)

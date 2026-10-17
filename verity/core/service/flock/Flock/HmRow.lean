@@ -2019,4 +2019,171 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
             unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
 
+/-- `Stmt.setupHidden` on its circuit as `HmOut.parse` returns it (`parsed`), which the caller parses once
+(`Stmt.setupHidden_eq`). -/
+def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (coins : Coins)
+    (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
+    (publicInputs : Option ByteArray := none) : V Stmt := do
+  let c ← parsed
+  let pi ← HmIn.parse c
+  let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
+    else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
+  let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"
+  let pop ← HmIn.loadPublic tags c pi publicFile
+  HmIn.checkOwn pi pop publicInputs
+  let pub ← match draw with
+    | some d => HmIn.drawn c pi pop d
+    | none => pure pop
+  if let some d := draw then
+    if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
+        ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
+      let (law, _) ← HmRow.stratifiedLaw obj prog k
+      if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
+  HmOut.checkPublic c pub
+  let linked := J.has c.metaJ "links"
+  let finding ← match finding0, partition, program with
+    | some f, some obj, some prog =>
+      let q := (obj.getObjVal? "query").toOption.getD Json.null
+      if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
+        let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+        let note ← HmRow.deriveTemplateUnits c obj prog indices
+        let wires ← HmLinks.check c pop prog
+        let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
+          else s!"; Linking checked: {wires} cut wire(s) over the {pop.n} units of the population, each reader's link row the writer's committed output row"
+        pure (some { f with derived := true, note := note ++ linking })
+      else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
+      else HmRow.qwordFinding c pub obj prog f
+    | f, _, _ =>
+      if linked then throw "META links: Linking needs the verifier's own program and partition (--program, --partition)"
+      pure f
+  let n := pub.n
+  let blocksReal := (n + c.g - 1) / c.g
+  let nbl := max 3 (log2ceil (max blocksReal 1))
+  let m := c.kLog + nbl
+  if c.kLog > 27 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
+  let pin ← HmRow.pin c
+  let (da, db) := HmIn.delta c pi pin
+  let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
+  checkInRange c.kLog regions.size (PT_LOCAL + nbl)
+  let identity := if J.has c.metaJ "row_schemas" then Tags.rowV2Identity tags.identity else tags.identity
+  let identity := if c.ports.any (·.segs.isSome) then Tags.rowSegIdentity identity else identity
+  let v2Run := (List.range c.outRowPorts.size).any fun j =>
+    (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
+  let identity := if !J.has c.metaJ "out_row_ports" then identity
+    else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
+  for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
+  for d in [da, db] do
+    h := pushLe64 h d.size
+    for (i, cc) in d do h := pushLe32 (pushLe32 h i) cc
+  let digest := Sha512.hash h
+  let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
+  let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
+  return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
+           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
+
+/-- `Stmt.setupTables` on its circuit as `HmOut.parse` returns it under `tags` (`parsed`), which the caller parses once: a
+one-table session sets up on it, several tables each parse their own (`Stmt.setupTables_eq`). -/
+def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
+    (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
+    (publicInputs : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
+  -- a closure draw proves more units than it draws, so what it adds must be the verifier's own closure of the draw
+  if let some d := draw then
+    if let .ok u := Draw.UnitDraw.ofJson d then
+      if let .work .. := u.law then
+        match closure with
+        | some cm =>
+          if u.closure != Draw.closureOf cm u.units then
+            throw "U3: the draw's closure is not the verifier's own (its closure map)"
+        | none =>
+          if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
+  -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  if let some d := draw then
+    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some K) := (partition, program, stratified)
+        | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
+      if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
+      let (law, _) ← HmRow.stratifiedLaw obj prog K
+      if law != Draw.Law.stratified k strata then
+        throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
+  -- a work draw's K and stated work set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  if let some d := draw then
+    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some (K, table)) := (partition, program, work)
+        | throw "U2: a work draw needs the verifier's own K, work table, program and partition (--work, --work-table, --program, --partition)"
+      if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
+      let (law, _) ← HmRow.workLaw obj prog K table
+      if law != Draw.Law.work k strata then
+        throw "U2: the draw's work law is not the verifier's own (its K, program, query and work table)"
+  if publicInputs.isSome && !tags.hiddenOutputs then
+    throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+  let setup := fun (t : Tags) (d : Option Json) => do
+    if tags.hiddenOutputs then Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
+    else
+      let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
+      if J.has st.c.metaJ "public_inputs" then
+        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      pure st
+  let setupOne := fun (d : Option Json) => do
+    if tags.hiddenOutputs then Stmt.setupHiddenOf parsed tags publicFile coins d partition program publicInputs
+    else
+      let st ← Stmt.setupH tags circuitFile publicFile coins tables d partition program
+      if J.has st.c.metaJ "public_inputs" then
+        throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
+      pure st
+  if count ≤ 1 then
+    let st ← setupOne draw
+    return (st.spec, #[st])
+  let some tt := tags.manyTables | throw s!"{tags.name}: one table per session"
+  if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
+  let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
+    else (pure () : V Unit)
+  -- the draw's law and count are refused before the circuit is read
+  let u? ← draw.mapM Draw.UnitDraw.ofJson
+  if let some u := u? then
+    match u.law with
+    | .subset _ => splits u.units.size
+    | _ => throw "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables could not split it evenly)"
+  -- without a draw, the population's units (`setupH` checks a draw's population against the file)
+  let (population, units) ← match u? with
+    | some u => pure (u.population, u.units)
+    | none => do
+      let n ← if tags.hiddenOutputs then do
+          let c ← HmOut.parse tags circuitFile tables
+          pure (← HmIn.loadPublic tags c (← HmIn.parse c) publicFile).n
+        else do pure (← HmRow.loadPublic tags (← HmRow.parse tags circuitFile tables) publicFile).n
+      pure (n, Array.range n)
+  splits units.size
+  let k := units.size / count
+  let sts ← (Array.range count).mapM fun j =>
+    let part := Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson population), ("k", Lean.toJson k),
+      ("units", Json.arr ((units.extract (j * k) (j * k + k)).map Lean.toJson))]
+    setup { tags with identity := tags.tableIdentity count j } (some part)
+  let mPts := sts[0]!.mPts
+  if sts.any (·.mPts != mPts) then throw "tables: the tables' link points have different lengths"
+  let sigma := Sha512.hash (sts.foldl (fun h st => h ++ st.sigma) (pushLe64 tt.sigmaTag.toUTF8 count))
+  let names := tags.tableNames count
+  let hello ← helloOf tags sigma mPts coins names
+  return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
+            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
+
+set_option maxRecDepth 20000 in
+theorem Stmt.setupHidden_eq (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (draw partition : Option Json) (program publicInputs : Option ByteArray) :
+    Stmt.setupHidden tags circuitFile publicFile coins tables draw partition program publicInputs
+      = Stmt.setupHiddenOf (HmOut.parse tags circuitFile tables) tags publicFile coins draw partition program publicInputs :=
+  rfl
+
+set_option maxRecDepth 20000 in
+theorem Stmt.setupTables_eq (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
+    (tables : List (String × ByteArray)) (draw partition : Option Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray) :
+    Stmt.setupTables tags circuitFile publicFile coins count tables draw partition program work stratified closure publicInputs
+      = Stmt.setupTablesOf (HmOut.parse tags circuitFile tables) tags circuitFile publicFile coins count tables draw partition
+          program work stratified closure publicInputs :=
+  rfl
+
 end Flock

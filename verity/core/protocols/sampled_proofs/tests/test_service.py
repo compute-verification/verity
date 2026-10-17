@@ -569,6 +569,31 @@ def test_a_sampler_draws_instead_and_is_held_to_the_law():
             stream.select(reg)
 
 
+def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monkeypatch):
+    """A one-stage outcome on a draw from the coins is the verifier of record's run (`verifier.run`, the Lean's `Run.run`)
+    from the registration, the bytes the draw read, the sessions and the verdicts: one run per outcome, agreeing on an
+    accepted and a rejected round. A run the Python doesn't make alike (here, a draw said to read one byte more) rejects
+    the round, its audit record failing `run`; a sampler's draw isn't run."""
+    run, ran = S.V.run, []
+
+    def spy(python, *a, **kw):
+        ran.append(v := run(python, *a, **kw))
+        return v
+
+    monkeypatch.setattr(S.V, "run", spy)
+    stream = _stream(budget=10)
+    assert [_round(stream).accepted, _round(stream, accepted=False).accepted] == [True, False]
+    assert len(ran) == 2 and all(v.ok and v.verifiers["of_record"] == "lean" for v in ran)
+    monkeypatch.setattr(S.V, "run", lambda python, *a, **kw: spy({**python, "read": python["read"] + 1}, *a, **kw))
+    out = _round(stream)
+    assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["run"] and ran[-1].codes == ("disagree",)
+    body = stream.records[-1]["audit"]
+    assert body["accepted"] is False and body["checks"]["run"]["codes"] == ["disagree"]
+    assert set(body["checks"]["run"]["detail"]["disagree"]["fields"]) == {"read"}
+    sampled = _stream(sampler=lambda law, n: [0, 1])
+    assert _round(sampled).accepted and len(ran) == 3
+
+
 def test_public_outputs_come_from_the_verifier_of_record():
     spec = _spec(public=(*STEP0, S.Public("credited", "output", "the credited work")), public_outputs=("credited",))
     stream = _stream(spec)

@@ -21,8 +21,9 @@ def solved(name):
 
 
 def test_every_named_vector_is_here():
-    assert NAMES[0] == "VF" and NAMES[-7:] == ["VF3l-16", "VF3l-16-copy16", "VF3l-16-copy16-fan32", "VF3l-16-copy32",
-                                              "VF3l-16-copy32-fan16", "VF3m-16", "VF3n-16"]
+    assert NAMES[0] == "VF" and NAMES[-9:] == ["VF3l-16-copy16", "VF3l-16-copy16-fan32", "VF3l-16-copy32",
+                                              "VF3l-16-copy32-fan16", "VF3m-16", "VF3n-16", "VF3o-16", "VF3p-16",
+                                              "VF3q-16"]
     assert {"VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict", "VF3j", "VF3j-8",
             "VF3j-16", "VF3k-16"} < set(NAMES)
 
@@ -41,6 +42,9 @@ PUBLISHED = {
     "VF3l-16-copy32": (0.0518, 0.0405, 1.3125, 2.000),
     "VF3m-16": (0.0591, 0.0462, 1.1563, 2.000),       # note:20261017T0332Z-draft-eps1-datasheet
     "VF3n-16": (0.0586, 0.0459, 1.1563, 2.000),       # note:20261017T0321Z-draft-eps1-tensor
+    "VF3o-16": (0.0588, 0.0460, 1.1563, 2.000),
+    "VF3p-16": (0.0588, 0.0460, 1.1563, 2.000),       # note:20261017T0332Z-draft-eps1-datasheet
+    "VF3q-16": (0.0564, 0.0441, 1.1563, 2.000),       # note:20261017T0524Z-draft-eps1-facet-break
 }
 
 
@@ -118,6 +122,8 @@ CLAIMED = {
     "VF3l-16-copy32": ([], []),
     "VF3m-16": ([], []),
     "VF3n-16": ([], []),
+    "VF3o-16": ([], []),
+    "VF3p-16": ([], []),
 }
 
 
@@ -129,11 +135,12 @@ def test_claims(name):
 
 
 # π_c ≥ 16 by vector: what is under it, and its cheapest copy route a word. VF3k-16 and VF3l-16 price the UR fan-out
-# under it; each copy candidate raises the routes it names
+# under it; each copy candidate raises the routes it names; VF3p-16's UNI on the issue rows lifts UNI's route over it
 UR_FANOUT = ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"]
 COPIES = {"VF3k-16": (UR_FANOUT, 1), "VF3l-16": (UR_FANOUT, 1), "VF3l-16-copy16": ([], 16),
           "VF3l-16-copy16-fan32": ([], 16), "VF3l-16-copy32-fan16": ([], 16), "VF3l-16-copy32": ([], 32),
-          "VF3m-16": (UR_FANOUT, 1), "VF3n-16": (UR_FANOUT, 1)}
+          "VF3m-16": (UR_FANOUT, 1), "VF3n-16": (UR_FANOUT, 1), "VF3o-16": (UR_FANOUT, 1),
+          "VF3p-16": (UR_FANOUT[1:], 1)}
 
 
 @pytest.mark.parametrize("name", sorted(COPIES))
@@ -157,10 +164,11 @@ def test_vf3k16_loses_tau_on_atoms64_alone(tmp_path):
     line costs 7.5e-7 of it): the 1.1% VF3k-16 loses is the price of ATOMS64's credit on its faster row."""
     data = tmp_path / "data"
     shutil.copytree(DATA, data)
-    c = (data / "census.csv").read_text()
+    p = data / "census" / "VF3k-16.csv"
+    c = p.read_text()
     line = "ATOMS64,ROW_ATOMS64,0.480156,0.02,,,VF3k-16,VF3k-16,r20261016-183617-3914\n"
     assert c.count(line) == 1
-    (data / "census.csv").write_text(c.replace(line, line.replace("0.480156", "0.29523")))
+    p.write_text(c.replace(line, line.replace("0.480156", "0.29523")))
     assert resolve("VF3k-16", data).tau == pytest.approx(solved("VF3j-16").tau, rel=1e-6)
     assert solved("VF3k-16").tau < solved("VF3j-16").tau * (1 - 0.01)
 
