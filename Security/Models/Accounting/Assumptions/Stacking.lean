@@ -1,13 +1,13 @@
 import Definitions.Accounting.Carrier
 
 /-!
-# Stacking's named assumptions: encoding in an exact-integer circuit costs roundings, and bound keys (trusted)
+# Stacking's named assumptions: encoding costs budgeted gates, and bound keys (trusted)
 
 What the stacking guarantees (`Models/Accounting/Guarantees/Stacking.lean`) assume beyond the remote audit's own, named
 `Prop`s taken as hypotheses, never `axiom`s:
 
-* `CircuitEncodeHardness b rEnc cost`: computing `x` of a block's `b` encoded bits in an exact-integer circuit costs
-  at least `x/b` of `rEnc` roundings (claim `circuit-encode-hardness`).
+* `CircuitEncodeHardness b rEnc cost`: computing `x` of a block's `b` encoded bits costs at least `x/b` of `rEnc`
+  budgeted gates (claim `circuit-encode-hardness`).
 * `KeyBinding δ store`: a store whose blocks written after the seed are encoded under bound keys is, on every event,
   at most `δ` likelier than a uniform store (claim `key-binding`).
 -/
@@ -17,28 +17,30 @@ namespace Accounting.Assumptions
 open Pous (pr)
 open scoped ENNReal
 
-/-- **`circuit-encode-hardness`: an exact-integer circuit needs `rEnc` roundings to encode a fresh block, `x/b` of
-them for `x` of its `b` bits.** For every `x ≤ b`:
+/-- **`circuit-encode-hardness`: a circuit needs `rEnc` budgeted gates to encode a fresh block, `x/b` of them for `x` of
+its `b` bits.** For every `x ≤ b`:
 
   `x · rEnc ≤ b · cost x`,
 
-where `cost x` is the fewest roundings in which a circuit of exact-integer operations (integer matrix products that
-neither wrap nor clamp, linear maps, roundings) computes `x` bits of a block's encoding (any `x`-bit function of it)
-from the block's payload and anything else it holds, the block's other `b − x` bits among them, one block at a time
-(no amortization across blocks). It is what `RateSketch.Provenance.roundings` charges an `encode` step of `x` bits.
-With a budget of `R` roundings over a carrier's life it bounds the bits a circuit encodes by `b·R/rEnc`: at the
-property's `c_ρ` roundings per byte of certified read, `q ≤ c_ρ·reads·L/rEnc` blocks over a life of `L` windows.
+where `cost x` is what computing `x` bits of a block's encoding costs. The stacking guarantees take
+`cost = encodeBitsCost F k f w εnum εden`, the circuit model's encode cost (`Gates.encodeCost`, budgeted gates of
+`Definitions/Accounting/Gates`) of the codec words `x` bits fill. It is what `RateSketch.Provenance.roundings` charges
+an `encode` step of `x` bits. With a budget of `R` budgeted gates over a carrier's life it bounds the bits a circuit
+encodes by `b·R/rEnc`: at the property's `c_ρ` budgeted gates per byte of certified read, `q ≤ c_ρ·reads·L/rEnc` blocks
+over a life of `L` windows.
 
-**Why it should hold.** Products are exact and free in this count; what costs is a rounding, the one operation that
-discards information (a floor, a right shift, a modular reduction step). An `n`-limb modular squaring needs at least
-`n − O(1)` roundings that each read a bounded window of limbs, even with free products (the carry lower bound,
-note:20261017T0810Z-report-restricted-loopholes, section (7)), and encoding a word is about `rounds · (b_word − 2)`
-modular squarings (`Accounting.Assumptions.WorkHardness`'s price at the stated codec's `rounds`), so `rEnc` should be
-at least their product per word, times the block's words. It is conjectured, not proved or measured: the carry bound is
-per squaring, not per encoding, and the partial form must also hold against a completion from the block's other bits,
-as the red team's lattice completion is against `WorkHardness` (`ra-rate-redteam`). An exact-integer circuit is
-necessary: with FP8 or BF16 matrix products the FP32 accumulator gives about one free floor per product, and the
-assumption is false for such circuits. -/
+At that cost it follows from `Accounting.Assumptions.EncodeChainHardness` at `E` a word, at `rEnc = (b/(8·bytes))·E`,
+wherever the circuit model has a circuit computing the words (`Accounting.Guarantees.CircuitEncodeHardnessOfChain`); at
+parameters where it has none, `encodeCost` is `0` and this premise is false.
+
+**Why it should hold.** In the circuit model, s8-family products in their proven window and constant affine maps are
+free; every other gate is budgeted, a floor, a carry or a select among them. An `n`-limb modular squaring needs about
+one budgeted gate a limb to return its column sums to the window (`Accounting.Guarantees.Gates.Renormalization`; the
+carry bound proves 63 bits of it at p1024), and encoding a word is `k` roots of `S` squarings each, so `rEnc` should be
+at least `k·S` times that a word, times the block's words. It is conjectured, not proved or measured: the carry bound is
+per squaring, not per encoding (`EncodeChainHardness` is that composition), and the charge is for whole words: a
+function of a block's encoding cheaper than its words (a word's parity is a Jacobi symbol, which is why the words'
+targets leave it out) must enter a carrier's provenance as an input, not an encode. -/
 def CircuitEncodeHardness (b rEnc : ℕ) (cost : ℕ → ℕ) : Prop :=
   ∀ x, x ≤ b → x * rEnc ≤ b * cost x
 

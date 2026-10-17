@@ -2,6 +2,7 @@ import Definitions.Accounting.Carrier
 import Models.Accounting.Assumptions.RateAudit
 import Models.Accounting.Assumptions.RateAuditDeployed
 import Models.Accounting.Assumptions.Stacking
+import Models.Accounting.Assumptions.EncodeChain
 import Models.Accounting.Guarantees.Requirement
 
 /-!
@@ -10,7 +11,7 @@ import Models.Accounting.Guarantees.Requirement
 Stacking needs a carrier the audit counts: device memory whose contents were chosen after the seed (a credited KV page)
 and hold other blocks' encodings, so that one read serves several receipts. In the ideal encoding model a carrier's
 contents are a circuit's values, which depend on the encodings only through the circuit's inputs and its own encodes
-(`Definitions/Accounting/Carrier.lean`). Five guarantees, whose proofs are in
+(`Definitions/Accounting/Carrier.lean`). Six guarantees, whose proofs are in
 `Security/Proofs/Accounting/Stacking.lean`:
 
 * `CarrierBits`, the carrier lemma: memory holding a circuit's values holds at most its input and encoded bits about
@@ -28,17 +29,20 @@ contents are a circuit's values, which depend on the encodings only through the 
   map and every pass's plan are `W`'s at each step the passes are bound to (`Requirement.StoreMatches`,
   `Requirement.PlanMatches`), an accepted session read at least `(1 − γ)` of the bits `W` holds over those steps
   (`Requirement.held`) and of the bits it reads (`Requirement.read`).
+* `CircuitEncodeHardnessOfChain`: the encode premise at the circuit model's cost follows from the model's conjecture
+  `Accounting.Assumptions.EncodeChainHardness` wherever the model has a circuit computing the words.
 
-They rest on the remote audit's random oracle and named assumptions, and on two more:
-`Accounting.Assumptions.CircuitEncodeHardness` (encoding `x` of a block's `b` bits costs `x/b` of `rEnc` roundings) and
-`Accounting.Assumptions.KeyBinding` (the programmed store is a uniform store but for `δ`).
+The stacked sessions charge an encode at the circuit model's cost (`encodeBitsCost`, budgeted gates of
+`Definitions/Accounting/Gates`). They rest on the remote audit's random oracle and named assumptions, and on two more:
+`Accounting.Assumptions.CircuitEncodeHardness` (encoding `x` of a block's `b` bits costs `x/b` of `rEnc` budgeted gates)
+and `Accounting.Assumptions.KeyBinding` (the programmed store is a uniform store but for `δ`).
 
 **Idioms.** The carrier lemma is the counting step of incompressible encodings (Moran–Wichs, CRYPTO 2020: an
 adversary's state that recovers the encoding is at least its entropy) and of proofs of replication (Fisch, SealStack,
 2019: a replica stored as a function of other data is worth at most that data's bits), here with the circuit's
 inputs and encodes as the only channels, as red-blue pebbling (Hong–Kung 1981; Ren–Devadas, bandwidth-hard functions,
-TCC 2017) counts only what crosses the fast-memory boundary. The encode's price in roundings is an arithmetic-circuit
-lower bound, assumed per block as `WorkHardness` assumes the codec's price.
+TCC 2017) counts only what crosses the fast-memory boundary. The encode's price in budgeted gates is a circuit lower
+bound, assumed per block as `WorkHardness` assumes the codec's price.
 -/
 
 namespace Accounting.Guarantees
@@ -57,8 +61,8 @@ as the store ranges over every store:
 **The reading.** In the ideal encoding model the store is uniform, so whatever memory holds the circuit's values (a
 carrier) holds at most `I + X` bits about the store: about the other blocks' encodings, which is what stacking needs.
 `X ≤ q·b` for `q` encodes of at most a block's `b` bits each, and under
-`Accounting.Assumptions.CircuitEncodeHardness` a budget of `R` roundings gives `X ≤ b·R/rEnc`. The count is over the
-prover's choices too: an input is any function of the store, so a carrier is a side source of `I + X` bits, whatever
+`Accounting.Assumptions.CircuitEncodeHardness` a budget of `R` budgeted gates gives `X ≤ b·R/rEnc`. The count is over
+the prover's choices too: an input is any function of the store, so a carrier is a side source of `I + X` bits, whatever
 the prover feeds.
 
 Proof: `Accounting.SecurityProofs.CarrierBits`, by induction on the provenance: a step of `x` bits splits the stores
@@ -77,15 +81,17 @@ whose payloads are a circuit's values, under bound keys), which is a uniform sto
 (`Accounting.Assumptions.KeyBinding`), for a session whose every pass rebuilds at most `X` bits plus one sector for
 each sector of a carrier (`RateSketch.Carrier`: memory whose contents are a circuit's values, which decode to those
 sectors at every store). Each carrier's circuit, over its life of `life` windows, takes in at most `R_in` input bytes a
-window and spends at most `c_ρ` roundings a byte of certified read, at `reads` bytes a window (the property's
-parameters; its lifetime cap is `life`, since `L` is the side link's bits here). Under
-`Accounting.Assumptions.CircuitEncodeHardness 32768 rEnc cost` the shortfall terms are the deployed guarantee's at
-rebuilt bits `X + C` a pass,
+window and spends at most `c_ρ` budgeted gates a byte of certified read, at `reads` bytes a window (the property's
+parameters; its lifetime cap is `life`, since `L` is the side link's bits here), an encode of `x` bits costing
+`encodeBitsCost` at the deployed codec (p1024, 3 rounds) in the circuit model's restricted class (budgeted fan-in at
+most `fan`, values within `wid` bits, on more than `εnum/εden` of the draws). Under
+`Accounting.Assumptions.CircuitEncodeHardness 32768 rEnc` at that cost, the shortfall terms are the deployed guarantee's
+at rebuilt bits `X + C` a pass,
 
   `C = 8·R_in·life + 32768·(c_ρ·reads·life)/rEnc`,
 
-the carriers' bits: inputs, and the bits of 4 KiB tiles the circuit can encode with its roundings. The error is the
-deployed guarantee's, plus `δ`:
+the carriers' bits: inputs, and the bits of 4 KiB tiles the circuit can encode with its budgeted gates. The error is
+the deployed guarantee's, plus `δ`:
 
   `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96 + δ`.
 
@@ -93,7 +99,7 @@ deployed guarantee's, plus `δ`:
 side capacity `S + (L − ρ·256) + X` as one more source, a carrier being a source of `I + q·b` bits (`CarrierBits`),
 with `I = 8·R_in·life` and `q = c_ρ·reads·life/rEnc` blocks. In the verbatim class a sector the device decodes from a
 carrier is one it computes rather than reads at its position, a rebuild. The circuit is each carrier's whole
-provenance: the property's isolation is what bounds it by the inputs and roundings of `life` windows, and a carrier
+provenance: the property's isolation is what bounds it by the inputs and gates of `life` windows, and a carrier
 copied forward from older ones is one carrier whose life is the chain's. Key binding is what keeps a written block's
 encoding from being chosen: what its payload carries about other blocks is its carrier, here, and nothing else.
 
@@ -105,20 +111,21 @@ Frozen (no-function, hash): `RemoteSessionConservationSketchDeployed`'s game wit
 the random-oracle and ideal encoding models, under the per-pass hash budget, `CircuitEncodeHardness` and
 `KeyBinding`. -/
 def StackedSessionConservationSketchDeployed : Prop :=
-  ∀ (n P N ρ S L q G X qtot Rin cρ reads life rEnc : ℕ) (cost : ℕ → ℕ) (ε δ : ℝ≥0∞) {Ω : Type} [Fintype Ω]
+  ∀ (n P N ρ S L q G X qtot Rin cρ reads life rEnc fan wid εnum εden : ℕ) (ε δ : ℝ≥0∞) {Ω : Type} [Fintype Ω]
     (store : Ω → RateSketch.SketchStore N 128)
     (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773),
     7 ≤ n → 0 < P → 0 < N → 0 < rEnc →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding δ store →
-    Assumptions.CircuitEncodeHardness 32768 rEnc cost →
+    Assumptions.CircuitEncodeHardness 32768 rEnc (encodeBitsCost Gates.p1024 3 fan wid εnum εden) →
     (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
     (∀ w η j ι c, ∃ K : RateSketch.Carrier N 128,
       (∀ E σ R O,
         let B := (A.window w η).device j ι c
         let D := RateSketch.Data.ofParts E R
         (B.prog σ D).rebuilds O D * 256 ≤ X + K.carried.card * 256) ∧
-      ∀ E, K.provenance.inputs E ≤ 8 * Rin * life ∧ K.provenance.roundings cost E ≤ cρ * reads * life) →
+      ∀ E, K.provenance.inputs E ≤ 8 * Rin * life ∧
+        K.provenance.roundings (encodeBitsCost Gates.p1024 3 fan wid εnum εden) E ≤ cρ * reads * life) →
     let C := 8 * Rin * life + 32768 * (cρ * reads * life) / rEnc
     pr (fun x : Ω × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
       (∀ w t, (x.2 w).2.2 t ∈
@@ -137,9 +144,10 @@ but for `δ` (`Accounting.Assumptions.KeyBinding`), for a session whose every pa
 reads at odd addresses answer a carrier's memory (`Rate.PassProvenance`: a circuit's values in the pass, whose inputs
 may depend on the pass's certified stream and oracle, so they may be receipts computed elsewhere), and its other side
 reads and the certified stream take in at most `L` bits in every world (`PIChip.linkBitsEven`; the session's own link
-bound `L_all` counts the carrier's reads too, and is any). With each carrier's circuit within the property's budgets
-and `Accounting.Assumptions.CircuitEncodeHardness b rEnc cost_ρ`, as in `StackedSessionConservationSketchDeployed`, the
-bound is `RemoteSessionConservationRelay`'s at side link `L + C`,
+bound `L_all` counts the carrier's reads too, and is any). With each carrier's circuit within the property's budgets,
+an encode costing `encodeBitsCost` over the codec's field `Fc` at `k` rounds, and
+`Accounting.Assumptions.CircuitEncodeHardness b rEnc` at that cost, as in `StackedSessionConservationSketchDeployed`,
+the bound is `RemoteSessionConservationRelay`'s at side link `L + C`,
 
   `C = 8·R_in·life + b·(c_ρ·reads·life)/rEnc`:
 
@@ -163,18 +171,20 @@ session, and `KeyBinding` moves the store's distribution to a uniform one.
 Frozen (no-function, hash): `RemoteSessionConservationRelay`'s game with carriers on a programmed store, in the
 random-oracle and ideal encoding models, under `CircuitEncodeHardness` and `KeyBinding`. -/
 def StackedSessionConservationRelay : Prop :=
-  ∀ (n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc : ℕ) (cost costρ : ℕ → ℕ)
-    (tier : ℕ → Fin τ) (δ : ℝ≥0∞) {Ω : Type} [Fintype Ω] (store : Ω → Rate.Store N b)
+  ∀ (n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc : ℕ) (cost : ℕ → ℕ)
+    (Fc : Gates.Field) (k fan wid εnum εden : ℕ) (tier : ℕ → Fin τ) (δ : ℝ≥0∞) {Ω : Type} [Fintype Ω]
+    (store : Ω → Rate.Store N b)
     (A : Rate.DeployedSession n P N b h ρ S Lall q r s d G) (dbar dw : ℝ),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 → 0 < rEnc →
     Assumptions.KeyBinding δ store →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
-    Assumptions.CircuitEncodeHardness b rEnc costρ →
+    Assumptions.CircuitEncodeHardness b rEnc (encodeBitsCost Fc k fan wid εnum εden) →
     (∀ w η j ι c, ∃ K : Rate.PassProvenance N b h ρ (ℕ → Bool),
       (∀ E R O v i, ((A.window w η).device j ι c).side E R O v (2 * i + 1) = K.run E R O i) ∧
       (∀ st wd, (((A.window w η).device j ι c).chip st).linkBitsEven wd [] ≤ L) ∧
-      ∀ E R O, K.inputs E R O ≤ 8 * Rin * life ∧ K.roundings costρ E R O ≤ cρ * reads * life) →
+      ∀ E R O, K.inputs E R O ≤ 8 * Rin * life ∧
+        K.roundings (encodeBitsCost Fc k fan wid εnum εden) E R O ≤ cρ * reads * life) →
     let C := 8 * Rin * life + b * (cρ * reads * life) / rEnc
     pr (fun x : Ω × (Fin n → Rate.WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
@@ -217,7 +227,7 @@ Frozen (no-function, hash): `StackedSessionConservationSketchDeployed`'s game, w
 declared circuit's requirement by counting bounds over its wiring, execution and store, in the random-oracle and ideal
 encoding models, under the per-pass hash budget, `CircuitEncodeHardness` and `KeyBinding`. -/
 def StackedRequirementSketchDeployed : Prop :=
-  ∀ (n P N ρ S L q G X qtot Rin cρ reads life rEnc : ℕ) (cost : ℕ → ℕ) (ε δ : ℝ≥0∞) {Ω : Type} [Fintype Ω]
+  ∀ (n P N ρ S L q G X qtot Rin cρ reads life rEnc fan wid εnum εden : ℕ) (ε δ : ℝ≥0∞) {Ω : Type} [Fintype Ω]
     (store : Ω → RateSketch.SketchStore N 128)
     (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773)
     {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V) (ℓ : Requirement.Layout V)
@@ -225,14 +235,15 @@ def StackedRequirementSketchDeployed : Prop :=
     7 ≤ n → 0 < P → 0 < N → 0 < rEnc →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding δ store →
-    Assumptions.CircuitEncodeHardness 32768 rEnc cost →
+    Assumptions.CircuitEncodeHardness 32768 rEnc (encodeBitsCost Gates.p1024 3 fan wid εnum εden) →
     (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
     (∀ w η j ι c, ∃ K : RateSketch.Carrier N 128,
       (∀ E σ R O,
         let B := (A.window w η).device j ι c
         let D := RateSketch.Data.ofParts E R
         (B.prog σ D).rebuilds O D * 256 ≤ X + K.carried.card * 256) ∧
-      ∀ E, K.provenance.inputs E ≤ 8 * Rin * life ∧ K.provenance.roundings cost E ≤ cρ * reads * life) →
+      ∀ E, K.provenance.inputs E ≤ 8 * Rin * life ∧
+        K.provenance.roundings (encodeBitsCost Gates.p1024 3 fan wid εnum εden) E ≤ cρ * reads * life) →
     win.len ≤ n * P →
     (∀ t ∈ win.ticks, Requirement.StoreMatches W e ℓ mm 32768 t ∧ (mm.resident t).card ≤ N ∧
       Requirement.PlanMatches W e ℓ (plan t) 32768 t ∧ (plan t).card ≤ N) →
@@ -277,8 +288,9 @@ Frozen (no-function, hash): `StackedSessionConservationRelay`'s game, with its s
 circuit's requirement by counting bounds over its wiring, execution and store, in the random-oracle and ideal encoding
 models, under `CircuitEncodeHardness` and `KeyBinding`. -/
 def StackedRequirementRelay : Prop :=
-  ∀ (n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc : ℕ) (cost costρ : ℕ → ℕ)
-    (tier : ℕ → Fin τ) (δ : ℝ≥0∞) {Ω : Type} [Fintype Ω] (store : Ω → Rate.Store N b)
+  ∀ (n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc : ℕ) (cost : ℕ → ℕ)
+    (Fc : Gates.Field) (k fan wid εnum εden : ℕ) (tier : ℕ → Fin τ) (δ : ℝ≥0∞) {Ω : Type} [Fintype Ω]
+    (store : Ω → Rate.Store N b)
     (A : Rate.DeployedSession n P N b h ρ S Lall q r s d G) (dbar dw : ℝ)
     {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V) (ℓ : Requirement.Layout V)
     (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
@@ -286,11 +298,12 @@ def StackedRequirementRelay : Prop :=
     Assumptions.KeyBinding δ store →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
-    Assumptions.CircuitEncodeHardness b rEnc costρ →
+    Assumptions.CircuitEncodeHardness b rEnc (encodeBitsCost Fc k fan wid εnum εden) →
     (∀ w η j ι c, ∃ K : Rate.PassProvenance N b h ρ (ℕ → Bool),
       (∀ E R O v i, ((A.window w η).device j ι c).side E R O v (2 * i + 1) = K.run E R O i) ∧
       (∀ st wd, (((A.window w η).device j ι c).chip st).linkBitsEven wd [] ≤ L) ∧
-      ∀ E R O, K.inputs E R O ≤ 8 * Rin * life ∧ K.roundings costρ E R O ≤ cρ * reads * life) →
+      ∀ E R O, K.inputs E R O ≤ 8 * Rin * life ∧
+        K.roundings (encodeBitsCost Fc k fan wid εnum εden) E R O ≤ cρ * reads * life) →
     win.len ≤ n * P →
     (∀ t ∈ win.ticks, Requirement.StoreMatches W e ℓ mm b t ∧ (mm.resident t).card ≤ N ∧
       Requirement.PlanMatches W e ℓ (plan t) b t ∧ (plan t).card ≤ N) →
@@ -302,5 +315,31 @@ def StackedRequirementRelay : Prop :=
             (((∑ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 : ℕ)) : ℝ) < (1 - γ) * Requirement.read W e win))
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
         (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ (L + C) / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + δ
+
+/-- **The encode premise at the circuit model's cost, from the model's conjecture.** Under
+`Accounting.Assumptions.EncodeChainHardness F k f w E ε` (computing a codec word costs `E` budgeted gates), for a block
+of `b` bits that is a whole number of the field's words of `8·bytes` bits, if for every `q` from 1 to the block's words
+some restricted circuit with no run input computes `q` words on more than `ε` of the draws (`Gates.encodeCosts` is
+nonempty: the circuit model has an honest circuit), the stacking guarantees' premise holds at `E` a word:
+
+  `CircuitEncodeHardness b ((b / (8·bytes))·E) (encodeBitsCost F k f w ε)`.
+
+**The reading.** At the circuit model's cost the stacking premise is no assumption beyond the model's conjecture and an
+honest circuit's existence. What it leaves out is in the charge, not the premise: an encode of `x` bits is charged the
+`⌈x / (8·bytes)⌉` whole words those bits fill, so a function of a block's encoding cheaper than its words must enter a
+carrier's provenance as an input, and the theorem that a declared circuit passing the stacking property has a
+provenance within its budgets is where that is shown. Without an honest circuit, `encodeCost` is `0` and the premise
+fails.
+
+Proof: `Accounting.SecurityProofs.CircuitEncodeHardnessOfChain`: every circuit of `Gates.encodeCosts` at `q` words has
+at least `q·E` budgeted gates by `EncodeChainHardness` with no run input, so `Gates.encodeCost` does, and
+`x ≤ (8·bytes)·⌈x / (8·bytes)⌉`.
+
+Frozen (no-function): an implication between named assumptions over the circuit model, about no function of the code. -/
+def CircuitEncodeHardnessOfChain : Prop :=
+  ∀ (F : Gates.Field) (k f w E εnum εden b : ℕ),
+    Assumptions.EncodeChainHardness F k f w E εnum εden → 0 < F.bytes → 8 * F.bytes ∣ b →
+    (∀ q, 0 < q → q ≤ b / (8 * F.bytes) → (Gates.encodeCosts F k f w εnum εden q).Nonempty) →
+    Assumptions.CircuitEncodeHardness b (b / (8 * F.bytes) * E) (encodeBitsCost F k f w εnum εden)
 
 end Accounting.Guarantees

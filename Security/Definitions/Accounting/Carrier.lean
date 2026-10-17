@@ -1,5 +1,6 @@
 import Definitions.Accounting.RateAuditSketchDeployed
 import Definitions.Accounting.RateAuditDeployed
+import Definitions.Accounting.Gates.Codec
 
 /-!
 # Carriers: device memory whose post-seed contents are a circuit's values (trusted)
@@ -31,6 +32,10 @@ every store (the device's decoding is its last step).
 a pass's certified stream and oracle, receipts it computed elsewhere among them: `Rate.PassProvenance` is a provenance
 whose inputs are any function of the store, the stream and the oracle. A device reads such a carrier through its side
 sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts the side link without them.
+
+**The encode cost.** An `encode` step of `x` bits is charged `encodeBitsCost`: the circuit model's encode cost
+(`Gates.encodeCost`, budgeted gates) of the codec words that `x` bits fill, so the provenances' `roundings` count
+budgeted gates of `Definitions/Accounting/Gates`.
 -/
 
 namespace Accounting.RateSketch
@@ -149,3 +154,15 @@ def linkBitsEven (w : IWorld N b h ρ) : List Bool → PIChip N b h ρ α → �
 end PIChip
 
 end Accounting.Rate
+
+namespace Accounting
+
+/-- **The encode cost of `x` bits of a block's encoding**, in budgeted gates: the circuit model's encode cost
+(`Gates.encodeCost`, the fewest budgeted gates of a restricted circuit with no run input that computes that many codec
+words over `F` at `k` rounds, budgeted fan-in at most `f`, values within `w` bits, on more than `εnum/εden` of the
+draws) of the `⌈x / (8·bytes)⌉` words that `x` bits fill. A function of a block's encoding is charged as the whole
+words its bits would fill. -/
+noncomputable def encodeBitsCost (F : Gates.Field) (k f w εnum εden x : ℕ) : ℕ :=
+  Gates.encodeCost F k f w εnum εden ((x + 8 * F.bytes - 1) / (8 * F.bytes))
+
+end Accounting

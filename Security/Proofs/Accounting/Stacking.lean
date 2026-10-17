@@ -650,7 +650,7 @@ theorem CarrierBits : Accounting.Guarantees.CarrierBits := by
 `Accounting.Guarantees.StackedSessionConservationSketchDeployed`. -/
 theorem StackedSessionConservationSketchDeployed :
     Accounting.Guarantees.StackedSessionConservationSketchDeployed := by
-  intro n P N ρ S L q G X qtot Rin cρ reads life rEnc cost ε δ Ω _ store A hn hP hN hr hrank hKB hE hB hK C
+  intro n P N ρ S L q G X qtot Rin cρ reads life rEnc fan wid εnum εden ε δ Ω _ store A hn hP hN hr hrank hKB hE hB hK C
   have hX : ∀ w η j ι c E σ R O,
       let B := (A.window w η).device j ι c
       let D := RateSketch.Data.ofParts E R
@@ -674,8 +674,8 @@ theorem StackedSessionConservationSketchDeployed :
 /-- **The remote audit with relaying side sources on a programmed store, with stacking**,
 `Accounting.Guarantees.StackedSessionConservationRelay`. -/
 theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionConservationRelay := by
-  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc cost costρ tier δ Ω _ store A
-    dbar dw hn hP hN hb hrc hdw hr hKB hW hF hE hK C
+  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc cost Fc k fan wid εnum εden tier δ
+    Ω _ store A dbar dw hn hP hN hb hrc hdw hr hKB hW hF hE hK C
   choose K hside hL hbud using hK
   have hC : ∀ w η j ι c E R O, (K w η j ι c).inputs E R O + (K w η j ι c).encoded E R O ≤ C := by
     intro w η j ι c E R O
@@ -701,11 +701,11 @@ theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionCo
 /-- **The stacked remote audit at the deployed parameters, read against a declared circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementSketchDeployed`. -/
 theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed := by
-  intro n P N ρ S L q G X qtot Rin cρ reads life rEnc cost ε δ Ω _ store A V _ W e ℓ mm plan win hn hP hN hr hrank
-    hKB hE hB hK hwin hm C γ
+  intro n P N ρ S L q G X qtot Rin cρ reads life rEnc fan wid εnum εden ε δ Ω _ store A V _ W e ℓ mm plan win hn hP hN
+    hr hrank hKB hE hB hK hwin hm C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan 32768 N (n * P) win hwin hm
-  have base := StackedSessionConservationSketchDeployed n P N ρ S L q G X qtot Rin cρ reads life rEnc cost ε δ store A
-    hn hP hN hr hrank hKB hE hB hK
+  have base := StackedSessionConservationSketchDeployed n P N ρ S L q G X qtot Rin cρ reads life rEnc fan wid εnum εden
+    ε δ store A hn hP hN hr hrank hKB hE hB hK
   dsimp only at base
   refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
   have h := Requirement.lt_of_cap hcap.1 hcap.2 hx.2
@@ -715,15 +715,47 @@ theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirem
 /-- **The stacked remote audit with relaying side sources, read against a declared circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementRelay`. -/
 theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay := by
-  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc cost costρ tier δ Ω _ store A
-    dbar dw V _ W e ℓ mm plan win hn hP hN hb hrc hdw hr hKB hW hF hE hK hwin hm C γ
+  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc cost Fc k fan wid εnum εden tier δ
+    Ω _ store A dbar dw V _ W e ℓ mm plan win hn hP hN hb hrc hdw hr hKB hW hF hE hK hwin hm C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan b N (n * P) win hwin hm
   have base := StackedSessionConservationRelay n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life
-    rEnc cost costρ tier δ store A dbar dw hn hP hN hb hrc hdw hr hKB hW hF hE hK
+    rEnc cost Fc k fan wid εnum εden tier δ store A dbar dw hn hP hN hb hrc hdw hr hKB hW hF hE hK
   dsimp only at base
   refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
   have h := Requirement.lt_of_cap hcap.1 hcap.2 hx.2
   simp only [Nat.cast_mul, Nat.cast_ofNat] at h
   exact h
+
+/-- **The encode premise at the circuit model's cost, from the model's conjecture**,
+`Accounting.Guarantees.CircuitEncodeHardnessOfChain`. -/
+theorem CircuitEncodeHardnessOfChain : Accounting.Guarantees.CircuitEncodeHardnessOfChain := by
+  intro F k f w E εnum εden b hE hbytes hdvd hne x hx
+  have hn : 0 < F.n - 1 := by
+    have h := hbytes
+    simp only [Gates.Field.bytes] at h
+    omega
+  have hwb : 0 < 8 * F.bytes := by omega
+  obtain ⟨c, rfl⟩ := hdvd
+  rw [Nat.mul_div_cancel_left c hwb] at hne ⊢
+  rcases Nat.eq_zero_or_pos x with rfl | hx0
+  · simp
+  set q := (x + 8 * F.bytes - 1) / (8 * F.bytes) with hq
+  have hq0 : 0 < q := Nat.div_pos (by omega) hwb
+  have hlt := Nat.lt_mul_div_succ (x + 8 * F.bytes - 1) hwb
+  rw [← hq, mul_add, mul_one] at hlt
+  have hxq : x ≤ 8 * F.bytes * q := by omega
+  have hqc : q ≤ c := by
+    refine Nat.lt_succ_iff.mp ((Nat.div_lt_iff_lt_mul hwb).mpr ?_)
+    rw [Nat.succ_eq_add_one, add_mul, one_mul, mul_comm c]
+    omega
+  have hcost : q * E ≤ encodeBitsCost F k f w εnum εden x := by
+    refine le_csInf (hne q hq0 hqc) ?_
+    rintro _ ⟨ι, C, m, xs, words, out, hlen, hnd, hp, hres, hrun, hin, hcomp, rfl⟩
+    have h := hE C m xs words out hres hin hnd hp hcomp
+    rw [hrun, zero_mul, add_zero, hlen] at h
+    exact Nat.le_of_mul_le_mul_right h hn
+  calc x * (c * E) ≤ 8 * F.bytes * q * (c * E) := Nat.mul_le_mul_right _ hxq
+    _ = 8 * F.bytes * c * (q * E) := by ring
+    _ ≤ 8 * F.bytes * c * encodeBitsCost F k f w εnum εden x := Nat.mul_le_mul_left _ hcost
 
 end Accounting.SecurityProofs
