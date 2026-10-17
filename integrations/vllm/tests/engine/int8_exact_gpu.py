@@ -1,21 +1,26 @@
 """VLLM-18 on one GPU: a BF16 pin's int8 checkpoint served with `TargetProfile.int8_exact = "plain"`, checked end to end.
 
-One process writes `<out>/int8_exact_gpu.json` (and `<out>/pin_entry.json`, the int8 pin's checkpoints.json entry):
+One process writes `<out>/int8_exact_gpu.json` (and `<out>/pin_entry.json`, the int8 pin's checkpoints-int8.json entry):
 
   pin       `verity-vllm int8-checkpoint pin` in-process: the int8 snapshot made from the BF16 pin into the HF cache, its entry (every
-            file's sha256, the pinned revision).  The engine reads it through a scratch copy of checkpoints.json with the entry
-            appended as `downloaded` (the repo's manifest is append-only and gets the entry by hand, after review).
+            file's sha256, the pinned revision).  The engine reads it through a scratch copy of checkpoints.json and of
+            checkpoints-int8.json with the entry appended as `downloaded` (the repo's manifests get the entry by hand).
   engine    `engine.build.build_engine(case=ROLE, target=from_device() + int8_exact="plain")`, which refuses a target mismatch
             (`int8_exact_arm_of` included).
   applied   `int8_exact.applied_record`: every linear's method, arm and calls, before and after generation, against vLLM's own
             `LinearBase` modules: every one runs `Int8PlainLinearMethod` (arm "plain") and served calls during generation.
   generate  greedy (temperature 0) on PROMPTS, batched and one by one; the texts, token ids, and which prompts' tokens differ
-            between the two (the per-call activation scale makes a row's value depend on its batch).
+            between the two (attention stays bf16 FlashAttention, whose rows may depend on the batch).
   equal     forward hooks on the first four linears and the last one keep (x, y) of their first calls in the batched run and in
-            the first solo run (prefill and decode, so the M < 17 padding too).  Each y, bit for bit, against
-              cpu    `int8_exact.plain_linear` on the CPU (torch `_int_mm` on the CPU, every row)
-              ref    `tests/engine/int8_reference.plain` (NumPy from egemm_ref.py, `--ref-rows` rows, the whole call's scale)
-              rerun  `int8_exact.plain_linear` again on the GPU on the same weights
+            every solo run (prefill and decode, so the M < 17 padding too).  Each served y, bit for bit, against
+              oracle  `benchmarks/ppl/steps.py`'s `int8_linear` on the CPU (`tests/engine/ppl_oracle.int8_linear`) from x and the
+                      BF16 base pin's own weight (q, k, v and gate, up concatenated by rows for vLLM's merged modules)
+              cpu     `int8_exact.plain_linear` on the CPU on the served int8 weight and scales
+              rerun   `int8_exact.plain_linear` again on the GPU
+              alone   every row of the call recomputed alone on the GPU (M = 1, padded): a row's value is its own
+            and the served weight against the oracle's `quant_rows(w.float(), 127)` of the base weight.
+  batch     every solo-run row whose x is bitwise a row of the batched run's calls of the same module has the batched run's y
+            row, bit for bit (rows past bf16 attention may differ in x, and are counted, not compared).
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
     $PY tests/engine/int8_exact_gpu.py --out DIR --at 2026-10-17T00:00:00Z --by LANE
@@ -35,14 +40,17 @@ from typing import Any
 import numpy as np
 import torch
 
-from tests.engine import int8_reference as R
+from tests.engine import ppl_oracle as O
+from verity_vllm.config import checkpoint_entries
+from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
 from verity_vllm.engine import int8_exact as E
 
-SCHEMA = "verity-vllm/int8-exact-gpu/v1"
+SCHEMA = "verity-vllm/int8-exact-gpu/v2"
 RECORD = "int8_exact_gpu.json"
 PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the n-th Fibonacci number.\"\"\"\n",
            "The three primary colors are", "Water boils at a temperature of", "Once upon a time, in a small village,"]
+MERGED = {"qkv_proj": ("q_proj", "k_proj", "v_proj"), "gate_up_proj": ("gate_proj", "up_proj")}
 
 
 def pin(a: argparse.Namespace) -> dict[str, Any]:
@@ -56,11 +64,37 @@ def pin(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def scratch_checkpoints(checkpoints: str, entry: dict[str, Any], scratch: Path) -> Path:
-    doc = json.loads(Path(checkpoints).read_text())
-    doc["checkpoints"].append({**entry, "downloaded": True})
     p = scratch / "checkpoints.json"
-    p.write_text(json.dumps(doc, indent=1) + "\n")
+    p.write_text(Path(checkpoints).read_text())
+    sib = Path(checkpoints).with_name("checkpoints-int8.json")
+    doc = json.loads(sib.read_text()) if sib.is_file() else {"checkpoints": []}
+    doc["checkpoints"].append({**entry, "downloaded": True})
+    (scratch / "checkpoints-int8.json").write_text(json.dumps(doc, indent=1) + "\n")
     return p
+
+
+class BaseWeights:
+    """The base pin's weight of a vLLM linear, read from its safetensors as stored (merged modules concatenated by rows)."""
+
+    DTYPES = {"BF16": (np.int16, torch.bfloat16), "F32": (np.float32, torch.float32)}
+
+    def __init__(self, snapshot: str):
+        self.snapshot = Path(snapshot)
+        self.headers = {p: F.read_header(p) for p in sorted(self.snapshot.glob("*.safetensors"))}
+        self.where = {k: p for p, (_, h) in self.headers.items() for k in h if k != "__metadata__"}
+
+    def tensor(self, name: str) -> torch.Tensor:
+        p = self.where[name]
+        start, header = self.headers[p]
+        info = header[name]
+        lo, hi = info["data_offsets"]
+        np_dtype, dtype = self.DTYPES[info["dtype"]]
+        raw = np.fromfile(p, dtype=np.uint8, count=hi - lo, offset=start + lo)
+        return torch.from_numpy(raw.view(np_dtype).copy()).view(dtype).reshape(info["shape"])
+
+    def weight(self, module: str) -> torch.Tensor:
+        prefix, _, leaf = module.rpartition(".")
+        return torch.cat([self.tensor(f"{prefix}.{p}.weight") for p in MERGED.get(leaf, (leaf,))])
 
 
 class Taps:
@@ -93,18 +127,46 @@ def _words(t: torch.Tensor) -> np.ndarray:
     return t.contiguous().view(torch.int16).numpy().view(np.uint16)
 
 
-def compare(mod: torch.nn.Module, x: torch.Tensor, y: torch.Tensor, ref_rows: int) -> dict[str, Any]:
+def compare(mod: torch.nn.Module, w_base: torch.Tensor, x: torch.Tensor, y: torch.Tensor) -> dict[str, Any]:
     w, s = mod.weight, mod.weight_scale
     m = x.shape[0]
     gpu = E.plain_linear(x.to(w.device), w, s).cpu()
     cpu = E.plain_linear(x, w.cpu(), s.cpu())
-    rows = np.unique(np.linspace(0, m - 1, min(m, ref_rows)).round().astype(np.int64))
-    ref = R.plain(_words(x), w.cpu().numpy(), s.cpu().numpy(), rows=rows)
+    oracle = O.int8_linear(x, w_base)
+    alone = torch.cat([E.plain_linear(x[i:i + 1].to(w.device), w, s) for i in range(m)]).cpu()
     yw = _words(y)
     return {"M": m, "K": int(x.shape[1]), "N": int(y.shape[1]), "padded": m < E.MIN_ROWS, "dtype": str(y.dtype).removeprefix("torch."),
-            "inv_s": float(ref["inv_s"]), "s_x": float(ref["s_x"]), "y32_absmax_ref_rows": int(np.abs(ref["y32"]).max(initial=0)),
-            "words": int(yw.size), "cpu_mismatch": int((_words(cpu) != yw).sum()), "rerun_mismatch": int((_words(gpu) != yw).sum()),
-            "ref_rows": rows.tolist(), "ref_mismatch": int((ref["y"] != yw[rows]).sum())}
+            "words": int(yw.size), "oracle_mismatch": int((_words(oracle) != yw).sum()), "cpu_mismatch": int((_words(cpu) != yw).sum()),
+            "rerun_mismatch": int((_words(gpu) != yw).sum()), "alone_mismatch": int((_words(alone) != yw).sum())}
+
+
+def weights_match(mod: torch.nn.Module, w_base: torch.Tensor) -> bool:
+    q, s = O.int8_weights(w_base)
+    return bool(torch.equal(mod.weight.cpu(), q) and torch.equal(mod.weight_scale.cpu().reshape(-1), s))
+
+
+def batch_vs_solo(got: dict[tuple[str, str], list[tuple[torch.Tensor, torch.Tensor]]], names: list[str]) -> dict[str, Any]:
+    """Per module and solo prompt: the solo rows whose x is bitwise a batched row of that module, and how many of their y rows
+    differ from the batched y row."""
+    out: dict[str, Any] = {}
+    for name in names:
+        batched: dict[bytes, bytes] = {}
+        for x, y in got.get(("batched", name), []):
+            for i in range(x.shape[0]):
+                batched.setdefault(_words(x[i]).tobytes(), _words(y[i]).tobytes())
+        per = []
+        for phase in sorted(p for p, n in got if n == name and p.startswith("solo")):
+            rows = matched = mismatch = 0
+            for x, y in got[(phase, name)]:
+                for i in range(x.shape[0]):
+                    rows += 1
+                    hit = batched.get(_words(x[i]).tobytes())
+                    if hit is not None:
+                        matched += 1
+                        mismatch += hit != _words(y[i]).tobytes()
+            per.append({"phase": phase, "rows": rows, "matched": matched, "mismatch": mismatch})
+        out[name] = per
+    return out
 
 
 def applied(model: torch.nn.Module) -> tuple[dict[str, dict[str, Any]], list[str]]:
@@ -130,6 +192,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "recipe": entry["recipe"], "local_path": entry["local_path"]}
     (outdir / "pin_entry.json").write_text(json.dumps(entry, indent=1) + "\n")
     print(f"[int8] pin {json.dumps(doc['pin'])}", flush=True)
+    base = BaseWeights(F.base_entry(entry, checkpoint_entries(a.checkpoints), I.INT8)["local_path"])
 
     target = TargetProfile.from_device().with_overrides(int8_exact=E.ARM)
     doc["target"] = target.to_json()
@@ -143,12 +206,13 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     before, linears = applied(eng.model)
     names = list(before)
-    taps = Taps(eng.model, names[:4] + names[-1:], a.keep_calls)
+    tapped = names[:4] + names[-1:]
+    taps = Taps(eng.model, tapped, a.keep_calls)
     taps.phase = "batched"
     batched = generate(eng.llm, PROMPTS, a.max_tokens)
     solo = []
     for i, p in enumerate(PROMPTS):
-        taps.phase = "solo" if i == 0 else None
+        taps.phase = f"solo{i}"
         solo += generate(eng.llm, [p], a.max_tokens)
     taps.phase = None
     taps.close()
@@ -167,24 +231,32 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         print(f"[int8] gen {b['prompt']!r}\n  batched: {b['text']!r}\n  solo:    {s['text']!r}", flush=True)
 
     mods = dict(eng.model.named_modules())
+    w_base = {n: base.weight(n) for n in tapped}
+    doc["weights_match_oracle"] = {n: weights_match(mods[n], w_base[n]) for n in tapped}
+    print(f"[int8] weights_match_oracle {doc['weights_match_oracle']}", flush=True)
     doc["equal"] = []
     for (phase, name), calls in sorted(taps.got.items()):
         for i, (x, y) in enumerate(calls):
-            rec = {"phase": phase, "module": name, "call": i, **compare(mods[name], x, y, a.ref_rows)}
+            rec = {"phase": phase, "module": name, "call": i, **compare(mods[name], w_base[name], x, y)}
             doc["equal"].append(rec)
             print(f"[int8] equal {phase} {name} call {i}: M={rec['M']} K={rec['K']} N={rec['N']} padded={rec['padded']} "
-                  f"cpu!={rec['cpu_mismatch']} ref!={rec['ref_mismatch']} rerun!={rec['rerun_mismatch']} inv_s={rec['inv_s']:.6g}",
-                  flush=True)
+                  f"oracle!={rec['oracle_mismatch']} cpu!={rec['cpu_mismatch']} rerun!={rec['rerun_mismatch']} "
+                  f"alone!={rec['alone_mismatch']}", flush=True)
     eq = doc["equal"]
+    keys = ("oracle_mismatch", "cpu_mismatch", "rerun_mismatch", "alone_mismatch")
     doc["equal_totals"] = {"compared": len(eq), "padded": sum(r["padded"] for r in eq), "words": sum(r["words"] for r in eq),
-                           **{k: sum(r[k] for r in eq) for k in ("cpu_mismatch", "ref_mismatch", "rerun_mismatch")}}
-    t = doc["equal_totals"]
+                           **{k: sum(r[k] for r in eq) for k in keys}}
+    doc["batch_vs_solo"] = batch_vs_solo(taps.got, tapped)
+    bvs = [r for per in doc["batch_vs_solo"].values() for r in per]
+    doc["batch_vs_solo_totals"] = {k: sum(r[k] for r in bvs) for k in ("rows", "matched", "mismatch")}
+    t, b = doc["equal_totals"], doc["batch_vs_solo_totals"]
     doc["ok"] = bool(doc["applied"]["ok"] and not doc["engine"]["target_mismatches"] and doc["engine"]["int8_exact_arm"] == E.ARM
-                     and t["compared"] and t["padded"] and not (t["cpu_mismatch"] or t["ref_mismatch"] or t["rerun_mismatch"])
+                     and all(doc["weights_match_oracle"].values()) and t["compared"] and t["padded"] and not any(t[k] for k in keys)
+                     and b["matched"] and not b["mismatch"]
                      and all(g["token_ids"] for g in batched + solo))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    print(f"INT8-EXACT-GPU {'OK' if doc['ok'] else 'FAIL'} totals={json.dumps(t)} batch_dependent={len(doc['generations']['batch_dependent'])}",
-          flush=True)
+    print(f"INT8-EXACT-GPU {'OK' if doc['ok'] else 'FAIL'} totals={json.dumps(t)} batch_vs_solo={json.dumps(b)} "
+          f"batch_dependent_tokens={len(doc['generations']['batch_dependent'])}", flush=True)
     return doc
 
 
@@ -200,7 +272,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--by", required=True, help="resolved_by of the pin entry")
     ap.add_argument("--max-tokens", type=int, default=32)
     ap.add_argument("--keep-calls", type=int, default=3, help="calls kept per tapped module and phase")
-    ap.add_argument("--ref-rows", type=int, default=6, help="rows per call checked against the NumPy reference")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 
