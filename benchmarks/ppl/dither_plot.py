@@ -24,6 +24,7 @@ SIDES = {"adopted-bd-lm": ("both", "both"), "side-lin-act": ("act", "both"), "si
          "side-qk-q": ("both", "q"), "side-qk-k": ("both", "k")}
 ROWS = (("linears", "linears and lm_head", (("act", "activations only"), ("w", "weights only"), ("both", "both"))),
         ("qk", "Q Kᵀ", (("q", "Q only"), ("k", "K only"), ("both", "both"))))
+ORDER = [("act", "both"), ("w", "both"), ("both", "both"), ("both", "q"), ("both", "k"), ("record", "record")]
 
 
 def classify(arm: str) -> tuple[str, str, int] | None:
@@ -89,7 +90,7 @@ def table(rs: list[dict]) -> str:
              "|---|---|---|---|---:|---:|---:|---:|---:|---:|---|"]
     for pt in points(rs):
         for r in sorted((r for r in rs if (r["model"], r["set"], r["ctx"]) == pt),
-                        key=lambda r: (r["b"], r["linears"] == "record", r["qk"] != "both", r["linears"], r["qk"])):
+                        key=lambda r: (r["b"], ORDER.index((r["linears"], r["qk"])))):
             vs = against_both(rs, r)
             lines.append(f"| {pt[0]} · {pt[1]} · {pt[2] // 1024}K | {r['arm']} | {r['linears']} | {r['qk']} | {r['b']} "
                          f"| {r['seeds']} | {r['ppl']:.4f} ({r['ppl_min']:.4f}–{r['ppl_max']:.4f}) | {r['ppl_sd']:.4f} "
@@ -111,19 +112,19 @@ def plot(rs: list[dict], png: str) -> None:
         for i, (row, title, sides) in enumerate(ROWS):
             ax = axes[i][j]
             drawn = False
-            for side, label in sides:
+            for n, (side, label) in enumerate(sides):
                 s = series(rs, pt, row, side)
                 if not s:
                     continue
                 drawn = True
-                xs, ys = [r["b"] for r in s], [r["inc"] for r in s]
+                xs, ys = [r["b"] + 0.06 * (n - 1) for r in s], [r["inc"] for r in s]
                 err = [[r["inc"] - r["inc_min"] for r in s], [r["inc_max"] - r["inc"] for r in s]]
                 ax.errorbar(xs, ys, yerr=err, marker="o", capsize=3, color=colors[side], label=label)
             if rec:
                 r = rec[0]
-                ax.errorbar([1], [r["inc"]], yerr=[[r["inc"] - r["inc_min"]], [r["inc_max"] - r["inc"]]],
+                ax.errorbar([1.12], [r["inc"]], yerr=[[r["inc"] - r["inc_min"]], [r["inc_max"] - r["inc"]]],
                             marker="*", markersize=11, capsize=3, color="black", linestyle="none",
-                            label="record (one-sided + U)")
+                            label="record (one-sided + U on W and Q)")
             if not drawn:
                 ax.set_axis_off()
                 continue
