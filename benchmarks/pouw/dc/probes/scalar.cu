@@ -4,6 +4,7 @@
 //   s_<lane>            1024 threads (8 warps a SMSP), 64 ops of one lane an iteration (duo: 32 words, 3 ops each)
 //   p_<x>_<y>           the same with x and y alternating (independent chains): a pair rate above both alone rates
 //                       means x and y issue to different pipes; at the alone rate, they share one
+//   s_<lane>_w<W>       W warps a SMSP: the lane role's warps in sm90_wgmma.cu's wgU_* (W = 1), alone
 // The beside-the-tensor-pipe rows are sm90_wgmma.cu's and sm100_tcgen05.cu's; dc/analyze.py reads all three.
 #include "../../opcode_probe/probe.cuh"
 #include "lanes.cuh"
@@ -49,6 +50,12 @@ OP_KERNEL(p_lea_lop3, 1024) { s_pair<L_LEA, L_LOP3>(a); }
 OP_KERNEL(p_lea_imad, 1024) { s_pair<L_LEA, L_IMAD>(a); }
 OP_KERNEL(p_lea_iadd, 1024) { s_pair<L_LEA, L_IADD>(a); }
 OP_KERNEL(p_lea_ffma, 1024) { s_pair<L_LEA, L_FFMA>(a); }
+OP_KERNEL(s_li_w1, 128) { s_alone<L_LI>(a); }
+OP_KERNEL(s_lif_w1, 128) { s_alone<L_LIF>(a); }
+OP_KERNEL(s_lop3_w1, 128) { s_alone<L_LOP3>(a); }
+OP_KERNEL(s_imad_w1, 128) { s_alone<L_IMAD>(a); }
+OP_KERNEL(s_mix_w1, 128) { s_alone<L_MIX>(a); }
+OP_KERNEL(s_li_w2, 256) { s_alone<L_LI>(a); }
 
 #define P(NAME, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 1024, .expect = PAT, .iters = 4096}
 static const OpProbe PROBES[] = {
@@ -74,6 +81,14 @@ static const OpProbe PROBES[] = {
     P(p_lea_imad, "LEA.HI=32,IMAD=32"),
     P(p_lea_iadd, "LEA.HI=32,I*ADD*=32"),
     P(p_lea_ffma, "LEA.HI=32,FFMA=32"),
+#define PW(NAME, TPB, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = TPB, .expect = PAT, .iters = 4096}
+    PW(s_li_w1, 128, "LOP3.LUT=32,IMAD=32"),
+    PW(s_lif_w1, 128, "LOP3.LUT=28,IMAD=28,FFMA=8"),
+    PW(s_lop3_w1, 128, "LOP3.LUT=64"),
+    PW(s_imad_w1, 128, "IMAD=64"),
+    PW(s_mix_w1, 128, "I*ADD*=32,FFMA=32"),
+    PW(s_li_w2, 256, "LOP3.LUT=32,IMAD=32"),
+#undef PW
 };
 #undef P
 
