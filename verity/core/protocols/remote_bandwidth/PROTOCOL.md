@@ -223,7 +223,14 @@ then holds the picked encoding, the prover holds nothing for it, and each of its
 (`tests/test_key_binding.py` runs it against the reference: a prover that holds only the weights' block passes a window
 that draws the KV block's receipts). Under the bound key, a picked \(E\) decodes under digest \(d\)'s key to a payload
 whose digest is \(d\) only if \(d\) is a fixed point of that map, which a try hits with chance about \(2^{-512}\). So
-the writer chooses only the payload, and its encoding costs an encode. \(d_j\) is the payload leaf's \(x_j\), so the
+the writer chooses only the payload, and its encoding costs an encode. Binding is necessary, not sufficient: it stops
+the writer picking an encoding, not stacking. A writer that can learn the key can compute another registered block's
+encoding in the circuit, or take it as input, and write it (or any cheap invertible function of it) as a bound block's
+payload. Decoding that carrier then yields the other block's encoding, and one read serves both blocks' receipts. A
+carrier costs one encode, what the honest prover pays a write, so binding doesn't price it. So a block written after
+the seed is credited only once the share of the store its writers can program is bounded (the stacking campaign,
+note:20261017T0723Z-draft-stacking-model); until then no plan holds one, and the credited store is the registration's,
+whose payloads no writer chose after the seed. \(d_j\) is the payload leaf's \(x_j\), so the
 leaf hashes the payload once for both (34 compressions), and \(b_j\) is one SHA-512 output, 2 compressions. The prover
 keeps \(d_j\), or \(b_j\) in its place, beside the block: 64 bytes a 4 KiB block, 1.6%. Blocks under the seed's key are
 unchanged, byte for byte. The bound key is `kv.py`'s
@@ -683,9 +690,11 @@ and each window's, from it plus the node's capacities.
   the plan committed, its distinctness and each opening's \(j = \text{plan}[p]\) proved, only \(L\) public (the draws
   need it).
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
-  its encoding the way it binds the weights' and filler's. Its bound key does (§3): its encoding costs an encode
-  whatever its writer picks, and its payload is bound only by integrity, sampled proofs proving it is the model's
-  actual computation. Only bound blocks may be registered after the seed. The reference registers a fixed store, every
+  its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
+  but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that
+  can learn the key can compute another registered block's encoding as that payload. So a KV page is credited only
+  once the share its writers can program is bounded (§3); until then it stays out of every plan. Only bound blocks may
+  be registered after the seed. The reference registers a fixed store, every
   block under the seed's key. Appending pages needs their payload roots committed before the passes that read them,
   fresh store indices, each page encoded under its bound key with \(d_j\) kept beside it, and an opening of one that
   carries \(d_j\), its payload leaf's \(x_j\), which check 3 decodes under. Until then, a block being rewritten stays
