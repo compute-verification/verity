@@ -364,8 +364,10 @@ follows these rules:
 Each device also has a data-sheet vector, `DS-NN` (note:20261017T1818Z-draft-axioms): its `DS_*` rows, which a vendor
 document states, at their exact values, and no measured or joint row. They are `DS_issue` (every kind 1 SMSP-cycle,
 uniform included), `DS_tensor` (each MMA form's MACs over the data sheet's dense peak for its type), the pipe rows of
-the Programming Guide's throughput table on Nsight Compute's pipes, and `DS_smem` (128 B a SM-clock). `eps --vector
+the Programming Guide's throughput table on Nsight Compute's pipes, and `DS_smem` (one request of 128 B a SM-clock for
+each shared-memory instruction, whatever its width, since a broadcast load reads as little as one word). `eps --vector
 DS-NN` prices a design on the axioms alone. The current vector is the measured one, and every row is some vector's.
+sm_120's is `DS-120`, an epoch of its own after VF whose lines close where they open, so it moves no other vector.
 
 The L40S (`data/devices/sm_89/`, note:20261017T0605Z-draft-eps1-ada) prices Dither-1S, Dither-2S and Dither-C at L = 16
 (IMMA.16816, where T1 is tight) and at L = 32 (IMMA.16832, half the tensor pipe's words), on ADA's measured honest step:
