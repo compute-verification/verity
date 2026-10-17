@@ -11,7 +11,8 @@ from verity_machine_model import eps as E
 from verity_machine_model.cli import main
 from verity_machine_model.model import census, model, vector
 
-PI = E.machine()
+PIN = "VF3l-16"                    # the vector these hand-checked numbers were read on, whatever is current
+PI = E.machine(PIN)
 H = E.honest("dither-duo-l32")
 M = E.honest("e-l7qs")
 JI = PI.c["MMA"]["JI3e_0"]          # a MMA's SMSP-cycles on the joint issue row that binds honest
@@ -259,7 +260,7 @@ def test_the_table_route_is_bound_by_L2():
 
 
 def test_designs_read_what_exists():
-    c = census(model(), vector(model().current).epoch)
+    c = census(model(), vector(PIN).epoch)
     for n in E.designs():
         d = E.design(n)
         assert d.name == n and d.honest in E.profiles() and d.floor and "SPEC" in d.floor_source
@@ -274,39 +275,41 @@ def test_designs_read_what_exists():
 
 
 def test_cli(capsys):
-    assert main(["eps"]) == 0
+    assert main(["eps", "--vector", PIN]) == 0
     out = capsys.readouterr().out
     assert out.startswith("dither-duo: ") and "binding JI3e_0" in out and "ε_machine  11.171%" in out
     assert "q* threshold (ε_machine = its floor): none ≤ 64; lanes alone 2.029" in out and "ε_sched    14.121%" in out
-    assert main(["eps", "dither-two-sided", "--upfill", "--operands", "floor", "--credit", "floor", "--json"]) == 0
+    assert main(["eps", "--vector", PIN, "dither-two-sided", "--upfill", "--operands", "floor", "--credit", "floor",
+                 "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["credit"] == "floor" and d["terms"]["machine"] == 0 and d["terms"]["sched"] is None
     assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["total"] < 0.002
-    assert main(["eps", "dither-two-sided", "--upfill", "--q", "4", "--json"]) == 0
+    assert main(["eps", "--vector", PIN, "dither-two-sided", "--upfill", "--q", "4", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-two-sided+up" and d["operands"] == "free"
     assert d["terms"]["machine"] == pytest.approx(d["floor"]) and d["threshold"] == pytest.approx(2.029, abs=1e-3)
     assert len(d["curve"]) == 32 and d["curve"][0][0] == 0.5 and d["curve"][-1][0] == 16
     assert d["curve_uniform"][7] == pytest.approx([4, d["terms"]["machine"]])   # q*_U = q* = 4
-    assert main(["eps", "--q-uniform", "32", "--json"]) == 0
+    assert main(["eps", "--vector", PIN, "--q-uniform", "32", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-duo@qu32"
     assert d["floor"] < d["terms"]["machine"] < E.eps(E.design("dither-duo"), PI, 8).machine_eps
-    assert main(["eps", "dither-two-sided", "--upfill", "--operands", "honest", "--json"]) == 0
+    assert main(["eps", "--vector", PIN, "dither-two-sided", "--upfill", "--operands", "honest", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     base = PI.load(M.base())["JI3e_0"]   # honest's MMA and its other issue a MMA, the fold aside
     assert d["terms"]["machine"] == 0 and d["threshold_lanes"] == pytest.approx(base / 4, abs=1e-5)
     assert d["threshold"] >= d["threshold_lanes"] - 1e-6
-    assert main(["eps", "--upfill", "--credit", "floor", "--q", "2.16", "--lookups", "--lookup-q", "1.906",
-                 "--json"]) == 0
+    assert main(["eps", "--vector", PIN, "--upfill", "--credit", "floor", "--q", "2.16", "--lookups", "--lookup-q",
+                 "1.906", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["lookups"]["q"] == 1.906 and d["cheat"]["words"]["table"] > 0 and "L2" in d["cheat"]["binding"]
     with pytest.raises(SystemExit):
-        main(["eps", "--l2", "1e12"])
-    assert main(["eps", "--credit", "floor", "--uni-issue", "0.92", "--json"]) == 0
+        main(["eps", "--vector", PIN, "--l2", "1e12"])
+    assert main(["eps", "--vector", PIN, "--credit", "floor", "--uni-issue", "0.92", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["vector"] == "VF3l-16 (UNI on issue at 0.92)" and d["threshold"] == pytest.approx(2.029, abs=1e-3)
-    assert main(["eps", "--table", "dither-duo", "--fold-sweep", "1.5,3", "--operands", "floor", "--q", "2.16"]) == 0
+    assert main(["eps", "--vector", PIN, "--table", "dither-duo", "--fold-sweep", "1.5,3", "--operands", "floor", "--q",
+                 "2.16"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("Π VF3l-16, operands floor")
     assert lines[1].split()[-6:-3] == ["ε@2", "ε@2.16", "ε@8"]
