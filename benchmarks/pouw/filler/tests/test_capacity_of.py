@@ -64,6 +64,24 @@ def test_dfill_reads_split_and_co_alike():
     assert slow["sigma"] < co["sigma"]
 
 
+def fstep(pump_share=0.58, fused_ms=7.0, fused0_ms=7.0):
+    """an fstep co line at B 1: the pump at `pump_share` of the whole GPU's tensor peak beside the flin step"""
+    cap = 1024 * 188 * GHZ
+    return {"mode": "fstep", "place": "co", "B": 1, "L": 2048, "M": 32, "step_sms": 188, "fill_sms": 188, "mhz": 2092.0,
+            "pump": {"share": pump_share, "alone_share": 0.57, "rec_bad": 0}, "fill_share_lin": 0.0, "fill_share_att": 0.0,
+            "step_share_fused": 8.04e9 / (fused_ms * 1e-3) / cap, "slowdown": fused_ms / 6.0, "fused_ms": fused_ms,
+            "fused0_ms": fused0_ms, "fused0_vs_base": fused0_ms / 6.0, "lin": {"rec_bad": 0}, "att": {"rec_bad": 0},
+            "out_mismatches": 0, "lm_mismatches": 0}
+
+
+def test_fstep_reads_as_dfill_co():
+    (f,) = CO.fstep_rows(PI, [fstep()])
+    (d,) = CO.dfill_rows(PI, [dfill("co")])
+    assert f["sigma"] == pytest.approx(d["sigma"])
+    assert f["sigma_run_clock"] == pytest.approx(d["sigma_run_clock"])
+    assert f["co_cost"] == 1.0 and f["rec_bad"] == 0 and f["out_bad"] == 0
+
+
 def test_cli_reads_lfill_lines(tmp_path, capsys):
     p = tmp_path / "lfill.jsonl"
     p.write_text("\n".join(json.dumps(r) for r in (rec(), rec(pf_lane=8, lane_rate=0.5))) + "\n")

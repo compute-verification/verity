@@ -8,11 +8,13 @@ lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f
 With --lfill it reads dcap's lfill lines instead (capfill_fold_probe.sh): each one's window beside the pump alone and
 beside the pump and the lane filler (lines from a -DPF_LANE build, retired after r20261017-072934-dd50, carry its lane
 instructions a pump MMA as pf_lane). With --dfill, dcap's dfill lines (capfill_co_probe.sh): the step beside the pump on a
-split, or co-scheduled on every SM.
+split, or co-scheduled on every SM. With --fstep, dcap's fstep lines (capfill_fstep_probe.sh): the step through flin
+beside the pump, co-scheduled on every SM.
 
   python3 benchmarks/pouw/filler/capacity_of.py RUN_OUT_DIR [--fold duo] [--lane-per-mma X] [--served-fold none] [--json]
   python3 benchmarks/pouw/filler/capacity_of.py --lfill LFILL_JSONL [--fold duo] [--json]
   python3 benchmarks/pouw/filler/capacity_of.py --dfill DFILL_JSONL [--fold duo] [--json]
+  python3 benchmarks/pouw/filler/capacity_of.py --fstep FSTEP_JSONL [--fold duo] [--json]
 """
 from __future__ import annotations
 
@@ -105,11 +107,36 @@ def dfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
     return rows
 
 
+def fstep_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
+    """dcap fstep lines: the step through flin and dcap's attention beside the pump, on a split or co-scheduled on every
+    SM (place co), its filler warps' MMAs (if any) with the pump's. Shares in a line are of the whole GPU's tensor peak at
+    its run clock, so at `mhz` they scale by run clock / mhz."""
+    rows = []
+    for r in recs:
+        def at(mhz):
+            k = r["mhz"] / mhz
+            fill = (r["pump"]["share"] + r["fill_share_lin"] + r["fill_share_att"]) * k
+            srv = r["step_share_fused"] * k
+            return C.window(pi, [(1.0, C.tensor_filler(fill, fold) + C.served(srv, served_fold))])
+
+        top = at(F_MAX_MHZ)
+        rows.append({"B": r["B"], "L": r["L"], "place": r.get("place", "split"), "build": r.get("build"), "M": r["M"],
+                     "pad_kb": r.get("pad_kb"), "fill_sms": r["fill_sms"], "slowdown": r["slowdown"],
+                     "co_cost": r["fused_ms"] / r["fused0_ms"], "fused0_vs_base": r["fused0_vs_base"],
+                     "pump_share": r["pump"]["share"], "pump_alone": r["pump"]["alone_share"], "mhz": r["mhz"],
+                     "sigma": top.sigma(), "sigma_run_clock": at(r["mhz"]).sigma(), "tensor": top.tensor(),
+                     "binding": list(top.pooled.binding),
+                     "rec_bad": r["pump"]["rec_bad"] + r["lin"]["rec_bad"] + r["att"]["rec_bad"],
+                     "out_bad": r["out_mismatches"] + r["lm_mismatches"]})
+    return rows
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="capacity_of.py", description=__doc__.split("\n")[0])
     ap.add_argument("out", type=Path, nargs="?", help="a scored run's arm dir (its score.json)")
     ap.add_argument("--lfill", type=Path, help="dcap lfill lines (capfill_probe.sh's lfill.jsonl)")
     ap.add_argument("--dfill", type=Path, help="dcap dfill lines, split or co (capfill_co_probe.sh's co.jsonl)")
+    ap.add_argument("--fstep", type=Path, help="dcap fstep lines (capfill_fstep_probe.sh's fstep.jsonl)")
     ap.add_argument("--fold", default="duo")
     ap.add_argument("--served-fold", default="none")
     ap.add_argument("--lane-per-mma", type=float, default=0.0, help="lane-chain warp instructions a filler MMA")
@@ -117,6 +144,19 @@ def main(argv=None) -> int:
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     pi = E.machine(a.vector)
+    if a.fstep:
+        recs = [json.loads(s) for s in a.fstep.read_text().splitlines() if s.startswith("{")]
+        rows = fstep_rows(pi, recs, a.fold, a.served_fold)
+        if a.json:
+            print(json.dumps({"vector": pi.vector, "f_max_mhz": F_MAX_MHZ, "fold": a.fold, "rows": rows}, indent=1))
+            return 0
+        for r in rows:
+            print(f"  B {r['B']:3d} L {r['L']:5d} {r['place']:5s} {r['build'] or '':4s} M {r['M']:3d}  slowdown "
+                  f"{r['slowdown']:.3f} (flin alone {r['fused0_vs_base']:.3f}, pump's cost {r['co_cost']:.3f})  pump "
+                  f"{r['pump_share']:.3f} (alone {r['pump_alone']:.3f})  σ {r['sigma']:.3f} at f_max "
+                  f"({r['sigma_run_clock']:.3f} at {r['mhz']:.0f} MHz)  bind {','.join(r['binding'])}  bad {r['rec_bad']} "
+                  f"out {r['out_bad']}")
+        return 0
     if a.dfill:
         recs = [json.loads(s) for s in a.dfill.read_text().splitlines() if s.startswith("{")]
         rows = dfill_rows(pi, recs, a.fold, a.served_fold)
