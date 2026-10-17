@@ -20,16 +20,21 @@ many reads of a node's registered blocks the node made in each window, from rece
    default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`), each of its
    block alone, or under a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it
    commits them in a tree bound to the plan and sends the root and the plan, whole or as its change from the previous
-   pass's (`Plan.changed`), as soon as the pass ends (`Session.receive`).  The chain runs across the session's windows: a window's first
+   pass's (`Plan.changed`), with the step it covers, as soon as the pass ends (`Session.receive`).  A pass covers one
+   step `s` of the served circuit's execution (the engine step), and its plan is the blocks the circuit reads at `s`:
+   the steps are public, and strictly increase over the session's passes.  The chain runs across the session's windows: a window's first
    pass follows the root of the previous window's last.  On a boundary message the prover finishes the pass in flight,
    which is its window's last, and starts the next window's chain.  Blocks written after the codec seed (KV pages)
    join the store mid-session: their payloads committed (`append_tree`, `Session.append`) before any pass whose plan
    holds them, at fresh store indices from N up, each encoded under its bound key (`codec.encode(..., bound=True)`);
-   and a block released (`Session.release`) is in no later plan.
+   a block released (`Session.release`) is in no later plan; and an appended block is in no plan of a window L or more
+   after the window it joined (`Params.lifetime`): one kept longer is released and appended again, under a fresh index
+   and so a fresh bound key.
 5. Deadline.  Window t's roots must all arrive by `D_t = b_t + A`, where `b_t` is the verifier's clock when it sent the
    boundary message and `A` the allowance (`Params.deadline_ns`: the message's trip down, the pass in flight, its root's
-   reduction and its trip up, `timing.deadline`).  A late root, one out of order, or a plan that repeats a block rejects
-   the session.  A window with fewer than `min_passes` roots is rejected.
+   reduction and its trip up, `timing.deadline`).  A late root, one out of order, one with no step or a step not above
+   the previous pass's, a plan that repeats a block, or one that holds an appended block past L rejects the session.
+   A window with fewer than `min_passes` roots is rejected.
 6. Openings.  Once window t's roots are final (the next window's first root has arrived, or `D_t` has passed), the
    challenger releases the window's openings coin, and the verifier draws `s = samples` distinct receipts uniformly from
    the window's `U_t = Σ_i L_i` with it (`Session.close`).  The prover opens each (`Prover.open`): the block, its receipt
@@ -42,13 +47,16 @@ many reads of a node's registered blocks the node made in each window, from rece
    PoUW's tile check (`Tiles.recompute`); the receipt recomputed from the block (and `z`) under the registration's
    kind (under sketch-sha512, the block's sketch from the pass's signs first).  A window is accepted only if every opening checks,
    and a rejected window ends its session.
-8. The record (`Session.record`): per window each pass's length, its challenge's release and its deadline on the
+8. The record (`Session.record`): per window each pass's length and step, its challenge's release and its deadline on the
    verifier's clock, its openings coin's release, and an `IntegrityProfile` over its receipts with `Subset(s)` drawn;
    `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
    pooled over the session's horizon (`pooled`, `floors`).  It credits a receipt of a block appended after the seed
    only on the property's verdict on the circuits that wrote it (`credit_post_seed`, I2's), and then charges what
-   their carriers may hold (μ_carrier); without one, those receipts are certified but not credited.
+   their carriers may hold (μ_carrier); without one, those receipts are certified but not credited.  On the served
+   circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
+   the census's layout rule), each pass's credit is its receipts at the link's D bits each, at most the circuit's reads
+   at its step (`Ledger.linked`); without one the credit is the node's reads of its store.
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
 The verifier's clock is injected (`clock`, nanoseconds, `time.monotonic_ns` by default).  Openings are checked in the
@@ -93,8 +101,15 @@ WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
 DELTA = 2.0 ** -40
 
-FAILURES = ("late", "order", "plan", "append", "release", "few", "malformed", "receipt-path", "codec", "payload-path",
-            "tile", "receipt")
+FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "release", "few", "malformed", "receipt-path",
+            "codec", "payload-path", "tile", "receipt")
+STEP_LIMIT = 1 << 64
+"""A step is an integer below this, memory-map/v1's."""
+LIFETIME = 60
+"""L, the lifetime cap, in windows: a block appended after the codec seed is in no plan of a window L or more after the
+window it joined (the window of the first root received after its append), so it leaves the credited store within L
+windows unless the prover appends it again, which gives it a fresh index and so a fresh bound key.  60 windows is an
+hour at the stated window."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,9 +117,9 @@ class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
     deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at 2^-40 by default, 555 a second of the
     stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
-    boundary message leaves sooner after its window's challenge), and the store's codec, receipt kind, whether its
+    boundary message leaves sooner after its window's challenge), the store's codec, receipt kind, whether its
     receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
-    registration's."""
+    registration's, and the lifetime cap L on an appended block, in windows (`LIFETIME`)."""
 
     blocks: int
     deadline_ns: int
@@ -118,9 +133,10 @@ class Params:
     bind: bool = False
     layout: str = receipts.LAYOUT
     rows: int | None = None
+    lifetime: int = LIFETIME
 
     def __post_init__(self) -> None:
-        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns"):
+        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"{name} is a positive integer")
         if not 0 < self.delta < 1:
@@ -455,8 +471,9 @@ class Verdict:
 class WindowRecord:
     """What an accepted window established: chained passes of `lengths` reads of distinct registered blocks each, made
     after its challenge left at `released_ns` and committed by `deadline_ns` on the verifier's clock; its openings coin
-    released at `opened_ns`; the openings' law (`profile`); and of each pass's reads, `post_seed` of blocks appended
-    after the codec seed (none if empty), which the ledger credits only on the property's verdict."""
+    released at `opened_ns`; the openings' law (`profile`); of each pass's reads, `post_seed` of blocks appended
+    after the codec seed (none if empty), which the ledger credits only on the property's verdict; and the step each
+    pass covers, `steps`, strictly increasing (empty in a record no session made, such as `timing.stated`'s model)."""
 
     window: int
     lengths: tuple[int, ...]
@@ -465,6 +482,7 @@ class WindowRecord:
     opened_ns: int
     profile: IntegrityProfile
     post_seed: tuple[int, ...] = ()
+    steps: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if self.post_seed == ():
@@ -472,6 +490,11 @@ class WindowRecord:
         if len(self.post_seed) != len(self.lengths) or any(
                 type(a) is not int or not 0 <= a <= n for a, n in zip(self.post_seed, self.lengths)):
             raise ValueError("a window's post-seed reads are a count of each pass's, at most its length")
+        if self.steps != () and (
+                len(self.steps) != len(self.lengths)
+                or any(type(s) is not int or not 0 <= s < STEP_LIMIT for s in self.steps)
+                or any(a >= b for a, b in zip(self.steps, self.steps[1:]))):
+            raise ValueError("a window's steps are each pass's, strictly increasing integers from 0 below 2^64")
 
     @property
     def passes(self) -> int:
@@ -495,7 +518,7 @@ class WindowRecord:
     def to_json(self) -> dict:
         return {"deadline_ns": self.deadline_ns, "lengths": list(self.lengths), "opened_ns": self.opened_ns,
                 "post_seed": list(self.post_seed), "profile": self.profile.to_json(), "released_ns": self.released_ns,
-                "span_ns": self.span_ns, "window": self.window}
+                "span_ns": self.span_ns, "steps": list(self.steps), "window": self.window}
 
 
 @dataclass(frozen=True, slots=True)
@@ -503,8 +526,9 @@ class Record:
     """An accepted session: its registration, its coin commitment's root, its store's `blocks`, every window's record,
     and the receipt kind the registration names, whether its receipts bind z, its codec, its block layout and its sketch
     rows (its digest binds all five; the record repeats them, since what a receipt rests on depends on the kind, `bind`
-    and the rows, μ_rebuild on the codec, and which bytes a credited block is on the layout), and the blocks the
-    session appended after the codec seed and released.  `public` is what acceptance makes public;
+    and the rows, μ_rebuild on the codec, and which bytes a credited block is on the layout), the blocks the
+    session appended after the codec seed and released, and the lifetime cap it held them to (`Params.lifetime`, None
+    in a record no session made).  `public` is what acceptance makes public;
     `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`)."""
 
@@ -520,6 +544,7 @@ class Record:
     rows: int = receipts.SKETCH_ROWS
     appended: int = 0
     released: int = 0
+    lifetime: int | None = None
 
     @property
     def start_ns(self) -> int:
@@ -546,7 +571,7 @@ class Record:
     def public(self) -> dict:
         return {"appended": self.appended, "bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks,
                 "codec": self.codec.name, "codec_params": self.codec.to_json(), "coins": self.coins.hex(),
-                "layout": self.layout, "passes": [w.passes for w in self.windows],
+                "layout": self.layout, "lifetime": self.lifetime, "passes": [w.passes for w in self.windows],
                 "post_seed": [sum(w.post_seed) for w in self.windows], "protocol": PROTOCOL_ID,
                 "receipt": self.receipt, "receipts": [w.receipts for w in self.windows],
                 "registration": self.registration.hex(), "released": self.released, "rows": self.rows,
@@ -567,6 +592,7 @@ class _Window:
     roots: list[bytes] = field(default_factory=list)
     plans: list[Plan] = field(default_factory=list)
     post: list[int] = field(default_factory=list)
+    steps: list[int] = field(default_factory=list)
     boundary_ns: int | None = None
     final: bool = False
     draws: tuple[tuple[int, int], ...] | None = None
@@ -606,8 +632,10 @@ class Session:
         self.extent = registration.blocks
         self.released = 0
         self._appends: list[tuple[int, CommitmentDomain, Commitment]] = []
+        self._joined: list[int] = []
         self._gone: list[tuple[int, int]] = []
         self._plan = Plan.whole(registration.blocks)
+        self._step = -1
 
     @property
     def commitment(self) -> coins.CoinCommitment:
@@ -660,8 +688,10 @@ class Session:
 
     def append(self, root: bytes, count: int) -> int | Verdict:
         """The root of an append's payload tree (`append_tree`), `count` blocks written after the codec seed: they take
-        the store's next fresh indices, from the one returned, and a plan received after this may hold them.  Its
-        rejection, `append`, if it is malformed or would take the store past its codec's `max_blocks`."""
+        the store's next fresh indices, from the one returned, and a plan received after this may hold them, until the
+        lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
+        more after it may hold them.  Its rejection, `append`, if it is malformed or would take the store past its
+        codec's `max_blocks`."""
         self._live()
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
                 or self.extent + count > self.params.codec.max_blocks):
@@ -695,13 +725,24 @@ class Session:
         r = bisect.bisect_right(self._gone, (first, math.inf))
         return (r > 0 and self._gone[r - 1][1] > first) or (r < len(self._gone) and self._gone[r][0] < first + count)
 
+    def _stale_below(self, t: int) -> int:
+        """The store index below which every appended block joined a window `Params.lifetime` or more before `t`:
+        appends join windows in index order, so the stale ones are a prefix of them."""
+        k = bisect.bisect_right(self._joined, t - self.params.lifetime)
+        return self._appends[k][0] if k < len(self._appends) else self.extent
+
     def receive(self, t: int, i: int, root: bytes, runs: Sequence[tuple[int, int]] | None = None, *,
-                change: tuple[Sequence[tuple[int, int]], Sequence[tuple[int, int]]] | None = None) -> Verdict | None:
-        """Root `i` of window `t` and its pass's plan as the prover sends it, as they arrive: `runs` (None: the
-        registered store in order; a numpy array of rows (first, count): `Plan.from_array`), or `change`, the blocks
-        (added, removed) from the session's previous pass's plan (`Plan.changed`; before its first pass, the registered
-        store).  A plan is over the store's blocks so far, registered and appended, and holds none released.  Returns
-        the rejection they cause, if any."""
+                change: tuple[Sequence[tuple[int, int]], Sequence[tuple[int, int]]] | None = None,
+                step: int | None = None) -> Verdict | None:
+        """Root `i` of window `t`, its pass's plan as the prover sends it, and the step it covers, as they arrive: `runs`
+        (None: the registered store in order; a numpy array of rows (first, count): `Plan.from_array`), or `change`,
+        the blocks (added, removed) from the session's previous pass's plan (`Plan.changed`; before its first pass, the
+        registered store).  A plan is over the store's blocks so far, registered and appended, and holds none released;
+        its rejection, `lifetime`, if it holds an appended block that joined a window `Params.lifetime` or more before
+        `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
+        is to be the blocks the circuit reads at it, which the plan's proof unit checks against the prover's memory map
+        (`PROTOCOL.md` §8); its rejection, `step`, if it is missing or not above.  Returns the rejection they cause, if
+        any."""
         self._live()
         if not self.windows:
             raise SessionError("the session has not started")
@@ -716,6 +757,8 @@ class Session:
         d = self.deadline(t)
         if d is not None and now > d:
             return self._fail(t, "late")
+        if type(step) is not int or not self._step < step < STEP_LIMIT:
+            return self._fail(t, "step")
         N, extent = self.params.blocks, self.extent
         try:
             if change is not None:
@@ -730,10 +773,14 @@ class Session:
             return self._fail(t, "plan")
         if self._gone and any(self._released(f, c) for f, c in plan.runs):
             return self._fail(t, "plan")
+        self._joined.extend([t] * (len(self._appends) - len(self._joined)))
+        if (below := self._stale_below(t)) > N and any(f < below and f + c > N for f, c in plan.runs):
+            return self._fail(t, "lifetime")
         self.windows[t].roots.append(root)
         self.windows[t].plans.append(plan)
         self.windows[t].post.append(0 if extent == N else sum(max(0, f + c - max(f, N)) for f, c in plan.runs))
-        self._plan = plan
+        self.windows[t].steps.append(step)
+        self._plan, self._step = plan, step
         return None
 
     def close(self, t: int) -> tuple[tuple[int, int], ...] | Verdict:
@@ -835,16 +882,19 @@ class Session:
             lengths = tuple(plan.length for plan in w.plans)
             profile = IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(len(w.draws))},
                                        self.params.delta, drawn={"receipt": len(w.draws)})
-            out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post)))
+            out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post),
+                                    tuple(w.steps)))
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
-                      self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released)
+                      self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
+                      self.params.lifetime)
 
 
 LEDGER_SOURCES = {
     "timing": "the record: the span its passes don't cover at the node's capacity (the round trip and the pass in "
               "flight at the span's ends, the chaining gaps, blocks a plan leaves out), the session's or a window's own "
-              "[b_(t−1), D_t]",
+              "[b_(t−1), D_t]; on a requirement link, each pass's credit is its receipts at D bits each, at most the "
+              "circuit's reads at its step",
     "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
               "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, `pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
@@ -871,6 +921,25 @@ class PostSeedVerdict(Protocol):
     def holds(self) -> bool: ...
 
     def carrier_bytes(self, read_bytes: int) -> float: ...
+
+
+class RequirementLink(Protocol):
+    """The served circuit's requirement, linked to a session's passes (A1's `Accounting.Requirement`), as `ledger`
+    reads it: whether the link `holds`; `density_bits`, D, the fewest bits of the circuit's values that any block a
+    plan holds carries; and `read_bits(step)`, the bits the circuit reads at a step (`requirement.Requirement.read_bits`
+    in `verity.ml.circuits`).  It holds once the proof units have shown, for every pass, that its plan holds only
+    blocks the circuit reads at the pass's step (`PlanMatches`; the plan unit, I4's), each carrying at least D of its
+    values' bits (`Packs` under the census's layout rule), and that every free in the memory map, of a registered
+    block or a written one, is at its values' last read (the memory-map unit, I4's).  Those checks are theirs; the
+    ledger takes the link as given."""
+
+    @property
+    def holds(self) -> bool: ...
+
+    @property
+    def density_bits(self) -> int: ...
+
+    def read_bits(self, step: int) -> int: ...
 
 
 class _Terms:
@@ -921,7 +990,9 @@ class Ledger(_Terms):
     both ways: `sample`, each window's openings bounding its own wrong receipts at δ, and `horizon`, the session's
     openings pooled over its windows at one δ (`pooled`).  `floor` is the most of any window's receipts the pooled
     event leaves wrong.  `windows` are the same terms over each window's own span, and `worst` and `worst_horizon`
-    the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's."""
+    the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's.
+    `linked`: whether the credit is the served circuit's (capped at its reads, on a `RequirementLink`); without a link
+    the credited bytes are the node's reads of its store, not shown to be reads the circuit makes."""
 
     timing: float
     sample: float
@@ -934,6 +1005,7 @@ class Ledger(_Terms):
     horizon: float
     floor: float
     windows: tuple[WindowLedger, ...]
+    linked: bool = False
 
     @property
     def worst(self) -> WindowLedger:
@@ -945,7 +1017,7 @@ class Ledger(_Terms):
 
     def to_json(self) -> dict:
         w, h = self.worst, self.worst_horizon
-        return {**self._json(), "windows": [x.to_json() for x in self.windows],
+        return {**self._json(), "linked": self.linked, "windows": [x.to_json() for x in self.windows],
                 "worst": {"gamma": w.gamma, "horizon": {"gamma": h.gamma_horizon, "window": h.window},
                           "window": w.window}}
 
@@ -1019,7 +1091,7 @@ def named_bits(k: int, queries_log2: int = QUERIES_LOG2) -> int:
 def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: Rebuild, host: float = 0.0,
            link: float = 0.0, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2,
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound,
-           credit_post_seed: PostSeedVerdict | None = None) -> Ledger:
+           credit_post_seed: PostSeedVerdict | None = None, requirement: RequirementLink | None = None) -> Ledger:
     """γ's terms for an accepted session on a node of `capacity_bytes_per_s` (HBM plus host DRAM) and `chip_bytes` of
     on-chip storage: the read bytes the record credits are at least `(1 − γ)·capacity·span`, except with probability
     `windows · delta`, and at least `(1 − γ_horizon)·capacity·span` except with `delta` (each plus 2^-slack_log2 a
@@ -1035,9 +1107,23 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
     `credit_post_seed`, the property's verdict on the circuits that wrote them (I2's; None credits none, and a verdict
     that fails is refused).  Crediting them charges μ_carrier, each pass the least of the verdict's carrier bytes and
-    its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt."""
+    its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
+    On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold), a
+    pass's credit is its credited receipts at D bits each, at most the bits the circuit reads at the pass's step, so
+    the credit is the circuit's reads (`Ledger.linked`); `sample` still charges a whole block for a wrong receipt."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
+    density = 8 * record.block_bytes
+    if requirement is not None:
+        if requirement.holds is not True:
+            raise ValueError("a requirement link whose proofs don't hold caps nothing: pass None, and the credit is "
+                             "the node's reads of its store, not the circuit's")
+        density = requirement.density_bits
+        if type(density) is not int or not 1 <= density <= 8 * record.block_bytes:
+            raise ValueError(f"a link's density is a whole number of bits from 1 to a block's {8 * record.block_bytes}")
+        if any(len(w.steps) != w.passes for w in record.windows):
+            raise ValueError("a requirement link reads each pass's step, and this record's passes name none: link a "
+                             "session's own record")
     if capacity_bytes_per_s <= 0 or chip_bytes < 0:
         raise ValueError("the capacity is positive and the chip's storage nonnegative")
     if type(rebuild) is not Rebuild:
@@ -1066,20 +1152,30 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
             raise ValueError("a verdict's carrier bytes are a finite nonnegative number")
         return sum(min(c, a * b) for a in w.post_seed)
 
-    windows, carriers = [], [carried(w) for w in record.windows]
-    for w, f, e, cb in zip(record.windows, floors(record), wrong_receipts, carriers):
+    def credited_bytes(w: WindowRecord) -> float:
+        if requirement is None:
+            return sum(w.credited(credit)) * b
+        out = 0
+        for n, s in zip(w.credited(credit), w.steps):
+            r = requirement.read_bits(s)
+            if type(r) is not int or r < 0:
+                raise ValueError(f"the bits the circuit reads at step {s} are a nonnegative integer")
+            out += min(n * density, r)
+        return out / 8
+
+    windows, carriers, credits = [], [carried(w) for w in record.windows], [credited_bytes(w) for w in record.windows]
+    for w, f, e, cb, cr in zip(record.windows, floors(record), wrong_receipts, carriers, credits):
         whole_t, reads_t = capacity_bytes_per_s * w.span_ns / 1e9, w.receipts * b
         if reads_t > whole_t:
             raise ValueError(f"window {w.window} certifies {reads_t} bytes read, more than the capacity allows in its "
                              "span: the capacity is understated")
         windows.append(WindowLedger(
-            w.window, w.span_ns, timing=1 - sum(w.credited(credit)) * b / whole_t, sample=e * b / whole_t,
+            w.window, w.span_ns, timing=1 - cr / whole_t, sample=e * b / whole_t,
             chip=w.passes * chip_bytes / whole_t, counting=sum(named[k] for k in w.lengths) / 8 / whole_t,
             rebuild=mu_rebuild, host=host, link=link, carrier=cb / whole_t, horizon=f * reads_t / whole_t, floor=f))
     horizon, floor = pooled(record)
     lam_bits = sum(named[k] for w in record.windows for k in w.lengths)
-    credited = sum(sum(w.credited(credit)) for w in record.windows) * b
-    return Ledger(timing=1 - credited / whole, sample=sum(wrong_receipts) * b / whole,
+    return Ledger(timing=1 - sum(credits) / whole, sample=sum(wrong_receipts) * b / whole,
                   chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=mu_rebuild, host=host,
                   link=link, carrier=sum(carriers) / whole, horizon=horizon * b / whole, floor=floor,
-                  windows=tuple(windows))
+                  windows=tuple(windows), linked=requirement is not None)

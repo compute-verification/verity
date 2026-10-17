@@ -9,9 +9,11 @@ One connection serves one registration and then `--sessions` sessions over it, e
    calibration (pass times, the gap, its measured read rate);
 2. the round trip, measured by pings;
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
-   and gaps and of the measured round trip (`--quantile`), and `--jitter-ms`; the coin commitment sent first, then
+   and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
+   (`--lifetime`, windows, sent with the session so the prover re-keys in time); the coin commitment sent first, then
    σ_0, a boundary message every window, each root fed to `Session.receive` stamped with the time its last byte was
-   read, each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
+   read (with the appends and releases its message carries first, its plan as a change when it carries one, and the
+   step its pass covers: `Verifier.root`), each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
    verdict as `Session.verify`'s) or by `Session.verify` on a thread of the verifier's, so a window's checks run while
    the next window's passes arrive; once every window is accepted the record (`Session.record`) and its γ terms
@@ -101,8 +103,8 @@ class RealClock:
 
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
-                 jitter_ns: int, clock=None, log=print, checks=None) -> None:
-        self.conn, self.source, self.W, self.T = conn, source, windows, window_ns
+                 jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME) -> None:
+        self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.checks = checks
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
         self.clock = clock or RealClock()
@@ -182,11 +184,12 @@ class Verifier:
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None) -> dict:
         W, reg = self.W, self.registration
         params = audit.Params(reg.blocks, allowance_ns, W, self.samples, self.delta, window_ns=self.T, codec=reg.codec,
-                              receipt=reg.receipt, rows=reg.rows)
+                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime)
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         challenger = coins.Challenger(reg.digest, k, params.coins)
         session = audit.Session(params, reg, None, challenger, clock=self._now, not_before_ns=not_before_ns)
-        self.conn.send({"type": "session", "k": k, "windows": W, "commitment": session.commitment.to_json()})
+        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
+                        "commitment": session.commitment.to_json()})
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -245,9 +248,12 @@ class Verifier:
                 t, i = head["t"], head["i"]
                 self._stamp = stamp
                 try:
-                    v = session.receive(t, i, bytes.fromhex(head["root"]))
+                    v = self.root(session, head)
                 except audit.SessionError:
                     failure = failed()
+                    break
+                except (TypeError, ValueError, KeyError):
+                    failure = {"t": t, "failure": "malformed", "at": None}
                     break
                 finally:
                     self._stamp = None
@@ -320,6 +326,7 @@ class Verifier:
         out = {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": self.samples, "delta": self.delta, "window_ns": self.T, "windows": W,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
+               "appended": session.extent - reg.blocks, "released": session.released,
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
                "verify_latency_ns": {t: v.get("checked_ns") for t, v in sorted(verdicts.items())},
                "check_workers": self.checks.workers if self.checks else 0,
@@ -337,6 +344,23 @@ class Verifier:
             out["end_ns"] = record.end_ns
             out["ledger"] = self.ledgers(record, arrivals)
         return out
+
+    @staticmethod
+    def root(session: audit.Session, head: dict) -> audit.Verdict | None:
+        """A root's message to the session in the order the prover sends it: its appends (`Session.append`), then the
+        blocks it releases (`Session.release`), then the root with its plan, a change from the last plan if it carries
+        one and the registered store otherwise, and its step (`Session.receive`).  The first rejection, if any."""
+        for root, count in head.get("appends", ()):
+            got = session.append(bytes.fromhex(root), count)
+            if isinstance(got, audit.Verdict):
+                return got
+        if head.get("released") and (v := session.release([tuple(r) for r in head["released"]])) is not None:
+            return v
+        change = head.get("change")
+        if change is not None:
+            added, removed = change
+            change = ([tuple(r) for r in added], [tuple(r) for r in removed])
+        return session.receive(head["t"], head["i"], bytes.fromhex(head["root"]), change=change, step=head.get("step"))
 
     def ledgers(self, record: audit.Record, arrivals: list[list[int]] = ()) -> dict:
         """γ against the node's R at spec and measured (`timing.SPEC_BYTES_PER_S`, `timing.READ_BYTES_PER_S`: every
@@ -361,7 +385,9 @@ class Verifier:
                           "chip_bytes": timing.CHIP_BYTES, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
-                          "reads_bytes": record.receipts * record.block_bytes}}
+                          "reads_bytes": record.receipts * record.block_bytes,
+                          "post_seed_receipts": sum(sum(w.post_seed) for w in record.windows),
+                          "post_seed_credited": False}}
         tiers = cal.get("read_tiers")
         spacings = sorted(b - a for arr in arrivals for a, b in zip(arr, arr[1:]))
         parts = None
@@ -400,6 +426,8 @@ def main() -> int:
     ap.add_argument("--delta-log2", type=float, default=-40.0)
     ap.add_argument("--jitter-ms", type=float, default=2.0)
     ap.add_argument("--sessions", type=int, default=1)
+    ap.add_argument("--lifetime", type=int, default=audit.LIFETIME,
+                    help="L: windows an appended block may stay in plans after the window it joined")
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--check-workers", type=int, default=len(os.sched_getaffinity(0)) - 1,
                     help="processes checking openings (0: one thread of the verifier's own)")
@@ -416,7 +444,7 @@ def main() -> int:
     conn = wire.Conn(sock)
     v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
-                 log=lambda m: print(m, flush=True), checks=checks)
+                 log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime)
     c0 = time.process_time_ns()
     reg, cal = v.register()
     print(f"verifier: registered {reg.blocks} blocks, digest {reg.digest.hex()[:16]}, calibration {json.dumps(cal)}",
@@ -437,9 +465,11 @@ def main() -> int:
         r = v.session(k, allowance, not_before)
         results.append(r)
         not_before = r.get("end_ns", v.clock.now())
-        lg = r.get("ledger", {}).get("spec", {})
+        lg, pub = r.get("ledger", {}).get("spec", {}), r.get("record", {}).get("public", {})
         print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
-              f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')}", flush=True)
+              f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')} "
+              f"appended={r['appended']} released={r['released']} post_seed={pub.get('post_seed')}",
+              flush=True)
         record()
     conn.send({"type": "bye"})
     if checks:

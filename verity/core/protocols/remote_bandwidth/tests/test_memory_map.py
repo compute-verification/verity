@@ -59,7 +59,7 @@ def test_replay_turns_each_step_into_appends_releases_and_plan_changes() -> None
     assert [r.holds(s) for s in (0, 7, N, 100)] == [0, 7, None, None]
     c0 = r.apply(serving(head)[0])
     assert (c0.first, c0.count, c0.released) == (N, 3, ((4, 2),))
-    assert r.take() == (((N, 3),), ((4, 2),))
+    assert r.take(1) == (((N, 3),), ((4, 2),))
     c3 = r.apply(serving(head)[1])
     assert (c3.first, c3.count, c3.released) == (N + 3, 2, ((6, 1), (N, 1), (N + 2, 1)))
     assert [r.holds(s) for s in (4, 5, 6, 7, 100)] == [N + 4, N + 1, N + 3, 7, None]
@@ -67,8 +67,8 @@ def test_replay_turns_each_step_into_appends_releases_and_plan_changes() -> None
     assert (c5.first, c5.count, c5.released) == (N + 5, 1, ((N + 1, 1),))
     c6 = r.apply(serving(head)[3])
     assert (c6.first, c6.count, c6.released, c6.append_tree(bytes(64), [])) == (N + 6, 0, ((N + 5, 1),), None)
-    assert r.take() == (((N + 3, 2),), ((6, 1), (N, 3)))
-    assert r.take() == ((), ()) and r.extent == N + 6
+    assert r.take(7) == (((N + 3, 2),), ((6, 1), (N, 3)))
+    assert r.take(8) == ((), ()) and r.extent == N + 6
     assert [r.holds(s) for s in (4, 5, 6, 7, 100, 101)] == [N + 4, None, N + 3, 7, None, None]
     tree = c3.append_tree(bytes(64), salts(b"s", 2))
     assert tree.commitment.root == audit.append_tree(bytes(64), N + 3, c3.digests, salts(b"s", 2)).commitment.root
@@ -77,13 +77,14 @@ def test_replay_turns_each_step_into_appends_releases_and_plan_changes() -> None
 def test_a_session_driven_by_a_memory_map_is_accepted() -> None:
     """The map drives both sides: the prover appends each step's pages (their digests the map's, at its indices) and
     sends the append's root and the released runs; the verifier takes them (`Session.append`, `Session.release`), and
-    each pass's plan travels as `Replay.take`'s change.  Every receipt is drawn and every window accepted."""
+    each pass's plan travels as `Replay.take`'s change for the step it names, the one after the step just applied.
+    Every receipt is drawn and every window accepted, and the record keeps each pass's step."""
     st = store()
     head = Header(st.registration.digest, N)
     run = Run(st)
     replay = Replay(head, st.registration)
     steps = serving(head)
-    assert run.run() is None
+    assert run.run(change=replay.take(0), step=0) is None
     for k, s in enumerate(steps):
         change = replay.apply(s)
         if change.count:
@@ -92,7 +93,7 @@ def test_a_session_driven_by_a_memory_map_is_accepted() -> None:
             assert run.s.append(a.root, a.count) == change.first
         if change.released:
             assert run.s.release(change.released) is None
-        assert run.run(change=replay.take()) is None
+        assert run.run(change=replay.take(s.step + 1), step=s.step + 1) is None
         if k == 1:
             run.boundary()
     run.boundary()
@@ -100,7 +101,46 @@ def test_a_session_driven_by_a_memory_map_is_accepted() -> None:
     rec = run.s.record()
     assert [w.lengths for w in rec.windows] == [(8, 9, 8), (8, 7)]
     assert [w.post_seed for w in rec.windows] == [(0, 3, 3), (3, 2)]
+    assert [w.steps for w in rec.windows] == [(0, 1, 4), (6, 7)]
+    assert rec.profile()["windows"][1]["steps"] == [6, 7]
     assert (rec.appended, rec.released) == (6, 7)
+
+
+def test_a_registered_block_freed_at_its_values_last_read_leaves_every_later_plan() -> None:
+    """A free of a slot below N releases its registered block: the writer records it at the step that reads the
+    block's values for the last time (a weight only some steps read), so no later pass holds it and none credits it.
+    The verifier takes the release, and a plan that still holds the block is refused (`plan`)."""
+    st = store()
+    replay, run = Replay(Header(st.registration.digest, N), st.registration), Run(st)
+    assert run.run(change=replay.take(0), step=0) is None
+    change = replay.apply(Step(0, (2,), ()))
+    assert (change.count, change.released, replay.holds(2)) == (0, ((2, 1),), None)
+    assert run.s.release(change.released) is None
+    assert replay.take(1) == ((), ((2, 1),))
+    assert run.run(change=((), ((2, 1),)), step=1) is None
+    assert run.plan.runs == ((0, 2), (3, 5))
+    assert run.s.receive(0, 2, bytes(64), change=(((2, 1),), ()), step=2).failure == "plan"
+
+
+def test_a_pass_covers_the_blocks_resident_at_its_step() -> None:
+    """A step's record takes effect after the step's reads: the pass at step 3 holds what steps 0 … 2 left, step 3's
+    own frees and writes are the next pass's, and a pass whose step is not after every step applied, or after the
+    last pass's, is refused, as is a record of a step before a pass already taken."""
+    head = Header(bytes(64), N)
+    r = Replay(head)
+    steps = serving(head)
+    r.apply(steps[0])
+    assert r.take(3) == (((N, 3),), ((4, 2),))
+    r.apply(steps[1])
+    for bad in (3, 2, -1, True, audit.STEP_LIMIT):
+        with pytest.raises(MemoryMapError, match="take it before applying"):
+            r.take(bad)
+    assert r.take(4) == (((N + 3, 2),), ((6, 1), (N, 1), (N + 2, 1)))
+    r = Replay(head)
+    assert r.take(2) == ((), ())
+    with pytest.raises(MemoryMapError, match="apply each step's record before the pass after it"):
+        r.apply(steps[0])
+    assert r.apply(Step(2, (), ())).step == 2
 
 
 @pytest.mark.parametrize("steps, match", [

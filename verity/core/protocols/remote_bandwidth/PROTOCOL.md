@@ -312,11 +312,15 @@ root_(t,i)  frame-v3-sha512, CommitmentDomain(SHA512("verity/remote-bandwidth/re
 seed, and the seed exists only once the root before it does. The pass index stays in the seed, so two passes never
 share one even if their previous roots collide.
 
-The prover sends each root with its pass's plan as the pass ends (`Session.receive`), the plan whole or as its change
-from the session's previous pass's plan (`Plan.changed`: the blocks it adds and removes, the result in store order;
-before the first pass, the registered store's). A root out of turn rejects with `order`: a window's roots come in
-index order, and a window's first root makes the window before it final. A plan that breaks its format, or a change
-that removes a block its plan doesn't hold or adds one it does, rejects with `plan`.
+The prover sends each root with its pass's plan and its step as the pass ends (`Session.receive`), the plan whole or
+as its change from the session's previous pass's plan (`Plan.changed`: the blocks it adds and removes, the result in
+store order; before the first pass, the registered store's). A pass covers one step \(s\) of the served circuit's
+execution, the engine step, and its plan is the blocks the circuit reads at \(s\) (§8, "The pass and its step"). The
+step is public, an integer below \(2^{64}\), and the steps strictly increase over the session's passes, across its
+windows, so no two passes cover one step. A root out of turn rejects with `order`: a window's roots come in index
+order, and a window's first root makes the window before it final. A root with no step, or with a step not above the
+previous pass's, rejects with `step`. A plan that breaks its format, or a change that removes a block its plan doesn't
+hold or adds one it does, rejects with `plan`.
 
 **Appends and releases.** Blocks written after the codec seed (KV pages) join the store mid-session. The prover commits
 their payloads in an append tree (`append_tree`: the payload tree's leaves, \(x_j = d_j\), in a frame-v3-sha512 domain
@@ -331,6 +335,15 @@ codec's `max_blocks` rejects with `append`, and a release of a block outside the
 `release`. Appends are a session's: the next session over the store starts again from \(N\) (§8). A late append
 buys nothing: a block whose payload is chosen after a pass's seed still costs an encode for any receipt of it, which
 \(\mu_{\text{rebuild}}\) prices, and its root still precedes the root of the pass that reads it.
+
+**The lifetime cap.** \(L\) here is the lifetime cap of §1's carrier term, not a pass's length \(L_{t,i}\). An
+appended block joins the window of the next root received after its append, and no plan of a window \(L\) or more
+after that one may hold it (`Params.lifetime`, `LIFETIME`: 60 windows, an hour at the stated window). A plan that does
+rejects with `lifetime`. So every post-seed block leaves the credited store within \(L\) windows, and the stacked
+stock the carrier term charges is the input rate times \(L\) (§1, §8). A block the prover keeps longer, a prefix
+cache's for instance, is re-keyed: released, and its payload appended again at the store's next fresh index, which
+gives it a fresh bound key (§3), so its encoding is computed anew. The record names \(L\) (`lifetime`), and the remote
+session sends it with the session, so the prover re-keys in time.
 
 **Fiat–Shamir, and what grinding buys.** A seed after the first depends on the prover's own root, so the prover can
 grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path and no read. A
@@ -662,14 +675,15 @@ opening.
 commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z\), the codec's name and parameters
 (`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), the block layout, the sketch's rows
 (`rows`), each window's passes and receipts \(U_t\) and how many of them are of blocks appended after the seed
-(`post_seed`), the blocks the session appended and released (`appended`, `released`), and the session's span. The
+(`post_seed`), the blocks the session appended and released (`appended`, `released`), the lifetime cap \(L\) it held
+the appended blocks to (`lifetime`, §4), and the session's span. The
 digest binds the kind, `bind`, the
 codec, the layout and the rows already, but the record names them as well: what its receipts rest on depends on the
 kind, `bind` and the rows (§4), and `ledger` takes a link term only from a record that binds \(z\);
 \(\mu_{\text{rebuild}}\) is priced from the record's codec (§1, §3), and `ledger` refuses a rebuild model of any
 other; and the layout says which bytes a credited block is (§4). Each
-`WindowRecord` carries its passes' lengths \(L_{t,i}\) and their post-seed reads \(a_{t,i}\) (`post_seed`, which
-`ledger` credits only on a verdict, §1), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so
+`WindowRecord` carries its passes' lengths \(L_{t,i}\), their post-seed reads \(a_{t,i}\) (`post_seed`, which
+`ledger` credits only on a verdict, §1) and their steps (`steps`, strictly increasing, §4), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so
 its span \(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`. That is every input of
 \(\gamma_t\) but the node's measured \(R\) and \(S_{\text{chip}}\) and the models, so the every-window claim is
 checkable from the record (§1). `Record.end_ns` is the last deadline, which the next session over the store waits
@@ -722,6 +736,47 @@ and each window's, from it plus the node's capacities.
   batch's shape and context lengths over time, not their contents. Hiding them goes with the zero-knowledge openings:
   the plan committed, its distinctness and each opening's \(j = \text{plan}[p]\) proved, only \(L\) public (the draws
   need it).
+- **The pass and its step.** A pass covers one step \(s\) of the served circuit's execution, which it names with its
+  root (§4; for vLLM, the engine step its Store backend tags each pass with). The step is the requirement's (the Lean
+  module `Definitions.Accounting.Requirement` in `Security/`), and the pass's plan is to be the
+  blocks the circuit reads at \(s\), `readBlocks s` (`PlanMatches`). For a store that holds only what the circuit
+  keeps live, that is the store resident when \(s\) begins (`Store.resident s`, under `StoreMatches`): the blocks
+  registered or written at a step before \(s\), less those freed or overwritten at one. So a step's memory-map record
+  takes effect after the step's reads: its writes are of values the step produced, and its frees are of blocks whose
+  values the step read last. A writer therefore records a free at the step of its values' last read, not at the next
+  write's. The prover's audit side gives each pass its plan's change at its step (`Replay.take(s)`). It refuses a pass
+  at a step whose record it has applied, or before the last pass's, and a record of a step before the last pass's
+  (`memory_map.py`). The step is public structure, and the map and the plan are witness. Because the steps strictly
+  increase, a step has at most one pass, so its reads are credited at most once; a step with no pass is credited
+  nothing. Open:
+  - *The plan's check.* That a pass's plan is the circuit's reads at its step, block for block, is the plan's proof
+    unit's to check, inside zero knowledge, against the prover's memory map and the circuit's requirement (I4). The
+    verifier here checks only that each pass names a step above the last.
+  - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
+    pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
+    on one clock would.
+- **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
+  circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three
+  of its gaps are on the audit's side. `ledger` takes the link as `requirement`, a `RequirementLink`: whether its
+  proofs hold, the density \(D\) and the circuit's read bits at each step. On it, a pass's credit is its credited
+  receipts at \(D\) bits each, at most the circuit's read bits at the pass's step, and the ledger says it is linked
+  (`Ledger.linked`); without it, the credit is the store's, flagged as such. The checks behind the link belong to the
+  units named below, and the ledger takes them as given.
+  - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
+    gather's unselected rows, requests absent from the step's batch, unrouted experts. Their receipts are capped at
+    the circuit's reads at the pass's step (`read_bits`, `requirement.Requirement.read_bits`). That each receipted
+    block is one the circuit reads at that step (`plan = readBlocks s`, so a block of an unread row is in no plan)
+    is the plan unit's to prove (I4), against the memory map and the requirement, inside zero knowledge.
+  - *Partly filled blocks.* A block holding fewer than \(B\) bits of the circuit's values (a request's last block,
+    values of different lifetimes sharing a block) would overstate the credit by \(B/D\) if it counted whole. On the
+    link, a receipt counts \(D\) bits, the fewest any planned block carries. \(D\) is the census's to prove from its
+    layout rule (`Packs`), and \(D = B\) is the rule "full blocks only". The sampling term still charges a whole
+    block for a wrong receipt.
+  - *Registered blocks past their last read.* memory-map/v1 frees a registered block like a written one: a free of a
+    slot below \(N\) releases it, and no later plan may hold it (`Session.release`). The writer records the free at
+    the step that reads the block's values for the last time. That each free is at its values' last read is the
+    memory-map unit's to prove (I4). Until it does, a dense decoder's weights, which every step reads, need no free,
+    and the census must show it.
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
   its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
   but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that
@@ -732,8 +787,10 @@ and each window's, from it plus the node's capacities.
   key with \(d_j\) kept beside it, an opening of one carrying \(d_j\), which check 3 decodes under, and releases that
   keep a block out of every later plan. Open:
   - *The verdict's binding.* `ledger` takes the verdict as given (`PostSeedVerdict`: whether it holds, and its carrier
-    bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, that their
-    payloads are those circuits' values (sampled proofs), and that no page outlives \(L\) are I2's and I4's to check.
+    bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, and that
+    their payloads are those circuits' values (sampled proofs), are I2's and I4's to check. That no appended block is
+    credited past \(L\) the session checks itself (§4, `lifetime`); that the verdict was computed at the record's
+    \(L\) is the verdict's to say.
   - *Appends across sessions.* A session's appends end with it, and the next session starts again from \(N\), so a
     page that outlives its session is appended again in the next, its encoding recomputed under its new index.
     Carrying appends over needs the next session to take the previous one's append roots and releases as its
@@ -741,10 +798,13 @@ and each window's, from it plus the node's capacities.
   - *The device side.* A KV page's index is the store's next fresh one, not \(\text{slot} \cdot \text{LAYERS} +
     \text{layer}\): serving records each block it completes, with its slot, the index it gave it and its \(d_j\), and
     each slot it frees, step by step (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its
-    slot held), and the prover's audit side turns the record into appends, releases and plan changes (`Replay`). The record is the prover's: \(d_j\) is witness, and the
-    verifier sees only the append roots, the releases and the plans. A KV block under the seed's
-    key, as `kv.cu` and vLLM's encoded store (whose `Codec` is keyed by the store index alone) encode them today, is
-    not to be credited: its writer may have picked its encoding, and then its receipts need no read.
+    slot held, and vLLM's `kv_free` is a free, recorded at its values' last read, so the store's filler plan leaves the
+    released blocks out), and the prover's audit side turns the record into appends, releases and plan changes (`Replay`). The record is the prover's: \(d_j\) is witness, and the
+    verifier sees only the append roots, the releases and the plans; `benchmarks/remote_session` carries them over
+    the wire, each root's message its appends, then its releases, then its plan as a change, and the pass's step. A KV block under the
+    seed's key, as vLLM's encoded store (whose `Codec` is keyed by the store index alone) encodes them today, is not
+    to be credited: its writer may have picked its encoding, and then its receipts need no read. `kv.cu` and
+    `paged.cu` take the bound key as a per-block offset, which serving does not pass yet.
 - **Multi-GPU trees.** Each GPU's blocks should be an aligned power-of-two range of leaves, so that a pass's root is
   its GPUs' subtree roots combined. That keeps \(g\) to an all-gather, a few hashes and the next seed's broadcast.
 - **Sketch receipts** (a ±1 projection hashed, `RateAuditSketch`) are the stated receipt, sketch-sha512 (§4). Three
