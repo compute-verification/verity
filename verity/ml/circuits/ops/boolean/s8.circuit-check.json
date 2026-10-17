@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "S32ByteCarry_v2": {
+   "and": 31
+  },
+  "S32ClampRest_v2": {
+   "and": 57
+  },
+  "S32ClampS8_v2": {
+   "and": 59
+  },
+  "S32LowByte_v2": {
+   "and": 0
+  }
+ }
+}

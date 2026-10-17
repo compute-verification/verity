@@ -11,6 +11,7 @@ from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
 from verity.ml.circuits.silicon.integer import (
     BLACKWELL_SM120_S8_M16N8K32,
     BLACKWELL_SM120_S8_M16N8K32_WRAP,
+    BLACKWELL_SM120_U8S8_M16N8K32,
     S32_MAX,
     S32_MIN,
     s32_value,
@@ -19,7 +20,7 @@ from verity.ml.circuits.silicon.integer import (
 from verity.ml.circuits.silicon.models import MODELS, tc_dot_chain
 from verity.ml.circuits.silicon.term import term_value
 
-SAT, WRAP = BLACKWELL_SM120_S8_M16N8K32, BLACKWELL_SM120_S8_M16N8K32_WRAP
+SAT, WRAP, U8S8 = BLACKWELL_SM120_S8_M16N8K32, BLACKWELL_SM120_S8_M16N8K32_WRAP, BLACKWELL_SM120_U8S8_M16N8K32
 
 # Run r20261015-071801-6d3c (the library-kernel probe's edge case): every entry of A is 127 and every entry of B is
 # sign * 127, zero incoming accumulator, the device word of one output: (k, sign) -> s32 value.
@@ -95,6 +96,22 @@ def test_registry_entry() -> None:
     assert ins.dossier == "art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474"
     assert "HYPOTHESIS" not in SAT.validated and "HYPOTHESIS" not in WRAP.validated
     assert MODELS[SAT.name] is SAT and MODELS[WRAP.name] is WRAP
+
+
+def test_u8s8_sibling_wraps_the_exact_dot() -> None:
+    """`BlackwellU8S8ImmaDot32_v1` is the u8 x s8 form of the same instruction without ``.satfinite``: the exact sum modulo 2^32."""
+    from verity.ml.circuits.ops import prims as P
+
+    assert (U8S8.dtype, U8S8.b_dtype, U8S8.satfinite) == ("u8", "s8", False) and MODELS[U8S8.name] is U8S8
+    assert "r20261015-084000-06d8" in U8S8.validated and "u8.s8" in U8S8.validated
+    rng = random.Random(5)
+    cases = [([255] * 32, [127] * 32, S32_MAX), ([255] * 32, [-128] * 32, S32_MIN), ([0] * 32, [0] * 32, -1)]
+    cases += [([rng.randrange(256) for _ in range(32)], [rng.randrange(-128, 128) for _ in range(32)],
+               rng.randrange(S32_MIN, S32_MAX + 1)) for _ in range(300)]
+    for a, b, c in cases:
+        exact = c + sum(x * y for x, y in zip(a, b))
+        d = P.BlackwellU8S8ImmaDot32.evaluate(s32_word(c), *a, *[code(y) for y in b])
+        assert d == U8S8.step(s32_word(c), a, [code(y) for y in b]) == exact & 0xFFFFFFFF
 
 
 def test_refuses_words_outside_the_formats() -> None:
