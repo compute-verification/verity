@@ -210,7 +210,9 @@ that the live event implies bounds the mixture, the third bound's form (`PlainTh
 deployed plain verifier holds from a live prover for each prover that simulates its accepting runs, whose self-clashes
 give its accepting runs with a collision and whose fork bound holds, the record's draw verbatim and `Extendθ`
 (`PlainSimW`: `FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
-`FlockDeploy.KS.plainLiveWrPAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). Where `verify --zk` sets its session up at a
+`FlockDeploy.KS.plainLiveWrPAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). Two different columns an accepted plain run's
+reps open at one position collide in its own log (`ConflictTied`: `FlockDeploy.KS.plainRawCols`,
+`FlockDeploy.KS.plain_opening_raw`, `FlockDeploy.KS.plain_selfClash_tied`). Where `verify --zk` sets its session up at a
 draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`,
 `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`,
 `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's draw to the statement's only up to key order,
