@@ -466,10 +466,16 @@ def test_large_mla_absorb_is_bound_before_its_composite_transpose(served):
     assert rep.provenance["weight_roles"]["weight"]["role"] == "mla.absorb"
 
 
-def test_large_mla_absorb_refuses_when_the_bmm_intermediate_escapes(served):
+def test_large_mla_absorb_is_not_fused_when_the_bmm_intermediate_escapes(served):
+    """The escaping bmm output is a value of its own, so the chain is not one absorb: the bmm binds alone and the transpose, past the
+    Explicit limit, reads its rows whole."""
     rep = _large_absorb(escape_bmm=True)
-    assert rep.program is None and rep.unsupported.reason == "unsupported_view"
-    assert "permute (1, 0, 2) of 131072 leaves over a composite reference sequence has no O(1) form" in rep.unsupported.hint
+    assert rep.program is not None, rep.unsupported
+    assert "MlaAbsorbTranspose[vllm-dsa]_v1" not in [a["rule"] for a in rep.provenance["applications"]]
+    q = _bf16(np.random.default_rng(5), 256, 16, 33)
+    out = np.array(_run(rep, _LargeMlaAbsorb(True), (q,)))
+    z, y = out[:256 * 16 * 8].reshape(256, 16, 8), out[256 * 16 * 8:].reshape(16, 256, 8)
+    assert (z == y.transpose(1, 0, 2)).all()
 
 
 def test_default_sparse_mla_uses_each_tokens_launched_split_count(served):

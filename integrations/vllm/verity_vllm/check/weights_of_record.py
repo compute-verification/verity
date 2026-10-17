@@ -41,6 +41,7 @@ import os
 import re
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -124,7 +125,7 @@ def to_served(arr: np.ndarray, src_dtype: str, bits: int) -> tuple[np.ndarray, s
             return (arr.view(np.uint16).astype(np.uint32) << 16), "bf16->f32 (exact)"
         if src_dtype in ("F16", "F64"):
             return arr.astype(np.float32).view(np.uint32), f"{src_dtype}->f32"
-    if bits == 8 and src_dtype in ("F8_E4M3", "F8_E5M2", "I8", "U8", "BOOL"):
+    if bits == 8 and src_dtype in ("F8_E4M3", "F8_E5M2", "F8_E8M0", "I8", "U8", "BOOL"):
         return arr.view(np.uint8), None
     if bits == 64 and src_dtype in ("I64", "F64"):
         return arr.view(np.uint64), None
@@ -286,6 +287,14 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
     if list(out.shape) != list(shape):
         raise ValueError(f"{name}: composed shape {list(out.shape)} != Program shape {shape}")
     return np.ascontiguousarray(out), note
+
+
+def rank_composer(*, checkpoint_dir: str, checkpoints_manifest: str | None = None, model: str | None = None, world: int = 1,
+                  rank: int = 0) -> Callable[[str, list[int], int], np.ndarray]:
+    """`compose` at a TP rank over the checkpoint at `checkpoint_dir`: (served name, shape, bits) -> raw words.  Its shards are not hashed
+    again here: the rank's weights pin checks them."""
+    ck = CheckpointIndex(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, verify_shards=False)
+    return lambda name, shape, bits: compose(name, shape, bits, ck, world=world, rank=rank)[0]
 
 
 def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], int]]:

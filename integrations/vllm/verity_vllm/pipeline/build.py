@@ -500,6 +500,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `vm.retie_lm_head_as_the_loader_does`)
             res["lm_head_tying"] = vm.retie_lm_head_as_the_loader_does(model, cfg)
             res["mla_absorbed_weights"] = vm.mla_absorbed_weights_as_the_loader_does(model, cfg)
+            res["fp8_block_weights"] = vm.fp8_block_weights_as_the_loader_does(model)
+            res["post_load_tensors"] = vm.post_load_tensors_as_the_loader_does(model)
             if tp > 1:
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
@@ -541,6 +543,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 probe = vm.probe_collectives(mod, inputs, cfg, ntok, bus, profile=target)
                 res["tp"]["collectives"] = {"n": len(probe), "by_kind": _count([p["kind"] for p in probe]),
                                             "by_shape": _count([f'{p["kind"]}{tuple(p["shape"])}' for p in probe]), "record": probe}
+                if bus.schedule_record:      # the align calls' keys, the `schedule` input before the peers (`CollectiveBus.schedule_key`)
+                    res["tp"]["schedule"] = {"calls": len(bus.schedule_record), "pairs": sum(r["pairs"] for r in bus.schedule_record),
+                                             "record": list(bus.schedule_record)}
                 mod, inputs = vm.with_peers(mod, inputs, bus)
             applied_export: dict = {}
             ep = vm.export_module(mod, inputs, cfg, ntok, intercept_triton=intercept, launch_log=log, profile=target, applied_out=applied_export)
