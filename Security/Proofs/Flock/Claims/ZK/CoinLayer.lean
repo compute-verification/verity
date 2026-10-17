@@ -273,7 +273,7 @@ structure TableData where
 
 attribute [instance] TableData.finTape TableData.neTape
 
-instance : DecidableEq FlockDeploy.Coin := inferInstanceAs (DecidableEq (Fin 65536 → Flock.F128))
+instance instDecidableEqCoin : DecidableEq FlockDeploy.Coin := inferInstanceAs (DecidableEq (Fin 65536 → Flock.F128))
 
 /-- **The reference session at the deployed coin layer**, rep rounds of `nr` coins, at the tables `T`. -/
 def session (nr : Msg → ℕ → ℕ) (T : TableData) : RefSession where
