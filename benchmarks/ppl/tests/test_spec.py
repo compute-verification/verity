@@ -19,6 +19,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
             "adopted-bd": ("all", "int8-all", True), "adopted-bd-lm": ("all", "int8-all", True),
             "co": ("all", "int8-all", True), "ncp": ("all", "int8-all", True),
             "cb": ("all", "int8-all", True), "co32c": ("all", "int8-all", True)}
+    for side in ("lin-act", "lin-w", "qk-q", "qk-k"):
+        want[f"side-{side}"] = ("all", "int8-all", True)
     for g in ("fp4c", "fp4", "int5"):
         for m in ("dither", "round"):
             want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
@@ -89,6 +91,23 @@ def test_lm_head_takes_only_the_steps_that_name_it():
     for bad in ('step = "smooth"\nalpha = 0.5', 'step = "int8"\nlayers = [0]', 'step = "int8"\ngptq = true'):
         with pytest.raises(ValueError, match="lm_head takes steps without calibration or layers"):
             parse(f'[[linear]]\n{bad}\nlinears = ["lm_head"]')
+
+
+def test_side_arms_round_one_operand_of_adopted_bd_lm():
+    lm = spec.load("adopted-bd-lm")
+    int8 = lambda steps: [s.kw for s in steps if s.defn.name == "int8"]  # noqa: E731
+    for name, act, weight in (("side-lin-act", "dither", "round"), ("side-lin-w", "round", "dither")):
+        a = spec.load(name)
+        assert a.attention == lm.attention
+        assert [(s.defn.name, s.linears) for s in a.linear] == [(s.defn.name, s.linears) for s in lm.linear]
+        assert [(kw["act"], kw["weight"], kw["weight_top"]) for kw in int8(a.linear)] == [(act, weight, 127)] * 2
+    for name, q, k in (("side-qk-q", "dither", "round"), ("side-qk-k", "round", "dither")):
+        a = spec.load(name)
+        assert a.linear == lm.linear
+        assert [s.defn.name for s in a.attention] == [s.defn.name for s in lm.attention]
+        (kw,) = int8(a.attention)
+        assert (kw["q"], kw["k"], kw["v"], kw["q_top"], kw["k_top"]) == (q, k, "dither", 127, 127)
+        assert {**kw, "q": "dither", "k": "dither"} == int8(lm.attention)[0]
 
 
 def test_co_and_ncp_serve_seven_bit_sides():

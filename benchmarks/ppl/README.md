@@ -140,6 +140,8 @@ SKIP's designs (note:20261017T0340Z-draft-skip): `adopted-qkd` (Q Kᵀ dithered 
 `adopted-bd` (the linears too), `adopted-bd-lm` (and lm_head), `co` (CO-Dither's served values at r = k/2: 7-bit
 sides plus fresh bits), `co32c` (CHECKED-STRIP's: 7-bit weights and 8-bit activations on the linears, `co`'s
 attention), `ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention).
+One-sided dither against `adopted-bd-lm`'s both-sided: `side-lin-act` and `side-lin-w` round the linears' and
+lm_head's weights, or their activations, on ±127; `side-qk-q` and `side-qk-k` round K, or Q, in Q Kᵀ.
 Any other file passes as a path.
 
 ## Adding an intervention
