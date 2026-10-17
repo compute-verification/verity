@@ -84,13 +84,14 @@ def ksR (Coin : Type) : Recursion.Deploy Coin where
   Tape := Unit
   P _ := silentP
 
-/-- A recursion statement in scope: an inner table at `m = 22`, `k_log = 6`, one region and four claims, and a RecSparse
-phase at `NU = 1`, `ℓ = 6`. -/
+/-- A recursion statement in scope: a dense inner table at `m = 22`, `k_log = 6`, one region and four claims, with no
+RecSparse phase and no V* session. -/
 def recStmt : Recursion.Stmt where
   inner := []
-  innerDims := (22, 6, 1)
+  innerDims := none
   circ := none
-  form := ⟨22, 6, 1, 4, false, some (1, 6, 0, 0), some (max 22 (1 + pLog 6), 2), true⟩
+  form := ⟨22, 6, 1, 4, false, none, none, false⟩
+  draws := []
 
 /-- The toy record of `Complete` and `Nontrivial`: the compiled verifier rejects, and every statement parses as
 `recStmt`. -/
@@ -128,10 +129,8 @@ carries: `Sim`'s inner round. -/
 def zeroP (Coin : Type) : Prover ((Fin 1 → Fin 1 → UInt8) × Unit) :=
   ⟨fun _ _ ω => (zvR Coin none).zeroCommit (ω.1 0)⟩
 
-theorem recStmt_inScope : Recursion.InScope recStmt := by
-  have hp : pLog 6 ≤ 14 := by unfold pLog; have := Nat.log_le_self 2 (2 * 6 + 1); omega
-  refine ⟨rfl, rfl, rfl, le_rfl, by decide, le_rfl, rfl, rfl, 1, 6, 0, rfl, le_rfl, le_rfl, le_rfl, rfl, ?_⟩
-  omega
+theorem recStmt_inScope : Recursion.InScope recStmt :=
+  ⟨rfl, le_rfl, by decide, le_rfl, rfl, Or.inl ⟨rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
 
 /-! ## `ksR`'s extraction and numbers -/
 

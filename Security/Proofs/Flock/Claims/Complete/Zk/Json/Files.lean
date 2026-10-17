@@ -5,8 +5,8 @@ import Proofs.Flock.Claims.Complete.Files
 # The honest masked run's proof files
 
 `Files.lean` at the masked run: the rep goals on the masked proof files, `RepDecodesZk`, `RepParamsZk`, `PadsRoot` and
-`CapCommittedZk`, and `FinalFitsZk` but for the record's length, at every honest masked run, under the masked record
-goals' hypotheses (`JsonSpec`, `Out64`, `StmtOkZk`, `ProverOkZk`) and one more:
+`CapCommittedZk`, and `FinalFitsZk` (the record's length from `readyZk`, `RunZk.recordFits`), at every honest masked
+run, under the masked record goals' hypotheses (`JsonSpec`, `Out64`, `StmtOkZk`, `ProverOkZk`) and one more:
 
 * `RepShapedZk`: each masked proof a rep returns, on the case's trace, its masked level-0 commitment under the case's
   tape, the table's extra claims at the link's points, and the tape's pads committed, is `Shaped` at the shape the
@@ -204,11 +204,6 @@ def RepShapedZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
       (c.ω.extra 0) (c.ω.lanePad 0) (c.ω.salt 0 rep) (c.ω.nonce 0 rep)).run (Transcript.init #[] d)) fun pt =>
       FlockSoundness.Discharge.ZkView.Shaped (shapeZk (Setup.ofCircuit st) v.1 e.size) pt.1
 
-/-- **The printed honest masked record is under `2^64` bytes**: `RunZk.json`'s `compress` of the honest record
-object. -/
-def RecordFitsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ o : RunZk H rel, o.record.toUTF8.size < 2 ^ 64
-
 /-- **Each rep's decoded masked proof is the honest one**: at the run's one table, with `--zk` schedule `v` and masked
 level-0 commitment `cm`, the record's `root_B` is `cm`'s cap, two proof files, each under `2^64` bytes, and each rep's
 file decodes at the masked verifier's shape to a proof with `cm`'s cap, the table's PCS parameters, and the root of its
@@ -371,11 +366,12 @@ theorem capCommittedZk_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel)
   rw [bne, bytes_beq_self]
   rfl
 
-/-- **The last message's lengths fit their words**: the goal `FinalFitsZk`, given the printed record's length. -/
+/-- **The last message's lengths fit their words**: the goal `FinalFitsZk`, the printed record's length from `readyZk`
+(`RunZk.recordFits`). -/
 theorem finalFitsZk_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : ProverOkZk H rel)
-    (hR : RepShapedZk H rel) (hF : RecordFitsZk H rel) : FinalFitsZk H rel := by
+    (hR : RepShapedZk H rel) : FinalFitsZk H rel := by
   intro o
   obtain ⟨st, v, cm, -, -, -, hsz, hb, -⟩ := RunZk.rep S h64 hS hP hR o
-  exact ⟨hF o, by omega, hb⟩
+  exact ⟨o.recordFits, by omega, hb⟩
 
 end FlockComplete.JsonRT
