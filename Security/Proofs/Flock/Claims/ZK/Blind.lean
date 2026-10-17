@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.ZK.Server
 # Zero knowledge at the reference session, at any values pad-blind workers supply
 
 `Switched` has Lemmas A, B and C at the switched prover: the honest prover at the workers' values where their rows hold,
-else the honest prover on moved pads. Here that prover is defined at the reference session, it meets `Claims.Flock.ZK`
+else the honest prover on moved pads. Here that prover is defined at the reference session, it meets `Claims.Flock.ZKAt`
 with the honest prover's simulator, and the server that runs pad-blind workers is bounded by it:
 
 * `RefSession.SwVals`: the values the workers supply, each table's at each statement, witness, nonce and coin vector:
@@ -18,10 +18,10 @@ with the honest prover's simulator, and the server that runs pad-blind workers i
 * `RefSession.swPS_shvzk`: its `SHVZK` against `refP`'s simulator, from `TCoinModel.shvzk_sw` at `refP`'s models
   typed at `swP` (`toSw`, `swCoinModel_eq`); Lemma C before the last coin is `swPreModel`'s. Both rest on `Complete`,
   `DummyReg`, `Causal`, `TapeOK`, `Tables` and `SwCausal vs`, the switched round encoding's causality.
-  **`Flock.zk_deployZk_sw`**: `Claims.Flock.ZK` at `swP vs`'s prover with `Flock.zk_deployZk_ref`'s simulator, `ε_zk`
+  **`Flock.zk_deployZk_sw`**: `Claims.Flock.ZKAt` at `swP vs`'s prover with `Flock.zkAt_deployZk_ref`'s simulator, `ε_zk`
   and `γ`: one simulator for every `vs`.
 * `RefSession.honestVals`, each table's own values: `swP_vals` (`swP` there is `refP`) and `swCausal_vals` (`Causal`
-  gives `SwCausal` there), so `Flock.zk_deployZk_ref_of_sw` recovers `Flock.zk_deployZk_ref` from `zk_deployZk_sw`.
+  gives `SwCausal` there), so `Flock.zkAt_deployZk_ref_of_sw` recovers `Flock.zkAt_deployZk_ref` from `zk_deployZk_sw`.
 * **`Flock.zk_server_blind`**: for every pad-blind worker and any values `vs` whose round encoding is causal, the server
   whose frame at the worker's values is `swP vs`'s message where the run is live (`RefLive` at `withHonest`, `srcOf`)
   releases, on every event, at most `D.V.k x + 2` times the guessing simulator's probability plus `ε_zk + γ·Fork`, with
@@ -566,16 +566,16 @@ theorem swPS_shvzk (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel F
 
 end RefSession
 
-/-- **Flock's zero knowledge at the switched reference prover, with the honest prover's simulator**: `Claims.Flock.ZK`
+/-- **Flock's zero knowledge at the switched reference prover, with the honest prover's simulator**: `Claims.Flock.ZKAt`
 at `P_zk = swP vs`'s prover, at any values `vs` the workers supply whose round encoding is causal, and the simulator of
-`Flock.zk_deployZk_ref` (`refP`'s), at its `ε_zk` and `γ`, under `Claims.Hm96Hiding` and the session's five Props. One
+`Flock.zkAt_deployZk_ref` (`refP`'s), at its `ε_zk` and `γ`, under `Claims.Hm96Hiding` and the session's five Props. One
 simulator serves every `vs`. -/
 theorem Flock.zk_deployZk_sw (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (vs : S.SwVals) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
     (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
     (hsc : S.SwCausal vs) (hT : S.TapeOK) :
-    Claims.Flock.ZK H (FlockDeploy.deployZk rel) (S.swP vs).prover
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) (S.swP vs).prover
       ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
       (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t := by
@@ -591,14 +591,14 @@ theorem Flock.zk_deployZk_sw (H : Msg → Msg) (rel : _root_.Flock.Readable.Pars
   exact Flock.zkR_gkE_hm96_deployZk H rel (S.swPS vs) t ht (fun _ => rfl) δ₁ S.nLeaves S.nLeaves hA
     (S.swPS_shvzk vs H _ hT1 hδ₁ hV hD hc hsc hT hS) Tr nb root parse pos idx n depth dc hchk hdec
 
-/-- **At the honest values `Flock.zk_deployZk_sw` is `Flock.zk_deployZk_ref`**: the switched prover is `refP`
+/-- **At the honest values `Flock.zk_deployZk_sw` is `Flock.zkAt_deployZk_ref`**: the switched prover is `refP`
 (`RefSession.swP_vals`) and `SwCausal` is `Causal` (`RefSession.swCausal_vals`). -/
-theorem Flock.zk_deployZk_ref_of_sw (H : Msg → Msg)
+theorem Flock.zkAt_deployZk_ref_of_sw (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession) (t : ℕ) (ht : 0 < t)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
     (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
     (hT : S.TapeOK) :
-    Claims.Flock.ZK H (FlockDeploy.deployZk rel) S.refP.prover
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) S.refP.prover
       ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
       (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t := by
