@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.GS.RadiusDeploy
 import Proofs.Flock.Claims.Sampling.Leaf
-import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+import Proofs.Flock.Claims.Sampling.Select.Scope
 import Proofs.Flock.Claims.Sampling.Session
 import Proofs.Flock.SamplingBoundary
 
@@ -10,11 +10,13 @@ import Proofs.Flock.SamplingBoundary
 `sampling_assembled`: at a sampling deployment `D` whose sessions are Flock's deployed masked verifier
 (`D.flock = FlockDeploy.deployZk rel`), at every hash `H`, the conjunction of the sampling claims:
 
-* `ScopeMatches`, `Universal`, `Complete` and `ZK`: hypotheses;
+* `ScopeMatches`, from the deployed design's well-formedness (`scopeMatches_of`, `designWellFormed`) where the scope
+  check is the readable scope's program part;
+* `Universal`, `Complete` and `ZK`: hypotheses;
 * `Binding`, at hm96 leaves under the registered frame-v3-sha512 path check (`Binding_of_hm96`);
 * `FaultyBoundary` (`faultyBoundary`);
 * `KS` from Flock's KS at the checked units' sessions (`SessionKS_of`, `KS_of`), with the binding and the draw law
-  (`drawLaw_of_slots`);
+  (`drawLaw_of_slots`), and the verifier's refusal of what is out of scope (`refuses_of`);
 * `KSCount` from `KS` (`KSCount_of_KS`);
 * `Bits` from `KS` and the extractor's expected reruns and own calls (`Bits_of_KS`);
 * `Efficient` at Flock's masked radius decoder (`GS.zkDecodeRD`), its `ListWithin` and `DecoderComplexity` at
@@ -33,13 +35,16 @@ import Proofs.Flock.SamplingBoundary
   and the draw doesn't read them; a checked unit's session is a Flock run on its own rounds that decides the run, with
   the Flock verifier's `H` calls among the sampled verifier's; the inner numbers are Flock's at each session. The Lean
   sampled-proofs verifier, held to the Python by difftest.
-* `DrawSlots` (`Sampling.Select.DrawLaw`): the deployed draw is `Slots.select`'s on the statement's partition and
-  design, from uniform bytes of the coins, every slot checked where it is refused; the Lean sampled-proofs verifier's
-  run, which builds `D`.
-* `SessionOpens`, `InteriorFixed`, `Refuses` (`Sampling.KS`): the same verifier.
+* `DrawSlots` (`Sampling.Select.DrawLaw`): on every statement that parses and whose query evaluates, the partition and
+  design are the verifier's own layout and the design `Slots.select` draws, from uniform bytes of the coins, every slot
+  checked where it is refused; the Lean sampled-proofs verifier's run, which builds `D`.
+* `SessionOpens`, `InteriorFixed` (`Sampling.KS`): the same verifier.
+* `ProgramScope`, `ChecksScope` (`Sampling.Select.Scope`): the scope check is the readable scope's program part (a
+  topologically ordered program, partitioned into proof units), and an accepted run passed it. The design part is a
+  theorem (`designWellFormed`); the program part waits on the claims' program and the verifier's being one, and on the
+  claims' proof units covering a `Q_word` unit, whose gates another unit's may interleave.
 * `hrunsLe`, `hrunsExp`, `hown`: `Efficient`'s run bounds on `E`, from the rerun programs' counts (`Sampling.Cost`:
   `waitAccC_runs_eq`, `accExp_le`, `ownLog_flatMapRP`); not yet assembled.
-* `hscope : ScopeMatches D`: the deployed scope check, the Lean sampled-proofs verifier's.
 * `huniv : Universal D`: the universal unit's Definition (`verity/ml/private_circuits`) against `Netlist.eval`; no
   branch proves it yet.
 * `hComplete : Complete H D P δc`: waits on the reference prover (ruling 4), so `P` and `δc` are any.
@@ -64,13 +69,13 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer) (hrow : RowPlaces row)
     (hfixed : DrawFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
-    (hrefuse : Refuses H D)
+    (hprog : ProgramScope D) (hchecks : ChecksScope H D)
     (hrunsLe : ∀ decode, ExtractRunsLe H (E D decode)
       (fun x => 1 + D.cap x + D.k x * (D.cap x + D.k x * (nPU D x * (D.innerWaits x * D.innerCap x)))))
     (hrunsExp : ∀ decode, ExtractRunsExpLe H (E D decode)
       (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)))
     (hown : ∀ decode, ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x))
-    (hscope : ScopeMatches D) (huniv : Universal D)
+    (huniv : Universal D)
     {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H D P δc)
     {Ωz : Type} [Fintype Ωz] (Pz : Wit → Prover Ωz) (S : SimLeak) (εzk : Msg → ℝ) (hZK : ZK H D Pz S εzk) :
     ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ KS H D ∧ KSCount H D ∧ Bits H D ∧
@@ -78,6 +83,8 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
         (Polynomial.C 11 * (Claims.GS.zkPolyR + Polynomial.X)) ∧
       Complete H D P δc ∧ ZK H D Pz S εzk := by
   have hbind : Binding D := Binding_of_hm96 D own at_ row salt π layer hcommit hrow
+  have hscope : ScopeMatches D := scopeMatches_of D hslots hprog
+  have hrefuse : Refuses H D := refuses_of H D hscope hchecks
   have hKS' : Claims.Flock.KS H D.flock := by
     rw [hflock]
     exact hKS
