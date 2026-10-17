@@ -1,27 +1,36 @@
 import Proofs.Flock.Claims.ZK.Hypotheses
+import Proofs.Flock.Claims.ZK.Prefinal
 import Proofs.Flock.Soundness.Discharge.ZkHidden.View
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
 
 /-!
 # Flock's zero knowledge at the tables `verify --zk` sets up
 
-`Flock.zk_deployZk_of_models` takes five Props of the masked prover's models. At the tables `verify --zk` sets up, two of
-them are theorems and one is a construction:
+`Flock.zk_deployZk_of_models` takes five Props of the masked prover's models, each model's tables of one type. At the
+tables `verify --zk` sets up, each a `CoinedSetup` with its own types as `--session-tables J` has them, the models are
+the session's own and most of what the Props ask is a theorem:
 
-* where the prover goes on, its model is `J` `--zk` tables, each a `CoinedSetup` at coins it admits, each with its own
-  types as `--session-tables J` has them (`Proto.TabModel`). Lemma B there is `ZkHidden.zkViewAtJ_of_ok`: what
-  `NonDegenerate` and `InnerHolds` ask of the tables is in `CoinedOK`, which `coinedOf_setup_of` and `coinedOf_reg` prove
-  at every table the session sets up (`SetupTable`, `setupTable_planZHJ`). The table witnesses' validity
-  (`CoinedSetup.Valid`) is what stays, in `TabModel.Link`;
-* the SHVZK simulator is built from the models (`Proto.withSim`): one tape per nonce and coin vector, and at each,
-  `lift` of the tables' `simExe` on the dummy where the prover goes on and the dummy-witness prover's messages where it
+* before the last coin (`Proto.TPreModel`) and where the prover refuses (`Proto.TOffModel`), the prover's messages are a
+  round encoding `out` of the session's pre-final view cut where it stops (`cutAt`, the schedule `famSent`), at the
+  executable's leaves (`exeOf`, `Coined.exeLeaf`). Lemma C there is `prefinal_of_ideal`: what `PreModel.Link` and
+  `OffModel.Link` ask of the leaves (`hP`), the tables' randomness (`he`) and world `W₀` (`hI`) holds by definition
+  (`exeOf_eq`, `famRandAt_bijective`, `Coined.preWith_ideal`), and Lemma A at tables of their own types is each table's
+  own (`card_cutAt_ideal`);
+* where the prover goes on (`Proto.TabModel`), Lemma B is `ZkHidden.zkViewAtJ_of_ok`: what `NonDegenerate` and
+  `InnerHolds` ask is in `CoinedOK`, which `coinedOf_setup_of` and `coinedOf_reg` prove at every table the session sets
+  up (`SetupTable`, `setupTable_planZHJ`), so the witness's registered values are its validity (`CoinedSetup.Valid`);
+* the SHVZK simulator is built from the models (`Proto.withSim`): one tape per nonce and coin vector, and at each, `lift`
+  of the tables' `simExe` on the dummy where the prover goes on and the dummy-witness prover's messages where it
   refuses. `SimLink` holds by construction (`Proto.withSim_shvzk`), and the prover is `G`'s.
 
 `Flock.zk_deployZk_of_tables` is `Claims.Flock.ZK` at `FlockDeploy.deployZk` and the pinned hm96 key (`ZkView.My`,
 `ZkView.saltHash`), under `Claims.Hm96Hiding` and three Props of a Lean model of `flock-circuit --zk`:
 
-* `Proto.TMsgLink`: the prover's messages are the session's (`MsgLink`, with the tables' views where it goes on);
-* `Proto.TablesOK`: where it goes on, its tables are tables the session sets up, at coins each admits;
+* `Proto.TMsgLink`: the prover's messages are the session's: before the last coin and where it refuses, the round
+  encoding of the cut view at the executable's leaves (reading the answers before each round only); where it goes on,
+  `lift` of the tables' views; the witness's table witnesses valid and the dummy's carrying the public region data;
+* `Proto.TablesOK`: the models' tables are tables the session sets up, at coins each admits where the prover goes on;
 * `Proto.CoinCheck`.
 
 `Flock.zk_deployZk_of_tables_gap` is the same at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`), with
@@ -68,9 +77,158 @@ theorem setupTable_planZHJ {mPts n : ℕ} {Reg : Type} (P : Composed.LigProver) 
     ZkHidden.maskSetup_of_setupHidden ((Exec.tagsAt_typed _ _ _).trans ((ZkExec.zkTags_typed I).trans ht)) y.x.h,
     FailClosed.DrawSetupZHJ.avoidsMask y, Composed.setupHidden_whole y.x.h, rfl⟩
 
+/-! ## The session's pre-final view, at tables of their own types -/
+
+/-- **The session's tables' randomness** (`ZkView.randAt`) at tables of their own types: each table's base, and its
+pre-final leaves' seeds by position. -/
+noncomputable def famRandAt {K : Type} [Field K] {J : ℕ} {Wf Hi VL : Fin J → Type} {zs : Fin J → ZkView.Sizes}
+    (Tc : ∀ j, ZkView.Coined K (Wf j) (Hi j) (VL j) (zs j))
+    (x : (∀ j, ZkView.Base (zs j) (Hi j)) × (ZkView.Leaves zs → ZkView.Bits × ZkView.Salt)) :
+    ∀ j, (Tc j).tab.Rand :=
+  fun j => (Tc j).randOf (x.1 j) fun p => x.2 ⟨j, p⟩
+
+theorem famRandAt_bijective {K : Type} [Field K] {J : ℕ} {Wf Hi VL : Fin J → Type} {zs : Fin J → ZkView.Sizes}
+    (Tc : ∀ j, ZkView.Coined K (Wf j) (Hi j) (VL j) (zs j)) : Function.Bijective (famRandAt Tc) := by
+  constructor
+  · intro x x' h
+    have hj : ∀ j, ((x.1 j, fun p => x.2 ⟨j, p⟩) :
+        ZkView.Base (zs j) (Hi j) × (ZkView.LeafPos (zs j) → ZkView.Bits × ZkView.Salt))
+        = (x'.1 j, fun p => x'.2 ⟨j, p⟩) := fun j =>
+      (Tc j).randOf_injective (a₁ := (x.1 j, fun p => x.2 ⟨j, p⟩)) (a₂ := (x'.1 j, fun p => x'.2 ⟨j, p⟩))
+        (congrFun h j)
+    refine Prod.ext (funext fun j => (Prod.ext_iff.1 (hj j)).1) (funext fun l => ?_)
+    exact congrFun (Prod.ext_iff.1 (hj l.1)).2 l.2
+  · intro r
+    choose x hx using fun j => (Tc j).randOf_surjective (r j)
+    exact ⟨(fun j => (x j).1, fun l => (x l.1).2 l.2), funext fun j => hx j⟩
+
+/-- **The session's pre-final view at coins `cz`, cut where the session stops** (`famSent`), at table witnesses `wt`,
+bases `ω` and the pre-final leaves `lv` by position (`Coined.preWith`). -/
+noncomputable def cutAt {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (lv : ZkView.Leaves (fun j => (C j).z) → ByteArray) : ∀ j, ((C j).T (cz j)).tab.Cut :=
+  fun j => ((C j).T (cz j)).tab.cut (famSent (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) j)
+    (((C j).T (cz j)).preWith (wt j) (ω j) fun p => lv ⟨j, p⟩)
+
+/-- The digest each pre-final leaf commits, as bits (`ZkView.digAt`). -/
+noncomputable def digOf {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (l : ZkView.Leaves (fun j => (C j).z)) : ZkView.Bits :=
+  ZkView.bitsOf (((C l.1).T (cz l.1)).content (wt l.1) (ω l.1) l.2)
+
+/-- **The executable's pre-final leaves** (`Coined.exeLeaf`), each under its own salt. -/
+noncomputable def exeOf {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (y : ZkView.Leaves (fun j => (C j).z) → ZkView.Salt) : ZkView.Leaves (fun j => (C j).z) → ByteArray :=
+  fun l => ((C l.1).T (cz l.1)).exeLeaf (wt l.1) (ω l.1) l.2 (y l)
+
+/-- The executable's leaves are `H(dig ⊕ M·y, c(y))` (`ZkView.leafSplit`). -/
+theorem exeOf_eq {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (y : ZkView.Leaves (fun j => (C j).z) → ZkView.Salt) :
+    exeOf C cz wt ω y = fun l => ZkView.leafH (digOf C cz wt ω l + ZkView.My (y l), ZkView.saltHash (y l)) :=
+  funext fun l => by
+    rw [exeOf, ZkView.Coined.exeLeaf, ZkView.leafSplit _ _ (((C l.1).T (cz l.1)).content_size _ _ _)]
+    rfl
+
+open Finset in
+/-- **World `W₀` at the session's tables**: at ideal leaves `H(U, c(y))`, any function of the cut view takes every value
+as often on two tuples of table witnesses carrying the public region data (`famCard_cut_eq`, `randOf` a bijection). -/
+theorem card_cutAt_ideal {J : ℕ} {V : Type} [DecidableEq V] (C : Fin J → Composed.CoinedSetup)
+    (cz : ∀ j, Composed.CoinsZK (C j).Rest) (wt wt' : ∀ j, FlockSoundness.Model.Witness (C j).S.m)
+    (hreg : ∀ j, ((C j).T (cz j)).tab.sReg (wt j) = ((C j).T (cz j)).tab.pubReg)
+    (hreg' : ∀ j, ((C j).T (cz j)).tab.sReg (wt' j) = ((C j).T (cz j)).tab.pubReg)
+    (out : (∀ j, ((C j).T (cz j)).tab.Cut) → V) (σ : V) :
+    #{u : (∀ j, ZkView.Base (C j).z (C j).Hi) × (ZkView.Leaves (fun j => (C j).z) → ZkView.Bits × ZkView.Salt) |
+        out (cutAt C cz wt u.1 fun l => ZkView.leafH ((u.2 l).1, ZkView.saltHash (u.2 l).2)) = σ}
+      = #{u : (∀ j, ZkView.Base (C j).z (C j).Hi) × (ZkView.Leaves (fun j => (C j).z) → ZkView.Bits × ZkView.Salt) |
+        out (cutAt C cz wt' u.1 fun l => ZkView.leafH ((u.2 l).1, ZkView.saltHash (u.2 l).2)) = σ} :=
+  famCard_cut_eq (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) (famRandAt fun j => (C j).T (cz j))
+    (fun r => ZkView.card_fiber_of_bijective (famRandAt_bijective fun j => (C j).T (cz j)) r) out wt wt' hreg hreg' σ
+
 namespace Proto
 
-/-! ## The model where the prover goes on, at the session's tables -/
+/-! ## Before the last coin, at the session's tables -/
+
+/-- **Lemma C's setting at the session's tables**: table `j` is the `CoinedSetup` `C j` at the coins `cz a j` the answers
+`a` open, each with its own types; the prover's messages at `a` are the round encoding `out a` of the session's
+pre-final view cut where it stops (`cutAt`); the table witnesses of each witness and of the dummy, and the map `eR`
+from `G`'s randomness to the tables' bases and the pre-final leaves' salts. -/
+structure TPreModel {W : Type} (G : Proto W) (x : Msg) where
+  J : ℕ
+  C : Fin J → Composed.CoinedSetup
+  cz : (Fin (G.K x + 1) → Out) → ∀ j, Composed.CoinsZK (C j).Rest
+  out : ∀ a, (∀ j, ((C j).T (cz a j)).tab.Cut) → Fin (G.K x + 1) → Msg
+  wt : W → ∀ j, FlockSoundness.Model.Witness (C j).S.m
+  wt₀ : ∀ j, FlockSoundness.Model.Witness (C j).S.m
+  eR : G.Rand → (∀ j, ZkView.Base (C j).z (C j).Hi) × (ZkView.Leaves (fun j => (C j).z) → ZkView.Salt)
+  kR : ℕ
+
+/-- The prover's messages before the last coin at the answers `a`, on table witnesses `wt`, bases `ω` and pre-final
+leaves `lv`. -/
+noncomputable def TPreModel.msgs {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x)
+    (wt : ∀ j, FlockSoundness.Model.Witness (M.C j).S.m) (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi)
+    (a : Fin (G.K x + 1) → Out) (lv : ZkView.Leaves (fun j => (M.C j).z) → ByteArray) : Fin (G.K x + 1) → Msg :=
+  M.out a (cutAt M.C (M.cz a) wt ω lv)
+
+/-- **The round encoding reads the answers before each round only**, whatever each leaf's pair `(M·y, c(y))`
+(`ZkView.Causal`). -/
+def TPreModel.Causal {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x) : Prop :=
+  ∀ (wt : ∀ j, FlockSoundness.Model.Witness (M.C j).S.m) (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi)
+    (p : ZkView.Leaves (fun j => (M.C j).z) → ZkView.Bits × ByteArray) (a a' : Fin (G.K x + 1) → Out)
+    (i : Fin (G.K x + 1)), (∀ j, j < i → a j = a' j) →
+    M.msgs wt ω a (fun l => ZkView.leafH (digOf M.C (M.cz a) wt ω l + (p l).1, (p l).2)) i =
+      M.msgs wt ω a' (fun l => ZkView.leafH (digOf M.C (M.cz a') wt ω l + (p l).1, (p l).2)) i
+
+/-- **Before the last coin, the prover's messages on `w` and on the dummy are the session's at the executable's
+leaves**, its round encoding causal, on randomness read through a map with fibers of one size; `w`'s table witnesses
+valid and the dummy's carrying the public region data. -/
+def TPreModel.Link {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x) (H : Msg → Msg) (ν : G.Nonce) (w : W) :
+    Prop :=
+  (∀ j, (M.C j).Valid (M.wt w j)) ∧
+    (∀ a j, ((M.C j).T (M.cz a j)).tab.sReg (M.wt₀ j) = ((M.C j).T (M.cz a j)).tab.pubReg) ∧ M.Causal ∧
+    (∀ p, Nat.card {r // M.eR r = p} = M.kR) ∧
+    (∀ r a, (G.preStrat H x ν (G.msg x w ν)).msg r a =
+      M.msgs (M.wt w) (M.eR r).1 a (exeOf M.C (M.cz a) (M.wt w) (M.eR r).1 (M.eR r).2)) ∧
+    ∀ r a, (G.preStrat H x ν (G.dmsg x ν)).msg r a =
+      M.msgs M.wt₀ (M.eR r).1 a (exeOf M.C (M.cz a) M.wt₀ (M.eR r).1 (M.eR r).2)
+
+/-- The tables are tables the session sets up. -/
+def TPreModel.OK {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x) : Prop := ∀ j, SetupTable (M.C j)
+
+/-- The session's pre-final leaves. -/
+def TPreModel.size {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x) : ℕ :=
+  Fintype.card (ZkView.Leaves (fun j => (M.C j).z))
+
+/-- **Lemma C's bound on the runs before the last coin, at the session's tables** (`runs_close_of_ideal`), within
+`2·|L|·δ₁`. -/
+theorem TPreModel.runs_close {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x) (H : Msg → Msg) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (ν : G.Nonce) (w : W) (hL : M.Link H ν w)
+    (hOK : M.OK) (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1)) (E : (Fin (G.K x + 1) → Msg) → Prop) :
+    |Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.msg x w ν)) V r)) -
+      Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.dmsg x ν)) V r))|
+      ≤ 2 * M.size * δ₁.toReal := by
+  obtain ⟨hv, hreg₀, hc, heR, hlink, hlink₀⟩ := hL
+  let P : (∀ j, FlockSoundness.Model.Witness (M.C j).S.m) → FlockSoundness.ZK.Strategy
+      ((∀ j, ZkView.Base (M.C j).z (M.C j).Hi) × (ZkView.Leaves (fun j => (M.C j).z) → ZkView.Bits × ByteArray))
+      Msg Out (G.K x + 1) := fun wt =>
+    { msg := fun q a => M.msgs wt q.1 a fun l => ZkView.leafH (digOf M.C (M.cz a) wt q.1 l + (q.2 l).1, (q.2 l).2)
+      causal := fun q a a' i h => hc wt q.1 q.2 a a' i h }
+  have hP : ∀ wt ω p a, (P wt).msg (ω, p) a =
+      M.msgs wt ω a fun l => ZkView.leafH (digOf M.C (M.cz a) wt ω l + (p l).1, (p l).2) := fun _ _ _ _ => rfl
+  have hl : ∀ r, (G.preStrat H x ν (G.msg x w ν)).msg r =
+      (P (M.wt w)).msg ((M.eR r).1, fun l => (ZkView.My ((M.eR r).2 l), ZkView.saltHash ((M.eR r).2 l))) :=
+    fun r => funext fun a => by rw [hP, hlink r a, exeOf_eq]
+  have hl₀ : ∀ r, (G.preStrat H x ν (G.dmsg x ν)).msg r =
+      (P M.wt₀).msg ((M.eR r).1, fun l => (ZkView.My ((M.eR r).2 l), ZkView.saltHash ((M.eR r).2 l))) :=
+    fun r => funext fun a => by rw [hP, hlink₀ r a, exeOf_eq]
+  have : Nonempty (∀ j, ZkView.Base (M.C j).z (M.C j).Hi) := ⟨fun _ => 0⟩
+  exact G.runs_close_of_ideal H x ν w ZkView.My ZkView.saltHash hT1 hδ₁ ZkView.leafH M.msgs
+    (fun wt ω a => digOf M.C (M.cz a) wt ω) P hP (M.wt w) M.wt₀
+    (fun a σ => card_cutAt_ideal M.C (M.cz a) (M.wt w) M.wt₀ (fun j => (hOK j).ok.2 _ _ (hv j)) (hreg₀ a) (M.out a) σ)
+    M.eR M.kR heR hl hl₀ V E
+
+/-! ## Where the prover goes on, at the session's tables -/
 
 /-- **Lemma B's setting at `J` `--zk` tables, at a coin vector where the prover goes on** (`ZkHidden.ZkViewAtJ`): table
 `j` is the `CoinedSetup` `C j` at its coins `cz j`, each with its own types; the table witnesses of each witness and of
@@ -150,23 +308,75 @@ theorem TabModel.shvzk {W : Type} {G : Proto W} {x : Msg} (M : G.TabModel x) (H 
   rw [eReal, eSim, abs_le]
   constructor <;> linarith
 
+/-! ## Where the prover refuses, at the session's tables -/
+
+/-- **Lemma C's setting at fixed answers, at a coin vector where the prover refuses**: table `j` is `C j` at its coins
+`cz j`, each with its own types; the prover's messages are `out` of the session's pre-final view cut where it stops
+(`cutAt`); the table witnesses of each witness and of the dummy, and the map `eR` from `G`'s randomness to the tables'
+bases and the pre-final leaves' salts. -/
+structure TOffModel {W : Type} (G : Proto W) (x : Msg) where
+  J : ℕ
+  C : Fin J → Composed.CoinedSetup
+  cz : ∀ j, Composed.CoinsZK (C j).Rest
+  out : (∀ j, ((C j).T (cz j)).tab.Cut) → List Msg
+  wt : W → ∀ j, FlockSoundness.Model.Witness (C j).S.m
+  wt₀ : ∀ j, FlockSoundness.Model.Witness (C j).S.m
+  eR : G.Rand → (∀ j, ZkView.Base (C j).z (C j).Hi) × (ZkView.Leaves (fun j => (C j).z) → ZkView.Salt)
+  kR : ℕ
+
+/-- **Where the prover refuses at `c`, its messages on `w` and on the dummy are `out` of the session's cut view at the
+executable's leaves**, on randomness read through a map with fibers of one size; `w`'s table witnesses valid and the
+dummy's carrying the public region data. -/
+def TOffModel.Link {W : Type} {G : Proto W} {x : Msg} (M : G.TOffModel x) (H : Msg → Msg) (ν : G.Nonce)
+    (c : Fin (G.K x) → G.Coin) (w : W) : Prop :=
+  (∀ j, (M.C j).Valid (M.wt w j)) ∧
+    (∀ j, ((M.C j).T (M.cz j)).tab.sReg (M.wt₀ j) = ((M.C j).T (M.cz j)).tab.pubReg) ∧
+    (∀ p, Nat.card {r // M.eR r = p} = M.kR) ∧
+    (∀ r, G.realVec H x w ν r c =
+      M.out (cutAt M.C M.cz (M.wt w) (M.eR r).1 (exeOf M.C M.cz (M.wt w) (M.eR r).1 (M.eR r).2))) ∧
+    ∀ r, G.dVec H x ν r c = M.out (cutAt M.C M.cz M.wt₀ (M.eR r).1 (exeOf M.C M.cz M.wt₀ (M.eR r).1 (M.eR r).2))
+
+/-- The tables are tables the session sets up. -/
+def TOffModel.OK {W : Type} {G : Proto W} {x : Msg} (M : G.TOffModel x) : Prop := ∀ j, SetupTable (M.C j)
+
+/-- The session's pre-final leaves. -/
+def TOffModel.size {W : Type} {G : Proto W} {x : Msg} (M : G.TOffModel x) : ℕ :=
+  Fintype.card (ZkView.Leaves (fun j => (M.C j).z))
+
+/-- **Lemma C at a coin vector where the prover refuses, at the session's tables** (`refused_close_of_ideal`): the
+honest prover's messages at `c` and the dummy-witness prover's are within `2·|L|·δ₁`. -/
+theorem TOffModel.close {W : Type} {G : Proto W} {x : Msg} (M : G.TOffModel x) (H : Msg → Msg) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
+    (w : W) (hL : M.Link H ν c w) (hOK : M.OK) (E : List Msg → Prop) :
+    |Pr (fun r : G.Rand => E (G.realVec H x w ν r c)) - Pr (fun r : G.Rand => E (G.dVec H x ν r c))|
+      ≤ 2 * M.size * δ₁.toReal := by
+  obtain ⟨hv, hreg₀, heR, hR, hD⟩ := hL
+  have : Nonempty (∀ j, ZkView.Base (M.C j).z (M.C j).Hi) := ⟨fun _ => 0⟩
+  exact G.refused_close_of_ideal H x w ν c ZkView.My ZkView.saltHash hT1 hδ₁ ZkView.leafH
+    (fun wt ω lv => M.out (cutAt M.C M.cz wt ω lv)) (digOf M.C M.cz) (M.wt w) M.wt₀
+    (fun σ => card_cutAt_ideal M.C M.cz (M.wt w) M.wt₀ (fun j => (hOK j).ok.2 _ _ (hv j)) hreg₀ M.out σ)
+    M.eR M.kR heR
+    (fun r => (hR r).trans (congrArg (fun lv => M.out (cutAt M.C M.cz (M.wt w) (M.eR r).1 lv))
+      (exeOf_eq M.C M.cz (M.wt w) (M.eR r).1 (M.eR r).2)))
+    (fun r => (hD r).trans (congrArg (fun lv => M.out (cutAt M.C M.cz M.wt₀ (M.eR r).1 lv))
+      (exeOf_eq M.C M.cz M.wt₀ (M.eR r).1 (M.eR r).2))) E
+
 /-! ## The model at each coin vector -/
 
-/-- **The model at one coin vector, at the session's tables**: `TabModel` where the prover goes on, `OffModel` where it
-refuses (its `Link`; `withSim` builds the simulator, and reads neither its `eS` nor its `kS`). -/
-abbrev TCoinModel {W : Type} (G : Proto W) (x : Msg) : Type 1 :=
-  G.TabModel x ⊕ G.OffModel x ZkView.Salt ZkView.Bits ByteArray
+/-- **The model at one coin vector, at the session's tables**: `TabModel` where the prover goes on, `TOffModel` where it
+refuses. -/
+abbrev TCoinModel {W : Type} (G : Proto W) (x : Msg) : Type 1 := G.TabModel x ⊕ G.TOffModel x
 
-/-- The message link at a coin vector, at the pinned hm96 key where the prover refuses. -/
+/-- The message link at a coin vector. -/
 def TCoinModel.Link {W : Type} {G : Proto W} {x : Msg} :
     G.TCoinModel x → (Msg → Msg) → G.Nonce → (Fin (G.K x) → G.Coin) → W → Prop
   | .inl M => M.Link
-  | .inr M => fun H => M.Link H ZkView.My ZkView.saltHash
+  | .inr M => M.Link
 
-/-- The session's tables where the prover goes on; nothing where it refuses. -/
+/-- The session's tables, at coins each admits where the prover goes on. -/
 def TCoinModel.OK {W : Type} {G : Proto W} {x : Msg} : G.TCoinModel x → Prop
   | .inl M => M.OK
-  | .inr _ => True
+  | .inr M => M.OK
 
 /-- The leaves the coin vector's bound counts. -/
 noncomputable def TCoinModel.size {W : Type} {G : Proto W} {x : Msg} : G.TCoinModel x → ℕ
@@ -215,21 +425,18 @@ theorem TCoinModel.shvzk {W : Type} {G : Proto W} {x : Msg} (H : Msg → Msg) {�
       have : sim = fun s => M.simOut (ev s) := funext hsim
       subst this
       exact M.shvzk H hT1 hδ₁ ν c w hL hOK ev hev hn E
-  | .inr M, ev, kS, hev, hsim, hL, _, hn => by
+  | .inr M, ev, _, hev, hsim, hL, hOK, hn => by
       have hD : ∀ s, sim s = G.dVec H x ν (ev s) c := fun s => by
         rw [hsim s]
         simp only [TCoinModel.simAt, ocSeq_eval, List.map_map]
         rfl
-      let G' : Proto W :=
-        { G with
-          SimRand := fun _ => Ω
-          finSim := fun _ => inferInstance
-          neSim := fun _ => inferInstance
-          sim := fun _ _ _ s => .ret (sim s) }
-      have hn' : Fintype.card M.L ≤ n := hn
-      obtain ⟨he, hI, hreg, hreg₀, heR, hR, hD'⟩ := hL
-      exact G'.shvzk_refused_hm96 H x w ν c M.T M.rep ZkView.My ZkView.saltHash hT1 hδ₁ M.Hl M.msgs M.dig M.e M.k
-        he M.out hI (M.wt w) M.wt₀ hreg hreg₀ M.eR M.kR heR hR hD' ev kS hev hD hn' E
+      have e : Pr (fun s : Ω => E (sim s)) = Pr (fun r : G.Rand => E (G.dVec H x ν r c)) := by
+        simp only [hD]
+        exact Pr_comp_fiber ev hev fun r => E (G.dVec H x ν r c)
+      rw [e]
+      have hn' : (M.size : ℝ) ≤ n := by exact_mod_cast hn
+      calc _ ≤ 2 * M.size * δ₁.toReal := M.close H hT1 hδ₁ ν c w hL hOK E
+        _ ≤ 2 * n * δ₁.toReal := by gcongr
 
 /-! ## The simulator the models give -/
 
@@ -272,16 +479,16 @@ theorem withSim_shvzk {W : Type} (G : Proto W) [Fintype G.Coin] (H : Msg → Msg
 
 /-! ## The named hypotheses -/
 
-/-- **The message link at the session's tables**: before the last coin the prover's messages are the session's strategy
-on real hm96 leaves at the pinned key; at each coin vector they are the model's. -/
-def TMsgLink {W : Type} (G : Proto W) (H : Msg → Msg) (R : Rel W)
-    (Mp : ∀ x, G.Nonce → G.PreModel x ZkView.Salt ZkView.Bits ByteArray)
+/-- **The message link at the session's tables**: before the last coin, and at each coin vector, the prover's messages
+are the session's. -/
+def TMsgLink {W : Type} (G : Proto W) (H : Msg → Msg) (R : Rel W) (Mp : ∀ x, G.Nonce → G.TPreModel x)
     (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) : Prop :=
-  ∀ x w, R x w → ∀ ν, (Mp x ν).Link H ZkView.My ZkView.saltHash ν w ∧ ∀ c, (Mc x ν c).Link H ν c w
+  ∀ x w, R x w → ∀ ν, (Mp x ν).Link H ν w ∧ ∀ c, (Mc x ν c).Link H ν c w
 
-/-- **The tables**: where the prover goes on, its tables are tables the session sets up, at coins each admits. -/
-def TablesOK {W : Type} (G : Proto W) (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) : Prop :=
-  ∀ x ν c, (Mc x ν c).OK
+/-- **The tables**: the models' tables are tables the session sets up, at coins each admits where the prover goes on. -/
+def TablesOK {W : Type} (G : Proto W) (Mp : ∀ x, G.Nonce → G.TPreModel x)
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) : Prop :=
+  (∀ x ν, (Mp x ν).OK) ∧ ∀ x ν c, (Mc x ν c).OK
 
 end Proto
 
@@ -295,11 +502,11 @@ verifier's, under `Claims.Hm96Hiding` at the pinned key and three named hypothes
 theorem Flock.zk_deployZk_of_tables (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
     (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {δ₁ : ENNReal}
-    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤)
-    (Mp : ∀ x, G.Nonce → G.PreModel x ZkView.Salt ZkView.Bits ByteArray)
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (Mp : ∀ x, G.Nonce → G.TPreModel x)
     (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Msg → ℕ)
-    (hnL : ∀ x ν, Fintype.card (Mp x ν).L ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
-    (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mc) (hC : G.CoinCheck) :
+    (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
+    (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
+    (hC : G.CoinCheck) :
     Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
       (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
   obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := hC
@@ -309,25 +516,25 @@ theorem Flock.zk_deployZk_of_tables (H : Msg → Msg)
         Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.dmsg x ν)) V r))| ≤
         2 * nL x * δ₁.toReal := by
     intro x w hR ν V E
-    calc _ ≤ 2 * Fintype.card (Mp x ν).L * δ₁.toReal :=
-          (Mp x ν).runs_close H ZkView.My ZkView.saltHash hT1 hδ₁ ν w (hL x w hR ν).1 V E
+    calc _ ≤ 2 * (Mp x ν).size * δ₁.toReal :=
+          (Mp x ν).runs_close H hT1 hδ₁ ν w (hL x w hR ν).1 (hOK.1 x ν) V E
       _ ≤ 2 * nL x * δ₁.toReal := by
-          have : (Fintype.card (Mp x ν).L : ℝ) ≤ nL x := by exact_mod_cast hnL x ν
+          have : ((Mp x ν).size : ℝ) ≤ nL x := by exact_mod_cast hnL x ν
           gcongr
   rw [← G.withSim_prover Mc]
   exact Flock.zkR_gkE_hm96_deployZk H rel (G.withSim Mc) t ht hK δ₁ nL nB hA
-    (G.withSim_shvzk H _ hT1 hδ₁ Mc nB hnB (fun x w hR ν c => (hL x w hR ν).2 c) hOK) Tr nb root parse pos idx n
+    (G.withSim_shvzk H _ hT1 hδ₁ Mc nB hnB (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) Tr nb root parse pos idx n
     depth dc hchk hdec
 
 /-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): `Claims.Flock.ZK` at `δ₁` the statistical
 distance of `(M·y, c(y))` from `(U, c(y))` at the pinned key, under `TMsgLink`, `TablesOK` and `CoinCheck` alone. -/
 theorem Flock.zk_deployZk_of_tables_gap (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
-    (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1)
-    (Mp : ∀ x, G.Nonce → G.PreModel x ZkView.Salt ZkView.Bits ByteArray)
+    (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) (Mp : ∀ x, G.Nonce → G.TPreModel x)
     (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Msg → ℕ)
-    (hnL : ∀ x ν, Fintype.card (Mp x ν).L ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
-    (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mc) (hC : G.CoinCheck) :
+    (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
+    (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
+    (hC : G.CoinCheck) :
     Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
       (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
         8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
