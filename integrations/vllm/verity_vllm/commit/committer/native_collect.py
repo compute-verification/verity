@@ -1807,6 +1807,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.transient_peak_bytes = 0
         self.excluded_bytes = 0
         self.plan_mismatches = 0
+        self._win_reupload_bytes = 0    # windowed: per-run counters of finalize's extra["windows"]
+        self._win_relayouts = 0
         self._oar_deferred = []         # picks the in-run stages could not open from host (excluded families) -> openings_after_release
         for src in self.sources:
             fn = getattr(src, "begin_run", None)
