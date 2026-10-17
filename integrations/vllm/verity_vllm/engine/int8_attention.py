@@ -35,6 +35,8 @@ ARM = E.ARM
 TOP = E.TOP
 #: |P'| <= 127 and |V'| <= 127 over s keys stay within int32
 MAX_KEYS = E.MAX_K
+#: cuBLASLt (sm_120) refuses an s8 product whose k is an odd multiple of 8 up to 120 at n = 128 and m not a multiple of 64
+K_ALIGN = 16
 
 
 def quant(x: torch.Tensor, dim: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -52,11 +54,11 @@ def quant_p(p: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 
 
 def int_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    """a b^T (int32) of integer-valued a [m, k] and b [n, k] within int8, exactly: k and n padded with zeros to multiples of 8
-    and m to `int8_exact.MIN_ROWS` (``torch._int_mm``'s shape rules on CUDA)."""
+    """a b^T (int32) of integer-valued a [m, k] and b [n, k] within int8, exactly: k padded with zeros to a multiple of
+    K_ALIGN, n to a multiple of 8 and m to `int8_exact.MIN_ROWS` (``torch._int_mm``'s shape rules on CUDA)."""
     n, k = b.shape
-    a8 = F.pad(a.to(torch.int8), (0, -k % 8)).contiguous()
-    b8 = F.pad(b.to(torch.int8), (0, -k % 8, 0, -n % 8)).contiguous()
+    a8 = F.pad(a.to(torch.int8), (0, -k % K_ALIGN)).contiguous()
+    b8 = F.pad(b.to(torch.int8), (0, -k % K_ALIGN, 0, -n % 8)).contiguous()
     return E.int_mm(a8, b8)[:, :n]
 
 
