@@ -110,12 +110,14 @@ DC_DEV void tc_alone(const OpArgs& a) {
   OP_SINK(x ^ threadIdx.x)
 }
 
-// 8 warps; warp w reads its lane quarter (w % 4), columns (w / 4) * 256 + 32 j.
+// 8 warps; warp w reads its lane quarter (w % 4) in columns (w / 4) * 256 .. + 255. The 16-lane shapes' x16/x8/x4 read 32
+// columns each, so they step by 32 within the warp's 256 (c32), never past the 512 allocated.
 template <int SHAPE>
 DC_DEV void ld_alone(const OpArgs& a) {
   __shared__ __align__(1024) Smem s;
   const uint32_t tmem = setup<0>(s, a.mode);
   const uint32_t w = warp_u(), base = tmem + ((32u * (w & 3u)) << 16) + (w >> 2) * 256u;
+  auto c32 = [&](int g, int j) { return base + ((128u * g + 32u * j) & 255u); };
   uint32_t r0[32], r1[32];
   uint32_t q0[16], q1[16], q2[16], q3[16];
   uint32_t v0[4], v1[4], v2[4], v3[4];
@@ -134,18 +136,18 @@ DC_DEV void ld_alone(const OpArgs& a) {
         tmem_wait_ld();
         acc += q0[0] ^ q1[1] ^ q2[2] ^ q3[3];
       } else if constexpr (SHAPE == 2) {
-        tmem_ld16x256(base + 64 * g, q0); tmem_ld16x256(base + 64 * g + 16, q1); tmem_ld16x256(base + 64 * g + 32, q2);
-        tmem_ld16x256(base + 64 * g + 48, q3);
+        tmem_ld16x256(c32(g, 0), q0); tmem_ld16x256(c32(g, 1), q1); tmem_ld16x256(c32(g, 2), q2);
+        tmem_ld16x256(c32(g, 3), q3);
         tmem_wait_ld();
         acc += q0[0] ^ q1[1] ^ q2[2] ^ q3[3];
       } else if constexpr (SHAPE == 3) {
-        tmem_ld16x64(base + 64 * g, q0); tmem_ld16x64(base + 64 * g + 16, q1); tmem_ld16x64(base + 64 * g + 32, q2);
-        tmem_ld16x64(base + 64 * g + 48, q3);
+        tmem_ld16x64(c32(g, 0), q0); tmem_ld16x64(c32(g, 1), q1); tmem_ld16x64(c32(g, 2), q2);
+        tmem_ld16x64(c32(g, 3), q3);
         tmem_wait_ld();
         acc += q0[0] ^ q1[1] ^ q2[2] ^ q3[3];
       } else if constexpr (SHAPE == 4) {
-        tmem_ld16x128(base + 64 * g, q0); tmem_ld16x128(base + 64 * g + 16, q1); tmem_ld16x128(base + 64 * g + 32, q2);
-        tmem_ld16x128(base + 64 * g + 48, q3);
+        tmem_ld16x128(c32(g, 0), q0); tmem_ld16x128(c32(g, 1), q1); tmem_ld16x128(c32(g, 2), q2);
+        tmem_ld16x128(c32(g, 3), q3);
         tmem_wait_ld();
         acc += q0[0] ^ q1[1] ^ q2[2] ^ q3[3];
       } else if constexpr (SHAPE == 5) {
