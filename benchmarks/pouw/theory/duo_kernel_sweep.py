@@ -50,7 +50,7 @@ def invoke(exe: Path, n: int, L: int, mode: str, idx: tuple, rot: tuple, phase: 
     return {"n": n, "L": L, "mode": mode, "idx": list(idx), "rot": list(rot), "phase": phase,
             "keys": list(keys) if keys else "every odd", "configs": int(f[f.index("configs") + 1]),
             "hit_configs": int(f[f.index("hit_configs") + 1]), "hits": int(f[f.index("hits") + 1]), "nontop": int(f[f.index("nontop") + 1]),
-            "hit_lines": lines[:-1][:8]}
+            "hit_lines": lines[:-1]}
 
 
 def generic(n: int, L: int, mode: str) -> list[tuple]:
