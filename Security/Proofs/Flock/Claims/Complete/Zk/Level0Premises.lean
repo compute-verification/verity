@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Level0
 import Proofs.Flock.Claims.Complete.Zk.Level0Run
+import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
 import Proofs.Flock.Claims.Complete.Zk.Count
 import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
 
@@ -11,6 +12,7 @@ here:
 
 * `proverRuns : ProverRuns`: the masked prover's Ligerito returns wherever its pair coins are independent, from
   `ligeritoPZk_ret` at a `--zk` schedule, which keeps fast100's `n ≠ 0` and `k_0 ≥ 1` (`zkSchedule_n`).
+* `lanes : Lanes`: its lane phase in closed form, from `ligeritoPZk_lanes`.
 -/
 
 namespace FlockComplete.L0
@@ -33,5 +35,11 @@ theorem proverRuns : ProverRuns := by
   intro resp h m v T cm0 tb b lay hv rep extra lanePad salt nonce t l _ _ _ hv0 hrho
   exact ligeritoPZk_ret resp h _ v.1 T cm0 tb b lay hv rep v.2 extra lanePad salt nonce (zkSchedule_n hv0)
     (zkSchedule_shape hv0).1 t l hrho
+
+/-- **`ZkTables.Level0.Lanes`**: the masked prover's lane phase in closed form. -/
+theorem lanes : Lanes := by
+  intro resp h m v T cm0 tb b lay hv rep extra lanePad salt nonce t t' l l' P zl rc _ _ hv0 _ _ hrun
+  exact ligeritoPZk_lanes resp _ _ v.1 T cm0 tb b lay hv rep v.2 extra lanePad salt nonce (zkSchedule_n hv0)
+    (zkSchedule_shape hv0).1 hrun
 
 end FlockComplete.L0
