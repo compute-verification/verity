@@ -55,7 +55,7 @@ ask:
   a node's root) and claims (what a guarantee says or rests on) go on to Daniel, as written; spend is its lead's call
   (13 Oct), with pods still bounding themselves under a `budgets.toml` line;
 - the case, the change, and your recommendation, in a few lines;
-- meanwhile, prepare the change on your branch, and mark it ready only after the answer.
+- meanwhile, prepare the change on your branch, and mark it ready yourself once the answer comes.
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`, and put the
 proposal in the question.
@@ -109,6 +109,16 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-16 (11:51 AM PDT): no PR waits on Daniel: "If you think they're ready, they're ready. Merge them. Or maybe
+  ask CI what it thinks." A PR's owner lane marks it ready once it's final and its checks pass, with
+  `research queue ready N --on auto --by LANE` (CI's quick tier first) or `--mark`, and drive lands it. Nobody else
+  marks it, approves its landing or grants it per PR. Claims and lock changes still reach him, through the landing DM.
+- 2026-10-16 (10:06 AM PDT, decision 22 of the compute-accounting decision pack): duo receipts are a second named
+  exception to one hash, beside Pearl's FP8 scheme (`AGENTS.md`, "One hash"). PoUW's per-step receipts, keyed u32
+  mul/xor/rotl folds over committed accumulator words, tie each committed prefix word to its SHA-512 commitment inside
+  the GEMM, since a SHA-512 leaf for every prefix word costs 52–68× the GEMM at L = 32. Their binding premise H-μ⁺ is
+  named (the premise ledger's row R1, `note:20261016T0219Z-report-premise-ledger`) and goes into the lock; proving it
+  beyond single-word errors is a work item. The served GEMM stays on duo while Theorem K is the floor of record.
 - 2026-10-14 (12:53 PM PDT): hard switches, one abstraction per job. The moves we've made are total: the new repository,
   one cloud agent per lead talking horizontally, and Linear as the work-item layer (the brief colocated in the issue,
   filed into the owning team; pickup is the issue's state change; Slack narrows to conversation, broadcasts, alerts and

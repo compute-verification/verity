@@ -13,12 +13,16 @@ shape (`zkQueryRound`): the masked replay's `m + kLog − 6` rounds (`Zk.replay`
 (`Flock.ringSwitch`), then Ligerito's `k0 + 8` before level 0's queries (`Zk.ligerito`: the OOD point and its coin, the
 `k0` lane challenges, the pair's `ρ_0, ρ_1`, and level 1's two OOD intros of two rounds each).
 `Proofs.Flock.Claims.ZkQueryRound` proves it from the verifier's transcript: in an accepted session
-(`Zk.verifyWithM`, any oracle) each rep's `zkRepColsOf` is its proof's level-0 rows at the positions of that round's
-coins, on which level 0's Merkle check passed against the table's `root_B` (`zkQueryRound_verifyWithM`). The probe
+(`Zk.verifyWithM`, any oracle) each rep's `zkRepColsOf` is the witness lanes of its proof's level-0 rows at the
+positions of that round's coins, on which level 0's Merkle check passed against the table's `root_B`
+(`zkQueryRound_verifyWithM`). The probe
 `Proofs.Flock.Claims.ZkColsSession` checks the same on recorded `--zk` sessions, by hand.
 
+A masked column is the row's first `2^k0` symbols, the witness lanes (`zkRepColsOf`): the extra lanes are the reps'
+own, and the masked code is the padded witness-lane code (`zkEncD`).
+
 The reader takes no hash: it neither replays the transcript nor checks a digest, so it reads the same columns under
-every `H`. `zkRepCols` is one rep's columns (position `j` with row `j`, read in GF(2^128)); `zkRunCols` is a table's
+every `H`. `zkRepCols` is one rep's rows (position `j` with row `j`, read in GF(2^128)); `zkRunCols` is a table's
 run, both reps' columns, one per position and each below `2^d` (`zkRunCols_nodup`, `zkRunCols_lt`), at most `q₀` per
 rep (`zkRunCols_length_le`), so one run's two reps give fewer columns than the Johnson count
 (`zkRunCols_length_lt_zkNMinD`).
@@ -49,13 +53,14 @@ def zkRepCols (lv₀ : Flock.Level) (coins : Array Flock.F128) (rows : Array (Ar
   ((Flock.positions lv₀ coins).toList.zip (rows.toList.take lv₀.q)).map fun p =>
     (p.1, p.2.toList.map FlockLevel3.GF128.of)
 
-/-- **A rep's opened level-0 columns** from its recorded rounds and proof bytes: none if the proof does not decode. -/
+/-- **A rep's opened level-0 columns** from its recorded rounds and proof bytes, each an opened row's first `2^k0`
+symbols (the witness lanes): none if the proof does not decode. -/
 def zkRepColsOf (sh : Flock.Shape) (rounds : Array Flock.Round) (bytes : ByteArray) : List (ℕ × List 𝔽) :=
   match Flock.Zk.decode sh bytes with
   | .ok zp =>
-    zkRepCols (sh.sched.levels.getD 0 default)
+    (zkRepCols (sh.sched.levels.getD 0 default)
       ((rounds[zkQueryRound sh.m sh.kLog sh.sched.k0 sh.claims]?.map (·.coins)).getD #[])
-      zp.proof.ligerito.initialProof.rows
+      zp.proof.ligerito.initialProof.rows).map fun p => (p.1, p.2.take (2 ^ (sh.sched.levels.getD 0 default).lanes))
   | .error _ => []
 
 /-- What the reader takes from a masked run, for one table: the shape's numbers and each rep's recorded rounds and
@@ -99,7 +104,8 @@ theorem length_zkRepColsOf_le (sh : Flock.Shape) (rounds : Array Flock.Round) (b
     (zkRepColsOf sh rounds bytes).length ≤ (sh.sched.levels.getD 0 default).q := by
   unfold zkRepColsOf
   split
-  · exact length_zkRepCols_le _ _ _
+  · rw [List.length_map]
+    exact length_zkRepCols_le _ _ _
   · exact Nat.zero_le _
 
 /-- **A masked run's columns sit at distinct positions.** -/

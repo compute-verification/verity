@@ -37,7 +37,7 @@ to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in 
 * `setup_of_accepts`: a raw session that passes the statement check sets up a first table, with `circZ I` as its
   circuit and `(pubZ I).n` as its population.
 * `vstarFile_of_accepts`: at a raw session that `AcceptsZKV` accepts as statement `j` under `f` and that passes the
-  statement check, the inputs' circuit file is `circuitFile s f` for V*'s statement `s` at index `j` at `i`, named as the
+  statement check, the inputs' circuit file is `circuitFile s f i.holo` for V*'s statement `s` at index `j` at `i`, named as the
   session's unit; `(pubZ I).n` is `s`'s instance count, and the verifier's reads hold `s`'s message-round ports.
 -/
 
@@ -50,16 +50,6 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
 `k_log`, two claims and one per region and link point, and its regions. -/
 def innerAt (spec : Flock.SessionSpec) (st : Flock.Stmt) : RecVStar.Inner :=
   { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size }
-
-/-- **A private inner session has no V* statements**: `RecVStar.statements` refuses an inner shape whose circuits are
-private (`i.holo`, the verifier's own `--hide`), as V*'s circuit writer writes no holo part yet. -/
-theorem statements_holo {i : RecVStar.Inner} (h : i.holo = true) (ss : Array VStar.Stmt) :
-    RecVStar.statements i ≠ .ok ss := by
-  obtain ⟨m, k, c, r, holo, sp, st⟩ := i
-  dsimp only at h
-  subst h
-  intro hss
-  cases hss
 
 /-- **flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F --rec-rows F` accepts the
 transcript**, at the inner shape `i`, as V*'s statement `j` under the verifier's own bindings `f`: `AcceptsZKR`, and each
@@ -105,14 +95,14 @@ end Sessions
 /-- Obligation: open until gap 4 builds `Vs j` from the partition, as this parse of V*'s file.
 **V*'s statement `j` at the inner shape `i`, written under its bindings, parses to `Vs j`'s circuit, and `Vs j` has one
 unit per instance.** At V*'s tags `t₀` (the `--statement` the verifier requires of a V* session), where `i` has
-statements and the `j`th is `s`, the file `circuitFile s (bind j)` that `vstar stage` writes parses, under `--zk`'s tags
+statements and the `j`th is `s`, the file `circuitFile s (bind j) i.holo` that `vstar stage` writes parses, under `--zk`'s tags
 for one table (`Zk.tags` on the coin tree of `Zk.coinSpec #[t₀.table]`, at the file's `mask_log` and count 1) and with
 no lookup tables, to `(Vs j).c`; and `(Vs j).nv` is `s`'s instance count. A fact about our code, not a premise: the tags
 are a constant of the file, so no session input enters it. -/
 def VStarParses {S : ℕ} (t₀ : Flock.Tags) (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings) (Vs : Fin S → VStmt) :
     Prop :=
   ∀ (j : Fin S) (ss : Array VStar.Stmt) (s : VStar.Stmt) (cf : ByteArray), RecVStar.statements i = .ok ss →
-    ss[(j : ℕ)]? = some s → RecVStar.circuitFile s (bind j) = .ok cf →
+    ss[(j : ℕ)]? = some s → RecVStar.circuitFile s (bind j) i.holo = .ok cf →
     HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table]))) (Flock.Zk.maskLogOf cf) 1) cf
       [] = .ok (Vs j).c ∧ (Vs j).nv = s.instances
 
@@ -200,11 +190,11 @@ theorem firstDiff?_eq_none {a b : ByteArray} (h : RecVStar.firstDiff? a b = none
         exact hi
     · cases h
 
-/-- **The file check**: the circuit file is V*'s for `s` under `b`. -/
-theorem checkFile_ok {s : VStar.Stmt} {b : VStar.Bindings} {circuitB : ByteArray}
-    (h : RecVStar.checkFile s b circuitB = .ok ()) : RecVStar.circuitFile s b = .ok circuitB := by
+/-- **The file check**: the circuit file is V*'s for `s` under `b`, over an inner session holo or not. -/
+theorem checkFile_ok {s : VStar.Stmt} {b : VStar.Bindings} {circuitB : ByteArray} {holo : Bool}
+    (h : RecVStar.checkFile s b circuitB holo = .ok ()) : RecVStar.circuitFile s b holo = .ok circuitB := by
   unfold RecVStar.checkFile at h
-  cases hc : RecVStar.circuitFile s b with
+  cases hc : RecVStar.circuitFile s b holo with
   | error e =>
     rw [hc] at h
     cases h
@@ -316,10 +306,10 @@ theorem checkPart_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkPar
       exact hn
 
 /-- **The circuit check, as V*'s statement `j` under the verifier's bindings `f`**: the unit check as statement `j`,
-the file check under `f`, the parse check and the part check. -/
+the file check under `f` at `i`'s holo flag, the parse check and the part check. -/
 theorem checkCircuit_ok {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : ℕ} {circuitB : ByteArray}
     {f : VStar.Bindings} {s : VStar.Stmt} (h : RecVStar.checkCircuit i j c n circuitB f = .ok s) :
-    RecVStar.check i c.unit.name n (some j) = .ok s ∧ RecVStar.checkFile s f circuitB = .ok () ∧
+    RecVStar.check i c.unit.name n (some j) = .ok s ∧ RecVStar.checkFile s f circuitB i.holo = .ok () ∧
       RecVStar.checkParsed s c = .ok () ∧ RecVStar.checkPart s c = .ok () := by
   unfold RecVStar.checkCircuit at h
   obtain ⟨_, -, h⟩ := ebind_ok h
@@ -332,7 +322,7 @@ theorem checkCircuit_ok {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : 
 
 /-- **`checkStmt` at an inner shape, the verifier's own reads, statement `j` and bindings `f`**: the statement is set
 up under tags named V*'s `Tags.circuit` with no lookup table (refusals 5 and 6), and its circuit file is
-`circuitFile s f` for V*'s statement `s` at index `j` at `i`, named as its unit (the one statement so named), with the
+`circuitFile s f i.holo` for V*'s statement `s` at index `j` at `i`, named as its unit (the one statement so named), with the
 statement's population as its instances, and the verifier's reads hold `s`'s message-round ports. -/
 theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)} {st : Flock.Stmt}
     {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
@@ -341,7 +331,7 @@ theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (St
       .ok ()) :
     tags.name = Flock.Tags.circuit.name ∧ tables = [] ∧
       ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ s.name = st.c.unit.name ∧
-        RecVStar.population st = s.instances ∧ RecVStar.circuitFile s f = .ok circuitB ∧
+        RecVStar.population st = s.instances ∧ RecVStar.circuitFile s f i.holo = .ok circuitB ∧
         RecVStar.checkOwn s own = .ok () ∧ ss.toList.filter (·.name == st.c.unit.name) = [s] := by
   unfold RecVStar.checkStmt at h
   dsimp only at h
@@ -439,14 +429,14 @@ theorem setup_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec
 /-- **A raw session that `AcceptsZKV` accepts as V*'s statement `j` under the bindings `f` loads that statement's
 file**, where its inputs pass the statement check: its first table's statement has the inputs' circuit and
 `(pubZ I).n` as its population (`setup_of_accepts`), and `checkStmt_ok` at it: the inputs' tags are named the
-circuit's and they carry no lookup tables, and the inputs' circuit file is `circuitFile s f` for V*'s statement `s` at
-index `j`, whose instance count is `(pubZ I).n`. -/
+circuit's and they carry no lookup tables, and the inputs' circuit file is `circuitFile s f i.holo` for V*'s statement
+`s` at index `j`, whose instance count is `(pubZ I).n`. -/
 theorem vstarFile_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec.Transcript)
     {i : RecVStar.Inner} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
     (hacc : AcceptsZKV i j f rows x.I x.own t) (hck : ScopeZR x.I) :
     x.I.tags.name = Flock.Tags.circuit.name ∧ x.I.tables = [] ∧
       ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ s.name = (circZ x.I).unit.name ∧
-        (pubZ x.I).n = s.instances ∧ RecVStar.circuitFile s f = .ok x.I.circuitFile ∧
+        (pubZ x.I).n = s.instances ∧ RecVStar.circuitFile s f i.holo = .ok x.I.circuitFile ∧
         RecVStar.checkOwn s x.own = .ok () := by
   obtain ⟨-, spec, sts, hs, hv⟩ := hacc
   obtain ⟨h0, hcst, hpop⟩ := setup_of_accepts x t hs hck
@@ -496,7 +486,7 @@ file the verifier refuses; `VStarParses` gives it (`vstarParsesScoped_of`). -/
 def VStarParsesScoped {S : ℕ} (t₀ : Flock.Tags) (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings)
     (Vs : Fin S → VStmt) : Prop :=
   ∀ (j : Fin S) (ss : Array VStar.Stmt) (s : VStar.Stmt) (cf : ByteArray) (c : Flock.Circuit),
-    RecVStar.statements i = .ok ss → ss[(j : ℕ)]? = some s → RecVStar.circuitFile s (bind j) = .ok cf →
+    RecVStar.statements i = .ok ss → ss[(j : ℕ)]? = some s → RecVStar.circuitFile s (bind j) i.holo = .ok cf →
     HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table]))) (Flock.Zk.maskLogOf cf) 1) cf
       [] = .ok c → Layout.scopeOk c = true → c = (Vs j).c ∧ (Vs j).nv = s.instances
 

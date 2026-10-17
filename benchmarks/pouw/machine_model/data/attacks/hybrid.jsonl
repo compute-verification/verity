@@ -1,0 +1,6 @@
+{"design": "u5", "family": "hybrid", "name": "P2-FF r3 nibble gather (κ = 2.46)", "program": {"MMA": 0.0001220703125, "ALU": 0.0093580513946281, "LDS32": 0.0009281379132231405}}
+{"design": "u5", "family": "hybrid", "name": "P2-FF r3 nibble gather (κ = 2.46), integer work on UNI", "program": {"MMA": 0.0001220703125, "LDS32": 0.0009281379132231405, "UNI": 0.2994576446280992}, "since": "VF2"}
+{"design": "u5", "family": "hybrid", "name": "P2-FF r3 nibble gather (κ = 2.46), ALU on ALU64", "program": {"MMA": 0.0001220703125, "LDS32": 0.0009281379132231405, "ALU64": 0.00467902569731405}, "since": "VF3c"}
+{"design": "u5", "family": "hybrid", "name": "P2-FF r3 nibble gather (κ = 2.46), ALU on UNI64", "program": {"MMA": 0.0001220703125, "LDS32": 0.0009281379132231405, "UNI64": 0.1497288223140496}, "since": "VF3c"}
+{"design": "u5", "family": "hybrid", "name": "P2-FF r3 nibble gather (κ = 2.46), ALU on W2", "program": {"MMA": 0.0001220703125, "LDS32": 0.0009281379132231405, "W2": 0.00467902569731405}, "since": "VF3e"}
+{"design": "u5", "family": "hybrid", "name": "P2-FF r3 nibble gather (κ = 2.46), ALU on DMUL", "program": {"MMA": 0.0001220703125, "LDS32": 0.0009281379132231405, "DMUL": 0.00467902569731405}, "since": "VF3e"}

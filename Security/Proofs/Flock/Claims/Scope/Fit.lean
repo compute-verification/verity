@@ -11,7 +11,7 @@ has the circuit the scope check parses, the verifier's layout, and the well-form
 (`StmtWF`, `RegionsWF`). `tables_fit`: so every table has the first table's circuit, `m` and link points, and fits its
 blocks (`Tab.Fits`). `relS_layout`: at such a statement, `RelS` of the readable statement is every table's
 `Layout.model` at `regionsOf`, the statement the soundness proof reads, satisfied by its share of the hidden values
-(`2^m` bits per table).
+(`zOf`, the tables' bits interleaved).
 -/
 
 namespace Flock.Readable
@@ -83,12 +83,12 @@ theorem tables_fit {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (h
   rw [rj.hm, r0.hm, hk, hnbl]
 
 /-- **`RelS` at a statement the verifier parses**: every table's model statement (`Layout.model` at `regionsOf`) is
-satisfied by its share of the hidden values, `2^m` bits per table. -/
+satisfied by its share of the hidden values. -/
 theorem relS_layout {p : Parsed} (hp : Parses p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none)
     (w : Claims.Flock.Wit) :
     Claims.Flock.RelS (toReadable relation p) w ↔
       ∀ c (hc : c < p.sts.size), ∃ L : FlockSoundness.Layout p.sts[c],
-        (L.model (Refine.regionsOf p.sts[c])).Satisfies (zOf (2 ^ (toReadable relation p).m) w c p.sts[c].m) := by
+        (L.model (Refine.regionsOf p.sts[c])).Satisfies (zOf p.sts.size w c p.sts[c].m) := by
   have hs := tablesOf_of_parses hp
   rw [relS_relation]
   refine forall₂_congr fun c hc => ?_
@@ -97,14 +97,9 @@ theorem relS_layout {p : Parsed} (hp : Parses p) (ht : p.tags.typed = false) (hp
     simp only [toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some]
   have hk : (toReadable relation p).kLog = p.sts[0].c.kLog := by
     simp only [toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some]
-  obtain ⟨-, L, w0, -⟩ := tableAt hs ht hpi hc
+  obtain ⟨-, L, -, -⟩ := tableAt hs ht hpi hc
   have hfit := tables_fit hs ht hpi hc
-  have hT : 2 ^ ((toReadable relation p).m - (toReadable relation p).kLog) * 2 ^ (toReadable relation p).kLog =
-      2 ^ (toReadable relation p).m := by
-    rw [← Nat.pow_add, Nat.sub_add_cancel]
-    rw [hm, hk, ← hfit.1, ← hfit.2.1]
-    exact w0.hk
-  rw [hT, getElem!_pos p.sts c hc, hm, hk]
+  rw [getElem!_pos p.sts c hc, hm, hk]
   exact ⟨fun ⟨_, hz⟩ => ⟨L, hz⟩, fun ⟨_, hz⟩ => ⟨hfit, hz⟩⟩
 
 end Flock.Readable

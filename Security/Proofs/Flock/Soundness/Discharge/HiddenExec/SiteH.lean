@@ -220,7 +220,7 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
 /-! ## The rows' `b ‖ c` at a site -/
 
 /-- `Hidden.Any.row_bc_tgtS` in an accepted statement `T`, through its flat twin (`Hidden.Any.sat_flatF`). -/
-theorem AcceptedH.row_bc (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
+theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
@@ -230,20 +230,20 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
       (bytesOf (blockBit T z o) 192 (saltCol a.st.c g p)) := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
-  dsimp only at ho hrf hg hp ⊢
+  dsimp only at hupv hrf hg hp ⊢
   have s := Hidden.setupHidden_spec' h
   have L0 := flat_layout ht h
   have F0 := flat_unitFacts ht h
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
     rw [s.da, Hidden.hidden_delta']
   have hz0 := Hidden.Any.sat_flatF L L0 F0 hda hrf.1 hz
-  exact Hidden.Any.row_bc_tgtS L0 F0 rfl (Hm.upv_pos F0.check ho) hz0 o hg hp (hrf.kind hp)
+  exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv hz0 o hg hp (hrf.kind hp)
 
-/-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement whose unit returns the
-outputs and whose rows are each fit or `sha512/row-seg/v1` (`hrf`), at block `o`, template instance `g` and row `p`, the
+/-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement with a unit per VU
+(`hupv`) and whose rows are each fit or `sha512/row-seg/v1` (`hrf`), at block `o`, template instance `g` and row `p`, the
 128 bytes at the `hm96` slot's output (`bcCol`) are the commit string of the bytes the row hashes for the `2 · words`
 bytes at its message columns (`Typed.msgCol`, `Hidden.Any.rowMsg`), under the 192 bytes at `saltCol`. -/
-theorem bc_site_colH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
+theorem bc_site_colH (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
@@ -257,10 +257,10 @@ theorem bc_site_colH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
     bytesAt_siteH a z o 192 (saltCol a.st.c g p) (fun j hj t ht => Hm.saltCol_lt R hg hp hj ht),
     ofFn_siteH a z o _ (Typed.msgCol a.st.c g p)
       (fun j _ t ht => Layout.msgCol_lt_of_parse a.parse hg hp j t ht)]
-  exact a.row_bc ho hrf hz o hg hp
+  exact a.row_bc hupv hrf hz o hg hp
 
 /-- `bc_site_colH` at the address the regions pin (`Layout.bcAddr`). -/
-theorem bc_site_commitH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
+theorem bc_site_commitH (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
@@ -275,6 +275,6 @@ theorem bc_site_commitH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
     rw [Layout.bcAddr_eq_slotCol _ _ _ _ _ (Hm.perVu_hm_pow2 a.rowRanges)]
     rfl
   rw [hbc]
-  exact bc_site_colH a ho hrf hz o hg hp
+  exact bc_site_colH a hupv hrf hz o hg hp
 
 end FlockSoundness.Discharge.HiddenExec

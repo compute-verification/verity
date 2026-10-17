@@ -791,7 +791,7 @@ def _render(entries: dict[int, Entry]) -> str:
 
 #: the quick tier, run from the checkout's root: the suites the PR changes since `--changed REV`, without the tests marked `slow`
 SUITES = quick_tier.SUITES
-QUICK_TIER = ["uv", "run", "--locked", "--extra", "torch-cpu", "python", SUITES, "--quick"]
+QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
 LEAN_BUILDS = ("verity/core/service/flock",)
@@ -1059,14 +1059,36 @@ class MarkOnly:
         return None
 
 
-def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None]) -> int:
+def ejection(store, pr: PR) -> str | None:
+    """Why ``pr``'s current head was ejected, when the newest `ready` label on it is `research queue eject`'s `false` (its reason in
+    `ref`), pulled from the store's remote first; else None, and None when that pull fails: this saves a train, and the train's
+    check is the gate."""
+    try:
+        labs = StoreLabels(store, log=lambda s: print(s, file=sys.stderr))._labels(pr.number, pr.head, vocab.READY)
+    except QueueError as e:
+        print(f"research queue ready: can't tell whether #{pr.number}'s head was ejected ({e}); the train's check still gates it",
+              file=sys.stderr)
+        return None
+    last = labs[-1] if labs else None
+    if last is None or str(last.value).lower() != "false" or not last.ref:
+        return None
+    return f"{last.ref} (ejected by {last.by} at {last.ts})"
+
+
+def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool = False) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
-    head marked ready (`same_tree_mark`) is marked without running the tier again."""
+    head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
+    unless ``again`` (16 Oct: #2174, re-marked at its ejected head, failed a second train on the same line)."""
     pr = next((p for p in github.open_prs() if p.number == number), None) if number is not None else None
     if pr is None:
         print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
         return 2
+    if not again and (why := ejection(store, pr)):
+        print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: that head was ejected: {why}. Push the fix "
+              f"and mark the new head; if the ejection was wrong (a machine fault), say so in the merge thread and pass --again",
+              file=sys.stderr)
+        return 1
     if (repo := getattr(tier, "repo", None)) is not None:
         try:
             old = same_tree_mark(store, repo, tier.remote, pr)
@@ -1201,6 +1223,7 @@ def main(argv: list[str]) -> int:
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
+    ap.add_argument("--again", action="store_true", help="ready: mark a head that was ejected (only when the ejection was wrong)")
     ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once; "
                                                                       "report: of merge groups")
     ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
@@ -1263,7 +1286,7 @@ def main(argv: list[str]) -> int:
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
-            return ready(GitHub(repo), store, a.pr, a.by, tier)
+            return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again)
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,

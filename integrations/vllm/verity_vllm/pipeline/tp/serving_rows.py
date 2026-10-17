@@ -11,7 +11,6 @@ or whose root is not the one the TP run root combines, exits the Commit before i
 from __future__ import annotations
 
 import json
-import os
 import traceback
 from pathlib import Path
 from typing import Any
@@ -90,7 +89,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
                            committed=OC.OpenedReader(st["com"], rc), weights=SR.model_weights_provider(st["eng"].model, p.index.prefix),
                            manifest=RR.manifest_of_rank(st.get("manifest_doc"), rank), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
                            run=request.get("run"), row=request.get("row"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
-                           committer=request.get("committer"), workers=max(1, min(16, (os.cpu_count() or 1) // world)),
+                           committer=request.get("committer"), workers=1,   # vLLM's TP workers are daemonic: no process pool under them
                            tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
                            index={"attention_paths": p.attn_paths, "tp": p.tp})
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
