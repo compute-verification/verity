@@ -38,7 +38,7 @@ from paged import K, KB  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 
-sys.path.insert(0, str(HERE.parents[1] / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests"))
+sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests")]
 import remote_bandwidth_vectors as RV  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as RC  # noqa: E402
 
