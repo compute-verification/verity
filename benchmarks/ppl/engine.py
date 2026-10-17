@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import math
 import time
+import types
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,7 @@ import methodology
 from gates import Gates
 from matmul import MM, Run, run_chain
 from model import Config, Layer, Weights, check_reference, head, rotary
+from spec import HEAD
 from steps import FIRST, GROUP
 
 
@@ -118,9 +120,22 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
         norm_w = top["model.norm.weight"].to(device=device, dtype=torch.bfloat16)
         name = "lm_head.weight" if "lm_head.weight" in W.where else "model.embed_tokens.weight"
         head_w = W.read([name])[name].to(device=device, dtype=torch.bfloat16)
+        arm_of = {stream_key(a, s): (a, s) for a, s in runs}
+        head_layer, head_cache = types.SimpleNamespace(li=cfg.layers), {}
+
+        def proj(k: str, w: int):
+            if k not in arm_of:
+                return None
+            run = Run(*arm_of[k], window_ids[w], head_layer, gates, head_cache, rotations, None)
+            steps = run.steps_for("linear", HEAD)
+            if not steps:
+                return None
+            return lambda x, c: run_chain(steps, MM("linear", HEAD, run, x.float(), head_w, maps=(lambda t: t.float(),),
+                                                    draws=[2 * c]))
+
         nll = {}
         for k, h in [("bf16/s0", ref)] + list(streams.items()):
-            nll[k] = torch.stack([head(cfg, norm_w, head_w, h[w], ids_t[w]) for w in range(N)]).cpu().numpy()
+            nll[k] = torch.stack([head(cfg, norm_w, head_w, h[w], ids_t[w], proj(k, w)) for w in range(N)]).cpu().numpy()
     gates.record("tokens", all(v.shape == (N, T - 1) for v in nll.values()), "nll", {k: list(v.shape) for k, v in nll.items()})
     return {"nll": nll, "gates": gates.log, "divergence": diverge,
             "attn_rel_err": {k: math.sqrt(e[0] / e[1]) if e[1] else None for k, e in attn_err.items()},

@@ -2060,6 +2060,7 @@ dependencies = [
     { name = "scipy" },
     { name = "verity" },
     { name = "verity-difftest" },
+    { name = "verity-exact-kit" },
     { name = "verity-vllm" },
 ]
 
@@ -2071,6 +2072,7 @@ requires-dist = [
     { name = "scipy", specifier = "==1.18.1" },
     { name = "verity", editable = "." },
     { name = "verity-difftest", editable = "verity/core/difftest" },
+    { name = "verity-exact-kit", editable = "benchmarks/pouw/exact_kit" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
