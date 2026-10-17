@@ -3390,7 +3390,7 @@
    ]
   },
   "Flock.Canon": {
-   "digest": "cff07bd5e7e3c3b8bdf747b3f465634474da235d2f6a24e413ed7db7e40e8672",
+   "digest": "536a8731b7fba7d6860645cc6aac972085812ed94c352fadfefbfe1e9a56e65e",
    "definitions": {
     "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
     "Flock.J.asArr": "1b27db679047d2f116aa1f9a34f952f53a203ac47471331311ff49f0937597b0",
@@ -3402,7 +3402,9 @@
     "Flock.J.has": "ca6982e3c1614babecc5c8ac4f8e0dbe6d84112fb997d55371d9644449b9d208",
     "Flock.J.nat": "14651f660693f11c7c802159f9ef5dd00e9d1ab41c9994d1475731cc4fec6aa0",
     "Flock.J.str": "e3b64bf9e865f4b684f547639349e4d4af1dca863e4b32aa1becab9980d2fdaa",
-    "Flock.canon": "93dbf8cf653d16c809b10196ae319b382c9029b69aef49a3395c51de57ae1519"
+    "Flock.canon": "91721c8381191df75ed1970942b7cc109bf7ffde3d4daf2578471d7ec12e2fb1",
+    "Flock.canonStr": "004d0450163619de70153792b310392e674d6f8022604a84ab492ae059079804",
+    "_private.Flock.Canon.0.Flock.hex4": "7c4da174272bc28875627bc5c5f157d6d70a8c1163e8e6e961d111bf7cf9a56c"
    },
    "guarantees": [
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
@@ -3982,7 +3984,7 @@
    ]
   },
   "Flock.TemplateQuery": {
-   "digest": "f36fd631e126056cdcf2fca257c7ea7d2cb1216aab021bcc608f2c7b336d80a2",
+   "digest": "e0c8febbdc10062684a3da87d9a00cbe1b7ac66260173fa25273c962bcb48da6",
    "definitions": {
     "Flock.TemplateQuery.DDef": "645f008e487ba991572c3d7659e26904c597f4992a45203064a039b8390c5c25",
     "Flock.TemplateQuery.DDef.nodes": "b1e5faa09c8fdd900e35d000003880cda625866e44f4dbade582562d61802677",
@@ -4006,6 +4008,7 @@
     "Flock.TemplateQuery.TRange": "fd176f71efa5fc07006ee54773e55f3a6124120a9bee2e4e1bddf50c3e6f7c29",
     "Flock.TemplateQuery.TRange.count": "3fe062b8587defd38ac54d1642748d5cb3d36fed2811e229e40e58ab44a94866",
     "Flock.TemplateQuery.TRange.first": "300a15fc0874f4d021d64b7cb584eeecb7d4e7c004891138fea17c1860cac4af",
+    "Flock.TemplateQuery.TRange.node": "5f1b0a67687c76e53492726f0160d1345cf542d428ef2a35fb83ff200d3b7e93",
     "Flock.TemplateQuery.TRange.template": "c97082152447cce908ab19f4a60920ab5762ecbe2fe15762729a512482a742bd",
     "Flock.TemplateQuery.evaluate": "ef5c9d3372ef509ead267a7f27120b7532de85c172ba4946d79bf60809268bbd",
     "Flock.TemplateQuery.instInhabitedDNode": "1d2ed3dda22709ce0a00c64c4cb97c5e33bcf5033920f6dc47ae79bcd0570ad5",
@@ -6279,16 +6282,20 @@
    ]
   },
   "SampledProofs.Partition": {
-   "digest": "4caca97f1c9b924013a206db8f269510bd1b6477f06ac9c0442627121c42a0d7",
+   "digest": "f447ebdd725cdc546233d7b2fd17b549b9bf289231e90d20d76b49b4bcfde440",
    "definitions": {
     "SampledProofs.Partition.QUERIES": "7a4b15ad65801c50776c22330a725a5d0dcab1cac894ef229a7005cfa4bfc37b",
     "SampledProofs.Partition.UNIT_BITS": "1f5956e25c217932d6d7df5eaf2d42b71b07bf928d8a09bcd32555f64182e5e4",
     "SampledProofs.Partition.build": "b4abd1a65a434819085c7b20ed737a83fec84a4b09737d18ce8b02e8d3c3d79a",
     "SampledProofs.Partition.callRanges": "c25cdea3cc0b6ab2883c0efeb955ad7515689aa4ad63d86e57f7158752c5f545",
-    "SampledProofs.Partition.calls": "2551cf5b6b00fc56b9dabe5cbac456e59c3b08e10a23b4e053995d5b5f787cfb",
+    "SampledProofs.Partition.calls": "327c6427447d87081d01cc2e59a22042a674a66e6eb018f4df4f8ff35c0c3825",
+    "SampledProofs.Partition.checkCalls": "cede4e9303e058efc3215b3bdfc8df9c187720d4437b3b17934792f6e9476452",
+    "SampledProofs.Partition.checkTemplates": "5708211f54a90295eb77c70cfa565eca07142e6860131f2437a5467283123ce7",
+    "SampledProofs.Partition.committedBits": "0bba844515c9f84ce259a5c9599ef62335726abe0bd9182adef63e17ed0b5073",
+    "SampledProofs.Partition.committedBits._sparseCasesOn_5": "74c33e19404a5d3ca0b890c66e45027ad81cd34abbbfd4f08e9d3add065f2114",
     "SampledProofs.Partition.defaultQuery": "30cf1f1d443c2ad40aff3b2cca034e7783c5b5036532896d60169a28ab15c8fa",
     "SampledProofs.Partition.digest": "d70cb97b36c305c74491aa1ab2e08bcfe03ab78eb6e205ab60d1589b8adbebdf",
-    "SampledProofs.Partition.evaluate": "7afc8298d0dfe480a41fcf685cbee93295cd088889a64fd6e1cf9081f29f0ba3",
+    "SampledProofs.Partition.evaluate": "0c7c03f190ffd15e82950c82cbf97b79efebd76dc08ca18b6d1c334964e64826",
     "SampledProofs.Partition.strata": "cafb193eb2fc133ba1b89bbd874d4efae0ec42a2d42dc276f2271123a0a57446",
     "SampledProofs.Partition.units": "c4191d8607d1306facb49854bcb3197f2b1e63eb95887694e7644d4eca5ee49e",
     "SampledProofs.Partition.valid": "4afd49c81c6a2b6534d2042d897a760151c0c17fcff2ab44cff6e72054073ff3",
