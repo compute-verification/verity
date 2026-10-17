@@ -8,8 +8,8 @@ them on a run: every V* session of an accepted run ends on a decision the compil
 (`run_decides`), at the session's last round. Before the last session, the next session's first round refuses a
 session that ended on a coin (`decided`, which `run_round` reads); the last session's last round is the run's, which
 accepts (`stepWith_acc_last`). So the compiled verifier refuses an accepted run whose inner shape the setup's checks
-refuse or one of whose V* records doesn't draw every unit (`run_acc_scope`), and what it reads of the statement with
-the sessions' records is in `InScope` (`run_acc_inScope_records`).
+refuse or one of whose V* records doesn't draw every unit (`run_acc_scope`; `Draw.Full`, `run_acc_full`), and what it
+reads of the statement with the sessions' records is in `InScope` (`run_acc_inScope_records`).
 -/
 
 namespace RecDeploy
@@ -182,6 +182,17 @@ theorem run_acc_scope (hacc : (run H P (V IV st) x ω r).out = .acc) :
       · cases hp
   · obtain ⟨i, f, hi, hD, -, hf⟩ := hd s hs
     exact ⟨i, f, hi, hD, hf⟩
+
+/-- **Every V\* session of an accepted run draws every unit**: its decision's record holds a draw, and it is the full
+draw (`Draw.Full`). -/
+theorem run_acc_full (hacc : (run H P (V IV st) x ω r).out = .acc) :
+    ∀ s < nS x, ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧
+      DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧
+        ∃ e, RecScope.recordDrawOf f.record = some e ∧ e.Full := by
+  obtain ⟨xr, -, -, hall⟩ := run_acc_scope H IV st x P ω r hacc
+  intro s hs
+  obtain ⟨i, f, hi, hD, hf⟩ := hall s hs
+  exact ⟨i, f, hi, hD, (RecScope.fullDrawOk_iff xr.shape f.record).1 hf⟩
 
 /-- **An accepted run is in scope with its records**: what the compiled verifier reads of `x` with the records each
 V* session decided on (`RecScope.toStmt`, at `readOf` with those records) is in `InScope`. -/
