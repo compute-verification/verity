@@ -104,3 +104,15 @@ def test_the_budget_reserves_this_process_s_own_task_list(monkeypatch):
     assert cli.admit([137.81], [], jobs=8, budget=budget) == [0] and cli.admit([16], [137.81], jobs=8, budget=budget) == []
     monkeypatch.setattr(cli, "memory_gb", lambda: 200)
     assert cli.budget_gb(None) == 200 and cli.budget_gb(560) == 200
+
+
+def test_without_mem_gb_a_run_in_a_check_slot_keeps_to_the_slot(monkeypatch):
+    """CIR-21: inside slot.py's slot (CHECK_SLOT_MEM_GB) a raw `circuit-check` without `--mem-gb` budgets the slot's mem=, not
+    the machine's MemAvailable; `--mem-gb` still wins, and outside a slot nothing changes."""
+    monkeypatch.setattr(cli, "_rss_gb", lambda: 0.0)
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 1500)
+    monkeypatch.setenv(cli.SLOT_MEM_ENV, "320")
+    assert cli.budget_gb(None) == 320 and cli.budget_gb(100) == 100
+    assert cli.auto_jobs() == min(2, len(os.sched_getaffinity(0)))
+    monkeypatch.delenv(cli.SLOT_MEM_ENV)
+    assert cli.budget_gb(None) == 1500

@@ -20,6 +20,7 @@ class Harness:
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
         monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
+        monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
                         post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
@@ -755,3 +756,71 @@ def test_a_twin_stopped_by_sigterm_is_no_verdict_and_its_sibling_still_decides(w
     assert h.d.verdict(_tip(world), _git(world.origin, "rev-parse", "main"), h.d.q.load_state()["drive"]).state == "none"
     h.tick()
     assert len(h.launched) == 2 and not h.posts                          # launched again, nothing told
+
+
+def test_a_new_head_keeps_the_running_train_at_the_head_it_checks_and_rejoins_above_it(world, monkeypatch):
+    """17 Oct 07:56Z: two re-marked heads (#2222, #2235) took their PRs off `next` and cancelled two running trains; top ruled a
+    new head no longer cancels a running train: it runs on at the head the owner marked, and the new head rejoins above."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 1
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    running = h.q.chain()[1].commit
+    world.gh.put(1, world.change({"a.txt": "1 fixed\n"}, base=old))                # #1's owner pushes a new head
+    h.tick()
+    chain = h.q.chain()
+    assert [(m.pr, m.head) for m in chain[:1]] == [(1, old)] and chain[1].commit == running and h.cancelled == []
+
+
+def test_a_new_head_after_its_own_train_failed_rebuilds_without_waiting(world, monkeypatch, tmp_path):
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()                                                              # #1's own train, and the one above it with #2
+    own = h.q.chain()[0].commit
+    _check(world, monkeypatch, own, ("false",))
+    h.evidence = [_killed_run(tmp_path, "one")]
+    h.tick()                                                              # resent
+    rid = h.d.q.load_state()["drive"]["launched"][own]["ids"][0]
+    h.run_state[rid] = ("done", 1, None)
+    h.clock += PUBLISH_GRACE_S + 1
+    h.evidence = [_killed_run(tmp_path, "two")]
+    h.tick()                                                              # failed again: told, nobody ejected
+    assert len(h.posts) == 1 and "failed again on its resend" in h.posts[0], h.posts
+    fixed = world.change({"a.txt": "1 fixed\n"}, base=old)
+    world.gh.put(1, fixed)                                                # the train above still runs, but #1's own failed
+    h.tick()
+    assert [m.head for m in h.q.chain() if m.pr == 1] == [fixed]
+
+
+def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
+    """17 Oct, r20261017-104751-c19c on cpu-2: the Security/Proofs replay was OOM-killed (exit 137), lean-audit failed with rc 1,
+    and the fallback on Lean sources ejected #2224 and #2231, whose heads had passed."""
+    from research.drive import killed
+
+    d = tmp_path / "run"
+    d.mkdir()
+    (d / "steps.jsonl").write_text('{"step": "lean-audit", "status": "failed", "rc": 1, "log": "lean-audit.log"}\n')
+    (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n  replay: killed (exit 137; out of "
+                                      "memory?), which is not a kernel verdict: rerun it alone\n")
+    assert killed(d)
+    (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n    error: build failed\n")
+    assert not killed(d)
+
+def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
+    """CI-48: nothing deleted a landed PR's branch or an idle one, and the repository reached 3,543 branches."""
+    from research.drive import BRANCH_SWEEP_S
+
+    h = Harness(world, monkeypatch)
+    calls = []
+    monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: calls.append(a) or (2, 1))
+    h.tick()
+    h.tick()
+    assert len(calls) == 1 and any("branch sweep: 2 deleted (on main), 1 archived" in x for x in world.logs)
+    h.clock += BRANCH_SWEEP_S + 1
+    h.tick()
+    assert len(calls) == 2
