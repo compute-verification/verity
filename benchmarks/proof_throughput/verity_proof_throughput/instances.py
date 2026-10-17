@@ -80,6 +80,23 @@ def class_lanes(w: Workload, n: int) -> dict[str, Any]:
     return {"shape": shape, "definition": str(cl.representative.definition), "program_digest": pdig, "ins": ins, "want": want}
 
 
+def partition_object(w: Workload, circuit_meta: dict[str, Any]) -> dict[str, Any]:
+    """The ``verity/partition/v1`` object the workload's statement binds, derived from its own program as the verifier must
+    (``flock-verify --partition``), refused unless it is the one the circuit's META names."""
+    from verity.ml.circuits import partition_object as PO
+    from verity_flock import class_statement as CS
+    from verity_flock import partition_units as PU
+
+    program, _calls, _prov = CS.distinct_calls(None, None, w.definitions(), None)
+    units = PU.partition_units(program, PARTITION)
+    obj = PO.build(units.program, units.query)
+    want = ((circuit_meta.get("partition") or {}).get("digest"), circuit_meta.get("program_sha512"))
+    if (PO.digest(obj), obj["program"]) != want:
+        raise ValueError(f"{w.name}: the circuit binds partition {want[0]} and program {want[1]}, not the workload's "
+                         f"{PO.digest(obj)} and {obj['program']}")
+    return obj
+
+
 def _git_head() -> str | None:
     if os.environ.get("RESEARCH_SOURCE_SHA"):
         return os.environ["RESEARCH_SOURCE_SHA"]

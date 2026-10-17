@@ -30,7 +30,9 @@ A point is one statement of B coordinates of one workload, the first B instances
    result with the live verdicts only.
 2. **Verifier run** (`verify.sh`, a `research run --on vy-nebius-cpu-3` or `-cpu-2` job, tool `proof_throughput_verifier`):
    builds the compiled Lean verifier (`flock-verify`, `verity/core/service/flock/`), runs `flock-verify verify --coins os`
-   on every session of the bundle one at a time under `/usr/bin/time`, and writes the point's result of record: the
+   on every session of the bundle one at a time under `/usr/bin/time`, with its own copy of the `verity/partition/v1` object
+   the circuit binds (`--partition`, derived from the workload's program and checked against the circuit's META, not taken
+   from the bundle), and writes the point's result of record: the
    prover's measurements and the Lean verifier's. It passes only when the live verifier accepted every session and the
    Lean verifier accepted every timed one.
 

@@ -66,6 +66,21 @@ def cmd_check_instances(a) -> int:
     return 0 if got["ok"] else 1
 
 
+def cmd_partition(a) -> int:
+    """The verifier's own copy of the partition object the circuit binds (META, its second line), from the workload."""
+    with open(a.circuit) as f:
+        f.readline()
+        meta = json.loads(f.readline()[5:])
+    try:
+        obj = I.partition_object(workload(a.workload), meta)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 1
+    Path(a.out).write_text(json.dumps(obj, sort_keys=True))
+    print(meta["partition"]["digest"])
+    return 0
+
+
 def _stage_record(path: Path) -> dict | None:
     recs = [r for r in _jsonl(path) if r.get("shape")]
     return recs[-1] if recs else None
@@ -437,6 +452,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("defs"); p.add_argument("--workload", required=True); p.add_argument("--out", required=True)
     p = sub.add_parser("check-instances"); p.add_argument("--workload", required=True); p.add_argument("--B", type=int, required=True)
     p.add_argument("--out", required=True)
+    p = sub.add_parser("partition"); p.add_argument("--workload", required=True); p.add_argument("--circuit", required=True)
+    p.add_argument("--out", required=True)
     p = sub.add_parser("staged"); p.add_argument("--results", required=True); p.add_argument("--cache-dir", action="store_true")
     p = sub.add_parser("probe"); p.add_argument("--out", required=True); p.add_argument("--gpu-csv", default=None)
     p = sub.add_parser("put-bundle"); p.add_argument("--tree", required=True); p.add_argument("--meta", required=True)
@@ -453,5 +470,5 @@ def main(argv: list[str] | None = None) -> int:
     return {"plan": cmd_plan, "check": cmd_check, "run": cmd_run, "verify": cmd_verify, "compare": cmd_compare, "table": cmd_table,
             "baseline": cmd_baseline,
             "instances": cmd_instances, "workloads": cmd_workloads, "zk": cmd_zk, "defs": cmd_defs,
-            "check-instances": cmd_check_instances, "staged": cmd_staged, "probe": cmd_probe, "lean-verdict": cmd_lean_verdict,
+            "check-instances": cmd_check_instances, "partition": cmd_partition, "staged": cmd_staged, "probe": cmd_probe, "lean-verdict": cmd_lean_verdict,
             "point-result": cmd_point_result, "put-bundle": cmd_put_bundle, "fetch-bundle": cmd_fetch_bundle}[a.cmd](a)

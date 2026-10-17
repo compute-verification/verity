@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # proof_throughput's verifier point: the compiled Lean verifier (`flock-verify verify --coins os`) on every session of one prover
 # point's bundle (job.sh's out/bundle.json), each under /usr/bin/time, then the point's contract result from the prover's records
-# and these verdicts. Runs on a CPU node (vy-nebius-cpu-2 or -cpu-3), never on the prover's:
+# and these verdicts. The verifier's `--partition` is its own: derived from the workload's program and checked against the
+# digest the circuit binds (`partition`), never read from the bundle. Runs on a CPU node (vy-nebius-cpu-2 or -cpu-3), never on the prover's:
 #   research run --on vy-nebius-cpu-3 --project verity --source . --cwd source --mem-gb 64 \
 #     --tool verity_proof_throughput.tool:VERIFIER_POINT -- bash benchmarks/proof_throughput/verify.sh BUNDLE=art:... PROVE_RUN=r...
 # env: BUNDLE=art:... PROVE_RUN= (the prover point's run id, recorded in the result)  BUILD_ONLY=1 (build the verifier, stop)
@@ -40,7 +41,7 @@ if [ ! -x "$PYBIN" ]; then
   UV=$(command -v uv || echo "$HOME/.local/bin/uv")
   (exec 8>"$W/venv.lock"; flock 8; [ -x "$PYBIN" ] || { "$UV" venv -q --python 3.12 "$W/py" && "$UV" pip install -q --python "$PYBIN" numpy blake3; })
 fi
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/benchmarks/proof_throughput
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 [ "${BUILD_ONLY:-0}" = 1 ] && { log "BUILD_ONLY: $LEAN ($(cat "$O/lean.sha256"))"; exit 0; }
 
 log "fetching $BUNDLE"
@@ -52,16 +53,21 @@ cp "$BD/gpu-mem.txt" "$O/" 2>/dev/null
 WORKLOAD=$("$PYBIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["workload"])' "$BD/point.json")
 B=$("$PYBIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["B"])' "$BD/point.json")
 PUB=$(ls "$BD"/pub-*.bin | head -1)
-log "verifying $WORKLOAD B=$B: $(ls -d "$BD"/sessions/*/ | wc -l) sessions, circuit $(stat -c %s "$BD/circuit.txt") B"
+# the verifier's own copy of the partition object the circuit binds, derived from the workload's program, not the bundle's
+PART=$S/partition.json
+"$PYBIN" -m verity_proof_throughput partition --workload "$WORKLOAD" --circuit "$BD/circuit.txt" --out "$PART" > "$O/partition.txt" 2>&1 \
+  || { tail -5 "$O/partition.txt"; log "the workload's partition object is not the circuit's"; exit 1; }
+cp "$PART" "$O/partition.json"
+log "verifying $WORKLOAD B=$B: $(ls -d "$BD"/sessions/*/ | wc -l) sessions, circuit $(stat -c %s "$BD/circuit.txt") B, partition $(tail -1 "$O/partition.txt" | cut -c1-16)"
 
 verify_one() {   # verify_one SESSION_DIR: one VERDICT line with the session's time and peak memory
   local s=${1%/} t; t=$(mktemp "$S/time.XXXXXX")
   /usr/bin/time -f '%e %U %S %M' -o "$t" "$LEAN" verify --statement verity/flock-circuit --coins os --circuit "$BD/circuit.txt" \
-    --public "$PUB" --session "$s" > "$t.out" 2> "$t.err"
+    --public "$PUB" --partition "$PART" --session "$s" > "$t.out" 2> "$t.err"
   local rc=$?
   "$PYBIN" -m verity_proof_throughput lean-verdict --session "$(basename "$s")" --rc $rc --time "$t" --stdout "$t.out" --stderr "$t.err"
 }
-export -f verify_one; export LEAN BD PUB S PYBIN
+export -f verify_one; export LEAN BD PUB PART S PYBIN
 ls -d "$BD"/sessions/*/ | xargs -P "${JOBS:-1}" -I{} bash -c 'verify_one {}' > "$O/lean.jsonl"
 log "Lean: $(grep -c '"accepted": true' "$O/lean.jsonl") of $(wc -l < "$O/lean.jsonl") sessions accepted"
 "$PYBIN" -m verity_proof_throughput point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --lean "$O/lean.jsonl" \
