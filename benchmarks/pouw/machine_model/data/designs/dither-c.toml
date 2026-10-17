@@ -3,8 +3,9 @@
 # a fresh bit c and c's mean taken off in the epilogue, V served, Ycum's digits committed, so no product is unchecked;
 # what the cheater gets free is vector work, the TS-time ε_skip below (note:20261017T0340Z-draft-skip Result 3, 06:19Z;
 # note:20261017T0030Z-draft-checked-strip). Perplexity +2.20% (8B WT-2 2K), +3.32% (70B C4 2K) with P in one block;
-# +1.65% (8B) in blocks of 256 keys, whose TS ε_skip grows as keys/256 (eps_budget.py's `pv_block_table`), on SKIP's
-# `co32c-pv` arms (`co32c-pv256` and up for blocks of keys).
+# +1.65% (8B) in blocks of 256 keys, whose TS ε_skip grows as keys/256 (eps_budget.py's `pv_block_table`: at the
+# measured costs 3.4% (8B) / 1.9% (70B) of the whole at 32K, served output free), on SKIP's `co32c-pv` arms
+# (`co32c-pv256` and up for blocks of keys).
 name = "dither-c"
 title = "Dither-C"
 aliases = ["co-dither-pv", "Bc-pv", "co32c-pv"]
@@ -22,5 +23,5 @@ floor = { LDSM_X4 = 0.025641 }
 source = "SPEC §3.4: CO-Dither's U is resident (B̃ a data-independent map of a resident matrix), so Dither's one-operand floor, least 1/39 at (a, b) = (1, 39); co32c's words are subset sums of wide U values, as fresh as Dither's (SKIP) (note:20261017T0324Z-draft-eps1-spec)"
 
 [skip.served]
-eps = 0.00145
-source = "eps_budget.py (benchmarks/pouw, `design_skip`): the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, of the whole-model ε_skip by honest time, every served output free; at 8B 8K prefill, the tensor–scalar vector work only the served outputs need: co32c's recombination (linears 0.053%), cohalf's x = 12 route (QKᵀ 0.019%) and pv's digits and epilogue, P in one block (P·V 0.073%; `TS_EPS`, `pv_ts`, checked_strip.py; the digit and epilogue constants unmeasured). With P·V's served output checked downstream it would be lower (CO-DITHER r3 settles which; note:20261017T0030Z-draft-checked-strip, note:20261017T0340Z-draft-skip Result 3)"
+eps = 0.00217
+source = "eps_budget.py (benchmarks/pouw, `design_skip`): the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, of the whole-model ε_skip by honest time, every served output free; at 8B 2K prefill, the tensor–scalar vector work only the served outputs need: co32c's recombination (linears 0.061%), cohalf's x = 12 route (QKᵀ 0.005%) and pv's digits, epilogue and scaling at BC-KERNEL's measured costs, P in one block (P·V 0.151%; `TS_EPS`, `pv_ts`, checked_strip.py; note:20261017T0645Z-draft-bc-kernel). With P·V's served output checked downstream it is 0.124% (8B) / 0.072% (70B) (note:20261017T0320Z-draft-eps1-calc Round 5, note:20261017T0030Z-draft-checked-strip, note:20261017T0340Z-draft-skip Result 3)"

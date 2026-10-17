@@ -796,12 +796,17 @@ static void form() {
   mixu<F, 32, LANE_IADD3>(); mixu<F, 64, LANE_IADD3>(); mixu<F, 96, LANE_IADD3>(); mixu<F, 128, LANE_IADD3>();
 }
 
-int main() {
+static void setup() {
   int d = 0;
   CK(cudaGetDevice(&d));
   CK(cudaDeviceGetAttribute(&g_sms, cudaDevAttrMultiProcessorCount, d));
   CK(cudaMalloc(&g_sink, (size_t)g_sms * 1024 * 4));
   CK(cudaMalloc(&g_rec, (size_t)g_sms * sizeof(BlockClk)));
+}
+
+#ifndef TENSOR_KINDS_NO_MAIN
+int main() {
+  setup();
 #if TK_SM == 89
   // Reference first (group 0) and last (group 3), so drift across the run shows as a difference between its passes.
 #if TK_IN(0)
@@ -878,3 +883,4 @@ int main() {
   printf("{\"probe\":\"tensor_kinds\",\"done\":true,\"num_sms\":%d,\"sm\":%d,\"group\":%d}\n", g_sms, TK_SM, TK_GROUP);
   return 0;
 }
+#endif

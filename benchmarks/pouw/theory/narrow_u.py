@@ -10,6 +10,10 @@ and U's parity varies (the odd top weight, as checked_strip.py's 65). For each N
 - B. co32c's cross ranks: k + r in both orientations at the zero, a random and a structured instance, same-side blocks
   0 over F₂ (checked_strip.py's part B for co32c, at U's narrow planes). Mutation: an even top weight, which makes U's
   parity constant, loses rank.
+- C. Dither-C's cohalf Q Kᵀ (checked_strip.py's design `co` at r = k/2) at U's narrow planes, the Q Kᵀ decision 82
+  puts on H1 (`co32c-u16-cohalf`, Q and K within ±(127 − N)): cross ranks (k, k + r) at k = 64, 96, 128 at the zero, a
+  random and a structured instance, same-side blocks 0, and at Q = K = 0 every committed word varies with the coins.
+  Mutation: an even top weight loses rank.
 - H. The tensor–scalar model (checked_strip.py's TS facets and tiles) at A = B = 0 with every committed word bit-sliced
   at once: a T increment is 1 + p binary products (c and U's p planes), D_d is p, O′'s c·b is k/32 (checked_strip.py's
   `word_routes` at p planes). On the Llama-3.1 8B and 70B linears no route gains at the duo fold (3) for x ≥ 4 warp
@@ -156,6 +160,28 @@ def main():
             r1, r2, _ = cross_ranks(Bm, *instance(Bm, "random", rng), mod=1)
             with checks.mutant(f"co32c with an even top weight, U on ±{N} (U's parity constant)"):
                 checks.check(f"M{N} both cross ranks k + r = 96", r1 == r2 == 96, f"ranks {r1}, {r2}")
+
+        half = {}
+        for (kk, LL) in [(64, 32), (96, 32), (128, 32)]:
+            rr = kk // 2
+            Bh = NarrowBlock("co", 1, kk, 1, rr, LL, w)
+            res = [cross_ranks(Bh, *instance(Bh, kind, rng)) for kind in ("zero", "random", "balanced")]
+            half[f"k={kk} r={rr} L={LL}"] = [list(x[:2]) for x in res]
+            checks.check(f"C{N} cohalf (co at r = k/2) (k, r, L) = ({kk}, {rr}, {LL}), U on ±{N}: cross ranks (peeled "
+                         f"rows, coin rows) = (k, k + r) = ({kk}, {kk + rr}) at the zero, a random and a structured "
+                         f"instance, same-side blocks 0",
+                         all(x[:2] == (kk, kk + rr) and x[2] == 0 for x in res),
+                         f"{[x[:2] for x in res]}, same-side nonzero {[x[2] for x in res]}")
+        out[f"N={N} cohalf ranks"] = half
+        Bz = NarrowBlock("co", 4, 64, 4, 32, 32, w)
+        zw = Bz.words(np.zeros((4, 64), np.int64), np.zeros((64, 4), np.int64), rng.integers(0, 2, (draws, Bz.nbits)))
+        checks.check(f"C{N} cohalf at Q = K = 0, U on ±{N}: every committed word of every cell (T_t and O) varies with "
+                     f"the coins ({draws} draws)", bool(np.all(zw.min(0) != zw.max(0))), f"{zw.shape[1]} words")
+        if checks.mutations:
+            Bm = NarrowBlock("co", 1, 64, 1, 32, 32, planes(N, even=True))
+            r1, r2, _ = cross_ranks(Bm, *instance(Bm, "random", rng))
+            with checks.mutant(f"cohalf with an even top weight, U on ±{N} (U's parity constant)"):
+                checks.check(f"MC{N} cross ranks (k, k + r) = (64, 96)", (r1, r2) == (64, 96), f"ranks {r1}, {r2}")
 
         gain3 = [weighted_best(3, x, p, m) - weighted_best(3, None, p, m) for m in TS_SHAPES for x in (4, 8, 12, 16)]
         be = {f"fold={f} {m}": breakeven(f, p, m) for f in (3, 1.5, 1) for m in TS_SHAPES}

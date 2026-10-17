@@ -32,6 +32,7 @@ a Program with one Call of each distinct Call Definition, whose per-Call partiti
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import os
@@ -327,7 +328,7 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
             w = uc.in_widths[t]
             wires[act.absolute(uc.inputs[t])] = [b for word in leaves[base + leaf:base + leaf + _words(bit + w)] for b in word][bit:bit + w]
         base += w_port
-    IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires)
+    IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires, reads=[act.absolute(j) for j in uc.outputs])
     out_bits = []
     for j, w in zip(uc.outputs, uc.out_widths):
         out_bits += list(wires[act.absolute(j)]) + [gf2.ZERO] * (16 * _words(w) - w)
@@ -910,88 +911,139 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     return IL.Lowering(name, SimpleNamespace(id=name, signature=lambda: sig), units, C, lay), out_words
 
 
+def _row_bits(words) -> np.ndarray:
+    """Each instance's row ``(n, words)`` u16 as its bits ``(n, 16 words)``, little-endian."""
+    return np.unpackbits(np.ascontiguousarray(words, dtype="<u2").view(np.uint8), axis=1, bitorder="little")
+
+
+def _leaf_words(bits: np.ndarray, widths: Sequence[int], at: Sequence[int]) -> np.ndarray:
+    """Leaf ``i`` of every instance: the ``widths[i]`` bits of ``bits`` from bit ``at[i]``, little-endian, as ``(n, leaves)``
+    integers (Python ints when a leaf is wider than 64 bits)."""
+    ws, at = np.asarray(widths, np.int64), np.asarray(at, np.int64)
+    if ws.size and ws.max() > 64:
+        return np.array([[int.from_bytes(np.packbits(b[a:a + w], bitorder="little").tobytes(), "little") for a, w in zip(at, ws)]
+                         for b in bits], dtype=object).reshape(len(bits), len(ws))
+    dt = next(d for top, d in ((8, np.uint8), (16, np.uint16), (32, np.uint32), (64, np.uint64)) if ws.max(initial=1) <= top)
+    out = np.zeros((len(bits), len(ws)), dt)
+    for w in np.unique(ws):
+        k = np.flatnonzero(ws == w)
+        out[:, k] = (bits[:, at[k, None] + np.arange(w)].astype(dt) << np.arange(w, dtype=dt)).sum(axis=2, dtype=dt)
+    return out
+
+
+class UnitStager:
+    """One unit Definition (a PoUW unit: several output ports, rows a tile reads) as a bit-row statement, its circuit built once
+    and each round's instances staged on it (`stage`): ``in_rows`` its input rows ``(row, schema, bits, params)``
+    (`unit_lowering`; ``schema`` ``hm96-sha512/row/v2`` or ``…/row-seg/v1``, ``bits`` its META length), ``out_rows`` each output
+    row ``(schema, output ports)``, a run of consecutive output ports of exactly their words (`circuit.compose`'s
+    ``seg_out_rows`` / ``v2_out_rows``). ``public_inputs`` (``{param: {"seed", "derivation"}}``): parameters that are public
+    input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from public seeds), laid out as
+    `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once; else `stage` writes it beside each round's
+    files. ``pin`` and ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads
+    them after writing circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass
+    that writes it."""
+
+    def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
+                 out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None):
+        from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
+
+        public_inputs = dict(public_inputs or {})
+        self.definition, self.name, self.in_rows, self.public_inputs = definition, name, list(in_rows), public_inputs
+        self.low, self.out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs))
+        if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(self.out_words))):
+            raise ValueError(f"{name}: the output rows {[list(ps) for _s, ps in out_rows]} are not the outputs, once each")
+        oname = lambda ps: tuple(f"o{p}" for p in ps)  # noqa: E731
+        seg_out = tuple(oname(ps) for s, ps in out_rows if s == SCHEMA_HM96_SHA512_ROW_SEG)
+        v2_out = tuple(oname(ps) for s, ps in out_rows if s != SCHEMA_HM96_SHA512_ROW_SEG)
+        cache_slot_circuits()
+        port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
+        content = json.dumps([definition.id, [list(r[:3]) + [list(r[3])] for r in in_rows], [[s, list(ps)] for s, ps in out_rows]]
+                             + ([public_inputs] if public_inputs else [])).encode()
+        self.row_ports = [*public_inputs, *(r for r, *_ in in_rows)]
+        self.sub = SimpleNamespace(id=name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r in self.row_ports],
+                                   outputs=[port(f"o{j}") for j in range(len(self.out_words))],
+                                   program_digests=lambda statics: {name: hashlib.sha256(content).hexdigest()})
+        self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
+        self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
+                               seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
+                               seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None)
+        self._meta = self.text.split("\n", 2)[1][5:]
+        self.meta = json.loads(self._meta)
+        self.ports = FC._meta_ports(self.meta)
+        self.circuit = circuit
+        if circuit is not None:
+            circuit.parent.mkdir(parents=True, exist_ok=True)
+            circuit.write_text(self.text)
+
+    @functools.cached_property
+    def pin(self) -> str:
+        return FC.digest(self.text)
+
+    @functools.cached_property
+    def class_sha512(self) -> str:
+        return FC.class_digest(self.text)
+
+    def reference_check(self, rows: dict[str, np.ndarray], outs: dict[str, np.ndarray]) -> None:
+        """``outs`` (``{o{j}: (n, words)}``) are the IR reference's on every instance's ``rows``, leaf by leaf, from one call of
+        `verity.ml.circuits.evaluation.evaluate_batch` (bit-sliced for a Boolean Definition, else its registered kernel or the
+        reference), whose exceptions (rows outside the Definition's domain) propagate."""
+        from verity.ml.circuits.evaluation import evaluate_batch
+
+        params, ret = self.definition.signature()
+        types = dict(params)
+        leaves = {}
+        for p in self.public_inputs:
+            ws = _leaf_bits(types[p])
+            leaves[(p, -1)] = _leaf_words(_row_bits(rows[p]), ws, 16 * np.cumsum([0] + [-(-w // 16) for w in ws[:-1]]))
+        for r, _s, _b, ps in self.in_rows:
+            bits, at = _row_bits(rows[r]), 0
+            for q in ps:
+                nm, _, rr = q.partition("[")
+                ws = _leaf_bits(types[nm] if not rr else types[nm].elem)
+                leaves[(nm, int(rr[:-1]) if rr else -1)] = _leaf_words(bits, ws, at + np.cumsum([0] + ws[:-1]))
+                at += sum(ws)
+        args = [np.concatenate([leaves[k] for k in sorted(k for k in leaves if k[0] == nm)], axis=1) for nm, _t in params]
+        want = evaluate_batch(self.definition, *args).reshape(len(args[0]), ret.leaves)
+        have = np.concatenate([_leaf_words(_row_bits(outs[f"o{j}"]), ws, np.cumsum([0] + ws[:-1]))
+                               for j, ws in enumerate(_leaf_bits(f) for f in (ret.fields if hasattr(ret, "fields") else (ret,)))], axis=1)
+        bad = np.flatnonzero((have != want).any(axis=1))
+        if bad.size:
+            raise AssertionError(f"{self.name}: instance {bad[0]}'s outputs are not the IR reference's")
+
+    def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None) -> dict:
+        """A round's statement: ``rows`` each input row's words per instance ``(n, words)`` u16, and each public input's
+        (``rows[param]``). The outputs are the lowering's, checked against the IR reference (`reference_check`); the salts are
+        ``salts``' where given, else `circuit.stage_salts`'. Writes ``inst.bin`` and ``pub.bin`` (and ``circuit.txt`` without the
+        stager's ``circuit``) under ``out_dir``; returns META, the outputs per port, every row's salts, and the unit's ANDs and
+        matrix entries."""
+        n = len(rows[self.in_rows[0][0]])
+        flat = np.concatenate([np.asarray(rows[r], dtype=np.uint16) for r in self.row_ports], axis=1)
+        got, _cut, ok = self.low.evaluate(flat.astype(np.uint64))
+        if int(ok) != (1 << n) - 1:
+            raise AssertionError(f"{self.name}: a unit is unsatisfied on its rows")
+        got = got.astype(np.uint16)
+        at = np.cumsum([0] + self.out_words)
+        outs = {f"o{j}": got[:, at[j]:at[j + 1]] for j in range(len(self.out_words))}
+        self.reference_check(rows, outs)
+        salts = {**FC.stage_salts(self.iset, 0, n, self.ports, salt_key), **(salts or {})}
+        out_dir.mkdir(parents=True, exist_ok=True)
+        if self.circuit is None:
+            (out_dir / "circuit.txt").write_text(self.text)
+        FC.write(self.text, self.iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+                 rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
+                 public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
+                 digests=(self.pin, self.class_sha512))
+        counts = self.low.layout.counts
+        return {"meta": json.loads(self._meta), "outs": outs, "salts": salts, "ands": counts["ands"],
+                "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
+
+
 def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]], out_rows: Sequence[tuple[str, Sequence[int]]],
                rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
                public_inputs: dict | None = None) -> dict:
-    """One unit Definition (a PoUW unit: several output ports, rows a tile reads) as a bit-row statement: ``in_rows`` its input
-    rows ``(row, schema, bits, params)`` (`unit_lowering`; ``schema`` ``hm96-sha512/row/v2`` or ``…/row-seg/v1``, ``bits`` its
-    META length), ``out_rows`` each output row ``(schema, output ports)``, a run of consecutive output ports of exactly their
-    words (`circuit.compose`'s ``seg_out_rows`` / ``v2_out_rows``), ``rows`` each input row's words per instance ``(n, words)``
-    u16. The outputs are the lowering's, checked against the IR reference (`verity.ml.circuits.evaluation.evaluate`) on every instance;
-    the salts are ``salts``' where given, else `circuit.stage_salts`'. ``public_inputs`` (``{param: {"seed", "derivation"}}``):
-    parameters that are public input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from
-    public seeds), laid out as `unit_lowering`'s ``public``, ``rows[param]`` their words per instance. Writes ``circuit.txt``,
-    ``inst.bin`` and ``pub.bin``; returns META, the outputs per port, every row's salts, and the unit's ANDs and matrix entries."""
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
-    from verity.ml.circuits.evaluation import evaluate
-
-    public_inputs = dict(public_inputs or {})
-    low, out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs))
-    if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(out_words))):
-        raise ValueError(f"{name}: the output rows {[list(ps) for _s, ps in out_rows]} are not the outputs, once each")
-    oname = lambda ps: tuple(f"o{p}" for p in ps)  # noqa: E731
-    seg_out = tuple(oname(ps) for s, ps in out_rows if s == SCHEMA_HM96_SHA512_ROW_SEG)
-    v2_out = tuple(oname(ps) for s, ps in out_rows if s != SCHEMA_HM96_SHA512_ROW_SEG)
-    cache_slot_circuits()
-    port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
-    content = json.dumps([definition.id, [list(r[:3]) + [list(r[3])] for r in in_rows], [[s, list(ps)] for s, ps in out_rows]]
-                         + ([public_inputs] if public_inputs else [])).encode()
-    sub = SimpleNamespace(id=name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r in [*public_inputs, *(r for r, *_ in in_rows)]],
-                          outputs=[port(f"o{j}") for j in range(len(out_words))],
-                          program_digests=lambda statics: {name: hashlib.sha256(content).hexdigest()})
-    iset = SimpleNamespace(subcircuit=sub, name=name.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
-    text = FC.compose(low, sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
-                      seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
-                      seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None)
-    n = len(rows[in_rows[0][0]])
-    flat = np.concatenate([np.asarray(rows[r], dtype=np.uint16) for r in [*public_inputs, *(r for r, *_ in in_rows)]], axis=1)
-    got, _cut, ok = low.evaluate(flat.astype(np.uint64))
-    if int(ok) != (1 << n) - 1:
-        raise AssertionError(f"{name}: a unit is unsatisfied on its rows")
-    got = got.astype(np.uint16)
-    at = np.cumsum([0] + out_words)
-    outs = {f"o{j}": got[:, at[j]:at[j + 1]] for j in range(len(out_words))}
-    params, ret = definition.signature()
-    out_leaves = [_leaf_bits(f) for f in (ret.fields if hasattr(ret, "fields") else (ret,))]
-    for i in range(n):
-        got_leaves = {}
-        for p in public_inputs:
-            ws, at_ = _leaf_bits(dict(params)[p]), 0
-            got_leaves[(p, -1)] = []
-            for w in ws:
-                k = -(-w // 16)
-                got_leaves[(p, -1)].append(int.from_bytes(np.asarray(rows[p][i][at_:at_ + k], dtype="<u2").tobytes(), "little") & ((1 << w) - 1))
-                at_ += k
-        for r, _s, _b, ps in in_rows:
-            bits = int.from_bytes(np.asarray(rows[r][i], dtype="<u2").tobytes(), "little")
-            for q in ps:
-                nm, _, rr = q.partition("[")
-                key = (nm, int(rr[:-1]) if rr else -1)
-                got_leaves[key] = []
-                ws = _leaf_bits(dict(params)[nm] if not rr else dict(params)[nm].elem)
-                for w in ws:
-                    got_leaves[key].append(bits & ((1 << w) - 1))
-                    bits >>= w
-        args = []
-        for nm, t in params:
-            vals = [v for key in sorted(k for k in got_leaves if k[0] == nm) for v in got_leaves[key]]
-            args.append(vals[0] if isinstance(t, Value) else vals)
-        want, have = list(evaluate(definition, *args)), []
-        for j, ws in enumerate(out_leaves):
-            g = int.from_bytes(outs[f"o{j}"][i].astype("<u2").tobytes(), "little")
-            for w in ws:
-                have.append(g & ((1 << w) - 1))
-                g >>= w
-        if have != want:
-            raise AssertionError(f"{name}: instance {i}'s outputs are not the IR reference's")
-    meta = json.loads(text.split("\n", 2)[1][5:])
-    salts = {**FC.stage_salts(iset, 0, n, FC._meta_ports(meta), salt_key), **(salts or {})}
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "circuit.txt").write_text(text)
-    FC.write(text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key, rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in in_rows},
-             outs=outs, salts=salts, public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in public_inputs})
-    return {"meta": meta, "outs": outs, "salts": salts, "ands": low.layout.counts["ands"],
-            "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_sha512": FC.digest(text)}
+    """One round of a `UnitStager` (its arguments as there and in its `stage`): writes ``circuit.txt``, ``inst.bin`` and
+    ``pub.bin``; returns META, the outputs per port, every row's salts, and the unit's ANDs and matrix entries."""
+    return UnitStager(definition, name, in_rows, out_rows, public_inputs).stage(rows, out_dir, salt_key, salts)
 
 
 def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
