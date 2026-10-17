@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from verity_proof_throughput import workloads as W
@@ -19,17 +17,24 @@ def test_ladder_runs_over_powers_of_two():
             W.ladder(*bad)
 
 
-def test_definitions_are_one_synthetic_call_of_the_vu():
+def test_the_population_is_n_max_independent_instances_of_the_vu(monkeypatch):
+    from verity.ml.circuits import partition_object as PO
+    from verity.ml.circuits.codec import program_digest
+
+    from verity_proof_throughput import population as POP
+
     w = W.workload("bf16-k6144")
-    (src, count), = w.definitions().items()
-    assert count == 1 and src == 'Gemm_v2{K=6144,N=1024,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
-    assert json.loads(W.defs_json(w)) == w.definitions()
-    assert "K=6144" in w.vu and w.extra["dot"] in w.vu
+    prog = w.population()
+    (_k, fn), = PO.calls(prog)
+    assert fn.id == w.vu and "K=6144" in w.vu and w.extra["dot"] in w.vu
+    monkeypatch.setenv("PT_VU", w.vu)
+    monkeypatch.setenv("PT_N", str(w.n_max))
+    assert program_digest(POP.program()) == program_digest(prog), "the class sweep's PROGRAM= file stages the same program"
 
 
 def test_served_unit_workloads_are_not_staged_by_the_class_sweep():
     with pytest.raises(ValueError, match="served-unit"):
-        W.WORKLOADS["fp8-coord-k2048"].definitions()
+        W.WORKLOADS["fp8-coord-k2048"].population()
 
 
 def test_every_workload_names_a_contract_profile():
