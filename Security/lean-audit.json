@@ -1913,16 +1913,71 @@
    "assumptions": [],
    "type_hash": "9de3756acca2c0371ebe858dbef4fb09986590604299e770146481c5a28666f3"
   },
+  "Claims.Sampling.Binding_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Binding_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (c : SamplingDeploy.Code)",
+    "  (roots : List Claims.Msg) (o : Claims.Sampling.Opening Bool) :",
+    "  Iff",
+    "    (Eq (Claims.Sampling.Commitment.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o)",
+    "      Bool.true)",
+    "    (Exists fun root =>",
+    "      Exists fun i =>",
+    "        Exists fun reg =>",
+    "          And (Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := i }))",
+    "            (And",
+    "              (Eq (Array.find? (fun p => Decidable.decide (Eq p.root (Claims.Sampling.bytes root))) c.own)",
+    "                (Option.some reg))",
+    "              (Eq",
+    "                (Flock.Registered.opensLeaf reg",
+    "                  (Claims.Sampling.bytes",
+    "                    (FlockSoundness.Binding.digBytes",
+    "                      (FlockSoundness.Refine.H512",
+    "                        (FlockSoundness.Binding.hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o)))))",
+    "                  i (Claims.Sampling.bytes (c.π o)))",
+    "                Bool.true)))"
+   ],
+   "assumptions": [],
+   "type_hash": "a0a89acdc1c927024954d4c84f5369b2fa82c728adba155ce30ede4e3cbd0f92"
+  },
+  "Claims.Sampling.Binding_meets_one": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Binding_meets_one (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (c : SamplingDeploy.Code)",
+    "  (roots : List Claims.Msg) (o : Claims.Sampling.Opening Bool) (root : Claims.Msg) (dom : ByteArray)",
+    "  (hat : Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := 0 })) (hπ : Eq (c.π o) List.nil)",
+    "  (hroot :",
+    "    Eq (Claims.Sampling.bytes root)",
+    "      (Flock.Registered.climb dom",
+    "        (Flock.Registered.rowLeaf dom 0",
+    "          (Claims.Sampling.bytes",
+    "            (FlockSoundness.Binding.digBytes",
+    "              (FlockSoundness.Refine.H512",
+    "                (FlockSoundness.Binding.hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o))))))",
+    "        0 0 (Claims.Sampling.bytes List.nil)))",
+    "  (hown :",
+    "    Eq c.own",
+    "      (List.cons",
+    "          { name := \"\", value := \"\", root := Claims.Sampling.bytes root, leaves := 1, words := Option.none,",
+    "            wordBits := 16, domain := dom, reads := List.nil.toArray }",
+    "          List.nil).toArray) :",
+    "  Eq (Claims.Sampling.Commitment.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o) Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "415cf277b2412e0bb8ea83b0706ffd1078c21307af429358fa2df94676ef5d6e"
+  },
   "Claims.Sampling.BitsLin_fails": {
    "owner": "@proofs",
    "signature": [
     "Claims.Sampling.BitsLin_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
     "  (H : Claims.Msg → Claims.Msg) :",
     "  Exists fun V =>",
-    "    Exists fun R => Exists fun E => Exists fun Fe => Exists fun lam => Not (Claims.Sampling.BitsLin H V R E Fe lam)"
+    "    Exists fun Scope =>",
+    "      Exists fun R =>",
+    "        Exists fun E => Exists fun Fe => Exists fun lam => Not (Claims.Sampling.BitsLin H V Scope R E Fe lam)"
    ],
    "assumptions": [],
-   "type_hash": "58a4261d06efc3682cf2321ef5809ec11f189acb0b9827ffb1cfd5f56a1ed886"
+   "type_hash": "e47885553e8f5fb861ed3c170fa7009becd9e97691bf14e6e64a4ed8e488f828"
   },
   "Claims.Sampling.Bits_fails": {
    "owner": "@proofs",
@@ -1956,6 +2011,21 @@
    ],
    "assumptions": [],
    "type_hash": "00bed36c39eaf751988e2f5c811ddd0388920d22c4ec06ce5259e93d25247341"
+  },
+  "Claims.Sampling.KSLinOn_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.KSLinOn_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun V =>",
+    "    Exists fun Scope =>",
+    "      Exists fun R =>",
+    "        Exists fun E =>",
+    "          Exists fun κ =>",
+    "            Exists fun γ => Exists fun β => Exists fun Fe => Not (Claims.Sampling.KSLinOn H V Scope R E κ γ β Fe)"
+   ],
+   "assumptions": [],
+   "type_hash": "abebd32213005259fa2754347dd54a59c26cf68bf16f917ef2ba76241d292710"
   },
   "Claims.Sampling.KS_fails": {
    "owner": "@proofs",
@@ -5554,15 +5624,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Claims.Sampling.Binding_meets": {
-   "owner": "@proofs"
-  },
-  "Claims.Sampling.Binding_meets_one": {
-   "owner": "@proofs"
-  },
-  "Claims.Sampling.KSLinOn_fails": {
-   "owner": "@proofs"
   }
  },
  "shape": {
@@ -7660,11 +7721,14 @@
     "Claims.KS_fails",
     "Claims.Nontrivial_fails",
     "Claims.Sampling.Binding_fails",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Claims.Sampling.BitsLin_fails",
     "Claims.Sampling.Bits_fails",
     "Claims.Sampling.Complete_fails",
     "Claims.Sampling.Efficient_fails",
     "Claims.Sampling.KSCount_fails",
+    "Claims.Sampling.KSLinOn_fails",
     "Claims.Sampling.KS_fails",
     "Claims.Sampling.Nontrivial_fails",
     "Claims.Sampling.ScopeMatches_fails",
@@ -7905,7 +7969,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "556def9bdd553fe766190dd1a0391a61ab537be5f942cd033b46651e1f470c13",
+   "digest": "027863caa9b5d9c969f962852619629e92addc5eb1e5721f31083037fbeb9b24",
    "definitions": {
     "Claims.Sampling.BGate": "63a981e57403ae475c097446b58799e6bbc6ebb87e4a1ff8911d63f602542833",
     "Claims.Sampling.BGate.and": "5e97bb022ac07b984f8303744fbc545e8aa6f37c7e6ec025083230906f800909",
@@ -7920,8 +7984,8 @@
     "Claims.Sampling.BGate.xor": "ffcfb099869784fa5e844b41261cfad381f38bd652c0f2d4619de82a550c6e27",
     "Claims.Sampling.Bext": "92900257638348d49c154a593348589ff5c5dcf19db07008a2bf2abb573fd658",
     "Claims.Sampling.Binding": "f0b5d68e7ef26dcf3f41116ddeb9dc002f662d98ca03b7cf9b754b02d8afbff8",
-    "Claims.Sampling.Bits": "b851036e6627f45d3cf9aa1bd8c23e6fc242a4e950588c07cc7ac915c526c1a2",
-    "Claims.Sampling.BitsLin": "9f8509a977053bae027de023c1975dc7cb4d09bfd8bedee1ad2b23baaef3e56c",
+    "Claims.Sampling.Bits": "32127d04d1abb75b3b4b6338f14750f5b6108b2f69d3cbd8b969c35e07cfed91",
+    "Claims.Sampling.BitsLin": "12104e21f4e2f56bfd5155466aa311b5bb32a85e1a8487d7f7dcabd2598f5e16",
     "Claims.Sampling.BoundaryFaulty": "bae6eddf2b56d3d7e64877fbd0f784905eb38b3fcb3c3e780592919f2afab6a3",
     "Claims.Sampling.Commitment": "6f21adfbc654f6e71de5b6f338e836ed805fcb50b98a77646b11e96fbc01b65f",
     "Claims.Sampling.Commitment.Binds": "3d281bc90d41540bc59fac317c7704f40034ecf5b92268542b66de988a289858",
@@ -7970,8 +8034,9 @@
     "Claims.Sampling.Faulty": "57b98736ecb3cdc04e1587091e96e47a3a04e709cff385a3a1336df475ad72de",
     "Claims.Sampling.FaultyBoundary": "8a397c204f7d38ce20239f9f4aad82a81b446511f87032250974a69c55d67b2f",
     "Claims.Sampling.InScope": "6a434dab6346dce2714b06fbc817a2fdd95a02dc108afb688aef4b145da91aef",
-    "Claims.Sampling.KS": "f6c87246797d3221c09ac232eaa7397b3ecaa59c85a586800c38104feaa431b5",
-    "Claims.Sampling.KSCount": "8748e91db164932c915928e9a5037f2c108e0e3e742b226af52e08b314d9d659",
+    "Claims.Sampling.KS": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2",
+    "Claims.Sampling.KSCount": "2efbb9432a8bc328bb911364ff9eceba711c48f28c6a06625967f2ae42354688",
+    "Claims.Sampling.KSLinOn": "3cd3242c014dcfc2396edb1804401628881a6073f98b1da31842b3655b58e08b",
     "Claims.Sampling.LogColl": "556b27152133c315374dc4629cb20ba9925e4044187c7529eb9fb9c86de3ce30",
     "Claims.Sampling.Netlist": "a5715809f46a4bb1974daf0b51e94642c1eb1b849c47def7d144b613e20c7af7",
     "Claims.Sampling.Netlist.Fits": "459dc5d554c6c82dd0dac7534ecd4a6b485ebaa8f5f67a340674b4b37812a8a7",
@@ -8081,11 +8146,14 @@
    },
    "guarantees": [
     "Claims.Sampling.Binding_fails",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Claims.Sampling.BitsLin_fails",
     "Claims.Sampling.Bits_fails",
     "Claims.Sampling.Complete_fails",
     "Claims.Sampling.Efficient_fails",
     "Claims.Sampling.KSCount_fails",
+    "Claims.Sampling.KSLinOn_fails",
     "Claims.Sampling.KS_fails",
     "Claims.Sampling.Nontrivial_fails",
     "Claims.Sampling.ScopeMatches_fails",
@@ -12585,6 +12653,8 @@
    "guarantees": [
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -13575,6 +13645,8 @@
     "Claims.Flock.masked_meets_zk",
     "Claims.Flock.scope_meets_plain",
     "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Claims.Sampling.decoder_meets_plain",
     "Claims.Sampling.decoder_meets_zk",
     "Claims.Sampling.masked_meets_zk",
@@ -13748,6 +13820,8 @@
     "Flock.Sha512.word": "b1086da4c00e9cf65abe8a24bde5bf83aa2e6897854b30766e6be070dc7de279"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -13833,6 +13907,8 @@
     "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14180,6 +14256,8 @@
     "_private.Flock.HmRow.0.Flock.HmRow.templateStrata": "d1afdd12f32817b3c645c55e29c61170a35ba172f9918cee9d3e1221f392b5c6"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14695,6 +14773,7 @@
    "guarantees": [
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
+    "Claims.Sampling.Binding_meets",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -15301,6 +15380,8 @@
    "guarantees": [
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -16529,6 +16610,8 @@
     "_private.Flock.Registered.0.Flock.Registered.tagged": "57d4d01156f6691bd7c899ff653c3c5f75b8fa9183ad7afbcaef5d134b584330"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
@@ -17923,9 +18006,9 @@
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
   "Models.Flock.Guarantees.SamplingClaims": {
-   "digest": "22991349c889781e854fdb870cacdb70a6478cc83786e2b0c6e7000415a7db3f",
+   "digest": "388f0efc1e0d4f83548815d6984799c0fda6f42f658b7f25b3c51153aa3967ff",
    "definitions": {
-    "Flock.Guarantees.SamplingClaimsStated": "d4b414673d943faee145698e8dccd8713129a9b4f7d44eff97c01dacc787e389"
+    "Flock.Guarantees.SamplingClaimsStated": "62c588282bd892c5b7554e9f476e506200d7e90e834ae7826a8843e62357de13"
    },
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
@@ -19069,6 +19152,8 @@
     "Claims.Flock.masked_meets_zk",
     "Claims.Flock.scope_meets_plain",
     "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Claims.Sampling.decoder_meets_plain",
     "Claims.Sampling.decoder_meets_zk",
     "Claims.Sampling.masked_meets_zk",
@@ -20812,6 +20897,8 @@
     "FlockSoundness.Binding.hm96Pair": "c1ac7aba11bea03bf4156061f96ef5c100b0e3731b63980fccfb9a29476c4083"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -24980,6 +25067,8 @@
     "FlockSoundness.Merkle.xorBytes": "1a6543034cfd27812c0fa204112fe907680579ff63b51dbefc752739b3b890cf"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -25605,6 +25694,8 @@
     "FlockSoundness.Refine.toDig": "fc09670eec36ed92bef301805e7fd420fc6ae40c8d7e2e886967b6cc3de958a6"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -25696,6 +25787,8 @@
     "FlockSoundness.Refine.saltsOf": "a0d5812e80a2fd860d924b9a3b626466509453659b2f05d5e5748a45e51cc96b"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
