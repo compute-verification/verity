@@ -506,6 +506,138 @@ __global__ void __launch_bounds__(128) vsum(const int8_t* __restrict__ Xt, int8_
     S += t;
   }
 }
+// vedit and vsum in one pass. A CTA a patch row group grp (channels 4 grp % 128 .. + 3 of KV head grp / 32): its threads
+// hash the row group's s / 128 patch digests (one a thread), then its 8 warps take a 128-key chunk each a round. Lane l
+// holds keys 32 jj + 4 t .. + 3 of its chunk (jj = l / 8, t = l % 8: block j = 4 c + jj, residues 4 t + i), forms X = V + b
+// and, with SUMS, X's bytes biased to [0, 255] as two 16-bit pairs (bytes 0 and 2, 1 and 3), scanned over jj by
+// shuffles, over the round's warps through shared memory and over earlier rounds in registers, so Yb = Ycum + 128 is
+// whole a lane a residue: Y0 = byte 0 of Yb ^ 0x80, Y1 = byte 1 of Yb and Y2 = byte 2 of Yb + 32768 (D3, s > AP_Y1S;
+// else 0, as Y2 is there). Key 0 enters the sums as 0. SUMS false is X alone: vedit's output, what a one-hot cheater
+// still needs
+constexpr int VF_NT = 256, VF_SM_FIXED = 4 * (512 + 512 + 64);
+template <bool SUMS, bool D3>
+__global__ void __launch_bounds__(VF_NT, 2) vfold(const int8_t* __restrict__ Vt, int8_t* __restrict__ Xt, int8_t* __restrict__ DG,
+                                                 int* __restrict__ Sq, int* __restrict__ X0, int s, const __grid_constant__ Sig sg) {
+  extern __shared__ uint32_t vfs[];   // digests (nC x 16 words), then tot[w][rr][t][2], pre[w][rr][t][2], rtot[rr][t][2]
+  const int grp = blockIdx.x, nC = s / 128, nJ = s / 32, kvh = grp / 32, ch0 = 4 * (grp % 32);
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, jj = lane >> 3, t = lane & 7;
+  uint32_t *tot = vfs + 16 * nC, *pre = tot + 512, *rtot = pre + 512;
+  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(vfs);
+  const int8_t* vrow = Vt + (size_t)grp * 4 * s + 4 * lane;
+  int8_t* xrow = Xt + (size_t)grp * 4 * s + 4 * lane;
+  uint32_t vw[4];
+#pragma unroll
+  for (int rr = 0; rr < 4; rr++) vw[rr] = warp < nC ? __ldg(reinterpret_cast<const uint32_t*>(vrow + (size_t)rr * s + 128 * warp)) : 0u;
+  for (int i = threadIdx.x; i < nC; i += VF_NT) {
+    uint64_t st[8];
+    sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | ((uint64_t)grp * nC + i), st);
+#pragma unroll
+    for (int k = 0; k < 8; k++) {
+      vfs[16 * i + 2 * k] = __byte_perm((uint32_t)(st[k] >> 32), 0, 0x0123);
+      vfs[16 * i + 2 * k + 1] = __byte_perm((uint32_t)st[k], 0, 0x0123);
+    }
+  }
+  __syncthreads();
+  int B[4][4] = {};   // a row's biased sums over the earlier rounds' blocks, a byte i (residue 4 t + i)
+#pragma unroll 1
+  for (int c0 = 0; c0 < nC; c0 += 8) {
+    const int c = c0 + warp;
+    const bool live = c < nC;
+    uint32_t vn[4], xw[4], e02[4], e13[4];
+#pragma unroll
+    for (int rr = 0; rr < 4; rr++)
+      vn[rr] = c + 8 < nC ? __ldg(reinterpret_cast<const uint32_t*>(vrow + (size_t)rr * s + 128 * (c + 8))) : 0u;
+#pragma unroll
+    for (int rr = 0; rr < 4; rr++) {
+      uint32_t x = 0;
+      if (live) {
+        const uint32_t bits = (bytes[64 * c + 16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
+        x = add_noise<false>(vw[rr], bits01(bits));
+        *reinterpret_cast<uint32_t*>(xrow + (size_t)rr * s + 128 * c) = x;
+        if (c == 0 && lane == 0) X0[4 * grp + rr] = (int)(int8_t)(x & 0xFFu);
+      }
+      xw[rr] = x;
+      if constexpr (SUMS) {
+        const uint32_t u = live ? ((c == 0 && lane == 0) ? x & 0xFFFFFF00u : x) ^ 0x80808080u : 0u;
+        const uint32_t p02 = u & 0x00FF00FFu, p13 = (u >> 8) & 0x00FF00FFu;
+        uint32_t i02 = p02, i13 = p13, a02 = __shfl_up_sync(~0u, i02, 8), a13 = __shfl_up_sync(~0u, i13, 8);
+        if (lane >= 8) { i02 += a02; i13 += a13; }
+        a02 = __shfl_up_sync(~0u, i02, 16); a13 = __shfl_up_sync(~0u, i13, 16);
+        if (lane >= 16) { i02 += a02; i13 += a13; }
+        e02[rr] = i02 - p02; e13[rr] = i13 - p13;
+        if (jj == 3) { tot[warp * 64 + (rr * 8 + t) * 2] = i02; tot[warp * 64 + (rr * 8 + t) * 2 + 1] = i13; }
+      }
+    }
+#pragma unroll
+    for (int rr = 0; rr < 4; rr++) vw[rr] = vn[rr];
+    if constexpr (SUMS) {
+      __syncthreads();
+      if (threadIdx.x < 64) {
+        uint32_t acc = 0;
+#pragma unroll
+        for (int w = 0; w < 8; w++) { const uint32_t v = tot[w * 64 + threadIdx.x]; pre[w * 64 + threadIdx.x] = acc; acc += v; }
+        rtot[threadIdx.x] = acc;
+      }
+      __syncthreads();
+      if (live) {
+        const int j = 4 * c + jj, off = 128 - 128 * j;
+        uint32_t* drow = reinterpret_cast<uint32_t*>(DG + ((size_t)(kvh * nJ + j) * 128 + ch0) * 128) + t;
+#pragma unroll
+        for (int rr = 0; rr < 4; rr++) {
+          const int k = warp * 64 + (rr * 8 + t) * 2;
+          const uint32_t s02 = pre[k] + e02[rr], s13 = pre[k + 1] + e13[rr];
+          const int y0 = B[rr][0] + (int)(s02 & 0xFFFFu) + off, y2 = B[rr][2] + (int)(s02 >> 16) + off;
+          const int y1 = B[rr][1] + (int)(s13 & 0xFFFFu) + off, y3 = B[rr][3] + (int)(s13 >> 16) + off;
+          const uint32_t t01 = __byte_perm(y0, y1, 0x5140), t23 = __byte_perm(y2, y3, 0x5140);
+          uint32_t* d = drow + rr * 32;
+          d[0] = __byte_perm(t01, t23, 0x5410) ^ 0x80808080u;
+          d[8] = __byte_perm(t01, t23, 0x7632);
+          d[16] = xw[rr];
+          uint32_t w2 = 0;
+          if constexpr (D3) {
+            const uint32_t q01 = __byte_perm(y0 + 32768, y1 + 32768, 0x0062), q23 = __byte_perm(y2 + 32768, y3 + 32768, 0x0062);
+            w2 = __byte_perm(q01, q23, 0x5410);
+          }
+          d[24] = w2;
+          int sm = y0 + y1 + y2 + y3;
+          sm += __shfl_xor_sync(~0u, sm, 1);
+          sm += __shfl_xor_sync(~0u, sm, 2);
+          sm += __shfl_xor_sync(~0u, sm, 4);
+          if (t == 0) Sq[(size_t)(kvh * nJ + j) * 128 + ch0 + rr] = sm - 4096;
+        }
+      }
+#pragma unroll
+      for (int rr = 0; rr < 4; rr++) {
+        const uint32_t r02 = rtot[(rr * 8 + t) * 2], r13 = rtot[(rr * 8 + t) * 2 + 1];
+        B[rr][0] += (int)(r02 & 0xFFFFu); B[rr][2] += (int)(r02 >> 16);
+        B[rr][1] += (int)(r13 & 0xFFFFu); B[rr][3] += (int)(r13 >> 16);
+      }
+    }
+  }
+}
+// the producers' check against Ycum itself: a thread a (KV head, channel, residue) walks the blocks, Ycum in full, and
+// counts each DG row whose Y0 + 256 Y1 + 65536 Y2 is not Ycum or whose X_diag is not X, and each Sq that is not the sum
+// of Ycum
+__global__ void vcheck(const int8_t* __restrict__ Xt, const int8_t* __restrict__ DG, const int* __restrict__ Sq, int rows, int s,
+                       unsigned long long* bad) {
+  const int g = blockIdx.x * blockDim.x + threadIdx.x, row = g / 32, r = g % 32, nJ = s / 32;
+  if (row >= rows) return;
+  const int kvh = row / 128, ch = row % 128;
+  const int8_t* xr = Xt + (size_t)row * s;
+  long long Y = 0;
+  unsigned long long c = 0;
+  for (int j = 0; j < nJ; j++) {
+    const int8_t* dg = DG + ((size_t)(kvh * nJ + j) * 128 + ch) * 128;
+    const long long d = (long long)dg[r] + 256LL * dg[32 + r] + 65536LL * dg[96 + r];
+    c += d != Y || dg[64 + r] != xr[32 * j + r];
+    long long S = Y;
+#pragma unroll
+    for (int o = 16; o; o >>= 1) S += __shfl_xor_sync(0xFFFFFFFFu, S, o);
+    if (r == 0) c += Sq[(size_t)(kvh * nJ + j) * 128 + ch] != S;
+    if (!(j == 0 && r == 0)) Y += xr[32 * j + r];
+  }
+  if (c) atomicAdd(bad, c);
+}
 // the scales: s_q in [2^-11, 2^-10), z_q in [2^-12, 2^-11), s_ch in [2^-10, 2^-9)
 __global__ void apfill(float* sp, float* sz, int nq, float* sv, int nc, uint32_t seed) {
   for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < 2 * nq + nc; i += gridDim.x * blockDim.x) {
@@ -611,7 +743,16 @@ static void ved(AP& V, const Sig& s) {
   vedit<<<dim3(V.s / 128, (V.kvh * 128 + 4 * VE_G - 1) / (4 * VE_G)), 256, 0, V.st>>>(V.Vt, V.Xt, V.kvh * 128, V.s, s);
 }
 static void vsm(AP& V) { vsum<<<dim3(32, V.kvh), 128, 0, V.st>>>(V.Xt, V.DG, V.Sq, V.X0, V.s); }
-static void producers(AP& V, const Sig& s) { ued(V, s); ped(V); ved(V, s); vsm(V); }
+template <bool SUMS>
+static void vfl(const int8_t* Vt, int8_t* Xt, int8_t* DG, int* Sq, int* X0, int kvh, int s, const Sig& sg, cudaStream_t st) {
+  const size_t sm = (size_t)64 * (s / 128) + VF_SM_FIXED;
+  if (SUMS && s > AP_Y1S) vfold<true, true><<<kvh * 32, VF_NT, sm, st>>>(Vt, Xt, DG, Sq, X0, s, sg);
+  else vfold<SUMS, false><<<kvh * 32, VF_NT, sm, st>>>(Vt, Xt, DG, Sq, X0, s, sg);
+}
+static void vfd(AP& V, const Sig& s) { vfl<true>(V.Vt, V.Xt, V.DG, V.Sq, V.X0, V.kvh, V.s, s, V.st); }
+static void vfx(AP& V, const Sig& s) { vfl<false>(V.Vt, V.Xt, V.DG, V.Sq, V.X0, V.kvh, V.s, s, V.st); }
+static void producers(AP& V, const Sig& s) { ued(V, s); ped(V); vfd(V, s); }
+static void producers_r2(AP& V, const Sig& s) { ued(V, s); ped(V); ved(V, s); vsm(V); }
 static void aprun(AP& V, ApKern k, uint32_t* R) {
   const bool plain = k == apv_plain;
   ApArgs a{plain ? V.pmaps : k == apv_fu ? V.fmaps : V.maps, V.tab, V.ntiles, V.DG, V.Sq, plain ? V.V0 : V.X0, V.Uf,
@@ -619,16 +760,28 @@ static void aprun(AP& V, ApKern k, uint32_t* R) {
   k<<<V.grid, MLW::NT, CSMEM, V.st>>>(a);
 }
 // an arm: apv (apv_l7qs), apv_i, plain (apv_plain, eps_profile.py's baseline), cf and cc (the one-hot cheater, served free
-// and served checked), fu (apv_fu), uedit, pedit, vedit, vsum, apvedited (the four producers and apv under one key) or
-// fuedited (uedit, vedit, vsum and apv_fu: no pedit)
+// and served checked), fu (apv_fu), uedit, pedit, vedit, vsum, vfold, vfold_x, apvedited (uedit, pedit, vfold and apv under
+// one key), fuedited (uedit, vfold and apv_fu: no pedit), or apvedited_r2 and fuedited_r2 (the same with vedit and vsum
+// for vfold)
 static std::function<void(AP&)> aparm(const std::string& a) {
   if (a == "apv") return [](AP& V) { aprun(V, apv_l7qs, V.R); };
   if (a == "apv_i") return [](AP& V) { aprun(V, apv_l7qs_i, V.R); };
   if (a == "fu") return [](AP& V) { aprun(V, apv_fu, V.R); };
   if (a == "fuedited") return [](AP& V) {
     const Sig sg = sigma(V.seed, V.inst++);
+    ued(V, sg); vfd(V, sg);
+    aprun(V, apv_fu, V.R);
+  };
+  if (a == "fuedited_r2") return [](AP& V) {
+    const Sig sg = sigma(V.seed, V.inst++);
     ued(V, sg); ved(V, sg); vsm(V);
     aprun(V, apv_fu, V.R);
+  };
+  if (a == "vfold") return [](AP& V) { vfd(V, sigma(V.seed, V.inst++)); };
+  if (a == "vfold_x") return [](AP& V) { vfx(V, sigma(V.seed, V.inst++)); };
+  if (a == "apvedited_r2") return [](AP& V) {
+    producers_r2(V, sigma(V.seed, V.inst++));
+    aprun(V, apv_l7qs, V.R);
   };
   if (a == "cf") return [](AP& V) { aprun(V, apv_cf, V.R); };
   if (a == "cc") return [](AP& V) { aprun(V, apv_cc, V.R); };
@@ -690,8 +843,32 @@ static int apgate(const std::string& dir, int s, int H, int rep, uint32_t seed) 
   CK(cudaGetLastError());
   const unsigned long long fu_r_bad = apbad(V, V.R3, V.R, rw), fu_f_bad = apbad(V, V.F, V.Fr, fw);
   CK(cudaMemcpyAsync(V.F, V.Fr, fw * 4, cudaMemcpyDeviceToDevice, V.st));
+  // vfold's X, DG, Sq and X(0) (the producers' above) against r2's vedit and vsum from poisoned buffers under the same key,
+  // and vfold_x's X; vfold's are put back for the dumps
+  const size_t vb = (size_t)V.kvh * 128 * s, dgb = (size_t)V.kvh * V.nJ * 128 * 128, sqb = (size_t)V.kvh * V.nJ * 128 * 4,
+               x0b = (size_t)V.kvh * 128 * 4;
+  int8_t *cx, *cdg;
+  int *csq, *cx0;
+  CK(cudaMalloc(&cx, vb)); CK(cudaMalloc(&cdg, dgb)); CK(cudaMalloc(&csq, sqb)); CK(cudaMalloc(&cx0, x0b));
+  for (auto [d, p, b] : {std::tuple<void*, void*, size_t>{cx, V.Xt, vb}, {cdg, V.DG, dgb}, {csq, V.Sq, sqb}, {cx0, V.X0, x0b}}) {
+    CK(cudaMemcpyAsync(d, p, b, cudaMemcpyDeviceToDevice, V.st));
+    CK(cudaMemsetAsync(p, 0xA5, b, V.st));
+  }
+  ved(V, sg); vsm(V);
   CK(cudaStreamSynchronize(V.st));
-  const bool ok = r_bad == 0 && fu_r_bad == 0 && fu_f_bad == 0, control_rejected = c_bad > 0;
+  CK(cudaGetLastError());
+  const unsigned long long vf_x = apbad(V, V.Xt, cx, vb / 4), vf_dg = apbad(V, V.DG, cdg, dgb / 4), vf_sq = apbad(V, V.Sq, csq, sqb / 4),
+                           vf_x0 = apbad(V, V.X0, cx0, x0b / 4);
+  CK(cudaMemsetAsync(V.Xt, 0xA5, vb, V.st));
+  vfx(V, sg);
+  const unsigned long long vfx_x = apbad(V, V.Xt, cx, vb / 4);
+  for (auto [d, p, b] : {std::tuple<void*, void*, size_t>{V.Xt, cx, vb}, {V.DG, cdg, dgb}, {V.Sq, csq, sqb}, {V.X0, cx0, x0b}})
+    CK(cudaMemcpyAsync(d, p, b, cudaMemcpyDeviceToDevice, V.st));
+  CK(cudaStreamSynchronize(V.st));
+  CK(cudaGetLastError());
+  for (void* p : {(void*)cx, (void*)cdg, (void*)csq, (void*)cx0}) CK(cudaFree(p));
+  const bool vf_ok = vf_x == 0 && vf_dg == 0 && vf_sq == 0 && vf_x0 == 0 && vfx_x == 0;
+  const bool ok = r_bad == 0 && fu_r_bad == 0 && fu_f_bad == 0 && vf_ok, control_rejected = c_bad > 0;
   // the sampled tiles: all at most 24, else 24 spread over the table
   std::vector<int> pick;
   const int ns = std::min(V.ntiles, 24);
@@ -723,15 +900,17 @@ static int apgate(const std::string& dir, int s, int H, int rep, uint32_t seed) 
   FILE* fp = fopen((dir + "/meta.json").c_str(), "w");
   fprintf(fp, "{\"m\": %d, \"n\": 128, \"k\": %d, \"s\": %d, \"H\": %d, \"rep\": %d, \"ntiles\": %d, \"seed\": %u, "
               "\"key\": [\"%016llx\", \"%016llx\", \"%016llx\", \"%016llx\"], \"tiles\": [%s], \"kinds\": {\"apv_l7qs\": \"apv\"}, "
-              "\"device\": {\"apv_l7qs\": {\"r_bad\": %llu}, \"apv_fu\": {\"r_bad\": %llu, \"f_bad\": %llu}, \"control\": {\"r_bad\": %llu}}, "
+              "\"device\": {\"apv_l7qs\": {\"r_bad\": %llu}, \"apv_fu\": {\"r_bad\": %llu, \"f_bad\": %llu}, \"control\": {\"r_bad\": %llu}, "
+              "\"vfold\": {\"x_bad\": %llu, \"dg_bad\": %llu, \"sq_bad\": %llu, \"x0_bad\": %llu}, \"vfold_x\": {\"x_bad\": %llu}}, "
               "\"device_ok\": %s, \"control_rejected\": %s}\n",
           H * s, s, s, H, rep, V.ntiles, seed, (unsigned long long)sg.w[0], (unsigned long long)sg.w[1], (unsigned long long)sg.w[2],
-          (unsigned long long)sg.w[3], tj.c_str(), r_bad, fu_r_bad, fu_f_bad, c_bad, ok ? "true" : "false",
-          control_rejected ? "true" : "false");
+          (unsigned long long)sg.w[3], tj.c_str(), r_bad, fu_r_bad, fu_f_bad, c_bad, vf_x, vf_dg, vf_sq, vf_x0, vfx_x,
+          ok ? "true" : "false", control_rejected ? "true" : "false");
   fclose(fp);
   printf("{\"gate\": \"%s\", \"s\": %d, \"H\": %d, \"rep\": %d, \"ntiles\": %d, \"device_ok\": %s, \"control_rejected\": %s, "
-         "\"r_bad\": %llu, \"fu_r_bad\": %llu, \"fu_f_bad\": %llu}\n", dir.c_str(), s, H, rep, V.ntiles, ok ? "true" : "false",
-         control_rejected ? "true" : "false", r_bad, fu_r_bad, fu_f_bad);
+         "\"r_bad\": %llu, \"fu_r_bad\": %llu, \"fu_f_bad\": %llu, \"vfold_bad\": [%llu, %llu, %llu, %llu], \"vfold_x_bad\": %llu}\n",
+         dir.c_str(), s, H, rep, V.ntiles, ok ? "true" : "false", control_rejected ? "true" : "false", r_bad, fu_r_bad, fu_f_bad,
+         vf_x, vf_dg, vf_sq, vf_x0, vfx_x);
   apfree(V);
   return ok && control_rejected ? 0 : 1;
 }
@@ -806,13 +985,172 @@ static int apone(const std::string& arm, int s, int H, int rep) {
 }
 
 #ifndef APV_LIB
+// ---------------------------------------------------------------- the V producers alone
+struct VP {
+  int s = 0, kvh = 0, rows = 0;
+  uint32_t seed = 0, inst = 0;
+  size_t vb = 0, dgb = 0, sqb = 0, x0b = 0;
+  cudaStream_t st;
+  int8_t *Vt, *Xt, *DG, *Xr, *DGr;
+  int *Sq, *X0, *Sqr, *X0r;
+  unsigned long long* bad;
+};
+static void vpsetup(VP& P, int s, int kvh, uint32_t seed, bool gate) {
+  if (s % 256 || s < 256 || kvh < 1) { fprintf(stderr, "s %d kvh %d: s %% 256 == 0, s >= 256, kvh >= 1\n", s, kvh); exit(2); }
+  P.s = s; P.kvh = kvh; P.rows = kvh * 128; P.seed = seed;
+  P.vb = (size_t)P.rows * s; P.dgb = (size_t)kvh * (s / 32) * 128 * 128; P.sqb = (size_t)kvh * (s / 32) * 128 * 4; P.x0b = (size_t)P.rows * 4;
+  CK(cudaStreamCreateWithFlags(&P.st, cudaStreamNonBlocking));
+  CK(cudaMalloc(&P.Vt, P.vb)); CK(cudaMalloc(&P.Xt, P.vb)); CK(cudaMalloc(&P.Xr, P.vb));
+  CK(cudaMalloc(&P.DG, P.dgb)); CK(cudaMalloc(&P.DGr, P.dgb)); CK(cudaMalloc(&P.Sq, P.sqb)); CK(cudaMalloc(&P.Sqr, P.sqb));
+  CK(cudaMalloc(&P.X0, P.x0b)); CK(cudaMalloc(&P.X0r, P.x0b)); CK(cudaMalloc(&P.bad, 8));
+  sfill<I8><<<4096, 256, 0, P.st>>>(reinterpret_cast<uint8_t*>(P.Vt), P.vb, mix32(seed ^ 0x2222u), -128, 255);
+  if (gate) { CK(cudaMemsetAsync(P.Vt, 0x7E, s, P.st)); CK(cudaMemsetAsync(P.Vt + s, 0x80, s, P.st)); }
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaGetLastError());
+}
+static void vpfree(VP& P) {
+  CK(cudaDeviceSynchronize());
+  for (void* p : {(void*)P.Vt, (void*)P.Xt, (void*)P.Xr, (void*)P.DG, (void*)P.DGr, (void*)P.Sq, (void*)P.Sqr, (void*)P.X0, (void*)P.X0r,
+                  (void*)P.bad})
+    CK(cudaFree(p));
+  CK(cudaStreamDestroy(P.st));
+}
+static void vp_ved(VP& P, const Sig& s) { vedit<<<dim3(P.s / 128, P.rows / 32), 256, 0, P.st>>>(P.Vt, P.Xt, P.rows, P.s, s); }
+static void vp_vsm(VP& P) { vsum<<<dim3(32, P.kvh), 128, 0, P.st>>>(P.Xt, P.DG, P.Sq, P.X0, P.s); }
+template <bool SUMS> static void vp_vf(VP& P, const Sig& s) { vfl<SUMS>(P.Vt, P.Xt, P.DG, P.Sq, P.X0, P.kvh, P.s, s, P.st); }
+// an arm: vedit, vsum (r2's), vpair (vedit then vsum), vfold or vfold_x
+static std::function<void(VP&)> vparm(const std::string& a) {
+  if (a == "vedit") return [](VP& P) { vp_ved(P, sigma(P.seed, P.inst++)); };
+  if (a == "vsum") return [](VP& P) { vp_vsm(P); };
+  if (a == "vpair") return [](VP& P) { vp_ved(P, sigma(P.seed, P.inst++)); vp_vsm(P); };
+  if (a == "vfold") return [](VP& P) { vp_vf<true>(P, sigma(P.seed, P.inst++)); };
+  if (a == "vfold_x") return [](VP& P) { vp_vf<false>(P, sigma(P.seed, P.inst++)); };
+  fprintf(stderr, "no producer arm %s\n", a.c_str());
+  exit(2);
+}
+static unsigned long long vpcount(VP& P, const std::function<void()>& f) {
+  CK(cudaMemsetAsync(P.bad, 0, 8, P.st));
+  f();
+  unsigned long long h;
+  CK(cudaMemcpyAsync(&h, P.bad, 8, cudaMemcpyDeviceToHost, P.st));
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaGetLastError());
+  return h;
+}
+static unsigned long long vpbad(VP& P, const void* a, const void* b, size_t words) {
+  return vpcount(P, [&] {
+    apcmp<<<1024, 256, 0, P.st>>>(reinterpret_cast<const uint32_t*>(a), reinterpret_cast<const uint32_t*>(b), words, P.bad);
+  });
+}
+// poisoned buffers, one key: vfold's DG digits, X_diag and Sq against Ycum recomputed in full (vcheck); its X, X(0), Sq and
+// DG against r2's vedit and vsum; vfold_x's X; a no-write control
+static int vgate(int s, int kvh, uint32_t seed) {
+  VP P;
+  vpsetup(P, s, kvh, seed, true);
+  const auto poison = [&] {
+    for (auto [p, b] : {std::pair<void*, size_t>{P.Xt, P.vb}, {P.DG, P.dgb}, {P.Sq, P.sqb}, {P.X0, P.x0b}}) CK(cudaMemsetAsync(p, 0xA5, b, P.st));
+  };
+  const Sig sg = sigma(seed, 0);
+  poison();
+  vp_vf<true>(P, sg);
+  for (auto [d, p, b] : {std::tuple<void*, void*, size_t>{P.Xr, P.Xt, P.vb}, {P.DGr, P.DG, P.dgb}, {P.Sqr, P.Sq, P.sqb}, {P.X0r, P.X0, P.x0b}})
+    CK(cudaMemcpyAsync(d, p, b, cudaMemcpyDeviceToDevice, P.st));
+  const unsigned long long y_bad =
+      vpcount(P, [&] { vcheck<<<(P.rows * 32 + 255) / 256, 256, 0, P.st>>>(P.Xr, P.DGr, P.Sqr, P.rows, s, P.bad); });
+  poison();
+  vp_ved(P, sg);
+  vp_vsm(P);
+  const unsigned long long x_bad = vpbad(P, P.Xt, P.Xr, P.vb / 4), x0_bad = vpbad(P, P.X0, P.X0r, P.x0b / 4),
+                           sq_bad = vpbad(P, P.Sq, P.Sqr, P.sqb / 4), dg_bad = vpbad(P, P.DG, P.DGr, P.dgb / 4);
+  CK(cudaMemsetAsync(P.Xt, 0xA5, P.vb, P.st));
+  vp_vf<false>(P, sg);
+  const unsigned long long fx_bad = vpbad(P, P.Xt, P.Xr, P.vb / 4);
+  CK(cudaMemsetAsync(P.Xt, 0xA5, P.vb, P.st));
+  const unsigned long long c_bad = vpbad(P, P.Xt, P.Xr, P.vb / 4);
+  const bool ok = y_bad == 0 && x_bad == 0 && x0_bad == 0 && sq_bad == 0 && dg_bad == 0 && fx_bad == 0, control_rejected = c_bad > 0;
+  printf("{\"vgate\": true, \"s\": %d, \"kvh\": %d, \"digits\": %d, \"vfold\": {\"ycum_bad\": %llu, \"x_bad\": %llu, \"x0_bad\": %llu, "
+         "\"sq_bad\": %llu, \"dg_bad\": %llu}, \"vfold_x\": {\"x_bad\": %llu}, \"control\": {\"x_bad\": %llu}, \"device_ok\": %s, "
+         "\"control_rejected\": %s}\n",
+         s, kvh, s > AP_Y1S ? 3 : 2, y_bad, x_bad, x0_bad, sq_bad, dg_bad, fx_bad, c_bad, ok ? "true" : "false",
+         control_rejected ? "true" : "false");
+  vpfree(P);
+  return ok && control_rejected ? 0 : 1;
+}
+static int vbench(int reps, int s, int kvh) {
+  Nv nv;
+  const std::vector<std::string> names = split(getenv("VP_ARMS"), "vedit,vsum,vpair,vfold,vfold_x");
+  VP P;
+  vpsetup(P, s, kvh, 0x5EED0000u + s + kvh, false);
+  vp_vf<true>(P, sigma(P.seed, 0xFFFFFFFFu));
+  std::vector<std::function<void(VP&)>> arms;
+  for (auto& a : names) arms.push_back(vparm(a));
+  const int NA = (int)arms.size();
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
+  auto time_arm = [&](int j, int calls) {
+    CK(cudaEventRecord(e0, P.st));
+    for (int c = 0; c < calls; c++) arms[j](P);
+    CK(cudaEventRecord(e1, P.st));
+    CK(cudaEventSynchronize(e1));
+    float ms;
+    CK(cudaEventElapsedTime(&ms, e0, e1));
+    return (double)ms / calls;
+  };
+  std::vector<int> calls(NA);
+  for (int j = 0; j < NA; j++) {
+    time_arm(j, 1);
+    const double t = time_arm(j, 2);
+    calls[j] = std::max(2, std::min(400, (int)(20.0 / std::max(t, 1e-4))));
+  }
+  std::vector<std::vector<double>> ms(NA), mhz(NA);
+  for (int r = 0; r < reps; r++)
+    for (int j = 0; j < NA; j++) {
+      const int a = (j + r) % NA;
+      ms[a].push_back(time_arm(a, calls[a]));
+      mhz[a].push_back(nv.sm());
+    }
+  CK(cudaGetLastError());
+  printf("{\"vprod\": true, \"s\": %d, \"kvh\": %d, \"entries\": %zu, \"digits\": %d, \"arms\": {", s, kvh, P.vb, s > AP_Y1S ? 3 : 2);
+  for (int j = 0; j < NA; j++) {
+    printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"calls\": %d, \"ms_all\": [", j ? ", " : "", names[j].c_str(), median(ms[j]),
+           median(mhz[j]), calls[j]);
+    for (size_t i = 0; i < ms[j].size(); i++) printf("%s%.6f", i ? ", " : "", ms[j][i]);
+    printf("]}");
+  }
+  printf("}}\n");
+  fflush(stdout);
+  CK(cudaEventDestroy(e0)); CK(cudaEventDestroy(e1));
+  vpfree(P);
+  return 0;
+}
+static int vone(const std::string& arm, int s, int kvh) {
+  VP P;
+  vpsetup(P, s, kvh, 0x5EED0000u + s + kvh, false);
+  vp_vf<true>(P, sigma(P.seed, 0xFFFFFFFFu));
+  auto f = vparm(arm);
+  for (int i = 0; i < 3; i++) f(P);
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaProfilerStart());
+  f(P);
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaProfilerStop());
+  CK(cudaGetLastError());
+  printf("{\"vone\": \"%s\", \"s\": %d, \"kvh\": %d}\n", arm.c_str(), s, kvh);
+  vpfree(P);
+  return 0;
+}
+
 int main(int argc, char** argv) {
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
+  if (argc >= 5 && !strcmp(argv[1], "vgate")) return vgate(atoi(argv[2]), atoi(argv[3]), (uint32_t)strtoul(argv[4], 0, 0));
+  if (argc >= 5 && !strcmp(argv[1], "vbench")) return vbench(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]));
+  if (argc >= 5 && !strcmp(argv[1], "vone")) return vone(argv[2], atoi(argv[3]), atoi(argv[4]));
   if (argc >= 7 && !strcmp(argv[1], "gate")) return apgate(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), (uint32_t)strtoul(argv[6], 0, 0));
   if (argc >= 6 && !strcmp(argv[1], "bench")) return apbench(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
   if (argc >= 6 && !strcmp(argv[1], "one")) return apone(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
-  fprintf(stderr, "usage: apv gate DIR S H REP SEED | bench REPS S H REP | one ARM S H REP\n");
+  fprintf(stderr, "usage: apv gate DIR S H REP SEED | bench REPS S H REP | one ARM S H REP | vgate S KVH SEED | vbench REPS S KVH | "
+                  "vone ARM S KVH\n");
   return 2;
 }
 #endif
