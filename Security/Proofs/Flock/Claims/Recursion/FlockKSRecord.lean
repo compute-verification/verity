@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+import Proofs.Flock.Claims.Recursion.KSStated
 import Proofs.Flock.Claims.KS.TableBound
 import Proofs.Flock.Claims.Bridge.Hm96Tree
 
@@ -133,12 +134,14 @@ theorem plain_KSFlock (rel : Readable.Parsed → Readable.Relation) (D : Deploy 
     (hRd : ∀ decI, SessionRounds D (Inner.ofFlock (deployPlain rel) decI) DO) (hS : SessionAccepts D)
     (hR : ∀ decI, SessionRuns sha512 D (Inner.ofFlock (deployPlain rel) decI) DO)
     (hV : ∀ decI, InnerViewRun sha512 D (Inner.ofFlock (deployPlain rel) decI) DO)
-    (hC : ∀ decI, CallsRecord sha512 D (Inner.ofFlock (deployPlain rel) decI) DO)
-    (hO : ∀ decI, CallsOpen sha512 D (Inner.ofFlock (deployPlain rel) decI) DO opening)
+    (hT : ∀ decI, CallsTrue sha512 D (Inner.ofFlock (deployPlain rel) decI) DO)
+    (hL : ∀ decI, CallsLogColl sha512 D (Inner.ofFlock (deployPlain rel) decI) DO)
+    (hO : ∀ decI, CallsOpenPlayed sha512 D (Inner.ofFlock (deployPlain rel) decI) DO opening)
     (hAcc : ∀ decI, InnerAccepts sha512 D (Inner.ofFlock (deployPlain rel) decI) DO) (hN0 : CallsNil sha512 D) :
-    KSFlockA sha512 D (deployPlain rel) DO :=
-  fun decI h => KS_of_flockKS sha512 D _ DO opening decCoin hF (plain_KSAbort rel hext htab decI h) hRef
-    hRounds hN hε (hRd decI) hS (hR decI) (hV decI) (hC decI) (hO decI) (hAcc decI) (coinsShown_V sha512 false) hN0
+    KSFlock sha512 D (deployPlain rel) DO :=
+  (KSFlockA_iff_KSFlock _ _ _ _).1 fun decI h => KS_of_flockKS sha512 D _ DO opening decCoin hF
+    (plain_KSAbort rel hext htab decI h) hRef hRounds hN hε (hRd decI) hS (hR decI) (hV decI) (hT decI) (hL decI)
+    (hO decI) (hAcc decI) (coinsShown_V sha512 false) hN0
 
 /-- **KS of the recursion over the deployed masked (`--zk`) record as the inner protocol**, at SHA-512:
 `KS_of_flockKS` at each inner decoder within the radius, with `Inner.KSAbort` from `zk_KSAbort` and `PublicCoin` at
@@ -154,11 +157,13 @@ theorem zk_KSFlock (rel : Readable.Parsed → Readable.Relation) (D : Deploy Coi
     (hRd : ∀ decI, SessionRounds D (Inner.ofFlock (deployZk rel) decI) DO) (hS : SessionAccepts D)
     (hR : ∀ decI, SessionRuns sha512 D (Inner.ofFlock (deployZk rel) decI) DO)
     (hV : ∀ decI, InnerViewRun sha512 D (Inner.ofFlock (deployZk rel) decI) DO)
-    (hC : ∀ decI, CallsRecord sha512 D (Inner.ofFlock (deployZk rel) decI) DO)
-    (hO : ∀ decI, CallsOpen sha512 D (Inner.ofFlock (deployZk rel) decI) DO opening)
+    (hT : ∀ decI, CallsTrue sha512 D (Inner.ofFlock (deployZk rel) decI) DO)
+    (hL : ∀ decI, CallsLogColl sha512 D (Inner.ofFlock (deployZk rel) decI) DO)
+    (hO : ∀ decI, CallsOpenPlayed sha512 D (Inner.ofFlock (deployZk rel) decI) DO opening)
     (hAcc : ∀ decI, InnerAccepts sha512 D (Inner.ofFlock (deployZk rel) decI) DO) (hN0 : CallsNil sha512 D) :
-    KSFlockA sha512 D (deployZk rel) DO :=
-  fun decI h => KS_of_flockKS sha512 D _ DO opening decCoin hF (zk_KSAbort rel hone hext htab decI h) hRef
-    hRounds hN hε (hRd decI) hS (hR decI) (hV decI) (hC decI) (hO decI) (hAcc decI) (coinsShown_V sha512 true) hN0
+    KSFlock sha512 D (deployZk rel) DO :=
+  (KSFlockA_iff_KSFlock _ _ _ _).1 fun decI h => KS_of_flockKS sha512 D _ DO opening decCoin hF
+    (zk_KSAbort rel hone hext htab decI h) hRef hRounds hN hε (hRd decI) hS (hR decI) (hV decI) (hT decI) (hL decI)
+    (hO decI) (hAcc decI) (coinsShown_V sha512 true) hN0
 
 end FlockDeploy.KS
