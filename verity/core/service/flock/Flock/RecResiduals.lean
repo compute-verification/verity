@@ -292,6 +292,13 @@ def readBits (rd : Array Bool) (ns : List Nat) (q : Nat) : Nat :=
 def partlyRead (rd : Array Bool) (ns : List Nat) : Option (Nat × Nat) :=
   ((List.range ns.sum).map fun q => (q, readBits rd ns q)).find? fun (_, k) => k != 0 && k != 128
 
+/-- The first element of a part's w (`W`, its slots in w, named by `wn`) that is an element of `h` (`.h l`) and not
+read in all 128 bits, with how many are. -/
+def hUnread (wn : Array RecAlgebra.Key) (W : Array Nat) (rd : Array Bool) (ns : List Nat) : Option (Nat × Nat) :=
+  ((List.range W.size).filterMap fun q => match (wn[W[q]!]? : Option RecAlgebra.Key) with
+    | some (.h _) => let n := readBits rd ns q; if n != 128 then some (q, n) else none
+    | _ => none).head?
+
 /-! ## The row ports' names -/
 
 /-- Each circuit port's first leaf (`HmRow.delta`'s `starts`). -/
@@ -350,7 +357,8 @@ def holoOf (c : Circuit) : V Bool :=
 
 /-- A unit named `rec-residuals/…` is the verifier's part at the shape and part its name gives, holo when the statement
 says so (`holoOf`), equal in every field, its computed rows read each row-port element in all 128 bits or in none
-(`partlyRead`), and each bit of an element of w that round `r` holds is keyed at each copy by a circuit port named
+(`partlyRead`) and each element of `h` it holds in all 128 (`hUnread`), and each bit of an element of w that round `r`
+holds is keyed at each copy by a circuit port named
 `m<r>` where a port keys it (`misnamed`, `roundNames`); any other unit passes. The shape is bounded by the file's unit
 before the structure is computed, and the part's input and output bits are compared before its net is built.
 Irreducible, so that no unification against it builds the net. -/
@@ -385,11 +393,14 @@ Irreducible, so that no unification against it builds the net. -/
                   | .ok W =>
                     let rs := RecAlgebra.rounds sh
                     let wn := RecAlgebra.wNames sh
-                    match misnamed c ns W.size (fun a => roundNames rs wn[W[a]!]?) with
-                    | none => pure ()
-                    | some (k, a, b, q) =>
-                      throw (s!"circuit {c.name}: unit {c.unit.name}'s copy {k} keys bit {b} of row-port element {a} " ++
-                        s!"by port {c.ports[q]!.name}, not {roundNames rs wn[W[a]!]?}")
+                    match hUnread wn W (readIns g) ns with
+                    | some (q, n) =>
+                      throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of h's row-port element {q}'s 128 bits"
+                    | none => match misnamed c ns W.size (fun a => roundNames rs wn[W[a]!]?) with
+                      | none => pure ()
+                      | some (k, a, b, q) =>
+                        throw (s!"circuit {c.name}: unit {c.unit.name}'s copy {k} keys bit {b} of row-port element " ++
+                          s!"{a} by port {c.ports[q]!.name}, not {roundNames rs wn[W[a]!]?}")
                 | some (q, n) => throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of row-port element {q}'s 128 bits"
               else throw s!"circuit {c.name}: not the verifier's {kind} {c.unit.name} ({firstDiff c.unit g})"
   | none =>

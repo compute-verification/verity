@@ -2,7 +2,8 @@
 loads it for the children it forks and for its own process, and `sitecustomize` beside it for every Python a test starts.
 
 Each open of one of the suite's test modules (a `test_*.py` under `VERITY_SUITE_DIR`), or of a repository file outside the suite's
-inputs (`VERITY_SUITE_ALLOW`, relative to `VERITY_SUITE_ROOT`), is appended at once to `VERITY_SUITE_READS` as a line
+inputs (`VERITY_SUITE_ALLOW`, relative to `VERITY_SUITE_ROOT`, less the suites nested in its directory that `VERITY_SUITE_DENY`
+names), is appended at once to `VERITY_SUITE_READS` as a line
 `R|O<tab>module<tab>path[<tab>test]`. The module is the test module `VERITY_SUITE_MODULE` names: the guard sets it while one is
 collected or its tests run, and a child inherits it; the test is the node id `VERITY_SUITE_TEST` names while one runs. One write
 per open, so a forked child that ends through `os._exit` loses nothing.
@@ -50,6 +51,10 @@ class Reads:
         self.allowed = tuple(os.path.join(p, "") for p in paths if os.path.isdir(p))
         self.allowed += (*self.prefix, self.here)                                       # the tracer itself
         self.allowed_files = frozenset(p for p in paths if not os.path.isdir(p))
+        #: the suites nested in this one's directory that its inputs leave out (`suites.dropped`), each outside them but where a
+        #: deeper input lies inside one
+        self.denied = tuple(os.path.join(os.path.normpath(os.path.join(self.root, p)), "")
+                            for p in json.loads(env.get("VERITY_SUITE_DENY", "[]")))
         self.inside = os.path.join(self.root, "")
         #: "0" for a suite whose keys leave Markdown out (`suites.markdown`): every `.md` it opens is outside its inputs
         self.markdown = env.get("VERITY_SUITE_MARKDOWN", "1") != "0"
@@ -62,23 +67,29 @@ class Reads:
         return os.path.normpath(path if os.path.isabs(path) else os.path.join(os.getcwd(), path))
 
     def classify(self, path: str) -> tuple[str, str] | None:
-        """("R", path) for one of the suite's test modules, ("O", path) for a repository file outside the inputs, else None."""
+        """("O", path) for a repository file outside the inputs, ("R", path) for one of the suite's test modules, else None."""
         path = self._abs(path)
         name = os.path.basename(path)
-        if path.startswith(self.suite) and name.startswith("test_") and name.endswith(".py"):
-            return "R", os.path.relpath(path, self.root)
         if self.outside(path):
             return "O", os.path.relpath(path, self.root)
+        if path.startswith(self.suite) and name.startswith("test_") and name.endswith(".py"):
+            return "R", os.path.relpath(path, self.root)
         return None
 
     def outside(self, path: str) -> bool:
         """Whether ``path`` (absolute and normalized) is a repository file outside the inputs; a cached module is inside when its
-        source is, and Markdown is outside them in a suite whose keys leave it out."""
+        source is, Markdown is outside them in a suite whose keys leave it out, and so is a file of a nested suite they leave out
+        (`denied`) unless an input deeper than that suite's directory holds it."""
         if not path.startswith(self.inside):
             return False
         if not self.markdown and path.endswith(".md") and not path.startswith((*self.prefix, self.here)):
             return True
-        return not path.startswith(self.allowed) and path not in self.allowed_files and _source(path) not in self.allowed_files
+        if path in self.allowed_files or _source(path) in self.allowed_files:
+            return False
+        if not path.startswith(self.allowed):
+            return True
+        return path.startswith(self.denied) and (max(len(d) for d in self.denied if path.startswith(d))
+                                                 > max(len(a) for a in self.allowed if path.startswith(a)))
 
     def traced(self, path: str) -> str | None:
         """The repository path a key narrowed to what the tests use holds for an open of ``path``; None outside the repository,

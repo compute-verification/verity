@@ -14,7 +14,8 @@ no premise of its own.
 * `checksC3Reached_checked`: `ChecksC3Reached` at the checked family, from the keep (`checks_of_keepOwn`);
 * `reachedChecked_checked`, `labels_checked`, `readsOwnAt_checked`: `ReachedChecked` (`reachedChecked_of`), the label
   check at each accepted outcome's own record (`label_of_checked`'s `hlb`) and `ReadsOwnAt` (`readsOwnAt_of`);
-* `ownNamed_checked`, `srcHTie_checked`: `srcHReads_of`'s `hnd`, and `SrcHTie` from `HCols` and `HAlgRows`;
+* `ownNamed_checked`, `srcHTie_checked`: `srcHReads_of`'s `hnd`, and `SrcHTie` from `HCols` and `HAlgRows`
+  (`FlockC3.Sparse.hCols_of_check`, `FlockC3.Reps.hAlgRows_of_res`);
 * `FlockC3.Sparse.srcSparseTie_of_copies`: `srcSparseTie_of_pubH` with its `h` conjunct from `SrcHTie`
   (`h_of_sessionAt`), at the copies `sparseSessionAt_of_zero` names.
 -/
@@ -163,7 +164,7 @@ theorem ownNamed_checked : ∀ R ω t R₂ (j : Fin (vstarCount (𝓒).ish)), �
 
 /-- **(`SrcHTie`) The h-port chain at the checked family**: `srcHTie_of` at `srcHReads_of`, whose `ChecksAccepted`,
 `ReadsOwnAt` and `hnd` the checked family gives (`checksAccepted_checked`, `readsOwnAt_checked`, `ownNamed_checked`),
-from the named `HCols` and `HAlgRows`. -/
+from `HCols` and `HAlgRows` (`FlockC3.Sparse.hCols_of_check`, `FlockC3.Reps.hAlgRows_of_res`). -/
 theorem srcHTie_checked {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     (hcols : ∀ s : Fin (vstarCount (𝓒).ish), Flock.RecSparse.check ((𝓒).Vs s).c = .ok () →
       Flock.RecSparse.params ((𝓒).Vs s).c.unit.name = some (FlockC3.Sparse.unitShape (holoAt st hp)) →
