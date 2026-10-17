@@ -264,3 +264,6 @@ def test_a_job_reads_the_programs_from_a_bundle_with_no_store(tmp_path, store, m
         records.programs("other-row", bundle=b)
     with pytest.raises(UsageError, match="not in the circuit database"):
         records.programs(ROW, [1])
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run-dir"))
+    with pytest.raises(RuntimeError, match=r"a research run job has no store.*records fetch ROW --to FILE.*--send FILE.*--bundle"):
+        records.fetch(build)
