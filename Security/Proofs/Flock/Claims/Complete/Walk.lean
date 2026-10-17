@@ -253,11 +253,11 @@ theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Rea
   obtain ⟨sch, cm, e, hsch, hcm, he, p₀, t₀, l₁, p₁, t₁, hr₀, hr₁, hps, hrec⟩ :=
     JsonRT.sessionP_reps H o.resp ht hct (Setup.ofCircuit st) _ _ hrun
   dsimp only at hps hrec
+  have hok₀ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _ he) hr₀
+  have hok₁ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _ he) hr₁
   rw [show o.resp 0 = (Claims.coinSeq o.r 0).bytes from rfl, JsonRT.ptsOf_coin] at he hrec
   have hcap := hC sch hsch _ _ cm hcm
   have hrs1 := JsonRT.repStreams_one ht
-  have hok₀ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _) hr₀
-  have hok₁ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _) hr₁
   have hpts : (pointsOf o.spec (Claims.coinSeq o.r 0)).size = o.spec.points := by simp [pointsOf]
   have hpm : ∀ p ∈ pointsOf o.spec (Claims.coinSeq o.r 0), p.size = o.spec.mPts := by
     intro p hp
@@ -395,16 +395,17 @@ theorem _root_.FlockComplete.Run.walkAt {H : Claims.Msg → Claims.Msg} {rel : R
 
 /-- **Flock's completeness at the deployed plain verifier**, at the deployed relation (`Readable.relation`), from the
 named premises: the record's JSON (`JsonSpec`), the oracle's 64-byte outputs (`Out64`), what the record needs of the
-statement and of the prover's pieces (`StmtOk`, `ProverOk`), the honest reps returning (`ProverRuns`) on proofs of the
-verifier's shape (`RepShaped`), the printed record's length (`RecordFits`), the Merkle schemes' digest widths
-(`SchemeWidths`), and Ligerito's final identity at every rep (`LgFinal`). The session walk (`Run.walkAt`,
-`Run.repWalk`) aligns every rep. -/
+statement (`StmtOk`), the honest reps returning (`ProverRuns`) on proofs of the verifier's shape (`RepShaped`), the
+printed record's length (`RecordFits`), and Ligerito's final identity at every rep (`LgFinal`). The prover's pieces
+(`ProverOk`, `proverOk`) and the Merkle schemes' digest widths (`SchemeWidths`, `schemeWidths`) follow from `Out64`, and
+the session walk (`Run.walkAt`, `Run.repWalk`) aligns every rep. -/
 theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
-    (hS : JsonRT.StmtOk H Readable.relation) (hP : JsonRT.ProverOk H Readable.relation)
-    (hPR : JsonRT.ProverRuns H Readable.relation) (hR : JsonRT.RepShaped H Readable.relation)
-    (hF : JsonRT.RecordFits H Readable.relation) (hW : SchemeWidths H Readable.relation)
+    (hS : JsonRT.StmtOk H Readable.relation) (hPR : JsonRT.ProverRuns H Readable.relation)
+    (hR : JsonRT.RepShaped H Readable.relation) (hF : JsonRT.RecordFits H Readable.relation)
     (hfin : LgFinal H Readable.relation) :
     Claims.Flock.Complete H (deployPlain Readable.relation) honestP (δc H) := by
+  have hP : JsonRT.ProverOk H Readable.relation := proverOk h64
+  have hW : SchemeWidths H Readable.relation := schemeWidths h64
   have w : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2,
       ZcAt o i r ∧ LcAt o i r ∧ RsAt o i r ∧ LgAt o i r ∧ LgCount o i r :=
     fun o _ hi _ hr => o.walkAt S h64 hS hP hR hi hr

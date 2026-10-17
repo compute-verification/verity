@@ -12,8 +12,9 @@ The goals of `Goals` on the record, proved at every honest run (`Run`) from four
   message's, so an oracle with outputs of varying length fails the honest record.
 * `StmtOk`: the statement names no keyed coin tree, a non-empty `Σ`, a printable draw that decodes (`DrawOk`), and its
   draw is the one it was set up at (`Ins.read.draw`).
-* `ProverOk`: at the case's table, the commitment's cap is non-empty and under `2^64` bytes, and each rep records a
-  round, each of at most `65536` coins (`RepOk`).
+* `ProverOk`: at the case's table, the commitment's cap is non-empty and under `2^64` bytes, and each rep, on the
+  table's extra claims, records a round, each of at most `65536` coins (`RepOk`); it holds at `Out64`
+  (`Replay.proverOk`).
 
 `Run.json` is the record at the run: `Record.decodeWith` reads `sessOf` and `liveOf` the live session, its points the
 first coin's (`coinOf_bytes`: a coin's bytes read back are the coin), the first send is the link of its `root_B`, and
@@ -39,14 +40,15 @@ def StmtOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.R
   ∀ c : Case H rel, c.spec.coinTree = none ∧ 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw
 
 /-- **What the record needs of the prover's pieces**, at every good case's table: the commitment's cap, at the
-schedule's first level, is non-empty and under `2^64` bytes, and each rep records a round, each of at most `65536`
-coins. -/
+schedule's first level, is non-empty and under `2^64` bytes, and each rep, on the table's extra claims at the link's
+points, records a round, each of at most `65536` coins. -/
 def ProverOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∀ st ∈ c.sts,
     (∀ sch, fast100 (Setup.ofCircuit st).m = some sch → ∀ g salt cm,
       commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (sch.levels.getD 0 default) g
         salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64) ∧
     ∀ sch, fast100 (Setup.ofCircuit st).m = some sch → ∀ tr tb cm₀ extras salt nonce d,
+      (Setup.ofCircuit st).extra (ptsOf c.spec (coinOf (c.resp 0))) = .ok extras →
       Ret ((repP (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) sch tr tb cm₀ extras salt
         nonce).run (Transcript.init #[] d)) fun pt => RepOk pt.2.rounds
 
