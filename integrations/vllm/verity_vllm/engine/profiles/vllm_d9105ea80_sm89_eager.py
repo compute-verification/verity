@@ -135,6 +135,10 @@ def make_weight_field(C: dict[str, Any]) -> Callable[[str], tuple[str | int, ...
     if C.get("FP8_BLOCK"):
         layer_fields.update({"self_attn.qkv_proj.weight_scale_inv": "qkv_ws", "self_attn.o_proj.weight_scale_inv": "o_ws",
                              "mlp.gate_up_proj.weight_scale_inv": "gate_up_ws", "mlp.down_proj.weight_scale_inv": "down_ws"})
+    if C.get("INT8_EXACT"):
+        # the exact-int8 linears' f32 per-row scales (`program.model._int8_fields`)
+        layer_fields.update({"self_attn.qkv_proj.weight_scale": "qkv_ws", "self_attn.o_proj.weight_scale": "o_ws",
+                             "mlp.gate_up_proj.weight_scale": "gate_up_ws", "mlp.down_proj.weight_scale": "down_ws"})
 
     def weight_field(name: str) -> tuple[str | int, ...] | None:
         if name == "model.embed_tokens.weight":
@@ -227,6 +231,11 @@ def make_patterns(C: dict[str, Any]) -> list:
         # dynamic per-token-group activation quant and the blockwise CUTLASS scaled GEMM, each ONE registered family (registry.fp8)
         from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
         fp8 = [PerTokenGroupFp8Quant(group=int(C["FP8_BLOCK"])), CutlassScaledMmFp8Block(group=int(C["FP8_BLOCK"]))]
+    if C.get("INT8_EXACT"):
+        # the exact-int8 profile's named ops (engine.int8_ops), each one registered Definition (registry.int8_exact); the attention
+        # scope first, so a layer on the int8 backend never reaches the FA2 scope
+        from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8Linear
+        fp8 = [Int8Linear(), Int8AttentionScope()]
     return [
         *fp8,
         GemmLaunch(GEMM_CONSTEXPRS, num_warps=GEMM_NUM_WARPS, num_stages=GEMM_NUM_STAGES, num_sms=GEMM_NUM_SMS),
