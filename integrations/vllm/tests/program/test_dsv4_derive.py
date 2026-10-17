@@ -10,7 +10,8 @@
 * `export_compat.deep_gemm_fp8_einsum_leaf`: the o-projection's DeepGEMM einsum exports as the leaf op;
 * `marlin_moe_leaf.mxfp4_marlin_moe_leaf`: the MXFP4 Marlin MoE exports as its steps, its two expert GEMMs as the leaf op;
 * `rules/vllm_mhc.py`: the four mHC ops derive per token at the dispatch's own split counts, word for word the numpy twin's
-  (`kernels.mhc_twin`) on the FMA path and the TF32 path, and what the Definitions do not take refuses by name."""
+  (`kernels.mhc_twin`) on the FMA path and the TF32 path, and what the Definitions do not take refuses by name;
+* `CublasRouterRule`: a direct `torch.mm(x, W.T, out_dtype=float32)` binds the captured f32-output route."""
 from __future__ import annotations
 
 import sys
@@ -36,6 +37,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.vllm_meta import post_load_tensors_as_the_loader_does
 from verity_vllm.program.kernels import mhc_twin as W
 from verity_vllm.program.kernels.serve3_reference import materialize
+from verity_vllm.program.registry import hopper
 
 
 class _Overlapped(nn.Module):
@@ -472,4 +474,25 @@ def test_what_the_mhc_definitions_do_not_take_refuses_by_name(over, refusal, ser
     model = _Hyper(rng, **{k: v for k, v in over.items() if k in ("norm_weight", "norm_eps")})
     rep = _derive_mhc(model, (_tensor(W.bf16(_f32(rng, 2, HID))),))
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
+
+class _F32Out(nn.Module):
+    """DeepSeek-V4's compressor GEMM: a direct `torch.mm(x, W.T, out_dtype=float32)`, W [1024, 7168] bf16."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = _meta(1024, 7168)
+
+    def forward(self, x):
+        return torch.mm(x, self.weight.T, out_dtype=torch.float32)
+
+
+def test_a_direct_f32_output_mm_binds_the_captured_f32out_route(served):
+    rep = _derive_mhc(_F32Out(), (torch.empty(4, 7168, dtype=torch.bfloat16, device="meta"),))
+    assert rep.program is not None, rep.unsupported
+    want = PROFILE_B1_EAGER_V3.kind("cublas_splitk_gemm_f32out", K=7168, N=1024, SPLIT_K=5, DOT=hopper.HopperBF16WgmmaDot16).id
+    assert [n.fn.id for n in rep.program.fn.body.nodes] == [want] * 4
+    assert rep.provenance["weight_roles"]["weight"]["role"] == "linear.weight"
+    rep = _derive_mhc(_F32Out(), (torch.empty(8, 7168, dtype=torch.bfloat16, device="meta"),))
+    assert "no captured vLLM-default cuBLAS f32out route for M=8, K=7168, N=1024" in rep.unsupported.hint
 

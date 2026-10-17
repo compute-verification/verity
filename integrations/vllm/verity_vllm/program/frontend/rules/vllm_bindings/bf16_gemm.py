@@ -1,8 +1,9 @@
-"""GLM-5.3's served-default BF16 GEMMs on cc 9.0.
+"""GLM-5.3's and DeepSeek-V4's served-default BF16 GEMMs on cc 9.0.
 
 The unbiased linears use cuBLAS's captured per-shape, per-M route.  The MoE gate leaf is emitted only when vLLM dispatches
 its cuteDSL ``ll_bf16_gemm`` tier; its larger-token fallback is ``aten.mm.dtype`` and uses cuBLAS's captured f32-output
-route.  An absent route is unsupported rather than being interpreted as a non-split launch.
+route, as does a direct ``torch.mm(x, W.T, out_dtype=float32)`` (DeepSeek-V4's compressor GEMMs).  An absent route is
+unsupported rather than being interpreted as a non-split launch.
 """
 from __future__ import annotations
 
@@ -163,16 +164,25 @@ class LlBf16GemmRule(OpRule):
         )
 
 
+def _f32out_phase(K: int, N: int) -> str:
+    """The captured route family of a bf16 -> f32 ``torch.mm(x, W.T, out_dtype=float32)`` at (K, N): ``"f32out"``, a direct call,
+    when the shape has captured routes of its own, else ``"router"``, `GateLinear`'s cuBLAS tier, which vLLM dispatches only past
+    its cuteDSL tiers.  The two families' captured shapes are disjoint, so a shape binds only in the family it was captured in."""
+    key = ("f32out", K, N)
+    return "f32out" if key in bf16_gemm_check.DEFAULT_CUBLAS_SPLIT_K or key in bf16_gemm_check.DEFAULT_CUBLAS_NON_SPLIT else "router"
+
+
 class CublasRouterRule(OpRule):
     modes = frozenset({"profile"})
     info = RuleInfo(
         "CublasRouter[vllm-default]",
         1,
         "op-binding",
-        applies_to="aten.mm.dtype(x, W.T, out_dtype=float32), GateLinear's cc 9.0 fallback above 16 tokens",
+        applies_to="aten.mm.dtype(x, W.T, out_dtype=float32): GateLinear's cc 9.0 fallback above 16 tokens, or a direct call",
         preconditions=(
             "x is row-major bf16 [M,K], W.T is the transposed view of row-major bf16 W[N,K], and output is row-major f32 [M,N]",
-            "vLLM dispatches the cuBLAS tier and the shape and M have a captured vLLM-default route",
+            "the shape and M have a captured vLLM-default route (`_f32out_phase`); in the router family, vLLM dispatches the "
+            "cuBLAS tier",
         ),
         evidence_domain="GLM-5.3 BF16 GEMM defaults capture; GO pending its capture-side probe fix",
     )
@@ -198,12 +208,13 @@ class CublasRouterRule(OpRule):
             return f"output {ys}, not {(M, N)}"
         if _strides(x) != (K, 1) or _strides(wt) != (1, K) or _strides(node) != (N, 1):
             return f"noncanonical strides x={_strides(x)}, W.T={_strides(wt)}, output={_strides(node)}"
+        phase = _f32out_phase(K, N)
         kernel, _ = bf16_gemm_check.dispatch_sm90(M, K, N)
-        if kernel != "cublas":
+        if phase == "router" and kernel != "cublas":
             return f"vLLM dispatches the {kernel} tier at M={M}, K={K}, N={N}, not aten.mm.dtype"
-        route = bf16_gemm_check.default_cublas_route("router", M, K, N)
+        route = bf16_gemm_check.default_cublas_route(phase, M, K, N)
         if route is None:
-            return f"no captured vLLM-default cuBLAS router route for M={M}, K={K}, N={N}"
+            return f"no captured vLLM-default cuBLAS {phase} route for M={M}, K={K}, N={N}"
         role = "cublas_splitk_gemm_f32out" if route[0] == "splitk" else "cublas_gemm_f32out"
         if not ctx.vocab.has(role):
             return f"the vocabulary has no {role}"
@@ -215,7 +226,8 @@ class CublasRouterRule(OpRule):
         x, wt = node.args[:2]
         M, K = shape(ctx, x)
         N = shape(ctx, wt)[1]
-        kernel, statics = bf16_gemm_check.default_cublas_route("router", M, K, N)
+        phase = _f32out_phase(K, N)
+        kernel, statics = bf16_gemm_check.default_cublas_route(phase, M, K, N)
         DOT = targets.tensor_core_dot(active_target_profile())
         role = "cublas_splitk_gemm_f32out" if kernel == "splitk" else "cublas_gemm_f32out"
         fn = ctx.kind(role, node, K=K, N=N, DOT=DOT, **statics)
@@ -226,7 +238,7 @@ class CublasRouterRule(OpRule):
             for i, row in enumerate(rows)
         ]
         ctx.define(node, from_rows(outs, lead))
-        ctx.bind_weight_role(wt, self, "moe.gate.weight", K=K, N=N)
+        ctx.bind_weight_role(wt, self, "moe.gate.weight" if phase == "router" else "linear.weight", K=K, N=N)
         ctx.record(
             self,
             node,
