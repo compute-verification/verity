@@ -70,7 +70,8 @@ structure Model (K R T L U F X : Type) where
   bytes : L → K
   /-- SCALAR-ROUTE's floor for a gather-free vector-headed word, in lane-instructions (2.03) -/
   q : ℝ
-  /-- SCALAR-ROUTE's floors for a table word: lane-instructions (1.22) and bytes on its level (3.5) -/
+  /-- SCALAR-ROUTE's floors for a table word: lane-instructions (1.22) and bytes on its level
+  (`32(28 − 1.03κ)/(c_L − κ)` at a per-instruction cap `κ`, 3.0 at `κ = 8`) -/
   qT : ℝ
   bT : ℝ
   /-- side unit `u`'s per-word instruction vector, from its semantics and measured rate (P11) -/
