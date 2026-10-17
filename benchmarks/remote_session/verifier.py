@@ -11,8 +11,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), and `--jitter-ms`; the coin commitment sent first, then
    σ_0, a boundary message every window, each root fed to `Session.receive` stamped with the time its last byte was
-   read (with the appends and releases its message carries first, and its plan as a change when it carries one:
-   `Verifier.root`), each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
+   read (with the appends and releases its message carries first, its plan as a change when it carries one, and the
+   step its pass covers: `Verifier.root`), each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
    verdict as `Session.verify`'s) or by `Session.verify` on a thread of the verifier's, so a window's checks run while
    the next window's passes arrive; once every window is accepted the record (`Session.record`) and its γ terms
@@ -347,7 +347,7 @@ class Verifier:
     def root(session: audit.Session, head: dict) -> audit.Verdict | None:
         """A root's message to the session in the order the prover sends it: its appends (`Session.append`), then the
         blocks it releases (`Session.release`), then the root with its plan, a change from the last plan if it carries
-        one and the registered store otherwise (`Session.receive`).  The first rejection, if any."""
+        one and the registered store otherwise, and its step (`Session.receive`).  The first rejection, if any."""
         for root, count in head.get("appends", ()):
             got = session.append(bytes.fromhex(root), count)
             if isinstance(got, audit.Verdict):
@@ -358,7 +358,7 @@ class Verifier:
         if change is not None:
             added, removed = change
             change = ([tuple(r) for r in added], [tuple(r) for r in removed])
-        return session.receive(head["t"], head["i"], bytes.fromhex(head["root"]), change=change)
+        return session.receive(head["t"], head["i"], bytes.fromhex(head["root"]), change=change, step=head.get("step"))
 
     def ledgers(self, record: audit.Record, arrivals: list[list[int]] = ()) -> dict:
         """γ against the node's R at spec and measured (`timing.SPEC_BYTES_PER_S`, `timing.READ_BYTES_PER_S`: every
