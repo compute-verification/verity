@@ -30,7 +30,7 @@ LD_REGS = {"ld_32x32b_x32": 32, "ld_32x32b_x16": 16, "ld_16x256b_x4": 16, "ld_16
            "ld_32x32b_x4": 4, "ld_32x32b_x1": 1, "ld16w_32x32b_x32": 32, "ld16w_32x32b_x16": 16,
            "ld_32x32b_x64": 64, "ld_32x32b_x128": 128}
 TENSOR = ("IGMMA", "QGMMA", "HGMMA", "BGMMA", "UTC", "LDTM", "IMMA", "HMMA", "BMMA")
-LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo"}
+LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo", "li": "p_imad_lop3"}
 
 
 def load(d: Path) -> tuple[dict[str, dict], dict[str, dict]]:
@@ -105,7 +105,7 @@ def slots_sm100(name: str, row: dict) -> dict | None:
 
 
 def lane_of(name: str) -> str | None:
-    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo)", name)
+    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo|li)", name)
     return (m.group(1) or m.group(2)) if m else None
 
 
@@ -232,6 +232,13 @@ def analyze(family: str, d: Path) -> dict:
                 if rate_of(row, "IMMA"):
                     j["sync_slots"] = rate_of(row, "IMMA") * SYNC_SLOTS
                 joints[name] = j
+            elif name.startswith("tcliU_") and t_alone and rate_of(row, "LDTM"):
+                # words loaded and folded (one LI op each) a SM a clock; L = 64 commits one slot in two of UTCIMMA's
+                cols = int(re.fullmatch(r"tcliU_x(\d+)", name).group(1))
+                words, asked = rate_of(row, "LDTM") * 32 * cols, rate_of(row, "UTC") * 128 * 256 / 2
+                joints[name] = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
+                                "issue": issue_rates(row, verdicts.get(name)), "li_words": words,
+                                "l64_asked": asked, "keeps_up_l64": words / asked}
         rho5 = t5["slots"] if t5 else 256.0
         for name in [n for n in joints if n.startswith("ldmma_")]:
             ld = loop_rate(rows[name], 1, ("LDTM",))

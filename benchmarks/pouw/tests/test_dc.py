@@ -127,6 +127,23 @@ def test_analyze_sm100_tmem_model(tmp_path):
     assert m4["L_saturated"] == 32 * 41   # 0.024 loaded at tensor 0.98: one slot in 41
 
 
+def test_analyze_sm100_li_joint(tmp_path):
+    """tcliU: the MMA at 0.98 beside lanes folding 1/16 x128 load a SM a clock (256 words) keeps up with L = 64's half of
+    0.98 x 256 slots; tclaneU_li is a lane joint against the LOP3 + IMAD pair alone; neither enters the TMEM region."""
+    an = _load("analyze")
+    t5 = {"0:UTCIMMA*": 1 / 128}
+    _rows(tmp_path, {"tc_i8_m128_n256": t5, "ld_32x32b_x32": {"0:LDTM.x32": 0.25}, "s_duo": {"0:LOP3.LUT": 2.0},
+                     "p_imad_lop3": {"0:IMAD": 2.0, "0:LOP3.LUT": 2.0},
+                     "tcliU_x128": {"0:UTCIMMA*": 0.98 / 128, "1:LDTM.x128": 1 / 16, "1:LOP3.LUT": 4.0, "1:IMAD": 4.0},
+                     "tclaneU_li": {"0:UTCIMMA*": 1 / 128, "1:LOP3.LUT": 1.5, "1:IMAD": 1.5}})
+    out = an.analyze("sm100", tmp_path)
+    li = out["joints"]["tcliU_x128"]
+    assert li["li_words"] == 256 and abs(li["tensor_fraction"] - 0.98) < 1e-12
+    assert abs(li["keeps_up_l64"] - 256 / (0.98 * 128)) < 1e-12 and "ld_words" not in li
+    assert out["joints"]["tclaneU_li"]["lane_fraction"] == 0.75
+    assert all(p[0] != 0.98 for p in out["tmem_model"]["tmem_points"])
+
+
 def _gate(d: Path, loops: dict[str, list[tuple[int, dict[str, int]]]]):
     """gate.json beside rows.jsonl: each probe's timed loops in SASS order, as (instructions, {pattern: count})."""
     vs = []

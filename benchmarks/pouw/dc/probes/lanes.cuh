@@ -3,8 +3,9 @@
 #pragma once
 #include "../dc.cuh"
 
-// mix: add.u32 and FFMA alternating (ptxas splits the adds between IADD3 and IMAD.IADD); duo: the fold, 3 ops a word.
-enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO, L_IADD, L_FFMA, L_SHF, L_LEA };
+// mix: add.u32 and FFMA alternating (ptxas splits the adds between IADD3 and IMAD.IADD); duo: the fold, 3 ops a word;
+// li: LOP3 and IMAD alternating, LI's op mix.
+enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO, L_IADD, L_FFMA, L_SHF, L_LEA, L_LI };
 struct Lane {
   uint32_t r[8];
   float f[8];
@@ -54,16 +55,6 @@ DC_DEV void duo_ops(Lane& l) {
     duo_ops<Q + 1, N>(l);
   }
 }
-// R lane ops (the duo lane: R/3 words of three ops each)
-template <int X, int R>
-DC_DEV void lane_ops(Lane& l) {
-  if constexpr (X == L_DUO) {
-    duo_ops<0, R / 3>(l);
-  } else {
-#pragma unroll
-    for (int q = 0; q < R; q++) l.op<X>(q);
-  }
-}
 // R ops alternating X and Y: when the pair's rate exceeds both alone rates, X and Y issue to different pipes.
 template <int X, int Y, int R>
 DC_DEV void lane_pair(Lane& l) {
@@ -71,5 +62,17 @@ DC_DEV void lane_pair(Lane& l) {
   for (int q = 0; q < R; q += 2) {
     l.op<X>(q >> 1);
     l.op<Y>((q >> 1) + 4);
+  }
+}
+// R lane ops (the duo lane: R/3 words of three ops each; the LI lane: LI's LOP3 + IMAD pair, R/2 of each)
+template <int X, int R>
+DC_DEV void lane_ops(Lane& l) {
+  if constexpr (X == L_DUO) {
+    duo_ops<0, R / 3>(l);
+  } else if constexpr (X == L_LI) {
+    lane_pair<L_LOP3, L_IMAD, R>(l);
+  } else {
+#pragma unroll
+    for (int q = 0; q < R; q++) l.op<X>(q);
   }
 }

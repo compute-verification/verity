@@ -15,6 +15,8 @@
 //   imma_s8_k32 / _k16    mma.sync alone on sm_100 (M4c)
 //   syncmma_k32 / _k16    thread 0 tcgen05.mma beside 8 warps of mma.sync (M4c: does mma.sync share the tcgen05 pipe?)
 //   tclane_<lane>_r<R>    thread 0 tcgen05.mma beside 12 warps of lane ops (the scalar pipes beside a saturated MMA)
+//   tclaneU_<lane>        the same, exact (the lanes run only while the MMA does)
+//   tcliU_x<C>            the LI fold beside the MMA, exact: lane warps load C columns of TMEM and fold each word
 // dc/analyze.py turns rows.jsonl into words a cycle and the joint facets.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
@@ -459,6 +461,56 @@ DC_DEV void lane_until_mma(const OpArgs& a) {
   teardown(tmem);
   OP_SINK(v ^ threadIdx.x)
 }
+// The LI fold as the honest kernel runs it: warp 0 the MMA, fixed (ld_until_mma's 4 into D0); warps 4 .. 4 + LW - 1 load
+// C columns of their lane quarter of D1 (tcgen05.ld.32x32b.x<C>) and fold each word with one LI op (LOP3 and IMAD
+// alternating) until it is done. At L = 64 the MMA commits one slot in two, so the lanes keep up when they fold
+// UTCIMMA's rate x 128 x 256 / 2 words a clock. x128 holds 128 registers a thread, so it runs 8 lane warps (384 threads).
+template <int C, int LW>
+DC_DEV void li_until_mma(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  const uint32_t tmem = setup<0>(s, a.mode);
+  const uint64_t da = desc_a(s), db = desc_b(s);
+  constexpr uint32_t idesc = idesc_of<0>(128, 256);
+  const uint32_t w = warp_u(), col = tmem + ((32u * (w & 3u)) << 16) + 256u + (((w - 4u) >> 2) * C) % 256u;
+  Lane l(threadIdx.x);
+  uint32_t z[C];
+  OP_BEGIN_STOP
+  if (w == 0) {
+    OP_LOOP(it) {
+      if (elect_one()) {
+        umma_i8(tmem, da, db, idesc, 0);
+        umma_i8(tmem, da, db, idesc, 1);
+        umma_i8(tmem, da, db, idesc, 1);
+        umma_i8(tmem, da, db, idesc, 1);
+      }
+      __syncwarp();
+    }
+    OP_DONE
+  } else if (w >= 4 && w < 4 + LW) {
+    OP_UNTIL(n) {
+      if constexpr (C == 32) tmem_ld32(col, z);
+      else if constexpr (C == 64) tmem_ld64(col, z);
+      else tmem_ld128(col, z);
+      tmem_wait_ld();
+#pragma unroll
+      for (int i = 0; i < C; i += 2) {
+        asm volatile("lop3.b32 %0,%0,%1,%2,0x96;" : "+r"(l.r[i & 7]) : "r"(z[i]), "r"(0x85EBCA6Bu));
+        asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(l.r[(i + 1) & 7]) : "r"(z[i + 1]), "r"(0x9E3779B9u));
+      }
+    }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  if (w == 0) {
+    if (elect_one()) umma_commit(&s.bar);
+    __syncwarp();
+  }
+  mbar_wait(&s.bar, 0);
+  tc_after_sync();
+  const uint32_t v = sink_ld(tmem, 0) ^ l.fold();
+  teardown(tmem);
+  OP_SINK(v ^ threadIdx.x)
+}
 
 OP_KERNEL(tc_i8_m128_n32, 128) { tc_alone<0, 128, 32>(a); }
 OP_KERNEL(tc_i8_m128_n64, 128) { tc_alone<0, 128, 64>(a); }
@@ -505,6 +557,11 @@ OP_KERNEL(tclane_duo_r192, 512) { lane_beside_mma<L_DUO, 192>(a); }
 OP_KERNEL(tclaneU_mix, 512) { lane_until_mma<L_MIX, 64>(a); }
 OP_KERNEL(tclaneU_imad, 512) { lane_until_mma<L_IMAD, 64>(a); }
 OP_KERNEL(tclaneU_duo, 512) { lane_until_mma<L_DUO, 48>(a); }
+OP_KERNEL(tclaneU_lop3, 512) { lane_until_mma<L_LOP3, 64>(a); }
+OP_KERNEL(tclaneU_li, 512) { lane_until_mma<L_LI, 64>(a); }
+OP_KERNEL(tcliU_x32, 512) { li_until_mma<32, 12>(a); }
+OP_KERNEL(tcliU_x64, 512) { li_until_mma<64, 12>(a); }
+OP_KERNEL(tcliU_x128, 384) { li_until_mma<128, 8>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -559,6 +616,11 @@ static const OpProbe PROBES[] = {
     {.name = "tclaneU_mix", .kernel = (const void*)tclaneU_mix, .tpb = 512, .expect = UI ";FFMA=32", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_imad", .kernel = (const void*)tclaneU_imad, .tpb = 512, .expect = UI ";IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_duo", .kernel = (const void*)tclaneU_duo, .tpb = 512, .expect = UI ";LOP3.LUT=16,IMAD=16", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_lop3", .kernel = (const void*)tclaneU_lop3, .tpb = 512, .expect = UI ";LOP3.LUT=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_li", .kernel = (const void*)tclaneU_li, .tpb = 512, .expect = UI ";LOP3.LUT=32,IMAD=32", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcliU_x32", .kernel = (const void*)tcliU_x32, .tpb = 512, .expect = UI ";LDTM.x32=1,LOP3.LUT=16,IMAD=16", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcliU_x64", .kernel = (const void*)tcliU_x64, .tpb = 512, .expect = UI ";LDTM.x64=1,LOP3.LUT=32,IMAD=32", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcliU_x128", .kernel = (const void*)tcliU_x128, .tpb = 384, .expect = UI ";LDTM.x128=1,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
