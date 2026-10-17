@@ -184,6 +184,14 @@ theorem vu_lt_pow2 {tags : Tags} {bytes : ByteArray} {tables : List (String × B
   rw [hi, Nat.log2_two_pow, ← hi]
   exact hg
 
+/-- **Every template instance is below `2^⌊log₂ c.g⌋`** in a circuit `HmRow.check` accepted, a tail's included: the
+check refuses a `c.g` that is no power of two (`CheckFacts.g_pow2`). -/
+theorem vu_lt_pow2_of {c : Flock.Circuit} (C : CheckFacts c) {g : ℕ} (hg : g < c.g) : g < 2 ^ c.g.log2 := by
+  have hp := C.g_pow2
+  simp only [isPow2, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hp
+  rw [hp.2]
+  exact hg
+
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
 
 /-- The number of input columns of the circuit's template instance rows. -/

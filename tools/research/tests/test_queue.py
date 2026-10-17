@@ -715,6 +715,25 @@ def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
 
 
+def test_ready_refuses_a_head_that_was_ejected_and_says_why_unless_again(world, capsys):
+    """16 Oct: #2174, ejected at 24a9b5e635 for a lean-audit failure, was marked ready again at that head and failed a second train
+    on the same line, holding up the PRs without Lean in it."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    h = world.change({"e.txt": "e\n"})
+    world.gh.put(4, h, ready=False)
+    world.store.add_label(label_target(4, h), vocab.READY, True, "lane-4", ts="2026-10-16T20:00:00Z")
+    world.queue().eject(4, "lean-audit in r1: X.lean:189", "ci")
+    capsys.readouterr()
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly()) == 1
+    err = capsys.readouterr().err
+    assert "that head was ejected: lean-audit in r1: X.lean:189 (ejected by ci at" in err and "Push the fix" in err
+    assert StoreLabels(world.store, log=world.logs.append).ready(4, h) is False
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), again=True) == 0
+    assert StoreLabels(world.store, log=world.logs.append).ready(4, h) is True
+
+
 def test_a_head_with_the_tree_of_a_head_marked_ready_is_marked_without_running_the_tier_again(world, monkeypatch, capsys):
     """Merging a `main` that changes none of a PR's files (the repository move's merges did this) gave lanes a new head and a
     35-minute tier over the same files.  Only an identical tree, read with labels pulled from the remote, skips the tier."""

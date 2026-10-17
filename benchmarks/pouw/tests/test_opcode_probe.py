@@ -118,6 +118,15 @@ def test_declared_verdicts():
     assert atom["redg_add32_l2"]["sass_sha256"] == atom["redg_add32"]["sass_sha256"]  # one kernel, two probes
 
 
+def test_own_rank_atome64_verdicts():
+    """64-bit EXCH and CAS at the own rank lower to one ATOM.E each; red.add.u64 nests its CAST.SPIN fallback."""
+    cl = probe.judge(Path("cl"), table("cl"), fns("cl"))
+    assert {v["probe"]: (v["passed"], v["correct"]) for v in cl} == {
+        "dsm_atom_exch64_self": (True, True), "dsm_atom_cas64_self": (True, True), "dsm_red_add64_self": (False, True)}
+    assert any(ln.startswith("REFUSED cl:dsm_red_add64_self (known-invalid, refuse by loops: as declared)")
+               for ln in probe.verdict_lines(cl))
+
+
 def test_a_known_invalid_probe_must_be_refused_by_its_check():
     t = {p["name"]: p for p in table("lm")}
     passes = dict(t["ldsm_x1"], refuse="loops")
@@ -191,4 +200,5 @@ def test_probes_build_and_gate(tmp_path):
     _, verdicts = probe.gate_all(built)
     wrong = probe.verdict_lines([v for v in verdicts if not v["correct"]])
     assert not wrong, "\n".join(wrong)
-    assert {v["probe"] for v in verdicts if not v["passed"]} == {"bad_ldsm_merged", "bad_stsm_conflict"}
+    assert {v["probe"] for v in verdicts if not v["passed"]} == {"bad_ldsm_merged", "bad_stsm_conflict",
+                                                                 "dsm_red_add64_self"}

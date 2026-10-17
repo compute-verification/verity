@@ -11,8 +11,10 @@ game, layer and every read but its own list are `zs`'s, so an outer proof `offZs
 off `Bad` (`accepted_offZs`), and back (`offZs_accepted`). Hence:
 
 * a fact at every proof `zs` accepts holds at every proof `offZs zs Bad` accepts (`hLeafC3_offZs`, `atSrc_offZs`,
-  `atRep_offZs`, `mapsAt_offZs`, `srcHTie_offZs`, and the reads across two proofs, `repsMsgsRead_offZs`,
-  `partMsgsRead_offZs`, `opensReadAt_offZs`, `rsRead_offZs`);
+  `atRep_offZs`, `mapsAt_offZs`, `srcHTie_offZs`, `readsOwnAt_offZs`, and the reads across two proofs,
+  `repsMsgsRead_offZs`, `partMsgsRead_offZs`, `opensReadAt_offZs`, `rsRead_offZs`), as do the verifier's checks where a
+  session accepts and each session's ports named once (`checksAccepted_offZs`, `ownNamed_offZs`: off `Bad` a session's
+  list is `zs`'s, `own_dropOwn_neg`);
 * a fact off `Bad` holds at every proof `offZs zs Bad` accepts (`algebraDecodes_offZs`, `accChains_offZs`);
 * a fact at every proof the honest family at `offZs zs Bad` accepts holds off `Bad` at the honest family at `zs`
   (`atAcceptedOff_offZs`).
@@ -194,6 +196,24 @@ theorem srcHTie_offZs {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ 
     (h : FlockC3.HPort.SrcHTie zs dg N k Rw stp w) : FlockC3.HPort.SrcHTie (offZs zs Bad) dg N k Rw stp w :=
   fun R ω t R₂ τ o hA => h R ω t R₂ τ o (accepted_offZs hS hA).2
 
+/-- **The sessions refusing `Bad` name each port once** where `zs`'s do: off `Bad` each list is `zs`'s
+(`own_dropOwn_neg`), and where `Bad` holds it is `freshOwn`'s one port. -/
+theorem ownNamed_offZs {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {Bad : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Prop}
+    (h : ∀ R ω t R₂ j, ∀ p ∈ (zs R ω t R₂ j).own, ∀ p' ∈ (zs R ω t R₂ j).own, p.name = p'.name → p = p') :
+    ∀ R ω t R₂ j, ∀ p ∈ (offZs zs Bad R ω t R₂ j).own, ∀ p' ∈ (offZs zs Bad R ω t R₂ j).own, p.name = p'.name →
+      p = p' := by
+  intro R ω t R₂ j
+  by_cases hb : Bad R ω t R₂
+  · intro p hp p' hp' _
+    have hf : (offZs zs Bad R ω t R₂ j).own = freshOwn (Vs j).c := own_dropOwn_pos _ hb
+    rw [hf] at hp hp'
+    unfold freshOwn at hp hp'
+    rw [Array.mem_singleton] at hp hp'
+    exact hp.trans hp'.symm
+  · rw [show (offZs zs Bad R ω t R₂ j).own = (zs R ω t R₂ j).own from own_dropOwn_neg _ hb]
+    exact h R ω t R₂ j
+
 end transport
 
 /-- **A fact at every proof the honest family at `offZs zs Bad` accepts holds off `Bad'` at the honest family at
@@ -213,6 +233,52 @@ theorem atAcceptedOff_offZs {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss 
     (h : (C3Family.honest (xR := xR) ish hss bind hob (offZs zs Bad) own sel bc dec wr reg).AtAccepted dg N k Rw P) :
     (C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg).AtAcceptedOff Bad' dg N k Rw P :=
   fun R ω t R₂ τ o hA hb => h R ω t R₂ τ o (offZs_accepted (hB _ _ _ _ hb) hA)
+
+/-- **The verifier's checks where a session refusing `Bad` accepts** are `zs`'s: where `Bad` holds it accepts nothing
+(`not_accepts_dropOwn`), and elsewhere its list is `zs`'s (`own_dropOwn_neg`). -/
+theorem checksAccepted_offZs {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Array VStar.Stmt}
+    {hss : RecVStar.statements ish = .ok ss} {bind : Fin (vstarCount ish) → VStar.Bindings}
+    {Vs : Fin (vstarCount ish) → VStmt} {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).Outer Reg'}
+    {Bad : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Prop}
+    {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
+    {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
+    {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (ℐ).Msg}
+    {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} {rows : Option (Array Flock.Registered.Port)}
+    (h : FlockC3.PubRows.ChecksAccepted (C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg) rows
+      wr reg) :
+    FlockC3.PubRows.ChecksAccepted (C3Family.honest (xR := xR) ish hss bind hob (offZs zs Bad) own sel bc dec wr reg)
+      rows wr reg := by
+  intro R ω t R₂ j hex
+  by_cases hb : Bad R ω t R₂
+  · obtain ⟨tr', ha⟩ := hex
+    exact (not_accepts_dropOwn (zs R ω t R₂ j) hb tr' ha).elim
+  · have e : ((C3Family.honest (xR := xR) ish hss bind hob (offZs zs Bad) own sel bc dec wr reg).zs R ω t R₂ j).own =
+        (zs R ω t R₂ j).own := own_dropOwn_neg _ hb
+    rw [e] at hex ⊢
+    exact h R ω t R₂ j hex
+
+/-- **The registered reads of the sessions refusing `Bad`** are `zs`'s, at the proofs `zs` accepts off `Bad`
+(`accepted_offZs`, `own_dropOwn_neg`). -/
+theorem readsOwnAt_offZs {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Array VStar.Stmt}
+    {hss : RecVStar.statements ish = .ok ss} {bind : Fin (vstarCount ish) → VStar.Bindings}
+    {Vs : Fin (vstarCount ish) → VStmt} {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).Outer Reg'}
+    {Bad : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Prop}
+    {own : Fin (vstarCount ish) → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
+    {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
+    {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (ℐ).Msg}
+    {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hS : 0 < vstarCount ish)
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    (h : FlockC3.HPort.ReadsOwnAt (C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg) dg N k Rw) :
+    FlockC3.HPort.ReadsOwnAt (C3Family.honest (xR := xR) ish hss bind hob (offZs zs Bad) own sel bc dec wr reg) dg N k
+      Rw := by
+  intro R ω t R₂ τ o hA j u q hr
+  obtain ⟨hb, hA'⟩ := accepted_offZs (zs := zs) (Bad := Bad) hS hA
+  have e : ((C3Family.honest (xR := xR) ish hss bind hob (offZs zs Bad) own sel bc dec wr reg).zs R ω t R₂ j).own =
+      (zs R ω t R₂ j).own := own_dropOwn_neg _ hb
+  rw [e]
+  exact h R ω t R₂ τ o hA' j u q hr
 
 end
 
