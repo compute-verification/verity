@@ -1,18 +1,23 @@
 import Proofs.Flock.Claims.KS.ZkEvent
+import Proofs.Flock.Claims.KS.ZkLevels
+import Proofs.Flock.Claims.KS.ZkLevelsAll
 
 /-!
-# The masked reader's level-0 rows at a rep's run
+# The masked reader's opened rows at a rep's run
 
-`ZkEntries` and `ZkDrawJ` with each opened level-0 row whole: its witness lanes and both reps' extra lanes. A masked
-level-0 self-clash (`ClashW`) compares whole rows, so where `OpensEntries` reads an output's level-0 openings as the
-reader's entries on the witness lanes, `OpensRows` reads them as the rep's opened rows, row by row:
+`ZkEntries` and `ZkDrawJ` with each opened row whole: at level 0 its witness lanes and both reps' extra lanes, and past
+level 0 every level's. A masked self-clash (`ClashW`, `ClashL`) compares whole rows, so where `OpensEntries` reads an
+output's level-0 openings as the reader's entries on the witness lanes, `OpensRows` reads each level's openings as the
+rep's opened rows, row by row:
 
 * `Claims.Flock.zkRepRowsOf`, `Claims.Flock.zkRepRowsOf_ok`, `Claims.Flock.slotOpensZ_rows`: `zkRepColsOf`,
-  `zkRepColsOf_ok` and `slotOpensZ_entries` with no row cut.
+  `zkRepColsOf_ok` and `slotOpensZ_entries` with no row cut; `Claims.Flock.slotOpensZ_rowsAt` at any level.
 * `FlockSoundness.Discharge.ZkExec.zk_rep_rows`, `FlockSoundness.Discharge.ZkExec.zk_table_rows₀Z`: a rep's, and an
-  accepted table's, level-0 openings are its reps' `zkRepRowsOf` rows (`zk_rep_entries`, `zk_table_opens₀Z`).
+  accepted table's, level-0 openings are its reps' `zkRepRowsOf` rows (`zk_rep_entries`, `zk_table_opens₀Z`);
+  `FlockSoundness.Discharge.ZkExec.zk_rep_rowsL`, `FlockSoundness.Discharge.ZkExec.zk_table_rowsLZ`: their level-`ℓ`
+  openings past level 0 are their reps' `zkLevelRowsOf` rows (`zk_rep_reqsL`).
 * `OpensRows`, `runsAtZCJ_live_rows`, `runsAtZCJH_live_rows`: at public and hidden outputs, each accepted output's
-  level-0 openings are the reps' rows (`runsAtZCJ_live_entries`, `runsAtZCJH_live_entries` at `OpensRows`).
+  openings at every level are the reps' rows (`runsAtZCJ_live_entries`, `runsAtZCJH_live_entries` at `OpensRows`).
 * `decodesTableR_zkTabs`, `decodesTableHR_zkTabs`, `decodesTableR_deploy`: the deployed `opnD` and `decD` at `zkTabs`
   are right at `OpensRows` at one live outcome `o₀`, on `o₀` where `verify --zk` accepts what `wrS` writes for it, at
   public and hidden outputs and at a masked statement in scope (`decodesTableW_zkTabs`, `decodesTableHW_zkTabs`,
@@ -63,6 +68,25 @@ theorem slotOpensZ_rows {D Sl : Type} (out : OutZC 𝔽 D Sl) (r : ℕ) (lv : _r
     simp only [List.length_map, List.length_zipIdx] at h1
     simp [hop, hrows, h1]
 
+/-- **A masked rep's openings at a level are its rows there**: `slotOpensZ_rows` at the rep's first request of any
+level `ℓ`. -/
+theorem slotOpensZ_rowsAt {D Sl : Type} (out : OutZC 𝔽 D Sl) (r ℓ : ℕ) (lv : _root_.Flock.Level)
+    (coins : Array _root_.Flock.F128) (rows : Array (Array _root_.Flock.F128)) (R : Model.Req)
+    (hfind : ((if r = 0 then out.pend.1 else out.pend.2).lig.reqs.find? fun req => req.level == ℓ) = some R)
+    (hpos : R.positions = (_root_.Flock.positions lv coins).toList)
+    (hq : R.positions.length = lv.q) (hrows : rows.size = R.positions.length)
+    (hop : ∀ j, (out.opens.rows r ℓ j).1 = rows[j]!.toList.map FlockLevel3.GF128.of) :
+    (slotOpensZ out r ℓ lv.q).map (fun x => (x.1, x.2.1)) = zkRepCols lv coins rows := by
+  unfold slotOpensZ zkRepCols
+  rw [hfind]
+  simp only [List.map_map]
+  rw [← hq, List.take_length, ← hpos]
+  apply List.ext_getElem
+  · simp [hrows]
+  · intro i h1 h2
+    simp only [List.length_map, List.length_zipIdx] at h1
+    simp [hop, hrows, h1]
+
 end Claims.Flock
 
 namespace FlockSoundness.Discharge.ZkExec
@@ -103,6 +127,74 @@ theorem zk_rep_rows {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
   rw [hQ, Claims.Flock.zkRepRowsOf_ok hdec]
   exact Claims.Flock.slotOpensZ_rows out r.val _ _ _ R rest (by rw [he]; exact hR) hl hpos
     (by rw [hpos, Array.length_toList, positions_size _ hseam0]) hrows ho
+
+/-- **A masked rep's openings past level 0 are its deployed rows**: at a level `1 ≤ ℓ` of the schedule, rep `r`'s
+first level-`ℓ` request is the `ℓ`-th after level 0's, at the positions of round `zkLevelRound`'s coins (`zk_rep_reqsL`,
+`find?_later`), so its openings there are the rep's `zkLevelRowsOf` rows; past the last level it has none. -/
+theorem zk_rep_rowsL {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
+    (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
+    (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
+    (bytes : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
+    (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
+    (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
+      ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
+    (hwf : RoundsWF rounds)
+    (hrun : (repProg st sch tPad r.val extras zp).run (Flock.Transcript.init rounds dom) = .ok ((), tr))
+    (hk : tr.k = rounds.size) (hdec : Zk.decode (shapeZK st sch extras) bytes = .ok zp)
+    (out : ZkLink.OutZC 𝔽 Dig Sl)
+    (hp : Plays fOf (ZkLink.repZCAt execArith Hs T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
+      (rounds.toList.map (·.coins)) (if r.val = 0 then out.pend.1 else out.pend.2))
+    (ho : ∀ ℓ j, (out.opens.rows r.val ℓ j).1 =
+      ((openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).1)[j]!.toList.map fOf)
+    (ℓ : ℕ) (h1 : 1 ≤ ℓ) :
+    (ZkLink.slotOpensZ out r.val ℓ (lvOf T.sch ℓ).queries).map (fun x => (x.1, x.2.1)) =
+      FlockDeploy.KS.zkLevelRowsOf (shapeZK st sch extras) rounds bytes ℓ := by
+  obtain ⟨-, -, -, -, -, -, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨pend', hp', -, hreqs, R, rest, hR, hl, -, hlenR, hlatR⟩ :=
+    zk_rep_reqsL Hs T pts r st sch tPad extras zp rounds dom tr hsch hseam hlen hext hwf hrun hk
+  have he := plays_det hp hp'
+  rw [← he] at hR hreqs
+  by_cases hℓ : ℓ < sch.levels.size
+  · have hj : ℓ - 1 < rest.length := by omega
+    have hfind := find?_later hl hlatR h1 (show ℓ ≤ rest.length by omega)
+    have hat := hlatR (ℓ - 1) hj
+    have hmem : rest[ℓ - 1] ∈ (if r.val = 0 then out.pend.1 else out.pend.2).lig.reqs := by
+      rw [hR]
+      exact List.mem_cons_of_mem _ (List.getElem_mem hj)
+    generalize rest[ℓ - 1] = Q at hfind hat hmem
+    rw [Nat.sub_add_cancel h1] at hat
+    obtain ⟨hlQ, hposQ⟩ := hat
+    obtain ⟨-, -, -, hmc⟩ := (hreqs Q hmem).2 (by omega)
+    rw [hlQ] at hmc
+    have hseamℓ : LevelSeam (sch.levels.getD ℓ default) := hlv ℓ hℓ
+    have hQ : (lvOf T.sch ℓ).queries = (sch.levels.getD ℓ default).q := by
+      rw [hseam.hsch, lvOf_schedOf hℓ]
+      rfl
+    have hrows : (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).1.size = Q.positions.length := by
+      simpa using (merkleCheck_rows hmc).1
+    have hc : 1 ≤ ℓ ∧ ℓ < (shapeZK st sch extras).sched.levels.size := ⟨h1, hℓ⟩
+    rw [hQ, FlockDeploy.KS.zkLevelRowsOf, ite_eq_left hc, hdec]
+    simp only [shapeZK]
+    refine (Claims.Flock.slotOpensZ_rowsAt out r.val ℓ _
+      (rounds[FlockDeploy.KS.zkLevelRound st.m st.kLog sch.k0 (2 + extras.size) (sch.levels.size - 1) ℓ]!).coins
+      _ Q (by rw [hR]; exact hfind) hposQ (by rw [hposQ, Array.length_toList, positions_size _ hseamℓ]) hrows
+      (ho ℓ)).trans ?_
+    rw [Claims.Flock.coins_getElem!]
+  · have hc : ¬ (1 ≤ ℓ ∧ ℓ < (shapeZK st sch extras).sched.levels.size) := fun h => hℓ h.2
+    rw [FlockDeploy.KS.zkLevelRowsOf, ite_eq_right hc]
+    have hnone : ((if r.val = 0 then out.pend.1 else out.pend.2).lig.reqs.find?
+        fun req => req.level == ℓ) = none := by
+      rw [hR, List.find?_eq_none]
+      intro q hq
+      simp only [beq_iff_eq]
+      rcases List.mem_cons.1 hq with rfl | hq
+      · omega
+      · obtain ⟨i, hi, rfl⟩ := List.mem_iff_getElem.1 hq
+        rw [(hlatR i hi).1]
+        omega
+    unfold ZkLink.slotOpensZ
+    rw [hnone]
+    rfl
 
 /-- **At `verify --zk`'s acceptance of a table, its level-0 openings are its reps' rows**: `zk_table_opens₀Z`'s
 entries with each row whole (`zk_rep_rows`), rep 0's then rep 1's. -/
@@ -160,6 +252,62 @@ theorem zk_table_rows₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Re
   rw [List.map_append]
   exact congrArg₂ (· ++ ·) he₀ he₁
 
+/-- **At `verify --zk`'s acceptance of a table, its openings past level 0 are its reps' rows**: at every level `ℓ ≥ 1`,
+rep 0's and rep 1's openings are their `zkLevelRowsOf` rows (`zk_rep_rowsL`). -/
+theorem zk_table_rowsLZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
+    (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
+    (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
+    (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
+    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
+    (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
+    (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
+    (h0 : Zk.verifyRep spec st sch tPad sess i 0 b₀ = .ok c) (h1 : Zk.verifyRep spec st sch tPad sess i 1 b₁ = .ok c)
+    (s₀ s₁ : StreamRec) (zp₀ zp₁ : Zk.ZkProof)
+    (hs₀ : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 0) =
+      some s₀)
+    (hs₁ : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 1) =
+      some s₁)
+    (hd₀ : Zk.decode (shapeZKn st sch N) b₀ = .ok zp₀) (hd₁ : Zk.decode (shapeZKn st sch N) b₁ = .ok zp₁)
+    (pend : ZkLink.PendZ 𝔽 Dig (List UInt8) × ZkLink.PendZ 𝔽 Dig (List UInt8)) (cap : Cap Dig)
+    (hp₀ : Plays fOf (ZkLink.repZCAt execArith hs512 (T S R) pts 0) (repMsgsZ st sch (2 + N) tPad zp₀)
+      (s₀.rounds.toList.map (·.coins)) pend.1)
+    (hp₁ : Plays fOf (ZkLink.repZCAt execArith hs512 (T S R) pts 1) (repMsgsZ st sch (2 + N) tPad zp₁)
+      (s₁.rounds.toList.map (·.coins)) pend.2) (ℓ : ℕ) (hℓ1 : 1 ≤ ℓ) :
+    (ZkLink.slotOpensZ (ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁])) 0 ℓ
+        (lvOf (T S R).sch ℓ).queries).map (fun x => (x.1, x.2.1)) =
+      FlockDeploy.KS.zkLevelRowsOf (shapeZKn st sch N) s₀.rounds b₀ ℓ ∧
+    (ZkLink.slotOpensZ (ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁])) 1 ℓ
+        (lvOf (T S R).sch ℓ).queries).map (fun x => (x.1, x.2.1)) =
+      FlockDeploy.KS.zkLevelRowsOf (shapeZKn st sch N) s₁.rounds b₁ ℓ := by
+  obtain ⟨s₀', ex, zp₀', tr₀, hs₀', hx₀, hd₀', -, -, hrun₀, hk₀, -, -⟩ :=
+    zk_verifyRep_ok spec st sch tPad sess i 0 b₀ c h0
+  obtain ⟨s₁', ex₁, zp₁', tr₁, hs₁', hx₁, hd₁', -, -, hrun₁, hk₁, -, -⟩ :=
+    zk_verifyRep_ok spec st sch tPad sess i 1 b₁ c h1
+  obtain rfl : ex = ex₁ := Except.ok.inj (hx₀.symm.trans hx₁)
+  obtain ⟨hsz, hrel⟩ := hext ex hx₀
+  have hsh : shapeZK st sch ex = shapeZKn st sch N := by
+    unfold shapeZK shapeZKn; rw [hsz, hN]
+  obtain rfl : s₀' = s₀ := Option.some.inj (hs₀'.symm.trans hs₀)
+  obtain rfl : s₁' = s₁ := Option.some.inj (hs₁'.symm.trans hs₁)
+  have hz₀ := hd₀'
+  have hz₁ := hd₁'
+  rw [hsh] at hz₀ hz₁
+  obtain rfl : zp₀' = zp₀ := Except.ok.inj (hz₀.symm.trans hd₀)
+  obtain rfl : zp₁' = zp₁ := Except.ok.inj (hz₁.symm.trans hd₁)
+  have hn : ex.size = N := hsz.trans hN
+  rw [← hn] at hp₀ hp₁
+  obtain ⟨hro, -, -, -⟩ := opnZ_pair hd₀ hd₁
+  have he₀ := zk_rep_rowsL hs512 (T S R) pts 0 st sch tPad ex zp₀' s₀'.rounds _ tr₀ b₀ hsch hseam hsz
+    hrel (hwf s₀' (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs₀))) hrun₀ hk₀ hd₀'
+    (ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁])) hp₀
+    (fun ℓ j => by show ((opnZ st sch N #[b₀, b₁]).rows 0 ℓ j).1 = _; rw [hro]; simp [opensOf, openRow]) ℓ hℓ1
+  have he₁ := zk_rep_rowsL hs512 (T S R) pts 1 st sch tPad ex zp₁' s₁'.rounds _ tr₁ b₁ hsch hseam hsz
+    hrel (hwf s₁' (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs₁))) hrun₁ hk₁ hd₁'
+    (ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁])) hp₁
+    (fun ℓ j => by show ((opnZ st sch N #[b₀, b₁]).rows 1 ℓ j).1 = _; rw [hro]; simp [opensOf, openRow]) ℓ hℓ1
+  rw [hsh] at he₀ he₁
+  exact ⟨he₀, he₁⟩
+
 end FlockSoundness.Discharge.ZkExec
 
 namespace FlockSoundness.Discharge.Composed
@@ -187,7 +335,14 @@ def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : 
       Claims.Flock.zkRepRowsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₀.rounds
           t.proofs[2 * j]! ++
         Claims.Flock.zkRepRowsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₁.rounds
-          t.proofs[2 * j + 1]!
+          t.proofs[2 * j + 1]! ∧
+    ∀ ℓ, 1 ≤ ℓ →
+      (slotOpensZ out 0 ℓ (lvOf T.sch ℓ).queries).map (fun x => (x.1, x.2.1)) =
+          FlockDeploy.KS.zkLevelRowsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₀.rounds
+            t.proofs[2 * j]! ℓ ∧
+        (slotOpensZ out 1 ℓ (lvOf T.sch ℓ).queries).map (fun x => (x.1, x.2.1)) =
+          FlockDeploy.KS.zkLevelRowsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₁.rounds
+            t.proofs[2 * j + 1]! ℓ
 
 /-- **`runsZCJ_live` at the setup at each draw, with the rows**: `runsAtZCJ_live_entries` at `OpensRows`
 (`zk_table_rows₀Z`). -/
@@ -325,8 +480,14 @@ theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Fins
     refine ⟨hok, spec, sts, sess, y.sch, y.tPad, s₀, s₁, hj, hs, hdecS, by rw [← hyst]; exact y.hz, hf₀, hf₁,
       (zk_table_rows₀Z (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
         (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ c _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
-        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁).trans ?_⟩
-    rw [hN, hyst]
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁).trans ?_, fun ℓ h1 =>
+      ⟨(zk_table_rowsLZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
+        (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ c _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).1.trans ?_,
+      (zk_table_rowsLZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
+        (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ c _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).2.trans ?_⟩⟩
+    all_goals rw [hN, hyst]
 
 end FlockSoundness.Discharge.Composed
 
@@ -480,8 +641,14 @@ theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false) {c : Flock
     refine ⟨hok, spec, sts, sess, y.sch, y.tPad, s₀, s₁, hj, hs, hdecS, by rw [← hyst]; exact y.hz, hf₀, hf₁,
       (zk_table_rows₀Z (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
         (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ cap _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
-        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁).trans ?_⟩
-    rw [hN, hyst]
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁).trans ?_, fun ℓ h1 =>
+      ⟨(zk_table_rowsLZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
+        (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ cap _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).1.trans ?_,
+      (zk_table_rowsLZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
+        (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ cap _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).2.trans ?_⟩⟩
+    all_goals rw [hN, hyst]
 
 end FlockSoundness.Discharge.ZkHidden
 
