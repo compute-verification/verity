@@ -255,10 +255,10 @@ def quant(x: torch.Tensor, top: int, dims) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.round(x / s).clamp(-top, top), s
 
 
-def floor_quant(x: torch.Tensor, dims) -> tuple[torch.Tensor, torch.Tensor]:
-    """floor(x / s) in [-128, 126] and s, the smallest scale (to 2^-20) that keeps x / s in [-128, 127): with a fresh bit
-    added, the served X stays within int8."""
-    s = torch.maximum(x.amax(dim=dims, keepdim=True) / 127, (-x).amax(dim=dims, keepdim=True) / 128)
+def floor_quant(x: torch.Tensor, dims, top: int = 127) -> tuple[torch.Tensor, torch.Tensor]:
+    """floor(x / s) in [-top - 1, top - 1] and s, the smallest scale (to 2^-20) that keeps x / s in [-top - 1, top): with
+    a fresh bit added, the served X stays within [-top - 1, top] (int8 at top = 127)."""
+    s = torch.maximum(x.amax(dim=dims, keepdim=True) / top, (-x).amax(dim=dims, keepdim=True) / (top + 1))
     s = s.clamp(min=1e-30) * (1 + 2 ** -20)
     return torch.floor(x / s), s
 
@@ -329,22 +329,23 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
                    p_top: int = 127, p_block: int = 0, p_sink: bool = False, v: str = "round", v_top: int = 127,
                    v_scale: str = "channel"):
     """Both attention matmuls on one int8 limb. Q, K: one scale per (head, token), Q rounded to [-q_top, q_top] or
-    dithered, K rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-128, 127), b a
-    fresh bit for every query head; a dithered Q ignores q_top). P: after the softmax, one scale per query row, or per
+    dithered, K rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-top - 1, top), b
+    a fresh bit (for K, one for every query head), so the served operand is within [-top - 1, top]). P: after the
+    softmax, one scale per query row, or per
     (row, block of `p_block` keys), `p_sink` putting key 0 in a block of its own, rounded to [0, p_top], each block's
     product read and scaled on its own. V: one scale per (KV head, channel) (`v_scale = "head"`: per KV head), rounded
     or dithered. Products exact in FP32 chunks."""
     rep = mm.extra["rep"]
     if mm.kind == "qk":
         if q == "dither":
-            qi, sq = floor_quant(mm.x, -1)
+            qi, sq = floor_quant(mm.x, -1, q_top)
             qi = qi + mm.coins(qi.shape)
         else:
             qi, sq = quant(mm.x, q_top, -1)
 
         def keys():
             kg = mm.weight()
-            kq, sk = floor_quant(kg, -1) if k == "dither" else quant(kg, k_top, -1)
+            kq, sk = floor_quant(kg, -1, k_top) if k == "dither" else quant(kg, k_top, -1)
             kq = kq.expand(rep, *kq.shape)
             if k == "dither":
                 kq = kq + mm.coins(kq.shape)
@@ -357,7 +358,7 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
     def values():
         vg = mm.weight()
         dims = 0 if v_scale == "channel" else (0, 1)
-        vq, sv = floor_quant(vg, dims) if v == "dither" else quant(vg, v_top, dims)
+        vq, sv = floor_quant(vg, dims, v_top) if v == "dither" else quant(vg, v_top, dims)
         vq = vq.expand(rep, *vq.shape)
         if v == "dither":
             vq = vq + mm.coins(vq.shape)

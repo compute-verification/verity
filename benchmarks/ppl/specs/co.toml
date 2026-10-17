@@ -1,0 +1,35 @@
+description = "CO-Dither's served values (note:20261017T0030Z-draft-checked-strip): the peeled side 7-bit plus a fresh bit (weights; Q), the served side dithered on 8 bits (activations; K, V); U peels exactly, so it is left out; P's w64 peel, psink, kc, SmoothQuant and the rotations as in adopted"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+weight_top = 63
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+q_top = 63
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

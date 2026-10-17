@@ -1,9 +1,10 @@
 import tomllib
 
 import pytest
+import torch
 
 import spec
-import steps  # noqa: F401
+import steps
 
 
 def parse(text: str, name: str = "t"):
@@ -15,7 +16,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
             "int8-all": ("all", "int8-all", True), "adopted-linears": ("linears", "int8-linears", True),
             "adopted-attention": ("attention", "int8-attention", True), "adopted": ("all", "int8-all", True),
             "adopted-no-smooth": ("all", "int8-all", True), "adopted-qkd": ("all", "int8-all", True),
-            "adopted-bd": ("all", "int8-all", True)}
+            "adopted-bd": ("all", "int8-all", True), "adopted-bd-lm": ("all", "int8-all", True),
+            "co": ("all", "int8-all", True), "ncp": ("all", "int8-all", True)}
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
@@ -61,6 +63,42 @@ def test_adopted_bd_dithers_both_operands_of_the_linears():
                 'weight = "dither"\nweight_top = 1'):
         with pytest.raises(ValueError, match="int8"):
             parse(f'[[linear]]\nstep = "int8"\n{bad}')
+
+
+def test_lm_head_takes_only_the_steps_that_name_it():
+    bd, lm = spec.load("adopted-bd"), spec.load("adopted-bd-lm")
+    assert bd.attention == lm.attention
+    assert [s for s in lm.linear if s.linears is None] == list(bd.linear)
+    on_head = [s for s in lm.linear if s.applies(32, "linear", spec.HEAD)]
+    assert [(s.defn.name, s.kw.get("act"), s.kw.get("weight")) for s in on_head] == [
+        ("rotate", None, None), ("int8", "dither", "dither")]
+    assert not any(s.applies(0, "linear", spec.HEAD) for s in bd.linear)
+    assert not any(s.applies(0, "linear", "mlp.up_proj") for s in on_head)
+    for bad in ('step = "smooth"\nalpha = 0.5', 'step = "int8"\nlayers = [0]', 'step = "int8"\ngptq = true'):
+        with pytest.raises(ValueError, match="lm_head takes steps without calibration or layers"):
+            parse(f'[[linear]]\n{bad}\nlinears = ["lm_head"]')
+
+
+def test_co_and_ncp_serve_seven_bit_sides():
+    co, ncp = spec.load("co"), spec.load("ncp")
+    ckw = {s.defn.name: s.kw for s in co.linear}
+    assert (ckw["int8"]["act"], ckw["int8"]["weight"], ckw["int8"]["weight_top"]) == ("dither", "dither", 63)
+    akw = {s.defn.name: s.kw for s in co.attention}
+    assert (akw["int8"]["q"], akw["int8"]["q_top"], akw["int8"]["k"], akw["int8"]["k_top"]) == ("dither", 63, "dither", 127)
+    nkw = {s.defn.name: s.kw for s in ncp.linear}
+    assert (nkw["int8"]["act"], nkw["int8"]["act_top"], nkw["int8"]["weight_top"]) == ("round", 63, 63)
+    assert not any(s.defn.name == "peel" for s in ncp.attention)
+    assert {s.defn.name: s.kw for s in ncp.attention}["int8"]["p_top"] == 63
+
+
+def test_a_dithered_operand_stays_within_its_top():
+    x = torch.randn(64, 128) * 3
+    for top in (127, 63):
+        q, s = steps.floor_quant(x, -1, top)
+        served = q + 1
+        assert q.min() >= -top - 1 and served.max() <= top
+        assert torch.all((x / s - q >= 0) & (x / s - q < 1))
+    assert torch.equal(steps.floor_quant(x, -1)[0], steps.floor_quant(x, -1, 127)[0])
 
 
 def test_round_trip():
