@@ -44,16 +44,20 @@ def test_the_measured_profile():
     e = E.eps(E.design("dither-duo"), PI, 8)
     assert e.T_honest_source == "measured" and e.T_honest * 128 == M.measured
     assert e.sched == pytest.approx(1 - 22.4334 / 26.1221, abs=1e-5)
-    assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.sched))
+    assert e.clock == pytest.approx(1 - 2092 / 2430, abs=1e-4)   # SPEC's P1: the prover sets its own clocks
+    assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.sched) * (1 - e.clock))
     assert e.floor == pytest.approx((22.4334 - JI - 12) / 22.4334, abs=1e-5)   # honest's overhead, under H's credit
-    m = E.eps(E.design("dither-duo"), PI, 8, credit="model")   # PROFILE's B(H)/f_max: ε_sched leaves ε for γ
-    assert m.sched is None and m.machine_eps == e.machine_eps and m.total() < e.total()
-    assert m.credit_ratio == pytest.approx(1 / (1 - e.sched), rel=1e-9)
-    xin = E.eps(E.design("dither-xin"), PI, 8)
-    assert xin.sched is None and xin.T_honest_source == "model"   # another fold: unmeasured
+    m = E.eps(E.design("dither-duo"), PI, 8, credit="model")   # PROFILE's B(H)/f_max: ε_sched, ε_clock leave ε for γ
+    assert m.sched is None and m.clock == 0 and m.machine_eps == e.machine_eps and m.total() < e.total()
+    assert m.credit_ratio == pytest.approx(1 / ((1 - e.sched) * (1 - e.clock)), rel=1e-9)
+    xin = E.eps(E.design("dither-xin"), PI, 8)   # another fold: H's measured overhead over its model carries over
+    assert xin.sched is None and xin.T_honest_source.startswith("measured +")
+    assert xin.T_honest - xin.baseline.T == pytest.approx(e.T_honest - e.baseline.T, rel=1e-9)
     up = E.eps(E.design("dither-duo").with_upfill(), PI, 8)
     assert up.as_built.T == pytest.approx(e.as_built.T, rel=1e-12)   # UPFILL fills UP's slack beside honest's own UNI
-    assert up.T_honest_source.startswith("measured ×") and up.sched == pytest.approx(e.sched, abs=1e-12)
+    assert up.T_honest_source.startswith("measured +") and up.sched == pytest.approx(e.sched, abs=1e-12)
+    fill = E.eps(E.design("dither-two-sided-fill"), PI, 8)
+    assert fill.T_honest - fill.baseline.T == pytest.approx(e.T_honest - e.baseline.T, rel=1e-9)
 
 
 def test_the_noise_sets_the_operand_floor():
@@ -116,6 +120,25 @@ def test_upfill_closes_the_uniform_route():
         d.with_upfill()
 
 
+def test_a_uniform_instruction_on_the_issue_rows():
+    """Charged an issue slot, the uniform route costs the cheater at least the lane route at q* ≥ the threshold without
+    UPFILL. UPFILL then costs honest issue time, and the cheater does its checked work on lanes, 32 values a warp
+    instruction, so it opens more than it closes."""
+    pi = E.uniform_on_issue(PI, 1.0)
+    assert pi.c["UNI"]["issue"] == pi.c["UNI"]["JI3e_0"] == 1.0 and pi.c["UNI"]["UP"] == UP
+    assert "issue" not in PI.c["UNI"] and "UNI on issue at 1" in pi.vector
+    refit = E.Machine(vector="X", rows=("issue", "JI3n_0", "JI3n_1", "A", "UP"), cuda=(),
+                      c={"ALU": {"issue": 1.0, "JI3n_0": 0.9346, "JI3n_1": 0.2963, "A": 2.0}, "UNI": {"UP": UP}})
+    assert E.uniform_on_issue(refit, 0.92).c["UNI"] == pytest.approx({"UP": UP, "issue": 0.92, "JI3n_0": 0.92 * 0.9346})
+    old, new = E.setup(DUO, PI, credit="floor"), E.setup(DUO, pi, credit="floor")
+    assert new.baseline.T == pytest.approx(old.baseline.T, rel=1e-9)
+    assert E.threshold(old) is None and E.threshold(new) == pytest.approx(E.threshold(old, uniform=False), abs=1e-5)
+    assert new.machine_eps(8) == pytest.approx(new.floor(), abs=1e-9)
+    assert new.machine_eps(8) < old.machine_eps(8) - 0.005
+    up = E.setup(DUO.with_upfill(), pi, credit="floor")
+    assert up.baseline.T > 1.5 * new.baseline.T and up.machine_eps(8) > 0.3
+
+
 def test_lane_filler_dilutes_the_operand_floor():
     """x lane instructions a word of verified filler add 4x issue-cycles a MMA to honest, and the cheater must run them
     too, so what it saves on operands is a smaller share. The design file is DUO's two-sided twin with 4.5 of them."""
@@ -141,7 +164,7 @@ def test_the_floor_credit(n, phi):
     e = E.eps(d, PI, 8, operands="floor", credit="floor")
     assert e.baseline.T * 128 == pytest.approx(JI + 12 + phi, abs=1e-6) and "JI3e_0" in e.baseline.binding
     assert e.sched is None and e.clock == 0 and e.machine_eps == 0
-    assert e.credit_ratio == pytest.approx(M.measured / (JI + 12 + phi), abs=1e-6)
+    assert e.credit_ratio == pytest.approx(M.measured / (JI + 12 + phi) / (1 - d.clock.eps), abs=1e-6)
     assert e.total() == pytest.approx(e.skip + e.luck, abs=1e-12)
     free = E.eps(d, PI, 8, credit="floor")
     assert free.machine_eps == pytest.approx(phi * (1 - 1 / (32 * UP + 1)) / (JI + 12 + phi), abs=1e-8)
@@ -153,9 +176,11 @@ def test_the_floor_credit(n, phi):
 
 
 def test_plain_work_counts_in_gamma_only():
-    """CO-Dither at r = k/2 runs a k/2 strip on one unfolded limb beside its folded transcript: γ + 0.5."""
-    co, duo = E.design("co-dither"), E.design("dither-duo")
-    assert co.plain == 0.5 and co.work == duo.work == 1
+    """A design that runs plain (unfolded) MMAs beside its work, as CO-Dither at r = k/2 runs a k/2 strip on one limb,
+    pays them in γ and nowhere else: γ + 0.5."""
+    duo = E.design("dither-duo")
+    co = replace(duo, plain=0.5)
+    assert co.work == duo.work == 1
     a, b = E.eps(co, PI, 8), E.eps(duo, PI, 8)
     assert a.gamma == pytest.approx(b.gamma + 0.5, abs=1e-12) and a.machine_eps == b.machine_eps
 
@@ -196,8 +221,8 @@ def test_luck_and_the_total():
     assert e.cheat.binding == ("JI3e_0",)
     assert e.luck == pytest.approx(E.deficit(DUO) * (JI + 0.375) / (JI + 12.375), rel=1e-6)
     e = E.eps(DUO, PI, 8)
-    assert e.sched is None and e.mand == 0 and e.clock == 0 and e.skip == 0.0063
-    assert e.total() == pytest.approx(e.skip + e.machine_eps + e.luck)
+    assert e.sched is None and e.mand == 0 and e.skip == 0.0063
+    assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
 
 
 def test_luck_spends_one_budget_on_words_and_filler():
@@ -212,6 +237,25 @@ def test_luck_spends_one_budget_on_words_and_filler():
     words_only = E.eps(replace(d, filler=tuple(replace(f, p=0.0) for f in d.filler)), PI, 8, operands="floor",
                        credit="floor")
     assert e.luck > words_only.luck and words_only.lucky.short["filler 1"] == 0
+
+
+def test_the_table_route_is_bound_by_L2():
+    d = E.design("dither-duo").with_upfill()
+    base = E.setup(d, PI, credit="floor")
+    wide = E.Table(q=1.25, bytes=8.0, l2=1e18, sms=188, mhz=2092, source="")    # L2 never binds
+    unbound = E.setup(d, PI, credit="floor", table=wide)
+    assert unbound.cheat(2.16, lanes=False).T == pytest.approx(base.cheat(1.25).T, rel=1e-9)
+    shut = E.setup(d, PI, credit="floor", table=replace(wide, l2=1e9))         # 1 GB/s: next to no table words
+    assert shut.machine_eps(2.16) == pytest.approx(base.machine_eps(2.16), abs=1e-5)
+    t = E.table()
+    assert t.per_cycle() == pytest.approx(6e12 / (188 * 4 * 2092e6))
+    s = E.setup(d, PI, credit="floor", table=t)
+    m = s.cheat(2.16)
+    assert "L2" in m.binding and m.words["table"] * t.bytes / t.per_cycle() == pytest.approx(m.T, rel=1e-9)
+    assert 0 < m.words["table"] < 0.1 and s.machine_eps(2.16) > base.machine_eps(2.16)
+    assert s.floor() == pytest.approx(s.machine_eps(8.0), abs=1e-9)        # the floor keeps the table route
+    measured = E.setup(d, PI, credit="floor", table=E.table(q=1.906))
+    assert base.machine_eps(2.16) < measured.machine_eps(2.16) < s.machine_eps(2.16)
 
 
 def test_designs_read_what_exists():
@@ -253,7 +297,17 @@ def test_cli(capsys):
     base = PI.load(M.base())["JI3e_0"]   # honest's MMA and its other issue a MMA, the fold aside
     assert d["terms"]["machine"] == 0 and d["threshold_lanes"] == pytest.approx(base / 4, abs=1e-5)
     assert d["threshold"] >= d["threshold_lanes"] - 1e-6
-    assert main(["eps", "--table", "dither-duo", "--fold-sweep", "1.5,3", "--operands", "floor"]) == 0
+    assert main(["eps", "--upfill", "--credit", "floor", "--q", "2.16", "--lookups", "--lookup-q", "1.906",
+                 "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["lookups"]["q"] == 1.906 and d["cheat"]["words"]["table"] > 0 and "L2" in d["cheat"]["binding"]
+    with pytest.raises(SystemExit):
+        main(["eps", "--l2", "1e12"])
+    assert main(["eps", "--credit", "floor", "--uni-issue", "0.92", "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["vector"] == "VF3l-16 (UNI on issue at 0.92)" and d["threshold"] == pytest.approx(2.029, abs=1e-3)
+    assert main(["eps", "--table", "dither-duo", "--fold-sweep", "1.5,3", "--operands", "floor", "--q", "2.16"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("Π VF3l-16, operands floor")
+    assert lines[1].split()[-6:-3] == ["ε@2", "ε@2.16", "ε@8"]
     assert [x.split()[0] for x in lines[2:]] == ["dither-duo@r1.5", "dither-duo@r3"]
