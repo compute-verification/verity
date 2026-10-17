@@ -348,18 +348,18 @@ __device__ __forceinline__ void fr16_thread(const uint32_t* __restrict__ T0, con
     z[c] = chain_z0(y[c]);
   }
   const char *b0 = (const char*)T0, *b1 = (const char*)T1;
-  uint32_t Rn = Rw[(size_t)min(1, L - 1) * m + i];
-  {
-    const uint32_t R = Rw[i];
-    ld8s<CPT / 8>(b0 + (R & 0xFFFFu) * (4 * CPT), b1 + (R >> 16) * (4 * CPT), e0, e1);
-  }
+  const uint32_t* rp = Rw + i;  // Rw has two zero segments after the last, so the prefetch needs no clamp
+  uint32_t Rn = rp[m];
+  ld8s<CPT / 8>(b0 + (rp[0] & 0xFFFFu) * (4 * CPT), b1 + (rp[0] >> 16) * (4 * CPT), e0, e1);
+  rp += 2 * m;
   QS_BEGIN
 #pragma unroll 1
   for (int ell = 0; ell < L; ell++) {
 #pragma unroll
     for (int c = 0; c < CPT; c++) acc[c] += e0[c] + e1[c];
     ld8s<CPT / 8>(b0 + (Rn & 0xFFFFu) * (4 * CPT), b1 + (Rn >> 16) * (4 * CPT), e0, e1);
-    Rn = Rw[(size_t)min(ell + 2, L - 1) * m + i];
+    Rn = *rp;
+    rp += m;
     KEYS(ell)
 #pragma unroll
     for (int c = 0; c < CPT; c++) FOLD(y[c], z[c], acc[c]);
@@ -502,10 +502,10 @@ static std::vector<uint32_t> pack_b(const std::vector<int8_t>& Y, int n, int k) 
       }
   return out;
 }
-// R_ℓ's 32 bits a row, [L][m]: bit p of Rw[ℓ][i] is R[i, 32ℓ + p]
+// R_ℓ's 32 bits a row, [L + 2][m]: bit p of Rw[ℓ][i] is R[i, 32ℓ + p]; the two last segments are zero (fr16's prefetch)
 static std::vector<uint32_t> pack_rw(const std::vector<int8_t>& R, int m, int k) {
   const int L = k / SEG;
-  std::vector<uint32_t> out((size_t)L * m);
+  std::vector<uint32_t> out((size_t)(L + 2) * m, 0);
   for (int ell = 0; ell < L; ell++)
     for (int i = 0; i < m; i++) {
       uint32_t w = 0;
