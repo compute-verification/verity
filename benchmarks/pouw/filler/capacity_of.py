@@ -6,10 +6,12 @@ placement), is read by machine_model's `capacity` (note:20261017T0652Z-draft-fil
 lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f_max (decision 74) and at the run clock.
 
 With --lfill it reads dcap's lfill lines instead (capfill_probe.sh): each one's window beside the pump alone and beside
-the pump and the lane filler, the pump's MMAs carrying the build's PF_LANE lane instructions each.
+the pump and the lane filler, the pump's MMAs carrying the build's PF_LANE lane instructions each. With --dfill, dcap's
+dfill lines (capfill_co_probe.sh): the step beside the pump on a split, or co-scheduled on every SM.
 
   python3 benchmarks/pouw/filler/capacity_of.py RUN_OUT_DIR [--fold duo] [--lane-per-mma X] [--served-fold none] [--json]
   python3 benchmarks/pouw/filler/capacity_of.py --lfill LFILL_JSONL [--fold duo] [--json]
+  python3 benchmarks/pouw/filler/capacity_of.py --dfill DFILL_JSONL [--fold duo] [--json]
 """
 from __future__ import annotations
 
@@ -77,10 +79,34 @@ def lfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
     return rows
 
 
+def dfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
+    """dcap dfill lines: the step beside the pump on its split's SMs (split_fill) or on every SM at the lowest priority
+    beside the step at the highest (co_fill), pooled over the GPU."""
+    rows = []
+    for r in recs:
+        co = r["place"] == "co"
+        a = r["arms"]["co_fill" if co else "split_fill"]
+        sms = r["step_sms"] if co else r["step_sms"] + r["fill_sms"]
+
+        def at(mhz):
+            cyc = 4 * sms * mhz * 1e6
+            w = C.tensor_filler(r["window"]["fill_mac_per_s"] / MACS_A_MMA / cyc * C.TENSOR_CYCLES, fold)
+            w = w + C.served(r["step_macs"] / (a["ms"] * 1e-3) / MACS_A_MMA / cyc * C.TENSOR_CYCLES, served_fold)
+            return C.window(pi, [(1.0, w)])
+
+        top = at(F_MAX_MHZ)
+        rows.append({"B": r["B"], "L": r["L"], "place": r["place"], "build": r.get("build"), "NC": r["NC"], "S": r["S"],
+                     "pad_kb": r.get("pad_kb"), "fill_sms": r["fill_sms"], "slowdown": r["slowdown"], "mhz": a["mhz"],
+                     "sigma": top.sigma(), "sigma_run_clock": at(a["mhz"]).sigma(), "tensor": top.tensor(),
+                     "binding": list(top.pooled.binding), "rec_bad": r["rec_bad"]})
+    return rows
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="capacity_of.py", description=__doc__.split("\n")[0])
     ap.add_argument("out", type=Path, nargs="?", help="a scored run's arm dir (its score.json)")
     ap.add_argument("--lfill", type=Path, help="dcap lfill lines (capfill_probe.sh's lfill.jsonl)")
+    ap.add_argument("--dfill", type=Path, help="dcap dfill lines, split or co (capfill_co_probe.sh's co.jsonl)")
     ap.add_argument("--fold", default="duo")
     ap.add_argument("--served-fold", default="none")
     ap.add_argument("--lane-per-mma", type=float, default=0.0, help="lane-chain warp instructions a filler MMA")
@@ -88,6 +114,18 @@ def main(argv=None) -> int:
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     pi = E.machine(a.vector)
+    if a.dfill:
+        recs = [json.loads(s) for s in a.dfill.read_text().splitlines() if s.startswith("{")]
+        rows = dfill_rows(pi, recs, a.fold, a.served_fold)
+        if a.json:
+            print(json.dumps({"vector": pi.vector, "f_max_mhz": F_MAX_MHZ, "fold": a.fold, "rows": rows}, indent=1))
+            return 0
+        for r in rows:
+            print(f"  B {r['B']:3d} L {r['L']:5d} {r['place']:5s} {r['build'] or '':8s} NC {r['NC']} S {r['S']:4d} pad "
+                  f"{r['pad_kb'] or 0:2d}  slowdown {r['slowdown']:.3f}  σ {r['sigma']:.3f} at f_max "
+                  f"({r['sigma_run_clock']:.3f} at {r['mhz']:.0f} MHz)  tensor {r['tensor']:.3f}  "
+                  f"bind {','.join(r['binding'])}  bad {r['rec_bad']}")
+        return 0
     if a.lfill:
         recs = [json.loads(s) for s in a.lfill.read_text().splitlines() if s.startswith("{")]
         rows = lfill_rows(pi, recs, a.fold, a.served_fold)

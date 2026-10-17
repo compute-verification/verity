@@ -45,6 +45,25 @@ def test_lane_work_raises_sigma():
     assert base < lanes < both
 
 
+def dfill(place="co", pump_share=0.58, fill_ms=7.0):
+    """a dfill line at B 1: the pump at `pump_share` of the whole GPU's tensor peak beside the step (on every SM, co; or
+    on 140 of 188, split)"""
+    sms = 188 if place == "co" else 140
+    arm = {"ms": fill_ms, "mhz": 2092.0}
+    return {"mode": "dfill", "place": place, "B": 1, "L": 2048, "NC": 2, "S": 256, "step_sms": 188 if place == "co" else 48,
+            "fill_sms": sms, "step_macs": 8.04e9, "rec_bad": 0, "slowdown": 1.0,
+            "window": {"fill_mac_per_s": pump_share * 1024 * 188 * GHZ},
+            "arms": {"co_fill" if place == "co" else "split_fill": arm}}
+
+
+def test_dfill_reads_split_and_co_alike():
+    co, split = CO.dfill_rows(PI, [dfill("co"), dfill("split")])
+    assert co["sigma"] == pytest.approx(split["sigma"])
+    assert 0.5 < co["sigma"] < co["sigma_run_clock"] < 0.65
+    slow = CO.dfill_rows(PI, [dfill("co", fill_ms=70.0)])[0]
+    assert slow["sigma"] < co["sigma"]
+
+
 def test_cli_reads_lfill_lines(tmp_path, capsys):
     p = tmp_path / "lfill.jsonl"
     p.write_text("\n".join(json.dumps(r) for r in (rec(), rec(pf_lane=8, lane_rate=0.5))) + "\n")
