@@ -120,7 +120,7 @@ class TpRow(Row):
     def prepare(self) -> None:
         env = self.env
         self.ncb = env.native_collect_build or env.native_collect_default
-        self.setup({"NATIVE_COLLECT_BUILD": self.ncb})
+        self.setup({"NATIVE_COLLECT_BUILD": self.ncb, "VERITY_INSTANCES_FORM": self.cm.instances_form})
         if not os.path.isfile(self.path(self.wl)):
             print(f"no manifest {self.wl}")
             raise Stop(2)
