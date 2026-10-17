@@ -11,9 +11,9 @@ sets a record up, the two are one list, so the old decoders are right at `zkTabs
 
 * `table_eq_zkTab`: a `DrawSetupZJ`'s table is `zkTab` at its statement, at every layout and link layout (`Layout` is a
   `Prop`, and `Layout.model` is `stmtOf`: `Integrate.model_eq_stmtOf`).
-* `setupZJ_of_setupOf`: where `verify --zk` sets the record up (`Exec.setupOf`) at the draw `dj S`, `DrawOkZKJ` holds and
-  table `j` has `Zk.schedule`'s schedule, table `j` has a `DrawSetupZJ` at its statement (`setupZJ_of_acceptsZK` without
-  the verdict).
+* `setupZJ_of_setupOf`: where `verify --zk` sets the record up (`Exec.setupOf`) at the draw `dj S`, `DrawOkZKJ` holds
+  and table `j` has `Zk.schedule`'s schedule, table `j` has a `DrawSetupZJ` at its statement (`setupZJ_of_acceptsZK`
+  without the verdict).
 * `tableZJ_eq_zkTabs`, `planZJ_eq_tabsJ`: so the plan there is `tabsJ` of `zkTabs`, at every layout.
 * `drawOkZKJ_empty`: at no drawn units, `DrawOkZKJ` is the tables' link points, which `setupTables` makes the session's
   (`setupTables_points`).
