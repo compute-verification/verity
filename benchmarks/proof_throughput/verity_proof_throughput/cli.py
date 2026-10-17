@@ -2,7 +2,7 @@
 
     plan     [--workload W] [--lo B] [--hi B] [--json]   each point's identity and its passing prover run, if any
     run      [--workload W] [--lo B] [--hi B] [--dry-run]  one recorded prover run per point without a passing one
-    verify   --prove-run RUN [--node vy-nebius-cpu-3] [--dry-run]   the Lean verifier point on a prover run's bundle
+    verify   --prove-run RUN [--node vy-nebius-cpu-3|-cpu-2|vy-nebius-1] [--dry-run]   the Lean verifier point on a prover run's bundle
     check    [--workload W] ...                          exit 0 only when every point has a passing prover run
     compare  A B [--allow FIELD]                         accept two results only when their identities agree
     table    [RESULT ...] [--store --workload W [--commit C]] [--baseline] [--json]   the throughput frontier over B
