@@ -1345,6 +1345,12 @@
    "assumptions": [],
    "type_hash": "eb1d71eefdaee8934a9bf238b893b3128bacc151ddc6273bd93b97fa553311ba"
   },
+  "Accounting.SecurityProofs.RequirementHeldLive": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementHeldLive : Accounting.Guarantees.RequirementHeldLive"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Accounting.SecurityProofs.RequirementMoved": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RequirementMoved : Accounting.Guarantees.RequirementMoved"],
@@ -5439,6 +5445,7 @@
    "Pouw.Guarantees.Eps1.WordLocalGeneral": "unstated: Theorem B of EPS1-QSTAR at a general int8 instance; its theorem Pouw.SecurityProofs.Eps1.WordLocalGeneral is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
    "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
    "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementHeldLive": "frozen (no-function): A counting identity over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), W's live bits are those in the held blocks plus the live bits of each resident block not held; about no function of the code.",
    "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
    "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code."
   },
