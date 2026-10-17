@@ -153,7 +153,32 @@ theorem price_of_parts [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : 
 theorem price_of_rd [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K) (n : K → ℝ)
     (fixed : ℝ) (lam : R → ℝ) (h : IsCert lam) (hZ : Z.Wf P) (hRD : Z.RouteDominated n fixed) :
     fixed * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam ≤ Z.G.price lam n := by
-  sorry
+  obtain ⟨-, hw0, hphi0, hchi0⟩ := stars_nonneg Z P lam hZ h
+  obtain ⟨hlam, -⟩ := h
+  obtain ⟨N, Mf, Mx, hN, hMf, hMx, hfix, hsF, hsX, hdom⟩ := hRD
+  have hw : ∀ hd, Z.wStar lam ≤ demandPrice lam (Z.demand hd) := fun hd =>
+    ciInf_le (Set.finite_range fun hd => demandPrice lam (Z.demand hd)).bddBelow hd
+  have hphi : ∀ φ, Z.phiStar lam ≤ demandPrice lam (Z.fold φ) := fun φ =>
+    ciInf_le (Set.finite_range fun φ => demandPrice lam (Z.fold φ)).bddBelow φ
+  have hchi : ∀ ψ, Z.chiStar lam ≤ demandPrice lam (Z.fill ψ) := fun ψ =>
+    ciInf_le (Set.finite_range fun ψ => demandPrice lam (Z.fill ψ)).bddBelow ψ
+  calc fixed * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam
+      ≤ (∑ hd, N hd) * Z.wStar lam + (∑ φ, Mf φ) * Z.phiStar lam + (∑ ψ, Mx ψ) * Z.chiStar lam :=
+        add_le_add (add_le_add (mul_le_mul_of_nonneg_right hfix hw0) (mul_le_mul_of_nonneg_right hsF hphi0))
+          (mul_le_mul_of_nonneg_right hsX hchi0)
+    _ = ∑ hd, N hd * Z.wStar lam + ∑ φ, Mf φ * Z.phiStar lam + ∑ ψ, Mx ψ * Z.chiStar lam := by
+        simp only [Finset.sum_mul]
+    _ ≤ ∑ hd, N hd * demandPrice lam (Z.demand hd) + ∑ φ, Mf φ * demandPrice lam (Z.fold φ) +
+          ∑ ψ, Mx ψ * demandPrice lam (Z.fill ψ) :=
+        add_le_add (add_le_add
+          (Finset.sum_le_sum fun hd _ => mul_le_mul_of_nonneg_left (hw hd) (hN hd))
+          (Finset.sum_le_sum fun φ _ => mul_le_mul_of_nonneg_left (hphi φ) (hMf φ)))
+          (Finset.sum_le_sum fun ψ _ => mul_le_mul_of_nonneg_left (hchi ψ) (hMx ψ))
+    _ = ∑ r, lam r * (∑ hd, N hd * Z.demand hd r + ∑ φ, Mf φ * Z.fold φ r + ∑ ψ, Mx ψ * Z.fill ψ r) := by
+        simp only [sum_demandPrice, mul_add, Finset.sum_add_distrib]
+    _ ≤ ∑ r, lam r * Z.G.load n r :=
+        Finset.sum_le_sum fun r _ => mul_le_mul_of_nonneg_left (hdom r) (hlam r)
+    _ = Z.G.price lam n := rfl
 
 /-- Step 4 of Theorem D(a), the identity: `Φ(π)/B(L) = 1 − ε_cert − ε_skip − ε_route − ε_mand − ε_luck − ε_adapt`
 for any labelled program `L`, with `Φ(π) = (1 − d̄ − ā)N_w w* + (1 − μ_f)N_w φ* + (1 − μ_x)χ*`. -/
