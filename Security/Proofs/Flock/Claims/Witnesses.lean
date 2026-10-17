@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.Witnesses.Recursion
 import Proofs.Flock.Claims.Witnesses.RecursionMeets
 import Proofs.Flock.Claims.Witnesses.Stated
 import Proofs.Flock.Claims.Witnesses.Meets
+import Proofs.Flock.Claims.Witnesses.BindingMeets
 
 /-!
 # Refutation witnesses
@@ -16,7 +17,8 @@ by a trivial instance has a theorem `<Claim>_vacuous` that exhibits it.
 
 The lock's `claims` section (`Security/lean-audit.json`) lists, per claim, its `fails` and `meets` witnesses as
 guarantees: `Stated` states the shared, Flock and sampling claims' failures over the spec (`Claims.<Claim>_fails`), and
-`Meets` their checkable antecedents at Flock's deployed records (`deployPlain`, `deployZk`). The ZK-recursion
-compiler's claims carry `Claims.Witness.Recursion.<Claim>_fails` and `<Claim>_meets`, their checkable antecedents met at
-the deployed record (`RecursionMeets`).
+`Meets` their checkable antecedents at Flock's deployed records (`deployPlain`, `deployZk`), and `BindingMeets` the
+sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`). The ZK-recursion compiler's claims carry
+`Claims.Witness.Recursion.<Claim>_fails` and `<Claim>_meets`, their checkable antecedents met at the deployed record
+(`RecursionMeets`).
 -/

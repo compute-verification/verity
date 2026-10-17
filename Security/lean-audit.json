@@ -482,7 +482,7 @@
    },
    "Claims.Sampling.Binding": {
     "fails": "Claims.Sampling.Binding_fails",
-    "meets": []
+    "meets": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
    },
    "Claims.Sampling.Bits": {
     "fails": "Claims.Sampling.Bits_fails",
@@ -528,13 +528,13 @@
     "fails": "Claims.ScopeMatches_fails",
     "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
    },
-   "Claims.SimCost": {
-    "fails": "Claims.SimCost_fails",
-    "meets": []
-   },
    "Claims.ZKmalR": {
     "fails": "Claims.ZKmalR_fails",
     "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.Sampling.KSLinOn": {
+    "fails": "Claims.Sampling.KSLinOn_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
    }
   },
   "not": {
@@ -5369,10 +5369,12 @@
     "Claims.Sampling.BitsLin_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
     "  (H : Claims.Msg → Claims.Msg) :",
     "  Exists fun V =>",
-    "    Exists fun R => Exists fun E => Exists fun Fe => Exists fun lam => Not (Claims.Sampling.BitsLin H V R E Fe lam)"
+    "    Exists fun Scope =>",
+    "      Exists fun R =>",
+    "        Exists fun E => Exists fun Fe => Exists fun lam => Not (Claims.Sampling.BitsLin H V Scope R E Fe lam)"
    ],
    "assumptions": [],
-   "type_hash": "58a4261d06efc3682cf2321ef5809ec11f189acb0b9827ffb1cfd5f56a1ed886"
+   "type_hash": "e47885553e8f5fb861ed3c170fa7009becd9e97691bf14e6e64a4ed8e488f828"
   },
   "Claims.Sampling.Bits_fails": {
    "owner": "@proofs",
@@ -5528,6 +5530,74 @@
    ],
    "assumptions": [],
    "type_hash": "b08360cf751d2b6dd16de075df1216368538d3c6302577877fb8206d4f0b89fc"
+  },
+  "Claims.Sampling.Binding_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Binding_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (c : SamplingDeploy.Code)",
+    "  (roots : List Claims.Msg) (o : Claims.Sampling.Opening Bool) :",
+    "  Iff",
+    "    (Eq (Claims.Sampling.Commitment.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o)",
+    "      Bool.true)",
+    "    (Exists fun root =>",
+    "      Exists fun i =>",
+    "        Exists fun reg =>",
+    "          And (Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := i }))",
+    "            (And",
+    "              (Eq (Array.find? (fun p => Decidable.decide (Eq p.root (Claims.Sampling.bytes root))) c.own)",
+    "                (Option.some reg))",
+    "              (Eq",
+    "                (Flock.Registered.opensLeaf reg",
+    "                  (Claims.Sampling.bytes",
+    "                    (FlockSoundness.Binding.digBytes",
+    "                      (FlockSoundness.Refine.H512",
+    "                        (FlockSoundness.Binding.hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o)))))",
+    "                  i (Claims.Sampling.bytes (c.π o)))",
+    "                Bool.true)))"
+   ],
+   "assumptions": [],
+   "type_hash": "a0a89acdc1c927024954d4c84f5369b2fa82c728adba155ce30ede4e3cbd0f92"
+  },
+  "Claims.Sampling.Binding_meets_one": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Binding_meets_one (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (c : SamplingDeploy.Code)",
+    "  (roots : List Claims.Msg) (o : Claims.Sampling.Opening Bool) (root : Claims.Msg) (dom : ByteArray)",
+    "  (hat : Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := 0 })) (hπ : Eq (c.π o) List.nil)",
+    "  (hroot :",
+    "    Eq (Claims.Sampling.bytes root)",
+    "      (Flock.Registered.climb dom",
+    "        (Flock.Registered.rowLeaf dom 0",
+    "          (Claims.Sampling.bytes",
+    "            (FlockSoundness.Binding.digBytes",
+    "              (FlockSoundness.Refine.H512",
+    "                (FlockSoundness.Binding.hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o))))))",
+    "        0 0 (Claims.Sampling.bytes List.nil)))",
+    "  (hown :",
+    "    Eq c.own",
+    "      (List.cons",
+    "          { name := \"\", value := \"\", root := Claims.Sampling.bytes root, leaves := 1, words := Option.none,",
+    "            wordBits := 16, domain := dom, reads := List.nil.toArray }",
+    "          List.nil).toArray) :",
+    "  Eq (Claims.Sampling.Commitment.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o) Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "415cf277b2412e0bb8ea83b0706ffd1078c21307af429358fa2df94676ef5d6e"
+  },
+  "Claims.Sampling.KSLinOn_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.KSLinOn_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun V =>",
+    "    Exists fun Scope =>",
+    "      Exists fun R =>",
+    "        Exists fun E =>",
+    "          Exists fun κ =>",
+    "            Exists fun γ => Exists fun β => Exists fun Fe => Not (Claims.Sampling.KSLinOn H V Scope R E κ γ β Fe)"
+   ],
+   "assumptions": [],
+   "type_hash": "abebd32213005259fa2754347dd54a59c26cf68bf16f917ef2ba76241d292710"
   }
  },
  "shape": {
@@ -7619,11 +7689,14 @@
     "Claims.KS_fails",
     "Claims.Nontrivial_fails",
     "Claims.Sampling.Binding_fails",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Claims.Sampling.BitsLin_fails",
     "Claims.Sampling.Bits_fails",
     "Claims.Sampling.Complete_fails",
     "Claims.Sampling.Efficient_fails",
     "Claims.Sampling.KSCount_fails",
+    "Claims.Sampling.KSLinOn_fails",
     "Claims.Sampling.KS_fails",
     "Claims.Sampling.Nontrivial_fails",
     "Claims.Sampling.ScopeMatches_fails",
@@ -8029,7 +8102,10 @@
     "Claims.Sampling.masked_meets_zk",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Claims.Sampling.scope_meets",
-    "Claims.Sampling.universal_meets"
+    "Claims.Sampling.universal_meets",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Sampling.KSLinOn_fails"
    ]
   },
   "Definitions.Core.Circuit": {
@@ -12516,6 +12592,8 @@
     "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -13490,6 +13568,8 @@
     "Claims.Flock.masked_meets_zk",
     "Claims.Flock.scope_meets_plain",
     "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Claims.Sampling.decoder_meets_plain",
     "Claims.Sampling.decoder_meets_zk",
     "Claims.Sampling.masked_meets_zk",
@@ -13663,6 +13743,8 @@
     "Flock.Sha512.word": "b1086da4c00e9cf65abe8a24bde5bf83aa2e6897854b30766e6be070dc7de279"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -13748,6 +13830,8 @@
     "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14095,6 +14179,8 @@
     "_private.Flock.HmRow.0.Flock.HmRow.templateStrata": "d1afdd12f32817b3c645c55e29c61170a35ba172f9918cee9d3e1221f392b5c6"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14602,6 +14688,7 @@
     "_private.Flock.Net.0.Flock.Net.num": "3eabe4a40fe243c1336f63a815a8766ef8f2f271de028d86056f366d4e139592"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -15206,6 +15293,8 @@
     "Flock.instInhabitedPublic.default": "32d7220c79f8cee269c9c870fbbb12ec7d42e4e3e3c4c03d7555d33400da438b"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -16432,6 +16521,8 @@
     "_private.Flock.Registered.0.Flock.Registered.tagged": "57d4d01156f6691bd7c899ff653c3c5f75b8fa9183ad7afbcaef5d134b584330"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
@@ -18962,6 +19053,8 @@
     "Claims.Flock.masked_meets_zk",
     "Claims.Flock.scope_meets_plain",
     "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Claims.Sampling.decoder_meets_plain",
     "Claims.Sampling.decoder_meets_zk",
     "Claims.Sampling.masked_meets_zk",
@@ -20705,6 +20798,8 @@
     "FlockSoundness.Binding.hm96Pair": "c1ac7aba11bea03bf4156061f96ef5c100b0e3731b63980fccfb9a29476c4083"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -24873,6 +24968,8 @@
     "FlockSoundness.Merkle.xorBytes": "1a6543034cfd27812c0fa204112fe907680579ff63b51dbefc752739b3b890cf"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -25498,6 +25595,8 @@
     "FlockSoundness.Refine.toDig": "fc09670eec36ed92bef301805e7fd420fc6ae40c8d7e2e886967b6cc3de958a6"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -25589,6 +25688,8 @@
     "FlockSoundness.Refine.saltsOf": "a0d5812e80a2fd860d924b9a3b626466509453659b2f05d5e5748a45e51cc96b"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
