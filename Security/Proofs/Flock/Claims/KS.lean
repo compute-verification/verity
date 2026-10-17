@@ -65,6 +65,7 @@ import Proofs.Flock.Claims.KS.PlainClash0
 import Proofs.Flock.Claims.KS.PlainLevels
 import Proofs.Flock.Claims.KS.LevelsAll
 import Proofs.Flock.Claims.KS.PlainClashLater
+import Proofs.Flock.Claims.KS.ForkSim
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -294,4 +295,7 @@ with different columns, which are the run's level-`ℓ` rows and clash in its lo
 verifier's trimmed record holds from the simulator's fork bound alone (`PlainClashLater`:
 `FlockSoundness.Discharge.AtDraw.accepts_opensLD`, `FlockDeploy.KS.plainClashQL`,
 `FlockDeploy.KS.plainSimLaterClashAt`, `FlockDeploy.KS.plain_KS_of_fork`).
+Two runs forked after `j` coins pass through a simulation, which matches the model's coins with the live ones one to
+one, and at the live session, whose every coin answers its own send, `B`'s fork at round `j` is the fork after `j`
+coins (`ForkSim`: `FlockSoundness.Game.forkC`, `Claims.Bridge.Sim.forkC_le`, `Claims.Bridge.Live.forkX_sessionK`).
 -/
