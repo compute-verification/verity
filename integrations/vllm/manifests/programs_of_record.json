@@ -1,6 +1,6 @@
 {
  "schema": "verity-vllm/programs-of-record/v1",
- "about": "Per row of record, every rank's Program digests (step, each request shape, GP-01's workload) as its Build of record made them; `verity-vllm neutrality` rebuilds a row and compares. Re-pin with `verity-vllm neutrality ROW --update` in the PR that changes the circuit on purpose.",
+ "about": "Per row of record, every rank's Program digests (step, each request shape, GP-01's workload) as the Build its pinned_from names made them; `verity-vllm neutrality` rebuilds a row and compares. Re-pin with `verity-vllm neutrality ROW --update` in the PR that changes the circuit on purpose.",
  "rows": {
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
    "tier": "heavy",
@@ -69,6 +69,18 @@
      }
     }
    }
+  },
+  "qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
+   "tier": "fast",
+   "pinned_from": {},
+   "manifest_digest": null,
+   "programs": {}
+  },
+  "qwen3-14b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager": {
+   "tier": "fast",
+   "pinned_from": {},
+   "manifest_digest": null,
+   "programs": {}
   }
  }
 }

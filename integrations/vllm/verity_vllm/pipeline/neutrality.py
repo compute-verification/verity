@@ -9,7 +9,8 @@ record, with the tier of its rebuild and the Build they were taken from.  Each s
 its digests compared with the pins; `--compare` compares the Builds already under OUT instead.  The manifest digest is reported, not
 compared: a naming change moves the manifest and leaves the circuit.  Exit 0 when every pinned digest is reproduced, 1 when one
 moved or is missing (each named), 2 on a usage error.  `--update` rewrites the selected rows' pins from what was built: the PR that
-changes a circuit on purpose re-pins it, and its diff names what moved.
+changes a circuit on purpose re-pins it, and its diff names what moved (`pinned_from`: the Build, and under `research run` its run
+and source commit).
 
 The rebuild needs the pinned vLLM (`ops/pod_bootstrap.sh --cpu`) and each row's checkpoint metadata (the derive runs on the meta
 device and reads no weights), so it runs on a CPU pod, never in `check`; the suite's tier is `tests/program/test_derive_neutrality.py`.
@@ -18,6 +19,7 @@ fast: small TP1/TP2 rows, minutes each; heavy: GLM-5.3's 8 ranks, about an hour 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -102,7 +104,9 @@ def main(a: Options) -> int:
         print(f"[neutrality] {row}: {'NEUTRAL' if not diffs else 'MOVED'} -- {len(built)} rank(s){moved}"
               + "".join(f"\n    {d}" for d in diffs), flush=True)
         if a.update and built:
-            doc["rows"][row] = {**pin, "programs": built, "manifest_digest": man}
+            src = {"build": str((out / row).resolve()), **{k: os.environ[v] for k, v in (("run", "RESEARCH_RUN_ID"), ("tree", "RESEARCH_SOURCE_SHA"))
+                                                           if os.environ.get(v)}}
+            doc["rows"][row] = {**pin, "pinned_from": src, "programs": built, "manifest_digest": man}
     (out / "neutrality.json").write_text(json.dumps(report, indent=1) + "\n")
     if a.update:
         Path(a.pins).write_text(json.dumps(doc, indent=1) + "\n")

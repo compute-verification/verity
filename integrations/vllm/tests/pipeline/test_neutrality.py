@@ -14,7 +14,7 @@ from verity_vllm.pipeline import epoch
 from verity_vllm.pipeline import neutrality as N
 from verity_vllm.pipeline.cli import main as cli
 
-ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
+ROW = "qwen3-14b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 REQ = "build_request_LP256_T31"
 
 
@@ -65,13 +65,16 @@ def test_compare_passes_on_the_pinned_build_and_fails_by_name_on_a_moved_one(tmp
     assert cli(["neutrality", ROW, "--compare", "--out", str(tmp_path / "none"), "--pins", str(pins)]) == 1
 
 
-def test_update_re_pins_the_row_from_its_build(tmp_path: Path) -> None:
+def test_update_re_pins_the_row_from_its_build(tmp_path: Path, monkeypatch) -> None:
     pins, out = _pins(tmp_path, {}), tmp_path / "out"
     _build(out / ROW, _programs(tag="n"), manifest="m2")
     assert cli(["neutrality", ROW, "--compare", "--out", str(out), "--pins", str(pins)]) == 1
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.delenv("RESEARCH_SOURCE_SHA", raising=False)
     assert cli(["neutrality", ROW, "--compare", "--update", "--out", str(out), "--pins", str(pins)]) == 0
     row = json.loads(pins.read_text())["rows"][ROW]
     assert (row["tier"], row["manifest_digest"], row["programs"]) == ("fast", "m2", _programs(tag="n"))
+    assert row["pinned_from"] == {"build": str((out / ROW).resolve()), "run": "r1"}
     assert cli(["neutrality", ROW, "--compare", "--out", str(out), "--pins", str(pins)]) == 0
 
 
