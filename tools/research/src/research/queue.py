@@ -363,6 +363,9 @@ class Queue:
         #: how many members at the bottom of `next` a running check covers (`Drive`): `first` goes above them, so no reorder
         #: takes a running check's commit off `next`
         self.hold = 0
+        #: members a running check covers that keep their place at the head it checks though their PR's head has moved
+        #: (`Driver`; top, 17 Oct: a new head no longer cancels a running train, and its PR rejoins above once that train ends)
+        self.frozen: set[int] = set()
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
 
@@ -511,7 +514,7 @@ class Queue:
         in `first` (`--first`) that are ready go below all of them, in the order given, so the next train starts with them; but
         above the bottom `hold` members, which a running check covers."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
-        kept = [m.pr for m in chain if m.pr in ready and entries[m.pr].pr.head == m.head]
+        kept = [m.pr for m in chain if m.pr in ready and entries[m.pr].pr.head == m.head or self._frozen(m, entries)]
         held: list[int] = []
         for m in chain[:self.hold]:
             if m.pr not in kept:
@@ -533,6 +536,12 @@ class Queue:
         for n in held + [f for f in self.first if f in ready] + kept + [n for n in new if n not in cold] + sorted(cold):
             place(n)
         return out
+
+    def _frozen(self, m: Member, entries: dict[int, Entry]) -> bool:
+        """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, and neither ejected nor held."""
+        e = entries.get(m.pr)
+        return (m.pr in self.frozen and e is not None and e.pr.head != m.head and e.state != "refused"
+                and not e.why.startswith("held"))
 
     def _forces_cold(self, n: int) -> bool:
         r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
@@ -583,7 +592,8 @@ class Queue:
         entries = self.entries(prs, state)
         entries.update(waiting)
         order = self.order(chain, entries)
-        want = [(n, entries[n].pr.head) for n in order]
+        frozen = {m.pr: m.head for m in chain if self._frozen(m, entries)}
+        want = [(n, frozen.get(n, entries[n].pr.head)) for n in order]
         k = next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
         members = chain[:k]
         tip = members[-1].commit if members else _out(self.workdir, "rev-parse", "origin/main")
