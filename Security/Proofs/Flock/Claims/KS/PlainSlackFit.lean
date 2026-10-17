@@ -6,7 +6,7 @@ import Proofs.Flock.Level3.ArithFacts
 
 `slackEsc_fitsFork_plain` asks that the slack's escapes' weights total at most level 0's `2·2^{d₀}·Q₀`, the room
 `plain_fork_room` leaves in the plain weight. At the chances `δ_t` of the coupling at `fnAt`
-(`FnFork.δN`, `δ_t = |X|^{-min (n t) M}`, `FnFork.δAt_eq`) with every `n t ≥ 1`, each `δ_t` is at most `2^{-128}`, and:
+(`FnFork.δN`, `δ_t = |A|^{-min (n t) M}`, `FnFork.δAt_eq`) with every `n t ≥ 1`, each `δ_t` is at most `2^{-128}`, and:
 
 * `slackW_le_geom`, `sum_slackW_le`: a fork's slack weights fall geometrically past its round, so they total at most
   `6ε` at chances at most `ε ≤ 1/2`, whatever the number of rounds;
@@ -175,17 +175,17 @@ theorem slack_fits_fast100 {K m : ℕ} {sch : FlockSoundness.Accounting.Schedule
   have h2 : (2 : ℝ) ^ 33 * (2 * 7 * (6 * ((2 : ℝ) ^ 128)⁻¹)) ≤ 2 := by norm_num
   nlinarith
 
-/-- **The coupling's chances with every revealed length positive** are at most `|X|⁻¹`. -/
-theorem δN_le_inv {K M : ℕ} {X : Type} [Fintype X] [DecidableEq X] [Nonempty X] (hM : 1 ≤ M) {n : Fin K → ℕ}
-    (hn : ∀ t, 1 ≤ n t) (t : ℕ) : FnFork.δN X M n t ≤ (Fintype.card X : ℝ)⁻¹ := by
+/-- **The coupling's chances with every revealed length positive** are at most `|A|⁻¹`. -/
+theorem δN_le_inv {K M : ℕ} {A : Type} [Fintype A] [DecidableEq A] [Nonempty A] (hM : 1 ≤ M) {n : Fin K → ℕ}
+    (hn : ∀ t, 1 ≤ n t) (t : ℕ) : FnFork.δN A M n t ≤ (Fintype.card A : ℝ)⁻¹ := by
   unfold FnFork.δN
   split_ifs with ht
   · rw [FnFork.δAt_eq]
-    have h1 : (Fintype.card X : ℝ)⁻¹ ≤ 1 := inv_le_one_of_one_le₀ (by exact_mod_cast Fintype.card_pos)
-    have h0 : (0 : ℝ) ≤ (Fintype.card X : ℝ)⁻¹ := by positivity
-    calc (Fintype.card X : ℝ)⁻¹ ^ min (n ⟨t, ht⟩) M ≤ (Fintype.card X : ℝ)⁻¹ ^ 1 :=
+    have h1 : (Fintype.card A : ℝ)⁻¹ ≤ 1 := inv_le_one_of_one_le₀ (by exact_mod_cast Fintype.card_pos)
+    have h0 : (0 : ℝ) ≤ (Fintype.card A : ℝ)⁻¹ := by positivity
+    calc (Fintype.card A : ℝ)⁻¹ ^ min (n ⟨t, ht⟩) M ≤ (Fintype.card A : ℝ)⁻¹ ^ 1 :=
           pow_le_pow_of_le_one h0 h1 (le_min (hn _) hM)
-      _ = (Fintype.card X : ℝ)⁻¹ := pow_one _
+      _ = (Fintype.card A : ℝ)⁻¹ := pow_one _
   · positivity
 
 end Claims.Flock
@@ -209,7 +209,7 @@ theorem plain_slack_fits {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
             (plainJ h0 hsch r ℓ).val i.val) i ≤
       2 * ((2 : ℝ) ^ l₀.logLen * l₀.queries) := by
   have hδ : ∀ t, Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 n t ≤ ((2 : ℝ) ^ 128)⁻¹ := fun t => by
-    have := Claims.Flock.δN_le_inv (X := FlockLevel3.GF128) (M := 65536) (by norm_num) hn t
+    have := Claims.Flock.δN_le_inv (A := FlockLevel3.GF128) (M := 65536) (by norm_num) hn t
     rwa [FlockLevel3.card_F, Nat.cast_pow, Nat.cast_ofNat] at this
   exact Claims.Flock.slack_fits_fast100 hsch (plainJ h0 hsch) (Claims.Flock.FnFork.δN_nonneg n) hδ
 

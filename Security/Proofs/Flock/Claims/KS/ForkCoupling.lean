@@ -9,9 +9,9 @@ import Proofs.Flock.Claims.KS.LiveMix
 it at `fnAt`, a tape of uniform functions of the live coins' history read through a prefix key
 (`FnFork.fnAt_coupling`). Here the two meet, in `ForkSlack`'s closure:
 
-* `forkCoinCoupling_fnAt`: at any verifier whose coins are `M` symbols of a finite `X`, the simulated forks
-  `simForkPr` at `fnAt` and the live fork `forkN` satisfy `ForkCoinCoupling` at the chances `FnFork.δN X M n`
-  (`δ_t = |X|^{-min (n t) M}`, `FnFork.δAt_eq`), the self-pair's event being the one-run event
+* `forkCoinCoupling_fnAt`: at any verifier whose coins are `M` symbols of a finite `A`, the simulated forks
+  `simForkPr` at `fnAt` and the live fork `forkN` satisfy `ForkCoinCoupling` at the chances `FnFork.δN A M n`
+  (`δ_t = |A|^{-min (n t) M}`, `FnFork.δAt_eq`), the self-pair's event being the one-run event
   (`tiedColl_of_append_self`).
 * `slack_fnAt`: so the simulated fork at round `j` is at most the deployed fork there and the slack at those chances
   (`slack_of_coupling`).
@@ -23,14 +23,14 @@ namespace Claims.Flock
 
 open FnFork
 
-/-- **The coupling at `fnAt`**: with the verifier's coins `M` symbols of `X`, the live coins indexed by `Fin L`,
+/-- **The coupling at `fnAt`**: with the verifier's coins `M` symbols of `A`, the live coins indexed by `Fin L`,
 `L = K`, and a prefix key `key` of the live coins' history (`PrefixKey`), the simulated forks at `fnAt` and the live
-fork `forkN` couple with the deployed fork at the chances `δN X M n`. -/
-theorem forkCoinCoupling_fnAt {M : ℕ} {X D : Type} [Fintype X] [DecidableEq X] [Nonempty X]
-    [hI : Inhabited (Fin M → X)] [Fintype D] [DecidableEq D] {Ω : Type} (H : Msg → Msg) (V : Verifier (Fin M → X))
+fork `forkN` couple with the deployed fork at the chances `δN A M n`. -/
+theorem forkCoinCoupling_fnAt {M : ℕ} {A D : Type} [Fintype A] [DecidableEq A] [Nonempty A]
+    [hI : Inhabited (Fin M → A)] [Fintype D] [DecidableEq D] {Ω : Type} (H : Msg → Msg) (V : Verifier (Fin M → A))
     (P : Prover Ω) (x : Msg) (ω : Ω) {L : ℕ} (h : L = V.k x) (n : Fin (V.k x) → ℕ)
-    {key : Fin (V.k x) → (Fin (V.k x) → Fin M → X) → D} (hk : PrefixKey n key) :
-    ForkCoinCoupling H V P x (δN X M n)
+    {key : Fin (V.k x) → (Fin (V.k x) → Fin M → A) → D} (hk : PrefixKey n key) :
+    ForkCoinCoupling H V P x (δN A M n)
       (simForkPr H V P x (fun q => fnAt h n key q.1 q.2) (fun t => forkN t) ω) ω := by
   obtain ⟨hstep, hlast⟩ := fnAt_coupling h hk (pairEv H V P x ω) (oneEv H V P x ω)
     fun s hs => ⟨hs.1, FlockDeploy.KS.tiedColl_of_append_self hs.2.2⟩
@@ -43,23 +43,23 @@ theorem forkCoinCoupling_fnAt {M : ℕ} {X D : Type} [Fintype X] [DecidableEq X]
     exact hlast
 
 /-- **The slack at `fnAt`**: the simulated fork at `fnAt` at round `j` is at most the deployed fork there and the
-slack at the chances `δN X M n` (`slack_of_coupling` at `forkCoinCoupling_fnAt`). -/
-theorem slack_fnAt {M : ℕ} {X D : Type} [Fintype X] [DecidableEq X] [Nonempty X] [Inhabited (Fin M → X)]
-    [Fintype D] [DecidableEq D] {Ω : Type} (H : Msg → Msg) (V : Verifier (Fin M → X)) (P : Prover Ω) (x : Msg)
-    (ω : Ω) {L : ℕ} (h : L = V.k x) (n : Fin (V.k x) → ℕ) {key : Fin (V.k x) → (Fin (V.k x) → Fin M → X) → D}
+slack at the chances `δN A M n` (`slack_of_coupling` at `forkCoinCoupling_fnAt`). -/
+theorem slack_fnAt {M : ℕ} {A D : Type} [Fintype A] [DecidableEq A] [Nonempty A] [Inhabited (Fin M → A)]
+    [Fintype D] [DecidableEq D] {Ω : Type} (H : Msg → Msg) (V : Verifier (Fin M → A)) (P : Prover Ω) (x : Msg)
+    (ω : Ω) {L : ℕ} (h : L = V.k x) (n : Fin (V.k x) → ℕ) {key : Fin (V.k x) → (Fin (V.k x) → Fin M → A) → D}
     (hk : PrefixKey n key) (j : Fin (V.k x)) :
     simForkPr H V P x (fun q => fnAt h n key q.1 q.2) (fun t => forkN t) ω j ≤
-      (Pr fun s : (Fin (V.k x) → Fin M → X) × (Fin (V.k x) → Fin M → X) => forkEv H V P x j ω s.1 s.2) +
-        forkSlack H V P x (δN X M n) j ω :=
-  slack_of_coupling H V P x (fun t => δN_nonneg (X := X) (M := M) n t) (forkCoinCoupling_fnAt H V P x ω h n hk) j
+      (Pr fun s : (Fin (V.k x) → Fin M → A) × (Fin (V.k x) → Fin M → A) => forkEv H V P x j ω s.1 s.2) +
+        forkSlack H V P x (δN A M n) j ω :=
+  slack_of_coupling H V P x (fun t => δN_nonneg («X» := A) (M := M) n t) (forkCoinCoupling_fnAt H V P x ω h n hk) j
 
 end Claims.Flock
 
 namespace FlockDeploy.KS
 
 /-- **`Claims.Bridge.Live.fnAt` is `FnFork.fnAt`**: the two are one definition. -/
-theorem live_fnAt_eq {K L M : ℕ} {X D : Type} (h : L = K) (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D)
-    (f : Fin K → D → Fin M → X) (r : Fin L → Fin M → X) :
+theorem live_fnAt_eq {K L M : ℕ} {A D : Type} (h : L = K) (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → A) → D)
+    (f : Fin K → D → Fin M → A) (r : Fin L → Fin M → A) :
     Claims.Bridge.Live.fnAt h n key f r = Claims.Flock.FnFork.fnAt h n key f r := rfl
 
 /-- **The coupling at the deployed plain verifier**: at `V false`, with a tape of uniform functions of the live coins
@@ -70,9 +70,10 @@ theorem forkCoinCoupling_plain {D : Type} [Fintype D] [DecidableEq D] {Ω : Type
     {key : Fin ((V false).k x) → (Fin ((V false).k x) → Claims.Bridge.Live.LCoin 65536) → D}
     (hk : Claims.Flock.FnFork.PrefixKey n key) :
     Claims.Flock.ForkCoinCoupling sha512 (V false) P x (Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 n)
-      (Claims.Flock.simForkPr sha512 (V false) P x (fun q => Claims.Bridge.Live.fnAt h n key q.1 q.2)
+      (Claims.Flock.simForkPr sha512 (V false) P x (τ := Fin ((V false).k x) → D → Claims.Bridge.Live.LCoin 65536)
+        (LC := Claims.Bridge.Live.LCoin 65536) (fun q => Claims.Bridge.Live.fnAt h n key q.1 q.2)
         (fun t => Claims.Flock.FnFork.forkN t) ω) ω :=
-  Claims.Flock.forkCoinCoupling_fnAt (X := FlockLevel3.GF128) (M := 65536) (hI := instInhabitedCoin) sha512 (V false)
-    P x ω h n hk
+  Claims.Flock.forkCoinCoupling_fnAt («X» := FlockLevel3.GF128) (M := 65536) (hI := instInhabitedCoin) sha512
+    (V false) P x ω h n hk
 
 end FlockDeploy.KS
