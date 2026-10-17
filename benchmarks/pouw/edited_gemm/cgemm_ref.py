@@ -117,8 +117,14 @@ def check_half(d: Path, meta: dict) -> dict:
     m_, n, k, seed, inv_s = meta["m"], meta["n"], meta["k"], meta["seed"], np.float32(meta["inv_s"])
     key = b"".join(struct.pack(">Q", int(w, 16)) for w in meta["key"])
     tiles_n = n // T
-    out = {"dir": str(d), "m": m_, "n": n, "k": k, "design": "cohalf", "device_ok": meta["device_ok"],
-           "control_rejected": meta["control_rejected"], "device": meta["device"], "tiles": {}}
+    # H1 (co32c-u16, decision 82): Q/K per (head, token) asymmetric floor at top 111, s = max(max(x) / 111, max(-x) / 112)
+    # clamped to 1e-30 then * (1 + 2^-20), X = floor(x / s) + b in [-112, 111] (matching hrow_s + hquant_h1 and
+    # steps.floor_quant: one divide, no clamp); the narrow U (u_rows16); Y = X_lo + X_hi in [-224, 222] split as
+    # Y0 = ((Y + 64) & 127) - 64, Y1 = (Y - Y0) >> 7 with P_A = [Y0 | Y1], P_B = [-U | -U]. Else Dither-C's 7-bit cohalf.
+    h1 = meta.get("numerics") == "h1"
+    km = next(iter(meta["kinds"]))   # the main kernel's name: h_l7qs (7-bit) or h_l7qs_h1 (H1)
+    out = {"dir": str(d), "m": m_, "n": n, "k": k, "design": "cohalf", "numerics": "h1" if h1 else "co32c",
+           "device_ok": meta["device_ok"], "control_rejected": meta["control_rejected"], "device": meta["device"], "tiles": {}}
     ok = bool(meta["device_ok"]) and bool(meta["control_rejected"]) and k == 128
     for tm, tn in meta["tiles"]:
         sfx = f"_{tm}_{tn}.bin"
@@ -126,17 +132,29 @@ def check_half(d: Path, meta: dict) -> dict:
             return np.fromfile(d / (name + sfx), dt)
 
         x = (rd("x", np.uint16).astype(np.uint32) << 16).view(np.float32).reshape(T, k)
-        Vq = np.clip(np.floor(x * inv_s), -64, 62).astype(np.int64)
+        if h1:
+            s = (np.maximum(np.maximum(x.max(axis=1) / np.float32(111.0), (-x).max(axis=1) / np.float32(112.0)),
+                            np.float32(1e-30)) * np.float32(1.0 + 2.0 ** -20)).astype(np.float32)
+            Vq = np.floor(x / s[:, None]).astype(np.int64)
+            U = u_rows16(key, tn * T, T)
+        else:
+            Vq = np.clip(np.floor(x * inv_s), -64, 62).astype(np.int64)
+            U = u_rows_half(key, tn * T, T)
         b = patch_bits(key, DITHER_TAG, tm * T, T, k)
         X = Vq + b
         W = rd("W", np.int8).astype(np.int64).reshape(T, k)
         c = patch_bits(key, C_TAG, tn * T, T, k)
-        U = u_rows_half(key, tn * T, T)
         Wp = W + c + U[:, np.arange(k) % 64]
         Y = X[:, :64] + X[:, 64:]
-        zero = np.zeros((T, 32), np.int64)
-        PA = np.concatenate([Y, zero, zero], axis=1)
-        PB = np.concatenate([-U, zero, zero], axis=1)
+        if h1:
+            Y0 = ((Y + 64) & 127) - 64
+            Y1 = (Y - Y0) >> 7
+            PA = np.concatenate([Y0, Y1], axis=1)
+            PB = np.concatenate([-U, -U], axis=1)
+        else:
+            zero = np.zeros((T, 32), np.int64)
+            PA = np.concatenate([Y, zero, zero], axis=1)
+            PB = np.concatenate([-U, zero, zero], axis=1)
         Ts, O = cs.honest_words(W, Vq.T, U, c, b.T, 64, 32)
         strip = (Ts[-1].astype(np.int64) - U @ Y.T) & cs.MASK
         want_r = tile_receipts(seed, [t.T for t in Ts] + [O.T], tm * tiles_n + tn)
@@ -144,17 +162,18 @@ def check_half(d: Path, meta: dict) -> dict:
             "X": bool((rd("X", np.int8).reshape(T, k) == X).all()),
             "X_range": [int(X.min()), int(X.max())],
             "PA": bool((rd("PA", np.int8).reshape(T, 128) == PA).all()),
-            "PA_s8": bool(-128 <= int(Y.min()) and int(Y.max()) <= 127),
+            "PA_s8": bool(-128 <= int(PA.min()) and int(PA.max()) <= 127),
             "Wp": bool((rd("Wp", np.int8).reshape(T, k) == Wp).all()),
             "Wp_range": [int(Wp.min()), int(Wp.max())],
             "PB": bool((rd("PB", np.int8).reshape(T, 128) == PB).all()),
             "O_is_strip": bool((strip == O.astype(np.int64)).all()),
-            "O": bool((rd("Y_h_l7qs", np.int32).reshape(T, T).view(np.uint32) == O.T).all()),
-            "R": bool((rd("R_h_l7qs", np.uint32).reshape(NCT, 8) == want_r).all()),
+            "O": bool((rd("Y_" + km, np.int32).reshape(T, T).view(np.uint32) == O.T).all()),
+            "R": bool((rd("R_" + km, np.uint32).reshape(NCT, 8) == want_r).all()),
         }
         out["tiles"][f"{tm},{tn}"] = res
         ok &= all(v for v in res.values() if isinstance(v, bool))
-        ok &= -64 <= res["X_range"][0] and res["X_range"][1] <= 63 and -128 <= res["Wp_range"][0] and res["Wp_range"][1] <= 127
+        xlo, xhi = (-112, 111) if h1 else (-64, 63)
+        ok &= xlo <= res["X_range"][0] and res["X_range"][1] <= xhi and -128 <= res["Wp_range"][0] and res["Wp_range"][1] <= 127
     out["ok"] = bool(ok)
     return out
 
