@@ -19,7 +19,6 @@ fast: small TP1/TP2 rows, minutes each; heavy: GLM-5.3's 8 ranks, about an hour 
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -86,6 +85,8 @@ class Options:
     update: bool = option("--update", default=False, action="store_true", help="re-pin the selected rows from what was built")
     pins: str = option("--pins", default=str(PINS))
     row_flags: list[str] = option("--row-flag", action="append", default=[], help="passed to `row run` (repeat), e.g. --row-flag=--build-jobs=4")
+    run_id: str | None = option("--run-id", env="RESEARCH_RUN_ID", default=None, help="the research run the re-pin's Build is from")
+    source_sha: str | None = option("--source-sha", env="RESEARCH_SOURCE_SHA", default=None, help="the tree commit the re-pin's Build is from")
 
 
 def main(a: Options) -> int:
@@ -104,8 +105,7 @@ def main(a: Options) -> int:
         print(f"[neutrality] {row}: {'NEUTRAL' if not diffs else 'MOVED'} -- {len(built)} rank(s){moved}"
               + "".join(f"\n    {d}" for d in diffs), flush=True)
         if a.update and built:
-            src = {"build": str((out / row).resolve()), **{k: os.environ[v] for k, v in (("run", "RESEARCH_RUN_ID"), ("tree", "RESEARCH_SOURCE_SHA"))
-                                                           if os.environ.get(v)}}
+            src = {"build": str((out / row).resolve()), **{k: v for k, v in (("run", a.run_id), ("tree", a.source_sha)) if v}}
             doc["rows"][row] = {**pin, "pinned_from": src, "programs": built, "manifest_digest": man}
     (out / "neutrality.json").write_text(json.dumps(report, indent=1) + "\n")
     if a.update:
