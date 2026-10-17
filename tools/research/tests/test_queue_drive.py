@@ -835,6 +835,45 @@ def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
     assert lean_errors(log) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean", "Security/Definitions/Claims/Sampling.lean"}
 
 
+def test_a_new_head_keeps_the_running_train_at_the_head_it_checks_and_rejoins_above_it(world, monkeypatch):
+    """17 Oct 07:56Z: two re-marked heads (#2222, #2235) took their PRs off `next` and cancelled two running trains; top ruled a
+    new head no longer cancels a running train: it runs on at the head the owner marked, and the new head rejoins above."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 1
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    running = h.q.chain()[1].commit
+    world.gh.put(1, world.change({"a.txt": "1 fixed\n"}, base=old))                # #1's owner pushes a new head
+    h.tick()
+    chain = h.q.chain()
+    assert [(m.pr, m.head) for m in chain[:1]] == [(1, old)] and chain[1].commit == running and h.cancelled == []
+
+
+def test_a_new_head_after_its_own_train_failed_rebuilds_without_waiting(world, monkeypatch, tmp_path):
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()                                                              # #1's own train, and the one above it with #2
+    own = h.q.chain()[0].commit
+    _check(world, monkeypatch, own, ("false",))
+    h.evidence = [_killed_run(tmp_path, "one")]
+    h.tick()                                                              # resent
+    rid = h.d.q.load_state()["drive"]["launched"][own]["ids"][0]
+    h.run_state[rid] = ("done", 1, None)
+    h.clock += PUBLISH_GRACE_S + 1
+    h.evidence = [_killed_run(tmp_path, "two")]
+    h.tick()                                                              # failed again: told, nobody ejected
+    assert len(h.posts) == 1 and "failed again on its resend" in h.posts[0], h.posts
+    fixed = world.change({"a.txt": "1 fixed\n"}, base=old)
+    world.gh.put(1, fixed)                                                # the train above still runs, but #1's own failed
+    h.tick()
+    assert [m.head for m in h.q.chain() if m.pr == 1] == [fixed]
+
+
 def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
     """17 Oct, r20261017-104751-c19c on cpu-2: the Security/Proofs replay was OOM-killed (exit 137), lean-audit failed with rc 1,
     and the fallback on Lean sources ejected #2224 and #2231, whose heads had passed."""

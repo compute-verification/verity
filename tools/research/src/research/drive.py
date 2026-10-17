@@ -823,15 +823,21 @@ class Driver:
         # and a train whose check is running, or has ended without its attempt in the store yet, keeps its place (19:47Z: a
         # rebuild in the seconds between 5897's end and its attempt's publication dropped a passing check)
         chain, main = q.chain(), _out(self.repo, "rev-parse", "origin/main")
-        q.hold = 0
+        q.hold, failed_at, checked = 0, set(), []
         for i, m in enumerate(chain):
             if m.commit not in drive["launched"]:
                 continue
+            checked.append(i)
             v = self.verdict(m.commit, main, drive)
             if v.state == "failed":
                 self.failed(drive, m, chain[: i + 1], v)
+                failed_at.add(i)
             elif v.state == "running":
                 q.hold = i + 1
+        # a member a running check covers keeps its place at the head that check runs, though its PR has a new head, unless
+        # its own train (the lowest checked one above it) failed: then the push is the fix (top, 17 Oct)
+        q.frozen = {m.pr for i, m in enumerate(chain[:q.hold])
+                    if next((c for c in checked if c >= i), None) not in failed_at}
         members, entries = q.sync(dry_run)
         state = {**q.load_state(), "drive": drive}
         for n, c in state.get("conflicts", {}).items():
