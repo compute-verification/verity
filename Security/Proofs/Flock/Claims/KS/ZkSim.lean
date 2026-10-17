@@ -238,9 +238,9 @@ theorem zkTabs_len {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
   unfold zkTabs zkSchT zkTbl
   split_ifs with h
   · rw [getElem!_pos sts j h]
-    simp only [zkTab, Refine.schedOf, List.length_map, Array.length_toList]
+    simp only [zkTab, Refine.schedOf, List.length_map, Array.length_toList, hz j h]
   · rw [getElem!_pos sts 0 h0]
-    simp only [zkTab, Refine.schedOf, List.length_map, Array.length_toList]
+    simp only [zkTab, Refine.schedOf, List.length_map, Array.length_toList, hz 0 h0]
 
 /-- **Table `j`'s fork rounds**: `zkRdOf` at its place's reps. -/
 def zkRdAt (spec : SessionSpec) (sts : Array Stmt) (j : ℕ) {Lv : ℕ} (i : Claims.Flock.IZW Lv) : ℕ :=
@@ -293,7 +293,7 @@ theorem zkRdAt_le {spec : SessionSpec} {sts : Array Stmt} (h0 : 0 < sts.size)
   omega
 
 /-- **The masked fork rounds** of table `j`'s events, rounds of `V true`. -/
-def zkRd {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+noncomputable def zkRd {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
@@ -311,8 +311,8 @@ theorem zkRd_succ_lt {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Ar
     (j : ℕ) (i : Claims.Flock.IZW (zkTabs h0 L hz hk hlay j).sch.levels.length) :
     (zkRd hset h0 L hz hk hlay j i).val + 1 < (V true).k x := by
   have := zkRdAt_le h0 L hz hk hlay j i
-  rw [zkK hset]
-  exact show zkRdAt spec sts j i + 1 < 2 + rounds true spec sts by omega
+  have := zkK hset
+  exact show zkRdAt spec sts j i + 1 < (V true).k x by omega
 
 theorem zkRd_inj {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -410,7 +410,7 @@ theorem zk_simFork_le {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : 
         Claims.Flock.forkSlack sha512 (V true) P x (Claims.Flock.FnFork.δN 𝔽 65536 (zkNOf x spec sts)) t.val ω := by
   rw [zkΦ_eq (zkN_add hset)]
   exact Claims.Flock.slack_of_coupling sha512 (V true) P x
-    (fun t => Claims.Flock.FnFork.δN_nonneg (X := 𝔽) (M := 65536) (zkNOf x spec sts) t)
+    (fun t => Claims.Flock.FnFork.δN_nonneg («X» := 𝔽) (M := 65536) (zkNOf x spec sts) t)
     (forkCoinCoupling_zk P x ω (zkN_add hset) (zkNOf x spec sts) (Claims.Flock.FnFork.prefixKey_histKey _)) t
 
 /-! ## The simulator -/
@@ -710,7 +710,7 @@ theorem zk_m_range {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Rea
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size) (j : ℕ) (hj : j < (tables true x).length) :
     25 ≤ (stJ h0 j).m ∧ (stJ h0 j).m ≤ 35 := by
   have hj' : j < sts.size := by rw [← zk_tables_length hset]; exact hj
-  simp only [stJ, dif_pos hj']
+  simp only [stJ, dite_eq_left hj']
   exact ⟨(zk_scopeJ hs hin hset hj').1, (zk_scopeJ hs hin hset hj').2.1⟩
 
 theorem zk_sch_m1 {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -723,7 +723,7 @@ theorem zk_sch_m1 {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array
     (zkTabs h0 L hz hk hlay j).sch = Accounting.m1Schedule (stJ h0 j).m := by
   have hj' : j < sts.size := by rw [← zk_tables_length hset]; exact hj
   rw [zkTabs_of_lt h0 L hz hk hlay hj']
-  simp only [stJ, dif_pos hj']
+  simp only [stJ, dite_eq_left hj']
   exact (zkTab_m1 (L j hj') (hz j hj') (hk j hj') spec (hlay j hj')).1
 
 open Classical in
@@ -736,7 +736,7 @@ theorem zkSimWJ_of_parts {x : Claims.Msg} (hrun : ZkSimRunAt x) (habort : ZkSimA
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω _ _ P
   refine ⟨zkRd hset h0 L hz hk hlay, zkRd_inj hset h0 L hz hk hlay, zkRd_zero hset h0 L hz hk hlay,
     Claims.Flock.FnFork.δN 𝔽 65536 (zkNOf x spec sts),
-    fun t => Claims.Flock.FnFork.δN_nonneg (X := 𝔽) (M := 65536) (zkNOf x spec sts) t,
+    fun t => Claims.Flock.FnFork.δN_nonneg («X» := 𝔽) (M := 65536) (zkNOf x spec sts) t,
     zk_slackFitW_δN (n := (tables true x).length) (stJ h0) (zk_m_range hs hin hset h0)
       (fun j => (zkTabs h0 L hz hk hlay j).sch) (zk_sch_m1 hset h0 L hz hk hlay) (fun j => (zkTabs h0 L hz hk hlay j).N)
       (zkRd hset h0 L hz hk hlay) (fun j _ i => zkRd_succ_lt hset h0 L hz hk hlay j i) (zkNOf x spec sts)
