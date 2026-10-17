@@ -168,6 +168,8 @@ class ServedCompiledSource:
         self.step_pad = 0
         self.step_tokens = 0
         self.live: list[tuple] = []
+        self.native_drain = False                                       # measurement: drain through the committer's slot plans
+        self.native_plans: dict[tuple[str, int], int] = {}
         self.drained = True
         self.stale: dict[int, torch.Tensor] = {}
         self.inputs: dict[int, list[tuple[int, str]]] = {}
@@ -326,6 +328,9 @@ class ServedCompiledSource:
     def _drop_slots(self) -> None:
         self.slots, self.plans, self.static = {}, {}, set()
         self.stats["slot_bytes"] = 0
+        if self.native_plans and self.c is not None:
+            self.c.clear_slot_plans()
+        self.native_plans = {}
 
     def _note_dispatch(self, desc: Any, num_tokens: int) -> None:
         if self._job() is None:
@@ -412,6 +417,20 @@ class ServedCompiledSource:
             return
         late = self.fault == "compiled_late_drain"
         n = self.step_tokens
+        if self.native_drain and not late and not self.omit and not self.live:
+            key = (self.step_mode, self.step_pad)
+            h = self.native_plans.get(key)
+            if h is None:
+                ordered = sorted(plan, key=lambda e: e[0])
+                kinds = [0 if not rows else 2 if (order, name) in self.static else 1 for order, name, _slot, rows in ordered]
+                h = self.native_plans[key] = self.c.slot_plan([e[1] for e in ordered], [e[2] for e in ordered], kinds)
+            self.stats["replay_drains"] += self.c.stage_slot_plan(h, n, self.step_pad)
+            self.stats["replayed_steps"] += 1
+            self.stats["padded_steps"] += int(n != self.step_pad)
+            if getattr(self.c, "gather", False):
+                self.c._nc.flush()
+            self.stats["drain_s"] += time.perf_counter() - t0
+            return
         for order, name, slot, rows in sorted(plan + self.live, key=lambda e: e[0]):
             value = slot if not rows else slot[: self.step_pad] if (order, name) in self.static else slot[:n]
             if late:

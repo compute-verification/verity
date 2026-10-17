@@ -7,6 +7,9 @@ and batch, under continuous batching with staggered arrivals, greedy and seeded 
 - `arm.py`: the two Commit arms, `served-commit` (values retained in host memory, each run's linkage checked) and
   `served-commit-noretain` (authentication state only; openings by replay). Its docstring has what a run does.
 - `run.sh`: `verity bench served_commit`, one spec's sweep in one process. Its header has the recorded form.
+- Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (bounded staging, no levels, native drain, the
+  finalize profile, NVTX ranges), optionally under nsys, summarized by `nsys_summary.py`; `gather_bench.py` times the
+  gather kernel alone; `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node.
 - The specs: `benchmarks/specs/qwen3-8b-bf16-h200-served.toml` (the default) and
   `benchmarks/specs/llama32-1b-bf16-h200-served.toml`, each on the sweep `benchmarks/specs/served.toml` (B1, B8, B32 and
   B64, 512-token prompts, mixed traffic, greedy and stochastic).
