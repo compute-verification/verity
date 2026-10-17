@@ -126,7 +126,7 @@ theorem hi_false' (x : UInt64) (k : ℕ) (hk : 64 ≤ k) : x.toNat.testBit k = f
 theorem clmulStep_w128 (a bb t i lo hi : UInt64) (ht : t.toNat < 64) (hi64 : i.toNat < 64) :
     w128 (F128.clmulStep a bb t i lo hi).lo (F128.clmulStep a bb t i lo hi).hi =
       w128 lo hi ^^^ (if bb.toNat.testBit t.toNat then a.toNat <<< i.toNat else 0) := by
-  simp only [F128.clmulStep, mask_and _ _ _ ht]
+  simp only [F128.clmulStep, F128.clmulStepLo, F128.clmulStepHi, mask_and _ _ _ ht]
   split
   · have h63 : (63 - i).toNat = 63 - i.toNat := by
       rw [UInt64.toNat_sub_of_le _ _ (by rw [UInt64.le_iff_toNat_le]; simp; omega)]; rfl
@@ -164,7 +164,12 @@ theorem clmulWindow_spec (a bb s lo hi : UInt64) (hs : s.toNat + 4 ≤ 64) :
   have e1 : (s + 1).toNat = s.toNat + 1 := by rw [UInt64.toNat_add]; simp; omega
   have e2 : (s + 2).toNat = s.toNat + 2 := by rw [UInt64.toNat_add]; simp; omega
   have e3 : (s + 3).toNat = s.toNat + 3 := by rw [UInt64.toNat_add]; simp; omega
-  simp only [F128.clmulWindow]
+  rw [show F128.clmulWindow a bb s lo hi =
+      (let r0 := F128.clmulStep a bb 0 s lo hi
+       let r1 := F128.clmulStep a bb 1 (s + 1) r0.lo r0.hi
+       let r2 := F128.clmulStep a bb 2 (s + 2) r1.lo r1.hi
+       F128.clmulStep a bb 3 (s + 3) r2.lo r2.hi) from rfl]
+  dsimp only
   rw [clmulStep_w128 _ _ _ _ _ _ (by decide) (by omega), clmulStep_w128 _ _ _ _ _ _ (by decide) (by omega),
     clmulStep_w128 _ _ _ _ _ _ (by decide) (by omega), clmulStep_w128 _ _ _ _ _ _ (by decide) (by omega)]
   simp only [natPoly_xor, natPoly_ite_shift, natPoly_mod_16, poly64, e1, e2, e3, UInt64.toNat_zero,

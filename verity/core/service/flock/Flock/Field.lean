@@ -34,18 +34,24 @@ def clmulGo (a : UInt64) : Nat → Nat → UInt64 → UInt64 → UInt64 → UInt
 /-- Carry-less product of two 64-bit words, as (low word, high word). -/
 def clmul (a b : UInt64) : UInt64 × UInt64 := clmulGo a 64 0 b 0 0
 
-/-- `(lo, hi) + a · x^i` if bit `t` of `bb` is set, else `(lo, hi)`, without a branch (`i < 64`; `a · x^i`'s high word
-is `(a >>> 1) >>> (63 − i)`, `0` at `i = 0`). -/
-@[inline] def clmulStep (a bb t i lo hi : UInt64) : F128 :=
-  let m := (0 : UInt64) - ((bb >>> t) &&& 1)
-  ⟨lo ^^^ ((a <<< i) &&& m), hi ^^^ (((a >>> 1) >>> (63 - i)) &&& m)⟩
+/-- The low word of `lo + a · x^i` if bit `t` of `bb` is set, else `lo`, without a branch (`i < 64`). -/
+@[inline] def clmulStepLo (a bb t i lo : UInt64) : UInt64 :=
+  lo ^^^ ((a <<< i) &&& ((0 : UInt64) - ((bb >>> t) &&& 1)))
 
-/-- `clmulStep` on bits `0, 1, 2, 3` of `bb`, as `a · x^s, …, a · x^(s+3)`. -/
+/-- The high word of `a · x^i` added into `hi` if bit `t` of `bb` is set, without a branch (`i < 64`; that word is
+`(a >>> 1) >>> (63 − i)`, `0` at `i = 0`). -/
+@[inline] def clmulStepHi (a bb t i hi : UInt64) : UInt64 :=
+  hi ^^^ (((a >>> 1) >>> (63 - i)) &&& ((0 : UInt64) - ((bb >>> t) &&& 1)))
+
+/-- `(lo, hi) + a · x^i` if bit `t` of `bb` is set, else `(lo, hi)`. -/
+@[inline] def clmulStep (a bb t i lo hi : UInt64) : F128 :=
+  ⟨clmulStepLo a bb t i lo, clmulStepHi a bb t i hi⟩
+
+/-- `clmulStep` on bits `0, 1, 2, 3` of `bb`, as `a · x^s, …, a · x^(s+3)`. Each word is its own chain, with no `let`
+shared between them: unfolded, a shared accumulator would appear twice per step. -/
 @[inline] def clmulWindow (a bb s lo hi : UInt64) : F128 :=
-  let r0 := clmulStep a bb 0 s lo hi
-  let r1 := clmulStep a bb 1 (s + 1) r0.lo r0.hi
-  let r2 := clmulStep a bb 2 (s + 2) r1.lo r1.hi
-  clmulStep a bb 3 (s + 3) r2.lo r2.hi
+  ⟨clmulStepLo a bb 3 (s + 3) (clmulStepLo a bb 2 (s + 2) (clmulStepLo a bb 1 (s + 1) (clmulStepLo a bb 0 s lo))),
+    clmulStepHi a bb 3 (s + 3) (clmulStepHi a bb 2 (s + 2) (clmulStepHi a bb 1 (s + 1) (clmulStepHi a bb 0 s hi)))⟩
 
 /-- `clmulGo` four bits at a time: `fuel` windows of `bb`, from bit `s`, stopping once no bit of `bb` is left. That
 `if` is also where a definitional check (`congr`, `rfl`) on symbolic words stops, as it stops at `clmulGo`'s; without it
@@ -54,8 +60,7 @@ def clmulWin (a : UInt64) : Nat → UInt64 → UInt64 → UInt64 → UInt64 → 
   | 0, _, _, lo, hi => ⟨lo, hi⟩
   | fuel + 1, s, bb, lo, hi =>
     if bb = 0 then ⟨lo, hi⟩ else
-    let r := clmulWindow a bb s lo hi
-    clmulWin a fuel (s + 4) (bb >>> 4) r.lo r.hi
+    clmulWin a fuel (s + 4) (bb >>> 4) (clmulWindow a bb s lo hi).lo (clmulWindow a bb s lo hi).hi
 
 /-- `clmul`, the one `mul` computes: sixteen 4-bit windows, branch-free, with no `Nat` but the fuel. -/
 @[inline] def clmulFast (a b : UInt64) : UInt64 × UInt64 :=
