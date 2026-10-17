@@ -11,8 +11,9 @@ session; keep the openings that pass. This file proves it from Flock's KS at the
 the deployed sampled verifier, each a hypothesis to discharge there.
 
 * `SessionKS`, `DrawLaw`, `Refuses`, `InteriorFixed`, `SessionOpens`: **the hypotheses**. Flock's KS at the session a
-  selection picks among the checked units; the draw law over `Design.Pa`; the scope refusal; the interior commitments
-  fixed by the first stage; and that a checked unit's Flock witness reveals openings making its proof unit correct.
+  selection picks among the checked units; the draw law over `Design.Pa` (`drawLaw_of_slots` proves it of the deployed
+  draw, `Sampling.Select.DrawLaw`); the scope refusal; the interior commitments fixed by the first stage; and that a
+  checked unit's Flock witness reveals openings making its proof unit correct.
 * `split`: **the deterministic half**. At an accepted run whose extraction fails, the failure event `Fails` holds or
   the extractor's own calls collide (`Commitment.Binds`).
 * `inner_bad_le`, `outer_bad_le`, `Pr_fails_le`: **the probabilistic half**. Each wait's truncation and union bound
