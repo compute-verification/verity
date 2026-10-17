@@ -518,7 +518,8 @@ class Eps:
     lucky: Mix                       # the cheater writing 1 − d̄ of them: ε_luck
     fillers: tuple[tuple[Filler, float], ...]
     T_honest_measured: float | None  # measured SMSP-cycles a committed word
-    T_honest: float                  # honest's SMSP-cycles a committed word: measured, else its fastest program's model
+    T_honest: float                  # honest's SMSP-cycles a committed word: measured, else the measured profile's time plus
+                                     # the model's difference to it, else its fastest program's model
     T_honest_source: str
     gamma: float                     # honest's time a useful MMA (`work` of them, `plain` plain) over the plain GEMM's
     sched: float | None
@@ -569,11 +570,13 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
     plain_mma = plain.T * h.words
     kernel = d.L == h.L and d.fold == h.fold and h.measured is not None
     measured = h.measured / words_per_mma if (kernel and not d.filler) else None
-    if kernel and d.filler:
-        bare_fill = setup(replace(d, filler=()), pi, data).baseline.T
-        t_h, t_src = h.measured / words_per_mma * hs.baseline.T / bare_fill, "measured × the model's filler cost"
+    if measured:
+        t_h, t_src = measured, "measured"
+    elif h.measured is not None:
+        own = setup(replace(d, L=h.L, fold=h.fold, filler=()), pi, data).baseline.T * h.words * h.depth / h.L
+        t_h, t_src = (h.measured - own) / words_per_mma + hs.baseline.T, "measured + the model's difference"
     else:
-        t_h, t_src = (measured, "measured") if measured else (hs.baseline.T, "model")
+        t_h, t_src = hs.baseline.T, "model"
     machine_eps = max(0.0, 1 - c.T / base.T)
     return Eps(design=d, honest=h, machine=pi.vector, operands=operands, credit=credit, q=q, as_built=s.as_built,
                baseline=base, cheat=c, lucky=lucky, fillers=s.fillers, T_honest_measured=measured, T_honest=t_h,

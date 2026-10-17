@@ -50,11 +50,14 @@ def test_the_measured_profile():
     m = E.eps(E.design("dither-duo"), PI, 8, credit="model")   # PROFILE's B(H)/f_max: ε_sched, ε_clock leave ε for γ
     assert m.sched is None and m.clock == 0 and m.machine_eps == e.machine_eps and m.total() < e.total()
     assert m.credit_ratio == pytest.approx(1 / ((1 - e.sched) * (1 - e.clock)), rel=1e-9)
-    xin = E.eps(E.design("dither-xin"), PI, 8)
-    assert xin.sched is None and xin.T_honest_source == "model"   # another fold: unmeasured
+    xin = E.eps(E.design("dither-xin"), PI, 8)   # another fold: H's measured overhead over its model carries over
+    assert xin.sched is None and xin.T_honest_source.startswith("measured +")
+    assert xin.T_honest - xin.baseline.T == pytest.approx(e.T_honest - e.baseline.T, rel=1e-9)
     up = E.eps(E.design("dither-duo").with_upfill(), PI, 8)
     assert up.as_built.T == pytest.approx(e.as_built.T, rel=1e-12)   # UPFILL fills UP's slack beside honest's own UNI
-    assert up.T_honest_source.startswith("measured ×") and up.sched == pytest.approx(e.sched, abs=1e-12)
+    assert up.T_honest_source.startswith("measured +") and up.sched == pytest.approx(e.sched, abs=1e-12)
+    fill = E.eps(E.design("dither-two-sided-fill"), PI, 8)
+    assert fill.T_honest - fill.baseline.T == pytest.approx(e.T_honest - e.baseline.T, rel=1e-9)
 
 
 def test_the_noise_sets_the_operand_floor():
