@@ -2,11 +2,11 @@
 The partition as a named query over the verifier's own program (`one_stage/partition.py`): core's `verity/partition/v1`
 object and its digest (C-Flock's `HmRow.checkPartitionObject` and `HmRow.partitionDigest`), and the queries one-stage
 applies to the program: the template queries (C-Flock's `TemplateQuery`), `Q_word` v1 at `X = 16` (`Flock.Extract`) and
-`Q_call` v1 at `X ≤ 16` (`Flock.Qcall`), each on a topological program only, as core's `evaluate` refuses any other. Every
-unit commits at most 16 bits, the literal limit: a program with a unit that commits more is refused, which `Q_word`'s
-width rule's `W` allows a unit of one value, a template query has no width rule, and `Q_call`'s leaves out the constants
-a unit holds (`committedBits`); so is a program with a template of no gate. The verifier holds its own copy of the program and applies
-the query itself; it never takes a population or a unit index on the prover's word.
+`Q_call` v1 at `X ≤ 16` (`Flock.Qcall`), each on a topological program only, as core's `evaluate` refuses any other. A
+`Q_word` or `Q_call` unit commits at most 16 bits, the literal limit: a program with a unit that commits more is refused,
+which `Q_word`'s width rule's `W` allows a unit of one value, and `Q_call`'s leaves out the constants a unit holds
+(`committedBits`); so is a program with a template of no gate. A template query has no width rule. The verifier holds its
+own copy of the program and applies the query itself; it never takes a population or a unit index on the prover's word.
 -/
 import Flock.HmRow
 import Flock.TemplateQuery
@@ -122,19 +122,12 @@ def committedBits (P : Flock.Program.Prog) (d : Nat) (units : Array (Nat × Nat)
         | _ => 0
     else bits) 0
 
-/-- `partition._check_units` on a template query's ranges: refused for a template of no gate, or one whose instance commits
-more than `UNIT_BITS` bits (`committedBits`), each template once. -/
+/-- `partition._check_units` on a template query's ranges: refused for a template of no gate. -/
 def checkTemplates (P : Flock.Program.Prog) (rs : Array TRange) : V Unit := do
   let root := (P.defs[P.root]!).body
-  let mut seen : Array String := #[]
   for r in rs do
-    if r.count == 0 || seen.contains r.template then continue
-    seen := seen.push r.template
-    let d := root.nodes[r.node]!.fn
-    let n := (P.defs[d]!).gates
-    if n == 0 then throw s!"query-refused: template {r.template} has no gate"
-    let bits := (← committedBits P d #[(0, n)])[0]!
-    if bits > UNIT_BITS then throw s!"query-refused: an instance of {r.template} commits {bits} bits, more than {UNIT_BITS}"
+    if r.count > 0 && (P.defs[root.nodes[r.node]!.fn]!).gates == 0 then
+      throw s!"query-refused: template {r.template} has no gate"
 
 /-- `partition._check_units` on `Q_call`'s Calls: refused when a unit commits more than `UNIT_BITS` bits (`committedBits`,
 constants counted, which `Q_call`'s width rule leaves out), each Definition once. -/
