@@ -1,12 +1,12 @@
 # The table route: a fresh word made by register-indexed lookups (QSTAR, note:20261017T0344Z-draft-eps1-qstar). Below
-# 2.03 lane instructions a word on sm_120 a word needs two 16-bit-index lookups at eight entries a 256-bit load, which
-# only L2 serves (fr16_c32: 1.906 measured, r20261017-042939-efd9). The LP prices such a word at q lane instructions in
-# any CUDA mix plus `bytes` of L2 reads, against an L2 facet at `l2` bytes a second; honest's own L2 traffic is not
-# charged, which gives the cheater all of L2.
-status = "provisional"
-source = "QSTAR (b): one IADD3 and two eighths of a 256-bit load a word, the family's ISA floor 1.25; 8 B of L2 a word (two 4-byte entries, no L1 reuse); L2 at QSTAR's 5–6 TB/s peak (fr16 sustains 3.3), not yet a DATASHEET row"
-q = 1.25
-bytes = 8.0
+# 2.03 issue slots a word on sm_120 a word must come from table loads, which at these sizes only L2 serves (fr16_c32:
+# 1.906 measured, r20261017-042939-efd9). The LP prices such a word at q lane instructions in any CUDA mix plus `bytes`
+# of L2 reads, against an L2 facet at `l2` bytes a second; honest's own L2 traffic is not charged, which gives the
+# cheater all of L2. The values are SCALAR-ROUTE as restated (`--lookup-bytes 6` for single-field tables).
+status = "named assumption"
+source = "SCALAR-ROUTE restated (coordinator 06:10Z, a named assumption for Daniel, resting on class P and ISA-CAP; note:20261017T0310Z-report-eps1-program): a fresh word costs ≥ 2.03 issue slots, or ≥ 3.5 B of table loads and ≥ 1.22 slots (≥ 6.0 B for single-field tables); L2 at QSTAR's 5–6 TB/s peak (fr16 sustains 3.3), not yet a DATASHEET row"
+q = 1.22
+bytes = 3.5
 l2 = 6.0e12
 sms = 188
 mhz = 2092
