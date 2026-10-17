@@ -122,7 +122,7 @@ theorem δc_code (H : Msg → Msg) (x : Msg) :
 a registration whose layout (`Slots.layout`) is the statement's partition and whose design (`slotDesign`) is the
 statement's. -/
 def RegMatches : Prop :=
-  ∀ x s Pt, c.parse x = some s → c.partition s.prog s.query = some Pt →
+  ∀ x s Pt, c.parse x = some s → c.partition s = some Pt →
     ∃ g l, reg x = some g ∧ SampledProofs.Slots.layout g.program g.query = .ok l ∧ Pt = slotPartition l ∧
       slotDesign g.rule g.program g.query g.table = .ok s.design
 
@@ -170,7 +170,7 @@ def FramedOne (H : Msg → Msg) : Prop :=
 session is accepted when the session, at coins that check some unit, accepts. -/
 def AcceptsOne (H : Msg → Msg) : Prop :=
   ∀ x {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin),
-    (∃ s Pt, c.parse x = some s ∧ c.partition s.prog s.query = some Pt ∧ InScope Pt s) →
+    (∃ s Pt, c.parse x = some s ∧ c.partition s = some Pt ∧ InScope Pt s) →
     (∀ hist m, c.step x hist = .say m → ((P.next x hist ω).eval H).1 = m) →
     ((code c reg L bytes sr sess).checked x r ≠ [] →
       ∀ xS vS, sess x (run H P c.V x ω r).seen = some (xS, vS) → vS.out = .acc) →
@@ -179,7 +179,7 @@ def AcceptsOne (H : Msg → Msg) : Prop :=
 /-- **`SessionsScope` at one session**: on a statement in scope, at coins that check some unit, the session's statement
 passes the deployed `--zk` scope check. -/
 def SessScope (H : Msg → Msg) : Prop :=
-  ∀ x s Pt, c.parse x = some s → c.partition s.prog s.query = some Pt → InScope Pt s →
+  ∀ x s Pt, c.parse x = some s → c.partition s = some Pt → InScope Pt s →
     ∀ {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin) xS vS,
       (code c reg L bytes sr sess).checked x r ≠ [] →
       sess x (run H P c.V x ω r).seen = some (xS, vS) → FlockDeploy.scopeCheck true xS = true
@@ -188,7 +188,7 @@ def SessScope (H : Msg → Msg) : Prop :=
 openings that pass the commitment's check, are the committed values and cover what the session reads under its
 statement `xS` encode (`wit`) a witness in `xS`'s relation. -/
 def SessWit (H : Msg → Msg) : Prop :=
-  ∀ x s Pt w, c.parse x = some s → c.partition s.prog s.query = some Pt → InScope Pt s →
+  ∀ x s Pt w, c.parse x = some s → c.partition s = some Pt → InScope Pt s →
     faulty H (commit c) s Pt w = ∅ →
     ∀ {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin) xS vS,
       (code c reg L bytes sr sess).checked x r ≠ [] →

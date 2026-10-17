@@ -63,7 +63,7 @@ session with statement `xS`, one Flock witness in its relation reveals, for ever
 unit correct. -/
 def SessionOpensOne (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) : Prop :=
   ∀ x s Pt (Ω : Type) (P : Prover Ω) ω (r : Fin (c.V.k x) → FlockDeploy.Coin) xS vS wF,
-    c.parse x = some s → c.partition s.prog s.query = some Pt → InScope Pt s →
+    c.parse x = some s → c.partition s = some Pt → InScope Pt s →
     (run H P c.V x ω r).out = .acc → sess x (run H P c.V x ω r).seen = some (xS, vS) →
     Claims.Flock.check (FlockDeploy.deployZk rel).parse xS wF = true →
     ∀ u, (∃ q : Fin (nPU (deploy rel (code c reg L bytes sr sess)) x),

@@ -82,7 +82,7 @@ def rejCm : Commitment Bool := ⟨fun _ _ => .ret false, fun _ _ _ => []⟩
 def toyProg : Prog := ⟨[.input], [0]⟩
 
 /-- The program, drawn `all`. -/
-def toyStmt : Stmt := ⟨toyProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def toyStmt : Stmt := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
 
 /-- One class of one stratum of one replay unit, the proof unit `[0, 1)`. -/
 def toyPart : Partition := ⟨[[[[(0, 1)]]]]⟩
@@ -178,7 +178,7 @@ noncomputable def sksD (Coin : Type) : Deploy Coin Unit Unit where
   V := accV Coin
   parse _ := some toyStmt
   scopeCheck _ := true
-  partition _ _ := some toyPart
+  partition _ := some toyPart
   commit := rejCm
   universal _ := ⟨[], []⟩
   flock := Flock.ksD Coin
@@ -203,7 +203,7 @@ noncomputable def compSD (Coin : Type) : Deploy Coin Unit Unit where
   V := rejV Coin
   parse _ := some toyStmt
   scopeCheck _ := true
-  partition _ _ := some toyPart
+  partition _ := some toyPart
   commit := accCm
   universal _ := ⟨[], []⟩
   flock := Flock.ksD Coin
@@ -231,7 +231,7 @@ def effSD (Coin : Type) : Deploy Coin (List Bool) Unit where
   V := accV Coin
   parse _ := none
   scopeCheck _ := true
-  partition _ _ := none
+  partition _ := none
   commit := accCm
   universal _ := ⟨[], []⟩
   flock := Flock.effD Coin

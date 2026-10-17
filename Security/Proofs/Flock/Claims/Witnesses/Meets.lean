@@ -77,7 +77,7 @@ theorem Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Rel
 
 /-- **A statement of the sampling scope**: the one-gate program that returns its input, under `Q_word` v1, with the
 design that checks every unit of its one class. -/
-def Sampling.scopeStmt : Claims.Sampling.Stmt := ⟨⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def Sampling.scopeStmt : Claims.Sampling.Stmt := ⟨[], ⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
 
 /-- Its partition: one class of one stratum of one replay unit, the one proof unit `[0, 1)`. -/
 def Sampling.scopePartition : Claims.Sampling.Partition := ⟨[[[[(0, 1)]]]]⟩

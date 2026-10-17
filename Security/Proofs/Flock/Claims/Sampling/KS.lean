@@ -424,7 +424,7 @@ that session covers, openings that make that unit correct, as `SessionOpens` say
 def SessionOpensSlots (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg)
     (S : Msg → ℕ) : Prop :=
   ∀ x s Pt (Ω : Type) (P : Prover Ω) ω r (p : ℕ) u' xS vS wF,
-    D.parse x = some s → D.partition s.prog s.query = some Pt → InScope Pt s →
+    D.parse x = some s → D.partition s = some Pt → InScope Pt s →
     (run H P D.V x ω r).out = .acc → p < S x → (D.checked x r)[p]? = some u' →
     D.session x u' (run H P D.V x ω r).seen = some (xS, vS) → Flock.check D.flock.parse xS wF = true →
     ∀ u, (∃ q : Fin (nPU D x), (D.checked x r)[q.val]? = some u) → D.session x u = D.session x u' →

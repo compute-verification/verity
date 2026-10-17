@@ -60,7 +60,7 @@ def Framed (H : Msg → Msg) : Prop :=
 the sessions is accepted when every checked unit's session that shows accepts. -/
 def AcceptsFramed (H : Msg → Msg) : Prop :=
   ∀ x {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin),
-    (∃ s Pt, c.parse x = some s ∧ c.partition s.prog s.query = some Pt ∧ InScope Pt s) →
+    (∃ s Pt, c.parse x = some s ∧ c.partition s = some Pt ∧ InScope Pt s) →
     (∀ hist m, c.step x hist = .say m → ((P.next x hist ω).eval H).1 = m) →
     (∀ u ∈ c.checked x r, ∀ xS vS, c.session x u (run H P c.V x ω r).seen = some (xS, vS) → vS.out = .acc) →
       (run H P c.V x ω r).out = .acc
@@ -69,7 +69,7 @@ def AcceptsFramed (H : Msg → Msg) : Prop :=
 session's statement passes the deployed `--zk` scope check (`FlockDeploy.scopeCheck true`), so it is in Flock's masked
 scope (`FlockDeploy.scopeMatches_zk`). -/
 def SessionsScope (H : Msg → Msg) : Prop :=
-  ∀ x s Pt, c.parse x = some s → c.partition s.prog s.query = some Pt → InScope Pt s →
+  ∀ x s Pt, c.parse x = some s → c.partition s = some Pt → InScope Pt s →
     ∀ {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin) u xS vS, u ∈ c.checked x r →
       c.session x u (run H P c.V x ω r).seen = some (xS, vS) → FlockDeploy.scopeCheck true xS = true
 
@@ -78,7 +78,7 @@ faulty unit, at any run whose coins check `u` and whose `u` session has statemen
 commitment's check under the roots, are the committed values `Wit.val` reads, and cover every position the session
 reads under `xS` that has a committed value, encode (`wit`) a witness in `xS`'s relation. -/
 def SessionWit (H : Msg → Msg) : Prop :=
-  ∀ x s Pt w, c.parse x = some s → c.partition s.prog s.query = some Pt → InScope Pt s →
+  ∀ x s Pt w, c.parse x = some s → c.partition s = some Pt → InScope Pt s →
     faulty H (commit c) s Pt w = ∅ →
     ∀ {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin) u xS vS, u ∈ c.checked x r →
       c.session x u (run H P c.V x ω r).seen = some (xS, vS) →
@@ -91,7 +91,7 @@ def SessionWit (H : Msg → Msg) : Prop :=
 session is the session of the unit checked at a slot below `c.sessions x`. One session that proves every drawn unit has
 it at `sessions = 1`, and one session per unit at the proof units' count (`sessionSlots_units`). -/
 def SessionSlots (H : Msg → Msg) : Prop :=
-  ∀ x, (∃ s Pt, c.parse x = some s ∧ c.partition s.prog s.query = some Pt ∧ InScope Pt s) →
+  ∀ x, (∃ s Pt, c.parse x = some s ∧ c.partition s = some Pt ∧ InScope Pt s) →
     ∀ {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin) u, u ∈ c.checked x r →
       ∃ p < c.sessions x, ∃ u', (c.checked x r)[p]? = some u' ∧
         c.session x u (run H P c.V x ω r).seen = c.session x u' (run H P c.V x ω r).seen
@@ -109,8 +109,8 @@ theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : 
   change c.parse x = some s' at hs'
   rw [hs] at hs'
   cases hs'
-  change c.partition s.prog s.query = some Pt at hP
-  change c.partition s.prog s.query = some Pt' at hP'
+  change c.partition s = some Pt at hP
+  change c.partition s = some Pt' at hP'
   rw [hP] at hP'
   cases hP'
   obtain ⟨xS, emb, hinj, hemb, hrun⟩ :=
