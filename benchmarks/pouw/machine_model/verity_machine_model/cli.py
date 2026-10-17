@@ -10,11 +10,12 @@
                                               the N cheapest attacks of each design (or of D) at NAME's prices
     machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) into data/ at EPOCH,
                                               the last epoch: each (kind, row) keeps the faster of its old and new line
-    machine-model eps [DESIGN] [--q Q] [--operands O] [--fold-cost R] [--fill X] [--upfill] [--vector V] [--json]
+    machine-model eps [DESIGN] [--q Q] [--q-uniform QU] [--operands O] [--fold-cost R] [--fill X] [--upfill] [--vector V] [--json]
                                               a design's ε budget (data/designs, default dither-duo) at q* = Q (default
                                               8): every term with its source, ε_machine's LP (honest's and the
                                               cheater's mix, binding rows and certificate π*), the ε(q*) curve for q*
-                                              in [0.5, 16] and the q* at which ε_machine reaches its floor; the
+                                              in [0.5, 16] (and for q*_U at q* = Q) and the q* at which ε_machine
+                                              reaches its floor; q*_U is q* unless given; the
                                               cheater's operand delivery is free (default), at the floor, or honest's;
                                               --fill adds X lane instructions a word of verified filler on lanes,
                                               --upfill filler keeping the uniform datapath busy
@@ -33,6 +34,7 @@ import argparse
 import json
 import sys
 import textwrap
+from dataclasses import replace
 from pathlib import Path
 
 from verity_machine_model import attacks as atk
@@ -159,7 +161,8 @@ def _design(args, name: str) -> E.Design:
     d = E.design(name, args.data)
     d = d.with_fold_cost(args.fold_cost) if args.fold_cost is not None else d
     d = d.with_fill(args.fill) if args.fill else d
-    return d.with_upfill() if args.upfill else d
+    d = d.with_upfill() if args.upfill else d
+    return d if args.q_uniform is None else replace(d, name=f"{d.name}@qu{args.q_uniform:g}", q_uniform=args.q_uniform)
 
 
 def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str) -> dict:
@@ -185,6 +188,7 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str)
                     "clock": d.clock.source, "luck": d.luck_source, "baseline": d.baseline_source,
                     "operands": e.honest.floor_source if operands == "floor" else operands},
         "curve": [[x, s.machine_eps(x)] for x in E.QS],
+        "curve_uniform": [[x, s.machine_eps(q, q_uniform=x)] for x in E.QS],
         "threshold": E.threshold(s), "threshold_lanes": E.threshold(s, uniform=False),
         "uniform_at_16": s.machine_eps(16, lanes=False),
     }
@@ -268,6 +272,9 @@ def _eps(args) -> int:
           f"{_thr(rec['threshold_lanes'])}; the uniform route alone at q* = 16: {_pct(rec['uniform_at_16'])}")
     print(textwrap.fill("ε_machine(q*): " + ", ".join(f"{x:g} {100 * y:.2f}%" for x, y in rec["curve"]), width=120,
                         initial_indent="  ", subsequent_indent="    "))
+    print(textwrap.fill(f"ε_machine(q*_U) at q* = {args.q:g}: "
+                        + ", ".join(f"{x:g} {100 * y:.2f}%" for x, y in rec["curve_uniform"]), width=120,
+                        initial_indent="  ", subsequent_indent="    "))
     return 0
 
 
@@ -293,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
     e = sub.add_parser("eps")
     e.add_argument("designs", nargs="*")
     e.add_argument("--q", type=float, default=8.0, help="q*, lane instructions a fresh word (default %(default)s)")
+    e.add_argument("--q-uniform", type=float, help="q*_U, uniform instructions a fresh word (default: q*)")
     e.add_argument("--operands", choices=E.OPERANDS, default="free",
                    help="the cheater's operand delivery on the tensor route (default %(default)s)")
     e.add_argument("--fold-cost", type=float, help="scale the design's fold to R lane instructions a word")

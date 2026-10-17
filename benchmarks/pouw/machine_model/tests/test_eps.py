@@ -170,6 +170,10 @@ def test_cli(capsys):
     assert d["design"] == "dither-two-sided+up" and d["operands"] == "free"
     assert d["terms"]["machine"] == pytest.approx(d["floor"]) and d["threshold"] == pytest.approx(2.029, abs=1e-3)
     assert len(d["curve"]) == 32 and d["curve"][0][0] == 0.5 and d["curve"][-1][0] == 16
+    assert d["curve_uniform"][7] == pytest.approx([4, d["terms"]["machine"]])   # q*_U = q* = 4
+    assert main(["eps", "--q-uniform", "32", "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["design"] == "dither-duo@qu32" and d["floor"] < d["terms"]["machine"] < E.eps(DUO, PI, 8).machine_eps
     assert main(["eps", "dither-two-sided", "--upfill", "--operands", "honest", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["terms"]["machine"] == 0 and d["threshold"] == pytest.approx(2.123, abs=1e-3)
