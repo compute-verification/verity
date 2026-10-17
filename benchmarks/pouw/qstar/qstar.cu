@@ -13,6 +13,9 @@
 //   co_*       a fused kernel: IMMA warps on the zero instance beside scalar warps of one arm, sharing every SM
 //   imma_p*    persistent IMMA on the zero instance, 8-warp blocks two an SM (imma_p) or 4-warp blocks three (imma_p3)
 //   co2_*, co3_*  that IMMA on n - co2 columns, and on a second stream fr16 on the other co2 (none: the control)
+//   design A (Ã = R, B̃ = Rc, both 0/1 dither bits): imma_bb its honest IMMA (imma_gen's kernel); bb its words, LOP3 AND +
+//   POPC + IADD3 a word; bx, bx_hs, bx_mix the depth-k bit product alone (out = O, no word a segment; CO-DITHER's x):
+//   AND + POPC, Harley–Seal carry-save, half each; co3_bb, co3_bx, co3_mix each on the second stream beside co3's IMMA
 //
 // Each timed loop is one segment an iteration (two for IMMA) between two SR_CLOCKLO reads, so count.py pins its
 // instructions (expect.json) and turns them into instructions a word. gpu_kit carries poisoning and the timed items.
@@ -478,11 +481,170 @@ __global__ void __launch_bounds__(CO_T, 1) k_co(const uint4* __restrict__ Ap, co
   }
 }
 
+// ---- design A (note:20261017T0340Z-draft-skip): both operands dither bits, Ã = R and B̃ = Rc ∈ {0,1}, so a word's
+// segment is popc(R_ℓ[i] & C_ℓ[j]), with R_ℓ[i] and C_ℓ[j] the 32 bits as in Rw. A thread is BR = 4 consecutive rows by
+// BCPT = 4 consecutive columns; a block of 64 is BG × BG = 8 × 8 of them, 32 rows by 32 columns, so each 128-bit row
+// and column load is shared by 8 threads through L1 and L2 carries a quarter byte a lane-word (4 columns a block
+// carried 1 byte, which bound every arm at L2's ≈ 3.3 TB/s). The operands are group-major, [rows/4][L + 4] uint4
+// (pack_g4), so a thread's segments are consecutive: one 128-bit load a segment for its rows and one for its columns, at
+// immediate offsets from two pointers that move once an iteration. Segments are loaded ahead into the registers their
+// ANDs have just read, as in imma_warp.
+constexpr int BR = 4, BBT = 64, BCPT = 4, BG = 8;
+struct Seg {
+  uint4 r, c;
+};
+__device__ __forceinline__ uint32_t w4(const uint4& v, int e) { return e == 0 ? v.x : e == 1 ? v.y : e == 2 ? v.z : v.w; }
+// A carry-save adder's two LOP3s, written as lop3 so ptxas keeps one instruction each
+__device__ __forceinline__ uint32_t maj3(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm("lop3.b32 %0, %1, %2, %3, 0xE8;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+__device__ __forceinline__ uint32_t xor3(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t r;
+  asm("lop3.b32 %0, %1, %2, %3, 0x96;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
+  return r;
+}
+__device__ __forceinline__ void seg_and(const Seg& s, uint32_t (&x)[BR][BCPT]) {
+#pragma unroll
+  for (int a = 0; a < BR; a++)
+#pragma unroll
+    for (int c = 0; c < BCPT; c++) x[a][c] = w4(s.r, a) & w4(s.c, c);
+}
+
+// Design A's words: T += popc(R & C) (LOP3, POPC, IADD3) and the duo fold, every segment; two segments an iteration.
+template <bool TIMED>
+__device__ __forceinline__ void bb_thread(const uint4* __restrict__ Rg, const uint4* __restrict__ Cg, int L, int n,
+                                          int i0, int j0, uint32_t* __restrict__ out, Clk* rec) {
+  int acc[BR][BCPT];
+  uint32_t y[BR][BCPT], z[BR][BCPT];
+#pragma unroll
+  for (int a = 0; a < BR; a++)
+#pragma unroll
+    for (int c = 0; c < BCPT; c++) {
+      acc[a][c] = 0;
+      y[a][c] = chain_y0((uint32_t)(i0 + a) * n + j0 + c);
+      z[a][c] = chain_z0(y[a][c]);
+    }
+  const uint4 *rp = Rg + (size_t)(i0 / 4) * (L + 4), *cp = Cg + (size_t)(j0 / 4) * (L + 4);
+  Seg s0{rp[0], cp[0]}, s1{rp[1], cp[1]};
+  auto step = [&](int ell, Seg& s, int h) {
+    uint32_t x[BR][BCPT];
+    seg_and(s, x);
+    s = Seg{rp[2 + h], cp[2 + h]};
+    KEYS(ell)
+#pragma unroll
+    for (int a = 0; a < BR; a++)
+#pragma unroll
+      for (int c = 0; c < BCPT; c++) {
+        acc[a][c] += __popc(x[a][c]);
+        FOLD(y[a][c], z[a][c], acc[a][c]);
+      }
+  };
+  QS_BEGIN
+#pragma unroll 1
+  for (int ell = 0; ell < L; ell += 2) {
+    step(ell, s0, 0);
+    step(ell + 1, s1, 1);
+    rp += 2, cp += 2;
+  }
+  QS_END(rec)
+#pragma unroll
+  for (int a = 0; a < BR; a++)
+#pragma unroll
+    for (int c = 0; c < BCPT; c++) out[(size_t)(i0 + a) * n + j0 + c] = rf_duo_final(y[a][c], z[a][c]);
+}
+
+// x: the depth-k bit product O[i, j] = Σ_ℓ popc(R_ℓ[i] & C_ℓ[j]) with no word a segment (out = O), eight segments an
+// iteration. Rows a < NP count with POPC (AND, POPC a lane-word, IADD3 a pair: the XU pipe); the others with Harley–Seal
+// carry-save over the eight (8 AND + 7 CSAs of two LOP3 + 1 POPC: the ALU pipe), so NP sets the two pipes' balance.
+template <int NP, bool TIMED>
+__device__ __forceinline__ void bx_thread(const uint4* __restrict__ Rg, const uint4* __restrict__ Cg, int L, int n,
+                                          int i0, int j0, uint32_t* __restrict__ out, Clk* rec) {
+  constexpr int CPT = BCPT;
+  int acc[BR][CPT];
+  uint32_t one[BR][CPT], two[BR][CPT], four[BR][CPT], t2[BR][CPT], t4[BR][CPT];
+#pragma unroll
+  for (int a = 0; a < BR; a++)
+#pragma unroll
+    for (int c = 0; c < CPT; c++) acc[a][c] = 0, one[a][c] = two[a][c] = four[a][c] = t2[a][c] = t4[a][c] = 0;
+  const uint4 *rp = Rg + (size_t)(i0 / 4) * (L + 4), *cp = Cg + (size_t)(j0 / 4) * (L + 4);
+  Seg sb[4];
+#pragma unroll
+  for (int q = 0; q < 4; q++) sb[q] = Seg{rp[q], cp[q]};
+  auto pair = [&](int q) {  // segments 2q, 2q + 1 of the eight, in sb[2(q & 1)], sb[2(q & 1) + 1]
+    uint32_t x0[BR][CPT], x1[BR][CPT];
+    seg_and(sb[2 * (q & 1)], x0);
+    seg_and(sb[2 * (q & 1) + 1], x1);
+    sb[2 * (q & 1)] = Seg{rp[2 * q + 4], cp[2 * q + 4]};
+    sb[2 * (q & 1) + 1] = Seg{rp[2 * q + 5], cp[2 * q + 5]};
+#pragma unroll
+    for (int a = 0; a < BR; a++)
+#pragma unroll
+      for (int c = 0; c < CPT; c++) {
+        if (a < NP) {
+          acc[a][c] += __popc(x0[a][c]) + __popc(x1[a][c]);
+          continue;
+        }
+        uint32_t &o = one[a][c], &w = two[a][c], &f = four[a][c];
+        const uint32_t h = maj3(o, x0[a][c], x1[a][c]);
+        o = xor3(o, x0[a][c], x1[a][c]);
+        if (!(q & 1)) {
+          t2[a][c] = h;
+          continue;
+        }
+        const uint32_t h4 = maj3(w, t2[a][c], h);
+        w = xor3(w, t2[a][c], h);
+        if (q == 1) {
+          t4[a][c] = h4;
+          continue;
+        }
+        const uint32_t e8 = maj3(f, t4[a][c], h4);
+        f = xor3(f, t4[a][c], h4);
+        acc[a][c] += __popc(e8);
+      }
+  };
+  QS_BEGIN
+#pragma unroll 1
+  for (int g = 0; g < L; g += 8) {
+    pair(0);
+    pair(1);
+    pair(2);
+    pair(3);
+    rp += 8, cp += 8;
+  }
+  QS_END(rec)
+#pragma unroll
+  for (int a = 0; a < BR; a++)
+#pragma unroll
+    for (int c = 0; c < CPT; c++)
+      out[(size_t)(i0 + a) * n + j0 + c] =
+          a < NP ? (uint32_t)acc[a][c]
+                 : 8u * acc[a][c] + 4u * __popc(four[a][c]) + 2u * __popc(two[a][c]) + __popc(one[a][c]);
+}
+// grid (m/(BG·BR), columns/(BG·BCPT)): the columns [jbase, jbase + BG·BCPT·gridDim.y)
+#define BIT_I0 ((blockIdx.x * BG + threadIdx.x / BG) * BR)
+#define BIT_J0 (jbase + (blockIdx.y * BG + threadIdx.x % BG) * BCPT)
+extern "C" __global__ void __launch_bounds__(BBT) k_bb(const uint4* __restrict__ Rg, const uint4* __restrict__ Cg,
+                                                       uint32_t* __restrict__ out, int L, int n, int jbase, Clk* rec) {
+  bb_thread<true>(Rg, Cg, L, n, BIT_I0, BIT_J0, out, rec);
+}
+#define BX_KERNEL(NAME, NP)                                                                                       \
+  extern "C" __global__ void __launch_bounds__(BBT) NAME(const uint4* __restrict__ Rg, const uint4* __restrict__ Cg, \
+                                                         uint32_t* __restrict__ out, int L, int n, int jbase,      \
+                                                         Clk* rec) {                                               \
+    bx_thread<NP, true>(Rg, Cg, L, n, BIT_I0, BIT_J0, out, rec);                                                   \
+  }
+BX_KERNEL(k_bx, BR)
+BX_KERNEL(k_bx_hs, 0)
+BX_KERNEL(k_bx_mix, BR / 2)
+
 // ---- host: inputs, packings, the reference receipt -------------------------------------------------------------------
 struct Inputs {
   int m, k, n, L;
   std::vector<int8_t> At, Bt;  // generic, m×k and n×k
   std::vector<int8_t> R, U;    // zero instance, m×k (0/1) and n×32 (±1..±64)
+  std::vector<int8_t> Rc;      // design A's column bits, n×k (0/1); its Ã is R
 };
 
 static Inputs make_inputs(int m, int k, int n, unsigned seed) {
@@ -497,6 +659,8 @@ static Inputs make_inputs(int m, int k, int n, unsigned seed) {
   for (auto& v : in.Bt) v = (int8_t)s8(g);
   for (auto& v : in.R) v = (int8_t)bit(g);
   for (auto& v : in.U) v = (int8_t)(sign(g) ? mag(g) : -mag(g));
+  in.Rc.resize((size_t)n * k);
+  for (auto& v : in.Rc) v = (int8_t)bit(g);
   return in;
 }
 
@@ -548,6 +712,19 @@ static std::vector<uint32_t> pack_rw(const std::vector<int8_t>& R, int m, int k)
     }
   return out;
 }
+// Group-major bits [rows/4][L + 4][4]: word e of group g, segment ℓ, is row 4g + e's 32 bits (bit p = X[4g + e, 32ℓ + p]);
+// the four last segments are zero (the prefetches)
+static std::vector<uint32_t> pack_g4(const std::vector<int8_t>& X, int rows, int k) {
+  const int L = k / SEG;
+  std::vector<uint32_t> out((size_t)rows * (L + 4), 0);
+  for (int r = 0; r < rows; r++)
+    for (int ell = 0; ell < L; ell++) {
+      uint32_t w = 0;
+      for (int p = 0; p < SEG; p++) w |= (uint32_t)(X[(size_t)r * k + ell * SEG + p] & 1) << p;
+      out[((size_t)(r / 4) * (L + 4) + ell) * 4 + r % 4] = w;
+    }
+  return out;
+}
 // U's bit planes [n][8]: bit p of P[j][b] is bit b of U[j, p] as a byte
 static std::vector<uint32_t> planes(const std::vector<int8_t>& U, int n) {
   std::vector<uint32_t> out((size_t)n * 8, 0);
@@ -580,6 +757,17 @@ static std::vector<uint32_t> ref_receipt(const int8_t* A, const int8_t* B, int k
   }
   return out;
 }
+// The plain dot O[i, j] = Σ_t A[i, t] B[j, t] of each pair (the x arms' output)
+static std::vector<uint32_t> ref_dot(const int8_t* A, const int8_t* B, int k,
+                                     const std::vector<std::pair<int, int>>& pairs) {
+  std::vector<uint32_t> out(pairs.size());
+  for (size_t q = 0; q < pairs.size(); q++) {
+    int acc = 0;
+    for (int t = 0; t < k; t++) acc += (int)A[(size_t)pairs[q].first * k + t] * (int)B[(size_t)pairs[q].second * k + t];
+    out[q] = (uint32_t)acc;
+  }
+  return out;
+}
 template <class T>
 static T* upload(const std::vector<T>& h) {
   T* d = nullptr;
@@ -590,20 +778,23 @@ static T* upload(const std::vector<T>& h) {
 
 enum Arm {
   IMMA_GEN, IMMA_ZERO, DP4A_GEN, DP4A_ZERO, BITS, FR8, FR16_C16, FR16_C32, CO_NONE, CO_FR8, CO_BITS,
-  IMMA_P, CO2_NONE, CO2_FR16, CO2_C16, IMMA_P3, CO3_NONE, CO3_C32, NARM
+  IMMA_P, CO2_NONE, CO2_FR16, CO2_C16, IMMA_P3, CO3_NONE, CO3_C32,
+  IMMA_BB, BB, BX, BX_HS, BX_MIX, CO3_BB, CO3_BX, CO3_MIX, NARM
 };
 static const char* NAMES[NARM] = {"imma_gen", "imma_zero", "dp4a_gen", "dp4a_zero", "bits",     "fr8",
                                   "fr16_c16", "fr16_c32",  "co_none",  "co_fr8",    "co_bits",  "imma_p",
-                                  "co2_none", "co2_fr16",  "co2_c16",  "imma_p3",   "co3_none", "co3_c32"};
-static bool zero_arm(Arm a) { return a != IMMA_GEN && a != DP4A_GEN; }
+                                  "co2_none", "co2_fr16",  "co2_c16",  "imma_p3",   "co3_none", "co3_c32",
+                                  "imma_bb",  "bb",        "bx",       "bx_hs",     "bx_mix",   "co3_bb",
+                                  "co3_bx",   "co3_mix"};
 
 struct Dev {
   int m, k, n, L, share, co2, sms, p_smem2, p_smem3;
   cudaStream_t s2;
   cudaEvent_t fork, join;
   const uint4 *Ap_g, *Ap_z, *Aw_g, *Aw_z, *Bw_g, *Bw_z;
-  const uint2 *Bp_g, *Uf;
+  const uint2 *Bp_g, *Uf, *Bp_b;
   const uint32_t *Rw, *P;
+  const uint4 *Rg, *Cg;
   const int8_t* U;
   int* H;
   uint32_t* T;
@@ -616,19 +807,46 @@ constexpr size_t FR16_TABLE_BYTES = (size_t)64 << 20;  // a launch's passes, in 
 static int co_ni(const Dev& d) { return d.n - std::max(256, (d.n / d.share) / 256 * 256); }
 // The two-stream arms: k_imma_p on [0, n - co2) (co2*: 8-warp blocks two an SM; co3*: 4-warp blocks three an SM) and
 // fr16 on [n - co2, n) on a second stream (cpt 32 for co2_fr16 and co3_c32, 16 for co2_c16); imma_p* take all n.
+// co3_bb, co3_bx and co3_mix put design A's bb, bx or bx_mix on the second stream instead.
 struct Co {
   int warps, cpt, ni;
+  Arm bit;  // the design-A arm on the second stream, or NARM
 };
 static Co co_of(Arm a, const Dev& d) {
-  const int w = a == IMMA_P3 || a == CO3_NONE || a == CO3_C32 ? 4 : 8;
+  const Arm bit = a == CO3_BB ? BB : a == CO3_BX ? BX : a == CO3_MIX ? BX_MIX : NARM;
+  const int w = a == IMMA_P3 || a == CO3_NONE || a == CO3_C32 || bit != NARM ? 4 : 8;
   const int cpt = a == CO2_FR16 || a == CO3_C32 ? 32 : a == CO2_C16 ? 16 : 0;
-  return {w, cpt, a == IMMA_P || a == IMMA_P3 ? d.n : d.n - d.co2};
+  return {w, cpt, a == IMMA_P || a == IMMA_P3 ? d.n : d.n - d.co2, bit};
+}
+// The reference a column of an arm's output is checked against: the generic receipt, the zero instance's, design A's,
+// or design A's plain dot (the x arms)
+enum Ref { REF_G, REF_Z, REF_B, REF_O };
+static Ref ref_of(Arm a, int j, const Dev& d) {
+  switch (a) {
+    case IMMA_GEN:
+    case DP4A_GEN: return REF_G;
+    case IMMA_BB:
+    case BB: return REF_B;
+    case BX:
+    case BX_HS:
+    case BX_MIX: return REF_O;
+    case CO3_BB:
+    case CO3_BX:
+    case CO3_MIX: return j < co_of(a, d).ni ? REF_Z : a == CO3_BB ? REF_B : REF_O;
+    default: return REF_Z;
+  }
 }
 // The columns written, for the gate: a control leaves the scalar columns unwritten
 static int written(Arm a, const Dev& d) {
   return a == CO_NONE ? co_ni(d) : a == CO2_NONE || a == CO3_NONE ? co_of(a, d).ni : d.n;
 }
 
+// Design A's arm a (bb, bx, bx_hs, bx_mix) on the columns [j0, j1)
+static void bit_launch(const Dev& d, Arm a, int j0, int j1, cudaStream_t s) {
+  const dim3 grid(d.m / (BG * BR), (j1 - j0) / (BG * BCPT));
+  auto* k = a == BB ? k_bb : a == BX ? k_bx : a == BX_HS ? k_bx_hs : k_bx_mix;
+  k<<<grid, BBT, 0, s>>>(d.Rg, d.Cg, d.out, d.L, d.n, j0, d.rec);
+}
 // fr16 on the columns [j0, j1): per launch, the tables of P passes of cpt columns, then their lookups
 static void fr16_launch(const Dev& d, int cpt, int j0, int j1, cudaStream_t s) {
   const int m = d.m, n = d.n, L = d.L, P = (int)(FR16_TABLE_BYTES / ((size_t)2 * 65536 * cpt * 4));
@@ -646,9 +864,11 @@ static void launch(Arm a, const Dev& d, cudaStream_t s) {
   const int m = d.m, n = d.n, L = d.L;
   switch (a) {
     case IMMA_GEN:
+    case IMMA_BB:
     case IMMA_ZERO: {
       dim3 grid(m / 16, n / (8 * WN * 8));
       if (a == IMMA_GEN) k_imma_gen<<<grid, 256, 0, s>>>(d.Ap_g, d.Bp_g, d.out, L, n, d.rec);
+      else if (a == IMMA_BB) k_imma_gen<<<grid, 256, 0, s>>>(d.Ap_z, d.Bp_b, d.out, L, n, d.rec);
       else k_imma_zero<<<grid, 256, 0, s>>>(d.Ap_z, d.Uf, d.out, L, n, d.rec);
       break;
     }
@@ -661,22 +881,30 @@ static void launch(Arm a, const Dev& d, cudaStream_t s) {
     case FR8: k_fr8<<<dim3(m / F8T, n / F8C), F8T, F8_SMEM, s>>>(d.Rw, d.U, d.out, L, m, n, d.rec); break;
     case FR16_C16:
     case FR16_C32: fr16_launch(d, a == FR16_C16 ? 16 : 32, 0, n, s); break;
+    case BB:
+    case BX:
+    case BX_HS:
+    case BX_MIX: bit_launch(d, a, 0, n, s); break;
     case IMMA_P:
     case CO2_NONE:
     case CO2_FR16:
     case CO2_C16:
     case IMMA_P3:
     case CO3_NONE:
-    case CO3_C32: {
+    case CO3_C32:
+    case CO3_BB:
+    case CO3_BX:
+    case CO3_MIX: {
       const Co c = co_of(a, d);
-      if (c.cpt) {
+      if (c.cpt || c.bit != NARM) {
         CK(cudaEventRecord(d.fork, s));
         CK(cudaStreamWaitEvent(d.s2, d.fork, 0));
-        fr16_launch(d, c.cpt, c.ni, n, d.s2);
+        if (c.cpt) fr16_launch(d, c.cpt, c.ni, n, d.s2);
+        else bit_launch(d, c.bit, c.ni, n, d.s2);
       }
       if (c.warps == 8) k_imma_p<<<2 * d.sms, 256, d.p_smem2, s>>>(d.Ap_z, d.Uf, d.out, L, n, m / 16, c.ni);
       else k_imma_p<<<3 * d.sms, 128, d.p_smem3, s>>>(d.Ap_z, d.Uf, d.out, L, n, m / 16, c.ni);
-      if (c.cpt) {
+      if (c.cpt || c.bit != NARM) {
         CK(cudaEventRecord(d.join, d.s2));
         CK(cudaStreamWaitEvent(s, d.join, 0));
       }
@@ -729,8 +957,8 @@ int main(int argc, char** argv) {
   if (arms.empty())
     for (int a = 0; a < NARM; a++) arms.push_back((Arm)a);
   const int L = k / SEG;
-  if (L > MAXL || m % 512 || n % 512 || k % (2 * SEG) || co2 % 256 || co2 >= n) {
-    fprintf(stderr, "ERR shape: m, n multiples of 512, k of 64, k/32 <= %d, --co2 a multiple of 256 below n\n", MAXL);
+  if (L > MAXL || m % 512 || n % 512 || k % (8 * SEG) || co2 % 256 || co2 >= n) {
+    fprintf(stderr, "ERR shape: m, n multiples of 512, k of 256, k/32 <= %d, --co2 a multiple of 256 below n\n", MAXL);
     return 2;
   }
   cudaDeviceProp prop;
@@ -758,6 +986,9 @@ int main(int argc, char** argv) {
   d.Rw = upload(pack_rw(in.R, m, k));
   d.P = upload(planes(in.U, n));
   d.U = upload(in.U);
+  d.Bp_b = (const uint2*)upload(pack_b(in.Rc, n, k));
+  d.Rg = (const uint4*)upload(pack_g4(in.R, m, k));
+  d.Cg = (const uint4*)upload(pack_g4(in.Rc, n, k));
   CK(cudaMalloc(&d.H, (size_t)4 << 20));
   CK(cudaMalloc(&d.T, FR16_TABLE_BYTES));
   CK(cudaMalloc(&d.out, (size_t)m * n * 4));
@@ -783,9 +1014,11 @@ int main(int argc, char** argv) {
     for (int t = 0; t < 4096; t++) pairs.push_back({(int)(pg() % m), (int)(pg() % n)});
     const std::vector<uint32_t> ref_g = ref_receipt(in.At.data(), in.Bt.data(), k, n, pairs);
     const std::vector<uint32_t> ref_z = ref_receipt(in.R.data(), Su.data(), k, n, pairs);
+    const std::vector<uint32_t> ref_b = ref_receipt(in.R.data(), in.Rc.data(), k, n, pairs);
+    const std::vector<uint32_t> ref_o = ref_dot(in.R.data(), in.Rc.data(), k, pairs);
+    const std::vector<uint32_t>* refs[4] = {&ref_g, &ref_z, &ref_b, &ref_o};
     bool all = true;
     for (Arm a : arms) {
-      const std::vector<uint32_t>& ref = zero_arm(a) ? ref_z : ref_g;
       const int jmax = written(a, d);
       size_t checked = 0, armchecked = 0;
       gk::PoisonGate g = gk::poison_gate(
@@ -796,7 +1029,8 @@ int main(int argc, char** argv) {
             for (size_t q = 0; q < pairs.size(); q++) {
               if (pairs[q].second >= jmax) continue;
               checked++;
-              if (r[(size_t)pairs[q].first * n + pairs[q].second] != ref[q]) return false;
+              if (r[(size_t)pairs[q].first * n + pairs[q].second] != (*refs[ref_of(a, pairs[q].second, d)])[q])
+                return false;
             }
             armchecked = std::max(armchecked, checked);  // the poisoned control stops at its first mismatch
             return checked > 0;
@@ -832,8 +1066,11 @@ int main(int argc, char** argv) {
       }
     const double med = gk::median(ms), f = mhz.empty() ? NAN : gk::median(mhz);
     const double w = (double)m * written(arms[a], d) * L;
-    printf("QSTAR arm=%s m=%d k=%d n=%d words=%.0f ms=%.6f ps_per_word=%.4f words_per_sm_clk=%.4f sm_mhz=%.0f\n",
-           NAMES[arms[a]], m, k, n, w, med, 1e9 * med / w, w / (med * 1e-3 * prop.multiProcessorCount * f * 1e6), f);
+    const double smsp_cyc = med * 1e-3 * f * 1e6 * prop.multiProcessorCount * 4;  // a word is 32 products
+    printf("QSTAR arm=%s m=%d k=%d n=%d words=%.0f ms=%.6f ps_per_word=%.4f words_per_sm_clk=%.4f sm_mhz=%.0f "
+           "smsp_cyc_per_4096=%.3f\n",
+           NAMES[arms[a]], m, k, n, w, med, 1e9 * med / w, w / (med * 1e-3 * prop.multiProcessorCount * f * 1e6), f,
+           smsp_cyc / (w * SEG / 4096.0));
   }
   if (!items.empty()) {
     FILE* fi = fopen(items.c_str(), "w");
