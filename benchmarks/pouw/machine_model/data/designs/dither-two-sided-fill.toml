@@ -1,6 +1,7 @@
 # Two-sided dither with verified lane filler: the filler dilutes what the cheater saves on operand delivery, which SPEC's
-# conservative contract prices at 0 (note:20261017T0324Z-draft-eps1-spec §0.5), at the cost of γ. With `--upfill` it is
-# under 1% at q* ≥ 2.03 and γ 2.71 (note:20261017T0320Z-draft-eps1-calc).
+# conservative contract prices at 0 (note:20261017T0324Z-draft-eps1-spec §0.5), at the cost of γ. Its reading with
+# `--upfill` (under 1% at q* ≥ 2.03 and γ 2.71, note:20261017T0320Z-draft-eps1-calc) is not adopted: decision 73 drops
+# UPFILL, a uniform instruction taking an issue slot (EPS1 P10, r20261017-055801-e051).
 name = "dither-two-sided-fill"
 summary = "Two-sided dither, duo at L = 32, and 4.5 lane instructions a word of verified filler"
 honest = "e-l7qs"
