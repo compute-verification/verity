@@ -31,7 +31,8 @@
 // Fold-warp modes M (the time split): FULL (the kernel of record), EXT (read and extract, no duo; C written), LD (read,
 // and K4S's restore or I8C's copy, nothing computed), MMAONLY (wait for each word and release it, no read: the tensor
 // and the operand pipeline alone), FOLDONLY (no tensor, no TMEM: the fold warps extract and fold register words, as
-// many as FULL absorbs).
+// many as FULL absorbs), and MMARES and FULLRES, MMAONLY and FULL with the operands resident in shared memory (the
+// tensor without the operand feed; the kernel as a perfect feed would leave it). pf8_res is plain FP8 so.
 //
 // Modes:
 //   pgemm selftest                   host only: k4s's plane identity on every pair, E4M3 round trip, tile_planes'
@@ -75,7 +76,11 @@ constexpr int SMEM_RING = 192 * 1024;
 constexpr uint32_t MAGIC_BITS = 0x4B400000u;
 
 enum Route { K4S = 0, I8C = 1, I8R = 2, PF8 = 3, PI8 = 4, K4P = 5 };
-enum Mode { FULL = 0, EXT = 1, LD = 2, MMAONLY = 3, FOLDONLY = 4 };
+enum Mode { FULL = 0, EXT = 1, LD = 2, MMAONLY = 3, FOLDONLY = 4, MMARES = 5, FULLRES = 6 };
+// MMARES and FULLRES are MMAONLY and FULL with resident operands: the loader fills the ring once and then completes each
+// stage's barrier without a copy, so the MMAs reread stale tiles (timing only: C and the receipts are wrong).
+DC_HD constexpr int fold_mode(int m) { return m == MMARES ? MMAONLY : m == FULLRES ? FULL : m; }
+DC_HD constexpr bool resident(int m) { return m == MMARES || m == FULLRES; }
 DC_HD constexpr bool is_k4(int r) { return r == K4S || r == K4P; }
 DC_HD constexpr int planes_of(int r) { return is_k4(r) ? 2 : 1; }
 DC_HD constexpr bool is_plain(int r) { return r == PF8 || r == PI8; }
@@ -195,11 +200,12 @@ DC_DEV void fold_all(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], const uint32_t* v) {
   }
 }
 
-template <int R, int M, int L, int FW>
+template <int R, int MK, int L, int FW>
 __global__ void __launch_bounds__(64 + 128 * FW, 1)
     pg100(const uint8_t* A, const uint8_t* B, int m, int n, int k, uint32_t seed, int32_t* C, uint32_t* Rc,
           int write, const uint32_t* magic, uint64_t* clk) {
 #if defined(__CUDA_ARCH_FEAT_SM100_ALL)
+  constexpr int M = fold_mode(MK);
   __shared__ uint64_t clk0[2];  // in shared memory: registers held across the kernel cost the k4 routes spills
   if (clk && threadIdx.x == 0) {
     uint64_t g0;
@@ -250,13 +256,17 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
         const int slot = st % S;
         if (st >= S) mbar_wait(&empty[slot], ((st / S) & 1) ^ 1);
         if (elect_one()) {
-          mbar_expect_tx(&full[slot], stage_bytes(R));
-          const uint32_t dst = ring0 + slot * stage_bytes(R);
+          if (resident(MK) && st >= S) {
+            mbar_arrive(&full[slot]);
+          } else {
+            mbar_expect_tx(&full[slot], stage_bytes(R));
+            const uint32_t dst = ring0 + slot * stage_bytes(R);
 #pragma unroll
-          for (int p = 0; p < P; p++) {
-            bulk_g2s(dst + p * a_tile, A + (((size_t)p * (m / BM) + tm) * kst + st) * a_tile, a_tile, &full[slot]);
-            bulk_g2s(dst + P * a_tile + p * b_tile, B + (((size_t)p * (n / N) + tn) * kst + st) * b_tile, b_tile,
-                     &full[slot]);
+            for (int p = 0; p < P; p++) {
+              bulk_g2s(dst + p * a_tile, A + (((size_t)p * (m / BM) + tm) * kst + st) * a_tile, a_tile, &full[slot]);
+              bulk_g2s(dst + P * a_tile + p * b_tile, B + (((size_t)p * (n / N) + tn) * kst + st) * b_tile, b_tile,
+                       &full[slot]);
+            }
           }
         }
         __syncwarp();
@@ -525,11 +535,11 @@ static const char* route_name(int r) {
   return n[r];
 }
 static const char* mode_name(int m) {
-  static const char* n[] = {"full", "ext", "ld", "mma", "foldonly"};
+  static const char* n[] = {"full", "ext", "ld", "mma", "foldonly", "mmares", "fullres"};
   return n[m];
 }
 static std::string arm_name(const Arm& a) {
-  if (is_plain(a.r)) return route_name(a.r);
+  if (is_plain(a.r)) return std::string(route_name(a.r)) + (a.m == FULLRES ? "_res" : "");
   return std::string(route_name(a.r)) + "_L" + std::to_string(a.L) + "_fw" + std::to_string(a.fw) + "_" +
          mode_name(a.m);
 }
@@ -574,6 +584,8 @@ static bool launch_m(const Arm& a, dim3 g, const uint8_t* A, const uint8_t* B, i
     case EXT: return launch_l<R, EXT>(a, g, A, B, m, n, k, s, C, Rc, wr, st);
     case LD: return launch_l<R, LD>(a, g, A, B, m, n, k, s, C, Rc, wr, st);
     case MMAONLY: return launch_l<R, MMAONLY>(a, g, A, B, m, n, k, s, C, Rc, wr, st);
+    case MMARES: return launch_l<R, MMARES>(a, g, A, B, m, n, k, s, C, Rc, wr, st);
+    case FULLRES: return launch_l<R, FULLRES>(a, g, A, B, m, n, k, s, C, Rc, wr, st);
     default: return launch_l<R, FOLDONLY>(a, g, A, B, m, n, k, s, C, Rc, wr, st);
   }
 }
@@ -585,6 +597,7 @@ static void launch(const Arm& a, const uint8_t* A, const uint8_t* B, int m, int 
   else if (a.r == K4P) ok = launch_m<K4P>(a, g, A, B, m, n, k, seed, C, Rc, write, st);
   else if (a.r == I8C) ok = launch_m<I8C>(a, g, A, B, m, n, k, seed, C, Rc, write, st);
   else if (a.r == I8R) ok = launch_m<I8R>(a, g, A, B, m, n, k, seed, C, Rc, write, st);
+  else if (a.r == PF8 && a.m == FULLRES) launch_t<PF8, FULLRES, 32, 2>(g, A, B, m, n, k, seed, C, Rc, write, st);
   else if (a.r == PF8) launch_t<PF8, FULL, 32, 2>(g, A, B, m, n, k, seed, C, Rc, write, st);
   else launch_t<PI8, FULL, 32, 2>(g, A, B, m, n, k, seed, C, Rc, write, st);
   if (!ok) {
@@ -607,7 +620,7 @@ static std::vector<Arm> split_arms() {
   std::vector<Arm> v;
   for (int L : {32, 64})
     for (int r : {K4S, K4P, I8C, I8R})
-      for (int md : {EXT, LD, MMAONLY, FOLDONLY}) v.push_back({r, md, L, 2});
+      for (int md : {EXT, LD, MMAONLY, FOLDONLY, MMARES, FULLRES}) v.push_back({r, md, L, 2});
   return v;
 }
 
@@ -768,6 +781,7 @@ static int run_bench(int reps, int m, int n, int k) {
   for (const Arm& a : record_arms()) runs.push_back({arm_name(a), 0, a});
   for (const Arm& a : split_arms()) runs.push_back({arm_name(a), 0, a});
   runs.push_back({"pf8", 0, {PF8, FULL, 32, 2}});
+  runs.push_back({"pf8_res", 0, {PF8, FULLRES, 32, 2}});
   runs.push_back({"pi8", 0, {PI8, FULL, 32, 2}});
   std::string lt_out;
 #ifdef PG_CUBLASLT

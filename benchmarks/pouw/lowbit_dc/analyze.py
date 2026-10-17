@@ -190,7 +190,7 @@ def gemm_main(argv: list[str]) -> int:
 
 
 PG_ROUTES = ("k4s", "i8c", "i8r", "pf8", "pi8", "k4p")  # pgemm's Route and Mode enums, in order
-PG_MODES = ("full", "ext", "ld", "mma", "foldonly")
+PG_MODES = ("full", "ext", "ld", "mma", "foldonly", "mmares", "fullres")
 PG_DITHER = ("k4s", "k4p", "i8c", "i8r")
 SM100_ALU, SM100_IMAD, SM100_ISSUE = 2.0, 2.0, 4.0  # warp instructions a SM a clock (dc/README.md, sm_100's census)
 ALU_OPS = ("LOP3", "LEA", "IADD3", "SHF", "ISETP", "PLOP3", "SEL")
@@ -219,9 +219,9 @@ def fold_mix(sass: str) -> dict[str, dict]:
             tgt = re.search(r"0x([0-9a-f]+)", text)
             if text.startswith("BRA") and tgt and int(tgt.group(1), 16) < addr:
                 loops.append([o for a, o in ins if int(tgt.group(1), 16) <= a <= addr])
-        if PG_MODES[md] in ("full", "foldonly"):
+        if PG_MODES[md] in ("full", "foldonly", "fullres"):
             cand = [lp for lp in loops if sum(o.startswith("LEA.HI") for o in lp) >= bnr]
-        elif PG_MODES[md] == "mma":
+        elif PG_MODES[md] in ("mma", "mmares"):
             cand = [lp for lp in loops if any(o.startswith("SYNCS.ARRIVE") for o in lp)]
         else:
             cand = [lp for lp in loops if any(o.startswith(("LDTM", "STTM")) for o in lp)]
@@ -244,14 +244,16 @@ def fold_mix(sass: str) -> dict[str, dict]:
 def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict]) -> dict:
     """pgemm's gates and time. Per shape, spacing L and Dither route: the kernel of record (the faster receipt tile
     width), its words a SM a clock, γ against plain FP8 (cuBLASLt and the same pipeline's pf8) and plain int8, its ratio
-    to int8 Dither (the faster of i8c and i8r), the time split at FW 2 (tensor: MMA mode; tensor memory loads: LD - MMA;
-    extraction: EXT - LD; fold: FULL - EXT), the alone times of the three facets (tensor; tensor plus its TMEM traffic;
-    the fold's lane work without tensor or TMEM) and the binding facet, the largest of them. Rates are at each arm's
-    measured SM clock (`<arm>_mhz`) where the bench has it, else at the reported clock."""
+    to int8 Dither (the faster of i8c and i8r), the time split at FW 2 (tensor: MMARES, the MMAs on resident operands;
+    operand feed: MMA - MMARES; tensor memory loads: LD - MMA; extraction: EXT - LD; fold: FULL - EXT), the alone times
+    of the facets (each the pipeline up to it: tensor, + operand feed, + TMEM traffic; and the fold's lane work without
+    tensor or TMEM), the binding facet (the largest), and γ on resident operands (FULLRES over cuBLASLt FP8 and over
+    pf8_res: the kernel as a perfect operand feed would leave it). Rates are at each arm's measured SM clock
+    (`<arm>_mhz`) where the bench has it, else at the reported clock."""
     rows = []
     for b in bench:
         sms, nominal = b.get("sms", 0), b.get("clock_khz", 0) / 1e3
-        plain = {p: b.get(f"{p}_ms") for p in ("cublaslt_f8", "pf8", "cublaslt_i8", "pi8")}
+        plain = {p: b.get(f"{p}_ms") for p in ("cublaslt_f8", "pf8", "cublaslt_i8", "pi8", "pf8_res")}
         for L in (32, 64):
             words = b["m"] * b["n"] * b["k"] / L
 
@@ -266,20 +268,27 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict]) ->
                     continue
                 fw = min(fulls, key=fulls.get)
                 t, t2 = fulls[fw], fulls.get(2)
-                md = {x: b.get(f"{r}_L{L}_fw2_{x}_ms") for x in ("mma", "ld", "ext", "foldonly")}
-                alone = {"tensor": md["mma"], "tensor_memory": md["ld"], "fold": md["foldonly"]}
+                md = {x: b.get(f"{r}_L{L}_fw2_{x}_ms") for x in ("mma", "ld", "ext", "foldonly", "mmares", "fullres")}
+                facet_arm = {"tensor": "mmares", "operand_feed": "mma", "tensor_memory": "ld", "fold": "foldonly"}
+                alone = {f: md[x] for f, x in facet_arm.items()}
                 bind = max((f for f in alone if alone[f]), key=lambda f: alone[f], default=None)
                 split = None
                 if t2 and None not in (md["mma"], md["ld"], md["ext"]):
-                    split = {"tensor": md["mma"], "tensor_memory_loads": md["ld"] - md["mma"],
-                             "extraction": md["ext"] - md["ld"], "fold": t2 - md["ext"]}
-                arm, facet_arm = f"{r}_L{L}_fw{fw}_full", {"tensor": "mma", "tensor_memory": "ld", "fold": "foldonly"}
+                    tensor = md["mmares"] or md["mma"]
+                    split = {"tensor": tensor, "operand_feed": md["mma"] - tensor,
+                             "tensor_memory_loads": md["ld"] - md["mma"], "extraction": md["ext"] - md["ld"],
+                             "fold": t2 - md["ext"]}
+                arm = f"{r}_L{L}_fw{fw}_full"
+                res = md["fullres"]
                 routes[r] = {"full_ms": t, "fw": fw, "full_ms_by_fw": fulls, "mhz": b.get(f"{arm}_mhz"),
                              "words_sm_clk": rate(arm, t), "split_ms": split, "alone_ms": alone,
                              "alone_words_sm_clk": {f: rate(f"{r}_L{L}_fw2_{facet_arm[f]}", v) for f, v in alone.items()},
                              "binding": bind, "binding_of_full": alone[bind] / t2 if bind and t2 else None,
-                             "issue": mix.get(f"{r}_L{L}_fw2_full"),
-                             **{f"gamma_{p}": t / v for p, v in plain.items() if v}}
+                             "issue": mix.get(f"{r}_L{L}_fw2_full"), "full_resident_ms": res,
+                             "gamma_resident_cublaslt_f8": res / plain["cublaslt_f8"] if res and plain["cublaslt_f8"]
+                             else None,
+                             "gamma_resident_pf8_res": res / plain["pf8_res"] if res and plain["pf8_res"] else None,
+                             **{f"gamma_{p}": t / v for p, v in plain.items() if v and p != "pf8_res"}}
             int8 = min((r for r in ("i8c", "i8r") if r in routes), key=lambda r: routes[r]["full_ms"], default=None)
             for r in routes:
                 routes[r]["over_int8_dither"] = routes[r]["full_ms"] / routes[int8]["full_ms"] if int8 else None
@@ -307,19 +316,21 @@ def pgemm_main(argv: list[str]) -> int:
     print(f"# pgemm: the k4s Dither GEMM pipelined on B200\n\ngates exact (C, receipts, control rejected): "
           f"{s['gates_exact']} of {s['gates']} over {len(s['gate_arms'])} arms and {len(s['gate_shapes'])} shapes\n")
     print("| m x n x k | L | route | fw | ms | MHz | words/SM/clk | γ cuBLASLt FP8 | γ pf8 | γ cuBLASLt i8 | / int8 Dither | "
-          "split ms: tensor, TMEM loads, extraction, fold | alone ms: tensor, +TMEM, fold | fold alone words/SM/clk | "
-          "binds (of FULL) |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+          "split ms: tensor, operand feed, TMEM loads, extraction, fold | alone ms: tensor, +feed, +TMEM, fold | "
+          "fold alone words/SM/clk | binds (of FULL) | resident γ: cuBLASLt FP8, pf8_res |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for row in s["bench"]:
         for r, d in row["routes"].items():
             sp, al = d["split_ms"], d["alone_ms"]
-            sps = ", ".join(f"{sp[x]:.3f}" for x in ("tensor", "tensor_memory_loads", "extraction", "fold")) if sp else "-"
-            als = ", ".join(_f(al[x], ".3f") for x in ("tensor", "tensor_memory", "fold"))
+            sps = ", ".join(f"{sp[x]:.3f}" for x in ("tensor", "operand_feed", "tensor_memory_loads", "extraction",
+                                                       "fold")) if sp else "-"
+            als = ", ".join(_f(al[x], ".3f") for x in ("tensor", "operand_feed", "tensor_memory", "fold"))
             print(f"| {row['m']}x{row['n']}x{row['k']} | {row['L']} | {r} | {d['fw']} | {d['full_ms']:.4f} | "
                   f"{_f(d['mhz'], '.0f')} | {_f(d['words_sm_clk'], '.1f')} | {_f(d.get('gamma_cublaslt_f8'), '.2f')} | "
                   f"{_f(d.get('gamma_pf8'), '.2f')} | {_f(d.get('gamma_cublaslt_i8'), '.2f')} | "
                   f"{_f(d['over_int8_dither'], '.2f')} | {sps} | {als} | "
-                  f"{_f(d['alone_words_sm_clk']['fold'], '.1f')} | {d['binding']} ({_f(d['binding_of_full'], '.2f')}) |")
+                  f"{_f(d['alone_words_sm_clk']['fold'], '.1f')} | {d['binding']} ({_f(d['binding_of_full'], '.2f')}) | "
+                  f"{_f(d['gamma_resident_cublaslt_f8'], '.2f')}, {_f(d['gamma_resident_pf8_res'], '.2f')} |")
     print("\nPlain (ms; words/SM/clk at L = 32):\n")
     for row in (r for r in s["bench"] if r["L"] == 32):
         print(f"- {row['m']}x{row['n']}x{row['k']}: " + ", ".join(

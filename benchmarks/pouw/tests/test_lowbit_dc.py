@@ -178,16 +178,18 @@ def _pg_gate(arm: str, ok: bool = True) -> dict:
 
 def _pg_bench() -> dict:
     """pgemm bench's line: at both spacings every Dither route takes FULL 1.0 ms at FW 2 (k4s 2.0, i8c 1.0 at FW 1),
-    and the split arms MMA 0.4, LD 0.5, EXT 0.8, FOLDONLY 0.9 ms (k4s's fold alone 1.9)."""
+    and the split arms MMARES 0.3, MMA 0.4, LD 0.5, EXT 0.8, FOLDONLY 0.9 ms (k4s's fold alone 1.9), FULLRES 0.8 (k4s
+    1.5)."""
     b = {"mode": "bench", "arch": "sm_100a", "m": 4096, "n": 4096, "k": 4096, "reps": 20, "sms": 148,
          "clock_khz": 1965000, "cublaslt_f8_out": "f32", "pf8_ms": 0.2, "pi8_ms": 0.25, "cublaslt_f8_ms": 0.125,
-         "cublaslt_i8_ms": 0.16}
+         "cublaslt_i8_ms": 0.16, "pf8_res_ms": 0.15}
     for L in (32, 64):
         for r in an.PG_DITHER:
             b[f"{r}_L{L}_fw2_full_ms"] = 2.0 if r == "k4s" else 1.0
             if r != "k4p":
                 b[f"{r}_L{L}_fw1_full_ms"] = 1.6 if r == "k4s" else 1.2
-            for md, ms in (("mma", 0.4), ("ld", 0.5), ("ext", 0.8), ("foldonly", 1.9 if r == "k4s" else 0.9)):
+            for md, ms in (("mmares", 0.3), ("mma", 0.4), ("ld", 0.5), ("ext", 0.8),
+                           ("foldonly", 1.9 if r == "k4s" else 0.9), ("fullres", 1.5 if r == "k4s" else 0.8)):
                 b[f"{r}_L{L}_fw2_{md}_ms"] = ms
     return b
 
@@ -228,8 +230,11 @@ def test_pgemm_summary_gamma_split_binding():
     assert k4s["gamma_cublaslt_i8"] == pytest.approx(10) and k4s["gamma_pi8"] == pytest.approx(6.4)
     assert row["int8_dither"] in ("i8c", "i8r") and k4s["over_int8_dither"] == pytest.approx(1.6)
     sp = k4s["split_ms"]  # at FW 2, whose FULL is 2.0
-    assert (sp["tensor"], sp["tensor_memory_loads"], sp["extraction"], sp["fold"]) == pytest.approx((0.4, 0.1, 0.3, 1.2))
+    assert [sp[x] for x in ("tensor", "operand_feed", "tensor_memory_loads", "extraction", "fold")] == \
+        pytest.approx([0.3, 0.1, 0.1, 0.3, 1.2])
     assert k4s["binding"] == "fold" and k4s["binding_of_full"] == pytest.approx(0.95)
+    assert k4s["gamma_resident_cublaslt_f8"] == pytest.approx(12) and k4s["gamma_resident_pf8_res"] == pytest.approx(10)
+    assert "gamma_pf8_res" not in k4s
     assert k4s["issue"] == {"alu_word": 3.0} and i8c["issue"] is None
     words = 4096**3 / 32
     assert k4s["words_sm_clk"] == pytest.approx(words / (1.6e-3 * 148 * 1.965e9))
