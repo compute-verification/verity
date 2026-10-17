@@ -941,11 +941,18 @@ class UnitStager:
     `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once; else `stage` writes it beside each round's
     files. ``pin`` and ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads
     them after writing circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass
-    that writes it."""
+    that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
+    Program, a template query's that lists ``definition``, which META ``program_digests`` then names as the circuit's template
+    (as `_shims`' does with a ``definition``); `stage` then takes each instance's global unit index (``indices``). The class
+    (`circuit.class_digest`) is the unbound stager's."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
-                 out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None):
+                 out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
+                 bind: dict | None = None):
         from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
+
+        if bind is not None and set(bind) != {"partition", "program"}:
+            raise ValueError(f"{name}: bind is exactly partition and program")
 
         public_inputs = dict(public_inputs or {})
         self.definition, self.name, self.in_rows, self.public_inputs = definition, name, list(in_rows), public_inputs
@@ -960,13 +967,16 @@ class UnitStager:
         content = json.dumps([definition.id, [list(r[:3]) + [list(r[3])] for r in in_rows], [[s, list(ps)] for s, ps in out_rows]]
                              + ([public_inputs] if public_inputs else [])).encode()
         self.row_ports = [*public_inputs, *(r for r, *_ in in_rows)]
+        programs = {definition.id: program_digest(Program(definition))} if bind else {name: hashlib.sha256(content).hexdigest()}
         self.sub = SimpleNamespace(id=name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r in self.row_ports],
                                    outputs=[port(f"o{j}") for j in range(len(self.out_words))],
-                                   program_digests=lambda statics: {name: hashlib.sha256(content).hexdigest()})
+                                   program_digests=lambda statics: programs, **({"definition": lambda **_: definition} if bind else {}))
         self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
         self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
                                seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
-                               seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None)
+                               seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
+                               partition=bind and bind["partition"], program=bind and bind["program"])
+        self.bound = bind is not None
         self._meta = self.text.split("\n", 2)[1][5:]
         self.meta = json.loads(self._meta)
         self.ports = FC._meta_ports(self.meta)
@@ -1010,12 +1020,16 @@ class UnitStager:
         if bad.size:
             raise AssertionError(f"{self.name}: instance {bad[0]}'s outputs are not the IR reference's")
 
-    def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None) -> dict:
+    def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
+              indices: Sequence[int] | None = None) -> dict:
         """A round's statement: ``rows`` each input row's words per instance ``(n, words)`` u16, and each public input's
         (``rows[param]``). The outputs are the lowering's, checked against the IR reference (`reference_check`); the salts are
         ``salts``' where given, else `circuit.stage_salts`'. Writes ``inst.bin`` and ``pub.bin`` (and ``circuit.txt`` without the
         stager's ``circuit``) under ``out_dir``; returns META, the outputs per port, every row's salts, and the unit's ANDs and
-        matrix entries."""
+        matrix entries. ``indices``: each instance's global unit index, which a bound stager needs and an unbound one refuses
+        (its units are ``0 .. n``)."""
+        if (indices is None) == self.bound:
+            raise ValueError(f"{self.name}: a bound stager's round names its units' global indices, and only a bound one's")
         n = len(rows[self.in_rows[0][0]])
         flat = np.concatenate([np.asarray(rows[r], dtype=np.uint16) for r in self.row_ports], axis=1)
         got, _cut, ok = self.low.evaluate(flat.astype(np.uint64))
@@ -1032,7 +1046,7 @@ class UnitStager:
         FC.write(self.text, self.iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
-                 digests=(self.pin, self.class_sha512))
+                 digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices])
         counts = self.low.layout.counts
         return {"meta": json.loads(self._meta), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
@@ -1040,10 +1054,10 @@ class UnitStager:
 
 def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]], out_rows: Sequence[tuple[str, Sequence[int]]],
                rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
-               public_inputs: dict | None = None) -> dict:
+               public_inputs: dict | None = None, bind: dict | None = None, indices: Sequence[int] | None = None) -> dict:
     """One round of a `UnitStager` (its arguments as there and in its `stage`): writes ``circuit.txt``, ``inst.bin`` and
     ``pub.bin``; returns META, the outputs per port, every row's salts, and the unit's ANDs and matrix entries."""
-    return UnitStager(definition, name, in_rows, out_rows, public_inputs).stage(rows, out_dir, salt_key, salts)
+    return UnitStager(definition, name, in_rows, out_rows, public_inputs, bind=bind).stage(rows, out_dir, salt_key, salts, indices)
 
 
 def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
