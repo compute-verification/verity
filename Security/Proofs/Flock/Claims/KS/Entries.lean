@@ -13,10 +13,11 @@ with their rows, the deployed reader's entries. This file proves all three at fl
 * `Claims.Flock.plainRepColsOf_ok`, `Claims.Flock.lt_of_mem_positions`: the deployed plain reader's entries at a proof
   that decodes are `zkRepCols`'s, and a drawn position is below `2^d` at a level `fast100` uses.
 * `Claims.Flock.exists_ne_of_entries`: `exists_ne_of_off₀L_sc` with the entries given as one list equation.
-* `accepts_opens₀L`: when `Accepts I t` under `hm96-sha512/v1` with plain outputs, at every table, the salted output
-  `accepts_verdict_hm96` accepts has every level-0 opening verifying against `capOfRoot` of the table's `root_B`, at
-  level 0's lanes and path length, below `2^d`, and its level-0 openings' positions and rows are its reps'
-  `plainRepColsOf` entries at the session's shape, stream rounds and proof files (`accepts_req0`, `verified_opens₀L`).
+* `accepts_opens₀L`: when `Accepts I t` with plain outputs, at every table, every pair of the reps' runs on the proof
+  files' messages and the streams' coins whose salted output accepts at a cap has every level-0 opening verifying
+  against that cap, at level 0's lanes and path length, below `2^d`, and its level-0 openings' positions and rows are
+  its reps' `plainRepColsOf` entries at the session's shape, stream rounds and proof files (`accepts_req0`,
+  `verified_opens₀L`); `accepts_verdict_hm96` gives such runs, accepted at `capOfRoot` of the table's `root_B`.
 -/
 
 namespace Claims.Flock
@@ -101,42 +102,43 @@ open Flock Refine Model Game
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **At flock-verify's acceptance, each table's level-0 openings are its reps' deployed entries** (§9–§14, S16). When
-`Accepts I t` under `hm96-sha512/v1` with plain outputs, at every table `j`, its `fast100` schedule and the statement
-read off its layout, the reps' runs `accepts_verdict_hm96` gives end in an accepted salted output whose level-0
-openings verify against `capOfRoot` of the table's `root_B` at level 0's lanes and path length and sit below `2^d`,
-and whose level-0 openings' positions and rows are the reps' `plainRepColsOf` entries, rep 0's then rep 1's, at the
-table's shape, the reps' stream rounds and the proof files. -/
-theorem accepts_opens₀L {I : Inputs} {t : Transcript} (hl : I.tags.merkleLeaf = "hm96-sha512/v1")
-    (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
+/-- **At flock-verify's acceptance, each table's level-0 openings are its reps' deployed entries** (§9–§14). When
+`Accepts I t` with plain outputs, at every table `j`, its `fast100` schedule and the statement read off its layout,
+every pair of the reps' runs on the proof files' messages and the streams' coins whose salted output accepts at a cap
+has its level-0 openings verifying against that cap at level 0's lanes and path length, below `2^d`, and its level-0
+openings' positions and rows are the reps' `plainRepColsOf` entries, rep 0's then rep 1's, at the table's shape, the
+reps' stream rounds and the proof files. -/
+theorem accepts_opens₀L {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
-      Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
+      Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
-        ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m),
-        ∃ (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig) (out : OutCL 𝔽 Dig (List UInt8)),
-          out = tableOutL H512 enc512 leaf512 (capOfRoot sess.rootB[j]!) (pend₀, pend₁)
-            (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
-              sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]) ∧
+        ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
+          (pend₀ pend₁ : PendL 𝔽 Dig) (cap : Cap Dig) (out : OutCL 𝔽 Dig (List UInt8)),
+          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 0) =
+            some s₀ →
+          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 1) =
+            some s₁ →
           decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
-            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j]! = .ok p₀ ∧
+            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j]! = .ok p₀ →
           decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
-            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j + 1]! = .ok p₁ ∧
-          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
-          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
+            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j + 1]! = .ok p₁ →
           Plays fOf (Model.repC execArith 0 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
               (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
                 (ptsOf sts[j].mPts sess.points)))
             (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
               PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₀ capDig)
-            (s₀.rounds.toList.map (·.coins)) pend₀ ∧
+            (s₀.rounds.toList.map (·.coins)) pend₀ →
           Plays fOf (Model.repC execArith 1 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
               (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
                 (ptsOf sts[j].mPts sess.points)))
             (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
               PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₁ capDig)
-            (s₁.rounds.toList.map (·.coins)) pend₁ ∧
-          out.accepted = true ∧
-          (∀ x ∈ opens₀L (schedOf sch) out, VerifiedL H512 enc512 leaf512 (capOfRoot sess.rootB[j]!)
+            (s₁.rounds.toList.map (·.coins)) pend₁ →
+          out = tableOutL H512 enc512 leaf512 cap (pend₀, pend₁)
+            (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
+              sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]) →
+          out.accepted = true →
+          (∀ x ∈ opens₀L (schedOf sch) out, VerifiedL H512 enc512 leaf512 cap
             (lvOf (schedOf sch) 0).lanes (Model.pathLen (lvOf (schedOf sch) 0)) x ∧
               x.1 < 2 ^ (sch.levels.getD 0 default).d) ∧
           (opens₀L (schedOf sch) out).map (fun x => (x.1, x.2.1)) =
@@ -146,25 +148,23 @@ theorem accepts_opens₀L {I : Inputs} {t : Transcript} (hl : I.tags.merkleLeaf 
               Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
                 (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
                   (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! := by
-  obtain ⟨spec, sts, sess, hs, hsess, hsz, hall⟩ := accepts_verdict_hm96 hl hh h
-  obtain ⟨spec', sts', sess', hs', hsess', hall'⟩ := accepts_req0 hh h
-  obtain ⟨rfl, rfl⟩ : spec = spec' ∧ sts = sts' := by
-    simpa using Except.ok.inj (hs.symm.trans hs')
-  obtain rfl : sess = sess' := Except.ok.inj (hsess.symm.trans hsess')
-  refine ⟨spec, sts, sess, hs, hsess, hsz, fun j hj => ?_⟩
+  obtain ⟨spec, sts, sess, hs, hsess, hall⟩ := accepts_req0 hh h
+  refine ⟨spec, sts, sess, hs, hsess, fun j hj => ?_⟩
   obtain ⟨sch, hf, hk⟩ := hall j hj
-  obtain ⟨sch', hf', hk'⟩ := hall' j hj
-  obtain rfl : sch = sch' := Option.some.inj (hf.symm.trans hf')
-  refine ⟨sch, hf, fun hwf hr hm => ?_⟩
-  obtain ⟨p₀, p₁, s₀, s₁, pend₀, pend₁, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, hacc⟩ := hk hwf hr hm
-  obtain ⟨⟨R₀, rest₀, hR₀, hl₀, hpos₀, hrw₀⟩, hsh₀⟩ := hk' hwf hr hm 0 (by norm_num) s₀ p₀ pend₀ hs₀ hp₀ hpl₀
-  obtain ⟨⟨R₁, rest₁, hR₁, hl₁, hpos₁, hrw₁⟩, hsh₁⟩ := hk' hwf hr hm 1 (by norm_num) s₁ p₁ pend₁ hs₁ hp₁ hpl₁
+  refine ⟨sch, hf, fun hwf hr hm p₀ p₁ s₀ s₁ pend₀ pend₁ cap out hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ hout hacc => ?_⟩
+  subst hout
+  obtain ⟨⟨R₀, rest₀, hR₀, hl₀, hpos₀, hrw₀⟩, hsh₀⟩ := hk hwf hr hm 0 (by norm_num) s₀ p₀ pend₀ hs₀ hp₀ hpl₀
+  obtain ⟨⟨R₁, rest₁, hR₁, hl₁, hpos₁, hrw₁⟩, hsh₁⟩ := hk hwf hr hm 1 (by norm_num) s₁ p₁ pend₁ hs₁ hp₁ hpl₁
   have h2 := (fast100_dims _ sch hf).1.2.1
   have hseam : LevelSeam (sch.levels.getD 0 default) :=
     fast100_level _ sch hf _ (by unfold Array.getD; rw [dite_eq_left (by omega)]; exact Array.getElem_mem _)
   have hlv0 := lvOf_schedOf (s := sch) (i := 0) (by omega)
   have hQ : (lvOf (schedOf sch) 0).queries = (sch.levels.getD 0 default).q := by rw [hlv0]; rfl
-  have hent : (opens₀L (schedOf sch) (tableOutL H512 enc512 leaf512 (capOfRoot sess.rootB[j]!) (pend₀, pend₁)
+  have hq : ∀ (R : Req) (coins : Array F128),
+      R.positions = (Flock.positions (sch.levels.getD 0 default) coins).toList →
+      R.positions.length = (sch.levels.getD 0 default).q := fun R coins h => by
+    rw [h, Array.length_toList, positions_size _ hseam]
+  have hent : (opens₀L (schedOf sch) (tableOutL H512 enc512 leaf512 cap (pend₀, pend₁)
       (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
         sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]))).map
         (fun x => (x.1, x.2.1)) =
@@ -174,19 +174,13 @@ theorem accepts_opens₀L {I : Inputs} {t : Transcript} (hl : I.tags.merkleLeaf 
         Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
           (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
             (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! := by
-    have hq : ∀ (R : Req) (coins : Array F128),
-        R.positions = (Flock.positions (sch.levels.getD 0 default) coins).toList →
-        R.positions.length = (sch.levels.getD 0 default).q := fun R coins h => by
-      rw [h, Array.length_toList, positions_size _ hseam]
     unfold opens₀L
-    rw [List.map_append, hQ, Claims.Flock.plainRepColsOf_ok hp₀, Claims.Flock.plainRepColsOf_ok hp₁]
-    rw [opnOf_pair hp₀ hp₁]
+    rw [List.map_append, hQ, Claims.Flock.plainRepColsOf_ok hp₀, Claims.Flock.plainRepColsOf_ok hp₁,
+      opnOf_pair hp₀ hp₁]
     congr 1
-    · exact Claims.Flock.slotOpensL_entries _ 0 _ _ _ R₀ rest₀ hR₀ hl₀ hpos₀ (hq _ _ hpos₀) hrw₀
-        fun _ => rfl
-    · exact Claims.Flock.slotOpensL_entries _ 1 _ _ _ R₁ rest₁ hR₁ hl₁ hpos₁ (hq _ _ hpos₁) hrw₁
-        fun _ => rfl
-  refine ⟨p₀, p₁, s₀, s₁, pend₀, pend₁, _, rfl, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, hacc, fun x hx => ⟨?_, ?_⟩, hent⟩
+    · exact Claims.Flock.slotOpensL_entries _ 0 _ _ _ R₀ rest₀ hR₀ hl₀ hpos₀ (hq _ _ hpos₀) hrw₀ fun _ => rfl
+    · exact Claims.Flock.slotOpensL_entries _ 1 _ _ _ R₁ rest₁ hR₁ hl₁ hpos₁ (hq _ _ hpos₁) hrw₁ fun _ => rfl
+  refine ⟨fun x hx => ⟨?_, ?_⟩, hent⟩
   · refine Claims.Flock.verified_opens₀L H512 enc512 leaf512 (schedOf sch) _ (pend₀, pend₁) _ hacc
       (fun r hr R hR hlR => ?_) x hx
     rcases r with _ | _ | r
