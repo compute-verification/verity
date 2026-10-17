@@ -1,0 +1,199 @@
+import Proofs.Flock.Claims.Complete.ZkTables.Discharge
+import Proofs.Flock.Claims.Complete.ZkTables.Link
+import Proofs.Flock.Claims.Complete.Zk.Complete
+
+/-!
+# Masked completeness at any number of tables, from named premises
+
+* **One table is `Zk/`'s**: a good case of one table is a `CaseZk` (`Case.toZk`: `ready` gives `readyZk`), its session
+  `sessionSZk`'s (`sessionS_one`), and a run of one table a `RunZk` (`Run.toZk`), at which every method is the same. So
+  every goal `complete_zk` rests on, or proves, holds at a run of one table.
+* **Several tables**: what `complete_zk` asks or proves at one table, at a run of several, as named `Prop`s: the session
+  runs (`SessionRunsJ`), the record checks that `Zk/Json/` proves at one table from the record's premises
+  (`RecordAt`, `RecordJ`), and the checks still open at one table (`OpenAt`, `OpenJ`: the sends fit, and per rep the
+  masked replay, the ring switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed).
+* `complete`: Flock's masked verifier is complete for `honestP` with error `δc H`
+  (`Claims.Flock.Complete H (deployZk rel) honestP (δc H)`), from `complete_zk`'s premises and these three.
+-/
+
+open Flock FlockDeploy Transcript
+
+namespace FlockComplete.ZkTables
+
+variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+
+/-! ## One table -/
+
+/-- **`ready` at a setup of one table is `readyZk`.** -/
+theorem readyZk_of_ready {x : Claims.Msg} (h : ready H x = true) {s : Ins} {spec : SessionSpec}
+    {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) : readyZk H x = true := by
+  unfold ready at h
+  unfold readyZk
+  rw [hs] at h ⊢
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
+  exact ⟨⟨⟨⟨h1, h.1.1.1.1⟩, h.1.1.1.2⟩, h.1.2⟩, h.2⟩
+
+/-- **A good case of one table is a good masked case.** -/
+def Case.toZk (c : Case H rel) (h1 : c.sts.size = 1) : CaseZk H rel :=
+  ⟨c.x, c.w, c.ω, c.r, c.s, c.spec, c.sts, c.scope, c.rel_w, readyZk_of_ready c.ready c.setup h1, c.good, c.setup⟩
+
+/-- **At one table the session is `sessionSZk`'s.** -/
+theorem sessionS_one {resp : ℕ → Claims.Msg} {spec : SessionSpec} {sts : Array Flock.Stmt} (h1 : sts.size = 1)
+    (w : Claims.Flock.Wit) (ω : TapeZk) : sessionS H resp spec sts w ω = sessionSZk H resp spec sts w ω := by
+  unfold sessionS sessionSZk
+  rw [traces_one h1]
+
+/-- **A run of one table is a masked run.** -/
+def Run.toZk (o : Run H rel) (h1 : o.sts.size = 1) : RunZk H rel :=
+  ⟨o.toCase.toZk h1, o.record, o.proofs, o.bodies, (sessionS_one h1 o.w o.ω).symm.trans o.ran⟩
+
+/-! ## Several tables -/
+
+section Several
+
+variable (H rel)
+
+/-- **The masked session runs** at every good case of several tables. -/
+def SessionRunsJ : Prop :=
+  ∀ c : Case H rel, 1 < c.sts.size →
+    ∃ record proofs bodies, sessionS H c.resp c.spec c.sts c.w c.ω = (.ok (record, proofs), bodies)
+
+/-- **The record's checks at a run**: `Goals`' checks on the record and the proof files, which `Zk/Json/` proves at one
+table from the record's premises. -/
+structure RecordAt (o : Run H rel) : Prop where
+  finalFits : o.record.toUTF8.size < 2 ^ 64 ∧ o.proofs.size < 2 ^ 64 ∧ ∀ b ∈ o.proofs, b.size < 2 ^ 64
+  draw : drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
+  liveReads : liveOf o.spec o.record = .ok o.live
+  rootB : (o.live.rootB.toList == o.link.1) = true
+  publicsLink : (o.live.publics.toList == o.link.2) = true
+  points : (o.live.points == pointsOf o.spec (Claims.coinSeq o.r 0)) = true
+  count : ((o.live.streams.toList.flatMap (·.toList)).length == o.mids.length) = true
+  rounds : ((o.live.streams.toList.flatMap (·.toList)).zip o.mids).all
+    (fun (r, a, c) => r.bytes == some ⟨a.toArray⟩ && r.coins == c.vals r.n) = true
+  decodes : Record.decodeWith o.hs o.spec o.record = .ok o.sess
+  publics : ∀ q ∈ (o.tabs.zip o.sess.publics).toList, q.1.publics q.2 = .ok ()
+  proofList : (o.sess.proofSha.size != o.spec.repStreams.size ||
+    !o.spec.repStreams.all fun a => o.sess.proofSha.any fun x => x.1 == a.2.2) = false
+  proofDigests : ∀ q ∈ (o.spec.repStreams.zip o.proofs).toList,
+    ((o.sess.proofSha.find? (·.1 == q.1.2.2)).map (·.2) != some (hexOf (dgOf o.spec (Claims.hOf H) q.2))) = false
+  repStream : ∀ i < o.tabs.size, ∀ r < 2,
+    (o.sess.streams.find? (·.name == s!"{o.spec.tables[i]!}/rep{r}")).isSome = true
+  repExtras : ∀ i < o.tabs.size, o.tabs[i]!.extra o.sess.points = .ok (o.extras i)
+  repDecodes : ∀ i < o.tabs.size, ∀ r < 2,
+    Zk.decode (shapeZk o.tabs[i]! (o.sch i) (o.extras i).size) (o.bytes i r) = .ok (o.zp i r)
+  repParams : ∀ i < o.tabs.size, ∀ r < 2, ((o.zp i r).proof.params != pcsParams o.tabs[i]!.merkle (o.sch i)) = false
+  padsRoot : ∀ i < o.tabs.size, ∀ r < 2, ((o.zp i r).inner.root.size != 64) = false
+  capCommitted : ∀ i < o.tabs.size, ∀ r < 2, (flat (o.zp i r).proof.cap != o.sess.rootB[i]!) = false
+
+/-- **The record's checks at every run of several tables.** -/
+def RecordJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → RecordAt H rel o
+
+/-- **The checks open at one table, at a run**: the sends fit `k(x)`, and per rep the masked replay, the ring switch, the
+masked Ligerito, level 0's lane phase, the inner proof and every round consumed. -/
+structure OpenAt (o : Run H rel) : Prop where
+  sends : o.bodies.size ≤ 1 + rounds true o.spec o.sts
+  replay : ∀ i < o.tabs.size, ∀ r < 2,
+    (Zk.replayWith o.hs o.tabs[i]! (o.lay i) (o.zp i r).proof (o.zp i r).inner.root).run (o.t₀ i r) = .ok (o.rp i r)
+  ringSwitch : ∀ i < o.tabs.size, ∀ r < 2,
+    (ringSwitchWith o.hs o.tabs[i]!.m (ringClaimsZk (o.rp i r).1 (o.zp i r).proof ++ o.extras i)
+      (o.zp i r).proof.ringSwitches).run (o.rp i r).2 = .ok (o.sw i r)
+  ligerito : ∀ i < o.tabs.size, ∀ r < 2,
+    (Zk.ligeritoWith o.hs o.tabs[i]!.merkle (o.sch i) (o.sw i r).1.1 (o.zp i r).proof.cap (o.zp i r).proof.ligerito
+      (basis (o.sw i r).1.2) ⟨o.tPad i, r, (o.zp i r).level0⟩).run (o.sw i r).2 = .ok (o.lg i r)
+  lanes : ∀ i < o.tabs.size, ∀ r < 2,
+    Zk.ligeritoConstraints (o.lay i) (o.lg i r).1 (o.zp i r).proof.ligerito (o.zp i r).level0 = .ok (o.lanes i r)
+  inner : ∀ i < o.tabs.size, ∀ r < 2,
+    (Zk.verifyInnerWith o.hs (o.lay i) (o.zp i r).inner (o.zp i r).proof.zerocheck.finalC
+      (repConsZk (o.rp i r).1 (o.zp i r).proof ++ o.lanes i r)).run (o.lg i r).2 = .ok (o.inner i r)
+  consumed : ∀ i < o.tabs.size, ∀ r < 2, ((o.inner i r).2.k != (o.stream i r).rounds.size) = false
+
+/-- **The checks open at one table, at every run of several tables.** -/
+def OpenJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → OpenAt H rel o
+
+end Several
+
+/-! ## The composition -/
+
+theorem Case.one_or_several (c : Case H rel) : c.sts.size = 1 ∨ 1 < c.sts.size := by
+  have := c.tables.1
+  omega
+
+/-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
+any number of tables: from `complete_zk`'s premises, which give every check at one table, and at several tables the
+session running (`SessionRunsJ`), the record's checks (`RecordJ`) and the checks open at one table (`OpenJ`). -/
+theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hP : JsonRT.ProverOkZk H rel)
+    (hR : JsonRT.RepShapedZk H rel) (hF : JsonRT.RecordFitsZk H rel) (hSR : FlockComplete.SessionRunsZk H rel)
+    (hN : FlockComplete.SendCountZk H rel) (hRp : FlockComplete.Replay H rel)
+    (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
+    (hLC : FlockComplete.LaneConstraints H rel) (hIn : FlockComplete.Inner H rel)
+    (hCo : FlockComplete.ConsumedZk H rel) (hSRJ : SessionRunsJ H rel) (hRec : RecordJ H rel) (hOp : OpenJ H rel) :
+    Claims.Flock.Complete H (deployZk rel) honestP (δc H) := by
+  have hl := linkFirstZk_goal H h64 rel
+  have rec1 : ∀ o : Run H rel, (h1 : o.sts.size = 1) → RecordAt H rel o := fun o h1 =>
+    { finalFits := JsonRT.finalFitsZk_goal S h64 hS hP hR hF (o.toZk h1)
+      draw := JsonRT.drawMatchesZk_goal S h64 hS hP (o.toZk h1)
+      liveReads := JsonRT.liveReadsZk_goal S h64 hS hP (o.toZk h1)
+      rootB := JsonRT.custodyRootBZk_goal S h64 hS hP (o.toZk h1)
+      publicsLink := JsonRT.custodyPublicsZk_goal S h64 hS hP (o.toZk h1)
+      points := JsonRT.custodyPointsZk_goal S h64 hS hP (o.toZk h1)
+      count := JsonRT.custodyCountZk_goal S h64 hS hP (o.toZk h1)
+      rounds := JsonRT.custodyRoundsZk_goal S h64 hS hP (o.toZk h1)
+      decodes := JsonRT.decodesZk_goal S h64 hS hP (o.toZk h1)
+      publics := JsonRT.publicsZk_goal S h64 hS hP (o.toZk h1)
+      proofList := JsonRT.proofListZk_goal S h64 hS hP (o.toZk h1)
+      proofDigests := JsonRT.proofDigestsZk_goal S h64 hS hP (o.toZk h1)
+      repStream := JsonRT.repStreamZk_goal S h64 hS hP (o.toZk h1)
+      repExtras := JsonRT.repExtrasZk_goal S h64 hS hP (o.toZk h1)
+      repDecodes := JsonRT.repDecodesZk_goal S h64 hS hP hR (o.toZk h1)
+      repParams := JsonRT.repParamsZk_goal S h64 hS hP hR (o.toZk h1)
+      padsRoot := JsonRT.padsRoot_goal S h64 hS hP hR (o.toZk h1)
+      capCommitted := JsonRT.capCommittedZk_goal S h64 hS hP hR (o.toZk h1) }
+  have open1 : ∀ o : Run H rel, (h1 : o.sts.size = 1) → OpenAt H rel o := fun o h1 =>
+    { sends := hN (o.toZk h1)
+      replay := hRp (o.toZk h1)
+      ringSwitch := hRS (o.toZk h1)
+      ligerito := hLg (o.toZk h1)
+      lanes := hLC (o.toZk h1)
+      inner := hIn (o.toZk h1)
+      consumed := hCo (o.toZk h1) }
+  have recAll : ∀ o : Run H rel, RecordAt H rel o := fun o =>
+    (o.one_or_several).elim (rec1 o) (hRec o)
+  have openAll : ∀ o : Run H rel, OpenAt H rel o := fun o =>
+    (o.one_or_several).elim (open1 o) (hOp o)
+  refine complete_of_goals H rel
+    { session := fun c => (c.one_or_several).elim (fun h1 => ?_) (hSRJ c)
+      sends := fun o => (openAll o).sends
+      linkFirst := linkFirst_goal H h64 rel
+      finalFits := fun o => (recAll o).finalFits
+      draw := fun o => (recAll o).draw
+      liveReads := fun o => (recAll o).liveReads
+      rootB := fun o => (recAll o).rootB
+      publicsLink := fun o => (recAll o).publicsLink
+      points := fun o => (recAll o).points
+      count := fun o => (recAll o).count
+      rounds := fun o => (recAll o).rounds
+      tables := tables_goal H rel
+      decodes := fun o => (recAll o).decodes
+      publics := fun o => (recAll o).publics
+      schedules := schedules_goal H rel
+      proofCount := proofCount_goal H rel
+      proofList := fun o => (recAll o).proofList
+      proofDigests := fun o => (recAll o).proofDigests
+      repStream := fun o => (recAll o).repStream
+      repExtras := fun o => (recAll o).repExtras
+      repDecodes := fun o => (recAll o).repDecodes
+      repParams := fun o => (recAll o).repParams
+      padsRoot := fun o => (recAll o).padsRoot
+      replay := fun o => (openAll o).replay
+      ringSwitch := fun o => (openAll o).ringSwitch
+      ligerito := fun o => (openAll o).ligerito
+      lanes := fun o => (openAll o).lanes
+      inner := fun o => (openAll o).inner
+      consumed := fun o => (openAll o).consumed
+      capCommitted := fun o => (recAll o).capCommitted }
+  obtain ⟨record, proofs, bodies, hran⟩ := hSR (c.toZk h1)
+  exact ⟨record, proofs, bodies, (sessionS_one h1 c.w c.ω).trans hran⟩
+
+end FlockComplete.ZkTables
