@@ -65,7 +65,7 @@ theorem proverOkJ (h64 : Out64 H) : ProverOkJ H rel := by
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hst
   obtain ⟨hm1, hm2, hms⟩ := c.tables.2.2.2 j hj
   refine ⟨fun v hv g extra lanePad salt cm hcm => ?_,
-    fun v hv rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce hex => ?_⟩
+    fun v hv rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws hex => ?_⟩
   · have hm : (Setup.ofCircuit c.sts[j]).merkle = MerkleScheme.hm96Sha512 := hms
     rw [hm] at hcm
     exact commitPZk_cap (hOf_size h64) hm1 hm2 hv hcm
@@ -77,7 +77,7 @@ theorem proverOkJ (h64 : Out64 H) : ProverOkJ H rel := by
     rw [hm] at hv
     obtain ⟨hn, hq⟩ := zkSchedule_small hm1 hm2 hv
     rintro l ⟨p, t'⟩ l' hrun
-    obtain ⟨⟨hs, hsz⟩, -⟩ := repPZk_grows c.resp _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (B := 65536) (by decide)
+    obtain ⟨⟨hs, hsz⟩, -⟩ := repPZk_grows c.resp _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (B := 65536) (by decide)
       (by simp [Setup.ofCircuit]; omega) (by omega) hn hq _ l _ _ _ hrun
     exact ⟨show 0 < t'.rounds.size by simp [Transcript.init] at hsz; omega, hs (by simp [CoinsLe, Transcript.init])⟩
 

@@ -59,7 +59,7 @@ theorem Run.jsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
   have hrun := o.ran
   unfold sessionS at hrun
   obtain ⟨rbs, streams, hrbs, hrec, hrb, hss, hrs, bs, hbs, hrecs⟩ :=
-    sessionPZk_factsJ H _ hct hown hcz (tabsOf o.sts) _ _
+    sessionPZk_factsJ H _ hct hown hcz (tabsOf o.sts) _ _ _
       (fun st hst' => by
         obtain ⟨st', hst'', rfl⟩ := Array.mem_map.1 hst'
         exact (hP st' hst'').1)

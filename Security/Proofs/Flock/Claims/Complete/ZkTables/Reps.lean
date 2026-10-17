@@ -29,19 +29,19 @@ open Lean (Json JsonNumber)
 
 /-- **Rep `rep` of table `i`'s run**: the rep, on the table's trace `tr`, its packed table, its masked level-0
 commitment `cm` under the tape's level `i`, the extra claims `e`, and the tape's pads at table `i` committed as `ic`,
-returns a proof with `q`, from the empty transcript at its domain and `n` sends, ending at the rounds `rs`
-(`RepRunZk` at table `i`). -/
+returns a proof with `q`, from the empty transcript at its domain and `n` sends, ending at the rounds `rs`, at some
+earlier claim points and mask words (`RepRunZk` at table `i`). -/
 def RepRunJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup)
     (v : Schedule × ℕ) (tr : Trace) (cm : Commit) (e : Array Claim) (tape : TapeZk) (i rep : ℕ) (rs : Array Round)
     (n : ℕ) (q : Zk.ZkProof → Prop) : Prop :=
-  ∃ p ic l t' l', innerCommitP (Hashes.ofSha512 h : Hashes V)
+  ∃ p ic l t' l' prior ws, innerCommitP (Hashes.ofSha512 h : Hashes V)
       (padsOf tape i rep (Zk.PadLayout.new st.m st.kLog v.1.k0)) (tape.innerSalt i rep) = .ok ic ∧ q p ∧
     rs = t'.rounds ∧ l.size = n ∧
     commitPZk (Hashes.ofSha512 h : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 (packed tr st.m)
       (tape.extra i) (tape.lanePad i) (tape.salt i 0 0) = .ok cm ∧
     ((repPZk (asksS resp) (Hashes.ofSha512 h) st v.1 v.2 rep (spec.domain spec.tables[i]! rep).toUTF8 tr
       (packed tr st.m) cm e (padsOf tape i rep (Zk.PadLayout.new st.m st.kLog v.1.k0)) ic (tape.extra i)
-      (tape.lanePad i) (tape.salt i rep) (tape.nonce i rep)).run
+      (tape.lanePad i) (tape.salt i rep) (tape.nonce i rep) prior ws).run
         (Transcript.init #[] (spec.domain spec.tables[i]! rep).toUTF8)).go l = (.ok (p, t'), l')
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
@@ -84,7 +84,7 @@ theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
   have hrun := o.ran
   unfold sessionS at hrun
   obtain ⟨schs, cms, ss, hsc, hcsz, hrec, hss, hrs, ⟨bs, hbs, hrecs⟩, hpsz, hfiles⟩ :=
-    sessionPZk_filesJ H _ hct hown hcz (tabsOf o.sts) _ _
+    sessionPZk_filesJ H _ hct hown hcz (tabsOf o.sts) _ _ _
       (fun st hst' => by
         obtain ⟨st', hst'', rfl⟩ := Array.mem_map.1 hst'
         exact (hP st' hst'').2) hst hrun
@@ -162,19 +162,20 @@ theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
     rw [hv]
   refine ⟨htabi, hv, hsch, fun r hr => ⟨hstream i r (by rw [repStreams_size, hsz]; omega) hr, ?_⟩⟩
   have hj : 2 * i + r < o.proofs.size := by rw [hpsz, repStreams_size, hsz]; omega
-  obtain ⟨e, p, ic, l, t', l', hex, hic, hb, hrr, hl, hp⟩ := hfiles (2 * i + r) hj
+  obtain ⟨e, p, ic, l, t', l', prior, hex, hic, hb, hrr, hl, hp⟩ := hfiles (2 * i + r) hj
   have hji : (2 * i + r) / 2 = i := by omega
   have hjr : (2 * i + r) % 2 = r := by omega
   rw [hji] at hex hic hb hp
   rw [hjr] at hic hp
   rw [htab i hi] at hex hic hb hp
+  rw [MaskRank.masksOf_getElem! hi] at hp
   have hext : o.extras i = e := by
     unfold Run.extras
     rw [hsess, htabi]
     simp only [sessOf, hex]
     rfl
-  have hps := Ret.go (hR i hi _ _ e hv hcm hex r ic hic) hp
-  refine ⟨p, ic, l, t', l', hic, ?_, hrr, hl, hcm, by rw [hext]; exact hp⟩
+  have hps := Ret.go (hR i hi _ _ e hv hcm hex r ic hic prior) hp
+  refine ⟨p, ic, l, t', l', prior, _, hic, ?_, hrr, hl, hcm, by rw [hext]; exact hp⟩
   have hdec' : Zk.decode (shapeZk o.tabs[i]! (o.sch i) (o.extras i).size) (o.bytes i r) = .ok p := by
     unfold Run.bytes
     rw [getElem!_pos o.proofs _ hj, hb, htabi, hsch, hext]
@@ -194,9 +195,9 @@ theorem replayJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.to
   intro i hi r hr
   obtain ⟨schs, cms, streams, hss, hbytes, -, -, hrep⟩ := Run.walkJ S h64 o hS hR
   obtain ⟨htabi, -, hsch, hreps⟩ := hrep i (Run.lt_sts hi)
-  obtain ⟨hstream, p, ic, l, t', l', -, hzp, hst', -, -, hrun⟩ := hreps r hr
-  have hroot := (Ret.go (repPZk_fields _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun).2.2
-  obtain ⟨R, rp, t₁, hre, C, hC⟩ := Ret.go (repPZk_replay _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
+  obtain ⟨hstream, p, ic, l, t', l', prior, ws, -, hzp, hst', -, -, hrun⟩ := hreps r hr
+  have hroot := (Ret.go (repPZk_fields _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun).2.2
+  obtain ⟨R, rp, t₁, hre, C, hC⟩ := Ret.go (repPZk_replay _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
   refine FlockComplete.Replay.ok_val ?_
   have hlay : o.lay i = Zk.PadLayout.new (Setup.ofCircuit o.sts[i]!).m (Setup.ofCircuit o.sts[i]!).kLog
       schs[i]!.1.k0 := by

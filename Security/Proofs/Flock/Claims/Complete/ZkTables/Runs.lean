@@ -45,21 +45,29 @@ def StmtAt (c : Case H rel) : Prop :=
 
 variable (H rel) in
 /-- Rep `rep` of table `i` of a good case as the session runs it, from its stream's domain: on the table's `--zk`
-schedule `v`, its masked level-0 commitment `cm`, its extra claims `e` and its pads' commitment `ic`. -/
+schedule `v`, its masked level-0 commitment `cm`, its extra claims `e` and its pads' commitment `ic`, its rank check at
+the earlier claim points `prior` over the table's mask words. -/
 def repRunJ (c : Case H rel) (i : ℕ) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (rep : ℕ)
-    (ic : InnerCommit) : PS (Zk.ZkProof × Transcript) :=
+    (ic : InnerCommit) (prior : Array (List F128)) : PS (Zk.ZkProof × Transcript) :=
   (repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit c.sts[i]!) v.1 v.2 rep
     (c.spec.domain c.spec.tables[i]! rep).toUTF8 (traces c.sts c.w)[i]!
     (packed (traces c.sts c.w)[i]! (Setup.ofCircuit c.sts[i]!).m) cm e
     (padsOf c.ω i rep (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]!).m (Setup.ofCircuit c.sts[i]!).kLog v.1.k0)) ic
-    (c.ω.extra i) (c.ω.lanePad i) (c.ω.salt i rep) (c.ω.nonce i rep)).run
+    (c.ω.extra i) (c.ω.lanePad i) (c.ω.salt i rep) (c.ω.nonce i rep) prior
+    (FlockSoundness.Discharge.Composed.maskWordsOf c.sts[i]!)).run
     (Transcript.init #[] (c.spec.domain c.spec.tables[i]! rep).toUTF8)
+
+/-- The claim points the session's `k`th rep checks ahead of its own (`priorOf`), the reps having returned `pts`: at
+a table's rep `1`, its rep `0`'s, read off its rounds. -/
+def priorJ (c : Case H rel) (pts : ℕ → Zk.ZkProof × Transcript) (k : ℕ) : Array (List F128) :=
+  if k % 2 = 1 then MaskRank.roundPoints c.sts[k / 2]!.m c.sts[k / 2]!.c.kLog (pts (k - 1)).2.rounds else #[]
 
 /-- **The masked prover's pieces return** (`ProverRunsZk`), at a good case: on each table `i`'s `--zk` schedule `v i`,
 its masked level-0 commitment `cm i` of its trace's packed table under the tape's level `i`, its extra claims `e i` at
 the link's points and its pads' commitments `ic i`, the session's `2·|tables|` reps in its rep streams' order (table
-`k / 2`'s rep `k % 2`) each return from where the one before stopped, the first from the link's send. The reps' coins
-are the case's at the session's rounds, where the masked prover's coin checks pass by `¬ BadZk`. -/
+`k / 2`'s rep `k % 2`) each return (`pts k`) from where the one before stopped, the first from the link's send, a rep
+`1`'s rank check at its rep `0`'s claim points too (`priorJ`). The reps' coins are the case's at the session's rounds,
+where the masked prover's coin checks pass by `¬ BadZk`. -/
 def ProverRunsAt (c : Case H rel) : Prop :=
   ∀ (v : ℕ → Schedule × ℕ) (cm : ℕ → Commit) (e : ℕ → Array Claim)
     (ic : ℕ → ℕ → InnerCommit), (∀ i < c.sts.size, Zk.schedule (Setup.ofCircuit c.sts[i]!).m = .ok (v i) ∧
@@ -70,9 +78,10 @@ def ProverRunsAt (c : Case H rel) : Prop :=
       ∀ rep, innerCommitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (padsOf c.ω i rep
         (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]!).m (Setup.ofCircuit c.sts[i]!).kLog (v i).1.k0))
         (c.ω.innerSalt i rep) = .ok (ic i rep)) →
-    ∀ l₀ : Array Claims.Msg, l₀.size = 1 → ∃ ls : ℕ → Array Claims.Msg, ls 0 = l₀ ∧ ∀ k < 2 * c.sts.size, ∃ pt,
-      (repRunJ H rel c (k / 2) (v (k / 2)) (cm (k / 2)) (e (k / 2)) (k % 2) (ic (k / 2) (k % 2))).go (ls k) =
-        (.ok pt, ls (k + 1))
+    ∀ l₀ : Array Claims.Msg, l₀.size = 1 → ∃ (ls : ℕ → Array Claims.Msg) (pts : ℕ → Zk.ZkProof × Transcript),
+      ls 0 = l₀ ∧ ∀ k < 2 * c.sts.size,
+      (repRunJ H rel c (k / 2) (v (k / 2)) (cm (k / 2)) (e (k / 2)) (k % 2) (ic (k / 2) (k % 2))
+        (priorJ c pts k)).go (ls k) = (.ok (pts k), ls (k + 1))
 
 section Several
 
@@ -178,12 +187,13 @@ theorem Case.sessionRuns (S : JsonSpec) (c : Case H rel) (hS : StmtAt c) (hR : P
   choose ic hic using fun i rep => innerCommitP_ok (Claims.hOf H) (padsOf c.ω i rep
     (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]!).m (Setup.ofCircuit c.sts[i]!).kLog schs[i]!.1.k0))
     (c.ω.innerSalt i rep)
-  obtain ⟨ls, hls0, hls⟩ := hR (fun i => schs[i]!) (fun i => cms[i]!) e ic
+  obtain ⟨ls, pts, hls0, hls⟩ := hR (fun i => schs[i]!) (fun i => cms[i]!) e ic
     (fun i hi => ⟨by rw [hst i hi]; exact hv i hi, by rw [hst i hi]; exact hcmi i hi, he i hi, hic i⟩) l₀ hl₀
   unfold afterLinkPZk
   refine Runs.bind (Q := fun _ _ => True) ?_ fun b l _ => ?_
   · rw [← Array.forIn_toList, FlockDeploy.repStreams_toList, hspec]
-    refine Runs.weaken (Runs.forIn_idx _ (fun j _ l => l = ls j) _ 0 ?_ _ _ hls0.symm) fun _ _ _ => trivial
+    refine Runs.weaken (Runs.forIn_idx _ (fun j b l => l = ls j ∧ (0 < j → b.1.back! = (pts (j - 1)).2.rounds)) _ 0
+      ?_ _ _ ⟨hls0.symm, fun h => absurd h (lt_irrefl 0)⟩) fun _ _ _ => trivial
     intro j ⟨i, k, name⟩ ha ⟨ss, ps⟩ l hinv
     obtain ⟨hj, rfl, rfl⟩ : j < 2 * c.sts.size ∧ i = j / 2 ∧ k = j % 2 := by
       rw [List.getElem?_map] at ha
@@ -194,11 +204,18 @@ theorem Case.sessionRuns (S : JsonSpec) (c : Case H rel) (hS : StmtAt c) (hR : P
       · rw [List.getElem?_eq_none (by simpa using hj)] at ha
         cases ha
     have hi : j / 2 < c.sts.size := by omega
-    obtain ⟨pt, hpt⟩ := hls j hj
+    have hpt := hls j hj
     simp only [Nat.zero_add] at hinv
-    subst hinv
+    obtain ⟨rfl, hback⟩ := hinv
     dsimp only
     rw [htab' _ hi]
+    have hprior : priorOf (Setup.ofCircuit c.sts[j / 2]!) ss (j % 2) = priorJ c pts j := by
+      unfold priorOf priorJ
+      by_cases h1 : j % 2 = 1
+      · rw [if_pos h1, if_pos h1, hback (by omega)]
+        rfl
+      · rw [if_neg h1, if_neg h1]
+    rw [hprior, MaskRank.masksOf_getElem! hi]
     refine Runs.bind (Q := fun ex l' => ex = e (j / 2) ∧ l' = ls j) ⟨e (j / 2), ls j, ?_, rfl, rfl⟩
       fun ex l' hq => ?_
     · rw [monadLift_go]
@@ -214,10 +231,10 @@ theorem Case.sessionRuns (S : JsonSpec) (c : Case H rel) (hS : StmtAt c) (hR : P
       simpa using this
     obtain ⟨rfl, rfl⟩ := hq
     rw [htp' _ hi]
-    refine Runs.bind (Q := fun _ l'' => l'' = ls (j + 1)) ⟨pt, ls (j + 1), hpt, rfl⟩ fun pt l'' hl'' => ?_
-    obtain ⟨p, t⟩ := pt
-    subst hl''
-    exact Runs.pure ⟨_, rfl, by simp only [Nat.zero_add]⟩
+    refine Runs.bind (Q := fun pt' l'' => pt' = pts j ∧ l'' = ls (j + 1)) ⟨pts j, ls (j + 1), hpt, rfl, rfl⟩
+      fun pt' l'' hq => ?_
+    obtain ⟨p, t⟩ := pt'
+    exact Runs.pure ⟨_, rfl, by simp only [Nat.zero_add]; exact ⟨hq.2, fun _ => by simp [← hq.1]⟩⟩
   obtain ⟨ss, ps⟩ := b
   dsimp only
   rw [recordJson_eqZk _ hct hown hcn]

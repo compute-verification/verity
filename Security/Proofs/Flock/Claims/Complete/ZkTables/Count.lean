@@ -80,11 +80,11 @@ theorem repStreams_sum (spec : SessionSpec) (K : ℕ → ℕ) :
 
 /-- **The masked session after the link** sends at most each table's two masked reps' rounds. -/
 theorem afterLinkPZk_sendsJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
-    (sts : Array Stmt) (schs : Array (Schedule × ℕ)) (trs : Array Trace) (tape : TapeZk) (tbls : Array (Array F128))
-    (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = sts.size)
+    (sts : Array Stmt) (words : Array (List ℕ)) (schs : Array (Schedule × ℕ)) (trs : Array Trace) (tape : TapeZk)
+    (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = sts.size)
     (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
     (hschs : ∀ j (hj : j < sts.size), Zk.schedule sts[j].m = .ok schs[j]!) :
-    sendsC.P (afterLinkPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) trs tape schs tbls cms c1)
+    sendsC.P (afterLinkPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape schs tbls cms c1)
       (rounds true spec sts) := by
   unfold afterLinkPZk
   extract_lets rootB points streams proofs
@@ -144,7 +144,7 @@ theorem sends_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
       exact hv
     refine sendsC_quiet_bind (commitsPZk_quiet _ _ _ _ _) fun cms _ => ?_
     exact sendsC.bind (sendsC_link _ _ _) fun c1 =>
-      afterLinkPZk_sendsJ _ _ o.spec o.sts schs _ _ _ cms c1 hspec (fun j hj => by have := (hall j hj).1; omega)
+      afterLinkPZk_sendsJ _ _ o.spec o.sts _ schs _ _ _ cms c1 hspec (fun j hj => by have := (hall j hj).1; omega)
         hschs
   have := hP #[] _ _ o.ran
   simpa using this

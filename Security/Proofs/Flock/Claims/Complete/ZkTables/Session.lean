@@ -33,8 +33,8 @@ def SessionFactsJ (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spe
 `2^64` bytes and well-formed rep rounds on its extra claims at the link's points, every rep stream naming a table. -/
 theorem sessionPZk_factsJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
     {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Json.parse spec.hello = .ok own)
-    {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (trs : Array Trace) (tape : TapeZk)
-    (hC : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v → ∀ g extra lanePad salt cm,
+    {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))
+    (trs : Array Trace) (tape : TapeZk) (hC : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 g extra lanePad
         salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64)
     (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v →
