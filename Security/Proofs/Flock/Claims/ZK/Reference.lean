@@ -214,7 +214,7 @@ noncomputable def refP (S : RefSession) : Proto Flock.Wit where
   dmsg x _ t cs := .ret (S.msgAt x (S.wt₀ x) t cs)
   sim _ _ _ _ := .ret []
 
-noncomputable instance (S : RefSession) : Fintype S.refP.Coin := S.finCoin
+noncomputable instance instFintypeCoinWitRefP (S : RefSession) : Fintype S.refP.Coin := S.finCoin
 
 /-! ## Its models -/
 
