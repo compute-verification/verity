@@ -69,6 +69,12 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
 - the guarantees say what their records say, and each names its owner (below);
+- with a `verifier` section, nothing the verifier's `entries` reach is `@[implemented_by]` or `@[extern]` outside `allow`,
+  and they reach the `hash` namespace only through `stop` (`verifier_failures`);
+- with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its
+  witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stated `¬ C …` past its `∀`
+  and `∃` binders with the claim `C` at the head, and guarantees `meets`, one per deployed record, that state the claim's
+  checkable antecedents there and not `C` itself (`claim_failures`; the `shape` rule doesn't apply to them);
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
@@ -382,7 +388,8 @@ module docstring has the layout and the rules. In short:
 - A package's record also carries the build of each dependency that Mathlib's cache doesn't provide (ArkLib and the
   packages it brings, for `Security/Proofs`), unstaged into that dependency's scope. A fresh machine then needs
   `setup.sh` (the toolchain, Mathlib's cache, the dependencies' sources) and `cache.py get`, and compiles none of ArkLib.
-- A miss or a mismatch means building from source. So do a missing read credential (`LEAN_CACHE_R2_*`), the kill switch
+- A miss or a mismatch means building from source. So do a missing read credential (the `LEAN_CACHE_*` variables, else
+  the same four lines in `~/.config/verity/lean-cache-read.env`, as the nodes' research user holds them), the kill switch
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
 - The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off`, and `LAKE_ARTIFACT_CACHE=false` unless check's audit
   names its node's own Lake cache (`--artifacts`, `lean_audit.LakeArtifacts`), which only a passing audit on that node

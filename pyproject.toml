@@ -59,6 +59,7 @@ verity-circuit-check = { workspace = true }
 torch = { index = "pytorch-cpu", extra = "torch-cpu" }
 verity-cli = { workspace = true }
 verity-difftest = { workspace = true }
+verity-exact-kit = { workspace = true }
 
 [dependency-groups]
 # pyyaml: the tests of node 1's dispatcher and pack pilot (research/pods/nebius), which render Job templates with it on the

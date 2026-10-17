@@ -7,8 +7,13 @@
 # hot items (EG_ARMS), the slice's per-call interleaving (IL pairs ARM:BASE; IL_COLD the same with L2 flushed before each
 # call), each other linear's hot items and interleaving (LAYER_ARMS, LAYER_IL), and ncu's issue and pipe counters at
 # o_proj. EG_SET=best times each receipt kind's fastest kernels instead, also after wedit alone (edited:K); EG_SET=x13
-# r9's XOR-in (13, 19) beside x_l2o and e_l4q. The small gate's seed has a key that key_ok_r9 rejects. Clocks are
-# read, never set.
+# r9's XOR-in (13, 19) beside x_l2o and e_l4q; EG_SET=eps1 the fold-cost sweep at 8192^3 and Llama-3.1-8B's o_proj and
+# gate_up at m = 2048, with ncu's sections on every arm at every shape (out/ncu/, read by eps_profile.py), EG_SET=eps1lag
+# duo's absorb lag and tie spacing there, EG_SET=eps1sleep consumers that sleep on a stage's mbarrier, EG_SET=eps1wave
+# the best of them at all four linears at m = 2048 and at a shape whose tiles fill whole waves, EG_SET=eps1pred the machine
+# model's predictions against kernels with extra scalar work and duo's counts across k, EG_SET=eps1uni the uniform
+# filler's stand-ins, EG_SET=eps1fill the four linears at 6016 tokens (whole waves) against 6144. The small gate's seed has
+# a key that key_ok_r9 rejects. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
 #     -- bash benchmarks/pouw/edited_gemm/run.sh
@@ -50,8 +55,19 @@ echo "sass_gate rc $?" | tee -a "$O/rc.txt"
 cuobjdump -sass "$BIN/egemm" > "$BIN/egemm.sass" 2>/dev/null
 awk '/Function :/{f=$3} /[[:space:]](LDL|STL)[.[:space:]]/{n[f]++} END{for (f in n) print n[f], f}' "$BIN/egemm.sass" | sort -k2 \
   > "$O/sass_local_mem_ops.txt" 2>&1
-export O_SHAPE="8192 4096 4096"
+export O_SHAPE=${O_SHAPE:-"8192 4096 4096"}
 export LAYERS=${LAYERS:-"qkv:8192:6144:4096 gate_up:8192:28672:4096 down:8192:4096:14336"}
+# EG_SET=eps1, the fold-cost sweep (note:20261017T0320Z-draft-eps1-profile): 8192^3, and Llama-3.1-8B's o_proj and gate_up
+# at m = 2048 (EG_SET=eps1lag too)
+case "${EG_SET:-all}" in
+  eps1 | eps1lag | eps1sleep) O_SHAPE="8192 8192 8192" LAYERS="o2k:2048:4096:4096 gu2k:2048:28672:4096" ;;
+  eps1wave) O_SHAPE="2048 6016 4096" LAYERS="q2k:2048:6144:4096 o2k:2048:4096:4096 gu2k:2048:28672:4096 dn2k:2048:4096:14336" ;;
+  eps1uni) O_SHAPE="8192 8192 8192" LAYERS="gu2k:2048:28672:4096" ;;
+  eps1pred) O_SHAPE="8192 8192 8192" LAYERS="gu2k:2048:28672:4096 k1k:2048:4096:1024 k2k:2048:4096:2048 k8k:2048:4096:8192 q8k:2048:6144:8192" ;;
+  eps1fill) O_SHAPE="4096 6016 4096"
+    LAYERS="o48:4096:6144:4096 q47:6144:6016:4096 q48:6144:6144:4096 g47:28672:6016:4096 g48:28672:6144:4096 d47:4096:6016:14336 d48:4096:6144:14336" ;;
+esac
+gzip -c "$BIN/egemm.sass" > "$O/egemm.sass.gz"
 export W="$BIN/gates"
 mkdir -p "$W/small" "$W/o"
 # shellcheck disable=SC2016
@@ -116,6 +132,63 @@ if [ "${EG_SET:-all}" = x13 ]; then
   larms=$arms lil=$il
   ncu="x13_l2o x_l2o" stall="x13_l2o"
 fi
+# EG_SET=eps1: the fold-cost sweep at r = 0 (e_plain), 1, 1.5, 2, 2.5, 3 (duo, e_l2q), 4 ops a word, all at e_l2q's
+# schedule, beside cuBLASLt, duo's e_l4q and XIN's x_l2o; ncu on every arm at every shape (NCU_ONE: its sections;
+# NCU_FULL: --set full; both only at the shapes NCU_SHAPES names when it is set, NCU_EVERY's arms at the others)
+export NCU_ONE="" NCU_FULL="" NCU_SHAPES="" NCU_EVERY=""
+if [ "${EG_SET:-all}" = eps1 ]; then
+  sweep="e_plain f10_l2q f15_l2q f20_l2q f25_l2q e_l2q f40_l2q"
+  arms="plain" il="e_plain:plain e_l2q:plain edited:e_l2q:plain"
+  for k in $sweep e_l4q x_l2o; do arms="$arms,$k"; done
+  cold="" larms=$arms lil=$il ncu="" stall=""
+  NCU_ONE="f10_l2q f15_l2q f20_l2q f25_l2q f40_l2q e_l4q x_l2o" NCU_FULL="plain e_plain e_l2q"
+fi
+# EG_SET=eps1lag: duo's schedule against eps_sched, the absorb LAG 2, 4, 6, 7 MMAs behind with the tie every 4th (q) or
+# 8th (o) MMA, at eps1's shapes, ncu sections on every arm
+if [ "${EG_SET:-all}" = eps1lag ]; then
+  arms="plain,e_plain,e_l2q,e_l4q,e_l4o,e_l6q,e_l7q,e_l7o" il="e_l4q:plain e_l7q:plain"
+  cold="" larms=$arms lil=$il ncu="" stall=""
+  NCU_ONE="plain e_plain e_l2q e_l4q e_l4o e_l6q e_l7q e_l7o"
+fi
+# EG_SET=eps1sleep: consumers that sleep on a stage's mbarrier (try_wait's suspend-time hint; the s kernels) against
+# ptxas's retry loop
+if [ "${EG_SET:-all}" = eps1sleep ]; then
+  arms="plain,e_plain,e_plains,e_l2q,e_l2qs,e_l7q,e_l7qs" il="e_l7q:plain e_l7qs:plain"
+  cold="" larms=$arms lil=$il ncu="" stall=""
+  NCU_ONE="e_plain e_plains e_l2q e_l2qs e_l7q e_l7qs"
+fi
+# EG_SET=eps1wave: where the gap above the bound goes at m = 2048: o = 2048 x 6016 x 4096 is 752 tiles, 4 whole waves of
+# 188 SMs, beside qkv's 768 (5 waves, the last 8% full), o_proj, gate_up and down
+if [ "${EG_SET:-all}" = eps1wave ]; then
+  arms="plain,e_plain,e_plains,e_l7q,e_l7qs" il="e_l7qs:plain"
+  cold="" larms=$arms lil=$il ncu="" stall=""
+  NCU_ONE="plain e_plains e_l7qs"
+fi
+# EG_SET=eps1pred: the machine model's predictions (note:20261017T0320Z-draft-eps1-calc) against kernels at e_l7qs's
+# schedule: r = 2 (f20), duo on x-op filler chains (fx<x>, x = 4.5, 8, 12, 24), duo with 8 or 16 uniform-datapath
+# instructions a MMA (u8, u16); ncu on every arm at 8192^3 and gate_up, and e_l7qs's counts at k = 1024 to 8192 for its
+# closed-form instruction counts
+if [ "${EG_SET:-all}" = eps1pred ]; then
+  arms="plain,e_plains,e_l7qs,f20_l7qs,fx45_l7qs,fx8_l7qs,fx12_l7qs,fx24_l7qs,u8_l7qs,u16_l7qs" il=""
+  cold="" larms=$arms lil="" ncu="" stall=""
+  NCU_ONE=${arms//,/ } NCU_SHAPES="o gu2k" NCU_EVERY="e_plains e_l7qs"
+fi
+# EG_SET=eps1uni: the uniform filler's stand-ins with the chains broadcast from lane 0 (u8s, u16s before each atom's
+# instructions, u16t before each tile's) beside u16 (ptxas's vector datapath) at 8192^3 and gate_up, ncu on every arm
+if [ "${EG_SET:-all}" = eps1uni ]; then
+  arms="plain,e_l7qs,u16_l7qs,u8s_l7qs,u16s_l7qs,u16t_l7qs" il=""
+  cold="" larms=$arms lil="" ncu="" stall=""
+  NCU_ONE=${arms//,/ }
+fi
+# EG_SET=eps1fill: the wave tail removed by the token count. 128 x 128 tiles over 188 = 4 x 47 SMs fill whole waves only
+# when 47 divides the tiles, which for every Llama-3.1-8B linear means tokens a multiple of 47 x 128 = 6016; tokens are
+# the n side (the kernel's m is a multiple of 1024), so o = o_proj at 6016 tokens (1504 tiles, 8 waves), q/g/d qkv,
+# gate_up and down, each at 6016 (47) and 6144 (48: 8.17, 12.26, 57.19, 8.17 waves); ncu's sections on H at every shape
+if [ "${EG_SET:-all}" = eps1fill ]; then
+  arms="plain,e_plains,e_l7qs" il=""
+  cold="" larms=$arms lil="" ncu="" stall=""
+  NCU_ONE="e_l7qs"
+fi
 export EG_ARMS=${EG_ARMS:-$arms} IL=${IL:-$il} IL_COLD=${IL_COLD:-$cold}
 export LAYER_ARMS=${LAYER_ARMS:-$larms} LAYER_IL=${LAYER_IL:-$lil}
 export NCU=${NCU:-$ncu} NCU_STALL=${NCU_STALL:-$stall}
@@ -150,7 +223,30 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
     EG_ARMS=$a ncu --clock-control none --kernel-name "regex:^${a}\$" --launch-skip 4 --launch-count 1 --csv \
       --metrics "regex:^smsp__average_warps_issue_stalled_.*_per_issue_active\.ratio$" \
       "$BIN/egemm" bench 1 $O_SHAPE > "$O/ncu-stall-$a.csv" 2>&1 || echo "ncu stall $a rc $?" >> "$O/rc.txt"
-  done'
+  done
+  if [ -n "$NCU_ONE$NCU_FULL" ]; then
+    mkdir -p "$O/ncu"
+    S=(--section SpeedOfLight --section ComputeWorkloadAnalysis --section InstructionStats --section WarpStateStats
+       --section SchedulerStats --section SourceCounters --section LaunchStats --section Occupancy)
+    for sh in "o:$(echo $O_SHAPE | tr " " :)" $LAYERS; do
+      IFS=: read -r name m n k <<< "$sh"
+      arms_="$NCU_FULL $NCU_ONE"
+      case " ${NCU_SHAPES:-$name} " in *" $name "*) ;; *) arms_=$NCU_EVERY ;; esac
+      for a in $arms_; do
+        case " $NCU_FULL " in *" $a "*) set_=(--set full) ;; *) set_=("${S[@]}") ;; esac
+        ncu --clock-control none --profile-from-start off --import-source no "${set_[@]}" -f -o "$O/ncu/$name-${a//:/_}" \
+          "$BIN/egemm" one "$a" "$m" "$n" "$k" > "$O/ncu/$name-${a//:/_}.log" 2>&1 || echo "ncu one $name $a rc $?" >> "$O/rc.txt"
+      done
+    done
+  fi'
 echo "lease 2 rc $?" >> "$O/rc.txt"
+for r in "$O"/ncu/*.ncu-rep; do
+  [ -e "$r" ] || continue
+  b=${r%.ncu-rep}
+  ncu -i "$r" --page raw --csv --print-metric-instances values > "$b.raw.csv" 2> "$b.raw.err" ||
+    ncu -i "$r" --page raw --csv > "$b.raw.csv" 2>> "$b.raw.err"
+  ncu -i "$r" --page details --csv > "$b.details.csv" 2> "$b.details.err"
+  ncu -i "$r" --page source --csv --print-source sass > "$b.sass.csv" 2> "$b.sass.err"
+done
 cat "$O/rc.txt"
 $PY $D/summary.py "$O" | tee "$O/summary.md"
