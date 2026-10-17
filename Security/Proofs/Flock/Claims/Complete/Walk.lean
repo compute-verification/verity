@@ -251,11 +251,11 @@ theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Rea
   obtain ⟨sch, cm, e, hsch, hcm, he, p₀, t₀, l₁, p₁, t₁, hr₀, hr₁, hps, hrec⟩ :=
     JsonRT.sessionP_reps H o.resp ht hct (Setup.ofCircuit st) _ _ hrun
   dsimp only at hps hrec
+  have hok₀ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _ he) hr₀
+  have hok₁ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _ he) hr₁
   rw [show o.resp 0 = (Claims.coinSeq o.r 0).bytes from rfl, JsonRT.ptsOf_coin] at he hrec
   have hcap := hC sch hsch _ _ cm hcm
   have hrs1 := JsonRT.repStreams_one ht
-  have hok₀ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _) hr₀
-  have hok₁ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _) hr₁
   have hpts : (pointsOf o.spec (Claims.coinSeq o.r 0)).size = o.spec.points := by simp [pointsOf]
   have hpm : ∀ p ∈ pointsOf o.spec (Claims.coinSeq o.r 0), p.size = o.spec.mPts := by
     intro p hp
