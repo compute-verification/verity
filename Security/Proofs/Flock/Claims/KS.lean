@@ -31,6 +31,7 @@ import Proofs.Flock.Claims.KS.ZkTables
 import Proofs.Flock.Claims.KS.ZkBoundJ
 import Proofs.Flock.Claims.KS.ZkLiveJ
 import Proofs.Flock.Claims.KS.ZkAccJ
+import Proofs.Flock.Claims.KS.RoundsNZk
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -136,4 +137,7 @@ masked record an output at the empty openings never self-clashes, so table `j`'s
 on accepted live runs (`ZkAccJ`: `FlockDeploy.KS.not_selfClashZ_nul`, `FlockDeploy.KS.mean_selfClash_le_liveJZ`); with
 the live sessions' bound at escapes on accepted runs (`FlockDeploy.KS.ZkLiveAccJ`, which gives `ZkLiveJ`,
 `FlockDeploy.KS.zkLiveJ_of_acc`), every table's bound holds with escapes on accepted runs at every statement
-(`Flock.TableBoundJAccAt`, `FlockDeploy.KS.zk_tableBoundJAccAt`). -/
+(`Flock.TableBoundJAccAt`, `FlockDeploy.KS.zk_tableBoundJAccAt`). Each round of an accepted masked rep issued the coins
+its statement fixes (`RoundsNZk`: `FlockDeploy.repNsZ`, `FlockDeploy.zkVerifyRepWith_readsN`; per rep stream,
+`FlockDeploy.zkRepNs`, `FlockDeploy.streams_ns_zk`), and custody reads each round message's coin at the session's count
+(`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). -/
