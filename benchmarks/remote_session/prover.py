@@ -15,9 +15,27 @@ honest          every block held and read
 skip:F          a fraction F of the blocks dropped from the store before the session (chosen afresh each session,
                 zeroed where they were): each pass's receipts for them are of what is there, so wrong, and an opening
                 of one carries the true block, as rebuilding it from its payload after the roots would give
+kv:P            honest, beside a serving node's KV writes (`ServingTrace`): before every --kv-every'th pass but the
+                session's first, a memory-map/v1 step writes P pages and releases the blocks they overwrite or free,
+                and a step re-keys each block before a pass of the window the session's lifetime cap L makes it stale
+                in; every pass reads every live block, registered and appended
+kvdrop:P        kv:P, but the appended pages are not held: each pass's receipts for them are of zeros, and an
+                opening of one carries the true page, as skip's do
 ~~~
 
+With a serving trace, each root's message carries what changed since the last root sent, in the order the verifier
+applies it: the appends' tree roots and sizes (`Session.append`), then the blocks released as runs
+(`Session.release`), then the pass's plan as a change from the last one sent (`Session.receive(..., change=...)`).
+A pass discarded at a boundary sends nothing, and the next root sent carries its changes too.
+
+Every root's message names the step its pass covers (`Session.receive(..., step=...)`, PROTOCOL.md §8 "The pass and
+its step"): the backend's `step_of(ticket)` if it has one, which a serving backend takes from its engine, and otherwise
+the count of the session's passes launched before it. A serving trace's step before pass n is recorded as step n − 1,
+so pass n reads the store that step left.
+
     python prover.py --connect HOST:PORT --out OUT --plan honest,skip:3e-5 [device options, `device.py`]
+    python prover.py --connect HOST:PORT --out OUT --plan kv:4,kvdrop:4 --cpu 256 --codec p512/k2
+                                                        the driver's reference as the backend, no GPU
 """
 from __future__ import annotations
 
@@ -41,7 +59,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, coins, receipts as rb  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, memory_map, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import wire  # noqa: E402
@@ -52,6 +70,7 @@ OPENINGS_PART = 128
 DROPPED_LISTED = 4096
 """A session's result lists its dropped blocks up to this many, and counts them always."""
 BOUNDARIES = ("coin", "close", "end")
+MODES = ("honest", "skip", "kv", "kvdrop")
 
 
 @dataclass
@@ -60,7 +79,10 @@ class _Pass:
     i: int
     ticket: object
     start: int | None
+    step: int = 0
     discard: bool = False
+    plan: rb.Plan | None = None
+    upto: tuple[int, int] = (0, 0)
 
 
 def hits(dropped: np.ndarray, positions) -> np.ndarray:
@@ -76,22 +98,111 @@ def parse_plan(plan: str) -> list[tuple[str, float]]:
     out = []
     for part in plan.split(","):
         mode, _, f = part.partition(":")
-        if mode not in ("honest", "skip"):
-            raise ValueError(f"a session's mode is honest or skip:F, not {part!r}")
+        if mode not in MODES or (mode in ("kv", "kvdrop") and (not f.isdigit() or int(f) < 1)):
+            raise ValueError(f"a session's mode is honest, skip:F, kv:P or kvdrop:P (P pages a step), not {part!r}")
         out.append((mode, float(f) if f else 0.0))
     return out
 
 
+def payload(rng: random.Random) -> bytes:
+    """A random payload block whose last word is below any codec's p."""
+    return rng.randbytes(rcodec.BLOCK_BYTES - 16) + bytes(16)
+
+
+def runs_of(blocks) -> tuple[tuple[int, int], ...]:
+    """Sorted distinct store indices as a plan's canonical runs (first, count)."""
+    out: list[list[int]] = []
+    for j in blocks:
+        if out and out[-1][0] + out[-1][1] == j:
+            out[-1][1] += 1
+        else:
+            out.append([j, 1])
+    return tuple((f, c) for f, c in out)
+
+
+def plan_change(before: rb.Plan, after: rb.Plan) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
+    """`after` as `before.changed(added, removed, ...)` takes it: (added, removed) runs."""
+    a, b = set(before), set(after)
+    return runs_of(sorted(b - a)), runs_of(sorted(a - b))
+
+
+class ServingTrace:
+    """A serving node's KV writes beside its registered store, as memory-map/v1 steps (`memory_map`).  Step s writes
+    `pages` blocks of fresh payloads round-robin over a pool of slots: the store's last `pool` registered blocks (a KV
+    pool's pages, registered as filler) and `pool // 4` slots of memory outside the store.  Every third step first frees
+    the `pages // 2` slots after its last write, so a later write lands in a slot holding nothing.  A block written in
+    window a is stale from window a + `lifetime` (`audit.Params.lifetime`), and the step before a pass of a window
+    that would hold a stale block re-keys it: writes its payload again in its slot, at the store's next fresh index.
+    `memory_map.Replay` turns each step into the audit's append, which the backend's store encodes under the pages'
+    bound keys, and its release; `plan` is every live block in store order."""
+
+    def __init__(self, backend, registration: audit.Registration, pages: int, pool: int, rng: random.Random,
+                 lifetime: int = audit.LIFETIME) -> None:
+        N = registration.blocks
+        pool = max(1, min(pool, N))
+        self.slots = list(range(N - pool, N)) + list(range(N, N + max(1, pool // 4)))
+        if pages + pages // 2 > len(self.slots):
+            raise ValueError(f"a step of {pages} pages frees and writes more than the pool's {len(self.slots)} slots")
+        self.backend, self.registration, self.pages, self.rng = backend, registration, pages, rng
+        self.lifetime = lifetime
+        self.replay = memory_map.Replay(memory_map.Header(registration.digest, N), registration)
+        self.steps, self.cursor, self.rekeyed = 0, 0, 0
+        self.live = set(range(N))
+        self.held: dict[int, tuple[int, bytes]] = {}
+        self.appends: list[tuple[bytes, int]] = []
+        self.released: list[int] = []
+        self.appended: list[int] = []
+
+    def stale(self, window: int) -> list[int]:
+        """The slots holding a block written `lifetime` windows or more before `window`, by its index."""
+        old = [x for x, (a, _) in self.held.items() if a <= window - self.lifetime]
+        return sorted(old, key=self.replay.holds)
+
+    def step(self, s: int, window: int, pages: bool = True) -> memory_map.Change:
+        """The trace's next step in `window`, recorded as memory-map step `s`: its `pages` writes if `pages`, and the
+        stale blocks' re-keys."""
+        n, k = len(self.slots), (self.pages // 2 if pages and self.steps % 3 == 2 else 0)
+        freed = [x for x in (self.slots[(self.cursor + u) % n] for u in range(k)) if self.replay.holds(x) is not None]
+        slots = [self.slots[(self.cursor + k + u) % n] for u in range(self.pages)] if pages else []
+        if pages:
+            self.cursor = (self.cursor + k + self.pages) % n
+            self.steps += 1
+        payloads = [payload(self.rng) for _ in slots]
+        rekey = [x for x in self.stale(window) if x not in slots and x not in freed]
+        slots, payloads = slots + rekey, payloads + [self.held[x][1] for x in rekey]
+        self.rekeyed += len(rekey)
+        first = self.replay.extent
+        written = tuple(memory_map.Written(x, first + u, rcodec.digest(m)) for u, (x, m) in enumerate(zip(slots, payloads)))
+        change = self.replay.apply(memory_map.Step(s, tuple(freed), written))
+        for x in freed:
+            self.held.pop(x, None)
+        self.held.update((x, (window, m)) for x, m in zip(slots, payloads))
+        a = self.backend.append(payloads, [self.rng.randbytes(rb.SALT_BYTES) for _ in payloads])
+        if a.first != change.first or a.digests != change.digests:
+            raise AssertionError("the store's append is not the memory map's")
+        self.appends.append((a.root, a.count))
+        self.appended.extend(range(a.first, a.first + a.count))
+        gone = [j for f, c in change.released for j in range(f, f + c)]
+        self.released.extend(gone)
+        self.live.difference_update(gone)
+        self.live.update(range(a.first, a.first + a.count))
+        return change
+
+    def plan(self) -> rb.Plan:
+        return rb.Plan(runs_of(sorted(self.live)), self.replay.extent)
+
+
 class CpuBackend:
     """The driver's reference as a backend: a store of `blocks` random payload blocks under the registration's codec,
-    every pass `receipts.receipter` over every block, its tree `receipts.tree`, salts from `entropy`."""
+    every pass `receipts.receipter` over its plan's blocks (every registered block unless the pass names a plan), its
+    tree `receipts.tree`, salts from `entropy`; blocks appended after the codec seed (`append`) are the session's."""
 
     def __init__(self, blocks: int, rng: random.Random, read_bytes_per_s: float = 1e12) -> None:
         self.blocks, self.rng, self.read_bytes_per_s = blocks, rng, read_bytes_per_s
-        self.payloads = [bytes(rng.getrandbits(8) for _ in range(rcodec.BLOCK_BYTES - 16)) + bytes(16)
-                         for _ in range(blocks)]
+        self.payloads = [payload(rng) for _ in range(blocks)]
         self.salts = [rng.randbytes(rb.SALT_BYTES) for _ in range(blocks)]
         self.dropped: set[int] = set()
+        self.gates: dict = {}
 
     def payload_root(self, node: bytes) -> bytes:
         return audit.payload_tree(node, self.payloads, self.salts).commitment.root
@@ -100,6 +211,14 @@ class CpuBackend:
         self.store = audit.Store(registration, self.payloads, self.salts)
         self.plan = rb.Plan.whole(self.blocks)
         return {"encode_bytes_per_s": 1.0}
+
+    def begin_session(self) -> None:
+        """A session's appends start again from N."""
+        del self.store.blocks[self.blocks:]
+        self.store.appends.clear()
+
+    def append(self, payloads, salts) -> audit.Append:
+        return self.store.append(payloads, salts)
 
     def calibrate(self) -> dict:
         return {"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": self.read_bytes_per_s}
@@ -112,47 +231,54 @@ class CpuBackend:
         if previous is not None:
             self.previous = previous
 
-    def launch(self, i: int, after: dict | None) -> dict:
-        """Pass i of the window, chained from `after`'s root (None: the window's previous root), run when awaited."""
-        return {"challenge": self.challenge, "i": i, "after": after, "previous": self.previous, "root": None}
+    def launch(self, i: int, after: dict | None, plan: rb.Plan | None = None) -> dict:
+        """Pass i of the window over `plan` (None: every registered block), chained from `after`'s root (None: the
+        window's previous root), run when awaited."""
+        return {"challenge": self.challenge, "i": i, "after": after, "previous": self.previous, "root": None,
+                "plan": plan}
 
     def wait(self, ticket: dict):
         after = ticket["after"]
         prev = ticket["previous"] if after is None else after["root"]
-        root, handle = self.run_pass(rb.seed(ticket["challenge"], ticket["i"], prev))
+        root, handle = self.run_pass(rb.seed(ticket["challenge"], ticket["i"], prev), ticket["plan"])
         ticket["root"] = root
         return root, handle
 
-    def run_pass(self, seed: bytes):
+    def run_pass(self, seed: bytes, plan: rb.Plan | None = None):
+        plan = plan or self.plan
         r = rb.receipter(self.store.registration.receipt, seed, self.store.registration.rows)
-        ys = tuple(r(j, bytes(rcodec.BLOCK_BYTES) if j in self.dropped else self.store.blocks[j]) for j in self.plan)
-        salts = tuple(self.rng.randbytes(rb.SALT_BYTES) for _ in range(rb.leaves(self.blocks)))
-        tree = rb.tree(seed, self.plan, ys, salts)
-        return tree.commitment.root, (ys, salts, tree)
+        ys = tuple(r(j, bytes(rcodec.BLOCK_BYTES) if j in self.dropped else self.store.blocks[j]) for j in plan)
+        salts = tuple(self.rng.randbytes(rb.SALT_BYTES) for _ in range(rb.leaves(plan.length)))
+        tree = rb.tree(seed, plan, ys, salts)
+        return tree.commitment.root, (ys, salts, tree, plan)
 
     def open_window(self, items) -> list[list[tuple]]:
         return [self.open(handle, positions) for handle, positions in items]
 
     def open(self, handle, positions: list[int]) -> list[tuple]:
-        ys, salts, tree = handle
+        """Each position's opening fields: the block, its receipt leaf, salt and path, and its payload's salt, path
+        and digest d_j (empty for a registered block)."""
+        ys, salts, tree, plan = handle
         out = []
         for p in positions:
-            c = p // rb.PER_LEAF
+            c, j = p // rb.PER_LEAF, plan.block(p)
             leaf = b"".join(ys[rb.PER_LEAF * c:rb.PER_LEAF * (c + 1)])
-            out.append((self.store.blocks[p], leaf, salts[c], tree.open(c).path, self.store.salts[p],
-                        self.store.payload_tree.open(p).path))
+            out.append((self.store.blocks[j], leaf, salts[c], tree.open(c).path, *self.store.committed(j)))
         return out
 
 
 class ProverSide:
     def __init__(self, conn: wire.Conn, backend, node: bytes, plan: list[tuple[str, float]], *, seed: int = 0,
-                 defer_openings: bool = True, warmup_ns: int = 0, log=print) -> None:
+                 defer_openings: bool = True, warmup_ns: int = 0, kv_every: int = 1, kv_pool: int = 64,
+                 log=print) -> None:
         self.conn, self.backend, self.node, self.plan, self.log = conn, backend, node, plan, log
         self.defer_openings, self.warmup_ns = defer_openings, warmup_ns
+        self.kv_every, self.kv_pool = kv_every, kv_pool
         self.rng = random.Random(seed)
         self.inbox: queue.Queue = queue.Queue()
         self.jobs: queue.Queue = queue.Queue()
         self.kept: dict[tuple[int, int], object] = {}
+        self.plans: dict[tuple[int, int], rb.Plan] = {}
         self.dropped = np.empty(0, dtype=np.int64)
         self.lock = threading.Lock()
         self.open_enabled = threading.Event()
@@ -193,7 +319,8 @@ class ProverSide:
             c2 = time.perf_counter_ns()
             for j, ((i, items), got) in enumerate(zip(passes, fields)):
                 for (k, p), f in zip(items, got):
-                    out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"")
+                    out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"",
+                                           f[6] if len(f) > 6 else b"")
                 fields[j] = None
             del fields
             parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
@@ -211,8 +338,13 @@ class ProverSide:
                     del self.kept[key]
             self.opened.append({"t": t, "n": n, "bytes": sent, "ns": time.perf_counter_ns() - c0,
                                 "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
-                                "on_dropped": int(hits(self.dropped, [p for _, p in draws]).sum())})
+                                "on_dropped": int(hits(self.dropped, [self.block(t, i, p) for i, p in draws]).sum())})
             self.jobs.task_done()
+
+    def block(self, t: int, i: int, p: int) -> int:
+        """The block at position p of pass i of window t: p itself unless the pass's plan was sent."""
+        plan = self.plans.get((t, i))
+        return p if plan is None else plan.block(p)
 
     def expect(self, kind: str):
         while True:
@@ -241,12 +373,20 @@ class ProverSide:
         if commitment.registration != self.registration.digest or commitment.count != 2 * W:
             raise ValueError("the session's coins are not for this registration")
         N = self.backend.blocks
+        getattr(self.backend, "begin_session", lambda: None)()
+        trace = None
+        if mode in ("kv", "kvdrop"):
+            if not hasattr(self.backend, "append"):
+                raise ValueError(f"a {mode} session needs a backend that appends blocks after the codec seed (--cpu)")
+            trace = ServingTrace(self.backend, self.registration, int(fraction), self.kv_pool,
+                                 random.Random(self.rng.getrandbits(64)), head.get("lifetime", audit.LIFETIME))
         if mode == "skip":
             pick = np.random.default_rng(self.rng.getrandbits(64))
             dropped = np.sort(pick.choice(N, size=round(fraction * N), replace=False)).astype(np.int64)
         else:
             dropped = np.empty(0, dtype=np.int64)
         self.backend.arm(dropped)
+        self.plans = {}
         # Untimed passes bring the GPU to its boost clocks and warm its caches before the window clock starts: the
         # window's released_ns is the verifier's when it sends the first coin, after this `armed`, so the first
         # window does not pay the first passes' ramp (`device.DeviceStore.warmup`).
@@ -266,20 +406,51 @@ class ProverSide:
             return coin.coin
 
         backend, clock = self.backend, self.conn.clock
+        step_of = getattr(backend, "step_of", None)
+        launched, sent_plan, sent_upto = 0, rb.Plan.whole(N), (0, 0)
+
+        def launch(t: int, i: int, after, start: int | None) -> _Pass:
+            """Pass i of window t; with a serving trace, after the trace's step if one falls due, over every live
+            block."""
+            nonlocal launched
+            n, launched = launched, launched + 1
+            if trace is None:
+                ticket = backend.launch(i, after)
+                return _Pass(t, i, ticket, start, step=step_of(ticket) if step_of is not None else n)
+            due = n > 0 and n % self.kv_every == 0
+            if due or (n > 0 and trace.stale(t)):
+                trace.step(n - 1, t, due)
+                if mode == "kvdrop":
+                    backend.arm(trace.appended)
+            plan = trace.plan()
+            return _Pass(t, i, backend.launch(i, after, plan), start, step=n, plan=plan,
+                         upto=(len(trace.appends), len(trace.released)))
+
         backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
-        inflight = deque([_Pass(0, 0, backend.launch(0, None), clock())])
+        inflight = deque([launch(0, 0, None, clock())])
         pending: deque = deque()
         passes, last, nxt, stopping, ended, discarded = [], None, 1, False, None, 0
 
         def send(x: _Pass, root: bytes, handle, seen: int) -> None:
+            nonlocal sent_plan, sent_upto
             with self.lock:
                 self.kept[(x.t, x.i)] = handle
-            self.conn.send({"type": "root", "t": x.t, "i": x.i, "root": root.hex()})
+            msg = {"type": "root", "t": x.t, "i": x.i, "root": root.hex(), "step": x.step}
+            if x.plan is not None:
+                (a0, r0), (a1, r1) = sent_upto, x.upto
+                if a1 > a0:
+                    msg["appends"] = [[r.hex(), c] for r, c in trace.appends[a0:a1]]
+                if r1 > r0:
+                    msg["released"] = [list(r) for r in runs_of(sorted(trace.released[r0:r1]))]
+                msg["change"] = [[list(r) for r in side] for side in plan_change(sent_plan, x.plan)]
+                self.plans[(x.t, x.i)] = x.plan
+                sent_plan, sent_upto = x.plan, x.upto
+            self.conn.send(msg)
             passes.append((x.t, x.i, x.start, seen, clock()))
 
         while inflight:
             if not stopping and len(inflight) < 2:
-                inflight.append(_Pass(t, nxt, backend.launch(nxt, inflight[-1].ticket), None))
+                inflight.append(launch(t, nxt, inflight[-1].ticket, None))
                 nxt += 1
             x = inflight.popleft()
             root, handle = backend.wait(x.ticket)
@@ -311,8 +482,10 @@ class ProverSide:
                 continue
             t += 1
             backend.begin_window(take(wire.coin_of(msg["coin"])), None)
-            inflight.append(_Pass(t, 0, backend.launch(0, last.ticket if last else None), None if inflight else clock()))
+            inflight.append(launch(t, 0, last.ticket if last else None, None if inflight else clock()))
             nxt = 1
+        if mode == "kvdrop":
+            dropped = self.dropped = np.array(sorted(trace.appended), dtype=np.int64)
         self.conn.send({"type": "closed", "k": k})
         self.open_enabled.set()
         if ended is None:
@@ -328,13 +501,22 @@ class ProverSide:
             per_window[tt] += 1
         failure = ended["failure"]
         at = failure.get("at") if failure else None
-        return {"k": k, "mode": mode, "fraction": fraction,
-                "dropped": dropped.tolist() if len(dropped) <= DROPPED_LISTED else None, "dropped_count": len(dropped),
-                "failure_on_dropped": bool(hits(dropped, [at[1]])[0]) if at else None,
-                "accepted": ended["accepted"], "failure": failure, "passes": [per_window[tt] for tt in range(W)],
-                "pass_host_ns": [seen - start for _, _, start, seen, _ in passes],
-                "gap_host_ns": [sent - seen for _, _, _, seen, sent in passes], "discarded": discarded,
-                "opened": self.opened, "warmup": self.warmup, "device": device}
+        out = {"k": k, "mode": mode, "fraction": fraction,
+               "dropped": dropped.tolist() if len(dropped) <= DROPPED_LISTED else None, "dropped_count": len(dropped),
+               "failure_on_dropped": bool(hits(dropped, [self.block(failure["t"], *at)])[0]) if at else None,
+               "accepted": ended["accepted"], "failure": failure, "passes": [per_window[tt] for tt in range(W)],
+               "pass_host_ns": [seen - start for _, _, start, seen, _ in passes],
+               "gap_host_ns": [sent - seen for _, _, _, seen, sent in passes], "discarded": discarded,
+               "opened": self.opened, "warmup": self.warmup, "device": device}
+        if trace is not None:
+            sent = [self.plans[tt, i] for tt, i, *_ in passes]
+            out["kv"] = {"pages": trace.pages, "every": self.kv_every, "pool_slots": len(trace.slots),
+                         "steps": trace.steps, "rekeyed": trace.rekeyed, "lifetime": trace.lifetime,
+                         "appended": len(trace.appended), "released": len(trace.released),
+                         "sent_appended": sum(c for _, c in trace.appends[:sent_upto[0]]), "sent_released": sent_upto[1],
+                         "pass_blocks": [p.length for p in sent],
+                         "pass_appended": [sum(max(0, f + c - max(f, N)) for f, c in p.runs) for p in sent]}
+        return out
 
     def _drain(self, pending: deque) -> None:
         """Move the boundary messages that have arrived into `pending`, in order."""
@@ -362,19 +544,31 @@ def main() -> int:
     ap.add_argument("--warmup-ms", type=float, default=2500.0,
                     help="untimed passes before each session's first window, to reach boost clocks before the window "
                          "clock starts (0: none; the CPU reference backend ignores it)")
-    import device
+    ap.add_argument("--cpu", type=int, default=0, metavar="BLOCKS",
+                    help="the driver's reference (`CpuBackend`) over a store of BLOCKS blocks, no GPU and none of "
+                         "device.py's options")
+    ap.add_argument("--codec", default=rcodec.DEFAULT.name, help="the registration's codec, with --cpu")
+    ap.add_argument("--kv-every", type=int, default=1, help="a kv session's passes per memory-map step")
+    ap.add_argument("--kv-pool", type=int, default=64, help="a kv session's registered slots the KV pool writes over")
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--cpu", type=int, default=0)
+    if not pre.parse_known_args()[0].cpu:
+        import device
 
-    device.add_arguments(ap)
+        device.add_arguments(ap)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     sys.setswitchinterval(2e-4)
-    backend = device.from_arguments(a, log=lambda m: print(m, flush=True))
+    if a.cpu:
+        backend = CpuBackend(a.cpu, random.Random(a.seed))
+    else:
+        backend = device.from_arguments(a, log=lambda m: print(m, flush=True))
     host, port = a.connect.rsplit(":", 1)
     conn = wire.connect(host, int(port))
     p = ProverSide(conn, backend, a.node.encode(), parse_plan(a.plan), seed=a.seed,
-                   defer_openings=not a.overlap_openings, warmup_ns=round(a.warmup_ms * 1e6),
-                   log=lambda m: print(m, flush=True))
-    cal = p.register()
+                   defer_openings=not a.overlap_openings, warmup_ns=round(a.warmup_ms * 1e6), kv_every=a.kv_every,
+                   kv_pool=a.kv_pool, log=lambda m: print(m, flush=True))
+    cal = p.register(codec=wire.codec_named(a.codec)) if a.cpu else p.register()
     print(f"prover: registered, calibration {json.dumps(cal)}", flush=True)
     stalls = getattr(backend, "calibration_trace", None)
     (a.out / "prover.json").write_text(json.dumps({"calibration": cal, "gates": backend.gates,
@@ -396,7 +590,10 @@ def main() -> int:
             gc.enable()
             gc.unfreeze()
         results.append(r)
-        print(f"prover: session {r['k']} ({mode}:{fraction}): accepted={r['accepted']} passes={r['passes']}", flush=True)
+        kv = r.get("kv")
+        print(f"prover: session {r['k']} ({mode}:{fraction}): accepted={r['accepted']} passes={r['passes']}"
+              + (f" appended={kv['appended']} released={kv['released']} failure={r['failure']}"
+                 f" on_dropped={r['failure_on_dropped']}" if kv else ""), flush=True)
         (a.out / "prover.json").write_text(json.dumps(
             {"schema": "verity/remote-session/prover/v0", "registration": wire.registration_json(p.registration),
              "calibration": cal, "gates": backend.gates, "calibration_trace": stalls, "sessions": results,

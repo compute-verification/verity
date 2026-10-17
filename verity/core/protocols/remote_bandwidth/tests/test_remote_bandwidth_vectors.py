@@ -271,7 +271,7 @@ def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kin
         passes.append(prover.run(challenge, i, previous, plan))
         ps = passes[-1]
         assert ps.root.hex() == want["root"] and ps.plan.runs == tuple(map(tuple, want["plan"]))
-        assert s.receive(0, i, ps.root, ps.plan.runs) is None
+        assert s.receive(0, i, ps.root, ps.plan.runs, step=i) is None
         previous = ps.root
     clock.now = rv.PARAMS.window_ns
     assert s.boundary() is None
