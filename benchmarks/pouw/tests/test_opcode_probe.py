@@ -232,6 +232,36 @@ def test_sm89_frontier_counts_every_non_mma_instruction_as_x():
     assert (m, x) == pytest.approx((0.25, 0.25 * 7 / 8))
 
 
+def test_sm89_uniform_lines(tmp_path):
+    """UNI runs on UP at its fastest alone loop's rate, every uniform instruction counted, and costs issue the least SMSP-
+    cycles a uniform instruction adds beside a base loop, less the margin (JI89 that over SCHED)."""
+    rows_, verdicts = [], []
+
+    def put(name, top, counted, cycles):   # cycles: SMSP-cycles a warp-iteration
+        rows_.append({"probe": name, "run": RUN, "counted": counted, "rates": {f"0:{counted}": 4 / cycles * top[counted]}})
+        verdicts.append({"probe": name, "verdict": {"loops": [{"top": {**top, "IADD3": 1, "BRA": 1}}]}})
+
+    for i, p in enumerate(sm89.UNI_ALONE):
+        put(p, {"ULOP3.LUT": 64}, "ULOP3.LUT", 128 * (1 + i / 100))          # 2.0 a SM-clock at best
+    put("ut_0", {"IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 64)
+    for p in sm89.UNI_TENSOR[1:]:
+        put(p, {"ULOP3.LUT": 48, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 100)   # UP's 96, 4% over
+    for base, ps in sm89.UNI_BESIDE.items():
+        put(base, {"LOP3.LUT": 32, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 150)
+        for p in ps:
+            put(p, {"ULOP3.LUT": 64, "LOP3.LUT": 32, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8",
+                150 + 64 * (0.8 if p == "uh_64m" else 1.0))
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows_))
+    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    rws, cen = [["issue", "measured", "r0", "i"], ["JI89", "joint", "r0", "j"]], []
+    sm89.uniform(tmp_path, rws, cen)
+    c = 0.8 / 1.02
+    assert cen == [["UNI", "UP", "2", "0.02", "", "", "", "", RUN], ["UNI", "issue", "", "", f"{c:.6g}", "", "", "", RUN],
+                   ["UNI", "JI89", "", "", f"{c / sm89.TK.SCHED:.9g}", "", "", "", RUN]]
+    assert rws[0][2] == f"r0 {RUN}" and "least at uh_64m" in rws[0][3] and rws[1][2] == f"r0 {RUN}"
+    assert rws[2][:3] == ["UP", "measured", RUN] and "within 4.2%" in rws[2][3]
+
+
 def test_one_census_line_a_kind_and_row(tmp_path):
     binary = tmp_path / "atom"
     binary.write_bytes(b"\x7fELF")

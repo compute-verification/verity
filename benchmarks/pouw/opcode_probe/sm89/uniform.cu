@@ -6,7 +6,7 @@
 // chain). The gate pins every loop opcode, vector and uniform alike, so a chain that lands on lanes refuses.
 //   u<F>_<K><S>   F: z alone (the MMAs unread); t 8 IMMA.16816 a step, accumulators carried to the sink (the tensor
 //                 pipe saturated); h honest16 (the MMAs and duo on each accumulator: the ALU pipe binds); g h and 64
-//                 FFMA on the accumulators' bits (FACET-BREAK's: issue binds)
+//                 FFMA on the accumulators' bits (FACET-BREAK's issue-nearest setting)
 //                 S, the uniform step on each of four chain pairs: x ULOP3; a UIADD3 + ULOP3; s USHF + ULOP3;
 //                 p UPRMT + ULOP3; m UIMAD + ULOP3
 //   i<F>_<op>[_N] the IMAD forms of the fold's ALU work: op imad (mad.lo, a register multiplier), hi (mad.hi with its
@@ -63,7 +63,8 @@ struct UChains {
 
 enum { F_Z, F_T, F_H, F_G };
 
-// FACET-BREAK's issue-bound setting: 64 FFMA a warp-iteration on the honest step's accumulator bits
+// FACET-BREAK's issue-nearest setting: 64 FFMA a warp-iteration on the honest step's accumulator bits (on sm_89
+// FFMA beside the fold's ALU work, not issue, holds it: 252 SMSP-cycles a warp-iteration for 171 instructions)
 struct Feed {
   float f[8], g;
   __device__ explicit Feed(int mode) {
