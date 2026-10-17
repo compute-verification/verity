@@ -464,13 +464,13 @@ theorem zkSim_reps {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J :
       rw [hmk] at hR
       obtain ⟨hby, hco⟩ := hR
       have hb := hbd _ (List.getElem_mem hkf)
-      have hn : (lv.streams.toList.flatMap (·.toList))[k].n = (zkNs spec sts).getD k 0 := by
+      have hn : (lv.streams.toList.flatMap fun s : Array Round => s.toList)[k].n = (zkNs spec sts).getD k 0 := by
         rw [← hnf, List.getD_eq_getElem _ _ (by rw [List.length_map]; exact hkf), List.getElem_map]
-      have hcnt : zkCnt x spec sts (k + 1) = (lv.streams.toList.flatMap (·.toList))[k].n := by
+      have hcnt : zkCnt x spec sts (k + 1) = (lv.streams.toList.flatMap fun s : Array Round => s.toList)[k].n := by
         unfold zkCnt
         rw [ite_eq_right (Nat.succ_ne_zero k), ite_eq_left (show k + 1 ≤ zkN x by omega),
           show k + 1 - 1 = k from rfl, ← hn, min_eq_left hb.2, max_eq_right hb.1]
-      generalize (lv.streams.toList.flatMap (·.toList))[k] = rd at hby hco hb hcnt ⊢
+      generalize (lv.streams.toList.flatMap fun s : Array Round => s.toList)[k] = rd at hby hco hb hcnt ⊢
       rcases rd with ⟨n, sha, coins, bytes⟩
       simp only at hby hco hb hcnt
       subst hby hco
