@@ -17,12 +17,15 @@ those entries are the run's level-`ℓ` rows (`rawLevelCols_plain`), which clash
 * `plainLevelColsOf_ok`, `plainLevelColsOf_ge`: the reader's level-`ℓ` rows at a proof that decodes, and none past the
   schedule.
 * `slotOpensL_entriesAt`, `slotOpensL_level`: a rep's level-`ℓ` openings are the reader's level-`ℓ` entries.
-* `accepts_reqsD`, `accepts_opensLD`: at flock-verify's acceptance at a draw value, each rep's request at level
-  `ℓ ≥ 1`, and each table's level-`ℓ` openings as its reps' `plainLevelColsOf` entries.
-* `LaterEntriesClash`, `laterClash_wrPD`, `laterClash_wrPDH`: the self-clash past level 0 at `wrPD` at the deployed
-  plain decoders is two of one rep's level-`ℓ` entries at one position with different columns, at public and at
-  hidden outputs.
-* `plain_laterClashAt`, `plain_laterClashHAt`: those at the statement's draw, at `plainTab`.
+* `accepts_reqsD`, `accepts_opensLD`: at flock-verify's acceptance at a draw value, each rep's recorded caps and
+  request at level `ℓ ≥ 1`, and each table's recorded caps and level-`ℓ` openings as its reps' proofs' recursive caps
+  and `plainLevelColsOf` entries.
+* `LaterEntriesAt`, `laterEntries_wrPD`, `laterEntries_wrPDH`: at `wrPD` at the deployed plain decoders, each rep's
+  recorded caps and later openings are the deployed rep's, at public and at hidden outputs.
+* `LaterEntriesClash`, `laterEntriesClash_of`, `laterClash_wrPD`, `laterClash_wrPDH`: so the self-clash past level 0
+  there is two of one rep's level-`ℓ` entries at one position with different columns.
+* `plain_laterEntriesAt`, `plain_laterEntriesHAt`, `plain_laterClashAt`, `plain_laterClashHAt`: those at the
+  statement's draw, at `plainTab`.
 * `rawLevelCols_plain`: an accepted plain run's level-`ℓ` rows are its reps' `plainLevelColsOf` entries.
 * `plainClashQL`, `plainSimLaterClashAt`, `plain_KS_of_fork`: so a self-clash past level 0 at the concrete
   simulator's outcome gives `P`'s accepting run a raw clash, at every statement, and KS at the deployed plain
@@ -96,9 +99,9 @@ theorem slotOpensL_level {Sl : Type} (out : Model.OutCL 𝔽 Dig Sl) (r ℓ Q : 
     rw [hpend, List.find?_eq_none.2 fun R hR => by have := hlt R hR; simp; omega]
     rfl
 
-/-- **An accepted rep at `dr` requests every later level**: `accepts_req0D` past level 0, where each request is below
-the schedule's levels and the first of level `ℓ ≥ 1` is at the positions of the coins of round `plainLevelRound`, one
-opened level-`ℓ` row per position. -/
+/-- **An accepted rep at `dr` requests every later level**: `accepts_req0D` past level 0, where the rep records its
+proof's recursive caps, each request is below the schedule's levels and the first of level `ℓ ≥ 1` is at the positions
+of the coins of round `plainLevelRound`, one opened level-`ℓ` row per position. -/
 theorem accepts_reqsD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtD I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
@@ -115,6 +118,7 @@ theorem accepts_reqsD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
             (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
               PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p capDig)
             (s.rounds.toList.map (·.coins)) pend →
+          pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig p.ligerito.recursiveCaps[j]!) ∧
           (∀ ℓ, 1 ≤ ℓ → ℓ < sch.levels.size → ∃ R : Req, pend.reqs.find? (fun q => q.level == ℓ) = some R ∧
             R.positions = (Flock.positions (sch.levels.getD ℓ default)
               (s.rounds[FlockDeploy.KS.plainLevelRound sts[j].m sts[j].c.kLog sch.k0
@@ -148,11 +152,11 @@ theorem accepts_reqsD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     hα1 hsm (decode_roundsWF hsess) j r _ _ hrep
   obtain rfl : s' = s := Option.some.inj (hs''.symm.trans hsr)
   obtain rfl : p' = p := Except.ok.inj (hp'.symm.trans hp)
-  obtain ⟨pend', hpl', -, hok, -, R, rest, hRe, hRl, -, hlen, hlat⟩ :=
+  obtain ⟨pend', hpl', hcaps, hok, -, R, rest, hRe, hRl, -, hlen, hlat⟩ :=
     hk capDig (fun _ ℓ k => (((openAt p'.ligerito (schs[j].levels.size - 1) ℓ).1)[k]!.toList.map fOf, []))
       (fun _ _ _ _ => rfl)
   obtain rfl := ZkExec.plays_det hpl hpl'
-  refine ⟨fun ℓ h1 hℓ => ?_, fun R' hR' => (hok R' hR').1⟩
+  refine ⟨hcaps, fun ℓ h1 hℓ => ?_, fun R' hR' => (hok R' hR').1⟩
   have hlt : ℓ - 1 < rest.length := by omega
   obtain ⟨hlv', hpos'⟩ := hlat (ℓ - 1) hlt
   rw [Nat.sub_add_cancel h1] at hlv' hpos'
@@ -161,8 +165,9 @@ theorem accepts_reqsD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
   refine ⟨rest[ℓ - 1], by rw [hRe]; exact find?_later hRl hlat h1 (by omega), hpos', ?_⟩
   simpa using (merkleCheck_rows hmc).1
 
-/-- **At flock-verify's acceptance at `dr`, each table's level-`ℓ` openings are its reps' deployed entries**, at every
-level `ℓ ≥ 1`: `accepts_opens₀LD` past level 0, each rep's level-`ℓ` openings its `plainLevelColsOf` entries. -/
+/-- **At flock-verify's acceptance at `dr`, each table's recorded caps and level-`ℓ` openings are its reps' deployed
+ones**, at every level `ℓ ≥ 1`: `accepts_opens₀LD` past level 0, each rep's caps its proof's recursive caps and its
+level-`ℓ` openings its `plainLevelColsOf` entries. -/
 theorem accepts_opensLD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtD I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
@@ -192,6 +197,8 @@ theorem accepts_opensLD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcrip
           out = tableOutL H512 enc512 leaf512 cap (pend₀, pend₁)
             (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
               sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]) →
+          pend₀.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig p₀.ligerito.recursiveCaps[j]!) ∧
+          pend₁.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig p₁.ligerito.recursiveCaps[j]!) ∧
           ∀ ℓ, 1 ≤ ℓ →
             (slotOpensL out 0 ℓ (lvOf (schedOf sch) ℓ).queries).map (fun x => (x.1, x.2.1)) =
               FlockDeploy.KS.plainLevelColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
@@ -204,10 +211,11 @@ theorem accepts_opensLD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcrip
   obtain ⟨spec, sts, sess, hs, hsess, hall⟩ := accepts_reqsD h
   refine ⟨spec, sts, sess, hs, hsess, fun j hj => ?_⟩
   obtain ⟨sch, hf, hk⟩ := hall j hj
-  refine ⟨sch, hf, fun hwf hr hm p₀ p₁ s₀ s₁ pend₀ pend₁ cap out hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ hout ℓ h1 => ?_⟩
+  refine ⟨sch, hf, fun hwf hr hm p₀ p₁ s₀ s₁ pend₀ pend₁ cap out hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ hout => ?_⟩
   subst hout
-  obtain ⟨hf₀, hlt₀⟩ := hk hwf hr hm 0 (by norm_num) s₀ p₀ pend₀ hs₀ hp₀ hpl₀
-  obtain ⟨hf₁, hlt₁⟩ := hk hwf hr hm 1 (by norm_num) s₁ p₁ pend₁ hs₁ hp₁ hpl₁
+  obtain ⟨hc₀, hf₀, hlt₀⟩ := hk hwf hr hm 0 (by norm_num) s₀ p₀ pend₀ hs₀ hp₀ hpl₀
+  obtain ⟨hc₁, hf₁, hlt₁⟩ := hk hwf hr hm 1 (by norm_num) s₁ p₁ pend₁ hs₁ hp₁ hpl₁
+  refine ⟨hc₀, hc₁, fun ℓ h1 => ?_⟩
   have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
     fast100_level _ sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
   have hQ : ℓ < sch.levels.size → (lvOf (schedOf sch) ℓ).queries = (sch.levels.getD ℓ default).q := fun hℓ => by
@@ -242,13 +250,43 @@ def LaterEntriesClash (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop 
       (q, b) ∈ FlockDeploy.KS.plainLevelColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s.rounds
         t.proofs[r]! ℓ ∧ a ≠ b
 
+/-- **Rep `r`'s recorded caps and later openings in `out` are the deployed rep's**, in the transcript `t` at the setup
+at the draw `d`: at its one table, that table's `fast100` schedule (`sch` as the model's), rep `r`'s record stream and
+`t`'s proof file decoded at the shape `TxNoOffAt` reads, `out`'s caps for rep `r` are the proof's recursive caps, and
+its level-`ℓ` openings, at every level `ℓ ≥ 1`, are the rep's `plainLevelColsOf` entries. -/
+def LaterEntriesAt (sch : Accounting.Schedule) (I : Exec.Inputs) (d : Json) (t : Exec.Transcript)
+    (out : Model.OutCL 𝔽 Dig (List UInt8)) (r : ℕ) : Prop :=
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch' : _root_.Flock.Schedule),
+    setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decode spec t.record = .ok sess ∧
+    _root_.Flock.fast100 st.m = some sch' ∧ schedOf sch' = sch ∧ ∃ (s : StreamRec) (p : Proof),
+    sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r) = some s ∧
+    decodeProof (shapeOf (Setup.ofCircuit st) sch' (2 * st.regions.size)) t.proofs[r]! = .ok p ∧
+    (if r = 0 then out.pend.1 else out.pend.2).caps =
+      (List.range (sch'.levels.size - 1)).map (fun j => capDig p.ligerito.recursiveCaps[j]!) ∧
+    ∀ ℓ, 1 ≤ ℓ → (slotOpensL out r ℓ (lvOf sch ℓ).queries).map (fun x => (x.1, x.2.1)) =
+      FlockDeploy.KS.plainLevelColsOf (shapeOf (Setup.ofCircuit st) sch' (2 * st.regions.size)) s.rounds
+        t.proofs[r]! ℓ
+
+/-- **A self-clash past level 0 in an output whose reps' later openings are the deployed reps' is a clash of one rep's
+level-`ℓ` entries.** -/
+theorem laterEntriesClash_of {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
+    {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAt sch I d t out r)
+    (hcl : FlockDeploy.KS.LaterClashL sch out) : LaterEntriesClash I d t := by
+  obtain ⟨r, hr2, ℓ, h1, -, -, u, hu, v, hv, huv, -, -, hne⟩ := hcl
+  obtain ⟨spec, st, sess, sch', hsu, hdec, hf, -, s, -, hs, -, -, hent⟩ := he r hr2
+  have hmem : ∀ z ∈ slotOpensL out r ℓ (lvOf sch ℓ).queries, (z.1, z.2.1) ∈
+      FlockDeploy.KS.plainLevelColsOf (shapeOf (Setup.ofCircuit st) sch' (2 * st.regions.size)) s.rounds
+        t.proofs[r]! ℓ :=
+    fun z hz => hent ℓ h1 ▸ List.mem_map_of_mem hz
+  exact ⟨spec, st, sess, sch', hsu, hdec, hf, r, hr2, s, hs, ℓ, u.1, u.2.1, v.2.1, hmem u hu, huv ▸ hmem v hv, hne⟩
+
 open DecodeZL Integrate in
-/-- **A self-clash past level 0 at the deployed plain decoders is a clash of one rep's level-`ℓ` entries**, at one
+/-- **At the deployed plain decoders, the reps' recorded caps and later openings are the deployed reps'**, at one
 table: where `verify` accepts what `wrPD` writes for `o` at the setup at the draw `dj S`, two pendings the reps' decoded
-tapes play to (`hp`), whose output at `o`'s cap and openings has one rep's two level-`ℓ` openings of one position to
-different columns (`hcl`), give two of that rep's `plainLevelColsOf` entries at the setup's table, its `fast100`
-schedule and `wrPD`'s proof file at one position with different columns. -/
-theorem laterClash_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+tapes play to (`hp`) record, in the output at `o`'s cap and openings, each rep's proof's recursive caps, and open at
+each level `ℓ ≥ 1` the rep's `plainLevelColsOf` entries at the setup's table, its `fast100` schedule and `wrPD`'s proof
+file (`accepts_opensLD`). -/
+theorem laterEntries_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}
     (hT : DecodeZL.TagsOk I) {S : Finset (Fin n)} (hS : DecodeZL.DrawOk I dj mPts S) (R : Reg)
@@ -256,10 +294,10 @@ theorem laterClash_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R) o.pts r)
       (Tables.repTapeJ (fun _ => DecodeZL.decAt (Integrate.tablesAt ht dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
-        (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r))
-    (hcl : FlockDeploy.KS.LaterClashL (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R).sch (tableOutL H512 enc512 leaf512
-      (capOfRoot o.rootB[0]!) pend' (DecodeZL.opnAt (Integrate.tablesAt ht dj x₀) I dj S R o.proofs))) :
-    LaterEntriesClash I (dj S) (wrPD I (dj S) o) := by
+        (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r)) :
+    ∀ r < 2, LaterEntriesAt (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R).sch I (dj S) (wrPD I (dj S) o)
+      (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+        (DecodeZL.opnAt (Integrate.tablesAt ht dj x₀) I dj S R o.proofs)) r := by
   change AcceptsAtD I (some (dj S)) (wrPD (J := 1) I (dj S) o) at hacc
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
   obtain ⟨hprf, hrec⟩ := recordsLive_wrPD1 I (dj S) o hacc
@@ -337,23 +375,39 @@ theorem laterClash_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (
     unfold nX
     rw [extraClaims_length, hS']
     simp [stmtOf, regionsOf]
-  rw [hopn, hsch] at hcl
-  obtain ⟨r, hr2, ℓ, h1, -, -, u, hu, v, hv, huv, -, -, hne⟩ := hcl
-  have hmem : ∀ {xs : List (ℕ × List 𝔽 × List UInt8 × List Dig)} {ys : List (ℕ × List 𝔽)},
-      xs.map (fun x => (x.1, x.2.1)) = ys → ∀ z ∈ xs, (z.1, z.2.1) ∈ ys :=
-    fun he z hz => he ▸ List.mem_map_of_mem hz
-  obtain ⟨he₀, he₁⟩ := hent ℓ h1
+  rw [hopn, hsch]
+  rw [hn] at hp₀ hp₁
+  intro r hr2
+  refine ⟨spec, st, sess, sch, hsu, hdec, hf, rfl, ?_⟩
   rcases r with _ | _ | r
-  · exact ⟨spec, st, sess, sch, hsu, hdec, hf, 0, by norm_num, s₀, hs₀, ℓ, u.1, u.2.1, v.2.1, hmem he₀ u hu,
-      huv ▸ hmem he₀ v hv, hne⟩
-  · exact ⟨spec, st, sess, sch, hsu, hdec, hf, 1, by norm_num, s₁, hs₁, ℓ, u.1, u.2.1, v.2.1, hmem he₁ u hu,
-      huv ▸ hmem he₁ v hv, hne⟩
+  · exact ⟨s₀, p₀, hs₀, hp₀, hent.1, fun ℓ h1 => (hent.2.2 ℓ h1).1⟩
+  · exact ⟨s₁, p₁, hs₁, hp₁, hent.2.1, fun ℓ h1 => (hent.2.2 ℓ h1).2⟩
   · omega
 
+open DecodeZL Integrate in
+/-- **A self-clash past level 0 at the deployed plain decoders is a clash of one rep's level-`ℓ` entries**, at one
+table: where `verify` accepts what `wrPD` writes for `o` at the setup at the draw `dj S`, two pendings the reps' decoded
+tapes play to (`hp`), whose output at `o`'s cap and openings has one rep's two level-`ℓ` openings of one position to
+different columns (`hcl`), give two of that rep's `plainLevelColsOf` entries at the setup's table, its `fast100`
+schedule and `wrPD`'s proof file at one position with different columns (`laterEntries_wrPD`). -/
+theorem laterClash_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+    (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : DecodeZL.TagsOk I) {S : Finset (Fin n)} (hS : DecodeZL.DrawOk I dj mPts S) (R : Reg)
+    (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtD I (some (dj S)) (wrPD I (dj S) o))
+    (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R) o.pts r)
+      (Tables.repTapeJ (fun _ => DecodeZL.decAt (Integrate.tablesAt ht dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
+        (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r))
+    (hcl : FlockDeploy.KS.LaterClashL (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R).sch (tableOutL H512 enc512 leaf512
+      (capOfRoot o.rootB[0]!) pend' (DecodeZL.opnAt (Integrate.tablesAt ht dj x₀) I dj S R o.proofs))) :
+    LaterEntriesClash I (dj S) (wrPD I (dj S) o) :=
+  laterEntriesClash_of (laterEntries_wrPD ht hc ho dj x₀ hT hS R o hacc pend' hp) hcl
+
 open DecodeZL HiddenExec HiddenDec in
-/-- **A self-clash past level 0 at the deployed plain decoders at hidden outputs is a clash of one rep's level-`ℓ`
-entries**: `laterClash_wrPD` at the hidden tables and their openings `opnAtH`. -/
-theorem laterClash_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+/-- **At the deployed plain decoders at hidden outputs, the reps' recorded caps and later openings are the deployed
+reps'**: `laterEntries_wrPD` at the hidden tables and their openings `opnAtH`. -/
+theorem laterEntries_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
     (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
@@ -361,10 +415,9 @@ theorem laterClash_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} 
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
       (Tables.repTapeJ (fun _ => DecodeZL.decAt (tablesAtH dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
-        (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r))
-    (hcl : FlockDeploy.KS.LaterClashL (tablesAtH (Reg := Reg) dj x₀ S R).sch (tableOutL H512 enc512 leaf512
-      (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs))) :
-    LaterEntriesClash I (dj S) (wrPD I (dj S) o) := by
+        (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r)) :
+    ∀ r < 2, LaterEntriesAt (tablesAtH (Reg := Reg) dj x₀ S R).sch I (dj S) (wrPD I (dj S) o)
+      (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs)) r := by
   change AcceptsAtD I (some (dj S)) (wrPD (J := 1) I (dj S) o) at hacc
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
   obtain ⟨hprf, hrec⟩ := recordsLive_wrPD1 I (dj S) o hacc
@@ -442,18 +495,31 @@ theorem laterClash_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} 
     unfold nX
     rw [extraClaims_length, hS']
     simp [stmtOf, regionsOf]
-  rw [hopn, hsch] at hcl
-  obtain ⟨r, hr2, ℓ, h1, -, -, u, hu, v, hv, huv, -, -, hne⟩ := hcl
-  have hmem : ∀ {xs : List (ℕ × List 𝔽 × List UInt8 × List Dig)} {ys : List (ℕ × List 𝔽)},
-      xs.map (fun x => (x.1, x.2.1)) = ys → ∀ z ∈ xs, (z.1, z.2.1) ∈ ys :=
-    fun he z hz => he ▸ List.mem_map_of_mem hz
-  obtain ⟨he₀, he₁⟩ := hent ℓ h1
+  rw [hopn, hsch]
+  rw [hn] at hp₀ hp₁
+  intro r hr2
+  refine ⟨spec, st, sess, sch, hsu, hdec, hf, rfl, ?_⟩
   rcases r with _ | _ | r
-  · exact ⟨spec, st, sess, sch, hsu, hdec, hf, 0, by norm_num, s₀, hs₀, ℓ, u.1, u.2.1, v.2.1, hmem he₀ u hu,
-      huv ▸ hmem he₀ v hv, hne⟩
-  · exact ⟨spec, st, sess, sch, hsu, hdec, hf, 1, by norm_num, s₁, hs₁, ℓ, u.1, u.2.1, v.2.1, hmem he₁ u hu,
-      huv ▸ hmem he₁ v hv, hne⟩
+  · exact ⟨s₀, p₀, hs₀, hp₀, hent.1, fun ℓ h1 => (hent.2.2 ℓ h1).1⟩
+  · exact ⟨s₁, p₁, hs₁, hp₁, hent.2.1, fun ℓ h1 => (hent.2.2 ℓ h1).2⟩
   · omega
+
+open DecodeZL HiddenExec HiddenDec in
+/-- **A self-clash past level 0 at the deployed plain decoders at hidden outputs is a clash of one rep's level-`ℓ`
+entries**: `laterClash_wrPD` at the hidden tables and their openings `opnAtH` (`laterEntries_wrPDH`). -/
+theorem laterClash_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtD I (some (dj S)) (wrPD I (dj S) o))
+    (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
+      (Tables.repTapeJ (fun _ => DecodeZL.decAt (tablesAtH dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
+        (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r))
+    (hcl : FlockDeploy.KS.LaterClashL (tablesAtH (Reg := Reg) dj x₀ S R).sch (tableOutL H512 enc512 leaf512
+      (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs))) :
+    LaterEntriesClash I (dj S) (wrPD I (dj S) o) :=
+  laterEntriesClash_of (laterEntries_wrPDH ht hc dj x₀ hT hS R o hacc pend' hp) hcl
 
 end Claims.Bridge.PlainDraw
 
@@ -466,9 +532,9 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the draw**: `laterClash_wrPD` at the
-statement's draw `d` and no drawn unit, as `plain_clash₀At` is `clash₀_wrPD` there. -/
-theorem plain_laterClashAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+/-- **The deployed plain decoders' later entries at `plainTab`, at the draw**: `laterEntries_wrPD` at the statement's
+draw `d` and no drawn unit, as `plain_clash₀At` is `clash₀_wrPD` there. -/
+theorem plain_laterEntriesAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
@@ -478,10 +544,10 @@ theorem plain_laterClashAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
     (hacc : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o)) (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)
       o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
-        (fun _ _ _ => []) o 0 r) (sel pend' r))
-    (hcl : LaterClashL ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
-      (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
-    LaterEntriesClash ins.read.I d (wrPD ins.read.I d o) := by
+        (fun _ _ _ => []) o 0 r) (sel pend' r)) :
+    ∀ r < 2, LaterEntriesAt ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ins.read.I d (wrPD ins.read.I d o)
+      (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+        (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0)) r := by
   obtain ⟨ht, hc, ho, hT, hst, rfl, -, -⟩ := plain_setupH hs hin hset h hh hd
   obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
     have e := fast100_schedOf st.m
@@ -503,14 +569,34 @@ theorem plain_laterClashAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
       obtain rfl := Except.ok.inj (hst.symm.trans hst')
       rfl⟩
-  refine laterClash_wrPD ht hc ho (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hacc pend' ?_ ?_ <;>
-    rw [e]
-  · exact hp
-  · exact hcl
+  have he := laterEntries_wrPD ht hc ho (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hacc pend'
+    (by rw [e]; exact hp)
+  rw [e] at he
+  exact he
 
-/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the draw, at hidden outputs**:
-`laterClash_wrPDH` at the statement's draw `d` and no drawn unit. -/
-theorem plain_laterClashHAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the draw**: `laterEntriesClash_of` at
+`plain_laterEntriesAt`. -/
+theorem plain_laterClashAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
+    (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ (L.model (regionsOf st)).m)
+    (hlay : (L.model (regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (o : LiveOutJ 1 spec.mPts)
+    (hacc : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o)) (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)
+      o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+        (fun _ _ _ => []) o 0 r) (sel pend' r))
+    (hcl : LaterClashL ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+      (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
+    LaterEntriesClash ins.read.I d (wrPD ins.read.I d o) :=
+  laterEntriesClash_of (plain_laterEntriesAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o hacc pend' hp)
+    hcl
+
+/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs**:
+`laterEntries_wrPDH` at the statement's draw `d` and no drawn unit. -/
+theorem plain_laterEntriesHAt {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
@@ -520,10 +606,10 @@ theorem plain_laterClashHAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse
     (hacc : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o)) (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)
       o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
-        (fun _ _ _ => []) o 0 r) (sel pend' r))
-    (hcl : LaterClashL ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
-      (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
-    LaterEntriesClash ins.read.I d (wrPD ins.read.I d o) := by
+        (fun _ _ _ => []) o 0 r) (sel pend' r)) :
+    ∀ r < 2, LaterEntriesAt ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ins.read.I d (wrPD ins.read.I d o)
+      (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+        (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0)) r := by
   obtain ⟨ht, hc, hT, hst, rfl, -, -⟩ := plain_setupHidden hs hin hset h hh hd
   obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
     have e := fast100_schedOf st.m
@@ -545,10 +631,29 @@ theorem plain_laterClashHAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
       obtain rfl := Except.ok.inj (hst.symm.trans hst')
       rfl⟩
-  refine laterClash_wrPDH ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hacc pend' ?_ ?_ <;>
-    rw [e]
-  · exact hp
-  · exact hcl
+  have he := laterEntries_wrPDH ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hacc pend'
+    (by rw [e]; exact hp)
+  rw [e] at he
+  exact he
+
+/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the draw, at hidden outputs**:
+`laterEntriesClash_of` at `plain_laterEntriesHAt`. -/
+theorem plain_laterClashHAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = true) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
+    (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ (L.model (regionsOf st)).m)
+    (hlay : (L.model (regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (o : LiveOutJ 1 spec.mPts)
+    (hacc : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o)) (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)
+      o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+        (fun _ _ _ => []) o 0 r) (sel pend' r))
+    (hcl : LaterClashL ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+      (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
+    LaterEntriesClash ins.read.I d (wrPD ins.read.I d o) :=
+  laterEntriesClash_of (plain_laterEntriesHAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o hacc pend' hp)
+    hcl
 
 /-- **An accepted plain run's reps' level-`ℓ` rows**: `rawCols_plain` past level 0, so `plainRawLevelCols` at rep
 `k < 2` is `plainLevelColsOf` at `shapeOf` with `2 · |regions|` extra claims, on the live session's `k`-th rep stream
