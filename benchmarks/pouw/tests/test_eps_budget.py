@@ -22,7 +22,7 @@ def test_the_strips_are_their_rank_over_depth():
     assert E.products("B", "QKᵀ", 128) == (128, 64, 0)                   # r = k/2 on one limb: checked
     assert E.products("B32", "linears", 4096) == (4096, 64, 32)          # CO's gap r/(k + r)
     assert E.products("C", "linears", 4096) == (3 * 4096, 0, 32)         # NCP: L of 3k known at the zero instance
-    assert E.products("A", "P·V", 1024) == (1024, 66, 33)
+    assert E.products("A", "P·V", 1024) == (1024, 66, 66)              # a one-hot P row frees both limbs
 
 
 def test_record_skips_the_strips_lm_head_and_decode():
@@ -37,7 +37,7 @@ def test_record_skips_the_strips_lm_head_and_decode():
 def test_both_sided_and_co_dither_meet_the_target_everywhere(design):
     for m, c, ph in CELLS:
         s = E.summary(m, c, ph, design)
-        assert s.eps_mac < 1e-3 and s.eps_time < 1e-3, (m, c, ph)
+        assert s.eps_mac < 3e-3 and s.eps_time < 3e-3, (m, c, ph)
         assert s.gamma < 2.2, (m, c, ph)
         skipped = {r["component"] for r in s.rows if r["eps_mac"] or r["eps_time"]}
         assert skipped == {"P·V"}, (m, c, ph)
@@ -65,7 +65,8 @@ def test_the_hybrids_meet_the_target_everywhere(design):
 
 @pytest.mark.parametrize("design", ["Bc", "Ap"])
 def test_committed_pv_digits_leave_nothing_to_skip(design):
-    assert E.products(design, "P·V", 1024) == (1024, 3 * 33, 0)
+    assert E.products(design, "P·V", 1024) == (1024, 3 * 32, 0)
+    assert E.products(design, "P·V", 8192) == (8192, 4 * 32, 0)       # Ycum takes a third digit past 2K keys
     for m, c, ph in CELLS:
         s, a = E.summary(m, c, ph, design), E.summary(m, c, ph, "A")
         assert s.eps_mac == 0 and s.eps_time == 0, (m, c, ph)

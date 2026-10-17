@@ -215,7 +215,7 @@ SKIP_DESIGNS = {
     "record": "Dither of record: U on the weights and on Q (peels), P's peel, lm_head clean, forming unchecked, decode "
               "deferred (decision 36)",
     "A": "both operands dithered with fresh bits and no U (adopted-bd), the served output the last checked word, "
-         "lm_head the same, P V as recorded with its output checked",
+         "lm_head the same, P V as recorded with its output checked (its whole strip free at a one-hot P row)",
     "B": "CO-Dither at r = k/2 with a 7-bit served side: U on the peeled side, bits on both, the served output a "
          "checked word, one limb; P V as in A",
     "B32": "CO-Dither at r = 32 with an 8-bit served side: the strip's second int8 limb unforced, r/(k + r)",
@@ -233,25 +233,35 @@ SKIP_DESIGNS = {
 HYBRIDS = {"CB": ("C", "B", "A"), "Bc": ("co32c", "B", "pv"), "Ap": ("A", "A", "pv")}
 #: co32c's digit limbs: the residue sums of an 8-bit served side over k / 32 terms take up to 3 base-128 digits
 CO32C_DIGITS = 3
+
+
+def pv_digits(keys: int) -> int:
+    """m, the base-128 digits of P V's Ycum (CHECKED-STRIP's P3): 2 up to 2K keys, 3 up to 128K."""
+    return 2 if keys <= 2048 else 3
 #: Every SKIP design but `record` derives each stage's operand by C1′ from the previous stage's served output (the
 #: epilogue and quantizer are checked) and serves decode edited, with coins drawn per round once the weights and the
 #: round's inputs are committed (no deferred pass, no per-stage round trip).
 COMPONENTS = ("linears", "lm_head", "QKᵀ", "P·V", "softmax", "forming", "noise, commitments, draws")
 
 
+def leaf(design: str, comp: str) -> str:
+    """The design that serves `comp`: a hybrid's part, else the design itself."""
+    return HYBRIDS[design][{"QKᵀ": 1, "P·V": 2}.get(comp, 0)] if design in HYBRIDS else design
+
+
 def products(design: str, comp: str, k: int) -> tuple[float, float, float]:
     """(transcript, strip, skippable) int8 products an output word of depth k executes. A strip runs on two int8 limbs
     when its operand is a residue sum that leaves int8 (L = 32 classes of k / L terms), on one when it fits (CO-Dither's
-    r = k/2 with a 7-bit served side: two terms), on CO32C_DIGITS checked limbs when the sums' base-128 digits are
-    committed (co32c, pv)."""
-    if design in HYBRIDS:
-        return products(HYBRIDS[design][{"QKᵀ": 1, "P·V": 2}.get(comp, 0)], comp, k)
+    r = k/2 with a 7-bit served side: two terms), on checked digit limbs when the sums' base-128 digits are committed
+    (co32c; pv, (m + 1)·L for m digits). Adopted P V's whole strip is free: at a one-hot P row its output is a copy
+    (CHECKED-STRIP's Result 3)."""
+    design = leaf(design, comp)
     if comp == "P·V":
         if design == "C":
             return 3 * k, 0, L
         if design == "pv":
-            return k, CO32C_DIGITS * (L + 1), 0
-        return k, 2 * (L + 1), 2 * (L + 1) if design == "record" else L + 1
+            return k, (pv_digits(k) + 1) * L, 0
+        return k, 2 * (L + 1), 2 * (L + 1)
     if design == "record":
         return k, 2 * L, 2 * L
     if design == "A":
@@ -294,7 +304,8 @@ def parts(name: str, ctx: int, phase: str, design: str, rates: dict = RATES) -> 
             row = [c, c, c * t, c * t, c * t]       # served plain, never proved
         else:
             tr, st, sk = products(design, comp, k)
-            strip_t = t * (r["tail"] if 0 < st <= CO32C_DIGITS * (L + 1) else 1)
+            short = st and (leaf(design, comp) != "B" or st <= 2 * (L + 1))     # limbs of L or L + 1 terms
+            strip_t = t * (r["tail"] if short else 1)
             row = [words * (tr + st), words * sk, words * (tr * t * r["r_receipt"] + st * strip_t),
                    words * sk * (strip_t if st else t * r["r_receipt"]), words * k * t]
             if deferred:                            # the served clean product, whose noised twin the deferred pass proves
