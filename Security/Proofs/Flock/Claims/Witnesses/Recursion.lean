@@ -13,8 +13,8 @@ Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy r
   `Bits_fails`; over Flock (`Flock.ksD` inside, `κ_I < 1/4`), `KSFlock_fails` and `BitsFlock_fails`.
   `ScopeMatches_fails`: its scope is empty and its check takes everything.
 * `compR`: the compiled verifier rejects after one round, and every statement parses as `recStmt`, in scope, under an
-  inner protocol whose relation and scope hold everywhere. `Complete_fails`: its reference prover fails at
-  `δ_c < 1`. `Nontrivial_fails`: a recorded run is rejected.
+  inner protocol whose relation and scope hold everywhere. `Complete_fails`: its reference prover fails at its
+  error `δ_c = 0`. `Nontrivial_fails`: a recorded run is rejected.
 * `effR`: the run always accepts, but its one V* session's view never does, so the outer extractor's wait reruns all
   `K = 2` of its draws where `Efficient`'s expected count allows `k = 1`. `Efficient_fails`: `E*` reruns `3` times on
   every coin, above the expected bound `N_I · (1 + m′·k) = 2`. The worst-case conjunct holds at every record (each
@@ -84,6 +84,7 @@ def ksR (Coin : Type) : Recursion.Deploy Coin where
   mask _ _ := 0
   Tape := Unit
   P _ := silentP
+  δc _ _ := 0
 
 /-- A recursion statement in scope: a dense inner table at `m = 22`, `k_log = 6`, one region and four claims, with no
 RecSparse phase and no V* session. -/
@@ -545,11 +546,10 @@ theorem ScopeMatches_fails : ¬ Recursion.ScopeMatches (ksR Coin) (accI Coin) :=
   simp [ksR] at hs
 
 omit [Nonempty Coin] in
-/-- **The recursion's `Complete` fails** at `compR`, whose reference prover is silent, at every `δ_c < 1`. -/
-theorem Complete_fails (δc : Msg → ℝ) (x : Msg) (hδ : δc x < 1) :
-    ¬ Recursion.Complete constH (compR Coin) (accI Coin) δc :=
-  Witness.Complete_fails (compR Coin).P _ _ δc (w := ⟨[]⟩) ⟨recStmt, rfl, trivial, recStmt_inScope⟩
-    ⟨recStmt, rfl, rfl, trivial⟩ hδ
+/-- **The recursion's `Complete` fails** at `compR`, whose reference prover is silent, at its error `δ_c = 0`. -/
+theorem Complete_fails : ¬ Recursion.Complete constH (compR Coin) (accI Coin) :=
+  Witness.Complete_fails (compR Coin).P _ _ ((compR Coin).δc constH) (x := []) (w := ⟨[]⟩)
+    ⟨recStmt, rfl, trivial, recStmt_inScope⟩ ⟨recStmt, rfl, rfl, trivial⟩ (by norm_num [compR, ksR])
 
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **The recursion's `Nontrivial` fails** at `compR`, which rejects the recorded run. -/

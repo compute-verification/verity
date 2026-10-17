@@ -36,10 +36,10 @@ eight items:
    `Flock.ZK`). The extraction-based finder `Be`: `B`'s fork, `E_O` on both runs, a collision among the SHA-512
    evaluations their outer witnesses record (`Deploy.calls`), which no party computes in the clear.
 6. **Claims.** `KS` with costs (`Efficient`), `Bits`, `ZK`, `Complete` on the scope of the deployed reference prover
-   (`Deploy.P`), `ScopeMatches`, `Nontrivial`, and the private variant's `KSPriv`, `ZKPriv`; `At Flock` instantiates the
-   inner protocol with Flock and its decoder. The inner protocol's claim the recursion rests on is `Inner.KSAbort`: its
-   KS against provers that may abort after the inner rounds, on coins the inner verifier doesn't read (with no aborts,
-   `Inner.KS`).
+   (`Deploy.P`) at the deployed error (`Deploy.δc`), `ScopeMatches`, `Nontrivial`, and the private variant's `KSPriv`,
+   `ZKPriv`; `At Flock` instantiates the inner protocol with Flock and its decoder. The inner protocol's claim the
+   recursion rests on is `Inner.KSAbort`: its KS against provers that may abort after the inner rounds, on coins the
+   inner verifier doesn't read (with no aborts, `Inner.KS`).
 7. **Assumptions used.** `StrictBirthday` (for `B`), `ExpectedCR` (for `Be`), each read once in `Bits`; `Hm96Hiding`
    (hm96 leaves hide up to `δ₁`) at the deployed key's salt mask and salt hash (`Deploy.mask`, `Deploy.saltHash`), read
    in `ZK` and `ZKPriv`; and `trustedBase`. The decoders are those within Flock's list-decoding radius (`decOK`,
@@ -377,8 +377,9 @@ the inner session's view read off a run's coins and the outer witnesses, at an o
 runs at it); the SHA-512 evaluations the outer witnesses record (`calls`); the numbers of outer session `s` at `x`
 (`nums`, the outer Flock's at that session's V* statements, which their public shape fixes); for the simulator, the
 pinned hm96 key's salts (`saltLen` bytes), its salt prefix `p_salt` and its GF(2)-linear salt mask `Φ`, into 64 bytes
-(`mask`); and the reference prover (`P`), the honest prover the deployment runs, on its tapes (`Tape`, a nonempty
-type). -/
+(`mask`); the reference prover (`P`), the honest prover the deployment runs, on its tapes (`Tape`, a nonempty
+type); and its completeness error as the deployment states it, at each hash (`δc H x` at `H`): `Complete` is at that
+error and no other. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
@@ -398,6 +399,7 @@ structure Deploy (Coin : Type) where
   Tape : Type
   [tapeNonempty : Nonempty Tape]
   P : Flock.Wit → Prover Tape
+  δc : (Msg → Msg) → Msg → ℝ
 
 instance Deploy.instNonemptyTape {Coin : Type} (D : Deploy Coin) : Nonempty D.Tape := D.tapeNonempty
 
@@ -603,9 +605,9 @@ def Efficient (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock
     (1 + ∑ s : Fin (D.nS x), ((D.nums x s).waits * (D.nums x s).k : ℕ)))
 
 /-- **The recursion: Complete**, on the statements in scope, of the deployed record's reference prover (`D.P`, on its
-nonempty tapes), at an inner protocol of Flock's witnesses. -/
-def Complete (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin Flock.Wit) (δc : Msg → ℝ) : Prop :=
-  Claims.Complete H D.V D.P (R D I) (Scope D I) δc
+nonempty tapes), at an inner protocol of Flock's witnesses, at the deployed error (`D.δc H`). -/
+def Complete (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin Flock.Wit) : Prop :=
+  Claims.Complete H D.V D.P (R D I) (Scope D I) (D.δc H)
 
 /-- **The recursion: the readable scope is the compiled verifier's**: a statement is in `Scope` exactly when the
 compiled verifier's scope check takes it. -/
