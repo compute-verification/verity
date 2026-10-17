@@ -622,6 +622,15 @@ def test_all_neither_updates_records_nor_names_instances(capsys):
         assert "neither updates records nor names instances" in capsys.readouterr().err
 
 
+def test_update_refuses_a_shared_shipped_tree(tmp_path, capsys):
+    pkg = tmp_path / "Security"
+    pkg.mkdir()
+    (tmp_path / "READY.json").write_text("{}\n")
+    with pytest.raises(SystemExit):
+        A.main([str(pkg), "--update"])
+    assert "--cwd clone" in capsys.readouterr().err
+
+
 def test_a_theorem_s_statement_is_read_from_its_source():
     src = ("namespace P\n/-- twice -/\n@[simp] theorem t.{u} {α : Sort u} (f : α → α) -- a note\n    (h : ∀ x, f x = x) :\n"
            "    ∀ x, f (f x) = x := by\n  intro x; simp [h]\n"
