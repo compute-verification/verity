@@ -29,13 +29,14 @@ uv run machine-model eps --table --upfill --credit floor --uni-issue 0.92   # a 
 |---|---|
 | `data/model.toml` | The constants (R*, the honest kernel's u a MAC, at 600 W too), the LP's ρ, tie and x_min, the honest GEMM, the CUDA kinds, the adopted design and the epochs in order |
 | `data/rows.csv` | One line per row of the machine (a pipe, a port, a ceiling or a joint vertex): its status (`measured`, `ASSUMED`, `provisional`, `joint`), the runs or notes it rests on, and what it is |
-| `data/census.csv` | One line per instruction class on a row: its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, `until`) and its runs |
+| `data/census/EPOCH.csv` | The census lines from EPOCH, a file for each epoch that brought any: one line per instruction class on a row, its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, its file's epoch; `until`) and its runs |
+| `data/census/runs.toml` | The run lists many census lines share (a refit's every line cites every run its fit read), each cited in a line's `runs` as `@NAME` |
 | `data/vectors/NAME.toml` | A named vector: its epoch, the rows and credits it uses in LP order, its note, and the numbers it was published with |
 | `data/attacks/FAMILY.jsonl` | An attack family: one program a line, its design, and the epochs it holds |
 | `data/floors.csv` | What the claims read: each root-writing kind at 32 MACs a word ((π₃₂)), each load into registers at 16 (PRICES-32's load half) and each copy route at 16 (π_c ≥ 16, `copy16`: every kind that writes registers, a UR word at the 32 lanes it serves), with the words a warp instruction of it writes |
 | `verity_machine_model/lp.py` | The LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ), as the legacy `rs-price-99.py` `solve` computes it |
 | `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, what is under its floor, and a claim's kinds priced a word beside their measured cost |
-| `verity_machine_model/adopt.py` | Merging a measured census into `data/` at the last epoch, each (kind, row) at the faster of its two lines |
+| `verity_machine_model/adopt.py` | Merging a measured census into `data/census/` at the last epoch, each (kind, row) at the faster of its two lines |
 | `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
 | `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA: `e-l7qs` is PROFILE's measured kernel, `dither-duo-l32` the provisional one the tests' hand arithmetic reads |
 | `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (QSTAR's, provisional until a DATASHEET row) |
@@ -44,7 +45,8 @@ uv run machine-model eps --table --upfill --credit floor --uni-issue 0.92   # a 
 
 An *epoch* is a state of the census and the attacks, named after the vector that introduced it. A census line or an attack
 holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector re-solves on
-the data it was published on while new measurements land beside it. A kind with no coefficient on a vector's rows is
+the data it was published on while new measurements land beside it. The census lines from an epoch are its own file, so
+the census grows by a file an epoch; the tests keep every file under a quarter of the repository's 256 KiB cap. A kind with no coefficient on a vector's rows is
 refused, and the check fails on it.
 
 ## Add a measurement
@@ -53,10 +55,11 @@ A new measurement is lines of data and a vector file, not a script:
 
 1. **The row**, if the measurement is a new row: a line in `data/rows.csv` with its status, its run ids
    (`rYYYYMMDD-HHMMSS-xxxx`, or a `note:` id) and what it measures.
-2. **The census lines**: one line in `data/census.csv` for each instruction class the row binds, with exactly one of
-   `rate` (the measured warp instructions/SM/clk; `noise` 0.02 for the usual 2% margin), `cycles` or `u`, `since` the new
-   epoch, and its runs. A refit of an existing line sets the old line's `until` to the last epoch it held and adds the new
-   value with `since` the new epoch.
+2. **The census lines**: the new epoch's file, `data/census/EPOCH.csv`, with one line for each instruction class the row
+   binds: exactly one of `rate` (the measured warp instructions/SM/clk; `noise` 0.02 for the usual 2% margin), `cycles`
+   or `u`, `since` the new epoch, and its runs. A run list that many lines share (a refit's) goes in
+   `data/census/runs.toml` once, and its lines cite it as `@NAME`. A refit of an existing line sets the old line's `until`
+   to the last epoch it held, in the old line's file, and adds the new value to the new epoch's file.
 3. **The epoch**: append the new vector's name to `epochs` in `data/model.toml`.
 4. **The vector**: copy the vector it builds on to `data/vectors/NAME.toml`, set `name` and `epoch`, add the row to `rows`
    (and any credit to `credits`), and drop `[published]` and `[legacy]`.
@@ -127,8 +130,8 @@ An opcode probe (the `opcode_probe` beside this directory, #2160) writes its gat
 schema, with no epochs. After steps 3 and 4 above, `uv run machine-model adopt CENSUS EPOCH` merges it at `EPOCH`, which
 must be the last epoch. Each (kind, row) keeps the faster of its line at the epoch before and the measured one: a row's
 u must be a lower bound on what every program pays on it, so a line slower than the hardware makes a price that isn't
-sound. A faster line closes the old one at the epoch before, adds its own from `EPOCH` and adds its runs to the row's in
-`rows.csv`; a slower one changes nothing. A probe case the census has no row for (VF3k-16's peer-CTA DSMEM atomic) is a new row and, if it is
+sound. A faster line closes the old one at the epoch before (in the old line's file), adds its own to
+`data/census/EPOCH.csv` and adds its runs to the row's in `rows.csv`; a slower one changes nothing. A probe case the census has no row for (VF3k-16's peer-CTA DSMEM atomic) is a new row and, if it is
 slower than its opcode's other cases, its own kind (`ATOME32P`): a line for the old kind there would overstate it.
 
 A joint row a re-measurement finds violated (a measured point past 1) is unsound whatever the faster rule says: it closes

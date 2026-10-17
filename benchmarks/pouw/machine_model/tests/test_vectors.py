@@ -159,10 +159,11 @@ def test_vf3k16_loses_tau_on_atoms64_alone(tmp_path):
     line costs 7.5e-7 of it): the 1.1% VF3k-16 loses is the price of ATOMS64's credit on its faster row."""
     data = tmp_path / "data"
     shutil.copytree(DATA, data)
-    c = (data / "census.csv").read_text()
+    p = data / "census" / "VF3k-16.csv"
+    c = p.read_text()
     line = "ATOMS64,ROW_ATOMS64,0.480156,0.02,,,VF3k-16,VF3k-16,r20261016-183617-3914\n"
     assert c.count(line) == 1
-    (data / "census.csv").write_text(c.replace(line, line.replace("0.480156", "0.29523")))
+    p.write_text(c.replace(line, line.replace("0.480156", "0.29523")))
     assert resolve("VF3k-16", data).tau == pytest.approx(solved("VF3j-16").tau, rel=1e-6)
     assert solved("VF3k-16").tau < solved("VF3j-16").tau * (1 - 0.01)
 
