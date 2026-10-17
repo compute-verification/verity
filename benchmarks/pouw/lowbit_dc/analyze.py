@@ -110,7 +110,7 @@ def gemm_summary(gates: list[dict], bench: list[dict], dbench: list[dict]) -> di
         for emu in (a for a in arms if a.startswith(("k3", "k4"))):
             tile = emu.split("_")[1]
             same = f"i8_{tile}"
-            other = next(a for a in arms if a.startswith("i8") and a != same)
+            other = "i8_bn256" if b.get("arch") == "sm_100a" else "i8_bn128"
             split = "split_x_k4s" if emu.startswith("k4s") else "split_x"
             row = {"m": b["m"], "n": b["n"], "k": b["k"], "emu": emu, "i8_same_tile": same, "i8_dgemm_tile": other,
                    "split_x_ms": b.get(f"{split}_ms")}

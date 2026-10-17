@@ -375,10 +375,12 @@ struct Arm {
   int route, bm, bn;
   const char* name;
 };
-// Family arms: native int8 at the emulated routes' tile (the like-for-like ratio), int8 at dgemm's tile, emulated.
+// Family arms: native int8 at each emulated tile (the like-for-like ratio), int8 at dgemm's tile, emulated. On sm_100a
+// the emulated routes at BN = 64 hold half the running words (k4s: 246 registers at BN = 128, two CTAs a SM).
 static std::vector<Arm> arms() {
   if (g_sm == 100)
-    return {{0, 128, 128, "i8_bn128"}, {0, 128, 256, "i8_bn256"}, {1, 128, 128, "k3z_bn128"}, {2, 128, 128, "k4s_bn128"}};
+    return {{0, 128, 64, "i8_bn64"},   {1, 128, 64, "k3z_bn64"},   {2, 128, 64, "k4s_bn64"}, {0, 128, 128, "i8_bn128"},
+            {1, 128, 128, "k3z_bn128"}, {2, 128, 128, "k4s_bn128"}, {0, 128, 256, "i8_bn256"}};
   return {{0, 64, 64, "i8_bn64"}, {0, 64, 128, "i8_bn128"}, {1, 64, 64, "k3h_bn64"}};
 }
 // The split of an arm's route: 100 k3z, 104 k4s, 90 k3h.
@@ -389,9 +391,12 @@ static void launch(const Arm& a, const uint8_t* A, const uint8_t* B, int m, int 
                    uint32_t* R, cudaStream_t st) {
   const dim3 grid(n / a.bn, m / a.bm);
   if (g_sm == 100) {
-    if (a.route == 0 && a.bn == 128) eg100<0, 128, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
+    if (a.route == 0 && a.bn == 64) eg100<0, 64, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
+    else if (a.route == 0 && a.bn == 128) eg100<0, 128, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
     else if (a.route == 0) eg100<0, 256, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
+    else if (a.route == 1 && a.bn == 64) eg100<1, 64, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
     else if (a.route == 1) eg100<1, 128, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
+    else if (a.bn == 64) eg100<2, 64, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
     else eg100<2, 128, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
   } else {
     if (a.route == 0 && a.bn == 64) eg90<0, 64, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
@@ -538,7 +543,7 @@ static int run_gate(int m, int n, int k, uint32_t seed, bool edge) {
   }
   bool all = split_bad == 0;
   int last_bn = 0;
-  std::vector<int32_t> Cr, C((size_t)m * n);
+  std::vector<int32_t> Cr, C((size_t)m * n);  // arms are ordered by tile, so each width's reference is computed once
   std::vector<uint32_t> Rr, R;
   for (const Arm& a : arms()) {
     if (a.bn != last_bn) host_ref(m, n, k, a.bn, seed, X, W, Cr, Rr), last_bn = a.bn;
