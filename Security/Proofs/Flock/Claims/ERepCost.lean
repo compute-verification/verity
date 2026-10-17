@@ -12,7 +12,7 @@ the draws: `ε·N(K+1, a) = ε + ε·(ε·N(K, a+1)) + (1−ε)·(ε·N(K, a))`)
 
 Between reruns, Flock's `assemble` checks each table's decoded list once (`Flock.assembleCounted`, the checks
 `find?` makes table by table): at most the lists' lengths summed (`Flock.assembleCounted_spec`), which `Flock.Efficient`
-bounds by `p(size)` per table (`Flock.assemble_checks_le`).
+bounds by `p` at each table's opened word's encoded length (`Flock.assemble_checks_le`).
 -/
 
 namespace Claims
@@ -201,15 +201,24 @@ theorem ERep_cost (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (o
 
 end ERep
 
-/-- **Flock: efficiency rests on the decoder alone**: `ERepCost` holds at every deployment, so Flock's `Efficient` is a
-decoder that meets the list-decoding spec, with its stated complexity and its lists at most that long. -/
-theorem Flock.Efficient_of_decoder {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
-    (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ)
-    (hl : Flock.ListWithin D.len D.enc D.θ decode) (hd : DecoderComplexity decode counted size p)
-    (hlen : ∀ os, (decode os).length ≤ p.eval (size os)) :
-    Flock.Efficient H D decode counted size p :=
-  ⟨ERep_cost H D.V D.waits D.k D.cap (fun v => [D.cols v]) _ _, hl, hd, hlen⟩
+/-- **Flock: efficiency rests on the decoder alone**: `ERepCost` holds at every deployment, so Flock's `Efficient` is
+the deployed decoder meeting the list-decoding spec, with its count and its lists at most `p` at the opened word's
+encoded length. -/
+theorem Flock.Efficient_of_decoder {Coin F T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype F]
+    [DecidableEq F] [Zero (List F)] (H : Msg → Msg) (D : Flock.Deploy Coin (List F) T) (p : Polynomial ℕ)
+    (hl : Flock.ListWithin D.len D.enc D.θ D.decode) (hs : ∀ os, (D.dec os).2 ≤ p.eval (Flock.wordLen os))
+    (hlen : ∀ os, (D.decode os).length ≤ p.eval (Flock.wordLen os)) :
+    Flock.Efficient H D p :=
+  ⟨ERep_cost H D.V D.waits D.k D.cap (fun v => [D.cols v]) _ _, hl, hs, hlen⟩
+
+/-- An opened word has at most as many columns as its encoded length has bits: each column takes at least one. -/
+theorem Flock.length_le_wordLen {F : Type} [Fintype F] (os : List (ℕ × List F)) : os.length ≤ Flock.wordLen os := by
+  unfold Flock.wordLen
+  induction os with
+  | nil => simp
+  | cons o os ih =>
+    simp only [List.map_cons, List.sum_cons, List.length_cons]
+    omega
 
 /-! ## `assemble`'s checks -/
 
@@ -278,15 +287,14 @@ theorem Flock.assembleCounted_spec {Col T : Type} (parse : Msg → Option Flock.
     · exact Nat.zero_le _
     · exact (findC_snd_le _ _).trans (hlen _)
 
-/-- **Flock's `Efficient` bounds `assemble`'s checks**: at most `p(size)` per table, summed over the statement's
-tables. -/
-theorem Flock.assemble_checks_le {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Flock.Deploy Coin Col T} {decode : List (ℕ × Col) → List T}
-    {counted : List (ℕ × Col) → List T × ℕ} {size : List (ℕ × Col) → ℕ} {p : Polynomial ℕ}
-    (hE : Flock.Efficient H D decode counted size p) (x : Msg) (opens : List (ℕ → List (ℕ × Col))) (s : Flock.Stmt)
+/-- **Flock's `Efficient` bounds `assemble`'s checks**: at most `p` at each table's opened word's encoded length,
+summed over the statement's tables. -/
+theorem Flock.assemble_checks_le {Coin F T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype F]
+    [DecidableEq F] [Zero (List F)] {H : Msg → Msg} {D : Flock.Deploy Coin (List F) T} {p : Polynomial ℕ}
+    (hE : Flock.Efficient H D p) (x : Msg) (opens : List (ℕ → List (ℕ × List F))) (s : Flock.Stmt)
     (hs : D.parse x = some s) :
-    (Flock.assembleCounted D.parse D.table decode D.read x opens).2 ≤
-      ((List.range s.tables).map fun j => p.eval (size (opens.flatMap fun o => o j))).sum :=
-  (Flock.assembleCounted_spec D.parse D.table decode D.read size p hE.2.2.2 x opens).2 s hs
+    (Flock.assembleCounted D.parse D.table D.decode D.read x opens).2 ≤
+      ((List.range s.tables).map fun j => p.eval (Flock.wordLen (opens.flatMap fun o => o j))).sum :=
+  (Flock.assembleCounted_spec D.parse D.table D.decode D.read Flock.wordLen p hE.2.2.2 x opens).2 s hs
 
 end Claims

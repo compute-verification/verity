@@ -29,7 +29,7 @@ Five Props say what the models must satisfy; `Claims.Hm96Hiding` stays the one n
 `Proto.binding_of_coinCheck` `Binding`. `Flock.zk_of_models` is `Claims.Flock.ZK` for a masked `D` whose rounds with
 `Hello` are the protocol's, and `Flock.zk_deployZk_of_models` is `Claims.Flock.ZK` at `FlockDeploy.deployZk`, both at
 
-  `ε_zk(x) = 6·n_L(x)·δ₁ + 16t·n_B(x)·δ₁ + 2·3^{-t}`,
+  `ε_zk(x) = 8·n_L(x)·δ₁ + 8t·n_B(x)·δ₁ + 2·3^{-t}` and `γ(x) = 4t·3^t`,
 
 `n_L` bounding the pre-final view's leaves and `n_B` each coin vector's hidden leaves (`OnModel.size`) or pre-final leaves
 (`OffModel.size`).
@@ -387,8 +387,9 @@ end Proto
 /-! ## Flock's zero knowledge from the models -/
 
 /-- **Flock's zero knowledge against a malicious verifier, from the masked prover's models**: `Claims.Flock.ZK` at
-`P_zk = G.prover` and `S_GK = G.simulatorE t (t·3^t)`, at `ε_zk = 6·n_L·δ₁ + 16t·n_B·δ₁ + 2·3^{-t}`, when the deployed
-verifier's rounds with `Hello` are the protocol's, under `Claims.Hm96Hiding` and the five named hypotheses. -/
+`P_zk = G.prover` and `S_GK = G.simulatorE t (t·3^t)`, at `ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`,
+when the deployed verifier's rounds with `Hello` are the protocol's, under `Claims.Hm96Hiding` and the five named
+hypotheses. -/
 theorem Flock.zk_of_models {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (G : Proto Flock.Wit)
     (t : ℕ) (ht : 0 < t) (hzk : D.zk = true) (hk : ∀ x, D.V.k x + 1 = G.k x) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (My : Salt → B) (cs : Salt → Cc)
@@ -398,7 +399,7 @@ theorem Flock.zk_of_models {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Depl
     (hL : G.MsgLink H (Flock.R D.parse) My cs Mp Mc) (hS : G.SimLink H Mc) (hN : G.NonDegenerate Mc)
     (hI : G.InnerHolds (Flock.R D.parse) Mc) (hC : G.CoinCheck) :
     Claims.Flock.ZK H D G.prover (G.simulatorE t (t * 3 ^ t))
-      fun x => 6 * nL x * δ₁.toReal + 16 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t := by
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
   obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := hC
   exact Flock.zkR_gkE_hm96 H D G t ht hzk hk δ₁ nL nB
     (G.prefix_of_models H _ My cs hT1 hδ₁ Mp Mc nL hnL hL)
@@ -406,7 +407,8 @@ theorem Flock.zk_of_models {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Depl
 
 /-- **Flock's zero knowledge against a malicious verifier at the deployed masked verifier** `FlockDeploy.deployZk`:
 `Claims.Flock.ZK` at `P_zk = G.prover` and `S_GK = G.simulatorE t (t·3^t)`, at
-`ε_zk = 6·n_L·δ₁ + 16t·n_B·δ₁ + 2·3^{-t}`, for a committed-coin protocol whose coins are the deployed verifier's
+`ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`, for a committed-coin protocol whose coins are the deployed
+verifier's
 (`deployZk_proto_k`: `Hello` and `D.V`'s rounds are its), under `Claims.Hm96Hiding` and the five named hypotheses. -/
 theorem Flock.zk_deployZk_of_models (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) (t : ℕ) (ht : 0 < t)
@@ -418,7 +420,7 @@ theorem Flock.zk_deployZk_of_models (H : Msg → Msg)
     (hL : G.MsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) My cs Mp Mc) (hS : G.SimLink H Mc)
     (hN : G.NonDegenerate Mc) (hI : G.InnerHolds (Flock.R (FlockDeploy.deployZk rel).parse) Mc) (hC : G.CoinCheck) :
     Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover (G.simulatorE t (t * 3 ^ t))
-      fun x => 6 * nL x * δ₁.toReal + 16 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t :=
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
   Flock.zk_of_models H _ G t ht rfl (fun x => (deployZk_proto_k rel G hK x).symm) My cs hT1 hδ₁ Mp Mc nL nB hnL hnB
     hL hS hN hI hC
 

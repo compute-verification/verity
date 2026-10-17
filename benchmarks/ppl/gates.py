@@ -1,13 +1,14 @@
-"""The exactness gates. Every integer product is gated on every call (its operands within int8, and its accumulator
-within s32 by an a priori bound); on the check window (methodology.CHECK_WINDOW), every layer: each product against a
-float64 recomputation, every peel identity (per KV group and P block), and the engine's bf16 layer against HF's. A run
-with any failed gate reports no perplexity (`run.py` exits 1)."""
+"""The exactness gates. Every integer product is gated on every call (its operands within int8, or within the bound a
+block-scaled grid declares, and its accumulator within s32 by an a priori bound); on the check window
+(methodology.CHECK_WINDOW), every layer: each product against a float64 recomputation, every peel identity (per KV group
+and P block, and per linear), and the engine's bf16 layer against HF's. A run with any failed gate reports no
+perplexity (`run.py` exits 1)."""
 from __future__ import annotations
 
 import torch
 
 S32 = 2 ** 31 - 1
-NAMES = ("int8_range", "accumulator", "product_exact", "peel", "hf_reference", "windows", "tokens")
+NAMES = ("int8_range", "grid_range", "accumulator", "product_exact", "peel", "hf_reference", "windows", "tokens")
 
 
 class Gates:
@@ -43,6 +44,10 @@ class Gates:
 
 def int8_ok(*xs: torch.Tensor) -> bool:
     return all(x.numel() == 0 or (-128 <= float(x.min()) and float(x.max()) <= 127) for x in xs)
+
+
+def within(top: int, *xs: torch.Tensor) -> bool:
+    return all(x.numel() == 0 or float(x.abs().max()) <= top for x in xs)
 
 
 def absmax(x: torch.Tensor) -> float:
