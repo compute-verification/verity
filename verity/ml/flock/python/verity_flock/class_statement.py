@@ -1058,10 +1058,12 @@ def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
 def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False, timeout: int = 3600, gpu: bool = False,
           warm: int = 0, runs: int = 1) -> dict:
     """A live session (``serve`` on 127.0.0.1, or a verifier pod's at FC_VERIFIERS, and ``prove``), or ``selftest``: the LIVE or
-    SELFTEST record."""
+    SELFTEST record. The selftest reads the forged circuit and the tables `circuit.stage` writes beside the circuit, wherever
+    it runs from; ``skipped`` lists the cases it skipped on this statement."""
     circ, inst, pub = d / "circuit.txt", d / f"inst-{n}.bin", d / f"pub-{n}.bin"
     if selftest:
-        cmd = [binary, "selftest", "--instances", str(inst), "--circuit", str(circ)] + (["--gpu"] if gpu else [])
+        cmd = [binary, "selftest", "--instances", str(inst), "--circuit", str(circ), "--forged", str(d / "circuit-forged.txt"),
+               "--tables", str(d / "tables")] + (["--gpu"] if gpu else [])
         t0 = time.monotonic()
         try:
             r = subprocess.run(cmd + (["--only", selftest] if isinstance(selftest, str) else []), capture_output=True, text=True,
@@ -1080,7 +1082,8 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         all_pass = head.get("all_pass") if head is not None else (bool(neg) and not failed)     # --only prints its one case, no summary
         # a process that ends without its verdict (killed, out of memory) is no verdict: its exit code and stderr say why
         finished = r.returncode == 0 and bool(lines)
-        return {"all_pass": all_pass, "cases": len(neg), "failed": failed, "finished": finished, "timed_out": False,
+        skipped = [json.loads(ln.split("\t", 1)[1])["case"] for ln in r.stdout.splitlines() if ln.startswith("SKIP\t")]
+        return {"all_pass": all_pass, "cases": len(neg), "failed": failed, "skipped": skipped, "finished": finished, "timed_out": False,
                 "exit_code": r.returncode, "wall_s": round(time.monotonic() - t0, 3)} | \
             ({} if finished else {"stderr_tail": r.stderr[-600:]}) | \
             ({"gpu_cases": gc} if (gc := [c for c in neg if c.get("case") in GPU_CASES]) else {})
