@@ -156,10 +156,10 @@ def test_the_relabel_refuses_what_it_cannot_rewrite(monkeypatch):
 # ------------------------------------------------------------------------------------------------ the row's side
 class _Row:
     """What `relabel_build.derive` drives of a `TpRow`, with each derive `_fake_build` in-process."""
-    step, request = TpRow.step, TpRow.request
+    step, request, launch_of, launch_args = TpRow.step, TpRow.request, TpRow.launch_of, TpRow.launch_args
 
     def __init__(self, tmp, W: int, hook=None) -> None:
-        self.W, self.B, self.bdir, self.hook = W, 1, f"{tmp}/build", hook
+        self.W, self.B, self.bdir, self.hook, self.lctx = W, 1, f"{tmp}/build", hook, {}
         self.marks: list = []
         self.logs: list[str] = []
         self.verdicts: list = []

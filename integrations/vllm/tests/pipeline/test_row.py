@@ -78,7 +78,10 @@ def test_the_match_of_record_is_the_default_and_the_caller_can_choose_the_audit(
     assert (o.match.match_impl, o.match.match_pipeline) == ("record", "standalone")
     assert _opts(tmp_path, "--match-impl", "record").match.match_impl == "record"
     with pytest.raises(SystemExit):
-        _opts(tmp_path, "--match-phase", "gpu")
+        _opts(tmp_path, "--match-phase", "fold")
+    with pytest.raises(Stop) as e:
+        _row(tmp_path, "--match-phase", "gpu").match()
+    assert e.value.rc == 12
 
 
 def test_machine_paths_are_defaults_that_the_environment_and_flags_override(tmp_path):
@@ -752,6 +755,34 @@ def _engines_custom_all_reduce_off(t, monkeypatch) -> tuple[object, object]:
     def parsed(cmd: list[str]) -> object:
         return parse_engine_args([cmd[i + 1] for i, a in enumerate(cmd) if a == "--engine-arg"])["disable_custom_all_reduce"]
     return parsed(seen[0]), parsed(t.commit_cmd([]))
+
+
+def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_after(tmp_path, monkeypatch):
+    """`--match-phase gpu` runs the capture and control with no Build and stops the row; `cpu` runs the check over the legs they recorded."""
+    gpu, cpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu"), _tp_row(tmp_path, GLM53, "--match-phase", "cpu")
+    os.makedirs(gpu.M)
+    monkeypatch.setattr(R, "derived_ok", lambda p: True)
+    with pytest.raises(Stop) as e:
+        cpu.match()
+    assert e.value.rc == 11 and "gpu_legs.json" in open(f"{cpu.d}/stages.txt").read()
+    ran: list[str] = []
+    monkeypatch.setattr(R, "derived_ok", lambda p: False)
+    monkeypatch.setattr(gpu, "run_gpu", lambda stage, to, log, cmd, **kw: ran.append(stage) or 0)
+    monkeypatch.setattr(gpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
+    with pytest.raises(Stop) as e:
+        gpu.match()
+    assert e.value.rc == 0 and ran == ["match.capture", "match.control"]
+    assert json.loads(Path(gpu.M, "gpu_legs.json").read_text()) == {"capture_rc": 0, "control_rc": 0}
+    assert open(f"{gpu.d}/stages.txt").read().splitlines()[-1].startswith("match-gpu PASS")
+    ran.clear()
+    monkeypatch.setattr(R, "derived_ok", lambda p: True)
+    monkeypatch.setattr(R, "tp_passed", lambda p: True)
+
+    monkeypatch.setattr(cpu, "run_gpu", lambda *a, **kw: pytest.fail("a GPU leg in the cpu phase"))
+    monkeypatch.setattr(cpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
+    cpu.match()
+    last = open(f"{cpu.d}/stages.txt").read().splitlines()[-1].split()
+    assert ran == ["match.check"] and last[:2] == ["match", "PASS"] and last[3] == "rc=0/0/0/-1"
 
 
 @pytest.mark.parametrize("row, off", [

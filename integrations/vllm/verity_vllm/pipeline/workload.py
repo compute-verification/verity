@@ -2,7 +2,7 @@
 
     verity-vllm workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
         [--sampling greedy|stoch-t0.8-p0.95|stoch-t0.8-p1] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
-        [--lengths-only] [--check] --out workloads/<row-id>.json
+        [--shared-prefix N] [--lengths-only] [--check] --out workloads/<row-id>.json
 
 Output = the existing request-list workload format (a row file, `config.RowConfig`, see `workloads/workload_cov_*.json`) that
 `verity_vllm.engine.vllm_adapter.load_workload` / `bench/commit_delta.py` / `zk/bench/e2e_commit_run.py` / the eager capture consume unchanged,
@@ -23,6 +23,9 @@ independent stored seed per request (`requests[i].seed`, read by `load_workload`
 Gumbel-max only).  Arrivals `staggered`: request 0 at 0 s, the
 others at seeded offsets over the first ~60 % of a full-length run; stored as `arrival_offsets_s` and as the step-indexed
 `arrive_step` the loaders consume (`arrive_step = round(offset_s / nominal_step_s)`, nominal_step_s = 0.010, recorded).
+`--shared-prefix N` (a prefix-caching row): every prompt longer than N starts with the same N tokens of one seeded passage, then its own
+text (`requests[i].shared_prefix_tokens`), the row's `engine.args.enable_prefix_caching` is true, and `--check` requires a request
+longer than N to arrive after the first one (a hit needs the first one's blocks computed).
 `--lengths-only` writes the plan without text/token ids (no tokenizer needed) so lanes can see the shape plan on a laptop.
 """
 from __future__ import annotations
@@ -134,8 +137,9 @@ def plan_values(n: int, lo: int, hi: int, rng: np.random.Generator, *, anchor_ne
     return out
 
 
-def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: str, arrivals: str) -> dict:
-    """The model-independent shape plan of one row: lengths, caps, sampling seeds, arrival offsets (all deterministic in the row id)."""
+def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: str, arrivals: str, shared_prefix: int = 0) -> dict:
+    """The model-independent shape plan of one row: lengths, caps, sampling seeds, arrival offsets (all deterministic in the row id),
+    and the shared prefix every prompt longer than it starts with (`--shared-prefix`; 0 = none)."""
     seed = row_seed(row_id)
     lo = 8 if max_input >= 32 else 1
     lengths = plan_values(batch, lo, max_input, rng_for(seed, "lengths"), anchor_near_lo=True)
@@ -165,7 +169,14 @@ def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: 
             "length_rule": {"input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] "
                                      "nudged off powers of two; seeded permutation", "output": "same over [2, O]; paired by seeded permutation",
                             "depends_on": "SHA256(row_id) only"},
-            "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]"}
+            "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]",
+            "shared_prefix": int(shared_prefix)}
+
+
+def prefix_sharers(p: dict) -> list[int]:
+    """The requests whose prompt starts with the plan's shared prefix: every one longer than it."""
+    n = int(p.get("shared_prefix") or 0)
+    return [i for i, x in enumerate(p["input_lengths"]) if n and int(x) > n]
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -212,6 +223,11 @@ def check_plan(p: dict) -> list[str]:
         offs = p["arrival_offsets_s"]
         if offs[0] != 0.0 or offs != sorted(offs) or len(set(offs)) < min(B, 4):
             bad.append(f"staggered arrival schedule malformed: {offs}")
+    if p.get("shared_prefix"):
+        arrive = [int(p["arrive_steps"][i]) for i in prefix_sharers(p)]
+        if len(arrive) < 2 or max(arrive) == min(arrive):
+            bad.append(f"shared prefix {p['shared_prefix']}: no request longer than it arrives after the first one (arrive steps "
+                       f"{arrive}), so none could reuse its cached blocks (stagger the arrivals or shorten the prefix)")
     return bad
 
 
@@ -268,6 +284,17 @@ def corpus_paragraphs() -> list[dict]:
     return [{"text": p, "source": b["source"], "index": i} for b in doc["books"] for i, p in enumerate(b["paragraphs"])]
 
 
+def _passage(tok: Tok, paras: list[dict], j: int, need: int, ids: list[int] | None = None) -> tuple[list[int], list[str]]:
+    """``need`` token ids: ``ids``, then corpus text from paragraph ``j`` on (a paragraph after earlier text joined by a space)."""
+    ids, used = list(ids or []), []
+    while len(ids) < need:
+        para = paras[j % len(paras)]
+        ids += tok.encode((" " if ids else "") + para["text"])
+        used.append(f"{para['source']} ¶{para['index']}")
+        j += 1
+    return ids[:need], used
+
+
 def build_requests(tok: Tok, p: dict) -> list[dict]:
     paras = corpus_paragraphs()
     B = int(p["batch"])
@@ -275,22 +302,19 @@ def build_requests(tok: Tok, p: dict) -> list[dict]:
     starts = [int(s) for s in rng.choice(len(paras), size=min(B, len(paras)), replace=False)]
     while len(starts) < B:                       # B > #paragraphs: reuse starts with a paragraph offset so prefixes still differ
         starts.append((starts[len(starts) - len(paras)] + 7 * (1 + len(starts) // len(paras))) % len(paras))
+    n, sharers = int(p.get("shared_prefix") or 0), set(prefix_sharers(p))
+    prefix, prefix_used = _passage(tok, paras, int(rng_for(p["seed"], "prefix").integers(len(paras))), n) if sharers else ([], [])
     reqs = []
     for i in range(B):
         need = int(p["input_lengths"][i])
-        ids: list[int] = []
-        used: list[str] = []
-        j = starts[i]
-        while len(ids) < need:
-            para = paras[j % len(paras)]
-            ids += tok.encode((" " if ids else "") + para["text"])
-            used.append(f"{para['source']} ¶{para['index']}")
-            j += 1
-        ids = ids[:need]
+        ids, used = _passage(tok, paras, starts[i], need, prefix if i in sharers else None)
         req = {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
                "prompt_len": need, "max_tokens": int(p["output_caps"][i]), "arrive_step": int(p["arrive_steps"][i]),
                "arrival_offset_s": float(p["arrival_offsets_s"][i]),
                "prompt_token_ids": ids, "prompt_text": tok.decode(ids), "origin": {"corpus": CORPUS.name, "paragraphs": used}}
+        if i in sharers:
+            req["shared_prefix_tokens"] = n
+            req["origin"]["shared_prefix_paragraphs"] = prefix_used
         if p["sampling_seeds"]:
             req["seed"] = int(p["sampling_seeds"][i])
         reqs.append(req)
@@ -299,10 +323,12 @@ def build_requests(tok: Tok, p: dict) -> list[dict]:
 
 def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok: Tok | None) -> dict:
     B, I, O = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
+    n, sharers = int(p["shared_prefix"]), prefix_sharers(p)
     reqs = build_requests(tok, p) if tok is not None else [
         {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
          "prompt_len": int(p["input_lengths"][i]), "max_tokens": int(p["output_caps"][i]), "arrive_step": int(p["arrive_steps"][i]),
-         "arrival_offset_s": float(p["arrival_offsets_s"][i]), **({"seed": int(p["sampling_seeds"][i])} if p["sampling_seeds"] else {})}
+         "arrival_offset_s": float(p["arrival_offsets_s"][i]), **({"shared_prefix_tokens": n} if i in sharers else {}),
+         **({"seed": int(p["sampling_seeds"][i])} if p["sampling_seeds"] else {})}
         for i in range(B)]
     variant = p["sampling"]
     variants = {"greedy": SAMPLING["greedy"]}
@@ -334,6 +360,11 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
                  f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."),
     }
     doc["sweep"]["lengths_only"] = tok is None
+    if n:
+        doc["engine"]["args"]["enable_prefix_caching"] = True
+        doc["sweep"]["shared_prefix"] = n
+        doc["note"] += (f"  Shared prefix: requests {sharers} (every prompt longer than {n} tokens) start with the same {n} tokens and "
+                        f"prefix caching is on, so each after the first reuses its cached KV blocks.")
     # [lane vllm-tp-n] a tensor-parallel row (`__tp<N>__` in the row id, N >= 2): the engine's world, the manifests' TP flags of record
     # (#70 / #75: VLLM_BATCH_INVARIANT=1, or what a `--target` declares; on a SYS target, where P2P hangs, disable_custom_all_reduce and
     # NCCL_P2P_DISABLE=1) and `sweep.tp`
@@ -385,6 +416,9 @@ class Options:
                                 help="emit the shape plan without text / token ids (no tokenizer needed)")
     check: bool = option("--check", default=False, action="store_true",
                          help="run the §12 self-check on the plan; exit 1 on a violation")
+    shared_prefix: int = option("--shared-prefix", type=int, default=0,
+                                help="every prompt longer than N tokens starts with the same N tokens (one seeded corpus passage) and the row "
+                                "runs with enable_prefix_caching (vLLM reuses whole KV blocks: N a multiple of the block size reuses all of it)")
     out: str | None = option("--out", default=None, help="default workloads/<row-id>.json (relative to the repo)")
     target: str | None = option("--target", default=None,
                                 help="[R13 hopper] TargetProfile overrides of the row as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
@@ -393,7 +427,7 @@ class Options:
 
 
 def main(a: Options) -> int:
-    p = plan(a.row_id, a.batch, a.max_input, a.max_output, sampling=a.sampling, arrivals=a.arrivals)
+    p = plan(a.row_id, a.batch, a.max_input, a.max_output, sampling=a.sampling, arrivals=a.arrivals, shared_prefix=a.shared_prefix)
     bad = check_plan(p)
     if a.check:
         print(f"[check] {a.row_id}: B={a.batch} lens={p['input_lengths']} caps={p['output_caps']} steps={p['arrive_steps']} -> "

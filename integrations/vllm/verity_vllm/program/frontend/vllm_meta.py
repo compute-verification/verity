@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import socket
 import sys
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from typing import Any
 
 from verity_vllm.engine import env as engine_env
@@ -400,17 +400,20 @@ class GreedyRequest(nn.Module):
         super().__init__()
         self.model, self.LP, self.T = model, LP, T
 
-    def _step(self, ids: torch.Tensor, pos0: int) -> torch.Tensor:
-        positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
-        hidden = self.model(ids, positions)
-        logits = self.model.compute_logits(hidden[-1:])
-        return torch.argmax(logits, dim=-1).to(torch.int32)
+    def _step(self, ids: torch.Tensor, pos0: int, s: int) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        with launch_region(s, "tokens"):
+            positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
+            hidden = self.model(ids, positions)
+        with launch_region(s, "sampled"):
+            logits = self.model.compute_logits(hidden[-1:])
+            return torch.argmax(logits, dim=-1).to(torch.int32)
 
     def forward(self, prompt: torch.Tensor) -> torch.Tensor:
-        tok = self._step(prompt, 0)
+        tok = self._step(prompt, 0, 0)
         toks = [tok]
         for s in range(self.T):
-            tok = self._step(tok, self.LP + s)
+            tok = self._step(tok, self.LP + s, s + 1)
             toks.append(tok)
         return torch.cat(toks)
 
@@ -512,19 +515,22 @@ class StochasticRequest(nn.Module):
         self.temperature, self.top_p = float(temperature), float(top_p)
         self.S = S
 
-    def _step(self, ids: torch.Tensor, pos0: int, seed: torch.Tensor, splits: torch.Tensor | None) -> torch.Tensor:
+    def _step(self, ids: torch.Tensor, pos0: int, seed: torch.Tensor, splits: torch.Tensor | None, s: int) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
         from verity_vllm.program.frontend.rules.vllm_iface import iface
-        positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
-        hidden = self.model(ids, positions)
-        logits = self.model.compute_logits(hidden[-1:])
-        return iface.gumbel_topp_token_select(logits, seed, self.temperature, self.top_p, pos0 + ids.shape[0] - 1, splits, S=self.S)
+        with launch_region(s, "tokens"):
+            positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
+            hidden = self.model(ids, positions)
+        with launch_region(s, "sampled"):
+            logits = self.model.compute_logits(hidden[-1:])
+            return iface.gumbel_topp_token_select(logits, seed, self.temperature, self.top_p, pos0 + ids.shape[0] - 1, splits, S=self.S)
 
     def forward(self, prompt: torch.Tensor, seed: torch.Tensor, splits: torch.Tensor | None = None) -> torch.Tensor:
         entry = (lambda s: None) if self.S is not None else (lambda s: splits[s:s + 1])   # noqa: E731
-        tok = self._step(prompt, 0, seed, entry(0))
+        tok = self._step(prompt, 0, seed, entry(0), 0)
         toks = [tok]
         for s in range(self.T):
-            tok = self._step(tok, self.LP + s, seed, entry(s + 1))
+            tok = self._step(tok, self.LP + s, seed, entry(s + 1), s + 1)
             toks.append(tok)
         return torch.cat(toks)
 
@@ -642,10 +648,14 @@ def export_module(mod: nn.Module, inputs: tuple, vllm_config, num_tokens: int, s
     """`torch.export.export(strict=False)` of a wrapper module on meta under vLLM's forward context + the export shims for the
     TargetProfile `profile` (default profile if None). `intercept_triton`: direct Python-level Triton launches become opaque
     `verity_cba::triton_launch` nodes (triton_capture.py). `applied_out`, if given, receives `read_back_applied()` taken INSIDE the
-    export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile)."""
+    export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile).
+    Under a declared launch batch the graph keeps each node's `launch_region` tag."""
+    import torch.fx.traceback as fxt
     from .export_compat import export_compat, read_back_applied
+    from .rules.vllm_bindings.observations import launch_batch_declared
     from .triton_capture import intercept_triton_launches
-    with torch.no_grad(), fake_forward_context(vllm_config, num_tokens), torch.device("meta"), export_compat(profile, mod), no_fx_stack_traces():
+    with (torch.no_grad(), fake_forward_context(vllm_config, num_tokens), torch.device("meta"), export_compat(profile, mod), no_fx_stack_traces(),
+          fxt.preserve_node_meta() if launch_batch_declared() else nullcontext()):
         if intercept_triton:
             with intercept_triton_launches(launch_log):
                 ep = torch.export.export(mod, inputs, strict=strict)
