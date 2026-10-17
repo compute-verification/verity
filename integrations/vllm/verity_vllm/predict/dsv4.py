@@ -10,13 +10,15 @@ their order, each at the shape the model allocates.
 Vocabulary: EmbeddingShard and its all-reduce; layer 0's MhcPreBroadcast and MhcResidualBroadcast; per layer the compressor's f32
 cuBLAS GEMM (on an indexer layer, ratio 4, the indexer's weights projection and compressor GEMMs too, which its short path never
 reads), the block-FP8 linears (FlashInfer below 32 rows), TritonBlockRMSNorm of q and kv, Dsv4QNormRopeKvInsert,
-Dsv4CompressorScore, FlashMlaDecode over the layer's window, Dsv4InvRopeQuantHead per head and the grouped o projection
-(ScaledMmFp8BlockGrouped); between sublayers the all-reduce and MhcFusedPostPre; the MoE block: the router GEMM, the shared expert
-(SiluMulClamp), the table route (GatherI32x, MoeRouterHash) below HASH_LAYERS and MoeRouterSqrtSoftplus from it on, MoeAlignRanks
-over the schedule's keys and MoeAlignBlocks, the Marlin expert GEMMs per pair, MoeSum and the shared expert's add; then MhcPost,
-HcHead, the final norm, the last row's logits, their all-gather and TokenSelect.  The domain is one engine step's single row, which
-opens every layer's history: a fact outside it raises `Unexpressible`, φ's when the decoder is made and a launch's (a prefill, a
-second call, a position that completes a compressed row, a Marlin batch no capture determines) when it is written.
+Dsv4CompressorScore, Dsv4MlaCompressC4 / C128 at each position that completes a compressed row, FlashMlaDecode of one row or
+FlashMlaGatherRow and FlashMlaPrefill of more over the window and compressed rows, Dsv4InvRopeQuantHead per head and the grouped o
+projection (ScaledMmFp8BlockGrouped); between sublayers the all-reduce and MhcFusedPostPre (MhcPostPreTf32 above 16 rows); the MoE
+block: the router GEMM, the shared expert (SiluMulClamp), the table route (GatherI32x, MoeRouterHash) below HASH_LAYERS and
+MoeRouterSqrtSoftplus from it on, MoeAlignRanks over the schedule's keys and MoeAlignBlocks, the Marlin expert GEMMs per pair,
+MoeSum and the shared expert's add; then MhcPost, HcHead, the final norm, the last row's logits, their all-gather and TokenSelect.
+The domain is one request's calls, the first opening every layer's history and each later one continuing it: a fact outside it
+raises `Unexpressible`, φ's when the decoder is made and a launch's (a ratio-4 position past the indexer's short path, a cuBLAS or
+Marlin launch no capture determines) when it is written.
 """
 
 from __future__ import annotations
@@ -188,12 +190,13 @@ class Net:
 
 
 class _Model(dsa._Model):
-    """The forward over one call's row, emitted into `B`: the HC residual streams and their (post, comb) mixes carried from sublayer
-    to sublayer; the collectives, linears, router GEMM and sampler are `dsa._Model`'s."""
+    """The forward over one call's rows, emitted into `B`: the HC residual streams and their (post, comb) mixes carried from sublayer
+    to sublayer, and each layer's window, compressor state and compressed rows carried across calls as `vllm_dsv4` keeps them (its
+    history opens at the layer's first call); the collectives, linears, router GEMM and sampler are `dsa._Model`'s."""
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
         super().__init__(net, B, W, peers)
-        self.calls = 0
+        self.hist: dict[int, dict] = {}
 
     def fp8(self, xs: list[Refs], L: int, name: str) -> list[Refs]:
         return self.fp8_linear(xs, self.w[(L, f"{name}.weight")], self.w[(L, f"{name}.weight_scale_inv")])
@@ -202,11 +205,6 @@ class _Model(dsa._Model):
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
         from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY
         C, net, H, M = self.C, self.net, self.H, len(toks)
-        if M > 1:
-            _refuse(f"a call of {M} rows, a prefill (FlashMLA's sparse prefill and the compressors are not written)")
-        if self.calls:
-            _refuse("a second call, which reads the window rows of the call before it")
-        self.calls += 1
         V = int(C["V"])
         emb = self.k("embedding_shard", VS=V, H=H, START=net.rank * V)
         streams, x, mix = self.pre(self.all_reduce([self.call(emb, t.refs, self.w["embed_tokens"].refs).refs for t in toks]))
@@ -234,12 +232,16 @@ class _Model(dsa._Model):
         return [self.call(copy, r).refs for r in rows], [o[0].refs for o in outs], [(o[1].refs, o[2].refs) for o in outs]
 
     def post_pre(self, parts: list[Refs], streams: list[Refs], mix: list, L: int, side: str) -> tuple[list[Refs], list[Refs], list]:
-        """The all-reduce of a sublayer's partials, its post into the streams and the pre of layer L's `side` sublayer, on the FMA path
-        of at most `SMALL_FMA_TOKENS` rows (`MhcFusedPostPreRule`) -> (streams, layer input, (post, comb)) per row."""
-        from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY
+        """The all-reduce of a sublayer's partials, its post into the streams and the pre of layer L's `side` sublayer: the FMA path at
+        most `SMALL_FMA_TOKENS` rows, the TF32 pre above (`MhcFusedPostPreRule`) -> (streams, layer input, (post, comb)) per row."""
+        from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, SMALL_FMA_TOKENS
+        from verity_vllm.program.kernels.mhc_twin import tf32_num_split
         w = lambda f: self.w[(L, f)].refs  # noqa: E731
-        x = self.all_reduce(parts)
-        fn = self.k("mhc_fused_post_pre", **self.net.mhc, NS=8 if len(x) < 8 and self.H <= 4096 else 4, TH=MHC_GEOMETRY[self.H]["TH"])
+        x, mhc = self.all_reduce(parts), self.net.mhc
+        if len(x) <= SMALL_FMA_TOKENS:
+            fn = self.k("mhc_fused_post_pre", **mhc, NS=8 if len(x) < 8 and self.H <= 4096 else 4, TH=MHC_GEOMETRY[self.H]["TH"])
+        else:
+            fn = self.k("mhc_post_pre_tf32", **mhc, NS=tf32_num_split(len(x), mhc["HC"] * self.H, int(self.net.tp.num_sms)))
         outs = [self.call(fn, a, s, p, c, w(f"hc_{side}_fn"), w(f"hc_{side}_scale"), w(f"hc_{side}_base"), w(f"{side}_norm.weight"))
                 for a, s, (p, c) in zip(x, streams, mix)]
         return [o[0].refs for o in outs], [o[1].refs for o in outs], [(o[2].refs, o[3].refs) for o in outs]
@@ -247,18 +249,21 @@ class _Model(dsa._Model):
     # -- the layer
 
     def attention(self, L: int, x: list[Refs], pos0: int) -> list[Refs]:
-        """Layer L's attention over the row x at position pos0, which opens the layer's history (`vllm_dsv4`, op-major): the
-        compressor's state row (its score; no compressed row is complete), the query and the window row, FlashMLA's decode over the
-        window, the inverse RoPE and the grouped o projection (`fp8.DeepGemmFp8EinsumRule`) -> the o projection's partials."""
+        """Layer L's attention over the rows x at positions pos0.., which continue the layer's history (`vllm_dsv4`, op-major): the
+        compressor's state rows, the queries and the window rows, the compressed row of each window a position completes, FlashMLA's
+        decode of one row or gathered prefill of more over the window and compressed rows (`attend`), the inverse RoPE and the
+        grouped o projection (`fp8.DeepGemmFp8EinsumRule`) -> the o projection's partials."""
         from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import FP8_QUANT_PINS
-        from verity_vllm.program.kernels.flashmla_twin import num_sm_parts, request_splits, sched_meta
-        C, net, p, r = self.C, self.net, pos0, self.net.ratios[L]
-        if (p + 1) % r == 0:
-            _refuse(f"position {p} completes compressed row {(p + 1) // r - 1} of layer {L} (ratio {r}): the compressors are not written")
+        C, net, r, pos = self.C, self.net, self.net.ratios[L], range(pos0, pos0 + len(x))
         D, DR, QL, NH, NHP, QG = (int(C[k]) for k in ("HEAD_DIM", "QK_ROPE", "Q_LORA", "NH", "PADDED_HEADS", "O_QUANT_GROUP"))
-        DN, QT, BN, CW, OG = D - DR, net.G["QT"], net.G["BN"], D * (2 if r == 4 else 1), int(C["O_GROUPS"]) // net.world
+        DN, QT, CW, OG = D - DR, net.G["QT"], D * (2 if r == 4 else 1), int(C["O_GROUPS"]) // net.world
+        hist = self.hist.setdefault(L, {"from": pos0, "window": [], "state": [], "compressed": []})
+        P = hist["from"]
+        if r == 4 and (pos[-1] + 1) // 4 - P // 4 > int(C["INDEX_TOPK"]):
+            _refuse(f"position {pos[-1]} has {(pos[-1] + 1) // 4 - P // 4} compressed rows, more than the indexer's top-{C['INDEX_TOPK']} "
+                    f"(its long path is not written)")
         w = lambda f: self.w[(L, f)].refs  # noqa: E731
-        cs = self.w[(0, "attn.rotary_emb.cos_sin_cache")].refs.slice(p * DR, (p + 1) * DR)
+        cs = lambda p: self.w[(0, "attn.rotary_emb.cos_sin_cache")].refs.slice(p * DR, (p + 1) * DR)  # noqa: E731
         kvs = self.cublas(x, self.w[(L, "attn.compressor.fused_wkv_wgate.weight")], f32=True)
         indexer = r == 4
         if indexer:
@@ -268,19 +273,53 @@ class _Model(dsa._Model):
         qn, kn = (self.k("triton_block_rmsnorm", N=N, **net.norm) for N in (QL, D))
         q = [self.call(qn, a.slice(0, QL), w("attn.q_norm.weight")).refs for a in qkv]
         kv = [self.call(kn, a.slice(QL, QL + D), w("attn.kv_norm.weight")).refs for a in qkv]
-        score = self.k("dsv4_compressor_score", W=CW)
-        ape = w("attn.compressor.ape").slice(p % r * CW, (p % r + 1) * CW)
+        score, ape, scores = self.k("dsv4_compressor_score", W=CW), w("attn.compressor.ape"), []
 
         def state() -> None:
-            for s in kvs:
-                self.call(score, s.slice(CW, 2 * CW), ape)
+            scores.extend(self.call(score, s.slice(CW, 2 * CW), ape.slice(p % r * CW, (p % r + 1) * CW)).refs for s, p in zip(kvs, pos))
 
         if indexer:   # the Build's order: an indexer layer's compressor state precedes its query
             state()
         ins = self.k("dsv4_qnorm_rope_kv_insert", NH=NH, NHP=NHP, DN=DN, DR=DR, QB=QT, EPS=self.EPS)
-        rows = [self.call(ins, a, b, cs) for a, b in zip(self.fp8(q, L, "attn.wq_b"), kv)]
+        rows = [self.call(ins, a, b, cs(p)) for a, b, p in zip(self.fp8(q, L, "attn.wq_b"), kv, pos)]
         if not indexer:
             state()
+        hist["window"] += [(o[1].refs, o[2].refs.slice(0, DN // QT), o[3].refs) for o in rows]
+        hist["state"] += [(s.slice(0, CW), sc) for s, sc in zip(kvs, scores)]
+        hist["compressed"] += [self.compress(L, hist["state"], P, p) for p in pos if (p + 1) % r == 0]
+        att = self.attend(L, hist, [o[0].refs.slice(0, NH * D) for o in rows], pos)
+        inv = self.k("dsv4_inv_rope_quant_head", CHUNKS=D // QG, QG=QG, ROPE=DR)
+        heads = [[self.call(inv, o.slice(h * D, (h + 1) * D), cs(p)) for h in range(NH)] for o, p in zip(att, pos)]
+        wo_a = self.k("deepgemm_fp8_einsum_grouped", H=OG, K=NH // OG * D, N=int(C["O_LORA"]), G=FP8_QUANT_PINS["group_size"])
+        out = [self.call(wo_a, concat([h[0].refs for h in hs]), concat([h[1].refs for h in hs]), w("attn.wo_a.weight"),
+                         w("attn.wo_a.weight_scale_inv")).refs for hs in heads]
+        return self.fp8(out, L, "attn.wo_b")
+
+    def compress(self, L: int, state: list[tuple[Refs, Refs]], P: int, p: int) -> tuple[Refs, Refs, Refs]:
+        """The compressed row of the window ending at p over the state rows from position P (`Dsv4SparseAttnRule._compress`): the
+        window's 2 * ratio rows at ratio 4 (row k reading the half k // 4 of its state), its ratio rows at 128 -> (NoPE, scale bytes
+        without the pad, RoPE)."""
+        from verity_vllm.program.registry.dsv4_compressor import DSV4_COMPRESSOR
+        r, D, DR, QB = self.net.ratios[L], int(self.C["HEAD_DIM"]), int(self.C["QK_ROPE"]), self.net.G["QT"]
+        taken = [(k, s - P) for k, s in enumerate(range(p - (2 * r if r == 4 else r) + 1, p + 1)) if s >= P]
+        if r == 4:
+            fn = self.k("dsv4_compress_c4", ROWS=len(taken), D=D, QB=QB, EPS=self.EPS)
+        else:
+            fn = self.k("dsv4_compress_c128", W=DSV4_COMPRESSOR["W"], R=r // DSV4_COMPRESSOR["W"], D=D, QB=QB, EPS=self.EPS)
+        kv, score = (concat([state[s][i].slice(k // r * D, (k // r + 1) * D) for k, s in taken]) for i in (0, 1))
+        cs = self.w[(0, "attn.rotary_emb.cos_sin_cache")].refs.slice((p - r + 1) * DR, (p - r + 2) * DR)
+        out = self.call(fn, kv, score, self.w[(L, "attn.compressor.norm.weight")].refs, cs)
+        return out[0].refs, out[2].refs.slice(0, (D - QB) // QB), out[1].refs
+
+    def attend(self, L: int, hist: dict, qs: list[Refs], pos: range) -> list[Refs]:
+        """FlashMLA over the rows each position reads, its window from max(p - window + 1, P) then the compressed rows the history
+        holds by then (`Dsv4SparseAttnRule`): one row a decode over each padded to BN rows, at the splits of the planner for the one
+        request; more a prefill, each row gathered once and each position's rows, compressed first, padded to its NP pairs of blocks."""
+        from verity_vllm.program.kernels.flashmla_twin import num_sm_parts, request_splits, sched_meta
+        C, net, r, P = self.C, self.net, self.net.ratios[L], hist["from"]
+        D, DR, NH, NHP, window = (int(C[k]) for k in ("HEAD_DIM", "QK_ROPE", "NH", "PADDED_HEADS", "WINDOW"))
+        G, scale, sink = net.G, float(C["ATTN_SCALE"]), self.w[(L, "attn.attn_sink")].refs.slice(0, NH)
+        BN, blocks = G["BN"], lambda n, b: -(-n // b)  # noqa: E731
         consts: dict[int, Refs] = {}
 
         def i32(v: int) -> Refs:
@@ -288,21 +327,35 @@ class _Model(dsa._Model):
                 consts[v] = self.call(self.k("const", W=32, BITS=v & 0xFFFFFFFF)).refs
             return consts[v]
 
-        swa, NW = 1, BN
-        idx = concat([i32(0)] * swa + [i32(-1)] * (NW - swa))
-        metas, ns = sched_meta([swa], [0], topk=int(C["WINDOW"]), extra_topk=1, parts=num_sm_parts(NHP, 1, int(net.tp.num_sms)), block_size_n=BN)
-        dec = self.k("flashmla_decode", NH=NH, SPLITS=request_splits(metas, ns, 0, NW // BN), NW=NW, DN=DN, DR=DR, QT=QT, BN=BN, DOT=net.G["DOT"],
-                     SCALE=float(C["ATTN_SCALE"]))
-        att = [self.call(dec, o[0].refs.slice(0, NH * D), concat([o[1].refs] * NW), concat([o[2].refs.slice(0, DN // QT)] * NW),
-                         concat([o[3].refs] * NW), idx, i32(swa), w("attn.attn_sink").slice(0, NH)).refs for o in rows]
-        inv = self.k("dsv4_inv_rope_quant_head", CHUNKS=D // QG, QG=QG, ROPE=DR)
-        wo_a = self.k("deepgemm_fp8_einsum_grouped", H=OG, K=NH // OG * D, N=int(C["O_LORA"]), G=FP8_QUANT_PINS["group_size"])
+        if len(pos) == 1:
+            p = pos[0]
+            s0 = max(p - window + 1, P)
+            swa, nc = p - s0 + 1, (p + 1) // r - P // r
+            NW, NX = blocks(swa, BN) * BN, blocks(nc, BN) * BN
+            win, comp = hist["window"][s0 - P:p - P + 1], hist["compressed"][:nc]
+            rows = win + win[:1] * (NW - swa) + comp + comp[:1] * (NX - nc)
+            idx = [i32(0)] * swa + [i32(-1)] * (NW - swa) + [i32(0)] * nc + [i32(-1)] * (NX - nc)
+            metas, ns = sched_meta([swa], [nc], topk=window, extra_topk=1, parts=num_sm_parts(NHP, 1, int(net.tp.num_sms)), block_size_n=BN)
+            fn = self.k("flashmla_decode", NH=NH, SPLITS=request_splits(metas, ns, 0, (NW + NX) // BN), NW=NW, DN=D - DR, DR=DR, QT=G["QT"],
+                        BN=BN, DOT=G["DOT"], SCALE=scale)
+            lens = [i32(swa)] + ([i32(nc)] if NX else [])
+            return [self.call(fn, qs[0], *(concat([row[k] for row in rows]) for k in range(3)), concat(idx), *lens, sink).refs]
+        gather, got = self.k("flashmla_gather_row", DN=D - DR, DR=DR, QT=G["QT"]), {}
+
+        def row(cache: str, j: int) -> Refs:
+            if (cache, j) not in got:
+                got[(cache, j)] = self.call(gather, *hist[cache][j]).refs
+            return got[(cache, j)]
+
         out = []
-        for o in att:
-            heads = [self.call(inv, o.slice(h * D, (h + 1) * D), cs) for h in range(NH)]
-            out.append(self.call(wo_a, concat([h[0].refs for h in heads]), concat([h[1].refs for h in heads]), w("attn.wo_a.weight"),
-                                 w("attn.wo_a.weight_scale_inv")).refs)
-        return self.fp8(out, L, "attn.wo_b")
+        for q, p in zip(qs, pos):
+            s0, tl = max(p - window + 1, P), (p + 1) // r - P // r
+            rows = [row("compressed", j) for j in range(tl)] + [row("window", k - P) for k in range(s0, p + 1)]
+            n = len(rows)
+            NP = blocks(blocks(n, BN), 2)
+            fn, pad = self.k("flashmla_prefill", NH=NH, NP=NP, D=D, BN=BN, DOT=G["DOT"], SCALE=scale), 2 * NP * BN - n
+            out.append(self.call(fn, q, concat(rows + rows[:1] * pad), concat([i32(0)] * n + [i32(-1)] * pad), i32(n), i32(1), sink).refs)
+        return out
 
     def moe(self, L: int, x: list[Refs], toks: list[Coll]) -> list[Refs]:
         """The MoE block over the rows x (`vllm_moe_router`, `vllm_marlin_moe`, op-major): the router logits, the shared expert, each

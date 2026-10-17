@@ -162,10 +162,9 @@ def test_mhc_rank_step_equals_the_traced_build(rank, digest, tmp_path):
 
 def test_mhc_refuses_outside_its_domain(tmp_path):
     phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
-    with pytest.raises(Unexpressible, match=re.escape("a call of 2 rows, a prefill")):
-        build_program(phi, "step", M=2)
-    with pytest.raises(Unexpressible, match=re.escape("position 127 completes compressed row 0 of layer 0 (ratio 128)")):
-        build_program(phi, "step", M=1, pos0=127)
+    short = {**phi.hf_config, "compress_ratios": [4] + phi.hf_config["compress_ratios"][1:], "index_topk": 1}
+    with pytest.raises(Unexpressible, match=re.escape("position 7 has 2 compressed rows, more than the indexer's top-1")):
+        build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": short}}), "step", M=8, pos0=0)
     cfg = {**phi.hf_config, "compress_ratios": [1] + phi.hf_config["compress_ratios"][1:]}
     with pytest.raises(Unexpressible, match=re.escape("compress ratios [1] (the compressors: [4, 128]")):
         build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": cfg}}), "step")
