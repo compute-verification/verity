@@ -417,9 +417,10 @@ __global__ void __launch_bounds__(256) hquant_h1(const uint16_t* __restrict__ x,
         y1w |= ((uint32_t)(uint8_t)(int8_t)Y1) << (8 * b);
       }
       // P_A row = [Y0 (cols 0..63) | Y1 (cols 0..63)]: lanes 0..15 hold Y0/Y1, a uniform store (lane l writes word l, Y1
-      // pulled from lane l - 16) in place of a lane < 16 branch, which the pinned slow path needs ptxas not to split
-      const uint32_t pw = lane < 16 ? y0w : __shfl_sync(~0u, y1w, lane - 16);
-      reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = pw;
+      // pulled from lane l - 16) in place of a lane < 16 branch. The shuffle runs on every lane (a mask that any lane skips
+      // deadlocks); lanes < 16 take their Y0 and drop the shuffled word
+      const uint32_t y1from = __shfl_sync(~0u, y1w, lane - 16);
+      reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = lane < 16 ? y0w : y1from;
     }
   }
 }
