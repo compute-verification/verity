@@ -9,7 +9,8 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 `stmt_of_one`: a masked statement in scope whose drawn setup has one table gives `StmtAt`'s facts under the JSON
 library's specification (`JsonSpec`), from the setup alone. So `StmtAt` holds at every good case of one table
 (`Case.stmtOne`), and with `Case.stmtAt` at every good case (`stmtAt_all`); `StmtOkZk` holds (`stmtOkZk`); and
-`completeRel`, `completeJRel` hold without it (`completeRelS`, `completeJRelS`).
+`completeRel`, `completeJRel` and `complete_zk_relation` hold without it (`completeRelS`, `completeJRelS`,
+`complete_zk_relationS`).
 
 * A setup of one table is `setupOne`'s (`setupTables_okAny`: one of several has more).
 * Its public header is the population's with the draw put in (`HmRow.drawn`), so its `unit_draw` is the statement's
@@ -386,5 +387,14 @@ theorem completeJRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)
     (hCJ : LgInnerJ H Readable.relation) : Claims.Flock.Complete H (deployZk Readable.relation) honestP (δc H) :=
   completeJRel H S h64 (stmtOkZk S) hR hPR hLg hIn hPRJ hRJ hCJ
+
+/-- **Flock's masked verifier is complete at the deployed relation** for `honestPZk` with error `δcZk H`:
+`complete_zk_relation` with `StmtOkZk` proved (`stmtOkZk`). -/
+theorem complete_zk_relationS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
+    (hR : JsonRT.RepShapedZk H Readable.relation) (hF : JsonRT.RecordFitsZk H Readable.relation)
+    (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)
+    (hIn : FlockComplete.Inner H Readable.relation) :
+    Claims.Flock.Complete H (deployZk Readable.relation) honestPZk (δcZk H) :=
+  FlockComplete.complete_zk_relation H S h64 (stmtOkZk S) hR hF hPR hLg hIn
 
 end FlockComplete.ZkTables

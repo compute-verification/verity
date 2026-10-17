@@ -61,5 +61,5 @@ the extra claims' algebra (`RingSwitch`: `ringSwitchJ`, `RsExtrasAt`), which hol
 masked Ligerito and the inner proof (`LgInnerAt`; `completeRel`, and `completeJRel` from `complete_zk_relation`'s
 premises at one table). The statement's premise holds at one table too (`StmtOne`: `stmt_of_one`, from `setupOne`'s
 statement, its header's draw the statement's, a printable stratified or subset draw, `good_stratified`), so `StmtAt`
-holds at every good case (`stmtAt_all`) and `StmtOkZk` holds (`stmtOkZk`), and `completeRelS`, `completeJRelS` drop
-it. -/
+holds at every good case (`stmtAt_all`) and `StmtOkZk` holds (`stmtOkZk`), and `completeRelS`, `completeJRelS` and
+`complete_zk_relationS` drop it. -/
