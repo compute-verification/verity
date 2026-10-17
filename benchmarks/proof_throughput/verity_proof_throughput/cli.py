@@ -171,7 +171,7 @@ def cmd_lean_verdict(a) -> int:
 
 
 def cmd_profile_phases(a) -> int:
-    """``verify.sh PROFILE=1``'s result: the perf samples of one session by phase and kernel (``profile``)."""
+    """``verify.sh PROFILE=1``'s result: the perf samples of one session by stage, phase and kernel (``profile``)."""
     from . import profile as PF
 
     out = Path(a.stdout).read_text() if a.stdout and Path(a.stdout).exists() else ""

@@ -61,8 +61,9 @@ imported as it is and checked by its `validate()` before it is written:
 - `mem.peak_host_bytes`: the prover's peak RSS. `mem.peak_device_bytes`: the leased GPU's memory use sampled every 200 ms.
 - `proof_bytes`, `transcript.bytes` (`net.bytes_out` from the prover, `net.bytes_in` from the verifier).
 - `verifier.seconds`: the Lean verifier's median wall seconds per timed session, one session per call; `verify.cpu_s`,
-  `verify.peak_rss_bytes`, and its two parts `verify.setup_s` (the statement's setup, parsing the circuit, which a call
-  verifying several sessions pays once) and `verify.session_s` (one session's checks).
+  `verify.peak_rss_bytes`, and two of its parts, `verify.setup_s` (the drawn statement's setup, which each fresh draw pays
+  again) and `verify.session_s` (one session's checks). The rest is the proved-scope check (`ProvedScope.check`), which a
+  call runs once, before its first session's clock starts.
 - `verifier.cpu_seconds_per_vu` = `verify.cpu_s` / B and `verifier.cores_per_gpu` = `verify.cpu_s` / `t.total`: the
   verifier's CPU per VU, and the cores that keep up with one GPU proving back to back (`contract.verifier_rates`,
   recomputed by `validate`).
@@ -81,6 +82,15 @@ the sweep's results, `table --baseline` renders it, and a candidate is `compare`
 R_native is the H200's dense peak for the workload's number format. The census has no H200 line, and the H200 has the
 H100 SXM5's tensor cores and clocks (it differs in memory), so the profiles' anchors are the H100 SXM5's dense peaks:
 `bf16-hopper-mma-draft/2026-09-22` (989.4 TFLOPS bf16) and `fp8-hopper-wgmma-draft/2026-09-22` (1978.9 TFLOPS e4m3).
+
+## The verifier's profile
+
+`verify.sh PROFILE=1` (the verifier point's command with `PROFILE=1` appended) runs one timed session under
+`perf record --call-graph dwarf` and writes `out/profile.json` and a `proof-throughput/verifier-profile/v1` result
+(`profile.py`). It attributes each sample by stage (the outermost frame among the proved-scope check, the session's setup
+and its verification), by phase (the innermost frame that names a protocol step) and by kernel (SHA-512, GF(2^128),
+allocation and reference counting, bignums, strings). Its wall and CPU seconds tell how many threads the verifier keeps
+busy.
 
 ## Workloads
 
