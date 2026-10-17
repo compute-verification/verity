@@ -1,4 +1,5 @@
-import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.ZK.Congr
+import Proofs.Flock.Claims.DeployOC
 
 /-!
 # `ZKmalR` is not vacuous
@@ -122,7 +123,7 @@ theorem not_zkmalR_leak {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [N
 theorem not_flockZK_collSim {Coin Col T N Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (u v : Msg)
     (εzk γ : Msg → ℝ) (x : Msg) (w : Flock.Wit) (hR : Flock.R D.parse x w) (hε : εzk x < 1) :
-    ¬ Flock.ZK H D (fun _ => quietP N Ω []) (collSim u v) εzk γ :=
+    ¬ Flock.ZKAt H D (fun _ => quietP N Ω []) (collSim u v) εzk γ :=
   fun h => not_zkmalR_collSim H _ _ u v εzk γ x w hR (Nat.succ_pos _) hε h.2
 
 /-- A witness's hidden values as bytes. -/
@@ -139,7 +140,7 @@ whose relation has a statement with two witnesses of different hidden values. -/
 theorem not_flockZK_leak {Coin Col T N Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (εzk γ : Msg → ℝ)
     (x : Msg) (w₁ w₂ : Flock.Wit) (h₁ : Flock.R D.parse x w₁) (h₂ : Flock.R D.parse x w₂) (hw : w₁.hid ≠ w₂.hid)
-    (hε : εzk x < 1 / 2) : ¬ ∃ S, Flock.ZK H D (fun w => quietP N Ω (witMsg w)) S εzk γ :=
+    (hε : εzk x < 1 / 2) : ¬ ∃ S, Flock.ZKAt H D (fun w => quietP N Ω (witMsg w)) S εzk γ :=
   fun ⟨S, h⟩ => not_zkmalR_leak H _ _ witMsg S εzk γ x w₁ w₂ h₁ h₂ (witMsg_ne hw) (Nat.succ_pos _) hε h.2
 
 /-- A statement whose relation holds at every witness: one block, no gates, no inputs or outputs. -/
@@ -183,13 +184,60 @@ theorem toyD_R (x : Msg) (w : Flock.Wit) : Flock.R toyD.parse x w := ⟨toyStmt,
 /-- **At `toyD`, Flock's `ZK` fails at the colliding simulator** at every `ε_zk < 1` and every `γ`. -/
 theorem not_flockZK_collSim_toy {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
     (u v : Msg) (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
-    ¬ Flock.ZK H toyD (fun _ => quietP N Ω []) (collSim u v) εzk γ :=
+    ¬ Flock.ZKAt H toyD (fun _ => quietP N Ω []) (collSim u v) εzk γ :=
   not_flockZK_collSim H toyD u v εzk γ x ⟨[]⟩ (toyD_R x _) hε
 
 /-- **At `toyD`, the prover that sends its witness has no simulator** at `ε_zk < 1/2` anywhere, at every `γ`. -/
 theorem not_flockZK_leak_toy {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
     (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1 / 2) :
-    ¬ ∃ S, Flock.ZK H toyD (fun w => quietP N Ω (witMsg w)) S εzk γ :=
+    ¬ ∃ S, Flock.ZKAt H toyD (fun w => quietP N Ω (witMsg w)) S εzk γ :=
   not_flockZK_leak H toyD εzk γ x ⟨[]⟩ ⟨[true]⟩ (toyD_R x _) (toyD_R x _) (by simp) hε
+
+/-! ## Flock's `ZK` at a masked record -/
+
+theorem allPass_true_eval (H : Msg → Msg) :
+    ∀ (j : ℕ) (ms : List Msg), (Flock.allPass (fun _ _ => OC.ret true) j ms).eval H = (true, [])
+  | _, [] => rfl
+  | j, _ :: ms => allPass_true_eval H (j + 1) ms
+
+/-- **A masked record of `toyD` whose reference prover is quiet**: `Hello`, every message and the abort message are `m`,
+every opening passes, the tape is `()`, and the simulator is `S`. -/
+def toyZD (m : Msg) (S : Simulator) : Flock.ZkDeploy Unit Unit Unit :=
+  { toyD with
+    P := fun _ => ⟨fun _ _ _ => .ret m⟩
+    Nonce := Unit
+    Rest := Unit
+    tapeOf := fun _ => ()
+    hello := fun _ _ => m
+    abort := m
+    chk := fun _ _ _ _ _ => .ret true
+    coinOf := id
+    S := S }
+
+/-- `toyZD`'s reference prover sends `m` and calls nothing, at every history. -/
+theorem toyZD_prover (H : Msg → Msg) (m : Msg) (S : Simulator) (w : Flock.Wit) (x : Msg) (hist : List (Msg × Msg))
+    (ω : Unit × Unit) : (((toyZD m S).prover w).next x hist ω).eval H = (m, []) := by
+  cases hist with
+  | nil => rfl
+  | cons p ops =>
+      obtain ⟨a, ρ⟩ := p
+      show ((Flock.allPass (fun _ _ => OC.ret true) 0 (ops.map Prod.snd)).bind fun ok =>
+        if ok then OC.ret m else OC.ret m).eval H = (m, [])
+      rw [OC.eval_bind, allPass_true_eval]
+      rfl
+
+/-- **Flock's `ZK` fails at the masked record `toyZD m (collSim u v)`**, at every `ε_zk < 1` somewhere and every `γ`:
+its reference prover is quiet, so its colliding simulator is charged nothing and outputs the wrong transcript. -/
+theorem not_flockZK_toyZD (H : Msg → Msg) (m u v : Msg) (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
+    ¬ Flock.ZK H (toyZD m (collSim u v)) εzk γ := fun h =>
+  not_zkmalR_of_out (N := Unit) (Ω := Unit) H _ _ m (collSim u v) εzk γ x ⟨[]⟩ (toyD_R x _) (Nat.succ_pos _) hε
+    (fun _ => by simp [Simulator.out, collSim, SP.eval])
+    (zkmalR_congr_eq (fun w x hist ω _ => toyZD_prover H m _ w x hist ω) h.2)
+
+/-- **Flock's `ZK` is not met at every masked record**, at `ε_zk = 0` and `γ = 0`: `toyZD [] (collSim [] [])` fails it.
+-/
+theorem not_forall_flockZK (H : Msg → Msg) :
+    ¬ ∀ D : Flock.ZkDeploy Unit Unit Unit, D.zk = true → Flock.ZK H D 0 0 := fun h =>
+  not_flockZK_toyZD H [] [] [] 0 0 [] one_pos (h _ rfl)
 
 end Claims.ZKMal
