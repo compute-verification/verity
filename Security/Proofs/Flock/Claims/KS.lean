@@ -213,4 +213,6 @@ off `C` on a witness lane without a self-clash only where the reader looks up a 
 its stream's round `zkQueryRound` (`FlockSoundness.Discharge.ZkExec.zk_rep_reqs`), so at a rep's run its level-0
 openings, on the witness lanes, are the masked reader's entries (`ZkEntries`: `Claims.Flock.slotOpensZ_entries`,
 `Claims.Flock.zkRepColsOf_ok`, `FlockSoundness.Discharge.ZkExec.zk_rep_entries`,
-`Claims.Flock.exists_ne_of_zk_entries`). -/
+`Claims.Flock.exists_ne_of_zk_entries`), and where `Zk.verifyRep` accepts both reps of a table, every accepted output of
+their results has its level-0 openings verifying at `width₀` below `2^d`, with positions and witness lanes its reps'
+`zkRepColsOf` entries (`FlockSoundness.Discharge.ZkExec.zk_table_opens₀Z`). -/
