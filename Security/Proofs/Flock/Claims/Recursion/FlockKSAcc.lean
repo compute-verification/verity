@@ -646,7 +646,7 @@ inner one**: `KS_of_flockKS` at each inner decoder that meets the spec, with `In
 (`KSAbort_of_tableBoundOnAcc`; its coins shown are `PublicCoin`'s). It doesn't follow from `Claims.Flock.KS` at `DI`
 (`flockKS_not_KSAbort`). -/
 theorem KSFlock_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T)
-    (opening : Msg → Msg) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO) (NI : Msg → ℕ) (Ok : Msg → Col → Prop)
+    (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO) (NI : Msg → ℕ) (Ok : Msg → Col → Prop)
     (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x) (hVkI : ∀ x, 0 < DI.V.k x)
     (hKI : ∀ x, 0 < DI.cap x) (hkI : ∀ x, (8 ≤ DI.k x ∧ Splits DI x) ∨ NoAcc H DI.V x)
     (hone : ∀ x, (∃ s, DI.parse x = some s ∧ s.tables = 1) ∨ NoAcc H DI.V x) (hz : ∀ x, Ok x 0)

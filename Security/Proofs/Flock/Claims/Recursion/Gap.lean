@@ -222,12 +222,12 @@ theorem gCallsNil (H : Msg → Msg) : CallsNil H (gD H) := fun _ e he => by
   subst he
   rfl
 
-theorem gCallsOpen (H : Msg → Msg) : CallsOpen H (gD H) gI gDO id := by
+theorem gCallsOpen (H : Msg → Msg) : CallsOpen H (gD H) gI gDO (Opening.ofCall id) := by
   intro decO x Ω P ω r c ws hg j hj
   have hj0 : j = 0 := Nat.lt_one_iff.1 hj
   subst hj0
   have h1 := ((gD_out H P x ω r).1 hg.1).1
-  refine ⟨[], ?_, rfl⟩
+  refine ⟨(gD H).calls x ws, List.Subset.refl _, [], ?_, rfl⟩
   rw [gD_run, ite_eq_left h1]
   simp [h1, gD]
 
@@ -521,14 +521,14 @@ an outer deployment with `Claims.Flock.KS`, whose recursion's KS fails at the er
 draft's (`KS`): so `InnerKS` fails there, as `KS_of` with `outerKS_of_flockKS` would otherwise prove `KSA`. Its inner
 protocol fails `Inner.KSAbort`, the one hypothesis of `KS_of_flockKS` it lacks. -/
 theorem innerKS_gap (H : Msg → Msg) :
-    ∃ (D : Deploy Bool) (I : Inner Bool Unit) (DO : Flock.Deploy Bool ℕ Unit) (opening : Msg → Msg)
+    ∃ (D : Deploy Bool) (I : Inner Bool Unit) (DO : Flock.Deploy Bool ℕ Unit) (opening : Opening)
       (decC : Msg → Msg → Bool),
       Inner.KS H I ∧ ¬ I.KSAbort H ∧ Flock.KS H DO ∧ Refuses H D ∧ InnerRounds D I ∧ SessionNums D DO ∧
         TableErrNonneg D ∧ SessionRounds D I DO ∧ SessionAccepts D ∧ SessionRuns H D I DO ∧
         InnerViewRun H D I DO ∧ CallsRecord H D I DO ∧ CallsOpen H D I DO opening ∧ InnerAccepts H D I DO ∧
         PublicCoin H I decC ∧ CallsNil H D ∧ ¬ KSA H D I DO ∧ ¬ KS H D I DO ∧ ¬ InnerKS H D I DO :=
-  ⟨gD H, gI, gDO, id, fun _ _ => false, gInnerKS H, gI_not_KSAbort H, gFlockKS H, gRefuses H, gInnerRounds H,
-    gSessionNums H, gTableErrNonneg H, gSessionRounds H, gSessionAccepts H, gSessionRuns H, gInnerViewRun H,
+  ⟨gD H, gI, gDO, Opening.ofCall id, fun _ _ => false, gInnerKS H, gI_not_KSAbort H, gFlockKS H, gRefuses H,
+    gInnerRounds H, gSessionNums H, gTableErrNonneg H, gSessionRounds H, gSessionAccepts H, gSessionRuns H, gInnerViewRun H,
     gCallsRecord H, gCallsOpen H, gInnerAccepts H, gPublicCoin H, gCallsNil H, gNotKSA H, gNotKS H,
     fun hI => gNotKSA H (KS_of H (gD H) gI gDO (gRefuses H) (gInnerRounds H)
       (outerKS_of_flockKS (gFlockKS H) (gSessionNums H) (gTableErrNonneg H) (gSessionRounds H) (gSessionAccepts H)

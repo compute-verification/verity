@@ -108,7 +108,7 @@ theorem accLast_V_sha512 (zk : Bool) : AccLast sha512 (V zk) := fun _ _ _ hcs h 
 inner deployment whose verifier is `V zk`, with its code facts `AccLast`, `DecideFree` and `Refusable` met by the
 deployed verifier. -/
 theorem KSFlock_of_flockKS_V {Col T : Type} [DecidableEq Col] [Zero Col] (zk : Bool) (D : Deploy Coin)
-    (DI DO : Claims.Flock.Deploy Coin Col T) (hVI : DI.V = V zk) (opening : Claims.Msg → Claims.Msg)
+    (DI DO : Claims.Flock.Deploy Coin Col T) (hVI : DI.V = V zk) (opening : Opening)
     (decC : Claims.Msg → Claims.Msg → Coin) (hF : Claims.Flock.KS sha512 DO) (NI : Claims.Msg → ℕ)
     (Ok : Claims.Msg → Col → Prop) (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x)
     (hVkI : ∀ x, 0 < DI.V.k x) (hKI : ∀ x, 0 < DI.cap x)

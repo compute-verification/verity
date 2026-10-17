@@ -565,7 +565,7 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
 rounds' roots sum under one (Cauchy–Schwarz) to at most `√(k_I·Σ_j Pr[…])`, and `Σ_j ≤ k(x)·Pr[Be]`
 (`sum_opensDiffer_le`). -/
 theorem Pr_bad_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Msg → Msg} (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (hR : InnerRounds D I)
+    {opening : Opening} (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (hR : InnerRounds D I)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
       Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x) := by
@@ -654,7 +654,7 @@ stage fails where `E^rep` fails against `P_I`'s aborting runs, at most `κ_I + �
 (`Inner.KSAbort`), with `Pr[B at P_I's aborting runs] ≤ Pr[B_I]`, plus at a bad rerun, at most
 `N_I·√(k_I·k(x)·Pr[Be])`. -/
 theorem innerKS_of_KSAbort [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
-    {DO : Flock.Deploy Coin Col T} {opening : Msg → Msg} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
+    {DO : Flock.Deploy Coin Col T} {opening : Opening} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
     (hR : InnerRounds D I) (hV : InnerViewRun H D I DO) (hC : CallsRecord H D I DO) (hO : CallsOpen H D I DO opening)
     (hAcc : InnerAccepts H D I DO) (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) : InnerKS H D I DO := by
   intro decO _ x Ω _ _ P
@@ -695,7 +695,7 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [
 abort**: `KS_of`, its `OuterKS` from `outerKS_of_flockKS` and its `InnerKS` from `innerKS_of_KSAbort`. It rests on
 `Claims.Flock.KS` at `DO`, `Inner.KSAbort` and code facts only. -/
 theorem KS_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
-    (opening : Msg → Msg) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO) (hKS : I.KSAbort H)
+    (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO) (hKS : I.KSAbort H)
     (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO) (hε : TableErrNonneg D)
     (hRd : SessionRounds D I DO) (hS : SessionAccepts D) (hR : SessionRuns H D I DO) (hV : InnerViewRun H D I DO)
     (hC : CallsRecord H D I DO) (hO : CallsOpen H D I DO opening) (hAcc : InnerAccepts H D I DO)

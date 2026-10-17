@@ -14,9 +14,9 @@ code fact here where `InnerKS` fails (`innerKS_gap`).
 * Code facts (`Prop`s about `D`): the inner view `E_O`'s witnesses give on an accepted run is the inner verifier's run
   of its own messages at the compiled verifier's first `k_I` coins (`InnerViewRun`, `innerCoins`); the witnesses record
   the inner verifier's SHA-512 calls in that run, every recorded call a true evaluation (`CallsRecord`), and at each
-  inner round the call that opens the run's commit string to the inner view's message (`CallsOpen`); that inner view
-  is accepted (`InnerAccepts`); no witnesses record only true evaluations (`CallsNil`); and the inner verifier's
-  messages show its coins (`PublicCoin`).
+  inner round the calls that open the run's commit string to the inner view's message, under the deployment's binding
+  opening (`CallsOpen`, `Opening`; one call is `Opening.ofCall`); that inner view is accepted (`InnerAccepts`); no
+  witnesses record only true evaluations (`CallsNil`); and the inner verifier's messages show its coins (`PublicCoin`).
 * Binding: two extractions whose runs agree on inner round `j`'s commit string and whose inner views differ there give
   a collision among their recorded calls (`opening_coll`), at a fork at `j` one of `Be`'s (`forkColl_of_opening`). So
   the inner rounds' differing openings cost at most `k(x)·Pr[Be]` (`sum_opensDiffer_le`).
@@ -25,6 +25,25 @@ code fact here where `InnerKS` fails (`innerKS_gap`).
 namespace Claims.Recursion
 
 open Claims
+
+/-! ## Openings -/
+
+/-- **How the deployment opens a commit string**: `opens a m cs` when the SHA-512 evaluations `cs` open the commit
+string `a` to the message `m`. It binds: two openings of one commit string to different messages, by true evaluations
+of any `H`, hold two queries with one answer. -/
+structure Opening where
+  opens : Msg → Msg → List (Msg × Msg) → Prop
+  bind : ∀ (H : Msg → Msg) (a m m' : Msg) (cs cs' : List (Msg × Msg)), opens a m cs → opens a m' cs' → m ≠ m' →
+    (∀ e ∈ cs ++ cs', H e.1 = e.2) → ∃ q ∈ (cs ++ cs').map Prod.fst, ∃ q' ∈ (cs ++ cs').map Prod.fst, Collision H q q'
+
+/-- **One call opens**: an evaluation answers the commit string at a query that `f` reads as the message. -/
+def Opening.ofCall (f : Msg → Msg) : Opening where
+  opens a m cs := ∃ q, (q, a) ∈ cs ∧ f q = m
+  bind H a m m' cs cs' := by
+    rintro ⟨q, hq, rfl⟩ ⟨q', hq', rfl⟩ hne hall
+    exact ⟨q, List.mem_map.2 ⟨(q, a), List.mem_append_left _ hq, rfl⟩,
+      q', List.mem_map.2 ⟨(q', a), List.mem_append_right _ hq', rfl⟩, fun h => hne (congrArg f h),
+      (hall _ (List.mem_append_left _ hq)).trans (hall _ (List.mem_append_right _ hq')).symm⟩
 
 /-! ## The inner session's code facts -/
 
@@ -66,14 +85,15 @@ def CallsRecord (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flo
     (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws) ∧ ∀ e ∈ D.calls x ws, H e.1 = e.2
 
 /-- **`D.calls` records each inner message's opening** (a code fact): wherever `E_O` gives witnesses on an accepted
-run, at each inner round `j` a recorded call answers the run's message `j`, its commit string, at a query that
-`opening` reads as the inner view's message `j`. -/
+run, at each inner round `j` some recorded calls open the run's message `j`, its commit string, to the inner view's
+message `j` under `opening`. -/
 def CallsOpen (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
-    (opening : Msg → Msg) : Prop :=
+    (opening : Opening) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
-    ∀ j < I.V.k (xI D x), ∃ q, (q, ((run H P D.V x ω r).msgs.map Prod.fst).getD j []) ∈ D.calls x ws ∧
-      opening q = ((D.innerView H x r ws).msgs.map Prod.fst).getD j []
+    ∀ j < I.V.k (xI D x), ∃ cs, cs ⊆ D.calls x ws ∧
+      opening.opens (((run H P D.V x ω r).msgs.map Prod.fst).getD j [])
+        (((D.innerView H x r ws).msgs.map Prod.fst).getD j []) cs
 
 /-- **The compiled verifier accepts only where the inner view does** (a code fact): wherever `E_O` gives witnesses on
 an accepted run, the inner view read off them is accepted. -/
@@ -96,16 +116,12 @@ end CodeFacts
 
 /-! ## Binding -/
 
-/-- **Two openings of one commit string are a collision**: true evaluations with one answer at different queries, which
-`findColl` finds among any true evaluations that hold both. -/
-theorem findColl_two_openings (H : Msg → Msg) {l l' : List (Msg × Msg)} (hl : ∀ e ∈ l, H e.1 = e.2)
-    (hl' : ∀ e ∈ l', H e.1 = e.2) {q q' a : Msg} (hq : (q, a) ∈ l) (hq' : (q', a) ∈ l') (hne : q ≠ q') :
-    ∃ u v, findColl (l ++ l') = some (u, v) ∧ Collision H u v := by
-  have hall : ∀ e ∈ l ++ l', H e.1 = e.2 := fun e he => (List.mem_append.1 he).elim (hl e) (hl' e)
-  have hs := findColl_isSome_mem H (l ++ l') hall q q' (List.mem_map.2 ⟨(q, a), List.mem_append_left _ hq, rfl⟩)
-    (List.mem_map.2 ⟨(q', a), List.mem_append_right _ hq', rfl⟩) ⟨hne, (hl _ hq).trans (hl' _ hq').symm⟩
-  obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hs
-  exact ⟨u, v, huv, findColl_spec H _ hall u v huv⟩
+/-- **`findColl` finds a collision wherever true evaluations hold one**: two of their queries with one answer. -/
+theorem findColl_of_coll (H : Msg → Msg) {l : List (Msg × Msg)} (hl : ∀ e ∈ l, H e.1 = e.2) {q q' : Msg}
+    (hq : q ∈ l.map Prod.fst) (hq' : q' ∈ l.map Prod.fst) (hc : Collision H q q') :
+    ∃ u v, findColl l = some (u, v) ∧ Collision H u v := by
+  obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 (findColl_isSome_mem H l hl q q' hq hq' hc)
+  exact ⟨u, v, huv, findColl_spec H _ hl u v huv⟩
 
 section Binding
 
@@ -114,7 +130,7 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 /-- **Binding**: two extractions on accepted runs whose messages at inner round `j` agree (one commit string) and whose
 inner views differ there give a collision among the calls their witnesses record. -/
 theorem opening_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Msg → Msg}
+    {opening : Opening}
     (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (decO : List (ℕ × Col) → List T)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) {r r' : Fin (D.V.k x) → Coin} {c c' : (EO D I DO decO).C x}
     {ws ws' : List Flock.Wit} (h : EOGives H D I DO decO P x ω r c ws) (h' : EOGives H D I DO decO P x ω r' c' ws')
@@ -122,11 +138,15 @@ theorem opening_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO 
     (hm : ((run H P D.V x ω r).msgs.map Prod.fst).getD j [] = ((run H P D.V x ω r').msgs.map Prod.fst).getD j [])
     (hd : ((D.innerView H x r ws).msgs.map Prod.fst).getD j [] ≠ ((D.innerView H x r' ws').msgs.map Prod.fst).getD j []) :
     ∃ u v, findColl (D.calls x ws ++ D.calls x ws') = some (u, v) ∧ Collision H u v := by
-  obtain ⟨q, hq, hoq⟩ := hO decO x Ω P ω r c ws h j hj
-  obtain ⟨q', hq', hoq'⟩ := hO decO x Ω P ω r' c' ws' h' j hj
-  rw [hm] at hq
-  exact findColl_two_openings H (hC decO x Ω P ω r c ws h).2 (hC decO x Ω P ω r' c' ws' h').2 hq hq'
-    fun hqq => hd (by rw [← hoq, ← hoq', hqq])
+  obtain ⟨cs, hcs, ho⟩ := hO decO x Ω P ω r c ws h j hj
+  obtain ⟨cs', hcs', ho'⟩ := hO decO x Ω P ω r' c' ws' h' j hj
+  rw [hm] at ho
+  have hsub : cs ++ cs' ⊆ D.calls x ws ++ D.calls x ws' := fun e he =>
+    (List.mem_append.1 he).elim (fun he => List.mem_append_left _ (hcs he)) fun he => List.mem_append_right _ (hcs' he)
+  have hall : ∀ e ∈ D.calls x ws ++ D.calls x ws', H e.1 = e.2 := fun e he =>
+    (List.mem_append.1 he).elim ((hC decO x Ω P ω r c ws h).2 e) ((hC decO x Ω P ω r' c' ws' h').2 e)
+  obtain ⟨q, hq, q', hq', hc⟩ := opening.bind H _ _ _ cs cs' ho ho' hd fun e he => hall e (hsub he)
+  exact findColl_of_coll H hall (List.map_subset _ hsub hq) (List.map_subset _ hsub hq') hc
 
 end Binding
 
@@ -207,7 +227,7 @@ def OpensDiffer (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flo
 /-- **Binding at a fork**: a differing opening at inner round `j` is a collision `Be` finds at its fork at `j`, since
 the two runs share their coins before `j` and so their message `j`. -/
 theorem forkColl_of_opening {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Msg → Msg}
+    {opening : Opening}
     (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (decO : List (ℕ × Col) → List T)
     (x : Msg) {Ω : Type} (P : Prover Ω) {j : ℕ} (hj : j < I.V.k (xI D x))
     (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x × (EO D I DO decO).C x)
@@ -222,7 +242,7 @@ theorem forkColl_of_opening {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin 
 /-- **The inner rounds' differing openings cost at most `k(x)·Pr[Be]`**: each is a collision at `Be`'s fork at its
 round (`forkColl_of_opening`), and the inner rounds are among the compiled verifier's (`InnerRounds`). -/
 theorem sum_opensDiffer_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Msg → Msg}
+    {opening : Opening}
     (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (hR : InnerRounds D I)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     ∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j) ≤ D.V.k x * PrBe H D I DO decO P x := by
