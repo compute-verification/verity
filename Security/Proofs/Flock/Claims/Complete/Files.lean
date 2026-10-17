@@ -1,15 +1,13 @@
-import Proofs.Flock.Claims.Complete.Json
+import Proofs.Flock.Claims.Complete.Shaped
 import Proofs.Flock.VBridge.Family.Files
 
 /-!
 # The honest run's proof files
 
 The rep goals on the proof files, `RepDecodes`, `RepParams` and `CapCommitted`, and `FinalFits` but for the record's
-length, at every honest run, under the record goals' hypotheses (`JsonSpec`, `Out64`, `StmtOk`, `ProverOk`) and one more:
-
-* `RepShaped`: each proof a rep returns, on the case's trace and its level-0 commitment, with the table's extra claims at
-  the link's points, is `ProofShaped` at the shape the verifier decodes it at, so `decodeProof_encodeProof` reads it
-  back.
+length, at every honest run, under the record goals' hypotheses (`JsonSpec`, `Claims.Out64`, `ProverOk`). Each proof a
+rep returns is `ProofShaped` at the shape the verifier decodes it at (`Shaped`'s `repShaped`), so
+`decodeProof_encodeProof` reads it back.
 
 `sessionP_files`: each proof file of the one-table session encodes a proof its rep returned, on the table's level-0
 commitment and its extra claims, and the first send is the link of that commitment's cap. `Run.rep`: at the run, the
@@ -132,35 +130,22 @@ theorem sessionP_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The honest rep proof fits its shape**: at every good case, on its table's trace, the trace's packed table committed
-at the schedule's first level (`cm`, under any salts), and the table's extra claims at the link's points (`e`), each
-proof a rep returns is `ProofShaped` at the shape the verifier decodes it at. -/
-def RepShaped (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ c : Case H rel, ∀ st sch cm e, c.sts = #[st] → fast100 (Setup.ofCircuit st).m = some sch →
-    ∀ salt₀, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
-      (sch.levels.getD 0 default) (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) salt₀ = .ok cm →
-    (Setup.ofCircuit st).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e →
-    ∀ salt nonce d, Ret ((repP (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) sch
-      (tracesOf c.sts c.w)[0]! (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) cm e salt nonce).run
-      (Transcript.init #[] d)) fun pt => FlockVBridge.Family.ProofShaped (shapeOf (Setup.ofCircuit st) sch e.size) pt.1
-
-/-- **The printed honest record is under `2^64` bytes**: `Run.json`'s `compress` of the honest record object. -/
+/-- **The printed honest record is under `2^64` bytes**: `Run.json`'s `printJ` of the honest record object. -/
 def RecordFits (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, o.record.toUTF8.size < 2 ^ 64
 
 /-- **Each rep's decoded proof is the honest one**: at the run's one table, with schedule `sch` and level-0
 commitment `cm`, the record's `root_B` is `cm`'s cap, two proof files, each under `2^64` bytes, and each rep's file
 decodes at the verifier's shape to a proof with `cm`'s cap and the table's PCS parameters. -/
-theorem Run.rep (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) (hR : RepShaped H rel)
-    (o : Run H rel) :
+theorem Run.rep (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) (o : Run H rel) :
     ∃ (st : Flock.Stmt) (sch : Schedule) (cm : Commit), o.tabs = #[Setup.ofCircuit st] ∧ o.sch 0 = sch ∧
       o.sess.rootB = #[flat cm.cap] ∧
       o.proofs.size = 2 ∧ (∀ b ∈ o.proofs, b.size < 2 ^ 64) ∧ ∀ r < 2,
         decodeProof (shapeOf o.tabs[0]! (o.sch 0) (o.extras 0).size) (o.bytes 0 r) = .ok (o.proof 0 r) ∧
         (o.proof 0 r).cap = cm.cap ∧ (o.proof 0 r).params = pcsParams (Setup.ofCircuit st).merkle sch := by
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
-    Run.json S h64 hS hP o
-  obtain ⟨hct, -, -, -⟩ := hS o.toCase
+    Run.json S h64 hP o
+  obtain ⟨hct, -, -, -⟩ := stmtOk S o.toCase
   obtain ⟨hC, -⟩ := hP o.toCase st (by rw [hst]; simp)
   have hrun := o.ran
   unfold sessionS at hrun
@@ -191,7 +176,7 @@ theorem Run.rep (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverO
       p.cap = cm.cap ∧ p.params = pcsParams (Setup.ofCircuit st).merkle sch := by
     intro b hb
     obtain ⟨p, salt, nonce, d, l, t', l', rfl, hp⟩ := hfiles b hb
-    have hR' := hR o.toCase st sch cm e hst hsch _ (by rw [hst]; exact hcm) he salt nonce d
+    have hR' := repShaped h64 o.toCase st sch cm e hst hsch _ (by rw [hst]; exact hcm) he salt nonce d
     rw [hst] at hR'
     have h1 := Ret.go hR' hp
     have h2 := Ret.go (repP_fields _ _ _ _ _ _ _ _ _ _ _) hp
@@ -215,29 +200,29 @@ theorem Run.rep (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverO
     exact ⟨hdec, hc, hpar⟩
 
 /-- **The rep's proof file decodes** at its shape: the goal `RepDecodes`. -/
-theorem repDecodes_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel)
-    (hR : RepShaped H rel) : RepDecodes H rel := by
+theorem repDecodes_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+    RepDecodes H rel := by
   intro o i hi r hr
-  obtain ⟨st, sch, cm, htabs, -, -, -, -, hrep⟩ := Run.rep S h64 hS hP hR o
+  obtain ⟨st, sch, cm, htabs, -, -, -, -, hrep⟩ := Run.rep S h64 hP o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   exact (hrep r hr).1
 
 /-- **The rep's PCS parameters are fast100's** (R7/F2): the goal `RepParams`. -/
-theorem repParams_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel)
-    (hR : RepShaped H rel) : RepParams H rel := by
+theorem repParams_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+    RepParams H rel := by
   intro o i hi r hr
-  obtain ⟨st, sch, cm, htabs, hsch0, -, -, -, hrep⟩ := Run.rep S h64 hS hP hR o
+  obtain ⟨st, sch, cm, htabs, hsch0, -, -, -, hrep⟩ := Run.rep S h64 hP o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   rw [(hrep r hr).2.2, hsch0, show o.tabs[0]! = Setup.ofCircuit st by rw [htabs]; rfl]
   exact FlockVBridge.Family.pcs_bne_self _
 
 /-- **The rep's cap is the committed `root_B`** (S16): the goal `CapCommitted`. -/
-theorem capCommitted_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel)
-    (hR : RepShaped H rel) : CapCommitted H rel := by
+theorem capCommitted_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+    CapCommitted H rel := by
   intro o i hi r hr
-  obtain ⟨st, sch, cm, htabs, -, hroot, -, -, hrep⟩ := Run.rep S h64 hS hP hR o
+  obtain ⟨st, sch, cm, htabs, -, hroot, -, -, hrep⟩ := Run.rep S h64 hP o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   rw [(hrep r hr).2.1, hroot]
@@ -246,10 +231,10 @@ theorem capCommitted_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP
   rfl
 
 /-- **The last message's lengths fit their words**: the goal `FinalFits`, given the printed record's length. -/
-theorem finalFits_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel)
-    (hR : RepShaped H rel) (hF : RecordFits H rel) : FinalFits H rel := by
+theorem finalFits_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel)
+    (hF : RecordFits H rel) : FinalFits H rel := by
   intro o
-  obtain ⟨st, sch, cm, -, -, -, hsz, hb, -⟩ := Run.rep S h64 hS hP hR o
+  obtain ⟨st, sch, cm, -, -, -, hsz, hb, -⟩ := Run.rep S h64 hP o
   exact ⟨hF o, by omega, hb⟩
 
 end FlockComplete.JsonRT

@@ -6,8 +6,8 @@ import Proofs.Flock.Claims.Scope.Matches
 /-!
 # The completeness proof's skeleton
 
-`complete_of_goals`: Flock's plain verifier is complete for `honestP` with error `δc H`
-(`Claims.Flock.Complete H (deployPlain rel) honestP (δc H)`), given one goal per check the honest run must pass.
+`complete_of_goals`: Flock's plain verifier is complete for `honestP`, the record's reference prover, with error `δc H`
+(`Claims.Flock.Complete H (deployPlain rel) (δc H)`), given one goal per check the honest run must pass.
 
 * **The setting.** A good case (`Case`): a statement in scope that the verifier can accept (`ready H`), at its setup, a
   witness in the relation, a tape, and coins outside `Bad`. The honest run at it (`Run`): the pure session's record,
@@ -185,7 +185,7 @@ def FinalFits (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readabl
 
 /-! ### B's checks -/
 
-/-- **The record's draw is the statement's**, whatever its key order (`drawEq`). -/
+/-- **The record's draw is the statement's**, as the verifier compares them (`drawEq`). -/
 def DrawMatches (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
@@ -323,10 +323,10 @@ structure Goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
 
 /-! ## The checks proved here -/
 
-/-- `ready` at the case's setup: the session draws a unit, the statement is under `2^56` bytes, and the setup against
-`H` is the case's. -/
+/-- `ready` at the case's setup: the session draws a unit, the statement is under `2^56` bytes, each table's regions
+fit, and the setup against `H` is the case's. -/
 theorem Case.ready_parts {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
-    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧
+    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
       setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) := by
   have h := c.ready
   unfold FlockComplete.ready at h
@@ -423,7 +423,7 @@ theorem Run.acc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Reada
     rw [o.setup]
   have hlen : (honestRun H o.x o.w o.ω o.r).1.length = o.bodies.size := by
     rw [he]; simp
-  refine run_acc_of H o.w o.x o.ω o.r (link := o.link) (F := o.final) o.setup o.ready_parts.2.2 ?_ ?_ ?_ ?_ ?_
+  refine run_acc_of H o.w o.x o.ω o.r (link := o.link) (F := o.final) o.setup o.ready_parts.2.2.2 ?_ ?_ ?_ ?_ ?_
     (o.verdict_ok g) ?_
   · rw [hlen, hk]
     have := g.sends o
@@ -451,7 +451,7 @@ theorem Run.acc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Reada
 /-- **Completeness from the goals**: Flock's plain verifier is complete for `honestP` with error `δc`, given each
 goal. -/
 theorem complete_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (g : Goals H rel) :
-    Claims.Flock.Complete H (deployPlain rel) honestP (δc H) := by
+    Claims.Flock.Complete H (deployPlain rel) (δc H) := by
   refine complete_of H rel fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf false x = some (s, spec, sts) := by
     unfold ready at hready

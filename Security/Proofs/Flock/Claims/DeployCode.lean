@@ -5,6 +5,8 @@ import Proofs.Flock.Claims.NumbersGamma
 import Proofs.Flock.Claims.NumbersNMin
 import Proofs.Flock.Claims.NumbersTable
 import Proofs.Flock.Claims.GS.RadiusDeploy
+import Proofs.Flock.Claims.Complete.Honest
+import Proofs.Flock.Claims.Complete.Zk.Honest
 
 /-!
 # Flock's deployed instances of `Claims.Flock.Deploy`
@@ -41,6 +43,9 @@ the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Re
   reruns open every table (`tableLen`). `weight`: the tables' weights summed (`Numbers.weightOf`, at the pads' domain
   `Numbers.padDomain` under `--zk`). `waits`, `cap`: `Numbers.waits` (`210`) and `Numbers.cap` (`2^256`). A statement
   that does not set up has no tables: `εtable`, `N₀` and `weight` are `0` there, where the verifier refuses every run.
+* `Tape`, `P`: the reference prover, each verifier's honest prover on its tapes: `FlockComplete.honestP` on
+  `FlockComplete.Tape` (`Complete.Honest`), and `FlockComplete.honestPZk` on `FlockComplete.TapeZk`
+  (`Complete.Zk.Honest`).
 
 One run opens fewer level-0 columns than `nMin` of every trace (`cols_length_lt_nMin_plain`, `_zk`): ruling 2's count
 is reached only by `E^rep`'s columns, gathered over its accepted reruns.
@@ -437,6 +442,8 @@ noncomputable def deployPlain (rel : Readable.Parsed → Readable.Relation) :
   weight := weight false
   waits _ := Claims.Flock.Numbers.waits
   cap _ := Claims.Flock.Numbers.cap
+  Tape := FlockComplete.Tape
+  P := FlockComplete.honestP
 
 /-- **Flock's deployed masked (`--zk`) verifier**, as the record Flock's claims read. -/
 noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
@@ -457,6 +464,8 @@ noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
   weight := weight true
   waits _ := Claims.Flock.Numbers.waits
   cap _ := Claims.Flock.Numbers.cap
+  Tape := FlockComplete.TapeZk
+  P := FlockComplete.honestPZk
 
 /-! ## What the instances meet -/
 
