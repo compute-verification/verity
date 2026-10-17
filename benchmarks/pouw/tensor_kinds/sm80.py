@@ -33,7 +33,7 @@ REF = "ImmaS8k32"
 MMA = re.compile(r"^(IMMA|HMMA|BMMA|DMMA)")
 #: lane op codes (sm80.cu's OP_*) -> (name, the SASS opcode pattern the gate counts)
 OPS = {0: ("iadd3", "IADD3"), 1: ("ffma", "FFMA"), 2: ("lop3", "LOP3*"), 3: ("imad", "IMAD"), 4: ("dp4a", "IDP.4A*"),
-       5: ("shfl", "SHFL.BFLY*"), 6: ("popc", "POPC"), 7: ("lds", "LDS*"), 8: ("iadd3r", "IADD3"), 9: ("xor", "LOP3*")}
+       5: ("shfl", "SHFL.BFLY*"), 6: ("popc", "POPC"), 7: ("lds", "LDS*"), 8: ("iadd3r", "IADD3"), 9: ("lop3i", "LOP3*")}
 OP_NONE = 15
 #: SASS MMAs a PTX mma.sync, where not 1
 SASS_PER_PTX: dict[str, int] = {}
@@ -146,7 +146,7 @@ def expect(kern: str, struct: str, targs: list[int]) -> list[dict[str, int]]:
         R, x = targs
         return [{fam: 8 * s}, lane_counts(x, R)]
     if kern == "k_mixu":
-        R, x = targs
+        R, x = targs[:2]
         u = mixu_u(R)
         return [{fam: 8 * u * s, **lane_counts(x, u * R)}]
     raise ValueError(kern)
