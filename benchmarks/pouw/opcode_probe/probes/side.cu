@@ -2,7 +2,8 @@
 // that works off the SM's vector pipes (L2 reductions and atomics, cp.async, TMA bulk copies and reductions, DSMEM,
 // texture point fetch and bilinear filtering over 32 MB, and tld1c/texc over a window the texture cache holds; tld1d,
 // texd, atomgd: tld1, texbil, atomg32 with 4x, 2x, 4x the fetches in flight; texr: texd on two rows (32 KB); tld1w, texw:
-// tld1d and texr with 12 side warps; redblk: REDG.32 and a 1 KB bulk reduce a warp in one trip, both L2 paths) adds
+// tld1d and texr with 12 side warps; redblk: REDG.32 and a 1 KB bulk reduce a warp in one trip, both L2 paths; uni: the
+// uniform datapath, four UIMAD-ULOP3 chains of one word a warp instruction) adds
 // beside a saturated int8 IMMA kernel that folds every output word with duo (receipt_folds.cuh, the served fold), and
 // whether the MMAs keep their rate. Joint points, rows.jsonl only.
 //   honest        16 warps: 8 IMMA an iteration, then rf_duo_step on each accumulator's 4 words (side warps idle)
@@ -21,7 +22,7 @@ typedef unsigned long long u64;
 
 enum {
   S_RED32, S_RED64, S_REDV4, S_REDV4H, S_ATOMG32, S_LDGSTS, S_BLKRED512, S_BLKRED4K, S_BLKCP4K, S_DSM_ST4, S_DSM_RED,
-  S_TLD1, S_TEXBIL, S_REDBLK, S_TLD1C, S_TEXC, S_TLD1D, S_TEXD, S_ATOMGD, S_TEXR
+  S_TLD1, S_TEXBIL, S_REDBLK, S_TLD1C, S_TEXC, S_TLD1D, S_TEXD, S_ATOMGD, S_TEXR, S_UNI
 };
 
 __host__ __device__ constexpr bool bulk(int s) { return s == S_BLKRED512 || s == S_BLKRED4K || s == S_BLKCP4K; }
@@ -46,10 +47,14 @@ struct Side {
   cudaTextureObject_t tex1, tex2;
   uint32_t gtid, total, acc, lane, sw;
   unsigned sbase, peer;
+  // the uniform role's four chains and multiplier: from blockIdx only, so the compiler keeps them in uniform registers
+  uint32_t u[4], um;
   __device__ Side(const OpArgs& a, int side_warp, int nsw, unsigned char* sb, bool cluster) {
     g = a.g;
     tex1 = a.tex1;
     tex2 = a.tex2;
+    um = blockIdx.x * 2u + 1u;
+    for (int c = 0; c < 4; c++) u[c] = blockIdx.x * 0x9E3779B9u + c;
     lane = threadIdx.x & 31;
     sw = side_warp;
     gtid = (blockIdx.x * nsw + sw) * 32 + lane;
@@ -124,6 +129,8 @@ struct Side {
       const float4 f = tex2D<float4>(tex2, x, y);
       acc ^= __float_as_uint(f.x) ^ __float_as_uint(f.y) ^ __float_as_uint(f.z) ^ __float_as_uint(f.w);
     }
+    // a multiply then an xor with a constant: no reassociation folds two steps of a chain into one
+    if constexpr (S == S_UNI) u[q & 3] = (u[q & 3] * um) ^ (0x5bd1e995u + (uint32_t)q * 0x27d4eb2fu);
     // texbil's x walk on rows 0 and 1 only: 32 KB, and only two rows at the 16 KB pitch (texc's five alias in the cache)
     if constexpr (S == S_TEXR) {
       const float x = (float)((gtid + seq * 37u) & 1023u) + 0.25f;
@@ -172,6 +179,7 @@ struct Side {
   __device__ __forceinline__ void finish() {
     if constexpr (bulk(S) || S == S_REDBLK) asm volatile("cp.async.bulk.wait_group 0;" ::: "memory");
     if constexpr (S == S_LDGSTS) asm volatile("cp.async.wait_all;" ::: "memory");
+    if constexpr (S == S_UNI) acc ^= u[0] ^ u[1] ^ u[2] ^ u[3];
   }
 };
 
@@ -241,6 +249,7 @@ SIDE(tld1d, S_TLD1D, NOCL)
 SIDE(texd, S_TEXD, NOCL)
 SIDE(atomgd, S_ATOMGD, NOCL)
 SIDE(texr, S_TEXR, NOCL)
+SIDE(uni, S_UNI, NOCL)
 // the wide side roles: SWW warps beside the same 16 honest warps (the honest block's registers fit (HW + SWW) * 32)
 constexpr int SWW = 12;
 #define SIDEW(s, S)                                                                                                \
@@ -292,6 +301,7 @@ static const OpProbe PROBES[] = {
     P_SIDE(texd, "TEX*", 16, 128, 1, 256, 4),
     P_SIDE(atomgd, "ATOMG*", 32, 32, 1, 256, 4),
     P_SIDE(texr, "TEX*", 16, 128, 1, 256, 4),
+    P_SIDE_X(uni, "UIMAD*", 8, 1, 1, 4096, 4, ",ULOP3*=8"),
     P_SIDE_W(tld1w, "TLD*", 32, 32, 256),
     P_SIDE_W(texw, "TEX*", 16, 128, 256),
 };
