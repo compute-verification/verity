@@ -57,6 +57,7 @@ import Proofs.Flock.Claims.KS.ZkSessionW
 import Proofs.Flock.Claims.KS.ZkOffSC
 import Proofs.Flock.Claims.KS.ZkEntries
 import Proofs.Flock.Claims.KS.ZkDecodeW
+import Proofs.Flock.Claims.KS.ZkEvent
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -173,40 +174,42 @@ session's count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted
 level 0's, at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
 `FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`), so an accepted
 rep's is at the stream's round `plainQueryRound` (`FlockSoundness.Refine.lincheck_moves`,
-`FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). At flock-verify's acceptance, every
-result of each table's reps' runs requests level 0 first there, and every request has its level's lanes and path length
-(`LevelZeroAcc`: `FlockSoundness.Discharge.Exec.accepts_req0`). A position the deployed reader is given below `2^d` is
-looked up, to a column it was given there, so an output whose level-0 openings verify and are the reader's entries opens
-a position off `C` without a self-clash only where the reader looks up a column off `C` (`OffSC`:
-`Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`); an accepted salted table's level-0
-openings verify (`Claims.Flock.verified_opens₀L`). At flock-verify's acceptance, every accepted salted output of a
-table's reps' runs has its level-0 openings verifying below `2^d`, with positions and rows its reps' `plainRepColsOf`
-entries (`Entries`: `FlockSoundness.Discharge.Exec.accepts_opens₀L`, `Claims.Flock.exists_ne_of_entries`). So at `wrP`,
-at one table, the deployed plain decoders are right for accepting with no level-0 opening off `C` unless it
-self-clashes, on the outcomes flock-verify accepts at the live root where the deployed reader looks up no column off `C`
-(`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`, `Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). At a plain statement
-in scope with public outputs, that table is `plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for
-(`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`). With hidden outputs, the hidden table is `plainTab` too, and the same
-holds at its openings (`DecodeHidden`: `Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`).
-A statement some run accepts sets up at a draw, so the plain chain asks only for the mixture at those decoders, whether
-or not the outputs are hidden (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`,
-`FlockDeploy.KS.PlainLiveW`, `FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the
-statement's draw, the event the mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
-`FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the rest
-of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the merged
-coins being uniform, and the mixture by an event of the deployed coins the live event implies (`LiveMix`:
+`FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). At flock-verify's acceptance,
+every result of each table's reps' runs requests level 0 first there, and every request has its level's lanes and
+path length (`LevelZeroAcc`: `FlockSoundness.Discharge.Exec.accepts_req0`). A position the deployed reader is given
+below `2^d` is looked up, to a column it was given there, so an output whose level-0 openings verify and are the
+reader's entries opens a position off `C` without a self-clash only where the reader looks up a column off `C`
+(`OffSC`: `Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`); an accepted salted
+table's level-0 openings verify (`Claims.Flock.verified_opens₀L`). At flock-verify's acceptance, every accepted
+salted output of a table's reps' runs has its level-0 openings verifying below `2^d`, with positions and rows its reps'
+`plainRepColsOf` entries (`Entries`: `FlockSoundness.Discharge.Exec.accepts_opens₀L`,
+`Claims.Flock.exists_ne_of_entries`). So at `wrP`, at one table, the deployed plain decoders are right for accepting
+with no level-0 opening off `C` unless it self-clashes, on the outcomes flock-verify accepts at the live root where the
+deployed reader looks up no column off `C` (`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`,
+`Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). At a plain statement in scope with public outputs, that table is
+`plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for (`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`).
+With hidden outputs, the hidden table is `plainTab` too, and the same holds at its openings (`DecodeHidden`:
+`Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`). A statement some run accepts sets
+up at a draw, so the plain chain asks only for the mixture at those decoders, whether or not the outputs are hidden
+(`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`, `FlockDeploy.KS.PlainLiveW`,
+`FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the statement's draw, the event the
+mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
+`FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the
+rest of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the
+merged coins being uniform, and the mixture by an event of the deployed coins the live event implies (`LiveMix`:
 `Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_mergeAt`, `Claims.Bridge.Live.liveMix_eq`,
-`Claims.Bridge.Live.Pr_le_liveMix`, `Claims.Bridge.Live.liveMix_le_Pr`). From a simulation of the deployed prover by a
-live prover on coins of uniform law, and the record's draw on accepting runs, the mixture's first bound holds
-(`PlainFirst`: `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.RecordDrawVerbatim`, `FlockDeploy.KS.plain_first_of_sim`), and
-at the coins that merge each live coin with the rest of a deployed coin, from the simulation of the runs alone
-(`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`, `FlockDeploy.KS.plainSim_of_run`,
-`FlockDeploy.KS.plain_first_of_run`); the checks compare draws only up to `JsonEquiv`, which holds between different
-terms (`FlockDeploy.KS.drawEq_ne`). At those coins, a deployed event that the live event implies bounds the mixture, the
-third bound's form (`PlainThird`: `FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision
-as the events, KS at the deployed plain verifier holds from a live prover for each prover that simulates its accepting
-runs, whose self-clashes give its accepting runs with a collision and whose fork bound holds, the record's draw verbatim
-and `Extendθ` (`PlainSimW`: `FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
+`Claims.Bridge.Live.Pr_le_liveMix`, `Claims.Bridge.Live.liveMix_le_Pr`). From a simulation of the deployed prover by
+a live prover on coins of uniform law, and the record's draw on accepting runs,
+the mixture's first bound holds (`PlainFirst`: `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.RecordDrawVerbatim`,
+`FlockDeploy.KS.plain_first_of_sim`), and at the coins that merge each live coin with the rest of a deployed coin, from
+the simulation of the runs alone (`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`,
+`FlockDeploy.KS.plainSim_of_run`, `FlockDeploy.KS.plain_first_of_run`); the checks compare draws only up to
+`JsonEquiv`, which holds between different terms (`FlockDeploy.KS.drawEq_ne`). At those coins, a deployed event
+that the live event implies bounds the mixture, the third bound's form (`PlainThird`:
+`FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision as the events, KS at the
+deployed plain verifier holds from a live prover for each prover that simulates its accepting runs, whose self-clashes
+give its accepting runs with a collision and whose fork bound holds, the record's draw verbatim and `Extendθ`
+(`PlainSimW`: `FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
 `FlockDeploy.KS.plainLiveWrPAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). Where `verify --zk` sets its session up at a
 draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`,
 `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`,
@@ -252,4 +255,9 @@ outcome `verify --zk` accepts at the setup at the draw (`FlockSoundness.Discharg
 `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_entries`). There, where the deployed masked reader looks up no column
 of table `j` off `C`, table `j`'s accepted output opens no position off `C` on a witness lane without a self-clash
 (`ZkDecodeW`: `FlockSoundness.Discharge.Composed.ZkTxNoOff`, `FlockSoundness.Discharge.Composed.not_offW_of_entries`,
-`FlockSoundness.Discharge.Composed.runsAtZCJ_live_offW`, `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_offW`). -/
+`FlockSoundness.Discharge.Composed.runsAtZCJ_live_offW`, `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_offW`), and
+the deployed decoders are right at that verdict on those outcomes, at a masked statement in scope
+(`FlockDeploy.KS.OkOffWJ`, `FlockDeploy.KS.AccTxJ`, `FlockDeploy.KS.decodesTableW_zkTabs`,
+`FlockDeploy.KS.decodesTableHW_zkTabs`, `FlockDeploy.KS.decodesTableW_deploy`). On an accepting deployed masked run, the
+event of no column of table `j` off `C` gives that verdict at the run's live outcome (`ZkEvent`:
+`FlockDeploy.KS.cols_zk`, `FlockDeploy.KS.accTxJ_of_run`). -/
