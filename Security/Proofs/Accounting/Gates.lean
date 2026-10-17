@@ -649,4 +649,31 @@ theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
   rw [hrb, zero_mul, add_zero, hlen, hc] at h
   exact Nat.le_of_mul_le_mul_right h (by omega)
 
+/-! ## The codec at toy fields, against `codec.py` -/
+
+/-- Rows `(n, c, c_r, K, τ, i, m, y)`: `codec.encode_word(m, i)` is `y` at `p = 2^n − c` (251 and 65519) under round
+constants `c_r`, mask `K` and tweak multiplier `τ`. Between them they take both arms of `σ_K` and every arm of `ρ`
+(a square, a non-square, zero). `test_encode_chain.py` reads them from this file and recomputes each with
+`codec.encode_word`. -/
+def codecRows : List (ℕ × ℕ × List ℕ × ℕ × ℕ × ℕ × ℕ × ℕ) := [
+  (8, 5, [17, 200, 99], 248, 3, 5, 219, 234),
+  (8, 5, [92, 7], 253, 18, 54, 195, 147),
+  (8, 5, [44, 209], 252, 132, 41, 181, 166),
+  (8, 5, [139, 0], 254, 232, 36, 68, 225),
+  (8, 5, [56, 35], 12, 69, 52, 101, 18),
+  (8, 5, [88, 65], 93, 168, 12, 225, 4),
+  (8, 5, [103, 10, 98], 252, 50, 51, 47, 10),
+  (8, 5, [156, 202], 253, 47, 41, 11, 126),
+  (16, 17, [26622, 53477], 34513, 22959, 218370, 28017, 16283),
+  (16, 17, [27420, 1802, 17095], 22236, 6729, 817333, 53283, 48655),
+  (16, 17, [60688, 23696, 15300], 349, 10049, 806969, 33473, 64012)]
+
+/-- `Encodes`'s word, `encodeWord F.p d.key (d.tweak F i) m`, is `codec.encode_word`'s on every row. -/
+theorem encodeWord_codecRows :
+    codecRows.all (fun (n, c, cs, K, τ, i, m, y) =>
+      let F : Field := ⟨n, c⟩
+      let d : Draw cs.length := (fun r => cs.getD r 0, K, τ)
+      encodeWord F.p d.key (d.tweak F i) m == y) := by
+  decide +kernel
+
 end Accounting.SecurityProofs.Gates
