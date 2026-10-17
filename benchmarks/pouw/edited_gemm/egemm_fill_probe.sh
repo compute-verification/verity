@@ -52,7 +52,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
   done
   shp=${TSHPS%% *}; shp=${shp//:/ }
   for a in $NCU_ARMS; do
-    EG_ARMS=$a ncu --clock-control none -k "regex:^${a}\$" --launch-count 1 --launch-skip 2 \
+    EG_ARMS=$a ncu --clock-control none -k "regex:^${a}(_k3)?\$" --launch-count 1 --launch-skip 2 \
       --section InstructionStats --section ComputeWorkloadAnalysis --section SchedulerStats \
       "$B/egemm" bench 1 $shp > "$O/ncu-$a.txt" 2>&1; echo "ncu $a rc $?" >> "$O/rc.txt"
   done
