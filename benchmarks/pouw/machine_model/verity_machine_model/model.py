@@ -129,14 +129,17 @@ def rows(data: Path = DATA) -> dict[str, Row]:
 
 def census_files(m: Model, data: Path = DATA) -> list[Path]:
     """`data/census/EPOCH.csv`: a file for each epoch that brought census lines, in model.toml's order, each line's `since`
-    its file's epoch."""
+    its file's epoch. A device directory with one epoch (`data/sm89/`, `data/devices/SM/`) keeps a single `census.csv`."""
+    if not (data / "census").is_dir():
+        return [p] if (p := data / "census.csv").is_file() else []
     return [p for e in m.epochs if (p := data / "census" / f"{e}.csv").is_file()]
 
 
 def run_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
     """`data/census/runs.toml`: the run lists many census lines share (a refit's every line cites every run its fit read),
     each cited in a line's `runs` as `@NAME`."""
-    return {k: tuple(v) for k, v in tomllib.loads((data / "census" / "runs.toml").read_text()).items()}
+    p = data / "census" / "runs.toml"
+    return {k: tuple(v) for k, v in tomllib.loads(p.read_text()).items()} if p.is_file() else {}
 
 
 def census_lines(m: Model, data: Path = DATA) -> list[dict[str, str]]:
