@@ -16,7 +16,6 @@ outputs `([0], [1])`, a collision of the constant hash `constH`, whose outputs a
 * `KS_fails`, `KSLin_fails`, `Bits_fails`: at `accV`, `silentP` and a statement with no witness, every extractor fails
   at `κ < 1` (at `λ > 0` for `Bits`), whatever `γ`: the run is accepted surely and `B` finds nothing.
 * `Complete_fails`: at a tape that exists, `rejV` fails at `δ_c < 1` wherever the scope and the relation meet.
-  `Complete_vacuous`: at a prover with no tape, every verifier meets it at `δ_c = 0`.
 * `ScopeMatches_fails`: an empty scope and a check that takes everything.
 * `ZKmalR_fails` (`ZKMal.not_zkmalR_collSim`): the colliding simulator, which met the form before `Fork`, fails it.
   `ZKmalR_vacuous`: the honest prover is a parameter, so a prover that ignores its witness and calls nothing
@@ -197,18 +196,6 @@ theorem Complete_fails {Ω : Type} [Nonempty Ω] (P : W → Prover Ω) (R : Rel 
     | exact h (fun _ => List.length_replicate ..) x w hs hr _
   rw [Pr_congr fun r => iff_false_intro (by rw [run_rejV_out]; exact Out.noConfusion), Pr_false] at h1
   linarith
-
-/-- An honest prover with no tape. -/
-def noTape {W : Type} : W → Prover Empty := fun _ => ⟨fun _ _ ω => ω.elim⟩
-
-omit [Nonempty Coin] in
-/-- **`Complete` is met at a prover with no tape**, at `δ_c = 0` and every hash, verifier, relation and scope: it
-quantifies over the tapes and asks for none. -/
-theorem Complete_vacuous (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (Scope : Msg → Prop) :
-    Complete H V noTape R Scope 0 := by
-  unfold Complete
-  intros
-  exact (‹Empty›).elim
 
 /-- **`ScopeMatches` fails** at an empty scope and a check that takes everything. -/
 theorem ScopeMatches_fails : ¬ ScopeMatches (fun _ => False) (fun _ => true) := fun h => (h []).2 rfl
