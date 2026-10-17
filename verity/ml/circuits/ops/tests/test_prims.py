@@ -393,3 +393,28 @@ def test_const_primitives_are_memoised_and_decodable() -> None:
     assert P.ZERO32.evaluate() == 0 and P.ZERO32.id == "Const32[0x00000000]_v1"
     # a process that never built the program can still materialise the family from the id alone
     assert _lookup_primitive(REGISTRY, "Const16[0x3f80]_v1") is P.const(16, 0x3F80)
+
+
+def test_the_s8_step_is_the_pinned_integer_model() -> None:
+    from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as M
+
+    step = P.BlackwellS8ImmaDot32
+    assert step.id == "BlackwellS8ImmaDot32_v1" and REGISTRY[step.id] is step and step.conformance.startswith("exact-model-tested")
+    rng = random.Random(9)
+    for acc in [0, 0x7FFFFFFF, 0x80000000, 0x7FFFFF00, 0x80000100] + [rng.getrandbits(32) for _ in range(400)]:
+        a, b = [rng.getrandbits(8) for _ in range(32)], [rng.getrandbits(8) for _ in range(32)]
+        assert step.evaluate(acc, *a, *b) == M.step(acc, a, b)
+    assert step.evaluate(0x7FFFFFFF, *[0x7F] * 32, *[0x7F] * 32) == 0x7FFFFFFF
+    assert step.evaluate(0x80000000, *[0x80] * 32, *[0x7F] * 32) == 0x80000000
+    assert step.evaluate(0, *[0x80] * 32, *[0x80] * 32) == 32 * 128 * 128
+
+
+def test_the_s32_cast_is_numpy_int32_to_float32() -> None:
+    import numpy as np
+
+    rng = random.Random(10)
+    words = [0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF] + [(1 << e) + d for e in range(32) for d in (-1, 0, 1)] + \
+            [rng.getrandbits(32) for _ in range(20_000)]
+    words = [w & 0xFFFFFFFF for w in words]
+    want = np.array(words, np.uint32).view(np.int32).astype(np.float32).view(np.uint32)
+    assert [P.S32ToF32Rn.evaluate(w) for w in words] == want.tolist()

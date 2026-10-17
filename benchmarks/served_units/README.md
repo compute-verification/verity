@@ -9,7 +9,7 @@ internal bit).
 
 Two kinds of type (`stage.py`'s docstring has both):
 
-- a unit Definition (`UNITS`: the FP8 block GEMM coordinate), staged by `class_statement.stage_unit` on PoUW's row
+- a unit Definition (`UNITS`: the FP8 block GEMM coordinate, the W8A8 GEMM coordinate), staged by `class_statement.stage_unit` on PoUW's row
   convention, each instance's output held to the IR reference and to the served kernel's numpy twin;
 - a Q_word class of a word Definition (`PARTS`: router, MoE tiles, SiLU-mul block quant, RMSNorm, RoPE, DSA indexer, sparse
   MLA head, ...), the class of rank `C` by word gates (`TYPE:C=1`), staged by `class_statement.stage` with every instance's
@@ -18,7 +18,8 @@ Two kinds of type (`stage.py`'s docstring has both):
 
 Files:
 
-- `stage.py UNIT N OUT`: the unit types at GLM-5.3's statics (per TP8 rank) and their synthetic values.
+- `stage.py UNIT N OUT`: the unit types at GLM-5.3's statics (per TP8 rank), the W8A8 coordinate at Llama-3.2-1B's, and
+  their synthetic values.
 - `job.sh`: builds, stages, proves and verifies every unit of `SU_UNITS` (its header lists the checks and the environment);
   the builds, the session and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per unit.

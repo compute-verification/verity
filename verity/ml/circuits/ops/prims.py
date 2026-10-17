@@ -19,6 +19,8 @@ equal to `_v1` on every finite input.  A registered id denotes one function, so 
 (`models.BLACKWELL_SM120_NVF4`), with the two casts NVFP4 quantization uses, `F32ToE2m1Sat_v1` and `E4m3ToF32_v1`, and
 `BlackwellMxf4OmmaDot64_v1` its MXFP4 step (`models.BLACKWELL_SM120_MXF4`).  `HopperE4m3MmaV2Dot32_v1` is the k32 step of an e4m3
 `tl.dot` that Triton 3.7.1 lowers to MMAv2 on sm_90 (`total_fp8.HOPPER_E4M3_MMAV2_K32` in `total_fp8.MMAV2_E4M3_K_ORDER`).
+`BlackwellS8ImmaDot32_v1` is sm_120's s8 `mma.sync` step with `.satfinite` (`integer.BLACKWELL_SM120_S8_M16N8K32`, an s32
+accumulator word), and `S32ToF32Rn_v1` the `cvt.rn.f32.s32` that hands its sum to an f32 epilogue.
 """
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ from verity.ml.circuits.types import Array, Value
 from verity.ml.circuits.silicon import cast
 from verity.ml.circuits.silicon import models as _tc_models
 from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_E5M2_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4
 from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
@@ -41,13 +44,15 @@ A32_E5M2 = Array(32, E5M2)       # the same type as A32_8: an encoding type carr
 A64_4 = Array(64, E2M1)
 A4_8 = Array(4, E4M3)            # four UE4M3 block-scale bytes (the E4M3 encoding with the sign bit clear)
 A2_8 = Array(2, Value(8))        # two UE8M0 block-scale bytes
+S8, S32 = Value(8), Value(32)    # two's-complement integer words
+A32_S8 = Array(32, S8)
 #: `cvt.rn.satfinite.e2m1x2.f32`'s code for a NaN input (E2M1 has none): +6, measured on the RTX PRO 6000 for every NaN element
 #: of `cvt_fp16_to_fp4` (whose FMUL hands it the canonical +NaN; the sign of a NaN input is not observable there, and dropped)
 E2M1_NAN_CODE = 0x7
 
-__all__ = ["A16", "A2_8", "A32_8", "A32_E5M2", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "E5M2", "F32", "AmpereBF16TcDot16", "Bf16ToF32",
-           "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64", "E4m3ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE2m1Sat", "F32ToE4m3Sat", "HopperBF16WgmmaDot16",
-           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "const"]
+__all__ = ["A16", "A2_8", "A32_8", "A32_E5M2", "A32_S8", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "E5M2", "F32", "S32", "S8", "AmpereBF16TcDot16", "Bf16ToF32",
+           "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64", "BlackwellS8ImmaDot32", "E4m3ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE2m1Sat", "F32ToE4m3Sat", "HopperBF16WgmmaDot16",
+           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "S32ToF32Rn", "const"]
 
 
 @primitive("Bf16ToF32", 1, [("a", BF16)], F32, conformance="exact-model-tested")
@@ -237,6 +242,26 @@ def F32ToE2m1Sat(x: int) -> int:
 def E4m3ToF32(x: int) -> int:
     """`float(__nv_fp8_e4m3)`: the exact widening `cast.e4m3_to_f32_word` (NaN -> 0x7FFFE000, documented, not measured)."""
     return cast.e4m3_to_f32_word(x)
+
+
+@primitive("BlackwellS8ImmaDot32", 1, [("acc", S32), ("a", A32_S8), ("b", A32_S8)], S32,
+           conformance="exact-model-tested; RTX PRO 6000 Blackwell Server Edition (cc 12.0) IMMA.16832.S8.S8.SAT: run "
+                       "r20261015-084000-06d8, 10,243,968 words, 0 mismatches, the clamp tiles admitting only a clamp at D (trust "
+                       "dossier art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474, PINNED)")
+def BlackwellS8ImmaDot32(acc: int, *ab: int) -> int:
+    """One accumulator coordinate of `mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32` on sm_120a (SASS
+    `IMMA.16832.S8.S8.SAT`): `acc` (an s32 word) plus the 32 exact s8 x s8 products, summed exactly and clamped once to
+    [-2^31, 2^31 - 1]. Total on every encoding: `integer.BLACKWELL_SM120_S8_M16N8K32.step`."""
+    return BLACKWELL_SM120_S8_M16N8K32.step(acc, list(ab[:32]), list(ab[32:64]))
+
+
+@primitive("S32ToF32Rn", 1, [("a", S32)], F32,
+           conformance="exact-model-tested; cvt.rn.f32.s32 (SASS I2FP.F32.S32) is IEEE 754's convertFromInt, round to nearest even; "
+                       "the evaluator is that function (`cast.s32_to_f32_rn_word`), checked against numpy's int32 -> float32 on "
+                       "every exponent; not separately probed on a device")
+def S32ToF32Rn(a: int) -> int:
+    """`cvt.rn.f32.s32`: the s32 word as the nearest f32 word, ties to even, zero +0 (`cast.s32_to_f32_rn_word`)."""
+    return cast.s32_to_f32_rn_word(a)
 
 
 # ---- constants: one primitive per (width, bits), materialised on demand and decodable by id -------------------------------------------
