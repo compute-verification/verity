@@ -40,6 +40,7 @@ import Proofs.Flock.Claims.KS.PlainFirst
 import Proofs.Flock.Claims.KS.PlainThird
 import Proofs.Flock.Claims.KS.ForkSlack
 import Proofs.Flock.Claims.KS.PlainSimW
+import Proofs.Flock.Claims.KS.FnFork
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -180,4 +181,9 @@ functions read at the live coins seen so far, so that a fork that redraws them r
 accepted plain run's reps open at one position collide in its own log (`ConflictTied`: `FlockDeploy.KS.plainRawCols`,
 `FlockDeploy.KS.plain_opening_raw`, `FlockDeploy.KS.plain_selfClash_tied`), so the simulator's self-clashes at level
 0 need only give such columns (`PlainSimW`: `FlockDeploy.KS.PlainRawClashRun`, `FlockDeploy.KS.plainClashRun_of_raw`).
+At a tape of uniform functions read at a key that reads and tells apart the revealed live history, the simulated fork
+at round `t` is at most the deployed fork there and `δ_t` times the simulated fork at `t + 1`, with `δ_t` the chance
+that two coins agree on the entries the key reads, which is `ForkCoinCoupling`'s shape (`FnFork`:
+`Claims.Flock.FnFork.PrefixKey`, `Claims.Flock.FnFork.prefixKey_histKey`, `Claims.Flock.FnFork.fnC_coupling`,
+`Claims.Flock.FnFork.fnAt_coupling`).
 -/
