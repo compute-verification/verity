@@ -664,6 +664,8 @@ OP_KERNEL(tcliU_x32_t8, 512) { li_until_mma<32, 12, false, false, 8>(a); }
 OP_KERNEL(tc_mxf4_m128_n256, 128) { mxf4_alone(a); }
 OP_KERNEL(tcfU_li, 512) { lane_until_mma<L_LI, 64, true>(a); }
 OP_KERNEL(tcfU_mix, 512) { lane_until_mma<L_MIX, 64, true>(a); }
+OP_KERNEL(tcfU_li_r512, 512) { lane_until_mma<L_LI, 512, true>(a); }
+OP_KERNEL(tcfU_mix_r512, 512) { lane_until_mma<L_MIX, 512, true>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -733,6 +735,8 @@ static const OpProbe PROBES[] = {
     {.name = "tc_mxf4_m128_n256", .kernel = (const void*)tc_mxf4_m128_n256, .tpb = 128, .expect = "UTC*MMA*=4", .warps = "1", .iters = 4096},
     {.name = "tcfU_li", .kernel = (const void*)tcfU_li, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=32,IMAD=32", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcfU_mix", .kernel = (const void*)tcfU_mix, .tpb = 512, .expect = "UTC*MMA*=4;FFMA=32", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcfU_li_r512", .kernel = (const void*)tcfU_li_r512, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=256,IMAD=256", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcfU_mix_r512", .kernel = (const void*)tcfU_mix_r512, .tpb = 512, .expect = "UTC*MMA*=4;FFMA=256", .warps = "1;12", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
