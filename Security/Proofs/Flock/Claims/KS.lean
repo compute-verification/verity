@@ -32,6 +32,7 @@ import Proofs.Flock.Claims.KS.ZkBoundJ
 import Proofs.Flock.Claims.KS.ZkLiveJ
 import Proofs.Flock.Claims.KS.ZkAccJ
 import Proofs.Flock.Claims.KS.RoundsNZk
+import Proofs.Flock.Claims.KS.LevelZero
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Claims.KS.ZkDecJ
@@ -143,11 +144,15 @@ the live sessions' bound at escapes on accepted runs (`FlockDeploy.KS.ZkLiveAccJ
 (`Flock.TableBoundJAccAt`, `FlockDeploy.KS.zk_tableBoundJAccAt`). Each round of an accepted masked rep issued the coins
 its statement fixes (`RoundsNZk`: `FlockDeploy.zkRepNs`, `FlockDeploy.zkVerifyRepWith_readsN`; per rep stream,
 `FlockDeploy.zkRepNsOf`, `FlockDeploy.streams_ns_zk`), and custody reads each round message's coin at the session's
-count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). Where `verify --zk` sets its session up at a draw
-(`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`,
-`FlockDeploy.KS.planZJ_eq_tabsJ`), so at the empty draw the deployed `--zk` decoders are right at them
-(`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`); so are the hidden-output plan's and decoders
-(`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`,
+count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted Ligerito run's first model request is level 0's,
+at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
+`FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`), so an accepted
+rep's is at the stream's round `plainQueryRound` (`FlockSoundness.Refine.lincheck_moves`,
+`FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). Where `verify --zk` sets its
+session up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`:
+`FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), so at the empty draw the deployed `--zk` decoders
+are right at them (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`); so are the hidden-output
+plan's and decoders (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`,
 `FlockDeploy.KS.decodesTableH_zkTabs`). So at every masked statement in scope that `Deploy.V` sets up at a draw, which
 every statement some run accepts carries (`FlockDeploy.KS.acc_draw`), the deployed decoders are right at `zkTabs`
 (`ZkDecJ`: `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. -/
