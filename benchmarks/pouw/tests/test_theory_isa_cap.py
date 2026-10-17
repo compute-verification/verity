@@ -17,6 +17,13 @@ def test_outer_product_packings():
     assert not ic.outer_imad(3, 2, 24, 64, signed=False)
 
 
+def test_idp2a_packs_five():
+    """IDP.2A.LO writes 5 incidences into one word at radices 129 and 129·257, and one value short at either fails."""
+    assert ic.idp2a_packing()
+    assert not ic.idp2a_packing(m3=129 * 256)
+    assert not ic.idp2a_packing(m2=128, m3=128 * 257)
+
+
 def test_load_bound_against_the_cap():
     """QSTAR's 6.0 / 3.5 B at κ = 32/7, and 5.3 / 3.0 B at the 8 one IMAD.WIDE reaches."""
     assert round(ic.load_bound(32 / 7, 128), 2) == 6.04 and round(ic.load_bound(32 / 7, 216), 2) == 3.53

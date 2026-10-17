@@ -9,6 +9,7 @@ products pack more, inside class P: an R-only word times a U-only word is a mixe
 - IMAD.WIDE, 8-bit slots (s = 24, 3 rows × 2 columns): 6. At radix 129 (`isa_cap.c`): 8, four in each destination word.
 - IDP.4A.U8.S8 at radix 129 (`isa_cap.c`): a 1-entry and a 4-entry field in one 32-bit word, 5. So no cap below 5 holds
   even counted per destination word.
+- IDP.2A.LO.U16.S8 at radices 129 and 129·257: fields of 1, 2 and 2 entries in one word, 5.
 Each is checked over every R bit and U entry (U ∈ ±1..±64). The joint statement's load bound is then restated as a
 function of the cap κ: Ld ≥ (28 − 1.03κ)N/(c_L − κ).
 
@@ -56,6 +57,32 @@ def outer_imad(rows, cols, s, width, signed=True):
     return ok
 
 
+def idp2a_lo(a, b, c):
+    """IDP.2A.LO.U16.S8: c + a's halfwords (unsigned) · b's bytes 0 and 1 (signed), mod 2^32."""
+    d = np.asarray(c, dtype=np.int64)
+    for k in range(2):
+        bk = (b >> (8 * k)) & 0xFF
+        d = d + ((a >> (16 * k)) & 0xFFFF) * np.where(bk > 127, bk - 256, bk)
+    return d & 0xFFFFFFFF
+
+
+def idp2a_packing(m2=129, m3=129 * 257):
+    """Every R ∈ {0,1}^5 and U ∈ (±1..±64)²: a's halfwords r1 + m2·r2_0 + m3·r3_0 and m2·r2_1 + m3·r3_1, b's bytes u0, u1
+    (bytes 2 and 3 junk), and whether the word decodes as r1·u0 (129 values) under Σ_k r2_k·u_k and Σ_k r3_k·u_k
+    (257 values each) at radices m2 and m3."""
+    u0, u1 = (x.ravel().astype(np.int64) for x in np.meshgrid(U_VALUES, U_VALUES, indexing="ij"))
+    b = (u0 & 0xFF) | (u1 & 0xFF) << 8 | 0xA5C3 << 16
+    c = 64 + m2 * 128 + m3 * 128
+    for r1, r20, r21, r30, r31 in itertools.product((0, 1), repeat=5):
+        a = (r1 + m2 * r20 + m3 * r30) | (m2 * r21 + m3 * r31) << 16
+        assert max(r1 + m2 * r20 + m3 * r30, m2 * r21 + m3 * r31) < 1 << 16
+        d = idp2a_lo(np.int64(a), b, c)
+        if not (np.array_equal(d % m2 - 64, r1 * u0) and np.array_equal(d // m2 % 257 - 128, r20 * u0 + r21 * u1)
+                and np.array_equal(d // m3 - 128, r30 * u0 + r31 * u1)):
+            return False
+    return True
+
+
 def radix_packings(radix, tmp):
     """`isa_cap.c` at this radix: {"IDP4A": (cases, fails), "IMADW": (cases, fails)}."""
     exe = Path(tmp) / f"isa_cap{radix}"
@@ -93,6 +120,10 @@ def main() -> int:
                  "r1·u_0 and Σ_k r2_k·u_k into one 32-bit word, at every R ∈ {0,1}^5 and U ∈ (±1..±64)^4: 5 incidences "
                  "in one word, so no cap below 5 holds even per destination word", cases == 1 << 33 and fails == 0,
                  f"{cases} cases, {fails} wrong")
+    checks.check("IDP.2A.LO.U16.S8 with a's halfwords (r1 + 129 r2_0 + 33153 r3_0, 129 r2_1 + 33153 r3_1) and b's bytes "
+                 "(u0, u1) writes r1·u0 under Σ_k r2_k·u_k and Σ_k r3_k·u_k (radices 129, 129·257) into one word, at "
+                 "every R ∈ {0,1}^5 and U ∈ (±1..±64)²: 5 incidences, as QSTAR's round 3 says", idp2a_packing(),
+                 "fields of 1, 2 and 2 entries")
     cases, fails = got["IMADW"]
     checks.check("signed IMAD.WIDE with a = r1 + 2^29 r2 and b = 8 Σ_j 129^j u_j writes four r1·u_j into the low word and "
                  "four r2·u_j into the high word, at every R ∈ {0,1}² and U ∈ (±1..±64)^4: 8 incidences in one "
@@ -128,6 +159,8 @@ def main() -> int:
     if checks.mutations:
         checks.mutation("IMAD.WIDE.U32 (b read unsigned) breaks the high word's fields: the 6-field route needs the "
                         "signed form", not outer_imad(3, 2, 24, 64, signed=False))
+        checks.mutation("IDP.2A with the top radix 129·256, one short for the 2-entry middle field, fails",
+                        not idp2a_packing(m3=129 * 256))
         checks.mutation("radix 128 is one value short for a 1-entry field: both packings fail", bad["IDP4A"][1] > 0
                         and bad["IMADW"][1] > 0, f"IDP.4A {bad['IDP4A'][1]}, IMAD.WIDE {bad['IMADW'][1]} wrong")
     return checks.finish()
