@@ -735,6 +735,9 @@ static void form() {
   alone<F, 2, 4>();
   alone<F, 4, 4>();
   alone<F, 8, 4>();
+  alone<F, 2, 8>();
+  alone<F, 4, 8>();
+  alone<F, 8, 8>();
   spec<F, 8, LANE_MIX>(); spec<F, 16, LANE_MIX>(); spec<F, 32, LANE_MIX>(); spec<F, 64, LANE_MIX>(); spec<F, 128, LANE_MIX>();
   mixu<F, 8, LANE_MIX>(); mixu<F, 16, LANE_MIX>(); mixu<F, 32, LANE_MIX>(); mixu<F, 64, LANE_MIX>(); mixu<F, 128, LANE_MIX>();
   // IADD3 alone binds on its pipe; these programs still bound any joint row, which must hold on every program
