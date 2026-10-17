@@ -136,12 +136,15 @@ contiguous region in the same blocks, `nvfp4-qN`, `nvfp4c-qN` and `int5-qN` dith
 word's positions on both operands, and `fp8-peel-wW[-gptq]` is the int8 design on E4M3's exact integers: activations
 dithered on −16..16, weights on ±W (rounded or GPTQ) served as W + U and peeled; `fp8-peel-w15-qN` dithers the
 activations on 1/N of the positions only (U still coins every position).
-SKIP's designs (note:20261017T0340Z-draft-skip): `adopted-qkd` (Q Kᵀ dithered on both operands, no Q peel),
+SKIP's arms (note:20261017T0340Z-draft-skip): `adopted-qkd` (Q Kᵀ dithered on both operands, no Q peel),
 `adopted-bd` (the linears too), `adopted-bd-lm` (and lm_head), `co` (CO-Dither's served values at r = k/2: 7-bit
 sides plus fresh bits), `co32c` (CHECKED-STRIP's: 7-bit weights and 8-bit activations on the linears, `co`'s
 attention), `co32c-pv` (`co32c` with P·V as CO-Dither serves it: P dithered with a fresh bit under the w64 peel; `co32c-pvN`
-in blocks of N = 256, 512 or 1,024 keys; `adopted-bd-lm-pv` is design A with that P·V, `adopted-bd-lm-pvN` in blocks),
-`ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention).
+in blocks of N = 256, 512 or 1,024 keys; `adopted-bd-lm-pv` is `adopted-bd-lm` with that P·V, `adopted-bd-lm-pvN` in
+blocks), and `ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention),
+kept as records now that NCP-INT is no longer a design candidate. A design names its arm as `ppl` in the design registry
+(`benchmarks/pouw/machine_model/data/designs/`, decision 79's names): Dither-1S `adopted`, Dither-2S `adopted-bd-lm`,
+Dither-2S-pv `adopted-bd-lm-pv`, Dither-C `co32c-pv` and Dither-C-peel `co32c`.
 Any other file passes as a path.
 
 ## Adding an intervention
