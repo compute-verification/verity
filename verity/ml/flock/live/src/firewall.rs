@@ -561,6 +561,44 @@ mod tests {
         assert!(e.contains("squeeze slice of 2 where the statement has squeeze slice of 3"), "{e}");
     }
 
+    /// A round as the masking challenger hands it on: two observes and a zero-length squeeze inside, then its coin.
+    fn masked_round(ch: &mut impl Challenger, v: u64) -> F128 {
+        ch.observe_label(b"zc");
+        ch.observe_f128_slice(&[F128::new(v, 1), F128::new(v + 1, 2)]);
+        ch.sample_f128_vec(0);
+        ch.observe_bytes(&[9; 20]);
+        ch.observe_f128(F128::new(v + 2, 3));
+        ch.sample_f128()
+    }
+
+    #[test]
+    fn gate_passes_through_without_a_release_and_sends_only_the_release_with_one() {
+        let mut direct = Recorder::default();
+        masked_round(&mut direct, 10);
+        let mut g = Gate::new(Recorder::default());
+        masked_round(&mut g, 10);
+        assert_eq!(g.inner.items, direct.items, "no release: every call passes through");
+        let release = framed(|f| { f.pending.clear(); masked_round(f, 10); }).remove(0).0;
+        let mut g = Gate::new(Recorder::default());
+        g.release = Some(release);
+        let coin = masked_round(&mut g, 10);
+        assert_eq!((g.inner.items, coin), (direct.items, F128::new(0x5eed_0001, 0x1234_5678_9abc_def0)), "the release reaches the stream");
+        assert!(g.release.is_none(), "a release is used once");
+    }
+
+    #[test]
+    fn gate_refuses_a_masking_round_the_release_differs_from() {
+        let release = framed(|f| { f.pending.clear(); masked_round(f, 10); }).remove(0).0;
+        let e = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut g = Gate::new(Recorder::default());
+            g.release = Some(release.clone());
+            masked_round(&mut g, 11);
+            g
+        })).map(|_| ()).unwrap_err();
+        let e = e.downcast_ref::<String>().expect("a refusal message");
+        assert!(e.starts_with("FIREWALL-REFUSED: the masking challenger's round") && e.ends_with("differ from byte 48"), "{e}");
+    }
+
     #[test]
     fn shadow_link_names_the_first_differing_frame() {
         let (mut link, mut end) = shadow_pair();
