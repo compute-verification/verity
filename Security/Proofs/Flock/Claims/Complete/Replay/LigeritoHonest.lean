@@ -333,6 +333,160 @@ theorem VRuns.query (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64)
   refine VRuns.seqV (VRuns.sampleVec resp (Nat.succ_ne_zero _) _ _) ?_
   exact VRuns.pure fun s h => ⟨rfl, h⟩
 
+/-! ## Runs of challenges -/
+
+/-- The coin pairs of `j` challenges from position `k`. -/
+def chsK (cf : ℕ → ℕ → F128) (k j : ℕ) : List F256 := (List.range j).map fun i => ⟨cf (k + i) 0, cf (k + i) 1⟩
+
+theorem chsK_succ (cf : ℕ → ℕ → F128) (k j : ℕ) :
+    chsK cf k (j + 1) = chsK cf k j ++ [⟨cf (k + j) 0, cf (k + j) 1⟩] := by
+  simp [chsK, List.range_succ]
+
+theorem chs_eq (cf : ℕ → ℕ → F128) (t : Transcript) (j : ℕ) : chs cf t j = chsK cf t.k j := rfl
+
+theorem push_get_size {γ : Type} [Inhabited γ] (A : Array γ) (x : γ) : (A.push x)[A.size]! = x :=
+  Pre.get (Pre.refl _)
+
+theorem Pre.get_lt {γ : Type} [Inhabited γ] {A B : Array γ} (h : Pre A B) {i : ℕ} (hi : i < A.size) : B[i]! = A[i]! := by
+  obtain ⟨C, rfl⟩ := h
+  rw [getElem!_pos _ i (by simp; omega), Array.getElem_append_left hi, ← getElem!_pos A i hi]
+
+/-- **After `j` plain challenges** from `S` at position `k`: the table and weight folded at their coins, each fold's
+round polynomial sent, the other lists as they were. -/
+structure ChalInv (cf : ℕ → ℕ → F128) (k : ℕ) (S : LigState) (j : ℕ) (st : LigState) : Prop where
+  tab : st.tab = foldKs (chsK cf k j) S.tab
+  w : st.w = foldKs (chsK cf k j) S.w
+  oods : st.oods = S.oods
+  cbn : st.cbn = S.cbn
+  qn : st.qn = S.qn
+  cn : st.cn = S.cn
+  pre : Pre S.msgs st.msgs
+  size : st.msgs.size = S.msgs.size + j
+  msg : ∀ i < j, st.msgs[S.msgs.size + i]! =
+    roundPoly (foldKs (chsK cf k (i + 1)) S.tab) (foldKs (chsK cf k (i + 1)) S.w)
+
+/-- **After `j` plain challenges and a splitting one** from `S` at position `k`. -/
+structure SplitInv (cf : ℕ → ℕ → F128) (k : ℕ) (S : LigState) (j : ℕ) (st : LigState) : Prop where
+  tab : st.tab = embedF (splitK (foldKs (chsK cf k (j + 1)) S.tab))
+  w : st.w = liftU (foldKs (chsK cf k (j + 1)) S.w)
+  oods : st.oods = S.oods
+  cbn : st.cbn = S.cbn
+  qn : st.qn = S.qn
+  cn : st.cn = S.cn
+  pre : Pre S.msgs st.msgs
+  size : st.msgs.size = S.msgs.size + j + 1
+  msg : ∀ i < j, st.msgs[S.msgs.size + i]! =
+    roundPoly (foldKs (chsK cf k (i + 1)) S.tab) (foldKs (chsK cf k (i + 1)) S.w)
+  last : st.msgs[S.msgs.size + j]! = roundPoly st.tab st.w
+
+theorem ChalInv.zero (cf : ℕ → ℕ → F128) (k : ℕ) (S : LigState) : ChalInv cf k S 0 S :=
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl, Pre.refl _, rfl, fun _ h => absurd h (Nat.not_lt_zero _)⟩
+
+theorem ChalInv.step {cf : ℕ → ℕ → F128} {k : ℕ} {S : LigState} {j : ℕ} {st : LigState} (h : ChalInv cf k S j st) :
+    ChalInv cf k S (j + 1) (chalSt ⟨cf (k + j) 0, cf (k + j) 1⟩ false st) where
+  tab := by simp only [chalSt, Bool.false_eq_true, ↓reduceIte, h.tab, chsK_succ, foldKs_snoc]
+  w := by simp only [chalSt, Bool.false_eq_true, ↓reduceIte, h.w, chsK_succ, foldKs_snoc]
+  oods := h.oods
+  cbn := h.cbn
+  qn := h.qn
+  cn := h.cn
+  pre := h.pre.trans (Pre.push _ _)
+  size := by simp only [chalSt, Array.size_push, h.size]; omega
+  msg i hi := by
+    simp only [chalSt, Bool.false_eq_true, ↓reduceIte]
+    rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
+    · rw [push_get_lt _ (by rw [h.size]; omega), h.msg i hi]
+    · rw [← h.size, push_get_size, h.tab, h.w, chsK_succ, foldKs_snoc, foldKs_snoc]
+
+theorem ChalInv.split {cf : ℕ → ℕ → F128} {k : ℕ} {S : LigState} {j : ℕ} {st : LigState} (h : ChalInv cf k S j st) :
+    SplitInv cf k S j (chalSt ⟨cf (k + j) 0, cf (k + j) 1⟩ true st) where
+  tab := by simp only [chalSt, ↓reduceIte, h.tab, chsK_succ, foldKs_snoc]
+  w := by simp only [chalSt, ↓reduceIte, h.w, chsK_succ, foldKs_snoc]
+  oods := h.oods
+  cbn := h.cbn
+  qn := h.qn
+  cn := h.cn
+  pre := h.pre.trans (Pre.push _ _)
+  size := by simp only [chalSt, Array.size_push, h.size]
+  msg i hi := by
+    simp only [chalSt, ↓reduceIte]
+    rw [push_get_lt _ (by rw [h.size]; omega), h.msg i hi]
+  last := by
+    simp only [chalSt, ↓reduceIte]
+    rw [← h.size, push_get_size]
+
+/-- **Level 0's challenges**, exactly: `k0` of them, the last splitting. -/
+theorem vChals0 (resp : ℕ → Claims.Msg) (k k0 : ℕ) (hk0 : k0 ≠ 0) (S : LigState) :
+    VRuns L (forIn [:k0] PUnit.unit fun j (_ : PUnit) => do
+        let _ ← challengeP (asksS resp) (j + 1 == k0)
+        Pure.pure (ForInStep.yield PUnit.unit)) k (k + k0) (· = S)
+      fun _ st => SplitInv (cfOf resp L) k S (k0 - 1) st := by
+  have key := VRuns.loop (L := L) (σ := PUnit) (fun j (_ : PUnit) => do
+      let _ ← challengeP (asksS resp) (j + 1 == k0)
+      Pure.pure (ForInStep.yield PUnit.unit)) (fun j => k + j)
+    (fun j _ st => (j < k0 → ChalInv (cfOf resp L) k S j st) ∧ (j = k0 → SplitInv (cfOf resp L) k S (k0 - 1) st)) k0
+    (fun j hj _ => VRuns.intro fun S' hS' => by
+      refine (VRuns.challenge resp _ _ S').bind fun r => VRuns.pure fun st h => ⟨(), rfl, ?_⟩
+      obtain ⟨-, rfl⟩ := h
+      by_cases hj1 : j + 1 = k0
+      · have hb : (j + 1 == k0) = true := by simp [hj1]
+        rw [hb]
+        refine ⟨fun h => absurd h (by omega), fun _ => ?_⟩
+        rw [show k0 - 1 = j by omega]
+        exact (hS'.1 hj).split
+      · have hb : (j + 1 == k0) = false := by simp [hj1]
+        rw [hb]
+        exact ⟨fun _ => (hS'.1 hj).step, fun h => absurd h hj1⟩) PUnit.unit
+  refine (key.mono (fun st h => ?_) fun _ st h => h.2 rfl)
+  subst h
+  exact ⟨fun _ => ChalInv.zero _ _ _, fun h => absurd h.symm hk0⟩
+
+/-- **A level's four challenges**, exactly: the last keeps the folded table `f`, then splits it. -/
+theorem vLevelChals (resp : ℕ → Claims.Msg) (k : ℕ) (S : LigState) :
+    VRuns L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
+        if (i + 1 == 4) = true then do
+          let r ← liftT (sampleKP (asksS resp))
+          modify fun st : LigState =>
+            { tab := foldK r st.tab, w := foldK r st.w, msgs := st.msgs, oods := st.oods, qn := st.qn, cn := st.cn,
+              cbn := st.cbn }
+          let d ← get
+          modify fun st : LigState =>
+            { tab := embedF (splitK st.tab), w := liftU st.w, msgs := st.msgs, oods := st.oods, qn := st.qn,
+              cn := st.cn, cbn := st.cbn }
+          let st ← get
+          FlockComplete.sendMsg (roundPoly st.tab st.w)
+          pure (ForInStep.yield d.tab)
+        else do
+          let _ ← challengeP (asksS resp) false
+          pure (ForInStep.yield f)) k (k + 4) (· = S)
+      fun f st => f = foldKs (chsK (cfOf resp L) k 4) S.tab ∧ SplitInv (cfOf resp L) k S 3 st := by
+  refine VRuns.mono (VRuns.loop _ (fun j => k + j)
+    (fun j f st => (j < 4 → ChalInv (cfOf resp L) k S j st) ∧
+      (j = 4 → f = foldKs (chsK (cfOf resp L) k 4) S.tab ∧ SplitInv (cfOf resp L) k S 3 st)) 4
+    (fun j hj f => VRuns.intro fun S' hS' => ?_) #[]) (fun st h => ?_) fun _ st h => h.2 rfl
+  · by_cases hj3 : j = 3
+    · subst hj3
+      refine VRuns.ite (fun _ => ?_) fun h => absurd (by decide) h
+      refine VRuns.seqV (VRuns.sampleK resp _ S') ?_
+      refine VRuns.seq (VRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _) ?_
+      refine VRuns.seqV (VRuns.get _ _) ?_
+      refine VRuns.seq (VRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _) ?_
+      refine VRuns.seqV (VRuns.get _ _) ?_
+      refine VRuns.seq (VRuns.sendMsg _ _ _) ?_
+      refine VRuns.pure fun st h => ⟨_, rfl, fun h' => absurd h' (by omega), fun _ => ⟨?_, ?_⟩⟩
+      · show foldK _ S'.tab = _
+        rw [(hS'.1 (by omega)).tab]
+        exact (foldKs_snoc _ _ _).symm.trans (congrArg (foldKs · S.tab) (chsK_succ _ k 3).symm)
+      · subst h
+        exact (hS'.1 (by omega)).split
+    · refine VRuns.ite (fun h => absurd (by simpa using h) (by omega)) fun _ => ?_
+      refine (VRuns.challenge resp false _ S').bind fun r => VRuns.pure fun st h => ⟨f, rfl, fun _ => ?_,
+        fun h' => absurd h' (by omega)⟩
+      obtain ⟨-, rfl⟩ := h
+      exact (hS'.1 hj).step
+  · subst h
+    exact ⟨fun _ => ChalInv.zero _ _ _, fun h => absurd h (by omega)⟩
+
 end Lg
 
 end FlockComplete.Replay
