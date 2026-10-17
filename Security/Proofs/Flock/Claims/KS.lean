@@ -17,6 +17,7 @@ import Proofs.Flock.Claims.KS.TableBound
 import Proofs.Flock.Claims.KS.Refit
 import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.KS.Mixture
+import Proofs.Flock.Claims.KS.SessionSC
 import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.KS.PlainKS
 import Proofs.Flock.Claims.KS.Escapes
@@ -33,6 +34,8 @@ import Proofs.Flock.Claims.KS.ZkLiveJ
 import Proofs.Flock.Claims.KS.ZkAccJ
 import Proofs.Flock.Claims.KS.RoundsNZk
 import Proofs.Flock.Claims.KS.LevelZero
+import Proofs.Flock.Claims.KS.LevelZeroAcc
+import Proofs.Flock.Claims.KS.OffSC
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Claims.KS.ZkDecJ
@@ -91,40 +94,43 @@ escapes' (`Flock.oldEsc`, `Flock.oldEsc_term`; masked, with the pads roots' and 
 `Flock.oldEscZ_term`) that fit the weight with the fork event of weight `k` (`FlockDeploy.KS.oldEsc_fitsFork_plain`,
 `FlockDeploy.KS.oldEscZ_fitsFork_zk`), so the salted and masked sessions' `ε_c⁻` are at most `ε_table` and their term
 (`FlockDeploy.KS.epsSL_le`, `FlockDeploy.KS.epsSZ_le`), also averaged over a mixture of strategies
-(`FlockDeploy.KS.mean_epsSL_le`, `FlockDeploy.KS.mean_epsSZ_le`). The plain fork rounds (`Rounds`): rep `r`'s level-`ℓ +
-1` cap round at table 0, no two of them one (`FlockDeploy.KS.plainJ`, `FlockDeploy.KS.plainJ_inj`), at which the old
-escapes fit the plain weight (`FlockDeploy.KS.oldEsc_fitsFork_plainJ`). At one table the model does not commit to, a
-live verdict is no likelier than the simulated strategy's `ε_c⁻` after `Commit` and its probability of accepting off the
-table (`Mixture`: `FlockDeploy.KS.live_le_epsSL`; over a mixture of live strategies, `FlockDeploy.KS.mean_live_le`). At
-a plain statement of one table, `TableBoundθAt` follows from, at each table `C`, a mixture of salted sessions after
-`Commit` whose acceptance with no opening off `C` bounds the deployed runs accepting on `C`, and whose `Adv` and
-self-clash the escapes' events bound, the escapes at the plain fork rounds (`PlainBound`:
-`FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). `Flock.KS` at the plain record follows from the live sessions' bound
-at table 0 and `Extendθ` (`PlainKS`: `FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit` against the
-simulated strategy arises only on live runs the live verdict accepts, whose decoded outputs self-clash (`Escapes`:
-`FlockDeploy.KS.selfClash_le_live`, `FlockDeploy.KS.mean_selfClash_le_live`). Escapes on accepted runs (`OnAcc`,
-`Claims.Escapes.OnAcc`): `Flock.TableBoundθAccAt` is `TableBoundθAt` with them, which gives it
-(`Flock.TableBoundθAccAt.tableBoundθAt`) and holds with none where no run accepts (`Flock.tableBoundθAccAt_of_noAcc`);
-the old escapes are on accepted runs where their events are (`Flock.oldEsc_onAcc`, `Flock.oldEscZ_onAcc`). With the live
-sessions' bound at escapes on accepted runs, whose events bound the decoded self-clashes on accepted live runs
-(`PlainAcc`: `FlockDeploy.KS.PlainLiveAcc`, which gives `PlainLive`, `FlockDeploy.KS.plainLive_of_acc`), the plain table
-bound holds with escapes on accepted runs at every statement (`FlockDeploy.KS.plain_tableBoundθAccAt`). Each round of an
-accepted plain rep issued the coins its statement fixes (`RoundsN`: `FlockDeploy.repNs`,
-`FlockDeploy.verifyRepWith_readsN`; per rep stream, `FlockDeploy.plainRepNs`, `FlockDeploy.streams_ns_plain`), and
-custody reads each round message's coin at the session's count (`FlockDeploy.plainNs`,
-`FlockDeploy.custody_vals_plain`). At `--zk`, one table's compiled session is `Commit`'s cap and then `sessAtZ` with no
-other game, so a live verdict at one masked table is no likelier than any verdict after `Commit` the decoder is right
-for (`MixtureZk`: `FlockDeploy.KS.live_le_simAtZ`, `FlockDeploy.KS.mean_live_le_simAtZ`), and at a masked statement of
-one table, `TableBoundθAt` follows from a mixture of masked sessions after `Commit` at a table `T` at C-Flock ZK's
-parameters, the escapes `Flock.oldEscZ` at injective fork rounds, and no table that does not extract committed to `T`
-(`ZkBound`: `FlockDeploy.KS.zk_tableBoundθAt_of_sessions`, `FlockDeploy.KS.zk_tableBoundθAt_of_live`, at the live
-sessions' bound `FlockDeploy.KS.ZkLiveAt`). At the deployed masked record, `T` is C-Flock ZK's padded table of the
-statement's table 0 (`ZkKS`: `FlockDeploy.KS.zkTab`, `FlockDeploy.KS.zkTab_m1`), so `Flock.KS` follows from one table at
-every statement some run accepts (`FlockDeploy.KS.ZkOne`, which the masked scope's several tables do not give), the live
-sessions' bound at `zkTab` (`FlockDeploy.KS.ZkLive`) and `Extendθ` (`FlockDeploy.KS.zk_KS_of_live`). At several tables
-(`JointJ`), one wait follows from every table's bound with one family of escapes, over every table's word's positions
-(`Flock.TableBoundJ`, `Flock.ColsOkJ`, `Flock.ConflictTiedJ`, `Flock.oneWait_of_tableBoundJ`), and at the masked record
-accepted runs open table `j`'s columns at its width and as its level-0 openings (`ZkTables`: `FlockDeploy.KS.wordLenJ`,
+(`FlockDeploy.KS.mean_epsSL_le`, `FlockDeploy.KS.mean_epsSZ_le`). The plain fork rounds (`Rounds`): rep `r`'s
+level-`ℓ + 1` cap round at table 0, no two of them one (`FlockDeploy.KS.plainJ`, `FlockDeploy.KS.plainJ_inj`), at which
+the old escapes fit the plain weight (`FlockDeploy.KS.oldEsc_fitsFork_plainJ`). At one table the model does not commit
+to, a live verdict is no likelier than the simulated strategy's `ε_c⁻` after `Commit` and its probability of accepting
+off the table (`Mixture`: `FlockDeploy.KS.live_le_epsSL`; over a mixture of live strategies,
+`FlockDeploy.KS.mean_live_le`). The session's bound with its level-0 term only on runs that do not self-clash, a
+self-clash being in `ε_c⁻` already (`SessionSC`: `FlockSoundness.Discharge.Exec.bad_pointwise_ofL_sc`,
+`FlockSoundness.Discharge.Exec.session_sound_of_table_accL_sc`). At a plain statement of one table, `TableBoundθAt`
+follows from, at each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C`
+unless it self-clashes bounds the deployed runs accepting on `C`, and whose `Adv` and self-clash the escapes' events
+bound, the escapes at the plain fork rounds (`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). `Flock.KS`
+at the plain record follows from the live sessions' bound at table 0 and `Extendθ` (`PlainKS`:
+`FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit` against the simulated strategy arises only on live
+runs the live verdict accepts, whose decoded outputs self-clash (`Escapes`: `FlockDeploy.KS.selfClash_le_live`,
+`FlockDeploy.KS.mean_selfClash_le_live`). Escapes on accepted runs (`OnAcc`, `Claims.Escapes.OnAcc`):
+`Flock.TableBoundθAccAt` is `TableBoundθAt` with them, which gives it (`Flock.TableBoundθAccAt.tableBoundθAt`) and holds
+with none where no run accepts (`Flock.tableBoundθAccAt_of_noAcc`); the old escapes are on accepted runs where their
+events are (`Flock.oldEsc_onAcc`, `Flock.oldEscZ_onAcc`). With the live sessions' bound at escapes on accepted runs,
+whose events bound the decoded self-clashes on accepted live runs (`PlainAcc`: `FlockDeploy.KS.PlainLiveAcc`, which
+gives `PlainLive`, `FlockDeploy.KS.plainLive_of_acc`), the plain table bound holds with escapes on accepted runs at
+every statement (`FlockDeploy.KS.plain_tableBoundθAccAt`). Each round of an accepted plain rep issued the coins its
+statement fixes (`RoundsN`: `FlockDeploy.repNs`, `FlockDeploy.verifyRepWith_readsN`; per rep stream,
+`FlockDeploy.plainRepNs`, `FlockDeploy.streams_ns_plain`), and custody reads each round message's coin at the session's
+count (`FlockDeploy.plainNs`, `FlockDeploy.custody_vals_plain`). At `--zk`, one table's compiled session is `Commit`'s
+cap and then `sessAtZ` with no other game, so a live verdict at one masked table is no likelier than any verdict after
+`Commit` the decoder is right for (`MixtureZk`: `FlockDeploy.KS.live_le_simAtZ`, `FlockDeploy.KS.mean_live_le_simAtZ`),
+and at a masked statement of one table, `TableBoundθAt` follows from a mixture of masked sessions after `Commit` at a
+table `T` at C-Flock ZK's parameters, the escapes `Flock.oldEscZ` at injective fork rounds, and no table that does not
+extract committed to `T` (`ZkBound`: `FlockDeploy.KS.zk_tableBoundθAt_of_sessions`,
+`FlockDeploy.KS.zk_tableBoundθAt_of_live`, at the live sessions' bound `FlockDeploy.KS.ZkLiveAt`). At the deployed
+masked record, `T` is C-Flock ZK's padded table of the statement's table 0 (`ZkKS`: `FlockDeploy.KS.zkTab`,
+`FlockDeploy.KS.zkTab_m1`), so `Flock.KS` follows from one table at every statement some run accepts
+(`FlockDeploy.KS.ZkOne`, which the masked scope's several tables do not give), the live sessions' bound at `zkTab`
+(`FlockDeploy.KS.ZkLive`) and `Extendθ` (`FlockDeploy.KS.zk_KS_of_live`). At several tables (`JointJ`), one wait follows
+from every table's bound with one family of escapes, over every table's word's positions (`Flock.TableBoundJ`,
+`Flock.ColsOkJ`, `Flock.ConflictTiedJ`, `Flock.oneWait_of_tableBoundJ`), and at the masked record accepted runs open
+table `j`'s columns at its width and as its level-0 openings (`ZkTables`: `FlockDeploy.KS.wordLenJ`,
 `FlockDeploy.KS.zk_colsOkJ`, `FlockDeploy.KS.zk_openingJ`, `FlockDeploy.KS.zk_conflictTiedJ`), so `Flock.KS` there
 follows from every table's bound alone, at every number of tables (`FlockDeploy.KS.zk_KS_of_tableBoundJ`). The batched
 tables' old fork events share rounds, so joined by round they fit the masked weight (`ZkBoundJ`: `Flock.joinEscZ`,
@@ -149,8 +155,13 @@ count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted Ligerito 
 at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
 `FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`), so an accepted
 rep's is at the stream's round `plainQueryRound` (`FlockSoundness.Refine.lincheck_moves`,
-`FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). Where `verify --zk` sets its
-session up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`:
+`FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). At flock-verify's acceptance, every
+result of each table's reps' runs requests level 0 first there (`LevelZeroAcc`:
+`FlockSoundness.Discharge.Exec.accepts_req0`). A position the deployed reader is given below `2^d` is looked up, to a
+column it was given there, so an output whose level-0 openings verify and are the reader's entries opens a position off
+`C` without a self-clash only where the reader looks up a column off `C` (`OffSC`:
+`Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`). Where `verify --zk` sets its session
+up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`:
 `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), so at the empty draw the deployed `--zk` decoders
 are right at them (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`); so are the hidden-output
 plan's and decoders (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`,
