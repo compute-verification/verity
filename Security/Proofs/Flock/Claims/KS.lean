@@ -385,4 +385,7 @@ record the claims read meets `Inner.KSAbort`, and the recursion's KS over it hol
 self-clash clause follows from a live self-clash giving an accepting run whose reps open two different columns at one
 position of some table, or a collision: each such column is a level-0 opening in the run's own log (`ZkClashRaw`:
 `FlockDeploy.KS.zkRawColsJ`, `FlockDeploy.KS.zk_openingJ_raw`, `FlockDeploy.KS.zk_selfClash_tiedJ`,
-`FlockDeploy.KS.ZkRawClashRun`, `FlockDeploy.KS.zkClashRun_of_raw`). -/
+`FlockDeploy.KS.ZkRawClashRun`, `FlockDeploy.KS.zkClashRun_of_raw`). A simulator reading uniform functions of the
+live coins' history through a prefix key has the fork's coin coupling, so its slack, at `δ_t = |X|^{-min (n t) M}`
+(`ForkCoupling`: `Claims.Flock.forkCoinCoupling_fnAt`, `Claims.Flock.slack_fnAt`,
+`FlockDeploy.KS.forkCoinCoupling_plain`). -/
