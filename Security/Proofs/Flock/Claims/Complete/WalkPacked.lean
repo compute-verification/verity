@@ -8,8 +8,9 @@ The honest session commits each table's packed trace at level 0 and runs both re
 switching's claim and the verifier's basis proved at the deployed relation (`lgFinal_relation`), Ligerito's final
 identity there rests on the honest Ligerito's alone (`lgFinal_walk`), and so does Flock's completeness at the deployed
 plain verifier, beside the record's JSON and the oracle's 64-byte outputs (`complete_plain_honest`). With the honest
-Ligerito's final identity proved (`Lg.Exact.honest`), both rest on the record's JSON and the oracle's 64-byte outputs
-alone (`lgFinal_json`, `complete_plain_json`).
+Ligerito's final identity proved (`Lg.honest`), `LgFinal` rests on the record's JSON and the oracle's 64-byte outputs
+alone (`lgFinal_json`, by `lgFinal_walkP`), and Flock's completeness at the deployed plain verifier on the record's JSON
+alone (`complete_plain_json`): `Claims.Complete` reads the oracle's 64-byte outputs (`Out64`) itself.
 -/
 
 namespace FlockComplete.Replay
@@ -136,12 +137,13 @@ theorem complete_plain_honest (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSp
 outputs. -/
 theorem lgFinal_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) :
     LgFinal H Readable.relation :=
-  lgFinal_walk H S h64 Lg.Exact.honest
+  lgFinal_walkP H fun o _ hi _ hr => o.repWalkP S h64 (proverOk h64) hi hr
 
-/-- **Flock's completeness at the deployed plain verifier**, at the deployed relation and the record's error, from the
-record's JSON (`JsonSpec`) and the oracle's 64-byte outputs (`Out64`) alone. -/
-theorem complete_plain_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
-    (h64 : Claims.Out64 H) : Claims.Flock.Complete H (deployPlain Readable.relation) :=
-  complete_plain_honest H S h64 Lg.Exact.honest
+/-- **Flock's completeness at the deployed plain verifier**, at the deployed relation, of the record's reference prover
+(`honestP`) at the record's error (`δc H`), from the record's JSON (`JsonSpec`) alone: the oracle's 64-byte outputs
+(`Out64`) are `Claims.Complete`'s own antecedent. -/
+theorem complete_plain_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) :
+    Claims.Flock.Complete H (deployPlain Readable.relation) := fun h64 =>
+  complete_plain H S h64 (lgFinal_json H S h64) h64
 
 end FlockComplete.Replay
