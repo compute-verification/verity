@@ -7,8 +7,9 @@ import Proofs.Nci.Pull
 
 Theorem 1 (`threaded_reads`) follows the draft's Appendix A: split a small subcircuit's threads into those it reads fewer
 than `d` values of (low) and the rest (high). Low threads give at most `e` multiplications per value read; each high
-thread gives at most `c · p` multiplications for the `p` weights used, and there are at most `A_H / (d b)` of them. With
-`p b + A_L + A_H ≤ R` (incompressibility) and AM–GM, `p · A_H ≤ (R − A_L)² / (4b)`, and the total is linear in `A_L`.
+thread gives at most `c · p` multiplications for the `p` weights used, and there are at most `A_H / (d b_a)` of them.
+With `p b_w + A_L + A_H ≤ R` (incompressibility) and AM–GM, `p · A_H ≤ (R − A_L)² / (4 b_w)`, and the total is linear in
+`A_L`.
 
 Theorem 2 (`ThreadedThrottled`) follows Appendix B: pull a compliant division of the containing declaration back to `c`
 (`pull`); each piece is small, reads no more than its IU, and Theorem 1 bounds its counted multiplications.
@@ -53,15 +54,17 @@ theorem card_threadMults_le (R : Finset (Fin c.D.N)) (t : Fin T.m) :
 
 end Counting
 
-/-- The real-number core of Theorem 1: `Mt ≤ max(e, c·S/(4db)) · Rn` from `Mt ≤ e·X + c·P·Hc` when `P + X + Y ≤ Rn ≤ S`,
-`d·b·Hc ≤ Y`, and everything is nonnegative. -/
-theorem threaded_ineq {b d e cr S Rn X Y P Hc Mt : ℝ} (hb : 0 < b) (hd : 0 < d) (hcr : 0 ≤ cr)
-    (hX : 0 ≤ X) (hY : 0 ≤ Y) (hP : 0 ≤ P) (hinc : P + X + Y ≤ Rn) (hRS : Rn ≤ S)
-    (hHc : d * b * Hc ≤ Y) (hMt : Mt ≤ e * X + cr * P * Hc) :
-    Mt ≤ Rn * max e (cr * S / (4 * d * b)) := by
-  set K := cr * S / (4 * d * b)
+/-- The real-number core of Theorem 1: `Mt ≤ max(e, c·S/(4d·b_w)) · Rn` from `Mt ≤ e·X + c·q·Hb` when
+`b_w·q + X + Y ≤ Rn ≤ S`, `d·Hb ≤ Y`, and everything is nonnegative. -/
+theorem threaded_ineq {bw d e cr S Rn X Y q Hb Mt : ℝ} (hbw : 0 < bw) (hd : 0 < d) (hcr : 0 ≤ cr)
+    (hX : 0 ≤ X) (hY : 0 ≤ Y) (hq : 0 ≤ q) (hinc : bw * q + X + Y ≤ Rn) (hRS : Rn ≤ S)
+    (hHb : d * Hb ≤ Y) (hMt : Mt ≤ e * X + cr * q * Hb) :
+    Mt ≤ Rn * max e (cr * S / (4 * d * bw)) := by
+  set K := cr * S / (4 * d * bw)
+  set P := bw * q
+  have hP : 0 ≤ P := mul_nonneg hbw.le hq
   have hRX : 0 ≤ Rn - X := by linarith
-  have hhigh : cr * P * Hc ≤ K * (Rn - X) := by
+  have hhigh : cr * q * Hb ≤ K * (Rn - X) := by
     have h4 : 4 * P * Y ≤ (P + Y) ^ 2 := by nlinarith [sq_nonneg (P - Y)]
     have hsq : (P + Y) ^ 2 ≤ S * (Rn - X) := by
       have h1 : P + Y ≤ Rn - X := by linarith
@@ -69,14 +72,14 @@ theorem threaded_ineq {b d e cr S Rn X Y P Hc Mt : ℝ} (hb : 0 < b) (hd : 0 < d
       calc (P + Y) ^ 2 = (P + Y) * (P + Y) := sq _
         _ ≤ (Rn - X) * (Rn - X) := mul_le_mul h1 h1 (by linarith) hRX
         _ ≤ S * (Rn - X) := mul_le_mul_of_nonneg_right h2 hRX
-    have hdb : 0 < 4 * d * b := by positivity
-    have : 4 * d * b * (cr * P * Hc) ≤ cr * S * (Rn - X) := by
-      calc 4 * d * b * (cr * P * Hc) = cr * (4 * P * (d * b * Hc)) := by ring
+    have hdb : 0 < 4 * d * bw := by positivity
+    have : 4 * d * bw * (cr * q * Hb) ≤ cr * S * (Rn - X) := by
+      calc 4 * d * bw * (cr * q * Hb) = cr * (4 * P * (d * Hb)) := by simp only [P]; ring
         _ ≤ cr * (4 * P * Y) := mul_le_mul_of_nonneg_left
-            (mul_le_mul_of_nonneg_left hHc (by linarith)) hcr
+            (mul_le_mul_of_nonneg_left hHb (by linarith)) hcr
         _ ≤ cr * (S * (Rn - X)) := mul_le_mul_of_nonneg_left (h4.trans hsq) hcr
         _ = cr * S * (Rn - X) := by ring
-    rw [show K * (Rn - X) = cr * S * (Rn - X) / (4 * d * b) by simp only [K]; ring, le_div_iff₀ hdb]
+    rw [show K * (Rn - X) = cr * S * (Rn - X) / (4 * d * bw) by simp only [K]; ring, le_div_iff₀ hdb]
     linarith
   calc Mt ≤ e * X + K * (Rn - X) := hMt.trans (by linarith)
     _ ≤ max e K * X + max e K * (Rn - X) :=
@@ -85,9 +88,10 @@ theorem threaded_ineq {b d e cr S Rn X Y P Hc Mt : ℝ} (hb : 0 < b) (hd : 0 < d
     _ = Rn * max e K := by ring
 
 /-- **Theorem 1** (the thread draft, Appendix A). -/
-theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b : ℝ) (d e : ℕ) (hb : 0 < b) (hd : 0 < d)
-    (hT : T.Threaded Γ S d e) (hW : Assumptions.WeightsIncompressible c T Γ S b) (R : Finset (Fin c.D.N))
-    (hR : Small c Γ S R) : b * (T.mults R).card ≤ novelReads c R * T.bound S b d e := by
+theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ) (hbw : 0 < b_w)
+    (hba : 0 < b_a) (hd : 0 < d) (hT : T.Threaded Γ S d e) (hW : Assumptions.WeightsIncompressible c T Γ S b_w b_a)
+    (R : Finset (Fin c.D.N)) (hR : Small c Γ S R) :
+    b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w d e := by
   classical
   set L := univ.filter fun t => (T.threadReads R t).card < d with hL_def
   set H := univ.filter fun t => ¬ (T.threadReads R t).card < d with hH_def
@@ -110,17 +114,16 @@ theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b : ℝ
   push_cast at hinc
   rw [← sum_filter_add_sum_filter_not univ (fun t => (T.threadReads R t).card < d)] at hinc
   have hdr : (0 : ℝ) < d := by exact_mod_cast hd
-  refine threaded_ineq (Hc := H.card) (Y := b * ∑ t ∈ H, ((T.threadReads R t).card : ℝ))
-    (X := b * ∑ t ∈ L, ((T.threadReads R t).card : ℝ)) (P := b * (T.weightsUsed R).card) hb hdr
-    (Nat.cast_nonneg _) (mul_nonneg hb.le (sum_nonneg fun _ _ => Nat.cast_nonneg _))
-    (mul_nonneg hb.le (sum_nonneg fun _ _ => Nat.cast_nonneg _)) (mul_nonneg hb.le (Nat.cast_nonneg _)) (by linarith)
-    hR.2.2
-    ?_ ?_
-  · calc (d : ℝ) * b * H.card = b * (d * H.card) := by ring
-      _ ≤ _ := mul_le_mul_of_nonneg_left hHc hb.le
+  refine threaded_ineq (Hb := b_a * H.card) (Y := b_a * ∑ t ∈ H, ((T.threadReads R t).card : ℝ))
+    (X := b_a * ∑ t ∈ L, ((T.threadReads R t).card : ℝ)) (q := (T.weightsUsed R).card) hbw hdr
+    (Nat.cast_nonneg _) (mul_nonneg hba.le (sum_nonneg fun _ _ => Nat.cast_nonneg _))
+    (mul_nonneg hba.le (sum_nonneg fun _ _ => Nat.cast_nonneg _)) (Nat.cast_nonneg _) (by linarith)
+    hR.2.2 ?_ ?_
+  · calc (d : ℝ) * (b_a * H.card) = b_a * (d * H.card) := by ring
+      _ ≤ _ := mul_le_mul_of_nonneg_left hHc hba.le
   · rw [hsplit, mul_add]
-    have h1 := mul_le_mul_of_nonneg_left hL hb.le
-    have h2 := mul_le_mul_of_nonneg_left hH hb.le
+    have h1 := mul_le_mul_of_nonneg_left hL hba.le
+    have h2 := mul_le_mul_of_nonneg_left hH hba.le
     nlinarith
 
 /-- **Theorem 1** (the thread draft, Appendix A). -/
@@ -128,9 +131,9 @@ theorem ThreadedReads : Guarantees.ThreadedReads := threaded_reads
 
 /-- **Theorem 2** (the thread draft, Appendix B). -/
 theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
-  intro Γ α b c d T dd e hα hb hdd ⟨M, hθ⟩ ⟨n, P, hP⟩ hT hW
+  intro Γ α b_w b_a c d T dd e hα hbw hba hdd ⟨M, hθ⟩ ⟨n, P, hP⟩ hT hW
   classical
-  set Λ := T.bound (α * Γ) b dd e
+  set Λ := T.bound (α * Γ) b_w dd e
   have hΛ : 0 ≤ Λ := le_max_of_le_left (Nat.cast_nonneg _)
   have hpiece : ∀ u, Small c Γ (α * Γ) ((pull M P).gates u) := fun u =>
     ⟨Partition.gates_subset_computed _ u, (card_pull_gates_le u).trans (hP u).1,
@@ -157,10 +160,10 @@ theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
       exact ⟨u, hg, hu⟩
     · rintro ⟨_, hg, _⟩
       exact hg
-  calc b * (T.M.card : ℝ) = ∑ u, b * ((T.mults ((pull M P).gates u)).card : ℝ) := by
+  calc b_a * (T.M.card : ℝ) = ∑ u, b_a * ((T.mults ((pull M P).gates u)).card : ℝ) := by
         rw [hM, Nat.cast_sum, mul_sum]
     _ ≤ ∑ u, (novelReads c ((pull M P).gates u) : ℝ) * Λ :=
-        sum_le_sum fun u _ => threaded_reads c T Γ (α * Γ) b dd e hb hdd hT hW _ (hpiece u)
+        sum_le_sum fun u _ => threaded_reads c T Γ (α * Γ) b_w b_a dd e hbw hba hdd hT hW _ (hpiece u)
     _ ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) * Λ := sum_le_sum fun u _ =>
         mul_le_mul_of_nonneg_right ((Nat.cast_le.2 (novelReads_pull M hθ P u)).trans (hP u).2) hΛ
     _ = α * Λ * d.D.size d.D.computed := by
@@ -168,12 +171,12 @@ theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
           exact_mod_cast (Partition.sum_card_gates P).symm]
         ring
 
-/-- Weights are incompressible when each weight is a novel input gate and every weight and thread value is at least
-`b` bits wide: a subcircuit reads every weight it uses, and those reads are disjoint from its thread reads. -/
-theorem weightsIncompressible_of_inputs {c : Declaration} (T : Threading c) (Γ : ℕ) (S b : ℝ)
-    (hW : ∀ g ∈ T.W, c.D.isInput g = true ∧ g ∉ c.θ ∧ b ≤ c.D.w g)
-    (hthread : ∀ g t, T.thread g = some t → b ≤ c.D.w g) :
-    Assumptions.WeightsIncompressible c T Γ S b := by
+/-- Weights are incompressible when each weight is a novel input gate at least `b_w` bits wide and every thread value
+is at least `b_a` bits wide: a subcircuit reads every weight it uses, and those reads are disjoint from its thread reads. -/
+theorem weightsIncompressible_of_inputs {c : Declaration} (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ)
+    (hW : ∀ g ∈ T.W, c.D.isInput g = true ∧ g ∉ c.θ ∧ b_w ≤ c.D.w g)
+    (hthread : ∀ g t, T.thread g = some t → b_a ≤ c.D.w g) :
+    Assumptions.WeightsIncompressible c T Γ S b_w b_a := by
   classical
   intro R hR
   set V := univ.biUnion fun t => T.threadReads R t
@@ -259,23 +262,24 @@ theorem threaded_one_zero {c : Declaration} (T : Threading c) (Γ : ℕ) (S : �
     rw [hlt] at this
     exact notMem_empty _ this
 
-/-- **Theorem 1 from structure alone**: when weights are novel input gates, threads are closed and no thread value is
-baseline, with every weight and thread value at least `b` bits wide, every small subcircuit computes at most
-`c · S / (4b)` counted multiplications per `b` bits it reads, with no named assumption: an NCI floor of `2b² / (cS)`. -/
-theorem threaded_reads_of_structure {c : Declaration} (T : Threading c) (Γ : ℕ) (S b : ℝ) (hb : 0 < b)
-    (hW : ∀ g ∈ T.W, c.D.isInput g = true ∧ g ∉ c.θ ∧ b ≤ c.D.w g)
-    (hthread : ∀ g t, T.thread g = some t → b ≤ c.D.w g)
+/-- **Theorem 1 from structure alone**: when weights are novel input gates at least `b_w` bits wide, threads are closed
+and no thread value is baseline, with every thread value at least `b_a` bits wide, every small subcircuit computes at
+most `c · S / (4 b_w)` counted multiplications per `b_a` bits it reads, with no named assumption: an NCI floor of
+`2 b_w b_a / (cS)`. -/
+theorem threaded_reads_of_structure {c : Declaration} (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (hbw : 0 < b_w)
+    (hba : 0 < b_a) (hW : ∀ g ∈ T.W, c.D.isInput g = true ∧ g ∉ c.θ ∧ b_w ≤ c.D.w g)
+    (hthread : ∀ g t, T.thread g = some t → b_a ≤ c.D.w g)
     (hθ : ∀ g t, T.thread g = some t → g ∉ c.θ)
     (hclosed : ∀ h t, c.D.isInput h = false → T.thread h = some t → ∃ g ∈ c.D.reads h, T.thread g = some t)
     (R : Finset (Fin c.D.N)) (hR : Small c Γ S R) :
-    b * (T.mults R).card ≤ novelReads c R * T.bound S b 1 0 :=
-  threaded_reads c T Γ S b 1 0 hb one_pos (threaded_one_zero T Γ S hθ hclosed)
-    (weightsIncompressible_of_inputs T Γ S b hW hthread) R hR
+    b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w 1 0 :=
+  threaded_reads c T Γ S b_w b_a 1 0 hbw hba one_pos (threaded_one_zero T Γ S hθ hclosed)
+    (weightsIncompressible_of_inputs T Γ S b_w b_a hW hthread) R hR
 
 /-- **Training is slowed** (the thread draft, "Putting the two together"). -/
 theorem ThreadedTraining : Guarantees.ThreadedTraining := by
-  intro Γ α b κ c d T dd e hα hb hdd hc hd hT hW hκ
-  have h := ThreadedThrottled Γ α b c d T dd e hα hb hdd hc hd hT hW
+  intro Γ α b_w b_a κ c d T dd e hα hbw hba hdd hc hd hT hW hκ
+  have h := ThreadedThrottled Γ α b_w b_a c d T dd e hα hbw hba hdd hc hd hT hW
   nlinarith
 
 end Nci.SecurityProofs

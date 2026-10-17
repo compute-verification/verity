@@ -76,10 +76,11 @@ def Threaded (Γ : ℕ) (S : ℝ) (d e : ℕ) : Prop :=
   ∀ R, Small c Γ S R → ∀ t, (T.threadReads R t).card < d →
     (T.threadMults R t).card ≤ e * (T.threadReads R t).card
 
-/-- **The NCI bound of the draft's Theorem 1**, as the most counted multiplications per bit read, times `b`:
-`Λ = max(e, c · S / (4 d b))`. The draft's NCI floor `(b/2) · min(1/e, 4db/(cS))` is `b / (2Λ)`. -/
-noncomputable def bound (S : ℝ) (b : ℝ) (d e : ℕ) : ℝ :=
-  max (e : ℝ) (T.reuse * S / (4 * d * b))
+/-- **The NCI bound of the draft's Theorem 1**, as the most counted multiplications per `b_a` bits read, at `b_w`
+bits charged per weight used: `Λ = max(e, c · S / (4 d b_w))`. The NCI floor is `b_a / (2Λ) =
+(b_a/2) · min(1/e, 4 d b_w/(cS))`, the draft's at `b_w = b_a = b`. -/
+noncomputable def bound (S : ℝ) (b_w : ℝ) (d e : ℕ) : ℝ :=
+  max (e : ℝ) (T.reuse * S / (4 * d * b_w))
 
 end Threading
 
