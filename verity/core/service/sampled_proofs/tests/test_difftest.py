@@ -41,7 +41,8 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registered as G, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, partition as P, registered as G,
+                                                            registration as R)
 from verity.core.protocols.sampled_proofs.two_stage import (OwnRandomness, ReplayUnit, Stage, TwoStageLaw, draw_first,
                                                             select_proof_units, select_replay_units)
 from verity.ml.circuits import codec, partition_object as PO
@@ -1043,6 +1044,26 @@ def proof_units(j):
     """`select_proof_units`: each selected RU's index and the positions checked in it, in order, and the bytes read."""
     out, read = _two_stage_draw(j, "selected", select_proof_units)
     return {"read": read, "units": [[i, list(ps)] for i, ps in out.items()]}
+
+
+def hello(j):
+    """The run's Hello on its record (`hello.check_run`) on `{"own", "hello", "coin_tree", "seen", "selection", "slots",
+    "session"}`. Rejected where the Lean refuses: an own Hello that isn't an object with an object `coins`, a Hello that
+    isn't a string, `seen`, `selection` or `session` not lists of strings, and `slots` not a natural number."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("the run is not an object")
+    own, received, slots = j.get("own"), j.get("hello"), j.get("slots")
+    if not (isinstance(own, dict) and isinstance(own.get("coins"), dict)):
+        raise D.Reject("the verifier's own Hello is not an object with an object coins")
+    if not isinstance(received, str):
+        raise D.Reject("the Hello is not a string")
+    seen, selection, session = (j.get(k) for k in ("seen", "selection", "session"))
+    if not all(isinstance(x, list) and all(isinstance(s, str) for s in x) for x in (seen, selection, session)):
+        raise D.Reject("seen, selection or session is not a list of strings")
+    if not (type(slots) is int and slots >= 0):
+        raise D.Reject("slots is not a natural number")
+    return _json(H.check_run(own, received, j.get("coin_tree"), seen, selection, slots, session).to_json())
 
 
 # --- strategies ------------------------------------------------------------------------------------------------------
@@ -2086,19 +2107,106 @@ REPLAY_UNITS = D.Port(PIECES, "replay_units", replay_units, st.one_of(*[two_stag
 PROOF_UNITS = D.Port(PIECES, "proof_units", proof_units, st.one_of(*[two_stage_cases("selected")] * 5, JSON),
                      package=PACKAGE)
 
+
+def _key(tag: bytes) -> str:
+    """A 256-byte key with bit 2047 zero."""
+    h = hashlib.shake_256(tag).hexdigest(256)
+    return h[:510] + "0" + h[511]
+
+
+RUN_NONCE = hashlib.sha256(b"run nonce").hexdigest()
+RUN_KEY = _key(b"run key")
+RUN_ROOT = hashlib.sha512(b"run root").hexdigest()
+
+
+def run_hello(selection=("selection",), slots=2, session=("session", "t/rep0", "t/rep1"), streams=None) -> dict:
+    """A run's Hello on its record: the verifier's own Hello, the prover's (the nonce put in), the record's tree."""
+    spec = {"block": 3, "rounds_log": 2, "scheme": H.SCHEME,
+            "streams": H.run_streams(selection, slots, session) if streams is None else list(streams)}
+    own = {"digests": "sha512", "profile": "fast100", "slots": slots, "coins": {**spec, "nonce": ""}}
+    return {"own": own, "hello": D.canonical({**own, "coins": {**spec, "nonce": RUN_NONCE}}),
+            "coin_tree": {"key": RUN_KEY, "nonce": RUN_NONCE, "root": RUN_ROOT, "spec": spec}, "seen": [],
+            "selection": list(selection), "slots": slots, "session": list(session)}
+
+
+def _hello_as(c: dict, own: dict) -> dict:
+    """`c` with the verifier's own Hello `own`, and the prover's Hello its with the nonce."""
+    return {**c, "own": own, "hello": D.canonical({**own, "coins": {**own["coins"], "nonce": RUN_NONCE}})}
+
+
+def _tree(c: dict, **change) -> dict:
+    return {**c, "coin_tree": {**c["coin_tree"], **change}}
+
+
+#: One change each to a run's Hello on its record: the tree reused, the Hello tampered, the streams not the run's, the
+#: record's tree not the Hello's, and inputs the Lean refuses.
+HELLO_CHANGES = [
+    lambda c, x: c,
+    lambda c, x: {**c, "seen": [_key(b"earlier"), RUN_KEY][x % 2:]},
+    lambda c, x: {**c, "seen": [_key(b"earlier %d" % i) for i in range(x % 3)]},
+    lambda c, x: {**c, "hello": c["hello"].replace(RUN_NONCE, [RUN_NONCE.upper(), RUN_NONCE[:-2], "1" * 64][x % 3])},
+    lambda c, x: {**c, "hello": [json.dumps(json.loads(c["hello"])), c["hello"] + " ", " " + c["hello"],
+                                 c["hello"].replace("fast100", "fast101"), "x", "", "[]", "null"][x % 8]},
+    lambda c, x: _hello_as(c, {**c["own"], "coins": {**c["own"]["coins"], "scheme": ["coin-tree/v1", 1, None][x % 3]}}),
+    lambda c, x: _hello_as(c, {**c["own"], "coins": {k: v for k, v in c["own"]["coins"].items()
+                                                     if k != ["streams", "rounds_log", "block"][x % 3]}}),
+    lambda c, x: _hello_as(c, {**c["own"], "coins": {**c["own"]["coins"], "rounds_log": [-1, True, "2"][x % 3]}}),
+    lambda c, x: {**c, "selection": [[], ["other"], c["selection"] * 2][x % 3]},
+    lambda c, x: {**c, "slots": c["slots"] + 1 + x % 2},
+    lambda c, x: {**c, "session": c["session"][::-1] if len(set(c["session"])) > 1 else c["session"] + ["x"]},
+    lambda c, x: _tree(c, nonce=["11" * 32, None, RUN_NONCE.upper()][x % 3]),
+    lambda c, x: _tree(c, key=[RUN_KEY[:-2] + "a5", RUN_KEY.upper(), RUN_KEY[:-2], 7][x % 4]),
+    lambda c, x: _tree(c, root=[RUN_ROOT[:-2], RUN_ROOT.upper(), None][x % 3]),
+    lambda c, x: _tree(c, spec=[{**c["coin_tree"]["spec"], "block": 4}, None,
+                                {**c["coin_tree"]["spec"], "streams": c["coin_tree"]["spec"]["streams"][::-1] + ["z"]}][x % 3]),
+    lambda c, x: _tree(c, answer="00"),
+    lambda c, x: {**c, "coin_tree": [None, [], "tree"][x % 3]},
+    lambda c, x: {**c, ["own", "hello", "seen", "selection", "session", "slots"][x % 6]:
+                  [None, {"coins": []}, 5, ["a", 1], "s", -1][x % 6]},
+]
+STREAM_NAMES = st.lists(st.sampled_from(["session", "t/rep0", "t/rep1", "nl/rep0", "lin"]), unique=True, max_size=4)
+RUN_HELLOS = st.builds(lambda sel, slots, ses, change, x: HELLO_CHANGES[change](run_hello(sel, slots, ses), x),
+                       st.sampled_from([("selection",), ("selection", "selection/1"), ("draw",)]), st.integers(0, 3),
+                       STREAM_NAMES, st.integers(0, len(HELLO_CHANGES) - 1), st.integers(0, 63))
+HELLO = D.Port(PIECES, "hello", hello, st.one_of(RUN_HELLOS, RUN_HELLOS, JSON), package=PACKAGE)
+
 pieces = D.server_fixture(DECODE)
 
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400)]
+              (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400), (HELLO, 500)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
+
+
+@pytest.mark.parametrize("name, change, code", [
+    ("a good run", lambda c: c, None),
+    ("a reused tree", lambda c: {**c, "seen": [_key(b"earlier"), RUN_KEY]}, "fresh"),
+    ("a nonce not lowercase hex", lambda c: {**c, "hello": c["hello"].replace(RUN_NONCE, RUN_NONCE.upper())}, "hello"),
+    ("a Hello whose nonce the tree is not under", lambda c: {**c, "hello": c["hello"].replace(RUN_NONCE, "1" * 64)},
+     "coin_tree"),
+    ("a tampered parameter", lambda c: {**c, "hello": c["hello"].replace("fast100", "fast101")}, "hello"),
+    ("the selection not first", lambda c: {**c, "selection": ["t/rep0"]}, "streams"),
+    ("a slot short", lambda c: {**c, "slots": 3}, "streams"),
+    ("the slots out of order", lambda c: _hello_as(c, {**c["own"], "coins": {**c["own"]["coins"], "streams": [
+        "selection", *(H.slot_stream(i, s) for i in (1, 0) for s in ("session", "t/rep0", "t/rep1"))]}}), "streams"),
+    ("the record's tree not the Hello's", lambda c: _tree(c, nonce="11" * 32), "coin_tree"),
+    ("a key with bit 2047 set", lambda c: _tree(c, key=RUN_KEY[:-2] + "a5"), "coin_tree"),
+    ("a tampered spec", lambda c: _tree(c, spec={**c["coin_tree"]["spec"], "streams": ["selection"]}), "coin_tree"),
+])
+def test_the_runs_hello_and_its_one_tree(pieces, name, change, code):
+    """The run's Hello on its record, Lean's verdict the Python's whole: a good run, then one named change each, refused
+    with its code."""
+    case = change(run_hello())
+    out = hello(copy.deepcopy(case))
+    assert D.replay(HELLO, case, pieces) == ("output", D.canonical(out)), name
+    assert out["codes"] == ([] if code is None else [code]) and out["ok"] == (code is None), (name, out)
 
 
 def test_the_two_stage_samplers_read_the_coins_in_order(pieces):
