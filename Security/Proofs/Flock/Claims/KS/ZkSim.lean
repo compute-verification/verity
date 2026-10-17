@@ -399,7 +399,7 @@ theorem forkCoinCoupling_zk {D : Type} [Fintype D] [DecidableEq D] {Ω : Type} (
       (Claims.Flock.simForkPr sha512 (V true) P x
         (fun q : (Fin ((V true).k x) → D → LCoin 65536) × (Fin L → LCoin 65536) => fnAt h n key q.1 q.2)
         (fun t => Claims.Flock.FnFork.forkN t) ω) ω :=
-  Claims.Flock.forkCoinCoupling_fnAt («X» := 𝔽) (M := 65536) (hI := instInhabitedCoin) sha512 (V true) P x ω h n hk
+  Claims.Flock.forkCoinCoupling_fnAt (A := 𝔽) (M := 65536) (hI := instInhabitedCoin) sha512 (V true) P x ω h n hk
 
 /-- **The simulated fork at `zkΦ` against the deployed one**: at most the deployed fork at round `t` with its collision
 and the slack there at the chances `δN GF128 65536 (zkNOf …)` (`slack_of_coupling` at `forkCoinCoupling_zk`). -/
