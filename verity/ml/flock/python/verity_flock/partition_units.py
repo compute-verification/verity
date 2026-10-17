@@ -115,7 +115,7 @@ def lower_class(act: Activation, uc: UnitCircuit, max_gates: int = 1 << 20) -> C
     C = gf2.Circuit()
     wires = {act.absolute(k): C.input(f"in{t}", w) for t, (k, w) in enumerate(zip(uc.inputs, uc.in_widths))}
     try:
-        IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires)
+        IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires, reads=[act.absolute(j) for j in uc.outputs])
     except (IL.NoPiece, NotImplementedError) as e:
         return ClassCircuit(uc.shape, None, None, (), f"{type(e).__name__}: {e}"[:200])
     for t, j in enumerate(uc.outputs):
