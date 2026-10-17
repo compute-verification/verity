@@ -460,8 +460,8 @@ theorem zkmalR_zeroP (circ : Option Msg) (R : Rel Flock.Wit) (H : Msg → Msg) (
     have : IsEmpty (Fin ((zvR Coin circ).nS x)) := Fin.isEmpty'
     unfold Recursion.εzk
     simp only [Finset.univ_eq_empty, Finset.sum_empty, zero_add]
-    have := δ₁.2
-    positivity
+    exact mul_nonneg (mul_nonneg zero_le_two
+      (add_nonneg (Nat.cast_nonneg _) (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)))) δ₁.2
   calc _ = (0 : ℝ) := by simp only [e, sub_self, abs_zero]
     _ ≤ _ := by simp only [hγ, zero_mul, add_zero]; exact hε
 
