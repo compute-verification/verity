@@ -19,8 +19,9 @@ terms one by one, at one table.
 * **The fork and self-clash terms.** The old fork terms, one per rep and level `ℓ ≥ 1` with weight `2^{d_ℓ}·Q_ℓ`, and
   the self-clash probability are at most the term of escapes with those weights and one one-run event of weight `1`
   (`oldEsc`, `oldEsc_term`), given fork and one-run events whose probabilities bound them. With at most one fork
-  event per round they fit the plain weight with the fork event of weight `k` (`oldEsc_fitsFork_plain`), and the
-  salted session's `ε_c⁻` is at most `ε_table` plus their term (`epsSL_le`). Under `--zk` each rep adds a pads root's
+  event per round they fit the plain weight with the fork event of weight `k` (`oldEsc_fitsFork_plain`), with level
+  0's `2·2^{d₀}·Q₀` of it to spare (`plain_fork_room`), and the salted session's `ε_c⁻` is at most `ε_table` plus
+  their term (`epsSL_le`). Under `--zk` each rep adds a pads root's
   fork term of weight `N_p²` and `τ`'s of weight `1` (`IZ`, `cZ`, `oldEscZ`, `oldEscZ_term`); they fit the masked
   weight when `N_p` is at most the deployed pads' domain, level 0's `2·2^{d₀}·Q₀ ≥ 2` paying for `k`'s rounding
   (`oldEscZ_fitsFork_zk`), and the masked session's `ε_c⁻` is at most `ε_table` plus their term (`epsSZ_le`).
@@ -388,6 +389,53 @@ theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stm
     have : (0 : ℝ) ≤ rest.length := Nat.cast_nonneg _
     linarith
 
+/-- **The plain weight's room past the old escapes**: the fork events' weights `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ` and the fork
+of weight `k`, at two fork events a round, leave level 0's `2·2^{d₀}·Q₀` of the weight unused, since `k < 4·N₀/e + 1`
+fits in the weight's `2 + 4·2^{d₀}/e` (`kFits_all`): escapes of total weight up to `2·2^{d₀}·Q₀` more, with at most
+two fork events a round in all, still fit. -/
+theorem plain_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
+    {st : Stmt} (h0 : (tables false x).head? = some (spec, st)) {sch : FlockSoundness.Accounting.Schedule}
+    (hsch : FlockSoundness.Accounting.fast100 st.m = some sch) :
+    ((2 : ℕ) : ℝ) * ((deployPlain rel).k x + ∑ i : Fin 2 × Fin sch.levels.length, Claims.Flock.cOf sch (i.2.val + 1)) +
+        4 * ((2 : ℝ) ^ (sch.levels.headD default).logLen * (sch.levels.headD default).queries) ≤
+      2 * (deployPlain rel).weight x := by
+  have hgs : (FlockSoundness.Accounting.fast100 st.m).getD default = sch := by rw [hsch]; rfl
+  set f : FlockSoundness.Accounting.Level → ℝ := fun l => 2 ^ l.logLen * l.queries with hf
+  have hsum : ∑ i : Fin 2 × Fin sch.levels.length, Claims.Flock.cOf sch (i.2.val + 1) =
+      2 * ∑ ℓ : Fin sch.levels.length, f (sch.levels.getD (ℓ.val + 1) default) := by
+    simp only [Fintype.sum_prod_type, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
+      Nat.cast_ofNat]
+    rfl
+  have hd : (default : FlockSoundness.Accounting.Level).queries = 0 := rfl
+  have hhead := Claims.Flock.head_add_sum_shift f (by simp [hf, hd]) sch.levels
+  have hfh : f (sch.levels.headD default) =
+      (2 : ℝ) ^ (sch.levels.headD default).logLen * (sch.levels.headD default).queries := rfl
+  have htw : tableWeight false st = Claims.Flock.Numbers.weightOf sch 0 := by
+    simp only [tableWeight, Bool.false_eq_true, ↓reduceIte, hgs]
+  have hlen : tableLen false st = 2 ^ (Claims.Flock.plainLevel0 st.m).d := rfl
+  have hfits := kFits_all false st.m
+  simp only [level0, wSched, Bool.false_eq_true, ↓reduceIte, hgs] at hfits
+  have he := Real.exp_pos 1
+  have hpow : (2 : ℝ) ^ (Claims.Flock.plainLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
+    pow_le_pow_right₀ (by norm_num) hfits
+  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.plainLevel0 st.m).d / Real.exp 1 ≤
+      4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
+    gcongr
+  have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg false x)) he.le)
+  have hk : ((deployPlain rel).k x : ℝ) = (⌈4 * N₀ false x / Real.exp 1⌉₊ : ℝ) := rfl
+  have hsplit := weight_split h0
+  rw [hlen] at hsplit
+  have e : 4 * (N₀ false x - 2 ^ (Claims.Flock.plainLevel0 st.m).d) / Real.exp 1 =
+      4 * N₀ false x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.plainLevel0 st.m).d / Real.exp 1 := by ring
+  rw [e] at hsplit
+  show ((2 : ℕ) : ℝ) * ((deployPlain rel).k x + ∑ i : Fin 2 × Fin sch.levels.length,
+    Claims.Flock.cOf sch (i.2.val + 1)) + 4 * ((2 : ℝ) ^ (sch.levels.headD default).logLen *
+      (sch.levels.headD default).queries) ≤ 2 * weight false x
+  rw [hsum, hk, ← hfh]
+  rw [htw, Claims.Flock.Numbers.weightOf, weightNat_cast] at hsplit
+  push_cast at hsplit ⊢
+  linarith
+
 /-- **The old escapes fit the plain weight with the fork event of weight `k`**, at a statement whose table 0 has
 schedule `sch`, when no two of them share a round: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ`, within the
 weight's `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ`, and `k < 4·N₀/e + 1` within its `2 + 4·2^{d₀}/e` (`kFits_all`). -/
@@ -413,39 +461,11 @@ theorem oldEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω 
         exact Prod.ext h1 h2
     have hr : (if r.val = 0 then 1 else 0) ≤ 1 := by split <;> omega
     exact Nat.add_le_add hc hr
-  · have hgs : (FlockSoundness.Accounting.fast100 st.m).getD default = sch := by rw [hsch]; rfl
-    set f : FlockSoundness.Accounting.Level → ℝ := fun l => 2 ^ l.logLen * l.queries with hf
-    have hsum : ∑ i : Fin 2 × Fin sch.levels.length, Claims.Flock.cOf sch (i.2.val + 1) =
-        2 * ∑ ℓ : Fin sch.levels.length, f (sch.levels.getD (ℓ.val + 1) default) := by
-      simp only [Fintype.sum_prod_type, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
-        Nat.cast_ofNat]
-      rfl
-    have hd : (default : FlockSoundness.Accounting.Level).queries = 0 := rfl
-    have hhead := Claims.Flock.head_add_sum_shift f (by simp [hf, hd]) sch.levels
-    have hf0 : 0 ≤ f (sch.levels.headD default) := by simp only [hf]; positivity
-    have htw : tableWeight false st = Claims.Flock.Numbers.weightOf sch 0 := by
-      simp only [tableWeight, Bool.false_eq_true, ↓reduceIte, hgs]
-    have hlen : tableLen false st = 2 ^ (Claims.Flock.plainLevel0 st.m).d := rfl
-    have hfits := kFits_all false st.m
-    simp only [level0, wSched, Bool.false_eq_true, ↓reduceIte, hgs] at hfits
-    have he := Real.exp_pos 1
-    have hpow : (2 : ℝ) ^ (Claims.Flock.plainLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
-      pow_le_pow_right₀ (by norm_num) hfits
-    have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.plainLevel0 st.m).d / Real.exp 1 ≤
-        4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
-      gcongr
-    have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg false x)) he.le)
-    have hk : ((deployPlain rel).k x : ℝ) = (⌈4 * N₀ false x / Real.exp 1⌉₊ : ℝ) := rfl
-    have hsplit := weight_split h0
-    rw [hlen] at hsplit
-    have e : 4 * (N₀ false x - 2 ^ (Claims.Flock.plainLevel0 st.m).d) / Real.exp 1 =
-        4 * N₀ false x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.plainLevel0 st.m).d / Real.exp 1 := by ring
-    rw [e] at hsplit
+  · have hroom := plain_fork_room rel x h0 hsch
+    have hf0 : 0 ≤ 4 * ((2 : ℝ) ^ (sch.levels.headD default).logLen * (sch.levels.headD default).queries) := by
+      positivity
     show ((2 : ℕ) : ℝ) * ((deployPlain rel).k x + ∑ i : Fin 2 × Fin sch.levels.length,
-      Claims.Flock.cOf sch (i.2.val + 1)) ≤ 2 * weight false x
-    rw [hsum, hk]
-    rw [htw, Claims.Flock.Numbers.weightOf, weightNat_cast] at hsplit
-    push_cast at hsplit ⊢
+      Claims.Flock.cOf sch (i.2.val + 1)) ≤ 2 * (deployPlain rel).weight x
     linarith
   · show ∑ _l : Unit, (1 : ℝ) ≤ (V false).k x
     rw [Fintype.sum_unique]

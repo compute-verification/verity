@@ -11,6 +11,7 @@ import Proofs.Flock.Claims.Sampling.Leaf
 import Proofs.Flock.Claims.Sampling.Live
 import Proofs.Flock.Claims.Sampling.Path
 import Proofs.Flock.Claims.Sampling.Raise
+import Proofs.Flock.Claims.Sampling.Reference
 import Proofs.Flock.Claims.Sampling.Select
 import Proofs.Flock.Claims.Sampling.Runs
 import Proofs.Flock.Claims.Sampling.RunsExp
@@ -32,6 +33,7 @@ bits from Flock's KS at the checked units' sessions and the deployed sampled ver
 Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`), and at a raised `N₀` with the weight scaled
 by `k` (`Sampling.Raise`); the deployed draw's miss bound and `DrawLaw` from it (`Sampling.Select`); the universal
 unit's gates computing its netlist (`Sampling.Universal`); the block's claims assembled, with what remains as hypotheses
-(`Sampling.Assembled`), and at the deployed record (`Sampling.Deployed`); and its zero knowledge from a committed-coin
+(`Sampling.Assembled`), and at the deployed record (`Sampling.Deployed`); its zero knowledge from a committed-coin
 protocol given the leaf layer (`Sampling.ZK`), at the sampled masked protocol with every coin committed at `Hello`
-(`Sampling.Committed`), and at the sessions' tables, with the simulator its models give (`Sampling.Tables`). -/
+(`Sampling.Committed`), and at the sessions' tables, with the simulator its models give (`Sampling.Tables`); and the
+deployed record's reference prover and its completeness from Flock's (`Sampling.Reference`). -/

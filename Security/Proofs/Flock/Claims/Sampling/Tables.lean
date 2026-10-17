@@ -210,7 +210,7 @@ theorem zk_sampled_tables (H : Msg → Msg) (S : Sampled c) (hR : HelloRounds c)
 tables**: `Claims.Sampling.ZK` from `zk_sampled_tables`, where the code's reference prover on the masked tape is the
 protocol's (`Honest`). -/
 theorem zk_sampled_tables_mask (H : Msg → Msg) (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t)
-    (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → c.Tape) (hP : Honest c H S.leaky.G tapeOf)
+    (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → Reference.Tape) (hP : Honest c H S.leaky.G tapeOf)
     (Mp : ∀ lx x, S.leaky.G.Nonce → (S.leaky.proto lx).TPreModel x)
     (Mc : ∀ lx x, S.leaky.G.Nonce → (Fin (S.leaky.G.K x) → S.leaky.G.Coin) → (S.leaky.proto lx).TCoinModel x)
     (nL nB nS : Msg → ℕ) (hnL : ∀ lx x ν, (Mp lx x ν).size ≤ nL x) (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)
@@ -235,7 +235,7 @@ theorem sampling_deployed_tables (H : Msg → Msg) (hKS : Claims.Flock.KS H (Flo
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
     (hComplete : Complete H (deploy rel c)) (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t)
-    (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → c.Tape) (hP : Honest c H S.leaky.G tapeOf)
+    (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → Reference.Tape) (hP : Honest c H S.leaky.G tapeOf)
     (Mp : ∀ lx x, S.leaky.G.Nonce → (S.leaky.proto lx).TPreModel x)
     (Mc : ∀ lx x, S.leaky.G.Nonce → (Fin (S.leaky.G.K x) → S.leaky.G.Coin) → (S.leaky.proto lx).TCoinModel x)
     (nL nB nS : Msg → ℕ) (hnL : ∀ lx x ν, (Mp lx x ν).size ≤ nL x) (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)

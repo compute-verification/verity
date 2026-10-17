@@ -33,7 +33,7 @@ filled with the commit strings of fixed digests under its own salts, kinds `fixe
 * `zk_server`: zero knowledge carries over from `ZKmalR` of the reference prover with a guessing loss: the released,
   scheduled transcript is within a factor `k + 1` of `leaky`'s, the simulator that guesses the stop round, plus
   `(k + 1)·(ε_zk + γ·Fork)` and `∑ ε`. `Flock.zk_server_ref` is it at the masked record's reference prover and
-  `Flock.zk_deployZk_ref`.
+  `Flock.zk_zkD_ref`.
 * At the worker's own values (`withHonest`, `srcOf`) every round is faithful (`faithful_own`), so for every worker the
   server releases, with no probability, the run cut at some round of any prover whose message is its frame at the
   worker's values where the run is live (`split_own`), and zero knowledge carries over from that prover's with no term
@@ -845,9 +845,9 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **The ZK server at `flock-circuit --zk`'s masked record**: for every worker, the server whose frame at honest workers
-is the record's reference prover's message (`ZkServer.Ref` at `(S.zkD rel coinOf tapeOf t).prover`, `honestPZk` behind
+is the record's reference prover's message (`ZkServer.Ref` at `(S.zkD rel coinOf tapeOf t).prover`, `ZkTables.honestP` behind
 `refP`'s `Hello` and coin-tree checks) and whose masked checks are sound (`ZkServer.CheckSound`) releases, on every
-event, at most `D.V.k x + 2` times the guessing simulator's probability plus `ε_zk + γ·Fork` of `Flock.zk_deployZk_ref`,
+event, at most `D.V.k x + 2` times the guessing simulator's probability plus `ε_zk + γ·Fork` of `Flock.zk_zkD_ref`,
 plus the checks' errors, under `Claims.Hm96Hiding`, the session's five Props and `RefSession.HonestMsgs`. -/
 theorem Flock.zk_server_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
@@ -870,7 +870,7 @@ theorem Flock.zk_server_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.Parse
       ∑ i ∈ Finset.range ((FlockDeploy.deployZk rel).V.k x + 1),
         ∑ s ∈ (Finset.range (srv.nS x i)).filter (fun s => srv.kind x i s = .masked), ε x i s := by
   have h := srv.zk_server H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (S.zkD rel coinOf tapeOf t).prover _ _ _ _
-    (Flock.zk_deployZk_ref H rel S t ht hT1 hδ₁ hS hV hD hc hT coinOf tapeOf hH).2 x w hR hRef ε hε hCS wk Vs θ hk Ev
+    (Flock.zk_zkD_ref H rel S t ht hT1 hδ₁ hS hV hD hc hT coinOf tapeOf hH).2 x w hR hRef ε hε hCS wk Vs θ hk Ev
   push_cast at h ⊢
   exact h
 

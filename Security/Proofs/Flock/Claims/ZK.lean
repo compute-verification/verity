@@ -10,6 +10,7 @@ import Proofs.Flock.Claims.ZK.GKProof
 import Proofs.Flock.Claims.ZK.GKCost
 import Proofs.Flock.Claims.ZK.GKExp
 import Proofs.Flock.Claims.ZK.CoinCheck
+import Proofs.Flock.Claims.ZK.CoinBind
 import Proofs.Flock.Claims.ZK.Prefix
 import Proofs.Flock.Claims.ZK.Shvzk
 import Proofs.Flock.Claims.ZK.Flock
@@ -17,9 +18,15 @@ import Proofs.Flock.Claims.ZK.Hypotheses
 import Proofs.Flock.Claims.ZK.Prefinal
 import Proofs.Flock.Claims.ZK.Deployed
 import Proofs.Flock.Claims.ZK.Reference
+import Proofs.Flock.Claims.ZK.CoinLayer
 import Proofs.Flock.Claims.ZK.Tape
+import Proofs.Flock.Claims.ZK.Capacity
+import Proofs.Flock.Claims.ZK.Session
+import Proofs.Flock.Claims.ZK.Masked
 import Proofs.Flock.Claims.ZK.Worker
+import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
+import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 import Proofs.Flock.Claims.ZK.Compose
@@ -42,7 +49,7 @@ import Proofs.Flock.Claims.ZK.Compose
   (`zkmalR_congr`).
 * `Pin`: `Claims.Flock.ZK` reads the masked record's own reference prover (`ZkDeploy.prover`) and simulator; the proofs
   prove `Claims.Flock.ZKAt` at a committed-coin protocol's prover. The masked record at a protocol `G` (`zkOf`) has
-  `honestPZk` behind `G`'s `Hello` and opening checks; where `G`'s messages are `honestPZk`'s (`Proto.Honest`, a named
+  `ZkTables.honestP` behind `G`'s `Hello` and opening checks; where `G`'s messages are `ZkTables.honestP`'s (`Proto.Honest`, a named
   Prop), `ZKAt` at `G.prover` is `Claims.Flock.ZK` at `zkOf` (`zk_zkOf`).
 * `Forced`: the forced run at `c` with the honest prover's messages at `c` opens all of `c` exactly when the real run
   opens `c`, and is then the real run (`fcls_succ_iff`, `forced_eq_of_cls`, `real_eq_of_fcls`); one that stops before a
@@ -62,6 +69,10 @@ import Proofs.Flock.Claims.ZK.Compose
 * `CoinCheck`: the coin-tree check (`coin-tree/hm96-sha512/v2`) as an oracle program that logs its hash calls
   (`treeChk`); a protocol whose check it is meets `Binding` with no hypothesis on `H` (`Proto.binding_of_tree`), T6's
   aligned hash inputs being among the two walks' calls (`coinPairs_mem`).
+* `CoinBind`: the same where the coin is read from the whole message: two different passing openings of one position
+  are a collision among the two walks' calls (`GK.coinPairs_coll_any`), so a protocol whose check is the walk on the
+  message read at its round, and whose reading is one coin for two messages that read as one opening, meets `Binding`
+  (`Proto.binding_of_open`).
 * `Prefix`: runs of a Claims `V*` as runs of the session analysis's model: the committed-coin prover's first `K + 1`
   messages as a causal strategy (`Proto.preStrat`) against `V*`'s responder (`vResp`), whose run is a transcript's
   first `K + 1` messages (`run_prefix`) and determines what the extraction run passes on (`view0_run`); so
@@ -87,21 +98,44 @@ import Proofs.Flock.Claims.ZK.Compose
   `ZkHidden.zkViewAtJ_of_ok`), Lemma C's tables, leaves and world `W₀` are the session's by definition
   (`card_cutAt_ideal`, `exeOf_eq`) and the simulator is the models' (`Proto.withSim`, so `SimLink` holds by
   construction): **`Flock.zk_deployZk_of_tables`** under `Claims.Hm96Hiding` and three Props (`TMsgLink`, `TablesOK`,
-  `CoinCheck`), and under those alone at the pinned key's hiding gap (`Flock.zk_deployZk_of_tables_gap`).
+  `CoinCheck`, or `Binding` itself in `_bind`), and under those alone at the pinned key's hiding gap
+  (`Flock.zk_deployZk_of_tables_gap`).
 * `Reference`: the reference prover those three Props are about, `RefSession.refP`, defined from the session's data
   (its round encoding of the cut view, its final message of the tables' real views, refusing where a table doesn't
-  admit the coins); `CoinCheck` holds of it by definition, `TablesOK` from `Tables` and `TMsgLink` from `Complete`,
-  `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is the cut view the round
-  messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and **`Flock.zk_deployZk_ref`** at the session's masked
-  record `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `honestPZk`'s, a named Prop), each also at
-  the pinned key's hiding gap (`_gap`).
+  admit the coins); `Binding` holds of it with no hypothesis (`Proto.binding_of_open`), `TablesOK` from `Tables` and
+  `TMsgLink` from `Complete`, `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is
+  the cut view the round messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and `Flock.zk_zkD_ref` at the session's masked record
+  `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `ZkTables.honestP`'s, a named Prop), each also at the
+  pinned key's hiding gap (`_gap`).
+* `CoinLayer`: the deployed masked record `zkDeployed`, `RefSession.zkD` at `coin-tree/hm96-sha512/v2`'s coin layer
+  (the 32-byte nonce, `Hello`'s frame with its hex, `Hello`'s answer of root and hm96 key, the keyed tree, the
+  committed schedule's places, the opening read from `Resp::Coins`'s words, the coin handed on its words), and
+  **`Flock.zk_deployZk_ref`** at it, at every rep rounds' coin counts; `Claims.Witness.Flock.ZK_meets` states its coin
+  layer and `ZK_coins_fails` that the degenerate one (every opening passes, the coin is the opening) is not it.
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
+* `Capacity`: the tape asked for on a class `A` of statements only (`RefSession.TapeOKOn`, `RefSession.HonestMsgsOn`),
+  as a tape of bounded size can meet it where `A` bounds the tables, at the record whose parser refuses the rest
+  (`deployOn`): `Flock.zk_zkD_ref_on`, `Claims.Flock.ZK` at `RefSession.zkD` at `Flock.zk_zkD_ref`'s `ε_zk` on `A`
+  and `1` outside it (`zkmalR_on`). `RefSession.tapeOKOn_of_tape`: `TapeOKOn A` from the tape read with fibers of one
+  size at each statement in `A`, each table's randomness being read from it so (`fibersEq_tabRand`). With it,
+  **`Flock.zk_deployZk_ref_on`** (and `_gap`) at `zkDeployed`, the tape asked for only as the tables' tape read with
+  fibers of one size on `A`, where `Flock.zk_deployZk_ref`'s `TapeOK` fails at every unbounded table count.
+* `Session`: `RefSession.HonestMsgsOn A` as its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`: `enc`, `fin`
+  and `off` each `ZkTables.honestP`'s message), and `Flock.zk_deployZk_ref_on_rounds` at them.
+* `Masked`: the deployed masked session's table data (`Masked.tableData`): its tables `setupOf true x`'s, each
+  `coinedOf` at its `TabZK`, the witness's table witnesses its shares; the tables' plan (`TabPlan`) and the rest
+  (`SessionPlan`: tape, coins, dummy, round encodings) named. `Masked.tables_hidden`: `Tables` there at the
+  hidden-output form. `Masked.OneTableLowers`: the lowering's completeness at one table, which `Complete` needs.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
-  (`swView_outer`).
+  (`swView_outer`). It is the honest prover at the worker's values rectified, which pass the inner constraint at every
+  pad, on a tape moved by a bijection (`swView_sameDist_rect`, `rect_innerHolds`), and Lemma B at such row-satisfying
+  values is `table_shvzk`'s (`vals_shvzk`); each also with real hm96 leaves (`worker_shvzk_hm96`, `vals_shvzk_hm96`).
+* `Switched`: the switched prover at the session's `J` tables: Lemma B at the workers' values there (`zkViewAtJ_sw`),
+  and `SHVZK` against the honest prover's simulator where the prover goes on (`Proto.TabModel.shvzk_sw`).
 * `Server`: the ZK server (`ZkServer`) that releases untrusted workers' values in four kinds (`fixed`, `own`,
   `recomputed`, `masked`), masks added after its checks, on a public schedule. For every worker it releases the
   reference prover's run cut at some round, but with probability the masked checks' errors (`ZkServer.split`), from
@@ -111,6 +145,14 @@ import Proofs.Flock.Claims.ZK.Compose
   (`stream_leak`). At the worker's own values the split is exact and the checks' errors drop out
   (`ZkServer.split_own`, `ZkServer.zk_server_own`), and a pad-blind worker (`ZkServer.BWorker`) is handed neither the
   server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`).
+* `Blind`: the switched prover at the reference session (`RefSession.swP`, at values `RefSession.SwVals` indexed by what
+  a pad-blind worker sees), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
+  **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZKAt` at the same `ε_zk`, `γ` and simulator as `Flock.zkAt_deployZk_ref`
+  for any values whose round encoding is causal (`RefSession.SwCausal`), `Flock.zkAt_deployZk_ref` its case at the
+  tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server at
+  every pad-blind worker within `D.V.k x + 2` of the guessing simulator, with no term for the masked checks, and at a
+  statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`), at the deployed coin layer with the
+  tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at

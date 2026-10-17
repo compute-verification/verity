@@ -20,7 +20,7 @@ equation:
   (`scope_of_accepts`) and so is `Vs j`'s circuit (`VStarParsesScoped`). The verifier compares the tags by name only; the inputs' tags are the
   statement their name names (`TagsFound`, an obligation on our code), so they are V*'s (`find?_circuit`).
 * `typable_of_accepts`: a session that accepts and loads `Q` types (`ZkOuterR.Typable`): `Loads` gives its circuit and
-  population, and the record's draw sets table 0 up (`setupZHJ_of_acceptsZK`, at the record's custody).
+  population, and the record's draw sets table 0 up (`setupZHJ_of_acceptsZKI`, at the record's custody).
 * `prob_sessionsR_untypable`, `prob_recT_le`: where a session of some index never types, the raw sessions' event is
   empty when every session accepts as V*'s statement of its index; elsewhere the raw recursive audit's event is no
   likelier than the typed sessions' (`zsOf`) at the transported strategy (`recT`).
@@ -84,14 +84,14 @@ theorem loads_of_verifiesV {S : ℕ} {i : RecVStar.Inner} {bind : Fin S → VSta
   exact ⟨hc, hn.trans hnv.symm⟩
 
 /-- **A session the verifier of record accepts types**, where its inputs pass the statement check and load V*'s
-statement (`hL`): the record carries the draw (custody), at which table 0 sets up (`setupZHJ_of_acceptsZK`). -/
+statement (`hL`): the record carries the draw (custody), at which table 0 sets up (`setupZHJ_of_acceptsZKI`). -/
 theorem typable_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => Q.J) x.wr) (ω : Q.law.live.Ω) (R : Reg') (o : LiveOutJ Q.J Q.mPts)
     (hacc : AcceptsZKR x.I x.own (x.wr (Q.law.live.draw ω) R o)) (hck : ScopeZR x.I) (hL : Q.Loads x.I) :
     x.Typable := by
   have hacc' := acceptsZK_of_R hacc
-  exact ⟨hck, hL.1, hL.2, _, _, ZkHidden.setupZHJ_of_acceptsZK x.I x.hTags.1 hck.typed (hck.parseH x.hTags.1)
-    (Checks.outNet hck) x.dj hacc' (hRec _ R o hacc').1 (x.hDraw ω) ⟨0, nTab_pos _⟩⟩
+  exact ⟨hck, hL.1, hL.2, _, _, ZkHidden.setupZHJ_of_acceptsZKI x.I x.hTags.1 hck.typed (hck.parseH x.hTags.1)
+    x.dj hacc' (hRec _ R o hacc').1 (x.hDraw ω) ⟨0, nTab_pos _⟩⟩
 
 /-- **A session that never types accepts nowhere** where its inputs pass the statement check, for an event at which it
 accepts and loads V*'s statement: an acceptance would type it (`typable_of_accepts`). -/

@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.Level3.RowV2
+import Proofs.Flock.Claims.Sampling.Reference.Prover
 
 /-!
 # The deployed sampling record
@@ -20,9 +21,16 @@ fixes set, and the sampled verifier's code (`SamplingDeploy.Code`) as its parame
 * `openCalls`: the most openings one session reveals (`Code.reveals`) times one opening's calls, at most
   `4 + depth own` (`opens_calls_le`): the leaf's three, the leaf's frame, and one node per level of the deepest
   registered port.
+* `Tape`, `P`: the sampled reference prover (`Reference.refP`), at the code's framing, on a Flock tape per session
+  statement: in each session, Flock's masked reference prover on what it reveals, checked by this commitment.
+* `δc`: the sessions' count (`Code.sessions`) times the largest of Flock's masked error `FlockComplete.ZkTables.δc`
+  (the masked record's own, `FlockDeploy.deployZk`'s `δc`), capped at `1`, over the statements of the reference
+  prover's sessions at `x`, at an honest witness and coins that check their units (`Reference.sessErrAt`): the union
+  bound over the run's sessions.
+  One session that proves every drawn unit has error `ZkTables.δc` at its statement.
 * The rest is the code's: the verifier in public-coin form, its parser, scope check and partition evaluation, its draw
-  layout, the checked units' sessions and what their witnesses reveal, the sessions' `N₀`, and the reference prover on
-  its tapes with its completeness error.
+  layout, the checked units' sessions and what their witnesses reveal, the sessions' `N₀` and count, and the reference
+  prover's framing.
 
 What is then a fact about the record: its sessions are `deployZk`'s (`deploy_flock`, `rfl`), its `ε_table` is
 nonnegative (`deploy_εtable_nonneg`), its commitment is hm96 leaves under the registered path check (`deploy_commit`,
@@ -42,13 +50,16 @@ its Flock witness reveals (`session`, `reveal`); the trace commitment's register
 index of each position under a run's roots (`at_`) and its published leaf layer (`layer`); where each committed bit
 sits, its row's width and its place there (`place`), and how the reveal encodes an opening's data: the row's other bits,
 the salt and the path (`bits`, `salt`, `π`); and its numbers: the sessions' `N₀`, the most tables a session at a
-statement sets up (`tables`) and the most openings one session reveals (`reveals`); and the reference prover, the honest
-sampled prover the deployment runs, on its tapes (`Tape`, `P`), with its completeness error at each hash (`δc`). -/
+statement sets up (`tables`), the most openings one session reveals (`reveals`) and the slots whose checked units'
+sessions are all of a run's (`sessions`: `1` when one session proves every drawn unit, the proof units' count at one
+session per unit); and the reference prover's framing (`Reference.refP`): where a run is at a history (`step`), the
+positions a session opens (`reads`) and the Flock witness that encodes what it reveals (`wit`), each by the session's
+statement. -/
 structure Code where
   V : Verifier FlockDeploy.Coin
   parse : Msg → Option Stmt
   scopeCheck : Msg → Bool
-  partition : Prog → Query → Option Partition
+  partition : Stmt → Option Partition
   stage2 : (x : Msg) → Finset (Fin (V.k x))
   checked : (x : Msg) → (Fin (V.k x) → FlockDeploy.Coin) → List (ℕ × ℕ)
   rounds : (x : Msg) → ℕ × ℕ → Finset (Fin (V.k x))
@@ -64,10 +75,10 @@ structure Code where
   innerN₀ : Msg → ℝ
   tables : Msg → ℕ
   reveals : Msg → ℕ
-  Tape : Type
-  [tapeNonempty : Nonempty Tape]
-  P : Wit → Prover Tape
-  δc : (Msg → Msg) → Msg → ℝ
+  sessions : Msg → ℕ
+  step : Msg → List (Msg × Msg) → Reference.Step
+  reads : Stmt → Msg → List ℕ
+  wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit
 
 /-! ## The trace commitment -/
 
@@ -154,6 +165,12 @@ theorem opens_calls_le (H : Msg → Msg) (c : Code) (roots : List Msg) (o : Open
 
 /-! ## The record -/
 
+/-- The proof units at `x` under the code's parser and partition evaluation, `0` on a statement that doesn't parse. -/
+def units (c : Code) (x : Msg) : ℕ :=
+  match c.parse x with
+  | some s => ((c.partition s).getD ⟨[]⟩).sizes.sum
+  | none => 0
+
 /-- **The deployed sampling record** at the relation's fields `rel` and the verifier's code `c`. -/
 noncomputable def deploy (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : Code) :
     Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace where
@@ -175,10 +192,10 @@ noncomputable def deploy (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Re
   εtable x := c.tables x * 2 ^ (-(205 : ℝ))
   weight x := c.tables x * 2 ^ 33
   openCalls x := c.reveals x * (4 + depth c.own)
-  Tape := c.Tape
-  tapeNonempty := c.tapeNonempty
-  P := c.P
-  δc := c.δc
+  Tape := Reference.Tape
+  P := Reference.refP c.step c.parse c.reads (commit c) c.wit
+  δc H x := c.sessions x * Reference.sessErrAt H (Rhon H (commit c) c.parse c.partition)
+    (Reference.refP c.step c.parse c.reads (commit c) c.wit) c.V c.checked c.session (FlockComplete.ZkTables.δc H) x
 
 variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : Code)
 
@@ -233,15 +250,15 @@ set_option synthInstance.maxSize 1024 in
 discharged. The hypotheses are what remains: Flock's KS at `deployZk` (`hKS`); the draw, sessions and their scope,
 slots, session openings, interior roots and scope checks of the sampled verifier's run (`DrawFixed`, `SessionRuns`,
 `SessionsIn`, `DrawSlots`, `SessionOpens`, `InteriorFixed`, `ProgramScope`, `ChecksScope`); its reveal count
-(`RevealsLe`); completeness and zero knowledge. -/
+(`RevealsLe`); completeness (`complete_deploy` proves it from its own facts) and zero knowledge. -/
 theorem sampling_deployed (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
     (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
     (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
     (hComplete : Complete H (deploy rel c))
-    {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (tapeOf : Nz × Ωz → c.Tape) (S : SimLeak)
-    (εzk γzk : Msg → ℝ) (hZK : ZK H ((deploy rel c).mask Nz Ωz tapeOf S) εzk γzk) :
+    {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (tapeOf : Nz × Ωz → Reference.Tape)
+    (S : SimLeak) (εzk γzk : Msg → ℝ) (hZK : ZK H ((deploy rel c).mask Nz Ωz tapeOf S) εzk γzk) :
     ScopeMatches (deploy rel c) ∧ Binding (deploy rel c) ∧ Universal (deploy rel c) ∧ FaultyBoundary ∧
       KS H (deploy rel c) ∧ KSCount H (deploy rel c) ∧ Bits H (deploy rel c) ∧
       Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) ∧

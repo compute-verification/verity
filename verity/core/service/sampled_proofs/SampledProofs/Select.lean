@@ -44,16 +44,21 @@ inductive Rule where
   | twoStage (replay : String)
 
 /-- A rule as `to_json` writes it, exactly its keys: `{rule: all}`, `{rule: law, law}` or
-`{rule: two-stage, replay, check: all}`. A stream refuses a two-stage rule's count and a sequential rule. -/
+`{rule: two-stage, replay, check: all}`, its law text one `parseLaw` reads, as `service.Law` refuses any other when it is
+made. A stream refuses a two-stage rule's count and a sequential rule. -/
 def Rule.ofJson (j : Json) : V Rule := do
   match getD j "rule" with
   | .str "all" => if keys? j == some #["rule"] then return .all
   | .str "law" =>
     if keys? j == some #["law", "rule"] then
-      if let .str t := getD j "law" then return .law t
+      if let .str t := getD j "law" then
+        let _ ← parseLaw t
+        return .law t
   | .str "two-stage" =>
     if keys? j == some #["check", "replay", "rule"] && jeq (getD j "check") "all" then
-      if let .str t := getD j "replay" then return .twoStage t
+      if let .str t := getD j "replay" then
+        let _ ← parseLaw t
+        return .twoStage t
   | _ => pure ()
   throw "a selection rule the stream runs is {rule: all}, {rule: law, law} or {rule: two-stage, replay, check: all}"
 

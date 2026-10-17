@@ -4033,7 +4033,6 @@
     "Flock.TemplateQuery.TRange": "fd176f71efa5fc07006ee54773e55f3a6124120a9bee2e4e1bddf50c3e6f7c29",
     "Flock.TemplateQuery.TRange.count": "3fe062b8587defd38ac54d1642748d5cb3d36fed2811e229e40e58ab44a94866",
     "Flock.TemplateQuery.TRange.first": "300a15fc0874f4d021d64b7cb584eeecb7d4e7c004891138fea17c1860cac4af",
-    "Flock.TemplateQuery.TRange.node": "5f1b0a67687c76e53492726f0160d1345cf542d428ef2a35fb83ff200d3b7e93",
     "Flock.TemplateQuery.TRange.template": "c97082152447cce908ab19f4a60920ab5762ecbe2fe15762729a512482a742bd",
     "Flock.TemplateQuery.evaluate": "ef5c9d3372ef509ead267a7f27120b7532de85c172ba4946d79bf60809268bbd",
     "Flock.TemplateQuery.gates": "b8c2c0b9676750b17b1eed541fff185ec992be123579d75f22620c61fe0a9c72",
@@ -6347,7 +6346,7 @@
    ]
   },
   "SampledProofs.Partition": {
-   "digest": "975da13a462768118a5bebece930ccaf508ce3f561df60d57c03019e681b4ada",
+   "digest": "0a7b0bd5682b0940d84fbd966fbd2374c2066fca89e1490fe882e867ad4cb4d2",
    "definitions": {
     "SampledProofs.Partition.QUERIES": "7a4b15ad65801c50776c22330a725a5d0dcab1cac894ef229a7005cfa4bfc37b",
     "SampledProofs.Partition.UNIT_BITS": "1f5956e25c217932d6d7df5eaf2d42b71b07bf928d8a09bcd32555f64182e5e4",

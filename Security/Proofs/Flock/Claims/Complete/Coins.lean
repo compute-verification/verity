@@ -235,8 +235,8 @@ theorem Claims.Flock.Complete_meets_zk (rel : Readable.Parsed → Readable.Relat
   rw [h1] at ho hr hb
   have hle : (deployZk rel).δc H x ≤ 50 / 2 ^ 128 := by
     have e : δcZk H x = εZk x := by simp [δcZk, hready]
-    show δcZk H x ≤ _
-    rw [e, εZk]
+    show ZkTables.δc H x ≤ _
+    rw [ZkTables.δc_eq_δcZk hready, e, εZk]
     gcongr
     have ho' : ((outerSlotsZk x).length : ℝ) ≤ 44 := by exact_mod_cast ho
     have hr' : ((rhoSlotsZk x).length : ℝ) ≤ 2 := by exact_mod_cast hr

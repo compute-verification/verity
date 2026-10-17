@@ -159,7 +159,7 @@ is `L`'s (`Honest`); what remains is that and the four models' Props at each lea
 theorem zk_sampled_mask (H : Msg → Msg) (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t)
     {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
     [DecidableEq B] [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc)
-    (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → c.Tape) (hP : Honest c H S.leaky.G tapeOf)
+    (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → Reference.Tape) (hP : Honest c H S.leaky.G tapeOf)
     (Mp : ∀ lx x, S.leaky.G.Nonce → (S.leaky.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, S.leaky.G.Nonce → (Fin (S.leaky.G.K x) → S.leaky.G.Coin) → (S.leaky.proto lx).CoinModel x Salt B Cc)
     (nL nB : Msg → ℕ) (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x)
@@ -186,7 +186,7 @@ theorem sampling_deployed_sampled (H : Msg → Msg) (hKS : Claims.Flock.KS H (Fl
     (hComplete : Complete H (deploy rel c)) (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t)
     {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
     [DecidableEq B] [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc)
-    (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → c.Tape) (hP : Honest c H S.leaky.G tapeOf)
+    (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → Reference.Tape) (hP : Honest c H S.leaky.G tapeOf)
     (Mp : ∀ lx x, S.leaky.G.Nonce → (S.leaky.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, S.leaky.G.Nonce → (Fin (S.leaky.G.K x) → S.leaky.G.Coin) → (S.leaky.proto lx).CoinModel x Salt B Cc)
     (nL nB : Msg → ℕ) (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x)

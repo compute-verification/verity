@@ -11,13 +11,16 @@ run fails it wherever a statement in scope has a witness in the relation, at eve
 * `rejV`: the verifier of one round that rejects; `not_complete_rejV`: it fails `Claims.Complete` at every honest
   prover on a nonempty tape type.
 * `zeroHash`: the hash whose every output is 64 zero bytes (`out64_zeroHash`).
-* `Claims.Complete_fails`: `Claims.Complete` fails at `rejV`, the silent prover, the full relation and scope, and
-  `δ_c = 0`.
+* `Claims.Complete_fails`: `Claims.Complete` fails at `rejV` and `zeroHash`, at every such prover, relation, scope and
+  `δ_c`.
 * `Claims.Flock.Complete_fails`: Flock's fails at `rejD`, a plain record of `rejV` whose parser reads every message as
   `inStmt`, a statement in Flock's scope (`inScope_inStmt`) whose relation every witness meets (`relS_inStmt`).
 * `Claims.Sampling.Complete_fails`: the sampling claim fails at `rejSD`, a record of `rejV` whose parser reads every
   message as `nilStmt`, the empty program, and whose partition is the empty one: in scope (`inScope_nilStmt`), with no
   unit, so no unit is faulty at any witness (`rhon_rejSD`).
+
+The three are the lock's `claims` witnesses, stated over the spec: each quantifies (`∃`) over the hash and the toy it
+fails at.
 -/
 
 namespace Claims.CompleteFails
@@ -100,11 +103,11 @@ def rejD : Flock.Deploy Unit Unit Unit where
 /-! ## Sampling -/
 
 /-- **The empty sampling statement**: no gates, no outputs, no rules, no roots. -/
-def nilStmt : Sampling.Stmt := ⟨⟨[], []⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
+def nilStmt : Sampling.Stmt := ⟨[], ⟨[], []⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
 
 theorem inScope_nilStmt : Sampling.InScope ⟨[]⟩ nilStmt := by
-  refine ⟨⟨fun _ _ h => by simp [nilStmt] at h, fun _ h => by simp [nilStmt] at h⟩, ⟨?_, ?_, ?_⟩, ⟨rfl, ?_⟩⟩ <;>
-    simp [Sampling.Partition.rus, nilStmt]
+  refine ⟨⟨fun _ _ h => by simp [nilStmt] at h, fun _ h => by simp [nilStmt] at h⟩, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩,
+    ⟨rfl, ?_⟩⟩ <;> simp [Sampling.Partition.rus, Sampling.Partition.gates, nilStmt]
 
 /-- **A sampling record of `rejV`**: its parser reads every message as `nilStmt`, its partition is the empty one, its
 sessions are `rejD`'s, its reference prover is `silent`, and its error `0`. -/
@@ -112,7 +115,7 @@ def rejSD : Sampling.Deploy Unit Unit Unit where
   V := rejV Unit
   parse _ := some nilStmt
   scopeCheck _ := true
-  partition _ _ := some ⟨[]⟩
+  partition _ := some ⟨[]⟩
   commit := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
   universal _ := ⟨[], []⟩
   flock := rejD
@@ -139,20 +142,23 @@ end Claims.CompleteFails
 
 open Claims.CompleteFails
 
-/-- **`Claims.Complete` can fail**: at the 64-byte `zeroHash`, the verifier that rejects every run is not complete for
-the silent prover on the one tape, on the full relation and scope, at `δ_c = 0`. -/
-theorem Claims.Complete_fails :
-    ¬ Claims.Complete zeroHash (rejV Unit) (silent Unit) (fun _ _ => True) (fun _ => True) (fun _ => 0) :=
-  not_complete_rejV out64_zeroHash _ (x := []) (w := ()) trivial trivial (by norm_num)
+/-- **`Claims.Complete` can fail**: at every prover with a tape and every `δ_c`, wherever a statement in scope has a
+witness and `δ_c < 1`, the verifier that rejects every run fails it at the 64-byte `zeroHash`. -/
+theorem Claims.Complete_fails {Coin W Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]
+    (P : W → Prover Ω) (R : Rel W) (Scope : Msg → Prop) (δc : Msg → ℝ) {x : Msg} {w : W} (hs : Scope x)
+    (hr : R x w) (hδ : δc x < 1) : ∃ (H : Msg → Msg) (V : Verifier Coin), ¬ Claims.Complete H V P R Scope δc :=
+  ⟨zeroHash, rejV Coin, not_complete_rejV out64_zeroHash P hs hr hδ⟩
 
 /-- **Flock's `Complete` can fail**: at `zeroHash`, the record `rejD`'s reference prover is not accepted at the empty
 message, a statement in its scope whose relation every witness meets, at its error `δ_c = 0`. -/
-theorem Claims.Flock.Complete_fails : ¬ Claims.Flock.Complete zeroHash rejD :=
-  not_complete_rejV out64_zeroHash rejD.P (x := []) (w := ⟨[]⟩) ⟨inStmt, rfl, inScope_inStmt⟩
-    ⟨inStmt, rfl, relS_inStmt _⟩ (by show (0 : ℝ) < 1; norm_num)
+theorem Claims.Flock.Complete_fails :
+    ∃ (H : Msg → Msg) (D : Claims.Flock.Deploy Unit Unit Unit), ¬ Claims.Flock.Complete H D :=
+  ⟨zeroHash, rejD, not_complete_rejV out64_zeroHash rejD.P (x := []) (w := ⟨[]⟩) ⟨inStmt, rfl, inScope_inStmt⟩
+    ⟨inStmt, rfl, relS_inStmt _⟩ (by show (0 : ℝ) < 1; norm_num)⟩
 
 /-- **The sampling `Complete` can fail**: at `zeroHash`, the record `rejSD`'s reference prover is not accepted at the
 empty message, in scope with no faulty unit, at its error `δ_c = 0`. -/
-theorem Claims.Sampling.Complete_fails : ¬ Claims.Sampling.Complete zeroHash rejSD :=
-  not_complete_rejV out64_zeroHash rejSD.P (x := []) (w := ⟨[]⟩) ⟨nilStmt, ⟨[]⟩, rfl, rfl, inScope_nilStmt⟩
-    (rhon_rejSD _ _ _) (by show (0 : ℝ) < 1; norm_num)
+theorem Claims.Sampling.Complete_fails :
+    ∃ (H : Msg → Msg) (D : Claims.Sampling.Deploy Unit Unit Unit), ¬ Claims.Sampling.Complete H D :=
+  ⟨zeroHash, rejSD, not_complete_rejV out64_zeroHash rejSD.P (x := []) (w := ⟨[]⟩)
+    ⟨nilStmt, ⟨[]⟩, rfl, rfl, inScope_nilStmt⟩ (rhon_rejSD _ _ _) (by show (0 : ℝ) < 1; norm_num)⟩
