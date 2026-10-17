@@ -15,6 +15,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Session
 import Proofs.Flock.Claims.Complete.ZkTables.Decode
 import Proofs.Flock.Claims.Complete.ZkTables.Prover
 import Proofs.Flock.Claims.Complete.ZkTables.Goals
+import Proofs.Flock.Claims.Complete.ZkTables.Files
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
@@ -37,4 +38,6 @@ table's `root_B` read under its name and each rep stream found under its name, r
 (`Decode`: `decode_recordObjZkJ`, `live_recordObjZkJ`, `recordDraw_recordObjZkJ`). Every table's cap and reps are what
 the record needs (`Prover`: `Case.points_regions`, `proverOkJ`), so the record's checks hold at several tables but what
 they ask of the proof files (`Goals`: `Run.jsonJ`, `recordJsonJ`, `FilesJ`, `recordJ_of`), and `complete` holds with
-`FilesJ` for `RecordJ` (`completeJ`). -/
+`FilesJ` for `RecordJ` (`completeJ`). Each table's reps' proof files decode to proofs of its parameters, its `root_B` as
+their cap and a 64-byte pads' root (`Files`: `sessionPZk_filesJ`, `Run.repJ`), so `FilesJ` holds from each table's
+`RepShapedZk` and the record's size (`filesJ` from `RepShapedJ`, `RecordFitsJ`; `completeJR`). -/
