@@ -6,9 +6,11 @@ The reference is `one_stage` itself (`registration.check`, `draw.derive`, `check
 `wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `two_stage.draw_first` on
 `OwnRandomness` over the given bytes, for the `select` piece the challenger's draw from a Spec's selection rule on
-(`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), and for
-`check_public` and `check_verdicts` the proof service's own (`service.check_public`, `service.check_verdicts`). The
-`partition` and `select` pieces also run on random partitions: mixed population programs of random members of three
+(`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
+`slots` piece that draw in the claims' slots, read off `partition.strata`, `TemplatePartition.gates` and the root's input
+nodes (`slots`), and for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
+`service.check_verdicts`). The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
+programs of random members of three
 templates under template queries over them. Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries.
@@ -42,7 +44,7 @@ from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, pa
 from verity.core.protocols.sampled_proofs.two_stage import OwnRandomness, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program, input_id
+from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.types import Array, Record, Tuple, Value
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -564,6 +566,27 @@ def select(j):
     if not DR.check_draw(obj, {"population": n}, law).ok:
         raise D.Reject("the draw is not well formed under the law")
     return {"draw": obj, "read": at}
+
+
+def slots(j):
+    """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its draw's
+    checked proof units. The population's strata are `partition.strata`'s, each unit a replay unit of one proof unit, its
+    instance's gates (`TemplatePartition.gates`); the input class is one stratum of every gate of the root's input nodes
+    (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
+    units are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
+    out = select(j)
+    j = _json(j)
+    program = PROGRAMS[PO.program_sha512(j["program"])]
+    tp = P.evaluate(program, j["query"])
+    pop = [[{"pus": [list(tp.gates(u))], "unit": u} for lo, hi in rs for u in range(lo, hi)]
+           for _t, rs in P.strata(program, j["query"])]
+    body = program.root.body
+    inputs = [{"pus": [[g, g + 1]], "unit": None} for k, node in enumerate(body.nodes) if is_input(node.fn)
+              for g in range(body.offsets[k], body.offsets[k] + (node.n if node.form in ("batch", "scan") else 1) * node.fn.gates)]
+    classes = [pop, [inputs] if inputs else []]
+    proved = set(DR.proved(out["draw"]))
+    rus = [r for c in classes for s in c for r in s]
+    return {"checked": [[v, 0] for v, r in enumerate(rus) if r["unit"] is None or r["unit"] in proved], "classes": classes}
 
 
 def bound(j):
@@ -1341,6 +1364,7 @@ def changed_selections(draw, most: int = 2) -> dict:
 
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
+SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -1529,7 +1553,7 @@ pieces = D.server_fixture(DECODE)
 
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400)]
 
 
@@ -1567,6 +1591,26 @@ def test_the_select_piece_draws_every_rule(pieces):
         assert D.replay(SELECT, case, pieces)[0] == "reject", text
         with pytest.raises(D.Reject):
             select(case)
+
+
+def test_the_slots_follow_the_strata(pieces):
+    """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
+    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the replay units' gates and
+    the input class's are every gate of the program once; and the checked proof units are the drawn units' slots and
+    every input slot, in slot order."""
+    desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
+    query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
+    case = {"closure": None, "program": desc, "query": query, "rule": {"law": "subset:4", "rule": "law"},
+            "source": hashlib.shake_256(b"slots").hexdigest(400), "work_table": None}
+    out = slots(copy.deepcopy(case))
+    assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
+    assert [[r["unit"] for r in s] for s in out["classes"][0]] == [[0, 1, 5, 6, 7, 8], [2, 3, 4], [9]]
+    rus = [r for c in out["classes"] for s in c for r in s]
+    gates = sorted(g for r in rus for lo, hi in r["pus"] for g in range(lo, hi))
+    assert gates == list(range(PROGRAMS[PO.program_sha512(desc)].circuit.size))
+    units = [r["unit"] for r in rus]
+    drawn = [units.index(u) for u in select(case)["draw"]["units"]]
+    assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held"}
