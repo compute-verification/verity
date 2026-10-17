@@ -13,7 +13,7 @@
     machine-model designs [--json]            the design registry (data/designs): each design's name, its aliases, the
                                               noise on each product, fold, filler, proof unit, coins and perplexity arm
     machine-model eps [DESIGN] [--q Q] [--q-uniform QU] [--operands O] [--credit C] [--fold-cost R] [--fill X]
-                      [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]] [--uni-issue C]
+                      [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B] [--index-bits B]] [--uni-issue C]
                       [--checking full|sampled [--adapt UNIT]] [--vector V] [--json]
                                               a design's ε budget (a name or alias in data/designs, default
                                               dither-1s) at q* = Q (default 8): every term with its source,
@@ -25,12 +25,14 @@
                                               H, default) or of the floor program ♭ (--credit floor); --fill adds X
                                               lane instructions a word of verified filler on lanes; --lookups opens
                                               the table route (data/table.toml: lane instructions and L2 bytes a word
-                                              against an L2 facet; --lookup-q, --lookup-bytes, --l2); --uni-issue C
-                                              also charges a uniform instruction C times an ALU's cost on the issue
-                                              rows; --checking full (default) is the protocol with every word and
-                                              operand verified, the core ε alone, and --checking sampled adds
-                                              ε_sample = ε_luck + ε_adapt on its own line, for the design's proof unit
-                                              (data/adapt.toml) or --adapt UNIT's
+                                              against an L2 facet; --lookup-q, --lookup-bytes, --l2; --index-bits B
+                                              for B-bit noise entries on the operand it indexes); --uni-issue C also
+                                              charges a uniform instruction C times an ALU's cost on the issue rows
+                                              (a no-op where the census has it there already); --checking full
+                                              (default) is the protocol with every word and operand verified, the
+                                              core ε alone, and --checking sampled adds ε_sample = ε_luck + ε_adapt
+                                              on its own line, for the design's proof unit (data/adapt.toml) or
+                                              --adapt UNIT's
     machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--operands O] [--credit C]
                       [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
                                               one line a design (every design by default; with --fold-sweep, each at
@@ -175,6 +177,7 @@ def _design(args, name: str) -> E.Design:
     d = E.design(name, args.data)
     d = d.with_fold_cost(args.fold_cost) if args.fold_cost is not None else d
     d = d.with_fill(args.fill) if args.fill else d
+    d = d.with_index_bits(args.index_bits) if args.index_bits else d
     return d if args.q_uniform is None else replace(d, name=f"{d.name}@qu{args.q_uniform:g}", q_uniform=args.q_uniform)
 
 
@@ -219,7 +222,7 @@ def _designs(args) -> int:
 def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, credit: str = "H",
                 table: E.Table | None = None, adapt: E.Adapt | None = None, checking: str = "full") -> dict:
     e = E.eps(d, pi, q, data, operands=operands, credit=credit, table=table, adapt=adapt)
-    sampled = checking == "sampled"
+    sampled, dt = checking == "sampled", d.table(table)
     s = E.setup(d, pi, data, operands, credit, table)
     per_mma = e.honest.words * e.honest.depth / d.L
     return {
@@ -245,8 +248,9 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
         "sources": {"skip": {k: p.source for k, p in d.skip.items()}, "mand": {k: p.source for k, p in d.mand.items()},
                     "clock": d.clock.source, "luck": d.luck_source, "baseline": d.baseline_source,
                     "operands": d.floor_source if operands == "floor" else operands},
-        "lookups": None if table is None else {"q": table.q, "bytes": table.bytes, "l2": table.l2,
-                                               "bytes_per_smsp_cycle": table.per_cycle(), "source": table.source},
+        "index_bits": d.index_bits,
+        "lookups": None if dt is None else {"q": dt.q, "bytes": dt.bytes, "l2": dt.l2,
+                                            "bytes_per_smsp_cycle": dt.per_cycle(), "source": dt.source},
         "adapt": None if adapt is None else {"unit": adapt.name, "eps": adapt.eps, "source": adapt.source,
                                              "selection": adapt.selection},
         "curve": [[x, s.machine_eps(x)] for x in E.QS],
@@ -285,7 +289,8 @@ def _eps_table(args, pi: E.Machine) -> int:
         for r in sweep:
             d = E.design(n, args.data)
             d = d.with_fold_cost(r) if r is not None else d
-            rows.append(d.with_fill(args.fill) if args.fill else d)
+            d = d.with_fill(args.fill) if args.fill else d
+            rows.append(d.with_index_bits(args.index_bits) if args.index_bits else d)
     for d in rows:
         ad = _adapt(args, d)
         es = {q: E.eps(d, pi, q, args.data, operands=args.operands, credit=args.credit, table=tb, adapt=ad)
@@ -310,6 +315,9 @@ def _eps_table(args, pi: E.Machine) -> int:
 
 def _eps(args) -> int:
     pi = E.machine(args.vector or "", args.data)
+    if args.uni_issue is not None and E.uniform_issue_charged(pi):
+        print(f"eps: {pi.vector}'s census charges a uniform instruction on the issue rows already; --uni-issue "
+              f"{args.uni_issue:g} changes nothing", file=sys.stderr)
     pi = pi if args.uni_issue is None else E.uniform_on_issue(pi, args.uni_issue)
     if args.table:
         return _eps_table(args, pi)
@@ -346,8 +354,9 @@ def _eps(args) -> int:
           + (f"; honest over the credit at f_max {e.credit_ratio:.3f}, in γ" if args.credit != "H" else ""))
     print(f"  cheater's operand delivery: {ops[args.operands]}")
     if tb is not None:
-        print(f"  table route: {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a word, L2 {tb.l2 / 1e12:g} TB/s = "
-              f"{tb.per_cycle():.3f} B a SMSP-cycle ({tb.source})")
+        dt = d.table(tb)
+        print(f"  table route: {dt.q:g} lane instructions and {dt.bytes:g} B of L2 a word ({d.index_bits}-bit entries "
+              f"on the indexed operand), L2 {dt.l2 / 1e12:g} TB/s = {dt.per_cycle():.3f} B a SMSP-cycle ({dt.source})")
     print(f"  cheater at q* = {args.q:g}: {_mix(e.cheat, per_mma)}")
     print(f"  certificate π*: {_pi(e.cheat)}")
     t = e.terms()
@@ -432,6 +441,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="with --checking sampled: the proof unit (data/adapt.toml; default: the design's own)")
     e.add_argument("--lookup-bytes", type=float, metavar="B",
                    help="with --lookups: L2 bytes a table word (default: the file's)")
+    e.add_argument("--index-bits", type=int, metavar="B",
+                   help="B-bit noise entries on the operand the table route indexes, which costs B times the 1-bit "
+                        "route's lane instructions and bytes (default: the design's [table] bits, else 1)")
     args = p.parse_args(argv)
     if args.cmd is None:
         print(__doc__)

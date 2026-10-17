@@ -116,6 +116,9 @@ def test_a_uniform_instruction_on_the_issue_rows():
     refit = E.Machine(vector="X", rows=("issue", "JI3n_0", "JI3n_1", "A", "UP"), cuda=(),
                       c={"ALU": {"issue": 1.0, "JI3n_0": 0.9346, "JI3n_1": 0.2963, "A": 2.0}, "UNI": {"UP": UP}})
     assert E.uniform_on_issue(refit, 0.92).c["UNI"] == pytest.approx({"UP": UP, "issue": 0.92, "JI3n_0": 0.92 * 0.9346})
+    charged = replace(refit, c={**refit.c, "UNI": {"UP": UP, "issue": 1.0, "JI3n_0": 0.69}})   # VF3p-16's kind of census
+    assert not E.uniform_issue_charged(refit) and E.uniform_issue_charged(charged)
+    assert E.uniform_on_issue(charged, 0.92) is charged
     old, new = E.setup(DUO, PI, credit="floor"), E.setup(DUO, pi, credit="floor")
     assert new.baseline.T == pytest.approx(old.baseline.T, rel=1e-9)
     assert E.threshold(old) is None and E.threshold(new) == pytest.approx(E.threshold(old, uniform=False), abs=1e-5)
@@ -231,6 +234,25 @@ def test_adapt_is_a_proof_units_term():
     assert all(E.adapt(n).selection for n in E.adapts())
 
 
+def test_two_bit_entries_on_the_indexed_operand(tmp_path):
+    """b-bit noise entries on the operand the table route indexes cost it b times the 1-bit lane instructions and bytes;
+    at b = 2 (2.44 slots) the route is above the lane threshold, so the core ε is the closed route's."""
+    t = E.table()
+    d = E.design("dither-c")
+    assert d.index_bits == 1 and d.table(t) is t and d.table(None) is None
+    b2 = d.with_index_bits(2)
+    assert b2.name == "dither-c@b2" and (b2.table(t).q, b2.table(t).bytes) == (2 * t.q, 2 * t.bytes)
+    pi = E.uniform_on_issue(PI, 0.92)
+    closed, one = (E.eps(x, pi, 8, operands="floor", credit="floor", table=tb) for x, tb in ((d, None), (d, t)))
+    two = E.eps(b2, pi, 8, operands="floor", credit="floor", table=t)
+    assert one.core() > closed.core() + 0.01 and two.core() == pytest.approx(closed.core(), abs=1e-9)
+    data = tmp_path / "data"
+    shutil.copytree(E.DATA, data)
+    f = data / "designs" / "dither-c.toml"
+    f.write_text(f.read_text() + "\n[table]\nbits = 2\n")
+    assert E.design("dither-c", data).index_bits == 2 and E.design("dither-c-peel", data).index_bits == 2
+
+
 def test_core_and_sample_are_two_layers():
     """Daniel (06:29Z): the core ε is the protocol with 100% checking, ε_luck = ε_adapt = 0; ε_sample = ε_luck + ε_adapt
     is the sampling compiler's and never enters it."""
@@ -340,7 +362,7 @@ def test_cli(capsys):
     assert "ε_sample   21.153%" in capsys.readouterr().out
     with pytest.raises(SystemExit, match="--checking sampled"):
         main(["eps", "--adapt", "whole"])
-    assert main(["eps", "--vector", PIN, "dither-two-sided", "--uni-issue", "1", "--operands", "floor", "--credit",
+    assert main(["eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--operands", "floor", "--credit",
                  "floor", "--checking", "sampled", "--adapt", "per-stage", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-2s" and d["registry"]["aliases"] == ["dither-two-sided", "A", "adopted-bd-lm"]
