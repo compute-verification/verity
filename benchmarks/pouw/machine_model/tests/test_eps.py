@@ -381,8 +381,9 @@ def test_sm89_the_fold_binds_honest():
     ALU's measured rate, above IMMA.16816's issue, so no lane route saves time at any q*. The uniform route does: UNI
     runs on UP at 2.0 a SM-clock (uniform.cu, every form) and costs issue and JI89 its measured cost beside honest16, so
     a cheater writes words there in JI89's slack, less of them as q* grows, and ε_machine never reaches its floor. At
-    L = 32 IMMA.16832's joint facets with ALU bind, lane words on other pipes save time until q* reaches dp4a's 8.5, and
-    UNI's JI89 cost leaves the uniform route nothing."""
+    L = 32, with IMMA.16832's ALU and FFMA facets refitted to FACET-BREAK's schedule (EPS1 ADA r3, opcode_probe/sm89/
+    ji.py), JI89 binds the floor program and the cheater alike: lane words save time only below JI89's q*0 (IMMA.16832's
+    coefficient over a thread's 4 words, 1.9), and UNI's JI89 cost leaves the uniform route nothing."""
     pi = E.machine("", SM89)
     assert pi.vector == "ADA-89" and set(pi.c[E.UNI]) == {"UP", "issue", "JI89"}
     assert pi.c[E.UNI]["UP"] == pytest.approx(4 / (2.0 * 1.02), rel=1e-3)   # UNI's rate + 2%
@@ -400,9 +401,9 @@ def test_sm89_the_fold_binds_honest():
     assert e.T_honest * 128 == pytest.approx(19.069) and e.T_honest_source == "measured"
     assert e.gamma_clock == pytest.approx(e.gamma * 2520 / 1680, rel=1e-6)
     s32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor")
-    assert E.threshold(s32) == pytest.approx(8.5, abs=1e-5)   # dp4a: 8 IDP4A and 0.5 LDS.128 a word
-    assert s32.machine_eps(8.5) == pytest.approx(0, abs=1e-9) and 0 < s32.machine_eps(8) < s32.machine_eps(2)
-    assert all(s32.machine_eps(q) == pytest.approx(s32.machine_eps(q, uniform=False), abs=1e-12) for q in (2, 8, 16))
+    assert "JI89" in s32.as_built.binding and 1.8 < E.threshold(s32) < 2
+    assert all(s32.machine_eps(q) == pytest.approx(0, abs=1e-9) for q in (2, 8, 16)) and s32.machine_eps(1.5) > 0
+    assert all(s32.machine_eps(q) == pytest.approx(s32.machine_eps(q, uniform=False), abs=1e-12) for q in (1.5, 2, 8))
     t = E.table(SM89)
     assert t.l2 is None and t.per_cycle() is None and t.mhz == 2520 and t.sms == 142
     open32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor", table=t)
