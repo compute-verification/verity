@@ -186,29 +186,36 @@ def rotate_linear(mm, nxt, *, kind: str = "q"):
 
 
 def _check_int8_linear(p):
-    if p["act"] not in ("round", "dither"):
-        raise ValueError("int8.act is round or dither")
+    for x in ("act", "weight"):
+        if p[x] not in ("round", "dither"):
+            raise ValueError(f"int8.{x} is round or dither")
     if not 1 <= p["weight_top"] <= 127 or not 2 <= p["act_top"] <= 127:
         raise ValueError("int8: tops within 127")
     if p["gptq"] and p["group"]:
         raise ValueError("int8: gptq runs on one scale per row")
+    if p["weight"] == "dither" and (p["gptq"] or p["group"] or p["weight_top"] < 2):
+        raise ValueError("int8: a dithered weight has one scale per row, no gptq and weight_top >= 2")
     per = p["density"] * WORD_K
     if not 0 < p["density"] <= 1 or abs(per - round(per)) > 1e-9:
         raise ValueError(f"int8.density is in (0, 1], a multiple of 1/{WORD_K}")
     if p["density"] < 1 and p["act"] != "dither":
         raise ValueError("int8.density thins the activations' dither: act = dither")
+    if p["density"] < 1 and p["weight"] == "dither":
+        raise ValueError("int8.density thins the activations' dither only: a dithered weight takes density = 1 "
+                         "(the grid step thins both operands)")
 
 
-@linear_step("int8", phase="quantize", seeded=lambda p: p["act"] == "dither", calib=lambda p: p["gptq"],
+@linear_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["act"], p["weight"]), calib=lambda p: p["gptq"],
              check=_check_int8_linear)
-def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight_top: int = 127, group: int = 0,
-                gptq: bool = False, density: float = 1.0):
+def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str = "round", weight_top: int = 127,
+                group: int = 0, gptq: bool = False, density: float = 1.0):
     """The int8 grid: activations one scale per token (`round` to [-act_top, act_top], or `dither`: floor(x / s) + b,
     b a fresh coin bit, s = absmax / (act_top - 1)), weights one scale per output row (or per (row, `group` inputs),
-    each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded or by GPTQ (blocks of 128, on
-    the calibration windows' served inputs). The integer product is exact (s8 x s8 -> s32), scaled after. `density`
-    < 1: the dither only on a coin-chosen density * 64 of every k64 word's positions (`coin_positions`), the rest
-    rounded on the same scale; a weight-side coin (the `peel` step's U) sits on every position."""
+    each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded, by GPTQ (blocks of 128, on
+    the calibration windows' served inputs) or dithered like the activations (fresh bits every call, drawn after the
+    activations'). The integer product is exact (s8 x s8 -> s32), scaled after. `density` < 1: the activations'
+    dither only on a coin-chosen density * 64 of every k64 word's positions (`coin_positions`), the rest rounded on the
+    same scale; a weight-side coin (the `peel` step's U) sits on every position."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
         if gptq:
@@ -217,6 +224,10 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight_top: 
 
     def weights():
         w = mm.weight()
+        if weight == "dither":
+            t = weight_top - 1
+            s = w.abs().amax(dim=1).clamp(min=1e-30) / t
+            return torch.floor((w / s[:, None]).clamp(-t, t)).to(torch.int8), s
         if gptq:
             q, s = gptq_round(w, mm.run.calib["H"][hkey], weight_top)
             return q.to(torch.int8), s
@@ -233,6 +244,8 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight_top: 
     k = mm.x.shape[1]
     coined = mm.cached("pos", lambda: coin_positions(mm, k, density)) if density < 1 else None
     xq, sa = act_quant(mm.x, act, bits, act_top, coined)
+    if weight == "dither":
+        wq = (wq.float() + mm.coins(wq.shape)).to(torch.int8)
     if group:
         k = xq.shape[1]
         y = torch.zeros(xq.shape[0], wq.shape[0], device=xq.device)
@@ -260,10 +273,10 @@ def quant(x: torch.Tensor, top: int, dims) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.round(x / s).clamp(-top, top), s
 
 
-def floor_quant(x: torch.Tensor, dims) -> tuple[torch.Tensor, torch.Tensor]:
-    """floor(x / s) in [-128, 126] and s, the smallest scale (to 2^-20) that keeps x / s in [-128, 127): with a fresh bit
-    added, the served X stays within int8."""
-    s = torch.maximum(x.amax(dim=dims, keepdim=True) / 127, (-x).amax(dim=dims, keepdim=True) / 128)
+def floor_quant(x: torch.Tensor, dims, top: int = 127) -> tuple[torch.Tensor, torch.Tensor]:
+    """floor(x / s) in [-top - 1, top - 1] and s, the smallest scale (to 2^-20) that keeps x / s in [-top - 1, top): with
+    a fresh bit added, the served X stays within [-top - 1, top] (int8 at top = 127)."""
+    s = torch.maximum(x.amax(dim=dims, keepdim=True) / top, (-x).amax(dim=dims, keepdim=True) / (top + 1))
     s = s.clamp(min=1e-30) * (1 + 2 ** -20)
     return torch.floor(x / s), s
 
@@ -317,7 +330,7 @@ def center_keys(mm, nxt):
 
 
 def _check_int8_attention(p):
-    for x in ("k", "v"):
+    for x in ("q", "k", "v"):
         if p[x] not in ("round", "dither"):
             raise ValueError(f"int8.{x} is round or dither")
     if p["v_scale"] not in ("channel", "head"):
@@ -328,21 +341,28 @@ def _check_int8_attention(p):
         raise ValueError("int8: tops within 127")
 
 
-@attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["k"], p["v"]), check=_check_int8_attention)
-def int8_attention(mm, nxt, *, q_top: int = 127, k: str = "round", k_top: int = 127, p_top: int = 127,
-                   p_block: int = 0, p_sink: bool = False, v: str = "round", v_top: int = 127, v_scale: str = "channel"):
-    """Both attention matmuls on one int8 limb. Q, K: one scale per (head, token), Q rounded to [-q_top, q_top], K
-    rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-128, 127), b a fresh bit for
-    every query head). P: after the softmax, one scale per query row, or per (row, block of `p_block` keys), `p_sink`
-    putting key 0 in a block of its own, rounded to [0, p_top], each block's product read and scaled on its own. V: one
-    scale per (KV head, channel) (`v_scale = "head"`: per KV head), rounded or dithered. Products exact in FP32 chunks."""
+@attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["v"]),
+                check=_check_int8_attention)
+def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "round", k_top: int = 127,
+                   p_top: int = 127, p_block: int = 0, p_sink: bool = False, v: str = "round", v_top: int = 127,
+                   v_scale: str = "channel"):
+    """Both attention matmuls on one int8 limb. Q, K: one scale per (head, token), Q rounded to [-q_top, q_top] or
+    dithered, K rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-top - 1, top), b
+    a fresh bit (for K, one for every query head), so the served operand is within [-top - 1, top]). P: after the
+    softmax, one scale per query row, or per (row, block of `p_block` keys), `p_sink` putting key 0 in a block of its
+    own, rounded to [0, p_top], each block's product read and scaled on its own. V: one scale per (KV head, channel)
+    (`v_scale = "head"`: per KV head), rounded or dithered. Products exact in FP32 chunks."""
     rep = mm.extra["rep"]
     if mm.kind == "qk":
-        qi, sq = quant(mm.x, q_top, -1)
+        if q == "dither":
+            qi, sq = floor_quant(mm.x, -1, q_top)
+            qi = qi + mm.coins(qi.shape)
+        else:
+            qi, sq = quant(mm.x, q_top, -1)
 
         def keys():
             kg = mm.weight()
-            kq, sk = floor_quant(kg, -1) if k == "dither" else quant(kg, k_top, -1)
+            kq, sk = floor_quant(kg, -1, k_top) if k == "dither" else quant(kg, k_top, -1)
             kq = kq.expand(rep, *kq.shape)
             if k == "dither":
                 kq = kq + mm.coins(kq.shape)
@@ -355,7 +375,7 @@ def int8_attention(mm, nxt, *, q_top: int = 127, k: str = "round", k_top: int = 
     def values():
         vg = mm.weight()
         dims = 0 if v_scale == "channel" else (0, 1)
-        vq, sv = floor_quant(vg, dims) if v == "dither" else quant(vg, v_top, dims)
+        vq, sv = floor_quant(vg, dims, v_top) if v == "dither" else quant(vg, v_top, dims)
         vq = vq.expand(rep, *vq.shape)
         if v == "dither":
             vq = vq + mm.coins(vq.shape)

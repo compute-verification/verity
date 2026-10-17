@@ -9,4 +9,8 @@ theorem main_thm (h : Control.Hyp) (n : Nat) : double n = n + n := by
 
 theorem helper : double 0 = 0 := rfl
 
+theorem Small_fails : ∃ n, ¬ Small n := ⟨10, by unfold Small; omega⟩
+
+theorem Small_meets : (3 : Nat) < 10 := by omega
+
 end Control
