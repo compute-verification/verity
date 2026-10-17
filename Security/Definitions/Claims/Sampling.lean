@@ -11,10 +11,10 @@ the code side's.
 1. **Statement** (`Stmt`): the program `C` (named by its digest; both parties hold it), as its descriptor and its gates,
    the partition query `Q` (named, versioned, with its parameters), the sampling design, and the roots the trace is
    committed under. The partition is public: `P = Q(C)`, which the verifier evaluates itself on the statement it parsed,
-   descriptor and gates (`Deploy.partition`), gives the proof units (sets of gates of
-   `C`, every gate but a constant in exactly one, input gates included; a constant is public and in one or in none), the
-   replay units, the strata and the classes, and so every replay unit's size `n_v`. `x` is the canonical bytes of what the verifier reads before it draws, and `parse`
-   is its own.
+   descriptor and gates (`Deploy.partition`), gives the proof units (sets of gates of `C`, every gate but a constant in
+   exactly one, input gates included; a constant is public and in one or in none), the replay units, the strata and the
+   classes, and so every replay unit's size `n_v`. `x` is the canonical bytes of what the verifier reads before it
+   draws, and `parse` is its own.
 2. **Witness** (`Wit`): openings of the committed values of `C`'s gates under the roots.
 3. **Relation** (`R δ`): the set of faulty units of the committed trace is in the confidence set
    `M_δ = {B : P_a(B) > δ}`. A unit is faulty when its committed outputs differ from its gates applied to its committed
@@ -424,10 +424,10 @@ def InScope (P : Partition) (s : Stmt) : Prop :=
 
 /-- What the deployed sampled verifier brings, read by the claims: the verifier, its parser and scope check, its own
 evaluation of a statement's partition query on its program, descriptor and gates (`partition`, `P = Q(C)`), the
-trace's commitment, the universal unit of
-each size class (the program a private circuit's units run, its arguments the private netlist), and the Flock verifier
-its sessions run (`flock`): whether it is the masked one, its parser, the opened columns of a run, the code, each
-trace's codeword length and decoding radius, and how a trace is read as a witness.
+trace's commitment, the universal unit of each size class (the program a private circuit's units run, its arguments the
+private netlist), and the Flock verifier its sessions run (`flock`): whether it is the masked one, its parser, the
+opened columns of a run, the code, each trace's codeword length and decoding radius, and how a trace is read as a
+witness.
 
 The draw is `V`'s, from its coins, in this layout: `stage2` holds the rounds after the first stage (the proof units'
 draw under two-stage sampling, and the sessions), so runs that keep the other rounds make the same first draw and see the
