@@ -671,6 +671,11 @@ OP_KERNEL(tclaneU_li_r256, 512) { lane_until_mma<L_LI, 256>(a); }
 OP_KERNEL(tcfU_li_r128, 512) { lane_until_mma<L_LI, 128, true>(a); }
 OP_KERNEL(tcfU_li_r256, 512) { lane_until_mma<L_LI, 256, true>(a); }
 OP_KERNEL(tcfU_li_r1024, 512) { lane_until_mma<L_LI, 1024, true>(a); }
+OP_KERNEL(tclaneU_lif_r128, 512) { lane_until_mma<L_LIF, 128>(a); }
+OP_KERNEL(tclaneU_lif_r512, 512) { lane_until_mma<L_LIF, 512>(a); }
+OP_KERNEL(tcfU_lif, 512) { lane_until_mma<L_LIF, 64, true>(a); }
+OP_KERNEL(tcfU_lif_r128, 512) { lane_until_mma<L_LIF, 128, true>(a); }
+OP_KERNEL(tcfU_lif_r512, 512) { lane_until_mma<L_LIF, 512, true>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -747,6 +752,11 @@ static const OpProbe PROBES[] = {
     {.name = "tcfU_li_r128", .kernel = (const void*)tcfU_li_r128, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=64,IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcfU_li_r256", .kernel = (const void*)tcfU_li_r256, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=128,IMAD=128", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcfU_li_r1024", .kernel = (const void*)tcfU_li_r1024, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=512,IMAD=512", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_lif_r128", .kernel = (const void*)tclaneU_lif_r128, .tpb = 512, .expect = UI ";LOP3.LUT=56,IMAD=56,FFMA=16", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_lif_r512", .kernel = (const void*)tclaneU_lif_r512, .tpb = 512, .expect = UI ";LOP3.LUT=224,IMAD=224,FFMA=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcfU_lif", .kernel = (const void*)tcfU_lif, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=28,IMAD=28,FFMA=8", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcfU_lif_r128", .kernel = (const void*)tcfU_lif_r128, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=56,IMAD=56,FFMA=16", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcfU_lif_r512", .kernel = (const void*)tcfU_lif_r512, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=224,IMAD=224,FFMA=64", .warps = "1;12", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
