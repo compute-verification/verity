@@ -27,6 +27,11 @@ applies it: the appends' tree roots and sizes (`Session.append`), then the block
 (`Session.release`), then the pass's plan as a change from the last one sent (`Session.receive(..., change=...)`).
 A pass discarded at a boundary sends nothing, and the next root sent carries its changes too.
 
+Every root's message names the step its pass covers (`Session.receive(..., step=...)`, PROTOCOL.md §8 "The pass and
+its step"): the backend's `step_of(ticket)` if it has one, which a serving backend takes from its engine, and otherwise
+the count of the session's passes launched before it. A serving trace's step before pass n is recorded as step n − 1,
+so pass n reads the store that step left.
+
     python prover.py --connect HOST:PORT --out OUT --plan honest,skip:3e-5 [device options, `device.py`]
     python prover.py --connect HOST:PORT --out OUT --plan kv:4,kvdrop:4 --cpu 256 --codec p512/k2
                                                         the driver's reference as the backend, no GPU
@@ -73,6 +78,7 @@ class _Pass:
     i: int
     ticket: object
     start: int | None
+    step: int = 0
     discard: bool = False
     plan: rb.Plan | None = None
     upto: tuple[int, int] = (0, 0)
@@ -141,7 +147,8 @@ class ServingTrace:
         self.released: list[int] = []
         self.appended: list[int] = []
 
-    def step(self) -> memory_map.Change:
+    def step(self, s: int) -> memory_map.Change:
+        """The trace's next write, recorded as memory-map step `s`."""
         n, k = len(self.slots), (self.pages // 2 if self.steps % 3 == 2 else 0)
         freed = [s for s in (self.slots[(self.cursor + u) % n] for u in range(k)) if self.replay.holds(s) is not None]
         slots = [self.slots[(self.cursor + k + u) % n] for u in range(self.pages)]
@@ -149,7 +156,7 @@ class ServingTrace:
         payloads = [payload(self.rng) for _ in slots]
         first = self.replay.extent
         written = tuple(memory_map.Written(s, first + u, rcodec.digest(m)) for u, (s, m) in enumerate(zip(slots, payloads)))
-        change = self.replay.apply(memory_map.Step(self.steps, tuple(freed), written))
+        change = self.replay.apply(memory_map.Step(s, tuple(freed), written))
         self.steps += 1
         a = self.backend.append(payloads, [self.rng.randbytes(rb.SALT_BYTES) for _ in payloads])
         if a.first != change.first or a.digests != change.digests:
@@ -380,21 +387,23 @@ class ProverSide:
             return coin.coin
 
         backend, clock = self.backend, self.conn.clock
+        step_of = getattr(backend, "step_of", None)
         launched, sent_plan, sent_upto = 0, rb.Plan.whole(N), (0, 0)
 
         def launch(t: int, i: int, after, start: int | None) -> _Pass:
             """Pass i of window t; with a serving trace, after the trace's step if one falls due, over every live
             block."""
             nonlocal launched
-            launched += 1
+            n, launched = launched, launched + 1
             if trace is None:
-                return _Pass(t, i, backend.launch(i, after), start)
-            if launched > 1 and (launched - 1) % self.kv_every == 0:
-                trace.step()
+                ticket = backend.launch(i, after)
+                return _Pass(t, i, ticket, start, step=step_of(ticket) if step_of is not None else n)
+            if n > 0 and n % self.kv_every == 0:
+                trace.step(n - 1)
                 if mode == "kvdrop":
                     backend.arm(trace.appended)
             plan = trace.plan()
-            return _Pass(t, i, backend.launch(i, after, plan), start, plan=plan,
+            return _Pass(t, i, backend.launch(i, after, plan), start, step=n, plan=plan,
                          upto=(len(trace.appends), len(trace.released)))
 
         backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
@@ -406,7 +415,7 @@ class ProverSide:
             nonlocal sent_plan, sent_upto
             with self.lock:
                 self.kept[(x.t, x.i)] = handle
-            msg = {"type": "root", "t": x.t, "i": x.i, "root": root.hex()}
+            msg = {"type": "root", "t": x.t, "i": x.i, "root": root.hex(), "step": x.step}
             if x.plan is not None:
                 (a0, r0), (a1, r1) = sent_upto, x.upto
                 if a1 > a0:

@@ -88,7 +88,7 @@ class Run:
         self.store = store
         self.prover = audit.Prover(prover_store or store, None, self.s.commitment, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
-        self.t, self.i, self.previous, self.plan = 0, 0, reg.digest, Plan.whole(reg.blocks)
+        self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.passes: dict[tuple[int, int], audit.Pass] = {}
 
     def append(self, count: int) -> audit.Append:
@@ -96,18 +96,21 @@ class Run:
         assert self.s.append(a.root, a.count) == a.first
         return a
 
-    def run(self, plan: Plan | None = None, change: tuple | None = None, sent=None) -> audit.Verdict | None:
-        """One pass, its plan sent whole (None: the registered store) or as its `change` (added, removed)."""
+    def run(self, plan: Plan | None = None, change: tuple | None = None, sent=None, step: int | None = None
+            ) -> audit.Verdict | None:
+        """One pass, its plan sent whole (None: the registered store) or as its `change` (added, removed), covering
+        `step` (None: the step after the last pass's)."""
         if change is not None:
             plan = self.plan.changed(*change, self.store.extent)
         ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan)
         self.passes[self.t, self.i], self.previous, self.plan = ps, ps.root, ps.plan
         self.i += 1
+        self.step = self.step + 1 if step is None else step
         if sent is not None:
-            return self.s.receive(self.t, self.i - 1, ps.root, sent)
+            return self.s.receive(self.t, self.i - 1, ps.root, sent, step=self.step)
         if change is not None:
-            return self.s.receive(self.t, self.i - 1, ps.root, change=change)
-        return self.s.receive(self.t, self.i - 1, ps.root, None if plan is None else plan.runs)
+            return self.s.receive(self.t, self.i - 1, ps.root, change=change, step=self.step)
+        return self.s.receive(self.t, self.i - 1, ps.root, None if plan is None else plan.runs, step=self.step)
 
     def boundary(self) -> None:
         self.clock.now += self.p.window_ns
@@ -207,10 +210,18 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
         audit.ledger(rec, **common, credit_post_seed=Verdict(True, float("inf")))
 
 
-def synthetic(lengths: tuple[int, ...], post: tuple[int, ...]) -> audit.Record:
+def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = ()) -> audit.Record:
     w = audit.WindowRecord(0, lengths, 0, 10**9, 10**9, IntegrityProfile(
-        ("receipt",), (sum(lengths),), {"receipt": Subset(1)}, 1e-6, drawn={"receipt": 1}), post)
+        ("receipt",), (sum(lengths),), {"receipt": Subset(1)}, 1e-6, drawn={"receipt": 1}), post, steps)
     return audit.Record(bytes(64), bytes(64), 10, 4096, (w,))
+
+
+def test_a_window_record_s_steps_are_each_pass_s_strictly_increasing() -> None:
+    assert synthetic((10, 12), (), (3, 8)).windows[0].to_json()["steps"] == [3, 8]
+    assert synthetic((10, 12), ()).windows[0].steps == ()
+    for bad in ((3,), (3, 3), (8, 3), (-1, 3), (3, True), (3, audit.STEP_LIMIT)):
+        with pytest.raises(ValueError, match="steps"):
+            synthetic((10, 12), (), bad)
 
 
 def test_a_window_record_s_post_seed_reads_are_each_pass_s_at_most_its_length() -> None:
@@ -293,7 +304,7 @@ def test_a_plan_holding_a_block_not_appended_or_released_is_refused() -> None:
     """A plan is over the store's blocks so far: one holding a block before the append that commits it, or after its
     release, is refused (`plan`), whole or as a change."""
     r = Run(store())
-    assert r.s.receive(0, 0, bytes(64), ((0, N + 1),)).failure == "plan"
+    assert r.s.receive(0, 0, bytes(64), ((0, N + 1),), step=0).failure == "plan"
 
     r = Run(store())
     r.append(2)
@@ -304,10 +315,10 @@ def test_a_plan_holding_a_block_not_appended_or_released_is_refused() -> None:
     r.append(2)
     assert r.run(change=(((N, 2),), ())) is None
     assert r.s.release(((N + 1, 1),)) is None
-    assert r.s.receive(0, 1, bytes(64), change=((), ())).failure == "plan"
+    assert r.s.receive(0, 1, bytes(64), change=((), ()), step=1).failure == "plan"
 
     r = Run(store())
-    assert r.s.receive(0, 0, bytes(64), ((0, N),), change=((), ())).failure == "plan"
+    assert r.s.receive(0, 0, bytes(64), ((0, N),), change=((), ()), step=0).failure == "plan"
 
 
 def test_a_malformed_append_or_release_rejects_the_session() -> None:

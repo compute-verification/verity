@@ -108,7 +108,7 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
             pair = joint_pass(store, t, i, seeds, reads, entropy)
             for k in (0, 1):
                 passes[k][t, i], previous[k] = pair[k], pair[k].root
-                assert sessions[k].receive(t, i, pair[k].root, pair[k].plan.runs) is None
+                assert sessions[k].receive(t, i, pair[k].root, pair[k].plan.runs, step=3 * t + i) is None
         clock.now += 10
         challenges = [s.boundary() for s in sessions]
     for k in (0, 1):
