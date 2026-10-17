@@ -39,6 +39,8 @@ uv run machine-model eps --device sm89 --table --credit floor --operands floor  
 uv run machine-model eps --device sm100 --table --credit floor --operands floor   # the B200 at L = 32 to 256
 uv run machine-model headline             # each family's design of record at the data-sheet and measured readings
 uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
+uv run machine-model counts e-l7qs 2048 28672 4096   # H's closed-form instruction counts and model bound at a shape
+uv run machine-model counts e-l7qs --check           # every ncu observation of H against them
 ~~~
 
 The data, each kind of thing a file or a line of its own:
@@ -60,6 +62,9 @@ The data, each kind of thing a file or a line of its own:
   at the 32 lanes it serves), with the words a warp instruction of it writes.
 - `data/honest/NAME.toml`: an honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the
   least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA, with its source.
+- `data/counts/NAME.toml`: an honest kernel's executed warp instructions by class as a closed form in the shape (a
+  stage's, a tile's and a launch's, per variant), the ncu observations they are fitted to and the tolerance that holds
+  them.
 - `data/designs/NAME.toml`: one design of the registry ("Designs" below): its name, title and aliases, the noise on each
   product, its honest profile, L, the noise's operand-delivery floor φ_del, the fold and filler (lane instructions a
   word by class), plain (unfolded) MMAs beside its work, the proof unit, the coins, its perplexity arm, and ε_skip's and
@@ -89,6 +94,8 @@ The code:
 - `verity_machine_model/resolve.py`: re-solving a named vector from the data.
 - `verity_machine_model/eps.py`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2)
   and ε_machine's LP.
+- `verity_machine_model/counts.py`: n(H)(m, n, k) from that closed form, the model bound it gives at any shape the
+  kernel runs, its fit and its check.
 - `verity_machine_model/capacity.py`: the certified share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity,
   hidden(n̄) the useful work any program could still add beside the pooled certified load n̄ (the filler workstream,
   decision 77; note:20261017T0652Z-draft-filler).
