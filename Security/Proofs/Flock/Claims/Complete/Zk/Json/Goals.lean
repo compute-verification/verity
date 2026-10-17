@@ -11,7 +11,8 @@ specification (`JsonSpec`) and 64-byte oracle outputs (`Out64`), and two named h
 
 * `StmtOkZk`: a non-empty `Σ`, a printable draw that decodes (`DrawOk`), the statement's draw the one it was set up at,
   and the verifier's `Hello` a JSON object whose `coins` is an object, printable with the prover's nonce put in (what
-  the prover's `Hello` and R7 need). The keyed coin tree is `readyZk`'s.
+  the prover's `Hello` and R7 need). The keyed coin tree is `readyZk`'s. It holds at every good masked case under
+  `JsonSpec` (`stmtOkZk`, `Zk/Json/Stmt.lean`).
 * `ProverOkZk`: at the case's table, the masked commitment's cap, at the `--zk` schedule's first level, is non-empty and
   under `2^64` bytes, and each masked rep, on the table's extra claims at the link's points, records a round, each of
   at most `65536` coins (`RepOk`).
