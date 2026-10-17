@@ -259,7 +259,6 @@ def toyFlock : Flock.Deploy Bool ℕ Unit where
   weight _ := 0
   waits _ := 0
   cap _ := 0
-  dec _ := ([], 0)
 
 /-- **A sampled deployment with the toy's numbers** at every statement. -/
 def toyD : Deploy Bool ℕ Unit where
