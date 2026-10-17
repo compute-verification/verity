@@ -70,11 +70,11 @@ theorem zk_setupOne_range {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tbl
   · exact ⟨(Discharge.Hidden.setupHidden_spec' h).inRange, (Discharge.Hidden.setupHidden_wf h).2⟩
   · exact ⟨FlockVBridge.Family.setupH_inRange h, (Refine.setupH_wf h).2⟩
 
-/-- **A masked statement in scope has link points of at most 64 coordinates**, so its two link points fit a live
-coin: table 0's range check and regions, whose link points are the session's. -/
-theorem zk_mPts_le {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+/-- **A masked statement in scope has link points of between 1 and 64 coordinates**, so its two link points fit a
+live coin: table 0's range check and regions, whose link points are the session's. -/
+theorem zk_mPts {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) : 2 * spec.mPts ≤ 65536 := by
+    (hset : setupOf true x = some (ins, spec, sts)) : 2 * spec.mPts ≤ 65536 ∧ 1 ≤ spec.mPts := by
   obtain ⟨p, hp, rfl, -, -, -⟩ := parsed_of_parse hs
   obtain ⟨hpst, hpr, hsr⟩ := parseBytes_setup hp hset
   subst hpst
@@ -91,7 +91,13 @@ theorem zk_mPts_le {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Rea
   have h64 := ((checkInRange_ok _ _ _).1 hr).2.2
   have hm := hwf.mPts
   unfold PT_LOCAL at h64 hm
-  omega
+  exact ⟨by omega, by omega⟩
+
+/-- **A masked statement in scope has link points of at most 64 coordinates** (`zk_mPts`). -/
+theorem zk_mPts_le {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) : 2 * spec.mPts ≤ 65536 :=
+  (zk_mPts hs hin hset).1
 
 /-! ## The fork rounds -/
 
