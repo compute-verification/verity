@@ -147,7 +147,34 @@ theorem price_of_parts [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : 
     (hX : FillOpt Z A) :
     A.fixed * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam ≤
       Z.G.price lam A.run.n := by
-  sorry
+  obtain ⟨-, hw0, -, -⟩ := stars_nonneg Z P lam hZ h
+  have hdom := head_dominates Z P A hZ hA hW hS hU
+  have hfold := hF lam h
+  have hfill := hX lam h
+  obtain ⟨ha, -⟩ := hZ
+  obtain ⟨hlam, -⟩ := h
+  obtain ⟨-, -, -, hwd, hsplit⟩ := hA
+  have hword : ∀ hd, A.words hd * Z.wStar lam ≤ Z.G.price lam (A.nword hd) := by
+    intro hd
+    calc A.words hd * Z.wStar lam ≤ A.words hd * demandPrice lam (Z.demand hd) :=
+          mul_le_mul_of_nonneg_left
+            (ciInf_le (Set.finite_range fun hd => demandPrice lam (Z.demand hd)).bddBelow hd) (hwd hd)
+      _ = ∑ r, lam r * (A.words hd * Z.demand hd r) := by
+          simp only [demandPrice, Finset.mul_sum]
+          exact Finset.sum_congr rfl fun _ _ => by ring
+      _ ≤ ∑ r, lam r * Z.G.load (A.nword hd) r :=
+          Finset.sum_le_sum fun r _ => mul_le_mul_of_nonneg_left (hdom hd r) (hlam r)
+      _ = Z.G.price lam (A.nword hd) := rfl
+  calc A.fixed * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam
+      ≤ (∑ hd, A.words hd) * Z.wStar lam + Z.G.price lam A.nfold + Z.G.price lam A.nfill :=
+        add_le_add (add_le_add (mul_le_mul_of_nonneg_right hN hw0) hfold) hfill
+    _ = ∑ hd, A.words hd * Z.wStar lam + Z.G.price lam A.nfold + Z.G.price lam A.nfill := by
+        rw [Finset.sum_mul]
+    _ ≤ ∑ hd, Z.G.price lam (A.nword hd) + Z.G.price lam A.nfold + Z.G.price lam A.nfill :=
+        add_le_add (add_le_add (Finset.sum_le_sum fun hd _ => hword hd) le_rfl) le_rfl
+    _ = Z.G.price lam (fun k => ∑ hd, A.nword hd k + A.nfold k + A.nfill k) := by
+        rw [price_add, price_add, price_sum]
+    _ ≤ Z.G.price lam A.run.n := price_mono Z.G lam ha hlam hsplit
 
 /-- (RD) in its per-facet form gives the same price bound (step 2 of Theorem D(a)). -/
 theorem price_of_rd [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K) (n : K → ℝ)
