@@ -88,14 +88,31 @@ DC_DEV uint32_t elect_one() {
 }
 DC_DEV void tmem_wait_ld() { asm volatile("tcgen05.wait::ld.sync.aligned;" ::: "memory"); }
 
-// tcgen05.ld.32x32b.x16: lane l of the warp gets row (32 (warp % 4) + l), 16 consecutive columns.
-DC_DEV void tmem_ld16(uint32_t taddr, uint32_t (&r)[16]) {
-  asm volatile(
-      "tcgen05.ld.sync.aligned.32x32b.x16.b32 {%0,%1,%2,%3,%4,%5,%6,%7,%8,%9,%10,%11,%12,%13,%14,%15}, [%16];"
-      : "=r"(r[0]), "=r"(r[1]), "=r"(r[2]), "=r"(r[3]), "=r"(r[4]), "=r"(r[5]), "=r"(r[6]), "=r"(r[7]), "=r"(r[8]),
-        "=r"(r[9]), "=r"(r[10]), "=r"(r[11]), "=r"(r[12]), "=r"(r[13]), "=r"(r[14]), "=r"(r[15])
-      : "r"(taddr)
-      : "memory");
+// A tcgen05.ld of 16 registers a thread. 32x32b.x16: lane l of the warp gets row (32 (warp % 4) + l), 16 consecutive
+// columns; 16x64b.x16, 16x128b.x8 and 16x256b.x4 are the other geometries of the same 512 words a warp.
+#define DC_TMEM_LD16(NAME, SHAPE)                                                                                  \
+  DC_DEV void NAME(uint32_t taddr, uint32_t (&r)[16]) {                                                            \
+    asm volatile("tcgen05.ld.sync.aligned." SHAPE                                                                  \
+                 ".b32 {%0,%1,%2,%3,%4,%5,%6,%7,%8,%9,%10,%11,%12,%13,%14,%15}, [%16];"                            \
+                 : "=r"(r[0]), "=r"(r[1]), "=r"(r[2]), "=r"(r[3]), "=r"(r[4]), "=r"(r[5]), "=r"(r[6]), "=r"(r[7]), \
+                   "=r"(r[8]), "=r"(r[9]), "=r"(r[10]), "=r"(r[11]), "=r"(r[12]), "=r"(r[13]), "=r"(r[14]),        \
+                   "=r"(r[15])                                                                                     \
+                 : "r"(taddr)                                                                                      \
+                 : "memory");                                                                                      \
+  }
+DC_TMEM_LD16(tmem_ld16, "32x32b.x16")
+DC_TMEM_LD16(tmem_ld16x64, "16x64b.x16")
+DC_TMEM_LD16(tmem_ld16x128, "16x128b.x8")
+#undef DC_TMEM_LD16
+// 32x32b.x4 and .x1: the narrow loads (4 and 1 words a thread), for the load's fixed cost a instruction.
+DC_DEV void tmem_ld4(uint32_t taddr, uint32_t (&r)[4]) {
+  asm volatile("tcgen05.ld.sync.aligned.32x32b.x4.b32 {%0,%1,%2,%3}, [%4];"
+               : "=r"(r[0]), "=r"(r[1]), "=r"(r[2]), "=r"(r[3])
+               : "r"(taddr)
+               : "memory");
+}
+DC_DEV void tmem_ld1(uint32_t taddr, uint32_t& r) {
+  asm volatile("tcgen05.ld.sync.aligned.32x32b.x1.b32 {%0}, [%1];" : "=r"(r) : "r"(taddr) : "memory");
 }
 // x32 as two x16 halves would be two instructions; this is one.
 DC_DEV void tmem_ld32(uint32_t taddr, uint32_t (&r)[32]) {
