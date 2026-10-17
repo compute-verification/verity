@@ -192,7 +192,8 @@ def binding(d: bytes, block: int, k: Key) -> int:
     if not 0 <= block < 1 << 64 or k.seed is None:
         raise ValueError("a bound key is of a u64 block, under its codec seed")
     f = k.field
-    return int.from_bytes(xof(_message(f, k.seed, BIND_INDEX) + struct.pack(">Q", block) + d, DIGEST_BYTES), "little") % f.p
+    message = _message(f, k.seed, BIND_INDEX) + struct.pack(">Q", block) + d
+    return int.from_bytes(xof(message, DIGEST_BYTES), "little") % f.p
 
 
 def rho(a: int, f: Field) -> int:

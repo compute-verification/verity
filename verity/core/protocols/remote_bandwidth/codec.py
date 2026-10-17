@@ -174,8 +174,8 @@ def key(seed: bytes, codec: Codec = DEFAULT) -> Key:
         raise ValueError("a key is of a Codec")
     f = codec.field
     mask = int.from_bytes(_xof(_message(f, seed, MASK_INDEX), f.word_bytes), "little") if codec.masked else None
-    return Key(codec, tuple(_element(f, seed, r) for r in range(codec.rounds)), _element(f, seed, TWEAK_INDEX) or 1, mask,
-               seed)
+    c = tuple(_element(f, seed, r) for r in range(codec.rounds))
+    return Key(codec, c, _element(f, seed, TWEAK_INDEX) or 1, mask, seed)
 
 
 def digest(payload: bytes) -> bytes:

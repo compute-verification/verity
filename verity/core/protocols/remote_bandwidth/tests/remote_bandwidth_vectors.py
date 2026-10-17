@@ -11,12 +11,13 @@ openings coin); the payload salts are drawn in block order and the receipt leave
 three passes are one window's chain: pass 0 follows the registration's digest and each later pass the root before it.
 A GPU receipter fills its store with the same payloads, encodes them under the pinned codec seed, and checks its blocks,
 receipts and roots against these.  `codec.bound` holds blocks 0 and 20 encoded under their bound keys, as blocks
-written after the codec seed are: d_j, b_j, the first word and the block's SHA-512.  The middle pass reads a partial plan out of store order, so its receipt for position
-p is block plan[p]'s and its tree has 10 positions.  The main chain is the default registration's: sketch-sha512, the
-default receipt kind, at 16 rows, of the block alone.  `variants` holds every other: the same store registered under
-each other kind and `bind`, and sketch-sha512 at 64 rows (named "kind", "kind/bind" for receipts that bind the stub
-tiles' z, "sketch-sha512/rows64"), with the same nonce, so the same codec seed and blocks (none of them is in the seed's
-context) under another digest, so other coins' binding, seeds, signs and roots.
+written after the codec seed are: d_j, b_j, the first word and the block's SHA-512.  The middle pass reads a partial
+plan out of store order, so its receipt for position p is block plan[p]'s and its tree has 10 positions.  The main
+chain is the default registration's: sketch-sha512, the default receipt kind, at 16 rows, of the block alone.
+`variants` holds every other: the same store registered under each other kind and `bind`, and sketch-sha512 at 64 rows
+(named "kind", "kind/bind" for receipts that bind the stub tiles' z, "sketch-sha512/rows64"), with the same nonce, so
+the same codec seed and blocks (none of them is in the seed's context) under another digest, so other coins' binding,
+seeds, signs and roots.
 """
 
 from __future__ import annotations
