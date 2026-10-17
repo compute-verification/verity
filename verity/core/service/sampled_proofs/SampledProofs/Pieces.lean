@@ -77,7 +77,7 @@ def registration (j : Json) : V Json := do
 def registered (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
   return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson)))
-    (Registered.entries v.program v.params v.registered)
+    (Registered.entries v.program.desc v.params v.registered)
 
 /-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, to
 `registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32). -/
@@ -108,14 +108,14 @@ def select (j : Json) : V Json := do
   let rule ← Select.Rule.ofJson (getD j "rule")
   let .obj _ := getD j "program" | throw "program is not an object"
   let .obj _ := getD j "query" | throw "query is not an object"
-  let d ← Flock.TemplateQuery.Desc.parse (← Flock.canon (getD j "program")).toUTF8
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
   let table := match getD j "work_table" with
     | .null => none
     | t => some t
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
-  let (draw, _, read) ← Select.select rule d (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
+  let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
 /-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),
@@ -125,14 +125,14 @@ def slots (j : Json) : V Json := do
   let rule ← Select.Rule.ofJson (getD j "rule")
   let .obj _ := getD j "program" | throw "program is not an object"
   let .obj _ := getD j "query" | throw "query is not an object"
-  let d ← Flock.TemplateQuery.Desc.parse (← Flock.canon (getD j "program")).toUTF8
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
   let table := match getD j "work_table" with
     | .null => none
     | t => some t
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
-  let (l, checked) ← Slots.select rule d (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
+  let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
     ("checked", Json.arr (checked.map fun (v, i) => Json.arr #[Lean.toJson v, Lean.toJson i]))]
 

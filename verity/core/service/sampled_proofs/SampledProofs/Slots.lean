@@ -3,13 +3,14 @@ The claims' slots over the verifier's partition (`Claims.Sampling.Partition` and
 verifier evaluates, as the claims read it, and the proof units a draw checks, each as its replay unit's slot and its index
 there.
 
-* **Classes.** Two, the population and then the inputs. The population's strata are the template query's
-  (`Partition.strata`: one per template, in the order of its first unit), each stratum's replay units its units in
-  ascending order, each unit one proof unit, its instance's gates (`TemplateQuery.gates`). The input class is one stratum
-  (none when the root has no input) of every gate of the root's input nodes, in gate order, each a replay unit of one proof
+* **Classes.** Two, the population and then the inputs. The population's strata are the query's (`Partition.strata`:
+  one per template or Definition, in the order of its first unit), each stratum's replay units its units in ascending
+  order, each unit one proof unit, its gates (`Partition.unitGates`): an instance's, a `Q_call` unit's interval, or the
+  span of the gates a `Q_word` unit owns, which another unit's gates may interleave. The input class is one stratum (none
+  when the root has no input) of every gate of the root's input nodes, in gate order, each a replay unit of one proof
   unit; it is drawn `all`, as `partition_object`'s input unit is always checked and never drawn.
 * **Slots.** A replay unit's slot is its index in class, stratum and replay-unit order (`Partition.rus`). Where no two
-  templates' units interleave, unit `i`'s slot is `i`.
+  strata's units interleave, unit `i`'s slot is `i`.
 * **Checked.** `checked` lists the proof units of every replay unit the draw proves (`Select.select`'s proved units: its
   units and a work draw's closure) and of every input slot, each as `(slot, index)`, in slot order. The one-stage rules and the two-stage
   rule a stream runs (each replay unit one instance of the check's unit, all of it checked) make every replay unit one
@@ -52,16 +53,17 @@ def inputGates (d : Desc) : Array Nat := Id.run do
     at_ := at_ + n
   return out
 
-/-- The claims' partition over the verifier's own program `d` under `query` (`Partition.evaluate`): the population's
+/-- The claims' partition over the verifier's own program `p` under `query` (`Partition.evaluate`): the population's
 strata, then the input class. An error where the query doesn't apply. -/
-def layout (d : Desc) (query : Json) : V Layout := do
-  let rs ← Partition.evaluate d query
+def layout (p : Program) (query : Json) : V Layout := do
+  let rs ← Partition.evaluate p query
+  let gs ← Partition.unitGates p query
   let strata := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))
   let pop ← strata.mapM fun (_, ranges) =>
     (ranges.flatMap fun (lo, hi) => (Array.range (hi - lo)).map (lo + ·)).mapM fun u => do
-      let some g := Flock.TemplateQuery.gates d rs u | throw s!"unit {u} has no instance"
+      let some g := gs[u]? | throw s!"unit {u} has no gates"
       pure ({ unit := some u, pus := #[g] } : RU)
-  let inputs := (inputGates d).map fun g => ({ unit := none, pus := #[(g, g + 1)] } : RU)
+  let inputs := (inputGates p.desc).map fun g => ({ unit := none, pus := #[(g, g + 1)] } : RU)
   return { classes := #[pop, if inputs.isEmpty then #[] else #[inputs]] }
 
 /-- **The checked proof units** (`Deploy.checked`) of a draw that proves the units `proved`: each proof unit of every
@@ -70,12 +72,12 @@ def checked (l : Layout) (proved : Array Nat) : Array (Nat × Nat) :=
   (l.rus.zipIdx.filter fun (r, _) => r.unit.all proved.contains).flatMap fun (r, v) =>
     (Array.range r.pus.size).map (v, ·)
 
-/-- **The challenger's draw in the claims' slots**: the layout of `d` under `query`, and the proof units of the units
+/-- **The challenger's draw in the claims' slots**: the layout of `p` under `query`, and the proof units of the units
 `Select.select`'s draw on the coins `src` proves. An error where either is. -/
-def select (rule : Select.Rule) (d : Desc) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
+def select (rule : Select.Rule) (p : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
     (src : ByteArray) : V (Layout × Array (Nat × Nat)) := do
-  let l ← layout d query
-  let (_, proved, _) ← Select.select rule d query table cm src
+  let l ← layout p query
+  let (_, proved, _) ← Select.select rule p query table cm src
   return (l, checked l proved)
 
 def RU.toJson (r : RU) : Json :=

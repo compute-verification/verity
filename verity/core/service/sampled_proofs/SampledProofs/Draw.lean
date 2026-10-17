@@ -11,17 +11,15 @@ namespace SampledProofs.Draw
 
 open Lean (Json)
 open Flock (V)
-open Flock.TemplateQuery (Desc)
-
 /-- `draw.derive`'s expansion as C-Flock's law: `stratified` and `work` (the rule, or an expanded law, whose strata are
 ignored) over the strata of the verifier's program and query (`Flock.Draw.derive`, and `Flock.Draw.deriveWork` with its
 work table); `none` for `subset` and `bernoulli`, which `derive` leaves unchanged. An error when the query doesn't apply,
 `k` isn't in `[1, population]`, a work law has no table, the table names no work for a template, or the population does
 none. -/
-def deriveLaw (d : Desc) (query law : Json) (table : Option Json) : V (Option Flock.Draw.Law) := do
+def deriveLaw (p : Program) (query law : Json) (table : Option Json) : V (Option Flock.Draw.Law) := do
   let kind := match getD law "law" with | .str s => s | _ => ""
   if !(kind == "stratified" || kind == "work") then return none
-  let strata ← Partition.strata d query
+  let strata ← Partition.strata p query
   let n := strata.foldl (fun acc (_, rs) => acc + rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0) 0
   let some k := nat? (getD law "k") | throw s!"a law needs 1 <= k <= {n}"
   if kind == "stratified" then
@@ -30,8 +28,8 @@ def deriveLaw (d : Desc) (query law : Json) (table : Option Json) : V (Option Fl
   return some (← Flock.Draw.deriveWork k strata (← Flock.Draw.workTableOfJson t))
 
 /-- `draw.derive`: the law object of `deriveLaw`'s expansion, and `law` itself where it has none. -/
-def derive (d : Desc) (query law : Json) (table : Option Json) : V Json :=
-  return ((← deriveLaw d query law table).map (·.toJson)).getD law
+def derive (p : Program) (query law : Json) (table : Option Json) : V Json :=
+  return ((← deriveLaw p query law table).map (·.toJson)).getD law
 
 /-- `draw.same_law`: the same canonical bytes. -/
 def sameLaw (a b : Json) : Bool := jeq a b

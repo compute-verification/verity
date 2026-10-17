@@ -11,8 +11,6 @@ namespace SampledProofs.Select
 
 open Lean (Json)
 open Flock (V)
-open Flock.TemplateQuery (Desc)
-
 /-- `draw.digits`: one or more ASCII digits. -/
 private def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
 
@@ -79,7 +77,7 @@ def closureMap? (j : Json) : V (Array (Int × Array Int)) := do
 private def inRange (n : Nat) (u : Int) : Bool := 0 ≤ u && u < n
 
 /-- `selection_law`, `draw.derive` and `select_draw` on the coins `src`, then `Stream.select`'s `draw.check_draw`: the
-draw object over the population of `d` under `query` (`Partition.units`), the units it proves (`Draw.proved`'s: the drawn
+draw object over the population of `p` under `query` (`Partition.units`), the units it proves (`Draw.proved`'s: the drawn
 units, then a work draw's closure) and the number of bytes of `src` it read. The law is the rule's over that population,
 expanded (`Draw.derive`, with the work `table`); `All` draws every unit and reads nothing, any other rule draws its C-Flock
 law by `Draw.drawUnits`, as `Draw.drawFirstRead` does: the law `Draw.flockLaw` reads from the law object, or, for
@@ -88,11 +86,11 @@ same law. With the closure map `cm`, a work draw carries
 the drawn units' closure (`Flock.Draw.closureOf`) when it is not empty. An error where the Python raises: the query
 doesn't apply, the rule's law or its expansion is refused, a closure map is given for another law or names a unit outside
 the population, the draw is refused (`drawFirstRead`), or it is not well formed under the law (`Draw.checkDraw`). -/
-def select (rule : Rule) (d : Desc) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
+def select (rule : Rule) (p : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
     (src : ByteArray) : V (Json × Array Nat × Nat) := do
-  let n ← Partition.units d query
+  let n ← Partition.units p query
   let named ← rule.lawOver n
-  let derived ← Draw.deriveLaw d query named table
+  let derived ← Draw.deriveLaw p query named table
   let law := (derived.map (·.toJson)).getD named
   if let some cm := cm then
     if !(jeq (getD law "law") "work" && cm.all fun (u, cs) => inRange n u && cs.all (inRange n)) then
