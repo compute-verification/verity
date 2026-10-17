@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.Recursion.InnerAccepts
 import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
 import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarKS
+import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
