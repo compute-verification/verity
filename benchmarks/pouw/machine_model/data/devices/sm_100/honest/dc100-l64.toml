@@ -1,0 +1,32 @@
+# Honest at L = 64 on the B200 (sm_100), a model profile (no kernel measured at this spacing yet): one
+# UTCIMMA.128x256x32.S8.S8, then duo on each committed word (LOP3 + IMAD + LEA.HI); the accumulator is in TMEM, so a
+# committed word is brought to registers by tcgen05.ld.32x32b.x32 (LDTM_32X32B_X32, 1024 words a warp instruction)
+# before it is folded.
+name = "dc100-l64"
+status = "provisional"
+source = "CALC from EPS1 DC's census (note:20261017T0452Z-draft-eps1-dc): duo is LOP3 + IMAD + LEA.HI a word on sm_100 (DC 05:25Z), 512 committed words a lane a MMA at L = 64"
+L = 64
+
+[mma]
+kind = "UTCIMMA.128x256x32.S8.S8"
+# tcgen05.mma m128n256k32 s8 into TMEM, issued by one thread: 32768 words, 512 SMSP-cycles on the tensor pipe, 256
+# words/SM/clk
+class = "UTCIMMA_M128_N256"
+words = 32768
+depth = 32
+
+[per_mma]       # warp instructions a MMA: the MMA, the TMEM loads and the fold (LEA.HI on ALU's row)
+UTCIMMA_M128_N256 = 1
+LDTM_32X32B_X32 = 16
+ALU = 1024
+IMAD = 512
+
+[operands]      # the least operand delivery any program pays a MMA when the design names none
+floor = { LDTM_32X32B_X32 = 16 }
+source = "tcgen05.mma reads both operands from shared memory by descriptor (TMA fills it), so delivery costs no warp instruction a MMA; the accumulator's 32768 words leave TMEM by 16 tcgen05.ld.32x32b.x32 a MMA at L = 64 (1024 words each), which every tensor-route word pays to be folded on lanes"
+
+[fold]          # lane instructions a committed word: duo, and on sm_100 the load that brings the word to a lane
+name = "duo"
+ALU = 2
+IMAD = 1
+LDTM_32X32B_X32 = 0.03125   # the word's tcgen05.ld: 1/32 of a lane instruction
