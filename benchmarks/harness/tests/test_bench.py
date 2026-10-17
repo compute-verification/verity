@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import re
 import subprocess
 import sys
 import tomllib
@@ -440,3 +442,27 @@ def test_the_decode_metric_is_reported_only_where_every_rep_has_it():
     assert "decode_time_per_token_s" not in row["arms"]["candidate"]["metrics"]
     doc["points"] = [row]
     assert "decode time / token" not in render(doc)
+
+
+def test_the_readme_states_the_contract_the_code_keeps():
+    """The README is the harness's contract (BENCH-3): every metric, gate kind, mode, schema and kind it names is the
+    code's, and the code has none it doesn't name."""
+
+    from verity_bench.vllm import result as result_format
+    from verity_bench.vllm.runner import METRICS, OPTIONAL_METRICS
+
+    root = Path(__file__).resolve().parents[3]
+    readme = (root / "benchmarks/harness/README.md").read_text()
+    runner_source = (root / "benchmarks/harness/verity_bench/vllm/runner.py").read_text()
+    for metric in METRICS + OPTIONAL_METRICS:
+        assert f"`{metric}`" in readme, metric
+    for kind in re.findall(r'"kind": "([a-z-]+)"', runner_source):
+        assert f"`{kind}`" in readme, kind
+    for mode in ("resident", "blocks"):
+        assert f"`{mode}`" in readme and f'"{mode}"' in runner_source
+    assert f"`{result_format.SCHEMA}`" in readme
+    for kind in jobs.QUEUE_KINDS.values():
+        assert f"`{kind}`" in readme, kind
+    [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
+    public = {name for name in subparsers.choices if not name.startswith("_")}
+    assert public == set(re.findall(r"^verity-bench ([a-z]+) ", readme, re.M))

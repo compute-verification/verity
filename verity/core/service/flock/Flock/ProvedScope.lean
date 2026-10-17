@@ -67,8 +67,9 @@ def scopeOkH (c : Circuit) : Bool :=
 /-- What `net`'s output ports read: for each, the input ports whose bits it reads, ascending; and whether its computed rows
 and output ports read, among the input columns, only port bits, each row only earlier rows. A column's reads are a mask,
 bit `p + 1` for input port `p` and bit `0` for an input column no port carries or a row read out of order; a computed
-row's are the union of the columns' it reads, and the constant and the zero rows past it read nothing. A lookup slot,
-which the verifier builds from its pinned table, is taken whole: each output port reads every input port. -/
+row's are the union of the columns' it reads, the constant reads nothing, and a column past it, which no row computes, is
+read out of order. A lookup slot, which the verifier builds from its pinned table, is taken whole: each output port reads
+every input port. -/
 def outReads (net : Net) : Array (Array Nat) × Bool :=
   let ins := portCols net.inGroups
   let outs := portCols net.outGroups
@@ -80,7 +81,8 @@ def outReads (net : Net) : Array (Array Nat) × Bool :=
       let bit := 1 <<< (p + 1)
       (Array.range q.2).foldl (fun m x => m.setIfInBounds (q.1 + x) bit) m) (Array.replicate n 1)
     let col := fun (rows : Array Nat) (x : Nat) =>
-      if x < n then inMask.getD x 1 else if x < net.constPos then rows.getD (x - n) 1 else 0
+      if x < n then inMask.getD x 1 else if x < net.constPos then rows.getD (x - n) 1 else if x == net.constPos then 0
+      else 1
     -- most reads add nothing to the mask so far: keep it then, rather than build an equal one
     let union := fun (m y : Nat) => if y == 0 || y == m then m else if m == 0 then y else m ||| y
     let rows := Nat.fold (net.constPos - n) (fun i _ rows =>

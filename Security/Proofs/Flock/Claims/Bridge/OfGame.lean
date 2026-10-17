@@ -7,7 +7,8 @@ import Proofs.Flock.Claims.Bridge.Coins
 prover's message `a_j` (the move, at a `send` node, through the interface's decoder) and answers with its live coin
 `r_j` (the game coin, the projection of `r_j`, at the `coin` node that follows), or with the empty message at a `send`
 node that follows a `send` node; at the game's end its reply is the decision `d x b` on the game's outcome `b`, an
-oracle program whose `H` calls are the verifier's log. It is stateless: `next` replays the whole transcript every round
+oracle program whose `H` calls are the verifier's log. A message the prover sends at a `coin` node is dropped (`opn`),
+and a coin's reply carries the projected game coin's bytes only (`reply`: `enc (proj r_j)`). It is stateless: `next` replays the whole transcript every round
 (`walk`), as `Claims.Verifier` requires.
 
 * `opn`, `close`, `reply`, `pos`, `walk`: the verifier as a machine over game positions.

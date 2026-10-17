@@ -95,7 +95,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
   `benchmarks/one_stage` call it. The two are held to each other by
-  `verity/core/service/sampled_proofs/tests/test_difftest.py`.
+  `verity/core/service/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
+  selection rule on (`SampledProofs/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
+  with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
+  partitions; the `Stream` still draws in Python.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is two-stage sampling and the
@@ -134,6 +137,9 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
   - `Stream(spec, unit, budget=, delta=, challenger=)` has the calls `register`, `select` (with a work sampling design's
     `closure=`), `register_interiors` (under `TwoStage`), `deliver` and `outcome`, which raise `Refused` (with its
     `Verdict`) or `Pending`.
+  - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
+    challenger's coins (or a sampler) under the expanded design, with a work draw's closure: what `register` and
+    `select` run.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `served_domain` is a
   served root's commitment domain.
@@ -285,7 +291,8 @@ which `tests/test_one_stage.py` replays (`test_the_partition_is_cores_on_the_pin
 Code and records call a sampling design a `law`; the name stays until a format version renames it.
 
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (M0's `serve --draw`
-  syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`).
+  syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`), each number in ASCII digits
+  (`draw.digits`, as the Lean reads them; a draw's `p` too).
 - As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
   `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
   `{"law": "work", "k": K, "strata": [{"template", "units", "work", "floor", "k"}, ...]}`. The registration carries the
@@ -420,7 +427,8 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   `tr` is `received_at`, and `td` is `ts` plus the deadline. With no registration deadline, `register` reads no clock
   and logs nothing to the epoch log.
 - **No retries.** A second salt (`salt` or `salt_released`), `select`, `register_interiors`, `deliver` or `outcome` is refused. A proof delivered more than
-  `Check.proof_deadline` seconds after the draw, or none by then, is the symbol `late`. An outcome is pending until every
+  `Check.proof_deadline` seconds after the draw, or none by then, is the symbol `late`; a stream refuses a check with no
+  proof deadline, so every draw ends. An outcome is pending until every
   verifier of record has run, and each verdict of record names the delivered sessions and reports the public outputs
   alike (`check_verdicts`: `pending`, `sessions`, `public`, by the verifier of record).
 - **The failure budget.** At its `budget`-th `reject` or `late` a stream stops, and it refuses registrations from then on.
@@ -438,11 +446,13 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   one-stage's audit record (null for `late`), and `interior` null, or under `TwoStage` `{"registration", "receipt",
   "audit"}` for the interiors in the same forms; `Outcome.record` is its SHA-512.
 
-A stream refuses a two-stage count, the `Sequential` rule, a window statement and a timed session until they are built.
+A stream refuses a two-stage count, the `Sequential` rule, a window statement and a timed session until they are built,
+and a check with no proof deadline.
 Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outcome`,
 `test_the_rule_refuses_an_extra_field` and the other `test_the_rule_refuses_*`,
 `test_no_retries_nothing_redraws_and_an_outcome_is_final`, `test_a_late_proof_is_a_reject`,
-`test_a_late_registration_is_refused_and_ends_the_epoch`, `test_an_on_time_registration_carries_both_readings`,
+`test_a_proof_that_never_arrives_ends_late`, `test_a_late_registration_is_refused_and_ends_the_epoch`,
+`test_an_on_time_registration_carries_both_readings`,
 `test_a_registration_before_the_salt_is_late`, `test_the_salt_is_issued_once_from_the_challengers_coins`,
 `test_no_registration_deadline_changes_nothing`, `test_the_interiors_are_not_held_to_the_registration_deadline`,
 `test_a_salt_released_elsewhere_counts_the_deadline_from_its_release`,
@@ -514,7 +524,8 @@ proof-unit draw after the interiors are.
   one-stage draw object, which `draw.check_draw` holds to the registration and the sampling design; the verifier's
   closure map widens a work draw only, as `flock-verify draw --closure` does (`closure_of` is Lean's `closureOf`).
 - Nothing here derives a draw, the proof service's included (`service.Stream.select` is `draw_first` on the
-  challenger's coins). vLLM's legacy replay challenge derives its own (`verity_vllm.commit.challenge.replay_key`,
+  challenger's coins, by `select_draw`; Lean's `Select.select` is the same draw, and reads the same bytes).
+  vLLM's legacy replay challenge derives its own (`verity_vllm.commit.challenge.replay_key`,
   under the domain `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
 
 Pinned by `tests/test_two_stage.py` (`test_own_randomness_is_the_lean_verifiers_samplers_on_raw_bytes`,

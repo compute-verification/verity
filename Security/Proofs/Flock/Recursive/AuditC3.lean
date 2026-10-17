@@ -381,11 +381,10 @@ $$\Pr[\text{Lean's verifier builds } st \wedge \text{it accepts its inputs at ca
 is at most the checked sessions' expected statistical errors under the full draw's model, `r` times their expected stage
 slack, and candidate 3's error.
 
-At a private inner shape (`ish.holo`), `RecVStar.statements` refuses (`statements_holo`), so no run the verifier accepts
-has a private inner session, and the guarantee says nothing about one until V*'s holo parts land (#1896). Every deployed
-candidate-3 run is at a private inner shape (`--holo`, `88-rec-c3-inner.sh`), and at a plain shape no honest rep unit
-passes (`DrawnRounds`), so (i) covers no deployed run until those parts land (PRF-25, cursor/holo-parts-c7a9; vacuity
-sweep, LEAN-19).
+At a private inner shape (`ish.holo`), the verifier's list is V*'s holo statements (`FlockC3.VStarList.statements_holo`):
+each part's file is V*'s holo one (`RecVStar.circuitFile` at `ish.holo`), and the event counts those runs as it counts
+plain ones. Every deployed candidate-3 run is at a private inner shape (`--holo`, `88-rec-c3-inner.sh`); at a plain
+shape no honest rep unit passes (`DrawnRounds`).
 
 Check 5's source `coins` is any: `--rec-inner-coins` is inside the guarantee. The verifier never accepts one at candidate
 3 anyway: the event's `AcceptsC3` names a RecSparse shape (`FlockC3.VStarList.sparse_of_acceptsC3`), where the
