@@ -54,6 +54,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "gemm-correspondence": ("verity_vllm.program.kernels.gemm_target_correspondence", "a target's bf16 linear vs its registered GEMM Definition"),
     "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
+    "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
     "golden": ("verity_vllm.properties.golden", "golden corpus check"),
     "hidden-gpu": ("verity_vllm.commit.committer.hidden_gpu_src.hidden_gpu", "GPU commitment tree: check, bench, commit"),
     "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
