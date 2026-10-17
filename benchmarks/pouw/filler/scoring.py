@@ -856,9 +856,8 @@ FOLDS = {
     "duo": {"share": 1.0, "nc": (2,), "flag": None, "sass": "every word into an XOR (LOP3)",
             "source": "u = y ⊕ d ⊕ k; y <- u·a + z; z <- rotl(u, r) + y: no all-state kernel at one, two or three "
                       "words, proved (Lean Pouw.SecurityProofs.Receipt.DuoWordInjective, DuoPairNoKernel, "
-                      "DuoTripleNoKernel); longer runs open at key_ok keys, and false at four words for some keys "
-                      "key_ok rejects "
-                      "(note:20261017T1000Z-draft-fold-r §6)"},
+                      "DuoTripleNoKernel); at four words, for key_ok keys, on paper; longer runs open, and false at "
+                      "four words for some keys key_ok rejects (note:20261017T1000Z-draft-fold-r §6)"},
     "xor-in": {"share": 0.5, "share_if": 1.0, "if": SELECT_LEMMA, "nc": (4,), "flag": "-DPFILL_XIN",
                "rotations": (7, 19),
                "sass": "d0 into an XOR (LOP3) with the state rotated by 7 and 19 (SHF.L.W), d1 an IMAD addend",

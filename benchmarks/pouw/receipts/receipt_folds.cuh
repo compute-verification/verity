@@ -5,7 +5,7 @@
 //
 // Soundness (receipt_folds.py FOLDS; README.md):
 //   duo    needs (D) past three words: one, two and three proved (Lean Pouw.SecurityProofs.Receipt.DuoWordInjective,
-//          DuoPairNoKernel, DuoTripleNoKernel)
+//          DuoPairNoKernel, DuoTripleNoKernel), four at both schedules' keys on paper
 //   xin13  needs (RT) and (G3) (RS-E-REF Part IX, P2-FF r11); keys under key_ok_r9, key_ok_r11 for r11's Theorem 1
 //   li     needs (RT), (G3) and (HO)
 //   ram    binds pairs only (a step reads (d0, d1) through Q = a0 d0 + d1)
