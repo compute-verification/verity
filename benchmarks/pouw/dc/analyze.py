@@ -105,7 +105,7 @@ def slots_sm100(name: str, row: dict) -> dict | None:
 
 
 def lane_of(name: str) -> str | None:
-    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|tclaneU_([a-z0-9]+)", name)
+    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo)", name)
     return (m.group(1) or m.group(2)) if m else None
 
 
@@ -208,6 +208,10 @@ def analyze(family: str, d: Path) -> dict:
         for name, row in rows.items():
             if lane_of(name):
                 joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
+            elif name.startswith("wgU_sync") and t_alone:
+                joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone, "exact": True,
+                                "issue": issue_rates(row, verdicts.get(name)),
+                                "sync_slots": (rate_of(row, "IMMA") or 0.0) * SYNC_SLOTS}
         best = max((f for f in forms.values() if "slots" in f and not f.get("zero_data")), key=lambda f: f["slots"],
                    default=None)
         out["M3"] = {"rho_T": best and best["slots"], "rho_T_form": best and best["form"],
