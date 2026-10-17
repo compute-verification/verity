@@ -330,7 +330,7 @@ def center_keys(mm, nxt):
 
 
 def _check_int8_attention(p):
-    for x in ("q", "k", "v"):
+    for x in ("q", "k", "p", "v"):
         if p[x] not in ("round", "dither"):
             raise ValueError(f"int8.{x} is round or dither")
     if p["v_scale"] not in ("channel", "head"):
@@ -341,16 +341,19 @@ def _check_int8_attention(p):
         raise ValueError("int8: tops within 127")
 
 
-@attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["v"]),
+@attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),
                 check=_check_int8_attention)
 def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "round", k_top: int = 127,
-                   p_top: int = 127, p_block: int = 0, p_sink: bool = False, v: str = "round", v_top: int = 127,
-                   v_scale: str = "channel"):
+                   p: str = "round", p_top: int = 127, p_block: int = 0, p_sink: bool = False, v: str = "round",
+                   v_top: int = 127, v_scale: str = "channel"):
     """Both attention matmuls on one int8 limb. Q, K: one scale per (head, token), Q rounded to [-q_top, q_top] or
     dithered, K rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-top - 1, top), b
     a fresh bit (for K, one for every query head), so the served operand is within [-top - 1, top]). P: after the
     softmax, one scale per query row, or per (row, block of `p_block` keys), `p_sink` putting key 0 in a block of its
-    own, rounded to [0, p_top], each block's product read and scaled on its own. V: one scale per (KV head, channel)
+    own, rounded to [0, p_top], or (`dither`) rounded to [0, p_top - 1] plus a fresh bit where key <= query (so a
+    dithered P serves no future key), the bits' mean, half the causal sum of V, taken off the product in the epilogue:
+    P is non-negative and mostly under one step, so a bit's +1/2 would not average out over the keys. Each block's
+    product read and scaled on its own. V: one scale per (KV head, channel)
     (`v_scale = "head"`: per KV head), rounded or dithered. Products exact in FP32 chunks."""
     rep = mm.extra["rep"]
     if mm.kind == "qk":
@@ -369,8 +372,8 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
             return kq, sk
         ki, sk = mm.cached("k", keys)
         return nxt(mm.integer(qi, ki)).float() * (sq * sk.T[None])
-    p = mm.x
-    s = p.shape[-1]
+    pr = mm.x
+    s = pr.shape[-1]
 
     def values():
         vg = mm.weight()
@@ -384,9 +387,17 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
     edges = p_edges(s, p_block, p_sink)
     num = None
     for a, b in zip(edges, edges[1:]):
-        sb = p[..., a:b].amax(-1, keepdim=True).clamp(min=1e-30) / p_top
-        pi = torch.round(p[..., a:b] / sb).clamp(0, p_top)
-        part = sb.double() * nxt(mm.integer(pi, vi[..., a:b, :], keys=(a, b), v_full=vi))
+        blk = pr[..., a:b]
+        top = p_top - 1 if p == "dither" else p_top
+        sb = blk.amax(-1, keepdim=True).clamp(min=1e-30) / top
+        pi = torch.round(blk / sb).clamp(0, top)
+        if p == "dither":
+            causal = mm.extra["causal"][:, a:b]
+            pi = pi + mm.coins(pi.shape) * causal
+        prod = nxt(mm.integer(pi, vi[..., a:b, :], keys=(a, b), v_full=vi))
+        if p == "dither":
+            prod = prod - 0.5 * (causal.double() @ vi[..., a:b, :].double())
+        part = sb.double() * prod
         num = part if num is None else num + part
     return (num * sv.double()).float()
 
