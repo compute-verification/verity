@@ -19,8 +19,8 @@ unless the session is `--zk`, the statement has hidden outputs and the verifier 
 executable's `ProvedScope.scopeOk` is `Layout.scopeOk`, its port bits a mask), or under hidden outputs `Layout.scopeOkI`
 (`Checks.scopeI`), and wherever the wires feed the unit or the outputs, an order of them that computes
 (`Checks.wiresAcyclic`). So a circuit the wires feed neither way is in `Layout.scopeOkH` (`Checks.scopeH`), and one they
-feed, under hidden outputs, in the general form `Layout.scopeGenH` (`Checks.scopeGen`). `check_ok` gives no more than
-that, which the check gives with `scopeOkH` (`scopeOkH_eq`) or with `scopeOkI` in its place under hidden outputs. The
+feed, under hidden outputs, in the general form `Layout.scopeGenH` (`Checks.scopeGen`). `check_ok` gives exactly what the
+check runs: the executable's `ProvedScope.scopeOkI` is `Layout.scopeOkI` (`scopeOkI_eq`). The
 unconditional headlines (`FailClosed.Composed`, `FailClosed.ZkHidden`,
 `FailClosed.Exec`) are over `Verifies`, with no hypothesis on the statement's form, and so is the registered one
 (`FailClosed.ZkRegistered`) over `VerifiesZKR`.
@@ -92,6 +92,13 @@ theorem scopeOkH_eq (c : Circuit) : ProvedScope.scopeOkH c = Layout.scopeOkH c :
   simp only [ProvedScope.scopeOkH, Layout.scopeOkH, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
     ProvedScope.bitRows, Layout.bitRows, e, e']
 
+/-- **The executable's `scopeOkI` is `Layout.scopeOkI`.** -/
+theorem scopeOkI_eq (c : Circuit) : ProvedScope.scopeOkI c = Layout.scopeOkI c := by
+  have e : ProvedScope.v2Row = Layout.v2Row := rfl
+  have e' : ProvedScope.segRow = Layout.segRow := rfl
+  simp only [ProvedScope.scopeOkI, Layout.scopeOkI, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
+    ProvedScope.bitRows, Layout.bitRows, e, e']
+
 /-! ## The check, and what it gives -/
 
 /-- **The verifier's statement check passes** at tags `t` (the session's: under `--zk`, `zkTags`'s), with no public input
@@ -132,7 +139,7 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
   simp only [ProvedScope.statementRules, List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq,
     Bool.not_eq_true', Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, Bool.not_false] at hall
   obtain ⟨h1, h2, h3, h4, h5, -⟩ := hall
-  refine ⟨⟨h1, h2, h3, h4, h5⟩, ?_⟩
+  refine ⟨⟨h1, h2, h3, h4, (Bool.eq_false_or_eq_true zk).imp id fun hz => by simpa [hz] using h5⟩, ?_⟩
   split at h
   · cases h
   rename_i c hc
@@ -157,15 +164,15 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
     cases h
   refine ⟨c, pub, hc, hp, htab, ?_, fun hf => ?_⟩
   · simp only [hw] at h
-    have hs : (if t.hiddenOutputs then ProvedScope.scopeOkH c else ProvedScope.scopeOk c) = true := by
-      generalize (if t.hiddenOutputs then ProvedScope.scopeOkH c else ProvedScope.scopeOk c) = b at h
+    have hs : (if t.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = true := by
+      generalize (if t.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = b at h
       cases b
       · cases h
       · rfl
     cases hh : t.hiddenOutputs
     · simpa [hh] using hs
     · simp only [hh, ↓reduceIte] at hs ⊢
-      exact Layout.scopeOkI_of_scopeOkH (by rw [← scopeOkH_eq, hs])
+      rw [← scopeOkI_eq, hs]
   · cases ha : ProvedScope.wiresAcyclic c
     · simp [hf, ha] at hw
     · rfl
