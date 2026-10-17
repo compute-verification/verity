@@ -262,6 +262,27 @@ Three properties of registration matter:
 - **The node is in the codec seed.** Two nodes registering the same weights hold different stores, and the tweak
   \(\tau i\) separates every word of one store.
 
+**One live registration per node.** Each registration draws a fresh codec seed, so a prover that registered \(R\)
+times and kept the registration whose key suits it would choose \(\log_2 R\) bits of the seed: a retry that redraws,
+which live coins rule out (the red team's KB-4, note:20261017T1859Z-report-property-redteam §R4.2). The verifier draws
+through its `Registry`, which holds at most one live registration per node:
+
+- a second `register` for a node while it has a live registration is refused (`RegistryError`), counted (`refused`),
+  and draws nothing;
+- each session over the registration is the registry's (`Registry.session`, its coins' session number its count so
+  far);
+- the registration ends only when the verifier closes it (`Registry.close`), never on the prover's word. The close
+  counts each of its sessions as it stands: accepted, the failure that rejected it, or unended, which counts as failed.
+
+So a failed session stays on its registration's record: no fresh draw can replace that registration while it is
+live, and closing it to draw again records the failure. Every codec seed a node has been given stays in the registry
+(`Registry.drawn`, \(R\)), which an advice form can charge as \(\log_2 R\). Refusal rather than supersession: a second
+registration that superseded the first would cut its session in flight short, so the record would show the supersession
+in place of that session's own verdict, and the prover could have a fresh draw whenever it asked. The remote session
+verifier keeps one registry for its process, or across processes in a file (`--registry`). It answers a refused hello
+with `bye` and the reason, closes its registration after its last session, and leaves a registration live when its
+process ends early, until `--close`. The registry's record holds digests and outcomes, never the verifier's secret.
+
 ## 4. The coins and the chained passes
 
 Before a session the challenger draws its \(2W\) coins and commits to them (`coins.py`), and the prover receives the
@@ -285,8 +306,13 @@ trip waits on it. The prover refuses an openings coin as a challenge (`Prover.ru
 (`receipts.py`):
 
 ~~~text
-seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ root_(t,i−1)),
+seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ prev_(t,i)),
             root_(t,−1) = root_(t−1,last) in a session, and the registration's digest before its first window
+prev_(t,i)  root_(t,i−1) while no append has been received before root_(t,i); otherwise
+            SHA512("verity/remote-bandwidth/chained/v0\0" ‖ root_(t,i−1) ‖ a_(t,i)) (`audit.chained`)
+a_(t,i)     the chain over every append received before root_(t,i), in order: a = 64 zero bytes, then for each append
+            a ← SHA512("verity/remote-bandwidth/appends/v0\0" ‖ a ‖ u64be first ‖ u64be count ‖ its root)
+            (`audit.append_head`)
 plan_(t,i)  R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, no run starting where
             the one before it ends.  Position p is the p-th block of the runs concatenated; L positions in all.
             digest SHA512("verity/remote-bandwidth/plan/v0\0" ‖ u32be R ‖ (u64be first ‖ u64be count) × R)
@@ -332,9 +358,20 @@ commits one of its blocks rejects with `plan`. The prover encodes each under its
 received after its release that holds it rejects with `plan`; its receipts from earlier passes can still be drawn, so
 the prover keeps it until its windows are drawn. An append that is malformed or would take the store past its
 codec's `max_blocks` rejects with `append`, and a release of a block outside the store or released already with
-`release`. Appends are a session's: the next session over the store starts again from \(N\) (§8). A late append
-buys nothing: a block whose payload is chosen after a pass's seed still costs an encode for any receipt of it, which
-\(\mu_{\text{rebuild}}\) prices, and its root still precedes the root of the pass that reads it.
+`release`. Appends are a session's: the next session over the store starts again from \(N\) (§8).
+
+**No block appended after a pass's seed is in that pass's plan.** A pass's seed binds every append received before
+its root (`prev_(t,i)` above), so every block its plan can hold, which must be appended before its root, was
+committed before its seed. A block appended after the seed is in no plan of the pass, and its receipts are credited
+in no pass whose seed came before its append. Without this the seed would depend only on \(\sigma_t\) and the root
+before, which the prover knows before it sends that root, so a page appended mid-window could hold the pass's
+sketches of other blocks (64 bytes a block at 16 rows, 64 blocks a page), and their receipts would follow from the
+page's bytes without reading them: the red team's KB-1, in note:20261017T1859Z-report-property-redteam §R4.2, whose
+test is `test_append_order.py`. A page that relayed any receipt of a pass whose seed binds it would be a fixed point
+of SHA-512. The prover therefore sends a pass's appends before its root and computes the seed after they're sent
+(`Store.head`, `Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
+fails every receipt of the pass. While a session has no appends the seeds are unchanged, so the GPU passes, which
+append nothing, derive them as before.
 
 **The lifetime cap.** \(L\) here is the lifetime cap of §1's carrier term, not a pass's length \(L_{t,i}\). An
 appended block joins the window of the next root received after its append, and no plan of a window \(L\) or more
@@ -755,6 +792,28 @@ and each window's, from it plus the node's capacities.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
     on one clock would.
+- **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
+  circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three
+  of its gaps are on the audit's side. `ledger` takes the link as `requirement`, a `RequirementLink`: whether its
+  proofs hold, the density \(D\) and the circuit's read bits at each step. On it, a pass's credit is its credited
+  receipts at \(D\) bits each, at most the circuit's read bits at the pass's step, and the ledger says it is linked
+  (`Ledger.linked`); without it, the credit is the store's, flagged as such. The checks behind the link belong to the
+  units named below, and the ledger takes them as given.
+  - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
+    gather's unselected rows, requests absent from the step's batch, unrouted experts. Their receipts are capped at
+    the circuit's reads at the pass's step (`read_bits`, `requirement.Requirement.read_bits`). That each receipted
+    block is one the circuit reads at that step (`plan = readBlocks s`, so a block of an unread row is in no plan)
+    is the plan unit's to prove (I4), against the memory map and the requirement, inside zero knowledge.
+  - *Partly filled blocks.* A block holding fewer than \(B\) bits of the circuit's values (a request's last block,
+    values of different lifetimes sharing a block) would overstate the credit by \(B/D\) if it counted whole. On the
+    link, a receipt counts \(D\) bits, the fewest any planned block carries. \(D\) is the census's to prove from its
+    layout rule (`Packs`), and \(D = B\) is the rule "full blocks only". The sampling term still charges a whole
+    block for a wrong receipt.
+  - *Registered blocks past their last read.* memory-map/v1 frees a registered block like a written one: a free of a
+    slot below \(N\) releases it, and no later plan may hold it (`Session.release`). The writer records the free at
+    the step that reads the block's values for the last time. That each free is at its values' last read is the
+    memory-map unit's to prove (I4). Until it does, a dense decoder's weights, which every step reads, need no free,
+    and the census must show it.
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
   its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
   but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that

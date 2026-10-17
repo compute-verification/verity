@@ -75,25 +75,37 @@ def pages(first: int, count: int) -> list[bytes]:
 
 class Run:
     """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
-    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends."""
+    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each pass's
+    seed binding every append it sent before the pass's root (`head`).  With a `registry`, the session is its next
+    over the store's registration."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
-                 samples: int = 10**6, lifetime: int = audit.LIFETIME) -> None:
+                 samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
                         window_ns=10, codec=reg.codec, lifetime=lifetime)
         self.clock = Clock()
-        self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
-                         not_before_ns=0, clock=self.clock)
+        if registry is None:
+            self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
+                             not_before_ns=0, clock=self.clock)
+        else:
+            self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
         self.store = store
         self.prover = audit.Prover(prover_store or store, None, self.s.commitment, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
+        self.head: bytes | None = None
         self.passes: dict[tuple[int, int], audit.Pass] = {}
+
+    def commit(self, root: bytes, count: int) -> int:
+        """An append's root sent (`Session.append`): the index the verifier assigns."""
+        first = self.s.append(root, count)
+        self.head = audit.append_head(self.head, first, count, root)
+        return first
 
     def append(self, count: int) -> audit.Append:
         a = self.store.append(pages(self.store.extent, count), salts(b"page salts %d" % self.store.extent, count))
-        assert self.s.append(a.root, a.count) == a.first
+        assert self.commit(a.root, a.count) == a.first
         return a
 
     def run(self, plan: Plan | None = None, change: tuple | None = None, sent=None, step: int | None = None
@@ -102,7 +114,7 @@ class Run:
         `step` (None: the step after the last pass's)."""
         if change is not None:
             plan = self.plan.changed(*change, self.store.extent)
-        ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan)
+        ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan, head=self.head)
         self.passes[self.t, self.i], self.previous, self.plan = ps, ps.root, ps.plan
         self.i += 1
         self.step = self.step + 1 if step is None else step
@@ -210,6 +222,49 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
         audit.ledger(rec, **common, credit_post_seed=Verdict(True, float("inf")))
 
 
+@dataclasses.dataclass(frozen=True)
+class Link:
+    """A requirement link that holds or not, at `density_bits`, reading `reads[step]` bits at a step (plenty
+    otherwise)."""
+    holds: bool
+    density_bits: int
+    reads: dict
+
+    def read_bits(self, step: int):
+        return self.reads.get(step, 10**9)
+
+
+def test_on_a_requirement_link_a_pass_is_credited_at_most_the_circuit_s_reads_at_its_step(honest) -> None:
+    """The honest session's passes are steps 0 … 4, with (8, 8, 7) and (7, 7) registered receipts credited.  A link
+    at whole blocks (D = 32,768 bits) and ample reads changes nothing but `linked`.  At D = 8,192 bits each credited
+    receipt counts a quarter block, and step 1's reads, 20,000 bits, cap its pass below its 8 receipts' 65,536.  A link
+    that doesn't hold, a density outside 1 … 32,768 bits, reads that aren't a count, or a record whose passes name no
+    step are refused."""
+    rec = honest[0].s.record()
+    assert [w.steps for w in rec.windows] == [(0, 1, 2), (3, 4)]
+    capacity = 4096 * 10**9 / 10
+    common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    whole = capacity * rec.span_ns / 1e9
+    store_ = audit.ledger(rec, **common)
+    full = audit.ledger(rec, **common, requirement=Link(True, 8 * 4096, {}))
+    assert full.timing == store_.timing and full.linked and not store_.linked
+    assert full.to_json()["linked"] is True and store_.to_json()["linked"] is False
+    quarter = audit.ledger(rec, **common, requirement=Link(True, 8192, {1: 20_000}))
+    w0 = 8 * 8192 + 20_000 + 7 * 8192
+    assert quarter.timing == pytest.approx(1 - (w0 + 14 * 8192) / 8 / whole)
+    assert quarter.windows[0].timing == pytest.approx(1 - w0 / 8 / (capacity * rec.windows[0].span_ns / 1e9))
+    assert quarter.sample == store_.sample and quarter.counting == store_.counting
+    for link, match in ((Link(False, 8192, {}), "don't hold"), (Link(True, 0, {}), "density"),
+                        (Link(True, 8 * 4096 + 1, {}), "density"), (Link(True, True, {}), "density"),
+                        (Link(True, 8192, {2: -1}), "nonnegative integer"),
+                        (Link(True, 8192, {2: 1.5}), "nonnegative integer")):
+        with pytest.raises(ValueError, match=match):
+            audit.ledger(rec, **common, requirement=link)
+    bare = synthetic((10, 12), ())
+    with pytest.raises(ValueError, match="name none"):
+        audit.ledger(bare, **dict(common, rebuild=audit.Rebuild(bare.codec, 0.0)), requirement=Link(True, 8192, {}))
+
+
 def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = ()) -> audit.Record:
     w = audit.WindowRecord(0, lengths, 0, 10**9, 10**9, IntegrityProfile(
         ("receipt",), (sum(lengths),), {"receipt": Subset(1)}, 1e-6, drawn={"receipt": 1}), post, steps)
@@ -288,7 +343,7 @@ def test_an_append_s_leaves_bind_the_indices_the_verifier_assigns() -> None:
     ys = salts(b"page salts", 2)
     a = st.append(pages(N, 2), ys)
     shifted = audit.append_tree(st.registration.digest, N + 1, a.digests, ys)
-    assert r.s.append(shifted.commitment.root, 2) == N
+    assert r.commit(shifted.commitment.root, 2) == N
     assert len(shifted.open(N + 1).path) == len(a.tree.open(N).path)
     assert r.run(change=(((N, 2),), ())) is None
     r.boundary()
@@ -345,7 +400,7 @@ def test_an_appended_block_leaves_every_plan_within_the_lifetime_unless_re_keyed
 
     r = two_windows_under_a_lifetime_of_two()
     a = r.store.append(pages(N, 2), salts(b"re-keyed", 2))
-    assert r.s.append(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
+    assert r.commit(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
     assert r.run(change=(((N + 3, 2),), ((N, 2),))) is None
     r.boundary()
     v = copy.deepcopy(r).run(change=((), ()))

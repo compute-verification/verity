@@ -30,7 +30,9 @@ servedrop:K     serve, but the first K blocks appended (1 by default) are not he
 With a serving trace, each root's message carries what changed since the last root sent, in the order the verifier
 applies it: the appends' tree roots and sizes (`Session.append`), then the blocks released as runs
 (`Session.release`), then the pass's plan as a change from the last one sent (`Session.receive(..., change=...)`).
-A pass discarded at a boundary sends nothing, and the next root sent carries its changes too.
+A pass discarded at a boundary sends nothing, and the next root sent carries its changes too.  A pass's seed binds
+every append sent before its root (`audit.chained`), so a backend that appends takes the chain over its appends when
+the pass is launched (`audit.Store.head`), every one of which goes out with that pass's root or before it.
 
 Every root's message names the step its pass covers (`Session.receive(..., step=...)`, PROTOCOL.md §8 "The pass and
 its step"): the backend's `step_of(ticket)` if it has one, which a serving backend takes from its engine, and otherwise
@@ -239,13 +241,14 @@ class CpuBackend:
 
     def launch(self, i: int, after: dict | None, plan: rb.Plan | None = None) -> dict:
         """Pass i of the window over `plan` (None: every registered block), chained from `after`'s root (None: the
-        window's previous root), run when awaited."""
+        window's previous root) and the store's appends so far, every one of which goes out before this pass's root
+        (`audit.chained`), run when awaited."""
         return {"challenge": self.challenge, "i": i, "after": after, "previous": self.previous, "root": None,
-                "plan": plan}
+                "plan": plan, "head": self.store.head}
 
     def wait(self, ticket: dict):
         after = ticket["after"]
-        prev = ticket["previous"] if after is None else after["root"]
+        prev = audit.chained(ticket["previous"] if after is None else after["root"], ticket["head"])
         root, handle = self.run_pass(rb.seed(ticket["challenge"], ticket["i"], prev), ticket["plan"])
         ticket["root"] = root
         return root, handle

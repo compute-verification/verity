@@ -21,7 +21,11 @@ A write puts block j in its slot and releases the block the slot held, if it was
 free releases the slot's block and leaves the slot not live, its memory out of the store, until a write.  vLLM's
 `kv_free` is a free, though the pages' bytes stay as they were: a block left live after its values' last read would be
 credited past the circuit's use of it and past the lifetime cap, so the writer records the free, and the store's
-filler plan leaves the released blocks out.  A step's frees apply before its writes; a step frees a slot at most once,
+filler plan leaves the released blocks out.  A free of a slot below N releases its registered block, and the writer
+records one at the step that reads the block's values for the last time (weights only some steps read), so no
+registered block stays credited past its last read; that every free, of a registered block or a written one, is at
+its values' last read is the memory-map unit's to prove (I4, `PROTOCOL.md` §8 "The requirement's link").  A step's
+frees apply before its writes; a step frees a slot at most once,
 only a live one, and writes a slot at most once.  A block is written once, complete: a KV block the step's tokens are
 still filling is not in the record until the step that completes it (the prover-side registry's dirty blocks).
 
@@ -34,7 +38,7 @@ The record is the prover's: `d_j` is a hash of user data, a witness, never publi
 The prover's audit side (`Replay`) commits each step's digests in an append tree (`audit.append_tree`, under fresh
 salts) and sends its root and size (`Session.append`), and the released blocks' indices as runs (`Session.release`); the
 verifier sees those and the plans, never the record.  The appends of a step are sent before the root of any pass
-whose plan holds them.
+whose plan holds them, and that pass's seed binds them (`audit.chained`), so it is computed after they are sent.
 
 Passes and steps.  Each pass of the audit covers one step `s`, which it names with its root (`Session.receive(...,
 step=s)`, public), and the steps of a session's passes strictly increase.  Its plan is the blocks the circuit reads at
