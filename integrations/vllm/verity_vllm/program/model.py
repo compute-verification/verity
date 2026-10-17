@@ -49,11 +49,18 @@ FAMILY_RULES: dict[str, dict[str, Any]] = {
     "qwen3": {"qkv_bias_key": "attention_bias", "default_theta": 1_000_000.0, "qk_norm": "head"},
 }
 
-#: [R15 fp8] the ONE checkpoint quantization the sweep serves: vLLM `Fp8Config` from a `quantization_config` with `quant_method: fp8`,
+#: [R15 fp8] the FP8 checkpoint quantization the sweep serves (the other is `INT8_EXACT_QUANT`): vLLM `Fp8Config` from a `quantization_config` with `quant_method: fp8`,
 #: `fmt: e4m3`, `weight_block_size: [G, G]` (block-scaled weights `weight` e4m3 [N, K] + `weight_scale_inv` f32 [N/G, K/G]) and
 #: `activation_scheme: dynamic` (per-token-group activation quantisation, group G, at run time).  `config_of` records it as
 #: `C["FP8_BLOCK"] = G`; any other quantization_config is refused (`quant_refusal`) -- never served as a looser approximation.
 FP8_BLOCK_QUANT = {"quant_method": "fp8", "fmt": "e4m3", "activation_scheme": "dynamic"}
+#: the exact-int8 profile's checkpoint (`engine.int8_checkpoint`): every linear int8 [N, K] with per-row f32 scales, lm_head bf16;
+#: `config_of` records it as `C["INT8_EXACT"] = weight_max`
+INT8_EXACT_QUANT = {"quant_method": "verity_int8", "weight_max": 127, "modules_to_not_convert": ["lm_head"]}
+
+
+def is_int8_exact(qc: dict[str, Any] | None) -> bool:
+    return bool(qc) and str(qc.get("quant_method", "")).lower() == INT8_EXACT_QUANT["quant_method"]
 
 
 def _moe_routers(cfg: dict[str, Any] | None) -> set[str]:
@@ -70,9 +77,15 @@ def quant_refusal(qc: dict[str, Any] | None, cfg: dict[str, Any] | None = None) 
     the checkpoint's config.json: a fused-MoE one serves FP8 experts with bf16 routers, so it must list every layer's router."""
     if not qc:
         return None
+    if is_int8_exact(qc):
+        if dict(qc) != INT8_EXACT_QUANT:
+            return f"quantization_config {dict(qc)!r} is not the exact-int8 profile's {INT8_EXACT_QUANT!r}"
+        if any((cfg or {}).get(k) for k in ("num_experts", "num_local_experts", "n_routed_experts")):
+            return "an exact-int8 MoE checkpoint: the int8 profile states dense linears only"
+        return None
     for k, v in FP8_BLOCK_QUANT.items():
         if str(qc.get(k, "")).lower() != v:
-            return f"quantization_config.{k}={qc.get(k)!r} is not {v!r} (only block-scaled dynamic e4m3 FP8 is modelled)"
+            return f"quantization_config.{k}={qc.get(k)!r} is not {v!r} (only block-scaled dynamic e4m3 FP8 and the exact-int8 profile are modelled)"
     bs = qc.get("weight_block_size")
     if not (isinstance(bs, (list, tuple)) and len(bs) == 2 and bs[0] == bs[1] and int(bs[0]) > 0 and int(bs[0]) % 32 == 0):
         return f"quantization_config.weight_block_size={bs!r} is not a square block [G, G] with G a multiple of 32"
@@ -163,13 +176,16 @@ def config_of(hf_config: str | Path | dict, *, model: str | None = None, revisio
     # [R15 fp8] family fact: the per-head q/k RMSNorm (Qwen3) -- "hand" because vLLM's model code applies it, config.json does not say
     if rules.get("qk_norm"):
         C["QK_NORM"], prov["QK_NORM"] = rules["qk_norm"], "hand"
-    # [R15 fp8] checkpoint quantization: block-scaled dynamic e4m3 FP8 (`C["FP8_BLOCK"] = G`) or none; anything else refuses here
+    # [R15 fp8] checkpoint quantization: block-scaled dynamic e4m3 FP8 (`C["FP8_BLOCK"] = G`), exact int8 (`C["INT8_EXACT"]`) or none
     qc = cfg.get("quantization_config")
     if qc:
         why = quant_refusal(qc, cfg)
         if why:
             raise ValueError(why)
-        C["FP8_BLOCK"], prov["FP8_BLOCK"] = int(qc["weight_block_size"][0]), "hf-config"
+        if is_int8_exact(qc):
+            C["INT8_EXACT"], prov["INT8_EXACT"] = int(qc["weight_max"]), "hf-config"
+        else:
+            C["FP8_BLOCK"], prov["FP8_BLOCK"] = int(qc["weight_block_size"][0]), "hf-config"
         C["quantization_config"], prov["quantization_config"] = dict(qc), "hf-config"
     for k, v in (hand or {}).items():
         C[k], prov[k] = v, "hand"
