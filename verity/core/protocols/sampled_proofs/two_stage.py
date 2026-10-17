@@ -29,7 +29,7 @@ from verity.ml.randomness import uniform_from_words
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Subset
 
 from .one_stage.audit import core_law
-from .one_stage.draw import strata_problem
+from .one_stage.draw import digits, strata_problem
 
 REPLAY = "replay"
 """The profile's only level: the replay units."""
@@ -44,7 +44,7 @@ def _int(x: Any) -> bool:
 
 def _ratio(p: Any) -> tuple[int, int] | None:
     num, _, den = str(p).partition("/")
-    if num.isdigit() and den.isdigit() and 0 < int(den) and int(num) <= int(den):
+    if digits(num) and digits(den) and 0 < int(den) and int(num) <= int(den):
         return int(num), int(den)
     return None
 

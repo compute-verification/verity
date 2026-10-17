@@ -94,7 +94,7 @@ got, why = place(sys.argv[1], Path.cwd()); print("train: --on", sys.argv[1] + ":
   wait_s=21600 run_s=10800
   # the run's command is the shipped tree's slot.py, the one form a machine with /etc/vy/runs-via-slot launches (slot_only.py)
   job="exec python3 \"\$RESEARCH_RUN_DIR/inputs/quick_tier.py\""
-  job+=" --lean verity/core/service/flock --head $sha --base $base -- uv run --locked --extra torch-cpu python tools/verity/check/suites.py"
+  job+=" --lean verity/core/service/flock --head $sha --base $base -- uv run --locked --all-packages --extra torch-cpu python tools/verity/check/suites.py"
   setsid nohup uv run -q research run --on "$machine" --project verity --source "$tree" --cwd source \
     --send tools/research/src/research/quick_tier.py --require-result \
     --timeout $((wait_s + run_s)) --custody-ttl $((wait_s + run_s + 1800)) --declared-output 'out/*' \

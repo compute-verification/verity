@@ -34,7 +34,7 @@ STEP0 = tuple(S.Public(i, "structure", r) for i, r in (
 VALUES = (S.Value("x", SCHEMA, "serve"), S.Value("out", SCHEMA, "serve"))
 
 
-def _spec(selection=S.Law("subset:2"), public=STEP0, proof_deadline=None, public_outputs=(), values=VALUES,
+def _spec(selection=S.Law("subset:2"), public=STEP0, proof_deadline=60.0, public_outputs=(), values=VALUES,
           registration_deadline=None) -> S.Spec:
     return S.Spec(values, selection, S.Check(P.program_digest(Program(PAIR)), QUERY, public_outputs=public_outputs,
                                              proof_deadline=proof_deadline, registration_deadline=registration_deadline),
@@ -253,6 +253,8 @@ def test_a_stream_refuses_what_isnt_built_and_another_unit():
         _stream(_two_spec(check=2))
     with pytest.raises(ValueError, match="unit"):
         S.Stream(_spec(), OTHER, budget=1, delta=DELTA, challenger="c")
+    with pytest.raises(ValueError, match="proof deadline"):
+        _stream(_spec(proof_deadline=None))
     for bad in ({"budget": 0}, {"budget": 1.0}, {"delta": 1}, {"delta": 1.5}):
         with pytest.raises(ValueError):
             S.Stream(_spec(), PAIR, **{"budget": 1, "delta": DELTA, "challenger": "c", **bad})
@@ -345,6 +347,25 @@ def test_a_late_proof_is_a_reject():
     clock.now += 60.0
     assert stream.deliver(draw, [SESSION]) is None and stream.outcome(draw, _lean(), {}).accepted
     assert stream.symbols == ("late", "late", "accept") and stream.failures == 2
+
+
+def test_a_proof_that_never_arrives_ends_late():
+    """A drawn unit whose proof is never delivered is pending until the proof deadline and a reject (`late`) after it:
+    no draw stays pending forever, and the stream receives the next registration only once it ends."""
+    clock = Clock()
+    stream = _stream(clock=clock)
+    draw = stream.select(stream.register(_record(), _ports(6)))
+    for now in (0.0, 30.0, 60.0):
+        clock.now = now
+        with pytest.raises(S.Pending, match="no proof delivered"):
+            stream.outcome(draw, _lean(), {})
+        assert _refused(lambda: stream.register(_record(row=1, previous=draw.registration.digest), _ports(6))) == ("open",)
+    clock.now = 60.5
+    out = stream.outcome(draw, _lean(), {})
+    assert not out.accepted and out.verdict.codes == ("late",) and out.profile is None and stream.symbols == ("late",)
+    assert stream.records[0]["sessions"] == [] and stream.records[0]["audit"] is None and stream.failures == 1
+    assert _refused(lambda: stream.deliver(draw, [SESSION])) == ("final",)
+    assert stream.register(_record(row=1, previous=draw.registration.digest), _ports(6)).order == 1
 
 
 OUTCOME_KEYS = {"format", "stream", "order", "registration", "receipt", "draw", "sessions", "symbol", "public", "audit",
@@ -465,7 +486,7 @@ def test_the_interiors_are_not_held_to_the_registration_deadline():
     clock.now = 10.0
     reg = stream.register(*_half("x", 6))
     draw = stream.select(reg)
-    clock.now = 100.0
+    clock.now = 35.0
     ireg = stream.register_interiors(draw, *_interiors(draw))
     assert (ireg.salted_at, ireg.received_at) == (None, None) and not stream.ended
     assert [e["event"] for e in stream.epoch_log] == ["salt", "registration"]
