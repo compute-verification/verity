@@ -2,10 +2,11 @@
 each condition start its load and time challenges from three challengers in turn: on this node over loopback (the
 on-node lower bound), from vy-nebius-cpu-1 and from vy-nebius-1 over the VPC (the two-machine path). Stdlib only.
 
-Conditions: `quiet` (no load of ours; the node's other tenants as they are), `hbm` (bf16 GEMMs and device-to-device
-copies on both GPUs, every other CPU of the job spinning or copying memory), `pcie` (`hbm` plus pinned H2D and D2H copies
-on both GPUs), `vllm` (vLLM generation on the responder's GPU). The responder and the local challenger each hold a whole
-core of the job's cpuset that no load touches. Everything goes to $OUT: per cell `<cond>/<challenger>.bin|json`, the load
+Conditions: `quiet` (no load of ours; the node's other tenants as they are); `gemm` (back-to-back bf16 8192^3 GEMMs on
+both GPUs, and the job's other declared CPUs spinning or copying memory); `hbm` (`gemm` plus 2 GiB device-to-device
+copies); `pcie` (`hbm` plus 64 MiB pinned H2D and D2H copies, both directions at once); `pcie1m` (the same in 1 MiB
+copies); `vllm` (vLLM generation on the responder's GPU). The responder and the local challenger each hold a whole core
+of the job's cpuset that no load touches, and the load takes the job's declared CPU count less those four. Everything goes to $OUT: per cell `<cond>/<challenger>.bin|json`, the load
 reports, the responder's stats, the environment, and `summary.json`."""
 
 from __future__ import annotations
@@ -32,8 +33,12 @@ TAUS_US = (50, 100, 150, 300, 840)
 CUDA = "/usr/local/cuda"
 NVCC = f"{CUDA}/bin/nvcc"
 VENV = "/workspace/jobs/venv312/bin/python"
-MODEL = "unsloth/Meta-Llama-3.1-8B-Instruct"
+MODEL = "/workspace/hf/hub/models--unsloth--Meta-Llama-3.1-8B-Instruct/snapshots/a2856192dd7c25b842431f39c179a6c2c2f627d1"
 REC = struct.Struct("<IIIHH")
+OPS = {1: "gpu", 5: "gpu_sm", 2: "host", 3: "ping"}
+LOADS = {"gemm": ["gemm=8192"], "hbm": ["gemm=8192", "d2d_mib=2048"],
+         "pcie": ["gemm=8192", "d2d_mib=2048", "pcie_mib=64", "pcie=both"],
+         "pcie1m": ["gemm=8192", "d2d_mib=2048", "pcie_mib=1", "pcie=both"]}
 
 
 def log(msg: str) -> None:
@@ -61,7 +66,8 @@ def plan_cpus() -> tuple[int, int, list[int]]:
         raise SystemExit(f"need two whole cores in the job's cpuset, got {cpus}")
     resp, chal = whole[0], whole[1]
     reserved = siblings(resp) | siblings(chal)
-    return resp, chal, [c for c in cpus if c not in reserved]
+    declared = int(os.environ.get("OMP_NUM_THREADS") or len(cpus))
+    return resp, chal, [c for c in cpus if c not in reserved][: max(0, declared - len(reserved))]
 
 
 def busy_ticks() -> dict[int, tuple[int, int]]:
@@ -96,7 +102,7 @@ def summarize(path: str) -> dict:
         flags["lost"] += bool(f & 4)
         flags["bad_data"] += bool(f & 8)
     out: dict = {"flags": flags}
-    for op, name in ((1, "gpu"), (2, "host"), (3, "ping")):
+    for op, name in OPS.items():
         xs = sorted(by_op.get(op, []))
         if not xs:
             continue
@@ -115,11 +121,10 @@ class Load:
         self.ready_file = os.path.join(scratch, f"ready-{cond}")
         half = len(cpus) // 2
         cpu_arg = ",".join(map(str, cpus))
-        if cond in ("hbm", "pcie"):
-            pcie = ["pcie_mib=64", "pcie=both"] if cond == "pcie" else []
+        if cond in LOADS:
             for dev in (0, 1):
                 hogs = [f"spin_cpus={','.join(map(str, cpus[:half]))}", f"mem_cpus={','.join(map(str, cpus[half:]))}"] if dev == 0 else []
-                self.spawn(["taskset", "-c", cpu_arg, lat, "load", f"device={dev}", "gemm=8192", "d2d_mib=2048", *pcie, *hogs,
+                self.spawn(["taskset", "-c", cpu_arg, lat, "load", f"device={dev}", *LOADS[cond], *hogs,
                             f"report={celldir}/load-gpu{dev}.jsonl"], f"{celldir}/load-gpu{dev}.log")
         elif cond == "vllm":
             env = dict(os.environ, HF_HOME="/workspace/hf", HF_HUB_OFFLINE="1", CUDA_VISIBLE_DEVICES=os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0])
@@ -157,18 +162,19 @@ class Load:
         return [p.returncode for p in self.procs]
 
 
-def local_probe(lat: str, cpu: int, celldir: str, pings: int, rounds: int) -> dict:
+def local_probe(lat: str, cpu: int, celldir: str, pings: int, rounds: int, max_s: int) -> dict:
     out = os.path.join(celldir, "local")
-    p = subprocess.run([lat, "probe", f"to=127.0.0.1:{PORT}", f"cpu={cpu}", f"pings={pings}", f"rounds={rounds}", f"out={out}"],
+    p = subprocess.run([lat, "probe", f"to=127.0.0.1:{PORT}", f"cpu={cpu}", f"pings={pings}", f"rounds={rounds}", f"max_s={max_s}",
+                        f"out={out}"],
                        capture_output=True, text=True, timeout=1800)
     return {"rc": p.returncode, "stderr": p.stderr[-2000:]}
 
 
-def remote_probe(name: str, src: bytes, celldir: str, pings: int, rounds: int) -> dict:
+def remote_probe(name: str, src: bytes, celldir: str, pings: int, rounds: int, max_s: int) -> dict:
     dest, lport = REMOTES[name]
     script = ("set -e; d=$(mktemp -d /tmp/lat-probe.XXXXXX); trap 'rm -rf \"$d\"' EXIT; cat > \"$d/lat.cu\"; "
               "g++ -O2 -std=c++17 -x c++ -o \"$d/lat\" \"$d/lat.cu\" -lpthread; "
-              f"\"$d/lat\" probe to={NODE_IP}:{PORT} lport={lport} cpu=auto pings={pings} rounds={rounds} out=\"$d/{name}\" >&2 "
+              f"\"$d/lat\" probe to={NODE_IP}:{PORT} lport={lport} cpu=auto pings={pings} rounds={rounds} max_s={max_s} out=\"$d/{name}\" >&2 "
               "|| echo \"probe rc=$?\" >&2; "
               f"(uptime; nproc) > \"$d/{name}.host\"; tar -C \"$d\" -cf - {name}.bin {name}.json {name}.host")
     p = subprocess.run([*SSH, dest, script], input=src, capture_output=True, timeout=1800)
@@ -179,13 +185,17 @@ def remote_probe(name: str, src: bytes, celldir: str, pings: int, rounds: int) -
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--conditions", default="quiet,hbm,pcie,vllm")
+    ap.add_argument("--conditions", default="quiet,gemm,hbm,pcie,pcie1m,vllm")
     ap.add_argument("--challengers", default="local,cpu1,node1")
     ap.add_argument("--pings", type=int, default=20000)
     ap.add_argument("--rounds-local", type=int, default=300000)
     ap.add_argument("--rounds-remote", type=int, default=500000)
     ap.add_argument("--rounds-quiet-cpu1", type=int, default=1000000)
     ap.add_argument("--rounds-node1", type=int, default=100000)
+    ap.add_argument("--max-s-local", type=int, default=50)
+    ap.add_argument("--max-s-remote", type=int, default=120)
+    ap.add_argument("--max-s-quiet-cpu1", type=int, default=240)
+    ap.add_argument("--max-s-node1", type=int, default=40)
     ap.add_argument("--vllm-timeout", type=float, default=600)
     ns = ap.parse_args()
     out = os.environ.get("OUT") or sys.exit("$OUT is unset: run under research run")
@@ -233,11 +243,13 @@ def main() -> None:
                 a = busy_ticks()
                 t0 = time.time()
                 if who == "local":
-                    r = local_probe(lat, chal_cpu, celldir, ns.pings, ns.rounds_local)
+                    r = local_probe(lat, chal_cpu, celldir, ns.pings, ns.rounds_local, ns.max_s_local)
                     name = "local"
                 else:
-                    rounds = ns.rounds_node1 if who == "node1" else ns.rounds_quiet_cpu1 if cond == "quiet" else ns.rounds_remote
-                    r = remote_probe(who, src, celldir, ns.pings, rounds)
+                    rounds, max_s = ((ns.rounds_node1, ns.max_s_node1) if who == "node1" else
+                                     (ns.rounds_quiet_cpu1, ns.max_s_quiet_cpu1) if cond == "quiet" else
+                                     (ns.rounds_remote, ns.max_s_remote))
+                    r = remote_probe(who, src, celldir, ns.pings, rounds, max_s)
                     name = who
                 b = busy_ticks()
                 r.update(seconds=round(time.time() - t0, 1), responder_cpu_busy=busy_frac(a, b, [resp_cpu]),
