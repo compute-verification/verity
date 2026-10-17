@@ -7,6 +7,7 @@ the record's ``without_refusal``, written here as ``verdict_without_refusal``. W
 from __future__ import annotations
 
 import json
+import os
 import resource
 import subprocess
 import sys
@@ -55,7 +56,9 @@ def session(binary: str, d: Path, n: int, zk: bool, runs: int) -> dict:
 
 
 def selftest(binary: str, d: Path, n: int, cases: list[str]) -> dict:
-    """Every case in one selftest process, or each of ``cases`` in its own (``--only``)."""
+    """Every case in one selftest process, or each of ``cases`` in its own (``--only``), run in DIR: flock-circuit reads
+    ``circuit-forged.txt`` and ``tables`` from its working directory, and skips ``tail_swapped`` without the first."""
+    os.chdir(d)
     if not cases:
         return CS.prove(binary, d, n, 0, selftest=True, timeout=7200)
     each = {c: CS.prove(binary, d, n, 0, selftest=c, timeout=7200) for c in cases}
@@ -65,7 +68,9 @@ def selftest(binary: str, d: Path, n: int, cases: list[str]) -> dict:
 
 
 def main(argv: list[str]) -> int:
-    binary, d, n = argv[0], Path(argv[1]), int(argv[2])
+    binary, d, n = argv[0], Path(argv[1]).resolve(), int(argv[2])
+    if "/" in binary:
+        binary = str(Path(binary).resolve())
     if "--selftest" in argv:
         res, name = selftest(binary, d, n, [a for a in argv[argv.index("--selftest") + 1:] if not a.startswith("--")]), "selftest.json"
     else:

@@ -32,7 +32,8 @@ from . import tail as TL
 class Split:
     """A template as k-step units and repeated stages: ``low`` the units (their circuit, layout and leaf maps), ``tail`` the
     stages (``None``: the units return the outputs), ``rows`` the input rows ``(name, words)``, ``out_words`` the output
-    words, ``definition`` the Definition it computes (its Program digest is META's)."""
+    words, ``definition`` the Definition it computes (its Program digest is META's), ``forged`` the same stages computing
+    another function (the selftest's ``tail_swapped``)."""
 
     name: str
     low: IL.Lowering
@@ -40,6 +41,7 @@ class Split:
     rows: list
     out_words: int
     definition: object = None
+    forged: TL.Tail | None = None
 
 
 class _SplitLowering(IL.Lowering):
@@ -98,9 +100,10 @@ def _kstep_circuit(G: int, word_outs: bool) -> gf2.Circuit:
     return C
 
 
-def _scale_circuit(T: int, word_ins: bool) -> gf2.Circuit:
+def _scale_circuit(T: int, word_ins: bool, reverse: bool = False) -> gf2.Circuit:
     """The scale stage: inputs ``(temp_kb, s_kb)`` per tile (``word_ins``: each as two 16-bit words), ``acc = FFMA(temp, s, acc)``
-    from +0 over the T tiles, output the bf16 cast (one 16-bit port)."""
+    from +0 over the T tiles (``reverse``: last tile first, the forged stage: the same gates and output column, rewired),
+    output the bf16 cast (one 16-bit port)."""
     _dot, _mul, fma, cast = _fp8_pieces()
     C = gf2.Circuit()
     if word_ins:
@@ -109,7 +112,7 @@ def _scale_circuit(T: int, word_ins: bool) -> gf2.Circuit:
     else:
         ins = [C.input(f"in{j}", 32) for j in range(2 * T)]
     acc = [gf2.ZERO] * 32
-    for kb in range(T):
+    for kb in reversed(range(T)) if reverse else range(T):
         acc = _call(C, fma, ins[2 * kb], ins[2 * kb + 1], acc)
     C.output("out0", _call(C, cast, acc))
     return C
@@ -151,11 +154,12 @@ def fp8_block(K: int, N: int, G: int = 128) -> Split:
     out_src = [[("cut", 2 * u), ("cut", 2 * u + 1)] for u in range(N * T)]
     name = f"multi-unit/ScaledMmFp8Block_v2{{K={K},N={N},G={G}}}"
     low = _lowering(f"{name}/kstep", _kstep_circuit(G, False), G + 4, [32, 32], in_src, out_src, rows, N, cut=2 * N * T, rets=N)
-    S = _scale_circuit(T, False)
     slot_ins = [[("cut", 2 * (n * T + kb) + j) for kb in range(T) for j in range(2)] for n in range(N)]
     slot_outs = [[("ret", n)] for n in range(N)]
-    st = TL.Stage(S, slot_ins[0], slot_outs[0], [32] * (2 * T), [16], count=N, slot_ins=slot_ins, slot_outs=slot_outs)
-    return Split(name, low, TL.Tail([st], [], [], list(range(N))), rows, N, _definition(K, N, G))
+    tail = lambda S: TL.Tail([TL.Stage(S, slot_ins[0], slot_outs[0], [32] * (2 * T), [16], count=N, slot_ins=slot_ins,  # noqa: E731
+                                       slot_outs=slot_outs)], [], [], list(range(N)))
+    return Split(name, low, tail(_scale_circuit(T, False)), rows, N, _definition(K, N, G),
+                 forged=tail(_scale_circuit(T, False, reverse=True)))
 
 
 def fp8_block_linked(K: int, N: int, G: int = 128) -> tuple[Split, Split]:
@@ -235,11 +239,12 @@ def counts(split: Split) -> dict:
 def stage(split: Split, rows: dict, out_dir: Path, salt_key: bytes, want: np.ndarray | None = None) -> dict:
     """``rows`` (``{row: (n, words)}`` u16) as the split's statement under ``out_dir``, every row a ``sha512/row/v2`` bit row of
     exactly its words: ``circuit.txt``, ``inst-<n>.bin``, ``pub-<n>.bin``, ``outs.npy`` (the outputs, which ``want`` must equal
-    where given). Returns META's shape and the counts."""
+    where given), and ``circuit-forged.txt`` for a split with forged stages. Returns META's shape and the counts."""
     sub = _sub(split)
     n = len(rows[split.rows[0][0]])
-    text = FC.compose(split.low, sub, tail=split.tail, program=None if split.definition is not None else "0" * 128,
-                      port_bits=[16 * w for _r, w in split.rows], v2_out_rows=(("y",),))
+    kw = {"program": None if split.definition is not None else "0" * 128, "port_bits": [16 * w for _r, w in split.rows],
+          "v2_out_rows": (("y",),)}
+    text = FC.compose(split.low, sub, tail=split.tail, **kw)
     flat = np.concatenate([np.asarray(rows[r], dtype=np.uint64) for r, _w in split.rows], axis=1)
     outs, ok = evaluate(split, flat)
     if not ok:
@@ -252,6 +257,8 @@ def stage(split: Split, rows: dict, out_dir: Path, salt_key: bytes, want: np.nda
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
+    if split.forged is not None:
+        (out_dir / "circuit-forged.txt").write_text(FC.compose(split.low, sub, tail=split.forged, **kw))
     FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key,
              rows={r: np.asarray(rows[r], dtype=np.uint16) for r, _w in split.rows}, outs={"y": outs})
     np.save(out_dir / "outs.npy", outs)
