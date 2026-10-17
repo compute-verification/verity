@@ -17,8 +17,17 @@ What is proved about duo's words (`Definitions/Pouw/Receipt/Duo.lean`), at every
 `DuoQuadNoKernel`'s condition on `a₂` is needed: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and
 `a₃ ≡ ±1 (mod 2^(n+1−r₁))`, flipping the top bit of all four words leaves every final state unchanged. pfill's `key_ok`
 rejects `a ≡ −1 (mod 32)` and its rotations are 5 to 29, and no served word's multiplier is `≡ −1` modulo two to the
-previous word's rotation, so both deployed schedules meet it at `n = 32`. Runs of five or more words are not covered,
-nor is the served receipt `y ⊕ rotl(z, 16)`, which commits less than the whole state.
+previous word's rotation, so both deployed schedules meet it at `n = 32`. Runs of five or more words are not covered.
+
+The served receipt `y ⊕ rotl(z, 16)` commits less than the whole state, and a thread commits the XOR of its 8 chains'
+receipts, so two runs whose receipts differ by one XOR constant on every start state cancel in two chains of a parity
+group. `duoWordSpread` (the receipt's XOR between two start states) is equal for two words exactly then:
+
+* `DuoWordProjNoKernel`: one word's served receipt has no such kernel, for every odd multiplier, rotation
+  `0 < r < n` and receipt rotation `0 < h < n`.
+
+Three words' receipts can have one: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and `a₃ ≡ ±1 (mod 2^(n−r₁))`,
+flipping the top bit of all three words moves the receipt by one constant (`benchmarks/pouw/theory/duo_proj.c`).
 -/
 
 namespace Pouw.Guarantees.Receipt
@@ -50,5 +59,11 @@ def DuoQuadNoKernel : Prop :=
   ∀ (n : ℕ) (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : ShortRotation n) (k₂ : BitVec n) (a₂ : OddKeyNotNegOne n r₁.1)
     (r₂ : Rotation n) (k₃ : BitVec n) (a₃ : OddKey n) (r₃ : Rotation n) (k₄ a₄ : BitVec n) (r₄ : ℕ),
     Function.Injective (duoQuad k₁ a₁.1 r₁.1 k₂ a₂.1 r₂.1 k₃ a₃.1 r₃.1 k₄ a₄ r₄)
+
+/-- **One duo word's served receipt binds it up to no XOR constant.** For every width, XOR key, odd multiplier,
+rotation `0 < r < n` and receipt rotation `0 < h < n`, two words whose receipts `y ⊕ rotl(z, h)` differ by one XOR
+constant on every start state (equal `duoWordSpread`s) are equal. -/
+def DuoWordProjNoKernel : Prop :=
+  ∀ (n : ℕ) (k : BitVec n) (a : OddKey n) (r h : Rotation n), Function.Injective (duoWordSpread k a.1 r.1 h.1)
 
 end Pouw.Guarantees.Receipt
