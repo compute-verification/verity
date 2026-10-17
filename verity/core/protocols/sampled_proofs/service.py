@@ -476,6 +476,28 @@ def check_verdicts(verdicts: Mapping[str, Mapping[str, Any]], sessions: Sequence
 Sampler = Callable[[Mapping[str, Any], int], Sequence[int]]
 
 
+def _window_key(window: Any) -> bytes | None:
+    """The key under which R6 looks for an earlier window equal to `window`. Two plain JSON windows (dicts with string
+    keys, lists, strings, integers, booleans and null) that Python's `==` or the Lean's `jeq` finds equal share it: a
+    boolean keys as its integer, as `==` reads it. Any other window (a float, a tuple, another type) has none, and
+    `Stream._earlier` compares it with the whole log."""
+    def plain(x: Any) -> Any:
+        if x is None or type(x) in (str, int):
+            return x
+        if type(x) is bool:
+            return int(x)
+        if type(x) is list:
+            return [plain(v) for v in x]
+        if type(x) is dict and all(type(k) is str for k in x):
+            return {k: plain(v) for k, v in x.items()}
+        raise TypeError(type(x).__name__)
+
+    try:
+        return canonical_json(plain(window))
+    except (TypeError, RecursionError):
+        return None
+
+
 def selection_law(rule: Selection, n: int) -> dict[str, Any]:
     """The law a selection rule names over `n` proof units, before `draw.derive` expands it over the check's program and
     query: `subset:n` for `All`, a `Law`'s own, and a two-stage rule's `replay` (over its RUs)."""
@@ -532,6 +554,10 @@ class Stream:
     elsewhere with its release, and under `Check.registration_deadline` every registration is received within the
     deadline of that release, or the epoch ends (`ended`) at the first that isn't. `epoch_log` holds the challenger's
     clock readings.
+
+    As its log grows, a stream keeps what one-stage's R6 and R7 read of it: where each window was logged, and each
+    registered value's first registration. It also counts its failures as they come. So a registration's checks read
+    the same few records whatever the stream's history (`_earlier`), with the verdicts the whole log gives.
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition, *, budget: int, delta: float, challenger: str,
@@ -561,14 +587,18 @@ class Stream:
                                "challenger": challenger})
         self._entries: list[_Entry] = []
         self._log: list[dict[str, Any]] = []
+        self._windows: dict[bytes, list[int]] = {}
+        self._irregular: list[int] = []
+        self._first: dict[Any, int] = {}
         self._records: list[dict[str, Any]] = []
+        self._failures = 0
         self._epoch_log: list[dict[str, Any]] = []
         self._salted_at: float | None = None
         self._ended: dict[str, Any] | None = None
 
     @property
     def failures(self) -> int:
-        return sum(1 for e in self._entries if e.outcome is not None and not e.outcome.accepted)
+        return self._failures
 
     @property
     def stopped(self) -> bool:
@@ -657,12 +687,13 @@ class Stream:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
         each by its verifier of record (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N, the check's query, the selection rule's law (a
-        two-stage rule's `replay`), `SCHEME`, the stream's log, and the per-registration copies given here (`ports`,
-        `leaf_layer`, `anchors`, `registered`, `work_table`, as `registration.check` takes them). Under `TwoStage` its
-        roots are the boundary values'. Then the receipt. Under `Check.registration_deadline` the challenger first reads
-        its clock (`received_at`): a registration received more than the deadline after the salt's release, or before
-        any salt, is refused (`late-registration`, with both readings) whatever it holds, logged, and ends the epoch; an
-        on-time one carries both readings (`Registration.salted_at`, `received_at`) and is logged with them. Raises
+        two-stage rule's `replay`), `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the
+        per-registration copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, as
+        `registration.check` takes them). Under `TwoStage` its roots are the boundary values'. Then the receipt. Under
+        `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
+        than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
+        readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
+        (`Registration.salted_at`, `received_at`) and is logged with them. Raises
         `Refused`: when the stream has stopped or its epoch ended (`epoch-ended`), while an earlier registration has no
         final outcome, when it is late, or when either check fails."""
         self.ready()
@@ -683,8 +714,8 @@ class Stream:
             raise _refuse("population", n)
         program = P.population_program(self.unit, n)
         law = selection_law(self.spec.selection, n)
-        v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, self._log, None,
-                    work_table, registered)
+        v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors,
+                    self._earlier(record), None, work_table, registered)
         if not v.ok:
             raise Refused(v)
         salted_at = None if d is None else self._salted_at
@@ -711,8 +742,30 @@ class Stream:
                     received_at: float | None = None) -> Registration:
         reg = Registration(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))), R.digest(record),
                            order, salted_at, received_at)
-        self._log.append(dict(record))
+        at = len(self._log)
+        self._log.append(logged := dict(record))
+        key = _window_key(logged.get("window"))
+        if key is None:
+            self._irregular.append(at)
+        else:
+            self._windows.setdefault(key, []).append(at)
+        for e in logged.get("registered") or ():
+            self._first.setdefault(e["value"], at)
         return reg
+
+    def _earlier(self, record: Mapping[str, Any]) -> list[dict[str, Any]]:
+        """The records of the log that one-stage's R6 and R7 read for `record`, in log order: the last (R6's `previous`),
+        every one whose window may equal `record`'s (R6's window: the same `_window_key`, or none), and each registered
+        value's first registration (R7's held roots, `registration.held_roots`). Both verifiers of record give the same
+        verdict on them as on the whole log. A record whose window has no key, or that has no window, gets the whole
+        log."""
+        key = _window_key(record["window"]) if isinstance(record, Mapping) and "window" in record else None
+        if key is None:
+            return self._log
+        at = {*self._first.values(), *self._irregular, *self._windows.get(key, ())}
+        if self._log:
+            at.add(len(self._log) - 1)
+        return [self._log[i] for i in sorted(at)]
 
     def _entry(self, registration: Registration) -> _Entry:
         o = registration.order
@@ -771,7 +824,7 @@ class Stream:
             raise _refuse("interior-population", {"registered": record.get("population"), "proved": n})
         law = {"law": "subset", "k": n}
         v = V.check(record, P.population_program(self.unit, n), self.spec.check.query, law, SCHEME, ports, leaf_layer,
-                    anchors, self._log)
+                    anchors, self._earlier(record))
         if not v.ok:
             raise Refused(v)
         e.interior, e.interior_draw = self._log_record(record, order), {**law, "population": n, "units": list(range(n))}
@@ -869,6 +922,7 @@ class Stream:
             terms=Terms(None if exhaustive else self.delta),
             public=dict(public),
             record=_sha512(body))
+        self._failures += not accepted
         self._records.append(body)
         return e.outcome
 
