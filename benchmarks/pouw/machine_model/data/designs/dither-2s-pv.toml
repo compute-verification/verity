@@ -1,0 +1,19 @@
+# Dither-2S with Dither-C's committed-digit P·V (SKIP's Ap, Result 3): both operands dithered, no U, the last checked
+# word served, and P·V's strip digits committed, so no product is unchecked. Perplexity +1.38% (8B WT-2 2K) on SKIP's
+# `adopted-bd-lm-pv` arms, which are not on main yet (cursor/eps-pv-ea24).
+base = "dither-2s"
+name = "dither-2s-pv"
+title = "Dither-2S, pv P·V"
+aliases = ["dither-two-sided-pv", "Ap"]
+summary = "Two-sided dither serving the last checked word, P·V on committed digit limbs, duo at L = 32"
+ppl = ""
+
+[noise]
+linears = "two-sided"
+lm_head = "two-sided"
+qk = "two-sided"
+pv = "pv"
+
+[skip.ts-time]
+eps = 0.00016
+source = "SKIP's Ap (calculator @a668d59c3, Result 3): 0 by int8 products and by time, plus pv's TS vector work ≤ 0.016% (note:20261017T0340Z-draft-skip, 06:19Z)"
