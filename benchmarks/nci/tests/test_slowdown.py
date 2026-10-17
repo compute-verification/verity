@@ -62,7 +62,19 @@ def test_fit_is_free_for_inference_shaped_work():
 def test_decode_that_does_not_fit_shards_the_decoding():
     K, Gamma = 2e7, 6.4e16
     i = BASE | {"U_bits": 3.2e5, "U_token_bits": 3.2e5, "decode_flops": 2.1e17, "crossings": 1.0}
-    assert S.construction_upper(i, K, Gamma, 20)[1] == "decode-shard"
+    assert S.construction_upper(i, K, Gamma, 20, splits=False)[1] == "decode-shard"
+
+
+def test_search_reproduces_the_shard_closed_form():
+    """With no data and no decoding, the best split is half a block of state: the closed form."""
+    K, b_tok, n_active = 2e7, 20, 3.2e10
+    Gamma = K * 2 * n_active / b_tok
+    U = 8e10
+    c = S.search(U, True, 6 * n_active, 2 * 28672, 0.0, 0.0, K, Gamma)
+    i = BASE | {"U_token_bits": U, "crossings": 2.0, "w_cut": 28672.0, "flops_per_token": 6 * n_active}
+    assert c["basis"] == "shard"
+    assert c["rho"] == pytest.approx(S.shard(i, K, Gamma), rel=1e-2)
+    assert c["reads"]["state"] == pytest.approx(K / 2, rel=1e-2)
 
 
 def test_every_bracket_is_consistent():

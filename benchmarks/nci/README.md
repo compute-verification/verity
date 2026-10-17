@@ -19,7 +19,10 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `parameters.json` | parameters, each with estimates: `low`, `central`, `high`, `confidence`, `evidence` (finding ids), `merge` |
 | `calibrations.json` | a policy (`K` bits a block may read besides committed parameters, `Gamma` gates per block, `b_tok`) and the model it is calibrated to |
 | `rows.json` | the board's rows: method, configuration, state representation, calculator inputs (a number or `estimate-id:low|central|high`), notes, sources, demonstrated capability |
+| `algorithms.json` | the algorithm library: training algorithms by architecture-agnostic traits (`library.TRAITS`) |
+| `models.json` | model shapes the library queries against |
 | `catalog.py` | loading, and `problems()`: every rule below that a file breaks |
+| `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
 | `slowdown.py` | the bracket per row; `python benchmarks/nci/slowdown.py [--calibration ID] [--row ID]` |
 | `render.py` | the whole index as Markdown on stdout |
 
@@ -69,12 +72,12 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
     may take the values it needs from a compressed boundary crossing;
   - when one block can hold the state a token touches, the entry fee vanishes (`d = 1`, `e` at least the counted
     multiplications per token).
-- `upper` is the cost of an explicit compliant construction, the cheapest that applies:
-  - `fit`: the state fits in a block;
-  - `decode-shard`: the description fits, but decoding it does not;
-  - `shard`: layer sharding with activations crossing the boundaries.
-
-  The constructions are analytic; none has been run.
+- `upper` is the cost of the cheapest construction `search` finds. In it, a block covers a slice of every token's
+  computation. It reads its slice's state, or the whole description when that doesn't split (seeds), plus the
+  activations crossing into the slice and the tokens' data. It decodes its own slice and is padded to `Gamma`. The
+  result is labeled `fit` (one block holds the whole computation), `shard` (slices split the state) or `decode-shard`
+  (each slice reads a whole description and decodes its part). One sequential chain of blocks is assumed. The
+  constructions are analytic; none has been run.
 - `chain` is the earlier bound \(\kappa F\), for comparison only. The lock marks its assumption as falsified, and on the
   small-adapter rows it exceeds a compliant construction's cost.
 
@@ -115,6 +118,43 @@ All values below are from `parameters.json`; render the index for the findings b
     prompt and playbook optimization (`capability.bits/*`).
   - No generational jump has been shown within about 10 MB.
 
+## The algorithm library
+
+`library.py` answers questions across training algorithms. An algorithm is a set of traits that scale with the model's
+shape (`algorithms.json`; `library.TRAITS` lists them):
+
+- the fraction of parameters it updates;
+- the bits of state per updated parameter, and whether that state splits across slices;
+- the width and bits of what crosses a layer boundary, and how many times per token;
+- the work per token and the novel data per token;
+- any decoding work;
+- the theorem's own parameters.
+
+A query takes an algorithm, a model (`models.json`), a policy and whether the training data is committed or novel. It
+returns the bracket and where a block's reads go: state, activations, data.
+
+~~~sh
+python benchmarks/nci/library.py table --model kimi-k2 --policy kimi-k2-1m-raw    # brackets and read shares
+python benchmarks/nci/library.py data                                             # what training data is worth, per model
+python benchmarks/nci/library.py query lora-16 --model dense-7b --data committed  # one query, as JSON
+~~~
+
+**How big a deal is training data?** Not much, once a model doesn't fit in a block.
+
+- At Kimi K2 scale, the cheapest construction for every algorithm spends about half its reads re-reading weights and
+  half on activations crossing in. Data is under 1%, and committing the data changes the cost by under 1%.
+- Data is the whole story only when one block can hold a token's entire state. That covers models of a few million
+  parameters (a factor of about 5,000 at 4M), fine-tuning deltas and seed runs on models up to about 1–7B, and
+  rank-1 RL on small models.
+- On the proof side it matters a great deal: with the data committed, the theorem's containment hypothesis fails, and
+  the proven bound drops to 1.
+
+Three caps keep the library's lower bounds valid. Each was added because a query broke lower ≤ upper without it:
+
+- a token's charge is at most `b_tok`;
+- an activation's charge is at most the bits a compressed boundary carries per value;
+- a block that holds the whole state is charged no more per token than the novel data it reads.
+
 ## The board today
 
 Under `kimi-k2-1m-raw` (K = 2e7 bits, a 1M-token session at 32B active parameters):
@@ -124,11 +164,12 @@ Under `kimi-k2-1m-raw` (K = 2e7 bits, a 1M-token session at 32B active parameter
 | `pretrain-full` | 1.1e5 | 1.5e7 (shard) |
 | `rl-full-weights` | 1.4e5 | 9.2e6 (shard) |
 | `rl-rank1-lora-all-experts` | 4 | 6.3e4 (shard) |
-| `mezo-seed-finetune` | 1 | 4.7e3 (decode-shard) |
+| `mezo-seed-finetune` | 1 | 2.4e3 (decode-shard) |
+| `zo-seed-pool` | 1 | about 3 (fit) |
 | `rl-tinylora`, `context-playbook` | 1 | about 1 (fit) |
 
-Each row's numbers move with the calibration. The 11 MB calibration lets a fixed seed pool fit (`zo-seed-pool`, about
-1.2) but not a 20k-step MeZO run. Coded prompts raise full-weight training's lower bound about 5x.
+Each row's numbers move with the calibration. Under the 11 MB calibration every seed-based row fits in a block, at
+1.2–3.5. Coded prompts raise full-weight training's lower bound about 5x.
 
 The widest brackets are the research targets:
 
@@ -142,8 +183,10 @@ Today the policy puts no limit on θ, the values committed before monitoring. Th
 A developer may commit a noise table, one entry per parameter per direction, and then decode an update with one
 multiply-add per parameter instead of a PRNG draw.
 
-- **Without a cap** (`kimi-k2-1m-raw-uncapped`), `zo-seed-pool` costs about 1.1 and `es-population-30` about 1.5.
-- **With a cap**, which every other calibration assumes (`theta_cap`), they cost 970 and 7,070.
+- **Without a cap** (`kimi-k2-1m-raw-uncapped`), `zo-seed-pool`, `es-population-30` and `mezo-seed-finetune` cost
+  about 1.2, 2 and 3.
+- **With a cap**, which every other calibration assumes (`theta_cap`), they cost about 3, 3,600 and 2,400. A fixed seed
+  pool fits in one block even then: its decoding, 4.3×10¹⁶ flops, is under `Gamma`.
 
 **Design constraint.** The policy serves an agreement between rivals, so a rule on θ must neither reveal nor narrow the
 architecture. Checks run inside the zero-knowledge proof, and the verifier learns only that they pass.

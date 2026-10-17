@@ -247,7 +247,8 @@
    ],
    "note": "within 1% of fine-tuning on 7/11 tasks at 13B"
   },
-  "decode_flops_table": 4.16e+16
+  "decode_flops_table": 4.16e+16,
+  "state_splits": false
  },
  {
   "id": "es-population-30",
@@ -282,7 +283,8 @@
    ],
    "note": "beats PPO and GRPO on Countdown at 7-8B; a re-run finds near-parity"
   },
-  "decode_flops_table": 3.12e+16
+  "decode_flops_table": 3.12e+16,
+  "state_splits": false
  },
  {
   "id": "zo-seed-pool",
@@ -310,7 +312,8 @@
   "sources": [
    "qin-2024-fedkseed"
   ],
-  "decode_flops_table": 8519680000000000.0
+  "decode_flops_table": 8519680000000000.0,
+  "state_splits": false
  },
  {
   "id": "context-playbook",

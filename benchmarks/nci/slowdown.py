@@ -9,19 +9,12 @@ in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
   containing circuit is no smaller. The weight rate is capped at ``U_bits / n_updated``: a block that uses ``p`` updated
   weights can always read the whole update instead, so no larger rate is a valid charge. A seed-described update
   therefore gets a lower bound near 1, which is the truth about it, not an artifact.
-* ``upper``: the cheapest applicable construction, each compliant by construction under its own accounting. Every
-  block is padded to ``Gamma`` gates, so a construction's cost is ``Gamma`` over the reference work a block does.
-  ``fit``: the state one token touches fits in half a block's reads and its decoding in half a block's work. Each block
-  reads that state and spends the rest of its reads on tokens at ``b_tok`` bits, doing ``flops_per_token`` each:
-  ``rho = max(1, Gamma b_tok / (flops_per_token (K - U_token))) (1 + U_token / K) + decode / Gamma``, where the
-  ``U_token / K`` term (training rows, ``c >= 2``) pays for blocks that sum the gradients, ``K / U_token`` per block.
-  ``decode-shard``: the description fits but decoding it does not. A block reads the whole description, decodes the
-  slice ``phi = Gamma / (2 decode)`` of the model it covers, and takes ``crossings * w_cut`` bits per token from the
-  previous slice: ``rho = Gamma / (phi flops_per_token T)`` with ``T = (K - U_token) / (crossings w_cut)``.
-  ``shard``: the state does not fit. Each shard holds ``U_s`` bits of it and receives ``crossings * w_cut`` bits per
-  token; at the best split (``U_s = K / 2``) a block's intensity is ``4 crossings w_cut U_token / (K flops_per_token)``,
-  padded to ``alpha``. It assumes updated state spread evenly over a token's compute, and that a block's work cap
-  never binds (``shard`` checks it).
+* ``upper``: the cost of the cheapest construction ``search`` finds, compliant by construction under its own
+  accounting: a block covers a slice of every token's computation, reads its slice's state, the activations crossing
+  into it and the tokens' data at ``b_tok`` bits each, and is padded to ``Gamma``. It reports ``fit`` (one block covers
+  the whole computation), ``shard`` (slices, the state split among them) or ``decode-shard`` (slices, each reading a
+  whole description such as seeds and decoding its own slice). ``shard`` is the closed form of the best split with no
+  data and no decoding, kept as a check.
 * ``theta_cap``: a calibration without a cap on the committed parameters' size lets a row decode from a committed table
   (its ``decode_flops_table``) instead of regenerating it, as a seed-based method's noise.
 * ``chain``: the earlier chain bound ``kappa * F`` (``Nci.Guarantees.UpdatedMatMul``), for comparison. The lock marks it
@@ -111,25 +104,43 @@ def shard(i: dict, K: float, Gamma: float) -> float:
     return max(1.0, nci * Gamma / K)
 
 
-def fit(i: dict, K: float, Gamma: float, b_tok: float) -> float:
-    U = i["U_token_bits"]
-    tokens = (K - U) / b_tok
-    aggregate = 1 + (U / K if i["c"] >= 2 else 0.0)
-    return max(1.0, Gamma / (i["flops_per_token"] * tokens)) * aggregate + i["decode_flops"] / Gamma
+def _phis() -> list[float]:
+    return [10 ** (-12 + 12 * k / 2400) for k in range(2400)] + [1.0]
 
 
-def decode_shard(i: dict, K: float, Gamma: float) -> float:
-    phi = Gamma / (2 * i["decode_flops"])
-    tokens = min((K - i["U_token_bits"]) / (i["crossings"] * i["w_cut"]), Gamma / (2 * phi * i["flops_per_token"]))
-    return max(1.0, Gamma / (phi * i["flops_per_token"] * tokens))
+def search(U: float, splits: bool, flops: float, w: float, t: float, decode: float, K: float, Gamma: float) -> dict:
+    """The cheapest construction in one family. A block covers a slice, a fraction ``phi`` of every token's computation,
+    for ``T`` tokens. It reads its slice's state (``phi U``; all of ``U`` when the state is a description that does not
+    split, such as seeds), the ``w`` bits per token crossing into the slice (none at ``phi = 1``), and ``t`` bits of
+    novel data per token. It does ``phi flops`` of reference work per token and decodes its slice (``phi decode``).
+    Padded to ``Gamma``, its cost is ``Gamma`` over its reference work, minimized over ``phi`` and ``T`` under the caps.
+    At ``phi = 1`` this is the fit construction; at the best ``phi`` with ``t = 0`` and no decoding it is ``shard``. One
+    sequential chain of blocks is assumed, so no gradient aggregation is charged and wall-clock time is ignored."""
+    best = None
+    for phi in _phis():
+        state = phi * U if splits else U
+        dec = phi * decode
+        if state >= K or dec >= Gamma:
+            continue
+        w_in = w if phi < 1 else 0.0
+        per_token = w_in + t
+        tokens = min((K - state) / per_token if per_token > 0 else math.inf, (Gamma - dec) / (phi * flops))
+        rho = Gamma / (phi * flops * tokens)
+        if best is None or rho < best["rho"]:
+            best = {"rho": rho, "phi": phi, "tokens": tokens,
+                    "reads": {"state": state, "activations": tokens * w_in, "data": tokens * t},
+                    "work": {"reference": phi * flops * tokens, "decode": dec}}
+    if best is None:
+        raise ValueError("no compliant construction in the family: the state or its decoding exceeds a block")
+    best["rho"] = max(1.0, best["rho"])
+    best["basis"] = "fit" if best["phi"] == 1.0 else ("shard" if splits else "decode-shard")
+    return best
 
 
-def construction_upper(i: dict, K: float, Gamma: float, b_tok: float) -> tuple[float, str]:
-    if i["U_token_bits"] > K / 2:
-        return shard(i, K, Gamma), "shard"
-    if i["decode_flops"] > Gamma / 2:
-        return decode_shard(i, K, Gamma), "decode-shard"
-    return fit(i, K, Gamma, b_tok), "fit" if i["U_bits"] <= K / 2 else "fit-per-token"
+def construction_upper(i: dict, K: float, Gamma: float, b_tok: float, splits: bool = True) -> tuple[float, str]:
+    c = search(i["U_token_bits"], splits, i["flops_per_token"], i["crossings"] * i["w_cut"], b_tok, i["decode_flops"],
+               K, Gamma)
+    return c["rho"], c["basis"]
 
 
 def bracket(row: dict, calibration: dict, parameters: list[dict]) -> dict:
@@ -138,7 +149,7 @@ def bracket(row: dict, calibration: dict, parameters: list[dict]) -> dict:
         i["decode_flops"] = min(i["decode_flops"], row["decode_flops_table"])
     K, Gamma = calibration["K"], calibration["Gamma"]
     b_tok = calibration["b_tok"]
-    upper, basis = construction_upper(i, K, Gamma, b_tok)
+    upper, basis = construction_upper(i, K, Gamma, b_tok, row.get("state_splits", True))
     return {"row": row["id"], "calibration": calibration["id"], "lower": thread_lower(i, K, Gamma, b_tok),
             "lower_basis": THREAD_THEOREM, "upper": upper, "upper_basis": basis,
             "chain": chain_conditional(i, K, Gamma, b_tok), "inputs": i}

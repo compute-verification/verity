@@ -1,0 +1,354 @@
+[
+ {
+  "id": "backprop",
+  "name": "Standard pretraining",
+  "family": "reference",
+  "description": "End-to-end backprop through a transformer, every weight updated every step.",
+  "sources": [
+   "tseng-2024-qtip",
+   "he-2025-tahquant"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "State at the scratch-trained rate b_w = 2.5 bits per weight (b_w.pretrained central) and a momentum-free optimizer, the attacker's choice; activations cross at 4 bits (b_a.activation central)."
+ },
+ {
+  "id": "backprop-fp8-boundaries",
+  "name": "Standard pretraining, 8-bit boundaries",
+  "family": "reference",
+  "description": "As backprop, with activations crossing at 8 bits as production systems send them.",
+  "sources": [
+   "deepseekai-2024-deepseek-v3"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 8.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "b_a.activation high."
+ },
+ {
+  "id": "backprop-bottleneck",
+  "name": "Pretraining with a trained residual bottleneck",
+  "family": "architecture",
+  "description": "Backprop through an architecture whose residual crosses layer boundaries at half width.",
+  "sources": [
+   "ryabinin-2023-swarm"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 0.5,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "A linear d/2 bottleneck costs SWARM 26-28% more steps; not counted here (efficiency multiplier < 1)."
+ },
+ {
+  "id": "backprop-subspace",
+  "name": "Pretraining with a 1% residual subspace",
+  "family": "architecture",
+  "description": "Backprop through an architecture that confines the residual to 1% of its width at boundaries, 16 bits.",
+  "sources": [
+   "ramasinghe-2025-protocolmodels"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 0.01,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "The most aggressive published claim (Subspace Networks, unreplicated, mostly 2-8B)."
+ },
+ {
+  "id": "diloco",
+  "name": "DiLoCo (local SGD, sync every 30 steps)",
+  "family": "parallel-communication",
+  "description": "Workers each run ordinary backprop on a full replica and average pseudo-gradients every H steps.",
+  "sources": [
+   "douillard-2023-diloco",
+   "charles-2025-diloco-scaling"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Within a worker, blocks still pass the same state and activations as standard training, so its per-block traits equal backprop's: less traffic between workers does not shrink what crosses a block."
+ },
+ {
+  "id": "greedy-layerwise",
+  "name": "Greedy layer-wise (local) learning",
+  "family": "local-learning",
+  "description": "Each layer is trained with a local loss on the frozen prefix's outputs; no gradient crosses a layer boundary.",
+  "sources": [],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "No source in the index yet. Activations still cross forward; the thread theorem does not cover it, since it is not end-to-end backprop."
+ },
+ {
+  "id": "full-finetune",
+  "name": "Full fine-tuning from a committed base",
+  "family": "fine-tuning",
+  "description": "Backprop over every weight, starting from committed weights; the state is the delta.",
+  "sources": [
+   "yu-2024-dare"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 0.1,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "b_w.delta/sft central: 0.1 bits per base weight."
+ },
+ {
+  "id": "lora-16",
+  "name": "LoRA rank 16 on every matrix",
+  "family": "low-rank",
+  "description": "Continued training of rank-16 adapters on every matrix, the base frozen.",
+  "sources": [
+   "hu-2022-lora",
+   "biderman-2024-lora-learns-less"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 0.0101,
+   "state_bits_per_param": 16.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 4.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.003,
+   "uses_per_thread": 2,
+   "entry_fee_override": 16,
+   "fanout_override": 7168
+  },
+  "notes": "Updated fraction ~ 16 (1/7168 + 1/2048) for Kimi K2 shapes; bf16 adapter; 4 flops per active parameter per token (no weight gradients for the base); the adapter's up-projection has a 16-value entry fee."
+ },
+ {
+  "id": "rl-rank1-lora",
+  "name": "RL with a rank-1 LoRA on every matrix",
+  "family": "rl-adapter",
+  "description": "Rollouts and updates of rank-1 adapters on every matrix, including every routed expert.",
+  "sources": [
+   "schulman-2025-lora-without-regret"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 0.00061,
+   "state_bits_per_param": 16.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 2.0,
+   "data_tokens_per_token": 0.05,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.0004,
+   "uses_per_thread": 2,
+   "entry_fee_override": 1,
+   "fanout_override": 7168
+  },
+  "notes": "Priced at rollout cost (2 flops per active parameter per token, forward only); prompts are a small share of the tokens a rollout generates."
+ },
+ {
+  "id": "expert-subset-sft",
+  "name": "Expert-specialized fine-tuning (10% of experts)",
+  "family": "fine-tuning",
+  "description": "Backprop that updates a tenth of the routed experts.",
+  "sources": [
+   "wang-2024-esft"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 0.1,
+   "state_bits_per_param": 0.1,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.067,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "b_w.delta/sft central."
+ },
+ {
+  "id": "mezo",
+  "name": "Zeroth-order fine-tuning (MeZO, 20k steps)",
+  "family": "seed-based",
+  "description": "Two forward passes per step with a seeded perturbation; the update is seeds and one scalar per step.",
+  "sources": [
+   "malladi-2023-mezo"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": false,
+   "description_bits": 320000.0,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 4.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 200000.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "The description does not split across slices: a block must read every seed to rebuild any slice. Decoding regenerates each step's perturbation, 10 flops per parameter per step."
+ },
+ {
+  "id": "es-30",
+  "name": "Evolution strategies (population 30, 500 iterations)",
+  "family": "seed-based",
+  "description": "Perturb, evaluate, and move along fitness-weighted seeded noise.",
+  "sources": [
+   "qiu-2025-es-at-scale"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": false,
+   "description_bits": 240000.0,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 2.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 150000.0,
+   "kappa": 0.667,
+   "uses_per_thread": 1,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "15,000 perturbations at 10 flops per parameter each."
+ },
+ {
+  "id": "zo-seed-pool",
+  "name": "Zeroth-order over a fixed 4096-seed pool",
+  "family": "seed-based",
+  "description": "The update is one coefficient per seed of a fixed pool, so decoding costs the same for any run length.",
+  "sources": [
+   "qin-2024-fedkseed"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": false,
+   "description_bits": 320000.0,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 4.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 40960.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "4096 seeds at 10 flops per parameter each."
+ }
+]
