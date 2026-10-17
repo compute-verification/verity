@@ -9,6 +9,7 @@ import Proofs.Flock.Claims.Bridge.Custody
 import Proofs.Flock.Claims.Bridge.Hm96Tree
 import Proofs.Flock.Claims.Bridge.CustodyPlain
 import Proofs.Flock.Claims.Bridge.DecodePlain
+import Proofs.Flock.Claims.Bridge.Dead
 
 /-! The run-to-live-game bridge: the coin law (`Coins`), the public-coin verifier of a game and its run path by path
 (`OfGame`), the transport of `Claims.run`'s probabilities to the live game's (`Transport`), and Flock's live session

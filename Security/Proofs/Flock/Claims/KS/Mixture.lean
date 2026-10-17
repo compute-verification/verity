@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.Bridge.LivePlain
+import Proofs.Flock.Claims.Bridge.Dead
 
 /-!
 # One table's salted session after `Commit`, under a live strategy
@@ -14,9 +15,10 @@ accepting while opening a level-0 position off `T` (`live_le_epsSL`). Averaged o
 (`mean_live_le`), each term is the mean over the mixture's strategies after `Commit`.
 
 The same holds at any verdict `ok` on the table's output that the decoder is right for (`simSessG`,
-`live_le_sessionBLG`, `prob_sessionBL_oneG`). The simulated `Commit` sends the cap the live roots decode to
-(`simSessG_fst`), so over a mixture of live strategies whose roots agree, the strategies after `Commit` share one cap
-(`simAt`, `live_le_simAt`, `mean_live_le_simAt`).
+`live_le_sessionBLG`, `prob_sessionBL_oneG`), with the simulation's dead branches, past which no live run is accepted,
+sending empty openings (`nulOp`, `Claims.Bridge.Sim.mapDead`). The simulated `Commit` sends the cap the live roots
+decode to (`simSessG_fst`), so over a mixture of live strategies whose roots agree, the strategies after `Commit` share
+one cap (`simAt`, `live_le_simAt`, `mean_live_le_simAt`).
 -/
 
 namespace FlockDeploy.KS
@@ -166,7 +168,12 @@ theorem fst_rec_send {β M : Type} {k k' : M → Game β} (h : Game.send M k = G
   obtain rfl : k = k' := eq_of_heq (Game.send.inj h).2
   rfl
 
-/-- The simulated strategy of the salted session (`simSessJ`) at any verdict `ok` on each table's output. -/
+/-- **Empty openings**: every slot's row and path empty, at the default salts. -/
+def nulOp {D Sl : Type} [Inhabited Sl] : Model.Opens FlockLevel3.GF128 D × Model.Salts Sl :=
+  (fun _ _ _ => ([], []), fun _ _ _ => default)
+
+/-- The simulated strategy of the salted session (`simSessJ`) at any verdict `ok` on each table's output, its dead
+branches sending empty openings (`nulOp`). -/
 noncomputable def simSessG {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
     [Inhabited Sl] {mPts : ℕ} (A : Model.Arith FlockLevel3.GF128 K) (Hc : List UInt8 → D)
     (E : Merkle.Enc (List FlockLevel3.GF128) D) (Lf : Merkle.Leaf (List FlockLevel3.GF128) Sl D Hc)
@@ -180,9 +187,10 @@ noncomputable def simSessG {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K]
       opn dec one fin capOf (fun j => repsOf (D := D) A (ts.get j)) j)
     (Pr : Strategy (liveSession dg ts.length mPts N)) : Strategy (sessionBL A Hc E Lf ts) :=
   sessionBL_eq_modelSession A Hc E Lf ts ▸
-    (simSession (fun _ cap pend os => tableOutL Hc E Lf cap pend os) (fun _ o => ok o) dfltOutL pL opn dg
-      dec one fin capOf N (fun j => repsOf (D := D) A (ts.get j))
-      (fun j _ _ => Model.allInh_repC A _ (ts.get j).S (ts.get j).sch (ts.get j).hm _) hdec).strategy Pr
+    (Claims.Bridge.Sim.mapDead (Claims.Bridge.answerWith (nulOp (D := D) (Sl := Sl)))
+      (simSession (fun _ cap pend os => tableOutL Hc E Lf cap pend os) (fun _ o => ok o) dfltOutL pL opn dg
+        dec one fin capOf N (fun j => repsOf (D := D) A (ts.get j))
+        (fun j _ _ => Model.allInh_repC A _ (ts.get j).S (ts.get j).sch (ts.get j).hm _) hdec)).strategy Pr
 
 /-- The simulated strategy's `Commit` sends the caps the live prover's roots decode to. -/
 theorem simSessG_fst {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
@@ -220,7 +228,7 @@ theorem live_le_sessionBLG {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K]
         (simSessG A Hc E Lf ts ok pL opn dg dec one fin capOf N hdec Pr) := by
   unfold simSessG
   rw [prob_cast]
-  exact live_le_session _ _ _ pL opn dg dec one fin capOf N _ _ hdec Pr
+  exact Claims.Bridge.Sim.prob_le_mapDead _ _ Pr
 
 open Classical in
 /-- One table's salted session passes `ok` as its output does after `Commit` (`prob_sessionBL_one`). -/
