@@ -1,26 +1,29 @@
-"""VLLM-18 on one GPU: a BF16 pin's int8 checkpoint served with `TargetProfile.int8_exact = "plain"`, checked end to end.
+"""VLLM-18 on one GPU: Llama served with `TargetProfile.int8_exact` (`--int8-exact linears|attention|all`, default all), checked end
+to end against `benchmarks/ppl/steps.py` on the CPU.
 
-One process writes `<out>/int8_exact_gpu.json` (and `<out>/pin_entry.json`, the int8 pin's checkpoints-int8.json entry):
+One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, `<out>/pin_entry.json`, the int8 pin's entry):
 
-  pin       `verity-vllm int8-checkpoint pin` in-process: the int8 snapshot made from the BF16 pin into the HF cache, its entry (every
-            file's sha256, the pinned revision).  The engine reads it through a scratch copy of checkpoints.json and of
-            checkpoints-int8.json with the entry appended as `downloaded` (the repo's manifests get the entry by hand).
-  engine    `engine.build.build_engine(case=ROLE, target=from_device() + int8_exact="plain")`, which refuses a target mismatch
-            (`int8_exact_arm_of` included).
-  applied   `int8_exact.applied_record`: every linear's method, arm and calls, before and after generation, against vLLM's own
-            `LinearBase` modules: every one runs `Int8PlainLinearMethod` (arm "plain") and served calls during generation.
-  generate  greedy (temperature 0) on PROMPTS, batched and one by one; the texts, token ids, and which prompts' tokens differ
-            between the two (attention stays bf16 FlashAttention, whose rows may depend on the batch).
-  equal     forward hooks on the first four linears and the last one keep (x, y) of their first calls in the batched run and in
-            every solo run (prefill and decode, so the M < 17 padding too).  Each served y, bit for bit, against
-              oracle  `benchmarks/ppl/steps.py`'s `int8_linear` on the CPU (`tests/engine/ppl_oracle.int8_linear`) from x and the
-                      BF16 base pin's own weight (q, k, v and gate, up concatenated by rows for vLLM's merged modules)
+  pin       (linears) the registered int8 pin of `--role` (`checkpoints-int8.json`), re-made and checked by `int8-checkpoint make`
+            when its snapshot is not on this host, else a new one by `int8-checkpoint pin`.  The engine reads it through scratch
+            copies of the manifests with the entry `downloaded`.  Attention alone serves the BF16 `--base-role`.
+  engine    `engine.build.build_engine(case=ROLE, target=from_device() + int8_exact)`, which refuses a target mismatch
+            (`int8_exact_of`, read back from every linear and attention layer).
+  applied   `int8_exact.applied_record` and `int8_attention.applied_record`: every linear runs `Int8PlainLinearMethod` and every
+            attention layer `Int8AttentionImpl` (arm "plain"), each serving calls during generation.
+  generate  greedy (temperature 0) on PROMPTS, batched and one by one; the texts, token ids, and which prompts' tokens differ.
+  equal     (linears) forward hooks on the first four linears and the last one keep (x, y) of their first calls in the batched
+            run and in every solo run (prefill and decode, so the M < 17 padding too).  Each served y, bit for bit, against
+              oracle  steps.py's `int8_linear` on the CPU (`tests/engine/ppl_oracle.int8_linear`) from x and the BF16 base pin's
+                      own weight (q, k, v and gate, up concatenated by rows for vLLM's merged modules)
               cpu     `int8_exact.plain_linear` on the CPU on the served int8 weight and scales
               rerun   `int8_exact.plain_linear` again on the GPU
               alone   every row of the call recomputed alone on the GPU (M = 1, padded): a row's value is its own
             and the served weight against the oracle's `quant_rows(w.float(), 127)` of the base weight.
-  batch     every solo-run row whose x is bitwise a row of the batched run's calls of the same module has the batched run's y
-            row, bit for bit (rows past bf16 attention may differ in x, and are counted, not compared).
+  batch     (linears) every solo-run row whose x is bitwise a row of the batched run's calls of the same module has the batched
+            run's y row, bit for bit.
+  attention (attention) the first and last attention layers' first calls, request by request (`int8_attention_gpu`): the served
+            rows against a GPU rerun and the CPU with only the softmax on the GPU (both bit for bit), steps.py's own attention
+            on the CPU (counted: the two devices' torch.softmax round apart), and solo requests against the batched ones.
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
     $PY tests/engine/int8_exact_gpu.py --out DIR --at 2026-10-17T00:00:00Z --by LANE
@@ -46,21 +49,27 @@ from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
 from verity_vllm.engine import int8_exact as E
 
-SCHEMA = "verity-vllm/int8-exact-gpu/v2"
+SCHEMA = "verity-vllm/int8-exact-gpu/v3"
 RECORD = "int8_exact_gpu.json"
 PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the n-th Fibonacci number.\"\"\"\n",
            "The three primary colors are", "Water boils at a temperature of", "Once upon a time, in a small village,"]
 MERGED = {"qkv_proj": ("q_proj", "k_proj", "v_proj"), "gate_up_proj": ("gate_proj", "up_proj")}
 
 
-def pin(a: argparse.Namespace) -> dict[str, Any]:
+def pin(a: argparse.Namespace) -> tuple[dict[str, Any], str]:
+    """The int8 pin of `a.role`: the registered one (re-made and checked by `int8-checkpoint make` when its snapshot is missing
+    here), else a new one (`int8-checkpoint pin`)."""
     out = io.StringIO()
+    entry = next((c for c in checkpoint_entries(a.checkpoints) if c.get("role") == a.role), None)
+    if entry is not None and Path(entry["local_path"]).is_dir():
+        return entry, "registered"
     with contextlib.redirect_stdout(out):
-        rc = I.main(I.PinOptions(base_role=a.base_role, role=a.role, repo=a.repo, checkpoints=a.checkpoints, hf_home=a.hf_home,
+        rc = I.main(I.MakeOptions(role=a.role, checkpoints=a.checkpoints, hf_home=a.hf_home) if entry is not None else
+                    I.PinOptions(base_role=a.base_role, role=a.role, repo=a.repo, checkpoints=a.checkpoints, hf_home=a.hf_home,
                                  by=a.by, at=a.at))
     if rc:
-        raise SystemExit(f"int8-checkpoint pin exited {rc}")
-    return json.loads(out.getvalue())
+        raise SystemExit(f"int8-checkpoint exited {rc}: {out.getvalue()[-2000:]}")
+    return (entry, "remade") if entry is not None else (json.loads(out.getvalue()), "made")
 
 
 def scratch_checkpoints(checkpoints: str, entry: dict[str, Any], scratch: Path) -> Path:
@@ -68,7 +77,7 @@ def scratch_checkpoints(checkpoints: str, entry: dict[str, Any], scratch: Path) 
     p.write_text(Path(checkpoints).read_text())
     sib = Path(checkpoints).with_name("checkpoints-int8.json")
     doc = json.loads(sib.read_text()) if sib.is_file() else {"checkpoints": []}
-    doc["checkpoints"].append({**entry, "downloaded": True})
+    doc["checkpoints"] = [c for c in doc["checkpoints"] if c.get("role") != entry["role"]] + [{**entry, "downloaded": True}]
     (scratch / "checkpoints-int8.json").write_text(json.dumps(doc, indent=1) + "\n")
     return p
 
@@ -180,57 +189,7 @@ def generate(llm: Any, prompts: list[str], max_tokens: int) -> list[dict[str, An
     return [{"prompt": p, "text": o.outputs[0].text, "token_ids": list(o.outputs[0].token_ids)} for p, o in zip(prompts, outs)]
 
 
-def run(a: argparse.Namespace) -> dict[str, Any]:
-    from verity_vllm.engine.build import build_engine, target_mismatches
-    from verity_vllm.program.frontend.kernel_readback import int8_exact_arm_of
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-
-    outdir = Path(a.out)
-    outdir.mkdir(parents=True, exist_ok=True)
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "torch": torch.__version__, "device": torch.cuda.get_device_name(0)}
-    entry = pin(a)
-    doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "recipe": entry["recipe"], "local_path": entry["local_path"]}
-    (outdir / "pin_entry.json").write_text(json.dumps(entry, indent=1) + "\n")
-    print(f"[int8] pin {json.dumps(doc['pin'])}", flush=True)
-    base = BaseWeights(F.base_entry(entry, checkpoint_entries(a.checkpoints), I.INT8)["local_path"])
-
-    target = TargetProfile.from_device().with_overrides(int8_exact=E.ARM)
-    doc["target"] = target.to_json()
-    with tempfile.TemporaryDirectory() as scratch:
-        eng = build_engine(scratch_checkpoints(a.checkpoints, entry, Path(scratch)), case=a.role, target=target,
-                           max_num_seqs=len(PROMPTS))
-    doc["engine"] = {"build_s": round(eng.build_s, 1), "effective": eng.effective, "target_mismatches": target_mismatches(eng),
-                     "int8_exact_arm": int8_exact_arm_of(eng.model), "quantization": eng.kwargs.get("quantization"),
-                     "enforce_eager": eng.kwargs.get("enforce_eager")}
-    print(f"[int8] engine {json.dumps(doc['engine'], default=str)[:800]}", flush=True)
-
-    before, linears = applied(eng.model)
-    names = list(before)
-    tapped = names[:4] + names[-1:]
-    taps = Taps(eng.model, tapped, a.keep_calls)
-    taps.phase = "batched"
-    batched = generate(eng.llm, PROMPTS, a.max_tokens)
-    solo = []
-    for i, p in enumerate(PROMPTS):
-        taps.phase = f"solo{i}"
-        solo += generate(eng.llm, [p], a.max_tokens)
-    taps.phase = None
-    taps.close()
-    after, _ = applied(eng.model)
-    served = {n: (after[n]["calls"] or 0) - (before[n]["calls"] or 0) for n in after}
-    doc["applied"] = {"linears": len(linears), "recorded": len(after), "same_modules": sorted(linears) == sorted(after),
-                      "methods": sorted({r["method"] for r in after.values()}), "arms": sorted({str(r["arm"]) for r in after.values()}),
-                      "min_calls_during_generation": min(served.values(), default=0), "layers": after}
-    doc["applied"]["ok"] = (doc["applied"]["same_modules"] and bool(linears) and doc["applied"]["methods"] == ["Int8PlainLinearMethod"]
-                            and doc["applied"]["arms"] == [E.ARM] and doc["applied"]["min_calls_during_generation"] > 0)
-    print(f"[int8] applied { {k: v for k, v in doc['applied'].items() if k != 'layers'} }", flush=True)
-
-    doc["generations"] = {"batched": batched, "solo": solo,
-                          "batch_dependent": [b["prompt"] for b, s in zip(batched, solo) if b["token_ids"] != s["token_ids"]]}
-    for b, s in zip(batched, solo):
-        print(f"[int8] gen {b['prompt']!r}\n  batched: {b['text']!r}\n  solo:    {s['text']!r}", flush=True)
-
-    mods = dict(eng.model.named_modules())
+def linear_checks(doc: dict[str, Any], mods: dict[str, Any], taps: Taps, tapped: list[str], base: BaseWeights) -> bool:
     w_base = {n: base.weight(n) for n in tapped}
     doc["weights_match_oracle"] = {n: weights_match(mods[n], w_base[n]) for n in tapped}
     print(f"[int8] weights_match_oracle {doc['weights_match_oracle']}", flush=True)
@@ -244,24 +203,130 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                   f"alone!={rec['alone_mismatch']}", flush=True)
     eq = doc["equal"]
     keys = ("oracle_mismatch", "cpu_mismatch", "rerun_mismatch", "alone_mismatch")
-    doc["equal_totals"] = {"compared": len(eq), "padded": sum(r["padded"] for r in eq), "words": sum(r["words"] for r in eq),
-                           **{k: sum(r[k] for r in eq) for k in keys}}
+    doc["equal_totals"] = t = {"compared": len(eq), "padded": sum(r["padded"] for r in eq), "words": sum(r["words"] for r in eq),
+                               **{k: sum(r[k] for r in eq) for k in keys}}
     doc["batch_vs_solo"] = batch_vs_solo(taps.got, tapped)
     bvs = [r for per in doc["batch_vs_solo"].values() for r in per]
-    doc["batch_vs_solo_totals"] = {k: sum(r[k] for r in bvs) for k in ("rows", "matched", "mismatch")}
-    t, b = doc["equal_totals"], doc["batch_vs_solo_totals"]
-    doc["ok"] = bool(doc["applied"]["ok"] and not doc["engine"]["target_mismatches"] and doc["engine"]["int8_exact_arm"] == E.ARM
-                     and all(doc["weights_match_oracle"].values()) and t["compared"] and t["padded"] and not any(t[k] for k in keys)
-                     and b["matched"] and not b["mismatch"]
-                     and all(g["token_ids"] for g in batched + solo))
+    doc["batch_vs_solo_totals"] = b = {k: sum(r[k] for r in bvs) for k in ("rows", "matched", "mismatch")}
+    print(f"[int8] linears totals={json.dumps(t)} batch_vs_solo={json.dumps(b)}", flush=True)
+    return bool(all(doc["weights_match_oracle"].values()) and t["compared"] and t["padded"] and not any(t[k] for k in keys)
+                and b["matched"] and not b["mismatch"])
+
+
+def attention_checks(doc: dict[str, Any], taps: Any, tapped: list[str]) -> bool:
+    from tests.engine import int8_attention_gpu as AG
+    doc["attention_equal"] = []
+    for (phase, name), recs in sorted(taps.got.items()):
+        for r in recs:
+            rec = {"phase": phase, "module": name, "call": r["call"], "request": r["request"], **AG.compare(r)}
+            doc["attention_equal"].append(rec)
+            print(f"[int8] attn {phase} {name} call {rec['call']} req {rec['request']}: s={rec['s']} n={rec['n']} "
+                  f"rerun!={rec['rerun_mismatch']} gpu_softmax!={rec['gpu_softmax_mismatch']} oracle!={rec['oracle_mismatch']} "
+                  f"cpu_oracle!={rec['cpu_oracle_mismatch']} P moved {rec['p_ints_moved']}/{rec['p_ints']} (max {rec['p_ints_max_move']}) "
+                  f"cache!={rec.get('cache_mismatch', '-')}", flush=True)
+    eq = doc["attention_equal"]
+    keys = ("rerun_mismatch", "gpu_softmax_mismatch", "cpu_oracle_mismatch", "cache_mismatch")
+    doc["attention_totals"] = t = {"compared": len(eq), "prefills": sum(r["n"] == r["s"] for r in eq), "words": sum(r["words"] for r in eq),
+                                   **{k: sum(r.get(k, 0) for r in eq) for k in keys},
+                                   **{k: sum(r[k] for r in eq) for k in ("oracle_mismatch", "p_ints", "p_ints_moved")},
+                                   "p_ints_max_move": max((r["p_ints_max_move"] for r in eq), default=0),
+                                   "scale_is_head_dim": all(r["scale_is_head_dim"] for r in eq)}
+    doc["attention_batch_vs_solo"] = AG.batch_vs_solo(taps.got, tapped)
+    bvs = [r for per in doc["attention_batch_vs_solo"].values() for r in per]
+    doc["attention_batch_vs_solo_totals"] = b = {k: sum(r[k] for r in bvs) for k in ("requests", "matched", "mismatch")}
+    print(f"[int8] attention totals={json.dumps(t)} batch_vs_solo={json.dumps(b)}", flush=True)
+    return bool(t["compared"] and t["prefills"] and t["scale_is_head_dim"] and not any(t[k] for k in keys)
+                and b["matched"] == b["requests"] > 0 and not b["mismatch"])
+
+
+def applied_attention(model: Any, before: dict[str, Any]) -> dict[str, Any]:
+    from verity_vllm.engine import int8_attention as A
+    after = A.applied_record(model)
+    served = {n: (after[n]["calls"] or 0) - (before.get(n, {}).get("calls") or 0) for n in after}
+    rec = {"layers": len(after), "impls": sorted({r["impl"] for r in after.values()}), "arms": sorted({str(r["arm"]) for r in after.values()}),
+           "min_calls_during_generation": min(served.values(), default=0), "record": after}
+    rec["ok"] = bool(after) and rec["impls"] == ["Int8AttentionImpl"] and rec["arms"] == [E.ARM] and rec["min_calls_during_generation"] > 0
+    return rec
+
+
+def run(a: argparse.Namespace) -> dict[str, Any]:
+    from verity_vllm.engine import int8_attention as A
+    from verity_vllm.engine.build import build_engine, target_mismatches
+    from verity_vllm.program.frontend.kernel_readback import int8_exact_of
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+    outdir = Path(a.out)
+    outdir.mkdir(parents=True, exist_ok=True)
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "torch": torch.__version__, "device": torch.cuda.get_device_name(0),
+                           "target": target.to_json()}
+    linears = "linears" in target.int8_parts
+    with tempfile.TemporaryDirectory() as scratch:
+        checkpoints, role = a.checkpoints, a.base_role
+        if linears:
+            entry, how = pin(a)
+            doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "recipe": entry["recipe"], "local_path": entry["local_path"],
+                          "source": how}
+            (outdir / "pin_entry.json").write_text(json.dumps(entry, indent=1) + "\n")
+            print(f"[int8] pin {json.dumps(doc['pin'])}", flush=True)
+            base = BaseWeights(F.base_entry(entry, checkpoint_entries(a.checkpoints), I.INT8)["local_path"])
+            checkpoints, role = scratch_checkpoints(a.checkpoints, entry, Path(scratch)), a.role
+        eng = build_engine(checkpoints, case=role, target=target, max_num_seqs=len(PROMPTS))
+    doc["engine"] = {"build_s": round(eng.build_s, 1), "effective": eng.effective, "target_mismatches": target_mismatches(eng),
+                     "int8_exact": int8_exact_of(eng.model), "quantization": eng.kwargs.get("quantization"),
+                     "attention_backend": eng.kwargs.get("attention_backend"), "enforce_eager": eng.kwargs.get("enforce_eager")}
+    print(f"[int8] engine {json.dumps(doc['engine'], default=str)[:800]}", flush=True)
+
+    before, lin_names = applied(eng.model)
+    attn_before = A.applied_record(eng.model)
+    tapped = (lin_names[:4] + lin_names[-1:]) if linears else []
+    attn_tapped = [n for n in (list(attn_before)[:1] + list(attn_before)[-1:])] if "attention" in target.int8_parts else []
+    taps = Taps(eng.model, tapped, a.keep_calls)
+    if attn_tapped:
+        from tests.engine.int8_attention_gpu import AttnTaps
+        attn_taps = AttnTaps(eng.model, attn_tapped, a.keep_calls)
+    phases = [taps] + ([attn_taps] if attn_tapped else [])
+    for t in phases:
+        t.phase = "batched"
+    batched = generate(eng.llm, PROMPTS, a.max_tokens)
+    solo = []
+    for i, p in enumerate(PROMPTS):
+        for t in phases:
+            t.phase = f"solo{i}"
+        solo += generate(eng.llm, [p], a.max_tokens)
+    for t in phases:
+        t.phase = None
+        t.close()
+    after, _ = applied(eng.model)
+    served = {n: (after[n]["calls"] or 0) - (before[n]["calls"] or 0) for n in after}
+    doc["applied"] = {"linears": len(lin_names), "recorded": len(after), "same_modules": sorted(lin_names) == sorted(after),
+                      "methods": sorted({r["method"] for r in after.values()}), "arms": sorted({str(r["arm"]) for r in after.values()}),
+                      "min_calls_during_generation": min(served.values(), default=0), "layers": after}
+    doc["applied"]["ok"] = (not linears) or (doc["applied"]["same_modules"] and bool(lin_names) and doc["applied"]["methods"] == ["Int8PlainLinearMethod"]
+                                             and doc["applied"]["arms"] == [E.ARM] and doc["applied"]["min_calls_during_generation"] > 0)
+    print(f"[int8] applied { {k: v for k, v in doc['applied'].items() if k != 'layers'} }", flush=True)
+    if attn_tapped:
+        doc["applied_attention"] = applied_attention(eng.model, attn_before)
+        print(f"[int8] applied_attention { {k: v for k, v in doc['applied_attention'].items() if k != 'record'} }", flush=True)
+
+    doc["generations"] = {"batched": batched, "solo": solo,
+                          "batch_dependent": [b["prompt"] for b, s in zip(batched, solo) if b["token_ids"] != s["token_ids"]]}
+    for b, s in zip(batched, solo):
+        print(f"[int8] gen {b['prompt']!r}\n  batched: {b['text']!r}\n  solo:    {s['text']!r}", flush=True)
+
+    mods = dict(eng.model.named_modules())
+    ok_lin = linear_checks(doc, mods, taps, tapped, base) if linears else True
+    ok_attn = (attention_checks(doc, attn_taps, attn_tapped) and doc["applied_attention"]["ok"]) if attn_tapped else True
+    doc["ok"] = bool(doc["applied"]["ok"] and not doc["engine"]["target_mismatches"] and doc["engine"]["int8_exact"] == a.int8_exact
+                     and ok_lin and ok_attn and all(g["token_ids"] for g in batched + solo))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    print(f"INT8-EXACT-GPU {'OK' if doc['ok'] else 'FAIL'} totals={json.dumps(t)} batch_vs_solo={json.dumps(b)} "
-          f"batch_dependent_tokens={len(doc['generations']['batch_dependent'])}", flush=True)
+    print(f"INT8-EXACT-GPU {'OK' if doc['ok'] else 'FAIL'} int8_exact={a.int8_exact} linears_ok={ok_lin} attention_ok={ok_attn} "
+          f"attention={json.dumps(doc.get('attention_totals'))} batch_dependent_tokens={len(doc['generations']['batch_dependent'])}", flush=True)
     return doc
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="int8 linears (TargetProfile.int8_exact) served by vLLM on this GPU, checked bit for bit")
+    ap = argparse.ArgumentParser(description="int8 linears and attention (TargetProfile.int8_exact) served by vLLM on this GPU, checked bit for bit")
     ap.add_argument("--out", required=True, help=f"directory for {RECORD} and pin_entry.json")
     ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
     ap.add_argument("--base-role", default="LLAMA31_8B")
@@ -272,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--by", required=True, help="resolved_by of the pin entry")
     ap.add_argument("--max-tokens", type=int, default=32)
     ap.add_argument("--keep-calls", type=int, default=3, help="calls kept per tapped module and phase")
+    ap.add_argument("--int8-exact", default="all", choices=["linears", "attention", "all"], help="TargetProfile.int8_exact")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 
