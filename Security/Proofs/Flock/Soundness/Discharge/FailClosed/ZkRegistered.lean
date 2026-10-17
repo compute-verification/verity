@@ -52,7 +52,7 @@ theorem ScopeZR.tagsOkZHJ {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutput
 registered reads are checked.** `ZkReg.zk_session_soundHJR` over `VerifiesZKR`, at a public file with or without shared
 rows: the first conjunct is its bound, the second the registered check's consequence at every accepted outcome. -/
 theorem zk_session_soundHJR
-    (I : Inputs) (hh : I.tags.hiddenOutputs = true) (own : Array Flock.Registered.Port)
+    (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
@@ -74,39 +74,39 @@ theorem zk_session_soundHJR
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-          (runsZCJH_live I hs.typed (hs.parseH hh) (Layout.scopeOkH_spec hs.built hs.scopeH).2.1 dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
+          (runsZCJH_live I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
         ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) :
     prob (fun o => LiveVerifiesZKR I own o ∧ ∀ hs : ScopeZR I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-          (runsZCJH_live I hs.typed (hs.parseH hh) (Layout.scopeOkH_spec hs.built hs.scopeH).2.1 dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
+          (runsZCJH_live I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
         K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
-            ((rsZHJS dj y₀ hs.typed (hs.parseH hh) hs.scopeH hs.built (hs.loadH hh)).bindingZ (rsZHJS_computes dj y₀ hs.typed (hs.parseH hh) hs.scopeH hs.built (hs.loadH hh)))
+            ((rsZHJS dj y₀ hs.typed (hs.parseH hh) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJS_computes dj y₀ hs.typed (hs.parseH hh) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg σ) (cont σ) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ⨆ hs : ScopeZR I,
         (let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-          (runsZCJH_live I hs.typed (hs.parseH hh) (Layout.scopeOkH_spec hs.built hs.scopeH).2.1 dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
+          (runsZCJH_live I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
         (Law.subset n kd hkd).miss K₀ +
         ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
-          ((rsZHJS dj y₀ hs.typed (hs.parseH hh) hs.scopeH hs.built (hs.loadH hh)).bindingZ (rsZHJS_computes dj y₀ hs.typed (hs.parseH hh) hs.scopeH hs.built (hs.loadH hh)))
+          ((rsZHJS dj y₀ hs.typed (hs.parseH hh) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJS_computes dj y₀ hs.typed (hs.parseH hh) (hs.scopeH hf) hs.built (hs.loadH hh)))
           k Rw M ρ t' (reg σ) (cont σ)) ∧
     ∀ hs : ScopeZR I, ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveVerifiesZKR I own o →
       ∀ rd : FlockSoundness.Registered.ReadsX
-          (layShHJ (Reg := Reg) dj y₀ hs.typed (hs.parseH hh) hs.scopeH hs.built (pub := pubZ I))
-          (rsShHJS dj y₀ hs.typed (hs.parseH hh) hs.scopeH hs.built (hs.loadH hh)),
+          (layShHJ (Reg := Reg) dj y₀ hs.typed (hs.parseH hh) (hs.scopeH hf) hs.built (pub := pubZ I))
+          (rsShHJS dj y₀ hs.typed (hs.parseH hh) (hs.scopeH hf) hs.built (hs.loadH hh)),
         OwnReadsHJ I own (circZ I) (pubZ I) o.2.2 rd.isRead rd.port rd.readAt →
           rd.Checked o.1 (regPathsHJ I (circZ I) (pubZ I) o.2.2 rd.port) :=
   ⟨prob_scope (A := LiveAcceptsZKR I own) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs =>
       (FlockSoundness.Discharge.ZkReg.zk_session_soundHJR I hs.typed own dj y₀ wr dg N (hs.parseH hh) hs.built
-        (hs.loadH hh) hs.scopeH kd hkd Lb src hA3 hDraw (hs.tagsOkZHJ hh) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs)).1,
+        (hs.loadH hh) (hs.scopeH hf) kd hkd Lb src hA3 hDraw (hs.tagsOkZHJ hh) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs)).1,
     fun hs o hv rd hown =>
-      checked_of_acceptsHJ I hs.typed own dj y₀ (hs.parseH hh) hs.built (hs.loadH hh) hs.scopeH (hs.tagsOkZHJ hh) o hv.1
+      checked_of_acceptsHJ I hs.typed own dj y₀ (hs.parseH hh) hs.built (hs.loadH hh) (hs.scopeH hf) (hs.tagsOkZHJ hh) o hv.1
         rd hown⟩
 
 end FlockSoundness.Discharge.FailClosed

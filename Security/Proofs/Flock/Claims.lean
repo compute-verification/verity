@@ -12,10 +12,10 @@ import Proofs.Flock.Claims.NumbersTable
 import Proofs.Flock.Claims.NumbersPads
 import Proofs.Flock.Claims.NumbersGamma
 import Proofs.Flock.Claims.NumbersNMin
+import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.Claims.NumbersRadius
 import Proofs.Flock.Claims.Counted
-import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 import Proofs.Flock.Claims.ZkDecode
@@ -39,6 +39,7 @@ import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Assembled
+import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.ZK
 import Proofs.Flock.Claims.Witnesses
 

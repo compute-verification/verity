@@ -176,4 +176,5 @@ import Proofs.Flock.Soundness.Discharge.Composed
 import Proofs.Flock.Soundness.Discharge.ZkReg
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin
 import Proofs.Flock.Soundness.Discharge.FailClosed
+import Proofs.Flock.Soundness.Discharge.General
 import Proofs.Flock.Soundness.ZK.PadNonvanishing40
