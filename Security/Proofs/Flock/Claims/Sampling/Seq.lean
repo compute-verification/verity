@@ -68,19 +68,6 @@ structure Framing where
 /-- The first part's tape: none. -/
 abbrev unitTape : SeqTape := ⟨Unit, Unit⟩
 
-open Classical in
-/-- **A simulator's program on coins of another type**: `S`'s at `xS` through a bijection, where there is one. -/
-noncomputable def progOf (S : Simulator) (C : Type) (xS : Msg) (c : C) : SP (List (Msg × Out)) :=
-  if h : Nonempty (C ≃ S.C xS) then S.prog xS (h.some c) else .ret []
-
-theorem progOf_of {S : Simulator} {C : Type} {xS : Msg} (h : Nonempty (C ≃ S.C xS)) :
-    progOf S C xS = fun c => S.prog xS (h.some c) := by
-  funext c
-  unfold progOf
-  split
-  · rfl
-  · contradiction
-
 namespace Framing
 
 variable (F : Framing)
