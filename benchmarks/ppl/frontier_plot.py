@@ -116,7 +116,8 @@ def table(rs: dict, ep: dict) -> str:
         cells = [label + marks.get(label, ""), f"`{arm}`"]
         for pt in pts:
             r = rs.get((*pt, arm))
-            cells.append("–" if r is None else f"{r['inc']:+.2f} ({r['inc_min']:+.2f} to {r['inc_max']:+.2f}), {r['run']}")
+            spread = f"{r['inc_min']:+.2f} to {r['inc_max']:+.2f}" if r and r["seeds"] > 1 else "1 seed"
+            cells.append("–" if r is None else f"{r['inc']:+.2f} ({spread}), {r['run']}")
         cells.append(f"{ep['readings']['closed'][label]['gamma']:.3f}")
         for reading in rd:
             e = ep["readings"][reading][label]["core"]
