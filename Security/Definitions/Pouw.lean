@@ -86,6 +86,7 @@ import Definitions.Pouw.PearlC.W1Stop
 import Definitions.Pouw.PearlC.WholeCircuit
 import Definitions.Pouw.PearlC.WholeCircuit4
 import Definitions.Pouw.Receipt.Duo
+import Definitions.Pouw.Receipt.Run
 import Definitions.Pouw.RelativeSecurity
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
@@ -152,7 +153,8 @@ two (`Completeness`).
 ## `Receipt`: the receipt folds
 
 `Duo`: duo's step, one word and two words (`benchmarks/pouw/receipts/receipt_folds.py`, `duo_word`); its binding
-statements are `Models.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.
+statements are `Models.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`. `Run`: duo and fx1 over a run of `N`
+words; their per-word binding is `Models.Pouw.Guarantees.ReceiptRun`, proved in `Proofs.Pouw.Receipt.Run`.
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 

@@ -8,7 +8,7 @@ import Mathlib.Data.Fintype.Card
 its deps (`eval_local`), so every essential input of `P.run out` is in the deps of an output. The deps of a set `S` of
 nodes number at most `|S| + (f − 1)·m` (`card_deps_le`, by induction on the program): replacing the last instruction
 in `S` by its `f` sources adds at most `f − 1` nodes and keeps the deps. A fold of binding steps changes when any one
-word does (`foldRun_ne`), so all `N` of its words are essential.
+word does (`foldl_ne`), so all `N` of its words are essential (`essential_of_foldl`).
 -/
 
 namespace Accounting.FanInProofs
@@ -117,17 +117,19 @@ theorem fanInFloor {α : Type} {n f m c : ℕ} (P : Prog α n f m) (out : Fin c 
         simp only [Finset.card_univ, Fintype.card_fin] at this
         omega
 
-/-- Two runs of a fold of binding steps that differ at one word, and only there, end in different states. -/
-theorem foldRun_ne {α : Type} {c : ℕ} :
-    ∀ {N : ℕ} (g : Fin N → (Fin c → α) → α → (Fin c → α)), (∀ i s, Function.Injective (g i s)) →
-      (∀ i d, Function.Injective fun s => g i s d) → ∀ (s : Fin c → α) (i : Fin N) (d e : Fin N → α),
-      (∀ j, j ≠ i → d j = e j) → d i ≠ e i → foldRun g s d ≠ foldRun g s e := by
+/-- Two runs of a fold of steps that bind word and state, differing at one word and only there, end in different
+states. -/
+theorem foldl_ne {σ α : Type} :
+    ∀ {N : ℕ} (g : Fin N → σ → α → σ), (∀ i s, Function.Injective (g i s)) →
+      (∀ i d, Function.Injective fun s => g i s d) → ∀ (s : σ) (i : Fin N) (d e : Fin N → α),
+      (∀ j, j ≠ i → d j = e j) → d i ≠ e i →
+      Fin.foldl N (fun t j => g j t (d j)) s ≠ Fin.foldl N (fun t j => g j t (e j)) s := by
   intro N
   induction N with
   | zero => exact fun _ _ _ _ i => i.elim0
   | succ N ih =>
     intro g hw hs s i d e hde hi
-    simp only [foldRun, Fin.foldl_succ_last]
+    simp only [Fin.foldl_succ_last]
     revert hde hi
     refine Fin.lastCases ?_ (fun i' => ?_) i
     · intro hde hi
@@ -146,22 +148,32 @@ theorem foldRun_ne {α : Type} {c : ℕ} :
         (fun j => d j.castSucc) (fun j => e j.castSucc) (fun j hj => hde _ ?_) hi (hs _ _ h)
       exact fun h' => hj (Fin.castSucc_injective _ h')
 
+/-- When some function `π` of `F`'s result is a fold of steps that bind word and state, on registers of at least one
+bit, every input is essential to `F`. -/
+theorem essential_of_foldl {σ β : Type} {w N : ℕ} (F : (Fin N → BitVec (w + 1)) → β) (π : β → σ)
+    (g : Fin N → σ → BitVec (w + 1) → σ) (hw : ∀ i s, Function.Injective (g i s))
+    (hs : ∀ i d, Function.Injective fun s => g i s d) (s : σ)
+    (hF : ∀ d, π (F d) = Fin.foldl N (fun t j => g j t (d j)) s) (i : Fin N) : Essential F i := by
+  refine ⟨fun _ => 0, Function.update (fun _ => 0) i 1, fun j hj => by simp [hj], fun h => ?_⟩
+  have := congrArg π h
+  rw [hF, hF] at this
+  exact foldl_ne g hw hs s i _ _ (fun j hj => by simp [hj]) (by simp) this
+
+/-- A program with every input essential has `n ≤ c + (f − 1)·m`. -/
+theorem le_of_essential {α : Type} {n f m c : ℕ} (P : Prog α n f m) (out : Fin c → Fin (n + m))
+    (h : ∀ i, Essential (P.run out) i) : n ≤ c + (f - 1) * m := by
+  have hall : {i | Essential (P.run out) i} = Set.univ := Set.eq_univ_of_forall h
+  have := fanInFloor P out
+  rwa [hall, Set.ncard_univ, Nat.card_eq_fintype_card, Fintype.card_fin] at this
+
 theorem foldFanIn {w N f m c : ℕ} (g : Fin N → BindingStep c (BitVec (w + 1))) (s : Fin c → BitVec (w + 1))
     (P : Prog (BitVec (w + 1)) N f m) (out : Fin c → Fin (N + m)) :
     (∃ d, P.run out d ≠ foldRun (fun i => (g i).1) s d) ∨ N ≤ c + (f - 1) * m := by
-  classical
   by_cases hP : ∃ d, P.run out d ≠ foldRun (fun i => (g i).1) s d
   · exact Or.inl hP
-  right
   simp only [not_exists, not_not] at hP
-  have hall : {i | Essential (P.run out) i} = Set.univ := by
-    refine Set.eq_univ_of_forall fun i => ?_
-    refine ⟨fun _ => 0, Function.update (fun _ => 0) i 1, fun j hj => by simp [hj], ?_⟩
-    rw [hP, hP]
-    exact foldRun_ne _ (fun j => (g j).2.1) (fun j => (g j).2.2) s i _ _
-      (fun j hj => by simp [hj]) (by simp)
-  have := fanInFloor P out
-  rwa [hall, Set.ncard_univ, Nat.card_eq_fintype_card, Fintype.card_fin] at this
+  exact Or.inr (le_of_essential P out (essential_of_foldl (P.run out) id (fun i => (g i).1) (fun i => (g i).2.1)
+    (fun i => (g i).2.2) s hP))
 
 end Accounting.FanInProofs
 

@@ -146,6 +146,7 @@ import Proofs.Pouw.PearlC.TileCheckWords
 import Proofs.Pouw.Prob
 import Proofs.Pouw.QTree
 import Proofs.Pouw.Receipt
+import Proofs.Pouw.Receipt.Run
 import Proofs.Pouw.Reduction
 import Proofs.Pouw.RelativeSecurity
 import Proofs.Pouw.RelativeSecurityGuarantees

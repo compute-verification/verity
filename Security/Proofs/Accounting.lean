@@ -10,6 +10,7 @@ import Proofs.Accounting.RateAudit
 import Proofs.Accounting.BoundReceipt
 import Proofs.Accounting.Capacity
 import Proofs.Accounting.FanIn
+import Proofs.Accounting.FanInDuo
 import Proofs.Accounting.Remote
 import Proofs.Accounting.PerRunTruncation
 import Proofs.Accounting.PerRunPouw
