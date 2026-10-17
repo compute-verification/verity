@@ -78,6 +78,7 @@ import Proofs.Flock.Claims.KS.ZkClashRaw
 import Proofs.Flock.Claims.KS.ZkSlackW
 import Proofs.Flock.Claims.KS.ForkCoupling
 import Proofs.Flock.Claims.KS.PlainSlackFit
+import Proofs.Flock.Claims.KS.ZkSlackFit
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -391,4 +392,10 @@ live coins' history through a prefix key has the fork's coin coupling, so its sl
 (`ForkCoupling`: `Claims.Flock.forkCoinCoupling_fnAt`, `Claims.Flock.slack_fnAt`,
 `FlockDeploy.KS.forkCoinCoupling_plain`). At chances at most `ε ≤ 1/2` before the last round and at most `1` there, a
 fork's slack weights before the last round fall geometrically past its round (`PlainSlackFit`:
-`Claims.Flock.sum_slackW_le`, `Claims.Flock.δN_le_inv`, `Claims.Flock.δN_le_one`). -/
+`Claims.Flock.sum_slackW_le`, `Claims.Flock.δN_le_inv`, `Claims.Flock.δN_le_one`). So each table's slack weights total at
+most its weight times `|IZW|·8ε` (Cauchy–Schwarz), and at C-Flock ZK's schedules, with at most `7` levels, level 1 a
+query and level 0's weight under `2^40`, the joined weights are at most `2^41` times the room and the slack fits it at
+chances at most `2^{-128}`, so at the coupling's chances where every revealed length before the last round is positive
+(`ZkSlackFit`: `Claims.Flock.sum_slackCW_le`, `Claims.Flock.sum_slackTW_le`, `Claims.Flock.slackFitW_of_le`,
+`Claims.Flock.joinCW_le_room`, `FlockDeploy.KS.m1_slackNums`, `FlockDeploy.KS.zk_slackFitW`,
+`FlockDeploy.KS.zk_slackFitW_δN`). -/
