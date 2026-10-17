@@ -412,7 +412,10 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   `interior-registered`, `interior-empty` and `interior-population`, then the public-items rule's and R1 to R7's.
 - **Sessions over several rounds.** `Stream(rounds=R)`, R from 1 to `ROUNDS` (4) and 1 under `TwoStage`, holds up to R
   registrations without a final outcome, so one proof session can prove the draws of up to R consecutive rounds, each
-  round's registration its own tables of the session's statement. `session(draws)` opens it once, after the last
+  round's registration its own tables of the session's statement. C-Flock's verifier of record doesn't take that
+  statement yet: it reads a session of several tables only as one draw of one registration split into equal parts
+  (`verity/ml/flock/verifier/PROTOCOL.md` §16.12) and refuses any other, so until its proof covers tables of their own
+  registrations a session covers one round on that verifier. `session(draws)` opens it once, after the last
   covered draw, over consecutive registrations in order, none delivered, final or covered by another session. It
   refuses `rule`, `rounds`, `unknown`, `not-drawn` (a covered registration not drawn yet), `final`, `delivered`,
   `covered` (nothing reopens a draw's session) and `order`, and changes nothing when it does. Each round is committed
