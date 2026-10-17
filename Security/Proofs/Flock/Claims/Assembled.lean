@@ -38,16 +38,13 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
 `flock_plain_assembled`:
 * `hKS : Flock.KS H (deployPlain rel)`. Main reduces it to one wait's bound, `Flock.OneWait`, with `k ≥ 8` and the
   relation splitting by table wherever the verifier accepts (`FlockDeploy.KS.plain_of_oneWait`).
-* `hComplete`: `Flock.Complete H (deployPlain rel) honestP (δc H)`, unfolded. `FlockComplete.complete_of_goals`
-  concludes it from the honest run's goals, `FlockComplete.Goals H rel`.
+* `hComplete`: `Flock.Complete` at the plain record, unfolded, of `honestP` at `δc H`.
+  `FlockComplete.complete_of_goals` concludes it from the honest run's goals, `FlockComplete.Goals H rel`.
 
 `flock_zk_assembled`:
 * `hKS : Flock.KS H (deployZk rel)` (`FlockDeploy.KS.zk_of_oneWait`, as at the plain record).
-* `hComplete`: `Flock.Complete H (deployZk rel) honestPZk (δcZk H)`, unfolded (`FlockComplete.complete_zk_of_goals`,
-  from `FlockComplete.GoalsZk H rel`).
-
-`δc H` and `δcZk H` are `1`, so `Complete` asks nothing, where `ready H` and `readyZk H` fail; `readyZk H` fails at
-every statement of several tables.
+* `hComplete`: `Flock.Complete` at the masked record, unfolded, of `honestPZk` at `δcZk H`
+  (`FlockComplete.complete_zk_of_goals`, from `FlockComplete.GoalsZk H rel`).
 * ZK's, as `Flock.zk_deployZk_of_models` takes them:
   * the named assumption `hT1 : Hm96Hiding My cs δ₁`, with `hδ₁ : δ₁ ≠ ⊤`;
   * the model: `G` and its rounds, `hK : G.K x = (V true).k x − 1`; the pre-coin and coin models `Mp` and `Mc` over
@@ -56,7 +53,8 @@ every statement of several tables.
   * the five premises `hL : G.MsgLink`, `hS : G.SimLink`, `hN : G.NonDegenerate`, `hI : G.InnerHolds` and
     `hC : G.CoinCheck`.
 
-ZK is at `G.prover`, which no theorem yet ties to `honestPZk`.
+`δc H` and `δcZk H` are `1`, so `Complete` asks nothing, where `ready H` and `readyZk H` fail; `readyZk H` fails at
+every statement of several tables. ZK is at `G.prover`, which no theorem yet ties to `honestPZk`.
 -/
 
 namespace FlockDeploy.Assembled
