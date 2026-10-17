@@ -18,6 +18,8 @@ import Proofs.Flock.Claims.KS.Refit
 import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Claims.KS.PlainBound
+import Proofs.Flock.Claims.KS.MixtureZk
+import Proofs.Flock.Claims.KS.ZkBound
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -82,4 +84,10 @@ At one table the model does not commit to, a live verdict is no likelier than th
 live strategies, `FlockDeploy.KS.mean_live_le`). At a plain statement of one table, `TableBoundθAt` follows from, at
 each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C` bounds the deployed
 runs accepting on `C`, and whose `Adv` and self-clash the escapes' events bound, the escapes at the plain fork rounds
-(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). -/
+(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). At `--zk`, one table's compiled session is `Commit`'s
+cap and then `sessAtZ` with no other game, so a live verdict at one masked table is no likelier than any verdict after
+`Commit` the decoder is right for (`MixtureZk`: `FlockDeploy.KS.live_le_simAtZ`, `FlockDeploy.KS.mean_live_le_simAtZ`),
+and at a masked statement of one table, `TableBoundθAt` follows from a mixture of masked sessions after `Commit` at a
+table `T` at C-Flock ZK's parameters, the escapes `Flock.oldEscZ` at injective fork rounds, and no table that does not
+extract committed to `T` (`ZkBound`: `FlockDeploy.KS.zk_tableBoundθAt_of_sessions`,
+`FlockDeploy.KS.zk_tableBoundθAt_of_live`). -/
