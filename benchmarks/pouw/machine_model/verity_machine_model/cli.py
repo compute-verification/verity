@@ -46,6 +46,13 @@
                                               facets, the decision-76 move in the cheater's favour at which the core
                                               first rises (per row), and, where Π prices no uniform datapath, the ε a
                                               sibling-rate uniform route would open (default q* = 1.22, credit floor)
+    machine-model margin [DESIGN ...] [--device sm_NN] [--m M] [--least [--mix FFMA]] [--q Q] [--operands O] [--credit C]
+                                              decision 76's margin (redteam.margin_audit): each design's core as built,
+                                              its worst core with every near measured facet's lane coefficient moved M
+                                              in the cheater's favour at once (default 2%), the single facet that drives
+                                              it, and each near facet's own move; with --least, the cheapest filler a
+                                              word (in --mix, default the design's) that brings the worst back to the
+                                              floor (default q* = 1.22, credit floor)
     machine-model capacity GROUP [GROUP ...] [--vector V] [--json]
                                               the certified share σ of a window's capacity (capacity.py): each GROUP
                                               is [WEIGHT/]TERM+TERM..., its share of the cell's SMSP-time (default 1)
@@ -248,8 +255,8 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
     return {
         "design": d.name, "summary": d.summary, "registry": _registry(d), "vector": pi.vector, "honest": e.honest.name,
         "honest_status": e.honest.status, "operands": operands, "credit": credit, "L": d.L, "fold": d.fold_name,
-        "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source}
-                                                for f, pw in e.fillers], "q": q,
+        "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source,
+                                                 "p": f.p, "luck": f.luck} for f, pw in e.fillers], "q": q,
         "operand_floor": d.floor, "gamma": e.gamma, "gamma_clock": e.gamma_clock,
         "honest_cycles_per_mma": e.T_honest * per_mma,
         "honest_time": e.T_honest_source, "credit_ratio": e.credit_ratio,
@@ -470,6 +477,25 @@ def _redteam(args) -> int:
     return 0
 
 
+def _margin(args) -> int:
+    from verity_machine_model import redteam as RT
+
+    mix = {c: 1.0 for c in args.mix.split(",")} if args.mix else None
+    for name in args.designs or E.designs(args.data):
+        mg = RT.margin_audit(name, args.data, m=args.m, q=args.q, operands=args.operands, credit=args.credit)
+        drive = f"driven by {mg.driver}" if mg.driver else "no near facet drives it"
+        print(f"{mg.design} on {mg.device}: core {_pct(mg.base)}  worst at {mg.m*100:g}% {_pct(mg.worst)}  ({drive})")
+        for r, s in mg.rows:
+            print(f"    {r:12s} alone → {_pct(s)}")
+        if args.least:
+            lf = RT.least_filler(name, args.data, mix=mix, m=args.m, q=args.q, operands=args.operands,
+                                 credit=args.credit)
+            how = (f"{lf.per_word:g} a word (worst {_pct(lf.core)}, γ {lf.gamma:.3f})" if lf.per_word is not None
+                   else f"none ≤ cap holds it (worst {_pct(lf.core)})")
+            print(f"    least {'+'.join(lf.mix)} filler that holds {mg.m*100:g}%: {how}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="machine-model", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -538,6 +564,18 @@ def main(argv: list[str] | None = None) -> int:
                     help="the cheater's operand delivery on the tensor route (default %(default)s)")
     rt.add_argument("--credit", choices=E.CREDITS, default="floor",
                     help="what ε is a fraction of (default %(default)s: the floor program ♭)")
+    mg = sub.add_parser("margin")
+    mg.add_argument("designs", nargs="*", help="the designs to audit (default: every design in the data directory)")
+    mg.add_argument("--device", default=argparse.SUPPRESS, help=dev)
+    mg.add_argument("--m", type=float, default=0.02, help="the margin each near facet moves in the cheater's favour "
+                    "(default %(default)s: decision 76's 2%%)")
+    mg.add_argument("--least", action="store_true", help="also find the cheapest filler a word that holds the margin")
+    mg.add_argument("--mix", help="with --least: the filler's class mix, comma-separated (default: the design's)")
+    mg.add_argument("--q", type=float, default=1.22, help="q*, lane instructions a fresh word (default %(default)s)")
+    mg.add_argument("--operands", choices=E.OPERANDS, default="free",
+                    help="the cheater's operand delivery on the tensor route (default %(default)s)")
+    mg.add_argument("--credit", choices=E.CREDITS, default="floor",
+                    help="what ε is a fraction of (default %(default)s: the floor program ♭)")
     args = p.parse_args(argv)
     if args.device is not None:
         if args.data != DATA:
@@ -547,7 +585,8 @@ def main(argv: list[str] | None = None) -> int:
         print(__doc__)
         return 0
     return {"list": _list, "solve": _solve, "census": _census, "attacks": _attacks, "adopt": _adopt,
-            "designs": _designs, "eps": _eps, "capacity": _capacity, "redteam": _redteam}[args.cmd](args)
+            "designs": _designs, "eps": _eps, "capacity": _capacity, "redteam": _redteam,
+            "margin": _margin}[args.cmd](args)
 
 
 if __name__ == "__main__":
