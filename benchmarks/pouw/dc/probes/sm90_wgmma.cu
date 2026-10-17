@@ -337,6 +337,9 @@ OP_KERNEL(wgU_lop3, 384) { wg_until<L_LOP3, 64>(a); }
 OP_KERNEL(wgU_duo, 384) { wg_until<L_DUO, 48>(a); }
 OP_KERNEL(wgU_li, 384) { wg_until<L_LI, 64>(a); }
 OP_KERNEL(wgU_lif, 384) { wg_until<L_LIF, 64>(a); }
+OP_KERNEL(wgU_li_r512, 384) { wg_until<L_LI, 512>(a); }
+OP_KERNEL(wgU_mix_r512, 384) { wg_until<L_MIX, 512>(a); }
+OP_KERNEL(wgU_lop3_r256, 384) { wg_until<L_LOP3, 256>(a); }
 OP_KERNEL(wgU_sync_k16, 384) { wg_sync_until<16>(a); }
 OP_KERNEL(wgU_sync_k32, 384) { wg_sync_until<32>(a); }
 OP_KERNEL(imma_s8_k32, 512) { imma_alone<32>(a); }
@@ -403,6 +406,9 @@ static const OpProbe PROBES[] = {
     P_UNTIL(wgU_duo, "LOP3.LUT=16,IMAD=16"),
     P_UNTIL(wgU_li, "LOP3.LUT=32,IMAD=32"),
     P_UNTIL(wgU_lif, "LOP3.LUT=28,IMAD=28,FFMA=8"),
+    P_UNTIL(wgU_li_r512, "LOP3.LUT=256,IMAD=256"),
+    P_UNTIL(wgU_mix_r512, "I*ADD*=256,FFMA=256"),
+    P_UNTIL(wgU_lop3_r256, "LOP3.LUT=256"),
     P_UNTIL(wgU_sync_k16, "IMMA.16816.S8.S8=8"),
     P_UNTIL(wgU_sync_k32, "IMMA.16832.S8.S8=8"),
 #undef P_UNTIL

@@ -105,7 +105,7 @@ def slots_sm100(name: str, row: dict) -> dict | None:
 
 
 def lane_of(name: str) -> str | None:
-    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo|li|lif)", name)
+    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo|li|lif)(?:_r\d+)?", name)
     return (m.group(1) or m.group(2)) if m else None
 
 
