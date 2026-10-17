@@ -1,7 +1,10 @@
-import Proofs.Flock.Claims.GS.RadiusDeploy
+import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Sampling.Leaf
+import Proofs.Flock.Claims.Sampling.Runs
+import Proofs.Flock.Claims.Sampling.RunsExp
 import Proofs.Flock.Claims.Sampling.Select.Scope
 import Proofs.Flock.Claims.Sampling.Session
+import Proofs.Flock.Claims.Sampling.Universal
 import Proofs.Flock.SamplingBoundary
 
 /-!
@@ -12,15 +15,18 @@ import Proofs.Flock.SamplingBoundary
 
 * `ScopeMatches`, from the deployed design's well-formedness (`scopeMatches_of`, `designWellFormed`) where the scope
   check is the readable scope's program part;
-* `Universal`, `Complete` and `ZK`: hypotheses;
+* `Complete` and `ZK`: hypotheses;
+* `Universal`, from the unit's Definition (`Universal_of`);
 * `Binding`, at hm96 leaves under the registered frame-v3-sha512 path check (`Binding_of_hm96`);
 * `FaultyBoundary` (`faultyBoundary`);
-* `KS` from Flock's KS at the checked units' sessions (`SessionKS_of`, `KS_of`), with the binding and the draw law
-  (`drawLaw_of_slots`), and the verifier's refusal of what is out of scope (`refuses_of`);
+* `KS`, on the statements in scope (`Scope`), from Flock's KS at the checked units' sessions (`SessionKS_of`, `KS_of`),
+  with the binding and the draw law (`drawLaw_of_slots`), and the verifier's refusal of what is out of scope
+  (`refuses_of`);
 * `KSCount` from `KS` (`KSCount_of_KS`);
-* `Bits` from `KS` and the extractor's expected reruns and own calls (`Bits_of_KS`);
-* `Efficient` at Flock's masked radius decoder (`GS.zkDecodeRD`), its `ListWithin` and `DecoderComplexity` at
-  `deployZk` (`GS.radius_deployZk`), with the extractor's run bounds.
+* `Bits` from `KS`, the extractor's expected reruns (`E_runs_exp`) and its own calls (`Bits_of_KS`);
+* `Efficient` at `FlockDeploy.zkStepPoly`: the extractor's reruns (`E_runs_le`), expected reruns (`E_runs_exp`, with
+  the draw before the sessions) and own calls (`E_own_le`) at the record's decoder, and that decoder's `ListWithin`
+  and step count at `deployZk` (`FlockDeploy.efficient_zk`).
 
 ## What remains: the hypotheses
 
@@ -43,13 +49,17 @@ import Proofs.Flock.SamplingBoundary
   topologically ordered program, partitioned into proof units), and an accepted run passed it. The design part is a
   theorem (`designWellFormed`); the program part waits on the claims' program and the verifier's being one, and on the
   claims' proof units covering a `Q_word` unit, whose gates another unit's may interleave.
-* `hrunsLe`, `hrunsExp`, `hown`: `Efficient`'s run bounds on `E`, from the rerun programs' counts (`Sampling.Cost`:
-  `waitAccC_runs_eq`, `accExp_le`, `ownLog_flatMapRP`); not yet assembled.
-* `huniv : Universal D`: the universal unit's Definition (`verity/ml/private_circuits`) against `Netlist.eval`; no
-  branch proves it yet.
+* `hopen : OpenCallsLe H D`: checking what one checked unit's Flock witness reveals makes at most `openCalls` SHA-512
+  calls; the deployed opening check's count, the Lean sampled-proofs verifier's. With it the extractor's own calls are
+  `Efficient`'s (`E_own_le`); its reruns are, at every deployment (`E_runs_le`), and its expected reruns are with
+  `DrawFixed` (`E_runs_exp`).
+* `huniv : UniversalIs D`: the deployed universal unit computes what its Definition's gates do (`universalProg`, the
+  port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
+  gates compute `Netlist.eval` is proved (`universal_correct`).
 * `hComplete : Complete H D P δc`: waits on the reference prover (ruling 4), so `P` and `δc` are any.
-* `hZK : ZK H D Pz S εzk`: the masked sessions' zero knowledge with the leaf layer's simulator; no branch proves it
-  yet, so `Pz`, `S` and `εzk` are any.
+* `hZK : ZK H D Pz S εzk γzk`: the masked sessions' zero knowledge with the leaf layer's simulator, its binding term
+  `γzk` times `Fork`'s collisions among the honest prover's calls in two real runs on one nonce (#2201); no branch
+  proves it yet, so `Pz`, `S`, `εzk` and `γzk` are any.
 -/
 
 namespace Claims.Sampling
@@ -57,9 +67,9 @@ namespace Claims.Sampling
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at a deployment whose sessions are Flock's masked verifier**, at every hash: the readable
 scope is the verifier's; the trace commitment binds; the universal unit computes its netlist; the faulty set is the
-boundary form's; KS, its count form and bits at every decoder meeting Flock's `ListWithin`; efficiency at Flock's
-masked radius decoder; completeness; and zero knowledge. The hypotheses are what remains (the module docstring says
-what discharges each). -/
+boundary form's; KS, its count form and bits on the statements in scope at every decoder meeting Flock's `ListWithin`;
+efficiency at the record's decoder; completeness; and zero knowledge. The hypotheses are what remains (the module
+docstring says what discharges each). -/
 theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (D : Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace) (H : Msg → Msg)
     (hflock : D.flock = FlockDeploy.deployZk rel) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
@@ -70,18 +80,13 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (hfixed : DrawFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope H D)
-    (hrunsLe : ∀ decode, ExtractRunsLe H (E D decode)
-      (fun x => 1 + D.cap x + D.k x * (D.cap x + D.k x * (nPU D x * (D.innerWaits x * D.innerCap x)))))
-    (hrunsExp : ∀ decode, ExtractRunsExpLe H (E D decode)
-      (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)))
-    (hown : ∀ decode, ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x))
-    (huniv : Universal D)
+    (hopen : OpenCallsLe H D)
+    (huniv : UniversalIs D)
     {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H D P δc)
-    {Ωz : Type} [Fintype Ωz] (Pz : Wit → Prover Ωz) (S : SimLeak) (εzk : Msg → ℝ) (hZK : ZK H D Pz S εzk) :
+    {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (Pz : Wit → Prover (Nz × Ωz)) (S : SimLeak)
+    (εzk γzk : Msg → ℝ) (hZK : ZK H D Pz S εzk γzk) :
     ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ KS H D ∧ KSCount H D ∧ Bits H D ∧
-      Efficient H D Claims.GS.zkDecodeRD Claims.GS.zkCountedRD Claims.GS.zkSizeRD
-        (Polynomial.C 11 * (Claims.GS.zkPolyR + Polynomial.X)) ∧
-      Complete H D P δc ∧ ZK H D Pz S εzk := by
+      Efficient H D FlockDeploy.zkStepPoly ∧ Complete H D P δc ∧ ZK H D Pz S εzk γzk := by
   have hbind : Binding D := Binding_of_hm96 D own at_ row salt π layer hcommit hrow
   have hscope : ScopeMatches D := scopeMatches_of D hslots hprog
   have hrefuse : Refuses H D := refuses_of H D hscope hchecks
@@ -90,10 +95,12 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     exact hKS
   have hks : KS H D := KS_of iroots (hbind H) (SessionKS_of hKS' hfixed hsessions hnum hε) hopens hfix
     (drawLaw_of_slots D hslots) hrefuse hε
-  have hlist : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ Claims.GS.zkDecodeRD := by
+  have hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
+      ∀ os, (D.flock.dec os).2 ≤ FlockDeploy.zkStepPoly.eval (Claims.Flock.wordLen os) := by
     rw [hflock]
-    exact (Claims.GS.radius_deployZk rel).1
-  exact ⟨hscope, hbind, huniv, faultyBoundary, hks, KSCount_of_KS hks, Bits_of_KS hks hrunsExp hown hε,
-    ⟨hrunsLe _, hrunsExp _, hown _, hlist, (Claims.GS.radius_deployZk rel).2⟩, hComplete, hZK⟩
+    exact ⟨(FlockDeploy.efficient_zk H rel).2.1, (FlockDeploy.efficient_zk H rel).2.2.1⟩
+  exact ⟨hscope, hbind, Universal_of huniv, faultyBoundary, hks, KSCount_of_KS hks,
+    Bits_of_KS hks (E_runs_exp H D hfixed) (E_own_le hopen) hε,
+    ⟨E_runs_le H D _, E_runs_exp H D hfixed _, E_own_le hopen _, hdec.1, hdec.2⟩, hComplete, hZK⟩
 
 end Claims.Sampling
