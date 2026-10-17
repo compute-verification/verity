@@ -1436,13 +1436,10 @@
    "type_hash": "5cd9789694c0df8e5c5a09cd026a4f45b7c72ae8be8393f286cb479d9cac04d0"
   },
   "Accounting.SecurityProofs.TS.DuoFoldFanIn": {
-   "owner": "@compute-accounting"
-  },
-  "Accounting.SecurityProofs.TS.FoldFanIn": {
-   "owner": "@compute-accounting"
-  },
-  "Accounting.SecurityProofs.TS.Fx1FoldFanIn": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.DuoFoldFanIn : Accounting.Guarantees.TS.DuoFoldFanIn"],
+   "assumptions": [],
+   "type_hash": "68c23f457c775415f32b574d381b81d927a6521c56667cc92a4a6b4a19042459"
   },
   "Accounting.SecurityProofs.TS.FanInCount": {
    "owner": "@compute-accounting",
@@ -1462,11 +1459,23 @@
    "assumptions": [],
    "type_hash": "010375a4f71170b4f5bce6e609521eeb3513178b58fb0ab590c0230ab29fee8f"
   },
+  "Accounting.SecurityProofs.TS.FoldFanIn": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.FoldFanIn : Accounting.Guarantees.TS.FoldFanIn"],
+   "assumptions": [],
+   "type_hash": "d750f908348617364ef047b2d98633d47ae3a338fc98196c54a7ce80906cb58a"
+  },
   "Accounting.SecurityProofs.TS.FoldOptOfFanIn": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.FoldOptOfFanIn : Accounting.Guarantees.TS.FoldOptOfFanIn"],
    "assumptions": [],
    "type_hash": "22e2320fa4db7ad6c4182cab5d22d9df1ef0ede2c031c256c59be0e9997c4a1e"
+  },
+  "Accounting.SecurityProofs.TS.Fx1FoldFanIn": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.Fx1FoldFanIn : Accounting.Guarantees.TS.Fx1FoldFanIn"],
+   "assumptions": [],
+   "type_hash": "b4fc50d2775376891a7b633d358b9f2376a08409a8b43647215595f1e2731dad"
   },
   "Accounting.SecurityProofs.TS.LuckCaseA": {
    "owner": "@compute-accounting",
@@ -6946,12 +6955,23 @@
     "Accounting.TS.thinStep": "f23d750769766a0d93cda8d5c9bfafbf2c4148c618df2b5abb14ba22a493b986"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.DuoFoldFanIn",
     "Accounting.SecurityProofs.TS.FanInCount",
     "Accounting.SecurityProofs.TS.FillOptOfFanIn",
+    "Accounting.SecurityProofs.TS.FoldFanIn",
     "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
+    "Accounting.SecurityProofs.TS.Fx1FoldFanIn",
     "Accounting.SecurityProofs.TS.SeesOfInjective",
     "Accounting.SecurityProofs.TS.ThinFoldInjective"
    ]
+  },
+  "Definitions.Accounting.TS.Fold": {
+   "digest": "ee8f2e69343e8ab7ab8bd1da4eceff7f35a46d29377b64a12ff39a3e9ba5a983",
+   "definitions": {
+    "Accounting.TS.BindingStep": "c22e666b1e4035abf15886dbdf99fd2528959877bc5022d77ed9b57cb5c62c1c",
+    "Accounting.TS.foldRun": "f3251505eafd31ec02c542ba34556238befd8a20f0add7a0c12e73f148c511d0"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.FoldFanIn"]
   },
   "Definitions.Accounting.TS.Machine": {
    "digest": "14155d8d7579d0f76acfc5d2bfe15eb21dd222a817df9da2cd141ded2c31c6f0",
@@ -12098,6 +12118,8 @@
     "Pouw.Receipt.duoWord": "cbd7aa3d7554fa9b6113932c730b75304b994a68bc15cfb4c5e6955f265142a9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.DuoFoldFanIn",
+    "Accounting.SecurityProofs.TS.Fx1FoldFanIn",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
@@ -12128,6 +12150,7 @@
     "Pouw.Receipt.fx1Word": "73eee01d3c5801774a602c2ecae3d7373f5e91b769955a7811df2864b3fca206"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.Fx1FoldFanIn",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
@@ -17667,6 +17690,19 @@
     "Accounting.SecurityProofs.TS.ThinFoldInjective",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
+   ]
+  },
+  "Models.Accounting.Guarantees.TS.FoldFanIn": {
+   "digest": "648210a2fa788e461df3e771c20bf7a84ee51c11d6400612ebea2c08437fa00e",
+   "definitions": {
+    "Accounting.Guarantees.TS.DuoFoldFanIn": "14d7caed177754532b32a224fd59d2b4fa020c4609436920dd2dc111135acfb4",
+    "Accounting.Guarantees.TS.FoldFanIn": "ee50475ccdc2f8f5ed1c44b98dee71224bb0d10ed4af4da1a142ae630a36b133",
+    "Accounting.Guarantees.TS.Fx1FoldFanIn": "e938c58c55fd4239cc98fcbeb8e01566a7cbe719db5f64b306fa9f91bfc89e7a"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.DuoFoldFanIn",
+    "Accounting.SecurityProofs.TS.FoldFanIn",
+    "Accounting.SecurityProofs.TS.Fx1FoldFanIn"
    ]
   },
   "Models.Accounting.Guarantees.TS.Receipt": {
