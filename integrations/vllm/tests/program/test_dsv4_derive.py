@@ -11,7 +11,9 @@
 * `marlin_moe_leaf.mxfp4_marlin_moe_leaf`: the MXFP4 Marlin MoE exports as its steps, its two expert GEMMs as the leaf op;
 * `rules/vllm_mhc.py`: the four mHC ops derive per token at the dispatch's own split counts, word for word the numpy twin's
   (`kernels.mhc_twin`) on the FMA path and the TF32 path, and what the Definitions do not take refuses by name;
-* `CublasRouterRule`: a direct `torch.mm(x, W.T, out_dtype=float32)` binds the captured f32-output route."""
+* `CublasRouterRule`: a direct `torch.mm(x, W.T, out_dtype=float32)` binds the captured f32-output route;
+* `vllm_meta.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
+  leaves them."""
 from __future__ import annotations
 
 import sys
@@ -34,7 +36,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.frontend.vllm_meta import post_load_tensors_as_the_loader_does
+from verity_vllm.program.frontend.vllm_meta import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
 from verity_vllm.program.kernels import mhc_twin as W
 from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import hopper
@@ -496,3 +498,24 @@ def test_a_direct_f32_output_mm_binds_the_captured_f32out_route(served):
     rep = _derive_mhc(_F32Out(), (torch.empty(8, 7168, dtype=torch.bfloat16, device="meta"),))
     assert "no captured vLLM-default cuBLAS f32out route for M=8, K=7168, N=1024" in rep.unsupported.hint
 
+
+class _Fp8Linear(nn.Module):
+    def __init__(self, scale_dtype, g: int = 0) -> None:
+        super().__init__()
+        self.weight = _meta(2 * 128, 256, dtype=torch.float8_e4m3fn)
+        self.weight_scale_inv = _meta(2, 2, dtype=scale_dtype)
+        if g:
+            self.is_bmm, self.bmm_batch_size = True, g
+
+
+def test_the_block_fp8_linears_have_the_scales_and_shapes_the_loaders_post_process_leaves():
+    model = nn.ModuleDict({"q": _Fp8Linear(torch.float8_e8m0fnu), "wo_a": _Fp8Linear(torch.float8_e8m0fnu, g=2),
+                           "f32": _Fp8Linear(torch.float32)})
+    f32 = model["f32"].weight_scale_inv
+    fact = fp8_block_weights_as_the_loader_does(model)
+    assert (fact["upcast"], fact["bmm"]) == (["q", "wo_a"], ["wo_a"]) and "deepgemm_post_process_fp8_weight_block" in fact["rule"]
+    shapes = {n: (tuple(p.shape), p.dtype) for n, p in model.named_parameters()}
+    assert shapes["q.weight_scale_inv"] == ((2, 2), torch.float32) and shapes["q.weight"] == ((256, 256), torch.float8_e4m3fn)
+    assert shapes["wo_a.weight"] == ((2, 128, 256), torch.float8_e4m3fn) and shapes["wo_a.weight_scale_inv"] == ((2, 1, 2), torch.float32)
+    assert model["f32"].weight_scale_inv is f32
+    assert fp8_block_weights_as_the_loader_does(nn.Linear(2, 2)) == {"upcast": [], "bmm": []}

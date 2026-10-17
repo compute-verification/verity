@@ -268,6 +268,35 @@ def mla_absorbed_weights_as_the_loader_does(model: nn.Module, vllm_config) -> di
     return fact
 
 
+def fp8_block_weights_as_the_loader_does(model: nn.Module) -> dict:
+    """Loader parity for the block-FP8 linears' DeepGEMM post-process (`fp8_utils.deepgemm_post_process_fp8_weight_block`, which the
+    sm_90 block-FP8 kernels' `process_weights_after_loading` runs): checkpoint UE8M0 block scales (`float8_e8m0fnu`, DeepSeek-V4) are
+    upcast to the f32 words the kernels read, and a layer marked `is_bmm` (DeepSeek-V4's grouped o-projection `wo_a`, the einsum's
+    B) has its weight [g*r, d] and scales [g*r/128, d/128] as [g, r, d] and [g, r/128, d/128].  A meta instantiation never loads,
+    so each such layer gets them here, empty, in the served shapes and dtypes, under the served names.  A model whose block-FP8
+    scales are f32 and that marks no layer `is_bmm` is unchanged."""
+    fact: dict[str, Any] = {"upcast": [], "bmm": []}
+    for name, m in model.named_modules():
+        w, s = getattr(m, "weight", None), getattr(m, "weight_scale_inv", None)
+        if not (isinstance(w, nn.Parameter) and isinstance(s, nn.Parameter) and w.dtype == torch.float8_e4m3fn):
+            continue
+        upcast, g = s.dtype == torch.float8_e8m0fnu, getattr(m, "bmm_batch_size", 0) if getattr(m, "is_bmm", False) else 0
+        if not upcast and not g:
+            continue
+        wshape, sshape = tuple(w.shape), tuple(s.shape)
+        if g:
+            wshape, sshape = (g, wshape[0] // g, wshape[1]), (g, sshape[0] // g, sshape[1])
+            m.register_parameter("weight", nn.Parameter(torch.empty(wshape, dtype=w.dtype, device=w.device), requires_grad=False))
+            fact["bmm"].append(name)
+        m.register_parameter("weight_scale_inv", nn.Parameter(torch.empty(sshape, dtype=torch.float32, device=s.device), requires_grad=False))
+        if upcast:
+            fact["upcast"].append(name)
+    if fact["upcast"] or fact["bmm"]:
+        fact["rule"] = ("deepgemm_post_process_fp8_weight_block: _upcast_e8m0_to_fp32(ws) for float8_e8m0fnu scales; is_bmm: "
+                        "wq.view(g, r, d), ws.view(g, r // 128, d // 128)")
+    return fact
+
+
 def _plain_tensors(model: nn.Module) -> dict[tuple[str, str], torch.Tensor]:
     return {(mname, n): v for mname, m in model.named_modules() for n, v in vars(m).items()
             if isinstance(v, torch.Tensor) and not isinstance(v, nn.Parameter)}
@@ -623,7 +652,7 @@ def op_histogram(ep) -> dict[str, int]:
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
            "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
            "attention_impls", "export_facts", "BI_TRITON_KERNELS", "retie_lm_head_as_the_loader_does",
-           "mla_absorbed_weights_as_the_loader_does", "post_load_tensors_as_the_loader_does"]
+           "mla_absorbed_weights_as_the_loader_does", "fp8_block_weights_as_the_loader_does", "post_load_tensors_as_the_loader_does"]
 
 
 def attention_impls(model: nn.Module) -> dict:
