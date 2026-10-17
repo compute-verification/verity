@@ -1,8 +1,9 @@
 """pgemm.cu's run (pipe.sh) into the honest sm_100 kernel's numbers: its rate at each commit spacing against ρ_T5, the
 TMEM stage alone, ε_tensor at L = 32 with the measured points, the fold's issue cost beside the MMA, and q*.
 
-    python3 pipe.py gate-build OUT                  refuse a pg100 that spills or lacks UTCIMMA / LDTM.x32 (build.log, sass/)
+    python3 pipe.py gate-build OUT                  refuse a pg100 that spills, can't launch, or lacks UTCIMMA / LDTM.x32
     python3 pipe.py analyze OUT [--census RUN_OUT ...] [--json F]
+    python3 pipe.py agree OUT_A OUT_B               a repeat's rates against the first's, point by point
 
 OUT is pipe.sh's output (rate.jsonl, gate/*/result.json and ref.json, sass/pgemm.sass). --census takes the B200 probe runs
 (run.sh sm100, fetched with `research fetch RUN --all`): their TMEM region and mma.sync points, with the kernel's measured
@@ -10,7 +11,8 @@ points added, give ε_tensor at L = 32 by TENSOR's two-stage LP (analyze.tmem_mo
 `../machine_model/data/devices/sm_100/` give ρ_T5, the issue facet and the scalar rates, and ε is not computed.
 
 Arms (pgemm.cu's MODE): 0 the pipeline alone (loaders hand the barrier back), 1 the TMEM stage (every word loaded, not
-folded), 2 honest (loaded and folded by duo).
+folded), 2 honest (loaded and folded by duo), 3 the MMA warp waiting on its own commit (no loaders). MI 1: one MMA warp a
+tile.
 """
 
 from __future__ import annotations
@@ -167,7 +169,7 @@ def issue_beside(w: float, prof: dict, mach: dict, L: int) -> dict:
 def qstar(mach: dict, L: int, ld_issue_word: float) -> dict:
     """q*: the issue (SMSP-cycles) honest's tensor route spends a committed word a lane: L / 32 UTCIMMA 128x256 at c_M a
     1024 words a lane, plus the tcgen05.ld that bring each word to a register at c_X (the kernel's SASS count: ptxas
-    makes tcgen05.wait::ld a scoreboard wait, no instruction; census.py's 0.047 charged dgemm.cu a wait every 2 loads)."""
+    makes tcgen05.wait::ld a scoreboard wait, no instruction)."""
     mma = (L // 32) * mach["c_M"] / (SLOTS_MMA / LANES)
     return {"mma_only": mma, "with_loads": mma + ld_issue_word * mach["c_X"]}
 
@@ -202,8 +204,11 @@ def eps_tensor_l32(census_dirs: list[Path], rates: list[dict], rho5: float) -> d
     out = {"honest_TMEM_stage": w, "honest_fraction": w / rho5, "rho_sync": rho_sync,
            "region_balanced_probes": base["honest_fraction_L32"], "eps_probes_lp": base.get("eps_tensor_L32"),
            "T1": 1 - w / rho5}
-    rt = best(rates, 3, 32)
+    rt = max((b for b in (best(rates, 0, 32), best(rates, 3, 32)) if b), key=lambda r: r["slots_per_clk"], default=None)
+    out["honest_config"] = {k: honest.get(k) for k in ("nb", "lw", "mi")}
     caps = {"bandwidth": h} | ({"round_trip": min(h, rt["slots_per_clk"] / rho5)} if rt else {})
+    if rt:
+        out["round_trip_config"] = {k: rt.get(k) for k in ("nb", "lw", "mi", "arm")}
     for name, t in caps.items():
         extra = analyze.upper(base["sync_points"], t) * rho_sync
         out[name] = {"t": t, "tcgen05_words": t * rho5, "mma_sync_words": extra, "adversary_words": t * rho5 + extra,
@@ -280,15 +285,30 @@ def text(res: dict) -> str:
     return "\n".join(lines)
 
 
+def agree(a: Path, b: Path) -> dict:
+    """Two runs' rates point by point: the ratio of slots/SM/clk for every (NB, LW, MI, arm, L) both have."""
+    key = ("nb", "lw", "mi", "arm", "L")
+    ra = {tuple(r.get(k) for k in key): r for r in load(a)[0]}
+    rb = {tuple(r.get(k) for k in key): r for r in load(b)[0]}
+    ratios = {k: rb[k]["slots_per_clk"] / ra[k]["slots_per_clk"] for k in ra.keys() & rb.keys()}
+    worst = max(ratios, key=lambda k: abs(ratios[k] - 1), default=None)
+    return {"points": len(ratios), "worst": worst and {"point": dict(zip(key, worst)), "ratio": ratios[worst]},
+            "within_2pct": sum(abs(r - 1) <= 0.02 for r in ratios.values())}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("cmd", choices=["gate-build", "analyze"])
+    ap.add_argument("cmd", choices=["gate-build", "analyze", "agree"])
     ap.add_argument("out", type=Path)
+    ap.add_argument("other", type=Path, nargs="?")
     ap.add_argument("--census", type=Path, nargs="*", default=[])
     ap.add_argument("--json", type=Path)
     a = ap.parse_args(argv)
     if a.cmd == "gate-build":
         return gate_build(a.out)
+    if a.cmd == "agree":
+        print(json.dumps(agree(a.out, a.other)))
+        return 0
     res = analyze_run(a.out, a.census)
     if a.json:
         a.json.write_text(json.dumps(res, indent=1, default=str) + "\n")

@@ -14,14 +14,17 @@ there; the rates and the GEMM's exactness need the GPU (`run.sh`).
 | `dc.cuh` | The K-major no-swizzle operand layout and its descriptors (wgmma and tcgen05), the instruction descriptor, mbarrier and tcgen05 wrappers, and duo (floored_gemm's) |
 | `gen_wgmma.py`, `wgmma.cuh` | The wgmma wrappers (up to 128 accumulator registers an operand list), generated |
 | `dgemm.cu` | The honest Dither GEMM, s8 C = X Wᵀ with every 32-step s32 prefix word folded by duo (3 ops a word): `dg90` (wgmma m64n128k32, accumulators in registers) and `dg100` (tcgen05.mma 128×256×32 into TMEM, tcgen05.ld to registers). Modes `cpuref`, `gate` (0xA5 poisoning, no-write control, a mismatch rerun with LBO/SBO exchanged) and `bench` (fold, no fold, cuBLASLt int8) |
-| `dgemm_ref.py` | The receipt's numpy twin: C and every receipt word from X, W and the seed |
+| `dgemm_ref.py` | The receipt's numpy twin: C and every receipt word from X, W and the seed, at meta.json's commit spacing L |
+| `pgemm.cu` | The honest Dither GEMM on sm_100a, pipelined: one CTA a SM holds a 128 × 512 block as NB = 2 or 4 TMEM tiles in flight (all 512 columns); MMA warps (one, or one a tile: MI) issue lm tcgen05.mma kind::i8 into a tile and tcgen05.commit to its full barrier; LW loader warpgroups wait on it, tcgen05.ld 32x32b.x32 the rows, hand the tile back on its empty barrier after the last load and fold with duo; L = 32 lm. Arms: 0 pipeline (loaders hand back only), 1 TMEM stage (load, no fold), 2 honest, 3 MMA self-wait (no loaders). Operands are resident (K-periodic inputs), so the rate leaves out operand streaming. Modes `gate` (MODE 2, 0xA5 poison, host reference, dumps for `dgemm_ref.py`) and `rate` |
+| `pipe.py`, `pipe.sh` | pgemm's job and its analysis: the build gate (no spill, launchable registers, UTCIMMA and LDTM.x32 present), the rate per arm and spacing against ρ_T5, the honest loader's issue a word from SASS, q*, ε_tensor at L = 32, and `agree` for a repeat |
 | `fp8acc.cu` | M4e for E4M3 (sm_100a): emu8's k3 and k4 limb planes through tcgen05.mma kind::f8f6f4 from TMEM preloaded with the binade constants, on five adversarial operand classes; counts accumulators that differ from the exact C + T and k32 words that differ from the s8 dot product. `selftest` runs the same checks with ideal accumulators on the CPU (all exact) |
 | `analyze.py` | rows.jsonl → slots a SM a clock, every loop's issue rate, a (issue cycles a tensor instruction takes from the lane beside it), M3's and M4's pass lines, sm_100's TMEM model (honest at L = 32, the L that saturates the tensor, the two-stage LP's ε), the fold's words a clock; `agree A B` checks a repeat |
 | `census.py` | Runs → machine_model's census lines, a device directory a family (`../machine_model/data/devices/sm_90/`, `sm_100/`: census.csv and rows.csv), and the tables: T1 a form, ε_tensor at L = 32, the joint issue rows, q*, L_bal |
 | `run.sh` | The job for one family (below); `DC_BUILD_ONLY=1` builds and gates without a GPU |
 
-The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop and against dgemm.cu's host
-reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form). A probe's rate is
+The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
+dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
+pipe.py's SASS profile and q*). A probe's rate is
 opcode_probe's: warp instructions a SM a clock, timed only after its SASS gate, its poisoned sink and its no-write
 control pass (`../opcode_probe/README.md`).
 
@@ -31,7 +34,10 @@ control pass (`../opcode_probe/README.md`).
 research run --on vy-dc-h200 --project verity --campaign cmp-13 --source /workspace --cwd source --custody-ttl 12h \
   --timeout 60m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90
 research run --on vy-dc-b200 ... -- bash benchmarks/pouw/dc/run.sh sm100
+research run --on vy-dc-b200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
 python3 benchmarks/pouw/dc/analyze.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
+python3 benchmarks/pouw/dc/pipe.py analyze ~/.research/runs/RUN/out --census SM100_RUN_OUT...
+python3 benchmarks/pouw/dc/pipe.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
 python3 benchmarks/pouw/dc/census.py sm90 ~/.research/runs/RUN/out... --write benchmarks/pouw/machine_model/data/devices/sm_90
 ~~~
 
@@ -57,18 +63,48 @@ MHz, B200 1965 MHz.
   other instruction 0.98 SMSP-cycles, and the IMAD and ALU pipes' facets cost the IGMMA about 63 too.
 - **sm_100 (M4 fails: the TMEM load binds).** tcgen05.mma i8, f8 and f16 write 256.05 slots/SM/clk at M = 128, N ≥ 128
   (M = 64: 128); mma.sync 64.0, on the same pipe. tcgen05.ld alone reaches 244.5 words/SM/clk (x128; x32 242.7), 233.3
-  beside the saturated MMA. Honest at L = 32 loads every slot it writes and balances at 0.914 of ρ_T5 (234.1 words/SM/
-  clk); the tensor saturates from L = 64; the two-stage LP gives ε_tensor ≤ 2.3% at L = 32. A tcgen05.mma costs one
-  issue slot (UTCIMMA 1.09 + other 0.98), so lanes beside it keep their rates.
-- **q*** (the issue facet's tensor coefficient over the words a lane gets): sm_90 0.49, sm_100 0.001 (0.047 with the
-  tcgen05.ld.x32 issue that brings the words to registers), against sm_120's 2.03. The fold binds at L = 32 on both
-  (duo 31.3 and 31.5 words/SM/clk alone: L_bal 131 and 260).
+  beside the saturated MMA. On load bandwidth alone, honest at L = 32 would balance at 0.914 of ρ_T5 (234.1 words/SM/
+  clk; the two-stage LP's ε_tensor ≤ 2.3%), but the pipelined kernel below measures 0.489: at L = 32 the TMEM round
+  trip binds, not the load. A tcgen05.mma costs one issue slot (UTCIMMA 1.09 + other 0.98), so lanes beside it keep
+  their rates.
+- **q*** (the issue facet's tensor coefficient over the words a lane gets): sm_90 0.49, sm_100 0.001 (0.032 with the
+  tcgen05.ld.x32 that bring the words to registers; ptxas emits no instruction for tcgen05.wait::ld), against sm_120's
+  2.03. The fold binds at L = 32 on both (duo 31.3 and 31.5 words/SM/clk alone: L_bal 131 and 260).
+
+## The pipelined honest GEMM on sm_100 (`pgemm.cu`, 1× B200)
+
+Runs r20261017-082803-be14 and its repeat r20261017-082819-a9cd (70f2e417c; 152 rate points, all within 2%, worst
+1.0064). All 32 gates are exact in both: (NB, LW) in (2, 1), (2, 2), (4, 1), (4, 2), one MMA warp or one a tile, at L = 32
+and 64, on 128 × 512 × 256 and 256 × 1024 × 1024, each dump rechecked by `dgemm_ref.py`. Rates are slots/SM/clk (each
+point's best configuration; committed words = slots / lm), clock64 a CTA on 148 CTAs:
+
+| L | honest (fold) | TMEM stage | pipeline | MMA self-wait |
+|---|---|---|---|---|
+| 32 | 29.6 (0.116 ρ_T5) | 125.3 (0.489) | 147.6 (0.576) | 149.9 (0.585) |
+| 64 | 58.1 (0.227), 29.1 words | 218.3 (0.853), 109.2 words | 255.8 (0.999) | 180.5 (0.705) |
+| 128 | 114.9 (0.449), 28.7 words | 255.9 (1.000) | 256.0 | 234.3 |
+| 256 | 230.1 (0.899), 28.8 words | 256.3 (1.000) | 256.1 | 255.7 |
+
+- **The fold sets honest's rate at every spacing**: 29.6, 29.1, 28.7 and 28.8 committed words/SM/clk at L = 32 … 256
+  (duo alone 31.5). Its loader issues 3.03 lane instructions a word (ALU 1.94, IMAD 0.98, LDTM.x32 1/32), so at L = 32
+  it fills the ALU pipe to 0.90, the IMAD pipe to 0.45 and the SM's issue to 0.69. The MMA's share is 0.001 SMSP-cycles
+  a lane-word. q* is 0.0011 (MMA only) and 0.032 (with the loads) at L = 32, and 0.0021 and 0.033 at L = 64.
+- **At L = 32 the TMEM round trip binds the tensor.** Each running sum must leave TMEM before the next k-step lands on
+  it, so no more than TMEM's 65,536 words are in flight. The tile's round trip (MMA, commit, loaders, hand-back) is at
+  least 437 clocks in these kernels, which caps the tensor at 0.585 of ρ_T5 even with no reads (self-wait). One MMA warp
+  issuing for every tile serializes the commits (at most 0.36 at L = 32), so a tile needs its own issuer. Four tiles of
+  128 columns take as long a round trip as two of 256.
+- **ε_tensor at L = 32**, honest's TMEM stage at 0.489 of ρ_T5: T1 gives 51.1%. TENSOR's two-stage LP (mma.sync fills
+  the shared pipe's slack) gives 47.7% against an adversary at the probes' bandwidth balance (0.914) and 29.0% against one
+  held to the same round trip (0.585). The 2.3% above assumed load bandwidth alone.
+- **The commit spacing need not be 64.** At L = 64 the TMEM stage commits 109.2 words/SM/clk, 0.426 of ρ_T5, so T1 gives
+  57.4% against 51.1% at L = 32, and the fold-bound honest kernel is no faster (29.1 against 29.6 words/SM/clk). L = 32
+  stays sm_100's spacing.
 
 Not covered yet: sparse wgmma and tcgen05 (metadata operands), the N sweep for the FP kinds (s8 only), cta_group::2 (a
 CTA pair), M4e beyond fp8acc's binade question (kind::f16/tf32/f8f6f4 accumulation against the silicon models in
 general), lanes beside wgmma with more than one lane warp a SMSP (`wgU_` reaches only 0.3–0.4 of alone, under the
-block-timed points the sm_90 facets rest on), and the pipelined (TMA, multi-stage) GEMMs whose receipts must equal these
-kernels'. On sm_90 CUDA 13.0 has no native FP8 or s4 mma.sync: e4m3 m16n8k32 is 2 HMMA.16816.F32 + 4 FADD (timed as
+block-timed points the sm_90 facets rest on), operand streaming (TMA) in `pgemm.cu`, and a pipelined sm_90 GEMM. On sm_90 CUDA 13.0 has no native FP8 or s4 mma.sync: e4m3 m16n8k32 is 2 HMMA.16816.F32 + 4 FADD (timed as
 that), s4 m16n8k64 a CALL (not timed).
 
 ## B300 (sm_103a)
