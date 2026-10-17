@@ -287,7 +287,8 @@ theorem slackEscW_term [Fintype Coin] [Nonempty Coin] (hδ : ∀ t, 0 ≤ δ t) 
         ≤ ∑ i, Real.sqrt (joinCW n sch Np rd (rd j i)) * Real.sqrt (R (rd j i)) :=
           Finset.sum_le_sum fun i _ => hle i
       _ = ∑ t ∈ Finset.univ.image (rd j), Real.sqrt (joinCW n sch Np rd t) * Real.sqrt (R t) :=
-          (Finset.sum_image fun a _ b _ h => hinj h).symm
+          (Finset.sum_image (f := fun t => Real.sqrt (joinCW n sch Np rd t) * Real.sqrt (R t))
+            fun a _ b _ h => hinj h).symm
       _ ≤ ∑ t, Real.sqrt (joinCW n sch Np rd t) * Real.sqrt (R t) :=
           Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _)
             fun _ _ _ => mul_nonneg (Real.sqrt_nonneg _) (Real.sqrt_nonneg _)
