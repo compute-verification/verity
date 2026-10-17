@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.KS.PlainKS
+import Proofs.Flock.Claims.KS.Escapes
 import Proofs.Flock.Claims.KS.MixtureZk
 import Proofs.Flock.Claims.KS.ZkBound
 import Proofs.Flock.Claims.KS.ZkKS
@@ -86,7 +87,11 @@ At one table the model does not commit to, a live verdict is no likelier than th
 live strategies, `FlockDeploy.KS.mean_live_le`). At a plain statement of one table, `TableBoundθAt` follows from, at
 each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C` bounds the deployed
 runs accepting on `C`, and whose `Adv` and self-clash the escapes' events bound, the escapes at the plain fork rounds
-(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). At `--zk`, one table's compiled session is `Commit`'s
+(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). `Flock.KS` at the plain record follows from the live
+sessions' bound at table 0 and `Extendθ` (`PlainKS`: `FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit`
+against the simulated strategy arises only on live runs the live verdict accepts, whose decoded outputs self-clash
+(`Escapes`: `FlockDeploy.KS.selfClash_le_live`, `FlockDeploy.KS.mean_selfClash_le_live`).
+At `--zk`, one table's compiled session is `Commit`'s
 cap and then `sessAtZ` with no other game, so a live verdict at one masked table is no likelier than any verdict after
 `Commit` the decoder is right for (`MixtureZk`: `FlockDeploy.KS.live_le_simAtZ`, `FlockDeploy.KS.mean_live_le_simAtZ`),
 and at a masked statement of one table, `TableBoundθAt` follows from a mixture of masked sessions after `Commit` at a
