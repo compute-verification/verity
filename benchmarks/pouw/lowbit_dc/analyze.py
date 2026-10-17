@@ -14,6 +14,9 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+# routes whose every k32 word is checked: emu8's int8 limb routes and the restarted E4M3 grid
+WORD_ROUTES = ("k3b", "k4b", "k3z", "k4z", "k3h", "e4r")
+
 
 def load(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()] if path.exists() else []
@@ -95,7 +98,7 @@ def main() -> int:
     rows = per_config(load(a.out / "records.jsonl"))
     chains = group_chains(rows)
     wins = windows(load(a.out / "windows.jsonl"))
-    emu = [r for r in rows if r["fmt"] in ("k3b", "k4b", "k3z", "k4z")]
+    emu = [r for r in rows if r["fmt"] in WORD_ROUTES]
     controls = [r for r in rows if r["control"]]
     print(f"# fpx on {summary.get('device', '?')} (cc {summary.get('cc', '?')})\n")
     print(f"summary: {json.dumps(summary)}\n")
@@ -114,15 +117,16 @@ def main() -> int:
         p = w["past"]
         print(f"| {w['fmt']} | {w['test']} | {w['gaps']} | {w['max_exact_gap']} | {w['first_bad_gap']} | "
               f"{p['n']}, {p['exact']}, {p['rz']}, {p['rn']}, {p['dropped']}, {p['other']} |")
-    print("\n## emu8 routes (every k32 prefix word)\n")
-    print("| route | dist | K | bad accumulators | bad words |")
-    print("|---|---|---|---|---|")
+    print("\n## Word routes (every k32 prefix word: emu8's int8 limbs, and e4r's restarted E4M3 grid)\n")
+    print("| route | grid | dist | K | bad accumulators | bad words |")
+    print("|---|---|---|---|---|---|")
     for r in emu:
         if not r["control"]:
-            print(f"| {r['fmt']} | {r['dist']} | {r['K_max']} | {r['bad_acc']} | {r['bad_word']} |")
+            print(f"| {r['fmt']} | {r['grid'] if r['fmt'] == 'e4r' else 'int8'} | {r['dist']} | {r['K_max']} | "
+                  f"{r['bad_acc']} | {r['bad_word']} |")
     print("\n## Controls (no MMA issued; each must count wrong outputs)\n")
     for r in controls:
-        caught = r["bad_rep"] + r["bad_word"] + r["bad_acc"] + (0 if r["fmt"].startswith("k") else
+        caught = r["bad_rep"] + r["bad_word"] + r["bad_acc"] + (0 if r["fmt"] in WORD_ROUTES else
                                                                   int(r["first_inexact"] is not None))
         print(f"- {r['fmt']} {r['dist']} C0 {r['c0']}: {'caught' if caught else 'MISSED'}")
     if a.json:

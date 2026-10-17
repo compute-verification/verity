@@ -47,9 +47,9 @@
     }                                                                                        \
   } while (0)
 
-enum Fmt { F_E4M3 = 0, F_MXF4 = 1, F_NVF4 = 2, F_K3B = 3, F_K4B = 4, F_K3Z = 5, F_K4Z = 6 };
+enum Fmt { F_E4M3 = 0, F_MXF4 = 1, F_NVF4 = 2, F_K3B = 3, F_K4B = 4, F_K3Z = 5, F_K4Z = 6, F_K3H = 7, F_E4R = 8 };
 enum Dist { D_UNI = 0, D_MAX = 1, D_SIGN = 2, D_EDGE = 3, D_CANCEL = 4, D_WIN = 5, D_ACCWIN = 6, D_LMIN = 7 };
-static const char* FMTS[] = {"e4m3", "mxf4", "nvf4", "k3b", "k4b", "k3z", "k4z"};
+static const char* FMTS[] = {"e4m3", "mxf4", "nvf4", "k3b", "k4b", "k3z", "k4z", "k3h", "e4r"};
 static const char* DISTS[] = {"uniform", "max", "max_signs", "edge", "cancel", "win", "accwin", "l_min_h_max"};
 static const char* C0S[] = {"zero", "binade", "nobits", "above"};
 
@@ -74,7 +74,9 @@ struct Rec {
 };
 
 __host__ __device__ inline bool is_fp4(int f) { return f == F_MXF4 || f == F_NVF4; }
-__host__ __device__ inline bool is_emu(int f) { return f >= F_K3B; }
+__host__ __device__ inline bool is_emu(int f) { return f >= F_K3B && f <= F_K3H; }
+__host__ __device__ inline bool is_word(int f) { return is_emu(f) || f == F_E4R; }  // a word checked every step
+__host__ __device__ inline bool is_k3(int f) { return f == F_K3B || f == F_K3Z || f == F_K3H; }
 __host__ __device__ inline int kstep_of(int f) { return is_fp4(f) ? 64 : 32; }
 
 __host__ __device__ inline uint32_t hsh(uint32_t seed, int step, int side, int row, int k) {
@@ -189,9 +191,10 @@ __host__ __device__ inline bool rep24(long long P) {
 __host__ __device__ inline int plane_val(int fmt, int p, int x, int bside) {
   const int h = (x + 8) >> 4, l = x - 16 * h, m = h + l;
   if (fmt == F_K3B || fmt == F_K3Z) return p == 0 ? 4 * h : p == 1 ? m : (bside ? l : -l);
+  if (fmt == F_K3H) return p == 0 ? h : p == 1 ? m : l;
   return p == 0 ? 16 * h : l;
 }
-__host__ __device__ inline int nplanes(int fmt) { return (fmt == F_K3B || fmt == F_K3Z) ? 3 : is_emu(fmt) ? 2 : 1; }
+__host__ __device__ inline int nplanes(int fmt) { return is_k3(fmt) ? 3 : is_emu(fmt) ? 2 : 1; }
 
 // ---- shared device state -------------------------------------------------------------------------------------------------
 struct Tally {
@@ -279,26 +282,37 @@ __device__ inline void chain_check(const Cfg& c, const OutState& o, uint32_t got
   if (err > t.maxerr) t.maxerr = err;
 }
 // emu: the accumulators' exact values and the word increment from what the tensor core wrote.
+// k3h: three accumulators from +0 on unscaled limbs, Σhh', Σmm', Σll' (each |T| < 2^13), word += 240 Σhh' + 16 Σmm' -
+// 15 Σll' by three FFMAs into the binade.
 __device__ inline void emu_step(const Cfg& c, OutState& o, const int8_t* xa, const int8_t* xb, uint32_t g0, uint32_t g1,
-                                Tally& t) {
-  int T0 = 0, T1 = 0, dot = 0;
+                                uint32_t g2, Tally& t) {
+  int T0 = 0, T1 = 0, T2 = 0, dot = 0;
   for (int k = 0; k < 32; k++) {
     const int x = xa[k], y = xb[k];
     dot += x * y;
-    if (c.fmt == F_K3B || c.fmt == F_K3Z) {
+    if (c.fmt == F_K3H) {
+      T0 += plane_val(c.fmt, 0, x, 0) * plane_val(c.fmt, 0, y, 1);
+      T1 += plane_val(c.fmt, 1, x, 0) * plane_val(c.fmt, 1, y, 1);
+      T2 += plane_val(c.fmt, 2, x, 0) * plane_val(c.fmt, 2, y, 1);
+    } else if (is_k3(c.fmt)) {
       T0 += plane_val(c.fmt, 0, x, 0) * plane_val(c.fmt, 0, y, 1) + plane_val(c.fmt, 2, x, 0) * plane_val(c.fmt, 2, y, 1);
       T1 += plane_val(c.fmt, 1, x, 0) * plane_val(c.fmt, 1, y, 1);
     } else {
       T0 += x * y;
     }
   }
-  const bool k3 = c.fmt == F_K3B || c.fmt == F_K3Z, binade = c.fmt == F_K3B || c.fmt == F_K4B;
+  const bool k3 = is_k3(c.fmt), binade = c.fmt == F_K3B || c.fmt == F_K4B;
   const float c0 = binade ? __uint_as_float(k3 ? C1B : C0B) : 0.f, c1 = binade ? __uint_as_float(C2B) : 0.f;
   const float w0 = c0 + (float)T0, w1 = c1 + (float)T1;  // exact: |T| < 2^19 inside each binade
   t.bad_acc += __float_as_uint(w0) != g0;
   if (k3) t.bad_acc += __float_as_uint(w1) != g1;
+  if (c.fmt == F_K3H) t.bad_acc += __float_as_uint((float)T2) != g2;
   uint32_t inc;
-  if (binade) {
+  if (c.fmt == F_K3H) {
+    const float r = __fmaf_rn(-15.f, __uint_as_float(g2),
+                              __fmaf_rn(16.f, __uint_as_float(g1), __fmaf_rn(240.f, __uint_as_float(g0), 12582912.f)));
+    inc = __float_as_uint(r) - C0B;
+  } else if (binade) {
     inc = k3 ? 15u * g0 + 2u * g1 : g0 - C0B;
   } else {
     const float r = k3 ? __fmaf_rn(16.f, __uint_as_float(g1), __fmaf_rn(15.f, __uint_as_float(g0), 12582912.f))
@@ -307,6 +321,15 @@ __device__ inline void emu_step(const Cfg& c, OutState& o, const int8_t* xa, con
   }
   o.word += (int32_t)inc;
   o.dot += dot;
+  t.bad_word += o.word != o.dot;
+}
+// e4r: one MMA a step from +0 on a grid (units 2^e, num 1); the accumulator must be the step's exact sum, and the word in
+// units grows by one FFMA into the binade and one IADD: the honest route where a narrow adder forbids a binade start.
+__device__ inline void e4r_step(const Cfg& c, OutState& o, int T, uint32_t g, Tally& t) {
+  t.bad_acc += __float_as_uint(ldexpf((float)T, c.e)) != g;
+  const float r = __fmaf_rn(__uint_as_float(g), ldexpf(1.f, -c.e), 12582912.f);
+  o.word += (int32_t)(__float_as_uint(r) - C0B);
+  o.dot += T;
   t.bad_word += o.word != o.dot;
 }
 
@@ -370,7 +393,7 @@ __global__ void __launch_bounds__(128) fpx100(const Cfg* cfgs, Rec* recs, uint32
   tmem_fill(trow + 64, 0x01010101u * (uint32_t)c.sa, 32);
   tmem_fill(trow + 96, 0x01010101u * (uint32_t)c.sb, 32);
   const uint32_t c0 = c.dist == D_ACCWIN ? __float_as_uint(ldexpf(1.f, row % 32)) : c.c0bits;
-  if (!is_emu(c.fmt)) tmem_fill(trow, c0, 32);
+  if (!is_word(c.fmt)) tmem_fill(trow, c0, 32);
   tmem_wait_st();
   OutState o[TN];
   for (int j = 0; j < TN; j++) o[j] = OutState{c.c0u, __uint_as_float(c0), __uint_as_float(c0), 1, 0, 0};
@@ -401,6 +424,12 @@ __global__ void __launch_bounds__(128) fpx100(const Cfg* cfgs, Rec* recs, uint32
             case F_E4M3: umma_f8f6f4(tmem, da(0), db(0), idesc, 1); break;
             case F_MXF4: umma_mxf4(tmem, da(0), db(0), idesc, tmem + 64, tmem + 96, 1); break;
             case F_NVF4: umma_nvf4(tmem, da(0), db(0), idesc, tmem + 64, tmem + 96, 1); break;
+            case F_E4R: umma_f8f6f4(tmem, da(0), db(0), idesc, 0); break;
+            case F_K3H:  // acc2 in the A-scale columns: no scales on this route
+              umma_f8f6f4(tmem, da(0), db(0), idesc, 0);
+              umma_f8f6f4(tmem + 32, da(1), db(1), idesc, 0);
+              umma_f8f6f4(tmem + 64, da(2), db(2), idesc, 0);
+              break;
             case F_K3B: case F_K3Z:
               umma_f8f6f4(tmem, da(0), db(0), idesc, z);
               umma_f8f6f4(tmem, da(2), db(2), idesc, 1);
@@ -422,12 +451,24 @@ __global__ void __launch_bounds__(128) fpx100(const Cfg* cfgs, Rec* recs, uint32
     tc_after_sync();
     const bool at_ck = ((s + 1) & s) == 0 || s == c.nsteps - 1;
     if (is_emu(c.fmt)) {
-      uint32_t g0[16], g1[16];
+      uint32_t g0[16], g1[16], g2[16];
       for (int h = 0; h < 2; h++) {
         tmem_ld16(trow + 16 * h, g0);
         tmem_ld16(trow + 32 + 16 * h, g1);
+        tmem_ld16(trow + 64 + 16 * h, g2);
         tmem_wait_ld();
-        for (int q = 0; q < 16; q++) emu_step(c, o[16 * h + q], vA[row], vB[16 * h + q], g0[q], g1[q], loc);
+        for (int q = 0; q < 16; q++) emu_step(c, o[16 * h + q], vA[row], vB[16 * h + q], g0[q], g1[q], g2[q], loc);
+      }
+    } else if (c.fmt == F_E4R) {
+      uint32_t g[16];
+      for (int h = 0; h < 2; h++) {
+        tmem_ld16(trow + 16 * h, g);
+        tmem_wait_ld();
+        for (int q = 0; q < 16; q++) {
+          int T = 0;
+          for (int k = 0; k < 32; k++) T += (int)vA[row][k] * (int)vB[16 * h + q][k];
+          e4r_step(c, o[16 * h + q], T, g[q], loc);
+        }
       }
     } else {
       for (int j = 0; j < TN; j++) {
@@ -437,8 +478,8 @@ __global__ void __launch_bounds__(128) fpx100(const Cfg* cfgs, Rec* recs, uint32
       }
     }
     if (at_ck) {
-      Tally t = is_emu(c.fmt) ? loc : Tally{};
-      if (!is_emu(c.fmt)) {
+      Tally t = is_word(c.fmt) ? loc : Tally{};
+      if (!is_word(c.fmt)) {
         for (int h = 0; h < 2; h++) {
           uint32_t g[16];
           tmem_ld16(trow + 16 * h, g);
@@ -511,12 +552,13 @@ __global__ void __launch_bounds__(128) fpx90(const Cfg* cfgs, Rec* recs, uint32_
     rowq[q] = 16 * warp + (lane >> 2) + 8 * ((q >> 1) & 1);
     colq[q] = 8 * (q >> 2) + 2 * (lane & 3) + (q & 1);
   }
-  float d0[16], d1[16];
+  float d0[16], d1[16], d2[16];
   OutState o[16];
   for (int q = 0; q < 16; q++) {
     const uint32_t c0 = c.dist == D_ACCWIN ? __float_as_uint(ldexpf(1.f, rowq[q] % 32)) : c.c0bits;
     d0[q] = __uint_as_float(c0);
     d1[q] = 0.f;
+    d2[q] = 0.f;
     o[q] = OutState{c.c0u, d0[q], d0[q], 1, 0, 0};
   }
   Tally loc{};
@@ -538,6 +580,12 @@ __global__ void __launch_bounds__(128) fpx90(const Cfg* cfgs, Rec* recs, uint32_
       wg_fence();
       switch (c.fmt) {
         case F_E4M3: wg_e4m3_n32(d0, da(0), db(0), 1); break;
+        case F_E4R: wg_e4m3_n32(d0, da(0), db(0), 0); break;
+        case F_K3H:
+          wg_e4m3_n32(d0, da(0), db(0), 0);
+          wg_e4m3_n32(d1, da(1), db(1), 0);
+          wg_e4m3_n32(d2, da(2), db(2), 0);
+          break;
         case F_K3B: case F_K3Z:
           wg_e4m3_n32(d0, da(0), db(0), z);
           wg_e4m3_n32(d0, da(2), db(2), 1);
@@ -554,11 +602,19 @@ __global__ void __launch_bounds__(128) fpx90(const Cfg* cfgs, Rec* recs, uint32_
       wg_wait0();
       hold(d0);
       hold(d1);
+      hold(d2);
     }
     const bool at_ck = ((s + 1) & s) == 0 || s == c.nsteps - 1;
     if (is_emu(c.fmt)) {
       for (int q = 0; q < 16; q++)
-        emu_step(c, o[q], vA[rowq[q]], vB[colq[q]], __float_as_uint(d0[q]), __float_as_uint(d1[q]), loc);
+        emu_step(c, o[q], vA[rowq[q]], vB[colq[q]], __float_as_uint(d0[q]), __float_as_uint(d1[q]),
+                 __float_as_uint(d2[q]), loc);
+    } else if (c.fmt == F_E4R) {
+      for (int q = 0; q < 16; q++) {
+        int T = 0;
+        for (int k = 0; k < 32; k++) T += (int)vA[rowq[q]][k] * (int)vB[colq[q]][k];
+        e4r_step(c, o[q], T, __float_as_uint(d0[q]), loc);
+      }
     } else {
       for (int q = 0; q < 16; q++) {
         int T = 0;
@@ -567,8 +623,8 @@ __global__ void __launch_bounds__(128) fpx90(const Cfg* cfgs, Rec* recs, uint32_
       }
     }
     if (at_ck) {
-      Tally t = is_emu(c.fmt) ? loc : Tally{};
-      if (!is_emu(c.fmt))
+      Tally t = is_word(c.fmt) ? loc : Tally{};
+      if (!is_word(c.fmt))
         for (int q = 0; q < 16; q++) {
           chain_check(c, o[q], __float_as_uint(d0[q]), t);
           if (c.dump && s == c.nsteps - 1)
@@ -608,6 +664,7 @@ static Cfg make(int fmt, int grid, int dist, int c0mode, int nsteps, uint32_t se
   c.fmt = fmt; c.grid = grid; c.dist = dist; c.c0mode = c0mode; c.nsteps = nsteps; c.seed = seed;
   c.sa = sa; c.sb = sb;
   if (is_emu(fmt)) { c.s = 1; c.num = 1; c.e = 0; return c; }
+  if (fmt == F_E4R) c0mode = 0;
   double unit;
   if (is_fp4(fmt)) { c.s = 2; unit = scale_val(fmt, sa) * scale_val(fmt, sb) / 4.0; }
   else { c.s = grid == 0 ? 1 : grid == 1 ? 2 : 4; unit = 1.0 / (c.s * c.s); }
@@ -643,8 +700,10 @@ static std::vector<Cfg> configs(int family) {
           }
   }
   const int emu_d[] = {D_UNI, D_UNI, D_UNI, D_MAX, D_SIGN, D_EDGE, D_LMIN};
-  for (int f = F_K3B; f <= F_K4Z; f++)
+  for (int f = F_K3B; f <= F_K3H; f++)
     for (int d : emu_d) v.push_back(make(f, 0, d, 0, 512, seed++));
+  for (int g = 0; g < 3; g++)
+    for (int d : chain_d) v.push_back(make(F_E4R, g, d, 0, 512, seed++));
   Cfg w = make(F_E4M3, 0, D_WIN, 0, 1, seed++); w.dump = 1; v.push_back(w);
   Cfg a = make(F_E4M3, 0, D_ACCWIN, 0, 1, seed++); a.dump = 1; v.push_back(a);
   if (family == 10) {
@@ -655,6 +714,8 @@ static std::vector<Cfg> configs(int family) {
   Cfg k1 = make(F_E4M3, 0, D_UNI, 1, 64, seed++); k1.control = 1; v.push_back(k1);
   Cfg k2 = make(F_K3B, 0, D_UNI, 0, 64, seed++); k2.control = 1; v.push_back(k2);
   Cfg k3 = make(F_K3Z, 0, D_UNI, 0, 64, seed++); k3.control = 1; v.push_back(k3);
+  Cfg k6 = make(F_K3H, 0, D_UNI, 0, 64, seed++); k6.control = 1; v.push_back(k6);
+  Cfg k7 = make(F_E4R, 0, D_UNI, 0, 64, seed++); k7.control = 1; v.push_back(k7);
   if (family == 10) {
     Cfg k4 = make(F_MXF4, 0, D_UNI, 1, 64, seed++, 127, 127); k4.control = 1; v.push_back(k4);
     Cfg k5 = make(F_NVF4, 0, D_UNI, 1, 64, seed++, 0x38, 0x38); k5.control = 1; v.push_back(k5);
@@ -733,7 +794,7 @@ int main(int argc, char** argv) {
               ", \"K\": %lld, \"n\": %d, \"rep\": %d, \"bad_rep\": %d, \"inexact\": %d, \"rz\": %d, \"rn\": %d, "
               "\"negzero\": %d, \"bad_word\": %d, \"bad_acc\": %d, \"maxerr\": %.9g}\n",
               r.K, r.n, r.rep, r.bad_rep, r.inexact, r.rz, r.rn, r.negzero, r.bad_word, r.bad_acc, r.maxerr);
-      cfg_bad += r.bad_rep + r.bad_word + r.bad_acc + (is_emu(c.fmt) ? 0 : r.inexact);
+      cfg_bad += r.bad_rep + r.bad_word + r.bad_acc + (is_word(c.fmt) ? 0 : r.inexact);
       if (!c.control) {
         if (k == nck - 1 || k == MAXCK - 1) { bad_word += r.bad_word; bad_acc += r.bad_acc; }
         bad_rep += r.bad_rep;
