@@ -327,13 +327,18 @@ variable [Fintype X] [Nonempty X] [Fintype D] [DecidableEq D]
 /-- **Off agreement, the simulated fork over the tape is the deployed fork's law at the live coins**: the keys differ
 at every round from `t` on (`sep`), so the tape's values at the two keys are independent and uniform
 (`Pr_evalAt₂`, with any other point before round `t`), and the second branch's coins are the fork of the two merges. -/
-theorem Pr_disagree [_root_.Nontrivial D] {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D}
+theorem Pr_disagree {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D}
     (hk : PrefixKey n key) (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (t : Fin K)
     (r r'' : Fin K → Fin M → X) (hne : ¬ AgreeAt (n t) (r t) (r'' t)) :
     Pr (fun f : Fin K → D → Fin M → X => E (fnC n key f r) (fnC n key f (forkN t.val r r''))) =
       Pr (fun p : (Fin K → Fin M → X) × (Fin K → Fin M → X) =>
         E (mergeC n p.1 r) (forkN t.val (mergeC n p.1 r) (mergeC n p.2 r''))) := by
   classical
+  have hsep : key t r ≠ key t (forkN t.val r r'') := fun heq => by
+    refine hne fun m hm => ?_
+    have h' : r t m = forkN t.val r r'' t m := hk.sep t _ _ heq t le_rfl m hm
+    rwa [show forkN t.val r r'' t = r'' t from ite_eq_right (lt_irrefl _)] at h'
+  have : _root_.Nontrivial D := ⟨⟨_, _, hsep⟩⟩
   obtain ⟨b, hb, hab⟩ : ∃ b : Fin K → D, (∀ i : Fin K, t.val ≤ i.val → b i = key i (forkN t.val r r'')) ∧
       ∀ i, b i ≠ key i r := by
     refine ⟨fun i => if t.val ≤ i.val then key i (forkN t.val r r'') else (exists_ne (key i r)).choose,
@@ -403,7 +408,7 @@ theorem Ex_fork_merge (n : Fin K → ℕ) (E : (Fin K → Fin M → X) → (Fin 
 /-- **Off agreement the simulated fork is at most the deployed one**: at each pair of live coins that disagree at
 round `t`, the tape's chance is the deployed fork's at those coins (`Pr_disagree`), whose average is the deployed
 fork's (`Ex_fork_merge`). -/
-theorem Pr_disagree_le [_root_.Nontrivial D] {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D}
+theorem Pr_disagree_le {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D}
     (hk : PrefixKey n key) (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (t : Fin K) :
     Pr (fun p : (Fin K → D → Fin M → X) × (Fin K → Fin M → X) × (Fin K → Fin M → X) =>
         E (fnC n key p.1 p.2.1) (fnC n key p.1 (forkN t.val p.2.1 p.2.2)) ∧
@@ -510,7 +515,7 @@ theorem Pr_and_agree [DecidableEq X] {n : Fin K → ℕ} {key : Fin K → (Fin K
 
 /-- **The coupling's step**: the simulated fork at round `t` is at most the deployed fork there and `δ_t` times the
 simulated fork at `t + 1`. -/
-theorem simF_step [DecidableEq X] [_root_.Nontrivial D] {n : Fin K → ℕ}
+theorem simF_step [DecidableEq X] {n : Fin K → ℕ}
     {key : Fin K → (Fin K → Fin M → X) → D} (hk : PrefixKey n key)
     (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (t : Fin K) :
     simF n key E t.val ≤ depF E t.val + δAt X M (n t) * simF n key E (t.val + 1) := by
@@ -535,7 +540,7 @@ theorem simF_last {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) �
 
 /-- **The fork's coin coupling at `fnC`**: at a key that reads the revealed history, the simulated forks are at most
 the deployed fork at each round and `δ_t` times the next simulated fork, and past the last round are the one run. -/
-theorem fnC_coupling [DecidableEq X] [_root_.Nontrivial D] {n : Fin K → ℕ}
+theorem fnC_coupling [DecidableEq X] {n : Fin K → ℕ}
     {key : Fin K → (Fin K → Fin M → X) → D} (hk : PrefixKey n key)
     (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) :
     (∀ t : Fin K, simF n key E t.val ≤ depF E t.val + δAt X M (n t) * simF n key E (t.val + 1)) ∧
@@ -560,7 +565,7 @@ theorem δN_nonneg (n : Fin K → ℕ) (t : ℕ) : 0 ≤ δN X M n t := by
 event `O` the diagonal implies. At `E := pairEv sha512 V P x ω` and `O := oneEv sha512 V P x ω` (whose diagonal step
 is `TiedColl (l ++ l) → TiedColl l`), the two clauses are `ForkCoinCoupling sha512 V P x (δN X M n) sim ω` once
 `forkPrAt` is unfolded at `t < V.k x` and at `V.k x`. -/
-theorem fnAt_coupling [DecidableEq X] [_root_.Nontrivial D] {L : ℕ} (h : L = K) {n : Fin K → ℕ}
+theorem fnAt_coupling [DecidableEq X] {L : ℕ} (h : L = K) {n : Fin K → ℕ}
     {key : Fin K → (Fin K → Fin M → X) → D} (hk : PrefixKey n key)
     (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) (O : (Fin K → Fin M → X) → Prop)
     (hEO : ∀ s, E s s → O s) :
