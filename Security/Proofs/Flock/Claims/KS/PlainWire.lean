@@ -16,7 +16,9 @@ its tape into the deployed coins it feeds `P`.
 (`PlainSimRoot`), the link's points at the first coin (`PlainSimPts`), each rep's rounds, the lockstep through `P`'s
 round messages and the coins' used parts (`PlainSimReps`), and the proof files (`PlainSimProofs`). The roots hold at
 the plain wire wherever `P'` sends `P`'s first message, since every round after `Commit` keeps them
-(`liveOut_rootB`, `plainSimRoot_of_first`); the other three are the remaining named Props. The abort, the live event
+(`liveOut_rootB`, `plainSimRoot_of_first`). The link's points are the first live coin's at any prover, so they ask
+only that the deployed link coin's points be the live coin's (`liveOut_pts`, `plainSimPts_of_coins`). The reps'
+rounds and the proof files are the remaining named Props. The abort, the live event
 failing at `P'`'s outcome wherever `P`'s run is rejected (`PlainSimAbort`), gives the acceptance `PlainRawClashRun`
 asks for (`plain_acc_of_abort`, `plainRawClashRun_of_abort`).
 -/
@@ -217,6 +219,60 @@ theorem plainSimRoot_of_first {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg
   show ((linkOf ((P.next x [] ω).eval sha512).1).getD default).1.toArray = link.1.toArray
   rw [hl]
   rfl
+
+/-! ## The link's points -/
+
+/-- **The rounds keep the link's points.** -/
+theorem allRet_roundsK_pts (dg : ByteArray → ByteArray) {J mPts : ℕ} (rootB : Array ByteArray)
+    (pts : Fin 2 → Fin mPts → FlockLevel3.GF128) :
+    ∀ (N : ℕ) (rs : Fin J → Fin 2 → List Flock.Round),
+      AllRet (fun o : LiveOutJ J mPts => o.pts = pts) (roundsK dg rootB pts N rs)
+  | 0, rs => by
+    simp only [roundsK, KLJ, AllRet]
+    intro _
+    trivial
+  | N + 1, rs => by
+    simp only [roundsK, AllRet]
+    intro o
+    cases o with
+    | none =>
+      simp only [branch, KLJ, AllRet]
+      intro _
+      trivial
+    | some s =>
+      simp only [branch, AllRet]
+      intro _
+      exact allRet_roundsK_pts dg rootB pts N _
+
+/-- **At a coin read off a pending coin, every outcome has the property of the value read.** -/
+theorem playOn_coin_allRet {β Coin : Type} [Fintype Coin] {C : Type} [Fintype C] [Nonempty C] {k : C → Game β}
+    {p : C → β → Prop} (hk : ∀ c, AllRet (p c) (k c)) (I : Claims.Bridge.Iface Coin (.coin C k))
+    (s : Claims.Bridge.RStrat Coin (.coin C k) I) (u : Coin) (r : ℕ → Coin) :
+    p (I.1.proj u) (Claims.Bridge.playOn (.coin C k) I s (some u) r) :=
+  playOn_allRet (k (I.1.proj u)) _ _ _ _ (hk _)
+
+/-- **The live outcome's link points are the first live coin's**, at any prover. -/
+theorem liveOut_pts {nMax mPts : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : Claims.Msg → Wire nMax 1 mPts) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+    (r : Fin (N x + 2) → LCoin nMax) :
+    (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P x ω r).pts = (ptsIf (w x)).proj (Claims.coinSeq r 0) :=
+  playOn_coin_allRet (C := Fin 2 → Fin mPts → FlockLevel3.GF128)
+    (k := fun pts => roundsK dg ((w x).root ((P.next x [] ω).eval sha512).1) pts (N x) fun _ _ => [])
+    (p := fun c o => o.pts = c) (fun c => allRet_roundsK_pts dg _ c (N x) _)
+    ((sessionIf (w x) dg (N x)).2 ((P.next x [] ω).eval sha512).1)
+    (Claims.Bridge.stratOf sha512 P x ω _ (sessionIf (w x) dg (N x)) [] none).2 (Claims.coinSeq r 0)
+    fun i => Claims.coinSeq r (i + 1)
+
+/-- **The link's points from the coins alone**: where `P`'s run decides, the first live coin's points are the
+deployed link coin's, whatever `P'` sends (`liveOut_pts`). -/
+theorem plainSimPts_of_coins {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts nMax : ℕ}
+    {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire nMax 1 mPts} {τ : Type}
+    {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin}
+    (h : ∀ u r' s spec sts link c₁ mids f, PlainDecides P x ω Φ u r' s spec sts link c₁ mids f →
+      (ptsIf (w x)).proj (Claims.coinSeq r' 0) = (Claims.Bridge.Custody.viewOf 1 mPts spec link c₁ f).pts) :
+    PlainSimPts P x ω mPts N dg w P' Φ := fun u r' s spec sts link c₁ mids f hd => by
+  rw [liveOut_pts]
+  exact h u r' s spec sts link c₁ mids f hd
 
 /-! ## The abort -/
 
