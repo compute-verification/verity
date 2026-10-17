@@ -498,9 +498,11 @@ def tc_dot16_hopper(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.n
 # ---------------------------------------------------------------------------------------------------------
 
 
-def rope_rows(x: np.ndarray, cs: np.ndarray) -> np.ndarray:
+def rope_rows(x: np.ndarray, cs: np.ndarray, store=None) -> np.ndarray:
     """`RoPE_v1{NHEADS, D}` vectorised: x (..., NHEADS, D) bf16 words, cs (..., D) bf16 words (one cache row per leading index,
-    broadcast over heads) -> (..., NHEADS, D) bf16 words."""
+    broadcast over heads) -> (..., NHEADS, D) bf16 words.  ``store`` rounds the f32 results (default `bf16_rn_torch`; `f2fp_bf16`
+    is `inductor.InductorRoPE_v1`'s)."""
+    store = bf16_rn_torch if store is None else store
     x = np.asarray(x, dtype=np.uint16)
     cs = np.asarray(cs, dtype=np.uint16)
     D = x.shape[-1]
@@ -513,7 +515,7 @@ def rope_rows(x: np.ndarray, cs: np.ndarray) -> np.ndarray:
     x1, x2 = xf[..., :R], xf[..., R:]
     lo = fma_rn(x1, c, mul_rn(x2, s) ^ np.uint32(0x80000000))                    # x*c - y*s  (y*s exact, so one rounding)
     hi = fma_rn(x2, c, mul_rn(x1, s))                                            # y*c + x*s
-    return np.concatenate([bf16_rn_torch(lo), bf16_rn_torch(hi)], axis=-1)
+    return np.concatenate([store(lo), store(hi)], axis=-1)
 
 
 #: the k16 step twin per registered `DOT` primitive id (`b1.DotBf16V2{K, DOT}` / `Gemm_v2{K,N,DOT}` statics; the spec text carries
