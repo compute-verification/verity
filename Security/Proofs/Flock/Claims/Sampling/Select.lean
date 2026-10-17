@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.Sampling.Select.Misses
 import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 import Proofs.Flock.Claims.Sampling.Select.Design
 import Proofs.Flock.Claims.Sampling.Select.Scope
+import Proofs.Flock.Claims.Sampling.Select.Code
 
 /-! The deployed sampled verifier's draw (`SampledProofs.Slots.select`) against the claims' `P_a`: a sequential draw's
 stopping-time bound (`Select.Seq`); the draw's coins read in order and its law's stages (`Select.Take`); the
