@@ -518,7 +518,7 @@
    },
    "Claims.Sampling.Universal": {
     "fails": "Claims.Sampling.Universal_fails",
-    "meets": []
+    "meets": ["Claims.Sampling.universal_meets"]
    },
    "Claims.Sampling.ZK": {
     "fails": "Claims.Sampling.ZK_fails",
@@ -1985,6 +1985,9 @@
    "type_hash": "bd502b58f795b48c8708eb50525eec087e6cdb98c6d89927dab5439b91f88a61"
   },
   "Claims.Sampling.scope_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.universal_meets": {
    "owner": "@proofs"
   },
   "Claims.ScopeMatches_fails": {
