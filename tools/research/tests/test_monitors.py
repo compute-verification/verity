@@ -253,6 +253,7 @@ def test_run_refuses_while_another_runner_holds_the_lock(tmp_path, monkeypatch, 
 def test_run_exits_1_while_its_alert_dir_takes_no_writes_and_node_1s_heartbeat_pages_on_it(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv(M.WEBHOOK_ENV, raising=False)
     monkeypatch.setattr(M, "HELD_IDLE", str(tmp_path / "none.jsonl"))       # held-idle-stale finds `stale`
+    monkeypatch.setattr(M, "HELD_IDLE_PANEL", str(tmp_path / "none.json"))
     (tmp_path / "alerts").write_text("not a directory")
 
     def run(state, alerts):
