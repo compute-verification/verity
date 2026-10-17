@@ -17,6 +17,7 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Decode
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 import Proofs.Flock.Claims.Complete.Zk.Json.Files
+import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
@@ -35,5 +36,6 @@ its draw (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `
 masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`); `Json.Goals` proves
 the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`);
 `Json.Files` the proof files' goals, given `RepShapedZk` (`RunZk.rep`, `repDecodesZk_goal`, `repParamsZk_goal`,
-`padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal` given `RecordFitsZk`); `Complete` assembles them into
+`padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal` given `RecordFitsZk`); `Json.Runs` the session
+running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Complete` assembles them into
 `complete_zk`, from those premises and the goals not yet proved. -/
