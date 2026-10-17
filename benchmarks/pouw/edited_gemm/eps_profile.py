@@ -101,8 +101,9 @@ def num(v: str) -> float:
 def sass_counts(path: Path) -> tuple[dict[str, float], dict[str, float], list[tuple[str, float, float]]]:
     """Executed warp instructions by mnemonic, over the kernel and over its hot loop (instructions executed at least half
     as often as the most executed MMA), and per instruction (mnemonic, executed, stall samples). An mbarrier's retry loop
-    (YIELD; SYNCS.PHASECHK...TRYWAIT; @!P BRA; BRA, ptxas's out-of-line spin) is counted as WAIT.<mnemonic>: how often
-    it runs is how long a warp waited, not work."""
+    (YIELD; SYNCS.PHASECHK...TRYWAIT; @!P BRA; BRA, ptxas's out-of-line spin, or with a suspend-time hint TRYWAIT;
+    @!P NANOSLEEP.SYNCS; @!P SYNCS.PHASECHK; @!P BRA; BRA) is counted as WAIT.<mnemonic>: how often it runs is how long a
+    warp waited, not work."""
     rows = table(path)
     if not rows:
         return {}, {}, []
@@ -113,6 +114,11 @@ def sass_counts(path: Path) -> tuple[dict[str, float], dict[str, float], list[tu
     for i in range(len(per) - 3):
         if per[i][0] == "YIELD" and per[i + 1][0].startswith("SYNCS.PHASECHK") and per[i + 2][0] == "BRA":
             for j in range(i, i + 3 + (per[i + 3][0] == "BRA")):
+                per[j] = ("WAIT." + per[j][0],) + per[j][1:]
+    for i in range(len(per) - 4):
+        if (per[i][0].startswith("SYNCS.PHASECHK") and per[i + 1][0].startswith("NANOSLEEP")
+                and per[i + 2][0].startswith("SYNCS.PHASECHK") and per[i + 3][0] == "BRA"):
+            for j in range(i, i + 4 + (per[i + 4][0] == "BRA")):
                 per[j] = ("WAIT." + per[j][0],) + per[j][1:]
     top = max((n for op, n, _ in per if kind_of(op, "") == "MMA"), default=0.0)
     allc, hot = defaultdict(float), defaultdict(float)
@@ -324,7 +330,8 @@ def main() -> int:
     if a.toml:
         lines = [f"# the edited GEMM's executed SASS a MMA (m16n8k32 s8, the peel's included) by census class, from ncu; "
                  f"cycles are SMSP-cycles a MMA, bounds over census {epoch}",
-                 "# WAIT: the mbarrier retry loop (YIELD, TRYWAIT, BRA), NOROW-priced in bound, left out of work_bound; "
+                 "# WAIT: the mbarrier retry loop (YIELD or NANOSLEEP, TRYWAIT, BRA), NOROW-priced in bound, left out of "
+                 "work_bound; "
                  "measured: the hot median at its clock", f'run_dir = "{a.out.parent.name}"', ""]
         for sh, shape in SHAPES.items():
             for arm in a.toml_arms.split(","):
