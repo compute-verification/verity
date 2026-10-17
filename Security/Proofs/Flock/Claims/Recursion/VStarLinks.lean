@@ -41,14 +41,16 @@ that link once for every kind and every shape, with what is the circuit's own pr
   input columns.
 * **A table of V\*'s statement, by its kind** (`StmtUnit`, `stmtUnit_of_check`): a table named as V\*'s statement
   `sv` that passes `checkPart sv` is that kind's unit, with the kind's outputs (`UnitOuts`): a level's `LevelOuts`, an
-  algebra part's or R's opening part's `ResOuts` at its parameters, RecSparse's `SparseReadOuts`.
+  algebra part's or R's opening part's `ResOuts` at its parameters, RecSparse's `SparseReadOuts`. With `AllOuts`,
+  every copy of every such table holds them (`StmtCopies`, `stmtCopies_of_allOuts`), read by kind: `levelCopies`,
+  `stackedCopies`, `innerCopies`, `openingCopies`, `sparseCopies`.
 * **The staging at `deployRec`, per part** (`showsPart`: VS2's `showsTr`, which reads the transcript only, and
   `StagedPart`, part `s`'s V\* statement as V\* stages it). An accepted run stages every part (`stagedPart_run`), so
   `Staged` holds at `showsPart` (`staged_deployRec_part`). A staged statement parses untyped, without public input
   words, with at least one table, each named as V\*'s statement `s` at `x`'s inner shape and of that kind
   (`stagedTables`, `stagedReads`).
-* **What is left of a link at `deployRec`** (`StmtReadsTo`: `PartReadsTo` at `showsPart` given `stagedReads`, so the
-  held tie and the goal from the outputs; `StagedLinked` for `LinkedPart`): `partReadsTo_deployRec`,
+* **What is left of a link at `deployRec`** (`StmtReadsTo`: `PartReadsTo` at `showsPart` given `stagedReads` and
+  `StmtCopies`, so the held tie and the goal from the outputs; `StagedLinked` for `LinkedPart`): `partReadsTo_deployRec`,
   `linkedPart_deployRec`, and the bundles with `Staged` proved, `vstarParts_deployRec_staged` and
   `vstarAccepts_deployRec_staged`.
 -/
@@ -388,6 +390,72 @@ theorem stmtUnit_of_check {tags : Flock.Tags} {c : Flock.Circuit} (P : FlockSoun
     obtain ⟨S', ns, nv', hpart, -⟩ := check_opening P.recOpening hq hsh
     exact ⟨_, Or.inr (Or.inl ⟨S', ns, nv', Or.inr ⟨m, cl, j, sh, hq, hsh, hpart⟩, rfl⟩), sh, S', ns, nv', hsh,
       hpart, rfl⟩
+
+/-- **Every copy of every table of V\*'s statement `sv`**: each table is named as `sv` and is a table of `sv`
+(`StmtUnit`), each of whose copies (block `o`, VU `g`, copy `u`) holds its outputs at what its inputs read. -/
+def StmtCopies (sv : VStar.Stmt) (p : Parsed) (w : Claims.Flock.Wit) : Prop :=
+  ∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ ∃ K, StmtUnit sv p.sts[t].c K ∧
+    ∀ o g u, o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) → g < p.sts[t].c.g → u < p.sts[t].c.upv →
+      K (copyOf p t ht w o g u)
+
+/-- **The output tie at a staged statement's copies**: tables of `sv` (`StmtUnit`) whose copies all hold their
+outputs (`AllOuts`). -/
+theorem stmtCopies_of_allOuts {sv : VStar.Stmt} {p : Parsed} {w : Claims.Flock.Wit}
+    (htab : ∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ ∃ K, StmtUnit sv p.sts[t].c K)
+    (hO : AllOuts p w) : StmtCopies sv p w := fun t ht => by
+  obtain ⟨hn, K, hK⟩ := htab t ht
+  exact ⟨hn, K, hK, fun o g u ho hg hu => hO t ht K hK.1 o g u ho hg hu⟩
+
+section Kinds
+
+variable {p : Parsed} {w : Claims.Flock.Wit} {t : ℕ} (ht : t < p.sts.size) {o g u : ℕ}
+  (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv)
+include ht ho hg hu
+
+/-- At a level's statement every copy climbs at the level's `LANES` and `H`. -/
+theorem levelCopies {lv LANES H n : ℕ} (h : StmtCopies (.recOpen lv LANES H n) p w) :
+    LevelOuts (copyOf p t ht w o g u) LANES H := by
+  obtain ⟨-, K, ⟨-, hK⟩, hc⟩ := h t ht
+  subst hK
+  exact hc o g u ho hg hu
+
+/-- At one of R's levels every copy climbs at the level's `LANES` and `H`. -/
+theorem stackedCopies {lv LANES H n : ℕ} (h : StmtCopies (.recOpenStacked lv LANES H n) p w) :
+    LevelOuts (copyOf p t ht w o g u) LANES H := by
+  obtain ⟨-, K, ⟨-, hK⟩, hc⟩ := h t ht
+  subst hK
+  exact hc o g u ho hg hu
+
+/-- At the RecSparse statement every copy holds the unit's outputs at the statement's shape. -/
+theorem sparseCopies {sh : Flock.RecSparse.Shape} {hR : ℕ} (h : StmtCopies (.sparse sh hR) p w) :
+    SparseReadOuts sh (copyOf p t ht w o g u) := by
+  obtain ⟨-, K, ⟨-, hK⟩, hc⟩ := h t ht
+  subst hK
+  exact hc o g u ho hg hu
+
+/-- At an algebra part's statement every copy holds the residuals of the verifier's part at the unit's name, shape
+and META. -/
+theorem innerCopies {j : ℕ} {nm : String} {pt : VStar.Part} (h : StmtCopies (.inner j nm pt) p w) :
+    ∃ (m k cl jj : ℕ) (sh : Flock.Shape) (holo : Bool) (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
+      RecResiduals.params p.sts[t].c.unit.name = some (m, k, cl, jj) ∧ RecResiduals.shape? m k cl = some sh ∧
+      RecResiduals.holoOf p.sts[t].c = .ok holo ∧ RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) ∧
+      ResOuts S ns nv (copyOf p t ht w o g u) := by
+  obtain ⟨-, K, ⟨-, m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, hK⟩, hc⟩ := h t ht
+  subst hK
+  exact ⟨m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, hc o g u ho hg hu⟩
+
+/-- At a part of R's opening every copy holds the residuals of the verifier's part at the statement's `m`, claims
+and `j`. -/
+theorem openingCopies {m cl j : ℕ} {S0 : Flock.RecOpen.GfS} {ports : List (String × ℕ)} {nv0 : ℕ}
+    (h : StmtCopies (.opening m cl j S0 ports nv0) p w) :
+    ∃ (sh : Flock.Shape) (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
+      RecOpening.shape? m cl = some sh ∧ RecOpening.part sh j = .ok (S, ns, nv) ∧
+      ResOuts S ns nv (copyOf p t ht w o g u) := by
+  obtain ⟨-, K, ⟨-, sh, S, ns, nv, h1, h2, hK⟩, hc⟩ := h t ht
+  subst hK
+  exact ⟨sh, S, ns, nv, h1, h2, hc o g u ho hg hu⟩
+
+end Kinds
 
 end Flock.Readable
 
@@ -1019,9 +1087,11 @@ section Staged
 variable {W Col T : Type} (H : Msg → Msg) (I : Inner FlockDeploy.Coin W) (ivScope : Msg → Bool)
   (b : RecDeploy.Brings)
 
-/-- **Part `s`'s link at `deployRec` toward `G`, with the staging done**: `PartReadsTo` at `showsPart`, given what
-`stagedReads` proves (the parse, `x`'s inner shape, V\*'s statement `sv` there, and every table's unit and outputs
-by kind). What is left is the held tie (the layout's messages at the copies' columns) and the goal from the outputs. -/
+/-- **Part `s`'s link at `deployRec` toward `G`, with the staging and the output tie done**: `PartReadsTo` at
+`showsPart`, given what `stagedReads` proves (the parse, `x`'s inner shape and V\*'s statement `sv` there, at least
+one table) and, at each witness, every copy of every table of `sv` holding its kind's outputs (`StmtCopies`; by kind
+`levelCopies`, `stackedCopies`, `innerCopies`, `openingCopies`, `sparseCopies`). What is left is the held tie (the
+layout's messages at the copies' columns, `agrees_colsHold`) and the goal from the outputs. -/
 def StmtReadsTo (L : Layout) (shape : Form → Prop)
     (G : Msg → (ℕ → FlockDeploy.Coin) → Flock.Wit → List Msg → Prop) (s : ℕ) : Prop :=
   ∀ (x : Msg) (st : Stmt), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
@@ -1029,18 +1099,19 @@ def StmtReadsTo (L : Layout) (shape : Form → Prop)
     ∀ (p : Flock.Readable.Parsed) (r : RecDeploy.XR) (sv : VStar.Stmt),
       Flock.Readable.parseBytes RecDeploy.readOfO xO = some p → RecDeploy.readX x = some r →
       (∃ ss, _root_.Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) → 0 < p.sts.size →
-      (∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ ∃ K, Flock.Readable.StmtUnit sv p.sts[t].c K) →
-      ∀ (w : Flock.Wit) (ms : List Msg), Agrees L x s w ms → Flock.Readable.AllOuts p w →
+      ∀ (w : Flock.Wit) (ms : List Msg), Agrees L x s w ms → Flock.Readable.StmtCopies sv p w →
         G x c w ms ∨ PartColl H (RecDeploy.deployRec I.V ivScope b) L s x xO w
 
-/-- `StmtReadsTo` is `PartReadsTo` at `showsPart`: the staging is `stagedReads`. -/
+/-- `StmtReadsTo` is `PartReadsTo` at `showsPart`: the staging is `stagedReads`, the output tie
+`stmtCopies_of_allOuts`. -/
 theorem partReadsTo_deployRec {L : Layout} {shape : Form → Prop}
     {G : Msg → (ℕ → FlockDeploy.Coin) → Flock.Wit → List Msg → Prop} {s : ℕ}
     (h : StmtReadsTo H I ivScope b L shape G s) :
     PartReadsTo H (RecDeploy.deployRec I.V ivScope b) RecDeploy.readOfO L shape (RecDeploy.showsPart b) G s := by
   intro x st hst hf xO c hc
   obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := RecDeploy.stagedReads hc
-  exact ⟨p, hx, ht, hpi, fun w ms hA hO => h x st hst hf xO c hc p r sv hx hr hss hsz htab w ms hA hO⟩
+  exact ⟨p, hx, ht, hpi, fun w ms hA hO =>
+    h x st hst hf xO c hc p r sv hx hr hss hsz w ms hA (Flock.Readable.stmtCopies_of_allOuts htab hO)⟩
 
 /-- **A part linked at `deployRec` with the staging done**: `StmtReadsTo` toward its check, and its calls either none
 where its coins are shown (`LogsNil`) or `StmtReadsTo` toward them. -/
