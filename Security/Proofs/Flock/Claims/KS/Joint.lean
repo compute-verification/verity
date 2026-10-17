@@ -30,11 +30,11 @@ The old theorems' extraction step (`Extract.joint_acc_le`) is stated over a game
 * **One wait** (`oneWait_of_tableBound`): `joint_acc_le` at `runGame`, with the conflict term an escape at round `0`
   (two independent runs, `forkCoins_zero`) of weight `k` (`Escapes.addFork`), gives `OneWait` when the word is no
   longer than `N₀`, `Ok` admits `0` and every statement some run accepts has one table.
-* **Unopened positions** (`orZero`): `0` is a position no rerun opened, and agrees with no codeword column at the
-  untrimmed records (`instZeroListCol`, the empty column), while the old fixed-table bound speaks of tables of
-  full-width columns. So at those records the tables `TableBoundθ` needs are those of `orZero Ok`. The records the
-  claims read trim their columns, where `0` is the trimmed zero column, and there the bound over full-width tables is
-  enough (`Trim`).
+* **Unopened positions** (`orZero`, `Extendθ`, `tableBoundθ_of_extend`): `0` is a position no rerun opened, and agrees
+  with no codeword column at the records (`instZeroListCol`, the empty column), while the old fixed-table bound speaks
+  of tables of full-width columns. So the tables `TableBoundθ` needs are those of `orZero Ok`: the bound over tables of
+  `Ok` columns gives it wherever a table with unopened positions that does not extract has an `Ok` extension that does
+  not either.
 
 At the deployed records (`plain_oneWait_of_tableBound`, `zk_oneWait_of_tableBound`) the word is table 0's level-0
 codeword (`wordLen`), no longer than `N₀` (`wordLen_le_N₀`), and `Ok` is a column of the code's width (`wide`): KS at
@@ -466,6 +466,28 @@ theorem colsOk_orZero (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ
     (h : ColsOk H D N Ok) : ColsOk H D N (orZero Ok) :=
   fun x Ω P ω r q u ha hq hu => .inr (h x Ω P ω r q u ha hq hu)
 
+/-- **A table with unopened positions extends**: when it does not extract, some table of `Ok` columns that keeps its
+opened ones does not extract either. -/
+def Extendθ (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop) : Prop :=
+  ∀ (x : Msg) (C : Fin (N x) → Col), (∀ p, orZero Ok x (C p)) → ¬ GoodTable D N x C →
+    ∃ C' : Fin (N x) → Col, (∀ p, Ok x (C' p)) ∧ (∀ p, C p ≠ 0 → C' p = C p) ∧ ¬ GoodTable D N x C'
+
+omit [Nonempty Coin] in
+/-- **The fixed-table bound at tables with unopened positions**, from the bound at tables of `Ok` columns and
+`Extendθ`, when accepted runs open only `Ok` columns and `Ok` admits no `0` on a nonempty word. -/
+theorem tableBoundθ_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop)
+    (hne : ∀ x u, 0 < N x → Ok x u → u ≠ 0) (hok : ColsOk H D N Ok) (hext : Extendθ D N Ok)
+    (htab : TableBoundθ H D N Ok) : TableBoundθ H D N (orZero Ok) := by
+  intro x Ω _ _ P
+  obtain ⟨e, hfit, hb⟩ := htab x Ω P
+  refine ⟨e, hfit, fun ω C hC hg => ?_⟩
+  obtain ⟨C', hC', hkeep, hg'⟩ := hext x C hC hg
+  refine (hb ω C' hC' hg').trans (add_le_add le_rfl (Pr_mono fun r ⟨ha, p, u, hu, hne'⟩ => ⟨ha, p, u, hu, ?_⟩))
+  by_cases h0 : C p = 0
+  · rw [h0]
+    exact hne x u (Nat.lt_of_le_of_lt (Nat.zero_le _) p.isLt) (hok x Ω P ω r p.val u ha p.isLt hu)
+  · rwa [← hkeep p h0]
+
 end OneWait
 
 end Claims.Flock
@@ -584,5 +606,23 @@ theorem zk_KS_of_tableBound (rel : Readable.Parsed → Readable.Relation)
   zk_of_oneWait_sha512 rel
     (fun x => (hone x).imp_left fun ⟨_, hs, h1⟩ => splits_of_one (deployZk rel) rfl rfl hs h1)
     (zk_oneWait_of_tableBound rel hone hok hconf htab)
+
+/-- **The plain fixed-table bound at tables with unopened positions**, from the bound at full-width tables and
+`Extendθ`. -/
+theorem plain_tableBoundθ_of_extend (rel : Readable.Parsed → Readable.Relation)
+    (hok : Claims.Flock.ColsOk sha512 (deployPlain rel) (wordLen false) (wide false))
+    (hext : Claims.Flock.Extendθ (deployPlain rel) (wordLen false) (wide false))
+    (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) (wordLen false) (wide false)) :
+    Claims.Flock.TableBoundθ sha512 (deployPlain rel) (wordLen false) (Claims.Flock.orZero (wide false)) :=
+  Claims.Flock.tableBoundθ_of_extend _ _ _ _ (wide_ne_zero false) hok hext htab
+
+/-- **The masked fixed-table bound at tables with unopened positions**, from the bound at full-width tables and
+`Extendθ`. -/
+theorem zk_tableBoundθ_of_extend (rel : Readable.Parsed → Readable.Relation)
+    (hok : Claims.Flock.ColsOk sha512 (deployZk rel) (wordLen true) (wide true))
+    (hext : Claims.Flock.Extendθ (deployZk rel) (wordLen true) (wide true))
+    (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) (wordLen true) (wide true)) :
+    Claims.Flock.TableBoundθ sha512 (deployZk rel) (wordLen true) (Claims.Flock.orZero (wide true)) :=
+  Claims.Flock.tableBoundθ_of_extend _ _ _ _ (wide_ne_zero true) hok hext htab
 
 end FlockDeploy.KS
