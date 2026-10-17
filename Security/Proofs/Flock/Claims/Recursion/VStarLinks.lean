@@ -59,7 +59,9 @@ that link once for every kind and every shape, with what is the circuit's own pr
 * **What is left of a link at `deployRec`** (`StmtReadsTo`: `PartReadsTo` at `showsPart` given `stagedReads` and
   `StmtCopies`, so the held tie and the goal from the outputs; `StagedLinked` for `LinkedPart`):
   `partReadsTo_deployRec`, `linkedPart_deployRec`, and the bundles with `Staged` proved,
-  `vstarParts_deployRec_staged` and `vstarAccepts_deployRec_staged`.
+  `vstarParts_deployRec_staged` and `vstarAccepts_deployRec_staged`. A level part's calls need only that each logged
+  call is a copy's climb call and that the layout records the copies' gadgets (`LevelLogReads`,
+  `stmtReadsTo_levelLogs`).
 -/
 
 namespace FlockVBridge
@@ -1470,6 +1472,50 @@ theorem partReadsTo_deployRec {L : Layout} {shape : Form → Prop}
   obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := RecDeploy.stagedReads hc
   exact ⟨p, hx, ht, hpi, fun w ms hA hO =>
     h x st hst hf xO c hc p r sv hx hr hss hsz w ms hA (Flock.Readable.stmtCopies_of_allOuts htab hO)⟩
+
+/-- **A level part's calls at `deployRec`, with the circuit's half done**: at a part whose V\* statement is a level's
+(`.recOpen` or `.recOpenStacked`, at `LANES` and `H`), on every list of messages agreeing with what the part holds,
+each call its inner check logs is a climb call of some copy (`rowCalls` at what the copy reads), and the layout records
+every copy's gadgets (`copyForm` at `unitCol`, read by `readLin`); or the fallback. What the copies' gadgets carry is
+the circuit's (`LevelCalls`, `levelCalls_recorded`). -/
+def LevelLogReads (L : Layout) (shape : Form → Prop)
+    (logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)) (s : ℕ) : Prop :=
+  ∀ (x : Msg) (st : Stmt), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
+    ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart b s x xO c →
+    ∀ (p : Flock.Readable.Parsed) (r : RecDeploy.XR) (sv : VStar.Stmt),
+      Flock.Readable.parseBytes RecDeploy.readOfO xO = some p → RecDeploy.readX x = some r →
+      (∃ ss, _root_.Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) → 0 < p.sts.size →
+      ∀ (w : Flock.Wit) (ms : List Msg), Agrees L x s w ms →
+        (∃ lv LANES Ht n, (sv = .recOpen lv LANES Ht n ∨ sv = .recOpenStacked lv LANES Ht n) ∧
+          (∀ e ∈ logs s x c ms, ∃ t, ∃ ht : t < p.sts.size, ∃ o g u, o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) ∧
+            g < p.sts[t].c.g ∧ u < p.sts[t].c.upv ∧
+            ∃ e' ∈ FlockVBridge.rowCalls (_root_.Flock.MerkleScheme.rowBytes
+                  (Flock.Readable.openRow (Flock.Readable.copyOf p t ht w o g u) LANES))
+                (Flock.Readable.openIdx (Flock.Readable.copyOf p t ht w o g u) LANES Ht)
+                (Flock.Readable.openSibs (Flock.Readable.copyOf p t ht w o g u) LANES Ht),
+              e = (e'.1.data.toList, e'.2.data.toList)) ∧
+          ∀ t (ht : t < p.sts.size) o g u, o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) → g < p.sts[t].c.g →
+            u < p.sts[t].c.upv → ∀ f ∈ FlockVBridge.unitCalls LANES Ht,
+              (readLin w (f.1.map (copyForm p t ht o g u (FlockVBridge.unitCol LANES Ht))),
+                readLin w (f.2.map (copyForm p t ht o g u (FlockVBridge.unitCol LANES Ht)))) ∈ L.calls x s w) ∨
+        PartColl H (RecDeploy.deployRec I.V ivScope b) L s x xO w
+
+/-- `LevelLogReads` is `StmtReadsTo` toward the part's calls: every copy of a level carries its climb's calls
+(`levelCopies`, `stackedCopies`), recorded where the layout records its gadgets (`levelCalls_recorded`). -/
+theorem stmtReadsTo_levelLogs {L : Layout} {shape : Form → Prop}
+    {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)} {s : ℕ}
+    (h : LevelLogReads H I ivScope b L shape logs s) :
+    StmtReadsTo H I ivScope b L shape (fun x c w ms => ∀ e ∈ logs s x c ms, e ∈ L.calls x s w) s := by
+  intro x st hst hf xO c hc p r sv hx hr hss hsz w ms hA hC
+  rcases h x st hst hf xO c hc p r sv hx hr hss hsz w ms hA with ⟨lv, LANES, Ht, n, hsv, hlog, hrec⟩ | hcoll
+  · refine Or.inl fun e he => ?_
+    obtain ⟨t, ht, o, g, u, ho, hg, hu, e', he', rfl⟩ := hlog e he
+    have hL : Flock.Readable.LevelOuts (Flock.Readable.copyOf p t ht w o g u) LANES Ht := by
+      rcases hsv with rfl | rfl
+      · exact Flock.Readable.levelCopies ht ho hg hu hC
+      · exact Flock.Readable.stackedCopies ht ho hg hu hC
+    exact levelCalls_recorded hL.2 (hrec t ht o g u ho hg hu) e' he'
+  · exact Or.inr hcoll
 
 /-- **A part linked at `deployRec` with the staging done**: `StmtReadsTo` toward its check, and its calls either none
 where its coins are shown (`LogsNil`) or `StmtReadsTo` toward them. -/
