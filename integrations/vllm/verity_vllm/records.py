@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import re
 import subprocess
 import sys
@@ -72,12 +71,12 @@ def data(*args: str) -> str:
 
 
 def fetch(art: str, to: Path | None = None, paths: list[str] = ()) -> Path:
-    """Materialise `art`'s payload (only `paths` of a tree, when given) and return its path.  Inside a `research run` job (which has
-    no store) a failure names the bundle that serves it instead."""
+    """Materialise `art`'s payload (only `paths` of a tree, when given) and return its path.  A store with no remote (a `research
+    run` job's) that lacks it names the bundle that serves a job instead."""
     try:
         out = data("fetch", art, *(["--to", str(to)] if to else []), *(f"--path={p}" for p in paths))
     except RuntimeError as e:
-        if "RESEARCH_RUN_DIR" not in os.environ:
+        if "no remote configured" not in str(e):
             raise
         raise RuntimeError(f"{e}: a research run job has no store; the launcher writes the row's bundle (`verity-vllm records fetch "
                            f"ROW --to FILE`), sends it (`research run --send FILE`) and the job reads it (`records programs ROW --bundle "
