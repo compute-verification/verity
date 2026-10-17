@@ -820,3 +820,15 @@ def test_a_collection_error_names_its_test_module(tmp_path):
                                                 "failed_tests": [], "log": "/x/suites/filler.log"}]))
     (d / "suites" / "filler.log").write_text("ERROR tests/test_capacity_of.py - KeyError: 'VF3r-16'\n1 error in 2.1s\n")
     assert "benchmarks/pouw/filler/tests/test_capacity_of.py" in implicated(d)
+
+
+def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
+    """17 Oct 15:10Z: three trains' lean-audit failed with the build's error lines scrolled out of the step's log; drive found
+    no Lean file, fell back on every PR touching Lean, and ejected nine."""
+    from research.drive import lean_errors
+
+    log = ("AUDIT /w/lean-audit-scratch-1-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
+           "    Some required targets logged failures:\n    - Proofs.Flock.Claims.NumbersRadius\n    error: build failed\n"
+           "AUDIT /w/lean-audit-scratch-1-x/Security: FAIL\n    Some required targets logged failures:\n"
+           "    - Definitions.Claims.Sampling\n")
+    assert lean_errors(log) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean", "Security/Definitions/Claims/Sampling.lean"}

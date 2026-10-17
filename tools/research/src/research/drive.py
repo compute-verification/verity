@@ -285,12 +285,20 @@ def under(f: str, paths: list[str]) -> bool:
 def lean_errors(log: str) -> set[str]:
     """The repository paths of the Lean files lean-audit's ``log`` reports errors in: each `error: FILE.lean:LINE` after an
     `AUDIT .../PKG: FAIL` line, FILE relative to PKG."""
-    out, pkg = set(), None
+    out, pkg, failures = set(), None, False
     for line in log.splitlines():
         if m := LEAN_AUDIT_RE.match(line):
-            pkg = m[1]
+            pkg, failures = m[1], False
         elif pkg and (m := LEAN_ERROR_RE.match(line)):
             out.add(os.path.normpath(os.path.join(pkg, m[1])))
+        elif pkg and "Some required targets logged failures:" in line:
+            failures = True                                 # lake's own list: the step's log keeps it when the errors scroll by
+        elif pkg and failures and (m := re.match(r"^\s*- ([A-Za-z][\w.]*)\s*$", line)):
+            parts = m[1].split(".")                         # a module of a package rooted at its own name sits beside it
+            root = os.path.dirname(pkg) if parts[0] == os.path.basename(pkg) else pkg
+            out.add(os.path.normpath(os.path.join(root, *parts) + ".lean"))
+        elif failures and not line.strip().startswith("-"):
+            failures = False
     return out
 
 
