@@ -4659,6 +4659,9 @@
   "Pouw.SecurityProofs.Receipt.DuoPairNoKernel": {
    "owner": "@compute-accounting"
   },
+  "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Receipt.DuoWordInjective": {
    "owner": "@compute-accounting"
   },
@@ -4831,6 +4834,10 @@
    },
    "Pouw.SecurityProofs.Receipt.DuoPairNoKernel": {
     "function": "Pouw.Receipt.duoPair",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel": {
+    "function": "Pouw.Receipt.duoTriple",
     "outcome": "none"
    }
   },

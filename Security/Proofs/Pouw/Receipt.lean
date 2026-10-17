@@ -15,4 +15,7 @@ theorem DuoWordInjective : Pouw.Guarantees.Receipt.DuoWordInjective :=
 theorem DuoPairNoKernel : Pouw.Guarantees.Receipt.DuoPairNoKernel :=
   fun _ k₁ a₁ r₁ k₂ a₂ r₂ => Pouw.ReceiptProofs.duoPair_injective k₁ a₁ r₁ k₂ a₂ r₂
 
+theorem DuoTripleNoKernel : Pouw.Guarantees.Receipt.DuoTripleNoKernel :=
+  fun _ k₁ a₁ r₁ k₂ a₂ r₂ k₃ a₃ r₃ => Pouw.ReceiptProofs.duoTriple_injective k₁ a₁ r₁ k₂ a₂ r₂ k₃ a₃ r₃
+
 end Pouw.SecurityProofs.Receipt
