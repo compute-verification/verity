@@ -217,6 +217,17 @@ def section_floors(prims: dict[str, PrimitiveDefinition]) -> dict:
     # A PoUW comparison on a sum of squares (an exact >= on wide encodings).
     check("PouwSqGe_v1", (0, 0), 1, "wide compare (2^300 x^2 >= theta)")
 
+    # A runtime-indexed gather over constant words is a lookup table: it realizes any function of the index.  Here a
+    # 128-entry f32 column holds (i^2 + 7i) mod 251, and the gather returns its entry exactly: a data-dependent
+    # nonlinearity property/v1 does not budget (the census counts gathers and fan-in, the budget does not read them).
+    from verity_vllm.program.registry.ref_prims import gather_f32
+    table = [f32(float((i * i + 7 * i) % 251)) for i in range(128)]   # an arbitrary nonlinear table of the 7-bit index
+    g = gather_f32(128)
+    idx = 100
+    got = g.evaluate(idx, *table)
+    rows.append({"primitive": g.name, "realizes": "arbitrary table lookup by a runtime 7-bit index (free nonlinearity)",
+                 "value": got, "exact": got == table[idx], "class": "gather(census-only)", "budgeted": False})
+
     n_unbudgeted = sum(1 for r in rows if r["exact"] and not r["budgeted"])
     return {"rows": rows, "exact": sum(r["exact"] for r in rows), "total": len(rows),
             "exact_but_unbudgeted": n_unbudgeted}
@@ -286,9 +297,24 @@ class Circuit:
 
     D = 128
 
-    def __init__(self, prims: dict[str, PrimitiveDefinition]):
+    def __init__(self, prims: dict[str, PrimitiveDefinition], carry: str = "idiv"):
         self.prims = prims
+        self.carry = carry
         self.n: collections.Counter = collections.Counter()
+
+    def split(self, t: int) -> tuple[int, int]:
+        """(t mod 256, t div 256) for 0 <= t < 2^24: by I32Rem/I32Div ("idiv"), or ("cmp") by 16 compares against
+        constant thresholds, each choosing by SelectI32 between r and r - T (I32Sub) and between q and q + 2^b (I32Add)."""
+        if self.carry == "idiv":
+            return self.call("I32Rem_v1", t, 256), self.call("I32Div_v1", t, 256)
+        assert 0 <= t < 1 << 24
+        r, q = t, 0
+        for b in range(15, -1, -1):
+            T = 256 << b
+            ge = self.call("U32Ge_v1", r, T)
+            r = self.call("SelectI32_v1", ge, self.call("I32Sub_v1", r, T), r)
+            q = self.call("SelectI32_v1", ge, self.call("I32Add_v1", q, 1 << b), q)
+        return r, q
 
     def call(self, pid: str, *args: int) -> int:
         self.n[pid] += 1
@@ -306,12 +332,12 @@ class Circuit:
         return word
 
     def normalize(self, cols: list[int], width: int) -> tuple[list[int], int]:
-        """Column words (each < 2^31) to `width` u8 digits and the carry out, by I32Div/I32Rem by 256 (floor, all >= 0)."""
+        """Column words (each < 2^24 here) to `width` u8 digits and the carry out, every carry one `split`."""
         out, carry = [], 0
         for k in range(width):
             t = self.call("I32Add_v1", cols[k] if k < len(cols) else 0, carry)
-            out.append(self.call("I32Rem_v1", t, 256))
-            carry = self.call("I32Div_v1", t, 256)
+            digit, carry = self.split(t)
+            out.append(digit)
         return out, carry
 
     def fold(self, digits: list[int], carry: int) -> tuple[list[int], int]:
@@ -400,6 +426,8 @@ def undigits(d: list[int]) -> int:
 
 
 def section_encode_in_circuit(prims: dict[str, PrimitiveDefinition], rng: random.Random, words: int) -> dict:
+    if words <= 0:
+        return {"skipped": True}
     seed = bytes(rng.randrange(256) for _ in range(C.SEED_BYTES))
     k = C.key(seed, C.DEFAULT)
     f = C.DEFAULT.field
@@ -419,14 +447,39 @@ def section_encode_in_circuit(prims: dict[str, PrimitiveDefinition], rng: random
         got, want = undigits(x), C.encode_word(m, i, k)
         results.append(got == want)
         census.update(ckt.n)
+    per_byte = _per_byte(census, words * f.word_bytes)
+    carries = census["I32Div_v1"] // words
+    # Comparison-only carries: the same circuit with every `split` by compares and selects, checked on modular products,
+    # its encode census the measured one with each carry's I32Div + I32Rem replaced by the cmp split's 80 calls.
+    p = f.p
+    ckt = Circuit(prims, carry="cmp")
+    cmp_ok = 0
+    trials = 4
+    for _ in range(trials):
+        x, y = rng.randrange(p), rng.randrange(p)
+        cmp_ok += undigits(ckt.mul(digits(x), digits(y))) == x * y % p
+    swap = collections.Counter(census)
+    swap["I32Div_v1"] = 0
+    swap["I32Rem_v1"] = 0
+    swap["U32Ge_v1"] += 16 * carries * words
+    swap["SelectI32_v1"] += 32 * carries * words
+    swap["I32Sub_v1"] += 16 * carries * words
+    swap["I32Add_v1"] += 16 * carries * words
+    cmp_per_byte = _per_byte(swap, words * f.word_bytes)
+    return {"codec": C.DEFAULT.name, "words": words, "equal_to_codec_encode_word": sum(results),
+            "census_per_word": {pid: n // words for pid, n in sorted(census.items())},
+            "carries_per_byte": carries / f.word_bytes,
+            "classes_per_byte": per_byte,
+            "budgeted_roundings_per_byte": sum(v for c, v in per_byte.items() if c in BUDGETED),
+            "cmp_carries": {"modmul_trials": trials, "exact": cmp_ok, "classes_per_byte_derived": cmp_per_byte,
+                            "budgeted_roundings_per_byte": sum(v for c, v in cmp_per_byte.items() if c in BUDGETED)}}
+
+
+def _per_byte(census: collections.Counter, nbytes: int) -> dict:
     by_class: collections.Counter = collections.Counter()
     for pid, n in census.items():
         by_class["exact-int-matmul" if pid.startswith("IMMA") else classify(pid)] += n
-    per_byte = {cls: n / (words * f.word_bytes) for cls, n in by_class.items()}
-    return {"codec": C.DEFAULT.name, "words": words, "equal_to_codec_encode_word": sum(results),
-            "census_per_word": {pid: n // words for pid, n in sorted(census.items())},
-            "classes_per_byte": per_byte,
-            "budgeted_roundings_per_byte": sum(v for c, v in per_byte.items() if c in BUDGETED)}
+    return {cls: n / nbytes for cls, n in by_class.items() if n}
 
 
 # ---- main ---------------------------------------------------------------------------------------------------------------
