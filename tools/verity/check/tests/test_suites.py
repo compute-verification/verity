@@ -1509,6 +1509,16 @@ def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb
         "no worker_gb: TEST_PROCESS_GB each (r20261016-140947-47fc: pous_check's undeclared workers reached 11 GB)"
 
 
+def test_parallel_suites_share_what_mem_gb_leaves_beside_the_one_process_suites(tmp_path, monkeypatch):
+    """17 Oct, cpu-2 (note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent): circuit_check's 53 workers and flock's 30
+    ran side by side, each sized to all of --mem-gb, and reached 800 GB together."""
+    S = _suites(monkeypatch, tmp_path)
+    assert S.wide_gb(480, 4) == 480 - 4 * S.TEST_PROCESS_GB and S.wide_gb(20, 4) == 0 and S.wide_gb(None, 4) is None
+    flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
+    assert S.wide_workers(flock, 69, S.wide_gb(480, 4)) == (480 - 4 * S.TEST_PROCESS_GB) // 16
+    assert S.worker_gb(flock) == 16 and S.worker_gb(S.Suite("light", "l", (), (), parallel=True)) == S.TEST_PROCESS_GB
+
+
 def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_their_longest(tmp_path, monkeypatch):
     """ee02's pytest step ran its parallel suites one at a time (650 s) before circuit_check's one process (2,730 s) started, and
     its lean-suites ran evaluate (527 s) only after flock (862 s): the suites in one process now run beside the parallel ones."""
@@ -1536,3 +1546,13 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
     assert p.returncode == 0, p.stdout + p.stderr
     assert "1 parallel suites one at a time on 2 processes, beside 1 others on 1" in p.stdout, p.stdout
     assert re.search(r"passed  wide .* on 2 workers", p.stdout) and "passed  one" in p.stdout, p.stdout
+
+
+def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
+    """17 Oct 11:21Z, cpu-2: a quick tier in a 480 GB pool slot ran circuit_check's suite on 94 workers (784 GB), since only
+    `check` passed `--mem-gb`."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "480")
+    assert S.slot_mem_gb() == 480.0
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "")
+    assert S.slot_mem_gb() is None

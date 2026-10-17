@@ -98,16 +98,26 @@ def quant_rows(m: torch.Tensor, top: int) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.round(m / s[:, None]).clamp(-top, top), s
 
 
+def dither_shift(dither_bits: int) -> int:
+    """m = 2^(b - 1) - 1 for a b-bit dither: the served floor(v) - m + R, R uniform on {0, ..., 2^b - 1} (mean m + 1/2),
+    has E = floor(v) + 1/2 given v at every b, the 1-bit dither's (m = 0), and only R's variance (4^b - 1) / 12 grows.
+    It reaches m below floor(v) and m + 1 above it."""
+    return 2 ** (dither_bits - 1) - 1
+
+
 def act_quant(x: torch.Tensor, mode: str, bits: torch.Tensor | None, top: int,
-              coined: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
-    """Integer rows and per-row scales: rounded to [-top, top], or the dither floor(v) + b with v = x / s on
-    [-top + 1, top - 1] (|X| <= top). `coined` (a mask over k): the dither only there, round(v) on the same s elsewhere."""
+              coined: torch.Tensor | None = None, dither_bits: int = 1) -> tuple[torch.Tensor, torch.Tensor]:
+    """Integer rows and per-row scales: rounded to [-top, top], or the dither floor(v) - m + R with v = x / s on
+    [-t, t], t = top - 2^(b - 1), R the coins `bits` on {0, ..., 2^b - 1} and m = `dither_shift(b)` (b = 1: floor(v)
+    plus a bit on [-top + 1, top - 1]), so -top < X <= top. `coined` (a mask over k): the dither only there, round(v) on
+    the same s elsewhere."""
     if mode == "round":
         return quant_rows(x, top)
-    t = top - 1
+    m = dither_shift(dither_bits)
+    t = top - 1 - m
     s = x.abs().amax(dim=1).clamp(min=1e-30) / t
     v = (x / s[:, None]).clamp(-t, t)
-    q = torch.floor(v) + bits
+    q = torch.floor(v) - m + bits
     return (q if coined is None else torch.where(coined, q, torch.round(v))), s
 
 
@@ -203,31 +213,46 @@ def _check_int8_linear(p):
     if p["density"] < 1 and p["weight"] == "dither":
         raise ValueError("int8.density thins the activations' dither only: a dithered weight takes density = 1 "
                          "(the grid step thins both operands)")
+    _check_dither_bits(p["dither_bits"], "int8.dither_bits",
+                       [p[f"{x}_top"] for x in ("act", "weight") if p[x] == "dither"], 1)
+
+
+def _check_dither_bits(b: int, name: str, tops: list, floor_room: int) -> None:
+    if not 1 <= b <= 6:
+        raise ValueError(f"{name} is in 1..6")
+    if b > 1 and not tops:
+        raise ValueError(f"{name} widens a dither: dither an operand")
+    if any(t - floor_room - dither_shift(b) < 1 for t in tops):
+        raise ValueError(f"{name} = {b} leaves no room under a dithered operand's top (top >= {2 ** (b - 1) + floor_room})")
 
 
 @linear_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["act"], p["weight"]), calib=lambda p: p["gptq"],
              check=_check_int8_linear)
 def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str = "round", weight_top: int = 127,
-                group: int = 0, gptq: bool = False, density: float = 1.0):
+                group: int = 0, gptq: bool = False, density: float = 1.0, dither_bits: int = 1):
     """The int8 grid: activations one scale per token (`round` to [-act_top, act_top], or `dither`: floor(x / s) + b,
     b a fresh coin bit, s = absmax / (act_top - 1)), weights one scale per output row (or per (row, `group` inputs),
     each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded, by GPTQ (blocks of 128, on
     the calibration windows' served inputs) or dithered like the activations (fresh bits every call, drawn after the
     activations'). The integer product is exact (s8 x s8 -> s32), scaled after. `density` < 1: the activations'
     dither only on a coin-chosen density * 64 of every k64 word's positions (`coin_positions`), the rest rounded on the
-    same scale; a weight-side coin (the `peel` step's U) sits on every position."""
+    same scale; a weight-side coin (the `peel` step's U) sits on every position. `dither_bits` = b widens every
+    dithered operand's coin to R uniform on {0, ..., 2^b - 1}, served as floor(x / s) - (2^(b - 1) - 1) + R with
+    s = absmax / (top - 2^(b - 1)) (`act_quant`): the same mean given x as the bit's, within (-top, top]."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
         if gptq:
             mm.run.hessian(hkey, mm.x)
         return None
 
+    m = dither_shift(dither_bits)
+
     def weights():
         w = mm.weight()
         if weight == "dither":
-            t = weight_top - 1
+            t = weight_top - 1 - m
             s = w.abs().amax(dim=1).clamp(min=1e-30) / t
-            return torch.floor((w / s[:, None]).clamp(-t, t)).to(torch.int8), s
+            return (torch.floor((w / s[:, None]).clamp(-t, t)) - m).to(torch.int8), s
         if gptq:
             q, s = gptq_round(w, mm.run.calib["H"][hkey], weight_top)
             return q.to(torch.int8), s
@@ -240,12 +265,13 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
         return q.to(torch.int8), s
 
     wq, sw = mm.cached("int8", weights)
-    bits = mm.coins(mm.x.shape) if act == "dither" else None
+    levels = 2 ** dither_bits
+    bits = mm.coins(mm.x.shape, levels) if act == "dither" else None
     k = mm.x.shape[1]
     coined = mm.cached("pos", lambda: coin_positions(mm, k, density)) if density < 1 else None
-    xq, sa = act_quant(mm.x, act, bits, act_top, coined)
+    xq, sa = act_quant(mm.x, act, bits, act_top, coined, dither_bits)
     if weight == "dither":
-        wq = (wq.float() + mm.coins(wq.shape)).to(torch.int8)
+        wq = (wq.float() + mm.coins(wq.shape, levels)).to(torch.int8)
     if group:
         k = xq.shape[1]
         y = torch.zeros(xq.shape[0], wq.shape[0], device=xq.device)
@@ -273,12 +299,14 @@ def quant(x: torch.Tensor, top: int, dims) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.round(x / s).clamp(-top, top), s
 
 
-def floor_quant(x: torch.Tensor, dims, top: int = 127) -> tuple[torch.Tensor, torch.Tensor]:
-    """floor(x / s) in [-top - 1, top - 1] and s, the smallest scale (to 2^-20) that keeps x / s in [-top - 1, top): with
-    a fresh bit added, the served X stays within [-top - 1, top] (int8 at top = 127)."""
-    s = torch.maximum(x.amax(dim=dims, keepdim=True) / top, (-x).amax(dim=dims, keepdim=True) / (top + 1))
+def floor_quant(x: torch.Tensor, dims, top: int = 127, dither_bits: int = 1) -> tuple[torch.Tensor, torch.Tensor]:
+    """floor(x / s) - m in [-top - 1, top - 2m - 1] and s, the smallest scale (to 2^-20) that keeps x / s in
+    [-top - 1 + m, top - m), m = `dither_shift(dither_bits)`: with fresh coins R on {0, ..., 2^b - 1} added, the served
+    X stays within [-top - 1, top] (int8 at top = 127). b = 1: floor(x / s) in [-top - 1, top - 1], plus a bit."""
+    m = dither_shift(dither_bits)
+    s = torch.maximum(x.amax(dim=dims, keepdim=True) / (top - m), (-x).amax(dim=dims, keepdim=True) / (top + 1 - m))
     s = s.clamp(min=1e-30) * (1 + 2 ** -20)
-    return torch.floor(x / s), s
+    return torch.floor(x / s) - m, s
 
 
 def causal_peel(u: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
@@ -330,7 +358,7 @@ def center_keys(mm, nxt):
 
 
 def _check_int8_attention(p):
-    for x in ("q", "k", "v"):
+    for x in ("q", "k", "p", "v"):
         if p[x] not in ("round", "dither"):
             raise ValueError(f"int8.{x} is round or dither")
     if p["v_scale"] not in ("channel", "head"):
@@ -339,38 +367,45 @@ def _check_int8_attention(p):
         raise ValueError(f"int8.p_block is a multiple of {PEEL_L} keys, at most 2^16")
     if not all(1 <= p[t] <= 127 for t in ("q_top", "k_top", "p_top", "v_top")):
         raise ValueError("int8: tops within 127")
+    _check_dither_bits(p["qk_bits"], "int8.qk_bits", [p[f"{x}_top"] for x in ("q", "k") if p[x] == "dither"], 0)
 
 
-@attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["v"]),
+@attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),
                 check=_check_int8_attention)
 def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "round", k_top: int = 127,
-                   p_top: int = 127, p_block: int = 0, p_sink: bool = False, v: str = "round", v_top: int = 127,
-                   v_scale: str = "channel"):
+                   p: str = "round", p_top: int = 127, p_block: int = 0, p_sink: bool = False, v: str = "round",
+                   v_top: int = 127, v_scale: str = "channel", qk_bits: int = 1):
     """Both attention matmuls on one int8 limb. Q, K: one scale per (head, token), Q rounded to [-q_top, q_top] or
     dithered, K rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-top - 1, top), b
     a fresh bit (for K, one for every query head), so the served operand is within [-top - 1, top]). P: after the
     softmax, one scale per query row, or per (row, block of `p_block` keys), `p_sink` putting key 0 in a block of its
-    own, rounded to [0, p_top], each block's product read and scaled on its own. V: one scale per (KV head, channel)
-    (`v_scale = "head"`: per KV head), rounded or dithered. Products exact in FP32 chunks."""
+    own, rounded to [0, p_top], or (`dither`) rounded to [0, p_top - 1] plus a fresh bit where key <= query (so a
+    dithered P serves no future key), the bits' mean, half the causal sum of V, taken off the product in the epilogue:
+    P is non-negative and mostly under one step, so a bit's +1/2 would not average out over the keys. Each block's
+    product read and scaled on its own. V: one scale per (KV head, channel) (`v_scale = "head"`: per KV head), rounded
+    or dithered. Products exact in FP32 chunks. `qk_bits` = b widens Q's and K's coins to R uniform on
+    {0, ..., 2^b - 1}, served as floor(x / s) - (2^(b - 1) - 1) + R (`floor_quant`), still within [-top - 1, top]; V
+    and P keep their bit."""
     rep = mm.extra["rep"]
     if mm.kind == "qk":
+        levels = 2 ** qk_bits
         if q == "dither":
-            qi, sq = floor_quant(mm.x, -1, q_top)
-            qi = qi + mm.coins(qi.shape)
+            qi, sq = floor_quant(mm.x, -1, q_top, qk_bits)
+            qi = qi + mm.coins(qi.shape, levels)
         else:
             qi, sq = quant(mm.x, q_top, -1)
 
         def keys():
             kg = mm.weight()
-            kq, sk = floor_quant(kg, -1, k_top) if k == "dither" else quant(kg, k_top, -1)
+            kq, sk = floor_quant(kg, -1, k_top, qk_bits) if k == "dither" else quant(kg, k_top, -1)
             kq = kq.expand(rep, *kq.shape)
             if k == "dither":
-                kq = kq + mm.coins(kq.shape)
+                kq = kq + mm.coins(kq.shape, levels)
             return kq, sk
         ki, sk = mm.cached("k", keys)
         return nxt(mm.integer(qi, ki)).float() * (sq * sk.T[None])
-    p = mm.x
-    s = p.shape[-1]
+    pr = mm.x
+    s = pr.shape[-1]
 
     def values():
         vg = mm.weight()
@@ -384,9 +419,17 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
     edges = p_edges(s, p_block, p_sink)
     num = None
     for a, b in zip(edges, edges[1:]):
-        sb = p[..., a:b].amax(-1, keepdim=True).clamp(min=1e-30) / p_top
-        pi = torch.round(p[..., a:b] / sb).clamp(0, p_top)
-        part = sb.double() * nxt(mm.integer(pi, vi[..., a:b, :], keys=(a, b), v_full=vi))
+        blk = pr[..., a:b]
+        top = p_top - 1 if p == "dither" else p_top
+        sb = blk.amax(-1, keepdim=True).clamp(min=1e-30) / top
+        pi = torch.round(blk / sb).clamp(0, top)
+        if p == "dither":
+            causal = mm.extra["causal"][:, a:b]
+            pi = pi + mm.coins(pi.shape) * causal
+        prod = nxt(mm.integer(pi, vi[..., a:b, :], keys=(a, b), v_full=vi))
+        if p == "dither":
+            prod = prod - 0.5 * (causal.double() @ vi[..., a:b, :].double())
+        part = sb.double() * prod
         num = part if num is None else num + part
     return (num * sv.double()).float()
 

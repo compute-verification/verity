@@ -33,6 +33,7 @@ from verity.ml.commitments.identity import identity_digest
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, row_leaf, sha512_row_digest
+from verity.ml.circuits.partition_object import TemplatePartition
 from verity.ml.circuits.program import Program
 
 from . import partition as P
@@ -214,8 +215,11 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int])
     """Every unit's reads of the registered values, from the verifier's own program: `values` is `{parameter: words}`, and
     the result `{template parameter: {"value", "rows"}}`, `rows` one entry per unit of the population (the row it reads,
     None for a unit of another template). A unit's parameter that holds a registered leaf must be exactly one row, and a
-    template's parameter reads the same value in every unit or in none: a read at a computed position is no public read."""
+    template's parameter reads the same value in every unit or in none: a read at a computed position is no public read.
+    The units are a template query's instances; a `Q_word` or `Q_call` unit reads no registered value (`ValueError`)."""
     tp = P.evaluate(program, query)
+    if not isinstance(tp, TemplatePartition):
+        raise ValueError("a registered value is read by a template query's instances, not by a Q_word or Q_call unit")
     owner: dict[int, tuple[str, int]] = {}
     for v, w in values.items():
         shape(program, v, w)
