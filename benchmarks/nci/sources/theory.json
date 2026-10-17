@@ -1,0 +1,679 @@
+[
+ {
+  "id": "alwen-2015-memory-hard",
+  "title": "High Parallel Complexity Graphs and Memory-Hard Functions",
+  "authors": "Joël Alwen, Vladimir Serbinenko",
+  "year": 2015,
+  "venue": "STOC 2015 (IACR ePrint 2014/238)",
+  "url": "https://eprint.iacr.org/2014/238",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "alwen-2015-memory-hard/1",
+    "claim": "Cumulative pebbling complexity (memory summed over time) captures parallel cost where older pebbling measures fail.",
+    "quote": "cumulative complexity (CC) and show how it overcomes a crucial shortcoming in the parallel setting exhibited by more traditional complexity measures used in past reductions.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Depth-robust-graph arguments from memory-hard functions are a route to NCI-style bounds for computations whose dependency DAG is depth-robust, as sequential SGD's may be.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "ballard-2011-minimizing-communication",
+  "title": "Minimizing Communication in Linear Algebra",
+  "authors": "Grey Ballard, James Demmel, Olga Holtz, Oded Schwartz",
+  "year": 2011,
+  "venue": "SIAM J. Matrix Anal. Appl. 32(3) (arXiv 0905.2485)",
+  "url": "https://arxiv.org/abs/0905.2485",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ballard-2011-minimizing-communication/1",
+    "claim": "For a large class of direct linear algebra, communication is at least the arithmetic count divided by the square root of the fast (or local) memory size.",
+    "quote": "In both cases the lower bound may be expressed as $\\Omega$(#arithmetic operations / $\\sqrt{M}$), where $M$ is the size of the fast memory (or local memory in the parallel case).",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.5,
+      "unit": "exponent of M",
+      "condition": "communication >= (#arithmetic operations) / M^0.5; Loomis-Whitney segment argument"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "The segment argument (bound work per segment of M loads, divide total work by it) is exactly how an NCI slowdown bound is built: bound useful training progress per block given K novel bits, then count blocks.",
+    "from_review": "theory"
+   },
+   {
+    "id": "ballard-2011-minimizing-communication/2",
+    "claim": "Within a segment, the number of multiply-adds is bounded by the geometric mean of the three operand projections (Loomis-Whitney).",
+    "quote": "Let $|\\cdot|$ denote the cardinality of a set. Then $|V|\\leq\\sqrt{|A_{x}|\\cdot|A_{y}|\\cdot|A_{z}|}$.",
+    "location": "Lemma 1",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "With committed weights free, one projection is unbounded and NCI does not cap outputs, so this inequality degenerates to a bound linear in the novel input; NCI's bounds must come from dependency structure instead.",
+    "from_review": "theory"
+   },
+   {
+    "id": "ballard-2011-minimizing-communication/3",
+    "claim": "Operands created and discarded inside a segment cannot be bounded by the segment argument without extra structure.",
+    "quote": "The S2/D2 operands, those created during the segment and then discarded without causing any slow memory traffic, cannot be bounded without further information.",
+    "location": "segment argument, after Lemma 1",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Matches NCI's setting in which intermediates inside a Gamma-gate block are free; NCI bounds cannot rely on charging for in-block intermediates.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "ballard-2012-graph-expansion",
+  "title": "Graph Expansion and Communication Costs of Fast Matrix Multiplication",
+  "authors": "Grey Ballard, James Demmel, Olga Holtz, Oded Schwartz",
+  "year": 2012,
+  "venue": "Journal of the ACM 59(6) (SPAA 2011 best paper; arXiv 1109.1693)",
+  "url": "https://arxiv.org/abs/1109.1693",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ballard-2012-graph-expansion/1",
+    "claim": "Communication cost is governed by the edge expansion of the computation graph.",
+    "quote": "The communication cost of algorithms (also known as I/O-complexity) is shown to be closely related to the expansion properties of the corresponding computation graphs.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Expansion of the training circuit's DAG (how many edges leave any small set of gates) is a candidate route to NCI bounds that survive restructuring of matrix products.",
+    "from_review": "theory"
+   },
+   {
+    "id": "ballard-2012-graph-expansion/2",
+    "claim": "Strassen-like algorithms need Omega((n/sqrt(M))^omega0 * M) communication, p times less with p processors.",
+    "quote": "where $\\omega_{0}$ is the exponent in the arithmetic count (e.g., $\\omega_{0}=\\lg 7$ for Strassen, and $\\omega_{0}=3$ for conventional matrix multiplication). With $p$ parallel processors, each with fast memory of size $M$, the lower bound is $p$ times smaller.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.807,
+      "unit": "omega0 (arithmetic exponent)",
+      "condition": "derived: lg 7 = 2.807 for Strassen; omega0 = 3 for conventional"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Shows how to extend a per-piece bound to fast bilinear algorithms; an NCI bound on matrix-product-heavy training should hold for any bilinear restructuring an adversary might choose.",
+    "from_review": "theory"
+   },
+   {
+    "id": "ballard-2012-graph-expansion/3",
+    "claim": "The expansion approach forbids recomputation, a serious gap for NCI where a block has Gamma gates to recompute freely.",
+    "quote": "We were not able to allow recomputation using our edge expansion approach.",
+    "location": "Section 1.5 (The Expansion Approach)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Expansion bounds cannot be imported into NCI as is; NCI must allow recomputation, which pushes toward the Grigoriev-flow (Bilardi-De Stefani) or communication-complexity (Saha-Ye) techniques.",
+    "from_review": "theory"
+   },
+   {
+    "id": "ballard-2012-graph-expansion/4",
+    "claim": "Loomis-Whitney counting fails once an algorithm uses distributivity, as Strassen's does.",
+    "quote": "approach, however, is not suitable when distributivity is used, as is the case in Strassen",
+    "location": "Section 1.3 (Previous Work)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Geometric counting of products is not robust to algebraic restructuring; NCI proofs should not depend on the circuit computing matrix products the classical way.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "beame-2013-communication-steps",
+  "title": "Communication Steps for Parallel Query Processing",
+  "authors": "Paul Beame, Paraschos Koutris, Dan Suciu",
+  "year": 2013,
+  "venue": "PODS 2013 (JACM 2017; arXiv 1306.5972)",
+  "url": "https://arxiv.org/abs/1306.5972",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "beame-2013-communication-steps/1",
+    "claim": "In the MPC model each server receives O(n/p^(1-epsilon)) bits per round, epsilon controlling replication; one-round evaluation of a query q needs epsilon >= 1 - 1/tau*.",
+    "quote": "we show that any algorithm requires ε ≥ 1--1/τ*, where τ* is the fractional vertex cover of the hypergraph of q",
+    "location": "abstract (PODS version, ACM page)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Replication-based lower bounds charge for copying input data; NCI does not charge for committed data, so the analogous NCI bound must charge only computed data that crosses blocks.",
+    "from_review": "theory"
+   },
+   {
+    "id": "beame-2013-communication-steps/2",
+    "claim": "With near-linear per-processor load, Omega(log p) rounds are needed for some queries.",
+    "quote": "per-processor load that is O (m/p 1-ε ) requires Ω(log p) rounds of communication.",
+    "location": "abstract (JACM version)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Round-versus-load tradeoffs correspond to NCI's depth-versus-K tradeoff: a smaller K forces a longer chain of dependent blocks.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "bennett-1988-logical-depth",
+  "title": "Logical Depth and Physical Complexity",
+  "authors": "Charles H. Bennett",
+  "year": 1988,
+  "venue": "The Universal Turing Machine: A Half-Century Survey (ed. R. Herken), Oxford University Press",
+  "url": "https://doi.org/10.1093/oso/9780198537748.003.0008",
+  "topics": [
+   "theory",
+   "integration-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bennett-1988-logical-depth/1",
+    "claim": "Logical depth is the time a universal machine needs to produce an object from an algorithmically random input.",
+    "quote": "defining an object’s “logical depth” as the time required by a standard universal Turing machine to gen erate it from an input that is algorithmically random",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Trained weights are deep objects in Bennett's sense; NCI targets the accumulation of depth (training) while letting shallow, prompt-driven computation (inference) through.",
+    "from_review": "theory"
+   },
+   {
+    "id": "bennett-1988-logical-depth/2",
+    "claim": "Depth obeys a slow-growth law: deep objects cannot be produced quickly from shallow ones.",
+    "quote": "slow-growth law: deep objects cannot be quickly produced from shallow ones by any deterministic process, nor with much probability by a probabilistic process, but can be pro duced slowly.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Suggests a per-block invariant (depth gained relative to theta is at most the block's work) that NCI could aim for; depth is uncomputable, so NCI's cap on novel input is the enforceable proxy.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "bilardi-2017-strassen-recomputation",
+  "title": "The I/O complexity of Strassen's matrix multiplication with recomputation",
+  "authors": "Gianfranco Bilardi, Lorenzo De Stefani",
+  "year": 2017,
+  "venue": "WADS 2017 (arXiv 1605.02224)",
+  "url": "https://arxiv.org/abs/1605.02224",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bilardi-2017-strassen-recomputation/1",
+    "claim": "The Strassen I/O bound holds even when recomputation is allowed, proved via the Grigoriev flow of the matrix multiplication function rather than graph expansion.",
+    "quote": "The result generalizes a similar bound previously obtained under the constraint of no-recomputation, that is, that intermediate results cannot be computed more than once.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The Grigoriev-flow technique is a property of the function, not of one circuit, so it is the right shape for NCI, where blocks may recompute anything within Gamma gates.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "braverman-2016-distributed-dpi",
+  "title": "Communication Lower Bounds for Statistical Estimation Problems via a Distributed Data Processing Inequality",
+  "authors": "Mark Braverman, Ankit Garg, Tengyu Ma, Huy L. Nguyen, David P. Woodruff",
+  "year": 2016,
+  "venue": "STOC 2016 (arXiv 1506.07216)",
+  "url": "https://arxiv.org/abs/1506.07216",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "braverman-2016-distributed-dpi/1",
+    "claim": "Distributed sparse linear regression over m machines with n observations each needs total communication Omega(min{n,d} m) to reach minimax error, proved with a distributed strong data processing inequality.",
+    "quote": "to achieve the statistical minimax error, the total communication is at least $\\Omega(\\min\\{n,d\\}m)$, where $n$ is the number of observations that each machine",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Strong data processing inequalities bound information rather than words, the quantity NCI caps; they could give lower bounds on the novel bits per block for learning tasks independent of the compression scheme.",
+    "from_review": "theory",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   }
+  ]
+ },
+ {
+  "id": "christ-2013-hbl-comm-bounds",
+  "title": "Communication lower bounds and optimal algorithms for programs that reference arrays -- Part 1",
+  "authors": "Michael Christ, James Demmel, Nicholas Knight, Thomas Scanlon, Katherine Yelick",
+  "year": 2013,
+  "venue": "arXiv preprint (UC Berkeley EECS-2013-61)",
+  "url": "https://arxiv.org/abs/1308.0068",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "christ-2013-hbl-comm-bounds/1",
+    "claim": "Discrete Holder-Brascamp-Lieb inequalities generalize Loomis-Whitney and give communication lower bounds for any loop nest whose array indices are affine in the loop variables.",
+    "quote": "Using a recent generalization of Loomis’ and Whitney’s result, we generalize this lower bound approach to a much larger class of algorithms, that may have arbitrary numbers of loops and arrays with arbitrary dimensions, as long as the index expressions are affine combinations of loop variables.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "HBL inequalities with weights let one projection be free and still bound the others, a possible way to bound attention and convolution work per NCI block when only the activation projections are capped.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "dassarma-2011-distributed-verification",
+  "title": "Distributed Verification and Hardness of Distributed Approximation",
+  "authors": "Atish Das Sarma, Stephan Holzer, Liah Kor, Amos Korman, Danupon Nanongkai, Gopal Pandurangan, et al.",
+  "year": 2011,
+  "venue": "STOC 2011 (SIAM J. Comput. 2012; arXiv 1011.3049)",
+  "url": "https://arxiv.org/abs/1011.3049",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dassarma-2011-distributed-verification/1",
+    "claim": "In CONGEST with B-bit messages, many verification problems need Omega(sqrt(n/(B log n)) + D) rounds, proved by reduction from two-party communication complexity across a bottleneck.",
+    "quote": "We show a lower bound of $\\Omega(\\sqrt{n/(B\\log n)}+D)$ for many verification problems in the $B$ model",
+    "location": "Section 1 (main results)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The reduction from set disjointness across a cut is a technique for lower-bounding the novel bits that must cross any NCI block boundary for a given update function.",
+    "from_review": "theory"
+   },
+   {
+    "id": "dassarma-2011-distributed-verification/2",
+    "claim": "In distributed settings verification can be harder than computation.",
+    "quote": "verification is harder than computation in the distributed world!",
+    "location": "Section 1 (introduction)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Cautions that per-block checks need not be cheap in a distributed setting; NCI places verification outside the bandwidth-limited model, with committed state and a proof service.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "garg-2018-extractor-time-space",
+  "title": "Extractor-Based Time-Space Lower Bounds for Learning",
+  "authors": "Sumegha Garg, Ran Raz, Avishay Tal",
+  "year": 2018,
+  "venue": "STOC 2018 (arXiv 1708.02639)",
+  "url": "https://arxiv.org/abs/1708.02639",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "garg-2018-extractor-time-space/1",
+    "claim": "For any learning problem whose sample-concept matrix is a (k, l)-extractor with error 2^-r, a learner needs either Omega(k l) memory or 2^Omega(r) samples.",
+    "quote": "We show that any learning algorithm for the learning problem corresponding to $M$ requires either a memory of size at least $\\Omega\\left(k\\cdot\\ell\\right)$, or at least $2^{\\Omega(r)}$ samples.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Generalizes Raz's bound to a broad class of learning problems, so a K-bit cross-block state is a hard bottleneck for any task with extractor structure, not only parities.",
+    "from_review": "theory",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   },
+   {
+    "id": "garg-2018-extractor-time-space/2",
+    "claim": "The bound is tight at memory about (log|X|)(log|A|) for many problems.",
+    "quote": "achieving a tight $\\Omega\\left((\\log|X|)\\cdot(\\log|A|)\\right)$ lower bound on the size of the memory",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Suggests the memory threshold scales like (bits per sample) x (bits per concept), which for LLM training would be (b_tok x context) x (bits of model), far above K; whether real LLM training has extractor structure is open.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "hong-1981-red-blue-pebble",
+  "title": "I/O complexity: The red-blue pebble game",
+  "authors": "Jia-Wei Hong, H. T. Kung",
+  "year": 1981,
+  "venue": "STOC 1981",
+  "url": "https://dl.acm.org/doi/10.1145/800076.802486",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hong-1981-red-blue-pebble/1",
+    "claim": "The red-blue pebble game models a computation's traffic between a small fast memory and a large slow memory, and its S-partition argument cuts the computation into pieces each with a bounded set of inputs, the same shape as an NCI block decomposition.",
+    "quote": "In this paper, the red-blue pebble game is proposed to model the input-output complexity of algorithms.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "NCI's block decomposition is an S-partition with the memory bound S replaced by a cap of K novel bits read and a work bound of Gamma gates, so the S-partition counting argument is the natural template for NCI lower bounds.",
+    "from_review": "theory"
+   },
+   {
+    "id": "hong-1981-red-blue-pebble/2",
+    "claim": "With fast memory S, the FFT needs Omega(n log n / log S) I/O and classical matrix multiplication needs Omega(n^3 / sqrt(S)), and both bounds are attainable.",
+    "quote": "with a device of O(S) memory at least Omega(n log n/log S) (or Omega(n-cubed/square root of S), respectively) time is needed for the I/O.",
+    "location": "abstract (DTIC record)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.5,
+      "unit": "exponent of S",
+      "condition": "I/O lower bound for classical n x n matrix multiplication scales as n^3 / S^0.5; S counts all words in fast memory, with no free (committed) operands"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Gives the classical per-piece work bound (work per piece at most about S^1.5 for matrix multiplication); NCI differs because committed weights are free, which removes one of the three operands from the count.",
+    "from_review": "theory"
+   },
+   {
+    "id": "hong-1981-red-blue-pebble/3",
+    "claim": "Hong and Kung's bounds are tight, achieved by blocked decompositions.",
+    "quote": "All of the lower bounds presented are the best possible in the sense that they are achievable by certain decomposition schemes.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Shows that partition-based communication lower bounds can be tight; NCI's slowdown bounds would also want matching attack constructions (decompositions) to show tightness.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "irony-2004-comm-lower-bounds-mm",
+  "title": "Communication lower bounds for distributed-memory matrix multiplication",
+  "authors": "Dror Irony, Sivan Toledo, Alexander Tiskin",
+  "year": 2004,
+  "venue": "Journal of Parallel and Distributed Computing 64(9)",
+  "url": "https://doi.org/10.1016/j.jpdc.2004.03.021",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "irony-2004-comm-lower-bounds-mm/1",
+    "claim": "2D algorithms, with Theta(n^2/P) memory per processor, communicate O(n^2/P^(1/2)) words per processor, and this is optimal for that memory.",
+    "quote": "We show that the amount of communication that they perform per processor, O(n 2/P 1/2), is asymptotically optimal for this amount of memory.",
+    "location": "Section 1 (preprint)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.5,
+      "unit": "exponent of P",
+      "condition": "per-processor communication n^2 / P^0.5 with O(n^2/P) memory; conventional Theta(n^3) algorithms only"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Parallel analogue of a per-block input cap: it bounds the busiest processor, as NCI bounds every block, but counts words rather than novel bits.",
+    "from_review": "theory"
+   },
+   {
+    "id": "irony-2004-comm-lower-bounds-mm/2",
+    "claim": "3D algorithms replicate the inputs Theta(P^(1/3)) times and cut communication to Theta(n^2/P^(2/3)) per processor, which is optimal for that memory.",
+    "quote": "But this allows them to reduce the amount of communication to only Θ(n 2/P 2/3) per processor. We show that this amount of communication is optimal for the amount of memory that is used.",
+    "location": "Section 1 (preprint)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.6667,
+      "unit": "exponent of P",
+      "condition": "3D (replicated) regime, O(n^2/P^(2/3)) memory per processor"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Replicating inputs buys less communication; in NCI committed theta is replicated for free, which is the regime where these bounds are weakest.",
+    "from_review": "theory"
+   },
+   {
+    "id": "irony-2004-comm-lower-bounds-mm/3",
+    "claim": "The bounds cover only classical cubic algorithms, not Strassen-like ones.",
+    "quote": "Our analysis applies only to conventional matrix-multiplication algorithms. It does not apply to Strassen’s algorithm [23] or other o(n 3) algorithms.",
+    "location": "Section 1 (preprint)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Any NCI bound proved by Loomis-Whitney-style counting would not cover an adversary that restructures matrix products bilinearly (Strassen-like); a different technique (expansion, Grigoriev flow, communication complexity) is needed.",
+    "from_review": "theory"
+   },
+   {
+    "id": "irony-2004-comm-lower-bounds-mm/4",
+    "claim": "The bounds deliberately do not charge for replicating the inputs, the analogue of NCI not charging for committed parameters.",
+    "quote": "our lower bounds do not even count the communication necessary to perform the replication of input elements!",
+    "location": "Section 1 (preprint)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Precedent for leaving initial data distribution free, as NCI does for theta; the bounds then come only from data produced during the computation.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "loomis-1949-inequality",
+  "title": "An inequality related to the isoperimetric inequality",
+  "authors": "L. H. Loomis, H. Whitney",
+  "year": 1949,
+  "venue": "Bulletin of the American Mathematical Society 55(10)",
+  "url": "https://doi.org/10.1090/S0002-9904-1949-09320-5",
+  "topics": [
+   "theory"
+  ],
+  "verified": "search-snippet",
+  "findings": [
+   {
+    "id": "loomis-1949-inequality/1",
+    "claim": "The volume of a set of unit cubes is bounded by the product of its coordinate projections, with equality for boxes; this is the geometric core of the matrix multiplication communication bounds.",
+    "quote": "Let S be a set of cubes from a cubical subdivision of n-space; let Si be the set of (n — 1)-cubes obtained by projecting the cubes of S onto the ith coordinate hyperplane.",
+    "location": "first page",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The inequality bounds work per block only if every projection is capped; NCI leaves the weight projection (theta) and the outputs free, so it gives no useful per-block bound by itself.",
+    "from_review": "theory"
+   },
+   {
+    "id": "loomis-1949-inequality/2",
+    "claim": "Boxes aligned with the axes attain the bound, which is why blocked algorithms are optimal.",
+    "quote": "Note that for w-dimensional intervals with faces parallel to the coordinate hyperplanes, (1) holds with the equality sign.",
+    "location": "first page",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Tightness by boxes suggests the matching NCI attack is a blocked decomposition along the token, layer and weight axes.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "raz-2016-fast-learning-memory",
+  "title": "Fast Learning Requires Good Memory: A Time-Space Lower Bound for Parity Learning",
+  "authors": "Ran Raz",
+  "year": 2016,
+  "venue": "FOCS 2016 (arXiv 1602.05161)",
+  "url": "https://arxiv.org/abs/1602.05161",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "raz-2016-fast-learning-memory/1",
+    "claim": "A streaming learner with less than n^2/25 bits of memory needs exponentially many samples to learn an n-bit parity.",
+    "quote": "We show that any algorithm for parity learning, that uses less than $\\frac{n^{2}}{25}$ bits of memory, requires an exponential number of samples.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 22000,
+      "unit": "parity length n (bits)",
+      "condition": "derived: n = sqrt(25 K) for K = 2e7 bits (about 47,000 for K = 9e7); applies only if a single thread's K-bit block input is the learner's whole memory between blocks"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "If a training thread carries at most K novel bits from block to block, memory-sample tradeoffs imply exponential (not merely constant-factor) slowdowns for some learning problems with n above about 2e4-5e4.",
+    "from_review": "theory"
+   },
+   {
+    "id": "raz-2016-fast-learning-memory/2",
+    "claim": "With quadratic memory the same problem takes O(n) samples by Gaussian elimination, so the gap is caused by the memory bound alone.",
+    "quote": "Parity learning can be solved in polynomial time, by Gaussian elimination, using $O(n)$ samples and $O(n^{2})$ memory bits.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Illustrates the kind of separation a per-block cap could force on learners whose state cannot be compressed, the opposite case to low-U updates such as seed-based fine-tuning.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "roughgarden-2018-shuffles-circuits",
+  "title": "Shuffles and Circuits (On Lower Bounds for Modern Parallel Computation)",
+  "authors": "Tim Roughgarden, Sergei Vassilvitskii, Joshua R. Wang",
+  "year": 2018,
+  "venue": "Journal of the ACM 65(6) (SPAA 2016)",
+  "url": "https://doi.org/10.1145/3232536",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "roughgarden-2018-shuffles-circuits/1",
+    "claim": "The MPC (s-shuffle) model caps each machine's input per round at s bits, smaller than the input, with no communication inside a round.",
+    "quote": "the \"fan-in\" of each machine is limited to s bits, where s is smaller than the input size n, and that computation proceeds in synchronized rounds, with no communication between different machines within a round.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "An MPC machine-round is close to an NCI block (fan-in s ~ K), except that NCI bounds a block's work and gives committed data for free; MPC lower bounds transfer only where those differences do not matter.",
+    "from_review": "theory"
+   },
+   {
+    "id": "roughgarden-2018-shuffles-circuits/2",
+    "claim": "Few-round MPC computations are low-degree real polynomials, which gives unconditional round lower bounds.",
+    "quote": "We prove that computations in our model that use few rounds can be represented as low-degree polynomials over the reals.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Polynomial-degree arguments could bound how far information spreads across NCI blocks per round of dependency.",
+    "from_review": "theory"
+   },
+   {
+    "id": "roughgarden-2018-shuffles-circuits/3",
+    "claim": "Much stronger generic round lower bounds would separate P from NC1, so unconditional bounds for arbitrary functions are blocked.",
+    "quote": "Restricting to a polynomial number of machines, we show that asymptotically better lower bounds would separate P from NC 1",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "NCI slowdown bounds cannot come from generic circuit lower bounds; they must use the structure of training (sequential updates, b_w, b_a), as NCI's thread and sharding bounds do.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "saha-2024-io-attention",
+  "title": "The I/O Complexity of Attention, or How Optimal is Flash Attention?",
+  "authors": "Barna Saha, Christopher Ye",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2402.07443",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "saha-2024-io-attention/1",
+    "claim": "FlashAttention's N^2 d^2 / M I/O is optimal for every cache size M >= d^2.",
+    "quote": "an I/O complexity lower bound that matches the upper bound provided by FlashAttention for any values of $M\\geq d^{2}$ within any constant factors",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "exponent of d in attention I/O",
+      "condition": "I/O = Theta(N^2 d^2 / M) for M >= d^2; N = sequence length, d = head dimension"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Gives a tight data-movement bound for the attention step that dominates long-session inference and training; a template for bounding attention inside an NCI block.",
+    "from_review": "theory"
+   },
+   {
+    "id": "saha-2024-io-attention/2",
+    "claim": "The bound survives fast matrix multiplication because it is proved through a communication complexity protocol, not by counting products.",
+    "quote": "even if one uses fast matrix multiplication, the above I/O complexity bounds cannot be improved. We do so by introducing a new communication complexity protocol for matrix compression, and connecting communication complexity to I/O complexity.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The most directly borrowable technique: NCI already measures information in bits, so a communication complexity lower bound for the update function would transfer to NCI regardless of how the adversary writes the circuit.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2013-distributed-estimation",
+  "title": "Information-theoretic lower bounds for distributed statistical estimation with communication constraints",
+  "authors": "Yuchen Zhang, John C. Duchi, Michael I. Jordan, Martin J. Wainwright",
+  "year": 2013,
+  "venue": "NeurIPS 2013 (extended version arXiv 1405.0782)",
+  "url": "https://arxiv.org/abs/1405.0782",
+  "topics": [
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2013-distributed-estimation/1",
+    "claim": "Reaching the centralized minimax rate for d-dimensional estimation from m machines needs about dm/log m bits of communication, even with full interaction.",
+    "quote": "at least $B\\gtrsim\\frac{dm}{\\log m}$ bits are required for any distributed procedure—even allowing fully interactive communication—to attain the centralized minimax rate.",
+    "location": "discussion after Theorem 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "bits per coordinate per machine, up to a 1/log m factor",
+      "condition": "derived: total dm/log m bits over m machines and d coordinates; Gaussian mean estimation; read as a floor on how far per-shard update messages can be compressed"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "If a training run must split its data over m blocks (each limited to Gamma work), the aggregating blocks must read about dm/log m novel bits, a floor on b_w-like compression of per-shard updates for at least some estimation problems.",
+    "from_review": "theory"
+   },
+   {
+    "id": "zhang-2013-distributed-estimation/2",
+    "claim": "Communicating the answer is exponentially cheaper than computing it distributedly: O(d log(mn)) bits describe the solution, yet nearly dm bits must be exchanged.",
+    "quote": "there is an exponential gap between the number of bits required to communicate the problem solution and the number required to compute it in a distributed manner.",
+    "location": "discussion after Theorem 2",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "NCI's sharding cost uses U, the update's description length; this result says the novel bits needed to compute an update across blocks can far exceed U, so a sharding bound in terms of U may be loose in the adversary's favor.",
+    "from_review": "theory"
+   },
+   {
+    "id": "zhang-2013-distributed-estimation/3",
+    "claim": "Each machine individually must send at least d/log m bits.",
+    "quote": "each machine individually must communicate at least $\\frac{d}{\\log m}$ bits for a decentralized procedure to match the centralized rate.",
+    "location": "discussion after Theorem 1",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "A per-shard floor, comparable to NCI's per-block cap K: when d/log m exceeds K, a shard's contribution cannot fit in one block's input.",
+    "from_review": "theory"
+   }
+  ]
+ }
+]

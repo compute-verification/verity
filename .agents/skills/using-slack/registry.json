@@ -148,6 +148,7 @@
         "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
+        "benchmarks/nci/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocol_options/pouw.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py",

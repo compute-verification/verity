@@ -1,0 +1,1463 @@
+[
+ {
+  "id": "abdi-2026-es-forgetting",
+  "title": "Evolutionary Strategies lead to Catastrophic Forgetting in LLMs",
+  "authors": "Immanuel Abdi, Akshat Gupta, Micah Mok, Alexander Lu, Nicholas Lee, Gopala Anumanchipalli",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2601.20861",
+  "topics": [
+   "seed-based",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "abdi-2026-es-forgetting/1",
+    "claim": "In a re-run comparison, GRPO marginally beats ES on almost all tasks, contrary to Qiu et al.",
+    "quote": "contrary to results reported in Qiu et al. (2025) , we find that GRPO still dominates ES marginally on almost all tasks.",
+    "location": "Introduction",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "ES is close to but not above RL, so seed-based RL is near-parity rather than superior.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "abdi-2026-es-forgetting/2",
+    "claim": "ES updates are dense and have orders of magnitude larger L2 norm than GRPO updates.",
+    "quote": "the updates made using ES are much less sparse and have orders of magnitude larger ℓ 2 norm compared to corresponding GRPO updates",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 1,
+      "unit": "fraction",
+      "condition": "derived: ES update is a sum of dense Gaussian perturbations; 'much less sparse' than GRPO"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A seed update changes every weight (fraction_changed ~1) though U is tiny: weight-space sparsity is no proxy for U.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "abdi-2026-es-forgetting/3",
+    "claim": "GRPO updates are about 95% sparse across parameter types and layers.",
+    "quote": "The sparsity levels for GRPO updates across all parameter types and layers are close to 95%",
+    "location": "section \"Dissecting ES Updates: Norm and Sparsity\"",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.05,
+      "unit": "fraction",
+      "condition": "derived: 1 - 0.95 sparsity, GRPO updates"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The RL comparator's delta is sparse; sparse deltas compress in b_w.delta while seed deltas compress in U.",
+    "from_review": "seed-based",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities derived-ok"
+   },
+   {
+    "id": "abdi-2026-es-forgetting/4",
+    "claim": "ES reaches peak performance in a similar number of update steps as GRPO.",
+    "quote": "ES is able to reach peak performance in similar number of update steps",
+    "location": "section \"ES vs GRPO Comparison\"",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "ES needs no more optimizer steps than RL, so seed-steps per capability are comparable to RL steps.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "allaire-2025-kronzo",
+  "title": "Zeroth-order Kronecker optimization for pretraining language models",
+  "authors": "Nathan Allaire, Sébastien Le Digabel, Dominique Orban, Vahid Partovi Nia",
+  "year": 2025,
+  "venue": "GERAD Cahier G-2025-44 (SN Computer Science, 2026)",
+  "url": "https://www.gerad.ca/en/papers/G-2025-44",
+  "topics": [
+   "seed-based",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "allaire-2025-kronzo/1",
+    "claim": "Kronecker-structured ZO pretraining of GPT-2 Small beats earlier ZO baselines but still trails first-order methods in final loss.",
+    "quote": "When pretraining GPT-2 Small from scratch on OpenWebText, KronZO achieves a markedly lower training loss than all previous ZO baselines while consuming less GPU memory. Although still trailing first-order methods in final loss",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The largest seed-based LM pretraining result found (124M) still trails backprop, so pretraining via a decodable U is undemonstrated.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "allaire-2025-kronzo/2",
+    "claim": "Pretraining gradients spread across many directions, so low-rank ZO perturbations discard information.",
+    "quote": "gradient information is spread across many directions; low-rank ZO methods therefore potentially discard some informative components.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The low-effective-rank argument behind cheap fine-tuning does not carry over to pretraining.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "allaire-2025-zo-pretraining",
+  "title": "Zeroth Order Optimization for Pretraining Language Models",
+  "authors": "Nathan Allaire, Mahsa Ghazvini Nejad, Sébastien Le Digabel, Vahid Partovi Nia",
+  "year": 2025,
+  "venue": "ICPRAM 2025",
+  "url": "https://doi.org/10.5220/0013261100003905",
+  "topics": [
+   "seed-based",
+   "gradients",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "allaire-2025-zo-pretraining/1",
+    "claim": "The curse of dimensionality is the main obstacle to ZO pretraining of language models.",
+    "quote": "We show in particular that the curse of dimensionality is the main obstacle",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Pretraining by seed-steps needs far more steps than fine-tuning, which pushes decode past Gamma.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "allaire-2025-zo-pretraining/2",
+    "claim": "ZO needs roughly n times as long as FO to reach the same accuracy, n being the dimension.",
+    "quote": "The time needed by ZO to reach the same accuracy as FO is roughly O(n) bigger, n being the problem dimension (Nesterov and Spokoiny, 2017).",
+    "location": "Section 2.3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 30000000000.0,
+      "unit": "x more steps than FO (worst case)",
+      "condition": "derived: O(n) with n = N = 3e10 active params, constant omitted"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "For frontier pretraining the worst-case seed-step count is ~N x FO steps, hopeless within any block budget.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "allaire-2025-zo-pretraining/3",
+    "claim": "Pretraining Llama2-20M for 2 epochs with 100 ZO queries per step takes about 6 days against a couple of hours for FO SGD; one query per step diverges.",
+    "quote": "Training Llama2-20M on just 2 epochs with q = 100 takes around 6 days on our setup, versus a couple hours with FO SGD",
+    "location": "Section 3.1, Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 8.17,
+      "unit": "training loss",
+      "condition": "q=20, 30 h, vs FO 8.02 in 2.5 h (Table 2)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Even at 20M parameters, ZO pretraining is ~two orders of magnitude slower and still behind.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "allaire-2025-zo-pretraining/4",
+    "claim": "First-order gradient variance is about 1000x smaller than single-query ZO variance.",
+    "quote": "FO-variance is roughly 1 000 times smaller than ZO-variance with q = 1",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1000,
+      "unit": "x variance ratio ZO/FO",
+      "condition": "q = 1, Llama2-20M"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Each seed-step carries much less information than a gradient step in pretraining.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "chen-2024-deepzero",
+  "title": "DeepZero: Scaling Up Zeroth-Order Optimization for Deep Model Training",
+  "authors": "Aochuan Chen, Yimeng Zhang, Jinghan Jia, James Diffenderfer, Jiancheng Liu, Konstantinos Parasyris, et al.",
+  "year": 2024,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2310.02025",
+  "topics": [
+   "seed-based",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "chen-2024-deepzero/1",
+    "claim": "Before DeepZero, no ZO method had trained deep networks from scratch without a significant accuracy loss.",
+    "quote": "no prior work has demonstrated the effectiveness of ZO optimization in training deep neural networks (DNNs) without a significant decrease in performance.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "From-scratch ZO training remains hard, supporting that seed-based methods are mainly a fine-tuning threat.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "chen-2024-deepzero/2",
+    "claim": "DeepZero trains ResNet-20 (270K parameters) to 86.94% on CIFAR-10 using coordinate-wise, not random-direction, gradient estimates.",
+    "quote": "we demonstrate the advantages of coordinate-wise gradient estimation (CGE) over randomized vector-wise gradient estimation in training accuracy and computational efficiency.",
+    "location": "abstract, Section 6",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 86.94,
+      "unit": "% CIFAR-10 test accuracy",
+      "condition": "ResNet-20, 270K parameters"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The best from-scratch ZO result uses per-coordinate estimates whose update is not a short seed list, so it gives no small U.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "chen-2024-deepzero/3",
+    "claim": "An accuracy gap to first-order training remains even for this small model.",
+    "quote": "the accuracy gap still exists between (1) and the model trained with DeepZero in the sparsity regime of 80% to 99%. This highlights the challenge of ZO optimization for deep model training",
+    "location": "Section 6.1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "From-scratch ZO training is still behind backprop at 270K parameters, far from LLM pretraining.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "chen-2025-lozo",
+  "title": "Enhancing Zeroth-order Fine-tuning for Language Models with Low-rank Structures",
+  "authors": "Yiming Chen, Yuan Zhang, Liyuan Cao, Kun Yuan, Zaiwen Wen",
+  "year": 2025,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2410.07698",
+  "topics": [
+   "seed-based",
+   "gradients",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "chen-2025-lozo/1",
+    "claim": "Standard ZO estimators miss the low-rank gradient structure of LLM fine-tuning.",
+    "quote": "existing ZO methods struggle to capture the low-rank gradient structure common in LLM fine-tuning, leading to suboptimal performance.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Low-rank seeded perturbations make each seed-step more informative, lowering T for a given capability.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "chen-2025-lozo/2",
+    "claim": "Low-rank ZO with momentum closely approaches first-order performance at MeZO's storage cost.",
+    "quote": "LOZO and its momentum-based variant outperform existing ZO methods and closely approach the performance of FO algorithms.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The ZO-FO capability gap is narrowing without growing U.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "fournier-2023-forward-gradient",
+  "title": "Can Forward Gradient Match Backpropagation?",
+  "authors": "Louis Fournier, Stéphane Rivaud, Eugene Belilovsky, Michael Eickenberg, Edouard Oyallon",
+  "year": 2023,
+  "venue": "ICML 2023",
+  "url": "https://arxiv.org/abs/2306.06968",
+  "topics": [
+   "seed-based",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "fournier-2023-forward-gradient/1",
+    "claim": "Random-direction gradient estimates struggle in high dimensions because the step direction must be guessed.",
+    "quote": "The cost is the requirement to guess the step direction, which is hard in high dimensions.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Confirms dimension-driven inefficiency of random-direction updates in training from scratch.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "fournier-2023-forward-gradient/2",
+    "claim": "Using local-loss gradients as guess directions instead of random noise greatly improves forward gradients.",
+    "quote": "We find that using gradients obtained from a local loss as a candidate direction drastically improves on random noise in Forward Gradient methods.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Non-random directions recover efficiency but are not seed-describable, so they lose the small U.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "korotyshova-2025-essa",
+  "title": "ESSA: Evolutionary Strategies for Scalable Alignment",
+  "authors": "Daria Korotyshova, Boris Shaposhnikov, Alexey Malakhov, Alexey Khokhulin, Nikita Surnachev, Kirill Ovcharenko, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2507.04453",
+  "topics": [
+   "seed-based",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "korotyshova-2025-essa/1",
+    "claim": "ES over LoRA factors works up to 72B, is inference-only and compatible with INT4/INT8 weights, and exchanges a few bytes per iteration.",
+    "quote": "restricting the search to a compact, task-aligned subspace where evolutionary search is practical even for 72B-parameter models. Because the loop is inference-only, ESSA is compatible with INT4/INT8 weight quantization and reduces inter-GPU communication to a few bytes per iteration.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 72,
+      "unit": "billion parameters",
+      "condition": "largest model tuned"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Seed-based alignment reaches 72B with tiny U per iteration.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "korotyshova-2025-essa/2",
+    "claim": "ESSA matches LoRA-GRPO on GSM8K with Qwen2.5-7B (0.853 vs 0.847).",
+    "quote": "final test accuracy over five seeds $0.853±0.0080.853\\pm 0.008$",
+    "location": "Figure 2 (Section 4.1)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.853,
+      "unit": "GSM8K accuracy",
+      "condition": "Qwen2.5-7B, LoRA-rank-8 comparison; LoRA-GRPO 0.847"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Seed-encoded alignment reaches RL-level math accuracy at 7B.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "korotyshova-2025-essa/3",
+    "claim": "ESSA sometimes uses many more generations than LoRA-GRPO (1.76M vs 123K on IFEval), so its sample efficiency varies.",
+    "quote": "IFEval uses 1,764,000 versus 122,880",
+    "location": "Appendix (generation and reward-query accounting)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 14.4,
+      "unit": "x generations vs LoRA-GRPO",
+      "condition": "derived: 1,764,000 / 122,880, IFEval, Llama-3.1-8B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Seed-based RL may cost an order of magnitude more inference; this is compute, not bits of U.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "li-2025-decomfl",
+  "title": "Achieving Dimension-Free Communication in Federated Learning via Zeroth-Order Optimization",
+  "authors": "Zhe Li, Bicheng Ying, Zidong Liu, Chaosheng Dong, Haibo Yang",
+  "year": 2025,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2405.15861",
+  "topics": [
+   "seed-based",
+   "gradients",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2025-decomfl/1",
+    "claim": "Seeds and scalars let a client fine-tune a billion-parameter model exchanging about 1 MB in total.",
+    "quote": "DeComFL achieves this by transmitting only around 1MB of data in total between the server and a client to fine-tune a model with billions of parameters.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 8000000.0,
+      "unit": "bits",
+      "condition": "derived: ~1 MB x 8, whole training run, OPT-1.3B and larger"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Even a long federated fine-tune's total U is ~8e6 bits, still below K.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "li-2025-decomfl/2",
+    "claim": "Worst-case ZO convergence depends on model dimension, so total communication could still scale with model size without a low-effective-rank assumption.",
+    "quote": "the total communication cost, which is the product of the number of rounds and the communication cost per round, might still be proportional to the model size. This is because the worst-case convergence rate of ZO methods is known to depend on the model dimension (Nesterov & Spokoiny, 2017; Duchi et al., 2015).",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Dimension-free U relies on low effective rank, which holds for fine-tuning but not obviously for pretraining.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "liu-2025-sparse-mezo",
+  "title": "Sparse MeZO: Less Parameters for Better Performance in Zeroth-Order LLM Fine-Tuning",
+  "authors": "Yong Liu, Zirui Zhu, Chaoyu Gong, Minhao Cheng, Cho-Jui Hsieh, Yang You",
+  "year": 2025,
+  "venue": "NeurIPS 2025",
+  "url": "https://arxiv.org/abs/2402.15751",
+  "topics": [
+   "seed-based",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2025-sparse-mezo/1",
+    "claim": "Perturbing only a sparse subset of parameters gains 9 points and converges 3.5x faster than MeZO on RTE.",
+    "quote": "it achieves a 9% absolute accuracy improvement and 3.5x speedup over MeZO on the RTE task.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3.5,
+      "unit": "x speedup vs MeZO",
+      "condition": "RTE, LLaMA-7B"
+     },
+     {
+      "param": "other",
+      "value": 9,
+      "unit": "accuracy points over MeZO",
+      "condition": "RTE, LLaMA-7B (71.7 to 80.7)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Sparse ZO reduces T and decode cost; the sparsity mask derives from committed weights, so it adds no bits to U.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "liu-2025-sparse-mezo/2",
+    "claim": "S-MeZO reaches 70% on RTE in about 5,000 steps where MeZO needs 17,500.",
+    "quote": "S-MeZO only needs about 5,000 steps to achieve $70\\%$ accuracy but vanilla MeZO needs 17,500 steps.",
+    "location": "Section 4.4 (convergence rate)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 5000,
+      "unit": "seed-steps to 70% RTE",
+      "condition": "LLaMA-7B; MeZO 17,500"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 80000,
+      "unit": "bits",
+      "condition": "derived: 5,000 steps x 16 bits"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Fine-tuning a 7B model to a usable level takes ~1e4 bits of update.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "malladi-2023-mezo",
+  "title": "Fine-Tuning Language Models with Just Forward Passes",
+  "authors": "Sadhika Malladi, Tianyu Gao, Eshaan Nichani, Alex Damian, Jason D. Lee, Danqi Chen, et al.",
+  "year": 2023,
+  "venue": "NeurIPS 2023",
+  "url": "https://arxiv.org/abs/2305.17333",
+  "topics": [
+   "seed-based",
+   "updates",
+   "gradients",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "malladi-2023-mezo/1",
+    "claim": "A full-parameter MeZO fine-tune of a 66B model is stored as one seed plus a 2-byte scalar per step, under 0.1 MB for 20k steps, versus 38 MB for LoRA.",
+    "quote": "for fine-tuning a 66B model, MeZO requires saving the seed plus 20,000 (steps) $\\times$ 2 bytes, which is less than 0.1MB. LoRA fine-tunes 19M parameters and requires 38MB storage, and prefix tuning fine-tunes 6M parameters and requires 12MB storage.",
+    "location": "Section 2 (storage efficiency)",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 0.1,
+      "unit": "MB",
+      "condition": "upper bound stated for OPT-66B, 20k steps"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 320000,
+      "unit": "bits",
+      "condition": "derived: 20,000 steps x 16 bits, plus one seed"
+     },
+     {
+      "param": "other",
+      "value": 38,
+      "unit": "MB",
+      "condition": "LoRA (19M trainable parameters) storage for the same model, for comparison"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "U of a full-parameter ZO fine-tune of a 66B model is ~3e5 bits, 60-300x below K, so the 'U <= K' escape is met on the bits side.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "malladi-2023-mezo/2",
+    "claim": "Reconstructing the fine-tuned weights from the seed and scalars needs no forward passes and no training data, only regenerating each step's perturbation and adding it.",
+    "quote": "Note that this reconstruction requires no additional forward passes through the model and no access to the data used during fine-tuning, since projected_grad implicitly encodes this information.",
+    "location": "Section 2, footnote 3",
+    "quantities": [
+     {
+      "param": "update.decode_flops",
+      "value": 1.3e+16,
+      "unit": "flops",
+      "condition": "derived: 2e4 steps x 6.6e10 params x ~10 ops/param (Gaussian RNG plus axpy); 2.6e15 at 2 ops/param, 2.6e16 at 20"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Decode cost is steps x params x a small constant (~1e16 flops at 66B), well under Gamma = 1e18 flops, so the escape is met on the compute side too.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "malladi-2023-mezo/3",
+    "claim": "On OPT-30B MeZO needs 32x more steps than fine-tuning but about half the GPU-hours, because each step is cheaper and needs fewer GPUs.",
+    "quote": "MeZO takes 32$\\times$ more steps than standard FT, while FT takes 8$\\times$ more GPUs and 7.74$\\times$ more time per step. Overall, MeZO requires only half as many GPU-hours as FT for a 30B model.",
+    "location": "Appendix F.6",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 32,
+      "unit": "x steps vs FT",
+      "condition": "OPT-30B"
+     },
+     {
+      "param": "other",
+      "value": 0.5,
+      "unit": "GPU-hours relative to FT",
+      "condition": "OPT-30B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Seed-based fine-tuning carries no compute penalty at fine-tuning scale, so an adversary gives up little by switching to it to keep U tiny.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "malladi-2023-mezo/4",
+    "claim": "The OPT experiments use 20k MeZO steps against 625 fine-tuning steps.",
+    "quote": "We run MeZO for $20$ K steps and fine-tuning for $5$ epochs, or $625$ steps, noting that each step of MeZO is substantially faster than fine-tuning",
+    "location": "Section 3 (autoregressive LMs)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 20000,
+      "unit": "seed-steps",
+      "condition": "OPT-13B to 66B, 1000 training examples per task"
+     },
+     {
+      "param": "other",
+      "value": 625,
+      "unit": "FT steps",
+      "condition": "same tasks, 5 epochs"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Sets the seed-step count T for LLM fine-tuning at ~2e4, far below what one block can decode.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "malladi-2023-mezo/5",
+    "claim": "On OPT-13B, MeZO is within 1% of full fine-tuning on 7 of 11 tasks and beats zero-shot and in-context learning.",
+    "quote": "MeZO demonstrates superior results over zero-shot and ICL and performs on par with FT (within 1%) on 7 out of 11 tasks, despite using only 1/12 memory.",
+    "location": "Figure 1 caption (OPT-13B)",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 320000,
+      "unit": "bits",
+      "condition": "derived: 20k steps x 16 bits buys near-FT accuracy (within 1%) on 7/11 SuperGLUE-style tasks, OPT-13B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Ties a ~3e5-bit seed update to near-full-fine-tuning quality on classification and multiple-choice tasks.",
+    "from_review": "seed-based",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities derived-ok"
+   },
+   {
+    "id": "malladi-2023-mezo/6",
+    "claim": "At 66B, MeZO beats zero-shot and ICL on most tasks (e.g. SST-2 93.6%), but the paper does not compare it with full fine-tuning at that scale.",
+    "quote": "We see that on most tasks MeZO effectively optimizes up to 66B models and outperforms zero-shot and ICL.",
+    "location": "Table 2 caption",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 93.6,
+      "unit": "% SST-2 accuracy",
+      "condition": "OPT-66B, MeZO/MeZO (prefix), Table 2"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows seed-based training works at 66B, but the evidence for parity with backprop at that scale is indirect.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "malladi-2023-mezo/7",
+    "claim": "MeZO's rate depends on the loss landscape's local effective rank rather than on the parameter count, which explains why fine-tuning needs only ~1e4 steps despite billions of parameters.",
+    "quote": "the per-step optimization rate (Theorem 1) and global convergence rate (Lemma 3) of MeZO depend on a certain condition number of the landscape (i.e., the local effective rank, see Assumption 1) instead of numbers of parameters.",
+    "location": "Section 1 (contributions; theory in Section 4)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The step count T, and therefore decode cost, need not grow with N for fine-tuning; this argument does not cover pretraining, where the effective rank is not small.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "malladi-2023-mezo/8",
+    "claim": "Classical zeroth-order lower bounds predict convergence slowing linearly with model size.",
+    "quote": "classical lower bounds [69, 32] suggest that convergence slows linearly with model size.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "In the worst case (e.g. pretraining) seed-steps needed scale with N, which would push decode cost T x N past Gamma.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "panchal-2025-cost-avoiding-backprop",
+  "title": "The Cost of Avoiding Backpropagation",
+  "authors": "Kunjal Panchal, Sunav Choudhary, Yuriy Brun, Hui Guan",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2506.21833",
+  "topics": [
+   "seed-based",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "panchal-2025-cost-avoiding-backprop/1",
+    "claim": "Backprop with checkpointing is 4.5-31.1% more accurate, converges 21-35% faster and costs 3.2-3.8x less compute than forward-mode AD and ZO.",
+    "quote": "BP with checkpointing achieves 4.5–31.1% higher accuracy, 21.4–34.8% faster convergence, and 3.2–3.8$×\\times×$ lower computation cost than FmAD and ZO variants",
+    "location": "Section 1 (contributions)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3.5,
+      "unit": "x compute ZO vs BP",
+      "condition": "range 3.2-3.8; Llama 3.1 8B, OPT-13B, Qwen2-VL 7B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Seed-based training costs ~3.5x more compute than checkpointed backprop for equal quality, a modest price for evading NCI.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "panchal-2025-cost-avoiding-backprop/2",
+    "claim": "The accuracy gap grows with trainable parameters and model size.",
+    "quote": "Accuracy gaps widen as trainable parameters or model size increases.",
+    "location": "Section 4.2",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The capability bought by seed-based updates degrades as models grow.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "qin-2024-fedkseed",
+  "title": "Federated Full-Parameter Tuning of Billion-Sized Language Models with Communication Cost under 18 Kilobytes",
+  "authors": "Zhen Qin, Daoyuan Chen, Bingchen Qian, Bolin Ding, Yaliang Li, Shuiguang Deng",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2312.06353",
+  "topics": [
+   "seed-based",
+   "updates",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "qin-2024-fedkseed/1",
+    "claim": "A ZO update step is replicated from a seed and one scalar gradient.",
+    "quote": "a parameter update step of ZOO can be replicated with just two values: a seed (with an identical random number generator) and the corresponding scalar gradient",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Same seed-plus-scalar encoding as MeZO, applied to the federated setting.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "qin-2024-fedkseed/2",
+    "claim": "With a finite pool of K seeds, scalars for the same seed accumulate, so catching up to the latest model needs at most K perturbation replays regardless of how many steps were taken.",
+    "quote": "If we select only $K$ candidate seeds and accumulate the scalar gradients corresponding to the same seed, each client only needs to perform at most $K$ iterations to get the latest global model",
+    "location": "Section 4.2",
+    "quantities": [
+     {
+      "param": "update.decode_flops",
+      "value": 1200000000000000.0,
+      "unit": "flops",
+      "condition": "derived: 4096 seeds x 3e10 params x ~10 ops/param, independent of step count"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Seed reuse caps decode cost at K_seeds x N, so total training length no longer drives decode within Gamma.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "qin-2024-fedkseed/3",
+    "claim": "The seed pool is 4096 for FedKSeed (1024-2048 for FedKSeed-Pro), with 200 local ZO steps per client per round.",
+    "quote": "we set $K$ to 4096 for FedKSeed, 1024 for FedKSeed-Pro with DataJuicer-1.3B, and 2048 for FedKSeed-Pro with LLaMA-3B.",
+    "location": "Section 5.1",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 4096,
+      "unit": "dimension of the seed-spanned update subspace",
+      "condition": "derived: update lies in span of the K seeded directions"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The whole update is a point in a ~4096-dim random subspace, so U = K_seeds x scalar width regardless of training length.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "qin-2024-fedkseed/4",
+    "claim": "Per-round communication is 17,988 B against 12.76 GB for FedAvg on LLaMA-3B.",
+    "quote": "enabling full-parameter tuning of LLMs in FL with a communication cost of less than 18 kilobytes per round, and the memory footprint equivalent to inference requirements.",
+    "location": "Section 1; Table 3",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 143904,
+      "unit": "bits per round",
+      "condition": "derived: 17,988 B x 8; LLaMA-3B (Table 3)"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 710000.0,
+      "unit": "x vs FedAvg",
+      "condition": "derived: 12.76 GB / 17,988 B (Table 3)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Full-parameter updates of a 3B model fit in ~1.4e5 bits per round, ~150-600x below K.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "qin-2024-fedkseed/5",
+    "claim": "Full-parameter backprop (FedAvg) and other ZO baselines are not more accurate than FedKSeed; on LLaMA-3B on Natural Instructions FedKSeed scores 29.77 Rouge-L against FedAvg's 27.88.",
+    "quote": "From Table 2, FedAvg, FedZO and FedMeZO do not exhibit higher accuracy than FedKSeed and FedKSeed-Pro.",
+    "location": "Section 5.2, Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 29.77,
+      "unit": "Rouge-L",
+      "condition": "LLaMA-3B, Natural Instructions, FedKSeed; FedAvg 27.88 (Table 2)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A finite-seed update reaches backprop-level instruction-tuning quality at 3B in the federated setting.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "qin-2024-fedkseed/6",
+    "claim": "The seed pool only needs to be slightly larger than the task's intrinsic dimension, several thousand for 1-3B models.",
+    "quote": "an integer slightly larger than the intrinsic dimension. Section 5.2 experimentally demonstrates that for models with 1B and 3B parameters, $K$ can be several thousand",
+    "location": "Section 4 (Principle 2)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Links seed-based U to intrinsic dimension: fine-tuning capability is bounded by a few thousand random directions.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "qiu-2025-es-at-scale",
+  "title": "Evolution Strategies at Scale: LLM Fine-Tuning Beyond Reinforcement Learning",
+  "authors": "Xin Qiu, Yulu Gan, Conor F. Hayes, Qiyao Liang, Yinggan Xu, Roberto Dailey, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2509.24372",
+  "topics": [
+   "seed-based",
+   "updates",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "qiu-2025-es-at-scale/1",
+    "claim": "Full-parameter ES works on multi-billion-parameter LLMs with a population of only 30, against 10,000+ in earlier ES work on much smaller models.",
+    "quote": "ES is able to find good solutions in large space with small populations, e.g. just 30 in the multi-billion-parameter space in this paper. As a comparison, previous ES implementations (Salimans et al., 2017; Zhang et al., 2017; Lehman et al., 2018; Lorenc and Neruda, 2025) utilized a population size of 10,000 or more with much smaller models",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 30,
+      "unit": "population size",
+      "condition": "Qwen2.5 0.5B-7B, Llama3 1B-8B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Few perturbations per step keep both U and decode cost small for ES fine-tuning at 7-8B.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "qiu-2025-es-at-scale/2",
+    "claim": "Countdown results are after 500 ES iterations, about 15,000 seeded perturbations in total.",
+    "quote": "For ES, results were reported on the test set after training for 500 iterations. For RL, the training was stopped after the same total number of sample evaluations as in the ES runs.",
+    "location": "Appendix A.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 15000,
+      "unit": "perturbations",
+      "condition": "derived: 500 iterations x population 30"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 240000,
+      "unit": "bits",
+      "condition": "derived: 15,000 rewards x 16 bits, seeds derived from a master seed; 4.8e5 bits at 32 bits per reward"
+     },
+     {
+      "param": "update.decode_flops",
+      "value": 1100000000000000.0,
+      "unit": "flops",
+      "condition": "derived: 15,000 perturbations x 7.6e9 params x ~10 ops/param"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "An RL-grade ES fine-tune of a 7B model has U ~ 2-5e5 bits and decode ~1e15 flops, both far inside one block.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "qiu-2025-es-at-scale/3",
+    "claim": "On Countdown, ES beat PPO, GRPO and Dr.GRPO across Qwen2.5 and Llama3 models: Qwen-2.5-7B-Instruct reached 66.8% (base 31.2%, best RL 57.5%) and Llama-3.1-8B-Instruct reached 61.2% (base 8.1%, best RL 51.3%).",
+    "quote": "With each model in the Qwen2.5 family (0.5B–7B) and the Llama3 family (1B–8B), ES substantially improved over PPO, GRPO and Dr.GRPO (Liu et al., 2025b), including their implementation variants, often by a large margin",
+    "location": "Section 4.1, Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 66.8,
+      "unit": "% Countdown accuracy",
+      "condition": "Qwen-2.5-7B-Instruct, ES; base 31.2, best RL variant 57.5 (Table 1)"
+     },
+     {
+      "param": "other",
+      "value": 61.2,
+      "unit": "% Countdown accuracy",
+      "condition": "Llama-3.1-8B-Instruct, ES; base 8.1, best RL variant 51.3 (Table 1)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "RL-style capability gains at 7-8B are reachable with a seed-encoded update far below K; contested by abdi-2026-es-forgetting.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "qiu-2025-es-at-scale/4",
+    "claim": "The implementation keeps only random seeds, regenerating perturbations in place rather than storing them.",
+    "quote": "only the random seeds are stored to reduce GPU memory usage.",
+    "location": "Section 3.2 (implementation details)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The working ES implementation already is a seed decoder, so a block could run it directly.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "salimans-2017-es",
+  "title": "Evolution Strategies as a Scalable Alternative to Reinforcement Learning",
+  "authors": "Tim Salimans, Jonathan Ho, Xi Chen, Szymon Sidor, Ilya Sutskever",
+  "year": 2017,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/1703.03864",
+  "topics": [
+   "seed-based",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "salimans-2017-es/1",
+    "claim": "With common random numbers, ES workers exchange only scalars, because every worker regenerates every perturbation from shared seeds.",
+    "quote": "By using a novel communication strategy based on common random numbers, our ES implementation only needs to communicate scalars, making it possible to scale to over a thousand parallel workers.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1000,
+      "unit": "parallel workers",
+      "condition": "'over a thousand'; scalar-only communication per perturbation"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "This is the template for U = (number of perturbations) x (bits per scalar): every ES update is decodable by a reader holding the seed schedule.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "salimans-2017-es/2",
+    "claim": "ES matched A3C on most Atari games with 3-10x more data, partly offset by roughly 3x less compute from skipping backpropagation.",
+    "quote": "we were able to match the final performance of A3C [Mnih et al., 2016] on most Atari environments while using between 3x and 10x as much data. The slight decrease in data efficiency is partly offset by a reduction in required computation of roughly 3x due to not performing backpropagation",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10,
+      "unit": "x data vs A3C (upper)",
+      "condition": "Atari; lower end 3x"
+     },
+     {
+      "param": "other",
+      "value": 3,
+      "unit": "x less compute per sample",
+      "condition": "no backprop"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "ES is competitive with RL at small scale at modest sample cost, so seed-based RL is a realistic substitute.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "salimans-2017-es/3",
+    "claim": "On MuJoCo, ES matched TRPO using at most 10x as much data.",
+    "quote": "On MuJoCo tasks, we were able to match the learned policy performance of Trust Region Policy Optimization [TRPO; Schulman et al., 2015], using no more than 10x as much data.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10,
+      "unit": "x data vs TRPO (upper bound)",
+      "condition": "MuJoCo"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Same direction as above: seed-based RL costs about one order of magnitude in samples at small scale.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "sarkar-2025-eggroll",
+  "title": "Evolution Strategies at the Hyperscale",
+  "authors": "Bidipta Sarkar, Mattie Fellows, Juan Agustin Duque, Alistair Letcher, Antonio León Villares, Anya Sims, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2511.16652",
+  "topics": [
+   "seed-based",
+   "updates",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sarkar-2025-eggroll/1",
+    "claim": "Low-rank perturbations make ES about 100x faster for billion-parameter models at large populations, reaching up to 91% of pure batch-inference throughput.",
+    "quote": "resulting in a hundredfold increase in training speed for billion-parameter models at large population sizes, achieving up to 91% of the throughput of pure batch inference",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.91,
+      "unit": "fraction of batch-inference throughput",
+      "condition": "billion-parameter models, large populations"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "ES training compute looks like inference, so seed-based training costs little extra per block beyond decode.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "sarkar-2025-eggroll/2",
+    "claim": "EGGROLL pretrained a small int8 RNN character LM from scratch to 3.40 bits/byte against 3.58 for backprop, using populations up to 2^20.",
+    "quote": "We use EGGROLL to train an int8 RNN language model from scratch, scaling population size from 2 to 1,048,576 with a fixed data batch size of 16.",
+    "location": "Figure 2 caption",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3.4,
+      "unit": "bits/byte test cross-entropy",
+      "condition": "EGGROLL, 6-layer 256-dim int8 RNN, character-level minipile; backprop 3.58"
+     },
+     {
+      "param": "other",
+      "value": 1048576,
+      "unit": "population size",
+      "condition": "largest run"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The only seed-based from-scratch LM pretraining result, on a tiny model; shows pretraining is possible in principle but needs huge populations.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "sarkar-2025-eggroll/3",
+    "claim": "The 2^20-population pretraining run needs about 180x the GPU-hours of backprop.",
+    "quote": "requires around 180 times more GPU-hours than the backprop baseline, demonstrating the potential for compute-only scaling in limited data regimes using EGGROLL.",
+    "location": "Section 6.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 180,
+      "unit": "x GPU-hours vs backprop",
+      "condition": "int8 RNN LM pretraining, population 2^20"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 1700000.0,
+      "unit": "bits per step",
+      "condition": "derived: 1,048,576 fitness values x 1.6 bits; exceeds K = 2e7-9e7 after ~12-53 steps"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Pretraining-style ES has large U per step (population x 1.6 bits), so it does not fit in K for more than a few dozen steps.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "sarkar-2025-eggroll/4",
+    "claim": "A population of 2, MeZO's regime, significantly underperforms large populations in pretraining even with the same data.",
+    "quote": "We note that large population sizes are critical for pretraining; a population size of 2, analogous to MeZO (Malladi et al., 2023), significantly underperforms larger population sizes despite having access to the same data batch.",
+    "location": "Section 6.1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Evidence that cheap seed-steps (small U per step) do not suffice for pretraining.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "sarkar-2025-eggroll/5",
+    "claim": "Fitness values are packed ternary at 1.6 bits each, so network payload is independent of model size.",
+    "quote": "This yields an effective bitrate of 1.6 bits per value (near the log2 3 ≈ 1.585 theoretical limit).",
+    "location": "Appendix J.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.6,
+      "unit": "bits per perturbation",
+      "condition": "ternary-packed fitness; seeds derived from counters"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Lowers the bits per seed-step from ~16 to ~1.6, so K's limit on perturbations rises to ~1e7-6e7 and Gamma becomes the binding limit.",
+    "from_review": "seed-based",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "sarkar-2025-eggroll/6",
+    "claim": "On Qwen3-4B-Base with DeepScaleR, EGGROLL with LoRA rank 1 and population 2048 matches RL (average 41.4 vs 41.4, base 28.0; MATH500 75.8 vs 67.4).",
+    "quote": "We see that EGGROLL is able to match the RL optimisation with very minimal hyperparameter tuning, a LoRA rank of 1 and a moderately small population size of 2048.",
+    "location": "Appendix L.1, Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 41.4,
+      "unit": "average test accuracy %",
+      "condition": "Qwen3-4B-Base + EGGROLL; +RL also 41.4; base 28.0 (Table 1)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "RL-level math-reasoning gains are reachable by seed-encoded updates, here at 4B.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "sarkar-2025-eggroll/7",
+    "claim": "Starting from RWKV 7B, EGGROLL reached 72.9% on Countdown, above reported GRPO (52.8%) and OpenES (66.8%) results on Qwen 2.5-7B.",
+    "quote": "we are able to train to a higher validation accuracy (72.9%), v.s. the ones reported for training with GRPO (52.8%) and Open ES (66.8%).",
+    "location": "Appendix, Figure 13(a) discussion",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 72.9,
+      "unit": "% Countdown validation accuracy",
+      "condition": "RWKV 7g7B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Seed-based reasoning fine-tuning is competitive with RL at 7B.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "schweighofer-2026-es-awd",
+  "title": "Overcoming Forgetting in LLM Fine-Tuning with Evolution Strategies",
+  "authors": "Kajetan Schweighofer, Conor F. Hayes, Roberto Dailey, Risto Miikkulainen, Xin Qiu",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2605.30148",
+  "topics": [
+   "seed-based",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "schweighofer-2026-es-awd/1",
+    "claim": "ES forgetting is performance drift that a decay term stabilizes at much lower cost than large populations.",
+    "quote": "AWD effectively stabilizes prior-task performance while preserving target-task performance, achieving benefits comparable to large ES population sizes at much lower computational cost.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The forgetting objection to ES is addressable without enlarging populations, so it does not raise U.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "shafipour-2025-seedlm",
+  "title": "SeedLM: Compressing LLM Weights into Seeds of Pseudo-Random Generators",
+  "authors": "Rasoul Shafipour, David Harrison, Maxwell Horton, Jeffrey Marker, Houman Bedayat, Sachin Mehta, et al.",
+  "year": 2025,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2410.10714",
+  "topics": [
+   "seed-based",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shafipour-2025-seedlm/1",
+    "claim": "SeedLM encodes each block of weights as an LFSR seed plus a few coefficients, regenerated during inference.",
+    "quote": "for each block of weights, we find a seed that is fed into a Linear Feedback Shift Register (LFSR) during inference to efficiently generate a random matrix.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "LFSR generation is very cheap in gates, so seed decode cost per parameter can be far below a Gaussian RNG's.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "shafipour-2025-seedlm/2",
+    "claim": "On Llama 3 70B, SeedLM retains zero-shot accuracy at 3-4 bits per weight better than prior methods.",
+    "quote": "SeedLM achieves significantly better zero-shot accuracy retention at 4- and 3-bit than state-of-the-art techniques",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 3,
+      "unit": "bits/weight",
+      "condition": "Llama 3 70B, 3-4 bit"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Pretrained weights themselves are not seed-compressible far below ~3 bits/weight; seeds help only with low-dimensional updates.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "shu-2025-ferret",
+  "title": "Ferret: Federated Full-Parameter Tuning at Scale for Large Language Models",
+  "authors": "Yao Shu, Wenyang Hu, See-Kiong Ng, Bryan Kian Hsiang Low, Fei Richard Yu",
+  "year": 2025,
+  "venue": "ICML 2025",
+  "url": "https://arxiv.org/abs/2409.06277",
+  "topics": [
+   "seed-based",
+   "updates",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shu-2025-ferret/1",
+    "claim": "Projecting first-order local updates onto seed-generated random bases cuts communication 1e6x versus FedAvg and converges 3.3x faster than FedKSeed.",
+    "quote": "a 6.0 $\\times$ reduction in computational cost and 3.3 $\\times$ fewer convergence rounds than FedKSeed, alongside a $\\text{10}^{\\text{6}}\\times$ reduction in communication overhead than FedAvg",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 1000000.0,
+      "unit": "x vs FedAvg",
+      "condition": "LLaMA2-7B/13B federated tuning"
+     },
+     {
+      "param": "other",
+      "value": 3.3,
+      "unit": "x fewer rounds than FedKSeed",
+      "condition": "same setting"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows a backprop-quality step can also be shipped as seeds plus scalars: seed encoding is not tied to zeroth-order estimators.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "shu-2025-ferret/2",
+    "claim": "Reconstruction from K seeded bases costs O(Kd), which the authors call prohibitive and reduce by block-wise reconstruction.",
+    "quote": "The computational complexity of ${\\mathcal{O}}(Kd)$ and storage complexity of ${\\mathcal{O}}(\\max\\{K,d\\})$ for our reconstruction in (7) is still prohibitively costly, particularly for LLMs with billions of parameters.",
+    "location": "Section 3.2",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Decode cost of a seed-encoded update is the bottleneck practitioners notice: U is small but decode scales as seeds x params.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "such-2017-deep-neuroevolution",
+  "title": "Deep Neuroevolution: Genetic Algorithms Are a Competitive Alternative for Training Deep Neural Networks for Reinforcement Learning",
+  "authors": "Felipe Petroski Such, Vashisht Madhavan, Edoardo Conti, Joel Lehman, Kenneth O. Stanley, Jeff Clune",
+  "year": 2017,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/1712.06567",
+  "topics": [
+   "seed-based",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "such-2017-deep-neuroevolution/1",
+    "claim": "A GA-evolved 4M-parameter Atari network is encoded as its list of seeds, 8,000-50,000x smaller than its weights.",
+    "quote": "Competitive Atari-playing agents evolve in as little as tens of generations, enabling a compressed representation of a 4M+ parameter neural network in just thousands of bytes (a 10,000-fold compression). The compression rate depends on the number of generations, but in practice is always substantial: all Atari final networks were compressible 8,000-50,000-fold.",
+    "location": "Section 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10000,
+      "unit": "x compression of weights",
+      "condition": "4M+ parameter Atari networks; range 8,000-50,000x"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 16000,
+      "unit": "bits",
+      "condition": "derived: 4e6 params x 32 bits / 8,000; ~2.6e3 bits at 50,000x"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The encoding cost scales with generations, not parameters: U is the seed list, the earliest demonstration of a seed-encoded trained network.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "such-2017-deep-neuroevolution/2",
+    "claim": "The compact encoding trades storage for compute: a reader must replay every generation's perturbation to recover the weights.",
+    "quote": "It does, of course, require computation to reconstruct the DNN weight vector.",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Confirms that the cost of a seed-encoded update sits in decode compute (Gamma), not in bits read (K).",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "such-2017-deep-neuroevolution/3",
+    "claim": "Perturbations are indexed into a precomputed noise table with 28-bit seeds, so each step costs 28 bits plus selection.",
+    "quote": "ε(τn) is a large precomputed table that is indexed by 28-bit seeds.",
+    "location": "Section 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 28,
+      "unit": "bits per seed",
+      "condition": "one seed per generation in the lineage"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Bits per seed-step can be ~16-32; a noise table also lowers decode cost to a lookup plus add per parameter.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "tan-2025-dizo",
+  "title": "Harmony in Divergence: Towards Fast, Accurate, and Memory-efficient Zeroth-order LLM Fine-tuning",
+  "authors": "Qitao Tan, Jun Liu, Zheng Zhan, Caiwen Ding, Yanzhi Wang, Xiaolong Ma, et al.",
+  "year": 2025,
+  "venue": "NeurIPS 2025",
+  "url": "https://arxiv.org/abs/2502.03304",
+  "topics": [
+   "seed-based",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "tan-2025-dizo/1",
+    "claim": "Plain ZO lags far behind first-order fine-tuning in both speed and accuracy.",
+    "quote": "However, ZO method lags far behind FO method in both convergence speed and accuracy.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The capability bought per seed-step is below backprop's per-step gain.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "tan-2025-dizo/2",
+    "claim": "Layer-wise divergence-driven ZO cuts training GPU-hours by up to 48% versus MeZO, tested up to Llama3-8B.",
+    "quote": "cutting training GPU hours by up to 48% on various datasets",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.48,
+      "unit": "fractional GPU-hour reduction vs MeZO (max)",
+      "condition": "OPT-2.7B to Llama3-8B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Fewer ZO steps per fine-tune; per-layer scalars raise bits per step modestly.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "wang-2025-zo2",
+  "title": "ZO2: Scalable Zeroth-Order Fine-Tuning for Extremely Large Language Models with Limited GPU Memory",
+  "authors": "Liangyu Wang, Jie Ren, Hang Xu, Junxiao Wang, Huanyi Xie, David E. Keyes, et al.",
+  "year": 2025,
+  "venue": "COLM 2025",
+  "url": "https://arxiv.org/abs/2503.12668",
+  "topics": [
+   "seed-based"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2025-zo2/1",
+    "claim": "ZO fine-tuning of OPT-175B runs on one 18 GB GPU by offloading parameters.",
+    "quote": "fine-tune extraordinarily large models, such as the OPT-175B with more than 175 billion parameters, on a mere 18GB GPU",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 175,
+      "unit": "billion parameters",
+      "condition": "OPT-175B on 18 GB GPU"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Seed-based fine-tuning is practical at frontier scale with commodity memory.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2024-zo-bench",
+  "title": "Revisiting Zeroth-Order Optimization for Memory-Efficient LLM Fine-Tuning: A Benchmark",
+  "authors": "Yihua Zhang, Pingzhi Li, Junyuan Hong, Jiaxiang Li, Yimeng Zhang, Wenqing Zheng, et al.",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2402.11592",
+  "topics": [
+   "seed-based",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2024-zo-bench/1",
+    "claim": "On harder tasks and larger models, first-order methods beat every ZO method by a large margin.",
+    "quote": "the FO methods (FO-SGD and FO-Adam) outperform all the other ZO methods by a large margin. This observation shows the scalability bottleneck intrinsic to ZO methods, when dealing with larger models and/or more complex tasks.",
+    "location": "Section 4.2",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Limits what capability a seed-encoded update reaches: the ZO-FO gap grows with task difficulty.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "zhang-2024-zo-bench/2",
+    "claim": "On WinoGrande a 5-6 point FO-ZO gap persists across OPT-13B, LLaMA2-7B, Vicuna-7B and Mistral-7B.",
+    "quote": "for the more difficult task WinoGrande, a performance gap of $5\\%\\sim 6\\%$ between FO and ZO methods still exists across different models.",
+    "location": "Section 4.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 5.5,
+      "unit": "accuracy points, FO minus ZO",
+      "condition": "WinoGrande; range 5-6; OPT-13B, LLaMA2-7B, Vicuna-7B, Mistral-7B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Seed-based updates fall a few points short of backprop on harder fine-tuning tasks at 7-13B.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "zhang-2024-zo-bench/3",
+    "claim": "ZO-SGD cuts per-iteration runtime by about 42% relative to FO-SGD.",
+    "quote": "ZO optimization reduces runtime costs per iteration by $\\sim 41.9\\%$ for ZO-SGD versus FO-SGD.",
+    "location": "Section 4.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.419,
+      "unit": "fractional runtime reduction per iteration",
+      "condition": "ZO-SGD vs FO-SGD"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Per-step cost is lower, so total cost depends on the extra steps ZO needs.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "zhao-2025-hizoo",
+  "title": "Second-Order Fine-Tuning without Pain for LLMs: A Hessian Informed Zeroth-Order Optimizer",
+  "authors": "Yanjun Zhao, Sizhe Dang, Haishan Ye, Guang Dai, Yi Qian, Ivor Tsang",
+  "year": 2025,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2402.15173",
+  "topics": [
+   "seed-based",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhao-2025-hizoo/1",
+    "claim": "Hessian-informed ZO converges 8x faster than MeZO on SST-2 and gains up to 5.1 points at 66B.",
+    "quote": "on the SST2 task, HiZOO achieves an 8 $\\times$ speed-up and better accuracy. Even when scaled to 66B-model, HiZOO outperforms MeZO with up to 5.1% absolute improvement.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 8,
+      "unit": "x fewer steps vs MeZO",
+      "condition": "SST-2"
+     },
+     {
+      "param": "other",
+      "value": 5.1,
+      "unit": "accuracy points over MeZO (max)",
+      "condition": "OPT-66B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Cuts the seed-steps (and so U and decode) needed per fine-tune by up to ~8x.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "zhao-2025-hizoo/2",
+    "claim": "HiZOO adds one forward pass per step, so each step still costs only forward passes.",
+    "quote": "we propose HiZOO, as shown in Figure 1(left), which estimates the diagonal Hessian by one more forward pass.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The update stays seed-plus-scalars; a diagonal Hessian estimate must be replayed too, which adds decode cost per step.",
+    "from_review": "seed-based",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   }
+  ]
+ }
+]

@@ -1,0 +1,2027 @@
+[
+ {
+  "id": "allenzhu-2024-knowledge-capacity",
+  "title": "Physics of Language Models: Part 3.3, Knowledge Capacity Scaling Laws",
+  "authors": "Zeyuan Allen-Zhu, Yuanzhi Li",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2404.05405",
+  "topics": [
+   "weights",
+   "theory",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "allenzhu-2024-knowledge-capacity/1",
+    "claim": "Language models store at most about 2 bits of factual knowledge per parameter, and int8 quantization keeps it.",
+    "quote": "we establish that language models can and only can store 2 bits of knowledge per parameter, even when quantized to int8, and such knowledge can be flexibly extracted for downstream applications.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_w.capacity",
+      "value": 2,
+      "unit": "bits/parameter",
+      "condition": "synthetic factual (biography) knowledge with sufficient exposures; GPT-2/LLaMA/Mistral-style models"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Central capacity anchor: a knowledge-saturated model carries ~2 bits per parameter of extractable content.",
+    "from_review": "weights"
+   },
+   {
+    "id": "allenzhu-2024-knowledge-capacity/2",
+    "claim": "Int4 quantization of a capacity-saturated model cuts its knowledge to 0.7 bits per parameter, while int8 loses nothing.",
+    "quote": "Quantizing to int8 does not compromise model capacity (even for models on the boundary of 2bit/param); however, quantizing to int4 reduces capacity to 0.7bit/param.",
+    "location": "Section 1 (Result 8)",
+    "quantities": [
+     {
+      "param": "b_w.capacity",
+      "value": 0.7,
+      "unit": "bits/parameter",
+      "condition": "after int4 quantization of a model at 2 bits/param"
+     },
+     {
+      "param": "b_w.capacity",
+      "value": 2,
+      "unit": "bits/parameter",
+      "condition": "after int8 quantization"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A saturated model needs more than 4 bits per weight to keep its 2 bits/param of knowledge, so b_w.pretrained rises as models saturate.",
+    "from_review": "weights"
+   },
+   {
+    "id": "allenzhu-2024-knowledge-capacity/3",
+    "claim": "MoE models with 32 experts lose only 1.3x capacity per total parameter.",
+    "quote": "MoE models, even with 32 experts, only reduce 1.3x in capacity compared to the base scaling laws, despite using just 8.8% of the total parameters during inference.",
+    "location": "Section 1 (Result 9)",
+    "quantities": [
+     {
+      "param": "b_w.capacity",
+      "value": 1.54,
+      "unit": "bits/parameter",
+      "condition": "derived: 2 bits / 1.3 for an MoE with 32 experts"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "MoE weights hold somewhat less information per parameter, consistent with experts tolerating lower rates.",
+    "from_review": "weights"
+   },
+   {
+    "id": "allenzhu-2024-knowledge-capacity/4",
+    "claim": "Mixing in junk data cuts the capacity for useful knowledge by up to 20x.",
+    "quote": "Junk data significantly reduces model capacity. As an example, with a 1:7 ratio of \"useful to junk\" training tokens, capacity for useful knowledge loses by a factor of 20 x, even when useful knowledge is exposed 100 times.",
+    "location": "Section 1 (Result 10+11)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 20,
+      "unit": "x capacity loss",
+      "condition": "useful:junk token ratio 1:7, useful knowledge seen 100 times"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Models trained on web data may hold far less than 2 bits/param of useful knowledge, but the weights still encode the junk, so the total content per weight need not be lower.",
+    "from_review": "weights"
+   },
+   {
+    "id": "allenzhu-2024-knowledge-capacity/5",
+    "claim": "Language models store at most about 2 bits of factual knowledge per parameter, even in int8, so a 7B model holds ~14B bits.",
+    "quote": "we establish that language models can and only can store 2 bits of knowledge per parameter, even when quantized to int8 , and such knowledge can be flexibly extracted for downstream applications. Consequently, a 7B model can store 14B bits of knowledge",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_w.capacity",
+      "value": 2,
+      "unit": "bits/parameter",
+      "condition": "synthetic biography knowledge, 1000 exposures, GPT-2-style models"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Ceiling: a K-sized update (8e7 bits) can carry at most ~0.6% of a 7B model's knowledge, so knowledge-heavy generational jumps cannot fit in one block.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "allenzhu-2024-knowledge-capacity/6",
+    "claim": "Capacity drops to 0.7 bits/parameter in int4 and to ~1 bit/parameter with only 100 exposures.",
+    "quote": "Result 8: Quantizing to int8 does not compromise model capacity (even for models on the boundary of 2bit/param); however, quantizing to int4 reduces capacity to 0.7bit/param.",
+    "location": "Section 1 (Result 8; Result 4)",
+    "quantities": [
+     {
+      "param": "b_w.capacity",
+      "value": 0.7,
+      "unit": "bits/parameter",
+      "condition": "int4 GPTQ quantization"
+     },
+     {
+      "param": "b_w.capacity",
+      "value": 1,
+      "unit": "bits/parameter",
+      "condition": "100 exposures per fact (Result 4)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Rarely seen knowledge stores at ~1 bit/param, so small updates hold even less new knowledge than the 2-bit ceiling.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "brown-2026-weight-theft",
+  "title": "Aggressive Compression Enables LLM Weight Theft",
+  "authors": "Davis Brown, Juan-Pablo Rivera, Dan Hendrycks, Mantas Mazeika",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2601.01296",
+  "topics": [
+   "weights",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "brown-2026-weight-theft/1",
+    "claim": "If decompression may include fine-tuning, LLM weights compress 10-100x beyond what inference-oriented quantization achieves.",
+    "quote": "We find that models are orders of magnitude (10-100x) more compressible than standard practice would suggest, when one allows for high decompression costs, in the form of additional finetuning.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The adversary's rate is lower than inference quantization's once a decoder may run training; that decoding is itself a training workload.",
+    "from_review": "weights"
+   },
+   {
+    "id": "brown-2026-weight-theft/2",
+    "claim": "Vector quantization plus 1B tokens of recovery fine-tuning keeps Qwen2-1.5B within 1.6 MMLU points at 1.15 bits per parameter, where AQLM collapses.",
+    "quote": "Our method maintains reasonable fidelity at $1.15$ BPP, with only a $1.6\\%$ reduction in accuracy on MMLU.",
+    "location": "Section 4; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1.15,
+      "unit": "bits/weight",
+      "condition": "Qwen2-1.5B, 1B-token recovery fine-tune (~0.01% of pretraining): MMLU 56.5 -> 54.9, C4 loss 3.28 -> 3.69 (Table 1)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 0.58,
+      "unit": "bits/weight",
+      "condition": "Qwen2-1.5B: MMLU 56.5 -> 48.4, C4 loss 3.28 -> 4.27; random-init baseline 25.6 (Table 1)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "With fine-tuned decoding, ~1 bit per weight keeps most capability of a small model.",
+    "from_review": "weights",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "brown-2026-weight-theft/3",
+    "claim": "At 7B with only 50M recovery tokens, the losses are larger: MMLU 70.5 falls to 65.5 at 3.01 bits and 48.5 at 1.52 bits.",
+    "quote": "For the larger Qwen2-7B model, our method achieves an MMLU accuracy of 48.5 at 1.52 bits per parameter (BPP), compared to 34.0 for AQLM, representing a difference of 14.5 points.",
+    "location": "Section 4; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1.52,
+      "unit": "bits/weight",
+      "condition": "Qwen2-7B, 50M-token recovery fine-tune: MMLU 70.5 -> 48.5 (Table 1)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 2.26,
+      "unit": "bits/weight",
+      "condition": "Qwen2-7B: MMLU 70.5 -> 61.2 (Table 1)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 3.01,
+      "unit": "bits/weight",
+      "condition": "Qwen2-7B: MMLU 70.5 -> 65.5 (Table 1)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "At 7B scale, sub-2-bit rates are not yet at retained quality with small recovery budgets.",
+    "from_review": "weights"
+   },
+   {
+    "id": "brown-2026-weight-theft/4",
+    "claim": "Llama-3-70B weights keep very low reconstruction error down to 0.1 bits per parameter, but this was not evaluated on tasks.",
+    "quote": "the latter of which maintains very low MSE down to $0.1$ BPP with almost no degradation.",
+    "location": "Section 4.1; Figure 10",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 0.1,
+      "unit": "bits/weight",
+      "condition": "Llama-3-70B weight-space MSE only; no downstream evaluation (Figure 10 notes no full evaluations on Llama 3 models)"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "If confirmed on tasks, larger models could reach the ~0.1-bit regime where b_w enters the NCI bound; unverified.",
+    "from_review": "weights"
+   },
+   {
+    "id": "brown-2026-weight-theft/5",
+    "claim": "The headline estimate is that an attacker could reach 16x to 100x compression with small trade-offs when expensive decompression (fine-tuning) is allowed.",
+    "quote": "attackers could achieve 16× to 100× compression with minimal trade-offs, reducing the time it would take for an attacker to illicitly transmit model weights from the defender’s server from months to days",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "extrapolated",
+    "bears_on": "Supports the draft's '16x-100x' attribution as the authors' estimate, but see the next findings for what was measured.",
+    "from_review": "prior"
+   },
+   {
+    "id": "brown-2026-weight-theft/6",
+    "claim": "On Qwen2-1.5B, vector quantization followed by decompression training holds MMLU within 1.6 points at 1.15 bits per parameter.",
+    "quote": "Our method maintains reasonable fidelity at 1.15 BPP, with only a 1.6% reduction in accuracy on MMLU. Thus, our method is able to obtain 16× compression compared to the original model without reducing downstream performance.",
+    "location": "Section 4.2 (Results); Table 1 (Qwen2-1.5B, original MMLU 56.5; 0.58/1.15/2.03 BPP give 48.4/54.9/55.5)",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1.15,
+      "unit": "bits/weight",
+      "condition": "Qwen2-1.5B, MMLU 54.9 vs 56.5, after 1B tokens of decompression training"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The only downstream-validated 16x result is on a 1.5B model, which puts the central measured b_w.pretrained near 1 bit per weight.",
+    "from_review": "prior"
+   },
+   {
+    "id": "brown-2026-weight-theft/7",
+    "claim": "On Qwen2-7B with only 50M decompression tokens, 1.52 bits per parameter keeps MMLU at 48.5, 22 points below the original 70.5.",
+    "quote": "For the larger Qwen2-7B model, our method achieves an MMLU accuracy of 48.5 at 1.52 bits per parameter (BPP), compared to 34.0 for AQLM",
+    "location": "Section 4.2 (Results); Table 1 (Qwen2-7B original 70.5; 1.5/2.26/3.01 BPP give 48.5/61.2/65.5)",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 3.01,
+      "unit": "bits/weight",
+      "condition": "Qwen2-7B, MMLU 65.5 vs 70.5 (5 points lost) with 50M decompression tokens"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 1.52,
+      "unit": "bits/weight",
+      "condition": "Qwen2-7B, MMLU 48.5 vs 70.5 (22 points lost)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "DISCREPANCY: for FP16 Qwen2 at 7B the measured result near 10x (1.52 BPP) loses 22 MMLU points and only about 5x (3 BPP) is within 5 points, so '16x-100x for FP16 Qwen2 models' overstates what was shown at scale.",
+    "from_review": "prior"
+   },
+   {
+    "id": "brown-2026-weight-theft/8",
+    "claim": "The 100x-plus end comes from reconstruction-error (MSE) curves on Llama-3-70B, without downstream evaluation.",
+    "quote": "the Llama-3-70B Pareto frontier obtains very high-fidelity compression down to 0.1 bits per parameter (BPP), representing a 160× compression. Note that we do not run full evaluations on Llama 3 models",
+    "location": "Appendix, Figure 10 caption",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 0.1,
+      "unit": "bits/weight",
+      "condition": "Llama-3-70B, MSE-based rate-distortion only, no downstream evaluation"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "DISCREPANCY: the 100x end rests on Llama-3-70B and Pythia reconstruction error, not on Qwen2 and not on capability retention, so b_w near 0.1-0.16 bits is a hypothesis, not a measurement.",
+    "from_review": "prior"
+   },
+   {
+    "id": "brown-2026-weight-theft/9",
+    "claim": "Decompressing Qwen2-1.5B used 1B tokens of continued pretraining and fine-tuning, about 0.01% of its pretraining data.",
+    "quote": "We train for a combined $1$ billion tokens on these two datasets, comprising approximately $0.01\\%$ of the Qwen2 pre-training data of $7$ trillion tokens.",
+    "location": "Section 4.2 (Setup)",
+    "quantities": [
+     {
+      "param": "update.decode_flops",
+      "value": 9e+18,
+      "unit": "FLOPs",
+      "condition": "derived: 6 x 1.5e9 params x 1e9 tokens; decompression of pretrained weights, not of an update; about 9x Gamma"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Aggressive weight compression is paid for in decode compute that already exceeds one block's Gamma at 1.5B, so low b_w and decode-within-Gamma pull against each other in NCI's U condition.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "castro-2025-quartet",
+  "title": "Quartet: Native FP4 Training Can Be Optimal for Large Language Models",
+  "authors": "Roberto L. Castro, Andrei Panferov, Soroush Tabesh, Oliver Sieberling, Jiale Chen, Mahdi Nikdan, et al.",
+  "year": 2025,
+  "venue": "NeurIPS 2025",
+  "url": "https://arxiv.org/abs/2505.14669",
+  "topics": [
+   "weights",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "castro-2025-quartet/1",
+    "claim": "Fully MXFP4 training of the linear layers is near-lossless when training data is plentiful, but a 7B C4 run still shows a perplexity gap to BF16.",
+    "quote": "which provides the best accuracy-efficiency trade-off among existing methods, and is near-lossless for LLM pre-training in the large-data regime",
+    "location": "Section 1 (contributions); Table 7",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4.25,
+      "unit": "bits/weight",
+      "condition": "derived: MXFP4 = 4-bit E2M1 + 8-bit shared scale per 32 values; Llama-type 7B on C4, PPL 16.40 BF16 vs 17.77 Quartet (Table 7)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Training at ~4.25 bits per weight is feasible with a small loss, consistent with a ~4-bit floor for trained precision.",
+    "from_review": "weights"
+   },
+   {
+    "id": "castro-2025-quartet/2",
+    "claim": "Training with all linear-layer matmuls in MXFP4 (forward and backward) is competitive with FP8 and FP16.",
+    "quote": "demonstrating that fully FP4-based training is a competitive alternative to FP16 half-precision and to FP8 training.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.25,
+      "unit": "bits",
+      "condition": "derived: MXFP4 = 4 bits + 8-bit scale per 32 elements; Llama-type 30M-200M on C4, stability checked to ~7B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Independent support for ~4-bit activations and gradients surviving training; mostly sub-1B evidence.",
+    "from_review": "activations"
+   },
+   {
+    "id": "castro-2025-quartet/3",
+    "claim": "The scaling-law fits are on 30-200M models, with selective runs up to about 7B for stability only.",
+    "quote": "We additionally selectively scale the model size up to around 7 billion parameters to verify training stability.",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Limits the weight of this source for frontier-scale b_a.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "chee-2023-quip",
+  "title": "QuIP: 2-Bit Quantization of Large Language Models With Guarantees",
+  "authors": "Jerry Chee, Yaohui Cai, Volodymyr Kuleshov, Christopher De Sa",
+  "year": 2023,
+  "venue": "NeurIPS 2023",
+  "url": "https://arxiv.org/abs/2307.13304",
+  "topics": [
+   "weights",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "chee-2023-quip/1",
+    "claim": "Incoherence processing (random orthogonal rotations before rounding) made 2-bit LLM quantization viable for the first time, with a theoretical error guarantee.",
+    "quote": "yields the first LLM quantization methods that produce viable results using only two bits per weight.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2,
+      "unit": "bits/weight",
+      "condition": "OPT models up to 66B; 'viable' but with large perplexity gaps"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Opened the 2-bit regime that later vector quantizers made near-usable.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "chmiel-2025-fp4-all-the-way",
+  "title": "FP4 All the Way: Fully Quantized Training of LLMs",
+  "authors": "Brian Chmiel, Maxim Fishman, Ron Banner, Daniel Soudry",
+  "year": 2025,
+  "venue": "NeurIPS 2025",
+  "url": "https://arxiv.org/abs/2505.19115",
+  "topics": [
+   "weights",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "chmiel-2025-fp4-all-the-way/1",
+    "claim": "A 7B model trained fully in NVFP4 on 1T tokens closes its small loss gap to BF16 after a short quantization-aware fine-tuning phase.",
+    "quote": "We successfully train a 7B-parameter LLM entirely in FP4 precision on a trillion tokens, using 256 Intel Gaudi2 accelerators. While a slight gap in final training loss is observed compared to the BF16 baseline, it is fully closed through the brief QAF phase.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4.5,
+      "unit": "bits/weight",
+      "condition": "derived: NVFP4 (E2M1 values, E4M3 scale per 16); 7B, 1T tokens, FP4 simulated on Gaudi2"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Independent confirmation that ~4.5-bit weights suffice for 7B pretraining.",
+    "from_review": "weights"
+   },
+   {
+    "id": "chmiel-2025-fp4-all-the-way/2",
+    "claim": "A 7B model trained with FP4 weights, activations and gradients on up to 200B tokens matches BF16 downstream.",
+    "quote": "we successfully train a 7-billion-parameter model on 256 Intel Gaudi2 accelerators. The resulting FP4-trained model achieves downstream task performance comparable to a standard BF16 baseline",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.5,
+      "unit": "bits",
+      "condition": "derived: NVFP4 (16 E2M1 values share an E4M3 scale); fully quantized training, 7B, up to 200B tokens"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Second at-scale confirmation that ~4.5-bit activations survive forward and backward passes.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "deepseekai-2024-deepseek-v3",
+  "title": "DeepSeek-V3 Technical Report",
+  "authors": "DeepSeek-AI",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2412.19437",
+  "topics": [
+   "weights",
+   "activations",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "deepseekai-2024-deepseek-v3/1",
+    "claim": "FP8 mixed-precision training stays within 0.25% relative loss of BF16 at two MoE scales over about 1T tokens, and was used for the 671B (37B active) model on 14.8T tokens.",
+    "quote": "Notably, compared with the BF16 baseline, the relative loss error of our FP8-training model remains consistently below 0.25%, a level well within the acceptable range of training randomness.",
+    "location": "Section 3.3",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 8,
+      "unit": "bits/weight",
+      "condition": "FP8 (E4M3) GEMM weights with 128x128 block scales; validated at two scales similar to DeepSeek-V2-Lite and DeepSeek-V2, ~1T tokens"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A production frontier model was trained with 8-bit forward weights, so its released weights start at 8 bits.",
+    "from_review": "weights",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "deepseekai-2024-deepseek-v3/2",
+    "claim": "Master weights and gradients remain in FP32 in DeepSeek-V3's FP8 training.",
+    "quote": "However, the master weights (stored by the optimizer) and gradients (used for batch size accumulation) are still retained in FP32 to ensure numerical stability throughout training.",
+    "location": "Section 3.3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 32,
+      "unit": "bits",
+      "condition": "precision of master weights and accumulated gradients"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "As with NVFP4, the training state that changes is 32-bit even when compute is 8-bit.",
+    "from_review": "weights"
+   },
+   {
+    "id": "deepseekai-2024-deepseek-v3/3",
+    "claim": "In production MoE training, activations are quantized to FP8 before expert-parallel dispatch, and activation gradients likewise; combine stays BF16.",
+    "quote": "we quantize the activation before MoE up-projections into FP8 and then apply dispatch components, which is compatible with FP8 Fprop in MoE up-projections. Like the inputs of the Linear after the attention operator, scaling factors for this activation are integral power of 2. A similar strategy is applied to the activation gradient before MoE down-projections. For both the forward and backward combine components, we retain them in BF16 to preserve training precision in critical parts of the training pipeline.",
+    "location": "Section 3.3 (Low-Precision Communication)",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "FP8 dispatch over expert-parallel links, forward and backward, 671B model at d=7168; combine in BF16"
+     },
+     {
+      "param": "activation.compression_ratio",
+      "value": 2,
+      "unit": "x",
+      "condition": "derived: FP8 vs BF16 on dispatch only"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The best production evidence of activations crossing a device boundary: 8 bits one way, 16 bits on the return path.",
+    "from_review": "activations"
+   },
+   {
+    "id": "deepseekai-2024-deepseek-v3/4",
+    "claim": "DeepSeek-V3 has hidden width 7168 and caches a 512-dim KV latent (plus 64-dim RoPE key) per token per layer.",
+    "quote": "We set the number of Transformer layers to 61 and the hidden dimension to 7168.",
+    "location": "Section 4.2",
+    "quantities": [
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 0.08,
+      "unit": "fraction of d_model",
+      "condition": "derived: (512+64)/7168 per token per layer; what attention reads from past tokens; trained end to end"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "At exactly NCI's d=7168, what later tokens need from each past token per layer is 8% of d; relevant if blocks split along the sequence.",
+    "from_review": "activations"
+   },
+   {
+    "id": "deepseekai-2024-deepseek-v3/5",
+    "claim": "DeepSeek-V3 uses byte-level BPE with a 128K vocabulary (vocab_size 129,280 in its config, hidden size 7168).",
+    "quote": "The tokenizer for DeepSeek-V3 employs Byte-level BPE (Shibata et al., 1999) with an extended vocabulary of 128K tokens.",
+    "location": "Section 4.1; config.json on Hugging Face (deepseek-ai/DeepSeek-V3, fetched): vocab_size 129280, hidden_size 7168",
+    "quantities": [
+     {
+      "param": "b_tok",
+      "value": 16.98,
+      "unit": "bits/token raw",
+      "condition": "derived: log2(129280)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Raw b_tok ~17 bits for a 671B frontier MoE whose d_model (7168) matches NCI's d.",
+    "from_review": "tokens"
+   },
+   {
+    "id": "deepseekai-2024-deepseek-v3/6",
+    "claim": "On Pile-test, DeepSeek-V3 base scores 0.548 bits per byte and LLaMA-3.1-405B base 0.542 (Qwen2.5-72B 0.638).",
+    "quote": "| English | Pile-test (BPB) | - | 0.606 | 0.638 | 0.542 | 0.548 |",
+    "location": "Table 3 (columns DeepSeek-V2, Qwen2.5 72B, LLaMA-3.1 405B, DeepSeek-V3 base)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.548,
+      "unit": "bits/byte",
+      "condition": "DeepSeek-V3 base, Pile-test"
+     },
+     {
+      "param": "b_tok",
+      "value": 2.16,
+      "unit": "bits/token",
+      "condition": "derived: 0.548 x 3.94 bytes/token (Llama 3 English rate); Pile mixes code and other domains, so approximate"
+     },
+     {
+      "param": "b_tok",
+      "value": 2.14,
+      "unit": "bits/token",
+      "condition": "derived: LLaMA-3.1-405B 0.542 x 3.94"
+     },
+     {
+      "param": "prompt.compression_ratio",
+      "value": 7.9,
+      "unit": "x vs raw token ids",
+      "condition": "derived: 16.97 / 2.14"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Best frontier anchor: entropy-coding against a committed 400B-class model gives b_tok ~2.1-2.2 bits/token, ~8x below raw.",
+    "from_review": "tokens"
+   }
+  ]
+ },
+ {
+  "id": "dettmers-2022-kbit-scaling",
+  "title": "The case for 4-bit precision: k-bit Inference Scaling Laws",
+  "authors": "Tim Dettmers, Luke Zettlemoyer",
+  "year": 2022,
+  "venue": "ICML 2023",
+  "url": "https://arxiv.org/abs/2212.09720",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dettmers-2022-kbit-scaling/1",
+    "claim": "For zero-shot (data-free) scalar quantization across 19M-176B models, 4 bits per weight maximizes accuracy for a fixed total number of model bits.",
+    "quote": "Overall, our findings show that 4-bit precision is almost universally optimal for total model bits and zero-shot accuracy.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4,
+      "unit": "bits/weight",
+      "condition": "size-optimal rate for 3-8 bit zero-shot quantization, BLOOM/OPT/Pythia/GPT-2, 19M-176B params"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Upper anchor: with simple quantizers, about 4 bits per weight is optimal; better quantizers later moved this to 2-3 bits.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "dettmers-2023-spqr",
+  "title": "SpQR: A Sparse-Quantized Representation for Near-Lossless LLM Weight Compression",
+  "authors": "Tim Dettmers, Ruslan Svirschevski, Vage Egiazarian, Denis Kuznedelev, Elias Frantar, Saleh Ashkboos, et al.",
+  "year": 2023,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2306.03078",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dettmers-2023-spqr/1",
+    "claim": "Storing outlier weights sparsely in high precision brings LLaMA and Falcon within 1% of FP16 perplexity at 4.6-4.7 bits per parameter.",
+    "quote": "if we measure the bits per parameter needed to come within 1% of the 16-bit performance in terms of perplexity, Figure 1 shows that SpQR with 4.6 to 4.71 bits per parameter approaches the non-quantized models with at most 1% margin of error for all models",
+    "location": "Section 4.2; Figure 1; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4.71,
+      "unit": "bits/weight",
+      "condition": "LLaMA-65B, WikiText2 PPL 3.53 -> 3.57 (Table 1); within 1%"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 4.6,
+      "unit": "bits/weight",
+      "condition": "lower end of the within-1% range across LLaMA/Falcon (Figure 1)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A strict 'within 1% perplexity' standard costs about 4.6-4.7 bits per weight for 2023-era models.",
+    "from_review": "weights"
+   },
+   {
+    "id": "dettmers-2023-spqr/2",
+    "claim": "Accepting a slightly larger perplexity gap gives a better size-quality trade-off at about 3.4-3.9 bits.",
+    "quote": "We achieve even better quality-size-tradeoff when compressing to as little as 3.36 bits",
+    "location": "Section 6",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 3.36,
+      "unit": "bits/weight",
+      "condition": "lowest SpQR configuration reported; not within 1%"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The near-lossless rate falls toward ~3.5 bits once a small loss is accepted.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "egiazarian-2024-aqlm",
+  "title": "Extreme Compression of Large Language Models via Additive Quantization",
+  "authors": "Vage Egiazarian, Andrei Panferov, Denis Kuznedelev, Elias Frantar, Artem Babenko, Dan Alistarh",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2401.06118",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "egiazarian-2024-aqlm/1",
+    "claim": "With learned additive multi-codebook quantization, the size-optimal rate for Llama 2 is about 2.5 bits per parameter.",
+    "quote": "Thus, the Pareto-optimal bitwidth for AQLM appears to be around 2.5 bits per parameter (Table 1), at which point we are comparable to 5-bit AQLM for Llama 2 7B (Appendix Table 10).",
+    "location": "Section 4.1; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2.5,
+      "unit": "bits/weight",
+      "condition": "Pareto-optimal bits/param at fixed model bytes, Llama 2 family"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A reader who chooses the best model per byte stores weights at ~2.5 bits, not 4.",
+    "from_review": "weights"
+   },
+   {
+    "id": "egiazarian-2024-aqlm/2",
+    "claim": "Llama 2 70B at 2.07 bits (codebooks included) reaches WikiText2 perplexity 3.94 vs 3.12 in FP16.",
+    "quote": "For GPU inference, we targeted quantized Llama 2 models with 16-bit codebooks, corresponding to 2.07 bits for Llama 2 70B, 2.19 bits for 13B, and 2.29 bits for 7B models",
+    "location": "Section 4.4; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2.07,
+      "unit": "bits/weight",
+      "condition": "Llama 2 70B, WikiText2 PPL 3.12 -> 3.94 (Table 1)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Codebook overheads are negligible at 70B scale, so ~2 bits is the real per-weight cost.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "frantar-2022-gptq",
+  "title": "GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers",
+  "authors": "Elias Frantar, Saleh Ashkboos, Torsten Hoefler, Dan Alistarh",
+  "year": 2022,
+  "venue": "ICLR 2023",
+  "url": "https://arxiv.org/abs/2210.17323",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "frantar-2022-gptq/1",
+    "claim": "Second-order one-shot quantization keeps OPT-175B essentially lossless at 4 bits and close at 3 bits.",
+    "quote": "For example, GPTQ loses only 0.03 perplexity at 4-bit on the 175B model, while RTN drops 2.2 points",
+    "location": "Section 5; Table 3",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4,
+      "unit": "bits/weight",
+      "condition": "OPT-175B, WikiText2 PPL 8.34 -> 8.37 (Table 3); per-row scales"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 3,
+      "unit": "bits/weight",
+      "condition": "OPT-175B, WikiText2 PPL 8.34 -> 8.68 (Table 3)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Sets the classic near-lossless PTQ point at 3-4 bits per weight for 100B+ models.",
+    "from_review": "weights"
+   },
+   {
+    "id": "frantar-2022-gptq/2",
+    "claim": "With grouping, 2-bit GPTQ on the largest models costs under 1.5 perplexity points at about 2.2 bits including scales.",
+    "quote": "(group-size 128; using FP16 scale and 2-bit zero point per group) the perplexity increase is already less than 1.5 points",
+    "location": "Section 5; Table 7",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2.2,
+      "unit": "bits/weight",
+      "condition": "OPT-175B / BLOOM-176B, 2-bit weights with group size 128 incl. scale/zero overhead; WikiText2 PPL increase < 1.5"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows ~2 bits was already usable (with visible loss) for 175B models in 2022.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "frantar-2023-qmoe",
+  "title": "QMoE: Practical Sub-1-Bit Compression of Trillion-Parameter Models",
+  "authors": "Elias Frantar, Dan Alistarh",
+  "year": 2023,
+  "venue": "MLSys 2024",
+  "url": "https://arxiv.org/abs/2310.16795",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "frantar-2023-qmoe/1",
+    "claim": "Ternary quantization plus dictionary-based entropy coding stores the whole 1.6T-parameter SwitchTransformer-c2048 at 0.807 bits per parameter.",
+    "quote": "corresponding to 0.807 bits per parameter, reducing the checkpoint size from 3142GB to 158.6GB.",
+    "location": "Section 4.3",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 0.807,
+      "unit": "bits/weight",
+      "condition": "SwitchTransformer-c2048, 1.6T params incl. dense parts; ternary experts, C4 validation loss 1.18 -> 1.26 (Table 5)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The only verified sub-1-bit result at retained quality, on a huge but older MoE whose experts compress far better than modern dense weights.",
+    "from_review": "weights"
+   },
+   {
+    "id": "frantar-2023-qmoe/2",
+    "claim": "Data-aware quantization keeps c2048 within 1.7% relative loss at 2 bits and 6.7% at ternary, before entropy coding.",
+    "quote": "In contrast, using data-dependent quantization, 2-bit is achievable at minimal loss (1.7% relative on c2048) and ternary at only a small increase (6.7% relative on c2048).",
+    "location": "Section 4.3; Table 5",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2,
+      "unit": "bits/weight",
+      "condition": "c2048, C4 validation loss +1.7% relative"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 1.58,
+      "unit": "bits/weight",
+      "condition": "derived: log2(3) for ternary before entropy coding; C4 loss +6.7% relative"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Gives the quality cost of the sub-1-bit point: a few percent of loss.",
+    "from_review": "weights"
+   },
+   {
+    "id": "frantar-2023-qmoe/3",
+    "claim": "Ternary-quantized c2048 experts are about 89% zeros, which is what entropy coding exploits.",
+    "quote": "For ternary weights, the largest model achieves close to 90% natural sparsity",
+    "location": "Section 4.1; Table 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.886,
+      "unit": "fraction zeros",
+      "condition": "c2048 ternary weights (Table 4)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 0.63,
+      "unit": "bits/weight",
+      "condition": "derived: entropy of a ternary symbol with P(0)=0.886 and symmetric +/-1, assuming independent weights"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Quantization and entropy coding stack: ternary at high sparsity is ~0.6 bits, the main route below 1 bit.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "frantar-2025-compression-scaling-laws",
+  "title": "Compression Scaling Laws: Unifying Sparsity and Quantization",
+  "authors": "Elias Frantar, Utku Evci, Wonpyo Park, Neil Houlsby, Dan Alistarh",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2502.16440",
+  "topics": [
+   "weights",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "frantar-2025-compression-scaling-laws/1",
+    "claim": "For models trained compressed from scratch, weight-only quantization keeps a high effective parameter multiplier down to 1 bit, so fewer bits per weight still buys more quality per byte.",
+    "quote": "we find that weight-only quantization maintains strong parameter efficiency even at very low bitwidths, with 4-bit to 1-bit showing approximately 2x improvement.",
+    "location": "Section 5; Table 2",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4.33,
+      "unit": "bits per dense-equivalent parameter",
+      "condition": "derived: 4 bits / EPM 0.923 (Table 2); Llama-type models on C4, Chinchilla token ratios"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 2.85,
+      "unit": "bits per dense-equivalent parameter",
+      "condition": "derived: 2 bits / EPM 0.702 (Table 2)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 2.15,
+      "unit": "bits per dense-equivalent parameter",
+      "condition": "derived: 1 bit / EPM 0.466 (Table 2)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Normalizes rates by capability: a 1-bit weight is worth ~0.47 full-precision weights, so ~2 bits per dense-equivalent parameter is the floor of this family.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "han-2016-deepcompression",
+  "title": "Deep Compression: Compressing Deep Neural Networks with Pruning, Trained Quantization and Huffman Coding",
+  "authors": "Song Han, Huizi Mao, William J. Dally",
+  "year": 2016,
+  "venue": "ICLR 2016",
+  "url": "https://arxiv.org/abs/1510.00149",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "han-2016-deepcompression/1",
+    "claim": "Pruning, trained quantization and Huffman coding shrink AlexNet and VGG-16 storage by 35x and 49x against FP32 without accuracy loss.",
+    "quote": "reduce the storage requirement of neural networks by 35× to 49× without affecting their accuracy",
+    "location": "abstract (AlexNet 240MB to 6.9MB; VGG-16 552MB to 11.3MB)",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 0.91,
+      "unit": "bits/weight",
+      "condition": "derived: 32 bits / 35x, AlexNet, ImageNet top-1 unchanged"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 0.65,
+      "unit": "bits/weight",
+      "condition": "derived: 32 bits / 49x, VGG-16"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Supports the draft's 35-49x; it is relative to FP32 (about 2.2-3.3x against FP16) on fully-connected-heavy CNNs that prune 9-13x, so it suggests b_w.pretrained near 0.65-0.9 bits only for very redundant models.",
+    "from_review": "prior",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities derived-ok"
+   }
+  ]
+ },
+ {
+  "id": "hao-2024-neuzip",
+  "title": "NeuZip: Memory-Efficient Training and Inference with Dynamic Compression of Neural Networks",
+  "authors": "Yongchang Hao, Yanshuai Cao, Lili Mou",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2410.20650",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hao-2024-neuzip/1",
+    "claim": "In Llama-3 8B, BF16 exponents carry under 3 bits of information and mantissas nearly 7 bits, so the ideal lossless ratio is about 1.5x.",
+    "quote": "For the exponent bits, there is a clear pattern that they demonstrate a low-entropy nature, carrying only less than 3 bits of information with 8 bits of capacity. For the mantissa bits, they store nearly 7-bit information with 7-bit capacity.",
+    "location": "Section 2.1; Figure 1",
+    "quantities": [
+     {
+      "param": "b_w.lossless",
+      "value": 10.66,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits / 1.501 ideal (entropy) compression ratio in the Section 2.1 example; Llama-3 8B BF16"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Independent confirmation of a ~10.7-bit lossless floor for BF16 weights.",
+    "from_review": "weights"
+   },
+   {
+    "id": "hao-2024-neuzip/2",
+    "claim": "Lossless exponent compression also works during training, roughly halving the memory to train Llama-3 8B with unchanged training dynamics.",
+    "quote": "we significantly reduce the memory footprint of training a Llama-3 8B model from 31GB to less than 16GB, while keeping the training dynamics fully unchanged.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 16,
+      "unit": "GB",
+      "condition": "Llama-3 8B training memory with lossless NeuZip, down from 31 GB (includes optimizer state, not weights alone)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows the ~1/3 lossless saving applies to weights that are being updated, not only to frozen checkpoints.",
+    "from_review": "weights"
+   },
+   {
+    "id": "hao-2024-neuzip/3",
+    "claim": "Keeping the exponent lossless and truncating the mantissa to 3 bits is nearly lossless in perplexity at under half the memory.",
+    "quote": "Notably, the 3-bit NeuZip achieves nearly lossless performance in all experiments while using less than 50% memory compared with the uncompressed model.",
+    "location": "Section 3.3; Table 3",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 8.2,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits x 7.70/15.08 GiB inference memory incl. overheads; Llama-3 8B, PPL 9.93 vs 9.89 (Table 3)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A float-format lossy point; far above what integer/vector quantizers reach, so not the adversary's frontier.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "hershcovitch-2024-zipnn",
+  "title": "ZipNN: Lossless Compression for AI Models",
+  "authors": "Moshik Hershcovitch, Andrew Wood, Leshem Choshen, Guy Girmonsky, Roy Leibovitz, Or Ozeri, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2411.05239",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hershcovitch-2024-zipnn/1",
+    "claim": "Lossless entropy coding of BF16 LLM checkpoints saves about one third, because only the exponent byte compresses (about 3x); sign and mantissa bits are nearly incompressible.",
+    "quote": "When compressing regular models we found that the exponent compresses by approximately a 3X factor (namely compressed size of 33%) whereas the fraction and sign bits hardly compress at all.",
+    "location": "Section III-A; Table II",
+    "quantities": [
+     {
+      "param": "b_w.lossless",
+      "value": 10.6,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits x 66.4% compressed size (Llama-3.1 8B BF16, 16 GB, Table II; Falcon-7b also 66.4%); bit-exact"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Puts the lossless rate of a BF16 weight near 10.6 bits, so lossless coding alone lowers b_w by only about a third.",
+    "from_review": "weights"
+   },
+   {
+    "id": "hershcovitch-2024-zipnn/2",
+    "claim": "Checkpoints already quantized with GPTQ or AWQ still compress losslessly to 85-91% of their size, while GGUF-quantized checkpoints do not compress at all.",
+    "quote": "with some off-the-shelf quantized models that have been quantized with GTPQ [56] and AWQ [57] we find that they are still compressible, with a compressed size between 85-91%. On the other hand, we found that other quantized models using GGUF do not compress at all.",
+    "location": "Section VI-A",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.85,
+      "unit": "compressed/original size",
+      "condition": "lossless recompression of off-the-shelf GPTQ/AWQ checkpoints, best case; model sizes not given in the passage"
+     },
+     {
+      "param": "other",
+      "value": 0.91,
+      "unit": "compressed/original size",
+      "condition": "same, worst case; GGUF checkpoints about 1.0"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Entropy coding on top of a good quantizer gains at most about 10-15% more, so lossless and lossy savings compose only weakly.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "huang-2024-billm",
+  "title": "BiLLM: Pushing the Limit of Post-Training Quantization for LLMs",
+  "authors": "Wei Huang, Yangdong Liu, Haotong Qin, Ying Li, Shiming Zhang, Xianglong Liu, et al.",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2402.04291",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "huang-2024-billm/1",
+    "claim": "Post-training binarization at about 1.08 bits runs Llama2-70B but at roughly 2.5x the FP16 perplexity.",
+    "quote": "BiLLM, for the first time, achieves high-accuracy inference (e.g. 8.41 perplexity on LLaMA2-70B) with only 1.08-bit weights across various LLM families and evaluation metrics",
+    "location": "abstract; Table 2",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1.08,
+      "unit": "bits/weight",
+      "condition": "LLaMA2-70B WikiText2 PPL 8.41 vs FP16 3.32; not retained quality"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Without fine-tuning, about 1 bit per weight loses a lot, so pure PTQ does not reach sub-1.5 bits at retained quality.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "kim-2023-squeezellm",
+  "title": "SqueezeLLM: Dense-and-Sparse Quantization",
+  "authors": "Sehoon Kim, Coleman Hooper, Amir Gholami, Zhen Dong, Xiuyu Li, Sheng Shen, et al.",
+  "year": 2023,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2306.07629",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kim-2023-squeezellm/1",
+    "claim": "Sensitivity-weighted non-uniform quantization plus a sparse FP16 outlier set stays within 0.1 (4-bit) and 0.5 (3-bit) perplexity of FP16 on LLaMA.",
+    "quote": "This enables nearly lossless compression with less than 0.1/0.5 perplexity deviation from the FP16 baseline for 4/3-bit, respectively.",
+    "location": "Section 5.2; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 3.24,
+      "unit": "bits/weight",
+      "condition": "3-bit dense + 0.45% sparse outliers, average bits (Table 1); PPL within 0.5 of FP16"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 4.05,
+      "unit": "bits/weight",
+      "condition": "4-bit dense + sparse outliers, average bits (Table 1); PPL within 0.1 of FP16"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Scalar quantization with outlier handling reaches ~3.2 bits at small loss.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "kumar-2024-precision-scaling",
+  "title": "Scaling Laws for Precision",
+  "authors": "Tanishq Kumar, Zachary Ankner, Benjamin F. Spector, Blake Bordelon, Niklas Muennighoff, Mansheej Paul, et al.",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2411.04330",
+  "topics": [
+   "weights",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kumar-2024-precision-scaling/1",
+    "claim": "Post-training quantization hurts more the longer a model is trained, to the point that extra pretraining data can make the quantized model worse.",
+    "quote": "For inference, we find that the degradation introduced by post-training quantization increases as models are trained on more data, eventually making additional pretraining data actively harmful.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Data-saturated weights carry more information per parameter, so b_w.pretrained rises with tokens per parameter.",
+    "from_review": "weights"
+   },
+   {
+    "id": "kumar-2024-precision-scaling/2",
+    "claim": "A fitted law over 465 runs (up to 1.7B params, 26B tokens) puts the compute-optimal training precision at 7-8 bits.",
+    "quote": "to be around 7-8 bits when fitting our scaling law on runs with quantization done to integer type",
+    "location": "Section 4.3.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 7,
+      "unit": "bits",
+      "condition": "compute-optimal training precision (integer type), lower end; extrapolated from runs up to 1.7B params"
+     },
+     {
+      "param": "other",
+      "value": 8,
+      "unit": "bits",
+      "condition": "same, upper end"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Training below ~4-8 bits costs extra parameters, so low-bit training does not reduce information per useful parameter for free.",
+    "from_review": "weights"
+   },
+   {
+    "id": "kumar-2024-precision-scaling/3",
+    "claim": "Below 4-bit training precision, models would have to grow more than 4x to keep the same loss scaling.",
+    "quote": "the race to low-precision training may have to stop before going below 4-bits, since this would force model sizes to become disproportionately (more than 4x) larger to maintain loss scaling",
+    "location": "Section 4.3.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "bits",
+      "condition": "training precision below which the required model size grows by more than 4x"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Implies a practical floor near 4 bits for trained weight precision, and near ~1-2 bits per effective parameter.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "lin-2023-awq",
+  "title": "AWQ: Activation-aware Weight Quantization for On-Device LLM Compression and Acceleration",
+  "authors": "Ji Lin, Jiaming Tang, Haotian Tang, Shang Yang, Wei-Ming Chen, Wei-Chen Wang, et al.",
+  "year": 2023,
+  "venue": "MLSys 2024",
+  "url": "https://arxiv.org/abs/2306.00978",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "lin-2023-awq/1",
+    "claim": "Activation-aware scaling keeps Llama-2-70B within 0.1 perplexity at 4 bits and within 0.4 at 3 bits (group size 128).",
+    "quote": "AWQ improves over round-to-nearest quantization (RTN) for different model sizes and different bit-precisions.",
+    "location": "Section 5; Table 4",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4,
+      "unit": "bits/weight",
+      "condition": "plus per-group-128 scales; Llama-2-70B WikiText2 PPL 3.32 -> 3.41 (Table 4)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 3,
+      "unit": "bits/weight",
+      "condition": "plus per-group-128 scales; Llama-2-70B WikiText2 PPL 3.32 -> 3.74 (Table 4)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The production default (INT4 weights) is near-lossless; 3 bits shows measurable loss without vector codebooks.",
+    "from_review": "weights"
+   },
+   {
+    "id": "lin-2023-awq/2",
+    "claim": "Quantization error is dominated by a small set of salient weight channels; protecting about 1% of them recovers most quality.",
+    "quote": "Protecting only 1% salient weights can greatly reduce quantization error.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Information is unevenly spread across weights, so mixed-precision schemes beat uniform rates and lower the average b_w.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "liu-2025-paretoq",
+  "title": "ParetoQ: Improving Scaling Laws in Extremely Low-bit LLM Quantization",
+  "authors": "Zechun Liu, Changsheng Zhao, Hanxian Huang, Sijia Chen, Jing Zhang, Jiawei Zhao, et al.",
+  "year": 2025,
+  "venue": "NeurIPS 2025",
+  "url": "https://arxiv.org/abs/2502.02631",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2025-paretoq/1",
+    "claim": "At 3 bits and above, quantization-aware fine-tuning stays near the pretrained model; at 2 bits and below, the network relearns its representations.",
+    "quote": "Our findings reveal a notable learning transition between 2 and 3 bits: For 3-bits and above, the fine-tuned models stay close to their original pre-trained distributions, whereas for learning 2-bit networks or below, the representations change drastically.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Below ~2-3 bits, a low rate comes from retraining, not from compressing the original weights, so it costs training compute.",
+    "from_review": "weights"
+   },
+   {
+    "id": "liu-2025-paretoq/2",
+    "claim": "With quantization-aware fine-tuning, a 2-bit LLaMA-3 8B is 3.4 points below full precision in average zero-shot accuracy.",
+    "quote": "ParetoQ dramatically narrows the 2-bit quantization gap to full precision to just 3.4 points, outperforming the best QAT method by 5.7 points and the vector quantization method by 7.1 points.",
+    "location": "Section 5.2; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2,
+      "unit": "bits/weight",
+      "condition": "LLaMA-3 8B, QAT fine-tuning; average zero-shot accuracy gap 3.4 points vs full precision (AQLM PTQ gap 10.5)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Heavily trained Llama 3 needs QAT to be near-usable at 2 bits; PTQ alone loses ~10 points.",
+    "from_review": "weights"
+   },
+   {
+    "id": "liu-2025-paretoq/3",
+    "claim": "A ternary LLaMA-3 8B trained with 30B tokens of QAT is 5.6 points below full precision.",
+    "quote": "In contrast, ParetoQ requiring only 30B tokens and utilizing standard AdamW optimization with cosine learning rate decay, narrows the gap to just 5.6 points.",
+    "location": "Section 5.2; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1.58,
+      "unit": "bits/weight",
+      "condition": "LLaMA-3 8B ternary, 30B QAT tokens; average zero-shot gap 5.6 points"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "About 1.6 bits per weight at 8B costs ~5-6 points even with fine-tuning.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "ma-2024-bitnet-b158",
+  "title": "The Era of 1-bit LLMs: All Large Language Models are in 1.58 Bits",
+  "authors": "Shuming Ma, Hongyu Wang, Lingxiao Ma, Lei Wang, Wenhui Wang, Shaohan Huang, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2402.17764",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ma-2024-bitnet-b158/1",
+    "claim": "Ternary-weight models trained from scratch match a same-size full-precision LLaMA in perplexity from 3B parameters.",
+    "quote": "It shows that BitNet b1.58 starts to match full precision LLaMA LLM at 3B model size in terms of perplexity, while being 2.71 times faster and using 3.55 times less GPU memory.",
+    "location": "Section 3; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1.58,
+      "unit": "bits/weight",
+      "condition": "ternary weights from quantization-aware training from scratch; 3B PPL 9.91 vs LLaMA 3B 10.04 (Table 1)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "With training-time quantization, 1.58 bits per weight suffices at small scale; this sets the from-scratch rate, not a compression of an existing model.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "ma-2025-bitnet-2b4t",
+  "title": "BitNet b1.58 2B4T Technical Report",
+  "authors": "Shuming Ma, Hongyu Wang, Shaohan Huang, Xingxing Zhang, Ying Hu, Ting Song, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2504.12285",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ma-2025-bitnet-2b4t/1",
+    "claim": "A 2B ternary model trained from scratch on 4T tokens is close to leading full-precision models of similar size.",
+    "quote": "Our results demonstrate that BitNet b1.58 2B4T achieves performance on par with leading open-weight, full-precision LLMs of similar size",
+    "location": "abstract; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1.58,
+      "unit": "bits/weight",
+      "condition": "2B params, 4T tokens; benchmark average 54.19 vs Qwen2.5-1.5B 55.23 (Table 1); non-embedding memory 0.4 GB"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Native 1.58-bit training survives heavy training (2000 tokens/param), unlike PTQ of heavily trained models.",
+    "from_review": "weights"
+   },
+   {
+    "id": "ma-2025-bitnet-2b4t/2",
+    "claim": "The ternary model beats 4-bit post-training quantized versions of a comparable full-precision model.",
+    "quote": "BitNet b1.58 2B4T maintains stronger overall performance than the INT4 quantized versions of Qwen2.5-1.5B on the evaluated benchmarks.",
+    "location": "Section 4.2; Table 2",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4,
+      "unit": "bits/weight",
+      "condition": "Qwen2.5-1.5B: bf16 avg 55.72, GPTQ-int4 52.15, AWQ-int4 51.17, vs BitNet 55.01 (Table 2)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Small, heavily trained models lose ~3.5 points under INT4 PTQ, consistent with PTQ getting harder as training grows.",
+    "from_review": "weights"
+   },
+   {
+    "id": "ma-2025-bitnet-2b4t/3",
+    "claim": "Training keeps a bf16 master copy of the weights; the ternary weights are only the forward-pass representation.",
+    "quote": "The master weight of BitNet b1.58 2B4T, used for training only",
+    "location": "model weights list after the abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The weights updated during training are 16-bit, so the b_w a training block reads is not the 1.58-bit inference rate.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "malinovskii-2024-pv-tuning",
+  "title": "PV-Tuning: Beyond Straight-Through Estimation for Extreme LLM Compression",
+  "authors": "Vladimir Malinovskii, Denis Mazur, Ivan Ilin, Denis Kuznedelev, Konstantin Burlachenko, Kai Yi, et al.",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2405.14852",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "malinovskii-2024-pv-tuning/1",
+    "claim": "Better quantization-aware fine-tuning of codebook-quantized weights moves the size-optimal rate for Llama 2 down to 2.0 bits.",
+    "quote": "From this perspective, PV-tuning pushes the Pareto-optimal frontier for Llama 2 to 2.0 bits.",
+    "location": "Section 4.3",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2.0,
+      "unit": "bits/weight",
+      "condition": "Pareto-optimal bits/param at fixed model bytes, Llama 2 7B-70B, with fine-tuning on calibration data"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "With light fine-tuning, the size-optimal rate is 2 bits per weight.",
+    "from_review": "weights"
+   },
+   {
+    "id": "malinovskii-2024-pv-tuning/2",
+    "claim": "A 2-bit 13B or 70B model matches the 16-bit model one size down.",
+    "quote": "a 2-bit 13B model outperforms any 7B quantization and is comparable with the 16-bit 7B model. The same holds for the 2-bit 70B model.",
+    "location": "Section 4.3",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "At 2 bits, the cost of compression is roughly one model-size step, an 8x saving in bytes for the same quality.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "morris-2025-memorize",
+  "title": "How much do language models memorize?",
+  "authors": "John X. Morris, Chawin Sitawarin, Chuan Guo, Narine Kokhlikyan, G. Edward Suh, Alexander M. Rush, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.24832",
+  "topics": [
+   "weights",
+   "theory",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "morris-2025-memorize/1",
+    "claim": "GPT-style models trained on random bitstrings memorize about 3.6 bits per parameter before saturating.",
+    "quote": "our measurements estimate that models in the GPT family have an approximate capacity of 3.6 bits-per-parameter.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_w.capacity",
+      "value": 3.6,
+      "unit": "bits/parameter",
+      "condition": "GPT-style models 500K-1.5B params trained on uniform random data"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Upper anchor for the information a weight can hold; a reader never needs more than ~3.6 bits per parameter of content.",
+    "from_review": "weights"
+   },
+   {
+    "id": "morris-2025-memorize/2",
+    "claim": "Doubling weight precision from bf16 to fp32 adds only about 0.3 bits per parameter of capacity.",
+    "quote": "Doubling precision from bfloat16 to float32 only increases model capacity from $3.51$ to $3.83$ bits-per-parameter.",
+    "location": "Section 2.3; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.capacity",
+      "value": 3.51,
+      "unit": "bits/parameter",
+      "condition": "bfloat16 training"
+     },
+     {
+      "param": "b_w.capacity",
+      "value": 3.83,
+      "unit": "bits/parameter",
+      "condition": "float32 training"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Most of a weight's width is not information: of 16 bf16 bits only ~3.5 store content.",
+    "from_review": "weights"
+   },
+   {
+    "id": "morris-2025-memorize/3",
+    "claim": "GPT-style models memorize about 3.6 bits per parameter (3.51 in bf16, 3.83 in fp32) before generalization takes over.",
+    "quote": "our measurements estimate that GPT-style models have a capacity of approximately 3.6 bits per parameter.",
+    "location": "abstract; Figure 7",
+    "quantities": [
+     {
+      "param": "b_w.capacity",
+      "value": 3.6,
+      "unit": "bits/parameter",
+      "condition": "random-data memorization, models of about 100K to 20M parameters"
+     },
+     {
+      "param": "b_w.capacity",
+      "value": 3.51,
+      "unit": "bits/parameter",
+      "condition": "bfloat16 training"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Upper ceiling for how much a small adapter can hold: <= ~3.6 bits per trainable parameter, so a 10 MB bf16 adapter (5M params) holds <= ~1.8e7 bits.",
+    "from_review": "capability-per-bit",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities wrong; corrected here: Values 3.6, 3.51 (bf16) and 3.83 (fp32) bits/param are right, but the random-data capacity runs use models of 100K-20M parameters (Table 1: 8.0e4-6.9e6), not 500K-1.5B, which is the range of all models trained, including the text/membership-inference experiments."
+   }
+  ]
+ },
+ {
+  "id": "nvidia-2025-nvfp4",
+  "title": "Pretraining Large Language Models with NVFP4",
+  "authors": "NVIDIA",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2509.25149",
+  "topics": [
+   "weights",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "nvidia-2025-nvfp4/1",
+    "claim": "A 12B model trained on 10T tokens with NVFP4 GEMMs (16% of linear layers kept in BF16) nearly matches the FP8-trained baseline.",
+    "quote": "For instance, the model attains an MMLU-pro accuracy of 62.58%, nearly matching the 62.62% accuracy achieved through FP8 pretraining.",
+    "location": "abstract; Section 4",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4.5,
+      "unit": "bits/weight",
+      "condition": "derived: 4-bit E2M1 + one 8-bit E4M3 scale per 16 values (plus a per-tensor FP32 scale); 12B hybrid Mamba-Transformer, 10T tokens; 16% of linear layers in BF16"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Forward weights at ~4.5 bits suffice for the longest public 4-bit training run.",
+    "from_review": "weights"
+   },
+   {
+    "id": "nvidia-2025-nvfp4/2",
+    "claim": "Master weights, weight gradients and optimizer state stay in FP32 during NVFP4 training.",
+    "quote": "The main weights (stored by the optimizer), weight gradients (used for gradient accumulation across microbatches and across data-parallel replicas), and optimizer states are also kept in FP32.",
+    "location": "Section 4.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 32,
+      "unit": "bits",
+      "condition": "precision of master weights, weight gradients and optimizer states"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Low-bit training does not make the updated state low-bit; the information a training step changes is held at 32 bits.",
+    "from_review": "weights"
+   },
+   {
+    "id": "nvidia-2025-nvfp4/3",
+    "claim": "A 12B model pretrained on 10T tokens with NVFP4 GEMM inputs in forward and backward matches the FP8 baseline.",
+    "quote": "We validate our approach by training a 12-billion-parameter model on 10 trillion tokens – the longest publicly documented training run in 4-bit precision to date.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.5,
+      "unit": "bits",
+      "condition": "derived: NVFP4 = 4-bit E2M1 + E4M3 scale per 16 elements; GEMM inputs in Fprop/Dgrad/Wgrad; MMLU-pro 62.58 vs 62.62 FP8"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Forward activations and backward gradients survive 4.5-bit GEMM inputs in a long training run; supports central b_a near 4.5.",
+    "from_review": "activations"
+   },
+   {
+    "id": "nvidia-2025-nvfp4/4",
+    "claim": "16% of linear layers (first two and last eight blocks) stayed in BF16 for the 12B run.",
+    "quote": "keeping the first two blocks in addition to the final eight blocks (FFNs or Mamba-2, each has 2 linear layers) in BF16",
+    "location": "Section 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.16,
+      "unit": "fraction",
+      "condition": "fraction of linear layers kept in BF16 at 12B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Some boundaries (near the output) need more bits, so a uniform 4.5-bit b_a is slightly optimistic.",
+    "from_review": "activations"
+   },
+   {
+    "id": "nvidia-2025-nvfp4/5",
+    "claim": "Attention and communication paths were not moved to FP4; that is future work.",
+    "quote": "refining the methodology to quantize all linear layers without impacting convergence, reducing remaining high-precision layers, and extending NVFP4 to attention and communication paths.",
+    "location": "Section 6 (Conclusion)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "FP4 training has not yet been shown for tensors sent between devices (the NCI boundary case).",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "ouyang-2024-low-bit-undertrained",
+  "title": "Low-Bit Quantization Favors Undertrained LLMs: Scaling Laws for Quantized LLMs with 100T Training Tokens",
+  "authors": "Xu Ouyang, Tao Ge, Thomas Hartvigsen, Zhisong Zhang, Haitao Mi, Dong Yu",
+  "year": 2024,
+  "venue": "ACL 2025",
+  "url": "https://arxiv.org/abs/2411.17691",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ouyang-2024-low-bit-undertrained/1",
+    "claim": "Quantization-induced degradation grows with training tokens, and fits predict that 2-3 bit quantization will be badly damaging for models trained on 100T tokens.",
+    "quote": "In particular, performance degradation with 2-bit and 3-bit quantization at the unprecedented training scale of 100 trillion tokens is predicted to be severe",
+    "location": "Section 4.3",
+    "quantities": [],
+    "grade": "extrapolated",
+    "bears_on": "Suggests the low b_w.pretrained figures from 2023-era models will rise for more heavily trained frontier models.",
+    "from_review": "weights",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   },
+   {
+    "id": "ouyang-2024-low-bit-undertrained/2",
+    "claim": "A 70B model shows over 20% likelihood loss under 4-bit GPTQ once trained on more than about 17T tokens (fit on Pythia 160M-12B).",
+    "quote": "For a 70B scale model, achieving a QiD greater than 0.2 (corresponding to likelihood decrease by 20%) under 4-bit quantization requires over 17 trillion training tokens.",
+    "location": "Section 4.2; Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 17,
+      "unit": "trillion training tokens",
+      "condition": "tokens at which 4-bit GPTQ of a 70B model passes QiD 0.2; extrapolated from Pythia fits"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Frontier models trained on 15-40T tokens may need about 4 bits per weight for retained quality, raising the central b_w.pretrained.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "tseng-2024-qtip",
+  "title": "QTIP: Quantization with Trellises and Incoherence Processing",
+  "authors": "Albert Tseng, Qingyao Sun, David Hou, Christopher De Sa",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2406.11235",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "tseng-2024-qtip/1",
+    "claim": "Trellis-coded quantization takes Llama 3.1 405B Instruct to 2 bits with about 1 point lower zero-shot accuracy, though WikiText2 perplexity nearly doubles; 3 bits is close to lossless.",
+    "quote": "Table 8 shows results for Llama 3.1 instruct-tuned models, including Llama 3.1 405B. At all sizes, QTIP achieves strong results.",
+    "location": "Section 4.2; Table 8",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2,
+      "unit": "bits/weight",
+      "condition": "Llama 3.1 405B Instruct vs Meta 'FP8' (16-bit attn / 8-bit MLP): WikiText2 PPL 1.70 -> 3.29; ArcC 61.6 -> 60.7, ArcE 81.4 -> 81.1, HellaSwag 67.1 -> 65.4, PiQA 83.8 -> 82.2 (Table 8)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 3,
+      "unit": "bits/weight",
+      "condition": "Llama 3.1 405B Instruct: PPL 1.70 -> 2.05; zero-shot within 0.3 points (Table 8)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 4,
+      "unit": "bits/weight",
+      "condition": "Llama 3.1 405B Instruct: PPL 1.70 -> 1.79 (Table 8)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 2,
+      "unit": "bits/weight",
+      "condition": "Llama 3.1 70B Instruct: BF16 PPL 3.52 -> 5.08, ArcC 56.7 -> 54.4 (Table 8)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The largest public dense model holds most task accuracy at 2 bits and nearly all at 3, so b_w.pretrained at frontier scale is 2-3 bits.",
+    "from_review": "weights"
+   },
+   {
+    "id": "tseng-2024-qtip/2",
+    "claim": "On Llama 2 70B, 2-bit QTIP is better per byte than an ideal 4-bit model (WikiText2 3.87 vs 3.12 FP16 without fine-tuning).",
+    "quote": "With QTIP, 2 bit models scale better than theoretically optimal 4 bit models.",
+    "location": "Figure 1; Table 3",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2,
+      "unit": "bits/weight",
+      "condition": "Llama-2-70B, WikiText2 PPL 3.12 -> 3.87 (1MAD code, no fine-tuning, Table 3)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Confirms 2 bits as the size-optimal operating point for 2023-era 70B models.",
+    "from_review": "weights"
+   },
+   {
+    "id": "tseng-2024-qtip/3",
+    "claim": "Heavily trained Llama 3 models degrade much more at 2 bits than Llama 2, and quantizing one sensitive layer collapses zero-shot accuracy unless worked around.",
+    "quote": "In our experiments, we observed that quantizing layer 0 v of all Llama 3 70B variants (including 3.1, 3.3, and all instruct models) resulted in catastrophic collapse of zeroshot performance.",
+    "location": "Section 4.2; Table 7",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2,
+      "unit": "bits/weight",
+      "condition": "Llama 3 70B base: WikiText2 PPL 2.59 -> 4.97, ArcC 60.5 -> 28.0 with layer 0 v quantized (Table 7)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 2,
+      "unit": "bits/weight",
+      "condition": "Llama 3 8B base: WikiText2 PPL 5.54 -> 7.33, ArcC 50.2 -> 44.2 (Table 7)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Models trained on more tokens per parameter need more bits per weight, pushing the retained-quality rate toward 3-4 bits.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "tseng-2024-quip-sharp",
+  "title": "QuIP#: Even Better LLM Quantization with Hadamard Incoherence and Lattice Codebooks",
+  "authors": "Albert Tseng, Jerry Chee, Qingyao Sun, Volodymyr Kuleshov, Christopher De Sa",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2402.04396",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "tseng-2024-quip-sharp/1",
+    "claim": "Hadamard incoherence plus E8 lattice codebooks and fine-tuning make 3-bit models beat lossless 4-bit ones per byte, and keep Llama-2-70B usable at 2 bits.",
+    "quote": "To the best of our knowledge, this is the first time a 3 bit PTQ method has outperformed a theoretical lossless 4 bit model and also the first time a 2 bit PTQ method has offered similar scaling to higher bitrates.",
+    "location": "Section 6.2; Tables 3-4",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2,
+      "unit": "bits/weight",
+      "condition": "Llama-2-70B, WikiText2 PPL 3.12 -> 3.91 (ctx 4096, Table 4; QuIP gives 5.90); zero-shot ArcC 51.1 -> 48.7, PiQA 81.1 -> 80.3, Wino 77.0 -> 75.9 (Table 3)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 3,
+      "unit": "bits/weight",
+      "condition": "Llama-2-70B, WikiText2 PPL 3.12 -> 3.35 (Table 4)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 4,
+      "unit": "bits/weight",
+      "condition": "Llama-2-70B, WikiText2 PPL 3.12 -> 3.18 (Table 4)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Moves the size-optimal weight rate from 4 bits down to 2-3 bits for 70B models.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "unsloth-2025-deepseek-r1-dynamic",
+  "title": "Run DeepSeek R1 Dynamic 1.58-bit",
+  "authors": "Daniel and Michael (Unsloth)",
+  "year": 2025,
+  "venue": "blog (Unsloth)",
+  "url": "https://unsloth.ai/blog/deepseekr1-dynamic",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "unsloth-2025-deepseek-r1-dynamic/1",
+    "claim": "Quantizing DeepSeek-R1's routed experts to about 1.58 bits while keeping attention, dense and shared layers at 4-6 bits gives a working 671B model at 131 GB.",
+    "quote": "managed to quantize DeepSeek’s R1 671B parameter model to 131GB in size, a 80% reduction in size from the original 720GB, whilst being very functional.",
+    "location": "blog intro; Section 1 table",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1.56,
+      "unit": "bits/weight",
+      "condition": "derived: 131 GB x 8 / 671B params; Flappy Bird coding test pass@3 score 69.2% (single task, 3 seeds)"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 2.18,
+      "unit": "bits/weight",
+      "condition": "derived: 183 GB x 8 / 671B params (2.22-bit dynamic quant); score 91.7%"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A frontier MoE runs at ~1.6 bits/param with degraded but real capability, and ~2.2 bits with little loss on this one test.",
+    "from_review": "weights",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities derived-ok"
+   },
+   {
+    "id": "unsloth-2025-deepseek-r1-dynamic/2",
+    "claim": "Uniformly quantizing all layers to 1.58 bits breaks the model, so the low rate relies on keeping sensitive layers at higher precision.",
+    "quote": "Quantizing all layers to 1.58bits gets 0% on our benchmark",
+    "location": "Section 2",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The achievable average b_w depends on mixed precision: a small set of layers stays at 4-6 bits.",
+    "from_review": "weights"
+   },
+   {
+    "id": "unsloth-2025-deepseek-r1-dynamic/3",
+    "claim": "Routed MoE experts hold about 88% of DeepSeek-R1's weights, so compressing them dominates the total.",
+    "quote": "This leaves ~88% of the weights as the MoE weights! By quantizing them to 1.58bit, we can massively shrink the model!",
+    "location": "Section 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.88,
+      "unit": "fraction of weights",
+      "condition": "share of DeepSeek-R1 weights in routed MoE experts"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "In MoE models, the expert weights set the average b_w, and they tolerate lower rates than attention.",
+    "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "yang-2025-ecf8",
+  "title": "To Compress or Not? Pushing the Frontier of Lossless GenAI Model Weights Compression with Exponent Concentration",
+  "authors": "Zeyu Yang, Tianyi Zhang, Jianwen Xie, Chuan Li, Zhaozhuo Xu, Anshumali Shrivastava",
+  "year": 2025,
+  "venue": "ICLR 2026",
+  "url": "https://arxiv.org/abs/2510.02676",
+  "topics": [
+   "weights",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yang-2025-ecf8/1",
+    "claim": "Entropy-coding the exponents of FP8 language models saves 9.8-14.8% losslessly.",
+    "quote": "Language models achieve moderate but consistent reductions between 9.8% and 14.8%",
+    "location": "Section 4.1",
+    "quantities": [
+     {
+      "param": "b_w.lossless",
+      "value": 7.22,
+      "unit": "bits/weight",
+      "condition": "derived: 8 bits x (1 - 0.098); FP8 LLM checkpoints"
+     },
+     {
+      "param": "b_w.lossless",
+      "value": 6.82,
+      "unit": "bits/weight",
+      "condition": "derived: 8 bits x (1 - 0.148); FP8 LLM checkpoints"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "For models trained and released natively in FP8, the lossless rate is about 6.8-7.2 bits, lower than BF16's ~10.8.",
+    "from_review": "weights"
+   },
+   {
+    "id": "yang-2025-ecf8/2",
+    "claim": "DeepSeek-R1 (671B, FP8) shrinks losslessly from 623 GB to 530 GB.",
+    "quote": "This improvement stems from ECF8’s ability to reduce the model’s memory footprint from 623GB to 530GB",
+    "location": "Section 4.2",
+    "quantities": [
+     {
+      "param": "b_w.lossless",
+      "value": 6.81,
+      "unit": "bits/weight",
+      "condition": "derived: 8 bits x 530/623; DeepSeek-R1-0528 671B FP8 weights, bit-exact"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Frontier-scale lossless rate for an FP8-native MoE: about 6.8 bits per weight.",
+    "from_review": "weights"
+   },
+   {
+    "id": "yang-2025-ecf8/3",
+    "claim": "Theory for alpha-stable weight distributions bounds exponent entropy at about 2.67 bits, giving a float-format floor of about 4.67 bits with a 1-bit mantissa.",
+    "quote": "Our analysis proves that the ultimate compression limit corresponds to a floating-point format of roughly FP4.67.",
+    "location": "Section 1; Section 3 (numerical instance, alpha = 2)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4.67,
+      "unit": "bits/weight",
+      "condition": "theoretical: 2.67-bit exponent entropy bound + 1 sign bit + ~1 mantissa bit; keeps only 1 mantissa bit, so it is a lossy format floor, not a lossless rate for real weights"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Suggests floating-point representations bottom out near 4.7 bits; going lower requires integer/vector quantization.",
+    "from_review": "weights",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   }
+  ]
+ },
+ {
+  "id": "yubeaton-2025-huff-llm",
+  "title": "Huff-LLM: End-to-End Lossless Compression for Efficient LLM Inference",
+  "authors": "Patrick Yubeaton, Tareq Mahmoud, Shehab Naga, Pooria Taheri, Tianhua Xia, Arun George, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2502.00922",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yubeaton-2025-huff-llm/1",
+    "claim": "The empirical entropy of Llama-3-8B FP16 weights is 10.54 bits per parameter, and a hardware-friendly split Huffman code reaches 10.61.",
+    "quote": "Table 1 shows the entropy of Llama-3-8B FP16 weights is 10.54 bits/parameter",
+    "location": "Section 3.1; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.lossless",
+      "value": 10.54,
+      "unit": "bits/weight",
+      "condition": "Llama-3-8B FP16, entropy of whole 16-bit symbols (Table 1)"
+     },
+     {
+      "param": "b_w.lossless",
+      "value": 10.61,
+      "unit": "bits/weight",
+      "condition": "Llama-3-8B FP16, {1,5,5,5} split Huffman, sign uncompressed (Table 1)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Same ~10.5-10.6 bits for FP16 as for BF16: the per-weight first-order entropy of 16-bit weights is about two thirds of the width.",
+    "from_review": "weights"
+   },
+   {
+    "id": "yubeaton-2025-huff-llm/2",
+    "claim": "Huffman-coded weights decoded in hardware cut model size by up to 32% across Llama, OPT, Qwen and Vicuna.",
+    "quote": "Using simulations and an FPGA prototype, we show that Huff-LLM reduces model size by up to 32%, improves inference latency by up to 31%, and cuts energy cost by up to 26%.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "b_w.lossless",
+      "value": 10.9,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits x (1 - 0.32), best case"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Confirms the lossless saving is capped near one third for 16-bit weights.",
+    "from_review": "weights",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities derived-ok"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2025-dfloat11",
+  "title": "70% Size, 100% Accuracy: Lossless LLM Compression for Efficient GPU Inference via Dynamic-Length Float",
+  "authors": "Tianyi Zhang, Mohsen Hariri, Shaochen Zhong, Vipin Chaudhary, Yang Sui, Xia Hu, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2504.11651",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2025-dfloat11/1",
+    "claim": "The 8-bit exponent of BF16 LLM weights carries only about 2.6 bits of entropy.",
+    "quote": "its 8-bit exponent field carries only about 2.6 bits of actual information",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.6,
+      "unit": "bits",
+      "condition": "entropy of the 8-bit BF16 exponent field of LLM weights"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Locates all lossless slack in the exponent; the remaining 8 sign+mantissa bits behave as incompressible.",
+    "from_review": "weights"
+   },
+   {
+    "id": "zhang-2025-dfloat11/2",
+    "claim": "Huffman-coding the exponent (DFloat11) gives bit-exact models at about 70% of BF16 size, about 10.8-10.9 bits per weight, from 8B up to Llama 3.1 405B.",
+    "quote": "DF11 achieves approximately 70% compression across all models, corresponding to an effective bit width of around 11 bits.",
+    "location": "Section 3.1; Table 1",
+    "quantities": [
+     {
+      "param": "b_w.lossless",
+      "value": 10.87,
+      "unit": "bits/weight",
+      "condition": "Llama 3.1 405B Instruct, 811.71 GB -> 551.22 GB (Table 1); outputs bit-identical"
+     },
+     {
+      "param": "b_w.lossless",
+      "value": 10.82,
+      "unit": "bits/weight",
+      "condition": "Llama 3.3 70B Instruct (Table 1)"
+     },
+     {
+      "param": "b_w.lossless",
+      "value": 10.85,
+      "unit": "bits/weight",
+      "condition": "Llama 3.1 8B Instruct (Table 1)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Even at frontier scale, lossless BF16 weights need about 10.9 bits; b_w.lossless barely depends on model size.",
+    "from_review": "weights"
+   }
+  ]
+ }
+]

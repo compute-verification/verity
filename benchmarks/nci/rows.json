@@ -1,0 +1,423 @@
+[
+ {
+  "id": "pretrain-full",
+  "model": "kimi-k2",
+  "method": "Pretraining",
+  "family": "pretraining",
+  "configuration": "all 1.04T weights updated every step; standard transformer; FP4 activations at boundaries",
+  "state": "full weights at the scratch-trained rate",
+  "inputs": {
+   "kappa": 0.667,
+   "b_w": "b_w.pretrained/frontier-lossy:central",
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 2048,
+   "e": 40000,
+   "c": 2,
+   "n_updated": 1040000000000.0,
+   "U_bits": 2600000000000.0,
+   "U_token_bits": 80000000000.0,
+   "decode_flops": 0,
+   "w_cut": 28672,
+   "crossings": 2,
+   "flops_per_token": 192000000000.0
+  },
+  "notes": "kappa = 4 of 6 flops per parameter per token multiply a weight by an activation. U = 1.04e12 x 2.5 bits; U_token = active 3.2e10 x 2.5. d = 2048 (routed-expert width, the smallest inner dimension); e = 4e4 (the thread draft's MoE estimate). w_cut = 7168 x 4 bits.",
+  "sources": [
+   "tseng-2024-qtip"
+  ],
+  "capability": {
+   "demonstrated": "generational",
+   "evidence": [],
+   "note": "the reference case: standard training"
+  }
+ },
+ {
+  "id": "pretrain-full-subspace-arch",
+  "model": "kimi-k2",
+  "method": "Pretraining",
+  "family": "pretraining",
+  "configuration": "as pretrain-full, but an architecture trained to carry its residual in a 1% subspace across shard boundaries",
+  "state": "full weights at the scratch-trained rate; boundary activations compressed 100x",
+  "inputs": {
+   "kappa": 0.667,
+   "b_w": "b_w.pretrained/frontier-lossy:central",
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 2048,
+   "e": 40000,
+   "c": 2,
+   "n_updated": 1040000000000.0,
+   "U_bits": 2600000000000.0,
+   "U_token_bits": 80000000000.0,
+   "decode_flops": 0,
+   "w_cut": "activation.boundary_bits/d7168:low",
+   "crossings": 2,
+   "flops_per_token": 192000000000.0
+  },
+  "notes": "The activation-compression attack at its most aggressive published claim (Subspace Networks, unreplicated). Moves only the construction; the proven bound does not use w_cut.",
+  "sources": [
+   "ramasinghe-2025-protocolmodels"
+  ]
+ },
+ {
+  "id": "sft-full-weights",
+  "model": "kimi-k2",
+  "method": "Supervised fine-tuning",
+  "family": "fine-tuning",
+  "configuration": "all weights updated from the committed base; delta coded at the SFT rate",
+  "state": "dense delta at b_w.delta/sft",
+  "inputs": {
+   "kappa": 0.667,
+   "b_w": "b_w.delta/sft:central",
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 2048,
+   "e": 40000,
+   "c": 2,
+   "n_updated": 1040000000000.0,
+   "U_bits": 104000000000.0,
+   "U_token_bits": 3200000000.0,
+   "decode_flops": 0,
+   "w_cut": 28672,
+   "crossings": 2,
+   "flops_per_token": 192000000000.0
+  },
+  "notes": "U = 1.04e12 x 0.1 bits; U_token = 3.2e10 x 0.1.",
+  "sources": [
+   "yu-2024-dare",
+   "liu-2024-bitdelta"
+  ]
+ },
+ {
+  "id": "rl-full-weights",
+  "model": "kimi-k2",
+  "method": "RL post-training (GRPO-style)",
+  "family": "rl",
+  "configuration": "all weights updated; rollouts generated with the fresh weights",
+  "state": "dense natural delta, post-hoc 1-bit code",
+  "inputs": {
+   "kappa": 0.9,
+   "b_w": "b_w.delta/rl:high",
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 2048,
+   "e": 40000,
+   "c": 2,
+   "n_updated": 1040000000000.0,
+   "U_bits": 1040000000000.0,
+   "U_token_bits": 32000000000.0,
+   "decode_flops": 0,
+   "w_cut": 28672,
+   "crossings": 1,
+   "flops_per_token": 64000000000.0
+  },
+  "notes": "Rollouts dominate RL compute and multiply fresh weights by activations, so kappa is high (attention aside). Rows are priced at rollout cost: crossings 1, 2 flops per active parameter per token.",
+  "sources": [
+   "shenfeld-2025-rls-razor"
+  ],
+  "capability": {
+   "demonstrated": "broad",
+   "evidence": [],
+   "note": "frontier reasoning gains come from this configuration"
+  }
+ },
+ {
+  "id": "rl-rank1-lora-all-experts",
+  "model": "kimi-k2",
+  "method": "RL with a rank-1 LoRA",
+  "family": "rl-adapter",
+  "configuration": "rank-1 LoRA on gate, up and down of every routed expert, attention and shared expert; bf16 adapter",
+  "state": "637M adapter parameters (1.27 GB); a token touches about 1.4e7 of them",
+  "inputs": {
+   "kappa": 0.0004,
+   "b_w": 16,
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 1,
+   "e": 7168,
+   "c": 2,
+   "n_updated": 637000000.0,
+   "U_bits": 10200000000.0,
+   "U_token_bits": 220000000.0,
+   "decode_flops": 0,
+   "w_cut": 28672,
+   "crossings": 1,
+   "flops_per_token": 64000000000.0
+  },
+  "notes": "Derived from the Kimi K2 config: 23,040 routed experts x 3 matrices x (7168 + 2048) params = 6.37e8. A token uses 8 experts in 61 layers: about 1.4e7 adapter params, 2.2e8 bits, more than K/2, so it shards. kappa = 2 x 1.4e7 / 6.4e10 adapter flops per token. d = 1 (the up-projection's input is one value), e = 7168.",
+  "sources": [
+   "schulman-2025-lora-without-regret",
+   "moonshotai-2025-kimi-k2-config"
+  ],
+  "capability": {
+   "demonstrated": "broad",
+   "evidence": [
+    "schulman-2025-lora-without-regret/1"
+   ],
+   "note": "rank-1 LoRA matches full RL at 8B dense; untested on a 1T MoE"
+  }
+ },
+ {
+  "id": "rl-lora-xs-all-modules",
+  "model": "kimi-k2",
+  "method": "RL with LoRA-XS",
+  "family": "rl-adapter",
+  "configuration": "LoRA-XS r = 2 (a trainable 2x2 core between frozen SVD factors of the base) on all about 69,600 modules",
+  "state": "2.8e5 trainable parameters, 0.56 MB in bf16",
+  "inputs": {
+   "kappa": 0.0001,
+   "b_w": 16,
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 2,
+   "e": 7168,
+   "c": 2,
+   "n_updated": 280000.0,
+   "U_bits": 4500000.0,
+   "U_token_bits": 4500000.0,
+   "decode_flops": 2000000000000.0,
+   "w_cut": 28672,
+   "crossings": 1,
+   "flops_per_token": 64000000000.0
+  },
+  "notes": "The SVD factors are functions of theta, so they can be committed. Decode is a merge, about 2e12 flops.",
+  "sources": [
+   "balazy-2025-lora-xs"
+  ]
+ },
+ {
+  "id": "rl-tinylora",
+  "model": "kimi-k2",
+  "method": "RL with TinyLoRA",
+  "family": "rl-adapter",
+  "configuration": "about 10k tied trainable parameters (20 KB)",
+  "state": "1.6e5 bits",
+  "inputs": {
+   "kappa": 1e-05,
+   "b_w": 16,
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 1,
+   "e": 7168,
+   "c": 2,
+   "n_updated": 10000.0,
+   "U_bits": 160000.0,
+   "U_token_bits": 160000.0,
+   "decode_flops": 2000000000000.0,
+   "w_cut": 28672,
+   "crossings": 1,
+   "flops_per_token": 64000000000.0
+  },
+  "notes": "Qwen-7B goes from 76% to 95% on GSM8K with 10k parameters (Qwen-specific; Llama needs about 500 params for 85%).",
+  "sources": [
+   "morris-2026-tinylora"
+  ],
+  "capability": {
+   "demonstrated": "elicit",
+   "evidence": [
+    "morris-2026-tinylora/6"
+   ],
+   "note": "elicitation of existing skill"
+  }
+ },
+ {
+  "id": "mezo-seed-finetune",
+  "model": "kimi-k2",
+  "method": "Zeroth-order fine-tuning (MeZO)",
+  "family": "seed-based",
+  "configuration": "20k seed-steps over all 1.04T weights; the update is seeds plus one scalar per step",
+  "state": "3.2e5 bits of seeds and scalars; decoding regenerates every perturbation",
+  "inputs": {
+   "kappa": 0.9,
+   "b_w": "b_w.delta/sft:central",
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 2048,
+   "e": 40000,
+   "c": 1,
+   "n_updated": 1040000000000.0,
+   "U_bits": 320000.0,
+   "U_token_bits": 320000.0,
+   "decode_flops": 2.08e+17,
+   "w_cut": 28672,
+   "crossings": 1,
+   "flops_per_token": 128000000000.0
+  },
+  "notes": "decode = 2e4 steps x 10 flops x 1.04e12 parameters = 2.1e17. Two forward passes per step, so 4 flops per active parameter per token. Whether it fits depends on Gamma: it needs Gamma >= 4.2e17 to decode in one block.",
+  "sources": [
+   "malladi-2023-mezo"
+  ],
+  "capability": {
+   "demonstrated": "narrow",
+   "evidence": [
+    "malladi-2023-mezo/4"
+   ],
+   "note": "within 1% of fine-tuning on 7/11 tasks at 13B"
+  }
+ },
+ {
+  "id": "es-population-30",
+  "model": "kimi-k2",
+  "method": "Evolution strategies",
+  "family": "seed-based",
+  "configuration": "population 30 for 500 iterations over all weights (ES at Scale)",
+  "state": "2.4e5 bits of seeds and fitness values",
+  "inputs": {
+   "kappa": 0.9,
+   "b_w": "b_w.delta/rl:central",
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 2048,
+   "e": 40000,
+   "c": 1,
+   "n_updated": 1040000000000.0,
+   "U_bits": 240000.0,
+   "U_token_bits": 240000.0,
+   "decode_flops": 1.56e+17,
+   "w_cut": 28672,
+   "crossings": 1,
+   "flops_per_token": 64000000000.0
+  },
+  "notes": "decode = 1.5e4 perturbations x 10 flops x 1.04e12 = 1.6e17.",
+  "sources": [
+   "qiu-2025-es-at-scale"
+  ],
+  "capability": {
+   "demonstrated": "narrow",
+   "evidence": [
+    "qiu-2025-es-at-scale/3"
+   ],
+   "note": "beats PPO and GRPO on Countdown at 7-8B; a re-run finds near-parity"
+  }
+ },
+ {
+  "id": "zo-seed-pool",
+  "model": "kimi-k2",
+  "method": "Zeroth-order fine-tuning over a fixed seed pool (FedKSeed-style)",
+  "family": "seed-based",
+  "configuration": "all weights; the update is a coefficient per seed of a 4096-seed pool, so decoding costs the same for any run length",
+  "state": "4096 coefficients plus the run's seeds and scalars, 3.2e5 bits",
+  "inputs": {
+   "kappa": 0.9,
+   "b_w": "b_w.delta/sft:central",
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 2048,
+   "e": 40000,
+   "c": 1,
+   "n_updated": 1040000000000.0,
+   "U_bits": 320000.0,
+   "U_token_bits": 320000.0,
+   "decode_flops": 4.25984e+16,
+   "w_cut": 28672,
+   "crossings": 1,
+   "flops_per_token": 128000000000.0
+  },
+  "notes": "decode = 4096 seeds x 10 flops x 1.04e12 parameters = 4.3e16, whatever the number of steps. The price is a 4096-dimensional update subspace.",
+  "sources": [
+   "qin-2024-fedkseed"
+  ]
+ },
+ {
+  "id": "context-playbook",
+  "model": "kimi-k2",
+  "method": "Context optimization (ACE, GEPA)",
+  "family": "context",
+  "configuration": "a 0.2 MB playbook evolved by reflective prompting, read by every session",
+  "state": "1.6e6 bits of text",
+  "inputs": {
+   "kappa": 0,
+   "b_w": 16,
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 1,
+   "e": 1,
+   "c": 1,
+   "n_updated": 0,
+   "U_bits": 1600000.0,
+   "U_token_bits": 1600000.0,
+   "decode_flops": 0,
+   "w_cut": 28672,
+   "crossings": 1,
+   "flops_per_token": 64000000000.0
+  },
+  "notes": "No weights change, so kappa = 0 and the proven bound is 1 by design: this is the shared headroom. U is raw text; arithmetic-coded against the base model it would be about 8x smaller, so under kimi-k2-1m-coded this row overstates its cost.",
+  "sources": [
+   "zhang-2025-ace"
+  ],
+  "capability": {
+   "demonstrated": "narrow",
+   "evidence": [
+    "zhang-2025-ace/2"
+   ],
+   "note": "+10.6 points on agent tasks"
+  }
+ },
+ {
+  "id": "steering-vectors",
+  "model": "kimi-k2",
+  "method": "Steering vectors",
+  "family": "steering",
+  "configuration": "one 7168-wide bf16 vector added to the residual in each of 61 layers",
+  "state": "7.0e6 bits",
+  "inputs": {
+   "kappa": 0,
+   "b_w": 16,
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 1,
+   "e": 1,
+   "c": 2,
+   "n_updated": 437000.0,
+   "U_bits": 7000000.0,
+   "U_token_bits": 7000000.0,
+   "decode_flops": 0,
+   "w_cut": 28672,
+   "crossings": 1,
+   "flops_per_token": 64000000000.0
+  },
+  "notes": "Additions, not multiplications, so kappa = 0.",
+  "sources": []
+ },
+ {
+  "id": "moe-expert-subset-sft",
+  "model": "kimi-k2",
+  "method": "Expert-specialized fine-tuning",
+  "family": "fine-tuning",
+  "configuration": "10% of routed experts updated (ESFT); delta at the SFT rate",
+  "state": "1e11 updated parameters",
+  "inputs": {
+   "kappa": 0.067,
+   "b_w": "b_w.delta/sft:central",
+   "b_a": "b_a.activation/boundary-training:central",
+   "d": 2048,
+   "e": 40000,
+   "c": 2,
+   "n_updated": 100000000000.0,
+   "U_bits": 10000000000.0,
+   "U_token_bits": 290000000.0,
+   "decode_flops": 0,
+   "w_cut": 28672,
+   "crossings": 2,
+   "flops_per_token": 192000000000.0
+  },
+  "notes": "A token touches the updated experts among its 8: about 10% of 2.9e10 active expert params x 0.1 bits.",
+  "sources": [
+   "wang-2024-esft"
+  ]
+ },
+ {
+  "id": "dense-pretrain-thread-draft",
+  "model": "dense-100b",
+  "method": "Pretraining",
+  "family": "pretraining",
+  "configuration": "the thread draft's dense example at FP4 weights and activations",
+  "state": "full weights at 4 bits",
+  "inputs": {
+   "kappa": 0.667,
+   "b_w": 4,
+   "b_a": 4,
+   "d": 3072,
+   "e": 7168,
+   "c": 2,
+   "n_updated": 100000000000.0,
+   "U_bits": 400000000000.0,
+   "U_token_bits": 400000000000.0,
+   "decode_flops": 0,
+   "w_cut": 49152,
+   "crossings": 2,
+   "flops_per_token": 600000000000.0
+  },
+  "notes": "Reproduces the draft's 'about 3e6 with FP4': kappa x 2.8e6. w_cut assumes d_model = 12288.",
+  "sources": []
+ }
+]

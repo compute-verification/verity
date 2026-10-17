@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The calculator's lower bound cites guarantees by name; the tests check that the lock lists them.
+inputs = ["Security/lean-audit.json"]

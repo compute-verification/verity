@@ -1,0 +1,2097 @@
+[
+ {
+  "id": "aghajanyan-2021-intrinsic-dim",
+  "title": "Intrinsic Dimensionality Explains the Effectiveness of Language Model Fine-Tuning",
+  "authors": "Armen Aghajanyan, Sonal Gupta, Luke Zettlemoyer",
+  "year": 2021,
+  "venue": "ACL 2021",
+  "url": "https://arxiv.org/abs/2012.13255",
+  "topics": [
+   "updates",
+   "theory",
+   "seed-based",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "aghajanyan-2021-intrinsic-dim/1",
+    "claim": "Training 200 parameters through a fixed random projection gets RoBERTa to 90% of full fine-tuning on MRPC, and larger models have lower intrinsic dimension.",
+    "quote": "by optimizing only 200 trainable parameters randomly projected back into the full space, we can tune a RoBERTa model to achieve 90% of the full parameter performance levels on MRPC",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 6400,
+      "unit": "bits",
+      "condition": "derived: 200 params * 32 bits; projection regenerated from a seed; RoBERTa-Large, 90% of full FT on MRPC"
+     },
+     {
+      "param": "capability.bits",
+      "value": 6400,
+      "unit": "bits",
+      "condition": "derived: same update tied to a 90%-of-FT capability"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Classic evidence that a fine-tune can be described in KB, not GB, given the base model and a seed; U can be tiny.",
+    "from_review": "updates"
+   },
+   {
+    "id": "aghajanyan-2021-intrinsic-dim/2",
+    "claim": "Larger pretrained models need fewer intrinsic dimensions for the same task.",
+    "quote": "larger models tend to have lower intrinsic dimension",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 207,
+      "unit": "intrinsic dimension d90",
+      "condition": "RoBERTa-Large, MRPC (Table 1); QQP 774"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Points to even smaller U at frontier scale (extrapolation).",
+    "from_review": "updates"
+   },
+   {
+    "id": "aghajanyan-2021-intrinsic-dim/3",
+    "claim": "Tuning 200 parameters randomly projected into RoBERTa's full space reaches 90% of full fine-tuning on MRPC.",
+    "quote": "by optimizing only 200 trainable parameters randomly projected back into the full space, we can tune a RoBERTa model to achieve 90% of the full parameter performance levels on MRPC.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 200,
+      "unit": "random-subspace dimension",
+      "condition": "RoBERTa, MRPC, 90% of full FT"
+     },
+     {
+      "param": "capability.bits",
+      "value": 6400,
+      "unit": "bits",
+      "condition": "derived: 200 x 32-bit floats plus a seed"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Fine-tuning a task to 90% needs only ~6e3 bits in a seeded subspace, the lower floor on seed-based U.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "aghajanyan-2021-intrinsic-dim/4",
+    "claim": "Larger pretrained models have lower intrinsic dimension for fine-tuning.",
+    "quote": "larger models tend to have lower intrinsic dimension after a fixed number of pre-training updates",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Seed-based fine-tuning gets cheaper as N grows: U per task falls with scale.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "balazy-2025-lora-xs",
+  "title": "LoRA-XS: Low-Rank Adaptation with Extremely Small Number of Parameters",
+  "authors": "Klaudia Bałazy, Mohammadreza Banaei, Karl Aberer, Jacek Tabor",
+  "year": 2025,
+  "venue": "ECAI 2025",
+  "url": "https://arxiv.org/abs/2405.17604",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "balazy-2025-lora-xs/1",
+    "claim": "A small trainable r x r matrix between frozen SVD factors of the base weights cuts adapter storage over 100x versus LoRA at 7B.",
+    "quote": "This design enables LoRA-XS to reduce storage requirements by over 100x",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 100,
+      "unit": "storage reduction vs LoRA",
+      "condition": "7B models"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Adapters built from the committed model's own SVD carry only r^2 numbers per matrix, pushing U for a frontier model into the sub-MB range.",
+    "from_review": "updates"
+   },
+   {
+    "id": "balazy-2025-lora-xs/2",
+    "claim": "A rank-16 LoRA-XS for GPT-3 costs about 96 KB per personalized model.",
+    "quote": "adapting GPT-3 with LoRA-XS (rank 16) for 1 million personalized models requires just 96GB of storage, compared to LoRA’s 144TB",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 0.096,
+      "unit": "MB",
+      "condition": "derived: 96 GB / 1e6 models; GPT-3 175B, rank 16 (storage calculation, not a trained 175B run)"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "At 175B an SVD-based adapter is ~0.1 MB, well under K; decoding needs the base SVD, which is a function of theta.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "biderman-2024-lora-learns-less",
+  "title": "LoRA Learns Less and Forgets Less",
+  "authors": "Dan Biderman, Jacob Portes, Jose Javier Gonzalez Ortiz, Mansheej Paul, Philip Greengard, Connor Jennings, et al.",
+  "year": 2024,
+  "venue": "TMLR 2024",
+  "url": "https://arxiv.org/abs/2405.09673",
+  "topics": [
+   "updates",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "biderman-2024-lora-learns-less/1",
+    "claim": "Full fine-tuning learns perturbations of 10-100x higher rank than typical LoRA settings.",
+    "quote": "full finetuning learns perturbations with a rank that is 10-100$\\times$ greater than typical LoRA configurations",
+    "location": "abstract; Section 6 for the ~2000/4096 spectrum",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 2000,
+      "unit": "rank (of 4096)",
+      "condition": "Llama-2-7B full FT: ~50% of singular vectors (~2000/4096) needed for 90% of variance (Section 6)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Unconstrained SFT on new domains has high update.rank (~half of full), so naturally trained deltas compress poorly by rank.",
+    "from_review": "updates"
+   },
+   {
+    "id": "biderman-2024-lora-learns-less/2",
+    "claim": "For math instruction tuning of Llama-2-7B, rank 64 nearly matches full fine-tuning (GSM8K 0.624 vs 0.642).",
+    "quote": "$r=64$ suffices to approach full finetuning and achieve GSM8K=0.624",
+    "location": "Section 4.1",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 64,
+      "unit": "rank",
+      "condition": "Llama-2-7B math IFT, all modules; full FT 0.642, r=256 0.634"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Central update.rank for SFT-style instruction tuning is ~16-256; continued pretraining needs more.",
+    "from_review": "updates"
+   },
+   {
+    "id": "biderman-2024-lora-learns-less/3",
+    "claim": "For code and math with ~100K instruction pairs or ~20B tokens of continued pretraining, low-rank LoRA substantially underperforms full fine-tuning on Llama-2-7B.",
+    "quote": "In continued pretraining, the performance gap between full finetuning and LoRA is not closed even with high ranks.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Domain-scale new knowledge (billions of tokens) needs high-rank, high-U updates; the broad-improvement tier via new data does not fit in small adapters.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "biderman-2024-lora-learns-less/4",
+    "claim": "Full fine-tuning perturbations have rank 10-100x higher than typical LoRA configurations, and the rank grows during training.",
+    "quote": "The rank of the perturbation grows as training progresses, with ranks 10-100$\\times$ higher than typical LoRA configurations (Figure 6).",
+    "location": "Section 1; Figure 6",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 1000,
+      "unit": "rank (order of magnitude)",
+      "condition": "derived: 10-100x typical LoRA ranks (16-256 assumed); Llama-2-7B code/math full FT"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Knowledge-acquiring updates have high b_w.delta; only elicitation-type updates are low rank.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "dettmers-2023-qlora",
+  "title": "QLoRA: Efficient Finetuning of Quantized LLMs",
+  "authors": "Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, Luke Zettlemoyer",
+  "year": 2023,
+  "venue": "NeurIPS 2023",
+  "url": "https://arxiv.org/abs/2305.14314",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dettmers-2023-qlora/1",
+    "claim": "LoRA on a 4-bit base reaches 99.3% of ChatGPT on Vicuna with a 65B model after 24 hours on one GPU.",
+    "quote": "reaching 99.3% of the performance level of ChatGPT while only requiring 24 hours of finetuning on a single GPU",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Strong chat instruction tuning is reachable with LoRA-sized updates, so SFT-style U ~10s-100s of MB is realistic.",
+    "from_review": "updates",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   },
+   {
+    "id": "dettmers-2023-qlora/2",
+    "claim": "For 7B, typical LoRA weights equal to 0.2% of the model take 26 MB.",
+    "quote": "with LoRA weights equivalent to commonly used 0.2% of the original model weights [28, 37], the LoRA input gradients have a memory footprint of 567 MB while the LoRA parameters take up only 26 MB",
+    "location": "Appendix J (Memory Footprint)",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 26,
+      "unit": "MB",
+      "condition": "LLaMA 7B, LoRA = 0.2% of weights"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.03,
+      "unit": "bits per base weight",
+      "condition": "derived: 26 MB * 8 / 7e9"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Typical SFT LoRA at 7B is ~26 MB, above K; b_w.delta ~0.03 in this common setting.",
+    "from_review": "updates"
+   },
+   {
+    "id": "dettmers-2023-qlora/3",
+    "claim": "A 9k-example dataset beat a 450k-example one for chatbot quality.",
+    "quote": "a 9k sample dataset (OASST1) outperformed a 450k sample dataset (FLAN v2, subsampled) on chatbot performance",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Instruction-tuning information content is set by small curated data, consistent with small U.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "feng-2024-mixtureofloras",
+  "title": "Mixture-of-LoRAs: An Efficient Multitask Tuning for Large Language Models",
+  "authors": "Wenfeng Feng, Chuzhan Hao, Yuewei Zhang, Yu Han, Hao Wang",
+  "year": 2024,
+  "venue": "LREC-COLING 2024",
+  "url": "https://arxiv.org/abs/2403.03432",
+  "topics": [
+   "updates",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "feng-2024-mixtureofloras/1",
+    "claim": "Each LoRA expert and the single-LoRA baseline have 143M trainable parameters, so the full mixture of eight is about 1.15B parameters plus a 1.05M-parameter router.",
+    "quote": "| trainable parameters | 143M | 143M | 143M*8+1.05M |",
+    "location": "Table 4",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 143,
+      "unit": "M parameters per expert",
+      "condition": "Qwen-7b base"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 18.3,
+      "unit": "Gbit",
+      "condition": "derived: (143M x 8 + 1.05M) params x 16 bits, about 2.3 GB, roughly 200-900x K"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Confirms the draft's 'baseline adapter the same size as an individual expert', but the mixture is 8x larger than the baseline, so its gain is not a free capability-per-bit gain and U is far above K.",
+    "from_review": "prior"
+   },
+   {
+    "id": "feng-2024-mixtureofloras/2",
+    "claim": "The mixture lowers average perplexity from 4.0128 (single LoRA) and 3.9450 (mixed-data LoRA) to 3.7987 and raises Exam accuracy from 39.07% to 44.55%.",
+    "quote": "| MoA | 1331 | 593 | 44.55% |",
+    "location": "Table 2 (average PPL 4.0128 / 3.9450 / 3.7987) and Table 5 (Single-LoRA 39.07%)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 5.48,
+      "unit": "accuracy points",
+      "condition": "derived: Exam accuracy 44.55% (MoA) minus 39.07% (Single-LoRA), Qwen-7b"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Supports the draft's claim of improvement over a same-size single adapter; it moves capability.bits only weakly because the comparison is at 8x the update size.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "gao-2024-mola",
+  "title": "Higher Layers Need More LoRA Experts",
+  "authors": "Chongyang Gao, Kezhen Chen, Jinmeng Rao, Baochen Sun, Ruibo Liu, Daiyi Peng, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint (published as 'MoLA: MoE LoRA with Layer-wise Expert Allocation', Findings of NAACL 2025)",
+  "url": "https://arxiv.org/abs/2402.08562",
+  "topics": [
+   "updates",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gao-2024-mola/1",
+    "claim": "MoLA uses rank-8 LoRA experts with top-2 routing at each layer, on LLaMA2-7B, compared against a single rank-64 LoRA.",
+    "quote": "The rank of each LoRA expert is 8 and we adopt top-2 for the router.",
+    "location": "Section 4 (implementation details); baseline: 'Specifically, the rank of LoRA is 64.'",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 8,
+      "unit": "rank per expert",
+      "condition": "LLaMA2-7B, top-2 routing per token per layer"
+     },
+     {
+      "param": "update.rank",
+      "value": 16,
+      "unit": "effective rank per token per layer",
+      "condition": "derived: 2 active experts x rank 8"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Matches the draft's description; each token sees an effective rank-16 update per layer while the total update is a mixture of many experts, so U is set by all experts, not by one.",
+    "from_review": "prior"
+   },
+   {
+    "id": "gao-2024-mola/2",
+    "claim": "Only MoLA-2468 beats the rank-64 LoRA baseline on all six benchmarks (by 0.35 to 3.44 points); the other variants trail LoRA on CoLA and two on RTE, so the quoted sentence overstates the paper's own Table 1.",
+    "quote": "MoLA variants outperform the LoRA baseline on all the benchmarks.",
+    "location": "Section 4 (Comparison with Baselines); Table 1 (LoRA 83.13/86.29/85.92/91.01/75.51/77.0 vs MoLA-2468 83.48/86.87/86.28/92.36/78.95/79.6)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3.44,
+      "unit": "accuracy points",
+      "condition": "derived: largest gain of MoLA-2468 over LoRA rank 64 (CSQA 78.95 vs 75.51), LLaMA2-7B; smallest gain 0.35 (MRPC)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Adapter mixtures give incremental gains at best (largest +5.8 for MoLA-8888 on OpenbookQA), so the draft's 'incrementally outperform' holds, but only for the best allocation.",
+    "from_review": "prior",
+    "audit": "2026-10-17 sample audit: quote yes, claim overstated, quantities derived-ok; corrected here: The quote is verbatim, but the paper's Table 1 contradicts it for most variants: only MoLA-2468 beats LoRA on all six tasks (by 0.35-3.44, matching the derived numbers), the other four variants fall below LoRA on CoLA (85.43-86.28 vs 86.29) and two also on RTE, and the largest variant gain is +5.8 (MoLA-8888 OpenbookQA 82.8 vs 77.0)."
+   }
+  ]
+ },
+ {
+  "id": "guo-2021-diff-pruning",
+  "title": "Parameter-Efficient Transfer Learning with Diff Pruning",
+  "authors": "Demi Guo, Alexander M. Rush, Yoon Kim",
+  "year": 2021,
+  "venue": "ACL 2021",
+  "url": "https://arxiv.org/abs/2012.07463",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "guo-2021-diff-pruning/1",
+    "claim": "Learning a sparse diff with an L0 penalty matches full fine-tuning on GLUE while changing 0.5% of BERT's parameters.",
+    "quote": "Diff pruning can match the performance of finetuned baselines on the GLUE benchmark while only modifying 0.5% of the pretrained model’s parameters per task",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.005,
+      "unit": "fraction",
+      "condition": "BERT-Large, GLUE"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Low end of update.fraction_changed when sparsity is trained in.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "hu-2022-lora",
+  "title": "LoRA: Low-Rank Adaptation of Large Language Models",
+  "authors": "Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, et al.",
+  "year": 2022,
+  "venue": "ICLR 2022",
+  "url": "https://arxiv.org/abs/2106.09685",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hu-2022-lora/1",
+    "claim": "A rank-4 LoRA on query and value projections of GPT-3 175B shrinks the checkpoint from 350 GB to 35 MB.",
+    "quote": "With r=4 and only the query and value projection matrices being adapted, the checkpoint size is reduced by roughly 10,000× (from 350GB to 35MB)",
+    "location": "Section 4.2",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 35,
+      "unit": "MB",
+      "condition": "GPT-3 175B, r=4, Wq and Wv only, FP16"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.0016,
+      "unit": "bits per base weight",
+      "condition": "derived: 35 MB * 8 / 175e9"
+     },
+     {
+      "param": "update.rank",
+      "value": 4,
+      "unit": "rank",
+      "condition": "GPT-3 175B adaptation"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A 175B fine-tune at matched quality fits in 35 MB, about 3-14x over K, in 16-bit and without further compression.",
+    "from_review": "updates"
+   },
+   {
+    "id": "hu-2022-lora/2",
+    "claim": "Rank 1 or 2 suffices for GPT-3 adaptation even though the full rank is 12,288.",
+    "quote": "a very low rank (i.e., r in Figure 1 can be one or two) suffices even when the full rank (i.e., d) is as high as 12,288",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 1,
+      "unit": "rank",
+      "condition": "GPT-3 175B, Wq and Wv, WikiSQL/MNLI"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Sets the low end of update.rank at 1 for narrow fine-tunes.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "ilharco-2023-task-arithmetic",
+  "title": "Editing Models with Task Arithmetic",
+  "authors": "Gabriel Ilharco, Marco Tulio Ribeiro, Mitchell Wortsman, Suchin Gururangan, Ludwig Schmidt, Hannaneh Hajishirzi, et al.",
+  "year": 2023,
+  "venue": "ICLR 2023",
+  "url": "https://arxiv.org/abs/2212.04089",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ilharco-2023-task-arithmetic/1",
+    "claim": "A fine-tune's weight delta (task vector) is a direction that can be added, negated and combined to steer the model.",
+    "quote": "A task vector specifies a direction in the weight space of a pre-trained model, such that movement in that direction improves performance on the task.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Frames an update as a separable object relative to committed theta, the premise behind b_w.delta and U.",
+    "from_review": "updates"
+   },
+   {
+    "id": "ilharco-2023-task-arithmetic/2",
+    "claim": "Task vectors for different tasks are nearly orthogonal.",
+    "quote": "Task vectors are typically close to orthogonal.",
+    "location": "Figure 5",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Distinct updates share little structure, so U for multiple tasks adds roughly linearly.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "jiang-2024-deltadq",
+  "title": "DeltaDQ: Ultra-High Delta Compression for Fine-Tuned LLMs via Group-wise Dropout and Separate Quantization",
+  "authors": "Yanfeng Jiang, Zelan Yang, Bohua Chen, Shen Li, Yong Li, Tao Li",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2410.08666",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "jiang-2024-deltadq/1",
+    "claim": "Group-wise dropout plus separate quantization reaches 128x on WizardMath-7B and 512x on WizardMath-70B with acceptable loss.",
+    "quote": "achieving $128\\times$ compression for the WizardMath-7B model and $512\\times$ compression for the WizardMath-70B model",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 0.031,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits / 512x; WizardMath-70B GSM8K 79.90 vs 81.80 original (Table 3)"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.125,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits / 128x; WizardMath-7B GSM8K 52.69 vs 55.49 original (Table 2)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The lowest measured post-hoc b_w.delta for a naturally trained SFT delta: ~0.03 bits/weight at 70B with ~98% of GSM8K kept.",
+    "from_review": "updates"
+   },
+   {
+    "id": "jiang-2024-deltadq/2",
+    "claim": "At the same 512x ratio on 70B, DARE collapses to 37.45 and DeltaZip to 48.74 GSM8K, while DeltaDQ keeps 79.90.",
+    "quote": "DeltaDQ($m=8$) 512 79.90",
+    "location": "Table 3 (Accuracy comparison of WizardMath-70B under ultra-high compression ratio)",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 0.031,
+      "unit": "bits/weight",
+      "condition": "derived: 16/512; DARE 37.45, DeltaZip 48.74 at the same ratio"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Below ~0.1 bits/weight the result depends heavily on the code; generic sparsifiers fail there.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "koohpayegani-2024-nola",
+  "title": "NOLA: Compressing LoRA using Linear Combination of Random Basis",
+  "authors": "Soroush Abbasi Koohpayegani, K L Navaneet, Parsa Nooralinejad, Soheil Kolouri, Hamed Pirsiavash",
+  "year": 2024,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2310.02556",
+  "topics": [
+   "updates",
+   "seed-based"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "koohpayegani-2024-nola/1",
+    "claim": "Expressing LoRA factors as learned mixtures of seeded random bases makes a LLaMA-2 70B instruction tune about 20x smaller than rank-1 LoRA at equal accuracy.",
+    "quote": "on LLaMA-2 70B, our method is almost 20 times more compact than the most compressed LoRA without degradation in accuracy",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 1.14,
+      "unit": "MB",
+      "condition": "derived: 0.57M params * 2 bytes; LLaMA-2 70B (8-bit base), Alpaca instruction tuning, MMLU 69.4 vs LoRA 69.5 vs base 68.9 (Table 5)"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.00013,
+      "unit": "bits per base weight",
+      "condition": "derived: 0.57M * 16 / 70e9"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A 70B instruction-tuning update fits in ~1 MB, under K, with seed-regenerated bases.",
+    "from_review": "updates"
+   },
+   {
+    "id": "koohpayegani-2024-nola/2",
+    "claim": "Rank-1 LoRA on all layers of LLaMA-2 needs 2.50M (7B), 3.91M (13B) and 12.94M (70B) parameters; NOLA needs 0.06M, 0.14M and 0.57M.",
+    "quote": "NOLA fine-tunes LLaMA-2 70B (8-bit) with $0.57M$ parameters, a $95\\%$ reduction compared to rank-one LoRA.",
+    "location": "Table 5",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 25.9,
+      "unit": "MB",
+      "condition": "derived: rank-1 LoRA, 12.94M params * 2 bytes, LLaMA-2 70B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Even rank-1 LoRA on a dense 70B is ~26 MB (above K); getting under K needs sub-rank-1 parameterizations.",
+    "from_review": "updates"
+   },
+   {
+    "id": "koohpayegani-2024-nola/3",
+    "claim": "NOLA stores a LoRA as coefficients over seeded random bases plus the seed.",
+    "quote": "To reconstruct the model, we store the coefficients and the seed of the random generator which is a single scalar.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Seed-based encoding applies to backprop-trained adapters, so small U is not unique to ZO.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "koohpayegani-2024-nola/4",
+    "claim": "NOLA fine-tunes LLaMA-2 70B with 0.57M parameters, 95% fewer than rank-1 LoRA, at essentially equal MMLU.",
+    "quote": "NOLA fine-tunes LLaMA-2 70B (8-bit) with 0.57M parameters, a 95% reduction compared to rank-one LoRA",
+    "location": "Section 3.3",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 9100000.0,
+      "unit": "bits",
+      "condition": "derived: 0.57M coefficients x 16 bits; MMLU 69.4 vs LoRA 69.5"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A 70B instruction fine-tune fits in ~9e6 bits as seeds plus coefficients, inside K.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "kopiczko-2024-vera",
+  "title": "VeRA: Vector-based Random Matrix Adaptation",
+  "authors": "Dawid J. Kopiczko, Tijmen Blankevoort, Yuki M. Asano",
+  "year": 2024,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2310.11454",
+  "topics": [
+   "updates",
+   "seed-based"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kopiczko-2024-vera/1",
+    "claim": "Training only scaling vectors on frozen random matrices matches LoRA's instruction tuning with 100x fewer parameters (Llama2-13B: 2.4M vs 250.3M; MT-Bench 5.93 vs 5.77).",
+    "quote": "We find that despite the 100x reduction in the number of trainable parameters, our method closely matches the performance of LoRA-based finetuning.",
+    "location": "Section 4.3 / Table 4",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 4.8,
+      "unit": "MB",
+      "condition": "derived: 2.4M params * 2 bytes; Llama2-13B instruction tuning, MT-Bench 5.93 vs LoRA 5.77"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.003,
+      "unit": "bits per base weight",
+      "condition": "derived: 2.4M * 16 / 13e9"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "An instruction-tuning update for a 13B model fits within K (4.8 MB) using seed-regenerated random bases.",
+    "from_review": "updates"
+   },
+   {
+    "id": "kopiczko-2024-vera/2",
+    "claim": "Frozen shared random low-rank matrices plus trained scaling vectors match LoRA with 10x fewer trainable parameters.",
+    "quote": "using a single pair of low-rank matrices shared across all layers and learning small scaling vectors instead",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10,
+      "unit": "x fewer trainable parameters than LoRA",
+      "condition": "GLUE, RoBERTa-large; also instruction-tuned 7B and 13B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A backprop-trained update can also be a seed plus a small vector, lowering U with modest decode.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "kunwar-2025-ttloramoe",
+  "title": "TT-LoRA MoE: Unifying Parameter-Efficient Fine-Tuning and Sparse Mixture-of-Experts",
+  "authors": "Pradip Kunwar, Minh N. Vu, Maanak Gupta, Mahmoud Abdelsalam, Manish Bhattarai",
+  "year": 2025,
+  "venue": "SC 2025 (ACM/IEEE Supercomputing); arXiv preprint",
+  "url": "https://arxiv.org/abs/2504.21190",
+  "topics": [
+   "updates",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kunwar-2025-ttloramoe/1",
+    "claim": "A separately trained router picks exactly one tensor-train adapter per input, so the mixture behaves like a task classifier over a bank of tiny task adapters.",
+    "quote": "A sparse MoE router, trained separately, dynamically leverages base model representations to select exactly one specialized adapter per input at inference time",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Supports the draft's 'single expert per input' wording, but because routing is per input over 17 classification tasks it says nothing about per-token capability bought by an update, so it does not move U for open-ended training.",
+    "from_review": "prior"
+   },
+   {
+    "id": "kunwar-2025-ttloramoe/2",
+    "claim": "The 'rank-5' adapter is a tensor-train decomposition with 33,920 total parameters on Llama-3.2-1B, against 1,703,936 for a rank-16 LoRA on the same layers.",
+    "quote": "it uses roughly 2% of the trainable parameters (33,920) compared to LoRA's 1,703,936 parameters for the same adaptation layer",
+    "location": "Section 5.1; Table 2",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 33920,
+      "unit": "parameters",
+      "condition": "TT-rank 5 adapter on Q/V projections of Llama-3.2-1B"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 0.54,
+      "unit": "Mbit",
+      "condition": "derived: 33,920 params x 16 bits = 542,720 bits (about 68 KB), roughly 1-3% of K"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "DISCREPANCY: the draft calls it a 'rank-5 expert', but 5 is a tensor-train rank (33,920 parameters in total), not a LoRA of rank 5; an update this small fits well inside K, so it would push U far below K for narrow classification tasks.",
+    "from_review": "prior"
+   },
+   {
+    "id": "kunwar-2025-ttloramoe/3",
+    "claim": "On average across 17 classification tasks TT-LoRA scores 79.58 against 80.99 for rank-16 LoRA, with large drops on BoolQ and Winogrande, so it approaches rather than matches LoRA.",
+    "quote": "| Average | 80.99 | 79.58 |",
+    "location": "Table 4 (LoRA vs TT-LoRA; BoolQ 77.81 vs 68.58, Winogrande_l 65.06 vs 54.73)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": -1.41,
+      "unit": "accuracy points",
+      "condition": "derived: TT-LoRA average 79.58 minus LoRA average 80.99 over 17 classification tasks, Llama-3.2-1B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "DISCREPANCY: 'able to match the performance of a rank-16 adapter' overstates the result (1.4 points lower on average, up to 10 points lower on single tasks), so capability per bit of tiny adapters is somewhat lower than the draft implies.",
+    "from_review": "prior"
+   },
+   {
+    "id": "kunwar-2025-ttloramoe/4",
+    "claim": "The authors limit their claims to homogeneous classification settings and leave generation and question answering to future work.",
+    "quote": "uniform TT-shape, TT-rank, Alpha values, and task type (classification)",
+    "location": "Section 6 (Conclusion and Future Work)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Confirms the draft's caveat that results cover only Llama-3.2-1B classification, so this source cannot set b_w.delta or U for generative fine-tuning.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "li-2018-intrinsic-dim",
+  "title": "Measuring the Intrinsic Dimension of Objective Landscapes",
+  "authors": "Chunyuan Li, Heerad Farkhoor, Rosanne Liu, Jason Yosinski",
+  "year": 2018,
+  "venue": "ICLR 2018",
+  "url": "https://arxiv.org/abs/1804.08838",
+  "topics": [
+   "updates",
+   "theory",
+   "seed-based",
+   "weights",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2018-intrinsic-dim/1",
+    "claim": "Training in a random low-dimensional subspace bounds a solution's description length and compresses networks over 100x.",
+    "quote": "the method is a simple technique for constructively obtaining an upper bound on the minimum description length of a solution. A byproduct of this construction is a simple approach for compressing networks, in some cases by more than 100 times.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 100,
+      "unit": "compression ratio",
+      "condition": "random-subspace training of small networks (MNIST, CIFAR, RL tasks)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Gives the method behind seed-plus-coefficients updates, whose size upper-bounds U.",
+    "from_review": "updates"
+   },
+   {
+    "id": "li-2018-intrinsic-dim/2",
+    "claim": "A network trained in a 750-dim random subspace is stored as two seeds plus 750 floats, 260x smaller.",
+    "quote": "the 750 floating point numbers in $\\theta^{(d)}_{*}$. It leads to compression (assuming 32-bit floats) by a factor of 260$\\times$ from 793kB to only 3.2kB, or 0.4% of the full parameter size.",
+    "location": "Section 3",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 25600,
+      "unit": "bits",
+      "condition": "derived: 3.2 kB x 8; MNIST FC network"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Random-subspace training gives the same seeds-plus-scalars structure as ZO, with U = subspace dimension x float width.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "li-2018-intrinsic-dim/3",
+    "claim": "Intrinsic dimension measures task difficulty: Atari Pong from pixels is about as hard as CIFAR-10.",
+    "quote": "playing Atari Pong from pixels is about as hard as classifying CIFAR-10.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Gives a capability-per-scalar scale: harder tasks need more seeded directions.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "li-2018-intrinsic-dim/4",
+    "claim": "Memorizing shuffled MNIST labels needs an intrinsic dimension of 190k, about 3.8 floats per random label.",
+    "quote": "it yields dint90 = 190k. We can interpret this as requiring 3.8 floats to memorize each random label (at 90% accuracy).",
+    "location": "supplementary material (shuffled-label MNIST)",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 3.8,
+      "unit": "floats per memorized label",
+      "condition": "shuffled-label MNIST, 50k images"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Memorization (pretraining-like novel information) needs subspace dimension proportional to data, unlike fine-tuning.",
+    "from_review": "seed-based"
+   }
+  ]
+ },
+ {
+  "id": "li-2024-excp",
+  "title": "ExCP: Extreme LLM Checkpoint Compression via Weight-Momentum Joint Shrinking",
+  "authors": "Wenshuo Li, Xinghao Chen, Han Shu, Yehui Tang, Yunhe Wang",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2406.11257",
+  "topics": [
+   "updates",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2024-excp/1",
+    "claim": "Residuals between adjacent pretraining checkpoints (weights plus Adam momentum) compress ~70x on Pythia-410M and ~24x on PanGu-pi-7B, nearly losslessly.",
+    "quote": "we achieve approximately $70\\times$ compression for the Pythia-410M model, with the final performance being as accurate as the original model on various downstream tasks",
+    "location": "abstract / Tables 2-3",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 1.2,
+      "unit": "bits per param",
+      "condition": "derived: 0.06 GB * 8 / 410M, weights+optimizer state; Pythia-410M, avg 42.93 vs 43.11"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 4.7,
+      "unit": "bits per param",
+      "condition": "derived: 4.10 GB * 8 / 7e9, weights+optimizer state; PanGu-pi-7B 98.59G -> 4.10G, avg 57.09 vs 56.71"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Pretraining-style updates (with optimizer state) stay at ~1-5 bits/param, far above fine-tune deltas; b_w stays high for pretraining-like training.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "liu-2024-bitdelta",
+  "title": "BitDelta: Your Fine-Tune May Only Be Worth One Bit",
+  "authors": "James Liu, Guangxuan Xiao, Kai Li, Jason D. Lee, Song Han, Tri Dao, et al.",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2402.10193",
+  "topics": [
+   "updates",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2024-bitdelta/1",
+    "claim": "A post-hoc sign-plus-scale quantization takes full fine-tune deltas (SFT, RLHF, RoPE scaling) to 1 bit per weight with small quality loss, up to 70B.",
+    "quote": "We introduce a simple post-fine-tuning method, BitDelta, which successfully quantizes this delta down to 1 bit without compromising performance.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 1,
+      "unit": "bits/weight",
+      "condition": "Llama-2, Mistral, MPT up to 70B; embeddings and LM head left uncompressed; scale distillation brings TruthfulQA/GSM8K within 1-2 points of the fine-tune"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Sets a near-lossless ceiling of about 1 bit/weight for b_w.delta of naturally trained full fine-tunes, so b_w.delta <= 1 even without special training.",
+    "from_review": "updates"
+   },
+   {
+    "id": "liu-2024-bitdelta/2",
+    "claim": "On Llama 2-70B the compressed delta is 8.95 GB against 137.95 GB for the full model (15.41x), i.e. about 1 bit per weight including the uncompressed embeddings.",
+    "quote": "Llama 2-70B | 137.95 GB | 8.95 GB | 15.41",
+    "location": "Table 5",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 8950,
+      "unit": "MB",
+      "condition": "Llama 2-70B delta"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 1.02,
+      "unit": "bits/weight",
+      "condition": "derived: 8.95 GB * 8 / 70e9 weights"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A naturally trained 70B fine-tune compressed this way is ~9 GB, about 1000x over K, so it needs sharding unless training is constrained.",
+    "from_review": "updates"
+   },
+   {
+    "id": "liu-2024-bitdelta/3",
+    "claim": "Full-parameter fine-tune deltas are high rank, so low-rank SVD approximations of them do worse than 1-bit quantization.",
+    "quote": "Deltas from full parameter fine-tuning are fairly high rank, making low-rank approximations difficult.",
+    "location": "Figure 2",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 4096,
+      "unit": "rank (of 4096)",
+      "condition": "Llama 2-7B -> Vicuna-7B v1.5 delta, 4096x4096 matrix; qualitative: cumulative explained variance rises slowly"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Naturally trained full-FT updates are not low rank, so update.rank is high unless the training itself is LoRA-constrained.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "moonshotai-2025-kimi-k2-config",
+  "title": "Kimi-K2-Instruct config.json",
+  "authors": "Moonshot AI",
+  "year": 2025,
+  "venue": "model card (Hugging Face)",
+  "url": "https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/config.json",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "moonshotai-2025-kimi-k2-config/1",
+    "claim": "Kimi K2 (~1T parameters) has 61 layers (1 dense), 384 routed experts plus 1 shared per MoE layer, hidden size 7168 and expert width 2048; from this, a rank-1 LoRA on every routed expert's three matrices is ~637M parameters.",
+    "quote": "\"hidden_size\": 7168, \"initializer_range\": 0.02, \"intermediate_size\": 18432, \"kv_lora_rank\": 512, \"max_position_embeddings\": 131072, \"model_type\": \"kimi_k2\", \"moe_intermediate_size\": 2048, \"moe_layer_freq\": 1, \"n_group\": 1, \"n_routed_experts\": 384",
+    "location": "config.json",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 1274,
+      "unit": "MB",
+      "condition": "derived: rank-1 LoRA on gate/up/down of all 384 routed experts x 60 MoE layers = 23,040 experts * 3 * (7168+2048) = 637M params * 2 bytes (bf16)"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 80,
+      "unit": "MB",
+      "condition": "derived: same 637M params at 1 bit each"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.0099,
+      "unit": "bits per base weight",
+      "condition": "derived: 1.02e10 bits / 1.03e12 weights (routed experts only)"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 11.1,
+      "unit": "MB",
+      "condition": "derived: rank-1 LoRA on all non-routed matrices (MLA attention 3.81M + shared experts 1.66M + dense MLP 0.08M = 5.55M params) in bf16"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 0.56,
+      "unit": "MB",
+      "condition": "derived: LoRA-XS r=2 (4 params) on all ~69,600 linear modules = 278k params in bf16"
+     },
+     {
+      "param": "update.decode_flops",
+      "value": 2000000000000.0,
+      "unit": "flops",
+      "condition": "derived: merging a rank-1 LoRA into all ~1.03e12 weights at ~2 flops/weight, about 30 tokens of forward pass at 32B active params"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Answers the U question: a rank-1 adapter on every expert of a 1T MoE is ~1.3 GB (115-510x over K), but SVD-based or tied adapters fit under K and decode cheaply.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "morris-2026-tinylora",
+  "title": "Learning to Reason in 13 Parameters",
+  "authors": "John X. Morris, Niloofar Mireshghallah, Mark Ibrahim, Saeed Mahloujifar",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2602.04118",
+  "topics": [
+   "updates",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "morris-2026-tinylora/1",
+    "claim": "RL with a tied, SVD-based adapter takes Qwen2.5-8B to 91% on GSM8K by training 13 parameters (26 bytes).",
+    "quote": "we are able to train the 8B parameter size of Qwen2.5 to 91% accuracy on GSM8K with only 13 trained parameters in bf16 (26 total bytes)",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 208,
+      "unit": "bits",
+      "condition": "13 bf16 parameters; Qwen2.5 8B, GSM8K 91%; RL (GRPO)"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 2.7e-08,
+      "unit": "bits per base weight",
+      "condition": "derived: 208 bits / 7.6e9 weights"
+     },
+     {
+      "param": "capability.bits",
+      "value": 208,
+      "unit": "bits",
+      "condition": "GSM8K gain to 91%"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The most extreme low end for RL U: bytes, not MB, when the decoder holds the base model's SVD.",
+    "from_review": "updates"
+   },
+   {
+    "id": "morris-2026-tinylora/2",
+    "claim": "RL recovers 90% of gains with 1000x fewer parameters, while SFT needs 100-1000x larger updates for the same performance.",
+    "quote": "models trained using SFT require $100-1000x$ larger updates to reach the same performance",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1000,
+      "unit": "ratio of SFT to RL update size",
+      "condition": "upper end; math reasoning benchmarks"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Separates RL from SFT: b_w.delta for RL-style updates can be 2-3 orders of magnitude below SFT-style.",
+    "from_review": "updates"
+   },
+   {
+    "id": "morris-2026-tinylora/3",
+    "claim": "Qwen-2.5-7B-Instruct goes from 76% to 95% GSM8K with 10,000 trained parameters, and 196 parameters keep 87% of the improvement on harder math.",
+    "quote": "Qwen-2.5-7B-Instruct improves from 76% to 95% while training just 10,000 parameters",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 0.02,
+      "unit": "MB",
+      "condition": "derived: 10,000 params * 2 bytes"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 2.1e-05,
+      "unit": "bits per base weight",
+      "condition": "derived: 10,000 * 16 / 7.6e9"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A robust (less extreme) RL low end: ~20 KB updates keep most of the gain.",
+    "from_review": "updates",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities derived-ok"
+   },
+   {
+    "id": "morris-2026-tinylora/4",
+    "claim": "Llama responds less than Qwen: it needs ~500 parameters (1 KB) to reach 85% and barely improves below five parameters.",
+    "quote": "in this low-parameter setting LLAMA is less responsive than Qwen and reaches 85% with an update size of 1KB (500 parameters trained in bf16)",
+    "location": "Section 6.4",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 0.001,
+      "unit": "MB",
+      "condition": "Llama, 500 bf16 params"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The 13-parameter result is model-dependent; KB-scale is the safer low end for RL U.",
+    "from_review": "updates"
+   },
+   {
+    "id": "morris-2026-tinylora/5",
+    "claim": "Larger backbones need smaller updates to reach 95% of peak performance.",
+    "quote": "Larger models require smaller updates to reach e.g. 95% of peak performance.",
+    "location": "Figure 3",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Extrapolates to even smaller RL U at frontier scale.",
+    "from_review": "updates"
+   },
+   {
+    "id": "morris-2026-tinylora/6",
+    "claim": "TinyLoRA trained with GRPO takes Qwen2.5-7B-Instruct on GSM8K from 76% to 91% with 13 bf16 parameters (26 bytes).",
+    "quote": "we are able to train the 8B parameter size of Qwen2.5 to 91% accuracy on GSM8K with only 13 trained parameters in bf16 (26 total bytes).",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 208,
+      "unit": "bits",
+      "condition": "13 bf16 params; Qwen2.5-7B-Instruct GSM8K 76% (base) to 91%; GRPO"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 26,
+      "unit": "bytes",
+      "condition": "TinyLoRA, fixed random projections from a seed, SVD of frozen weights"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Sets the floor for U of an elicited narrow skill at tens of bytes; decode cost is one SVD-based projection, negligible versus Gamma.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "morris-2026-tinylora/7",
+    "claim": "At 10,000 trained parameters (~20 KB bf16) Qwen2.5-7B-Instruct reaches 95% on GSM8K, near full fine-tuning.",
+    "quote": "On the GSM8K dataset of math word problems, Qwen-2.5-7B-Instruct improves from 76% to 95% while training just 10,000 parameters.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 20,
+      "unit": "KB",
+      "condition": "derived: 10,000 params x 16 bits; GSM8K 76% to 95%"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Central value for U of a near-full RL gain on a narrow benchmark at 7B: ~1e5 bits.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "morris-2026-tinylora/8",
+    "claim": "On harder math (MATH500, AIME, AMC and others), 196 parameters keep 87% of the RL improvement; larger backbones need smaller updates.",
+    "quote": "finetuning Qwen-2.5-7B-Instruct for just 196 parameters retains 87% of its absolute performance improvement, averaged across six difficult math benchmarks.",
+    "location": "Section 1; Figure 3",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 3136,
+      "unit": "bits",
+      "condition": "derived: 196 params x 16 bits; 87% of full-FT gain averaged over six math benchmarks"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Capability per bit of RL updates grows with base-model scale (Figure 3), so shared headroom under a fixed K widens as committed models grow.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "morris-2026-tinylora/9",
+    "claim": "Tiny updates work only for RL; SFT needs 100-1000x larger updates to reach the same score.",
+    "quote": "We show that such low-capacity model updates only succeed in the case of RL, and are not information-dense enough to work well for SFT.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "SFT-derived capability needs U of ~1e6+ parameters (MB scale), still near or under K; RL needs ~1e2-1e4 parameters.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "morris-2026-tinylora/10",
+    "claim": "The effect is model-family dependent: at 100 parameters Llama-3.2-3B reaches 60% on GSM8K versus 74% for Qwen-2.5-3B.",
+    "quote": "when training just 100 parameters, Llama achieves 60% accuracy, while Qwen averages 74% across 3 random seeds.",
+    "location": "Appendix (ablations)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Discount Qwen-based capability-per-bit figures when estimating headroom for other committed bases.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "mukherjee-2025-rl-subnetworks",
+  "title": "Reinforcement Learning Finetunes Small Subnetworks in Large Language Models",
+  "authors": "Sagnik Mukherjee, Lifan Yuan, Dilek Hakkani-Tür, Hao Peng",
+  "year": 2025,
+  "venue": "NeurIPS 2025",
+  "url": "https://arxiv.org/abs/2505.11711",
+  "topics": [
+   "updates",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "mukherjee-2025-rl-subnetworks/1",
+    "claim": "RL fine-tuning of released LLMs changes only 5-30% of parameters, yet each matrix's update is nearly full rank.",
+    "quote": "Moreover, the updates to almost all parameter matrices are nearly full-rank, suggesting RL updates a small subset of parameters that nevertheless span almost the full subspaces that the parameter matrices can represent.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.05,
+      "unit": "fraction",
+      "condition": "low end; 7 RL algorithms, 10 open models, bf16 checkpoints, tolerance 1e-5"
+     },
+     {
+      "param": "update.fraction_changed",
+      "value": 0.3,
+      "unit": "fraction",
+      "condition": "high end"
+     },
+     {
+      "param": "update.rank",
+      "value": 0.992,
+      "unit": "fraction of max rank",
+      "condition": "Table 2: 99.2%-99.8% of maximum rank"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Natural RL deltas are sparse in bf16 but not low rank; the sparsity alone saves at most a few-fold in b_w because positions must be encoded.",
+    "from_review": "updates"
+   },
+   {
+    "id": "mukherjee-2025-rl-subnetworks/2",
+    "claim": "Across RL-tuned open models 68.5%-96.0% of parameters are bit-identical after RL (e.g. DeepSeek-R1-Zero 86.0%, Tulu-3-70B DPO 95.2%).",
+    "quote": "for all RL-finetuned models, 68.5%–96.0% of parameters remain unchanged after RL",
+    "location": "Table 1 / Section 3",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.14,
+      "unit": "fraction",
+      "condition": "derived: 1 - 0.860; DeepSeek-R1-Zero, the largest (frontier MoE) model in Table 1"
+     },
+     {
+      "param": "update.fraction_changed",
+      "value": 0.048,
+      "unit": "fraction",
+      "condition": "derived: 1 - 0.952; Tulu-3-70B DPO"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "At frontier MoE scale (R1-Zero), an RL run changed ~14% of bf16 weights; the bound should not assume a much smaller fraction.",
+    "from_review": "updates"
+   },
+   {
+    "id": "mukherjee-2025-rl-subnetworks/3",
+    "claim": "RL changes only 5-30% of parameters across 7 algorithms and 10 models (7B-70B and DeepSeek-R1-Zero), yet the updated matrices are nearly full rank.",
+    "quote": "such large gains result from updating only a small subnetwork comprising just 5%-30% of the parameters, with the rest effectively unchanged.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.05,
+      "unit": "fraction",
+      "condition": "low end across 7 RL algorithms, 10 LLMs"
+     },
+     {
+      "param": "update.fraction_changed",
+      "value": 0.3,
+      "unit": "fraction",
+      "condition": "high end across 7 RL algorithms, 10 LLMs"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Full-FT RL deltas are sparse but not low rank, so their raw b_w.delta is not tiny; low U comes from choosing a compact parametrization (LoRA/TinyLoRA), not from compressing the full-FT delta.",
+    "from_review": "capability-per-bit",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "mukherjee-2025-rl-subnetworks/4",
+    "claim": "DeepSeek-R1-Zero's RL left 86% of DeepSeek-V3-Base parameters unchanged.",
+    "quote": "DeepSeek v3 base DeepSeek-R1-Zero 86.0",
+    "location": "Table 1 (update sparsity, %)",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.14,
+      "unit": "fraction",
+      "condition": "derived: 1 - 0.860 sparsity; DeepSeek-V3-Base to R1-Zero (671B MoE)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Even a frontier reasoning jump touches a minority of weights; position-coding a sparse delta still costs far more than K at 671B.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "ping-2024-delta-come",
+  "title": "Delta-CoMe: Training-Free Delta-Compression with Mixed-Precision for Large Language Models",
+  "authors": "Bowen Ping, Shuo Wang, Hanqing Wang, Xu Han, Yuzhuang Xu, Yukun Yan, et al.",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2406.08903",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ping-2024-delta-come/1",
+    "claim": "Mixed-precision quantization of the delta's singular vectors at a 1-bit-equivalent budget matches aligned models on average (53.2 vs 53.5), beating low-rank (47.8) and BitDelta (49.3).",
+    "quote": "Delta-CoMe attains an average score of 53.2 across eight representative tasks, closely matching the average score of 53.5 achieved by the aligned LLMs. In comparison, the scores of the low-rank and low-bit baselines are 47.8 and 49.3",
+    "location": "Section 1 / Table 2",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 1,
+      "unit": "bits/weight",
+      "condition": "derived: compression ratio 1/16 of 16-bit; 7B math/code/chat/VLM fine-tunes"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Confirms ~1 bit/weight as a near-lossless b_w.delta for naturally trained SFT deltas, including math and code.",
+    "from_review": "updates"
+   },
+   {
+    "id": "ping-2024-delta-come/2",
+    "claim": "BitDelta's plain 1-bit scheme hurts math and code fine-tunes even though it is near-lossless on chat models.",
+    "quote": "While BitDelta (Liu et al., 2024b) can achieve near lossless performance on chat models, it significantly degrades the performance of math and code LLMs",
+    "location": "Section 5.2",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Tempers the 1-bit claim: reaching b_w.delta ~1 near-losslessly needs a structure-aware code, not naive sign quantization.",
+    "from_review": "updates"
+   },
+   {
+    "id": "ping-2024-delta-come/3",
+    "claim": "Quality holds to about 20x compression (~0.8 bits/weight) and falls noticeably at 32x (~0.5 bits/weight); WizardMath-7B GSM8K goes 55.2 -> 53.6 (16x) -> 51.9 (20x) -> 48.8 (32x).",
+    "quote": "When the compression ratio is within 20×, Delta-CoMe still performs well. However, at a compression ratio of 32×, there is a noticeable decline in performance",
+    "location": "Appendix D",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 0.8,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits / 20x; WizardMath-7B GSM8K 51.9 vs 55.2"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.5,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits / 32x; WizardMath-7B GSM8K 48.8 vs 55.2 (noticeable decline)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Low-rank-plus-quantization codes for SFT deltas hit a knee near 0.5-0.8 bits/weight at 7B.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "renduchintala-2024-tied-lora",
+  "title": "Tied-LoRA: Enhancing parameter efficiency of LoRA with Weight Tying",
+  "authors": "Adithya Renduchintala, Tugrul Konuk, Oleksii Kuchaiev",
+  "year": 2024,
+  "venue": "NAACL 2024",
+  "url": "https://arxiv.org/abs/2311.09578",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "renduchintala-2024-tied-lora/1",
+    "claim": "Sharing LoRA matrices across layers and training only small vectors stays within 1-2% of LoRA with 12.5% of its parameters.",
+    "quote": "This configuration is within $1-2\\%$ of LoRA in terms of performance and in one case beats LoRA while only using $12.5\\%$ of the number of parameters.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.125,
+      "unit": "fraction of LoRA params",
+      "condition": "LLaMA2 7B and a smaller model, 5 tasks; math tasks favor plain LoRA"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Cross-layer tying cuts U a further ~8x below LoRA at small quality cost.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "schulman-2025-lora-without-regret",
+  "title": "LoRA Without Regret",
+  "authors": "John Schulman, Thinking Machines Lab",
+  "year": 2025,
+  "venue": "blog (Thinking Machines)",
+  "url": "https://thinkingmachines.ai/blog/lora",
+  "topics": [
+   "updates",
+   "theory",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "schulman-2025-lora-without-regret/1",
+    "claim": "LoRA matches full fine-tuning for policy-gradient RL even at rank 1.",
+    "quote": "LoRA fully matches the learning performance of FullFT when running policy gradient algorithms for reinforcement learning, even with ranks as low as 1.",
+    "location": "blog, section Reinforcement learning",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 1,
+      "unit": "rank",
+      "condition": "RL (GRPO-style) on Llama-3.1-8B and Qwen3 math reasoning"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.006,
+      "unit": "bits per base weight",
+      "condition": "derived: rank-1 LoRA on Llama-3.1-8B = 3M params * 16 bits / 8e9"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 6,
+      "unit": "MB",
+      "condition": "derived: 3M params * 2 bytes (bf16), Llama-3.1-8B rank-1 LoRA"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "RL updates need only rank 1: b_w.delta ~0.006 at 8B in 16-bit, and much less with quantized or tied adapters.",
+    "from_review": "updates"
+   },
+   {
+    "id": "schulman-2025-lora-without-regret/2",
+    "claim": "Policy gradient gives O(1) bits per episode versus O(tokens) for supervised learning, so a 10k-problem x 32-sample RL run absorbs about 320,000 bits.",
+    "quote": "Assuming each completion yields a single bit of information, the whole training process only needs to absorb 320,000 bits. Rank-1 LoRA for Llama-3.1-8B already has 3M parameters",
+    "location": "blog, section Reinforcement learning",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 320000,
+      "unit": "bits",
+      "condition": "MATH RL run, ~10,000 problems x 32 samples, 1 bit per completion (argument, upper bound)"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "The information in an RL update is bounded by the number of episodes, far below parameter counts; supports small U for RL.",
+    "from_review": "updates"
+   },
+   {
+    "id": "schulman-2025-lora-without-regret/3",
+    "claim": "By the same count DeepSeek-R1-Zero's 5.3M episodes carry about 5.3M bits (~0.66 MB).",
+    "quote": "DeepSeek-R1-Zero was trained on 5.3M episodes",
+    "location": "blog, section Reinforcement learning",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 5300000,
+      "unit": "bits",
+      "condition": "information bound for R1-Zero RL (1 bit/episode); derived: = 0.66 MB, below K's 2.5-11 MB"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "A frontier RL run's update information (~0.66 MB) sits under K, so RL could be nearly unthrottled if encoded near its information content.",
+    "from_review": "updates"
+   },
+   {
+    "id": "schulman-2025-lora-without-regret/4",
+    "claim": "For MoE layers they train a separate LoRA per expert with rank equal to the total rank divided by the number of active experts.",
+    "quote": "we trained a separate LoRA on each expert, with the rank of each equal to the total rank divided by the number of active experts (equal to 8 for Qwen3 MoE)",
+    "location": "blog, section Layers Where LoRA Is Applied",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Under this convention a rank-1 adapter per expert is already rank-8-equivalent, more than RL needs.",
+    "from_review": "updates"
+   },
+   {
+    "id": "schulman-2025-lora-without-regret/5",
+    "claim": "Policy-gradient RL learns about O(1) bits per episode, against O(tokens) bits per episode in supervised learning.",
+    "quote": "Supervised learning arguably provides O(number of tokens) bits per episode. In contrast, in policy gradient methods, learning is driven by the advantage function which provides only O(1) bits per episode.",
+    "location": "Section on RL capacity",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 1,
+      "unit": "bits per episode (order of magnitude)",
+      "condition": "policy-gradient RL"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "RL's information intake is tiny, consistent with ES encoding it as one scalar per perturbation.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "schulman-2025-lora-without-regret/6",
+    "claim": "By this count, DeepSeek-R1-Zero's 5.3M RL episodes carry about 5.3M bits.",
+    "quote": "corresponding to 5.3M bits of information.",
+    "location": "Section on RL capacity",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 5300000.0,
+      "unit": "bits",
+      "condition": "DeepSeek-R1-Zero RL; argued, not measured"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "A frontier reasoning-RL run's information is ~5e6 bits, below K, so an RL-scale gain might fit in one block's read budget if it can be decoded.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "schulman-2025-lora-without-regret/7",
+    "claim": "Citing Allen-Zhu and Li, the post says networks store about 2 bits per parameter in the long-training limit.",
+    "quote": "neural networks can store 2 bits per parameter",
+    "location": "Section on capacity",
+    "quantities": [
+     {
+      "param": "b_w.capacity",
+      "value": 2,
+      "unit": "bits/parameter",
+      "condition": "cited from Allen-Zhu and Li (2024), long-training limit"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Bounds what any update can store; seed updates sit far below capacity.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "schulman-2025-lora-without-regret/8",
+    "claim": "Rank-1 LoRA matches full fine-tuning for policy-gradient RL on math (Llama-3.1-8B on MATH/GSM, Qwen3-8B-Base on DeepMath with AIME held-out).",
+    "quote": "A key finding from our experiments is that LoRA fully matches the learning performance of FullFT when running policy gradient algorithms for reinforcement learning, even with ranks as low as 1.",
+    "location": "Section: Reinforcement learning",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 1,
+      "unit": "rank",
+      "condition": "Llama-3.1-8B base, GRPO-like policy gradient on MATH and GSM8K; same peak reward as FullFT"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 6,
+      "unit": "MB",
+      "condition": "derived: rank-1 LoRA on all Llama-3.1-8B matrices = 3M params (stated) x 16 bits (bf16)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A full RL post-training update for an 8B model fits in ~6 MB, inside one block's K (2.5-11 MB); lowers effective U for RL to <= K.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "schulman-2025-lora-without-regret/9",
+    "claim": "DeepSeek-R1-Zero's whole RL run carried at most ~5.3M bits of reward information, and the authors predict it could be replicated with LoRA (not tested).",
+    "quote": "corresponding to 5.3M bits of information. This is less than the number of parameters in a low-rank LoRA, and we predict that the results can be replicated with LoRA.",
+    "location": "Section: Reinforcement learning",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 5.3,
+      "unit": "Mbit",
+      "condition": "10,400 steps x 32 questions x 16 samples, 1 bit per episode; derived: ~0.66 MB"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Even a reasoning jump like R1-Zero (AIME 15.6% to 77.9%) is information-wise under one K; the binding cost is the compute to find it, not U's size.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "schulman-2025-lora-without-regret/10",
+    "claim": "LoRA underperforms full fine-tuning only once the dataset's information exceeds adapter capacity; supervised data carries roughly 1 bit per token of description length.",
+    "quote": "LLM datasets usually have a loss of around 1 bit (0.69 nats) per token, depending on dataset and model size.",
+    "location": "Section: How much capacity is needed by supervised and reinforcement learning?",
+    "quantities": [
+     {
+      "param": "b_tok",
+      "value": 1,
+      "unit": "bits/token",
+      "condition": "first-epoch log loss as description-length upper bound for SFT datasets"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Lets us convert SFT datasets to bits: ~1 bit/token entropy-coded vs ~17 raw, so a 10 MB block can carry ~80M tokens of entropy-coded SFT data.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "shenfeld-2025-rls-razor",
+  "title": "RL's Razor: Why Online Reinforcement Learning Forgets Less",
+  "authors": "Idan Shenfeld, Jyothish Pari, Pulkit Agrawal",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2509.04259",
+  "topics": [
+   "updates",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shenfeld-2025-rls-razor/1",
+    "claim": "RL's sparse updates came from bfloat16 rounding; in float32 the same training gives identical performance with dense, full-rank updates.",
+    "quote": "Performing the same training with float32 resulted in models with identical performance but without any sparsity in their weight updates. Checking the rank of the weight changes, we found that all algorithms lead to full rank weight updates.",
+    "location": "Section 6",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 1,
+      "unit": "fraction",
+      "condition": "float32 training, Qwen 2.5 3B-Instruct, RL and SFT"
+     },
+     {
+      "param": "update.rank",
+      "value": 1,
+      "unit": "fraction of full rank",
+      "condition": "all algorithms give full-rank weight changes"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Naturally trained RL updates are dense and full rank; any low b_w for RL must come from constraining training (LoRA, tiny adapters), not from natural sparsity.",
+    "from_review": "updates"
+   },
+   {
+    "id": "shenfeld-2025-rls-razor/2",
+    "claim": "On-policy RL is implicitly biased toward the solution with the smallest KL from the base policy.",
+    "quote": "on-policy RL is implicitly biased towards KL-minimal solutions",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Explains why RL updates carry little information relative to the base model, supporting small U for RL.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "wang-2024-esft",
+  "title": "Let the Expert Stick to His Last: Expert-Specialized Fine-Tuning for Sparse Architectural Large Language Models",
+  "authors": "Zihan Wang, Deli Chen, Damai Dai, Runxin Xu, Zhuoshu Li, Y. Wu",
+  "year": 2024,
+  "venue": "EMNLP 2024",
+  "url": "https://arxiv.org/abs/2407.01906",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2024-esft/1",
+    "claim": "Fine-tuning only the task-relevant experts of a fine-grained MoE (5-15% of experts) matches or beats full fine-tuning.",
+    "quote": "Most tasks and layers train 5-15% of experts, demonstrating ESFT’s effectiveness in selecting task-related experts.",
+    "location": "Figure 4",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.1,
+      "unit": "fraction of experts",
+      "condition": "central of 5-15%; DeepSeek-V2-Lite (16B MoE, 66 experts per layer)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "MoE updates can be confined to a few experts, cutting fraction_changed and U roughly 10x versus touching all experts.",
+    "from_review": "updates",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities derived-ok"
+   },
+   {
+    "id": "wang-2024-esft/2",
+    "claim": "ESFT stores 2.57-3.20 GB of trained parameters against 28.6 GB for full fine-tuning.",
+    "quote": "The average storage space of parameters trained is 2.57 GB for ESFT-Token and 3.20 GB for ESFT-Gate, while FFT demands a substantial 28.6 GB.",
+    "location": "Section 5.2 (Storage Space)",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 2570,
+      "unit": "MB",
+      "condition": "ESFT-Token, uncompressed, DeepSeek-V2-Lite"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Expert selection alone leaves U in GB; it must be combined with low-rank or tiny adapters to approach K.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "wang-2025-one-shot-rlvr",
+  "title": "Reinforcement Learning for Reasoning in Large Language Models with One Training Example",
+  "authors": "Yiping Wang, Qing Yang, Zhiyuan Zeng, Liliang Ren, Liyuan Liu, Baolin Peng, et al.",
+  "year": 2025,
+  "venue": "NeurIPS 2025",
+  "url": "https://arxiv.org/abs/2504.20571",
+  "topics": [
+   "updates",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2025-one-shot-rlvr/1",
+    "claim": "RLVR on a single training example lifts Qwen2.5-Math-1.5B on MATH500 from 36.0% to 73.6%, matching a 1.2k-example set.",
+    "quote": "we identify a single example that elevates model performance on MATH500 from 36.0% to 73.6% (8.6% improvement beyond format correction)",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Most RL gains elicit what the base model already contains, so the novel information in an RL update is small.",
+    "from_review": "updates",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   },
+   {
+    "id": "wang-2025-one-shot-rlvr/2",
+    "claim": "RLVR on a single math problem lifts Qwen2.5-Math-1.5B on MATH500 from 36.0% to 73.6%, matching RLVR on the 1.2k-example subset.",
+    "quote": "Applying RLVR to the base model Qwen2.5-Math-1.5B, we identify a single example that elevates model performance on MATH500 from 36.0% to 73.6% (8.6% improvement beyond format correction)",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 3000,
+      "unit": "bits",
+      "condition": "derived order of magnitude: one problem plus answer, ~150-250 tokens x ~17 bits raw; most of the gain is format correction (8.6 pts beyond it)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The novel input for an RL elicitation can be a few hundred bytes; NCI cannot throttle it via K.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "wang-2025-one-shot-rlvr/3",
+    "claim": "1-shot RLVR does not save compute: the single example is sampled ~1024 times per step and is not overfitted until millions of rollouts.",
+    "quote": "Considering that each example is sampled 1024 times per step, the single training example is not overfitted until after millions of rollouts.",
+    "location": "Section 3.2.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1400,
+      "unit": "training steps",
+      "condition": "steps before overfitting with pi_1; 1024 rollouts per step; i.e. >1e6 rollouts of compute for ~3 kbit of input"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Shows information and compute decouple: U is tiny but the search compute is many sessions, so Gamma (not K) bounds how fast such gains are found.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "wang-2025-one-shot-rlvr/4",
+    "claim": "On Qwen2.5-Math-7B, 1-shot RLVR raises the six-benchmark average by 17.8 points, and putting the same example in context also helps but less.",
+    "quote": "Although in-context learning also improves the base models, 1-shot RLVR still performs better than all in-context results, showing the advantage of RLVR.",
+    "location": "Section 3.3; Appendix C (in-context comparison)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 17.8,
+      "unit": "points (6-benchmark average)",
+      "condition": "Qwen2.5-Math-7B, 1-shot RLVR with pi_1; 5.9 pts above format-reward baseline (Section 3.3)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Most of the RL gain is reachable by inference alone (in-context), which NCI allows freely; the weight update adds a smaller increment.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "yadav-2023-compeft",
+  "title": "ComPEFT: Compression for Communicating Parameter Efficient Updates via Sparsification and Quantization",
+  "authors": "Prateek Yadav, Leshem Choshen, Colin Raffel, Mohit Bansal",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2311.13171",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yadav-2023-compeft/1",
+    "claim": "Sparsifying and ternarizing QLoRA adapters for LLaMA-65B shrinks them from 1.49 GB to 0.058 GB while raising average score from 59.29 to 63.45.",
+    "quote": "| Average | 37.88 (0.3) | 38.42 (0.0188) | 46.03 (0.47) | 47.09 (0.024) | 54.15 (0.91) | 57.60 (0.056) | 59.29 (1.49) | 63.45 (0.058",
+    "location": "Table 1 (Section 3.1)",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 58,
+      "unit": "MB",
+      "condition": "LLaMA-65B QLoRA adapter after ComPEFT; MMLU-style average 63.45 vs 59.29 uncompressed"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.0071,
+      "unit": "bits per base weight",
+      "condition": "derived: 58 MB * 8 / 65e9 base weights"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 18.8,
+      "unit": "MB",
+      "condition": "LLaMA-7B adapter, 0.3 GB -> 0.0188 GB"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "An instruction-tuning update for a 65B model fits in ~58 MB, within ~5-25x of K; PEFT-then-compress gives b_w.delta ~0.007.",
+    "from_review": "updates"
+   },
+   {
+    "id": "yadav-2023-compeft/2",
+    "claim": "At 5% density a ternary update with Golomb coding costs about 0.34 bits per updated parameter instead of 16.",
+    "quote": "At a density level of $k=0.05$, the resultant update has $95\\%$ of the values as $0$ and the entropy is $0.34*d+16~\\mathtt{bits}$.",
+    "location": "Section 2.2",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 0.34,
+      "unit": "bits/weight",
+      "condition": "per parameter of the (PEFT or full) update at density 0.05, entropy-optimal coding"
+     },
+     {
+      "param": "update.fraction_changed",
+      "value": 0.05,
+      "unit": "fraction",
+      "condition": "density k=0.05"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Gives the entropy cost of a 5%-dense sign-only update: ~0.34 bits/weight, a central value for sparse SFT deltas.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "yadav-2023-ties",
+  "title": "TIES-Merging: Resolving Interference When Merging Models",
+  "authors": "Prateek Yadav, Derek Tam, Leshem Choshen, Colin Raffel, Mohit Bansal",
+  "year": 2023,
+  "venue": "NeurIPS 2023",
+  "url": "https://arxiv.org/abs/2306.01708",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yadav-2023-ties/1",
+    "claim": "Keeping only the 20% largest-magnitude entries of a task vector does not hurt that task's performance.",
+    "quote": "Keeping only the top-20% of the parameter does not degrade the performance.",
+    "location": "Figure 3",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.2,
+      "unit": "fraction kept",
+      "condition": "T5-base/large and ViT task vectors, magnitude top-k"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Supports update.fraction_changed ~0.2 for magnitude-selected deltas; the positions must be encoded (~0.72 bits/weight for the mask at 20%), unlike DARE's seeded mask.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "yang-2025-impart",
+  "title": "ImPart: Importance-Aware Delta-Sparsification for Improved Model Compression and Merging in LLMs",
+  "authors": "Yan Yang, Yixia Li, Hongru Wang, Xuetao Wei, Jianqiao Yu, Yun Chen, et al.",
+  "year": 2025,
+  "venue": "ACL 2025",
+  "url": "https://arxiv.org/abs/2504.13237",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yang-2025-impart/1",
+    "claim": "Importance-aware SVD sparsification keeps 95.8% of fine-tuned performance at 16x (93.75% sparsity), twice the ratio of baselines at equal quality.",
+    "quote": "ImPart demonstrates $2\\times$ higher compression ratio than baselines at the same performance level, retaining 95.8% of the fine-tuned model’s performance at a compression ratio of 16 (93.75% sparsity).",
+    "location": "Section 1 / Figure 1",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 1,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits / 16x; 7B-13B math, code and chat deltas, 95.8% retained"
+     },
+     {
+      "param": "update.fraction_changed",
+      "value": 0.0625,
+      "unit": "fraction kept",
+      "condition": "93.75% sparsity"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Corroborates ~1 bit/weight as the near-lossless point for SFT deltas across tasks.",
+    "from_review": "updates"
+   },
+   {
+    "id": "yang-2025-impart/2",
+    "claim": "At 32x, chat deltas degrade badly: LLaMA2-Chat-13B AlpacaEval drops from 18.39 to 9.88 with ImPart and 2.27 with DARE, while WizardMath-13B keeps 60.20 of 63.96 GSM8K.",
+    "quote": "| ImPart | 32 | 60.20 | 10.38 | 59.76 | 68.00 | 26.80 | 9.88 | 27.91 | 7.13 | 33.27 | 18.77 | 32.21 |",
+    "location": "Table 1 (CR 32 rows)",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 0.5,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits / 32x; chat (RLHF-style) deltas keep only ~54% of AlpacaEval (9.88/18.39), math keeps ~94%"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Chat/RLHF deltas compress worse than math SFT deltas post hoc, so b_w.delta for broad alignment updates sits nearer 1 bit than 0.5.",
+    "from_review": "updates",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities derived-ok"
+   }
+  ]
+ },
+ {
+  "id": "yao-2025-deltazip",
+  "title": "DeltaZip: Efficient Serving of Multiple Full-Model-Tuned LLMs",
+  "authors": "Xiaozhe Yao, Qinghao Hu, Ana Klimovic",
+  "year": 2025,
+  "venue": "EuroSys 2025",
+  "url": "https://arxiv.org/abs/2312.05215",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yao-2025-deltazip/1",
+    "claim": "A serving system compresses full fine-tune deltas up to 10x while keeping quality, because fine-tuning makes small-magnitude changes.",
+    "quote": "aggressively compressing model deltas by up to 10× while maintaining high model quality. The key insight behind this design is that fine-tuning results in small-magnitude changes to the pre-trained model.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 1.6,
+      "unit": "bits/weight",
+      "condition": "derived: 16 bits / 10x; production-style serving of full-model-tuned LLMs"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A conservative, deployed b_w.delta of ~1.6 bits/weight for full fine-tunes; an upper anchor for the high value.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "yu-2024-dare",
+  "title": "Language Models are Super Mario: Absorbing Abilities from Homologous Models as a Free Lunch",
+  "authors": "Le Yu, Bowen Yu, Haiyang Yu, Fei Huang, Yongbin Li",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2311.03099",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yu-2024-dare/1",
+    "claim": "Randomly dropping 90-99% of SFT delta parameters and rescaling the rest preserves ability; SFT deltas are tiny in magnitude.",
+    "quote": "SFT delta parameter value ranges are typically small (within 0.002) with extreme redundancy, and DARE can effortlessly eliminate 90% or even 99% of them",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.01,
+      "unit": "fraction kept",
+      "condition": "p=0.99 drop rate; works for WizardMath-70B, fails for 7B/13B"
+     },
+     {
+      "param": "other",
+      "value": 0.002,
+      "unit": "abs delta value range",
+      "condition": "typical SFT delta magnitude"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows most SFT delta entries are individually dispensable, so a seed-chosen 1% subset carries the update; pushes b_w.delta down toward ~0.16 bits at 70B.",
+    "from_review": "updates"
+   },
+   {
+    "id": "yu-2024-dare/2",
+    "claim": "Drop tolerance grows with model size: 99% works at 70B but not at 7B/13B, which implies about 0.16 bits per weight at 70B if the mask is seed-derived and kept values are 16-bit.",
+    "quote": "DARE can eliminate up to 99% delta parameters with minimal impact on the performance when the LM’s parameters reach 70 billion",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 0.16,
+      "unit": "bits/weight",
+      "condition": "derived: (1-0.99) * 16 bits, random mask regenerated from a seed; WizardMath-70B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Larger models tolerate sparser deltas, so b_w.delta for frontier models is likely at or below the 70B figure.",
+    "from_review": "updates"
+   },
+   {
+    "id": "yu-2024-dare/3",
+    "claim": "Continued pretraining produces deltas about 15x larger in magnitude, for which DARE fails.",
+    "quote": "once models undergo continuous pre-training, the delta parameters can rapidly reach around 0.03, making DARE infeasible",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.03,
+      "unit": "abs delta value range",
+      "condition": "continued pretraining deltas"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Low b_w.delta applies to SFT/RL-style updates, not to continued pretraining, whose deltas stay near full width.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "zhu-2025-path-not-taken",
+  "title": "The Path Not Taken: RLVR Provably Learns Off the Principals",
+  "authors": "Hanqing Zhu, Zhenyu Zhang, Hanxian Huang, DiJia Su, Zechun Liu, Jiawei Zhao, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2511.08567",
+  "topics": [
+   "updates",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhu-2025-path-not-taken/1",
+    "claim": "Measured with a bf16-aware test, RL leaves 36-92% of weights unchanged while SFT leaves only 0.6-18.8% unchanged.",
+    "quote": "SFT sparsity is consistently low (typically 0.6%–18.8%), whereas RL sparsity is an order of magnitude higher, ranging from 36% to 92%.",
+    "location": "Section 2 / Table 1",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.083,
+      "unit": "fraction",
+      "condition": "derived: 1 - 0.917; Qwen3-30B-A3B -> UloRL-A3B (GRPO, MoE)"
+     },
+     {
+      "param": "update.fraction_changed",
+      "value": 0.64,
+      "unit": "fraction",
+      "condition": "derived: 1 - 0.36; most-changed RL model (DS-R1-Distill-1.5B -> ProRL)"
+     },
+     {
+      "param": "update.fraction_changed",
+      "value": 0.994,
+      "unit": "fraction",
+      "condition": "derived: 1 - 0.006; SFT (Klear-8B)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "SFT deltas are dense (fraction_changed ~0.8-1.0); RL deltas look sparse in bf16 (0.08-0.64).",
+    "from_review": "updates"
+   },
+   {
+    "id": "zhu-2025-path-not-taken/2",
+    "claim": "The apparent RL sparsity is an artifact of a model-conditioned optimization bias plus precision; raising the learning rate makes it largely disappear.",
+    "quote": "sparsity is a surface artifact of a model-conditioned optimization bias",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Do not set fraction_changed far below 1 for RL; small RL updates are dense below bf16 resolution, so sparsity is not a robust compression lever.",
+    "from_review": "updates"
+   }
+  ]
+ }
+]

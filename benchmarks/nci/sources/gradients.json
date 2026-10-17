@@ -1,0 +1,1965 @@
+[
+ {
+  "id": "alistarh-2016-qsgd",
+  "title": "QSGD: Communication-Efficient SGD via Gradient Quantization and Encoding",
+  "authors": "Dan Alistarh, Demjan Grubic, Jerry Z. Li, Ryota Tomioka, Milan Vojnovic",
+  "year": 2016,
+  "venue": "NeurIPS 2017",
+  "url": "https://arxiv.org/abs/1610.02132",
+  "topics": [
+   "gradients",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "alistarh-2016-qsgd/1",
+    "claim": "An unbiased stochastic quantizer with entropy coding needs about 2.8 bits per coordinate per iteration, at the price of at most 2x more iterations.",
+    "quote": "we use $\\approx 2.8n$ bits of communication per iteration as opposed to $32n$ bits, and guarantee at most $2\\times$ more iterations, leading to bandwidth savings of $\\approx 5.7\\times$.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 11.4,
+      "unit": "x",
+      "condition": "derived: 32n / 2.8n bits per iteration, vs fp32, every step, before the up-to-2x iteration penalty"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 5.7,
+      "unit": "x",
+      "condition": "net bandwidth saving vs fp32 after up to 2x more iterations (as stated)"
+     },
+     {
+      "param": "other",
+      "value": 2.8,
+      "unit": "bits per coordinate per iteration",
+      "condition": "QSGD with Elias coding; no per-worker memory (memoryless, unbiased)"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "A provable ~3 bits/param/step budget for compressors that keep no worker-side state, the regime closest to a block that holds no residual buffer.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "alistarh-2016-qsgd/2",
+    "claim": "The authors show the bits-versus-variance trade-off of their quantizer is close to an information-theoretic limit.",
+    "quote": "We show that this trade-off is inherent, in the sense that improving it past some threshold would violate information-theoretic lower bounds.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Suggests memoryless unbiased compression has a floor of order bits per parameter per step, so the far larger LLM ratios come from worker-held state (error feedback) or local steps.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "alistarh-2016-qsgd/3",
+    "claim": "End-to-end gains of memoryless quantization were modest, about 1.8x faster ResNet-152 training on 16 GPUs.",
+    "quote": "on 16GPUs, we can train the ResNet-152 network to full accuracy on ImageNet 1.8$\\times$ faster than the full-precision variant.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.8,
+      "unit": "x wall-clock speed-up",
+      "condition": "ResNet-152 ImageNet, 16 GPUs, to full accuracy"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Caps what stateless per-step compression offers in practice at roughly an order of magnitude.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "avraham-2026-agora",
+  "title": "Agora: Collective and Permissionless Internet-Scale Pretraining of Large Language Models",
+  "authors": "Gil Avraham, Violetta Shevchenko, Hadi Mohaghegh Dolatabadi, Karol Pajak, James Snewin, Harry Xi, et al.",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2607.13332",
+  "topics": [
+   "gradients",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "avraham-2026-agora/1",
+    "claim": "In Agora no participant ever holds the full model; each holds one pipeline stage.",
+    "quote": "Each participant holds only one stage of the model, and no single party ever possesses the full weights.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The closest real system to a sharded regime, yet each participant still holds a full dense stage plus its optimizer state, far more than K bits.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "avraham-2026-agora/2",
+    "claim": "Pluralis-8B trained 8.6B parameters on 500B tokens at 63% of centralized H100 efficiency and converged near a centralized reference.",
+    "quote": "Pluralis-8B, an open, permissionless pretraining run of an 8.6B-parameter model on 500B tokens of FineWeb-Edu",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 63,
+      "unit": "% of centralized H100 efficiency",
+      "condition": "8.6B, 500B tokens (abstract)"
+     },
+     {
+      "param": "other",
+      "value": 2.41,
+      "unit": "training loss",
+      "condition": "after 60k optimizer steps and 500B tokens; the reference run uses the same compression"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows compressed model-parallel plus sparse data-parallel training works at 8.6B over 500B tokens.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "avraham-2026-agora/3",
+    "claim": "Parameter gradients never cross nodes; replicas instead average 5% of parameters every 20 steps.",
+    "quote": "Pluralis-8B values: $s{=}5\\%$ (consecutive rounds cover every parameter once per $1/s{=}20$ rounds, i.e., every 400 steps)",
+    "location": "Algorithm 3",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 400,
+      "unit": "x",
+      "condition": "derived: per replica, 5% of parameters averaged every A=20 steps = 0.25% per step, vs per-step bf16 all-reduce; index cost ignored"
+     },
+     {
+      "param": "other",
+      "value": 0.04,
+      "unit": "bits/param/step",
+      "condition": "derived: 16 bits x 0.0025"
+     },
+     {
+      "param": "other",
+      "value": 400,
+      "unit": "steps for every parameter to be averaged once",
+      "condition": "as stated"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Data-parallel exchange near 0.04 bits/param/step at 8.6B, the low end of the aggregate envelope.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "avraham-2026-agora/4",
+    "claim": "Pipeline-boundary activations use a subspace of rank about 51 at width 5120.",
+    "quote": "the 1B model uses rank 40 at $d=2048$, and Pluralis-8B rank $\\approx$ 51 at $d=5120$",
+    "location": "Section 3.4.5",
+    "quantities": [
+     {
+      "param": "activation.compression_ratio",
+      "value": 100,
+      "unit": "x",
+      "condition": "derived: d=5120 / rank 51"
+     },
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 51,
+      "unit": "dimensions",
+      "condition": "subspace rank used at d=5120 (design choice)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Needed boundary rank grows slowly with width, which would lower b_a times d at frontier widths if it holds.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "bernstein-2018-signsgd",
+  "title": "signSGD: Compressed Optimisation for Non-Convex Problems",
+  "authors": "Jeremy Bernstein, Yu-Xiang Wang, Kamyar Azizzadenesheli, Anima Anandkumar",
+  "year": 2018,
+  "venue": "ICML 2018",
+  "url": "https://arxiv.org/abs/1802.04434",
+  "topics": [
+   "gradients",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bernstein-2018-signsgd/1",
+    "claim": "Majority vote over gradient signs gives 1-bit communication in both directions, so the aggregated update applied by every worker is also 1 bit per parameter per step.",
+    "quote": "the parameter server uses majority vote to aggregate gradient signs from each worker enabling 1-bit compression of worker-server communication in both directions.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 32,
+      "unit": "x",
+      "condition": "derived: 32-bit fp32 / 1 bit; both directions; every step"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 16,
+      "unit": "x",
+      "condition": "derived: vs bf16"
+     },
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "bits/param/step of the aggregated (broadcast) update",
+      "condition": "derived: majority-vote sign, every step"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "One of few schemes whose aggregate is as compressed as the upload; ~1 bit/param/step is an upper envelope on the per-step update rate of working training.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "bernstein-2018-signsgd/2",
+    "claim": "Sign descent with momentum matched Adam on ImageNet-scale models.",
+    "quote": "we find that the momentum counterpart of signSGD is able to match the accuracy and convergence speed of Adam on deep Imagenet models.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Evidence that 1 bit/param/step updates train deep nets to Adam quality at small scale.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "charles-2025-diloco-scaling",
+  "title": "Communication-Efficient Language Model Training Scales Reliably and Robustly: Scaling Laws for DiLoCo",
+  "authors": "Zachary Charles, Gabriel Teston, Lucio Dery, Keith Rush, Nova Fallen, Zachary Garrett, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2503.09799",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "charles-2025-diloco-scaling/1",
+    "claim": "Scaling-law-predicted DiLoCo runs at 4B and 10B beat data-parallel training while communicating over 100x less in total.",
+    "quote": "we tested these predictions when training models with 4 billion and 10 billion parameters. The scaling laws proved accurate, with DiLoCo outperforming data-parallel training as predicted, even while reducing total communication by a factor of over 100.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 100,
+      "unit": "x",
+      "condition": "lower bound ('over 100'); total communication vs DP; 4B and 10B; H=30 inner steps; as stated by authors"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "At 10B, local-update training with ~100x less communication loses no quality, anchoring the low end of grad.compression_ratio at frontier scale.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "charles-2025-diloco-scaling/2",
+    "claim": "At 10B, DiLoCo with 1 or 2 replicas reached slightly lower loss than data-parallel, and 4 replicas slightly higher.",
+    "quote": "Table 5: DiLoCo outperforms Data-Parallel at larger scales. Here we show the evaluation results on 4B and 10B models, using hyperparameters predicted by scaling laws.",
+    "location": "Table 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.09,
+      "unit": "eval loss",
+      "condition": "Data-Parallel, 10B (Table 5)"
+     },
+     {
+      "param": "other",
+      "value": 2.086,
+      "unit": "eval loss",
+      "condition": "DiLoCo M=1 and M=2, 10B, -0.19% (Table 5)"
+     },
+     {
+      "param": "other",
+      "value": 2.096,
+      "unit": "eval loss",
+      "condition": "DiLoCo M=4, 10B, +0.29% (Table 5)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Quality gap of local-update compression is a few tenths of a percent at 10B with few replicas.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "charles-2025-diloco-scaling/3",
+    "claim": "The loss penalty of more replicas shrinks with model size.",
+    "quote": "DiLoCo with $M=4$ goes from attaining 2% higher evaluation loss for $N$ = 35M parameters to only a 0.26% higher evaluation loss at $N$ = 2.4B parameters.",
+    "location": "Section 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.26,
+      "unit": "% higher eval loss vs DP",
+      "condition": "M=4, 2.4B"
+     },
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "% higher eval loss vs DP",
+      "condition": "M=4, 35M"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Trend suggests the quality cost of compressed synchronization falls at frontier scale.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "douillard-2023-diloco",
+  "title": "DiLoCo: Distributed Low-Communication Training of Language Models",
+  "authors": "Arthur Douillard, Qixuan Feng, Andrei A. Rusu, Rachita Chhaparia, Yani Donchev, Adhiguna Kuncoro, et al.",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2311.08105",
+  "topics": [
+   "gradients",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "douillard-2023-diloco/1",
+    "claim": "Eight DiLoCo workers that sync every 500 inner steps match fully synchronous training while communicating 500x less.",
+    "quote": "On the widely used C4 dataset, we show that DiLoCo on 8 workers performs as well as fully synchronous optimization while communicating 500 times less.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 500,
+      "unit": "x",
+      "condition": "8 workers; H=500 inner steps between syncs; C4; 60M-400M models; vs per-step synchronous DP; ratio equals H"
+     },
+     {
+      "param": "other",
+      "value": 0.064,
+      "unit": "bits/param/step (aggregate outer update)",
+      "condition": "derived: assuming 32-bit pseudo-gradients, 32 bits / H=500"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Local steps cut per-step communication by H, but every worker holds and advances a full model for H steps, so the saving lives inside the worker.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "douillard-2023-diloco/2",
+    "claim": "Stretching the interval from 50 to 1000 inner steps raised perplexity by only 2.9%.",
+    "quote": "For instance, when $H=1000$ the perplexity increases by only $2.9\\%$ relative to $H=50$, despite communicating $20\\times$ less.",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 1000,
+      "unit": "x",
+      "condition": "derived: H=1000 inner steps per sync vs per-step DP"
+     },
+     {
+      "param": "other",
+      "value": 2.9,
+      "unit": "% perplexity increase vs H=50",
+      "condition": "H=1000"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The interval H can reach ~1000 with a small quality cost at small scale.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "douillard-2023-diloco/3",
+    "claim": "DiLoCo is less compute- and data-efficient than simply taking 8x more synchronized steps.",
+    "quote": "the distributed nature of the computation reduces the FLOP and data efficiency of the model, as shown by the $8\\times$ updates row in Table 2.",
+    "location": "Section 5 (Limitations) and Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 15.02,
+      "unit": "perplexity",
+      "condition": "DiLoCo, 8 workers, H=500 (Table 2)"
+     },
+     {
+      "param": "other",
+      "value": 14.72,
+      "unit": "perplexity",
+      "condition": "baseline with 8x updates, 8x slower (Table 2)"
+     },
+     {
+      "param": "other",
+      "value": 15.3,
+      "unit": "perplexity",
+      "condition": "baseline with 8x batch (Table 2)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The 500x is bought with a compute-efficiency gap; it is not a lossless compression of the update.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "douillard-2025-streamingdiloco",
+  "title": "Streaming DiLoCo with overlapping communication: Towards a Distributed Free Lunch",
+  "authors": "Arthur Douillard, Yanislav Donchev, Keith Rush, Satyen Kale, Zachary Charles, Zachary Garrett, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2501.18512",
+  "topics": [
+   "gradients",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "douillard-2025-streamingdiloco/1",
+    "claim": "Streaming fragments, overlapping communication and low-precision pseudo-gradients keep quality while cutting bandwidth about 100x.",
+    "quote": "reach similar quality as before, but reducing required bandwidth by two orders of magnitude.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 100,
+      "unit": "x",
+      "condition": "peak bandwidth reduction as stated in abstract"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Supports ~10^2 per-worker reduction as routine for LLM pretraining.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "douillard-2025-streamingdiloco/2",
+    "claim": "At 1B parameters and 250B tokens, Streaming DiLoCo matched data-parallel loss while exchanging 400x fewer bits in total.",
+    "quote": "Overtraining Data-Parallel and our method on Dolma with a 1 billion parameters model. The latter performs slightly better despite exchanging in total $400\\times$ fewer bits, reducing the peak bandwidth by $8\\times$",
+    "location": "Table 1",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 400,
+      "unit": "x",
+      "condition": "total bits exchanged vs DP (4,418 TB vs 11.05 TB); 1B; Dolma 250B tokens; M=2 replicas; H=100; FP4 E3M0 pseudo-gradients"
+     },
+     {
+      "param": "other",
+      "value": 2.45,
+      "unit": "eval loss",
+      "condition": "both DP and Streaming DiLoCo FP4 at 250B tokens (Table 1)"
+     },
+     {
+      "param": "other",
+      "value": 0.04,
+      "unit": "bits/param/step per replica",
+      "condition": "derived: 4-bit values / H=100; aggregate of M=2 replicas at most 0.08"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Aggregate update information near 0.04-0.08 bits/param/step suffices at 1B, a lower envelope on per-step U.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "douillard-2025-streamingdiloco/3",
+    "claim": "Pseudo-gradients can be sent as 4-bit floats with no measurable regression at billion scale.",
+    "quote": "we found no sign of performance regression when employing such low precision numbers during communication, even at the billion scale.",
+    "location": "Section 2.4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "bits per pseudo-gradient value",
+      "condition": "E3M0 float (1 sign, 3 exponent, 0 mantissa bits)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Per-sync pseudo-gradient values tolerate 4 bits, so per-sync U per parameter is about 4 bits before entropy coding.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "gurari-2018-tinysubspace",
+  "title": "Gradient Descent Happens in a Tiny Subspace",
+  "authors": "Guy Gur-Ari, Daniel A. Roberts, Ethan Dyer",
+  "year": 2018,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/1812.04754",
+  "topics": [
+   "gradients",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gurari-2018-tinysubspace/1",
+    "claim": "Gradients quickly align with a few top Hessian eigenvectors (about as many as classes) and stay there.",
+    "quote": "the gradient dynamically converges to a very small subspace after a short period of training. The subspace is spanned by a few top eigenvectors of the Hessian (equal to the number of classes in the dataset), and is mostly preserved over long periods of training.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "If it held for LLMs, per-step updates would have tiny rank; contested by song-2024-sgdsubspace.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "hao-2024-flora",
+  "title": "Flora: Low-Rank Adapters Are Secretly Gradient Compressors",
+  "authors": "Yongchang Hao, Yanshuai Cao, Lili Mou",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2402.03293",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hao-2024-flora/1",
+    "claim": "Resampling random projections gives high-rank cumulative updates while keeping optimizer state sublinear.",
+    "quote": "we propose Flora, which is able to achieve high-rank updates by resampling the projection matrices while enjoying the sublinear space complexity of optimization states.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Random-projection gradient compression with seeded projections could be decoded from a seed plus r coefficients per row, a small per-step U.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "hao-2024-flora/2",
+    "claim": "For T5-3B and GPT-2-XL, Flora's memory overhead is 30% of naive accumulation at equal performance.",
+    "quote": "the memory overhead of Flora ($r=256$) is only $30\\%$ of the naive accumulation, while the performance is on par.",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 30,
+      "unit": "% of naive accumulation memory",
+      "condition": "T5-3B and GPT-2-XL, r=256"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Compression of accumulated gradients is ~3x here, modest.",
+    "from_review": "gradients",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   }
+  ]
+ },
+ {
+  "id": "jaghouar-2024-intellect1",
+  "title": "INTELLECT-1 Technical Report",
+  "authors": "Sami Jaghouar, Jack Min Ong, Manveer Basra, Fares Obeid, Jannik Straube, Michael Keiblinger, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2412.01152",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "jaghouar-2024-intellect1/1",
+    "claim": "INTELLECT-1 (10B, 1T tokens) used DiLoCo with int8 all-reduce for a 400x bandwidth reduction vs data parallelism.",
+    "quote": "Using prime with DiLoCo and our custom int8 all-reduce, we achieve a $400\\times$ reduction in communication bandwidth compared to traditional data-parallel training settings while delivering comparable performance.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 400,
+      "unit": "x",
+      "condition": "10B; 1T tokens; vs fp32 per-step DP all-reduce; = 100 inner steps x int8 (4x)"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 200,
+      "unit": "x",
+      "condition": "derived: 400x / 2 = vs bf16 per-step DP"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Production-scale anchor: ~200-400x per-worker reduction at 10B with workers that each hold the full model.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "jaghouar-2024-intellect1/2",
+    "claim": "Workers synced every 100 inner steps (about 38 minutes on 8xH100 nodes) with int8 pseudo-gradients.",
+    "quote": "we chose a conservative number of 100 inner steps between each DiLoCo synchronization, which, on clusters of 8xH100 nodes, took roughly 38 minutes to complete. We quantize the pseudo-gradients to int8, reducing communication requirements by a factor of $400\\times$.",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 100,
+      "unit": "inner steps between syncs",
+      "condition": "8xH100 nodes, ~38 minutes per round"
+     },
+     {
+      "param": "other",
+      "value": 0.08,
+      "unit": "bits/param/step (aggregate outer update)",
+      "condition": "derived: 8-bit pseudo-gradient / 100 inner steps"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The applied update carries ~0.08 bits/param/step at 10B, i.e. ~8e8 bits per step for the whole model, far above K.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "jaghouar-2024-intellect1/3",
+    "claim": "The reduction is quantized inside the ring, so the averaged pseudo-gradient also stays int8.",
+    "quote": "we implement a specialized int8 quantized ring-all-reduce (Thakur et al., 2005) kernel with fp32 accumulation.",
+    "location": "Section 2.2",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows the aggregate (not just the upload) can be kept at the per-worker rate, so the 0.08 bits/param/step envelope applies to the applied update.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "jaghouar-2024-intellect1/4",
+    "claim": "There is no matched centralized baseline; INTELLECT-1 is compared with older 7B models (MMLU 37.5 vs LLaMA-7B 35.1, HellaSwag 72.26 vs 78.19).",
+    "quote": "| intellect-1 | 10B | 1T | 37.5 | 72.26 | 52.13 |",
+    "location": "Section 3.6, Table 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 37.5,
+      "unit": "MMLU (%)",
+      "condition": "INTELLECT-1 10B, 1T tokens; LLaMA-7B 1T tokens scores 35.1 (Table 3)"
+     },
+     {
+      "param": "other",
+      "value": 72.26,
+      "unit": "HellaSwag (%)",
+      "condition": "INTELLECT-1; LLaMA-7B scores 78.19 (Table 3)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The quality gap of 400x compression at 10B is not measured against a matched run, so 'lossless' is not established.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "karimireddy-2019-ef",
+  "title": "Error Feedback Fixes SignSGD and other Gradient Compression Schemes",
+  "authors": "Sai Praneeth Karimireddy, Quentin Rebjock, Sebastian U. Stich, Martin Jaggi",
+  "year": 2019,
+  "venue": "ICML 2019",
+  "url": "https://arxiv.org/abs/1901.09847",
+  "topics": [
+   "gradients",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "karimireddy-2019-ef/1",
+    "claim": "With error feedback, any compression operator converges at the SGD rate under standard assumptions.",
+    "quote": "We prove that our algorithm EF-SGD with arbitrary compression operator achieves the same rate of convergence as SGD without any additional assumptions. Thus EF-SGD achieves gradient compression for free.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The guarantee depends on a dense per-worker error memory that is re-added locally, so a block that cannot hold that memory must either read it (full width) or lose the guarantee.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "li-2021-1bitlamb",
+  "title": "1-bit LAMB: Communication Efficient Large-Scale Large-Batch Training with LAMB’s Convergence Speed",
+  "authors": "Conglong Li, Ammar Ahmad Awan, Hanlin Tang, Samyam Rajbhandari, Yuxiong He",
+  "year": 2021,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2104.06069",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2021-1bitlamb/1",
+    "claim": "1-bit LAMB reduces communication volume up to 4.6x with the same sample-wise convergence as LAMB.",
+    "quote": "1-bit LAMB with NCCL-based backend is able to achieve up to 4.6x communication volume reduction, up to 2.8x end-to-end time-wise speedup, and the same sample-wise convergence speed (and same fine-tuning task accuracy) compared to uncompressed LAMB.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 4.6,
+      "unit": "x",
+      "condition": "whole-run volume vs uncompressed LAMB, including warmup; NCCL backend"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Confirms that 1-bit optimizer families deliver only ~5x whole-run savings once the dense warmup is counted.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "lialin-2023-relora",
+  "title": "ReLoRA: High-Rank Training Through Low-Rank Updates",
+  "authors": "Vladislav Lialin, Namrata Shivagunde, Sherin Muckatira, Anna Rumshisky",
+  "year": 2023,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2307.05695",
+  "topics": [
+   "gradients",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "lialin-2023-relora/1",
+    "claim": "Repeated low-rank updates merged into the weights train transformers up to 1.3B with comparable performance.",
+    "quote": "We apply ReLoRA to training transformer language models with up to 1.3B parameters and demonstrate comparable performance to regular neural network training.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Pretraining can proceed as a sequence of low-rank deltas, each a small description.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "lialin-2023-relora/2",
+    "claim": "At 1.3B, rank-128 ReLoRA after a 33% full-rank warm start ended 0.44 perplexity above full-rank training.",
+    "quote": "Our best run at this model size starts after a 10K step warm start ($33\\%$ of the total update steps). We train ReLoRA with rank $r=128$",
+    "location": "Section 4 (1.3B results), Table 4",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 128,
+      "unit": "rank",
+      "condition": "per restart; 1.3B; after full-rank warm start of 33% of steps"
+     },
+     {
+      "param": "other",
+      "value": 0.44,
+      "unit": "perplexity gap vs full-rank",
+      "condition": "final ppl 17.24 (Section 4.1)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Low-rank deltas carry most of the late training but need a dense start.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "lialin-2023-relora/3",
+    "claim": "The full-rank warm start matters most.",
+    "quote": "The warm start shows the most significant improvement, dropping perplexity by almost 10 points.",
+    "location": "Section 4.2 (Ablation studies)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Early training needs near-dense updates, so per-step U is largest at the start of a run.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "lidin-2026-covenant72b",
+  "title": "Covenant-72B: Pre-Training a 72B LLM with Trustless Peers Over-the-Internet",
+  "authors": "Joel Lidin, Amir Sarfi, Erfan Miahi, Quentin Anthony, Shivam Chauhan, Evangelos Pappas, et al.",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2603.08163",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "lidin-2026-covenant72b/1",
+    "claim": "Covenant-72B pretrained a 72B model over the internet with pseudo-gradients compressed more than 146x per sync.",
+    "quote": "Covenant-72B demonstrates successful large-scale LLM pre-training by infrequently communicating heavily compressed (more than $146\\times$ ) pseudo-gradients.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 146,
+      "unit": "x",
+      "condition": "per peer per sync round vs a dense fp32 pseudo-gradient ('more than'); 72B; ~1.1T tokens"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Largest verified compressed-pretraining run; the per-sync ratio alone understates the per-step ratio by the interval H=30.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "lidin-2026-covenant72b/2",
+    "claim": "The scheme keeps 64 of every 4096 entries with 2-bit values, every 30 inner steps.",
+    "quote": "chunk-wise Top- $k$ sparsification using a chunk size $C{=}4096$ and Top- $k{=}64$ , and 2-bit quantization of transmitted values. This leads to a compression ratio of more than $146\\times$ relative to dense gradient communication.",
+    "location": "Section 4.1 (Optimization Hyperparameters & Pseudo-gradient Compression)",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 2190,
+      "unit": "x",
+      "condition": "derived: per peer per inner step vs bf16 per-step DP; (1/64 x 14 bits incl. 12-bit index) / H=30 = 0.0073 bits/param/step"
+     },
+     {
+      "param": "other",
+      "value": 0.146,
+      "unit": "bits/param/step (aggregate, upper bound)",
+      "condition": "derived: <=20 peers x 0.219 bits/param/round / H=30"
+     },
+     {
+      "param": "update.fraction_changed",
+      "value": 0.3125,
+      "unit": "fraction of entries in aggregate per round (upper bound)",
+      "condition": "derived: 20 peers x 1/64 if supports are disjoint"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "At 72B the applied update needs at most ~0.15 bits/param/step, i.e. ~1e10 bits per step for the whole model, about 100-500x more than K.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "lidin-2026-covenant72b/3",
+    "claim": "Index positions cost more than the values: 7.36 bits/value in theory, 12 bits/value as implemented.",
+    "quote": "this bound is approximately $7.36$ bits/value. In practice, we found that implementing an encoding scheme that approaches this degree of encoding introduces significant overhead. Thus, the chunk size being small becomes advantageous as it allows us to reduce the total index overhead to $12$ bits/value without a complex encoding scheme.",
+    "location": "Section 2.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 12,
+      "unit": "index bits per transmitted value",
+      "condition": "C=4096, k=64, as implemented"
+     },
+     {
+      "param": "other",
+      "value": 7.36,
+      "unit": "index bits per transmitted value",
+      "condition": "information-theoretic bound (1/k) log2 C(C,k)"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Sparse updates cost ~10-14 bits per kept entry, so estimates of U from sparsity must add position bits.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "lidin-2026-covenant72b/4",
+    "claim": "Each round is 30 inner steps in a fixed 20-minute compute window on 20 peers of 8xB200.",
+    "quote": "With $R{=}20$ peers, $H{=}30$ inner steps per round, and $8\\times$ B200 per peer, we enforce a fixed per-round compute window of $t_{\\text{compute}}{=}20$ minutes.",
+    "location": "Section 4.3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 30,
+      "unit": "inner steps between syncs",
+      "condition": "20 peers"
+     },
+     {
+      "param": "other",
+      "value": 1.7e+17,
+      "unit": "FLOPs per peer per inner step",
+      "condition": "derived: 6 x 72e9 params x 393,216 tokens (per-peer batch 192 x 2048, hyperparameter section)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A single worker's inner step is ~1e17 FLOPs on a full 72B model, so a worker is many blocks, not one.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "lidin-2026-covenant72b/5",
+    "claim": "Covenant-72B reports MMLU 67.1, above LLaMA-2-70B (65.6) and far above earlier internet runs, but with no matched centralized run.",
+    "quote": "| MMLU | 32.7 | 24.2 | 67.1 | 65.5 | 41.7 | 65.6 |",
+    "location": "Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 67.1,
+      "unit": "MMLU (%)",
+      "condition": "Covenant-72B, 1.1T tokens; INTELLECT-1 32.7, Psyche Consilience (40B, 1.2T tokens) 24.2, LLM360 K2 65.5, LLaMA-2-70B 65.6 (Table 1)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Heavy compression did not visibly cap quality at 72B, though the gap to a matched dense run is unmeasured.",
+    "from_review": "gradients",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   }
+  ]
+ },
+ {
+  "id": "lin-2017-dgc",
+  "title": "Deep Gradient Compression: Reducing the Communication Bandwidth for Distributed Training",
+  "authors": "Yujun Lin, Song Han, Huizi Mao, Yu Wang, William J. Dally",
+  "year": 2017,
+  "venue": "ICLR 2018",
+  "url": "https://arxiv.org/abs/1712.01887",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "lin-2017-dgc/1",
+    "claim": "With top-k sparsification, local accumulation of the unsent residual and momentum correction, almost none of the per-step gradient entries need to be sent each step.",
+    "quote": "In this paper, we find 99.9% of the gradient exchange in distributed SGD are redundant",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.001,
+      "unit": "fraction of gradient entries sent per step",
+      "condition": "DGC on CNNs/RNNs; unsent entries accumulate in a dense per-worker residual buffer"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Per-step traffic between full-model workers is ~1000x sparsifiable, but only because each worker keeps a dense residual buffer, so it does not by itself lower what a block lacking that state must read.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "lin-2017-dgc/2",
+    "claim": "DGC reports 270-600x per-step gradient compression with no accuracy loss on ResNet-50 and DeepSpeech.",
+    "quote": "Deep Gradient Compression achieves a gradient compression ratio from 270$\\times$ to 600$\\times$ without losing accuracy, cutting the gradient size of ResNet-50 from 97MB to 0.35MB, and for DeepSpeech from 488MB to 0.74MB.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 270,
+      "unit": "x",
+      "condition": "low end of stated range; vs fp32 gradients; every step; ResNet-50 ImageNet (97MB to 0.35MB); no accuracy loss"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 600,
+      "unit": "x",
+      "condition": "high end of stated range; vs fp32; every step; DeepSpeech (488MB to 0.74MB)"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 135,
+      "unit": "x",
+      "condition": "derived: 270x vs fp32 / 2 = ratio vs a dense bf16 gradient"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Classic anchor for per-worker grad.compression_ratio of 10^2-10^3 on non-LLM models.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "lin-2017-dgc/3",
+    "claim": "Sparsifying gradients with momentum correction, local clipping and warm-up gives 270x to 600x per-step compression without accuracy loss on CNNs and RNNs.",
+    "quote": "Deep Gradient Compression achieves a gradient compression ratio from 270× to 600× without losing accuracy, cutting the gradient size of ResNet-50 from 97MB to 0.35MB, and for DeepSpeech from 488MB to 0.74MB.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 270,
+      "unit": "x",
+      "condition": "low end, vs dense FP32 gradients per step, ImageNet/Cifar/PTB/speech models"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 600,
+      "unit": "x",
+      "condition": "high end, vs dense FP32 gradients per step"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Supports the draft's 270-600x figure; it is a per-step ratio against FP32 on pre-LLM models with error accumulation, so it bounds gradient traffic, not the information content of an accumulated update.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "lu-2022-01adam",
+  "title": "Maximizing Communication Efficiency for Large-scale Training via 0/1 Adam",
+  "authors": "Yucheng Lu, Conglong Li, Minjia Zhang, Christopher De Sa, Yuxiong He",
+  "year": 2022,
+  "venue": "ICLR 2023",
+  "url": "https://arxiv.org/abs/2202.06009",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "lu-2022-01adam/1",
+    "claim": "0/1 Adam combines 1-bit compression with local steps and cuts data volume by up to 87% beyond 1-bit Adam.",
+    "quote": "0/1 Adam is able to reduce up to 87% of data volume, 54% of communication rounds, and achieve up to 2$\\times$ higher training throughput and end-to-end training time reduction compared to the state-of-the-art baseline 1-bit Adam",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 87,
+      "unit": "% data volume reduction vs 1-bit Adam",
+      "condition": "BERT-Base, BERT-Large, GPT-2 pretraining and ImageNet, up to 128 GPUs (abstract)"
+     },
+     {
+      "param": "other",
+      "value": 54,
+      "unit": "% fewer communication rounds vs 1-bit Adam",
+      "condition": "same"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Combining quantization with skipped rounds pushes per-worker rates below 1 bit/param/step.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "lu-2022-01adam/2",
+    "claim": "The name reflects an average per-parameter volume between 0 and 1 bit per step.",
+    "quote": "The name comes from the fact that the algorithm can potentially reduce the per-parameter volume to some number between 0 and 1 bit on average.",
+    "location": "Section 4 (footnote)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "bits/param/step (upper bound on average)",
+      "condition": "1-bit compression plus skipped synchronization rounds; vs fp16 baseline this is >16x"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Places per-worker per-step rates in the 0-1 bit range for BERT/GPT-2-size models.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "lu-2022-01adam/3",
+    "claim": "The uncompressed warmup is a small share of steps but over half of the wall-clock time.",
+    "quote": "while the full-precision stage contains 15% of the total steps, it can take more than 50% of the entire training in terms of the wall-clock time",
+    "location": "Section 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 15,
+      "unit": "% of steps run uncompressed",
+      "condition": "1-bit Adam warmup on BERT"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Early training needs near-dense per-step updates, so a per-block policy bites hardest at the start of a run.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "nous-2025-psyche",
+  "title": "Democratizing AI: The Psyche Network Architecture",
+  "authors": "Nous Research",
+  "year": 2025,
+  "venue": "blog (Nous Research)",
+  "url": "https://nousresearch.com/nous-psyche",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "nous-2025-psyche/1",
+    "claim": "Psyche builds on DeMo/DisTrO to cut data transfer by orders of magnitude.",
+    "quote": "Building on DisTrO and its predecessor DeMo, Psyche reduces data transfer by several orders of magnitude",
+    "location": "blog",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Qualitative; no ratio is stated for the production network.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "nous-2025-psyche/2",
+    "claim": "Psyche's first run planned a 40B MLA model on 20T tokens.",
+    "quote": "Our first run on Psyche will pretrain a 40B parameter model using the Multi-head Latent Attention (MLA) architecture across 20T tokens, which we're naming Consilience.",
+    "location": "blog",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 40000000000.0,
+      "unit": "parameters",
+      "condition": "planned Consilience run; Covenant-72B Table 1 reports it at 1.2T tokens"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "A frontier-adjacent attempt at DisTrO-style compression; no quality-at-ratio result yet.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "nous-2025-psyche/3",
+    "claim": "Sending only the sign of the DCT coefficients recovered the momentum and compressed results by more than 3x more.",
+    "quote": "simply communicating the sign of the DCT in a DisTrO result conveys all the information needed to recreate the correct momentum matrix",
+    "location": "blog",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3,
+      "unit": "x additional compression",
+      "condition": "sign-only DCT values, as stated in the blog ('more than 3x')"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Value precision can drop to 1 bit per kept coefficient, so index bits dominate sparse updates.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "nous-2025-psyche/4",
+    "claim": "Nous asserts DisTrO payloads grow sub-linearly with model size.",
+    "quote": "Because DisTrO results grow sub-linearly to model parameter size",
+    "location": "blog",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "If true, per-parameter per-step U falls with scale and the frontier grad.compression_ratio rises; unverified.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "peng-2024-demo",
+  "title": "DeMo: Decoupled Momentum Optimization",
+  "authors": "Bowen Peng, Lizhang Chen, Baiyu Su, Jeffrey Quesnelle, Diederik P. Kingma, Qiang Liu",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2411.19870",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "peng-2024-demo/1",
+    "claim": "DeMo sends only the top DCT components of local momentum each step and transmits up to 85x less per GPU than AdamW-DDP at 300M-1B.",
+    "quote": "Experiments on 300M- and 1B-parameter DeMo language models show DeMo transmits up to 85× less data per GPU than AdamW-DDP while achieving comparable loss and accuracy.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 85,
+      "unit": "x",
+      "condition": "per-GPU upload vs AdamW-DDP; 300M and 1B; every step (no local steps)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Per-step, every-step per-worker compression near 10^2 without local steps, relying on dense local momentum.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "peng-2024-demo/2",
+    "claim": "At 1B, DeMo with k=16 beat AdamW on HellaSwag and PIQA while sending 55 MB per step, a 44x gain.",
+    "quote": "At the 1B scale, the trend persists: DeMo with $k=16$ attains higher HellaSwag and PIQA scores than AdamW while transmitting only 55 MB per step—an efficiency gain of 44 times.",
+    "location": "Section 3.3",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 44,
+      "unit": "x",
+      "condition": "1B, k=16, every step, upload per GPU"
+     },
+     {
+      "param": "other",
+      "value": 55,
+      "unit": "MB transmitted per GPU per step",
+      "condition": "1B, k=16"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Anchors every-step sparse-momentum compression at ~40-90x.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "peng-2024-demo/3",
+    "claim": "What each worker must download grows with the number of workers.",
+    "quote": "it is important to note that the download bandwidth scales with the number of workers.",
+    "location": "Section 5 (Discussions and Limitations)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The aggregate update each replica applies is far less compressed than one worker's upload, so upload ratios overstate how small per-step U is.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "peng-2024-demo/4",
+    "claim": "For one chunk setting, upload is reduced 128x but download only 16x.",
+    "quote": "for DeMo with a $64\\times 64$ chunk size and top-$k=32$, the data-transmission and data-receiving reductions are 128 and 16, respectively",
+    "location": "Section 5 (Discussions and Limitations)",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 128,
+      "unit": "x",
+      "condition": "upload; 64x64 DCT chunks, top-32"
+     },
+     {
+      "param": "other",
+      "value": 16,
+      "unit": "x reduction in received data",
+      "condition": "same setting"
+     },
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "bits/param/step received",
+      "condition": "derived: assuming a 16-bit dense baseline, 16 bits / 16x"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Aggregate-side rate around 1 bit/param/step, about 8x larger than the upload rate.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "peng-2024-distro",
+  "title": "A Preliminary Report on DisTrO",
+  "authors": "Bowen Peng, Jeffrey Quesnelle, Dillon Rolnick, Ari Lotter, Umer H. Adil, Esteban La Rocca",
+  "year": 2024,
+  "venue": "report (Nous Research)",
+  "url": "https://github.com/NousResearch/DisTrO/blob/main/A_Preliminary_Report_on_DisTrO.pdf",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "peng-2024-distro/1",
+    "claim": "On a 1.2B model, DisTrO-AdamW cut per-step bandwidth 857x vs AdamW with all-reduce and reached a lower final loss (2.373 vs 2.449).",
+    "quote": "While this initial training run shows a 857x reduction of bandwidth requirements when using DisTrO-AdamW as a drop-in replacement to AdamW+All-Reduce",
+    "location": "Section 3 (Discussion) and results table",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 857,
+      "unit": "x",
+      "condition": "per node per step vs All-Reduce + AdamW (74.4 GB vs 86.8 MB per step); 1.2B; 105B tokens; 32 H100; every step"
+     },
+     {
+      "param": "other",
+      "value": 2.373,
+      "unit": "final loss",
+      "condition": "DisTrO + AdamW vs 2.449 for All-Reduce + AdamW (results table)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Every-step per-worker compression near 10^3 at 1.2B, with dense per-worker momentum.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "peng-2024-distro/2",
+    "claim": "Preliminary tests suggest 1000-3000x for pretraining and up to 10000x for fine-tuning.",
+    "quote": "our preliminary tests indicate that it is possible to get a bandwidth requirements reduction of up to 1000x to 3000x during the pre-training of a 1.2B LLM if hyper-parameters are chosen",
+    "location": "Section 3 (Discussion)",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 1000,
+      "unit": "x",
+      "condition": "low end; preliminary, details not reported; 1.2B pretraining"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 3000,
+      "unit": "x",
+      "condition": "high end; preliminary"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Upper envelope claim for per-worker ratios; unreplicated.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "peng-2024-distro/3",
+    "claim": "In the naive peer-to-peer setting each node still receives 31 peers' payloads per step.",
+    "quote": "at every step, each node has to transmit on average 2.8MB× 31 = 86.8MB",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.019,
+      "unit": "bits/param/step uploaded per node",
+      "condition": "derived: 2.8 MB = 2.24e7 bits / 1.2e9 params"
+     },
+     {
+      "param": "other",
+      "value": 0.58,
+      "unit": "bits/param/step aggregate per node",
+      "condition": "derived: 86.8 MB = 6.94e8 bits / 1.2e9 params; grows linearly with the 31 peers"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Without a requantized all-reduce, the applied update grows with worker count (~0.6 bits/param/step here), the high end of the aggregate envelope.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "pluralis-2025-node0",
+  "title": "Pluralis' Multi-party Training Stack",
+  "authors": "Gil Avraham, Yan Zuo, Violetta Shevchenko, Hadi Mohaghegh Dolatabadi, Thalaiyasingam Ajanthan, Sameera Ramasinghe, et al.",
+  "year": 2025,
+  "venue": "blog (Pluralis Research)",
+  "url": "https://pluralis.ai/blog/pluralis-multi-party-training-stack",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "pluralis-2025-node0/1",
+    "claim": "Within each pipeline stage, data-parallel gradient all-reduces used PowerSGD at 64x (one 7.5B block from ~800MB to 12.5MB).",
+    "quote": "With PowerSGD we can compress this 64x (the ratio we used in the run), resulting in a size of 12.5MB.",
+    "location": "blog",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 64,
+      "unit": "x",
+      "condition": "PowerSGD on each stage's data-parallel gradient all-reduce; 7.5B; every step; ~800MB per transformer block"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Every-step low-rank compression of 64x worked at 7.5B, higher than PowerSGD's own transformer result (14x).",
+    "from_review": "gradients"
+   },
+   {
+    "id": "pluralis-2025-node0/2",
+    "claim": "Parameters were also sparsely averaged across replicas every 5 gradient steps.",
+    "quote": "We performed a state averaging step once every 5 gradient steps.",
+    "location": "blog",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 5,
+      "unit": "gradient steps between state averaging",
+      "condition": "SPARTA sparse parameter averaging; optimizer state not averaged"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Replica divergence is controlled by periodic parameter exchange in addition to compressed gradients.",
+    "from_review": "gradients",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "pluralis-2025-node0/3",
+    "claim": "The 7.5B run trained on 36B tokens over the internet and tracked a centralized baseline (loss 2.75).",
+    "quote": "The run went for over 3 weeks and consumed 36B tokens using the fineweb-edu dataset. Through training, the loss decayed down to 2.75 (Fig. 9), tracking a centralized baseline.",
+    "location": "blog",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.75,
+      "unit": "training loss",
+      "condition": "7.5B, 36B tokens, internet, consumer GPUs"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Short (36B-token) run; supports workability, not frontier-length training.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "primeintellect-2025-intellect2",
+  "title": "INTELLECT-2: A Reasoning Model Trained Through Globally Decentralized Reinforcement Learning",
+  "authors": "Prime Intellect Team, Sami Jaghouar, Justus Mattern, Jack Min Ong, Jannik Straube, Manveer Basra, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.07291",
+  "topics": [
+   "gradients",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "primeintellect-2025-intellect2/1",
+    "claim": "INTELLECT-2 is a globally distributed RL run of a 32B model, not a compressed-pseudo-gradient pretraining run.",
+    "quote": "We introduce intellect-2, the first globally distributed reinforcement learning (RL) training run of a 32 billion parameter language model.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Its main traffic is new policy weights for rollouts, so it does not supply a grad.compression_ratio; the int8 ~400x figure belongs to INTELLECT-1.",
+    "from_review": "gradients",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   },
+   {
+    "id": "primeintellect-2025-intellect2/2",
+    "claim": "Cross-node traffic is a broadcast of updated policy weights from trainers to inference workers.",
+    "quote": "shardcast, which efficiently broadcasts policy weights from training nodes to inference workers.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows decentralized RL ships whole updated weights each policy step, the case where b_w of the updated model matters directly.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "sani-2024-photon",
+  "title": "Photon: Federated LLM Pre-Training",
+  "authors": "Lorenzo Sani, Alex Iacob, Zeyu Cao, Royson Lee, Bill Marino, Yan Gao, et al.",
+  "year": 2024,
+  "venue": "MLSys 2025",
+  "url": "https://arxiv.org/abs/2411.02908",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sani-2024-photon/1",
+    "claim": "Federated Photon training reached up to 7B with lower perplexity than centralized training.",
+    "quote": "(1) Photon can train model sizes up to 7B in a federated fashion while reaching an even better perplexity than centralized pre-training",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 13.8,
+      "unit": "perplexity",
+      "condition": "7B federated vs 16.6 centralized (Table 2)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Local-update compression is not quality-limiting at 7B, though the comparison is not compute-matched.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "sani-2024-photon/2",
+    "claim": "Photon communicates 64-512x less than baseline distributed training.",
+    "quote": "(3) Photon outperforms the wall-time of baseline distributed training methods by $35\\%$ via communicating $64\\times$–$512\\times$ less.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 64,
+      "unit": "x",
+      "condition": "low end; local steps between syncs vs per-step DP"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 512,
+      "unit": "x",
+      "condition": "high end"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Independent confirmation of 10^2-10^3 per-worker ratios up to 7B.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "sani-2024-photon/3",
+    "claim": "At 7B the federated run used almost 2x more compute time but 500x less communication.",
+    "quote": "Despite the compute time of the 7B model being almost 2× higher, the 500× commu nication reduction of Photon",
+    "location": "Section 5.2",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 500,
+      "unit": "x",
+      "condition": "7B"
+     },
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x compute time vs centralized",
+      "condition": "7B ('almost')"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The communication saving is paid partly in extra compute, so it is not free compression of the update.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "sarfi-2025-sparseloco",
+  "title": "Overcoming the Communication-Performance Tradeoff in LLM Pretraining",
+  "authors": "Amir Sarfi, Benjamin Thérien, Joel Lidin, Eugene Belilovsky",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2508.15706",
+  "topics": [
+   "gradients",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sarfi-2025-sparseloco/1",
+    "claim": "SparseLoCo (first released as 'Communication Efficient LLM Pre-training with SparseLoCo') combines local steps, error feedback, top-k and 2-bit values and keeps its gains from 178M to 2B and on an MoE.",
+    "quote": "SparseLoCo’s improvements over DiLoCo in performance and pseudo-gradient compression are maintained across dense model scales (178M-2B), an MoE transformer (645M-A273M)",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Sparse, error-fed pseudo-gradients beat dense DiLoCo, so pseudo-gradient values are highly compressible when workers hold dense error memory.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "sarfi-2025-sparseloco/2",
+    "claim": "At 512M, 10B tokens, 8 replicas and H=15, 3.12%-dense 2-bit SparseLoCo matched AdamW DDP loss (2.70 vs 2.69) while sending ~890x fewer bytes overall.",
+    "quote": "| SparseLoCo (H=15) | 3.12% | 2.70 | 17.21 MB | 163 | 2-bit |",
+    "location": "Table 1",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 889,
+      "unit": "x",
+      "condition": "derived: AdamW DDP 1.02 GB/sync x 2445 syncs vs 17.21 MB x 163 syncs (Table 1); per worker; vs bf16 DDP; 512M; R=8; H=15"
+     },
+     {
+      "param": "other",
+      "value": 0.14,
+      "unit": "bits/param/step (aggregate, upper bound)",
+      "condition": "derived: 17.21 MB = 1.38e8 bits / 512M params / 15 steps = 0.018 per worker; union of 8 workers' supports <= 0.14"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Near-lossless per-worker ratio near 10^3 vs bf16; aggregate stays near 0.1 bits/param/step.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "sarfi-2025-sparseloco/3",
+    "claim": "At 0.78% density the ratio rises to ~2800x but loss worsens to 2.79, between dense DiLoCo (2.76) and DeMo (2.83).",
+    "quote": "| SparseLoCo (H=15) | 0.78% | 2.79 | 5.45 MB | 163 | 2-bit |",
+    "location": "Table 1",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 2808,
+      "unit": "x",
+      "condition": "derived: 1.02 GB x 2445 vs 5.45 MB x 163 (Table 1); per worker vs bf16 DDP; loss 2.79 vs 2.69 DDP"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 30,
+      "unit": "x",
+      "condition": "derived: dense DiLoCo H=15, 8-bit (512.40 MB x 163), loss 2.76 (Table 1)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The high end (~3000x) carries a measurable loss penalty at 512M, bounding the high value of grad.compression_ratio.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "sarfi-2025-sparseloco/4",
+    "claim": "SparseLoCo applies Top-k sparsification and 2-bit quantization to DiLoCo pseudo-gradients, reaching 97-99% sparsity at lower final loss than dense DiLoCo.",
+    "quote": "sparsification and 2-bit quantization to reach extreme sparsity in the communicated pseudo-gradient, as high as 97–99%, while achieving lower final loss than dense DiLoCo.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Accumulated multi-step updates (pseudo-gradients) compress about as well as single-step gradients, which lowers the bits per update a training block must read.",
+    "from_review": "prior"
+   },
+   {
+    "id": "sarfi-2025-sparseloco/5",
+    "claim": "SparseLoCo was used to train a 72B model over the internet, with competitive zero-shot results.",
+    "quote": "Table 8 compares our Internet-trained 72B model against both decentralized (Intellect-1 (intellect1)) and centralized (LLaMA-2 (touvron2023llama) and LLM360 K2 (liu2025llm360)) large-scale baselines across standard zero-shot benchmarks.",
+    "location": "Appendix A (real-world deployment); Table 8",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows extreme pseudo-gradient compression is usable at frontier-adjacent scale, so NCI cannot assume dense update traffic for low-communication training.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "seide-2014-1bitsgd",
+  "title": "1-bit stochastic gradient descent and its application to data-parallel distributed training of speech DNNs",
+  "authors": "Frank Seide, Hao Fu, Jasha Droppo, Gang Li, Dong Yu",
+  "year": 2014,
+  "venue": "Interspeech 2014",
+  "url": "https://www.isca-archive.org/interspeech_2014/seide14_interspeech.html",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "seide-2014-1bitsgd/1",
+    "claim": "Gradients can be quantized to one bit per value with little or no accuracy loss if the quantization error is carried forward (error feedback).",
+    "quote": "one can, at no or nearly no loss of accuracy, quantize the gradients aggressively — to but one bit per value — if the quantization error is carried forward across minibatches (error feedback).",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 32,
+      "unit": "x",
+      "condition": "derived: fp32 / 1 bit per value; every minibatch; requires a dense per-worker error buffer"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Origin of error feedback: 1 bit/param/step suffices only when a dense residual stays in worker memory.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "seide-2014-1bitsgd/2",
+    "claim": "A 160M-parameter speech model trained 10x faster on 20 servers with a small accuracy loss.",
+    "quote": "A 160M-parameter model training processes 3300h of data in under 16h on 20 dual-GPU servers — a 10 times speed-up — albeit at a small accuracy loss.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10,
+      "unit": "x wall-clock speed-up",
+      "condition": "160M-parameter speech DNN, 3300h of data, 20 dual-GPU servers, small accuracy loss"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Early evidence that per-step updates near 1 bit/param keep training working.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "song-2024-sgdsubspace",
+  "title": "Does SGD really happen in tiny subspaces?",
+  "authors": "Minhak Song, Kwangjun Ahn, Chulhee Yun",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2405.16002",
+  "topics": [
+   "gradients",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "song-2024-sgdsubspace/1",
+    "claim": "Projecting updates onto the dominant Hessian subspace stops learning, while removing that subspace works as well as the full update, so the alignment is spurious.",
+    "quote": "Our primary observation is that when the SGD update is projected onto the dominant subspace, the training loss does not decrease further. This suggests that the observed alignment between the gradient and the dominant subspace is spurious. Surprisingly, projecting out the dominant subspace proves to be just as effective as the original update, despite removing the majority of the original update component.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The useful part of a step lives in the bulk, not a tiny subspace, which raises the per-step U a low-rank description would need.",
+    "from_review": "gradients",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   }
+  ]
+ },
+ {
+  "id": "tang-2021-1bitadam",
+  "title": "1-bit Adam: Communication Efficient Large-Scale Training with Adam’s Convergence Speed",
+  "authors": "Hanlin Tang, Shaoduo Gan, Ammar Ahmad Awan, Samyam Rajbhandari, Conglong Li, Xiangru Lian, et al.",
+  "year": 2021,
+  "venue": "ICML 2021",
+  "url": "https://arxiv.org/abs/2102.02888",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "tang-2021-1bitadam/1",
+    "claim": "1-bit Adam cuts total communication volume up to 5x with the same sample-wise convergence as Adam.",
+    "quote": "we propose 1-bit Adam that reduces the communication volume by up to $5\\times$, offers much better scalability, and provides the same sample-wise convergence speed as uncompressed Adam.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 5,
+      "unit": "x",
+      "condition": "whole-run communication volume vs uncompressed Adam, including the full-precision warmup; BERT pretraining"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Whole-run averages are dragged down by a dense warmup phase, so per-step compressibility is not uniform over training.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "tang-2021-1bitadam/2",
+    "claim": "Adam's variance term stabilizes early, so it can be frozen and the rest of training run as compressed momentum SGD.",
+    "quote": "Adam’s variance (non-linear term) becomes stable during training, hence we can run Adam in the beginning (warmup phase) and use it as a precondition for Momentum SGD during the rest of the training (compression phase).",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Slow-moving optimizer state need not be re-sent each step, lowering per-step U for adaptive optimizers after warmup.",
+    "from_review": "gradients",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   }
+  ]
+ },
+ {
+  "id": "therien-2025-muloco",
+  "title": "MuLoCo: Muon is a practical inner optimizer for DiLoCo",
+  "authors": "Benjamin Thérien, Xiaolong Huang, Aaron Defazio, Irina Rish, Eugene Belilovsky",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.23725",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "therien-2025-muloco/1",
+    "claim": "At 15B, 16-worker MuLoCo matches data-parallel AdamW on evaluation benchmarks.",
+    "quote": "Indeed, at 15B scale, K=16 MuLoCo matches the final performance of DP AdamW on language model evaluation benchmarks.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Local-update training with many workers is near-lossless at 15B, supporting at least ~30x (interval alone) at scale.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "therien-2025-muloco/2",
+    "claim": "Both MuLoCo and DiLoCo tolerate 4-bit pseudo-gradients without loss (K=8, H=30, 416M).",
+    "quote": "Finding 3: Both MuLoCo and DiLoCo achieve lossless 4-bit quantization. (Fig. 7)",
+    "location": "Section 6.3, Figure 7",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 120,
+      "unit": "x",
+      "condition": "derived: H=30 x (16-bit / 4-bit), per worker per step vs bf16 DP; 416M; K=8"
+     },
+     {
+      "param": "other",
+      "value": 0.133,
+      "unit": "bits/param/step (aggregate)",
+      "condition": "derived: 4 bits / 30 steps; quantized reduce-scatter and all-gather keep the aggregate at 4 bits"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Central-to-low anchor: ~0.13 bits/param/step for the applied update with no sparsity.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "therien-2025-muloco/3",
+    "claim": "At 2 bits, statistical quantization still works while linear quantization degrades badly.",
+    "quote": "When compressing to 2-bits there is a substantial performance degradation for Linear quantization but not statistical.",
+    "location": "Section 6.3",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 240,
+      "unit": "x",
+      "condition": "derived: H=30 x 16/2, statistical 2-bit, 416M"
+     },
+     {
+      "param": "other",
+      "value": 0.067,
+      "unit": "bits/param/step (aggregate)",
+      "condition": "derived: 2 bits / 30 steps"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Shows ~2 bits per pseudo-gradient value is near the floor for dense quantization.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "therien-2025-muloco/4",
+    "claim": "Plain top-k sparsification degraded performance at high sparsity, and index cost erodes its nominal ratio.",
+    "quote": "Given the additional overhead of communicating the index, the true compression ratios of vanilla top- $k$ sparsification are higher than the reported sparsity",
+    "location": "Section 6.3",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Contradicts SparseLoCo's view that sparse beats quantized; at matched bits, dense 2-bit with quantized all-gather may be competitive.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "therien-2025-muloco/5",
+    "claim": "The authors expect compute-optimal frontier models of 2-15T parameters soon.",
+    "quote": "it is reasonable to assume that the largest compute optimal models trained in the near future will have 2-15T parameters.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2000000000000.0,
+      "unit": "parameters",
+      "condition": "low end of the authors' near-future frontier estimate"
+     },
+     {
+      "param": "other",
+      "value": 15000000000000.0,
+      "unit": "parameters",
+      "condition": "high end"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "Sets N for frontier per-step U: at 0.1 bits/param/step, U per step ~2e11-1.5e12 bits.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "vogels-2019-powersgd",
+  "title": "PowerSGD: Practical Low-Rank Gradient Compression for Distributed Optimization",
+  "authors": "Thijs Vogels, Sai Praneeth Karimireddy, Martin Jaggi",
+  "year": 2019,
+  "venue": "NeurIPS 2019",
+  "url": "https://arxiv.org/abs/1905.13727",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "vogels-2019-powersgd/1",
+    "claim": "Low-rank gradients with error feedback compress more than 120x on ResNet18 and an LSTM.",
+    "quote": "By compressing gradients more than $120\\times$, we reduce communication time (including coding and decoding) by $54\\%$ for ResNet18 on Cifar10 and by $90\\%$ for an LSTM on Wikitext-2.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 120,
+      "unit": "x",
+      "condition": "lower bound ('more than'); vs fp32; every step; ResNet18 CIFAR-10 and LSTM WikiText-2; with error feedback"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Low-rank per-step compression of order 100x works on CNN/RNN models.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "vogels-2019-powersgd/2",
+    "claim": "A transformer language model needed rank 32 rather than rank 4 to match uncompressed SGD.",
+    "quote": "For this task, we need a higher rank than previously (32 vs 4) to achieve a validation loss comptetitive to uncompressed SGD.",
+    "location": "Appendix D",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 32,
+      "unit": "rank",
+      "condition": "per-step gradient rank needed to match uncompressed SGD; transformer LM on WikiText-103, 32 workers"
+     },
+     {
+      "param": "update.rank",
+      "value": 4,
+      "unit": "rank",
+      "condition": "rank sufficient for the CNN/LSTM experiments"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Transformer gradients are less low-rank than CNN gradients, raising the needed per-step U for low-rank schemes.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "vogels-2019-powersgd/3",
+    "claim": "At the rank needed for transformers the ratio is only 14x; rank 4 gives 105x but a much worse loss.",
+    "quote": "With rank 32, PowerSGD achieves similar validation loss to uncompressed SGD in the same number of update steps. At this rank, the compression ratio is $14\\times$",
+    "location": "Appendix D, Table 9",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 14,
+      "unit": "x",
+      "condition": "rank 32; transformer LM WikiText-103; vs fp32; every step; val loss 4.97 vs 4.92 uncompressed (Table 9)"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 105,
+      "unit": "x",
+      "condition": "rank 4; val loss 5.58 vs 4.92 uncompressed (Table 9)"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 7,
+      "unit": "x",
+      "condition": "derived: 14x vs fp32 / 2 = vs bf16, rank 32"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Pulls the per-step, every-step low-rank estimate of grad.compression_ratio for transformers down to ~10x.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "wen-2017-terngrad",
+  "title": "TernGrad: Ternary Gradients to Reduce Communication in Distributed Deep Learning",
+  "authors": "Wei Wen, Cong Xu, Feng Yan, Chunpeng Wu, Yandan Wang, Yiran Chen, et al.",
+  "year": 2017,
+  "venue": "NeurIPS 2017",
+  "url": "https://arxiv.org/abs/1705.07878",
+  "topics": [
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wen-2017-terngrad/1",
+    "claim": "Ternary gradients cut worker-to-server traffic 16x with a 2-bit code and about 20x at the entropy limit.",
+    "quote": "Theoretically, ternary gradients can at least reduce the worker-to-server traffic by a factor of ${32}/{log_{2}(3)}=20.18\\times$. Even using 2 bits to encode a ternary gradient, the reduction factor is still $16\\times$.",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 16,
+      "unit": "x",
+      "condition": "2-bit code for ternary gradients vs fp32; every step; worker-to-server direction"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 20.18,
+      "unit": "x",
+      "condition": "entropy limit 32/log2(3) vs fp32"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Stateless ~1.6-2 bits/param/step per worker; a lower anchor for grad.compression_ratio without error feedback.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "wen-2017-terngrad/2",
+    "claim": "TernGrad loses no accuracy on AlexNet and under 2% on GoogLeNet.",
+    "quote": "applying TernGrad on AlexNet doesn’t incur any accuracy loss and can even improve accuracy. The accuracy loss of GoogLeNet induced by TernGrad is less than $2\\%$ on average.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "% accuracy loss (upper bound, average)",
+      "condition": "GoogLeNet ImageNet with ternary gradients"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Shows ~16x stateless compression is near-lossless only on some CNNs; no LLM evidence.",
+    "from_review": "gradients"
+   }
+  ]
+ },
+ {
+  "id": "zhao-2024-galore",
+  "title": "GaLore: Memory-Efficient LLM Training by Gradient Low-Rank Projection",
+  "authors": "Jiawei Zhao, Zhenyu Zhang, Beidi Chen, Zhangyang Wang, Anima Anandkumar, Yuandong Tian",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2403.03507",
+  "topics": [
+   "gradients",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhao-2024-galore/1",
+    "claim": "Projecting gradients to a low-rank subspace cuts optimizer-state memory by up to 65.5% for 1B and 7B pretraining.",
+    "quote": "Our approach reduces memory usage by up to 65.5% in optimizer states while maintaining both efficiency and performance for pre-training on LLaMA 1B and 7B architectures with C4 dataset with up to 19.7B tokens",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 65.5,
+      "unit": "% optimizer-state memory reduction",
+      "condition": "LLaMA 1B and 7B, C4, up to 19.7B tokens"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Optimizer state is compressible a few-fold, not by orders of magnitude.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "zhao-2024-galore/2",
+    "claim": "At 7B, rank-1024 8-bit GaLore matched 8-bit Adam perplexity after 150K steps.",
+    "quote": "after 150K steps, 8-bit GaLore achieves a perplexity of 14.65, comparable to 8-bit Adam with a perplexity of 14.61.",
+    "location": "Section 5.3",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 1024,
+      "unit": "rank",
+      "condition": "per-matrix projection rank at hidden size 4096 (7B); subspace refreshed every 200 steps"
+     },
+     {
+      "param": "grad.compression_ratio",
+      "value": 4,
+      "unit": "x",
+      "condition": "derived: projected gradient r x n vs m x n with r=1024, m=4096, if it were communicated"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Lossless low-rank gradients at 7B need rank ~d/4, so low rank alone gives ~4x per step, far below local-update methods.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "zhao-2024-galore/3",
+    "claim": "The authors argue gradients become low-rank during training for certain architectures even though weights are not.",
+    "quote": "Surprisingly, while the weight matrices are not necessarily low-rank, the gradient indeed becomes low-rank during the training for certain gradient forms and associated network architectures.",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Supports a low update.rank per step, but the practical rank needed (d/4) is high.",
+    "from_review": "gradients"
+   }
+  ]
+ }
+]

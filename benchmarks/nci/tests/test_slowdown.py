@@ -1,0 +1,72 @@
+import sys
+from pathlib import Path
+
+import pytest
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+
+import catalog  # noqa: E402
+import slowdown as S  # noqa: E402
+
+BASE = {"kappa": 0.667, "b_w": 4.0, "b_a": 4.0, "d": 3072.0, "e": 7168.0, "c": 2.0, "n_updated": 1e11,
+        "U_bits": 4e11, "U_token_bits": 4e11, "decode_flops": 0.0, "w_cut": 49152.0, "crossings": 2.0,
+        "flops_per_token": 6e11}
+
+
+def test_inputs_are_the_documented_ones():
+    assert set(BASE) == set(S.INPUTS)
+
+
+def test_thread_bound_reproduces_the_thread_draft():
+    """The draft: N = 1e11, alpha* = 20 / (2N) = 1e-10, e = 7168, FP4: about 3e6 per counted multiplication."""
+    K, Gamma = 2e7, 2e17
+    assert S.thread_lower(BASE | {"kappa": 1.0}, K, Gamma, 20) == pytest.approx(4 / (2 * 1e-10 * 7168))
+
+
+def test_weight_rate_is_capped_by_the_whole_update():
+    seeded = BASE | {"U_bits": 3.2e5, "U_token_bits": 3.2e5}
+    assert S.rates(seeded, 2e7, 20)[0] == pytest.approx(3.2e5 / 1e11)
+
+
+def test_activation_rate_is_capped_by_a_token():
+    assert S.rates(BASE, 2e7, 2.2)[1] == 2.2
+
+
+def test_a_block_that_holds_the_state_gets_no_entry_fee():
+    small = BASE | {"U_bits": 1e6, "U_token_bits": 1e6}
+    _, _, d, e = S.rates(small, 2e7, 20)
+    assert (d, e) == (1.0, 0.667 * 6e11 / 2)
+
+
+def test_chain_read_factor_matches_its_definition():
+    """f(K) at K = 2e7, b_w = b_a = 4, d = 2048: the split term binds near mu = 0.25."""
+    assert S.read_factor(2e7, 4, 4, 2048) == pytest.approx(3.286e-3, rel=1e-3)
+
+
+def test_shard_floor_is_twice_w_cut_over_b_tok():
+    """Just past half a block of state, a forward-only shard pays 2 w_cut / b_tok when Gamma is inference's."""
+    K, b_tok, n_active = 2e7, 20, 3.2e10
+    Gamma = K * 2 * n_active / b_tok
+    i = BASE | {"U_token_bits": K / 2, "crossings": 1.0, "w_cut": 28672.0, "flops_per_token": 2 * n_active}
+    assert S.shard(i, K, Gamma) == pytest.approx(2 * 28672 / b_tok)
+
+
+def test_fit_is_free_for_inference_shaped_work():
+    K, b_tok, n_active = 2e7, 20, 3.2e10
+    Gamma = K * 2 * n_active / b_tok
+    i = BASE | {"U_bits": 0.0, "U_token_bits": 0.0, "c": 1.0, "flops_per_token": 2 * n_active}
+    assert S.construction_upper(i, K, Gamma, b_tok) == (pytest.approx(1.0), "fit")
+
+
+def test_decode_that_does_not_fit_shards_the_decoding():
+    K, Gamma = 2e7, 6.4e16
+    i = BASE | {"U_bits": 3.2e5, "U_token_bits": 3.2e5, "decode_flops": 2.1e17, "crossings": 1.0}
+    assert S.construction_upper(i, K, Gamma, 20)[1] == "decode-shard"
+
+
+def test_every_bracket_is_consistent():
+    """A proven lower bound above an explicit construction's cost means a row's inputs break the theorem's
+    assumptions; the caps in `rates` exist because two rows did."""
+    for b in S.brackets(catalog.load("rows"), catalog.load("calibrations"), catalog.load("parameters")):
+        assert 1 <= b["lower"] <= b["upper"] * (1 + 1e-9), b

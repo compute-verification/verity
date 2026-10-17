@@ -1,0 +1,1115 @@
+[
+ {
+  "id": "agarwal-2024-many-shot-icl",
+  "title": "Many-Shot In-Context Learning",
+  "authors": "Rishabh Agarwal, Avi Singh, Lei M. Zhang, Bernd Bohnet, Luis Rosias, Stephanie C.Y. Chan, et al.",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2404.11018",
+  "topics": [
+   "capability-per-bit",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "agarwal-2024-many-shot-icl/1",
+    "claim": "Many-shot ICL on Gemini 1.5 Pro performs comparably to full fine-tuning on low-resource translation with the same 997 examples (~85K tokens).",
+    "quote": "Our results in Figure 13 show that SFT and ICL performance is quite close for Bemba, while SFT has a slight edge for Kurdish.",
+    "location": "Section 4.3; Figure 3 caption (85K tokens)",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 0.18,
+      "unit": "MB",
+      "condition": "derived: 997-shot prompt ~85K tokens (stated) x ~17 bits/token raw; English to Bemba/Kurdish"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A narrow new skill (a low-resource language pair) equals SFT when delivered as ~0.2 MB of context, i.e. as inference.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "agarwal-2024-many-shot-icl/2",
+    "claim": "Peak many-shot performance often needs hundreds of thousands of tokens, and many-shot ICL can override pretraining biases.",
+    "quote": "maximum performance is often achieved only once the number of shots reaches up to hundreds of thousands of tokens",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 1,
+      "unit": "MB",
+      "condition": "derived order of magnitude: ~5e5 tokens x ~17 bits/token raw"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Context-delivered skills range up to ~1 MB, still under K, so they ride the inference allowance.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "agrawal-2025-gepa",
+  "title": "GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning",
+  "authors": "Lakshya A Agrawal, Shangyin Tan, Dilara Soylu, Noah Ziems, Rishi Khare, Krista Opsahl-Ong, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2507.19457",
+  "topics": [
+   "capability-per-bit",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "agrawal-2025-gepa/1",
+    "claim": "Reflective prompt evolution beats GRPO (24,000 rollouts, LoRA rank 16) on Qwen3-8B by 6% on average with up to 35x fewer rollouts; the learned artifact is a text prompt.",
+    "quote": "Across six tasks, GEPA outperforms GRPO by 6% on average and by up to 20%, while using up to 35x fewer rollouts.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 6,
+      "unit": "percentage points (avg over 6 tasks)",
+      "condition": "Qwen3-8B; GEPA vs GRPO with 24,000 rollouts"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A prompt (KB-scale text, pure inference under NCI) can match or beat an RL weight update on compound-system tasks.",
+    "from_review": "capability-per-bit",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "agrawal-2025-gepa/2",
+    "claim": "GEPA matches GRPO's best validation score with as few as 6-179 training rollouts.",
+    "quote": "To match GRPO’s best validation scores, GEPA achieves this with only 102, 32, 6, and 179 train rollouts for four tasks, respectively",
+    "location": "Section 4 (Observation 1)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 6,
+      "unit": "train rollouts",
+      "condition": "minimum across four tasks to match GRPO's best validation score"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Natural-language reflection extracts far more than 1 bit per rollout, so prompt optimization needs less search compute than RL for the same gain.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "akyurek-2024-ttt",
+  "title": "The Surprising Effectiveness of Test-Time Training for Few-Shot Learning",
+  "authors": "Ekin Akyürek, Mehul Damani, Adam Zweiger, Linlu Qiu, Han Guo, Jyothish Pari, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2411.07279",
+  "topics": [
+   "capability-per-bit",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "akyurek-2024-ttt/1",
+    "claim": "Per-task test-time LoRA training on the task's own demonstrations raises a fine-tuned 8B model on ARC from 18.3% to 47.1%.",
+    "quote": "TTT significantly improves accuracy from $18.3$% to $47.125$%.",
+    "location": "Section 4 (final ARC results)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 28.8,
+      "unit": "ARC accuracy points",
+      "condition": "fine-tuned Llama-3 8B, per-task LoRA, augmented inference; novel input = the task's demonstrations"
+     },
+     {
+      "param": "update.rank",
+      "value": 64,
+      "unit": "rank",
+      "condition": "per-task LoRA rank in the BBH setup (Llama 3.1 8B)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "TTT's adapter is a deterministic function of the prompt, so its U equals the prompt; it costs extra in-session compute, not novel bits.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "akyurek-2024-ttt/2",
+    "claim": "TTT beats standard 10-shot prompting on BIG-Bench Hard by 7.3 points.",
+    "quote": "On BIG-Bench Hard (BBH), TTT on in-context examples surpasses standard few-shot prompting in the $10$-shot setting by $7.3$ percentage points",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Gradient steps inside a session can extract more from the same small input than plain ICL.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "davis-2026-ldt",
+  "title": "Lattice Deduction Transformers",
+  "authors": "Liam Davis, Leopold Haller, Alberto Alfarano, Mark Santolucito",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2605.08605",
+  "topics": [
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "davis-2026-ldt/1",
+    "claim": "An 800K-parameter LDT solves Sudoku-Extreme, and a 1.8M-parameter variant reaches 99.9% on Maze-Hard, where frontier LLMs score 0% zero-shot.",
+    "quote": "A 1.8M-parameter variant reaches 99.9% accuracy on Maze-Hard. Frontier LLMs score 0% on all three benchmarks.",
+    "location": "abstract (preceded by: 'An 800K-parameter LDT achieves 100% accuracy on Sudoku-Extreme and Snowflake Sudoku')",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 28.8,
+      "unit": "Mbit",
+      "condition": "derived: 1.8M params x 16 bits = 3.6 MB, inside the K range (2e7-9e7 bits); the paper does not state a byte size"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Supports the draft's '1.8M parameters, about 3.6MB' (3.6MB is derived at 16 bits) and 'outperform trillion-parameter models on puzzle tasks', with caveats: the LLMs ran zero-shot and LDT is a specialized solver per puzzle family.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "deepseek-2025-r1",
+  "title": "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning",
+  "authors": "DeepSeek-AI",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2501.12948",
+  "topics": [
+   "capability-per-bit",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "deepseek-2025-r1/1",
+    "claim": "Pure RL with rule-based rewards took DeepSeek-V3-Base from 15.6% to 77.9% pass@1 on AIME 2024.",
+    "quote": "the average pass@1 score on AIME 2024 shows a significant increase, jumping from an initial 15.6% to 77.9%.",
+    "location": "Section 2.3 (DeepSeek-R1-Zero)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 62.3,
+      "unit": "AIME24 pass@1 points",
+      "condition": "DeepSeek-V3-Base (671B MoE) to R1-Zero, GRPO, no SFT"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The largest documented RL capability jump; its reward information is <= ~5.3 Mbit (see schulman-2025), so it is the test case for 'tiny U, huge search compute'.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "deepseek-2025-r1/2",
+    "claim": "R1-Zero trained for 10,400 steps of 32 questions x 16 samples, with outputs up to 32,768-65,536 tokens.",
+    "quote": "training continuing for a total of 10,400 steps, corresponding to 1.6 training epochs. Each training step consists of 32 unique questions, resulting in a training batch size of 512.",
+    "location": "Section 2.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 5324800,
+      "unit": "episodes",
+      "condition": "derived: 10,400 x 32 x 16"
+     },
+     {
+      "param": "update.decode_flops",
+      "value": 4e+21,
+      "unit": "FLOPs",
+      "condition": "derived order of magnitude: 5.3e6 episodes x ~1e4 tokens (assumed mean) x 2 x 37e9 active params, rollouts only"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Re-deriving an R1-Zero-class update from its few Mbit of reward record needs ~1e21+ FLOPs, far beyond one block's Gamma; decode compute, not K, throttles it.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "jolicoeurmartineau-2025-trm",
+  "title": "Less is More: Recursive Reasoning with Tiny Networks",
+  "authors": "Alexia Jolicoeur-Martineau",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2510.04871",
+  "topics": [
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "jolicoeurmartineau-2025-trm/1",
+    "claim": "A 7M-parameter recursive network reaches 45% on ARC-AGI-1 and 8% on ARC-AGI-2, above several large LLMs.",
+    "quote": "With only 7M parameters, TRM obtains 45% test-accuracy on ARC-AGI-1 and 8% on ARC-AGI-2, higher than most LLMs (e.g., Deepseek R1, o3-mini, Gemini 2.5 Pro) with less than 0.01% of the parameters.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 112,
+      "unit": "Mbit",
+      "condition": "derived: 7M params x 16 bits = 14 MB, slightly above K (2.5-11 MB); 3.5 MB at 4 bits"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Narrow puzzle capability can fit in about one block's K, so NCI should not assume all valuable capability needs large novel weights; the gain is task-specific and trained per task.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "lampinen-2025-icl-vs-ft",
+  "title": "On the generalization of language models from in-context learning and finetuning: a controlled study",
+  "authors": "Andrew K. Lampinen, Arslan Chaudhry, Stephanie C. Y. Chan, Cody Wild, Diane Wan, Alex Ku, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.00661",
+  "topics": [
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "lampinen-2025-icl-vs-ft/1",
+    "claim": "With matched data on Gemini 1.5 Flash, in-context learning generalizes several kinds of inference (e.g. reversals, deductions) more flexibly than fine-tuning.",
+    "quote": "We find overall that in data-matched settings, in-context learning can generalize several types of inferences more flexibly than fine-tuning",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "For new factual information up to a context's worth, putting it in the prompt (inference, allowed) loses nothing versus training it in.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "li-2021-prefix-tuning",
+  "title": "Prefix-Tuning: Optimizing Continuous Prompts for Generation",
+  "authors": "Xiang Lisa Li, Percy Liang",
+  "year": 2021,
+  "venue": "ACL 2021",
+  "url": "https://aclanthology.org/2021.acl-long.353",
+  "topics": [
+   "capability-per-bit",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2021-prefix-tuning/1",
+    "claim": "Prefix-tuning 0.1% of parameters matches full fine-tuning on table-to-text (GPT-2) and summarization (BART).",
+    "quote": "We show that by learning only 0.1% of the parameters, prefix-tuning obtains comparable performance in the full data setting, outperforms fine-tuning in low-data settings, and extrapolates better to examples with topics that are unseen during training.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.001,
+      "unit": "fraction of parameter count",
+      "condition": "GPT-2 / BART, generation tasks"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Early evidence that task skills need ~1e-3 of the weights' bits; small models, so a loose upper bound on U at scale.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "li-2023-iti",
+  "title": "Inference-Time Intervention: Eliciting Truthful Answers from a Language Model",
+  "authors": "Kenneth Li, Oam Patel, Fernanda Viégas, Hanspeter Pfister, Martin Wattenberg",
+  "year": 2023,
+  "venue": "NeurIPS 2023",
+  "url": "https://arxiv.org/abs/2306.03341",
+  "topics": [
+   "capability-per-bit",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2023-iti/1",
+    "claim": "Shifting activations along directions in 48 attention heads raises Alpaca-7B TruthfulQA truthfulness from 32.5% to 65.1%, using a few hundred examples.",
+    "quote": "On an instruction-finetuned LLaMA called Alpaca, ITI improves its truthfulness from $32.5\\%$ to $65.1\\%$.",
+    "location": "abstract; Section 4 (K=48 heads)",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 12,
+      "unit": "KB",
+      "condition": "derived: 48 heads x 128 dims x 16 bits (LLaMA-7B head width assumed 128)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A ~30-point benchmark gain from ~1e5 bits, elicitation of a latent truthfulness representation.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "lin-2023-urial",
+  "title": "The Unlocking Spell on Base LLMs: Rethinking Alignment via In-Context Learning",
+  "authors": "Bill Yuchen Lin, Abhilasha Ravichander, Ximing Lu, Nouha Dziri, Melanie Sclar, Khyathi Chandu, et al.",
+  "year": 2024,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2312.01552",
+  "topics": [
+   "capability-per-bit",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "lin-2023-urial/1",
+    "claim": "A fixed 1,011-token prompt (three examples plus system prompt) aligns base models as well as SFT or RLHF: Mistral-7B 4.63 vs Mistral-7B-Instruct 4.44; Llama-2-70B 4.74 vs Llama-2-70b-chat 4.67.",
+    "quote": "Together, the K=3 examples and the system prompt comprise a total of 1,011 tokens (or 671 words).",
+    "location": "Section 3; Section 5 (results)",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 17200,
+      "unit": "bits",
+      "condition": "derived: 1,011 tokens x ~17 bits/token raw (~2.1 KB); matches SFT/RLHF alignment on just-eval-instruct"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Alignment-tier capability needs ~2 KB of novel context and no weight update, so it is pure inference under NCI.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "meng-2022-memit",
+  "title": "Mass-Editing Memory in a Transformer",
+  "authors": "Kevin Meng, Arnab Sen Sharma, Alex Andonian, Yonatan Belinkov, David Bau",
+  "year": 2023,
+  "venue": "ICLR 2023",
+  "url": "https://arxiv.org/abs/2210.07229",
+  "topics": [
+   "capability-per-bit",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "meng-2022-memit/1",
+    "claim": "MEMIT inserts 10,000 facts into GPT-J (6B) and GPT-NeoX (20B) with good generalization and specificity.",
+    "quote": "demonstrating experimentally that it can scale up to thousands of associations for GPT-J (6B) and GPT-NeoX (20B), exceeding prior work by orders of magnitude.",
+    "location": "abstract; Tables 1-2 (10,000 edits)",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 0.5,
+      "unit": "Mbit",
+      "condition": "derived assumption: 10,000 subject-relation-object facts x ~50 bits each; runtime 7.44 hr for 10,000 edits (Appendix B)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Thousands of new facts fit in ~1% of one K; adding knowledge is cheap in bits per block but caps out quickly (see capacity sources).",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "meng-2022-rome",
+  "title": "Locating and Editing Factual Associations in GPT",
+  "authors": "Kevin Meng, David Bau, Alex Andonian, Yonatan Belinkov",
+  "year": 2022,
+  "venue": "NeurIPS 2022",
+  "url": "https://arxiv.org/abs/2202.05262",
+  "topics": [
+   "capability-per-bit",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "meng-2022-rome/1",
+    "claim": "One fact is written into GPT-J or GPT-2 XL with a rank-one update to one mid-layer MLP.",
+    "quote": "we modify feed-forward weights to update specific factual associations using Rank-One Model Editing (ROME).",
+    "location": "abstract; Section 3",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 1,
+      "unit": "rank",
+      "condition": "per edited fact, one MLP layer, GPT-J (6B)"
+     },
+     {
+      "param": "update.bits_total",
+      "value": 40,
+      "unit": "KB",
+      "condition": "derived: 4,096 + 16,384 numbers x 16 bits for GPT-J's MLP projection; the fact itself is tens of bits"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Weight-space size of an edit is far above its description length: U = the fact plus a deterministic decode, so b_w.delta overstates edits' novel information.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "muennighoff-2025-s1",
+  "title": "s1: Simple test-time scaling",
+  "authors": "Niklas Muennighoff, Zitong Yang, Weijia Shi, Xiang Lisa Li, Li Fei-Fei, Hannaneh Hajishirzi, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2501.19393",
+  "topics": [
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "muennighoff-2025-s1/1",
+    "claim": "SFT of Qwen2.5-32B-Instruct (AIME24 26.7%) on 1,000 Gemini-distilled traces plus budget forcing gives 50-57% on AIME24, beating o1-preview.",
+    "quote": "scaling s1-32B with budget forcing allows extrapolating beyond its performance without test-time intervention: from 50% to 57% on AIME24.",
+    "location": "abstract; Table 1 (base 26.7)",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 7.7,
+      "unit": "MB",
+      "condition": "derived: 1,000 traces x ~3.6K thinking tokens (59K-pool mean, Table 7; s1K skews longer) x ~17 bits raw"
+     },
+     {
+      "param": "capability.bits",
+      "value": 0.45,
+      "unit": "MB",
+      "condition": "derived: same token count x ~1 bit/token entropy-coded"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A near-o1-preview math jump for a 32B base fits in one block's K raw (7.7 MB is within 2.5-11 MB) and easily if entropy-coded.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "muennighoff-2025-s1/2",
+    "claim": "The whole SFT took 26 minutes on 16 H100s.",
+    "quote": "Finetuning took 26 minutes on 16 NVIDIA H100 GPUs with PyTorch FSDP.",
+    "location": "Section 3 (Training)",
+    "quantities": [
+     {
+      "param": "update.decode_flops",
+      "value": 1e+19,
+      "unit": "FLOPs",
+      "condition": "derived: 16 x 1,560 s x ~1e15 FLOP/s bf16 peak x ~40% utilization"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Decoding an SFT update from its dataset costs ~1e19 FLOPs, many long sessions; with full FT the intermediate weights exceed K, so SFT stays throttled unless the trainable state fits in K.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "opsahlong-2024-mipro",
+  "title": "Optimizing Instructions and Demonstrations for Multi-Stage Language Model Programs",
+  "authors": "Krista Opsahl-Ong, Michael J Ryan, Josh Purtell, David Broman, Christopher Potts, Matei Zaharia, et al.",
+  "year": 2024,
+  "venue": "EMNLP 2024",
+  "url": "https://arxiv.org/abs/2406.11695",
+  "topics": [
+   "capability-per-bit",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "opsahlong-2024-mipro/1",
+    "claim": "DSPy's MIPRO optimizer, which tunes only instructions and demonstrations, improves Llama3-8B programs by up to 13% accuracy.",
+    "quote": "MIPRO, a novel optimizer that outperforms baselines on five of seven diverse LM programs using a best-in-class open-source model (Llama3-8B), by as much as 13% accuracy.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 13,
+      "unit": "percentage points (max)",
+      "condition": "Llama3-8B, 7 LM programs, prompt-only optimization"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Prompt-only optimization gives narrow-skill gains with KB-scale artifacts.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "shao-2025-spurious-rewards",
+  "title": "Spurious Rewards: Rethinking Training Signals in RLVR",
+  "authors": "Rulin Shao, Shuyue Stella Li, Rui Xin, Scott Geng, Yiping Wang, Sewoong Oh, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2506.10947",
+  "topics": [
+   "capability-per-bit",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shao-2025-spurious-rewards/1",
+    "claim": "Random rewards, which carry no information about correctness, give Qwen2.5-Math-7B +21.4 points on MATH-500 versus +29.1 with ground-truth rewards.",
+    "quote": "RLVR training with GRPO improves MATH-500 performance for Qwen2.5-Math-7B in absolute points by 21.4% using randomly assigned rewards, nearly matching the 29.1% gained with ground truth rewards.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 0,
+      "unit": "bits",
+      "condition": "task information in random rewards; Qwen2.5-Math-7B MATH-500 +21.4 pts (ground truth +29.1)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Much of a measured RL gain on Qwen is elicitation needing ~0 novel bits; capability-per-bit figures on Qwen overstate what new information buys.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "shao-2025-spurious-rewards/2",
+    "claim": "The spurious-reward effect does not transfer to Llama3 or OLMo2, so it reflects Qwen's pretraining priors.",
+    "quote": "In practice, spurious rewards that are effective for Qwen models often fail to produce gains for other model families, such as Llama3 or OLMo2.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Headroom depends on the committed base: elicitable latent skill varies by model family.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "song-2024-onlinedata",
+  "title": "The Importance of Online Data: Understanding Preference Fine-tuning via Coverage",
+  "authors": "Yuda Song, Gokul Swamy, Aarti Singh, J. Andrew Bagnell, Wen Sun",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2406.01462",
+  "topics": [
+   "capability-per-bit",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "song-2024-onlinedata/1",
+    "claim": "For preference fine-tuning, offline contrastive methods (DPO-style) need global coverage to converge to the optimal policy, while online RL needs only partial coverage.",
+    "quote": "We prove that a global coverage condition is both necessary and sufficient for offline contrastive methods to converge to the optimal policy, but a weaker partial coverage condition suffices for online RL methods.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "DISCREPANCY: the result covers offline contrastive preference methods, not 'offline methods' in general (offline RL with pessimism or hybrid methods such as the paper's own HyPO avoid it); the draft should narrow the claim, which slightly weakens the argument that NCI's throttle on fresh on-policy data is fundamental.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "turner-2023-actadd",
+  "title": "Steering Language Models With Activation Engineering",
+  "authors": "Alexander Matt Turner, Lisa Thiergart, Gavin Leech, David Udell, Juan J. Vazquez, Ulisse Mini, et al.",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2308.10248",
+  "topics": [
+   "capability-per-bit",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "turner-2023-actadd/1",
+    "claim": "A steering vector from one prompt pair raises negative-to-positive sentiment shift on Llama-3-8B by 25 points absolute, with no optimization.",
+    "quote": "ActAdd is lightweight: it does not require any machine optimization and works with a single pair of data points, which enables rapid iteration over steering.",
+    "location": "abstract; Appendix E.4 (Llama-3-8B +25%)",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 8,
+      "unit": "KB",
+      "condition": "derived: one 4,096-dim bf16 vector per injected position (Llama-3-8B); order of magnitude"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Behavioral control (style, sentiment, toxicity) costs KB-scale novel input, i.e. the elicitation tier, essentially free under NCI.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "wang-2024-oreo",
+  "title": "Offline Reinforcement Learning for LLM Multi-Step Reasoning",
+  "authors": "Huaijie Wang, Shibo Hao, Hanze Dong, Shenao Zhang, Yilin Bao, Ziran Yang, et al.",
+  "year": 2024,
+  "venue": "Findings of ACL 2025; arXiv preprint",
+  "url": "https://arxiv.org/abs/2412.16145",
+  "topics": [
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2024-oreo/1",
+    "claim": "OREO is evaluated on math reasoning (GSM8K, MATH) and embodied agent control (ALFWorld), not on coding.",
+    "quote": "OREO surpasses existing offline learning methods on multi-step reasoning benchmarks, including mathematical reasoning tasks (GSM8K, MATH), and embodied agent control (ALFWorld).",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "DISCREPANCY: the draft says 'coding and math tasks', but OREO covers math and ALFWorld; coding is listed only as future work, so the paper gives no evidence on offline RL for coding.",
+    "from_review": "prior"
+   },
+   {
+    "id": "wang-2024-oreo/2",
+    "claim": "The math experiments use Qwen2.5-Math-1.5B and DeepSeekMath-7B-Instruct as base models, as the draft says.",
+    "quote": "we select Qwen2.5-Math-1.5B (Yang et al., 2024) and DeepSeekMath-7B-Instruct (Shao et al., 2024) as our base model.",
+    "location": "Section 5 (experimental setup)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Confirms the draft's model names; offline (off-policy) training from a fixed dataset works at 1.5B-7B, which keeps the 'train from committed data' path open for capability gains.",
+    "from_review": "prior"
+   },
+   {
+    "id": "wang-2024-oreo/3",
+    "claim": "With offline training only on the original training set, a 1.5B model reaches 52.5% on MATH.",
+    "quote": "Notably, we train a 1.5B model to achieve a 52.5% accuracy on the MATH dataset using only the original training set.",
+    "location": "abstract / Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 52.5,
+      "unit": "% MATH accuracy",
+      "condition": "Qwen2.5-Math-1.5B with OREO, offline data only"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Shows offline RL from committed data can buy measurable reasoning gains, which matters for how much NCI's throttle on on-policy data costs an adversary.",
+    "from_review": "prior"
+   },
+   {
+    "id": "wang-2024-oreo/4",
+    "claim": "The authors explicitly defer coding and web browsing to future work.",
+    "quote": "As future work, we aim to extend OREO to a wider variety of tasks, such as coding and web browsing",
+    "location": "Section 7 (limitations / conclusion)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "DISCREPANCY: confirms the coding attribution is wrong; the draft should say 'math and embodied-agent tasks'.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "wang-2025-hrm",
+  "title": "Hierarchical Reasoning Model",
+  "authors": "Guan Wang, Jin Li, Yuhao Sun, Xing Chen, Changling Liu, Yue Wu, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2506.21734",
+  "topics": [
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2025-hrm/1",
+    "claim": "A 27M-parameter recurrent model trained on about 1000 examples per task performs strongly on Sudoku, mazes and ARC.",
+    "quote": "With only 27 million parameters, HRM achieves exceptional performance on complex reasoning tasks using only 1000 training samples",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 432,
+      "unit": "Mbit",
+      "condition": "derived: 27M params x 16 bits = 54 MB; reported ARC-AGI-1 40.3%"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Same direction as jolicoeurmartineau-2025-trm, but at about 5-20x K; TRM later reports HRM's ARC-AGI-1 score as lower than TRM's 45%.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "wu-2024-reft",
+  "title": "ReFT: Representation Finetuning for Language Models",
+  "authors": "Zhengxuan Wu, Aryaman Arora, Zheng Wang, Atticus Geiger, Dan Jurafsky, Christopher D. Manning, et al.",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2404.03592",
+  "topics": [
+   "capability-per-bit",
+   "updates",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wu-2024-reft/1",
+    "claim": "LoReFT with 0.0039% of Llama-2-7B's parameters (<1 MB) beats full fine-tuning on Alpaca-Eval (85.60 vs 80.93 win rate).",
+    "quote": "When matched in parameter count to the previous most parameter-efficient PEFT (RED) and trained on Llama-2 7B, LoReFT outperforms all reported finetuning methods (including full finetuning) and achieves a win-rate within 1% of GPT-3.5 Turbo 1106.",
+    "location": "Section 4.4; Table 3",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 1,
+      "unit": "MB",
+      "condition": "authors: released ReFT weights < 1MB; 1K-example variant trains in 18 min on one A100"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Instruction-following for a 7B base fits in <1 MB of representation intervention.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "wu-2024-reft/2",
+    "claim": "At the same size LoReFT trails LoRA on arithmetic reasoning (LLaMA-7B GSM8K 26.0 vs 37.5).",
+    "quote": "LoReFT (ours) 0.031% 21.4 26.0 76.2 46.8 42.6",
+    "location": "Table 2 (AQuA, GSM8K, MAWPS, SVAMP, Avg.)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "SFT-based reasoning gains need more capacity than style gains, consistent with morris-2026-tinylora.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "wu-2026-offlinercode",
+  "title": "Efficient Post-training of LLMs for Code Generation With Offline Reinforcement Learning",
+  "authors": "Mingze Wu, Abhinav Anand, Shweta Verma, Mira Mezini",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2605.28409",
+  "topics": [
+   "capability-per-bit",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wu-2026-offlinercode/1",
+    "claim": "The 7B coder model is trained with LoRA adapters (the 0.5B model is fully fine-tuned) on CodeNet Python solutions.",
+    "quote": "For the 0.5B model, we fine-tune all parameters, whereas for the 7B model we apply LoRA (Hu et al., 2021) adapters instead of full-model training.",
+    "location": "Section 2.1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The 7B result is a low-rank update, so it is evidence about capability per bit of a small delta (b_w.delta, U) as well as about offline RL.",
+    "from_review": "prior"
+   },
+   {
+    "id": "wu-2026-offlinercode/2",
+    "claim": "On competition-level APPS+ problems offline RLOO with GRPO-style advantages raises Qwen2.5-Coder-7B pass@1 by 88% (1.42 to 2.67) and pass@10 by 40%.",
+    "quote": "whereas RLOO with GRPO-style advantages improves pass@1 by 88% and pass@10 by 40%.",
+    "location": "Section 3.2; Table 2 (Competition pass@1 Base 1.42, with GRPO advantage 2.67)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.25,
+      "unit": "pass@1 points",
+      "condition": "derived: 2.67 - 1.42 on APPS+ competition, Qwen2.5-Coder-7B with LoRA"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Relative gains are large but absolute gains are about one point, so offline RL buys little capability at 7B; this weakly supports the draft's view that throttling on-policy data costs an adversary real capability.",
+    "from_review": "prior"
+   },
+   {
+    "id": "wu-2026-offlinercode/3",
+    "claim": "Offline RL gives little or no improvement when the base model is already strong (no gain on MBPP at 7B), and SFT can beat it on easy problems.",
+    "quote": "When the base model already performs well, offline RL provides little to no improvement. Similarly, for easier problems, supervised fine-tuning (SFT) can outperform offline RL.",
+    "location": "Section 1 (contributions); Section 3.1 ('However, we see no improvement for the 7B model on MBPP')",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Supports the draft's 'mixed results' reading, though the authors frame offline RL as 'an effective training strategy'; the draft should note both.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "yang-2023-opro",
+  "title": "Large Language Models as Optimizers",
+  "authors": "Chengrun Yang, Xuezhi Wang, Yifeng Lu, Hanxiao Liu, Quoc V. Le, Denny Zhou, et al.",
+  "year": 2024,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2309.03409",
+  "topics": [
+   "capability-per-bit",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yang-2023-opro/1",
+    "claim": "An OPRO-found three-word instruction lifts pre-trained PaLM 2-L on GSM8K from 34.0% (empty prompt) to 79.9%, above 'Let's think step by step' (71.8%).",
+    "quote": "| PaLM 2-L | Break this down. | 79.9 |",
+    "location": "Table 1 (empty string baseline 34.0)",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 70,
+      "unit": "bits",
+      "condition": "derived: ~4 tokens x ~17 bits/token (128 bits as 16 ASCII chars); GSM8K +45.9 pts vs empty prompt, PaLM 2-L"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The extreme of capability per bit for elicitation: ~100 bits buys tens of points, and the search compute (200 steps x 8 candidates) is modest.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "yang-2023-opro/2",
+    "claim": "Accuracy is highly sensitive to small wording changes.",
+    "quote": "with the PaLM 2-L scorer on the GSM8K test set, “Let’s think step by step.” achieves accuracy 71.8, “Let’s solve the problem together.” has accuracy 60.5, while the accuracy of “Let’s work together to solve this problem step by step.” is only 49.4",
+    "location": "Section 5.2.3",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Bits of a prompt are a poor proxy for its value; capability per bit at tiny sizes is dominated by search, not message length.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "ye-2025-limo",
+  "title": "LIMO: Less is More for Reasoning",
+  "authors": "Yixin Ye, Zhen Huang, Yang Xiao, Ethan Chern, Shijie Xia, Pengfei Liu",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2502.03387",
+  "topics": [
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ye-2025-limo/1",
+    "claim": "SFT of Qwen2.5-32B-Instruct on 800 curated long-CoT examples raises AIME24 from 16.5% to 63.3% and MATH500 from 79.4% to 95.6%; 400 examples already give 57.5%.",
+    "quote": "Fine-tuning with just 400 samples yields dramatic improvement over the base model, increasing AIME24 accuracy from 16.5 to 57.5 and MATH500 accuracy from 79.4 to 94.8.",
+    "location": "Section 6.3.5; abstract (63.3% / 95.6%)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 46.8,
+      "unit": "AIME24 points",
+      "condition": "Qwen2.5-32B-Instruct 16.5 to 63.3 with 800 examples, each under 16,384 tokens (dataset bits not reported)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A domain-wide reasoning uplift from a dataset of at most a few MB, so the broad-improvement tier fits in K when a teacher supplies the traces.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "ye-2025-limo/2",
+    "claim": "The same 800 examples barely help a weaker-pretrained base (Qwen1.5-32B reaches 9.2% on AIME24), and 3B models gain little.",
+    "quote": "LIMO (built on Qwen2.5) achieves 63.3% accuracy on AIME2024, a 54.1 percentage point improvement over Qwen1.5’s 9.2%.",
+    "location": "Section 6.3.3",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Small-data gains are elicitation of pretrained knowledge; headroom is bounded by what the committed base already contains.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "yue-2025-rlvr-boundary",
+  "title": "Does Reinforcement Learning Really Incentivize Reasoning Capacity in LLMs Beyond the Base Model?",
+  "authors": "Yang Yue, Zhiqi Chen, Rui Lu, Andrew Zhao, Zhaokai Wang, Yang Yue, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2504.13837",
+  "topics": [
+   "capability-per-bit",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yue-2025-rlvr-boundary/1",
+    "claim": "RLVR raises pass@1 but base models overtake RLVR models at large k, so RLVR re-weights reasoning paths the base already has.",
+    "quote": "In pass@$k$ curves, although RLVR models outperform their base models at small $k$, it is surprising that base models consistently surpass RLVR models across all benchmarks and LLM families as $k$ increases.",
+    "location": "Section 1 (key findings)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 9,
+      "unit": "percentage points",
+      "condition": "32B base beats RL model on Minerva at k=128 (Section 3)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Classifies RLVR gains as the elicitation tier: small U because they select within the base's coverage.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "yue-2025-rlvr-boundary/2",
+    "claim": "Distillation from a stronger teacher, unlike RLVR, expands the student's reasoning coverage.",
+    "quote": "In contrast, distillation can transfer new reasoning patterns from a stronger teacher to the student.",
+    "location": "Section 1 (key findings); Section 4",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Gains beyond elicitation need information from outside the base (teacher traces); their U is dataset-sized (MB), not bytes.",
+    "from_review": "capability-per-bit",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   }
+  ]
+ },
+ {
+  "id": "yuksekgonul-2024-textgrad",
+  "title": "TextGrad: Automatic “Differentiation” via Text",
+  "authors": "Mert Yuksekgonul, Federico Bianchi, Joseph Boen, Sheng Liu, Zhi Huang, Carlos Guestrin, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2406.07496",
+  "topics": [
+   "capability-per-bit",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yuksekgonul-2024-textgrad/1",
+    "claim": "Textual-feedback optimization raises GPT-4o's zero-shot GPQA accuracy from 51% to 55%.",
+    "quote": "improves the zero-shot accuracy of GPT-4o in Google-Proof Question Answering from $51\\%$ to $55\\%$",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "percentage points",
+      "condition": "GPT-4o, GPQA, test-time solution refinement"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "On frontier models, text-only optimization yields single-digit gains; the elicitation headroom shrinks as the base gets stronger.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2025-ace",
+  "title": "Agentic Context Engineering: Evolving Contexts for Self-Improving Language Models",
+  "authors": "Qizheng Zhang, Changran Hu, Shubhangi Upasani, Boyuan Ma, Fenglu Hong, Vamsidhar Kamanuru, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2510.04618",
+  "topics": [
+   "capability-per-bit",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2025-ace/1",
+    "claim": "Evolving context playbooks on DeepSeek-V3.1 (671B) add +10.6 points on agent tasks and +8.6 on finance, matching the top AppWorld production agent.",
+    "quote": "consistently outperforming strong baselines: +10.6% on agents and +8.6% on finance",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10.6,
+      "unit": "percentage points",
+      "condition": "AppWorld, DeepSeek-V3.1 671B, vs baselines"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Narrow-skill gains at frontier scale with no weight change, as inference.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "zhang-2025-ace/2",
+    "claim": "ACE playbooks of 10K-100K tokens work equally well on FiNER, i.e. at most ~0.2 MB of raw text.",
+    "quote": "On FiNER, performance is stable from 10K to 100K tokens",
+    "location": "Appendix (pruning trigger, maximum context length)",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 0.21,
+      "unit": "MB",
+      "condition": "derived: 100K tokens x ~17 bits/token raw; upper end of tested playbook sizes"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Context-based learned skills occupy 1-10% of one block's K.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "zhou-2023-lima",
+  "title": "LIMA: Less Is More for Alignment",
+  "authors": "Chunting Zhou, Pengfei Liu, Puxin Xu, Srini Iyer, Jiao Sun, Yuning Mao, et al.",
+  "year": 2023,
+  "venue": "NeurIPS 2023",
+  "url": "https://arxiv.org/abs/2305.11206",
+  "topics": [
+   "capability-per-bit",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhou-2023-lima/1",
+    "claim": "SFT of LLaMA-65B on 1,000 curated examples (~750,000 tokens) yields an assistant judged equal or better than GPT-4 in 43% of cases.",
+    "quote": "The total amount of training data is roughly 750,000 tokens, split over exactly 1,000 sequences.",
+    "location": "Table 1 caption; abstract (43% vs GPT-4)",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 1.6,
+      "unit": "MB",
+      "condition": "derived: 750,000 tokens x ~17 bits/token raw"
+     },
+     {
+      "param": "capability.bits",
+      "value": 94,
+      "unit": "KB",
+      "condition": "derived: 750,000 tokens x ~1 bit/token entropy-coded (schulman-2025 estimate)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "General instruction-following for a 65B base fits in 0.1-1.6 MB of novel input, well inside K.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "zhou-2023-lima/2",
+    "claim": "The authors conclude almost all knowledge comes from pretraining and alignment data mostly teaches format.",
+    "quote": "these results strongly suggest that almost all knowledge in large language models is learned during pretraining, and only limited instruction tuning data is necessary to teach models to produce high quality output.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Places alignment/assistant behavior in the elicitation tier.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ },
+ {
+  "id": "zou-2023-repe",
+  "title": "Representation Engineering: A Top-Down Approach to AI Transparency",
+  "authors": "Andy Zou, Long Phan, Sarah Chen, James Campbell, Phillip Guo, Richard Ren, et al.",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2310.01405",
+  "topics": [
+   "capability-per-bit",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zou-2023-repe/1",
+    "claim": "Adding honesty contrast vectors to LLaMA-2-13B-Chat activations raises TruthfulQA MC1 from 35.9% to 54.0%.",
+    "quote": "By increasing model honesty in a fully unsupervised manner, we achieve state-of-the-art results on TruthfulQA, improving over zero-shot accuracy by $18.1$ percentage points and outperforming all prior methods.",
+    "location": "Section 1; Table 2 (13B-Chat 35.9 to 54.0)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 18.1,
+      "unit": "TruthfulQA MC1 points",
+      "condition": "LLaMA-2-13B-Chat, contrast-vector control; vector size not reported (per-layer d_model vectors, KB scale)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Corroborates ITI: steering-tier gains of ~20 points from KB-scale vectors at 13B.",
+    "from_review": "capability-per-bit"
+   }
+  ]
+ }
+]

@@ -1,0 +1,1456 @@
+[
+ {
+  "id": "alvarez-2025-nvfp4-blog",
+  "title": "Introducing NVFP4 for Efficient and Accurate Low-Precision Inference",
+  "authors": "Eduardo Alvarez, et al. (NVIDIA)",
+  "year": 2025,
+  "venue": "blog (NVIDIA Technical Blog)",
+  "url": "https://developer.nvidia.com/blog/introducing-nvfp4-for-efficient-and-accurate-low-precision-inference",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "alvarez-2025-nvfp4-blog/1",
+    "claim": "NVFP4 costs 4.5 bits per value including its per-16 FP8 scale.",
+    "quote": "NVFP4 stores one 4-bit value plus minor overhead of one FP8 scale per 16 values (4.5 bits per value) and one FP32 per tensor second-level scaling factor.",
+    "location": "blog body (Memory section)",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.5,
+      "unit": "bits",
+      "condition": "NVFP4 format cost per element incl. block scale"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "The effective width of '4-bit' activations is 4.5 bits, not 4, so the FP4 floor should use 4.5.",
+    "from_review": "activations",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "alvarez-2025-nvfp4-blog/2",
+    "claim": "PTQ of DeepSeek-R1-0528 (671B) to NVFP4 weights and activations loses at most 1% accuracy versus FP8.",
+    "quote": "achieving 1% or less accuracy degradation versus FP8 on DeepSeek-R1-0528 benchmarks",
+    "location": "blog summary",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.5,
+      "unit": "bits",
+      "condition": "DeepSeek-R1-0528 PTQ, linear-layer inputs only; <=1% loss vs FP8 on 7 evals; inference"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Production-scale evidence that 4.5-bit matmul inputs retain quality in inference; residual and attention paths not covered.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "ashkboos-2024-quarot",
+  "title": "QuaRot: Outlier-Free 4-Bit Inference in Rotated LLMs",
+  "authors": "Saleh Ashkboos, Amirkeivan Mohtashami, Maximilian L. Croci, Bo Li, Pashmina Cameron, Martin Jaggi, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2404.00456",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ashkboos-2024-quarot/1",
+    "claim": "Hadamard rotations remove outliers so weights, matmul-input activations and KV cache all run at 4 bits; Llama-2-70B loses 0.47 perplexity.",
+    "quote": "Our 4-bit quantized Llama 2-70B model has losses of at most 0.47 WikiText-2 perplexity and retains 99% of the zero-shot performance.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4,
+      "unit": "bits",
+      "condition": "Llama-2-70B W4A4KV4 PTQ, per-token scale; WikiText-2 ppl 3.32 -> 3.79 (Table 1); inference only"
+     },
+     {
+      "param": "b_a.kv",
+      "value": 4,
+      "unit": "bits",
+      "condition": "Llama-2-70B, asymmetric group-128 KV quantization, same run"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Supports a central b_a of about 4 bits for matmul inputs in inference.",
+    "from_review": "activations"
+   },
+   {
+    "id": "ashkboos-2024-quarot/2",
+    "claim": "QuaRot keeps the residual stream itself in 16-bit; quantizing the residual is listed as future work.",
+    "quote": "Opportunities to build on QuaRot include quantizing the residuals and extending the method to mixture-of-experts architectures.",
+    "location": "Section 6 (Conclusion)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The 4-bit result does not cover the residual vector that crosses a pipeline boundary, so b_a=4 for that vector is an extrapolation.",
+    "from_review": "activations"
+   },
+   {
+    "id": "ashkboos-2024-quarot/3",
+    "claim": "Llama-3 models degrade much more: Llama-3-70B perplexity rises from 2.86 to 6.66 at W4A4 (5.51 with group-128).",
+    "quote": "is more sensitive to quantization as we can see a higher gap between the quantized and FP16 models",
+    "location": "Appendix A.8, Table 11",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4,
+      "unit": "bits",
+      "condition": "Llama-3-70B W4A4KV4: WikiText-2 ppl 2.86 -> 6.66 (QuaRot), 5.51 (QuaRot-128G); large loss"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Models trained on more tokens are harder to quantize, pushing b_a above 4 for retained quality in newer models.",
+    "from_review": "activations"
+   },
+   {
+    "id": "ashkboos-2024-quarot/4",
+    "claim": "With everything else in full precision, a 3-bit KV cache costs at most 0.21 perplexity (0.07 on Llama-2-70B).",
+    "quote": "The results show a negligible (at most 0.21) perplexity degradation up to 3-bit KV cache (0.07 for Llama 2-70B model).",
+    "location": "Appendix A.3, Table 6",
+    "quantities": [
+     {
+      "param": "b_a.kv",
+      "value": 3,
+      "unit": "bits",
+      "condition": "Llama-2-70B, group-128 asymmetric, +0.07 ppl; inference"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Places retained-quality KV at about 3 bits with simple quantization.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "bian-2023-compressing-activations",
+  "title": "Does compressing activations help model parallel training?",
+  "authors": "Song Bian, Dacheng Li, Hongyi Wang, Eric P. Xing, Shivaram Venkataraman",
+  "year": 2023,
+  "venue": "MLSys 2024",
+  "url": "https://arxiv.org/abs/2301.02654",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bian-2023-compressing-activations/1",
+    "claim": "In BERT-Large, singular values show gradients are low-rank but activations are not.",
+    "quote": "The result shows that the gradient is low-rank but the activation is not.",
+    "location": "Figure 2",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Argues against a small linear d_eff for unmodified activations; supports intrinsic_dim near 1.",
+    "from_review": "activations"
+   },
+   {
+    "id": "bian-2023-compressing-activations/2",
+    "claim": "Learned autoencoders compressing the 1024-dim activation to 50 or 100 dims (about 10-20x) are the only method that both speeds up training and keeps accuracy.",
+    "quote": "Takeaway 5 Among all evaluated methods, AE is the best strategy to compress activation over pre-training. It achieves higher pre-training throughput and preserves the model’s accuracy.",
+    "location": "Section 4.4",
+    "quantities": [
+     {
+      "param": "activation.compression_ratio",
+      "value": 10,
+      "unit": "x",
+      "condition": "AE encoder dim 100 of hidden 1024 (and 50 = ~20x); BERT-Large 345M; last 12 layers; fine-tuning loss within ~3% except CoLA/RTE"
+     },
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 0.05,
+      "unit": "fraction of d_model",
+      "condition": "derived: AE dim 50 / hidden 1024"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A learned bottleneck trained with the model reaches ~10-20x at small scale, a precedent for small d_eff.",
+    "from_review": "activations"
+   },
+   {
+    "id": "bian-2023-compressing-activations/3",
+    "claim": "Quantization and Top-K hurt accuracy when compressing activations during pre-training.",
+    "quote": "In conclusion, it is not a good choice to compress the activation by using quantization or Top-K.",
+    "location": "Section 4.4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "At 345M, direct 2-8 bit quantization of boundary activations was not lossless in pre-training; tempers low b_a.",
+    "from_review": "activations"
+   },
+   {
+    "id": "bian-2023-compressing-activations/4",
+    "claim": "Compression ratios tested matched the autoencoders.",
+    "quote": "we compress the activation around 10 and 20 times.",
+    "location": "Section 4.1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Gives the comparison scale for the 10-20x autoencoder result.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "borzunov-2022-petals",
+  "title": "Petals: Collaborative Inference and Fine-tuning of Large Models",
+  "authors": "Alexander Borzunov, Dmitry Baranchuk, Tim Dettmers, Max Ryabinin, Younes Belkada, Artem Chumachenko, et al.",
+  "year": 2022,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2209.01188",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "borzunov-2022-petals/1",
+    "claim": "Hidden states sent between pipeline stages of BLOOM-176B are 8-bit blockwise quantized with no noticeable quality effect.",
+    "quote": "We apply it to the hidden states before pipeline-parallel communication, as done in Ryabinin et al. (2023). Dynamic blockwise quantization halves the bandwidth requirements without any noticeable effect on generation quality.",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "derived: halving 16-bit hidden states; residual stream at pipeline boundary; BLOOM-176B inference and fine-tuning"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Direct at-scale evidence that the residual vector crossing a pipeline boundary tolerates 8 bits.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "chang-2024-palu",
+  "title": "Palu: KV-Cache Compression with Low-Rank Projection",
+  "authors": "Chi-Chih Chang, Wei-Cheng Lin, Chien-Yu Lin, Chong-Yan Chen, Yu-Fang Hu, Pei-Shuo Wang, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2407.21118",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "chang-2024-palu/1",
+    "claim": "Low-rank projection halves the KV hidden dimension with strong accuracy retained.",
+    "quote": "Extensive experiments with popular LLMs show that Palu compresses KV-Cache by 50%, while maintaining strong accuracy",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 0.5,
+      "unit": "fraction of KV width",
+      "condition": "post-training low-rank KV, Llama-2-7B / Llama-3-8B; inference"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The hidden dimension of K/V can be halved post hoc; d_eff for KV about 0.5 without retraining.",
+    "from_review": "activations"
+   },
+   {
+    "id": "chang-2024-palu/2",
+    "claim": "Combining 30% low-rank compression with 2-bit quantization reaches 91.25% compression at 5.76 vs 5.47 perplexity on Llama-2-7B.",
+    "quote": "| Palu-30% | 2 | 5.76 | 5.6 | 91.25% |",
+    "location": "Table 2",
+    "quantities": [
+     {
+      "param": "b_a.kv",
+      "value": 1.4,
+      "unit": "bits",
+      "condition": "derived: 16 x (1 - 0.9125) per original KV entry; Llama-2-7B ppl 5.47 -> 5.76"
+     },
+     {
+      "param": "b_a.kv",
+      "value": 1.0,
+      "unit": "bits",
+      "condition": "derived: Palu-50% + 2-bit = 93.75% compression; ppl 6.41"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Rank reduction and quantization compose, giving ~1.4 bits per original KV entry at modest loss.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "cheng-2024-id-phase",
+  "title": "Emergence of a High-Dimensional Abstraction Phase in Language Transformers",
+  "authors": "Emily Cheng, Diego Doimo, Corentin Kervadec, Iuri Macocco, Jade Yu, Alessandro Laio, et al.",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2405.15471",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "cheng-2024-id-phase/1",
+    "claim": "In five 6.5-8B LMs with width 4096, the intrinsic dimension of representations is of order 10 (about 10-45 across layers).",
+    "quote": "we first observe that the ID for all models is O(10), which lies orders of magnitude lower than the models’ hidden dimension at 4096",
+    "location": "Section 4.1, Figure 1",
+    "quantities": [
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 0.011,
+      "unit": "fraction of d_model",
+      "condition": "derived: peak ID ~45 / 4096 (range ~10-45 -> 0.0025-0.011); Llama, Mistral, OPT, Pythia, OLMo 6.5-8B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The nonlinear manifold is ~1% of d; an information-theoretic floor no known codec reaches.",
+    "from_review": "activations"
+   },
+   {
+    "id": "cheng-2024-id-phase/2",
+    "claim": "All models studied have 4096-wide hidden states.",
+    "quote": "All language models considered have between 6.5 and 8B parameters, 32 hidden layers, and a hidden dimension of 4096.",
+    "location": "Section 3.1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Fixes the denominator for the intrinsic_dim fraction.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "deepseek-2024-v2",
+  "title": "DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model",
+  "authors": "DeepSeek-AI, Aixin Liu, Bei Feng, Bin Wang, Bingxuan Wang, Bo Liu, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2405.04434",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "deepseek-2024-v2/1",
+    "claim": "Multi-head Latent Attention, trained from scratch, caches one 512-dim latent per token per layer instead of full keys and values, cutting KV by 93.3% versus DeepSeek 67B.",
+    "quote": "The KV compression dimension $d_{c}$ is set to 512",
+    "location": "Section 3.1.1",
+    "quantities": [
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 0.1125,
+      "unit": "fraction of d_model",
+      "condition": "derived: (512+64)/5120 per token per layer; trained end to end (forward and backward), 236B MoE"
+     },
+     {
+      "param": "other",
+      "value": 0.067,
+      "unit": "fraction",
+      "condition": "derived: KV cache relative to DeepSeek 67B (1 - 0.933)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A model trained with a bottleneck needs only ~d/9 numbers per token per layer for attention, so trained architectures can make d_eff small.",
+    "from_review": "activations"
+   },
+   {
+    "id": "deepseek-2024-v2/2",
+    "claim": "The KV cache reduction is reported in the abstract.",
+    "quote": "reduces the KV cache by 93.3%, and boosts the maximum generation throughput to 5.76 times",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Trained-in compression survives the full training pipeline, unlike post-hoc KV methods.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "dettmers-2022-llmint8",
+  "title": "LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale",
+  "authors": "Tim Dettmers, Mike Lewis, Younes Belkada, Luke Zettlemoyer",
+  "year": 2022,
+  "venue": "NeurIPS 2022",
+  "url": "https://arxiv.org/abs/2208.07339",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dettmers-2022-llmint8/1",
+    "claim": "Int8 activations with a 16-bit side path for a few outlier feature dimensions give degradation-free inference up to 175B parameters.",
+    "quote": "Using LLM.int8(), we show empirically it is possible to perform inference in LLMs with up to 175B parameters without any performance degradation.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "OPT-175B/BLOOM inference; matmul inputs; outlier dims kept in 16-bit; no degradation"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Sets 8 bits as a safe, lossless activation width in inference; an upper anchor for b_a.",
+    "from_review": "activations"
+   },
+   {
+    "id": "dettmers-2022-llmint8/2",
+    "claim": "Fewer than 0.1% of activation values need 16 bits; the rest are 8-bit.",
+    "quote": "we also include a new mixed-precision decomposition scheme, which isolates the outlier feature dimensions into a 16-bit matrix multiplication while still more than 99.9% of values are multiplied in 8-bit",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.001,
+      "unit": "fraction",
+      "condition": "fraction of activation values kept in 16-bit (outlier feature dims)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Outliers are sparse and systematic, so their bit cost is small once located; slightly raises effective b_a above 8 only marginally.",
+    "from_review": "activations"
+   },
+   {
+    "id": "dettmers-2022-llmint8/3",
+    "claim": "Large-magnitude outlier features emerge in all layers from about 6.7B parameters and break naive low-bit activation quantization.",
+    "quote": "the sparse but systematic large magnitude outlier features that ruin quantization precision once they emerge in all transformer layers starting at scales of 6.7B parameters",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Explains why sub-8-bit activations needed rotations or outlier handling; small-model results may overstate compressibility.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "he-2025-tahquant",
+  "title": "TAH-Quant: Effective Activation Quantization in Pipeline Parallelism over Slow Network",
+  "authors": "Guangxin He, Yuan Cao, Yutong He, Tianyi Bai, Kai Chen, Kun Yuan, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2506.01352",
+  "topics": [
+   "activations",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "he-2025-tahquant/1",
+    "claim": "Tile-wise adaptive Hadamard quantization sends pipeline activations at about 4.4 bits per element (80% INT4, 20% INT3, metadata included), the lowest setting the paper finds stable in training.",
+    "quote": "TAH-Quant achieves an aggressive activation quantization ratio of 3–4 bits",
+    "location": "abstract (v2)",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.41,
+      "unit": "bits",
+      "condition": "80% INT4 + 20% INT3 incl. ~0.61 bits of metadata, the lowest stable setting; 100% INT3 converges worse (loss 2.58 vs 2.49 at step 600); GPT2-XL, Qwen2.5-3B, LLaMA-3.2-1B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Direct (memoryless) boundary quantization at 3-4 bits in training, but only up to 3B.",
+    "from_review": "activations",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities wrong; corrected here: The claim mirrors the abstract's 3-4 bits and AQ-SGD comparison, but the paper calls its default 80% INT4 + 20% INT3 setting the lowest consistently stable one and says it transmits about 4.41 bits per activation element (incl. ~0.61 bits metadata), while 100% INT3 converges worse (loss 2.58 vs 2.49 at step 600), so 3 bits is not a supported retained-quality rate."
+   },
+   {
+    "id": "he-2025-tahquant/2",
+    "claim": "Experiments include from-scratch pretraining of a 1B model.",
+    "quote": "including fine-tuning (GPT2-XL), instruction tuning (Qwen2.5-3B), and from-scratch pretraining (LLaMA-3.2-1B)",
+    "location": "Section 1 (Contribution 3)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Unlike AQ-SGD, this applies to single-pass pretraining, so ~3-4 bits is plausible for boundary b_a.",
+    "from_review": "activations"
+   },
+   {
+    "id": "he-2025-tahquant/3",
+    "claim": "Backward gradients used a simple 6-8 bit quantizer.",
+    "quote": "a higher-bit naive quantizer (e.g., 6–8 bits) is usually sufficient in practice",
+    "location": "Section 3.4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 7,
+      "unit": "bits",
+      "condition": "backward activation-gradient bits (6-8)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Backward traffic at a training boundary stays at ~2x the forward bits.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "hooper-2024-kvquant",
+  "title": "KVQuant: Towards 10 Million Context Length LLM Inference with KV Cache Quantization",
+  "authors": "Coleman Hooper, Sehoon Kim, Hiva Mohammadzadeh, Michael W. Mahoney, Yakun Sophia Shao, Kurt Keutzer, et al.",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2401.18079",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hooper-2024-kvquant/1",
+    "claim": "Pre-RoPE per-channel keys, non-uniform datatypes and per-vector outliers give under 0.1 perplexity loss at 3 bits.",
+    "quote": "we achieve $<0.1$ perplexity degradation with 3-bit quantization on both Wikitext-2 and C4, outperforming existing approaches",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.kv",
+      "value": 3,
+      "unit": "bits",
+      "condition": "LLaMA/Llama-2/Llama-3/Mistral, <0.1 ppl loss; inference"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Places near-lossless KV at 3 bits.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "kuratov-2025-cramming",
+  "title": "Cramming 1568 Tokens into a Single Vector and Back Again: Exploring the Limits of Embedding Space Capacity",
+  "authors": "Yuri Kuratov, Mikhail Arkhipov, Aydar Bulatov, Mikhail Burtsev",
+  "year": 2025,
+  "venue": "ACL 2025",
+  "url": "https://arxiv.org/abs/2502.13063",
+  "topics": [
+   "activations",
+   "tokens",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kuratov-2025-cramming/1",
+    "claim": "A single optimized 4096-dim input vector lets Llama-3.1-8B reconstruct up to 1568 tokens exactly.",
+    "quote": "texts of up to 1568 tokens from just a single input vector",
+    "location": "Section 4.1 (text after Fig. 1)",
+    "quantities": [
+     {
+      "param": "prompt.compression_ratio",
+      "value": 1568,
+      "unit": "tokens per vector",
+      "condition": "per-sample optimized input embedding; Llama-3.1-8B (d=4096); PG-19"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "One d-vector can carry the content of >1000 tokens, so per-vector capacity is far above what natural activations use.",
+    "from_review": "activations"
+   },
+   {
+    "id": "kuratov-2025-cramming/2",
+    "claim": "The information carried by one vector is about 4.9 kbits of cross-entropy reduction for Llama-3.1-8B.",
+    "quote": "Information Gain 396.4±46.0 431.4±51.6 792.8±143.4 2119.9±364.8 3292.2±320.0 4865.7±546.6",
+    "location": "Table 1 (PG-19)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4866,
+      "unit": "bits per vector",
+      "condition": "information gain per 4096-dim bf16 input vector, Llama-3.1-8B"
+     },
+     {
+      "param": "b_a.activation",
+      "value": 1.19,
+      "unit": "bits",
+      "condition": "derived: 4866 bits / 4096 dims of usable information per entry"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Usable information per entry is ~1.2 bits even when optimized, much less than its 16-bit storage, a hint that entropy per entry is low.",
+    "from_review": "activations"
+   },
+   {
+    "id": "kuratov-2025-cramming/3",
+    "claim": "Practical encoders reach only about 10x, two orders of magnitude below what exists.",
+    "quote": "We show that vectors with compression ratios up to x1500 exist, which highlights two orders of magnitude gap between existing and practically attainable solutions.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The gap between capacity and achieved compression marks where the NCI attack could improve.",
+    "from_review": "activations"
+   },
+   {
+    "id": "kuratov-2025-cramming/4",
+    "claim": "Encoder-based soft compressors optimize compute, not bits, and lossless compression with them stays at about 10x.",
+    "quote": "These approaches are focused on reduction of the amount of compute in existing language models rather than minimization of number of bits needed to store text. Despite relying on powerful models as encoders, the maximum attainable lossless compression ratio is typically not higher than x10.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "prompt.compression_ratio",
+      "value": 10,
+      "unit": "x (positions, lossless)",
+      "condition": "existing encoder-based methods, as characterized by the authors"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Separates position compression (soft prompts) from bit compression (entropy coding); only the latter lowers b_tok.",
+    "from_review": "tokens"
+   },
+   {
+    "id": "kuratov-2025-cramming/5",
+    "claim": "The measured information a vector adds (cross-entropy reduction) is ~4.9 kbit for Llama-3.1-8B on PG-19, about 3.1 bits per reconstructed token and ~7% of the vector's nominal 65,536 bits.",
+    "quote": "Notably, Llama-3.1-8B can accurately reconstruct texts of up to $1568$ tokens from just a single input vector.",
+    "location": "Section 4.1 and Table 1 (Information Gain 4865.7 ± 546.6 bits, PG-19, Llama-3.1-8B)",
+    "quantities": [
+     {
+      "param": "b_tok",
+      "value": 3.1,
+      "unit": "bits/token",
+      "condition": "derived: 4865.7 bits / 1568 tokens; approximates the 8B model's cross-entropy on PG-19 at full reconstruction"
+     },
+     {
+      "param": "other",
+      "value": 4866,
+      "unit": "bits per input vector",
+      "condition": "Information Gain, d = 4096; 7.4% of 4096 x 16 nominal bits (derived)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Independent check that an 8B model codes book text at ~3 bits/token; also that a d-wide input vector really carries thousands of bits.",
+    "from_review": "tokens"
+   },
+   {
+    "id": "kuratov-2025-cramming/6",
+    "claim": "The theoretical capacity of one input vector dwarfs a token id: 2,048 fp16 entries hold 32,768 bits, enough for ~1,931 tokens of a 128,256 vocabulary.",
+    "quote": "Remarkably, even a 2,048-dimensional vector of 16-bit floats has a theoretical capacity of 32,768 bits, which is sufficient to encode roughly 1,931 tokens from a vocabulary of size 128,256.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 114688,
+      "unit": "bits per input position",
+      "condition": "derived: d = 7168 x 16 bits (DeepSeek-V3 / Kimi K2 width), about 6,600x a 17.3-bit token id"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "A soft-prompt interface widens the per-position channel from ~17 bits to d x 16 bits; it must be charged like an activation (d x b_a), not like a token.",
+    "from_review": "tokens"
+   },
+   {
+    "id": "kuratov-2025-cramming/7",
+    "claim": "Information gain per vector is about the same for random word sequences as for natural text, so the channel carries arbitrary content.",
+    "quote": "Notably, Information Gain remains similar across all text sources for each model (except random for Pythia).",
+    "location": "Table 1 caption (random text, Llama-3.1-8B: 792 tokens, 4541.2 bits)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4541,
+      "unit": "bits per input vector",
+      "condition": "random sequences of GloVe words, Llama-3.1-8B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Novel, incompressible information enters as easily as text through vector inputs: the adversary's channel.",
+    "from_review": "tokens",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   }
+  ]
+ },
+ {
+  "id": "li-2024-snapkv",
+  "title": "SnapKV: LLM Knows What You are Looking for Before Generation",
+  "authors": "Yuhong Li, Yingbing Huang, Bowen Yang, Bharat Venkitesh, Acyr Locatelli, Hanchen Ye, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2404.14469",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2024-snapkv/1",
+    "claim": "Selecting important prompt positions per head before generation gives 8.2x memory efficiency at 16K inputs.",
+    "quote": "SnapKV achieves a consistent decoding speed with a 3.6x increase in generation speed and an 8.2x enhancement in memory efficiency compared to the baseline when processing inputs of 16K tokens.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 8.2,
+      "unit": "x",
+      "condition": "KV memory efficiency (max context before OOM) at 16K inputs; inference only"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Long-context KV is highly compressible along the token axis for inference; irrelevant to training boundaries.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "lin-2024-qserve",
+  "title": "QServe: W4A8KV4 Quantization and System Co-design for Efficient LLM Serving",
+  "authors": "Yujun Lin, Haotian Tang, Shang Yang, Zhekai Zhang, Guangxuan Xiao, Chuang Gan, et al.",
+  "year": 2024,
+  "venue": "MLSys 2025",
+  "url": "https://arxiv.org/abs/2405.04532",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "lin-2024-qserve/1",
+    "claim": "A production-oriented serving stack chooses 8-bit activations with 4-bit weights and 4-bit KV.",
+    "quote": "we introduce QoQ, a W4A8KV4 quantization algorithm with 4-bit weight, 8-bit activation, and 4-bit KV cache.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "W4A8KV4 serving, Llama-3-8B to Qwen1.5-72B; inference"
+     },
+     {
+      "param": "b_a.kv",
+      "value": 4,
+      "unit": "bits",
+      "condition": "same; SmoothAttention to limit KV4 loss"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows practitioners still keep activations at 8 bits when accuracy matters; supports the high end of b_a.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "liu-2024-kivi",
+  "title": "KIVI: A Tuning-Free Asymmetric 2bit Quantization for KV Cache",
+  "authors": "Zirui Liu, Jiayi Yuan, Hongye Jin, Shaochen Zhong, Zhaozhuo Xu, Vladimir Braverman, et al.",
+  "year": 2024,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2402.02750",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2024-kivi/1",
+    "claim": "Per-channel keys and per-token values at 2 bits keep almost the same quality on Llama, Falcon and Mistral.",
+    "quote": "From this analysis, we developed a tuning-free 2bit KV cache quantization algorithm named KIVI. With hardware-friendly implementation, KIVI can enable Llama, Falcon, and Mistral models to maintain almost the same quality",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.kv",
+      "value": 2,
+      "unit": "bits",
+      "condition": "group size 32 plus up to 128 most recent tokens kept full precision; 7B-13B models; inference"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Sets the central retained-quality KV width at about 2 bits.",
+    "from_review": "activations"
+   },
+   {
+    "id": "liu-2024-kivi/2",
+    "claim": "The most recent tokens' KV are kept in full precision.",
+    "quote": "the residual key cache and value cache are kept in full precision",
+    "location": "Section 3.3",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Effective KV width is slightly above 2 bits for short contexts.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "liu-2024-spinquant",
+  "title": "SpinQuant: LLM Quantization with Learned Rotations",
+  "authors": "Zechun Liu, Changsheng Zhao, Igor Fedorov, Bilge Soran, Dhruv Choudhary, Raghuraman Krishnamoorthi, et al.",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2405.16406",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2024-spinquant/1",
+    "claim": "Learned rotations bring W4A4KV4 within 1.7 zero-shot points of full precision on LLaMA-2-70B.",
+    "quote": "In 4-4-4 quantized LLaMA-2 7B/13B/70B models, SpinQuant had leaves only a 2.9/1.4/1.7 accuracy gap to the corresponding full-precision network",
+    "location": "Section 4.2",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4,
+      "unit": "bits",
+      "condition": "LLaMA-2-70B W4A4KV4 PTQ with learned rotations; -1.7 points avg zero-shot; inference only"
+     },
+     {
+      "param": "b_a.kv",
+      "value": 4,
+      "unit": "bits",
+      "condition": "same configuration"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Strengthens 4 bits as the central inference value for matmul-input activations.",
+    "from_review": "activations"
+   },
+   {
+    "id": "liu-2024-spinquant/2",
+    "claim": "Llama-3-8B is harder to quantize; learned rotations close up to 45.1% of QuaRot's remaining gap.",
+    "quote": "In particular, for LLaMA-3 8B models that are hard to quantize, SpinQuant reduces the gap to full precision by up to 45.1% relative to QuaRot.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Retained quality at 4 bits needs increasingly elaborate transforms for heavily trained models.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "ramasinghe-2025-protocolmodels",
+  "title": "Protocol Models: Scaling Decentralized Training with Communication-Efficient Model Parallelism",
+  "authors": "Sameera Ramasinghe, Thalaiyasingam Ajanthan, Gil Avraham, Yan Zuo, Alexander Long",
+  "year": 2025,
+  "venue": "NeurIPS 2025",
+  "url": "https://arxiv.org/abs/2506.01260",
+  "topics": [
+   "activations",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ramasinghe-2025-protocolmodels/1",
+    "claim": "Constraining weights so that inter-stage activations and their gradients lie in a shared subspace allows 99% compression of pipeline-parallel traffic with no convergence loss.",
+    "quote": "enabling up to 99% compression with no convergence degradation with negligible memory/compute overhead",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "activation.compression_ratio",
+      "value": 100,
+      "unit": "x",
+      "condition": "activations and activation-gradients between pipeline stages; 8B LLaMA; 64 L4 GPUs over 60-350 Mbps"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Lowers b_a at a model-parallel boundary by ~100x when the architecture is trained to be subspace-constrained, the case NCI's sharding bound charges.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "ramasinghe-2025-protocolmodels/2",
+    "claim": "The subspace has rank 40, which gives the 100x.",
+    "quote": "We initialize Uk with isotropic Gaussian noise and set k = 40, achieving 100× compression.",
+    "location": "Section 6.1",
+    "quantities": [
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 40,
+      "unit": "dimensions",
+      "condition": "chosen subspace rank sufficient for convergence (a design choice, not a measured intrinsic dimension)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Suggests an effective d of order 10^1-10^2 per boundary token in trained-for-compression models.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "ramasinghe-2025-protocolmodels/3",
+    "claim": "Generic compressors (top-k, SVD, quantization) fail to converge at 100x on the same boundary traffic.",
+    "quote": "Top-k, low-rank (SVD), and quantization fail to converge at 100× compression",
+    "location": "Figure 6 (Section 6.7)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Off-the-shelf activation compression is much weaker; the 100x needs architecture changes.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "ramasinghe-2025-protocolmodels/4",
+    "claim": "Without compression the decentralized run was 13x slower than the centralized one.",
+    "quote": "the decentralized setting w/o compression was 13x slower.",
+    "location": "Section 6.4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 13,
+      "unit": "x slowdown",
+      "condition": "decentralized, uncompressed, vs centralized"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Model-parallel boundaries are the bottleneck once workers do not hold a full model.",
+    "from_review": "gradients"
+   },
+   {
+    "id": "ramasinghe-2025-protocolmodels/5",
+    "claim": "Pluralis constrains projection weights to a shared low-dimensional subspace so activations and activation gradients crossing pipeline stages compress by up to 99% with no convergence loss.",
+    "quote": "We propose a novel compression algorithm that compresses both forward and backward passes, enabling up to 99% compression with no convergence degradation with negligible memory/compute overhead.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "activation.compression_ratio",
+      "value": 100,
+      "unit": "x",
+      "condition": "forward activations and backward gradients; architecture-constrained; up to 8B, 80 Mbps links"
+     },
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 0.01,
+      "unit": "fraction of d_model",
+      "condition": "derived: 99% compression -> subspace k ~ d/100 (plus token ids for the embedding term)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The strongest attack on NCI: a model designed to be split cuts boundary bits ~100x, lowering the sharding floor ~100x.",
+    "from_review": "activations"
+   },
+   {
+    "id": "ramasinghe-2025-protocolmodels/6",
+    "claim": "An 8B LLaMA split across four regions over the internet converged on par with datacenter baselines.",
+    "quote": "Further, we successfully train an 8B-parameter LLaMA model (Dubey et al., 2024) with layers split across four different geographical regions, connected via the internet, and achieve convergence on par with baselines utilizing datacenter-grade connections.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Evidence at >=7B, but reported as convergence (loss), with most ablations at 2B and short runs.",
+    "from_review": "activations"
+   },
+   {
+    "id": "ramasinghe-2025-protocolmodels/7",
+    "claim": "The residual is the token+position embedding plus a sum of projections confined to the subspace; the receiver rebuilds the embedding term from token ids.",
+    "quote": "Therefore, we consider the rank of the residual activations when PE and TE are subtracted",
+    "location": "Section 4.2",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The boundary carries k coefficients plus token ids (b_tok), so d_eff*b_a can approach the cost of the tokens themselves.",
+    "from_review": "activations"
+   },
+   {
+    "id": "ramasinghe-2025-protocolmodels/8",
+    "claim": "Generic compressors fail at the same 100x ratio.",
+    "quote": "Top-k, low-rank (SVD), and quantization fail to converge at 100×",
+    "location": "Figure 6",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "100x requires the architectural change; post-hoc codecs on standard models do not reach it.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "ryabinin-2023-swarm",
+  "title": "SWARM Parallelism: Training Large Models Can Be Surprisingly Communication-Efficient",
+  "authors": "Max Ryabinin, Tim Dettmers, Michael Diskin, Alexander Borzunov",
+  "year": 2023,
+  "venue": "ICML 2023",
+  "url": "https://arxiv.org/abs/2301.11913",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ryabinin-2023-swarm/1",
+    "claim": "Activations and their gradients at pipeline boundaries are sent with dynamic blockwise 8-bit quantization.",
+    "quote": "Instead, we use dynamic 8-bit quantization with blockwise scaling from (Dettmers et al., 2022). This technique reduces communication by ≈2x and ≈4x for half and full precision, respectively.",
+    "location": "Appendix I.1",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "forward activations and backward gradients at pipeline boundaries; training"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "8-bit boundary activations in training are the established safe choice.",
+    "from_review": "activations"
+   },
+   {
+    "id": "ryabinin-2023-swarm/2",
+    "claim": "8-bit compression did not slow convergence, while a 2x linear or maxout bottleneck cost 26-28% more steps.",
+    "quote": "We can see that 8-bit compression does not degrade the time to 22 perplexity and maintains close to the final perplexity of the baseline. The compression-aware bottleneck and maxout architectures perform equal to each other, but degrade final perplexity slightly and increase time to a perplexity of 22 by 26–28%.",
+    "location": "Appendix I.2, Table 7",
+    "quantities": [
+     {
+      "param": "activation.compression_ratio",
+      "value": 2,
+      "unit": "x",
+      "condition": "8-bit quantization vs 16-bit: no slowdown; WikiText-103 LM, 2 stages"
+     },
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 0.5,
+      "unit": "fraction of d_model",
+      "condition": "bottleneck c = m/2 costs 26-28% more steps to target perplexity"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Halving the boundary dimension of a standard model is not free; supports intrinsic_dim near 1 without architecture redesign.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "sakr-2024-espace",
+  "title": "ESPACE: Dimensionality Reduction of Activations for Model Compression",
+  "authors": "Charbel Sakr, Brucek Khailany",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2410.05437",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sakr-2024-espace/1",
+    "claim": "Projecting GEMM-input activations onto precomputed principal components gives 50% model compression with small loss after retraining.",
+    "quote": "Experimentally, we find ESPACE enables 50% compression of GPT3, Llama2, and Nemotron4 models with small accuracy degradation, as low as a 0.18 perplexity increase on GPT3-22B.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 0.25,
+      "unit": "fraction of GEMM input width",
+      "condition": "derived from the paper's own example: 50% compression of a square layer means L = K/4; GPT3-22B +0.18 ppl; with retraining"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A linear projection keeps about a quarter of each matmul input's dimensions at small loss; central anchor for d_eff.",
+    "from_review": "activations"
+   },
+   {
+    "id": "sakr-2024-espace/2",
+    "claim": "The paper states how 50% compression maps to projection rank.",
+    "quote": "For instance, if N = K, i.e., WT is square, and L = K/4, then our method yields 50% compression at inference time.",
+    "location": "Section 2",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Converts the headline into a dimension fraction; each GEMM has its own projection, so the shared residual needs more.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "sun-2024-massive-activations",
+  "title": "Massive Activations in Large Language Models",
+  "authors": "Mingjie Sun, Xinlei Chen, J. Zico Kolter, Zhuang Liu",
+  "year": 2024,
+  "venue": "COLM 2024",
+  "url": "https://arxiv.org/abs/2402.17762",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sun-2024-massive-activations/1",
+    "claim": "A handful of residual entries are up to 100,000x larger than the rest, nearly input-independent, and act as bias terms.",
+    "quote": "we find their values largely stay constant regardless of the input, and they function as indispensable bias terms in LLMs.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "entries",
+      "condition": "number of massive activations in LLaMA2-7B whose zeroing collapses the model; setting them to their mean is harmless"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The outliers that break naive low-bit quantization carry little per-token information, so they can be predicted from committed weights.",
+    "from_review": "activations"
+   },
+   {
+    "id": "sun-2024-massive-activations/2",
+    "claim": "Zeroing four massive activations collapses LLaMA2-7B, but setting them to their means is harmless.",
+    "quote": "For instance, in LLaMA2-7B, setting merely four massive activations (out of millions of activations) to zero would result in catastrophic collapse in model performance. Further, setting them to their mean values does not hurt the model",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Supports encoding these few entries as constants, which lowers effective b_a.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "valeriani-2023-geometry",
+  "title": "The geometry of hidden representations of large transformer models",
+  "authors": "Lucrezia Valeriani, Diego Doimo, Francesca Cuturello, Alessandro Laio, Alessio Ansuini, Alberto Cazzaniga",
+  "year": 2023,
+  "venue": "NeurIPS 2023",
+  "url": "https://arxiv.org/abs/2302.00294",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "valeriani-2023-geometry/1",
+    "claim": "The intrinsic dimension of hidden representations rises early, then contracts in middle layers; values stay in the tens.",
+    "quote": "In the first layers, the data manifold expands, becoming high-dimensional, and then contracts significantly in the intermediate layers.",
+    "location": "abstract; Figure 1",
+    "quantities": [
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 35,
+      "unit": "dimensions",
+      "condition": "upper end of Figure 1 ID axis; ESM-2 up to 3B and iGPT up to 1.4B (protein/image transformers)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Representation manifolds are tens of dimensions; supports a very low intrinsic_dim, though for non-language models.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "wang-2022-aqsgd",
+  "title": "Fine-tuning Language Models over Slow Networks using Activation Compression with Guarantees",
+  "authors": "Jue Wang, Binhang Yuan, Luka Rimanic, Yongjun He, Tri Dao, Beidi Chen, et al.",
+  "year": 2022,
+  "venue": "NeurIPS 2022",
+  "url": "https://arxiv.org/abs/2206.01299",
+  "topics": [
+   "activations",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2022-aqsgd/1",
+    "claim": "Compressing the change in each example's activation since its last visit allows 2-4 bit pipeline activations in fine-tuning up to 1.5B, where direct quantization fails.",
+    "quote": "We show that AQ-SGD can aggressively quantize activations to 2-4 bits without sacrificing convergence performance, where direct quantization of activations fails to converge",
+    "location": "Section 1 (Contribution 4)",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 2,
+      "unit": "bits",
+      "condition": "forward, DeBERTa-1.5B fine-tuning (fw2 bw4); GPT2-1.5B used fw3 bw6; delta vs per-example buffer"
+     },
+     {
+      "param": "activation.compression_ratio",
+      "value": 8,
+      "unit": "x",
+      "condition": "derived: 16-bit / 2-bit forward"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Lowest b_a demonstrated for training across a pipeline boundary, but only via delta coding on repeated examples.",
+    "from_review": "activations"
+   },
+   {
+    "id": "wang-2022-aqsgd/2",
+    "claim": "Backward gradients were sent at twice the forward bit width.",
+    "quote": "AQ-SGD (fw2 bw4)",
+    "location": "Figure 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "bits",
+      "condition": "backward activation-gradient bits with 2-bit forward activations"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A training boundary carries forward and backward traffic; the backward needs more bits.",
+    "from_review": "activations"
+   },
+   {
+    "id": "wang-2022-aqsgd/3",
+    "claim": "The first time an example is seen, its activation is sent uncompressed.",
+    "quote": "if it is the first time that ξt is sampled, Machine a communicates the full precision activations without any compression",
+    "location": "Section 3.1 (Algorithm)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "In single-epoch pretraining AQ-SGD gives no compression; its low b_a relies on information the receiver already holds.",
+    "from_review": "activations"
+   },
+   {
+    "id": "wang-2022-aqsgd/4",
+    "claim": "The per-example buffer is large.",
+    "quote": "in GPT2-XL training, a simple calculation shows that we need an approximately extra 1TB storage.",
+    "location": "Section 3.3",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Delta coding trades boundary bits for stored state, which NCI would count as previously read information.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "wang-2024-bitnet-a48",
+  "title": "BitNet a4.8: 4-bit Activations for 1-bit LLMs",
+  "authors": "Hongyu Wang, Shuming Ma, Furu Wei",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2411.04965",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2024-bitnet-a48/1",
+    "claim": "Trained ternary-weight models use 4-bit inputs to attention and FFN, and sparsified 8-bit intermediate states.",
+    "quote": "Specifically, we utilize 4-bit activations for inputs to the attention and feed-forward network layers, while sparsifying intermediate states followed with 8-bit quantization.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4,
+      "unit": "bits",
+      "condition": "INT4/FP4 inputs to attention/FFN; quantization-aware training (STE), 7B, 100B tokens; backward in high precision"
+     },
+     {
+      "param": "b_a.kv",
+      "value": 3,
+      "unit": "bits",
+      "condition": "supports 3-bit KV cache"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Models trained for low-bit activations reach 4 bits at 7B; intermediate (FFN-down/attention-output) states still need 8 bits.",
+    "from_review": "activations",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "wang-2024-bitnet-a48/2",
+    "claim": "At 7B, BitNet a4.8 matches BitNet b1.58 with almost no loss.",
+    "quote": "For 7B models, BitNet b1.58 matches LLaMA LLM in terms of both language model perplexity and average accuracy on the end tasks. Furthermore, BitNet a4.8 achieves performance comparable to BitNet b1.58, with almost no loss in average accuracy.",
+    "location": "Section 3.1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Supports b_a=4 at retained quality when the model is trained for it.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "xi-2024-coat",
+  "title": "COAT: Compressing Optimizer States and Activation for Memory-Efficient FP8 Training",
+  "authors": "Haocheng Xi, Han Cai, Ligeng Zhu, Yao Lu, Kurt Keutzer, Jianfei Chen, et al.",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2410.19313",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "xi-2024-coat/1",
+    "claim": "Activations saved for the backward pass can be stored in FP8 with nearly lossless pretraining (OLMo-7B, 250B tokens).",
+    "quote": "COAT effectively reduces end-to-end training memory footprint by 1.54× compared to BF16 while achieving nearly lossless performance across various tasks",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "FP8 stored activations (mixed per-tensor/per-group); OLMo-7B pretraining 250B tokens, Llama-2-7B fine-tuning"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "8-bit activations survive training including the backward pass; consistent with the high end of b_a.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "xi-2024-jetfire",
+  "title": "Jetfire: Efficient and Accurate Transformer Pretraining with INT8 Data Flow and Per-Block Quantization",
+  "authors": "Haocheng Xi, Yuxiang Chen, Kang Zhao, Kai Jun Teh, Jianfei Chen, Jun Zhu",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2403.12422",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "xi-2024-jetfire/1",
+    "claim": "INT8 data flow between operators with per-block quantization matches FP16 pretraining for GPT-2 up to 774M.",
+    "quote": "Extensive experiments demonstrate that our INT8 FQT method achieves comparable accuracy to the FP16 training baseline and outperforms the existing INT8 training works for transformers.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "INT8 activations/gradients in data flow; GPT2-base/medium/large (124M-774M) pretraining"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Small-scale support that 8-bit activations moved between operators survive training.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "xiao-2022-smoothquant",
+  "title": "SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models",
+  "authors": "Guangxuan Xiao, Ji Lin, Mickael Seznec, Hao Wu, Julien Demouth, Song Han",
+  "year": 2022,
+  "venue": "ICML 2023",
+  "url": "https://arxiv.org/abs/2211.10438",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "xiao-2022-smoothquant/1",
+    "claim": "Migrating activation outliers into weights allows W8A8 for all matmuls of LLMs up to 530B with negligible accuracy loss.",
+    "quote": "SmoothQuant enables an INT8 quantization of both weights and activations for all the matrix multiplications in LLMs, including OPT, BLOOM, GLM, MT-NLG, Llama-1/2, Falcon, Mistral, and Mixtral models.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "W8A8 post-training quantization, inference only; up to MT-NLG 530B; negligible loss"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Confirms 8-bit activations are routine in inference at the largest scales; does not lower b_a below 8.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2023-h2o",
+  "title": "H2O: Heavy-Hitter Oracle for Efficient Generative Inference of Large Language Models",
+  "authors": "Zhenyu Zhang, Ying Sheng, Tianyi Zhou, Tianlong Chen, Lianmin Zheng, Ruisi Cai, et al.",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2306.14048",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2023-h2o/1",
+    "claim": "Keeping only recent and heavy-hitter tokens (20% of the KV) preserves accuracy, cutting KV memory up to 5x.",
+    "quote": "can reduce the memory footprint of $\\kv\\cache$ by up to $5\\times$ without accuracy degradation on a wide range of model architectures (OPT, LLaMA, GPT-NeoX), sizes (from 6.7B to 175B)",
+    "location": "Section 1 (contributions)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 5,
+      "unit": "x",
+      "condition": "KV token-eviction ratio at retained accuracy; OPT/LLaMA/GPT-NeoX 6.7B-175B; inference only"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Along the sequence axis, most past tokens' KV can be dropped in inference; does not apply to training.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2024-cq",
+  "title": "KV Cache is 1 Bit Per Channel: Efficient Large Language Model Inference with Coupled Quantization",
+  "authors": "Tianyi Zhang, Jonah Yi, Zhaozhuo Xu, Anshumali Shrivastava",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2405.03917",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2024-cq/1",
+    "claim": "KV channels are strongly inter-dependent, so jointly coding channels beats per-channel quantization.",
+    "quote": "the joint entropy of multiple channels grows at a slower rate than the sum of their marginal entropies",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Entropy coding across channels can push b_a.kv (and likely b_a) below per-entry quantization widths.",
+    "from_review": "activations"
+   },
+   {
+    "id": "zhang-2024-cq/2",
+    "claim": "At 2 bits per entry coupled quantization costs +0.29 perplexity on LLaMA-7B; at 1 bit it costs +2.41.",
+    "quote": "CQ-4c8b 2.00 5.97 5.32 5.42 4.81 5.11 KVQuant-1b 1.00-1.02 321.58 1617.40 NaN 4709.83 203.73 KVQuant-1b-1% 1.32-1.35 9.93 7.97 9.50 13.76 10.07 CQ-8c8b 1.00 8.09 7.02 7.75 6.55 7.25",
+    "location": "Table 1 (WikiText-2 perplexity; FP16 LLaMA-7b = 5.68)",
+    "quantities": [
+     {
+      "param": "b_a.kv",
+      "value": 2,
+      "unit": "bits",
+      "condition": "LLaMA-7b WikiText-2 ppl 5.68 -> 5.97 (CQ-4c8b)"
+     },
+     {
+      "param": "b_a.kv",
+      "value": 1,
+      "unit": "bits",
+      "condition": "LLaMA-7b ppl 5.68 -> 8.09 (CQ-8c8b); 1.25 bits gives 6.78"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "1 bit per KV entry is reachable only with clear quality loss; the low end of b_a.kv is ~1-1.25 bits.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "zou-2024-bisup",
+  "title": "BiSup: Bidirectional Quantization Error Suppression for Large Language Models",
+  "authors": "Minghui Zou, Ronghui Guo, Sai Zhang, Xiaowang Zhang, Zhiyong Feng",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2405.15346",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zou-2024-bisup/1",
+    "claim": "At W3A3 (group 128) even the best method leaves large losses, and plain QuaRot collapses on Llama-3-8B.",
+    "quote": "the average WikiText2 perplexity decreases from 13.26 to 9.41 for Atom and from 14.33 to 7.85 for QuaRot under the W3A3-g128 configuration",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 3,
+      "unit": "bits",
+      "condition": "W3A3-g128 PTQ+PEFT; Llama-1/2/3 7B-30B average WikiText-2 ppl 7.85 (BiSup) vs FP16 ~5.2; inference"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "3-bit activations are not yet at retained quality in inference; argues against b_a below ~4 without training.",
+    "from_review": "activations"
+   },
+   {
+    "id": "zou-2024-bisup/2",
+    "claim": "On Llama-3-8B, W3A3-g128 drops average zero-shot accuracy from 74.49 to 44.91 (QuaRot) or 60.53 (QuaRot+BiSup).",
+    "quote": "QuaRot 23.81 39.90 56.76 39.95 57.83 51.22 44.91 W3A3-g128",
+    "location": "Table 2",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 3,
+      "unit": "bits",
+      "condition": "Llama-3-8B W3A3-g128: avg acc 74.49 (FP16) -> 60.53 best; weights also 3-bit"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Quantifies the quality cost of 3-bit activations (with 3-bit weights) at 8B: large.",
+    "from_review": "activations"
+   }
+  ]
+ }
+]

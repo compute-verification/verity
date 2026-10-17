@@ -1,0 +1,125 @@
+[
+ {
+  "id": "mediano-2019-measuring-phi",
+  "title": "Measuring Integrated Information: Comparison of Candidate Measures in Theory and Simulation",
+  "authors": "Pedro A. M. Mediano, Anil K. Seth, Adam B. Barrett",
+  "year": 2019,
+  "venue": "Entropy 21(1):17 (arXiv 1806.09373)",
+  "url": "https://arxiv.org/abs/1806.09373",
+  "topics": [
+   "integration-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "mediano-2019-measuring-phi/1",
+    "claim": "Six candidate integrated-information measures disagree with each other even on small simulated networks.",
+    "quote": "We find a striking diversity in the behaviour of these measures—no two measures show consistent agreement across all analyses.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 8,
+      "unit": "nodes",
+      "condition": "largest networks simulated in the comparison"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Statistical integration measures are not settled or scalable enough to serve as an enforceable cap; NCI should keep its operational definition (novel bits read per block) rather than adopt one.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "oizumi-2014-iit3",
+  "title": "From the Phenomenology to the Mechanisms of Consciousness: Integrated Information Theory 3.0",
+  "authors": "Masafumi Oizumi, Larissa Albantakis, Giulio Tononi",
+  "year": 2014,
+  "venue": "PLoS Computational Biology 10(5)",
+  "url": "https://doi.org/10.1371/journal.pcbi.1003588",
+  "topics": [
+   "integration-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "oizumi-2014-iit3/1",
+    "claim": "IIT 3.0 evaluates integration across the minimum information partition.",
+    "quote": "integrated information is evaluated across the minimum information partition (MIP), the partition that makes the least difference to the cause and effect repertoires",
+    "location": "Models: Integration, irreducible cause-effect repertoires",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The MIP is the closest analogue to NCI's best-case (prover-chosen) block partition; finding it is exponential in system size, whereas NCI makes the prover supply the partition as a witness.",
+    "from_review": "theory"
+   },
+   {
+    "id": "oizumi-2014-iit3/2",
+    "claim": "Purely feed-forward systems have zero integrated information even when functionally equivalent to integrated ones.",
+    "quote": "there can be true “zombies” – unconscious feed-forward systems that are functionally equivalent to conscious complexes.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Loosely parallels NCI letting feed-forward inference pass while recurrent accumulation (training) is throttled; but IIT's verdict depends on the implementing structure, while NCI quantifies over every circuit computing the committed function.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "tononi-1994-neural-complexity",
+  "title": "A measure for brain complexity: relating functional segregation and integration in the nervous system",
+  "authors": "Giulio Tononi, Olaf Sporns, Gerald M. Edelman",
+  "year": 1994,
+  "venue": "PNAS 91(11)",
+  "url": "https://www.pnas.org/doi/10.1073/pnas.91.11.5033",
+  "topics": [
+   "integration-measures"
+  ],
+  "verified": "search-snippet",
+  "findings": [
+   {
+    "id": "tononi-1994-neural-complexity/1",
+    "claim": "Neural complexity measures integration as the deviation from statistical independence of large subsets, and segregation as the independence of small subsets.",
+    "quote": "We express functional segregation within a neural system in terms of the relative statistical independence of small subsets of the system and functional integration in terms of significant deviations from independence of large subsets.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Integration in TSE is statistical dependence across subsets; NCI instead measures the novel bits that must cross block boundaries of one specific computation, which is checkable.",
+    "from_review": "theory"
+   },
+   {
+    "id": "tononi-1994-neural-complexity/2",
+    "claim": "Complexity is high only when segregation and integration coexist, and low when parts are fully independent or fully dependent.",
+    "quote": "CN is shown to be high when functional segregation coexists with integration and to be low when the components of a system are either completely independent (segregated) or completely dependent (integrated).",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Unlike CN, NCI is monotone: more cross-block novel information is always worse for the prover, so NCI does not reward or penalize a mix of segregation and integration.",
+    "from_review": "theory"
+   }
+  ]
+ },
+ {
+  "id": "tononi-2004-iit",
+  "title": "An information integration theory of consciousness",
+  "authors": "Giulio Tononi",
+  "year": 2004,
+  "venue": "BMC Neuroscience 5:42",
+  "url": "https://bmcneurosci.biomedcentral.com/articles/10.1186/1471-2202-5-42",
+  "topics": [
+   "integration-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "tononi-2004-iit/1",
+    "claim": "Phi is the effective information across a system's weakest bipartition.",
+    "quote": "Φ is the amount of causally effective information that can be integrated across the informational weakest link of a subset of elements.",
+    "location": "abstract (Presentation of the hypothesis)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Phi minimizes information over partitions, as NCI asks whether some partition into blocks keeps each block's novel input below K; but Phi is a property of a system's dynamics, NCI of a committed circuit and a witness partition.",
+    "from_review": "theory"
+   }
+  ]
+ }
+]

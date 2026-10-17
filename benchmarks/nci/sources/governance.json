@@ -1,0 +1,1266 @@
+[
+ {
+  "id": "aarne-2024-secure-governable-chips",
+  "title": "Secure, Governable Chips: Using On-Chip Mechanisms to Manage National Security Risks from AI & Advanced Computing",
+  "authors": "Onni Aarne, Tim Fist, Caleb Withers",
+  "year": 2024,
+  "venue": "CNAS report",
+  "url": "https://www.cnas.org/publications/reports/secure-governable-chips",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "aarne-2024-secure-governable-chips/1",
+    "claim": "CNAS proposes on-chip governance in which a chip's user makes claims about its use (e.g., compute used or dataset in a training run) that another party can verify, backed by operating licenses.",
+    "quote": "“Verification” involves the user of a chip making claims that are verifiable by another party about what they are doing with the chip. For example, verifying the quantity of computation or the dataset used in a particular training run.",
+    "location": "Executive summary",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Supplies the trusted hardware an NCI-style check could run on; the report does not itself specify a criterion that separates training from inference.",
+    "from_review": "governance"
+   },
+   {
+    "id": "aarne-2024-secure-governable-chips/2",
+    "claim": "Training at scale on gaming GPUs (without NVLink) would cost perhaps 2x more in price-performance, significant but not crippling.",
+    "quote": "the authors expect that using gaming GPUs for large-scale AI training today would result in a significant, but not crippling, overall price-performance penalty, perhaps 2x.",
+    "location": "Appendix A (Distinguishing Between AI Chips and Non-AI Chips)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x price-performance penalty",
+      "condition": "large-scale training on gaming GPUs with limited memory and chip-to-chip bandwidth; authors' expectation from conversations with engineers"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "Removing interconnect costs an evader only about 2x, far below the slowdowns NCI's bounds aim at, so hardware segmentation alone does not throttle training.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "barnett-2025-halting",
+  "title": "Technical Requirements for Halting Dangerous AI Activities",
+  "authors": "Peter Barnett, Aaron Scher, David Abecassis",
+  "year": 2025,
+  "venue": "ICML 2025 Workshop on Technical AI Governance (arXiv 2507.09801)",
+  "url": "https://arxiv.org/abs/2507.09801",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "barnett-2025-halting/1",
+    "claim": "MIRI lists inference-only hardware as a research goal for preventing prohibited development.",
+    "quote": "Inference-only hardware: Develop AI hardware architecturally limited to inference (i.e., incapable of efficient model training) to prevent prohibited development.",
+    "location": "Section 3.3 (Compute monitoring)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "NCI offers a software-verifiable version of 'inference-only': compute whose blocks read no more novel input than a prompt.",
+    "from_review": "governance"
+   },
+   {
+    "id": "barnett-2025-halting/2",
+    "claim": "Datacenter-level options include kill switches, interconnect limits and workload classification from external measurements.",
+    "quote": "Monitor or restrict at the datacenter level: Implement controls directly at datacenters, such as chip kill-switches, interconnect limits, workload classification based on external measurements (Scher & Thiergart, 2024).",
+    "location": "Section 3.3 (Compute monitoring)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Places NCI in the same slot as interconnect limits and workload classification, but checkable from commitments rather than inferred from measurements.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "basu-2026-usefulnessgap",
+  "title": "The Usefulness Gap in Proof-of-Useful-Work: An Empirical Study of Pearl's cuPOW Protocol",
+  "authors": "Abhinaba Basu",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2606.04819",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "basu-2026-usefulnessgap/1",
+    "claim": "In Pearl's deployed cuPOW, verification accepts random matrices and does not check that the work came from an AI model.",
+    "quote": "Critically, it does not check whether the matrices originate from an AI model.",
+    "location": "Section 2.2 (Pearl and the cuPOW Protocol)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "A cuPOW proof shows that a matrix product was computed, not which computation it served, so it cannot by itself attest what a block computed.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "benson-2023-csis-updated-controls",
+  "title": "Updated October 7 Semiconductor Export Controls",
+  "authors": "Emily Benson",
+  "year": 2023,
+  "venue": "CSIS commentary",
+  "url": "https://www.csis.org/analysis/updated-october-7-semiconductor-export-controls",
+  "topics": [
+   "governance"
+  ],
+  "verified": "search-snippet",
+  "findings": [
+   {
+    "id": "benson-2023-csis-updated-controls/1",
+    "claim": "The 2023 update traded the interconnect-speed parameter for performance density.",
+    "quote": "The administration is foregoing interconnect speed—the speed at which chips talk to each other—in exchange for performance density as a parameter.",
+    "location": "commentary body",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Policy record that communication-based chip limits were abandoned in practice.",
+    "from_review": "governance"
+   },
+   {
+    "id": "benson-2023-csis-updated-controls/2",
+    "claim": "The change targets Nvidia's A800 and H800, engineered to comply with the 2022 interconnect threshold, and Intel's Gaudi2.",
+    "quote": "This is largely aimed at preventing the proliferation of Nvidia-style A800 and H800 chips, which the company engineered to comply with the rules, along with Intel’s Gaudi2 chips.",
+    "location": "commentary body",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Vendors met a link threshold with small spec changes; a cap defined on the computation (NCI) cannot be met by changing chip specifications.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "bis-2022-advanced-computing-ifr",
+  "title": "Implementation of Additional Export Controls: Certain Advanced Computing and Semiconductor Manufacturing Items; Supercomputer and Semiconductor End Use; Entity List Modification",
+  "authors": "Bureau of Industry and Security, U.S. Department of Commerce",
+  "year": 2022,
+  "venue": "Federal Register 87 FR 62186 (interim final rule)",
+  "url": "https://www.federalregister.gov/documents/2022/10/13/2022-21658/implementation-of-additional-export-controls-certain-advanced-computing-and-semiconductor",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bis-2022-advanced-computing-ifr/1",
+    "claim": "The October 2022 rule controlled chips with at least 600 Gbyte/s aggregate bidirectional chip-to-chip transfer rate combined with high compute.",
+    "quote": "a. Integrated circuits that have or are programmable to have an aggregate bidirectional transfer rate over all inputs and outputs of 600 Gbyte/s or more to or from integrated circuits other than volatile memories, and any of the following:",
+    "location": "regulatory text, ECCN 3A090",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 600,
+      "unit": "Gbyte/s",
+      "condition": "aggregate bidirectional I/O transfer rate to non-memory ICs; one of two conjunctive criteria for 3A090 in Oct 2022"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The first real-world attempt to separate training from other use by communication; it was a per-chip link threshold and was designed around within months.",
+    "from_review": "governance"
+   },
+   {
+    "id": "bis-2022-advanced-computing-ifr/2",
+    "claim": "The compute criterion was 4800 bits x TOPS, e.g., 300 dense 16-bit TFLOPS.",
+    "quote": "the threshold of 4800 bits x TOPS can be met with 600 tera integer operations at 8 bits or 300 tera FLOPS at 16 bits.",
+    "location": "regulatory text, ECCN 3A090 technical note",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4800,
+      "unit": "bits x TOPS",
+      "condition": "processing-performance threshold paired with the 600 Gbyte/s interconnect criterion"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Shows the 2022 rule needed both compute and interconnect; dropping interconnect later concedes that link speed was not the right lever.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "bis-2023-acs-ifr",
+  "title": "Implementation of Additional Export Controls: Certain Advanced Computing Items; Supercomputer and Semiconductor End Use; Updates and Corrections",
+  "authors": "Bureau of Industry and Security, U.S. Department of Commerce",
+  "year": 2023,
+  "venue": "Federal Register 88 FR 73458 (interim final rule)",
+  "url": "https://www.federalregister.gov/documents/2023/10/25/2023-23055/implementation-of-additional-export-controls-certain-advanced-computing-items-supercomputer-and",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bis-2023-acs-ifr/1",
+    "claim": "BIS found that chips under the 2022 interconnect threshold still gave nearly comparable training capability.",
+    "quote": "BIS learned that certain additional ICs could provide nearly comparable AI model training capability as those controlled in the October 7 IFR",
+    "location": "Section A (Introduction, overview of EAR changes)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Regulator's own finding that a chip-to-chip bandwidth cap (A800/H800 at 400 GB/s) did not throttle training; NCI's cap is on information per unit work, not per link.",
+    "from_review": "governance"
+   },
+   {
+    "id": "bis-2023-acs-ifr/2",
+    "claim": "The 2023 rule replaced the interconnect test with total processing performance and performance density.",
+    "quote": "(1) a `total processing performance' of 4800 or more, or (2) a `total processing performance' of 1600 or more and a `performance density' of 5.92 or more.",
+    "location": "preamble, revision of ECCN 3A090",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4800,
+      "unit": "TPP",
+      "condition": "first alternative for 3A090.a"
+     },
+     {
+      "param": "other",
+      "value": 5.92,
+      "unit": "TPP per mm^2 die area (performance density)",
+      "condition": "second alternative, together with TPP >= 1600"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Export controls now meter compute only and say nothing about training versus inference, the gap NCI is designed to fill.",
+    "from_review": "governance"
+   },
+   {
+    "id": "bis-2023-acs-ifr/3",
+    "claim": "Performance density blocks buying many smaller chips that together equal a restricted one.",
+    "quote": "A performance density parameter prevents the workaround of simply purchasing a larger number of smaller datacenter AI chips which, if combined, would be equally powerful as restricted chips.",
+    "location": "Section A (Introduction, overview of EAR changes)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Aggregation of small units is the evasion every per-unit limit faces; NCI handles it by bounding novel input per block of work regardless of how many chips run the blocks.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "bursuc-2024-posedb",
+  "title": "Software-Based Memory Erasure with Relaxed Isolation Requirements",
+  "authors": "Sergiu Bursuc, Reynaldo Gil-Pons, Sjouke Mauw, Rolando Trujillo-Rasua",
+  "year": 2024,
+  "venue": "IEEE CSF 2024",
+  "url": "https://arxiv.org/abs/2401.06626",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bursuc-2024-posedb/1",
+    "claim": "PoSE-DB variants stay secure against provers helped by an outside conspirator as long as communication with that conspirator is relatively slow, replacing strict isolation.",
+    "quote": "We reduce the requirement of isolation to the more realistic requirement that the communication with the external conspirator is relatively slow.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Supports the draft's PoSE-DB citation; erasure attestation needs a timing (distance-bounding) assumption, which NCI must state when it relies on it.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "douglas-2026-pacing-frontier",
+  "title": "Pacing the Frontier: A Framework & Research Agenda",
+  "authors": "Raymond Douglas, Charles Dillon, Nikola Moore, Gavin Leech, Shahar Avin, Mathias Kirk Bonde, et al.",
+  "year": 2026,
+  "venue": "research agenda (pacing.tech)",
+  "url": "https://pacing.tech",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "douglas-2026-pacing-frontier/1",
+    "claim": "Capping training slows AI progress less than proportionally, because developers substitute algorithmic efficiency, data quality and inference-time scaling.",
+    "quote": "Capping, e.g. frontier training runs does not slow AI development in strict proportion to the amount of training forgone; rather, it slows by that amount net of whatever the developers recover by substituting with algorithmic efficiency, data quality and inference-time scaling.",
+    "location": "Section 3.2 (Targeting and tradeoffs)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "NCI leaves inference-time scaling unthrottled by design, so its effect on progress is also net of that substitution.",
+    "from_review": "governance"
+   },
+   {
+    "id": "douglas-2026-pacing-frontier/2",
+    "claim": "Pacing's model uses a per-model cap covering pretraining and post-training.",
+    "quote": "Here we choose a per-model cap covering pretraining and post-training.",
+    "location": "Section 3.4 (Case A: a cap on frontier training)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "A per-model cap has to measure post-training, which FLOP thresholds do poorly; NCI's per-block cap applies to post-training directly.",
+    "from_review": "governance"
+   },
+   {
+    "id": "douglas-2026-pacing-frontier/3",
+    "claim": "Pacing lists interconnect bandwidth limits among treaty verification tools.",
+    "quote": "Treaty verifications: chip registry, datacenter inspections, interconnect bandwidth limits",
+    "location": "appendix table (coordination)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Interconnect limits remain the default communication-based tool in 2026 agendas; NCI is an alternative that does not depend on topology.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "fang-2023-pol-broken",
+  "title": "Proof-of-Learning is Currently More Broken Than You Think",
+  "authors": "Congyu Fang, Hengrui Jia, Anvith Thudi, Mohammad Yaghini, Christopher A. Choquette-Choo, Natalie Dullerud, et al.",
+  "year": 2023,
+  "venue": "IEEE EuroS&P 2023",
+  "url": "https://arxiv.org/abs/2208.03567",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "fang-2023-pol-broken/1",
+    "claim": "The original PoL authors' group concludes that a provably robust PoL verifier needs a better theory of deep learning optimization than exists.",
+    "quote": "We conclude that one cannot develop a provably robust PoL verification mechanism without further understanding of optimization in deep learning.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Supports grounding a training limit in information flow (which NCI can prove) rather than in properties of SGD (which no one can yet prove).",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "gargiulo-2026-side-channel-workload",
+  "title": "Workload Identification with Physical Side Channels for AI Governance",
+  "authors": "Simone Gargiulo, Gabriel Kulp",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2609.00309",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gargiulo-2026-side-channel-workload/1",
+    "claim": "Physical side-channel traces from an H200 separate training, inference and non-AI work with 97% accuracy.",
+    "quote": "we separate training from inference and from non-AI computation with an accuracy of $97\\%$ and a macro-averaged F1 score of $0.955$",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.97,
+      "unit": "classification accuracy",
+      "condition": "training vs inference vs non-AI; 930 five-second traces at 10 MHz on an H200, 17 LLM families"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Evidence that training's memory-bound optimizer step is physically visible; NCI does not need a classifier, but this is independent evidence that the training/inference split is real.",
+    "from_review": "governance"
+   },
+   {
+    "id": "gargiulo-2026-side-channel-workload/2",
+    "claim": "The optimizer update, which is memory-bound, is what makes training recognizable.",
+    "quote": "training appears to be particularly recognizable through the memory-bound optimizer update",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The signal is the write of updated weights, the same novel state NCI charges b_w for reading.",
+    "from_review": "governance"
+   },
+   {
+    "id": "gargiulo-2026-side-channel-workload/3",
+    "claim": "Diluted LoRA fine-tuning evades the hardened classifier half the time or more, because it updates few parameters.",
+    "quote": "The fourth, diluted low-rank adaptation (LoRA), is detected $48$–$88\\%$ of the time with a hardened classifier, rising to $\\geq 98\\%$ with an additional rescue rule.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.48,
+      "unit": "detection rate (low end)",
+      "condition": "diluted LoRA, hardened classifier; range 48-88%, >=98% with a rescue rule"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "LoRA is the hardest case for side channels as for NCI: a small update (low U) leaves little footprint and fits within a block's K.",
+    "from_review": "governance"
+   },
+   {
+    "id": "gargiulo-2026-side-channel-workload/4",
+    "claim": "LoRA is harder to detect because its optimizer update is short.",
+    "quote": "LoRA updates only a small fraction of the model parameters compared with full fine-tuning, leaving a shorter temporal footprint of the optimizer update and therefore making detection more difficult.",
+    "location": "Section 4 (Discussion)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Confirms that the detectability of training scales with the size of the update, which is NCI's U.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "harack-2025-verification-international",
+  "title": "Verification for International AI Governance",
+  "authors": "Ben Harack, Robert F. Trager, Anka Reuel, David Manheim, Miles Brundage, Onni Aarne, et al.",
+  "year": 2025,
+  "venue": "Oxford Martin AI Governance Initiative report",
+  "url": "https://aigi.ox.ac.uk/publications/verification-for-international-ai-governance",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "harack-2025-verification-international/1",
+    "claim": "A fixed set of a few dozen GPUs behind one limited-bandwidth interface would need inter-pod bandwidth as low as about 1 Mb/s to resist advances in distributed training.",
+    "quote": "Depending on the politically desired slowdown in the training of the largest models, the inter-pod bandwidth in such a design would need to be surprisingly low (e.g., 1 Mb/s) to be robust against reasonable advances in the efficiency of distributed training.",
+    "location": "Appendix I (fixed set policies)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "Mb/s",
+      "condition": "inter-pod bandwidth for a fixed-set pod of a few dozen GPUs; follows Scher & Thiergart (2024)"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "A link cap low enough to throttle training also blocks loading models and other legitimate traffic; NCI exempts committed theta, so loading weights costs nothing.",
+    "from_review": "governance"
+   },
+   {
+    "id": "harack-2025-verification-international/2",
+    "claim": "The report reads Scher and Thiergart as showing inference needs little external bandwidth while efficient distributed training remains possible.",
+    "quote": "Calculations provided in Scher and Thiergart (2024) indicate that inference workloads require remarkably little external bandwidth and that there is a real possibility of training protocols that allow for efficient distributed training.",
+    "location": "Section 2.5.2.3, footnote 201",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Both halves of NCI's premise (inference is cheap in novel input; training can be made communication-light) are acknowledged, and NCI's bounds quantify the second half through b_w and U.",
+    "from_review": "governance",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   }
+  ]
+ },
+ {
+  "id": "jia-2021-proof-of-learning",
+  "title": "Proof-of-Learning: Definitions and Practice",
+  "authors": "Hengrui Jia, Mohammad Yaghini, Christopher A. Choquette-Choo, Natalie Dullerud, Anvith Thudi, Varun Chandrasekaran, et al.",
+  "year": 2021,
+  "venue": "IEEE S&P 2021",
+  "url": "https://arxiv.org/abs/2103.05633",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "jia-2021-proof-of-learning/1",
+    "claim": "Proof-of-learning uses the secret randomness that SGD accumulates as evidence that a party actually trained a model.",
+    "quote": "stochastic gradient descent, accumulates secret information due to its stochasticity",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Proves that training happened (provenance); NCI proves a bound on how much novel information could have accumulated, the complementary claim.",
+    "from_review": "governance"
+   },
+   {
+    "id": "jia-2021-proof-of-learning/2",
+    "claim": "The claimed security is that forging a proof costs at least as much as honest gradient descent.",
+    "quote": "an adversary seeking to illegitimately manufacture a proof-of-learning needs to perform *at least* as much work than is needed for gradient descent itself.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "A cost-of-forgery argument resting on heuristic optimization assumptions, which later attacks broke; NCI rests on a proved per-block bound over a committed circuit.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "komargodski-2025-cupow",
+  "title": "Proofs of Useful Work from Arbitrary Matrix Multiplication",
+  "authors": "Ilan Komargodski, Omri Weinstein",
+  "year": 2025,
+  "venue": "arXiv preprint; IACR ePrint 2025/685",
+  "url": "https://arxiv.org/abs/2504.09971",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "komargodski-2025-cupow/1",
+    "claim": "cuPOW gives a proof of useful work for multiplying arbitrary matrices at 1+o(1) overhead over naive matrix multiplication.",
+    "quote": "Our main result is a PoUW for the task of Matrix Multiplication MatMul(A,B) of arbitrary matrices with 1+o(1) multiplicative overhead compared to naïve MatMul",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "multiplicative overhead (1+o(1))",
+      "condition": "asymptotic, vs naive MatMul"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Supports the draft's description; it is a compute-attestation primitive for NCI's enforcement layer and does not move b_w, b_a or b_tok.",
+    "from_review": "prior"
+   },
+   {
+    "id": "komargodski-2025-cupow/2",
+    "claim": "Its security rests on a conjecture about solving batches of low-rank random linear equations.",
+    "quote": "We conjecture that our protocol has optimal security",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Any NCI design that relies on cuPOW inherits an unproven hardness conjecture.",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "kulp-2024-hems",
+  "title": "Hardware-Enabled Governance Mechanisms: Developing Technical Solutions to Exempt Items Otherwise Classified Under Export Control Classification Numbers 3A090 and 4A090",
+  "authors": "Gabriel Kulp, Daniel Gonzales, Everett Smith, Lennart Heim, Prateek Puri, Michael J. D. Vermeer, et al.",
+  "year": 2024,
+  "venue": "RAND Working Paper WR-A3056-1",
+  "url": "https://www.rand.org/pubs/working_papers/WRA3056-1.html",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kulp-2024-hems/1",
+    "claim": "RAND's Fixed Set design allows high-bandwidth links only inside a preauthorized pod (e.g., fewer than 65 chips) and throttles everything else.",
+    "quote": "I. Limit high-bandwidth communication to a select number of preauthorized chips in a pod (for example, fewer than 65 chips). II. Any communication outside this preauthorized pod of chips would be limited to much lower data rates.",
+    "location": "Chapter 7 (Fixed Set Approach)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 65,
+      "unit": "chips per pod (upper limit)",
+      "condition": "example pod size inside which full-bandwidth communication is allowed"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "Training inside one pod is unrestricted under this design; NCI throttles accumulation within a pod too, because it caps novel bits per block of work, not links.",
+    "from_review": "governance"
+   },
+   {
+    "id": "kulp-2024-hems/2",
+    "claim": "To penalize large training runs, external bandwidth may have to fall to about consumer internet speeds, around 1 GB/s.",
+    "quote": "Effective penalization of large-scale training runs may require reducing the bandwidth to levels comparable to consumer internet speeds, such as around 1 GB/s.",
+    "location": "Chapter 7 (Fixed Set Approach)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "GB/s",
+      "condition": "external (outside-pod) bandwidth cap suggested for Fixed Set pods"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "A bandwidth cap on links; NCI's analogue is K bits of novel input per Gamma gates of work, which does not depend on link speed.",
+    "from_review": "governance"
+   },
+   {
+    "id": "kulp-2024-hems/3",
+    "claim": "RAND expects communication needs to shrink as training algorithms improve and calls adapting to that a key challenge.",
+    "quote": "we expect communication requirements to change as training algorithms improve. Adapting to these algorithmic improvements is a key challenge of this approach.",
+    "location": "Chapter 7 (Fixed Set Approach), Key Open Questions",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Bandwidth caps fail open as compression improves; NCI's bounds lose only in proportion as b_w and b_a fall, and those rates appear explicitly in the bound.",
+    "from_review": "governance"
+   },
+   {
+    "id": "kulp-2024-hems/4",
+    "claim": "The 2023 export controls dropped the interconnect criterion because high-TPP, low-interconnect chips still trained models nearly as well.",
+    "quote": "It later became clear that chips with a high TPP but low interconnect speed could still provide \"nearly comparable AI model training capability,\" so the 2023 export controls removed the interconnect speed requirement and lowered the threshold for TPP.",
+    "location": "Summary (policy implications)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Empirical evidence that per-chip interconnect caps do not throttle training; NCI caps information per unit of work, which chip specifications cannot route around.",
+    "from_review": "governance"
+   },
+   {
+    "id": "kulp-2024-hems/5",
+    "claim": "Bandwidth limits could hurt hosted inference for midsize models, depending on model type.",
+    "quote": "could restrict the mechanism’s utility, particularly in hosted inference for midsize models, though the exact communication need would depend on the type of model (for example, LLMs are less communication-intense than text-to-image generators).",
+    "location": "Chapter 7 (Fixed Set Approach)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Link caps can collide with legitimate inference; NCI's inference allowance is set per block by prompt bits (b_tok), not by the deployment's topology.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "ogara-2025-hems-verifying",
+  "title": "Hardware-Enabled Mechanisms for Verifying Responsible AI Development",
+  "authors": "Aidan O’Gara, Gabriel Kulp, Will Hodgkins, James Petrie, Vincent Immler, Aydin Aysu, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.03742",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ogara-2025-hems-verifying/1",
+    "claim": "Frontier training could be recognized by accelerator count, sustained peak utilization and intra-node communication patterns that reflect parallelism.",
+    "quote": "Frontier-scale AI training, for example, could be identified by unique patterns, such as the number of accelerators, steady peak throughput utilization, and specific communication patterns within nodes that correspond to different forms of parallelization.",
+    "location": "Section 2.2.2",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Classification by communication pattern identifies frontier-scale runs but not small or disguised ones; NCI's bound applies at any scale.",
+    "from_review": "governance"
+   },
+   {
+    "id": "ogara-2025-hems-verifying/2",
+    "claim": "Limits on training cluster size could curb risky training while leaving smaller-scale training and inference usable.",
+    "quote": "limits on the size of a training cluster could be used to limit high-risk AI training activities while maintaining functionality for smaller-scale training and inference.",
+    "location": "Section 2.1",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Cluster-size limits permit unbounded training inside the allowed cluster; NCI's per-block cap applies inside it too.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "perito-2010-pose",
+  "title": "Secure Code Update for Embedded Devices via Proofs of Secure Erasure",
+  "authors": "Daniele Perito, Gene Tsudik",
+  "year": 2010,
+  "venue": "ESORICS 2010 (LNCS 6345); IACR ePrint 2010/217",
+  "url": "https://eprint.iacr.org/2010/217",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "perito-2010-pose/1",
+    "claim": "Proofs of Secure Erasure have a verifier fill the prover's memory with randomness and check it is returned, which proves the memory held nothing else.",
+    "quote": "secure erasure is achieved by filling prover’s memory with verifier-selected randomness, followed by the prover returning the very same randomness to the verifier.",
+    "location": "Section 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 59,
+      "unit": "seconds",
+      "condition": "Section 6: time to send randomness for a MicaZ sensor's 644 KB at about 11,000 bytes/s"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Canonical PoSE: it attests that a bounded memory was overwritten, which is the primitive NCI would use to bound what a block retains between blocks (the K side, not b_w or b_a).",
+    "from_review": "prior"
+   }
+  ]
+ },
+ {
+  "id": "petrie-2025-flexheg",
+  "title": "Flexible Hardware-Enabled Guarantees for AI Compute",
+  "authors": "James Petrie, Onni Aarne, Nora Ammann, David Dalrymple",
+  "year": 2025,
+  "venue": "arXiv preprint (Part I of a report commissioned by ARIA)",
+  "url": "https://arxiv.org/abs/2506.15093",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "petrie-2025-flexheg/1",
+    "claim": "flexHEG's guarantee processor could block any operation that would push a training run past a threshold, including merging or further processing earlier intermediate results.",
+    "quote": "having the guarantee processor block any operation that would result in a training run exceeding this threshold, e.g. as a result of the operation merging or further processing previous intermediate results.",
+    "location": "Part I, Categories of Guarantees: Rules",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "The closest prior proposal to NCI's idea of tracking accumulation across pieces of work; flexHEG gives the enforcement platform but not a criterion for what counts as contributing to a run.",
+    "from_review": "governance"
+   },
+   {
+    "id": "petrie-2025-flexheg/2",
+    "claim": "flexHEG's compute accounting proves that no workload contributed to an over-threshold training run and that workload FLOP add up to datacenter capacity.",
+    "quote": "They could do so by providing privacy-preserving verification of all of the workloads they have run in their data centers that prove that none of those workloads contributed toward such a training run, and that the total FLOP used by the workloads adds up to the total capacity of the data centers.",
+    "location": "Part I, Categories of Guarantees: Verification",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "NCI's per-block cap is one concrete, provable definition of 'did not contribute toward a training run' that such compute accounting needs.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "rahman-2026-distributed-training",
+  "title": "Does Distributed Training Undermine Compute Governance?",
+  "authors": "Robi Rahman",
+  "year": 2026,
+  "venue": "TAIGR workshop at ICML 2026 (arXiv 2605.29359)",
+  "url": "https://arxiv.org/abs/2605.29359",
+  "topics": [
+   "governance",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "rahman-2026-distributed-training/1",
+    "claim": "DiLoCo-style compression in principle allows large-scale training on under 100 Mbps, thousands of times below datacenter links.",
+    "quote": "theoretically allowing large-scale model training to be done with less than 100 Mbps of bandwidth, thousands of times less than the 400+ Gbps connections that are standard in modern datacenters",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 100,
+      "unit": "Mbps",
+      "condition": "bandwidth sufficient for large-scale DiLoCo training per the paper"
+     },
+     {
+      "param": "other",
+      "value": 400,
+      "unit": "Gbps",
+      "condition": "standard datacenter link speed"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Bandwidth limits above about 100 Mbps do not bind; NCI's bound instead scales with the compressed update size, so DiLoCo's compression lowers b_w but does not escape the cap.",
+    "from_review": "governance"
+   },
+   {
+    "id": "rahman-2026-distributed-training/2",
+    "claim": "At 100 Mbps, distributed training costs about 3x more than centralized, not a barrier to feasibility.",
+    "quote": "At 100 Mbps bandwidth, it costs about $3\\times$ more to do training distributed relative to centralized, but it is not a substantial barrier to feasibility.",
+    "location": "Section 4 (Results)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3,
+      "unit": "x cost",
+      "condition": "distributed vs centralized cost to reach 1e25 FLOP local-equivalent compute at 100 Mbps; simulator"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Bandwidth throttles impose only a few-x penalty; NCI's target slowdowns are much larger because it charges every block of work, including those inside one node.",
+    "from_review": "governance"
+   },
+   {
+    "id": "rahman-2026-distributed-training/3",
+    "claim": "Covenant-72B achieved 146x pseudo-gradient compression with negligible quality loss, and the simulator now defaults to 150x.",
+    "quote": "achieved 146× compression with negligible quality loss",
+    "location": "Section 5 (Discussion)",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 146,
+      "unit": "x",
+      "condition": "Covenant-72B, Streaming-DiLoCo-style training; secondhand via this paper"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Puts compression of exchanged updates near 150x at 72B scale; from a 16-bit baseline that would be about 0.11 bits per weight per sync (derived: 16 / 146; the baseline precision is not stated in the quote), the regime where NCI's b_w term matters.",
+    "from_review": "governance"
+   },
+   {
+    "id": "rahman-2026-distributed-training/4",
+    "claim": "Thresholds can be evaded with modest unmonitored hardware budgets: under $2M for the MIRI draft treaty, $31M for the EU AI Act, $3.8B for SB 53.",
+    "quote": "Configurations evaluated herein would violate Scher and others (2025) for under $2M, the EU AI Act for $31M, and SB 53 for $3.8B worth of unmonitored hardware.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "million USD",
+      "condition": "unmonitored hardware needed to exceed the MIRI draft treaty's 1e24 FLOP training threshold by distributed training"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Shows the cost of evading cluster-size and bandwidth tests; NCI would charge such a run for the novel bits each node's blocks read, wherever the node sits.",
+    "from_review": "governance"
+   },
+   {
+    "id": "rahman-2026-distributed-training/5",
+    "claim": "Capping site bandwidth and monitoring internet traffic are judged likely ineffective against determined developers.",
+    "quote": "Others, such as capping bandwidth available from AI computing sites and monitoring internet traffic, are likely ineffective because they are too easily evaded by developers with sufficient determination and technical capabilities.",
+    "location": "Section 5 (Discussion)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "The strongest recent argument against link-based limits, which motivates a cap defined on the computation rather than the network.",
+    "from_review": "governance",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   },
+   {
+    "id": "rahman-2026-distributed-training/6",
+    "claim": "The paper recommends registering clusters by compute throughput and accelerator memory, not only bandwidth.",
+    "quote": "We recommend that regulations governing models be accompanied by registration requirements for clusters exceeding compute throughput and/or accelerator memory thresholds, in order to prevent evasion.",
+    "location": "Section 1 (Introduction)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Memory thresholds act like a cap on per-node state; NCI's K is a cap on per-block novel input, related but enforced by proof rather than registration.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "sastry-2024-compute-governance",
+  "title": "Computing Power and the Governance of Artificial Intelligence",
+  "authors": "Girish Sastry, Lennart Heim, Haydn Belfield, Markus Anderljung, Miles Brundage, Julian Hazell, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2402.08797",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sastry-2024-compute-governance/1",
+    "claim": "Compute is a governance lever because it is detectable, excludable and quantifiable and has a concentrated supply chain.",
+    "quote": "it is detectable, excludable, and quantifiable, and is produced via an extremely concentrated supply chain",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "The compute-governance premise NCI builds on, extended from counting FLOP to bounding what the FLOP can accumulate.",
+    "from_review": "governance"
+   },
+   {
+    "id": "sastry-2024-compute-governance/2",
+    "claim": "Training and inference have different computational and network signatures that could help tell them apart.",
+    "quote": "the training and inference phases have different computational signatures, and observations about the computing cluster and the network communication patterns could help to distinguish between them.",
+    "location": "Section 4.A (Visibility)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Classification by observed signatures is statistical and evadable; NCI turns the distinction into a provable property of the committed circuit.",
+    "from_review": "governance"
+   },
+   {
+    "id": "sastry-2024-compute-governance/3",
+    "claim": "Inference clusters need constant internet traffic, while training clusters read locally hosted data.",
+    "quote": "clusters used for inference require constant internet traffic to serve customers, whereas clusters used for training typically access training data hosted locally (Heim & Egan, 2023).",
+    "location": "Section 4.A (Visibility)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "External traffic points the wrong way for NCI's purposes: training data can be committed (free) and still produce novel internal state, which NCI charges and a traffic monitor does not see.",
+    "from_review": "governance"
+   },
+   {
+    "id": "sastry-2024-compute-governance/4",
+    "claim": "Running one copy of a trained model needs far fewer chips than training it, perhaps a few dozen.",
+    "quote": "The computational needs for running a single copy of a trained model (inference) are significantly lower than that needed for training it—perhaps only a few dozen chips.",
+    "location": "Section 3.A",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Consistent with NCI's premise that inference fits inside small blocks; NCI's Gamma (~1e18 gates per block) plays the role of 'a few dozen chips for a session'.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "scher-2024-verification-mechanisms",
+  "title": "Mechanisms to Verify International Agreements About AI Development",
+  "authors": "Aaron Scher, Lisa Thiergart",
+  "year": 2024,
+  "venue": "MIRI Technical Governance Team report (arXiv 2506.15867)",
+  "url": "https://arxiv.org/abs/2506.15867",
+  "topics": [
+   "governance",
+   "tokens",
+   "gradients",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "scher-2024-verification-mechanisms/1",
+    "claim": "Naive data-parallel training of a Llama-scale model needs 131 GB/s per direction between pods, while serving inference needs 85 KB/s of tokens, a 1.5 million times gap.",
+    "quote": "(131 GB/s / 85 KB/s) = 1.5 million times less than for gradients, assuming no compression of either",
+    "location": "Networking Equipment Interconnect Limits section",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 131,
+      "unit": "GB/s",
+      "condition": "training gradient bandwidth per direction between pods of 128 H100s, naive 16-bit data parallelism"
+     },
+     {
+      "param": "other",
+      "value": 85,
+      "unit": "KB/s",
+      "condition": "inference token download bandwidth for the same pod"
+     },
+     {
+      "param": "other",
+      "value": 1500000,
+      "unit": "ratio (gradient bandwidth / token bandwidth)",
+      "condition": "no compression of either"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The training/inference gap NCI exploits, stated for one deployment; NCI makes the gap a per-block property rather than a link property.",
+    "from_review": "governance"
+   },
+   {
+    "id": "scher-2024-verification-mechanisms/2",
+    "claim": "Scher and Thiergart assume 17 bits per token as a conservative raw token size.",
+    "quote": "(8,192 tokens/sequence * 16 sequences * 17 bits/token * 0.125 bytes/bit) = 278 KB per batch per pod of 128 H100s",
+    "location": "Networking Equipment Interconnect Limits section",
+    "quantities": [
+     {
+      "param": "b_tok",
+      "value": 17,
+      "unit": "bits/token",
+      "condition": "raw token id, no entropy coding; called conservative in the report"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Independent confirmation of the low end of NCI's raw b_tok range (17-20).",
+    "from_review": "governance"
+   },
+   {
+    "id": "scher-2024-verification-mechanisms/3",
+    "claim": "Pipeline parallelism needs activation_size x bits_per_activation x 2 / bits_per_token times more bandwidth than inference, at least 1,000x for Llama 3.1 405B, far less than the gradient gap.",
+    "quote": "in the case of Llama 3.1 405B, the activation_size is 16,384, and activations and gradients are in 16-bit precision. As noted previously, 17 bits per token is a conservative estimate. While there appears to be a difference in communication requirements of at least 1,000x, this range is much narrower than that of data parallelism",
+    "location": "Interconnect Limits section, Pipeline Parallelism",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 30840,
+      "unit": "ratio (pipeline activation bits / token bits per token)",
+      "condition": "derived: 16,384 x 16 bits x 2 / 17 bits; this is NCI's d * b_a / b_tok with forward and backward traffic; the report states only 'at least 1,000x'"
+     },
+     {
+      "param": "b_a.activation",
+      "value": 16,
+      "unit": "bits per activation entry",
+      "condition": "uncompressed BF16 activations and gradients assumed in the report"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The report computes exactly NCI's factor d * b_a / b_tok and treats it as the floor of the training/inference gap that interconnect limits can exploit.",
+    "from_review": "governance"
+   },
+   {
+    "id": "scher-2024-verification-mechanisms/4",
+    "claim": "A 128-way pipeline-parallel training run hidden behind a 125 KB/s link reaches about 12.5 tokens/s, or about 2000x slower than Llama training even after a 100x compression allowance.",
+    "quote": "(125 KB/s * 8 bit/byte * 1/16 act/bit * 1/5000 tokens/act) = 12.5 tokens/second",
+    "location": "Interconnect Limits section, Pipeline Parallelism",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 12.5,
+      "unit": "tokens/s",
+      "condition": "pipeline training throughput at 125 KB/s per direction, d_model 5,000, 16-bit activations"
+     },
+     {
+      "param": "other",
+      "value": 2000,
+      "unit": "x slowdown",
+      "condition": "after a further 100x adjustment for compression (1,250 tokens/s vs 2.6M tokens/s for Llama training)"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "A worked slowdown of the same form as NCI's thread bound (throughput set by link bits / (d * b_a)); NCI's version needs no link cap and holds for any topology.",
+    "from_review": "governance"
+   },
+   {
+    "id": "scher-2024-verification-mechanisms/5",
+    "claim": "The authors expect two stacked 100x efficiency gains (algorithms and gradient compression) to be possible, so they set the inter-pod limit at 1 Mb/s.",
+    "quote": "we recommend an inter-pod interconnect limit of 125 KB/s = 1,000 Kb/s = 1 Mb/s for each direction.",
+    "location": "Networking Equipment Interconnect Limits section",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "Mb/s",
+      "condition": "recommended inter-pod limit per direction, pods of 128 H100s"
+     },
+     {
+      "param": "other",
+      "value": 10000,
+      "unit": "x reduction in training communication",
+      "condition": "two stacked 100x gains the authors expect are likely possible; quote: 'Stacking two 100x efficiency gains leads to an improvement of 10,000x, which we expect is likely possible'"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "The limit is set by guessing future compression; NCI writes compression into its bound through b_w and b_a, so a better compressor weakens NCI's bound by a known factor rather than defeating it.",
+    "from_review": "governance"
+   },
+   {
+    "id": "scher-2024-verification-mechanisms/6",
+    "claim": "The report cites CocktailSGD's 117x gradient compression without loss in fine-tuning.",
+    "quote": "The CocktailSGD method introduced by Wang et al. (2023) combines random sparsification, top-k sparsification, and quantization to compress gradients by 117x without hurting fine-tuning performance.",
+    "location": "Networking Equipment Interconnect Limits section",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 117,
+      "unit": "x",
+      "condition": "CocktailSGD, fine-tuning; secondhand via this report"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Gradient compression lowers the effective b_w of exchanged updates by about two orders of magnitude, into the range where b_w starts to matter for NCI's bounds.",
+    "from_review": "governance",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "scher-2024-verification-mechanisms/7",
+    "claim": "The report cites work suggesting model weights could be compressed to about 1 bit per parameter for exfiltration.",
+    "quote": "Preliminary work from Brown & Mazeika (2024) finds that, in the upload security limit context, compressing to ~1 bit/parameter is likely feasible (and potentially lower)",
+    "location": "Networking Equipment Interconnect Limits section",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1,
+      "unit": "bits/weight",
+      "condition": "secondhand via this report; preliminary, compressed model may be fine-tuned to recover"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Puts b_w for pretrained weights near 1 bit, near the top of the range where NCI's thread bound is sensitive to b_w.",
+    "from_review": "governance"
+   },
+   {
+    "id": "scher-2024-verification-mechanisms/8",
+    "claim": "Inference-only chips that cannot train efficiently may be very hard or impossible to build robustly.",
+    "quote": "This may prove extremely difficult or effectively impossible, especially given the need to be robust to future improvements in training methods",
+    "location": "Inference-Only Chips section",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Hardware cannot tell training from inference; NCI makes the distinction at the level of the computation (novel input per block), which is the gap hardware approaches leave.",
+    "from_review": "governance"
+   },
+   {
+    "id": "scher-2024-verification-mechanisms/9",
+    "claim": "Much of the danger may come from post-training and inference on existing models, and dangerous training will need less compute over time.",
+    "quote": "substantial danger will likely originate from post-training or inference on already-trained models, and algorithmic progress will likely allow dangerous training runs to occur with increasingly smaller amounts of compute.",
+    "location": "policy goal on large training runs ('Why This Policy Goal is Included')",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Compute thresholds miss post-training; NCI's cap applies to post-training updates, though low-U methods (LoRA, seed-based) remain its weak point.",
+    "from_review": "governance"
+   },
+   {
+    "id": "scher-2024-verification-mechanisms/10",
+    "claim": "Pipeline training at small batch can be passed off as inference at large batch, and sparse architectures may compress activation transfers.",
+    "quote": "claim to be doing inference with a batch size of 16,000 but actually be doing training with a batch size of 1",
+    "location": "Interconnect Limits section, Pipeline Parallelism",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "A link cap cannot tell whose bits are crossing; NCI counts what each block reads against committed theta, so batch relabeling does not change the count.",
+    "from_review": "governance"
+   },
+   {
+    "id": "scher-2024-verification-mechanisms/11",
+    "claim": "A naive 1 Mb/s limit would make loading a Llama model take about 75 days, so the authors propose occasional high-bandwidth windows for bulk transfers.",
+    "quote": "Compute would be unusable if this limit was imposed naively—it would take ~75 days to load the full Llama model into memory! Therefore, these interconnect limits should be implemented with modular networking equipment, such that high bandwidth is available occasionally for large data transfers—e.g., once every 48 hours.",
+    "location": "Networking Equipment Interconnect Limits section",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 75,
+      "unit": "days",
+      "condition": "time to load the full Llama model through a 1 Mb/s inter-pod link"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Link caps charge for moving committed weights; NCI does not (theta is free), so it needs no exemption windows, which are themselves an evasion channel.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "scher-2025-international-agreement",
+  "title": "An International Agreement to Prevent the Premature Creation of Artificial Superintelligence",
+  "authors": "Aaron Scher, David Abecassis, Peter Barnett, Brian Abeyta",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2511.10783",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "scher-2025-international-agreement/1",
+    "claim": "The draft treaty covers any cluster above 16 H100-equivalents, counting chips as networked if their inter-node aggregate bandwidth exceeds 25 Gbit/s.",
+    "quote": "Covered chip cluster (CCC) means any set of AI chips or networked cluster with aggregate effective computing capacity greater than 16 H100-equivalents. A networked cluster refers to chips that either are physically co-located, have inter-node aggregate bandwidth — defined as the sum of bandwidth between distinct hosts/chassis — greater than 25 Gbit",
+    "location": "Article II (Definitions)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 16,
+      "unit": "H100-equivalents",
+      "condition": "covered chip cluster threshold"
+     },
+     {
+      "param": "other",
+      "value": 25,
+      "unit": "Gbit/s",
+      "condition": "inter-node aggregate bandwidth above which chips count as one networked cluster"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "Uses bandwidth to define what counts as one cluster, a topology test; NCI's test applies to the computation regardless of how chips are networked.",
+    "from_review": "governance"
+   },
+   {
+    "id": "scher-2025-international-agreement/2",
+    "claim": "Chip monitoring under the treaty starts by telling inference on existing models from training of new ones.",
+    "quote": "AI chip monitoring starts with discerning whether the chips are being used for inference on existing AIs or training of new AIs.",
+    "location": "Section 4 (The Agreement)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Names the exact distinction NCI provides, as a requirement the treaty leaves to unspecified mechanisms.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "shavit-2023-catch-chinchilla",
+  "title": "What does it take to catch a Chinchilla? Verifying Rules on Large-Scale Neural Network Training via Compute Monitoring",
+  "authors": "Yonadav Shavit",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2303.11341",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shavit-2023-catch-chinchilla/1",
+    "claim": "Shavit's mechanism has chip firmware occasionally snapshot the weights in device memory so an inspector can later check that a declared training run produced them.",
+    "quote": "using on-chip firmware to occasionally save snapshots of the the neural network weights stored in device memory, in a form that an inspector could later retrieve",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "A retrospective audit of large training runs that does not throttle anything; NCI instead makes accumulation expensive as it happens, at block granularity.",
+    "from_review": "governance"
+   },
+   {
+    "id": "shavit-2023-catch-chinchilla/2",
+    "claim": "The framework explicitly leaves out small-scale training and fine-tuning of existing large models.",
+    "quote": "More generally, the framework does not apply to small-scale ML training, which can often be done with small quantities of consumer GPUs.",
+    "location": "Section 1.2 (Limitations)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Fine-tuning is the loophole NCI also faces: when an update's description length U fits within K, NCI throttles it little, so neither approach covers low-U fine-tuning on its own.",
+    "from_review": "governance"
+   },
+   {
+    "id": "shavit-2023-catch-chinchilla/3",
+    "claim": "Shavit names fine-tuning of existing large models as a source of harm the framework does not address.",
+    "quote": "We acknowledge that the training of smaller models (or fine-tuning of existing large models) can be used to cause substantial societal harm",
+    "location": "Section 1.2 (Limitations)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Confirms that the compute-threshold family treats fine-tuning as out of scope, whereas NCI's cap applies to any update, with slowdown set by U, b_w and K.",
+    "from_review": "governance"
+   },
+   {
+    "id": "shavit-2023-catch-chinchilla/4",
+    "claim": "Shavit notes that weights from an illicit run can be copied and served on consumer GPUs, because inference needs far less inter-chip bandwidth than training, which puts proliferation outside the framework.",
+    "quote": "(as ML inference requires far lower inter-chip communication bandwidth)",
+    "location": "Section 1.2 (Limitations)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "The same asymmetry NCI relies on (inference needs little communication), treated here as a gap in monitoring; NCI uses it on purpose, letting inference through and charging training.",
+    "from_review": "governance"
+   },
+   {
+    "id": "shavit-2023-catch-chinchilla/5",
+    "claim": "Detecting a Chinchilla-280B-sized run within 30 days anywhere on earth with 90% probability needs roughly 232,000 chip samples per year.",
+    "quote": "detecting a Chinchilla-280B-sized run within $T=30$ days of its completion anywhere on earth with 90% probability would require roughly 232,000 worldwide chip samples per year.",
+    "location": "Section 3.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 232000,
+      "unit": "chip inspections per year",
+      "condition": "worldwide sampling needed to catch a Chinchilla-280B-scale run within 30 days with 90% probability"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Shows the inspection cost of sampling-based monitoring; NCI's check runs on every block of a committed computation instead of sampling chips.",
+    "from_review": "governance",
+    "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "shavit-2023-catch-chinchilla/6",
+    "claim": "Shavit already anticipated large-scale training on low-interconnect consumer chips, at a cost and speed penalty.",
+    "quote": "recent work has suggested it may be possible to do large-scale training on consumer chips with low interconnect, though with substantial cost and speed penalties",
+    "location": "Appendix A.2",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "Interconnect limits degrade gracefully for the evader; NCI does not depend on topology, so low-interconnect training is still charged for the novel bits it moves.",
+    "from_review": "governance"
+   },
+   {
+    "id": "shavit-2023-catch-chinchilla/7",
+    "claim": "Among the training properties Shavit's framework could verify is the fraction of steps trained with reinforcement learning.",
+    "quote": "Properties of the hyperparameters, such as the fraction of steps trained via reinforcement learning.",
+    "location": "Section 2 (rules a verifier could check)",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "RL is treated as an attribute to report, not something to throttle; under NCI, RL post-training is charged like any update, through the size U of its weight changes.",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "sutter-2025-crs-export-controls",
+  "title": "U.S. Export Controls and China: Advanced Semiconductors",
+  "authors": "Karen M. Sutter",
+  "year": 2025,
+  "venue": "Congressional Research Service report R48642",
+  "url": "https://www.congress.gov/crs-product/R48642",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sutter-2025-crs-export-controls/1",
+    "claim": "Nvidia's A800 and H800 cut NVLink from 600 GB/s to 400 GB/s to fall under the 2022 threshold.",
+    "quote": "In October 2022, after BIS controlled its A100 and H100 GPUs, Nvidia customized its A800 and H800 chips for China by reducing the NVLink interface (high-speed, low-latency GPU-to-GPU communication) from 600GB/s to 400GB/s.",
+    "location": "report body",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 400,
+      "unit": "GB/s",
+      "condition": "NVLink bandwidth of A800/H800 (down from 600 GB/s on A100/H100)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A one-third bandwidth cut left training capability nearly intact, so throttling by link bandwidth needs cuts of many orders of magnitude (as MIRI's 1 Mb/s proposal reflects).",
+    "from_review": "governance"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2022-adversarial-pol",
+  "title": "\"Adversarial Examples\" for Proof-of-Learning",
+  "authors": "Rui Zhang, Jian Liu, Yuan Ding, Zhibo Wang, Qingbiao Wu, Kui Ren",
+  "year": 2022,
+  "venue": "IEEE S&P 2022",
+  "url": "https://arxiv.org/abs/2108.09454",
+  "topics": [
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2022-adversarial-pol/1",
+    "claim": "An attacker can craft data points that make a chosen model look like the result of training, producing a valid proof-of-learning more cheaply than honest training.",
+    "quote": "we could make an arbitrarily chosen data point “generate” a given model, hence efficiently generating intermediate models with correct data points. We demonstrate, both theoretically and empirically, that we are able to generate a valid proof with significantly less cost than generating a proof by the prover.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Checks that rely on heuristic properties of SGD trajectories can be spoofed; NCI avoids this by checking the committed circuit itself rather than the plausibility of a trajectory.",
+    "from_review": "governance"
+   }
+  ]
+ }
+]

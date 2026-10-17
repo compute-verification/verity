@@ -1,0 +1,428 @@
+[
+ {
+  "id": "b_w.pretrained",
+  "symbol": "b_w",
+  "unit": "bits/weight",
+  "meaning": "Bits a reader needs per weight of a model trained from scratch, at retained quality (lossy). The rate the thread theorem charges per updated weight when the update is a whole model, as in pretraining.",
+  "estimates": [
+   {
+    "id": "b_w.pretrained/frontier-lossy",
+    "context": "frontier-scale dense or MoE models, quality within about 1 zero-shot point",
+    "low": 0.8,
+    "central": 2.5,
+    "high": 4.5,
+    "confidence": "medium",
+    "merge": "High is the strict within-1%-perplexity standard (4-bit GPTQ/AWQ, SpQR, NVFP4 training at about 4.5 bits with scales). Central sits between where zero-shot holds (2 bits, QTIP on Llama 3.1 405B) and where perplexity holds (3 bits); size-optimal fine-tuned rates are 2.0-2.5. Low is QMoE's 0.807 bits/param on an older MoE; a frontier MoE needs about 1.6. Rates that need fine-tuning to decompress are excluded: decompression is itself training.",
+    "evidence": [
+     "frantar-2022-gptq/1",
+     "nvidia-2025-nvfp4/1",
+     "malinovskii-2024-pv-tuning/1",
+     "egiazarian-2024-aqlm/1",
+     "tseng-2024-qtip/1",
+     "unsloth-2025-deepseek-r1-dynamic/1",
+     "frantar-2023-qmoe/1",
+     "frantar-2023-qmoe/3"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_w.lossless",
+  "symbol": "b_w",
+  "unit": "bits/weight",
+  "meaning": "Lossless bits per weight of a released checkpoint.",
+  "estimates": [
+   {
+    "id": "b_w.lossless/checkpoints",
+    "context": "BF16 checkpoints (central, high) and FP8-native ones (low)",
+    "low": 6.8,
+    "central": 10.8,
+    "high": 11.0,
+    "confidence": "high",
+    "merge": "Only the exponent compresses: every BF16 measurement lands at 10.5-10.9 bits (DFloat11 at 70B-405B, ZipNN). FP8-native DeepSeek-R1 gives the low. Lossless coding is an upper bound on b_w, never the attacker's rate.",
+    "evidence": [
+     "zhang-2025-dfloat11/2",
+     "hershcovitch-2024-zipnn/1",
+     "yang-2025-ecf8/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_w.capacity",
+  "symbol": "b_w",
+  "unit": "bits/parameter",
+  "meaning": "Information a trained parameter holds: a ceiling on what a small update can carry per trainable parameter.",
+  "estimates": [
+   {
+    "id": "b_w.capacity/measured",
+    "context": "memorization and knowledge-capacity experiments, at most about 1.5B parameters",
+    "low": 1.5,
+    "central": 2.0,
+    "high": 3.6,
+    "confidence": "medium",
+    "merge": "High: 3.6 bits/param of memorized random data (models of about 100K-20M params). Central: 2 bits/param of extractable knowledge, matching the 2-bit size-optimal quantization rate. Low: the MoE figure.",
+    "evidence": [
+     "morris-2025-memorize/1",
+     "allenzhu-2024-knowledge-capacity/1",
+     "allenzhu-2024-knowledge-capacity/3"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_w.delta",
+  "symbol": "b_w",
+  "unit": "bits/base weight",
+  "meaning": "Bits per base-model weight of an update relative to committed theta (fine-tuning, RL), at retained quality.",
+  "estimates": [
+   {
+    "id": "b_w.delta/sft",
+    "context": "supervised fine-tuning deltas up to 70B",
+    "low": 0.003,
+    "central": 0.1,
+    "high": 1.0,
+    "confidence": "medium",
+    "merge": "High: post-hoc 1-bit codes are near-lossless on chat up to 70B (BitDelta), though they degrade math and code. Central: a random 99% drop at 70B (DARE, about 0.16) and DeltaDQ at 128x (0.125). Low: constrained adapters (VeRA at 13B, 0.003).",
+    "evidence": [
+     "liu-2024-bitdelta/1",
+     "ping-2024-delta-come/1",
+     "yu-2024-dare/1",
+     "jiang-2024-deltadq/1",
+     "dettmers-2023-qlora/1",
+     "kopiczko-2024-vera/1"
+    ]
+   },
+   {
+    "id": "b_w.delta/rl",
+    "context": "RL post-training; the trainer chooses the parametrization",
+    "low": 2e-05,
+    "central": 0.006,
+    "high": 1.0,
+    "confidence": "low",
+    "merge": "High: natural RL deltas are dense and full rank, so take the post-hoc 1-bit code. Central: rank-1 LoRA matches full RL on Llama-3.1-8B (3M params, as a rate per base weight). Low: TinyLoRA's 10k parameters on Qwen-7B (13 parameters is the extreme, Qwen-specific). RL sparsity (68-96% unchanged) is treated as a precision artifact that does not lower b_w.",
+    "evidence": [
+     "shenfeld-2025-rls-razor/1",
+     "schulman-2025-lora-without-regret/1",
+     "morris-2026-tinylora/1",
+     "mukherjee-2025-rl-subnetworks/1",
+     "zhu-2025-path-not-taken/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "update.bits_total",
+  "symbol": "U",
+  "unit": "bits",
+  "meaning": "Description length of a whole update. The policy charges a block for the part of it the block must read; an update under K/2 that a block can also decode fits in one block.",
+  "estimates": [
+   {
+    "id": "update.bits_total/frontier-rl",
+    "context": "RL post-training of a frontier model, smallest parametrization that works",
+    "low": 80000.0,
+    "central": 40000000.0,
+    "high": 10400000000.0,
+    "confidence": "low",
+    "merge": "Low: TinyLoRA-scale adapters (0.01 MB). Central: 1-10 MB, the size of K; R1-Zero's 5.3M episodes bound its reward information at about 0.66 MB. High: rank-1 LoRA on every expert of a 1T MoE, 1.27 GB in bf16 (derived from the Kimi K2 config).",
+    "evidence": [
+     "morris-2026-tinylora/2",
+     "schulman-2025-lora-without-regret/1",
+     "moonshotai-2025-kimi-k2-config/1",
+     "balazy-2025-lora-xs/1"
+    ]
+   },
+   {
+    "id": "update.bits_total/seed-run",
+    "context": "a whole zeroth-order or evolution-strategies run, as seeds and scalars",
+    "low": 6400.0,
+    "central": 320000.0,
+    "high": 9000000.0,
+    "confidence": "medium",
+    "merge": "Central: MeZO stores a 20k-step fine-tune of a 66B model in under 0.1 MB. Low: an intrinsic-dimension subspace. High: NOLA at 70B.",
+    "evidence": [
+     "malladi-2023-mezo/1",
+     "aghajanyan-2021-intrinsic-dim/3",
+     "koohpayegani-2024-nola/4",
+     "qiu-2025-es-at-scale/2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "update.decode_flops_per_step",
+  "symbol": "c_dec",
+  "unit": "flops/parameter/seed-step",
+  "meaning": "Work to regenerate one seed-step's perturbation and add it, per parameter.",
+  "estimates": [
+   {
+    "id": "update.decode_flops_per_step/seed",
+    "context": "Gaussian or Rademacher noise from a counter-based PRNG, plus an add",
+    "low": 2,
+    "central": 10,
+    "high": 20,
+    "confidence": "low",
+    "merge": "Derived: rebuilding MeZO's weights needs no forward pass or data, only one noise draw and one multiply-add per parameter per step. In Boolean gates it is about 1e2-1e5 per parameter, which would make decoding the binding cost.",
+    "evidence": [
+     "malladi-2023-mezo/2",
+     "qin-2024-fedkseed/2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "update.fraction_changed",
+  "symbol": "phi",
+  "unit": "fraction of parameters",
+  "meaning": "Fraction of parameters an update changes materially.",
+  "estimates": [
+   {
+    "id": "update.fraction_changed/fine-tuning",
+    "context": "fine-tuning and RL deltas",
+    "low": 0.005,
+    "central": 0.15,
+    "high": 1.0,
+    "confidence": "medium",
+    "merge": "Low: trained-in sparsity (diff pruning). Central: the top 20% of a delta suffices (TIES); MoE fine-tuning touches 5-15% of experts. High: SFT changes 81-99% of weights. An arbitrary mask costs H(phi) bits per weight, so sparsity lowers b_w only when positions are free (seeded, or whole experts).",
+    "evidence": [
+     "guo-2021-diff-pruning/1",
+     "yadav-2023-ties/1",
+     "wang-2024-esft/1",
+     "zhu-2025-path-not-taken/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "update.bits_per_param_step",
+  "symbol": "u_step",
+  "unit": "bits/parameter/step",
+  "meaning": "Aggregate update every replica applies per step in working low-communication pretraining: an achieved rate, so an upper bound on a frontier update's per-step information.",
+  "estimates": [
+   {
+    "id": "update.bits_per_param_step/pretraining",
+    "context": "DiLoCo-family runs at 0.5B-72B",
+    "low": 0.04,
+    "central": 0.1,
+    "high": 0.6,
+    "confidence": "medium",
+    "merge": "Low: Streaming DiLoCo. Central: INTELLECT-1, MuLoCo and SparseLoCo-family runs. High: DisTrO without re-quantized all-reduce. At N = 1e12 even the low is 4e10 bits per step, thousands of times K.",
+    "evidence": [
+     "douillard-2025-streamingdiloco/1",
+     "jaghouar-2024-intellect1/1",
+     "therien-2025-muloco/1",
+     "sarfi-2025-sparseloco/1",
+     "peng-2024-distro/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "grad.compression_ratio",
+  "symbol": "r_g",
+  "unit": "x vs dense bf16",
+  "meaning": "Per-worker, per-step communication reduction against a dense bf16 all-reduce. These methods shrink traffic between workers that each hold a full model, so they do not by themselves evade a per-block cap.",
+  "estimates": [
+   {
+    "id": "grad.compression_ratio/frontier",
+    "context": "matched-loss results at 1B-72B",
+    "low": 100,
+    "central": 1000,
+    "high": 3000,
+    "confidence": "medium",
+    "merge": "Low: DiLoCo at 10B (over 100x), MuLoCo, INTELLECT-1. Central: SparseLoCo at matched loss (889x), DisTrO. High: SparseLoCo with a loss penalty. Error feedback keeps the discarded part in dense worker-local state, so the information moves rather than disappears.",
+    "evidence": [
+     "charles-2025-diloco-scaling/1",
+     "therien-2025-muloco/1",
+     "jaghouar-2024-intellect1/1",
+     "sarfi-2025-sparseloco/1",
+     "peng-2024-distro/1",
+     "lin-2017-dgc/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_a.activation",
+  "symbol": "b_a",
+  "unit": "bits/entry",
+  "meaning": "Bits per activation entry crossing a block boundary in training, at retained quality. Every bound and the sharding floor scale with it.",
+  "estimates": [
+   {
+    "id": "b_a.activation/boundary-training",
+    "context": "residual-stream activations sent between pipeline stages in training",
+    "low": 2,
+    "central": 4,
+    "high": 8,
+    "confidence": "medium",
+    "merge": "High: production systems send 8-bit activations across parallel links (DeepSeek-V3 FP8 dispatch at d = 7168, SWARM, Petals). Central: TAH-Quant, the one direct boundary test in training, is stable only from about 4.4 bits (80% INT4, scales included), at 3B or less; 4-bit residuals at 7B or more are untested. Low: AQ-SGD's 2-3 bits, which delta-codes against per-example buffers in fine-tuning. Backward traffic needs about 2x the forward bits.",
+    "evidence": [
+     "deepseekai-2024-deepseek-v3/3",
+     "ryabinin-2023-swarm/1",
+     "borzunov-2022-petals/1",
+     "he-2025-tahquant/1",
+     "nvidia-2025-nvfp4/3",
+     "wang-2024-bitnet-a48/1",
+     "wang-2022-aqsgd/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_a.kv",
+  "symbol": "b_kv",
+  "unit": "bits/entry",
+  "meaning": "Bits per KV-cache entry at retained quality (inference).",
+  "estimates": [
+   {
+    "id": "b_a.kv/inference",
+    "context": "KV-cache quantization",
+    "low": 1,
+    "central": 2,
+    "high": 4,
+    "confidence": "high",
+    "merge": "Central: KIVI's 2 bits. Low: coupled and low-rank KV methods. High: production 4-bit KV.",
+    "evidence": [
+     "liu-2024-kivi/1",
+     "zhang-2024-cq/2",
+     "lin-2024-qserve/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "activation.boundary_bits",
+  "symbol": "w_cut",
+  "unit": "bits/token",
+  "meaning": "Bits per token crossing a shard boundary at d_model = 7168: effective width times b_a. Sets the sharding floor w_cut / b_tok.",
+  "estimates": [
+   {
+    "id": "activation.boundary_bits/d7168",
+    "context": "attacker's choice of architecture and codec at d_model = 7168",
+    "low": 1147,
+    "central": 14336,
+    "high": 57344,
+    "confidence": "low",
+    "merge": "High: production practice, d at 8 bits. Central: a bottleneck retrained to 0.5 d at 4 bits (a linear d/2 bottleneck costs SWARM 26-28% more steps; ESPACE projects to 0.25 d at +0.18 perplexity). Low: Subspace Networks' claimed 100x (0.01 d at 16 bits), one unreplicated preprint. A standard architecture at FP4 is 28672. An unmodified model's boundary activations are not low-rank.",
+    "evidence": [
+     "deepseekai-2024-deepseek-v3/3",
+     "ryabinin-2023-swarm/2",
+     "sakr-2024-espace/1",
+     "bian-2023-compressing-activations/1",
+     "ramasinghe-2025-protocolmodels/5",
+     "deepseek-2024-v2/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "b_tok",
+  "symbol": "b_tok",
+  "unit": "bits/token",
+  "meaning": "Bits per prompt token the policy allows for.",
+  "estimates": [
+   {
+    "id": "b_tok/raw",
+    "context": "raw token ids of frontier tokenizers (128k-200k vocabularies)",
+    "low": 17.0,
+    "central": 17.3,
+    "high": 17.6,
+    "confidence": "high",
+    "merge": "log2 of the vocabulary: Llama 3 (128,256) to o200k (about 200,019). None reaches 20 bits.",
+    "evidence": [
+     "grattafiori-2024-llama3/1",
+     "openai-2026-tiktoken-o200k/1"
+    ]
+   },
+   {
+    "id": "b_tok/entropy-coded",
+    "context": "arithmetic-coded against a strong committed base model",
+    "low": 0.9,
+    "central": 2.2,
+    "high": 3.3,
+    "confidence": "medium",
+    "merge": "Central: Llama-3.1-405B and DeepSeek-V3 at about 0.54 bits/byte on Pile-test, times 3.94 characters per token. Low: Python code. High: 7-8B models (LLMZip). Requires bit-exact probabilities, which exact circuits give.",
+    "evidence": [
+     "deepseekai-2024-deepseek-v3/5",
+     "huang-2024-compression-represents-intelligence/1",
+     "deletang-2023-language-modeling-is-compression/1",
+     "valmeekam-2023-llmzip/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "prompt.compression_ratio",
+  "symbol": "r_p",
+  "unit": "x",
+  "meaning": "Prompt compression at retained task quality. Soft-prompt 'compression' cuts positions, not bits: each vector input must be charged as an activation.",
+  "estimates": [
+   {
+    "id": "prompt.compression_ratio/lossy-task-preserving",
+    "context": "token-dropping and learned compressors",
+    "low": 2,
+    "central": 4,
+    "high": 26,
+    "confidence": "medium",
+    "merge": "LLMLingua-2 2-5x and ICAE 4x (central), LLMLingua 20x and gist tokens 26x (high, narrower tasks). 480-1568x soft compression keeps only 62-73% of capability and is not a bit ratio.",
+    "evidence": [
+     "pan-2024-llmlingua2/1",
+     "jiang-2023-llmlingua/1",
+     "mu-2023-gist-tokens/1",
+     "kuratov-2025-cramming/3"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "capability.bits",
+  "symbol": "I",
+  "unit": "bits",
+  "meaning": "Size of the new information behind a measured capability gain: the shared headroom one block keeps.",
+  "estimates": [
+   {
+    "id": "capability.bits/rl-elicitation",
+    "context": "RL with tiny adapters, measured gains on math at 7-8B",
+    "low": 208,
+    "central": 160000.0,
+    "high": 48000000.0,
+    "confidence": "low",
+    "merge": "Low: 26 bytes of TinyLoRA add 15 points. Central: 20 KB. High: rank-1 LoRA on an 8B model (6 MB) matches full RL. Mostly Qwen math models, which run high; all elicitation of existing skill.",
+    "evidence": [
+     "morris-2026-tinylora/6",
+     "schulman-2025-lora-without-regret/2",
+     "shao-2025-spurious-rewards/1"
+    ]
+   },
+   {
+    "id": "capability.bits/sft-data",
+    "context": "small curated SFT sets",
+    "low": 750000.0,
+    "central": 8000000.0,
+    "high": 62000000.0,
+    "confidence": "medium",
+    "merge": "LIMA's 1,000 examples (94 KB), about 1 MB for ReFT-scale sets, s1's 1k traces (7.7 MB).",
+    "evidence": [
+     "zhou-2023-lima/1",
+     "wu-2024-reft/1",
+     "muennighoff-2025-s1/1"
+    ]
+   },
+   {
+    "id": "capability.bits/context",
+    "context": "prompts and context playbooks",
+    "low": 70,
+    "central": 16000.0,
+    "high": 8000000.0,
+    "confidence": "medium",
+    "merge": "OPRO's three words (GSM8K 34% to 80%), URIAL's 2 KB, ACE playbooks and many-shot ICL at 0.2-1 MB.",
+    "evidence": [
+     "yang-2023-opro/1",
+     "lin-2023-urial/1",
+     "zhang-2025-ace/2",
+     "agarwal-2024-many-shot-icl/2"
+    ]
+   }
+  ]
+ }
+]
