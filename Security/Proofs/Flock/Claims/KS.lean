@@ -63,6 +63,7 @@ import Proofs.Flock.Claims.KS.FitsR
 import Proofs.Flock.Claims.KS.ZkFitsW
 import Proofs.Flock.Claims.KS.ZkBoundW
 import Proofs.Flock.Claims.KS.ZkLiveW
+import Proofs.Flock.Claims.KS.JointR
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -294,4 +295,9 @@ bounding the simulated strategies' `Adv₀` after `Commit`, gives those sessions
 so at the deployed masked record every table's bound and table 0's with escapes on accepted runs counted per round
 follow from `ZkLiveAccWJ` where some run accepts (`FlockDeploy.KS.ZkLiveAccWJ`, `FlockDeploy.KS.zk_tableBoundJAccAtR`,
 `Claims.Flock.TableBoundθAccAtR`, `Claims.Flock.TableBoundJAccAtR.tableBoundθAccAtR`,
-`FlockDeploy.KS.zk_tableBoundθAccAtR`). -/
+`FlockDeploy.KS.zk_tableBoundθAccAtR`). Escapes fitting per round fit as `Escapes.Fits` asks once their fork events are
+merged by round, with a term no smaller (`JointR`: `Claims.Escapes.mergeR`, `Claims.Escapes.FitsR.fits_mergeR`,
+`Claims.Escapes.term_le_mergeR`), so `OneWait` follows from every table's bound counted per round
+(`Claims.Flock.TableBoundJR`, `Claims.Flock.oneWait_of_tableBoundJR`, `Claims.Flock.tableBoundJR_of_extend`), and the
+deployed masked verifier is KS from `ZkLiveAccWJ` where some run accepts and `ExtendJ`
+(`FlockDeploy.KS.zk_KS_of_tableBoundJR`, `FlockDeploy.KS.zk_KS_of_liveAccWJ`). -/
