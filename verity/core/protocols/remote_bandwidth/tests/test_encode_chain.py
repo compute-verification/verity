@@ -8,6 +8,8 @@ intervals), and so are integer affine maps with constant coefficients. Every oth
 reading at most `f = 4` operands of at most 32 bits. An s8 operand comes straight from a budgeted gate declared in
 `[−128, 127]`, since interval analysis proves no affine map of a wide value narrow. Each construction is run on seeded
 inputs and checked against `pow(a, 2, p)`; a cheaper one, added here, fails the test and falsifies the conjecture at `e`.
+It is also the test of the per-squaring statement `Accounting.Guarantees.Gates.Renormalization` at `d = 2`: its outputs
+are limbs congruent to the square, which canonical bytes only make costlier.
 """
 
 from __future__ import annotations

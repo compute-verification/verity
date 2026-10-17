@@ -17,6 +17,8 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   the whole family (`2^s` members) its charged gates have at least `s` bits: `s = 63` at p1024 (`256^127 ≤ p`). It is a
   bound in bits, not in gates: a budgeted gate of `b` declared bits carries `b` of them. "Computes" is "on every member
   of `G`": on the fraction `ε` of the family, `G` has `ε · 2^s` members.
+* `Renormalization`: the step the encode bound needs and no counting argument gives, stated and unproved: returning a
+  square's limbs to the window takes `n/8 − d` budgeted gates. `EncodeChainHardness` is its composition over the chain.
 * `EncodeBudget`: the connection. For a declared circuit `W` that satisfies the stacking property `P` and is in the
   restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the draws number at most
   `(budget)/E + (run-input bits)/(n − 1)`, under `EncodeChainHardness` at `E`: the budget is the caps times the
@@ -49,6 +51,19 @@ def SquaringCarry : Prop :=
     (∀ S ∈ G, ∀ i, (∃ g ∈ C, g.op = .input .registered i) → x S i = byte (sparse S) (slot i)) →
     (∀ S ∈ G, InWindow C (x S) ∧ ∀ l < n, val C (x S) (out l) = byte (sparse S ^ 2 % p) l) →
     G.card ≤ volume C
+
+/-- **Re-normalization** (the 19:15Z ruling's lemma, unproved): a product's limbs come back to the window only through
+budgeted gates, about one a limb. A restricted circuit with no run input whose registered inputs are bytes of `a` or
+fixed, and that on more than `ε` of the `a ∈ [0, p)` is in its window and outputs (`out l`, `l < n/8`) the canonical
+bytes of `a² mod p`, has at least `n/8 − d` budgeted gates. The s8 family forms the column sums of `a²` for free; what
+it can't do is carry, and `SquaringCarry` proves only bits of that (63 at p1024), not gates. -/
+def Renormalization (F : Field) (f w d εnum εden : ℕ) : Prop :=
+  ∀ {ι : Type} (C : Circuit ι) (x : ℕ → ι → ℤ) (out : ℕ → ℕ) (good : Finset ℕ),
+    Restricted f w C → runBits C = 0 → good ⊆ Finset.range F.p → MoreThan (Finset.range F.p) good εnum εden →
+    (∀ i, (∃ g ∈ C, g.op = .input .registered i) →
+      (∃ l, ∀ a ∈ good, x a i = byte a l) ∨ ∀ a ∈ good, ∀ a' ∈ good, x a i = x a' i) →
+    (∀ a ∈ good, InWindow C (x a) ∧ ∀ l < F.bytes, val C (x a) (out l) = byte (a ^ 2 % F.p) l) →
+    F.bytes - d ≤ budgeted C
 
 /-- **The encode budget: what the stacking property bounds.** For a declared circuit `W` in the restricted class
 (`Restricted f w`) whose census satisfies the stacking property `P` (`Property caps A W`), whose registered inputs are
