@@ -410,22 +410,15 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   registrations' audit records accept, `session_roots` split between them by value, and its profile is the boundary's,
   the replay sampling design's over the RUs. Its refusals are `rule`, `not-drawn`, `final`, `delivered`,
   `interior-registered`, `interior-empty` and `interior-population`, then the public-items rule's and R1 to R7's.
-- **Sessions over several rounds.** `Stream(rounds=R)`, R from 1 to `ROUNDS` (4) and 1 under `TwoStage`, holds up to R
-  registrations without a final outcome, so one proof session can prove the draws of up to R consecutive rounds, each
-  round's registration its own tables of the session's statement. C-Flock's verifier of record doesn't take that
-  statement yet: it reads a session of several tables only as one draw of one registration split into equal parts
-  (`verity/ml/flock/verifier/PROTOCOL.md` §16.12) and refuses any other, so until its proof covers tables of their own
-  registrations a session covers one round on that verifier. `session(draws)` opens it once, after the last
-  covered draw, over consecutive registrations in order, none delivered, final or covered by another session. It
-  refuses `rule`, `rounds`, `unknown`, `not-drawn` (a covered registration not drawn yet), `final`, `delivered`,
-  `covered` (nothing reopens a draw's session) and `order`, and changes nothing when it does. Each round is committed
-  before its own draw, and so before every later round's. The first covered round's `Check.proof_deadline`, from its
-  draw, spans the session. `deliver(session, sessions)` delivers it once, for every draw it covers, and refuses one of
-  them alone (`covered`) and a session the stream didn't open (`not-session`). Past the deadline every covered draw is
-  `late`, returned in order, and a session never delivered ends `late` for each round at that deadline. Each covered
-  draw's `outcome` binds the same delivered session records and runs its own audit record, on its round's
-  `proved_units`, `instances`, `served` and `session_roots` (its own tables'), never another round's. The stream's
-  digest adds `rounds` when it is more than 1.
+- **Sessions over several rounds.** `Stream(rounds=R)` (R ≤ `ROUNDS`, 4; 1 under `TwoStage`; in the digest when more
+  than 1) holds up to R registrations open, so one proof session can prove up to R consecutive rounds' draws, each
+  round's registration its own tables. C-Flock's verifier of record reads several tables only as one registration's
+  draw split in equal parts (`verity/ml/flock/verifier/PROTOCOL.md` §16.12) and refuses any other, so there a session
+  covers one round until its proof covers more. `session(draws)` opens it once, after the last covered draw
+  (`not-drawn`), over consecutive registrations (`order`) no session covers (`covered`), and the first covered round's
+  `Check.proof_deadline` spans it. `deliver(session, sessions)` delivers it once for every covered draw, each `late` past
+  that deadline. Each covered draw's `outcome` binds the same session records and runs its own audit record, on its own
+  round's units and roots, never another round's.
 - **The salt and the registration deadline.** A stream runs one epoch with one salt. `salt(n=64)` issues it, `n` bytes
   of the challenger's coins (read in order with the draws'), and reads its release on the challenger's clock
   (`salted_at`). `salt_released(salt, released_at)` instead records a salt released elsewhere, such as PoUW's epoch
@@ -486,12 +479,7 @@ Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outc
 `test_a_two_stage_outcome_accepts_only_when_both_audits_do`, `test_a_work_draw_carries_its_closure_and_the_proof_proves_it`,
 `test_a_closure_widens_a_work_draw_only_and_stays_in_range`, `test_the_default_draw_is_draw_first_on_the_challengers_bytes`).
 What a registration reads of the log, and that its verdicts are the whole log's, is pinned by
-`tests/test_service_history.py`. Sessions over several rounds are pinned by `tests/test_service_sessions.py`
-(`test_a_two_round_session_is_accepted`, `test_each_rounds_audit_record_reads_only_its_own_units_and_roots`,
-`test_a_session_opened_before_the_last_rounds_coin_is_refused`,
-`test_a_session_past_the_first_rounds_deadline_is_a_reject`,
-`test_an_undelivered_session_ends_late_at_its_first_rounds_deadline`,
-`test_open_registrations_are_bounded_by_rounds_and_the_budget`).
+`tests/test_service_history.py`, and sessions over several rounds by `tests/test_service_sessions.py`.
 
 PoUW's example runs on a two-stage `Stream` in `tests/test_service_two_stage.py`, following the architecture note
 (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, §4.1): a uniform `subset:K′` over `N`
