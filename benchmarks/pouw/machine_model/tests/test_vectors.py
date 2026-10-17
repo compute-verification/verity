@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import shutil
 
 import pytest
 
 from verity_machine_model import attacks as atk
 from verity_machine_model.lp import price
-from verity_machine_model.model import Attack, measured_cost, vectors
+from verity_machine_model.model import DATA, Attack, census, measured_cost, model, vectors
 from verity_machine_model.resolve import resolve
 
 NAMES = vectors()
@@ -20,8 +21,9 @@ def solved(name):
 
 
 def test_every_named_vector_is_here():
-    assert NAMES[0] == "VF" and NAMES[-1] == "VF3j-16"
-    assert {"VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict", "VF3j", "VF3j-8"} < set(NAMES)
+    assert NAMES[0] == "VF" and NAMES[-1] == "VF3k-16"
+    assert {"VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict", "VF3j", "VF3j-8",
+            "VF3j-16"} < set(NAMES)
 
 
 # τ, τ at 600 W, U/F_low and margin as the round notes published them
@@ -30,6 +32,7 @@ PUBLISHED = {
     "VF3i-strict": (0.0698, 0.0546, 1.0938, 1.935),   # note:20261016T1640Z-draft-rs-vf3j-strict-closure, on valid rows
     "VF3j": (0.0634, 0.0495, 1.0938, 1.935),
     "VF3j-16": (0.0610, 0.0477, 1.1563, 2.000),
+    "VF3k-16": (0.0603, 0.0472, 1.1563, 2.000),       # note:20261016T1912Z-draft-machine-model-vf3k
 }
 
 
@@ -90,8 +93,43 @@ def test_check_names_what_fails():
 
 
 def test_margin_is_the_adopted_designs_cheapest():
-    r = solved("VF3j-16")
+    r = solved(model().current)
     xs = [atk.x_of(r.census, r.solution, a.program) for a in r.attacks if a.design == r.model.adopted]
     assert r.margin == min(xs) and r.cheapest[0][0] == r.margin
     assert r.three_piece == min(atk.x_of(r.census, r.solution, a.program) for a in r.attacks
                                 if a.design == r.model.adopted and a.family.startswith("(iv)"))
+
+
+# What each claim of data/floors.csv finds below its floor, by vector: (π₃₂) and PRICES-32's load half
+CLAIMED = {
+    "VF3j": ([], ["LDS128 8.00 a word < 16", "LDG128 8.00 a word < 16", "LDC64 0.00 a word < 16"]),
+    "VF3j-16": ([], []),
+    "VF3k-16": ([], []),
+}
+
+
+@pytest.mark.parametrize("name", sorted(CLAIMED))
+def test_claims(name):
+    r = solved(name)
+    assert (r.floors["pi32"][1], r.floors["loads16"][1]) == CLAIMED[name]
+    assert r.floors["loads16"][0] == 9 and r.floors["pi32"][0] == 84 + (r.vector.epoch == "VF3k-16")
+
+
+def test_vf3j16_rested_on_slow_rows():
+    """VF3j-16's θ on VF3k-16's census, the gated probes' faster rows: its (π₃₂) for ATOMS64 doesn't hold there."""
+    j = solved("VF3j-16")
+    out = atk.check(j.model, census(j.model, "VF3k-16"), j.solution, j.vector.credits, [], j.model.x_min, j.model.rho)
+    assert [f.split(":")[0] for f in out] == ["credit ATOMS64 ≥ 2048 MACs unpaid", "credit LDSM_X4T ≥ 4096 MACs unpaid"]
+
+
+def test_vf3k16_loses_tau_on_atoms64_alone(tmp_path):
+    """Every adopted line but ATOMS64's, and the peer class, leave VF3j-16's τ as it was, to 1e-6 (LDSM_X4T's faster
+    line costs 7.5e-7 of it): the 1.1% VF3k-16 loses is the price of ATOMS64's credit on its faster row."""
+    data = tmp_path / "data"
+    shutil.copytree(DATA, data)
+    c = (data / "census.csv").read_text()
+    line = "ATOMS64,ROW_ATOMS64,0.480156,0.02,,,VF3k-16,,r20261016-183617-3914\n"
+    assert c.count(line) == 1
+    (data / "census.csv").write_text(c.replace(line, line.replace("0.480156", "0.29523")))
+    assert resolve("VF3k-16", data).tau == pytest.approx(solved("VF3j-16").tau, rel=1e-6)
+    assert solved("VF3k-16").tau < solved("VF3j-16").tau * (1 - 0.01)

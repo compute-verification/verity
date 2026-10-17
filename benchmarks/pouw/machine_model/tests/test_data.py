@@ -7,8 +7,8 @@ import re
 
 import pytest
 
-from verity_machine_model.model import (DATA, STATUSES, all_attacks, attacks, census, entries, holds, model, rows,
-                                        u_of, vector, vectors)
+from verity_machine_model.model import (CLAIMS, DATA, STATUSES, all_attacks, attacks, census, entries, floors, holds,
+                                        model, rows, u_of, vector, vectors)
 
 M = model()
 ROWS = rows()
@@ -93,3 +93,21 @@ def test_holds():
     assert holds(M, "", "", "VF") and holds(M, "VF3e", "", "VF3j") and not holds(M, "VF3e", "", "VF3d")
     assert not holds(M, "VF3j-8", "VF3j-8", "VF3j") and holds(M, "", "VF", "VF") and not holds(M, "", "VF", "VF2")
     assert len(all_attacks()) == len(attacks(M, M.epochs[-1]))
+
+
+def test_floors_name_census_kinds():
+    fs, c = floors(), census(M, M.epochs[-1])
+    assert {f.claim for f in fs} == set(CLAIMS)
+    assert len({(f.kind, f.claim) for f in fs}) == len(fs)
+    assert all(f.kind in c and f.words > 0 and f.floor > 0 for f in fs), [f.kind for f in fs if f.kind not in c]
+
+
+def test_adopted_lines_are_faster():
+    """Each line adopted from a probe at an epoch is cheaper than the line it closed at the epoch before."""
+    with open(DATA / "census.csv", newline="") as f:
+        lines = list(csv.DictReader(f))
+    u = lambda d: u_of(M.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"])
+    for d in (d for d in lines if d["since"] == "VF3k-16" and "r20261016-183617-3914" in d["runs"].split()):
+        old = [e for e in lines if (e["kind"], e["row"]) == (d["kind"], d["row"]) and e["until"] == "VF3j-8"]
+        assert old == [] or u(d) < u(old[0]), f"{d['kind']} on {d['row']}"
+    assert sum(d["since"] == "VF3k-16" for d in lines) == 18 + 5

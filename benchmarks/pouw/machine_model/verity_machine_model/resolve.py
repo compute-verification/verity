@@ -6,7 +6,8 @@ from pathlib import Path
 
 from verity_machine_model import attacks as atk
 from verity_machine_model import lp
-from verity_machine_model.model import DATA, Attack, Census, Model, Vector, attacks, census, model, rows, vector
+from verity_machine_model.model import (DATA, Attack, Census, Model, Vector, attacks, census, floors, model, rows,
+                                        vector)
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class Resolved:
     cheapest: list[tuple[float, str, str]]    # the adopted design's three cheapest (X, family, name)
     three_piece: float | None                 # its cheapest three-piece (iv) attack's X
     failures: list[str]                       # what `attacks.check` found; empty when the vector passes
+    floors: dict[str, tuple[int, list[str], list[str]]]  # each claim of data/floors.csv: `attacks.under_floor`
 
     def numbers(self) -> dict[str, float]:
         return {"tau": self.tau, "tau_600w": self.tau_600w, "uf_low": self.uf_low, "margin": self.margin}
@@ -46,4 +48,5 @@ def resolve(name: str, data: Path = DATA) -> Resolved:
     return Resolved(model=m, vector=v, census=c, attacks=a, solution=sol, tau=sol.tau,
                     tau_600w=sol.tau * (m.honest_real / m.honest_real_600w), uf_low=1 + sol.infl, margin=xs[0][0],
                     cheapest=xs, three_piece=tp,
-                    failures=atk.check(m, c, sol, v.credits, a, m.x_min, m.rho))
+                    failures=atk.check(m, c, sol, v.credits, a, m.x_min, m.rho),
+                    floors=atk.under_floor(c, sol, floors(data)))

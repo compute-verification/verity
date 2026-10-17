@@ -1,0 +1,95 @@
+kind,words,floor,claim,what
+ALU,32,32,pi32,LOP3/IADD3/SHF/PRMT/ISETP-class per-lane head
+IMAD,32,32,pi32,IMAD
+SEL,32,32,pi32,SEL
+FFMA,32,32,pi32,FFMA/FADD/FMUL
+HFMA2,32,32,pi32,HFMA2 (one packed word)
+VIMNMX,32,32,pi32,VIMNMX
+F2FS,32,32,pi32,conversions (F2F/F2I/I2F/F2FP)
+XU,32,32,pi32,MUFU
+NOROW,32,32,pi32,other one-slot heads
+IMADW,64,32,pi32,IMAD.WIDE
+ALU64,64,32,pi32,IADD.64
+W2,64,32,pi32,DADD/DFMA
+DMUL,64,32,pi32,DMUL
+UNI,1,32,pi32,uniform head (one UR word)
+UNI64,2,32,pi32,uniform head (UR pair)
+TEX1,32,32,pi32,"filtered texture, 1 word"
+TEX4,128,32,pi32,"filtered texture, 4 words"
+TEXBIL,128,32,pi32,"bilinear texture, 4 words"
+TEX2,64,32,pi32,"TEX, 2 words a lane (point/linear RG8: a converted texel)"
+RED32,32,32,pi32,REDG.ADD
+RED64,64,32,pi32,REDG.ADD.64
+REDV,128,32,pi32,vector reduce
+ATOMG32,32,32,pi32,ATOMG
+ATOMG64,64,32,pi32,ATOMG.64
+REDG32,32,32,pi32,REDG select
+REDG64,64,32,pi32,REDG.64 select
+ATOMS32,32,32,pi32,ATOMS
+ATOMS64,64,32,pi32,ATOMS.64/CAST.SPIN
+ATOME32,32,32,pi32,ATOM.E
+ATOME64,64,32,pi32,ATOM.E.64
+ATOME32P,32,32,pi32,ATOM.E into a peer CTA's shared memory (DSMEM)
+REDAS32,32,32,pi32,REDAS
+REDAS64,64,32,pi32,REDAS.64
+SURED,32,32,pi32,SURED
+TMAred512,128,32,pi32,UBLKRED/UTMAREDG 512 B
+CVT64,64,32,pi32,F2F/F2I/I2F/FRND to a 64-bit pair
+SHFL,32,32,pi32,"SHFL, any mode (data-dependent IDX: a select)"
+LDS32,32,32,pi32,"LDS.U8/.S8/.U16/.S16: a byte or half of a shared word, extended"
+LDG32,32,32,pi32,LDG/LD/LDL sub-word; LDGSTS with src-size < cp-size (one masked word a lane)
+LDSM_X1T,32,32,pi32,LDSM.16.MT88 (b16 halves of two rows in one register)
+LDSM_X2T,64,32,pi32,LDSM.16.MT88.2
+LDSM_X4T,128,32,pi32,LDSM.16.MT88.4
+STSM_X1T,32,32,pi32,STSM.16.MT88
+STSM_X2T,64,32,pi32,STSM.16.MT88.2
+STSM_X4T,128,32,pi32,STSM.16.MT88.4
+TLD1,32,32,pi32,"texture point fetch / gather, format-converting (UNORM/SNORM/sRGB/half texels)"
+TLD2,64,32,pi32,"texture point fetch / gather, format-converting (UNORM/SNORM/sRGB/half texels)"
+TLD4w,128,32,pi32,"texture point fetch / gather, format-converting (UNORM/SNORM/sRGB/half texels)"
+TLD2D1,32,32,pi32,"texture point fetch / gather, format-converting (UNORM/SNORM/sRGB/half texels)"
+TLD2D4,128,32,pi32,"texture point fetch / gather, format-converting (UNORM/SNORM/sRGB/half texels)"
+TLD4G,128,32,pi32,"texture point fetch / gather, format-converting (UNORM/SNORM/sRGB/half texels)"
+SULD1,32,32,pi32,"SULD.b8/.b16: a sub-word surface load, extended"
+SULD4,128,32,pi32,SULD .v4 of sub-word elements
+LDCDIV,32,32,pi32,LDC.U8/.U16 at a per-lane address
+UTMA,4,32,pi32,"TMA box load, 16 B, OOB zero-fill at a data-dependent coordinate (select)"
+UTMA8,8,32,pi32,"TMA box load, 32 B, OOB zero-fill at a data-dependent coordinate (select)"
+UTMA512,128,32,pi32,"TMA box load, 48-512 B, OOB zero-fill at a data-dependent coordinate (select)"
+G4_16,16,32,pi32,"TMA gather4, 4 rows of at most 16 B, OOB fill (select)"
+G4_32,32,32,pi32,"TMA gather4, 4 rows of at most 32 B, OOB fill (select)"
+LDSM8T_X1,64,32,pi32,LDSM.8.MT1616 (ldmatrix m16n16.x1.trans.b8)
+LDSM8T_X2,128,32,pi32,LDSM.8.MT1616.2
+LDSM6_X1,32,32,pi32,LDSM.U6x16P32TO8.M816 (ldmatrix m8n16.x1 b6x16_p32 -> b8)
+LDSM6_X2,64,32,pi32,LDSM.U6x16P32TO8.M816.2
+LDSM6_X4,128,32,pi32,LDSM.U6x16P32TO8.M816.4
+LDSM4_X1,32,32,pi32,LDSM.U4x16P64TO8.M816 (ldmatrix m8n16.x1 b4x16_p64 -> b8)
+LDSM4_X2,64,32,pi32,LDSM.U4x16P64TO8.M816.2
+LDSM4_X4,128,32,pi32,LDSM.U4x16P64TO8.M816.4
+LDSM6T_X1,64,32,pi32,LDSM.U6x16P32TO8.MT1616
+LDSM6T_X2,128,32,pi32,LDSM.U6x16P32TO8.MT1616.2
+LDSM4T_X1,64,32,pi32,LDSM.U4x16P64TO8.MT1616
+LDSM4T_X2,128,32,pi32,LDSM.U4x16P64TO8.MT1616.2
+STSM8T_X1,32,32,pi32,STSM.8.MT168 (stmatrix m16n8.x1.trans.b8)
+STSM8T_X2,64,32,pi32,STSM.8.MT168.2
+STSM8T_X4,128,32,pi32,STSM.8.MT168.4
+UTMA1K,256,32,pi32,"TMA box load, 528 B - 1 KB, OOB zero-fill at a data-dependent coordinate (select)"
+UTMA2K,512,32,pi32,"TMA box load, 1-2 KB, OOB zero-fill at a data-dependent coordinate (select)"
+UTMA4K,1024,32,pi32,"TMA box load, 2-4 KB, OOB zero-fill at a data-dependent coordinate (select)"
+UTMA8K,2048,32,pi32,"TMA box load, 4-8 KB, OOB zero-fill at a data-dependent coordinate (select)"
+UTMA16K,4096,32,pi32,"TMA box load, 8-16 KB, OOB zero-fill at a data-dependent coordinate (select)"
+UTMA32K,8192,32,pi32,"TMA box load, 16-32 KB, OOB zero-fill at a data-dependent coordinate (select)"
+UTMA48K,12288,32,pi32,"TMA box load, 32-48 KB, OOB zero-fill at a data-dependent coordinate (select)"
+UTMA64K,16384,32,pi32,"TMA box load, 48-64 KB, OOB zero-fill at a data-dependent coordinate (select)"
+UTMABIG,25344,32,pi32,"TMA box load, 64 KB to shared memory's 99 KB, OOB zero-fill at a data-dependent coordinate (select)"
+G4_256,256,32,pi32,"TMA gather4, 4 rows of at most 256 B, OOB fill (select)"
+G4_1K,1024,32,pi32,"TMA gather4, 4 rows of at most 1024 B, OOB fill (select)"
+LDS32,32,16,loads16,a plain load into registers
+LDS128,128,16,loads16,a plain load into registers
+LDG32,32,16,loads16,a plain load into registers
+LDG128,128,16,loads16,a plain load into registers
+LDC64,64,16,loads16,a plain load into registers
+LDCUNI,32,16,loads16,a plain load into registers
+LDSM_X1,32,16,loads16,a plain load into registers
+LDSM_X2,64,16,loads16,a plain load into registers
+LDSM_X4,128,16,loads16,a plain load into registers

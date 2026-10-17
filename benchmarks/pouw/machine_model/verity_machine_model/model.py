@@ -66,6 +66,19 @@ class Attack:
 
 
 @dataclass(frozen=True)
+class Floor:
+    kind: str
+    words: int          # words a warp instruction of the kind writes (at most)
+    floor: float        # MACs a word its price must reach
+    claim: str          # one of CLAIMS
+    what: str
+
+
+CLAIMS = {"pi32": "(π₃₂): every root-writing kind at ≥ 32 MACs a word",
+          "loads16": "PRICES-32's load half: every load into registers at ≥ 16 MACs a word"}
+
+
+@dataclass(frozen=True)
 class Vector:
     name: str
     epoch: str
@@ -135,6 +148,12 @@ def census(m: Model, epoch: str, data: Path = DATA) -> Census:
 def measured_cost(c: Census) -> dict[str, float]:
     """An instruction class's measured cost: its time alone, the largest of its rows."""
     return {k: max(v.values()) for k, v in c.items()}
+
+
+def floors(data: Path = DATA) -> list[Floor]:
+    """The per-word price floors the claims read (`data/floors.csv`): PRICES-32 is (π₃₂) and its load half together."""
+    with open(data / "floors.csv", newline="") as f:
+        return [Floor(d["kind"], int(d["words"]), float(d["floor"]), d["claim"], d["what"]) for d in csv.DictReader(f)]
 
 
 def all_attacks(data: Path = DATA) -> list[Attack]:
