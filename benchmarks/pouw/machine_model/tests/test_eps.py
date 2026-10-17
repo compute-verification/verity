@@ -502,7 +502,7 @@ def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
     H200 JI90_0 charges a uniform instruction 0.96, which closes it. At L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit
     spacing's cost."""
     sm90, sm100 = DEVICES / "sm_90", DEVICES / "sm_100"
-    duo = [n for n in E.designs(sm90) if "-li-" not in n]
+    duo = [n for n in E.designs(sm90) if "-li" not in n]
     assert duo == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
     p90 = E.machine("", sm90)
     s = E.setup(E.design("dither-2s-l32", sm90), p90, sm90, "floor", "floor")
