@@ -70,6 +70,7 @@ import Proofs.Flock.Claims.KS.ZkTrimW
 import Proofs.Flock.Claims.KS.ZkSimW
 import Proofs.Flock.Claims.KS.ZkAbortR
 import Proofs.Flock.Claims.KS.ZkAbortJR
+import Proofs.Flock.Claims.KS.ZkClashRaw
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -347,4 +348,8 @@ so the chain holds from every table's bound counted per round (`Claims.Recursion
 `Claims.Recursion.oneWaitAbort_of_tableBoundJR`, `Claims.Recursion.KSAbort_of_tableBoundJOnAccR`), and the masked
 record the claims read meets `Inner.KSAbort`, and the recursion's KS over it holds, from that bound alone
 (`FlockDeploy.KS.zk_KSAbortJR`, `FlockDeploy.KS.zk_KSFlockJR`), so from a simulator of each prover
-(`FlockDeploy.KS.zk_KSAbort_of_simWJ_tables`, `FlockDeploy.KS.zk_KSFlock_of_simWJ_tables`). -/
+(`FlockDeploy.KS.zk_KSAbort_of_simWJ_tables`, `FlockDeploy.KS.zk_KSFlock_of_simWJ_tables`). `ZkSimWJ`'s
+self-clash clause follows from a live self-clash giving an accepting run whose reps open two different columns at one
+position of some table, or a collision: each such column is a level-0 opening in the run's own log (`ZkClashRaw`:
+`FlockDeploy.KS.zkRawColsJ`, `FlockDeploy.KS.zk_openingJ_raw`, `FlockDeploy.KS.zk_selfClash_tiedJ`,
+`FlockDeploy.KS.ZkRawClashRun`, `FlockDeploy.KS.zkClashRun_of_raw`). -/
