@@ -80,14 +80,6 @@ theorem budget_tail {Ω : Type} [Fintype Ω] {S : ℕ} (g : RoundGame Ω S) (Λ 
     prob (fun x => g.accepts x ∧ Λ * t ≤ g.deficiency x) ≤ Real.exp (-t) := by
   sorry
 
-/-- The union bound: `Pr[A ∨ B] ≤ Pr[A] + Pr[B]`. -/
-theorem prob_or_le {Ω : Type} [Fintype Ω] (A B : Ω → Prop) : prob (fun x => A x ∨ B x) ≤ prob A + prob B := by
-  sorry
-
-/-- Monotonicity: an event inside another has no larger probability. -/
-theorem prob_mono {Ω : Type} [Fintype Ω] (A B : Ω → Prop) (h : ∀ x, A x → B x) : prob A ≤ prob B := by
-  sorry
-
 end Lemmas
 
 /-- Lemma 1. -/
