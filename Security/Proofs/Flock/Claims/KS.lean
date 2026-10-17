@@ -58,6 +58,7 @@ import Proofs.Flock.Claims.KS.ZkOffSC
 import Proofs.Flock.Claims.KS.ZkEntries
 import Proofs.Flock.Claims.KS.ZkDecodeW
 import Proofs.Flock.Claims.KS.ZkEvent
+import Proofs.Flock.Claims.KS.ZkFirst
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -262,4 +263,8 @@ the deployed decoders are right at that verdict on those outcomes, at a masked s
 (`FlockDeploy.KS.OkOffWJ`, `FlockDeploy.KS.AccTxJ`, `FlockDeploy.KS.decodesTableW_zkTabs`,
 `FlockDeploy.KS.decodesTableHW_zkTabs`, `FlockDeploy.KS.decodesTableW_deploy`). On an accepting deployed masked run, the
 event of no column of table `j` off `C` gives that verdict at the run's live outcome (`ZkEvent`:
-`FlockDeploy.KS.cols_zk`, `FlockDeploy.KS.accTxJ_of_run`). -/
+`FlockDeploy.KS.cols_zk`, `FlockDeploy.KS.accTxJ_of_run`), with no premise on the record's draw, so a simulation of
+the deployed masked prover by a live prover on coins of uniform law gives the masked mixture's first bound at that
+verdict, and at the coins that merge each live coin with the rest of a deployed coin, a deployed event a live event
+implies bounds the mixture (`ZkFirst`: `FlockDeploy.KS.ZkSimRun`, `FlockDeploy.KS.ZkSim`, `FlockDeploy.KS.zkCoins`,
+`FlockDeploy.KS.zk_first_of_sim`, `FlockDeploy.KS.zk_first_of_run`, `FlockDeploy.KS.zkMix_le_of_run`). -/
