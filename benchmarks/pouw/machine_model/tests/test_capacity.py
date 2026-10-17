@@ -66,6 +66,7 @@ def test_parse_reads_each_term_as_its_constructor():
     assert w.n["ALU"] == pytest.approx(m * 8 + 0.15 + 0.01 * 4)
     assert w.n["IMAD"] == pytest.approx(m * 4 + 0.15 + 0.01 * 2 + 0.01)
     assert C.parse("xin13:0.8*2").n["ALU"] == pytest.approx(0.05 * 4 * 2)
+    assert C.parse("arx:0.8").n == pytest.approx({C.MMA: 0.05, "ALU": 0.05 * 4})
     with pytest.raises(SystemExit, match="can't read"):
         C.parse("duo")
 
