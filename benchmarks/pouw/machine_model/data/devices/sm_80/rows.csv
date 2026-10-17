@@ -1,0 +1,9 @@
+row,status,runs,description
+issue,measured,r20261017-072121-3924 r20261017-072600-1397 r20261017-073620-0273 r20261017-074340-2dc5 r20261017-075006-6dba r20261017-075541-3c04 r20261017-080529-ace2 r20261017-081119-98b5 r20261017-082003-7ae7,"1 warp instruction a SMSP-cycle, every kind (the best scalar issue: IADD3+FFMA alternating, 0.973 a SMSP-cycle)"
+M,measured,r20261017-072121-3924 r20261017-075006-6dba r20261017-075541-3c04 r20261017-080529-ace2 r20261017-081119-98b5 r20261017-082003-7ae7,"tensor pipe: each MMA kind alone, 4 / its least SMSP-cycles a MMA warp instructions/SM/clk + 2% (best of 2, 4 and 8 warps a SMSP and of 8, 32 and 64 MMAs a loop iteration, 8 accumulators a warp; the loop's 3 instructions included)"
+A,measured,r20261017-074340-2dc5,"ALU pipe: IADD3 and LOP3 + 2% (IADD3+LOP3 issue 0.506 a SMSP-cycle: one pipe)"
+I,measured,r20261017-074340-2dc5,"IMAD pipe: IMAD, FFMA and IDP.4A + 2% (IMAD+FFMA 0.522, IDP.4A+FFMA 0.523 a SMSP-cycle: one pipe on sm_80)"
+XU,measured,r20261017-074340-2dc5,"XU: POPC + 2%"
+SHFL,measured,r20261017-074340-2dc5,"SHFL.BFLY + 2%"
+LDSi,measured,r20261017-074340-2dc5,"LDS.32 + 2% (one warp a SM-cycle: 128 B/SM/clk)"
+JIM,joint,r20261017-072600-1397 r20261017-073620-0273 r20261017-074340-2dc5 r20261017-075006-6dba r20261017-075541-3c04 r20261017-080529-ace2 r20261017-081119-98b5 r20261017-082003-7ae7,"M1's issue facet: a(kind) #MMA + every other warp instruction 1 <= T SMSP-cycles, a the least (T - #other)/#MMA over every gated program that holds the kind's MMA (beside IADD3+FFMA, which issues 0.973 a SMSP-cycle alone, beside IADD3 and the other lanes, duo, alone); every coefficient x 0.98 (2% noise) / 1.0139 (decision 76: the most the search's latest extension, r20261017-082003-7ae7, moved a kind's least)"
