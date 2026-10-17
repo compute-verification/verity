@@ -43,7 +43,9 @@ every relation's fields `rel` and every hash `H`, the conjunction of Flock's cla
   the deployed relation it follows from the record's JSON and three premises on the honest masked run, each at every
   good case or run and every table of it (`FlockComplete.ZkTables.complete_json`), so `flock_zk_assembled_relation`
   takes those in its place: the masked prover's pieces return (`ProverRunsAt`), its rep proofs fit their shapes
-  (`RepShapedAt`) and, per rep, the masked Ligerito and the inner proof accept (`LgInnerAt`). At any other `rel` it stays a hypothesis, as at `deployPlain rel`.
+  (`RepShapedAt`) and, per rep, the masked Ligerito and the inner proof accept (`LgInnerAt`). Those three follow from
+  four premises on one rep of one table (`FlockComplete.ZkTables.complete_jsonT`: `RepShapedT`, `ProverRunsT`,
+  `LigeritoT`, `InnerT`). At any other `rel` it stays a hypothesis, as at `deployPlain rel`.
 -/
 
 namespace FlockDeploy.Assembled
