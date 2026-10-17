@@ -152,6 +152,18 @@ def test_positive_two_requests_engine_order_differs(tmp_path):
     assert res["oracle"]["requests"] == {U0: "r0", U1: "r1"} and res["oracle"]["snapshot_steps"] == [0]
 
 
+def test_a_kv_layers_slots_are_no_match_value(tmp_path):
+    d, vals = make_match(str(tmp_path))
+    bmap, committed = make_bmap(vals)
+    bmap["entries"].append({"identity": {"program_digest": "p" * 64, "request_id": "r0", "step": 0, "invocation": 0, "op_path": "model.layers.0.self_attn.qkv_proj",
+                                         "output_member": "slot_mapping", "element_range": [0, ROWS[U0]], "rank": 0}, "kind": "leaf",
+                            "name": "model.layers.0.self_attn.qkv_proj/slot_mapping", "element_offset": 0, "encoding": {"dtype": "int64", "shape": [ROWS[U0]]}})
+    committed[(0, "model.layers.0.self_attn.qkv_proj/slot_mapping")] = np.arange(ROWS[U0], dtype="<i8").tobytes()
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
+    assert res["mismatch_n"] == 0 and res["result"] is True and res["complete"], res
+    assert res["not_compared_by_family"] == {"hidden_stream": 2, "weights": 1}
+
+
 def test_relabel_across_op_paths_fails_named(tmp_path):
     """F-cb-02: qkv_proj never acquired, post_attention_layernorm/0's bytes emitted under qkv_proj's name."""
     d, vals = make_match(str(tmp_path))

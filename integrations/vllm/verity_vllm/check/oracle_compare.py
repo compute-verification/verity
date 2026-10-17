@@ -42,6 +42,9 @@ from verity_vllm.commit.opened import ORDINAL_SEP, OPENED_METHOD, OpenedReader, 
 SCHEMA = "verity-sweep/oracle-compare/v1"
 METHOD = "oracle-compare (Match capture of the same attempt: snapshots at the fold's instance output views + SampleEnd ids)"
 NO_ORACLE_FAMILY_PREFIXES = ("fa2.m1/", "fa3.m1/", "moe/")          # kernel-interior streams: no dispatcher-level value in the Match record
+#: members no Match value is: a tap's Call-interior value (query.norm_scales / router_softmax / vocab_range / scale_products MEMBER)
+#: and a KV layer's slots (acquire.sources.kv_slots_source.MEMBER), committed under the module the Match records an output of
+NO_ORACLE_MEMBERS = ("norm_scale", "router_softmax", "vocab_range", "scale_products", "slot_mapping")
 _ITEMSIZE = {"bfloat16": 2, "float16": 2, "float32": 4, "float64": 8, "int32": 4, "int64": 8, "int16": 2, "int8": 1, "uint8": 1, "bool": 1,
              "float8_e4m3fn": 1, "float8_e5m2": 1}
 _ROPE_MEMBER = {"0": "rope.q", "1": "rope.k"}
@@ -493,8 +496,8 @@ def _family_of(entry: dict) -> str:
     if entry.get("kind") == "registered-input" or ident.get("op_path") == "weights":
         return "weights"
     name = str(entry.get("name") or ident.get("op_path") or "")
-    if name.startswith(NO_ORACLE_FAMILY_PREFIXES) or str(ident.get("op_path", "")).startswith(NO_ORACLE_FAMILY_PREFIXES) or (m := ident.get("output_member")) == "norm_scale" or m == "router_softmax" or m == "vocab_range" or m == "scale_products":
-        return "hidden_stream"                                     # ... and a tap's Call-interior value (query.norm_scales / router_softmax / vocab_range / scale_products MEMBER): no Match value
+    if name.startswith(NO_ORACLE_FAMILY_PREFIXES) or str(ident.get("op_path", "")).startswith(NO_ORACLE_FAMILY_PREFIXES) or ident.get("output_member") in NO_ORACLE_MEMBERS:
+        return "hidden_stream"                                     # ... and a tap's Call-interior value or a KV layer's slots: no Match value
     if ident.get("output_member") == "sampled_token_ids":
         return "sampled_token_ids"
     if ident.get("output_member") == "in":
