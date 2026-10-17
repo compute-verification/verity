@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from verity_machine_model.eps import design, designs
+from verity_machine_model.eps import design, designs, eps, machine
 from verity_machine_model.model import device, devices
 
 spec = importlib.util.spec_from_file_location("pouw_eps_budget", Path(__file__).parents[1] / "eps_budget.py")
@@ -130,6 +131,28 @@ def test_every_family_keeps_a_design_under_one_percent_and_the_b200_li_2s_is_at_
     assert E.design_skip(li, data=sm100).eps_time == pytest.approx(0.010050, abs=1e-5)
     chk = E.floor_eps("llama-3.1-8b", 2048, "prefill", li, checked=True, data=sm100)[0]
     assert chk == pytest.approx(0.00833, abs=1e-5)
+
+
+def test_the_b200s_filled_li_design_is_under_one_percent_with_the_operands_free():
+    """Decision 89's reading (operands free, q* = 1.22, D3's ε_skip): the free-operand cheater skips LI's 8
+    tcgen05.ld.x128 a MMA, 8 of ♭'s 1033 issue cycles at every q* (the lane and uniform routes write no word), beside
+    its ε_skip of 1.005%. ¾ verified lane instruction a word adds 768 to ♭ and to the cheater, diluting both terms over
+    one B_♭, and vfold's sums (#2300) cost 0.7265 an entry against vsum's 35/32: core 0.927% at γ 3.90 (EPS1 DC r6)."""
+    sm100 = device("sm_100")
+    pi = machine("", sm100)
+    li, fill = design("dither-2s-li-l32", sm100), design("dither-2s-li-fill-l32", sm100)
+    assert (li.sums, fill.sums, fill.noise, fill.honest) == ("vsum", "vfold", li.noise, li.honest)
+    bare = eps(li, pi, 1.22, sm100, operands="free", credit="floor")
+    assert bare.machine_eps == pytest.approx(8 / 1033, abs=1e-9) and bare.core() > 1e-2
+    e = eps(fill, pi, 1.22, sm100, operands="free", credit="floor")
+    assert e.machine_eps == pytest.approx(8 / 1801, abs=1e-9) and e.skip == pytest.approx(0.00483, abs=5e-6)
+    assert e.core() == pytest.approx(0.00927, abs=1e-5) and e.gamma == pytest.approx(3.900, abs=1e-3)
+    assert E.prices(fill.name, sm100).mma == pytest.approx(1801 / 256, abs=1e-9)
+    m = "llama-3.1-8b"
+    _, vfold, _ = E.floor_skip(m, 2048, fill, data=sm100)
+    _, vsum, _ = E.floor_skip(m, 2048, replace(fill, sums="vsum"), data=sm100)
+    kv_d = E.MODELS[m].kv * E.MODELS[m].d
+    assert vsum["P·V"] - vfold["P·V"] == pytest.approx((E.RATES["c_vsum"] - E.RATES["c_vfold"]) * kv_d)
 
 
 def test_h1_under_the_floor_credit_is_specs_table(monkeypatch):
