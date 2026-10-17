@@ -21,6 +21,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
             "cb": ("all", "int8-all", True), "co32c": ("all", "int8-all", True)}
     for b in (2, 3, 4):
         want[f"adopted-bd-lm-d{b}"] = want[f"co32c-d{b}"] = ("all", "int8-all", True)
+    want["adopted-bd-lm-d2-linears"] = want["adopted-bd-lm-d2-qk"] = ("all", "int8-all", True)
     for g in ("fp4c", "fp4", "int5"):
         for m in ("dither", "round"):
             want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
@@ -132,6 +133,9 @@ def test_the_dither_arms_widen_only_the_coins():
             unwiden = lambda steps: [(s.defn.name, {k: v for k, v in s.kw.items() if k not in ("dither_bits", "qk_bits")},  # noqa: E731
                                       s.linears) for s in steps]
             assert unwiden(d.linear) == unwiden(a.linear) and unwiden(d.attention) == unwiden(a.attention)
+    d2, lin, qk = (spec.load(f"adopted-bd-lm-d2{x}") for x in ("", "-linears", "-qk"))
+    assert lin.linear == d2.linear and lin.attention == spec.load("adopted-bd-lm").attention
+    assert qk.attention == d2.attention and qk.linear == spec.load("adopted-bd-lm").linear
 
 
 @pytest.mark.parametrize("b", [1, 2, 3, 4])

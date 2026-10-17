@@ -1,0 +1,45 @@
+description = "adopted-bd-lm-d2 with the 2-bit coins on the linears and lm_head only (scales absmax / 125); Q, K and V keep their bits: where the 2-bit cost sits"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+dither_bits = 2
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+dither_bits = 2
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64
