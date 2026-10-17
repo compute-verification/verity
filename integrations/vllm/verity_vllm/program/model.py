@@ -30,7 +30,7 @@ import numpy as np
 
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry.prims import BF16
-from verity.ml.circuits.types import Array, Record
+from verity.ml.circuits.types import Array, Record, Value
 
 COS_SIN_MAX_ULP = 1     # gate I9 (frozen with gates.py; change only through an approved decision)
 
@@ -310,7 +310,23 @@ def dense_layer_weights_type(C: dict[str, Any]) -> Record:
         i = names.index("qkv_b") if "qkv_b" in names else names.index("qkv_w")
         fields[i + 1:i + 1] = [("q_norm", Array(C["D"], BF16)), ("k_norm", Array(C["D"], BF16))]
     G = int(C.get("FP8_BLOCK") or 0)
+    if C.get("INT8_EXACT"):
+        fields = _int8_fields(fields)
     return Record(*(_fp8_fields(fields, G, G) if G else fields))
+
+
+def _int8_fields(fields: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
+    """A dense layer's fields under the exact-int8 checkpoint (`INT8_EXACT_QUANT`): each linear of `FP8_LINEAR_FIELDS` is s8 `[N][K]`
+    (`Value<8>`, the stored bytes) followed by its f32 per-row scale `[N][1]` (`weight_scale`, the checkpoint's and vLLM's shape)."""
+    from verity_vllm.program.registry.prims import F32
+    scale_of = dict(FP8_LINEAR_FIELDS)
+    out: list[tuple[str, Any]] = []
+    for n, t in fields:
+        if n in scale_of:
+            out += [(n, Array(t.n, Array(t.elem.n, Value(8)))), (scale_of[n], Array(t.n, Array(1, F32)))]
+        else:
+            out.append((n, t))
+    return out
 
 
 def weights_type(C: dict[str, Any]) -> Record:
@@ -326,7 +342,7 @@ def weights_type(C: dict[str, Any]) -> Record:
     takes `moe_layer_weights_type(C)`, which states both itself."""
     base = b1.weights_type(C)
     fields = list(base.fields)
-    if not C.get("NUM_EXPERTS") and (C.get("QK_NORM") == "head" or C.get("FP8_BLOCK")):
+    if not C.get("NUM_EXPERTS") and (C.get("QK_NORM") == "head" or C.get("FP8_BLOCK") or C.get("INT8_EXACT")):
         fields = [(n, Array(C["NL"], dense_layer_weights_type(C))) if n == "layers" else (n, t) for n, t in fields]
     if C.get("NORM") == "layernorm":
         fields = [(n, Array(C["NL"], layernorm_layer_weights_type(C))) if n == "layers" else (n, t) for n, t in fields]

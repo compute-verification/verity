@@ -60,6 +60,12 @@ class Vocabulary:
         return d
 
 
+def _int8():
+    """`registry.int8_exact`, loaded on a profile's first int8 kind (it builds the s8 family's circuits)."""
+    from verity_vllm.program.registry import int8_exact
+    return int8_exact
+
+
 def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
     """Off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11): without
     `FA2_MASKED_FROM` the kind does not bind (`Vocabulary.kind`)."""
@@ -407,8 +413,17 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
-           "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N)},
+           "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N),
+           # the exact-int8 profile (`TargetProfile.int8_exact`, `engine.int8_ops`): `rules/vllm_bindings/int8.py` asks for them
+           "int8_linear": lambda K, N: ir_bind(_int8().Int8Linear, K=K, N=N),
+           "int8_attention": lambda N, S, H, G, D, SCALE: ir_bind(_int8().Int8LutAttentionWindow, N=N, S=S, H=H, G=G, D=D, SCALE=SCALE)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
+           "int8_linear": "Int8Linear_v1{K,N}: verity_int8::linear on one bf16 token row -> (x_q s8[K], s_a f32, y bf16[N]): s_a = "
+                          "RN32(max(amax, RN32(1e-30))/127), x_q = clamp(rint(RN32(x/s_a)), ±127), the s8 dot (S8Dot_v2), "
+                          "y = bf16(RN32(RN32(f32(acc)·s_a)·s_w)); W s8 [N,K] + s_w f32 [N] Inputs (registry.int8_exact)",
+           "int8_attention": "Int8LutAttentionWindow_v1{N,S,H,G,D,SCALE}: one request's int8 LUT-softmax window (verity_int8::window_attention) "
+                             "-- its N query rows over its S keys, Q per row and KV group, K under the layer's K scales (Const32 per KV head), "
+                             "V per channel over the window, fattn's uint32 A and 256-entry exp2 LUT (registry.int8_exact)",
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
            "token_select_stochastic": "GumbelTopPTokenSelect_v1{V}(logits bf16[V], top_p f32, seed i64, pos i64, temp f32, splits i32) -> i32: f32 "
