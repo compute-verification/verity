@@ -24,6 +24,7 @@ uv run machine-model eps --table --upfill --credit floor --q 2.16 --lookups   # 
 uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
 uv run machine-model eps --table --upfill --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
 uv run machine-model eps --device sm89 --table --credit floor --operands floor   # the L40S: Dither-1S/2S/C at L = 16, 32
+uv run machine-model eps --device sm100 --table --credit floor --operands floor   # the B200 at L = 32 to 256
 ~~~
 
 | Path | What |
@@ -31,10 +32,9 @@ uv run machine-model eps --device sm89 --table --credit floor --operands floor  
 | `data/model.toml` | The constants (R*, the honest kernel's u a MAC, at 600 W too), the LP's ρ, tie and x_min, the honest GEMM, the CUDA kinds, the adopted design and the epochs in order |
 | `data/rows.csv` | One line per row of the machine (a pipe, a port, a ceiling or a joint vertex): its status (`measured`, `ASSUMED`, `provisional`, `joint`), the runs or notes it rests on, and what it is |
 | `data/census.csv` | One line per instruction class on a row: its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, `until`) and its runs |
-| `data/devices/SM/` | Another family's `census.csv` and `rows.csv` in the same schema (`sm_90` H200, `sm_100` B200; written by `dc/census.py`); no epoch reads them, `rows(DIR)` and `entries(m, DIR)` do |
 | `data/vectors/NAME.toml` | A named vector: its epoch, the rows and credits it uses in LP order, its note, and the numbers it was published with |
 | `data/attacks/FAMILY.jsonl` | An attack family: one program a line, its design, and the epochs it holds |
-| `data/devices/sm_NN/` | Another device's data ("Devices" below): `sm_89`, the L40S, from EPS1 ADA |
+| `data/devices/sm_NN/` | Another device's data ("Devices" below): `sm_89`, the L40S, from EPS1 ADA; `sm_90`, the H200, and `sm_100`, the B200, from EPS1 DC (`dc/census.py` writes their census) |
 | `data/floors.csv` | What the claims read: each root-writing kind at 32 MACs a word ((π₃₂)), each load into registers at 16 (PRICES-32's load half) and each copy route at 16 (π_c ≥ 16, `copy16`: every kind that writes registers, a UR word at the 32 lanes it serves), with the words a warp instruction of it writes |
 | `verity_machine_model/lp.py` | The LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ), as the legacy `rs-price-99.py` `solve` computes it |
 | `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, what is under its floor, and a claim's kinds priced a word beside their measured cost |
@@ -184,3 +184,12 @@ duo's fold, 19.07 and 22.93 SMSP-cycles a MMA. Its clock is f_max = 2,520 MHz, w
 1,585 MHz at L = 32 under the enforced 325 W cap. Its operand floors are SPEC §3.4's register count applied to each
 form: 1/94 and 7/72 a MMA for m16n8k16, 1/39 and 0.20 for m16n8k32. ε_skip at L = 16 scales L = 32's strips by their
 widths. `eps --table` prints γ_f, γ with the clock gap f_max/f_H.
+
+The H200 and B200 (`data/devices/sm_90/` and `sm_100/`, note:20261017T0452Z-draft-eps1-dc) price the same three designs
+at L = 32, 64, 128 and 256 on model honest profiles: one IGMMA.64x256x32 (4096 words a warp) or UTCIMMA.128x256x32
+(32768 words), then duo on every committed word. Neither has a measured honest kernel or f_H yet, so γ is the model's
+and ε_clock is 0. Both read their operands from shared memory by descriptor, so the operand floor is no instruction for
+every noise. The B200's accumulator is in TMEM, so its floor is the tcgen05.ld.32x32b.x32 that bring each committed word
+to registers, 1024/L a MMA. Honest's profile counts that load in its fold, and the design's fold leaves it out, so a
+word written on lanes doesn't pay it. The baseline is dp4a on IMAD's class, as on sm_120, with its loads unpriced (the
+census has no IDP4A or LDS kind).
