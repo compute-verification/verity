@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.VStarParts
+import Proofs.Flock.VBridge.Family.Openings
 import Proofs.Flock.VBridge.OpeningUnit
 import Proofs.Flock.VBridge.Sparse.Laid
 import Proofs.Flock.VBridge.Sparse.Unit
@@ -34,9 +35,10 @@ The rest:
   (`PartColl`: two of the part's recorded calls collide), so a part may be of a different kind at different compiled
   statements. `PartLinks s` has the goal the inner check `chk s`; `LogLinks s` has the goal that the calls the inner
   check makes (`logs s`) are among the part's recorded calls, which at a rec-open part are the climb's.
-* **The input tie off the columns** (`resAt_of_reads`, `sparseAt_of_reads`): a copy's input columns hold the elements
-  they read (`inCols_readElems`, `sparseIn_reads` where no types are stacked, `T_LOG = 0` as in scope), so the input tie
-  is left only in the output tie's premise.
+* **The input tie off the columns** (`climbAt_of_reads`, `resAt_of_reads`, `sparseAt_of_reads`): a copy's input
+  columns hold the values they read (`openIns_reads`: the row, siblings, running sums, coefficients and position;
+  `inCols_readElems`; `sparseIn_reads` where no types are stacked, `T_LOG = 0` as in scope), so the input tie is left
+  only in the output tie's premise, at every unit.
 * **`PartChecks` and `PartLogs` at every part** (`goal_of_links`; `partChecks_of_links`, `partLogs_of_links`):
   `PartLinks s` gives `PartChecks s` and `LogLinks s` gives `PartLogs s`, the goal where the part's calls don't collide.
   M's dense-shape links, whose output ties give the inner check outright, give `PartLinks` (`partLinks_of_resLinks`,
@@ -296,6 +298,53 @@ theorem sparseIn_reads (sh : Flock.RecSparse.Shape) (hst : sh.stacked = false) (
   · exact (ofFn_readElems e).trans (readElems_ge he)
   · exact (ofFn_readElems e).trans (readElems_ge he)
 
+/-! ## A rec-open copy's inputs off its columns -/
+
+section OpenReads
+
+open FlockVBridge.Family (elems bytesAt natOfBits)
+
+/-- The row a rec-open copy's columns `v` hold: `LANES` elements from column 0. -/
+noncomputable def openRow (v : ℕ → Bool) (LANES : ℕ) : Array Flock.F128 := elems v 0 LANES
+
+/-- The `H` 64-byte siblings a rec-open copy's columns `v` hold, sibling `i` from column `128 LANES + 512 i`. -/
+def openSibs (v : ℕ → Bool) (LANES H : ℕ) : List ByteArray :=
+  (List.range H).map fun i => bytesAt v (128 * LANES + 512 * i) 64
+
+/-- The running sums a rec-open copy's columns `v` hold: two elements past the siblings' columns. -/
+noncomputable def openAcc (v : ℕ → Bool) (LANES H : ℕ) : Array Flock.F128 :=
+  elems v (128 * LANES + 1024 * max 1 ((H + 1) / 2)) 2
+
+/-- The 96 bytes a rec-open copy's columns `v` hold after the running sums. -/
+def openRest (v : ℕ → Bool) (LANES H : ℕ) : ByteArray :=
+  bytesAt v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 256) 96
+
+/-- The `2 LANES` coefficients a rec-open copy's columns `v` hold. -/
+noncomputable def openCoefs (v : ℕ → Bool) (LANES H : ℕ) : Array Flock.F128 :=
+  elems v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024) (2 * LANES)
+
+/-- The position whose low `H` bits a rec-open copy's columns `v` hold. -/
+def openIdx (v : ℕ → Bool) (LANES H : ℕ) : ℕ :=
+  natOfBits (fun h => v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + h)) H
+
+/-- **A rec-open copy's input columns hold what they read**: any columns `v` hold `openRow`, `openSibs`, `openAcc`
+and `openRest`, `openCoefs` and `openIdx`'s low bits at `OpenIns`' offsets. -/
+theorem openIns_reads (v : ℕ → Bool) (LANES H : ℕ) :
+    OpenIns v LANES H (openRow v LANES) (openAcc v LANES H) (openCoefs v LANES H) (openRest v LANES H)
+      (openIdx v LANES H) (openSibs v LANES H) := by
+  refine ⟨FlockVBridge.Family.size_elems _ _ _, FlockVBridge.Family.size_elems _ _ _,
+    FlockVBridge.Family.size_elems _ _ _, FlockVBridge.Family.size_bytesAt _ _ _, by simp [openSibs],
+    FlockVBridge.Family.colsHold_elems _ _ _, fun i hi => ?_, ?_, FlockVBridge.Family.colsHold_elems _ _ _,
+    fun h hh => ?_⟩
+  · simp only [openSibs, List.getElem_map, List.getElem_range]
+    exact ⟨FlockVBridge.Family.size_bytesAt _ _ _, FlockVBridge.Family.colsHold_bytesAt _ _ _⟩
+  · refine FlockVBridge.Family.colsHold_append (FlockVBridge.Family.colsHold_elems _ _ _) ?_
+    rw [FlockVBridge.size_rowBytes, show (openAcc v LANES H).size = 2 from FlockVBridge.Family.size_elems _ _ _]
+    exact FlockVBridge.Family.colsHold_bytesAt _ _ _
+  · simp [openIdx, FlockVBridge.Family.testBit_natOfBits, hh]
+
+end OpenReads
+
 end Templates
 
 end Flock.Readable
@@ -493,6 +542,34 @@ theorem resAt_of_reads {decode : Msg → Option Flock.Readable.Read} {L : Layout
       Flock.Readable.vRead ns nv (Flock.Readable.copyOf p t htl w o g u),
       fun _ he => Flock.Readable.readElems_ge he, fun _ he => Flock.Readable.readElems_ge he,
       Flock.Readable.inCols_readElems ns nv _, hout w ms hms⟩⟩
+
+/-- **A rec-open part's links, read off the copy's columns**: `ClimbAt` with the input tie's row, siblings, running
+sums, coefficients and position those the named copy's columns hold (`openIns_reads`), under the hm96-sha512 scheme,
+whose nodes are SHA-512's. What is left of the input tie sits in the output tie's premise. -/
+theorem climbAt_of_reads {decode : Msg → Option Flock.Readable.Read} {L : Layout} {s : ℕ} {x xO : Msg}
+    {G : Flock.Wit → List Msg → Prop} {p : Flock.Readable.Parsed} (hx : Flock.Readable.parseBytes decode xO = some p)
+    (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size) {LANES Ht : ℕ}
+    (hp : _root_.Flock.RecOpen.params p.sts[t].c.unit.name = some (LANES, Ht) ∨
+      _root_.Flock.RecOpen.stackedParams p.sts[t].c.unit.name = some (LANES, Ht)) {o g u : ℕ}
+    (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv)
+    (hout : ∀ (w : Flock.Wit) (ms : List Msg), (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
+      Flock.Readable.OpenOuts (Flock.Readable.copyOf p t htl w o g u) _root_.Flock.MerkleScheme.hm96Sha512 LANES Ht
+        (Flock.Readable.openRow (Flock.Readable.copyOf p t htl w o g u) LANES)
+        (Flock.Readable.openAcc (Flock.Readable.copyOf p t htl w o g u) LANES Ht)
+        (Flock.Readable.openCoefs (Flock.Readable.copyOf p t htl w o g u) LANES Ht)
+        (Flock.Readable.openRest (Flock.Readable.copyOf p t htl w o g u) LANES Ht)
+        (Flock.Readable.openIdx (Flock.Readable.copyOf p t htl w o g u) LANES Ht)
+        (Flock.Readable.openSibs (Flock.Readable.copyOf p t htl w o g u) LANES Ht) → G w ms) :
+    ClimbAt decode L s x xO G :=
+  ⟨p, hx, ht, hpi, t, htl, LANES, Ht, hp, o, g, u, ho, hg, hu, fun w ms hms =>
+    ⟨_root_.Flock.MerkleScheme.hm96Sha512,
+      Flock.Readable.openRow (Flock.Readable.copyOf p t htl w o g u) LANES,
+      Flock.Readable.openAcc (Flock.Readable.copyOf p t htl w o g u) LANES Ht,
+      Flock.Readable.openCoefs (Flock.Readable.copyOf p t htl w o g u) LANES Ht,
+      Flock.Readable.openRest (Flock.Readable.copyOf p t htl w o g u) LANES Ht,
+      Flock.Readable.openIdx (Flock.Readable.copyOf p t htl w o g u) LANES Ht,
+      Flock.Readable.openSibs (Flock.Readable.copyOf p t htl w o g u) LANES Ht, fun _ _ => rfl,
+      Flock.Readable.openIns_reads _ LANES Ht, hout w ms hms⟩⟩
 
 /-- **The sparse phase's links, read off the copy's columns**, at a shape that stacks no types (`T_LOG = 0`, as in
 scope): `SparseAt` with the input tie's elements those the named copy's columns hold (`sparseW`, `sparseV`;
