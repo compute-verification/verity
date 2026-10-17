@@ -81,8 +81,9 @@ with what they do to its table and weight, `Lg.HRuns`, composing by `Lg.HRuns.bi
 the model's own steps a challenge, `Lg.HRuns.challenge`, an out-of-domain intro, `Lg.HRuns.oodIntro`, and a level's
 query, `Lg.HRuns.query`; `LigeritoHonest`: the claim and the weight kept through the model's steps, `Lg.sync_close`,
 `Lg.WOK`, `Lg.wok_level`, the challenge loops, `Lg.HRuns.initChals`, `Lg.HRuns.levelChals`, and the prover between
-levels, `Lg.Mid`, kept by an inner level's step, `Lg.mid_stepN`), and the prover's pieces (`RepRounds`: a returning rep
-records a round, each of at most `65536` coins, `repP_repOk`, every squeeze of the models being few coins, `Bnd`;
-`ProverOk`: the case's table has a registered scheme and at most 1,024 regions, `Case.schemeOk`, so at an oracle of
-64-byte outputs its digests have the scheme's width, `opsWith_widths`, `schemeWidths`, its level-0 cap is non-empty and
-under `2^64` bytes, `commitP_cap`, and `ProverOk` holds, `proverOk`). -/
+levels, `Lg.Mid`, reached after level 0, `Lg.mid_lv0`, kept by an inner level's step, `Lg.mid_stepN`, from which the
+last level meets the final identity, `Lg.goal_last`), and the prover's pieces (`RepRounds`: a returning rep records a
+round, each of at most `65536` coins, `repP_repOk`, every squeeze of the models being few coins, `Bnd`; `ProverOk`: the
+case's table has a registered scheme and at most 1,024 regions, `Case.schemeOk`, so at an oracle of 64-byte outputs its
+digests have the scheme's width, `opsWith_widths`, `schemeWidths`, its level-0 cap is non-empty and under `2^64` bytes,
+`commitP_cap`, and `ProverOk` holds, `proverOk`). -/
