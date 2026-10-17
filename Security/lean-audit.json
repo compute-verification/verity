@@ -889,7 +889,9 @@
   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
@@ -8062,7 +8064,7 @@
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
-    "Claims.Recursion.Bits": "8a8dd1e63c47b45cbb5c955be2e52c2582b083746395eb3d806a8d5b53b4b21e",
+    "Claims.Recursion.Bits": "26c98570c70857c8d120a470160d224c44737d3708df5a814b5ec97aeefc4708",
     "Claims.Recursion.BitsFlock": "10b5e68b72d96c35d7caec8c60b0459ae053a8b0a70dce72e0dae151207ee88c",
     "Claims.Recursion.Complete": "a6223a2a373f68d1584ef13fa42275adf9f4230120ffb2ad4e98ffc1d1bfe309",
     "Claims.Recursion.Deploy": "f2836b45e8a781fc806f3cd8499ffcff8c4318273243a8ade5fddbe1779cd10a",
@@ -8122,9 +8124,9 @@
     "Claims.Recursion.Inner.waits": "63c050b6b3f26c6a079b70b64536aa7cd895d7dc95f544e9fe4d79e8f386db82",
     "Claims.Recursion.Inner.γ": "7bd3c240361fc3143125ac501ac67173d0e3fbf912e0f8e5937ab5c5caccbb1b",
     "Claims.Recursion.Inner.κ": "8724a4a0cc99567c32a2e0e4de422fb97b002c657ad75ae5d63e08e11f0b8977",
-    "Claims.Recursion.KS": "b13703cf55a8b9959c393cdd5374d40fc468d10bf96f6081db37e9a00c952be1",
+    "Claims.Recursion.KS": "05140a1c1c91db19d12aad4c50de9db823fc891d3644a2d21e18f112d36b1b41",
     "Claims.Recursion.KSFlock": "a74e351886ff9ffb4fb1ac7964323fc0cfcb3c48a9b6647142dedcbab376b727",
-    "Claims.Recursion.KSPriv": "649729e7db98a5f859040492bea461b2c6a7c4445eab04523905a2549c35122a",
+    "Claims.Recursion.KSPriv": "6ac1e9ee33d4fcdca26b1472607508eef84beaa01ad8d6a6f72e749bf73c4947",
     "Claims.Recursion.NI": "334246b6e9ef4802ecd06c2db3aae3a494077be7e57915e2dffa67f1e25133ef",
     "Claims.Recursion.Nontrivial": "8254008bbfe450d7f4237a68ccea9f9c212e6da8e88ac858f451dd2a6cf8d5df",
     "Claims.Recursion.Nums": "4ca40866293e472589b75de5ef556de799b5818fd7e885ac0f246bdf40b31879",
@@ -8197,7 +8199,13 @@
     "Claims.Recursion.ZkDeploy.restFin": "5f6c78e688d49230a975cc6004bb8cbb7d29bb94478ecde678c959f827631169",
     "Claims.Recursion.ZkDeploy.tapeOf": "9561c063183c2f907b63ca6f7e88f3bc895bc39a75d80dcdc38c17eb269c7af4",
     "Claims.Recursion.ZkDeploy.toDeploy": "0a08a77f61c1304972024afb6affee8330e39a852acec059d8de99745e7f34c9",
-    "Claims.Recursion.Deploy.δc": "d3324917fe92b12365c5404e83fa503e2e0c9860d36d9723dbfdf3fb864cfde2"
+    "Claims.Recursion.Deploy.δc": "d3324917fe92b12365c5404e83fa503e2e0c9860d36d9723dbfdf3fb864cfde2",
+    "Claims.Recursion.Br": "55d227ee78f6203b646ef60f2221f0a6db3eea9e325ac4d8f98ee177be0dc644",
+    "Claims.Recursion.Deploy.setup": "79624cd866ef117a67d503ca9bd5500d9f76c0bce7c2e89945a80ae437d5c7a1",
+    "Claims.Recursion.PrBr": "0a3173b22b5b2550b434624857782b9eebd38bd080a66b033a2bcc420ed2232f",
+    "Claims.Recursion.findCollIn": "4d554a9db01983b7415fe6c1f7103026dbbe90107a5378088ab7f58e522f612a",
+    "Claims.Recursion.runStmts": "c76caedc558cd62cf7aa8defc53ee3d4bf945dd06dfbbf2004e9529d43940818",
+    "Claims.Recursion.setupCalls": "4d4b89edf5bd5b9d8efdb4357061c4441a538543a8ad2281cb877f4d1ebfd87b"
    },
    "guarantees": [
     "Claims.Witness.Recursion.BitsFlock_fails",
