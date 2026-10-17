@@ -21,6 +21,7 @@ import Proofs.Flock.Claims.Complete.Replay.RepRounds
 import Proofs.Flock.Claims.Complete.Replay.ProverOk
 import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
 import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
+import Proofs.Flock.Claims.Complete.Replay.RsSum
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`, `Agrees`),
@@ -61,7 +62,10 @@ basis, `repP_lig`, so `LgFinal` holds at every rep the walk runs on the trace's 
 honest Ligerito's final identity, `Lg.Honest`, ring switching's claim on the packed table, `RsSum`, and the verifier's
 basis as the batched basis's extension, `BasisOk`, `lgFinal_of`; `LigeritoBasis`: every claim a rep opens has `m − 6`
 coordinates, `claims_xsize`, so the verifier's basis is the extension of the prover's batched basis on the cube,
-`Lg.fOf_basisVals`, `Lg.basis_bHat`, and `BasisOk` holds at the deployed relation, `basisOk_relation`), and the prover's
+`Lg.fOf_basisVals`, `Lg.basis_bHat`, and `BasisOk` holds at the deployed relation, `basisOk_relation`; `RsSum`: the
+packed table packs the trace's bits, `Rs.fOf_packed`, so each `β_k` recombines the claim's honest `ŝ_k`,
+`Rs.switchVec_shat`, to the packed table against its basis term, and `RsSum` holds at the deployed relation,
+`Rs.T_packed`, `rsSum_relation`), and the prover's
 pieces (`RepRounds`: a returning rep records a round, each of at most `65536` coins, `repP_repOk`, every squeeze of the
 models being few coins, `Bnd`; `ProverOk`: the case's table has a registered scheme and at most 1,024 regions,
 `Case.schemeOk`, so at an oracle of 64-byte outputs its digests have the scheme's width, `opsWith_widths`,

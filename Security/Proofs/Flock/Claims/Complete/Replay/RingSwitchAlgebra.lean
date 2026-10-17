@@ -216,15 +216,11 @@ theorem eval_congr {m : ℕ} (c c' : Model.Claim 𝔽 m) (hs : ∀ s, c.skip s =
   unfold Model.Claim.eval
   rw [funext hs, funext hx]
 
-/-- **The honest `ŝ` of a claim**, on a trace whose bits are the witness's, has the claim's evaluation as its packed
-weights' sum. -/
-theorem switch_eval {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6) (tr : Trace) (w : Model.Witness m)
+/-- **The honest `ŝ` of a claim** is the model's honest message on the trace's bits: `s[v] = ŝ[v]`. -/
+theorem switchVec_shat {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6) (tr : Trace) (w : Model.Witness m)
     (hz : ∀ a : Fin (2 ^ m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) :
-    fOf (dot (wOf c) (switchVec tr c)) = (Discharge.Composed.RingSwitch.claimOf m c).eval w := by
-  show fOf (Zk.claimCheck c (switchVec tr c)) = _
-  rw [Discharge.Composed.RingSwitch.fOf_claimCheck hm c, claim_eval_eq hm]
-  refine Finset.sum_congr rfl fun v _ => ?_
-  congr 1
+    vecOf 128 (switchVec tr c) = shat hm (Discharge.Composed.RingSwitch.claimOf m c) w := by
+  funext v
   have hsz : (c.x.extract 1 c.x.size).size = m - 7 := by
     rw [Array.size_extract, Nat.min_self, hx]
     omega
@@ -251,6 +247,17 @@ theorem switch_eval {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6)
   · rw [ite_eq_right Bool.false_ne_true, ite_eq_right Bool.false_ne_true, mul_zero]
     exact GF128.zero_eq.symm
   · rw [ite_eq_left rfl, ite_eq_left rfl, mul_one]
+
+/-- **The honest `ŝ` of a claim**, on a trace whose bits are the witness's, has the claim's evaluation as its packed
+weights' sum. -/
+theorem switch_eval {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6) (tr : Trace) (w : Model.Witness m)
+    (hz : ∀ a : Fin (2 ^ m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) :
+    fOf (dot (wOf c) (switchVec tr c)) = (Discharge.Composed.RingSwitch.claimOf m c).eval w := by
+  show fOf (Zk.claimCheck c (switchVec tr c)) = _
+  rw [Discharge.Composed.RingSwitch.fOf_claimCheck hm c, claim_eval_eq hm]
+  refine Finset.sum_congr rfl fun v _ => ?_
+  congr 1
+  exact congrFun (switchVec_shat hm c hx tr w hz) v
 
 /-- A claim whose evaluation is its value is met by its honest `ŝ`. -/
 theorem switch_of {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6) (tr : Trace) (w : Model.Witness m)
