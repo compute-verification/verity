@@ -14,7 +14,8 @@ Each of the sampling compiler's claims (`Definitions.Claims.Sampling`) fails at 
   `KS_fails`, `KSCount_fails` (at `t = 1`, whose miss is `0`), `Bits_fails` (there `λ > 0`).
 * `compSD`: the verifier rejects after one round, and every opening passes (`accCm`), so the opening of the input
   (`toyWit`) leaves no unit faulty. `Complete_fails`, `Nontrivial_fails`, `ZK_fails`
-  (`Sampling.ZKMal.not_samplingZK_collSim`), `Binding_fails` (two openings of different values at one position pass
+  (`Sampling.ZKMal.not_samplingZK_collSim`, at `Sampling.ZKMal.quietZD`, its masked deployment whose reference prover
+  is quiet and whose simulator collides), `Binding_fails` (two openings of different values at one position pass
   with no call), `Universal_fails` (its universal unit returns nothing).
 * `effSD`: its sessions' decoder counts one step, and nothing parses while the check takes everything.
   `Efficient_fails` at `p = 0`; `ScopeMatches_fails`.
@@ -23,9 +24,9 @@ Each of the sampling compiler's claims (`Definitions.Claims.Sampling`) fails at 
 `FaultyBoundary` is a theorem (`Claims.Sampling.faultyBoundary`), so it has no refutation. `BitsLin`, `KSLin` and the
 scoped `KSLinOn` are refuted through `Bits_fails`, `KS_fails` and `KSCount_fails`, whose proofs read each.
 
-Still met by a trivial instance, as Flock's: `ZK_vacuous` (a prover that ignores its witness, at every masked
-deployment, `ε_zk = 0` and `γ = 0`), since `ZK` reads the honest prover as a parameter where `Complete` reads the
-deployment's (`Sampling.Deploy.P`).
+`ZK` reads the masked deployment's own reference prover and simulator, as `Complete` reads the deployment's
+(`Sampling.Deploy.P`), so it is not met at every masked deployment (`ZK_vacuous_refuted`, at `zkSD`, `compSD` with a
+masked inner Flock).
 -/
 
 namespace Claims.Witness.Sampling
@@ -554,26 +555,22 @@ theorem Nontrivial_fails (H : Msg → Msg) :
     ¬ Claims.Sampling.Nontrivial H (compSD Coin) [⟨[], [], fun _ => default⟩] :=
   fun h => Witness.Nontrivial_fails H h.1
 
-/-- **The sampling `ZK` fails** at the colliding simulator, at `compSD`, the quiet prover, every `ε_zk < 1` and every
-`γ`. -/
-theorem ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (u v : Msg)
-    (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
-    ¬ Claims.Sampling.ZK H (compSD Coin) (fun _ => ZKMal.quietP N Ω []) (ZKMal.collSimLeak u v) εzk γ :=
-  ZKMal.not_samplingZK_collSim H (compSD Coin) u v εzk γ x toyWit
+/-- **The sampling `ZK` fails** at the colliding simulator, as the simulator of `compSD`'s masked deployment whose
+reference prover is quiet, at every `ε_zk < 1` and every `γ`. -/
+theorem ZK_fails (H : Msg → Msg) (u v : Msg) (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
+    ¬ Claims.Sampling.ZK H (ZKMal.quietZD (compSD Coin) u v) εzk γ :=
+  ZKMal.not_samplingZK_collSim H _ u v εzk γ x toyWit rfl rfl
     ⟨toyStmt, toyPart, rfl, rfl, by show faulty constH accCm toyStmt toyPart toyWit = ∅; rw [toy_faulty, toyWit_val]; rfl⟩ Nat.one_pos hε
 
-/-- The simulator given the leakage that runs the quiet prover against the verifier for `k x` rounds. -/
-def quietSimLeak (k : Msg → ℕ) : SimLeak where
-  C _ := Unit
-  prog x _ _ := ZKMal.spRun (fun _ => .ret []) (k x) []
+/-- `compSD` with a masked inner Flock (`ZKMal.toyD`, so one coin). -/
+noncomputable def zkSD : Deploy Unit Unit Unit := { compSD Unit with flock := ZKMal.toyD }
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The sampling `ZK` is met by a prover that ignores its witness**, at every masked deployment, `ε_zk = 0` and
-`γ = 0`. -/
-theorem ZK_vacuous {Col T N Ω : Type} [DecidableEq Col] [Zero Col] [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω]
-    (H : Msg → Msg) (D : Deploy Coin Col T) (hzk : D.flock.zk = true) :
-    Claims.Sampling.ZK H D (fun _ => ZKMal.quietP N Ω []) (quietSimLeak D.V.k) 0 0 :=
-  ⟨hzk, fun _ => ZKmalR_vacuous H D.V.k _⟩
+/-- **The sampling `ZK` is not met at every masked deployment**, at `ε_zk = 0` and `γ = 0`. -/
+theorem ZK_vacuous_refuted (H : Msg → Msg) :
+    ¬ ∀ D : ZkDeploy Unit Unit Unit, D.flock.zk = true → Claims.Sampling.ZK H D 0 0 :=
+  ZKMal.not_forall_samplingZK H zkSD rfl [] toyWit
+    ⟨toyStmt, toyPart, rfl, rfl, by show faulty H accCm toyStmt toyPart toyWit = ∅; rw [toy_faulty, toyWit_val]; rfl⟩
+    Nat.one_pos
 
 /-- **The sampling `Efficient` fails** at `effSD` and `p = 0`: its sessions' decoder counts one step. -/
 theorem Efficient_fails (H : Msg → Msg) : ¬ Claims.Sampling.Efficient H (effSD Coin) 0 := fun h => by
