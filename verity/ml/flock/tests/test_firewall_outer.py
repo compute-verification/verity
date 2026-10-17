@@ -56,9 +56,9 @@ def test_a_control_must_stop_where_the_firewall_did_and_for_its_reason():
     assert not OA.judge("root", t, {"accepted": False, "released": 9, "why": why})[0]
 
 
-def test_the_prover_stopping_is_judged_at_the_first_failing_check():
+def test_a_stop_at_finish_for_rows_that_fail_on_the_pads_is_judged_at_the_first_failing_check():
     t = transcript([{"masked": {}}, check(True, 0, []), check(False, 1, []), check(False, 1, [])],
-                   stopped="PROVER-STOPPED: the batched constraint fails (⟨c, h⟩ ≠ t)")
+                   stopped="FIREWALL-REFUSED: circuit: 2 constraints fail on a rep's pads")
     assert OA.judge("algebra", t, {"accepted": False, "released": 2, "why": "the relation r fails"}) == (True, "")
     assert not OA.judge("algebra", t, {"accepted": False, "released": 3, "why": "the relation r fails"})[0]
     assert not OA.judge("honest", t, {"accepted": True, "released": 4, "why": None})[0]
