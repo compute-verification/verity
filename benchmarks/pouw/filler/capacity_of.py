@@ -1,0 +1,80 @@
+"""The certified share σ of a GPU's capacity, from a scored filler run's measured entries (FILLER, decision 77).
+
+Each entry of a run's score.json is one served step beside its filler: the step's time, the served and filler MACs in
+it, and the SM clock. Their certified load, pooled over the step and the GPU's 4 × SMs SMSPs (a receipt attests no
+placement), is read by machine_model's `capacity` (note:20261017T0652Z-draft-filler §3): filler MMAs with their fold's
+lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f_max (decision 74) and at the run clock.
+
+  python3 benchmarks/pouw/filler/capacity_of.py RUN_OUT_DIR [--fold duo] [--lane-per-mma X] [--served-fold none] [--json]
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "machine_model"))
+from verity_machine_model import capacity as C  # noqa: E402
+from verity_machine_model import eps as E  # noqa: E402
+
+F_MAX_MHZ = 2430.0  # sm_120's maximum SM clock, the credit's (decision 74)
+SMS = 188
+MACS_A_MMA = 4096
+
+
+def load(serving_macs: float, filler_macs: float, ms: float, mhz: float, sms: int = SMS, fold: str = "duo",
+         lane_per_mma: float = 0.0, served_fold: str = "none") -> C.Work:
+    """The pooled certified load a SMSP-cycle at `mhz` over `ms` on `sms` SMs."""
+    cyc = 4 * sms * mhz * 1e6 * ms * 1e-3
+    fill = filler_macs / MACS_A_MMA / cyc * C.TENSOR_CYCLES
+    srv = serving_macs / MACS_A_MMA / cyc * C.TENSOR_CYCLES
+    w = C.tensor_filler(fill, fold) + C.served(srv, served_fold)
+    if lane_per_mma:
+        w = w + C.lane_filler(lane_per_mma * fill / C.TENSOR_CYCLES)
+    return w
+
+
+def sigma(pi, entry: dict, mhz: float | None = None, **kw) -> C.Window:
+    w = load(entry["serving_macs"], entry["filler_macs"], entry["t1_ms"], mhz or entry["mhz"], **kw)
+    return C.window(pi, [(1.0, w)])
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="capacity_of.py", description=__doc__.split("\n")[0])
+    ap.add_argument("out", type=Path, help="a scored run's arm dir (its score.json)")
+    ap.add_argument("--fold", default="duo")
+    ap.add_argument("--served-fold", default="none")
+    ap.add_argument("--lane-per-mma", type=float, default=0.0, help="lane-chain warp instructions a filler MMA")
+    ap.add_argument("--vector", default="")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    pi = E.machine(a.vector)
+    d = json.loads((a.out / "score.json").read_text())
+    kw = dict(fold=a.fold, lane_per_mma=a.lane_per_mma, served_fold=a.served_fold)
+    rows = []
+    for e in d["entries"]:
+        run, top = sigma(pi, e, **kw), sigma(pi, e, F_MAX_MHZ, **kw)
+        rows.append({"entry": e["entry"], "kind": e["kind"], "slowdown": e["time"], "mhz": e["mhz"],
+                     "filler_share": e["filler_share"], "sigma_run_clock": run.sigma(), "sigma": top.sigma(),
+                     "credit": top.credit(), "tensor": top.tensor(), "binding": list(top.pooled.binding)})
+    dec = [r for r in rows if r["kind"] == "decode"]
+    summ = {"arm": d.get("arm"), "run": d.get("run"), "vector": pi.vector, "f_max_mhz": F_MAX_MHZ, **kw,
+            "decode_mean_sigma": sum(r["sigma"] for r in dec) / len(dec),
+            "decode_mean_sigma_run_clock": sum(r["sigma_run_clock"] for r in dec) / len(dec),
+            "decode_min_sigma": min(r["sigma"] for r in dec), "entries": rows}
+    if a.json:
+        print(json.dumps(summ, indent=1))
+        return 0
+    print(f"{summ['arm']} ({summ['run']}), Π {pi.vector}, fold {a.fold}, lanes {a.lane_per_mma:g} a MMA")
+    for r in rows:
+        print(f"  {r['entry']:22s} slowdown {r['slowdown']:.3f}  filler {r['filler_share']:.3f}  σ {r['sigma']:.3f} at "
+              f"f_max ({r['sigma_run_clock']:.3f} at {r['mhz']:.0f} MHz)  B {r['credit']:.3f}  bind {','.join(r['binding'])}")
+    print(f"  decode mean σ {summ['decode_mean_sigma']:.3f} at f_max, {summ['decode_mean_sigma_run_clock']:.3f} at the run "
+          f"clock; min {summ['decode_min_sigma']:.3f}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
