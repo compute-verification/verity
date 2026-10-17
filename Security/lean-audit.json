@@ -373,6 +373,9 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  },
+  "Accounting.Assumptions.CircuitEncodeHardness": {
+   "owner": "@memory-accounting"
   }
  },
  "meaning": [
@@ -4823,6 +4826,12 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Accounting.SecurityProofs.CarrierBits": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -5419,7 +5428,9 @@
    "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
    "Pouw.Guarantees.Eps1.WordLocalZero": "unstated: Theorem B of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.WordLocalZero is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
    "Pouw.Guarantees.Eps1.WordLocalGeneral": "unstated: Theorem B of EPS1-QSTAR at a general int8 instance; its theorem Pouw.SecurityProofs.Eps1.WordLocalGeneral is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
-   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt)."
+   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
+   "Accounting.SecurityProofs.CarrierBits": "frozen (no-function): A counting bound over abstract provenances of a circuit's values (Security/Definitions/Accounting/Carrier.lean: the store reached only through the circuit's inputs and its own encodes), about no function of the code.",
+   "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed for devices whose held sectors beyond S bits come from carriers (Accounting.RateSketch.Carrier), at on-chip state S + C with C the carriers' input and encoded bits under the property's budgets and the named assumption Accounting.Assumptions.CircuitEncodeHardness: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
