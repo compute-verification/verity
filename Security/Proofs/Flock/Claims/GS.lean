@@ -35,8 +35,10 @@ The decoder computes on coefficient lists and tables, and counts its field opera
   with each trace's length and radius its index's (`listWithin_famDecodeR`), its count the sum over the indices
   (`famDecodeR_complexity`); at the masked verifier's deployed code, `zkDecodeRD` (`listWithin_zkDecodeRD`,
   `zkDecodeRD_complexity`).
-* `GS.RadiusDeploy`: the plain level-0 code at each `m` in the radius form (`plainDecodeR`), and both families at
-  the deployed instances, at each one's `len`, `enc` and `θ` (the length and radius read off the trace's `m`):
-  `radius_deployPlain` (`ListWithin` with `plainDecodeRD`, complexity `14·(flockPolyR + X)` at `plainSizeRD`) and
-  `radius_deployZk` (`ListWithin` with `zkDecodeRD`, complexity `11·(zkPolyR + X)` at `zkSizeRD`).
+* `GS.RadiusDeploy`: the plain level-0 code at each `m` in the radius form (`plainDecodeR`), and the plain family
+  (`plainDecodeRD`, `listWithin_plainDecodeRD`, complexity `14·(flockPolyR + X)` at `plainSizeRD`). Each family's size
+  is affine in the opened columns (`plainSizeRD_le`, `zkSizeRD_le`), and each counts a step on none
+  (`plainCountedRD_nil_pos`, `zkCountedRD_nil_pos`). The deployed records name the counted families as their decoder
+  (`FlockDeploy.deployPlain`'s and `deployZk`'s `dec`), and `FlockDeploy.efficient_plain` and `efficient_zk` are
+  `Claims.Flock.Efficient` there.
 -/
