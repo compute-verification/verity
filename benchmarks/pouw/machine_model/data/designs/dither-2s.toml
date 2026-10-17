@@ -16,6 +16,6 @@ pv = "peel"
 floor = { LDSM_X4 = 0.2 }
 source = "SPEC §3.4: two-sided {0,1} noise is fresh on both operands at every 32-step at every instance, so the register floor stays 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
 
-[skip.pv-strip]
+[skip.served]
 eps = 0.00131
-source = "SKIP's design A (`adopted-bd-lm`) over Llama-3.1-8B and 70B x 2K, 8K, 32K by honest time, with CHECKED-STRIP Result 3's correction: at a one-hot P row adopted P·V's whole strip is free, both limbs of U·Ycum and the triangle, so 0.131% by time (0.119% by int8 products), twice the 04:20Z count (note:20261017T0340Z-draft-skip Result 3, 06:19Z; note:20261017T0030Z-draft-checked-strip)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`): the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, of the whole-model ε_skip by honest time, every served output free; at 8B 2K prefill, P·V's peeled strip, all of it free at a one-hot P row (CHECKED-STRIP Result 3; note:20261017T0340Z-draft-skip, 06:19Z)"

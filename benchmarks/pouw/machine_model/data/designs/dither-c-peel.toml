@@ -15,10 +15,6 @@ lm_head = "co32c"
 qk = "cohalf"
 pv = "peel"
 
-[skip.pv-strip]
-eps = 0.00129
-source = "CALC from SKIP's parts: Bc's adopted P·V, 0.064% by time at 04:41Z, doubled by CHECKED-STRIP Result 3's one-hot P row (its whole strip free) as A's went 0.065% → 0.131% (note:20261017T0340Z-draft-skip Result 3, 06:19Z; note:20261017T0030Z-draft-checked-strip)"
-
-[skip.recombination]
-eps = 0.00074
-source = "co32c's recombination IMADs, 0.077% of the 8B linears' time at the duo fold (CHECKED-STRIP), at the linears' share of SKIP's worst cell (8B 2K prefill: 0.138% − 0.064%); added to P·V's maximum, which may sit in another cell, so conservative (note:20261017T0340Z-draft-skip, 04:41Z)"
+[skip.served]
+eps = 0.00193
+source = "eps_budget.py (benchmarks/pouw, `design_skip`): the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, of the whole-model ε_skip by honest time, every served output free; at 8B 2K prefill, P·V's peeled strip (0.128%, free at a one-hot P row) and co32c's and cohalf's tensor–scalar vector work (linears 0.061%, QKᵀ 0.005%; note:20261017T0030Z-draft-checked-strip)"

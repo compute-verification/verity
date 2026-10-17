@@ -215,7 +215,7 @@ def test_luck_and_the_total():
     assert e.cheat.binding == ("JI3e_0",)
     assert e.luck == pytest.approx(E.deficit(DUO) * (JI + 0.375) / (JI + 12.375), rel=1e-6)
     e = E.eps(DUO, PI, 8)
-    assert e.sched is None and e.mand == 0 and e.skip == 0.0063
+    assert e.sched is None and e.mand == 0 and e.skip == 0.164
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
 
 
@@ -306,6 +306,7 @@ def test_designs_read_what_exists():
         assert set(d.fold) | set(d.baseline) | set(d.floor) | {k for f in d.filler for k in f.mix} <= set(c), n
         assert all("note:" in p.source or "CALC" in p.source or "assumption" in p.source
                    for p in (*d.skip.values(), *d.mand.values())), n
+        assert all(p.source.startswith("eps_budget.py") for p in d.skip.values()), n
         assert 0 <= E.eps(d, PI, 8).total() < 1
         assert d.title.startswith("Dither-") and set(d.noise) == set(E.PRODUCTS) and d.unit in E.adapts(), n
         assert d.coin_bits >= 1 and "note:" in d.coins_source, n
@@ -324,7 +325,7 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
     two, fill = E.design("dither-2s"), E.design("dither-2s-fill")
     assert fill.base == "dither-2s" and fill.skip == two.skip and fill.floor == two.floor and fill.ppl == two.ppl
     assert fill.aliases == ("dither-two-sided-fill",) and fill.title != two.title and fill.filler and not two.filler
-    assert E.design("dither-2s-pv").ppl == "" and E.design("dither-c-peel").noise["pv"] == "peel"
+    assert E.design("dither-2s-pv").ppl == "adopted-bd-lm-pv" and E.design("dither-c-peel").noise["pv"] == "peel"
     assert E.design("A") == two and E.design("dither-duo").name == "dither-1s" and E.aliases()["Bc"] == "dither-c-peel"
     assert two.clock.eps == 0.1391 and two.checks == 48000 and two.baseline_name == "dp4a" and two.fold_cost() == 3
     data = tmp_path / "data"
@@ -418,7 +419,7 @@ def test_cli(capsys):
     assert main(["designs", "--json"]) == 0
     reg = {r["name"]: r for r in json.loads(capsys.readouterr().out)}
     assert reg["dither-c"]["noise"] == {"linears": "co32c", "lm_head": "co32c", "qk": "cohalf", "pv": "pv"}
-    assert reg["dither-1s"]["ppl"] == "adopted" and reg["dither-c"]["ppl"] is None
+    assert reg["dither-1s"]["ppl"] == "adopted" and reg["dither-c"]["ppl"] == "co32c-pv"
 
 
 SM89 = DEVICES / "sm_89"
