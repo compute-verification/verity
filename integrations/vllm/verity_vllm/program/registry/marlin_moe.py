@@ -394,8 +394,9 @@ def MarlinMoeSchedule(B, S, blk, par):
     return Coll(Array(S.NT, Array(S.KT - 1, BIT)), concat([b.refs for row in rows for b in row]))
 
 
-_ALIGN_CONF = ("model-untested: read from vLLM d9105ea80's moe_align_block_size (moe_align_sum_kernels.cu: moe_align_block_size_kernel, "
-               "count_and_sort_expert_tokens_kernel); tests/properties/dsv4_marlin_capture_gpu.py is its hardware check")
+_ALIGN_CONF = ("model-untested: read from vLLM d9105ea80's moe_align_block_size over more than 64 experts (moe/moe_align_sum_kernels.cu: "
+               "get_local_expert_id 86-98, _moe_align_block_size 101-195, _count_and_sort_expert_tokens 302-323, 627-725); "
+               "tests/properties/dsv4_marlin_capture_gpu.py is its hardware check")
 
 
 def _isum(o: IntOps, xs: Coll, n: int):

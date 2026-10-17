@@ -113,7 +113,8 @@ def ensure_ops() -> None:
 
 @dataclass
 class CollectiveBus:
-    """The collectives of one rank's forward, in call order.  `mode`: `probe` (record; no peers) or `trace` (consume peers, emit ops)."""
+    """The collectives of one rank's forward, in call order.  `mode`: `probe` (record; no peers) or `trace` (consume peers, emit ops).
+    It also hands out the rank Program's one other input a kernel reads mid-forward, the `schedule` witness (`schedule_key`)."""
     rank: int
     world: int
     mode: str = "probe"
@@ -121,6 +122,9 @@ class CollectiveBus:
     record: list[dict] = field(default_factory=list)
     settings: dict[str, bool] = field(default_factory=dict)
     cursor: int = 0
+    schedule: torch.Tensor | None = None
+    schedule_record: list[dict] = field(default_factory=list)
+    schedule_cursor: int = 0
 
     @property
     def peer_ranks(self) -> list[int]:
@@ -183,16 +187,34 @@ class CollectiveBus:
         ensure_ops()
         return torch.ops.verity_tp.fused_allreduce_rms_norm(self._parts(x, peers), residual, weight, float(eps))
 
+    def schedule_key(self, ids: torch.Tensor) -> torch.Tensor:
+        """The next `moe_align_block_size` call's key per pair (`registry.marlin_moe.MoeAlignBlocks`), shaped as its router `ids`:
+        the next `ids.numel()` words of the `schedule` input, which the run's GPU sorted positions fill; recorded in probe mode."""
+        shape, n = tuple(ids.shape), ids.numel()
+        if self.mode == "probe":
+            off = sum(r["pairs"] for r in self.schedule_record)
+            self.schedule_record.append({"k": len(self.schedule_record), "shape": list(shape), "pairs": n, "offset": off})
+            return torch.empty(shape, dtype=torch.int32, device=ids.device)
+        k = self.schedule_cursor
+        self.schedule_cursor += 1
+        if self.schedule is None or k >= len(self.schedule_record) or self.schedule_record[k]["shape"] != list(shape):
+            raise RuntimeError(f"align call #{k} {shape} is not the probe's ({len(self.schedule_record)} calls recorded)")
+        off = self.schedule_record[k]["offset"]
+        return self.schedule[off:off + n].view(shape)
+
     def example_peers(self, device: str = "meta") -> tuple[torch.Tensor, ...]:
         """One example peer tensor per (collective k, peer rank j) in flat order `k*(world-1) + j`."""
         return tuple(torch.empty(tuple(r["shape"]), dtype=getattr(torch, r["dtype"]), device=device)
                      for r in self.record for _j in range(self.world - 1))
 
-    def reset(self, mode: str, peers: list[torch.Tensor] | None = None) -> None:
-        self.mode, self.cursor = mode, 0
-        self.peers = list(peers or [])
+    def example_schedule(self, device: str = "meta") -> torch.Tensor:
+        return torch.empty(sum(r["pairs"] for r in self.schedule_record), dtype=torch.int32, device=device)
+
+    def reset(self, mode: str, peers: list[torch.Tensor] | None = None, schedule: torch.Tensor | None = None) -> None:
+        self.mode, self.cursor, self.schedule_cursor = mode, 0, 0
+        self.peers, self.schedule = list(peers or []), schedule
         if mode == "probe":
-            self.record = []
+            self.record, self.schedule_record = [], []
 
 
 class TPStub:

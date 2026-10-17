@@ -543,6 +543,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 probe = vm.probe_collectives(mod, inputs, cfg, ntok, bus, profile=target)
                 res["tp"]["collectives"] = {"n": len(probe), "by_kind": _count([p["kind"] for p in probe]),
                                             "by_shape": _count([f'{p["kind"]}{tuple(p["shape"])}' for p in probe]), "record": probe}
+                if bus.schedule_record:      # the align calls' keys, the `schedule` input before the peers (`CollectiveBus.schedule_key`)
+                    res["tp"]["schedule"] = {"calls": len(bus.schedule_record), "pairs": sum(r["pairs"] for r in bus.schedule_record),
+                                             "record": list(bus.schedule_record)}
                 mod, inputs = vm.with_peers(mod, inputs, bus)
             applied_export: dict = {}
             ep = vm.export_module(mod, inputs, cfg, ntok, intercept_triton=intercept, launch_log=log, profile=target, applied_out=applied_export)

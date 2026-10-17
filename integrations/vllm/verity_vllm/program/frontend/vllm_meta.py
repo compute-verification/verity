@@ -59,8 +59,9 @@ def make_vllm_config(model: str = PIN["model"], revision: str = PIN["revision"],
 class WithPeers(nn.Module):
     """[R13 tp] A rank's wrapper with its PEER INPUTS: `forward(prompt, *peers)` hands the peers (the other rank's collective partials,
     in collective call order) to the rank's `CollectiveBus` and runs the inner wrapper; the k-th collective of this forward consumes
-    peer k (see `tp_ops.CollectiveBus`).  A stochastic inner wrapper's own inputs come before the peers, in its order
-    (`SeededWithPeers`, `SplitsWithPeers`; `with_peers` picks the form): the Program's parameters are the TP1 Program's, then the peers."""
+    peer k (see `export_ops.CollectiveBus`).  A stochastic inner wrapper's own inputs come before the peers, in its order
+    (`SeededWithPeers`, `SplitsWithPeers`), and so does a `schedule` witness (`ScheduledWithPeers`); `with_peers` picks the form: the
+    Program's parameters are the TP1 Program's, then the schedule, then the peers."""
 
     def __init__(self, inner: nn.Module, bus) -> None:
         super().__init__()
@@ -73,11 +74,14 @@ class WithPeers(nn.Module):
     def forward(self, prompt: torch.Tensor, *peers: torch.Tensor):
         return self._run((prompt,), peers)
 
-    def _run(self, own: tuple, peers: tuple):
-        self.bus.reset("trace", list(peers))
+    def _run(self, own: tuple, peers: tuple, schedule: torch.Tensor | None = None):
+        self.bus.reset("trace", list(peers), schedule)
         out = self.inner(*own)
         if self.bus.cursor * (self.bus.world - 1) != len(peers):    # [lane vllm-tp-n] world-1 peer inputs per collective
             raise RuntimeError(f"rank {self.bus.rank}: {self.bus.cursor} collectives consumed x {self.bus.world - 1} peers, {len(peers)} peer inputs given")
+        if self.bus.schedule_cursor != len(self.bus.schedule_record):
+            raise RuntimeError(f"rank {self.bus.rank}: {self.bus.schedule_cursor} align calls read the schedule, the probe recorded "
+                               f"{len(self.bus.schedule_record)}")
         return out
 
 
@@ -95,12 +99,30 @@ class SplitsWithPeers(WithPeers):
         return self._run((prompt, seed, splits), peers)
 
 
+class ScheduledWithPeers(WithPeers):
+    """`WithPeers` over a greedy wrapper whose forward reads the `schedule` witness (`CollectiveBus.schedule_key`, each
+    `moe_align_block_size` call's key per pair): `forward(prompt, schedule, *peers)`."""
+
+    @property
+    def DERIVE_SOURCE(self) -> str:
+        return f"verity-vllm/scheduled-with-peers/v1[{self.inner.DERIVE_SOURCE}]"
+
+    def forward(self, prompt: torch.Tensor, schedule: torch.Tensor, *peers: torch.Tensor):
+        return self._run((prompt,), peers, schedule)
+
+
 def with_peers(inner: nn.Module, inputs: tuple, bus) -> tuple[nn.Module, tuple]:
     """A tensor-parallel rank's traced wrapper over `inner` (a `make_wrapper` module) and its example inputs: `inner`'s own inputs (the
-    prompt, and a stochastic wrapper's `seed` and `splits`), then the bus's example peers in collective order."""
+    prompt, and a stochastic wrapper's `seed` and `splits`), the `schedule` when the probe recorded an align call that reads it, then
+    the bus's example peers in collective order."""
     forms = {1: WithPeers, 2: SeededWithPeers, 3: SplitsWithPeers}
     if len(inputs) not in forms:
         raise ValueError(f"with_peers: a wrapper takes 1 to 3 inputs of its own (prompt, seed, splits), {type(inner).__name__} takes {len(inputs)}")
+    if bus.schedule_record:
+        if len(inputs) != 1:
+            raise ValueError(f"with_peers: the schedule witness has a greedy wrapper's form only (prompt, schedule, *peers), not one "
+                             f"with {len(inputs)} inputs of its own")
+        return ScheduledWithPeers(inner, bus), tuple(inputs) + (bus.example_schedule(),) + tuple(bus.example_peers())
     return forms[len(inputs)](inner, bus), tuple(inputs) + tuple(bus.example_peers())
 
 

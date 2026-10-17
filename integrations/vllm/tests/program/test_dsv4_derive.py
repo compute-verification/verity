@@ -53,7 +53,9 @@ from verity_vllm.program.frontend.rules.triton_iface import triton_launch
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.frontend.vllm_meta import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
+from verity_vllm.program.frontend.export_ops import CollectiveBus, TPStub
+from verity_vllm.program.frontend.vllm_meta import (ScheduledWithPeers, fp8_block_weights_as_the_loader_does,
+                                                    post_load_tensors_as_the_loader_does, with_peers)
 from verity_vllm.program.kernels import deepgemm_twins as DT
 from verity_vllm.program.kernels import dsv4_compressor_twin as DC
 from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as TQ
@@ -343,42 +345,75 @@ class _MarlinMoe(nn.Module):
                                           activation_func=activation, moe_sum=moe_sum, expert_map=None)
 
 
+class _Routed(nn.Module):
+    """A greedy wrapper over `_MarlinMoe`: its one input is the prompt's hidden states, routed to the top 2 of the first 4 features."""
+
+    def __init__(self, moe) -> None:
+        super().__init__()
+        self.moe = moe
+
+    def forward(self, x):
+        weights, ids = torch.topk(x[:, :4].float(), 2)
+        return self.moe(x, weights, ids.to(torch.int32))
+
+
 @pytest.fixture
 def marlin_site(monkeypatch):
+    """vLLM's Marlin MoE modules, and rank 0 of a TP2 group with its bus in probe mode."""
     mxfp4, oracle = types.ModuleType(mml._MXFP4), types.ModuleType(mml._ORACLE)
     site, scalar_type = types.ModuleType(mml._MARLIN_MOE), types.ModuleType("vllm.scalar_type")
+    parallel_state = types.ModuleType(mml._PARALLEL_STATE)
     mxfp4.Mxfp4MoEMethod = _Mxfp4Method
     oracle.Mxfp4MoeBackend = types.SimpleNamespace(MARLIN="marlin")
     oracle.make_mxfp4_moe_kernel = lambda **kwargs: kwargs
     scalar_type.scalar_types = types.SimpleNamespace(float4_e2m1f=types.SimpleNamespace(id=7))
     site.fused_marlin_moe = _launches
-    site.moe_align_block_size = lambda topk_ids, block_m, E, expert_map, ignore_invalid_experts: (
-        topk_ids.new_empty((topk_ids.numel() + E * (block_m - 1),)), topk_ids.new_empty((E,)), topk_ids.new_empty((1,)))
-    for module in (mxfp4, oracle, site, scalar_type):
+    parallel_state._TP = TPStub(0, 2, CollectiveBus(rank=0, world=2))
+    parallel_state.get_tp_group = lambda: parallel_state._TP
+    for module in (mxfp4, oracle, site, scalar_type, parallel_state):
         monkeypatch.setitem(sys.modules, module.__name__, module)
     return site
 
 
-def _moe_inputs(M: int = 3) -> tuple:
-    return (torch.empty(M, 64, dtype=torch.bfloat16, device="meta"), torch.empty(M, 2, device="meta"),
-            torch.empty(M, 2, dtype=torch.int32, device="meta"))
+def _prompt(M: int = 3) -> tuple:
+    return (torch.empty(M, 64, dtype=torch.bfloat16, device="meta"),)
 
 
 def test_the_mxfp4_marlin_moe_exports_as_its_steps_with_its_expert_gemms_as_leaf_ops(marlin_site):
-    model = _MarlinMoe(marlin_site)
+    bus = sys.modules[mml._PARALLEL_STATE]._TP.bus
+    model = _Routed(_MarlinMoe(marlin_site))
     with mml.mxfp4_marlin_moe_leaf(model):
-        kernel = model.quant_method.moe_kernel
-        ep = torch.export.export(model, _moe_inputs(), strict=False)
-    assert model.quant_method.moe_kernel is None and marlin_site.fused_marlin_moe is _launches
+        kernel = model.moe.quant_method.moe_kernel
+        torch.export.export(model, _prompt(), strict=False)
+        assert bus.schedule_record == [{"k": 0, "shape": [3, 2], "pairs": 6, "offset": 0}]
+        wrapped, inputs = with_peers(model, _prompt(), bus)
+        ep = torch.export.export(wrapped, inputs, strict=False)
+        with pytest.raises(ValueError, match="greedy wrapper's form only"):
+            with_peers(model, _prompt() + (torch.empty(1),), bus)
+    assert model.moe.quant_method.moe_kernel is None and marlin_site.fused_marlin_moe is _launches
     assert kernel["moe_quant_config"] == ("quant_config", (4, 64, 32)) and kernel["routing_tables"] == "routing_tables"
+    assert isinstance(wrapped, ScheduledWithPeers) and [tuple(t.shape) for t in inputs] == [(3, 64), (6,)]
+    prompt, schedule = [n for n in ep.graph.nodes if n.op == "placeholder" and n.name in ep.graph_signature.user_inputs]
+    (align,) = [n for n in ep.graph.nodes if str(n.target) == "vllm_iface.marlin_moe_align.default"]
+    ids, key, E, block_m = align.args
+    assert key.args == (key.args[0], [3, 2]) and key.args[0].args == (schedule, 0, 0, 6) and (E, block_m) == (4, 8)
+    blk, par = sorted(align.users, key=lambda n: n.args[1])
     gemms = [n for n in ep.graph.nodes if str(n.target) == "vllm_iface.marlin_moe_mxfp4_gemm.default"]
+    assert [n.args[3:6] for n in gemms] == [(ids, blk, par)] * 2
     assert [(tuple(n.meta["val"].shape), n.args[-3:]) for n in gemms] == [((6, 64), (8, 2, False)), ((6, 64), (8, 1, True))]
 
 
+def test_a_marlin_moe_without_a_tp_bus_refuses_at_export(marlin_site, monkeypatch):
+    monkeypatch.setattr(sys.modules[mml._PARALLEL_STATE], "_TP", types.SimpleNamespace())
+    model = _Routed(_MarlinMoe(marlin_site))
+    with mml.mxfp4_marlin_moe_leaf(model), pytest.raises(NotImplementedError, match="no TP bus"):
+        torch.export.export(model, _prompt(), strict=False)
+
+
 def test_a_marlin_moe_beyond_the_leafs_operands_refuses_at_export(marlin_site):
-    model = _MarlinMoe(marlin_site, bias=_meta(4, 64))
+    model = _Routed(_MarlinMoe(marlin_site, bias=_meta(4, 64)))
     with mml.mxfp4_marlin_moe_leaf(model), pytest.raises(NotImplementedError, match=r"given \['bias1'\]"):
-        torch.export.export(model, _moe_inputs(), strict=False)
+        torch.export.export(model, _prompt(), strict=False)
 
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")

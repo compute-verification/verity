@@ -226,12 +226,16 @@ _define_once("fused_inv_rope_fp8_quant_kernel(Tensor o, Tensor positions, Tensor
 # (`export_compat.deep_gemm_fp8_einsum_leaf`)
 _define_once("deep_gemm_fp8_einsum(str expr, Tensor a, Tensor a_scale, Tensor b, Tensor b_scale, Tensor(a!) d, int[] recipe) -> ()",
              "deep_gemm_fp8_einsum", lambda expr, a, a_scale, b, b_scale, d, recipe: None)
+# `fused_marlin_moe`'s `moe_align_block_size` as its launches read it, from the router ids and a key per pair (`marlin_moe_leaf`):
+# (each pair's moe block [pairs] i32, num_tokens_post_padded / moe_block_size [1] i32)
+_define_once("marlin_moe_align(Tensor topk_ids, Tensor key, int num_experts, int moe_block_size) -> (Tensor, Tensor)", "marlin_moe_align",
+             lambda topk_ids, key, num_experts, moe_block_size: (topk_ids.new_empty((topk_ids.numel(),)), topk_ids.new_empty((1,))))
 # one `moe_wna16_marlin_gemm` launch of `fused_marlin_moe` on W4A16 float4_e2m1f experts, over the logical weights w [E, N, K/2] and
-# their e8m0 scales [E, N, K/32] (`marlin_moe_leaf`): rows [x rows * top_k, N] bf16
-_define_once("marlin_moe_mxfp4_gemm(Tensor x, Tensor w, Tensor w_scale, Tensor sorted_token_ids, Tensor expert_ids, "
-             "Tensor num_tokens_post_padded, Tensor topk_weights, int moe_block_size, int top_k, bool mul_topk_weights) -> Tensor",
-             "marlin_moe_mxfp4_gemm", lambda x, w, w_scale, sorted_token_ids, expert_ids, num_tokens_post_padded, topk_weights, moe_block_size,
-             top_k, mul_topk_weights: x.new_empty((x.shape[0] * top_k, w.shape[1])))
+# their e8m0 scales [E, N, K/32], each pair at its moe block `blk` of `par` (`marlin_moe_align`): rows [x rows * top_k, N] bf16
+_define_once("marlin_moe_mxfp4_gemm(Tensor x, Tensor w, Tensor w_scale, Tensor topk_ids, Tensor blk, Tensor par, Tensor topk_weights, "
+             "int moe_block_size, int top_k, bool mul_topk_weights) -> Tensor",
+             "marlin_moe_mxfp4_gemm", lambda x, w, w_scale, topk_ids, blk, par, topk_weights, moe_block_size, top_k, mul_topk_weights:
+             x.new_empty((x.shape[0] * top_k, w.shape[1])))
 
 iface = torch.ops.vllm_iface
 
