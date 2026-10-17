@@ -839,7 +839,8 @@ def showsPart (b : Brings) (s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=
 (`stagedPart_run`). -/
 theorem staged_deployRec_part {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop)
-    (htr : ∀ x, Function.Injective (b.tr x)) (hL : ∀ x, L.rounds x ≤ I.V.k (xIOf x)) :
+    (htr : ∀ x st, parse x = some st → shape st.form → Function.Injective (b.tr x))
+    (hL : ∀ x st, parse x = some st → shape st.form → L.rounds x ≤ I.V.k (xIOf x)) :
     Claims.Recursion.VStar.Staged H (deployRec I.V ivScope b) I L shape (showsPart b) (cmtTr b) := by
   intro x stx hst hf Ω P ω r hacc s hs
   obtain ⟨h1, h2⟩ := staged_deployRec H I ivScope b L shape htr hL x stx hst hf Ω P ω r hacc s hs
@@ -1064,7 +1065,8 @@ dense, holo and sparse shapes): `vstarParts_deployRec_of_linked` at `showsPart`,
 theorem vstarParts_deployRec_staged {L : Layout} {opening : Opening} {shape : Form → Prop}
     {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop} {dig : Msg → ℕ → Msg → Msg}
     {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)}
-    (htr : ∀ x, Function.Injective (b.tr x)) (hL : ∀ x, L.rounds x ≤ I.V.k (RecDeploy.xIOf x))
+    (htr : ∀ x st, RecDeploy.parse x = some st → shape st.form → Function.Injective (b.tr x))
+    (hL : ∀ x st, RecDeploy.parse x = some st → shape st.form → L.rounds x ≤ I.V.k (RecDeploy.xIOf x))
     (hP : ∀ s, StagedLinked H I ivScope b L shape chk logs s)
     (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       shape (RecDeploy.showsPart b) opening dig s)
@@ -1082,7 +1084,8 @@ theorem vstarParts_deployRec_staged {L : Layout} {opening : Opening} {shape : Fo
 `showsPart`, with `Staged` from `staged_deployRec_part`. -/
 theorem vstarAccepts_deployRec_staged {L : Layout} (hb : b.rd = RecDeploy.readersOf L) {opening : Opening}
     {shape : Form → Prop} {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop} {dig : Msg → ℕ → Msg → Msg}
-    (htr : ∀ x, Function.Injective (b.tr x)) (hL : ∀ x, L.rounds x ≤ I.V.k (RecDeploy.xIOf x))
+    (htr : ∀ x st, RecDeploy.parse x = some st → shape st.form → Function.Injective (b.tr x))
+    (hL : ∀ x st, RecDeploy.parse x = some st → shape st.form → L.rounds x ≤ I.V.k (RecDeploy.xIOf x))
     (hC : ∀ s, StmtReadsTo H I ivScope b L shape (fun x c _ ms => chk s x c ms) s)
     (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       shape (RecDeploy.showsPart b) opening dig s)
