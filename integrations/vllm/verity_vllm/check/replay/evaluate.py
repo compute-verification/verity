@@ -16,6 +16,7 @@ from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, P
 from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
 from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, lifted_compare, padded_slot_enable
 from verity_vllm.check.replay.delegate import DELEGATES, Place
+from verity_vllm.program.compact import is_file_prog
 
 
 #: [R16 fp8] a `weights` field's leaf width (its `Value<b>`) -> the word dtype the registered slice is read as (bf16 -> u16, e4m3 -> u8, f32 -> u32)
@@ -71,6 +72,71 @@ _Unresolved = Declined
 INTERIOR_DEPTH = 4     # composed interior producers per VU (Gemm under a BiasAdd = 1); a deeper chain is 'not evaluable', named
 
 
+def _weight_words(pi: ProgramIndex, weights: Callable[[str, int, int], np.ndarray | None], fname: str, flo: int, fhi: int) -> tuple[np.ndarray, int]:
+    """The registered words [flo, fhi) of `weights` field `fname` in the field's declared leaf width, and that width."""
+    arr = weights(fname, flo, fhi)
+    if arr is None:
+        raise _Unresolved(f"registered weight field {fname} not available to the replay")
+    # [R16 fp8] the slice is read in the field's DECLARED leaf width (bf16 u16 / e4m3 u8 / f32 u32): a 16-bit cast of an
+    # f32 block scale or of an e4m3 byte would be a silent corruption of a load-bearing input
+    bits = pi.weight_bits(fname)
+    arr = np.asarray(arr).reshape(-1)
+    if arr.dtype.itemsize * 8 != bits:
+        raise _Unresolved(f"registered weight field {fname} is provided as {arr.dtype} but the Program declares Value<{bits}>")
+    return np.asarray(arr, dtype=_NP_BY_BITS.get(bits, np.uint16)).reshape(-1), bits
+
+
+def _weight_runs(pi: ProgramIndex, group: list) -> tuple[np.ndarray, np.ndarray] | None:
+    """A `weights` operand of more than one run as its runs' (lo, hi), in operand order, straight from the stored items: a strided
+    view's "P" progressions (GLM-5.3's MLA-absorb W_UK_T / W_UV reads, ~1e6 runs in ~2048 progressions, never expanded) or several
+    "p" runs.  None for an operand of one run or one that reads anything but `weights`."""
+    if not any(it and it[0] in ("p", "P") for it in group) or "weights" not in pi.pnames:
+        return None
+    wp = pi.pnames.index("weights")
+    los: list[np.ndarray] = []
+    his: list[np.ndarray] = []
+    lo1: list[int] = []
+    hi1: list[int] = []
+    for it in group:
+        if it[0] == "p" and int(it[1]) == wp:
+            lo1.append(int(it[2]))
+            hi1.append(int(it[3]))
+        elif is_file_prog(it) and it[0] == "P" and int(it[1]) == wp and int(it[4]) == 0:
+            if lo1:
+                los.append(np.asarray(lo1, dtype=np.int64))
+                his.append(np.asarray(hi1, dtype=np.int64))
+                lo1, hi1 = [], []
+            k = np.arange(int(it[7]), dtype=np.int64)
+            los.append(int(it[2]) + k * int(it[5]))
+            his.append(int(it[3]) + k * int(it[6]))
+        else:
+            return None
+    if lo1:
+        los.append(np.asarray(lo1, dtype=np.int64))
+        his.append(np.asarray(hi1, dtype=np.int64))
+    lo, hi = np.concatenate(los), np.concatenate(his)
+    return (lo, hi) if lo.size > 1 else None
+
+
+def _weight_gather(pi: ProgramIndex, weights: Callable[[str, int, int], np.ndarray | None], lo: np.ndarray, hi: np.ndarray,
+                   inputs_rec: list) -> tuple[np.ndarray, dict[str, Any]]:
+    """The leaves of runs [lo, hi) of the `weights` struct, in order: one read of the span of the one field they lie in, then a gather.
+    Recorded once, the field and span with the run and leaf counts (the row's stored args name every leaf)."""
+    n = hi - lo
+    if (n < 0).any() or not n.any():
+        raise _Unresolved(f"weights operand of {lo.size} runs reads {int(n.clip(0).sum())} leaves (a run with hi < lo, or none)")
+    idx = np.repeat(lo - (np.cumsum(n) - n), n) + np.arange(int(n.sum()), dtype=np.int64)
+    mn, mx = int(idx.min()), int(idx.max()) + 1
+    ws = pi.weight_slice(mn, mx)
+    if ws is None:
+        raise _Unresolved(f"weights operand of {lo.size} runs over [{mn}, {mx}) spans fields")
+    fname, flo, fhi, _shape = ws
+    words, bits = _weight_words(pi, weights, fname, flo, fhi)
+    gather = {"runs": int(lo.size), "leaves": int(idx.size)}
+    inputs_rec.append({"kind": "weights", "field": fname, "range": [flo, fhi], "bits": bits, "gather": gather})
+    return words[idx - mn], {"field": fname, "range": [flo, fhi], "gather": gather}
+
+
 def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str, arrive: int,
                   inputs_rec: list, *, depth: int, interior: dict[int, dict[str, np.ndarray]] | None = None,
                   row: int | None = None, plan: bool = False) -> dict[str, np.ndarray]:
@@ -88,7 +154,15 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
     inputs: list[list[np.ndarray]] = []
     wslices: list[np.ndarray | None] = []
     wrefs: list[dict[str, Any] | None] = []
-    for group in row_args(r):
+    for stored in r.get("args") or []:
+        runs = _weight_runs(pi, stored)
+        if runs is not None:
+            wsl, wref = (None, None) if plan else _weight_gather(pi, weights, *runs, inputs_rec)
+            inputs.append([])
+            wslices.append(wsl)
+            wrefs.append(wref)
+            continue
+        (group,) = row_args({"args": [stored]})
         words: list[np.ndarray] = []
         wsl = None
         wref = None
@@ -103,16 +177,7 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                     if ws is None:
                         raise _Unresolved(f"weights slice [{lo}, {hi}) spans fields")
                     fname, flo, fhi, _shape = ws
-                    arr = weights(fname, flo, fhi)
-                    if arr is None:
-                        raise _Unresolved(f"registered weight field {fname} not available to the replay")
-                    # [R16 fp8] the slice is read in the field's DECLARED leaf width (bf16 u16 / e4m3 u8 / f32 u32): a 16-bit cast of an
-                    # f32 block scale or of an e4m3 byte would be a silent corruption of a load-bearing input
-                    bits = pi.weight_bits(fname)
-                    arr = np.asarray(arr).reshape(-1)
-                    if arr.dtype.itemsize * 8 != bits:
-                        raise _Unresolved(f"registered weight field {fname} is provided as {arr.dtype} but the Program declares Value<{bits}>")
-                    wsl = np.asarray(arr, dtype=_NP_BY_BITS.get(bits, np.uint16)).reshape(-1)
+                    wsl, bits = _weight_words(pi, weights, fname, flo, fhi)
                     inputs_rec.append({"kind": "weights", "field": fname, "range": [flo, fhi], "bits": bits})
                     wref = {"field": fname, "range": [flo, fhi]}
                 elif a in pi.supplied:

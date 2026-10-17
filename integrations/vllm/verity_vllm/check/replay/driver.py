@@ -67,7 +67,8 @@ from verity_vllm.check.replay.fork import WorkerDied
 from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class
 from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
-from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, row_args
+from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
+from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
 from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu, replay_vu
@@ -126,20 +127,21 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
     seen: set[str] = set()
 
     def walk(pi: ProgramIndex, r: dict, depth: int) -> None:
-        for group in row_args(r):
-            for sl in group:
-                if sl[0] == "p" and int(sl[1]) < len(pi.pnames) and pi.pnames[int(sl[1])] == "weights":
-                    ws = pi.weight_slice(int(sl[2]), int(sl[3]))
-                    if ws is not None and ws[0] not in seen:
-                        seen.add(ws[0])
-                        weights(ws[0], ws[1], ws[2])
-                elif sl[0] == "n" and depth < INTERIOR_DEPTH:
-                    a, lo, hi = int(sl[1]), int(sl[2]), int(sl[3])
-                    if pi.member_at(a, lo, hi) is None:
-                        pr = pi.by_i.get(a)
-                        pd = pi.describe(pr) if pr is not None else None
-                        if pd is not None and pd["members"] == [] and pd["family"] in EVALUATORS:
-                            walk(pi, pr, depth + 1)                                # the interior producer's weights are the VU's too
+        wp = pi.pnames.index("weights") if "weights" in pi.pnames else None
+        for group in r.get("args") or []:
+            for it in group if wp is not None else ():
+                span = p_item_weight_span(it, wp)                                  # a "P" progression's span, never its runs
+                ws = pi.weight_slice(*span) if span is not None else None
+                if ws is not None and ws[0] not in seen:
+                    seen.add(ws[0])
+                    weights(ws[0], ws[1], ws[2])
+            for sl in node_runs(group) if depth < INTERIOR_DEPTH else ():
+                a, lo, hi = int(sl[1]), int(sl[2]), int(sl[3])
+                if pi.member_at(a, lo, hi) is None:
+                    pr = pi.by_i.get(a)
+                    pd = pi.describe(pr) if pr is not None else None
+                    if pd is not None and pd["members"] == [] and pd["family"] in EVALUATORS:
+                        walk(pi, pr, depth + 1)                                    # the interior producer's weights are the VU's too
 
     for vu in picked:
         pi = indices[vu["request_id"]]
