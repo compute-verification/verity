@@ -19,8 +19,8 @@ and derives the block's `Bits` from its `KS`.
 * `Bext_cost_le`: `B_ext`'s branches are one extraction each, the second's coins uniform too (`bextSwap`), so its
   expected calls are at most `2·(own + t·runs)` for an extractor with `own` own calls, `runs` expected reruns, and
   runs of at most `t` calls.
-* `lamLin_bound`, `Bits_of_KSLin`: `κ + t·√γ·2^{−255.5} + t·2βc/2^256 ≤ t·2^{−lamLin κ γ β c}`, so `KSLin` with
-  `StrictBirthday` for `B` and `ExpectedCR` for `Bext` gives `BitsLin` at `lamLin`.
+* `lamLin_bound`, `Bits_of_KSLin`: `κ + t·√γ·2^{−255.5} + t·2βc/2^256 ≤ t·2^{−lamLin κ γ β c}`, so `KSLin` on a
+  scope (`KSLinOn`) with `StrictBirthday` for `B` and `ExpectedCR` for `Bext` gives `BitsLin` at `lamLin` on it.
 * `Bits_of_KS`: **the block's bits from its KS**, given the extractor's expected reruns and own calls (`Efficient`'s)
   and a nonnegative table error.
 -/
@@ -282,16 +282,16 @@ section Bits
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **Bits from `KSLin` at `B_ext`**: `KSLin` at `β = 1` and `Bext`, an extractor with at most `own(x)` own calls and
-`runs(x)` reruns in expectation, `κ > 0`, `γ ≥ 0`, and `runs + own ≤ c` with `c > 0`, give `λ = lamLin κ γ 1 c` bits,
-where `B` obeys the strict birthday bound and `B_ext` the expected-time one. -/
-theorem Bits_of_KSLin {H : Msg → Msg} {V : Verifier Coin} {R : Rel W} {E : Extractor Coin W V} {κ γ runs c : Msg → ℝ}
-    {own : Msg → ℕ} (h : KSLin H V R E κ γ (fun _ => 1) (Bext H V E)) (hruns : ExtractRunsExpLe H E runs)
-    (hown : ExtractOwnLe H E own) (hκ : ∀ x, 0 < κ x) (hγ : ∀ x, 0 ≤ γ x) (hc0 : ∀ x, 0 < c x)
-    (hc : ∀ x, runs x + own x ≤ c x) :
-    BitsLin H V R E (Bext H V E) fun x => lamLin (κ x) (γ x) 1 (c x) := by
-  intro x Ω _ _ P t ht hrun hSB hECR
-  have hks := h x Ω P
+/-- **Bits from `KSLinOn` at `B_ext`**: `KSLin` at `β = 1` and `Bext` on a scope, an extractor with at most `own(x)`
+own calls and `runs(x)` reruns in expectation, `κ > 0`, `γ ≥ 0`, and `runs + own ≤ c` with `c > 0`, give
+`λ = lamLin κ γ 1 c` bits on that scope, where `B` obeys the strict birthday bound and `B_ext` the expected-time one. -/
+theorem Bits_of_KSLin {H : Msg → Msg} {V : Verifier Coin} {Scope : Msg → Prop} {R : Rel W} {E : Extractor Coin W V}
+    {κ γ runs c : Msg → ℝ} {own : Msg → ℕ} (h : KSLinOn H V Scope R E κ γ (fun _ => 1) (Bext H V E))
+    (hruns : ExtractRunsExpLe H E runs) (hown : ExtractOwnLe H E own) (hκ : ∀ x, 0 < κ x) (hγ : ∀ x, 0 ≤ γ x)
+    (hc0 : ∀ x, 0 < c x) (hc : ∀ x, runs x + own x ≤ c x) :
+    BitsLin H V Scope R E (Bext H V E) fun x => lamLin (κ x) (γ x) 1 (c x) := by
+  intro x hx Ω _ _ P t ht hrun hSB hECR
+  have hks := h x hx Ω P
   have ht1 : (1 : ℝ) ≤ t := by exact_mod_cast ht
   have hB : PrB H V P x ≤ (2 * (t : ℝ)) ^ 2 / 2 ^ (513 : ℝ) := by
     unfold PrB
