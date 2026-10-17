@@ -423,6 +423,11 @@ def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def unclaimed(policy: dict) -> dict:
+    """The control's lock without its `claims` section, for a test that lists guarantees of its own."""
+    return {k: v for k, v in policy.items() if k != "claims"}
+
+
 def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     """`Facts.lean`'s renaming and unfolding on a real build: a guarantee lifted into a `Guarantees` definition (its old theorem
     kept as the lemma that proves it), one whose statement holds a proof Lean abstracts out of a definition (`_proof_1`), and a
@@ -436,7 +441,7 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     moves.write_text("namespace Control\ndef f (n : Nat) : Nat := n + 0\ndef g (n : Nat) : Nat := n\n"
                      "theorem a (n : Nat) : f n = n := rfl\ntheorem b (n : Nat) : g n = n := rfl\n"
                      f"theorem c (n : Nat) : {fin} := rfl\nend Control\n")
-    pol = A.load(pkg)
+    pol = unclaimed(A.load(pkg))
     A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Moves": {"imports": []}},
                        "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.a", "Control.b", "Control.c")}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
@@ -513,7 +518,7 @@ def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
         "theorem v (h : Hyp) (n : Nat) : double n = n + n := by unfold double; omega\n"
         "theorem w (n : Nat) : double n = n + n := by unfold double; omega\n"
         "end Control\n")
-    A.dump(pkg, A.load(pkg) | {"guarantees": {f"Control.{n}": {"owner": "@lean"} for n in ("main_thm", *"pqrstvw")}})
+    A.dump(pkg, unclaimed(A.load(pkg)) | {"guarantees": {f"Control.{n}": {"owner": "@lean"} for n in ("main_thm", *"pqrstvw")}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda: A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)
     build()
@@ -652,7 +657,7 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
         "section\nvariable {k : Nat} (j : Nat) [Inhabited (Fin k)]\n"
         "open Classical in\ntheorem pick (p : Prop) : (if p then j else j) = j + 0 := by split <;> rfl\nend\n"
         "end Control.Sub\n")
-    pol = A.load(pkg)
+    pol = unclaimed(A.load(pkg))
     A.dump(pkg, pol | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.Sub.twice", "Control.Sub.refl",
                                                                         "Control.Sub.pick")},
                        "layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Defs"]}}})
