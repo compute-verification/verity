@@ -11,7 +11,7 @@ the honest prover sends from its table and weight there, each model step keeps t
 
 * **challenges** (`chal_sync`, `chals_sync`, `chals_split_sync`): the model's challenges are the coin pairs of their
   rounds (`chs`, `chals_fst`), and each message the folded tables' round polynomial;
-* **level 0** (`head_sync`, `JPre.pre0`): the out-of-domain sample on the table, then level 0's challenges and split;
+* **level 0** (`ood0_sync`, `JPre.pre0`): the out-of-domain sample on the table, then level 0's challenges and split;
 * **an out-of-domain intro** (`ood_sync`, `JPre.oodStep`) and **a level's query and close** (`close_sync`,
   `JPre.closeStep`);
 * **a level's four challenges** (`JPre.chalsStep`): the fold, then the split (`WPre.fold`, `WAt.lift`);
@@ -174,7 +174,7 @@ theorem gOf_dot (a b : Array F128) {N : ℕ} (ha : a.size = N) (hb : b.size = N)
 /-- **Level 0's out-of-domain sample and first message**: on the claim `Σ tb·b = T`, the claim after the sample is the
 prover's on its table and weight, when the value read is `tb`'s extension at the model's point and the message the
 round polynomial of the table against the weight. -/
-theorem head_sync {p : LigeritoProof} {cf : ℕ → ℕ → F128} {e : ℕ} {T : F128} {cap : Array ByteArray}
+theorem ood0_sync {p : LigeritoProof} {cf : ℕ → ℕ → F128} {e : ℕ} {T : F128} {cap : Array ByteArray}
     {t : Transcript} {tb b : Array F128} (htb : tb.size = 2 ^ (e + 1)) (hb : b.size = 2 ^ (e + 1))
     (hT : dot tb b = T) (hy : p.oodValues[0]! = mleF tb (vec cf t (e + 1)))
     (hm : p.messages[0]! = roundPoly (embedF tb)
@@ -363,7 +363,7 @@ theorem JPre.pre0 {p : LigeritoProof} {cf : ℕ → ℕ → F128} {T : F128} {ca
       (liftU (foldKs (chs cf (head p cf nn (init T) (start cap T t)).2 k0)
         (addScaled (embedF b) (embedF (eqTable (vec cf t nn))) (cf (t.k + 1) 0)))) e := by
   subst hn hk
-  have hS := head_sync (p := p) (cf := cf) (cap := cap) (e := e + j) htb hb hT hy hm0
+  have hS := ood0_sync (p := p) (cf := cf) (cap := cap) (e := e + j) htb hb hT hy hm0
   obtain ⟨hW, ho⟩ := (WAt.start b hb).oodHead (fun o h => by simp at h) rfl (vec cf t (e + j + 1)) (by simp [vec])
     (cf (t.k + 1) 0)
   rw [List.nil_append] at hW ho

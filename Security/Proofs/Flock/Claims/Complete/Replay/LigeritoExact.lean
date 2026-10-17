@@ -3,14 +3,15 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
 
 /-!
-# The honest Ligerito meets its final identity
+# The honest Ligerito meets its final identity, walked exactly
 
-`Lg.honest : Lg.Honest`. The honest prover's Ligerito (`ligeritoP`) is walked on its own state (`VRuns`: from a state
-with `I` at transcript position `k`, every run ends at position `k'`, only pushes onto its lists, and returns a value
-and state with `J`), each step's value and state exact (the squeezes' coins are the replies', `cfOf`). Along the walk
-the verifier's model (`Lg.out`), on the proof the prover returns, keeps `Lg.JPre` with the prover's table and weight,
-step by step (`JPre.pre0`, `JPre.oodStep`, `JPre.closeStep`, `JPre.chalsStep`), and the last level's `JPre.final` is
-the final identity.
+`Lg.Exact.honest : Lg.Honest`. The honest prover's Ligerito (`ligeritoP`) is walked on its own state (`VRuns`: from a
+state with `I` at transcript position `k`, every run ends at position `k'`, only pushes onto its lists, and returns a
+value and state with `J`), each step's value and state exact (the squeezes' coins are the replies', `cfOf`). Along the
+walk the verifier's model (`Lg.out`), on the proof the prover returns, keeps `Lg.JPre` with the prover's table and
+weight, step by step (`JPre.pre0`, `JPre.oodStep`, `JPre.closeStep`, `JPre.chalsStep`), and the last level's
+`JPre.final` is the final identity: level 0 starts the level loop (`lv0Inv`), an inner level keeps `LvInv` (`lvStep`),
+and the last gives `Final` (`finStep`).
 -/
 
 namespace FlockComplete.Replay
@@ -20,7 +21,7 @@ open Flock FlockSoundness FlockSoundness.Refine Transcript
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-namespace Lg
+namespace Lg.Exact
 
 /-! ## The relation -/
 
@@ -350,7 +351,7 @@ theorem chs_eq (cf : ℕ → ℕ → F128) (t : Transcript) (j : ℕ) : chs cf t
 theorem push_get_size {γ : Type} [Inhabited γ] (A : Array γ) (x : γ) : (A.push x)[A.size]! = x :=
   Pre.get (Pre.refl _)
 
-theorem Pre.get_lt {γ : Type} [Inhabited γ] {A B : Array γ} (h : Pre A B) {i : ℕ} (hi : i < A.size) : B[i]! = A[i]! := by
+theorem pre_get {γ : Type} [Inhabited γ] {A B : Array γ} (h : Pre A B) {i : ℕ} (hi : i < A.size) : B[i]! = A[i]! := by
   obtain ⟨C, rfl⟩ := h
   rw [getElem!_pos _ i (by simp; omega), Array.getElem_append_left hi, ← getElem!_pos A i hi]
 
@@ -619,7 +620,7 @@ theorem lvStep {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} 
   have hxm : x.2.1.msg = S.msgs.size := by rw [hI.msg, h.msgs]
   have hxk : x.2.2.k = kk := by rw [hI.k, hkk]
   have hP4 : ∀ i < S₄.msgs.size, P.messages[i]! = S₄.msgs[i]! := fun i hi =>
-    (hA.1.1.get_lt (by rw [hmsgs]; simp only [Array.size_push]; omega)).trans (hGm.get_lt hi)
+    (pre_get hA.1.1 (by rw [hmsgs]; simp only [Array.size_push]; omega)).trans (pre_get hGm hi)
   have hc := hJ0.chalsStep (p := P) (cf := cf) (t := x.2.2)
     (fun k hk => by rw [hxm, hP4 _ (by omega), h4.msg k hk, chs_eq, hxk, hgt])
     (by rw [hxm, hP4 _ (by omega), h4.last, h4.tab, h4.w, chs_eq, hxk, hgt])
@@ -758,13 +759,13 @@ theorem lv0Inv {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} 
   have hE1 : Ext P S₁ := hE2.of_grow hG2
   have hzv : z = vec cf t sch.n := by rw [hz]; rfl
   rw [hzv] at h1w h1m h1o
-  have hP2 : ∀ i < S₂.msgs.size, P.messages[i]! = S₂.msgs[i]! := fun i hi => hE2.1.get_lt hi
+  have hP2 : ∀ i < S₂.msgs.size, P.messages[i]! = S₂.msgs[i]! := fun i hi => pre_get hE2.1 hi
   have hhk : (head P cf sch.n (init T) (start cm0.cap T t)).2.k = t.k + 2 := by simp
   have hhm : (head P cf sch.n (init T) (start cm0.cap T t)).1.msg = S₁.msgs.size := by simp [h1ms]
   have hp0 := JPre.pre0 (p := P) (cf := cf) (cap := cm0.cap) (t := t) (k0 := sch.k0) (e := sch.n - sch.k0)
     (j := sch.k0 - 1) (by omega) (by omega) htb hb hT
-    (by have := hE1.2.1.get_lt (i := 0) (by rw [h1o]; simp); rw [this, h1o]; rfl)
-    (by have := hE1.1.get_lt (i := 0) (by rw [h1m]; simp); rw [this, h1m]; rfl)
+    (by have := pre_get hE1.2.1 (i := 0) (by rw [h1o]; simp); rw [this, h1o]; rfl)
+    (by have := pre_get hE1.1 (i := 0) (by rw [h1m]; simp); rw [this, h1m]; rfl)
     (fun k hk => by rw [hhm, hP2 _ (by omega), h2.msg k hk, chs_eq, hhk, h1t, h1w])
     (by rw [hhm, hP2 _ (by omega), h2.last, h2.tab, h2.w, hj1, chs_eq, hhk, h1t, h1w])
   have hho : (head P cf sch.n (init T) (start cm0.cap T t)).1.ood = S₁.oods.size := by simp [h1os]
@@ -875,8 +876,8 @@ theorem finStep {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule}
   have hxk : x.2.2.k = kk := by rw [hI.k, hkk]
   have hx1 : x.1.1 - 4 = sch.n - sch.k0 - 3 * (j + 1) := by rw [hI.sd]; omega
   have hP4 : ∀ i < S₄.msgs.size, P.messages[i]! = S₄.msgs[i]! := fun i hi =>
-    (hA.1.1.get_lt (by have := hG.1; obtain ⟨C, hC⟩ := this; rw [hC, Array.size_append]; omega)).trans
-      (hG.1.get_lt hi)
+    (pre_get hA.1.1 (by have := hG.1; obtain ⟨C, hC⟩ := this; rw [hC, Array.size_append]; omega)).trans
+      (pre_get hG.1 hi)
   unfold stepL at hDn ⊢
   simp only [hx1] at hDn ⊢
   generalize htq : ap (fun Q => P.finalProof.yr.foldl (fun Q w => pF w Q) Q) (chals P cf #[] x.2.1 x.2.2 4).2.2 = tq
@@ -1040,6 +1041,6 @@ theorem honest : Honest := by
   · exact ⟨⟨Pre.refl _, Pre.refl _, Pre.refl _, Pre.refl _, Pre.refl _⟩, rfl, Pre.refl _⟩
   · rfl
 
-end Lg
+end Lg.Exact
 
 end FlockComplete.Replay
