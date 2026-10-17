@@ -108,7 +108,17 @@ theorem identity (Z : Model K R T L U F X) (P : Labelled K) (lam : R → ℝ) (d
         (1 - Z.muX) * Z.chiStar lam) / Z.bnd P =
       1 - Z.epsCert P lam - Z.epsSkip P lam - Z.epsRoute P lam - Z.epsMand P lam - Z.epsLuck P lam dbar -
         Z.epsAdapt P lam abar := by
-  sorry
+  obtain ⟨-, -, hNw, hB, -⟩ := hZ
+  have hn : Z.G.price lam P.n =
+      Z.G.price lam P.nw + Z.G.price lam P.nf + Z.G.price lam P.nx + Z.G.price lam P.ns := by
+    change Z.G.price lam (fun k => P.nw k + P.nf k + P.nx k + P.ns k) = _
+    rw [price_add, price_add, price_add]
+  have hNw' := hNw.ne'
+  have hB' := hB.ne'
+  simp only [Model.epsCert, Model.epsSkip, Model.epsRoute, Model.epsMand, Model.epsLuck, Model.epsAdapt,
+    Model.kappa, hn]
+  field_simp
+  ring
 
 end Lemmas
 
