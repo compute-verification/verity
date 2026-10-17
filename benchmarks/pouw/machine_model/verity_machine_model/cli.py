@@ -161,6 +161,8 @@ def _thr(t: float | None) -> str:
 
 def _mix(m: E.Mix, per_mma: float) -> str:
     w = ", ".join(f"{r} {100 * max(m.words[r], 0.0) + 0.0:.1f}%" for r in E.ROUTES if r != "table" or m.words[r])
+    if m.forms:
+        w += "; tensor on " + ", ".join(f"{k} {100 * x:.1f}%" for k, x in sorted(m.forms.items(), key=lambda t: -t[1]))
     up = "".join(f"; filler {j + 1} on UP {100 * max(x, 0.0) + 0.0:.0f}%" for j, x in enumerate(m.filler_uniform))
     return (f"{m.T * per_mma:.3f} SMSP-cycles a MMA ({w}{up}), "
             f"binding {', '.join(m.binding)}")
@@ -209,7 +211,8 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
         "baseline": {"cycles_per_mma": e.baseline.T * per_mma, "binding": e.baseline.binding,
                      "words": e.baseline.words, "program": d.baseline_name},
         "cheat": {"cycles_per_mma": e.cheat.T * per_mma, "binding": e.cheat.binding, "words": e.cheat.words,
-                  "filler_uniform": e.cheat.filler_uniform, "pi": e.cheat.pi},
+                  "forms": e.cheat.forms, "filler_uniform": e.cheat.filler_uniform, "pi": e.cheat.pi},
+        "honest_form": e.honest.form,
         "lucky_cycles_per_mma": e.lucky.T * per_mma, "deficit": e.deficit, "lucky_short": e.lucky.short,
         "measured_cycles_per_mma": e.T_honest_measured * per_mma if e.T_honest_measured else None,
         "checking": checking, "terms": e.terms(), "cert": e.cert, "route": e.route, "floor": e.floor,
@@ -307,7 +310,8 @@ def _eps(args) -> int:
     built = {"H": "honest as built", "model": "honest as built",
              "floor": f"the floor program ♭ (the tensor route at φ_del = {floor} a MMA)"}
     print(f"{d.name}: {d.summary}")
-    print(f"  Π: {pi.vector}'s {len(pi.rows)} rows; honest {h.name} ({h.status}): {h.mma}, {h.words} words a MMA; "
+    print(f"  Π: {pi.vector}'s {len(pi.rows)} rows; honest {h.name} ({h.status}): {h.mma} ({h.form}), {h.words} words a "
+          f"MMA; the cheater's tensor route on any of {sum(f.kind in pi.c for f in E.forms(args.data))} MMA forms; "
           f"L {d.L}; fold {d.fold_name} {d.fold_cost():g} a word ({', '.join(f'{k} {v:g}' for k, v in d.fold.items())});"
           f" filler {filler}")
     print(f"  {built[args.credit]}: {_mix(e.as_built, per_mma)}")
