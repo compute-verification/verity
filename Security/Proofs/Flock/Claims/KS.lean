@@ -46,6 +46,7 @@ import Proofs.Flock.Claims.KS.PlainEvent
 import Proofs.Flock.Claims.KS.LiveMix
 import Proofs.Flock.Claims.KS.PlainFirst
 import Proofs.Flock.Claims.KS.PlainThird
+import Proofs.Flock.Claims.KS.ForkSlack
 import Proofs.Flock.Claims.KS.PlainSimW
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
@@ -120,20 +121,21 @@ looked-up column off the word (`Flock.exists_ne_of_off`, `Flock.Pr_le_of_off`), 
 (`FlockDeploy.KS.εtable_one_plain`, `FlockDeploy.KS.bound_le_εtable_zk`), and the old fork and self-clash terms are
 escapes' (`Flock.oldEsc`, `Flock.oldEsc_term`; masked, with the pads roots' and `τ`'s, `Flock.oldEscZ`,
 `Flock.oldEscZ_term`) that fit the weight with the fork event of weight `k` (`FlockDeploy.KS.oldEsc_fitsFork_plain`,
-`FlockDeploy.KS.oldEscZ_fitsFork_zk`), so the salted and masked sessions' `ε_c⁻` are at most `ε_table` and their term
-(`FlockDeploy.KS.epsSL_le`, `FlockDeploy.KS.epsSZ_le`), also averaged over a mixture of strategies
-(`FlockDeploy.KS.mean_epsSL_le`, `FlockDeploy.KS.mean_epsSZ_le`). The plain fork rounds (`Rounds`): rep `r`'s
-level-`ℓ + 1` cap round at table 0, no two of them one (`FlockDeploy.KS.plainJ`, `FlockDeploy.KS.plainJ_inj`), at which
-the old escapes fit the plain weight (`FlockDeploy.KS.oldEsc_fitsFork_plainJ`). At one table the model does not commit
-to, a live verdict is no likelier than the simulated strategy's `ε_c⁻` after `Commit` and its probability of accepting
-off the table (`Mixture`: `FlockDeploy.KS.live_le_epsSL`; over a mixture of live strategies,
-`FlockDeploy.KS.mean_live_le`). The session's bound with its level-0 term only on runs that do not self-clash, a
-self-clash being in `ε_c⁻` already (`SessionSC`: `FlockSoundness.Discharge.Exec.bad_pointwise_ofL_sc`,
+`FlockDeploy.KS.oldEscZ_fitsFork_zk`; the plain weight with level 0's share to spare, `FlockDeploy.KS.plain_fork_room`),
+so the salted and masked sessions' `ε_c⁻` are at most `ε_table` and their term (`FlockDeploy.KS.epsSL_le`,
+`FlockDeploy.KS.epsSZ_le`), also averaged over a mixture of strategies (`FlockDeploy.KS.mean_epsSL_le`,
+`FlockDeploy.KS.mean_epsSZ_le`). The plain fork rounds (`Rounds`): rep `r`'s level-`ℓ + 1` cap round at table 0, no two
+of them one (`FlockDeploy.KS.plainJ`, `FlockDeploy.KS.plainJ_inj`), at which the old escapes fit the plain weight
+(`FlockDeploy.KS.oldEsc_fitsFork_plainJ`). At one table the model does not commit to, a live verdict is no likelier than
+the simulated strategy's `ε_c⁻` after `Commit` and its probability of accepting off the table (`Mixture`:
+`FlockDeploy.KS.live_le_epsSL`; over a mixture of live strategies, `FlockDeploy.KS.mean_live_le`). The session's bound
+with its level-0 term only on runs that do not self-clash, a self-clash being in `ε_c⁻` already (`SessionSC`:
+`FlockSoundness.Discharge.Exec.bad_pointwise_ofL_sc`,
 `FlockSoundness.Discharge.Exec.session_sound_of_table_accL_sc`). At a plain statement of one table, `TableBoundθAt`
 follows from, at each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C`
 unless it self-clashes bounds the deployed runs accepting on `C`, and whose `Adv` and self-clash the escapes' events
 bound, the escapes at the plain fork rounds (`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). `Flock.KS`
-at the plain record follows from the live sessions' bound at table 0 and `Extendθ` (`PlainKS`:
+at the trimmed plain record follows from the live sessions' bound at table 0 (`PlainKS`:
 `FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit` against the simulated strategy arises only on live
 runs the live verdict accepts, whose decoded outputs self-clash (`Escapes`: `FlockDeploy.KS.selfClash_le_live`,
 `FlockDeploy.KS.mean_selfClash_le_live`). Escapes on accepted runs (`OnAcc`, `Claims.Escapes.OnAcc`):
@@ -214,26 +216,35 @@ the mixture's first bound holds (`PlainFirst`: `FlockDeploy.KS.PlainSim`, `Flock
 `FlockDeploy.KS.plain_first_of_sim`), and at the coins that merge each live coin with the rest of a deployed coin, from
 the simulation of the runs alone (`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`,
 `FlockDeploy.KS.plainSim_of_run`, `FlockDeploy.KS.plain_first_of_run`); the checks compare draws only up to
-`JsonEquiv`, which holds between different terms (`FlockDeploy.KS.drawEq_ne`). At those coins, a deployed event
+`JsonEquiv`, which holds between different terms (`FlockDeploy.KS.drawEq_ne`), so acceptance gives the draw only up
+to it (`FlockDeploy.KS.RecordDrawEquiv`, `FlockDeploy.KS.recordDrawEquiv`). At those coins, a deployed event
 that the live event implies bounds the mixture, the third bound's form (`PlainThird`:
 `FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision as the events, KS at the
-deployed plain verifier holds from a live prover for each prover that simulates its accepting runs, whose self-clashes
-give its accepting runs with a collision and whose fork bound holds, the record's draw verbatim and `Extendθ`
-(`PlainSimW`: `FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
-`FlockDeploy.KS.plainLiveWrPAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). Two different columns an accepted plain run's
-reps open at one position collide in its own log (`ConflictTied`: `FlockDeploy.KS.plainRawCols`,
-`FlockDeploy.KS.plain_opening_raw`, `FlockDeploy.KS.plain_selfClash_tied`), so the simulator's self-clashes at level 0
-need only give such columns (`PlainSimW`: `FlockDeploy.KS.PlainRawClashRun`, `FlockDeploy.KS.plainClashRun_of_raw`).
-Where `verify --zk` sets its session up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs`
-(`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's
-(`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's
-draw to the statement's only up to key order, so the old discharge is read at the setup at the statement's draw, which
-reads no draw in the record, with a writer that records the live session there (`ZkDrawJ`:
-`FlockSoundness.Discharge.Composed.AcceptsAt`, `FlockSoundness.Discharge.Composed.runsAtZCJ_live`,
-`FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`, `Claims.Bridge.Custody.wrS`,
-`Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted there
-(`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty draw the deployed `--zk` decoders are right at `zkTabs` at
-public and hidden outputs (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`,
+deployed plain verifier's trimmed record holds from a live prover for each prover, with a finite tape and coins of
+uniform law, that simulates its accepting runs, whose self-clashes give its accepting runs with a collision and whose
+fork bound holds up to a slack, and the record's draw verbatim (`PlainSimW`: `FlockDeploy.KS.PlainClashRun`,
+`FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`, `FlockDeploy.KS.plain_tableBoundθAt_of_sim`,
+`FlockDeploy.KS.plain_KS_of_sim`). The slack is the later rounds' forks and the one-run collision at the chances `δ_t`
+that a fork's coins at round `t` agree where the simulator's tape reads them, `Σ_{j<i<K} Δ_{j,i} Pr[F_i] + Δ_{j,K}
+Pr[F_K]` with `Δ_{j,i} = Π_{j≤t<i} δ_t` and `F_K` the one-run collision; a coupling of the fork's coin law gives it
+(`ForkSlack`: `Claims.Flock.ForkCoinCoupling`, `Claims.Flock.slack_of_coupling`), and it folds into one combined fork
+event per round with the old escapes, which fit the plain weight in level 0's room (`Claims.Flock.slackEsc`,
+`Claims.Flock.slackEsc_term`, `FlockDeploy.KS.slackEsc_fitsFork_plain`). The tape may hold the rest of each deployed
+coin (`plainCoins`) or uniform functions read at the live coins seen so far, so that a fork that redraws them reads
+fresh entries (`LiveMix`: `Claims.Bridge.Live.fnC`, `Claims.Bridge.Live.Pr_fnC`, `Claims.Bridge.Live.Pr_fnAt`). Two
+different columns an accepted plain run's reps open at one position collide in its own log (`ConflictTied`:
+`FlockDeploy.KS.plainRawCols`, `FlockDeploy.KS.plain_opening_raw`, `FlockDeploy.KS.plain_selfClash_tied`), so the
+simulator's self-clashes at level 0 need only give such columns (`PlainSimW`: `FlockDeploy.KS.PlainRawClashRun`,
+`FlockDeploy.KS.plainClashRun_of_raw`). Where `verify --zk` sets its session up at a draw (`FlockDeploy.KS.setupAt`),
+the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`,
+`FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`,
+`FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's draw to the statement's only up to key order,
+so the old discharge is read at the setup at the statement's draw, which reads no draw in the record, with a writer that
+records the live session there (`ZkDrawJ`: `FlockSoundness.Discharge.Composed.AcceptsAt`,
+`FlockSoundness.Discharge.Composed.runsAtZCJ_live`, `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`,
+`Claims.Bridge.Custody.wrS`, `Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted
+there (`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty draw the deployed `--zk` decoders are right at `zkTabs`
+at public and hidden outputs (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`,
 `FlockDeploy.KS.decodesTableH_zkTabs`), and so at every masked statement in scope that `Deploy.V` sets up at a draw,
 which every statement some run accepts carries (`FlockDeploy.KS.acc_draw_of_setup`; `ZkDecJ`:
 `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. The masked session's bound
@@ -282,15 +293,15 @@ bounds the mixture (`ZkFirst`: `FlockDeploy.KS.ZkSimRun`, `FlockDeploy.KS.ZkSim`
 
 The witness-lane bound's level-0 term is one more fork event per table, of weight `2·2^{d₀}·Q₀`. `Escapes.FitsFork`
 charges every fork event at the busiest round's count, two with the conflict fork at round `0`, and at that count the
-masked tables' weight spends level 0's share on `k`'s ceiling (`FlockDeploy.KS.cZ_sum_le_tableWeight`). Counted at
-their own rounds, only round `0`'s events are charged twice, and the escapes' root is `Escapes.le`'s (`FitsR`:
+masked tables' weight spends level 0's share on `k`'s ceiling (`FlockDeploy.KS.cZ_sum_le_tableWeight`). Counted at their
+own rounds, only round `0`'s events are charged twice, and the escapes' root is `Escapes.le`'s (`FitsR`:
 `Claims.collapseR`, `Claims.Escapes.FitsR`, `Claims.Escapes.FitsForkR`, `Claims.Escapes.le_of_fitsR`,
 `Claims.Escapes.Fits.fitsR`, `Claims.Escapes.FitsFork.fitsForkR`, `Claims.Escapes.fitsR_addFork`,
 `Claims.Escapes.fitsForkR_of_round`). Joined by round with level 0's events (`ZkFitsW`: `Claims.Flock.IZW`,
-`Claims.Flock.cZW`, `Claims.Flock.joinEscW`, `Claims.Flock.joinEscW_onAcc`), each table puts at most one event at
-round `0` and every event but one weighs at least `2` (`Claims.Flock.joinEscW_c_le`), and each table's weight pays
-exactly for its events with level 0's and its share of `k` (`FlockDeploy.KS.cZW_sum_le_tableWeight`), so the masked
-escapes with level 0's fit the deployed weight with the fork event of weight `k`, counted per round
+`Claims.Flock.cZW`, `Claims.Flock.joinEscW`, `Claims.Flock.joinEscW_onAcc`), each table puts at most one event at round
+`0` and every event but one weighs at least `2` (`Claims.Flock.joinEscW_c_le`), and each table's weight pays exactly for
+its events with level 0's and its share of `k` (`FlockDeploy.KS.cZW_sum_le_tableWeight`), so the masked escapes with
+level 0's fit the deployed weight with the fork event of weight `k`, counted per round
 (`FlockDeploy.KS.joinEscW_fitsForkR_zk`). At one tape and table, the deployed masked runs accept with no column of table
 `j` off `C` with probability at most `ε_table` and those escapes' term when the mixture bounds them by its acceptance
 with no level-0 opening off `C` on a witness lane (`ZkBoundW`: `Claims.Flock.oldEscW_term_le_join`,
@@ -299,9 +310,9 @@ runs give every masked table's bound with the escapes counted per round (`FlockD
 `Claims.Flock.TableBoundJAccAtR`, `Claims.Flock.TableBoundJAccAt.tableBoundJAccAtR`,
 `FlockDeploy.KS.zk_tableBoundJAccAtR_of_sessionsW`). The live sessions' bound at that verdict, with level 0's events
 bounding the simulated strategies' `Adv₀` after `Commit`, gives those sessions (`ZkLiveW`:
-`FlockDeploy.KS.ZkLiveAccAtWJ`, `FlockDeploy.KS.zkSessWJ_of_liveW`, `FlockDeploy.KS.zk_tableBoundJAccAtR_of_liveW`),
-so at the deployed masked record every table's bound and table 0's with escapes on accepted runs counted per round
-follow from `ZkLiveAccWJ` where some run accepts (`FlockDeploy.KS.ZkLiveAccWJ`, `FlockDeploy.KS.zk_tableBoundJAccAtR`,
+`FlockDeploy.KS.ZkLiveAccAtWJ`, `FlockDeploy.KS.zkSessWJ_of_liveW`, `FlockDeploy.KS.zk_tableBoundJAccAtR_of_liveW`), so
+at the deployed masked record every table's bound and table 0's with escapes on accepted runs counted per round follow
+from `ZkLiveAccWJ` where some run accepts (`FlockDeploy.KS.ZkLiveAccWJ`, `FlockDeploy.KS.zk_tableBoundJAccAtR`,
 `Claims.Flock.TableBoundθAccAtR`, `Claims.Flock.TableBoundJAccAtR.tableBoundθAccAtR`,
 `FlockDeploy.KS.zk_tableBoundθAccAtR`). Escapes fitting per round fit as `Escapes.Fits` asks once their fork events are
 merged by round, with a term no smaller (`JointR`: `Claims.Escapes.mergeR`, `Claims.Escapes.FitsR.fits_mergeR`,

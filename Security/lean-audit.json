@@ -460,11 +460,11 @@
    },
    "Claims.Recursion.Inner.KS": {
     "fails": "Claims.Witness.Recursion.Inner.KS_fails",
-    "meets": ["Claims.Witness.Recursion.Inner.KS_meets"]
+    "meets": ["Claims.Witness.Recursion.Inner.KS_meets", "Claims.Witness.Recursion.Inner.KS_meets_trim"]
    },
    "Claims.Recursion.Inner.KSAbort": {
     "fails": "Claims.Witness.Recursion.Inner.KSAbort_fails",
-    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets"]
+    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets", "Claims.Witness.Recursion.Inner.KSAbort_meets_trim"]
    },
    "Claims.Recursion.KS": {
     "fails": "Claims.Witness.Recursion.KS_fails",
@@ -472,7 +472,7 @@
    },
    "Claims.Recursion.KSFlock": {
     "fails": "Claims.Witness.Recursion.KSFlock_fails",
-    "meets": ["Claims.Witness.Recursion.KSFlock_meets"]
+    "meets": ["Claims.Witness.Recursion.KSFlock_meets", "Claims.Witness.Recursion.KSFlock_meets_trim"]
    },
    "Claims.Recursion.KSPriv": {
     "fails": "Claims.Witness.Recursion.KSPriv_fails",
@@ -5640,6 +5640,34 @@
    ],
    "assumptions": [],
    "type_hash": "64e8fdd77513f3e46276e8072000748f33543d2ec9fba13227fba9f760356865"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_meets_trim": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Inner.KSAbort_meets_trim (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) Claims.GS.plainDecodeRD"
+   ],
+   "assumptions": [],
+   "type_hash": "c5137cf425edf917a955a451eb90a08b9db0117206d95778cf4ec5fd44533401"
+  },
+  "Claims.Witness.Recursion.Inner.KS_meets_trim": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.Inner.KS_meets_trim (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) Claims.GS.plainDecodeRD"
+   ],
+   "assumptions": [],
+   "type_hash": "c5137cf425edf917a955a451eb90a08b9db0117206d95778cf4ec5fd44533401"
+  },
+  "Claims.Witness.Recursion.KSFlock_meets_trim": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSFlock_meets_trim (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  And (Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) Claims.GS.plainDecodeRD)",
+    "    (Claims.Recursion.decOK (FlockDeploy.deployZkTrim rel) Claims.GS.zkDecodeRD)"
+   ],
+   "assumptions": [],
+   "type_hash": "1f2e0eca9b75a5703db156348b8c0831e09abd80aa789e0b6b3bd42f4e0567eb"
   }
  },
  "shape": {
@@ -7784,7 +7812,10 @@
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Claims.Flock.Complete_meets_plain",
-    "Claims.Flock.Complete_meets_zk"
+    "Claims.Flock.Complete_meets_zk",
+    "Claims.Witness.Recursion.Inner.KSAbort_meets_trim",
+    "Claims.Witness.Recursion.Inner.KS_meets_trim",
+    "Claims.Witness.Recursion.KSFlock_meets_trim"
    ]
   },
   "Definitions.Claims.Hm96": {
@@ -7943,10 +7974,13 @@
     "Claims.Witness.Recursion.Efficient_meets",
     "Claims.Witness.Recursion.Inner.KSAbort_fails",
     "Claims.Witness.Recursion.Inner.KSAbort_meets",
+    "Claims.Witness.Recursion.Inner.KSAbort_meets_trim",
     "Claims.Witness.Recursion.Inner.KS_fails",
     "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.Inner.KS_meets_trim",
     "Claims.Witness.Recursion.KSFlock_fails",
     "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSFlock_meets_trim",
     "Claims.Witness.Recursion.KSPriv_fails",
     "Claims.Witness.Recursion.KSPriv_meets",
     "Claims.Witness.Recursion.KS_fails",
@@ -13700,7 +13734,10 @@
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
     "Claims.Flock.Complete_meets_plain",
-    "Claims.Flock.Complete_meets_zk"
+    "Claims.Flock.Complete_meets_zk",
+    "Claims.Witness.Recursion.Inner.KSAbort_meets_trim",
+    "Claims.Witness.Recursion.Inner.KS_meets_trim",
+    "Claims.Witness.Recursion.KSFlock_meets_trim"
    ]
   },
   "Flock.Firewall": {
@@ -19051,7 +19088,10 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "Claims.Witness.Recursion.Inner.KSAbort_meets_trim",
+    "Claims.Witness.Recursion.Inner.KS_meets_trim",
+    "Claims.Witness.Recursion.KSFlock_meets_trim"
    ]
   },
   "Proofs.Flock.Level3.Bits": {
@@ -19195,7 +19235,10 @@
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum",
     "Claims.Flock.Complete_meets_plain",
-    "Claims.Flock.Complete_meets_zk"
+    "Claims.Flock.Complete_meets_zk",
+    "Claims.Witness.Recursion.Inner.KSAbort_meets_trim",
+    "Claims.Witness.Recursion.Inner.KS_meets_trim",
+    "Claims.Witness.Recursion.KSFlock_meets_trim"
    ]
   },
   "Proofs.Flock.Level3.GF128Ring": {
