@@ -44,7 +44,7 @@ source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 o
 [baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
 name = "dp4a"
 program = { IDP4A = 8, LDS128 = 0.5 }
-source = "dp4a at 8 IDP4A a word at L = 32 (IDP4A on the FMA pipe's row on sm_80, with FFMA and IMAD), its loads 2(a + b)/(ab) LDS.128 a word at a = b = 8, scaled by L/32"
+source = "dp4a at 8 IDP4A a word at L = 32 (IDP4A on the IMAD pipe's row I on sm_80, with FFMA and IMAD), its loads 2(a + b)/(ab) LDS.128 a word at a = b = 8, scaled by L/32"
 
 [routes]
 lanes = true
