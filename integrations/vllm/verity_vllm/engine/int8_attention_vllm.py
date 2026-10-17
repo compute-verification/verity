@@ -10,7 +10,7 @@ block sizes, `reshape_and_cache_flash` writing K after RoPE and V as bf16).  The
 bf16 on every window: K's per-token scales could be stored with an int8 K (a cache spec of its own, more than a backend), but V's
 per-channel scale reads the whole window, so an int8 V would have to be requantized as the window grows.
 
-`Int8AttentionImpl.forward` runs `engine.int8_attention.paged_attention` on the cache, with its layer's K scales (the served
+`Int8AttentionImpl.forward` runs `engine.int8_ops.paged_attention` on the cache, with its layer's K scales (the served
 checkpoint's `engine.int8_k_scales` table, looked up by the model's revision when the impl is built and by the layer's name in each
 call), and counts its calls (`int8_arm` and `calls`, read back by `kernel_readback.int8_exact_of` and `int8_attention.applied_record`).  It refuses what the step does not define:
 ALiBi, a sliding window, a logit soft cap, sinks, non-decoder attention, a quantized KV cache, cascade attention, decode context
@@ -29,6 +29,7 @@ from vllm.v1.attention.backends.registry import AttentionBackendEnum, register_b
 
 from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_k_scales as K
+from verity_vllm.engine import int8_ops
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NAME = TargetProfile.INT8_EXACT_ATTENTION_BACKEND
@@ -74,7 +75,7 @@ class Int8AttentionImpl(FlashAttentionImpl):
         n = attn_metadata.num_actual_tokens
         key_cache, value_cache = kv_cache.transpose(1, 2).split(self.head_size, dim=-1)
         self.calls += 1
-        A.paged_attention(query[:n], key_cache, value_cache, attn_metadata.query_start_loc, attn_metadata.seq_lens,
+        int8_ops.paged_attention(query[:n], key_cache, value_cache, attn_metadata.query_start_loc, attn_metadata.seq_lens,
                           attn_metadata.block_table, self.k_scales(layer.layer_name, query.device), self.scale, output[:n])
         return output
 

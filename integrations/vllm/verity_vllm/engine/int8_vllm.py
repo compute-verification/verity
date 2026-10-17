@@ -8,7 +8,7 @@ weight is int8 [N, K] with a float32 `weight_scale` [N, 1].
 
 Every linear layer (`LinearBase`) gets an `Int8PlainLinearMethod` with its own prefix; nothing else is quantized (the embedding
 and `lm_head` are vocabulary embeddings, attention keeps its KV cache unquantized).  The method computes
-`engine.int8_exact.plain_linear` and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  Loading
+`engine.int8_exact.plain_linear` as one ``verity_int8::linear`` call (`engine.int8_ops`) and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  Loading
 refuses a weight outside [-127, 127] and a scale that is not finite and positive; a layer refuses tensor parallelism (a row-parallel
 shard would take each row's activation scale over its own K slice, not the row's), a bias, K or N not a multiple of 8, K > MAX_K, and
 activations that are not bf16.
@@ -25,6 +25,7 @@ from vllm.model_executor.layers.quantization.base_config import QuantizationConf
 from vllm.model_executor.parameter import ChannelQuantScaleParameter, ModelWeightParameter
 
 from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine import int8_ops
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NAME = TargetProfile.INT8_EXACT_QUANTIZATION
@@ -67,7 +68,11 @@ class Int8PlainLinearMethod(LinearMethodBase):
         if x.dtype != torch.bfloat16:
             raise ValueError(f"{self.prefix}: activations are {x.dtype}, the plain arm quantizes bf16")
         self.calls += 1
-        return E.plain_linear(x, layer.weight, layer.weight_scale)
+        lead, k = x.shape[:-1], x.shape[-1]
+        x2 = x.reshape(-1, k)
+        if x2.shape[0] == 0:
+            return x.new_empty(*lead, layer.weight.shape[0])
+        return int8_ops.linear(x2, layer.weight, layer.weight_scale)[2].reshape(*lead, layer.weight.shape[0])
 
 
 class Int8ExactConfig(QuantizationConfig):

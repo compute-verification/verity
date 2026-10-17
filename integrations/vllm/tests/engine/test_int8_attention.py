@@ -10,6 +10,7 @@ import torch
 
 from tests.engine import fattn_oracle as O
 from verity_vllm.engine import int8_attention as A
+from verity_vllm.engine import int8_ops
 
 
 def _words(t: torch.Tensor) -> torch.Tensor:
@@ -103,10 +104,10 @@ def test_zero_floored_and_clamped_values():
 
 def test_a_large_a_saturates_like_the_reference():
     q, k, v = _window(30, 2, 1, 16, seed=8, scale=50.0)
-    ks = torch.tensor([100.0])                   # sigma far past 1 / (16 log2 e): A past 2^32, capped at 2^40
+    ks = torch.tensor([100.0])                   # sigma far past 1 / (16 log2 e): A past 2^32, saturated at 2^32 - 1
     qi, sq = A.quant(q[:, :2].transpose(0, 1).float(), -1)
     a = A.fixed_point_a(sq, ks[0], 1.0)
-    assert (a == A.A_CAP).any() and (a > 2 ** 32).all()
+    assert (a == A.A_CAP).all()
     _same(A.window_attention(q, k, v, ks, 1.0), O.attention(q, k, v, ks, 1.0))
 
 
@@ -163,12 +164,12 @@ def test_a_paged_batch_is_each_request_alone():
     query = torch.cat([q[s - n:] for (q, _, _), s, n in zip(windows, lens, rows)])
     qsl = torch.tensor([0, *torch.tensor(rows).cumsum(0).tolist()], dtype=torch.int32)
     out = torch.full_like(query, float("nan"))
-    A.paged_attention(query, kc, vc, qsl, torch.tensor(lens, dtype=torch.int32), table, ks, 32 ** -0.5, out)
+    int8_ops.paged_attention(query, kc, vc, qsl, torch.tensor(lens, dtype=torch.int32), table, ks, 32 ** -0.5, out)
     for r, ((q, k, v), s, n) in enumerate(zip(windows, lens, rows)):
         got = out[qsl[r]:qsl[r + 1]]
         _same(got, O.attention(q[s - n:], k, v, ks, 32 ** -0.5))
         alone = torch.empty_like(got)
-        A.paged_attention(q[s - n:], kc, vc, torch.tensor([0, n], dtype=torch.int32), torch.tensor([s], dtype=torch.int32),
+        int8_ops.paged_attention(q[s - n:], kc, vc, torch.tensor([0, n], dtype=torch.int32), torch.tensor([s], dtype=torch.int32),
                           table[r:r + 1], ks, 32 ** -0.5, alone)
         _same(got, alone)
 
@@ -187,5 +188,5 @@ def test_refusals():
         A.window_attention(q2, k2, v2, torch.ones(1), 0.25)
     kc, vc, table = _paged([(q, k, v)], 16, seed=0)
     with pytest.raises(ValueError, match="chunked prefill"):
-        A.paged_attention(q[:3], kc, vc, torch.tensor([0, 3], dtype=torch.int32), torch.tensor([8], dtype=torch.int32), table,
+        int8_ops.paged_attention(q[:3], kc, vc, torch.tensor([0, 3], dtype=torch.int32), torch.tensor([8], dtype=torch.int32), table,
                           torch.ones(2), 0.25, torch.empty_like(q[:3]))

@@ -12,10 +12,10 @@ operation; every division a true IEEE division):
 * K [s, d], ONE scale per (layer, KV head), s_k (`engine.int8_k_scales`, calibrated offline): K' = clamp(round(RN32(k / s_k)),
   -127, 127);
 * S = Q' K'^T exactly (one ``torch._int_mm`` over the group's rep heads stacked, int32: |S| <= d 127^2);
-* A = min(rint(RN64(RN64(RN64(RN64(s_q s_k) scale) log2(e)) 16) 2^32), 2^40) per query row, fattn.cu's `fa_A` with
+* A = min(rint(RN64(RN64(RN64(RN64(s_q s_k) scale) log2(e)) 16) 2^32), 2^32 - 1) per query row, fattn.cu's `fa_A` with
   sigma = s_q s_k scale (the logit of one unit of S): float64, left to right, rint ties to even;
-* for the row at position pos: m = max S over keys 0..pos, t = min(((m - S) A) >> 32, 255) (int64; fattn's umulhi(m - S, A)
-  for A < 2^32, and the same t for any larger A: past 255 2^32 every key but the max one is 255 already), e = LUT[t] with
+* for the row at position pos: m = max S over keys 0..pos, t = min(((m - S) A) >> 32, 255) (int64; fattn's
+  umulhi(m - S, A), A saturated to fattn's uint32_t), e = LUT[t] with
   LUT[t] = rint(127 2^(-t/16)) at keys 0..pos and 0 past pos (so the max key's e is 127);
 * L = sum e (integer), r = RN32(1 / L) and z = RN32(e(0) / L) (fattn's s_q and z_q);
 * P = e at keys 1..pos, 0 at key 0 (key 0 is its own block, the sink term below) and past pos: s8 in [0, 127];
@@ -49,8 +49,8 @@ LUT_SIZE = 256
 #: fattn_ref.py's table: LUT[t] = rint(127 2^(-t/16)), t in 0..255
 LUT = np.rint(127.0 * np.exp2(-np.arange(LUT_SIZE) / 16.0)).astype(np.int64)
 LOG2E = 1.4426950408889634
-#: A at or past 255 2^32 gives t = 255 at every key whose m - S >= 1, so capping A there changes no t
-A_CAP = 1 << 40
+#: fattn.cu's A is a uint32_t: past it, A saturates
+A_CAP = (1 << 32) - 1
 #: m - S <= 2 d 127^2 < 2^23 for d <= 256, so (m - S) A < 2^63
 MAX_HEAD_DIM = 256
 
@@ -68,7 +68,7 @@ def quant_static(x: torch.Tensor, s: torch.Tensor) -> torch.Tensor:
 
 
 def fixed_point_a(s_q: torch.Tensor, s_k: torch.Tensor, scale: float) -> torch.Tensor:
-    """A (int64) per query row: min(rint((((s_q s_k) scale) log2(e)) 16 2^32), 2^40) in float64, left to right."""
+    """A (int64) per query row: min(rint((((s_q s_k) scale) log2(e)) 16 2^32), 2^32 - 1) in float64, left to right."""
     sigma = (s_q.double() * s_k.to(device=s_q.device, dtype=torch.float64)) * float(scale)
     a = torch.round(((sigma * LOG2E) * 16.0) * 4294967296.0)
     return a.clamp_(max=float(A_CAP)).long()
@@ -130,22 +130,6 @@ def window_of(key_cache: torch.Tensor, value_cache: torch.Tensor, blocks: torch.
     pos = torch.arange(s, device=key_cache.device)
     slot = blocks[pos // bs].long()
     return key_cache[slot, pos % bs], value_cache[slot, pos % bs]
-
-
-def paged_attention(query: torch.Tensor, key_cache: torch.Tensor, value_cache: torch.Tensor, query_start_loc: torch.Tensor,
-                    seq_lens: torch.Tensor, block_table: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor) -> None:
-    """Every request of a batch, one window each, into output [T, H, d]: request r's query rows query[qsl[r]:qsl[r+1]] are its
-    window's last rows, its window its first seq_lens[r] tokens in the caches (vLLM's FlashAttention metadata and layout).
-    A request whose rows are neither its whole window nor one row (a chunked prefill's later chunk) is refused."""
-    qsl, lens = query_start_loc.tolist(), seq_lens.tolist()
-    for r, s in enumerate(lens):
-        q0, q1 = qsl[r], qsl[r + 1]
-        if q1 == q0:
-            continue
-        if q1 - q0 not in (1, s):
-            raise ValueError(f"int8 attention: request {r} brings {q1 - q0} rows of a {s}-token window (a chunked prefill)")
-        k, v = window_of(key_cache, value_cache, block_table[r], s)
-        output[q0:q1] = window_attention(query[q0:q1], k, v, k_scales, scale)
 
 
 def applied_record(model: Any) -> dict[str, dict[str, Any]]:

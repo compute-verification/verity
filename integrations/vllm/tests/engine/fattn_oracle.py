@@ -36,8 +36,8 @@ def quant(x: np.ndarray, axis: int | None, scale: np.float32 | None = None) -> t
 
 
 def fixed_point_a(s_q: np.float32, s_k: np.float32, scale: float) -> int:
-    """fattn.cu's fa_A with sigma = s_q s_k scale: llrint(sigma log2(e) 16 2^32) in float64, left to right; capped at 2^40."""
-    return min(int(np.rint(float(s_q) * float(s_k) * float(scale) * LOG2E * 16.0 * 4294967296.0)), 1 << 40)
+    """fattn.cu's fa_A with sigma = s_q s_k scale: llrint(sigma log2(e) 16 2^32) in float64, left to right; saturated to its uint32_t."""
+    return min(int(np.rint(float(s_q) * float(s_k) * float(scale) * LOG2E * 16.0 * 4294967296.0)), (1 << 32) - 1)
 
 
 def softmax_row(S: np.ndarray, pos: int, A: int) -> dict:
