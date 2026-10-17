@@ -24,7 +24,14 @@ sys.path.insert(0, str(HERE.parent / "machine_model"))
 #: form: (mix.cuh struct, SASS opcode, census kind)
 FORMS = {"i16832": ("I16832", "IMMA.16832.S8.S8", "IMMA16832"), "i16816": ("I16816", "IMMA.16816.S8.S8", "IMMA16816"),
          "h16816": ("H16816", "HMMA.16816.F32", "HMMA16816"), "h16816f16": ("H16816F16", "HMMA.16816.F16", "HMMA16816F16"),
-         "h1684t": ("H1684T", "HMMA.1684.F32.TF32", "HMMA1684T"), "h1688t": ("H1688T", "HMMA.1688.F32.TF32", "HMMA1688T")}
+         "h1684t": ("H1684T", "HMMA.1684.F32.TF32", "HMMA1684T"), "h1688t": ("H1688T", "HMMA.1688.F32.TF32", "HMMA1688T"),
+         "isp16832": ("ISP16832", "IMMA.SP.16832.S8.S8", "IMMASP16832"),
+         "isp16864": ("ISP16864", "IMMA.SP.16864.S8.S8", "IMMASP16864"),
+         "hsp16832": ("HSP16832", "HMMA.SP.16832.F32", "HMMASP16832"),
+         "qsp16864": ("QSP16864", "QMMA.SP.16864.F32.E4M3.E4M3", "QMMASP16864"),
+         "q16832": ("Q16832", "QMMA.16832.F32.E4M3.E4M3", "QMMA16832"),
+         "qsf16832": ("QSF16832", "QMMA.SF.16832.F32.E4M3.E4M3.E8", "QMMASF16832"),
+         "osf16864": ("OSF16864", "OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X", "OMMASF16864")}
 #: lane: (mix.cuh enum, SASS fnmatch pattern, census class)
 LANES = {"iadd3": ("L_IADD3", "IADD3", "ALU"),
          "lop3": ("L_LOP3", "LOP3.LUT", "ALU"), "shf": ("L_SHF", "SHF.*", "ALU"), "prmt": ("L_PRMT", "PRMT", "ALU"),
@@ -105,7 +112,8 @@ def name_of(g: dict) -> str:
         if g["kind"] == "js":
             return f"js_{g['form']}_{ls}_{sched}_m{g['mw']}_w{w}"
         ld = f"_{g['d']}x{g['qd']}" if g.get("d") else ""
-        return f"jm_{g['form']}_{ls}_q{g['q']}_p{g['p']}_{sched}{ld}_w{w}"
+        rep = f"_k{g['rep']}" if g.get("rep") else ""
+        return f"jm_{g['form']}_{ls}_q{g['q']}_p{g['p']}_{sched}{ld}_w{w}{rep}"
     if g["kind"] == "l2":
         return f"l2_{g['d1']}_{g['pat']}_q{g['q']}_w{w}"
     if g["kind"] in ("ld", "ldmma"):
@@ -502,6 +510,46 @@ def targeted_jipair() -> list[dict]:
     return out
 
 
+#: the forms the jifine break (r20261017-093644-cef3) didn't reach, and the three it beat with its worst program each
+R4_FORMS = ("i16816", "h16816", "h1684t", "isp16832", "isp16864", "hsp16832", "qsp16864", "q16832", "qsf16832",
+            "osf16864")
+R4_REPEAT = (("i16832", 2), ("h16816f16", 3), ("h1688t", 3))
+#: ALU-only lanes (an ALU-pipe fold's ops: LOP3, SHF, PRMT and the one-read immediates) and ALU beside a FP lane
+R4_ALU = ("axi", "shfi", "prmti", "lop3", "shf", "prmt", ("shfi", "prmti"), ("axi", "shfi"), ("lop3", "shf", "prmt"))
+R4_ALU_FP = (("fmuli", "shfi"), ("fmuli", "prmti"), ("fmuli", "shfi", "prmti"))
+
+
+def targeted_r4() -> list[dict]:
+    """FACET-BREAK r4: the 2-3 accumulator break (FMUL by an immediate, 2 warps a SMSP) on every other MMA form, 8-192
+    lane ops a 8 MMAs; the three beating programs again, three copies each spread through the batch; and ALU-pipe work
+    beside the MMA (the A and issue rows an ALU-bound fold rests on), alone and beside FMUL."""
+    qs = (8, 16, 24, 32, 48, 64, 80, 96, 112, 128, 160, 192)
+    new: list[dict] = []
+    for form in R4_FORMS:
+        for na, ws in ((2, (2, 4)), (3, (2, 4)), (4, (2,))):
+            for q in qs:
+                for w in ws:
+                    new.append(_jm(form, "fmuli", q, w, na=na))
+        for q in (64, 80, 96, 112, 128):
+            new.append(_jm(form, "faddi", q, 2, na=3))
+    alu: list[dict] = []
+    for ls in R4_ALU + R4_ALU_FP:
+        for q in (32, 48, 64, 96, 128):
+            for na in (3, 8):
+                for w in (2, 4):
+                    alu.append(_jm("i16832", ls, q, w, na=na))
+    for form in ("h16816f16", "h1688t"):
+        for ls in ("shfi", "prmti", "axi", ("shfi", "prmti")):
+            for q in (32, 48, 64, 96, 128):
+                alu.append(_jm(form, ls, q, 2, na=3))
+    rest = new + alu
+    out: list[dict] = []
+    for k in range(3):
+        out += [_jm(f, "fmuli", 112, 2, na=na) | {"rep": k + 1} for f, na in R4_REPEAT]
+        out += rest[k * len(rest) // 3:(k + 1) * len(rest) // 3]
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -529,7 +577,8 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
     seen, out = set(), []
     tg, sm = {"mix": (targeted, sampled), "mem": (targeted_mem, sampled_mem), "fine": (targeted_fine, sampled),
               "l2": (targeted_l2, sampled_l2), "ji": (targeted_ji, sampled_ji),
-              "jifine": (targeted_jifine, sampled_ji), "jipair": (targeted_jipair, sampled_ji)}[family]
+              "jifine": (targeted_jifine, sampled_ji), "jipair": (targeted_jipair, sampled_ji),
+              "r4": (targeted_r4, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -615,11 +664,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
-    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair"), default="mix",
+    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4"), default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
                         "against the table route's L2 facet; ji: the joint issue rows' schedule search (ji.cuh); "
-                        "jifine: the sweep around its break; jipair: two dispatch pipes beside the HMMA forms")
+                        "jifine: the sweep around its break; jipair: two dispatch pipes beside the HMMA forms; r4: "
+                        "the break on every other form, its repeats, and ALU work beside the MMA")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")

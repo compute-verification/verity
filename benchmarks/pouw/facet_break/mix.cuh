@@ -64,6 +64,71 @@ struct H1688T {  // HMMA.1688.F32.TF32
                  : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : FB_A4, FB_B2);
   }
 };
+// The sparse forms take four B registers (b0, b1, a1, a3: loop-invariant like the rest) and metadata 0x44444444, which
+// selects positions (0, 1) of every group of four (tensor_kinds.cu's init_ops).
+#define FB_B4 "r"(b[0]), "r"(b[1]), "r"(a[1]), "r"(a[3])
+struct ISP16832 {  // IMMA.SP.16832: 2:4 sparse s8, two A registers
+  using Acc = int32_t;
+  static constexpr uint32_t W = 0x01020304u;
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b) {
+    asm volatile("mma.sp::ordered_metadata.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5}, {%6,%7}, "
+                 "{%0,%1,%2,%3}, %8, 0x0;"
+                 : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : "r"(a[0]), "r"(a[1]), FB_B2, "r"(0x44444444u));
+  }
+};
+struct ISP16864 {  // IMMA.SP.16864: 2:4 sparse s8, a dense k32 product
+  using Acc = int32_t;
+  static constexpr uint32_t W = 0x01020304u;
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b) {
+    asm volatile("mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
+                 "{%8,%9,%10,%11}, {%0,%1,%2,%3}, %12, 0x0;"
+                 : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : FB_A4, FB_B4, "r"(0x44444444u));
+  }
+};
+struct HSP16832 {  // HMMA.SP.16832.F32: 2:4 sparse f16
+  using Acc = float;
+  static constexpr uint32_t W = 0x14001400u;
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b) {
+    asm volatile("mma.sp::ordered_metadata.sync.aligned.m16n8k32.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
+                 "{%8,%9,%10,%11}, {%0,%1,%2,%3}, %12, 0x0;"
+                 : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : FB_A4, FB_B4, "r"(0x44444444u));
+  }
+};
+struct QSP16864 {  // QMMA.SP.16864.F32.E4M3.E4M3: 2:4 sparse FP8
+  using Acc = float;
+  static constexpr uint32_t W = 0x20202020u;
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b) {
+    asm volatile("mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32 {%0,%1,%2,%3}, "
+                 "{%4,%5,%6,%7}, {%8,%9,%10,%11}, {%0,%1,%2,%3}, %12, 0x0;"
+                 : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : FB_A4, FB_B4, "r"(0x44444444u));
+  }
+};
+struct Q16832 {  // QMMA.16832.F32.E4M3.E4M3
+  using Acc = float;
+  static constexpr uint32_t W = 0x20202020u;
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b) {
+    asm volatile("mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+                 : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : FB_A4, FB_B2);
+  }
+};
+struct QSF16832 {  // QMMA.SF.16832: block-scaled MXF8 (ue8m0 scale 1.0)
+  using Acc = float;
+  static constexpr uint32_t W = 0x20202020u;
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b) {
+    asm volatile("mma.sync.aligned.kind::mxf8f6f4.block_scale.scale_vec::1X.m16n8k32.row.col.f32.e4m3.e4m3.f32.ue8m0 "
+                 "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3}, {%10}, {0, 0}, {%11}, {0, 0};"
+                 : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : FB_A4, FB_B2, "r"(0x7f7f7f7fu), "r"(0x7f7f7f7fu));
+  }
+};
+struct OSF16864 {  // OMMA.SF.16864: block-scaled NVFP4 (ue4m3 scale 1.0)
+  using Acc = float;
+  static constexpr uint32_t W = 0x22222222u;
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b) {
+    asm volatile("mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3 "
+                 "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3}, {%10}, {0, 0}, {%11}, {0, 0};"
+                 : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : FB_A4, FB_B2, "r"(0x38383838u), "r"(0x38383838u));
+  }
+};
 
 template <class F>
 struct Mma {
