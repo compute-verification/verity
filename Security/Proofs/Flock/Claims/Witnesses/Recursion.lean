@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Witnesses.Flock
+import Proofs.Flock.Claims.ZK.Rewind
 import Definitions.Claims.Recursion
 
 /-!
@@ -25,6 +26,13 @@ Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy r
   masks hide up to `δ₁ = 1`), the quiet prover's one message is never simulated, at an error of `0`.
 * `Inner.KS_fails`, `Inner.KSAbort_fails`: at `noI`, an inner protocol that accepts and whose relation is empty, with
   no abort.
+
+Two of the claims are still met by a trivial instance, because they read the honest prover as a parameter, not the
+record's reference prover `Deploy.P` that `Complete` reads:
+
+* `ZK_vacuous`, `ZKPriv_vacuous`: at `zvR`, a record of one inner round with a one-byte salt, a masked outer Flock,
+  every outer simulator and every hiding level, the prover that ignores its witness and sends `Sim`'s commit string to
+  the zero digest (`zeroP`) meets the claim at an error of `0` (`zkmalR_zeroP`).
 -/
 
 namespace Claims.Witness.Recursion
@@ -109,6 +117,16 @@ def zkPR (Coin : Type) : Recursion.Deploy Coin :=
 
 /-- A masked outer Flock. -/
 noncomputable def zkO (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit := { Flock.ksD Coin with zk := true }
+
+/-- A record of one round whose every statement parses with the circuit commitment `circ`, with no staging rounds and
+no V* session, and a one-byte salt. -/
+def zvR (Coin : Type) (circ : Option Msg) : Recursion.Deploy Coin :=
+  { ksR Coin with parse := fun _ => some { recStmt with circ := circ }, saltLen := 1, mask := fun y _ => y 0 }
+
+/-- The prover that ignores its witness and sends the commit string to the zero digest under the salt its nonce
+carries: `Sim`'s inner round. -/
+def zeroP (Coin : Type) : Prover ((Fin 1 → Fin 1 → UInt8) × Unit) :=
+  ⟨fun _ _ ω => (zvR Coin none).zeroCommit (ω.1 0)⟩
 
 theorem recStmt_inScope : Recursion.InScope recStmt := by
   have hp : pLog 6 ≤ 14 := by unfold pLog; have := Nat.log_le_self 2 (2 * 6 + 1); omega
@@ -356,7 +374,7 @@ theorem effR_EO_reruns (H : Msg → Msg) (decO : List (ℕ × Unit) → List Uni
 
 end Efficient
 
-/-! ## `zkR`'s simulator -/
+/-! ## `Sim` at `zkR` and `zvR` -/
 
 section Sim
 
@@ -396,6 +414,54 @@ theorem zk_εzk (D : Recursion.Deploy Coin) (hn : D.nS [] = 0) (t : ℕ) (δ₁ 
   unfold Recursion.εzk
   rw [Finset.univ_eq_empty, Finset.sum_empty]
   simp [zeroI]
+
+theorem interact_one (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (hist : List (Msg × Msg)) :
+    ZKMal.interact ask pm 1 hist = [(pm hist, ask (hist.map Prod.fst ++ [pm hist]))] := by
+  simp only [ZKMal.interact]
+  split <;> simp_all
+
+/-- The transcript of one zero commit string under the salt `y`, against `V*`'s answers `ask`. -/
+def zeroT (H : Msg → Msg) (ask : List Msg → Out) (y : Fin 1 → UInt8) : List (Msg × Out) :=
+  [(List.ofFn (fun _ : Fin 64 => y 0) ++ H ([] ++ List.ofFn y),
+    ask [List.ofFn (fun _ : Fin 64 => y 0) ++ H ([] ++ List.ofFn y)])]
+
+theorem runStar_zeroP {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (hk : Vs.k x = 1)
+    (ω : (Fin 1 → Fin 1 → UInt8) × Unit) :
+    (runStar H (zeroP Coin) Vs x ω θ).msgs = zeroT H (fun as => ((Vs.next x as θ).eval H).1) (ω.1 0) := by
+  rw [ZKMal.runStar_msgs, hk, interact_one]
+  rfl
+
+theorem sim_zvR {Θ : Type} (circ : Option Msg) (H : Msg → Msg) (SO : Msg → ℕ → OSim) (Vs : VStar Θ) (θ : Θ)
+    (x : Msg) (c : (Sim (zvR Coin circ) (accI Coin) SO).C x) :
+    (Sim (zvR Coin circ) (accI Coin) SO).out H Vs θ x c =
+      zeroT H (fun as => ((Vs.next x as θ).eval H).1) (c.1 ⟨0, Nat.one_pos⟩) := by
+  rfl
+
+/-- At `zvR`, `zeroP` runs `Sim`'s one inner round, so its transcripts and `Sim`'s are alike, at every relation,
+outer simulator and hiding level. -/
+theorem zkmalR_zeroP (circ : Option Msg) (R : Rel Flock.Wit) (H : Msg → Msg) (SO : Msg → ℕ → OSim) (t : ℕ)
+    (δ₁ : ℝ≥0) : ZKmalR H (zvR Coin circ).V.k (fun _ => zeroP Coin) R (Sim (zvR Coin circ) (accI Coin) SO)
+      (Recursion.εzk (zvR Coin circ) (accI Coin) t δ₁) (Recursion.γzk (zvR Coin circ) t) := by
+  intro x w _ Θ Vs θ hk Ev
+  have e : Pr (fun ω => Ev (runStar H (zeroP Coin) Vs x ω θ).msgs) =
+      Pr fun c => Ev ((Sim (zvR Coin circ) (accI Coin) SO).out H Vs θ x c) := by
+    refine (Pr_congr fun ω => iff_of_eq (congrArg Ev (runStar_zeroP H Vs θ x hk ω))).trans ?_
+    refine Eq.trans ?_ (Pr_congr fun c => iff_of_eq (congrArg Ev (sim_zvR circ H SO Vs θ x c))).symm
+    let q := fun y : Fin 1 → UInt8 => Ev (zeroT H (fun as => ((Vs.next x as θ).eval H).1) y)
+    refine (Pr_fst (α := Fin 1 → Fin 1 → UInt8) (β := Unit) fun y => q (y 0)).trans (Eq.trans ?_
+      (Pr_fst (α := Fin ((accI Coin).V.k (xI (zvR Coin circ) x)) → Fin (zvR Coin circ).saltLen → UInt8)
+        (β := (s : Fin ((zvR Coin circ).nS x)) → (SO x s).C) fun y => q (y ⟨0, Nat.one_pos⟩)).symm)
+    exact ZKMal.Pr_equiv (α := Fin 1 → Fin 1 → UInt8)
+      (β := Fin ((accI Coin).V.k (xI (zvR Coin circ) x)) → Fin (zvR Coin circ).saltLen → UInt8) (Equiv.refl _)
+      fun y => q (y ⟨0, Nat.one_pos⟩)
+  have hγ : Recursion.γzk (zvR Coin circ) t x = 0 := by simp [Recursion.γzk, zvR, ksR]
+  have hε : 0 ≤ Recursion.εzk (zvR Coin circ) (accI Coin) t δ₁ x := by
+    have : IsEmpty (Fin ((zvR Coin circ).nS x)) := Fin.isEmpty'
+    unfold Recursion.εzk
+    simp only [Finset.univ_eq_empty, Finset.sum_empty, zero_add]
+    exact mul_nonneg (mul_nonneg zero_le_two (Nat.cast_nonneg _)) δ₁.2
+  calc _ = (0 : ℝ) := by simp only [e, sub_self, abs_zero]
+    _ ≤ _ := by simp only [hγ, zero_mul, add_zero]; exact hε
 
 end Sim
 
@@ -509,6 +575,19 @@ theorem ZKPriv_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonemp
     Nat.one_pos
     (by rw [zk_εzk _ rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
     (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **The recursion's `ZK` is met by a prover that ignores its witness**, at a masked outer Flock, every outer
+simulator and every hiding level (`zkmalR_zeroP`). -/
+theorem ZK_vacuous (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
+    Recursion.ZK H (zvR Coin none) (accI Coin) (zkO Coin) (fun _ => zeroP Coin) SO :=
+  ⟨rfl, fun t _ δ₁ _ => zkmalR_zeroP none _ H (SO t) t δ₁⟩
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **The recursion's private `ZK` is met by a prover that ignores its witness**, as `ZK` is (`zkmalR_zeroP`). -/
+theorem ZKPriv_vacuous (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
+    ZKPriv H (zvR Coin (some [])) (accI Coin) (zkO Coin) (fun _ => zeroP Coin) SO :=
+  ⟨rfl, fun t _ δ₁ _ => zkmalR_zeroP (some []) _ H (SO t) t δ₁⟩
 
 /-- **The inner protocol's `KS` fails** at `noI`, which accepts and whose relation is empty. -/
 theorem Inner.KS_fails (H : Msg → Msg) : ¬ (noI Coin).KS H :=
