@@ -189,9 +189,17 @@ def gemm_main(argv: list[str]) -> int:
     return 0 if s["gates"] and s["gates_exact"] == s["gates"] else 4
 
 
-PG_ROUTES = ("k4s", "i8c", "i8r", "pf8", "pi8", "k4p", "k4b")  # pgemm's Route and Mode enums, in order
+PG_ROUTES = ("k4s", "i8c", "i8r", "pf8", "pi8", "k4p", "k4b", "k4t")  # pgemm's Route and Mode enums, in order
 PG_MODES = ("full", "ext", "ld", "mma", "foldonly", "mmares", "fullres")
-PG_DITHER = ("k4s", "k4p", "k4b", "i8c", "i8r")
+PG_DITHER = ("k4s", "k4p", "k4b", "i8c", "i8r", "k4t")
+# k4t: a 128 x 256 CTA, one fold warpgroup a 128-column tile (template FW 2, receipt tile 128: its arms are named fw1,
+# and so are its time-split arms).
+PG_SPLIT_FW = {"k4t": 1}
+
+
+def pg_tile(route: str) -> int:
+    """pgemm's CTA tile, BM x cta_n(route)."""
+    return 128 * (256 if route == "k4t" else 128)
 SM100_ALU, SM100_IMAD, SM100_ISSUE = 2.0, 2.0, 4.0  # warp instructions a SM a clock (dc/README.md, sm_100's census)
 ALU_OPS = ("LOP3", "LEA", "IADD3", "SHF", "ISETP", "PLOP3", "SEL")
 NOT_LANE = ("U", "BRA", "NOP", "SYNCS", "LDTM", "STTM", "BSSY", "BSYNC", "ELECT", "FENCE", "VOTEU", "S2UR", "LDCU", "UTC")
@@ -208,6 +216,8 @@ def fold_mix(sass: str) -> dict[str, dict]:
         if not m:
             continue
         r, md, L, fw = map(int, m.groups())
+        if PG_ROUTES[r] == "k4t":
+            fw = 1
         bnr = 128 // fw
         ins, loops = [], []
         for line in body.splitlines():
@@ -241,7 +251,6 @@ def fold_mix(sass: str) -> dict[str, dict]:
     return out
 
 
-PG_TILE = 128 * 128  # pgemm's CTA tile, BM x N
 SM100_F8_SLOTS = 256  # k32 slots (an output element's k32 step) of FP8 tcgen05 MMA a SM a clock, dense peak
 
 
@@ -290,8 +299,10 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict], dc
                 if not fulls:
                     continue
                 fw = min(fulls, key=fulls.get)
-                t, t2 = fulls[fw], fulls.get(2)
-                md = {x: b.get(f"{r}_L{L}_fw2_{x}_ms") for x in ("mma", "ld", "ext", "foldonly", "mmares", "fullres")}
+                sfw = PG_SPLIT_FW.get(r, 2)
+                t, t2 = fulls[fw], fulls.get(sfw)
+                md = {x: b.get(f"{r}_L{L}_fw{sfw}_{x}_ms") for x in ("mma", "ld", "ext", "foldonly", "mmares",
+                                                                     "fullres")}
                 facet_arm = {"tensor": "mmares", "operand_feed": "mma", "tensor_memory": "ld", "fold": "foldonly"}
                 alone = {f: md[x] for f, x in facet_arm.items()}
                 bind = max((f for f in alone if alone[f]), key=lambda f: alone[f], default=None)
@@ -303,7 +314,7 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict], dc
                              "fold": t2 - md["ext"]}
                 arm = f"{r}_L{L}_fw{fw}_full"
                 res = md["fullres"]
-                cta = PG_TILE * b["k"] / L / b[f"{arm}_cta_clk"] if b.get(f"{arm}_cta_clk") else None
+                cta = pg_tile(r) * b["k"] / L / b[f"{arm}_cta_clk"] if b.get(f"{arm}_cta_clk") else None
                 d = dcb.get(L)
                 over_dc = {}
                 if d and cta:
@@ -314,9 +325,10 @@ def pgemm_summary(gates: list[dict], bench: list[dict], mix: dict[str, dict], dc
                              "words_sm_clk": rate(arm, t), "cta_words_sm_clk": cta,
                              "gamma_fp8_peak_clk": gamma_peak(cta, L), **over_dc,
                              "split_ms": split, "alone_ms": alone,
-                             "alone_words_sm_clk": {f: rate(f"{r}_L{L}_fw2_{facet_arm[f]}", v) for f, v in alone.items()},
+                             "alone_words_sm_clk": {f: rate(f"{r}_L{L}_fw{sfw}_{facet_arm[f]}", v)
+                                                    for f, v in alone.items()},
                              "binding": bind, "binding_of_full": alone[bind] / t2 if bind and t2 else None,
-                             "issue": mix.get(f"{r}_L{L}_fw2_full"), "full_resident_ms": res,
+                             "issue": mix.get(f"{r}_L{L}_fw{sfw}_full"), "full_resident_ms": res,
                              "gamma_resident_cublaslt_f8": res / plain["cublaslt_f8"] if res and plain["cublaslt_f8"]
                              else None,
                              "gamma_resident_pf8_res": res / plain["pf8_res"] if res and plain["pf8_res"] else None,
@@ -396,7 +408,7 @@ def pgemm_main(argv: list[str]) -> int:
         print("| arm | instrs | lane ops | ALU | IMAD | bound words/SM/clk |")
         print("|---|---|---|---|---|---|")
         for arm, x in sorted(s["fold_mix"].items()):
-            if "_fw2_" in arm:
+            if "_fw2_" in arm or arm.startswith("k4t_"):
                 print(f"| {arm} | {x['instrs_word']:.2f} | {x['lane_ops_word']:.2f} | {x['alu_word']:.2f} | "
                       f"{x['imad_word']:.2f} | {x['model_words_sm_clk']:.1f} |")
     if a.json:

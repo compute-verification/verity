@@ -29,6 +29,7 @@ uv run machine-model eps --table --credit floor --lookups --index-bits 2   # 2-b
 uv run machine-model eps --table --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
 uv run machine-model eps --device sm89 --table --credit floor --operands floor   # the L40S: Dither-1S/2S/C at L = 16, 32
 uv run machine-model eps --device sm100 --table --credit floor --operands floor   # the B200 at L = 32 to 256
+uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
 ~~~
 
 | Path | What |
@@ -38,6 +39,7 @@ uv run machine-model eps --device sm100 --table --credit floor --operands floor 
 | `data/census/EPOCH.csv` | The census lines from EPOCH, a file for each epoch that brought any: one line per instruction class on a row, its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, its file's epoch; `until`) and its runs |
 | `data/census/runs.toml` | The run lists many census lines share (a refit's every line cites every run its fit read), each cited in a line's `runs` as `@NAME` |
 | `data/vectors/NAME.toml` | A named vector: its epoch, the rows and credits it uses in LP order, its note, and the numbers it was published with |
+| `data/devices/sm_80/` | Ampere (sm_80, the A100-SXM4-80GB at default boost, EPS1 AMPERE) as a device of its own: its `rows.csv` and `census.csv` in the same schema, one epoch (no `since` or `until`), rates at the 2% noise margin and the joint row JIM at decision 76's margin, written by `tensor_kinds/sm80.py census`; no vector reads them yet |
 | `data/attacks/FAMILY.jsonl` | An attack family: one program a line, its design, and the epochs it holds |
 | `data/devices/sm_NN/` | Another device's data ("Devices" below): `sm_89`, the L40S, from EPS1 ADA; `sm_90`, the H200, and `sm_100`, the B200, from EPS1 DC (`dc/census.py` writes their census) |
 | `data/floors.csv` | What the claims read: each root-writing kind at 32 MACs a word ((π₃₂)), each load into registers at 16 (PRICES-32's load half) and each copy route at 16 (π_c ≥ 16, `copy16`: every kind that writes registers, a UR word at the 32 lanes it serves), with the words a warp instruction of it writes |
@@ -51,6 +53,7 @@ uv run machine-model eps --device sm100 --table --credit floor --operands floor 
 | `data/designs.toml` | What every design reads unless its file sets it: honest's profile, L, the proof unit, the coins, the fold (duo), ε_clock, Theorem S's δ, p and checks, honest's baseline program (dp4a) and the routes, all sm_120's |
 | `data/adapt.toml` | The proof units ε_adapt prices (SPEC's Theorem D): whole dot products (the designs' unit, decision 72), whole with operands recomputed one stage back, per-stage coins, and the segment spot check it replaced |
 | `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
+| `verity_machine_model/capacity.py` | `capacity`: the certified share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity, hidden(n̄) the useful work any program could still add beside the pooled certified load n̄ (the filler workstream, decision 77; note:20261017T0652Z-draft-filler) |
 
 An *epoch* is a state of the census and the attacks, named after the vector that introduced it. A census line or an attack
 holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector re-solves on
@@ -181,7 +184,10 @@ Beside its names, a design file has these keys:
 
 - `[noise]`: a leaf for each of `linears`, `lm_head`, `qk` and `pv`.
 - `honest`, `L`, `work` and `plain`.
-- `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes (decision 73).
+- `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes (decision 73). A filler states
+  `p`, the probability a deficient block of it passes its check, and `luck`, the theorem that proves it: 0 for a
+  receipt the check recomputes (`Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit`), 0.854 for pfill's cells
+  (`FillerBlocksDeficit`), or `p = 1` with no `luck`, no luck credit.
 - `[operands]`: the noise's floor φ_del.
 - `unit`: a table of `data/adapt.toml`. It is whole dot products (decision 72).
 - `[coins]`: `bits`, the width of a noised entry's coin, one σ a request.
@@ -251,8 +257,8 @@ The cheater is every route at q*. Its operand delivery is free by default (SPEC'
 `--operands floor` prices it at the noise's floor φ_del, the design's `[operands]`: 1/39 a MMA where B̃ stays resident
 at the zero instance, 0.20 where both operands are fresh (SPEC §3.4). `--operands honest` prices it at honest's.
 The LP's duals are the certificate π*. ε_luck is the same LP with Theorem S's budget spent on unwritten words (still
-folded) and undone filler, each deficient block weighted by 1 − p (¾ a word, 0.854 a filler block; SPEC §5), so the
-terms add up to its time exactly.
+folded) and undone filler, each deficient block weighted by 1 − p (¾ a word, the filler's own `p` a filler block), so
+the terms add up to its time exactly. At `p = 1` the cheater leaves the filler undone even with every block checked.
 
 Under `--credit model` or `--credit floor`, honest's time above the credit leaves ε for γ, which is printed beside it.
 `floor` is the floor program ♭ of SPEC §0.7a (Corollary D3): the tensor route at φ_del, the fold, the fillers and the

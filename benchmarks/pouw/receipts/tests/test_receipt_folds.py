@@ -90,10 +90,44 @@ def test_kj19s_exhaustive_count_is_the_combinatorial_one():
 
 
 def test_the_soundness_status_is_the_ruling():
-    """Daniel's statement of the task (17:02Z): duo proved; XOR-in-13 and LI need (RT) and (G3); ram binds pairs only."""
+    """Daniel's statement of the task (16 Oct, 17:02Z): XOR-in-13 and LI need (RT) and (G3); ram binds pairs only. It had
+    duo proved; duo is proved for runs of one, two and three words, and four at the deployed keys, and needs (D) past
+    them (FOLD-R r2, 17 Oct)."""
     status = {f: (d["status"], d["needs"]) for f, d in F.FOLDS.items()}
-    assert status == {"duo": ("proved", ()), "xin13": ("open", ("RT", "G3")), "li": ("open", ("RT", "G3", "HO")),
+    assert status == {"duo": ("open", ("D",)), "xin13": ("open", ("RT", "G3")), "li": ("open", ("RT", "G3", "HO")),
                       "ram": ("pairs-only", ()), "xin7": ("retired", ())}
+
+
+def _li_half(k: int, a: int, y: int, d0: int, d1: int) -> int:
+    """Lean's `Pouw.Receipt.liHalf` at n = 32."""
+    return ((y ^ d0 ^ k) * a + d1) & F.M32
+
+
+def test_li_is_leans_half_steps_and_a_checkpoint_moves_at_the_changes_lowest_bit():
+    """li_step is two of Lean's half steps, and on random chains a word's XOR change moves the checkpoint (the XOR of
+    the chains' states) at its lowest set bit and nowhere below it (`LiCheckpointLowBit`)."""
+    rng = random.Random(23)
+    r = lambda: rng.getrandbits(32)  # noqa: E731
+    for _ in range(200):
+        y, a0, a1, k0, k1, *d = r(), r() | 1, r() | 1, r(), r(), r(), r(), r(), r()
+        assert F.li_step(y, *d, a0, a1, k0, k1) == _li_half(k1, a1, _li_half(k0, a0, y, d[0], d[1]), d[2], d[3])
+    for _ in range(200):
+        chains = [([(r(), r() | 1, r(), r()) for _ in range(16)], r()) for _ in range(8)]
+
+        def checkpoint(cs):
+            x = 0
+            for steps, y in cs:
+                for k, a, d0, d1 in steps:
+                    y = _li_half(k, a, y, d0, d1)
+                x ^= y
+            return x
+
+        c, i, slot, x = rng.randrange(8), rng.randrange(16), rng.randrange(2), r() or 1
+        changed = [(list(s), y) for s, y in chains]
+        k, a, d0, d1 = changed[c][0][i]
+        changed[c][0][i] = (k, a, d0 ^ x, d1) if slot == 0 else (k, a, d0, d1 ^ x)
+        diff = checkpoint(chains) ^ checkpoint(changed)
+        assert diff & -diff == x & -x
 
 
 def test_the_e2e_key_rule_is_weaker_than_key_ok_r9():

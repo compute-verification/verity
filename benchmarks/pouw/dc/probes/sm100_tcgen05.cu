@@ -292,6 +292,69 @@ DC_DEV void ld_until_mma(const OpArgs& a) {
   OP_SINK(x)
 }
 
+// The honest LI loop beside the saturated MMA, exact by OP_UNTIL (as ld_until_mma): warp 0 fixed on tcgen05.mma, LW
+// loader warps reading the accumulator from TMEM and folding it with LI (LOP3 to absorb a word, IMAD to multiply by an
+// odd a), a segment of 128 words a trip (4 tcgen05.ld.32x32b.x32). CP 0 is the bare fold (LI); CP 1 adds LI-CP-W's
+// checkpoint with `redux.sync.xor.b32`, CP 2 with the 5-shuffle fallback: each lane XORs its 8 chains (4 LOP3) and the
+// warp reduces once a segment. The three throughputs' ratio is what the checkpoint costs the latency-bound loop, which
+// the honest profile scales dc100-li-l32's measured cycles by (note:LI-ALT asked this of DC).
+template <int CP, int LW>
+DC_DEV void tcli_until_mma(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  const uint32_t tmem = setup<0>(s, a.mode);
+  const uint64_t da = desc_a(s), db = desc_b(s);
+  constexpr uint32_t idesc = idesc_of<0>(128, 256);
+  const uint32_t w = warp_u(), sub = (w - 4u) >> 2, base = tmem + ((32u * (w & 3u)) << 16) + 256u;
+  const bool loader = w >= 4 && w < 4 + LW;
+  Lane l(threadIdx.x);
+  auto mma = [&] {
+    if (elect_one()) {
+      umma_i8(tmem, da, db, idesc, 0);
+      umma_i8(tmem, da, db, idesc, 1);
+      umma_i8(tmem, da, db, idesc, 1);
+      umma_i8(tmem, da, db, idesc, 1);
+    }
+    __syncwarp();
+  };
+  auto seg = [&] {
+    uint32_t r0[32], r1[32];
+#pragma unroll
+    for (int g = 0; g < 2; g++) {
+      tmem_ld32(base + (64u * (g + sub)) % 256u, r0);
+      tmem_ld32(base + (64u * (g + sub) + 32u) % 256u, r1);
+      tmem_wait_ld();
+#pragma unroll
+      for (int c = 0; c < 32; c++) {
+        asm volatile("lop3.b32 %0,%0,%1,%2,0x96;" : "+r"(l.r[c & 7]) : "r"(r0[c]), "r"(0x85EBCA6Bu));
+        asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(l.r[c & 7]) : "r"(0x9E3779B9u), "r"(r1[c]));
+      }
+    }
+    if constexpr (CP > 0) {
+      l.op<L_LOP3>(0); l.op<L_LOP3>(2); l.op<L_LOP3>(4); l.op<L_LOP3>(6);
+      if constexpr (CP == 1) l.op<L_REDUX>(0);
+      else l.op<L_REDUCE>(0);
+    }
+  };
+  OP_BEGIN_STOP
+  if (w == 0) {
+    OP_LOOP(it) { mma(); }
+    OP_DONE
+  } else if (loader) {
+    OP_UNTIL(n) { seg(); }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  if (w == 0) {
+    if (elect_one()) umma_commit(&s.bar);
+    __syncwarp();
+  }
+  mbar_wait(&s.bar, 0);
+  tc_after_sync();
+  const uint32_t x = sink_ld(tmem, 0) ^ l.fold();
+  teardown(tmem);
+  OP_SINK(x ^ threadIdx.x)
+}
+
 DC_DEV void mma_s8k32(int32_t* d, const uint32_t* a, const uint32_t* b) {
   asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
                : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
@@ -502,9 +565,16 @@ OP_KERNEL(tclane_mix_r256, 512) { lane_beside_mma<L_MIX, 256>(a); }
 OP_KERNEL(tclane_imad_r128, 512) { lane_beside_mma<L_IMAD, 128>(a); }
 OP_KERNEL(tclane_lop3_r128, 512) { lane_beside_mma<L_LOP3, 128>(a); }
 OP_KERNEL(tclane_duo_r192, 512) { lane_beside_mma<L_DUO, 192>(a); }
+OP_KERNEL(tclane_redux_r64, 512) { lane_beside_mma<L_REDUX, 64>(a); }
+OP_KERNEL(tclane_reduce_r8, 512) { lane_beside_mma<L_REDUCE, 8>(a); }
 OP_KERNEL(tclaneU_mix, 512) { lane_until_mma<L_MIX, 64>(a); }
 OP_KERNEL(tclaneU_imad, 512) { lane_until_mma<L_IMAD, 64>(a); }
+OP_KERNEL(tclaneU_redux, 512) { lane_until_mma<L_REDUX, 64>(a); }
+OP_KERNEL(tclaneU_reduce, 512) { lane_until_mma<L_REDUCE, 8>(a); }
 OP_KERNEL(tclaneU_duo, 512) { lane_until_mma<L_DUO, 48>(a); }
+OP_KERNEL(tcliU_base, 384) { tcli_until_mma<0, 8>(a); }
+OP_KERNEL(tcliU_redux, 384) { tcli_until_mma<1, 8>(a); }
+OP_KERNEL(tcliU_reduce, 384) { tcli_until_mma<2, 8>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -556,9 +626,15 @@ static const OpProbe PROBES[] = {
     {.name = "tclane_imad_r128", .kernel = (const void*)tclane_imad_r128, .tpb = 512, .expect = UI ";IMAD=128", .warps = "1;12", .iters = 2048},
     {.name = "tclane_lop3_r128", .kernel = (const void*)tclane_lop3_r128, .tpb = 512, .expect = UI ";LOP3.LUT=128", .warps = "1;12", .iters = 2048},
     {.name = "tclane_duo_r192", .kernel = (const void*)tclane_duo_r192, .tpb = 512, .expect = UI ";LOP3.LUT=64,IMAD=64", .warps = "1;12", .iters = 2048},
+    {.name = "tclane_redux_r64", .kernel = (const void*)tclane_redux_r64, .tpb = 512, .expect = UI ";REDUX*=64", .warps = "1;12", .iters = 2048},
+    {.name = "tclane_reduce_r8", .kernel = (const void*)tclane_reduce_r8, .tpb = 512, .expect = UI ";SHFL.BFLY=40,LOP3.LUT=40", .warps = "1;12", .iters = 2048},
     {.name = "tclaneU_mix", .kernel = (const void*)tclaneU_mix, .tpb = 512, .expect = UI ";FFMA=32", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_imad", .kernel = (const void*)tclaneU_imad, .tpb = 512, .expect = UI ";IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
-    {.name = "tclaneU_duo", .kernel = (const void*)tclaneU_duo, .tpb = 512, .expect = UI ";LOP3.LUT=16,IMAD=16", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_redux", .kernel = (const void*)tclaneU_redux, .tpb = 512, .expect = UI ";REDUX*=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_reduce", .kernel = (const void*)tclaneU_reduce, .tpb = 512, .expect = UI ";SHFL.BFLY=40,LOP3.LUT=40", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcliU_base", .kernel = (const void*)tcliU_base, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tcliU_redux", .kernel = (const void*)tcliU_redux, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=68,IMAD=64,REDUX*=1", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tcliU_reduce", .kernel = (const void*)tcliU_reduce, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=73,IMAD=64,SHFL.BFLY=5", .warps = "1;8", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
