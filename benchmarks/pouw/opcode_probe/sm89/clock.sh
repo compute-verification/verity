@@ -30,11 +30,12 @@ set -uo pipefail
 BIN=$1 OUT=$2 SECS=$3
 UUID=${GPU_LEASE_UUID:?under gpu-lease}
 KERNELS=(p_light p_honest16 p_honest p_half p_mma16 p_mma p_mma0 p_mma16z p_fold p_ffma p_mixed p_light p_honest16)
-FOUND_PL=$(nvidia-smi -i "$UUID" --query-gpu=power.limit --format=csv,noheader,nounits | tr -d ' ')
+# the enforced limit: on the L40S `power.limit` reads 350 W while 325 W is enforced
+FOUND_PL=$(nvidia-smi -i "$UUID" --query-gpu=enforced.power.limit --format=csv,noheader,nounits | tr -d ' ')
 DEFAULT_PL=$(nvidia-smi -i "$UUID" --query-gpu=power.default_limit --format=csv,noheader,nounits | tr -d ' ')
 echo "{\"found_pl_w\": \"$FOUND_PL\", \"default_pl_w\": \"$DEFAULT_PL\"}" >"$OUT/limits.json"
 nvidia-smi -i "$UUID" -q -d CLOCK,POWER,PERFORMANCE,TEMPERATURE >"$OUT/nvsmi-before.txt" 2>&1
-nvidia-smi -i "$UUID" --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,power.limit,temperature.gpu,clocks_event_reasons.active \
+nvidia-smi -i "$UUID" --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,enforced.power.limit,temperature.gpu,clocks_event_reasons.active \
   --format=csv,nounits -lms 100 >"$OUT/smi_trace.csv" 2>&1 &
 SMI=$!
 
