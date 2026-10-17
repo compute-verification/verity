@@ -10,8 +10,8 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 `slots` piece that draw in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), and for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
 `service.check_verdicts`). The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
-programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
-refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
+programs of random members of three templates, and rarely of two one-stage refuses (`REFUSED_TEMPLATES`), under
+template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
 Call among them, which one-stage refuses at either, and `SHARED`, whose `Q_call` unit at `X = 16` holds a constant
 another unit reads. Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
@@ -78,11 +78,12 @@ def _fork(B, S, x):
 FORK = bind(CompositeDefinition("CoreSampledProofsFork", 0, (),
                                 lambda S: ((("x", Array(4, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _fork,
                                 register=False))
-#: A template of no gate, which one-stage refuses.
+#: Templates one-stage refuses: `FORK`'s instance commits 24 bits, and the identity has no gate.
 IDENTITY = bind(CompositeDefinition("CoreSampledProofsIdentity", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                     lambda B, S, x: x[0], register=False))
-#: The templates a population's members are instances of: `TEMPLATES`, `FORK` and `IDENTITY`.
-MEMBERS = TEMPLATES + [FORK, IDENTITY]
+REFUSED_TEMPLATES = [FORK, IDENTITY]
+#: The templates a population's members are instances of: `TEMPLATES`, then `REFUSED_TEMPLATES`.
+MEMBERS = TEMPLATES + REFUSED_TEMPLATES
 CONST8 = PrimitiveDefinition("CoreSampledProofsConst8", 1, (), Value(8), lambda: 0x5A, register=False)
 
 
@@ -234,7 +235,7 @@ def _calls(members: tuple[int, ...]) -> str:
 @st.composite
 def partitions(draw) -> tuple[dict, dict, int]:
     """A random partition P = Q(C): a mixed population program of one to four members, each some instances of one of
-    `MEMBERS` (rarely of `FORK` or `IDENTITY`; one template's members apart, adjacent or alone), and a template query over
+    `MEMBERS` (rarely of `REFUSED_TEMPLATES`; one template's members apart, adjacent or alone), and a template query over
     it, mostly one that applies (the members' templates, in any order); or, a third of the time, a program of one to five
     root Calls of `CALLEES` (rarely the 32-bit one or `SHARED`) under `Q_word` or `Q_call`, mostly at a width one-stage
     applies. The program's descriptor, the query and the population, 0 where the query doesn't apply."""
@@ -1726,14 +1727,16 @@ def test_the_call_queries_cut_call_by_call(pieces):
             slots(copy.deepcopy(refused))
 
 
-def test_a_q_call_unit_wider_than_the_limit_or_a_template_of_no_gate_is_refused(pieces):
-    """Lean refuses as the Python does a population with an instance of `IDENTITY`, of no gate, and `SHARED` under
-    `Q_call` at `X = 16`, whose first unit passes `Q_call`'s width rule with 16 returned bits while it holds a constant a
-    later unit reads; at `X = 8`, where that constant is in no unit, both take the program and agree on its slots."""
+def test_a_unit_wider_than_the_limit_or_of_no_gate_is_refused(pieces):
+    """Lean refuses as the Python does a population of `FORK`, whose instance commits 24 bits, one with an instance of
+    `IDENTITY`, of no gate, and `SHARED` under `Q_call` at `X = 16`, whose first unit passes `Q_call`'s width rule with 16
+    returned bits while it holds a constant a later unit reads; at `X = 8`, where that constant is in no unit, both take
+    the program and agree on its slots."""
     case = {"closure": None, "rule": {"law": "subset:1", "rule": "law"},
             "source": hashlib.shake_256(b"refused").hexdigest(400), "work_table": None}
     shared = json.loads(_calls((0, 5)))
-    for program, query in [(json.loads(_population(((0, 1), (4, 2)))), P.template_instances_query([PAIR.id, IDENTITY.id])),
+    for program, query in [(json.loads(_population(((3, 2),))), P.template_instance_query(FORK.id)),
+                           (json.loads(_population(((0, 1), (4, 2)))), P.template_instances_query([PAIR.id, IDENTITY.id])),
                            (shared, PO.call_query(16))]:
         refused = {**case, "program": program, "query": _json(query)}
         assert D.replay(SLOTS, refused, pieces)[0] == "reject", query

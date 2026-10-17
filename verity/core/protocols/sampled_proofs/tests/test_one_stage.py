@@ -68,16 +68,20 @@ def test_the_query_refuses_what_it_does_not_describe():
         P.units(Program(bind(other)), q)
 
 
-def test_a_q_call_unit_wider_than_the_literal_limit_or_a_template_of_no_gate_is_refused():
-    """A `Q_call` unit commits at most `UNIT_BITS` bits, counting the constants it holds, and a template has a gate: a
-    template of no gate, and a Call whose first unit at `X = 16` returns 16 bits and holds a constant a later unit reads,
-    are refused; at `X = 8` that constant is in no unit, and the program is taken."""
+def test_a_unit_wider_than_the_literal_limit_or_of_no_gate_is_refused():
+    """A template instance commits at most `UNIT_BITS` bits, and so does a `Q_call` unit counting the constants it holds:
+    a template returning 24 bits, one of no gate, and a Call whose first unit at `X = 16` returns 16 bits and holds a
+    constant a later unit reads are refused; at `X = 8` that constant is in no unit, and the program is taken."""
     v8x3 = Tuple(Value(8), Value(8), Value(8))
     const = PrimitiveDefinition("OneStageTestConst8", 1, (), Value(8), lambda: 0x5A, register=False)
+    wide = bind(CompositeDefinition("OneStageTestWide", 0, (), lambda S: ((("x", Array(2, Value(8))),), v8x3),
+                                    lambda B, S, x: tuple_of(B.call(XOR8, x[0], x[1]), B.call(XOR8, x[1], x[0]),
+                                                             B.call(XOR8, x[0], x[0])), register=False))
     empty = bind(CompositeDefinition("OneStageTestEmpty", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                      lambda B, S, x: x[0], register=False))
-    with pytest.raises(P.QueryRefused, match="has no gate"):
-        P.units(P.population_program(empty, 3), P.template_instance_query(empty.id))
+    for t, why in ((wide, "commits 24 bits, more than 16"), (empty, "has no gate")):
+        with pytest.raises(P.QueryRefused, match=why):
+            P.units(P.population_program(t, 3), P.template_instance_query(t.id))
 
     def held(B, S, x):
         a = B.call(XOR8, x[0], x[1])
@@ -534,11 +538,17 @@ def test_the_partition_is_cores_on_the_pinned_q_word_vector():
 
 @pytest.mark.parametrize("n", range(len(TEMPLATE["cases"])), ids=[c[0] for c in TEMPLATE["cases"]])
 def test_the_partition_is_cores_on_the_pinned_template_vectors(n):
+    """One-stage names each pinned template vector's object as core does, and refuses its units: the vectors' templates
+    return 32-bit words, more than `UNIT_BITS` bits an instance."""
     _label, name, q, want = TEMPLATE["cases"][n]
     prog = _template_program(name)
     pinned = {"object": codec.canonical_json(want["object"]), "digest": want["digest"], "program": want["object"]["program"],
               "population": want["population"], "ranges": [(t, lo, c) for _k, t, lo, c in want["ranges"]]}
-    assert _one_stage(prog, q) == pinned == _core(prog, q)
+    obj = P.partition(prog, q)
+    assert {"object": codec.canonical_json(obj), "digest": P.digest(obj), "program": P.program_digest(prog)} == \
+        {k: pinned[k] for k in ("object", "digest", "program")} and _core(prog, q) == pinned
+    with pytest.raises(P.QueryRefused, match="commits 64 bits, more than 16"):
+        P.units(prog, q)
 
 
 def test_the_partition_is_cores_on_this_protocols_programs():
