@@ -89,6 +89,7 @@ def main(argv: list[str]) -> int:
         writer, reader = MU.fp8_block_linked(K, N, G)
         t_build = time.monotonic() - t
         st_w = MU.stage(writer, rows, out / "b-writer", SALT_KEY)
+        st_w |= {"units": N * (K // G), "units_padded": 1 << (N * (K // G) - 1).bit_length()}
         c = np.load(out / "b-writer" / "outs.npy")
         st_r = MU.stage(reader, {"c": c}, out / "b-reader", SALT_KEY, twin)
         res += [(out / "b-writer", st_w, t_build), (out / "b-reader", st_r, 0.0)]
