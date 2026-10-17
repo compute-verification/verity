@@ -239,11 +239,10 @@ FOLDS = {
             "key_rule": {"pfill": "key_ok (key_ok_r9 in an r9 build)", "served": "fixed public odd keys SERVED_KA"},
             "status": "open", "needs": ("D",),
             "ref": "(D): different runs of a chain's words leave different final states on some start state. Proved for "
-                   "one word and two at every width (Lean Pouw.SecurityProofs.Receipt.DuoWordInjective, DuoPairNoKernel); "
-                   "false at four words for odd keys with r1 + r3 = 0 mod 32, a2 = -1 mod 2^r1 and a3 = ±1 mod "
-                   "2^(33 - r1), which key_ok and both schedules' rotations exclude; open for three or more words at the "
-                   "deployed keys, with no three-word kernel at widths 4, 6 and 8 for any odd keys "
-                   "(note:20261017T1000Z-draft-fold-r §6)"},
+                   "one, two and three words at every width (Lean Pouw.SecurityProofs.Receipt.DuoWordInjective, "
+                   "DuoPairNoKernel, DuoTripleNoKernel); false at four words for odd keys with r1 + r3 = 0 mod 32, "
+                   "a2 = -1 mod 2^r1 and a3 = ±1 mod 2^(33 - r1), which key_ok and both schedules' rotations exclude; "
+                   "open for four or more words at the deployed keys (note:20261017T1000Z-draft-fold-r §6)"},
     "xin13": {"step": xin13_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": (13, 19),
               "key_rule": {"pfill": "key_ok_r9", "egemm": "key_ok_r9", "e2e": "lambda8 (weaker: no key_ok)"},
               "status": "open", "needs": ("RT", "G3"),

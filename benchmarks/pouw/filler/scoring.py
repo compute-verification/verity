@@ -854,9 +854,10 @@ FOLDS = {
             "source": "y <- (rotl(y, 7) + d0)·a0 + d1 = rotl(y, 7)·a0 + Q reads a pair only through Q = a0·d0 + d1, "
                       "one product a pair (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2; pfill_ref.q_receipt)"},
     "duo": {"share": 1.0, "nc": (2,), "flag": None, "sass": "every word into an XOR (LOP3)",
-            "source": "u = y ⊕ d ⊕ k; y <- u·a + z; z <- rotl(u, r) + y: no all-state kernel at one word or two, "
-                      "proved (Lean Pouw.SecurityProofs.Receipt.DuoWordInjective, DuoPairNoKernel); longer runs open at "
-                      "key_ok keys, and false at four words for some keys key_ok rejects "
+            "source": "u = y ⊕ d ⊕ k; y <- u·a + z; z <- rotl(u, r) + y: no all-state kernel at one, two or three "
+                      "words, proved (Lean Pouw.SecurityProofs.Receipt.DuoWordInjective, DuoPairNoKernel, "
+                      "DuoTripleNoKernel); longer runs open at key_ok keys, and false at four words for some keys "
+                      "key_ok rejects "
                       "(note:20261017T1000Z-draft-fold-r §6)"},
     "xor-in": {"share": 0.5, "share_if": 1.0, "if": SELECT_LEMMA, "nc": (4,), "flag": "-DPFILL_XIN",
                "rotations": (7, 19),

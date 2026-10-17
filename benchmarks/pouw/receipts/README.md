@@ -19,7 +19,7 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
 
 | fold | step | key rule | soundness |
 |---|---|---|---|
-| duo | per word: u = y ^ d ^ k, y ← u·a + z, z ← rotl(u, r) + y | pfill: key_ok; served: fixed odd keys | needs (D) past two words; one word and two proved |
+| duo | per word: u = y ^ d ^ k, y ← u·a + z, z ← rotl(u, r) + y | pfill: key_ok; served: fixed odd keys | needs (D) past three words; one, two and three proved |
 | xin13 | y ← (rotl(y, 13) ^ d0)·a0 + d1, then (rotl(y, 19) ^ d2)·a1 + d3 | key_ok_r9; key_ok_r11 for r11's Theorem 1 | needs (RT) and (G₃) |
 | li | y ← (y ^ d0 ^ k0)·a0 + d1, then (y ^ d2 ^ k1)·a1 + d3 | key_ok_r9 | needs (RT), (G₃) and (HO) |
 | ram | y ← (rotl(y, 7) + d0)·a0 + d1, then (rotl(y, 19) + d2)·a1 + d3 | key_ok | binds pairs only, through Q = a0·d0 + d1 |
@@ -29,12 +29,13 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
 
 - **(D), duo's premise.** Two different runs of a chain's words leave different final states on some start state
   (pfill commits the whole state; a served chain's receipt y ^ rotl(z, 16) needs the same up to one constant). It is
-  proved at every width for one word and for two (Lean: `Pouw.SecurityProofs.Receipt.DuoWordInjective`,
-  `Pouw.SecurityProofs.Receipt.DuoPairNoKernel`). At four words it is false for odd keys with r1 + r3 ≡ 0 (mod 32),
+  proved at every width for one, two and three words, for odd multipliers and rotations 0 < r < n (Lean:
+  `Pouw.SecurityProofs.Receipt.DuoWordInjective`, `Pouw.SecurityProofs.Receipt.DuoPairNoKernel`,
+  `Pouw.SecurityProofs.Receipt.DuoTripleNoKernel`). At four words it is false for odd keys with r1 + r3 ≡ 0 (mod 32),
   a2 ≡ −1 (mod 2^r1) and a3 ≡ ±1 (mod 2^(33 − r1)): flipping the top bit of all four words changes no final state.
-  key_ok rejects such keys, and neither schedule has r_t + r_(t+2) ≡ 0 (mod 32). Three or more words at the deployed
-  keys are open; `benchmarks/pouw/theory/duo_kernel.c` finds no three-word kernel at widths 4, 6 and 8 for any odd
-  keys (note:20261017T1000Z-draft-fold-r §6).
+  key_ok rejects such keys, and neither schedule has r_t + r_(t+2) ≡ 0 (mod 32). Four or more words at the deployed
+  keys are open; `benchmarks/pouw/theory/duo_kernel.c` finds every four-word kernel at widths 4 and 8 to be that
+  family (note:20261017T1000Z-draft-fold-r §6).
 - **(RT) and (G₃).** RS-E-REF Part IX (note:20261015T1931Z-draft-theorem-e-referee) says (RT) is open and that no lemma
   removes it, and that (G₃) suffices for (G₄).
 - **r11's results.** P2-FF r11 (note:20261016T1549Z-draft-fullfloor-s-r11) finds that pricing can't replace (RT). It
