@@ -34,7 +34,7 @@ private def intJ? : Json → Option Int
 
 /-- Where `j` leaves the domain on which canonical JSON is RFC 8785 (strings ASCII without DEL, integers of magnitude at most
 2^53 − 1, no other numbers), or none (`codec.jcs_domain_error`). -/
-partial def domainError (j : Json) (path : String := "$") : Option String :=
+def domainError (j : Json) (path : String := "$") : Option String :=
   match j with
   | .null | .bool _ => none
   | .num n =>
@@ -42,9 +42,15 @@ partial def domainError (j : Json) (path : String := "$") : Option String :=
     else if n.mantissa.natAbs > MAX_SAFE_INT then some s!"{path}: integer {n.mantissa} exceeds 2^53 - 1 in magnitude"
     else none
   | .str s => if s.toList.all (fun c : Char => c.toNat < 0x7f) then none else some s!"{path}: string is not ASCII without DEL"
-  | .arr a => (Array.range a.size).findSome? fun i => domainError a[i]! s!"{path}[{i}]"
-  | .obj kvs => kvs.toArray.findSome? fun (k, v) =>
-    if k.toList.all (fun c : Char => c.toNat < 0x7f) then domainError v s!"{path}.{k}" else some s!"{path}.<key>: string is not ASCII without DEL"
+  | .arr a => (Array.range a.size).attach.findSome? fun i =>
+    domainError (a[i.1]'(Array.mem_range.1 i.2)) s!"{path}[{i.1}]"
+  | .obj kvs => kvs.toArray.attach.findSome? fun x =>
+    if x.1.1.toList.all (fun c : Char => c.toNat < 0x7f) then domainError x.1.2 s!"{path}.{x.1.1}"
+    else some s!"{path}.<key>: string is not ASCII without DEL"
+termination_by j
+decreasing_by
+  · exact sizeOf_lt_of_mem_arr (Array.getElem_mem _)
+  · exact sizeOf_lt_of_mem_obj x.2
 
 /-! ### §2 Types and leaves -/
 
@@ -57,75 +63,109 @@ inductive Ty where
 
 namespace Ty
 
-partial def beq : Ty → Ty → Bool
+private theorem sizeOf_lt_of_mem {fs : Array Ty} {t : Ty} (h : t ∈ fs) : sizeOf t < 1 + sizeOf fs := by
+  have := Array.sizeOf_lt_of_mem h
+  omega
+
+private theorem sizeOf_snd_lt_of_mem {fs : Array (String × Ty)} {f : String × Ty} (h : f ∈ fs) :
+    sizeOf f.2 < 1 + sizeOf fs := by
+  have := Array.sizeOf_lt_of_mem h
+  obtain ⟨k, t⟩ := f
+  simp only [Prod.mk.sizeOf_spec] at this ⊢
+  omega
+
+def beq : Ty → Ty → Bool
   | .value a, .value b => a == b
   | .array n a, .array m b => n == m && beq a b
-  | .tuple a, .tuple b => a.size == b.size && (a.zip b).all fun (x, y) => beq x y
-  | .record a, .record b => a.size == b.size && (a.zip b).all fun (x, y) => x.1 == y.1 && beq x.2 y.2
+  | .tuple a, .tuple b => a.size == b.size && (a.attach.zip b).all fun (x, y) => beq x.1 y
+  | .record a, .record b => a.size == b.size && (a.attach.zip b).all fun (x, y) => x.1.1 == y.1 && beq x.1.2 y.2
   | _, _ => false
+termination_by t _ => t
+decreasing_by
+  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
+  · omega
+  · exact sizeOf_lt_of_mem x.2
+  · exact sizeOf_snd_lt_of_mem x.2
 
 instance instBEq : BEq Ty := ⟨beq⟩
 
-partial def leaves : Ty → Nat
+def leaves : Ty → Nat
   | .value _ => 1
   | .array n e => n * leaves e
   | .tuple fs => fs.foldl (fun a t => a + leaves t) 0
   | .record fs => fs.foldl (fun a t => a + leaves t.2) 0
+decreasing_by all_goals first | decreasing_tactic | (simp only [Ty.record.sizeOf_spec]; exact sizeOf_snd_lt_of_mem ‹_›)
 
 /-- The leaf widths in leaf order (row-major: an Array's elements in index order, fields in declared order). -/
-partial def widths : Ty → Array Nat
+def widths : Ty → Array Nat
   | .value w => #[w]
   | .array n e => let w := widths e; (Array.range n).foldl (fun a _ => a ++ w) #[]
   | .tuple fs => fs.foldl (fun a t => a ++ widths t) #[]
   | .record fs => fs.foldl (fun a t => a ++ widths t.2) #[]
+decreasing_by all_goals first | decreasing_tactic | (simp only [Ty.record.sizeOf_spec]; exact sizeOf_snd_lt_of_mem ‹_›)
 
-partial def toJson : Ty → Json
+def toJson : Ty → Json
   | .value w => Json.arr #[Json.str "Value", Lean.toJson w]
   | .array n e => Json.arr #[Json.str "Array", Lean.toJson n, toJson e]
   | .tuple fs => Json.arr #[Json.str "Tuple", Json.arr (fs.map toJson)]
-  | .record fs => Json.arr #[Json.str "Record", Json.arr (fs.map fun (k, t) => Json.arr #[Json.str k, toJson t])]
+  | .record fs => Json.arr #[Json.str "Record", Json.arr (fs.map fun f => Json.arr #[Json.str f.1, toJson f.2])]
+decreasing_by all_goals first | decreasing_tactic | (simp only [Ty.record.sizeOf_spec]; exact sizeOf_snd_lt_of_mem ‹_›)
 
 def render (t : Ty) : String := (toJson t).compress
 
 /-- `type_from_json` with its constructors' checks: a width a positive integer, a length a natural number (neither a boolean),
 a record's field names distinct strings. -/
-partial def ofJson (j : Json) : V Ty := do
+def ofJson (j : Json) : V Ty := do
   let bad := fun (why : String) => (throw s!"type {j.compress}: {why}" : V Ty)
-  let .arr (a : Array Json) := j | bad "not a list"
-  match (a[0]? : Option Json) with
-  | some (.str "Value") =>
-    match (a[1]? : Option Json).bind natJ?, a.size with
-    | some w, 2 => if w > 0 then pure (.value w) else bad "Value<w> needs a positive int width"
-    | _, _ => bad "Value<w> needs a positive int width"
-  | some (.str "Array") =>
-    match (a[1]? : Option Json).bind natJ?, (a[2]? : Option Json), a.size with
-    | some n, some e, 3 => pure (.array n (← ofJson e))
-    | _, _, _ => bad "Array<n,T> needs a non-negative int length and an element type"
-  | some (.str "Tuple") =>
-    match (a[1]? : Option Json), a.size with
-    | some (.arr fs), 2 => pure (.tuple (← fs.mapM ofJson))
-    | _, _ => bad "a Tuple's fields are a list"
-  | some (.str "Record") =>
-    match (a[1]? : Option Json), a.size with
-    | some (.arr fs), 2 => do
-      let fs ← fs.mapM fun f => match f with
-        | .arr #[.str k, t] => do pure (k, ← ofJson t)
-        | _ => throw s!"type {j.compress}: a Record field is [name, type]"
-      if (List.range fs.size).any (fun i => (fs.extract 0 i).any (·.1 == fs[i]!.1)) then
-        throw s!"type {j.compress}: duplicate record field names"
-      pure (.record fs)
-    | _, _ => bad "a Record's fields are a list"
-  | _ => bad "unknown type tag"
+  match j with
+  | .arr a =>
+    match (a[0]? : Option Json) with
+    | some (.str "Value") =>
+      match (a[1]? : Option Json).bind natJ?, a.size with
+      | some w, 2 => if w > 0 then pure (.value w) else bad "Value<w> needs a positive int width"
+      | _, _ => bad "Value<w> needs a positive int width"
+    | some (.str "Array") =>
+      match (a[1]? : Option Json).bind natJ?, h : (a[2]? : Option Json), a.size with
+      | some n, some e, 3 => pure (.array n (← ofJson e))
+      | _, _, _ => bad "Array<n,T> needs a non-negative int length and an element type"
+    | some (.str "Tuple") =>
+      match h : (a[1]? : Option Json), a.size with
+      | some (.arr fs), 2 => pure (.tuple (← fs.attach.mapM fun f => ofJson f.1))
+      | _, _ => bad "a Tuple's fields are a list"
+    | some (.str "Record") =>
+      match h : (a[1]? : Option Json), a.size with
+      | some (.arr fs), 2 => do
+        let fs ← fs.attach.mapM fun f => match hf : f.1 with
+          | .arr ys =>
+            if hy : ys.size = 2 then
+              match ys[0] with
+              | .str k => do pure (k, ← ofJson ys[1])
+              | _ => throw s!"type {j.compress}: a Record field is [name, type]"
+            else throw s!"type {j.compress}: a Record field is [name, type]"
+          | _ => throw s!"type {j.compress}: a Record field is [name, type]"
+        if (List.range fs.size).any (fun i => (fs.extract 0 i).any (·.1 == fs[i]!.1)) then
+          throw s!"type {j.compress}: duplicate record field names"
+        pure (.record fs)
+      | _, _ => bad "a Record's fields are a list"
+    | _ => bad "unknown type tag"
+  | _ => bad "not a list"
+termination_by j
+decreasing_by
+  · exact sizeOf_lt_of_getElem?_arr h
+  · exact Nat.lt_trans (sizeOf_lt_of_mem_arr f.2) (sizeOf_lt_of_getElem?_arr h)
+  · have h1 := sizeOf_lt_of_mem_arr (Array.getElem_mem (xs := ys) (i := 1) (by omega))
+    rw [← hf] at h1
+    exact Nat.lt_trans h1 (Nat.lt_trans (sizeOf_lt_of_mem_arr f.2) (sizeOf_lt_of_getElem?_arr h))
 
 /-- `remove_axis`: array axis `ax` stripped, with its length. -/
-partial def removeAxis : Ty → Nat → Option (Nat × Ty)
+def removeAxis : Ty → Nat → Option (Nat × Ty)
   | .array n e, 0 => some (n, e)
   | .array n e, ax + 1 => (removeAxis e ax).map fun (m, inner) => (m, .array n inner)
   | _, _ => none
 
 /-- For member `m` along axis `ax`: the axis' length and the leaves below it. Leaf `ℓ` of the member is leaf
 `((ℓ / L) · d + m) · L + ℓ % L` of the whole (§3, members of a batch argument). -/
-partial def axisDims : Ty → Nat → Option (Nat × Nat)
+def axisDims : Ty → Nat → Option (Nat × Nat)
   | .array n e, 0 => some (n, leaves e)
   | .array _ e, ax + 1 => axisDims e ax
   | _, _ => none
@@ -351,16 +391,20 @@ def recordPairs (fid : String) : Array (String × String) := Id.run do
     cur := ch :: cur
   return out
 
-private partial def fnRefs (acc : Array String) : Json → Array String
+private def fnRefs (acc : Array String) : Json → Array String
   | .obj kvs =>
     let items := kvs.toArray
     if items.size == 1 && items[0]!.1 == "fn" then
       match items[0]!.2 with
       | .str s => acc.push s
       | _ => acc
-    else (items.qsort (fun a b => a.1 < b.1)).foldl (fun acc (_, v) => fnRefs acc v) acc
-  | .arr a => a.foldl fnRefs acc
+    else (items.attach.qsort (fun a b => a.1.1 < b.1.1)).foldl (fun acc x => fnRefs acc x.1.2) acc
+  | .arr a => a.foldl (fun acc x => fnRefs acc x) acc
   | _ => acc
+termination_by j => j
+decreasing_by
+  · exact sizeOf_lt_of_mem_obj x.2
+  · exact sizeOf_lt_of_mem_arr ‹_›
 
 /-- Every `{"fn": id}` in a specialization id's binding record, in encoding order (`codec._record_function_ids`). -/
 def recordFunctionIds (fid : String) : Array String :=

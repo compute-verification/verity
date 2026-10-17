@@ -102,41 +102,58 @@ inductive DCut where
 
 namespace DCut
 
-partial def units : DCut → Nat
-  | .flat _ k => k.size
-  | .parts ps => ps.foldl (fun acc (c, m) => acc + (c.map units |>.getD 0) * m) 0
+private theorem sizeOf_lt_parts {ps : Array (Option DCut × Nat)} {p : Option DCut × Nat} {c : DCut} (hp : p ∈ ps)
+    (hc : p.1 = some c) : sizeOf c < sizeOf (DCut.parts ps) := by
+  have := Array.sizeOf_lt_of_mem hp
+  obtain ⟨_, _⟩ := p
+  subst hc
+  simp only [DCut.parts.sizeOf_spec, Prod.mk.sizeOf_spec, Option.some.sizeOf_spec] at this ⊢
+  omega
 
-partial def gates : DCut → Nat
+def units : DCut → Nat
+  | .flat _ k => k.size
+  | .parts ps => ps.attach.foldl (fun acc p => acc + (match _h : p.1.1 with | some c => units c | none => 0) * p.1.2) 0
+decreasing_by exact sizeOf_lt_parts p.2 _h
+
+def gates : DCut → Nat
   | .flat o _ => o.size
-  | .parts ps => ps.foldl (fun acc (c, m) => acc + (c.map gates |>.getD 0) * m) 0
+  | .parts ps => ps.attach.foldl (fun acc p => acc + (match _h : p.1.1 with | some c => gates c | none => 0) * p.1.2) 0
+decreasing_by exact sizeOf_lt_parts p.2 _h
 
 /-- The owner of every computing gate of the activation. -/
-partial def owner : DCut → Array Nat
+def owner : DCut → Array Nat
   | .flat o _ => o
   | .parts ps => Id.run do
     let mut out := #[]
     let mut base := 0
-    for (c, m) in ps do
-      if let some c := c then
+    for p in ps.attach do
+      match h : p.1.1 with
+      | some c =>
         let sub := owner c
-        for _ in [0:m] do
+        for _ in [0:p.1.2] do
           out := out ++ sub.map (· + base)
           base := base + units c
+      | none => pure ()
     return out
+decreasing_by exact sizeOf_lt_parts p.2 h
 
 /-- Unit `u` as a path of `(body node, member, unit within the member's cut)` down to a flat cut; none outside the cut. -/
-partial def locate : DCut → Nat → Option (List (Nat × Nat × Nat))
+def locate : DCut → Nat → Option (List (Nat × Nat × Nat))
   | .flat _ k, u => if u < k.size then some [] else none
   | .parts ps, u0 => Id.run do
     let mut u := u0
-    for i in [0:ps.size] do
-      let (c, m) := ps[i]!
-      if let some c := c then
+    for hi : i in [0:ps.size] do
+      let m := ps[i].2
+      match h : ps[i].1 with
+      | some c =>
         let cu := units c
         if u < cu * m then
           return (locate c (u % cu)).map ((i, u / cu, u % cu) :: ·)
         u := u - cu * m
+      | none => pure ()
     return none
+termination_by c _ => c
+decreasing_by exact sizeOf_lt_parts (Array.getElem_mem _) h
 
 end DCut
 
@@ -150,10 +167,16 @@ inductive Def where
 
 /-- `Q_word{X}` on one activation (core's `evaluate_definition`): a primitive is one unit, none when it is structure (no
 parameters, or wiring); a separable body is its members' cuts; any other body is `cutWord` of its graph. -/
-partial def evaluate (X : Nat) : Def → DCut
+def evaluate (X : Nat) : Def → DCut
   | .prim params wiring => if !params || wiring then .flat #[] #[] else .flat #[0] #["output"]
-  | .separable nodes => .parts (nodes.map fun (d, m) => let c := evaluate X d; (if c.gates > 0 then some c else none, m))
+  | .separable nodes =>
+    .parts (nodes.attach.map fun p => let c := evaluate X p.1.1; (if c.gates > 0 then some c else none, p.1.2))
   | .flat g => let (own, kinds, _) := cutWord g X; .flat (own.map Int.toNat) kinds
+decreasing_by
+  have := Array.sizeOf_lt_of_mem p.2
+  obtain ⟨⟨_, _⟩, _⟩ := p
+  simp only [Def.separable.sizeOf_spec, Prod.mk.sizeOf_spec] at this ⊢
+  omega
 
 /-- The Program's units: by Call (its root-body index and cut), then within the Call's cut. -/
 structure Units where
