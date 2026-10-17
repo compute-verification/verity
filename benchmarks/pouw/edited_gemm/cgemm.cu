@@ -51,53 +51,45 @@ __host__ __device__ inline int n_dig(int k) { return k <= 4096 ? 2 : 3; }
 
 // egemm.cu's quant_blk<true> (X and S as there), with P_A's rows S's digits under the carry coins z. DIG 1: that; the
 // cost-split stand-ins (wrong P_A): DIG 0 neither z nor digits (P_A row 0 = S's low byte), DIG 2 the digits over a z
-// that is zeroed, not hashed. Warps 0 .. 7 a row group of 4 each; warp 8's lane g hashes group g's z while they hash
-// their patches (one barrier before the last round's digits), so z's digest isn't a second hash on a patch lane
-constexpr int CQ_NT = 288;
+// that is zeroed, not hashed. z's digest rides on lane np of the last round's patch hashes when that round leaves a lane
+// idle (k / 128 not a multiple of 32: down's k = 14,336), else it is lane 0's own hash first
 template <int DIG>
 DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint16_t* __restrict__ x, int8_t* __restrict__ X,
                     int8_t* __restrict__ PA, int rows, int k, float inv_s, const Sig& sg) {
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blk * 8 + warp;
-  if (warp == 8) {
-    uint32_t* zs = zss + 16 * lane;
-    if (DIG == 1 && lane < 8 && (blk * 8 + lane) * 4 < rows) {
-      uint64_t st[8];
-      sha_block(sg.w, (uint64_t)Z_TAG << 56 | (uint64_t)(blk * 8 + lane), st);
-#pragma unroll
-      for (int i = 0; i < 8; i++) {
-        zs[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
-        zs[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
-      }
-    }
-    if (DIG == 2 && lane < 8)
-      for (int i = 0; i < 16; i++) zs[i] = 0;
-    __syncthreads();
-    return;
-  }
-  if (grp * 4 >= rows) {
-    __syncthreads();
-    return;
-  }
+  if (grp * 4 >= rows) return;
   const int kb = k / 128, m = n_dig(k);
   uint32_t* dg = dgs + 512 * warp;
   int* sp = sps + 128 * warp;
   uint32_t* zs = zss + 16 * warp;   // z's digest, digest byte order: row rr's 128 bits are words 4 rr .. 4 rr + 3
   const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dg);
+  const bool z_alone = kb % 32 == 0;
+  if (DIG == 1 && z_alone && lane == 0) {
+    uint64_t st[8];
+    sha_block(sg.w, (uint64_t)Z_TAG << 56 | (uint64_t)grp, st);
+#pragma unroll
+    for (int i = 0; i < 8; i++) {
+      zs[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+      zs[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+    }
+  }
+  if (DIG == 2 && lane < 16) zs[lane] = 0;
 #pragma unroll 1
   for (int p0 = 0; p0 < kb; p0 += 32) {
     const int np = min(32, kb - p0), steps = np / 2;
+    const bool zl = DIG == 1 && !z_alone && p0 + 32 >= kb && lane == np;
     if (p0) __syncwarp();
-    if (lane < np) {
+    if (lane < np || zl) {
       uint64_t st[8];
-      sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | ((uint64_t)grp * kb + p0 + lane), st);
+      sha_block(sg.w, zl ? (uint64_t)Z_TAG << 56 | (uint64_t)grp : (uint64_t)DITHER_TAG << 56 | ((uint64_t)grp * kb + p0 + lane), st);
+      uint32_t* o = zl ? zs : dg + 16 * lane;
 #pragma unroll
       for (int i = 0; i < 8; i++) {
-        dg[16 * lane + 2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
-        dg[16 * lane + 2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+        o[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+        o[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
       }
     }
-    if (p0 + 32 >= kb) __syncthreads();
-    else __syncwarp();
+    __syncwarp();
 #pragma unroll 1
     for (int rr = 0; rr < 4; rr++) {
       const size_t r = (size_t)grp * 4 + rr;
@@ -170,7 +162,7 @@ DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint1
   }
 }
 #define CQUANT(NAME, DIG)                                                                                                  \
-  __global__ void __launch_bounds__(CQ_NT) NAME(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA, \
+  __global__ void __launch_bounds__(256) NAME(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA, \
                                               int rows, int k, float inv_s, const __grid_constant__ Sig sg) {               \
     __shared__ uint32_t dg[8 * 512];                                                                                         \
     __shared__ int sp[8 * 128];                                                                                              \
@@ -582,7 +574,7 @@ static void cq(CP& C, const Sig& s, CqK f = cquant) {
     hquant<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
     return;
   }
-  f<<<(P.m + QROWS - 1) / QROWS, CQ_NT, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, P.inv_s, s);
+  f<<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, P.inv_s, s);
 }
 static void cw(CP& C, const Sig& s) {
   EP& P = C.E;
