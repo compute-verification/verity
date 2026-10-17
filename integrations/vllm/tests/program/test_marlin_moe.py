@@ -164,6 +164,23 @@ def test_split_k_coordinate_is_its_fold_and_the_twin(TK: int) -> None:
     assert len(sums) > 1, "every split of these operands gives one sum: the test reads no fold order"
 
 
+def test_an_expert_row_unpacks_the_checkpoint_s_bytes() -> None:
+    """Byte j of a packed row holds codes 2j (low nibble) and 2j + 1, as `prepare_moe_mxfp4_layer_for_marlin` reads the checkpoint;
+    an expert outside [0, E) reads two zero codes a byte."""
+    rng = np.random.default_rng(4)
+    E, K = 3, 64
+    q = rng.integers(0, 16, (E, K))
+    packed = MR.pack_e2m1(q)
+    assert packed.shape == (E, K // 2) and (packed == (q[:, 0::2] | q[:, 1::2] << 4)).all()
+    row = bind(MM.MoeExpertE2m1Row, E=E, K=K)
+    for e in range(E):
+        assert list(evaluate(row, [e], packed.ravel().tolist())) == q[e].tolist(), e
+    assert list(evaluate(row, [E], packed.ravel().tolist())) == [0] * K
+    assert [evaluate(bind(MM.E2m1x2Codes), [b]) for b in (0x00, 0x8F, 0x1E)] == [(0, 0), (0xF, 0x8), (0xE, 0x1)]
+    with pytest.raises(ValueError):
+        bind(MM.MoeExpertE2m1Row, E=E, K=63).body
+
+
 def test_pair_launch_over_three_experts_is_the_twin() -> None:
     rng = np.random.default_rng(3)
     E, K, N, TK, TN, GRID = 3, 256, 16, 128, 8, 5
@@ -175,7 +192,7 @@ def test_pair_launch_over_three_experts_is_the_twin() -> None:
         x = _bf16_rows(rng, (1, K))
         g = np.array([0.3], dtype=np.float32).view(np.uint32)
         lead = [x[0].tolist(), [e]] + ([[int(g[0])]] if routed else []) + [[blk], [par]]
-        got = evaluate(gemm, *lead, wq.ravel().tolist(), ws.ravel().tolist())
+        got = evaluate(gemm, *lead, MR.pack_e2m1(wq).ravel().tolist(), ws.ravel().tolist())
         if e >= E:
             assert all(v == 0x7FFF for v in got), "an expert outside [0, E) reads NaN weights"
             continue

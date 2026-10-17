@@ -51,15 +51,20 @@ Registered functions (`_v1`):
                                               starts a segment
   MarlinMxfp4Coordinate{K,TK,DOT}             (x: K bf16, cut: KT-1 bits, wq: K e2m1, ws: K/32 e8m0) -> bf16: the w13 word
   MarlinMxfp4CoordinateW{K,TK,DOT}            (x, cut, g: bf16, wq, ws) -> bf16: the w2 word, times the routed weight
-  GatherE2m1x{E}, GatherE8m0x{E}              (e: i32, column: E words) -> column[e]; e outside [0, E) -> 0 (e2m1), 0xFF (e8m0)
-  MoeExpertE2m1Row{E,K}, MoeExpertE8m0Row{E,K}  (e, slab: [E][K]) -> [K] = slab[e]
-  MarlinMoeExpertCoordinate(W){E,K,TK,DOT}    (x, cut, e, [g], wq: [E][K], ws: [E][K/32]) -> bf16: over the rows of expert e
-  MarlinMoeExpertGemm{E,K,N,TK,TN,GRID,DOT}   (x, e, blk, par, wq: [E][N][K] e2m1, ws: [E][N][K/32] e8m0) -> [N] bf16: one pair's
-                                              w13 output row
+  E2m1x2Lo, E2m1x2Hi                          primitives: a packed byte's low and high nibble, the codes of its even and odd k
+  E2m1x2Codes                                 (b: u8) -> 2 e2m1: both, in k order
+  GatherE2m1Pairx{E}, GatherE8m0x{E}          (e: i32, column: E bytes) -> column[e]; e outside [0, E) -> 0 (two zero codes), 0xFF
+                                              (e8m0)
+  MoeExpertE2m1Row{E,K}                       (e, slab: [E][K/2] packed) -> [K] e2m1: expert e's row, unpacked
+  MoeExpertE8m0Row{E,K}                       (e, slab: [E][K]) -> [K] = slab[e]
+  MarlinMoeExpertCoordinate(W){E,K,TK,DOT}    (x, cut, e, [g], wq: [E][K/2], ws: [E][K/32]) -> bf16: over the rows of expert e
+  MarlinMoeExpertGemm{E,K,N,TK,TN,GRID,DOT}   (x, e, blk, par, wq: [E][N][K/2] packed, ws: [E][N][K/32] e8m0) -> [N] bf16: one
+                                              pair's w13 output row
   MarlinMoeExpertGemmW{E,K,N,TK,TN,GRID,DOT}  (x, e, g, blk, par, wq, ws) -> [N] bf16: one pair's w2 output row
 
-`wq` / `ws` are the layer's logical weights, [E][N][K] codes and [E][N][K/32] scale bytes (the checkpoint's, before Marlin's repack
-and scale permutation at load: `marlin_utils_fp4.prepare_moe_mxfp4_layer_for_marlin`, `mxfp4_marlin_process_scales`, which for bf16
+`wq` / `ws` are the layer's logical weights as the checkpoint stores them, [E][N][K/2] bytes of two e2m1 codes each (the even k in
+the low nibble, GPTQ's order, which `gptq_marlin_repack` reads) and [E][N][K/32] scale bytes, before Marlin's repack and scale
+permutation at load (`marlin_utils_fp4.prepare_moe_mxfp4_layer_for_marlin`, `mxfp4_marlin_process_scales`, which for bf16
 activations reorders scales and keeps their values); `x` the pair's bf16 activation row (w13: the token's hidden state; w2: the
 pair's activation), `g` its f32 routed weight, which MarlinMoeExpertGemmW rounds to bf16 once for every coordinate.  Each
 MarlinMoeExpertGemm(W) reads the schedule once and every column of a tile its cut bits.
@@ -77,6 +82,8 @@ from verity_vllm.program.registry.prims import BF16, F32, I32, Bf16MulBf16, F32A
 
 M32 = 0xFFFFFFFF
 E8M0 = Value(8)
+#: a byte of two e2m1 codes, the even k in the low nibble (the checkpoint's uint8 `w13_weight` / `w2_weight`)
+E2M1X2 = Value(8)
 #: the scale group along K (MXFP4's 32; Marlin's group_blocks 2)
 GROUP = 32
 #: the thread configs' TK (ops.cu:132-145): four or two warp rows
@@ -159,7 +166,25 @@ def I32Rem(a: int, b: int) -> int:
     return i32_divrem(a, b)[1]
 
 
-MARLIN_PRIMITIVES = [E2m1ToBf16, E8m0DequantBf16, I32Mul, I32Div, I32Rem]
+@primitive("E2m1x2Lo", 1, [("b", E2M1X2)], E2M1, conformance="exact-model-tested")
+def E2m1x2Lo(b: int) -> int:
+    """A packed byte's low nibble: the code of its even k."""
+    return b & 0xF
+
+
+@primitive("E2m1x2Hi", 1, [("b", E2M1X2)], E2M1, conformance="exact-model-tested")
+def E2m1x2Hi(b: int) -> int:
+    """A packed byte's high nibble: the code of its odd k."""
+    return b >> 4 & 0xF
+
+
+MARLIN_PRIMITIVES = [E2m1ToBf16, E8m0DequantBf16, I32Mul, I32Div, I32Rem, E2m1x2Lo, E2m1x2Hi]
+
+
+@composite("E2m1x2Codes", 1, [], lambda S: ((("b", E2M1X2),), Array(2, E2M1)), conformance="exact-model-tested")
+def E2m1x2Codes(B, S, b):
+    """A packed byte's two codes in k order: `E2m1x2Lo_v1`, then `E2m1x2Hi_v1`."""
+    return Coll(Array(2, E2M1), concat([B.call(E2m1x2Lo, b).refs, B.call(E2m1x2Hi, b).refs]))
 
 
 def group_sig(e2m1=E2M1, e8m0=E8M0, bf16=BF16):
@@ -365,9 +390,9 @@ def MarlinMoeSchedule(B, S, blk, par):
     return Coll(Array(S.NT, Array(S.KT - 1, BIT)), concat([b.refs for row in rows for b in row]))
 
 
-def gather_e2m1(vocab: int) -> PrimitiveDefinition:
-    """`GatherE2m1x{V}_v1`: column[token] of V e2m1 codes, else 0."""
-    return X._gather("GatherE2m1", vocab, E2M1, E2M1_FILL)
+def gather_e2m1_pair(vocab: int) -> PrimitiveDefinition:
+    """`GatherE2m1Pairx{V}_v1`: column[token] of V packed bytes, else two zero codes."""
+    return X._gather("GatherE2m1Pair", vocab, E2M1X2, E2M1_FILL)
 
 
 def gather_e8m0(vocab: int) -> PrimitiveDefinition:
@@ -375,10 +400,22 @@ def gather_e8m0(vocab: int) -> PrimitiveDefinition:
     return X._gather("GatherE8m0", vocab, E8M0, E8M0_FILL)
 
 
-@composite("MoeExpertE2m1Row", 1, ["E", "K"], X.row_sig(E2M1), conformance="exact-model-tested")
+def packed_row_sig(e2m1=E2M1, e2m1x2=E2M1X2, i32=I32):
+    return lambda S: ((("e", i32), ("slab", Array(S.E, Array(S.K // 2, e2m1x2)))), Array(S.K, e2m1))
+
+
+def check_packed(K: int) -> None:
+    if K % 2:
+        raise ValueError(f"a packed e2m1 row holds an even number of codes, not K = {K}")
+
+
+@composite("MoeExpertE2m1Row", 1, ["E", "K"], packed_row_sig(), conformance="exact-model-tested")
 def MoeExpertE2m1Row(B, S, e, slab):
-    """`wrow[k] = slab[e][k]`: one `GatherE2m1x{E}_v1` per k over the E experts' codes."""
-    return B.batch(gather_e2m1(S.E), e, X.columns(slab, S.E, S.K, E2M1), axes=(None, 0))
+    """`wrow[k]` = code k of the packed row `slab[e]`: one `GatherE2m1Pairx{E}_v1` per byte over the E experts' bytes, then its
+    `E2m1x2Codes_v1` (k = 2j, 2j + 1 of byte j)."""
+    check_packed(S.K)
+    b = B.batch(gather_e2m1_pair(S.E), e, X.columns(slab, S.E, S.K // 2, E2M1X2), axes=(None, 0))
+    return B.batch(E2m1x2Codes, b, axes=(0,)).reshape(Array(S.K, E2M1))
 
 
 @composite("MoeExpertE8m0Row", 1, ["E", "K"], X.row_sig(E8M0), conformance="exact-model-tested")
@@ -387,10 +424,10 @@ def MoeExpertE8m0Row(B, S, e, slab):
     return B.batch(gather_e8m0(S.E), e, X.columns(slab, S.E, S.K, E8M0), axes=(None, 0))
 
 
-def pair_coordinate_sig(routed: bool, e2m1=E2M1, e8m0=E8M0, bf16=BF16, i32=I32, bit=BIT):
+def pair_coordinate_sig(routed: bool, e2m1x2=E2M1X2, e8m0=E8M0, bf16=BF16, i32=I32, bit=BIT):
     g = (("g", bf16),) if routed else ()
     return lambda S: ((("x", Array(S.K, bf16)), ("cut", Array(S.K // S.TK - 1, bit)), ("e", i32)) + g
-                      + (("wq", Array(S.E, Array(S.K, e2m1))), ("ws", Array(S.E, Array(S.K // GROUP, e8m0)))), bf16)
+                      + (("wq", Array(S.E, Array(S.K // 2, e2m1x2))), ("ws", Array(S.E, Array(S.K // GROUP, e8m0)))), bf16)
 
 
 def coordinate(S) -> dict:
@@ -400,7 +437,7 @@ def coordinate(S) -> dict:
 @composite("MarlinMoeExpertCoordinate", 1, ["E", "K", "TK", "DOT"], pair_coordinate_sig(False), conformance=DOT_CONF)
 def MarlinMoeExpertCoordinate(B, S, x, cut, e, wq, ws):
     """One output word of the w13 launch of a pair routed to expert e: `MarlinMxfp4Coordinate_v1` over expert e's rows (`wq`, `ws`
-    the column's codes and scale bytes of every expert)."""
+    the column's packed codes and scale bytes of every expert)."""
     q = B.call(bind(MoeExpertE2m1Row, E=S.E, K=S.K), e, wq)
     s = B.call(bind(MoeExpertE8m0Row, E=S.E, K=S.K // GROUP), e, ws)
     return B.call(bind(MarlinMxfp4Coordinate, **coordinate(S)), x, cut, q, s)
@@ -423,26 +460,27 @@ def check_gemm(S) -> None:
         raise ValueError(f"a Marlin launch's N = {S.N} is a whole number of TN = {S.TN} tile columns")
 
 
-def gemm_sig(routed: bool, e2m1=E2M1, e8m0=E8M0, bf16=BF16, f32=F32, i32=I32):
+def gemm_sig(routed: bool, e2m1x2=E2M1X2, e8m0=E8M0, bf16=BF16, f32=F32, i32=I32):
     g = (("g", f32),) if routed else ()
     return lambda S: ((("x", Array(S.K, bf16)), ("e", i32)) + g + (("blk", i32), ("par", i32))
-                      + (("wq", Array(S.E, Array(S.N, Array(S.K, e2m1)))), ("ws", Array(S.E, Array(S.N, Array(S.K // GROUP, e8m0))))),
+                      + (("wq", Array(S.E, Array(S.N, Array(S.K // 2, e2m1x2)))),
+                         ("ws", Array(S.E, Array(S.N, Array(S.K // GROUP, e8m0))))),
                       Array(S.N, bf16))
 
 
-def pair_rows(B, S, sched, coord, lead: tuple, blk, par, wq, ws, word=BF16, e2m1=E2M1, e8m0=E8M0) -> Coll:
+def pair_rows(B, S, sched, coord, lead: tuple, blk, par, wq, ws, word=BF16, e2m1x2=E2M1X2, e8m0=E8M0) -> Coll:
     """The N words of one pair: the schedule once, then per tile column J `coord` over its TN columns, each reading `lead` and J's
-    cut bits whole and its [E][K] code and [E][K/32] scale slabs."""
+    cut bits whole and its [E][K/2] packed code and [E][K/32] scale slabs."""
     check_gemm(S)
     E, K, N, TN = S.E, S.K, S.N, S.TN
-    KG, NT = K // GROUP, N // TN
+    KQ, KG, NT = K // 2, K // GROUP, N // TN
     cuts = B.call(sched, blk, par)
-    Lq, Ls = e2m1.leaves, e8m0.leaves
+    Lq, Ls = e2m1x2.leaves, e8m0.leaves
     parts = []
     for J in range(NT):
         n0, n1 = J * TN, (J + 1) * TN
-        q = Coll(Array(TN, Array(E, Array(K, e2m1))),
-                 concat([strided_view(wq, Lq * n * K, Lq * K, Lq * N * K, 1, Lq * E * K) for n in range(n0, n1)]))
+        q = Coll(Array(TN, Array(E, Array(KQ, e2m1x2))),
+                 concat([strided_view(wq, Lq * n * KQ, Lq * KQ, Lq * N * KQ, 1, Lq * E * KQ) for n in range(n0, n1)]))
         s = Coll(Array(TN, Array(E, Array(KG, e8m0))),
                  concat([strided_view(ws, Ls * n * KG, Ls * KG, Ls * N * KG, 1, Ls * E * KG) for n in range(n0, n1)]))
         parts.append(B.batch(coord, *lead[:1], cuts[J], *lead[1:], q, s, axes=(None,) * (len(lead) + 1) + (0, 0)))

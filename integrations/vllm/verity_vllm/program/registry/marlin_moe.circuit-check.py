@@ -13,6 +13,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
     D = MM.DOT
     return [
+        ("E2m1x2Codes_v1", lambda: bind(MM.E2m1x2Codes)),
+        ("MoeExpertE2m1Row_v1", lambda: bind(MM.MoeExpertE2m1Row, E=3, K=64)),
         ("MarlinMxfp4Group_v1", lambda: bind(MM.MarlinMxfp4Group)),
         ("MarlinMxfp4Step_v1", lambda: bind(MM.MarlinMxfp4Step, DOT=D)),
         ("MarlinMxfp4StepFromZero_v1", lambda: bind(MM.MarlinMxfp4StepFromZero, DOT=D)),

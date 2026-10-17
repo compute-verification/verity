@@ -125,6 +125,19 @@ def test_coordinate_is_the_twin_over_every_cut_pattern(routed: bool) -> None:
     assert (got == MR.coordinates(x, cut, wq, ws, TK=TK, g=g if routed else None)).all()
 
 
+def test_an_expert_row_is_its_word_row_on_packed_bytes() -> None:
+    """The bits of a packed byte, least significant first, are its two codes in k order: the Boolean row relabels the gathered
+    bytes and equals the word row, which unpacks them, an expert outside [0, E) included."""
+    rng = np.random.default_rng(17)
+    E, K, n = 3, 64, 12
+    slab = rng.integers(0, 256, (n, E * K // 2)).astype(np.uint8)
+    e = np.r_[rng.integers(0, E, n - 2), E, 0xFFFFFFFF].astype(np.uint32)
+    got = np.asarray(BS.evaluate_words(bind(BM.MoeExpertE2m1RowV2, E=E, K=K), e, slab)).reshape(n, K)
+    word = bind(MM.MoeExpertE2m1Row, E=E, K=K)
+    for i in range(n):
+        assert list(evaluate(word, [int(e[i])], slab[i].tolist())) == got[i].tolist(), i
+
+
 @pytest.mark.parametrize("routed", [False, True])
 def test_pair_launch_over_two_experts_is_the_twin(routed: bool) -> None:
     rng = np.random.default_rng(13 + routed)
@@ -138,7 +151,8 @@ def test_pair_launch_over_two_experts_is_the_twin(routed: bool) -> None:
     g = np.array(rng.random(P), dtype=np.float32).view(np.uint32)
     fam = BM.MarlinMoeExpertGemmWV2 if routed else BM.MarlinMoeExpertGemmV2
     lead = (x, e) + ((g,) if routed else ()) + (blk, par)
-    slabs = (np.broadcast_to(wq.ravel(), (P, wq.size)), np.broadcast_to(ws.ravel(), (P, ws.size)))
+    packed = MR.pack_e2m1(wq).ravel()
+    slabs = (np.broadcast_to(packed, (P, packed.size)), np.broadcast_to(ws.ravel(), (P, ws.size)))
     got = np.asarray(BS.evaluate_words(bind(fam, E=E, K=K, N=N, TK=TK, TN=TN, GRID=GRID, DOT=DOT), *lead, *slabs)).reshape(P, N)
     for i, (ei, b, p) in enumerate(cases):
         if ei >= E:

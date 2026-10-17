@@ -849,7 +849,7 @@ def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
         n = (P * 7919) % N
         cut = cuts.get(int(blk[0]), MR.schedule(KT, NT, GRID, int(blk[0]), par))[n // TN]
         fn = bind(MM.MarlinMoeExpertCoordinateW, E=E, K=K, TK=TK, DOT=MM.DOT)
-        y = evaluate(fn, x[0].tolist(), cut.astype(int).tolist(), int(e[0]), int(gb[0]), np.asarray(w["wq"][:, n]).ravel().tolist(),
+        y = evaluate(fn, x[0].tolist(), cut.astype(int).tolist(), int(e[0]), int(gb[0]), MR.pack_e2m1(w["wq"][:, n]).ravel().tolist(),
                      np.asarray(w["ws"][:, n]).ravel().tolist())
         twin = MR.coordinates(x[0][None], cut[None], w["wq"][e[0], n][None], w["ws"][e[0], n][None], TK=TK, g=gb[:1])
         rec["reference_expert_coords"] += 1
@@ -911,7 +911,7 @@ def bind_check(served: set[tuple[str, int, int, int]]) -> dict[str, Any]:
                   DOT=MM.DOT)
         params, ret = fn.signature()
         p = {k: list(type_shape(t)) for k, t in params}
-        ok = p["wq"] == [NUM_EXPERTS, N, K] and p["ws"] == [NUM_EXPERTS, N, K // GROUP] and p["x"] == [K] and list(type_shape(ret)) == [N]
+        ok = p["wq"] == [NUM_EXPERTS, N, K // 2] and p["ws"] == [NUM_EXPERTS, N, K // GROUP] and p["x"] == [K] and list(type_shape(ret)) == [N]
         out[descriptor_id(fn)] = {"ok": ok, "boolean": descriptor_id(boolean_version(fn))}
     return {"bindings": out, "ok": bool(out) and all(v["ok"] for v in out.values())}
 

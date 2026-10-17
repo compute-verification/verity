@@ -46,6 +46,13 @@ def max_blocks_per_sm(block: int) -> int:
     return 4 if thread_m_blocks(block) == 1 else 2
 
 
+def pack_e2m1(wq: np.ndarray) -> np.ndarray:
+    """Codes (..., K) as the checkpoint stores them and the Definitions read them (..., K / 2): two a byte, the even k in the low
+    nibble."""
+    q = np.asarray(wq, dtype=np.uint8) & 0xF
+    return q[..., 0::2] | q[..., 1::2] << 4
+
+
 def dequant(wq: np.ndarray, ws: np.ndarray) -> np.ndarray:
     """`MarlinMxfp4Group_v1` over the last axis: codes (..., K) and scale bytes (..., K / 32) -> bf16 words (..., K)."""
     a = E2M1_BF16[np.asarray(wq, dtype=np.uint8) & 0xF].astype(np.uint32) << 16
