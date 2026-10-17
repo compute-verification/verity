@@ -262,11 +262,16 @@ def value_family(name: str) -> str:
 
 class GcPauses:
     """`gc.callbacks` while a run is installed: each collection of at least `min_s`, as (generation, start, seconds, thread), the start on
-    `time.perf_counter` like the steps' `t_step_end`, so a pause lands on its step."""
+    `time.perf_counter` like the steps' `t_step_end`, so a pause lands on its step.
+
+    `install` first collects and freezes the heap, as vLLM does once its warm-up is done (`gc_utils.freeze_gc_heap`): the committer, its
+    sources and the manifests they hold are built after that freeze, and a full collection over them took 720-960 ms on every rank's
+    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce (r20261017-193316-4d59).  Collections never touch a value."""
 
     def __init__(self, min_s: float = 1e-3) -> None:
         self.min_s = min_s
         self.pauses: list[tuple[int, float, float, str]] = []
+        self.freeze_s: list[float] = []
         self._t0 = 0.0
 
     def __call__(self, phase: str, info: dict) -> None:
@@ -276,15 +281,20 @@ class GcPauses:
             self.pauses.append((int(info["generation"]), self._t0, dt, threading.current_thread().name))
 
     def install(self) -> None:
-        if self not in gc.callbacks:
-            gc.callbacks.append(self)
+        if self in gc.callbacks:
+            return
+        t0 = time.perf_counter()
+        gc.collect()
+        gc.freeze()
+        self.freeze_s.append(time.perf_counter() - t0)
+        gc.callbacks.append(self)
 
     def uninstall(self) -> None:
         if self in gc.callbacks:
             gc.callbacks.remove(self)
 
     def record(self) -> dict[str, Any]:
-        return {"min_s": self.min_s, "pauses": list(self.pauses), "total_s": sum(p[2] for p in self.pauses)}
+        return {"min_s": self.min_s, "pauses": list(self.pauses), "total_s": sum(p[2] for p in self.pauses), "freeze_s": list(self.freeze_s)}
 
 
 class _Footprint:
@@ -1181,7 +1191,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.padding_stats = None
         self._step_index = 0
         self.spans = Spans(scheme.NAME)
-        self.gc_pauses.pauses = []
+        self.gc_pauses.pauses, self.gc_pauses.freeze_s = [], []
         self.pool.reset()
         self.errors = []
 
