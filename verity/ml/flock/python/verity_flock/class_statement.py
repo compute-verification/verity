@@ -1050,12 +1050,15 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         srvs, addrs = _serve(binary, d, pub, circ, pin, warm + runs, "127.0.0.1", port, "loopback-stress")
     try:
         with open(d / "prove.out", "w") as fo, open(d / "prove.err", "w") as fe:
-            timer = ["/usr/bin/time", "-f", "%M", "-o", str(d / "prove.maxrss")] if os.path.exists("/usr/bin/time") else []
+            # user and system CPU seconds, then the peak RSS in KB, last
+            timer = ["/usr/bin/time", "-f", "%U %S %M", "-o", str(d / "prove.maxrss")] if os.path.exists("/usr/bin/time") else []
             pr = subprocess.Popen(timer + [binary, "prove", "--verifier", ",".join(addrs) or f"127.0.0.1:{port}", "--instances", str(inst),
-                                           "--circuit", str(circ), "--runs", str(runs), "--warm", str(warm)] + (["--gpu"] if gpu else []),
-                                  stdout=fo, stderr=fe)
+                                           "--circuit", str(circ), "--runs", str(runs), "--warm", str(warm)] + (["--gpu"] if gpu else [])
+                                  + _zk(), stdout=fo, stderr=fe)
             pr.wait()
-        prover_gb = int((d / "prove.maxrss").read_text().split()[-1]) / 2**20 if timer else None   # the prover's own peak, KB
+        rusage = (d / "prove.maxrss").read_text().split() if timer else []
+        prover_gb = int(rusage[-1]) / 2**20 if rusage else None   # the prover's own peak, KB
+        prover_cpu_s = round(float(rusage[-3]) + float(rusage[-2]), 2) if len(rusage) >= 3 else None
         hwm = [_vm_hwm(s.pid) for s in srvs]
         verifier_gb = round(sum(hwm), 2) if srvs and None not in hwm else None    # the verifier processes' peaks, summed
     finally:
@@ -1077,13 +1080,18 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         {k: v.get(k) for k in ("prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
                                "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
                                "wire_recv", "statement_digest", "buckets", "calls", "wait_e2e_s", "open_rtt_ms", "open_rtt_min_ms")} | \
-        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb, "verify_servers": len(addrs),
+        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "prover_cpu_s": prover_cpu_s, "zk": bool(_zk()),
+         "verifier_peak_gb": verifier_gb, "verify_servers": len(addrs),
          "verifier": f"pod {remote.get('host')}" if remote else "loopback", "coins": FC.coins(live),
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
          "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
          # per rep: the prover's phase timings (witness: units and row hashing; encoding and commitment; zerocheck, lincheck,
          # ring switch, Ligerito; t.total on the device), and host_s = the rep's wall time less t.total (host work and idle)
          "buckets": _buckets(v), "buckets_runs": [_buckets(x) for x in timed]}
+
+
+def _zk() -> list[str]:
+    return ["--zk"] if os.environ.get("FLOCK_ZK") == "1" else []
 
 
 def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int, host: str, port: int, operator: str,
@@ -1094,14 +1102,14 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
     system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them), for ``points``
     provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits. FLOCK_DRAW_LAW (a
     law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier draws by that law at its
-    Register, the staged statement their population."""
+    Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover alike)."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
     logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
     law = ["--draw-law", os.environ["FLOCK_DRAW_LAW"]] if os.environ.get("FLOCK_DRAW_LAW") else []
     srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),
                               "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", operator,
-                              "--concurrency", str(concurrency)] + law
+                              "--concurrency", str(concurrency)] + law + _zk()
                              + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else []),
                              stdout=open(log, "w"), stderr=subprocess.STDOUT)
             for i, log in enumerate(logs)]
