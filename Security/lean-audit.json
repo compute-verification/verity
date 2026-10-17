@@ -48,7 +48,7 @@
   },
   "Claims.JsonSpec": {
    "owner": "@proofs",
-   "digest": "032df7be3c6f93f5574cf4c0dcbbb43eeb733575ebc69814f5bd70067c89505b"
+   "digest": "2f64540de1ff32e4c08877bea0fad2444549fbd3a27ddd549d720090828e1597"
   },
   "Claims.StrictBirthday": {
    "owner": "@proofs",
@@ -6585,7 +6585,7 @@
    ]
   },
   "Definitions.Claims": {
-   "digest": "d41b1677a39e1e804725e22f8b052a07bedd95e3730b7a3c97a4969652e6c8b7",
+   "digest": "fcccf8dcdf429de319a36171d907be78e8f13e8c4c48fffadc7a18538fd554ce",
    "definitions": {
     "Claims.B": "fb3801991ccf043f813b846a36059903571dff8141ca0f402abb8a11582fa105",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -6596,7 +6596,7 @@
     "Claims.Circuit.outs": "1705a77b16b689aceee74f743004da62a7fe5be6b596df9bd4119221c5c1e350",
     "Claims.Circuit.wires": "f8708ac3ad38967a4248946a259ff63e30df7d1d730160a15a61e761c9d9f289",
     "Claims.Collision": "684d79c833f61a382736de6bea1d4837fddfeb6034c8b058487e8be7cf2d85ba",
-    "Claims.Complete": "d8c27ffaa41fdf4c594d9f34b2c2f9da18159a288e9901ec43f2ddffbdb728dd",
+    "Claims.Complete": "a2f9ca8ead083d11f9937e2fd80dc649424b2019e285152d33872bba4df794f4",
     "Claims.ERep": "cb016a5be2414cfa68d56c1f414a90a708a20cc10ad9298cdc1fe447ff4d0a14",
     "Claims.ERepCost": "81991c3620d6311de132341c0de57c286ec88418103dc34ea51b681b720d5033",
     "Claims.Ex": "c2c94d12b1a732e69312adbfd75898bd82844441f36c75ab6c132a808e7f85ff",
@@ -6616,9 +6616,11 @@
     "Claims.Finder.out": "1f2e96ba2d94703b13797de2b60b1089e0014df7842a3a3beef4d8d4d62558e2",
     "Claims.FinderFamily": "b34378ab00437b7c914dbf9fe528236e47b352b1d1757ccdc0710cf9db9fb99d",
     "Claims.Flock.Bits": "06b06a1b65925cd175908cde1663dea4936a5fe3aea6885fa5afa0c8823fc327",
-    "Claims.Flock.Complete": "dc072734310a80274929240a3976f8075e0af91d2e3388735e63d7347eabd845",
-    "Claims.Flock.Deploy": "89d295a31076f4ce2893f5f2df1e920b47c3774ebedd354da43942940d96589e",
+    "Claims.Flock.Complete": "d7d8ffa19191c184bbecabcb148476b824a83faed3bd2c9a1787ca553af3e788",
+    "Claims.Flock.Deploy": "090cad5d8ff4a786e885dae35c62ef1c087c17070662af00ff24ab929063e90f",
     "Claims.Flock.Deploy.N₀": "97dfde75d59f893a430f1c1fdc06100af4e64619a04ea8023dc226bc0c4d4845",
+    "Claims.Flock.Deploy.P": "7b93b1ccfb6a75ad24c6100006f888c08b41f48e24e6d33c6fff6008d4e176da",
+    "Claims.Flock.Deploy.Tape": "2866e3a86b808edfce7a04ae7baa7e54e23ad9541dabb689484e9c57c3779efe",
     "Claims.Flock.Deploy.V": "0b350ec7263373349bf9be4853fd8272796175d552093987f0b4ce2e48653ea7",
     "Claims.Flock.Deploy.cap": "7124980f43814ab1e660071ba93878fd79addb482cc70be0f81527f8c6abc18c",
     "Claims.Flock.Deploy.cols": "04ff4e239d01234e7cd7d3dea8a1c34656a7f7e39155f58846d05bd1fa065a3b",
@@ -6794,7 +6796,7 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Json": {
-   "digest": "9b0b12068daeead305f10df33a339407f22dd46d2754b5f3c5630d513bb793e1",
+   "digest": "82f971f29719d8884c4d9ccbf3d7033d0f508829e540d7f0f8a47c4a14142010",
    "definitions": {
     "Claims.Json.Good": "049bbffb568b7a24dc10ae33ffefdb6a5d2c9b084cb34437d2c331acc5fb7d93",
     "Claims.Json.Good.arr": "8415fb2c81ce9d83a6177315a99833ce4533ef41121cfb4e6aae6136c92aafae",
@@ -6817,12 +6819,12 @@
     "Claims.Json.Wf.num": "c0fde77e0148d77d2a9bd77d6b01fb819f606eadb660543f68d5ae4fd3ea8e9a",
     "Claims.Json.Wf.obj": "a26fc49abe31a28e2fd80de728e6f48281d412678e8f129887067fbadbe855bc",
     "Claims.Json.Wf.str": "1130cfd92d68d48b9b92694c0bfe11cadd3df5734428e3e751a08712c00ea8f8",
-    "Claims.JsonSpec": "032df7be3c6f93f5574cf4c0dcbbb43eeb733575ebc69814f5bd70067c89505b"
+    "Claims.JsonSpec": "2f64540de1ff32e4c08877bea0fad2444549fbd3a27ddd549d720090828e1597"
    },
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "43d52e480f535b1b9bd9a58cc2d1f26a444fbf8b0898e8517aae351dea862a6a",
+   "digest": "27a6bd5aa92a70e881c4e77498d7346f5059ed524d031765b3d9744a00e0af34",
    "definitions": {
     "Claims.Sampling.BGate": "63a981e57403ae475c097446b58799e6bbc6ebb87e4a1ff8911d63f602542833",
     "Claims.Sampling.BGate.and": "5e97bb022ac07b984f8303744fbc545e8aa6f37c7e6ec025083230906f800909",
@@ -6845,8 +6847,10 @@
     "Claims.Sampling.Commitment.Opens": "d445c3c389bf6e8aad46d821e19d02acff142e9e7ca5d1b457f5e0d8768e244f",
     "Claims.Sampling.Commitment.layer": "d6b245b1ec78281aefaae67140ea4d43c558780cbbd0c54cd970c0b5f2fbc245",
     "Claims.Sampling.Commitment.opens": "4fa5f1a179e73f004f5acf449ab4c25238c113570de24c46450c1f847e57c393",
-    "Claims.Sampling.Complete": "023a4be0a59ddc63b1eb8956b3f0b40ab64af077cfb7f54a74683e0b26615064",
-    "Claims.Sampling.Deploy": "15d6e567a86edf6837255c31dc0c2709383706d0ad2697336ef48786707ad2a6",
+    "Claims.Sampling.Complete": "b16bd5db99b38fb602ce17ffc92925a1343494089ca6c8560ec4d28d708acca2",
+    "Claims.Sampling.Deploy": "cce5fb697efd0ae98015b9a18eae937260d6704c2a50c0b3dff56f702666db99",
+    "Claims.Sampling.Deploy.P": "6f16f67e1eebc9b6cc3e1d1e29bd0bb050775371ed039318038d71d2c75bd630",
+    "Claims.Sampling.Deploy.Tape": "062cbdae4970c51a72fd9b8fad181c95b413cb7e2238406d068ebba6ec36d62f",
     "Claims.Sampling.Deploy.UnitCoins": "5d2f4eaf1fc21ec82cde327906e19e2e3d8f0a57d8eaf9c1fd78da5241b3a36b",
     "Claims.Sampling.Deploy.V": "45e3f7cc673a7b47034457b64d6afe50c2f17aa44b2a01235c8ec58ce8ddf0c6",
     "Claims.Sampling.Deploy.cap": "a967e1d0521eb8325b3fde2a2b06a64bbcf248f5ca87da55cd52d72bcdc210b6",
@@ -16748,16 +16752,16 @@
    ]
   },
   "Models.Flock.Guarantees.Claims": {
-   "digest": "ed7e4c7235e08e4079917b31164a231e2a8d2306bf29ac7875246608981c5f3b",
+   "digest": "c087b46c37f6386141472e0412a13ac36b665a5910b7715a59d7f0a11a0b74e6",
    "definitions": {
-    "Flock.Guarantees.ClaimsStated": "4f12b4aa4e88439281611e9f997c5d3bc4852d4e959eb706d36850b48e5f080c"
+    "Flock.Guarantees.ClaimsStated": "49c59652a24a68c606a790586a7b6320bfebea5120a0c4e3e9213b9d173ab1e4"
    },
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Models.Flock.Guarantees.SamplingClaims": {
-   "digest": "32d81478bad36ee1155b0b5e62fc2b39cbe38968e50c57c34ed8287b56f4bfd5",
+   "digest": "33d7530990df4e95dfd3a01747e2b86446cd34eee35916b59a28707631314dfa",
    "definitions": {
-    "Flock.Guarantees.SamplingClaimsStated": "0308d483c5dd279960fdbd65e1f30108bedb361d493cbed0e3cb362753e6100e"
+    "Flock.Guarantees.SamplingClaimsStated": "174ad5c0b3cb7e112140e4fc1f9a96fbbfcaf79668677c7078ae5db066fdfb66"
    },
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
