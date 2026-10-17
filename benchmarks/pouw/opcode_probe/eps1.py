@@ -199,7 +199,8 @@ def windows(lines: list[dict], skip_s: float) -> dict[tuple[str, str], list[dict
     return split
 
 
-MMAS = {"p_honest": 8, "p_half": 4, "p_mma": 8, "p_mma0": 8, "p_fold": 0, "p_ffma": 0, "p_mixed": 4}
+MMAS = {"p_honest": 8, "p_half": 4, "p_mma": 8, "p_mma0": 8, "p_fold": 0, "p_ffma": 0, "p_mixed": 4, "p_honest16": 8,
+        "p_mma16": 8, "p_mma16z": 8, "p_light": 0}
 
 
 def cmd_clock(a) -> int:
