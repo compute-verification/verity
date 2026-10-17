@@ -279,6 +279,18 @@ def test_a_class_staged_without_shared_rows_opens_every_instances_own_rows_under
         CS.stage(units, "q-word", s, cl, lanes, tmp_path / "wired", key, wiring=SimpleNamespace(), share_rows=False)
 
 
+def test_own_rows_is_its_own_stage_cache_entry(monkeypatch, tmp_path: Path):
+    """FLOCK_OWN_ROWS stages another public file from the same circuit, so a shape staged with shared rows is never served from
+    the cache to a run that asked for every instance's own rows, or the other way round."""
+    a = SimpleNamespace(batch="fixed", n=16, seed=0, partition="q-word", max_ands=1 << 24, select=None, real=None)
+    monkeypatch.setenv("FLOCK_STAGE_CACHE", str(tmp_path))
+    for k, v in {"source_digest": "s", "program_digest": "p", "a": a, "row_units": {}}.items():
+        monkeypatch.setitem(CS._CTX, k, v)
+    shared = CS._stage_cache("shape")
+    monkeypatch.setattr(CS, "OWN_ROWS", True)
+    assert CS._stage_cache("shape") != shared and CS._stage_cache("shape").parent == shared.parent
+
+
 def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):
     """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
     (the output row's, §16.13, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
