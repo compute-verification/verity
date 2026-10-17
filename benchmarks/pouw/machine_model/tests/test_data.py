@@ -224,3 +224,17 @@ def test_joint_issue_rows_take_the_schedule_search():
         assert c["MMA"][o] == pytest.approx(min(c[k][o] for k in forms)) == pytest.approx(mma * M.cycle_u, abs=0.05)
         assert all(c[k][o] == pytest.approx(v[n] * 1.07 / margin, rel=1e-5)
                    for k, v in old.items() if n in v and k not in forms and k != "MMA")
+
+
+def test_uniform_takes_the_issue_slot():
+    """VF3p-16 (EPS1 P10, r20261017-055801-e051; decision 73): a uniform instruction takes the SMSP's issue slot, 1 on
+    issue and on each joint issue row 0.7416 of a vector instruction's coefficient, the share that holds every uniform.cu
+    point at the 2% noise margin over JI3o's coefficients (0.8168 holds them exactly; the honest step beside 32 FFMA sets
+    it at JI3o_0); UP refit to the fastest form alone, 0.766 a SMSP-cycle."""
+    c, old = census(M, "VF3p-16"), census(M, "VF3o-16")
+    assert "issue" not in old["UNI"] and c["UNI"]["issue"] == pytest.approx(M.cycle_u)
+    for n in ("JI3o_0", "JI3o_1", "JI3o_2"):
+        assert n not in old["UNI"] and c["UNI"][n] / c["FFMA"][n] == pytest.approx(0.7416, abs=1e-6)
+    assert c["UNI"]["UP"] == pytest.approx(u_of(M.cycle_u, "3.0621", "", "", ""))
+    assert c["UNI"]["UP"] < old["UNI"]["UP"]
+    assert {k: v for k, v in c.items() if k != "UNI"} == {k: v for k, v in old.items() if k != "UNI"}

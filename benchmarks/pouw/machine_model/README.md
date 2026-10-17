@@ -3,17 +3,17 @@
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
 checks every attack against it. The reading it reports is a design's core ε (`machine-model eps`, "ε in the
-tensor–scalar model" below). Each named vector (VF … VF3o-16) re-solves here to the record it was published with (τ, τ
+tensor–scalar model" below). Each named vector (VF … VF3q-16) re-solves here to the record it was published with (τ, τ
 at 600 W, U/F_low and margin), at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3o-16        # the vector's record (τ, τ at 600 W, U/F_low, margin), θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3o-16, the vector of record since 17 Oct after VF3n-16; VF3l-16 by decision 62 before them)
-uv run machine-model census VF3o-16 --kind ATOMS64
-uv run machine-model attacks VF3o-16 -n 3 # the cheapest attacks of every design
+uv run machine-model solve VF3q-16        # the vector's record (τ, τ at 600 W, U/F_low, margin), θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current` (VF3q-16, the vector of record since 17 Oct after VF3n-16, VF3o-16 and VF3p-16; VF3l-16 by decision 62 before them)
+uv run machine-model census VF3q-16 --kind ATOMS64
+uv run machine-model attacks VF3q-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 uv run machine-model designs              # the registry: names, aliases, noise per product, fold, unit, coins, arm
@@ -46,7 +46,7 @@ uv run machine-model eps --device sm100 --table --credit floor --operands floor 
 | `verity_machine_model/adopt.py` | Merging a measured census into `data/census/` at the last epoch, each (kind, row) at the faster of its two lines |
 | `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
 | `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA: `e-l7qs` is PROFILE's measured kernel; `c-l7qs` (co32c's linear), `h-l7qs` (cohalf's QK^T) and `pv-l7qs` (P·V) are Dither-C's, measured on `benchmarks/pouw/edited_gemm/`'s bit-exact kernels; `dither-duo-l32` the provisional one the tests' hand arithmetic reads |
-| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (QSTAR's, provisional until a DATASHEET row) |
+| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (the most L2 read in any measured pattern, + 2%) |
 | `data/designs/NAME.toml` | One design of the registry (below): its name, title and aliases, the noise on each product, its honest profile, L, the noise's operand-delivery floor φ_del, the fold and filler (lane instructions a word by class), plain (unfolded) MMAs beside its work, the proof unit, the coins, its perplexity arm, and ε_skip's and ε_mand's parts with sources |
 | `data/designs.toml` | What every design reads unless its file sets it: honest's profile, L, the proof unit, the coins, the fold (duo), ε_clock, Theorem S's δ, p and checks, honest's baseline program (dp4a) and the routes, all sm_120's |
 | `data/adapt.toml` | The proof units ε_adapt prices (SPEC's Theorem D): whole dot products (the designs' unit, decision 72), whole with operands recomputed one stage back, per-stage coins, and the segment spot check it replaced |
@@ -303,7 +303,22 @@ the 1.07 with a measured margin (EPS1 TENSOR's M1c, r20261017-052102-d832, the t
 600 schedules of the forms that set JI3n (lane op, register layout, 2 to 6 warps a SMSP, placement) join the refit, and
 each JI3o row is divided by the most a searched program loads the row fitted to M1 alone, over 0.98 (1.038, 1.026,
 1.025), so a search as wide again finding as much again stays covered; the probe's refit with its search runs prints
-the rows.
+the rows. VF3p-16 put a uniform-datapath instruction on the issue rows (decision 73; EPS1 P10, `opcode_probe/eps1.py
+uniform` over `probes/uniform.cu`, r20261017-055801-e051): in the honest step at 60-68% issue it costs 0.6-1.1
+SMSP-cycles, so UNI is 1 on issue and 0.7416 of a vector instruction's coefficient on each JI3o row, the share that holds
+every uniform.cu point at the 2% margin (0.8168 holds them exactly), and UP rises to the fastest form alone, 0.766 a
+SMSP-cycle. A uniform row's measurement is valid only on ptxas 13.0 with the uniform chain gated by its exact uniform and
+MMA counts in SASS, inside a loop whose vector work reads the MMAs' results (ptxas moves the chain to lanes otherwise).
+VF3q-16 is FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; `facet_break/loads.py family`, runs `@FB`):
+3505 programs over every facet beat 18 rows, and each beaten family closes for the upper hull of its old rows' vertices
+and the measured programs at the 2% margin. R1 and KFFMA0 become EFFMA0..6 (interleaved IMMA + FFMA beat R1 by 41%);
+JI3o_0 becomes JI3q_0..11 (HMMA.16816.F16 beside FFMA beat it by 9.8%), each form's hull taken alone and every row at a
+vector coefficient one of those hulls has, each form at the most it carries beside it, while JI3o_1 and JI3o_2 hold; LDG
+becomes ELDG0..2 over LDG128 and LDG32; KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 their E families; R6r becomes
+ER6r0..1 over LDS128 and UBLKCP4K (broadcast LDS.128 beside a 4 KB bulk copy out of shared memory beat it by 5.1%, at
+LDS128's fastest program); TLD2 on ROW_TLDW2 scales to its fastest program. The six loads the census priced at 0 (LDS.64, LDG.E.64, the
+256-bit LDG.E.ENL2.256 and the L1-skipping LDG.E.NA.128, .128.STRONG.GPU and .ENL2.256.STRONG.GPU) are kinds with rows
+of their own at their fastest program, the L1-skipping three on one row of the L2 bytes they read (ROW_L2RD).
 
 ## Where the data came from
 
