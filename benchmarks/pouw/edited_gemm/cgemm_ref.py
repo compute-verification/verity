@@ -10,7 +10,10 @@ transposed, k x n'):
     Y = residue sums of X,  A = digits(Y, z, m),  P_A = [A_0 | A_1 | A_2 | 0]^T (A_2 = 0 at m = 2)
     (T, D, O') = co32c_words(W, V, U, c, b, z, 32, 32, m),  O = O' - sum_d 128^d D_d  (== P^ X, checked)
 and the device's bytes must equal: X, P_A, W', P_B, the served O (c_l7qs), O' (c_l7qs_o) and the receipts (derive.py's
-tile_receipts over T_1 .. T_last, O', D_1 .. D_{m-1}). A cohalf gate (QK^T at k = 128, meta's kinds "cohalf") is
+tile_receipts over T_1 .. T_last, O', D_1 .. D_{m-1}). c_fx1's O must equal it too, and its receipts tile_receipts over the
+same words each multiplied first by fx1's key (egemm.cu's fx_chain<FX1, t, e>: word e of tile position t times
+key_mul(1, (4 t + e) 32) mod 2^32, recomputed here from the key schedule); the receipts without the multiply, and with it
+dropped at one (t, e), must both differ from the device's. A cohalf gate (QK^T at k = 128, meta's kinds "cohalf") is
 check_half's: X = clamp(floor(x inv_s), -64, 62)^T + b (meta's inv_s the 7-bit scale), Y = X's two 64-halves summed, U from tag 11 (row i's digest
 byte r), and (T, O) = honest_words(W, V, U, c, b, 64, 32) with O = T_last - U Y. One JSON line a gate directory; exit 1
 on any difference, on a device mismatch or on a control the device didn't reject.
@@ -31,6 +34,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "e2e_slice"))
 from derive import NCT, tile_receipts
+from ref import key_mul  # noqa: E402  (floored_gemm's, on derive's path)
 
 _spec = importlib.util.spec_from_file_location("checked_strip", HERE.parent / "theory" / "checked_strip.py")
 cs = importlib.util.module_from_spec(_spec)
@@ -69,6 +73,23 @@ def z_rows(key: bytes, row0: int, rows: int, m: int) -> np.ndarray:
     for j in range(row0 // 4, (row0 + rows) // 4):
         z[4 * j - row0:4 * j - row0 + 4] = np.unpackbits(np.frombuffer(block(key, Z_TAG, j), np.uint8), bitorder="little").reshape(4, 128)
     return z[:, :32 * (m - 1)].reshape(rows, m - 1, 32).transpose(1, 2, 0)
+
+
+def fx1_keys(drop: tuple[int, int] | None = None) -> np.ndarray:
+    """fx1's multipliers over a 128 x 128 tile in tile_receipts' (row, column) order: the word at row 32 wm + 16 mi + g +
+    8 (e >> 1), column 32 wn + 8 ni + 2 q + (e & 1) is word e of tile position t = 4 mi + ni, multiplied by
+    key_mul(1, (4 t + e) 32); drop = (t, e) leaves that one multiply out."""
+    r, c = np.arange(T)[:, None], np.arange(T)[None, :]
+    t = 4 * ((r % 32) // 16) + (c % 32) // 8
+    e = 2 * ((r % 16) // 8) + (c & 1)
+    K = np.array([key_mul(1, 32 * j) for j in range(32)], np.uint64)[4 * t + e]
+    if drop is not None:
+        K = np.where((t == drop[0]) & (e == drop[1]), np.uint64(1), K)
+    return K
+
+
+def fx1_words(words: list[np.ndarray], K: np.ndarray) -> list[np.ndarray]:
+    return [((w.astype(np.uint64) * K) & cs.MASK).astype(np.uint32) for w in words]
 
 
 def u_rows_half(key: bytes, row0: int, rows: int) -> np.ndarray:
@@ -158,7 +179,9 @@ def check(d: Path) -> dict:
         Ts, D, Op = cs.co32c_words(W, Vq.T, U, c, b.T, z, 32, 32, nd)
         O = (Op.astype(np.int64) - sum(dd.astype(np.int64) << (7 * (j + 1)) for j, dd in enumerate(D))) & cs.MASK
         served = (W + c) @ X.T
-        want_r = tile_receipts(seed, [t.T for t in Ts] + [Op.T] + [dd.T for dd in D], tm * tiles_n + tn)
+        words = [t.T for t in Ts] + [Op.T] + [dd.T for dd in D]
+        want_r = tile_receipts(seed, words, tm * tiles_n + tn)
+        r_fx = rd("R_c_fx1", np.uint32).reshape(NCT, 8)
         res = {
             "X": bool((rd("X", np.int8).reshape(T, k) == X).all()),
             "X_range": [int(X.min()), int(X.max())],
@@ -171,6 +194,11 @@ def check(d: Path) -> dict:
             "O": bool((rd("Y_c_l7qs", np.int32).reshape(T, T).view(np.uint32) == O.T.astype(np.uint32)).all()),
             "Op": bool((rd("Y_c_l7qs_o", np.int32).reshape(T, T).view(np.uint32) == Op.T).all()),
             "R": bool((rd("R_c_l7qs", np.uint32).reshape(NCT, 8) == want_r).all()),
+            "O_fx1": bool((rd("Y_c_fx1", np.int32).reshape(T, T).view(np.uint32) == O.T.astype(np.uint32)).all()),
+            "R_fx1": bool((r_fx == tile_receipts(seed, fx1_words(words, fx1_keys()), tm * tiles_n + tn)).all()),
+            "R_fx1_rejects_duo": bool((r_fx != want_r).any()),
+            "R_fx1_rejects_dropped_imad": bool(
+                (r_fx != tile_receipts(seed, fx1_words(words, fx1_keys((7, 3))), tm * tiles_n + tn)).any()),
             "D1_nonzero": float((D[0] != 0).mean()),
             "Y_range": [int(Y.min()), int(Y.max())],
         }

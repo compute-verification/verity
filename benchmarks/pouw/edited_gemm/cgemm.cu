@@ -26,14 +26,16 @@
 //   c_*              the GEMM: e_l7qs's mainloop over X and W', then the tail stage: O' = IMMA (A_0, -U) seeded by T_last,
 //                    D_d = IMMA (A_d, U), each word absorbed as it is made, O = O' - 128^d D_d (one IMAD a word a digit);
 //                    c_*_o writes O' instead of O (the recombination's cost, and O' for the CPU reference); c_l7qs_v
-//                    writes P.V's served value f = float(2 O + 127 S) s_row s_col instead (that epilogue's cost a cell)
+//                    writes P.V's served value f = float(2 O + 127 S) s_row s_col instead (that epilogue's cost a cell);
+//                    c_fx1 is c_l7qs with fx1's fold (decision 83: egemm.cu's fx_chain<FX1>, one IMAD by
+//                    key_mul(1, (4 t + e) 32) on word e of tile position t before duo, f = 4) on every word it absorbs
 //   hquant, hwedit   cohalf's X and P_A = [Y_lo | Y_hi | 0 | 0], W' and P_B = [-U_lo | -U_hi | 0 | 0]
 //   h_l7qs, h_l2q    cohalf's GEMM (htail: O = T_last - U Y, absorbed), on c_*'s schedules
 // Modes (at K = 128, cohalf's kernels):
 //   cgemm gate DIR M N K SEED       poisoned buffers: each c_* kernel's O against cuBLASLt's X W^T (W^ = W' - U on the
 //                                   device), c_l2q's receipts (another schedule) against c_l7qs's, c_l7qs_v's f against
-//                                   vref's, a no-write control; three tiles' operands, O, O' and receipts to DIR for
-//                                   cgemm_ref.py
+//                                   vref's, c_fx1's receipts unequal to c_l7qs's, a no-write control; three tiles'
+//                                   operands, O, O' and receipts (c_l7qs's and c_fx1's) to DIR for cgemm_ref.py
 //   cgemm bench REPS M N K          hot items interleaved across CG_ARMS (egemm.cu's arms too), one JSON line
 //   cgemm one ARM M N K             three warm-up calls, then one between cudaProfilerStart and Stop (for ncu)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a cgemm.cu -lcuda -lcublasLt -lnvidia-ml
@@ -51,7 +53,8 @@ __host__ __device__ inline int n_dig(int k) { return k <= 4096 ? 2 : 3; }
 
 // egemm.cu's quant_blk<true> (X and S as there), with P_A's rows S's digits under the carry coins z. DIG 1: that; the
 // cost-split stand-ins (wrong P_A): DIG 0 neither z nor digits (P_A row 0 = S's low byte), DIG 2 the digits over a z
-// that is zeroed, not hashed
+// that is zeroed, not hashed. z's digest rides on lane np of the last round's patch hashes when that round leaves a lane
+// idle (k / 128 not a multiple of 32: down's k = 14,336), else it is lane 0's own hash first
 template <int DIG>
 DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint16_t* __restrict__ x, int8_t* __restrict__ X,
                     int8_t* __restrict__ PA, int rows, int k, float inv_s, const Sig& sg) {
@@ -62,7 +65,8 @@ DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint1
   int* sp = sps + 128 * warp;
   uint32_t* zs = zss + 16 * warp;   // z's digest, digest byte order: row rr's 128 bits are words 4 rr .. 4 rr + 3
   const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dg);
-  if (DIG == 1 && lane == 0) {
+  const bool z_alone = kb % 32 == 0;
+  if (DIG == 1 && z_alone && lane == 0) {
     uint64_t st[8];
     sha_block(sg.w, (uint64_t)Z_TAG << 56 | (uint64_t)grp, st);
 #pragma unroll
@@ -75,14 +79,16 @@ DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint1
 #pragma unroll 1
   for (int p0 = 0; p0 < kb; p0 += 32) {
     const int np = min(32, kb - p0), steps = np / 2;
+    const bool zl = DIG == 1 && !z_alone && p0 + 32 >= kb && lane == np;
     if (p0) __syncwarp();
-    if (lane < np) {
+    if (lane < np || zl) {
       uint64_t st[8];
-      sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | ((uint64_t)grp * kb + p0 + lane), st);
+      sha_block(sg.w, zl ? (uint64_t)Z_TAG << 56 | (uint64_t)grp : (uint64_t)DITHER_TAG << 56 | ((uint64_t)grp * kb + p0 + lane), st);
+      uint32_t* o = zl ? zs : dg + 16 * lane;
 #pragma unroll
       for (int i = 0; i < 8; i++) {
-        dg[16 * lane + 2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
-        dg[16 * lane + 2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+        o[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+        o[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
       }
     }
     __syncwarp();
@@ -254,63 +260,72 @@ template <bool HALF> __global__ void phat(const int8_t* __restrict__ Wp, const i
 // ---------------------------------------------------------------- cohalf: QK^T at k = 128, r = k / 2 = 64, Q and K 7-bit
 constexpr uint32_t HBETA_TAG = 11;
 // the served side (K): X = clamp(floor(x / s), -64, 62) + b (b as cquant's, tag 7, block = row / 4 at k = 128) and
-// P_A = [Y_lo | Y_hi | 0 | 0], Y(r) = X(r) + X(r + 64) in [-128, 126]; a warp 4 rows, lane l columns 4 l .. 4 l + 3
+// P_A = [Y_lo | Y_hi | 0 | 0], Y(r) = X(r) + X(r + 64) in [-128, 126]. A block HQ_G row groups of 4: thread g < HQ_G
+// hashes group g's digest, then a warp 4 rows at a time, lane l columns 4 l .. 4 l + 3
+constexpr int HQ_G = 16;
+inline int hq_blocks(int rows) { return (rows + 4 * HQ_G - 1) / (4 * HQ_G); }
 __global__ void __launch_bounds__(256) hquant(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
                                               int rows, float inv_s, const __grid_constant__ Sig sg) {
-  __shared__ uint32_t dgs[8 * 16];
-  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blockIdx.x * 8 + warp;
-  if (grp * 4 >= rows) return;
-  uint32_t* dg = dgs + 16 * warp;
-  if (lane == 0) {
+  __shared__ uint32_t dgs[HQ_G * 16];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, g0 = blockIdx.x * HQ_G;
+  if (threadIdx.x < HQ_G && (g0 + (int)threadIdx.x) * 4 < rows) {
     uint64_t st[8];
-    sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | (uint64_t)grp, st);
+    sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | (uint64_t)(g0 + threadIdx.x), st);
+    uint32_t* dg = dgs + 16 * threadIdx.x;
 #pragma unroll
     for (int i = 0; i < 8; i++) {
       dg[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
       dg[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
     }
   }
-  __syncwarp();
-  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dg);
+  __syncthreads();
 #pragma unroll 1
-  for (int rr = 0; rr < 4; rr++) {
-    const size_t r = (size_t)grp * 4 + rr;
-    const uint2 w = __ldg(reinterpret_cast<const uint2*>(x + r * 128) + lane);
-    const uint32_t bits = (bytes[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
-    const uint32_t ww[2] = {w.x, w.y};
-    int qv[4];
+  for (int gi = warp; gi < HQ_G && (g0 + gi) * 4 < rows; gi += 8) {
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dgs + 16 * gi);
+#pragma unroll 1
+    for (int rr = 0; rr < 4; rr++) {
+      const size_t r = (size_t)(g0 + gi) * 4 + rr;
+      const uint2 w = __ldg(reinterpret_cast<const uint2*>(x + r * 128) + lane);
+      const uint32_t bits = (bytes[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
+      const uint32_t ww[2] = {w.x, w.y};
+      int qv[4];
 #pragma unroll
-    for (int h = 0; h < 2; h++) {
-      const float f0 = __uint_as_float(ww[h] << 16) * inv_s, f1 = __uint_as_float(ww[h] & 0xFFFF0000u) * inv_s;
-      qv[2 * h] = min(max(__float2int_rd(f0), -64), 62) + (int)((bits >> (2 * h)) & 1u);
-      qv[2 * h + 1] = min(max(__float2int_rd(f1), -64), 62) + (int)((bits >> (2 * h + 1)) & 1u);
+      for (int h = 0; h < 2; h++) {
+        const float f0 = __uint_as_float(ww[h] << 16) * inv_s, f1 = __uint_as_float(ww[h] & 0xFFFF0000u) * inv_s;
+        qv[2 * h] = min(max(__float2int_rd(f0), -64), 62) + (int)((bits >> (2 * h)) & 1u);
+        qv[2 * h + 1] = min(max(__float2int_rd(f1), -64), 62) + (int)((bits >> (2 * h + 1)) & 1u);
+      }
+      const uint32_t xw = __byte_perm(__byte_perm(qv[0], qv[1], 0x0040), __byte_perm(qv[2], qv[3], 0x0040), 0x5410);
+      reinterpret_cast<uint32_t*>(X + r * 128)[lane] = xw;
+      const uint32_t hi = __shfl_down_sync(~0u, xw, 16);
+      reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = lane < 16 ? add_noise<false>(xw, hi) : 0u;
     }
-    const uint32_t xw = __byte_perm(__byte_perm(qv[0], qv[1], 0x0040), __byte_perm(qv[2], qv[3], 0x0040), 0x5410);
-    reinterpret_cast<uint32_t*>(X + r * 128)[lane] = xw;
-    const uint32_t hi = __shfl_down_sync(~0u, xw, 16);
-    reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = lane < 16 ? add_noise<false>(xw, hi) : 0u;
   }
 }
 // the peeled side (Q in [-64, 62]): Q' = Q + c + U(i, k mod 64) (c as cwedit's, tag 8; U(i, r) from digest byte r of
-// row i's tag-11 block, r < 64, as cwedit's beta) and P_B = [-U_lo | -U_hi | 0 | 0]; a warp 4 rows
+// row i's tag-11 block, r < 64, as cwedit's beta) and P_B = [-U_lo | -U_hi | 0 | 0]. A block HW_G row groups of 4:
+// thread t < HW_G hashes group t's c, thread HW_G + j row j's U (5 HW_G digests on 5 full warps at HW_G = 32), then a
+// warp 4 rows at a time. WH: also W^ = Q + c (phat<true>'s bytes) to Wh
+constexpr int HW_G = 32;
+inline int hw_blocks(int rows) { return (rows + 4 * HW_G - 1) / (4 * HW_G); }
+template <bool WH = false>
 __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB, int rows,
-                                              const __grid_constant__ Sig sg) {
-  __shared__ uint32_t cds[8 * 16];
-  __shared__ uint32_t uds[8 * 64];
-  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blockIdx.x * 8 + warp;
-  if (grp * 4 >= rows) return;
-  uint32_t* cd = cds + 16 * warp;
-  uint32_t* ud = uds + 64 * warp;
-  if (lane < 5) {
+                                              const __grid_constant__ Sig sg, uint8_t* __restrict__ Wh = nullptr) {
+  __shared__ uint32_t cds[HW_G * 16];
+  __shared__ uint32_t uds[HW_G * 64];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, g0 = blockIdx.x * HW_G, t = threadIdx.x;
+  if (t < 5 * HW_G && (g0 + (t < HW_G ? t : (t - HW_G) / 4)) * 4 < rows) {
     uint64_t st[8];
-    sha_block(sg.w, lane == 0 ? ((uint64_t)C_TAG << 56 | (uint64_t)grp) : ((uint64_t)HBETA_TAG << 56 | (uint64_t)(4 * grp + lane - 1)), st);
-    if (lane == 0) {
+    sha_block(sg.w, t < HW_G ? ((uint64_t)C_TAG << 56 | (uint64_t)(g0 + t)) : ((uint64_t)HBETA_TAG << 56 | (uint64_t)(4 * g0 + t - HW_G)), st);
+    if (t < HW_G) {
+      uint32_t* cd = cds + 16 * t;
 #pragma unroll
       for (int i = 0; i < 8; i++) {
         cd[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
         cd[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
       }
     } else {
+      uint32_t* ud = uds + 16 * (t - HW_G);
 #pragma unroll
       for (int q = 0; q < 16; q++) {
         uint32_t v = 0;
@@ -319,19 +334,25 @@ __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uin
           const int e = 4 * q + b;
           v |= ((uint32_t)u_beta((uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu) & 0xFFu) << (8 * b);
         }
-        ud[16 * (lane - 1) + q] = v;
+        ud[q] = v;
       }
     }
   }
-  __syncwarp();
-  const uint8_t* cb = reinterpret_cast<const uint8_t*>(cd);
+  __syncthreads();
 #pragma unroll 1
-  for (int rr = 0; rr < 4; rr++) {
-    const size_t r = (size_t)grp * 4 + rr;
-    const uint32_t w = __ldg(reinterpret_cast<const uint32_t*>(W + r * 128) + lane);
-    const uint32_t nib = (cb[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu, u = ud[16 * rr + (lane & 15)];
-    reinterpret_cast<uint32_t*>(Wp + r * 128)[lane] = add_noise<false>(add_noise<false>(w, bits01(nib)), u);
-    reinterpret_cast<uint32_t*>(PB + r * 128)[lane] = lane < 16 ? add_noise<false>(~u, 0x01010101u) : 0u;
+  for (int gi = warp; gi < HW_G && (g0 + gi) * 4 < rows; gi += 8) {
+    const uint8_t* cb = reinterpret_cast<const uint8_t*>(cds + 16 * gi);
+    const uint32_t* ud = uds + 64 * gi;
+#pragma unroll 1
+    for (int rr = 0; rr < 4; rr++) {
+      const size_t r = (size_t)(g0 + gi) * 4 + rr;
+      const uint32_t w = __ldg(reinterpret_cast<const uint32_t*>(W + r * 128) + lane);
+      const uint32_t nib = (cb[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu, u = ud[16 * rr + (lane & 15)];
+      const uint32_t wc = add_noise<false>(w, bits01(nib));
+      reinterpret_cast<uint32_t*>(Wp + r * 128)[lane] = add_noise<false>(wc, u);
+      if constexpr (WH) reinterpret_cast<uint32_t*>(Wh + r * 128)[lane] = wc;
+      reinterpret_cast<uint32_t*>(PB + r * 128)[lane] = lane < 16 ? add_noise<false>(~u, 0x01010101u) : 0u;
+    }
   }
 }
 // pv's served epilogue for the gate: F = float(2 O + 127 S_row) (s_row s_col), c_body's SERVE 2 op for op
@@ -365,30 +386,44 @@ __global__ void wfill(int8_t* W, size_t count, uint32_t seed, size_t k, int ends
 }
 
 // ---------------------------------------------------------------- the GEMM's tail
+// tile position J's words into chains 4 (J % 2) + e: duo's fold (RK DUO), or for an fx kind duo's fold of egemm.cu's
+// fx_chain<RK, J, e> of the word (FX1: one IMAD by key_mul(1, (4 J + e) 32), so f = 4)
+template <class L, int RK, int J> DEV void cfold(St (&ch)[8], const int (&w)[4]) {
+  if constexpr (is_fx(RK)) {
+    constexpr int H = 4 * (J % 2);
+    duo<DUO, 0, J>(ch[H], fx_chain<RK, J, 0>((uint32_t)w[0]));
+    duo<DUO, 0, J>(ch[H + 1], fx_chain<RK, J, 1>((uint32_t)w[1]));
+    duo<DUO, 0, J>(ch[H + 2], fx_chain<RK, J, 2>((uint32_t)w[2]));
+    duo<DUO, 0, J>(ch[H + 3], fx_chain<RK, J, 3>((uint32_t)w[3]));
+  } else {
+    static_assert(RK == DUO, "co32c's tail folds with duo or an fx kind");
+    L::template absorb<DUO, J / L::NI, J % L::NI>(ch, w);
+  }
+}
 // step D: D_d = A_d U^T tile by tile (atom D of the tail stage), each absorbed as made, and (SERVE) O -= 128^d D_d
-template <class L, int D, bool SERVE, int J = 0>
+template <class L, int D, bool SERVE, int RK = DUO, int J = 0>
 DEV void cdstep(int (&acc)[L::MI][L::NI][4], St (&ch)[8], const uint32_t (&fa)[L::MI][4], const uint32_t (&fb)[L::NI][2]) {
   if constexpr (J < L::MI * L::NI) {
     constexpr int mi = J / L::NI, ni = J % L::NI;
     int d[4];
     imma0(d, fa[mi], fb[ni]);
-    L::template absorb<DUO, mi, ni>(ch, d);
+    cfold<L, RK, J>(ch, d);
     if constexpr (SERVE) {
 #pragma unroll
       for (int e = 0; e < 4; e++) acc[mi][ni][e] = (int)((uint32_t)acc[mi][ni][e] - ((uint32_t)d[e] << (7 * D)));
     }
-    cdstep<L, D, SERVE, J + 1>(acc, ch, fa, fb);
+    cdstep<L, D, SERVE, RK, J + 1>(acc, ch, fa, fb);
   }
 }
-template <class L, int J = 0> DEV void cabs_all(St (&ch)[8], const int (&w)[L::MI][L::NI][4]) {
+template <class L, int RK = DUO, int J = 0> DEV void cabs_all(St (&ch)[8], const int (&w)[L::MI][L::NI][4]) {
   if constexpr (J < L::MI * L::NI) {
-    L::template absorb<DUO, J / L::NI, J % L::NI>(ch, w[J / L::NI][J % L::NI]);
-    cabs_all<L, J + 1>(ch, w);
+    cfold<L, RK, J>(ch, w[J / L::NI][J % L::NI]);
+    cabs_all<L, RK, J + 1>(ch, w);
   }
 }
 // the tail stage P_A = [A_0 | A_1 | A_2 | 0], P_B = [-U | U | U | 0]: O' = T_last + A_0 (-U)^T (atom 0, accumulated onto
 // T_last), absorbed; then D_1 (atom 1) and with THREE D_2 (atom 2)
-template <class L, bool THREE, bool SERVE> DEV void ctail(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8]) {
+template <class L, bool THREE, bool SERVE, int RK = DUO> DEV void ctail(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8]) {
   constexpr int MI = L::MI, NI = L::NI;
   ml.wait_full();
   const uint32_t tb = ml.stage(ml.s);
@@ -400,16 +435,16 @@ template <class L, bool THREE, bool SERVE> DEV void ctail(L& ml, int (&acc)[L::M
 #pragma unroll
     for (int ni = 0; ni < NI; ni++) imma(acc[mi][ni], fa[mi], fb[ni]);
   }
-  cabs_all<L>(ch, acc);
+  cabs_all<L, RK>(ch, acc);
   ml.load_b(fb, tb, 1);
 #pragma unroll
   for (int mi = 0; mi < MI; mi++) ml.load_a(fa[mi], tb, 1, mi);
-  cdstep<L, 1, SERVE>(acc, ch, fa, fb);
+  cdstep<L, 1, SERVE, RK>(acc, ch, fa, fb);
   if constexpr (THREE) {
     ml.load_b(fb, tb, 2);
 #pragma unroll
     for (int mi = 0; mi < MI; mi++) ml.load_a(fa[mi], tb, 2, mi);
-    cdstep<L, 2, SERVE>(acc, ch, fa, fb);
+    cdstep<L, 2, SERVE, RK>(acc, ch, fa, fb);
   }
   ml.release(ml.empty(ml.s));
   ml.advance();
@@ -437,9 +472,11 @@ template <class L> DEV void htail(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8
 }
 
 // TAIL 0: co32c's (ctail), 1: cohalf's (htail). SERVE 0: O' to U; 1: O; 2: P.V's served value as float, f = float(2 O + 127 S_row) (s_row s_col) with eb = [S (M ints) |
-// s_row (M floats) | s_col (N floats)] (pv's epilogue on a full key block, S per channel: the epilogue's cost a cell)
-template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0> DEV void c_body(const Args& a) {
-  using L = EL<DUO, LAG, TIE, SLEEP>;
+// s_row (M floats) | s_col (N floats)] (pv's epilogue on a full key block, S per channel: the epilogue's cost a cell).
+// RK: the fold, DUO or (co32c) an fx kind on every absorbed word, the mainloop's (EL's) and the tail's
+template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0, int RK = DUO> DEV void c_body(const Args& a) {
+  static_assert(RK == DUO || (TAIL == 0 && is_fx(RK)), "an fx fold is co32c's");
+  using L = EL<RK, LAG, TIE, SLEEP>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, true, 1);
@@ -467,7 +504,7 @@ template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0> DEV
     int acc[MI][NI][4];
     ml.tile_il(a.K, acc, ch, kr, zero);
     if constexpr (TAIL == 1) htail<L>(ml, acc, ch);
-    else ctail<L, THREE, SERVE != 0>(ml, acc, ch);
+    else ctail<L, THREE, SERVE != 0, RK>(ml, acc, ch);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
     if constexpr (SERVE == 2) {
       const int* S = reinterpret_cast<const int*>(a.eb);
@@ -520,6 +557,9 @@ CGEMM(c_l2q, 2, 4, false)
 // _v: pv's served epilogue (SERVE 2)
 __global__ void __launch_bounds__(MLW::NT, 1) c_l7qs_v(const __grid_constant__ Args a) { c_body<7, 4, true, false, 2>(a); }
 __global__ void __launch_bounds__(MLW::NT, 1) c_l7qs_v_k3(const __grid_constant__ Args a) { c_body<7, 4, true, true, 2>(a); }
+// c_fx1: c_l7qs with every absorbed word behind fx1's keyed IMAD (decision 83, SAT-120's fx1_l7qs chain and keys)
+__global__ void __launch_bounds__(MLW::NT, 1) c_fx1(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 0, FX1>(a); }
+__global__ void __launch_bounds__(MLW::NT, 1) c_fx1_k3(const __grid_constant__ Args a) { c_body<7, 4, true, true, 1, 0, FX1>(a); }
 // cohalf (k = 128)
 __global__ void __launch_bounds__(MLW::NT, 1) h_l7qs(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 1>(a); }
 __global__ void __launch_bounds__(MLW::NT, 1) h_l2q(const __grid_constant__ Args a) { c_body<2, 4, false, false, 1, 1>(a); }
@@ -527,8 +567,8 @@ __global__ void __launch_bounds__(MLW::NT, 1) h_l2q(const __grid_constant__ Args
 // ---------------------------------------------------------------- host
 struct CKn { const char* name; Kern k, k3; };
 static const CKn CKERN[] = {{"c_l7qs", c_l7qs, c_l7qs_k3}, {"c_l7qs_o", c_l7qs_o, c_l7qs_o_k3}, {"c_l2q", c_l2q, c_l2q_k3},
-                          {"c_l2q_o", c_l2q_o, c_l2q_o_k3}, {"c_l7qs_v", c_l7qs_v, c_l7qs_v_k3}, {"h_l7qs", h_l7qs, h_l7qs},
-                          {"h_l2q", h_l2q, h_l2q}};
+                          {"c_l2q_o", c_l2q_o, c_l2q_o_k3}, {"c_l7qs_v", c_l7qs_v, c_l7qs_v_k3}, {"c_fx1", c_fx1, c_fx1_k3},
+                          {"h_l7qs", h_l7qs, h_l7qs}, {"h_l2q", h_l2q, h_l2q}};
 static const CKn* ckern(const std::string& n) {
   for (auto& e : CKERN) if (n == e.name) return &e;
   return nullptr;
@@ -552,7 +592,7 @@ using CqK = void (*)(const uint16_t*, int8_t*, int8_t*, int, int, float, Sig);
 static void cq(CP& C, const Sig& s, CqK f = cquant) {
   EP& P = C.E;
   if (C.half) {
-    hquant<<<(P.m + 31) / 32, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
+    hquant<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
     return;
   }
   f<<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, P.inv_s, s);
@@ -560,7 +600,7 @@ static void cq(CP& C, const Sig& s, CqK f = cquant) {
 static void cw(CP& C, const Sig& s) {
   EP& P = C.E;
   if (C.half) {
-    hwedit<<<(P.n + 31) / 32, 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(C.W7), reinterpret_cast<uint8_t*>(C.Wp),
+    hwedit<<<hw_blocks(P.n), 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(C.W7), reinterpret_cast<uint8_t*>(C.Wp),
                                                reinterpret_cast<uint8_t*>(C.PB), P.n, s);
     return;
   }
@@ -689,6 +729,17 @@ static int cgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     if (name == "c_l7qs_o") dump_tiles(name, C.Y, nullptr);
   }
   if (F) CK(cudaFree(F));
+  // c_fx1 (co32c): O against cuBLASLt's; its receipts, judged by cgemm_ref.py from the key, differ from c_l7qs's (r_diff)
+  if (!C.half) {
+    CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
+    cgemm_run(C, cpick(C, ckern("c_fx1")), C.Y, C.R);
+    CK(cudaStreamSynchronize(P.st));
+    CK(cudaGetLastError());
+    const unsigned long long y = ecmp(P, C.Y, C.Yr, P.ny), r = ecmp(P, C.R, C.R2, P.nr);
+    res += ", \"c_fx1\": {\"y_bad\": " + std::to_string(y) + ", \"r_diff\": " + std::to_string(r) + "}";
+    ok &= y == 0 && r > 0;
+    dump_tiles("c_fx1", C.Y, C.R);
+  }
   // the no-write control: poisoned, nothing run; both compares must fail
   CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
   const unsigned long long cy = ecmp(P, C.Y, C.Yr, P.ny), cr = ecmp(P, C.R, C.R2, P.nr);
