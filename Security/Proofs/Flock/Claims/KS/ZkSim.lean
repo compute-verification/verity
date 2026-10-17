@@ -680,7 +680,7 @@ def ZkSimForkLe (x : Claims.Msg) : Prop :=
           (zkRd hset h0 L hz hk hlay j i).val
 
 /-- **A self-clash at an accepting run's view is a column clash or a collision**: at every masked statement in scope
-that sets up, at a draw `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
+that sets up, at its draw `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
 at which `V true` accepts `P` deciding a record, a decoded self-clash of table `j` at the record's live outcome
 (`LiveSelfClashZ` at `viewOf`) gives two different columns the run's reps open at one position of some table, or a
 collision among the run's verifier calls. -/
@@ -691,8 +691,8 @@ def ZkViewClash (x : Claims.Msg) : Prop :=
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    (d : Lean.Json) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (j : ℕ) (_ : j < (tables true x).length)
-    (C : Fin (wordLenJ true x j) → List 𝔽), (∀ p, wideJ true x j (C p)) →
+    (d : Lean.Json) (_ : ins.read.draw = some d) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
+    (_ : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽), (∀ p, wideJ true x j (C p)) →
     ∀ r : Fin ((V true).k x) → Coin, (Claims.run sha512 P (V true) x ω r).out = .acc →
     ∀ s' spec' sts' link c₁ mids f,
       act true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
@@ -768,8 +768,8 @@ theorem zkSimWJ_of_parts {x : Claims.Msg} (hrun : ZkSimRunAt x) (habort : ZkSimA
   obtain ⟨s', spec', sts', link, c₁, mids, f, hact, -⟩ := acc_decide hacc
   have hv := hrun s hs hin ins spec sts hset h0 L hz hk hlay Ω P ω u r' hacc s' spec' sts' link c₁ mids f hact
   rw [hv] at hp
-  exact ⟨hacc, hclash s hs hin ins spec sts hset h0 L hz hk hlay d Ω P ω j hj C hC _ hacc s' spec' sts' link c₁ mids
-    f hact hp⟩
+  exact ⟨hacc, hclash s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC _ hacc s' spec' sts' link c₁
+    mids f hact hp⟩
 
 /-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
 the masked simulator's lockstep, abort, fork bounds and view clashes at the statements some run accepts
