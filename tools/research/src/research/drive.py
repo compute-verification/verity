@@ -366,7 +366,8 @@ class Driver:
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
         #: steps a train lands without (Daniel through top, 17 Oct, CI-30's interim): they run on after the landing, and one
         #: that fails reverts it.  The Lean check's steps are never deferred.
-        self.defer = frozenset(x for x in defer if not x.startswith("lean"))
+        defer = {x for x in defer if not x.startswith("lean")}
+        self.defer = frozenset(defer | ({"flock-rust-tests"} if "circuit-check" in defer else set()))  # it runs after it
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence

@@ -792,4 +792,4 @@ def test_the_lean_check_is_never_deferred(world, monkeypatch):
     from research.drive import Driver
 
     d = Driver(h.q, on="m1", defer=frozenset({"lean-audit", "circuit-check"}))
-    assert d.defer == {"circuit-check"}
+    assert d.defer == {"circuit-check", "flock-rust-tests"}                 # the step after circuit-check in its group
