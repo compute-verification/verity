@@ -46,9 +46,10 @@ struct LaneC {
       if (q & 1) asm volatile("mad.lo.u32 %0, %0, %1, %2;" : "+r"(r[s]) : "r"(r[t]), "r"(0x9E3779B9u));
       else asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(r[s]) : "r"(r[t]), "r"(0x85EBCA6Bu));
     }
-    if constexpr (X == J_MIX) {
-      if (q & 1) asm volatile("fma.rn.f32 %0, %0, %1, 0f3F800000;" : "+f"(f[s]) : "f"(f[t]));
-      else asm volatile("add.u32 %0, %0, %1;" : "+r"(r[s]) : "r"(r[t]));
+    if constexpr (X == J_MIX) {  // lanes.cuh's mix: the pair's chain advances, so no add sees a constant neighbour
+      const int p = (q >> 1) % C, pn = ((q >> 1) + 1) % C;
+      if (q & 1) asm volatile("fma.rn.f32 %0, %0, %1, 0f3F800000;" : "+f"(f[p]) : "f"(f[pn]));
+      else asm volatile("add.u32 %0, %0, %1;" : "+r"(r[p]) : "r"(r[pn]));
     }
     if constexpr (X == J_LIF) {  // LI with one FFMA in eight (lanes.cuh's lif)
       if (q % 8 == 7) asm volatile("fma.rn.f32 %0, %0, %1, 0f3F800000;" : "+f"(f[s]) : "f"(f[t]));
@@ -83,14 +84,14 @@ DC_DEV void jb_mix(const OpArgs& a) {
       auto& acc = d[g % NS];
       wgmma_fence();
       if constexpr (P == 0) {
-        F::mma(acc, t, 0);
+        F::mma(acc, t, g < NS ? 0 : 1);
         F::mma(acc, t, 1);
         F::mma(acc, t, 1);
         F::mma(acc, t, 1);
         wgmma_commit();
         l.template ops<X, R>(g * R);
       } else {
-        F::mma(acc, t, 0);
+        F::mma(acc, t, g < NS ? 0 : 1);
         l.template ops<X, R / 4>(g * R);
         F::mma(acc, t, 1);
         l.template ops<X, R / 4>(g * R + R / 4);
