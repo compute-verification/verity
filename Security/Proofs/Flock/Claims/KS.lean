@@ -31,6 +31,7 @@ import Proofs.Flock.Claims.KS.OffSC
 import Proofs.Flock.Claims.KS.Entries
 import Proofs.Flock.Claims.KS.DecodeSC
 import Proofs.Flock.Claims.KS.DecodeDeploy
+import Proofs.Flock.Claims.KS.PlainWrP
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -131,4 +132,7 @@ salted output of a table's reps' runs has its level-0 openings verifying below `
 with no level-0 opening off `C` unless it self-clashes, on the outcomes flock-verify accepts at the live root where the
 deployed reader looks up no column off `C` (`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`,
 `Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). At a plain statement in scope with public outputs, that table is
-`plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for (`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`). -/
+`plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for (`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`).
+A statement some run accepts sets up at a draw, so where its outputs are public the plain chain asks only for the
+mixture at those decoders (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`,
+`FlockDeploy.KS.PlainLiveW`, `FlockDeploy.KS.plain_KS_of_w`). -/
