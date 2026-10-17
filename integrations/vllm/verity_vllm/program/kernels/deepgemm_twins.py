@@ -1,6 +1,6 @@
 """numpy twins of `registry.deepgemm` on whole rows, and of the load-time weight processing whose words the linears bind as derived
 Inputs (`deepgemm_post_process_fp8_weight_block`, vLLM d9105ea80 fp8_utils.py:1111-1175): DeepSeek-V4's e8m0 scale upcast and
-GLM-5.3's ue8m0 requantisation.  The capture (tests/properties/deepgemm_sm90_capture_gpu.py) compares the served words with these
+GLM-5.3's ue8m0 requantisation.  The capture (tests/properties/deepgemm_capture_gpu.py) compares the served words with these
 and the word Definitions with the GPU; tests/program/test_deepgemm.py pins each twin to its Definition."""
 from __future__ import annotations
 
