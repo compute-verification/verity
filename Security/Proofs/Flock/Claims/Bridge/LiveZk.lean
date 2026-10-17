@@ -23,7 +23,7 @@ record `wr x o`, and a drawn statement's digest covers its draw (`HmRow.drawn`'s
 of `x` only where that draw is. `Deploy.V`'s checks pin the record's draw to the statement's whatever its key order
 (`Custody.checks_draw`), and where the two are equal as values the setup of a record it accepts is the one it made of
 `x` before the first message (`Custody.setupOf_record`). At an equivalent draw with its keys in another order the setup
-is another value (its `unitDraw` is the record's draw), and its digests agree only through `canon`.
+is another value (its `unitDraw` is the record's draw), and its digests agree only through `canon`, a `partial def`.
 -/
 
 namespace Claims.Bridge.LiveZk

@@ -526,7 +526,8 @@ theorem setupOf_zkInputs {r : Readable.Read} {spec : SessionSpec} {sts : Array S
 (`Exec.setupOf`, at `zkInputs` under `--zk`), and where the checks pass and that draw is the statement's as a value
 (`hdraw`), that is the session and tables `Deploy.V` set up at the statement's. The checks give the draw only up to key
 order (`checks_draw`), and the setup keeps the draw itself: `Stmt.setupTables` makes it the session's `unitDraw`, and
-`HmRow.drawn` writes it into the public header (`setObjVal!`), whose `canon` the public digest hashes. -/
+`HmRow.drawn` writes it into the public header (`setObjVal!`), whose `canon` (a `partial def`) the public digest
+hashes. -/
 theorem setupOf_record {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (hs : s.setup = .ok (spec, sts)) (hc : checks zk s spec x link c₁ mids f = .ok ())
