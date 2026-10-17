@@ -110,7 +110,7 @@ def test_pfill_fill_counts_mmas_and_reads_k(tmp_path):
     (row,) = R.rows(str(tmp_path))
     assert row["fill"] == pytest.approx(4e7 * 4096 / 41e-3 / PEAK)
     assert row["fold"] == "duo"
-    assert row["fill_k"] == pytest.approx(0.9 * row["fill"])  # duo binds every word (PROVED)
+    assert row["fill_k"] == pytest.approx(0.9 * row["fill"])  # duo binds every word (provisional: proved up to 4 words)
     assert row["coverage_base"] == pytest.approx(0.225 * row["served"])
     assert row["coverage"] == pytest.approx(0.225 * row["served"] * 40 / 41 + row["fill_k"])
     assert row["fill_finished"] == pytest.approx(0.25 * row["fill"])
@@ -129,8 +129,9 @@ def test_pfill_gates_fail(tmp_path, kw, gate):
 
 
 def test_proved_fraction_by_fold():
-    # decision 43: duo binds every word (PROVED), ram binds word pairs only (half); r9's XOR family (LI, XIN13) reads at
-    # ram's proved half, provisional, until the select-charging lemma lands
+    # decision 43: duo binds every word (provisional: its binding is proved for runs of one to four words,
+    # DuoQuadNoKernel; five or more words and the served receipt's projected form are open), ram binds word pairs only
+    # (half); r9's XOR family (LI, XIN13) reads at ram's proved half, provisional, until the select-charging lemma lands
     assert R.proved_fraction(2, False, 64) == pytest.approx(0.9)
     assert R.proved_fraction(4, False, 64) == pytest.approx(0.45)             # round 3's rem fill K was 2x this
     assert R.proved_fraction(4, True, 64) == pytest.approx(0.45)
