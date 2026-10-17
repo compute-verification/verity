@@ -378,8 +378,56 @@
   "Models.Accounting.Guarantees.Bandwidth"
  ],
  "claims": {
-  "modules": ["Definitions.Claims.Recursion"],
+  "modules": ["Definitions.Claims"],
   "witnesses": {
+   "Claims.Bits": {
+    "fails": "Claims.Bits_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Complete": {
+    "fails": "Claims.Complete_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.Flock.Bits": {
+    "fails": "Claims.Flock.Bits_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Flock.Complete": {
+    "fails": "Claims.Flock.Complete_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.Flock.Efficient": {
+    "fails": "Claims.Flock.Efficient_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Flock.KS": {
+    "fails": "Claims.Flock.KS_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Flock.Nontrivial": {
+    "fails": "Claims.Flock.Nontrivial_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.Flock.ScopeMatches": {
+    "fails": "Claims.Flock.ScopeMatches_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.Flock.ZK": {
+    "fails": "Claims.Flock.ZK_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.KS": {
+    "fails": "Claims.KS_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.KSLin": {
+    "fails": "Claims.KSLin_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Nontrivial": {
+    "fails": "Claims.Nontrivial_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
    "Claims.Recursion.Bits": {
     "fails": "Claims.Witness.Recursion.Bits_fails",
     "meets": ["Claims.Witness.Recursion.Bits_meets"]
@@ -431,13 +479,97 @@
    "Claims.Recursion.ZKPriv": {
     "fails": "Claims.Witness.Recursion.ZKPriv_fails",
     "meets": ["Claims.Witness.Recursion.ZKPriv_meets"]
+   },
+   "Claims.Sampling.Binding": {
+    "fails": "Claims.Sampling.Binding_fails",
+    "meets": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
+   },
+   "Claims.Sampling.Bits": {
+    "fails": "Claims.Sampling.Bits_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.BitsLin": {
+    "fails": "Claims.Sampling.BitsLin_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.Complete": {
+    "fails": "Claims.Sampling.Complete_fails",
+    "meets": ["Claims.Sampling.scope_meets"]
+   },
+   "Claims.Sampling.Efficient": {
+    "fails": "Claims.Sampling.Efficient_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.KS": {
+    "fails": "Claims.Sampling.KS_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.KSCount": {
+    "fails": "Claims.Sampling.KSCount_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.Nontrivial": {
+    "fails": "Claims.Sampling.Nontrivial_fails",
+    "meets": ["Claims.Sampling.scope_meets"]
+   },
+   "Claims.Sampling.ScopeMatches": {
+    "fails": "Claims.Sampling.ScopeMatches_fails",
+    "meets": ["Claims.Sampling.scope_meets"]
+   },
+   "Claims.Sampling.Universal": {
+    "fails": "Claims.Sampling.Universal_fails",
+    "meets": ["Claims.Sampling.universal_meets"]
+   },
+   "Claims.Sampling.ZK": {
+    "fails": "Claims.Sampling.ZK_fails",
+    "meets": ["Claims.Sampling.masked_meets_zk"]
+   },
+   "Claims.ScopeMatches": {
+    "fails": "Claims.ScopeMatches_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.ZKmalR": {
+    "fails": "Claims.ZKmalR_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.Sampling.KSLinOn": {
+    "fails": "Claims.Sampling.KSLinOn_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
    }
   },
   "not": {
+   "Claims.Collision": "a helper the claims read: two inputs with one output",
+   "Claims.ERepCost": "proved at every deployment (`Claims.ERep_cost`); Flock's `Efficient` reads it",
+   "Claims.ExtractRunsExpLe": "a helper the claims read: an extractor's expected reruns, at most a bound, which every `Efficient` reads",
+   "Claims.ExtractRunsLe": "a helper the claims read: an extractor's reruns, at most a bound, which every `Efficient` reads",
+   "Claims.Flock.InScope": "a helper the claims read: the forms Flock proves, which its scope reads",
+   "Claims.Flock.ListWithin": "the list-decoding spec Flock's KS, Bits and Efficient ask of a decoder, proved of both deployed decoders (`FlockDeploy.listWithin_plain`, `listWithin_zk`)",
+   "Claims.Flock.RelS": "a helper the claims read: a statement's relation, which `Flock.R` reads",
+   "Claims.Flock.Scope": "a helper the claims read: the scope Flock's claims read",
    "Claims.Recursion.Draw.Full": "a V* session's draw that takes every unit, a clause of the readable scope (`InScope`), no claim",
    "Claims.Recursion.InScope": "the readable scope's form, which the claims read through `Scope`, no claim",
    "Claims.Recursion.Scope": "the recursion's scope, which `ScopeMatches` and `Complete` read, no claim",
-   "Claims.Recursion.decOK": "the decoders a claim quantifies over (`Flock.ListWithin` at the deployment), a domain, no claim"
+   "Claims.Recursion.decOK": "the decoders a claim quantifies over (`Flock.ListWithin` at the deployment), a domain, no claim",
+   "Claims.Rel.L": "a helper the claims read: a relation's language",
+   "Claims.Rel.ext": "a helper the claims read: a relation at an extractor's optional witness",
+   "Claims.Sampling.BoundaryFaulty": "a helper the claims read: a faulty unit on the boundary trace, which `FaultyBoundary` reads",
+   "Claims.Sampling.Commitment.Binds": "a helper the claims read: a commitment's binding, which `Binding` reads",
+   "Claims.Sampling.Design.WellFormed": "a helper the claims read: a well-formed design, one well-formed rule per class",
+   "Claims.Sampling.ExtractOwnLe": "a helper the claims read: an extractor's own calls, at most a bound, which the sampling `Efficient` reads",
+   "Claims.Sampling.Faulty": "a helper the claims read: a faulty unit, which the sampling relation reads",
+   "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",
+   "Claims.Sampling.InScope": "a helper the claims read: the programs and partitions the sampling scope takes",
+   "Claims.Sampling.LogColl": "a helper the claims read: a collision in a log of `H` calls",
+   "Claims.Sampling.Netlist.Fits": "a helper the claims read: a netlist of a size class",
+   "Claims.Sampling.OneStage.WellFormed": "a helper the claims read: a well-formed one-stage design",
+   "Claims.Sampling.Partition.Partitions": "a helper the claims read: a partition of a program's gates into proof units",
+   "Claims.Sampling.Prog.Correct": "a helper the claims read: a correct gate interval on committed values",
+   "Claims.Sampling.Prog.Topological": "a helper the claims read: a topologically ordered program",
+   "Claims.Sampling.RU.Consecutive": "a helper the claims read: a replay unit of consecutive gate intervals",
+   "Claims.Sampling.RelS": "a helper the claims read: a statement's sampling relation",
+   "Claims.Sampling.Rule.WellFormed": "a helper the claims read: a well-formed rule on its class",
+   "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read",
+   "Claims.SimCost": "a simulator's expected calls; `ClaimsStated` records it, but no claim reads it, so no ZK claim bounds its simulator's cost"
   }
  },
  "layers": {
@@ -688,13 +820,13 @@
   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
-  "Proofs.Flock.Claims.Deploy": "the deployed records' coin (`FlockDeploy.Coin`), which the claims' `meets` witnesses (LEAN-26) read; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Claims.DeployCode": "C-Flock's deployed plain and `--zk` records (`FlockDeploy.deployPlain`, `deployZk`), at which the claims' `meets` witnesses (LEAN-26) state each claim's antecedents; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Claims.DeployPlainCode": "the deployed plain record's trace (`Claims.Flock.PlainTrace`), what its radius decoder returns, which the claims' `meets` witnesses (LEAN-26) read; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.GS.RadiusDeploy": "the deployed plain record's radius decoder (`Claims.GS.plainDecodeRD`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Claims.GS.RadiusFamily": "the deployed `--zk` record's radius decoder (`Claims.GS.zkDecodeRD`) and its columns' zero (`Claims.Flock.instZeroListCol`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Claims.Scope.Readable": "the readable relation the deployed records are built at (`Flock.Readable.Parsed`, `Relation`), which the claims' `meets` witnesses (LEAN-26) quantify over; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Claims.ZkDecodeFlock": "the deployed `--zk` record's trace (`Claims.Flock.ZkTrace`), what its radius decoder returns, which the claims' `meets` witnesses (LEAN-26) read; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
@@ -5061,6 +5193,411 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Claims.Bits_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Bits_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)",
+    "  (R : Claims.Rel W) (lam : Claims.Msg → Real) (x : Claims.Msg) (hR : ∀ (w : W), Not (R x w))",
+    "  (hlam : Real.instLT.lt 0 (lam x)) : Exists fun V => ∀ (E : Claims.Extractor Coin W V), Not (Claims.Bits H V R E lam)"
+   ],
+   "assumptions": [],
+   "type_hash": "e9d9884782aacbe057d2a3b9a4210535811d2e39770b5f8fca19f43e94babbb3"
+  },
+  "Claims.Complete_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Complete_fails {Coin W Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]",
+    "  (P : W → Claims.Prover Ω) (R : Claims.Rel W) (Scope : Claims.Msg → Prop) (δc : Claims.Msg → Real) {x : Claims.Msg}",
+    "  {w : W} (hs : Scope x) (hr : R x w) (hδ : Real.instLT.lt (δc x) 1) :",
+    "  Exists fun H => Exists fun V => Not (Claims.Complete H V P R Scope δc)"
+   ],
+   "assumptions": [],
+   "type_hash": "da863c78e48aaca44e3a208e5e7b0f1bbb16381ed10e86cbd748228d32e9a200"
+  },
+  "Claims.Flock.Bits_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.Bits_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Not (Claims.Flock.Bits H D)"
+   ],
+   "assumptions": [],
+   "type_hash": "7baa5b9d74590d849b8bff625081fecdc6ffbf5fc59aff2f918ec08c8ef8459d"
+  },
+  "Claims.Flock.Complete_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.Complete_fails {Coin Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]",
+    "  (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → Real) (x : Claims.Msg) (hδ : Real.instLT.lt (δc x) 1) :",
+    "  Exists fun H => Exists fun D => Not (Claims.Flock.Complete H D P δc)"
+   ],
+   "assumptions": [],
+   "type_hash": "41fcaae98a2e881638f9bc77b3fb5e519b60ef00794e55aba46f62460aee62c8"
+  },
+  "Claims.Flock.Efficient_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun z => Exists fun D => Not (Claims.Flock.Efficient H D 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "772074801c726993c19b182871793d43f25eb5b1abcc37aec5bd7b4616804af4"
+  },
+  "Claims.Flock.KS_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Not (Claims.Flock.KS H D)"
+   ],
+   "assumptions": [],
+   "type_hash": "484af4a47096122fbcefaa7b4fc4a4a94e4bb0a2a1da497fbb429efdb2b642e1"
+  },
+  "Claims.Flock.Nontrivial_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.Nontrivial_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Exists fun recs => Not (Claims.Flock.Nontrivial H D recs)"
+   ],
+   "assumptions": [],
+   "type_hash": "5771063b99cb35d1908cfd8470ac2e1035dd2efacb2da659dfb6263f7118b8ef"
+  },
+  "Claims.Flock.ScopeMatches_fails": {
+   "owner": "@proofs",
+   "signature": ["Claims.Flock.ScopeMatches_fails {Coin : Type} : Exists fun D => Not (Claims.Flock.ScopeMatches D)"],
+   "assumptions": [],
+   "type_hash": "32747c6f2e45b685e5c82535e07e7f241cbb4538b2396e1ab3888da2b558993a"
+  },
+  "Claims.Flock.ZK_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg)",
+    "  (εzk γ : Claims.Msg → Real) (x : Claims.Msg) (hε : Real.instLT.lt (εzk x) 1) :",
+    "  Exists fun D => Exists fun P => Exists fun S => Not (Claims.Flock.ZK H D P S εzk γ)"
+   ],
+   "assumptions": [],
+   "type_hash": "be054d0e89d219cdd66d91bdf7852c9104c9af1c64e90f0bf495ddbbb9ab3072"
+  },
+  "Claims.Flock.decoder_meets_plain": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.decoder_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Flock.ListWithin (FlockDeploy.deployPlain rel).len (FlockDeploy.deployPlain rel).enc",
+    "    (FlockDeploy.deployPlain rel).θ (FlockDeploy.deployPlain rel).decode"
+   ],
+   "assumptions": [],
+   "type_hash": "ce42cd724bf1794a91d0d388d76f48a1f8495fefdf4e8d4e2f946d84ef9c5c06"
+  },
+  "Claims.Flock.decoder_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.decoder_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Flock.ListWithin (FlockDeploy.deployZk rel).len (FlockDeploy.deployZk rel).enc (FlockDeploy.deployZk rel).θ",
+    "    (FlockDeploy.deployZk rel).decode"
+   ],
+   "assumptions": [],
+   "type_hash": "fdd205603fba982a972fbd1231a4a6da260d0e4c48c8615066c70ce5f40e48bb"
+  },
+  "Claims.Flock.masked_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.masked_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Eq (FlockDeploy.deployZk rel).zk Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "c9aee9249a386b4232cc2e4430bafa74c02dd818197685ebfd898a3ef2d4c60e"
+  },
+  "Claims.Flock.scope_meets_plain": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.scope_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Exists fun s => Exists fun w => And (Claims.Flock.InScope (FlockDeploy.deployPlain rel).zk s) (Claims.Flock.RelS s w)"
+   ],
+   "assumptions": [],
+   "type_hash": "d5cddab40ddd51aa691c6cfb4ec218fa8cba3fd3cfaf555d44d4049aa35a3f74"
+  },
+  "Claims.Flock.scope_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Exists fun s => Exists fun w => And (Claims.Flock.InScope (FlockDeploy.deployZk rel).zk s) (Claims.Flock.RelS s w)"
+   ],
+   "assumptions": [],
+   "type_hash": "ef89c0bbe2549055608cdc278d7f122801096086efb2fdd4f164d35214390933"
+  },
+  "Claims.KSLin_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.KSLin_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)",
+    "  (R : Claims.Rel W) (κ γ β : Claims.Msg → Real) (x : Claims.Msg) (hR : ∀ (w : W), Not (R x w))",
+    "  (hκ : Real.instLT.lt (κ x) 1) :",
+    "  Exists fun V => Exists fun Fe => ∀ (E : Claims.Extractor Coin W V), Not (Claims.KSLin H V R E κ γ β Fe)"
+   ],
+   "assumptions": [],
+   "type_hash": "7c609d258cb9423d7f24fd49e82bd232d14d7f9d34ee5128721bf49797d1d33f"
+  },
+  "Claims.KS_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.KS_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)",
+    "  (R : Claims.Rel W) (κ γ : Claims.Msg → Real) (x : Claims.Msg) (hR : ∀ (w : W), Not (R x w))",
+    "  (hκ : Real.instLT.lt (κ x) 1) : Exists fun V => ∀ (E : Claims.Extractor Coin W V), Not (Claims.KS H V R E κ γ)"
+   ],
+   "assumptions": [],
+   "type_hash": "4182bf6632e1ad1477e2d769e3f59a567bade117902b07c6e1f053f3159a9ef5"
+  },
+  "Claims.Nontrivial_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Nontrivial_fails {Coin : Type} [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun V => Exists fun recs => Not (Claims.Nontrivial H V recs)"
+   ],
+   "assumptions": [],
+   "type_hash": "6357c43f3a417a4aa07cd4a55d4bf45876e2ab47f0ddce2c02107612c69f6ba4"
+  },
+  "Claims.Sampling.Binding_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Binding_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :",
+    "  Exists fun D => Not (Claims.Sampling.Binding D)"
+   ],
+   "assumptions": [],
+   "type_hash": "a0af16afd13fdb6a80be4748a99693cd056ee1f3912bfa7d12db858ea48ee06d"
+  },
+  "Claims.Sampling.BitsLin_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.BitsLin_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun V =>",
+    "    Exists fun Scope =>",
+    "      Exists fun R =>",
+    "        Exists fun E => Exists fun Fe => Exists fun lam => Not (Claims.Sampling.BitsLin H V Scope R E Fe lam)"
+   ],
+   "assumptions": [],
+   "type_hash": "e47885553e8f5fb861ed3c170fa7009becd9e97691bf14e6e64a4ed8e488f828"
+  },
+  "Claims.Sampling.Bits_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Bits_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Not (Claims.Sampling.Bits H D)"
+   ],
+   "assumptions": [],
+   "type_hash": "5a484969c254f12c7e57350d1fc893154c78287185b46ecf3ab11b63e5df1cea"
+  },
+  "Claims.Sampling.Complete_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Complete_fails {Coin Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]",
+    "  (P : Claims.Sampling.Wit → Claims.Prover Ω) (δc : Claims.Msg → Real) (x : Claims.Msg) (hδ : Real.instLT.lt (δc x) 1) :",
+    "  Exists fun H => Exists fun D => Not (Claims.Sampling.Complete H D P δc)"
+   ],
+   "assumptions": [],
+   "type_hash": "b97a4439dd19cc817fbd3dc80a91c08e6fab0670e940a4123dbc5ec1970b855f"
+  },
+  "Claims.Sampling.Efficient_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun z => Exists fun D => Not (Claims.Sampling.Efficient H D 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "e6fee080a0a0fdd851f04b5bc8f495b6adadfaf2c8da896e19119409f50b879c"
+  },
+  "Claims.Sampling.KSCount_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.KSCount_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Not (Claims.Sampling.KSCount H D)"
+   ],
+   "assumptions": [],
+   "type_hash": "0a1d567b0f5f769748e539b68a476ffb10390532c09210c21a31b6e8ab090bb4"
+  },
+  "Claims.Sampling.KS_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Not (Claims.Sampling.KS H D)"
+   ],
+   "assumptions": [],
+   "type_hash": "258f4c779d989e5863d431b04195b080e48d24114ed77dd994a20f063820be98"
+  },
+  "Claims.Sampling.Nontrivial_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Nontrivial_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Exists fun recs => Not (Claims.Sampling.Nontrivial H D recs)"
+   ],
+   "assumptions": [],
+   "type_hash": "74f4375bcaab2b1a82a8e3df9bd89bc188e292ffb5b14e85acc8732557798d2c"
+  },
+  "Claims.Sampling.ScopeMatches_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.ScopeMatches_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :",
+    "  Exists fun z => Exists fun D => Not (Claims.Sampling.ScopeMatches D)"
+   ],
+   "assumptions": [],
+   "type_hash": "5a97d2eb7088febc4bde6c6877022207d5e4e30052537ae1254eaa255c5819f4"
+  },
+  "Claims.Sampling.Universal_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Universal_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :",
+    "  Exists fun D => Not (Claims.Sampling.Universal D)"
+   ],
+   "assumptions": [],
+   "type_hash": "b183fd073df66b479bba7eeb3703198469a5b049c28f7a2fa4a9157ba4e5fcd4"
+  },
+  "Claims.Sampling.ZK_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.ZK_fails {Coin N Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype N] [Nonempty N]",
+    "  [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg) (εzk γ : Claims.Msg → Real) (x : Claims.Msg)",
+    "  (hε : Real.instLT.lt (εzk x) 1) :",
+    "  Exists fun D => Exists fun P => Exists fun S => Not (Claims.Sampling.ZK H D P S εzk γ)"
+   ],
+   "assumptions": [],
+   "type_hash": "c9d43b7a56001b14ce7531f53eca6ebae0b44431738191689e103087ecde311a"
+  },
+  "Claims.Sampling.decoder_meets_plain": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.decoder_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation)",
+    "  (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)",
+    "  (hD : Eq D.flock (FlockDeploy.deployPlain rel)) :",
+    "  Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode"
+   ],
+   "assumptions": [],
+   "type_hash": "3b6d24bdc5b41e2c9ad39f6bd2e33b8759ec3fbf14f72bc788b216400d48a182"
+  },
+  "Claims.Sampling.decoder_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.decoder_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation)",
+    "  (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)",
+    "  (hD : Eq D.flock (FlockDeploy.deployZk rel)) :",
+    "  Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode"
+   ],
+   "assumptions": [],
+   "type_hash": "cf166287f891663417f8cf853af3518f2019b166d57cfd37ebe81a5864d89c61"
+  },
+  "Claims.Sampling.masked_meets_zk": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.masked_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation)",
+    "  (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)",
+    "  (hD : Eq D.flock (FlockDeploy.deployZk rel)) : Eq D.flock.zk Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "bd502b58f795b48c8708eb50525eec087e6cdb98c6d89927dab5439b91f88a61"
+  },
+  "Claims.Sampling.scope_meets": {
+   "owner": "@proofs",
+   "signature": ["Claims.Sampling.scope_meets : Exists fun P => Exists fun s => Claims.Sampling.InScope P s"],
+   "assumptions": [],
+   "type_hash": "1fcd7c9a0265579d8a38c4942be635556fb0e8c0944d603de7c409ca33183ef1"
+  },
+  "Claims.ScopeMatches_fails": {
+   "owner": "@proofs",
+   "signature": ["Claims.ScopeMatches_fails : Not (Claims.ScopeMatches (fun x => False) fun x => Bool.true)"],
+   "assumptions": [],
+   "type_hash": "1934be0f6ae46d344ff607936771e0bf1e3973703001f050761fb7bf78083c1c"
+  },
+  "Claims.SimCost_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SimCost_fails (H : Claims.Msg → Claims.Msg) : Exists fun S => Not (Claims.SimCost H S fun x => 1)"
+   ],
+   "assumptions": [],
+   "type_hash": "d6fc94ba70bb9d0963b5c644c591dc12fee8fedf258a756885b115797c7315a9"
+  },
+  "Claims.ZKmalR_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.ZKmalR_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg)",
+    "  (εzk γ : Claims.Msg → Real) (x : Claims.Msg) (hε : Real.instLT.lt (εzk x) 1) :",
+    "  Exists fun P => Exists fun S => Not (Claims.ZKmalR H (fun x => 1) P (fun x x_1 => True) S εzk γ)"
+   ],
+   "assumptions": [],
+   "type_hash": "186029323a95571ffc1885099305b7bedfb3432f1068675d2dd416e9bd0a90a6"
+  },
+  "Claims.Sampling.universal_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.universal_meets :",
+    "  Exists fun c => Exists fun n => Exists fun x => And (Claims.Sampling.Netlist.Fits c n) (Eq x.length c.nIn)"
+   ],
+   "assumptions": [],
+   "type_hash": "b08360cf751d2b6dd16de075df1216368538d3c6302577877fb8206d4f0b89fc"
+  },
+  "Claims.Sampling.Binding_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Binding_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (c : SamplingDeploy.Code)",
+    "  (roots : List Claims.Msg) (o : Claims.Sampling.Opening Bool) :",
+    "  Iff",
+    "    (Eq (Claims.Sampling.Commitment.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o)",
+    "      Bool.true)",
+    "    (Exists fun root =>",
+    "      Exists fun i =>",
+    "        Exists fun reg =>",
+    "          And (Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := i }))",
+    "            (And",
+    "              (Eq (Array.find? (fun p => Decidable.decide (Eq p.root (Claims.Sampling.bytes root))) c.own)",
+    "                (Option.some reg))",
+    "              (Eq",
+    "                (Flock.Registered.opensLeaf reg",
+    "                  (Claims.Sampling.bytes",
+    "                    (FlockSoundness.Binding.digBytes",
+    "                      (FlockSoundness.Refine.H512",
+    "                        (FlockSoundness.Binding.hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o)))))",
+    "                  i (Claims.Sampling.bytes (c.π o)))",
+    "                Bool.true)))"
+   ],
+   "assumptions": [],
+   "type_hash": "a0a89acdc1c927024954d4c84f5369b2fa82c728adba155ce30ede4e3cbd0f92"
+  },
+  "Claims.Sampling.Binding_meets_one": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.Binding_meets_one (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (c : SamplingDeploy.Code)",
+    "  (roots : List Claims.Msg) (o : Claims.Sampling.Opening Bool) (root : Claims.Msg) (dom : ByteArray)",
+    "  (hat : Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := 0 })) (hπ : Eq (c.π o) List.nil)",
+    "  (hroot :",
+    "    Eq (Claims.Sampling.bytes root)",
+    "      (Flock.Registered.climb dom",
+    "        (Flock.Registered.rowLeaf dom 0",
+    "          (Claims.Sampling.bytes",
+    "            (FlockSoundness.Binding.digBytes",
+    "              (FlockSoundness.Refine.H512",
+    "                (FlockSoundness.Binding.hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o))))))",
+    "        0 0 (Claims.Sampling.bytes List.nil)))",
+    "  (hown :",
+    "    Eq c.own",
+    "      (List.cons",
+    "          { name := \"\", value := \"\", root := Claims.Sampling.bytes root, leaves := 1, words := Option.none,",
+    "            wordBits := 16, domain := dom, reads := List.nil.toArray }",
+    "          List.nil).toArray) :",
+    "  Eq (Claims.Sampling.Commitment.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o) Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "415cf277b2412e0bb8ea83b0706ffd1078c21307af429358fa2df94676ef5d6e"
+  },
+  "Claims.Sampling.KSLinOn_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.KSLinOn_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun V =>",
+    "    Exists fun Scope =>",
+    "      Exists fun R =>",
+    "        Exists fun E =>",
+    "          Exists fun κ =>",
+    "            Exists fun γ => Exists fun β => Exists fun Fe => Not (Claims.Sampling.KSLinOn H V Scope R E κ γ β Fe)"
+   ],
+   "assumptions": [],
+   "type_hash": "abebd32213005259fa2754347dd54a59c26cf68bf16f917ef2ba76241d292710"
   }
  },
  "shape": {
@@ -7134,6 +7671,42 @@
     "Claims.waitAcc": "85b751a4e882d0ce61736041f2349297297bc4eb996b472d6a6191513053bca7"
    },
    "guarantees": [
+    "Claims.Bits_fails",
+    "Claims.Complete_fails",
+    "Claims.Flock.Bits_fails",
+    "Claims.Flock.Complete_fails",
+    "Claims.Flock.Efficient_fails",
+    "Claims.Flock.KS_fails",
+    "Claims.Flock.Nontrivial_fails",
+    "Claims.Flock.ScopeMatches_fails",
+    "Claims.Flock.ZK_fails",
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Flock.masked_meets_zk",
+    "Claims.Flock.scope_meets_plain",
+    "Claims.Flock.scope_meets_zk",
+    "Claims.KSLin_fails",
+    "Claims.KS_fails",
+    "Claims.Nontrivial_fails",
+    "Claims.Sampling.Binding_fails",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Sampling.BitsLin_fails",
+    "Claims.Sampling.Bits_fails",
+    "Claims.Sampling.Complete_fails",
+    "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.KSCount_fails",
+    "Claims.Sampling.KSLinOn_fails",
+    "Claims.Sampling.KS_fails",
+    "Claims.Sampling.Nontrivial_fails",
+    "Claims.Sampling.ScopeMatches_fails",
+    "Claims.Sampling.Universal_fails",
+    "Claims.Sampling.ZK_fails",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
+    "Claims.Sampling.scope_meets",
+    "Claims.ScopeMatches_fails",
     "Claims.Witness.Recursion.BitsFlock_fails",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_fails",
@@ -7160,6 +7733,7 @@
     "Claims.Witness.Recursion.ZKPriv_meets",
     "Claims.Witness.Recursion.ZK_fails",
     "Claims.Witness.Recursion.ZK_meets",
+    "Claims.ZKmalR_fails",
     "Flock.SecurityProofs.ClaimsStated",
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated"
@@ -7510,7 +8084,29 @@
     "Claims.Sampling.κ": "b88d37f433003d07613a32bb93b7733aa367795821a06c99a3bf88215177f73c",
     "Claims.Sampling.κF": "b16b6f6879030bcd53b3bc53d7eefdd41a2760920c50b413251c17d5d80c61d9"
    },
-   "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
+   "guarantees": [
+    "Claims.Sampling.Binding_fails",
+    "Claims.Sampling.BitsLin_fails",
+    "Claims.Sampling.Bits_fails",
+    "Claims.Sampling.Complete_fails",
+    "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.ExtractOwnLe_fails",
+    "Claims.Sampling.KSCount_fails",
+    "Claims.Sampling.KS_fails",
+    "Claims.Sampling.Nontrivial_fails",
+    "Claims.Sampling.ScopeMatches_fails",
+    "Claims.Sampling.Universal_fails",
+    "Claims.Sampling.ZK_fails",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
+    "Flock.SecurityProofs.SamplingClaimsStated",
+    "Claims.Sampling.scope_meets",
+    "Claims.Sampling.universal_meets",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Sampling.KSLinOn_fails"
+   ]
   },
   "Definitions.Core.Circuit": {
    "digest": "a08239081fcf880dee928fce0029cfa179f6f760db51ccd16bd97d7097f3e541",
@@ -11996,6 +12592,8 @@
     "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -12965,6 +13563,16 @@
     "Flock.phi8Table": "c843996d571e5071f33e1788901951831ea8ffbcfc2f615881a46ee626da9154"
    },
    "guarantees": [
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Flock.masked_meets_zk",
+    "Claims.Flock.scope_meets_plain",
+    "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_meets",
     "Claims.Witness.Recursion.Efficient_meets",
@@ -13135,6 +13743,8 @@
     "Flock.Sha512.word": "b1086da4c00e9cf65abe8a24bde5bf83aa2e6897854b30766e6be070dc7de279"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -13220,6 +13830,8 @@
     "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -13567,6 +14179,8 @@
     "_private.Flock.HmRow.0.Flock.HmRow.templateStrata": "d1afdd12f32817b3c645c55e29c61170a35ba172f9918cee9d3e1221f392b5c6"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14074,6 +14688,7 @@
     "_private.Flock.Net.0.Flock.Net.num": "3eabe4a40fe243c1336f63a815a8766ef8f2f271de028d86056f366d4e139592"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -14678,6 +15293,8 @@
     "Flock.instInhabitedPublic.default": "32d7220c79f8cee269c9c870fbbb12ec7d42e4e3e3c4c03d7555d33400da438b"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -15904,6 +16521,8 @@
     "_private.Flock.Registered.0.Flock.Registered.tagged": "57d4d01156f6691bd7c899ff653c3c5f75b8fa9183ad7afbcaef5d134b584330"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.PublicAudit",
@@ -18298,6 +18917,10 @@
     "FlockLevel3.unpack": "34d46d73da3087e523794f03fdf8cc353e89599bab7796dabf68f8d46e7a5d66"
    },
    "guarantees": [
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_meets",
     "Claims.Witness.Recursion.Efficient_meets",
@@ -18425,6 +19048,16 @@
     "FlockLevel3.instFieldGF128": "8d89e3a068c342c818866b82d507901b8cea23772c0345b39cc1467af187f955"
    },
    "guarantees": [
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Flock.masked_meets_zk",
+    "Claims.Flock.scope_meets_plain",
+    "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_meets",
     "Claims.Witness.Recursion.Efficient_meets",
@@ -20165,6 +20798,8 @@
     "FlockSoundness.Binding.hm96Pair": "c1ac7aba11bea03bf4156061f96ef5c100b0e3731b63980fccfb9a29476c4083"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -24333,6 +24968,8 @@
     "FlockSoundness.Merkle.xorBytes": "1a6543034cfd27812c0fa204112fe907680579ff63b51dbefc752739b3b890cf"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -24958,6 +25595,8 @@
     "FlockSoundness.Refine.toDig": "fc09670eec36ed92bef301805e7fd420fc6ae40c8d7e2e886967b6cc3de958a6"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -25049,6 +25688,8 @@
     "FlockSoundness.Refine.saltsOf": "a0d5812e80a2fd860d924b9a3b626466509453659b2f05d5e5748a45e51cc96b"
    },
    "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
