@@ -22,6 +22,7 @@ import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
+import Proofs.Flock.Claims.ZK.Compose
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -120,4 +121,8 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   whose simulator is colliding given the leaf layer (`not_samplingZK_collSim`), at one whose reference prover sends its
   witness at two honest witnesses of one leaf layer (`not_samplingZK_leak`), and is not met at every masked deployment
   where one has an honest pair (`not_forall_samplingZK`).
+* `Compose`: sequential composition. Two protocols in turn, the second at a statement the first's history selects
+  (`Seq`), are `ZKmalR` under the simulator that runs the first's, then the second's at the unit its transcript selects
+  (**`zkmalR_seq`**): `ε` and `γ` add up, the hybrid that changes the second keeping the first real and giving `V*` its
+  messages as tape, and the composed tape (`forkTape`) guesses which session's `Fork` to charge (`Seq.fork_ge`).
 -/
