@@ -890,6 +890,15 @@
    "assumptions": [],
    "type_hash": "af808417b86286bf2f51de39df9be42488ce6ca4dcbe4896584f37670a01305c"
   },
+  "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.Fit": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Fit.{u_1} : Accounting.Guarantees.Fit"],
@@ -5602,6 +5611,9 @@
    "Accounting.SecurityProofs.FillerLuck.FillerLuckAt": "frozen (no-function): (I7) LuckAt at luck 1 over every full-checking filler window (Accounting.Filler.FullFill), not a Lean function: the service's full check has no Lean code yet; it takes the column's uniform parity as a hypothesis, which FillerParityBalanced proves for the filler's columns.",
    "Accounting.SecurityProofs.FillerLuck.FillerBudget": "frozen (no-function): Lemma C's BudgetAt at 1/(1 - 0.854) over every spot-checked filler window (Accounting.Filler.SpotFill), not a Lean function: the service's spot check has no Lean code yet; it takes the column's uniform parity as a hypothesis.",
    "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit": "frozen (no-function): Theorem S with each block at its own p over every window of another block's one-draw check beside the filler's spot check (Accounting.Filler.FillBlocks), not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape, and the column's uniform parity a hypothesis.",
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt": "frozen (no-function): (I7) LuckAt at 0 over every full-checking window of pinned receipts (Accounting.Filler.FullPinnedFill), at any receipt function of the round's committed data and live coins, not a Lean function: the service's filler check has no Lean code yet.",
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget": "frozen (no-function): Lemma C's BudgetAt at 1 over every spot-checked window of pinned receipts (Accounting.Filler.SpotPinnedFill), at any receipt function, not a Lean function: the service's spot check has no Lean code yet.",
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": "frozen (no-function): Theorem S with another block's one-draw check beside a pinned receipt's spot check (Accounting.Filler.PinnedFillBlocks), the filler at p = 0, not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape.",
    "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
    "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
    "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code.",
