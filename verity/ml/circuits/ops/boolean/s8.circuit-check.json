@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "BlackwellS8ImmaDot32_v2": {
+   "and": 4157
+  },
+  "BlackwellU8S8ImmaDot32_v2": {
+   "and": 4125
+  },
+  "S32ByteCarry_v2": {
+   "and": 31
+  },
+  "S32ClampRest_v2": {
+   "and": 57
+  },
+  "S32ClampS8_v2": {
+   "and": 59
+  },
+  "S32LowByte_v2": {
+   "and": 0
+  },
+  "S8Dot_v2{K=64,L=32,T0='zero',C=None,DOT=BlackwellS8ImmaDot32_v2,A=(-127,127),B=(-127,127),TAIL=((2,'fresh',(-127,127),(-64,64)),(1,'fresh',(-128,127),(-64,64))),TDOT=BlackwellS8ImmaDot32_v2,NOISE='weight',LIMBS='byteclamp',COMMIT='prefix'}": {
+   "and": 20626
+  },
+  "S8Dot_v2{K=64,L=64,T0='zero',C=None,DOT=BlackwellS8ImmaDot32_v2,A=(-127,127),B=(-127,127),TAIL=(),TDOT=None,NOISE='none',LIMBS='none',COMMIT='final'}": {
+   "and": 8261
+  }
+ }
+}
