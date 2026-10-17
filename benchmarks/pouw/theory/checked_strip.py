@@ -9,11 +9,14 @@ P̃(i, κ) = P̂(i, κ) + U(i, κ mod r) and X = V + b, a cell (i, l) has, over 
 - the served output O = Σ_κ P̂ X = T_last − P2.
 The honest prover computes T (k products a cell) and P2 (r products a cell) and derives O. Designs, by their committed
 words: `dither` (Dither as adopted: T, with no c), `checked1` (T and O, no c), `co` (CO-Dither: T and O, with c) and
-`co_p2` (T and P2, with c).
+`co_p2` (T and P2, with c). At r = 32 with 8-bit X, Y needs more than one int8 limb, and `co32c` commits each of its
+redundant base-128 digits: A_d = (R_d mod 128) − 128 z_d, R_{d+1} = ⌊R_d/128⌋ + z_d (R_0 = Y, z fresh carry coins),
+words T, D_d = U·A_d (d ≥ 1) and O′ = T_last − U·A_0, with the served O = O′ − Σ 128^d D_d. The carry coin keeps D_1
+fresh where Y < 128, which is every column at A = B = 0, where co32's high limb is 0 and its product free.
 
 Parts:
-- A. The s32 identity O = T_last − P2, the int8 ranges, and the strip operand Y's int8 limbs at the worst instance, at
-  the zero instance and at a structured one.
+- A. The s32 identity O = T_last − P2, the int8 ranges, the strip operand Y's int8 limbs at the worst instance, at
+  the zero instance and at a structured one, and co32c's digits (int8, reconstructing Y and O; D_1 fresh at zero).
 - B. Per-cell F₂ cross blocks from pair differences of the words evaluated at bit points with ≤ 2 ones, in both
   orientations (rows (word, peeled bit) or (word, served coin)), at the zero, a random and a structured instance; the
   same-side blocks vanish exactly (Lemma G's hypothesis on either side). CO's swapped block has rank k + r, the honest
@@ -23,21 +26,26 @@ Parts:
 - D. The collapses: one-sided, P2 = T_last at P = 0; KSW's four products equal at the zero instance; per-product
   independent noise admits no recovering combination; CO at zero serves the random 0/1 product c·b.
 - E. Priced strategies, each verified word for word against the honest words: int8 MAC = 1, FP4 (E2M1) MAC = ½, one
-  product per int8 limb, additions free. The ε table at production k, and Llama-3.1 8B/70B linears MAC-weighted.
+  product per int8 limb, additions free. The ε table at production k, and Llama-3.1 8B/70B linears MAC-weighted. Under
+  co32c the cheater at the zero and the structured instance pays k + m·r products a cell, as honest does.
 - F. Served error: exact mean and variance of O − PV over the coins (Fractions, every coin point), against Dither's.
 - G. Theorem N's bound ε ≥ (1 − θ)/(q − 1 + θ) for schemes whose q checked products are recovered by a per-coordinate
   identity, and the q it needs for ε < 1% and < 0.1%.
 - H. The tensor–scalar model (note:20261017T0310Z-report-eps1-program): a 128-cell tile's MMAs and other warp
   instructions, honest against the cheapest cheater found, timed on the measured facets (the tensor pipe and JI3e), for
-  CO at r = 32, CO at r = k/2 and Dither as built, at fold costs 3, 1.5 and 1 a word, on Llama-3.1 8B and 70B linears.
-  At A = B = 0, O = c·b is a depth-k binary product with no commit inside, so a cheater may make any fraction of it off
-  its strip: bit-sliced on the CUDA cores (x warp instructions per 32 × 128 bit products, a parameter), with b1 MMAs
-  (emulated on sm_120; native elsewhere) or FP4 MMAs. The best mix is an exact minimum over the facets' kinks. It
-  gains nothing at r = 32 and beats r = 32's ε at r = k/2 for any x below about 24.
+  CO at r = 32 (co32, co32c), CO at r = k/2 (cohalf) and Dither as built, at fold costs 3, 1.5 and 1 a word, on
+  Llama-3.1 8B and 70B linears and on QKᵀ (k = 128). At A = B = 0, O = c·b is a depth-k binary product with no commit
+  inside, so a cheater may make any fraction of it off its strip: bit-sliced on the CUDA cores (x warp instructions
+  per 32 × 128 bit products, a parameter), with b1 MMAs (emulated on sm_120; native elsewhere) or FP4 MMAs. The other
+  words are narrow there too (T at 8 binary products an IMMA, co32c's D at 7), and every route's fraction is chosen at
+  once by an exact minimum over the vertices of a small linear program. O's route gains nothing at r = 32 and beats
+  r = 32's ε at r = k/2 for any x below about 24; co32c's linears gain nothing from any route at fold 3 for x ≥ 4, or
+  at cheaper folds for x ≥ 8.
 
 Run from the repository root: `uv run --no-project --with numpy --with python-sat --with-editable
 benchmarks/pouw/exact_kit python -B benchmarks/pouw/theory/checked_strip.py --mutations` (`--full` adds the 2×2
-block's SAT case, unbounded). `benchmarks/pouw/tests/test_theory_checked_strip.py` runs it in the pouw suite.
+block's SAT case: 12 products, model checked, and 11 under a conflict budget, which so far leaves it undecided).
+`benchmarks/pouw/tests/test_theory_checked_strip.py` runs it in the pouw suite.
 """
 from __future__ import annotations
 
@@ -482,6 +490,41 @@ def o_routes(design, k):
             "b1_native": (-strip + k / 256, 0.0), "fp4": (-strip + k / 64, 4.0)}
 
 
+def word_routes(design, k, x):
+    """At A = B = 0 the other committed words are narrow products too, each a k32 IMMA honest pays: a T_t increment is
+    Σ (c + U)·b, 8 binary products (c and U's 7 planes; Σb is shared by the rows), and co32c's D_d = U·A_d is U's 7
+    planes against fresh carry bits. Bit-sliced at x per binary product: [(dM, dO)] for all the T words, then all the
+    D words."""
+    routes = [(-(k // 32), 8 * x * (k // 32))]
+    if design == "co32c":
+        m = n_digits((k // 32) * -128, (k // 32) * 127)
+        routes.append((-(m - 1), 7 * x * (m - 1)))
+    return routes
+
+
+def ts_best(design, k, n, fold, routes):
+    """(honest's time, the best cheater's) when the cheater moves any fraction φ_j ∈ [0, 1] of each route's work off
+    its tile, changing (MMAs, other instructions) by Σ φ_j (dM_j, dO_j). Minimising the max of the facets over the box
+    is a linear program in (φ, t); its optimum is a vertex, where len(routes) + 1 of the facet and box constraints
+    are tight, so every such vertex is solved for and the feasible minimum taken."""
+    hon, (Mc, Oc) = ts_tile(design, k, n, fold)
+    R = len(routes)
+    dM = np.array([d[0] for d in routes], float)
+    dO = np.array([d[1] for d in routes], float)
+    # Each constraint is a·(φ, t) = rhs when tight: a facet t = α(Mc + φ·dM) + β(Oc + φ·dO), or a box face φ_j ∈ {0, 1}.
+    cons = [(np.r_[a * dM + b * dO, -1.0], -(a * Mc + b * Oc)) for _, a, b in TS_FACETS]
+    cons += [(np.r_[np.eye(R)[j], 0.0], v) for j in range(R) for v in (0.0, 1.0)]
+    best = ts_time(Mc, Oc)
+    for tight in itertools.combinations(cons, R + 1):
+        A = np.array([c_[0] for c_ in tight])
+        if not any(c_[0][-1] for c_ in tight) or abs(np.linalg.det(A)) < 1e-12:
+            continue
+        phi = np.linalg.solve(A, np.array([c_[1] for c_ in tight]))[:R]
+        if np.all(phi >= -1e-12) and np.all(phi <= 1 + 1e-12):
+            best = min(best, ts_time(Mc + phi @ dM, Oc + phi @ dO))
+    return ts_time(*hon), best
+
+
 def main():
     checks = Checks()
     rng = np.random.default_rng(20261017)
@@ -856,6 +899,57 @@ def main():
                  all(zero[f"cohalf {m} scalar x={x}"] > base[("co32", m)] for m in TS_SHAPES for x in (8, 12, 16))
                  and all(abs(zero[f"cohalf {m} fp4"] - base[("cohalf", m)]) < 1e-12 for m in TS_SHAPES),
                  str({k_: v for k_, v in out["ts_zero_instance_O"].items() if k_.startswith("cohalf")}))
+
+    agree = [(d, kk, f, x) for d in ("co32c", "cohalf") for kk in (128, 4096, 14336) for f in (3, 1.5, 1)
+             for x in (4, 12, 24)]
+    checks.check("H the joint minimiser (vertices of the (φ, t) program) agrees with the one-route kink minimum",
+                 all(abs(ts_best(d, kk, 4096, f, [o_routes(d, kk)["scalar"](x)])[1]
+                         - ts_mix(d, kk, 4096, f, *o_routes(d, kk)["scalar"](x))[1]) < 1e-9 for d, kk, f, x in agree))
+
+    def all_routes(design, kk, x):
+        return word_routes(design, kk, x) + [o_routes(design, kk)["scalar"](x)]
+
+    def weighted_best(design, fold, x, mname):
+        h = c_ = 0.0
+        for _, kk, nn in TS_SHAPES[mname]:
+            th, tb = ts_best(design, kk, nn, fold, all_routes(design, kk, x) if x else [])
+            h, c_ = h + th * nn, c_ + tb * nn
+        return h / c_ - 1
+
+    joint = {f"fold={f} {m} x={x}": weighted_best("co32c", f, x, m) for f in (3, 1.5, 1) for m in TS_SHAPES
+             for x in (4, 8, 12, 16)}
+    base_f = {(f, m): weighted_best("co32c", f, None, m) for f in (3, 1.5, 1) for m in TS_SHAPES}
+    out["ts_zero_instance_co32c_all_routes"] = {k_: f"{v:.4%}" for k_, v in joint.items()}
+    checks.check("H co32c at A = B = 0 with every word bit-sliced at once (T at 8x, D at 7x an IMMA, O′'s c·b at "
+                 "x·k/32): no gain on the Llama-3.1 linears at fold 3 for x ≥ 4, and at folds 1.5 and 1 for x ≥ 8",
+                 all(abs(joint[f"fold={f} {m} x={x}"] - base_f[(f, m)]) < 1e-12 for m in TS_SHAPES
+                     for f, xs in ((3, (4, 8, 12, 16)), (1.5, (8, 12, 16)), (1, (8, 12, 16))) for x in xs),
+                 str(out["ts_zero_instance_co32c_all_routes"]))
+    qk = {}
+    for f in (3, 1.5, 1):
+        for d in ("co32", "co32c", "cohalf"):
+            th, tc = (ts_time(*t_) for t_ in ts_tile(d, 128, 4096, f))
+            qk[f"fold={f} {d} strip-only"] = f"{th / tc - 1:.4%}"
+            for x in (4, 8, 12, 16, 24):
+                th, tb = ts_best(d, 128, 4096, f, all_routes(d, 128, x))
+                qk[f"fold={f} {d} x={x}"] = f"{th / tb - 1:.4%}"
+    out["ts_qk_k128_all_routes"] = qk
+    checks.check("H QK^T (k = 128) at fold 3 with every route: cohalf below co32c at every x ≥ 4, co32c below co32",
+                 all(float(qk[f"fold=3 cohalf x={x}"][:-1]) < float(qk[f"fold=3 co32c x={x}"][:-1])
+                     < float(qk[f"fold=3 co32 x={x}"][:-1]) for x in (4, 8, 12, 16, 24)), str(qk))
+    recomb = {}
+    for f in (3, 1.5, 1):
+        for mname, shapes in TS_SHAPES.items():
+            h = c_ = 0.0
+            for _, kk, nn in shapes:
+                (Mh, Oh), (Mc, Oc) = ts_tile("co32c", kk, nn, f)
+                h += ts_time(Mh, Oh) * nn
+                c_ += ts_time(Mc, Oc + 4 * (n_digits((kk // 32) * -128, (kk // 32) * 127) - 1)) * nn
+            recomb[f"fold={f} {mname}"] = h / c_ - 1
+    out["ts_co32c_recombination_charged"] = {k_: f"{v:.4%}" for k_, v in recomb.items()}
+    checks.check("H co32c when the served output feeds a checked value (the cheater recombines O too): ε < 0.1% on "
+                 "Llama-3.1 8B and 70B linears at every fold", all(v < 1e-3 for v in recomb.values()),
+                 str(out["ts_co32c_recombination_charged"]))
 
     import json
     print("\nRESULTS " + json.dumps(out, default=str, sort_keys=True))
