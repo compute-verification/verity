@@ -648,13 +648,18 @@ BX_KERNEL(k_bx_mix, BR / 2)
 // the timed loop, so the measured time a word includes the per-instance build amortized over those rows. AC = 16 columns
 // a block are read 16 a 128-bit LDS. -----------------------------------------------------------------------------------
 constexpr int AC = 16, ATPB = 512;
-constexpr size_t A_SMEM = (size_t)4 * 256 * AC;  // bytes: [chunk 4][value 256][column AC]
-__device__ __forceinline__ void a_build(signed char* tab, const uint32_t* __restrict__ Cw, int ell, int n, int j0,
-                                        int t0, int nt) {
-  // nt threads build the 4·256·AC byte entries of this segment's table
-  for (int e = t0; e < 4 * 256 * AC; e += nt) {
+constexpr int A_ENTRIES = 4 * 256 * AC;            // [chunk 4][value 256][column AC]
+constexpr int A_BLD = A_ENTRIES / ATPB;            // build entries a thread, fully unrolled (no nested loop in the timed loop)
+static_assert(A_ENTRIES % ATPB == 0, "the build must divide evenly so it fully unrolls");
+constexpr size_t A_SMEM = (size_t)A_ENTRIES;       // bytes
+__device__ __forceinline__ void a_build(signed char* tab, const uint32_t* __restrict__ csm, int t0, int nt) {
+  // nt threads build the A_ENTRIES byte entries of this segment's table from the AC column words in shared memory
+  // (csm[c] = C_ℓ[j0 + c]); fully unrolled so the timed loop holds no inner loop
+#pragma unroll
+  for (int it = 0; it < A_BLD; it++) {
+    const int e = t0 + it * nt;
     const int c = e & (AC - 1), v = (e >> 4) & 255, k = e >> 12;
-    const uint32_t cb = (Cw[(size_t)ell * n + j0 + c] >> (8 * k)) & 0xFFu;
+    const uint32_t cb = (csm[c] >> (8 * k)) & 0xFFu;
     tab[e] = (signed char)__popc(v & cb);
   }
 }
@@ -662,6 +667,7 @@ template <bool TIMED>
 __device__ __forceinline__ void a_fr8_thread(signed char* tab, const uint32_t* __restrict__ Rw,
                                              const uint32_t* __restrict__ Cw, int L, int m, int n, int i, int j0,
                                              uint32_t* __restrict__ out, Clk* rec, int tid, int nt) {
+  __shared__ uint32_t csm[AC];  // this segment's AC column words, read once from global by the first AC threads
   int acc[AC];
   uint32_t y[AC], z[AC];
 #pragma unroll
@@ -673,7 +679,9 @@ __device__ __forceinline__ void a_fr8_thread(signed char* tab, const uint32_t* _
   QS_BEGIN
 #pragma unroll 1
   for (int ell = 0; ell < L; ell++) {
-    a_build(tab, Cw, ell, n, j0, tid, nt);
+    if (tid < AC) csm[tid] = Cw[(size_t)ell * n + j0 + tid];
+    __syncthreads();
+    a_build(tab, csm, tid, nt);
     __syncthreads();
     const uint32_t r = Rw[(size_t)ell * m + i];
     uint32_t ps[AC / 4];  // the four chunks' byte partials summed, 4 columns a word
