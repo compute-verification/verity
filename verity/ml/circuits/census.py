@@ -86,7 +86,7 @@ PRODUCTS: dict[str, int] = {
     "PouwDot16U8S8_v1": 16, "NcpDot16I7_v1": 16,
     "AmpereBF16TcDot16_v3": 16, "HopperBF16WgmmaDot16_v2": 16, "HopperE4m3QgmmaDot32_v2": 32, "HopperE4m3MmaV2Dot32_v2": 32,
     "BlackwellE4m3QmmaDot32_v2": 32, "BlackwellE5m2QmmaDot32_v2": 32, "BlackwellNvf4OmmaDot64_v2": 64,
-    "BlackwellMxf4OmmaDot64_v2": 64,
+    "BlackwellMxf4OmmaDot64_v2": 64, "BlackwellS8ImmaDot32_v1": 32,
 }
 
 COUNTERS = ("served_macs", "tail_atoms", "receipt_folds")
