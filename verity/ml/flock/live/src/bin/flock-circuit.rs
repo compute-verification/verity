@@ -647,14 +647,14 @@ fn server(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Server {
     server_tables(st, inst, 1)
 }
 
-/// The verifier's server for sessions of `count` tables. With a draw (`--draw`, `--draw-law`, `--draw-file`) the tables are the drawn
+/// The verifier's server for sessions of `count` tables. With a draw (`--draw`, `--draw-file`) the tables are the drawn
 /// units' (until `Register`, the population's one-table statement stands in); without, the population's.
 fn server_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
     server_of(&serving(st, inst, count), st, inst, count)
 }
 
-/// What every session of a server serves: the verifier's own draw (`--draw-file`) or its law (`--draw`, `--draw-law`), and
-/// without either the population's tables. Built once, when the server starts.
+/// What every session of a server serves: the verifier's own draw (`--draw-file`) or its law (`--draw`), and without either
+/// the population's tables. Built once, when the server starts.
 struct Serving {
     given: Option<Value>,
     law: Option<flock_live::unit_draw::Law>,
@@ -663,41 +663,23 @@ struct Serving {
 
 fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     use flock_live::unit_draw::Law;
-    let (file, law, law_file) = (arg("--draw-file", ""), arg("--draw", ""), arg("--draw-law", ""));
-    let read = |flag: &str, path: &str| -> Value {
-        serde_json::from_str(&std::fs::read_to_string(path).unwrap_or_else(|e| refuse(format!("{flag}: {e}"))))
-            .unwrap_or_else(|e| refuse(format!("{flag}: {e}")))
-    };
-    if [&file, &law, &law_file].iter().filter(|s| !s.is_empty()).count() > 1 {
-        refuse("one of --draw-file, --draw and --draw-law".into());
-    }
+    let (file, law) = (arg("--draw-file", ""), arg("--draw", ""));
     // the verifier's own draw, made outside this server: served at Register as it is (checked there, U2, and against the
     // registered population when the drawn statement is built)
     let given = (!file.is_empty()).then(|| {
-        let draw = read("--draw-file", &file);
+        let draw: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap_or_else(|e| refuse(format!("--draw-file: {e}"))))
+            .unwrap_or_else(|e| refuse(format!("--draw-file: {e}")));
         flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
         draw
     });
-    // `--draw-law`: a law object, a stratified one the verifier's own expansion over its program and query, drawn afresh at
-    // each session's Register over this registered population
-    let law = if !law_file.is_empty() {
-        let law = Law::of_json(&read("--draw-law", &law_file)).unwrap_or_else(|e| refuse(format!("--draw-law: {e}")));
-        if let Law::Stratified { k, strata } = &law {
-            if let Some(why) = flock_live::unit_draw::strata_problem(*k, strata, inst.n as u64) {
-                refuse(format!("--draw-law over the {} registered units: {why}", inst.n));
-            }
-        }
-        Some(law)
-    } else {
-        (!law.is_empty()).then(|| Law::parse(&law).unwrap_or_else(|e| refuse(e)))
-    };
+    let law = (!law.is_empty()).then(|| Law::parse(&law).unwrap_or_else(|e| refuse(e)));
     // several tables are refused here, before any session, for a draw they cannot split or whose tables `--zk` cannot prove. A
-    // subset or stratified law's table shapes depend on its counts alone, so a draw of the first units stands for every draw.
+    // subset law's table shapes depend on its k alone, so a draw of the first k units stands for every draw.
     if count > 1 {
-        let probe = match (&given, &law) {
+        let probe = match (&given, law) {
             (Some(d), _) => Some(d.clone()),
             (None, Some(Law::Bernoulli { .. })) => refuse(BERNOULLI_TABLES.into()),
-            (None, Some(l)) => l.first(inst.n as u64),
+            (None, Some(Law::Subset { k })) => Some(json!({"law": "subset", "population": inst.n, "k": k, "units": (0..k).collect::<Vec<_>>()})),
             (None, None) => None,
         };
         if let Some(d) = probe {
@@ -721,8 +703,8 @@ fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) 
         s.cfg.draw_given = Some(draw.clone());
         return s;
     }
-    match &sv.law {
-        Some(l) => with_draw(s, st, inst, l.clone(), count),
+    match sv.law {
+        Some(l) => with_draw(s, st, inst, l, count),
         None => s,
     }
 }

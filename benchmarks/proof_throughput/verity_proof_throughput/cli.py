@@ -2,17 +2,17 @@
 
     plan     [--workload W] [--lo B] [--hi B] [--json]   each point's identity and its passing prover run, if any
     run      [--workload W] [--lo B] [--hi B] [--dry-run]  one recorded prover run per point without a passing one
-    verify   --prove-run RUN [--node vy-nebius-cpu-3|-cpu-2|vy-nebius-1] [--dry-run]   the Lean verifier point on a prover run's bundle
+    verify   --prove-run RUN [--node vy-nebius-cpu-3] [--dry-run]   the Lean verifier point on a prover run's bundle
     check    [--workload W] ...                          exit 0 only when every point has a passing prover run
     compare  A B [--allow FIELD]                         accept two results only when their identities agree
     table    [RESULT ...] [--store --workload W [--commit C]] [--baseline] [--json]   the throughput frontier over B
     baseline [--workload W] [--lock RESULT ...]          the pinned hill-climb baseline (baseline.json), or pin one sweep
     instances --workload W [--write]                     regenerate the workload's frozen instance manifest
     workloads                                            the VU families and their B caps
-    zk                                                   what configuration 2 measures today (job.sh ZK=1: --zk sessions under the firewall)
+    zk                                                   what configuration 2 measures today, and what it stubs
 
-The job scripts call the rest: ``population``, ``check-instances``, ``partition``, ``staged``, ``probe``, ``put-bundle``,
-``fetch-bundle``, ``lean-verdict``, ``point-result``, ``zk-point`` and ``profile-phases``.
+The job scripts call the rest: ``defs``, ``check-instances``, ``staged``, ``probe``, ``put-bundle``, ``fetch-bundle``,
+``lean-verdict`` and ``point-result``.
 A RESULT is a ``result.json`` path or a run id (its result fetched from the evidence store).
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ from . import instances as I
 from . import plan as P
 from . import report as R
 from . import result as RS
-from .workloads import WORKLOADS, workload
+from .workloads import WORKLOADS, defs_json, workload
 
 DEFAULT_WORKLOAD = "bf16-k6144"
 
@@ -52,41 +52,31 @@ def _jsonl(path: Path) -> list[dict]:
 # --- job side ----------------------------------------------------------------------------------------------------------
 
 
-def cmd_population(a) -> int:
-    """The point's population and draw law: ``law.json`` (the verifier's stratified law for B, ``serve --draw-law``) in
-    ``--out``; prints the VU Definition and n_max, the class sweep's PT_VU and PT_N."""
+def cmd_defs(a) -> int:
     w = workload(a.workload)
-    if not 1 <= a.B <= w.n_max:
-        print(f"{w.name}: B = {a.B} outside [1, {w.n_max}]", file=sys.stderr)
-        return 1
-    Path(a.out).mkdir(parents=True, exist_ok=True)
-    (Path(a.out) / "law.json").write_text(json.dumps(I.law(w, a.B), sort_keys=True) + "\n")
-    print(w.vu, w.n_max)
+    Path(a.out).write_text(defs_json(w))
+    print(w.n_max, w.K)
     return 0
 
 
 def cmd_check_instances(a) -> int:
-    got = I.check(workload(a.workload))
+    got = I.check_prefix(workload(a.workload), a.B)
     Path(a.out).write_text(json.dumps(got, indent=1) + "\n")
     print(json.dumps(got))
     return 0 if got["ok"] else 1
 
 
 def cmd_partition(a) -> int:
-    """The verifier's own copies of the partition object the circuit binds (META, its second line) and of the program it
-    names (``--program``), from the workload."""
+    """The verifier's own copy of the partition object the circuit binds (META, its second line), from the workload."""
     with open(a.circuit) as f:
         f.readline()
         meta = json.loads(f.readline()[5:])
-    w = workload(a.workload)
     try:
-        obj = I.partition_object(w, meta)
+        obj = I.partition_object(workload(a.workload), meta)
     except ValueError as e:
         print(e, file=sys.stderr)
         return 1
     Path(a.out).write_text(json.dumps(obj, sort_keys=True))
-    if a.program_out:
-        Path(a.program_out).write_bytes(I.program_file(w))
     print(meta["partition"]["digest"])
     return 0
 
@@ -170,24 +160,6 @@ def cmd_lean_verdict(a) -> int:
     return 0
 
 
-def cmd_profile_phases(a) -> int:
-    """``verify.sh PROFILE=1``'s result: the perf samples of one session by stage, phase and kernel (``profile``)."""
-    from . import profile as PF
-
-    out = Path(a.stdout).read_text() if a.stdout and Path(a.stdout).exists() else ""
-    verdicts = [json.loads(ln[len("VERDICT "):]) for ln in out.splitlines() if ln.startswith("VERDICT ")]
-    err = Path(a.stderr).read_text()
-    summary = PF.summarize(PF.samples(PF.read_script(Path(a.script))))
-    doc = PF.result(summary, Path(a.time).read_text().strip().splitlines()[-1], err, bundle=a.bundle, prove_run=a.prove_run,
-                    verdicts=[{k: v.get(k) for k in ("accepted", "why")} for v in verdicts])
-    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    (Path(a.out).parent / "out").mkdir(exist_ok=True)
-    (Path(a.out).parent / "out" / "profile.json").write_text(json.dumps(summary | {"times": PF.times(err)}, indent=1))
-    Path(a.out).write_text(json.dumps(doc, sort_keys=True))
-    print(json.dumps({k: summary[k] for k in ("samples", "phase", "kernel")}))
-    return 0 if doc["validation"]["status"] == "passed" else 1
-
-
 def _timed(lean: list[dict], warm: int) -> list[dict]:
     """The timed sessions' verdicts: sessions are numbered in the order served (l0000-PID, ...), warm ones first."""
     order = sorted(lean, key=lambda v: v.get("session") or "")
@@ -227,8 +199,7 @@ def cmd_point_result(a) -> int:
                    gpu_peak_mib=max(mem) if mem else None, lean=timed if lean else None,
                    evidence=[p for p in ("out/results.jsonl", "out/lean.jsonl", "out/index.jsonl") if (d / Path(p).name).exists()],
                    **extra)
-    warm = [v for v in lean if v not in timed]
-    if warm and not all(RS.lean_passed(v) for v in warm) and doc["validation"]["status"] == "passed":
+    if lean and len(timed) < len(lean) and not all(RS.lean_passed(v) for v in lean):
         doc["validation"] = {**doc["validation"], "status": "failed",
                              "detail": "a warm session was rejected by the Lean verifier: " +
                                        "; ".join(f"{v['session']}: {v.get('why')}" for v in lean if not RS.lean_passed(v))[:800]}
@@ -430,7 +401,7 @@ def cmd_instances(a) -> int:
         I.manifest_path(w).write_text(text)
         print(f"{I.manifest_path(w)}: sha256 {I.manifest_sha256(w)}")
     else:
-        print(json.dumps({k: doc[k] for k in ("tier", "n", "population_digest", "output_words")}, indent=1))
+        print(json.dumps({k: doc[k] for k in ("tier", "n", "prefixes", "output_words")}, indent=1))
     return 0
 
 
@@ -445,17 +416,6 @@ def cmd_zk(_a) -> int:
 
     print(zk.describe())
     return 0
-
-
-def cmd_zk_point(a) -> int:
-    """``zk-point``: the ZK point's result (``job.sh ZK=1``) from its records; exit 0 when it passed."""
-    from . import zk
-
-    doc = zk.point(Path(a.dir), workload(a.workload), a.B, zk.firewall_on(), os.environ.get("RESEARCH_RUN_ID"))
-    Path(a.out).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    print(json.dumps({"status": doc["validation"]["status"], "detail": doc["validation"]["detail"]}
-                     | {m["name"]: m["value"] for m in doc["measurements"]}))
-    return 0 if doc["validation"]["status"] == "passed" else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -491,11 +451,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("instances"); p.add_argument("--workload", default=DEFAULT_WORKLOAD); p.add_argument("--write", action="store_true")
     sub.add_parser("workloads")
     sub.add_parser("zk")
-    p = sub.add_parser("population"); p.add_argument("--workload", required=True); p.add_argument("--B", type=int, required=True)
+    p = sub.add_parser("defs"); p.add_argument("--workload", required=True); p.add_argument("--out", required=True)
+    p = sub.add_parser("check-instances"); p.add_argument("--workload", required=True); p.add_argument("--B", type=int, required=True)
     p.add_argument("--out", required=True)
-    p = sub.add_parser("check-instances"); p.add_argument("--workload", required=True); p.add_argument("--out", required=True)
     p = sub.add_parser("partition"); p.add_argument("--workload", required=True); p.add_argument("--circuit", required=True)
-    p.add_argument("--out", required=True); p.add_argument("--program-out", default=None)
+    p.add_argument("--out", required=True)
     p = sub.add_parser("staged"); p.add_argument("--results", required=True); p.add_argument("--cache-dir", action="store_true")
     p = sub.add_parser("probe"); p.add_argument("--out", required=True); p.add_argument("--gpu-csv", default=None)
     p = sub.add_parser("put-bundle"); p.add_argument("--tree", required=True); p.add_argument("--meta", required=True)
@@ -508,15 +468,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("point-result"); p.add_argument("--workload", required=True); p.add_argument("--B", type=int, required=True)
     p.add_argument("--dir", required=True); p.add_argument("--lean", default=None); p.add_argument("--prove-run", default=None)
     p.add_argument("--bundle", default=None); p.add_argument("--out", required=True)
-    p = sub.add_parser("zk-point"); p.add_argument("--workload", required=True); p.add_argument("--B", type=int, required=True)
-    p.add_argument("--dir", required=True); p.add_argument("--out", required=True)
-    p = sub.add_parser("profile-phases"); p.add_argument("--script", required=True); p.add_argument("--time", required=True)
-    p.add_argument("--stderr", required=True); p.add_argument("--stdout", default=None); p.add_argument("--out", required=True)
-    p.add_argument("--bundle", default=None); p.add_argument("--prove-run", default=None)
     a = ap.parse_args(argv)
     return {"plan": cmd_plan, "check": cmd_check, "run": cmd_run, "verify": cmd_verify, "compare": cmd_compare, "table": cmd_table,
             "baseline": cmd_baseline,
-            "instances": cmd_instances, "workloads": cmd_workloads, "zk": cmd_zk, "population": cmd_population,
+            "instances": cmd_instances, "workloads": cmd_workloads, "zk": cmd_zk, "defs": cmd_defs,
             "check-instances": cmd_check_instances, "partition": cmd_partition, "staged": cmd_staged, "probe": cmd_probe, "lean-verdict": cmd_lean_verdict,
-            "point-result": cmd_point_result, "put-bundle": cmd_put_bundle, "fetch-bundle": cmd_fetch_bundle,
-            "profile-phases": cmd_profile_phases, "zk-point": cmd_zk_point}[a.cmd](a)
+            "point-result": cmd_point_result, "put-bundle": cmd_put_bundle, "fetch-bundle": cmd_fetch_bundle}[a.cmd](a)

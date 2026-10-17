@@ -4,8 +4,7 @@ kept in Git.
 ``compare`` is the judge: two results are compared only when they conform to the contract (``contract.validate``), their
 identity fields agree (``contract.incomparable``) apart from those ``allow`` names, and their instances don't conflict
 (``contract.compare_instances``). ``frontier`` puts one identity's points side by side over B, the one field a sweep
-varies, and refuses a set whose identities differ in anything else. A point counts only when the Lean verifier accepted
-every timed session (``accepted``): a prover run's own result, or a point refused under D12, gives no row.
+varies, and refuses a set whose identities differ in anything else.
 """
 from __future__ import annotations
 
@@ -18,13 +17,7 @@ from verity_numerical.bench import contract
 from .result import dominant_bucket, value
 
 HEADLINE = ("vu.per_second", "overhead.vs_native_peak", "t.total", "mem.peak_host_bytes", "mem.peak_device_bytes", "proof_bytes",
-            "transcript.bytes", "verifier.seconds", "verify.cpu_s", "verifier.cpu_seconds_per_vu", "verifier.cores_per_gpu")
-
-
-def accepted(r: Mapping[str, Any]) -> bool:
-    """A passing, conforming result whose Lean verifier ran and accepted every timed session (none refused under D12)."""
-    return ((r.get("validation") or {}).get("status") == "passed" and not contract.validate(r)
-            and bool(value(r, "verify.lean_accepted")) and not value(r, "verify.lean_drawless"))
+            "transcript.bytes", "verifier.seconds")
 
 
 class Refused(Exception):
@@ -64,8 +57,8 @@ def _show(v: Any) -> str:
 
 
 def frontier(results: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """One row per B (the newest accepted result of each), refusing results whose identities differ apart from B."""
-    passed = [r for r in results if accepted(r)]
+    """One row per B (the newest result of each), refusing results whose identities differ apart from B."""
+    passed = [r for r in results if (r.get("validation") or {}).get("status") == "passed" and not contract.validate(r)]
     if not passed:
         return []
     base = passed[0]["workload_fingerprint"]
@@ -87,20 +80,19 @@ def frontier(results: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
-BASELINE_SCHEMA = "proof-throughput/baseline/v2"
+BASELINE_SCHEMA = "proof-throughput/baseline/v1"
 
 
 def baseline(results: Sequence[Mapping[str, Any]], commit: str) -> dict[str, Any]:
-    """The pin of one sweep: its workload, configuration and commit, and each B's accepted result by run id
-    (``baseline.json``). The numbers stay in the results; ``table --baseline`` renders them."""
+    """The pin of one sweep: its workload, configuration and commit, and each B's result by run id (``baseline.json``).
+    The numbers stay in the results; ``table --baseline`` renders them."""
     rows = frontier(results)
     if not rows:
-        raise Refused("no result the Lean verifier accepted to pin")
+        raise Refused("no passing result to pin")
     fp = next(r for r in results if r.get("run_id") == rows[0]["run"])["workload_fingerprint"]
-    pop = fp.get("population") or {}
     return {"schema": BASELINE_SCHEMA, "workload": fp["workload"], "config": fp["config"], "vu": fp["vu"], "commit": commit,
-            "population": {k: pop.get(k) for k in ("dataset", "tier", "range", "manifest_sha256")},
-            "draw": (fp.get("draw") or {}).get("law"), "points": {str(r["B"]): r["run"] for r in rows}}
+            "instances": {k: fp["instances"][k] for k in ("dataset", "tier", "manifest_sha256")},
+            "points": {str(r["B"]): r["run"] for r in rows}}
 
 
 def best(rows: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
@@ -128,8 +120,7 @@ def markdown(rows: Sequence[Mapping[str, Any]], title: str = "") -> str:
     cols = [("B", "B", "int"), ("VU/s", "vu.per_second", "num"), ("overhead vs H200 peak", "overhead.vs_native_peak", "int"),
             ("t.total s", "t.total", "num"), ("peak host", "mem.peak_host_bytes", "bytes"),
             ("peak device", "mem.peak_device_bytes", "bytes"), ("proof", "proof_bytes", "bytes"),
-            ("verify s (Lean)", "verifier.seconds", "num"), ("verifier CPU-s/VU", "verifier.cpu_seconds_per_vu", "num"),
-            ("verifier cores/GPU", "verifier.cores_per_gpu", "num"), ("dominant bucket", "dominant", "str"),
+            ("verify s (Lean)", "verifier.seconds", "num"), ("dominant bucket", "dominant", "str"),
             ("share", "dominant_share", "share"), ("run", "run", "str")]
     out = [f"### {title}", ""] if title else []
     out.append("| " + " | ".join(c[0] for c in cols) + " |")

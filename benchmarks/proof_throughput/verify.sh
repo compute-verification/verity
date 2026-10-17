@@ -2,10 +2,8 @@
 # proof_throughput's verifier point: the compiled Lean verifier (`flock-verify verify --coins os`) on every session of one prover
 # point's bundle (job.sh's out/bundle.json), each under /usr/bin/time, then the point's contract result from the prover's records
 # and these verdicts. The verifier's `--partition` is its own: derived from the workload's program and checked against the
-# digest the circuit binds (`partition`), never read from the bundle. Runs in a proofs-pool slot of vy-nebius-cpu-3 or -cpu-2,
-# or as a queued CPU job of its own on vy-nebius-1 (never inside a prover's run); `verify --prove-run RUN [--node N]` prints
-# and launches it (plan.verifier_command), e.g.
-#   research run --on vy-nebius-cpu-3 --pool proofs --as proofs --cwd clone --project verity --source . --mem-gb 16 \
+# digest the circuit binds (`partition`), never read from the bundle. Runs on a CPU node (vy-nebius-cpu-2 or -cpu-3), never on the prover's:
+#   research run --on vy-nebius-cpu-3 --project verity --source . --cwd source --mem-gb 16 \
 #     --tool verity_proof_throughput.tool:VERIFIER_POINT -- bash benchmarks/proof_throughput/verify.sh BUNDLE=art:... PROVE_RUN=r...
 # env: BUNDLE=art:... PROVE_RUN= (the prover point's run id, recorded in the result)  BUILD_ONLY=1 (build the verifier, stop)
 #      JOBS=1 (sessions verified at once: more share the node's memory bandwidth, so the timings are one session's alone
@@ -55,41 +53,21 @@ cp "$BD/gpu-mem.txt" "$O/" 2>/dev/null
 WORKLOAD=$("$PYBIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["workload"])' "$BD/point.json")
 B=$("$PYBIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["B"])' "$BD/point.json")
 PUB=$(ls "$BD"/pub-*.bin | head -1)
-# the verifier's own copies of the partition object the circuit binds and of its program, derived from the workload, not the
-# bundle's; from them and its own K = B it derives the stratified law each session's draw must be by (U2)
-PART=$S/partition.json PROG=$S/program.json
-"$PYBIN" -m verity_proof_throughput partition --workload "$WORKLOAD" --circuit "$BD/circuit.txt" --out "$PART" --program-out "$PROG" \
-  > "$O/partition.txt" 2>&1 || { tail -5 "$O/partition.txt"; log "the workload's partition object is not the circuit's"; exit 1; }
+# the verifier's own copy of the partition object the circuit binds, derived from the workload's program, not the bundle's
+PART=$S/partition.json
+"$PYBIN" -m verity_proof_throughput partition --workload "$WORKLOAD" --circuit "$BD/circuit.txt" --out "$PART" > "$O/partition.txt" 2>&1 \
+  || { tail -5 "$O/partition.txt"; log "the workload's partition object is not the circuit's"; exit 1; }
 cp "$PART" "$O/partition.json"
-DRAW_FLAGS="--program $PROG --stratified $B"
 log "verifying $WORKLOAD B=$B: $(ls -d "$BD"/sessions/*/ | wc -l) sessions, circuit $(stat -c %s "$BD/circuit.txt") B, partition $(tail -1 "$O/partition.txt" | cut -c1-16)"
 
 verify_one() {   # verify_one SESSION_DIR: one VERDICT line with the session's time and peak memory
   local s=${1%/} t; t=$(mktemp "$S/time.XXXXXX")
-  # shellcheck disable=SC2086
   /usr/bin/time -f '%e %U %S %M' -o "$t" "$LEAN" verify --statement verity/flock-circuit --coins os --circuit "$BD/circuit.txt" \
-    --public "$PUB" --partition "$PART" $DRAW_FLAGS --session "$s" > "$t.out" 2> "$t.err"
+    --public "$PUB" --partition "$PART" --session "$s" > "$t.out" 2> "$t.err"
   local rc=$?
   "$PYBIN" -m verity_proof_throughput lean-verdict --session "$(basename "$s")" --rc $rc --time "$t" --stdout "$t.out" --stderr "$t.err"
 }
-if [ "${PROFILE:-0}" = 1 ]; then
-  # one timed session under perf (DWARF call graphs: Lean's C keeps no frame pointers), with the verifier's own phase times
-  s=$(ls -d "$BD"/sessions/*/ | grep -v warm | head -1); s=${s%/}
-  log "profiling $(basename "$s")"
-  # shellcheck disable=SC2086
-  /usr/bin/time -f '%e %U %S %M' -o "$O/profile.time" perf record -F "${PERF_HZ:-49}" --call-graph dwarf,32768 -o "$S/perf.data" \
-    "$LEAN" verify --statement verity/flock-circuit --coins os --circuit "$BD/circuit.txt" --public "$PUB" --partition "$PART" \
-    $DRAW_FLAGS --session "$s" > "$O/profile.stdout" 2> "$O/profile.stderr"
-  log "perf: exit $?, $(cat "$O/profile.time")"
-  perf report -i "$S/perf.data" --no-children --sort symbol --stdio -g none --percent-limit 0.2 2>> "$O/perf.err" | head -400 > "$O/perf-self.txt"
-  perf report -i "$S/perf.data" --children --sort symbol --stdio -g none --percent-limit 0.5 2>> "$O/perf.err" | head -600 > "$O/perf-children.txt"
-  # the address field too: with call chains, `sym` alone prints no frames
-  perf script -i "$S/perf.data" -F comm,ip,sym 2>> "$O/perf.err" | gzip > "$O/perf-script.txt.gz"
-  "$PYBIN" -m verity_proof_throughput profile-phases --script "$O/perf-script.txt.gz" --time "$O/profile.time" \
-    --stderr "$O/profile.stderr" --stdout "$O/profile.stdout" --out "${RESEARCH_RUN_DIR:-$O}/result.json" --bundle "$BUNDLE" --prove-run "${PROVE_RUN:-}"
-  exit $?
-fi
-export -f verify_one; export LEAN BD PUB PART S PYBIN DRAW_FLAGS
+export -f verify_one; export LEAN BD PUB PART S PYBIN
 ls -d "$BD"/sessions/*/ | xargs -P "${JOBS:-1}" -I{} bash -c 'verify_one {}' > "$O/lean.jsonl"
 log "Lean: $(grep -c '"accepted": true' "$O/lean.jsonl") of $(wc -l < "$O/lean.jsonl") sessions accepted"
 "$PYBIN" -m verity_proof_throughput point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --lean "$O/lean.jsonl" \
