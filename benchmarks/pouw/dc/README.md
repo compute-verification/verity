@@ -98,8 +98,8 @@ point's best configuration; committed words = slots / lm), clock64 a CTA on 148 
   the shared pipe's slack) gives 47.7% against an adversary at the probes' bandwidth balance (0.914) and 29.0% against one
   held to the same round trip (0.585). The 2.3% above assumed load bandwidth alone.
 - **The commit spacing need not be 64.** At L = 64 the TMEM stage commits 109.2 words/SM/clk, 0.426 of ρ_T5, so T1 gives
-  57.4% against 51.1% at L = 32, and the fold-bound honest kernel is no faster (29.1 against 29.6 words/SM/clk). L = 32
-  stays sm_100's spacing.
+  57.4% against 51.1% at L = 32 (even a TMEM stage at ρ_T5 would give 50% at L = 64), and the fold-bound honest kernel
+  is no faster (29.1 against 29.6 words/SM/clk). L = 32 stays sm_100's spacing.
 
 Not covered yet: sparse wgmma and tcgen05 (metadata operands), the N sweep for the FP kinds (s8 only), cta_group::2 (a
 CTA pair), M4e beyond fp8acc's binade question (kind::f16/tf32/f8f6f4 accumulation against the silicon models in
