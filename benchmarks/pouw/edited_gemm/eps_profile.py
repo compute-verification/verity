@@ -99,7 +99,9 @@ def num(v: str) -> float:
 
 def sass_counts(path: Path) -> tuple[dict[str, float], dict[str, float], list[tuple[str, float, float]]]:
     """Executed warp instructions by mnemonic, over the kernel and over its hot loop (instructions executed at least half
-    as often as the most executed one), and per instruction (mnemonic, executed, stall samples)."""
+    as often as the most executed MMA), and per instruction (mnemonic, executed, stall samples). An mbarrier's retry loop
+    (YIELD; SYNCS.PHASECHK...TRYWAIT; @!P BRA; BRA, ptxas's out-of-line spin) is counted as WAIT.<mnemonic>: how often
+    it runs is how long a warp waited, not work."""
     rows = table(path)
     if not rows:
         return {}, {}, []
@@ -107,7 +109,11 @@ def sass_counts(path: Path) -> tuple[dict[str, float], dict[str, float], list[tu
     st = next((k for k in rows[0] if k.strip().startswith("Warp Stall Sampling (All")), None)
     per = [(opcode(r["Source"]), num(r[ex]), num(r[st]) if st else 0.0) for r in rows if r.get("Source")]
     per = [p for p in per if p[0] and p[1] == p[1]]
-    top = max((p[1] for p in per), default=0.0)
+    for i in range(len(per) - 3):
+        if per[i][0] == "YIELD" and per[i + 1][0].startswith("SYNCS.PHASECHK") and per[i + 2][0] == "BRA":
+            for j in range(i, i + 3 + (per[i + 3][0] == "BRA")):
+                per[j] = ("WAIT." + per[j][0],) + per[j][1:]
+    top = max((n for op, n, _ in per if kind_of(op, "") == "MMA"), default=0.0)
     allc, hot = defaultdict(float), defaultdict(float)
     for op, n, _ in per:
         allc[op] += n
@@ -116,17 +122,28 @@ def sass_counts(path: Path) -> tuple[dict[str, float], dict[str, float], list[tu
     return dict(allc), dict(hot), per
 
 
-def raw_metrics(path: Path) -> dict[str, float]:
+SCALE = {"ns": 1e-6, "nsecond": 1e-6, "us": 1e-3, "usecond": 1e-3, "ms": 1.0, "msecond": 1.0, "s": 1e3, "second": 1e3,
+         "Ghz": 1e3, "GHz": 1e3, "Mhz": 1.0, "MHz": 1.0, "Khz": 1e-3, "hz": 1e-6}
+
+
+def raw_metrics(path: Path) -> tuple[dict[str, float], dict[str, str]]:
+    """The values of an ncu --page raw --csv export (its last row) and their units (the row under the header)."""
     rows = table(path)
     if len(rows) < 2:
-        return {}
-    r = rows[-1]
-    return {k: num(v) for k, v in r.items() if k}
+        return {}, {}
+    return {k: num(v) for k, v in rows[-1].items() if k}, {k: v for k, v in rows[0].items() if k}
+
+
+def first(raw: dict[str, float], *names: str) -> tuple[float, str]:
+    return next(((raw[n], n) for n in names if raw.get(n, float("nan")) == raw.get(n, float("nan"))), (float("nan"), ""))
 
 
 def by_class(counts: dict[str, float], tma: str) -> tuple[dict[str, float], dict[str, float]]:
     cls, unpriced = defaultdict(float), defaultdict(float)
     for op, n in counts.items():
+        if op.startswith("WAIT."):
+            cls["WAIT"] += n
+            continue
         k = kind_of(op, tma)
         if k is None:
             unpriced[op] += n
@@ -149,9 +166,10 @@ def pick(m: dict[str, float], *pats: str) -> dict[str, float]:
 
 
 def analyse(rep: Path, census: dict, cycle_u: float, tma: str) -> dict | None:
+    """One report's profile. `bound` prices the executed mix with WAIT (the spin) as NOROW; `bound_work` leaves it out."""
     b = str(rep)[: -len(".ncu-rep")] if str(rep).endswith(".ncu-rep") else str(rep)
     allc, hot, per = sass_counts(Path(b + ".sass.csv"))
-    raw = raw_metrics(Path(b + ".raw.csv"))
+    raw, units = raw_metrics(Path(b + ".raw.csv"))
     if not allc:
         return None
     out = {"report": Path(b).name}
@@ -162,25 +180,34 @@ def analyse(rep: Path, census: dict, cycle_u: float, tma: str) -> dict | None:
             continue
         pm = {k: v / mma for k, v in sorted(cls.items(), key=lambda x: -x[1])}
         rows = bound(pm, census, cycle_u)
-        out[scope] = {"mma": mma, "inst_per_mma": sum(counts.values()) / mma, "per_mma": pm,
-                      "opcodes_per_mma": {k: v / mma for k, v in sorted(counts.items(), key=lambda x: -x[1])},
+        work = bound({k: v for k, v in pm.items() if k != "WAIT"}, census, cycle_u)
+        out[scope] = {"mma": mma, "inst_per_mma": sum(counts.values()) / mma, "wait_per_mma": pm.get("WAIT", 0.0),
+                      "per_mma": pm, "opcodes_per_mma": {k: v / mma for k, v in sorted(counts.items(), key=lambda x: -x[1])},
                       "unpriced": {k: v / mma for k, v in unp.items()}, "bound": rows[0][0], "facet": rows[0][1],
-                      "facets": rows[:8]}
+                      "facets": rows[:8], "bound_work": work[0][0], "facet_work": work[0][1], "facets_work": work[:8]}
     nsm = raw.get("device__attribute_multiprocessor_count", float("nan"))
-    el, act = raw.get("sm__cycles_elapsed.avg", float("nan")), raw.get("sm__cycles_active.avg", float("nan"))
+    el, _ = first(raw, "sm__cycles_elapsed.avg", "smsp__cycles_elapsed.avg", "l1tex__cycles_elapsed.avg")
+    act, _ = first(raw, "sm__cycles_active.avg")
     k = out.get("kernel")
     if k:
         mps = k["mma"] / (4 * nsm)   # MMAs a SMSP
+        out["mma_per_smsp"] = mps
         out["measured"] = el / mps
         out["measured_active"] = act / mps
         out["eps_sched"] = 1 - k["bound"] / out["measured"]
         out["eps_sched_active"] = 1 - k["bound"] / out["measured_active"]
+        out["eps_sched_work"] = 1 - k["bound_work"] / out["measured"]
         if "loop" in out:
             out["eps_sched_loop_bound"] = 1 - out["loop"]["bound"] / out["measured"]
-    out["ms"] = raw.get("gpu__time_duration.sum", float("nan")) / 1e6
-    out["mhz"] = raw.get("sm__cycles_elapsed.avg.per_second", float("nan")) / 1e6
+    t, tn = first(raw, "gpu__time_duration.sum")
+    out["ms"] = t * SCALE.get(units.get(tn, "ns"), float("nan"))
+    hz, hn = first(raw, "sm__cycles_elapsed.avg.per_second", "smsp__cycles_elapsed.avg.per_second",
+                   "gpc__cycles_elapsed.avg.per_second")
+    out["mhz"] = hz * SCALE.get(units.get(hn, "hz"), float("nan"))
     out["sm_count"] = nsm
     out["issue_pct"] = raw.get("smsp__issue_active.avg.pct_of_peak_sustained_active", float("nan"))
+    out["tensor_pct"], _ = first(raw, "sm__inst_executed_pipe_tensor_subpipe_imma.avg.pct_of_peak_sustained_active",
+                                 "sm__pipe_tensor_subpipe_imma_cycles_active.avg.pct_of_peak_sustained_active")
     out["pipes_pct"] = pick(raw, r"^sm__(inst_executed_)?pipe_.*\.avg\.pct_of_peak_sustained_active$",
                             r"^sm__pipe_.*cycles_active\.avg\.pct_of_peak_sustained_active$")
     out["pipe_inst"] = pick(raw, r"^sm__inst_executed_pipe_[a-z0-9_]+\.sum$")
@@ -238,20 +265,30 @@ def main() -> int:
         arms = hot.get(shape, {})
         pl, ep = arms.get("plain", {}).get("ms"), arms.get("e_plain", {}).get("ms")
         print(f"## {sh} = {shape[0]} x {shape[1]} x {shape[2]}\n")
-        print("| arm | r | hot ms | / e_plain | / plain | MHz | inst/MMA | fold ops/word | issue % | bound | facet | "
-              "measured | eps_sched | eps_sched (active) |")
-        print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
-        base = res.get(f"{sh}-e_plain", {}).get("kernel", {}).get("inst_per_mma")
+        print("Cycles are SMSP-cycles a MMA; `ncu` is the one profiled call's elapsed cycles, `hot` the bench's hot median "
+              "at its clock. `bound` prices the executed mix, `work` leaves out WAIT (the mbarrier spin).\n")
+        print("| arm | r | hot ms | / e_plain | / plain | MHz | inst/MMA | WAIT/MMA | fold ops/word | issue % | tensor % | "
+              "bound | facet | work bound | facet | ncu | hot | eps_sched | eps_sched (work) |")
+        print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+        base = res.get(f"{sh}-e_plain", {}).get("kernel", {})
+        base = base["inst_per_mma"] - base["wait_per_mma"] if base else None
         rows = [(None, "plain")] + SWEEP + [(3.0, "e_l4q"), (1.5, "x_l2o")]
         for rr, arm in rows:
             r = res.get(f"{sh}-{arm}", {})
             k = r.get("kernel", {})
-            ms = arms.get(arm, {}).get("ms")
-            fo = (k["inst_per_mma"] - base) / 4 if k and base else None
+            hb = arms.get(arm, {})
+            ms, mhz = hb.get("ms"), hb.get("mhz")
+            if k and ms and mhz:
+                r["measured_hot"] = ms * mhz * 1e3 / r["mma_per_smsp"]
+                r["eps_sched_hot"] = 1 - k["bound"] / r["measured_hot"]
+                r["eps_sched_work_hot"] = 1 - k["bound_work"] / r["measured_hot"]
+            fo = (k["inst_per_mma"] - k["wait_per_mma"] - base) / 4 if k and base else None
             print(f"| {arm} | {'' if rr is None else rr} | {f(ms, 4)} | {f(ms / ep if ms and ep else None)} | "
-                  f"{f(ms / pl if ms and pl else None)} | {f(arms.get(arm, {}).get('mhz'), 0)} | {f(k.get('inst_per_mma'), 2)} | "
-                  f"{f(fo, 2)} | {f(r.get('issue_pct'), 1)} | {f(k.get('bound'), 2)} | {k.get('facet', '')} | "
-                  f"{f(r.get('measured'), 2)} | {f(r.get('eps_sched'))} | {f(r.get('eps_sched_active'))} |")
+                  f"{f(ms / pl if ms and pl else None)} | {f(mhz, 0)} | {f(k.get('inst_per_mma'), 2)} | "
+                  f"{f(k.get('wait_per_mma'), 2)} | {f(fo, 2)} | {f(r.get('issue_pct'), 1)} | {f(r.get('tensor_pct'), 1)} | "
+                  f"{f(k.get('bound'), 2)} | {k.get('facet', '')} | {f(k.get('bound_work'), 2)} | {k.get('facet_work', '')} | "
+                  f"{f(r.get('measured'), 2)} | {f(r.get('measured_hot'), 2)} | {f(r.get('eps_sched_hot'))} | "
+                  f"{f(r.get('eps_sched_work_hot'))} |")
         print()
         for arm in ("plain", "e_plain", HONEST):
             r = res.get(f"{sh}-{arm}")
@@ -266,6 +303,7 @@ def main() -> int:
             if k["unpriced"]:
                 print("\nunpriced (as NOROW): " + ", ".join(f"{o} {v:.3f}" for o, v in k["unpriced"].items()))
             print("\nfacets (SMSP-cycles a MMA): " + ", ".join(f"{row} {v:.2f}" for v, row in k["facets"]))
+            print("\nfacets without WAIT: " + ", ".join(f"{row} {v:.2f}" for v, row in k["facets_work"]))
             print("\npipes %: " + ", ".join(f"{p.replace('sm__', '').replace('.avg.pct_of_peak_sustained_active', '')} {v:.1f}"
                                             for p, v in sorted(r["pipes_pct"].items(), key=lambda x: -x[1]) if v >= 0.5))
             print("\nstalls (per issue): " + ", ".join(
@@ -286,9 +324,15 @@ def main() -> int:
                     continue
                 k = r["kernel"]
                 lines += [f'[profile.{arm}."{shape[0]}x{shape[1]}x{shape[2]}"]',
-                          f"inst_per_mma = {k['inst_per_mma']:.4f}", f"measured_cycles_per_mma = {r['measured']:.4f}",
-                          f"bound_cycles_per_mma = {k['bound']:.4f}", f'facet = "{k["facet"]}"', f"eps_sched = {r['eps_sched']:.4f}",
-                          f"issue_pct = {r['issue_pct']:.2f}", "per_mma = { " + ", ".join(f'{c} = {v:.4f}' for c, v in k["per_mma"].items()) + " }"]
+                          f"inst_per_mma = {k['inst_per_mma']:.4f}", f"wait_per_mma = {k['wait_per_mma']:.4f}",
+                          f"measured_cycles_per_mma = {r.get('measured_hot', r['measured']):.4f}",
+                          f"ncu_cycles_per_mma = {r['measured']:.4f}",
+                          f"bound_cycles_per_mma = {k['bound']:.4f}", f'facet = "{k["facet"]}"',
+                          f"work_bound_cycles_per_mma = {k['bound_work']:.4f}", f'work_facet = "{k["facet_work"]}"',
+                          f"eps_sched = {r.get('eps_sched_hot', r['eps_sched']):.4f}",
+                          f"eps_sched_work = {r.get('eps_sched_work_hot', r['eps_sched_work']):.4f}",
+                          f"issue_pct = {r['issue_pct']:.2f}", f"tensor_pct = {r['tensor_pct']:.2f}",
+                          "per_mma = { " + ", ".join(f'{c} = {v:.4f}' for c, v in k["per_mma"].items()) + " }"]
                 if "loop" in r:
                     lines.append("loop_per_mma = { " + ", ".join(f'{c} = {v:.4f}' for c, v in r["loop"]["per_mma"].items()) + " }")
                 lines.append("")
