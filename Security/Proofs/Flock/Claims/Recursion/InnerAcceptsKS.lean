@@ -39,8 +39,9 @@ def RoundsMargin (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) : Prop :
 /-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le`'s argument, stopped before the inner
 rounds' forks are bounded by all of `Be`'s. -/
 theorem Pr_bad_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Opening} (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO)
-    (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
+    (hT : CallsTrue H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
       Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (forkColl H D I DO decO P x j)) := by
   have h1 : Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
@@ -79,7 +80,7 @@ theorem Pr_bad_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {D
         (Real.sqrt_mul (Nat.cast_nonneg _) _).symm
     _ ≤ Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (forkColl H D I DO decO P x j)) :=
         Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
-          (Finset.sum_le_sum fun j _ => Pr_mono fun t => forkColl_of_opening hO hC decO x P j.isLt t)
+          (Finset.sum_le_sum fun j _ => Pr_mono fun t => forkColl_of_opening hV hO hT decO x P t)
           (Nat.cast_nonneg _))
 
 /-- **Spare mass under the root**: `n·√(a·A) + E ≤ n·√(a·(A+B))` when `B` holds three `E`s, `E ≤ 1`, `A ≤ a`,
@@ -224,8 +225,9 @@ forks' collisions (`Pr_bad_le_fork`); a rejecting draw at most each fork's, so a
 inner rounds (`Pr_innerRejects_le_fork`, `RoundsMargin`), and `k(x)·Pr[Be] = A + B` (`sqrt_margin`). Where no run is
 accepted, no draw rejects, and `Pr_bad_le` alone gives it. -/
 theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Opening} (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (hR : InnerRounds D I)
-    (hA : InnerAcceptsColl H D I DO) (hN0 : CallsNil H D) (hM : RoundsMargin H D I)
+    {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
+    (hT : CallsTrue H D I DO) (hR : InnerRounds D I) (hA : InnerAcceptsColl H D I DO) (hN0 : CallsNil H D)
+    (hM : RoundsMargin H D I)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     NI D I x * Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) +
         Pr (InnerRejects H D I DO decO P x) ≤
@@ -233,7 +235,7 @@ theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : 
   have hn0 : (0 : ℝ) ≤ NI D I x := Nat.cast_nonneg _
   by_cases hE : Pr (InnerRejects H D I DO decO P x) = 0
   · rw [hE, add_zero]
-    exact mul_le_mul_of_nonneg_left (Pr_bad_le hO hC hR decO x P) hn0
+    exact mul_le_mul_of_nonneg_left (Pr_bad_le hV hO hT hR decO x P) hn0
   obtain ⟨t, ws, hg, -⟩ : ∃ t, InnerRejects H D I DO decO P x t := by
     by_contra hn
     refine hE ((Pr_congr fun t => ⟨fun h => hn ⟨t, h⟩, False.elim⟩).trans Pr_false)
@@ -241,7 +243,7 @@ theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : 
   let S : ℕ → ℝ := fun j => Pr (forkColl H D I DO decO P x j)
   have hk : 0 < D.V.k x := by omega
   have hES : ∀ j, Pr (InnerRejects H D I DO decO P x) ≤ S j := fun j =>
-    Pr_innerRejects_le_fork hA hC hN0 decO x P j
+    Pr_innerRejects_le_fork hA hT hN0 decO x P j
   have htot : (D.V.k x : ℝ) * PrBe H D I DO decO P x = ∑ j ∈ Finset.range (D.V.k x), S j := by
     rw [PrBe_eq_avg H D I DO decO P x hk, mul_div_cancel₀ _ (by exact_mod_cast hk.ne'),
       Fin.sum_univ_eq_sum_range (fun j => Pr (forkColl H D I DO decO P x j))]
@@ -263,7 +265,7 @@ theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : 
           Finset.sum_le_sum fun j _ => Pr_le_one _
       _ = I.V.k (xI D x) := by rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul, mul_one]
   have hA0 : 0 ≤ ∑ j ∈ Finset.range (I.V.k (xI D x)), S j := Finset.sum_nonneg fun j _ => Pr_nonneg _
-  have hbad := Pr_bad_le_fork hO hC decO x P
+  have hbad := Pr_bad_le_fork hV hO hT decO x P
   rw [Fin.sum_univ_eq_sum_range (fun j => Pr (forkColl H D I DO decO P x j))] at hbad
   have hn1 : (1 : ℝ) ≤ NI D I x := by
     have : 1 ≤ NI D I x := by simp only [NI]; omega
@@ -284,15 +286,15 @@ theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : 
 rejection paid from the spare forks (`PrBadGood_le_abort_rej`, `bad_rej_le`), at the same bound. -/
 theorem innerKS_of_KSAbort_coll [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {opening : Opening} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
-    (hR : InnerRounds D I) (hV : InnerViewRun H D I DO) (hC : CallsRecord H D I DO) (hO : CallsOpen H D I DO opening)
-    (hA : InnerAcceptsColl H D I DO) (hM : RoundsMargin H D I) (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) :
-    InnerKS H D I DO := by
+    (hR : InnerRounds D I) (hV : InnerViewRun H D I DO) (hT : CallsTrue H D I DO) (hL : CallsLogColl H D I DO)
+    (hO : CallsOpenPlayed H D I DO opening) (hA : InnerAcceptsColl H D I DO) (hM : RoundsMargin H D I)
+    (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) : InnerKS H D I DO := by
   intro decO _ x Ω _ _ P
   have h1 := PrBadGood_le_abort_rej hV hpc hR decO x P
   have h2 := hKS (xI D x) Ω (innerP H D I DO decO P x decC) ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x)
     (keepA H D I DO decO P x)
-  have h3 := PrBAbort_le_PrBI hC hN0 hpc hR decO x P
-  have h4 := bad_rej_le hO hC hR hA hN0 hM decO x P
+  have h3 := PrBAbort_le_PrBI hL hT hN0 hpc hR decO x P
+  have h4 := bad_rej_le hV hO hT hR hA hN0 hM decO x P
   have hBA0 : 0 ≤ PrBAbort H I.V (innerP H D I DO decO P x decC) (xI D x) (keepA H D I DO decO P x) := by
     unfold PrBAbort; split
     · exact Pr_nonneg _
@@ -317,11 +319,12 @@ theorem KS_of_flockKS_coll [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : I
     (DO : Flock.Deploy Coin Col T) (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
     (hKS : I.KSAbort H) (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO)
     (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D) (hR : SessionRuns H D I DO)
-    (hV : InnerViewRun H D I DO) (hC : CallsRecord H D I DO) (hO : CallsOpen H D I DO opening)
-    (hA : InnerAcceptsColl H D I DO) (hM : RoundsMargin H D I) (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) :
+    (hV : InnerViewRun H D I DO) (hT : CallsTrue H D I DO) (hL : CallsLogColl H D I DO)
+    (hO : CallsOpenPlayed H D I DO opening) (hA : InnerAcceptsColl H D I DO) (hM : RoundsMargin H D I)
+    (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) :
     KSA H D I DO :=
   KS_of H D I DO hRef hRounds (outerKS_of_flockKS hF hN hε hRd hS hR)
-    (innerKS_of_KSAbort_coll hKS hRounds hV hC hO hA hM hpc hN0)
+    (innerKS_of_KSAbort_coll hKS hRounds hV hT hL hO hA hM hpc hN0)
 
 /-- **KS of the recursion over Flock where V* meets `InnerAcceptsColl`**: `KSFlock_of_flockKS` with
 `KS_of_flockKS_coll`. The margin is the compiled verifier's: on an accepted run, three rounds past the inner
@@ -337,8 +340,9 @@ theorem KSFlock_of_flockKS_coll [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (
     (hε : TableErrNonneg D) (hRd : ∀ decI, SessionRounds D (Inner.ofFlock DI decI) DO) (hS : SessionAccepts D)
     (hR : ∀ decI, SessionRuns H D (Inner.ofFlock DI decI) DO)
     (hV : ∀ decI, InnerViewRun H D (Inner.ofFlock DI decI) DO)
-    (hC : ∀ decI, CallsRecord H D (Inner.ofFlock DI decI) DO)
-    (hO : ∀ decI, CallsOpen H D (Inner.ofFlock DI decI) DO opening)
+    (hT : ∀ decI, CallsTrue H D (Inner.ofFlock DI decI) DO)
+    (hL : ∀ decI, CallsLogColl H D (Inner.ofFlock DI decI) DO)
+    (hO : ∀ decI, CallsOpenPlayed H D (Inner.ofFlock DI decI) DO opening)
     (hA : ∀ decI, InnerAcceptsColl H D (Inner.ofFlock DI decI) DO)
     (hM : ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       DI.V.k (xI D x) + 3 ≤ D.V.k x)
@@ -346,7 +350,7 @@ theorem KSFlock_of_flockKS_coll [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (
   fun decI h => KS_of_flockKS_coll H D _ DO opening decC hF
     (KSAbort_of_tableBoundOnAcc H DI NI Ok decC hNI hεI hVkI hKI hkI hone hz hok hconf htab
       (coinsShown_of_publicCoin (hpc decI)) hlastI hfreeI hrefI decI h) hRef hRounds hN hε
-    (hRd decI) hS (hR decI) (hV decI) (hC decI) (hO decI) (hA decI)
+    (hRd decI) hS (hR decI) (hV decI) (hT decI) (hL decI) (hO decI) (hA decI)
     (fun x Ω P ω r hacc => ⟨hVkI _, hM x Ω P ω r hacc⟩) (hpc decI) hN0
 
 end RecursionKS
@@ -372,8 +376,9 @@ theorem KSFlock_of_flockKS_V_coll {Col T : Type} [DecidableEq Col] [Zero Col] (z
     (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : ∀ decI, SessionRounds D (Inner.ofFlock DI decI) DO)
     (hS : SessionAccepts D) (hR : ∀ decI, SessionRuns sha512 D (Inner.ofFlock DI decI) DO)
     (hV : ∀ decI, InnerViewRun sha512 D (Inner.ofFlock DI decI) DO)
-    (hC : ∀ decI, CallsRecord sha512 D (Inner.ofFlock DI decI) DO)
-    (hO : ∀ decI, CallsOpen sha512 D (Inner.ofFlock DI decI) DO opening)
+    (hT : ∀ decI, CallsTrue sha512 D (Inner.ofFlock DI decI) DO)
+    (hL : ∀ decI, CallsLogColl sha512 D (Inner.ofFlock DI decI) DO)
+    (hO : ∀ decI, CallsOpenPlayed sha512 D (Inner.ofFlock DI decI) DO opening)
     (hA : ∀ decI, InnerAcceptsColl sha512 D (Inner.ofFlock DI decI) DO)
     (hM : ∀ (x : Claims.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin),
       (Claims.run sha512 P D.V x ω r).out = .acc → DI.V.k (xI D x) + 3 ≤ D.V.k x)
@@ -381,6 +386,6 @@ theorem KSFlock_of_flockKS_V_coll {Col T : Type} [DecidableEq Col] [Zero Col] (z
     KSFlockA sha512 D DI DO :=
   KSFlock_of_flockKS_coll sha512 D DI DO opening decC hF NI Ok hNI hεI hVkI hKI hkI hone hz hok hconf htab
     (hVI ▸ accLast_V_sha512 zk) (hVI ▸ decideFree_V sha512 zk) (hVI ▸ refusable_V sha512 zk) hRef hRounds hN hε
-    hRd hS hR hV hC hO hA hM hpc hN0
+    hRd hS hR hV hT hL hO hA hM hpc hN0
 
 end FlockDeploy

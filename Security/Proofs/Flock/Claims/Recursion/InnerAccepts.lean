@@ -165,14 +165,14 @@ theorem innerAccepts_of_vstar {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
   · exact hS x s hs hf Ω P ω r hg.1 ws ho
 
 /-- **`InnerAcceptsColl` from V\*'s circuits at the three inner shapes, off a collision**: as `innerAccepts_of_vstar`,
-the witnesses' recorded calls true evaluations by `CallsRecord`. -/
+the witnesses' recorded calls true evaluations by `CallsTrue`. -/
 theorem innerAcceptsColl_of_vstar {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    (hRef : Refuses H D) (hC : CallsRecord H D I DO) (hD : VStarAccepts H D I DO Form.Dense)
+    (hRef : Refuses H D) (hT : CallsTrue H D I DO) (hD : VStarAccepts H D I DO Form.Dense)
     (hH : VStarAccepts H D I DO Form.Holo) (hS : VStarAccepts H D I DO Form.Sparse) : InnerAcceptsColl H D I DO := by
   intro decO x Ω P ω r c ws hg
   obtain ⟨s, hs, -⟩ := hRef x Ω P ω r hg.1
   have ho := eoGives_outerHolds hg
-  have ht := (hC decO x Ω P ω r c ws hg).2
+  have ht := hT decO x Ω P ω r c ws hg
   rcases Form.shape_cases s.form with hf | hf | hf
   · exact hD x s hs hf Ω P ω r hg.1 ws ho ht
   · exact hH x s hs hf Ω P ω r hg.1 ws ho ht
@@ -201,9 +201,9 @@ theorem unifMap_judged {Ω R C : Type} [Fintype Ω] [Fintype R] [Fintype C] [Non
 
 /-- **A rejected inner view is a collision at every fork**: where `InnerAcceptsColl` holds, it is a collision among the
 judged run's recorded calls, which `Be`'s fork at any round `j` records as well (`findColl_isSome_of_sub`; every call
-`Be` reads is a true evaluation, by `CallsRecord` and `CallsNil`). -/
+`Be` reads is a true evaluation, by `CallsTrue` and `CallsNil`). -/
 theorem Pr_innerRejects_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    (hA : InnerAcceptsColl H D I DO) (hC : CallsRecord H D I DO) (hN0 : CallsNil H D)
+    (hA : InnerAcceptsColl H D I DO) (hT : CallsTrue H D I DO) (hN0 : CallsNil H D)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (j : ℕ) :
     Pr (InnerRejects H D I DO decO P x) ≤ Pr (forkColl H D I DO decO P x j) := by
   rw [← (unifMap_judged (Ω := Ω) (R := Fin (D.V.k x) → Coin) (C := (EO D I DO decO).C x)).Pr]
@@ -216,8 +216,8 @@ theorem Pr_innerRejects_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner C
     have htrue : ∀ p ∈ D.calls x (((EO D I DO decO).eval H P x t.1 t.2.1 t.2.2.2.1).1.getD []) ++
         D.calls x (((EO D I DO decO).eval H P x t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2).1.getD []),
         H p.1 = p.2 :=
-      fun p hp => (List.mem_append.1 hp).elim (calls_true hC hN0 t.1 (t.2.1, t.2.2.2.1) p)
-        (calls_true hC hN0 t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2) p)
+      fun p hp => (List.mem_append.1 hp).elim (calls_true hT hN0 t.1 (t.2.1, t.2.2.2.1) p)
+        (calls_true hT hN0 t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2) p)
     have hsub : ∀ p ∈ D.calls x ws, p ∈ D.calls x (((EO D I DO decO).eval H P x t.1 t.2.1 t.2.2.2.1).1.getD []) ++
         D.calls x (((EO D I DO decO).eval H P x t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2).1.getD []) :=
       fun p hp => List.mem_append_left _ (by rw [hws]; exact hp)
@@ -228,12 +228,12 @@ theorem Pr_innerRejects_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner C
 /-- **A rejected inner view costs at most `Pr[Be]`**: it is a collision at each of `Be`'s forks
 (`Pr_innerRejects_le_fork`), and `Be` averages its forks. -/
 theorem Pr_innerRejects_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    (hA : InnerAcceptsColl H D I DO) (hC : CallsRecord H D I DO) (hN0 : CallsNil H D)
+    (hA : InnerAcceptsColl H D I DO) (hT : CallsTrue H D I DO) (hN0 : CallsNil H D)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (InnerRejects H D I DO decO P x) ≤ PrBe H D I DO decO P x := by
   by_cases hk : 0 < D.V.k x
   · have hj : ∀ j : Fin (D.V.k x), Pr (InnerRejects H D I DO decO P x) ≤ Pr (forkColl H D I DO decO P x j) :=
-      fun j => Pr_innerRejects_le_fork hA hC hN0 decO x P j
+      fun j => Pr_innerRejects_le_fork hA hT hN0 decO x P j
     rw [PrBe_eq_avg H D I DO decO P x hk, le_div_iff₀ (by exact_mod_cast hk)]
     calc Pr (InnerRejects H D I DO decO P x) * D.V.k x
         = ∑ _j : Fin (D.V.k x), Pr (InnerRejects H D I DO decO P x) := by
