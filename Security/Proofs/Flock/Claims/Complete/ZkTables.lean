@@ -9,6 +9,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Count
 import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Proofs.Flock.Claims.Complete.ZkTables.Runs
 import Proofs.Flock.Claims.Complete.ZkTables.Complete
+import Proofs.Flock.Claims.Complete.ZkTables.One
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
@@ -20,6 +21,7 @@ and discharges five goals at any number of tables (`Discharge`: `tables_goal`, `
 `Link`: `linkFirst_goal`; `Count`: `sends_goal`, each table's two reps' rounds summed). At the deployed relation each
 table's trace is its share's and satisfies its block R1CS (`Trace`: `Case.traceR1CS`, `traceR1CS_goal`, from
 `Readable.relS_only`), which `tracesOf` reads only at one table. The session runs at several tables from the statement's
-`hello` and each table's prover pieces (`Runs`: `sessionRunsJ_goal` from `StmtOkJ`, `ProverRunsJ`). `Complete`
-composes them (`complete`): from `complete_zk`'s premises, which give every check at one table, and at several tables
-`StmtOkJ`, `ProverRunsJ`, `RecordJ` and `OpenJ`. -/
+`hello` and the prover's pieces, its reps run in stream order (`Runs`: `sessionRunsJ_goal` from `StmtOkJ`,
+`ProverRunsJ`). `Complete` composes them (`complete`): from `complete_zk`'s premises, which give every check at one
+table, and at several tables `StmtOkJ`, `ProverRunsJ`, `RecordJ` and `OpenJ`. The bound at several tables loses nothing
+at one (`One`: `completeZk_of`, `honestP`'s completeness with error `δc H` gives `honestPZk`'s with error `δcZk H`). -/
