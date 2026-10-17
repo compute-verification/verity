@@ -1337,7 +1337,7 @@
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RequirementCredits : Accounting.Guarantees.RequirementCredits"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "e388765e148bc5b99473bbb1b136a24495ca0259d9168c69546fdc9278ee4048"
   },
   "Accounting.SecurityProofs.RequirementDense": {
    "owner": "@memory-accounting",
@@ -1361,7 +1361,7 @@
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RequirementHelp : Accounting.Guarantees.RequirementHelp"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "5a7b277fa29473b8b6618281542ca3dc6474e5f04aacce6eb1be509576a932b5"
   },
   "Accounting.SecurityProofs.RequirementMoved": {
    "owner": "@memory-accounting",
@@ -1373,7 +1373,7 @@
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RequirementSteps : Accounting.Guarantees.RequirementSteps"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "90fe6e61a65a4879930d007079bb0249c36ca5a97b34093cd2c9e094b86f26ee"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -5536,6 +5536,8 @@
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
+    "Accounting.SecurityProofs.RequirementCredits",
+    "Accounting.SecurityProofs.RequirementHelp",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
@@ -5812,6 +5814,8 @@
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
+    "Accounting.SecurityProofs.RequirementCredits",
+    "Accounting.SecurityProofs.RequirementHelp",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
@@ -5888,7 +5892,8 @@
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
     "Accounting.SecurityProofs.RateOfAuditPartial",
-    "Accounting.SecurityProofs.RateOfAuditPartialPasses"
+    "Accounting.SecurityProofs.RateOfAuditPartialPasses",
+    "Accounting.SecurityProofs.RequirementSteps"
    ]
   },
   "Definitions.Accounting.Joint": {
@@ -6051,7 +6056,11 @@
     "Accounting.PouwWork.help": "7a9702d97e84bca1e3e4428126f2f8262ac1e05cabfccb9a5961310fca1bd573",
     "Accounting.PouwWork.inbox": "3624699338f625bd4606d0ecf66813147343885bd1c87a55fdf6338ab8ea8e16"
    },
-   "guarantees": ["Accounting.SecurityProofs.PouwLocalOff"]
+   "guarantees": [
+    "Accounting.SecurityProofs.PouwLocalOff",
+    "Accounting.SecurityProofs.RequirementCredits",
+    "Accounting.SecurityProofs.RequirementHelp"
+   ]
   },
   "Definitions.Accounting.RateAudit": {
    "digest": "dbd9158c737c887d04c2b85fc90aab289bee7fc51a569bf63d86b2cad42086a9",
@@ -6643,10 +6652,11 @@
    ]
   },
   "Definitions.Accounting.Requirement": {
-   "digest": "cefa15ee095bef3b6c06931b359363f99ff95fe2de63a1b24b94a31961f0846f",
+   "digest": "d84876346adb3682deb6b76a6d1dc220b5405e2d51ae9a29724843ac1e6ec92e",
    "definitions": {
     "Accounting.Requirement.Carries": "93fd6dff6b04c716c5141e9212142e6ea3701b3aa0de94ca12483c0b48591a4d",
     "Accounting.Requirement.Execution": "cd70ee0536fc5bb221c299172e35f32cb7f8664fbf0924096cf40b3a3ee791ea",
+    "Accounting.Requirement.Execution.Follows": "9a0ec163c95db890cf39d14ff39235550026410f9c252f58b75f0fcc5f893741",
     "Accounting.Requirement.Execution.ran": "ee3dc1ecb4abb911fe5cfb4f3839cfcf3370c9f185ad6642b82a4f9fde3a9056",
     "Accounting.Requirement.Execution.step": "00915655b8abaa7d1a47f5a308023df723d997aaa885ac0da75c9873bacac17b",
     "Accounting.Requirement.Execution.value": "12a2b08667ab39ede6ca4032fd90e3fea964ad63657984f7e862dcb2212a8913",
@@ -6654,6 +6664,12 @@
     "Accounting.Requirement.Layout.block": "8b8a656a1a4ac9e1cb112cce0478d031ce085c24f455672653142a34e439b901",
     "Accounting.Requirement.Layout.offset": "ea578971e1a12eb8fb75d0c055037d8e6b64e444bd1fb555fc29d173a87a90cb",
     "Accounting.Requirement.Packs": "c1dcea15b3eb160b861154472627e3db97bbf61009e5a7dc8d32cfd612f0153d",
+    "Accounting.Requirement.Placement": "c8a1cdbf39756eac064a7f7ff0bef5d5616b6d925eb44132e1aab948f4ca7f64",
+    "Accounting.Requirement.Placement.Paced": "d4928c2fb30cfb452a92983c9eed17102d0c05ff2221489e05b809aacca51a38",
+    "Accounting.Requirement.Placement.leaf": "b4f57f5dba601e938da183ca2a96c6d73e5b1ea71f67042089b975168e4b354b",
+    "Accounting.Requirement.Placement.tick": "19d3bde72fc93c41ba0c3edad711ee176bb7ec53439c601bda5d55fe6dd5696c",
+    "Accounting.Requirement.Placement.ticks": "60b1a8e6957cbd44187087579e43fbaa35f67d5ff5219c9d45423a53bbb91ae7",
+    "Accounting.Requirement.Placement.toExecution": "5a02271ef98321e3e31bad7c561cd43cc9a9e7cda172bb44d4bf4a3a2c574ae9",
     "Accounting.Requirement.PlanMatches": "3446fe70421d6f5818f116d517a0c5bb283236702b2a4171a7f8d15173caa730",
     "Accounting.Requirement.Store": "1938f3251d1599270d57405be6bc6fc366ac23924f2e849c8b7b7acc6f7281ca",
     "Accounting.Requirement.Store.freed": "4e87eda5acc330bde17fdc1204a03f0f98440c589337d909921d93fec0758313",
@@ -6671,20 +6687,39 @@
     "Accounting.Requirement.bitsAt": "893a7715539d4e1d88db8afcaf3f2f212e325676cfe6bf6dd25816df7f8a050f",
     "Accounting.Requirement.bitsIn": "5440bee8fc2b080cd09ffdf36d4f4c2e490eab2913fd623940cc6a44c783c9b9",
     "Accounting.Requirement.blocks": "43dd99e049f112b0b8fd74d4c35cca07a1cb09150ed5369f33334bdf9d7fe1d7",
+    "Accounting.Requirement.ingress": "db7ab43d43923959e21788123c6f6b6049f3d5d1c4040557a19435a3468cc5d4",
+    "Accounting.Requirement.into": "86c3087c2495d791e6d6ac312bf1f45f9fdeba840aa6dd4d6bc7adbfa0c2b925",
     "Accounting.Requirement.live": "fc7c4f9b1b45bf183ac91ab06378d9fae1dd203361b5ddb5c99abb723f8fa163",
     "Accounting.Requirement.liveBits": "de62460b5313ef9bdae1bbd45f81196e59929ae2430c0b2ec1c4b664e93f11d5",
     "Accounting.Requirement.liveBlocks": "96782dd578d5b274d1f92a82085f3a5c06ecef44cf189e64d04ea620d0ba09e8",
     "Accounting.Requirement.liveIn": "52436c3c7a6b7a3c6935576d5b86b4b71b69e9e45f3c5a000dd54b3fe9ba2b26",
     "Accounting.Requirement.readBits": "940ebb457d7936b46131a3e37e10e46cbf7281232b011c0bb9a16af8b8005fa9",
     "Accounting.Requirement.readBlocks": "331777b495aa32b4f7a2d537b06f6c2c15aa89d44145e262922ef53deffa9179",
-    "Accounting.Requirement.reads": "1055164e912eff3e5e598f08c907dc222843666d7ddee15fd3753a5f5eb2530a"
+    "Accounting.Requirement.reads": "1055164e912eff3e5e598f08c907dc222843666d7ddee15fd3753a5f5eb2530a",
+    "Accounting.Requirement.region": "8ec9c2c9a704ab404892c979f6245e1db4203333ab39c292b4ba7ffb39aea57b",
+    "Accounting.Requirement.stepRegion": "530bc69340c6652e6691d4a3455e720816c5bb20924fe41cf1ca9e1e63fcf09c",
+    "Accounting.Requirement.work": "3206697b7f531501caf4147e8259576c711665b5888e01fabec87c95bdd40237"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.RequirementCredits",
     "Accounting.SecurityProofs.RequirementDense",
     "Accounting.SecurityProofs.RequirementHeld",
     "Accounting.SecurityProofs.RequirementHeldLive",
-    "Accounting.SecurityProofs.RequirementMoved"
+    "Accounting.SecurityProofs.RequirementHelp",
+    "Accounting.SecurityProofs.RequirementMoved",
+    "Accounting.SecurityProofs.RequirementSteps"
    ]
+  },
+  "Definitions.Accounting.Requirement.Placed": {
+   "digest": "04ca3f00704d338bfa25b8a5f0a92ae69e5bb3ac48ca762e4ba806e68d580fa3",
+   "definitions": {
+    "Accounting.Requirement.Placement.actual": "2295529761511356b192c59a751f57c8de5f59afa586b13c1b9193cff0dd5193",
+    "Accounting.Requirement.Placement.gates": "96db8b4152731d2fa34f6e2bc2d8768cd4685203106765974a4d15dd010cf69a",
+    "Accounting.Requirement.Placement.heldAt": "462b660ada71cb16f2d9a99920f805354e0089b1b41bf48c3a4396dd3502f123",
+    "Accounting.Requirement.Placement.placed": "5ef821ba13b64bbbbd2a7c5df07474802d4cf67aa931cd1947ff559985644134",
+    "Accounting.Requirement.Wiring.Topological": "c20837aadec508b1a8dd451b91a1c9c52d58a81f5c40d5f68a3b23b2fd8c6993"
+   },
+   "guarantees": ["Accounting.SecurityProofs.RequirementCredits", "Accounting.SecurityProofs.RequirementHelp"]
   },
   "Definitions.Accounting.Responder": {
    "digest": "826e7bc03f2aeb2a6bb4cf4e3bd71f425ce4dabd983d488123c8a8c0ad4fea6b",
@@ -7494,6 +7529,8 @@
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
+    "Accounting.SecurityProofs.RequirementCredits",
+    "Accounting.SecurityProofs.RequirementHelp",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
@@ -17165,6 +17202,19 @@
     "Accounting.SecurityProofs.RequirementHeld",
     "Accounting.SecurityProofs.RequirementHeldLive",
     "Accounting.SecurityProofs.RequirementMoved"
+   ]
+  },
+  "Models.Accounting.Guarantees.RequirementPouw": {
+   "digest": "92112d09fd7a02c642c3df964e4bcc49186e5505e8880cc3c91c13d359b07c32",
+   "definitions": {
+    "Accounting.Guarantees.RequirementCredits": "d329644e864cb0539fd4c2e7df4383e477c7776a19a8fdcec2487b0f9151974b",
+    "Accounting.Guarantees.RequirementHelp": "ac275ff62eed4b61c0cb4cfac1d7812722ad2e32cf7db23cd6ca412cea438e4f",
+    "Accounting.Guarantees.RequirementSteps": "41b42dfca6a7deca7557e34902abffddc332c2959eae66d390603bae46e2682a"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RequirementCredits",
+    "Accounting.SecurityProofs.RequirementHelp",
+    "Accounting.SecurityProofs.RequirementSteps"
    ]
   },
   "Models.Accounting.Guarantees.Responder": {

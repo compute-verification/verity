@@ -1256,7 +1256,7 @@
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.credits : Properties.Requirement.Credits"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "8f6b91cc9e01c6ea2961440a89f3a14b1bfc1e0bcc3302f8b34a9ce107bbc8cd"
   },
   "Properties.Requirement.follows": {
    "owner": "@memory-accounting",
@@ -1274,7 +1274,7 @@
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.ingress : Properties.Requirement.Ingress"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "b38b9aef7e0269a820f7017c7fd2cc82708d501aee25e5d4382d60370228793f"
   },
   "Properties.Requirement.live": {
    "owner": "@memory-accounting",
@@ -1340,7 +1340,7 @@
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.region : Properties.Requirement.Region"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "50062db0379a8ae8dd4952826e923cd974946e998960ae9dc9cb8b3738135384"
   },
   "Properties.Requirement.resident": {
    "owner": "@memory-accounting",
@@ -1352,7 +1352,7 @@
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.stepRegion : Properties.Requirement.StepRegion"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "7560bc5d5b5f10ed497cf0fa71146bf5a5d34d768f2d77b1866e56e2f4bf46a8"
   },
   "Properties.Requirement.storeMatches": {
    "owner": "@memory-accounting",
@@ -2499,7 +2499,7 @@
    ]
   },
   "CircuitRequirement": {
-   "digest": "837fdecc3aec17f5e127218e3dec95d47ce81b2ef22119e6dc7446358ac0e121",
+   "digest": "bb26c9e26f4f710cc2c7ea1eb2e4440f1b45523390c2f76ba7a268a72f8b0c28",
    "definitions": {
     "CircuitRequirement.Instance": "6a19ecf3db2275179f9b41e9101dad07a32b8f034f0845279c8a8f7641c70ec8",
     "CircuitRequirement.Instance.apart": "74e694a52cf9ca1351045f3a9794e2809026001cb0e277fcf06a06395995b008",
@@ -2511,9 +2511,12 @@
     "CircuitRequirement.Instance.blockOf": "b11503716b08e556a32943b99fa5d48067dca1abe1339155fe47c04bf367ebcf",
     "CircuitRequirement.Instance.blocks": "b03f0fa33627c19a178d53e85012a9b7892000d37833c9757587bb606dbe467f",
     "CircuitRequirement.Instance.carries": "24a15caac8dde09141cc907620a333227e55c6bb30ec83a8ac4c4a544d89c055",
+    "CircuitRequirement.Instance.credits": "048ea39bbc919359c80a511e61a6dead2c9a4177cd0bd2dfd2922a7eebfa75c2",
     "CircuitRequirement.Instance.endOf": "489016157dfb31d9f4272b6e2d1e5ea4f44de75aaa4b3b03cf825d87e0d81a14",
     "CircuitRequirement.Instance.follows": "c7d8ea65433c1e7ff7dad5349a9c10c85348d05fd4028a5bca1e7b86b5c7f1a5",
     "CircuitRequirement.Instance.held": "a6c6543f70298b6ecabe03ef9d8919d682e439c12b7cf9b47487c5f75cb7ea5b",
+    "CircuitRequirement.Instance.ingress": "254eedb476743a21cc5f3566863f6784671293be574d27c145fab9869baa3dba",
+    "CircuitRequirement.Instance.into": "b06f58455ad8ec66df314edcde006105b73e13701e38bad7df1e5dca49b364a7",
     "CircuitRequirement.Instance.live": "64ea9db6dc4035f027fd007bdcdc2086ec7284237f60270141084a50c8887e16",
     "CircuitRequirement.Instance.liveBits": "0c4709da046de6185b58a9d662c3e05ba3d70fbe81ebe99a5f681782dbad1995",
     "CircuitRequirement.Instance.liveBlocks": "62422c2d1dd5577a8c09e7d2bec8a35d2809afe6008d0a5ccbbd159158518cb8",
@@ -2530,16 +2533,25 @@
     "CircuitRequirement.Instance.readBlocks": "b6fa5c2b4718e86224a2c20dd1fac19795ae091f9a447dcb01e4ba007160c69d",
     "CircuitRequirement.Instance.readIn": "373671629c585973edd18c1e10a827f425d583b5ba8e28c048adde9fd2c6812d",
     "CircuitRequirement.Instance.reads": "742c120da7f2cf4a5a972acb6cc7c1b29877e86425f267cb3362dd16505d3071",
+    "CircuitRequirement.Instance.region": "1ed4adb52056cc7fe9eafc6e664168d4da0e8d456326f6e5b1a4fb2c2da8e896",
     "CircuitRequirement.Instance.registered": "990a80a1d9508b11539580e6ae118e1ced97beedc5e6d4a776bcbf407e28ba10",
     "CircuitRequirement.Instance.step": "e2d57037c009f69d53a8778131210dc21d90ae786bbacba588de3af089865558",
     "CircuitRequirement.Instance.stepOf": "c4ea0cb6742381e78c3cd8a2ef7b94d0a7cd5a8a986d45cceaf45798b629dcd5",
+    "CircuitRequirement.Instance.stepRegion": "48d7bea84d7436989841aa5498e7fa6f01693e3e116d3c2f14cbfe4838572122",
     "CircuitRequirement.Instance.storeMatches": "52174a71168cbfb8a97d9c714e35364351a4b308c63343635024903ba68e50a9",
+    "CircuitRequirement.Instance.tick": "f4cfa974d2c654a72c863789217999fa37efcc076718c231cca0df773df594c1",
     "CircuitRequirement.Instance.uses": "cae58006e85592c514d863dc8b05238f9efcf706d47705804156786779c334d6",
     "CircuitRequirement.Instance.usesOf": "884688d297cd142b430cd489e5d0568dc122fa6a199e7b13fd259f0c403a5802",
     "CircuitRequirement.Instance.value": "9f151305d12bb6f74207ac3d65d3a000cd6288235022736430588a572c9c05a6",
     "CircuitRequirement.Instance.valueOf": "4542537e930e2080d4dee1c0e67d105314a467cdd07b1157f363097bd616282b",
     "CircuitRequirement.Instance.width": "25ce5139fca70ee9ce6abd6fc375ac9151fb4b8cf3b5bdcc30d78f6ba06a9fa9",
     "CircuitRequirement.Instance.widthOf": "76c7d8f7ea1380da13072bc9ee50f285ff14a0760243a1a9f2468930c7ed88c0",
+    "CircuitRequirement.Instance.work": "d2d68af74e6dde9b89db3e23e2b6f97ce485dbe146c9581840e8e872b571ab89",
+    "CircuitRequirement.Placement": "cdabfbe478e55b13bf9a60d7849bb89a73f98d32a81545052690c1d7d9aef3ee",
+    "CircuitRequirement.Placement.leaf": "b8c98ff7b41ea840b4c384e97401e8ebccc31c3fdae5fb14e80d008362016769",
+    "CircuitRequirement.Placement.leafOf": "9770b4842921ae81fef1d411ee3a933f7e851734a24a1a9199a685377bb614c3",
+    "CircuitRequirement.Placement.ticks": "dd8de5a7d66ea0889fea213a58b83b2824b6b458a3fec5a86e7a26796d93e759",
+    "CircuitRequirement.Placement.ticksOf": "56a222db7252c07d0244851838cf791082f553d84e8a9878a294674599802b30",
     "CircuitRequirement.Store": "3ee12b349421131b136106953a14bdc9992677e5dd1966e6626e68c7356806c1",
     "CircuitRequirement.Store.freed": "335c7b6d4194f821fb61fa2ca5af48a4addddd5ac78e71c90751d7961228c300",
     "CircuitRequirement.Store.freedAt": "d40497e492741ab9af7a60000b8a55c67f476ba0124f215ef91717c3dc91f25b",
@@ -2553,8 +2565,10 @@
     "CircuitRequirement.sameSet": "0a659ec09c56a68b105e2cd6e3fe9bde3b4b6691dd98bfd15b931f2e9b246098"
    },
    "guarantees": [
+    "Properties.Requirement.credits",
     "Properties.Requirement.follows",
     "Properties.Requirement.held",
+    "Properties.Requirement.ingress",
     "Properties.Requirement.live",
     "Properties.Requirement.liveBits",
     "Properties.Requirement.liveBlocks",
@@ -2565,7 +2579,9 @@
     "Properties.Requirement.readBlocks",
     "Properties.Requirement.readIn",
     "Properties.Requirement.reads",
+    "Properties.Requirement.region",
     "Properties.Requirement.resident",
+    "Properties.Requirement.stepRegion",
     "Properties.Requirement.storeMatches"
    ]
   },
@@ -2746,10 +2762,10 @@
     "Accounting.Window.start": "6bc10dfceff8bad8ecee79fe3871d22507cc431f9f8c139866299481336a192f",
     "Accounting.Window.ticks": "c361f40af35edc50725864af56fa88f98a73332059de22d1cdd53f262231d39e"
    },
-   "guarantees": ["Properties.Requirement.held", "Properties.Requirement.read"]
+   "guarantees": ["Properties.Requirement.held", "Properties.Requirement.read", "Properties.Requirement.stepRegion"]
   },
   "Definitions.Accounting.Requirement": {
-   "digest": "e1b445e3008626feb701f2c54ed5983925ba1dde3dae348e9d7d6e72e8614000",
+   "digest": "38d2dd43454105bee37c8a5f23bdd02257274a7a75abf7c7a7f1cf22949478f8",
    "definitions": {
     "Accounting.Requirement.Carries": "93fd6dff6b04c716c5141e9212142e6ea3701b3aa0de94ca12483c0b48591a4d",
     "Accounting.Requirement.Execution": "cd70ee0536fc5bb221c299172e35f32cb7f8664fbf0924096cf40b3a3ee791ea",
@@ -2761,6 +2777,11 @@
     "Accounting.Requirement.Layout.block": "8b8a656a1a4ac9e1cb112cce0478d031ce085c24f455672653142a34e439b901",
     "Accounting.Requirement.Layout.offset": "ea578971e1a12eb8fb75d0c055037d8e6b64e444bd1fb555fc29d173a87a90cb",
     "Accounting.Requirement.Packs": "c1dcea15b3eb160b861154472627e3db97bbf61009e5a7dc8d32cfd612f0153d",
+    "Accounting.Requirement.Placement": "c8a1cdbf39756eac064a7f7ff0bef5d5616b6d925eb44132e1aab948f4ca7f64",
+    "Accounting.Requirement.Placement.leaf": "b4f57f5dba601e938da183ca2a96c6d73e5b1ea71f67042089b975168e4b354b",
+    "Accounting.Requirement.Placement.tick": "19d3bde72fc93c41ba0c3edad711ee176bb7ec53439c601bda5d55fe6dd5696c",
+    "Accounting.Requirement.Placement.ticks": "60b1a8e6957cbd44187087579e43fbaa35f67d5ff5219c9d45423a53bbb91ae7",
+    "Accounting.Requirement.Placement.toExecution": "5a02271ef98321e3e31bad7c561cd43cc9a9e7cda172bb44d4bf4a3a2c574ae9",
     "Accounting.Requirement.PlanMatches": "3446fe70421d6f5818f116d517a0c5bb283236702b2a4171a7f8d15173caa730",
     "Accounting.Requirement.Store": "1938f3251d1599270d57405be6bc6fc366ac23924f2e849c8b7b7acc6f7281ca",
     "Accounting.Requirement.Store.freed": "4e87eda5acc330bde17fdc1204a03f0f98440c589337d909921d93fec0758313",
@@ -2778,6 +2799,8 @@
     "Accounting.Requirement.bitsIn": "5440bee8fc2b080cd09ffdf36d4f4c2e490eab2913fd623940cc6a44c783c9b9",
     "Accounting.Requirement.blocks": "43dd99e049f112b0b8fd74d4c35cca07a1cb09150ed5369f33334bdf9d7fe1d7",
     "Accounting.Requirement.held": "64cdeb5d4430c3aefead5921a08faa7345ce4003f6469f90e8639698aa4a6633",
+    "Accounting.Requirement.ingress": "db7ab43d43923959e21788123c6f6b6049f3d5d1c4040557a19435a3468cc5d4",
+    "Accounting.Requirement.into": "86c3087c2495d791e6d6ac312bf1f45f9fdeba840aa6dd4d6bc7adbfa0c2b925",
     "Accounting.Requirement.live": "fc7c4f9b1b45bf183ac91ab06378d9fae1dd203361b5ddb5c99abb723f8fa163",
     "Accounting.Requirement.liveBits": "de62460b5313ef9bdae1bbd45f81196e59929ae2430c0b2ec1c4b664e93f11d5",
     "Accounting.Requirement.liveBlocks": "96782dd578d5b274d1f92a82085f3a5c06ecef44cf189e64d04ea620d0ba09e8",
@@ -2786,11 +2809,16 @@
     "Accounting.Requirement.readBits": "940ebb457d7936b46131a3e37e10e46cbf7281232b011c0bb9a16af8b8005fa9",
     "Accounting.Requirement.readBlocks": "331777b495aa32b4f7a2d537b06f6c2c15aa89d44145e262922ef53deffa9179",
     "Accounting.Requirement.readIn": "cb46f46f43e8cac5a273df04eb3ea93d905e49359dc0776651a24372c95e25a1",
-    "Accounting.Requirement.reads": "1055164e912eff3e5e598f08c907dc222843666d7ddee15fd3753a5f5eb2530a"
+    "Accounting.Requirement.reads": "1055164e912eff3e5e598f08c907dc222843666d7ddee15fd3753a5f5eb2530a",
+    "Accounting.Requirement.region": "8ec9c2c9a704ab404892c979f6245e1db4203333ab39c292b4ba7ffb39aea57b",
+    "Accounting.Requirement.stepRegion": "530bc69340c6652e6691d4a3455e720816c5bb20924fe41cf1ca9e1e63fcf09c",
+    "Accounting.Requirement.work": "3206697b7f531501caf4147e8259576c711665b5888e01fabec87c95bdd40237"
    },
    "guarantees": [
+    "Properties.Requirement.credits",
     "Properties.Requirement.follows",
     "Properties.Requirement.held",
+    "Properties.Requirement.ingress",
     "Properties.Requirement.live",
     "Properties.Requirement.liveBits",
     "Properties.Requirement.liveBlocks",
@@ -2801,7 +2829,9 @@
     "Properties.Requirement.readBlocks",
     "Properties.Requirement.readIn",
     "Properties.Requirement.reads",
+    "Properties.Requirement.region",
     "Properties.Requirement.resident",
+    "Properties.Requirement.stepRegion",
     "Properties.Requirement.storeMatches"
    ]
   },
@@ -5672,10 +5702,12 @@
    ]
   },
   "Properties.Accounting.Requirement": {
-   "digest": "907c5c34b9cb36cf4d09ff97a3a0e1bc47f31f5f3398f9020c200a959328600d",
+   "digest": "a6ff4e65249c258150a5d8826cf369f7dc5369a13d2987fccd60159c99dcd958",
    "definitions": {
+    "Properties.Requirement.Credits": "8665ccb64dab2cab0b6996795d933610acb65b63a984da7403e207bc244c6709",
     "Properties.Requirement.Follows": "0db852472711542983e77851e2173368797dc4ed395edc2cd74c76691dc7a618",
     "Properties.Requirement.Held": "2acf8fbe2765670b6fd5b9f4c8e6b3a17e8f73223248983a158faa65dbb60385",
+    "Properties.Requirement.Ingress": "70a630614d3eb58e410d65e871ddf5ae4ed3319ad33e4c5b5e07b21ad309f515",
     "Properties.Requirement.Live": "85b88b5ab6a07b692ac0af7519fb95d5e54e7be334727dec1c9def11e4bb95dd",
     "Properties.Requirement.LiveBits": "e138ec9212ecc782f17dff7ec1396fe8e68b396f354d183aa60e5a7eabfc5b71",
     "Properties.Requirement.LiveBlocks": "bc58866c1dd70e21a3cbc7b393401649b5782ad02e833ee7b49131a15333b2ec",
@@ -5686,16 +5718,21 @@
     "Properties.Requirement.ReadBlocks": "d18be37e328288f840b3f4620738f030288a0e80be947d66b43e7c5094a8fd6b",
     "Properties.Requirement.ReadIn": "df7c1442b3c35a33bf1b9532ecb23bdbd477be7af33b7a57065f8a2afc8301f8",
     "Properties.Requirement.Reads": "8d0793e58308eadc3a9f906d21f8324b58cf65524d6985393875cd8c39e02548",
+    "Properties.Requirement.Region": "4ede72a2db46a69ef777abfdeaf723ab96db554ecdb1489250a6901afa80f022",
     "Properties.Requirement.Resident": "13a9be5b44cf100e14e15c40438a34913823387c0a8727a81711b3f5163343b9",
+    "Properties.Requirement.StepRegion": "49e30eeed04a143969a494d87b229113947f5be4b4b89002dcb88ebf3f6173a8",
     "Properties.Requirement.StoreMatches": "0d9b2073a1f3946c1f1a735519163c65c18f4724dcab1b8ee4e24fb5fc22f612",
     "Properties.Requirement.execution": "6b831c584424c2f21fefd717f36b0610dbe387496e3c7a458eda7b4f1db4885a",
     "Properties.Requirement.layout": "00d59b1846d400aa993a694568a070fd646145058b34ff9614f53fef01917561",
+    "Properties.Requirement.placement": "1fd04e7439420c7e2b7c39ffa9f64666e977601350c58afc0caf572de4130359",
     "Properties.Requirement.store": "490a7153c1cc7ce6ed8da10d8d8fc02023e180b92335f085eddd8b47e553d719",
     "Properties.Requirement.wiring": "d40130b60f50d7e336ed05c27b4a1a8a83f9148f6706e9fd1663e1a1abdc095d"
    },
    "guarantees": [
+    "Properties.Requirement.credits",
     "Properties.Requirement.follows",
     "Properties.Requirement.held",
+    "Properties.Requirement.ingress",
     "Properties.Requirement.live",
     "Properties.Requirement.liveBits",
     "Properties.Requirement.liveBlocks",
@@ -5706,7 +5743,9 @@
     "Properties.Requirement.readBlocks",
     "Properties.Requirement.readIn",
     "Properties.Requirement.reads",
+    "Properties.Requirement.region",
     "Properties.Requirement.resident",
+    "Properties.Requirement.stepRegion",
     "Properties.Requirement.storeMatches"
    ]
   },
