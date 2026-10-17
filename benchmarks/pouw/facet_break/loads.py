@@ -459,7 +459,8 @@ def _close(m, epoch: str, rows: list[str]) -> list[str]:
 def cmd_family(a) -> int:
     """A beaten family of joint rows refitted as one (the VF3m-16 rule, `eps1.py facets --prior`): the upper hull of the
     old rows' vertices and every measured program, at the margin. Over an axis class (`--axis`, default MMA: the generic
-    lines, which IMMA16832 takes) and one class (`--kind`); or, with `--forms`, the joint issue rows: each MMA form its own
+    lines, which IMMA16832 takes, and with `--all-forms` every form) and one class (`--kind`); or, with `--forms`, the
+    joint issue rows: each MMA form its own
     axis beside the rows' vector classes summed by their coefficients (so `V` is a vector instruction), each form's hull
     taken alone, and every new row at a vector coefficient one of those hulls has, each form at the most it can carry
     there. `--emit EPOCH` prints the rows.csv and census/EPOCH.csv lines and the old lines to close."""
@@ -474,7 +475,7 @@ def cmd_family(a) -> int:
     from eps1 import facets
     runs = a.runs or " ".join(sorted({p["run"] for p in progs if p["run"]}))
     if not a.forms:
-        axis = {"MMA", MMA_MEASURED_WITH} if a.axis == "MMA" else {a.axis}
+        axis = ({"MMA", MMA_MEASURED_WITH} | (MMA_FORMS if a.all_forms else set())) if a.axis == "MMA" else {a.axis}
         lines = [(c.get(a.axis, {}).get(r, 0.0) / cu, c.get(a.kind, {}).get(r, 0.0) / cu) for r in rows]
         pts = polygon(lines, s, "+".join(rows))
         n = 0
@@ -604,6 +605,8 @@ def main(argv: list[str] | None = None) -> int:
     fam.add_argument("--axis", default="MMA")
     fam.add_argument("--kind")
     fam.add_argument("--forms", action="store_true", help="the joint issue rows: each MMA form its own axis")
+    fam.add_argument("--all-forms", action="store_true",
+                     help="every MMA form on the generic MMA axis (ε prices a form without lines of its own there)")
     fam.add_argument("--margin", type=float, default=0.02)
     fam.add_argument("--emit", metavar="EPOCH", help="print the rows.csv and census lines for EPOCH")
     fam.add_argument("--runs", help="the new rows' runs in rows.csv (default: every run read)")
