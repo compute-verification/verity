@@ -20,7 +20,7 @@ or MoE tile no record covers) when the launch is written.
 from __future__ import annotations
 
 from verity.ml.circuits.defs import Builder
-from verity.ml.circuits.refs import Coll, PartLog, Refs, concat
+from verity.ml.circuits.refs import Coll, PartLog, Refs, concat, strided_view
 from verity.ml.circuits.types import Type, Value
 
 from .build import Unexpressible, _arr_shape, _Peers, _ptypes, kind, served_class
@@ -233,10 +233,10 @@ class _Model:
         return [self.call(fn, x, w.refs).refs for x in xs]
 
     def absorb(self, xs: list[Refs], w: Coll, B: int, K: int, N: int) -> list[Refs]:
-        """MLA's latent absorption `bmm(x^T, W)^T` per row (`MlaAbsorbTransposePatternRule`): each row's B heads against W^T."""
-        from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type
+        """MLA's latent absorption `bmm(x^T, W)^T` per row (`MlaAbsorbTransposePatternRule`): each row's B heads against W^T, the
+        [B][K][N] weight read as [B][N][K] (the frontend's permute view: one strided part per head)."""
         fn = self.k("batched_gemm", B=B, K=K, N=N, DOT=self.net.dot)
-        wt = _permute(Coll(_tensor_type((B, K, N), 16), w.refs), (0, 2, 1), "predict.dsa").refs
+        wt = concat([strided_view(w, b * K * N, K, 1, N, N * K) for b in range(B)])
         return [self.call(fn, x, wt).refs for x in xs]
 
     def silu(self, rows: list[Refs]) -> list[Refs]:
