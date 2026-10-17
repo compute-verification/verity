@@ -19,6 +19,9 @@ import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.KS.PlainKS
+import Proofs.Flock.Claims.KS.Escapes
+import Proofs.Flock.Claims.KS.OnAcc
+import Proofs.Flock.Claims.KS.PlainAcc
 import Proofs.Flock.Claims.KS.MixtureZk
 import Proofs.Flock.Claims.KS.ZkBound
 import Proofs.Flock.Claims.KS.ZkKS
@@ -89,25 +92,34 @@ At one table the model does not commit to, a live verdict is no likelier than th
 live strategies, `FlockDeploy.KS.mean_live_le`). At a plain statement of one table, `TableBoundθAt` follows from, at
 each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C` bounds the deployed
 runs accepting on `C`, and whose `Adv` and self-clash the escapes' events bound, the escapes at the plain fork rounds
-(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). At `--zk`, one table's compiled session is `Commit`'s
-cap and then `sessAtZ` with no other game, so a live verdict at one masked table is no likelier than any verdict after
-`Commit` the decoder is right for (`MixtureZk`: `FlockDeploy.KS.live_le_simAtZ`, `FlockDeploy.KS.mean_live_le_simAtZ`),
-and at a masked statement of one table, `TableBoundθAt` follows from a mixture of masked sessions after `Commit` at a
-table `T` at C-Flock ZK's parameters, the escapes `Flock.oldEscZ` at injective fork rounds, and no table that does not
-extract committed to `T` (`ZkBound`: `FlockDeploy.KS.zk_tableBoundθAt_of_sessions`,
+(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). `Flock.KS` at the plain record follows from the live
+sessions' bound at table 0 and `Extendθ` (`PlainKS`: `FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit`
+against the simulated strategy arises only on live runs the live verdict accepts, whose decoded outputs self-clash
+(`Escapes`: `FlockDeploy.KS.selfClash_le_live`, `FlockDeploy.KS.mean_selfClash_le_live`). Escapes on accepted runs
+(`OnAcc`, `Claims.Escapes.OnAcc`): `Flock.TableBoundθAccAt` is `TableBoundθAt` with them, which gives it
+(`Flock.TableBoundθAccAt.tableBoundθAt`) and holds with none where no run accepts (`Flock.tableBoundθAccAt_of_noAcc`);
+the old escapes are on accepted runs where their events are (`Flock.oldEsc_onAcc`, `Flock.oldEscZ_onAcc`). With the live
+sessions' bound at escapes on accepted runs, whose events bound the decoded self-clashes on accepted live runs
+(`PlainAcc`: `FlockDeploy.KS.PlainLiveAcc`, which gives `PlainLive`, `FlockDeploy.KS.plainLive_of_acc`), the plain table
+bound holds with escapes on accepted runs at every statement (`FlockDeploy.KS.plain_tableBoundθAccAt`). At `--zk`, one
+table's compiled session is `Commit`'s cap and then `sessAtZ` with no other game, so a live verdict at one masked table
+is no likelier than any verdict after `Commit` the decoder is right for (`MixtureZk`: `FlockDeploy.KS.live_le_simAtZ`,
+`FlockDeploy.KS.mean_live_le_simAtZ`), and at a masked statement of one table, `TableBoundθAt` follows from a mixture of
+masked sessions after `Commit` at a table `T` at C-Flock ZK's parameters, the escapes `Flock.oldEscZ` at injective fork
+rounds, and no table that does not extract committed to `T` (`ZkBound`: `FlockDeploy.KS.zk_tableBoundθAt_of_sessions`,
 `FlockDeploy.KS.zk_tableBoundθAt_of_live`, at the live sessions' bound `FlockDeploy.KS.ZkLiveAt`). At the deployed
 masked record, `T` is C-Flock ZK's padded table of the statement's table 0 (`ZkKS`: `FlockDeploy.KS.zkTab`,
 `FlockDeploy.KS.zkTab_m1`), so `Flock.KS` follows from one table at every statement some run accepts
 (`FlockDeploy.KS.ZkOne`, which the masked scope's several tables do not give), the live sessions' bound at `zkTab`
-(`FlockDeploy.KS.ZkLive`) and `Extendθ` (`FlockDeploy.KS.zk_KS_of_live`). At several tables (`JointJ`), one wait
-follows from every table's bound with one family of escapes, over every table's word's positions
-(`Flock.TableBoundJ`, `Flock.ColsOkJ`, `Flock.ConflictTiedJ`, `Flock.oneWait_of_tableBoundJ`), and at the masked record
-accepted runs open table `j`'s columns at its width and as its level-0 openings (`ZkTables`: `FlockDeploy.KS.wordLenJ`,
+(`FlockDeploy.KS.ZkLive`) and `Extendθ` (`FlockDeploy.KS.zk_KS_of_live`). At several tables (`JointJ`), one wait follows
+from every table's bound with one family of escapes, over every table's word's positions (`Flock.TableBoundJ`,
+`Flock.ColsOkJ`, `Flock.ConflictTiedJ`, `Flock.oneWait_of_tableBoundJ`), and at the masked record accepted runs open
+table `j`'s columns at its width and as its level-0 openings (`ZkTables`: `FlockDeploy.KS.wordLenJ`,
 `FlockDeploy.KS.zk_colsOkJ`, `FlockDeploy.KS.zk_openingJ`, `FlockDeploy.KS.zk_conflictTiedJ`), so `Flock.KS` there
-follows from every table's bound alone, at every number of tables (`FlockDeploy.KS.zk_KS_of_tableBoundJ`). The
-batched tables' old fork events share rounds, so joined by round they fit the masked weight
-(`ZkBoundJ`: `Flock.joinEscZ`, `FlockDeploy.KS.joinEscZ_fitsFork_zk`, `Flock.oldEscZ_term_le_join`); at table `j` the
-old padded bound is at most `ε_table` (`FlockDeploy.KS.mean_epsSZ_leJ`), and a table that does not extract table `j` is
-not committed to its model statement (`FlockDeploy.KS.zk_not_committedJ`). So every table's bound at a statement
-follows from masked sessions after `Commit` at every table (`FlockDeploy.KS.ZkSessJ`,
-`FlockDeploy.KS.zk_tableBoundJAt_of_sessions`), needed only where some run accepts (`FlockDeploy.KS.zk_tableBoundJ_of_acc`). -/
+follows from every table's bound alone, at every number of tables (`FlockDeploy.KS.zk_KS_of_tableBoundJ`). The batched
+tables' old fork events share rounds, so joined by round they fit the masked weight (`ZkBoundJ`: `Flock.joinEscZ`,
+`FlockDeploy.KS.joinEscZ_fitsFork_zk`, `Flock.oldEscZ_term_le_join`); at table `j` the old padded bound is at most
+`ε_table` (`FlockDeploy.KS.mean_epsSZ_leJ`), and a table that does not extract table `j` is not committed to its model
+statement (`FlockDeploy.KS.zk_not_committedJ`). So every table's bound at a statement follows from masked sessions after
+`Commit` at every table (`FlockDeploy.KS.ZkSessJ`, `FlockDeploy.KS.zk_tableBoundJAt_of_sessions`), needed only where
+some run accepts (`FlockDeploy.KS.zk_tableBoundJ_of_acc`). -/
