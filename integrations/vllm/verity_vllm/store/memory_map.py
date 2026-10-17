@@ -9,14 +9,21 @@ j         the store's next fresh index: N, the store's blocks when the map began
 d_j       `codec.digest` of the block's payload, its region codec's decoding of the bytes it holds once written
           (`Store.payload`)
 written   a block `kv_append` completes, at the step that completes it (a dirty block is in no step)
-freed     a registered block a step's write reaches without completing it: its bytes are no registered block until a
-          write completes it (`Store`'s dirty).  `kv_alloc` and `kv_free` touch no byte and emit nothing
+freed     a live (registered) block of a page `kv_free` returns, though its bytes stay as filler: the audit credits
+          only the blocks the circuit keeps live, so the store releases it (dirty, out of every plan) until a write
+          completes it again under a new j; it is freed at the next `kv_append`'s step, before that step's writes.
+          And a live block a step's write reaches without completing it: its bytes are no registered block until a
+          write completes it (`Store`'s dirty).  A block is freed once; `kv_alloc` emits nothing
 ~~~
 
 `Store.kv_append` runs before the step's KV writes land on the device (the binder calls it from
 `Scheduler.schedule`), so it records each step's slots, and their indices and digests are taken at `flush`, once the
 bytes are in place: at the next `kv_append`, at the binder's `end` (`Scheduler.update_from_output`), or by the driver
-after the last step.  `kv_write_reference` writes first and flushes at once.
+after the last step.  `kv_write_reference` writes first and flushes at once.  Pages freed after the last step are in
+no step.
+
+The header names the remote audit's `Registration.digest`, the one the verifier gives `Store.begin_window` for the
+session's first window; without it there is no map.
 
 The map is a witness (``d_j`` hashes user data): it goes to ``path``, the prover's own file, and is never published.
 """
@@ -33,6 +40,9 @@ from verity.core.protocols.remote_bandwidth.memory_map import Header, MemoryMapE
 
 def record(store: Any, path: str | Path | None = None, registration: bytes | None = None) -> MemoryMap:
     """Start ``store``'s memory map (`Store.record_memory_map`; ``store`` a `verity_vllm.store.registry.Store`)."""
+    if registration is None:
+        raise ValueError("a memory map names the store's registration: pass the remote audit's Registration.digest, "
+                         "the one the session's first window chains from (Store.begin_window)")
     if store.memory_map is not None:
         raise RuntimeError("the store already records a memory map")
     lay = store.layout()
@@ -40,7 +50,7 @@ def record(store: Any, path: str | Path | None = None, registration: bytes | Non
     if bad:
         raise ValueError(f"memory-map/v1 slots are {codec.BLOCK_BYTES}-byte blocks; regions {bad[:4]} are not: "
                          f"register them with block_bytes={codec.BLOCK_BYTES}")
-    head = Header(store.registration().root if registration is None else registration, lay.blocks)
+    head = Header(registration, lay.blocks)
     store.memory_map = MemoryMap(store, head, path)
     return store.memory_map
 
@@ -55,6 +65,7 @@ class MemoryMap:
         self._head = dumps(header, ())
         self._pending: list[tuple[int, tuple[int, ...], tuple[int, ...]]] = []
         self._kept: list[str] = []
+        self._freed: set[int] = set()
         if self.path is not None:
             self.path.write_text(self._head)
 
@@ -64,14 +75,19 @@ class MemoryMap:
         ids = p.ids[keys // p.per_page, keys % p.per_page]
         return tuple(sorted(int(x) for rn in p.regions for x in (self.store.region(rn).first + ids).tolist()))
 
+    def free(self, keys: np.ndarray) -> None:
+        """`kv_free` released the pool's live blocks ``keys``: freed at the next step."""
+        self._freed.update(self.slots(keys))
+
     def record(self, step: int, freed: np.ndarray, written: np.ndarray) -> None:
-        """Step ``step`` freed the pool's blocks ``freed`` and completed ``written`` (keys ``page * per_page +
-        column``), left for `flush`, which gives each written block the next fresh index, in slot order, and its
-        digest."""
+        """Step ``step`` freed the pool's blocks ``freed`` (and those released since the last step) and completed
+        ``written`` (keys ``page * per_page + column``), left for `flush`, which gives each written block the next
+        fresh index, in slot order, and its digest."""
         self.flush(step)
         self.last = step
-        if len(freed) or len(written):
-            self._pending.append((step, self.slots(freed), self.slots(written)))
+        gone, self._freed = tuple(sorted(self._freed.union(self.slots(freed)))), set()
+        if gone or len(written):
+            self._pending.append((step, gone, self.slots(written)))
 
     def flush(self, step: int | None = None) -> list[Step]:
         """The recorded steps not yet flushed, with each written block's digest from the bytes its slot holds now.

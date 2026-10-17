@@ -205,7 +205,7 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote():
     r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)]
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
-    m = s.record_memory_map()
+    m = s.record_memory_map(registration=bytes(range(64)))
     page = Block(1)
     page.ref_cnt = 1
     s.kv_alloc([1])

@@ -10,7 +10,9 @@ a block of a page is *registered* unless a write reached it and has not complete
   re-registers those it completes, under the step that wrote them; the codec encodes the slots as they are written
   (``encode_slots_`` on the device, `kv_write_reference` here);
 - ``kv_free`` returns pages to filler with their bytes as they are: a registered block stays registered, a dirty block
-  (a page freed part-written) stays out of every plan until a later write completes it.
+  (a page freed part-written) stays out of every plan until a later write completes it.  While a memory map records
+  (`record_memory_map`), a freed page's registered blocks are released instead: dirty, so out of every plan until a
+  write completes them again under a new index, as the audit's plans hold only blocks the circuit keeps live.
 
 A pass reads the weights' regions whole, each KV layer region over the blocks attention reads (the live pages'
 blocks that writes completed), and the filler the `filler_plan` policy picks (`idle_blocks` lists the registered
@@ -210,7 +212,7 @@ class _Pool:
     hi: np.ndarray
     allocated: np.ndarray
     fill: np.ndarray
-    dirty: np.ndarray            # (pages, per_page): written since registered, not complete
+    dirty: np.ndarray            # (pages, per_page): not registered: written and not complete, or released
     epoch: np.ndarray            # (pages, per_page): the block's registrations since the pool's
     step: np.ndarray             # (pages, per_page): the step that registered it, -1 for filler
     filler: str
@@ -436,7 +438,8 @@ class Store:
 
     def record_memory_map(self, path: Any = None, registration: bytes | None = None) -> mm.MemoryMap:
         """Record each step's KV blocks as memory-map/v1 into ``path`` (the prover's own file) or kept, beside
-        ``registration`` (the driver's `Registration.digest`; None: the store's root now) (`memory_map.record`)."""
+        ``registration``, the remote audit's `Registration.digest`, which the session's first window chains from
+        (`memory_map.record`)."""
         return mm.record(self, path, registration)
 
     # --- the KV pool's pages ----------------------------------------------------------------------------------------
@@ -464,6 +467,10 @@ class Store:
         if not p.allocated[ix].all():
             raise RuntimeError(f"pages {ix[~p.allocated[ix]][:8].tolist()} are not allocated")
         p.allocated[ix] = False
+        if self.memory_map is not None:
+            live = ~p.dirty[ix]
+            p.dirty[ix] = True
+            self.memory_map.free((ix[:, None] * p.per_page + np.arange(p.per_page))[live])
         self.counters.add("kv_free", time.perf_counter() - t)
 
     def kv_append(self, appends: Sequence[Append], step: int) -> None:
@@ -547,6 +554,8 @@ class Store:
             raise RuntimeError("a window is already open")
         if len(challenge) != CHALLENGE_BYTES:
             raise ValueError(f"a window's challenge is {CHALLENGE_BYTES} bytes")
+        if self.memory_map is not None and self._last_root is None and registration != self.memory_map.header.registration:
+            raise ValueError("the session's first window chains from the registration digest its memory map names")
         if self._last_root is None:
             self._last_root = self._log_root if registration is None else registration
         elif registration is not None:
@@ -591,6 +600,8 @@ class Store:
                 run = len(blk) > 0 and bool((np.diff(blk) == 1).all())
                 r = self._by_name[rn]
                 ep = r.pool.epoch[r.pool.page_of[blk], r.pool.slot_of[blk]] if r.pool is not None else None
+                if r.pool is not None and r.pool.dirty[r.pool.page_of[blk], r.pool.slot_of[blk]].any():
+                    raise ValueError(f"pass {j}'s filler reads {rn} blocks that are dirty or released (`idle_blocks`)")
                 parts.append((rn, int(blk[0]) if run else -1, len(blk), None if run else blk, ep))
         ps.lay_out(parts)
         if seed is not None:
