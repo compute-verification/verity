@@ -38,6 +38,7 @@ import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
 import Proofs.Flock.Claims.Complete.Zk.InnerGo
 import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
+import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
 import Proofs.Flock.Claims.Complete.Zk.MaskRank
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
