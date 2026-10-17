@@ -60,8 +60,8 @@ theorem RunZk.json (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : Pr
       o.link = ([rb], [ByteArray.empty]) ∧
       (∃ bs, o.bodies.toList = linkBody [rb] [ByteArray.empty] :: bs ∧
         Recs o.resp 1 (streams.toList.flatMap Array.toList) bs) ∧
-      o.record = (recordObjZk o.spec (Claims.hOf H) hz ct #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
-        o.proofs).compress ∧
+      o.record = (printJ (recordObjZk o.spec (Claims.hOf H) hz ct #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
+        o.proofs)) ∧
       Record.decodeWith o.hs o.spec o.record =
         .ok (sessOf o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs) ∧
       o.sess = sessOf o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs ∧

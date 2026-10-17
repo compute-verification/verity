@@ -4,9 +4,11 @@ import Proofs.Flock.Claims.Complete.Honest
 /-!
 # Flock's honest prover at the deployed masked verifier (`honestPZk`)
 
-The prover of `Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H)`, against B's masked record
+The prover of `CompleteWith H (deployZk rel) honestPZk (δcZk H)`, against B's masked record
 (`FlockDeploy.V true`): `honestP`'s program (`PI`, the sends `asks`, SHA-512 the oracle `Hashes.pi`, `feed`) on the
-masked session (`sessionPZk`), with its tape `TapeZk`.
+masked session (`sessionPZk`), with its tape `TapeZk`. It reads table `i`'s bit `a` at `i·2^m + a` (`tracesOf`), the
+relation's only at one table; the masked record's reference prover (`(deployZk rel).P`) is `ZkTables.honestP`, which
+runs each table on its share and is `honestPZk` at one table.
 
 * **Its program on a statement** (`progZk`): on the session `setupOf true x` sets up, each table's trace from the
   witness (`tracesOf`, the mask slot's words the witness's), the honest masked session, and the last message
