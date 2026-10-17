@@ -518,7 +518,7 @@
    },
    "Claims.Sampling.Universal": {
     "fails": "Claims.Sampling.Universal_fails",
-    "meets": []
+    "meets": ["Claims.Sampling.universal_meets"]
    },
    "Claims.Sampling.ZK": {
     "fails": "Claims.Sampling.ZK_fails",
@@ -568,7 +568,8 @@
    "Claims.Sampling.RU.Consecutive": "a helper the claims read: a replay unit of consecutive gate intervals",
    "Claims.Sampling.RelS": "a helper the claims read: a statement's sampling relation",
    "Claims.Sampling.Rule.WellFormed": "a helper the claims read: a well-formed rule on its class",
-   "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read"
+   "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read",
+   "Claims.SimCost": "a simulator's expected calls; `ClaimsStated` records it, but no claim reads it, so no ZK claim bounds its simulator's cost"
   }
  },
  "layers": {
@@ -5306,10 +5307,22 @@
    "type_hash": "c9aee9249a386b4232cc2e4430bafa74c02dd818197685ebfd898a3ef2d4c60e"
   },
   "Claims.Flock.scope_meets_plain": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.scope_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Exists fun s => Exists fun w => And (Claims.Flock.InScope (FlockDeploy.deployPlain rel).zk s) (Claims.Flock.RelS s w)"
+   ],
+   "assumptions": [],
+   "type_hash": "d5cddab40ddd51aa691c6cfb4ec218fa8cba3fd3cfaf555d44d4049aa35a3f74"
   },
   "Claims.Flock.scope_meets_zk": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Exists fun s => Exists fun w => And (Claims.Flock.InScope (FlockDeploy.deployZk rel).zk s) (Claims.Flock.RelS s w)"
+   ],
+   "assumptions": [],
+   "type_hash": "ef89c0bbe2549055608cdc278d7f122801096086efb2fdd4f164d35214390933"
   },
   "Claims.KSLin_fails": {
    "owner": "@proofs",
@@ -5478,7 +5491,10 @@
    "type_hash": "bd502b58f795b48c8708eb50525eec087e6cdb98c6d89927dab5439b91f88a61"
   },
   "Claims.Sampling.scope_meets": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["Claims.Sampling.scope_meets : Exists fun P => Exists fun s => Claims.Sampling.InScope P s"],
+   "assumptions": [],
+   "type_hash": "1fcd7c9a0265579d8a38c4942be635556fb0e8c0944d603de7c409ca33183ef1"
   },
   "Claims.ScopeMatches_fails": {
    "owner": "@proofs",
@@ -5503,6 +5519,15 @@
    ],
    "assumptions": [],
    "type_hash": "186029323a95571ffc1885099305b7bedfb3432f1068675d2dd416e9bd0a90a6"
+  },
+  "Claims.Sampling.universal_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.universal_meets :",
+    "  Exists fun c => Exists fun n => Exists fun x => And (Claims.Sampling.Netlist.Fits c n) (Eq x.length c.nIn)"
+   ],
+   "assumptions": [],
+   "type_hash": "b08360cf751d2b6dd16de075df1216368538d3c6302577877fb8206d4f0b89fc"
   }
  },
  "shape": {
@@ -7576,6 +7601,39 @@
     "Claims.waitAcc": "85b751a4e882d0ce61736041f2349297297bc4eb996b472d6a6191513053bca7"
    },
    "guarantees": [
+    "Claims.Bits_fails",
+    "Claims.Complete_fails",
+    "Claims.Flock.Bits_fails",
+    "Claims.Flock.Complete_fails",
+    "Claims.Flock.Efficient_fails",
+    "Claims.Flock.KS_fails",
+    "Claims.Flock.Nontrivial_fails",
+    "Claims.Flock.ScopeMatches_fails",
+    "Claims.Flock.ZK_fails",
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Flock.masked_meets_zk",
+    "Claims.Flock.scope_meets_plain",
+    "Claims.Flock.scope_meets_zk",
+    "Claims.KSLin_fails",
+    "Claims.KS_fails",
+    "Claims.Nontrivial_fails",
+    "Claims.Sampling.Binding_fails",
+    "Claims.Sampling.BitsLin_fails",
+    "Claims.Sampling.Bits_fails",
+    "Claims.Sampling.Complete_fails",
+    "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.KSCount_fails",
+    "Claims.Sampling.KS_fails",
+    "Claims.Sampling.Nontrivial_fails",
+    "Claims.Sampling.ScopeMatches_fails",
+    "Claims.Sampling.Universal_fails",
+    "Claims.Sampling.ZK_fails",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
+    "Claims.Sampling.scope_meets",
+    "Claims.ScopeMatches_fails",
     "Claims.Witness.Recursion.BitsFlock_fails",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_fails",
@@ -7602,6 +7660,7 @@
     "Claims.Witness.Recursion.ZKPriv_meets",
     "Claims.Witness.Recursion.ZK_fails",
     "Claims.Witness.Recursion.ZK_meets",
+    "Claims.ZKmalR_fails",
     "Flock.SecurityProofs.ClaimsStated",
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated"
@@ -7968,7 +8027,9 @@
     "Claims.Sampling.decoder_meets_plain",
     "Claims.Sampling.decoder_meets_zk",
     "Claims.Sampling.masked_meets_zk",
-    "Flock.SecurityProofs.SamplingClaimsStated"
+    "Flock.SecurityProofs.SamplingClaimsStated",
+    "Claims.Sampling.scope_meets",
+    "Claims.Sampling.universal_meets"
    ]
   },
   "Definitions.Core.Circuit": {
@@ -13424,6 +13485,14 @@
     "Flock.phi8Table": "c843996d571e5071f33e1788901951831ea8ffbcfc2f615881a46ee626da9154"
    },
    "guarantees": [
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Flock.masked_meets_zk",
+    "Claims.Flock.scope_meets_plain",
+    "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_meets",
     "Claims.Witness.Recursion.Efficient_meets",
@@ -18757,6 +18826,10 @@
     "FlockLevel3.unpack": "34d46d73da3087e523794f03fdf8cc353e89599bab7796dabf68f8d46e7a5d66"
    },
    "guarantees": [
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_meets",
     "Claims.Witness.Recursion.Efficient_meets",
@@ -18884,6 +18957,14 @@
     "FlockLevel3.instFieldGF128": "8d89e3a068c342c818866b82d507901b8cea23772c0345b39cc1467af187f955"
    },
    "guarantees": [
+    "Claims.Flock.decoder_meets_plain",
+    "Claims.Flock.decoder_meets_zk",
+    "Claims.Flock.masked_meets_zk",
+    "Claims.Flock.scope_meets_plain",
+    "Claims.Flock.scope_meets_zk",
+    "Claims.Sampling.decoder_meets_plain",
+    "Claims.Sampling.decoder_meets_zk",
+    "Claims.Sampling.masked_meets_zk",
     "Claims.Witness.Recursion.BitsFlock_meets",
     "Claims.Witness.Recursion.Bits_meets",
     "Claims.Witness.Recursion.Efficient_meets",
