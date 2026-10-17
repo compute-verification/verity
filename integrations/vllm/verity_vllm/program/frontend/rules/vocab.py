@@ -498,6 +498,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # [DSV4] the sqrtsoftplus routers (registry.dsv4_moe) and the hash table's lookup. `rules/vllm_moe_router.py` asks for them.
            "gather_i32": lambda V: gather_i32(V),
            "moe_router_hash": lambda E, SCALE: ir_bind(_dsv4_moe.MoeRouterHash, E=E, SCALE=SCALE),
+           "moe_router_sqrtsoftplus": lambda E, SCALE: ir_bind(_dsv4_moe.MoeRouterSqrtSoftplus, E=E, SCALE=SCALE),
            # [DSV4] the MXFP4 Marlin MoE's schedule and expert GEMMs (registry.marlin_moe). `rules/vllm_marlin_moe.py` asks for them.
            "marlin_moe_align": lambda E, P, BM: ir_bind(_marlin.MoeAlignBlocks, E=E, P=P, BM=BM),
            "marlin_moe_gemm": lambda E, K, N, TK, TN, GRID, DOT:
@@ -623,6 +624,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "gather_i32": "GatherI32x{V}_v1: column[token] of V i32 words, -1 for a token outside [0, V)",
            "moe_router_hash": "MoeRouterHash_v1{E,SCALE}: dsv4HashTopkSoftplusSqrt's weights for one token from its f32 logits and six "
                               "table ids -- Dsv4HashWeight_v1 of each id's logit, renormalised and scaled by SCALE",
+           "moe_router_sqrtsoftplus": "MoeRouterSqrtSoftplus_v1{E,SCALE}: _dsv4_topk_kernel's weights and ids for one token from its f32 "
+                                      "logits and the correction bias -- the top six of Dsv4SqrtSoftplus_v1 + bias, renormalised and "
+                                      "scaled by SCALE",
            "marlin_moe_align": "MoeAlignBlocks_v1{E,P,BM}: moe_align_block_size's schedule over P router ids, each expert's pairs ranked "
                                "by a key per pair -- each pair's moe block and the padded block count",
            "marlin_moe_gemm": "MarlinMoeExpertGemm_v1{E,K,N,TK,TN,GRID,DOT}: Marlin's w13 launch (W4A16 e2m1, e8m0 group-32 scales) on one "

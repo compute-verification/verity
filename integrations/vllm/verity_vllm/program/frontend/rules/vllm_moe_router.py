@@ -13,7 +13,9 @@ DeepSeek-V4's sqrtsoftplus routers (numerics: `verity_vllm.program.registry.dsv4
 `fused_topk_bias`:
 
     _moe_C.topk_softplus_sqrt(w!, ids!, tei!, logits [M, E] f32, True, scale, None, input_ids [M] i32, tid2eid [V, 6] i32, None)
-        -> per token row the six ids `tid2eid[input_ids[t]]` (`GatherI32x{V}` per slot) and their weights `MoeRouterHash{E,SCALE}`"""
+        -> per token row the six ids `tid2eid[input_ids[t]]` (`GatherI32x{V}` per slot) and their weights `MoeRouterHash{E,SCALE}`
+    verity_cba::triton_launch(_dsv4_topk_kernel; logits [M, E] f32, bias [E] f32, w!, ids!, ...)   (dsv4_topk, the scored layers)
+        -> per token row the weights and ids `MoeRouterSqrtSoftplus{E,SCALE}`"""
 
 from __future__ import annotations
 
@@ -24,6 +26,9 @@ from verity.ml.circuits.types import Array
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS, _pins_ok
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, DeadOutput, _moe_C_op, _not_owned
 from verity_vllm.program.registry.dsv4_moe import TOPK as DSV4_TOPK
@@ -157,6 +162,69 @@ class TopkSoftplusSqrtHashRule(InPlaceRule):
         ctx.record(self, node, {"E": E, "V": V, "SCALE": SCALE, "rows": M}, emitted=f"({gather.id} x{DSV4_TOPK} + {route.id}) x{M}")
 
 
-VLLM_MOE_ROUTER_RULES = [GroupedTopkRule(), TopkSoftplusSqrtHashRule()]
+_DSV4_TOPK_TENSORS = ("gating_output_ptr", "correction_bias_ptr", "topk_weights_ptr", "topk_ids_ptr")
 
-__all__ = ["GroupedTopkRule", "TopkSoftplusSqrtHashRule", "VLLM_MOE_ROUTER_RULES"]
+
+class Dsv4TopkRule(InPlaceRule):
+    """`_dsv4_topk_kernel[(M,)](gating_output, correction_bias, topk_weights, topk_ids, routed_scaling_factor, input_ids, bias_vl,
+    image_sentinel_lo, NUM_EXPERTS, BLOCK_N, HAS_VL, launch_pdl, num_warps=1)` launched by `dsv4_topk` (`fused_topk_bias` where
+    `can_use_dsv4_topk` holds) -> `MoeRouterSqrtSoftplus{E,SCALE}` per token row; topk_weights and topk_ids (allocations) are rebound.
+    Without the vision bias the kernel reads neither input_ids nor image_sentinel_lo, and `launch_pdl` adds the PDL wait and launch
+    and no arithmetic."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("Dsv4Topk[vllm-moe]", 1, "in-place-binding",
+                    applies_to="verity_cba::triton_launch of router.dsv4_topk._dsv4_topk_kernel (kernel name + source + constexprs pinned)",
+                    preconditions=("kernel qualified name, source sha256, NUM_EXPERTS, BLOCK_N, HAS_VL and num_warps are the pinned ones "
+                                   "(DSV4_TOPK_PINS)",
+                                   "gating_output a packed f32 value [M, E]; correction_bias a packed f32 value [E]",
+                                   f"topk_weights and topk_ids unwritten packed allocations [M, {DSV4_TOPK}], f32 and i32",
+                                   "routed_scaling_factor a static number; grid (M,)"),
+                    evidence_domain="structural; numerics: MoeRouterSqrtSoftplus_v1 (registry.dsv4_moe: the kernel's cc 9.0 PTX)")
+
+    def targets(self):
+        return {triton_launch.default}
+
+    def applies(self, node, ctx):
+        meta = launch_meta(node)
+        if meta.get("kernel") != DSV4_TOPK_PINS["kernel"]:
+            return f"kernel {meta.get('kernel')} is not {DSV4_TOPK_PINS['kernel']}"
+        if (r := _pins_ok(meta, DSV4_TOPK_PINS)):
+            return r
+        if not ctx.vocab.has("moe_router_sqrtsoftplus"):
+            return "numerics_unregistered: the vocabulary has no moe_router_sqrtsoftplus (MoeRouterSqrtSoftplus_v1)"
+        x, b, w, ids = (launch_tensor(node, meta, n) for n in _DSV4_TOPK_TENSORS)
+        if any(t is None for t in (x, b, w, ids)):
+            return f"tensor arguments {_DSV4_TOPK_TENSORS} not all present"
+        if not (_value(ctx, x, torch.float32) and _value(ctx, b, torch.float32)):
+            return "gating_output and correction_bias are not f32 value collections"
+        xs, E = shape(ctx, x), meta["scalars"]["NUM_EXPERTS"]
+        if len(xs) != 2 or xs[1] != E or shape(ctx, b) != (E,) or _strides(x) != (E, 1) or _strides(b) != (1,):
+            return f"gating_output {xs} strides {_strides(x)}, correction_bias {shape(ctx, b)} strides {_strides(b)}: not packed [M, {E}], [{E}]"
+        for nm, t, dt in (("topk_weights", w, torch.float32), ("topk_ids", ids, torch.int32)):
+            if not (isinstance(ctx.val(t), Alloc) and ctx.dtype_of(t) == dt and shape(ctx, t) == (xs[0], DSV4_TOPK)
+                    and _strides(t) == (DSV4_TOPK, 1)):
+                return f"{nm} is not an unwritten packed {dt} allocation [{xs[0]}, {DSV4_TOPK}]"
+        scale = meta["scalars"].get("routed_scaling_factor")
+        if not isinstance(scale, (int, float)) or isinstance(scale, bool):
+            return f"routed_scaling_factor {scale!r} is not a static number"
+        if meta.get("grid") != [xs[0]]:
+            return f"grid {meta.get('grid')} is not ({xs[0]},)"
+        return True
+
+    def emit(self, node, ctx):
+        meta = launch_meta(node)
+        x, b, w, ids = (launch_tensor(node, meta, n) for n in _DSV4_TOPK_TENSORS)
+        (M, E), SCALE = shape(ctx, x), float(meta["scalars"]["routed_scaling_factor"])
+        fn = ctx.kind("moe_router_sqrtsoftplus", node, E=E, SCALE=SCALE)
+        rows, lead = rows_of(ctx.coll(x))
+        bias = ctx.coll(b)
+        outs = [ctx.call(fn, r, bias, node=node, rule=self, name=f"{ctx.hint_name(node)}[{t}]") for t, r in enumerate(rows)]
+        ctx.rebind(w, from_rows([o[0] for o in outs], lead), self, what="topk_weights")
+        ctx.rebind(ids, from_rows([o[1] for o in outs], lead), self, what="topk_ids")
+        ctx.bind_weight_role(b, self, "router.e_score_correction_bias", E=E)
+        ctx.record(self, node, {"E": E, "SCALE": SCALE, "rows": M, "pins": DSV4_TOPK_PINS}, emitted=f"{fn.id} x{M}")
+
+
+VLLM_MOE_ROUTER_RULES = [GroupedTopkRule(), TopkSoftplusSqrtHashRule(), Dsv4TopkRule()]
+
+__all__ = ["Dsv4TopkRule", "GroupedTopkRule", "TopkSoftplusSqrtHashRule", "VLLM_MOE_ROUTER_RULES"]

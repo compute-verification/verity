@@ -27,6 +27,8 @@
   served kernel (`dsv4_moe_capture_gpu.clamp_twin`), and SwiGLU-OAI's alpha and beta or a limit that is no bf16 value refuses by name;
 * `TopkSoftplusSqrtHashRule`: a hash layer's router derives per token word for word the capture's twin over the table's ids
   (`dsv4_moe_capture_gpu.hash_twin`), and the kernel's scored path or another normalisation refuses by name;
+* `Dsv4TopkRule`: a scored layer's `_dsv4_topk_kernel` launch derives per token word for word the capture's twin
+  (`dsv4_moe_capture_gpu.router_twin`), and another kernel body or specialization refuses by name;
 * `rules/vllm_marlin_moe.py`: the Marlin MoE's align derives as `moe_align_block_size` with each expert's pairs in key order, and
   its two expert GEMMs per pair word for word the twin (`kernels.marlin_moe_rows.launch`) at the config the capture gives, and
   a batch, block or shape the capture does not give refuses by name;
@@ -52,6 +54,7 @@ from verity_vllm.program.frontend.export_compat import (InertEvent, InertStream,
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsv4, vllm_marlin_moe, vllm_mhc
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
 from verity_vllm.program.frontend.rules.triton_iface import triton_launch
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
@@ -70,7 +73,7 @@ from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import hopper
 from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
-from tests.properties.dsv4_moe_capture_gpu import clamp_twin, hash_twin
+from tests.properties.dsv4_moe_capture_gpu import clamp_twin, hash_twin, router_twin
 
 
 class _Overlapped(nn.Module):
@@ -969,6 +972,56 @@ def test_a_hash_layers_router_derives_per_token_word_for_word_the_twin_over_the_
 def test_a_router_beyond_the_hash_definition_refuses_by_name(over, refusal, served):
     table, x, toks = _hash_inputs(np.random.default_rng(3))
     rep = _derive_mhc(_HashRouter(table, **over), (_tensor(x), torch.from_numpy(toks)))
+    assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
+
+class _ScoredRouter(nn.Module):
+    """`dsv4_topk` on a scored layer: `_dsv4_topk_kernel[(M,)]` over the gate's f32 logits and `e_score_correction_bias`, launched
+    as the export captures it."""
+
+    def __init__(self, bias: np.ndarray, src: str = DSV4_TOPK_PINS["src_sha256"], has_vl: bool = False) -> None:
+        super().__init__()
+        self.e_score_correction_bias = nn.Parameter(_tensor(bias), requires_grad=False)
+        self.src, self.has_vl = src, has_vl
+
+    def forward(self, logits, input_ids):
+        (M, E), w, ids = logits.shape, torch.empty(logits.shape[0], 6), torch.empty(logits.shape[0], 6, dtype=torch.int32)
+        scalars = {"routed_scaling_factor": 2.5, "bias_vl_ptr": None, "image_sentinel_lo": 0, "NUM_EXPERTS": E,
+                   "BLOCK_N": 1 << (E - 1).bit_length(), "HAS_VL": self.has_vl, "launch_pdl": True}
+        meta = {"kernel": DSV4_TOPK_PINS["kernel"], "src_sha256": self.src, "grid": [M], "scalars": scalars, "geometry": {"num_warps": 1},
+                "tensor_args": ["gating_output_ptr", "correction_bias_ptr", "topk_weights_ptr", "topk_ids_ptr", "input_ids_ptr"]}
+        triton_launch(meta["kernel"], [logits, self.e_score_correction_bias, w, ids, input_ids], json.dumps(meta))
+        return w, ids
+
+
+def _scored_inputs(rng, E: int = 384) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Two rows of logits under one bias: a NaN logit, and two experts tied for the largest current."""
+    x, b = _f32(rng, 2, E, sd=4.0), _f32(rng, E, sd=0.1)
+    x[0, 5], x[1, 7], x[1, 9], b[7], b[9] = 0x7FC00000, *np.array([30.0, 30.0, 0.0, 0.0], np.float32).view(np.uint32)
+    return x, b, np.array([7, 2], np.int32)
+
+
+def test_a_scored_layers_router_derives_per_token_word_for_word_the_twin(served):
+    x, b, toks = _scored_inputs(np.random.default_rng(4))
+    model, inputs = _ScoredRouter(b), (_tensor(x), torch.from_numpy(toks))
+    rep = _derive_mhc(model, inputs)
+    assert rep.program is not None, rep.unsupported
+    (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "Dsv4Topk[vllm-moe]_v1"]
+    assert app["emitted"] == "MoeRouterSqrtSoftplus_v1{E=384,SCALE=2.5} x2"
+    assert rep.provenance["weight_roles"]["e_score_correction_bias"]["role"] == "router.e_score_correction_bias"
+    w, ids = router_twin(x, b, 2.5)
+    assert ids[1, 0] == 7
+    assert _run(rep, model, inputs) == w.reshape(-1).tolist() + ids.reshape(-1).astype(np.uint32).tolist()
+
+
+@pytest.mark.parametrize("over, E, refusal", [
+    ({"src": "00" * 32}, 384, "differs from the profile pin"),
+    ({}, 256, "constexpr NUM_EXPERTS=256 differs from the profile pin 384"),
+    ({"has_vl": True}, 384, "constexpr HAS_VL=True differs from the profile pin False"),
+])
+def test_a_scored_router_launch_beyond_the_ptx_refuses_by_name(over, E, refusal, served):
+    x, b, toks = _scored_inputs(np.random.default_rng(4), E)
+    rep = _derive_mhc(_ScoredRouter(b, **over), (_tensor(x), torch.from_numpy(toks)))
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
 
 
