@@ -30,6 +30,13 @@
 //        (IMAD.IADD) beside duo's LOP3 and LEA.HI on the ALU pipe; C is T, as for every route
 //   K4B  k4s's receipt with K4P's running sum: t += bits, then the word T_w = t - (w + 1) 0x4B400000 (a second
 //        two-input add, of a per-word uniform) into duo; two adds a word that ptxas may split between ALU and IMAD
+//   K4T  k4s with the running sum in TMEM, as int8 Dither carries it: the CTA is 128 x 256, two 128-column tiles, one
+//        fold warpgroup each (receipt tile 128, k4s's FW 1 definition). Tile t's accumulator (columns 128 t) holds
+//        1.5 2^23 + T - T_base and carries from word to word (the MMAs of word w + 1 accumulate onto word w's sum once
+//        the tile's warpgroup has read it, tempty[t]); base' = T_base - 0x4B400000 sits in the other half (columns
+//        256 + 128 t). The word is p = bits + base' (a two-input add, the IMAD pipe's), receipt unchanged; every RB
+//        words the warpgroup rebases (base' = p - 0x4B400000, the accumulator restored to 1.5 2^23), RB the most words
+//        whose k32 steps keep |T - T_base| within the binade's 2^22 at every partial sum
 // Fold-warp modes M (the time split): FULL (the kernel of record), EXT (read and extract, no duo; C written), LD (read,
 // and K4S's restore or I8C's copy, nothing computed), MMAONLY (wait for each word and release it, no read: the tensor
 // and the operand pipeline alone), FOLDONLY (no tensor, no TMEM: the fold warps extract and fold register words, as
@@ -78,17 +85,19 @@ constexpr int KS = 64;   // bytes of k a stage: two k32 slices
 constexpr int SMEM_RING = 192 * 1024;
 constexpr uint32_t MAGIC_BITS = 0x4B400000u;
 
-enum Route { K4S = 0, I8C = 1, I8R = 2, PF8 = 3, PI8 = 4, K4P = 5, K4B = 6 };
+enum Route { K4S = 0, I8C = 1, I8R = 2, PF8 = 3, PI8 = 4, K4P = 5, K4B = 6, K4T = 7 };
 enum Mode { FULL = 0, EXT = 1, LD = 2, MMAONLY = 3, FOLDONLY = 4, MMARES = 5, FULLRES = 6 };
 // MMARES and FULLRES are MMAONLY and FULL with resident operands: the loader fills the ring once and then completes each
 // stage's barrier without a copy, so the MMAs reread stale tiles (timing only: C and the receipts are wrong).
 DC_HD constexpr int fold_mode(int m) { return m == MMARES ? MMAONLY : m == FULLRES ? FULL : m; }
 DC_HD constexpr bool resident(int m) { return m == MMARES || m == FULLRES; }
-DC_HD constexpr bool is_k4(int r) { return r == K4S || r == K4P || r == K4B; }
-DC_HD constexpr int planes_of(int r) { return is_k4(r) ? 2 : 1; }
+DC_HD constexpr bool is_k4(int r) { return r == K4S || r == K4P || r == K4B; }  // the word buffers restored each word
+DC_HD constexpr bool is_f8x4(int r) { return is_k4(r) || r == K4T; }             // k4s's planes and MMAs
+DC_HD constexpr int planes_of(int r) { return is_f8x4(r) ? 2 : 1; }
 DC_HD constexpr bool is_plain(int r) { return r == PF8 || r == PI8; }
-DC_HD constexpr int nbuf_of(int r) { return is_plain(r) ? 1 : r == I8C ? 2 : 4; }
-DC_HD constexpr int stage_bytes(int r) { return planes_of(r) * (BM + N) * KS; }
+DC_HD constexpr int nbuf_of(int r) { return is_plain(r) ? 1 : r == I8C || r == K4T ? 2 : 4; }
+DC_HD constexpr int cta_n(int r) { return r == K4T ? 2 * N : N; }
+DC_HD constexpr int stage_bytes(int r) { return planes_of(r) * (BM + cta_n(r)) * KS; }
 DC_HD constexpr int stages_of(int r) { return SMEM_RING / stage_bytes(r) < 8 ? SMEM_RING / stage_bytes(r) : 8; }
 
 DC_HD int limb_h(int x) { return (x + 8) >> 4; }
@@ -206,6 +215,61 @@ DC_DEV void fold_all(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], const uint32_t* v, ui
   }
 }
 
+// K4T: chunk U (16 columns, key U) of a tile's word. xa/ba hold its accumulator bits and base' (loaded), xb/bb take
+// chunk U + 1's while U is extracted and folded. On a rebase word the chunk's p - 0x4B400000 becomes base' and the
+// accumulator is restored to 1.5 2^23. LD mode keeps a word of each chunk (x) and stores what a rebase would.
+template <int M, int U>
+DC_DEV void k4t_chunks(DuoSt (&ch)[NCH], uint32_t (&xa)[16], uint32_t (&ba)[16], uint32_t (&xb)[16],
+                       uint32_t (&bb)[16], uint32_t tacc, uint32_t tbas, const uint32_t (&c0)[16], bool reb,
+                       uint32_t& x) {
+  if constexpr (U < N / 16) {
+    tmem_wait_ld();
+    pin(xa);
+    pin(ba);
+    if constexpr (U + 1 < N / 16) {
+      tmem_ld16(tacc + 16 * (U + 1), xb);
+      tmem_ld16(tbas + 16 * (U + 1), bb);
+    }
+    if constexpr (M == LD) {
+      x ^= xa[0] ^ ba[0];
+      if (reb) {
+        tmem_st16(tbas + 16 * U, ba);
+        tmem_st16(tacc + 16 * U, c0);
+      }
+    } else {
+      uint32_t p[16];
+#pragma unroll
+      for (int c = 0; c < 16; c++) {
+        p[c] = xa[c] + ba[c];
+        if constexpr (M == EXT) asm volatile("" ::"r"(p[c]));
+        else duo<U % 16>(ch[c], p[c]);
+      }
+      if (reb) {
+#pragma unroll
+        for (int c = 0; c < 16; c++) p[c] -= MAGIC_BITS;
+        tmem_st16(tbas + 16 * U, p);
+        tmem_st16(tacc + 16 * U, c0);
+      }
+    }
+    k4t_chunks<M, U + 1>(ch, xb, bb, xa, ba, tacc, tbas, c0, reb, x);
+  }
+}
+// K4T FOLDONLY: the same lane work on register words (v, b pinned anew each chunk).
+template <int U>
+DC_DEV void k4t_regs(DuoSt (&ch)[NCH], uint32_t (&v)[16], uint32_t (&b)[16], bool reb) {
+  if constexpr (U < N / 16) {
+    pin(v);
+    pin(b);
+#pragma unroll
+    for (int c = 0; c < 16; c++) {
+      const uint32_t p = v[c] + b[c];
+      duo<U % 16>(ch[c], p);
+      if (reb) b[c] = p - MAGIC_BITS;
+    }
+    k4t_regs<U + 1>(ch, v, b, reb);
+  }
+}
+
 template <int R, int MK, int L, int FW>
 __global__ void __launch_bounds__(64 + 128 * FW, 1)
     pg100(const uint8_t* A, const uint8_t* B, int m, int n, int k, uint32_t seed, int32_t* C, uint32_t* Rc,
@@ -219,9 +283,10 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
     clk0[0] = clock64();
     clk0[1] = g0;
   }
-  constexpr int P = planes_of(R), NB = nbuf_of(R), S = stages_of(R), J = KS / 32, BNR = N / FW;
-  constexpr uint32_t TCOLS = NB * N < 32 ? 32 : NB * N;
+  constexpr int P = planes_of(R), NB = nbuf_of(R), S = stages_of(R), J = KS / 32, BNR = R == K4T ? N : N / FW;
+  constexpr uint32_t TCOLS = R == K4T ? 4 * N : NB * N < 32 ? 32 : NB * N;
   static_assert(BNR % 32 == 0 && (L == 32 || L == 64) && KS % L == 0, "shape");
+  static_assert(R != K4T || FW == 2, "K4T: one fold warpgroup a tile");
   extern __shared__ __align__(1024) unsigned char ring[];
   __shared__ uint64_t full[S], empty[S], tfull[NB], tempty[NB];
   __shared__ uint32_t tslot;
@@ -230,7 +295,7 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
   const int words = k / L, kst = k / KS;
   if (threadIdx.x == 0) {
     for (int s = 0; s < S; s++) mbar_init(&full[s], 1), mbar_init(&empty[s], 1);
-    for (int b = 0; b < NB; b++) mbar_init(&tfull[b], 1), mbar_init(&tempty[b], 4 * FW);
+    for (int b = 0; b < NB; b++) mbar_init(&tfull[b], 1), mbar_init(&tempty[b], R == K4T ? 4 : 4 * FW);
     fence_mbar_init();
   }
   if (w == 0) tmem_alloc(&tslot, TCOLS);
@@ -253,7 +318,20 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
     __syncthreads();
     tc_after_sync();
   }
-  constexpr uint32_t idesc = is_k4(R) || R == PF8 ? umma_idesc(1, 0, 0, BM, N) : umma_idesc(2, 1, 1, BM, N);
+  if constexpr (R == K4T && M != FOLDONLY) {  // accumulators 1.5 2^23, base' = 0 - 0x4B400000 (T_base = 0)
+    if (w >= 2) {
+#pragma unroll
+      for (int u = 0; u < N / 32; u++) {
+        tmem_st32c(tbase + 32 * u, MAGIC_BITS);
+        tmem_st32c(tbase + 2 * N + 32 * u, 0u - MAGIC_BITS);
+      }
+      tmem_wait_st();
+    }
+    tc_before_sync();
+    __syncthreads();
+    tc_after_sync();
+  }
+  constexpr uint32_t idesc = is_f8x4(R) || R == PF8 ? umma_idesc(1, 0, 0, BM, N) : umma_idesc(2, 1, 1, BM, N);
 
   if (w == 0) {
     if constexpr (M != FOLDONLY) {
@@ -267,11 +345,14 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
           } else {
             mbar_expect_tx(&full[slot], stage_bytes(R));
             const uint32_t dst = ring0 + slot * stage_bytes(R);
+            constexpr int NT = cta_n(R) / N;  // B tiles a stage: [plane][tile]
 #pragma unroll
             for (int p = 0; p < P; p++) {
               bulk_g2s(dst + p * a_tile, A + (((size_t)p * (m / BM) + tm) * kst + st) * a_tile, a_tile, &full[slot]);
-              bulk_g2s(dst + P * a_tile + p * b_tile, B + (((size_t)p * (n / N) + tn) * kst + st) * b_tile, b_tile,
-                       &full[slot]);
+#pragma unroll
+              for (int t = 0; t < NT; t++)
+                bulk_g2s(dst + P * a_tile + (p * NT + t) * b_tile,
+                         B + (((size_t)p * (n / N) + NT * tn + t) * kst + st) * b_tile, b_tile, &full[slot]);
             }
           }
         }
