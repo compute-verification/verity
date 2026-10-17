@@ -540,6 +540,30 @@ def test_a_partial_reference_is_named():
     assert f["name"].startswith("correspondence/reference-not-total CircuitCheckPartial_v1 raised on")
 
 
+def test_a_declared_interval_the_reference_leaves_is_named():
+    """A primitive's declared return interval is a fact the Build takes (`verity.ml.circuits.ports`): checked on operands within
+    its declared bounds, so a product of two s8 operands holds in [-16256, 16384] and one off by a unit is named."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.ports import In, Out, Ports
+    from verity.ml.circuits.types import Value
+
+    def mul(a, b):
+        return ((a - (1 << 16) if a >> 15 else a) * (b - (1 << 16) if b >> 15 else b)) & 0xFFFFFFFF
+
+    s8 = {"a": In(bound=(-128, 127)), "b": In(bound=(-128, 127))}
+    good = PrimitiveDefinition("CircuitCheckS8Mul", 1, (("a", Value(16)), ("b", Value(16))), Value(32), mul, register=False,
+                               ports=Ports(params=s8, ret=Out(interval=(-16256, 16384))))
+    e = CK.check_definition(good, OPTS, as_call=False)
+    assert e["ports"] == {"vectors": e["correspondence"]["vectors"], "intervals": [[0, 1, [-16256, 16384]]], "outside": 0}
+    assert not e["failures"]
+    bad = PrimitiveDefinition("CircuitCheckS8MulTight", 1, (("a", Value(16)), ("b", Value(16))), Value(32), mul, register=False,
+                              ports=Ports(params=s8, ret=Out(interval=(-16256, 16383))))
+    (f,) = CK.check_definition(bad, OPTS, as_call=False)["failures"]
+    assert f["name"].startswith("ports/interval CircuitCheckS8MulTight_v1") and f["examples"][0]["value"] == 16384
+    assert "ports" not in CK.check_definition(PrimitiveDefinition("CircuitCheckS8MulUntyped", 1, (("a", Value(16)), ("b", Value(16))),
+                                                                  Value(32), mul, register=False), OPTS, as_call=False)
+
+
 def test_a_kernel_wrong_only_on_edge_words_is_caught():
     """A kernel that returns 0 for a NaN operand: uniform random words rarely hold a NaN, the edge vectors always do."""
     from verity.ml.circuits.evaluation import register_kernel

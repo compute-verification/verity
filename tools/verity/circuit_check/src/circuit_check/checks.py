@@ -9,6 +9,10 @@
                      (`verity.ml.circuits.boolean.trace.word_of`) also equals that word Definition through its word view.  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the instances read
+    ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
+                     as facts about a primitive: its reference on edge and random operands, each leaf of a bounded parameter
+                     folded into its bound, returns every leaf within its interval; recorded only for a Definition that
+                     declares one
     redundant gates  a value computed twice inside one unit: the IR gates `verity_vllm.query.word.Graph` finds recomputed (same
                      primitive, same operands by value) that `word.units` puts in one unit, and the ANDs of a Boolean unit on
                      identical operands; counted, with where (primitive @ activation, or the named subcircuit)
@@ -215,6 +219,39 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
             F.fail("correspondence", "kernel-mismatch", t.id, f"[{name}]: {len(sc.mismatches)} of {sc.n} vectors", via=f"kernel:{name}",
                    examples=[{"instance": i, "args": _short(a), "kernel": _short(k), "reference": _short(r)} for i, a, k, r in sc.mismatches[:_EXAMPLES]])
     return rec, arrays, ref
+
+
+def port_intervals(t: Any, opts: Options, F: Findings) -> dict | None:
+    """The reference against the return intervals `t` declares (`verity.ml.circuits.ports`), on `vectors` with each leaf of a
+    bounded parameter folded into its bound (its two ends first); None when `t` declares none."""
+    from verity.ml.circuits import ports as P
+
+    pt = P.port_types(t)
+    outs = [(lo, hi, o.interval, w) for lo, hi, o, w in (pt.ret if pt is not None else ()) if o.interval is not None]
+    if not outs:
+        return None
+    params, _ret = signature_of(t)
+    n = _n_vectors(t, opts)
+    arrays = vectors(params, n, opts.seed)
+    for j, rs in enumerate(pt.params):
+        a = np.array(arrays[j]).reshape(n, -1)
+        for lo, hi, p, w in rs:
+            if p.bound is None or P.full(p.bound, w):
+                continue
+            b0, b1 = p.bound
+            for i in range(n):
+                for c in range(lo, hi):
+                    v = (b0, b1)[i] if i < 2 else b0 + int(a[i, c]) % (b1 - b0 + 1)
+                    a[i, c] = v & ((1 << w) - 1)
+        arrays[j] = a.reshape(arrays[j].shape)
+    ref, _raised = reference_outputs(t, params, arrays)
+    outside = [{"instance": i, "leaf": leaf, "value": out[leaf], "interval": list(iv)}
+               for i, out in enumerate(ref) if out is not None
+               for lo, hi, iv, w in outs for leaf in range(lo, hi) if not P.holds(iv, w, out[leaf])]
+    if outside:
+        F.fail("ports", "interval", t.id, f"{len(outside)} returned leaves outside their declared interval on {n} vectors",
+               examples=outside[:_EXAMPLES])
+    return {"vectors": n, "intervals": [[lo, hi, list(iv)] for lo, hi, iv, _w in outs], "outside": len(outside)}
 
 
 def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings) -> dict | None:
@@ -660,6 +697,9 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     if wv is not None:
         corr["realizations"].append(wv)
     entry["correspondence"] = corr
+    ports = port_intervals(t, opts, F)
+    if ports is not None:
+        entry["ports"] = ports
     leaves = 0 if kind == "reference" else sum(pt.leaves for pt in params)
     if kind != "reference" and leaves > opts.partition_max_leaves:
         why = (f"its parameters' {leaves} leaves are over the partition's leaf budget {opts.partition_max_leaves}: the word query "
