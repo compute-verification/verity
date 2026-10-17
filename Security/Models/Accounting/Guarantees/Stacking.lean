@@ -1,25 +1,31 @@
 import Definitions.Accounting.Carrier
+import Models.Accounting.Assumptions.RateAudit
 import Models.Accounting.Assumptions.RateAuditDeployed
 import Models.Accounting.Assumptions.Stacking
 
 /-!
-# Stacking: carriers are a side source of bounded capacity (trusted)
+# Stacking: carriers are a source of bounded capacity in every pass (trusted)
 
 Stacking needs a carrier the audit counts: device memory whose contents were chosen after the seed (a credited KV page)
 and hold other blocks' encodings, so that one read serves several receipts. In the ideal encoding model a carrier's
 contents are a circuit's values, which depend on the encodings only through the circuit's inputs and its own encodes
-(`Definitions/Accounting/Carrier.lean`). Two guarantees, whose proofs are in `Security/Proofs/Accounting/Stacking.lean`:
+(`Definitions/Accounting/Carrier.lean`). Three guarantees, whose proofs are in
+`Security/Proofs/Accounting/Stacking.lean`:
 
 * `CarrierBits`, the carrier lemma: memory holding a circuit's values holds at most its input and encoded bits about
   the store, `I + q·b` for `I` input bits and `q` blocks encoded.
 * `StackedSessionConservationSketchDeployed`: the remote audit's conservation at the deployed parameters
-  (`RemoteSessionConservationSketchDeployed`) for devices whose sectors beyond the on-chip state come from carriers,
-  with the on-chip state `S` (equivalently the side link's free capacity) raised by the carriers' bits under the
-  property: `8·R_in·life` input bits and `b·(c_ρ·reads·life)/rEnc` encoded bits over a carrier's life of `life`
+  (`RemoteSessionConservationSketchDeployed`) on a programmed store, whose blocks written after the seed are a
+  circuit's values under bound keys (`Accounting.Assumptions.KeyBinding`), for devices whose rebuilds beyond `X` are
+  their carriers' sectors. The stacked stock is charged in every pass's rebuilds: `X` grows by the carriers' bits under
+  the property, `8·R_in·life` input bits and `b·(c_ρ·reads·life)/rEnc` encoded bits over a carrier's life of `life`
   windows (the property's `L`; `L` here is the side link's bits, as in every rate-audit statement).
+* `StackedSessionConservationRelay`: the relay form, in the general class (`RemoteSessionConservationRelay`), where a
+  carrier's inputs may depend on the pass's oracle and so relay receipts: a carrier is a side source of the same bits.
 
-They rest on the remote audit's random oracle and named assumptions, and on one more:
-`Accounting.Assumptions.CircuitEncodeHardness` (encoding `x` of a block's `b` bits costs `x/b` of `rEnc` roundings).
+They rest on the remote audit's random oracle and named assumptions, and on two more:
+`Accounting.Assumptions.CircuitEncodeHardness` (encoding `x` of a block's `b` bits costs `x/b` of `rEnc` roundings) and
+`Accounting.Assumptions.KeyBinding` (the programmed store is a uniform store but for `δ`).
 
 **Idioms.** The carrier lemma is the counting step of incompressible encodings (Moran–Wichs, CRYPTO 2020: an
 adversary's state that recovers the encoding is at least its entropy) and of proofs of replication (Fisch, SealStack,
@@ -58,61 +64,119 @@ def CarrierBits : Prop :=
     (∀ E, c.inputs E ≤ I ∧ c.encoded E ≤ X) →
     Nat.card (Set.range fun E => c.run E) ≤ 2 ^ (I + X)
 
-/-- **The remote audit at the deployed parameters, with stacking: carriers are on-chip state of bounded size.**
-`RemoteSessionConservationSketchDeployed`'s game and bound for a session whose devices hold any sectors (at any on-chip
-budget `T` of the session's type), provided each device's held sectors beyond `S` bits are carried by a carrier
-(`RateSketch.Carrier`: memory whose contents are a circuit's values, which decode to those sectors at every store)
-whose circuit, over the carrier's life of `life` windows, takes in at most `R_in` input bytes a window and spends at
-most `c_ρ` roundings a byte of certified read, at `reads` bytes a window (the property's parameters; its lifetime
-cap is `life`, since `L` is the side link's bits here). Under
+/-- **The remote audit at the deployed parameters on a programmed store, with stacking: carriers are rebuilds of
+bounded size in every pass.** `RemoteSessionConservationSketchDeployed`'s game and bound on a programmed store
+`store ω` (`ω` uniform, before the session's coins: blocks registered before the seed and blocks written after it,
+whose payloads are a circuit's values, under bound keys), which is a uniform store but for `δ`
+(`Accounting.Assumptions.KeyBinding`), for a session whose every pass rebuilds at most `X` bits plus one sector for
+each sector of a carrier (`RateSketch.Carrier`: memory whose contents are a circuit's values, which decode to those
+sectors at every store). Each carrier's circuit, over its life of `life` windows, takes in at most `R_in` input bytes a
+window and spends at most `c_ρ` roundings a byte of certified read, at `reads` bytes a window (the property's
+parameters; its lifetime cap is `life`, since `L` is the side link's bits here). Under
 `Accounting.Assumptions.CircuitEncodeHardness 32768 rEnc cost` the shortfall terms are the deployed guarantee's at
-on-chip state `S + C`,
+rebuilt bits `X + C` a pass,
 
   `C = 8·R_in·life + 32768·(c_ρ·reads·life)/rEnc`,
 
 the carriers' bits: inputs, and the bits of 4 KiB tiles the circuit can encode with its roundings. The error is the
-deployed guarantee's:
+deployed guarantee's, plus `δ`:
 
-  `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96`.
+  `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96 + δ`.
 
-**The reading.** `C` adds to the side capacity `S + (L − ρ·256)` as one more source: a carrier is a side source of
-`I + q·b` bits (`CarrierBits`), with `I = 8·R_in·life` and `q = c_ρ·reads·life/rEnc` blocks. In the verbatim class a
-carrier's sectors reach the chip whole and at no read, as held sectors do, so a stacked device is a device of the
-deployed game at on-chip state `S + C`. The circuit is each carrier's whole provenance: the property's isolation is
-what bounds it by the inputs and roundings of `life` windows, and a carrier copied forward from older ones is one
-carrier whose life is the chain's.
+**The reading.** A carrier serves every pass of every window, so its stock is charged in each pass: `C` adds to the
+side capacity `S + (L − ρ·256) + X` as one more source, a carrier being a source of `I + q·b` bits (`CarrierBits`),
+with `I = 8·R_in·life` and `q = c_ρ·reads·life/rEnc` blocks. In the verbatim class a sector the device decodes from a
+carrier is one it computes rather than reads at its position, a rebuild. The circuit is each carrier's whole
+provenance: the property's isolation is what bounds it by the inputs and roundings of `life` windows, and a carrier
+copied forward from older ones is one carrier whose life is the chain's. Key binding is what keeps a written block's
+encoding from being chosen: what its payload carries about other blocks is its carrier, here, and nothing else.
 
 Proof: `Accounting.SecurityProofs.StackedSessionConservationSketchDeployed`, from
-`Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed` at on-chip state `S + C`, each carrier's sectors
-counted by `CarrierBits`.
+`Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed` at rebuilt bits `X + C`, each carrier's sectors
+counted by `CarrierBits`, and the store's distribution moved to a uniform one by `KeyBinding`.
 
-Frozen (no-function, hash): `RemoteSessionConservationSketchDeployed`'s game with carriers, in the random-oracle and
-ideal encoding models, under the per-pass hash budget and `CircuitEncodeHardness`. -/
+Frozen (no-function, hash): `RemoteSessionConservationSketchDeployed`'s game with carriers on a programmed store, in
+the random-oracle and ideal encoding models, under the per-pass hash budget, `CircuitEncodeHardness` and
+`KeyBinding`. -/
 def StackedSessionConservationSketchDeployed : Prop :=
-  ∀ (n P N ρ T S L q G X qtot Rin cρ reads life rEnc : ℕ) (cost : ℕ → ℕ) (ε : ℝ≥0∞)
-    (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 T L q 16 G 2773),
+  ∀ (n P N ρ S L q G X qtot Rin cρ reads life rEnc : ℕ) (cost : ℕ → ℕ) (ε δ : ℝ≥0∞) {Ω : Type} [Fintype Ω]
+    (store : Ω → RateSketch.SketchStore N 128)
+    (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773),
     7 ≤ n → 0 < P → 0 < N → 0 < rEnc →
     Assumptions.SketchRank 16 128 12 ε →
+    Assumptions.KeyBinding δ store →
     Assumptions.CircuitEncodeHardness 32768 rEnc cost →
-    (∀ w η j ι c E σ R O,
-      let B := (A.window w η).device j ι c
-      let D := RateSketch.Data.ofParts E R
-      (B.prog σ D).rebuilds O D * 256 ≤ X) →
     (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
     (∀ w η j ι c, ∃ K : RateSketch.Carrier N 128,
-      (((A.window w η).device j ι c).held \ K.carried).card * 256 ≤ S ∧
-        ∀ E, K.provenance.inputs E ≤ 8 * Rin * life ∧ K.provenance.roundings cost E ≤ cρ * reads * life) →
+      (∀ E σ R O,
+        let B := (A.window w η).device j ι c
+        let D := RateSketch.Data.ofParts E R
+        (B.prog σ D).rebuilds O D * 256 ≤ X + K.carried.card * 256) ∧
+      ∀ E, K.provenance.inputs E ≤ 8 * Rin * life ∧ K.provenance.roundings cost E ≤ cρ * reads * life) →
     let C := 8 * Rin * life + 32768 * (cρ * reads * life) / rEnc
-    pr (fun x : RateSketch.SketchStore N 128 ×
-        (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+    pr (fun x : Ω × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
       (∀ w t, (x.2 w).2.2 t ∈
-        (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
-        ((((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
-            (1 - (0.0015 + RateSketch.gammaSketch N 128 ρ (S + C) L X)) * (n * P * N * 32768) ∨
-          ∃ w, (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
-            (1 - (0.01 + RateSketch.gammaSketch N 128 ρ (S + C) L X)) * (P * N * 32768)))
+        (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
+        ((((∑ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+            (1 - (0.0015 + RateSketch.gammaSketch N 128 ρ S L (X + C))) * (n * P * N * 32768) ∨
+          ∃ w, (((A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+            (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L (X + C))) * (P * N * 32768)))
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε +
         (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
-          (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96)
+          (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + δ
+
+/-- **The remote audit with relaying side sources on a programmed store, with stacking: a carrier is a side source of
+its circuit's bits.** `RemoteSessionConservationRelay`'s game and bound on a programmed store `store ω`, a uniform store
+but for `δ` (`Accounting.Assumptions.KeyBinding`), for a session whose every pass device also reads a carrier: its side
+reads at odd addresses answer a carrier's memory (`Rate.PassProvenance`: a circuit's values in the pass, whose inputs
+may depend on the pass's certified stream and oracle, so they may be receipts computed elsewhere), and its other side
+reads and the certified stream take in at most `L` bits in every world (`PIChip.linkBitsEven`; the session's own link
+bound `L_all` counts the carrier's reads too, and is any). With each carrier's circuit within the property's budgets
+and `Accounting.Assumptions.CircuitEncodeHardness b rEnc cost_ρ`, as in `StackedSessionConservationSketchDeployed`, the
+bound is `RemoteSessionConservationRelay`'s at side link `L + C`,
+
+  `C = 8·R_in·life + b·(c_ρ·reads·life)/rEnc`:
+
+for every `m`, the probability that every opening of every window passes while the session's tier reads fall short of
+`(1 − γ̄)` of its bits or some window's fall short of `(1 − γ_w)` of its own, with `γ` read at side link `L + C` and
+slack `λ + m·b`, is at most
+
+  `(1 − d̄)^(d·n) + (1 − d_w/n)^(d·n) + n·P·G·(C(N, m)·2^(L + C)/2^(h·m) + 2^q/2^λ) + δ`.
+
+**The reading.** Reading a carrier costs no link, but its contents are its circuit's values, so the device could
+rerun the circuit, taking its inputs and the bits it encodes over the link: `C` bits a pass. A carrier is thus a side
+source of `C` bits, the one place a receipt relayed through the circuit's inputs can come from, at `h` bits a relayed
+receipt (`RemoteSessionConservationRelay`'s term). The general class's receipt hashes the whole word, not the deployed
+sketch (as in `RemoteSessionConservationRelay`).
+
+Proof: `Accounting.SecurityProofs.StackedSessionConservationRelay`: each device is simulated by one that reruns its
+carrier's circuit over the side link and answers the carrier's reads from its values, within `L + C` link bits, with
+the same receipts, tier reads and completions; `Accounting.SecurityProofs.RemoteSessionConservationRelay` bounds that
+session, and `KeyBinding` moves the store's distribution to a uniform one.
+
+Frozen (no-function, hash): `RemoteSessionConservationRelay`'s game with carriers on a programmed store, in the
+random-oracle and ideal encoding models, under `CircuitEncodeHardness` and `KeyBinding`. -/
+def StackedSessionConservationRelay : Prop :=
+  ∀ (n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life rEnc : ℕ) (cost costρ : ℕ → ℕ)
+    (tier : ℕ → Fin τ) (δ : ℝ≥0∞) {Ω : Type} [Fintype Ω] (store : Ω → Rate.Store N b)
+    (A : Rate.DeployedSession n P N b h ρ S Lall q r s d G) (dbar dw : ℝ),
+    0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 → 0 < rEnc →
+    Assumptions.KeyBinding δ store →
+    Assumptions.WorkHardness b rounds cRoot cost →
+    (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
+    Assumptions.CircuitEncodeHardness b rEnc costρ →
+    (∀ w η j ι c, ∃ K : Rate.PassProvenance N b h ρ (ℕ → Bool),
+      (∀ E R O v i, ((A.window w η).device j ι c).side E R O v (2 * i + 1) = K.run E R O i) ∧
+      (∀ st wd, (((A.window w η).device j ι c).chip st).linkBitsEven wd [] ≤ L) ∧
+      ∀ E R O, K.inputs E R O ≤ 8 * Rin * life ∧ K.roundings costρ E R O ≤ cρ * reads * life) →
+    let C := 8 * Rin * life + b * (cρ * reads * life) / rEnc
+    pr (fun x : Ω × (Fin n → Rate.WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
+          ((((∑ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 : ℕ)) : ℝ) <
+              (1 - (dbar + Rate.Deployed.gammaPass N b ρ S (L + C) (lam + m * b) rounds cRoot F)) * (n * P * N * b) ∨
+            ∃ w, (((A.win w x.2).reads tier (store x.1) (x.2 w).1 : ℕ) : ℝ) <
+              (1 - (dw + Rate.Deployed.gammaPass N b ρ S (L + C) (lam + m * b) rounds cRoot F)) * (P * N * b)))
+      ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
+        (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ (L + C) / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + δ
 
 end Accounting.Guarantees
