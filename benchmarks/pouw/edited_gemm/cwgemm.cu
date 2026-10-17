@@ -12,8 +12,10 @@
 //   cw_*     c_*'s GEMM (e_l7qs's mainloop, co32c's tail and receipts) on X and Wb: each consumer thread edits 32 bytes of
 //            every stage's B tile in place (row 32 wn + 8 wm + lane / 4, logical chunks 2 j, 2 j + 1 with j = lane % 4, so
 //            the 4 warps of column wn edit the 32 rows they read), the next stage's edit between this stage's atoms 1
-//            and 2, then those 4 warps meet on a named barrier before any ldmatrix of it; a tile's first stage is edited
-//            before its first atom. The release's fence.proxy.async orders the edit's stores before the slot's TMA refill
+//            and 2 and an arrival on the slot's edited mbarrier for column wn, whose 4 warps (all on one SMSP) wait on it
+//            before the first ldmatrix of that stage, after atom 2 (a named barrier there runs them in lockstep: 19%
+//            slower than c_l7qs, against 6% for the added instructions); a tile's first stage is edited before its first
+//            atom. The release's fence.proxy.async orders the edit's stores before the slot's TMA refill
 // Modes:
 //   cwgemm gate DIR M N K SEED    cgemm.cu's gate into DIR (c_l7qs and its peers, the dumps cgemm_ref.py reads), then
 //                                 under the same key: cplane's P_B against cwedit's, cw's O against cuBLASLt's X W^T and
@@ -114,19 +116,23 @@ template <int LAG, int TIE, bool SLEEP> struct WL : EL<DUO, LAG, TIE, SLEEP> {
   using B::B;
   static constexpr int MI = B::MI, NI = B::NI, NST = B::NST;
   int erow = 0, ej = 0, KTn = 0;
-  uint32_t eoff = 0, ebar = 0, pw = 0;
+  // ebar: this column's edited barriers (slot i's at ebar + 8 i, 128 arrivals: the column's 4 warps), eph: their phases
+  // (bit i), toggled at each wait, since the tail's stage takes a slot without an edit
+  uint32_t eoff = 0, ebar = 0, eph = 0, pw = 0;
   const uint32_t* cpl = nullptr;   // this tile's plane words for this thread: stage q's at cpl[512 q]
   const uint4* cub = nullptr;      // this thread's row of UB
+  DEV static uint32_t edited0(uint32_t bars) { return bars + 16 * NST; }
   DEV void edit_init(int warp, int lane) {
     const int wm = warp / B::WARPS_N, wn = warp % B::WARPS_N;
     erow = 32 * wn + 8 * wm + (lane >> 2);
     ej = lane & 3;
     eoff = B::A_BYTES + erow * B::BK + (((2 * ej) ^ (erow & 7)) << 4);
-    ebar = 1 + wn;
+    ebar = edited0(this->bars) + 8 * NST * wn;
   }
-  // stage q's edit at sb (W' = (Wb + Ub + c) ^ 0x80 on logical chunks 2 j, 2 j + 1), then stage q + 1's plane word
-  DEV void edit(uint32_t sb, int q) {
-    const uint32_t a0 = sb + eoff, a1 = a0 ^ 16u;
+  // stage q's edit in slot s (W' = (Wb + Ub + c) ^ 0x80 on logical chunks 2 j, 2 j + 1) and the arrival on its edited
+  // barrier, then stage q + 1's plane word (the plane has a stage of padding, so the last stage's prefetch stays in it)
+  DEV void edit(int q) {
+    const uint32_t a0 = this->stage(this->s) + eoff, a1 = a0 ^ 16u;
     uint32_t v[8];
     asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v[0]), "=r"(v[1]), "=r"(v[2]), "=r"(v[3]) : "r"(a0) : "memory");
     asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v[4]), "=r"(v[5]), "=r"(v[6]), "=r"(v[7]) : "r"(a1) : "memory");
@@ -137,9 +143,16 @@ template <int LAG, int TIE, bool SLEEP> struct WL : EL<DUO, LAG, TIE, SLEEP> {
     for (int w = 0; w < 8; w++) v[w] = (v[w] + u[w] + ((p >> w) & 0x01010101u)) ^ 0x80808080u;
     asm volatile("st.shared.v4.u32 [%0], {%1, %2, %3, %4};" ::"r"(a0), "r"(v[0]), "r"(v[1]), "r"(v[2]), "r"(v[3]) : "memory");
     asm volatile("st.shared.v4.u32 [%0], {%1, %2, %3, %4};" ::"r"(a1), "r"(v[4]), "r"(v[5]), "r"(v[6]), "r"(v[7]) : "memory");
-    if (q + 1 < KTn) pw = __ldg(cpl + 512 * (q + 1));
+    asm volatile("mbarrier.arrive.shared::cta.b64 _, [%0];" ::"r"(ebar + 8 * this->s) : "memory");
+    pw = __ldg(cpl + 512 * (q + 1));
   }
-  DEV void meet() const { asm volatile("bar.sync %0, 128;" ::"r"(ebar) : "memory"); }
+  // slot s's edit complete in the column (the mbarrier's release and acquire order the edit's stores before the ldmatrix)
+  DEV void meet() {
+    const uint32_t par = (eph >> this->s) & 1u;
+    eph ^= 1u << this->s;
+    if constexpr (SLEEP) mbar_sleep_warp(ebar + 8 * this->s, par);
+    else mbar_wait_warp(ebar + 8 * this->s, par);
+  }
   template <bool FIRST, bool LAST>
   DEV void stage_w(int (&acc)[MI][NI][4], St (&ch)[8], const uint32_t (&kr)[1], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[2][NI][2],
                    uint32_t zero, int kt) {
@@ -148,16 +161,13 @@ template <int LAG, int TIE, bool SLEEP> struct WL : EL<DUO, LAG, TIE, SLEEP> {
     B::template atom<FIRST, 0>(acc, ch, kr, fa[0], fb[0], zero);
     this->load(fa[0], fb[0], sb, 2);
     B::template atom<false, 1>(acc, ch, kr, fa[1], fb[1], zero);
+    this->advance();
     if (!LAST) {
-      const int sn = this->s + 1 == NST ? 0 : this->s + 1;
-      const uint32_t par = this->s + 1 == NST ? this->ph ^ 1 : this->ph;
-      if constexpr (SLEEP) mbar_sleep_warp(this->full(sn), par);
-      else mbar_wait_warp(this->full(sn), par);
-      edit(this->stage(sn), kt + 1);
+      this->wait_full();
+      edit(kt + 1);
     }
     this->load(fa[1], fb[1], sb, 3);
     B::template atom<false, 2>(acc, ch, kr, fa[0], fb[0], zero);
-    this->advance();
     if (!LAST) {
       meet();
       this->load(fa[0], fb[0], this->stage(this->s), 0);
@@ -170,7 +180,7 @@ template <int LAG, int TIE, bool SLEEP> struct WL : EL<DUO, LAG, TIE, SLEEP> {
     uint32_t fa[2][MI][4], fb[2][NI][2];
     pw = __ldg(cpl);
     this->wait_full();
-    edit(this->stage(this->s), 0);
+    edit(0);
     meet();
     this->load(fa[0], fb[0], this->stage(this->s), 0);
     if (KTn == 1) {
@@ -192,6 +202,8 @@ template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE> DEV void cw_body(
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, true, 1);
+  if (threadIdx.x == 0)
+    for (int i = 0; i < L::WARPS_N * L::NST; i++) mbar_init(L::edited0(ml.bars) + 8 * i, 128);
   ml.init(threadIdx.x);
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   ml.prologue();
@@ -239,6 +251,9 @@ template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE> DEV void cw_body(
 CWGEMM(cw_l7qs, 7, 4, true)
 
 // ---------------------------------------------------------------- host
+// CSMEM is ML's stages, its 6 stage barriers and 1,024 bytes of alignment slack; the 12 edited barriers follow the 6
+constexpr int WSMEM = CSMEM + 128;
+static_assert(WSMEM <= 101376, "sm_120's 99 KB a block");
 typedef void (*WKern)(const WArgs);
 struct WKn { const char* name; WKern k, k3; };
 static const WKn WKERN[] = {{"cw_l7qs", cw_l7qs, cw_l7qs_k3}};
@@ -262,13 +277,13 @@ static void wrun(WP& W, const WKn* e, int* Y, uint32_t* R) {
   EP& P = W.C.E;
   WArgs w{Args{W.mW, Y, R, P.m, P.n, P.k, 8, P.seed, 0, 1, 0, 0, {0, 0, 0, 0}, nullptr, 0}, W.plane,
           reinterpret_cast<const uint4*>(W.UB)};
-  (n_dig(P.k) == 3 ? e->k3 : e->k)<<<P.grid, MLW::NT, CSMEM, P.st>>>(w);
+  (n_dig(P.k) == 3 ? e->k3 : e->k)<<<P.grid, MLW::NT, WSMEM, P.st>>>(w);
 }
 static void wsetup(WP& W, int m, int n, int k, uint32_t seed, bool gate) {
   csetup(W.C, m, n, k, seed, gate);
   if (W.C.half) { fprintf(stderr, "cwgemm: co32c only (k = %d)\n", k); exit(2); }
   EP& P = W.C.E;
-  CK(cudaMalloc(&W.Wb, (size_t)n * k)); CK(cudaMalloc(&W.plane, (size_t)n * k / 8));
+  CK(cudaMalloc(&W.Wb, (size_t)n * k)); CK(cudaMalloc(&W.plane, (size_t)n * k / 8 + 2048));
   CK(cudaMalloc(&W.UB, (size_t)n * 32)); CK(cudaMalloc(&W.PB, (size_t)n * 128));
   wbias<<<4096, 256, 0, P.st>>>(W.C.W7, W.Wb, (size_t)n * k);
   cpl(W, sigma(seed, 0xFFFFFFFFu));
@@ -276,7 +291,7 @@ static void wsetup(WP& W, int m, int n, int k, uint32_t seed, bool gate) {
   CK(cudaGetLastError());
   W.mW = upload_maps(Maps{tmap(W.C.X, k, m, 128), tmap(W.Wb, k, n, 128), tmap(W.C.PA, 128, m, 128), tmap(W.PB, 128, n, 128)});
   for (auto& e : WKERN)
-    for (WKern kern : {e.k, e.k3}) CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
+    for (WKern kern : {e.k, e.k3}) CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, WSMEM));
 }
 static void wfree(WP& W) {
   CK(cudaDeviceSynchronize());
