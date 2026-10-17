@@ -12,6 +12,8 @@
 //   p_fold      the fold alone (scalar only, integer)
 //   p_ffma      FFMA on 8 chains a thread (scalar only, FP32)
 //   p_mixed     4 IMMA + the fold + 64 FFMA
+//   p_honest16, p_mma16, p_mma16z: p_honest, p_mma and p_mma0 with m16n8k16 (the honest MMA at L = 16 on sm_89)
+//   p_light     the fold alone on one warp an SM (the lightest load: the clock the board reaches unloaded)
 #include <algorithm>
 #include <chrono>
 #include <dlfcn.h>
@@ -50,14 +52,14 @@ struct Ffma {
 };
 
 // The timed loop between OP_BEGIN and OP_END, its globaltimer span in rec.stop (ns) for the launch's clock.
-template <int NM, bool FOLD, bool ZERO, int NF>
+template <int NM, bool FOLD, bool ZERO, int NF, bool K16 = false>
 __device__ __forceinline__ void body(const OpArgs& a) {
   Honest h(a.mode, ZERO);
   Ffma f(a.mode);
   const unsigned long long t0 = gtime();
   OP_BEGIN
   OP_LOOP(it) {
-    h.step<NM, FOLD>();
+    h.step<NM, FOLD, K16>();
     f.run<NF>();
   }
   OP_END
@@ -76,6 +78,10 @@ OP_KERNEL(p_mma0, TPB) { body<8, false, true, 0>(a); }
 OP_KERNEL(p_fold, TPB) { body<0, true, false, 0>(a); }
 OP_KERNEL(p_ffma, TPB) { body<0, false, false, 64>(a); }
 OP_KERNEL(p_mixed, TPB) { body<4, true, false, 64>(a); }
+OP_KERNEL(p_honest16, TPB) { body<8, true, false, 0, true>(a); }
+OP_KERNEL(p_mma16, TPB) { body<8, false, false, 0, true>(a); }
+OP_KERNEL(p_mma16z, TPB) { body<8, false, true, 0, true>(a); }
+OP_KERNEL(p_light, 32) { body<0, true, false, 0>(a); }
 
 #define IMMA "IMMA.16832.S8.S8"
 static const OpProbe PROBES[] = {
@@ -86,6 +92,10 @@ static const OpProbe PROBES[] = {
     {.name = "p_fold", .kernel = (const void*)p_fold, .tpb = TPB, .expect = "IMAD=32", .iters = 2048},
     {.name = "p_ffma", .kernel = (const void*)p_ffma, .tpb = TPB, .expect = "FFMA=64", .iters = 4096},
     {.name = "p_mixed", .kernel = (const void*)p_mixed, .tpb = TPB, .expect = IMMA "=4,FFMA=64", .iters = 2048},
+    {.name = "p_honest16", .kernel = (const void*)p_honest16, .tpb = TPB, .expect = "IMMA.16816.S8.S8=8", .iters = 2048},
+    {.name = "p_mma16", .kernel = (const void*)p_mma16, .tpb = TPB, .expect = "IMMA.16816.S8.S8=8", .iters = 4096},
+    {.name = "p_mma16z", .kernel = (const void*)p_mma16z, .tpb = TPB, .expect = "IMMA.16816.S8.S8=8", .iters = 4096},
+    {.name = "p_light", .kernel = (const void*)p_light, .tpb = 32, .expect = "IMAD=32", .iters = 2048},
 };
 
 // NVML's power reading beside bench.cuh's clock and reasons (dlopen'd, as there).

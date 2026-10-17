@@ -22,5 +22,5 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# The tests read this directory alone: the package and data/.
-inputs = []
+# The tests read this directory (the package and data/) and the perplexity arms the designs name.
+inputs = ["benchmarks/ppl/specs"]
