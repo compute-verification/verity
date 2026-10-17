@@ -142,8 +142,9 @@ the live sessions' bound at escapes on accepted runs (`FlockDeploy.KS.ZkLiveAccJ
 (`Flock.TableBoundJAccAt`, `FlockDeploy.KS.zk_tableBoundJAccAt`). Each round of an accepted masked rep issued the coins
 its statement fixes (`RoundsNZk`: `FlockDeploy.zkRepNs`, `FlockDeploy.zkVerifyRepWith_readsN`; per rep stream,
 `FlockDeploy.zkRepNsOf`, `FlockDeploy.streams_ns_zk`), and custody reads each round message's coin at the session's
-count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). Where `verify --zk` sets a record up, the old `--zk` plan's
-tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), so at the empty
-draw the deployed `--zk` decoders are right at them (`FlockDeploy.KS.drawOkZKJ_empty`,
-`FlockDeploy.KS.decodesTable_zkTabs`); so are the hidden-output plan's and decoders (`ZkPlanHJ`:
-`FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`, `FlockDeploy.KS.decodesTableH_zkTabs`). -/
+count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). Where `verify --zk` sets its session up at a draw
+(`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`,
+`FlockDeploy.KS.planZJ_eq_tabsJ`), so at the empty draw the deployed `--zk` decoders are right at them
+(`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`); so are the hidden-output plan's and decoders
+(`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`,
+`FlockDeploy.KS.decodesTableH_zkTabs`). -/
