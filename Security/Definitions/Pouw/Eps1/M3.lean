@@ -16,7 +16,7 @@ instruction any fixed function of at most three earlier words.
   `Σ_{ℓ' ≤ ℓ} Σ_p Ã[i, 32ℓ'+p]·B̃[32ℓ'+p, j]` (general), as s32 words, one designated instruction each (`out`).
 * `WordLocal`: the instructions split into blocks `P_τ`, one per output, holding its writer, every input of a `P_τ`
   instruction in `P_τ`, the previous segment's output `T_{ℓ−1}[i,j]`, or free (Theorem B's class).
-* `ClassP`: every instruction is an output writer or a mixed-radix tuple of fields
+* `ClassP`: every instruction is an output writer, a free word, or a mixed-radix tuple of fields
   `φ = β·T_{ℓ−1}[i,j] + Σ_{p∈E} R[i, 32ℓ+p]·U[j,p]` with `M_{k+1} ≥ M_k·|range_k|` and `Π_k |range_k| ≤ 2^32`, a field
   with a prefix taking it from an input that holds it (Theorem C's class).
 -/
@@ -145,8 +145,8 @@ def range (φ : Field m n Lseg) : Set ℤ := {z | ∃ R U, ColsValid U ∧ φ.va
 end Field
 
 /-- **A mixed-radix tuple of fields**: fields `φ_k` with offsets `lo_k` and multipliers `M_k`, its word
-`Σ_k (φ_k − lo_k)·M_k`, each `lo_k` below `φ_k`'s range, `M_0 ≥ 1`, `M_{k+1} ≥ M_k·|range_k|` and
-`Π_k |range_k| ≤ 2^32`. -/
+`Σ_k (φ_k − lo_k)·M_k`, each `lo_k` the least value of `φ_k`'s range, `M_0 ≥ 1`, `M_{k+1} ≥ M_k·|range_k|`,
+`Π_k |range_k| ≤ 2^32`, and the tuple's largest value below `2^32`, so that the word is the tuple (injective). -/
 structure Packing (m n Lseg : ℕ) where
   fields : List (Field m n Lseg × ℤ × ℕ)
 
@@ -158,27 +158,42 @@ variable {m n Lseg : ℕ}
 def word (π : Packing m n Lseg) (R : Dither m Lseg) (U : Cols n) : Word :=
   BitVec.ofInt 32 (π.fields.map fun f => (f.1.val R U - f.2.1) * (f.2.2 : ℤ)).sum
 
-/-- The tuple is mixed-radix: offsets below the ranges, multipliers growing by the ranges, ranges multiplying to at
-most `2^32`. -/
+/-- The tuple is mixed-radix: each offset the least value of its field's range, multipliers growing by the ranges,
+ranges multiplying to at most `2^32`, and the largest value `Σ_k (|range_k| − 1)·M_k` below `2^32`. -/
 def MixedRadix (π : Packing m n Lseg) : Prop :=
-  (∀ f ∈ π.fields, ∀ z ∈ f.1.range, f.2.1 ≤ z) ∧
+  (∀ f ∈ π.fields, f.2.1 ∈ f.1.range ∧ ∀ z ∈ f.1.range, f.2.1 ≤ z) ∧
     (∀ (k : ℕ) (hk : k + 1 < π.fields.length),
       (π.fields[k].2.2 : ℝ) * (π.fields[k].1.range.ncard : ℝ) ≤ (π.fields[k + 1].2.2 : ℝ)) ∧
     (∀ h : 0 < π.fields.length, 1 ≤ π.fields[0].2.2) ∧
-    (π.fields.map fun f => (f.1.range.ncard : ℝ)).prod ≤ 2 ^ 32
+    (π.fields.map fun f => (f.1.range.ncard : ℝ)).prod ≤ 2 ^ 32 ∧
+    (π.fields.map fun f => ((f.1.range.ncard : ℝ) - 1) * (f.2.2 : ℝ)).sum < 2 ^ 32
 
 end Packing
 
-/-- **Class P** (Theorem C's class) with tuples `pk`: every instruction is an output writer or a mixed-radix tuple of
-fields whose word it holds on every instance, and a field with a prefix (`β = true`) for `τ` with `ℓ > 0` takes it
-from an argument that holds it: the writer of `T_{ℓ−1}[i,j]`, or a tuple with a prefixed field for `τ`. -/
+/-- Instruction `t` **holds** the incidence `(τ, p)`, entry `p` of segment `ℓ = τ.1` of `(i, j) = τ.2`, under the
+tuples `pk`: it writes an output `T_{ℓ'}[i,j]` with `ℓ' ≥ ℓ`, or its tuple has a field for `τ` with `p ∈ E`, or a
+field with a prefix covering segment `ℓ` of `(i, j)` (a field for `(ℓ', i, j)`, `ℓ' > ℓ`, with `β = true`). Free words
+hold nothing. -/
+def Holds {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+    (pk : Fin G → Option (Packing m n Lseg)) (t : Fin G) (τ : Tau m n Lseg) (p : Fin 32) : Prop :=
+  (∃ τ', P.out τ' = t ∧ τ'.2 = τ.2 ∧ τ.1 ≤ τ'.1) ∨
+    ∃ π, pk t = some π ∧ ∃ f ∈ π.fields,
+      (f.1.τ = τ ∧ p ∈ f.1.E) ∨ (f.1.β = true ∧ f.1.τ.2 = τ.2 ∧ τ.1 < f.1.τ.1)
+
+/-- **Class P** (Theorem C's class) with tuples `pk`: every instruction is an output writer, a free word (on every
+instance a function of the dither alone or of `U` alone), or a mixed-radix tuple of fields whose word it holds on
+every instance (and only a tuple has `pk t = some _`); and a field with a prefix (`β = true`) for `τ = (ℓ, i, j)` with
+`ℓ > 0` takes it from an argument that holds it: one argument holding every incidence of the segments before `ℓ` of
+`(i, j)`. -/
 def ClassP {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) : Prop :=
-  ∀ t, (∃ τ, P.out τ = t) ∨
+  ∀ t, ((∃ τ, P.out τ = t) ∧ pk t = none) ∨
+    (pk t = none ∧
+      ((∃ g : Dither m Lseg → Word, ∀ R U, ColsValid U → ∀ v, P.prog.IsRun (P.inputs R U) v → v t = g R) ∨
+        ∃ g : Cols n → Word, ∀ R U, ColsValid U → ∀ v, P.prog.IsRun (P.inputs R U) v → v t = g U)) ∨
     ∃ π, pk t = some π ∧ π.MixedRadix ∧
       (∀ R U, ColsValid U → ∀ v, P.prog.IsRun (P.inputs R U) v → v t = π.word R U) ∧
-      ∀ f ∈ π.fields, f.1.β = true → ∀ h : 0 < f.1.τ.1.val, ∃ j s, P.prog.arg t j = .inr s ∧
-        (M3.earlier t s = P.out (f.1.τ.prev h) ∨
-          ∃ π', pk (M3.earlier t s) = some π' ∧ ∃ f' ∈ π'.fields, f'.1.τ = f.1.τ ∧ f'.1.β = true)
+      ∀ f ∈ π.fields, f.1.β = true → 0 < f.1.τ.1.val → ∃ j s, P.prog.arg t j = .inr s ∧
+        ∀ l, l < f.1.τ.1 → ∀ p, Holds P pk (M3.earlier t s) (l, f.1.τ.2) p
 
 end Pouw.Eps1

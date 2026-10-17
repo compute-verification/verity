@@ -35,7 +35,8 @@ def WordLocalGeneral : Prop :=
     P.WordLocal blk → 8 * (Lseg * m * n) ≤ G
 
 /-- **Theorem C.** A class-P (radix-packed) M3 program that computes Dither's prefix words at the zero instance has at
-least `(1 + 28/27)·L·m·n` instructions. -/
+least `(1 + 28/27)·L·m·n` instructions. `G` counts M3 instructions, each writing one 32-bit word, so it counts
+destination words: read in sm_120 issue slots, an IMAD.WIDE (two destination words in one slot) counts two. -/
 def ClassPPacked : Prop :=
   ∀ (m n Lseg : ℕ) (FR FU : Type) (G : ℕ) (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)),
