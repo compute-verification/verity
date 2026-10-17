@@ -483,10 +483,34 @@ def test_a_pr_that_makes_circuit_check_run_cold_goes_above_the_warm_ones_and_the
     h.d.train_size = 6
     for n, f in ((1, "a.txt"), (2, "verity/ml/circuits/library.py"), (3, "Security/X.lean")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
+    head2 = next(p.head for p in world.gh.open_prs() if p.number == 2)
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 3]                          # #2 pre-warms off `next`
+    assert h.launched[0][0] == head2 and len(h.launched) == 2
+    warm = h.launched[1][0]
+    (pre, *_) = sorted(h.run_state)
+    h.run_state[pre] = ("done", 1, None)                                  # its pre-warm ended, passed or not
+    h.tick()                                                              # it's marked done after this tick's sync
     h.tick()
     members = h.q.chain()
-    assert [m.pr for m in members] == [1, 3, 2]
-    assert [c for c, _, _ in h.launched] == [members[1].commit, members[2].commit]
+    assert [m.pr for m in members] == [1, 3, 2] and members[1].commit == warm
+    assert h.launched[-1][0] == members[2].commit
+
+
+def test_a_cold_pr_already_on_next_leaves_it_to_pre_warm_and_comes_back_above_the_warm_ones(world, monkeypatch):
+    """17 Oct 07:44Z: #2199 (tools/verity/circuit_check/) became the bottom of `next` when the PRs below it landed, and every
+    train above it ran circuit-check cold until top, as lander, ejected it by hand (CI-47)."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 6
+    world.gh.put(1, world.change({"tools/verity/circuit_check/x.py": "1\n"}))
+    h.d.q.warming = None                                                  # admitted before pre-warming existed
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1]
+    h.d.q.warming = h.d.warming
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [2]
+    assert any("pre-warming #1" in x for x in world.logs)
 
 
 def test_two_cold_prs_side_by_side_share_one_cold_train(world, monkeypatch):
