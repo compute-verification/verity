@@ -975,6 +975,40 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
     assert A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)[0] == []
 
 
+def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecedents_are_met():
+    """LEAN-26: each predicate the spec declares under `claims.modules` names a `fails` theorem stating `¬ C …` with that
+    claim at the head, and `meets` theorems that are not `C` itself, each a guarantee; one without witnesses fails unless
+    `claims.not` gives the reason, and a named assumption is no claim."""
+    def spec(name, predicate=True):
+        return {"name": name, "module": "P.Claims", "kind": "def", "statement": False, "predicate": predicate}
+
+    def thm(head, negated):
+        return fact() | {"kind": "theorem", "body": {"head": head, "negated": negated}}
+    defs = [spec("P.KS"), spec("P.Complete"), spec("P.Helper"), spec("P.Hyp"), spec("P.size", predicate=False)]
+    pins = {"P.t": fact(), "P.KS_fails": thm("P.KS", True), "P.KS_meets": thm("P.ListWithin", False),
+            "P.Complete_fails": thm("P.KS", True), "P.Complete_meets": thm("P.Complete", False)}
+    rule = {"modules": ["P.Claims"], "not": {"P.Helper": "a collision, which the claims read"},
+            "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]},
+                          "P.Complete": {"fails": "P.Complete_fails", "meets": ["P.Complete_meets", "P.Complete_zk"]}}}
+    policy = {**POLICY, "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}
+    f = facts(pins=pins, spec_definitions=defs)
+    assert A.claim_failures(policy, f) == [
+        "claims: P.Complete_fails does not state that P.Complete fails: past its ∀ and ∃ binders its statement must be "
+        "`¬ P.Complete …`, and it is ¬ P.KS …",
+        "claims: P.Complete_meets states P.Complete itself: a `meets` witness states the claim's checkable antecedents at a "
+        "deployed record (a decoder meeting its bound, a non-empty scope), not the claim",
+        "claims: P.Complete_zk, P.Complete's `meets` witness, is not under `guarantees`: list it there, so its record shows "
+        "in the landing DM"]
+    assert A.claim_failures({**policy, "claims": {**rule, "not": {}}}, f)[0].startswith(
+        "claims: P.Helper (P.Claims) is a claim definition with no witnesses: name its `P.Helper_fails`")
+    good = {**rule, "witnesses": {"P.KS": rule["witnesses"]["P.KS"]}, "not": {**rule["not"], "P.Complete": "not yet stated"}}
+    assert A.claim_failures({**policy, "claims": good}, f) == []
+    assert A.claim_failures({**policy, "claims": {**good, "not": {**good["not"], "P.Gone": "moved"}}}, f) == [
+        "claims: P.Gone is listed under `claims` but is no predicate of the spec under P.Claims; remove the entry"]
+    assert A.claim_failures(POLICY, f) == []
+    assert A.claim_witnesses(policy) == {"P.KS_fails", "P.KS_meets", "P.Complete_fails", "P.Complete_meets", "P.Complete_zk"}
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read

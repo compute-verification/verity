@@ -68,6 +68,12 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
 - the guarantees say what their records say, and each names its owner (below);
+- with a `verifier` section, nothing the verifier's `entries` reach is `@[implemented_by]` or `@[extern]` outside `allow`,
+  and they reach the `hash` namespace only through `stop` (`verifier_failures`);
+- with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its
+  witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stated `¬ C …` past its `∀`
+  and `∃` binders with the claim `C` at the head, and guarantees `meets`, one per deployed record, that state the claim's
+  checkable antecedents there and not `C` itself (`claim_failures`; the `shape` rule doesn't apply to them);
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);

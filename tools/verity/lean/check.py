@@ -182,7 +182,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
-ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "compile_time",
+ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "compile_time",
          "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
@@ -976,6 +976,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     for n in sorted(set(listed_escapes) - set(found)):
         fails.append(f"escape: {n} is listed under `escapes` but is not one; remove the entry")
     fails += verifier_failures(policy.get("verifier"), facts.get("verifier"))
+    fails += claim_failures(policy, facts)
     modules = set(facts["modules"])
     exempt = policy.get("exempt", {})
     for m, rel in sorted(files.items()):
@@ -1120,6 +1121,70 @@ def verifier_failures(rule: dict | None, found: dict | None) -> list[str]:
     return fails
 
 
+def claim_witnesses(policy: dict) -> set[str]:
+    """The theorems `claims.witnesses` names, which the claims rule holds to their form instead of `shape`."""
+    ws = (policy.get("claims") or {}).get("witnesses") or {}
+    return {n for w in ws.values() if isinstance(w, dict)
+            for n in [w.get("fails"), *(w.get("meets") if isinstance(w.get("meets"), list) else [])] if isinstance(n, str)}
+
+
+def claim_failures(policy: dict, facts: dict) -> list[str]:
+    """Each claim definition has its witnesses (`claims` in the policy; LEAN-26, proofs' claims-landing norms): every predicate
+    the spec declares under `claims.modules` (a named assumption, and one `claims.not` lists with the reason, aside) names
+    under `claims.witnesses` a theorem `fails`, whose statement past its `∀` and `∃` binders is `¬ C …` with the claim `C`
+    itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
+    the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
+    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM."""
+    rule = policy.get("claims")
+    if not rule:
+        return []
+    if not isinstance(rule, dict) or not isinstance(rule.get("modules"), list):
+        return ["claims: `claims` is {modules: [module prefix], witnesses: {claim: {fails, meets: [...]}}, not: {claim: why}}"]
+    fails, ws, nots = [], rule.get("witnesses", {}), rule.get("not", {})
+    assumptions, guarantees = policy.get("assumptions", {}), policy.get("guarantees", {})
+    found = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
+             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"]) and d["name"] not in assumptions}
+    for c, m in sorted(found.items()):
+        if c not in ws and c not in nots:
+            fails.append(f"claims: {c} ({m}) is a claim definition with no witnesses: name its `{c}_fails` (a theorem that it is "
+                         f"false at a toy instance) and `{c}_meets` (its checkable antecedents hold at each deployed record) "
+                         f"under `claims.witnesses`, or list it under `claims.not` with the reason it is no claim")
+    for c in sorted((set(ws) | set(nots)) - set(found)):
+        fails.append(f"claims: {c} is listed under `claims` but is no predicate of the spec under {', '.join(rule['modules'])}; "
+                     f"remove the entry")
+    for c, why in sorted(nots.items()):
+        if c in ws:
+            fails.append(f"claims: {c} is under both `claims.witnesses` and `claims.not`; keep one")
+        elif not str(why).strip():
+            fails.append(f"claims: claims.not[{c}] gives no reason")
+    for c, w in sorted(ws.items()):
+        if not (isinstance(w, dict) and isinstance(w.get("fails"), str) and isinstance(w.get("meets"), list) and w["meets"]
+                and all(isinstance(n, str) for n in w["meets"])):
+            fails.append(f"claims: claims.witnesses[{c}] is {{fails: theorem, meets: [theorem, one per deployed record]}}")
+            continue
+        for role, n in [("fails", w["fails"]), *(("meets", n) for n in w["meets"])]:
+            if n not in guarantees:
+                fails.append(f"claims: {n}, {c}'s `{role}` witness, is not under `guarantees`: list it there, so its record "
+                             f"shows in the landing DM")
+                continue
+            pin = facts["pins"].get(n, {"kind": "missing"})
+            if (k := pin.get("kind")) != "theorem":
+                what = "not in the build" if k == "missing" else f"a {k}"
+                fails.append(f"claims: {n}, {c}'s `{role}` witness, is {what}: a witness is a theorem")
+                continue
+            body = pin.get("body")
+            if not isinstance(body, dict):
+                fails.append(f"claims: `Facts.lean` reported no body for {n}; is the audit tool older than the policy?")
+            elif role == "fails" and not (body.get("negated") and body.get("head") == c):
+                fails.append(f"claims: {n} does not state that {c} fails: past its ∀ and ∃ binders its statement must be "
+                             f"`¬ {c} …`, and it is {'¬ ' if body.get('negated') else ''}{body.get('head') or 'no application'} …")
+            elif role == "meets" and body.get("head") == c:
+                fails.append(f"claims: {n} states {'¬ ' if body.get('negated') else ''}{c} itself: a `meets` witness states the "
+                             f"claim's checkable antecedents at a deployed record (a decoder meeting its bound, a non-empty "
+                             f"scope), not the claim")
+    return fails
+
+
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
                        premised: dict | None = None) -> tuple[dict, list[str]]:
     """The `assumptions` records as the build has them, and the failures: each named assumption (a definition of the spec,
@@ -1237,7 +1302,8 @@ def shape(policy: dict, facts: dict) -> list[str]:
     conditional and lists it under its entry's `rests_on`; one marked falsified refuses every property resting on it.
     An open conjecture names its falsification test, which a suite runs, so a counterexample fails `check` until it is
     marked falsified. Every package is checked: one without a `shape` section has no entries, so each of its
-    guarantees is frozen or fails. The landing DM shows each entry added to `shape.frozen`."""
+    guarantees is frozen or fails. A claim's witness (`claims.witnesses`) is held to `claim_failures` instead. The landing
+    DM shows each entry added to `shape.frozen`."""
     spec = policy.get("shape", {})
     fails, entries, premises = [], spec.get("properties", {}), spec.get("premises", [])
     frozen, where = spec.get("frozen", {}), "shape.frozen"
@@ -1278,7 +1344,7 @@ def shape(policy: dict, facts: dict) -> list[str]:
                          f"theorem that proves it under `guarantees`, or move it out of the spec")
     for name in sorted(set(entries) - guarantees):
         fails.append(f"shape: shape.properties lists {name}, which is not a guarantee of this package: remove the entry")
-    for name in sorted(guarantees):
+    for name in sorted(guarantees - claim_witnesses(policy)):
         if name in frozen and not frozen[name].strip():
             fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why {name} doesn't have the shape yet")
         got = facts["pins"].get(name, {}).get("shape")
