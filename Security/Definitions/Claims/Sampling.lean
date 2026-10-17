@@ -8,13 +8,12 @@ shared definitions of `Definitions.Claims`, in the template's eight items and th
 the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
 the code side's.
 
-1. **Statement** (`Stmt`): the program `C` (named by its digest; both parties hold it), as its descriptor and its gates,
-   the partition query `Q` (named, versioned, with its parameters), the sampling design, and the roots the trace is
-   committed under. The partition is public: `P = Q(C)`, which the verifier evaluates itself on the statement it parsed,
-   descriptor and gates (`Deploy.partition`), gives the proof units (sets of gates of `C`, every gate but a constant in
-   exactly one, input gates included; a constant is public and in one or in none), the replay units, the strata and the
-   classes, and so every replay unit's size `n_v`. `x` is the canonical bytes of what the verifier reads before it
-   draws, and `parse` is its own.
+1. **Statement** (`Stmt`): the program `C` (named by its digest; both parties hold it), the partition query `Q` (named,
+   versioned, with its parameters), the sampling design, and the roots the trace is committed under. The partition is
+   public: `P = Q(C)`, which the verifier evaluates itself (`Deploy.partition`), gives the proof units (gate intervals of
+   `C`, every gate in exactly one, input gates and constants included), the replay units, the strata and the classes, and
+   so every replay unit's size `n_v`. `x` is the canonical bytes of what the verifier reads before it draws, and `parse`
+   is its own.
 2. **Witness** (`Wit`): openings of the committed values of `C`'s gates under the roots.
 3. **Relation** (`R δ`): the set of faulty units of the committed trace is in the confidence set
    `M_δ = {B : P_a(B) > δ}`. A unit is faulty when its committed outputs differ from its gates applied to its committed
@@ -23,8 +22,8 @@ the code side's.
    which on a topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`); `P_a` is
    then its effective form `P̄_a`.
 4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
-   ordered program; a partition of all its gates but constants into proof units, each a set of gates committing at most
-   16 values (the literal limit); and a well-formed design, one rule per class. `KS`, `KSCount`, `Bits` and
+   ordered program; a partition of all its gates into proof units, each of at most 16 output bits (the literal limit),
+   each replay unit's proof units consecutive; and a well-formed design, one rule per class. `KS`, `KSCount`, `Bits` and
    `Complete` hold on it, and it excludes every design whose `P_a` is not its draw's miss probability: `subset K` with
    `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
    `num > den`. That the verifier refuses what is out of it is `ScopeMatches`, open.
@@ -135,50 +134,50 @@ def Prog.wires (C : Prog) (x : List Bool) : List Bool :=
 /-- `C`'s returned values on inputs `x`. -/
 def Prog.eval (C : Prog) (x : List Bool) : List Bool := C.outs.map fun o => (C.wires x).getD o false
 
-/-- Gate `i`'s value as a gate outside the set of gates that holds it reads it: a constant's own value (a constant is
-public and committed by nobody), every other gate's committed value `ref i`. -/
-def Prog.read (C : Prog) (ref : ℕ → Option Bool) (i : ℕ) : Option Bool :=
-  match C.gates[i]? with
-  | some (.const b) => some b
-  | _ => ref i
-
-/-- Whether gate `g`'s value is committed, as the set of gates `u` sees it: `g` is returned, is an input, or is read by a
-gate outside `u`. -/
-def Prog.Boundary (C : Prog) (u : List ℕ) (g : ℕ) : Bool :=
+/-- Whether gate `g`'s value is committed, as the gate interval `[lo, hi)` sees it: `g` is returned, is an input, or is
+read by a gate outside the interval. -/
+def Prog.Boundary (C : Prog) (lo hi g : ℕ) : Bool :=
   C.outs.contains g || decide (C.gates[g]? = some .input) ||
     (List.range C.gates.length).any fun g' =>
-      decide (g' ∉ u) && ((C.gates[g']?.map BGate.reads).getD []).contains g
+      (decide (g' < lo) || decide (hi ≤ g')) && ((C.gates[g']?.map BGate.reads).getD []).contains g
 
-/-- Gate `g`'s value computed in the set of gates `u`, on the committed values `ref`: from the values of the wires it
-reads, one of `u` before `g` as computed, one of `u` at or past `g` as `none`, one outside `u` as `read` sees it; an
-input's, its committed value. -/
-def Prog.runIn (C : Prog) (ref : ℕ → Option Bool) (u : List ℕ) (g : ℕ) : Option Bool :=
+/-- Gate `g`'s value computed in a gate interval from `lo`, on the committed values `ref`: from the values of the wires
+it reads, one before `lo` read as its committed value, one from `lo` on as computed, a later one as `none`; an input's,
+its committed value. -/
+def Prog.runAt (C : Prog) (ref : ℕ → Option Bool) (lo g : ℕ) : Option Bool :=
   C.gates[g]?.bind fun x =>
-    x.val (fun i => if i ∈ u then (if _h : i < g then C.runIn ref u i else none) else C.read ref i) (ref g)
+    x.val (fun i => if i < lo then ref i else if _h : i < g then C.runAt ref lo i else none) (ref g)
 termination_by g
 
-/-- **The set of gates `u` of `C` is correct** on the committed values `ref`: every value it reads from outside it is
-opened (a constant's needs no opening), and every gate of it whose value is committed (`Boundary`) has a committed value,
-the one `u` computes. -/
-def Prog.Correct (C : Prog) (ref : ℕ → Option Bool) (u : List ℕ) : Prop :=
-  ∀ g ∈ u,
-    (∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∉ u → C.read ref i ≠ none) ∧
-      (C.Boundary u g = true → ∃ b, ref g = some b ∧ C.runIn ref u g = some b)
+/-- **The gate interval `[lo, hi)` of `C` is correct** on the committed values `ref`: every value it reads from before
+`lo` is opened, and every gate of it whose value is committed (`Boundary`) has a committed value, the one the interval
+computes. -/
+def Prog.Correct (C : Prog) (ref : ℕ → Option Bool) (lo hi : ℕ) : Prop :=
+  ∀ g, lo ≤ g → g < hi →
+    (∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i < lo → ref i ≠ none) ∧
+      (C.Boundary lo hi g = true → ∃ b, ref g = some b ∧ C.runAt ref lo g = some b)
 
-/-- **A replay unit**: its proof units, each a set of gates in layout order. Under one-stage sampling it is one proof
+/-- **A replay unit**: its proof units, each a gate interval `[a, b)`. Under one-stage sampling it is one proof
 unit. -/
-abbrev RU := List (List ℕ)
+abbrev RU := List (ℕ × ℕ)
 
-/-- A replay unit's gates: its proof units'. -/
-def RU.gates (r : RU) : List ℕ := r.flatten
+/-- Where a replay unit's gates start: its first proof unit's start. -/
+def RU.lo (r : RU) : ℕ := (r.head?.map Prod.fst).getD 0
+
+/-- Where a replay unit's gates stop: its last proof unit's stop. -/
+def RU.hi (r : RU) : ℕ := (r.getLast?.map Prod.snd).getD 0
+
+/-- Its proof units are non-empty gate intervals, each starting where the one before it stops. -/
+def RU.Consecutive (r : RU) : Prop :=
+  r ≠ [] ∧ (∀ u ∈ r, u.1 < u.2) ∧ ∀ i (h : i + 1 < r.length), r[i].2 = r[i + 1].1
 
 /-- **The values a replay unit's proof units read and write**: a gate of `r` whose value `r`'s boundary doesn't commit
 has its interior value `ι`, committed after the first draw; every other, its committed value `val`. -/
 def RU.ref (C : Prog) (r : RU) (val : ℕ → Option Bool) (ι : ℕ → Bool) (g : ℕ) : Option Bool :=
-  if g ∈ RU.gates r ∧ C.Boundary (RU.gates r) g = false then some (ι g) else val g
+  if RU.lo r ≤ g ∧ g < RU.hi r ∧ C.Boundary (RU.lo r) (RU.hi r) g = false then some (ι g) else val g
 
-/-- The values proof unit `u` of `C` commits: its gates that `C.Boundary` commits. -/
-def committed (C : Prog) (u : List ℕ) : ℕ := (u.filter fun g => C.Boundary u g).length
+/-- A proof unit's gates. -/
+def unitGates (u : ℕ × ℕ) : List ℕ := List.range' u.1 (u.2 - u.1)
 
 /-- **A partition** `P = Q(C)`, as the verifier evaluates it: its classes, each its strata, each its replay units, in
 population order. -/
@@ -191,17 +190,11 @@ def Partition.rus (P : Partition) : List RU := P.classes.flatten.flatten
 /-- Each replay unit's count of proof units, `n_v`, slot by slot. -/
 def Partition.sizes (P : Partition) : List ℕ := P.rus.map List.length
 
-/-- The gates of all of `P`'s proof units. -/
-def Partition.gates (P : Partition) : List ℕ := P.rus.flatten.flatten
-
-/-- **`P` partitions `C`**: no gate is in two proof units, and every gate of `C` but a constant is in one, input gates
-included (a constant, public, may be in one or in none); every replay unit has a proof unit, and every proof unit a gate
-of `C`; and each proof unit commits at most 16 values, its gates that `Boundary` commits. A proof unit is a set of gates,
-so a unit's gates may interleave with another's. -/
+/-- **`P` partitions `C`**: every gate is in exactly one proof unit, input gates and constants included; each replay
+unit's proof units are consecutive; and each proof unit has at most 16 output bits, its committed values. -/
 def Partition.Partitions (P : Partition) (C : Prog) : Prop :=
-  P.gates.Nodup ∧ (∀ g ∈ P.gates, g < C.gates.length) ∧
-    (∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → g ∈ P.gates) ∧
-    (∀ r ∈ P.rus, r ≠ []) ∧ (∀ u ∈ P.rus.flatten, u ≠ []) ∧ ∀ u ∈ P.rus.flatten, committed C u ≤ 16
+  (P.rus.flatten.flatMap unitGates).Perm (List.range C.gates.length) ∧ (∀ r ∈ P.rus, RU.Consecutive r) ∧
+    ∀ r ∈ P.rus, ∀ u ∈ r, ((unitGates u).filter fun g => C.Boundary u.1 u.2 g).length ≤ 16
 
 /-! ## Proof units and the universal unit -/
 
@@ -333,11 +326,9 @@ structure Query where
   version : ℕ
   params : Msg
 
-/-- **The sampling statement**: the program (named by its digest; both parties hold it), as its descriptor's canonical
-bytes (`desc`, `verity-ir/descriptor/v1`, which a template query reads) and its gates (`prog`, the descriptor
-flattened), the partition query, the sampling design, and the roots the trace is committed under. -/
+/-- **The sampling statement**: the program (named by its digest; both parties hold it), the partition query, the
+sampling design, and the roots the trace is committed under. -/
 structure Stmt where
-  desc : Msg
   prog : Prog
   query : Query
   design : Design
@@ -359,12 +350,12 @@ def Wit.val (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (w : Wit) (g : �
 the replay unit there correct on its committed values. For a proof unit (one-stage) that is its committed outputs
 differing from its gates applied to its committed inputs, or a value it reads or writes unopened. -/
 def Faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
-  ¬ ∃ r, P.rus[v]? = some r ∧ ∃ ι : ℕ → Bool, ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) ι) u
+  ¬ ∃ r, P.rus[v]? = some r ∧ ∃ ι : ℕ → Bool, ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) ι) u.1 u.2
 
 /-- **A faulty unit, on the boundary trace** (the glossary's form): the replay unit's committed boundary outputs differ
 from its gates applied to its committed boundary inputs. -/
 def BoundaryFaulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
-  ¬ ∃ r, P.rus[v]? = some r ∧ s.prog.Correct (w.val H Cm s) (RU.gates r)
+  ¬ ∃ r, P.rus[v]? = some r ∧ s.prog.Correct (w.val H Cm s) (RU.lo r) (RU.hi r)
 
 open Classical in
 /-- **The faulty set** of the trace `w`'s openings define. -/
@@ -376,20 +367,20 @@ def RelS (H : Msg → Msg) (Cm : Commitment Bool) (δ : ℝ) (s : Stmt) (P : Par
   faulty H Cm s P w ∈ s.design.M P δ
 
 /-- **The sampling relation** at `δ`, on the statement's bytes: it parses (`parse`, the verifier's own), its query
-evaluates on its program, descriptor and gates (`partition`, the verifier's own), and `RelS` holds. -/
-def R (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Stmt → Option Partition)
+evaluates on its program (`partition`, the verifier's own), and `RelS` holds. -/
+def R (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Prog → Query → Option Partition)
     (δ : ℝ) : Rel Wit :=
-  fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ RelS H Cm δ s P w
+  fun x w => ∃ s P, parse x = some s ∧ partition s.prog s.query = some P ∧ RelS H Cm δ s P w
 
 /-- The count form: fewer than `t` units are faulty. -/
 def RCount (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt)
-    (partition : Stmt → Option Partition) (t : ℕ) : Rel Wit :=
-  fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ (faulty H Cm s P w).card < t
+    (partition : Prog → Query → Option Partition) (t : ℕ) : Rel Wit :=
+  fun x w => ∃ s P, parse x = some s ∧ partition s.prog s.query = some P ∧ (faulty H Cm s P w).card < t
 
 /-- The honest relation: no unit is faulty. -/
 def Rhon (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt)
-    (partition : Stmt → Option Partition) : Rel Wit :=
-  fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ faulty H Cm s P w = ∅
+    (partition : Prog → Query → Option Partition) : Rel Wit :=
+  fun x w => ∃ s P, parse x = some s ∧ partition s.prog s.query = some P ∧ faulty H Cm s P w = ∅
 
 /-! ## 4. Scope -/
 
@@ -412,7 +403,7 @@ def Design.WellFormed (d : Design) (P : Partition) : Prop :=
   d.rules.length = P.classes.length ∧ ∀ p ∈ d.rules.zip P.classes, p.1.WellFormed p.2
 
 /-- **The sampling scope, readable**, at the statement's partition: a topologically ordered program, partitioned into
-proof units (sets of gates, constants in one or in none) of at most 16 committed values, and a well-formed design.
+proof units of at most 16 output bits with each replay unit's consecutive, and a well-formed design.
 
 The query: whatever its own width parameter, every unit, input units included, has at most 16 committed values, the
 literal limit. Served partitions are `Q_word` v1 at `X = 16`; `Q_call` v1 is in scope at `X ≤ 16`. Its `X = 32`, which
@@ -423,11 +414,10 @@ def InScope (P : Partition) (s : Stmt) : Prop :=
 /-! ## 5. Named pieces -/
 
 /-- What the deployed sampled verifier brings, read by the claims: the verifier, its parser and scope check, its own
-evaluation of a statement's partition query on its program, descriptor and gates (`partition`, `P = Q(C)`), the
-trace's commitment, the universal unit of each size class (the program a private circuit's units run, its arguments the
-private netlist), and the Flock verifier its sessions run (`flock`): whether it is the masked one, its parser, the
-opened columns of a run, the code, each trace's codeword length and decoding radius, and how a trace is read as a
-witness.
+evaluation of a partition query on a program (`partition`, `P = Q(C)`), the trace's commitment, the universal unit of
+each size class (the program a private circuit's units run, its arguments the private netlist), and the Flock verifier
+its sessions run (`flock`): whether it is the masked one, its parser, the opened columns of a run, the code, each
+trace's codeword length and decoding radius, and how a trace is read as a witness.
 
 The draw is `V`'s, from its coins, in this layout: `stage2` holds the rounds after the first stage (the proof units'
 draw under two-stage sampling, and the sessions), so runs that keep the other rounds make the same first draw and see the
@@ -443,7 +433,7 @@ structure Deploy (Coin Col T : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
   scopeCheck : Msg → Bool
-  partition : Stmt → Option Partition
+  partition : Prog → Query → Option Partition
   commit : Commitment Bool
   universal : SizeClass → Prog
   flock : Flock.Deploy Coin Col T
@@ -461,7 +451,7 @@ structure Deploy (Coin Col T : Type) where
 
 /-- The statement's partition, as the verifier evaluates its query; empty when the query doesn't apply. -/
 def Deploy.part {Coin Col T : Type} (D : Deploy Coin Col T) (s : Stmt) : Partition :=
-  (D.partition s).getD ⟨[]⟩
+  (D.partition s.prog s.query).getD ⟨[]⟩
 
 /-! ### Rerun programs -/
 
@@ -708,7 +698,7 @@ a Bernoulli rule with `den = 0` or `num > den`, a stratified rule outside `1 ≤
 rule whose weights or floors don't match its strata, with a zero floor or with no work, and a check of part of a replay
 unit under any but a Bernoulli first stage. That the verifier refuses what is out of it is `ScopeMatches`. -/
 def Scope (D : Deploy Coin Col T) (x : Msg) : Prop :=
-  ∃ s P, D.parse x = some s ∧ D.partition s = some P ∧ InScope P s
+  ∃ s P, D.parse x = some s ∧ D.partition s.prog s.query = some P ∧ InScope P s
 
 /-- **Sampling: KS**, on the statements in scope, at every `δ ≥ 0`, at the sampling extractor and every decoder that
 lists every trace within Flock's radius: `Pr[acc ∧ faulty ∉ M_δ] ≤ δ + ε_ks + ε_bind`, with
@@ -737,11 +727,11 @@ def Universal (D : Deploy Coin Col T) : Prop :=
     (D.universal c).eval (n.args c ++ x) = n.eval x
 
 /-- **Sampling: the faulty set is the boundary form's**: on a topologically ordered program, a replay unit whose proof
-units are disjoint sets of its gates is faulty exactly when its committed boundary outputs differ from its gates applied
+units are consecutive gate intervals is faulty exactly when its committed boundary outputs differ from its gates applied
 to its committed boundary inputs. -/
 def FaultyBoundary : Prop :=
   ∀ (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) (r : RU),
-    s.prog.Topological → P.rus[v]? = some r → (RU.gates r).Nodup → (∀ g ∈ RU.gates r, g < s.prog.gates.length) →
+    s.prog.Topological → P.rus[v]? = some r → RU.Consecutive r → RU.hi r ≤ s.prog.gates.length →
     (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
 
 /-- **Sampling: Complete**, on the statements in scope, when no unit is faulty. It needs the verifier to check before

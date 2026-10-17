@@ -8,11 +8,8 @@ import Proofs.Flock.Claims.Sampling.Select.Misses
 * `Design.Pa_empty`: a well-formed design has `P_a(∅) = 1`.
 * `allSlots`, `drawChecked`: every proof unit of a layout, and the deployed draw's checked units, `Slots.select`'s or,
   where it is refused (the run rejects), every slot.
-* `Partition.shape`: each replay unit's count of proof units, in its strata and classes; `P_a`, the slots, their sizes
-  and the design's well-formedness read only it (`Design.Pa_of_shape`, `Partition.sizes_of_shape`,
-  `Design.wellFormed_of_shape`).
-* `DrawSlots`: the deployed draw is `Slots.select`'s on a layout of the statement's partition's shape and on its design,
-  from uniform bytes of the coins.
+* `DrawSlots`: the deployed draw is `Slots.select`'s on the statement's partition and design, from uniform bytes of the
+  coins.
 * `drawLaw_of_slots`: `DrawLaw` there, from `drawMisses`.
 -/
 
@@ -76,85 +73,6 @@ theorem classesPa_empty : ∀ (rs : List Rule) (cs : List (List (List RU))) (o :
 theorem Design.Pa_empty (d : Design) (P : Partition) (h : d.WellFormed P) : d.Pa P ∅ = 1 :=
   classesPa_empty _ _ 0 h.1 h.2
 
-/-! ## A partition's shape -/
-
-/-- A class's shape: each stratum's replay units' counts of proof units. -/
-def classShape (c : List (List RU)) : List (List ℕ) := c.map fun s => s.map List.length
-
-/-- **A partition's shape**: each class's (`classShape`). The design and the draw read a partition only through it: its
-slots, their sizes `n_v`, `P_a` and the design's well-formedness. -/
-def Partition.shape (P : Partition) : List (List (List ℕ)) := P.classes.map classShape
-
-theorem strataSizes_eq_shape (c : List (List RU)) : strataSizes c = (classShape c).map List.length := by
-  simp [strataSizes, classShape, Function.comp_def]
-
-theorem ruSizes_eq_shape (c : List (List RU)) : ruSizes c = (classShape c).flatten := by
-  simp [ruSizes, classShape, List.map_flatten]
-
-theorem flatten_length_eq_shape (c : List (List RU)) : c.flatten.length = (classShape c).flatten.length := by
-  simp [classShape, List.length_flatten, Function.comp_def]
-
-theorem Partition.sizes_eq_shape (P : Partition) : P.sizes = P.shape.flatten.flatten := by
-  simp only [Partition.sizes, Partition.rus, Partition.shape, List.map_flatten]
-  rfl
-
-theorem Partition.sizes_of_shape {P Q : Partition} (h : P.shape = Q.shape) : P.sizes = Q.sizes := by
-  rw [P.sizes_eq_shape, Q.sizes_eq_shape, h]
-
-theorem Partition.rus_length_of_shape {P Q : Partition} (h : P.shape = Q.shape) : P.rus.length = Q.rus.length := by
-  simpa [Partition.sizes] using congrArg List.length (Partition.sizes_of_shape h)
-
-/-- Partitions of one shape whose replay units are one proof unit each: either both or neither. -/
-theorem Partition.single_of_shape {P Q : Partition} (h : P.shape = Q.shape) (hQ : ∀ r ∈ Q.rus, r.length = 1) :
-    ∀ r ∈ P.rus, r.length = 1 := by
-  intro r hr
-  have hm : r.length ∈ Q.sizes := by
-    rw [← Partition.sizes_of_shape h]
-    exact List.mem_map_of_mem hr
-  obtain ⟨r', hr', he⟩ := List.mem_map.1 hm
-  rw [← he, hQ r' hr']
-
-theorem classesPa_of_shape : ∀ (rs : List Rule) (cs cs' : List (List (List RU))) (o : ℕ) (B : Finset ℕ),
-    cs.map classShape = cs'.map classShape → classesPa rs cs o B = classesPa rs cs' o B
-  | r :: rs, c :: cs, c' :: cs', o, B, h => by
-    simp only [List.map_cons, List.cons.injEq] at h
-    rw [classesPa, classesPa, strataSizes_eq_shape c, strataSizes_eq_shape c', ruSizes_eq_shape c,
-      ruSizes_eq_shape c', flatten_length_eq_shape c, flatten_length_eq_shape c', h.1,
-      classesPa_of_shape rs cs cs' _ B h.2]
-  | [], _, _, _, _, _ => by simp [classesPa]
-  | _ :: _, [], [], _, _, _ => rfl
-  | _ :: _, [], _ :: _, _, _, h => absurd h (by simp)
-  | _ :: _, _ :: _, [], _, _, h => absurd h (by simp)
-
-/-- **`P_a` reads only the shape.** -/
-theorem Design.Pa_of_shape (d : Design) {P Q : Partition} (h : P.shape = Q.shape) (B : Finset ℕ) :
-    d.Pa P B = d.Pa Q B :=
-  classesPa_of_shape _ _ _ 0 B h
-
-theorem Rule.wellFormed_of_shape (r : Rule) {c c' : List (List RU)} (h : classShape c = classShape c') :
-    r.WellFormed c ↔ r.WellFormed c' := by
-  simp only [Rule.WellFormed, strataSizes_eq_shape, h]
-
-theorem forall_zip_of_shape : ∀ (rs : List Rule) (cs cs' : List (List (List RU))),
-    cs.map classShape = cs'.map classShape →
-      ((∀ p ∈ rs.zip cs, p.1.WellFormed p.2) ↔ ∀ p ∈ rs.zip cs', p.1.WellFormed p.2)
-  | [], _, _, _ => by simp
-  | _ :: _, [], [], _ => Iff.rfl
-  | r :: rs, c :: cs, c' :: cs', h => by
-    simp only [List.map_cons, List.cons.injEq] at h
-    simp only [List.zip_cons_cons, List.forall_mem_cons]
-    rw [Rule.wellFormed_of_shape r h.1, forall_zip_of_shape rs cs cs' h.2]
-  | _ :: _, [], _ :: _, h => absurd h (by simp)
-  | _ :: _, _ :: _, [], h => absurd h (by simp)
-
-/-- **The design's well-formedness reads only the shape.** -/
-theorem Design.wellFormed_of_shape (d : Design) {P Q : Partition} (h : P.shape = Q.shape) :
-    d.WellFormed P ↔ d.WellFormed Q := by
-  have hl : P.classes.length = Q.classes.length := by
-    simpa [Partition.shape] using congrArg List.length h
-  unfold Design.WellFormed
-  rw [hl, forall_zip_of_shape _ _ _ h]
-
 /-! ## The deployed draw's checked units -/
 
 /-- Every proof unit of a layout, as `(slot, index)`, in slot order. -/
@@ -175,8 +93,7 @@ theorem mem_allSlots (l : Slots.Layout) (v i : ℕ) :
   · rintro ⟨hv, hi⟩
     exact ⟨(l.rus[v], v), Array.mem_zipIdx_iff_getElem?.2 (Array.getElem?_eq_getElem hv), i, hi, rfl, rfl⟩
 
-theorem slotPartition_rus (l : Slots.Layout) :
-    (slotPartition l).rus = l.rus.toList.map fun r => r.pus.toList.map puGates := by
+theorem slotPartition_rus (l : Slots.Layout) : (slotPartition l).rus = l.rus.toList.map fun r => r.pus.toList := by
   simp [slotPartition, Partition.rus, Slots.Layout.rus, List.map_flatten, Function.comp_def]
 
 theorem slotPartition_sizes (l : Slots.Layout) : (slotPartition l).sizes = l.rus.toList.map fun r => r.pus.size := by
@@ -213,35 +130,28 @@ theorem index_of_mem {c : Array (ℕ × ℕ)} {n : ℕ} (hc : c.size ≤ n) {u :
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
 
 /-- **The deployed draw is `Slots.select`'s**: on a statement that parses and whose query evaluates, the verifier's own
-program `d` (its parse of the statement's descriptor), query, selection rule, work table and closure map, whose layout
-`l` has the statement's partition's shape
-(`Partition.shape`: its slots, each with its count of proof units, in their strata and classes; the proof units' gates
-are the partition's) and whose design is the statement's; `L` bytes of the coins, uniform when the coins are; and the
-checked proof units the draw's on them (`drawChecked`). -/
+program `d`, query, selection rule, work table and closure map, whose layout `l` is the statement's partition and whose
+design is the statement's; `L` bytes of the coins, uniform when the coins are; and the checked proof units the draw's on
+them (`drawChecked`). -/
 def DrawSlots (D : Deploy Coin Col T) : Prop :=
-  ∀ x s Pt, D.parse x = some s → D.partition s = some Pt →
+  ∀ x s Pt, D.parse x = some s → D.partition s.prog s.query = some Pt →
   ∃ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (L : ℕ) (bytes : (Fin (D.V.k x) → Coin) → Fin L → Fin 256),
-    Program.parse ⟨s.desc.toArray⟩ = .ok d ∧ Slots.layout d query = .ok l ∧ Pt.shape = (slotPartition l).shape ∧
-      slotDesign rule d query table = .ok s.design ∧
+    Slots.layout d query = .ok l ∧ Pt = slotPartition l ∧ slotDesign rule d query table = .ok s.design ∧
       (∀ E : (Fin L → Fin 256) → Prop, Pr (fun c => E (bytes c)) = Pr E) ∧
       ∀ c, D.checked x c = (drawChecked rule d query table cm l (bytesOf (bytes c))).toList
 
 /-- **The draw law from the deployed draw**: where the draw is `Slots.select`'s on uniform bytes (`DrawSlots`), its
 miss probability at fixed first-stage coins averages at most `P_a(B)` (`drawMisses`); a refused draw checks every slot,
-so it misses no nonempty `B`, and a well-formed design has `P_a(∅) = 1`. The partition is read through its shape. -/
+so it misses no nonempty `B`, and a well-formed design has `P_a(∅) = 1`. -/
 theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D := by
   intro x s Pt hx hP hin B hB
-  obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, hds, hunif, hch⟩ := h x s Pt hx hP
-  have hnPU : nPU D x = (slotPartition l).sizes.sum := by
-    simp [nPU, hx, Deploy.part, hP, Partition.sizes_of_shape hshape]
-  rw [Partition.rus_length_of_shape hshape] at hB
-  rw [Partition.sizes_of_shape hshape, Design.Pa_of_shape _ hshape]
-  have hwf := (Design.wellFormed_of_shape _ hshape).1 hin.2.2
+  obtain ⟨rule, d, query, table, cm, l, L, bytes, hl, rfl, hds, hunif, hch⟩ := h x s Pt hx hP
+  have hnPU : nPU D x = (slotPartition l).sizes.sum := by simp [nPU, hx, Deploy.part, hP]
   by_cases hB0 : B = ∅
   · subst hB0
     refine ⟨fun _ => 1, fun _ => zero_le_one, fun r f _ => Pr_le_one _, ?_⟩
-    rw [Ex_const, Design.Pa_empty _ _ hwf]
+    rw [Ex_const, Design.Pa_empty _ _ hin.2.2]
   obtain ⟨v0, hv0⟩ := Finset.nonempty_iff_ne_empty.2 hB0
   have hlen : (slotPartition l).rus.length = l.rus.size := by rw [slotPartition_rus, List.length_map, Array.length_toList]
   have hsz : ∀ v (hv : v < l.rus.size), (slotPartition l).sizes.getD v 0 = l.rus[v].pus.size := by
