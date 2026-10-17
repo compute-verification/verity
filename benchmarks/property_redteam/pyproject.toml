@@ -3,8 +3,8 @@
 # (`run.py`). Not a package: the tests put this directory on sys.path, like benchmarks/word_codec. `demo.py` is round 1's
 # registry-evaluator demo. `renorm.py` searches toy fields for circuits of 6b's model (a port of Model.lean) that return a
 # square's digits with few budgeted gates: the falsification test of the re-normalization conjecture N_L.
-# `tests/test_key_binding_order.py` runs the remote audit's session against KeyBinding's game: a page appended after a
-# pass's seed carries that pass's receipts of other blocks.
+# `tests/test_key_binding_order.py` checks KeyBinding's ideal step against the codec's {x, p − x} symmetry; KB-1's
+# regression test is remote_bandwidth's `test_append_order.py`.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
