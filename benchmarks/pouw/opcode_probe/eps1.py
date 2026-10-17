@@ -7,6 +7,7 @@
   python eps1.py side OUT/rows.jsonl                     # side.cu: honest alone, and each unit alone and beside it
   python eps1.py clock OUT/sustain.jsonl [--skip-s 3]    # power.cu: each kernel's clock, power and work rate a phase
   python eps1.py uniform OUT                             # uniform.cu: issue slots a uniform instruction, each setting
+  python eps1.py l2gather OUT                            # l2gather.cu: bytes a SM a clock and TB/s a gather path, best
 
 A facet is a row c_M n_MMA + c_X n_X <= T over warp instructions on one SMSP in T SMSP-cycles: the upper hull of the
 measured points (x_MMA, x_X) in warp instructions a SMSP-cycle (the rows' rate / 4), each alone rate on its axis, with
@@ -275,6 +276,52 @@ def cmd_uniform(a) -> int:
     return 0
 
 
+#: QSTAR's fastest table kernel (fr16_c32, benchmarks/pouw/qstar, note:20261017T0344Z-draft-eps1-qstar) sustains this
+QSTAR_TBS = 3.3
+
+
+def cmd_l2gather(a) -> int:
+    """l2gather.cu: data-dependent row gathers from an L2-resident table at fresh random indices (a cheater's). Each
+    probe's sustained bytes a SM a clock (rate * words * 4, the warp instruction moving W*32 bytes) and TB/s (* nSM *
+    clock); alone (gl_/gt_/gn_) for the peak, beside the honest IMMA step (gh_, the gather's rate over the honest stop)
+    for the MMA rate kept. The best sustained of each, and whether any path beats QSTAR's 3.3 TB/s table kernel."""
+    rows = {r["probe"]: r for r in load(a.out / "rows.jsonl")}
+    hmma = loop_rate(rows["honest"], IMMA) if "honest" in rows else float("nan")
+    print(f"honest alone: IMMA {hmma:.5f}/SM/clk")
+
+    def read(r: dict) -> tuple[float, float, float, float]:
+        """gather rate, bytes a SM a clock, TB/s, and MMA kept (nan when alone)."""
+        bpc = r["rate"] * (r["words"] or 0) * 4
+        tbs = bpc * r["blocks"] * (r["sm_mhz"] or 0) / 1e6
+        beside = any(k.split(":", 1)[1] == IMMA for k in r["rates"])
+        kept = loop_rate(r, IMMA) / hmma if beside and hmma else float("nan")
+        return r["rate"], bpc, tbs, kept
+
+    print(f"{'probe':15s} {'note':17s} {'W':>3s} {'rate':>8s} {'B/SM/clk':>9s} {'TB/s':>6s} {'MMA kept':>9s}  tags")
+    best_alone = best_beside = None
+    for name, r in rows.items():
+        if name == "honest":
+            continue
+        rate, bpc, tbs, kept = read(r)
+        w = int(round((r["words"] or 0) / 8))
+        tag = " ".join(r.get("tags") or [])
+        print(f"{name:15s} {r.get('note') or '':17s} {w:3d} {rate:8.4f} {bpc:9.3f} {tbs:6.3f} {kept:9.4f}  {tag}")
+        if kept == kept:  # beside (MMA kept is a number)
+            if best_beside is None or bpc > best_beside[1]:
+                best_beside = (name, bpc, tbs, kept)
+        elif best_alone is None or bpc > best_alone[1]:
+            best_alone = (name, bpc, tbs)
+    if best_alone:
+        print(f"best alone:  {best_alone[0]} {best_alone[1]:.3f} B/SM/clk = {best_alone[2]:.3f} TB/s")
+    if best_beside:
+        print(f"best beside: {best_beside[0]} {best_beside[1]:.3f} B/SM/clk = {best_beside[2]:.3f} TB/s, "
+              f"MMA kept {best_beside[3]:.4f}")
+    peak = max((read(r)[2] for n, r in rows.items() if n != "honest"), default=0.0)
+    verb = "beats" if peak > QSTAR_TBS else "does not beat"
+    print(f"fastest path {peak:.3f} TB/s {verb} QSTAR's {QSTAR_TBS} TB/s table kernel")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -290,8 +337,11 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--skip-s", type=float, default=3.0)
     u = sub.add_parser("uniform")
     u.add_argument("out", type=Path, help="a uniform.cu run's out/ (rows.jsonl, gate.json, sass/)")
+    g = sub.add_parser("l2gather")
+    g.add_argument("out", type=Path, help="an l2gather.cu run's out/ (rows.jsonl)")
     a = p.parse_args(argv)
-    return {"facets": cmd_facets, "side": cmd_side, "clock": cmd_clock, "uniform": cmd_uniform}[a.cmd](a)
+    return {"facets": cmd_facets, "side": cmd_side, "clock": cmd_clock, "uniform": cmd_uniform,
+            "l2gather": cmd_l2gather}[a.cmd](a)
 
 
 if __name__ == "__main__":
