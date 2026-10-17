@@ -1,4 +1,4 @@
-// mont_core.h on one GPU (sm_120): Montgomery squarings mod a Williams modulus of -DMB_BITS bits, in FORM 0-3, and the
+// mont_core.h on one GPU (sm_120): Montgomery squarings mod an RSA modulus of -DMB_BITS bits, in FORM 0-5, and the
 // fused RW-SMS decode (records in, payloads out), each gated against rw.py before run.sh times it.
 //   mont clock                                  the SM clock off a timed clock64 spin
 //   mont chain-gate FORM K params.txt N         N words below N, K squarings: "x0 xK" in hex
@@ -79,7 +79,7 @@ using mb::u32;
     }                                                                                    \
   } while (0)
 
-// -DMB_FORM=F builds form F alone (run.sh builds one binary a form, so their ptxas runs in parallel); else all four.
+// -DMB_FORM=F builds form F alone (run.sh builds one binary a form, so their ptxas runs in parallel); else all six.
 #ifndef MB_FORM
 #define MB_FORM -1
 #endif
@@ -99,6 +99,12 @@ static Chain chain_k(int f) {
 #if MB_HAS(3)
   if (f == 3) return mb::chain<3>;
 #endif
+#if MB_HAS(4)
+  if (f == 4) return mb::chain<4>;
+#endif
+#if MB_HAS(5)
+  if (f == 5) return mb::chain<5>;
+#endif
   fprintf(stderr, "form %d not built\n", f);
   exit(2);
 }
@@ -115,6 +121,12 @@ static Dec dec_k(int f) {
 #if MB_HAS(3)
   if (f == 3) return mb::dec<3>;
 #endif
+#if MB_HAS(4)
+  if (f == 4) return mb::dec<4>;
+#endif
+#if MB_HAS(5)
+  if (f == 5) return mb::dec<5>;
+#endif
   fprintf(stderr, "form %d not built\n", f);
   exit(2);
 }
@@ -125,6 +137,7 @@ static mbio::Params load(const char *path) {
   CK(cudaMemcpyToSymbol(mb::cNp, &p.np, sizeof p.np));
   CK(cudaMemcpyToSymbol(mb::cK, p.K, sizeof p.K));
   CK(cudaMemcpyToSymbol(mb::cT, p.T, sizeof p.T));
+  CK(cudaMemcpyToSymbol(mb::cKj, p.Kj, sizeof p.Kj));
   return p;
 }
 

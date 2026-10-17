@@ -1,4 +1,4 @@
-// Host-side parsing and printing for mont.cu and host_check.cpp: rw.py's params.txt (N, n', K, t in hex, one a line)
+// Host-side parsing and printing for mont.cu and host_check.cpp: rw.py's params.txt (N, n', K, t, k in hex, one a line)
 // and records.txt ("c_hex tag m_hex"), words as NL little-endian limbs.
 #pragma once
 #include <cstdint>
@@ -16,7 +16,7 @@ using mb::NL;
 using mb::u32;
 
 struct Params {
-  u32 N[NL], np, K[NL], T[NL];
+  u32 N[NL], np, K[NL], T[NL], Kj[4];
 };
 
 inline void from_hex(const std::string &s, u32 *x) {
@@ -42,13 +42,16 @@ inline void print_hex(const u32 *x) {
 
 inline Params read_params(const char *path) {
   std::ifstream f(path);
-  std::string a, b, c, d;
-  if (!(f >> a >> b >> c >> d)) { fprintf(stderr, "bad params %s\n", path); exit(2); }
+  std::string a, b, c, d, e;
+  if (!(f >> a >> b >> c >> d >> e)) { fprintf(stderr, "bad params %s\n", path); exit(2); }
   Params p;
   from_hex(a, p.N);
   p.np = (u32)strtoul(b.c_str(), nullptr, 16);
   from_hex(c, p.K);
   from_hex(d, p.T);
+  u32 kj[NL];
+  from_hex(e, kj);
+  for (int k = 0; k < 4; ++k) p.Kj[k] = kj[k];
   return p;
 }
 

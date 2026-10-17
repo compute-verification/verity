@@ -53,11 +53,14 @@ int main(int argc, char **argv) {
   cNp = p.np;
   memcpy(cK, p.K, sizeof cK);
   memcpy(cT, p.T, sizeof cT);
+  memcpy(cKj, p.Kj, sizeof cKj);
   switch (atoi(argv[2])) {
     case 0: run<0>(argc, argv); break;
     case 1: run<1>(argc, argv); break;
     case 2: run<2>(argc, argv); break;
     case 3: run<3>(argc, argv); break;
+    case 4: run<4>(argc, argv); break;
+    case 5: run<5>(argc, argv); break;
     default: return 2;
   }
   return 0;

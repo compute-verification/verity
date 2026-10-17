@@ -10,13 +10,13 @@ export O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/rw_decode
 B=$(mktemp -d /tmp/rw-decode.XXXXXX); trap 'rm -rf "$B"' EXIT
-SIZES=${SIZES:-"1024 1536 2048 3072"}; FORMS=${FORMS:-"0 1 2 3"}; K=${K:-2000}; MB=${MB:-1024}; JOBS=${JOBS:-8}
+SIZES=${SIZES:-"1024 1536 2048 3072"}; FORMS=${FORMS:-"0 1 2 3 4 5"}; K=${K:-2000}; MB=${MB:-1024}; JOBS=${JOBS:-8}
 nvcc --version > "$O/nvcc.txt"
 for b in $SIZES; do for f in $FORMS; do echo "$b $f"; done; done \
   | xargs -P "$JOBS" -n 2 sh -c 'timeout 900 nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xptxas -v \
       -DMB_BITS=$0 -DMB_FORM=$1 -o '"$B"'/mont$0-f$1 '"$D"'/mont.cu > '"$O"'/build-$0-f$1.log 2>&1 \
       || echo "build $0 form $1 rc $?" >> '"$O"'/errors.txt' &
-for b in $SIZES; do for g in 0 1; do
+for b in $SIZES; do for g in 0 1 4; do
   (python3 $D/rw.py keygen "$b" "$g" $((b * 10 + g)) > "$O/key-$b-$g.json" \
     && python3 $D/rw.py params "$O/key-$b-$g.json" > "$B/p-$b-$g.txt" \
     && python3 $D/rw.py encode "$O/key-$b-$g.json" 128 "$b" > "$B/r-$b-$g.txt") \
@@ -29,7 +29,7 @@ first=$(ls "$B" | grep '^mont' | head -1)
 "$B/$first" clock > "$O/clock-before.json" 2>&1
 "$B/$first" bw 2048 10 > "$O/bw.json" 2>&1
 for b in $SIZES; do for f in $FORMS; do
-  x="$B/mont$b-f$f"; g=$((f % 2)); P="$B/p-$b-$g.txt"; KEY="$O/key-$b-$g.json"; ok=1
+  x="$B/mont$b-f$f"; g=$((f >= 4 ? 4 : f % 2)); P="$B/p-$b-$g.txt"; KEY="$O/key-$b-$g.json"; ok=1
   [ -x "$x" ] || { echo "no binary for $b form $f" >> "$O/errors.txt"; continue; }
   for k in 1 50; do
     "$x" chain-gate "$f" "$k" "$P" 256 > "$B/cg.txt" 2>> "$O/errors.txt" || ok=0
