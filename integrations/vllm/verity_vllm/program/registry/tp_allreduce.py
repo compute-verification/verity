@@ -72,6 +72,8 @@ is 0x7FFF.
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 from typing import NamedTuple
 
 import numpy as np

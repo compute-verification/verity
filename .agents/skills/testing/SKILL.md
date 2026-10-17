@@ -82,6 +82,15 @@ a `sys.path` entry another test file added: every suite runs alone.
 - **Minutes-long or machine-bound checks are opt-in:** they skip unless a variable asks for them, as `VERITY_POUS_SLOW`,
   `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL` and `VERITY_REGRESSION` do. Name the variable `VERITY_{PACKAGE}_...` and say in the skip
   reason how long it takes.
+- **Checks outside `check`.** `check` has no tier that runs after landing yet (AGENTS.md, "Checking and merging": ci and infra
+  build it), so a check far past ten minutes cold runs as a recorded run on the change that needs it. integrations/vllm's heavy
+  circuit-neutrality tier is one: it rebuilds GLM-5.3's 8 ranks to GP-01 and fails when a Program digest that
+  `integrations/vllm/manifests/records.json` pins moved, in about 50 minutes on a 256-CPU pod. Run it on a change under
+  `integrations/vllm/verity_vllm/program/` or `integrations/vllm/verity_vllm/engine/`, or to its `pipeline/build.py`, that is
+  meant to leave the circuits alone: `verity-vllm neutrality --tier heavy` as a `research run --on` a CPU pod (vy-nebius-cpu-2),
+  set up as `integrations/vllm/verity_vllm/pipeline/neutrality.py`'s docstring says (the pinned vLLM from
+  `ops/pod_bootstrap.sh --cpu`). It is the post-landing tier's first job once that exists; the suite's fast stand-in is
+  `integrations/vllm/tests/program/test_derive_neutrality.py`.
 - **GPU, pod and vLLM tests skip themselves** when the hardware or the runtime is absent. Their real runs are recorded runs
   on a pod (`research run --on ...`), never a laptop.
 - **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is not

@@ -40,6 +40,8 @@ It lives under tests/ because it seeds random generators and sets VLLM_BATCH_INV
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import argparse
 import hashlib
 import json

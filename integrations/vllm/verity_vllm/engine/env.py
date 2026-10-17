@@ -13,20 +13,27 @@ import tempfile
 from collections.abc import Mapping
 from typing import Any
 
-#: The engine's execution profile (CONTRACT.md §2 / §2.1), shared by production and replay.
+#: The engine's execution profile (CONTRACT.md §2 / §2.1), shared by production and replay: vLLM's defaults but for these, each
+#: with its reason in `REASONS`.  Batch invariance is the row's execution label's (`engine.served.EXECUTIONS`), not the profile's.
 ENGINE = {
-    "VLLM_BATCH_INVARIANT": "1",
     "VLLM_USE_V2_MODEL_RUNNER": "1",
     "VLLM_ENABLE_V1_MULTIPROCESSING": "0",
-    # The FlashInfer top-k/top-p sampler JIT-compiles at warm-up (needs ninja + nvcc matching the
-    # cu130 torch; the pod has neither). Inert for our workloads: the V2 sampler never uses it for
-    # greedy or explicitly seeded requests (sampler.py: any_greedy / any_explicit_seed), so the
-    # torch path (apply_top_k_top_p + gumbel_sample) that W3 re-derives is the one that runs.
     "VLLM_USE_FLASHINFER_SAMPLER": "0",
-    # A shared expert runs on the main stream, in the order a Build (`EXPORT`) gives it. Otherwise vLLM moves it to an aux stream
-    # at <= VLLM_SHARED_EXPERTS_STREAM_TOKEN_THRESHOLD (256) tokens, and the log's order is no longer the execution order that
-    # operand_provenance (G5) takes it to be. Costs the shared/routed overlap there, on shared-expert models only.
     "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
+}
+#: Why `ENGINE` sets each switch (a served Commit's record carries it: `engine.served`).
+REASONS = {
+    "VLLM_USE_V2_MODEL_RUNNER": "trace replay requires Model Runner V2, which vLLM selects by default only for "
+                                "DEFAULT_V2_MODEL_RUNNER_ARCHITECTURES (vllm/config/vllm.py)",
+    "VLLM_ENABLE_V1_MULTIPROCESSING": "the engine core runs in-process, so the recorder reads the scheduler's step trace and replay "
+                                      "intercepts the model runner; it changes the process topology, not the kernels",
+    "VLLM_USE_FLASHINFER_SAMPLER": "the FlashInfer top-k/top-p sampler JIT-compiles at warm-up (ninja and an nvcc matching torch's CUDA; "
+                                   "the pods have neither); the V2 sampler never uses it for greedy or explicitly seeded requests "
+                                   "(sampler.py: any_greedy / any_explicit_seed), so the torch path W3 re-derives is the one that runs",
+    "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "a shared expert runs on the main stream, in the order a Build (EXPORT) gives it; otherwise vLLM "
+                                          "moves it to an aux stream at <= VLLM_SHARED_EXPERTS_STREAM_TOKEN_THRESHOLD (256) tokens and the "
+                                          "log's order is no longer the execution order operand_provenance (G5) takes it to be; costs the "
+                                          "shared/routed overlap there, on shared-expert models only; value- and Program-neutral",
 }
 
 #: The meta-device instantiation of the pinned model class (``program/frontend/vllm_meta.py``).

@@ -37,11 +37,11 @@ def test_apply_engine_without_a_store_leaves_hf_home_alone(clean) -> None:
 
 
 def test_a_target_profile_replaces_the_pin(clean) -> None:
-    clean.setenv("VLLM_BATCH_INVARIANT", "1")
-    clean.delenv("VLLM_USE_DEEP_GEMM", raising=False)
-    assert env.apply_target({"VLLM_BATCH_INVARIANT": "0", "VLLM_USE_DEEP_GEMM": "0"}) == {
-        "VLLM_BATCH_INVARIANT": "0", "VLLM_USE_DEEP_GEMM": "0"}
-    assert env.apply_engine(None)["VLLM_BATCH_INVARIANT"] == "0"
+    clean.setenv("VLLM_USE_FLASHINFER_SAMPLER", "1")
+    clean.setenv("VLLM_USE_DEEP_GEMM", "1")
+    assert env.apply_target({"VLLM_USE_FLASHINFER_SAMPLER": "0", "VLLM_USE_DEEP_GEMM": "0"}) == {
+        "VLLM_USE_FLASHINFER_SAMPLER": "0", "VLLM_USE_DEEP_GEMM": "0"}
+    assert env.apply_engine(None)["VLLM_USE_FLASHINFER_SAMPLER"] == "0"
 
 
 def test_hidden_devices_override_what_the_process_inherited(monkeypatch) -> None:
@@ -76,8 +76,9 @@ def test_the_engine_profile_reads_this_table() -> None:
     from verity_vllm.engine import engine_profile as prof
 
     assert prof.DECLARED_ENV is env.ENGINE
-    assert env.ENGINE == {"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_V2_MODEL_RUNNER": "1", "VLLM_ENABLE_V1_MULTIPROCESSING": "0",
-                          "VLLM_USE_FLASHINFER_SAMPLER": "0", "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1"}
+    assert env.ENGINE == {"VLLM_USE_V2_MODEL_RUNNER": "1", "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_USE_FLASHINFER_SAMPLER": "0",
+                          "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1"}
+    assert set(env.REASONS) == set(env.ENGINE) and all(env.REASONS.values())
     assert env.EXPORT == {"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_LAYERNAME": "0", "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
                           "HF_HUB_OFFLINE": "1", "VLLM_LOGGING_LEVEL": "WARNING", "TOKENIZERS_PARALLELISM": "false"}
 
