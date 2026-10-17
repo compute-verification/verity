@@ -1,6 +1,6 @@
 """The circuit database: per served row, the exact circuit it served (the Build's Programs, per rank), the evidence that it is
-faithful (the Match on live data, the Commit's gates) and every config that determines it (the row file, `config.RowConfig`), in the
-evidence store by row id.  Committed values are never kept.
+faithful (the Match on live data, the Commit's gates, the conformance captures) and every config that determines it (the row file,
+`config.RowConfig`), in the evidence store by row id.  Committed values are never kept.
 
 A row's entry is one preserved `vllm-config-record/v1` artifact labelled `row=<id>`.  Its payload is the row's config record
 (`config_record.json`, `verity-vllm/config-record/v1`, `pipeline.config_record`) and its refs are the evidence the record names under
@@ -8,6 +8,12 @@ A row's entry is one preserved `vllm-config-record/v1` artifact labelled `row=<i
 `commit`, and one ref per conformance capture, named by its property.  `manifests/records.json` indexes the database: row id -> the
 record's art: id.  The store is reached through the research CLI (`python -m research data ...`), so `RESEARCH_STORE` /
 `RESEARCH_STORE_CONFIG` select it.
+
+Conformance: the properties a row's Programs need are those its capture map (`commit.capture_map.of_checkpoint`, the Build's
+checkpoint and world) names for the Programs the Build uses (`captures` of each map Program one of whose Definitions a construction
+manifest's `spec_histogram` holds), the record's `conformance.due`.  The record cites each one's capture of record under
+`evidence.conformance` (a `property-record/v1`: one run's `<property>.json`, validated and holding, referring to the run's record;
+`capture` preserves them) or names it a gap with its reason under `evidence.gaps`; `publish` refuses a record that leaves one silent.
 
     from verity_vllm import records
     from verity.ml.circuits.evaluation.reference import evaluate
@@ -19,6 +25,8 @@ record's art: id.  The store is reached through the research CLI (`python -m res
 
     verity-vllm records publish <row dir> <row> --build art:… --tree REF@SHA --by LANE [--manifest art:…] [--match art:…]
                                 [--match-run R] [--commit art:…] [--commit-run R] [--summary FILE] [--conformance PROPERTY=art:…]
+                                [--gap PROPERTY=REASON]
+    verity-vllm records capture <run> [--property P]  # preserve a capture run's property records; prints PROPERTY=art:…
     verity-vllm records show [<row>]                  # the index, or a row's record
     verity-vllm records programs <row> [--rank R] [--part P]   # fetch, decode and check a row's Programs, one rank at a time
 """
@@ -41,6 +49,8 @@ ART = re.compile(r"art:[0-9a-f]{64}")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 TREE = re.compile(r"\S+@[0-9a-f]{7,40}")
 REFS = ("build", "manifest", "match", "commit")
+PROPERTY_KIND = "property-record/v1"
+CONSTRUCTION = "construction_manifest.json"
 
 
 def data(*args: str) -> str:
@@ -55,6 +65,11 @@ def data(*args: str) -> str:
 def fetch(art: str, to: Path | None = None, paths: list[str] = ()) -> Path:
     """Materialise `art`'s payload (only `paths` of a tree, when given) and return its path."""
     return Path(data("fetch", art, *(["--to", str(to)] if to else []), *(f"--path={p}" for p in paths)).strip().splitlines()[-1])
+
+
+def listing(art: str) -> list[str]:
+    """The paths of a tree artifact's files."""
+    return [f["path"] for f in json.loads(data("fetch", art, "--list", "--json"))]
 
 
 def index() -> dict[str, str]:
@@ -121,23 +136,97 @@ def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None
     return out
 
 
+def capture(run: str, properties: list[str] | None = None) -> dict[str, str]:
+    """Preserve the property records run `run` wrote (each property's shallowest `out/**/<property>.json` in its run record; only
+    `properties`, when given) as `property-record/v1` artifacts referring to the run's record, each refused unless its schema is
+    the registered property's, its digest recomputes and it holds.  Returns {property: art: id}."""
+    from verity_vllm.properties.record import REGISTRY, PropertyRecord
+    att = json.loads(data("show", run, "--json"))
+    rr = (att.get("outputs") or {}).get("run_record")
+    if not rr:
+        raise UsageError(f"{run}: no run record (outputs.run_record; `research run --on` keeps one)")
+    found: dict[str, str] = {}
+    for p in sorted(listing(rr), key=lambda p: (p.count("/"), p)):
+        name = Path(p).stem
+        if p.startswith("out/") and p.endswith(".json") and name in REGISTRY and (properties is None or name in properties):
+            found.setdefault(name, p)
+    missing = sorted(set(properties or ()) - set(found))
+    if missing or not found:
+        raise UsageError(f"{run}: its record {rr} holds no out/**/<property>.json{' for ' + ', '.join(missing) if missing else ''}")
+    out = {}
+    with tempfile.TemporaryDirectory(prefix="records-") as tmp:
+        root = fetch(rr, Path(tmp), list(found.values()))
+        for name, p in sorted(found.items()):
+            pr = PropertyRecord.load(root / p)
+            problems = pr.problems() + ([] if pr.name in (None, name) else [f"the record is {pr.name}'s"])
+            if problems or not pr.ok:
+                raise UsageError(f"{run} {p}: {'; '.join(problems) or 'the property does not hold'}: not a capture of record")
+            meta = {"property": name, "schema": pr.doc["schema"], "digest": pr.digest, "ok": True, "path": p, "run_id": run,
+                    "commit": (att.get("source") or {}).get("commit")}
+            art = ART.findall(data("put", "--kind", PROPERTY_KIND, "--meta", json.dumps(meta, sort_keys=True), "--file", str(root / p),
+                                   f"--ref=run={rr}"))[-1]
+            data("push", art)
+            out[name] = art
+    return out
+
+
+def check_capture(prop: str, art: str) -> None:
+    """Refuse `art` as `prop`'s capture of record unless it is a holding `property-record/v1` of `prop` at its registered schema."""
+    from verity_vllm.properties.record import REGISTRY
+    m = json.loads(data("show", art, "--json"))["manifest"]
+    meta, want = m.get("meta") or {}, REGISTRY.get(prop)
+    if m.get("kind") != PROPERTY_KIND or meta.get("property") != prop or meta.get("ok") is not True or want is None \
+            or meta.get("schema") != want.schema:
+        raise UsageError(f"--conformance {prop}={art}: a {m.get('kind')} of {meta.get('property')} at {meta.get('schema')} "
+                         f"(ok {meta.get('ok')}), not a holding {PROPERTY_KIND} of {prop} at {want.schema if want else '<unregistered>'} "
+                         f"(`verity-vllm records capture RUN` preserves one)")
+
+
+def due(build: str, listed: list[str]) -> dict[str, Any]:
+    """The record's `conformance`: the capture map (`map`, its id) of the Build's checkpoint and world (its construction manifests'
+    `model.pin.model` and `tp.world`) and `due`, each property its `captures` name for a map Program the Build uses (one of whose
+    Definitions a construction manifest's `spec_histogram` holds) -> those Programs.  A Build with no construction manifest is
+    refused: what its Programs use is unknown."""
+    from verity_vllm.commit import capture_map as CM
+    from verity_vllm.query.program_view import spec_base
+    cms = [p for p in listed if p.rsplit("/", 1)[-1] == CONSTRUCTION]
+    if not cms:
+        raise UsageError(f"the Build {build} holds no {CONSTRUCTION}: the Definitions its Programs use, so the conformance they need, "
+                         f"are unknown")
+    with tempfile.TemporaryDirectory(prefix="records-") as tmp:
+        root = fetch(build, Path(tmp), cms)
+        docs = [json.loads((root / p).read_text()) for p in cms]
+    pins = {(((m.get("model") or {}).get("pin") or {}).get("model"), int((m.get("tp") or {}).get("world") or 1)) for m in docs}
+    if len(pins) != 1:
+        raise UsageError(f"the Build {build}'s construction manifests name {len(pins)} checkpoints and worlds: {sorted(map(str, pins))}")
+    cmap = CM.of_checkpoint(*pins.pop())
+    if cmap is None:
+        return {"map": None, "due": {}}
+    used = {spec_base(s) for m in docs for s in m.get("spec_histogram") or {}}
+    progs = {prop: [p for p in pids if used & set(cmap["programs"][p]["definitions"])] for prop, pids in CM.captures(cmap).items()}
+    return {"map": cmap["id"], "due": {prop: ps for prop, ps in progs.items() if ps}}
+
+
 def evidence_of(build: str, *, manifest: str | None = None, match: str | None = None, match_run: str | None = None,
-                commit: str | None = None, commit_run: str | None = None, conformance: dict[str, str] | None = None) -> dict[str, Any]:
-    """The record's `evidence` block, each id checked for its form."""
+                commit: str | None = None, commit_run: str | None = None, conformance: dict[str, str] | None = None,
+                gaps: dict[str, str] | None = None) -> dict[str, Any]:
+    """The record's `evidence` block, each id checked for its form, each gap for its reason."""
     ev = {"build": build, "manifest": manifest, "match": match, "match_run": match_run, "commit": commit, "commit_run": commit_run,
-          "conformance": dict(sorted((conformance or {}).items()))}
+          "conformance": dict(sorted((conformance or {}).items())), "gaps": dict(sorted((gaps or {}).items()))}
     bad = [f"{k}={v!r}" for k, v in ev.items() if k in REFS and v is not None and not ART.fullmatch(v)]
     bad += [f"{k}={v!r}" for k, v in ev.items() if k.endswith("_run") and v is not None and not RUN.fullmatch(v)]
     bad += [f"conformance {k}={v!r}" for k, v in ev["conformance"].items() if not ART.fullmatch(v) or k in ev]
+    bad += [f"gap {k}={v!r}" for k, v in ev["gaps"].items() if not str(v).strip() or k in ev or k in ev["conformance"]]
     if bad:
-        raise UsageError(f"evidence: not an art: id / run id: {', '.join(bad)}")
+        raise UsageError(f"evidence: not an art: id / run id / a gap's reason (a property is cited or a gap, not both): {', '.join(bad)}")
     return ev
 
 
 def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by: str, summary: dict[str, Any] | None = None) -> str:
     """Write the row's config record from its row dir `d` (the stages' files, or a copy of them) and its Commit of record's
-    `summary`, refuse it unless it is PASS, the Commit committed against the Build's manifest and Programs, and its Build artifact
-    holds every Program it names, then label it `row=<id>`, preserve it with its label and index it.  Returns its art: id."""
+    `summary`, refuse it unless it is PASS, the Commit committed against the Build's manifest and Programs, its Build artifact
+    holds every Program it names, and every conformance property its Programs need (`due`) is cited by a holding capture of
+    record or named a gap, then label it `row=<id>`, preserve it with its label and index it.  Returns its art: id."""
     if not TREE.fullmatch(tree):
         raise UsageError(f"--tree {tree!r}: REF@SHA, the code the row was built and served from")
     rec = CR.record(d, row, tree=tree, summary=summary, evidence=evidence)
@@ -149,10 +238,17 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
             workloads.get(str(r)) != v for r, v in (cm.get("program_digest_per_rank") or {}).items()):
         raise UsageError(f"{row}: the Commit committed against manifest {str(cm.get('manifest_digest'))[:16]}… and its Programs, not the "
                          f"Build's ({str(rec['build'].get('manifest_digest'))[:16]}…): the record's Build is not the one served")
-    listed = {f["path"] for f in json.loads(data("fetch", evidence["build"], "--list", "--json"))}
+    listed = listing(evidence["build"])
     if missing := [p for r, ps in parts(rec).items() for p in (descriptor(rec, r, q) for q in ps) if p not in listed]:
         raise UsageError(f"{row}: the Build {evidence['build']} lacks {len(missing)} Program descriptor(s): {', '.join(missing[:4])}")
-    refs = {**{k: evidence[k] for k in REFS if evidence.get(k)}, **(evidence.get("conformance") or {})}
+    rec["conformance"] = due(evidence["build"], listed)
+    cited, gaps = evidence.get("conformance") or {}, evidence.get("gaps") or {}
+    if silent := sorted(set(rec["conformance"]["due"]) - set(cited) - set(gaps)):
+        raise UsageError(f"{row}: its Programs need {', '.join(silent)} ({rec['conformance']['map']}), which the record neither cites nor "
+                         f"names a gap: --conformance PROPERTY=art:… (`verity-vllm records capture RUN`) or --gap PROPERTY=REASON")
+    for prop, art in cited.items():
+        check_capture(prop, art)
+    refs = {**{k: evidence[k] for k in REFS if evidence.get(k)}, **cited}
     meta = {"row": row, "outcome": rec["outcome"], "world": rec["config"].get("tp"), "tree": tree}
     with tempfile.TemporaryDirectory(prefix="config-record-") as tmp:
         p = Path(tmp) / CR.NAME
@@ -180,8 +276,20 @@ class PublishOptions:
     commit: str | None = option("--commit", default=None, help="the Commit of record")
     commit_run: str | None = option("--commit-run", default=None)
     summary: str | None = option("--summary", default=None, help="the Commit of record's summary.json (else the row dir's commit/)")
-    conformance: list[str] = option("--conformance", action="append", default=[], metavar="PROPERTY=art:...")
+    conformance: list[str] = option("--conformance", action="append", default=[], metavar="PROPERTY=art:...",
+                                    help="a property's capture of record (`records capture`)")
+    gap: list[str] = option("--gap", action="append", default=[], metavar="PROPERTY=REASON",
+                            help="a property the Programs need with no capture of record for the tree, and why")
     cmd: str = field(default="publish", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CaptureOptions:
+    """Preserve a capture run's property records as property-record/v1 artifacts; print PROPERTY=art:… for --conformance."""
+
+    run: str = option("run", help="the capture run (a run id with a run record)")
+    property: list[str] = option("--property", action="append", default=[], help="these properties only (default every one it wrote)")
+    cmd: str = field(default="capture", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -202,18 +310,27 @@ class ProgramsOptions:
     cmd: str = field(default="programs", init=False)
 
 
-COMMANDS = {"publish": PublishOptions, "show": ShowOptions, "programs": ProgramsOptions}
+COMMANDS = {"publish": PublishOptions, "capture": CaptureOptions, "show": ShowOptions, "programs": ProgramsOptions}
 
 
-def main(a: PublishOptions | ShowOptions | ProgramsOptions) -> int:
+def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
+    out = dict(c.split("=", 1) for c in items if "=" in c)
+    if len(out) != len(items):
+        raise UsageError(f"{flag} {items}: {form}, each property once")
+    return out
+
+
+def main(a: PublishOptions | CaptureOptions | ShowOptions | ProgramsOptions) -> int:
     if a.cmd == "publish":
-        conf = dict(c.split("=", 1) for c in a.conformance if "=" in c)
-        if len(conf) != len(a.conformance):
-            raise UsageError(f"--conformance {a.conformance}: PROPERTY=art:...")
         ev = evidence_of(a.build, manifest=a.manifest, match=a.match, match_run=a.match_run, commit=a.commit, commit_run=a.commit_run,
-                         conformance=conf)
+                         conformance=_pairs("--conformance", a.conformance, "PROPERTY=art:..."),
+                         gaps=_pairs("--gap", a.gap, "PROPERTY=REASON"))
         summary = json.loads(Path(a.summary).read_text()) if a.summary else None
         print(publish(a.row_dir, a.row, evidence=ev, tree=a.tree, by=a.by, summary=summary))
+        return 0
+    if a.cmd == "capture":
+        for prop, art in capture(a.run, a.property or None).items():
+            print(f"{prop}={art}")
         return 0
     if a.cmd == "show":
         print(json.dumps(record(a.row) if a.row else index(), indent=1, sort_keys=True))

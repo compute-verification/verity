@@ -1,4 +1,6 @@
-"""The circuit database (`verity_vllm.records`): the index, and a TP row published from its row dir and loaded back by row id."""
+"""The circuit database (`verity_vllm.records`): the index, a TP row published from its row dir and loaded back by row id, its
+conformance (captures of record, named gaps, a property left silent refused) and the in-stage manifest a manifest of record
+supersedes."""
 from __future__ import annotations
 
 import gzip
@@ -12,13 +14,17 @@ from verity.ml.circuits import encode_program, program_digest
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity_vllm import records
+from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import WORKLOADS, RowId, UsageError
 from verity_vllm.pipeline import research_outputs as ro
+from verity_vllm.properties.record import REGISTRY, seal
 
 from tests.program.test_running_example import make_program
 
 ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
+REPO = "meta-llama/Llama-3.2-1B"
 PARTS = ("build_step", "build_request_LP9_T2", "build_workload")
+PROP = "glm53_bf16_gemm_capture"
 SUMMARY = {"schema": "verity/commit-integ/delta-tp/v1", "pass": True, "pairs": 1, "commit_pass": [True], "tp_run_roots": ["ab" * 32],
            "per_rank_roots": [{"0": "c0" * 32, "1": "c1" * 32}], "openings": 64, "weights_pin": {"result": True},
            "value_check": {"verdict": "PASS"}, "match_oracle": {"0": {"verdict": "PASS"}, "1": {"verdict": "PASS"}},
@@ -51,6 +57,8 @@ def _row_dir(tmp_path: Path, digest: str | None = None) -> Path:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(gzip.compress(cj))
             _w(p.parent / "result.json", {"ok": True})
+            if part != "build_workload":
+                _w(p.parent / records.CONSTRUCTION, {"model": {"pin": {"model": REPO}}, "tp": {"world": 2}, "spec_histogram": {"Mul16_v1": 3}})
         ranks[f"rank{r}"] = {"build_step": {"ok": True, "program_digest": digest or real},
                              "build_request_LP9_T2": {"ok": True, "program_digest": real},
                              "workload": {"ok": True, "workload_digest": real}}
@@ -65,18 +73,46 @@ def _row_dir(tmp_path: Path, digest: str | None = None) -> Path:
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
-    """The store the research CLI selects: a local root with a directory as its remote."""
+    """The store the research CLI selects: a local root with a directory as its remote; and no capture map but the test's."""
     (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))
     monkeypatch.setattr(records, "INDEX", tmp_path / "records.json")
+    (tmp_path / "maps").mkdir()
+    monkeypatch.setattr(CM, "MAPS", tmp_path / "maps")
     return LocalStore(tmp_path / "store", config_path=tmp_path / "store.toml")
+
+
+def _map(tmp_path: Path) -> None:
+    """The checkpoint's capture map at TP2: the Program the Build uses (Mul16_v1) needs PROP; one it does not use needs another."""
+    _w(tmp_path / "maps" / "m.json", {"schema": CM.SCHEMA, "id": "llama-test-tp2", "pins": {"checkpoint": {"repo": REPO}},
+                                      "target": {"tensor_parallel_size": 2},
+                                      "programs": {"mul": {"status": "exists", "definitions": ["Mul16_v1"], "captures": [PROP]},
+                                                   "attn": {"status": "port", "definitions": ["Attention_v4"],
+                                                            "captures": ["glm53_fa3_prefill_capture"]}}})
 
 
 def _build_art(st: LocalStore, d: Path, run: Path) -> str:
     doc = ro.build_outputs(d, ROW, "build", run, {})
     build = next(e for e in doc["outputs"] if e["name"] == "build")
     return st.put_artifact(build["kind"], {"row": ROW}, tree=run / build["tree"])
+
+
+_runs = iter(range(1 << 16))
+
+
+def _capture_run(st: LocalStore, tmp_path: Path, prop: str = PROP, ok: bool = True, tamper: bool = False) -> str:
+    """A capture run's attempt whose run record holds `prop`'s property record under out/properties/."""
+    rid = f"r20261016-234133-{next(_runs):04x}"
+    doc = seal({"schema": REGISTRY[prop].schema, "words": 7}, ok)
+    _w(tmp_path / rid / "out" / "properties" / f"{prop}.json", {**doc, "words": 8} if tamper else doc)
+    rr = st.put_artifact("run-record/v1", {"run_id": rid}, tree=tmp_path / rid)
+    st.put_attempt({"schema": "research/attempt/v0.1", "id": rid, "tool": {"name": "bash", "version": None},
+                    "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {}, "key_params": [], "inputs": {},
+                    "conditions": {}, "key_conditions": [], "source": {"commit": "850fb2f6f" + "0" * 31, "dirty": False},
+                    "closure": None, "execution": {}, "cost": None, "status": {"state": "done", "rc": 0},
+                    "outputs": {"run_record": rr}, "telemetry": None})
+    return rid
 
 
 def _served(d: Path) -> dict:
@@ -89,20 +125,22 @@ def _served(d: Path) -> dict:
 def test_a_published_row_loads_back_by_id(tmp_path, store):
     d = _row_dir(tmp_path)
     build = _build_art(store, d, tmp_path / "run")
+    cap = records.capture(_capture_run(store, tmp_path))
     ev = records.evidence_of(build, manifest="art:" + "1" * 64, match="art:" + "2" * 64, match_run="r20261016-083240-d76e",
-                             commit="art:" + "3" * 64, commit_run="r20261016-213336-6c35",
-                             conformance={"glm53_bf16_gemm_capture": "art:" + "4" * 64})
+                             commit="art:" + "3" * 64, commit_run="r20261016-213336-6c35", conformance=cap)
     art = records.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
     assert records.index() == {ROW: art}
     m = store.get_manifest(art)
     assert m.kind == "vllm-config-record/v1" and m.meta == {"row": ROW, "outcome": "PASS", "world": 2, "tree": "cursor/x@1b53f685a"}
-    assert m.refs == {"build": build, "manifest": ev["manifest"], "match": ev["match"], "commit": ev["commit"],
-                      "glm53_bf16_gemm_capture": "art:" + "4" * 64}
+    assert m.refs == {"build": build, "manifest": ev["manifest"], "match": ev["match"], "commit": ev["commit"], PROP: cap[PROP]}
     assert [lb.value for lb in store.labels(art, "row")] == [ROW]
     assert any(w.get("location") == "remote" and w.get("present") for w in store.where(art))
 
     rec = records.record(ROW)
     assert rec["outcome"] == "PASS" and rec["evidence"] == ev and rec["tree"] == "cursor/x@1b53f685a"
+    assert rec["conformance"] == {"map": None, "due": {}}, "no capture map describes the checkpoint: nothing is due"
+    assert rec["stages"] == {"build": {"status": "PASS", "line": "2026-10-17T00:00:00Z rc=0"}}
+    assert rec["build"]["stage"] == {"status": "PASS", "manifest_rc": None}
     assert rec["row"]["file"] == f"workloads/{ROW}.json" and rec["row"]["profile"] == "derived_LLAMA32_1B_tp2"
     assert rec["match"]["ok"] is True and rec["commit"]["run_root"] == "ab" * 32
     assert rec["commit"]["per_rank"] == {"0": {"run_roots": ["c0" * 32]}, "1": {"run_roots": ["c1" * 32]}}
@@ -158,3 +196,52 @@ def test_evidence_ids_are_checked():
         records.evidence_of("art:" + "0" * 64, conformance={"p": "r20261016-083240-d76e"})
     with pytest.raises(UsageError, match="conformance build"):
         records.evidence_of("art:" + "0" * 64, conformance={"build": "art:" + "1" * 64})
+    with pytest.raises(UsageError, match="gap p=' '"):
+        records.evidence_of("art:" + "0" * 64, gaps={"p": " "})
+    with pytest.raises(UsageError, match="cited or a gap, not both"):
+        records.evidence_of("art:" + "0" * 64, conformance={"p": "art:" + "1" * 64}, gaps={"p": "no capture"})
+
+
+def test_a_capture_run_s_records_are_preserved_and_one_that_does_not_hold_or_recompute_is_refused(tmp_path, store):
+    run = _capture_run(store, tmp_path)
+    cap = records.capture(run)
+    m = store.get_manifest(cap[PROP])
+    rr = store.get_attempt(run)["outputs"]["run_record"]
+    assert m.kind == records.PROPERTY_KIND and m.refs == {"run": rr}
+    assert m.meta == {"property": PROP, "schema": REGISTRY[PROP].schema, "digest": m.meta["digest"], "ok": True,
+                      "path": f"out/properties/{PROP}.json", "run_id": run, "commit": "850fb2f6f" + "0" * 31}
+    assert records.capture(run, [PROP]) == cap, "the same record preserved again is the same artifact"
+    with pytest.raises(UsageError, match="does not hold"):
+        records.capture(_capture_run(store, tmp_path, ok=False))
+    with pytest.raises(UsageError, match="digest does not match"):
+        records.capture(_capture_run(store, tmp_path, tamper=True))
+    with pytest.raises(UsageError, match="for glm53_dsa_capture"):
+        records.capture(run, ["glm53_dsa_capture"])
+
+
+def test_publish_refuses_a_needed_property_left_silent_and_records_a_named_gap(tmp_path, store):
+    """The map's Program the Build uses (Mul16_v1 in its construction manifests) needs PROP; the one it does not use needs nothing."""
+    _map(tmp_path)
+    d = _row_dir(tmp_path)
+    build = _build_art(store, d, tmp_path / "run")
+    with pytest.raises(UsageError, match=f"need {PROP} \\(llama-test-tp2\\), which the record neither cites nor names a gap"):
+        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+    other = records.capture(_capture_run(store, tmp_path, prop="glm53_dsa_capture"))["glm53_dsa_capture"]
+    with pytest.raises(UsageError, match=f"not a holding property-record/v1 of {PROP}"):
+        records.publish(d, ROW, evidence=records.evidence_of(build, conformance={PROP: other}), tree="cursor/x@1b53f685a",
+                        by="circuits", summary=_served(d))
+    assert records.index() == {}
+    ev = records.evidence_of(build, gaps={PROP: "no capture of the tree's harness"})
+    records.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+    rec = records.record(ROW)
+    assert rec["conformance"] == {"map": "llama-test-tp2", "due": {PROP: ["mul"]}}
+    assert rec["evidence"]["gaps"] == {PROP: "no capture of the tree's harness"} and rec["evidence"]["conformance"] == {}
+
+
+def test_a_build_without_construction_manifests_is_refused(tmp_path, store):
+    d = _row_dir(tmp_path)
+    for p in d.glob(f"build/rank*/*/{records.CONSTRUCTION}"):
+        p.unlink()
+    build = _build_art(store, d, tmp_path / "run")
+    with pytest.raises(UsageError, match="the conformance they need, are unknown"):
+        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
