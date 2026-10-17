@@ -11,7 +11,7 @@ eight items:
 1. **Statement format.** `x` is the canonical bytes of what the compiled verifier reads, parsed by its own parser
    (`Deploy.parse`) into the inner statement's bytes, the inner statement's dimensions as the verifier sets it up, the
    commitment to the circuit (the private-circuit variant only), the recursion's form, and each V* session's draw as
-   its record holds it (`Stmt`, `Form`, `Draw`).
+   its record holds it, where the statement carries the records (`Stmt`, `Form`, `Draw`).
 2. **Witness.** The inner protocol's (`W`), in both variants. In the private-circuit one the circuit is in the inner
    witness, which the universal unit's relation reads, and its commitment is hm96 rows that unit outputs.
 3. **Relation (inherited).** `R(x, w) :⇔ x` parses, has no circuit commitment, and `R_I(x_I, w)` (`R`). The private
@@ -23,7 +23,8 @@ eight items:
    inside a block, and R at `table_m` with two claims. Every V* session draws every unit of its population
    (`Draw.Full`). There is no recursion-level scope refusal: `ScopeMatches` states that this is the compiled
    verifier's own scope check, its setup's checks of the inner shape and its refusal of a V* session whose draw is not
-   every unit.
+   every unit. Where the V* records are run messages, the statement carries no draws, and the compiled verifier
+   refuses a session whose draw is not every unit when that session decides.
 5. **Named pieces.** A run is the inner session's rounds, the prover's staging rounds (`Deploy.kS`), at which it stages
    the V* statements, then the V* sessions. `E*` (`E`): the outer extractor `E_O` (`EO`: per V* session, `E^rep` over
    forks of the judged run at the session's first round, with the outer Flock's assemble and check), then the inner one
@@ -305,7 +306,8 @@ def Draw.Full (d : Draw) : Prop :=
 
 /-- **The recursion's statement**: the inner statement's bytes, its `(m, k_log, regions)` as the verifier sets it up
 from its files (`none` where the verifier holds none), the commitment to the circuit (the private-circuit variant),
-the form, and each V* session's draw as its record holds it (`none` where it holds none the verifier reads). -/
+the form, and each V* session's draw as its record holds it (`none` where it holds none the verifier reads; no draws
+where the records are run messages rather than the statement's). -/
 structure Stmt where
   inner : Msg
   innerDims : Option (ℕ × ℕ × ℕ)
@@ -613,8 +615,8 @@ def ScopeMatches (D : Deploy Coin) (I : Inner Coin W) : Prop := Claims.ScopeMatc
 rounds (`ZKmalR` at `D.V.k`), at `Sim` over the outer `--zk` Flock's simulators at each attempt budget `t ≥ 1`
 (`SO t`): wherever hm96 leaves hide up to `δ₁` at the deployed key (`Hm96Hiding` at its salt mask `D.mask` and salt
 hash `D.saltHash H`), within `εzk` (each V* session's proved `--zk` simulation error, and `2δ₁` per commit string of
-the inner session and the staging messages) plus `γzk` times the probability that `Fork` finds a collision among the honest prover's SHA-512 calls in two real runs
-against `V*`. -/
+the inner session and the staging messages) plus `γzk` times the probability that `Fork` finds a collision among the
+honest prover's SHA-512 calls in two real runs against `V*`. -/
 def ZK {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (D : Deploy Coin)
     (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (P : W → Prover (N × Ω)) (SO : ℕ → Msg → ℕ → OSim) : Prop :=
   DO.zk = true ∧ ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, Hm96Hiding D.mask (D.saltHash H) δ₁ →
