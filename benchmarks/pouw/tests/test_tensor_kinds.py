@@ -17,6 +17,7 @@ def test_kernel_key_reads_the_struct_by_its_length():
     # QmmaE4m3k32 holds an E, which a regex on the mangling's E terminators would split
     assert TK.kernel_key("_Z6k_specI11QmmaE4m3k32Li32EEviPjP8BlockClk") == ("spec", "qmma_e4m3_m16n8k32_f32", 32)
     assert TK.kernel_key("_Z7k_aloneI9ImmaS8k32EviPjP8BlockClk") == ("alone", "imma_s8_m16n8k32", 0)
+    assert TK.kernel_key("_Z9k_opaloneILi2EEviPjP8BlockClk") == ("opalone", "iadd3_ffma", 64)
     assert TK.kernel_key("_Z4mainv") is None
 
 
@@ -37,20 +38,21 @@ def _fn(name: str, *loop_bodies: list[str]) -> str:
 def test_loops_counts_a_backward_branch_by_address_and_by_label():
     sass = _fn("f", ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8", "IADD3 R3, R3, R4, R5", "NOP", "ISETP.GE.AND P0, PT, R0, R9, PT"])
     [loop] = TK.loops(TK.parse_sass(sass)["f"])
-    assert loop == {"mma": 1, "mma_ops": ["IMMA.16832.S8.S8"], "other": 3, "iadd3": 1}
+    assert loop == {"mma": 1, "mma_ops": ["IMMA.16832.S8.S8"], "other": 3, "iadd3": 1, "ffma": 0}
     labelled = "\tFunction : g\n.L_x_0:\n        /*0000*/  HMMA.16816.F32 R8, R4, R2, R8 ;\n" \
                "        /*0010*/  @P0 BRA `(.L_x_0) ;\n"
-    assert TK.loops(TK.parse_sass(labelled)["g"]) == [{"mma": 1, "mma_ops": ["HMMA.16816.F32"], "other": 1, "iadd3": 0}]
+    assert TK.loops(TK.parse_sass(labelled)["g"]) == [
+        {"mma": 1, "mma_ops": ["HMMA.16816.F32"], "other": 1, "iadd3": 0, "ffma": 0}]
 
 
-# 64 lane adds, the counter and its compare; _fn closes the loop with a BRA, 67 instructions an iteration
-LANE = ["IADD3 R3, R3, R4, RZ"] * 64 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+# 64 lane ops, the counter and its compare; _fn closes the loop with a BRA, 67 instructions an iteration
+LANE = ["IADD3 R3, R3, R4, RZ", "FFMA R5, R5, R6, 1"] * 32 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
 
 
-def _opalone(iters: int, cyc_per_iter: float):
-    row = {"probe": "tensor_kinds", "mode": "opalone", "form": "iadd3_32", "macs": 0, "slots": 0, "ops_per_mma": 0,
+def _opalone(iters: int, cyc_per_iter: float, x: int = 2):
+    row = {"probe": "tensor_kinds", "mode": "opalone", "form": TK.LANES[x], "macs": 0, "slots": 0, "ops_per_mma": 0,
            "iters": iters, "cyc_med": iters * cyc_per_iter, "distinct_sms": 188, "mhz": 2100.0}
-    return row, [_fn("_Z9k_opaloneiPjP8BlockClk", LANE)]
+    return row, [_fn(f"_Z9k_opaloneILi{x}EEviPjP8BlockClk", LANE)]
 
 
 def _write(tmp_path: Path, cases) -> None:
@@ -73,7 +75,7 @@ def _case(mode, form, struct, R, iters, cyc, mma_loop, op_loop=None, slots=128):
 def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
     imma = ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
     hmma = [x.replace("IMMA.16832.S8.S8", "HMMA.16816.F32") for x in imma]
-    lane = ["IADD3 R3, R3, R4, R5"] * 32 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    lane = ["IADD3 R3, R3, R4, RZ", "FFMA R5, R5, R6, 1"] * 16 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
     # spec at 4 ops a MMA: 2 MMA warps a SMSP x 1000 iters x 8 MMAs = 16000 MMAs; 2 x 1000 x (3 + 35) others = 76000
     cases = [
         _opalone(1000, 8 * 67 / 0.98),
@@ -85,7 +87,7 @@ def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
     _write(tmp_path, cases)
     summary, fails = TK.analyze(tmp_path)
     assert fails == []
-    assert abs(summary["lane_op_alone"]["issue_per_smsp_cycle"] - 0.98) < 1e-9
+    assert abs(summary["lane_op_alone"]["iadd3_ffma"]["issue_per_smsp_cycle"] - 0.98) < 1e-9
     assert abs(summary["imma_s8_m16n8k32"]["a"] - 8.115) < 1e-9
     assert summary["imma_s8_m16n8k32"]["alone_smsp_cycles_per_mma"] == 16.0
     assert abs(summary["hmma_f16_m16n8k16_f32"]["vs_ref"] - 6.0 / 8.115) < 1e-9
@@ -95,10 +97,10 @@ def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
 
 
 def test_a_lane_op_slower_than_issue_fails_the_gate(tmp_path: Path):
-    # 0.45 a SMSP-cycle, as the three-source IADD3 ran: the mixed points would sit on its rate, not the issue facet
-    _write(tmp_path, [_opalone(1000, 8 * 67 / 0.45)])
+    # 0.52 a SMSP-cycle, as IADD3 alone runs: the mixed points would sit on its pipe's rate, not the issue facet
+    _write(tmp_path, [_opalone(1000, 8 * 67 / 0.52)])
     _, fails = TK.analyze(tmp_path)
-    assert fails == ["opalone: the lane op issues 0.450 a SMSP-cycle alone, below 0.9"]
+    assert fails == ["opalone: the lane op issues 0.520 a SMSP-cycle alone, below 0.9"]
 
 
 def test_an_unfinished_run_fails_the_gate(tmp_path: Path):
@@ -106,4 +108,4 @@ def test_an_unfinished_run_fails_the_gate(tmp_path: Path):
     (tmp_path / "tensor_kinds.jsonl").write_text("")
     (tmp_path / "sass" / "tensor_kinds.sass").write_text("")
     _, fails = TK.analyze(tmp_path)
-    assert fails == ["the run did not finish (no done line)", "opalone: no lane-op-alone row"]
+    assert fails == ["the run did not finish (no done line)", "opalone: no iadd3_ffma row"]

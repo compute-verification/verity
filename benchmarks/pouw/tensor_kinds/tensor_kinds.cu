@@ -2,8 +2,8 @@
 //
 // JI3e's MMA coefficient (8.115 SMSP-cycles a MMA beside other vector-pipe instructions) was fitted beside IMMA s8
 // m16n8k32 only. The issue form of the tensor theorem is tight only if no other form writes its output slots for less
-// issue. Each form here is timed alone and beside IADD3 at 4, 8, 12 and 16 ops a MMA, in the two schedules of ISSUE's
-// round 2 (note:20261016T0300Z-draft-issue-ceiling-r2): warp-specialized (k_spec: 2 MMA warps + 2 IADD3 warps a SMSP)
+// issue. Each form here is timed alone and beside IADD3+FFMA at 4, 8, 12 and 16 ops a MMA, in the two schedules of
+// ISSUE's round 2 (note:20261016T0300Z-draft-issue-ceiling-r2): warp-specialized (k_spec: 2 MMA warps + 2 lane warps a SMSP)
 // and interleaved (k_mixu: one warp issues both, body unrolled x8). tensor_kinds.py reads the loops' SASS and fits the
 // coefficient a in a·#MMA + #other <= cycles for each form.
 #include <cuda_runtime.h>
@@ -222,15 +222,41 @@ __device__ __forceinline__ void init_ops(uint32_t lane, uint32_t* a, uint32_t* b
   e = 0x44444444u;
 }
 
-// ---- lane op: ISSUE r5's iadd3_32, one add.u32 (IADD3 with two register sources) ------------------------------------
-// Two fused adds (IADD3 with three register sources) issue at ~0.45 a SMSP-cycle (r20261017-035218-d3c7), so beside an
-// MMA they bind on their own rate and the fit overstates a.
-__device__ __forceinline__ void op(uint32_t* r, int i) {
-  asm volatile("add.u32 %0,%0,%1;" : "+r"(r[i & 7]) : "r"(r[(i + 1) & 7]));
+// ---- lane ops -------------------------------------------------------------------------------------------------------
+// One pipe alone issues at ~0.5 a SMSP-cycle on sm_120 (IADD3: r20261017-040022-5e4d; ISSUE r1 the same for LOP3, IMAD,
+// HFMA2), so a one-pipe lane stream binds on its pipe beside an MMA and the fit overstates a. The mixed points use
+// LANE_MIX, IADD3 and FFMA alternating (integer ALU and FMA pipes), which can reach one issue a SMSP-cycle.
+enum { LANE_IADD3, LANE_FFMA, LANE_MIX };
+struct Lane {
+  uint32_t r[8];
+  float f[8];
+};
+__device__ __forceinline__ void iadd(Lane& s, int i) {
+  asm volatile("add.u32 %0,%0,%1;" : "+r"(s.r[i & 7]) : "r"(s.r[(i + 1) & 7]));
 }
-__device__ __forceinline__ void init_r(uint32_t* r, uint32_t tid) {
+__device__ __forceinline__ void ffma(Lane& s, int i) {
+  asm volatile("fma.rn.f32 %0,%0,%1,0f3F800000;" : "+f"(s.f[i & 7]) : "f"(s.f[(i + 1) & 7]));
+}
+template <int X>
+__device__ __forceinline__ void lane_op(Lane& s, int i) {
+  if (X == LANE_IADD3) iadd(s, i);
+  else if (X == LANE_FFMA) ffma(s, i);
+  else if (i & 1) ffma(s, i >> 1);
+  else iadd(s, i >> 1);
+}
+__device__ __forceinline__ void op(Lane& s, int i) { lane_op<LANE_MIX>(s, i); }
+__device__ __forceinline__ void init_r(Lane& s, uint32_t tid) {
 #pragma unroll
-  for (int i = 0; i < 8; i++) r[i] = (tid * 0x9e3779b9u + i * 0x85ebca6bu) | 1u;
+  for (int i = 0; i < 8; i++) {
+    s.r[i] = (tid * 0x9e3779b9u + i * 0x85ebca6bu) | 1u;
+    s.f[i] = 1.0f + (float)(s.r[i] & 0xffu) * 0x1p-12f;
+  }
+}
+__device__ __forceinline__ uint32_t consume(const Lane& s) {
+  uint32_t x = 0;
+#pragma unroll
+  for (int i = 0; i < 8; i++) x += s.r[i] ^ __float_as_uint(s.f[i]);
+  return x;
 }
 
 template <class F>
@@ -246,22 +272,20 @@ __device__ __forceinline__ uint32_t fold_acc(typename F::Acc (*d)[4]) {
   return x;
 }
 
-// The lane op alone at 8 warps a SMSP (ISSUE's saturation geometry): tensor_kinds.py gates on it issuing at ~1 a
-// SMSP-cycle, so the mixed points sit on the issue facet rather than on the lane op's own rate.
+// A lane op alone at 8 warps a SMSP (ISSUE's saturation geometry): tensor_kinds.py gates on LANE_MIX issuing at ~1
+// a SMSP-cycle, so the mixed points sit on the issue facet rather than on a pipe's own rate.
+template <int X>
 __global__ void __launch_bounds__(1024) k_opalone(int iters, uint32_t* sink, BlockClk* rec) {
-  uint32_t r[8];
+  Lane r;
   init_r(r, threadIdx.x);
   CLK_BEGIN
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
 #pragma unroll
-    for (int q = 0; q < 64; q++) op(r, q);
+    for (int q = 0; q < 64; q++) lane_op<X>(r, q);
   }
   CLK_END(rec)
-  uint32_t x = threadIdx.x;
-#pragma unroll
-  for (int i = 0; i < 8; i++) x += r[i];
-  sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
+  sink[blockIdx.x * blockDim.x + threadIdx.x] = threadIdx.x + consume(r);
 }
 
 // MMA alone: 2 MMA warps a SMSP, 8 independent accumulators, the geometry k_spec's MMA warps use.
@@ -281,7 +305,7 @@ __global__ void __launch_bounds__(512) k_alone(int iters, uint32_t* sink, BlockC
   sink[blockIdx.x * blockDim.x + threadIdx.x] = fold_acc<F>(d) ^ lane;
 }
 
-// Warp-specialized: with 16 warps a SM, SMSP r hosts warps {r, r+4} (MMA) and {r+8, r+12} (IADD3); R/8 ops a MMA.
+// Warp-specialized: with 16 warps a SM, SMSP r hosts warps {r, r+4} (MMA) and {r+8, r+12} (lane); R/8 ops a MMA.
 template <class F, int R>
 __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
@@ -289,7 +313,7 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
   uint32_t a[4], b[4], e;
   init_ops<F>(lane, a, b, e);
   typename F::Acc d[8][4] = {};
-  uint32_t r[8];
+  Lane r;
   init_r(r, threadIdx.x);
   CLK_BEGIN
   if (mma_role) {
@@ -308,20 +332,18 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
   CLK_END(rec)
   uint32_t x = lane;
   if (mma_role) x ^= fold_acc<F>(d);
-  else
-#pragma unroll
-    for (int i = 0; i < 8; i++) x += r[i];
+  else x += consume(r);
   sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
 }
 
-// Interleaved: every warp issues a MMA then R/8 IADD3s, 8 accumulators, body unrolled x8 (64 MMAs an iteration).
+// Interleaved: every warp issues a MMA then R/8 lane ops, 8 accumulators, body unrolled x8 (64 MMAs an iteration).
 template <class F, int R>
 __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t a[4], b[4], e;
   init_ops<F>(lane, a, b, e);
   typename F::Acc d[8][4] = {};
-  uint32_t r[8];
+  Lane r;
   init_r(r, threadIdx.x);
   CLK_BEGIN
 #pragma unroll 1
@@ -337,9 +359,7 @@ __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockCl
     }
   }
   CLK_END(rec)
-  uint32_t x = lane ^ fold_acc<F>(d);
-#pragma unroll
-  for (int i = 0; i < 8; i++) x += r[i];
+  uint32_t x = (lane ^ fold_acc<F>(d)) + consume(r);
   sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
 }
 
@@ -374,10 +394,11 @@ static void emit(const char* mode, const char* form, double macs, double slots, 
   fflush(stdout);
 }
 
-static void opalone() {
+template <int X>
+static void opalone(const char* name) {
   int iters;
-  Timing t = timed(k_opalone, 32, &iters);
-  emit("opalone", "iadd3_32", 0, 0, 64, 0, 32, iters, 0, 32.0 * iters * 64, t);
+  Timing t = timed(k_opalone<X>, 32, &iters);
+  emit("opalone", name, 0, 0, 64, 0, 32, iters, 0, 32.0 * iters * 64, t);
 }
 template <class F>
 static void alone() {
@@ -412,7 +433,9 @@ int main() {
   CK(cudaDeviceGetAttribute(&g_sms, cudaDevAttrMultiProcessorCount, d));
   CK(cudaMalloc(&g_sink, (size_t)g_sms * 1024 * 4));
   CK(cudaMalloc(&g_rec, (size_t)g_sms * sizeof(BlockClk)));
-  opalone();
+  opalone<LANE_IADD3>("iadd3");
+  opalone<LANE_FFMA>("ffma");
+  opalone<LANE_MIX>("iadd3_ffma");
   // Reference first and last, so drift across the run shows as a difference between its two passes.
   form<ImmaS8k32>();
   form<ImmaU8S8k32>();
