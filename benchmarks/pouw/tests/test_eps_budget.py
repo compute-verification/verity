@@ -60,6 +60,15 @@ def test_the_hybrids_meet_the_target_everywhere(design):
         s = E.summary(m, c, ph, design)
         assert s.eps_mac < 3e-3 and s.eps_time < 3e-3 and s.gamma < 10, (m, c, ph)
     assert E.products("Bc", "linears", 4096) == (4096, 3 * 32, 0)       # every digit limb is a committed word
+    assert E.products("CB", "P·V", 1024) == E.products("A", "P·V", 1024)
+
+
+def test_committed_pv_digits_leave_bc_nothing_to_skip():
+    assert E.products("Bc", "P·V", 1024) == (1024, 3 * 33, 0)
+    for m, c, ph in CELLS:
+        s, a = E.summary(m, c, ph, "Bc"), E.summary(m, c, ph, "A")
+        assert s.eps_mac == 0 and s.eps_time == 0, (m, c, ph)
+        assert s.gamma >= a.gamma - 1e-9, (m, c, ph)
 
 
 def test_decode_hides_the_edit_under_dram_and_the_zero_weight_gap_is_reported():

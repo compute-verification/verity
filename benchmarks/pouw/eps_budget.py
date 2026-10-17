@@ -220,14 +220,16 @@ SKIP_DESIGNS = {
          "checked word, one limb; P V as in A",
     "B32": "CO-Dither at r = 32 with an 8-bit served side: the strip's second int8 limb unforced, r/(k + r)",
     "Bc": "CHECKED-STRIP's CO-Dither: co32c on the linears and lm_head (r = 32, the residue sums' base-128 digits "
-          "committed, so every limb is checked; 7-bit weights, 8-bit activations), B (cohalf) on Q Kᵀ, P V as in A",
+          "committed, so every limb is checked; 7-bit weights, 8-bit activations), B (cohalf) on Q Kᵀ, and P V with "
+          "its strip's digits committed the same way (P peeled with U and a fresh bit, V served, its residue sums' "
+          "digits committed)",
     "C": "NCP-INT on k32 IMMA: three noised copies cancelling in one depth-3k product, the exact output the last "
          "checked word, so at the zero instance the last segment (L of 3k) is known",
     "CB": "NCP-INT on the linears and lm_head, CO-Dither at r = d/2 (7-bit) on Q Kᵀ, P V as in A: wide noise on every "
           "product",
 }
-#: hybrids: (design for the linears and lm_head, design for attention)
-HYBRIDS = {"CB": ("C", "B"), "Bc": ("co32c", "B")}
+#: hybrids: (design for the linears and lm_head, for Q Kᵀ, for P V); `pv` is P V with its strip's digits committed
+HYBRIDS = {"CB": ("C", "B", "A"), "Bc": ("co32c", "B", "pv")}
 #: co32c's digit limbs: the residue sums of an 8-bit served side over k / 32 terms take up to 3 base-128 digits
 CO32C_DIGITS = 3
 #: Every SKIP design but `record` derives each stage's operand by C1′ from the previous stage's served output (the
@@ -239,12 +241,15 @@ COMPONENTS = ("linears", "lm_head", "QKᵀ", "P·V", "softmax", "forming", "nois
 def products(design: str, comp: str, k: int) -> tuple[float, float, float]:
     """(transcript, strip, skippable) int8 products an output word of depth k executes. A strip runs on two int8 limbs
     when its operand is a residue sum that leaves int8 (L = 32 classes of k / L terms), on one when it fits (CO-Dither's
-    r = k/2 with a 7-bit served side: two terms)."""
+    r = k/2 with a 7-bit served side: two terms), on CO32C_DIGITS checked limbs when the sums' base-128 digits are
+    committed (co32c, pv)."""
     if design in HYBRIDS:
-        return products(HYBRIDS[design][comp in ("QKᵀ", "P·V")], comp, k)
+        return products(HYBRIDS[design][{"QKᵀ": 1, "P·V": 2}.get(comp, 0)], comp, k)
     if comp == "P·V":
         if design == "C":
             return 3 * k, 0, L
+        if design == "pv":
+            return k, CO32C_DIGITS * (L + 1), 0
         return k, 2 * (L + 1), 2 * (L + 1) if design == "record" else L + 1
     if design == "record":
         return k, 2 * L, 2 * L
@@ -288,7 +293,7 @@ def parts(name: str, ctx: int, phase: str, design: str, rates: dict = RATES) -> 
             row = [c, c, c * t, c * t, c * t]       # served plain, never proved
         else:
             tr, st, sk = products(design, comp, k)
-            strip_t = t * (r["tail"] if 0 < st <= 2 * (L + 1) else 1)
+            strip_t = t * (r["tail"] if 0 < st <= CO32C_DIGITS * (L + 1) else 1)
             row = [words * (tr + st), words * sk, words * (tr * t * r["r_receipt"] + st * strip_t),
                    words * sk * (strip_t if st else t * r["r_receipt"]), words * k * t]
             if deferred:                            # the served clean product, whose noised twin the deferred pass proves
