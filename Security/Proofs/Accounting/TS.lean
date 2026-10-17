@@ -3,6 +3,7 @@ import Proofs.Accounting.TS.Price
 import Proofs.Accounting.TS.Rounds
 import Proofs.Accounting.TS.Facets
 import Proofs.Accounting.TS.Tensor
+import Proofs.Accounting.TS.Sheet
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -205,6 +206,16 @@ theorem DIdealFloor : Accounting.Guarantees.TS.DIdealFloor := by
         prob_or_le _ _
     _ ≤ S * (δbind + nπ * δzk) + δ' := add_le_add hE hB
     _ = δ := by rw [hδ']; ring
+
+/-- Theorem D-ideal (2.7♭) on the data-sheet machine: `DIdealFloor`, its (I1) from `facetCeilings_of_sheet`, (I2)/(I4)
+and (I3) from A6 (`scalarRoute_half`), (I5) from A7. -/
+theorem SheetDIdealFloor : Accounting.Guarantees.TS.SheetDIdealFloor := by
+  intro K P T L U F X _ _ _ _ _ _ _ _ _ _ Sh Z Fl Ω _ S Pl lam p δ δbind δzk nπ hG h hZ hS hp0 hp1 hδ hSplit hq
+    hqT hb h1 h2 h3 h4 h5 h6 h7 hF hX hL hPS
+  refine DIdealFloor Z Fl Ω S Pl lam p δ δbind δzk nπ h hZ hS hp0 hp1 hδ hSplit (fun x => ?_) (fun x => (h6 x).1)
+    (fun x => scalarRoute_half Z _ (hSplit x) (h6 x) hq hqT hb) (fun x => (h7 x).2) (fun x => (h7 x).1) hF hX hL hPS
+  rw [hG]
+  exact facetCeilings_of_sheet Sh _ (run_nonneg_of_split (hSplit x)) (h1 x) (h2 x) (h3 x) (h4 x) (h5 x)
 
 /-- Lemma C: `budget_tail`, `price_of_parts`, `identity`, `TimeBound`. -/
 theorem CompilerC : Accounting.Guarantees.TS.CompilerC := by
