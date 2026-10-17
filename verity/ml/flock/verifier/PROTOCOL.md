@@ -1649,7 +1649,12 @@ population with no closure is refused after that, once every check has passed (`
 population's (`HmRow.drawn`), and V*'s statement check pins the circuit, so a V* part's numbers (its rounds, table
 error, `N₀` and weight) are the ones its circuit and population fix. The verdict is
 `refused: <why>: a V* session draws every unit of its population, the only draw the recursion's proof covers`, `<why>`
-`the draw is subset:<k> of <n> units over <N>, not every one of <N>` or `the draw's law is not subset`.
+`the draw is subset:<k> of <n> units over <N>, not every one of <N>` or `the draw's law is not subset`. A recursive
+session (the verifier holds `--rec-part`, `--rec-bindings` or `--rec-rows`) without `--rec-inner` is refused at the same
+point, whatever its draw (`RecSetup.noInner`), since V*'s checks and the full-draw refusal run under the verifier's inner
+shape: `refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) without the verifier's own inner shape
+(--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no session
+without it` (one line).
 
 The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. Under hidden outputs a circuit
