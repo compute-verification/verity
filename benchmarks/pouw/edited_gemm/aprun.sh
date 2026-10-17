@@ -85,8 +85,8 @@ for g in $APV_BENCH; do
   [ -e "$O/gate_${name}_meta.json" ] || echo "{\"m\": $((h * s)), \"n\": 128, \"k\": $s}" > "$O/gate_${name}_meta.json"
 done
 export REPS=${REPS:-15}
-export APV_ARMS=${APV_ARMS:-"plain,apv,cf,cc,uedit,pedit,vedit,vsum,apvedited"}
-export APV_NCU=${APV_NCU:-"plain apv cf cc uedit pedit vedit vsum"} APV_NCU_SHAPES=${APV_NCU_SHAPES:-"l8 l8x4k"}
+export APV_ARMS=${APV_ARMS:-"plain,apv,cf,cc,fu,uedit,pedit,vedit,vsum,apvedited,fuedited"}
+export APV_NCU=${APV_NCU:-"plain apv cf cc fu uedit pedit vedit vsum"} APV_NCU_SHAPES=${APV_NCU_SHAPES:-"l8 l8x4k"}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min 30 -- bash -c '
   nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu --format=csv -lms 500 -i "$GPU_LEASE_UUID" > "$O/smi.csv" 2>&1 &

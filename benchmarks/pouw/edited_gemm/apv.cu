@@ -22,18 +22,20 @@
 // layout over V^T (as cpv.cu's vedit); U under tag 14 (row q: block q / 2, digest byte (q % 2) 32 + rho, U = (byte & 63) +
 // 1, negated where bit 6 is set: egemm_ref.u_rows' map, LP_UW 64).
 // Kernels:
-//   uedit            U - 64 (s x 32, for pedit) and P_A's rows (s x 128)
+//   uedit            U - 64 (s x 32, for pedit), P_A's rows (s x 128) and apv_fu's V_u = U + 64 in fragment order
 //   pedit            P~ over each tile's keys
 //   vedit            X = V + b
 //   vsum             DG's rows for every (KV head, b_l), Sq (S over keys 1 .. 32 b_l - 1) and X(0)
 //   apv_l7qs         the tile GEMM with its words and receipts, f to F; apv_l7qs_i: O to O (for the CPU reference)
 //   apv_plain        the same tiles on P_prob and V with no edit: f = (float(P_prob V) s_q + z_q float(V(0))) s_ch, the
 //                    baseline (P_prob zero at key 0 and past the query, as the quantizer leaves it)
+//   apv_fu           apv_l7qs with P~ formed in registers from P_prob after each ldmatrix (no pedit pass)
 //   apv_cf, apv_cc   timing only: ts_pv_adopted's cheater at a one-hot P row (T's words and O's fold, no tail stage), f
 //                    not served (cf) or served (cc)
 // Modes:
 //   apv gate DIR S H REP SEED       poisoned buffers, every tile: apv_l7qs_i's receipts against apv_l7qs's, a no-write
-//                                   control; sampled tiles' operands, O, f and receipts to DIR for apv_ref.py
+//                                   control, apv_fu's f and receipts against apv_l7qs's; sampled tiles' operands, O, f
+//                                   and receipts to DIR for apv_ref.py
 //   apv bench REPS S H REP          hot items interleaved across APV_ARMS, one JSON line
 //   apv one ARM S H REP             three warm-up calls, then one between cudaProfilerStart and Stop (for ncu)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a apv.cu -lcuda -lcublasLt -lnvidia-ml
@@ -51,6 +53,7 @@ struct ApArgs {
   const int8_t* DG;
   const int* Sq;
   const int* X0;
+  const uint32_t* Uf;   // FUSE: V_u = U + 64 in fragment order (uedit)
   const float *sp, *sz, *sv;
   float* F;
   int* O;
@@ -60,8 +63,12 @@ struct ApArgs {
 };
 
 // e_l7qs's loop with its tiles from the table: the producer loads a tile's qt + 1 stages of P~ and X^T, then (TAIL) its
-// tail stage, P_A's 128 query rows alone
-template <bool PLAIN, bool TAIL = !PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ? 0 : 4, true> {
+// tail stage, P_A's 128 query rows alone. FUSE: the A tiles are P_prob and P~ is formed after each ldmatrix: U has period
+// 32 in the key, so a lane's fragments (rows g, g + 8 of each 16-row block, bytes 4 q and 16 + 4 q of the atom) take the
+// same 4 words of V_u = U + 64 in [0, 128] at every atom, and with P_prob in [0, 127] no byte carries:
+// P~ = (P_prob + V_u) ^ 0x80808080, zeroed past the diagonal and at key 0
+template <bool PLAIN, bool TAIL = !PLAIN, bool FUSE = false>
+struct APL : EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ? 0 : 4, true> {
   using E = EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ? 0 : 4, true>;
   using E::s; using E::pt; using E::pkt; using E::ps; using E::pph; using E::maps; using E::issuer;
   using E::stage; using E::full; using E::empty; using E::advance; using E::wait_full; using E::load; using E::load_a;
@@ -70,7 +77,34 @@ template <bool PLAIN, bool TAIL = !PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PL
   const int4* tab = nullptr;
   int ntiles = 0, s_len = 0;
   int jpt = -1, jA = 0, jB = 0, jKT = 0, jPA = 0;
+  const uint4* uf = nullptr;
+  int lg = 0, lq = 0;
   DEV APL(uint8_t* smem, const Maps* m) : E(smem, m, 128, 128, 256, 8, TAIL, 1) {}
+  // FUSE: the lane's V_u words of 32-row block blk (uedit's fragment order, 8 words a lane), read at every atom: held in
+  // registers across the tile they spill at the 128-register cap
+  DEV void set_uf(const uint32_t* Uf, int blk, int lane) {
+    lg = lane >> 2; lq = lane & 3;
+    uf = reinterpret_cast<const uint4*>(Uf) + (size_t)blk * 64 + 2 * lane;
+  }
+  DEV void ld(uint32_t (&fa)[MI][4], uint32_t (&fb)[NI][2], uint32_t sb, int kk) const {
+    load(fa, fb, sb, kk);
+    if constexpr (FUSE) {
+      static_assert(MI == 2, "two 16-row blocks a warp row");
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++) {
+        const uint4 u = __ldg(uf + mi);
+        fa[mi][0] = (fa[mi][0] + u.x) ^ 0x80808080u; fa[mi][1] = (fa[mi][1] + u.y) ^ 0x80808080u;
+        fa[mi][2] = (fa[mi][2] + u.z) ^ 0x80808080u; fa[mi][3] = (fa[mi][3] + u.w) ^ 0x80808080u;
+      }
+    }
+  }
+  // FUSE: key 0 (byte 0 of a0 and a1 in the lanes with q = 0 at the tile's first atom) is its own block
+  DEV void mask_key0(uint32_t (&fa)[MI][4]) const {
+    if (FUSE && lq == 0) {
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++) { fa[mi][0] &= 0xFFFFFF00u; fa[mi][1] &= 0xFFFFFF00u; }
+    }
+  }
   DEV void issue() {
     if (pt >= ntiles) return;
     if (pt != jpt) {
@@ -107,16 +141,16 @@ template <bool PLAIN, bool TAIL = !PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PL
   DEV void stage_a(int (&acc)[MI][NI][4], St (&ch)[8], const uint32_t (&kr)[NKR], uint32_t (&fa)[2][MI][4],
                    uint32_t (&fb)[2][NI][2], uint32_t zero) {
     const uint32_t sb = stage(s), done = empty(s);
-    load(fa[1], fb[1], sb, 1);
+    ld(fa[1], fb[1], sb, 1);
     E::template atom<FIRST, 0>(acc, ch, kr, fa[0], fb[0], zero);
-    load(fa[0], fb[0], sb, 2);
+    ld(fa[0], fb[0], sb, 2);
     E::template atom<false, 1>(acc, ch, kr, fa[1], fb[1], zero);
-    load(fa[1], fb[1], sb, 3);
+    ld(fa[1], fb[1], sb, 3);
     E::template atom<false, 2>(acc, ch, kr, fa[0], fb[0], zero);
     advance();
     if (!LAST) {
       wait_full();
-      load(fa[0], fb[0], stage(s), 0);
+      ld(fa[0], fb[0], stage(s), 0);
     }
     E::template atom<false, 3>(acc, ch, kr, fa[1], fb[1], zero);
     release(done);
@@ -124,7 +158,8 @@ template <bool PLAIN, bool TAIL = !PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PL
   DEV void tile_a(int KT, int (&acc)[MI][NI][4], St (&ch)[8], const uint32_t (&kr)[NKR], uint32_t zero) {
     uint32_t fa[2][MI][4], fb[2][NI][2];
     wait_full();
-    load(fa[0], fb[0], stage(s), 0);
+    ld(fa[0], fb[0], stage(s), 0);
+    mask_key0(fa[0]);
     if (KT == 1) {
       stage_a<true, true>(acc, ch, kr, fa, fb, zero);
     } else {
@@ -135,14 +170,28 @@ template <bool PLAIN, bool TAIL = !PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PL
     }
     if constexpr (E::R) E::flush(ch, kr, acc);
   }
-  // the diagonal stage: atom t0 + pos's words absorbed right after its MMAs while t0 + pos <= b_l
+  // the diagonal stage: atom t0 + pos's words absorbed right after its MMAs while t0 + pos <= b_l. FUSE: atom pos against
+  // warp row bl - t0 is whole before it, the triangle key <= query on it (byte b of a fragment word at k = kb + b of row
+  // rr in the block: kept while kb + b <= rr), zero after it
   template <bool FIRST> DEV void dstage(int t0, int bl, int (&acc)[MI][NI][4], St (&ch)[8]) {
     wait_full();
     const uint32_t sb = stage(s), done = empty(s);
 #pragma unroll
     for (int pos = 0; pos < 4; pos++) {
       uint32_t fa[MI][4], fb[NI][2];
-      load(fa, fb, sb, pos);
+      ld(fa, fb, sb, pos);
+      if constexpr (FUSE) {
+        const int w = bl - t0;
+#pragma unroll
+        for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+          for (int i = 0; i < 4; i++) {
+            const int nv = min(max(16 * mi + 8 * (i & 1) + lg - (4 * lq + 16 * (i >> 1)) + 1, 0), 4);
+            const uint32_t tri = nv == 4 ? 0xFFFFFFFFu : (1u << (8 * nv)) - 1u;
+            fa[mi][i] &= pos < w ? 0xFFFFFFFFu : pos == w ? tri : 0u;
+          }
+        if (FIRST && pos == 0) mask_key0(fa);
+      }
 #pragma unroll
       for (int mi = 0; mi < MI; mi++)
 #pragma unroll
@@ -212,9 +261,10 @@ template <bool PLAIN, bool TAIL = !PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PL
 
 // OUT 0: f to F; 1: O to O (s32). PLAIN: no edit, no words, f = (float(acc) s_q + z_q float(V(0))) s_ch. OUT 2 and 3 time
 // ts_pv_adopted's cheater at a one-hot P row, where O is a copy: T's words, then O folded from T_last with no tail stage
-// (the strip, its triangle and the sums skipped); 2 serves nothing (served free), 3 runs f's epilogue (served checked)
-template <bool PLAIN, int OUT> DEV void apv_body(const ApArgs& a) {
-  using L = APL<PLAIN, !PLAIN && OUT < 2>;
+// (the strip, its triangle and the sums skipped); 2 serves nothing (served free), 3 runs f's epilogue (served checked).
+// FUSE: maps' a is P_prob and P~ is formed in registers (APL)
+template <bool PLAIN, int OUT, bool FUSE> DEV void apv_body(const ApArgs& a) {
+  using L = APL<PLAIN, !PLAIN && OUT < 2, FUSE>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps);
@@ -239,6 +289,7 @@ template <bool PLAIN, int OUT> DEV void apv_body(const ApArgs& a) {
       }
     }
     int acc[MI][NI][4];
+    if constexpr (FUSE) ml.set_uf(a.Uf, 4 * qt + wm, lane);
     if constexpr (PLAIN) {
       ml.tile_a(qt + 1, acc, ch, kr, zero);
     } else {
@@ -302,18 +353,20 @@ template <bool PLAIN, int OUT> DEV void apv_body(const ApArgs& a) {
   }
 }
 using ApKern = void (*)(const ApArgs);
-#define APK(NAME, PLAIN, OUT) \
-  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ ApArgs a) { apv_body<PLAIN, OUT>(a); }
-APK(apv_l7qs, false, 0)
-APK(apv_l7qs_i, false, 1)
-APK(apv_plain, true, 0)
-APK(apv_cf, false, 2)
-APK(apv_cc, false, 3)
+#define APK(NAME, PLAIN, OUT, FUSE) \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ ApArgs a) { apv_body<PLAIN, OUT, FUSE>(a); }
+APK(apv_l7qs, false, 0, false)
+APK(apv_l7qs_i, false, 1, false)
+APK(apv_plain, true, 0, false)
+APK(apv_cf, false, 2, false)
+APK(apv_cc, false, 3, false)
+APK(apv_fu, false, 0, true)
 
 // ---------------------------------------------------------------- producers
 DEV int u_of(uint32_t byte) { const int u = (int)(byte & 63u) + 1; return byte & 64u ? -u : u; }
-// a thread a row pair (one digest): U - 64 (32 bytes a row) and P_A's row [-U | -U | -U M_d | 64 M_d]
-__global__ void __launch_bounds__(128) uedit(int8_t* __restrict__ Um, int8_t* __restrict__ PA, int s, const __grid_constant__ Sig sg) {
+// a thread a row pair (one digest): U - 64 (32 bytes a row), P_A's row [-U | -U | -U M_d | 64 M_d] and apv_fu's V_u
+__global__ void __launch_bounds__(128) uedit(int8_t* __restrict__ Um, int8_t* __restrict__ PA, uint32_t* __restrict__ Uf, int s,
+                                             const __grid_constant__ Sig sg) {
   const int j = blockIdx.x * blockDim.x + threadIdx.x;
   if (2 * j >= s) return;
   uint64_t st[8];
@@ -342,6 +395,12 @@ __global__ void __launch_bounds__(128) uedit(int8_t* __restrict__ Um, int8_t* __
     }
     uint4* ur = reinterpret_cast<uint4*>(Um + (size_t)qq * 32);
     ur[0] = make_uint4(um[0], um[1], um[2], um[3]); ur[1] = make_uint4(um[4], um[5], um[6], um[7]);
+    // apv_fu's V_u = U + 64 in fragment order: row qq = 32 B + 16 mi + 8 h + g, word cw (q = cw % 4, hh = cw / 4) goes to
+    // lane 4 g + q's slot 4 mi + 2 hh + h of block B
+    const int rr = qq % 32, mi = rr / 16, hb = (rr / 8) % 2, g = rr % 8;
+#pragma unroll
+    for (int cw = 0; cw < 8; cw++)
+      Uf[(size_t)(qq / 32) * 256 + (4 * g + cw % 4) * 8 + 4 * mi + 2 * (cw / 4) + hb] = um[cw] ^ 0x80808080u;
     uint4* pr = reinterpret_cast<uint4*>(PA + (size_t)qq * 128);
     pr[0] = make_uint4(nu[0], nu[1], nu[2], nu[3]); pr[1] = make_uint4(nu[4], nu[5], nu[6], nu[7]);
     pr[2] = pr[0]; pr[3] = pr[1];
@@ -480,12 +539,12 @@ struct AP {
   cudaStream_t st;
   int8_t *P, *Vt, *Pt, *Xt, *Um, *PA, *DG;
   int *Sq, *X0, *V0, *O;
-  float *sp, *sz, *sv, *F;
-  uint32_t *R, *R2;
+  float *sp, *sz, *sv, *F, *Fr;
+  uint32_t *R, *R2, *R3, *Uf;
   int4* tab;
   unsigned long long* bad;
   std::vector<int4> htab;
-  Maps *maps, *pmaps;
+  Maps *maps, *pmaps, *fmaps;
 };
 static void apsetup(AP& V, int s, int H, int rep, uint32_t seed, bool gate) {
   if (s % 256 || H % rep || s < 256 || s > AP_MAXS) {
@@ -515,7 +574,9 @@ static void apsetup(AP& V, int s, int H, int rep, uint32_t seed, bool gate) {
   CK(cudaMalloc(&V.X0, (size_t)V.kvh * 128 * 4)); CK(cudaMalloc(&V.V0, (size_t)V.kvh * 128 * 4));
   CK(cudaMalloc(&V.sp, (size_t)H * s * 4)); CK(cudaMalloc(&V.sz, (size_t)H * s * 4)); CK(cudaMalloc(&V.sv, (size_t)V.kvh * 128 * 4));
   CK(cudaMalloc(&V.F, (size_t)H * s * 128 * 4)); CK(cudaMalloc(&V.O, (size_t)H * s * 128 * 4));
+  CK(cudaMalloc(&V.Fr, (size_t)H * s * 128 * 4));
   CK(cudaMalloc(&V.R, nt * MLW::NCT * 8 * 4)); CK(cudaMalloc(&V.R2, nt * MLW::NCT * 8 * 4));
+  CK(cudaMalloc(&V.R3, nt * MLW::NCT * 8 * 4)); CK(cudaMalloc(&V.Uf, (size_t)s * 32));
   CK(cudaMalloc(&V.tab, nt * sizeof(int4))); CK(cudaMalloc(&V.bad, 8));
   CK(cudaMemcpy(V.tab, V.htab.data(), nt * sizeof(int4), cudaMemcpyHostToDevice));
   sfill<I8><<<4096, 256, 0, V.st>>>(reinterpret_cast<uint8_t*>(V.P), ps, mix32(seed ^ 0x1111u), 0, 128);
@@ -531,7 +592,8 @@ static void apsetup(AP& V, int s, int H, int rep, uint32_t seed, bool gate) {
   apfill<<<256, 256, 0, V.st>>>(V.sp, V.sz, H * s, V.sv, V.kvh * 128, mix32(seed ^ 0x3333u));
   V.maps = upload_maps(Maps{tmap(V.Pt, s, H * s, 128), tmap(V.Xt, s, V.kvh * 128, 128), tmap(V.PA, 128, s, 128), tmap(V.PA, 128, s, 128)});
   V.pmaps = upload_maps(Maps{tmap(V.P, s, H * s, 128), tmap(V.Vt, s, V.kvh * 128, 128), tmap(V.PA, 128, s, 128), tmap(V.PA, 128, s, 128)});
-  for (ApKern k : {apv_l7qs, apv_l7qs_i, apv_plain, apv_cf, apv_cc})
+  V.fmaps = upload_maps(Maps{tmap(V.P, s, H * s, 128), tmap(V.Xt, s, V.kvh * 128, 128), tmap(V.PA, 128, s, 128), tmap(V.PA, 128, s, 128)});
+  for (ApKern k : {apv_l7qs, apv_l7qs_i, apv_plain, apv_cf, apv_cc, apv_fu})
     CK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
   CK(cudaStreamSynchronize(V.st));
   CK(cudaGetLastError());
@@ -540,25 +602,33 @@ static void apfree(AP& V) {
   CK(cudaDeviceSynchronize());
   for (void* p : {(void*)V.P, (void*)V.Pt, (void*)V.Vt, (void*)V.Xt, (void*)V.Um, (void*)V.PA, (void*)V.DG, (void*)V.Sq, (void*)V.X0,
                   (void*)V.V0, (void*)V.sp, (void*)V.sz, (void*)V.sv, (void*)V.F, (void*)V.O, (void*)V.R, (void*)V.R2, (void*)V.tab,
-                  (void*)V.bad, (void*)V.maps, (void*)V.pmaps})
+                  (void*)V.bad, (void*)V.maps, (void*)V.pmaps, (void*)V.fmaps, (void*)V.Fr, (void*)V.R3, (void*)V.Uf})
     CK(cudaFree(p));
   CK(cudaStreamDestroy(V.st));
 }
-static void ued(AP& V, const Sig& s) { uedit<<<(V.s / 2 + 127) / 128, 128, 0, V.st>>>(V.Um, V.PA, V.s, s); }
+static void ued(AP& V, const Sig& s) { uedit<<<(V.s / 2 + 127) / 128, 128, 0, V.st>>>(V.Um, V.PA, V.Uf, V.s, s); }
 static void ped(AP& V) { pedit<<<V.ntiles, 128, 0, V.st>>>(V.P, V.Pt, V.Um, V.tab, V.s); }
 static void ved(AP& V, const Sig& s) { vedit<<<dim3(V.s / 128, V.kvh * 128 / 32), 256, 0, V.st>>>(V.Vt, V.Xt, V.kvh * 128, V.s, s); }
 static void vsm(AP& V) { vsum<<<dim3(V.s / 256, V.kvh), 128, 0, V.st>>>(V.Xt, V.DG, V.Sq, V.X0, V.s); }
 static void producers(AP& V, const Sig& s) { ued(V, s); ped(V); ved(V, s); vsm(V); }
 static void aprun(AP& V, ApKern k, uint32_t* R) {
   const bool plain = k == apv_plain;
-  ApArgs a{plain ? V.pmaps : V.maps, V.tab, V.ntiles, V.DG, V.Sq, plain ? V.V0 : V.X0, V.sp, V.sz, V.sv, V.F, V.O, R, V.s, V.nJ, V.seed, 0};
+  ApArgs a{plain ? V.pmaps : k == apv_fu ? V.fmaps : V.maps, V.tab, V.ntiles, V.DG, V.Sq, plain ? V.V0 : V.X0, V.Uf,
+           V.sp, V.sz, V.sv, V.F, V.O, R, V.s, V.nJ, V.seed, 0};
   k<<<V.grid, MLW::NT, CSMEM, V.st>>>(a);
 }
 // an arm: apv (apv_l7qs), apv_i, plain (apv_plain, eps_profile.py's baseline), cf and cc (the one-hot cheater, served free
-// and served checked), uedit, pedit, vedit, vsum, or apvedited (the four producers and apv under one key)
+// and served checked), fu (apv_fu), uedit, pedit, vedit, vsum, apvedited (the four producers and apv under one key) or
+// fuedited (uedit, vedit, vsum and apv_fu: no pedit)
 static std::function<void(AP&)> aparm(const std::string& a) {
   if (a == "apv") return [](AP& V) { aprun(V, apv_l7qs, V.R); };
   if (a == "apv_i") return [](AP& V) { aprun(V, apv_l7qs_i, V.R); };
+  if (a == "fu") return [](AP& V) { aprun(V, apv_fu, V.R); };
+  if (a == "fuedited") return [](AP& V) {
+    const Sig sg = sigma(V.seed, V.inst++);
+    ued(V, sg); ved(V, sg); vsm(V);
+    aprun(V, apv_fu, V.R);
+  };
   if (a == "cf") return [](AP& V) { aprun(V, apv_cf, V.R); };
   if (a == "cc") return [](AP& V) { aprun(V, apv_cc, V.R); };
   if (a == "plain" || a == "apv_plain") return [](AP& V) { aprun(V, apv_plain, V.R); };
@@ -609,7 +679,18 @@ static int apgate(const std::string& dir, int s, int H, int rep, uint32_t seed) 
   CK(cudaMemsetAsync(pz, 0xA5, rw * 4, V.st));
   const unsigned long long c_bad = apbad(V, pz, V.R2, rw);
   CK(cudaFree(pz));
-  const bool ok = r_bad == 0, control_rejected = c_bad > 0;
+  // apv_fu (P~ formed in registers from P_prob) against apv_l7qs on every tile: f and receipts bitwise; F keeps apv_l7qs's
+  const size_t fw = (size_t)H * s * 128;
+  CK(cudaMemcpyAsync(V.Fr, V.F, fw * 4, cudaMemcpyDeviceToDevice, V.st));
+  CK(cudaMemsetAsync(V.F, 0xA5, fw * 4, V.st));
+  CK(cudaMemsetAsync(V.R3, 0xA5, rw * 4, V.st));
+  aprun(V, apv_fu, V.R3);
+  CK(cudaStreamSynchronize(V.st));
+  CK(cudaGetLastError());
+  const unsigned long long fu_r_bad = apbad(V, V.R3, V.R, rw), fu_f_bad = apbad(V, V.F, V.Fr, fw);
+  CK(cudaMemcpyAsync(V.F, V.Fr, fw * 4, cudaMemcpyDeviceToDevice, V.st));
+  CK(cudaStreamSynchronize(V.st));
+  const bool ok = r_bad == 0 && fu_r_bad == 0 && fu_f_bad == 0, control_rejected = c_bad > 0;
   // the sampled tiles: all at most 24, else 24 spread over the table
   std::vector<int> pick;
   const int ns = std::min(V.ntiles, 24);
@@ -641,19 +722,22 @@ static int apgate(const std::string& dir, int s, int H, int rep, uint32_t seed) 
   FILE* fp = fopen((dir + "/meta.json").c_str(), "w");
   fprintf(fp, "{\"m\": %d, \"n\": 128, \"k\": %d, \"s\": %d, \"H\": %d, \"rep\": %d, \"ntiles\": %d, \"seed\": %u, "
               "\"key\": [\"%016llx\", \"%016llx\", \"%016llx\", \"%016llx\"], \"tiles\": [%s], \"kinds\": {\"apv_l7qs\": \"apv\"}, "
-              "\"device\": {\"apv_l7qs\": {\"r_bad\": %llu}, \"control\": {\"r_bad\": %llu}}, \"device_ok\": %s, \"control_rejected\": %s}\n",
+              "\"device\": {\"apv_l7qs\": {\"r_bad\": %llu}, \"apv_fu\": {\"r_bad\": %llu, \"f_bad\": %llu}, \"control\": {\"r_bad\": %llu}}, "
+              "\"device_ok\": %s, \"control_rejected\": %s}\n",
           H * s, s, s, H, rep, V.ntiles, seed, (unsigned long long)sg.w[0], (unsigned long long)sg.w[1], (unsigned long long)sg.w[2],
-          (unsigned long long)sg.w[3], tj.c_str(), r_bad, c_bad, ok ? "true" : "false", control_rejected ? "true" : "false");
+          (unsigned long long)sg.w[3], tj.c_str(), r_bad, fu_r_bad, fu_f_bad, c_bad, ok ? "true" : "false",
+          control_rejected ? "true" : "false");
   fclose(fp);
   printf("{\"gate\": \"%s\", \"s\": %d, \"H\": %d, \"rep\": %d, \"ntiles\": %d, \"device_ok\": %s, \"control_rejected\": %s, "
-         "\"r_bad\": %llu}\n", dir.c_str(), s, H, rep, V.ntiles, ok ? "true" : "false", control_rejected ? "true" : "false", r_bad);
+         "\"r_bad\": %llu, \"fu_r_bad\": %llu, \"fu_f_bad\": %llu}\n", dir.c_str(), s, H, rep, V.ntiles, ok ? "true" : "false",
+         control_rejected ? "true" : "false", r_bad, fu_r_bad, fu_f_bad);
   apfree(V);
   return ok && control_rejected ? 0 : 1;
 }
 
 static int apbench(int reps, int s, int H, int rep) {
   Nv nv;
-  const std::vector<std::string> names = split(getenv("APV_ARMS"), "plain,apv,cf,cc,uedit,pedit,vedit,vsum,apvedited");
+  const std::vector<std::string> names = split(getenv("APV_ARMS"), "plain,apv,cf,cc,fu,uedit,pedit,vedit,vsum,apvedited,fuedited");
   AP V;
   apsetup(V, s, H, rep, 0x5EED0000u + s + H, false);
   producers(V, sigma(V.seed, 0xFFFFFFFFu));
