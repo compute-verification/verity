@@ -282,6 +282,32 @@ def test_uniform_reads_each_loop_from_its_sass(tmp_path, capsys):
     assert "  ux: 1->17:1.000  fit 1.000 over U 1..17" in got
 
 
+def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
+    """`eps1.py l2gather`: bytes a SM a clock (rate * words * 4) and TB/s (* nSM * clock) a gather path, the best alone
+    and beside, the MMA kept beside the honest step, and whether any path beats QSTAR's 3.3 TB/s."""
+    out = tmp_path / "out"
+    out.mkdir()
+    imma, ldg = "IMMA.16832.S8.S8", "LDG.E.ENL2.256.STRONG.GPU"
+    jl = [
+        {"probe": "honest", "rate": 2.0, "words": None, "blocks": 100, "sm_mhz": 2000, "rates": {f"0:{imma}": 2.0}},
+        {"probe": "gl_w32", "rate": 0.01, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s128",
+         "rates": {f"0:{ldg}": 0.01}},
+        {"probe": "gl_w32_fast", "rate": 0.02, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s16",
+         "rates": {f"0:{ldg}": 0.02}},
+        {"probe": "gh_w32", "rate": 0.008, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s128 beside",
+         "rates": {f"0:{imma}": 1.0, f"1:{ldg}": 0.008}},
+    ]
+    (out / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in jl))
+    assert eps1.main(["l2gather", str(out)]) == 0
+    got = capsys.readouterr().out
+    assert "honest alone: IMMA 2.00000/SM/clk" in got
+    assert re.search(r"^gl_w32 +s128 +32 +0\.0100 +10\.240 +2\.048 +nan", got, re.M)
+    assert re.search(r"^gh_w32 .* 8\.192 +1\.638 +0\.5000", got, re.M)
+    assert "best alone:  gl_w32_fast 20.480 B/SM/clk = 4.096 TB/s" in got
+    assert "best beside: gh_w32 8.192 B/SM/clk = 1.638 TB/s, MMA kept 0.5000" in got
+    assert "fastest path 4.096 TB/s beats QSTAR's 3.3 TB/s table kernel" in got
+
+
 # ---- the probes themselves -------------------------------------------------------------------------------------------
 
 
