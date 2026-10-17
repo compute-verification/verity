@@ -297,7 +297,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "A4 PIPE: the instruction classes Nsight Compute puts on one pipe share that pipe's CUDA Programming Guide "
           "throughput", "A4 pipe (Programming Guide)", "measured"),
     Entry("accounting-sheet-smem", "assumption",
-          "A5 SMEM: shared memory moves at most 32 banks × 4 B = 128 B per SM clock, loads and stores together",
+          "A5 SMEM: shared memory serves one request per SM clock, its distinct banks together (32 banks × 4 B = 128 "
+          "B), loads and stores together, so each shared-memory instruction holds one request whatever its width",
           "A5 shared memory (Programming Guide)", "measured"),
     Entry("accounting-sheet-words", "assumption",
           "A6 WORDS: an instruction writes at most its destination registers' 32-bit words (its PTX fragment; two a "
