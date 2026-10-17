@@ -143,7 +143,7 @@ def mufu_lg2_undetermined(x: int) -> bool:
     return (m == 0 and E < 127) or mufu_lg2_bits(x) != mufu_lg2_bits(x, "C0_max")
 
 
-@primitive("MufuLg2Ftz", 1, [("x", F32)], F32, conformance=_LG2_CONF)
+@primitive("MufuLg2Ftz", 1, [("x", F32)], F32, conformance=_LG2_CONF, tables=(("C0", "library"),))
 def MufuLg2Ftz(x: int) -> int:
     """`lg2.approx.ftz.f32` (MUFU.LG2): the quadratic interpolator of `mufu_lg2.json` inside the exact exponent rule."""
     return mufu_lg2_bits(x)
