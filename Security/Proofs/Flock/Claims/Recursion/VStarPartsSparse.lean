@@ -45,7 +45,8 @@ The rest:
   `partLinks_of_openLinks`). A part whose inner check makes no call has `PartLogs` outright (`partLogs_of_nil`).
 * **`VStarAcceptsR` at the sparse shape** (`vstarAccepts_sparse_of_links`): `vstarAccepts_sparse` with every part's
   `PartChecks` from its links; `vstarParts_sparse_of_links` and `vstarPartsStaging_sparse_of_links` are `VStarParts`
-  and `VStarPartsStaging` so.
+  and `VStarPartsStaging` so. `PartOpens` stays a premise: what opens a held message is the V* statement's row
+  commitment (`b ‖ c`, the `sha512x3`/`hm96` slots) or a level's climb to a registered root, not a unit copy's outputs.
 -/
 
 namespace Flock.Readable
