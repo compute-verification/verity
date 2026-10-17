@@ -51,7 +51,7 @@ def Head.equiv (T L U : Type) : Head T L U ≃ T ⊕ (Unit ⊕ (L ⊕ U)) where
   left_inv h := by cases h <;> rfl
   right_inv s := by rcases s with t | ⟨⟨⟩⟩ | l | u <;> rfl
 
-noncomputable instance (T L U : Type) [Fintype T] [Fintype L] [Fintype U] : Fintype (Head T L U) :=
+noncomputable instance instFintypeHead (T L U : Type) [Fintype T] [Fintype L] [Fintype U] : Fintype (Head T L U) :=
   Fintype.ofEquiv _ (Head.equiv T L U).symm
 
 /-- **The TS model of a design** over classes `K`, facets `R`, writer kinds `T`, memory levels `L`, side units `U`,
