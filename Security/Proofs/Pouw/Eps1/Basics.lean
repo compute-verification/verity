@@ -70,7 +70,30 @@ theorem block_outside_slots {Rd Cd : Type} {m n Lseg : ℕ} {FR FU : Type} {G : 
     (hused : ∀ t ∈ live, t ≠ P.out τ → ∃ t' ∈ live, ∃ j s, P.prog.arg t' j = .inr s ∧ M3.earlier t' s = t) :
     ((Finset.univ : Finset (Fin 3)).product live |>.filter fun tj =>
       ∀ s, P.prog.arg tj.2 tj.1 = .inr s → M3.earlier tj.2 s ∉ live).card ≤ 2 * live.card + 1 := by
-  sorry
+  let tgt : Fin 3 × Fin G → Fin G := fun tj =>
+    match P.prog.arg tj.2 tj.1 with
+    | .inl _ => tj.2
+    | .inr s => M3.earlier tj.2 s
+  have hsplit := Finset.card_filter_add_card_filter_not
+    (s := (Finset.univ : Finset (Fin 3)).product live)
+    (fun tj => ∀ s, P.prog.arg tj.2 tj.1 = .inr s → M3.earlier tj.2 s ∉ live)
+  have hcard : ((Finset.univ : Finset (Fin 3)).product live).card = 3 * live.card := by
+    rw [Finset.product_eq_sprod, Finset.card_product, Finset.card_univ, Fintype.card_fin]
+  have hsub : live.erase (P.out τ) ⊆ (((Finset.univ : Finset (Fin 3)).product live).filter fun tj =>
+      ¬ ∀ s, P.prog.arg tj.2 tj.1 = .inr s → M3.earlier tj.2 s ∉ live).image tgt := by
+    intro t ht
+    obtain ⟨hne, htl⟩ := Finset.mem_erase.mp ht
+    obtain ⟨t', ht', j, s, harg, hearl⟩ := hused t htl hne
+    refine Finset.mem_image.mpr ⟨(j, t'), ?_, ?_⟩
+    · rw [Finset.mem_filter, Finset.product_eq_sprod, Finset.mem_product]
+      exact ⟨⟨Finset.mem_univ _, ht'⟩, fun hall => hall s harg (hearl ▸ htl)⟩
+    · simp only [tgt, harg, hearl]
+  have h1 := Finset.card_erase_of_mem hout
+  have h2 := Finset.card_le_card hsub
+  have h3 := Finset.card_image_le (s := ((Finset.univ : Finset (Fin 3)).product live).filter fun tj =>
+      ¬ ∀ s, P.prog.arg tj.2 tj.1 = .inr s → M3.earlier tj.2 s ∉ live) (f := tgt)
+  have hpos : 0 < live.card := Finset.card_pos.mpr ⟨_, hout⟩
+  omega
 
 /-- The zero instance's fiber: `r ↦ r·u` determines a column `u` with entries in `±1..±64`, so the column-side
 words a block reads carry at least 224 bits, at least 7 words. -/
