@@ -9,12 +9,14 @@ probability against strategies `σL u`. `V false` answers each round with a whol
 coins the round draws, so a prover that plays the live session keeps the rest of each coin on its tape:
 
 * `mergeC`, `Pr_mergeC`: the coins whose coordinate `j` takes its first `n j` entries from `r` and the rest from `u`
-  are uniform when `u` and `r` are: swapping those entries between `u` and `r` is an involution (`swapC`).
+  are uniform when `u` and `r` are: swapping those entries between `u` and `r` is an involution (`swapC`); `mergeAt`,
+  `Pr_mergeAt`: the same with `r` indexed by another `Fin L`, `L = K`.
 * `liveMix_eq`: the average over `u` of the live session's probability of `pL` against `liveStrat` at `(ω, u)` is the
   probability over the tape and the round coins of `pL` at the live outcome.
 * `Pr_le_liveMix`: an event `E` of coins whose law is that of `E ∘ Φ` on the tape and the live session's coins, and
   which implies `pL` at the live outcome of a prover `P'` at the tape `(ω, u)`, has probability at most that average;
   `liveMix_le_Pr`: where `pL` implies `E ∘ Φ` instead, the average is at most `Pr[E]`.
+* `liveStrat_fst`: `liveStrat`'s roots are the wire's roots of the prover's first message (`fst_eqRec`).
 -/
 
 namespace Claims.Bridge.Live
@@ -45,6 +47,19 @@ theorem Pr_mergeC {K M : ℕ} {X : Type} [Fintype X] [Nonempty X] (n : Fin K →
   refine (Pr_equiv (swapC X n) (fun q => E q.1)).trans ?_
   rw [Pr_eq_Ex, Ex_prod, Pr_eq_Ex]
   exact congrArg Ex (funext fun a => Ex_const' (ind E a))
+
+/-- `mergeC` with the coins `r` indexed by `Fin L`, where `L = K`. -/
+def mergeAt {K L M : ℕ} {X : Type} (h : L = K) (n : Fin K → ℕ) (u : Fin K → Fin M → X) (r : Fin L → Fin M → X) :
+    Fin K → Fin M → X :=
+  mergeC n u fun j => r (Fin.cast h.symm j)
+
+open Classical in
+/-- **The merged coins are uniform**, with the coins `r` indexed by `Fin L`. -/
+theorem Pr_mergeAt {K L M : ℕ} {X : Type} [Fintype X] [Nonempty X] (h : L = K) (n : Fin K → ℕ)
+    (E : (Fin K → Fin M → X) → Prop) :
+    Pr (fun p : (Fin K → Fin M → X) × (Fin L → Fin M → X) => E (mergeAt h n p.1 p.2)) = Pr E := by
+  subst h
+  exact Pr_mergeC n E
 
 open Classical in
 /-- **A mixture of live strategies is a probability over the tape and the live coins**: the average over `u` of the
@@ -97,5 +112,18 @@ theorem liveMix_le_Pr {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → 
       (liveStrat J mPts N dg w H P' x (ω, u))).toReal) / Fintype.card τ ≤ Pr E := by
   rw [← hΦ, liveMix_eq J mPts N dg w H P' x ω pL]
   exact Pr_mono fun p hp => hsim p.1 p.2 hp
+
+/-- A strategy cast across an equation of two games that send the same type sends the same message. -/
+theorem fst_eqRec {α M : Type} {k k' : M → Game α} (h : Game.send M k' = Game.send M k)
+    (s : Strategy (Game.send M k')) : (h ▸ s : Strategy (Game.send M k)).1 = s.1 := by
+  obtain ⟨-, hk⟩ := Game.send.inj h
+  cases eq_of_heq hk
+  rfl
+
+/-- **`liveStrat`'s roots are the wire's roots of the prover's first message.** -/
+theorem liveStrat_fst {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : (x : Msg) → Wire nMax (J x) (mPts x)) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
+    (liveStrat J mPts N dg w H P x ω).1 = (w x).root ((P.next x [] ω).eval H).1 :=
+  fst_eqRec (liveSession_eq dg (J x) (mPts x) (N x)).symm _
 
 end Claims.Bridge.Live
