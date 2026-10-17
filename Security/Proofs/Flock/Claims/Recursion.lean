@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.Recursion.FlockKSAbort
 import Proofs.Flock.Claims.Recursion.FlockKSAcc
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Proofs.Flock.Claims.Recursion.KSStated
 import Proofs.Flock.Claims.Recursion.Scope
 
 /-! The ZK-recursion compiler's claims proofs: serving one rerun program's reruns by another's (`Serve`), `E^rep`'s

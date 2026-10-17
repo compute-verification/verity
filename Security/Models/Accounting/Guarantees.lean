@@ -24,6 +24,7 @@ import Models.Accounting.Guarantees.Responder
 import Models.Accounting.Guarantees.Remote
 import Models.Accounting.Guarantees.Sketch
 import Models.Accounting.Guarantees.Tag
+import Models.Accounting.Guarantees.TS
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
 audit's guarantees as a joint run's compute and bandwidth guarantees, a state-bounded game's soundness as its capacity

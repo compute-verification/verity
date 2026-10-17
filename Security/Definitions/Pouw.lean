@@ -4,6 +4,7 @@ import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Basic.QTree
 import Definitions.Pouw.D1
+import Definitions.Pouw.Eps1.M3
 import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Dimension.Lift
@@ -84,6 +85,7 @@ import Definitions.Pouw.PearlC.W1
 import Definitions.Pouw.PearlC.W1Stop
 import Definitions.Pouw.PearlC.WholeCircuit
 import Definitions.Pouw.PearlC.WholeCircuit4
+import Definitions.Pouw.Receipt.Duo
 import Definitions.Pouw.RelativeSecurity
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
@@ -146,6 +148,11 @@ drawn tile's proof is sound (`HiddenTile`), what a proof system gives per tile t
 completeness on a population of activations (`Completeness`), its one assumption, the honest tiles' measured cap rate
 (`HonestCap`, empirical), the proof that every honest word is an FP32 word's (`HonestWords`) and completeness from the
 two (`Completeness`).
+
+## `Receipt`: the receipt folds
+
+`Duo`: duo's step, one word and two words (`benchmarks/pouw/receipts/receipt_folds.py`, `duo_word`); its binding
+statements are `Models.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 

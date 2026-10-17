@@ -2,14 +2,13 @@
 # drawn once, then the prover evaluates, so every operand is fixed before σ but enforced only by the sampled proofs, and
 # a cheater can steer instances in unproved regions. Its size depends on the proof unit and its selection rule, the
 # sampling compiler's choice (note:20261017T0324Z-draft-eps1-spec, final 05:34Z). It is part of ε_sample, never of the
-# core ε (Daniel, 06:29Z). `eps --checking sampled --adapt NAME` charges one; `default` is today's protocol. The budget
-# (S checks at δ, p) is the design's `[luck]`.
-default = "segment"
+# core ε (Daniel, 06:29Z). `eps --checking sampled` charges the design's own unit (`unit`, whole dot products since
+# decision 72), `--adapt NAME` another. The budget (S checks at δ, p) is the design's `[luck]`.
 
 [segment]
 eps = 0.21
-selection = "decision 19's L-step block, drawn uniformly"
-source = "today's spot check, decision 19's L-step block (a segment-type unit): writing half of one token's attention-output row wrong lands gate/up's operand on minus its own noise, so the token's gate/up words are 0 and their checks pass; fan-out ≈ 900–1,800, ε ≈ 21% (SPEC 05:34Z)"
+selection = "decision 19's L-step block, drawn uniformly (superseded by whole dot products, decision 72)"
+source = "the spot check before decision 72, decision 19's L-step block (a segment-type unit): writing half of one token's attention-output row wrong lands gate/up's operand on minus its own noise, so the token's gate/up words are 0 and their checks pass; fan-out ≈ 900–1,800, ε ≈ 21% (SPEC 05:34Z)"
 
 [whole]
 eps = 0.0035
