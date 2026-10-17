@@ -39,14 +39,15 @@ def StmtOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.R
   ∀ c : Case H rel, c.spec.coinTree = none ∧ 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw
 
 /-- **What the record needs of the prover's pieces**, at every good case's table: the commitment's cap, at the
-schedule's first level, is non-empty and under `2^64` bytes, and each rep records a round, each of at most `65536`
-coins. -/
+schedule's first level, is non-empty and under `2^64` bytes, and each rep, on the table's extra claims at the link's
+points, records a round, each of at most `65536` coins. -/
 def ProverOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∀ st ∈ c.sts,
     (∀ sch, fast100 (Setup.ofCircuit st).m = some sch → ∀ g salt cm,
       commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (sch.levels.getD 0 default) g
         salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64) ∧
     ∀ sch, fast100 (Setup.ofCircuit st).m = some sch → ∀ tr tb cm₀ extras salt nonce d,
+      (Setup.ofCircuit st).extra (ptsOf c.spec (coinOf (c.resp 0))) = .ok extras →
       Ret ((repP (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) sch tr tb cm₀ extras salt
         nonce).run (Transcript.init #[] d)) fun pt => RepOk pt.2.rounds
 
