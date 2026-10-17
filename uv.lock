@@ -53,7 +53,6 @@ members = [
     "verity-pouw-benchmarks",
     "verity-pouw-check-difftest",
     "verity-pouw-window-difftest",
-    "verity-proof-throughput",
     "verity-sp1",
     "verity-tc-probe",
     "verity-tc-probe-fp4",
@@ -1696,7 +1695,6 @@ dev = [
     { name = "verity-flock" },
     { name = "verity-numerical" },
     { name = "verity-ops" },
-    { name = "verity-proof-throughput" },
     { name = "verity-sp1" },
     { name = "verity-vllm" },
 ]
@@ -1727,7 +1725,6 @@ dev = [
     { name = "verity-flock", editable = "verity/ml/flock" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-ops", editable = "infra/ops" },
-    { name = "verity-proof-throughput", editable = "benchmarks/proof_throughput" },
     { name = "verity-sp1", editable = "archive/sp1" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
@@ -2088,27 +2085,6 @@ source = { virtual = "verity/core/protocols/pouw/lean/check" }
 name = "verity-pouw-window-difftest"
 version = "0.0.0"
 source = { virtual = "verity/core/protocols/pouw/lean/window" }
-
-[[package]]
-name = "verity-proof-throughput"
-version = "0.1.0"
-source = { editable = "benchmarks/proof_throughput" }
-dependencies = [
-    { name = "numpy" },
-    { name = "research" },
-    { name = "verity" },
-    { name = "verity-flock" },
-    { name = "verity-numerical" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy" },
-    { name = "research", editable = "tools/research" },
-    { name = "verity", editable = "." },
-    { name = "verity-flock", editable = "verity/ml/flock" },
-    { name = "verity-numerical", editable = "benchmarks/numerical" },
-]
 
 [[package]]
 name = "verity-sp1"
