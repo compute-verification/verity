@@ -44,6 +44,7 @@ import Proofs.Flock.Claims.KS.ZkDecJ
 import Proofs.Flock.Claims.KS.ZkXferJ
 import Proofs.Flock.Claims.KS.ZkSessionSC
 import Proofs.Flock.Claims.KS.ZkPads
+import Proofs.Flock.Claims.KS.ZkSessionW
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -193,4 +194,7 @@ follows from the live sessions' bound at the deployed decoders (`FlockDeploy.KS.
 masked rows carry both reps' extra lanes, which the session's level-0 term reads and the claim's witness-lane columns do
 not, so a verifying opening with a nonzero extra lane is off every table of those columns (`ZkPads`:
 `FlockDeploy.KS.off₀Z_oracleOf_of_extra`, `FlockDeploy.KS.offNoClashZ_oracleOf_of_extra`), while whether a table is
-committed reads only its witness lanes (`FlockDeploy.KS.committed_congr_lanes`). -/
+committed reads only its witness lanes (`FlockDeploy.KS.committed_congr_lanes`). So the masked session's bound holds
+with its level-0 term on the witness lanes, the extra lanes the plurality of the openings on `C`'s, at the old level-0
+term `√(2^{d₀}·2Q₀·Adv₀)` (`ZkSessionW`: `FlockSoundness.Discharge.ZkLink.OffW₀Z`,
+`FlockSoundness.Discharge.ZkLink.session_sound_of_table_accZ_w`). -/
