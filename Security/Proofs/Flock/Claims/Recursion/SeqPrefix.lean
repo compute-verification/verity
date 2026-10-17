@@ -37,20 +37,20 @@ open scoped ENNReal NNReal
 /-- **64 bytes under XOR**, the group of hm96's digests and salt masks. -/
 def XorBytes : Type := Fin 64 → UInt8
 
-instance : Fintype XorBytes := inferInstanceAs (Fintype (Fin 64 → UInt8))
+instance instFintypeXorBytes : Fintype XorBytes := inferInstanceAs (Fintype (Fin 64 → UInt8))
 
-instance : Nonempty XorBytes := ⟨fun _ => 0⟩
+instance instNonemptyXorBytes : Nonempty XorBytes := ⟨fun _ => 0⟩
 
 /-- XOR, bytewise. -/
 def xorBytes (a b : Fin 64 → UInt8) : Fin 64 → UInt8 := fun i => a i ^^^ b i
 
-instance : Zero XorBytes := ⟨fun _ => 0⟩
+instance instZeroXorBytes : Zero XorBytes := ⟨fun _ => 0⟩
 
-instance : Add XorBytes := ⟨xorBytes⟩
+instance instAddXorBytes : Add XorBytes := ⟨xorBytes⟩
 
-instance : Neg XorBytes := ⟨id⟩
+instance instNegXorBytes : Neg XorBytes := ⟨id⟩
 
-instance : AddCommGroup XorBytes where
+instance instAddCommGroupXorBytes : AddCommGroup XorBytes where
   add_assoc a b c := funext fun i => UInt8.xor_assoc (a i) (b i) (c i)
   zero_add a := funext fun i => UInt8.zero_xor (a := a i)
   add_zero a := funext fun i => UInt8.xor_zero (a := a i)
