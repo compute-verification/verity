@@ -27,6 +27,11 @@ The session's Props at every plan:
 * `HonestMsgs` is its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`) on `Live`. At a round plan whose last
   message where a table refuses is the empty one (`RoundPlan.stop`, what `ZkTables.prog` returns once `sessionPZk`
   stops), `HonestOffOn` is about the reference prover alone (`honestOffOn_stop_iff`).
+
+The rounds need a reference prover that does what `flock-circuit --zk` does and `ZkTables.honestP` doesn't: draw each
+table's mask-slot words from its tape (the tables' `zWith` at the base's first component; `ZkTables.traces` takes them
+from the witness and `TapeZk` has none), and refuse, before the round that would show them, a zerocheck outer coin `1`
+and claim points at which the mask slot's weights have rank below `128` per point (`refuse_outer`, `mask_rank_ok`).
 -/
 
 namespace Claims.ZKMal
