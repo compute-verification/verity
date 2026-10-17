@@ -9,22 +9,23 @@ Nothing is measured here; every input is a recorded output (`research data fetch
 - --attack  codec_mix's mask_attack.jsonl (art:ffca24ef70aaff39): σ_K's floor margin at 512-2,048 bits.
 - --cpu     cpu_lat.sh's $OUT (repeated): one word's dependent squaring chain on one core, and that core's clock.
 - --gpu     gpu_lat.sh's $OUT: the same chain on one GPU thread, and the SM clock.
+- --wide    wide_decode.sh's codec-tensor.json (optional): wt.cu's store decode and rates at 1,536 to 4,096 bits.
 
 The model, step by step:
-- Decode, a word at k rounds: kv.cu's rates at 512, 768 and 1,024 bits, linear in k past k = 3; elsewhere
-  t0·b + k·α/s(b), s(b) codec_tensor's squaring rate and α, t0 fitted to kv.cu. A decode's cost in reads per read is
-  the plain read's rate over the decode's (kv.cu's store measures it at k = 2 and 3), at least 1: the decode overlaps the
-  read.
+- Decode, a word at k rounds: kv.cu's rates at 512, 768 and 1,024 bits, linear in k past k = 3; with --wide, wt.cu's
+  at k = 1 and 2 and k = 2's half a round past it; elsewhere t0·b + k·α/s(b), s(b) codec_tensor's squaring rate and
+  α, t0 fitted to kv.cu. A decode's cost in reads per read is the plain read's rate over the store decode's in the
+  same run, at least 1: the decode overlaps the read.
 - d: table v5's where it has the codec, else codec_mix's `row` at the codec's κ (decode time a byte on p512's k axis),
   attention scaled by measured over projected as the nearest built width's.
-- x per round, the adversary's: x₁ at the max clock (175 at 512, scaled by each width's fastest build) over the stated
+- x per round, the adversary's: x₁ at the max clock (175 at 512, scaled by each width's squaring rate) over the stated
   factor a width (squaring analogue × the host's IFMA share; `timing.py`'s at 512 and 1,024). μ_rebuild is frontier.py's
   (d − τ)/x at κ = 1 and κ/x below it.
 - t_e: k roots one after another (a round needs the last), each the root's squarings plus 40 squaring-equivalents.
   A squaring is the fewest cycles measured over cores and forms, at 5.7 GHz, or the IFMA issue floor of P2's re-gate.
   At these widths cores don't cooperate: an exchange costs a core-to-core round trip, more than the squaring.
 
-`python curves.py --table T --kv KV --tensor R --attack A --cpu DIR [--cpu DIR] --gpu DIR [--json OUT]`
+`python curves.py --table T --kv KV --tensor R --attack A --cpu DIR [--cpu DIR] --gpu DIR [--wide J] [--json OUT]`
 """
 
 from __future__ import annotations
@@ -66,6 +67,8 @@ NARROW_X = {127: 32 / 326, 255: 110 / 326, 256: 97 / 326}
 FIELDS = [("p127", 127, 1), ("p255", 255, 19), ("p256", 256, 189), ("p511", 511, 481), ("p512", 512, 569),
           ("m521", 521, 1), ("p767", 767, 1081), ("p768", 768, 825), ("p1023", 1023, 361), ("p1024", 1024, 105),
           ("m1279", 1279, 1), ("p1536", 1536, 3453), ("p2048", 2048, 1557)]
+#: Wider Sloth fields wide_decode.sh adds to a scratch copy of codec_tensor (c the least with p prime and p = 3 mod 4).
+WIDE_C = {3072: 2165, 4096: 2549}
 #: P2 v4 at 16,448 bits and its maps at narrower widths (ra-fast-decode, art:4ba37c436c467ec5): the best full pass
 #: with the keys, GB/s; one root a 2,054-byte block.
 P2_DECODE = {16448: P2.MEASURED["cuda_core_full_GBps"], 8256: 45.3, 4160: 53.4, 2112: 52.5}
@@ -157,11 +160,19 @@ def gpu_latency(d: Path) -> dict[int, dict]:
 class Decode:
     """A word's decode time (s) at k rounds, and its cost in reads per read."""
 
-    def __init__(self, kv: dict, tensor: list[dict]):
+    def __init__(self, kv: dict, tensor: list[dict], wide: dict | None = None):
         self.read = kv["read"]["gbps"]
         self.kv = {lib: v for lib, v in kv["libs"].items()}
         self.sq = {r["n"]: r["squarings_s_cuda"] for r in tensor}
         self.bytes = {r["n"]: 1 / r["words_per_plain_byte"] for r in tensor}
+        # wt.cu's standalone store decode (wide_decode.sh): {(n, masked): {k: (store GB/s, chain words/s)}} at k = 1, 2
+        self.wide, self.wide_read = {}, wide["read"]["gbps"] if wide else None
+        for name, e in (wide or {}).get("libs", {}).items():
+            rates = e.get("rates", {}).get("decode", {})
+            ks = {int(k): (v["cuda"]["gbps_stored"], rates[k]["per_s"])
+                  for k, v in e.get("decode", {}).items() if v.get("cuda", {}).get("ok") and k in rates}
+            if ks:
+                self.wide[(e["constants"]["n"], name.endswith("-masked"))] = ks
         fits = [self._fit(lib) for lib in ("p512", "p768", "p1024")]
         self.alpha = sum(f[1] * self.kv[lib]["rates"]["square_s"] for f, lib in zip(fits, ("p512", "p768", "p1024"))) / 3
         self.t0_bit = sum(f[0] / b for f, b in zip(fits, (512, 768, 1024))) / 3
@@ -195,6 +206,9 @@ class Decode:
         lib = self.lib(b, masked)
         if lib:
             return self.time_kv(lib, k), k in (2, 3)
+        if (b, masked) in self.wide:   # wt.cu runs every round past the first in one loop: k = 2's half a round
+            w = self.wide[(b, masked)]
+            return (1 / w[k][1], True) if k in w else (k / (2 * w[2][1]), False)
         t = self.t0_bit * b + k * self.alpha / self.squarings_s(b)
         return t * (self.mask if masked else 1.0), False
 
@@ -202,13 +216,23 @@ class Decode:
         lib = self.lib(b, masked)
         if lib and str(k) in self.kv[lib].get("store", {}):
             return self.kv[lib]["store"][str(k)]["decode_gbps"]
+        if (b, masked) in self.wide:
+            w = self.wide[(b, masked)]
+            return w[k][0] if k in w else 2 * w[2][0] / k
         return self.word_bytes(b) / self.time(b, k, masked)[0] / 1e9
 
     def reads(self, b: int, k: int, masked: bool) -> float:
         lib = self.lib(b, masked)
         if lib and str(k) in self.kv[lib].get("store", {}):
             return self.kv[lib]["store"][str(k)]["decode_over_read"]
+        if (b, masked) in self.wide:
+            return max(1.0, self.wide_read / self.gbps(b, k, masked))
         return max(1.0, self.read / self.gbps(b, k, masked))
+
+    def model_reads(self, b: int, k: int, masked: bool) -> float:
+        """kv.cu's decode carried to width b (t0·b + k·α/s(b)), whatever was measured there."""
+        t = (self.t0_bit * b + k * self.alpha / self.squarings_s(b)) * (self.mask if masked else 1.0)
+        return max(1.0, self.read / (self.word_bytes(b) / t / 1e9))
 
     def kappa(self, b: int, k: int, masked: bool) -> float:
         per_byte = self.time(b, k, masked)[0] / self.word_bytes(b)
@@ -221,9 +245,12 @@ def x_ref(b: int, v5: dict, tensor: dict) -> float:
     """x₁ at the max clock: 175 at 512, scaled by the fastest measured build at each width."""
     if b in (512, 768, 1024):
         return next(r["x1_adv"] for r in v5["rows"] if r["b"] == b)
+    def root_s_a_byte(r: dict) -> float:     # x_cuda without the run's read rate, which differs between runs
+        return r["words_per_plain_byte"] * (r["n"] - 2) / r["squarings_s_cuda"]
+
     cands = []
     if b in tensor:
-        cands.append(MIX.X1_P512 * tensor[b]["k"]["1"]["x_cuda"] / tensor[512]["k"]["1"]["x_cuda"])
+        cands.append(MIX.X1_P512 * root_s_a_byte(tensor[b]) / root_s_a_byte(tensor[512]))
     if b in NARROW_X:
         cands.append(MIX.X1_P512 * NARROW_X[b])
     return min(cands)
@@ -271,18 +298,30 @@ def build(a: argparse.Namespace) -> dict:
     v5 = json.loads(Path(a.table).read_text())
     kv = json.loads(Path(a.kv).read_text())
     tensor_list = json.loads(Path(a.tensor).read_text())
+    wide = json.loads(Path(a.wide).read_text()) if a.wide else None
+    known = {r["n"] for r in tensor_list}
+    for name, e in (wide or {}).get("libs", {}).items():   # codec_tensor's rates rows for widths it hadn't run
+        if not name.endswith("-masked") and e["constants"]["n"] not in known and "rates" in e:
+            tensor_list.append({"n": e["constants"]["n"], "words_per_plain_byte": e["analysis"]["words_per_plain_byte"],
+                                "squarings_s_cuda": e["analysis"]["squarings_s"]["cuda"], "run": a.wide})
     tensor = {r["n"]: r for r in tensor_list}
     margins = {d["field"]: d["margin"] for d in jsonl(Path(a.attack)) if d["experiment"] == "floor"}
-    dec = Decode(kv, tensor_list)
+    dec = Decode(kv, tensor_list, wide)
     cpu = cpu_cycles([Path(d) for d in a.cpu])
     gpu = gpu_latency(Path(a.gpu))
+    fields = FIELDS + [(f"p{n}", n, WIDE_C[n]) for n in sorted(WIDE_C) if (n, False) in dec.wide]
 
     def t_sq(w: int) -> dict:
+        """A width no CPU run measured takes the nearest measured one's cycles, scaled by the floor's ratio."""
         m = cpu.get(w)
-        return {"measured_ns": m["cycles"] / GHZ if m else None, "floor_ns": floor_ns(w), "cpu": m}
+        if m:
+            return {"measured_ns": m["cycles"] / GHZ, "floor_ns": floor_ns(w), "cpu": m}
+        near = min(cpu, key=lambda v: abs(math.log(v / w)))
+        scaled = dict(cpu[near], cycles=cpu[near]["cycles"] * floor_ns(w) / floor_ns(near), scaled_from=near)
+        return {"measured_ns": scaled["cycles"] / GHZ, "floor_ns": floor_ns(w), "cpu": scaled}
 
     rows = []
-    for name, b, c in FIELDS:
+    for name, b, c in fields:
         xr = x_ref(b, v5, tensor)
         sq = squarings_per_root(b, c)
         ts = t_sq(b)
@@ -293,6 +332,7 @@ def build(a: argparse.Namespace) -> dict:
             rows.append({
                 "codec": f"{name} k={k}" + (" masked" if masked else ""), "b": b, "c": c, "k": k, "masked": masked,
                 "decode_gbps": dec.gbps(b, k, masked), "reads_per_read": dec.reads(b, k, masked),
+                "reads_model": dec.model_reads(b, k, masked),
                 "decode_measured": dec.time(b, k, masked)[1], "kappa": dec.kappa(b, k, masked),
                 "d": d, "d_source": d_src, "x_ref_round": xr, "x_adv_round": xr / factor(b), "x_adv": k * xr / factor(b),
                 "squarings_root": sq, "squarings_block": round(words * k * sq),
@@ -319,11 +359,11 @@ def build(a: argparse.Namespace) -> dict:
 
     curve_i = []
     cands = []
-    for b in (512, 768, 1024, 1536, 2048):
+    for b in sorted({f[1] for f in fields}):
         for k in range(2, 7):
             for masked in (True, False):
                 low, caveat = security(b, k, masked, margins)
-                if low is None or low < 1.0 and not (b == 512 and k == 2):
+                if low is not None and low < 1.0 and not (b == 512 and k == 2):
                     continue
                 xr = x_ref(b, v5, tensor)
                 d, src = step_d(b, k, masked, v5, dec, xr)
@@ -336,9 +376,11 @@ def build(a: argparse.Namespace) -> dict:
                           "d": {p: v["d"] for p, v in r["points"].items()}, "d_source": "v5 projected",
                           "x_adv": r["k"] * r["x1_adv"] / factor(r["b"]), "margin_low": r["margin"][1],
                           "reads_per_read": dec.reads(r["b"], r["k"], True) if r["b"] != 640 else None})
-    tiers = {"priced": lambda c: c["margin_low"] >= 1.0 and c["d_source"] != "v5 projected",
-             "with plain p512 k=2": lambda c: c["d_source"] != "v5 projected",
-             "with v5's projected layouts": lambda c: c["margin_low"] >= 1.0}
+    priced = lambda c: c["margin_low"] is not None and c["margin_low"] >= 1.0
+    tiers = {"priced": lambda c: priced(c) and c["d_source"] != "v5 projected",
+             "with plain p512 k=2": lambda c: c["margin_low"] is not None and c["d_source"] != "v5 projected",
+             "with v5's projected layouts": priced,
+             "with unpriced widths": lambda c: c["d_source"] != "v5 projected"}
     for kappa in KAPPAS:
         out = {"kappa": kappa}
         for tier, admit in tiers.items():
@@ -356,10 +398,11 @@ def build(a: argparse.Namespace) -> dict:
 
     curve_ii = []
     sloth = []
-    for b in (512, 768, 1024, 1536, 2048):
+    for b in [512, 768, 1024, 1536, 2048] + [n for n in sorted(WIDE_C) if (n, True) in dec.wide]:
         r = next(x for x in rows if x["b"] == b)
         for k in range(2, 400):
             sloth.append({"codec": f"p{b} k={k} masked", "k": k, "reads_per_read": dec.reads(b, k, True),
+                          "reads_model": dec.model_reads(b, k, True),
                           "decode_measured": dec.time(b, k, True)[1], "t_e_floor": k * r["root_us_floor"],
                           "t_e_measured": k * r["root_us_measured"]})
     allc = sloth + [{"codec": p["codec"], "k": 1, "reads_per_read": p["reads_per_read"], "decode_measured": True,
@@ -387,16 +430,21 @@ def fmt(x, nd=2):
 def render(t: dict) -> str:
     p8, p70 = list(MIX.STEP)
     out = [("| codec | decode GB/s | reads/read | d 8B / 70B | x a round (adv.) | squarings a block | t_root CPU "
-            "measured / floor, µs | t_root GPU thread, µs | margin (low) |"), "|" + "---|" * 9]
+            "measured / floor, µs | t_e = k roots, measured / floor, µs | t_root GPU thread, µs | margin (low) |"),
+           "|" + "---|" * 10]
     for r in t["rows"]:
+        scaled = "†" if r["cpu"] and r["cpu"].get("scaled_from") else ""
+        t_e = (f"{fmt(r['k'] * r['root_us_measured'], 1)}{scaled} / {fmt(r['k'] * r['root_us_floor'], 1)}"
+               if r["root_us_measured"] else "—")
         out.append(f"| {r['codec']} | {r['decode_gbps']:.0f}{'' if r['decode_measured'] else '*'} | "
                    f"{r['reads_per_read']:.2f} | {r['d'][p8]:.2f} / {r['d'][p70]:.2f}{'' if r['d_source'] == 'v5' else '*'}"
-                   f" | {r['x_adv_round']:.1f} | {r['squarings_block']:,} | {fmt(r['root_us_measured'])} / "
-                   f"{fmt(r['root_us_floor'])} | {fmt(r['root_us_gpu'])} | {fmt(r['margin_low'])} |")
+                   f" | {r['x_adv_round']:.1f} | {r['squarings_block']:,} | {fmt(r['root_us_measured'])}{scaled} / "
+                   f"{fmt(r['root_us_floor'])} | {t_e} | {fmt(r['root_us_gpu'])} | {fmt(r['margin_low'])} |")
     for p in t["p2"]:
         x = p["x_ref_round"] / factor(p["b"]) if p["x_ref_round"] else None
         out.append(f"| {p['codec']} | {p['decode_gbps']:.1f} | {p['reads_per_read']:.1f} | — | {fmt(x, 0)} | "
-                   f"{p['squarings_root']:,} a root | {fmt(p['root_us_measured'], 0)} / {fmt(p['root_us_floor'], 0)} | — | P2's |")
+                   f"{p['squarings_root']:,} a root | {fmt(p['root_us_measured'], 0)} / {fmt(p['root_us_floor'], 0)} | "
+                   f"(k = 1) | — | P2's |")
     out += ["", "| κ | candidates | point | codec | d 8B / 70B | reads/read | x adv | μ_rebuild |",
             "|---|---|---|---|---|---|---|---|"]
     for row in t["curve_i"]:
@@ -422,6 +470,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--attack", required=True)
     ap.add_argument("--cpu", action="append", required=True)
     ap.add_argument("--gpu", required=True)
+    ap.add_argument("--wide", help="wide_decode.sh's codec-tensor.json: wt.cu's store decode at 1,536 to 4,096 bits")
     ap.add_argument("--json")
     a = ap.parse_args(argv)
     t = build(a)
