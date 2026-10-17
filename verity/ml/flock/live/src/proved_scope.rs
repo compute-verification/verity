@@ -216,6 +216,9 @@ fn rows_why(ports: &[Port], out_row_ports: &[usize], hidden: bool) -> Option<&'s
     }
 }
 
+/// `ProvedScope.zkTableCap`: the most tables a `--zk` session may have.
+pub const ZK_TABLE_CAP: usize = 1 << 16;
+
 /// `ProvedScope.statementRules`' first failure among those a live statement can fail: `name` is the statement as the Lean
 /// verifier names it, `typed` whether it is `verity/flock-circuit/types`, `tables` the session's tables and `public_inputs`
 /// whether it has public input ports.
@@ -224,6 +227,8 @@ pub fn statement_why(name: &str, typed: bool, zk: bool, tables: usize, public_in
         Some(format!("{name}, a typed statement"))
     } else if !zk && tables > 1 {
         Some(format!("{tables} tables in a session without --zk"))
+    } else if zk && tables > ZK_TABLE_CAP {
+        Some(format!("{tables} tables in a --zk session, more than {ZK_TABLE_CAP}"))
     } else if public_inputs {
         Some("public input ports (--public-inputs)".into())
     } else {
@@ -293,6 +298,9 @@ mod tests {
         assert_eq!(statement_why("verity/flock-circuit", false, true, 2, true).unwrap(), "public input ports (--public-inputs)");
         assert_eq!(statement_why("verity/flock-circuit", false, true, 2, false), None);
         assert_eq!(statement_why("verity/flock-circuit", false, false, 1, false), None);
+        assert_eq!(statement_why("verity/flock-circuit", false, true, ZK_TABLE_CAP + 1, true).unwrap(),
+                   "65537 tables in a --zk session, more than 65536");
+        assert_eq!(statement_why("verity/flock-circuit", false, true, ZK_TABLE_CAP, false), None);
     }
 
     fn port(words: usize, comps: usize, bits: usize, v2: bool, segs: Option<Vec<(usize, usize)>>) -> Port {

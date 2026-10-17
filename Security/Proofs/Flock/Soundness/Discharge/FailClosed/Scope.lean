@@ -139,7 +139,7 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
   simp only [ProvedScope.statementRules, List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq,
     Bool.not_eq_true', Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, Bool.not_false] at hall
   obtain ⟨h1, h2, h3, h4, h5, -⟩ := hall
-  refine ⟨⟨h1, h2, h3, h4, h5⟩, ?_⟩
+  refine ⟨⟨h1, h2, h3, h4, (Bool.eq_false_or_eq_true zk).imp id fun hz => by simpa [hz] using h5⟩, ?_⟩
   split at h
   · cases h
   rename_i c hc

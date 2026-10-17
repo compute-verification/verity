@@ -556,10 +556,13 @@ def check (parse : Msg → Option Stmt) (x : Msg) (w : Wit) : Bool :=
   | some s => decide (RelS s w)
   | none => false
 
+/-- **The most tables a `--zk` session may have**, `2^16`: the masked verifier refuses a session past it. -/
+def zkTableCap : ℕ := 65536
+
 /-- **Flock's scope, readable**: the deployed parameters (`22 ≤ m ≤ 35`, `25 ≤ m` under `--zk`, `6 ≤ kLog ≤ min(m, 27)`)
 and the forms the soundness proof covers: hm96-sha512 rows, untyped, retained rounds, `hm96-sha512/v1` leaves, at most
-one table without `--zk`, no public input ports, shared rows only in a `--zk` session with hidden outputs and registered
-reads; a unit of at most `2^32` rows reading only port bits, which reads one input group and returns the outputs, or,
+one table without `--zk` and `zkTableCap` with it, no public input ports, shared rows only in a `--zk` session with
+hidden outputs and registered reads; a unit of at most `2^32` rows reading only port bits, which reads one input group and returns the outputs, or,
 with hidden outputs, the general instance form: the unit repeated, reading any number of committed input groups, and
 any number of stages the verifier evaluates, reading wires from earlier outputs, with an order of the wires that
 computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
@@ -567,7 +570,7 @@ row a `sha512/row/v2` or `sha512/row-seg/v1` row. -/
 def InScope (zk : Bool) (s : Stmt) : Prop :=
   (if zk then 25 else 22) ≤ s.m ∧ s.m ≤ 35 ∧ 6 ≤ s.kLog ∧ s.kLog ≤ min s.m 27 ∧
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧ s.form.leaf = "hm96-sha512/v1" ∧
-    (zk ∨ s.form.tables ≤ 1) ∧ ¬ s.form.publicInputs ∧
+    s.form.tables ≤ (if zk then zkTableCap else 1) ∧ ¬ s.form.publicInputs ∧
     (s.form.sharedRows → zk ∧ s.form.hiddenOutputs ∧ s.form.registeredReads) ∧
     ((s.form.unitInputGroups = 1 ∧ ¬ s.form.tail) ∨ (s.form.hiddenOutputs ∧ s.form.wiresAcyclic)) ∧
     s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧

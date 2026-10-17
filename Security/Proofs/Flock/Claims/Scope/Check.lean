@@ -16,7 +16,7 @@ namespace Flock.Readable
 /-- The rules of `statementRules`, as propositions. -/
 def Rules (t : Tags) (zk : Bool) (count : Nat) (pi : Bool) : Prop :=
   t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧ t.merkleLeaf = "hm96-sha512/v1" ∧
-    (zk = true ∨ count ≤ 1) ∧ pi = false
+    count ≤ (if zk then ProvedScope.zkTableCap else 1) ∧ pi = false
 
 theorem firstFailure_none_iff (t : Tags) (zk : Bool) (count : Nat) (pi : Bool) :
     ProvedScope.firstFailure (ProvedScope.statementRules t zk count pi) = none ↔ Rules t zk count pi := by

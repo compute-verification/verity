@@ -1600,7 +1600,9 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
 2. untyped (§16.11): `<name>, a typed statement`;
 3. retained rounds (§6.2) and `hm96-sha512/v1` leaves (`<name>, a statement without retained rounds`, `... with <leaf>
    leaves`);
-4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`;
+4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`; and at most
+   `ProvedScope.zkTableCap` (2^16) with it, the bound ZK's tape premise holds over: `<J> tables in a --zk session, more
+   than 65536`;
 5. no public input ports: `public input ports (--public-inputs)`;
 6. no shared-row public file, except in a `--zk` session of a statement with hidden outputs whose verifier holds its
    own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
