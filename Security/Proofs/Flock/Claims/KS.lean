@@ -83,6 +83,8 @@ import Proofs.Flock.Claims.KS.ZkSim
 import Proofs.Flock.Claims.KS.ZkLock
 import Proofs.Flock.Claims.KS.ZkStep
 import Proofs.Flock.Claims.KS.ZkClash0
+import Proofs.Flock.Claims.KS.PlainLevels
+import Proofs.Flock.Claims.KS.LevelsAll
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
