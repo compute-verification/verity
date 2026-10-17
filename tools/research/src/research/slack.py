@@ -130,7 +130,8 @@ LEAD_RE = re.compile(r"^\s*(?:(?::[a-z0-9_+'-]+:|[\u2600-\u27bf\U0001f000-\U0001
                      r"((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\|@?[^>]*)?>)[\s,:]*)+)")
 BARE_LEAD_RE = re.compile(r"^\s*([a-z0-9][a-z0-9._-]*):\s")
 NAME_TOKEN_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)|<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
-AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
+AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}"   # a cloud agent's (or its short form)
+                         r"|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")                 # a desktop agent's, a bare UUID
 QUIET = "(quiet)"                                                # ending a post: ring only the names it starts with
 CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
@@ -1331,12 +1332,41 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         if ns.verb == "state":
             print(f"{issue} {lin.move(issue, need(ns.value, 'the STATE by name (e.g. In Progress)'))}")
             return 0
-        lin.comment(lin.issue_id(issue), name_entry(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender"))["handle"],
-                    need(ns.value, "the TEXT"))
+        author, text = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender"))["handle"], need(ns.value, "the TEXT")
+        refuse_unrouted(text, reg, author)
+        info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
+        lin.comment(info["id"], author, text)
         print(f"{issue} commented")
+        ring_comment(ns, reg, author, info, text)
         return 0
     except linear.LinearError as e:
         raise SlackError(str(e)) from None
+
+
+def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, text: str) -> list[str]:
+    """Ring the inbox of the issue's team's handle and of each name the comment starts with, as `send` would, so nobody
+    polls Linear for comments (no one subscribes to them: every handle writes as one app; COMM-30).  The author is never
+    rung.  One line per name."""
+    owner = next((h["handle"] for h in reg["handles"] if h.get("linear") == issue["team"]["key"]), None)
+    names = list(dict.fromkeys(([owner] if owner else []) + lead_names(text, reg)))
+    routes, api, lines = routes_of(ns), client(ns), []
+    ch = channel_id(ns, reg, FRONT_DOOR)
+    body = plain(text)
+    if len(body) > DOORBELL_MAX:
+        body = body[:DOORBELL_MAX].rstrip() + "\u2026"
+    for name in names:
+        to, r = routes.resolve(name)
+        if name == author or to == author:
+            continue
+        if not r or (r.get("closed") and not r.get("forward_to")):
+            lines.append(f"@{name}: no inbox; the comment is on {issue['identifier']}")
+            continue
+        api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
+                 unfurl_media="false", text=f"from {author}, Linear {issue['identifier']} ({issue['url']}): {body}")
+        lines.append(f"@{to}: rang")
+    for line in lines:
+        print(f"route {line}", file=sys.stderr)
+    return lines
 
 
 def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: list[str]) -> str:

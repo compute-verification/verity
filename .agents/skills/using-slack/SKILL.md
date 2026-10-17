@@ -23,8 +23,10 @@ The coordination API has one place, three interactions and one lifecycle.
   `@vllm`, `@benchmarks`, `@console` and `@top` (the admin, Daniel's coordinator), plus two advisors,
   `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. Since
   14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own subagents.
-  `@console` is Daniel's desktop agent on his laptop, which holds no Slack inbox: reach it through its Linear team CON (an
-  ask to `@console` files there, and `send` says so where it would ring an inbox). A handle's current holder is its
+  `@console` is Daniel's desktop agent on his laptop, beside the console's dev server. Nothing wakes it: its inbox holds
+  your ask until Daniel opens it, and then it reads every unread doorbell (`names read --as console`) and answers in your
+  thread. So put the whole brief in the ask, since it can't open Linear, and card `#ask-daniel` when it can't wait for
+  him to open console. A handle's current holder is its
   inbox's holder: `names open --succeeds` records the successor's agent id and its working branch's suffix in the route,
   and routing reads them (`--as`, the owners of PRs and runs). Run `names open --as HANDLE` again on a new branch: it
   adds that branch's suffix. So a handover edits nothing in the repo; the registry's `holder` is a description. One agent may hold several handles, and posts as whichever
@@ -95,8 +97,10 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 - **A holder subscribes to its own inbox thread, not to `#agent-coordination`'s top level.** The sender rings the inbox of
   each handle a post addresses (`routes.d`, mode `cli`); no agent forwards. The registry's `subscribers` lists the holders
   that still take the channel top level as well (the `old-*` advisors). A doorbell for a
-  post that turns out not to be for you ends the turn silently. On timer wakes, still run `match` over the channel to catch
-  anything missed.
+  post that turns out not to be for you ends the turn silently. **Timers are for schedules and absence checks** (a
+  deadline, a renewal), **never for polling** your inbox, the channel or Linear: what's addressed to you rings your
+  inbox, a Linear comment included. comms' daily review replays every post against the doorbells rung and chases what
+  missed (COMM-30).
 - **A holder also subscribes to its Linear team's issue events** (`subscribe_linear_issue`: creations and state
   changes), so an issue a human files straight into Linear reaches you; it rings no inbox. **Don't subscribe to its
   comments.** The sender never rings its own inbox, but every handle posts through one Slack bot and writes to Linear
@@ -105,8 +109,9 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   Anything another handle must read about your issue comes on Slack, naming you, and rings your inbox.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - **Subscribe to a thread (`subscribe_slack_thread`) only where a human may answer**: your own `#ask-daniel` card, a
-  thread a named human posted in, or Codex's thread when you ask it something (Daniel's Codex agent posts outside
-  `research msg`, so its replies ring no inbox). Between handles your inbox already carries every reply addressed to you: one that names
+  thread a named human posted in, or Codex's thread when you've asked it something (its replies ring no inbox). A task
+  for Daniel's console, laptop or browser goes to `#ask-daniel` as a card with the exact steps, not to Codex: Codex is
+  a session on his laptop that Slack doesn't wake, so ask in its thread only when Daniel says it's on. Between handles your inbox already carries every reply addressed to you: one that names
   no one rings the root's poster, or the root's addressees when the poster replies, and a third party is named at the
   start. The sender never rings its own inbox, so the inbox carries no echo of your own posts. A thread subscription
   does: every handle posts through one bot, so it wakes you for each of your own replies too. Unsubscribe from any thread
@@ -186,8 +191,9 @@ done-condition, pointers — goes in the issue itself, filed into the owning tea
 link. The issue is its own doorbell: every holder subscribes to its team's issue events (Subscriptions above), so
 filing it wakes the owner. `research msg ask --as ME --to @OWNER --file BRIEF.md` files it and rings the owner's inbox
 too. Taking an issue is a workflow-state change out of the backlog — that change is the guarantee the work was seen,
-and the watcher flags issues that sit untouched. Comments on an issue wake no one (no holder subscribes to comments), so
-they are records. Anything the owner must read goes to Slack, naming it at the start. Slack carries what it is good at:
+and the watcher flags issues that sit untouched. No holder subscribes to comments, so comment with
+`research msg linear comment ISSUE 'TEXT' --as ME`: it rings the inbox of the issue's team's handle and of each name the
+text starts with (never yours), as `send` would (COMM-30). A comment made any other way wakes no one. Slack carries what it is good at:
 conversation in threads, broadcasts, alerts and `#ask-daniel`; pairing threads and ready marks are unchanged.
 
 ## Announcing

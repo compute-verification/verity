@@ -430,7 +430,8 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   `tr` is `received_at`, and `td` is `ts` plus the deadline. With no registration deadline, `register` reads no clock
   and logs nothing to the epoch log.
 - **No retries.** A second salt (`salt` or `salt_released`), `select`, `register_interiors`, `deliver` or `outcome` is refused. A proof delivered more than
-  `Check.proof_deadline` seconds after the draw, or none by then, is the symbol `late`. An outcome is pending until every
+  `Check.proof_deadline` seconds after the draw, or none by then, is the symbol `late`; a stream refuses a check with no
+  proof deadline, so every draw ends. An outcome is pending until every
   verifier of record has run, and each verdict of record names the delivered sessions and reports the public outputs
   alike (`check_verdicts`: `pending`, `sessions`, `public`, by the verifier of record).
 - **The failure budget.** At its `budget`-th `reject` or `late` a stream stops, and it refuses registrations from then on.
@@ -441,11 +442,13 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   one-stage's audit record (null for `late`), and `interior` null, or under `TwoStage` `{"registration", "receipt",
   "audit"}` for the interiors in the same forms; `Outcome.record` is its SHA-512.
 
-A stream refuses a two-stage count, the `Sequential` rule, a window statement and a timed session until they are built.
+A stream refuses a two-stage count, the `Sequential` rule, a window statement and a timed session until they are built,
+and a check with no proof deadline.
 Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outcome`,
 `test_the_rule_refuses_an_extra_field` and the other `test_the_rule_refuses_*`,
 `test_no_retries_nothing_redraws_and_an_outcome_is_final`, `test_a_late_proof_is_a_reject`,
-`test_a_late_registration_is_refused_and_ends_the_epoch`, `test_an_on_time_registration_carries_both_readings`,
+`test_a_proof_that_never_arrives_ends_late`, `test_a_late_registration_is_refused_and_ends_the_epoch`,
+`test_an_on_time_registration_carries_both_readings`,
 `test_a_registration_before_the_salt_is_late`, `test_the_salt_is_issued_once_from_the_challengers_coins`,
 `test_no_registration_deadline_changes_nothing`, `test_the_interiors_are_not_held_to_the_registration_deadline`,
 `test_a_salt_released_elsewhere_counts_the_deadline_from_its_release`,

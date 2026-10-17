@@ -1237,6 +1237,9 @@ def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, caps
     add_route(routes_dirs[0], "circuits", "1700000900.000200", holder="bc-11111111-2222-3333-4444-555555555555")
     monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-11111111-2222-3333-4444-555555555555")
     assert run(capsys, "send", "--as", "circuits", "--text", "a successor's first post")[0] == 0
+    desktop = next(a for a in held["console"] if not a.startswith("bc-"))
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{desktop}")
+    assert run(capsys, "send", "--as", "console", "--text", "from Daniel's laptop")[0] == 0
     monkeypatch.delenv("RESEARCH_AGENT_URL")
     monkeypatch.setattr(slack, "self_agent_id", lambda: None)
     rc, _, err = run(capsys, "send", "--as", "infra", "--text", "x")
@@ -1269,9 +1272,10 @@ def argparse_ns(**kw):
 def test_a_handle_without_an_inbox_is_reached_through_linear_or_top_level_and_an_unknown_name_is_refused(fake, registry, routes_dirs, capsys):
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@proofs", "--text", "x")
     assert rc == 0 and "route @proofs: no Slack inbox; reach it through its Linear team PRF" in err
-    add_route(routes_dirs[0], "console", "1700000900.000300", closed="2026-10-14T22:45Z")
-    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "x")
-    assert rc == 0 and "route @console: no Slack inbox; reach it through its Linear team CON" in err
+    box = inbox(fake, routes_dirs, "console")
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "the whole brief")
+    assert rc == 0 and "route @console: rang" in err and "Linear" not in err
+    assert bells(fake, box)[0]["text"].endswith("@console the whole brief")
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-accounting", "--text", "x")
     assert rc == 0 and "route @old-accounting: no inbox (top-level forwards it)" in err
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@nobody-here", "--text", "x")

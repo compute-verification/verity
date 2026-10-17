@@ -47,6 +47,35 @@ CHECK_BATCH = 1024
 """Openings a worker checks at once (`checks.Checks`)."""
 
 
+def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, reads_bytes: int, tiers: dict,
+                 pass_ns: int) -> dict:
+    """The ledger's timing term, `1 − reads/(R·span)`, split per pass into parts that sum to it exactly, each a share
+    of R·span.  `tiers` is the calibration's bare read of each tier (`read_tiers`: its bytes and milliseconds, the
+    prover's own measurement), and `pass_ns` the median spacing of the session's root arrivals (the verifier's clock).
+    With s the span a pass, G every GPU's stated read and H the host's:
+
+    - `above_stated_tiers`: R beyond G + H (at spec R, the hardware's gap);
+    - `host_dram_idle`: H·s less the host tier's bytes;
+    - `hbm_below_stated`: G over the bare HBM read's time less the HBM tier's bytes (a slower read, or idle GPUs);
+    - `receipts_beyond_read`: G over the median pass less the bare HBM read;
+    - `boundaries_and_allowance`: G over s less the median pass (window boundaries and A);
+    - `blocks_left_out`: the store's bytes less a pass's mean reads.
+
+    A split for display, not a bound: the prover's bare read moves share only between `hbm_below_stated` and
+    `receipts_beyond_read`."""
+    s = span_ns / passes / 1e9
+    whole = capacity_bytes_per_s * s
+    gpus, host = timing.GPUS * timing.GPU_READ_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S
+    hbm_bytes, host_bytes = tiers["hbm"]["bytes"], tiers.get("host", {}).get("bytes", 0)
+    hbm_s, pass_s = tiers["hbm"]["ms"] / 1e3, pass_ns / 1e9
+    return {"above_stated_tiers": (capacity_bytes_per_s - gpus - host) / capacity_bytes_per_s,
+            "host_dram_idle": (host * s - host_bytes) / whole,
+            "hbm_below_stated": (gpus * hbm_s - hbm_bytes) / whole,
+            "receipts_beyond_read": gpus * (pass_s - hbm_s) / whole,
+            "boundaries_and_allowance": gpus * (s - pass_s) / whole,
+            "blocks_left_out": (hbm_bytes + host_bytes - reads_bytes / passes) / whole}
+
+
 class RealClock:
     def now(self) -> int:
         return time.monotonic_ns()
@@ -306,16 +335,18 @@ class Verifier:
             record = session.record()
             out["record"] = {"public": record.public(), "profile": record.profile(), "end_ns": record.end_ns}
             out["end_ns"] = record.end_ns
-            out["ledger"] = self.ledgers(record)
+            out["ledger"] = self.ledgers(record, arrivals)
         return out
 
-    def ledgers(self, record: audit.Record) -> dict:
+    def ledgers(self, record: audit.Record, arrivals: list[list[int]] = ()) -> dict:
         """γ against the node's R at spec and measured (`timing.SPEC_BYTES_PER_S`, `timing.READ_BYTES_PER_S`: every
         GPU's HBM and the host's DRAM), with the node's S_chip and squaring ceiling, whatever share of the node the
         store is on.  Both R are the verifier's, which the prover's calibration can only raise: a prover reporting a
         slower read would shrink every term but the timing (MEM-24).  R cancels in the certified bytes,
         `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node establishes, whose γ
-        is the node's only once its store spans the node."""
+        is the node's only once its store spans the node.  Each reading carries its timing term's parts
+        (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
+        had two roots."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
         measured = max(timing.READ_BYTES_PER_S, reported)
@@ -331,12 +362,24 @@ class Verifier:
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
                           "reads_bytes": record.receipts * record.block_bytes}}
+        tiers = cal.get("read_tiers")
+        spacings = sorted(b - a for arr in arrivals for a, b in zip(arr, arr[1:]))
+        parts = None
+        if (tiers and "hbm" in tiers and spacings
+                and sum(t["bytes"] for t in tiers.values()) == self.registration.blocks * record.block_bytes):
+            parts = {"span_ns": record.span_ns, "passes": record.passes,
+                     "reads_bytes": record.receipts * record.block_bytes,
+                     "tiers": {k: {"bytes": t["bytes"], "ms": t["ms"]} for k, t in tiers.items()},
+                     "pass_ns": spacings[len(spacings) // 2]}
+            out["inputs"]["timing_parts"] = {"pass_ns": parts["pass_ns"], "tiers": parts["tiers"]}
         for name, r in (("spec", spec), ("measured", measured)):
             try:
                 lg = audit.ledger(record, capacity_bytes_per_s=r, chip_bytes=timing.CHIP_BYTES, rebuild=rebuild)
                 whole = r * record.span_ns / 1e9
                 out[name] = {"capacity_bytes_per_s": r, **lg.to_json(), "certified_bytes": (1 - lg.gamma) * whole,
                              "certified_bytes_horizon": (1 - lg.gamma_horizon) * whole}
+                if parts:
+                    out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
             except ValueError as e:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
         # RateAuditSketch's term: every compression the node's GPUs could make over the span a guess or a key.

@@ -660,14 +660,14 @@ theorem getD_empty (a : Array ByteArray) (j : ℕ) : a.getD j ByteArray.empty = 
   rfl
 
 /-- **The column reader reads the verifier's level-0 query round**: where the run's last message `f` sets up and the
-plain verdict accepts its record and proof files at any hashes, each of table 0's two reps that `runOf` takes has, at
-`plainQueryRound`, a round of level 0's `q₀` coins; its proof file decodes at the run's `plainShape` to the proof whose
-level-0 Merkle check the verifier passes at those coins' positions; and `plainRepColsOf` is that proof's level-0 rows at
-those coins. -/
+plain verdict accepts its record and proof files at any hashes, each of table 0's two reps that `runOf … 0` takes has,
+at `plainQueryRound`, a round of level 0's `q₀` coins; its proof file decodes at the run's `plainShape` to the proof
+whose level-0 Merkle check the verifier passes at those coins' positions; and `plainRepColsOf` is that proof's level-0
+rows at those coins. -/
 theorem runOf_queryRound_plain (hs : Hashes Flock.V) {s : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {r : Claims.Flock.ZkRun} (hf : lastFinal s = some f)
     (hset : setupOf false f.stmt = some (ins, spec, sts))
-    (hv : verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hr : runOf false s = some r) :
+    (hv : verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hr : runOf false s 0 = some r) :
     ∀ x ∈ r.reps, ∃ (p : Proof) (rd : Round),
       decodeProof r.plainShape x.2 = .ok p ∧
       x.1[Claims.Flock.plainQueryRound r.m r.kLog (Claims.Flock.plainSched r.m).k0 r.claims]? = some rd ∧
@@ -812,33 +812,57 @@ theorem rounds_sum (zk : Bool) (spec : SessionSpec) (sts : Array Stmt) :
     simp only [List.getElem_map, List.getElem_range, Array.getElem_toList]
     rw [getElem!_pos sts i (by simpa using h₁)]
 
-/-- **`Deploy.V`'s round count is the rounds the shipped verifier reads**, plain or masked: wherever the verifier
-accepts, against any oracle `H` and with one coin per message, the prover sent `(V zk).k x` messages: the link message,
-one message per round the shipped verifier's reps read from the record (`verifyRepWith_rounds`,
-`zkVerifyRepWith_rounds`: each table's two reps, each `repRounds zk` rounds), and the last message. -/
-theorem next_acc_length (zk : Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
+/-- **Wherever `Deploy.V` accepts, the prover sent the rounds of the session the statement sets up against `H`**,
+plain or masked: against any oracle `H` and with one coin per message, the link message, one message per round the
+shipped verifier's reps read from the record (`verifyRepWith_rounds`, `zkVerifyRepWith_rounds`: each table's two reps,
+each `repRounds zk` rounds, at the setup with `hOf H`), and the last message. -/
+theorem next_acc_length_setup (zk : Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} (hcs : cs.length = as.length) (h : ((next zk x as cs).eval H).1 = .acc) :
-    as.length = (V zk).k x := by
+    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (spec' : SessionSpec) (sts' : Array Stmt),
+      setupOf zk x = some (s, spec, sts) ∧ setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
+        as.length = 2 + rounds zk spec' sts' := by
   cases ha : act zk x as cs with
   | rej => rw [next_rej H ha] at h; cases h
   | coin c => rw [next_coin H ha] at h; cases h
   | decide s spec sts link c₁ mids f =>
-  obtain ⟨hv, hc⟩ := (next_decide H ha).1 h
+  obtain ⟨spec', sts', hsu, hv, hc⟩ := (next_decide H ha).1 h
+  refine ⟨s, spec, sts, spec', sts', act_decide ha, hsu, ?_⟩
   obtain ⟨lv, hlv, hcus⟩ := checks_custody hc
-  have hv' : verdictM (M := Flock.V) zk (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) f.record f.proofs =
+  have hv' : verdictM (M := Flock.V) zk (Hashes.ofSha512 (Claims.hOf H)) spec' (tabsOf sts') f.record f.proofs =
       .ok () := by
     cases zk <;> exact hv
   obtain ⟨hsz, hk⟩ := streams_size zk (Hashes.ofSha512 (Claims.hOf H)) hv' hlv
-  show as.length = (match setupOf zk x with | some (_, spec, sts) => 2 + rounds zk spec sts | none => 1)
-  rw [act_decide ha, act_decide_length hcs ha, ← custody_length hcus]
-  dsimp only
-  rw [rounds_sum, List.length_flatMap,
-    Nat.add_comm _ 2, ← sum_pairs (fun i => repRounds zk spec sts[i]!)]
+  rw [act_decide_length hcs ha, ← custody_length hcus, rounds_sum, List.length_flatMap,
+    Nat.add_comm _ 2, ← sum_pairs (fun i => repRounds zk spec' sts'[i]!)]
   congr 2
   apply List.ext_getElem
   · simp [hsz]
   · intro k h₁ h₂
     simp only [List.getElem_map, List.getElem_range, Array.getElem_toList, Array.length_toList]
     exact hk k _
+
+/-- **`Deploy.V`'s round count is the rounds the shipped verifier reads**, plain or masked: wherever the verifier
+accepts, against an oracle `H` at which the statement's setup has the rounds of its setup at SHA-512 (`hr`), and with one
+coin per message, the prover sent `(V zk).k x` messages (`next_acc_length_setup`). -/
+theorem next_acc_length (zk : Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
+    {cs : List Coin} (hcs : cs.length = as.length)
+    (hr : ∀ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (spec' : SessionSpec) (sts' : Array Stmt),
+      setupOf zk x = some (s, spec, sts) → setupWith (Claims.hOf H) s.read = .ok (spec', sts') →
+        rounds zk spec' sts' = rounds zk spec sts)
+    (h : ((next zk x as cs).eval H).1 = .acc) : as.length = (V zk).k x := by
+  obtain ⟨s, spec, sts, spec', sts', hso, hsu, hl⟩ := next_acc_length_setup zk H hcs h
+  show as.length = (match setupOf zk x with | some (_, spec, sts) => 2 + rounds zk spec sts | none => 1)
+  rw [hso]
+  dsimp only
+  rw [hl, hr s spec sts spec' sts' hso hsu]
+
+/-- **At the SHA-512 oracle, `Deploy.V`'s round count is the rounds the shipped verifier reads**: wherever the verifier
+accepts against `sha512`, with one coin per message, the prover sent `(V zk).k x` messages. -/
+theorem next_acc_length_sha512 (zk : Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (hcs : cs.length = as.length) (h : ((next zk x as cs).eval sha512).1 = .acc) : as.length = (V zk).k x :=
+  next_acc_length zk sha512 hcs (fun s spec sts spec' sts' hso hsu => by
+    rw [hOf_sha512, setupWith_sha512, Ins.setup_read (setupOf_some hso).2] at hsu
+    cases hsu
+    rfl) h
 
 end FlockDeploy
