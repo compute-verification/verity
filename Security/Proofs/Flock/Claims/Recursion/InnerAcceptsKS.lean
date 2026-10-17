@@ -39,7 +39,7 @@ def RoundsMargin (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) : Prop :
 /-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le`'s argument, stopped before the inner
 rounds' forks are bounded by all of `Be`'s. -/
 theorem Pr_bad_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Msg → Msg} (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO)
+    {opening : Opening} (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
       Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (forkColl H D I DO decO P x j)) := by
@@ -224,7 +224,7 @@ forks' collisions (`Pr_bad_le_fork`); a rejecting draw at most each fork's, so a
 inner rounds (`Pr_innerRejects_le_fork`, `RoundsMargin`), and `k(x)·Pr[Be] = A + B` (`sqrt_margin`). Where no run is
 accepted, no draw rejects, and `Pr_bad_le` alone gives it. -/
 theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Msg → Msg} (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (hR : InnerRounds D I)
+    {opening : Opening} (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (hR : InnerRounds D I)
     (hA : InnerAcceptsColl H D I DO) (hN0 : CallsNil H D) (hM : RoundsMargin H D I)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     NI D I x * Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) +
@@ -283,7 +283,7 @@ theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : 
 /-- **`InnerKS` from `Inner.KSAbort` where V* meets `InnerAcceptsColl`**: `innerKS_of_KSAbort`, with the judged draw's
 rejection paid from the spare forks (`PrBadGood_le_abort_rej`, `bad_rej_le`), at the same bound. -/
 theorem innerKS_of_KSAbort_coll [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
-    {DO : Flock.Deploy Coin Col T} {opening : Msg → Msg} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
+    {DO : Flock.Deploy Coin Col T} {opening : Opening} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
     (hR : InnerRounds D I) (hV : InnerViewRun H D I DO) (hC : CallsRecord H D I DO) (hO : CallsOpen H D I DO opening)
     (hA : InnerAcceptsColl H D I DO) (hM : RoundsMargin H D I) (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) :
     InnerKS H D I DO := by
@@ -314,7 +314,7 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [
 /-- **The recursion's KS from Flock's KS at the outer deployment and the inner protocol's KS against provers that may
 abort, where V* meets `InnerAcceptsColl`**: `KS_of_flockKS` with `innerKS_of_KSAbort_coll`. -/
 theorem KS_of_flockKS_coll [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
-    (DO : Flock.Deploy Coin Col T) (opening : Msg → Msg) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
+    (DO : Flock.Deploy Coin Col T) (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
     (hKS : I.KSAbort H) (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO)
     (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D) (hR : SessionRuns H D I DO)
     (hV : InnerViewRun H D I DO) (hC : CallsRecord H D I DO) (hO : CallsOpen H D I DO opening)
@@ -327,7 +327,7 @@ theorem KS_of_flockKS_coll [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : I
 `KS_of_flockKS_coll`. The margin is the compiled verifier's: on an accepted run, three rounds past the inner
 deployment's, which takes a round at every statement. -/
 theorem KSFlock_of_flockKS_coll [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T)
-    (opening : Msg → Msg) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO) (NI : Msg → ℕ) (Ok : Msg → Col → Prop)
+    (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO) (NI : Msg → ℕ) (Ok : Msg → Col → Prop)
     (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x) (hVkI : ∀ x, 0 < DI.V.k x)
     (hKI : ∀ x, 0 < DI.cap x) (hkI : ∀ x, (8 ≤ DI.k x ∧ Flock.Splits DI x) ∨ Flock.NoAcc H DI.V x)
     (hone : ∀ x, (∃ s, DI.parse x = some s ∧ s.tables = 1) ∨ Flock.NoAcc H DI.V x) (hz : ∀ x, Ok x 0)
@@ -361,7 +361,7 @@ open Claims.Recursion
 SHA-512: `KSFlock_of_flockKS_V` with `InnerAcceptsColl` and the compiled verifier's margin (`KSFlock_of_flockKS_coll`)
 for `InnerAccepts`. -/
 theorem KSFlock_of_flockKS_V_coll {Col T : Type} [DecidableEq Col] [Zero Col] (zk : Bool) (D : Deploy Coin)
-    (DI DO : Claims.Flock.Deploy Coin Col T) (hVI : DI.V = V zk) (opening : Claims.Msg → Claims.Msg)
+    (DI DO : Claims.Flock.Deploy Coin Col T) (hVI : DI.V = V zk) (opening : Opening)
     (decC : Claims.Msg → Claims.Msg → Coin) (hF : Claims.Flock.KS sha512 DO) (NI : Claims.Msg → ℕ)
     (Ok : Claims.Msg → Col → Prop) (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x)
     (hVkI : ∀ x, 0 < DI.V.k x) (hKI : ∀ x, 0 < DI.cap x)
