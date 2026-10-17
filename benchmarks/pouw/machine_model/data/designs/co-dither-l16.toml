@@ -1,0 +1,48 @@
+# Bc (co-dither) at L = 16 on the RTX PRO 6000: IMMA.16816, where T1 is tight (TENSOR), on the unmeasured e-l16-model.
+# sm_120 gives IMMA.16816 a 16832's pipe time, so honest issues two MMAs a useful 16832's work (`work` 2), and the plain
+# reference is a 16816 GEMM at the same time a MMA (γ low by about 1.5%: 16.25 vs 16.50 SMSP-cycles alone).
+name = "co-dither-l16"
+summary = "Bc at L = 16 on sm_120: co32c, cohalf QKᵀ, A's P·V, duo, IMMA.16816 (two a useful 16832; model honest)"
+honest = "e-l16-model"
+L = 16
+work = 2.0
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDSM_X4 = 0.010638 }
+source = "SPEC §3.4's count for m16n8k16 (CALC, devices-sm89 dither-c-l16): CO-Dither's U is resident, so Dither's one-operand floor, least 1/94 at (a, b) = (1, 47)"
+
+[fold]
+name = "duo"
+ALU = 2
+IMAD = 1
+
+[skip.pv-strip]
+eps = 0.00129
+source = "co-dither's at L = 32 (CALC from SKIP's parts, note:20261017T0340Z-draft-skip Result 3), kept at L = 16: a strip's share of time doesn't grow as L halves"
+
+[skip.recombination]
+eps = 0.00074
+source = "co-dither's at L = 32 (CHECKED-STRIP's recombination IMADs, note:20261017T0340Z-draft-skip, 04:41Z), kept at L = 16: vector work, not a strip"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD)"
+
+[clock]
+eps = 0.1391
+source = "SPEC's P1 (note:20261017T0324Z-draft-eps1-spec, 04:47Z): f_max 2,430 MHz against honest at the node's 2,092 lock, 1 − 2092/2430, as co-dither's"
+
+[luck]
+delta = 4.547473508864641e-13
+p = 0.75
+checks = 48000
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 4, LDS128 = 0.25 }   # lane instructions a word: 4 IDP4A at k = 16, operands for an 8x8 tile a lane
+source = "dp4a at 4 IDP4A a word at L = 16 (note:20261017T0310Z-report-eps1-program §3, halved from 8 at k = 32); its loads 2(a + b)/(ab) LDS.128 a word at a = b = 8, halved"
+
+[routes]
+lanes = true
+uniform = true
