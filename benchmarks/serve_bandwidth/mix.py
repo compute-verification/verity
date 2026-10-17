@@ -5,8 +5,10 @@ arrivals through the engine's step loop, with one NVTX range an engine step and 
 
 A step's range runs from the scheduler's output to its `update_from_output` and is named
 `s<i> p<prefill tokens> d<decode requests> kv<context tokens>`; a range `idle` covers each wait for the next arrival
-with nothing to run. Async scheduling is off, so the ranges don't overlap and each step's GPU work lies inside its
-range, on every rank: `timeline.py` places nsys's GPU-metrics samples by them. Writes `mix.json` (the engine, the weights' and KV's bytes a step per GPU, every step's record) under `--out`.
+with nothing to run. At `--tp 1` a range `x<i> ...` also covers each model step's launches in the runner (its
+`execute_model` and `sample_tokens`), so `timeline.py` finds each kernel's step by its launch, with async scheduling
+(vLLM's default, `--async-scheduling`) on or off. At TP > 1 the kernels launch in the workers, and `timeline.py` places
+samples by the scheduler's ranges, which hold each step's GPU work only with async scheduling off. Writes `mix.json` (the engine, the weights' and KV's bytes a step per GPU, every step's record) under `--out`.
 """
 from __future__ import annotations
 
@@ -50,12 +52,13 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--max-batched-tokens", type=int, default=8192)
     ap.add_argument("--max-seqs", type=int, default=max(CAPTURE))
+    ap.add_argument("--async-scheduling", choices=("default", "on", "off"), default="default")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
 
     import torch
     import vllm
-    from verity_vllm.engine.engine_profile import get_scheduler
+    from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
@@ -63,8 +66,9 @@ def main() -> int:
     kw = {"model": a.model, "quantization": "fp8", "tensor_parallel_size": a.tp, "max_num_seqs": a.max_seqs,
           "enable_prefix_caching": False, "seed": 0, "max_model_len": max(a.prompts) + max(a.outputs) + 64,
           "max_num_batched_tokens": a.max_batched_tokens, "enforce_eager": False, "gpu_memory_utilization": a.mem,
-          "async_scheduling": False,
           "compilation_config": {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": CAPTURE}}
+    if a.async_scheduling != "default":
+        kw["async_scheduling"] = a.async_scheduling == "on"
     t = time.perf_counter()
     llm = LLM(**kw)
     up = time.perf_counter() - t
@@ -76,25 +80,56 @@ def main() -> int:
     open_: list = []
     orig_schedule, orig_update = sched.schedule, sched.update_from_output
 
+    def label(so) -> tuple[int, int, int]:
+        ns = so.num_scheduled_tokens
+        kv = sum(int(sched.requests[r].num_computed_tokens) for r in ns if r in sched.requests)
+        return sum(n for n in ns.values() if n > 1), sum(1 for n in ns.values() if n == 1), kv
+
     def schedule(*args, **kwargs):
         so = orig_schedule(*args, **kwargs)
-        ns = so.num_scheduled_tokens
-        pre = sum(n for n in ns.values() if n > 1)
-        dec = sum(1 for n in ns.values() if n == 1)
-        kv = sum(int(sched.requests[r].num_computed_tokens) for r in ns if r in sched.requests)
+        pre, dec, kv = label(so)
         rec = {"i": len(steps), "t0": time.perf_counter(), "prefill_tokens": pre, "decode_reqs": dec, "kv_tokens": kv,
                "tokens": int(so.total_num_scheduled_tokens)}
         steps.append(rec)
-        open_.append(torch.cuda.nvtx.range_start(f"s{rec['i']} p{pre} d{dec} kv{kv}"))
+        open_.append((rec, torch.cuda.nvtx.range_start(f"s{rec['i']} p{pre} d{dec} kv{kv}")))
         return so
 
     def update_from_output(so, mro):
         if open_:
-            torch.cuda.nvtx.range_end(open_.pop(0))
-            steps[-1]["t1"] = time.perf_counter()
+            rec, rid = open_.pop(0)
+            torch.cuda.nvtx.range_end(rid)
+            rec["t1"] = time.perf_counter()
         return orig_update(so, mro)
 
     sched.schedule, sched.update_from_output = schedule, update_from_output
+    if a.tp == 1:
+        # One range `x<i> ...` a model step, around the runner's launches (execute_model, then sample_tokens when
+        # execute_model leaves the sampling to it): sequential with async scheduling too, so a kernel's step is the
+        # range its launch falls in.
+        runner = get_model_runner(llm)
+        ex_orig, st_orig = runner.execute_model, getattr(runner, "sample_tokens", None)
+        xs: list = []
+
+        def execute_model(*args, **kwargs):
+            so = args[0] if args else kwargs["scheduler_output"]
+            pre, dec, kv = label(so)
+            xs.append(torch.cuda.nvtx.range_start(f"x{len(xs)} p{pre} d{dec} kv{kv}"))
+            out = ex_orig(*args, **kwargs)
+            if out is not None or st_orig is None:
+                torch.cuda.nvtx.range_end(xs[-1])
+                xs[-1] = None
+            return out
+
+        def sample_tokens(*args, **kwargs):
+            out = st_orig(*args, **kwargs)
+            if xs and xs[-1] is not None:
+                torch.cuda.nvtx.range_end(xs[-1])
+                xs[-1] = None
+            return out
+
+        runner.execute_model = execute_model
+        if st_orig is not None:
+            runner.sample_tokens = sample_tokens
     llm.generate([TokensPrompt(prompt_token_ids=[1000 + i for i in range(64)])],
                  SamplingParams(max_tokens=8, ignore_eos=True), use_tqdm=False)
     steps.clear()

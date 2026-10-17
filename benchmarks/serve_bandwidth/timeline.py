@@ -1,9 +1,13 @@
 """Where a served mix's DRAM reads go, from nsys's sqlite export of a `mix.py` run (GPU metrics, CUDA kernels, NVTX):
-each GPU-metrics sample's DRAM read and write bytes, placed in a phase by the NVTX range its midpoint falls in (a step
-that schedules any prompt tokens is `prefill`, one that schedules only decodes `decode`; `idle` is the engine waiting
-for an arrival; `host` the rest of the trace, between steps) and split over kernel classes (`kv_filler/step_profile.py`'s:
-`gemm` reads the weights, `attention` the KV) by how much of the sample's interval each class's kernels cover on that GPU
-(`none`: no kernel running).
+each GPU-metrics sample's DRAM read and write bytes, placed in a phase by the step whose span its midpoint falls in (a
+step that schedules any prompt tokens is `prefill`, one that schedules only decodes `decode`; `idle` is the engine
+waiting for an arrival; `gap` the rest of the trace, the GPU between steps) and split over kernel classes
+(`kv_filler/step_profile.py`'s: `gemm` reads the weights, `attention` the KV) by how much of the sample's interval each
+class's kernels cover on that GPU (`none`: no kernel running).
+
+A step's span is, with `mix.py`'s `x` ranges (`--tp 1`), from the first to the last kernel on the GPU whose launch
+(its CUDA runtime call, by correlation id) falls in the step's range (`method: launch`); without them, the scheduler's
+range itself (`method: scheduler`, sound only with async scheduling off).
 
 Per phase it writes the time, the read rate against `--R` (the card's measured read rate; nsys's percentages are of the
 DRAM's peak, `TARGET_INFO_GPU`'s), the bandwidth left idle, and the modeled registered bytes of its steps (`mix.json`'s
@@ -26,8 +30,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "kv_filler"))
 from step_profile import classify  # noqa: E402
 
 CLASSES = ("gemm", "attention", "other")
-PHASES = ("prefill", "decode", "host", "idle")
+PHASES = ("prefill", "decode", "gap", "idle")
 STEP = re.compile(r"^s(\d+) p(\d+) d(\d+) kv(\d+)$")
+XSTEP = re.compile(r"^x(\d+) p(\d+) d(\d+) kv(\d+)$")
 
 
 def tables(db) -> set[str]:
@@ -102,23 +107,30 @@ def main() -> int:
         print("no `trace` range in the export", file=sys.stderr)
         return 3
     T0, T1 = trace[0]
-    steps = []
-    for s, e, t in rows:
-        m = STEP.match(t or "")
-        if m and s >= T0 and e <= T1:
-            steps.append((s, e, int(m[2]), int(m[3]), int(m[4])))
-    steps.sort()
-    idles = sorted((s, e) for s, e, t in rows if t == "idle" and s >= T0)
-    ranges = sorted([(s, e, "prefill" if p else "decode", i) for i, (s, e, p, _, _) in enumerate(steps)]
-                    + [(s, e, "idle", -1) for s, e in idles])
-    r_start = np.array([r[0] for r in ranges], dtype=np.int64)
-    r_end = np.array([r[1] for r in ranges], dtype=np.int64)
 
-    # kernels by device and class
+    def ranges_of(rx) -> list[tuple]:
+        return sorted((s, e, int(m[2]), int(m[3]), int(m[4])) for s, e, t in rows
+                      if (m := rx.match(t or "")) and s >= T0 and e <= T1)
+
+    xsteps = ranges_of(XSTEP)
+    method = "launch" if xsteps and "CUPTI_ACTIVITY_KIND_RUNTIME" in have else "scheduler"
+    steps = xsteps if method == "launch" else ranges_of(STEP)
+    res["method"] = method
+    idles = sorted((s, e) for s, e, t in rows if t == "idle" and s >= T0)
+    idle_s = np.array([s for s, _ in idles], dtype=np.int64)
+    idle_e = np.array([e for _, e in idles], dtype=np.int64)
+
+    # kernels by device and class, and (launch) by the step their launch falls in
     names = {i: classify(v) for i, v in db.execute(
         "select id, value from StringIds where id in (select distinct demangledName from CUPTI_ACTIVITY_KIND_KERNEL)")}
-    kn = np.array(db.execute("select deviceId, start, end, demangledName from CUPTI_ACTIVITY_KIND_KERNEL "
-                             "where end > ? and start < ?", (T0, T1)).fetchall(), dtype=np.int64).reshape(-1, 4)
+    if method == "launch":
+        q = ("select k.deviceId, k.start, k.end, k.demangledName, coalesce(r.start, -1) from CUPTI_ACTIVITY_KIND_KERNEL k "
+             "left join CUPTI_ACTIVITY_KIND_RUNTIME r on r.correlationId = k.correlationId "
+             "where k.end > ? and k.start < ?")
+    else:
+        q = ("select deviceId, start, end, demangledName, -1 from CUPTI_ACTIVITY_KIND_KERNEL "
+             "where end > ? and start < ?")
+    kn = np.array(db.execute(q, (T0, T1)).fetchall(), dtype=np.int64).reshape(-1, 5)
     kclass = np.array([CLASSES.index(names.get(int(n), "other")) for n in kn[:, 3]], dtype=np.int64)
     devices = sorted(int(d) for d in np.unique(kn[:, 0]))
     cov: dict = {}
@@ -126,6 +138,29 @@ def main() -> int:
         for ci, c in enumerate(CLASSES):
             m = (kn[:, 0] == d) & (kclass == ci)
             cov[d, c] = union(kn[m, 1], kn[m, 2])
+    st_s = np.array([s[0] for s in steps], dtype=np.int64)
+    st_e = np.array([s[1] for s in steps], dtype=np.int64)
+    st_phase = np.array(["prefill" if s[2] else "decode" for s in steps], dtype=object)
+    spans: dict = {}
+    if method == "launch":
+        # a step's span on a GPU: from its first kernel's start to its last's end
+        j = np.searchsorted(st_s, kn[:, 4], side="right") - 1
+        ok = (kn[:, 4] >= 0) & (j >= 0) & (kn[:, 4] < st_e[np.clip(j, 0, None)])
+        res["kernels_outside_steps"] = int((~ok).sum())
+        for d in devices:
+            m = ok & (kn[:, 0] == d)
+            jj = j[m]
+            order = np.argsort(jj, kind="stable")
+            jj, ks, ke = jj[order], kn[m, 1][order], kn[m, 2][order]
+            uj, first = np.unique(jj, return_index=True)
+            s0 = np.minimum.reduceat(ks, first) if len(ks) else ks
+            e0 = np.maximum.reduceat(ke, first) if len(ke) else ke
+            o = np.argsort(s0, kind="stable")
+            uj, s0, e0 = uj[o], s0[o], e0[o]
+            s0 = np.maximum(s0, np.concatenate(([s0[0]], np.maximum.accumulate(e0)[:-1]))) if len(s0) else s0
+            spans[d] = (s0, e0, uj)
+    else:
+        spans[None] = (st_s, st_e, np.arange(len(steps)))
     res["kernels"] = {"count": int(len(kn)), "devices": devices,
                       "names_by_class": {c: sum(1 for n in names.values() if n == c) for c in CLASSES},
                       "seconds_by_class": {c: round(float((kn[kclass == ci, 2] - kn[kclass == ci, 1]).sum()) / 1e9, 3)
@@ -165,12 +200,17 @@ def main() -> int:
         mid = (ts + t_prev) // 2
         rd = col[rid] / 100 * pk * dt / 1e9  # bytes in the sample
         wr = col[wid] / 100 * pk * dt / 1e9 if wid is not None else np.zeros(len(ts))
-        i = np.searchsorted(r_start, mid, side="right") - 1
-        inr = (i >= 0) & (mid < r_end[np.clip(i, 0, None)])
-        phase = np.array(["host"] * len(ts), dtype=object)
-        phase[inr] = [ranges[j][2] for j in i[inr]]
+        sp_s, sp_e, sp_j = spans[dev if method == "launch" else None]
+        i = np.searchsorted(sp_s, mid, side="right") - 1
+        inr = (i >= 0) & (mid < sp_e[np.clip(i, 0, None)])
+        phase = np.full(len(ts), "gap", dtype=object)
         step_of = np.full(len(ts), -1)
-        step_of[inr] = [ranges[j][3] for j in i[inr]]
+        step_of[inr] = sp_j[i[inr]]
+        phase[inr] = st_phase[step_of[inr]]
+        ii = np.searchsorted(idle_s, mid, side="right") - 1
+        inidle = (ii >= 0) & (mid < idle_e[np.clip(ii, 0, None)]) if len(idle_s) else np.zeros(len(ts), dtype=bool)
+        phase[~inr & inidle] = "idle"
+        span_s = dict(zip(sp_j.tolist(), ((sp_e - sp_s) / 1e9).tolist()))
         frac = {}
         if dev is not None:
             for c in CLASSES:
@@ -227,7 +267,7 @@ def main() -> int:
                    else f"decode {'1-4' if d <= 4 else '5-16' if d <= 16 else '17-64' if d <= 64 else '>64'} reqs")
             b = sr.setdefault(key, {"steps": 0, "seconds": 0.0, "read": 0.0})
             b["steps"] += 1
-            b["seconds"] += (e_ - s) / 1e9
+            b["seconds"] += span_s.get(j, (e_ - s) / 1e9)
             b["read"] += float(rd[m].sum())
         out["by_step_kind"] = {k: {"steps": v["steps"], "seconds": round(v["seconds"], 3),
                                    "read_of_R": round(v["read"] / (R * v["seconds"]), 4) if v["seconds"] else None}
