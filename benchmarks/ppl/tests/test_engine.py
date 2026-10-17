@@ -92,6 +92,15 @@ def test_the_adopted_design_passes_every_gate(which, request, ids, calib):
     assert 0 < r["attn_rel_err"]["adopted/s0"] < 0.1
 
 
+def test_q_dithered_attention_passes_every_gate(llama, ids, calib):
+    r = evaluate(llama, ids[:4], ["adopted-qkd"], calib=calib)
+    assert passed(r), r["gates"]
+    cfg = M.Config.read(llama)
+    # P's two blocks per (layer, KV group); Q carries no peel
+    assert r["gates"]["peel"]["checked"] == 2 * cfg.layers * cfg.kv_heads
+    assert abs(ppl(r["nll"]["adopted-qkd/s0"]) / ppl(r["nll"]["bf16/s0"]) - 1) < 0.05
+
+
 def test_linear_variants_pass_their_gates(llama, ids, calib):
     arms = [spec.parse({"linear": [{"step": "rotate", "kind": "h"}, {"step": "int8", "group": 32}]}, "grouped"),
             spec.parse({"linear": [{"step": "smooth", "alpha": 0.5}, {"step": "rotate"},

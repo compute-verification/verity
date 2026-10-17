@@ -302,7 +302,7 @@ def center_keys(mm, nxt):
 
 
 def _check_int8_attention(p):
-    for x in ("k", "v"):
+    for x in ("q", "k", "v"):
         if p[x] not in ("round", "dither"):
             raise ValueError(f"int8.{x} is round or dither")
     if p["v_scale"] not in ("channel", "head"):
@@ -313,17 +313,24 @@ def _check_int8_attention(p):
         raise ValueError("int8: tops within 127")
 
 
-@attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["k"], p["v"]), check=_check_int8_attention)
-def int8_attention(mm, nxt, *, q_top: int = 127, k: str = "round", k_top: int = 127, p_top: int = 127,
-                   p_block: int = 0, p_sink: bool = False, v: str = "round", v_top: int = 127, v_scale: str = "channel"):
-    """Both attention matmuls on one int8 limb. Q, K: one scale per (head, token), Q rounded to [-q_top, q_top], K
-    rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-128, 127), b a fresh bit for
-    every query head). P: after the softmax, one scale per query row, or per (row, block of `p_block` keys), `p_sink`
-    putting key 0 in a block of its own, rounded to [0, p_top], each block's product read and scaled on its own. V: one
-    scale per (KV head, channel) (`v_scale = "head"`: per KV head), rounded or dithered. Products exact in FP32 chunks."""
+@attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["v"]),
+                check=_check_int8_attention)
+def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "round", k_top: int = 127,
+                   p_top: int = 127, p_block: int = 0, p_sink: bool = False, v: str = "round", v_top: int = 127,
+                   v_scale: str = "channel"):
+    """Both attention matmuls on one int8 limb. Q, K: one scale per (head, token), Q rounded to [-q_top, q_top] or
+    dithered, K rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-128, 127), b a
+    fresh bit for every query head; a dithered Q ignores q_top). P: after the softmax, one scale per query row, or per
+    (row, block of `p_block` keys), `p_sink` putting key 0 in a block of its own, rounded to [0, p_top], each block's
+    product read and scaled on its own. V: one scale per (KV head, channel) (`v_scale = "head"`: per KV head), rounded
+    or dithered. Products exact in FP32 chunks."""
     rep = mm.extra["rep"]
     if mm.kind == "qk":
-        qi, sq = quant(mm.x, q_top, -1)
+        if q == "dither":
+            qi, sq = floor_quant(mm.x, -1)
+            qi = qi + mm.coins(qi.shape)
+        else:
+            qi, sq = quant(mm.x, q_top, -1)
 
         def keys():
             kg = mm.weight()

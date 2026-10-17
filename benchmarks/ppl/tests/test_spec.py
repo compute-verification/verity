@@ -14,7 +14,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     want = {"int8-linears": ("linears", "int8-linears", False), "int8-attention": ("attention", "int8-attention", True),
             "int8-all": ("all", "int8-all", True), "adopted-linears": ("linears", "int8-linears", True),
             "adopted-attention": ("attention", "int8-attention", True), "adopted": ("all", "int8-all", True),
-            "adopted-no-smooth": ("all", "int8-all", True)}
+            "adopted-no-smooth": ("all", "int8-all", True), "adopted-qkd": ("all", "int8-all", True)}
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
@@ -36,6 +36,17 @@ def test_the_adopted_design_is_its_two_halves():
     assert akw[3][1] == {"operand": "q", "width": 64, "offset": 0}
     assert akw[4][1] == {"operand": "p", "width": 64, "offset": 64}
     assert a.needs_calib and not att.needs_calib
+
+
+def test_adopted_qkd_is_adopted_with_q_dithered_and_unpeeled():
+    a, q = spec.load("adopted"), spec.load("adopted-qkd")
+    assert q.linear == a.linear
+    akw = [(s.defn.name, s.kw) for s in q.attention]
+    assert [n for n, _ in akw] == ["rotate", "center_keys", "int8", "peel"]
+    assert (akw[2][1]["q"], akw[2][1]["k"], akw[2][1]["v"], akw[2][1]["p_sink"]) == ("dither", "dither", "dither", True)
+    assert akw[3][1] == {"operand": "p", "width": 64, "offset": 64}
+    with pytest.raises(ValueError, match="int8.q is round or dither"):
+        parse('[[attention]]\nstep = "int8"\nq = "peel"')
 
 
 def test_round_trip():
