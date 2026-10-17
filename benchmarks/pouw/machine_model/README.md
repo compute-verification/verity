@@ -23,6 +23,7 @@ uv run machine-model eps --table --upfill --credit floor     # ε a fraction of 
 uv run machine-model eps --table --upfill --credit floor --q 2.16 --lookups   # with QSTAR's table route against L2
 uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
 uv run machine-model eps --table --upfill --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
+uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
 ~~~
 
 | Path | What |
@@ -41,6 +42,7 @@ uv run machine-model eps --table --upfill --credit floor --uni-issue 0.92   # a 
 | `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (QSTAR's, provisional until a DATASHEET row) |
 | `data/designs/NAME.toml` | A protocol's parameters: its honest profile, L, its noise's operand-delivery floor φ_del, the fold and filler (lane instructions a word by class), plain (unfolded) MMAs beside its work, ε_skip's and ε_mand's parts with sources, ε_clock, Theorem S's δ, p and checks, and honest's baseline program (dp4a) |
 | `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
+| `verity_machine_model/capacity.py` | `capacity`: the certified share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity, hidden(n̄) the useful work any program could still add beside the pooled certified load n̄ (the filler workstream, decision 77; note:20261017T0652Z-draft-filler) |
 
 An *epoch* is a state of the census and the attacks, named after the vector that introduced it. A census line or an attack
 holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector re-solves on
