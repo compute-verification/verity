@@ -53,6 +53,8 @@ LEAN_ERROR_RE = re.compile(r"^\s*error: (\S+?\.lean):\d+", re.M)
 KILLED_RC = (129, 137, 143)
 #: what the Lean check says of a process of its own that was killed (`tools/verity/lean/check.py`: the replay, `--fresh`)
 KILLED_SAYS = "not a kernel verdict"
+#: how often drive sweeps the repository's branches (`merge.sweep_branches`)
+BRANCH_SWEEP_S = 86400
 #: what `Driver.culprit` says of a failure that names no file and was a kill
 KILLED = "it was killed (a signal or 128+N) and names no file: a machine's fault"
 #: what it says of one whose files, and the declared inputs of what failed, no PR's change touches: a machine's fault too
@@ -716,6 +718,13 @@ class Driver:
         drive.setdefault("told", [])
         self._drive = drive
         landed = self.land(drive, dry_run)
+        if not dry_run and not q.shadow and self.now() - drive.get("branches_swept", 0) > BRANCH_SWEEP_S:
+            from .merge import sweep_branches
+
+            with authed(q.auth):
+                deleted, archived = sweep_branches(self.repo, "origin", log=q.log)
+            drive["branches_swept"] = self.now()
+            q.log(f"research queue drive: branch sweep: {deleted} deleted (on main), {archived} archived (unmerged, idle)")
         if landed is None and (why := self.held(drive)):
             if not dry_run:
                 q.save_state(state)
