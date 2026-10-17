@@ -14,7 +14,9 @@ an accepting run or fork with its collision (`zkForkEv`, `zkEv₁`) and the mixt
   the record's draw;
 * the self-clash bound, from a live self-clash at `P'`'s outcome giving an accepting run of `P` at `Φ` with a
   collision among the verifier's calls (`ZkClashRun`), by `liveMix_le_Pr`;
-* the fork bounds at `P'`'s strategies (`Adv`'s three and level 0's `Adv₀`) are asked as they are.
+* the fork bounds at `P'`'s strategies (`Adv`'s three and level 0's `Adv₀`) are asked as they are, each at most its
+  fork event's probability and the fork bound's slack at its round (`Claims.Flock.forkSlack`), whose events the
+  escapes merge by round (`Claims.Flock.slackEscW`).
 
 `Φ` may be `zkCoins` with the deployed coins as the tape (`zkSim_of_run`). The strategies send `P`'s roots wherever
 `P'`'s first message is `P`'s and the wire reads roots as the deployed link does (`zkRoot_of_first`). So `ZkSimWJ`
@@ -77,7 +79,9 @@ of the session at C-Flock ZK's padded tables with a finite tape `τ` and coins `
 coins, of uniform law, whose strategies send `P`'s roots (`zkRoot`), that simulates `P`'s accepting runs at `Φ`
 (`ZkSimRun`), and at each table `j` and table of full-width columns, whose live self-clashes give `P`'s accepting runs
 with a collision there (`ZkClashRun`) and whose strategies' fork bounds after `Commit` at the deployed decoders right
-at `OkOffWJ` are no more than an accepting fork's with a collision (`zkForkEv`). -/
+at `OkOffWJ` are no more than an accepting fork's with a collision (`zkForkEv`) and the slack of the fork at its round
+(`Claims.Flock.forkSlack` at `δ ≥ 0`), where only level 0's event of a table is at round `0` and the slack fits the
+masked weight's room (`Claims.Flock.SlackFitW`). -/
 def ZkSimWJ (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -87,7 +91,10 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (d : Lean.Json) (hd : ins.read.draw = some d) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
     ∃ (rd : (j : ℕ) → Claims.Flock.IZW (zkTabs h0 L hz hk hlay j).sch.levels.length → Fin ((V true).k x))
-      (_ : ∀ j, Function.Injective (rd j)),
+      (_ : ∀ j, Function.Injective (rd j)) (_ : ∀ j i, (rd j i).val = 0 → i = .inr ()) (δ : ℕ → ℝ)
+      (_ : ∀ t, 0 ≤ δ t)
+      (_ : Claims.Flock.SlackFitW (tables true x).length (fun j => (zkTabs h0 L hz hk hlay j).sch)
+        (fun j => (zkTabs h0 L hz hk hlay j).N) rd δ),
       ∀ ω, ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
         (w : Claims.Msg → Wire 65536 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts)
         (τ : Type) (_ : Fintype τ) (_ : Nonempty τ) (P' : Claims.Prover (Ω × τ))
@@ -115,8 +122,9 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
                   (liveStrat (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length)
                     (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) (hσ u) (finJ (zkTabs h0 L hz hk hlay) hj)
                   (tabsJ_get _ _ _))) / Fintype.card τ ≤
-              Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-                zkForkEv P x (rd j (.inl (.inl (r, ℓ)))) ω s.1 s.2) ∧
+              (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+                zkForkEv P x (rd j (.inl (.inl (r, ℓ)))) ω s.1 s.2) +
+                Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inl (.inl (r, ℓ)))).val ω) ∧
             (∀ r : Fin 2, (∑ u, advPadsSZ execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _
                 (Exec.capOfRoot (zkRoot P x ω)[j]!) r.val
                 (simAtJZ execArith ZkExec.hs512 _ (OkOffWJ (tabsJ _ (zkTabs h0 L hz hk hlay)) j (zkRoot P x ω) C)
@@ -126,8 +134,9 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
                   (liveStrat (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length)
                     (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) (hσ u) (finJ (zkTabs h0 L hz hk hlay) hj)
                   (tabsJ_get _ _ _))) / Fintype.card τ ≤
-              Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-                zkForkEv P x (rd j (.inl (.inr (.inl r)))) ω s.1 s.2) ∧
+              (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+                zkForkEv P x (rd j (.inl (.inr (.inl r)))) ω s.1 s.2) +
+                Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inl (.inr (.inl r)))).val ω) ∧
             (∀ r : Fin 2, (∑ u, advTauSZ execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _
                 (Exec.capOfRoot (zkRoot P x ω)[j]!) r.val
                 (simAtJZ execArith ZkExec.hs512 _ (OkOffWJ (tabsJ _ (zkTabs h0 L hz hk hlay)) j (zkRoot P x ω) C)
@@ -137,8 +146,9 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
                   (liveStrat (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length)
                     (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) (hσ u) (finJ (zkTabs h0 L hz hk hlay) hj)
                   (tabsJ_get _ _ _))) / Fintype.card τ ≤
-              Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-                zkForkEv P x (rd j (.inl (.inr (.inr r)))) ω s.1 s.2) ∧
+              (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+                zkForkEv P x (rd j (.inl (.inr (.inr r)))) ω s.1 s.2) +
+                Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inl (.inr (.inr r)))).val ω) ∧
             ((∑ u, adv₀SZ execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _
                 (Exec.capOfRoot (zkRoot P x ω)[j]!)
                 (simAtJZ execArith ZkExec.hs512 _ (OkOffWJ (tabsJ _ (zkTabs h0 L hz hk hlay)) j (zkRoot P x ω) C)
@@ -148,16 +158,17 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
                   (liveStrat (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length)
                     (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) (hσ u) (finJ (zkTabs h0 L hz hk hlay) hj)
                   (tabsJ_get _ _ _))) / Fintype.card τ ≤
-              Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-                zkForkEv P x (rd j (.inr ())) ω s.1 s.2)
+              (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+                zkForkEv P x (rd j (.inr ())) ω s.1 s.2) +
+                Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inr ())).val ω)
 
 /-- **A simulator gives the masked live sessions' bound at the deployed decoders off the table on a witness lane**:
 the events an accepting fork or run with its collision, the first bound by `zk_first_of_sim`, the self-clash bound by
 `liveMix_le_Pr`, the fork bounds as `ZkSimWJ` gives them. -/
 theorem zkXferWJ_of_simWJ {x : Claims.Msg} (hx : ZkSimWJ x) : ZkXferWJ x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω _ _ P
-  obtain ⟨rd, hrd, hω⟩ := hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
-  refine ⟨rd, hrd, fun j i => zkForkEv P x (rd j i), fun _ => zkEv₁ P x, fun _ _ _ _ _ he => he.2.2,
+  obtain ⟨rd, hrd, hr0, δ, hδ, hfit, hω⟩ := hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
+  refine ⟨rd, hrd, hr0, δ, hδ, hfit, fun j i => zkForkEv P x (rd j i), fun _ => zkEv₁ P x, fun _ _ _ _ _ he => he.2.2,
     fun _ _ _ he => he.2, fun _ _ _ _ _ he => ⟨he.1, he.2.1⟩, fun _ _ _ he => he.1, fun ω j hj C hC => ?_⟩
   obtain ⟨N, dg, w, τ, _, _, P', Φ, hΦ, hσ, hrun, hj'⟩ := hω ω
   obtain ⟨hsc, hRS, hPads, hTau, h₀⟩ := hj' j hj C hC

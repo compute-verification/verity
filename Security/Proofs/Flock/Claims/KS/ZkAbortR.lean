@@ -224,10 +224,12 @@ theorem tableBoundθAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Co
       refine (Ex_mono fun g => Pr_mono fun s hs => ?_).trans
         (Pr_fork_refDraw_le (e.j i) (fun d d' => TiedColl H ((abortRun H P D.V x keep ω d).vLog ++
           (abortRun H P D.V x keep ω d').vLog)) fun d d' h => TiedColl.of_dup h _)
-      obtain ⟨h1, h2⟩ := hon i (ω, g) s.1 s.2 hs
-      have ht := e.tied i (ω, g) s.1 s.2 hs
-      rw [(hrun ω g _).2 h1, (hrun ω g _).2 h2] at ht
-      exact ht
+      obtain ⟨h1, h2 | h2⟩ := hon i (ω, g) s.1 s.2 hs
+      · have ht := e.tied i (ω, g) s.1 s.2 hs
+        rw [(hrun ω g _).2 h1, (hrun ω g _).2 h2] at ht
+        exact ht
+      · rw [(hrun ω g _).2 h1] at h2
+        exact h2.append_right _
     · rw [Ex_mul_left]
       refine mul_le_mul_of_nonneg_left ?_ (e.β_nonneg l)
       refine (Ex_mono fun g => Pr_mono fun r hr => ?_).trans
