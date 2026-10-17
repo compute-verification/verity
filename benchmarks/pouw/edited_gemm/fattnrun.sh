@@ -5,8 +5,8 @@
 # apv's at APV_GATES (s = 16,384: Ycum's third limb Y2, judged by apv_ref.py on the CPU beside lease 2). Only if every
 # fattn gate and fattn_ref.py pass, lease 2 times FA_ARMS at FA_BENCH, the four linears (cgemm.cu's plain, plainq, c_l7qs
 # and cedited:c_l7qs at LIN_M tokens), plain attention (flash_ref.py: torch SDPA, bf16, causal, GQA) at FLASH_SHAPES,
-# and ncu's sections on FA_NCU at FA_NCU_SHAPES (out/ncu/, read by eps_profile.py, whose TOML ends the run). Clocks are
-# read, never set.
+# and ncu's sections on FA_NCU at FA_NCU_SHAPES (out/ncu/, read by eps_profile.py, whose TOML ends the run); with
+# FA_GATES_ONLY set, the run ends after the gates. Clocks are read, never set.
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=BC-KERNEL \
 #     -- bash benchmarks/pouw/edited_gemm/fattnrun.sh
 set -uo pipefail
@@ -86,6 +86,7 @@ if grep -q 'rc [1-9]' "$O/rc.txt"; then
   mkdir -p "$O/gates" && cp -r "$W"/f1k "$O/gates/" 2>/dev/null
   exit 5
 fi
+[ -n "${FA_GATES_ONLY:-}" ] && { echo "FA_GATES_ONLY: nothing timed"; exit 0; }
 apv_dirs=""
 for g in $APV_GATES; do apv_dirs="$apv_dirs $W/${g%%:*}"; done
 # shellcheck disable=SC2086
