@@ -13,8 +13,9 @@ session's words `sw` at its coins `sc`), its `SrcOK` with neither tie as a hypot
 
 * `hst`: `srcSparseTie_of_copies` at `repsOfVals stp sh rep vals`, which is `srcOK_holo_held`'s source, since
   `repsOfVals` writes the reps' steps and openings and `sparseOf` the sparse stages (`repsOfVals_sparseOf`, `rfl`). Its
-  `h` conjunct is `srcHTie_checked`'s, from the named `HCols` and `HAlgRows`, and `hss'` is `sparseStagesAt_sparseOf`'s
-  at the same sessions;
+  `h` conjunct is `srcHTie_checked`'s, from `HCols` and `HAlgRows`, taken here as `hcols` and `hHA`
+  (`FlockC3.Sparse.hCols_of_check` and `FlockC3.Reps.hAlgRows_of_res` prove them), and `hss'` is
+  `sparseStagesAt_sparseOf`'s at the same sessions;
 * `RepUnitOfAlg` from its four parts (`repUnitOfAlg_of_parts`): `srcOK_holo_held`'s `hpr`, `hsv` and `hf`, and
   `StepsOfVals` from them and the values' cap (`hcap`: `stepsOfVals_repsOfVals`, `stepsOfVals_norm_repsOfVals`), so
   `hrt` is `srcRepTie_of_alg`'s;
