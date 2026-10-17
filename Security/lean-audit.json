@@ -4659,6 +4659,9 @@
   "Pouw.SecurityProofs.Receipt.DuoPairNoKernel": {
    "owner": "@compute-accounting"
   },
+  "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel": {
    "owner": "@compute-accounting"
   },
@@ -4838,6 +4841,10 @@
    },
    "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel": {
     "function": "Pouw.Receipt.duoTriple",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel": {
+    "function": "Pouw.Receipt.duoQuad",
     "outcome": "none"
    }
   },

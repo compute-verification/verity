@@ -37,4 +37,11 @@ def duoTriple {n : ℕ} (k₁ a₁ : BitVec n) (r₁ : ℕ) (k₂ a₂ : BitVec 
     (d : BitVec n × BitVec n × BitVec n) (s : BitVec n × BitVec n) : BitVec n × BitVec n :=
   duoPair k₂ a₂ r₂ k₃ a₃ r₃ d.2 (duoWord k₁ a₁ r₁ s d.1)
 
+/-- Four words `d = (d₁, d₂, d₃, d₄)` from the state `s`, with keys `(kᵢ, aᵢ, rᵢ)` for word `i`: the first word, then the
+triple. -/
+def duoQuad {n : ℕ} (k₁ a₁ : BitVec n) (r₁ : ℕ) (k₂ a₂ : BitVec n) (r₂ : ℕ) (k₃ a₃ : BitVec n) (r₃ : ℕ)
+    (k₄ a₄ : BitVec n) (r₄ : ℕ) (d : BitVec n × BitVec n × BitVec n × BitVec n) (s : BitVec n × BitVec n) :
+    BitVec n × BitVec n :=
+  duoTriple k₂ a₂ r₂ k₃ a₃ r₃ k₄ a₄ r₄ d.2 (duoWord k₁ a₁ r₁ s d.1)
+
 end Pouw.Receipt

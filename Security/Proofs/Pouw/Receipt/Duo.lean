@@ -5,7 +5,7 @@ import Mathlib.Data.Nat.Prime.Basic
 import Mathlib.Tactic.LinearCombination
 
 /-!
-# duo's words are bound: one word, and runs of two and three words at every state
+# duo's words are bound: one word, and runs of two, three and four words at every state
 
 One word: `d ↦ u = y ⊕ d ⊕ k` is a bijection and `u ↦ u·a + z` is injective for odd `a`.
 
@@ -23,6 +23,15 @@ so the top bits of `y + δ` and `y` differ by the same bit for every `y`, which 
 `y = t − 1`), so `c₁ ∈ {0, t}`. With `c₁ = t` the start states
 `(u₁, z) = (0, 0)` and `(t, t)` give the same `y₁` and `y₁′` and `z₂ − z₂′` apart by `2·2^(r₁−1) ≠ 0`. So `c₁ = 0`, the
 first word is shared, one word's map on states is a bijection, and the two-word theorem binds the rest.
+
+Four words: equal final states force equal `z₃`, and the same top-bit shift gives `c₁ ∈ {0, t}`; `c₁ = 0` leaves the
+three-word theorem. With `c₁ = t`, write the start state through `X = rotl(u₁, r₁)` and `w = y₁`: the runs' states after
+word 1 are `(w, X + w)` and `(w + t, (X ⊕ 2^(r₁−1)) + w + t)`. Moving `X` by `t` moves both `z₁` by `t`, so `u₃` and
+`u₃′` have equal top bits for every `X` and `w`. At fixed `u₂` (`w = u₂ ⊕ d₂ ⊕ k₂`), that says the top bit of `B + X`,
+with `B = u₂·a₂ + (u₂ ⊕ d₂ ⊕ k₂)`, and the top bit of `B + K + t + (X ⊕ 2^(r₁−1))`, for a `K` fixed by `u₂`, differ by
+one constant for every `X`. Unless `B ≡ 0 (mod 2^r₁)`, four values of `X` around the half-blocks of `2^r₁` give both
+values of that constant (`carry_bv`, for `r₁ ≤ n − 3`). So `B ≡ 0` for every `u₂`: at `u₂ = 0`, `d₂ ⊕ k₂ ≡ 0`, and at
+`u₂ = 1`, `a₂ + 1 ≡ 0 (mod 2^r₁)`, which the hypothesis on `a₂` rules out.
 -/
 
 namespace Pouw.ReceiptProofs
@@ -364,6 +373,27 @@ theorem msb_add_const {n : ℕ} (hn : 0 < n) (δ : BitVec n)
     apply BitVec.eq_of_toNat_eq
     rw [ht, BitVec.toNat_twoPow, Nat.mod_eq_of_lt (Nat.pow_lt_pow_right (by norm_num) (by omega))]
 
+/-- The first words' difference is `0` or `t` when the next word's `u` keeps its top bit on every start state. -/
+theorem xor_eq_zero_or_top {n : ℕ} (hn : 0 < n) {a : BitVec n} (ha : a.toNat % 2 = 1) (c d₂ e₂ k₂ : BitVec n)
+    (M : ∀ u z : BitVec n, ((u * a + z) ^^^ d₂ ^^^ k₂).getLsbD (n - 1) =
+      (((u ^^^ c) * a + z) ^^^ e₂ ^^^ k₂).getLsbD (n - 1)) :
+    c = 0 ∨ c = BitVec.twoPow n (n - 1) := by
+  have m0 := M 0 0
+  have m1 := M 0 (BitVec.ofNat n (2 ^ (n - 1) - 1))
+  have hb0 : (BitVec.ofNat n (2 ^ (n - 1) - 1)).getLsbD (n - 1) = false := by
+    simp [BitVec.getLsbD_ofNat, Nat.testBit_two_pow_sub_one]
+  simp only [BitVec.ofNat_eq_ofNat, BitVec.zero_mul, BitVec.zero_add, BitVec.add_zero, BitVec.zero_xor,
+    BitVec.getLsbD_xor, hb0, Bool.false_xor] at m0 m1
+  have hm := m0.symm.trans m1
+  simp only [Bool.xor_left_inj] at hm
+  rcases msb_add_const hn _ hm.symm with h0 | ht
+  · left
+    apply mul_odd_cancel ha
+    rw [h0, zero_mul]
+  · right
+    apply mul_odd_cancel ha
+    rw [ht, top_mul_odd hn ha]
+
 /-- Three words: the final state on every start state determines all three words. -/
 theorem duoTriple_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : Rotation n) (k₂ : BitVec n)
     (a₂ : OddKey n) (r₂ : Rotation n) (k₃ a₃ : BitVec n) (r₃ : ℕ) :
@@ -406,22 +436,7 @@ theorem duoTriple_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ 
     have hbit := getLsbD_of_xor_twoPow_sub (by omega) hd
     rwa [getLsbD_rotateLeft_pred hq0 hqn, getLsbD_rotateLeft_pred hq0 hqn] at hbit
   -- so y₁′ − y₁ = c₁·a at u = 0 is 0 or t, and c₁ is 0 or t
-  have hc : d₁ ^^^ e₁ = 0 ∨ d₁ ^^^ e₁ = BitVec.twoPow n (n - 1) := by
-    have m0 := M 0 0
-    have m1 := M 0 (BitVec.ofNat n (2 ^ (n - 1) - 1))
-    have hb0 : (BitVec.ofNat n (2 ^ (n - 1) - 1)).getLsbD (n - 1) = false := by
-      simp [BitVec.getLsbD_ofNat, Nat.testBit_two_pow_sub_one]
-    simp only [BitVec.ofNat_eq_ofNat, BitVec.zero_mul, BitVec.zero_add, BitVec.add_zero, BitVec.zero_xor,
-      BitVec.getLsbD_xor, hb0, Bool.false_xor] at m0 m1
-    have hm := m0.symm.trans m1
-    simp only [Bool.xor_left_inj] at hm
-    rcases msb_add_const hn _ hm.symm with h0 | ht
-    · left
-      apply mul_odd_cancel ha
-      rw [h0, zero_mul]
-    · right
-      apply mul_odd_cancel ha
-      rw [ht, top_mul_odd hn ha]
+  have hc := xor_eq_zero_or_top hn ha (d₁ ^^^ e₁) d₂ e₂ k₂ M
   have hct : d₁ ^^^ e₁ ≠ BitVec.twoPow n (n - 1) := by
     intro hct
     -- u = 0, z = 0 and u = t, z = t give the same y₁ = 0 and y₁′ = t, and z₂ − z₂′ differs by 2·2^(r−1)
@@ -446,5 +461,334 @@ theorem duoTriple_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ 
   have h23 := duoPair_injective k₂ ⟨b, hb⟩ ⟨q, hq0, hqn⟩ k₃ a₃ r₃ hpair
   simp only [Prod.mk.injEq] at h23 ⊢
   exact ⟨trivial, h23⟩
+
+theorem mod_facts (x M : ℕ) (h : x < 3 * M) :
+    (x < M → x % M = x) ∧ (M ≤ x → x < 2 * M → x % M = x - M) ∧ (2 * M ≤ x → x % M = x - 2 * M) := by
+  refine ⟨fun h1 => Nat.mod_eq_of_lt h1, fun h1 h2 => ?_, fun h1 => ?_⟩
+  · rw [Nat.mod_eq_sub_mod h1, Nat.mod_eq_of_lt (by omega)]
+  · rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega)]
+    omega
+
+/-- One witness: a start value `V` below `N` (top bit clear), so the top bit after adding `δ` is `μ`. -/
+theorem witness_top {N V δ : ℕ} {μ : Bool} (hV : V < N) (hδ : δ < 2 * N)
+    (h : (decide (N ≤ V) ^^ decide (N ≤ (V + δ) % (2 * N))) = μ) :
+    (N ≤ V + δ ∧ V + δ < 2 * N) ↔ μ = true := by
+  have f := mod_facts (V + δ) (2 * N) (by omega)
+  rw [show decide (N ≤ V) = false from decide_eq_false (by omega), Bool.false_xor] at h
+  subst h
+  rw [decide_eq_true_iff]
+  omega
+
+/-- The carry step over half-blocks, in ℕ: `N = 2^(n−1)`, `m = 2^(r−1)`, a start offset `ρ ∈ [1, 2m)` below the
+half-block period `2m`, and steps `δ₀`, `δ₁ = δ₀ − 2m (mod 2N)`. Over the start values `ρ + c` with bit `r − 1` of `c`
+clear (step `δ₀`) and set (step `δ₁`), the top bit after the step can't be one constant. -/
+theorem carry_core (N m ρ δ₀ δ₁ : ℕ) (μ : Bool) (hm : 1 ≤ m) (hN : 8 * m ≤ N) (hρ1 : 1 ≤ ρ) (hρ2 : ρ < 2 * m)
+    (hδ₀ : δ₀ < 2 * N) (hδ₁ : δ₁ < 2 * N) (hδ : δ₁ + 2 * m = δ₀ ∨ δ₁ + 2 * m = δ₀ + 2 * N) (hdiv : 2 * m ∣ N)
+    (H0 : ∀ A i, 2 * m ∣ A → i < m → A + i + m < 2 * N →
+      (decide (N ≤ (ρ + (A + i)) % (2 * N)) ^^ decide (N ≤ ((ρ + (A + i)) % (2 * N) + δ₀) % (2 * N))) = μ)
+    (H1 : ∀ A i, 2 * m ∣ A → i < m → A + m + i < 2 * N →
+      (decide (N ≤ (ρ + (A + m + i)) % (2 * N)) ^^ decide (N ≤ ((ρ + (A + m + i)) % (2 * N) + δ₁) % (2 * N))) = μ) :
+    False := by
+  have d0 : 2 * m ∣ 0 := dvd_zero _
+  have d1 : 2 * m ∣ N - 2 * m := Nat.dvd_sub hdiv (dvd_refl _)
+  have d2 : 2 * m ∣ N - 4 * m :=
+    Nat.dvd_sub hdiv (by rw [show 4 * m = 2 * m * 2 by omega]; exact dvd_mul_right _ _)
+  have d3 : 2 * m ∣ 2 * N - 2 * m := Nat.dvd_sub (dvd_mul_of_dvd_right hdiv 2) (dvd_refl _)
+  rcases lt_trichotomy ρ m with hlt | heq | hgt
+  · have w1 := H0 0 0 d0 (by omega) (by omega)
+    have w2 := H0 (N - 2 * m) (m - 1) d1 (by omega) (by omega)
+    have w3 := H1 (2 * N - 2 * m) (m - ρ) d3 (by omega) (by omega)
+    have w4 := H1 (N - 2 * m) 0 d1 (by omega) (by omega)
+    rw [show (ρ + (0 + 0)) % (2 * N) = ρ by rw [Nat.mod_eq_of_lt (by omega)]; omega] at w1
+    rw [show (ρ + (N - 2 * m + (m - 1))) % (2 * N) = ρ + N - m - 1 by rw [Nat.mod_eq_of_lt (by omega)]; omega] at w2
+    rw [show (ρ + (2 * N - 2 * m + m + (m - ρ))) % (2 * N) = 0 by
+      rw [show ρ + (2 * N - 2 * m + m + (m - ρ)) = 2 * N by omega, Nat.mod_self]] at w3
+    rw [show (ρ + (N - 2 * m + m + 0)) % (2 * N) = ρ + N - m by rw [Nat.mod_eq_of_lt (by omega)]; omega] at w4
+    have e1 := witness_top (by omega) hδ₀ w1
+    have e2 := witness_top (by omega) hδ₀ w2
+    have e3 := witness_top (by omega) hδ₁ w3
+    have e4 := witness_top (by omega) hδ₁ w4
+    cases μ <;> simp only [Bool.false_eq_true, iff_false, iff_true] at e1 e2 e3 e4 <;> omega
+  · subst heq
+    have w1 := H0 0 0 d0 (by omega) (by omega)
+    have w2 := H0 (N - 2 * ρ) (ρ - 1) d1 (by omega) (by omega)
+    have w3 := H1 (2 * N - 2 * ρ) 0 d3 (by omega) (by omega)
+    have w4 := H1 (N - 4 * ρ) (ρ - 1) d2 (by omega) (by omega)
+    rw [show (ρ + (0 + 0)) % (2 * N) = ρ by rw [Nat.mod_eq_of_lt (by omega)]; omega] at w1
+    rw [show (ρ + (N - 2 * ρ + (ρ - 1))) % (2 * N) = N - 1 by rw [Nat.mod_eq_of_lt (by omega)]; omega] at w2
+    rw [show (ρ + (2 * N - 2 * ρ + ρ + 0)) % (2 * N) = 0 by
+      rw [show ρ + (2 * N - 2 * ρ + ρ + 0) = 2 * N by omega, Nat.mod_self]] at w3
+    rw [show (ρ + (N - 4 * ρ + ρ + (ρ - 1))) % (2 * N) = N - ρ - 1 by rw [Nat.mod_eq_of_lt (by omega)]; omega] at w4
+    have e1 := witness_top (by omega) hδ₀ w1
+    have e2 := witness_top (by omega) hδ₀ w2
+    have e3 := witness_top (by omega) hδ₁ w3
+    have e4 := witness_top (by omega) hδ₁ w4
+    cases μ <;> simp only [Bool.false_eq_true, iff_false, iff_true] at e1 e2 e3 e4 <;> omega
+  · have w1 := H0 (2 * N - 2 * m) (2 * m - ρ) d3 (by omega) (by omega)
+    have w2 := H0 (N - 2 * m) 0 d1 (by omega) (by omega)
+    have w3 := H1 (2 * N - 2 * m) 0 d3 (by omega) (by omega)
+    have w4 := H1 (N - 4 * m) (m - 1) d2 (by omega) (by omega)
+    rw [show (ρ + (2 * N - 2 * m + (2 * m - ρ))) % (2 * N) = 0 by
+      rw [show ρ + (2 * N - 2 * m + (2 * m - ρ)) = 2 * N by omega, Nat.mod_self]] at w1
+    rw [show (ρ + (N - 2 * m + 0)) % (2 * N) = ρ + N - 2 * m by rw [Nat.mod_eq_of_lt (by omega)]; omega] at w2
+    rw [show (ρ + (2 * N - 2 * m + m + 0)) % (2 * N) = ρ - m by
+      rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega)]; omega] at w3
+    rw [show (ρ + (N - 4 * m + m + (m - 1))) % (2 * N) = ρ + N - 2 * m - 1 by
+      rw [Nat.mod_eq_of_lt (by omega)]; omega] at w4
+    have e1 := witness_top (by omega) hδ₀ w1
+    have e2 := witness_top (by omega) hδ₀ w2
+    have e3 := witness_top (by omega) hδ₁ w3
+    have e4 := witness_top (by omega) hδ₁ w4
+    cases μ <;> simp only [Bool.false_eq_true, iff_false, iff_true] at e1 e2 e3 e4 <;> omega
+
+theorem getLsbD_add_of_mod {n r j : ℕ} (hj : j < r) (hr : r ≤ n) {Z : BitVec n} (hZ : Z.toNat % 2 ^ r = 0)
+    (Y : BitVec n) : (Z + Y).getLsbD j = Y.getLsbD j := by
+  rw [← BitVec.testBit_toNat, ← BitVec.testBit_toNat, BitVec.toNat_add]
+  have key : ∀ x : ℕ, x.testBit j = (x % 2 ^ r).testBit j := by
+    intro x
+    rw [Nat.testBit_mod_two_pow]
+    simp [hj]
+  rw [key, key Y.toNat, Nat.mod_mod_of_dvd _ (Nat.pow_dvd_pow 2 hr), Nat.add_mod, hZ, Nat.zero_add, Nat.mod_mod]
+
+theorem testBit_pred_of_dvd {r A i : ℕ} (h1 : 1 ≤ r) (hA : 2 ^ r ∣ A) (hi : i < 2 ^ r) :
+    (A + i).testBit (r - 1) = i.testBit (r - 1) := by
+  obtain ⟨q, rfl⟩ := hA
+  rw [Nat.testBit_two_pow_mul_add q hi]
+  simp [show r - 1 < r by omega]
+
+/-- The carry step over half-blocks: if adding `K + t` and flipping bit `r − 1` changes the top bit of `B + X` by one
+constant for every `X`, then `B ≡ 0 (mod 2^r)`, for `1 ≤ r ≤ n − 3`. -/
+theorem carry_bv {n r : ℕ} (h1 : 1 ≤ r) (h3 : r + 3 ≤ n) (B K : BitVec n) (μ : Bool)
+    (h : ∀ X : BitVec n,
+      ((B + X).msb ^^ (B + K + BitVec.twoPow n (n - 1) + (X ^^^ BitVec.twoPow n (r - 1))).msb) = μ) :
+    B.toNat % 2 ^ r = 0 := by
+  by_contra hρ0
+  have hn : 0 < n := by omega
+  have hP : 2 ^ r = 2 * 2 ^ (r - 1) := by rw [← Nat.pow_succ']; congr 1; omega
+  have h2n : 2 ^ n = 2 * 2 ^ (n - 1) := by rw [← Nat.pow_succ']; congr 1; omega
+  have hN : 8 * 2 ^ (r - 1) ≤ 2 ^ (n - 1) := by
+    have : 2 ^ (r + 2) ≤ 2 ^ (n - 1) := Nat.pow_le_pow_right (by norm_num) (by omega)
+    rw [pow_add] at this
+    rw [hP] at this
+    omega
+  have hm : 1 ≤ 2 ^ (r - 1) := Nat.one_le_two_pow
+  have hdiv : 2 * 2 ^ (r - 1) ∣ 2 ^ (n - 1) := by
+    rw [← hP]; exact Nat.pow_dvd_pow 2 (by omega)
+  have hrn : 2 ^ r ≤ 2 ^ n := Nat.pow_le_pow_right (by norm_num) (by omega)
+  obtain ⟨ρ, hρdef⟩ : ∃ x, x = B.toNat % 2 ^ r := ⟨_, rfl⟩
+  rw [← hρdef] at hρ0
+  have hρlt : ρ < 2 ^ r := hρdef ▸ Nat.mod_lt _ (Nat.two_pow_pos r)
+  obtain ⟨Z, hZdef⟩ : ∃ Z, Z = BitVec.ofNat n ρ - B := ⟨_, rfl⟩
+  have hBZ : B + Z = BitVec.ofNat n ρ := by rw [hZdef]; linear_combination
+  have hZ : Z.toNat % 2 ^ r = 0 := by
+    have e := congrArg BitVec.toNat hBZ
+    rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : ρ < 2 ^ n)] at e
+    have e2 := congrArg (· % 2 ^ r) e
+    rw [Nat.mod_mod_of_dvd _ (Nat.pow_dvd_pow 2 (by omega : r ≤ n)), Nat.add_mod, ← hρdef,
+      Nat.mod_eq_of_lt hρlt] at e2
+    have hz := Nat.mod_lt Z.toNat (Nat.two_pow_pos r)
+    have f := mod_facts (ρ + Z.toNat % 2 ^ r) (2 ^ r) (by omega)
+    omega
+  have tpn : (BitVec.twoPow n (r - 1)).toNat = 2 ^ (r - 1) := by
+    rw [BitVec.toNat_twoPow, Nat.mod_eq_of_lt (Nat.pow_lt_pow_right (by norm_num) (by omega))]
+  obtain ⟨Δ₀, hΔ₀⟩ : ∃ D, D = K + BitVec.twoPow n (n - 1) + BitVec.twoPow n (r - 1) := ⟨_, rfl⟩
+  obtain ⟨Δ₁, hΔ₁⟩ : ∃ D, D = K + BitVec.twoPow n (n - 1) - BitVec.twoPow n (r - 1) := ⟨_, rfl⟩
+  have hδ : Δ₁.toNat + 2 * 2 ^ (r - 1) = Δ₀.toNat ∨ Δ₁.toNat + 2 * 2 ^ (r - 1) = Δ₀.toNat + 2 * 2 ^ (n - 1) := by
+    have e : Δ₀ = Δ₁ + BitVec.twoPow n (r - 1) + BitVec.twoPow n (r - 1) := by
+      rw [hΔ₀, hΔ₁]; linear_combination
+    have e2 : Δ₀.toNat = (Δ₁.toNat + 2 ^ (r - 1) + 2 ^ (r - 1)) % 2 ^ n := by
+      rw [e, BitVec.toNat_add, BitVec.toNat_add, tpn, Nat.mod_add_mod]
+    have := Δ₁.isLt
+    have f := mod_facts (Δ₁.toNat + 2 ^ (r - 1) + 2 ^ (r - 1)) (2 ^ n) (by omega)
+    omega
+  have hρ1 : 1 ≤ ρ := Nat.one_le_iff_ne_zero.mpr hρ0
+  have sum_toNat : ∀ v : ℕ, v < 2 ^ n → (B + (Z + BitVec.ofNat n v)).toNat = (ρ + v) % (2 * 2 ^ (n - 1)) := by
+    intro v hv
+    rw [← add_assoc, hBZ, BitVec.toNat_add, BitVec.toNat_ofNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hv,
+      Nat.mod_eq_of_lt (by omega : ρ < 2 ^ n), h2n]
+  apply carry_core (2 ^ (n - 1)) (2 ^ (r - 1)) ρ Δ₀.toNat Δ₁.toNat μ hm hN hρ1 (by omega)
+    (by have := Δ₀.isLt; omega) (by have := Δ₁.isLt; omega) hδ hdiv
+  · intro A i hA hi hAi
+    have hbit : (Z + BitVec.ofNat n (A + i)).getLsbD (r - 1) = false := by
+      rw [getLsbD_add_of_mod (by omega) (by omega) hZ, BitVec.getLsbD_ofNat,
+        testBit_pred_of_dvd h1 (by rwa [hP]) (by omega), Nat.testBit_lt_two_pow hi]
+      simp
+    have e := h (Z + BitVec.ofNat n (A + i))
+    rw [xor_twoPow_of_false hbit,
+      show B + K + BitVec.twoPow n (n - 1) + (Z + BitVec.ofNat n (A + i) + BitVec.twoPow n (r - 1)) =
+        (B + (Z + BitVec.ofNat n (A + i))) + Δ₀ by rw [hΔ₀]; linear_combination,
+      BitVec.msb_eq_decide, BitVec.msb_eq_decide, BitVec.toNat_add (B + _), sum_toNat _ (by omega), h2n] at e
+    exact e
+  · intro A i hA hi hAi
+    have hbit : (Z + BitVec.ofNat n (A + 2 ^ (r - 1) + i)).getLsbD (r - 1) = true := by
+      rw [getLsbD_add_of_mod (by omega) (by omega) hZ, BitVec.getLsbD_ofNat, add_assoc,
+        testBit_pred_of_dvd h1 (by rwa [hP]) (by omega), Nat.testBit_two_pow_add_eq, Nat.testBit_lt_two_pow hi]
+      simp [show r - 1 < n by omega]
+    have e := h (Z + BitVec.ofNat n (A + 2 ^ (r - 1) + i))
+    rw [xor_twoPow_of_true (by omega) hbit,
+      show B + K + BitVec.twoPow n (n - 1) + (Z + BitVec.ofNat n (A + 2 ^ (r - 1) + i) - BitVec.twoPow n (r - 1)) =
+        (B + (Z + BitVec.ofNat n (A + 2 ^ (r - 1) + i))) + Δ₁ by rw [hΔ₁]; linear_combination,
+      BitVec.msb_eq_decide, BitVec.msb_eq_decide, BitVec.toNat_add (B + _), sum_toNat _ (by omega), h2n] at e
+    exact e
+
+theorem duoWord_add_snd {n : ℕ} (k a : BitVec n) (r : ℕ) (y z δ d : BitVec n) :
+    duoWord k a r (y, z + δ) d = ((duoWord k a r (y, z) d).1 + δ, (duoWord k a r (y, z) d).2 + δ) := by
+  simp only [duoWord, Prod.mk.injEq]
+  constructor <;> linear_combination
+
+theorem duoWord_add_top {n : ℕ} (hn : 0 < n) (k a : BitVec n) (ha : a.toNat % 2 = 1) (r : ℕ) (y z d : BitVec n) :
+    duoWord k a r (y + BitVec.twoPow n (n - 1), z + BitVec.twoPow n (n - 1)) d =
+      ((duoWord k a r (y, z) d).1, (duoWord k a r (y, z) d).2 +
+        (((y ^^^ d ^^^ k) ^^^ BitVec.twoPow n (n - 1)).rotateLeft r - (y ^^^ d ^^^ k).rotateLeft r)) := by
+  have hu : (y + BitVec.twoPow n (n - 1)) ^^^ d ^^^ k = (y ^^^ d ^^^ k) ^^^ BitVec.twoPow n (n - 1) := by
+    rw [add_top hn, xor_xor_xor_top]
+  have hm : ((y ^^^ d ^^^ k) ^^^ BitVec.twoPow n (n - 1)) * a = (y ^^^ d ^^^ k) * a + BitVec.twoPow n (n - 1) := by
+    rw [← add_top hn, add_mul, top_mul_odd hn ha]
+  simp only [duoWord, hu, hm, Prod.mk.injEq]
+  constructor
+  · linear_combination top_add_top hn
+  · linear_combination top_add_top hn
+
+theorem rotateLeft_surjective {n : ℕ} (r : ℕ) : Function.Surjective (fun x : BitVec n => x.rotateLeft r) :=
+  haveI : Finite (BitVec n) := Finite.of_equiv _ BitVec.equivFin.symm.toEquiv
+  Finite.injective_iff_surjective.mp (fun _ _ h => rotateLeft_inj h)
+
+theorem bool_xor_cancel (a b c d e : Bool) (h : ((a ^^ b) ^^ e) = ((c ^^ d) ^^ e)) : (a ^^ c) = (b ^^ d) := by
+  revert h; cases a <;> cases b <;> cases c <;> cases d <;> cases e <;> decide
+
+/-- Four words: equal final states on every start state force `a₂ ≡ −1 (mod 2^r₁)` unless the runs are equal. -/
+theorem duoQuad_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : ℕ) (hr₁ : 0 < r₁) (hr₁n : r₁ + 3 ≤ n)
+    (k₂ : BitVec n) (a₂ : OddKey n) (ha₂ : (a₂.1.toNat + 1) % 2 ^ r₁ ≠ 0) (r₂ : Rotation n) (k₃ : BitVec n)
+    (a₃ : OddKey n) (r₃ : Rotation n) (k₄ a₄ : BitVec n) (r₄ : ℕ) :
+    Function.Injective (duoQuad k₁ a₁.1 r₁ k₂ a₂.1 r₂.1 k₃ a₃.1 r₃.1 k₄ a₄ r₄) := by
+  obtain ⟨a, ha⟩ := a₁
+  obtain ⟨b, hb⟩ := a₂
+  obtain ⟨q, hq0, hqn⟩ := r₂
+  obtain ⟨p, hp⟩ := a₃
+  obtain ⟨v, hv0, hvn⟩ := r₃
+  simp only at ha₂
+  have hn : 0 < n := by omega
+  rintro ⟨d₁, d₂, d₃, d₄⟩ ⟨e₁, e₂, e₃, e₄⟩ h
+  -- z after the third word agrees on every start state
+  have Z : ∀ s, (duoWord k₃ p v (duoWord k₂ b q (duoWord k₁ a r₁ s d₁) d₂) d₃).2 =
+      (duoWord k₃ p v (duoWord k₂ b q (duoWord k₁ a r₁ s e₁) e₂) e₃).2 := fun s =>
+    duoWord_eq_snd (congrFun h s)
+  -- moving z by the top bit moves (y₁, z₁) by (t, t) in both runs; z₃ then fixes the top bit of u₂
+  have M : ∀ s : BitVec n × BitVec n, ((duoWord k₁ a r₁ s d₁).1 ^^^ d₂ ^^^ k₂).getLsbD (n - 1) =
+      ((duoWord k₁ a r₁ s e₁).1 ^^^ e₂ ^^^ k₂).getLsbD (n - 1) := by
+    rintro ⟨y, z⟩
+    have e0 := Z (y, z)
+    have e1 := Z (y, z + BitVec.twoPow n (n - 1))
+    rw [duoWord_add_snd k₁ a r₁ y z _ d₁, duoWord_add_snd k₁ a r₁ y z _ e₁, duoWord_add_top hn k₂ b hb q _ _ d₂,
+      duoWord_add_top hn k₂ b hb q _ _ e₂, duoWord_add_snd k₃ p v _ _ _ d₃, duoWord_add_snd k₃ p v _ _ _ e₃] at e1
+    simp only [Prod.mk.eta] at e1
+    have hd : (((duoWord k₁ a r₁ (y, z) d₁).1 ^^^ d₂ ^^^ k₂) ^^^ BitVec.twoPow n (n - 1)).rotateLeft q -
+          ((duoWord k₁ a r₁ (y, z) d₁).1 ^^^ d₂ ^^^ k₂).rotateLeft q =
+        (((duoWord k₁ a r₁ (y, z) e₁).1 ^^^ e₂ ^^^ k₂) ^^^ BitVec.twoPow n (n - 1)).rotateLeft q -
+          ((duoWord k₁ a r₁ (y, z) e₁).1 ^^^ e₂ ^^^ k₂).rotateLeft q := by
+      linear_combination e1 - e0
+    generalize (duoWord k₁ a r₁ (y, z) d₁).1 ^^^ d₂ ^^^ k₂ = U at hd ⊢
+    generalize (duoWord k₁ a r₁ (y, z) e₁).1 ^^^ e₂ ^^^ k₂ = U' at hd ⊢
+    rw [rotateLeft_xor U, rotateLeft_xor U', rotateLeft_top hq0 hqn] at hd
+    have hbit := getLsbD_of_xor_twoPow_sub (by omega) hd
+    rwa [getLsbD_rotateLeft_pred hq0 hqn, getLsbD_rotateLeft_pred hq0 hqn] at hbit
+  have hc := xor_eq_zero_or_top hn ha (d₁ ^^^ e₁) d₂ e₂ k₂ (fun u z => by
+    simpa only [duoWord, xor_xor_xor_cancel, xor_xor_xor_swap] using M (u ^^^ d₁ ^^^ k₁, z))
+  rcases hc with h0 | ht
+  · -- the first word is shared: the three-word theorem binds the rest
+    have hd₁ : d₁ = e₁ := BitVec.xor_eq_zero_iff.mp h0
+    subst hd₁
+    have htriple : duoTriple k₂ b q k₃ p v k₄ a₄ r₄ (d₂, d₃, d₄) = duoTriple k₂ b q k₃ p v k₄ a₄ r₄ (e₂, e₃, e₄) := by
+      funext s
+      obtain ⟨s₀, rfl⟩ := duoWord_state_surjective k₁ a r₁ d₁ s
+      exact congrFun h s₀
+    have h234 := duoTriple_injective k₂ ⟨b, hb⟩ ⟨q, hq0, hqn⟩ k₃ ⟨p, hp⟩ ⟨v, hv0, hvn⟩ k₄ a₄ r₄ htriple
+    simp only [Prod.mk.injEq] at h234 ⊢
+    exact ⟨trivial, h234⟩
+  · exfalso
+    have hr₁' : r₁ < n := by omega
+    -- the start state written through `X = rotl(u₁, r₁)` and `w = y₁`
+    have W1d : ∀ u w : BitVec n, duoWord k₁ a r₁ (u ^^^ d₁ ^^^ k₁, w - u * a) d₁ = (w, u.rotateLeft r₁ + w) := by
+      intro u w
+      simp only [duoWord, xor_xor_xor_cancel, Prod.mk.injEq]
+      constructor <;> linear_combination
+    have W1e : ∀ u w : BitVec n, duoWord k₁ a r₁ (u ^^^ d₁ ^^^ k₁, w - u * a) e₁ =
+        (w + BitVec.twoPow n (n - 1),
+          (u.rotateLeft r₁ ^^^ BitVec.twoPow n (r₁ - 1)) + (w + BitVec.twoPow n (n - 1))) := by
+      intro u w
+      have hm : (u ^^^ BitVec.twoPow n (n - 1)) * a = u * a + BitVec.twoPow n (n - 1) := by
+        rw [← add_top hn, add_mul, top_mul_odd hn ha]
+      simp only [duoWord, xor_xor_xor_swap, ht, hm, rotateLeft_xor u, rotateLeft_top hr₁ hr₁', Prod.mk.injEq]
+      constructor <;> linear_combination
+    have Z' : ∀ X w : BitVec n, (duoWord k₃ p v (duoWord k₂ b q (w, X + w) d₂) d₃).2 =
+        (duoWord k₃ p v (duoWord k₂ b q (w + BitVec.twoPow n (n - 1),
+          (X ^^^ BitVec.twoPow n (r₁ - 1)) + (w + BitVec.twoPow n (n - 1))) e₂) e₃).2 := by
+      intro X w
+      obtain ⟨u, hu⟩ := rotateLeft_surjective (n := n) r₁ X
+      simp only at hu
+      subst hu
+      have := Z (u ^^^ d₁ ^^^ k₁, w - u * a)
+      rwa [W1d, W1e] at this
+    -- moving X by t moves z₁ and z₁′ by t; z₃ then fixes the top bit of u₃
+    have M3 : ∀ X w : BitVec n, ((duoWord k₂ b q (w, X + w) d₂).1 ^^^ d₃ ^^^ k₃).getLsbD (n - 1) =
+        ((duoWord k₂ b q (w + BitVec.twoPow n (n - 1),
+          (X ^^^ BitVec.twoPow n (r₁ - 1)) + (w + BitVec.twoPow n (n - 1))) e₂).1 ^^^ e₃ ^^^ k₃).getLsbD (n - 1) := by
+      intro X w
+      have e0 := Z' X w
+      have e1 := Z' (X + BitVec.twoPow n (n - 1)) w
+      have s1 : X + BitVec.twoPow n (n - 1) + w = (X + w) + BitVec.twoPow n (n - 1) := by linear_combination
+      have s2 : ((X + BitVec.twoPow n (n - 1)) ^^^ BitVec.twoPow n (r₁ - 1)) + (w + BitVec.twoPow n (n - 1)) =
+          ((X ^^^ BitVec.twoPow n (r₁ - 1)) + (w + BitVec.twoPow n (n - 1))) + BitVec.twoPow n (n - 1) := by
+        rw [add_top hn X, BitVec.xor_assoc, BitVec.xor_comm (BitVec.twoPow n (n - 1)), ← BitVec.xor_assoc,
+          ← add_top hn]
+        linear_combination
+      rw [s1, s2, duoWord_add_snd k₂ b q w (X + w) _ d₂, duoWord_add_snd k₂ b q _ _ _ e₂,
+        duoWord_add_top hn k₃ p hp v _ _ d₃, duoWord_add_top hn k₃ p hp v _ _ e₃] at e1
+      simp only [Prod.mk.eta] at e1
+      generalize duoWord k₂ b q (w, X + w) d₂ = S at e0 e1 ⊢
+      generalize duoWord k₂ b q (w + BitVec.twoPow n (n - 1),
+        (X ^^^ BitVec.twoPow n (r₁ - 1)) + (w + BitVec.twoPow n (n - 1))) e₂ = S' at e0 e1 ⊢
+      have hd : ((S.1 ^^^ d₃ ^^^ k₃) ^^^ BitVec.twoPow n (n - 1)).rotateLeft v - (S.1 ^^^ d₃ ^^^ k₃).rotateLeft v =
+          ((S'.1 ^^^ e₃ ^^^ k₃) ^^^ BitVec.twoPow n (n - 1)).rotateLeft v - (S'.1 ^^^ e₃ ^^^ k₃).rotateLeft v := by
+        linear_combination e1 - e0
+      generalize S.1 ^^^ d₃ ^^^ k₃ = U at hd ⊢
+      generalize S'.1 ^^^ e₃ ^^^ k₃ = U' at hd ⊢
+      rw [rotateLeft_xor U, rotateLeft_xor U', rotateLeft_top hv0 hvn] at hd
+      have hbit := getLsbD_of_xor_twoPow_sub (by omega) hd
+      rwa [getLsbD_rotateLeft_pred hv0 hvn, getLsbD_rotateLeft_pred hv0 hvn] at hbit
+    -- the carry step: `u₂·a₂ + (u₂ ⊕ d₂ ⊕ k₂) ≡ 0 (mod 2^r₁)` for every `u₂`
+    have C : ∀ u₂ : BitVec n, (u₂ * b + (u₂ ^^^ d₂ ^^^ k₂)).toNat % 2 ^ r₁ = 0 := by
+      intro u₂
+      apply carry_bv hr₁ hr₁n _ ((((u₂ ^^^ d₂ ^^^ k₂) + BitVec.twoPow n (n - 1)) ^^^ e₂ ^^^ k₂) * b - u₂ * b)
+        (d₃.msb ^^ e₃.msb)
+      intro X
+      have m3 := M3 X (u₂ ^^^ d₂ ^^^ k₂)
+      simp only [duoWord, xor_xor_xor_cancel] at m3
+      rw [← BitVec.msb_eq_getLsbD_last, ← BitVec.msb_eq_getLsbD_last, BitVec.msb_xor, BitVec.msb_xor,
+        BitVec.msb_xor, BitVec.msb_xor] at m3
+      have e := bool_xor_cancel _ _ _ _ _ m3
+      rw [show u₂ * b + (u₂ ^^^ d₂ ^^^ k₂) + X = u₂ * b + (X + (u₂ ^^^ d₂ ^^^ k₂)) by linear_combination,
+        show u₂ * b + (u₂ ^^^ d₂ ^^^ k₂) +
+            ((((u₂ ^^^ d₂ ^^^ k₂) + BitVec.twoPow n (n - 1)) ^^^ e₂ ^^^ k₂) * b - u₂ * b) +
+            BitVec.twoPow n (n - 1) + (X ^^^ BitVec.twoPow n (r₁ - 1)) =
+          (((u₂ ^^^ d₂ ^^^ k₂) + BitVec.twoPow n (n - 1)) ^^^ e₂ ^^^ k₂) * b +
+            ((X ^^^ BitVec.twoPow n (r₁ - 1)) + ((u₂ ^^^ d₂ ^^^ k₂) + BitVec.twoPow n (n - 1))) by
+          linear_combination]
+      exact e
+    have hdvd : 2 ^ r₁ ∣ 2 ^ n := Nat.pow_dvd_pow 2 (by omega)
+    have hε : (d₂ ^^^ k₂).toNat % 2 ^ r₁ = 0 := by
+      have := C 0
+      simpa only [BitVec.ofNat_eq_ofNat, BitVec.zero_mul, BitVec.zero_xor, BitVec.zero_add] using this
+    have hbit0 : (d₂ ^^^ k₂).getLsbD 0 = false := by
+      have h2 : (d₂ ^^^ k₂).toNat % 2 = 0 := by
+        rw [← Nat.mod_mod_of_dvd _ (Nat.pow_dvd_pow 2 hr₁ : 2 ^ 1 ∣ 2 ^ r₁), hε]
+      rw [← BitVec.testBit_toNat, Nat.testBit_zero, h2]
+      rfl
+    have h1 := C (BitVec.twoPow n 0)
+    rw [BitVec.xor_assoc, BitVec.xor_comm, xor_twoPow_of_false hbit0, BitVec.twoPow_zero, BitVec.one_mul,
+      BitVec.toNat_add, BitVec.toNat_add, Nat.mod_mod_of_dvd _ hdvd, Nat.add_mod, Nat.mod_mod_of_dvd _ hdvd,
+      ← Nat.add_mod, show b.toNat + ((d₂ ^^^ k₂).toNat + (1#n).toNat) = (b.toNat + 1) + (d₂ ^^^ k₂).toNat by
+        rw [BitVec.toNat_one (by omega)]; omega, Nat.add_mod, hε, Nat.add_zero, Nat.mod_mod] at h1
+    exact ha₂ h1
 
 end Pouw.ReceiptProofs

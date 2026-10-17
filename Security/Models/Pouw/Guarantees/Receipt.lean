@@ -10,11 +10,15 @@ What is proved about duo's words (`Definitions/Pouw/Receipt/Duo.lean`), at every
   start state, for an odd first multiplier and a first rotation `0 < r₁ < n`, whatever the second word's keys.
 * `DuoTripleNoKernel`: three words have no all-state kernel, for odd first and second multipliers and first and second
   rotations `0 < r < n`, whatever the third word's keys.
+* `DuoQuadNoKernel`: four words have no all-state kernel, for odd first, second and third multipliers, second and third
+  rotations `0 < r < n`, a first rotation `0 < r₁ ≤ n − 3` and a second multiplier `a₂ ≢ −1 (mod 2^r₁)`, whatever
+  the fourth word's keys.
 
-Longer runs are not covered. At four words the statement fails for some odd keys: with `r₁ + r₃ ≡ 0 (mod n)`,
-`a₂ ≡ −1 (mod 2^r₁)` and `a₃ ≡ ±1 (mod 2^(n+1−r₁))`, flipping the top bit of all four words leaves every final state
-unchanged. pfill's `key_ok` and both deployed rotation schedules exclude that family; whether the deployed keys bind
-runs of four or more words is open.
+`DuoQuadNoKernel`'s condition on `a₂` is needed: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and
+`a₃ ≡ ±1 (mod 2^(n+1−r₁))`, flipping the top bit of all four words leaves every final state unchanged. pfill's `key_ok`
+rejects `a ≡ −1 (mod 32)` and its rotations are 5 to 29, and no served word's multiplier is `≡ −1` modulo two to the
+previous word's rotation, so both deployed schedules meet it at `n = 32`. Runs of five or more words are not covered,
+nor is the served receipt `y ⊕ rotl(z, 16)`, which commits less than the whole state.
 -/
 
 namespace Pouw.Guarantees.Receipt
@@ -38,5 +42,15 @@ state are equal. -/
 def DuoTripleNoKernel : Prop :=
   ∀ (n : ℕ) (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : Rotation n) (k₂ : BitVec n) (a₂ : OddKey n) (r₂ : Rotation n)
     (k₃ a₃ : BitVec n) (r₃ : ℕ), Function.Injective (duoTriple k₁ a₁.1 r₁.1 k₂ a₂.1 r₂.1 k₃ a₃ r₃)
+
+/-- **Four duo words have no all-state kernel.** For every width, odd first, second and third multipliers, a first
+rotation `0 < r₁ ≤ n − 3`, a second multiplier with `a₂ + 1` not divisible by `2^r₁`, second and third rotations that
+move every bit and any keys for the fourth word, two word quadruples whose final states agree on every start state are
+equal. -/
+def DuoQuadNoKernel : Prop :=
+  ∀ (n : ℕ) (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : ℕ), 0 < r₁ → r₁ + 3 ≤ n →
+    ∀ (k₂ : BitVec n) (a₂ : OddKey n), (a₂.1.toNat + 1) % 2 ^ r₁ ≠ 0 →
+    ∀ (r₂ : Rotation n) (k₃ : BitVec n) (a₃ : OddKey n) (r₃ : Rotation n) (k₄ a₄ : BitVec n) (r₄ : ℕ),
+      Function.Injective (duoQuad k₁ a₁.1 r₁ k₂ a₂.1 r₂.1 k₃ a₃.1 r₃.1 k₄ a₄ r₄)
 
 end Pouw.Guarantees.Receipt
