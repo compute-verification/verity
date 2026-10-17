@@ -10,7 +10,7 @@ its digests compared with the pins; `--compare` compares the Builds already unde
 compared: a naming change moves the manifest and leaves the circuit.  Exit 0 when every pinned digest is reproduced, 1 when one
 moved or is missing (each named), 2 on a usage error.  `--update` rewrites the selected rows' pins from what was built: the PR that
 changes a circuit on purpose re-pins it, and its diff names what moved (`pinned_from`: the Build, and under `research run` its run
-and source commit).
+and source commit).  A row whose Build failed or left a Program undigested keeps its pins, is named, and the exit is 1.
 
 The rebuild needs the pinned vLLM (`ops/pod_bootstrap.sh --cpu`) and each row's checkpoint metadata (the derive runs on the meta
 device and reads no weights), so it runs on a CPU pod, never in `check`; the suite's tier is `tests/program/test_derive_neutrality.py`.
@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT, UsageError, option
+from verity_vllm.engine import env as engine_env
 from verity_vllm.pipeline import epoch
 
 PINS = ROOT / "manifests" / "programs_of_record.json"
@@ -65,8 +66,16 @@ def compare(pinned: dict[str, dict], built: dict[str, dict]) -> list[str]:
     return out
 
 
+def finished(built: dict[str, dict]) -> bool:
+    """Every rank built its step Program and each request shape's (a failed derive records no digest)."""
+    return bool(built) and all(p["step"] and all(p["requests"].values()) for p in built.values())
+
+
 def rebuild(row: str, out: Path, flags: list[str]) -> int:
-    """The row's own Build into OUT/<row>, by this interpreter."""
+    """The row's own Build into OUT/<row>, by this interpreter, with no CUDA device visible (`engine.env.hide_devices`) as the pins'
+    Builds had none: the pinned vLLM keeps Triton with no active driver only under an empty CUDA_VISIBLE_DEVICES, and a declared
+    target's device name is then the row class's (`engine.profiles.devices`), not the host's."""
+    engine_env.hide_devices()
     role, repo, rev, _world = epoch.resolve(row)
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "row", "run", row, role, repo, rev, "--stages", "build",
            "--py", sys.executable, "--sweep-dir", str(out), *flags]
@@ -91,7 +100,7 @@ class Options:
 
 def main(a: Options) -> int:
     doc = load(Path(a.pins))
-    out, report, failed = Path(a.out), {"schema": "verity-vllm/neutrality/v1", "pins": a.pins, "rows": {}}, False
+    out, report, failed, unpinned = Path(a.out), {"schema": "verity-vllm/neutrality/v1", "pins": a.pins, "rows": {}}, False, []
     out.mkdir(parents=True, exist_ok=True)
     for row in select(doc, a.rows, a.tier):
         rc = None if a.compare_only else rebuild(row, out, a.row_flags)
@@ -104,12 +113,16 @@ def main(a: Options) -> int:
         moved = "" if man == pin.get("manifest_digest") else f"; manifest {str(man)[:16]} (pinned {str(pin.get('manifest_digest'))[:16]})"
         print(f"[neutrality] {row}: {'NEUTRAL' if not diffs else 'MOVED'} -- {len(built)} rank(s){moved}"
               + "".join(f"\n    {d}" for d in diffs), flush=True)
-        if a.update and built:
+        if a.update and rc in (0, None) and finished(built):
             src = {"build": str((out / row).resolve()), **{k: v for k, v in (("run", a.run_id), ("tree", a.source_sha)) if v}}
             doc["rows"][row] = {**pin, "pinned_from": src, "programs": built, "manifest_digest": man}
+        elif a.update:
+            unpinned.append(row)
     (out / "neutrality.json").write_text(json.dumps(report, indent=1) + "\n")
     if a.update:
         Path(a.pins).write_text(json.dumps(doc, indent=1) + "\n")
-        print(f"[neutrality] re-pinned {', '.join(report['rows'])} in {a.pins}", flush=True)
-        return 0
+        pinned = [r for r in report["rows"] if r not in unpinned]
+        print(f"[neutrality] re-pinned {', '.join(pinned) or 'no row'} in {a.pins}"
+              + (f"; not re-pinned, their Build did not finish: {', '.join(unpinned)}" if unpinned else ""), flush=True)
+        return 1 if unpinned else 0
     return 1 if failed else 0

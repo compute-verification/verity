@@ -3,6 +3,7 @@ Program fails by name, the manifest is reported and never compared, and `--updat
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -78,12 +79,25 @@ def test_update_re_pins_the_row_from_its_build(tmp_path: Path, monkeypatch) -> N
     assert cli(["neutrality", ROW, "--compare", "--out", str(out), "--pins", str(pins)]) == 0
 
 
-def test_a_rebuild_is_the_rows_own_build_stage_into_out(tmp_path: Path, monkeypatch) -> None:
+def test_update_keeps_the_pins_of_a_row_whose_build_failed(tmp_path: Path, capsys) -> None:
+    pins, out = _pins(tmp_path, _programs()), tmp_path / "out"
+    failed = _programs()
+    failed["1"]["step"] = None   # a crashed derive: `row_records.tp_build_summary` records no digest
+    _build(out / ROW, failed, manifest="m2")
+    before = pins.read_text()
+    assert cli(["neutrality", ROW, "--compare", "--update", "--out", str(out), "--pins", str(pins)]) == 1
+    assert json.loads(pins.read_text()) == json.loads(before)
+    assert f"not re-pinned, their Build did not finish: {ROW}" in capsys.readouterr().out
+
+
+def test_a_rebuild_is_the_rows_own_build_stage_into_out_with_no_device_visible(tmp_path: Path, monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(subprocess, "run", lambda cmd, cwd: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    monkeypatch.setattr(subprocess, "run", lambda cmd, cwd: calls.append((cmd, os.environ["CUDA_VISIBLE_DEVICES"])) or subprocess.CompletedProcess(cmd, 0))
     assert N.rebuild(ROW, tmp_path, ["--build-jobs=2"]) == 0
     role, repo, rev, world = epoch.resolve(ROW)
-    (cmd,) = calls
+    ((cmd, visible),) = calls
+    assert visible == "", "the pins' Builds saw no device; vLLM keeps Triton without a driver only so"
     assert cmd[1:] == ["-m", "verity_vllm.pipeline.cli", "row", "run", ROW, role, repo, rev, "--stages", "build", "--py", cmd[0],
                        "--sweep-dir", str(tmp_path), "--build-jobs=2"] and world == 2
 
