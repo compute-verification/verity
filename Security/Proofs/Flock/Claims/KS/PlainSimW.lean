@@ -16,7 +16,8 @@ facts about `P'` (`PlainSimWrPAt`):
 
 So KS at the deployed plain verifier holds from `PlainSimW` at the statements some run accepts, `RecordDrawVerbatim` at
 them, and `Extendθ` (`plain_KS_of_sim`). The strategies send `P`'s roots wherever `P'`'s first message is `P`'s and the
-wire reads roots as the deployed link does (`plainRoot_of_first`).
+wire reads roots as the deployed link does (`plainRoot_of_first`). The collision in `PlainClashRun` follows from two
+different columns the run's reps open at one position (`PlainRawClashRun`, `plainClashRun_of_raw`).
 -/
 
 namespace FlockDeploy.KS
@@ -65,6 +66,28 @@ def PlainClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) 
     (n : Fin ((V false).k x) → ℕ) (pL : LiveOutJ 1 mPts → Prop) : Prop :=
   ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →
     plainEv₁ P x ω (plainCoins hk n (u, r'))
+
+/-- **A live event at `P'`'s outcome gives an accepting run of `P` whose reps open two different columns at one
+position**: `PlainClashRun` without the hashes (`plainRawCols`). -/
+def PlainRawClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (N : Claims.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts)
+    (P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))) (hk : N x + 2 = (V false).k x)
+    (n : Fin ((V false).k x) → ℕ) (pL : LiveOutJ 1 mPts → Prop) : Prop :=
+  ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →
+    (Claims.run sha512 P (V false) x ω (plainCoins hk n (u, r'))).out = .acc ∧
+      ∃ (q : ℕ) (a b : List 𝔽),
+        (q, a) ∈ plainRawCols (Claims.run sha512 P (V false) x ω (plainCoins hk n (u, r'))).seen ∧
+        (q, b) ∈ plainRawCols (Claims.run sha512 P (V false) x ω (plainCoins hk n (u, r'))).seen ∧ a ≠ b
+
+/-- **The clash gives the collision**: two different columns of an accepting run at one position collide in its log
+(`plain_selfClash_tied`), so `PlainRawClashRun` gives `PlainClashRun`. -/
+theorem plainClashRun_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
+    {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts}
+    {P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))} {hk : N x + 2 = (V false).k x}
+    {n : Fin ((V false).k x) → ℕ} {pL : LiveOutJ 1 mPts → Prop} (h : PlainRawClashRun P x ω mPts N dg w P' hk n pL) :
+    PlainClashRun P x ω mPts N dg w P' hk n pL := fun u r' hp => by
+  obtain ⟨hacc, q, a, b, ha, hb, hab⟩ := h u r' hp
+  exact ⟨hacc, plain_selfClash_tied hacc ha hb hab⟩
 
 open Classical in
 /-- **A simulator of each prover at `wrP`'s verdict**: for each prover `P` and tape `ω`, a live prover `P'` with the
