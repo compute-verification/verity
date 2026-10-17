@@ -14,6 +14,7 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
 import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
 import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
+import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`, `Agrees`),
