@@ -279,7 +279,32 @@ def section_codec(rng: random.Random) -> dict:
     chosen_ok = dec_bound_wrong is not None and C.digest(dec_bound_wrong) == d_payload
     out["bound_key_closes_malleability"] = {"honest_roundtrip": dec_bound_right == payload,
                                             "chosen_encoding_has_claimed_digest": chosen_ok}
+
+    # Partial information without a root: rho's output is even iff its input is a quadratic residue (codec.rho keeps
+    # the even root of a residue, the odd one otherwise), so each round's output parity is a Jacobi symbol of its input.
+    p = f.p
+    leak_ok, n = 0, 200
+    for _ in range(n):
+        a = rng.randrange(1, p)
+        leak_ok += (C.rho(a, f) & 1) == (1 if _jacobi(a, p) == -1 else 0)
+    out["root_parity_is_jacobi_of_input"] = {"trials": n, "exact": leak_ok, "bits_per_word_per_round": 1,
+                                             "word_bits": f.n}
     return out
+
+
+def _jacobi(a: int, n: int) -> int:
+    a %= n
+    t = 1
+    while a:
+        while a % 2 == 0:
+            a //= 2
+            if n % 8 in (3, 5):
+                t = -t
+        a, n = n, a
+        if a % 4 == 3 and n % 4 == 3:
+            t = -t
+        a %= n
+    return t if n == 1 else 0
 
 
 # ---- the codec's encode from exact products and unbudgeted primitives ---------------------------------------------------
