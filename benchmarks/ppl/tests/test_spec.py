@@ -26,6 +26,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         for b in (2, 3, 4):
             want[f"side-{side}-d{b}"] = ("all", "int8-all", True)
     want["side-act-k"] = want["side-act-k-d2"] = ("all", "int8-all", True)
+    for n in (8, 16, 32, 64):
+        want[f"co32c-u{n}"] = ("all", "int8-all", True)
     for g in ("fp4c", "fp4", "int5"):
         for m in ("dither", "round"):
             want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
