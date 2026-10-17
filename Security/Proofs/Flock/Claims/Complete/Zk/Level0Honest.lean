@@ -190,6 +190,162 @@ theorem mid_lv0Z {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Transc
     rw [hf.2.2.2.2.2.2.2.2, hH.2.2.2.2.2.2.1]
     simp
 
+/-- **The last level meets the final identity**: from `Mid` before the last level (the last commitment `cm` at level
+`R`), the honest prover's four challenges, whose split fold is the proof's `y_r`, and its query against `cm`, whose rows
+are the proof's last opening, the masked verifier's model ends with `lhsE y_r ext res = s`. -/
+theorem goal_lastZ {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Transcript} {zl : Zk.Level0}
+    {b : Array F128} {basisAt : Array F256 → ℕ → Array F256} {j : ℕ} {x : Vars × LState × Transcript}
+    (hx : x = loop P cf sch (x₀Z P cf sch T cap zl t) j) (hjR : j + 1 = sch.levels.size - 1)
+    (hL : 2 ≤ sch.levels.size) (hk0 : 1 ≤ sch.k0)
+    (hsd : sch.k0 + 3 * (sch.levels.size - 1) ≤ sch.n) {cm : Commit} {g : Array F128} {w : Array F256}
+    (hrows : cm.rows = encodeRows (sch.levels.getD (sch.levels.size - 1) default) g)
+    (hsync : Sync x.2.1.s x.2.1.q (embedF g) w (x.1.1 - 1))
+    (hwok : WOK sch.n b ((preZ P cf sch T cap zl t).1.1.toList.map gOf) x.1.2.2.1 x.2.1 (x.1.1 - 1) w)
+    (hpre : PreOK ((preZ P cf sch T cap zl t).1.1.toList.map gOf) (levelsOf x.1.2.2.1) (x.2.1.oods.toList.map oodOf)
+      (x.2.1.conss.toList.map consOf) (x.1.1 - 1))
+    (hcs : ∀ cs ∈ x.2.1.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size)
+    (hseam : LevelSeam (sch.levels.getD (sch.levels.size - 1) default))
+    (hlanes : (sch.levels.getD (sch.levels.size - 1) default).lanes = 4)
+    (hcols : (sch.levels.getD (sch.levels.size - 1) default).cols = x.1.1 - 4)
+    (hbasis : ∀ q e y, q.size + e = sch.n → y < 2 ^ e →
+      gOf (basisAt q e)[y]! = Model.bHat execArith sch.n (bOf b) (q.toList.map gOf ++ Model.bitsK e y))
+    {C : Array F256 × LState × Transcript} (hC : C = chals P cf #[] x.2.1 x.2.2 4)
+    {F : Array F256} (hF : F = foldKs C.1.toList (embedF g))
+    (hsync₁ : Sync C.2.1.s C.2.1.q (embedF (splitK F)) (liftU (foldKs C.1.toList w)) (x.1.1 - 4))
+    (hyr : P.finalProof.yr = splitK F)
+    (hfin : P.finalProof.rows = (positions (sch.levels.getD (sch.levels.size - 1) default)
+      (queryCoins P cf (sch.levels.getD (sch.levels.size - 1) default) C.2.1
+        (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') C.2.2))).map fun p => cm.rows[p]!) :
+    lhsE P.finalProof.yr (outZ P cf sch T cap zl t).1.2.2.2 (resE basisAt sch.n (preZ P cf sch T cap zl t).1.1
+      (outZ P cf sch T cap zl t).1.2.2.1 (outZ P cf sch T cap zl t).1.2.2.2 (outZ P cf sch T cap zl t).2.1) =
+      (outZ P cf sch T cap zl t).2.1.s := by
+  have hD : Done P sch (t.k + 2) (outZ P cf sch T cap zl t) :=
+    done_of P cf sch (inv_x₀Z P cf sch T cap zl t hL hk0) hL hsd
+  have hI := inv_loop_of P cf sch (inv_x₀Z P cf sch T cap zl t hL hk0) hsd j (by omega)
+  rw [← hx] at hI
+  have hout : outZ P cf sch T cap zl t = stepL P cf sch x := by
+    unfold outZ
+    rw [← hjR, loop_stepL P cf sch _ (by omega), ← hx]
+  rw [hout] at hD ⊢
+  subst hC hF
+  have hCf := chals_fields P cf #[] x.2.1 x.2.2 4
+  have h4 : 4 ≤ x.1.1 := by rw [hI.sd]; omega
+  have hN : x.1.1 - 1 = x.1.1 - 4 + 3 := by omega
+  rw [hN] at hsync hwok hpre
+  have hch : (chals P cf #[] x.2.1 x.2.2 4).1.size = (sch.levels.getD (sch.levels.size - 1) default).lanes := by
+    rw [hCf.2.2.2.2.2.2.1, hlanes]; rfl
+  have hg : g.size = 2 ^ ((sch.levels.getD (sch.levels.size - 1) default).lanes +
+      (sch.levels.getD (sch.levels.size - 1) default).cols) := by
+    have := hsync.ts
+    rw [embedF_size] at this
+    rw [this, hlanes, hcols]
+    congr 1
+    omega
+  have hw4 : w.size = 2 ^ (x.1.1 - 4 + 4) := hsync.ws
+  have w0 : WOK sch.n b ((preZ P cf sch T cap zl t).1.1.toList.map gOf) x.1.2.2.1 (chals P cf #[] x.2.1 x.2.2 4).2.1
+      (x.1.1 - 4 + 3) w := by
+    intro i hi
+    rw [hCf.2.2.2.2.2.2.2.1, hCf.2.2.2.2.2.2.2.2]
+    exact hwok i hi
+  have hpre' : PreOK ((preZ P cf sch T cap zl t).1.1.toList.map gOf) (levelsOf x.1.2.2.1)
+      ((chals P cf #[] x.2.1 x.2.2 4).2.1.oods.toList.map oodOf)
+      ((chals P cf #[] x.2.1 x.2.2 4).2.1.conss.toList.map consOf) (x.1.1 - 4 + 3) := by
+    rw [hCf.2.2.2.2.2.2.2.1, hCf.2.2.2.2.2.2.2.2]
+    exact hpre
+  have hfold := wok_fold w0 hpre' hw4 _ (by rw [hCf.2.2.2.2.2.2.1]; rfl)
+  have h16 : ∀ a : ℕ, 2 ^ (a + 4) / 2 ^ 4 = 2 ^ a := fun a => by
+    rw [pow_add, Nat.mul_div_cancel _ (by positivity)]
+  have hFs : (foldKs (chals P cf #[] x.2.1 x.2.2 4).1.toList (embedF g)).size = 2 ^ (x.1.1 - 4) := by
+    rw [foldKs_size, embedF_size, hg, Array.length_toList, hch, hlanes, hcols, Nat.add_comm, h16]
+  have hWs : (foldKs (chals P cf #[] x.2.1 x.2.2 4).1.toList w).size = 2 ^ (x.1.1 - 4) := by
+    rw [foldKs_size, hw4, Array.length_toList, hCf.2.2.2.2.2.2.1, Array.size_empty, Nat.zero_add, h16]
+  have hrows' : P.finalProof.rows = (positions (sch.levels.getD (sch.levels.size - 1) default)
+      (queryCoins P cf (sch.levels.getD (sch.levels.size - 1) default) (chals P cf #[] x.2.1 x.2.2 4).2.1
+        (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2))).map
+      fun p => (encodeRows (sch.levels.getD (sch.levels.size - 1) default) g)[p]! := by
+    rw [hfin, hrows]
+  have e1 : lhsE P.finalProof.yr = lhsE (splitK (foldKs (chals P cf #[] x.2.1 x.2.2 4).1.toList (embedF g))) := by
+    rw [hyr]
+  have hpa := pos_le_alpha (sch.levels.getD (sch.levels.size - 1) default) hseam
+    (queryCoins P cf (sch.levels.getD (sch.levels.size - 1) default) (chals P cf #[] x.2.1 x.2.2 4).2.1
+      (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2))
+    (query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows (chals P cf #[] x.2.1 x.2.2 4).1
+      (chals P cf #[] x.2.1 x.2.2 4).2.1
+      (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)).1.2.1
+    (vec_size _ _ _)
+  have hl : ∀ l ∈ (x.1.2.2.1.push (chals P cf #[] x.2.1 x.2.2 4).1).toList, l.size = 4 := hD.lv4
+  have hlvs : (x.1.2.2.1.push (chals P cf #[] x.2.1 x.2.2 4).1).size = sch.levels.size - 1 := hD.lvs
+  have hext : x.1.1 - 4 = sch.n - sch.k0 - 3 * (sch.levels.size - 1) := hD.ext
+  have hk0' : (preZ P cf sch T cap zl t).1.1.size = sch.k0 := preZ_size P cf sch T cap zl t
+  have horig : (origE (preZ P cf sch T cap zl t).1.1 (x.1.2.2.1.push (chals P cf #[] x.2.1 x.2.2 4).1)).size +
+      (x.1.1 - 4) = sch.n := by
+    rw [origE_size _ _ hl, hlvs, hext, hk0']
+    omega
+  unfold stepL
+  dsimp only
+  rw [e1]
+  refine lhsE_honest _ (foldKs (chals P cf #[] x.2.1 x.2.2 4).1.toList w) (embedF (consW (x.1.1 - 4)
+    (positions (sch.levels.getD (sch.levels.size - 1) default)
+    (queryCoins P cf (sch.levels.getD (sch.levels.size - 1) default) (chals P cf #[] x.2.1 x.2.2 4).2.1
+      (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)))
+    (query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows (chals P cf #[] x.2.1 x.2.2 4).1
+      (chals P cf #[] x.2.1 x.2.2 4).2.1
+      (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)).1.2.1))
+    _ _ _ _ _ hFs ?_ ?_ fun y hy => ?_
+  · rw [← sum_split _ _ _ hFs hWs]
+    exact hsync₁.sum
+  · rw [show (query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows
+        (chals P cf #[] x.2.1 x.2.2 4).1 (chals P cf #[] x.2.1 x.2.2 4).2.1
+        (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)).1.2.2 =
+        consE ((query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows
+          (chals P cf #[] x.2.1 x.2.2 4).1 (chals P cf #[] x.2.1 x.2.2 4).2.1
+          (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P')
+            (chals P cf #[] x.2.1 x.2.2 4).2.2)).1.1.map fun p =>
+              (encodeRows (sch.levels.getD (sch.levels.size - 1) default) g)[p]!)
+          (query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows
+            (chals P cf #[] x.2.1 x.2.2 4).1 (chals P cf #[] x.2.1 x.2.2 4).2.1
+            (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P')
+              (chals P cf #[] x.2.1 x.2.2 4).2.2)).1.1.size
+          (query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows
+            (chals P cf #[] x.2.1 x.2.2 4).1 (chals P cf #[] x.2.1 x.2.2 4).2.1
+            (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P')
+              (chals P cf #[] x.2.1 x.2.2 4).2.2)).1.2.1 (chals P cf #[] x.2.1 x.2.2 4).1 by
+      rw [query_pos, positions_size _ hseam, ← hrows']
+      rfl]
+    rw [query_pos, consE_fold _ g _ _ _ hch hg (pos_lt hseam _), hcols]
+  · refine res_honest basisAt sch.n (preZ P cf sch T cap zl t).1.1 _ (x.1.1 - 4)
+      (closeLast P cf (x.1.1 - 4) (sch.levels.size - 1)
+        (query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows (chals P cf #[] x.2.1 x.2.2 4).1
+          (chals P cf #[] x.2.1 x.2.2 4).2.1
+          (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)).1
+        (query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows (chals P cf #[] x.2.1 x.2.2 4).1
+          (chals P cf #[] x.2.1 x.2.2 4).2.1
+          (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)).2.1
+        (query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows (chals P cf #[] x.2.1 x.2.2 4).1
+          (chals P cf #[] x.2.1 x.2.2 4).2.1
+          (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)).2.2).1
+      (bOf b) hl horig ?_ ?_ ?_ (fun y hy => hbasis _ _ y horig hy) _ _ _ _ ?_ hpa _ hfold hy
+    · refine conss_push_pos ?_ hpa
+      rw [(query_fields ..).2.2.2.2.2.2.1, hCf.2.2.2.2.2.2.2.2]
+      exact hcs
+    · intro o ho
+      have := hD.oods o ho
+      unfold FlockSoundness.Refine.oodFixed OodDim at *
+      split at this
+      · rename_i hs
+        rw [hs, origE_size _ _ hl, hlvs, hext, hk0']
+        omega
+      · rename_i s hs
+        rw [hs, oodFixed_size _ hl (by rw [hlvs]; exact this.1), hlvs, hext]
+        omega
+    · intro cs hc
+      have := hD.conss cs hc
+      unfold ConsDim at this
+      rw [consFixed_size _ hl, hlvs, hext]
+      omega
+    · rw [hlvs]
+      rfl
+
 end Mid
 
 end FlockComplete.L0
