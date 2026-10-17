@@ -24,7 +24,7 @@
 #     record is unchanged (no "mode" key = gpu).  `--dry-run` prints the resolved mode and the steps it would run, touches nothing, exits 0.
 #   Outputs: $OUT/readiness.json (schema verity-vllm/readiness/v1: checks{ok, value|error}, identities, measurements network/disk/memory),
 #     $OUT/{pip,checkpoints,hidden_gpu,fa2_tap,fa3_tap,fa2_tap_guarded,fa3_tap_guarded,norm_tap,router_tap}.log, $OUT/bootstrap.fail on a
-#     failure; the last stdout line is BOOTSTRAP-OK.
+#     failure, $OUT/staged-<case> for a checkpoint this run staged (and its `staged` label in the store); the last stdout line is BOOTSTRAP-OK.
 #   Invariants: idempotent (every step checks before it builds); a failing step exits 3 with the named class BOOTSTRAP_FAIL_<STEP>;
 #     readiness.json is written BEFORE its verdict is taken (a failed check still leaves the record; `ok` = AND of the checks);
 #     every Verity package must import from this tree (verity_from_tree, verity_vllm_from_tree,
@@ -96,19 +96,23 @@ printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nsys.exit(ma
 rm -rf /root/.cache/uv /root/.cache/pip 2>/dev/null
 
 # ---- 3. pinned checkpoints (manifests/checkpoints.json; sha256 of every safetensors) --------------------------------------------
+# A checkpoint this run downloads and checks is staged: its staging event goes to the store (`verity-vllm records staged`) through
+# the run's custody key; with no key, the log names the command that records it.
 IFS=, read -r -a CASE_LIST <<< "$CASES"
 for CASE in "${CASE_LIST[@]}"; do
-  $PY - "$CASE" manifests/checkpoints.json <<'EOF' >>"$OUT/checkpoints.log" 2>&1 && log "checkpoint OK $CASE" || fail CHECKPOINT "$CASE (see $OUT/checkpoints.log)"
-import hashlib, json, os, sys
+  rm -f "$OUT/staged-$CASE"
+  $PY - "$CASE" manifests/checkpoints.json "$OUT/staged-$CASE" <<'EOF' >>"$OUT/checkpoints.log" 2>&1 && log "checkpoint OK $CASE" || fail CHECKPOINT "$CASE (see $OUT/checkpoints.log)"
+import hashlib, json, os, sys, time
 from pathlib import Path
-case, manifest = sys.argv[1], sys.argv[2]
+case, manifest, staged = sys.argv[1], sys.argv[2], Path(sys.argv[3])
 doc = json.load(open(manifest))
 cases = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B", "B7": "Qwen/Qwen2.5-7B"}   # every other case is a `role` in checkpoints.json
 ent = next((c for c in doc["checkpoints"] if c.get("role") == case or (case in cases and c["repo"] == cases[case] and c.get("local_path"))), None)
 if ent is None:
     sys.exit(f"no checkpoints.json entry for case {case}")
 local = Path(ent["local_path"]); shas = ent.get("safetensors_sha256", {})
-if not all((local / f).exists() for f in shas) or not (local / "config.json").exists():
+fetched = not all((local / f).exists() for f in shas) or not (local / "config.json").exists()
+if fetched:
     from huggingface_hub import snapshot_download
     fetch = lambda e: snapshot_download(e["repo"], revision=e["revision"], allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model", "*.py"],
                                         cache_dir=os.path.join(os.environ["HF_HOME"], "hub"))
@@ -129,8 +133,21 @@ for f, sha in shas.items():
             h.update(chunk)
     good = h.hexdigest() == sha; ok &= good
     print(("OK  " if good else "BAD ") + str(local / f), flush=True)
+if ok and fetched:
+    staged.write_text(f"{ent['repo']} {ent['revision']} {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {local}\n")
 sys.exit(0 if ok else 1)
 EOF
+  if [ -s "$OUT/staged-$CASE" ]; then
+    read -r S_REPO S_REV S_AT S_DIR < "$OUT/staged-$CASE"
+    S_REF=${RESEARCH_RUN_ID:-$(hostname):$S_DIR}; S_BY=${RESEARCH_LANE:-pod-bootstrap}
+    C=${CUSTODY_DIR:-$(dirname "$(dirname "${RESEARCH_RUN_DIR:-/none/runs/x}")")/requests/${RESEARCH_RUN_ID:-none}/custody}
+    if [ -f "$C/cred.json" ] && (export RESEARCH_STORE_CONFIG=$C/store.toml && eval "$("$VENV/bin/verity-vllm" epoch custody-env "$C")" \
+        && "$VENV/bin/verity-vllm" records staged "$S_REPO" "$S_REV" --at "$S_AT" --ref "$S_REF" --by "$S_BY") >>"$OUT/checkpoints.log" 2>&1; then
+      log "staged $CASE at $S_AT: recorded on ckpt:$S_REPO@$S_REV"
+    else
+      log "STAGED-UNRECORDED $CASE: verity-vllm records staged $S_REPO $S_REV --at $S_AT --ref $S_REF --by $S_BY"
+    fi
+  fi
 done
 
 # ---- 4. native taps (built by the scripts the sweep already uses; VENV points them at the 3.12 environment) ----------------------

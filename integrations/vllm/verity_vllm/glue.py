@@ -13,21 +13,25 @@ goes with it.  Everything else joins on a field that already exists:
                   marked for the model, or whose own `models` names it;
   * family facts  `family_facts.FAMILY_FACTS[model_type]` of the checkpoint's `config.json`, and the other checkpoints of that family;
   * profile       the patterns of the checkpoint role's derived engine profile (`profiles.profile_for_case`, at its rows' world)
-                  that a marked module defines;
+                  that a marked module defines, or why the profile refuses its `config.json`;
   * capture maps  the maps pinned to the repo, by section;
-  * hours         from `staged`, the start of the first run in the store whose command line names the checkpoint's staged directory
-                  (its `local_path`, else its capture map's `pins.checkpoint.staged`), to `record`, the first `row` label on a PASS
-                  `vllm-config-record/v1` of one of the model's rows (`verity-vllm records publish`).  The store records no staging
-                  event, so `staged` is the first run on the staged weights; a Build that needed only the config ran before it.
+  * hours         from `staged`, the checkpoint's first staging event (the label `staged` on `ckpt:<repo>@<revision>`, which the
+                  step that stages its weights writes: `records.staged`), to `record`, the first `row` label on a PASS
+                  `vllm-config-record/v1` of one of the model's rows (`verity-vllm records publish`).
 
-The store is read through `research data sql` (the local catalog; `research data reindex --remote` refreshes it).
+The `config.json` is the one the Build reads (`hf_config`): the role's (`dense_generic.find_hf_config`), else the `$HF_HOME`
+snapshot at the pinned revision, which glue fills with `config.json` alone from the hub when this host has none, refused unless its
+sha256 is the pinned `config_sha256`.  The store is read through `research data sql` (the local catalog; `research data reindex
+--remote` refreshes it).
 
     verity-vllm glue [REPO ...] [--json] [--no-store]   # default: every model a marker names
 """
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
+import urllib.request
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -35,9 +39,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import records as RC
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import CHECKPOINTS, ROOT, WORKLOADS, UsageError, option
-from verity_vllm.engine.profiles import family_facts as FF
+from verity_vllm.engine.profiles import dense_generic, family_facts as FF
 from verity_vllm.pipeline import config_record as CR
 
 MARKER = "__models__"
@@ -46,6 +51,7 @@ SIDECAR = ".circuit-check.py"
 ALLOWLISTS = (ROOT / "tests" / "by_name_allowlist.json", ROOT / "tests" / "lint" / "allowlists")
 
 Sql = Callable[[str], list[dict[str, Any]]]
+Fetch = Callable[[str, str], bytes]
 
 
 def marked(path: Path, root: Path = ROOT) -> tuple[str, ...]:
@@ -94,9 +100,39 @@ def known() -> set[str]:
 
 
 def _model_type(role: str) -> str | None:
-    from verity_vllm.engine.profiles import dense_generic
     hit = dense_generic.find_hf_config(role)
     return FF.family_of(json.loads(hit[0].read_text())) if hit else None
+
+
+def hub_config(repo: str, revision: str) -> bytes:
+    """`config.json` alone from the hub at `revision` (never a weight file), unauthenticated: a gated repo's refusal is the reason."""
+    with urllib.request.urlopen(f"https://huggingface.co/{repo}/resolve/{revision}/config.json", timeout=60) as r:
+        return r.read()
+
+
+def hf_config(repo: str, role: str | None, revision: str | None, sha256: str | None,
+              fetch: Fetch | None = hub_config) -> tuple[dict[str, Any] | None, str]:
+    """The checkpoint's `config.json` as the Build reads it and where it was read, or None and why there is none (module docstring)."""
+    hit = dense_generic.find_hf_config(role) if role else None
+    if hit:
+        return json.loads(hit[0].read_text()), hit[1]
+    if not revision:
+        return None, "no revision pinned"
+    p = dense_generic.hf_snapshot(repo, revision) / "config.json"
+    if not p.exists():
+        if fetch is None or not sha256:
+            return None, f"no {p}" + ("" if sha256 else ", and no config_sha256 pinned to fetch it against")
+        try:
+            b = fetch(repo, revision)
+        except OSError as e:
+            return None, f"no {p}, and the hub's config.json at {revision[:12]}: {e}"
+        if hashlib.sha256(b).hexdigest() != sha256:
+            return None, f"the hub's config.json at {revision[:12]} has sha256 {hashlib.sha256(b).hexdigest()[:12]}, not the pinned {sha256[:12]}"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b)
+    elif sha256 and hashlib.sha256(p.read_bytes()).hexdigest() != sha256:
+        return None, f"{p} is not the pinned config_sha256 {sha256[:12]}"
+    return json.loads(p.read_text()), "hf_home:snapshot"
 
 
 def _area(rel: str) -> str:
@@ -134,8 +170,15 @@ def _family(model_type: str | None, repo: str) -> dict[str, Any] | None:
             "shared_with": others}
 
 
-def _profile(role: str | None, world: int, files: set[str]) -> dict[str, Any]:
+def _profile(role: str | None, world: int, files: set[str], config: tuple[dict[str, Any] | None, str]) -> dict[str, Any]:
     from verity_vllm.engine import profiles
+    from verity_vllm.engine.profiles import generic
+    cfg, source = config
+    if cfg is None:
+        return {"refused": f"no config.json: {source}"}
+    why = generic.structural_refusal(cfg)
+    if why:
+        return {"refused": f"its config.json ({source}): {why}"}
     if role is None:
         return {"refused": "no checkpoint role in manifests/checkpoints.json"}
     try:
@@ -145,7 +188,7 @@ def _profile(role: str | None, world: int, files: set[str]) -> dict[str, Any]:
         return {"refused": str(e.args[0] if e.args else e)}
     mine = [{"pattern": p.name, "module": type(p).__module__} for p in pats
             if type(p).__module__.replace(".", "/") + ".py" in files]
-    return {"module": name, "patterns": len(pats), "entries": mine}
+    return {"module": name, "config": source, "patterns": len(pats), "entries": mine}
 
 
 def _map_counts(m: dict[str, Any]) -> dict[str, Any]:
@@ -157,50 +200,49 @@ def _at(stamp: str) -> datetime:
 
 
 def store_sql(query: str) -> list[dict[str, Any]]:
-    from verity_vllm import records
-    return json.loads(records.data("sql", "--json", query) or "[]")
+    return json.loads(RC.data("sql", "--json", query) or "[]")
 
 
 def _quote(s: str) -> str:
     return "'" + s.replace("'", "''") + "'"
 
 
-def hours(staged_dir: str | None, rows: list[str], sql: Sql) -> dict[str, Any]:
-    """`staged` and `record` from the store (each None when it has none) and the hours between them."""
-    staged = sql("SELECT a.id, a.start_utc FROM attempts a JOIN attempt_params p ON p.attempt = a.id "
-                 f"WHERE instr(p.value, {_quote(staged_dir)}) > 0 ORDER BY a.start_utc LIMIT 1") if staged_dir else []
+def hours(ckpt: str | None, rows: list[str], sql: Sql) -> dict[str, Any]:
+    """`staged`, the checkpoint's first staging event, and `record`, its rows' first PASS record, from the store (each None when it
+    has none) and the hours between them."""
+    staged = sql(f"SELECT value, ref FROM labels WHERE target = {_quote(ckpt)} AND key = {_quote(RC.STAGED)} ORDER BY value LIMIT 1") if ckpt else []
     record = sql("SELECT l.target, l.value, l.ts FROM labels l JOIN artifacts a ON a.id = l.target JOIN artifact_meta m ON m.id = l.target "
                  f"WHERE l.key = 'row' AND a.kind = {_quote(CR.KIND)} AND m.key = 'outcome' AND m.value = 'PASS' "
                  f"AND l.value IN ({', '.join(map(_quote, rows))}) ORDER BY l.ts LIMIT 1") if rows else []
-    out: dict[str, Any] = {"staged_dir": staged_dir,
-                           "staged": {"run": staged[0]["id"], "at": staged[0]["start_utc"]} if staged else None,
+    out: dict[str, Any] = {"checkpoint": ckpt,
+                           "staged": {"at": staged[0]["value"], "ref": staged[0]["ref"]} if staged else None,
                            "record": {"artifact": record[0]["target"], "row": record[0]["value"], "at": record[0]["ts"]} if record else None}
     out["hours"] = (round((_at(out["record"]["at"]) - _at(out["staged"]["at"])).total_seconds() / 3600, 1)
                     if out["staged"] and out["record"] else None)
     return out
 
 
-def inventory(repo: str, marks: dict[str, tuple[str, ...]], sql: Sql | None = store_sql) -> dict[str, Any]:
-    """A model's glue inventory (module docstring); `sql` None leaves the hours out."""
+def inventory(repo: str, marks: dict[str, tuple[str, ...]], sql: Sql | None = store_sql, fetch: Fetch | None = hub_config) -> dict[str, Any]:
+    """A model's glue inventory (module docstring); `sql` None leaves the hours out, `fetch` None reads no config.json from the hub."""
     ckpt = next((c for c in checkpoints() if c["repo"] == repo), {})
     maps = capture_maps(repo)
+    pin = {**next((m["pins"]["checkpoint"] for m in maps), {}), **ckpt}
     role = ckpt.get("role")
-    model_type = (_model_type(role) if role else None) or next((m["model_type"] for m in maps), None)
+    config = hf_config(repo, role, pin.get("revision"), pin.get("config_sha256"), fetch)
+    model_type = (FF.family_of(config[0]) if config[0] else None) or next((m["model_type"] for m in maps), None)
     rows = {p.stem: json.loads(p.read_text()) for p in sorted(WORKLOADS.glob("*.json"))}
     rows = {r: w for r, w in rows.items() if w.get("model") == repo}
     world = max((int(w["engine"]["args"].get("tensor_parallel_size", 1)) for w in rows.values()), default=1)
     files = {rel: ms for rel, ms in marks.items() if repo in ms}
-    staged = ckpt.get("local_path") or next((m["pins"]["checkpoint"].get("staged") for m in maps), None)
-    staged = staged.split()[0].split(":", 1)[-1] if staged else None
     return {
         "model": repo, "role": role, "model_type": model_type, "rows": sorted(rows),
         "files": [{"path": rel, "area": _area(rel), "lines": _lines(ROOT / rel), "models": list(ms)} for rel, ms in sorted(files.items())],
         "rules": [{"path": rel, "rule": r} for rel in sorted(files) for r in _rules(ROOT / rel)],
         "allowlists": _allowlists(set(files), repo),
         "family": _family(model_type, repo),
-        "profile": _profile(role, world, set(files)),
+        "profile": _profile(role, world, set(files), config),
         "capture_maps": [_map_counts(m) for m in maps],
-        "hours": hours(staged, sorted(rows), sql) if sql else None,
+        "hours": hours(RC.checkpoint(repo, pin["revision"]) if pin.get("revision") else None, sorted(rows), sql) if sql else None,
     }
 
 
@@ -223,13 +265,13 @@ def render(inv: dict[str, Any]) -> str:
                  f"shared with {', '.join(fam['shared_with']) or 'no other checkpoint'}")
     prof = inv["profile"]
     lines.append(f"  profile       refused: {prof['refused']}" if "refused" in prof else
-                 f"  profile       {len(prof['entries'])} of {prof['patterns']} patterns of {prof['module']}"
+                 f"  profile       {len(prof['entries'])} of {prof['patterns']} patterns of {prof['module']} ({prof['config']})"
                  + "".join(f"  {e['pattern']}" for e in prof["entries"]))
     lines += [f"  capture map   {m['id']}: " + ", ".join(f"{k} {m[k]}" for k in m if k != "id") for m in inv["capture_maps"]] or \
              ["  capture map   none"]
     h = inv["hours"]
     if h is not None:
-        st = f"{h['staged']['at']} ({h['staged']['run']})" if h["staged"] else f"no run names {h['staged_dir']}"
+        st = f"{h['staged']['at']} ({h['staged']['ref']})" if h["staged"] else f"no staging event on {h['checkpoint']}"
         rec = f"{h['record']['at']} ({h['record']['artifact'][:16]}…)" if h["record"] else "no PASS record"
         lines.append(f"  hours         {h['hours'] if h['hours'] is not None else '-'}  staged {st} -> record {rec}")
     return "\n".join(lines)

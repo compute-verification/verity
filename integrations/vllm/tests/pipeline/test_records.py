@@ -1,6 +1,6 @@
 """The circuit database (`verity_vllm.records`): the index, a TP row published from its row dir, pinned and loaded back by row id, its
 conformance (captures of record, named gaps, a property left silent refused), the in-stage manifest a manifest of record
-supersedes, and a job's bundle read with no store."""
+supersedes, a job's bundle read with no store, and a checkpoint's staging event."""
 from __future__ import annotations
 
 import gzip
@@ -13,7 +13,7 @@ from research.store.local import LocalStore
 from verity.ml.circuits import encode_program, program_digest
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.evaluation.reference import evaluate
-from verity_vllm import records
+from verity_vllm import glue, records
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import WORKLOADS, RowId, UsageError
 from verity_vllm.pipeline import epoch
@@ -286,6 +286,16 @@ def test_a_record_published_from_another_tree_is_pulled_into_this_index(tmp_path
     assert pod[ROW]["programs"] == epoch.build_programs(d), "the entry rebuilt from the record is the one its row dir gave"
     with pytest.raises(UsageError, match="not a PASS vllm-config-record/v1"):
         records.pull(build)
+
+
+def test_a_checkpoints_staging_is_labelled_and_glue_counts_its_hours_from_it(tmp_path, store):
+    rev = "aca966e4e02791568aa6a4ced368624b3d897f42"
+    records.staged(REPO, rev, at="2026-10-12T21:42:55Z", ref="vy-glm53-eu:/fs/x.verify", by="circuits")
+    records.staged(REPO, rev, at="2026-10-13T00:00:00Z", ref="r20261013-000000-0000", by="circuits")
+    h = glue.hours(records.checkpoint(REPO, rev), [ROW], glue.store_sql)
+    assert h["staged"] == {"at": "2026-10-12T21:42:55Z", "ref": "vy-glm53-eu:/fs/x.verify"} and h["record"] is None and h["hours"] is None
+    with pytest.raises(UsageError, match="a UTC time"):
+        records.staged(REPO, rev, at="2026-10-12 21:42", ref="x", by="circuits")
 
 
 def test_a_build_without_construction_manifests_is_refused(tmp_path, store):

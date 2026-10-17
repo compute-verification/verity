@@ -84,7 +84,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
     "protected": ("verity_vllm.properties.protected", "protected-path diff check"),
     "quarantine-lint": ("verity_vllm.properties.quarantine_lint", "quarantine registry lint"),
-    "records": ("verity_vllm.records", "the circuit database: a row's record and its Programs, by row id (publish, capture, show, programs, fetch)"),
+    "records": ("verity_vllm.records", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch), and a "
+                            "checkpoint's staging (staged)"),
     "rejudge": ("verity_vllm.pipeline.tp.rejudge", "recompute a finished TP Commit's GPU-free gates from its saved outputs"),
     "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
     "router-tap-build": ("verity_vllm.acquire.router_tap_src.build_ext", "build or check the router-softmax tap's CUDA op"),

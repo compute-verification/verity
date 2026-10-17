@@ -375,8 +375,10 @@ hours).  `--update` re-pins a row from its rebuild and keeps its record, which t
 A module that exists for particular models says so with a module-level `__models__ = ("<HF repo id>", ...)`, after its docstring
 (P8 and the by-name lint skip it; its circuit-check sidecar goes with it).  `verity-vllm glue [REPO ...] [--json]` (`glue.py`) reports
 per model the code those markers tie to it (files and lines by area, the rules they define, the lint allowlist entries on them, the
-profile patterns they supply), its family facts and capture maps, and the hours from the store's first run on its staged weights to
-its first PASS record.  A new model's module carries the marker from its first commit.
+profile patterns they supply, or why the profile refuses the `config.json` the Build reads), its family facts and capture maps, and
+the hours from its checkpoint's staging event to its first PASS record.  The step that stages a checkpoint's weights
+(`ops/pod_bootstrap.sh`) records that event as the label `staged` on `ckpt:<repo>@<revision>` (`verity-vllm records staged`, which
+also backfills one from other evidence).  A new model's module carries the marker from its first commit.
 
 `verity-vllm rejudge RUN` (`pipeline/tp/rejudge.py`) recomputes a finished TP Commit's gates that need no GPU from what it saved
 (its runs in the row's `runs.jsonl`, each run's verdict from its ranks', manifest agreement, the cross-rank check, `summary.pass`),

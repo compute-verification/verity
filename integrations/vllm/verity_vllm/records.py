@@ -19,6 +19,10 @@ With `newest`, each one the caller leaves out cites its newest holding capture i
 publishes with (`pipeline.research.chain`, once a row's Build, Match and Commit pass).  A record published from another tree (a
 pod's job tree) reaches this tree's index with `pull`: the entry is rebuilt from the record alone (`entry`).
 
+A checkpoint's staging is the label `staged` on `ckpt:<repo>@<revision>`: when a host finished staging its weights and checking every
+shard's sha256, its ref the evidence (`staged`).  The step that stages weights writes it (`ops/pod_bootstrap.sh`, through its run's
+custody key); `glue` reads it as the start of a model's hours to record.
+
 A `research run` job has no store (its custody key stays with the runner): the launcher writes the row's record and the descriptors
 the job reads into one file (`bundle`), ships it (`research run --send FILE`), and the job decodes them from it (`programs(row,
 bundle=...)`), each digest checked against the record as from the store.
@@ -40,6 +44,7 @@ bundle=...)`), each digest checked against the record as from the store.
     verity-vllm records show [<row>]                  # the rows and their records, or a row's record
     verity-vllm records programs <row> [--rank R] [--part P] [--bundle FILE]   # fetch, decode and check a row's Programs
     verity-vllm records fetch <row> --to FILE [--rank R] [--part P]   # a job's bundle: research run --send FILE
+    verity-vllm records staged <repo> <revision> --at UTC --ref EVIDENCE --by LANE   # a checkpoint's staging event
 """
 from __future__ import annotations
 
@@ -51,6 +56,7 @@ import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -381,6 +387,24 @@ def pull(art: str, tier: str | None = None) -> str:
     return row
 
 
+STAGED = "staged"
+UTC = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def checkpoint(repo: str, revision: str) -> str:
+    """A checkpoint's label target in the store."""
+    return f"ckpt:{repo}@{revision}"
+
+
+def staged(repo: str, revision: str, *, at: str, ref: str, by: str) -> str:
+    """Label `repo`@`revision` staged at `at` (UTC, `UTC`'s form), `ref` the evidence."""
+    try:
+        datetime.strptime(at, UTC)
+    except ValueError:
+        raise UsageError(f"--at {at!r}: a UTC time, YYYY-MM-DDTHH:MM:SSZ") from None
+    return data("label", checkpoint(repo, revision), STAGED, at, "--by", by, "--ref", ref)
+
+
 @dataclass(frozen=True, kw_only=True)
 class PublishOptions:
     """Write a row's config record, preserve it labelled row=<id> and index it with its Programs' pins in manifests/records.json."""
@@ -456,7 +480,20 @@ class FetchOptions:
     cmd: str = field(default="fetch", init=False)
 
 
-COMMANDS = {"publish": PublishOptions, "pull": PullOptions, "capture": CaptureOptions, "show": ShowOptions, "programs": ProgramsOptions, "fetch": FetchOptions}
+@dataclass(frozen=True, kw_only=True)
+class StagedOptions:
+    """Record that a host finished staging a checkpoint's weights, every shard's sha256 checked: the label staged on ckpt:<repo>@<revision>."""
+
+    repo: str = option("repo", help="the checkpoint's HF repo id")
+    revision: str = option("revision")
+    at: str = option("--at", help="when the shards' check passed, UTC (YYYY-MM-DDTHH:MM:SSZ)")
+    ref: str = option("--ref", help="the evidence: the staging run, or host:path of its verify record")
+    by: str = option("--by", help="the label's author (a lane)")
+    cmd: str = field(default="staged", init=False)
+
+
+COMMANDS = {"publish": PublishOptions, "pull": PullOptions, "capture": CaptureOptions, "show": ShowOptions, "programs": ProgramsOptions, "fetch": FetchOptions,
+            "staged": StagedOptions}
 
 
 def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
@@ -466,7 +503,7 @@ def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
     return out
 
 
-def main(a: PublishOptions | PullOptions | CaptureOptions | ShowOptions | ProgramsOptions | FetchOptions) -> int:
+def main(a: PublishOptions | PullOptions | CaptureOptions | ShowOptions | ProgramsOptions | FetchOptions | StagedOptions) -> int:
     if a.cmd == "publish":
         ev = evidence_of(a.build, manifest=a.manifest, match=a.match, match_run=a.match_run, commit=a.commit, commit_run=a.commit_run,
                          conformance=_pairs("--conformance", a.conformance, "PROPERTY=art:..."),
@@ -487,6 +524,9 @@ def main(a: PublishOptions | PullOptions | CaptureOptions | ShowOptions | Progra
         return 0
     if a.cmd == "fetch":
         print(bundle(a.row, Path(a.to), a.rank or None, part=a.part or None))
+        return 0
+    if a.cmd == "staged":
+        print(staged(a.repo, a.revision, at=a.at, ref=a.ref, by=a.by), end="")
         return 0
     src = Path(a.bundle) if a.bundle else None
     named = parts(record(a.row, src))
