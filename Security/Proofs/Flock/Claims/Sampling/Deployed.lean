@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.Level3.RowV2
+import Proofs.Flock.Claims.Sampling.Reference.Prover
 
 /-!
 # The deployed sampling record
@@ -20,9 +21,13 @@ fixes set, and the sampled verifier's code (`SamplingDeploy.Code`) as its parame
 * `openCalls`: the most openings one session reveals (`Code.reveals`) times one opening's calls, at most
   `4 + depth own` (`opens_calls_le`): the leaf's three, the leaf's frame, and one node per level of the deepest
   registered port.
+* `Tape`, `P`: the sampled reference prover (`Reference.refP`), at the code's framing, on a Flock tape per unit: in each
+  checked unit's session, Flock's masked reference prover on what it reveals, checked by this commitment.
+* `δc`: the proof units' count times the largest of Flock's masked error `FlockComplete.δcZk`, capped at `1`, over the
+  sessions' statements at `x` (`Reference.sessErrAt`): the union bound over the checked units' sessions.
 * The rest is the code's: the verifier in public-coin form, its parser, scope check and partition evaluation, its draw
-  layout, the checked units' sessions and what their witnesses reveal, the sessions' `N₀`, and the reference prover on
-  its tapes with its completeness error.
+  layout, the checked units' sessions and what their witnesses reveal, the sessions' `N₀`, and the reference prover's
+  framing.
 
 What is then a fact about the record: its sessions are `deployZk`'s (`deploy_flock`, `rfl`), its `ε_table` is
 nonnegative (`deploy_εtable_nonneg`), its commitment is hm96 leaves under the registered path check (`deploy_commit`,
@@ -42,8 +47,9 @@ its Flock witness reveals (`session`, `reveal`); the trace commitment's register
 index of each position under a run's roots (`at_`) and its published leaf layer (`layer`); where each committed bit
 sits, its row's width and its place there (`place`), and how the reveal encodes an opening's data: the row's other bits,
 the salt and the path (`bits`, `salt`, `π`); and its numbers: the sessions' `N₀`, the most tables a session at a
-statement sets up (`tables`) and the most openings one session reveals (`reveals`); and the reference prover, the honest
-sampled prover the deployment runs, on its tapes (`Tape`, `P`), with its completeness error at each hash (`δc`). -/
+statement sets up (`tables`) and the most openings one session reveals (`reveals`); and the reference prover's framing
+(`Reference.refP`): where a run is at a history (`step`), the positions a checked unit's session opens (`reads`) and the
+Flock witness that encodes what it reveals (`wit`). -/
 structure Code where
   V : Verifier FlockDeploy.Coin
   parse : Msg → Option Stmt
@@ -64,10 +70,9 @@ structure Code where
   innerN₀ : Msg → ℝ
   tables : Msg → ℕ
   reveals : Msg → ℕ
-  Tape : Type
-  [tapeNonempty : Nonempty Tape]
-  P : Wit → Prover Tape
-  δc : (Msg → Msg) → Msg → ℝ
+  step : Msg → List (Msg × Msg) → Reference.Step
+  reads : Stmt → ℕ × ℕ → List ℕ
+  wit : Stmt → ℕ × ℕ → List (Opening Bool) → Claims.Flock.Wit
 
 /-! ## The trace commitment -/
 
@@ -154,6 +159,12 @@ theorem opens_calls_le (H : Msg → Msg) (c : Code) (roots : List Msg) (o : Open
 
 /-! ## The record -/
 
+/-- The proof units at `x` under the code's parser and partition evaluation, `0` on a statement that doesn't parse. -/
+def units (c : Code) (x : Msg) : ℕ :=
+  match c.parse x with
+  | some s => ((c.partition s.prog s.query).getD ⟨[]⟩).sizes.sum
+  | none => 0
+
 /-- **The deployed sampling record** at the relation's fields `rel` and the verifier's code `c`. -/
 noncomputable def deploy (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : Code) :
     Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace where
@@ -175,10 +186,9 @@ noncomputable def deploy (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Re
   εtable x := c.tables x * 2 ^ (-(205 : ℝ))
   weight x := c.tables x * 2 ^ 33
   openCalls x := c.reveals x * (4 + depth c.own)
-  Tape := c.Tape
-  tapeNonempty := c.tapeNonempty
-  P := c.P
-  δc := c.δc
+  Tape := Reference.Tape
+  P := Reference.refP c.step c.parse c.reads (commit c) c.wit
+  δc H x := units c x * Reference.sessErrAt c.session (FlockComplete.δcZk H) x
 
 variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : Code)
 
