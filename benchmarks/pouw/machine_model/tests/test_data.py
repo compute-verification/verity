@@ -221,16 +221,3 @@ def test_uniform_takes_the_issue_slot():
     assert c["UNI"]["UP"] == pytest.approx(u_of(M.cycle_u, "3.0621", "", "", ""))
     assert c["UNI"]["UP"] < old["UNI"]["UP"]
     assert {k: v for k, v in c.items() if k != "UNI"} == {k: v for k, v in old.items() if k != "UNI"}
-
-
-def test_l2_gather_rows_are_new_copy_routes():
-    """VF3q-16 (EPS1 DATASHEET r5, l2gather.cu, r20261017-071007-85c9) adds the five L2 random-row gather routes the
-    CUDA-core table route uses: LDG.E.{64,128,256} (L2G8/L2G16/L2G32), texture (L2GT4) and the read-only cache (L2GN16),
-    each on its own measured row, none in VF3p-16; VF3q-16 adds no row to any other kind."""
-    c, old = census(M, "VF3q-16"), census(M, "VF3p-16")
-    g = {"L2G8": "ROW_L2G8", "L2G16": "ROW_L2G16", "L2G32": "ROW_L2G32", "L2GT4": "ROW_L2GT4", "L2GN16": "ROW_L2GN16"}
-    assert not set(g) & set(old)
-    for k, row in g.items():
-        assert set(c[k]) == {row} and ROWS[row].status == "measured"
-    assert c["L2G32"]["ROW_L2G32"] == pytest.approx(u_of(M.cycle_u, "0.00953305", "0.02", "", ""))
-    assert {k: v for k, v in c.items() if k not in g} == old

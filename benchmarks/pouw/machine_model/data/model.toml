@@ -3,7 +3,8 @@
 
 # The vector `machine-model solve` re-solves by default: the adopted vector (decision 17; VF3l-16 by decision 62, then
 # VF3n-16 by the compute-accounting coordinator, 17 Oct, once the JI3e refit was approved; VF3o-16 its measured margin;
-# VF3p-16 by decision 73, a uniform instruction on the issue rows; VF3q-16 the L2 random-row gather routes).
+# VF3p-16 by decision 73, a uniform instruction on the issue rows; VF3q-16 by the compute-accounting coordinator, 17 Oct,
+# FACET-BREAK's refit of every row its programs beat, once its solve and check passed).
 current = "VF3q-16"
 # The design whose cheapest attack is a vector's margin.
 adopted = "U±64, F±1"

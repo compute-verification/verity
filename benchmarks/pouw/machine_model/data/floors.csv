@@ -170,13 +170,15 @@ OMMASF16864,128,16,copy16,OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X with A or B zero:
 QMMA16832,128,16,copy16,QMMA.16832.F32.E2M1.E2M1/QMMA.16832.F32.E4M3.E4M3/QMMA.16832.F32.E5M2.E5M2 with A or B zero: D = C
 QMMASF16832,128,16,copy16,QMMA.SF.16832.F32.E4M3.E4M3.E8 with A or B zero: D = C
 QMMASP16864,128,16,copy16,QMMA.SP.16864.F32.E4M3.E4M3 with A or B zero: D = C
-L2G8,64,16,loads16,a plain load into registers
-L2G16,128,16,loads16,a plain load into registers
-L2G32,256,16,loads16,a plain load into registers
-L2GN16,128,16,loads16,a plain load into registers
-L2GT4,32,32,pi32,L2 random-row gather via texture (TLD point fetch): 1 word a lane
-L2G8,64,16,copy16,"a landed word: L2 random-row gather, 8 B a lane (LDG.E.64 at a fresh random index)"
-L2G16,128,16,copy16,"a landed word: L2 random-row gather, 16 B a lane (LDG.E.128)"
-L2G32,256,16,copy16,"a landed word: L2 random-row gather, 32 B a lane (LDG.E.256)"
-L2GT4,32,16,copy16,a landed word: L2 random-row gather via texture (TLD point fetch)
-L2GN16,128,16,copy16,a landed word: L2 random-row gather via the read-only cache (LDG.E.128.CONSTANT)
+LDS64,64,16,loads16,a plain load into registers (LDS.64)
+LDS64,64,16,copy16,a landed word: a plain load into registers (LDS.64)
+LDG64,64,16,loads16,a plain load into registers (LDG.E.64)
+LDG64,64,16,copy16,a landed word: a plain load into registers (LDG.E.64)
+LDG256,256,16,loads16,a plain load into registers (LDG.E.ENL2.256)
+LDG256,256,16,copy16,a landed word: a plain load into registers (LDG.E.ENL2.256)
+LDG128NA,128,16,loads16,a plain load into registers (LDG.E.NA.128)
+LDG128NA,128,16,copy16,a landed word: a plain load into registers (LDG.E.NA.128)
+LDG128CG,128,16,loads16,a plain load into registers (LDG.E.128.STRONG.GPU)
+LDG128CG,128,16,copy16,a landed word: a plain load into registers (LDG.E.128.STRONG.GPU)
+LDG256CG,256,16,loads16,a plain load into registers (LDG.E.ENL2.256.STRONG.GPU)
+LDG256CG,256,16,copy16,a landed word: a plain load into registers (LDG.E.ENL2.256.STRONG.GPU)

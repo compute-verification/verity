@@ -9,10 +9,10 @@ price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3p-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3q-16, the vector of record since 17 Oct after VF3p-16; VF3l-16 by decision 62 before them)
-uv run machine-model census VF3p-16 --kind ATOMS64
-uv run machine-model attacks VF3p-16 -n 3 # the cheapest attacks of every design
+uv run machine-model solve VF3q-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current` (VF3q-16, the vector of record since 17 Oct after VF3n-16, VF3o-16 and VF3p-16; VF3l-16 by decision 62 before them)
+uv run machine-model census VF3q-16 --kind ATOMS64
+uv run machine-model attacks VF3q-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 uv run machine-model eps                  # Dither's ε budget at q* = 8: every term, the LP's mixes, the ε(q*) curve
@@ -39,7 +39,7 @@ uv run machine-model eps --table --upfill --credit floor --uni-issue 0.92   # a 
 | `verity_machine_model/adopt.py` | Merging a measured census into `data/census/` at the last epoch, each (kind, row) at the faster of its two lines |
 | `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
 | `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA: `e-l7qs` is PROFILE's measured kernel, `dither-duo-l32` the provisional one the tests' hand arithmetic reads |
-| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (QSTAR's, provisional until a DATASHEET row) |
+| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (the most L2 read in any measured pattern, + 2%) |
 | `data/designs/NAME.toml` | A protocol's parameters: its honest profile, L, its noise's operand-delivery floor φ_del, the fold and filler (lane instructions a word by class), plain (unfolded) MMAs beside its work, ε_skip's and ε_mand's parts with sources, ε_clock, Theorem S's δ, p and checks, and honest's baseline program (dp4a) |
 | `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
 
@@ -152,13 +152,16 @@ SMSP-cycles, so UNI is 1 on issue and 0.7416 of a vector instruction's coefficie
 every uniform.cu point at the 2% margin (0.8168 holds them exactly), and UP rises to the fastest form alone, 0.766 a
 SMSP-cycle. A uniform row's measurement is valid only on ptxas 13.0 with the uniform chain gated by its exact uniform and
 MMA counts in SASS, inside a loop whose vector work reads the MMAs' results (ptxas moves the chain to lanes otherwise).
-VF3q-16 added the L2 random-row gather routes the CUDA-core table route uses (EPS1 DATASHEET r5, `opcode_probe/l2gather.cu`,
-r20261017-071007-85c9): a data-dependent gather of a W-byte row from an L2-resident table at a fresh random index, by
-`LDG.E.{64,128,256}` (`L2G8`/`L2G16`/`L2G32`, 8/16/32 B a lane), texture (`L2GT4`, `TLD`) and the read-only cache
-(`L2GN16`, `LDG.E.128.CONSTANT`), each a copy route at π_c ≥ 16 (`L2GT4` at π₃₂ ≥ 32). The widest row (`L2G32`) is the
-fastest useful rate, 9.76 B/SM/clk = 3.84 TB/s L2-resident (above QSTAR's 3.3 TB/s but well under the ~6 TB/s L2 peak);
-past the ~128 MB L2 it falls to 0.5-0.6 TB/s. As VF3m-16's word-writers did, the credits that price the new routes lower
-τ (0.0588 → 0.0585); the adopted design's margin (2.0) and U/F_low (1.1563) are unchanged.
+VF3q-16 is FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; `facet_break/loads.py family`, runs `@FB`):
+3505 programs over every facet beat 18 rows, and each beaten family closes for the upper hull of its old rows' vertices
+and the measured programs at the 2% margin. R1 and KFFMA0 become EFFMA0..6 (interleaved IMMA + FFMA beat R1 by 41%);
+JI3o_0 becomes JI3q_0..11 (HMMA.16816.F16 beside FFMA beat it by 9.8%), each form's hull taken alone and every row at a
+vector coefficient one of those hulls has, each form at the most it carries beside it, while JI3o_1 and JI3o_2 hold; LDG
+becomes ELDG0..2 over LDG128 and LDG32; KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 their E families; R6r becomes
+ER6r0..1 over LDS128 and UBLKCP4K (broadcast LDS.128 beside a 4 KB bulk copy out of shared memory beat it by 5.1%, at
+LDS128's fastest program); TLD2 on ROW_TLDW2 scales to its fastest program. The six loads the census priced at 0 (LDS.64, LDG.E.64, the
+256-bit LDG.E.ENL2.256 and the L1-skipping LDG.E.NA.128, .128.STRONG.GPU and .ENL2.256.STRONG.GPU) are kinds with rows
+of their own at their fastest program, the L1-skipping three on one row of the L2 bytes they read (ROW_L2RD).
 
 ## Where the data came from
 

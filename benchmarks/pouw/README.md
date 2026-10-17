@@ -32,7 +32,7 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `eps_budget.py` | CPU | Dither's skippable share of honest work as served (Llama-3.1-8B and 70B, 2K–32K, prefill and decode), by int8 products and by time, per component and design, with γ and decode's zero-weight gap (SKIP, note:20261017T0340Z-draft-skip) |
 | `int8_toggle.py` | RTX PRO 6000 | Sustained int8 GEMM throughput, SM clock and power by operand pattern (wide, U against a bit, bit against bit, zero): what a zero instance's narrow operands gain on the clock (SKIP) |
 | `pearlc_census.py` | CPU | TT_OUT's falsification census for Pearl-C's ticket chain, bit-exact, on the H100's atom or sm_120's (`--atom`) |
-| `machine_model/` | CPU | The sm_120 machine model's price vectors (VF … VF3p-16, VF3p-16 the vector of record): the LP, the rows, census and attack families as data, and `machine-model solve NAME` (its own README, and its own suite) |
+| `machine_model/` | CPU | The sm_120 machine model's price vectors (VF … VF3q-16, VF3q-16 the vector of record): the LP, the rows, census and attack families as data, and `machine-model solve NAME` (its own README, and its own suite) |
 | `exact_kit/` | CPU | `verity-exact-kit`, the theory and referee scripts' primitives (F_2 and F_p linear algebra, Möbius coefficients, kernel searches, SAT) and their one check registry with a JSON verdict; no theory, no folds (its own README) |
 | `workloads.json` | | The model and its linear shapes, the decode batches and prefill lengths, and the reference shapes (`gamma.py`) |
 | `run_result.py`, `tool.py` | | The runs' result record (`research/result/v0.1`) and the store's tool declaration |

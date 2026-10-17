@@ -1,21 +1,23 @@
-# VF3q-16: VF3p-16 with the L2 random-row gather routes the CUDA-core table route uses (EPS1 DATASHEET r5, l2gather.cu, r20261017-071007-85c9): a data-dependent gather of a W-byte row from an L2-resident table at a fresh random index, by LDG.E.{64,128,256} (L2G8/L2G16/L2G32, 8/16/32 B a lane), texture (L2GT4, TLD) and the read-only cache (L2GN16, LDG.E.128.CONSTANT), each a copy route at π_c ≥ 16 (L2GT4 at π₃₂ ≥ 32). Like VF3m-16's word-writers, the credits that price the new routes lower τ (0.0588 -> 0.0585); the adopted design's margin (2.0) and U/F_low (1.1563) are unchanged.
+# VF3q-16: VF3p-16 with FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; runs @FB): R1 and KFFMA0 as EFFMA0-6, JI3o_0 as JI3q_0-11 (each MMA form at the most it carries beside a lower vector coefficient), LDG as ELDG0-2, R6r as ER6r0-1 (LDS128 beside the 4 KB bulk copy out of shared memory, which R6r priced as one pool) and TLD2 on ROW_TLDW2 8.676 SMSP-cycles, the joint rows KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 as their E families, and the six loads the census didn't price (LDS.64, LDG.E.64, LDG.E.ENL2.256 and the L1-skipping .NA/.STRONG.GPU loads) on rows of their own.
 name = "VF3q-16"
 epoch = "VF3q-16"
-summary = "VF3p-16 with the L2 random-row gather routes the CUDA-core table route uses (EPS1 DATASHEET r5, l2gather.cu, r20261017-071007-85c9): a data-dependent gather of a W-byte row from an L2-resident table at a fresh random index, by LDG.E.{64,128,256} (L2G8/L2G16/L2G32), texture (L2GT4) and the read-only cache (L2GN16), each a copy route at π_c ≥ 16 (L2GT4 at π₃₂ ≥ 32); the widest row (L2G32) sustains 9.76 B/SM/clk = 3.84 TB/s L2-resident, past the ~128 MB L2 it falls to 0.5-0.6 TB/s. The credits that price the new routes lower τ (0.0588 -> 0.0585), as VF3m-16's word-writers did; the margin (2.0) and U/F_low (1.1563) are unchanged."
-note = "note:20261017T0332Z-draft-eps1-datasheet"
+summary = "VF3p-16 with FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; runs @FB): R1 and KFFMA0 as EFFMA0-6, JI3o_0 as JI3q_0-11 (each MMA form at the most it carries beside a lower vector coefficient), LDG as ELDG0-2, R6r as ER6r0-1 (LDS128 beside the 4 KB bulk copy out of shared memory, which R6r priced as one pool) and TLD2 on ROW_TLDW2 8.676 SMSP-cycles, the joint rows KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 as their E families, and the six loads the census didn't price (LDS.64, LDG.E.64, LDG.E.ENL2.256 and the L1-skipping .NA/.STRONG.GPU loads) on rows of their own."
+note = "note:20261017T0524Z-draft-eps1-facet-break"
 rows = [
-    "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
-    "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
-    "IW", "JI3o_0", "JI3o_1", "JI3o_2", "A64", "DP", "DPM", "ROW_TLD1",
-    "ROW_TLD2", "ROW_TLD4w", "ROW_TLD2D1", "ROW_TLD2D4", "ROW_TEX1", "ROW_TEX4", "ROW_TLD4G", "ROW_TEXBIL",
-    "ROW_SULD1", "ROW_SULD4", "ROW_LDCUNI", "ROW_SURED", "ROW_LDCDIV", "ROW_LDC64", "ROW_UTMA", "ROW_UTMA8",
-    "ROW_UTMA512", "ROW_G4_16", "ROW_G4_32", "ROW_ATOMG32", "ROW_ATOMG64", "ROW_REDG32", "ROW_REDG64", "ROW_ATOMS32",
-    "ROW_ATOMS64", "ROW_ATOME32", "ROW_ATOME64", "ROW_REDAS32", "ROW_REDAS64", "ROW_UBLKRED", "ROW_CVT64", "ROW_TEXI",
-    "ROW_TLDW1", "ROW_TLDW2", "ROW_TLDW4", "ROW_SULDI", "ROW_LDSMR1", "ROW_LDSMR2", "ROW_LDSMR4", "ROW_STSMR1",
-    "ROW_STSMR2", "ROW_STSMR4", "ROW_SHFLM", "ROW_UTMA1K", "ROW_UTMA2K", "ROW_UTMA4K", "ROW_UTMA8K", "ROW_UTMA16K",
-    "ROW_UTMA32K", "ROW_UTMA48K", "ROW_UTMA64K", "ROW_UTMABIG", "ROW_G4_256", "ROW_G4_1K", "ROW_TMAB", "ROW_ATOME32P",
-    "ROW_LDGSTS16", "ROW_UBLKCP4K", "ROW_DSMST4P",
-    "ROW_L2G8", "ROW_L2G16", "ROW_L2G32", "ROW_L2GT4", "ROW_L2GN16",
+    "issue", "M", "F", "VMNX", "H", "I", "A", "F2FS",
+    "XU", "ER6r0", "ER6r1", "LDSi", "R6w", "L2red", "UP", "IW", "JI3o_1",
+    "JI3o_2", "A64", "DP", "DPM", "ROW_TLD1", "ROW_TLD2", "ROW_TLD4w", "ROW_TLD2D1",
+    "ROW_TLD2D4", "ROW_TEX1", "ROW_TEX4", "ROW_TLD4G", "ROW_TEXBIL", "ROW_SULD1", "ROW_SULD4", "ROW_LDCUNI",
+    "ROW_SURED", "ROW_LDCDIV", "ROW_LDC64", "ROW_UTMA", "ROW_UTMA8", "ROW_UTMA512", "ROW_G4_16", "ROW_G4_32",
+    "ROW_ATOMG32", "ROW_ATOMG64", "ROW_REDG32", "ROW_REDG64", "ROW_ATOMS32", "ROW_ATOMS64", "ROW_ATOME32", "ROW_ATOME64",
+    "ROW_REDAS32", "ROW_REDAS64", "ROW_UBLKRED", "ROW_CVT64", "ROW_TEXI", "ROW_TLDW1", "ROW_TLDW2", "ROW_TLDW4",
+    "ROW_SULDI", "ROW_LDSMR1", "ROW_LDSMR2", "ROW_LDSMR4", "ROW_STSMR1", "ROW_STSMR2", "ROW_STSMR4", "ROW_SHFLM",
+    "ROW_UTMA1K", "ROW_UTMA2K", "ROW_UTMA4K", "ROW_UTMA8K", "ROW_UTMA16K", "ROW_UTMA32K", "ROW_UTMA48K", "ROW_UTMA64K",
+    "ROW_UTMABIG", "ROW_G4_256", "ROW_G4_1K", "ROW_TMAB", "ROW_ATOME32P", "ROW_LDGSTS16", "ROW_UBLKCP4K", "ROW_DSMST4P",
+    "EFFMA0", "EFFMA1", "EFFMA2", "EFFMA3", "EFFMA4", "EFFMA5", "EFFMA6", "ELDG0",
+    "ELDG1", "ELDG2", "JI3q_0", "JI3q_1", "JI3q_2", "JI3q_3", "JI3q_4", "JI3q_5",
+    "JI3q_6", "JI3q_7", "JI3q_8", "JI3q_9", "JI3q_10", "JI3q_11", "ROW_LDS64", "ROW_LDG64",
+    "ROW_LDG256", "ROW_L2RD",
 ]
 # [kind, MACs]: the kind's price is at least that many tensor MACs
 credits = [
@@ -40,11 +42,11 @@ credits = [
     ["LDS128", 2048], ["LDG32", 512], ["LDG128", 2048], ["LDC64", 1024], ["LDCUNI", 512], ["LDSM_X1", 512],
     ["LDSM_X2", 1024], ["LDSM_X4", 2048], ["ATOME32P", 1024],
     ["LDGSTS16", 4096], ["UBLKCP4K", 32768], ["DSMST4P", 4096],
-    ["L2G8", 1024], ["L2G16", 2048], ["L2G32", 4096], ["L2GT4", 1024], ["L2GN16", 2048],
+    ["LDS64", 1024], ["LDG64", 1024], ["LDG256", 4096], ["LDG128NA", 2048], ["LDG128CG", 2048], ["LDG256CG", 4096],
 ]
 
 [published]  # as `machine-model solve VF3q-16` printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
-tau = 0.0585
-tau_600w = 0.0457
+tau = 0.0564
+tau_600w = 0.0441
 uf_low = 1.1563
 margin = 2.0
