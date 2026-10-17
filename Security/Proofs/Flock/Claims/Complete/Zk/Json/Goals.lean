@@ -13,7 +13,8 @@ specification (`JsonSpec`) and 64-byte oracle outputs (`Out64`), and two named h
   and the verifier's `Hello` a JSON object whose `coins` is an object, printable with the prover's nonce put in (what
   the prover's `Hello` and R7 need). The keyed coin tree is `readyZk`'s.
 * `ProverOkZk`: at the case's table, the masked commitment's cap, at the `--zk` schedule's first level, is non-empty and
-  under `2^64` bytes, and each masked rep records a round, each of at most `65536` coins (`RepOk`).
+  under `2^64` bytes, and each masked rep, on the table's extra claims at the link's points, records a round, each of
+  at most `65536` coins (`RepOk`).
 
 `RunZk.json` is the record at the run: the printed honest masked record (`sessionPZk_facts`), which `Record.decodeWith`
 reads as `sessOf` (`decode_recordObjZk`) and `liveOf` as its live session (`live_recordObjZk`). The goals follow as the
@@ -35,14 +36,15 @@ def StmtOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m))
 
 /-- **What the masked record needs of the prover's pieces**, at every good masked case's table: the masked
-commitment's cap, at the `--zk` schedule's first level, is non-empty and under `2^64` bytes, and each masked rep records
-a round, each of at most `65536` coins. -/
+commitment's cap, at the `--zk` schedule's first level, is non-empty and under `2^64` bytes, and each masked rep, on the
+table's extra claims at the link's points, records a round, each of at most `65536` coins. -/
 def ProverOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st ∈ c.sts,
     (∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (v.1.levels.getD 0 default)
         v.2 g extra lanePad salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64) ∧
     ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+      (Setup.ofCircuit st).extra (ptsOf c.spec (coinOf (c.resp 0))) = .ok extras →
       Ret ((repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) v.1 v.2 rep dom tr tb cm₀
         extras pads ic extra lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
 

@@ -138,7 +138,7 @@ def SessionFactsZk (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (sp
     ∃ bs, bodies.toList = linkBody [rb] [ByteArray.empty] :: bs ∧ Recs resp 1 (streams.toList.flatMap Array.toList) bs
 
 /-- **The one-table masked session's facts**, given a non-empty masked level-0 cap under `2^64` bytes and well-formed
-rep rounds. -/
+rep rounds on the table's extra claims at the link's points. -/
 theorem sessionPZk_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
     (hown : Json.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
@@ -147,6 +147,7 @@ theorem sessionPZk_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 g extra lanePad
         salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64)
     (hR : ∀ v, Zk.schedule st.m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+      st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
         lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
     {r : String × Array ByteArray} {bodies : Array Claims.Msg}
@@ -211,7 +212,8 @@ theorem sessionPZk_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
     obtain ⟨ic, l₀, e0, e3⟩ := go_bind_ok e
     rw [Still.go (Still.of_pureS (innerCommitP_pureS _ _ _)) e0] at e3
     obtain ⟨⟨pf, tr'⟩, l₂, e2, e⟩ := go_bind_ok e3
-    have hok := Ret.go (hR v hv _ _ _ _ _ _ _ _ _ _ _ _) e2
+    have hex' : st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras := by simpa [ptsOf] using hex
+    have hok := Ret.go (hR v hv _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
     obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
     simp only [go_pure, Prod.mk.injEq, Except.ok.injEq] at e
     obtain ⟨rfl, rfl⟩ := e
@@ -219,7 +221,7 @@ theorem sessionPZk_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
       rw [← Array.length_toList, hl, Recs.length_eq hrec]
       simp only [List.length_cons]
       omega
-    refine ⟨_, rfl, by simp [h₁], by simp [h₂], fun q hq => ?_, fun _ => ⟨extras, by simpa [ptsOf] using hex⟩,
+    refine ⟨_, rfl, by simp [h₁], by simp [h₂], fun q hq => ?_, fun _ => ⟨extras, hex'⟩,
       bs ++ bs', by rw [hl₂, hl]; rfl, ?_⟩
     · rcases Array.mem_push.1 hq with hq | rfl
       · exact h₃ q hq
