@@ -7,7 +7,8 @@ The lock's `claims` section (`Security/lean-audit.json`) names a theorem `C_fail
 and `∃` binders it is `¬ C …`, so `C` is not true of everything. A guarantee's statement reads only the spec, so each
 quantifies (`∃`) over the toy instance it fails at, and its proof is the toy witness of `Witnesses.Shared`, `Flock` or
 `Sampling`. A record whose decoder's columns are words of bits takes the zero word as an instance (`Zero (List Bool)`),
-which the statement quantifies over too. The ZK-recursion compiler's are `Witnesses.Recursion`'s and `RecursionMeets`'.
+which the statement quantifies over too. `Complete`'s, Flock's and the sampling one's are `CompleteFails`'; the
+ZK-recursion compiler's are `Witnesses.Recursion`'s and `RecursionMeets`'.
 -/
 
 namespace Claims
@@ -32,13 +33,6 @@ theorem Bits_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coi
     (lam : Msg → ℝ) (x : Msg) (hR : ∀ w, ¬ R x w) (hlam : 0 < lam x) :
     ∃ V : Verifier Coin, ∀ E : Extractor Coin W V, ¬ Claims.Bits H V R E lam :=
   ⟨_, fun E => Witness.Bits_fails H R E lam x hR hlam⟩
-
-/-- **`Complete` fails**: at every prover with a tape and every `δ_c`, wherever a statement in scope has a witness and
-`δ_c < 1`, some hash and verifier fail it. -/
-theorem Complete_fails {Coin W Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]
-    (P : W → Prover Ω) (R : Rel W) (Scope : Msg → Prop) (δc : Msg → ℝ) {x : Msg} {w : W} (hs : Scope x)
-    (hr : R x w) (hδ : δc x < 1) : ∃ (H : Msg → Msg) (V : Verifier Coin), ¬ Claims.Complete H V P R Scope δc :=
-  ⟨_, _, Witness.Complete_fails P R Scope δc hs hr hδ⟩
 
 /-- **`ScopeMatches` fails** at an empty scope and a check that takes everything. -/
 theorem ScopeMatches_fails : ¬ Claims.ScopeMatches (fun _ => False) (fun _ => true) :=
@@ -71,13 +65,6 @@ theorem Flock.Bits_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
 theorem Flock.ScopeMatches_fails {Coin : Type} :
     ∃ D : Claims.Flock.Deploy Coin Unit Unit, ¬ Claims.Flock.ScopeMatches D :=
   ⟨_, Witness.Flock.ScopeMatches_fails⟩
-
-/-- **Flock's `Complete` fails**: at every prover with a tape and every `δ_c`, wherever `δ_c < 1`, at some hash and
-record. -/
-theorem Flock.Complete_fails {Coin Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]
-    (P : Claims.Flock.Wit → Prover Ω) (δc : Msg → ℝ) (x : Msg) (hδ : δc x < 1) :
-    ∃ (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Unit Unit), ¬ Claims.Flock.Complete H D P δc :=
-  ⟨_, _, Witness.Flock.Complete_fails P δc x hδ⟩
 
 /-- **Flock's `Nontrivial` fails** at some record and recorded run. -/
 theorem Flock.Nontrivial_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
@@ -133,13 +120,6 @@ theorem Sampling.Binding_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inh
 theorem Sampling.Universal_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :
     ∃ D : Claims.Sampling.Deploy Coin Unit Unit, ¬ Claims.Sampling.Universal D :=
   ⟨_, Witness.Sampling.Universal_fails⟩
-
-/-- **The sampling `Complete` fails**: at every prover with a tape and every `δ_c`, wherever `δ_c < 1`, at some hash
-and record. -/
-theorem Sampling.Complete_fails {Coin Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]
-    (P : Claims.Sampling.Wit → Prover Ω) (δc : Msg → ℝ) (x : Msg) (hδ : δc x < 1) :
-    ∃ (H : Msg → Msg) (D : Claims.Sampling.Deploy Coin Unit Unit), ¬ Claims.Sampling.Complete H D P δc :=
-  ⟨_, _, Witness.Sampling.Complete_fails P δc x hδ⟩
 
 /-- **The sampling `Nontrivial` fails** at some record and recorded run. -/
 theorem Sampling.Nontrivial_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :

@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.Witnesses.Recursion
 import Proofs.Flock.Claims.Witnesses.RecursionMeets
 import Proofs.Flock.Claims.Witnesses.Stated
 import Proofs.Flock.Claims.Witnesses.Meets
+import Proofs.Flock.Claims.Witnesses.ReadyProbe
 import Proofs.Flock.Claims.Witnesses.BindingMeets
 import Proofs.Flock.Claims.Witnesses.SamplingTablesProbe
 
@@ -22,5 +23,6 @@ guarantees: `Stated` states the shared, Flock and sampling claims' failures over
 sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`); `SamplingTablesProbe` shows where that
 record's `Complete` says nothing. The ZK-recursion
 compiler's claims carry `Claims.Witness.Recursion.<Claim>_fails` and `<Claim>_meets`, their checkable antecedents met at
-the deployed record (`RecursionMeets`).
+the deployed record (`RecursionMeets`). `ReadyProbe` shows where a deployed record's claim says nothing: the masked
+record's `Complete` at a statement of other than one table.
 -/
