@@ -175,7 +175,8 @@ def test_draw_checks():
     assert D.check_draw(good, rec, D.parse_law("subset:3")).codes == ("law",)
     assert D.check_draw(None, rec, law).codes == ("not-a-draw",)
     assert D.check_draw({"law": "bernoulli", "population": 6, "p": "1/2", "units": [0, 5]}, rec, D.parse_law("bernoulli:1/2")).ok
-    for bad in ("subset", "subset:x", "bernoulli:3/2", "beta:1", "subset:\u0663", "work:\u00b2", "bernoulli:1/\u0662"):
+    for bad in ("subset", "subset:x", "subset:0", "subset:00", "bernoulli:3/2", "bernoulli:1/0", "beta:1", "subset:\u0663",
+                "work:\u00b2", "bernoulli:1/\u0662"):
         with pytest.raises(ValueError):
             D.parse_law(bad)
     for p in ("\u0661/\u0662", "\u00b9/2"):
