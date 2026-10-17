@@ -25,8 +25,9 @@ Three execution paths give the committer the same sequence of (name, bytes):
     gathering committer flushes after each, since Inductor reuses a dead buffer's storage within its wrapper.
 
 Kernels, fusion and autotuning are untouched: the hooks are wrapper lines added after Inductor fixed the kernels.  The generated
-code must be produced with these hooks installed, so the engine compiles fresh (`compile_cache_env`: no vLLM, FX-graph or
-AOTAutograd cache hit can hand back a wrapper generated without them).
+code must be produced with these hooks installed, so the engine compiles fresh: `install_hooks` turns Inductor's FX-graph and
+AOTAutograd caches off (a hit would hand back a wrapper generated without the hooks), and vLLM's own is off for every compiled engine
+(`engine.env.prepare_compiled_process_cache`).
 
 Faults (negatives): `compiled_omit:<substring>` -- tensors whose name contains it are not acquired (coverage fails);
 `compiled_late_drain` -- a replayed step acquires the previous replayed step's slot contents (`linkage` fails).
@@ -47,13 +48,6 @@ GRAPH_MODES = ("FULL", "PIECEWISE")
 #: nodes go to `Scheduler.codegen_extern_call`).  The hooks are emitted after the call, for `scheduler.current_node`.
 CODEGEN_METHODS = ("codegen_node", "codegen_template", "codegen_combo_kernel", "codegen_nested_reduction", "codegen_mix_order_reduction")
 INPUT_NAMES = (("input_ids", "ids"), ("positions", "positions"))
-
-
-def compile_cache_env() -> dict[str, str]:
-    """The cache switches a process sets before vLLM compiles so its wrappers are generated in-process with the hooks (and a control
-    process compiles the same way).  The autotuning cache (TORCHINDUCTOR_CACHE_DIR's best configs) stays on, so processes that share
-    that directory run the same kernel configurations."""
-    return {"VLLM_DISABLE_COMPILE_CACHE": "1", "TORCHINDUCTOR_FX_GRAPH_CACHE": "0", "TORCHINDUCTOR_AUTOGRAD_CACHE": "0"}
 
 
 def _capturing(val: torch.Tensor) -> bool:
@@ -108,11 +102,15 @@ def hookable_outputs(node: Any, wrapper: Any, graph: Any) -> tuple[list[str], di
 def install_codegen_hooks(hook: Any, into: hooks.Hooks) -> dict[str, Any]:
     """Patch Inductor so every generated wrapper calls `hook(name, tensor)` on each materialized buffer right after the node that
     writes it.  Must run before the engine compiles; returns the live codegen counters."""
+    from torch._functorch import config as fcfg
+    from torch._inductor import config as icfg
     from torch._inductor import hooks as ih
     from torch._inductor import scheduler as isched
     from torch._inductor.codegen.cuda_combined_scheduling import CUDACombinedScheduling
     from torch._inductor.virtualized import V
 
+    into.patch(icfg, "fx_graph_cache", False)
+    into.patch(fcfg, "enable_autograd_cache", False)
     stats: dict[str, Any] = {"nodes": 0, "hooks": 0, "skipped": {}}
 
     def emit() -> None:
