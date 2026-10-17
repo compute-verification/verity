@@ -35,7 +35,7 @@ STAGES = "build,match,commit"
 EFFECTIVE_SCHEMA = "verity-vllm/effective-config/v1"
 EFFECTIVE_NAME = "effective_config.json"
 #: The environment a row's engines inherit that can change their kernels, recorded beside the config (never a credential).
-ENGINE_ENV_PREFIXES = ("VLLM_", "NCCL_", "CUBLAS", "TORCH_", "TORCHINDUCTOR_", "TRITON_", "FLASHINFER_", "CUDA_VISIBLE_DEVICES")
+ENGINE_ENV = ("VLLM_", "NCCL_", "CUBLAS", "TORCH_", "TORCHINDUCTOR_", "TRITON_", "FLASHINFER_", "CUDA_VISIBLE_DEVICES")
 _SECRET_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
 
 
@@ -124,7 +124,7 @@ def _overrides(cfg: Any, prefix: str) -> dict[str, Any]:
 def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | None) -> dict[str, Any]:
     """What a run of a row used: its config (the row file without its requests, and the file's digest), the stage configs in full with
     the options a flag or variable set away from its default, the run's positionals, the installed vLLM and the engine environment
-    the stages inherit (``ENGINE_ENV_PREFIXES``)."""
+    the stages inherit (``ENGINE_ENV``)."""
     wl = WORKLOADS / f"{o.row}.json"
     cfg = RowConfig.load(wl) if wl.is_file() else None
     try:
@@ -144,7 +144,7 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
             "overrides": {**_overrides(o.build, "build."), **_overrides(o.match, "match."), **_overrides(o.commit, "commit."),
                           **{k: run[k] for k in ("world", "gpu_util", "protocols") if run[k] is not None}},
             "vllm_installed": vllm,
-            "engine_env": {k: environ[k] for k in sorted(environ) if k.startswith(ENGINE_ENV_PREFIXES)
+            "engine_env": {k: environ[k] for k in sorted(environ) if k.startswith(ENGINE_ENV)
                            and not any(w in k.upper() for w in _SECRET_WORDS)}}
 
 
