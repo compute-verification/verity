@@ -15,15 +15,22 @@ each term a fraction of honest time.
   T at q = q* over every route. Honest is the same LP with its own routes: the tensor route at its own operand cost, the
   baseline program (whose words belong to the baseline, not to ε: the brief §2) and its filler where it runs it.
   ε_machine = 1 − T_cheat/T_honest, and against honest as built (the tensor route alone) beside it. The cheater's
-  operand delivery is priced 0 (`free`, SPEC's conservative default), at the honest profile's register-capacity floor
-  (`floor`), or at honest's own (`honest`). The LP's duals are the certificate π*, at which ε_machine splits exactly
-  into ε_cert (1 − π*·n(H)/B(H)) and ε_route. With the scalar routes closed it is ε_machine's floor, which no q*
-  lowers; the threshold is the least q* at which ε_machine reaches it.
+  operand delivery is priced 0 (`free`, SPEC's conservative default), at the noise's floor φ_del (`floor`: the
+  design's `[operands]`, else the profile's), or at honest's own (`honest`). The LP's duals are the certificate π*, at
+  which ε_machine splits exactly into ε_cert (1 − π*·n(H)/B(H)) and ε_route. With the scalar routes closed it is
+  ε_machine's floor, which no q* lowers; the threshold is the least q* at which ε_machine reaches it.
+- **The credit** is honest's kernel (`H`, the master inequality) or the floor program ♭ (`floor`, SPEC §0.7a's
+  Corollary D3): the same LP restricted to honest's routes with the tensor route at φ_del and no overhead. Under ♭,
+  ε_sched, ε_clock and honest's overhead above ♭ leave ε for γ, as the factor T_H/B_♭.
 - **ε_luck** is Theorem S inside the same LP: an accepted cheater writes (1 − d̄) of the words and folds them all, d̄ =
   ln(1/δ)/((1 − p)·S) over S spot checks (note:20261016T0005Z-draft-luck-loss-round4), and ε_luck is what that saves
   it, d̄·w*/B(H) at π*. The terms add up to the LP exactly.
 - **ε_sched** is honest's measured time above its model time (`[measured]` in data/honest/), when the design runs the
-  profile's fold at its L. Unmeasured, it is 0: honest is certified at the model's bound, which moves it into γ.
+  profile's fold at its L (with its fillers, the measured time scaled by their model cost). Unmeasured, it is 0: honest
+  is certified at the model's bound, which moves it into γ.
+- **γ** is honest's time a useful MMA (`work` folded MMAs and `plain` unfolded ones) over the plain GEMM's model time.
+  Honest's time is measured when the design runs the profile's kernel, scaled by the model's cost of the design's
+  fillers when it adds some, and its fastest program's model time otherwise.
 - **ε_skip**, **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
 
 A warp instruction does 32 lane instructions; a uniform instruction does one. Every count is per committed word.
@@ -44,6 +51,7 @@ UNI = "UNI"
 MMA = "MMA"
 ROUTES = ("tensor", "lanes", "baseline", "uniform")
 OPERANDS = ("free", "floor", "honest")
+CREDITS = ("H", "floor")
 
 
 @dataclass(frozen=True)
@@ -72,16 +80,18 @@ class Honest:
             raise SystemExit(f"{self.name}: the fold is not inside per_mma")
         return {k: v for k, v in out.items() if v > 1e-12}
 
-    def tensor(self, operands: str) -> dict[str, float]:
-        """The cheater's tensor route a MMA: the MMA with its operand delivery free, at the floor, or at honest's."""
+    def tensor(self, operands: str, floor: dict[str, float] | None = None) -> dict[str, float]:
+        """The tensor route a MMA: the MMA with its operand delivery free, at the floor (the design's, else this
+        profile's), or at honest's."""
         if operands == "honest":
             return self.base()
         if operands not in OPERANDS:
             raise SystemExit(f"operands: one of {', '.join(OPERANDS)}")
-        if operands == "floor" and not self.floor:
+        floor = self.floor if floor is None else floor
+        if operands == "floor" and not floor:
             raise SystemExit(f"{self.name}: no [operands] floor")
         out = {MMA: self.per_mma[MMA]}
-        _add(out, self.floor if operands == "floor" else {}, 1.0)
+        _add(out, floor if operands == "floor" else {}, 1.0)
         return out
 
 
@@ -132,6 +142,9 @@ class Design:
     baseline: dict[str, float]   # honest's own lane program for a word (dp4a), lane instructions by class; {}: none
     baseline_name: str
     baseline_source: str
+    floor: dict[str, float]      # the noise's operand-delivery floor φ_del a MMA, warp instructions by class
+    floor_source: str
+    plain: float = 0.0           # plain MMAs a useful MMA beside `work`, unfolded (CO-Dither's strip): γ only
     lanes: bool = True
     uniform: bool = True
     q_uniform: float | None = None   # uniform instructions a word on the uniform datapath; None: q*
@@ -184,6 +197,7 @@ def design(name: str, data: Path = DATA) -> Design:
     h = honest(t["honest"], data)
     fold = dict(t.get("fold", {"name": h.fold_name, **h.fold}))
     luck, routes, base = t["luck"], t.get("routes", {}), t.get("baseline", {})
+    ops = t.get("operands", {"floor": h.floor, "source": h.floor_source})
     f = t.get("filler", {})
     filler = Filler(per_word=f.get("per_word", 0.0), mix=f.get("mix"), route=f.get("route", "lanes"),
                     source=f.get("source", ""))
@@ -195,7 +209,8 @@ def design(name: str, data: Path = DATA) -> Design:
                   mand=_parts(t.get("mand", {})), clock=Part(float(t["clock"]["eps"]), t["clock"]["source"]),
                   delta=luck["delta"], p=luck["p"], checks=luck["checks"], luck_source=luck["source"],
                   baseline=dict(base.get("program", {})), baseline_name=base.get("name", ""),
-                  baseline_source=base.get("source", ""), lanes=routes.get("lanes", True),
+                  baseline_source=base.get("source", ""), floor=dict(ops.get("floor", {})),
+                  floor_source=ops.get("source", ""), plain=t.get("plain", 0.0), lanes=routes.get("lanes", True),
                   uniform=routes.get("uniform", True), q_uniform=routes.get("q_uniform"))
 
 
@@ -351,14 +366,15 @@ def deficit(d: Design) -> float:
 
 @dataclass(frozen=True)
 class Setup:
-    """A design on Π with its honest side solved: the cheater's LP at any q* reads it."""
+    """A design on Π with its credited side solved: the cheater's LP at any q* reads it."""
     design: Design
     honest: Honest
     machine: Machine
     operands: str
+    credit: str                      # H (honest's kernel) or floor (the floor program ♭)
     fillers: tuple[tuple[Filler, float], ...]   # each filler with its lane instructions a word
-    as_built: Mix                    # honest's kernel: the tensor route alone
-    baseline: Mix                    # honest's fastest program: the tensor route and the baseline program
+    as_built: Mix                    # the credited kernel: the tensor route alone
+    baseline: Mix                    # the credited program: the tensor route and the baseline program
 
     def cheat(self, q: float, *, lanes: bool | None = None, uniform: bool | None = None,
               q_uniform: float | None = None, luck: bool = False) -> Mix:
@@ -367,7 +383,8 @@ class Setup:
         uniform = d.uniform if uniform is None else uniform
         qu = q_uniform if q_uniform is not None else (d.q_uniform if d.q_uniform is not None else q)
         return fastest(d, self.honest, self.machine, q=q if lanes else None, q_uniform=qu if uniform else None,
-                       baseline=True, fillers=self.fillers, cheat=True, tensor_mma=self.honest.tensor(self.operands), deficit=deficit(d) if luck else 0.0)
+                       baseline=True, fillers=self.fillers, cheat=True,
+                       tensor_mma=self.honest.tensor(self.operands, d.floor), deficit=deficit(d) if luck else 0.0)
 
     def machine_eps(self, q: float, **routes) -> float:
         return max(0.0, 1 - self.cheat(q, **routes).T / self.baseline.T)
@@ -377,24 +394,33 @@ class Setup:
         return self.machine_eps(0.0, lanes=False, uniform=False)
 
 
-def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free") -> Setup:
+def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", credit: str = "H") -> Setup:
+    """`credit` H compares the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a): the tensor
+    route at the noise's φ_del, the fold, the fillers on their own routes and the baseline program, with no overhead.
+    A saturating filler fills the uniform pipe's slack in the credited program's time."""
     h = honest(d.honest, data)
     if d.L % h.depth:
         raise SystemExit(f"{d.name}: L = {d.L} is not a multiple of the MMA's depth {h.depth}")
+    if credit not in CREDITS:
+        raise SystemExit(f"credit: one of {', '.join(CREDITS)}")
+    if credit == "floor" and operands == "honest":
+        raise SystemExit("the floor program delivers operands at φ_del: --operands honest reads honest's credit only")
+    tm = h.tensor("floor", d.floor) if credit == "floor" else None
     fixed = tuple((f, float(f.per_word)) for f in d.filler if f.per_word != "saturate")
     fillers = []
     for f in d.filler:
         if f.per_word == "saturate":
             if f.route != "uniform":
                 raise SystemExit(f"{d.name}: only a uniform filler saturates")
-            t = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fixed).T
-            fillers.append((f, t / pi.c[UNI]["UP"]))
+            m = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fixed, tensor_mma=tm)
+            fillers.append((f, max(0.0, m.T - pi.load(m.n)["UP"]) / pi.c[UNI]["UP"]))
         else:
             fillers.append((f, float(f.per_word)))
     fs = tuple(fillers)
-    built = fastest(d, h, pi, q=None, q_uniform=None, baseline=False, fillers=fs)
-    base = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fs)
-    return Setup(design=d, honest=h, machine=pi, operands=operands, fillers=fs, as_built=built, baseline=base)
+    built = fastest(d, h, pi, q=None, q_uniform=None, baseline=False, fillers=fs, tensor_mma=tm)
+    base = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fs, tensor_mma=tm)
+    return Setup(design=d, honest=h, machine=pi, operands=operands, credit=credit, fillers=fs, as_built=built,
+                 baseline=base)
 
 
 @dataclass(frozen=True)
@@ -403,14 +429,17 @@ class Eps:
     honest: Honest
     machine: str
     operands: str
+    credit: str
     q: float
     as_built: Mix
-    baseline: Mix
+    baseline: Mix                    # the credited program: ε's denominator
     cheat: Mix                       # the cheater writing every word: ε_machine
     lucky: Mix                       # the cheater writing 1 − d̄ of them: ε_luck
     fillers: tuple[tuple[Filler, float], ...]
     T_honest_measured: float | None  # measured SMSP-cycles a committed word
-    gamma: float                     # the baseline's time a useful MMA over the plain GEMM's fastest, times `work`
+    T_honest: float                  # honest's SMSP-cycles a committed word: measured, else its fastest program's model
+    T_honest_source: str
+    gamma: float                     # honest's time a useful MMA (`work` of them, `plain` plain) over the plain GEMM's
     sched: float | None
     skip: float
     mand: float
@@ -427,6 +456,11 @@ class Eps:
         """ε_route(π*) = ε_machine − ε_cert(π*)."""
         return self.machine_eps - self.cert
 
+    @property
+    def credit_ratio(self) -> float:
+        """Honest's time over the credited program's: under the floor credit, the factor that leaves ε for γ."""
+        return self.T_honest / self.baseline.T
+
     def total(self, sched: bool = True) -> float:
         s = (self.sched or 0.0) if sched else 0.0
         return 1 - (1 - self.skip - self.mand - self.machine_eps - self.luck) * (1 - s) * (1 - self.clock)
@@ -436,9 +470,11 @@ class Eps:
                 "luck": self.luck, "clock": self.clock}
 
 
-def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = "free", lanes: bool | None = None,
-        uniform: bool | None = None, q_uniform: float | None = None) -> Eps:
-    s = setup(d, pi, data, operands)
+def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = "free", credit: str = "H",
+        lanes: bool | None = None, uniform: bool | None = None, q_uniform: float | None = None) -> Eps:
+    """Under the floor credit ε_sched and ε_clock leave ε (honest's time above ♭ is in γ, `credit_ratio`)."""
+    s = setup(d, pi, data, operands, credit)
+    hs = s if credit == "H" else setup(d, pi, data, "free")
     h, base = s.honest, s.baseline
     routes = {"lanes": lanes, "uniform": uniform, "q_uniform": q_uniform}
     c, lucky = s.cheat(q, **routes), s.cheat(q, luck=True, **routes)
@@ -446,17 +482,25 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
     bare = replace(d, fold={}, filler=(), L=h.depth)
     plain = fastest(bare, h, pi, q=None, q_uniform=None, baseline=True)
     plain_mma = plain.T * h.words
-    same = d.L == h.L and d.fold == h.fold and not d.filler
-    measured = h.measured / words_per_mma if (h.measured is not None and same) else None
+    kernel = d.L == h.L and d.fold == h.fold and h.measured is not None
+    measured = h.measured / words_per_mma if (kernel and not d.filler) else None
+    if kernel and d.filler:
+        bare_fill = setup(replace(d, filler=()), pi, data).baseline.T
+        t_h, t_src = h.measured / words_per_mma * hs.baseline.T / bare_fill, "measured × the model's filler cost"
+    else:
+        t_h, t_src = (measured, "measured") if measured else (hs.baseline.T, "model")
     machine_eps = max(0.0, 1 - c.T / base.T)
-    return Eps(design=d, honest=h, machine=pi.vector, operands=operands, q=q, as_built=s.as_built, baseline=base,
-               cheat=c, lucky=lucky, fillers=s.fillers, T_honest_measured=measured,
-               gamma=d.work * base.T * words_per_mma / plain_mma,
-               sched=(1 - s.as_built.T / measured) if measured else None, skip=sum(p.eps for p in d.skip.values()),
+    return Eps(design=d, honest=h, machine=pi.vector, operands=operands, credit=credit, q=q, as_built=s.as_built,
+               baseline=base, cheat=c, lucky=lucky, fillers=s.fillers, T_honest_measured=measured, T_honest=t_h,
+               T_honest_source=t_src,
+               gamma=d.work * t_h * words_per_mma / plain_mma + d.plain,
+               sched=(1 - hs.as_built.T / t_h) if (kernel and credit == "H") else None,
+               skip=sum(p.eps for p in d.skip.values()),
                mand=sum(p.eps for p in d.mand.values()), machine_eps=machine_eps,
                machine_as_built=max(0.0, 1 - c.T / s.as_built.T),
                cert=min(machine_eps, max(0.0, 1 - c.price(pi, base.n) / base.T)), floor=s.floor(),
-               deficit=deficit(d), luck=max(0.0, (c.T - lucky.T) / base.T), clock=d.clock.eps)
+               deficit=deficit(d), luck=max(0.0, (c.T - lucky.T) / base.T),
+               clock=d.clock.eps if credit == "H" else 0.0)
 
 
 def threshold(s: Setup, hi: float = 64.0, tol: float = 1e-9, **routes) -> float | None:

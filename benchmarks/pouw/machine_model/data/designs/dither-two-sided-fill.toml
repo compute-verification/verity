@@ -3,9 +3,13 @@
 # under 1% at q* ≥ 2.03 and γ 2.71 (note:20261017T0320Z-draft-eps1-calc).
 name = "dither-two-sided-fill"
 summary = "Two-sided dither, duo at L = 32, and 4.5 lane instructions a word of verified filler"
-honest = "dither-duo-l32"
+honest = "e-l7qs"
 L = 32
 work = 1.0
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDSM_X4 = 0.2 }
+source = "SPEC §3.4: two-sided {0,1} noise is fresh on both operands at every 32-step at every instance, so the register floor stays 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
 
 [fold]
 name = "duo"
@@ -18,9 +22,9 @@ mix = { ALU = 1, IMAD = 1 }
 route = "lanes"
 source = "CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate); FILL-OPT (μ_x = 0) is its named assumption"
 
-[skip.peel]
-eps = 0.0
-source = "strip 0 on every linear (adopted-bd; P·V's 33/keys is attention's, reported apart): note:20261017T0031Z-draft-eps-budget; SKIP's note replaces this"
+[skip.pv-strip]
+eps = 0.00065
+source = "SKIP's design A over Llama-3.1-8B and 70B x 2K, 8K, 32K, prefill and decode, by honest time: the one unchecked item is the second int8 limb of P·V's strip U·Y (prefill 0.065%, decode 0.059%; 0.060% by int8 products) (note:20261017T0340Z-draft-skip, 04:20Z)"
 
 [mand.fold]
 eps = 0.0
@@ -28,7 +32,7 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [clock]
 eps = 0.0
-source = "honest certified at f_max; DATASHEET measures whether a lighter program clocks higher under the 600 W cap"
+source = "DATASHEET: at the node's 2,100 MHz lock every program (honest at 519 W, tensor-only, zero operands, fold-only, FFMA) runs 2,099.5-2,100.0 MHz by clock64 over %globaltimer (note:20261017T0332Z-draft-eps1-datasheet, r20261017-033131-4e67)"
 
 [luck]
 delta = 9.094947017729282e-13

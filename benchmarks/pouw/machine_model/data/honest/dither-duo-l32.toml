@@ -1,6 +1,6 @@
 # The honest edited GEMM a MMA: Dither with duo receipts at L = 32 (decision 45's served GEMM). Provisional: the counts
-# are the design's, not ncu's; PROFILE (note:*-draft-eps1-profile) replaces them with the measured profile, and its
-# measured SMSP-cycles a MMA go under [measured].
+# are the design's, not ncu's, with no overhead beyond operands and address math. The designs read PROFILE's measured
+# kernel (e-l7qs.toml); this one stays for the tests' hand arithmetic.
 name = "dither-duo-l32"
 status = "provisional"
 source = "model.toml's [honest] (a 64x64 warp tile in a 128x128 block) plus the duo fold, 3 lane instructions a word (note:20261015T0432Z-draft-receipt-phi; benchmarks/pouw/receipts on cursor/receipts-ref-ea24)"

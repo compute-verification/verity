@@ -1,18 +1,23 @@
 # CO-Dither: two-sided 0/1 dither, the served output committed as a checked word (note:20261017T0030Z-draft-checked-strip).
 name = "co-dither"
-summary = "CO-Dither (r = 32 strip), duo at L = 32"
-honest = "dither-duo-l32"
+summary = "CO-Dither at r = k/2 with a 7-bit served side (SKIP's B), duo at L = 32"
+honest = "e-l7qs"
 L = 32
-work = 1.0078125   # (k + r)/k at k = 4096, r = 32
+work = 1.0
+plain = 0.5         # the strip: k/2 products an output word on one int8 limb, unfolded (SKIP's `products`)
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDSM_X4 = 0.025641 }
+source = "SPEC §3.4: U on the peeled side is resident (B̃ a data-independent map of a resident matrix), so Dither's one-operand floor, least 1/39 at (a, b) = (1, 39) (note:20261017T0324Z-draft-eps1-spec)"
 
 [fold]
 name = "duo"
 ALU = 2
 IMAD = 1
 
-[skip.second-limb]
-eps = 0.0077519
-source = "the strip's second int8 limb, r/(k + r) at r = 32, k = 4096 (note:20261017T0030Z-draft-checked-strip; none at r = k/2 with a 7-bit served side); SKIP's note replaces this"
+[skip.pv-strip]
+eps = 0.00052
+source = "SKIP's design B over Llama-3.1-8B and 70B x 2K, 8K, 32K, prefill and decode, by honest time: one strip limb at r = k/2 leaves nothing on the linears and QKᵀ, and P·V's second limb as in A (prefill 0.052%, decode 0.047%) (note:20261017T0340Z-draft-skip, 04:20Z; at r = 32 the strip's second limb is unforced, 6.77%)"
 
 [mand.fold]
 eps = 0.0
@@ -20,7 +25,7 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [clock]
 eps = 0.0
-source = "honest certified at f_max; DATASHEET measures whether a lighter program clocks higher under the 600 W cap"
+source = "DATASHEET: at the node's 2,100 MHz lock every program (honest at 519 W, tensor-only, zero operands, fold-only, FFMA) runs 2,099.5-2,100.0 MHz by clock64 over %globaltimer (note:20261017T0332Z-draft-eps1-datasheet, r20261017-033131-4e67)"
 
 [luck]
 delta = 9.094947017729282e-13

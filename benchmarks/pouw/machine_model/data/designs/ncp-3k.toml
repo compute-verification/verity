@@ -3,9 +3,13 @@
 # int8 (ncp-v1)"). The idea is ported, not its 4090 conjecture.
 name = "ncp-3k"
 summary = "NCP at depth 3k, duo at L = 32, the last checked value served"
-honest = "dither-duo-l32"
+honest = "e-l7qs"
 L = 32
 work = 3.0
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDSM_X4 = 0.025641 }
+source = "SPEC §4.2: E₂ = E₁P and F₂ = −PF₁ let block 2's fragments be block 1's, so until (F3)'s kit settles NCP it takes Dither's one-operand floor 1/39, below any average of its three blocks (note:20261017T0324Z-draft-eps1-spec)"
 
 [fold]
 name = "duo"
@@ -13,8 +17,8 @@ ALU = 2
 IMAD = 1
 
 [skip.last-segment]
-eps = 0.0026042
-source = "a zero input saves only the last segment, L/(3k) at k = 4096 (note:20261017T0310Z-report-eps1-program §3); SKIP's note replaces this"
+eps = 0.0237
+source = "SKIP's design C over Llama-3.1-8B and 70B x 2K, 8K, 32K, by honest time: a zero input saves the last L-step segment of every product, L/(3k), and QKᵀ's k = d makes it 2.27% of QKᵀ (linears 0.19%; whole 1.77% prefill, 2.37% decode) (note:20261017T0340Z-draft-skip, 04:20Z)"
 
 [mand.fold]
 eps = 0.0
@@ -22,7 +26,7 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [clock]
 eps = 0.0
-source = "honest certified at f_max; DATASHEET measures whether a lighter program clocks higher under the 600 W cap"
+source = "DATASHEET: at the node's 2,100 MHz lock every program (honest at 519 W, tensor-only, zero operands, fold-only, FFMA) runs 2,099.5-2,100.0 MHz by clock64 over %globaltimer (note:20261017T0332Z-draft-eps1-datasheet, r20261017-033131-4e67)"
 
 [luck]
 delta = 9.094947017729282e-13

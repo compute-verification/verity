@@ -2,9 +2,13 @@
 # a candidate: it rests on (RT) and (G3), and (RT) on π_c ≥ 16).
 name = "dither-xin"
 summary = "Dither with XOR-in receipts (1.5 a word) at L = 32"
-honest = "dither-duo-l32"
+honest = "e-l7qs"
 L = 32
 work = 1.0
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDSM_X4 = 0.025641 }
+source = "SPEC §3.4: at the zero instance B̃ = ΠUᵀ repeats every 32 rows, so only A's fragment is delivered: >= 1/b with 4ab + 4a + 2b <= 240, least 1/39 at (a, b) = (1, 39) (note:20261017T0324Z-draft-eps1-spec)"
 
 [fold]
 name = "xin13"   # SHF (rotl), LOP3 (^ d0), IMAD (·a0 + d1) a pair
@@ -21,7 +25,7 @@ source = "named assumption: XOR-in at 1.5 lane instructions a word is the cheape
 
 [clock]
 eps = 0.0
-source = "honest certified at f_max; DATASHEET measures whether a lighter program clocks higher under the 600 W cap"
+source = "DATASHEET: at the node's 2,100 MHz lock every program (honest at 519 W, tensor-only, zero operands, fold-only, FFMA) runs 2,099.5-2,100.0 MHz by clock64 over %globaltimer (note:20261017T0332Z-draft-eps1-datasheet, r20261017-033131-4e67)"
 
 [luck]
 delta = 9.094947017729282e-13
