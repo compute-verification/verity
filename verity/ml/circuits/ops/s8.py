@@ -316,24 +316,19 @@ def _limb_signature(S: Any, word_t: Type, code_t: Type) -> tuple[tuple[tuple[str
     return (("y", word_t),), Array(S.N, code_t)
 
 
-def _limb_body(B: Any, S: Any, y: Coll, steps: tuple, code_t: Type) -> Coll:
-    low, carry, clamp, rest = steps
-    if S.FORM == "byteclamp":
-        h = B.call(carry, y)
-        limbs = [B.call(low, y), B.call(clamp, h), B.call(rest, h)]
-    else:
-        limbs, r = [], y
-        for _ in range(S.N - 1):
-            limbs.append(B.call(low, r))
-            r = B.call(carry, r)
-        limbs.append(B.call(low, r))
-    return Coll(Array(S.N, code_t), concat([c.refs for c in limbs]))
-
-
 @composite("LimbSplit", 1, ["FORM", "N", "Y"], lambda S: _limb_signature(S, S32, V8), conformance="exact-model-tested")
 def LimbSplit(B, S, y):
     """y as N s8 limbs, least significant first (the module docstring's forms)."""
-    return _limb_body(B, S, y, (S32LowByte, S32ByteCarry, S32ClampS8, S32ClampRest), V8)
+    if S.FORM == "byteclamp":
+        h = B.call(S32ByteCarry, y)
+        limbs = [B.call(S32LowByte, y), B.call(S32ClampS8, h), B.call(S32ClampRest, h)]
+    else:
+        limbs, r = [], y
+        for _ in range(S.N - 1):
+            limbs.append(B.call(S32LowByte, r))
+            r = B.call(S32ByteCarry, r)
+        limbs.append(B.call(S32LowByte, r))
+    return Coll(Array(S.N, V8), concat([c.refs for c in limbs]))
 
 
 # -- census -------------------------------------------------------------------------------------------------------------

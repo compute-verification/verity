@@ -13,9 +13,10 @@ A step is traced from `_imma` (`trace.definition`): the 32·64 bit products of t
 carry-save columns modulo 2^34, where the exact sum fits (a two's-complement bit of negative weight, x·(-2^p), enters as
 NOT(x)·2^p and the constant -2^p), one ripple, then `.satfinite`'s clamp to s32 (when bits 31..33 disagree: 0x80000000 for a
 negative sum, else 0x7FFFFFFF) or the low 32 bits.  `S8Dot_v2` is `S8Dot_v1`'s body on bits over Boolean steps, with the same
-statics, bind-time checks and census rule; ``DOT'`` is `DOT`'s word Definition (`trace.word_of`).  `LimbSplit_v2` is
-`LimbSplit_v1`'s body over the Boolean limb steps: the carry is y[8:] sign-extended plus y[7], and the clamp and its rest
-select on (h > 127, h < -127), read from h's sign and bits 0..30.
+statics, bind-time checks and census rule; ``DOT'`` is `DOT`'s word Definition (`trace.word_of`).  The limb steps compute
+the carry as y[8:] sign-extended plus y[7], and the clamp and its rest select on (h > 127, h < -127), read from h's sign
+and bits 0..30.  `LimbSplit_v2` is one circuit traced from their builders (`elementwise.specialized`), so a carry whose
+limb reads only its low byte keeps only those gates, and byteclamp's clamp and rest share h's comparisons.
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ from verity.ml.circuits.types import Array
 
 from .. import prims as P
 from .. import s8 as S8
+from .elementwise import specialized
 
 __all__ = ["BlackwellS8ImmaDot32", "BlackwellU8S8ImmaDot32", "LimbSplit", "S32ByteCarry", "S32ClampRest", "S32ClampS8",
            "S32LowByte", "S8Dot"]
@@ -138,11 +140,20 @@ S32ClampRest = definition("S32ClampRest", 2, _clamp_rest, (("h", S32),), CODE, w
                           doc="h - clamp(h, -127, 127)'s low byte, on bits: S32ClampRest_v1")
 
 
-@composite("LimbSplit", 2, ["FORM", "N", "Y"], lambda S: S8._limb_signature(S, S32, CODE), conformance="exact-model-tested")
-def LimbSplit(B, S, y):
-    """`LimbSplit_v1`'s limbs on bits, over the Boolean limb steps."""
-    return S8._limb_body(B, S, y, (S32LowByte, S32ByteCarry, S32ClampS8, S32ClampRest), CODE)
+def _limb_split(S):
+    def build(C, y):
+        if S.FORM == "byteclamp":
+            h = _byte_carry(C, y)
+            return [list(y[:8]), _clamp_s8(C, h), _clamp_rest(C, h)]
+        limbs, r = [], y
+        for _ in range(S.N - 1):
+            limbs.append(list(r[:8]))
+            r = _byte_carry(C, r)
+        return limbs + [list(r[:8])]
+    return build
 
 
-LimbSplit.word = lambda b: bind(S8.LimbSplit, **b)  # type: ignore[attr-defined]
+LimbSplit = specialized("LimbSplit", 2, ("FORM", "N", "Y"), _limb_split, lambda S: S8._limb_signature(S, S32, CODE),
+                        doc="`LimbSplit_v1`'s limbs on bits, one circuit from the limb steps' builders",
+                        word=lambda b: bind(S8.LimbSplit, **b))
 LimbSplit.carries = S8.carries  # type: ignore[attr-defined]
