@@ -107,8 +107,9 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   Anything another handle must read about your issue comes on Slack, naming you, and rings your inbox.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - **Subscribe to a thread (`subscribe_slack_thread`) only where a human may answer**: your own `#ask-daniel` card, a
-  thread a named human posted in, or Codex's thread when you ask it something (Daniel's Codex agent posts outside
-  `research msg`, so its replies ring no inbox). Between handles your inbox already carries every reply addressed to you: one that names
+  thread a named human posted in, or Codex's thread when you've asked it something (its replies ring no inbox). A task
+  for Daniel's console, laptop or browser goes to `#ask-daniel` as a card with the exact steps, not to Codex: Codex is
+  a session on his laptop that Slack doesn't wake, so ask in its thread only when Daniel says it's on. Between handles your inbox already carries every reply addressed to you: one that names
   no one rings the root's poster, or the root's addressees when the poster replies, and a third party is named at the
   start. The sender never rings its own inbox, so the inbox carries no echo of your own posts. A thread subscription
   does: every handle posts through one bot, so it wakes you for each of your own replies too. Unsubscribe from any thread
