@@ -149,8 +149,9 @@ lm_head, after the same SmoothQuant, rotations and key centring: `pc-int8` and t
 twin quantizes only the linears in the format and keeps `pc-int8`'s attention (C2's and C3's scope); `pc-c1-ROUTE` is
 `adopted-bd-lm` with every int8 product emulated from limbs (its perplexity is `adopted-bd-lm`'s bit for bit);
 `pc-c2-GRID-2s|1s` puts the linears on a format's integer grid (`int5`, `e4m3i`, `e4m3i-t` per tensor, `mx8`, `nvfp4`
-with odd scales, `mxfp4`), both operands dithered or the activations only (`int5-1s` is `fp8-peel-w15`'s design), and
-`pc-c3-fp8|fp4` keeps Dither's int8 activations against native dithered weights; C2 and C3 keep Dither-2S's attention.
+with odd scales, `mxfp4`, on E2M1's integers; `nvfp4x2`, `mxfp4x2` on twice E2M1's values), both operands dithered or
+the activations only (`int5-1s` is `fp8-peel-w15`'s design), and `pc-c3-fp8|fp4|fp4x2` keeps Dither's int8 activations
+against native dithered weights; C2 and C3 keep Dither-2S's attention.
 Any other file passes as a path.
 
 ## Adding an intervention

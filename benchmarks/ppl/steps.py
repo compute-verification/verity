@@ -467,9 +467,10 @@ def _e4m3_integers() -> tuple:
     return tuple(sorted(pos | {-v for v in pos}))
 
 
-#: every grid a quantizer may put integers on: GRIDS, every integer E4M3 holds (0..16, then E4M3's spacing to 448) and
-#: E2M1's integers
-LEVELS = {**GRIDS, "e4m3i": _e4m3_integers(), "e2m1i": (-6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6)}
+#: every grid a quantizer may put integers on: GRIDS, every integer E4M3 holds (0..16, then E4M3's spacing to 448),
+#: E2M1's integers, and twice every E2M1 value (the whole E2M1 grid as integers)
+LEVELS = {**GRIDS, "e4m3i": _e4m3_integers(), "e2m1i": (-6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6),
+          "e2m1x2": (-12, -8, -6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6, 8, 12)}
 
 
 def bracket(v: torch.Tensor, grid: str) -> tuple[torch.Tensor, torch.Tensor]:
@@ -765,7 +766,7 @@ def fp_attention(mm, nxt, *, fmt: str, scale: str):
 
 
 #: the format each native grid's integers are exact in
-NATIVE = {"e4m3i": "e4m3", "int5": "e4m3", "e2m1i": "e2m1"}
+NATIVE = {"e4m3i": "e4m3", "int5": "e4m3", "e2m1i": "e2m1", "e2m1x2": "e2m1"}
 
 
 def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool, amax: torch.Tensor | None = None):
@@ -805,7 +806,7 @@ def _check_native(p):
         raise ValueError(f"native.grid is one of {sorted(NATIVE)}")
     if p["scale"] not in FP_SCALES:
         raise ValueError(f"native.scale is one of {FP_SCALES}")
-    if p["scale"] == "nv" and p["grid"] != "e2m1i":
+    if p["scale"] == "nv" and NATIVE[p["grid"]] != "e2m1":
         raise ValueError("native: nv blocks hold E2M1")
     for o in ("act", "weight"):
         if p[o] not in GRID_MODES:
@@ -819,9 +820,9 @@ def _check_native(p):
 @linear_step("native", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_native)
 def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dither", weight: str = "dither",
                   act_grid: str = ""):
-    """Dither's coins on a format's exact integer grid (`NATIVE`: e4m3i, int5 on E4M3; e2m1i on E2M1), both operands
-    scaled by `scale` along k (`native_parts`) and `round`ed or `dither`ed (the level below or above by a fresh bit),
-    the activations' coins first, then the weights', fresh every call (Dither-2S's order). `act_grid = int8`: the
+    """Dither's coins on a format's exact integer grid (`NATIVE`: e4m3i, int5 on E4M3; e2m1i, e2m1x2 on E2M1), both
+    operands scaled by `scale` along k (`native_parts`) and `round`ed or `dither`ed (the level below or above by a fresh
+    bit), the activations' coins first, then the weights', fresh every call (Dither-2S's order). `act_grid = int8`: the
     activations Dither's own (`act_quant` at top 127, the int8 design's draws), the weights native: the hybrid that
     serves int8 activations as limbs. tensor, channel and nv scales give integers, so the product is the gated exact
     one; mx's power-of-two blocks give dyadic operands, multiplied dequantized in FP32 (the MX MMA)."""

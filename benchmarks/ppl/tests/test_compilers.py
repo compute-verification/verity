@@ -12,13 +12,21 @@ from test_engine import evaluate, passed, ppl
 C1 = ["pc-c1-e4m3-k3", "pc-c1-e4m3-k4", "pc-c1-fp4-k9"]
 OTHERS = ["pc-int8", "pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4", "pc-c2-int5-2s",
           "pc-c2-int5-1s", "pc-c2-e4m3i-2s", "pc-c2-e4m3i-t-2s", "pc-c2-e4m3i-1s", "pc-c2-mx8-2s", "pc-c2-mx8-1s",
-          "pc-c2-nvfp4-2s", "pc-c2-nvfp4-1s", "pc-c2-mxfp4-2s", "pc-c2-mxfp4-1s", "pc-c3-fp8", "pc-c3-fp4"]
+          "pc-c2-nvfp4-2s", "pc-c2-nvfp4-1s", "pc-c2-mxfp4-2s", "pc-c2-mxfp4-1s", "pc-c3-fp8", "pc-c3-fp4",
+          "pc-c2-nvfp4x2-2s", "pc-c2-nvfp4x2-1s", "pc-c2-mxfp4x2-2s", "pc-c3-fp4x2",
+          *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
 
 
 def test_e4m3_integers_are_every_integer_e4m3_holds():
     v = torch.arange(-448, 449, dtype=torch.float32)
     held = v[v.to(torch.float8_e4m3fn).float() == v]
     assert steps.LEVELS["e4m3i"] == tuple(int(x) for x in held)
+
+
+def test_e2m1_grids_are_its_integers_and_twice_its_values():
+    v = sorted({s * x for s in (-1, 1) for x in steps.E2M1})
+    assert steps.LEVELS["e2m1i"] == tuple(int(x) for x in v if x == int(x))
+    assert steps.LEVELS["e2m1x2"] == tuple(int(2 * x) for x in v)
 
 
 @pytest.mark.parametrize("route", steps.ROUTES)
@@ -57,7 +65,8 @@ def test_fake_quant_is_close_and_blockwise(fmt, scale):
     assert torch.equal(steps.fake_quant(x.T, fmt, scale, 0), q.T)
 
 
-@pytest.mark.parametrize("grid,scale", [("e4m3i", "channel"), ("e4m3i", "mx"), ("e2m1i", "nv"), ("e2m1i", "mx")])
+@pytest.mark.parametrize("grid,scale", [("e4m3i", "channel"), ("e4m3i", "mx"), ("e2m1i", "nv"), ("e2m1i", "mx"),
+                                        ("e2m1x2", "nv"), ("e2m1x2", "mx")])
 def test_native_parts_stay_on_the_grid(grid, scale):
     g = torch.Generator().manual_seed(1)
     x = torch.randn(8, 64, generator=g) * torch.logspace(-2, 2, 64)
