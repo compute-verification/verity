@@ -51,16 +51,22 @@ def build(tmp: Path, src: str = "fold_root_kernel.c", edit: tuple[str, str] | No
 
 
 def root_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, jobs) -> tuple[dict, dict]:
-    """({(a0, a1, w): [|K_1|, .., pxn, g3bad, degenerate]}, {(a0, a1, R): set of w' != w in K_R}) for jobs (a0, a1, *w)."""
-    inp = "".join(" ".join(map(str, j)) + "\n" for j in jobs)
-    out = subprocess.run([str(exe), "-a", str(n), str(r1), str(r2), str(rmax)], input=inp, capture_output=True, text=True,
-                         check=True, env=dict(os.environ, OMP_NUM_THREADS=THREADS)).stdout
-    summ, elems = {}, collections.defaultdict(set)
-    for p in map(str.split, out.splitlines()):
-        if p[0] == "S":
-            summ[tuple(map(int, p[1:7]))] = list(map(int, p[7:]))
-        elif p[0] == "K":
-            elems[(int(p[1]), int(p[2]), int(p[3]))].add(tuple(map(int, p[4:8])))
+    """({job: [|K_1|, .., pxn, g3bad, degenerate]}, {(job, R): set of w' != w in K_R}) for jobs (a0, a1, *w). The
+    enumerator's K lines name only the keys, so each call gets jobs with distinct key pairs."""
+    summ, elems, pending = {}, collections.defaultdict(set), [tuple(j) for j in dict.fromkeys(map(tuple, jobs))]
+    while pending:
+        batch, rest = {}, []
+        for j in pending:
+            (rest.append(j) if j[:2] in batch else batch.__setitem__(j[:2], j))
+        inp = "".join(" ".join(map(str, j)) + "\n" for j in batch.values())
+        out = subprocess.run([str(exe), "-a", str(n), str(r1), str(r2), str(rmax)], input=inp, capture_output=True,
+                             text=True, check=True, env=dict(os.environ, OMP_NUM_THREADS=THREADS)).stdout
+        for p in map(str.split, out.splitlines()):
+            if p[0] == "S":
+                summ[tuple(map(int, p[1:7]))] = list(map(int, p[7:]))
+            elif p[0] == "K":
+                elems[(batch[(int(p[1]), int(p[2]))], int(p[3]))].add(tuple(map(int, p[4:8])))
+        pending = rest
     return summ, elems
 
 
@@ -76,9 +82,9 @@ def brute_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, word, keys) ->
     return elems
 
 
-def agree(root, brute, keys, rmax, degenerate) -> list:
+def agree(root, brute, word, keys, rmax, degenerate) -> list:
     return [(a, b, r) for a, b in keys if (a, b) not in degenerate for r in range(1, rmax + 1)
-            if root[(a, b, r)] != brute[(a, b, r)]]
+            if root[((a, b) + tuple(word), r)] != brute[(a, b, r)]]
 
 
 def good(row, rmax) -> bool:
@@ -109,7 +115,7 @@ def main() -> int:
             summ, root = root_kernels(exe, n, r1, r2, rmax, [k + word for k in keys])
             ref = brute_kernels(brute, n, r1, r2, rmax, word, keys)
             degen = {(a, b) for (a, b, *_), row in summ.items() if row[rmax + 2]}
-            bad = agree(root, ref, keys, rmax, degen)
+            bad = agree(root, ref, word, keys, rmax, degen)
             checks.check(f"n6 word {word}: K_R by commuting == fold_kernel.c's brute force at every (key, R), R = 1..{rmax}",
                          not bad, f"{len(keys)} keys, {sum(len(ref[(a, b, r)]) for a, b in keys if (a, b) not in degen for r in range(1, rmax + 1))} "
                          f"elements; {len(degen)} keys cut short; mismatches {bad[:3]}")
@@ -119,7 +125,7 @@ def main() -> int:
                 other = tuple((x + 1) & 63 for x in word)
                 ref2 = brute_kernels(brute, n, r1, r2, rmax, other, keys[:24])
                 checks.mutation(f"n6 word {word}: compared against the brute force at another word",
-                                agree(root, ref2, keys[:24], rmax, degen))
+                                agree(root, ref2, word, keys[:24], rmax, degen))
 
         # (2) REFEREE's counterexamples
         s8, _ = root_kernels(exe, 8, 3, 5, 6, [(97, 179, 255, 48, 87, 75), (83, 225, 144, 166, 44, 160)])
@@ -177,7 +183,7 @@ def main() -> int:
             ok = [a for a in range(1, 1 << n, 2) if sw.kj_scaled(a, n, r2)]
             jobs = sw.jobs_for("symmetric", n, rng, 6 if quick else 40, 0)
             summ, elems = root_kernels(exe, n, r1, r2, 6, jobs)
-            twins = all(elems[(j[0], j[1], 2)] - elems[(j[0], j[1], 1)] >=
+            twins = all(elems[(j, 2)] - elems[(j, 1)] >=
                         {((j[2] ^ ((1 << n) - 1)), j[3], j[4], j[5])} for j in jobs)
             checks.check(f"n{n}, {len(jobs)} NOT-symmetric words at pairs passing the scaled KJ ({len(ok)} keys): "
                          "|K_1| = |K_odd| = 16 = P/X/N, |K_even| = 32, and the added words include w with d0 complemented",
@@ -207,7 +213,55 @@ def main() -> int:
         checks.check("32 bits, rotations (13, 19), keys passing key_ok_r11, NOT-symmetric words: F_{w'} = NOT ∘ F_w and "
                      "F_{w'}^2 = F_w^2 with w' = w with d0 complemented, so K_2 ⊋ K_1 at every key",
                      not fails, f"{8 if quick else 64} key pairs × 256 states; failures {fails[:2]}")
+
+        # (6) K_R is the part of the 2R-pair chain group that keeps the word the same every round
+        n, (r1, r2) = 10, sw.ROT[10]
+        ok = [a for a in range(1, 1 << n, 2) if sw.kj_scaled(a, n, r2)]
+        jobs = []
+        for _ in range(3 if quick else 12):
+            a0, a1 = rng.choice(ok), rng.choice(ok)
+            jobs.append((a0, a1) + tuple(rng.randrange(1 << n) for _ in range(4)))
+            jobs.append((a0, a1, rng.randrange(1 << n), (a0 - 1) // 2, rng.randrange(1 << n), (a1 - 1) // 2))
+        summ, elems = root_kernels(exe, n, r1, r2, 3, jobs)
+        bad = [(j, r) for j in jobs for r in (1, 2, 3)
+               if elems[(j, r)] | {j[2:]} != chain_group_orbit(n, j[0], j[1], j[2:], r)]
+        if checks.mutations:
+            off = [(j, r) for j in jobs for r in (1, 2, 3)
+                   if elems[(j, r)] | {j[2:]} != chain_group_orbit(n, j[0], j[1], j[2:], r, drop_n=True)]
+        checks.check(f"n10, {len(jobs)} words (half NOT-symmetric) at pairs passing the scaled KJ: K_R for R = 1, 2, 3 is "
+                     "exactly the set of words w' whose R-fold repetition is w's under an element of the 2R-pair chain "
+                     "group (P_p, X_p, N_p: pfill-fold §2.1)", not bad, f"mismatches {bad[:2]}")
+        if checks.mutations:
+            checks.mutation("the chain group without its N_p generators", off, f"{len(off)} mismatches")
     return checks.finish()
+
+
+def chain_group_orbit(n: int, a0: int, a1: int, w, R: int, drop_n: bool = False) -> set:
+    """The words w' such that w' repeated R times is w repeated R times moved by an element of the 2R-pair chain group:
+    P_p = (c_p ⊕ t, z_p + t), X_p = (z_p + t, c_(p+1) ⊕ rotl(t, r_(p+1))), N_p = (¬c_p, a_p − 1 − z_p, ¬c_(p+1))."""
+    r1, r2 = sw.ROT[n]
+    m, t, S = (1 << n) - 1, 1 << (n - 1), 2 * R
+    rot = lambda x, r: ((x << r) | (x >> (n - r))) & m
+    gens = [("P", p) for p in range(S)] + [(k, p) for p in range(S - 1) for k in ("X",) + (() if drop_n else ("N",))]
+    out = set()
+    for bits in range(1 << len(gens)):
+        L = [[w[0], w[1]] if p % 2 == 0 else [w[2], w[3]] for p in range(S)]
+        for i, (k, p) in enumerate(gens):
+            if not bits >> i & 1:
+                continue
+            if k == "P":
+                L[p][0] ^= t
+                L[p][1] = (L[p][1] + t) & m
+            elif k == "X":
+                L[p][1] = (L[p][1] + t) & m
+                L[p + 1][0] ^= rot(t, r1 if (p + 1) % 2 == 0 else r2)
+            else:
+                L[p][0] ^= m
+                L[p][1] = ((a0 if p % 2 == 0 else a1) - 1 - L[p][1]) & m
+                L[p + 1][0] ^= m
+        if all(L[p] == L[p % 2] for p in range(S)):
+            out.add((L[0][0], L[0][1], L[1][0], L[1][1]))
+    return out
 
 
 def fold32(y: int, w, a0: int, a1: int) -> int:

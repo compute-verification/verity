@@ -24,7 +24,7 @@ def test_root_kernel_matches_brute_force(tmp_path):
     summ, root = fr.root_kernels(exe, 6, 2, 4, 3, [k + word for k in keys])
     ref = fr.brute_kernels(brute, 6, 2, 4, 3, word, keys)
     assert not any(row[5] for row in summ.values())
-    assert not fr.agree(root, ref, keys, 3, set())
+    assert not fr.agree(root, ref, word, keys, 3, set())
     assert len(ref[(37, 21, 1)]) == 15 and summ[(37, 21) + word][:3] == [16, 16, 16]
 
 
@@ -54,7 +54,7 @@ def test_not_symmetric_words_open_k2(tmp_path):
     at n = 10 under the scaled KJ (|K_even| = 32, odd R adds none) and at 32 bits at a key_ok_r11 pair; one off, it isn't."""
     jobs = sw.jobs_for("symmetric", 10, random.Random(3), 2, 0)
     summ, elems = fr.root_kernels(fr.build(tmp_path), 10, 4, 6, 4, jobs + [j[:3] + (j[3] ^ 2,) + j[4:] for j in jobs[:2]])
-    assert all(summ[j] == [16, 32, 16, 32, 1, 0, 0] and (j[2] ^ 1023,) + j[3:] in elems[(j[0], j[1], 2)] for j in jobs)
+    assert all(summ[j] == [16, 32, 16, 32, 1, 0, 0] and (j[2] ^ 1023,) + j[3:] in elems[(j, 2)] for j in jobs)
     assert all(summ[j[:3] + (j[3] ^ 2,) + j[4:]] == [16, 16, 16, 16, 1, 0, 0] for j in jobs[:2])
     a0, a1 = 0x9E3779B1, 0x7F4A7C15
     assert rf.key_ok_r11(a0) and rf.key_ok_r11(a1)
