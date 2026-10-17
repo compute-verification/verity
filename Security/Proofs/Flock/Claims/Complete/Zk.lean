@@ -39,11 +39,12 @@ import Proofs.Flock.Claims.Complete.Zk.InnerGo
 import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
-/-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
+/-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
+the masked record's prover `ZkTables.honestP`): the honest masked prover (`Honest`: `honestPZk`, on
 the masked tape `TapeZk` and pads `padsOf` of `Tape`, the masked zerocheck and lincheck of `Piop`, level 0's masked
 Ligerito of `Ligerito`, the pads' commitment and inner proof of `Inner`, the session of `Session`), its run against
 `V true` (`Run`: `run_acc_of_zk`), that run as a pure session (`Sim`: `honestRunZk_eq`), `δcZk H` with the composition
-into `Claims.Flock.Complete` (`Coins`: `pr_badZk_le`, `complete_zk_of`), and the masked verdict accepting when each of
+into `Claims.Flock.Complete`'s statement at `honestPZk` (`CompleteWith`; `Coins`: `pr_badZk_le`, `complete_zk_of`), and the masked verdict accepting when each of
 its checks passes (`Verdict`: `zk_verifyRepWith_ok`, `zk_verifyWith_ok`). The skeleton (`Skeleton`:
 `complete_zk_of_goals`) composes them from one named goal per check (`GoalsZk`), proving the keyed coin tree from
 `readyZk` (`coinTree_goal`); `Discharge` proves those that follow

@@ -1,6 +1,7 @@
 import Flock.Canon
 import Std.Data.TreeMap.Raw.Lemmas
 import Definitions.Claims.Json
+import Definitions.Claims
 import Proofs.Flock.Claims.JsonEq
 import Proofs.Flock.Claims.Complete.Prover.Print
 
@@ -93,5 +94,17 @@ theorem _root_.Claims.Json.Same.getObjVal_none {j j' : Json} (h : Same j j') {k 
   cases hn' : n.get? k with
   | none => exact ⟨_, rfl⟩
   | some b => rw [hn'] at hs; cases hs
+
+/-! ## The masked proofs' names
+
+The masked completeness proofs (`Zk/`, `ZkTables/`) name the JSON library's specification at the honest prover's
+printer and the oracle's 64-byte outputs by these; a statement the lock lists reads `Claims.JsonSpec printJ Flock.canon`
+and `Claims.Out64`. -/
+
+/-- `Claims.JsonSpec` at the honest prover's printer `printJ` and the verifier's `canon`. -/
+abbrev JsonSpec : Prop := Claims.JsonSpec printJ Flock.canon
+
+/-- `Claims.Out64`: the oracle's outputs are 64 bytes. -/
+abbrev Out64 (H : Claims.Msg → Claims.Msg) : Prop := Claims.Out64 H
 
 end FlockComplete.JsonRT

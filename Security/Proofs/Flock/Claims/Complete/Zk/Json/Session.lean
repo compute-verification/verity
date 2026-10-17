@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Decode
 # What the one-table honest masked session returns and sends
 
 `sessionP_facts` at the masked session (`sessionPZk_facts`): at one table, with the keyed coin tree, a run of the pure
-masked session from no sends returns the printed honest masked record (`recordObjZk`'s `compress`) of a non-empty
+masked session from no sends returns the printed honest masked record (`printJ` of `recordObjZk`) of a non-empty
 `root_B` under `2^64` bytes, the link's points off the first reply's coin, and one well-formed stream per rep stream;
 the table's extra claims evaluate at those points; and its sends are the link of that `root_B` and no public words,
 then the streams' rounds in order (`SessionFactsZk`).

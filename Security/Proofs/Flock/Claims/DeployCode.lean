@@ -45,11 +45,12 @@ the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Re
   `Numbers.padDomain` under `--zk`). `waits`, `cap`: `Numbers.waits` (`210`) and `Numbers.cap` (`2^256`). A statement
   that does not set up has no tables: `εtable`, `N₀` and `weight` are `0` there, where the verifier refuses every run.
 * `Tape`, `P`: the reference prover, each verifier's honest prover on its tapes: `FlockComplete.honestP` on
-  `FlockComplete.Tape` (`Complete.Honest`), and `FlockComplete.honestPZk` on `FlockComplete.TapeZk`
-  (`Complete.Zk.Honest`).
+  `FlockComplete.Tape` (`Complete.Honest`), and `FlockComplete.ZkTables.honestP` on `FlockComplete.TapeZk`
+  (`Complete.ZkTables.Honest`), which runs each table on its share of the witness (the bits the relation reads,
+  `Readable.tableWit`) and at one table sends `FlockComplete.honestPZk`'s messages.
 * `δc`: the reference prover's completeness error at each hash `H`, `ε` (`εZk`), the bad coins' count over `2^128`, on
-  the statements the verifier can accept against `H` (`FlockComplete.ready H`, `readyZk H`), and `1` elsewhere
-  (`FlockComplete.δc`, `δcZk`, in `Complete.Ready`, which states that set).
+  the statements the verifier can accept against `H` (`FlockComplete.ready H`, `ZkTables.ready H`, at any number of
+  tables), and `1` elsewhere (`FlockComplete.δc`, `ZkTables.δc`, in `Complete.Ready`, which states that set).
 
 One run opens fewer level-0 columns than `nMin` of every trace (`cols_length_lt_nMin_plain`, `_zk`): ruling 2's count
 is reached only by `E^rep`'s columns, gathered over its accepted reruns.
@@ -470,8 +471,8 @@ noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
   waits _ := Claims.Flock.Numbers.waits
   cap _ := Claims.Flock.Numbers.cap
   Tape := FlockComplete.TapeZk
-  P := FlockComplete.honestPZk
-  δc := FlockComplete.δcZk
+  P := FlockComplete.ZkTables.honestP
+  δc := FlockComplete.ZkTables.δc
 
 /-! ## What the instances meet -/
 

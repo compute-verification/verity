@@ -8,7 +8,7 @@ The masked session's record is the plain one's with the keyed coin tree's S2: it
 the honest prover's nonce (`64` zeros) in `coins` (`helloJ`), and it carries the `coin_tree` of a zero key, nonce and
 root and the statement's spec (`coinTreeJ`). So it is `recordList` at the spec whose `Hello` is the prover's and which
 names no coin tree (`specZ`), with `coin_tree` added (`recordObjZk`): `recordJson` through `Hashes.ofSha512 h` returns
-its `compress` (`recordJson_eqZk`).
+its `printJ` (`recordJson_eqZk`).
 
 * **R7 with the prover's nonce** (`checkHello_ok`): the prover's `Hello` reads back with its nonce, which is `64`
   lowercase hex digits, and is the verifier's `Hello` with that nonce put in.
@@ -57,7 +57,7 @@ theorem helloOf_some {spec : SessionSpec} {ct : CoinTree.Spec} (hct : spec.coinT
   rw [hc]
   rfl
 
-/-- **The masked session's record JSON is `recordObjZk`'s `compress`**, the verifier's `Hello` parsing and its
+/-- **The masked session's record JSON is `printJ` of `recordObjZk`**, the verifier's `Hello` parsing and its
 prover's version printing. -/
 theorem recordJson_eqZk (h : ByteArray → ByteArray) {spec : SessionSpec} {ct : CoinTree.Spec}
     (hct : spec.coinTree = some ct) {own : Json} (hown : Json.parse spec.hello = .ok own) {hz : String}

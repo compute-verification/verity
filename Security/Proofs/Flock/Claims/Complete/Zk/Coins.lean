@@ -19,8 +19,10 @@ fail.
 * **The inner proof's `β`** (`betaSlotsZk`): refused at `0` (round `2` of the inner proof), by the verifier and the
   prover alike.
 
-`εZk` (`Complete.Ready`, with the slots and `readyZk`) is their count, each pair coin twice, over `2^128`;
-`pr_badZk_le` is the union bound, and `complete_zk_of` the composition at `deployZk`'s error, `δcZk H`.
+`εZk` is their count, each pair coin twice, over `2^128` (`Complete.Ready`, with the slots and `δcZk`); `pr_badZk_le` is
+the union bound. The slots read the statement's `m`, `k_log`, regions and points, as Deploy's `repRounds true`, and the
+`--zk` schedule's `k_0` and levels; rep `q` is table `q / 2`'s rep `q % 2`, its first coin after the link's and every
+earlier rep's rounds (`repStartZk`).
 -/
 
 namespace FlockComplete
@@ -167,9 +169,8 @@ theorem complete_zk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
     (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →
       readyZk H x = true → ∀ (ω : TapeZk) (r : Fin ((V true).k x) → Coin), ¬ BadZk x r →
         (Claims.run H (honestPZk w) (V true) x ω r).out = .acc) :
-    Claims.Flock.Complete H (deployZk rel) := by
+    CompleteWith H (deployZk rel) honestPZk (δcZk H) := by
   intro _ x w hs hr ω
-  show 1 - δcZk H x ≤ _
   unfold δcZk
   split
   · rename_i hready
