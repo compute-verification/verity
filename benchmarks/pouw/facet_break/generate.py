@@ -468,7 +468,8 @@ def targeted_jifine() -> list[dict]:
     for na in (3, 4):
         for q in dense:
             for w in (2, 4):
-                out.append(_jm("i16832", ("fmuli", "faddi"), q, w, na=na))
+                for ls in (("fmuli", "faddi"), ("ffma", "axi"), ("fmuli", "axi")):
+                    out.append(_jm("i16832", ls, q, w, na=na))
         for lane in ("ffmai", "ffma"):
             for q in (64, 80, 96, 112, 128, 160):
                 for w in (2, 3, 4):
