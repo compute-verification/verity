@@ -13,9 +13,9 @@ import Proofs.Flock.Claims.Sampling.Reference.Complete
   checked units' sessions are in the second stage and the draw doesn't read them; the draw is `Slots.select`'s, so it
   checks at most the statement's proof units (`checkedLe_of_slots`).
 * `Framed`: the reference prover's router (`step`) reads the sampled verifier's framing: at coins that check `u`, a
-  prover whose messages, at the histories where the router puts the run in `u`'s session, are a Flock prover's at the
-  session's history has `u`'s session be that Flock prover's run, on `u`'s rounds; the sampled verifier's and the
-  code's.
+  prover whose messages, at the histories where the router puts the run in the session under `u`'s session's
+  statement, are a Flock prover's at the session's history has `u`'s session be that Flock prover's run, on `u`'s
+  rounds; the sampled verifier's and the code's.
 * `AcceptsFramed`: on a statement in scope, a prover that says what the framing fixes outside the sessions is accepted
   when every checked unit's session accepts; the sampled verifier's.
 * `SessionsScope`: on a statement in scope, at a run whose coins check `u`, `u`'s session's statement passes the
@@ -38,14 +38,14 @@ variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
 
 /-- **The reference prover's router reads the sampled verifier's framing**: for every prover `P` and coins `r` that
 check `u`, a statement `xS` and an injective map `emb` of Flock's rounds into `u`'s such that, for a Flock prover `PF`
-whose messages are `P`'s wherever the router puts the run in `u`'s session under `xS`, at coins agreeing with `r` off
+whose messages are `P`'s wherever the router puts the run in the session under `xS`, at coins agreeing with `r` off
 `u`'s rounds, `u`'s session is `PF`'s run on `xS` at the coins `emb` reads. -/
 def Framed (H : Msg → Msg) : Prop :=
   ∀ x {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin) u, u ∈ c.checked x r →
     ∃ (xS : Msg) (emb : Fin ((FlockDeploy.V true).k xS) → Fin (c.V.k x)), Function.Injective emb ∧
       (∀ i, emb i ∈ c.rounds x u) ∧
       ∀ {ΩF : Type} (PF : Prover ΩF) (ωF : ΩF),
-        (∀ hist hS, c.step x hist = .session u xS hS →
+        (∀ hist hS, c.step x hist = .session xS hS →
           ((P.next x hist ω).eval H).1 = ((PF.next xS hS ωF).eval H).1) →
         ∀ r' : Fin (c.V.k x) → FlockDeploy.Coin, (∀ t ∉ c.rounds x u, r' t = r t) →
           c.session x u (run H P c.V x ω r').seen =
@@ -79,8 +79,8 @@ def SessionWit (H : Msg → Msg) : Prop :=
       c.session x u (run H P c.V x ω r).seen = some (xS, vS) →
       ∀ os : List (Opening Bool),
         (∀ o ∈ os, (commit c).Opens H s.roots o = true ∧ w.val H (commit c) s o.pos = some o.val) →
-        (∀ g ∈ c.reads s u xS, ∀ b, w.val H (commit c) s g = some b → ∃ o ∈ os, o.pos = g) →
-          Claims.Flock.R (FlockDeploy.deployZk rel).parse xS (c.wit s u xS os)
+        (∀ g ∈ c.reads s xS, ∀ b, w.val H (commit c) s g = some b → ∃ o ∈ os, o.pos = g) →
+          Claims.Flock.R (FlockDeploy.deployZk rel).parse xS (c.wit s xS os)
 
 /-- **Flock's masked error is nonnegative**: `εZk`, a count over `2^128`, or `1`. -/
 theorem δcZk_nonneg (H : Msg → Msg) (x : Msg) : 0 ≤ FlockComplete.δcZk H x := by
@@ -101,10 +101,10 @@ theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : 
   cases hP'
   obtain ⟨xS, emb, hinj, hemb, hrun⟩ :=
     hframe x (Reference.refP c.step c.parse c.reads (commit c) c.wit w) ω r u hu
-  have hr := hrun (FlockComplete.honestPZk (c.wit s u xS (found H (commit c) s.roots w (c.reads s u xS)))) (ω u)
+  have hr := hrun (FlockComplete.honestPZk (c.wit s xS (found H (commit c) s.roots w (c.reads s xS)))) (ω xS)
     fun hist hS h => refP_session H c.step c.parse c.reads (commit c) c.wit w hs h ω
   have h0 := hr r fun _ _ => rfl
-  exact ⟨xS, c.wit s u xS (found H (commit c) s.roots w (c.reads s u xS)), ω u, emb, hinj, hemb,
+  exact ⟨xS, c.wit s xS (found H (commit c) s.roots w (c.reads s xS)), ω xS, emb, hinj, hemb,
     (FlockDeploy.scopeMatches_zk rel xS).2 (hscope x s Pt hs hP hin _ ω r u xS _ hu h0),
     hwit x s Pt w hs hP hin hf _ ω r u xS _ hu h0 _ (fun o ho => ⟨found_opens ho, found_val ho⟩)
       (fun g hg b hb => found_covers hg hb), hr⟩

@@ -21,8 +21,8 @@ fixes set, and the sampled verifier's code (`SamplingDeploy.Code`) as its parame
 * `openCalls`: the most openings one session reveals (`Code.reveals`) times one opening's calls, at most
   `4 + depth own` (`opens_calls_le`): the leaf's three, the leaf's frame, and one node per level of the deepest
   registered port.
-* `Tape`, `P`: the sampled reference prover (`Reference.refP`), at the code's framing, on a Flock tape per unit: in each
-  checked unit's session, Flock's masked reference prover on what it reveals, checked by this commitment.
+* `Tape`, `P`: the sampled reference prover (`Reference.refP`), at the code's framing, on a Flock tape per session
+  statement: in each session, Flock's masked reference prover on what it reveals, checked by this commitment.
 * `δc`: the proof units' count times the largest of Flock's masked error `FlockComplete.δcZk`, capped at `1`, over the
   sessions' statements at `x` (`Reference.sessErrAt`): the union bound over the checked units' sessions.
 * The rest is the code's: the verifier in public-coin form, its parser, scope check and partition evaluation, its draw
@@ -48,8 +48,8 @@ index of each position under a run's roots (`at_`) and its published leaf layer 
 sits, its row's width and its place there (`place`), and how the reveal encodes an opening's data: the row's other bits,
 the salt and the path (`bits`, `salt`, `π`); and its numbers: the sessions' `N₀`, the most tables a session at a
 statement sets up (`tables`) and the most openings one session reveals (`reveals`); and the reference prover's framing
-(`Reference.refP`): where a run is at a history (`step`), the positions a checked unit's session opens under the
-session's statement (`reads`) and the Flock witness that encodes what it reveals (`wit`). -/
+(`Reference.refP`): where a run is at a history (`step`), the positions a session opens (`reads`) and the Flock
+witness that encodes what it reveals (`wit`), each by the session's statement. -/
 structure Code where
   V : Verifier FlockDeploy.Coin
   parse : Msg → Option Stmt
@@ -71,8 +71,8 @@ structure Code where
   tables : Msg → ℕ
   reveals : Msg → ℕ
   step : Msg → List (Msg × Msg) → Reference.Step
-  reads : Stmt → ℕ × ℕ → Msg → List ℕ
-  wit : Stmt → ℕ × ℕ → Msg → List (Opening Bool) → Claims.Flock.Wit
+  reads : Stmt → Msg → List ℕ
+  wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit
 
 /-! ## The trace commitment -/
 

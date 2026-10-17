@@ -4,22 +4,22 @@ import Proofs.Flock.Claims.Sampling.Path
 /-!
 # The sampled reference prover
 
-The honest sampled prover the deployment runs (`refP`), on its tapes (`Tape`, one Flock tape per unit), as a
-`Claims.Prover` against the sampled verifier.
+The honest sampled prover the deployment runs (`refP`), on its tapes (`Tape`, one Flock tape per session statement),
+as a `Claims.Prover` against the sampled verifier.
 
 The trace is committed before the run: the statement's roots, hm96 leaves under the verifier's registered
 frame-v3-sha512 path check (`SamplingDeploy.commit`, `pathCommit` at `hm96Leaf`), and the witness holds the openings.
-The prover waits for the selection coin, saying what the run's framing fixes, and in each checked unit's session runs
+The prover waits for the selection coin, saying what the run's framing fixes, and in each session runs
 Flock's masked reference prover (`FlockComplete.honestPZk`) at the session's own history, on the Flock witness that
 encodes what it opens: at each position the session reads, the witness's first opening there that
 passes its own check under the roots (`revealOC`), with its own `H` calls. Its framing is the code's:
 
-* `step`: where the run is at a history, for the prover: unit `u`'s session at its own history under its statement
+* `step`: where the run is at a history, for the prover: a session at its own history under its statement
   (`Step.session`), or a message the framing fixes outside the sessions (`Step.say`);
-* `reads`: the positions a checked unit's session opens under the session's statement;
-* `wit`: the Flock witness that encodes what a unit's session reveals, under the session's statement.
+* `reads`: the positions a session opens, by its statement;
+* `wit`: the Flock witness that encodes what a session reveals, by its statement.
 
-Both read the session's statement, so one session may prove several drawn units, its statement theirs.
+A session is named by its statement, so one session may prove several drawn units, its statement theirs.
 
 What it reveals opens and is the committed value `Wit.val` reads (`found_opens`, `found_val`), and covers every read
 position with a committed value (`found_covers`).
@@ -32,14 +32,14 @@ namespace Claims.Sampling.Reference
 
 open Claims Claims.Sampling
 
-/-- **Where a run is, for the reference prover**, at a history: unit `u`'s session at its own history `hS` under the
-session's statement `xS`, or a message the run's framing fixes outside the sessions. -/
+/-- **Where a run is, for the reference prover**, at a history: the session under the statement `xS` at its own
+history `hS`, or a message the run's framing fixes outside the sessions. -/
 inductive Step where
-  | session (u : ℕ × ℕ) (xS : Msg) (hS : List (Msg × Msg))
+  | session (xS : Msg) (hS : List (Msg × Msg))
   | say (m : Msg)
 
-/-- **The reference prover's tape**: a Flock tape per unit, its session's. -/
-abbrev Tape := ℕ × ℕ → FlockComplete.TapeZk
+/-- **The reference prover's tape**: a Flock tape per session statement. -/
+abbrev Tape := Msg → FlockComplete.TapeZk
 
 /-- **The opening revealed at `g`**: the first of `os` at `g` whose check under `roots` passes, each check its own `H`
 calls. -/
@@ -59,19 +59,19 @@ def revealOC (Cm : Commitment Bool) (roots : List Msg) (w : Wit) : List ℕ → 
 def found (H : Msg → Msg) (Cm : Commitment Bool) (roots : List Msg) (w : Wit) (gs : List ℕ) : List (Opening Bool) :=
   gs.flatMap fun g => (w.vals.find? fun o => o.pos == g && Cm.Opens H roots o).toList
 
-/-- **The sampled reference prover** at the witness `w`: what the framing fixes outside the sessions; in unit `u`'s
-session, Flock's masked reference prover at the session's history, on the Flock witness of what it reveals and the
-unit's tape. -/
-def refP (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt) (reads : Stmt → ℕ × ℕ → Msg → List ℕ)
-    (Cm : Commitment Bool) (wit : Stmt → ℕ × ℕ → Msg → List (Opening Bool) → Claims.Flock.Wit) (w : Wit) :
+/-- **The sampled reference prover** at the witness `w`: what the framing fixes outside the sessions; in the session
+under `xS`, Flock's masked reference prover at the session's history, on the Flock witness of what it reveals and
+`xS`'s tape. -/
+def refP (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt) (reads : Stmt → Msg → List ℕ)
+    (Cm : Commitment Bool) (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit) (w : Wit) :
     Prover Tape :=
   ⟨fun x hist ω =>
     match step x hist with
     | .say m => .ret m
-    | .session u xS hS =>
+    | .session xS hS =>
       match parse x with
-      | some s => ocBind (revealOC Cm s.roots w (reads s u xS)) fun os =>
-          (FlockComplete.honestPZk (wit s u xS os)).next xS hS (ω u)
+      | some s => ocBind (revealOC Cm s.roots w (reads s xS)) fun os =>
+          (FlockComplete.honestPZk (wit s xS os)).next xS hS (ω xS)
       | none => .ret []⟩
 
 /-- **The sessions' error at `x`**: the largest of `δ`, capped at `1`, over the statements of the sessions `x` sets up;
@@ -151,18 +151,18 @@ theorem found_covers {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {w : Wi
 /-- **In a session, its message is Flock's reference prover's** at the session's history, on the Flock witness of what
 it reveals. -/
 theorem refP_session (H : Msg → Msg) (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt)
-    (reads : Stmt → ℕ × ℕ → Msg → List ℕ) (Cm : Commitment Bool)
-    (wit : Stmt → ℕ × ℕ → Msg → List (Opening Bool) → Claims.Flock.Wit)
-    (w : Wit) {x : Msg} {s : Stmt} {hist : List (Msg × Msg)} {u : ℕ × ℕ} {xS : Msg} {hS : List (Msg × Msg)}
-    (hs : parse x = some s) (hstep : step x hist = .session u xS hS) (ω : Tape) :
+    (reads : Stmt → Msg → List ℕ) (Cm : Commitment Bool)
+    (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit)
+    (w : Wit) {x : Msg} {s : Stmt} {hist : List (Msg × Msg)} {xS : Msg} {hS : List (Msg × Msg)}
+    (hs : parse x = some s) (hstep : step x hist = .session xS hS) (ω : Tape) :
     (((refP step parse reads Cm wit w).next x hist ω).eval H).1 =
-      (((FlockComplete.honestPZk (wit s u xS (found H Cm s.roots w (reads s u xS)))).next xS hS (ω u)).eval H).1 := by
+      (((FlockComplete.honestPZk (wit s xS (found H Cm s.roots w (reads s xS)))).next xS hS (ω xS)).eval H).1 := by
   simp only [refP, hstep, hs, ocBind_eval, revealOC_eval]
 
 /-- **Outside the sessions, it says what the framing fixes.** -/
 theorem refP_say (H : Msg → Msg) (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt)
-    (reads : Stmt → ℕ × ℕ → Msg → List ℕ) (Cm : Commitment Bool)
-    (wit : Stmt → ℕ × ℕ → Msg → List (Opening Bool) → Claims.Flock.Wit)
+    (reads : Stmt → Msg → List ℕ) (Cm : Commitment Bool)
+    (wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit)
     (w : Wit) {x : Msg} {hist : List (Msg × Msg)} {m : Msg} (hstep : step x hist = .say m) (ω : Tape) :
     (((refP step parse reads Cm wit w).next x hist ω).eval H).1 = m := by
   simp only [refP, hstep, OC.eval]
