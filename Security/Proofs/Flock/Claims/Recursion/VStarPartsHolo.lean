@@ -51,7 +51,9 @@ lemma. Which template each part uses:
   and the setup climbs that digest and the round's commit string to one registered root (`RegClimbs`); two such
   climbs from different values collide, at `Br`'s setup evaluations or among the recorded calls.
 * **At the holo shape**: `vstarAccepts_holo_of_links` (`VStarAcceptsR`), and the bundles `vstarParts_holo_of_links` and
-  `vstarPartsStaging_holo_of_links`, what `codeFacts_of_parts`, `ksA_deployed_parts` and `KS_of_parts` read. At
+  `vstarPartsStaging_holo_of_links`, what `codeFacts_of_parts`, `ksA_deployed_parts` and `KS_of_parts` read, with each
+  part a holo part (`HoloPart`, the counterpart of M's `DensePart`: `PartsLinksOr`, and `LogsNil` or `PartsLogLinks`;
+  `holoPart_of_open` from M's level links, `holoPart_of_nil` at a part without calls). At
   `deployRec` over the outer record `deployZkRec relation` (`vstarAccepts_holo_deployRec`, `vstarParts_holo_deployRec`,
   `vstarPartsStaging_holo_deployRec`), the outer record parses at `parseOf relation readOfO` by definition, and
   `deployRec` at the layout's readers reads through them (`RecDeploy.readsThrough_deployRec`).
@@ -537,6 +539,35 @@ theorem partOpens_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Co
     (hC : ∀ s, RegClimbs H D DO L Form.Holo cmt dig s) : ∀ s, PartOpens H D DO L Form.Holo opening cmt s :=
   fun s => partOpens_of_climbs (hO s) (hC s)
 
+/-! ## A part at the holo shape -/
+
+/-- **Part `s` at the holo shape** (the holo counterpart of M's `DensePart`): its links for its check or a collision
+the finders charge (`PartsLinksOr`, any kind of part), and for its calls either none where its coins are shown (the
+algebra, opening and sparse parts, `LogsNil`) or a level's links for them (`PartsLogLinks`). -/
+def HoloPart (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T)
+    (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
+    (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg))
+    (s : ℕ) : Prop :=
+  PartsLinksOr H D DO decode L Form.Holo shows chk s ∧
+    (LogsNil D Form.Holo shows logs s ∨ PartsLogLinks H D DO decode L Form.Holo shows logs s)
+
+/-- **A holo level named `rec-open/…`, from M's dense links at the holo shape** (`OpenLinks`, `OpenLogLinks`). -/
+theorem holoPart_of_open {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T}
+    {decode : Msg → Option Flock.Readable.Read} {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
+    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
+    {s : ℕ} (hC : OpenLinks D decode L Form.Holo shows chk s) (hL : OpenLogLinks D decode L Form.Holo shows logs s) :
+    HoloPart H D DO decode L shows chk logs s :=
+  ⟨partsLinksOr_of_links (partsLinks_of_open hC), Or.inr (partsLogLinks_of_open hL)⟩
+
+/-- **A holo part whose check makes no SHA-512 call** (M's `partLogs_of_nil` premise): its links for its check and
+`logs s` empty everywhere. -/
+theorem holoPart_of_nil {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T}
+    {decode : Msg → Option Flock.Readable.Read} {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
+    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
+    {s : ℕ} (hC : PartsLinksOr H D DO decode L Form.Holo shows chk s) (h0 : ∀ x c ms, logs s x c ms = []) :
+    HoloPart H D DO decode L shows chk logs s :=
+  ⟨hC, Or.inl fun x _ _ _ _ c _ ms => h0 x c ms⟩
+
 /-! ## `VStarAcceptsR` and V*'s parts at the holo shape -/
 
 /-- **`VStarAcceptsR` at the holo shape from the parts' links**: `vstarAccepts_holo` with every part's `PartChecks`
@@ -554,20 +585,20 @@ theorem vstarAccepts_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : Deplo
   vstarAccepts_holo hR hVL (partChecks_holo hDO hC) (partOpens_holo hO hRC) hS hD
 
 /-- **V\*'s parts at the holo shape, from the parts' links** (`VStarParts` at `Form.Holo`, what `codeFacts_of_parts`
-and `ksA_deployed_parts` read there): every part's `PartChecks` from its links (`partChecks_holo`), its `PartOpens`
-through registered climbs (`partOpens_holo`), and its `PartLogs` nil where its coins are shown or from a level's links
-for its calls (`partLogs_holo`). -/
+and `ksA_deployed_parts` read there): with every part a holo part (`HoloPart`), its `PartChecks` from its links
+(`partChecks_holo`), its `PartOpens` through registered climbs (`partOpens_holo`), and its `PartLogs` nil where its
+coins are shown or from a level's links for its calls (`partLogs_holo`). -/
 theorem vstarParts_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {L : Layout} {opening : Opening} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {cmt dig : Msg → ℕ → Msg → Msg}
     {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (hC : ∀ s, PartsLinksOr H D DO decode L Form.Holo shows chk s)
+    (hP : ∀ s, HoloPart H D DO decode L shows chk logs s)
     (hO : ∀ s, HeldOpens D DO L Form.Holo opening dig s) (hRC : ∀ s, RegClimbs H D DO L Form.Holo cmt dig s)
-    (hLg : ∀ s, LogsNil D Form.Holo shows logs s ∨ PartsLogLinks H D DO decode L Form.Holo shows logs s)
     (hS : Staged H D I L Form.Holo shows cmt) (hD : Decomp H D I.V Form.Holo chk)
     (hLD : LogDecomp H D I.V Form.Holo logs) (hH : Held D I L Form.Holo) : VStarParts H D I DO L opening Form.Holo :=
-  ⟨shows, chk, cmt, logs, partChecks_holo hDO hC, partOpens_holo hO hRC, partLogs_holo hDO hLg, hS, hD, hLD, hH⟩
+  ⟨shows, chk, cmt, logs, partChecks_holo hDO fun s => (hP s).1, partOpens_holo hO hRC,
+    partLogs_holo hDO fun s => (hP s).2, hS, hD, hLD, hH⟩
 
 /-- **V\*'s parts at the holo shape with the staging off the run, from the parts' links** (`VStarPartsStaging` at
 `Form.Holo`, what `KS_of_parts` reads there): `vstarParts_holo_of_links` with the staging's fact about `D.vstar`
@@ -578,13 +609,13 @@ theorem vstarPartsStaging_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : 
     {cmt dig : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
     {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (hC : ∀ s, PartsLinksOr H D DO decode L Form.Holo shows chk s)
+    (hP : ∀ s, HoloPart H D DO decode L shows chk logs s)
     (hO : ∀ s, HeldOpens D DO L Form.Holo opening dig s) (hRC : ∀ s, RegClimbs H D DO L Form.Holo cmt dig s)
-    (hLg : ∀ s, LogsNil D Form.Holo shows logs s ∨ PartsLogLinks H D DO decode L Form.Holo shows logs s)
     (hV : VstarShows D I L Form.Holo decC shows cmt) (hD : Decomp H D I.V Form.Holo chk)
     (hLD : LogDecomp H D I.V Form.Holo logs) (hH : Held D I L Form.Holo) :
     VStarPartsStaging D I DO H L opening decC Form.Holo :=
-  ⟨shows, chk, cmt, logs, partChecks_holo hDO hC, partOpens_holo hO hRC, partLogs_holo hDO hLg, hV, hD, hLD, hH⟩
+  ⟨shows, chk, cmt, logs, partChecks_holo hDO fun s => (hP s).1, partOpens_holo hO hRC,
+    partLogs_holo hDO fun s => (hP s).2, hV, hD, hLD, hH⟩
 
 end Facts
 
@@ -620,44 +651,38 @@ theorem vstarAccepts_holo_deployRec {L : Layout} (hb : b.rd = RecDeploy.readersO
 theorem vstarParts_holo_deployRec {L : Layout} {opening : Opening}
     {shows : ℕ → Msg → Msg → (ℕ → FlockDeploy.Coin) → Prop} {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop}
     {cmt dig : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)}
-    (hC : ∀ s, PartsLinksOr H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
-      RecDeploy.readOfO L Form.Holo shows chk s)
+    (hP : ∀ s, HoloPart H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
+      RecDeploy.readOfO L shows chk logs s)
     (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       Form.Holo opening dig s)
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       Form.Holo cmt dig s)
-    (hLg : ∀ s, LogsNil (RecDeploy.deployRec I.V ivScope b) Form.Holo shows logs s ∨
-      PartsLogLinks H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
-        RecDeploy.readOfO L Form.Holo shows logs s)
     (hS : Staged H (RecDeploy.deployRec I.V ivScope b) I L Form.Holo shows cmt)
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk)
     (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs)
     (hH : Held (RecDeploy.deployRec I.V ivScope b) I L Form.Holo) :
     VStarParts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
       Form.Holo :=
-  vstarParts_holo_of_links rfl hC hO hRC hLg hS hD hLD hH
+  vstarParts_holo_of_links rfl hP hO hRC hS hD hLD hH
 
 /-- **V\*'s parts at the holo shape at `deployRec`, with the staging off the run** (`KS_of_parts`' holo premise
 there): `vstarPartsStaging_holo_of_links` with the outer record `deployZkRec relation`'s parser by definition. -/
 theorem vstarPartsStaging_holo_deployRec {L : Layout} {opening : Opening} {decC : Msg → Msg → FlockDeploy.Coin}
     {shows : ℕ → Msg → Msg → (ℕ → FlockDeploy.Coin) → Prop} {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop}
     {cmt dig : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)}
-    (hC : ∀ s, PartsLinksOr H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
-      RecDeploy.readOfO L Form.Holo shows chk s)
+    (hP : ∀ s, HoloPart H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
+      RecDeploy.readOfO L shows chk logs s)
     (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       Form.Holo opening dig s)
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       Form.Holo cmt dig s)
-    (hLg : ∀ s, LogsNil (RecDeploy.deployRec I.V ivScope b) Form.Holo shows logs s ∨
-      PartsLogLinks H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
-        RecDeploy.readOfO L Form.Holo shows logs s)
     (hV : VstarShows (RecDeploy.deployRec I.V ivScope b) I L Form.Holo decC shows cmt)
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk)
     (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs)
     (hH : Held (RecDeploy.deployRec I.V ivScope b) I L Form.Holo) :
     VStarPartsStaging (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) H L
       opening decC Form.Holo :=
-  vstarPartsStaging_holo_of_links rfl hC hO hRC hLg hV hD hLD hH
+  vstarPartsStaging_holo_of_links rfl hP hO hRC hV hD hLD hH
 
 end Deployed
 
