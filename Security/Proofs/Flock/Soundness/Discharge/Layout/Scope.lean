@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
+import Flock.ProvedScope
 
 set_option Elab.async false
 
@@ -21,6 +22,15 @@ row, or every row an unsegmented `sha512/row/v2` row of `16 · words` bits whose
 `sha512/row-seg/v1` row of `16 · words` bits as `HmRow.segShape` cuts it, each segment's bytes ending in its last block,
 of any mix, the output rows `sha512/row/v2` rows of one output port each (`scopeOkH_rows`). Those headlines commit each
 row under its own bytes (`Hidden.Any.rowMsg`).
+
+`scopeGenH` is the general form under hidden outputs: a template instance is one repeated unit stage (the unit net,
+`upv` slots) and any number of stages the verifier evaluates (every other net with slots, a lookup slot among them), the
+units reading any number of committed input groups (the leaf group and the leaf cuts), every other input port filled
+by a wire from an earlier stage's output port, and the outputs returned by the unit or by any stage. On the wires it
+refuses only an order that does not compute (`ProvedScope.wiresAcyclic`); the rest is `scopeOkH`'s conditions with their
+own reasons: the unit's reads (`portReadsB`), its size (`unitLog ≤ 32`) and the rows (`rowsH_spec`). It drops
+`scopeOkH`'s `inGroups.size = 1` and `outNet = unitNet` (`scopeGenH_of_scopeOkH`), which the headlines at the template
+instance's program (`Discharge/General`) do not read.
 -/
 
 namespace FlockSoundness.Discharge.Layout
@@ -144,15 +154,14 @@ theorem segRow_spec {p : Port} (h : segRow p = true) :
   obtain ⟨⟨⟨hs, hb⟩, hn⟩, hf⟩ := h
   exact ⟨hs, hb, hn, hf⟩
 
-/-- **`scopeOkH`'s rows**: all `sha512/row/v1` rows, or each row a `v2Row` or a `segRow`, each output row a `v2Row` of
-one output port. -/
-theorem scopeOkH_rows {c : Circuit} (h : scopeOkH c = true) :
+/-- **The hidden-output headlines' rows**: all `sha512/row/v1` rows, or each row a `v2Row` or a `segRow`, each output row
+a `v2Row` of one output port. -/
+theorem rowsH_spec {c : Circuit} (h : (v1Ports c || bitRows c) = true) :
     (∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) ∨
       ((∀ p ∈ c.ports.toList, v2Row p = true ∨ segRow p = true) ∧ (∀ r ∈ c.outRowPorts.toList, r = 1) ∧
         ∀ j < c.outRowPorts.size, v2Row (c.ports.getD (HmOut.nIn c + j) default) = true) := by
-  unfold scopeOkH at h
-  simp only [Bool.and_eq_true, Bool.or_eq_true] at h
-  rcases h.2 with h1 | h2
+  simp only [Bool.or_eq_true] at h
+  rcases h with h1 | h2
   · left
     unfold v1Ports at h1
     simp only [Array.all_eq_true', Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h1
@@ -165,5 +174,48 @@ theorem scopeOkH_rows {c : Circuit} (h : scopeOkH c = true) :
       List.mem_range] at h2
     obtain ⟨⟨hp, hr⟩, ho⟩ := h2
     exact ⟨fun p hm => hp p (Array.mem_toList_iff.1 hm), fun r hm => hr r (Array.mem_toList_iff.1 hm), ho⟩
+
+theorem scopeOkH_rowsB {c : Circuit} (h : scopeOkH c = true) : (v1Ports c || bitRows c) = true := by
+  unfold scopeOkH at h
+  simp only [Bool.and_eq_true] at h
+  exact h.2
+
+/-- **`scopeOkH`'s rows**: all `sha512/row/v1` rows, or each row a `v2Row` or a `segRow`, each output row a `v2Row` of
+one output port. -/
+theorem scopeOkH_rows {c : Circuit} (h : scopeOkH c = true) :
+    (∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) ∨
+      ((∀ p ∈ c.ports.toList, v2Row p = true ∨ segRow p = true) ∧ (∀ r ∈ c.outRowPorts.toList, r = 1) ∧
+        ∀ j < c.outRowPorts.size, v2Row (c.ports.getD (HmOut.nIn c + j) default) = true) :=
+  rowsH_spec (scopeOkH_rowsB h)
+
+/-! ## The general form -/
+
+/-- **The general form under hidden outputs**: the wires compute in some order (`ProvedScope.wiresAcyclic`), the unit
+has at most `2^32` rows and reads only port bits among its inputs, and the rows are the hidden-output headlines'
+(`v1Ports` or `bitRows`). No condition on the unit's input groups, on the stages or on which net returns the outputs. -/
+def scopeGenH (c : Circuit) : Bool :=
+  ProvedScope.wiresAcyclic c && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit && (v1Ports c || bitRows c)
+
+/-- **`scopeGenH` gives the template instance's circuit conditions**: the unit's reads and the wires' order. -/
+theorem scopeGenH_spec {c : Circuit} (hU : Built c.unit) (h : scopeGenH c = true) :
+    PortReads c hU ∧ ProvedScope.wiresAcyclic c = true := by
+  unfold scopeGenH at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨⟨⟨hw, hu⟩, hpr⟩, -⟩ := h
+  exact ⟨portReads_of_portReadsB hU hu hpr, hw⟩
+
+theorem scopeGenH_rowsB {c : Circuit} (h : scopeGenH c = true) : (v1Ports c || bitRows c) = true := by
+  unfold scopeGenH at h
+  simp only [Bool.and_eq_true] at h
+  exact h.2
+
+/-- **`scopeGenH` is `scopeOkH` without its shape conditions**: every circuit `scopeOkH` covers whose wires compute is
+in it. -/
+theorem scopeGenH_of_scopeOkH {c : Circuit} (h : scopeOkH c = true) (hw : ProvedScope.wiresAcyclic c = true) :
+    scopeGenH c = true := by
+  unfold scopeOkH at h
+  unfold scopeGenH
+  simp only [Bool.and_eq_true] at h ⊢
+  exact ⟨⟨⟨hw, h.1.1.2⟩, h.1.2⟩, h.2⟩
 
 end FlockSoundness.Discharge.Layout
