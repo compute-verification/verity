@@ -408,7 +408,7 @@ def main(args: Options) -> int:
         warm["wall_s"] = round(WU.run(llm, lambda: run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling), out, args.committer, args.rpc_timeout)["wall_s"], 3)
     rows: list[dict] = []
     bundles_of: dict[int, dict[int, dict | None]] = {}     # --replay-deferred: pair -> rank -> what its finalize wrote for its bundle
-    tokens_ref = None
+    tokens_ref, started = None, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())   # started: this Commit's stamp on its rows, pair files, summary (tp.rejudge)
     all_pass = True
     xrank_pairs: list[dict] = []     # [TP-12] one verdict per instrumented pair
     from verity_vllm.program.frontend import collective_kinds
@@ -431,7 +431,7 @@ def main(args: Options) -> int:
                        "wall_s": r["wall_s"], "iterations": r["iterations"], "engine_steps": len(r["step_wall_s"]), "generated_tokens": r["generated_tokens"],
                        "prompt_tokens": r["prompt_tokens"], "generated_tokens_per_s": r["generated_tokens"] / r["wall_s"],
                        "step_wall_prefill_s": r["step_wall_s"][0], "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
-                       "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+                       "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "commit_started": started}
                 if tokens_ref is None:
                     tokens_ref = r["tokens"]
                 row["tokens_equal_ref"] = r["tokens"] == tokens_ref
@@ -593,7 +593,7 @@ def main(args: Options) -> int:
                             xr["pair"] = pair
                             for fn in {d_["file"] for d_ in xd}:
                                 Path(fn).unlink(missing_ok=True)      # the picks are re-derivable from the retained records; the JSON verdict is the evidence
-                            (out / f"xrank_pair{pair}.json").write_text(json.dumps({"schema": "verity/tp2/xrank-collectives/v1", "tp": args.tp} | xr, indent=1, default=str) + "\n")
+                            (out / f"xrank_pair{pair}.json").write_text(json.dumps({"schema": "verity/tp2/xrank-collectives/v1", "tp": args.tp, "commit_started": started} | xr, indent=1, default=str) + "\n")
                             print(f"[tp2commit] cross-rank collectives (TP-12) pair {pair}: result {xr['result']} picks {xr['picks']} equal {xr['equal']} mismatch {xr.get('mismatch_n')} "
                                   f"missing {xr.get('missing_n')} families {sorted(xr.get('by_family') or {})} flipped {[d_.get('flipped_collective_inputs') for d_ in xd]}; {xr.get('why') or ''}", flush=True)
                         except Exception as e:  # noqa: BLE001
@@ -822,7 +822,7 @@ def main(args: Options) -> int:
     ctl = [r for r in rows if r["arm"] == "control"]
     trt = [r for r in rows if r["arm"] != "control"]
     deltas = [t["wall_s"] - c["wall_s"] for t, c in zip(trt, ctl)]
-    summ = {"schema": SCHEMA, "label": args.label, "tp": args.tp, "committer": args.committer, "pairs": args.pairs, "openings": args.openings,
+    summ = {"schema": SCHEMA, "commit_started": started, "label": args.label, "tp": args.tp, "committer": args.committer, "pairs": args.pairs, "openings": args.openings,
             "pairs_run": len({r["pair"] for r in rows}), "stopped": stopped,
             "control_wall": [r["wall_s"] for r in ctl], "treatment_wall": [r["wall_s"] for r in trt], "delta_wall": deltas,
             "delta_wall_mean": statistics.fmean(deltas) if deltas else None,
