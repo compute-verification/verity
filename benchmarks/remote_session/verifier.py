@@ -464,7 +464,7 @@ def main() -> int:
         lg, pub = r.get("ledger", {}).get("spec", {}), r.get("record", {}).get("public", {})
         print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
               f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')} "
-              f"appended={pub.get('appended')} released={pub.get('released')} post_seed={pub.get('post_seed')}",
+              f"appended={r['appended']} released={r['released']} post_seed={pub.get('post_seed')}",
               flush=True)
         record()
     conn.send({"type": "bye"})
