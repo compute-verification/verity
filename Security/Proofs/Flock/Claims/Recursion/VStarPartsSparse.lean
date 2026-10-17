@@ -44,7 +44,8 @@ The rest:
   M's dense-shape links, whose output ties give the inner check outright, give `PartLinks` (`partLinks_of_resLinks`,
   `partLinks_of_openLinks`). A part whose inner check makes no call has `PartLogs` outright (`partLogs_of_nil`).
 * **`VStarAcceptsR` at the sparse shape** (`vstarAccepts_sparse_of_links`): `vstarAccepts_sparse` with every part's
-  `PartChecks` from its links; `vstarPartsStaging_sparse_of_links` is `VStarPartsStaging` so.
+  `PartChecks` from its links; `vstarParts_sparse_of_links` and `vstarPartsStaging_sparse_of_links` are `VStarParts`
+  and `VStarPartsStaging` so.
 -/
 
 namespace Flock.Readable
@@ -626,6 +627,21 @@ theorem vstarPartsStaging_sparse_of_links {H : Msg → Msg} {D : Deploy Coin} {I
     (hD : Decomp H D I.V Form.Sparse chk) (hLD : LogDecomp H D I.V Form.Sparse logs) (hH : Held D I L Form.Sparse) :
     VStarPartsStaging D I DO H L opening decC Form.Sparse :=
   ⟨shows, chk, cmt, logs, fun s => partChecks_of_links hDO (hC s), hO, hL, hV, hD, hLD, hH⟩
+
+/-- **V\*'s parts at the sparse shape, from the parts' links**: `VStarParts` at `Form.Sparse` with every part's
+`PartChecks` from its links. -/
+theorem vstarParts_sparse_of_links {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
+    {DO : Flock.Deploy Coin Col T} {L : Layout} {opening : Opening}
+    {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
+    {cmt : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
+    {decode : Msg → Option Flock.Readable.Read}
+    (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
+    (hC : ∀ s, PartLinks H D decode L Form.Sparse shows chk s)
+    (hO : ∀ s, PartOpens H D DO L Form.Sparse opening cmt s)
+    (hL : ∀ s, PartLogs H D DO L Form.Sparse shows logs s) (hS : Staged H D I L Form.Sparse shows cmt)
+    (hD : Decomp H D I.V Form.Sparse chk) (hLD : LogDecomp H D I.V Form.Sparse logs) (hH : Held D I L Form.Sparse) :
+    VStarParts H D I DO L opening Form.Sparse :=
+  ⟨shows, chk, cmt, logs, fun s => partChecks_of_links hDO (hC s), hO, hL, hS, hD, hLD, hH⟩
 
 end Sparse
 
