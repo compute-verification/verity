@@ -21,6 +21,7 @@ import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.KS.PlainKS
 import Proofs.Flock.Claims.KS.Escapes
 import Proofs.Flock.Claims.KS.OnAcc
+import Proofs.Flock.Claims.KS.PlainAcc
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -91,4 +92,7 @@ against the simulated strategy arises only on live runs the live verdict accepts
 (`Escapes`: `FlockDeploy.KS.selfClash_le_live`, `FlockDeploy.KS.mean_selfClash_le_live`). Escapes on accepted runs
 (`OnAcc`, `Claims.Escapes.OnAcc`): `Flock.TableBoundθAccAt` is `TableBoundθAt` with them, which gives it
 (`Flock.TableBoundθAccAt.tableBoundθAt`) and holds with none where no run accepts (`Flock.tableBoundθAccAt_of_noAcc`);
-the old escapes are on accepted runs where their events are (`Flock.oldEsc_onAcc`, `Flock.oldEscZ_onAcc`). -/
+the old escapes are on accepted runs where their events are (`Flock.oldEsc_onAcc`, `Flock.oldEscZ_onAcc`). With the
+live sessions' bound at escapes on accepted runs, whose events bound the decoded self-clashes on accepted live runs
+(`PlainAcc`: `FlockDeploy.KS.PlainLiveAcc`, which gives `PlainLive`, `FlockDeploy.KS.plainLive_of_acc`), the plain
+table bound holds with escapes on accepted runs at every statement (`FlockDeploy.KS.plain_tableBoundθAccAt`). -/
