@@ -2,14 +2,15 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3n-16) re-solves here to the τ, τ at 600 W, U/F_low and
-margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
+checks every attack against it. The reading it reports is a design's core ε (`machine-model eps`, "ε in the
+tensor–scalar model" below). Each named vector (VF … VF3n-16) re-solves here to the record it was published with (τ, τ
+at 600 W, U/F_low and margin), at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3n-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
+uv run machine-model solve VF3n-16        # the vector's record (τ, τ at 600 W, U/F_low, margin), θ, the cheapest attacks, the check, the claims
 uv run machine-model solve                # model.toml's `current` (VF3n-16, the vector of record since 17 Oct; VF3l-16 by decision 62 before it)
 uv run machine-model census VF3n-16 --kind ATOMS64
 uv run machine-model attacks VF3n-16 -n 3 # the cheapest attacks of every design
