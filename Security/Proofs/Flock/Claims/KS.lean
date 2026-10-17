@@ -37,6 +37,7 @@ import Proofs.Flock.Claims.KS.PlainEvent
 import Proofs.Flock.Claims.KS.LiveMix
 import Proofs.Flock.Claims.KS.PlainFirst
 import Proofs.Flock.Claims.KS.PlainThird
+import Proofs.Flock.Claims.KS.PlainSimW
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -156,4 +157,8 @@ the simulation of the runs alone (`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.
 `FlockDeploy.KS.plainSim_of_run`, `FlockDeploy.KS.plain_first_of_run`); the checks compare draws only up to
 `JsonEquiv`, which holds between different terms (`FlockDeploy.KS.drawEq_ne`). At those coins, a deployed event
 that the live event implies bounds the mixture, the third bound's form (`PlainThird`:
-`FlockDeploy.KS.plainMix_le_of_run`). -/
+`FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision as the events, KS at the
+deployed plain verifier holds from a live prover for each prover that simulates its accepting runs, whose self-clashes
+give its accepting runs with a collision and whose fork bound holds, the record's draw verbatim and `Extendθ`
+(`PlainSimW`: `FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
+`FlockDeploy.KS.plainLiveWrPAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). -/
