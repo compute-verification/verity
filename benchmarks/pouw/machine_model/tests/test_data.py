@@ -163,3 +163,19 @@ def test_violated_rows_close():
     assert closed <= {r for v in census(M, "VF3l-16").values() for r in v}
     assert {f"KALU{i}" for i in range(4)} <= set(c["ALU"]) and ROWS["SHFL"].status == "measured"
     assert c["SHFL"]["SHFL"] == pytest.approx(u_of(M.cycle_u, "0.4997201", "0.02", "", ""))
+
+
+def test_joint_issue_rows_refit_over_every_mma_form():
+    """VF3n-16 closes JI3e_0..2, which EPS1 TENSOR's M1 programs load past 1 (IMMA m16n8k16 and TF32 k4 beside IADD3,
+    r20261017-040022-5e4d, r20261017-041103-d35d, r20261017-041754-7630), for JI3n_0..2: each the refit at the 2% noise
+    margin ÷ 1.07 (the schedule spread between builds), with MMA every form's least and each form its own kind."""
+    c, old = census(M, "VF3n-16"), census(M, "VF3m-16")
+    ji3e, ji3n = [f"JI3e_{i}" for i in range(3)], [f"JI3n_{i}" for i in range(3)]
+    assert not set(ji3e) & {r for v in c.values() for r in v}
+    forms = [k for k in c if k not in old and set(ji3n) <= set(c[k])]
+    assert len(forms) == 14 and {"IMMA16832", "IMMA16816", "HMMA1684T", "OMMASF16864"} <= set(forms)
+    for e, n, mma in zip(ji3e, ji3n, (7.5574, 13.3816, 14.4395)):
+        assert ROWS[n].status == "joint"
+        assert c["MMA"][n] == pytest.approx(min(c[k][n] for k in forms)) == pytest.approx(mma * M.cycle_u, abs=0.05)
+        assert c["MMA"][n] < old["MMA"][e] / 1.07
+        assert all(c[k][n] == pytest.approx(v[e] / 1.07) for k, v in old.items() if e in v and k != "MMA")

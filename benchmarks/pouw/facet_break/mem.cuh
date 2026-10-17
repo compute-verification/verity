@@ -1,0 +1,129 @@
+// FACET-BREAK's memory programs: the loads a table route reads its table with (shared, global through L1, texture), alone,
+// two kinds in one loop, and beside a MMA form. `generate.py` instantiates them and writes each probe-table entry.
+//
+//   FB_LD(name, D1, D2, R, P, Q, tpb)          every warp: Q loads an iteration; load q is D2 when q % R == R - 1
+//   FB_LDMMA(name, Form, D1, D2, R, P, Q, tpb) every warp: 8 MMAs and Q such loads an iteration, spread after the MMAs
+//
+// A block's table is a ring of 64 lines of 512 B (32 KB): its shared table, or its own region of `a.g` for LDG and TLD, so
+// a global table stays L1-resident. Load q of an iteration reads line (QL (warp + it) + q) mod 64, QL the power of two
+// at or above Q, so ptxas folds q into the instruction's immediate, can't merge two loads, and the loop is not invariant.
+// The lane's offset in its line is the pattern's: LINE, lane l at l x the load's width (one 128-byte phase each, no bank
+// conflict); BCAST, every lane the line's first word; QUAD, lanes 4j..4j+3 the line's j-th word.
+#pragma once
+#include "mix.cuh"
+
+namespace fb {
+
+enum Ld { D_NONE, D_LDS32, D_LDS64, D_LDS128, D_LDSU8, D_LDG32, D_LDGNC32, D_LDG64, D_LDG128, D_TLD1, D_TLD2, D_TLD4,
+          D_TLD4N };
+enum Pat { P_LINE, P_BCAST, P_QUAD };
+
+constexpr unsigned FB_LINE = 512, FB_RING = 64, FB_RINGB = FB_LINE * FB_RING;
+
+__host__ __device__ constexpr bool shared_ld(int d) { return d >= D_LDS32 && d <= D_LDSU8; }
+// bytes between two lanes' words: the load's width, or its texel's (tex1's texel is 4 B whatever the fetch's width)
+__host__ __device__ constexpr unsigned lane_stride(int d) {
+  return d == D_LDS64 || d == D_LDG64 ? 8 : d == D_LDS128 || d == D_LDG128 || d == D_TLD4 ? 16 : 4;
+}
+__host__ __device__ constexpr unsigned qlines(int q) { return q <= 1 ? 1 : 2 * qlines((q + 1) / 2); }
+__host__ __device__ constexpr int kind_at(int d1, int d2, int r, int q) { return d2 != D_NONE && q % r == r - 1 ? d2 : d1; }
+__host__ __device__ constexpr unsigned lane_off(int d, int p, int lane) {
+  return p == P_LINE ? lane * lane_stride(d) : p == P_QUAD ? (lane >> 2) * lane_stride(d) : 0u;
+}
+template <int Q>
+__host__ __device__ inline unsigned line_off(int warp, int it, int q) {
+  return ((qlines(Q) * (unsigned)(warp + it) + (unsigned)q) & (FB_RING - 1)) * FB_LINE;
+}
+
+// The gate's bank check: the byte offsets of the slot-th shared access of an iteration, from the kernel's own formula.
+template <int D1, int D2, int R, int P, int Q>
+__host__ __device__ unsigned soff(int slot, int lane, int warp, int it) {
+  int q = 0;
+  for (int seen = -1; q < Q; q++)
+    if (shared_ld(kind_at(D1, D2, R, q)) && ++seen == slot) break;
+  return line_off<Q>(warp, it, q) + lane_off(kind_at(D1, D2, R, q), P, lane);
+}
+
+template <int D>
+__device__ __forceinline__ uint32_t ld(const OpArgs& a, uint32_t sbase, const unsigned char* gb, unsigned gel, unsigned o) {
+  uint32_t r0 = 0, r1 = 0, r2 = 0, r3 = 0;
+  if constexpr (D == D_LDS32) asm volatile("ld.shared.u32 %0, [%1];" : "=r"(r0) : "r"(sbase + o));
+  if constexpr (D == D_LDS64) asm volatile("ld.shared.v2.u32 {%0,%1}, [%2];" : "=r"(r0), "=r"(r1) : "r"(sbase + o));
+  if constexpr (D == D_LDS128)
+    asm volatile("ld.shared.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(sbase + o));
+  if constexpr (D == D_LDSU8) asm volatile("ld.shared.u8 %0, [%1];" : "=r"(r0) : "r"(sbase + o));
+  if constexpr (D == D_LDG32) asm volatile("ld.global.u32 %0, [%1];" : "=r"(r0) : "l"(gb + o));
+  if constexpr (D == D_LDGNC32) asm volatile("ld.global.nc.u32 %0, [%1];" : "=r"(r0) : "l"(gb + o));
+  if constexpr (D == D_LDG64) asm volatile("ld.global.v2.u32 {%0,%1}, [%2];" : "=r"(r0), "=r"(r1) : "l"(gb + o));
+  if constexpr (D == D_LDG128)
+    asm volatile("ld.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "l"(gb + o));
+  if constexpr (D == D_TLD1) r0 = tex1Dfetch<unsigned>((cudaTextureObject_t)a.tex1, (int)(gel + o / 4));
+  if constexpr (D == D_TLD2) {
+    const uint2 v = tex1Dfetch<uint2>((cudaTextureObject_t)a.tex1, (int)(gel + o / 4));
+    r0 = v.x; r1 = v.y;
+  }
+  if constexpr (D == D_TLD4 || D == D_TLD4N) {
+    const uint4 v = D == D_TLD4 ? tex1Dfetch<uint4>((cudaTextureObject_t)a.tex4, (int)(gel / 4 + o / 16))
+                                : tex1Dfetch<uint4>((cudaTextureObject_t)a.tex1, (int)(gel + o / 4));
+    r0 = v.x; r1 = v.y; r2 = v.z; r3 = v.w;
+  }
+  return r0 ^ r1 ^ r2 ^ r3;
+}
+
+// The block's table: shared (filled, nonzero) when a kind reads shared memory; gel is its region of g in 4-byte texels.
+#define FB_TABLE(D1, D2)                                                                            \
+  constexpr bool fb_s = shared_ld(D1) || shared_ld(D2);                                             \
+  __shared__ __align__(128) unsigned char fb_tbl[fb_s ? FB_RINGB : 16];                             \
+  if constexpr (fb_s)                                                                               \
+    for (int i = threadIdx.x; i < (int)(FB_RINGB / 4); i += blockDim.x)                             \
+      reinterpret_cast<uint32_t*>(fb_tbl)[i] = i * 2654435761u + blockIdx.x + 1;                    \
+  const uint32_t sbase = (uint32_t)__cvta_generic_to_shared(fb_tbl);                                \
+  const unsigned char* gb = a.g + (size_t)blockIdx.x * FB_RINGB;                                     \
+  const unsigned gel = blockIdx.x * (FB_RINGB / 4);                                                  \
+  const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
+
+template <int D1, int D2, int R, int P, int Q>
+__device__ __forceinline__ uint32_t loads(const OpArgs& a, uint32_t sbase, const unsigned char* gb, unsigned gel, int lane,
+                                          int w, int it, int q0, int q1) {
+  uint32_t acc = 0;
+#pragma unroll
+  for (int q = q0; q < q1; q++) {
+    const unsigned o = line_off<Q>(w, it, q) + lane_off(kind_at(D1, D2, R, q), P, lane);
+    if (kind_at(D1, D2, R, q) == D1) acc ^= ld<D1>(a, sbase, gb, gel, o);
+    else if constexpr (D2 != D_NONE) acc ^= ld<D2>(a, sbase, gb, gel, o);
+  }
+  return acc;
+}
+
+template <int D1, int D2, int R, int P, int Q>
+__device__ __forceinline__ void ld_alone(const OpArgs& a) {
+  FB_TABLE(D1, D2)
+  uint32_t acc = threadIdx.x + 1;
+  OP_BEGIN
+  OP_LOOP(it) { acc ^= loads<D1, D2, R, P, Q>(a, sbase, gb, gel, lane, w, it, 0, Q); }
+  OP_END
+  OP_SINK(acc)
+}
+
+template <class F, int D1, int D2, int R, int P, int Q>
+__device__ __forceinline__ void ld_mma(const OpArgs& a) {
+  FB_TABLE(D1, D2)
+  Mma<F> m(lane);
+  uint32_t acc = threadIdx.x + 1;
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int c = 0; c < 8; c++) {
+      m.go(c);
+      acc ^= loads<D1, D2, R, P, Q>(a, sbase, gb, gel, lane, w, it, c * Q / 8, (c + 1) * Q / 8);
+    }
+  }
+  OP_END
+  OP_SINK((acc ^ m.fold()))
+}
+
+}  // namespace fb
+
+#define FB_LD(name, D1, D2, R, P, Q, TPB) OP_KERNEL(name, TPB) { fb::ld_alone<fb::D1, fb::D2, R, fb::P, Q>(a); }
+#define FB_LDMMA(name, F, D1, D2, R, P, Q, TPB) \
+  OP_KERNEL(name, TPB) { fb::ld_mma<fb::F, fb::D1, fb::D2, R, fb::P, Q>(a); }
