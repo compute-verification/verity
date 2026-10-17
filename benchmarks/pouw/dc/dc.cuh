@@ -19,7 +19,7 @@ DC_HD constexpr uint32_t kmaj_sbo(uint32_t kb) { return (kb >> 4) * 128u; }
 DC_DEV uint32_t smem_u32(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
 
 // sm_90 wgmma descriptor: start >> 4 [0,14), LBO >> 4 [16,30), SBO >> 4 [32,46), base offset 0, layout 0 (no swizzle)
-// [62,64). `swap` exchanges LBO and SBO: a diagnostic of the GEMM's layout gate only.
+// [62,64). dgemm's gate reruns a mismatch with LBO and SBO exchanged, so a misread of the two shows in one run.
 DC_HD uint64_t wgmma_desc(uint32_t saddr, uint32_t lbo, uint32_t sbo) {
   return (uint64_t)((saddr >> 4) & 0x3FFF) | ((uint64_t)((lbo >> 4) & 0x3FFF) << 16) |
          ((uint64_t)((sbo >> 4) & 0x3FFF) << 32);

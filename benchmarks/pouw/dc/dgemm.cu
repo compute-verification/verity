@@ -19,7 +19,8 @@
 // Modes:
 //   dgemm cpuref DIR M N K SEED        host reference only (no GPU): X, W, C and R to DIR for dgemm_ref.py
 //   dgemm gate DIR M N K SEED          poison C and R with 0xA5, run the fold kernel, compare with the host reference,
-//                                      run the no-write control (must be rejected); X, W, C, R and gate.json to DIR
+//                                      run the no-write control (must be rejected); X, W, C, R and meta.json to DIR. A
+//                                      mismatch is rerun with LBO and SBO exchanged and reported (lbo_sbo_swapped)
 //   dgemm bench REPS M N K             fold, no-fold and (with -DDG_CUBLASLT) cuBLASLt int8 interleaved, one JSON line
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a dgemm.cu -o dgemm_sm90   (or 100a; build.sh)
 #include <cuda_runtime.h>
@@ -73,14 +74,14 @@ DC_DEV void absorb90(DuoSt (&ch)[8], const int* d) {
 
 template <int BN, bool FOLD, bool WRITE>
 __global__ void __launch_bounds__(128) dg90(const int8_t* X, const int8_t* W, int m, int n, int k, uint32_t seed,
-                                            int32_t* C, uint32_t* R) {
+                                            int32_t* C, uint32_t* R, uint32_t lbo, uint32_t sbo) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   __shared__ __align__(1024) unsigned char sA[64 * L];
   __shared__ __align__(1024) unsigned char sB[BN * L];
   const int tn = blockIdx.x, tm = blockIdx.y, tiles_n = gridDim.x;
   const int w = threadIdx.x >> 5, lane = threadIdx.x & 31, g = lane >> 2, q = lane & 3;
-  const uint64_t da = wgmma_desc(smem_u32(sA), kmaj_lbo(), kmaj_sbo(L));
-  const uint64_t db = wgmma_desc(smem_u32(sB), kmaj_lbo(), kmaj_sbo(L));
+  const uint64_t da = wgmma_desc(smem_u32(sA), lbo, sbo);
+  const uint64_t db = wgmma_desc(smem_u32(sB), lbo, sbo);
   int d[BN / 2];
 #pragma unroll
   for (int i = 0; i < BN / 2; i++) d[i] = 0;
@@ -142,7 +143,7 @@ DC_DEV void absorb100(DuoSt (&ch)[NCH], uint32_t trow, int32_t* crow) {
 
 template <bool FOLD, bool WRITE>
 __global__ void __launch_bounds__(128) dg100(const int8_t* X, const int8_t* W, int m, int n, int k, uint32_t seed,
-                                             int32_t* C, uint32_t* R) {
+                                             int32_t* C, uint32_t* R, uint32_t lbo, uint32_t sbo) {
 #if defined(__CUDA_ARCH_FEAT_SM100_ALL)
   constexpr int BM = 128, BN = 256;
   __shared__ __align__(1024) unsigned char sA[BM * L];
@@ -161,8 +162,8 @@ __global__ void __launch_bounds__(128) dg100(const int8_t* X, const int8_t* W, i
   __syncthreads();
   tc_after_sync();
   const uint32_t tmem = tslot, trow = tmem + ((32u * w) << 16);
-  const uint64_t da = umma_desc(smem_u32(sA), kmaj_lbo(), kmaj_sbo(L));
-  const uint64_t db = umma_desc(smem_u32(sB), kmaj_lbo(), kmaj_sbo(L));
+  const uint64_t da = umma_desc(smem_u32(sA), lbo, sbo);
+  const uint64_t db = umma_desc(smem_u32(sB), lbo, sbo);
   constexpr uint32_t idesc = umma_idesc(2, 1, 1, BM, BN);
   DuoSt ch[NCH];
   if constexpr (FOLD) {
@@ -276,10 +277,11 @@ static Shape shape_for(int m, int n, int k) {
 }
 template <bool FOLD, bool WRITE>
 static void launch(const Shape& sh, const int8_t* X, const int8_t* W, uint32_t seed, int32_t* C, uint32_t* R,
-                   cudaStream_t st) {
+                   cudaStream_t st, bool swap = false) {
   const dim3 grid(sh.n / sh.bn, sh.m / sh.bm);
-  if (g_sm == 100) dg100<FOLD, WRITE><<<grid, 128, 0, st>>>(X, W, sh.m, sh.n, sh.k, seed, C, R);
-  else dg90<128, FOLD, WRITE><<<grid, 128, 0, st>>>(X, W, sh.m, sh.n, sh.k, seed, C, R);
+  const uint32_t lbo = swap ? kmaj_sbo(L) : kmaj_lbo(), sbo = swap ? kmaj_lbo() : kmaj_sbo(L);
+  if (g_sm == 100) dg100<FOLD, WRITE><<<grid, 128, 0, st>>>(X, W, sh.m, sh.n, sh.k, seed, C, R, lbo, sbo);
+  else dg90<128, FOLD, WRITE><<<grid, 128, 0, st>>>(X, W, sh.m, sh.n, sh.k, seed, C, R, lbo, sbo);
   CK(cudaGetLastError());
 }
 
@@ -301,11 +303,11 @@ static int run_gate(const std::string& dir, int m, int n, int k, uint32_t seed) 
   CK(cudaMemcpy(dW, W.data(), W.size(), cudaMemcpyHostToDevice));
   std::vector<int32_t> C(Cr.size());
   std::vector<uint32_t> R(Rr.size());
-  auto call = [&](bool write) {
+  auto call = [&](bool write, bool swap) {
     CK(cudaMemset(dC, 0xA5, Cr.size() * 4));
     CK(cudaMemset(dR, 0xA5, Rr.size() * 4));
-    if (write) launch<true, true>(sh, dX, dW, seed, dC, dR, 0);
-    else launch<true, false>(sh, dX, dW, seed, dC, dR, 0);
+    if (write) launch<true, true>(sh, dX, dW, seed, dC, dR, 0, swap);
+    else launch<true, false>(sh, dX, dW, seed, dC, dR, 0, swap);
     CK(cudaDeviceSynchronize());
     CK(cudaMemcpy(C.data(), dC, C.size() * 4, cudaMemcpyDeviceToHost));
     CK(cudaMemcpy(R.data(), dR, R.size() * 4, cudaMemcpyDeviceToHost));
@@ -314,20 +316,27 @@ static int run_gate(const std::string& dir, int m, int n, int k, uint32_t seed) 
     for (size_t i = 0; i < R.size(); i++) br += R[i] != Rr[i];
     return std::make_pair(bc, br);
   };
-  const auto ctl = call(false);
-  const auto got = call(true);
+  const auto ctl = call(false, false);
+  const auto got = call(true, false);
   dump(dir, "X.bin", X);
   dump(dir, "W.bin", W);
   dump(dir, "C.bin", C);
   dump(dir, "R.bin", R);
   const bool ok = got.first == 0 && got.second == 0, ctl_rejected = ctl.first > 0 && ctl.second > 0;
+  // A diagnosis only: the layout of record stays dc.cuh's until a commit changes it and the gate passes.
+  std::string swapped = "null";
+  if (!ok) {
+    const auto sw = call(true, true);
+    swapped = sw.first == 0 && sw.second == 0 ? "\"exact\"" : "\"mismatch\"";
+  }
   char extra[256];
   snprintf(extra, sizeof extra, ", \"source\": \"gpu\", \"c_bad\": %zu, \"r_bad\": %zu, \"control_c_bad\": %zu, \"control_r_bad\": %zu",
            got.first, got.second, ctl.first, ctl.second);
   meta(dir, sh, seed, g_sm == 100 ? "sm_100a" : "sm_90a", extra);
   printf("{\"mode\": \"gate\", \"arch\": \"sm_%da\", \"m\": %d, \"n\": %d, \"k\": %d, \"exact\": %s, \"c_bad\": %zu, "
-         "\"r_bad\": %zu, \"control_rejected\": %s, \"words\": %zu, \"receipts\": %zu}\n",
-         g_sm, m, n, k, ok ? "true" : "false", got.first, got.second, ctl_rejected ? "true" : "false", C.size(), R.size());
+         "\"r_bad\": %zu, \"control_rejected\": %s, \"lbo_sbo_swapped\": %s, \"words\": %zu, \"receipts\": %zu}\n",
+         g_sm, m, n, k, ok ? "true" : "false", got.first, got.second, ctl_rejected ? "true" : "false", swapped.c_str(),
+         C.size(), R.size());
   return ok && ctl_rejected ? 0 : 4;
 }
 
