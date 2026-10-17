@@ -906,7 +906,11 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "VY_EVICT_ORIGIN": "/workspace/research/git/verity.git",
                                                                      "FAKE_ERROR": "2: /proc/1 is unreadable"}, capture_output=True, text=True)
     assert json.loads((tmp_path / "argv.json").read_text())[-5:-2] == ["--src-origin", "/workspace/research/git/verity.git", "--min-mb"]
-    assert r.returncode == 0 and "kept 3 (1:1 2:2), nothing more deleted: 2: /proc/1 is unreadable; no store blob" in r.stdout
+    assert "kept 3 (1:1 2:2), nothing more deleted: 2: /proc/1 is unreadable; no store blob" in r.stdout
+    assert r.returncode == 1 and "could not run" in r.stderr, "a pass that can't establish its conditions fails the unit (cpu-2, 16 Oct)"
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_ERROR": "another pass holds /workspace/research/src/.evict.lock"},
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and "nothing more deleted: another pass holds" in r.stdout, "an overlapping pass is not a fault"
     assert (tmp_path / "argv.json.cwd").read_text() == "/", "python -m puts its cwd first on sys.path: never a writable one"
     (tool / "research" / "store" / "cli.py").unlink()
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)

@@ -1,6 +1,6 @@
 {
   "schema": "verity/slack-routing-vectors/v2",
-  "about": "The delivery rule. `vectors` pins research.slack.route_targets: which names a post in #agent-coordination wakes (`msg` the post, `root` its thread's root or null for a top-level post, `inboxes` every inbox thread's ts, `targets` the names in order; optional `history`, the thread's earlier replies, and `branches`, PR number -> head branch, feed a reply under an announcement's `pr_watchers`). The console site's events route passes the same file.",
+  "about": "The delivery rule. `vectors` pins research.slack.route_targets: which names a post in #agent-coordination wakes (`msg` the post, `root` its thread's root or null for a top-level post, `inboxes` every inbox thread's ts, `targets` the names in order; optional `history`, the thread's earlier replies, and `branches`, PR number -> head branch, feed a reply under an announcement's `pr_watchers`).",
   "registry": {
     "handles": [
       {

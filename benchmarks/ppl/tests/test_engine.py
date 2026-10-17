@@ -123,7 +123,12 @@ def test_linear_variants_pass_their_gates(llama, ids, calib):
                                    {"step": "int8", "weight_top": 63, "gptq": True}]}, "gptq"),
             spec.parse({"linear": [{"step": "int8", "act": "dither", "act_top": 64}],
                         "attention": [{"step": "int8", "p_block": 32, "p_top": 119, "v_scale": "head", "k": "dither"},
-                                      {"step": "peel", "operand": "p", "width": 8}]}, "mixed")]
+                                      {"step": "peel", "operand": "p", "width": 8}]}, "mixed"),
+            spec.parse({"linear": [{"step": "int8", "act": "dither", "weight": "dither", "weight_top": 63},
+                                   {"step": "peel", "alphabet": "bit"}],
+                        "attention": [{"step": "int8", "q": "dither", "k": "dither", "v": "dither"}]}, "dither-peel"),
+            spec.parse({"linear": [{"step": "int8", "act": "dither", "density": 0.5}],
+                        "attention": [{"step": "int8", "q": "dither", "q_top": 63, "k": "dither"}]}, "thin-q")]
     r = evaluate(llama, ids[:4], arms, calib=calib)
     assert passed(r), r["gates"]
     bf = ppl(r["nll"]["bf16/s0"])

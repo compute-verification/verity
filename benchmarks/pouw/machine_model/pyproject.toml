@@ -1,0 +1,26 @@
+[project]
+name = "verity-machine-model"
+version = "0.0.0"
+description = "PoUW's machine model: the price-vector LP, the census and attack families as data, and `machine-model`."
+requires-python = ">=3.12"
+# scipy pinned: a vector's margin is read at the vertex HiGHS returns, and the published margins are that version's vertex.
+dependencies = ["scipy==1.18.1", "numpy"]
+
+[project.scripts]
+machine-model = "verity_machine_model.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verity_machine_model"]
+dev-mode-exact = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The tests read this directory alone: the package and data/.
+inputs = []

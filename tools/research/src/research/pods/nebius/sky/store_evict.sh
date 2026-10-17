@@ -7,7 +7,9 @@
 # output that isn't the tool's JSON is. One line per run goes to the journal (journalctl -u vy-store-evict).
 # With $VY_EVICT_SRC (research's unit, store_evict_src.conf: /workspace/research/src) it also deletes the `research run` source
 # trees there recoverable on the node (a ref of $VY_EVICT_ORIGIN, default <root>/git/verity.git) that nothing uses, every hour whatever the mark
-# (`--src-dir`, store/evict.py `evict_src`); the line says how many went and why the rest stayed. Research's unit runs on
+# (`--src-dir`, store/evict.py `evict_src`); the line says how many went and why the rest stayed, and a pass that could not
+# establish its conditions fails the unit (another pass holding the lock does not): a root unit on cpu-2 and cpu-3 deleted
+# nothing for hours while it reported success, until cpu-2 ran out of inodes (16 Oct, INF-40). Research's unit runs on
 # every node every 30 minutes (store_evict_research.{service,timer}); vy-nebius-cpu-1 runs only that one.
 # A tool too old for --src-dir still evicts the rest, and the line says so. Python runs from / so nothing in a writable cwd imports.
 # The node's runs have no private remote, so a fixture whose blob is gone fails its suite whenever the public export lacks it
@@ -36,6 +38,8 @@ srcnote=
 if [ -n "$SRCDIR" ] && grep -q -- '"--src-dir"' "$TOOL/research/store/cli.py" 2> /dev/null; then
   args+=(--src-dir "$SRCDIR")
   [ -n "${VY_EVICT_ORIGIN:-}" ] && args+=(--src-origin "$VY_EVICT_ORIGIN")
+  [ -n "${VY_EVICT_SRC_KEEP_H:-}" ] && grep -q -- '"--src-keep-h"' "$TOOL/research/store/cli.py" 2> /dev/null \
+    && args+=(--src-keep-h "$VY_EVICT_SRC_KEEP_H")
 elif [ -n "$SRCDIR" ]; then
   srcnote="; src trees: not evicted, $(basename "$TOOL") has no --src-dir"
 fi
@@ -114,9 +118,15 @@ if c is not None:
     if c.get("error"):
         line += ", nothing more deleted: " + c["error"]
 print(line)
+sys.exit(3 if c is not None and c.get("error") and not c["error"].startswith("another pass holds") else 0)
 ' 2> /dev/null)
+src_failed=$?
 if [ -z "$summary" ]; then
   echo "vy-store-evict: research data evict failed: $(printf '%s' "$out" | tail -2 | tr '\n' ' ')" >&2
   exit 1
 fi
 echo "vy-store-evict: free $before -> $(avail) GiB (mark $FREE GB): evicted $summary$srcnote$keepnote$pycnote ($(basename "$TOOL"))"
+if [ "$src_failed" -eq 3 ]; then
+  echo "vy-store-evict: the source-tree pass could not run (above); check the unit's User=, capabilities and src/.evict.lock owner" >&2
+  exit 1
+fi

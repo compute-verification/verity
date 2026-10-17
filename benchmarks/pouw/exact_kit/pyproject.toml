@@ -1,0 +1,25 @@
+[project]
+name = "verity-exact-kit"
+version = "0.1.0"
+description = "Exact-checker primitives for theory and referee scripts: F_2 and F_p linear algebra, Moebius coefficients, kernel searches, SAT, and one check registry."
+requires-python = ">=3.12"
+# No workspace dependency: uv takes a project nested in benchmarks/pouw's for a project outside the workspace when it builds
+# it, so a `{ workspace = true }` source here fails to resolve. sympy: the suite's cross-checks of the linear algebra (a
+# dependency, not a group, so that every sync installs it).
+dependencies = ["numpy", "python-sat>=1.8.dev0", "sympy>=1.13"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["exact_kit"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test_checks validates the result.json `Checks.finish` writes under a run with `research.result.check_doc`.
+inputs = ["tools/research/src/research/__init__.py", "tools/research/src/research/result.py"]

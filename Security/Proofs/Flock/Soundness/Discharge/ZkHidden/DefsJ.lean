@@ -534,12 +534,11 @@ noncomputable def opnAtZHJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 
 
 /-- **`RunsZC` at the live hidden-output `--zk` tables of a session of `J` tables, at the law's draws**
 (`runsZCJ_live` under hidden outputs): on untyped inputs under the tags `TagsOkZHJ` fixes, whose circuit file
-`HmOut.parse` accepts as a circuit whose unit returns the outputs, with `wr` the coin server's record of the live
-session and each of the law's draws setting each table up at `mPts` link points, `RunsOnZCJ` holds at the tables
-`planZHJ` under `hm96-sha512/v1`, with the decoder `decAtZJ`, the openings `opnAtZHJ`, no tail and table `j`'s cap
-from `root_B[j]`. -/
-theorem runsZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
+`HmOut.parse` accepts, with `wr` the coin server's record of the live session and each of the law's draws setting each
+table up at `mPts` link points, `RunsOnZCJ` holds at the tables `planZHJ` under `hm96-sha512/v1`, with the decoder
+`decAtZJ`, the openings `opnAtZHJ`, no tail and table `j`'s cap from `root_B[j]`. -/
+theorem runsZCJH_liveI (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
@@ -567,8 +566,8 @@ theorem runsZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circui
     (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
   obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
-  obtain ⟨x, hx⟩ := drawSetupH_of_setupHidden (I := inputsJ I j.val)
-    (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hcJ ho hst hf hD
+  obtain ⟨x, hx⟩ := drawSetupH_of_setupHiddenI (I := inputsJ I j.val)
+    (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hcJ hst hf hD
     ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
   obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
     (sch := schs[j.val].1) (tPad := schs[j.val].2) (by rw [hx]; exact hz')
@@ -664,5 +663,18 @@ theorem runsZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circui
   · dsimp only
     rw [hTy, hopn, ← hroot]
     exact outZC_of_accZ hacc'
+
+set_option linter.unusedVariables false in
+/-- `runsZCJH_liveI` where the unit returns the outputs. -/
+theorem runsZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
+    (L : Law n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
+    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
+    RunsOnZCJ (K := 𝕂) execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=
+  runsZCJH_liveI I ht hc dj y₀ wr L hT hRec hDraw
 
 end FlockSoundness.Discharge.ZkHidden
