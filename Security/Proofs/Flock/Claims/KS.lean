@@ -43,6 +43,7 @@ import Proofs.Flock.Claims.KS.ZkDrawJ
 import Proofs.Flock.Claims.KS.ZkDecJ
 import Proofs.Flock.Claims.KS.ZkXferJ
 import Proofs.Flock.Claims.KS.ZkSessionSC
+import Proofs.Flock.Claims.KS.ZkPads
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -188,4 +189,8 @@ reads its level-0 term only on runs that do not self-clash, a self-clash being i
 self-clash (`ZkXferJ`: `FlockDeploy.KS.OffNoClashZ`, `FlockDeploy.KS.AccOffJ`, `FlockDeploy.KS.OkOffJ`,
 `FlockDeploy.KS.decodesOff_deploy`), the deployed decoders are right at a verdict accepting with none, so `ZkLiveAccJ`
 follows from the live sessions' bound at the deployed decoders (`FlockDeploy.KS.ZkXferJ`,
-`FlockDeploy.KS.zkLiveAccJ_of_xferJ`) and `Flock.KS` from it and `ExtendJ` (`FlockDeploy.KS.zk_KS_of_xferJ`). -/
+`FlockDeploy.KS.zkLiveAccJ_of_xferJ`) and `Flock.KS` from it and `ExtendJ` (`FlockDeploy.KS.zk_KS_of_xferJ`). Level 0's
+masked rows carry both reps' extra lanes, which the session's level-0 term reads and the claim's witness-lane columns do
+not, so a verifying opening with a nonzero extra lane is off every table of those columns (`ZkPads`:
+`FlockDeploy.KS.off₀Z_oracleOf_of_extra`, `FlockDeploy.KS.offNoClashZ_oracleOf_of_extra`), while whether a table is
+committed reads only its witness lanes (`FlockDeploy.KS.committed_congr_lanes`). -/

@@ -16,6 +16,10 @@ which chooses no decoder (`ZkXferJ`):
   `accepted` with none at table `j`, and the deployed decoders right there.
 * `ZkXferJ`, `zkLiveAccJ_of_xferJ`, `zk_KS_of_xferJ`: the live sessions' bound at the deployed decoders gives
   `ZkLiveAccJ` where some run accepts, so `Flock.KS` at the deployed masked record follows from it and `ExtendJ`.
+
+At `oracleOf C` the verdict's level-0 term reads both reps' extra lanes, which a table `C` of witness-lane columns reads
+as `0`, so a run whose level-0 opening has a nonzero extra lane is off `C` there (`ZkPads`): the deployed prover's own
+runs, whose extra lanes are uniform, are not the mixture `ZkXferJ` asks for.
 -/
 
 namespace FlockDeploy.KS
