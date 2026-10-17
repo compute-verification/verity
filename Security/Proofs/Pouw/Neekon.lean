@@ -28,6 +28,26 @@ theorem prob_of_forall {Ω : Type*} [Fintype Ω] (h₀ : Nonempty Ω) {p : Ω �
   rw [Finset.filter_true_of_mem fun ω _ => h ω, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
+/-- A weaker event has at least the probability. -/
+theorem prob_le_of_imp {Ω : Type*} [Fintype Ω] {p q : Ω → Prop} (h : ∀ ω, p ω → q ω) : prob p ≤ prob q := by
+  classical
+  unfold prob
+  exact div_le_div_of_nonneg_right
+    (by exact_mod_cast Finset.card_le_card (Finset.monotone_filter_right _ fun a _ => h a)) (Nat.cast_nonneg _)
+
+/-- **A per-run floor gives a time floor**: if the runs of `M₂` that are good (for H, correct) and charged below `F`
+(`max(|M₂|, cost)`, the form K's floors bound) have probability at most `κ < δ`, while its good runs have probability
+at least `δ`, then `time(M₂) ≥ F`. With `F = (1 − εH) tHonest` this is H's conclusion for `M₂`, so a one-draw floor of
+K's kind for the runs in its scope gives H there. -/
+theorem le_time_of_runFloor {I O : Type} [Fintype I] (M₂ : Mc.Alg I O) {good : I → Prop} {F κ δ : ℝ}
+    (hfloor : prob (fun ω => good ω ∧ Mc.charge M₂ ω < F) ≤ κ) (hκδ : κ < δ) (hgood : δ ≤ prob good) :
+    F ≤ Mc.time M₂ := by
+  by_contra hlt
+  have hcharge : ∀ ω, Mc.charge M₂ ω < F := fun ω =>
+    (max_le (Mc.size_le_time M₂) (Mc.cost_le_time M₂ ω)).trans_lt (not_le.mp hlt)
+  have := prob_le_of_imp (p := good) (q := fun ω => good ω ∧ Mc.charge M₂ ω < F) fun ω hω => ⟨hω, hcharge ω⟩
+  linarith
+
 /-- **Security from a time floor**: if `Solve` is complete, every adversary accepted with probability at least `δ` has
 `time(M) ≥ F`, and `Solve` costs at most `(1 + ε) F`, then the protocol is `NeekonSecure ε δ η` with `M' = Solve`. -/
 theorem neekonSecure_of_floor (P : PoUW Mc) {ε δ η F : ℝ} (hc : Complete P η)

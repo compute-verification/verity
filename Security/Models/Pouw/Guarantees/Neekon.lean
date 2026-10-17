@@ -20,7 +20,9 @@ the design of shape `(n, 32, 7, K, m)` and weights `wRe`, with `B − 64` and `A
   B − Vmax`, which is negative at one round. H is one draw checked whole. The one-draw form needs the per-stage
   count (`Slp`'s `L` products per certified cell-block, by charging purity) with the parity luck 0.854 per word, which
   gives H's conclusion at `δ > 0.854` with `tHonest = κ · 32 · n m K` and `εH = Vmax / tHonest`. Those lemmas are in
-  `Proofs.Pouw.RelativeSecurity`, and that statement is not proved here.
+  `Proofs.Pouw.RelativeSecurity`, and that statement is not proved here. Its last step is
+  `Pouw.SecurityProofs.Neekon.le_time_of_runFloor`: if `M₂`'s correct runs charged below `F` have probability at most
+  `κ < δ`, then `time(M₂) ≥ F`, H's conclusion at `F = (1 − εH) tHonest`.
 -/
 
 namespace Pouw.Guarantees.Neekon
