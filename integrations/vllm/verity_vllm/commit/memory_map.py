@@ -140,11 +140,17 @@ def _cut(refs, width: int, inputs: int, what: str) -> list[tuple[Slice, ...]]:
     return out
 
 
-def rows(program: Program) -> Rows:
-    """The KV rows of a request Program, born and last read as its requirement at its sampling events has them."""
+def census_of(program: Program, digest: str | None = None) -> dict:
+    """The census/v1 of a request Program over its steps, one per sampling event, naming it by `digest`."""
+    return census(program, step_ends(program, SAMPLING_EVENTS), digest)
+
+
+def rows(program: Program, c: Mapping | None = None) -> Rows:
+    """The KV rows of a request Program, born and last read as its requirement over its census `c` (`census_of`, computed when
+    not given) has them."""
     body = program.root.body
     inputs = sum(1 for nd in body.nodes if is_input(nd.fn))
-    c = census(program, step_ends(program, SAMPLING_EVENTS))
+    c = census_of(program) if c is None else c
     req = from_census(c)
     vals = c["values"]
     by_node: dict[int, list[tuple[int, int, int]]] = {}
@@ -199,6 +205,18 @@ def rows(program: Program) -> Rows:
         raise ValueError(f"a KV word of {bits} bits is no whole bytes")
     return Rows(tuple((tuple(row(g) for g in ks), tuple(row(pair[g]) for g in ks)) for ks in layers),
                 leaves * bits // 8, bits // 8, req.steps)
+
+
+def rows_doc(rs: Rows) -> dict[str, Any]:
+    """`rs` as JSON: a row as ``[born, last, [[node, lo, hi], ...]]``."""
+    return {"row_bytes": rs.row_bytes, "word_bytes": rs.word_bytes, "steps": rs.steps,
+            "layers": [[[[x.born, x.last, [[j, lo, hi] for _, j, lo, hi in x.group]] for x in plane] for plane in kv] for kv in rs.layers]}
+
+
+def rows_of(doc: Mapping[str, Any]) -> Rows:
+    """The `Rows` `rows_doc` wrote."""
+    return Rows(tuple(tuple(tuple(Row(tuple(("n", j, lo, hi) for j, lo, hi in g), b, l) for b, l, g in plane) for plane in kv)
+                      for kv in doc["layers"]), int(doc["row_bytes"]), int(doc["word_bytes"]), int(doc["steps"]))
 
 
 def tables(requests: Mapping[str, Rows], arrive: Mapping[str, int], slots: Callable[[str, int], Sequence[int]],

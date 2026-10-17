@@ -1,8 +1,9 @@
 """The Commit's memory map (`verity_vllm.pipeline.memory_map`) on CPU: a small Llama's request Program of record in a Build dir
 (its ``descriptor.json.gz`` and instance rows), a committed store that serves each identity's words as a function of it and the
 request's slots at pages out of first-need order, and the engine's caches in vLLM 0.28's packed page layout.  The map written is
-`commit.memory_map.record`'s over the rows' committed words at those pages, the engine holds its blocks, and a run without
-committed slots, without the engine's caches or with a descriptor of another Program is refused beside the map, never raised."""
+`commit.memory_map.record`'s over the rows' committed words at those pages, the engine holds its blocks, the Program's census and
+KV rows are cached beside its descriptor and read back without it, and a run without committed slots, without the engine's caches
+or with a descriptor of another Program is refused beside the map, never raised."""
 from __future__ import annotations
 
 import gzip
@@ -115,6 +116,24 @@ def test_no_page_is_assumed(tmp_path):
     with pytest.raises(ValueError, match="the Commit attached no KV-slots source"):
         PMM.write(out, req, store=_store(rows), caches=None, **kw)
     assert not out.exists()
+
+
+def test_the_census_and_kv_rows_are_computed_once_per_program(tmp_path):
+    program, lp = _build_dir(tmp_path, 4, 5)
+    d, digest = tmp_path / "build_request_LP4_T5", lp["instances"]["digest"]
+    out = tmp_path / "memory_map.jsonl"
+    rows = MM.rows(program)
+    PMM.write(out, {"path": str(out), "registration": "ab" * 64}, loaded={"r0": lp}, store=_store(rows), arrivals={"r0": ARRIVE},
+              caches=_caches(MM.packed(rows), _payload(ProgramIndex(lp["instances"]), rows)))
+    census = json.loads(gzip.decompress((d / PMM.CENSUS).read_bytes()))
+    kv = json.loads(gzip.decompress((d / PMM.KV_ROWS).read_bytes()))
+    assert census == MM.census_of(program, digest) and (kv["program"], kv["census"]) == (digest, census["digest"])
+    (d / "descriptor.json.gz").unlink()
+    assert PMM.of_build(d, digest) == rows
+    with pytest.raises(FileNotFoundError):
+        PMM.of_build(d, "f" * 128)
+    got = PMM.cache(d, program, digest)
+    assert (got["census"], got["kv_rows"]) == (census["digest"], True)
 
 
 def test_a_descriptor_of_another_program_is_refused_beside_the_map(tmp_path):

@@ -1,6 +1,7 @@
 """The Commit's memory map (opt-in, ``commit --memory-map REQUEST_JSON``): memory-map/v1 of the run's KV, written in the
 in-process C2 replay once the vllm-v1 roots are final.  Its blocks, their steps and store indices come from each request's
-Program of record (`commit.memory_map.rows`, over the Build's ``descriptor.json.gz``) at the pages the engine wrote: each
+Program of record (`commit.memory_map.rows`: the KV rows the Build wrote beside its ``descriptor.json.gz``, over the census it
+wrote there, `cache`; a Build without them has them computed once and cached, `of_build`) at the pages the engine wrote: each
 request's slots as the Commit committed them (`<layer>/slot_mapping`, `acquire.sources.kv_slots_source`, which the flag
 attaches), in the page layout of the engine's cache tensors.  Each d_j is from the committed K and V words of the block's rows,
 read as the serving rows read a Program's slices (`serving_rows._operand`: the ProgramIndex's members, the binding map's
@@ -18,6 +19,7 @@ map (``<path>.error.txt``) and changes no verdict.
 """
 from __future__ import annotations
 
+import gzip
 import json
 import re
 import time
@@ -56,6 +58,62 @@ def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]]
         return {"error": repr(e)}
 
 
+#: beside a request Build's ``descriptor.json.gz``: its Program's census (`MM.census_of`) and KV rows (`MM.rows_doc`), each naming
+#: the Program by digest
+CENSUS, KV_ROWS = "census.json.gz", "kv_rows.json.gz"
+KV_ROWS_SCHEMA = "verity-vllm/kv-rows/v1"
+
+
+def _read(path: Path, digest: str) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    with gzip.open(path, "rt") as f:
+        doc = json.load(f)
+    return doc if doc.get("program") == digest else None
+
+
+def _put(path: Path, doc: Mapping[str, Any]) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    with gzip.open(tmp, "wt", compresslevel=6) as f:
+        json.dump(doc, f, separators=(",", ":"))
+    tmp.replace(path)
+
+
+def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
+    """Write Build dir ``d``'s `CENSUS` and `KV_ROWS` for its request Program ``program`` (``digest``), the census read back when
+    one beside it already names the Program; a Program with no KV a memory map lays out gets the reason in place of its rows."""
+    d, t0 = Path(d), time.perf_counter()
+    c = _read(d / CENSUS, digest)
+    if c is None:
+        c = MM.census_of(program, digest)
+        _put(d / CENSUS, c)
+    doc: dict[str, Any] = {"schema": KV_ROWS_SCHEMA, "program": digest, "census": c["digest"]}
+    try:
+        doc.update(MM.rows_doc(MM.rows(program, c)))
+    except ValueError as e:
+        doc["refused"] = str(e)
+    _put(d / KV_ROWS, doc)
+    return {"census": c["digest"], "kv_rows": "refused" not in doc, "seconds": round(time.perf_counter() - t0, 2)}
+
+
+def of_build(d: str | Path, digest: str) -> MM.Rows:
+    """The KV rows of Build dir ``d``'s request Program ``digest``: its `KV_ROWS` when they name the Program, else computed from its
+    descriptor (refused unless that is Program ``digest``) and cached beside it (`cache`), once per Program digest."""
+    from verity_vllm.program.boolean import load_program
+
+    d = Path(d)
+    doc = _read(d / KV_ROWS, digest)
+    if doc is None:
+        program, got = load_program(d / "descriptor.json.gz")
+        if got != digest:
+            raise ValueError(f"{d}: descriptor.json.gz is Program {got[:16]}, its instance rows {str(digest)[:16]}")
+        cache(d, program, digest)
+        doc = _read(d / KV_ROWS, digest)
+    if "refused" in doc:
+        raise ValueError(f"{d}: {doc['refused']}")
+    return MM.rows_of(doc)
+
+
 def _layer(name: str) -> int:
     m = re.search(r"\.(\d+)(\.|$)", name)
     if m is None:
@@ -67,20 +125,15 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
           caches: Mapping[str, Any] | None) -> dict[str, Any]:
     """The map of ``req`` into ``out`` and its layout beside it: each request's slots and K and V words read from ``store`` (a
     `CommittedStore`), its pages laid out as ``caches`` (KV layer name -> the engine's cache tensor) lay them out."""
-    from verity_vllm.program.boolean import load_program
-
     if not caches:
         raise ValueError("no engine KV cache to lay pages out by: the Commit attached no KV-slots source (commit --memory-map attaches it)")
     t0 = time.perf_counter()
     by_dir: dict[str, tuple[MM.Rows, ProgramIndex, str]] = {}
     rows, index = {}, {}
     for rid, lp in loaded.items():
-        d = str(lp["dir"])
+        d, digest = str(lp["dir"]), str(lp["instances"].get("digest"))
         if d not in by_dir:
-            program, digest = load_program(Path(d) / "descriptor.json.gz")
-            if digest != lp["instances"].get("digest"):
-                raise ValueError(f"{d}: descriptor.json.gz is Program {digest[:16]}, its instance rows {str(lp['instances'].get('digest'))[:16]}")
-            by_dir[d] = (MM.rows(program), ProgramIndex(lp["instances"], program_dir=d), digest)
+            by_dir[d] = (of_build(d, digest), ProgramIndex(lp["instances"], program_dir=d), digest)
         rows[rid], index[rid], _ = by_dir[d]
     t_ir = time.perf_counter()
 
@@ -126,7 +179,7 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
                             "row_bytes": rs.row_bytes, "pages": tables[r], "program_digest": by_dir[str(loaded[r]["dir"])][2]}
                         for r, rs in rows.items()},
            "steps": len(steps), "written": sum(len(s.written) for s in steps), "freed": sum(len(s.freed) for s in steps), "engine": engine,
-           "seconds": {"ir_s": round(t_ir - t0, 3), "digests_s": round(t_d - t_ir, 3), "engine_s": round(time.perf_counter() - t_d, 3)}}
+           "seconds": {"rows_s": round(t_ir - t0, 3), "digests_s": round(t_d - t_ir, 3), "engine_s": round(time.perf_counter() - t_d, 3)}}
     out.with_name(out.name + ".json").write_text(json.dumps(doc, indent=1) + "\n")
     print(f"[memory-map] {doc['written']} blocks written and {doc['freed']} freed over {doc['steps']} steps beside {head.blocks} "
           f"registered, {page.form} pages of {page.block_size} slots; the engine holds {engine['equal']} of {engine['compared']} "
