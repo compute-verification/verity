@@ -44,11 +44,12 @@ def test_the_measured_profile():
     e = E.eps(E.design("dither-duo"), PI, 8)
     assert e.T_honest_source == "measured" and e.T_honest * 128 == M.measured
     assert e.sched == pytest.approx(1 - 22.4334 / 26.1221, abs=1e-5)
-    assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.sched))
+    assert e.clock == pytest.approx(1 - 2092 / 2430, abs=1e-4)   # SPEC's P1: the prover sets its own clocks
+    assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.sched) * (1 - e.clock))
     assert e.floor == pytest.approx((22.4334 - JI - 12) / 22.4334, abs=1e-5)   # honest's overhead, under H's credit
-    m = E.eps(E.design("dither-duo"), PI, 8, credit="model")   # PROFILE's B(H)/f_max: ε_sched leaves ε for γ
-    assert m.sched is None and m.machine_eps == e.machine_eps and m.total() < e.total()
-    assert m.credit_ratio == pytest.approx(1 / (1 - e.sched), rel=1e-9)
+    m = E.eps(E.design("dither-duo"), PI, 8, credit="model")   # PROFILE's B(H)/f_max: ε_sched, ε_clock leave ε for γ
+    assert m.sched is None and m.clock == 0 and m.machine_eps == e.machine_eps and m.total() < e.total()
+    assert m.credit_ratio == pytest.approx(1 / ((1 - e.sched) * (1 - e.clock)), rel=1e-9)
     xin = E.eps(E.design("dither-xin"), PI, 8)
     assert xin.sched is None and xin.T_honest_source == "model"   # another fold: unmeasured
     up = E.eps(E.design("dither-duo").with_upfill(), PI, 8)
@@ -141,7 +142,7 @@ def test_the_floor_credit(n, phi):
     e = E.eps(d, PI, 8, operands="floor", credit="floor")
     assert e.baseline.T * 128 == pytest.approx(JI + 12 + phi, abs=1e-6) and "JI3e_0" in e.baseline.binding
     assert e.sched is None and e.clock == 0 and e.machine_eps == 0
-    assert e.credit_ratio == pytest.approx(M.measured / (JI + 12 + phi), abs=1e-6)
+    assert e.credit_ratio == pytest.approx(M.measured / (JI + 12 + phi) / (1 - d.clock.eps), abs=1e-6)
     assert e.total() == pytest.approx(e.skip + e.luck, abs=1e-12)
     free = E.eps(d, PI, 8, credit="floor")
     assert free.machine_eps == pytest.approx(phi * (1 - 1 / (32 * UP + 1)) / (JI + 12 + phi), abs=1e-8)
@@ -153,9 +154,11 @@ def test_the_floor_credit(n, phi):
 
 
 def test_plain_work_counts_in_gamma_only():
-    """CO-Dither at r = k/2 runs a k/2 strip on one unfolded limb beside its folded transcript: γ + 0.5."""
-    co, duo = E.design("co-dither"), E.design("dither-duo")
-    assert co.plain == 0.5 and co.work == duo.work == 1
+    """A design that runs plain (unfolded) MMAs beside its work, as CO-Dither at r = k/2 runs a k/2 strip on one limb,
+    pays them in γ and nowhere else: γ + 0.5."""
+    duo = E.design("dither-duo")
+    co = replace(duo, plain=0.5)
+    assert co.work == duo.work == 1
     a, b = E.eps(co, PI, 8), E.eps(duo, PI, 8)
     assert a.gamma == pytest.approx(b.gamma + 0.5, abs=1e-12) and a.machine_eps == b.machine_eps
 
@@ -196,8 +199,8 @@ def test_luck_and_the_total():
     assert e.cheat.binding == ("JI3e_0",)
     assert e.luck == pytest.approx(E.deficit(DUO) * (JI + 0.375) / (JI + 12.375), rel=1e-6)
     e = E.eps(DUO, PI, 8)
-    assert e.sched is None and e.mand == 0 and e.clock == 0 and e.skip == 0.0063
-    assert e.total() == pytest.approx(e.skip + e.machine_eps + e.luck)
+    assert e.sched is None and e.mand == 0 and e.skip == 0.0063
+    assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
 
 
 def test_luck_spends_one_budget_on_words_and_filler():

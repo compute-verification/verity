@@ -24,8 +24,8 @@ eps = 0.0
 source = "named assumption: XOR-in at 1.5 lane instructions a word is the cheapest implementation of the fold (FOLD)"
 
 [clock]
-eps = 0.0
-source = "DATASHEET: at the node's 2,100 MHz lock every program (honest at 519 W, tensor-only, zero operands, fold-only, FFMA) runs 2,099.5-2,100.0 MHz by clock64 over %globaltimer (note:20261017T0332Z-draft-eps1-datasheet, r20261017-033131-4e67)"
+eps = 0.1391
+source = "SPEC's P1 (note:20261017T0324Z-draft-eps1-spec, 04:47Z): the prover sets its own clocks, so f_max is the hardware's 2,430 MHz against honest at the node's 2,092 lock, 1 − 2092/2430, unless a trusted device attests the lock; at the lock every program runs 2,099.5-2,100.0 MHz (DATASHEET, r20261017-033131-4e67), and the default-clock gap is unmeasured"
 
 [luck]
 delta = 4.547473508864641e-13

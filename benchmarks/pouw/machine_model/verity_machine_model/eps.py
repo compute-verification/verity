@@ -24,7 +24,7 @@ each term a fraction of honest time.
 - **The credit** is honest's kernel (`H`, the master inequality), its model bound B(H)/f_max (`model`, PROFILE's
   reading: ε_sched and ε_clock leave ε for γ), or the floor program ♭ (`floor`, SPEC §0.7a's Corollary D3): the same LP
   restricted to honest's routes with the tensor route at φ_del and no overhead. Under ♭, ε_sched, ε_clock and honest's
-  overhead above ♭ leave ε for γ, as the factor T_H/B_♭.
+  overhead above ♭ leave ε for γ, as the factor T_H/B_♭ · f_max/f_H (`credit_ratio`; f_max/f_H = 1/(1 − ε_clock)).
 - **ε_luck** is Theorem S inside the same LP: an accepted cheater writes (1 − d̄) of the words and folds them all, d̄ =
   ln(1/δ)/((1 − p)·S) over S spot checks (note:20261016T0005Z-draft-luck-loss-round4), and ε_luck is what that saves
   it, d̄·w*/B(H) at π*. The terms add up to the LP exactly.
@@ -526,8 +526,10 @@ class Eps:
 
     @property
     def credit_ratio(self) -> float:
-        """Honest's time over the credited program's: under the floor credit, the factor that leaves ε for γ."""
-        return self.T_honest / self.baseline.T
+        """Honest's time over the credited program's, the credit at f_max under the model and floor credits: the factor
+        by which ε_sched, ε_clock and honest's overhead leave ε for γ (SPEC's γ_♭)."""
+        r = self.T_honest / self.baseline.T
+        return r if self.credit == "H" else r / (1 - self.design.clock.eps)
 
     def total(self, sched: bool = True) -> float:
         s = (self.sched or 0.0) if sched else 0.0

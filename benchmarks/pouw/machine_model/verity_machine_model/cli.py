@@ -282,7 +282,7 @@ def _eps(args) -> int:
           f"{_mix(e.baseline, per_mma)}")
     print(f"  honest: {e.T_honest * per_mma:.3f} SMSP-cycles a MMA ({e.T_honest_source}"
           + (f", {h.measured_source}" if e.T_honest_source != "model" else "") + f"); γ {e.gamma:.3f}"
-          + (f"; honest over the credit {e.credit_ratio:.3f}, in γ" if args.credit != "H" else ""))
+          + (f"; honest over the credit at f_max {e.credit_ratio:.3f}, in γ" if args.credit != "H" else ""))
     print(f"  cheater's operand delivery: {ops[args.operands]}")
     if tb is not None:
         print(f"  table route: {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a word, L2 {tb.l2 / 1e12:g} TB/s = "
