@@ -289,6 +289,9 @@ def test_scan_analyze_reads_each_regimes_model_out_of_the_kept_words(monkeypatch
     churn = X.scan_analyze(op, [k("a", True)] * 9, [BC.cublas_splitk_rows(xw, ww, s, out="bf16") for s in range(2, 11)])
     assert len(churn["classes"]) == 9 > X.MAX_CLASSES                           # more models than the family should ever serve
     assert not churn["ok"] and churn["sweep"] == [X.ENVELOPE]
+    monkeypatch.setattr(X, "SCAN_M", range(1, 4))                               # below SCAN_FIT_ROWS a launch keeps only its M rows
+    small = X.scan_analyze(op, [k("a", True), k("a", True), k("c", False)], [split2[:1], split2[:2], op["serial"][:3]])
+    assert small["ok"] and [(r["m0"], r["m1"], r["split"]) for r in small["regimes"]] == [(1, 1, 2), (2, 2, 2), (3, 3, None)]
 
 
 def test_the_served_split_prefers_the_pin_and_falls_back_to_the_scan() -> None:
