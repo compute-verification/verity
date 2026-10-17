@@ -10,9 +10,9 @@
                                               the N cheapest attacks of each design (or of D) at NAME's prices
     machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) into data/ at EPOCH,
                                               the last epoch: each (kind, row) keeps the faster of its old and new line
-    machine-model eps [DESIGN] [--q Q] [--q-uniform QU] [--operands O] [--credit C] [--fold-cost R] [--fill X]
-                      [--upfill] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]] [--uni-issue C]
-                      [--checking full|sampled [--adapt UNIT]] [--vector V] [--json]
+    machine-model eps [DESIGN] [--device sm_NN] [--q Q] [--q-uniform QU] [--operands O] [--credit C]
+                      [--fold-cost R] [--fill X] [--upfill] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]]
+                      [--uni-issue C] [--checking full|sampled [--adapt UNIT]] [--vector V] [--json]
                                               a design's ε budget (data/designs, default dither-duo) at q* = Q (default
                                               8): every term with its source, ε_machine's LP (the credited and the
                                               cheater's mix, binding rows and certificate π*), the ε(q*) curve for q*
@@ -34,13 +34,15 @@
                       [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
                                               one line a design (every design by default; with --fold-sweep, each at
                                               each fold cost; with --upfill, each without and with it), in two column
-                                              groups: the core (γ, the credited time, ε_skip, ε_sched, ε_machine at
+                                              groups: the core (γ and γ_f, γ with the clock gap f_max/f_H, the
+                                              credited time, ε_skip, ε_sched, ε_machine at
                                               q* = 2, 4, 8, 16 and its floor, the core ε at q* = 2, 8 and Q, and the
                                               thresholds), then with --checking sampled the sample (ε_luck, ε_adapt
                                               and ε_sample at Q)
 
-`--data DIR` (before the command) reads another data directory, such as a copy with a candidate row. `solve` exits 1 when
-the vector fails its check or doesn't reproduce a published number.
+`--device sm_NN` (before the command, or on `eps`) reads that device's directory, `data/devices/sm_NN/` (README
+"Devices"); sm_120, `data/` itself, is the default. `--data DIR` (before the command) reads another data directory, such
+as a copy with a candidate row. `solve` exits 1 when the vector fails its check or doesn't reproduce a published number.
 """
 from __future__ import annotations
 
@@ -54,7 +56,7 @@ from pathlib import Path
 from verity_machine_model import attacks as atk
 from verity_machine_model import eps as E
 from verity_machine_model.adopt import adopt
-from verity_machine_model.model import CLAIMS, DATA, census, model, vector, vectors
+from verity_machine_model.model import CLAIMS, DATA, census, device, devices, model, vector, vectors
 from verity_machine_model.resolve import resolve
 
 
@@ -179,6 +181,10 @@ def _design(args, name: str) -> E.Design:
     return d if args.q_uniform is None else replace(d, name=f"{d.name}@qu{args.q_uniform:g}", q_uniform=args.q_uniform)
 
 
+def _l2(tb: E.Table) -> str:
+    return "L2 unbounded: unmeasured on this device" if tb.l2 is None else f"L2 {tb.l2 / 1e12:g} TB/s"
+
+
 def _lookups(args) -> E.Table | None:
     if not args.lookups and (args.lookup_q is not None or args.l2 is not None or args.lookup_bytes is not None):
         raise SystemExit("eps: --lookup-q, --lookup-bytes and --l2 price the table route: add --lookups")
@@ -204,7 +210,8 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
         "honest_status": e.honest.status, "operands": operands, "credit": credit, "L": d.L, "fold": d.fold_name,
         "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source}
                                                 for f, pw in e.fillers], "q": q,
-        "operand_floor": d.floor, "gamma": e.gamma, "honest_cycles_per_mma": e.T_honest * per_mma,
+        "operand_floor": d.floor, "gamma": e.gamma, "gamma_clock": e.gamma_clock,
+        "honest_cycles_per_mma": e.T_honest * per_mma,
         "honest_time": e.T_honest_source, "credit_ratio": e.credit_ratio,
         "as_built": {"cycles_per_mma": e.as_built.T * per_mma, "binding": e.as_built.binding},
         "baseline": {"cycles_per_mma": e.baseline.T * per_mma, "binding": e.baseline.binding,
@@ -224,6 +231,7 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
                     "operands": d.floor_source if operands == "floor" else operands},
         "lookups": None if table is None else {"q": table.q, "bytes": table.bytes, "l2": table.l2,
                                                "bytes_per_smsp_cycle": table.per_cycle(), "source": table.source},
+        "data": str(data),
         "adapt": None if adapt is None else {"unit": adapt.name, "eps": adapt.eps, "source": adapt.source,
                                              "selection": adapt.selection},
         "curve": [[x, s.machine_eps(x)] for x in E.QS],
@@ -244,15 +252,17 @@ def _eps_table(args, pi: E.Machine) -> int:
     ad = _adapt(args)
     sampled = args.checking == "sampled"
     look = "" if tb is None else (f", the table route open at {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a "
-                                  f"word (L2 {tb.l2 / 1e12:g} TB/s)")
+                                  f"word ({_l2(tb)})")
     unit = "" if not sampled else (f" Sample (the sampling compiler, proof unit {ad.name}: {ad.selection}; never in "
                                    f"core): ε_luck at q* = {args.q:g}, ε_adapt, ε_sample = their sum.")
     print(f"Π {pi.vector}, operands {args.operands}, credit {cred}{look}, checking {args.checking}. Core (every word "
-          f"and operand verified): T/MMA the credited time and its binding rows, H/cred honest's time over it; ε_skip; "
+          f"and operand verified): γ_f γ with the clock gap f_max/f_H; T/MMA the credited time and its binding rows, "
+          f"H/cred honest's time over it; ε_skip; "
           f"ε_sched; ε_machine at q* = {', '.join(map(str, qs))} and its floor (the lane and uniform routes closed); "
           f"core ε at q* = {', '.join(f'{q:g}' for q in qe)}; q*₀ the least q* at which ε_machine reaches its floor "
           f"(all routes; lanes alone); the uniform route alone at q* = 16.{unit}")
-    print(f"{'design':26s} {'fold':>6s} {'L':>3s} {'γ':>6s} {'T/MMA':>7s} {'binds':12s} {'H/cred':>6s} {'skip':>7s} "
+    print(f"{'design':26s} {'fold':>6s} {'L':>3s} {'γ':>6s} {'γ_f':>6s} {'T/MMA':>7s} {'binds':12s} {'H/cred':>6s} "
+          f"{'skip':>7s} "
           f"{'sched':>6s} " + " ".join(f"{'m@' + str(q):>7s}" for q in qs)
           + f" {'floor':>7s} " + " ".join(f"{f'core@{q:g}':>9s}" for q in qe)
           + f" {'q*₀':>9s} {'lanes':>6s} {'UP@16':>6s}"
@@ -274,7 +284,8 @@ def _eps_table(args, pi: E.Machine) -> int:
         up = s.machine_eps(16, lanes=False)
         sched = "–" if e.sched is None else f"{100 * e.sched:5.1f}%"
         eq = es[args.q]
-        print(f"{d.name:26s} {d.fold_cost():6.3g} {d.L:3d} {e.gamma:6.3f} {e.baseline.T * per_mma:7.3f} "
+        print(f"{d.name:26s} {d.fold_cost():6.3g} {d.L:3d} {e.gamma:6.3f} {e.gamma_clock:6.3f} "
+              f"{e.baseline.T * per_mma:7.3f} "
               f"{','.join(e.baseline.binding)[:12]:12s} {e.credit_ratio:6.3f} {100 * e.skip:6.3f}% {sched:>6s} "
               + " ".join(f"{100 * es[q].machine_eps:6.2f}%" for q in qs)
               + f" {100 * e.floor:6.2f}% "
@@ -292,7 +303,8 @@ def _eps(args) -> int:
         return _eps_table(args, pi)
     if len(args.designs) > 1:
         raise SystemExit("eps: one design, or --table for several")
-    d = _design(args, args.designs[0] if args.designs else "dither-duo")
+    names = E.designs(args.data)
+    d = _design(args, args.designs[0] if args.designs else "dither-duo" if "dither-duo" in names else names[0])
     tb = _lookups(args)
     ad = _adapt(args)
     rec = _eps_record(d, pi, args.q, args.data, args.operands, args.credit, tb, ad, args.checking)
@@ -316,12 +328,14 @@ def _eps(args) -> int:
     print(f"  credited (tensor and {d.baseline_name or 'nothing'}{f' at {prog} a word' if prog else ''}): "
           f"{_mix(e.baseline, per_mma)}")
     print(f"  honest: {e.T_honest * per_mma:.3f} SMSP-cycles a MMA ({e.T_honest_source}"
-          + (f", {h.measured_source}" if e.T_honest_source != "model" else "") + f"); γ {e.gamma:.3f}"
+          + (f", {h.measured_source}" if e.T_honest_source != "model" else "") + f"); γ {e.gamma:.3f}, "
+          f"{e.gamma_clock:.3f} with the clock gap"
           + (f"; honest over the credit at f_max {e.credit_ratio:.3f}, in γ" if args.credit != "H" else ""))
     print(f"  cheater's operand delivery: {ops[args.operands]}")
     if tb is not None:
-        print(f"  table route: {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a word, L2 {tb.l2 / 1e12:g} TB/s = "
-              f"{tb.per_cycle():.3f} B a SMSP-cycle ({tb.source})")
+        per = "" if tb.l2 is None else f" = {tb.per_cycle():.3f} B a SMSP-cycle"
+        print(f"  table route: {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a word, {_l2(tb)}{per} "
+              f"({tb.source})")
     print(f"  cheater at q* = {args.q:g}: {_mix(e.cheat, per_mma)}")
     print(f"  certificate π*: {_pi(e.cheat)}")
     t = e.terms()
@@ -360,6 +374,8 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="machine-model", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data", type=Path, default=DATA, help="the data directory (default: %(default)s)")
+    dev = f"the device: {', '.join(devices())} (default sm_120, data/ itself; the others data/devices/sm_NN/)"
+    p.add_argument("--device", help=dev)
     sub = p.add_subparsers(dest="cmd")
     sub.add_parser("list")
     s = sub.add_parser("solve")
@@ -377,6 +393,7 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("epoch")
     e = sub.add_parser("eps")
     e.add_argument("designs", nargs="*")
+    e.add_argument("--device", default=argparse.SUPPRESS, help=dev)
     e.add_argument("--q", type=float, default=8.0, help="q*, lane instructions a fresh word (default %(default)s)")
     e.add_argument("--q-uniform", type=float, help="q*_U, uniform instructions a fresh word (default: q*)")
     e.add_argument("--operands", choices=E.OPERANDS, default="free",
@@ -408,6 +425,10 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--lookup-bytes", type=float, metavar="B",
                    help="with --lookups: L2 bytes a table word (default: the file's)")
     args = p.parse_args(argv)
+    if args.device is not None:
+        if args.data != DATA:
+            raise SystemExit("--device or --data, not both")
+        args.data = device(args.device)
     if args.cmd is None:
         print(__doc__)
         return 0

@@ -23,6 +23,8 @@ uv run machine-model eps --table --credit floor     # ε a fraction of the floor
 uv run machine-model eps --table --credit floor --q 2.16 --lookups   # with QSTAR's table route against L2
 uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
 uv run machine-model eps --table --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
+uv run machine-model eps --device sm89 --table --credit floor --operands floor   # the L40S: Dither-1S/2S/C at L = 16, 32
+uv run machine-model eps --device sm100 --table --credit floor --operands floor   # the B200 at L = 32 to 256
 ~~~
 
 | Path | What |
@@ -32,6 +34,7 @@ uv run machine-model eps --table --credit floor --uni-issue 0.92   # a uniform i
 | `data/census.csv` | One line per instruction class on a row: its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, `until`) and its runs |
 | `data/vectors/NAME.toml` | A named vector: its epoch, the rows and credits it uses in LP order, its note, and the numbers it was published with |
 | `data/attacks/FAMILY.jsonl` | An attack family: one program a line, its design, and the epochs it holds |
+| `data/devices/sm_NN/` | Another device's data ("Devices" below): `sm_89`, the L40S, from EPS1 ADA; `sm_90`, the H200, and `sm_100`, the B200, from EPS1 DC (`dc/census.py` writes their census) |
 | `data/floors.csv` | What the claims read: each root-writing kind at 32 MACs a word ((π₃₂)), each load into registers at 16 (PRICES-32's load half) and each copy route at 16 (π_c ≥ 16, `copy16`: every kind that writes registers, a UR word at the 32 lanes it serves), with the words a warp instruction of it writes |
 | `verity_machine_model/lp.py` | The LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ), as the legacy `rs-price-99.py` `solve` computes it |
 | `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, what is under its floor, and a claim's kinds priced a word beside their measured cost |
@@ -151,3 +154,43 @@ the scripts' float exactly. Two differences from the
 scripts: an instruction class's measured cost is the largest of its census lines at the epoch (the scripts froze it before
 VF3f added `KFFMA0`, which is FFMA's F row rounded to 10 places, 4e-10 relative above it, inside the check's 1e-9); and
 a line's runs are the runs its row's description cites, else the runs its vector's script cites.
+
+## Devices
+
+`data/` is sm_120's, the RTX PRO 6000 at the node's 2,092 MHz lock, and every command reads it unless `--device` or
+`--data` names another directory. Another device's measurements go in `data/devices/sm_NN/`. That is the standard for
+sm_89 (the L40S, EPS1 ADA), sm_90 (the H200) and sm_100 (the B200, EPS1 DC), and for any later device. The directory
+follows these rules:
+
+- It holds `rows.csv` and `census.csv` in `data/`'s schema, and its rows follow "Measure a facet". Its probe's
+  `census.py` writes them from gated runs.
+- An MMA kind is one SASS form, as on sm_120's JI3n rows.
+- It has one epoch, its lines without `since` or `until`. `rows(DIR)`, `entries(m, DIR)` and `census(m, epoch, DIR)`
+  take the directory.
+- To price a design on the device, it gains the rest of `data/`'s files, and `--device sm_NN` (or `--data DIR`) reads
+  it:
+  - `model.toml`: its epoch, its vector and its CUDA lane classes. The constants only `solve` reads stay out.
+  - `vectors/NAME.toml`: its rows.
+  - `honest/`: its honest kernel at each L. `[mma] class` names the MMA's census class (sm_120's is `MMA`).
+  - `designs/`: each design at each L, with the device's honest kernel, operand floor φ_del, clock and ε_clock, luck
+    budget and baseline. The noise, ε_skip and ε_mand are sm_120's design's.
+  - `table.toml`: the table route at the device's SMs and f_max. Without an `l2`, the L2 isn't measured, and the route
+    is bound by its slots alone.
+
+  `data/adapt.toml` holds for every device. A census with no uniform-datapath line (`UNI`) closes the uniform route.
+
+The L40S (`data/devices/sm_89/`, note:20261017T0605Z-draft-eps1-ada) prices Dither-1S, Dither-2S and Dither-C at L = 16
+(IMMA.16816, where T1 is tight) and at L = 32 (IMMA.16832, half the tensor pipe's words), on ADA's measured honest step:
+duo's fold, 19.07 and 22.93 SMSP-cycles a MMA. Its clock is f_max = 2,520 MHz, with honest at 1,680 MHz at L = 16 and
+1,585 MHz at L = 32 under the enforced 325 W cap. Its operand floors are SPEC §3.4's register count applied to each
+form: 1/94 and 7/72 a MMA for m16n8k16, 1/39 and 0.20 for m16n8k32. ε_skip at L = 16 scales L = 32's strips by their
+widths. `eps --table` prints γ_f, γ with the clock gap f_max/f_H.
+
+The H200 and B200 (`data/devices/sm_90/` and `sm_100/`, note:20261017T0452Z-draft-eps1-dc) price the same three designs
+at L = 32, 64, 128 and 256 on model honest profiles: one IGMMA.64x256x32 (4096 words a warp) or UTCIMMA.128x256x32
+(32768 words), then duo on every committed word. Neither has a measured honest kernel or f_H yet, so γ is the model's
+and ε_clock is 0. Both read their operands from shared memory by descriptor, so the operand floor is no instruction for
+every noise. The B200's accumulator is in TMEM, so its floor is the tcgen05.ld.32x32b.x32 that bring each committed word
+to registers, 1024/L a MMA. Honest's profile counts that load in its fold, and the design's fold leaves it out, so a
+word written on lanes doesn't pay it. The baseline is dp4a on IMAD's class, as on sm_120, with its loads unpriced (the
+census has no IDP4A or LDS kind).
