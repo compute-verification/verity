@@ -42,6 +42,11 @@
                                               q* = 2, 4, 8, 16 and its floor, the core ε at q* = 2, 8 and Q, and the
                                               thresholds), then with --checking sampled the sample (ε_luck, ε_adapt
                                               and ε_sample at Q)
+    machine-model redteam [DESIGN ...] [--device sm_NN] [--q Q] [--operands O] [--credit C]
+                                              the red-team audit (redteam.py): each design's binding and near-binding
+                                              facets, the decision-76 move in the cheater's favour at which the core
+                                              first rises (per row), and, where Π prices no uniform datapath, the ε a
+                                              sibling-rate uniform route would open (default q* = 1.22, credit floor)
     machine-model capacity GROUP [GROUP ...] [--vector V] [--json]
                                               the certified share σ of a window's capacity (capacity.py): each GROUP
                                               is [WEIGHT/]TERM+TERM..., its share of the cell's SMSP-time (default 1)
@@ -463,6 +468,29 @@ def _capacity(args) -> int:
     return 0
 
 
+def _redteam(args) -> int:
+    from verity_machine_model import redteam as RT
+
+    names = args.designs or E.designs(args.data)
+    for name in names:
+        a = RT.audit(name, args.data, q=args.q, operands=args.operands, credit=args.credit)
+        print(f"{a.design} on {a.device}: core {_pct(a.core)}  ε_machine {_pct(a.machine_eps)}  floor {_pct(a.floor)}  "
+              f"γ {a.gamma:.3f}  binds {', '.join(a.binding)}" + ("" if a.uniform_route else "  [Π has no uniform route]"))
+        for r in a.near:
+            if r.ceiling:
+                how = "the issue ceiling, silicon cannot beat it"
+            elif r.flip_pct is None:
+                how = "no flip ≤ 10%"
+            else:
+                how = f"flips at {r.flip_pct}% → {_pct(r.core_at_flip)} (at 2%: {_pct(r.core_at_2pct)})"
+            print(f"    {r.name:12s} load {r.load:.3f}  dual {r.dual:.3f}: {how}")
+        if not a.uniform_route:
+            base, opened, binding = RT.uniform_gap(name, args.data, q=args.q, operands=args.operands, credit=args.credit)
+            print(f"    uniform-datapath gap: core {_pct(base)} → {_pct(opened)} with a sibling-rate uniform route "
+                  f"(binds {', '.join(binding) or 'none'})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="machine-model", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -525,6 +553,14 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("groups", nargs="+", metavar="GROUP")
     k.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
     k.add_argument("--json", action="store_true")
+    rt = sub.add_parser("redteam")
+    rt.add_argument("designs", nargs="*", help="the designs to audit (default: every design in the data directory)")
+    rt.add_argument("--device", default=argparse.SUPPRESS, help=dev)
+    rt.add_argument("--q", type=float, default=1.22, help="q*, lane instructions a fresh word (default %(default)s)")
+    rt.add_argument("--operands", choices=E.OPERANDS, default="free",
+                    help="the cheater's operand delivery on the tensor route (default %(default)s)")
+    rt.add_argument("--credit", choices=E.CREDITS, default="floor",
+                    help="what ε is a fraction of (default %(default)s: the floor program ♭)")
     args = p.parse_args(argv)
     if args.device is not None:
         if args.data != DATA:
@@ -534,7 +570,7 @@ def main(argv: list[str] | None = None) -> int:
         print(__doc__)
         return 0
     return {"list": _list, "solve": _solve, "census": _census, "attacks": _attacks, "adopt": _adopt,
-            "designs": _designs, "eps": _eps, "capacity": _capacity}[args.cmd](args)
+            "designs": _designs, "eps": _eps, "capacity": _capacity, "redteam": _redteam}[args.cmd](args)
 
 
 if __name__ == "__main__":
