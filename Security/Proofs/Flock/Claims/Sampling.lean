@@ -10,6 +10,7 @@ import Proofs.Flock.Claims.Sampling.Live
 import Proofs.Flock.Claims.Sampling.Path
 import Proofs.Flock.Claims.Sampling.Runs
 import Proofs.Flock.Claims.Sampling.Session
+import Proofs.Flock.Claims.Sampling.Universal
 import Proofs.Flock.Claims.Sampling.Wait
 
 /-! The sampling compiler's lemmas: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the
@@ -21,5 +22,5 @@ binding at the openings the extractor checks (`Sampling.Binding`), at the regist
 at its hm96 leaf (`Sampling.Leaf`); `B_ext` and the block's bits from its KS (`Sampling.Bext`); the waits' truncation
 and union bound (`Sampling.Wait`); the block's KS, its count form and its bits from Flock's KS at the checked units'
 sessions and the deployed sampled verifier's named facts (`Sampling.KS`); Flock's KS at those sessions from
-`Claims.Flock.KS` (`Sampling.Session`); and the block's claims assembled, with what remains as hypotheses
-(`Sampling.Assembled`). -/
+`Claims.Flock.KS` (`Sampling.Session`); the universal unit's gates computing its netlist (`Sampling.Universal`); and
+the block's claims assembled, with what remains as hypotheses (`Sampling.Assembled`). -/

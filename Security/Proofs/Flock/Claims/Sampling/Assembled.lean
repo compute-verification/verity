@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Sampling.Leaf
 import Proofs.Flock.Claims.Sampling.Runs
 import Proofs.Flock.Claims.Sampling.Session
+import Proofs.Flock.Claims.Sampling.Universal
 import Proofs.Flock.SamplingBoundary
 
 /-!
@@ -10,7 +11,8 @@ import Proofs.Flock.SamplingBoundary
 `sampling_assembled`: at a sampling deployment `D` whose sessions are Flock's deployed masked verifier
 (`D.flock = FlockDeploy.deployZk rel`), at every hash `H`, the conjunction of the sampling claims:
 
-* `ScopeMatches`, `Universal`, `Complete` and `ZK`: hypotheses;
+* `ScopeMatches`, `Complete` and `ZK`: hypotheses;
+* `Universal`, from the unit's Definition (`Universal_of`);
 * `Binding`, at hm96 leaves under the registered frame-v3-sha512 path check (`Binding_of_hm96`);
 * `FaultyBoundary` (`faultyBoundary`);
 * `KS`, on the statements in scope (`Scope`), from Flock's KS at the checked units' sessions (`SessionKS_of`, `KS_of`),
@@ -41,8 +43,9 @@ import Proofs.Flock.SamplingBoundary
   calls; the deployed opening check's count, the Lean sampled-proofs verifier's. With it the extractor's own calls are
   `Efficient`'s (`E_own_le`); its reruns are, at every deployment (`E_runs_le`).
 * `hscope : ScopeMatches D`: the deployed scope check, the Lean sampled-proofs verifier's.
-* `huniv : Universal D`: the universal unit's Definition (`verity/ml/private_circuits`) against `Netlist.eval`; no
-  branch proves it yet.
+* `huniv : UniversalIs D`: the deployed universal unit computes what its Definition's gates do (`universalProg`, the
+  port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
+  gates compute `Netlist.eval` is proved (`universal_correct`).
 * `hComplete : Complete H D P δc`: waits on the reference prover (ruling 4), so `P` and `δc` are any.
 * `hZK : ZK H D Pz S εzk γzk`: the masked sessions' zero knowledge with the leaf layer's simulator, its binding term
   `γzk` times `Fork`'s collisions among the honest prover's calls in two real runs on one nonce (#2201); no branch
@@ -70,7 +73,7 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (hrunsExp : ∀ decode, ExtractRunsExpLe H (E D decode)
       (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)))
     (hopen : OpenCallsLe H D)
-    (hscope : ScopeMatches D) (huniv : Universal D)
+    (hscope : ScopeMatches D) (huniv : UniversalIs D)
     {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H D P δc)
     {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (Pz : Wit → Prover (Nz × Ωz)) (S : SimLeak)
     (εzk γzk : Msg → ℝ) (hZK : ZK H D Pz S εzk γzk) :
@@ -85,7 +88,7 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
       ∀ os, (D.flock.dec os).2 ≤ FlockDeploy.zkStepPoly.eval (Claims.Flock.wordLen os) := by
     rw [hflock]
     exact ⟨(FlockDeploy.efficient_zk H rel).2.1, (FlockDeploy.efficient_zk H rel).2.2.1⟩
-  exact ⟨hscope, hbind, huniv, faultyBoundary, hks, KSCount_of_KS hks, Bits_of_KS hks hrunsExp (E_own_le hopen) hε,
+  exact ⟨hscope, hbind, Universal_of huniv, faultyBoundary, hks, KSCount_of_KS hks, Bits_of_KS hks hrunsExp (E_own_le hopen) hε,
     ⟨E_runs_le H D _, hrunsExp _, E_own_le hopen _, hdec.1, hdec.2⟩, hComplete, hZK⟩
 
 end Claims.Sampling
