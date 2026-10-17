@@ -109,13 +109,15 @@ proving cost doesn't depend on the values it carries. Regenerate with `instances
 
 ## Configuration 2: recursive zero knowledge
 
-Not measured yet: `zk` prints its fields. Workers would prove the inner statement natively with ZK off and the outer
-proof's arithmetic unmasked; a ZK server (compiled Lean, CPU) would draw the masks and salts, check the outer relations and
-release; the auditor runs the Lean verifier. None of that split exists. Its stand-ins, labelled wherever used, are the
-firewall (`verity/core/service/firewall`) and `flock-circuit prove --zk` (the masked prover, CPU only). Stubbed: the ZK
-server's CPU seconds per session and per VU, the released proof's bytes and the ZK servers needed per GPU. The worker's
-throughput is configuration 1's prover at best B (an upper bound), and the bytes from worker to server stand in as
-configuration 1's transcript.
+Workers would prove the inner statement natively with ZK off and the outer proof's arithmetic unmasked; a ZK server
+(compiled Lean, CPU) would draw the masks and salts, check the outer relations and release; the auditor runs the Lean
+verifier (note:proofs/20261017T0724Z-draft-zk-server). That split doesn't exist. The ZK point measures today's stand-in,
+labelled so in its result (`proof-throughput/zk-standin/v1`): `job.sh ZK=1` proves the same drawn sessions with
+`flock-circuit prove --zk --gpu` (M1's masked protocol) under the firewall's send check (`FC_FIREWALL=1`, PROTOCOL §10, its
+contract `verity/core/service/flock/Flock/Firewall`), which runs in the prover's process on its host threads, and
+`zk-point` writes the result: the prover process's CPU seconds per session, the firewall's recheck and shadow-opening
+times, the session's bytes out and its released proof. The ZK server's CPU per session is that CPU with `FC_FIREWALL=1`
+less the same point's with `FC_FIREWALL=0`. `zk` prints each field and its source.
 
 ## Placement
 

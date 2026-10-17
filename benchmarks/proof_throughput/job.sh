@@ -15,9 +15,12 @@
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the prover builds, the venv and FLOCK_STAGE_CACHE under it)
 #      LEASE_MAX_MIN=30  BUNDLE=1 (0: keep the sessions out of the store)  STAGE_ONLY=1 (build, stage and check; no GPU)
 #      any FC_*=VALUE reaches the prover (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as the hill-climb)
+#      ZK=1: configuration 2's stand-in (zk.py): M1's masked sessions (--zk), under the firewall's send check unless
+#      FC_FIREWALL=0; the result is zk-point's, no contract result and no bundle
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 : "${WORKLOAD:?WORKLOAD= is required}" "${B:?B= is required}"
+[ "${ZK:-0}" = 1 ] && export FLOCK_ZK=1 FC_FIREWALL=${FC_FIREWALL:-1} BUNDLE=0
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/pt-$$}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @proofs --expires 14d --priority low \
@@ -103,6 +106,10 @@ cp "$S/prove/classes/results.jsonl" "$O/results.jsonl" 2>/dev/null
 [ -n "$D" ] && for f in prove.out prove.err serve.log sessions/index.jsonl; do [ -e "$D/$f" ] && cp "$D/$f" "$O/$(basename "$f")"; done
 PT probe --out "$O/hardware.json" --gpu-csv "$O/gpu.csv"
 printf '{"workload": "%s", "B": %s, "warm": %s, "runs": %s, "run": "%s"}\n' "$WORKLOAD" "$B" "${WARM:-1}" "${RUNS:-3}" "${RESEARCH_RUN_ID:-local}" > "$O/point.json"
+if [ "${ZK:-0}" = 1 ]; then
+  PT zk-point --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESEARCH_RUN_DIR:-$O}/result.json" | tee -a "$O/job.log" || rc=1
+  log "done"; [ $rc = 0 ]; exit
+fi
 C=$(PT staged --results "$O/results.jsonl" --cache-dir 2>/dev/null)
 [ -n "$C" ] && cp "$C/rec.json" "$O/stage-rec.json"
 PT point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESEARCH_RUN_DIR:-$O}/result.json"

@@ -9,10 +9,10 @@
     baseline [--workload W] [--lock RESULT ...]          the pinned hill-climb baseline (baseline.json), or pin one sweep
     instances --workload W [--write]                     regenerate the workload's frozen instance manifest
     workloads                                            the VU families and their B caps
-    zk                                                   what configuration 2 measures today, and what it stubs
+    zk                                                   what configuration 2 measures today (job.sh ZK=1: --zk sessions under the firewall)
 
 The job scripts call the rest: ``population``, ``check-instances``, ``partition``, ``staged``, ``probe``, ``put-bundle``,
-``fetch-bundle``, ``lean-verdict``, ``point-result`` and ``profile-phases``.
+``fetch-bundle``, ``lean-verdict``, ``point-result``, ``zk-point`` and ``profile-phases``.
 A RESULT is a ``result.json`` path or a run id (its result fetched from the evidence store).
 """
 from __future__ import annotations
@@ -447,6 +447,17 @@ def cmd_zk(_a) -> int:
     return 0
 
 
+def cmd_zk_point(a) -> int:
+    """``zk-point``: the ZK point's result (``job.sh ZK=1``) from its records; exit 0 when it passed."""
+    from . import zk
+
+    doc = zk.point(Path(a.dir), workload(a.workload), a.B, zk.firewall_on(), os.environ.get("RESEARCH_RUN_ID"))
+    Path(a.out).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    print(json.dumps({"status": doc["validation"]["status"], "detail": doc["validation"]["detail"]}
+                     | {m["name"]: m["value"] for m in doc["measurements"]}))
+    return 0 if doc["validation"]["status"] == "passed" else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="verity bench proof_throughput", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -497,6 +508,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("point-result"); p.add_argument("--workload", required=True); p.add_argument("--B", type=int, required=True)
     p.add_argument("--dir", required=True); p.add_argument("--lean", default=None); p.add_argument("--prove-run", default=None)
     p.add_argument("--bundle", default=None); p.add_argument("--out", required=True)
+    p = sub.add_parser("zk-point"); p.add_argument("--workload", required=True); p.add_argument("--B", type=int, required=True)
+    p.add_argument("--dir", required=True); p.add_argument("--out", required=True)
     p = sub.add_parser("profile-phases"); p.add_argument("--script", required=True); p.add_argument("--time", required=True)
     p.add_argument("--stderr", required=True); p.add_argument("--stdout", default=None); p.add_argument("--out", required=True)
     p.add_argument("--bundle", default=None); p.add_argument("--prove-run", default=None)
@@ -506,4 +519,4 @@ def main(argv: list[str] | None = None) -> int:
             "instances": cmd_instances, "workloads": cmd_workloads, "zk": cmd_zk, "population": cmd_population,
             "check-instances": cmd_check_instances, "partition": cmd_partition, "staged": cmd_staged, "probe": cmd_probe, "lean-verdict": cmd_lean_verdict,
             "point-result": cmd_point_result, "put-bundle": cmd_put_bundle, "fetch-bundle": cmd_fetch_bundle,
-            "profile-phases": cmd_profile_phases}[a.cmd](a)
+            "profile-phases": cmd_profile_phases, "zk-point": cmd_zk_point}[a.cmd](a)
