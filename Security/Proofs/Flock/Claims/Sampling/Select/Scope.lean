@@ -46,7 +46,7 @@ theorem scopeMatches_of [Fintype Coin] (D : Deploy Coin Col T) (hslots : DrawSlo
   · rintro ⟨s, Pt, hx, hP, htop, hpart, -⟩
     exact ⟨s, Pt, hx, hP, htop, hpart⟩
   · rintro ⟨s, Pt, hx, hP, htop, hpart⟩
-    obtain ⟨rule, d, query, table, -, l, -, -, hl, hshape, hds, -, -⟩ := hslots x s Pt hx hP
+    obtain ⟨rule, d, query, table, -, l, -, -, -, hl, hshape, hds, -, -⟩ := hslots x s Pt hx hP
     exact ⟨s, _, hx, hP, htop, hpart,
       (Design.wellFormed_of_shape _ hshape).2 (designWellFormed rule d query table l s.design hl hds)⟩
 

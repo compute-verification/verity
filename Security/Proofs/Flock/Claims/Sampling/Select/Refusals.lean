@@ -119,7 +119,7 @@ theorem programScope_of_refusals [Fintype Coin] [Nonempty Coin] (D : Deploy Coin
   rw [hq x]
   constructor
   · rintro ⟨s, Pt, hx, hP⟩
-    obtain ⟨-, d, query, -, -, l, -, -, hl, hshape, -⟩ := hslots x s Pt hx hP
+    obtain ⟨-, d, query, -, -, l, -, -, -, hl, hshape, -⟩ := hslots x s Pt hx hP
     exact ⟨s, _, hx, hP, h₁ x s _ hx hP,
       (partitions_iff_cuts _ _ (Partition.single_of_shape hshape (slotPartition_single d query l hl))).2
         ⟨h₂ x s _ hx hP, h₃ x s _ hx hP, h₄ x s _ hx hP, h₅ x s _ hx hP⟩⟩

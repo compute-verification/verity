@@ -213,7 +213,8 @@ theorem index_of_mem {c : Array (ℕ × ℕ)} {n : ℕ} (hc : c.size ≤ n) {u :
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
 
 /-- **The deployed draw is `Slots.select`'s**: on a statement that parses and whose query evaluates, the verifier's own
-program `d`, query, selection rule, work table and closure map, whose layout `l` has the statement's partition's shape
+program `d` (its parse of the statement's descriptor), query, selection rule, work table and closure map, whose layout
+`l` has the statement's partition's shape
 (`Partition.shape`: its slots, each with its count of proof units, in their strata and classes; the proof units' gates
 are the partition's) and whose design is the statement's; `L` bytes of the coins, uniform when the coins are; and the
 checked proof units the draw's on them (`drawChecked`). -/
@@ -221,7 +222,8 @@ def DrawSlots (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s = some Pt →
   ∃ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (L : ℕ) (bytes : (Fin (D.V.k x) → Coin) → Fin L → Fin 256),
-    Slots.layout d query = .ok l ∧ Pt.shape = (slotPartition l).shape ∧ slotDesign rule d query table = .ok s.design ∧
+    Program.parse ⟨s.desc.toArray⟩ = .ok d ∧ Slots.layout d query = .ok l ∧ Pt.shape = (slotPartition l).shape ∧
+      slotDesign rule d query table = .ok s.design ∧
       (∀ E : (Fin L → Fin 256) → Prop, Pr (fun c => E (bytes c)) = Pr E) ∧
       ∀ c, D.checked x c = (drawChecked rule d query table cm l (bytesOf (bytes c))).toList
 
@@ -230,7 +232,7 @@ miss probability at fixed first-stage coins averages at most `P_a(B)` (`drawMiss
 so it misses no nonempty `B`, and a well-formed design has `P_a(∅) = 1`. The partition is read through its shape. -/
 theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D := by
   intro x s Pt hx hP hin B hB
-  obtain ⟨rule, d, query, table, cm, l, L, bytes, hl, hshape, hds, hunif, hch⟩ := h x s Pt hx hP
+  obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, hds, hunif, hch⟩ := h x s Pt hx hP
   have hnPU : nPU D x = (slotPartition l).sizes.sum := by
     simp [nPU, hx, Deploy.part, hP, Partition.sizes_of_shape hshape]
   rw [Partition.rus_length_of_shape hshape] at hB
