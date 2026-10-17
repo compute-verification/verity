@@ -42,14 +42,15 @@ import Proofs.Flock.SamplingBoundary
   and the draw doesn't read them; a checked unit's session is a Flock run on its own rounds that decides the run, with
   the Flock verifier's `H` calls among the sampled verifier's; the inner numbers are Flock's at each session. The Lean
   sampled-proofs verifier, held to the Python by difftest.
-* `DrawSlots` (`Sampling.Select.DrawLaw`): on every statement that parses and whose query evaluates, the partition and
-  design are the verifier's own layout and the design `Slots.select` draws, from uniform bytes of the coins, every slot
-  checked where it is refused; the Lean sampled-proofs verifier's run, which builds `D`.
+* `DrawSlots` (`Sampling.Select.DrawLaw`): on every statement that parses and whose query evaluates, the partition has
+  the shape of the verifier's own layout, and the design is the one `Slots.select` draws, from uniform bytes of the
+  coins, every slot checked where it is refused; the Lean sampled-proofs verifier's run, which builds `D`.
 * `SessionOpens`, `InteriorFixed` (`Sampling.KS`): the same verifier.
 * `ProgramScope`, `ChecksScope` (`Sampling.Select.Scope`): the scope check is the readable scope's program part (a
   topologically ordered program, partitioned into proof units), and an accepted run passed it. The design part is a
-  theorem (`designWellFormed`); the program part waits on the claims' program and the verifier's being one, and on the
-  claims' proof units covering a `Q_word` unit, whose gates another unit's may interleave.
+  theorem (`designWellFormed`); the program part waits on the claims' program and the verifier's being one. The
+  verifier's reading of the descriptor is total (C-Flock's verifier has no `partial` def); what remains is the
+  flattening of the program it decodes into the claims' gates.
 * `hopen : OpenCallsLe H D`: checking what one checked unit's Flock witness reveals makes at most `openCalls` SHA-512
   calls; at the deployed record, from the reveal count (`SamplingDeploy.openCallsLe_deploy`). With it the extractor's
   own calls are `Efficient`'s (`E_own_le`); its reruns are, at every deployment (`E_runs_le`), and its expected reruns
