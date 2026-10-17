@@ -16748,9 +16748,9 @@
    ]
   },
   "Models.Flock.Guarantees.Claims": {
-   "digest": "ed7e4c7235e08e4079917b31164a231e2a8d2306bf29ac7875246608981c5f3b",
+   "digest": "1ecc37af7756f6de177f852bff9fa44088f74e1d246e83f1691fdb1c54f8a467",
    "definitions": {
-    "Flock.Guarantees.ClaimsStated": "4f12b4aa4e88439281611e9f997c5d3bc4852d4e959eb706d36850b48e5f080c"
+    "Flock.Guarantees.ClaimsStated": "bc5f754054e7d692e65e21b8611d5b8d3b15887f70339598a4f85cd9fb7f015a"
    },
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
