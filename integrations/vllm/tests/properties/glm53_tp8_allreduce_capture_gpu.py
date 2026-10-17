@@ -1,9 +1,10 @@
 """GLM-5.3's TP8 all-reduces on 8x H200 against their Programs, a step of the 8-GPU run that needs no checkpoint (run it before an
 engine holds the GPUs).  The served engine (`WORKLOAD`) runs vLLM's custom all-reduce as the workload's ``disable_custom_all_reduce``
 has it, false (vLLM's default), so it runs vLLM's defaults (`tp_allreduce.SETTINGS`: custom all-reduce, torch's symmetric memory
-and FlashInfer's all-reduce on); ``--served custom-off`` serves with the custom all-reduce off, as the two GO runs did
-(`tp_allreduce.CAPTURE_RUNS`).  Either way, at vLLM d9105ea80 on cc 9.0 (`expected_comm`) its TP group's all-reduces of GLM-5.3's
-hidden states take three routes:
+and FlashInfer's all-reduce on); the two earlier GO runs served with the custom all-reduce off (`tp_allreduce.CAPTURE_RUNS`).  vLLM
+runs at its defaults, as it serves: `engine.env.served_defaults` clears every switch this process inherited before the gate, a
+served engine's toolchain is set (`environment`), and every rank reads its switches back from `vllm.envs` (`switches`).  At vLLM
+d9105ea80 on cc 9.0 (`expected_comm`) its TP group's all-reduces of GLM-5.3's hidden states take three routes:
 
   decode    up to `FUSED_MAX` (42) tokens, FlashInfer's MNNVL kernels: `fused_allreduce_rms_norm`'s fused all-reduce + residual
             add + RMSNorm (`tp_allreduce.AllReduceRmsNormMnnvl_v1`) and the standalone all-reduce (`fi_ar_comm`,
@@ -22,12 +23,14 @@ vLLM's defaults: FlashInfer to 36 tokens (one-shot to 9), multimem from 37, with
 This process makes every operand, spawns one GPU process per rank for each set of rank processes (`spawns`), which run vLLM's own
 calls on their rank's operands and save their words, and compares those words with the numpy models (`tp_allreduce_check`).  It
 writes `<out>/glm53_tp8_allreduce_capture.json`, the property record `glm53_tp8_allreduce_capture` (`properties.record`), the
-probes' words under `<out>/words/`, prints one line per case and then `GLM53-TP8-ALLREDUCE GO` or `NO-GO` with the served
-setting, the route prefill takes, its trees and FTZ, each shot's FMA and the h7168 verdict.  The device gate runs first and
-nothing else runs when it fails (exit 3).
+probes' words under `<out>/words/`, prints one line per case and then `GLM53-TP8-ALLREDUCE GO` or `NO-GO` with whether it ran
+served, the served setting, the route prefill takes, its trees and FTZ, each shot's FMA and the h7168 verdict.  The device gate
+runs first and nothing else runs when it fails (exit 3).
 
   gate       driver, cc 9.0, 132 SMs, `WORLD` GPUs of one name (an 8x H200 node), ninja and nvcc on PATH (FlashInfer JIT-builds
              its TRT-LLM all-reduce when a rank first makes its workspace); the NVLink topology is recorded.
+  served     per set of rank processes, every rank's switches as its vLLM read them (`SETTING_SWITCHES`: vLLM's defaults, symmetric
+             memory off under "switch"), and NCCL's P2P unset; ``served.ok`` when the served ones are the defaults.
   fused      (served) at M in `FUSED_M` (both shots of `mnnvl_shot` and every cluster geometry of `mnnvl_grid`), the special tokens
              and one screened probe call per shot: every call on FlashInfer's "mnnvl" workspace at `mnnvl_shot(M)`, weight_bias 0,
              eps `EPS`, and past `FUSED_MAX` on the all-reduce then the norm module; every rank's normed and residual words against
@@ -52,16 +55,16 @@ nothing else runs when it fails (exit 3).
   bind       every Definition binds at GLM-5.3's statics (the multimem one at the probes' trees).
   timing     rank 0's median of `REPS` CUDA-event-timed calls, so the switch's cost is each M's time switched over served.
 
-GO needs the gate, the bindings, the served spawns' dispatch, the fused and decode launches and one prefill route: "served" (every
+GO needs the gate, served, the bindings, the served spawns' dispatch and switches, the fused and decode launches and one prefill
+route: "served" (every
 probe's trees one tree per owner, the same in every probe and in both sets of rank processes, FTZ decided, every multimem word
-equal), else "switch" (every custom all-reduce word equal, and the switch's dispatch).  Every launch must also run on its expected
-path, deterministically, with every rank's words equal and the references equal.  The h7168 verdict needs the same of its own
-launches, its probe's trees and FTZ, and its dispatch.  ``coverage`` lists, per setting, hidden size and route, the token counts
-whose launches were GO: what `tp_allreduce.CAPTURED` may then cite, with this run's id.
+equal), else "switch" (every custom all-reduce word equal, and the switch's dispatch and switches).  Every launch must also run on
+its expected path, deterministically, with every rank's words equal and the references equal.  The h7168 verdict needs the same of
+its own launches, its probe's trees and FTZ, its dispatch and its switches.  ``coverage`` lists, per setting, hidden size and
+route, the token counts whose launches were GO: what `tp_allreduce.CAPTURED` may then cite, with this run's id.
 
     cd integrations/vllm; PY=/workspace/cp/venv312/bin/python  # vy-glm53-h8's venv; PYTHONPATH as verity_vllm/ops/pod_bootstrap.sh sets it
-    export CUDA_HOME=/usr/local/cuda PATH=/workspace/cp/venv312/bin:/usr/local/cuda/bin:$PATH
-    $PY tests/properties/glm53_tp8_allreduce_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--served workload|custom-off]
+    $PY tests/properties/glm53_tp8_allreduce_capture_gpu.py --out DIR [--scratch DIR] [--quick]
         [--only fused,allreduce,probe,again,switch,h7168,h7168_probe]
 """
 from __future__ import annotations
@@ -73,6 +76,7 @@ import multiprocessing
 import os
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import traceback
@@ -85,12 +89,14 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.config import RowEngine
+from verity_vllm.engine.env import served_defaults
+from verity_vllm.pipeline.cli import MACHINE
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import tp_allreduce as T
 from verity_vllm.program.registry import tp_allreduce_check as K
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-tp8-allreduce-capture/v3"
+SCHEMA = "verity-vllm/glm53-tp8-allreduce-capture/v4"
 RECORD = "glm53_tp8_allreduce_capture.json"
 WORKLOAD = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 WORKLOAD_PATH = Path(__file__).resolve().parents[2] / "workloads" / f"{WORKLOAD}.json"
@@ -128,8 +134,13 @@ SWITCH_ENV = {**SERVED_ENV, "VLLM_ALLREDUCE_USE_SYMM_MEM": "0"}
 #: each setting's environment (`tp_allreduce.SETTINGS`); its custom all-reduce is `set_custom_all_reduce`'s, as vLLM's worker sets
 #: it from ``disable_custom_all_reduce`` (`vllm/v1/worker/gpu_worker.py:1492`)
 SETTING_ENV = {"defaults": SERVED_ENV, "custom-off": SERVED_ENV, "switch": SWITCH_ENV}
-#: ``--served``: the workload's setting (`workload_setting`), or "custom-off", what the two GO runs served
-SERVED = ("workload", "custom-off")
+#: what every rank reads back (`switches`): vLLM's switches as `vllm.envs` has them at its defaults (d9105ea80, `vllm/envs.py:631,
+#: 1563, 1747, 1888-1900, 2017-2019`), and NCCL's P2P switch unset; "switch" turns symmetric memory off
+DEFAULT_SWITCHES = {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_DEEP_GEMM": True, "VLLM_ALLREDUCE_USE_SYMM_MEM": True,
+                    "VLLM_ALLREDUCE_USE_FLASHINFER": True, "VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC": False, "VLLM_USE_NCCL_SYMM_MEM": False,
+                    "VLLM_FLASHINFER_ALLREDUCE_BACKEND": "auto", "NCCL_P2P_DISABLE": None}
+SETTING_SWITCHES = {"defaults": DEFAULT_SWITCHES, "custom-off": DEFAULT_SWITCHES,
+                    "switch": {**DEFAULT_SWITCHES, "VLLM_ALLREDUCE_USE_SYMM_MEM": False}}
 PHASES = ("fused", "allreduce", "probe", "again", "switch", "h7168", "h7168_probe")
 SPAWN_OF = {"fused": "served", "allreduce": "served", "probe": "served", "again": "served_again", "switch": "switch",
             "h7168": "h7168", "h7168_probe": "h7168"}
@@ -683,6 +694,13 @@ def allreduce_case(rank: int, case: dict[str, Any]) -> dict[str, Any]:
             "us": None if probe else _time_us(lambda: all_reduce(x)), "kernels": _kernels(lambda: all_reduce(x))}
 
 
+def switches() -> dict[str, Any]:
+    """`DEFAULT_SWITCHES`' switches as this process's vLLM reads them (`vllm.envs`), NCCL's from the environment NCCL reads."""
+    import vllm.envs as envs
+
+    return {k: os.environ.get(k) if k.startswith("NCCL_") else getattr(envs, k) for k in DEFAULT_SWITCHES}
+
+
 def rank_main(rank: int, cfg: dict[str, Any]) -> None:
     """One rank: vLLM's TP group of `WORLD` with the custom all-reduce as `cfg` has it, every case in order (each a collective
     every rank makes), its record to the work dir."""
@@ -697,7 +715,7 @@ def rank_main(rank: int, cfg: dict[str, Any]) -> None:
                                                  init_distributed_environment, set_custom_all_reduce)
 
     rec: dict[str, Any] = {"rank": rank, "cases": {}, "errors": {}, "env": {k: os.environ.get(k) for k in (*cfg["env"], *UNSET)},
-                           "custom_all_reduce": cfg["custom_ar"]}
+                           "switches": switches(), "custom_all_reduce": cfg["custom_ar"]}
     set_custom_all_reduce(cfg["custom_ar"])
     with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
         init_distributed_environment(world_size=WORLD, rank=rank, distributed_init_method=cfg["init"], local_rank=rank, backend="nccl")
@@ -899,6 +917,19 @@ def dispatch_check(spawn: dict[str, Any], comms: list[dict[str, Any] | None]) ->
     return {"ok": len(comms) == WORLD and not bad, "want": want, "differ": bad}
 
 
+def switches_check(spawn: dict[str, Any], recs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Whether every rank read back its spawn's setting's switches (`SETTING_SWITCHES`); a rank without them differs in all."""
+    want = SETTING_SWITCHES[spawn["setting"]]
+    bad = {}
+    for r in recs:
+        got = r.get("switches")
+        if not isinstance(got, dict) or set(got) != set(want):
+            bad[f"rank{r.get('rank')}"] = {"switches": got}
+        elif d := {k: got[k] for k, v in want.items() if got[k] != v}:
+            bad[f"rank{r.get('rank')}"] = d
+    return {"ok": len(recs) == WORLD and not bad, "want": want, "differ": bad}
+
+
 # ------------------------------------------------------------------------------------------------------------------- verdicts
 def _call_ok(call: dict[str, Any], case: dict[str, Any]) -> bool:
     if case["path"] == UNFUSED:
@@ -987,13 +1018,16 @@ def _verdict(doc: dict[str, Any]) -> bool:
     prefill = prefill_of(r)
     need = {"served", *({"served_again"} if prefill == "served" else {"switch"} if prefill == "switch" else set())}
     errs = [k for k in doc["errors"] if k.split("/")[0] in need | {"bind"}]
-    return (doc["gate"]["ok"] and doc["bind"].get("ok") is True and not errs and r["fused"] and r["decode"] and prefill is not None
-            and all(len(doc["ranks"].get(s, [])) == WORLD and doc["dispatch"].get(s, {}).get("ok") is True for s in need))
+    return (doc["gate"]["ok"] and doc["served"].get("ok") is True and doc["bind"].get("ok") is True and not errs and r["fused"]
+            and r["decode"] and prefill is not None
+            and all(len(doc["ranks"].get(s, [])) == WORLD and doc["dispatch"].get(s, {}).get("ok") is True
+                    and doc["switches"].get(s, {}).get("ok") is True for s in need))
 
 
 def h7168_verdict(doc: dict[str, Any]) -> dict[str, Any]:
     """DeepSeek-V4-Pro's all-reduces, apart from GLM-5.3's verdict: every h7168 launch GO, its probe's trees one tree per owner and
-    its FTZ decided, its bindings and its dispatch; and whether its trees and FTZ are GLM-5.3's.  None when it did not run."""
+    its FTZ decided, its bindings, its dispatch and its switches; and whether its trees and FTZ are GLM-5.3's.  None when it did
+    not run."""
     keys = [c["key"] for c in doc["case_list"] if c["spawn"] == "h7168"]
     p, glm = doc.get("h7168_probes", {}), doc.get("probes", {})
     if not keys:
@@ -1001,7 +1035,7 @@ def h7168_verdict(doc: dict[str, Any]) -> dict[str, Any]:
     errs = [k for k in doc["errors"] if k.split("/")[0] in ("h7168", "h7168_bind")]
     ok = (doc["gate"]["ok"] and not errs and all(doc["cases"][k]["ok"] for k in keys) and p.get("agree") is True
           and doc.get("h7168_bind", {}).get("ok") is True and len(doc["ranks"].get("h7168", [])) == WORLD
-          and doc["dispatch"].get("h7168", {}).get("ok") is True)
+          and doc["dispatch"].get("h7168", {}).get("ok") is True and doc["switches"].get("h7168", {}).get("ok") is True)
     return {"ok": bool(ok), "trees": p.get("trees"), "ftz": p.get("ftz"),
             "same_as_glm53": p.get("trees") is not None and (p.get("trees"), p.get("ftz")) == (glm.get("trees"), glm.get("ftz"))}
 
@@ -1053,6 +1087,28 @@ def switch_cost(doc: dict[str, Any]) -> dict[str, float]:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- run
+def environment() -> tuple[dict[str, str], dict[str, str]]:
+    """vLLM's defaults (`served_defaults`) and a served engine's toolchain (`CUDA_HOME`, an exported one winning, and `RunEnv.cuda_bin`
+    on `PATH` after the interpreter's directory, as `pipeline.row_driver` sets them), set before the gate and inherited by every
+    rank process: (the env set, the switches cleared)."""
+    cleared = served_defaults()
+    env = {"CUDA_HOME": os.environ.get("CUDA_HOME") or MACHINE["RunEnv.cuda_home"],
+           "PATH": f"{os.path.dirname(sys.executable)}:{MACHINE['RunEnv.cuda_bin']}:{os.environ.get('PATH', '')}"}
+    os.environ.update(env)
+    return env, cleared
+
+
+def nvcc_version() -> list[str] | None:
+    nvcc = shutil.which("nvcc")
+    return nvcc and subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-2:]
+
+
+def served_ok(doc: dict[str, Any]) -> bool:
+    """The served sets of rank processes ran: every rank of each read back vLLM's defaults (its setting's switches)."""
+    ran = [s for s in ("served", "served_again") if s in doc["switches"]]
+    return "served" in ran and all(doc["switches"][s]["ok"] for s in ran)
+
+
 def gate(min_driver: int, want_cc: str, want_sms: int) -> dict[str, Any]:
     import torch
 
@@ -1087,12 +1143,12 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     tmp = tempfile.TemporaryDirectory(dir=a.scratch)
     work = Path(tmp.name)
     only = set(a.only.split(","))
-    served = (workload_setting() if a.served == "workload" else
-              {"setting": "custom-off", "disable_custom_all_reduce": True, "source": "--served custom-off"})
+    env, cleared = environment()
+    served = {**workload_setting(), "nvcc": nvcc_version(), "ok": None}
     sp = spawns(served["setting"])
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "quick": a.quick, "workload": WORKLOAD, "served": served,
-                           "spawns": sp, "environment": G._environment(), "gate": gate(a.min_driver, a.want_cc, a.want_sms),
-                           "errors": {}}
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "quick": a.quick, "workload": WORKLOAD, "env": env, "env_cleared": cleared,
+                           "served": served, "spawns": sp, "environment": G._environment(),
+                           "gate": gate(a.min_driver, a.want_cc, a.want_sms), "errors": {}}
     print(f"[glm53-tp8-ar] gate {json.dumps({k: v for k, v in doc['gate'].items() if k != 'topology'})}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
@@ -1109,9 +1165,9 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         if "screen" in c:
             print(f"[glm53-tp8-ar] {c['key']} screened {c['screen']}", flush=True)
     doc["case_list"] = [{k: v for k, v in c.items() if k not in ("ops", "out")} for c in case_list]
-    print(f"[glm53-tp8-ar] served {json.dumps(served)}; {len(case_list)} launches on {WORLD} ranks in "
+    print(f"[glm53-tp8-ar] served {json.dumps(served)} cleared {sorted(cleared)}; {len(case_list)} launches on {WORLD} ranks in "
           f"{sorted({c['spawn'] for c in case_list})}", flush=True)
-    doc["ranks"], doc["communicators"], doc["dispatch"], doc["comparisons"] = {}, {}, {}, []
+    doc["ranks"], doc["communicators"], doc["dispatch"], doc["switches"], doc["comparisons"] = {}, {}, {}, {}, []
     for spawn, s in sp.items():
         cs = [c for c in case_list if c["spawn"] == spawn]
         if not cs:
@@ -1125,9 +1181,12 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
             doc["errors"].update({f"{spawn}/rank{r['rank']}/{k}": v for k, v in r["errors"].items()})
         doc["communicators"][spawn] = doc["ranks"][spawn][0].get("communicators")
         doc["dispatch"][spawn] = dispatch_check(s, [r.get("communicators") for r in doc["ranks"][spawn]])
+        doc["switches"][spawn] = switches_check(s, doc["ranks"][spawn])
         print(f"[glm53-tp8-ar] {spawn} ({s['setting']}, H {s['H']}): dispatch {'ok' if doc['dispatch'][spawn]['ok'] else 'DIFFERS'} "
-              f"{json.dumps(doc['dispatch'][spawn]['differ'], default=str)} communicators "
-              f"{json.dumps(doc['communicators'][spawn], default=str)}", flush=True)
+              f"{json.dumps(doc['dispatch'][spawn]['differ'], default=str)} switches "
+              f"{'ok' if doc['switches'][spawn]['ok'] else 'DIFFER'} {json.dumps(doc['switches'][spawn]['differ'], default=str)} "
+              f"communicators {json.dumps(doc['communicators'][spawn], default=str)}", flush=True)
+    served["ok"] = served_ok(doc)
     ran = [c for c in case_list if c["spawn"] in doc["ranks"]]
     doc["probes"] = probe_analysis(ran)
     doc["h7168_probes"] = probe_analysis(ran, ("h7168_probe",))
@@ -1175,7 +1234,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     h = doc["h7168"]
     h_word = {True: "GO", False: "NO-GO", None: "skipped"}[h["ok"]]
     shown = lambda ts: "|".join(sorted({tree_str(t) for t in ts})) if ts else "none"  # noqa: E731
-    print(f"GLM53-TP8-ALLREDUCE {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} served={served['setting']} "
+    print(f"GLM53-TP8-ALLREDUCE {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} served={served['ok']} setting={served['setting']} "
           f"prefill={doc['prefill'] or 'none'} trees={shown(trees)} ftz={ftz} fma={json.dumps(doc['fma'])} h7168={h_word} "
           f"h7168_trees={'same' if h.get('same_as_glm53') else shown(h.get('trees'))} h7168_ftz={h.get('ftz')} "
           f"totals={json.dumps(doc['totals'])} no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} "
@@ -1194,9 +1253,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--quick", action="store_true",
                     help=f"fused M in {QUICK_FUSED_M}, all-reduce M in {QUICK_AR_M}, switch M in {QUICK_SWITCH_M}, h7168 M in "
                          f"{QUICK_DSV4_AR_M}, with every probe")
-    ap.add_argument("--served", choices=SERVED, default="workload",
-                    help="the served spawns' setting: the workload's disable_custom_all_reduce (default), or custom-off, the two GO "
-                         "runs' (tp_allreduce.CAPTURE_RUNS)")
     ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)}")
     a = ap.parse_args(argv)
     return 0 if run(a)["ok"] else 1

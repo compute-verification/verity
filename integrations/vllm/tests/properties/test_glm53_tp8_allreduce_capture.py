@@ -18,6 +18,7 @@ import numpy as np
 import pytest
 
 from tests.properties import glm53_tp8_allreduce_capture_gpu as X
+from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import tp_allreduce as T
 from verity_vllm.program.registry import tp_allreduce_check as K
@@ -486,8 +487,8 @@ def _rank_case(case: dict, us: float) -> dict:
 
 
 def _records(cases_: list[dict], us: float = 3.0, setting: str = "defaults") -> list[dict]:
-    return [{"rank": r, "cases": {c["key"]: _rank_case(c, us) for c in cases_}, "errors": {}, "communicators": _comms(setting)}
-            for r in range(X.WORLD)]
+    return [{"rank": r, "cases": {c["key"]: _rank_case(c, us) for c in cases_}, "errors": {}, "communicators": _comms(setting),
+             "switches": dict(X.SETTING_SWITCHES[setting])} for r in range(X.WORLD)]
 
 
 @pytest.mark.parametrize("change,ok", [({}, True), ({"backend": "trtllm"}, False), ({"shot": 1}, False), ({"weight_bias": 1.0}, False),
@@ -581,7 +582,9 @@ def _doc() -> dict:
     ranks = {s: _records([c for c in cs if c["spawn"] == s], 3.0, sp[s]["setting"]) for s in X.GLM_SPAWNS}
     doc = {"schema": X.SCHEMA, "gate": {"ok": True}, "errors": {}, "bind": {"ok": True}, "case_list": cs, "ranks": ranks,
            "comparisons": comps, "probes": {"trees": list(TREES), "agree": True, "ftz": True},
-           "dispatch": {s: X.dispatch_check(sp[s], [r["communicators"] for r in recs]) for s, recs in ranks.items()}}
+           "dispatch": {s: X.dispatch_check(sp[s], [r["communicators"] for r in recs]) for s, recs in ranks.items()},
+           "switches": {s: X.switches_check(sp[s], recs) for s, recs in ranks.items()}}
+    doc["served"] = {"setting": "defaults", "ok": X.served_ok(doc)}
     doc["fma"] = {str(s): X.fma_of(X._shot_totals(doc, s)) for s in (1, 2)}
     return _derive(doc)
 
@@ -602,6 +605,7 @@ def _with_h7168(doc: dict, ok: bool = True) -> dict:
                            for i, c in enumerate(cs)]
     doc["ranks"]["h7168"] = _records(cs)
     doc["dispatch"]["h7168"] = X.dispatch_check(X.spawns("defaults")["h7168"], [r["communicators"] for r in doc["ranks"]["h7168"]])
+    doc["switches"]["h7168"] = X.switches_check(X.spawns("defaults")["h7168"], doc["ranks"]["h7168"])
     doc["h7168_probes"] = {"trees": list(TREES), "agree": True, "ftz": True}
     doc["h7168_bind"] = {"ok": True}
     return _derive(doc)
@@ -655,7 +659,9 @@ def test_prefill_takes_the_served_route_else_the_switch() -> None:
 @pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("errors", "served/rank3/fused/M10"), "boom"), (("bind", "ok"), False),
                                         (("errors", "bind"), "boom"), (("routes", "fused"), False), (("routes", "decode"), False),
                                         (("errors", "served_again/compare/again/M64"), "boom"), (("dispatch", "served", "ok"), False),
-                                        (("dispatch", "served_again", "ok"), False)])
+                                        (("dispatch", "served_again", "ok"), False), (("served", "ok"), False),
+                                        (("served", "ok"), None), (("switches", "served", "ok"), False),
+                                        (("switches", "served_again", "ok"), False)])
 def test_the_verdict_needs_every_check(path: tuple, value) -> None:
     assert X._verdict(_doc())
     doc = copy.deepcopy(_doc())
@@ -685,8 +691,59 @@ def test_the_verdict_ignores_the_route_prefill_does_not_take() -> None:
     doc["dispatch"]["switch"]["ok"] = False
     assert not X._verdict(doc)
     doc = _doc()
+    doc["switches"]["switch"]["ok"] = False
+    assert X._verdict(doc)
+    doc["routes"]["served"] = False
+    assert not X._verdict(doc)
+    doc = _doc()
     doc["routes"].update(served=False, switch=False)
     assert not X._verdict(doc)
+
+
+def test_a_rank_reads_its_switches_from_vllm_and_nccls_from_the_environment(monkeypatch) -> None:
+    import sys
+    import types
+
+    envs = types.ModuleType("vllm.envs")
+    for k, v in X.DEFAULT_SWITCHES.items():
+        if not k.startswith("NCCL_"):
+            setattr(envs, k, v)
+    envs.VLLM_USE_DEEP_GEMM = False
+    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
+    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    monkeypatch.setenv("NCCL_P2P_DISABLE", "1")
+    assert X.switches() == {**X.DEFAULT_SWITCHES, "VLLM_USE_DEEP_GEMM": False, "NCCL_P2P_DISABLE": "1"}
+
+
+def test_every_rank_reads_back_its_settings_switches() -> None:
+    """Each setting's switches read back pass; batch invariance on, DeepGEMM off, NCCL's P2P off, symmetric memory off outside the
+    switch (or on under it), another FlashInfer backend, a rank without its switches, or a rank missing, fail; ``served.ok`` needs
+    the served sets of rank processes to pass, and a served set that did not run to be "served_again"."""
+    sp = X.spawns("defaults")
+    for name, s in sp.items():
+        assert X.switches_check(s, _records([], setting=s["setting"]))["ok"], name
+    assert X.DEFAULT_SWITCHES["VLLM_USE_DEEP_GEMM"] is True and X.SETTING_SWITCHES["switch"]["VLLM_ALLREDUCE_USE_SYMM_MEM"] is False
+    for name, change in [("served", {"VLLM_BATCH_INVARIANT": True}), ("served", {"VLLM_USE_DEEP_GEMM": False}),
+                         ("served", {"NCCL_P2P_DISABLE": "1"}), ("served", {"VLLM_ALLREDUCE_USE_SYMM_MEM": False}),
+                         ("switch", {"VLLM_ALLREDUCE_USE_SYMM_MEM": True}), ("h7168", {"VLLM_FLASHINFER_ALLREDUCE_BACKEND": "trtllm"}),
+                         ("served_again", {"VLLM_USE_NCCL_SYMM_MEM": True})]:
+        recs = _records([], setting=sp[name]["setting"])
+        recs[5]["switches"].update(change)
+        got = X.switches_check(sp[name], recs)
+        assert not got["ok"] and got["differ"] == {"rank5": change}, (name, change)
+    recs = _records([])
+    del recs[2]["switches"]
+    assert X.switches_check(sp["served"], recs)["differ"] == {"rank2": {"switches": None}}
+    assert not X.switches_check(sp["served"], _records([])[:7])["ok"]
+    doc = _doc()
+    assert X.served_ok(doc)
+    doc["switches"].pop("served_again")
+    assert X.served_ok(doc)
+    doc["switches"].pop("served")
+    assert not X.served_ok(doc)
+    doc = _doc()
+    doc["switches"]["served_again"]["ok"] = False
+    assert not X.served_ok(doc)
 
 
 def test_the_h7168_verdict_stands_apart_from_glm53s() -> None:
@@ -697,6 +754,7 @@ def test_the_h7168_verdict_stands_apart_from_glm53s() -> None:
     assert doc["h7168"] == {"ok": True, "trees": list(TREES), "ftz": True, "same_as_glm53": True} and X._verdict(doc)
     for mutate in (lambda d: d["comparisons"][-2].update(mismatch=1), lambda d: d["h7168_probes"].update(agree=False),
                    lambda d: d["h7168_bind"].update(ok=False), lambda d: d["dispatch"]["h7168"].update(ok=False),
+                   lambda d: d["switches"]["h7168"].update(ok=False),
                    lambda d: d["errors"].update({"h7168/rank1/h7168/M36": "boom"}), lambda d: d["ranks"]["h7168"].pop()):
         doc = _with_h7168(_doc())
         mutate(doc)
@@ -811,10 +869,23 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
         assert c.definition in cmap["programs"]["fused-allreduce-rmsnorm" if c.route == "fused" else "tp-allreduce"]["definitions"]
 
 
+def _vllm_reads(environ: dict) -> dict:
+    """`X.switches` of a rank process whose environment is `environ`, as vLLM d9105ea80's `vllm/envs.py` parses each switch."""
+    on = lambda k, default: bool(int(environ.get(k, default)))  # noqa: E731
+    return {"VLLM_BATCH_INVARIANT": on("VLLM_BATCH_INVARIANT", "0"), "VLLM_USE_DEEP_GEMM": on("VLLM_USE_DEEP_GEMM", "1"),
+            "VLLM_ALLREDUCE_USE_SYMM_MEM": on("VLLM_ALLREDUCE_USE_SYMM_MEM", "1"),
+            "VLLM_ALLREDUCE_USE_FLASHINFER": on("VLLM_ALLREDUCE_USE_FLASHINFER", "1"),
+            "VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC": on("VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC", "0"),
+            "VLLM_USE_NCCL_SYMM_MEM": on("VLLM_USE_NCCL_SYMM_MEM", "0"),
+            "VLLM_FLASHINFER_ALLREDUCE_BACKEND": environ.get("VLLM_FLASHINFER_ALLREDUCE_BACKEND", "auto"),
+            "NCCL_P2P_DISABLE": environ.get("NCCL_P2P_DISABLE")}
+
+
 def _fake_spawn(flip: dict, trees_of: dict):
     """`spawn_ranks` stood in for: every rank's words from the models (a fused shot's at `FMA`, an all-reduce's by its
-    communicator, multimem at `trees_of[spawn]` and FTZ), and its records with its setting's communicators, the time 3 us served
-    and 2 us switched; refused unless the spawn's environment and custom all-reduce are its setting's."""
+    communicator, multimem at `trees_of[spawn]` and FTZ), and its records with its setting's communicators, the switches vLLM
+    reads from the environment a rank inherits (`rank_main`'s: this process's without `UNSET`, then the spawn's), the time 3 us
+    served and 2 us switched; refused unless the spawn's environment and custom all-reduce are its setting's."""
 
     def spawn(work, env, custom_ar, cases_):
         name, setting = work.name, cases_[0]["setting"]
@@ -827,7 +898,9 @@ def _fake_spawn(flip: dict, trees_of: dict):
             else:
                 words = _ar_words(c, trees_of[name], True)
             _write(c, words, flip.get(c["key"]))
-        return _records(cases_, 2.0 if name == "switch" else 3.0, setting)
+        recs = _records(cases_, 2.0 if name == "switch" else 3.0, setting)
+        reads = _vllm_reads({**{k: v for k, v in X.os.environ.items() if k not in X.UNSET}, **env})
+        return [{**r, "switches": dict(reads)} for r in recs]
 
     return spawn
 
@@ -838,9 +911,15 @@ def test_main_end_to_end_on_stubbed_ranks(small, tmp_path, monkeypatch, capsys) 
     each spawn's setting, the operands, the probes' screening and trees, the comparison jobs through the spawned worker pool at the
     jobs' own widths and geometries, each shot's decided `fma`, the per-case verdicts, the routes, the switch's cost, the h7168
     verdict, the coverage, the sealed record, the saved probe words and the exit status, so a slip in the orchestration shows here
-    and not in the 8-GPU node's first hour.  About a minute: `main` runs three times."""
+    and not in the 8-GPU node's first hour; with every served-default switch inherited set, cleared (else NO-GO: served=False).
+    About a minute: `main` runs four times."""
     monkeypatch.setattr(X, "gate", lambda *a: {"ok": True, "checks": {}})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
+    monkeypatch.setattr(X, "nvcc_version", lambda: ["Cuda compilation tools, release 13.0, V13.0.88"])
+    for k in SERVED_DEFAULTS:
+        monkeypatch.setenv(k, "0")
+    monkeypatch.setenv("PATH", X.os.environ.get("PATH", ""))
+    monkeypatch.delenv("CUDA_HOME", raising=False)
     workload = tmp_path / "workload.json"
     workload.write_text(json.dumps({"engine": {"args": {"disable_custom_all_reduce": False}}}))
     monkeypatch.setattr(X, "WORKLOAD_PATH", workload)
@@ -852,7 +931,12 @@ def test_main_end_to_end_on_stubbed_ranks(small, tmp_path, monkeypatch, capsys) 
     assert X.main(argv) == 1
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["digest"] == digest_of(doc) and doc["ok"] is False and not doc["errors"] and doc["fma"] == {"1": 1, "2": 0}
-    assert doc["served"] == {"setting": "defaults", "disable_custom_all_reduce": False, "source": "workload.json"}
+    assert doc["served"] == {"setting": "defaults", "disable_custom_all_reduce": False, "source": "workload.json",
+                             "nvcc": ["Cuda compilation tools, release 13.0, V13.0.88"], "ok": True}
+    assert doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS} and not any(k in X.os.environ for k in SERVED_DEFAULTS)
+    assert doc["env"]["CUDA_HOME"] == "/usr/local/cuda" and doc["env"]["PATH"].split(":")[1] == "/usr/local/cuda/bin"
+    assert all(s["ok"] for s in doc["switches"].values()) and set(doc["switches"]) == set(X.spawns("defaults"))
+    assert doc["ranks"]["switch"][0]["switches"]["VLLM_ALLREDUCE_USE_SYMM_MEM"] is False
     assert {k: s["setting"] for k, s in doc["spawns"].items()} == {
         "served": "defaults", "served_again": "defaults", "switch": "switch", "h7168": "defaults"}
     assert {k for k, c in doc["cases"].items() if not c["ok"]} == {"fused/M3"} and doc["totals"]["mismatch"] == 1
@@ -876,22 +960,35 @@ def test_main_end_to_end_on_stubbed_ranks(small, tmp_path, monkeypatch, capsys) 
         ("defaults", N, "fi_ar_comm"): [2, 6], ("defaults", N, "fused"): [3, 4, 6], ("defaults", N, "symm_mem_comm"): [171],
         ("switch", N, "ca_comm"): [171], ("defaults", N7, "fi_ar_comm"): [2, 146], ("defaults", N7, "symm_mem_comm"): [148]}
     printed = capsys.readouterr().out.splitlines()[-1]
-    assert printed.startswith("GLM53-TP8-ALLREDUCE GO") and "served=defaults prefill=served" in printed and "ftz=True" in printed
-    assert "h7168=GO h7168_trees=same h7168_ftz=True" in printed and all(X.tree_str(t) in printed for t in TREES)
+    assert printed.startswith("GLM53-TP8-ALLREDUCE GO") and "served=True setting=defaults prefill=served" in printed
+    assert "h7168=GO h7168_trees=same h7168_ftz=True" in printed and "ftz=True" in printed
+    assert all(X.tree_str(t) in printed for t in TREES)
     trees_of["served_again"] = (BALANCED,) * 8
     flip["h7168/M146"] = ("out", (0, 5))
-    assert X.main([*argv, "--served", "custom-off"]) == 0
+    assert X.main(argv) == 0
     doc = json.loads((out / X.RECORD).read_text())
-    assert doc["served"]["setting"] == "custom-off" and doc["spawns"]["served"]["custom_all_reduce"] is False
-    assert all(r["communicators"]["ca_comm"] is False for r in doc["ranks"]["served"]) and doc["dispatch"]["served"]["ok"]
     assert doc["prefill"] == "switch" and doc["probes"]["agree"] is False and doc["probes"]["again_words_equal"] == {"again/M171": False}
     assert doc["h7168"]["ok"] is False and doc["h7168"]["same_as_glm53"] is False and not doc["cases"]["h7168/M146"]["ok"]
-    assert {r["setting"] for r in doc["coverage"]} == {"custom-off", "switch"} and all(r["N"] == N for r in doc["coverage"])
+    assert {(r["setting"], r["route"]) for r in doc["coverage"]} == {("defaults", "fi_ar_comm"), ("defaults", "fused"),
+                                                                     ("switch", "ca_comm")}
     printed = capsys.readouterr().out.splitlines()[-1]
-    assert "served=custom-off prefill=switch trees=none ftz=None" in printed and "h7168=NO-GO" in printed
+    assert "served=True setting=defaults prefill=switch trees=none ftz=None" in printed and "h7168=NO-GO" in printed
+    trees_of["served_again"] = TREES
+    flip.clear()
+    for k in SERVED_DEFAULTS:
+        monkeypatch.setenv(k, "0")
+    monkeypatch.setattr(X, "served_defaults", lambda: {})
+    assert X.main([*argv, "--only", "fused,allreduce,probe,again"]) == 1
+    doc = json.loads((out / X.RECORD).read_text())
+    assert doc["ok"] is False and doc["prefill"] == "served" and doc["served"]["ok"] is False and doc["env_cleared"] == {}
+    assert all(doc["routes"][r] for r in ("fused", "decode", "served")) and all(d["ok"] for d in doc["dispatch"].values())
+    assert {s: c["differ"] for s, c in doc["switches"].items()} == {
+        s: {f"rank{r}": {"VLLM_USE_DEEP_GEMM": False} for r in range(X.WORLD)} for s in ("served", "served_again")}
+    assert capsys.readouterr().out.splitlines()[-1].startswith("GLM53-TP8-ALLREDUCE NO-GO")
 
 
 def test_a_failed_gate_runs_nothing(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(X, "environment", lambda: ({}, {}))
     monkeypatch.setattr(X, "gate", lambda *a: {"ok": False, "checks": {"world": False}})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "spawn_ranks", lambda *a: pytest.fail("ranks spawned past a failed gate"))

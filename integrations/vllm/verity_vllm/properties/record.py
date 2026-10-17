@@ -56,9 +56,10 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "where FTZ at the scale's FMUL, the FFMA, both or the cvt, FMUL + FADD, and either scale applied to the block sum first "
              "each differ from the kernel's, and DeepGEMM's on a probe at the f32 overflow edge, where FMUL + FADD and either scale "
              "first each differ."),
-    Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v3",
-             "On the capture's 8 Hopper GPUs at the record's served setting (served.setting: vLLM's defaults, or its custom "
-             "all-reduce off), each set of rank processes holding that setting's communicators, GLM-5.3's fused_allreduce_rms_norm "
+    Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v4",
+             "On the capture's 8 Hopper GPUs at the workload's served setting (served.setting: vLLM's defaults, or its custom "
+             "all-reduce off), every rank reading back vLLM's default switches (served.ok) and each set of rank processes holding "
+             "that setting's communicators, GLM-5.3's fused_allreduce_rms_norm "
              "runs FlashInfer's MNNVL all-reduce + residual add + RMS norm up to 42 tokens at the strategy mnnvl_shot names, every "
              "normed and residual word equals AllReduceRmsNormMnnvl_v1 at the shot's decided FMA, and every "
              "tensor_model_parallel_all_reduce to 42 tokens runs FlashInfer's MNNVL all-reduce and equals AllReduceMnnvl_v1; past "
