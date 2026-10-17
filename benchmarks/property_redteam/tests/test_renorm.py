@@ -122,6 +122,22 @@ def test_p1024_small_digit_families_need_no_budgeted_gate():
     assert R.is_prime(R.P1024) and R.P1024 % 4 == 3
 
 
+def test_a_27_byte_field_has_an_exact_family_with_no_budgeted_gate_past_the_formula():
+    """The smallest byte field the greedy family refutes d = 4 + log₂(1/ε)/8 at: L = 27, p = 256^27 − 377."""
+    rows = R.greedy_series(range(1, 28))
+    assert all(r["exact"] for r in rows)
+    assert [r["L"] for r in rows if r["implied_d0"] > 4] == [27]
+    F = R.Field.toy(256, 27)
+    D = R.p1024_greedy_family(27, F.delta)
+    row = rows[-1]
+    assert F.delta == 377 and row["formula_d_at_eps"] < 27 and abs(row["log2_size"] - 33.30) < 0.01
+    rnd = random.Random(27)
+    for _ in range(25):
+        digits = [rnd.randint(0, m) for m in D]
+        a = sum(x << (8 * l) for l, x in enumerate(digits))
+        assert list((a * a % F.p).to_bytes(27, "little")) == R.p1024_column_sums(digits, 27, F.delta)
+
+
 def test_p1024_carries_rebuild_the_square():
     c = R.p1024_carries(8, seed=2)
     rnd = random.Random(2)

@@ -22,6 +22,8 @@ At B = 256 the formats are Model.lean's s8 and u8.
 
 Exhaustive over a ∈ [0, p) at every toy size; the constraint sets are searched exactly where stated (modes, every subset of
 carries) and heuristically elsewhere (lines through the heaviest points, small and LLL-short constraint rows, a beam).
+Past the exhaustive sizes, byte fields of L limbs take product families of small digits whose squares never carry
+(`greedy_series`, and p1024's own): a circuit with no budgeted gate that is exact on all of them.
 """
 
 from __future__ import annotations
@@ -850,16 +852,18 @@ def p1024_column_sums(digits: Sequence[int], L: int = 128, delta: int = 105) -> 
     return [t[l] + (delta * t[l + L] if l + L < 2 * L - 1 else 0) for l in range(L)]
 
 
-def p1024_family(maxdigit: Sequence[int]) -> dict:
+def p1024_family(maxdigit: Sequence[int], p: int = P1024) -> dict:
     """A product family {a : 0 ≤ a_l ≤ maxdigit[l]} on which the column-sum circuit (r = 0) is exact: its folded column
     sums at the all-max member bound every member's (products are monotone in nonnegative digits), so if those are ≤ 255
-    and their value is below p, every member's folded sums are its canonical digits: y = s on all of them."""
-    s = p1024_column_sums(maxdigit)
-    exact = max(s) <= 255 and sum(v << (8 * l) for l, v in enumerate(s)) < P1024
+    and their value is below p, every member's folded sums are its canonical digits: y = s on all of them. The field is
+    p1024 unless `p` (just below 256^len(maxdigit)) says otherwise."""
+    L = len(maxdigit)
+    s = p1024_column_sums(maxdigit, L, 256 ** L - p)
+    exact = max(s) <= 255 and sum(v << (8 * l) for l, v in enumerate(s)) < p
     log2 = sum(math.log2(m + 1) for m in maxdigit)
     return {"exact": exact, "max_column": max(s), "log2_size": log2, "log256_size": log2 / 8,
-            "eps_log2": log2 - math.log2(P1024), "formula_d_at_eps": 4 + (math.log2(P1024) - log2) / 8,
-            "implied_d0": 128 - (math.log2(P1024) - log2) / 8}
+            "eps_log2": log2 - math.log2(p), "formula_d_at_eps": 4 + (math.log2(p) - log2) / 8,
+            "implied_d0": L - (math.log2(p) - log2) / 8}
 
 
 def p1024_greedy_family(L: int = 128, delta: int = 105) -> list[int]:
@@ -894,6 +898,17 @@ def p1024_greedy_family(L: int = 128, delta: int = 105) -> list[int]:
                 t[l + i] += 2 * (new - old) * D[i]
         D[l] = new
     return D
+
+
+def greedy_series(Ls: Sequence[int] = range(1, 41)) -> list[dict]:
+    """The greedy exact family at each byte field `Field.toy(256, L)`: a Renormalization counterexample to the formula
+    wherever `implied_d0` exceeds 4 (no budgeted gate, every member's canonical digits, `formula_d_at_eps` below L)."""
+    rows = []
+    for L in Ls:
+        F = Field.toy(256, L)
+        fam = p1024_family(p1024_greedy_family(L, F.delta), F.p)
+        rows.append({"L": L, "delta": F.delta, **fam})
+    return rows
 
 
 def p1024_sample(n: int, digit_hi: int, positions: int, seed: int) -> np.ndarray:
@@ -974,6 +989,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--out", default="renorm.json")
     ap.add_argument("--sizes", default="4:3,4:4,4:5,4:6,4:7,4:8,16:2,16:3,16:4,256:1,256:2")
     ap.add_argument("--carry-free-L", type=int, default=10, help="the exact carry-free series at B = 256, L = 1..this")
+    ap.add_argument("--greedy-L", type=int, default=40, help="the greedy exact family at B = 256, L = 1..this")
     ap.add_argument("--p1024-samples", type=int, default=4000)
     args = ap.parse_args(argv)
     res: dict = {"toy": [], "carry_free_256": [], "p1024": {}}
@@ -990,6 +1006,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         for row in r["frontier"]:
             print(f"   k={row['k']:2d} r={row['r']:2d} N={row['count']:>8d} log2(1/ε)={row['log2_inv_eps']:6.2f} "
                   f"cost={row['cost_digits']:5.2f} d0≥{row['implied_d0']:5.2f} {row['method']}", flush=True)
+    res["greedy_256"] = greedy_series(range(1, args.greedy_L + 1))
+    for row in res["greedy_256"]:
+        print(f"greedy B=256 L={row['L']:3d} δ={row['delta']:>5d} exact={row['exact']} log2|family|={row['log2_size']:7.2f} "
+              f"log2(1/ε)={-row['eps_log2']:7.2f} formula d={row['formula_d_at_eps']:6.2f} d0≥{row['implied_d0']:.2f}",
+              flush=True)
     greedy = p1024_greedy_family()
     fam = {"{0,1,2}^63x{0,1}": p1024_family([2] * 63 + [1] + [0] * 64),
            "{0,1}^64": p1024_family([1] * 64 + [0] * 64),
