@@ -25,6 +25,7 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
 import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
 import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
 import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
+import Proofs.Flock.Claims.Complete.Replay.LigeritoHonest
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`,
@@ -78,8 +79,10 @@ consistency weight being the model's, `Lg.embed_consW`), and the final residual 
 the last weight plus the last consistency claim, `Lg.res_honest`; `LigeritoTrack`: the prover's steps on the model's
 with what they do to its table and weight, `Lg.HRuns`, composing by `Lg.HRuns.bindD` and `Lg.HRuns.loop`, and against
 the model's own steps a challenge, `Lg.HRuns.challenge`, an out-of-domain intro, `Lg.HRuns.oodIntro`, and a level's
-query, `Lg.HRuns.query`), and the prover's pieces (`RepRounds`: a returning rep records a round, each of at most `65536`
-coins, `repP_repOk`, every squeeze of the models being few coins, `Bnd`; `ProverOk`: the case's table has a registered
-scheme and at most 1,024 regions, `Case.schemeOk`, so at an oracle of 64-byte outputs its digests have the scheme's
-width, `opsWith_widths`, `schemeWidths`, its level-0 cap is non-empty and under `2^64` bytes, `commitP_cap`, and
-`ProverOk` holds, `proverOk`). -/
+query, `Lg.HRuns.query`; `LigeritoHonest`: the claim and the weight kept through the model's steps, `Lg.sync_close`,
+`Lg.WOK`, `Lg.wok_level`, the challenge loops, `Lg.HRuns.initChals`, `Lg.HRuns.levelChals`, and the prover between
+levels, `Lg.Mid`, kept by an inner level's step, `Lg.mid_stepN`), and the prover's pieces (`RepRounds`: a returning rep
+records a round, each of at most `65536` coins, `repP_repOk`, every squeeze of the models being few coins, `Bnd`;
+`ProverOk`: the case's table has a registered scheme and at most 1,024 regions, `Case.schemeOk`, so at an oracle of
+64-byte outputs its digests have the scheme's width, `opsWith_widths`, `schemeWidths`, its level-0 cap is non-empty and
+under `2^64` bytes, `commitP_cap`, and `ProverOk` holds, `proverOk`). -/
