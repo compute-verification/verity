@@ -274,7 +274,8 @@ theorem zkLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : 
   obtain ⟨rec, t₃, h₃, -⟩ := bind_ok hrun
   have er : t₂.rounds = stream.rounds := by rw [hr₂, hr₁]; rfl
   refine ⟨stream, extras, zp, hstream, hext, hzp, fun ℓ h1 hℓ => ⟨?_, ?_⟩⟩
-  · rw [zkLevelRowsOf, ite_eq_left ⟨h1, by simpa [shapeZK] using hℓ⟩, hzp]
+  · have hzp' : Zk.decode (shapeZK st sch extras) bytes = .ok zp := hzp
+    rw [zkLevelRowsOf, ite_eq_left ⟨h1, by simpa [shapeZK] using hℓ⟩, hzp']
     simp only [shapeZK]
     rw [Claims.Flock.coins_getElem!]
   · have hmc := zkLigeritoWith_levels hs _ _ _ _ _ _ _ hn hk0 h2 hq h₃ ℓ h1 hℓ
