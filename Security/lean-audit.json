@@ -2,6 +2,9 @@
  "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
  "assumptions": {
+  "Accounting.Assumptions.EncodeChainHardness": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.Assumptions.PouwDetection": {
    "owner": "@compute-accounting",
    "digest": "3fc26faa7c656f11bfca790d2e20bd400fe1d80ed62b71c22fe2f32e056b67e1"
@@ -373,9 +376,6 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
-  },
-  "Accounting.Assumptions.EncodeChainHardness": {
-   "owner": "@memory-accounting"
   }
  },
  "meaning": [
@@ -854,6 +854,18 @@
    "signature": ["Accounting.SecurityProofs.Fit.{u_1} : Accounting.Guarantees.Fit"],
    "assumptions": [],
    "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
+  },
+  "Accounting.SecurityProofs.Gates.EncodeBudget": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.EncodeCost": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.Fooling": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.SquaringCarry": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.HorizonSampling": {
    "owner": "@memory-accounting",
@@ -4862,18 +4874,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Accounting.SecurityProofs.Gates.Fooling": {
-   "owner": "@memory-accounting"
-  },
-  "Accounting.SecurityProofs.Gates.SquaringCarry": {
-   "owner": "@memory-accounting"
-  },
-  "Accounting.SecurityProofs.Gates.EncodeBudget": {
-   "owner": "@memory-accounting"
-  },
-  "Accounting.SecurityProofs.Gates.EncodeCost": {
-   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -5487,7 +5487,6 @@
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
    "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
    "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
-   "Accounting.Guarantees.Gates.Renormalization": "unstated: the re-normalization lemma (19:15Z), a square's canonical bytes take n/8 − d budgeted gates in the restricted class; open, beyond what a counting argument gives, and tested at d = 2 by verity/core/protocols/remote_bandwidth/tests/test_encode_chain.py::test_encode_chain_hardness_known_constructions.",
    "Accounting.SecurityProofs.Gates.Fooling": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.SquaringCarry": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the sparse family (Accounting.Gates.sparse), a counting bound from Fooling, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.EncodeBudget": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, over every declared circuit of the gate model that satisfies the stacking property, not a property of a Lean function: the property's check has no Lean code yet.",
