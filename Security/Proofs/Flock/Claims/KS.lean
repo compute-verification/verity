@@ -66,6 +66,7 @@ import Proofs.Flock.Claims.KS.ZkBoundW
 import Proofs.Flock.Claims.KS.ZkLiveW
 import Proofs.Flock.Claims.KS.JointR
 import Proofs.Flock.Claims.KS.ZkXferW
+import Proofs.Flock.Claims.KS.ZkTrimW
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -317,4 +318,11 @@ deployed masked verifier is KS from `ZkLiveAccWJ` where some run accepts and `Ex
 `FlockDeploy.KS.wordLenJ_zkTabs`), so the live sessions' bound at the deployed decoders right at the witness-lane
 verdict (`FlockDeploy.KS.ZkXferWJ`) gives `ZkLiveAccWJ` (`FlockDeploy.KS.zkLiveAccWJ_of_xferWJ`): with `ExtendJ`,
 `Flock.KS` at the deployed masked record (`FlockDeploy.KS.zk_KS_of_xferWJ`), and alone, table 0's bound counted per
-round (`FlockDeploy.KS.zk_tableBoundθAccAtR_of_xferWJ`). -/
+round (`FlockDeploy.KS.zk_tableBoundθAccAtR_of_xferWJ`). Every table's bound counted per round carries to the trimmed
+record by padding back (`ZkTrimW`: `Claims.Flock.OkThroughJ`, `Claims.Flock.colsOkJ_mapCols`,
+`Claims.Flock.conflictTiedJ_mapCols`, `Claims.Flock.tableBoundJR_mapCols`), where `[]` is the trim of table `j`'s zero
+column at a position of its word (`FlockDeploy.KS.okThroughJ_nil`), so with no `ExtendJ`
+(`FlockDeploy.KS.zk_tableBoundJR_trim`): `Flock.KS` at the trimmed masked record follows from every table's bound
+counted per round at full-width columns (`FlockDeploy.KS.zk_KS_trim_of_tableBoundJR`), so from `ZkLiveAccWJ` or
+`ZkXferWJ` where some run accepts alone (`FlockDeploy.KS.zk_KS_trim_of_liveAccWJ`,
+`FlockDeploy.KS.zk_KS_trim_of_xferWJ`). -/
