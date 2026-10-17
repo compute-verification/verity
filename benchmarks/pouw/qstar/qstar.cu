@@ -81,7 +81,9 @@ __device__ __forceinline__ void imma(int* c, uint4 a, uint2 b) {
 }
 
 // One warp: 16 rows (block bi) by WN 8-column tiles from nt0, every segment. Ap [MB][L][32 lanes] uint4; Bp is the zero
-// instance's resident U fragments [NB][32] or the generic [NB][L][32].
+// instance's resident U fragments [NB][32] or the generic, segment-major [L][NB][32]. Each segment's fragments are
+// loaded two segments ahead, into the registers its MMAs have just read (the loop is unrolled by two, L even); Ap and
+// the generic Bp end in two spare segments, so the prefetch needs no clamp.
 constexpr int WN = 4;
 template <bool ZERO>
 __device__ __forceinline__ void imma_warp(const uint4* __restrict__ Ap, const uint2* __restrict__ Bp,
@@ -102,18 +104,36 @@ __device__ __forceinline__ void imma_warp(const uint4* __restrict__ Ap, const ui
       z[s][c] = chain_z0(y[s][c]);
     }
   }
-  const long long t0 = clock64();
-#pragma unroll 1
-  for (int ell = 0; ell < L; ell++) {
-    const uint4 a = Ap[((size_t)bi * L + ell) * 32 + lane];
+  const uint4* ap = Ap + (size_t)bi * L * 32 + lane;
+  const size_t bs = (size_t)(n / 8) * 32;  // the generic Bp's segment stride
+  const uint2* bp = Bp + (size_t)nt0 * 32 + lane;
+  uint4 a0 = ap[0], a1 = ap[32];
+  ap += 64;
+  uint2 b0[WN], b1[WN];
+  if (!ZERO)
+#pragma unroll
+    for (int s = 0; s < WN; s++) b0[s] = bp[32 * s], b1[s] = bp[bs + 32 * s];
+  bp += 2 * bs;
+  auto step = [&](int ell, uint4& a, uint2(&b)[WN]) {
     KEYS(ell)
 #pragma unroll
-    for (int s = 0; s < WN; s++) {
-      const uint2 b = ZERO ? bf[s] : Bp[((size_t)(nt0 + s) * L + ell) * 32 + lane];
-      imma(acc[s], a, b);
+    for (int s = 0; s < WN; s++) imma(acc[s], a, ZERO ? bf[s] : b[s]);
+    a = *ap;
+    ap += 32;
+    if (!ZERO)
+#pragma unroll
+      for (int s = 0; s < WN; s++) b[s] = bp[32 * s];
+    bp += bs;
+#pragma unroll
+    for (int s = 0; s < WN; s++)
 #pragma unroll
       for (int w = 0; w < 4; w++) FOLD(y[s][w], z[s][w], acc[s][w]);
-    }
+  };
+  const long long t0 = clock64();
+#pragma unroll 1
+  for (int ell = 0; ell < L; ell += 2) {
+    step(ell, a0, b0);
+    step(ell + 1, a1, b1);
   }
   if (timed && lane == 0) {
     const long long t1 = clock64();
@@ -142,6 +162,15 @@ extern "C" __global__ void __launch_bounds__(256, 1) k_imma_gen(const uint4* Ap,
 extern "C" __global__ void __launch_bounds__(256, 1) k_imma_zero(const uint4* Ap, const uint2* Bp, uint32_t* out, int L,
                                                               int n, Clk* rec) {
   imma_body<true>(Ap, Bp, out, L, n, rec);
+}
+// The zero instance's IMMA on the columns [0, ni), persistent over the units (16 rows by 256 columns, unit u at row
+// block u % MB). The host gives it dynamic shared memory it doesn't use, a third of the SM's, so that at most two blocks
+// sit on an SM and a concurrent scalar kernel (no shared memory) gets the registers and warps left over.
+extern "C" __global__ void __maxnreg__(96) k_imma_p(const uint4* Ap, const uint2* Bp, uint32_t* out, int L,
+                                                           int n, int MB, int ni) {
+  const int units = MB * (ni / 256), warp = threadIdx.x >> 5;
+  for (int u = blockIdx.x; u < units; u += gridDim.x)
+    imma_warp<true>(Ap, Bp, out, L, n, u % MB, ((u / MB) * 8 + warp) * WN, nullptr, false);
 }
 
 // ---- dp4a: a block tile of 64 rows by 128 columns, a thread 4 rows by 8 columns (columns tx + 16c), one segment's Ã
@@ -467,10 +496,11 @@ static Inputs make_inputs(int m, int k, int n, unsigned seed) {
   return in;
 }
 
-// m16n8k32 A fragments [rows/16][L][32 lanes][4] and B fragments [n/8][L][32][2] (h_falsify/ref.py pack_a, pack_b).
+// m16n8k32 A fragments [rows/16][L][32 lanes][4] (h_falsify/ref.py pack_a) and B fragments segment-major, [L][n/8][32][2]
+// (pack_b's fragments), each with two zero segments after the last for imma_warp's prefetch.
 static std::vector<uint32_t> pack_a(const std::vector<int8_t>& X, int rows, int k) {
   const int L = k / SEG, MB = rows / 16;
-  std::vector<uint32_t> out((size_t)MB * L * 128);
+  std::vector<uint32_t> out(((size_t)MB * L + 2) * 128, 0);
   for (int mb = 0; mb < MB; mb++)
     for (int ell = 0; ell < L; ell++)
       for (int lane = 0; lane < 32; lane++) {
@@ -487,7 +517,7 @@ static std::vector<uint32_t> pack_a(const std::vector<int8_t>& X, int rows, int 
 }
 static std::vector<uint32_t> pack_b(const std::vector<int8_t>& Y, int n, int k) {
   const int L = k / SEG, NB = n / 8;
-  std::vector<uint32_t> out((size_t)NB * L * 64);
+  std::vector<uint32_t> out(((size_t)L + 2) * NB * 64, 0);
   for (int nb = 0; nb < NB; nb++)
     for (int ell = 0; ell < L; ell++)
       for (int lane = 0; lane < 32; lane++) {
@@ -497,7 +527,7 @@ static std::vector<uint32_t> pack_b(const std::vector<int8_t>& Y, int n, int k) 
           uint32_t w = 0;
           for (int b = 0; b < 4; b++)
             w |= (uint32_t)(uint8_t)Y[(size_t)(8 * nb + g) * k + ell * SEG + cc[reg] + b] << (8 * b);
-          out[(((size_t)nb * L + ell) * 32 + lane) * 2 + reg] = w;
+          out[(((size_t)ell * NB + nb) * 32 + lane) * 2 + reg] = w;
         }
       }
   return out;
@@ -554,13 +584,18 @@ static T* upload(const std::vector<T>& h) {
   return d;
 }
 
-enum Arm { IMMA_GEN, IMMA_ZERO, DP4A_GEN, DP4A_ZERO, BITS, FR8, FR16_C16, FR16_C32, CO_NONE, CO_FR8, CO_BITS, NARM };
-static const char* NAMES[NARM] = {"imma_gen", "imma_zero", "dp4a_gen", "dp4a_zero", "bits",   "fr8",
-                                  "fr16_c16", "fr16_c32",  "co_none",  "co_fr8",    "co_bits"};
+enum Arm {
+  IMMA_GEN, IMMA_ZERO, DP4A_GEN, DP4A_ZERO, BITS, FR8, FR16_C16, FR16_C32, CO_NONE, CO_FR8, CO_BITS,
+  IMMA_P, CO2_NONE, CO2_FR16, NARM
+};
+static const char* NAMES[NARM] = {"imma_gen", "imma_zero", "dp4a_gen", "dp4a_zero", "bits",   "fr8",      "fr16_c16",
+                                  "fr16_c32", "co_none",   "co_fr8",   "co_bits",   "imma_p", "co2_none", "co2_fr16"};
 static bool zero_arm(Arm a) { return a != IMMA_GEN && a != DP4A_GEN; }
 
 struct Dev {
-  int m, k, n, L, share;
+  int m, k, n, L, share, co2, sms, p_smem;
+  cudaStream_t s2;
+  cudaEvent_t fork, join;
   const uint4 *Ap_g, *Ap_z, *Aw_g, *Aw_z, *Bw_g, *Bw_z;
   const uint2 *Bp_g, *Uf;
   const uint32_t *Rw, *P;
@@ -574,6 +609,23 @@ constexpr size_t FR16_TABLE_BYTES = (size_t)64 << 20;  // a launch's passes, in 
 
 // The scalar arm's share of the columns beside IMMA: n/share, a multiple of 256 so IMMA's [0, ni) is whole units.
 static int co_ni(const Dev& d) { return d.n - std::max(256, (d.n / d.share) / 256 * 256); }
+// The two-stream arms: k_imma_p on [0, n - co2) and, for co2_fr16, fr16_c32 on [n - co2, n) on a second stream.
+static int co2_ni(Arm a, const Dev& d) { return a == IMMA_P ? d.n : d.n - d.co2; }
+// The columns written, for the gate: a control leaves the scalar columns unwritten
+static int written(Arm a, const Dev& d) { return a == CO_NONE ? co_ni(d) : a == CO2_NONE ? co2_ni(a, d) : d.n; }
+
+// fr16 on the columns [j0, j1): per launch, the tables of P passes of cpt columns, then their lookups
+static void fr16_launch(const Dev& d, int cpt, int j0, int j1, cudaStream_t s) {
+  const int m = d.m, n = d.n, L = d.L, P = (int)(FR16_TABLE_BYTES / ((size_t)2 * 65536 * cpt * 4));
+  for (int jb = j0; jb < j1; jb += cpt * P) {
+    const int nh = P * 2 * 2 * 256 * cpt;
+    k_fr16_half<<<(nh + 255) / 256, 256, 0, s>>>(d.U, d.H, jb, P, cpt);
+    const size_t ne = (size_t)P * 2 * 65536 * (cpt / 8);
+    k_fr16_expand<<<(unsigned)((ne + 255) / 256), 256, 0, s>>>(d.H, (int*)d.T, P, cpt);
+    if (cpt == 16) k_fr16_c16<<<dim3(m / F16T, P), F16T, 0, s>>>(d.T, d.Rw, d.out, L, m, n, jb, d.rec);
+    else k_fr16_c32<<<dim3(m / F16T, P), F16T, 0, s>>>(d.T, d.Rw, d.out, L, m, n, jb, d.rec);
+  }
+}
 
 static void launch(Arm a, const Dev& d, cudaStream_t s) {
   const int m = d.m, n = d.n, L = d.L;
@@ -593,15 +645,20 @@ static void launch(Arm a, const Dev& d, cudaStream_t s) {
     case BITS: k_bits<<<dim3(m / 256, n / BT), 256, 0, s>>>(d.Rw, d.P, d.out, L, m, n, d.rec); break;
     case FR8: k_fr8<<<dim3(m / F8T, n / F8C), F8T, F8_SMEM, s>>>(d.Rw, d.U, d.out, L, m, n, d.rec); break;
     case FR16_C16:
-    case FR16_C32: {
-      const int cpt = a == FR16_C16 ? 16 : 32, P = (int)(FR16_TABLE_BYTES / ((size_t)2 * 65536 * cpt * 4));
-      for (int jb = 0; jb < n; jb += cpt * P) {
-        const int nh = P * 2 * 2 * 256 * cpt;
-        k_fr16_half<<<(nh + 255) / 256, 256, 0, s>>>(d.U, d.H, jb, P, cpt);
-        const size_t ne = (size_t)P * 2 * 65536 * (cpt / 8);
-        k_fr16_expand<<<(unsigned)((ne + 255) / 256), 256, 0, s>>>(d.H, (int*)d.T, P, cpt);
-        if (cpt == 16) k_fr16_c16<<<dim3(m / F16T, P), F16T, 0, s>>>(d.T, d.Rw, d.out, L, m, n, jb, d.rec);
-        else k_fr16_c32<<<dim3(m / F16T, P), F16T, 0, s>>>(d.T, d.Rw, d.out, L, m, n, jb, d.rec);
+    case FR16_C32: fr16_launch(d, a == FR16_C16 ? 16 : 32, 0, n, s); break;
+    case IMMA_P:
+    case CO2_NONE:
+    case CO2_FR16: {
+      const int ni = co2_ni(a, d);
+      if (a == CO2_FR16) {
+        CK(cudaEventRecord(d.fork, s));
+        CK(cudaStreamWaitEvent(d.s2, d.fork, 0));
+        fr16_launch(d, 32, ni, n, d.s2);
+      }
+      k_imma_p<<<2 * d.sms, 256, d.p_smem, s>>>(d.Ap_z, d.Uf, d.out, L, n, m / 16, ni);
+      if (a == CO2_FR16) {
+        CK(cudaEventRecord(d.join, d.s2));
+        CK(cudaStreamWaitEvent(s, d.join, 0));
       }
       break;
     }
@@ -629,7 +686,7 @@ static Arm arm_of(const std::string& t) {
 }
 
 int main(int argc, char** argv) {
-  int m = 4096, k = 14336, n = 4096, reps = 10, share = 8;
+  int m = 4096, k = 14336, n = 4096, reps = 10, share = 8, co2 = 256;
   std::string mode = "time", dumpdir = "out", items;
   unsigned seed = 1;
   std::vector<Arm> arms;
@@ -642,6 +699,7 @@ int main(int argc, char** argv) {
     else if (f == "--reps") reps = nx();
     else if (f == "--seed") seed = nx();
     else if (f == "--share") share = nx();
+    else if (f == "--co2") co2 = nx();
     else if (f == "--mode") mode = argv[++i];
     else if (f == "--dump") dumpdir = argv[++i];
     else if (f == "--items") items = argv[++i];
@@ -651,8 +709,8 @@ int main(int argc, char** argv) {
   if (arms.empty())
     for (int a = 0; a < NARM; a++) arms.push_back((Arm)a);
   const int L = k / SEG;
-  if (L > MAXL || m % 512 || n % 512 || k % SEG) {
-    fprintf(stderr, "ERR shape: m, n multiples of 512, k of 32, k/32 <= %d\n", MAXL);
+  if (L > MAXL || m % 512 || n % 512 || k % (2 * SEG) || co2 % 256 || co2 >= n) {
+    fprintf(stderr, "ERR shape: m, n multiples of 512, k of 64, k/32 <= %d, --co2 a multiple of 256 below n\n", MAXL);
     return 2;
   }
   cudaDeviceProp prop;
@@ -668,7 +726,7 @@ int main(int argc, char** argv) {
   Inputs in = make_inputs(m, k, n, seed);
   std::vector<int8_t> Su = expand_u(in.U, n, k);
   Dev d{};
-  d.m = m, d.k = k, d.n = n, d.L = L, d.share = share;
+  d.m = m, d.k = k, d.n = n, d.L = L, d.share = share, d.co2 = co2;
   d.Ap_g = (const uint4*)upload(pack_a(in.At, m, k));
   d.Ap_z = (const uint4*)upload(pack_a(in.R, m, k));
   d.Bp_g = (const uint2*)upload(pack_b(in.Bt, n, k));
@@ -690,6 +748,13 @@ int main(int argc, char** argv) {
   CK(cudaFuncSetAttribute(k_co<2>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)F8_SMEM));
   cudaStream_t s;
   CK(cudaStreamCreate(&s));
+  CK(cudaStreamCreateWithFlags(&d.s2, cudaStreamNonBlocking));
+  CK(cudaEventCreateWithFlags(&d.fork, cudaEventDisableTiming));
+  CK(cudaEventCreateWithFlags(&d.join, cudaEventDisableTiming));
+  d.sms = prop.multiProcessorCount;
+  d.p_smem = (int)(prop.sharedMemPerMultiprocessor / 3) + 1024;  // two blocks an SM fit, three don't
+  CK(cudaFuncSetAttribute(k_imma_p, cudaFuncAttributeMaxDynamicSharedMemorySize, d.p_smem));
+  CK(cudaFuncSetAttribute(k_imma_p, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
 
   if (mode == "gate") {
     std::vector<std::pair<int, int>> pairs;
@@ -700,8 +765,8 @@ int main(int argc, char** argv) {
     bool all = true;
     for (Arm a : arms) {
       const std::vector<uint32_t>& ref = zero_arm(a) ? ref_z : ref_g;
-      const int jmax = a == CO_NONE ? co_ni(d) : n;  // the control's scalar columns are left unwritten
-      size_t checked = 0;
+      const int jmax = written(a, d);
+      size_t checked = 0, armchecked = 0;
       gk::PoisonGate g = gk::poison_gate(
           d.out, (size_t)m * n * 4, s, [&](cudaStream_t st) { launch(a, d, st); },
           [&](const void* h, size_t) {
@@ -712,10 +777,11 @@ int main(int argc, char** argv) {
               checked++;
               if (r[(size_t)pairs[q].first * n + pairs[q].second] != ref[q]) return false;
             }
+            armchecked = std::max(armchecked, checked);  // the poisoned control stops at its first mismatch
             return checked > 0;
           });
       printf("GATE arm=%s accepted=%d control_rejected=%d left=%zu checked=%zu\n", NAMES[a], g.accepted,
-             g.control_rejected, g.left, checked);
+             g.control_rejected, g.left, armchecked);
       all &= g.ok();
     }
     gk::Dump dump(dumpdir);
@@ -735,8 +801,7 @@ int main(int argc, char** argv) {
                       }});
   const gk::Timing t = gk::timed_items(gkarms, reps, s, nv);
   gk::summary(t, gkarms);
-  // words a call: every (i, j) and segment; the co arms make the same product (IMMA's share plus the scalar share)
-  const double words = (double)m * n * L;
+  // words a call: every written (i, j) and segment; the co arms make the whole product (IMMA's share and the scalar's)
   for (size_t a = 0; a < arms.size(); a++) {
     std::vector<double> ms, mhz;
     for (const gk::Item& it : t.items)
@@ -745,7 +810,7 @@ int main(int argc, char** argv) {
         if (it.sm_mhz()) mhz.push_back(it.sm_mhz());
       }
     const double med = gk::median(ms), f = mhz.empty() ? NAN : gk::median(mhz);
-    const double w = arms[a] == CO_NONE ? (double)m * co_ni(d) * L : words;
+    const double w = (double)m * written(arms[a], d) * L;
     printf("QSTAR arm=%s m=%d k=%d n=%d words=%.0f ms=%.6f ps_per_word=%.4f words_per_sm_clk=%.4f sm_mhz=%.0f\n",
            NAMES[arms[a]], m, k, n, w, med, 1e9 * med / w, w / (med * 1e-3 * prop.multiProcessorCount * f * 1e6), f);
   }

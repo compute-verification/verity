@@ -6,8 +6,9 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source <tree> --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=compute-accounting -- bash benchmarks/pouw/qstar/run.sh [M,K,N ...]
 #
-# The default shapes are 4096,14336,4096 and 4096,4096,4096. The arms' receipts are checked on the leased GPU against
-# the CPU reference before any timing; a failed gate times nothing.
+# The default shapes are 4096,14336,4096 and 4096,4096,4096; at the first, the two-stream arms (IMMA on n - co2 columns
+# beside fr16 on co2) again at co2 = 512 and 1024. The arms' receipts are checked on the leased GPU against the CPU
+# reference before any timing; a failed gate times nothing.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -40,6 +41,15 @@ for s in ${shapes[*]}; do
   "$WORK/qstar" --mode time --m \$m --k \$k --n \$n --reps 10 --items "$OUT/items-\$m-\$k-\$n.jsonl" \
     >"$OUT/time-\$m-\$k-\$n.txt" 2>&1 || exit 4
   cat "$OUT/time-\$m-\$k-\$n.txt"
+done
+IFS=, read -r m k n <<<"${shapes[0]}"
+for c in 512 1024; do
+  t="co2-\$c-\$m-\$k-\$n"
+  "$WORK/qstar" --mode gate --m \$m --k \$k --n \$n --co2 \$c --arms co2_none co2_fr16 --dump "$WORK/dump-\$t" \
+    >"$OUT/gate-\$t.txt" 2>&1 || { cat "$OUT/gate-\$t.txt"; exit 3; }
+  "$WORK/qstar" --mode time --m \$m --k \$k --n \$n --co2 \$c --arms imma_p co2_none co2_fr16 --reps 10 \
+    --items "$OUT/items-\$t.jsonl" >"$OUT/time-\$t.txt" 2>&1 || exit 4
+  cat "$OUT/gate-\$t.txt" "$OUT/time-\$t.txt"
 done
 EOF
 gpu-lease 1 --wait --max-min 45 -- bash "$WORK/leased.sh"

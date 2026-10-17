@@ -24,8 +24,8 @@ _spec.loader.exec_module(G)
 
 #: words a thread makes in one iteration of the timed loop (one segment), and what makes them
 ARMS = {
-    "k_imma_zero": (16, "IMMA m16n8k32, U resident (4 MMAs × 4 words a lane)"),
-    "k_imma_gen": (16, "IMMA m16n8k32, generic (4 MMAs × 4 words a lane)"),
+    "k_imma_zero": (32, "IMMA m16n8k32, U resident (2 segments × 4 MMAs × 4 words a lane)"),
+    "k_imma_gen": (32, "IMMA m16n8k32, generic (2 segments × 4 MMAs × 4 words a lane)"),
     "k_dp4a": (32, "IDP.4A, 4×8 register tile, LDS.128 operands"),
     "k_bits": (8, "bit planes: 8 LOP3 + 8 POPC + combine a word"),
     "k_fr8": (16, "Four Russians 8-bit, shared-memory tables, LDS.128 = 4 columns"),
