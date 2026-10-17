@@ -2,6 +2,10 @@
  "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
  "assumptions": {
+  "Accounting.Assumptions.CircuitEncodeHardness": {
+   "owner": "@memory-accounting",
+   "digest": "cdd35e79a4b367be9dcb441f6d61dbfe860834b165d39dbe5df28008bccaa821"
+  },
   "Accounting.Assumptions.PouwDetection": {
    "owner": "@compute-accounting",
    "digest": "3fc26faa7c656f11bfca790d2e20bd400fe1d80ed62b71c22fe2f32e056b67e1"
@@ -373,9 +377,6 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
-  },
-  "Accounting.Assumptions.CircuitEncodeHardness": {
-   "owner": "@memory-accounting"
   }
  },
  "meaning": [
@@ -782,6 +783,12 @@
    "signature": ["Accounting.SecurityProofs.CapacityOfStateBound : Accounting.Guarantees.CapacityOfStateBound"],
    "assumptions": [],
    "type_hash": "0a39e7949bbfaf219bed8ea794cb61c9d969c72aec4d51d6451736b6201ad9e3"
+  },
+  "Accounting.SecurityProofs.CarrierBits": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.CarrierBits : Accounting.Guarantees.CarrierBits"],
+   "assumptions": [],
+   "type_hash": "ea4f70e25ce50c4ed37d62528245c1c2801cb1b6060e5831f971206042aa4789"
   },
   "Accounting.SecurityProofs.Colocation": {
    "owner": "@memory-accounting",
@@ -1385,6 +1392,15 @@
    "signature": ["Accounting.SecurityProofs.SketchRankFiber : Accounting.Guarantees.SketchRankFiber"],
    "assumptions": [],
    "type_hash": "285621bb6e07e492d607d97ac1183c00f683ca8459de8b4d593e019714144cd1"
+  },
+  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed :",
+    "  Accounting.Guarantees.StackedSessionConservationSketchDeployed"
+   ],
+   "assumptions": [],
+   "type_hash": "216e718c3111038cc62a0bf1625b03ee086e5358592804d896b7dfa77dfd15f8"
   },
   "Accounting.SecurityProofs.TS.BindingFacetD1": {
    "owner": "@compute-accounting",
@@ -4826,12 +4842,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Accounting.SecurityProofs.CarrierBits": {
-   "owner": "@memory-accounting"
-  },
-  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": {
-   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -5728,6 +5738,31 @@
    },
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
+  "Definitions.Accounting.Carrier": {
+   "digest": "a769846cb25081e65e5948fa909c66b4af4e9c6cbc8d2f126fc39da8f6401a3f",
+   "definitions": {
+    "Accounting.RateSketch.Carrier": "959c9fa52081612967bc475abfb0112b80743b558b7330254d408762e8e2fdfa",
+    "Accounting.RateSketch.Carrier.carried": "10f81ebb2467e3794edeb76d3fed9cf3936e3dbc6e271b22f256dd8593daeaeb",
+    "Accounting.RateSketch.Carrier.provenance": "83fe2280f4e4a4cafcf9e61259f2d053aec04fb3fc65a15873296a8a3d6a0df4",
+    "Accounting.RateSketch.Provenance": "e1c403ace5ce67331b8bc30903a25604bdb1c5587793475ffc4fd90c358bd839",
+    "Accounting.RateSketch.Provenance.below": "4a48f157a7503f7554ee492f74fbecd0ceb6fc0bec60f0972ca47d597325c54b",
+    "Accounting.RateSketch.Provenance.brecOn": "ff2bee70e358db270dc1f9003b9314e630160852d793ad5f482f796f4e21359f",
+    "Accounting.RateSketch.Provenance.brecOn.go": "291335639b407bf01e1245cbca082ba4f9a9b58751242c79fe55b0d9ace72021",
+    "Accounting.RateSketch.Provenance.casesOn": "e024091f098819c2b623b84e134958d34e69a67374ed0bc808f449862c98ac86",
+    "Accounting.RateSketch.Provenance.done": "c43787cf2ee765044b765ef897024aaa6a78ee093887b45aabded19cb1836562",
+    "Accounting.RateSketch.Provenance.encode": "5ea4bfb1a205a74ecfd4ad846258204be64974f32369e53342ceac788a7edc7d",
+    "Accounting.RateSketch.Provenance.encoded": "f237c79ca2f8c939b4b063e705190df94531677cb49bd5bac667da77f432a391",
+    "Accounting.RateSketch.Provenance.input": "c952ae83a49c4e2c467dc2c57fd18d800fa5cf21d3fb452bdc0d6656b2f1e198",
+    "Accounting.RateSketch.Provenance.inputs": "6b30c8cf04bfbeceada1175d9d5886cff3f2b3605c1920a3881b4aa8699b083c",
+    "Accounting.RateSketch.Provenance.rec": "29ef2b5e0697a74454072abd56c2e61301503db37e36fc206de6f1d1a32233df",
+    "Accounting.RateSketch.Provenance.roundings": "9e948d1408b08ccb2fc1a384e2696e7fb98c8e12df2864602ab1d815b6e3cbbc",
+    "Accounting.RateSketch.Provenance.run": "f3927eefe53c708fe975d11873e6d296127a232b98f78b1746368901d89641bf"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
+   ]
+  },
   "Definitions.Accounting.Confidence": {
    "digest": "8f0f17fed4f0fe12353bd5c626eef6260396dd53fa330f78c0fd405bc0b8e70f",
    "definitions": {
@@ -6443,6 +6478,7 @@
     "Accounting.RateSketch.sketch": "47c23a3b18cf61f684a064117ca5c7fd9538652bb88b894cf7848d7a8bf64e1e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.RateAuditSketch",
     "Accounting.SecurityProofs.RateAuditSketchInteractiveRO",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
@@ -6453,7 +6489,8 @@
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
     "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.SketchBinds",
-    "Accounting.SecurityProofs.SketchRankFiber"
+    "Accounting.SecurityProofs.SketchRankFiber",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.RateAuditSketchDeployed": {
@@ -6480,8 +6517,10 @@
     "Accounting.RateSketch.instFintypeSketchWindowCoins": "e347fae6e7192c04c8b3117fcf91c06baacae0afca694194c5074646fa90be99"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
-    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed"
+    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.RateAuditSketchInteractive": {
@@ -6835,7 +6874,8 @@
     "Accounting.SecurityProofs.Sketch.SmallCode",
     "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
     "Accounting.SecurityProofs.SketchBinds",
-    "Accounting.SecurityProofs.SketchRankFiber"
+    "Accounting.SecurityProofs.SketchRankFiber",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.Window": {
@@ -7907,6 +7947,7 @@
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BoundReceiptLink",
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
+    "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.Colocation",
     "Accounting.SecurityProofs.HorizonSampling",
     "Accounting.SecurityProofs.LengthCode",
@@ -7973,6 +8014,7 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
     "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
@@ -16680,8 +16722,16 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
+  },
+  "Models.Accounting.Assumptions.Stacking": {
+   "digest": "b021616f9dcb6ca305ea8fa00622fa5cab5bf73a83c0c9001b71a41f6d2f17c3",
+   "definitions": {
+    "Accounting.Assumptions.CircuitEncodeHardness": "cdd35e79a4b367be9dcb441f6d61dbfe860834b165d39dbe5df28008bccaa821"
+   },
+   "guarantees": ["Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"]
   },
   "Models.Accounting.Assumptions.TS": {
    "digest": "1dc280d7e8e68052be922d55c6fe791e9b49a76282ad2f6e4e8c247f6b6c5746",
@@ -17116,6 +17166,17 @@
     "Accounting.SecurityProofs.Sketch.NonCollision",
     "Accounting.SecurityProofs.Sketch.SmallCode",
     "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision"
+   ]
+  },
+  "Models.Accounting.Guarantees.Stacking": {
+   "digest": "5601d942cc865d732ed07c428bb74d49800a8782d7e245437afc0505d10f9815",
+   "definitions": {
+    "Accounting.Guarantees.CarrierBits": "20428995c2321369af63229df03218efa0f480d915fc3d6b52a08f798f159c97",
+    "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "7eb5de957da4ecf4d9255a781da50968d14423b902c316aa87950945cad91b00"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Models.Accounting.Guarantees.TS": {
