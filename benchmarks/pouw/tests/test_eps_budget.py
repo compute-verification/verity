@@ -75,7 +75,7 @@ def test_committed_pv_digits_leave_nothing_to_skip(design):
 
 def test_pv_units_price_as_checked_strip_without_the_scaling_and_the_sink(monkeypatch):
     monkeypatch.setattr(E, "PV_SCALE_OPS", 0.0)
-    for m, c, eps, gamma in (("llama-3.1-8b", 2048, 0.019613, 1.3753), ("llama-3.1-70b", 8192, 0.005081, 1.2920)):
+    for m, c, eps, gamma in (("llama-3.1-8b", 2048, 0.043914, 1.4080), ("llama-3.1-70b", 8192, 0.010158, 1.2985)):
         e, g = E.pv_ts(m, c, 0, sink=False)
         assert eps <= e < eps + 1e-4 and g == pytest.approx(gamma, abs=1e-4)   # the zero-instance routes add < 0.01%
 

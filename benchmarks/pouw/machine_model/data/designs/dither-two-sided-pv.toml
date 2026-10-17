@@ -16,8 +16,8 @@ ALU = 2
 IMAD = 1
 
 [skip.ts-time]
-eps = 0.00016
-source = "SKIP's Ap (calculator @a668d59c3, Result 3): 0 by int8 products and by time, plus pv's TS vector work ≤ 0.016% (note:20261017T0340Z-draft-skip, 06:19Z)"
+eps = 0.00053
+source = "eps_budget.pv_block_point(…, \"Ap\", 0) at BC-KERNEL's measured digit, epilogue and scaling costs (7, 11.2, 12; note:20261017T0645Z-draft-bc-kernel): 0 by int8 products and by time off P·V, plus pv's TS vector work ≤ 0.053% (8B) / 0.016% (70B) of prefill time over 2K-32K, served output checked downstream; ≤ 0.155% / 0.073% with it free (CALC r5, note:20261017T0320Z-draft-eps1-calc)"
 
 [mand.fold]
 eps = 0.0

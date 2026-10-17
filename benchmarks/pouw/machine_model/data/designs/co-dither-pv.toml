@@ -19,8 +19,8 @@ ALU = 2
 IMAD = 1
 
 [skip.ts-time]
-eps = 0.00088
-source = "SKIP's Result 3 (calculator @07f901181): 0 by int8 products; ≤ 0.088% (8B) / 0.057% (70B) of prefill time with CHECKED-STRIP's TS vector work, co32c's recombination with O committed, cohalf's x = 12 route and pv's digits and epilogue (P·V 0.84% of its own time at 2K, served output checked downstream; 1.96% with it free), the digit and epilogue constants unmeasured (note:20261017T0340Z-draft-skip, 06:19Z)"
+eps = 0.00124
+source = "eps_budget.pv_block_point(…, \"Bc\", 0) at BC-KERNEL's measured digit, epilogue and scaling costs (7, 11.2, 12; note:20261017T0645Z-draft-bc-kernel): 0 by int8 products; ≤ 0.124% (8B) / 0.072% (70B) of prefill time over 2K-32K with CHECKED-STRIP's TS vector work, co32c's recombination with O committed, cohalf's routes at x = 10.66 and pv's digits and epilogue, served output checked downstream (P·V 3.13% of its own time at 8B 2K); ≤ 0.217% / 0.117% with it free (CALC r5, note:20261017T0320Z-draft-eps1-calc)"
 
 [mand.fold]
 eps = 0.0
