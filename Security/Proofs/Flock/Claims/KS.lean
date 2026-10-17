@@ -36,6 +36,7 @@ import Proofs.Flock.Claims.KS.RoundsNZk
 import Proofs.Flock.Claims.KS.LevelZero
 import Proofs.Flock.Claims.KS.LevelZeroAcc
 import Proofs.Flock.Claims.KS.OffSC
+import Proofs.Flock.Claims.KS.Entries
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Claims.KS.ZkDecJ
@@ -157,15 +158,18 @@ at the positions of the coins of the round `k0 + 6` after Ligerito's first (`Lev
 `FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`), so an accepted
 rep's is at the stream's round `plainQueryRound` (`FlockSoundness.Refine.lincheck_moves`,
 `FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). At flock-verify's acceptance, every
-result of each table's reps' runs requests level 0 first there (`LevelZeroAcc`:
-`FlockSoundness.Discharge.Exec.accepts_req0`). A position the deployed reader is given below `2^d` is looked up, to a
-column it was given there, so an output whose level-0 openings verify and are the reader's entries opens a position off
-`C` without a self-clash only where the reader looks up a column off `C` (`OffSC`:
-`Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`). Where `verify --zk` sets its session
-up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`:
-`FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), so at the empty draw the deployed `--zk` decoders
-are right at them (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`); so are the hidden-output
-plan's and decoders (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`,
+result of each table's reps' runs requests level 0 first there, and every request has its level's lanes and path length
+(`LevelZeroAcc`: `FlockSoundness.Discharge.Exec.accepts_req0`). A position the deployed reader is given below `2^d` is
+looked up, to a column it was given there, so an output whose level-0 openings verify and are the reader's entries opens
+a position off `C` without a self-clash only where the reader looks up a column off `C` (`OffSC`:
+`Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`); an accepted salted table's level-0
+openings verify (`Claims.Flock.verified_opens₀L`). At flock-verify's acceptance, every accepted salted output of a
+table's reps' runs has its level-0 openings verifying below `2^d`, with positions and rows its reps' `plainRepColsOf`
+entries (`Entries`: `FlockSoundness.Discharge.Exec.accepts_opens₀L`, `Claims.Flock.exists_ne_of_entries`). Where
+`verify --zk` sets its session up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs`
+(`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), so at the empty draw the deployed `--zk`
+decoders are right at them (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`); so are the
+hidden-output plan's and decoders (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`,
 `FlockDeploy.KS.decodesTableH_zkTabs`). So at every masked statement in scope that `Deploy.V` sets up at a draw, which
 every statement some run accepts carries (`FlockDeploy.KS.acc_draw`), the deployed decoders are right at `zkTabs`
 (`ZkDecJ`: `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. The masked
