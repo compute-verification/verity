@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Sampling.Leaf
 import Proofs.Flock.Claims.Sampling.Runs
+import Proofs.Flock.Claims.Sampling.RunsExp
 import Proofs.Flock.Claims.Sampling.Session
 import Proofs.Flock.Claims.Sampling.Universal
 import Proofs.Flock.SamplingBoundary
@@ -18,10 +19,10 @@ import Proofs.Flock.SamplingBoundary
 * `KS`, on the statements in scope (`Scope`), from Flock's KS at the checked units' sessions (`SessionKS_of`, `KS_of`),
   with the binding;
 * `KSCount` from `KS` (`KSCount_of_KS`);
-* `Bits` from `KS` and the extractor's expected reruns and own calls (`Bits_of_KS`);
-* `Efficient` at `FlockDeploy.zkStepPoly`: the extractor's reruns (`E_runs_le`) and own calls (`E_own_le`) at the
-  record's decoder, its expected reruns, and that decoder's `ListWithin` and step count at `deployZk`
-  (`FlockDeploy.efficient_zk`).
+* `Bits` from `KS`, the extractor's expected reruns (`E_runs_exp`) and its own calls (`Bits_of_KS`);
+* `Efficient` at `FlockDeploy.zkStepPoly`: the extractor's reruns (`E_runs_le`), expected reruns (`E_runs_exp`, with
+  the draw before the sessions) and own calls (`E_own_le`) at the record's decoder, and that decoder's `ListWithin`
+  and step count at `deployZk` (`FlockDeploy.efficient_zk`).
 
 ## What remains: the hypotheses
 
@@ -37,8 +38,6 @@ import Proofs.Flock.SamplingBoundary
   the Flock verifier's `H` calls among the sampled verifier's; the inner numbers are Flock's at each session. The Lean
   sampled-proofs verifier, held to the Python by difftest.
 * `DrawLaw`, `SessionOpens`, `InteriorFixed`, `Refuses` (`Sampling.KS`): the same verifier, starting with the draw.
-* `hrunsExp`: `Efficient`'s expected reruns on `E`, from the rerun programs' counts (`Sampling.Cost`: `accExp_le`);
-  not yet assembled.
 * `hopen : OpenCallsLe H D`: checking what one checked unit's Flock witness reveals makes at most `openCalls` SHA-512
   calls; the deployed opening check's count, the Lean sampled-proofs verifier's. With it the extractor's own calls are
   `Efficient`'s (`E_own_le`); its reruns are, at every deployment (`E_runs_le`).
@@ -70,8 +69,6 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (hfixed : DrawFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hdraw : DrawLaw D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hrefuse : Refuses H D)
-    (hrunsExp : ∀ decode, ExtractRunsExpLe H (E D decode)
-      (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)))
     (hopen : OpenCallsLe H D)
     (hscope : ScopeMatches D) (huniv : UniversalIs D)
     {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H D P δc)
@@ -88,7 +85,8 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
       ∀ os, (D.flock.dec os).2 ≤ FlockDeploy.zkStepPoly.eval (Claims.Flock.wordLen os) := by
     rw [hflock]
     exact ⟨(FlockDeploy.efficient_zk H rel).2.1, (FlockDeploy.efficient_zk H rel).2.2.1⟩
-  exact ⟨hscope, hbind, Universal_of huniv, faultyBoundary, hks, KSCount_of_KS hks, Bits_of_KS hks hrunsExp (E_own_le hopen) hε,
-    ⟨E_runs_le H D _, hrunsExp _, E_own_le hopen _, hdec.1, hdec.2⟩, hComplete, hZK⟩
+  exact ⟨hscope, hbind, Universal_of huniv, faultyBoundary, hks, KSCount_of_KS hks,
+    Bits_of_KS hks (E_runs_exp H D hfixed) (E_own_le hopen) hε,
+    ⟨E_runs_le H D _, E_runs_exp H D hfixed _, E_own_le hopen _, hdec.1, hdec.2⟩, hComplete, hZK⟩
 
 end Claims.Sampling
