@@ -33,7 +33,7 @@ UTMA16K = 0.0039
 
 [measured]
 cycles_per_mma = 30.5778        # the hot median at its clock; ncu 30.5743; work bound 22.7896 on JI3n_0 (eps_sched 0.255)
-source = "cw_l7qs at 8192^3 (r20261017-091604-85e1): hot 2.6482 ms against c_l7qs's 2.2656 and plain's 1.5128"
+source = "cw_l7qs at 8192^3 (r20261017-091604-85e1): hot 2.6482 ms against c_l7qs's 2.2656 and plain's 1.5128; r20261017-093140-8f65 reproduces it (30.5261, 17.9030 instructions a MMA)"
 
 [operands]      # the least operand delivery a program pays a MMA when the design names none (`--operands floor`)
 floor = { LDSM_X4 = 0.2 }
