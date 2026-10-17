@@ -87,6 +87,7 @@ import Proofs.Flock.Claims.KS.PlainLevels
 import Proofs.Flock.Claims.KS.LevelsAll
 import Proofs.Flock.Claims.KS.ZkLevelsAll
 import Proofs.Flock.Claims.KS.ZkLevels
+import Proofs.Flock.Claims.KS.ZkClashL
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -426,4 +427,12 @@ which are the run's rows, each a Merkle opening in its log, so two that differ a
 (`FlockDeploy.KS.rawRows_zk`, `FlockDeploy.KS.zk_rowClash_tiedJ`, `FlockDeploy.KS.zkViewClashQ₀`); masked KS and the
 recursion's premise rest on the fork bounds and the view's clashes past level 0 and at the pads
 (`FlockDeploy.KS.zk_KS_of_later`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_later`,
-`FlockDeploy.KS.zk_KSFlock_of_later`). -/
+`FlockDeploy.KS.zk_KSFlock_of_later`). Past level 0, each of an accepted masked rep's later requests is one level's
+(`ZkLevelsAll`: `FlockSoundness.Discharge.ZkExec.zk_rep_reqsL`), whose queries sit at round `zkLevelRound` of the rep's
+stream and pass the level's Merkle check against the proof's recursive cap (`ZkLevels`: `FlockDeploy.KS.zkLevelRound`,
+`FlockDeploy.KS.zkLevels_verifyWithM`), so two of one rep's level-`ℓ` rows at one position that differ collide in its
+log (`FlockDeploy.KS.zk_levelClash_tiedJ`). The decoders are right at those rows at the view too
+(`FlockSoundness.Discharge.ZkExec.zk_rep_rowsL`), so the view's clash past level 0 is such a collision (`ZkClashL`:
+`FlockDeploy.KS.zkViewClashQL`), and masked KS and the recursion's premise rest on the fork bounds and the view's pads
+clash alone (`FlockDeploy.KS.zk_KS_of_pads`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_pads`,
+`FlockDeploy.KS.zk_KSFlock_of_pads`). -/
