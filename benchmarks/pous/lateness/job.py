@@ -170,13 +170,15 @@ def local_probe(lat: str, cpu: int, celldir: str, pings: int, rounds: int, max_s
     return {"rc": p.returncode, "stderr": p.stderr[-2000:]}
 
 
-def remote_probe(name: str, src: bytes, celldir: str, pings: int, rounds: int, max_s: int) -> dict:
+def remote_probe(name: str, src: bytes, celldir: str, pings: int, rounds: int, max_s: int, extra: tuple[str, ...] = (),
+                 out: str | None = None, port: int = PORT) -> dict:
     dest, lport = REMOTES[name]
+    out = out or name
     script = ("set -e; d=$(mktemp -d /tmp/lat-probe.XXXXXX); trap 'rm -rf \"$d\"' EXIT; cat > \"$d/lat.cu\"; "
               "g++ -O2 -std=c++17 -x c++ -o \"$d/lat\" \"$d/lat.cu\" -lpthread; "
-              f"\"$d/lat\" probe to={NODE_IP}:{PORT} lport={lport} cpu=auto pings={pings} rounds={rounds} max_s={max_s} out=\"$d/{name}\" >&2 "
-              "|| echo \"probe rc=$?\" >&2; "
-              f"(uptime; nproc) > \"$d/{name}.host\"; tar -C \"$d\" -cf - {name}.bin {name}.json {name}.host")
+              f"\"$d/lat\" probe to={NODE_IP}:{port} lport={lport} cpu=auto pings={pings} rounds={rounds} max_s={max_s} "
+              f"{' '.join(extra)} out=\"$d/{out}\" >&2 || echo \"probe rc=$?\" >&2; "
+              f"(uptime; nproc) > \"$d/{out}.host\"; tar -C \"$d\" -cf - {out}.bin {out}.json {out}.host")
     p = subprocess.run([*SSH, dest, script], input=src, capture_output=True, timeout=1800)
     if p.returncode == 0 and p.stdout:
         tarfile.open(fileobj=io.BytesIO(p.stdout)).extractall(celldir)

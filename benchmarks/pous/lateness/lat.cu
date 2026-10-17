@@ -82,8 +82,10 @@ struct Rec {
 static_assert(sizeof(Req) == 16, "request is 16 bytes");
 static_assert(sizeof(Hdr) == 24, "answer header is 24 bytes");
 static_assert(sizeof(Rec) == 16, "record is 16 bytes");
-constexpr size_t DGRAM = 1472;  // a 1,500-byte MTU less the IPv4 and UDP headers
-constexpr size_t CHUNK = DGRAM - sizeof(Hdr);
+// A challenge's op field carries the answer's largest datagram payload in its high 16 bits (0: 1,472 bytes, a 1,500-byte
+// MTU less the IPv4 and UDP headers), so the challenger fits answers to its path's MTU.
+constexpr size_t DGRAM = 1472;
+constexpr size_t MIN_DGRAM = 512;
 constexpr int MAX_CHUNKS = 64;
 
 static volatile sig_atomic_t g_stop = 0;
@@ -281,8 +283,8 @@ static int serve(const Args& a) {
   const size_t host_bytes = size_t(a.i("host_mib", 1024)) << 20;
   const uint64_t gblocks = gpu_bytes / block, hblocks = host_bytes / block;
   (void)gblocks;
-  if (block % 8 || block > CHUNK * MAX_CHUNKS) {
-    fprintf(stderr, "block must be a multiple of 8 and at most %zu\n", CHUNK * MAX_CHUNKS);
+  if (block % 8 || block > (MIN_DGRAM - sizeof(Hdr)) * MAX_CHUNKS) {
+    fprintf(stderr, "block must be a multiple of 8 and at most %zu\n", (MIN_DGRAM - sizeof(Hdr)) * MAX_CHUNKS);
     return 2;
   }
   const std::vector<int> allowed = allowed_cpus();
@@ -364,10 +366,14 @@ static int serve(const Args& a) {
     }
     const uint64_t t0 = now_ns();
     last_req = t0;
-    if (n != sizeof(Req) || req.magic != MAGIC || req.op < OP_GPU || req.op > OP_GPU_SM) {
+    const size_t dgram = (req.op >> 16) ? (req.op >> 16) : DGRAM;
+    req.op &= 0xffff;
+    if (n != sizeof(Req) || req.magic != MAGIC || req.op < OP_GPU || req.op > OP_GPU_SM || dgram < MIN_DGRAM ||
+        dgram > DGRAM) {
       bad++;
       continue;
     }
+    const size_t chunk = dgram - sizeof(Hdr);
     for (size_t p = 0; p < peers.size(); p++)
       if (peers[p].sin_addr.s_addr == from.sin_addr.s_addr && peers[p].sin_port == from.sin_port) peer_seen[p] = t0;
     const long cs = nivcsw();
@@ -401,12 +407,12 @@ static int serve(const Args& a) {
       payload = hbase + (req.idx % hblocks) * block;
       plen = block;
     }
-    const int nchunks = plen ? int((plen + CHUNK - 1) / CHUNK) : 1;
+    const int nchunks = plen ? int((plen + chunk - 1) / chunk) : 1;
     const uint32_t server = uint32_t(now_ns() - t0);
     for (int c = 0; c < nchunks; c++) {
       hdr[c] = Hdr{MAGIC, req.seq, uint16_t(req.op), uint8_t(c), uint8_t(nchunks), device, server, flags};
       iov[2 * c] = iovec{&hdr[c], sizeof(Hdr)};
-      size_t off = size_t(c) * CHUNK, len = plen ? std::min(CHUNK, plen - off) : 0;
+      size_t off = size_t(c) * chunk, len = plen ? std::min(chunk, plen - off) : 0;
       iov[2 * c + 1] = iovec{const_cast<uint8_t*>(payload) + off, len};
       msgs[c].msg_hdr = msghdr{&from, fl, &iov[2 * c], size_t(len ? 2 : 1), nullptr, 0, 0};
     }
@@ -462,7 +468,12 @@ static int probe(const Args& a) {
     perror("connect");
     return 2;
   }
-  std::vector<uint8_t> buf(2048), data(block + CHUNK);
+  const size_t dgram = size_t(a.i("dgram", DGRAM)), chunk = dgram - sizeof(Hdr);
+  if (dgram < MIN_DGRAM || dgram > DGRAM || block > chunk * MAX_CHUNKS) {
+    fprintf(stderr, "dgram must be in [%zu, %zu] and hold the block in %d datagrams\n", MIN_DGRAM, DGRAM, MAX_CHUNKS);
+    return 2;
+  }
+  std::vector<uint8_t> buf(2048), data(block + chunk);
   uint32_t seq = 0;
   uint64_t stale = 0, short_chunks = 0;
   bool gpu_answer = true;
@@ -470,7 +481,7 @@ static int probe(const Args& a) {
   // One challenge: the record, and the payload reassembled in `data`.
   auto one = [&](uint32_t op, uint32_t idx) -> Rec {
     seq++;
-    Req req{MAGIC, op, seq, idx};
+    Req req{MAGIC, op | (dgram == DGRAM ? 0u : uint32_t(dgram) << 16), seq, idx};
     const long cs0 = nivcsw();
     const uint64_t t0 = now_ns();
     send(fd, &req, sizeof req, 0);
@@ -491,8 +502,8 @@ static int probe(const Args& a) {
         stale++;
         continue;
       }
-      const size_t len = size_t(n) - sizeof(Hdr), off = size_t(h.chunk) * CHUNK;
-      const size_t want = op == OP_PING ? 0 : std::min(CHUNK, block - std::min(block, off));
+      const size_t len = size_t(n) - sizeof(Hdr), off = size_t(h.chunk) * chunk;
+      const size_t want = op == OP_PING ? 0 : std::min(chunk, block - std::min(block, off));
       if (len != want) short_chunks++;
       if (len && off + len <= data.size()) memcpy(data.data() + off, buf.data() + sizeof(Hdr), len);
       got |= 1ull << h.chunk;
@@ -575,7 +586,7 @@ static int probe(const Args& a) {
   m << "{\"host\": \"" << host << "\", \"to\": \"" << a.s("to") << "\", \"cpu\": " << cpu << ", \"block\": " << block
     << ", \"pings\": " << pings << ", \"rounds\": " << done << ", \"rounds_asked\": " << rounds << ", \"max_s\": "
     << max_ns / 1000000000ull << ", \"k\": " << k << ", \"gap_us\": " << gap_ns / 1000
-    << ", \"ops\": \"" << a.s("ops", "1,5,1,5,2") << "\", \"timeout_ms\": " << timeout_ns / 1000000 << ", \"gpu_answer\": "
+    << ", \"ops\": \"" << a.s("ops", "1,5,1,5,2") << "\", \"dgram\": " << dgram << ", \"timeout_ms\": " << timeout_ns / 1000000 << ", \"gpu_answer\": "
     << (gpu_answer ? "true" : "false") << ", \"lost\": " << lost << ", \"bad_data\": " << bad_data
     << ", \"stale_chunks\": " << stale << ", \"short_chunks\": " << short_chunks
     << ", \"challenger_nivcsw\": " << nivcsw() - cs_start << ", \"punch_s\": " << punch_s << ", \"start\": " << std::fixed
