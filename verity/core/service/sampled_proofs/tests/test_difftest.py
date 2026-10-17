@@ -11,8 +11,10 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 nodes (`slots`), for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
 `service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
-programs of random members of three templates under template queries over them, and programs of random root Calls
-(`call_program`) under `Q_word` and `Q_call`, a 32-bit Call among them, which one-stage refuses at either. Records are v1 and, on the programs with root parameters to register
+programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
+refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
+Call among them, which one-stage refuses at either, and `SHARED`, whose `Q_call` unit at `X = 16` holds a constant
+another unit reads. Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries.
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
@@ -79,8 +81,34 @@ def _fork(B, S, x):
 FORK = bind(CompositeDefinition("CoreSampledProofsFork", 0, (),
                                 lambda S: ((("x", Array(4, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _fork,
                                 register=False))
-#: The Calls a `call_program` may make: the templates, the fork and the 8- and 32-bit primitives.
-CALLEES = [PAIR, TRIPLE, FORK, XOR8, XOR32]
+#: A template of no gate, which one-stage refuses.
+IDENTITY = bind(CompositeDefinition("CoreSampledProofsIdentity", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+                                    lambda B, S, x: x[0], register=False))
+#: The templates a population's members are instances of: `TEMPLATES`, `FORK` and `IDENTITY`.
+MEMBERS = TEMPLATES + [FORK, IDENTITY]
+CONST8 = PrimitiveDefinition("CoreSampledProofsConst8", 1, (), Value(8), lambda: 0x5A, register=False)
+
+
+def _held(B, S, x):
+    a = B.call(XOR8, x[0], x[1])
+    return tuple_of(a, B.call(XOR8, a, x[1]), B.call(CONST8))
+
+
+def _shared(B, S, x):
+    s = B.call(HELD, x)
+    return tuple_of(s[0], s[1], B.call(XOR8, s[0], s[2]))
+
+
+HELD = bind(CompositeDefinition("CoreSampledProofsHeld", 0, (),
+                                lambda S: ((("x", Array(2, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _held,
+                                register=False))
+#: A Call whose first `Q_call` unit at `X = 16`, `HELD`, returns 16 bits and holds a constant the last gate reads: 24
+#: committed bits, which `Q_call`'s width rule doesn't count; at `X = 8` the constant is in no unit.
+SHARED = bind(CompositeDefinition("CoreSampledProofsShared", 0, (),
+                                  lambda S: ((("x", Array(2, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _shared,
+                                  register=False))
+#: The Calls a `call_program` may make: the templates, the fork, the 8- and 32-bit primitives and the shared constant's.
+CALLEES = [PAIR, TRIPLE, FORK, XOR8, XOR32, SHARED]
 CALLEE_IDS = [codec.descriptor_id(f) for f in CALLEES]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LEAF = "ee" * 64
@@ -192,8 +220,8 @@ QUERIES = [s.query for s in SETUPS] + CALL_QUERIES + [
 @functools.cache
 def _population(members: tuple[tuple[int, int], ...]) -> str:
     """The canonical descriptor of the mixed population of `members`, `(template, instances)` pairs with the template an
-    index into `TEMPLATES`, its program put among `PROGRAMS`."""
-    program = P.mixed_population_program([(TEMPLATES[t], n) for t, n in members])
+    index into `MEMBERS`, its program put among `PROGRAMS`."""
+    program = P.mixed_population_program([(MEMBERS[t], n) for t, n in members])
     PROGRAMS[PO.program_sha512(program)] = program
     return D.canonical(codec.encode_program(program))
 
@@ -222,12 +250,12 @@ def _calls(members: tuple[int, ...]) -> str:
 @st.composite
 def partitions(draw) -> tuple[dict, dict, int]:
     """A random partition P = Q(C): a mixed population program of one to four members, each some instances of one of
-    `TEMPLATES` (one template's members apart, adjacent or alone), and a template query over it, mostly one that applies
-    (the members' templates, in any order); or, a third of the time, a program of one to five root Calls of `CALLEES`
-    (rarely the 32-bit one) under `Q_word` or `Q_call`, mostly at a width one-stage applies. The program's descriptor,
-    the query and the population, 0 where the query doesn't apply."""
+    `MEMBERS` (rarely of `FORK` or `IDENTITY`; one template's members apart, adjacent or alone), and a template query over
+    it, mostly one that applies (the members' templates, in any order); or, a third of the time, a program of one to five
+    root Calls of `CALLEES` (rarely the 32-bit one or `SHARED`) under `Q_word` or `Q_call`, mostly at a width one-stage
+    applies. The program's descriptor, the query and the population, 0 where the query doesn't apply."""
     if draw(st.integers(0, 2)) == 0:
-        members = tuple(draw(st.lists(st.sampled_from([0, 1, 2, 3] * 3 + [4]), min_size=1, max_size=5)))
+        members = tuple(draw(st.lists(st.sampled_from([0, 1, 2, 3] * 6 + [4, 4, 5]), min_size=1, max_size=5)))
         query = draw(st.sampled_from(CALL_QUERIES[:4] * 3 + CALL_QUERIES[4:]) | st.sampled_from(QUERIES))
         desc = json.loads(_calls(members))
         try:
@@ -235,12 +263,12 @@ def partitions(draw) -> tuple[dict, dict, int]:
         except (P.QueryRefused, ValueError):
             n = 0
         return desc, _json(query), n
-    members = tuple(draw(st.lists(st.tuples(st.integers(0, len(TEMPLATES) - 1), st.integers(1, 6)), min_size=1,
+    members = tuple(draw(st.lists(st.tuples(st.sampled_from([0, 1, 2] * 10 + [3, 4]), st.integers(1, 6)), min_size=1,
                                   max_size=4)))
-    ids = [t.id for t in TEMPLATES]
+    ids = [t.id for t in MEMBERS]
     kind = draw(st.integers(0, 9))
     if kind < 8:
-        templates = draw(st.permutations(list(dict.fromkeys(TEMPLATES[t].id for t, _ in members))))
+        templates = draw(st.permutations(list(dict.fromkeys(MEMBERS[t].id for t, _ in members))))
         one = len(templates) == 1 and draw(st.booleans())
         query = P.template_instance_query(templates[0]) if one else P.template_instances_query(templates)
     elif kind == 8:
@@ -2305,6 +2333,23 @@ def test_the_call_queries_cut_call_by_call(pieces):
         assert D.replay(SLOTS, refused, pieces)[0] == "reject", query
         with pytest.raises(D.Reject):
             slots(copy.deepcopy(refused))
+
+
+def test_a_q_call_unit_wider_than_the_limit_or_a_template_of_no_gate_is_refused(pieces):
+    """Lean refuses as the Python does a population with an instance of `IDENTITY`, of no gate, and `SHARED` under
+    `Q_call` at `X = 16`, whose first unit passes `Q_call`'s width rule with 16 returned bits while it holds a constant a
+    later unit reads; at `X = 8`, where that constant is in no unit, both take the program and agree on its slots."""
+    case = {"closure": None, "rule": {"law": "subset:1", "rule": "law"},
+            "source": hashlib.shake_256(b"refused").hexdigest(400), "work_table": None}
+    shared = json.loads(_calls((0, 5)))
+    for program, query in [(json.loads(_population(((0, 1), (4, 2)))), P.template_instances_query([PAIR.id, IDENTITY.id])),
+                           (shared, PO.call_query(16))]:
+        refused = {**case, "program": program, "query": _json(query)}
+        assert D.replay(SLOTS, refused, pieces)[0] == "reject", query
+        with pytest.raises(D.Reject):
+            slots(copy.deepcopy(refused))
+    taken = {**case, "program": shared, "query": _json(PO.call_query(8))}
+    assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken))))
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held"}
