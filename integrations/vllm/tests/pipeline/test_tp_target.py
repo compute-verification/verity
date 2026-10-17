@@ -20,16 +20,24 @@ pytest.importorskip("torch")
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, fp8_block_gemm="cutlass", moe_backend="triton")
 WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 2}], "sampling": {"max_tokens": 2}, "sha256": "w",
-            "accepted": {"q0": [5, 6]}, "engine_args_required": {"max_model_len": 288, "tensor_parallel_size": 8}}
+            "accepted": {"q0": [5, 6]}, "engine_args_required": {"max_model_len": 288, "tensor_parallel_size": 8}, "execution": "eager",
+            "engine": {"reasons": {"VLLM_USE_DEEP_GEMM": "the target's CUTLASS block-FP8 GEMM", "moe_backend": "the target's Triton experts"}}}
 RUN = {"wall_s": 0.5, "iterations": 2, "step_wall_s": [0.2, 0.3], "generated_tokens": 2, "prompt_tokens": 3, "tokens": {"q0": [5, 6]}}
+#: What each rank of an eager engine built for H200 under the engine profile reads back (`engine.served.read_rank`).
+SERVED = {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_DEEP_GEMM": False, "VLLM_DISABLE_SHARED_EXPERTS_STREAM": True,
+          "VLLM_USE_FLASHINFER_SAMPLER": False, "VLLM_USE_V2_MODEL_RUNNER": True, "NCCL_P2P_DISABLE": None, "disable_custom_all_reduce": False,
+          "enforce_eager": True, "compilation_mode": "NONE", "cudagraph_mode": "NONE", "attention_backend": None, "flash_attn_version": None,
+          "moe_backend": "triton"}
 
 
 class _LLM:
     """`vllm.LLM` over two ranks: it keeps the kwargs it was built with and every rpc (the method's name, kwargs); each rank answers
-    what the drivers read from the ranks' answers, ``mismatches`` naming what `rank_mismatches` reports for that rank."""
+    what the drivers read from the ranks' answers, ``mismatches`` naming what `rank_mismatches` reports for that rank and ``switches``
+    what `served.read_rank` reads back on every rank."""
 
-    def __init__(self, mismatches: dict[int, list[str]] | None = None, stop: str | None = None) -> None:
+    def __init__(self, mismatches: dict[int, list[str]] | None = None, stop: str | None = None, switches: dict | None = None) -> None:
         self.mismatches, self.stop, self.kw, self.rpcs = mismatches or {}, stop, None, []
+        self.switches = SERVED if switches is None else switches
         self.llm_engine = SimpleNamespace()
 
     def __call__(self, **kw) -> _LLM:
@@ -41,6 +49,8 @@ class _LLM:
         self.rpcs.append((method, dict(kwargs or {})))
         if method == self.stop:
             raise RuntimeError(f"stopped at {method}")
+        if method == "read_rank":
+            return [{"rank": r, "switches": dict(self.switches)} for r in range(2)]
         return [{"rank": r, "pid": 100 + r, "roots": 1, "profile_id": "p", "mismatches": self.mismatches.get(r, []), "events_written": 1,
                  "steps": 2, "snapshot_bytes": 0, "n_errors": 0, "errors": [], "leaves": 3, "errors_n": 0, "committer": "native_collect_v2b"}
                 for r in range(2)]
@@ -147,9 +157,24 @@ def test_tp_commit_builds_and_checks_the_declared_target_and_records_it(tmp_path
         _commit(tmp_path, llm, H200, stand_ins)
     assert (os.environ["VLLM_BATCH_INVARIANT"], os.environ["VLLM_USE_DEEP_GEMM"]) == ("0", "0")
     assert llm.kw["moe_backend"] == "triton" and llm.kw["max_model_len"] == 288 and llm.kw["max_num_batched_tokens"] == 2048
-    assert llm.methods()[:2] == ["tp2_probe", "rank_mismatches"] and llm.rpcs[1][1] == {"target": H200}
+    assert llm.methods()[:3] == ["tp2_probe", "rank_mismatches", "read_rank"] and llm.rpcs[1][1] == {"target": H200}
     versions = json.loads((tmp_path / "commit" / "versions.json").read_text())
     assert versions["target"] == H200.to_json() and versions["engine_kwargs"]["moe_backend"] == "triton"
+    served = versions["served"]
+    assert served["ok"] and [r["switches"] for r in served["ranks"]] == [SERVED, SERVED]
+    assert served["declared"]["moe_backend"] == {"value": "triton", "source": "row file", "reason": "the target's Triton experts"}
+    assert served["declared"]["VLLM_DISABLE_SHARED_EXPERTS_STREAM"]["source"] == "engine.env.ENGINE"
+
+
+def test_tp_commit_fails_closed_on_a_switch_its_row_does_not_declare(tmp_path, stand_ins):
+    """A rank whose engine runs batch invariant though nothing declares it: the Commit stops before it commits anything, and its
+    summary.json says which switch on which rank."""
+    llm = _LLM(switches={**SERVED, "VLLM_BATCH_INVARIANT": True})
+    with pytest.raises(SystemExit, match="fail-closed: served switches: rank 0: VLLM_BATCH_INVARIANT=True where row file declares False"):
+        _commit(tmp_path, llm, H200, stand_ins)
+    assert "tp2_commit_make" not in llm.methods()
+    sm = json.loads((tmp_path / "commit" / "summary.json").read_text())
+    assert sm["pass"] is False and sm["served"]["problems"] == [f"rank {r}: VLLM_BATCH_INVARIANT=True where row file declares False" for r in (0, 1)]
 
 
 # -- the ranks' side -----------------------------------------------------------------------------------------------------------

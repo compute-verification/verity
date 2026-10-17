@@ -3,6 +3,8 @@
 (`boolean_dsa.flat`), so its word view is `DsaRMSNorm_v1` at the same statics."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.types import Array

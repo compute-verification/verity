@@ -13,6 +13,8 @@ vocabulary assertion below checks its binding.  Its MLA absorbs use the register
 FA3's sparse geometry is registered at rope 16, latent 16."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import sys
 import types
 

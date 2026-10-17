@@ -363,6 +363,9 @@ class Queue:
         #: how many members at the bottom of `next` a running check covers (`Drive`): `first` goes above them, so no reorder
         #: takes a running check's commit off `next`
         self.hold = 0
+        #: members a running check covers that keep their place at the head it checks though their PR's head has moved
+        #: (`Driver`; top, 17 Oct: a new head no longer cancels a running train, and its PR rejoins above once that train ends)
+        self.frozen: set[int] = set()
         #: why a ready PR stays off `next` for now, or None (`Driver.warming`: a cold-forcing PR whose circuit-check is pre-warmed)
         self.warming: Callable[[PR], str | None] | None = None
         self.branch = SHADOW_BRANCH if shadow else BRANCH
@@ -514,7 +517,7 @@ class Queue:
         in `first` (`--first`) that are ready go below all of them, in the order given, so the next train starts with them; but
         above the bottom `hold` members, which a running check covers."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
-        kept = [m.pr for m in chain if m.pr in ready and entries[m.pr].pr.head == m.head]
+        kept = [m.pr for m in chain if m.pr in ready and entries[m.pr].pr.head == m.head or self._frozen(m, entries)]
         held: list[int] = []
         for m in chain[:self.hold]:
             if m.pr not in kept:
@@ -537,9 +540,21 @@ class Queue:
             place(n)
         return out
 
+    def _frozen(self, m: Member, entries: dict[int, Entry]) -> bool:
+        """Whether member ``m`` stays at its old head: `frozen` names it, its PR is still open, and neither ejected nor held."""
+        e = entries.get(m.pr)
+        return (m.pr in self.frozen and e is not None and e.pr.head != m.head and e.state != "refused"
+                and not e.why.startswith("held"))
+
     def _forces_cold(self, n: int) -> bool:
         r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
         return r.returncode == 0 and forces_cold(r.stdout.split())
+
+    def _reruns_all(self, n: int) -> bool:
+        """Whether PR ``n``'s change makes every train it's in run cold: circuit-check's (`forces_cold`) or every suite's
+        (`reruns_suites`)."""
+        r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
+        return r.returncode == 0 and (forces_cold(files := r.stdout.split()) or reruns_suites(files))
 
     # -- building `next`
 
@@ -586,7 +601,8 @@ class Queue:
         entries = self.entries(prs, state)
         entries.update(waiting)
         order = self.order(chain, entries)
-        want = [(n, entries[n].pr.head) for n in order]
+        frozen = {m.pr: m.head for m in chain if self._frozen(m, entries)}
+        want = [(n, frozen.get(n, entries[n].pr.head)) for n in order]
         k = next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
         members = chain[:k]
         tip = members[-1].commit if members else _out(self.workdir, "rev-parse", "origin/main")
@@ -750,6 +766,16 @@ def forces_cold(files: Iterable[str]) -> bool:
         if f.startswith(_COLD_PREFIXES) or f in ("uv.lock", "pyproject.toml") or f.endswith(".circuit-check.py"):
             return True
     return False
+
+
+#: what decides every suite's verdict: the check's runner, its harness and the read guard (17 Oct: #2241, a change to
+#: `suites.py`, made every train above it rerun every suite)
+_RUNNER_PREFIXES = ("tools/verity/check/",)
+
+
+def reruns_suites(files: Iterable[str]) -> bool:
+    """Whether a change to ``files`` reruns every test suite once (its runner's code is in every suite's key)."""
+    return any(f.startswith(_RUNNER_PREFIXES) and "/tests/" not in f and not f.endswith(".md") for f in files)
 
 
 def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
@@ -1230,6 +1256,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once; "
                                                                       "report: of merge groups")
     ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
+    ap.add_argument("--defer", default="", metavar="STEP[,STEP...]",
+                    help="drive: land a train once every other step passed, these still running; one that then fails reverts it")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
                                                                            "or after this time (default: `marked_after` in the rules file)")
     ap.add_argument("--first", metavar="N[,N...]", default="", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
@@ -1323,7 +1351,8 @@ def main(argv: list[str]) -> int:
         if a.command == "drive":
             from .drive import Driver
 
-            Driver(q, on=a.on, max_running=a.max_running, train_size=a.train_size).tick(dry_run=a.dry_run)
+            Driver(q, on=a.on, max_running=a.max_running, train_size=a.train_size,
+                   defer=frozenset(x for x in a.defer.split(",") if x)).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses
