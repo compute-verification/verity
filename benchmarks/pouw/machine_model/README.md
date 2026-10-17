@@ -119,14 +119,16 @@ lookups): q_T lane instructions a word from the lanes' class pool plus 8 B of L2
 card's bandwidth, honest's own L2 traffic uncharged (`--lookup-q`, `--l2` override the file). ε_machine's floor is its
 value with the lane and uniform routes closed (the table route, priced by its bytes, stays as set), which no q* lowers,
 and the threshold is the least q* at which ε_machine reaches it. `--uni-issue C` charges each uniform instruction C
-times an ALU instruction's cost on the issue rows too (`issue` and the joint `JI…_0` row), which the census has left out
-since VF3 and PREDICT's u16s_l7qs measured at 0.92 (r20261017-045133-67bf). The uniform route then closes without UPFILL, and UPFILL costs honest issue
-time while the cheater does its checked work on lanes, 32 values a warp instruction. ε_adapt is the proof unit's, SPEC's
+times an ALU instruction's cost on the issue rows too (`issue` and the joint `JI…_0` row), which the census left out
+from VF3 to VF3o-16 and PREDICT's u16s_l7qs measured at 0.92 (r20261017-045133-67bf). The uniform route then closes
+without UPFILL, and UPFILL costs honest issue time while the cheater does its checked work on lanes, 32 values a warp
+instruction. From VF3p-16 (decision 73) the census charges it there itself, and `--uni-issue` changes nothing. ε_adapt is the proof unit's, SPEC's
 Theorem D under the one-σ order (`data/adapt.toml`): today's segment spot check ≈ 21%, whole dot products +0.35%, and 0
 for whole-dot-product proofs that recompute their operands one stage back or for per-stage coins. `--checking sampled`
 charges today's by default and `--adapt UNIT` another; the Python `eps()` charges none unless given one. The table
 route's defaults (`data/table.toml`) are SCALAR-ROUTE as restated: 1.22 slots and 3.5 B of L2 a word, `--lookup-bytes 6`
-for single-field tables.
+for single-field tables. A design with b-bit noise entries on the operand the tables index (`[table] bits`, or
+`--index-bits B`) pays b times the route's slots and bytes (QSTAR's b-bit count); at b = 2 the route closes.
 
 ## Adopt a probe's census
 
