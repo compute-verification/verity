@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.KS.ZkDrawJ
 import Proofs.Flock.Claims.KS.ZkAccJ
+import Proofs.Flock.Claims.KS.PlainWrP
 
 /-!
 # The deployed `--zk` decoders at the masked statement
@@ -9,8 +10,8 @@ statement parses in scope and `Deploy.V` sets it up at a draw, the old `--zk` op
 outputs, are right at C-Flock ZK's padded tables (`zkTabs`) on the outcomes `verify --zk` accepts at the setup at that
 draw at `wrS`.
 
-* `draw_some_of_checks`, `next_acc_draw`, `acc_draw`: the checks refuse a session without a draw (`drawLaw zk none`),
-  so wherever some run accepts, the statement carries a draw.
+* `acc_draw_of_setup`: wherever some run accepts, the statement carries a draw at the inputs `Deploy.V` reads of it
+  (`acc_draw`, the checks refusing a session without one).
 * `setupAt_of_setupOf`: `Deploy.V`'s setup of the statement is `verify --zk`'s at its draw (`setupAt`), with no
   `--public-inputs` (`InScope` refuses them, `publicInputs_none_of_inScope`).
 * `tags_of_inScope`: the scope gives `verify --zk`'s inputs untyped tags with retained rounds and `hm96-sha512/v1`
@@ -29,41 +30,11 @@ open FlockSoundness.Discharge.Tables (DecodesTable)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The checks refuse a session without a draw**: their last step is `drawLaw zk none` there. -/
-theorem draw_some_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
-    (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d := by
-  unfold checks at h
-  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
-  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
-  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
-  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
-  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
-  cases hd : s.read.draw with
-  | none => simp [hd, ProvedScope.drawLaw] at h
-  | some d => exact ⟨d, rfl⟩
-
-/-- **An accepting step at SHA-512 carries a draw**: it is a decision whose checks passed (`draw_some_of_checks`). -/
-theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    (h : ((next zk x as cs).eval sha512).1 = .acc) :
-    ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
-  cases ha : act zk x as cs with
-  | rej => simp [next_rej sha512 ha] at h
-  | coin c => simp [next_coin sha512 ha] at h
-  | decide s spec sts link c₁ mids f =>
-    obtain ⟨-, hc⟩ := (next_decide_sha512 ha).1 h
-    obtain ⟨d, hd⟩ := draw_some_of_checks hc
-    exact ⟨s, spec, sts, d, act_decide ha, hd⟩
-
-/-- **A statement some run accepts carries a draw**, at the inputs `Deploy.V` reads of it (`next_acc_draw`). -/
-theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
+/-- **A statement some run accepts carries a draw**, at the inputs `Deploy.V` reads of it (`acc_draw`). -/
+theorem acc_draw_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) :
     ∃ d, ins.read.draw = some d := by
-  unfold Claims.Flock.NoAcc at hacc
-  push Not at hacc
-  obtain ⟨Ω, P, ω, r, hr⟩ := hacc
-  obtain ⟨as, has⟩ := stepWith_acc _ _ _ _ _ _ _ _ _ hr
-  obtain ⟨ins', spec', sts', d, hset', hd⟩ := next_acc_draw has
+  obtain ⟨ins', spec', sts', d, hset', hd⟩ := acc_draw hacc
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj (hset'.symm.trans hset))
   exact ⟨d, hd⟩
 
