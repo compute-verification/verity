@@ -17,9 +17,10 @@ open Accounting.Gates
 
 /-- **`encode-chain-hardness`: computing a word of the codec's encoding costs `E` budgeted gates.** For every circuit
 `C` of the model whose window is proven, whose budgeted gates but gathers read at most `f` operands and whose values lie
-within `w` bits (`Restricted f w C`), whose registered inputs are bytes of the payload `m`, of the draw, or fixed before
-the draw (`CodecInputs`), and that computes the `q` distinct words `words` (each below `p`) of the masked `k`-round
-codec over `F`, byte for byte less their parity, on more than `ε = εnum/εden` of the uniform draws (`ComputesWords`):
+within `w` bits (`Restricted f w C`), whose registered and coin inputs are bytes of the payload `m`, of the draw, or
+fixed on the draws (`CodecInputs`), and that computes the `q` distinct words `words` (each below `p`) of the masked
+`k`-round codec over `F`, byte for byte less their parity, on more than `ε = εnum/εden` of the uniform draws, its
+inputs and budgeted gates there in their declared intervals, so the whole circuit in its window (`ComputesWords`):
 
   `q · E · (n − 1) ≤ budgeted C · (n − 1) + runBits C · E`,
 
@@ -44,7 +45,7 @@ plus `I32Div`/`I32Rem` carries), spends at least `n/8` budgeted gates a squaring
 budgeted gate of unbounded fan-in computes an output byte from all the inputs, so `n/8` gates compute a word; and with
 values of 576 bits (`PouwSqAcc_v1`), about ten gates do. -/
 def EncodeChainHardness (F : Field) (k f w E εnum εden : ℕ) : Prop :=
-  ∀ {ι : Type} (C : Circuit ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+  ∀ {ι : Type} (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     Restricted f w C → CodecInputs F C (draws F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
     ComputesWords F k C x m words out εnum εden →
     words.length * E * (F.n - 1) ≤ budgeted C * (F.n - 1) + runBits C * E
