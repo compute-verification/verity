@@ -21,9 +21,14 @@ Lemma B holds at any such values, whether or not they pass the inner proof's con
 * `onVals`, `worker_shvzk`, `worker_prefinal`: a table's witnesses paired with any clear values (`Vals`), and Lemmas B and
   A there: the switched view at a worker's values `v` is distributed as the table's own `S_shvzk`, on the honest
   prover's `InnerHolds`; the pre-final view at `v` as the dummy's.
-* `Hm96.swViewR`, `sw_shvzk_hm96`, `worker_shvzk_hm96`: the same with real hm96 leaves, at `2·|Hid|·δ₁` each way, the
-  form `table_shvzk_hm96` gives the session's tables: the switched view's hidden leaves commit `p`'s columns where the
-  rows hold and the honest prover's on the moved pads elsewhere (`Hm96.swDig`).
+* `vals_shvzk`: **Lemma B at row-satisfying values**, values that pass the inner constraint at every pad, is
+  `table_shvzk` at `onVals`. `rect`, `swTape`, `view_rect`, `rect_innerHolds`, `swView_sameDist_rect`: the switched
+  prover is the honest prover at the worker's values rectified (`v` where its rows hold, the honest values elsewhere),
+  which are row-satisfying, on a tape moved by a bijection (`swTape`). What holds of the honest prover at row-satisfying
+  values, Lemmas A, B and C, holds of the switched one.
+* `Hm96.swViewR`, `sw_shvzk_hm96`, `worker_shvzk_hm96`, `vals_shvzk_hm96`: the same with real hm96 leaves, at
+  `2·|Hid|·δ₁` each way, the form `table_shvzk_hm96` gives the session's tables: the switched view's hidden leaves
+  commit `p`'s columns where the rows hold and the honest prover's on the moved pads elsewhere (`Hm96.swDig`).
 -/
 
 namespace FlockSoundness.ZK.Table
@@ -368,6 +373,99 @@ theorem worker_prefinal {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [Ch
     SameDist (T.onVals.preView (w, v)) (T.onVals.preView (w0, T.vals)) :=
   T.onVals.table_prefinal_indep hrank hW hβ (w, v) (w0, T.vals) hreg hreg0
 
+/-! ## The switched prover is the honest one at row-satisfying values -/
+
+/-- The view at clear values reads them at its own mask slot and extra lanes alone. -/
+theorem onVals_view_congr {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
+    (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) (ω : T.Rand)
+    (h : ∀ r, v r w ω.1 ω.2.1.2.1 = v' r w ω.1 ω.2.1.2.1) :
+    T.onVals.view (w, v) ω = T.onVals.view (w, v') ω := by
+  obtain ⟨u, ⟨μ0, R, μR⟩, rest⟩ := ω
+  have h' : ∀ r i, T.onVals.vals r (w, v) u R i = T.onVals.vals r (w, v') u R i := fun r i => congrFun (h r) i
+  have hnu : T.onVals.nu (w, v) = T.onVals.nu (w, v') := rfl
+  have hreg : T.onVals.sReg (w, v) = T.onVals.sReg (w, v') := rfl
+  have hy : T.onVals.y1' (w, v) = T.onVals.y1' (w, v') := rfl
+  have hrows : T.onVals.rows (w, v) = T.onVals.rows (w, v') := rfl
+  simp only [view, h', hnu, hreg, hy, hrows]
+
+open Classical in
+/-- **The worker's values, rectified**: `v` at the mask slots and extra lanes where they pass the inner constraint at
+every pad (`RowsAt`), the honest values elsewhere. They pass it everywhere (`rect_innerHolds`). -/
+noncomputable def rect {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
+    (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) : T.Vals :=
+  fun r w' u R => if T.onVals.RowsAt (w, v) u R then v r w' u R else T.vals r w' u R
+
+open Classical in
+/-- **The switched prover's tape**: the drawn one where `p`'s rows hold, the moved one elsewhere. -/
+noncomputable def swTape {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
+    (T : Table F K W Salt Seed D Hi VL) (p q : W) (ω : T.Rand) : T.Rand :=
+  if T.RowsAt p ω.1 ω.2.1.2.1 then ω else T.shift p q ω
+
+/-- The move keeps the mask slot and the extra lanes, so the switched tape is a bijection. -/
+theorem swTape_bijective {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
+    (T : Table F K W Salt Seed D Hi VL) (p q : W) : Function.Bijective (T.swTape p q) := by
+  classical
+  let g : T.Rand → T.Rand := fun ω =>
+    if T.RowsAt p ω.1 ω.2.1.2.1 then ω else (ω.1, ω.2.1, ω.2.2.1 - T.padShift p q ω.1 ω.2.1.2.1, ω.2.2.2)
+  refine Function.bijective_iff_has_inverse.2 ⟨g, fun ω => ?_, fun ω => ?_⟩
+  · by_cases hr : T.RowsAt p ω.1 ω.2.1.2.1
+    · simp only [swTape, g, hr, ↓reduceIte]
+    · simp only [swTape, g, hr, ↓reduceIte, shift, add_sub_cancel_right]
+  · by_cases hr : T.RowsAt p ω.1 ω.2.1.2.1
+    · simp only [swTape, g, hr, ↓reduceIte]
+    · simp only [swTape, g, hr, ↓reduceIte, shift, sub_add_cancel]
+
+open Classical in
+/-- **The switched view is the honest prover's view at the rectified values**, on the switched tape. -/
+theorem view_rect {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
+    (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.onVals.Rand) :
+    T.onVals.view (w, T.rect w v) (T.onVals.swTape (w, v) (w, T.vals) ω) = T.onVals.swView (w, v) (w, T.vals) ω := by
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  · rw [swTape, ite_eq_left hr, swView, ite_eq_left hr]
+    exact T.onVals_view_congr w _ _ ω fun r => funext fun i => by simp only [rect, hr, ↓reduceIte]
+  · rw [swTape, ite_eq_right hr, swView, ite_eq_right hr]
+    exact T.onVals_view_congr w _ _ _ fun r => funext fun i => by simp only [rect, shift, hr, ↓reduceIte]
+
+/-- **The rectified values pass the inner constraint at every pad**: where `v`'s rows hold by `RowsAt`, elsewhere by
+the honest prover's `InnerHolds`. -/
+theorem rect_innerHolds {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
+    (T : Table F K W Salt Seed D Hi VL) (w : W) (hinner : T.InnerHolds w) (v : T.Vals) :
+    T.onVals.InnerHolds (w, T.rect w v) := by
+  intro ω r
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  · rw [T.onVals_view_congr w (T.rect w v) v ω fun r => funext fun i => by simp only [rect, hr, ↓reduceIte]]
+    exact hr ω rfl rfl r
+  · rw [T.onVals_view_congr w (T.rect w v) T.vals ω fun r => funext fun i => by simp only [rect, hr, ↓reduceIte]]
+    exact (T.onVals_innerHolds w).2 hinner ω r
+
+theorem sameDist_comp_bijective {Ω V : Type} [Fintype Ω] (f : Ω → V) {φ : Ω → Ω} (hφ : Function.Bijective φ) :
+    SameDist (fun ω => f (φ ω)) f := by
+  classical
+  intro v
+  congr 1
+  exact Finset.card_equiv (Equiv.ofBijective φ hφ) fun ω => by simp
+
+/-- **The switched prover is the honest prover at the rectified values**: their views have the same distribution. -/
+theorem swView_sameDist_rect {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2] [Fintype F]
+    [DecidableEq F] [Fintype Salt] [DecidableEq Salt] [Fintype Seed] [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
+    (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) :
+    SameDist (T.onVals.swView (w, v) (w, T.vals)) (T.onVals.view (w, T.rect w v)) :=
+  (sameDist_comp_bijective (T.onVals.view (w, T.rect w v)) (T.onVals.swTape_bijective (w, v) (w, T.vals))).of_eq
+    (T.view_rect w v) fun _ => rfl
+
+/-- **Lemma B at row-satisfying values**: at a fixed non-degenerate coin vector, for a witness `w` that carries the
+public region data and any clear values `v` that pass the inner constraint at every pad, the honest prover's view at
+`v` and the table's `S_shvzk(x, e)` on any dummy witness have the same distribution. -/
+theorem vals_shvzk {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2] [AddCommGroup Salt]
+    [AddCommGroup Seed] [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt]
+    [DecidableEq Salt] [Fintype Seed] [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
+    (T : Table F K W Salt Seed D Hi VL) (hrank : T.Rank) (hpad : T.PadOnto)
+    (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
+    (w : W) (hreg : T.sReg w = T.pubReg) (v : T.Vals) (hinner : T.onVals.InnerHolds (w, v)) (w0 : W) :
+    SameDist (fun ω => T.toBase (T.onVals.view (w, v) ω)) (T.sim w0) :=
+  ((T.onVals.table_shvzk hrank hpad hW hpads hβ (w, v) hreg hinner (w0, T.vals)).comp T.toBase).of_eq
+    (fun _ => rfl) (T.toBase_sim w0 T.vals)
+
 /-! ## With real hm96 leaves -/
 
 open Classical in
@@ -510,5 +608,23 @@ theorem worker_shvzk_hm96 {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [A
   have h := T.onVals.sw_shvzk_hm96 M.onVals hT1 hrank hpad hW hpads hβ (w, v) (w, T.vals) rfl rfl hreg hreg
     ((T.onVals_innerHolds w).2 hinner) (w0, T.vals) fun u => E (T.toBase u)
   exact h
+
+open Game in
+/-- **Lemma B at row-satisfying values, with real leaves**: for a witness `w` that carries the public region data and
+any clear values `v` that pass the inner constraint at every pad, every event has probabilities within `2·|Hid|·δ₁` of
+each other under the honest prover at `v` with real leaves and under the table's `S_shvzk` with real leaves. -/
+theorem vals_shvzk_hm96 {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
+    [AddCommGroup Salt] [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt]
+    [DecidableEq Salt] [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi]
+    (T : Table F K W Salt (B × Salt) D Hi VL) (M : T.Hm96 C) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding M.My M.cs δ₁)
+    (hrank : T.Rank) (hpad : T.PadOnto) (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2)
+    (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) (w : W) (hreg : T.sReg w = T.pubReg) (v : T.Vals)
+    (hinner : T.onVals.InnerHolds (w, v)) (w0 : W) (E : T.View → Prop) :
+    prCoin (fun pr : T.Rand × (T.Hid → Salt) => E (T.toBase (M.onVals.viewR (w, v) pr.1 pr.2)))
+        ≤ prCoin (fun pr : T.SimRand × (T.Hid → Salt) => E (M.simR w0 pr.1 pr.2)) + 2 * Fintype.card T.Hid * δ₁
+      ∧ prCoin (fun pr : T.SimRand × (T.Hid → Salt) => E (M.simR w0 pr.1 pr.2))
+        ≤ prCoin (fun pr : T.Rand × (T.Hid → Salt) => E (T.toBase (M.onVals.viewR (w, v) pr.1 pr.2)))
+          + 2 * Fintype.card T.Hid * δ₁ :=
+  T.onVals.table_shvzk_hm96 M.onVals hT1 hrank hpad hW hpads hβ (w, v) hreg hinner (w0, T.vals) fun u => E (T.toBase u)
 
 end FlockSoundness.ZK.Table
