@@ -25,7 +25,7 @@ A unit whose cut input a wire feeds (another net's output, as every multi-group 
 RMSNorm unit's scalar from the tail's `lookup:rsq` stage, a GEMM coordinate's chained accumulator) has the key
 `Src.wire` there, which no gate of `keyProg` computes: its template instance is the unit's rows stacked `upv` times. Such
 a unit needs a key program over the whole template instance (the unit copies, the stages and the lookup slots, joined by
-Δ's wires in an order the verifier checks acyclic), not this condition.
+Δ's wires in an order the verifier checks acyclic), not this condition (`Inst.instKeysRow_of_parse`).
 
 `PortReads` is a circuit condition. `Net.ofRows` refuses a row that reads an input column whose row is empty
 (`checkOrder`), and has each port bit's row a self row (`inputsOk`), but an input column outside every port may also be a
