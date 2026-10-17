@@ -486,7 +486,7 @@
    },
    "Claims.Sampling.Binding": {
     "fails": "Claims.Sampling.Binding_fails",
-    "meets": []
+    "meets": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
    },
    "Claims.Sampling.Bits": {
     "fails": "Claims.Sampling.Bits_fails",
@@ -1869,6 +1869,12 @@
    ],
    "assumptions": [],
    "type_hash": "a0af16afd13fdb6a80be4748a99693cd056ee1f3912bfa7d12db858ea48ee06d"
+  },
+  "Claims.Sampling.Binding_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.Binding_meets_one": {
+   "owner": "@proofs"
   },
   "Claims.Sampling.BitsLin_fails": {
    "owner": "@proofs",
