@@ -999,7 +999,7 @@ def _permute(x: Coll, dims: Sequence[int], where: str) -> Coll:
     # whole rows of axes k.., reordered; past the Explicit limit only, so the Programs that derive today keep their bytes
     if (x.type.leaves > _EXPLICIT_LIMIT and k < len(shape) and (lead := math.prod(shape[:k])) <= _VIEW_PARTS_LIMIT
             and _constant_run(x.refs) is None and not isinstance(x.refs, Affine)):
-        L, rows = x.type.leaves // lead, torch.arange(lead).reshape(shape[:k]).permute(dims[:k]).reshape(-1).tolist()
+        L, rows = x.type.leaves // lead, torch.arange(lead, device="cpu").reshape(shape[:k]).permute(dims[:k]).reshape(-1).tolist()
         return Coll(_tensor_type([shape[d] for d in dims], w), concat([x.refs.slice(r * L, (r + 1) * L) for r in rows]))
     return _view(x, [shape[d] for d in dims], [strides[d] for d in dims], 0, where, f"permute {dims}")
 
