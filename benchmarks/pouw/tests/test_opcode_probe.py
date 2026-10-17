@@ -342,3 +342,25 @@ def test_sm89_ji_refit_is_the_upper_hull_at_the_margin(tmp_path):
         assert a * 0.06 * 1.02 + b * 0.9 * 1.02 <= 1 + 1e-9
         assert a * 0.05 * 1.02 + b * 0.5 * 1.02 < 1
         assert b * 1.07 <= 1 + 1e-9 and a / 4.03060164 <= 1 + 1e-9
+
+
+def test_sm89_ji_points_join_only_their_own_family(tmp_path):
+    """A ji32 program joins the E families its lane beat, as (IMMA.16832, every non-MMA instruction) a SMSP-cycle; one
+    whose adds ptxas split onto the IMAD pipe stays out, and IMMA.16816 programs and IMAD lanes join nothing."""
+    rows_, verdicts = [], []
+    for name, top in (("j32_fmuli_q112_a2u2_w2", {"FMUL": 224, "IMMA.16832.S8.S8": 16, "MOV": 6, "IADD3": 1}),
+                      ("j32_axi_q64_a3u1_w2", {"IADD3": 33, "LOP3.LUT": 32, "IMMA.16832.S8.S8": 8, "IMAD.MOV.U32": 6}),
+                      ("j32_iadd3_q112_a8u1_w2", {"IMAD.IADD": 70, "IADD3": 43, "IMMA.16832.S8.S8": 8}),
+                      ("j32_imadi_q32_a3u1_w2", {"IMAD": 32, "IMMA.16832.S8.S8": 8, "IADD3": 1}),
+                      ("j16_fmuli_q112_a2u1_w2", {"FMUL": 112, "IMMA.16816.S8.S8": 8, "IADD3": 1})):
+        mma = next(op for op in top if op.startswith("IMMA"))
+        top = {**top, "ISETP.GE.AND": 1, "BRA": 1}
+        rows_.append({"probe": name, "run": RUN, "rates": {f"0:{mma}": 0.25 * top[mma] / 8}})
+        verdicts.append({"probe": name, "verdict": {"loops": [{"top": top, "counts": {mma: top[mma]}}]}})
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows_))
+    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    pts = sm89.ji_points([tmp_path])
+    assert set(pts) == {"ffma", "iadd3", "lop3"}
+    (m, x, name), = pts["ffma"]
+    assert name == f"j32_fmuli_q112_a2u2_w2@{RUN}" and m == pytest.approx(0.125) and x == pytest.approx(0.125 * 233 / 16)
+    assert [n.split("@")[0] for *_, n in pts["iadd3"]] == [n.split("@")[0] for *_, n in pts["lop3"]] == ["j32_axi_q64_a3u1_w2"]
