@@ -4806,6 +4806,15 @@
    "assumptions": [],
    "type_hash": "e750ff080ad0a230437eb91653a6a5efce0853e7ca3347d1aed8e1ae58b7118a"
   },
+  "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.LiHalfBijective": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK : Pouw.Guarantees.RelativeSecurity.OverlapFloorK"],
@@ -4983,6 +4992,18 @@
    },
    "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel": {
     "function": "Pouw.Receipt.duoQuad",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.LiHalfBijective": {
+    "function": "Pouw.Receipt.liHalf",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective": {
+    "function": "Pouw.Receipt.liCheckpoint",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit": {
+    "function": "Pouw.Receipt.liCheckpoint",
     "outcome": "none"
    }
   },
