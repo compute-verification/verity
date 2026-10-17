@@ -123,7 +123,8 @@ class Filler:
 
 
 UPFILL = Filler(per_word="saturate", mix={"ALU": 1.0, "IMAD": 1.0}, route="uniform",
-                source="CALC: a uniform duo-style chain a warp, receipts checked like the fold's (candidate)")
+                source="CALC: a uniform duo-style chain a warp, receipts checked like the fold's (not adopted: "
+                       "decision 73)")
 
 
 def lane_fill(x: float) -> Filler:
@@ -170,7 +171,8 @@ class Design:
                        fold_name=f"{self.fold_name}×{s:.3g}")
 
     def with_upfill(self) -> Design:
-        """The design with UPFILL, verified filler keeping the uniform datapath busy for honest's time."""
+        """The design with UPFILL, verified filler keeping the uniform datapath busy for honest's time. Not adopted
+        (decision 73: a uniform instruction takes an issue slot, r20261017-055801-e051); kept for comparison."""
         if any(f.per_word == "saturate" for f in self.filler):
             raise SystemExit(f"{self.name} has UPFILL already")
         return replace(self, name=f"{self.name}+up", filler=(*self.filler, UPFILL))
