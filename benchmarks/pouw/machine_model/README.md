@@ -2,51 +2,117 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3n-16) re-solves here to the τ, τ at 600 W, U/F_low and
-margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
+checks every attack against it. The reading it reports is a design's core ε (`machine-model eps`, "ε in the
+tensor–scalar model" below). Each named vector (VF … VF3q-16) re-solves here to the record it was published with (τ, τ
+at 600 W, U/F_low and margin), at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3n-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3n-16, the vector of record since 17 Oct; VF3l-16 by decision 62 before it)
-uv run machine-model census VF3n-16 --kind ATOMS64
-uv run machine-model attacks VF3n-16 -n 3 # the cheapest attacks of every design
+uv run machine-model solve VF3q-16        # the vector's record (τ, τ at 600 W, U/F_low, margin), θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current` (VF3q-16, the vector of record since 17 Oct after VF3n-16, VF3o-16 and VF3p-16; VF3l-16 by decision 62 before them)
+uv run machine-model census VF3q-16 --kind ATOMS64
+uv run machine-model attacks VF3q-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
-uv run machine-model eps                  # Dither's ε budget at q* = 8: every term, the LP's mixes, the ε(q*) curve
-uv run machine-model eps dither-two-sided --upfill --q 2.2 --json
-uv run machine-model eps --table --upfill # every design, without and with filler on the uniform datapath
-uv run machine-model eps --table --upfill --operands floor   # the cheater's operands at the noise's floor φ_del
-uv run machine-model eps --table --upfill --credit floor     # ε a fraction of the floor program ♭, not honest's kernel
-uv run machine-model eps --table --upfill --credit floor --q 2.16 --lookups   # with QSTAR's table route against L2
-uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
-uv run machine-model eps --table --upfill --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
+uv run machine-model designs              # the registry: names, aliases, noise per product, fold, unit, coins, arm
+uv run machine-model eps                  # Dither-1S's ε at q* = 8: every term, the LP's mixes, the ε(q*) curve
+uv run machine-model eps dither-2s --q 2.2 --json
+uv run machine-model eps Bc --checking sampled   # any alias; the sampling layer on its own line
+uv run machine-model eps --table         # every design
+uv run machine-model eps --table --operands floor   # the cheater's operands at the noise's floor φ_del
+uv run machine-model eps --table --credit floor     # ε a fraction of the floor program ♭, not honest's kernel
+uv run machine-model eps --table --credit floor --q 2.16 --lookups   # with QSTAR's table route against L2
+uv run machine-model eps --table dither-1s --fold-sweep 1,1.5,2,2.5,3
+uv run machine-model eps --table --credit floor --lookups --index-bits 2   # 2-bit entries on the indexed operand
+uv run machine-model eps --table --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
+uv run machine-model eps --device sm89 --table --credit floor --operands floor   # the L40S: Dither-1S/2S/C at L = 16, 32
+uv run machine-model eps --device sm100 --table --credit floor --operands floor   # the B200 at L = 32 to 256
 ~~~
 
 | Path | What |
 |---|---|
 | `data/model.toml` | The constants (R*, the honest kernel's u a MAC, at 600 W too), the LP's ρ, tie and x_min, the honest GEMM, the CUDA kinds, the adopted design and the epochs in order |
 | `data/rows.csv` | One line per row of the machine (a pipe, a port, a ceiling or a joint vertex): its status (`measured`, `ASSUMED`, `provisional`, `joint`), the runs or notes it rests on, and what it is |
-| `data/census.csv` | One line per instruction class on a row: its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, `until`) and its runs |
-| `data/devices/SM/` | Another family's `census.csv` and `rows.csv` in the same schema (`sm_90` H200, `sm_100` B200; written by `dc/census.py`); no epoch reads them, `rows(DIR)` and `entries(m, DIR)` do |
+| `data/census/EPOCH.csv` | The census lines from EPOCH, a file for each epoch that brought any: one line per instruction class on a row, its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, its file's epoch; `until`) and its runs |
+| `data/census/runs.toml` | The run lists many census lines share (a refit's every line cites every run its fit read), each cited in a line's `runs` as `@NAME` |
 | `data/vectors/NAME.toml` | A named vector: its epoch, the rows and credits it uses in LP order, its note, and the numbers it was published with |
 | `data/attacks/FAMILY.jsonl` | An attack family: one program a line, its design, and the epochs it holds |
+| `data/devices/sm_NN/` | Another device's data ("Devices" below): `sm_89`, the L40S, from EPS1 ADA; `sm_90`, the H200, and `sm_100`, the B200, from EPS1 DC (`dc/census.py` writes their census) |
 | `data/floors.csv` | What the claims read: each root-writing kind at 32 MACs a word ((π₃₂)), each load into registers at 16 (PRICES-32's load half) and each copy route at 16 (π_c ≥ 16, `copy16`: every kind that writes registers, a UR word at the 32 lanes it serves), with the words a warp instruction of it writes |
 | `verity_machine_model/lp.py` | The LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ), as the legacy `rs-price-99.py` `solve` computes it |
 | `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, what is under its floor, and a claim's kinds priced a word beside their measured cost |
-| `verity_machine_model/adopt.py` | Merging a measured census into `data/` at the last epoch, each (kind, row) at the faster of its two lines |
+| `verity_machine_model/adopt.py` | Merging a measured census into `data/census/` at the last epoch, each (kind, row) at the faster of its two lines |
 | `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
 | `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA: `e-l7qs` is PROFILE's measured kernel; `c-l7qs` (co32c's linear), `h-l7qs` (cohalf's QK^T) and `pv-l7qs` (P·V) are Dither-C's, measured on `benchmarks/pouw/edited_gemm/`'s bit-exact kernels; `dither-duo-l32` the provisional one the tests' hand arithmetic reads |
-| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (QSTAR's, provisional until a DATASHEET row) |
-| `data/designs/NAME.toml` | A protocol's parameters: its honest profile, L, its noise's operand-delivery floor φ_del, the fold and filler (lane instructions a word by class), plain (unfolded) MMAs beside its work, ε_skip's and ε_mand's parts with sources, ε_clock, Theorem S's δ, p and checks, and honest's baseline program (dp4a) |
+| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (the most L2 read in any measured pattern, + 2%) |
+| `data/designs/NAME.toml` | One design of the registry (below): its name, title and aliases, the noise on each product, its honest profile, L, the noise's operand-delivery floor φ_del, the fold and filler (lane instructions a word by class), plain (unfolded) MMAs beside its work, the proof unit, the coins, its perplexity arm, and ε_skip's and ε_mand's parts with sources |
+| `data/designs.toml` | What every design reads unless its file sets it: honest's profile, L, the proof unit, the coins, the fold (duo), ε_clock, Theorem S's δ, p and checks, honest's baseline program (dp4a) and the routes, all sm_120's |
+| `data/adapt.toml` | The proof units ε_adapt prices (SPEC's Theorem D): whole dot products (the designs' unit, decision 72), whole with operands recomputed one stage back, per-stage coins, and the segment spot check it replaced |
 | `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
 
 An *epoch* is a state of the census and the attacks, named after the vector that introduced it. A census line or an attack
 holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector re-solves on
-the data it was published on while new measurements land beside it. A kind with no coefficient on a vector's rows is
+the data it was published on while new measurements land beside it. The census lines from an epoch are its own file, so
+the census grows by a file an epoch; the tests keep every file under a quarter of the repository's 256 KiB cap. A kind with no coefficient on a vector's rows is
 refused, and the check fails on it.
+
+## Measure a facet
+
+A facet is a row of Π: one class's rate, or a joint frontier of two or more classes. It is measured by a
+microbenchmark that knows nothing about any algorithm (`../opcode_probe/`, on `../gpu_kit/`). Its numbers enter
+`data/` only from a run that passes every gate below. A refused probe stays in the run as a visible failure.
+
+- **The SASS histogram is pinned.** `gpu_kit/sass_gate.py` runs on the binary in the same job, before the timed run.
+  It requires:
+  - two clock reads around the timed region;
+  - the declared loops, with each loop's exact opcode counts (`--expect`);
+  - no LDL or STL;
+  - a sink that every timed instruction reaches;
+  - with `--smem`, the bank check.
+
+  A loop whose counts differ measured something else, and none of its timing is read. The run records the toolkit
+  (ptxas's version), because placement moves between releases.
+- **Poison and the no-write control.** `gk::poison_gate` writes 0xA5 over the output on the kernel's own stream, runs
+  the kernel and judges the output against its twin. A control that writes nothing must then fail the same judge.
+- **Clocks.** `gk::timed_items` sizes every arm's item to 40 ms and warms up until the SM clock is steady. It rotates
+  the arms' order rep by rep and reads NVML's SM clock and throttle reasons around every item. An item tagged
+  `[clock-gap]`, `[throttled]`, `[unsteady]` or `[no-clock]` doesn't count. Rates are per SMSP-cycle, so the clock
+  enters ε only as ε_clock. sm_120's runs are at the node's 2,092 MHz lock, where every program runs at 2,099.5 to
+  2,100.0 MHz. f_max is the hardware's 2,430 MHz.
+- **The 2% noise rule.** A rate enters the census derated by its `noise`, 0.02. `opcode_probe/eps1.py facets` scales a
+  joint frontier's coefficients by 1 − margin (default 0.02), so a program measured on the hull still meets its facet
+  with 2% to spare. `--prior data/rows.csv` keeps the old rows' vertices in the hull, and `--emit EPOCH` prints census
+  lines.
+- **The margin rule (decision 76).** A limit found by a schedule search takes, as its margin, the spread of the
+  search's latest extension, once two successive extensions agree within the 2% noise. It replaces blanket factors
+  such as the 1.07 that divided VF3n-16's JI3n rows.
+- **Row status.** Every line of `data/rows.csv` states its status:
+  - `measured`: a gated run of its own;
+  - `joint`: a facet of a measured frontier;
+  - `provisional`: in use before its gate, or closed;
+  - `ASSUMED`: no run measures it.
+
+  A row a re-measurement violates closes, whatever its status ("Adopt a probe's census").
+
+A uniform-datapath row (UP, or UNI's coefficient on issue or a joint issue row) has its own standard, from DATASHEET
+P10 (note:20261017T0332Z-draft-eps1-datasheet). ptxas decides which datapath a warp-uniform chain runs on, and moves
+it to lanes unless the loop holds it there, so the run must:
+
+1. Prove the placement from SASS, never from source. The gate pins each timed loop's exact uniform-opcode and MMA
+   counts.
+2. Pin the toolkit the node pins (ptxas 13.0) and record its version.
+3. Put the chain in a loop with MMAs whose other vector work reads their results. That is the only place ptxas 13.0
+   keeps it.
+4. Carry the chain round the loop into the sink, with its operands from a kernel parameter and LDCU inside the loop.
+5. Hold the vector stream fixed while the uniform count K takes at least four values. The cost is the least-squares
+   slope of SMSP-cycles against the uniform count read from SASS.
+6. Report the vector issue rate at K = 0. A "takes the slot" reading holds only over the range measured (0.60–0.68 in
+   P10).
+7. Fit UNI's share of a vector instruction's coefficient on the joint rows at load ≤ 0.98, and refit it whenever the
+   joint rows are refit. UP is the fastest uniform form alone, with no margin.
+8. Record the SASS, every gate's verdict, rows.jsonl and the fit (`eps1.py uniform OUT`) in the run.
 
 ## Add a measurement
 
@@ -54,10 +120,11 @@ A new measurement is lines of data and a vector file, not a script:
 
 1. **The row**, if the measurement is a new row: a line in `data/rows.csv` with its status, its run ids
    (`rYYYYMMDD-HHMMSS-xxxx`, or a `note:` id) and what it measures.
-2. **The census lines**: one line in `data/census.csv` for each instruction class the row binds, with exactly one of
-   `rate` (the measured warp instructions/SM/clk; `noise` 0.02 for the usual 2% margin), `cycles` or `u`, `since` the new
-   epoch, and its runs. A refit of an existing line sets the old line's `until` to the last epoch it held and adds the new
-   value with `since` the new epoch.
+2. **The census lines**: the new epoch's file, `data/census/EPOCH.csv`, with one line for each instruction class the row
+   binds: exactly one of `rate` (the measured warp instructions/SM/clk; `noise` 0.02 for the usual 2% margin), `cycles`
+   or `u`, `since` the new epoch, and its runs. A run list that many lines share (a refit's) goes in
+   `data/census/runs.toml` once, and its lines cite it as `@NAME`. A refit of an existing line sets the old line's `until`
+   to the last epoch it held, in the old line's file, and adds the new value to the new epoch's file.
 3. **The epoch**: append the new vector's name to `epochs` in `data/model.toml`.
 4. **The vector**: copy the vector it builds on to `data/vectors/NAME.toml`, set `name` and `epoch`, add the row to `rows`
    (and any credit to `credits`), and drop `[published]` and `[legacy]`.
@@ -76,51 +143,143 @@ MOV, any landed word, UR fan-out, every SHFL mode, and any kind whose output can
 claim reads every kind that writes registers, a superset of those, so a route can't be missed. VF3k-16 and VF3l-16 fail
 it on the UR fan-out alone (UNI 2 and UNI64 1 MACs a lane-word); the candidates `VF3l-16-copy16`,
 `VF3l-16-copy16-fan32`, `VF3l-16-copy32-fan16` and `VF3l-16-copy32` credit the routes they name, each at or below its
-measured cost. They wait for XOR-in. Theorem O's every-run floor reads only (π₃₂) and the load half: a UR word is one
-value, so the lanes it serves past the first are copies, credited only by copy luck.
+measured cost. No claim needs them now: only XOR-in's and LI's (RT) did, and both folds left the ε designs (a fold
+cheaper than duo moves the lane threshold to dp4a's 8.5, under "ε in the tensor–scalar model"), so they stay as records.
+Theorem O's every-run floor reads only (π₃₂) and the load half: a UR word is one value, so the lanes it serves past the
+first are copies, credited only by copy luck.
+
+## Designs
+
+A design is one file, `data/designs/NAME.toml`, under decision 79's name. The names tonight's notes, data and
+perplexity arms used are its `aliases`, and every command takes either. It is read on top of its `base` (the design it
+varies, if it names one) and of `data/designs.toml`, which holds what every design shares: honest's profile, L, the
+proof unit, the coins, the fold, ε_clock, Theorem S's budget, the baseline and the routes. Each top-level key a file
+sets replaces the inherited one whole, and `name`, `title`, `summary` and `aliases` are never inherited.
+`uv run machine-model designs` prints the registry (`--json` too), and `eps --json` carries a design's entry under
+`registry`.
+
+| Design | Title | Aliases | Noise: linears, lm_head, QKᵀ, P·V | Perplexity arm |
+|---|---|---|---|---|
+| `dither-1s` | Dither-1S | `dither-duo`, `record`, `adopted` | one-sided, clean, one-sided, peel | `adopted` |
+| `dither-2s` | Dither-2S | `dither-two-sided`, `A`, `adopted-bd-lm` | two-sided, two-sided, two-sided, peel | `adopted-bd-lm` |
+| `dither-2s-pv` | Dither-2S, pv P·V | `dither-two-sided-pv`, `Ap` | two-sided, two-sided, two-sided, pv | `adopted-bd-lm-pv` |
+| `dither-2s-fill` | Dither-2S, lane filler | `dither-two-sided-fill` | Dither-2S's, with 4.5 lane instructions a word of verified filler | `adopted-bd-lm` |
+| `dither-c` | Dither-C | `co-dither-pv`, `Bc-pv`, `co32c-pv` | co32c, co32c, cohalf, pv | `co32c-pv` |
+| `dither-c-peel` | Dither-C, peel P·V | `co-dither`, `Bc` | co32c, co32c, cohalf, peel | `co32c` |
+
+The noise leaves are `NOISE` in `eps.py`, and `designs` prints them as a legend:
+
+- `one-sided`: one operand dithered with the low-rank U and the clean product served, the peeled strip unchecked.
+- `two-sided`: both operands dithered with fresh bits and the last checked word served, nothing unchecked.
+- `co32c`: CO-Dither at r = 32, the residue sums' base-128 digits committed.
+- `cohalf`: CO-Dither at r = k/2 with a 7-bit served side.
+- `peel`: P's w64 peel with U, the strip unchecked and free at a one-hot P row.
+- `pv`: P served with a fresh bit and Ycum's digits committed, every product checked.
+- `clean`: served plain and never proved.
+
+Beside its names, a design file has these keys:
+
+- `[noise]`: a leaf for each of `linears`, `lm_head`, `qk` and `pv`.
+- `honest`, `L`, `work` and `plain`.
+- `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes (decision 73).
+- `[operands]`: the noise's floor φ_del.
+- `unit`: a table of `data/adapt.toml`. It is whole dot products (decision 72).
+- `[coins]`: `bits`, the width of a noised entry's coin, one σ a request.
+- `[table]`: `bits` on the operand a table route indexes, by default the coins' width and never below it.
+- `ppl`: a spec in `benchmarks/ppl/specs/`, or `""` while the design's arm isn't on main.
+- The ε terms' accounting: `[skip.served]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
+  `[baseline]` and `[routes]`. `[skip.served]` is the number SKIP's calculator, `../eps_budget.py`, gives the design's
+  `[noise]` (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served
+  output free), and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
+
+A new design is a file with its own name, title and summary, and a `base` if it varies one. The tests refuse:
+
+- an alias that names two designs;
+- a noise leaf or a proof unit that isn't defined;
+- a `[skip]` that isn't `eps_budget.py`'s number for the design's noise, or a noise leaf it can't price;
+- an arm that isn't a spec;
+- a filler off lanes.
 
 ## ε in the tensor–scalar model
 
 `eps` reports two layers that are never mixed (Daniel, 17 Oct 06:29Z). The protocol with 100% checking, every word and
-operand verified, has the core ε, 1 − ε_core = (1 − ε_skip − ε_mand − ε_machine)(1 − ε_sched)(1 − ε_clock)
-(`--checking full`, the default). The sampling compiler adds ε_sample = ε_luck + ε_adapt, a function of the proof unit,
-its budget and its selection rule, 0 at 100% sampling, on its own line and in its own columns (`--checking sampled`).
-Each term is a fraction of honest time. Π is the current vector's rows at its epoch, read as the price LP reads them (SMSP-cycles a warp
-instruction a row). ε_machine is one LP, SPEC's §0.8 (note:20261017T0324Z-draft-eps1-spec): a program writes every
-committed word on one of four routes, folds every word and does the filler, and its time is its largest row. The routes
-are the tensor pipe (`L/32` MMAs for 128 words, with their operand delivery), CUDA lanes at q* lane instructions a word
-in any mix of the CUDA classes, the design's baseline program (dp4a: 8 IDP4A and its loads a word) and the uniform
-datapath (q* uniform instructions a word, the fold there too). Honest is the tensor route at the profile's cost plus the
-baseline, whose words belong to the baseline and not to ε, and the cheater is every route at q*. The cheater's operand
-delivery is free by default (SPEC's conservative choice), `--operands floor` prices it at the noise's floor φ_del (the
-design's `[operands]`: 1/39 a MMA where B̃ stays resident at the zero instance, 0.20 where both operands are fresh, SPEC
-§3.4) and `--operands honest` at honest's. The LP's duals are the certificate π*, at which ε_machine is ε_cert + ε_route.
-ε_luck is the same LP with Theorem S's budget ln(1/δ)/S spent on unwritten words (still folded) and undone filler, each
-deficient block weighted by 1 − p (¾ a word, 0.854 a filler block; SPEC §5), so the terms add up to its time exactly.
-ε_sched needs a measured profile (`[measured]`) and is otherwise 0, honest certified at the model's bound.
-`--credit model` reads ε as a fraction of honest's model bound B(H) (PROFILE's reading: ε_sched and ε_clock leave ε),
-and `--credit floor` as a fraction of the floor program ♭ (SPEC §0.7a, Corollary D3): the tensor route at φ_del, the
-fold, the fillers and the baseline, with no overhead. Honest's time above the credit then leaves ε for γ (printed beside
-it); which reading a guarantee certifies is the coordinator's call. γ is honest's time a useful MMA over the plain
-GEMM's model time: measured when the design runs the profile's kernel, otherwise the measured kernel's time plus the
-model's difference between the design and that kernel (PREDICT's arms: within −0.7% to +8.4% of measured on lane
-work), and the model's alone without a measured profile.
-`--upfill` adds verified filler that keeps the uniform datapath busy for the credited program's time, which the cheater
-must then run on lanes or leave in place, and `--fill X` adds X lane instructions a word of verified filler on lanes,
-which dilutes what the cheater saves on operands at the cost of γ (`dither-two-sided-fill` is two-sided dither with
-4.5). `--lookups` opens a fifth route for the cheater, the table route (`data/table.toml`, QSTAR's register-indexed
-lookups): q_T lane instructions a word from the lanes' class pool plus 8 B of L2 reads, against an L2 facet at the
-card's bandwidth, honest's own L2 traffic uncharged (`--lookup-q`, `--l2` override the file). ε_machine's floor is its
-value with the lane and uniform routes closed (the table route, priced by its bytes, stays as set), which no q* lowers,
-and the threshold is the least q* at which ε_machine reaches it. `--uni-issue C` charges each uniform instruction C
-times an ALU instruction's cost on the issue rows too (`issue` and the joint `JI…_0` row), which the census has left out
-since VF3 and PREDICT's u16s_l7qs measured at 0.92 (r20261017-045133-67bf). The uniform route then closes without UPFILL, and UPFILL costs honest issue
-time while the cheater does its checked work on lanes, 32 values a warp instruction. ε_adapt is the proof unit's, SPEC's
-Theorem D under the one-σ order (`data/adapt.toml`): today's segment spot check ≈ 21%, whole dot products +0.35%, and 0
-for whole-dot-product proofs that recompute their operands one stage back or for per-stage coins. `--checking sampled`
-charges today's by default and `--adapt UNIT` another; the Python `eps()` charges none unless given one. The table
-route's defaults (`data/table.toml`) are SCALAR-ROUTE as restated: 1.22 slots and 3.5 B of L2 a word, `--lookup-bytes 6`
-for single-field tables.
+operand verified, has the core ε (`--checking full`, the default):
+
+    1 − ε_core = (1 − ε_skip − ε_mand − ε_machine)(1 − ε_sched)(1 − ε_clock)
+
+The sampling compiler adds ε_sample = ε_luck + ε_adapt, on its own line and in its own columns (`--checking sampled`).
+It is a function of the proof unit, its budget and its selection rule, and 0 at 100% sampling. The two layers meet only
+in `Eps.total()`, for the record, never to compare designs. The core ε under the floor credit (decision 74) is the
+guarantee's real-time reading. τ, the price vectors' real-time factor, and Theorem O's every-run floor were the reading
+before it (decision 23). `solve` still prints τ as a vector's record, but τ is no longer the headline. Every term is a
+fraction of honest time:
+
+| Term | What it is | Set by |
+|---|---|---|
+| ε_skip | Honest work Verify doesn't require: peeled strips, clean products, unchecked limbs, the vector work a checked strip leaves free | The design's `[skip.served]`, SKIP's calculator's number for its noise (`../eps_budget.py`, `design_skip`) |
+| ε_mand | The fold or the filler done in fewer instructions than honest's | `[mand.PART]`: 0 for duo, under FOLD's named assumption |
+| ε_machine = ε_cert + ε_route | The cheater's best mix over Π at q*, from the LP below. ε_cert = 1 − π*·n(H)/B(H) is honest's own slack at the certificate π*; ε_route is what the cheater's routes add | The vector and the design |
+| ε_sched | Honest's measured time above its model time; 0 unmeasured | `[measured]` in `data/honest/NAME.toml` |
+| ε_clock | 1 − f_H/f_max: 0.1391, honest at the node's 2,092 MHz lock against sm_120's 2,430 MHz | `[clock]` |
+| ε_luck | Theorem S (sampling layer): an accepted cheater leaves d̄ = ln(1/δ)/((1 − p)·S) of the words wrong, still folded | `[luck]`: δ = 2⁻⁴¹, p = ¾, S = 48,000 |
+| ε_adapt | Sampling layer: what steering instances in unproved regions gains under one σ a request (SPEC's Theorem D) | The proof unit (`data/adapt.toml`) |
+| Fan | A proof unit's fan-out, the adaptive MACs per MAC that fails for certain. ε_luck + ε_adapt ≤ max(1/(1 − p), 1 + Fan)·(ln(1/δ)/S)·N_w·w*/B(H), so adaptivity is free while Fan ≤ 3 at p = ¾. Whole dot products have Fan 14 at gate/up and 17.9 at 8B's lm_head | The proof unit's `source` |
+| credit | What ε is a fraction of: `H`, honest's kernel; `model`, its model bound B(H)/f_max; `floor`, the floor program ♭'s bound at f_max (adopted, decision 74). Under `floor`, ε_sched, ε_clock and honest's overhead above ♭ go to γ | `--credit` |
+| q* | The fewest lane instructions, past the fold, of a right fresh committed word whose production reads no data-dependent address (SPEC §1.3). Assumed, never measured | `--q`, default 8 |
+| q*_T, b_T | A table word's lane instructions, and the bytes it reads from its memory level (QSTAR's lookups) | `data/table.toml`, `--lookup-q`, `--lookup-bytes` |
+| q*_U | q* on the uniform datapath, in uniform instructions. Out of the core since a uniform instruction takes an issue slot (decision 73) | `--q-uniform` |
+| threshold | The least q* at which ε_machine reaches its floor (the scalar routes closed) | Printed by `eps` |
+
+SPEC's SCALAR-ROUTE states q*, q*_T and b_T as one named assumption: a right fresh word costs at least 2.03 issue slots,
+or at least 1.22 slots and 3.5 B of table loads (6.0 B for single-field tables). Duo puts the lane threshold near that
+2.03 (2.022 on VF3n-16, operands free). A cheaper fold breaks this. With 1 or 1.5 lane instructions a word (LI,
+XOR-in), the fold leaves lane time idle beside the tensor route. The credited program fills that time with dp4a words,
+so the cheater's lane words save time until q* reaches dp4a's 8.5 (`test_a_cheaper_fold_raises_the_threshold`). That
+is why XOR-in and LI are not ε candidates.
+
+Π is the current vector's rows at its epoch, read as the price LP reads them (SMSP-cycles a warp instruction a row).
+ε_machine is one LP, SPEC's §0.8 (note:20261017T0324Z-draft-eps1-spec). A program writes every committed word on one
+of four routes, folds every word and does the filler, and its time is its largest row. The routes are:
+
+- the tensor pipe: `L/32` MMAs for 128 words, with their operand delivery;
+- CUDA lanes: q* lane instructions a word, in any mix of the CUDA classes;
+- the design's baseline program: dp4a, 8 IDP4A and its loads a word;
+- the uniform datapath: q* uniform instructions a word, the fold there too.
+
+Honest is the tensor route at the profile's cost plus the baseline, whose words belong to the baseline and not to ε.
+The cheater is every route at q*. Its operand delivery is free by default (SPEC's conservative choice).
+`--operands floor` prices it at the noise's floor φ_del, the design's `[operands]`: 1/39 a MMA where B̃ stays resident
+at the zero instance, 0.20 where both operands are fresh (SPEC §3.4). `--operands honest` prices it at honest's.
+The LP's duals are the certificate π*. ε_luck is the same LP with Theorem S's budget spent on unwritten words (still
+folded) and undone filler, each deficient block weighted by 1 − p (¾ a word, 0.854 a filler block; SPEC §5), so the
+terms add up to its time exactly.
+
+Under `--credit model` or `--credit floor`, honest's time above the credit leaves ε for γ, which is printed beside it.
+`floor` is the floor program ♭ of SPEC §0.7a (Corollary D3): the tensor route at φ_del, the fold, the fillers and the
+baseline, with no overhead. Decision 74 adopts it. γ is honest's time a useful MMA over the plain GEMM's model time.
+It is measured when the design runs the profile's kernel. Otherwise it is the measured kernel's time plus the model's
+difference between the design and that kernel (PREDICT's arms: within −0.7% to +8.4% of measured on lane work), and
+the model's alone without a measured profile.
+
+The other options:
+
+- `--fill X`: X lane instructions a word of verified filler on lanes. It dilutes what the cheater saves on operands,
+  at the cost of γ. `dither-2s-fill` is Dither-2S with 4.5.
+- `--lookups`: a fifth route for the cheater, the table route (`data/table.toml`, QSTAR's register-indexed lookups).
+  It costs q*_T lane instructions a word from the lanes' class pool plus b_T bytes of L2 reads, against an L2 facet at
+  the card's bandwidth, with honest's own L2 traffic uncharged. `--lookup-q`, `--lookup-bytes` and `--l2` override the
+  file. Its defaults are SCALAR-ROUTE as restated: 1.22 slots and 3.5 B of L2 a word. A design with b-bit noise
+  entries on the operand the tables index (`[table] bits`, or `--index-bits B`) pays b times the route's slots and
+  bytes (QSTAR's b-bit count), and at b = 2 the route closes.
+- ε_machine's floor and the threshold: the floor is ε_machine with the lane and uniform routes closed (the table route
+  stays as set), which no q* lowers. The threshold is the least q* at which ε_machine reaches it.
+- `--uni-issue C`: charges each uniform instruction C times an ALU instruction's cost on the issue rows too (`issue`
+  and the joint `JI…_0` row). The census left that out from VF3 to VF3o-16, and PREDICT's u16s_l7qs measured it at
+  0.92 (r20261017-045133-67bf). With it, the uniform route closes and a filler gains nothing there. From VF3p-16
+  (decision 73) the census charges it itself, and `--uni-issue` changes nothing.
+- `--checking sampled`: charges ε_adapt for the design's own proof unit (`unit`, whole dot products: +0.35%).
+  `--adapt UNIT` charges another (`data/adapt.toml`): `segment`, the spot check decision 72 replaced (≈ 21%), or
+  `whole-recompute` and `per-stage` (0). The Python `eps()` charges none unless given one.
 
 ## Adopt a probe's census
 
@@ -128,8 +287,8 @@ An opcode probe (the `opcode_probe` beside this directory, #2160) writes its gat
 schema, with no epochs. After steps 3 and 4 above, `uv run machine-model adopt CENSUS EPOCH` merges it at `EPOCH`, which
 must be the last epoch. Each (kind, row) keeps the faster of its line at the epoch before and the measured one: a row's
 u must be a lower bound on what every program pays on it, so a line slower than the hardware makes a price that isn't
-sound. A faster line closes the old one at the epoch before, adds its own from `EPOCH` and adds its runs to the row's in
-`rows.csv`; a slower one changes nothing. A probe case the census has no row for (VF3k-16's peer-CTA DSMEM atomic) is a new row and, if it is
+sound. A faster line closes the old one at the epoch before (in the old line's file), adds its own to
+`data/census/EPOCH.csv` and adds its runs to the row's in `rows.csv`; a slower one changes nothing. A probe case the census has no row for (VF3k-16's peer-CTA DSMEM atomic) is a new row and, if it is
 slower than its opcode's other cases, its own kind (`ATOME32P`): a line for the old kind there would overstate it.
 
 A joint row a re-measurement finds violated (a measured point past 1) is unsound whatever the faster rule says: it closes
@@ -139,7 +298,27 @@ KIMAD, KHFMA2 and KSHFL that way for EIMAD, EHFMA2 and ESHFL, and replaced the A
 VF3n-16 closed the joint issue rows JI3e_0..2 for JI3n_0..2 (note:20261017T0321Z-draft-eps1-tensor): IMMA m16n8k16 and
 TF32 m16n8k4 beside IADD3 load JI3e_1 past 1. Each JI3n row is JI3e's refit over every native mma.sync form's programs and
 VF3e's at the 2% margin, then divided by 1.07 for the 6.9% one program's time varied between builds; MMA takes every form's
-least, and each form is its own kind on them (`IMMA16816`, `HMMA1684T`, …, with its `copy16` line).
+least, and each form is its own kind on them (`IMMA16816`, `HMMA1684T`, …, with its `copy16` line). VF3o-16 replaced
+the 1.07 with a measured margin (EPS1 TENSOR's M1c, r20261017-052102-d832, the tensor_kinds probe's schedule search):
+600 schedules of the forms that set JI3n (lane op, register layout, 2 to 6 warps a SMSP, placement) join the refit, and
+each JI3o row is divided by the most a searched program loads the row fitted to M1 alone, over 0.98 (1.038, 1.026,
+1.025), so a search as wide again finding as much again stays covered; the probe's refit with its search runs prints
+the rows. VF3p-16 put a uniform-datapath instruction on the issue rows (decision 73; EPS1 P10, `opcode_probe/eps1.py
+uniform` over `probes/uniform.cu`, r20261017-055801-e051): in the honest step at 60-68% issue it costs 0.6-1.1
+SMSP-cycles, so UNI is 1 on issue and 0.7416 of a vector instruction's coefficient on each JI3o row, the share that holds
+every uniform.cu point at the 2% margin (0.8168 holds them exactly), and UP rises to the fastest form alone, 0.766 a
+SMSP-cycle. A uniform row's measurement is valid only on ptxas 13.0 with the uniform chain gated by its exact uniform and
+MMA counts in SASS, inside a loop whose vector work reads the MMAs' results (ptxas moves the chain to lanes otherwise).
+VF3q-16 is FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; `facet_break/loads.py family`, runs `@FB`):
+3505 programs over every facet beat 18 rows, and each beaten family closes for the upper hull of its old rows' vertices
+and the measured programs at the 2% margin. R1 and KFFMA0 become EFFMA0..6 (interleaved IMMA + FFMA beat R1 by 41%);
+JI3o_0 becomes JI3q_0..11 (HMMA.16816.F16 beside FFMA beat it by 9.8%), each form's hull taken alone and every row at a
+vector coefficient one of those hulls has, each form at the most it carries beside it, while JI3o_1 and JI3o_2 hold; LDG
+becomes ELDG0..2 over LDG128 and LDG32; KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 their E families; R6r becomes
+ER6r0..1 over LDS128 and UBLKCP4K (broadcast LDS.128 beside a 4 KB bulk copy out of shared memory beat it by 5.1%, at
+LDS128's fastest program); TLD2 on ROW_TLDW2 scales to its fastest program. The six loads the census priced at 0 (LDS.64, LDG.E.64, the
+256-bit LDG.E.ENL2.256 and the L1-skipping LDG.E.NA.128, .128.STRONG.GPU and .ENL2.256.STRONG.GPU) are kinds with rows
+of their own at their fastest program, the L1-skipping three on one row of the L2 bytes they read (ROW_L2RD).
 
 ## Where the data came from
 
@@ -151,3 +330,44 @@ the scripts' float exactly. Two differences from the
 scripts: an instruction class's measured cost is the largest of its census lines at the epoch (the scripts froze it before
 VF3f added `KFFMA0`, which is FFMA's F row rounded to 10 places, 4e-10 relative above it, inside the check's 1e-9); and
 a line's runs are the runs its row's description cites, else the runs its vector's script cites.
+
+## Devices
+
+`data/` is sm_120's, the RTX PRO 6000 at the node's 2,092 MHz lock, and every command reads it unless `--device` or
+`--data` names another directory. Another device's measurements go in `data/devices/sm_NN/`. That is the standard for
+sm_89 (the L40S, EPS1 ADA), sm_90 (the H200) and sm_100 (the B200, EPS1 DC), and for any later device. The directory
+follows these rules:
+
+- It holds `rows.csv` and `census.csv` in `data/`'s schema, and its rows follow "Measure a facet". Its probe's
+  `census.py` writes them from gated runs.
+- An MMA kind is one SASS form, as on sm_120's JI3n rows.
+- It has one epoch, its lines without `since` or `until`. `rows(DIR)`, `entries(m, DIR)` and `census(m, epoch, DIR)`
+  take the directory.
+- To price a design on the device, it gains the rest of `data/`'s files, and `--device sm_NN` (or `--data DIR`) reads
+  it:
+  - `model.toml`: its epoch, its vector and its CUDA lane classes. The constants only `solve` reads stay out.
+  - `vectors/NAME.toml`: its rows.
+  - `honest/`: its honest kernel at each L. `[mma] class` names the MMA's census class (sm_120's is `MMA`).
+  - `designs.toml` and `designs/`: each design at each L, read on the device's `designs.toml` (the proof unit and the
+    coins), with the device's honest kernel, operand floor φ_del, clock and ε_clock, luck budget and baseline. The
+    noise, ε_skip and ε_mand are sm_120's design's, and its title is that design's at L.
+  - `table.toml`: the table route at the device's SMs and f_max. Without an `l2`, the L2 isn't measured, and the route
+    is bound by its slots alone.
+
+  `data/adapt.toml` holds for every device. A census with no uniform-datapath line (`UNI`) closes the uniform route.
+
+The L40S (`data/devices/sm_89/`, note:20261017T0605Z-draft-eps1-ada) prices Dither-1S, Dither-2S and Dither-C at L = 16
+(IMMA.16816, where T1 is tight) and at L = 32 (IMMA.16832, half the tensor pipe's words), on ADA's measured honest step:
+duo's fold, 19.07 and 22.93 SMSP-cycles a MMA. Its clock is f_max = 2,520 MHz, with honest at 1,680 MHz at L = 16 and
+1,585 MHz at L = 32 under the enforced 325 W cap. Its operand floors are SPEC §3.4's register count applied to each
+form: 1/94 and 7/72 a MMA for m16n8k16, 1/39 and 0.20 for m16n8k32. ε_skip at L = 16 scales L = 32's strips by their
+widths. `eps --table` prints γ_f, γ with the clock gap f_max/f_H.
+
+The H200 and B200 (`data/devices/sm_90/` and `sm_100/`, note:20261017T0452Z-draft-eps1-dc) price the same three designs
+at L = 32, 64, 128 and 256 on model honest profiles: one IGMMA.64x256x32 (4096 words a warp) or UTCIMMA.128x256x32
+(32768 words), then duo on every committed word. Neither has a measured honest kernel or f_H yet, so γ is the model's
+and ε_clock is 0. Both read their operands from shared memory by descriptor, so the operand floor is no instruction for
+every noise. The B200's accumulator is in TMEM, so its floor is the tcgen05.ld.32x32b.x32 that bring each committed word
+to registers, 1024/L a MMA. Honest's profile counts that load in its fold, and the design's fold leaves it out, so a
+word written on lanes doesn't pay it. The baseline is dp4a on IMAD's class, as on sm_120, with its loads unpriced (the
+census has no IDP4A or LDS kind).
