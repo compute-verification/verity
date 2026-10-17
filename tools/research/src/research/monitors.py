@@ -1146,7 +1146,7 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
 # ---- failed checks (relay-side: GitHub and the Slack registry name each PR's lane) ---------------------------------------------
 
 MERGE_THREAD = "1790957906.278529"      # #agent-coordination's merge thread, where the lander and the lanes follow the trains
-LANDER = "old-circuits-and-proofs"
+LANDER = "ci"
 REPO_SLUG = "compute-verification/verity"
 # Node 2 too without N2_GUARD: its check slots run whole checks at any time, so one niced read of their run files a minute is
 # nothing they don't already bear (and its guard refuses everything while its fill runner is stopped)
