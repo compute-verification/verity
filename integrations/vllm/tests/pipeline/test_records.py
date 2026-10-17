@@ -31,7 +31,8 @@ SUMMARY = {"schema": "verity/commit-integ/delta-tp/v1", "pass": True, "pairs": 1
            "value_check": {"verdict": "PASS"}, "match_oracle": {"0": {"verdict": "PASS"}, "1": {"verdict": "PASS"}},
            "required_manifest": {"manifest_digest": "mm", "identities": 7},
            "sampled_replay": {"result": True, "sample": {"picked": 4, "evaluated": 4, "equal": 4, "mismatch_n": 0},
-                              "per_rank": {"0": {"result": True, "grade": "complete"}, "1": {"result": True, "grade": "complete"}}}}
+                              "per_rank": {"0": {"result": True, "grade": "complete"}, "1": {"result": True, "grade": "complete"}}},
+           "served": {"schema": "verity-vllm/served-switches/v1", "ok": True, "problems": []}}
 
 
 def test_index_names_rows_of_record():
@@ -187,6 +188,9 @@ def test_publish_refuses_a_failed_row_another_builds_commit_and_a_build_without_
         records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast",
                         summary={**SUMMARY, "pass": False})
     served = _served(d)
+    with pytest.raises(UsageError, match=r"the record is FAIL \(served switches not run\)"):
+        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast",
+                        summary={k: v for k, v in served.items() if k != "served"})
     for rm in ({**served["required_manifest"], "manifest_digest": "other"},
                {**served["required_manifest"], "program_digest_per_rank": {"0": "0" * 128}}):
         with pytest.raises(UsageError, match="not the one served"):
