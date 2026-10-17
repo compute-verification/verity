@@ -145,7 +145,9 @@ up at a draw, so the plain chain asks only for the mixture at those decoders, wh
 mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
 `FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the
 rest of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the
-merged coins being uniform (`LiveMix`: `Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_le_liveMix`). From a
+merged coins being uniform, and the mixture by an event of the deployed coins the live event implies (`LiveMix`:
+`Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.liveMix_eq`, `Claims.Bridge.Live.Pr_le_liveMix`,
+`Claims.Bridge.Live.liveMix_le_Pr`). From a
 simulation of the deployed prover by a live prover on coins of uniform law, and the record's draw on accepting runs,
 the mixture's first bound holds (`PlainFirst`: `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.RecordDrawVerbatim`,
 `FlockDeploy.KS.plain_first_of_sim`). -/
