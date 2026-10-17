@@ -86,7 +86,7 @@ class TargetProfile:
                            kernel class back from the instantiated `Fp8LinearMethod.fp8_linear` and refuse a mismatch; a model without
                            FP8 linears makes a declared kernel a mismatch too (nothing to select — the declaration would be idle).
                            Omitted from `to_json()` when None so every pre-R15 profile digest is unchanged.
-    int8_exact          -> `"plain"`: every linear runs the edited GEMM's plain arm (`engine.int8_exact`, an offline int8 checkpoint),
+    int8_exact          -> `"plain"`: every linear runs steps.py's plain int8 step (`engine.int8_exact`, an offline int8 checkpoint),
                            applied as vLLM quantization `INT8_EXACT_QUANTIZATION`; builder and runtime read every linear's arm back
                            (`int8_exact_arm_of`) and refuse a mismatch.  Omitted from `to_json()` when None.
     moe_backend         -> `EngineArgs.moe_backend`, the fused-MoE experts kernel (applied to `KernelConfig.moe_backend`; an explicit backend that

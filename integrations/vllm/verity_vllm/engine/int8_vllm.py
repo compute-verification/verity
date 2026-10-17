@@ -9,8 +9,8 @@ weight is int8 [N, K] with a float32 `weight_scale` [N, 1].
 Every linear layer (`LinearBase`) gets an `Int8PlainLinearMethod` with its own prefix; nothing else is quantized (the embedding
 and `lm_head` are vocabulary embeddings, attention keeps its KV cache unquantized).  The method computes
 `engine.int8_exact.plain_linear` and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  Loading
-refuses a weight outside [-63, 63] and a scale that is not finite and positive; a layer refuses tensor parallelism (a row-parallel
-shard would take its activation scale over its own K slice, not the call's), a bias, K or N not a multiple of 8, K > MAX_K, and
+refuses a weight outside [-127, 127] and a scale that is not finite and positive; a layer refuses tensor parallelism (a row-parallel
+shard would take each row's activation scale over its own K slice, not the row's), a bias, K or N not a multiple of 8, K > MAX_K, and
 activations that are not bf16.
 """
 from __future__ import annotations
@@ -71,7 +71,7 @@ class Int8PlainLinearMethod(LinearMethodBase):
 
 
 class Int8ExactConfig(QuantizationConfig):
-    """`quantization_config` {quant_method: NAME, weight_max: 63}: every linear layer on `Int8PlainLinearMethod`."""
+    """`quantization_config` {quant_method: NAME, weight_max: 127}: every linear layer on `Int8PlainLinearMethod`."""
 
     def __init__(self, weight_max: int):
         super().__init__()
