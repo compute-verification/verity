@@ -1429,14 +1429,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if self.footprint is None:
             return
         self.footprint.event("absorbed", step=job.step, used=int(job.cursor), padded=int(padded),
-                             levels_bytes=sum(int(lv.numel()) * 4 for lv in levels), levels_device=bool(levels and levels[0].is_cuda),
+                             levels_bytes=sum(int(lv.nbytes) for lv in levels), levels_device=bool(levels and levels[0].is_cuda),
                              keep_bytes=int(keep.numel()) if keep is not None else 0, keep_device=(keep.is_cuda if keep is not None else None),
                              retain=self.retain, arena_block_bytes=int(job.arena.numel()) if job.arena is not None else None,
                              retained_device_total=self._retained_device_bytes(), families=_Footprint.families(job.metas),
                              t_step_end=round(job.t_step_end - self.footprint.t0, 6) if job.t_step_end else None, backlog=job.backlog)
 
     def _retained_device_bytes(self) -> int:
-        n = sum(int(lv.numel()) * 4 for lvls in self._gpu_levels.values() for lv in lvls if lv.is_cuda)
+        n = sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls if lv.is_cuda)
         n += sum(int(b.numel()) for b, _u in self._gpu_blocks.values() if b is not None and b.is_cuda)
         return n
 
@@ -1451,7 +1451,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if levels_to_host:
             for step, lvls in list(self._gpu_levels.items()):
                 if lvls and lvls[0].is_cuda:
-                    freed["levels_device_bytes"] += sum(int(lv.numel()) * 4 for lv in lvls)
+                    freed["levels_device_bytes"] += sum(int(lv.nbytes) for lv in lvls)
                     self._gpu_levels[step] = [lv.cpu() for lv in lvls]
         if torch is not None and torch.cuda.is_available():
             torch.cuda.synchronize()
@@ -1927,7 +1927,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 "hook_wall_s": t_hook - t1, "apply_wall_s": time.perf_counter() - t_hook,
                 "padding_bytes_over_executed": (sum(ps.n_bytes for ps in pads) / ex_bytes) if ex_bytes else None}
         step_roots = [s.root for s in steps]    # b"": a placeholder step (a learn-only warm-up pass, or a failed step whose error is recorded)
-        run_root = scheme.run_root(self.program_digest, self._geo_digest, step_roots) if all(len(r) == 32 for r in step_roots) else b""
+        run_root = self._fold_run_root(step_roots) or b""
         t2 = time.perf_counter()
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
@@ -1949,7 +1949,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                                     "hash_threads": self.hash_threads, "chunk": self.chunk, "modules_hooked": len(self._modules), **self._leaf_record(steps),
                                     "staging": self.staging, "fast_copy": self.cudart_path, "gpu_tree": self.gpu_tree, "gpu_tree_ms": dict(self._gpu_t),
                                     "gpu_tree_retained_bytes": self._retained_device_bytes(),
-                                    "host_retained_bytes": sum(int(lv.numel()) * 4 for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
+                                    "host_retained_bytes": sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
                                     + sum(int(getattr(b, "retained_bytes", None) if getattr(b, "retained_bytes", None) is not None else b.numel())
                                           for b, _u in self._gpu_blocks.values() if b is not None and not b.is_cuda),
                                     "retain": self.retain, "released_device_bytes": self.released_bytes,
@@ -2299,8 +2299,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                         raise RuntimeError(f"open({step}, {index}): this run kept no tree levels (retain_levels=False): open with a replay "
                                            "source and paths_from_replay=True")
                     value = bytes(blk[lo:lo + self.chunk].cpu().numpy().tobytes())
-                    path = self._HG.gpu_open(levels, index) if self._HG is not None else open_levels(levels, index)
-                    out.append(Opening(step, index, value, tuple(path), ident))
+                    out.append(Opening(step, index, value, tuple(self._level_path(levels, index)), ident, self._gpu_salt(step, index)))
                     continue
                 if ident.get("packed"):
                     value = bytes(self._streams[step][ident["byte_lo"]:ident["byte_hi"]])
@@ -2310,6 +2309,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 path = scheme.path_in_levels(self._levels[step], index)
                 out.append(Opening(step, index, value, path, ident, self._salts_of(step, index, index + 1)))
         return out
+
+    def _level_path(self, levels: list, index: int) -> tuple:
+        """Leaf `index`'s sibling path in a GPU-tree step's levels."""
+        return tuple(self._HG.gpu_open(levels, index) if self._HG is not None else open_levels(levels, index))
+
+    def _gpu_salt(self, step: int, index: int) -> bytes:
+        """The salt a GPU-tree step's opening carries (none under vllm-v1 chunk leaves)."""
+        return b""
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
         """Production verifier core: shape rule + fold to the bare root, then the context binding to the ORIGINAL step root, then the

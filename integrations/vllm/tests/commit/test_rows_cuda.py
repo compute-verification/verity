@@ -179,7 +179,7 @@ def test_refusals(ext, hasher):
     with pytest.raises(RuntimeError, match="64 bytes"):
         ext.RowStep(dom.domain_id[:32], bytes(64), R.row_prefix(BITS), R.INST.salt_prefix, R.INST.leaf_prefix(R.KEY), R.SCHEMA, R.ROW_BYTES)
     with pytest.raises(RuntimeError, match="does not fit the schema"):
-        ext.RowStep(dom.domain_id, bytes(64), R.row_prefix(BITS), R.INST.salt_prefix, R.INST.leaf_prefix(R.KEY), "hm96-sha512/row/v1",
+        ext.RowStep(dom.domain_id, bytes(64), R.row_prefix(BITS), R.INST.salt_prefix, R.INST.leaf_prefix(R.KEY), "hm96-sha512/row-seg/v1",
                     R.ROW_BYTES)
     rs = _step(ext, dom, bytes(64), R.row_prefix(BITS), R.ROW_BYTES)
     rows = _dev(bytes(4 * R.ROW_BYTES))

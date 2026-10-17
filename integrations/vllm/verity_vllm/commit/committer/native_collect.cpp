@@ -1615,7 +1615,8 @@ struct StepHasher {
   // per row: a test's).  Runs on `stream_ptr`.  -> (leaves [m, 64] uint8, b || c [m, 128] when want_bc, h [m, 64] when want_h; the last
   // two hold the data positions' values, and are empty when not asked for)
   py::tuple rows_leaves(const RowStep& rs, at::Tensor rows, int64_t nbytes, int64_t first, int64_t m, int64_t n_total, at::Tensor tn, int64_t stream_ptr,
-                        int64_t stride = 0, at::Tensor salts = at::Tensor(), bool want_bc = false, bool want_h = false) {
+                        int64_t stride = 0, std::optional<at::Tensor> salts_given = std::nullopt, bool want_bc = false, bool want_h = false) {
+    const at::Tensor salts = salts_given.has_value() ? *salts_given : at::Tensor();
     if (stride == 0) stride = rs.row_bytes;
     if (!rows.is_cuda() || rows.scalar_type() != at::kByte || !rows.is_contiguous()) throw std::runtime_error("rows_leaves: rows must be a contiguous CUDA uint8 tensor");
     if (stride % 16 || stride < (rs.row_bytes + 15) / 16 * 16 || reinterpret_cast<uintptr_t>(rows.data_ptr()) % 16)
@@ -1688,7 +1689,9 @@ struct StepHasher {
 
   // rows-sha512: the tree above `nodes` (level level0, positions 0 .. n-1, n a power of two) to its root; root D2H (64 B), the levels to
   // pinned host when asked (into levels_dst when it holds them); one event sync.  -> (levels [nodes .. root], root: bytes(64), tree_ms)
-  py::tuple rows_tree(const RowStep& rs, at::Tensor nodes, int64_t level0, int64_t stream_ptr, bool levels_host = false, at::Tensor levels_dst = at::Tensor()) {
+  py::tuple rows_tree(const RowStep& rs, at::Tensor nodes, int64_t level0, int64_t stream_ptr, bool levels_host = false,
+                      std::optional<at::Tensor> levels_into = std::nullopt) {
+    const at::Tensor levels_dst = levels_into.has_value() ? *levels_into : at::Tensor();
     if (!nodes.is_cuda() || nodes.scalar_type() != at::kByte || !nodes.is_contiguous() || nodes.dim() != 2 || nodes.size(1) != 64)
       throw std::runtime_error("rows_tree: nodes must be a contiguous CUDA uint8 [n, 64]");
     const int64_t n0 = nodes.size(0);
@@ -1759,11 +1762,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("commit", &StepHasher::commit, py::arg("arena"), py::arg("used"), py::arg("step"), py::arg("src_mask"), py::arg("chunk_bytes"),
            py::arg("side_stream_ptr"), py::arg("step_event_ptr"), py::arg("keep_mode") = 0, py::arg("keep_dst") = at::Tensor(), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor())
       .def("rows_leaves", &StepHasher::rows_leaves, py::arg("rs"), py::arg("rows"), py::arg("nbytes"), py::arg("first"), py::arg("m"), py::arg("n_total"),
-           py::arg("tn"), py::arg("stream_ptr"), py::arg("stride") = 0, py::arg("salts") = at::Tensor(), py::arg("want_bc") = false, py::arg("want_h") = false)
+           py::arg("tn"), py::arg("stream_ptr"), py::arg("stride") = 0, py::arg("salts") = py::none(), py::arg("want_bc") = false, py::arg("want_h") = false)
       .def("rows_tree_window", &StepHasher::rows_tree_window, py::arg("rs"), py::arg("leaves"), py::arg("n_levels"), py::arg("first"), py::arg("stream_ptr"),
            py::arg("host_dsts"))
       .def("rows_tree", &StepHasher::rows_tree, py::arg("rs"), py::arg("nodes"), py::arg("level0"), py::arg("stream_ptr"), py::arg("levels_host") = false,
-           py::arg("levels_dst") = at::Tensor());
+           py::arg("levels_dst") = py::none());
   py::class_<RowStep>(m, "RowStep")
       .def(py::init<const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const std::string&, int64_t>(), py::arg("domain_id"),
            py::arg("ks"), py::arg("row_prefix"), py::arg("salt_prefix"), py::arg("leaf_prefix"), py::arg("schema"), py::arg("row_bytes"))

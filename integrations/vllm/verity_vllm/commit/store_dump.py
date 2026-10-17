@@ -147,6 +147,8 @@ def _as_bytes(t: Any) -> memoryview:
 def _refusal(com: Any) -> str | None:
     if getattr(com, "hiding", None) is not None:
         return f"{com.leaf_scheme} leaves (salted): not dumped"
+    if getattr(com, "commit_scheme", "vllm-v1") != "vllm-v1":
+        return f"{com.commit_scheme} steps: not dumped"
     if getattr(com, "_padding", None):
         return "padding steps: not dumped"
     if getattr(com, "_streams", None):
