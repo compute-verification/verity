@@ -60,7 +60,8 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
 
 An arm is a TOML file: a list of steps for the linears (`[[linear]]`: q, k, v, o, gate, up and down, each y = x Wᵀ) and
 one for attention (`[[attention]]`: S = Q Kᵀ and O = P V). Each step names a registered function and its parameters.
-`layers = [...]` and, on linears, `linears = [...]` restrict where a step applies. `specs/adopted.toml`:
+`layers = [...]` and, on linears, `linears = [...]` restrict where a step applies. The output head (`lm_head`) takes
+only the linear steps that name it in `linears`, without calibration or `layers`. `specs/adopted.toml`:
 
 ~~~toml
 description = "the adopted design end to end"
@@ -109,15 +110,18 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 |---|---|---|---|
 | `linear.smooth(alpha, kv_shared)` | real | SmoothQuant, x / m and W m; `kv_shared` is the foldable variant | D4-70B |
 | `linear.rotate(kind)` | real | x Q and W Q; `q` is exact_grid's rotation, `h` the flat Hadamard | D4-PPL |
-| `linear.int8(act, act_top, weight_top, group, gptq)` | quantize | activations per token, rounded or dithered; weights per row or per `group` inputs, capped at `weight_top`, rounded or GPTQ | D4-PPL, D4-70B |
+| `linear.int8(act, act_top, weight, weight_top, group, gptq)` | quantize | activations per token, rounded or dithered; weights per row or per `group` inputs, capped at `weight_top`, rounded, GPTQ or dithered (`weight = "dither"`: fresh bits a call) | D4-PPL, D4-70B, EPS-BUDGET |
 | `attention.rotate()` | real | Q R, K R, V R and the output R⁻¹ | D4-ATTN |
 | `attention.center_keys()` | real | kc | D4-ATTN |
-| `attention.int8(q_top, k, k_top, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; K and V rounded or dithered; P per row or per key block, `p_sink` | D4-ATTN |
+| `attention.int8(q, q_top, k, k_top, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; Q, K and V rounded or dithered within their tops; P per row or per key block, `p_sink` | D4-ATTN, EPS-BUDGET |
 | `attention.peel(operand, width, offset)` | integer | low-rank noise on Q or P, peeled exactly | D4-ATTN |
 
 `specs/` holds the arms in use: the three plain int8 arms, and the adopted design (`adopted`) with its halves
 (`adopted-linears`, tonight's `d63-sm50-smkv`; `adopted-attention`, tonight's `int8-rot-eqp=w64-poff64-psink-kc-kv=dith`)
-and `adopted-no-smooth` (tonight's WikiText end to end). Any other file passes as a path.
+and `adopted-no-smooth` (tonight's WikiText end to end); SKIP's designs (note:20261017T0340Z-draft-skip): `adopted-qkd`
+(Q Kᵀ dithered on both operands, no Q peel), `adopted-bd` (the linears too), `adopted-bd-lm` (and lm_head), `co`
+(CO-Dither's served values at r = k/2: 7-bit sides plus fresh bits) and `ncp` (NCP-INT's: the exact product of 7-bit
+operands). Any other file passes as a path.
 
 ## Adding an intervention
 
