@@ -23,7 +23,7 @@ the form the session's models read (`Deployed`):
 * `Proto.TPreModel.SwLink`, `Proto.TPreModel.runs_close_sw`; `Proto.TOffModel.SwLink`, `Proto.TOffModel.close_sw`:
   before the last coin and where the prover refuses, Lemma C between the switched prover at the workers' values and the
   honest prover on the dummy, within `2·|L|·δ₁`, as `runs_close` and `close` have it at the honest prover.
-* `Proto.TSwLink`, `Proto.withSim_shvzk_sw`, `Flock.zk_deployZk_of_tables_sw`: **`Claims.Flock.ZKAt` at the switched
+* `Proto.TSwLink`, `Proto.withSim_shvzk_sw`, `Flock.zk_deployZk_of_tables_sw`: **`Claims.Flock.ZK` at the switched
   prover**, with the honest prover's simulator and the same `ε_zk` and `γ`, with `TMsgLink` replaced by `TSwLink`: the
   prover's messages are the switched prover's at values the workers supply, which read the mask slot and the extra
   lanes and never the pads.
@@ -509,7 +509,7 @@ end Proto
 /-- **Flock's zero knowledge at the switched prover, at the tables the session sets up**: `Flock.zk_deployZk_of_tables`
 with `TMsgLink` replaced by `TSwLink`. At `P_zk = G.prover`, a prover whose messages on each witness are the switched
 prover's at whatever values the workers supply (read from the mask slot and the extra lanes, never the pads), and the
-honest prover's simulator, `Claims.Flock.ZKAt` holds at the same `ε_zk` and `γ`. -/
+honest prover's simulator, `Claims.Flock.ZK` holds at the same `ε_zk` and `γ`. -/
 theorem Flock.zk_deployZk_of_tables_sw (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
     (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {δ₁ : ENNReal}
@@ -518,7 +518,7 @@ theorem Flock.zk_deployZk_of_tables_sw (H : Msg → Msg)
     (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TSwLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.CoinCheck) :
-    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
+    Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
       (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
   obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := hC
   have hA : ∀ x w, Flock.R (FlockDeploy.deployZk rel).parse x w → ∀ (ν : G.Nonce)
