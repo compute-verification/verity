@@ -71,7 +71,7 @@ class Options:
     X: int = 16
     W: int = 32
     extras: int = 0
-    partition_max_gates: int = 4_000_000
+    partition_max_gates: int = 5_000_000
     partition_max_leaves: int = 1 << 22
     lower_max_gates: int = 256
     lower_max_ands: int = 60_000
