@@ -7,8 +7,8 @@ import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 At the deployed relation, the skeleton's `Zerocheck`, `Lincheck` and `RingSwitch` need only what the session walk
 establishes for each rep: `ZcAt`, `LcWalk` and `RsAt`.
 
-* `Run.fold_ok`: the statement's circuit fold at the lincheck's `α` returns at every rep. The scope's untyped row circuit
-  passed `HmRow.check`, so each range's slot type folds, and the zerocheck's `ρ` has the block's size
+* `Run.fold_ok`: the statement's circuit fold at the lincheck's `α` returns at every rep. The scope's untyped row
+  circuit passed `HmRow.check`, so each range's slot type folds, and the zerocheck's `ρ` has the block's size
   (`JsonRT.fold_ok`).
 * `LcWalk`: `LcAt` without the fold, which `Run.lcAt` adds back.
 * `replay_goals`: the three goals at `Readable.relation` from `ZcAt`, `LcWalk` and `RsAt`.
