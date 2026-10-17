@@ -11,7 +11,8 @@
     machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) into data/ at EPOCH,
                                               the last epoch: each (kind, row) keeps the faster of its old and new line
     machine-model eps [DESIGN] [--q Q] [--q-uniform QU] [--operands O] [--credit C] [--fold-cost R] [--fill X]
-                      [--upfill] [--lookups [--lookup-q QT] [--l2 B]] [--uni-issue C] [--vector V] [--json]
+                      [--upfill] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]] [--uni-issue C]
+                      [--checking full|sampled [--adapt UNIT]] [--vector V] [--json]
                                               a design's ε budget (data/designs, default dither-duo) at q* = Q (default
                                               8): every term with its source, ε_machine's LP (the credited and the
                                               cheater's mix, binding rows and certificate π*), the ε(q*) curve for q*
@@ -22,16 +23,20 @@
                                               the floor program ♭ (--credit floor); --fill adds X lane instructions a
                                               word of verified filler on lanes, --upfill filler keeping the uniform
                                               datapath busy; --lookups opens the table route (data/table.toml: lane
-                                              instructions and L2 bytes a word against an L2 facet; --lookup-q, --l2);
-                                              --uni-issue C also charges a uniform instruction C times an ALU's cost
-                                              on the issue rows; --adapt UNIT charges ε_adapt for a proof unit
-                                              (data/adapt.toml, today's segment check by default)
+                                              instructions and L2 bytes a word against an L2 facet; --lookup-q,
+                                              --lookup-bytes, --l2); --uni-issue C also charges a uniform instruction
+                                              C times an ALU's cost on the issue rows; --checking full (default) is the
+                                              protocol with every word and operand verified, the core ε alone, and
+                                              --checking sampled adds ε_sample = ε_luck + ε_adapt on its own line, for
+                                              --adapt UNIT's proof unit (data/adapt.toml, today's segment by default)
     machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--upfill] [--operands O] [--credit C]
-                      [--q Q] [--lookups] [--uni-issue C] [--adapt UNIT]
+                      [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
                                               one line a design (every design by default; with --fold-sweep, each at
-                                              each fold cost; with --upfill, each without and with it): γ, the credited
-                                              time, ε_sched, ε_machine at q* = 2, 4, 8, 16 and its floor, ε_luck, ε at
-                                              q* = 2, 8 and Q, and the thresholds
+                                              each fold cost; with --upfill, each without and with it), in two column
+                                              groups: the core (γ, the credited time, ε_skip, ε_sched, ε_machine at
+                                              q* = 2, 4, 8, 16 and its floor, the core ε at q* = 2, 8 and Q, and the
+                                              thresholds), then with --checking sampled the sample (ε_luck, ε_adapt
+                                              and ε_sample at Q)
     machine-model capacity GROUP [GROUP ...] [--vector V] [--json]
                                               the certified share σ of a window's capacity (capacity.py): each GROUP
                                               is [WEIGHT/]TERM+TERM..., its share of the cell's SMSP-time (default 1)
@@ -183,14 +188,23 @@ def _design(args, name: str) -> E.Design:
 
 
 def _lookups(args) -> E.Table | None:
-    if not args.lookups and (args.lookup_q is not None or args.l2 is not None):
-        raise SystemExit("eps: --lookup-q and --l2 price the table route: add --lookups")
-    return E.table(args.data, args.lookup_q, args.l2) if args.lookups else None
+    if not args.lookups and (args.lookup_q is not None or args.l2 is not None or args.lookup_bytes is not None):
+        raise SystemExit("eps: --lookup-q, --lookup-bytes and --l2 price the table route: add --lookups")
+    return E.table(args.data, args.lookup_q, args.l2, args.lookup_bytes) if args.lookups else None
+
+
+def _adapt(args) -> E.Adapt | None:
+    if args.checking == "full":
+        if args.adapt:
+            raise SystemExit("eps: --adapt picks the sampled protocol's proof unit: add --checking sampled")
+        return None
+    return E.adapt(args.adapt or "", args.data)
 
 
 def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, credit: str = "H",
-                table: E.Table | None = None, adapt: E.Adapt | None = None) -> dict:
+                table: E.Table | None = None, adapt: E.Adapt | None = None, checking: str = "full") -> dict:
     e = E.eps(d, pi, q, data, operands=operands, credit=credit, table=table, adapt=adapt)
+    sampled = checking == "sampled"
     s = E.setup(d, pi, data, operands, credit, table)
     per_mma = e.honest.words * e.honest.depth / d.L
     return {
@@ -207,14 +221,19 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
                   "filler_uniform": e.cheat.filler_uniform, "pi": e.cheat.pi},
         "lucky_cycles_per_mma": e.lucky.T * per_mma, "deficit": e.deficit, "lucky_short": e.lucky.short,
         "measured_cycles_per_mma": e.T_honest_measured * per_mma if e.T_honest_measured else None,
-        "terms": e.terms(), "cert": e.cert, "route": e.route, "floor": e.floor,
-        "machine_as_built": e.machine_as_built, "total": e.total(), "total_certified": e.total(sched=False),
+        "checking": checking, "terms": e.terms(), "cert": e.cert, "route": e.route, "floor": e.floor,
+        "machine_as_built": e.machine_as_built, "core": e.core(), "core_certified": e.core(sched=False),
+        "sample": None if not sampled else {
+            "eps": e.sample(), "luck": e.luck, "adapt": adapt.eps if adapt else 0.0,
+            "unit": adapt.name if adapt else None, "selection": adapt.selection if adapt else None,
+            "budget": {"checks": d.checks, "delta": d.delta, "p": d.p}},
         "sources": {"skip": {k: p.source for k, p in d.skip.items()}, "mand": {k: p.source for k, p in d.mand.items()},
                     "clock": d.clock.source, "luck": d.luck_source, "baseline": d.baseline_source,
                     "operands": d.floor_source if operands == "floor" else operands},
         "lookups": None if table is None else {"q": table.q, "bytes": table.bytes, "l2": table.l2,
                                                "bytes_per_smsp_cycle": table.per_cycle(), "source": table.source},
-        "adapt": None if adapt is None else {"unit": adapt.name, "eps": adapt.eps, "source": adapt.source},
+        "adapt": None if adapt is None else {"unit": adapt.name, "eps": adapt.eps, "source": adapt.source,
+                                             "selection": adapt.selection},
         "curve": [[x, s.machine_eps(x)] for x in E.QS],
         "curve_uniform": [[x, s.machine_eps(q, q_uniform=x)] for x in E.QS],
         "threshold": E.threshold(s), "threshold_lanes": E.threshold(s, uniform=False),
@@ -230,19 +249,22 @@ def _eps_table(args, pi: E.Machine) -> int:
     cred = {"H": "honest's kernel (H)", "model": "honest's model bound B(H)",
             "floor": "the floor program ♭ (SPEC §0.7a)"}[args.credit]
     tb = _lookups(args)
-    ad = E.adapt(args.adapt or "", args.data)
+    ad = _adapt(args)
+    sampled = args.checking == "sampled"
     look = "" if tb is None else (f", the table route open at {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a "
                                   f"word (L2 {tb.l2 / 1e12:g} TB/s)")
-    print(f"Π {pi.vector}, operands {args.operands}, credit {cred}{look}, proof unit {ad.name} (ε_adapt "
-          f"{100 * ad.eps:.2f}%, in ε): T/MMA the credited time and its binding "
-          f"rows, H/cred honest's time over it; ε_machine at q* = {', '.join(map(str, qs))} and its floor (the lane "
-          f"and uniform routes closed); ε_luck; ε at q* = {', '.join(f'{q:g}' for q in qe)} (ε_sched in it where "
-          f"measured); q*₀ the least q* at which ε_machine reaches its floor (all routes; lanes alone); the uniform "
-          f"route alone at q* = 16")
-    print(f"{'design':26s} {'fold':>6s} {'L':>3s} {'γ':>6s} {'T/MMA':>7s} {'binds':12s} {'H/cred':>6s} {'skip':>6s} "
+    unit = "" if not sampled else (f" Sample (the sampling compiler, proof unit {ad.name}: {ad.selection}; never in "
+                                   f"core): ε_luck at q* = {args.q:g}, ε_adapt, ε_sample = their sum.")
+    print(f"Π {pi.vector}, operands {args.operands}, credit {cred}{look}, checking {args.checking}. Core (every word "
+          f"and operand verified): T/MMA the credited time and its binding rows, H/cred honest's time over it; ε_skip; "
+          f"ε_sched; ε_machine at q* = {', '.join(map(str, qs))} and its floor (the lane and uniform routes closed); "
+          f"core ε at q* = {', '.join(f'{q:g}' for q in qe)}; q*₀ the least q* at which ε_machine reaches its floor "
+          f"(all routes; lanes alone); the uniform route alone at q* = 16.{unit}")
+    print(f"{'design':26s} {'fold':>6s} {'L':>3s} {'γ':>6s} {'T/MMA':>7s} {'binds':12s} {'H/cred':>6s} {'skip':>7s} "
           f"{'sched':>6s} " + " ".join(f"{'m@' + str(q):>7s}" for q in qs)
-          + f" {'floor':>7s} {'luck':>7s} " + " ".join(f"{f'ε@{q:g}':>7s}" for q in qe)
-          + f" {'q*₀':>9s} {'lanes':>6s} {'UP@16':>6s}")
+          + f" {'floor':>7s} " + " ".join(f"{f'core@{q:g}':>9s}" for q in qe)
+          + f" {'q*₀':>9s} {'lanes':>6s} {'UP@16':>6s}"
+          + (f" | {'luck':>7s} {'adapt':>7s} {'sample':>7s}" if sampled else ""))
     rows = []
     for n in names:
         for r in sweep:
@@ -259,12 +281,15 @@ def _eps_table(args, pi: E.Machine) -> int:
         t, tl = E.threshold(s), E.threshold(s, uniform=False)
         up = s.machine_eps(16, lanes=False)
         sched = "–" if e.sched is None else f"{100 * e.sched:5.1f}%"
+        eq = es[args.q]
         print(f"{d.name:26s} {d.fold_cost():6.3g} {d.L:3d} {e.gamma:6.3f} {e.baseline.T * per_mma:7.3f} "
-              f"{','.join(e.baseline.binding)[:12]:12s} {e.credit_ratio:6.3f} {100 * e.skip:5.2f}% {sched:>6s} "
+              f"{','.join(e.baseline.binding)[:12]:12s} {e.credit_ratio:6.3f} {100 * e.skip:6.3f}% {sched:>6s} "
               + " ".join(f"{100 * es[q].machine_eps:6.2f}%" for q in qs)
-              + f" {100 * e.floor:6.2f}% {100 * e.luck:6.3f}% "
-              + " ".join(f"{100 * es[q].total():6.2f}%" for q in qe)
-              + f" {_thr(t):>9s} {_thr(tl):>6s} {100 * up:5.2f}%")
+              + f" {100 * e.floor:6.2f}% "
+              + " ".join(f"{100 * es[q].core():8.3f}%" for q in qe)
+              + f" {_thr(t):>9s} {_thr(tl):>6s} {100 * up:5.2f}%"
+              + (f" | {100 * eq.luck:6.3f}% {100 * (ad.eps if ad else 0):6.3f}% {100 * eq.sample():6.3f}%"
+                 if sampled else ""))
     return 0
 
 
@@ -277,8 +302,8 @@ def _eps(args) -> int:
         raise SystemExit("eps: one design, or --table for several")
     d = _design(args, args.designs[0] if args.designs else "dither-duo")
     tb = _lookups(args)
-    ad = E.adapt(args.adapt or "", args.data)
-    rec = _eps_record(d, pi, args.q, args.data, args.operands, args.credit, tb, ad)
+    ad = _adapt(args)
+    rec = _eps_record(d, pi, args.q, args.data, args.operands, args.credit, tb, ad, args.checking)
     if args.json:
         print(json.dumps(rec, ensure_ascii=False, indent=1))
         return 0
@@ -317,14 +342,18 @@ def _eps(args) -> int:
             print(f"      {name} {_pct(p.eps)}: {p.source}")
     print(f"  ε_machine  {_pct(t['machine'])} = ε_cert(π*) {_pct(e.cert)} + ε_route(π*) {_pct(e.route)}; floor "
           f"{_pct(e.floor)} (the lane and uniform routes closed); against honest as built {_pct(e.machine_as_built)}")
-    short = ", ".join(f"{k} {100 * v:.4f}%" for k, v in e.lucky.short.items())
-    print(f"  ε_luck     {_pct(t['luck'])}: the lucky cheater leaves undone {short} (words alone: d̄ "
-          f"{100 * e.deficit:.4f}%; δ {d.delta:.3g}, p {d.p} a word"
-          + "".join(f", {f.p} filler {j + 1}" for j, (f, _) in enumerate(e.fillers)) + f", S {d.checks:g}: "
-          f"{d.luck_source})")
-    print(f"  ε_adapt    {_pct(t['adapt'])}: proof unit {ad.name}: {ad.source}")
     print(f"  ε_clock    {_pct(t['clock'])}: " + (d.clock.source if args.credit == "H" else "credited at f_max, in γ"))
-    print(f"  ε          {_pct(e.total())} (first order {_pct(sum(v or 0.0 for v in t.values()))})")
+    core = ("skip", "mand", "machine", "sched", "clock")
+    print(f"  ε core     {_pct(e.core())} (100% checking, every word and operand verified; first order "
+          f"{_pct(sum(t[k] or 0.0 for k in core))})")
+    if args.checking == "sampled":
+        short = ", ".join(f"{k} {100 * v:.4f}%" for k, v in e.lucky.short.items())
+        print(f"  ε_sample   {_pct(e.sample())} (the sampling compiler's, never in the core ε) = ε_luck + ε_adapt")
+        print(f"      ε_luck  {_pct(t['luck'])}: the lucky cheater leaves undone {short} (words alone: d̄ "
+              f"{100 * e.deficit:.4f}%; budget δ {d.delta:.3g}, p {d.p} a word"
+              + "".join(f", {f.p} filler {j + 1}" for j, (f, _) in enumerate(e.fillers)) + f", S {d.checks:g}: "
+              f"{d.luck_source})")
+        print(f"      ε_adapt {_pct(t['adapt'])}: proof unit {ad.name}, {ad.selection}: {ad.source}")
     print(f"  q* threshold (ε_machine = its floor): {_thr(rec['threshold'])}; lanes alone "
           f"{_thr(rec['threshold_lanes'])}; the uniform route alone at q* = 16: {_pct(rec['uniform_at_16'])}")
     print(textwrap.fill("ε_machine(q*): " + ", ".join(f"{x:g} {100 * y:.2f}%" for x, y in rec["curve"]), width=120,
@@ -406,8 +435,13 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--uni-issue", type=float, metavar="C",
                    help="put the uniform classes on the issue rows (issue, the joint JI…_0) at C times an ALU's "
                         "cost there (PREDICT's u16s_l7qs measured 0.92, r20261017-045133-67bf)")
+    e.add_argument("--checking", choices=("full", "sampled"), default="full",
+                   help="full: every word and operand verified, the core ε alone (default); sampled: also ε_sample = "
+                        "ε_luck + ε_adapt, on its own line and columns")
     e.add_argument("--adapt", metavar="UNIT",
-                   help="charge ε_adapt for this proof unit (data/adapt.toml; default: its default, today's protocol)")
+                   help="with --checking sampled: the proof unit (data/adapt.toml; default: its default, today's)")
+    e.add_argument("--lookup-bytes", type=float, metavar="B",
+                   help="with --lookups: L2 bytes a table word (default: the file's)")
     k = sub.add_parser("capacity")
     k.add_argument("groups", nargs="+", metavar="GROUP")
     k.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")

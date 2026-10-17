@@ -1,7 +1,10 @@
-# Bc with P·V on committed digit limbs (SKIP 05:27Z, CHECKED-STRIP 05:21Z): P peeled, V served, Ycum's digits committed,
-# so no limb is unchecked (note:20261017T0340Z-draft-skip, note:20261017T0030Z-draft-checked-strip). Perplexity pending.
+# Bc with P·V on committed digit limbs (`pv`, CHECKED-STRIP Result 3): P served round(P / s) + c with a fresh bit c and
+# c's mean taken off in the epilogue, V served, Ycum's digits committed, so no product is unchecked; what the cheater
+# gets free is vector work, the TS-time ε below (note:20261017T0340Z-draft-skip Result 3, 06:19Z;
+# note:20261017T0030Z-draft-checked-strip). Perplexity +2.20% (8B WT-2 2K), +3.32% (70B C4 2K) with P in one block;
+# +1.65% (8B) in blocks of 256 keys, whose TS ε grows as keys/256 (up to ≈ 1% of the whole at 32K, not priced here).
 name = "co-dither-pv"
-summary = "Bc with P·V on three committed digit limbs (co32c-pv, SKIP 05:27Z): every limb a checked word, duo at L = 32"
+summary = "Bc with P·V on committed digit limbs (co32c-pv, P in one block): every product a checked word, duo at L = 32"
 honest = "e-l7qs"
 L = 32
 work = 1.0
@@ -15,9 +18,9 @@ name = "duo"
 ALU = 2
 IMAD = 1
 
-[skip.worst-cell]
-eps = 0.0
-source = "SKIP's calculator at b5d3cf858: with P·V on three committed digit limbs of L + 1, Bc's ε_skip is 0 in every cell, prefill and decode (note:20261017T0340Z-draft-skip, 05:27Z); its perplexity (r20261017-052411-7598) is pending"
+[skip.ts-time]
+eps = 0.00088
+source = "SKIP's Result 3 (calculator @07f901181): 0 by int8 products; ≤ 0.088% (8B) / 0.057% (70B) of prefill time with CHECKED-STRIP's TS vector work, co32c's recombination with O committed, cohalf's x = 12 route and pv's digits and epilogue (P·V 0.84% of its own time at 2K, served output checked downstream; 1.96% with it free), the digit and epilogue constants unmeasured (note:20261017T0340Z-draft-skip, 06:19Z)"
 
 [mand.fold]
 eps = 0.0

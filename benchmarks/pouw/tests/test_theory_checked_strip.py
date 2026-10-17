@@ -13,8 +13,9 @@ SCRIPT = Path(__file__).resolve().parents[1] / "theory" / "checked_strip.py"
 
 @pytest.mark.slow
 def test_checked_strip(tmp_path):
-    """The script's exact claims about CO-Dither (cross ranks at every instance, SAT tensor ranks, collapses, s32
-    identities, priced strategies, the TS-model table): only running it checks them, since each is computed."""
+    """The script's exact claims about CO-Dither on the linears and on P·V (cross ranks at every instance, SAT tensor
+    ranks, collapses, s32 identities, priced strategies, the TS-model tables): only running it checks them, since each
+    is computed (about 80 s, most of it the F₂ cross ranks at 512 coin bits)."""
     verdict = tmp_path / "verdict.json"
     proc = subprocess.run([sys.executable, "-B", str(SCRIPT), "--mutations", "--verdict", str(verdict)],
                           capture_output=True, text=True, cwd=tmp_path)
