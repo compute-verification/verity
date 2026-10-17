@@ -22,15 +22,19 @@ served output (the epilogue and quantizer recomputed by checks).
 
 SKIP (note:20261017T0310Z-report-eps1-program) prices whole designs per component, in executed int8 products and honest
 seconds, with γ: `record`, A both-sided bit dither (adopted-bd), B CO-Dither at r = k/2, B32 CO-Dither at r = 32, C
-NCP-INT on k32 IMMA (`SKIP_DESIGNS`, `component_table`, `skip_table`).
+NCP-INT on k32 IMMA (`SKIP_DESIGNS`, `component_table`, `skip_table`). `pv_block_table` prices P V's block size for
+A and Bc with pv's P V in CHECKED-STRIP's tensor–scalar model: each block of P its own unit, every served output free.
 """
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+import numpy as np
 
 L = 32                      # transcript stride and the low-rank noise's rank
 CONTEXTS = (2048, 8192, 32768)
@@ -337,6 +341,133 @@ def parts(name: str, ctx: int, phase: str, design: str, rates: dict = RATES) -> 
     return out
 
 
+# ------------------------------------------------- P V's block size: pv's units in the tensor–scalar model
+
+#: The tensor–scalar (TS) model's facets in SMSP-cycles, (MMA coefficient, coefficient of every other vector-pipe warp
+#: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv (CHECKED-STRIP's
+#: TS_FACETS, note:20261017T0030Z-draft-checked-strip).
+TS_FACETS = ((16.0, 0.0), (8.115, 1.0), (15.030, 0.317), (15.539, 0.172))
+#: pv's vector work a tile (16 queries by 8 channels: 128 cells, 4 a lane) beyond the folds, in warp instructions.
+#: Estimates from instruction counts; no kernel has measured them: one digit of one Ycum entry (a shift or mask, then
+#: the carry; CHECKED-STRIP's PV_DIGIT_OPS), the epilogue's offset and centring (one op a cell; PV_SERVE_OPS), and a
+#: unit's I2F and FFMA into the float output (two ops a cell), which every block of P adds once.
+PV_DIGIT_OPS, PV_SERVE_OPS, PV_SCALE_OPS = 2.0, 4.0, 8.0
+#: Bc's other components in the TS model at the duo fold, each a fraction of its own time: co32c's recombination with O
+#: committed (linears, lm_head) and cohalf with every zero-instance route at X_BITSLICED (Q Kᵀ, k = 128), from
+#: checked_strip.py @007ee9c54 (`ts_co32c_recombination`, `ts_qk_k128_all_routes`). A's served outputs are its last
+#: checked words and its bit × bit words cost more than an IMMA (QSTAR's timed r20261017-055042-7c59), so A's are 0.
+TS_EPS_BC = {"llama-3.1-8b": {"linears": 7.63e-4, "lm_head": 4.9e-5, "QKᵀ": 1.984e-3},
+             "llama-3.1-70b": {"linears": 3.91e-4, "lm_head": 4.9e-5, "QKᵀ": 1.984e-3}}
+TS_FOLD = 3.0
+#: Warp instructions a bit-sliced 32 × 128 binary product takes (QSTAR's bx, note:20261017T0344Z-draft-eps1-qstar).
+X_BITSLICED = 10.66
+
+
+def ts_time(mmas: float, ops: float) -> float:
+    return max(a * mmas + b * ops for a, b in TS_FACETS)
+
+
+def base128_digits(g: int) -> int:
+    """m, the base-128 digits a sum of g int8 terms takes (CHECKED-STRIP's n_digits over g·[−128, 127])."""
+    m = 1
+    while not (-128 * g >= -(128 ** m) and 127 * g // 128 ** (m - 1) <= 127):
+        m += 1
+    return m
+
+
+def pv_unit(k: int, rep: int, fold: float = TS_FOLD, x: float = X_BITSLICED):
+    """One pv unit's tile at depth k keys (its diagonal 32 included), as CHECKED-STRIP's ts_pv prices it plus the unit's
+    float scaling: (MMAs, folds, free, routes). The cheater does every MMA and fold (each feeds a committed word); free
+    is what only the served output needs: the epilogue, the float scaling, and Ycum's and S's adds and Ycum's digits
+    (shared by the `rep` query heads of a KV head). Routes are the zero-instance ones, {direction: (dM, dO)}: T at 8x an
+    IMMA, W and the D_d at 7x, O′ through c·b at x·k/32."""
+    g = k // 32 - 1
+    m = base128_digits(g) if g else 1
+    mmas = k // 32 + (m + 1 if g else 1)
+    folds = 4 * fold * (k // 32 + m)
+    free = 4 * (m - 1) + PV_SERVE_OPS + PV_SCALE_OPS + (4 + 4 + 4 * m * PV_DIGIT_OPS) / rep
+    routes = {"T": (-(k // 32), 8 * x * (k // 32)), "WD": (-m, 7 * x * m), ("O′", k): (-(2 if g else 1), x * k / 32)}
+    return mmas, folds, free, routes
+
+
+def ts_best(hon: tuple, cheat: tuple, routes: list) -> tuple[float, float]:
+    """(honest's time, the best cheater's) when the cheater moves a fraction φ_j ∈ [0, 1] of each route's work, changing
+    its (MMAs, other instructions) by Σ φ_j (dM_j, dO_j). The minimum over the box of the facets' max is a vertex of the
+    (φ, t) program, where len(routes) + 1 facet and box constraints are tight; every vertex is solved for."""
+    R, d = len(routes), np.array(routes, float).reshape(-1, 2)
+    rows = [np.r_[a * d[:, 0] + b * d[:, 1], -1.0] for a, b in TS_FACETS] + [np.r_[np.eye(R)[j], 0.0] for j in range(R)
+                                                                             for _ in (0, 1)]
+    rhs = [-(a * cheat[0] + b * cheat[1]) for a, b in TS_FACETS] + [v for _ in range(R) for v in (0.0, 1.0)]
+    combos = np.array(list(itertools.combinations(range(len(rows)), R + 1)))
+    A, y = np.array(rows)[combos], np.array(rhs)[combos]
+    ok = np.abs(np.linalg.det(A)) > 1e-9
+    phi = np.linalg.solve(A[ok], y[ok][..., None])[..., :R, 0]
+    phi = np.vstack([phi[np.all((phi >= -1e-12) & (phi <= 1 + 1e-12), axis=1)], np.zeros((1, R))])
+    M, O = cheat[0] + phi @ d[:, 0], cheat[1] + phi @ d[:, 1]
+    return ts_time(*hon), float(np.max([a * M + b * O for a, b in TS_FACETS], axis=0).min())
+
+
+def pv_ts(name: str, ctx: int, block: int, sink: bool = True, fold: float = TS_FOLD,
+          x: float = X_BITSLICED) -> tuple[float, float]:
+    """pv's P V in a prefill of ctx tokens with P in blocks of `block` keys (0: one block): (ε_skip with the served output
+    free, γ over plain int8), each query block's tile weighed (past 256 every 8th, weighted 8, as CHECKED-STRIP). Each
+    block of P is its own unit (scale, T words, Ycum digits, served output); with `sink` key 0 is one more, priced as a
+    unit of depth 32 (the arms' p_sink)."""
+    s = MODELS[name]
+    rep = s.heads // s.kv
+    hon = cheat = plain = 0.0
+    for beta in range(ctx // 32):
+        if beta >= 256 and beta % 8:
+            continue
+        wt, k = (1 if beta < 256 else 8), 32 * (beta + 1)
+        full = (k - 1) // block if block else 0
+        units = ([(32, 1)] if sink else []) + ([(block, full)] if full else []) + [(k - full * block, 1)]
+        M = O = F = 0.0
+        routes: dict = {}
+        for depth, n in units:
+            mm, fo, fr, rs = pv_unit(depth, rep, fold, x)
+            M, O, F = M + n * mm, O + n * fo, F + n * fr
+            for key, (dm, do) in rs.items():
+                pm, po = routes.get(key, (0.0, 0.0))
+                routes[key] = (pm + n * dm, po + n * do)
+        th, tc = ts_best((M, O + F), (M, O), list(routes.values()))
+        hon, cheat, plain = hon + wt * th, cheat + wt * tc, plain + wt * 16 * (k // 32)
+    return hon / cheat - 1, hon / plain
+
+
+def pv_block_point(name: str, ctx: int, design: str, block: int, rates: dict = RATES) -> dict:
+    """Prefill's whole-model ε_skip (every served output free: no downstream check assumed) and γ for `Ap` (A with pv) or
+    `Bc`, P in blocks of `block` keys: each component's TS ε (TS_EPS_BC; A's 0 off P V) weighed by its honest seconds,
+    P V's taken as plain int8 × pv_ts's γ."""
+    ps = parts(name, ctx, "prefill", design, rates)
+    e_pv, g_pv = pv_ts(name, ctx, block)
+    eps = {"P·V": e_pv, **(TS_EPS_BC[name] if design == "Bc" else {})}
+    secs = {p.component: p.plain * g_pv if p.component == "P·V" else p.seconds for p in ps}
+    skip = sum(secs[c] * e / (1 + e) for c, e in eps.items())
+    total = sum(secs.values())
+    return {"model": name, "ctx": ctx, "design": design, "block": block, "eps_pv": e_pv, "gamma_pv": g_pv,
+            "pv_share": secs["P·V"] / total, "eps": skip / (total - skip), "gamma": total / sum(p.plain for p in ps)}
+
+
+PV_BLOCKS = (0, 256, 512, 1024)
+
+
+def pv_block_table(rates: dict = RATES) -> str:
+    lines = ["P V's block size (pv, prefill, TS model at the duo fold, every served output free): P V's ε_skip and γ, "
+             "its share of honest time, and the whole model's ε_skip and γ", "",
+             "| model | context | design | P block | P V ε_skip | P V γ | P V share | whole ε_skip | whole γ |",
+             "|---|---:|---|---:|---:|---:|---:|---:|---:|"]
+    for m in MODELS:
+        for c in CONTEXTS:
+            for d in ("Ap", "Bc"):
+                for b in PV_BLOCKS:
+                    q = pv_block_point(m, c, d, b, rates)
+                    lines.append(f"| {m} | {c // 1024}K | {d} | {b or 'one'} | {100 * q['eps_pv']:.3g}% | "
+                                 f"{q['gamma_pv']:.3f} | {100 * q['pv_share']:.3g}% | {100 * q['eps']:.3g}% | "
+                                 f"{q['gamma']:.3f} |")
+    return "\n".join(lines)
+
+
 def decode_dram(name: str, ctx: int, rates: dict = RATES) -> float:
     """What the zero-weight, zero-KV instance (B = 0 with B̃ generated from the coins, K = V = 0) saves on decode's binding
     facet, DRAM, as a fraction of its own (compute-bound) transcripts: the plain step beyond the transcripts. Binding B to
@@ -445,6 +576,7 @@ def main(argv: list[str] | None = None) -> int:
                       f"Compiled protocol adds {100 * compiled_extra():.2f}% (spot checks).", "",
                       "SKIP designs: " + "; ".join(f"{k}: {v}" for k, v in SKIP_DESIGNS.items()), "", skip_table(), "",
                       *(component_table(m, c, ph) + "\n" for m in MODELS for c in (2048, 32768) for ph in PHASES),
+                      pv_block_table(), "",
                       "Decode's zero-weight instance saves, on DRAM, this multiple of its transcripts' compute: "
                       + ", ".join(f"{m} {c // 1024}K {decode_dram(m, c):.2f}" for m in MODELS for c in CONTEXTS)])
     print(text)
@@ -454,6 +586,8 @@ def main(argv: list[str] | None = None) -> int:
         Path(a.json).write_text(json.dumps({"rates": RATES, "points": [
             {**asdict(q), "eps_mac": q.eps_mac, "eps_time": q.eps_time} for q in pts],
             "skip": [asdict(q) for q in sums],
+            "pv_blocks": [pv_block_point(m, c, d, b) for m in MODELS for c in CONTEXTS for d in ("Ap", "Bc")
+                          for b in PV_BLOCKS],
             "decode_zero_weight_gap": {f"{m}/{c}": decode_dram(m, c) for m in MODELS for c in CONTEXTS}}, indent=1) + "\n")
     return 0
 

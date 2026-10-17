@@ -73,6 +73,25 @@ def test_committed_pv_digits_leave_nothing_to_skip(design):
         assert s.gamma >= a.gamma - 1e-9, (m, c, ph)
 
 
+def test_pv_units_price_as_checked_strip_without_the_scaling_and_the_sink(monkeypatch):
+    monkeypatch.setattr(E, "PV_SCALE_OPS", 0.0)
+    for m, c, eps, gamma in (("llama-3.1-8b", 2048, 0.019613, 1.3753), ("llama-3.1-70b", 8192, 0.005081, 1.2920)):
+        e, g = E.pv_ts(m, c, 0, sink=False)
+        assert eps <= e < eps + 1e-4 and g == pytest.approx(gamma, abs=1e-4)   # the zero-instance routes add < 0.01%
+
+
+def test_smaller_p_blocks_cost_more_eps_and_gamma():
+    m = "llama-3.1-8b"
+    got = {b: E.pv_ts(m, 2048, b) for b in (0, 256, 512, 1024)}
+    assert got[256] > got[512] > got[1024] > got[0]
+    assert E.pv_ts(m, 2048, 2048) == got[0]
+    for b in (256, 512, 1024):
+        ap, bc = E.pv_block_point(m, 2048, "Ap", b), E.pv_block_point(m, 2048, "Bc", b)
+        e = ap["eps_pv"] / (1 + ap["eps_pv"]) * ap["pv_share"]
+        assert ap["eps"] == pytest.approx(e / (1 - e))                  # A skips nothing off P V
+        assert ap["eps"] < bc["eps"] and ap["gamma"] < bc["gamma"]
+
+
 def test_decode_hides_the_edit_under_dram_and_the_zero_weight_gap_is_reported():
     for m, c, _ in CELLS:
         assert E.summary(m, c, "decode", "A").gamma < 1.05
