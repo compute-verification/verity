@@ -55,6 +55,12 @@ the inner verifier.
 * `codeFacts_of_parts`: all of it at once. With `ReadsThrough`, `PartCallsTrue` at every part and V*'s parts at each
   shape (`VStarParts`: the part facts above at one layout and opening), the readers give `InnerViewRun`, `CallsNil`,
   `CallsTrue`, `CallsOpenPlayed`, `CallsLogColl` and `InnerAcceptsColl`.
+* **The staging, off the run.** A run's V* statements are the staging `D.vstar`'s at its first `k_I + kS` pairs
+  (`runVstar`), so `Staged` follows (`staged_of_vstarShows`) from a fact about the staging alone, with no prover or run
+  (`VstarShows`: a V* statement staged at pairs shows the coins their verifier messages show and their prover messages
+  as the commit strings), and one about the compiled verifier's accepted runs (`RunPairs`: they send at least
+  `k_I + kS` messages, each answered by a message that shows its coin). `codeFacts_of_staging` is `codeFacts_of_parts`
+  so (`VStarPartsStaging`).
 * `Opening.twoCalls`: an opening of a commit string `b ‖ c` through two recorded calls, its salt's hash `c` and its
   message's digest under the salt's mask, as hm96 rows open (`Deploy.zeroCommit`'s form). It binds wherever the salt's
   and the message's encodings are injective.
@@ -969,6 +975,56 @@ theorem PrBAbort_le_PrBI_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     exact hcoll s.1.1 s.1.2.1 s.1.2.2.1 s.1.2.2.2 s.2.1 s.2.2 (Option.isSome_iff_exists.2 ⟨(u, v), huv⟩)
   · simp only [hk, ↓reduceDIte, le_refl]
 
+/-! ## The staged V* statements, off the run -/
+
+/-- **An accepted run's first pairs show its coins** (a code fact about the compiled verifier): on an accepted run, the
+prover sends at least the inner and staging rounds' `k_I + kS` messages, and the verifier's answer to each of them is a
+message that shows that round's coin, which `decC` reads off it. -/
+def RunPairs (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (decC : Msg → Msg → Coin) : Prop :=
+  ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
+    I.V.k (xI D x) + D.kS x ≤ (run H P D.V x ω r).msgs.length ∧ ∀ i < I.V.k (xI D x) + D.kS x,
+      ∃ m, ((run H P D.V x ω r).msgs.getD i ([], .rej)).2 = .msg m ∧ decC x m = coinSeq r i
+
+/-- **The V\* statements show what they are staged at** (a code fact about the staging `D.vstar` alone, with no run): at
+a compiled statement of the shape, each V* statement staged at `k_I + kS` pairs shows every coin sequence the pairs'
+verifier messages show (`shows`) and, as the commit string of each inner round the layout spans, the pairs' prover
+message at that round (`cmt`). -/
+def VstarShows (D : Deploy Coin) (I : Inner Coin W) (L : Layout) (shape : Form → Prop) (decC : Msg → Msg → Coin)
+    (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
+  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out),
+    ps.length = I.V.k (xI D x) + D.kS x → ∀ c : ℕ → Coin,
+      (∀ i < ps.length, ∃ m, (ps.getD i ([], .rej)).2 = .msg m ∧ decC x m = c i) →
+        ∀ s < D.nS x, shows s x ((D.vstar x ps).getD s []) c ∧
+          ∀ i < L.rounds x, cmt x i ((D.vstar x ps).getD s []) = (ps.map Prod.fst).getD i []
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- **`Staged` off the run**: the staging shows what it is staged at (`VstarShows`), an accepted run's first pairs show
+its coins (`RunPairs`), and the layout spans no more than those rounds. A run's V* statements are the staging's at its
+first `k_I + kS` pairs (`runVstar`). -/
+theorem staged_of_vstarShows {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {L : Layout}
+    {shape : Form → Prop} {decC : Msg → Msg → Coin} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
+    {cmt : Msg → ℕ → Msg → Msg} (hP : RunPairs H D I decC) (hV : VstarShows D I L shape decC shows cmt)
+    (hL : ∀ x, L.rounds x ≤ I.V.k (xI D x) + D.kS x) : Staged H D I L shape shows cmt := by
+  intro x st hst hf Ω P ω r hacc s hs
+  obtain ⟨hlen, hpr⟩ := hP x Ω P ω r hacc
+  have hpl : ((run H P D.V x ω r).msgs.take (I.V.k (xI D x) + D.kS x)).length = I.V.k (xI D x) + D.kS x := by
+    simp only [List.length_take]
+    omega
+  have hc : ∀ i < ((run H P D.V x ω r).msgs.take (I.V.k (xI D x) + D.kS x)).length, ∃ m,
+      (((run H P D.V x ω r).msgs.take (I.V.k (xI D x) + D.kS x)).getD i ([], .rej)).2 = .msg m ∧
+        decC x m = coinSeq r i := by
+    intro i hi
+    rw [hpl] at hi
+    obtain ⟨m, hm, hd⟩ := hpr i hi
+    refine ⟨m, ?_, hd⟩
+    rwa [List.getD_eq_getElem?_getD, List.getElem?_take_of_lt hi, ← List.getD_eq_getElem?_getD]
+  obtain ⟨h1, h2⟩ := hV x st hst hf _ hpl (coinSeq r) hc s hs
+  refine ⟨h1, fun i hi => ?_⟩
+  unfold runVstar
+  rw [h2 i hi]
+  have hi' : i < I.V.k (xI D x) + D.kS x := Nat.lt_of_lt_of_le hi (hL x)
+  simp only [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_take_of_lt hi']
+
 /-! ## The code facts about the readers and V*, together -/
 
 /-- **V\*'s parts at one shape** (the code facts about V*'s parts, the staged V* statements and the inner verifier at
@@ -1005,6 +1061,38 @@ theorem codeFacts_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     callsOpenPlayed_of_parts hRef hR hHD hOD hSD hHH hOH hSH hHS hOS hSS,
     callsLogColl_of_parts hRef hTr hR hLD hOD hSD hLDD hLH hOH hSH hLDH hLS hOS hSS hLDS,
     innerAcceptsColl_of_parts hRef hTr hR hCD hOD hSD hDD hCH hOH hSH hDH hCS hOS hSS hDS⟩
+
+/-- **V\*'s parts at one shape, with the staging off the run**: `VStarParts` with the staging's fact about `D.vstar`
+alone (`VstarShows`, at the coins `decC` reads) in place of `Staged`. -/
+def VStarPartsStaging (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (H : Msg → Msg) (L : Layout)
+    (opening : Opening) (decC : Msg → Msg → Coin) (shape : Form → Prop) : Prop :=
+  ∃ (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop)
+    (cmt : Msg → ℕ → Msg → Msg) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)),
+    (∀ s, PartChecks H D DO L shape shows chk s) ∧ (∀ s, PartOpens D DO L shape opening cmt s) ∧
+      (∀ s, PartLogs H D DO L shape shows logs s) ∧ VstarShows D I L shape decC shows cmt ∧
+        Decomp H D I.V shape chk ∧ LogDecomp H D I.V shape logs ∧ Held D I L shape
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- **`VStarParts` from the staging off the run** (`staged_of_vstarShows`). -/
+theorem vstarParts_of_staging {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    {L : Layout} {opening : Opening} {decC : Msg → Msg → Coin} {shape : Form → Prop} (hP : RunPairs H D I decC)
+    (hL : ∀ x, L.rounds x ≤ I.V.k (xI D x) + D.kS x) (h : VStarPartsStaging D I DO H L opening decC shape) :
+    VStarParts H D I DO L opening shape := by
+  obtain ⟨shows, chk, cmt, logs, hC, hO, hLg, hV, hD, hLD, hH⟩ := h
+  exact ⟨shows, chk, cmt, logs, hC, hO, hLg, staged_of_vstarShows hP hV hL, hD, hLD, hH⟩
+
+/-- **The code facts about the readers and V\*, with the staging off the run**: `codeFacts_of_parts`, with each shape's
+`Staged` from the staging's fact about `D.vstar` (`VstarShows`) and an accepted run's first pairs (`RunPairs`). -/
+theorem codeFacts_of_staging {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    {L : Layout} {opening : Opening} {decC : Msg → Msg → Coin} (hRef : Refuses H D)
+    (hR : ReadsThrough H D I.V L.msgs L.calls) (hT : ∀ s, PartCallsTrue H D DO L s) (hP : RunPairs H D I decC)
+    (hL : ∀ x, L.rounds x ≤ I.V.k (xI D x) + D.kS x) (hD : VStarPartsStaging D I DO H L opening decC Form.Dense)
+    (hH : VStarPartsStaging D I DO H L opening decC Form.Holo)
+    (hS : VStarPartsStaging D I DO H L opening decC Form.Sparse) :
+    InnerViewRun H D I DO ∧ CallsNil H D ∧ CallsTrue H D I DO ∧ CallsOpenPlayed H D I DO opening ∧
+      CallsLogColl H D I DO ∧ InnerAcceptsColl H D I DO :=
+  codeFacts_of_parts hRef hR hT (vstarParts_of_staging hP hL hD) (vstarParts_of_staging hP hL hH)
+    (vstarParts_of_staging hP hL hS)
 
 end Facts
 
