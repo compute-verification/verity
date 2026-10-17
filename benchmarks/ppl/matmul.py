@@ -14,6 +14,7 @@ import gates as G
 import methodology
 
 FP32_EXACT = 2 ** 24
+FP64_EXACT = 2 ** 53
 #: rows of each product recomputed in float64 on the check window
 CHECK_ROWS = {"linear": 32, "qk": 64, "pv": 64}
 
@@ -31,11 +32,17 @@ def int_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 
 def exact_mm(a: torch.Tensor, b: torch.Tensor, term: int) -> torch.Tensor:
     """a @ b for integer-valued FP32 a, b with |a_ik b_kj| <= term: FP32 GEMMs over k-chunks whose every partial sum is
-    <= 2^24 (so exact in any order), summed in float64."""
+    <= 2^24 (so exact in any order), summed in float64. When the chunks would be shorter than 1024, b is split first
+    into b = 16 hi + lo (lo in [-8, 7]) and each part's product is taken the same way."""
     c = max(1, FP32_EXACT // max(1, term))
     k = a.shape[-1]
     if k <= c:
         return (a @ b).double()
+    am, bm = (float(t.abs().max()) for t in (a, b))
+    if c < 1024 and am < 2048 and bm > 15:
+        hi = torch.floor((b + 8) / 16)
+        lo = b - 16 * hi
+        return 16 * exact_mm(a, hi, int(am * float(hi.abs().max()))) + exact_mm(a, lo, int(am * 8))
     out = None
     for i in range(0, k, c):
         part = (a[..., i:i + c] @ b[..., i:i + c, :]).double()
@@ -141,10 +148,11 @@ class MM:
         m.stage = "int"
         return m
 
-    def cached(self, name: str, fn: Callable):
+    def cached(self, name: str, fn: Callable, coinless: bool = False):
         """fn(), once per matmul (linear name, or the attention KV group), chain prefix and, if anything before it
-        is seeded, seed: the layer's linears share it across windows and arms; attention's across its row chunks."""
-        seeded = any(s.defn.seeded(s.kw) for s in self.prefix)
+        is seeded, seed: the layer's linears share it across windows and arms; attention's across its row chunks.
+        `coinless`: fn reads none of this step's coins, so only the steps before it decide whether it is per seed."""
+        seeded = any(s.defn.seeded(s.kw) for s in (self.prefix[:-1] if coinless else self.prefix))
         key = (self.name, tuple(s.key for s in self.prefix), name, self.seed if seeded else None)
         if key not in self.store:
             self.store[key] = fn()
@@ -156,17 +164,18 @@ class MM:
             self.run.rotations[key] = fn()
         return self.run.rotations[key]
 
-    def coins(self, shape) -> torch.Tensor:
-        """Fresh bits (0. or 1.) of the given shape. Linears: one stream per (seed, layer, linear, window), the tag
-        tonight's `linears_layerwise.py` uses; attention: the (seed, layer, window) stream, in draw order."""
+    def coins(self, shape, levels: int = 2) -> torch.Tensor:
+        """Fresh coins of the given shape, uniform on {0, ..., levels - 1} (bits by default; a b-bit dither takes
+        levels = 2^b). Linears: one stream per (seed, layer, linear, window), the tag tonight's `linears_layerwise.py`
+        uses; attention: the (seed, layer, window) stream, in draw order."""
         if self.kind == "linear":
             n = self._draws[0]
             self._draws[0] += 1
             tag = f"{self.seed}/{self.layer}/{self.name}/{self.window}" + (f"/{n}" if n else "")
             g = torch.Generator(device=self.device)
             g.manual_seed(zlib.crc32(tag.encode()))
-            return torch.randint(0, 2, tuple(shape), generator=g, device=self.device).float()
-        return torch.randint(0, 2, tuple(shape), generator=self.run.gen(self.device), device=self.device).float()
+            return torch.randint(0, levels, tuple(shape), generator=g, device=self.device).float()
+        return torch.randint(0, levels, tuple(shape), generator=self.run.gen(self.device), device=self.device).float()
 
     def gate(self, name: str, ok: bool, detail=None) -> bool:
         return self.run.gates.record(name, ok, self.where, detail)
@@ -179,7 +188,8 @@ class MM:
     def int_product(self, x: torch.Tensor | None = None, w: torch.Tensor | None = None) -> torch.Tensor:
         """The exact integer product of x and w (default: this matmul's), gated: both within int8 (or, when the
         quantizer declared a wider grid with `integer(..., top=T)`, within +-T: `grid_range`) and the accumulator
-        within s32 by k max|x| max|w| on every call, and on the check window against float64 on CHECK_ROWS rows."""
+        within s32 (a wider grid's FP32-chunk route: within 2^53) by k max|x| max|w| on every call, and on the check
+        window against float64 on CHECK_ROWS rows."""
         x = self.x if x is None else x
         w = self.weight() if w is None else w
         top = self.extra.get("top", 127)
@@ -189,7 +199,7 @@ class MM:
             self.gate("int8_range", G.int8_ok(x, w))
         k = x.shape[-1]
         bound = k * G.absmax(x) * G.absmax(w)
-        self.gate("accumulator", bound <= G.S32, bound)
+        self.gate("accumulator", bound <= (G.S32 if top <= 127 else FP64_EXACT), bound)
         if self.kind == "linear" and top > 127:
             acc = exact_mm(x.float(), w.float().T, int(G.absmax(x) * G.absmax(w)))
         elif self.kind == "linear":

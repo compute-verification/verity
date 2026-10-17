@@ -1,0 +1,46 @@
+# The adopted P.V with P~ formed in registers, a useful MMA as measured: apv_fu (benchmarks/pouw/edited_gemm/apv.cu),
+# apv_l7qs's units, words and served f (gated equal, receipts and f) reading the masked P and forming P~ = (P + V_u) ^
+# 0x80 a byte after each A fragment's ldmatrix (V_u = U + 64 from a fragment-ordered table, 2 ops a register: 2.0 a
+# MMA at 4 n-tiles a fragment), so no P~ pass writes P~ to memory. Llama-3.1-8B's attention at 2,048 tokens (32 query
+# heads, 8 KV heads, causal); counts are the kernel's executed mix (ncu) a useful MMA, the strip's T-word MMAs, so MMA
+# = 1.1176 (the tail's 4 MMAs a 128-cell tile) and the duo fold sits inside per_mma at L = 32. WAIT is left out (0.1535
+# a useful MMA). The GEMM is 1.82x apv_plain's time at 2,048 tokens (apv_l7qs 1.59x) and 1.095x at 4,096 (DRAM-bound,
+# as apv_l7qs), and the whole P.V with its producers (U, V, the X sums) 3.32x (apv_l7qs with its P~ pass 5.95x).
+name = "apv-fu-l7qs"
+status = "measured"
+source = "BC-KERNEL's apv_fu (benchmarks/pouw/edited_gemm/apv.cu) at s = 2048, H = 32, rep = 4, `eps_profile.py OUT --json`, census VF3n-16's classes, scaled by 2,490,368 / 2,228,224 MMAs to a useful MMA (r20261017-092503-35ff; receipts and f equal to apv_l7qs's, which is bit-exact against checked_strip's pv_words and pv_served)"
+L = 32
+
+[mma]
+kind = "IMMA.16832.S32.S8.S8"   # mma.sync m16n8k32 s8: 16 SMSP-cycles on the tensor pipe
+words = 128                     # 16 x 8 s32 accumulators
+depth = 32                      # k
+form = "IMMA16832"              # its census kind (data/forms.toml): per_mma's MMA is one of these
+
+[per_mma]       # warp instructions a useful MMA by class, everything the kernel issues (the fold, P~ and the tail included)
+MMA = 1.1176
+ALU = 11.7833
+IMAD = 4.4337
+NOROW = 1.2135
+LDSM_X4 = 0.5294
+FFMA = 0.4721
+SEL = 0.2122
+LDG32 = 0.1623
+UNI = 0.1033
+LDG128 = 0.0553
+IMADW = 0.0352
+VIMNMX = 0.0081
+UTMA16K = 0.0041
+
+[measured]
+cycles_per_mma = 52.0484        # the hot median at its clock a useful MMA; ncu 51.6800; work bound 26.1149 on JI3n_0 (eps_sched 0.498)
+source = "apv_fu at s = 2048, H = 32, rep = 4 (r20261017-092503-35ff): hot 0.0765 ms against apv_plain's 0.0420"
+
+[operands]      # the least operand delivery a program pays a MMA when the design names none (`--operands floor`)
+floor = { LDSM_X4 = 0.2 }
+source = "SPEC §3.4: an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
+
+[fold]          # the fold inside per_mma, lane instructions a committed word (12 warp instructions a useful MMA at L = 32)
+name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)
+ALU = 2
+IMAD = 1
