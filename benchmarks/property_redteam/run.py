@@ -4,7 +4,7 @@
     uv run python benchmarks/property_redteam/run.py --json > benchmarks/property_redteam/cases.json
 
 A check is ``FUNCTION(program) -> {"refused": bool, "charged": {class: units}}`` over cases.py's `CLASSES` (``accept-all`` and
-``refuse-all`` name the two trivial ones). The check's module is imported before the cases, so a Definition it registers is
+``refuse-all`` name the two trivial ones); a ``reasons`` entry, when it returns one, is copied into the report. The check's module is imported before the cases, so a Definition it registers is
 the one the cases call. Each case's outcome:
 
   ok           the ruling's verdict, charged at least the case's charge (an attack) or within its allowance (an honest case)
@@ -106,11 +106,13 @@ def run(check: Callable[[Any], Any], ids: list[str] | None = None) -> dict:
             rows.append(row | {"outcome": outcome, "refused": True, "note": f"the IR refuses it at build: {e}"[:300]})
             continue
         try:
-            refused, charged = verdict(check(program), C.CLASSES)
+            v = check(program)
+            refused, charged = verdict(v, C.CLASSES)
         except Exception as e:  # noqa: BLE001  (a check's failure is its outcome, recorded)
             rows.append(row | {"outcome": "error", "note": f"{type(e).__name__}: {e}"[:300]})
             continue
-        rows.append(row | {"outcome": grade(case, refused, charged), "refused": refused, "charged": charged})
+        row |= {"outcome": grade(case, refused, charged), "refused": refused, "charged": charged}
+        rows.append(row | ({"reasons": v["reasons"]} if "reasons" in v else {}))
     outcomes = Counter(r["outcome"] for r in rows)
     return {"rows": rows, "outcomes": {o: outcomes[o] for o in OUTCOMES if outcomes[o]},
             "passed": all(r["outcome"] in PASSING or r["outcome"] == "skipped" for r in rows)}
@@ -130,7 +132,7 @@ def _table(report: dict) -> str:
     lines = [f"{'case':20s} {'outcome':12s} {'refused':8s} charged"]
     for r in report["rows"]:
         lines.append(f"{r['id']:20s} {r['outcome']:12s} {str(r.get('refused', '')):8s} "
-                     f"{json.dumps(r.get('charged', ''))} {r.get('note', '')}".rstrip())
+                     f"{json.dumps(r.get('charged', ''))} {r.get('note', '')} {json.dumps(r.get('reasons', ''))[:120]}".rstrip())
     lines.append("outcomes: " + ", ".join(f"{o} {n}" for o, n in report["outcomes"].items()))
     return "\n".join(lines)
 
