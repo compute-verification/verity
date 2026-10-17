@@ -6,6 +6,7 @@ import json
 import numpy as np
 
 from tests.properties import glm53_cuda_rmsnorm_capture_gpu as X
+from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.program.kernels import cuda_rmsnorm_rows as R
 from verity_vllm.properties.record import REGISTRY, digest_of
 
@@ -18,8 +19,19 @@ def _case(kind: str = "rms_norm", m: int = 1, n: int = 6144) -> dict:
 
 
 def _doc() -> dict:
-    return {"gate": {"ok": True}, "sass": {"ok": True},
+    return {"gate": {"ok": True}, "served": {"ok": True}, "sass": {"ok": True},
             "cases": [_case(kind, m, n) for n in X.WIDTHS for m in X.MS for kind in X.KINDS], "errors": {}}
+
+
+def _stub_envs(monkeypatch, **switches) -> None:
+    import sys
+    import types
+
+    envs = types.ModuleType("vllm.envs")
+    for k, v in {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_OINK_OPS": False, **switches}.items():
+        setattr(envs, k, v)
+    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
+    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
 
 
 def _through_torch(words: np.ndarray) -> np.ndarray:
@@ -49,6 +61,16 @@ def test_verdict_requires_all_shapes_words_launches_determinism_and_probes() -> 
     assert not X._verdict(doc)
     assert not X._verdict({**_doc(), "cases": _doc()["cases"][:-1]})
     assert not X._verdict({**_doc(), "errors": {"x": "boom"}})
+    assert not X._verdict({**_doc(), "served": {"ok": False}})
+    assert not X._verdict({k: v for k, v in _doc().items() if k != "served"})
+
+
+def test_served_needs_batch_invariance_and_oink_off(monkeypatch) -> None:
+    _stub_envs(monkeypatch)
+    assert X.served() == {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_OINK_OPS": False, "ok": True}
+    for k in ("VLLM_BATCH_INVARIANT", "VLLM_USE_OINK_OPS"):
+        _stub_envs(monkeypatch, **{k: True})
+        assert X.served()["ok"] is False
 
 
 def test_planted_rows_and_numpy_models_include_both_in_place_outputs() -> None:
@@ -65,10 +87,18 @@ def test_planted_rows_and_numpy_models_include_both_in_place_outputs() -> None:
 
 
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
+    """`main` with the launches stood in for, every served-default switch inherited set: cleared before vLLM reads them, its
+    switches read back, GO; with batch invariance read back on, NO-GO."""
+    import os
+
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X, "sass", lambda out: {"ok": True})
+    for k in SERVED_DEFAULTS:
+        monkeypatch.setenv(k, "0")
+    _stub_envs(monkeypatch)
 
     def stub_case(work, kind, m, n):
+        assert not any(k in os.environ for k in SERVED_DEFAULTS)
         words = np.array([[0x0000, 0x8000, 0x7FC1, 0x3F80]], np.uint16)
         assert np.array_equal(_through_torch(words), words)
         return _case(kind, m, n)
@@ -78,12 +108,17 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert X.main(["--out", str(out), "--scratch", str(tmp_path)]) == 0
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["ok"] and doc["digest"] == digest_of(doc) and len(doc["cases"]) == 24
+    assert doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS} and doc["served"]["ok"] is True
     assert {c["eps"] for c in doc["cases"] if c["N"] == 6144} == {1e-5}
     assert {c["eps"] for c in doc["cases"] if c["N"] == 7168} == {1e-6}
-    assert "GLM53-CUDA-RMSNORM GO cases=24 errors=0" in capsys.readouterr().out
+    assert "GLM53-CUDA-RMSNORM GO served=True cases=24 errors=0" in capsys.readouterr().out
+    _stub_envs(monkeypatch, VLLM_BATCH_INVARIANT=True)
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path)]) == 1
+    assert "GLM53-CUDA-RMSNORM NO-GO served=False" in capsys.readouterr().out
 
 
 def test_device_gate_failure_runs_nothing(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(X, "served_defaults", lambda: {})
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": False, "checks": {"cc": False}})
     monkeypatch.setattr(X, "one_case", lambda *a: (_ for _ in ()).throw(AssertionError("must not launch")))
     assert X.main(["--out", str(tmp_path)]) == 3

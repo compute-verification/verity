@@ -121,8 +121,9 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "(TileLang's FP32 path at <= 16 tokens, DeepGEMM's TF32 path above), the layer-0 broadcast pre and hc_head equals "
              "mhc_twin, and the evaluated pieces (MhcFusedSplit_v1, MhcPost_v1, MhcPrenormTf32_v1, MhcPreBigFuse(Broadcast)_v1, "
              "HcHead_v1) equal the kernel's words, bit for bit."),
-    Property("glm53_cuda_rmsnorm_capture", "verity-vllm/glm53-cuda-rmsnorm-capture/v1",
-             "On the capture's cc 9.0 GPU, vLLM's default non-batch-invariant BF16 rms_norm and fused_add_rms_norm launch their pinned "
+    Property("glm53_cuda_rmsnorm_capture", "verity-vllm/glm53-cuda-rmsnorm-capture/v2",
+             "On the capture's cc 9.0 GPU at vLLM's defaults (read back: not batch invariant, Oink off), vLLM's default "
+             "non-batch-invariant BF16 rms_norm and fused_add_rms_norm launch their pinned "
              "width-8 paths and block sizes at hidden sizes 6144 and 7168, and every output and residual word equals the "
              "registered CUDA vector-8 Definitions, including planted finite, subnormal, infinity and NaN rows."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
