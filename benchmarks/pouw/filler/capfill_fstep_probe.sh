@@ -33,14 +33,16 @@ for v in CP_RUNS CP_PAD CP_FGATE CP_FLIN CP_ALONE CP_NCU CP_NCU_METRICS; do echo
 
 declare -A FLAGS=([fit]="-DFLIN_FIT" [fit2]="-DFLIN_FIT=2" [fitx]="-DFLIN_FIT -DPFILL_XIN13" [c1]="")
 builds=$(for x in fit $CP_FGATE $CP_FLIN $CP_RUNS $CP_ALONE $CP_NCU; do x=${x%%,*}; echo "${x%%:*}"; done | sort -u)
-# fitx(y|tNS)[jJ][e]: fitx whose pump yields the SMs flin's CTAs occupy (PF_YIELD): y waits the mark out, tNS sleeps NS ns
-# a read while it holds; jJ reads it every J B fragments (default 16); e marks from the CTA's start
+# fitx(y|tNS)[jJ][e][a]: fitx whose pump yields the SMs flin's CTAs occupy (PF_YIELD): y waits the mark out, tNS sleeps
+# NS ns a read while it holds; jJ reads it every J B fragments (default 16); e marks from the CTA's start; a marks
+# attention's SMs too
 for b in $builds; do
-  if [[ $b =~ ^fitx(y|t([0-9]+))(j([0-9]+))?(e)?$ ]]; then
+  if [[ $b =~ ^fitx(y|t([0-9]+))(j([0-9]+))?(e)?(a)?$ ]]; then
     f="-DFLIN_FIT -DPFILL_XIN13"
     if [ "${BASH_REMATCH[1]}" = y ]; then f+=" -DPF_YIELD=1"; else f+=" -DPF_YIELD=2 -DPF_YIELD_NS=${BASH_REMATCH[2]}"; fi
     [ -n "${BASH_REMATCH[4]}" ] && f+=" -DPF_YIELD_J=${BASH_REMATCH[4]}"
     [ -n "${BASH_REMATCH[5]}" ] && f+=" -DPF_YIELD_EARLY=1"
+    [ -n "${BASH_REMATCH[6]}" ] && f+=" -DPF_YIELD_ATT=1"
     FLAGS[$b]=$f
   fi
 done
