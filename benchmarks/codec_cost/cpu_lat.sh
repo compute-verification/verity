@@ -52,7 +52,8 @@ for wc in $WIDTHS; do
   fi
   "$B/coop$w" ifma 1 9 $n >> "$O/ifma.jsonl" 2>> "$O/errors.txt" || echo "coop $w T1 rc $?" >> "$O/errors.txt"
   if [ "$w" -ge 2048 ]; then
-    for t in 2 4 $(( $(tr -cd , <<< "$COOP_CPUS" | wc -c) + 1 )); do
+    ncores=$(( $(tr -cd , <<< "$COOP_CPUS" | wc -c) + 1 ))
+    for t in $(printf '%s\n' 2 4 "$ncores" | sort -nu | awk -v n="$ncores" '$1 <= n'); do
       "$B/coop$w" ifma $t 9 $n >> "$O/ifma.jsonl" 2>> "$O/errors.txt" || echo "coop $w T$t rc $?" >> "$O/errors.txt"
       if [ "$w" -ge 8256 ]; then
         "$B/coop$w" owner $t 9 $n >> "$O/owner.jsonl" 2>> "$O/errors.txt" || echo "owner $w T$t rc $?" >> "$O/errors.txt"
