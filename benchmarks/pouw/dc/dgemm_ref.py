@@ -1,10 +1,11 @@
-"""CPU twin of dgemm.cu's dump: C and every receipt word, bit for bit, from X.bin, W.bin and meta.json alone.
+"""CPU twin of dgemm.cu's and pgemm.cu's dumps: C and every receipt word, bit for bit, from X.bin, W.bin and meta.json alone.
 
 python3 dgemm_ref.py DIR prints one JSON line of checks and exits 0 only if C.bin and R.bin both match.
 
 The receipt (dgemm.cu's header): chain (i, tn, c) starts at duo_init(seed, (i tiles_n + tn) 16 + c) and absorbs, at each
-boundary s = 1..k/32 and in ascending tile column j with j % 16 == c, the s32 running sum T_s[i, tn bn + j] at key position
-(j / 16) % 16. Duo is floored_gemm's (ref.py's key_mul(0, t), key_xor(0, t), rot_of(False, 0, t)).
+boundary s = 1..k/L (meta.json's L: 32 for dgemm.cu, 32 lm for pgemm.cu) and in ascending tile column j with j % 16 == c,
+the s32 running sum T_s[i, tn bn + j] at key position (j / 16) % 16. Duo is floored_gemm's (ref.py's key_mul(0, t),
+key_xor(0, t), rot_of(False, 0, t)).
 """
 
 import json
@@ -63,10 +64,10 @@ def receipts(X, W, seed, bn, L=32, nch=16):
 def main(d: Path) -> int:
     meta = json.loads((d / "meta.json").read_text())
     m, n, k, bn, seed = meta["m"], meta["n"], meta["k"], meta["bn"], meta["seed"]
-    assert meta["L"] == 32 and meta["nch"] == 16, meta
+    assert meta["L"] % 32 == 0 and k % meta["L"] == 0 and meta["nch"] == 16, meta
     X = np.fromfile(d / "X.bin", dtype=np.int8).reshape(m, k)
     W = np.fromfile(d / "W.bin", dtype=np.int8).reshape(n, k)
-    T, R = receipts(X, W, seed, bn)
+    T, R = receipts(X, W, seed, bn, L=meta["L"])
     C = np.fromfile(d / "C.bin", dtype=np.int32).reshape(m, n)
     Rg = np.fromfile(d / "R.bin", dtype=np.uint32).reshape(R.shape)
     checks = {
