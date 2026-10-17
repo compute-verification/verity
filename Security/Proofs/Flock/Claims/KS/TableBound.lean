@@ -302,7 +302,7 @@ theorem plain_hone (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg
   · exact .inr hno
   · obtain ⟨s, hs, hin⟩ := acc_inScope rel hno
     obtain ⟨-, -, -, -, -, -, -, -, ht, -⟩ := hin
-    exact .inl ⟨s, hs, (Claims.Flock.Stmt.tables_eq_one_iff s).2 (ht.resolve_left Bool.false_ne_true)⟩
+    exact .inl ⟨s, hs, (Claims.Flock.Stmt.tables_eq_one_iff s).2 (by simpa using ht)⟩
 
 /-! ## Down to the accepted statements -/
 
