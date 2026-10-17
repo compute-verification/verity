@@ -268,6 +268,8 @@ struct WP {
   uint32_t *plane, *UB;
   uint8_t* PB;
   Maps* mW;
+  cudaStream_t s2;
+  cudaEvent_t fork, join;
 };
 static void cpl(WP& W, const Sig& s) {
   const EP& P = W.C.E;
@@ -279,12 +281,27 @@ static void wrun(WP& W, const WKn* e, int* Y, uint32_t* R) {
           reinterpret_cast<const uint4*>(W.UB)};
   (n_dig(P.k) == 3 ? e->k3 : e->k)<<<P.grid, MLW::NT, WSMEM, P.st>>>(w);
 }
+// f's launches on the second stream beside g's on the main one; what the main stream launches next waits for both
+static void beside(WP& W, const std::function<void()>& f, const std::function<void()>& g) {
+  EP& P = W.C.E;
+  const cudaStream_t st = P.st;
+  CK(cudaEventRecord(W.fork, st));
+  CK(cudaStreamWaitEvent(W.s2, W.fork, 0));
+  P.st = W.s2;
+  f();
+  P.st = st;
+  g();
+  CK(cudaEventRecord(W.join, W.s2));
+  CK(cudaStreamWaitEvent(st, W.join, 0));
+}
 static void wsetup(WP& W, int m, int n, int k, uint32_t seed, bool gate) {
   csetup(W.C, m, n, k, seed, gate);
   if (W.C.half) { fprintf(stderr, "cwgemm: co32c only (k = %d)\n", k); exit(2); }
   EP& P = W.C.E;
   CK(cudaMalloc(&W.Wb, (size_t)n * k)); CK(cudaMalloc(&W.plane, (size_t)n * k / 8 + 2048));
   CK(cudaMalloc(&W.UB, (size_t)n * 32)); CK(cudaMalloc(&W.PB, (size_t)n * 128));
+  CK(cudaStreamCreateWithFlags(&W.s2, cudaStreamNonBlocking));
+  CK(cudaEventCreateWithFlags(&W.fork, cudaEventDisableTiming)); CK(cudaEventCreateWithFlags(&W.join, cudaEventDisableTiming));
   wbias<<<4096, 256, 0, P.st>>>(W.C.W7, W.Wb, (size_t)n * k);
   cpl(W, sigma(seed, 0xFFFFFFFFu));
   CK(cudaStreamSynchronize(P.st));
@@ -296,12 +313,32 @@ static void wsetup(WP& W, int m, int n, int k, uint32_t seed, bool gate) {
 static void wfree(WP& W) {
   CK(cudaDeviceSynchronize());
   for (void* p : {(void*)W.Wb, (void*)W.plane, (void*)W.UB, (void*)W.PB, (void*)W.mW}) CK(cudaFree(p));
+  CK(cudaEventDestroy(W.fork)); CK(cudaEventDestroy(W.join)); CK(cudaStreamDestroy(W.s2));
   cfree(W.C);
 }
 // an arm: cplane, a cw_* kernel (on cplane's plane and cquant's X), cwedited:KERN (cquant, cplane, KERN under one key: the
-// served linear), or any of cgemm.cu's arms (cedited:c_l7qs, cwedit, plain, plainq, ...)
+// served linear), cpar:KERN and cwpar:KERN (cedited's and cwedited's with the weight pass on a second stream beside
+// cquant), or any of cgemm.cu's arms (cedited:c_l7qs, cwedit, plain, plainq, ...)
 static std::function<void(WP&)> warm(const std::string& a) {
   if (a == "cplane") return [](WP& W) { cpl(W, sigma(W.C.E.seed, W.C.inst++)); };
+  if (a.rfind("cpar:", 0) == 0) {
+    const CKn* k = ckern(a.substr(5));
+    if (!k) { fprintf(stderr, "no kernel %s\n", a.c_str()); exit(2); }
+    return [k](WP& W) {
+      const Sig s = sigma(W.C.E.seed, W.C.inst++);
+      beside(W, [&] { cw(W.C, s); }, [&] { cq(W.C, s); });
+      cgemm_run(W.C, cpick(W.C, k), W.C.Y, W.C.R);
+    };
+  }
+  if (a.rfind("cwpar:", 0) == 0) {
+    const WKn* k = wkern(a.substr(6));
+    if (!k) { fprintf(stderr, "no kernel %s\n", a.c_str()); exit(2); }
+    return [k](WP& W) {
+      const Sig s = sigma(W.C.E.seed, W.C.inst++);
+      beside(W, [&] { cpl(W, s); }, [&] { cq(W.C, s); });
+      wrun(W, k, W.C.Y, W.C.R);
+    };
+  }
   if (a.rfind("cwedited:", 0) == 0) {
     const WKn* k = wkern(a.substr(9));
     if (!k) { fprintf(stderr, "no kernel %s\n", a.c_str()); exit(2); }
@@ -338,7 +375,25 @@ static int wgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   CK(cudaStreamSynchronize(P.st));
   CK(cudaGetLastError());
   const unsigned long long y = ecmp(P, C.Y, C.Yr, P.ny), r = ecmp(P, C.R, C.R2, P.nr), pb = ecmp(P, W.PB, C.PB, (size_t)n * 32);
-  const bool ok = y == 0 && r == 0 && pb == 0;
+  // the overlap arms' order under the gate's key, from poisoned operands: cwedit (cplane) beside cquant, then c_l7qs (cw_l7qs)
+  unsigned long long par[2][2];
+  for (int i = 0; i < 2; i++) {
+    for (auto [p, b] : {std::pair<void*, size_t>{C.X, (size_t)m * k}, {C.PA, (size_t)m * 128}, {C.Wp, wb}, {C.PB, (size_t)n * 128},
+                        {W.plane, wb / 8}, {W.UB, (size_t)n * 32}, {W.PB, (size_t)n * 128}, {C.Y, P.ny * 4}, {C.R, P.nr * 4}})
+      CK(cudaMemsetAsync(p, 0xA5, b, P.st));
+    if (i == 0) {
+      beside(W, [&] { cw(C, s); }, [&] { cq(C, s); });
+      cgemm_run(C, cpick(C, ckern("c_l7qs")), C.Y, C.R);
+    } else {
+      beside(W, [&] { cpl(W, s); }, [&] { cq(C, s); });
+      wrun(W, wkern("cw_l7qs"), C.Y, C.R);
+    }
+    CK(cudaStreamSynchronize(P.st));
+    CK(cudaGetLastError());
+    par[i][0] = ecmp(P, C.Y, C.Yr, P.ny);
+    par[i][1] = ecmp(P, C.R, C.R2, P.nr);
+  }
+  const bool ok = y == 0 && r == 0 && pb == 0 && par[0][0] == 0 && par[0][1] == 0 && par[1][0] == 0 && par[1][1] == 0;
   const int tiles_m = m / 128, tiles_n = n / 128, KT = k / 128;
   const int tl[3][2] = {{0, 0}, {tiles_m / 2, tiles_n / 2}, {tiles_m - 1, tiles_n - 1}};
   std::string tj;
@@ -357,9 +412,11 @@ static int wgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
   const unsigned long long cy = ecmp(P, C.Y, C.Yr, P.ny), cr = ecmp(P, C.R, C.R2, P.nr);
   const bool control_rejected = cy > 0 && cr > 0;
-  char res[512];
-  snprintf(res, sizeof res, "\"cw_l7qs\": {\"y_bad\": %llu, \"r_bad\": %llu}, \"pb_bad\": %llu, \"control\": {\"y_bad\": %llu, \"r_bad\": %llu}",
-           y, r, pb, cy, cr);
+  char res[768];
+  snprintf(res, sizeof res,
+           "\"cw_l7qs\": {\"y_bad\": %llu, \"r_bad\": %llu}, \"pb_bad\": %llu, \"cpar:c_l7qs\": {\"y_bad\": %llu, \"r_bad\": %llu}, "
+           "\"cwpar:cw_l7qs\": {\"y_bad\": %llu, \"r_bad\": %llu}, \"control\": {\"y_bad\": %llu, \"r_bad\": %llu}",
+           y, r, pb, par[0][0], par[0][1], par[1][0], par[1][1], cy, cr);
   FILE* fp = fopen((dir + "/cw_meta.json").c_str(), "w");
   fprintf(fp, "{\"kernel\": \"cw_l7qs\", \"reference\": \"c_l7qs\", \"tiles\": [%s], \"device\": {%s}, \"device_ok\": %s, "
               "\"control_rejected\": %s}\n",
@@ -375,7 +432,7 @@ static int wgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
 static int wbench(int reps, int m, int n, int k) {
   Nv nv;
   const std::vector<std::string> names =
-      split(getenv("CW_ARMS"), "plain,plainq,c_l7qs,cw_l7qs,cquant,cwedit,cplane,cedited:c_l7qs,cwedited:cw_l7qs");
+      split(getenv("CW_ARMS"), "plain,plainq,c_l7qs,cw_l7qs,cquant,cwedit,cplane,cedited:c_l7qs,cwedited:cw_l7qs,cpar:c_l7qs,cwpar:cw_l7qs");
   WP W;
   wsetup(W, m, n, k, 0x5EED0000u + m + n + k, false);
   EP& P = W.C.E;

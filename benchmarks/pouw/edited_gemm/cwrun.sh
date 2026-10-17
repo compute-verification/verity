@@ -78,7 +78,7 @@ if [ "$ref" != 0 ] || grep -q 'rc [1-9]' "$O/rc.txt"; then
   exit 5
 fi
 export REPS=${REPS:-15}
-export CW_ARMS=${CW_ARMS:-"plain,plainq,c_l7qs,cw_l7qs,cquant,cwedit,cplane,cedited:c_l7qs,cwedited:cw_l7qs"}
+export CW_ARMS=${CW_ARMS:-"plain,plainq,c_l7qs,cw_l7qs,cquant,cwedit,cplane,cedited:c_l7qs,cwedited:cw_l7qs,cpar:c_l7qs,cwpar:cw_l7qs"}
 export NCU_ONE=${NCU_ONE:-"plain c_l7qs cw_l7qs"}
 export NCU_VEC=${NCU_VEC:-"cquant cwedit cplane"} NCU_VEC_SHAPES=${NCU_VEC_SHAPES:-"o2k dn2k"}
 [ "$NCU_VEC" = - ] && NCU_VEC=""
