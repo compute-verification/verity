@@ -21,6 +21,12 @@ import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.Complete.ZkTables.Level0
+import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
+import Proofs.Flock.Claims.Complete.ZkTables.View
+import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
+import Proofs.Flock.Claims.Complete.ZkTables.Parts
+import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
@@ -70,4 +76,7 @@ stated once at a table, its trace, its tape row, its domain and its coins from t
 reps (`repStartZk`; `Case.coinsT`, `Run.start_eq`), so masked completeness at any number of tables follows from the
 JSON specification and those four (`complete_jsonT`); at table `0` of a good masked case or run
 (`CaseZk.toCase`, `RunZk.toRun`) they give `complete_zk`'s `RepShapedZk`, `ProverRunsZk`, `LigeritoZk` and `Inner`
-(`repShapedZk_of`, `proverRunsZk_of`, `lgInnerZk_of`). -/
+(`repShapedZk_of`, `proverRunsZk_of`, `lgInnerZk_of`). Each of the four splits into level 0's masked Ligerito,
+stated once (`Level0`: `ProverRuns`, `ProverShape`, `Lanes`, `Verifier`), and the rest (`Parts`); a returning rep runs
+stage by stage (`RepSplit`: `repPZk_split`), so given `Level0.Verifier` the verifier's view of it is the prover's
+(`View`: `view`), and `LigeritoT` and `InnerT` hold (`ligeritoRest`, `innerRest`; `complete_jsonT_of_parts`). -/
