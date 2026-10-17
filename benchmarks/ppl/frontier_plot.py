@@ -12,14 +12,23 @@ design's zero-instance words leave open (`READINGS`):
 - `measured`: QSTAR's fr16_c32 as timed, 1.906 issue slots and 8 B of L2 a word at 6 TB/s, table builds free. It
   times 1-bit coins only, so b = 2 is left closed here, which flatters a design that fails on perplexity anyway;
 - `builds charged`: tables over a coin drawn fresh each instance are rebuilt each instance and shared only by its rows,
-  which prices a 16-bit table at ≥ 2¹⁷/M adds a word (≥ 16 at M = 8,192). One-sided Dither's tables are of its resident
-  U, so it keeps the restated floor. Design A's best is SPEC's packed shared-memory byte route (§4.2a), at its
-  optimistic 2.05 slots and 4 B a word against shared memory's 128 B/SM/clk. co32c's (c + U)·b sums overflow a byte
+  which prices a 16-bit table at ≥ 2¹⁷/M adds a word (≥ 16 at M = 8,192). Tables of a resident U (one-sided Dither's
+  words, co32c's digits, the adopted P·V's) keep the restated floor. A's c·b words' best is SPEC's packed byte route
+  (§4.2a), at its optimistic 2.05 slots and 4 B a word against shared memory's 128 B/SM/clk (1.28% at 2.0 slots, the
+  threshold being 2.07 two-sided). co32c's (c + U)·b sums overflow a byte
   for U ≥ ±8 (narrow_u.py's T), so its packed route needs halfword fields, ≥ 2.5 slots before index and build, closed;
   so do b = 2 coins on both of A's operands (8 chunks a segment at an 8-bit index);
 - `restated floor`: SCALAR-ROUTE as the coordinator restated it (1.22 slots and 3.5 B at 6 TB/s, builds and combining
   free); b-bit coins on the indexed operand move the multi-field floor only to ≈ 1.15 slots and 4.0 B, since a field's
   entries are bounded by the table side's width, not the index's.
+
+A reading prices each kind of committed word by its zero instance's table class, not each design: machine-model puts
+every word of a design on one route, so a design's core ε under a reading is the mix Σ share × ε(design, the kind's
+flags) over its word kinds (`DESIGNS`), with each kind's share of the committed words from the model's shapes at the
+point's context (`shares`). The mix is linear in the shares, which holds while the table-routed share leaves the LP's
+binding row unchanged. The kinds: `linears` (the linears' and lm_head's T words, and co32c's O′ and committed O),
+`digits` (co32c's D_d, U·z at the zero instance: subset sums of the resident U, so Dither's tables), `qk` and `pv`
+(the adopted P·V peels P with a resident U, so its tables are Dither's).
 
 `plot` reads arms by name (`DESIGNS`), each point the mean over seeds of the arm's increase over its run's bf16, the bar
 the seeds' range; the last results file holding an arm wins. Each reading's Pareto frontier is a step line; the box
@@ -33,30 +42,37 @@ from pathlib import Path
 
 import report
 
-#: (label, ppl arm, machine-model design, table class). H1 is co32c's linears and lm_head with the peeled U on ±N
-#: (weights capped at ±(127 − N), narrow_u.py) and design A's attention; its core ε is co-dither's at every N.
+_A = {"linears": "bit", "qk": "bit", "pv": "resident"}
+_CO = {"linears": "wide", "digits": "resident", "qk": "wide", "pv": "resident"}
+_H1 = {"linears": "wide", "digits": "resident", "qk": "bit", "pv": "resident"}
+#: (label, ppl arm, machine-model design, table class of each word kind). H1 is co32c's linears and lm_head with the
+#: peeled U on ±N (weights capped at ±(127 − N), narrow_u.py) and design A's attention; its machine-model design is
+#: co-dither at every N (D_d's count depends on k, not on U). pv's P·V (P + c with a fresh bit, Ycum's digits
+#: committed) is priced as co32c's linears, unchecked: both pv designs fail on perplexity whatever it costs.
 DESIGNS = [
-    ("Dither-1S (record)", "adopted", "dither-duo", "resident"),
-    ("Dither-2S (A)", "adopted-bd-lm", "dither-two-sided", "bit"),
-    ("Dither-2S + pv (Ap)", "adopted-bd-lm-pv", "dither-two-sided-pv", "bit"),
-    ("Dither-2S, b = 2", "adopted-bd-lm-d2", "dither-two-sided", "b2"),
-    ("Dither-C (co32c)", "co32c", "co-dither", "wide"),
-    ("Dither-C + pv", "co32c-pv", "co-dither-pv", "wide"),
-    ("H1, U ±8", "co32c-u8", "co-dither", "wide"),
-    ("H1, U ±16", "co32c-u16", "co-dither", "wide"),
-    ("H1, U ±32", "co32c-u32", "co-dither", "wide"),
-    ("H1, U ±64", "co32c-u64", "co-dither", "wide"),
+    ("Dither-1S (record)", "adopted", "dither-duo", {"linears": "resident", "qk": "resident", "pv": "resident"}),
+    ("Dither-2S (A)", "adopted-bd-lm", "dither-two-sided", _A),
+    ("Dither-2S + pv (Ap)", "adopted-bd-lm-pv", "dither-two-sided-pv", {**_A, "pv": "wide"}),
+    ("Dither-2S, b = 2", "adopted-bd-lm-d2", "dither-two-sided", {**_A, "linears": "b2", "qk": "b2"}),
+    ("Dither-C (co32c)", "co32c", "co-dither", _CO),
+    ("Dither-C + pv", "co32c-pv", "co-dither-pv", {**_CO, "pv": "wide"}),
+    ("H1, U ±8", "co32c-u8", "co-dither", _H1),
+    ("H1, U ±16", "co32c-u16", "co-dither", _H1),
+    ("H1, U ±32", "co32c-u32", "co-dither", _H1),
+    ("H1, U ±64", "co32c-u64", "co-dither", _H1),
 ]
+#: model -> (hidden, layers, KV width, MLP width, vocabulary), Llama-3.1's.
+MODELS = {"llama-3.1-8b": (4096, 32, 1024, 14336, 128256), "llama-3.1-70b": (8192, 80, 1024, 28672, 128256)}
 FLOOR = ["--lookups", "--lookup-q", "1.22", "--lookup-bytes", "3.5"]
 MEASURED = ["--lookups", "--lookup-q", "1.906", "--lookup-bytes", "8"]
 #: reading -> table class -> machine-model flags.
+PACKED = ["--lookups", "--lookup-q", "2.05", "--lookup-bytes", "4", "--l2", "5.0e13"]
+FLOOR_B2 = ["--lookups", "--lookup-q", "1.15", "--lookup-bytes", "4.0"]
 READINGS = {
     "closed": {"resident": [], "bit": [], "b2": [], "wide": []},
     "measured": {"resident": MEASURED, "bit": MEASURED, "b2": [], "wide": MEASURED},
-    "builds charged": {"resident": FLOOR, "bit": ["--lookups", "--lookup-q", "2.05", "--lookup-bytes", "4", "--l2", "5.0e13"],
-                       "b2": [], "wide": []},
-    "restated floor": {"resident": FLOOR, "bit": FLOOR, "b2": ["--lookups", "--lookup-q", "1.15", "--lookup-bytes", "4.0"],
-                       "wide": FLOOR},
+    "builds charged": {"resident": FLOOR, "bit": PACKED, "b2": [], "wide": []},
+    "restated floor": {"resident": FLOOR, "bit": FLOOR, "b2": FLOOR_B2, "wide": FLOOR},
 }
 COMMON = ["--credit", "floor", "--operands", "floor", "--uni-issue", "0.92", "--q", "8", "--checking", "full", "--json"]
 COLORS = {"closed": "tab:green", "measured": "tab:blue", "builds charged": "tab:orange", "restated floor": "tab:red"}
@@ -68,17 +84,57 @@ NOTES = {"H1, U ±8": "narrow_u.py's H: at folds 1.5 and 1 a bit-sliced route ga
 TARGET = {"llama-3.1-8b": 1.0, "llama-3.1-70b": 2.0}
 
 
+def n_digits(lo: int, hi: int) -> int:
+    """checked_strip.py's: base-128 digits for values in [lo, hi]."""
+    m = 1
+    while not (lo >= -(128 ** m) and hi // 128 ** (m - 1) <= 127):
+        m += 1
+    return m
+
+
+def shares(model: str, ctx: int, kinds: dict) -> dict:
+    """Each word kind's share of a token's committed words: the linears' cells k/32 words each (co32c's add m − 1
+    digits, O′ and O), Q Kᵀ's and P·V's 1/32 of their products at the mean causal context ctx/2."""
+    d, layers, kv, ff, vocab = MODELS[model]
+    co = "digits" in kinds
+    lin = dig = 0.0
+    for k, n, reps in [(d, d + 2 * kv, layers), (d, d, layers), (d, 2 * ff, layers), (ff, d, layers), (d, vocab, 1)]:
+        lin += reps * n * (k / 32 + 2 * co)
+        dig += reps * n * (n_digits(k // 32 * -128, k // 32 * 127) - 1) * co
+    att = layers * (ctx / 2) * d / 32
+    words = {"linears": lin, "digits": dig, "qk": att, "pv": att}
+    total = sum(words[kind] for kind in kinds)
+    return {kind: words[kind] / total for kind in kinds}
+
+
+def flag_key(flags: list[str]) -> str:
+    return " ".join(flags) or "closed"
+
+
 def eps(out: str) -> int:
-    doc: dict = {"settings": " ".join(COMMON[:-1]), "readings": {}}
-    for reading, by_class in READINGS.items():
-        doc["readings"][reading] = {}
-        for label, _, design, cls in DESIGNS:
-            cmd = ["machine-model", "eps", design, *COMMON, *by_class[cls]]
-            r = json.loads(subprocess.run(cmd, check=True, capture_output=True, text=True).stdout)
-            doc["readings"][reading][label] = {"core": r["core"], "gamma": r["gamma"], "skip": r["terms"]["skip"],
-                                               "vector": r["vector"], "cmd": " ".join(cmd)}
+    """machine-model's core ε of each design at every flag set its kinds take under some reading."""
+    doc: dict = {"settings": " ".join(COMMON[:-1]), "designs": {}}
+    runs: dict = {}
+    for label, _, design, kinds in DESIGNS:
+        entry = doc["designs"][label] = {"design": design, "by_flags": {}}
+        for by_class in READINGS.values():
+            for cls in kinds.values():
+                key = flag_key(by_class[cls])
+                if (design, key) not in runs:
+                    cmd = ["machine-model", "eps", design, *COMMON, *by_class[cls]]
+                    runs[design, key] = json.loads(subprocess.run(cmd, check=True, capture_output=True,
+                                                                  text=True).stdout)
+                r = runs[design, key]
+                entry["by_flags"][key] = r["core"]
+                entry.update(gamma=r["gamma"], vector=r["vector"])
     Path(out).write_text(json.dumps(doc, indent=1) + "\n")
     return 0
+
+
+def core(ep: dict, label: str, reading: str, model: str, ctx: int) -> float:
+    kinds = next(k for lab, _, _, k in DESIGNS if lab == label)
+    by_flags = ep["designs"][label]["by_flags"]
+    return sum(s * by_flags[flag_key(READINGS[reading][kinds[kind]])] for kind, s in shares(model, ctx, kinds).items())
 
 
 def rows(paths: list[str]) -> dict:
@@ -109,7 +165,9 @@ def points(rs: dict) -> list[tuple]:
 def table(rs: dict, ep: dict) -> str:
     pts = points(rs)
     rd = list(READINGS)
-    head = ["design", "arm"] + [f"{m} · {s} · {c // 1024}K" for m, s, c in pts] + ["γ"] + [f"core ε, {r}" for r in rd]
+    at = " / ".join(f"{m.removeprefix('llama-3.1-').upper()} {c // 1024}K" for m, _, c in pts)
+    head = (["design", "arm"] + [f"{m} · {s} · {c // 1024}K" for m, s, c in pts] + ["γ"]
+            + [f"core ε, {r} ({at})" for r in rd])
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * 2 + "---:|" * (len(pts) + 1 + len(rd))]
     marks = {label: "†" * (n + 1) for n, label in enumerate(NOTES)}
     for label, arm, _, _ in DESIGNS:
@@ -118,11 +176,12 @@ def table(rs: dict, ep: dict) -> str:
             r = rs.get((*pt, arm))
             spread = f"{r['inc_min']:+.2f} to {r['inc_max']:+.2f}" if r and r["seeds"] > 1 else "1 seed"
             cells.append("–" if r is None else f"{r['inc']:+.2f} ({spread}), {r['run']}")
-        cells.append(f"{ep['readings']['closed'][label]['gamma']:.3f}")
+        cells.append(f"{ep['designs'][label]['gamma']:.3f}")
         for reading in rd:
-            e = ep["readings"][reading][label]["core"]
-            meets = e <= 0.005 and all((r := rs.get((*pt, arm))) is not None and r["inc"] <= TARGET[pt[0]] for pt in pts)
-            cells.append(f"{100 * e:.3f}%" + (" ✓" if meets else ""))
+            es = [core(ep, label, reading, m, c) for m, _, c in pts]
+            meets = all(e <= 0.005 for e in es) and all(
+                (r := rs.get((*pt, arm))) is not None and r["inc"] <= TARGET[pt[0]] for pt in pts)
+            cells.append(" / ".join(f"{100 * e:.3f}" for e in es) + "%" + (" ✓" if meets else ""))
         lines.append("| " + " | ".join(cells) + " |")
     lines += [""] + [f"{marks[label]} {text}." for label, text in NOTES.items()]
     return "\n".join(lines) + "\n"
@@ -159,7 +218,7 @@ def plot(rs: dict, ep: dict, png: str) -> None:
                 r = rs.get((*pt, arm))
                 if r is None:
                     continue
-                x = max(100 * ep["readings"][reading][label]["core"], 0.006)
+                x = max(100 * core(ep, label, reading, pt[0], pt[2]), 0.006)
                 pairs.append((x, r["inc"]))
                 ring = reading in HOLLOW
                 ax.errorbar([x], [r["inc"]], yerr=[[r["inc"] - r["inc_min"]], [r["inc_max"] - r["inc"]]],
@@ -182,15 +241,16 @@ def plot(rs: dict, ep: dict, png: str) -> None:
         seeds = "/".join(map(str, sorted({r["seeds"] for r in here})))
         ax.set_title(f"{pt[0]} · {pt[1]} · {pt[2] // 1024}K ({seeds} seeds; bars: range)", fontsize=10)
         ax.grid(alpha=0.3, which="both")
-    g = sorted({round(v["gamma"], 3) for v in ep["readings"]["closed"].values()})
+    g = sorted({round(v["gamma"], 3) for v in ep["designs"].values()})
     hd = [Line2D([], [], color=c, marker="o", markerfacecolor="none" if k in HOLLOW else c, linestyle="-",
                  label=f"table route: {k}") for k, c in COLORS.items()]
     hd += [Line2D([], [], color="black", marker=MARKERS[n], linestyle="none", label=lab)
            for n, (lab, _, _, _) in enumerate(DESIGNS)]
     fig.legend(handles=hd, fontsize=8, loc="center right", title=f"γ = {', '.join(map(str, g))}\n(every design)",
                title_fontsize=9)
-    fig.suptitle(f"Perplexity against core ε by table-route reading; Π {next(iter(ep['readings']['closed'].values()))['vector']}"
-                 f", floor credit, q* = 8; shaded: core ε ≤ 0.5% and the perplexity target", fontsize=10)
+    fig.suptitle(f"Perplexity against core ε by table-route reading (mixed over word kinds); Π "
+                 f"{next(iter(ep['designs'].values()))['vector']}, floor credit, q* = 8; shaded: core ε ≤ 0.5% and the "
+                 f"perplexity target", fontsize=10)
     fig.tight_layout(rect=(0, 0, 1 - 2.4 / fig.get_figwidth(), 1))
     fig.savefig(png, dpi=140)
 
