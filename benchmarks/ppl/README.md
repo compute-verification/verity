@@ -169,6 +169,8 @@ The arms:
 - `vllm-int8` is vLLM's plain step as VLLM-18 serves it: int8 everywhere, rounded, unrotated, lm_head bf16, float
   softmax.
 - `vllm-int8-khead` changes only the K scale, to one per (layer, KV head).
+- `-khead-sink` is `-lut-sink`'s float twin: the same K scales, float softmax, and key 0 in a P block of its own
+  (`p_sink`).
 - `-lut` is the kernel's form; `-lut-sinkm` takes key 0 out of the max; `-lut-sink` also gives key 0's K its own scale.
 - `-lut32` is 2^(−t/32) with 512 entries; `-lut-cal` calibrates the K scale; `-lut-sink-cal` and `-lut32-sink`
   combine them.
