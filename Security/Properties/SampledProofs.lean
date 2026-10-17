@@ -140,7 +140,7 @@ registered (`Registered.entries`); the record's `registered` is a list of entrie
 words, domain}` with `word_bits` beside them or not; its values are exactly the verifier's (`ValuesAre`); and each of the
 verifier's values has its entry (the last naming it, as Python's dict reads it) as derived and held (`EntryIs`). -/
 def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
-  ∃ mine es, Registered.entries v.program v.params v.registered = .ok mine ∧ getD rec "registered" = .arr es ∧
+  ∃ mine es, Registered.entries v.program.desc v.params v.registered = .ok mine ∧ getD rec "registered" = .arr es ∧
     (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
       keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
     ValuesAre es mine ∧
