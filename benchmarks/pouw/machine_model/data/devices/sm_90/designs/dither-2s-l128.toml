@@ -7,6 +7,7 @@ summary = "Dither-2S on the H200 at L = 128: two-sided dither serving the last c
 honest = "dc90-l128"
 L = 128
 work = 1.0
+sums = "vfold"
 
 [noise]
 linears = "two-sided"
@@ -23,9 +24,9 @@ name = "duo"
 ALU = 2
 IMAD = 1
 
-[skip.pv-strip]
-eps = 0.00512091
-source = "SKIP's design A over Llama-3.1-8B and 70B x 2K, 8K, 32K by honest time, CHECKED-STRIP Result 3: at a one-hot P row P·V's whole strip is free, 0.131% at L = 32 (note:20261017T0340Z-draft-skip Result 3, 06:19Z); at L = 128, (L + 1)/33 of it (the strip is L + 1 wide)"
+[skip.served]
+eps = 0.0118
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 5.881 SMSP-cycles a 4096-MAC MMA on DC-90; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 1.18%: its tail 0.909%, the sums DG, S and X(0) 0.226%, the served epilogue 0.0428%. With P·V's served output checked it is 1.10% (8B) / 0.514% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 10)"
 
 [mand.fold]
 eps = 0.0
@@ -48,4 +49,3 @@ source = "dp4a at 32 IDP4A a word at L = 128, on IMAD's class as sm_120 prices i
 
 [routes]
 lanes = true
-uniform = false     # no uniform-datapath line in EPS1 DC's census
