@@ -1,9 +1,10 @@
-"""run.sh EG_SET=eps1's profile against the machine model: per arm and shape, ncu's executed SASS instructions a MMA by
-census class, the bound max_r sum_k n_k u_kr (SMSP-cycles a MMA, the model's time for that mix) with its binding row,
-the measured cycles a MMA, eps_sched = 1 - bound / measured, issue, every pipe's utilization and the stall reasons; the
-fold-cost sweep's table (hot items); and the honest kernel's profile as TOML for `machine-model eps`.
+"""run.sh EG_SET=eps1's (or eps1lag's) profile against the machine model: per arm and shape, ncu's executed SASS
+instructions a MMA by census class, the bound max_r sum_k n_k u_kr (SMSP-cycles a MMA, the model's time for that mix)
+with its binding row, the measured cycles a MMA (the hot bench's, and ncu's one call), eps_sched = 1 - bound /
+measured, issue, tensor and every pipe's utilization and the stall reasons; the fold-cost sweep's table; and the
+profiles as TOML for `machine-model eps`.
 
-    python3 eps_profile.py OUT_DIR --mm MACHINE_MODEL_DIR [--epoch VF3l-16] [--json PATH] [--toml PATH]
+    python3 eps_profile.py OUT_DIR --mm MACHINE_MODEL_DIR [--epoch VF3l-16] [--json PATH] [--toml PATH] [--toml-arms A,B]
 
 MACHINE_MODEL_DIR is `benchmarks/pouw/machine_model` (verity_machine_model and its data/). An opcode with no class is
 priced as NOROW (issue only), so the bound is never above what the model says, and is listed under `unpriced`.
@@ -246,6 +247,7 @@ def main() -> int:
     ap.add_argument("--tma", default="UTMA16K", help="the class of the mainloop's TMA box (MLW: 128 x 128 bytes)")
     ap.add_argument("--json", type=Path)
     ap.add_argument("--toml", type=Path)
+    ap.add_argument("--toml-arms", default=f"{HONEST},e_l4q,e_plain,plain", help="the arms --toml writes, comma-separated")
     a = ap.parse_args()
     sys.path.insert(0, str(a.mm))
     from verity_machine_model import model as mmod
@@ -320,10 +322,12 @@ def main() -> int:
         a.json.write_text(json.dumps({"epoch": epoch, "reports": res, "hot": {f"{k[0]}x{k[1]}x{k[2]}": v for k, v in hot.items()}},
                                      indent=1, default=str))
     if a.toml:
-        lines = [f"# the honest edited GEMM ({HONEST}: duo every 32 steps), executed SASS a MMA by census class (ncu), "
-                 f"epoch {epoch}", f'run_dir = "{a.out.parent.name}"', ""]
+        lines = [f"# the edited GEMM's executed SASS a MMA (m16n8k32 s8, the peel's included) by census class, from ncu; "
+                 f"cycles are SMSP-cycles a MMA, bounds over census {epoch}",
+                 "# WAIT: the mbarrier retry loop (YIELD, TRYWAIT, BRA), NOROW-priced in bound, left out of work_bound; "
+                 "measured: the hot median at its clock", f'run_dir = "{a.out.parent.name}"', ""]
         for sh, shape in SHAPES.items():
-            for arm in (HONEST, "e_plain", "plain"):
+            for arm in a.toml_arms.split(","):
                 r = res.get(f"{sh}-{arm}")
                 if not r:
                     continue

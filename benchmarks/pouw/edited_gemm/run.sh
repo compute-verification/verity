@@ -9,7 +9,7 @@
 # o_proj. EG_SET=best times each receipt kind's fastest kernels instead, also after wedit alone (edited:K); EG_SET=x13
 # r9's XOR-in (13, 19) beside x_l2o and e_l4q; EG_SET=eps1 the fold-cost sweep at 8192^3 and Llama-3.1-8B's o_proj and
 # gate_up at m = 2048, with ncu's sections on every arm at every shape (out/ncu/, read by eps_profile.py), EG_SET=eps1lag
-# duo's absorb lag and tie spacing there. The small
+# duo's absorb lag and tie spacing there, EG_SET=eps1sleep consumers that sleep on a stage's mbarrier. The small
 # gate's seed has a key that key_ok_r9 rejects. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
@@ -56,7 +56,7 @@ export O_SHAPE=${O_SHAPE:-"8192 4096 4096"}
 export LAYERS=${LAYERS:-"qkv:8192:6144:4096 gate_up:8192:28672:4096 down:8192:4096:14336"}
 # EG_SET=eps1, the fold-cost sweep (note:20261017T0320Z-draft-eps1-profile): 8192^3, and Llama-3.1-8B's o_proj and gate_up
 # at m = 2048 (EG_SET=eps1lag too)
-case "${EG_SET:-all}" in eps1 | eps1lag) O_SHAPE="8192 8192 8192" LAYERS="o2k:2048:4096:4096 gu2k:2048:28672:4096" ;; esac
+case "${EG_SET:-all}" in eps1 | eps1lag | eps1sleep) O_SHAPE="8192 8192 8192" LAYERS="o2k:2048:4096:4096 gu2k:2048:28672:4096" ;; esac
 gzip -c "$BIN/egemm.sass" > "$O/egemm.sass.gz"
 export W="$BIN/gates"
 mkdir -p "$W/small" "$W/o"
@@ -139,6 +139,13 @@ if [ "${EG_SET:-all}" = eps1lag ]; then
   arms="plain,e_plain,e_l2q,e_l4q,e_l4o,e_l6q,e_l7q,e_l7o" il="e_l4q:plain e_l7q:plain"
   cold="" larms=$arms lil=$il ncu="" stall=""
   NCU_ONE="plain e_plain e_l2q e_l4q e_l4o e_l6q e_l7q e_l7o"
+fi
+# EG_SET=eps1sleep: consumers that sleep on a stage's mbarrier (try_wait's suspend-time hint; the s kernels) against
+# ptxas's retry loop
+if [ "${EG_SET:-all}" = eps1sleep ]; then
+  arms="plain,e_plain,e_plains,e_l2q,e_l2qs,e_l7q,e_l7qs" il="e_l7q:plain e_l7qs:plain"
+  cold="" larms=$arms lil=$il ncu="" stall=""
+  NCU_ONE="e_plain e_plains e_l2q e_l2qs e_l7q e_l7qs"
 fi
 export EG_ARMS=${EG_ARMS:-$arms} IL=${IL:-$il} IL_COLD=${IL_COLD:-$cold}
 export LAYER_ARMS=${LAYER_ARMS:-$larms} LAYER_IL=${LAYER_IL:-$lil}

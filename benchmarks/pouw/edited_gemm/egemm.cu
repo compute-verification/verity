@@ -135,11 +135,22 @@ template <bool FMA> DEV void tie(int& d, uint32_t z, uint32_t zero) {
   else asm("lop3.b32 %0, %0, %1, %2, 0x78;" : "+r"(d) : "r"(z), "r"(zero));
 }
 
+// mbar_wait_warp with try_wait's suspend-time hint (CUTLASS's 0x989680 ns): a warp whose stage hasn't landed sleeps until
+// the phase completes instead of retrying, which takes issue slots from the warps still working
+DEV void mbar_sleep_warp(uint32_t bar, uint32_t parity) {
+  asm volatile(
+      "{\n .reg .pred p;\n EG_SLEEP_%=:\n mbarrier.try_wait.parity.shared::cta.b64 p, [%0], %1, %2;\n @!p bra EG_SLEEP_%=;\n}\n" ::"r"(bar),
+      "r"(parity), "r"(0x989680u)
+      : "memory");
+  __syncwarp();
+}
+
 // RK: the receipt kind. A receipt's unit is the tiles one absorb reads (one tile; TB2W a pair, TB1W a row block), unit j
 // named by its last tile; LAG: unit j is absorbed after MMA j + LAG (past the atom's end, MMA j + LAG - 8 of the next), or
 // with LAG -1 after MMA min(2 j + 2, j + 7) (DUO64's spread: an absorb every second MMA over a receipting atom and the
-// next). TIE: a tie before every |TIE|-th MMA (0: none; negative: the IMAD tie) on the state the last absorb wrote
-template <int RK, int LAG, int TIE> struct EL : MLW {
+// next). TIE: a tie before every |TIE|-th MMA (0: none; negative: the IMAD tie) on the state the last absorb wrote.
+// SLEEP: a consumer waits for its stage with mbar_sleep_warp
+template <int RK, int LAG, int TIE, bool SLEEP = false> struct EL : MLW {
   static_assert(LAG >= -1 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
   static constexpr bool R = RK != NONE, TB = is_tb(RK), XF = RK == XIN || RK == XIN64 || RK == XIN13,
                         HALF = RK == DUO64 || RK == XIN64;
@@ -188,6 +199,10 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
     mbar_release(done);
     if (issuer) issue();
     __syncwarp();
+  }
+  DEV void wait_full() {
+    if constexpr (SLEEP) mbar_sleep_warp(full(s), ph);
+    else mbar_wait_warp(full(s), ph);
   }
   // the schedule: atom POS of a stage receipts (DUO64, XIN64: the odd ones, so the odd steps), unit j's first tile and slot
   __host__ __device__ static constexpr bool rc(int pos) { return !HALF || pos % 2 == 1; }
@@ -309,7 +324,7 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
     atom<false, 2>(acc, ch, kr, fa[0], fb[0], zero);
     advance();
     if (!LAST) {
-      mbar_wait_warp(full(s), ph);
+      wait_full();
       load(fa[0], fb[0], stage(s), 0);
     }
     atom<false, 3>(acc, ch, kr, fa[1], fb[1], zero);
@@ -319,7 +334,7 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
     static_assert(sched_ok(), "unit j is absorbed after its last tile's MMA and before its first tile's next");
     const int KT = K / BK;
     uint32_t fa[2][MI][4], fb[2][NI][2];
-    mbar_wait_warp(full(s), ph);
+    wait_full();
     load(fa[0], fb[0], stage(s), 0);
     if (KT == 1) {
       stage_il<true, true>(acc, ch, kr, fa, fb, zero);
@@ -336,7 +351,7 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
   // and 2, and atom 1 if THREE (atoms 0 and 1, then 2, in two passes, so it holds two atoms' fragments as the 2-atom
   // tail does)
   template <bool THREE> DEV void peel(int (&acc)[MI][NI][4]) {
-    mbar_wait_warp(full(s), ph);
+    wait_full();
     const uint32_t tb = stage(s);
     uint32_t fb[2][NI][2];
     load_b(fb[0], tb, 0);
@@ -378,8 +393,8 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
 };
 constexpr int PEEL2_MAXK = 4096;   // |S| <= 128 k / 32, so S_2 = 0 at k <= 4096; a longer k takes the 3-atom tail
 
-template <int RK, int LAG, int TIE, bool THREE> DEV void e_body(const Args& a) {
-  using L = EL<RK, LAG, TIE>;
+template <int RK, int LAG, int TIE, bool THREE, bool SLEEP = false> DEV void e_body(const Args& a) {
+  using L = EL<RK, LAG, TIE, SLEEP>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, true, 1);
@@ -438,12 +453,17 @@ template <int RK, int LAG, int TIE, bool THREE> DEV void e_body(const Args& a) {
   }
 }
 // <kind>_l<LAG><tie>: e duo, d64 DUO64, x XIN, x64 XIN64, x13 XIN13, t4/t4c/t2w/t1w the TB kinds; l s the spread schedule; tie h every second
-// MMA, q every fourth, o every eighth, none if absent; m: the IMAD tie. NAME_k3 is NAME with the 3-atom tail (k > 4096;
+// MMA, q every fourth, o every eighth, none if absent; m: the IMAD tie; s: SLEEP. NAME_k3 is NAME with the 3-atom tail (k > 4096;
 // one kernel with both tails behind a branch on K spills 50 bytes more in the 2-atom one)
 #define EGEMM(NAME, RK, LAG, TIE)                                                                                         \
   __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, false>(a); } \
   __global__ void __launch_bounds__(MLW::NT, 1) NAME##_k3(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, true>(a); }
+// NAME with SLEEP (s): its consumers sleep on a stage's mbarrier instead of retrying
+#define EGEMMS(NAME, RK, LAG, TIE)                                                                                              \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, false, true>(a); } \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_k3(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, true, true>(a); }
 EGEMM(e_plain, NONE, 0, 0)
+EGEMMS(e_plains, NONE, 0, 0)
 EGEMM(e_l2h, DUO, 2, 2)
 EGEMM(e_l2q, DUO, 2, 4)
 EGEMM(e_l3qm, DUO, 3, -4)
@@ -453,6 +473,8 @@ EGEMM(e_l4o, DUO, 4, 8)
 EGEMM(e_l6q, DUO, 6, 4)
 EGEMM(e_l7q, DUO, 7, 4)
 EGEMM(e_l7o, DUO, 7, 8)
+EGEMMS(e_l7qs, DUO, 7, 4)
+EGEMMS(e_l2qs, DUO, 2, 4)
 EGEMM(d64_l2q, DUO64, 2, 4)
 EGEMM(d64_l7q, DUO64, 7, 4)
 EGEMM(d64_lsq, DUO64, -1, 4)
@@ -708,7 +730,7 @@ struct EKn { const char* name; Kern k, k3; const char* kind; };
 static const EKn EK[] = {
     EKE(e_plain, ""), {"t_duo32", t_duo32, t_duo32, "duo32"}, EKE(e_l2h, "duo32"), EKE(e_l2q, "duo32"),
     EKE(e_l3qm, "duo32"), EKE(e_l2o, "duo32"), EKE(e_l4q, "duo32"), EKE(e_l4o, "duo32"), EKE(e_l6q, "duo32"),
-    EKE(e_l7q, "duo32"), EKE(e_l7o, "duo32"),
+    EKE(e_l7q, "duo32"), EKE(e_l7o, "duo32"), EKE(e_l7qs, "duo32"), EKE(e_l2qs, "duo32"), EKE(e_plains, ""),
     EKE(d64_l2q, "duo64"), EKE(d64_l7q, "duo64"), EKE(d64_lsq, "duo64"), EKE(d64_lsqm, "duo64"),
     EKE(x_l2, "xin"), EKE(x_l2q, "xin"), EKE(x_l3qm, "xin"), EKE(x_l2o, "xin"), EKE(x64_l2q, "xin64"), EKE(x64_l2o, "xin64"),
     EKE(x13_l2o, "xin13"),
