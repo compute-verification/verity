@@ -659,7 +659,7 @@ OP_KERNEL(tcliU_p64, 384) { li_until_mma<64, 8, true>(a); }
 OP_KERNEL(tcliU_p32f, 512) { li_until_mma<32, 12, true, true>(a); }
 OP_KERNEL(tclaneU_lif, 512) { lane_until_mma<L_LIF, 64>(a); }
 OP_KERNEL(tclaneU_li_r512, 512) { lane_until_mma<L_LI, 512>(a); }
-OP_KERNEL(tcliU_x128_t4, 384) { li_until_mma<128, 8, false, false, 4>(a); }
+OP_KERNEL(tcliU_x64_t2, 384) { li_until_mma<64, 8, false, false, 2>(a); }
 OP_KERNEL(tcliU_x32_t8, 512) { li_until_mma<32, 12, false, false, 8>(a); }
 OP_KERNEL(tc_mxf4_m128_n256, 128) { mxf4_alone(a); }
 OP_KERNEL(tcfU_li, 512) { lane_until_mma<L_LI, 64, true>(a); }
@@ -728,7 +728,7 @@ static const OpProbe PROBES[] = {
     {.name = "tcliU_p32f", .kernel = (const void*)tcliU_p32f, .tpb = 512, .expect = UI ";LDTM.x32=2,LOP3.LUT=32,IMAD=32,FFMA=8", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_lif", .kernel = (const void*)tclaneU_lif, .tpb = 512, .expect = UI ";LOP3.LUT=28,IMAD=28,FFMA=8", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_li_r512", .kernel = (const void*)tclaneU_li_r512, .tpb = 512, .expect = UI ";LOP3.LUT=256,IMAD=256", .warps = "1;12", .iters = 2048, .until = 2},
-    {.name = "tcliU_x128_t4", .kernel = (const void*)tcliU_x128_t4, .tpb = 384, .expect = UI ";LDTM.x128=4,LOP3.LUT=256,IMAD=256", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tcliU_x64_t2", .kernel = (const void*)tcliU_x64_t2, .tpb = 384, .expect = UI ";LDTM.x64=2,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
     {.name = "tcliU_x32_t8", .kernel = (const void*)tcliU_x32_t8, .tpb = 512, .expect = UI ";LDTM.x32=8,LOP3.LUT=128,IMAD=128", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tc_mxf4_m128_n256", .kernel = (const void*)tc_mxf4_m128_n256, .tpb = 128, .expect = "UTC*MMA*=4", .warps = "1", .iters = 4096},
     {.name = "tcfU_li", .kernel = (const void*)tcfU_li, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=32,IMAD=32", .warps = "1;12", .iters = 2048, .until = 2},
