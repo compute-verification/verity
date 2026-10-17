@@ -30,7 +30,8 @@ LD_REGS = {"ld_32x32b_x32": 32, "ld_32x32b_x16": 16, "ld_16x256b_x4": 16, "ld_16
            "ld_32x32b_x4": 4, "ld_32x32b_x1": 1, "ld16w_32x32b_x32": 32, "ld16w_32x32b_x16": 16,
            "ld_32x32b_x64": 64, "ld_32x32b_x128": 128}
 TENSOR = ("IGMMA", "QGMMA", "HGMMA", "BGMMA", "UTC", "LDTM", "IMMA", "HMMA", "BMMA")
-LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo"}
+LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo",
+              "redux": "s_redux", "reduce": "s_reduce"}
 
 
 def load(d: Path) -> tuple[dict[str, dict], dict[str, dict]]:
@@ -105,7 +106,7 @@ def slots_sm100(name: str, row: dict) -> dict | None:
 
 
 def lane_of(name: str) -> str | None:
-    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo)", name)
+    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo|redux|reduce)", name)
     return (m.group(1) or m.group(2)) if m else None
 
 

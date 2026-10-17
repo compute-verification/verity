@@ -502,8 +502,12 @@ OP_KERNEL(tclane_mix_r256, 512) { lane_beside_mma<L_MIX, 256>(a); }
 OP_KERNEL(tclane_imad_r128, 512) { lane_beside_mma<L_IMAD, 128>(a); }
 OP_KERNEL(tclane_lop3_r128, 512) { lane_beside_mma<L_LOP3, 128>(a); }
 OP_KERNEL(tclane_duo_r192, 512) { lane_beside_mma<L_DUO, 192>(a); }
+OP_KERNEL(tclane_redux_r64, 512) { lane_beside_mma<L_REDUX, 64>(a); }
+OP_KERNEL(tclane_reduce_r8, 512) { lane_beside_mma<L_REDUCE, 8>(a); }
 OP_KERNEL(tclaneU_mix, 512) { lane_until_mma<L_MIX, 64>(a); }
 OP_KERNEL(tclaneU_imad, 512) { lane_until_mma<L_IMAD, 64>(a); }
+OP_KERNEL(tclaneU_redux, 512) { lane_until_mma<L_REDUX, 64>(a); }
+OP_KERNEL(tclaneU_reduce, 512) { lane_until_mma<L_REDUCE, 8>(a); }
 OP_KERNEL(tclaneU_duo, 512) { lane_until_mma<L_DUO, 48>(a); }
 
 #define UI "UTCIMMA*=4"
@@ -556,9 +560,12 @@ static const OpProbe PROBES[] = {
     {.name = "tclane_imad_r128", .kernel = (const void*)tclane_imad_r128, .tpb = 512, .expect = UI ";IMAD=128", .warps = "1;12", .iters = 2048},
     {.name = "tclane_lop3_r128", .kernel = (const void*)tclane_lop3_r128, .tpb = 512, .expect = UI ";LOP3.LUT=128", .warps = "1;12", .iters = 2048},
     {.name = "tclane_duo_r192", .kernel = (const void*)tclane_duo_r192, .tpb = 512, .expect = UI ";LOP3.LUT=64,IMAD=64", .warps = "1;12", .iters = 2048},
+    {.name = "tclane_redux_r64", .kernel = (const void*)tclane_redux_r64, .tpb = 512, .expect = UI ";REDUX*=64", .warps = "1;12", .iters = 2048},
+    {.name = "tclane_reduce_r8", .kernel = (const void*)tclane_reduce_r8, .tpb = 512, .expect = UI ";SHFL.BFLY=40,LOP3.LUT=40", .warps = "1;12", .iters = 2048},
     {.name = "tclaneU_mix", .kernel = (const void*)tclaneU_mix, .tpb = 512, .expect = UI ";FFMA=32", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_imad", .kernel = (const void*)tclaneU_imad, .tpb = 512, .expect = UI ";IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
-    {.name = "tclaneU_duo", .kernel = (const void*)tclaneU_duo, .tpb = 512, .expect = UI ";LOP3.LUT=16,IMAD=16", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_redux", .kernel = (const void*)tclaneU_redux, .tpb = 512, .expect = UI ";REDUX*=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_reduce", .kernel = (const void*)tclaneU_reduce, .tpb = 512, .expect = UI ";SHFL.BFLY=40,LOP3.LUT=40", .warps = "1;12", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
