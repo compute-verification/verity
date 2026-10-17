@@ -39,7 +39,7 @@ uv run machine-model eps --table --upfill --credit floor --uni-issue 0.92   # a 
 | `verity_machine_model/adopt.py` | Merging a measured census into `data/census/` at the last epoch, each (kind, row) at the faster of its two lines |
 | `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
 | `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA: `e-l7qs` is PROFILE's measured kernel, `dither-duo-l32` the provisional one the tests' hand arithmetic reads |
-| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (QSTAR's, provisional until a DATASHEET row) |
+| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (the most L2 read in any measured pattern, + 2%) |
 | `data/designs/NAME.toml` | A protocol's parameters: its honest profile, L, its noise's operand-delivery floor φ_del, the fold and filler (lane instructions a word by class), plain (unfolded) MMAs beside its work, ε_skip's and ε_mand's parts with sources, ε_clock, Theorem S's δ, p and checks, and honest's baseline program (dp4a) |
 | `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
 
