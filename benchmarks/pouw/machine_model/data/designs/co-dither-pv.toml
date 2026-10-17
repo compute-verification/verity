@@ -1,0 +1,43 @@
+# Bc with P·V on committed digit limbs (SKIP 05:27Z, CHECKED-STRIP 05:21Z): P peeled, V served, Ycum's digits committed,
+# so no limb is unchecked (note:20261017T0340Z-draft-skip, note:20261017T0030Z-draft-checked-strip). Perplexity pending.
+name = "co-dither-pv"
+summary = "Bc with P·V on three committed digit limbs (co32c-pv, SKIP 05:27Z): every limb a checked word, duo at L = 32"
+honest = "e-l7qs"
+L = 32
+work = 1.0
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDSM_X4 = 0.025641 }
+source = "SPEC §3.4: CO-Dither's U is resident (B̃ a data-independent map of a resident matrix), so Dither's one-operand floor, least 1/39 at (a, b) = (1, 39); co32c's words are subset sums of wide U values, as fresh as Dither's (SKIP) (note:20261017T0324Z-draft-eps1-spec)"
+
+[fold]
+name = "duo"
+ALU = 2
+IMAD = 1
+
+[skip.worst-cell]
+eps = 0.0
+source = "SKIP's calculator at b5d3cf858: with P·V on three committed digit limbs of L + 1, Bc's ε_skip is 0 in every cell, prefill and decode (note:20261017T0340Z-draft-skip, 05:27Z); its perplexity (r20261017-052411-7598) is pending"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD)"
+
+[clock]
+eps = 0.1391
+source = "SPEC's P1 (note:20261017T0324Z-draft-eps1-spec, 04:47Z): the prover sets its own clocks, so f_max is the hardware's 2,430 MHz against honest at the node's 2,092 lock, 1 − 2092/2430, unless a trusted device attests the lock; at the lock every program runs 2,099.5-2,100.0 MHz (DATASHEET, r20261017-033131-4e67), and the default-clock gap is unmeasured"
+
+[luck]
+delta = 4.547473508864641e-13
+p = 0.75
+checks = 48000
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 8, LDS128 = 0.5 }   # lane instructions a word: 8 IDP4A at k = 32, operands for an 8x8 tile a lane
+source = "dp4a at 8 IDP4A a word (note:20261017T0310Z-report-eps1-program §3); its loads: 2(a + b)/(ab) LDS.128 a word at a = b = 8"
+
+[routes]
+lanes = true
+uniform = true
