@@ -14,12 +14,17 @@ batching coins' combination of every constraint the rep hands the inner proof an
   (characteristic 2).
 * `innerP_batched`: so at a rep's pads, the batched constraint `innerP` checks holds at every `ε` and every batching
   coin once the rep's own constraints vanish there.
+
+The verifier's checks on the honest inner proof (`Zk.verifyInnerWith`), on `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)`
+(`innerY`): the batched check `⟨c, Y⟩ = t + β τ` at `τ = ⟨c, μ⟩` where the prover's own check passed
+(`innerY_batched`, from `dot_innerY`), and each column check `code(Y)_j = code(h ‖ pad_h)_j + β code(μ ‖ pad_μ)_j`
+(`innerY_column`, from `codeAt_innerY`: the code is linear, `of_codeAt`).
 -/
 
 namespace FlockComplete
 
 open Flock FlockLevel3 FlockSoundness.Discharge.Composed.ZerocheckMasked
-open FlockSoundness.Discharge.Composed.Zerocheck (eq_of_of of_one')
+open FlockSoundness.Discharge.Composed.Zerocheck (eq_of_of of_one' mul_sum')
 
 /-- **Every constraint of `cons` vanishes at the pads `h`**, each on `h`'s length. -/
 def ConsHold (cons : Array (String × Zk.Lin)) (h : Array F128) : Prop :=
@@ -192,5 +197,97 @@ theorem innerP_batched (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) {cons : 
   show (evalL l p.h).isZero = true
   rw [e]
   rfl
+
+/-! ## The inner proof's checks on `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` -/
+
+/-- The masked dot product's `Y` (`innerP`'s `y`): entry `i` is `hv_i + β mv_i`. -/
+def innerY (hv mv : Array F128) (beta : F128) : Array F128 :=
+  (Array.range hv.size).map fun i => hv[i]! + beta * mv[i]!
+
+theorem innerY_size (hv mv : Array F128) (beta : F128) : (innerY hv mv beta).size = hv.size := by simp [innerY]
+
+theorem innerY_get (hv mv : Array F128) (beta : F128) {i : ℕ} (hi : i < hv.size) :
+    (innerY hv mv beta)[i]! = hv[i]! + beta * mv[i]! := by
+  rw [getElem!_pos _ i (by simpa [innerY] using hi)]
+  simp [innerY]
+
+theorem get_append_left (a b : Array F128) {i : ℕ} (hi : i < a.size) : (a ++ b)[i]! = a[i]! := by
+  rw [getElem!_pos _ i (by simp; omega), getElem!_pos a i hi, Array.getElem_append_left hi]
+
+theorem f128_beq_self (x : F128) : (x == x) = true := by cases x; simp [BEq.beq, instBEqF128.beq]
+
+theorem isZero_eq {a : F128} (h : a.isZero = true) : a = 0 := FlockLevel3.F128.isZero_iff a h
+
+/-- **`⟨c, Y⟩ = ⟨c, h⟩ + β ⟨c, μ⟩`** on the pads' rows, `c` on `h`'s length. -/
+theorem dot_innerY (a h mu padH padMu : Array F128) (beta : F128) (ha : a.size = h.size) (hm : mu.size = h.size) :
+    dot a (innerY (h ++ padH) (mu ++ padMu) beta) = dot a h + beta * dot a mu := by
+  apply eq_of_of
+  rw [of_dot_range a _ h.size ha, of_add, of_mul, of_dot_range a h h.size ha, of_dot_range a mu h.size ha,
+    mul_sum', ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun k hk => ?_
+  have hk' := Finset.mem_range.1 hk
+  rw [innerY_get _ _ _ (by simp; omega), get_append_left _ _ hk', get_append_left _ _ (by omega), of_add, of_mul]
+  ring
+
+/-- **The batched check passes** on `Y` and `τ = ⟨c, μ⟩` where the prover's `c + ⟨c, h⟩` vanished. -/
+theorem innerY_batched (l : Zk.Lin) (h mu padH padMu : Array F128) (beta : F128) (ha : l.a.size = h.size)
+    (hm : mu.size = h.size) (hz : (l.c + dot l.a h).isZero = true) :
+    (dot l.a (innerY (h ++ padH) (mu ++ padMu) beta) == l.c + beta * dot l.a mu) = true := by
+  rw [dot_innerY _ _ _ _ _ _ ha hm]
+  have e : dot l.a h = l.c := by
+    have := isZero_eq hz
+    apply eq_of_of
+    have h2 := congrArg GF128.of this
+    rw [of_add, ← GF128.zero_eq] at h2
+    linear_combination h2 - CharTwo.add_self_eq_zero (GF128.of l.c)
+  rw [e]
+  exact f128_beq_self _
+
+theorem of_horner (x : F128) : ∀ l : List F128,
+    GF128.of (l.foldr (fun c acc => acc * x + c) 0) =
+      ∑ i ∈ Finset.range l.length, GF128.of (l.getD i 0) * GF128.of x ^ i
+  | [] => by simp [← GF128.zero_eq]
+  | c :: l => by
+      rw [List.foldr_cons, of_add, of_mul, of_horner x l, List.length_cons, Finset.sum_range_succ']
+      refine congrArg₂ (· + ·) ((Finset.sum_mul _ _ _).trans (Finset.sum_congr rfl fun i _ => ?_)) ?_
+      · rw [List.getD_cons_succ, pow_succ, mul_assoc]
+      · simp
+
+/-- **The inner code at column `j`** is `Σ y_i X^i` at `X = j + 1`. -/
+theorem of_codeAt (y : Array F128) (j : ℕ) :
+    GF128.of (Zk.codeAt y j) = ∑ i ∈ Finset.range y.size, GF128.of y[i]! * GF128.of ⟨(j + 1).toUInt64, 0⟩ ^ i := by
+  show GF128.of (y.foldr (fun c acc => acc * (⟨(j + 1).toUInt64, 0⟩ : F128) + c) 0) = _
+  rw [← Array.foldr_toList, of_horner, Array.length_toList]
+  refine Finset.sum_congr rfl fun i hi => ?_
+  have hi' := Finset.mem_range.1 hi
+  have e : y.toList.getD i 0 = y[i]! := by simp [List.getD_eq_getElem?_getD, hi']
+  rw [e]
+
+/-- **`Y`'s code is the rows' codes combined**: `code(Y)_j = code(hv)_j + β code(mv)_j`. -/
+theorem codeAt_innerY (hv mv : Array F128) (beta : F128) (hs : mv.size = hv.size) (j : ℕ) :
+    Zk.codeAt (innerY hv mv beta) j = Zk.codeAt hv j + beta * Zk.codeAt mv j := by
+  apply eq_of_of
+  rw [of_add, of_mul, of_codeAt, of_codeAt, of_codeAt, innerY_size, hs, mul_sum', ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun i hi => ?_
+  rw [innerY_get _ _ _ (Finset.mem_range.1 hi), of_add, of_mul]
+  ring
+
+/-- **The column check passes** at an opened column `j < n` of the rows' codewords. -/
+theorem innerY_column (hv mv : Array F128) (beta : F128) (hs : mv.size = hv.size) (n j : ℕ) (hj : j < n) :
+    (Zk.codeAt (innerY hv mv beta) j ==
+      ((Array.range n).map (Zk.codeAt hv))[j]! + beta * ((Array.range n).map (Zk.codeAt mv))[j]!) = true := by
+  rw [codeAt_innerY hv mv beta hs, getElem!_pos _ j (by simpa using hj), getElem!_pos _ j (by simpa using hj)]
+  simp only [Array.getElem_map, Array.getElem_range]
+  exact f128_beq_self _
+
+/-- At a rep's pads, `Y` has the inner code's message length `s + K_PAD`. -/
+theorem padsOf_innerY_size (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) (beta : F128) :
+    (innerY ((padsOf tape i r lay).h ++ (padsOf tape i r lay).padH)
+      ((padsOf tape i r lay).mu ++ (padsOf tape i r lay).padMu) beta).size = lay.len + Zk.K_PAD := by
+  simp [innerY, padsOf]
+
+theorem padsOf_mu_size (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) :
+    (padsOf tape i r lay).mu.size = (padsOf tape i r lay).h.size := by
+  simp [padsOf]
 
 end FlockComplete
