@@ -24,7 +24,10 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import serving_rows as SRT
 from verity_vllm.pipeline.tp.commit import TP_ROOT_TAG, tp_run_root
 
-WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w"}
+from tests.pipeline import served_ranks
+
+WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w",
+            "execution": "bi-eager"}
 RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "step_tokens_out": [1, 1, 1, 1], "generated_tokens": 4, "prompt_tokens": 3, "tokens": {"q0": [5, 6, 7, 8]}}
 ROOTS = {0: bytes(range(32)), 1: bytes(range(32, 64))}
 SILU = "SiluMul_v1{I=32}"
@@ -51,6 +54,8 @@ class _LLM:
             raise _Stop
         if method is SRT.rank_rows:
             return [method(SimpleNamespace(_tp2_commit={"rank": r}), *args) for r in ROOTS]
+        if (served := served_ranks.answer(method, WORKLOAD, ROOTS)) is not None:
+            return served
         return [{"rank": r, "leaves": 3, "errors_n": 0, "errors": [], "committer": "native_collect_v2b", "run_root": ROOTS[r].hex(),
                  "leaves_per_step": [3], "cpu_s": {}} for r in ROOTS]
 
@@ -67,6 +72,7 @@ def _tp_commit(tmp_path: Path, monkeypatch, write) -> tuple[list[str], Path]:
     from verity_vllm.pipeline.tp import commit as TPCM
 
     events: list[str] = []
+    monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")
     vllm = ModuleType("vllm")
     vllm.LLM = _LLM(events)
     monkeypatch.setitem(sys.modules, "vllm", vllm)

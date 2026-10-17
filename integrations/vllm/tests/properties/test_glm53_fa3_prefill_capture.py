@@ -4,6 +4,8 @@ flipped one, a non-finite head takes the reference evaluator's words, the verdic
 end (the GPU run is `tests/properties/glm53_fa3_prefill_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import json
 from pathlib import Path
 

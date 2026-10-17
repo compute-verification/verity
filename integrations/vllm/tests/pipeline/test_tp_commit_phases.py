@@ -16,7 +16,10 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import timeline as T
 from verity_vllm.pipeline.tp import phases as PH
 
-WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w"}
+from tests.pipeline import served_ranks
+
+WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w",
+            "execution": "bi-eager"}
 RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "step_tokens_out": [1, 1, 1, 1], "generated_tokens": 4, "prompt_tokens": 3, "tokens": {"q0": [5, 6, 7, 8]}}
 
 
@@ -38,6 +41,8 @@ class _LLM:
         self.calls[name] = self.calls.get(name, 0) + 1
         if (name, self.calls[name]) == self.fails:
             raise RuntimeError(f"rank 1: {name} failed")
+        if (served := served_ranks.answer(method, WORKLOAD, range(self.ranks))) is not None:
+            return served
         return [{"rank": r, "leaves": 3, "errors_n": 0, "errors": [], "committer": "native_collect_v2b", "cpu_s": {}} for r in range(self.ranks)]
 
 
@@ -78,6 +83,7 @@ def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_f
         mark.event("run")
         return dict(RUN)
 
+    monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")
     vllm = ModuleType("vllm")
     vllm.LLM = llm
     monkeypatch.setitem(sys.modules, "vllm", vllm)
@@ -95,7 +101,7 @@ def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_f
 
     events = _events(timeline)
     assert _steps(events) == [
-        ("engine.build", "start"), "LLM", "rpc.tp2_probe", ("engine.build", "end", True),
+        ("engine.build", "start"), "LLM", "rpc.tp2_probe", ("engine.build", "end", True), "rpc.read_rank",
         ("prep.warmup_control0", "start"), "run", ("prep.warmup_control0", "end", True),
         ("prep.committer_setup", "start"), "rpc.tp2_commit_make", ("prep.committer_setup", "end", True),
         ("prep.warmup_instrumented", "start"), "rpc.warming", "rpc.tp2_commit_install", "run", "rpc.tp2_commit_finalize", "rpc.warming",

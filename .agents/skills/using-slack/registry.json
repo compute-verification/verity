@@ -77,6 +77,7 @@
         "archive/",
         "benchmarks/one_stage/",
         "benchmarks/commitments/",
+        "benchmarks/multi_unit/",
         "archive/sp1/benchmarks/dot_product/",
         "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
@@ -100,6 +101,7 @@
       "owns": [
         "integrations/",
         "benchmarks/served_units/",
+        "benchmarks/served_commit/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
@@ -197,6 +199,7 @@
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
         "benchmarks/resource_accounting/",
+        "benchmarks/serve_bandwidth/",
         "benchmarks/sketch_tag/",
         "benchmarks/tag_fast/",
         "benchmarks/vllm_encoded/",

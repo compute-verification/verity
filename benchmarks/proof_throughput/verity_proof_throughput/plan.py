@@ -20,7 +20,7 @@ from typing import Any
 from .workloads import Workload, ladder, workload
 
 PROVER_NODE = "vy-nebius-1"
-VERIFIER_NODES = ("vy-nebius-cpu-3", "vy-nebius-cpu-2")
+VERIFIER_NODES = ("vy-nebius-cpu-3", "vy-nebius-cpu-2", PROVER_NODE)
 CONFIGS = ("plain",)
 
 PASS_QUERY = """
@@ -119,9 +119,15 @@ def prover_command(root: Path, item: Planned, *, mem_gb: int = 96, cpus: int = 3
 
 def verifier_command(root: Path, bundle: str, prove_run: str, *, node: str = VERIFIER_NODES[0], mem_gb: int = 16,
                      timeout: str = "3h") -> list[str]:
-    return ["research", "run", "--on", node, "--project", "verity", "--campaign", "proof-throughput", "--source", str(root),
-            "--cwd", "source", "--mem-gb", str(mem_gb), "--mem-wait", "1800", "--timeout", timeout, "--require-result",
-            "--tool", "verity_proof_throughput.tool:VERIFIER_POINT",
+    """On a CPU pod, in a slot of the proofs pool; on the GPU node, as a queued CPU job in its own pinned scope (no GPU), for
+    when the pool's slots are held: the verifier is single-threaded, and a slot is a whole build's cores."""
+    if node == PROVER_NODE:
+        place = ["--queue", "--on", node, "--cpus", "4", "--max-min", "180", "--cwd", "source", "--question",
+                 f"proof_throughput: the Lean verifier on {bundle}, the sessions of {prove_run}"]
+    else:
+        place = ["--on", node, "--pool", "proofs", "--as", "proofs", "--cwd", "clone", "--mem-wait", "1800", "--timeout", timeout]
+    return ["research", "run", *place, "--project", "verity", "--campaign", "proof-throughput", "--source", str(root),
+            "--mem-gb", str(mem_gb), "--require-result", "--tool", "verity_proof_throughput.tool:VERIFIER_POINT",
             "--", "bash", "benchmarks/proof_throughput/verify.sh", f"BUNDLE={bundle}", f"PROVE_RUN={prove_run}"]
 
 

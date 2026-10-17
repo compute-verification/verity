@@ -31,7 +31,8 @@ SUMMARY = {"schema": "verity/commit-integ/delta-tp/v1", "pass": True, "pairs": 1
            "value_check": {"verdict": "PASS"}, "match_oracle": {"0": {"verdict": "PASS"}, "1": {"verdict": "PASS"}},
            "required_manifest": {"manifest_digest": "mm", "identities": 7},
            "sampled_replay": {"result": True, "sample": {"picked": 4, "evaluated": 4, "equal": 4, "mismatch_n": 0},
-                              "per_rank": {"0": {"result": True, "grade": "complete"}, "1": {"result": True, "grade": "complete"}}}}
+                              "per_rank": {"0": {"result": True, "grade": "complete"}, "1": {"result": True, "grade": "complete"}}},
+           "served": {"schema": "verity-vllm/served-switches/v1", "ok": True, "problems": []}}
 
 
 def test_index_names_rows_of_record():
@@ -136,7 +137,8 @@ def test_a_published_row_loads_back_by_id(tmp_path, store):
                                      "manifest_digest": "mm", "programs": epoch.build_programs(d)}}
     assert sorted(records.index()[ROW]["programs"]) == ["0", "1"]
     m = store.get_manifest(art)
-    assert m.kind == "vllm-config-record/v1" and m.meta == {"row": ROW, "outcome": "PASS", "world": 2, "tree": "cursor/x@1b53f685a"}
+    assert m.kind == "vllm-config-record/v1" and m.meta == {"row": ROW, "outcome": "PASS", "world": 2, "tree": "cursor/x@1b53f685a",
+                                                            "tier": "fast"}
     assert m.refs == {"build": build, "manifest": ev["manifest"], "match": ev["match"], "commit": ev["commit"], PROP: cap[PROP]}
     assert [lb.value for lb in store.labels(art, "row")] == [ROW]
     assert any(w.get("location") == "remote" and w.get("present") for w in store.where(art))
@@ -187,6 +189,9 @@ def test_publish_refuses_a_failed_row_another_builds_commit_and_a_build_without_
         records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast",
                         summary={**SUMMARY, "pass": False})
     served = _served(d)
+    with pytest.raises(UsageError, match=r"the record is FAIL \(served switches not run\)"):
+        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast",
+                        summary={k: v for k, v in served.items() if k != "served"})
     for rm in ({**served["required_manifest"], "manifest_digest": "other"},
                {**served["required_manifest"], "program_digest_per_rank": {"0": "0" * 128}}):
         with pytest.raises(UsageError, match="not the one served"):
@@ -248,6 +253,39 @@ def test_publish_refuses_a_needed_property_left_silent_and_records_a_named_gap(t
     rec = records.record(ROW)
     assert rec["conformance"] == {"map": "llama-test-tp2", "due": {PROP: ["mul"]}}
     assert rec["evidence"]["gaps"] == {PROP: "no capture of the tree's harness"} and rec["evidence"]["conformance"] == {}
+
+
+def test_publish_cites_each_needed_property_s_newest_holding_capture_when_asked(tmp_path, store):
+    """`--newest-captures`, as the row chain publishes: the latest capture run's record of PROP at its registered schema, not an
+    older one, not one at another schema, and never in place of what the caller cites."""
+    _map(tmp_path)
+    d = _row_dir(tmp_path)
+    build = _build_art(store, d, tmp_path / "run")
+    old, new = (records.capture(_capture_run(store, tmp_path))[PROP] for _ in range(2))
+    stale = tmp_path / "stale.json"
+    _w(stale, {"schema": "verity-vllm/stale/v0", "words": 9, "ok": True})
+    meta = {"property": PROP, "schema": "verity-vllm/stale/v0", "ok": True, "run_id": "r20991231-000000-ffff"}
+    records.data("put", "--kind", records.PROPERTY_KIND, "--meta", json.dumps(meta), "--file", str(stale))
+    assert records.newest_capture(PROP) == new != old and records.newest_capture("glm53_dsa_capture") is None
+    art = records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast",
+                          summary=_served(d), newest=True)
+    assert records.record(ROW)["evidence"]["conformance"] == {PROP: new} and store.get_manifest(art).refs[PROP] == new
+    records.publish(d, ROW, evidence=records.evidence_of(build, conformance={PROP: old}), tree="cursor/x@1b53f685a", by="circuits",
+                    summary=_served(d), newest=True)
+    assert records.record(ROW)["evidence"]["conformance"] == {PROP: old}
+
+
+def test_a_record_published_from_another_tree_is_pulled_into_this_index(tmp_path, store, monkeypatch):
+    d = _row_dir(tmp_path)
+    build = _build_art(store, d, tmp_path / "run")
+    art = records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="heavy",
+                          summary=_served(d))
+    pod = records.index()
+    monkeypatch.setattr(records, "INDEX", tmp_path / "checkout.json")
+    assert records.pull(art) == ROW and records.index() == pod
+    assert pod[ROW]["programs"] == epoch.build_programs(d), "the entry rebuilt from the record is the one its row dir gave"
+    with pytest.raises(UsageError, match="not a PASS vllm-config-record/v1"):
+        records.pull(build)
 
 
 def test_a_build_without_construction_manifests_is_refused(tmp_path, store):

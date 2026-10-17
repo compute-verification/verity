@@ -844,13 +844,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         rec = step_bound_bytes(self.model, self._modules, envelope, hidden_m1=bool(hidden_m1), attn_backend=backend,
                                moe_layers=(len(moe_src.layers) if moe_src is not None else 0))
         # [R14 TP-03] sources that bind extra tensors per step (TP partial source) widen the bound: per token / per sequence / chunk padding
-        extra_pt = extra_ps = extra_n = 0
+        extra_pt = extra_ps = extra_step = extra_n = 0
         for s in getattr(self, "sources", []):
             f = getattr(s, "extra_step_bytes", None)
             if f is None:
                 continue
             e = f(envelope, self.model)
             extra_pt += int(e.get("per_token_bytes", 0)); extra_ps += int(e.get("per_seq_bytes", 0)); extra_n += int(e.get("tensors_per_step", 0))
+            extra_step += int(e.get("per_step_bytes", 0))
         if self.acquire_inputs:
             # [R19 int-20] the manifest-driven `<consumer>/in` acquisitions: one per-token tensor per consumer per step (its width from the
             # promoted member's registry signature), minus the embedding-class inputs the module table already counts
@@ -860,11 +861,12 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                     continue
                 extra_pt += int(bpt); extra_n += 1
             rec["promoted_inputs"] = {"consumers": sorted(self.acquire_inputs), "per_token_bytes": sum(int(v) for v in self.acquire_inputs.values())}
-        if extra_pt or extra_ps or extra_n:
+        if extra_pt or extra_ps or extra_step or extra_n:
             B = max(1, int(envelope.get("batch") or 1))
-            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_n * GPU_CHUNK_BYTES
-            add_decode = B * extra_pt + B * extra_ps + extra_n * GPU_CHUNK_BYTES
-            rec["extra_sources"] = {"per_token_bytes": extra_pt, "per_seq_bytes": extra_ps, "tensors_per_step": extra_n, "prefill_add": add_prefill, "decode_add": add_decode}
+            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_step + extra_n * GPU_CHUNK_BYTES
+            add_decode = B * extra_pt + B * extra_ps + extra_step + extra_n * GPU_CHUNK_BYTES
+            rec["extra_sources"] = {"per_token_bytes": extra_pt, "per_seq_bytes": extra_ps, "per_step_bytes": extra_step, "tensors_per_step": extra_n,
+                                    "prefill_add": add_prefill, "decode_add": add_decode}
             rec["prefill_step_bytes"] = int(rec["prefill_step_bytes"]) + add_prefill
             rec["decode_step_bytes"] = int(rec["decode_step_bytes"]) + add_decode
             rec["step_bound_bytes"] = max(int(rec["prefill_step_bytes"]), int(rec["decode_step_bytes"]))

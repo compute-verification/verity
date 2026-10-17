@@ -16,9 +16,13 @@ of the Programs per rank, the manifest, the Match and Commit records and the con
 manifest's exit code; a Build whose Programs passed while that manifest alone failed is superseded by the manifest of record
 (`evidence.manifest`, `build.stage.superseded_by`), and passes only so.
 
+`served` is the switches that selected the Commit's kernels, as each serving process read them back, against what the row's config
+declares (`engine.served`, from the Commit's summary.json).
+
 Outcome PASS: the Build passed, the word check passed (a config run) or the Match passed (a row of record), the Commit verdict passed
-(`check.verdict.commit_verdict`, which includes the replay) and the replay evaluated k units, all equal.  Anything else is FAIL with the
-first reason; a failure is a finding of the sweep, not a stop.
+(`check.verdict.commit_verdict`, which includes the replay), the replay evaluated k units, all equal, and the served switches passed (a
+Commit that read none back is not run).  Anything else is FAIL with the first reason; a failure is a finding of the sweep, not a stop.
+Served switches that failed come before the Commit: the Commit fails closed on them before it runs.
 """
 from __future__ import annotations
 
@@ -29,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowConfig, RowId, UsageError
+from verity_vllm.engine import served as SV
 from verity_vllm.pipeline.research_outputs import verdicts
 
 SCHEMA = "verity-vllm/config-record/v1"
@@ -304,16 +309,21 @@ def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str
     else:
         commit, replay = tp_commit_part(d, world) if world > 1 else commit_part(d)
         engine, timing = engine_part(d), timing_part(d)
+    served = SV.of_summary(summary if summary is not None else _json(d / "commit" / "summary.json"))
     gate = ("match", match["ok"]) if match is not None else ("word check", word.get("ok"))
-    checks = (("build", build["ok"]), gate, ("commit", commit.get("ok")), ("replay", replay.get("ok")))
+    switches = ("served switches", (served or {}).get("ok"))
+    checks = (("build", build["ok"]), gate, *((switches,) if switches[1] is False else ()), ("commit", commit.get("ok")),
+              ("replay", replay.get("ok")), switches)
     why = next((f"{name} {'FAIL' if ok is False else 'not run'}" for name, ok in checks if ok is not True), None)
+    if why == "served switches FAIL":
+        why = f"served switches FAIL: {'; '.join(served.get('problems') or [])}"
     if why == "build FAIL" and programs_ok and stage and stage["manifest_rc"] not in (None, 0):
         why = f"build FAIL: the in-stage manifest exited {stage['manifest_rc']} and no manifest of record supersedes it (evidence.manifest)"
     if why == "commit FAIL" and commit.get("reason"):
         why = f"commit FAIL: {commit['reason']}"
     return {"schema": SCHEMA, "config": config_of(row), "row": row_part(row, (match or {}).get("profile")), "tree": tree, "device": device,
             "outcome": "PASS" if why is None else "FAIL", "why": why, "build": build, "word_check": word, "match": match, "commit": commit,
-            "replay": replay, "engine": engine, "timing": timing, "stages": stages, "evidence": evidence or {}}
+            "replay": replay, "engine": engine, "served": served, "timing": timing, "stages": stages, "evidence": evidence or {}}
 
 
 def write(d: str | Path, row: str, **kw: Any) -> dict[str, Any]:
