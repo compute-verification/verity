@@ -2,6 +2,8 @@ import Proofs.Flock.Claims.ZK.Statement
 import Proofs.Flock.Claims.ZK.GK
 import Proofs.Flock.Claims.ZK.Interact
 import Proofs.Flock.Claims.ZK.Coins
+import Proofs.Flock.Claims.ZK.Congr
+import Proofs.Flock.Claims.ZK.Pin
 import Proofs.Flock.Claims.ZK.Forced
 import Proofs.Flock.Claims.ZK.Rewind
 import Proofs.Flock.Claims.ZK.GKProof
@@ -27,7 +29,8 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 # Flock's zero knowledge against a malicious verifier
 
 * `Statement`: what the proofs add to the spec's `ZKmalR` and `Claims.Flock.ZK`: ZK bits under `StrictBirthday` at
-  `Fork` (`ZKmalR.bits`) and the worst-case cost `SimCostLe`.
+  `Fork` (`ZKmalR.bits`), the worst-case cost `SimCostLe`, and `Claims.Flock.ZKAt`, the claim's form at a given prover
+  and simulator (`ZK_iff_at`: `Claims.Flock.ZK` is it at the record's own).
 * `GK`: a committed-coin protocol (`Proto`), its honest prover, its Goldreich–Kahan simulator with `N` rewinds
   (`Proto.simulator`), and the three facts the theorem reads (`PrefixHides`, `SHVZK`, `Binding`).
 * `Interact`: what the programs evaluate to: `runStar` and the simulator's runs as one interaction (`runStar_msgs`,
@@ -36,6 +39,12 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 * `Coins`: what the coin checks evaluate to: a transcript opens `c` exactly when every opening is answered and passes
   the check (`cls_eq_some_iff`), the forced walk agrees (`cls_eq_some_iff_fcls`), and a mismatch is two checked
   openings within the walk's calls (`fcls_eq_mism`).
+* `Congr`: `ZKmalR` carries over to a prover with the same messages and more calls within the rounds
+  (`zkmalR_congr`).
+* `Pin`: `Claims.Flock.ZK` reads the masked record's own reference prover (`ZkDeploy.prover`) and simulator; the proofs
+  prove `Claims.Flock.ZKAt` at a committed-coin protocol's prover. The masked record at a protocol `G` (`zkOf`) has
+  `honestPZk` behind `G`'s `Hello` and opening checks; where `G`'s messages are `honestPZk`'s (`Proto.Honest`, a named
+  Prop), `ZKAt` at `G.prover` is `Claims.Flock.ZK` at `zkOf` (`zk_zkOf`).
 * `Forced`: the forced run at `c` with the honest prover's messages at `c` opens all of `c` exactly when the real run
   opens `c`, and is then the real run (`fcls_succ_iff`, `forced_eq_of_cls`, `real_eq_of_fcls`); one that stops before a
   binding failure is a real run that opens no coin vector (`cls_none_of_abort`).
@@ -69,7 +78,8 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   the `--zk` instance still needs.
 * `Hypotheses`: what the `--zk` instance still needs, as five Props about models of the masked prover (`MsgLink`,
   `SimLink`, `NonDegenerate`, `InnerHolds`, `CoinCheck`), and the claim from them under `Claims.Hm96Hiding`
-  (`Flock.zk_of_models`; **`Flock.zk_deployZk_of_models`** at `FlockDeploy.deployZk`).
+  (`Flock.zk_of_models`; `Flock.zkAt_deployZk_of_models` at `FlockDeploy.deployZk`; **`Flock.zk_deployZk_of_models`**
+  at its masked record `zkOf`, under `Proto.Honest`).
 * `Prefinal`: Lemma C from world `W₀` alone, for any family of tables of their own types (`famCard_cut_eq`), and its
   bounds on the runs before the last coin and where the prover refuses (`Proto.runs_close_of_ideal`,
   `Proto.refused_close_of_ideal`).
@@ -83,7 +93,9 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (its round encoding of the cut view, its final message of the tables' real views, refusing where a table doesn't
   admit the coins); `CoinCheck` holds of it by definition, `TablesOK` from `Tables` and `TMsgLink` from `Complete`,
   `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is the cut view the round
-  messages encode): **`Flock.zk_deployZk_ref`**, and at the pinned key's hiding gap (`Flock.zk_deployZk_ref_gap`).
+  messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and **`Flock.zk_deployZk_ref`** at the session's masked
+  record `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `honestPZk`'s, a named Prop), each also at
+  the pinned key's hiding gap (`_gap`).
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
@@ -100,7 +112,7 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   reference prover's run cut at some round, but with probability the masked checks' errors (`ZkServer.split`), from
   two obligations of its definition (`Ref`, `CheckSound`); so zero knowledge carries over within a factor `k + 1`, the
   stop's leak, of the simulator that guesses the stop round (`ZkServer.zk_server`; **`Flock.zk_server_ref`** at
-  `refP`), and over a stream with at most `b` stops the leak is at most `log₂ ∑_{i ≤ b} C(m, i)·r^i` bits
+  the session's masked record), and over a stream with at most `b` stops the leak is at most `log₂ ∑_{i ≤ b} C(m, i)·r^i` bits
   (`stream_leak`). At the worker's own values the split is exact and the checks' errors drop out
   (`ZkServer.split_own`, `ZkServer.zk_server_own`), and a pad-blind worker (`ZkServer.BWorker`) is handed neither the
   server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`).
@@ -112,9 +124,12 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   every pad-blind worker within `D.V.k x + 2` of the guessing simulator, with no term for the masked checks.
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
-  a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail Flock's `ZK` at
-  a masked record whose relation holds everywhere (`toyD`).
-* `SamplingNonVacuous`: the same for the sampling `ZK`: it fails at the colliding simulator given the leaf layer
-  (`not_samplingZK_collSim`), and for the witness-sending prover at two honest witnesses of one leaf layer
-  (`not_samplingZK_leak`).
+  a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
+  a masked record whose relation holds everywhere (`toyD`). Flock's `ZK` fails at the masked record of `toyD` whose
+  reference prover is quiet and whose simulator is colliding (`not_flockZK_toyZD`), so it is not met at every masked
+  record (`not_forall_flockZK`).
+* `SamplingNonVacuous`: the same for the sampling `ZK`: it fails at a deployment whose reference prover is quiet and
+  whose simulator is colliding given the leaf layer (`not_samplingZK_collSim`), at one whose reference prover sends its
+  witness at two honest witnesses of one leaf layer (`not_samplingZK_leak`), and is not met at every masked deployment
+  where one has an honest pair (`not_forall_samplingZK`).
 -/

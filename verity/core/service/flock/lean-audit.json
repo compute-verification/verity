@@ -4,6 +4,7 @@
   "FlockVerify",
   "Flock.Test.Full",
   "Flock.Test.Labels",
+  "Flock.Test.FullDraw",
   "Flock.Test.Sha512",
   "Flock.Test.InnerStreams",
   "Flock.Test.RecCoins",
