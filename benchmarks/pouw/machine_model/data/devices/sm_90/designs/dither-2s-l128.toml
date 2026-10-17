@@ -1,0 +1,44 @@
+# Dither-2S at L = 128 on the H200 (sm_90): two-sided dither serving the last checked word, duo receipts, P·V's peel.
+# The noise, ε_skip and ε_mand are sm_120's design's (data/designs/); honest, its operand floor and the baseline are
+# the H200's. Every Dither noise has the same floor here: no operand passes through a register.
+name = "dither-2s-l128"
+summary = "Dither-2S on the H200 at L = 128: two-sided dither serving the last checked word, duo receipts, P·V's peel"
+honest = "dc90-l128"
+L = 128
+work = 1.0
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { IGMMA_S8_N256 = 0.0 }
+source = "wgmma reads both operands from shared memory by descriptor (TMA fills it), so delivery costs no warp instruction a MMA; the warpgroup fences and commit groups are left out, so it is a lower bound"
+
+[fold]
+name = "duo"
+ALU = 2
+IMAD = 1
+
+[skip.pv-strip]
+eps = 0.00512091
+source = "SKIP's design A over Llama-3.1-8B and 70B x 2K, 8K, 32K by honest time, CHECKED-STRIP Result 3: at a one-hot P row P·V's whole strip is free, 0.131% at L = 32 (note:20261017T0340Z-draft-skip Result 3, 06:19Z); at L = 128, (L + 1)/33 of it (the strip is L + 1 wide)"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD)"
+
+[clock]
+eps = 0.0
+source = "f_H unmeasured on the H200 (EPS1 DC measured f_max = 1980 MHz at default clocks, 06:01Z): 0 here, so γ with the clock gap is γ, a lower bound"
+
+[luck]
+delta = 4.547473508864641e-13
+p = 0.75
+checks = 48000
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 32 }
+source = "dp4a at 32 IDP4A a word at L = 128, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
+
+[routes]
+lanes = true
+uniform = false     # no uniform-datapath line in EPS1 DC's census
