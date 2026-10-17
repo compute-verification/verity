@@ -752,6 +752,9 @@ static void form() {
   mixu<F, 48, LANE_MIX, 8>(); mixu<F, 16, LANE_MIX, 6>(); mixu<F, 32, LANE_MIX, 6>(); mixu<F, 8, LANE_IADD3, 8>();
   sweep<F, 6>();
   sweep<F, 8>();
+  // the search's extension (decision 76: its margin is the spread once two successive extensions agree within 2%)
+  sweep<F, 5>();
+  sweep<F, 7>();
 }
 
 // A scalar class beside a saturated MMA (2 MMA + 2 lane warps a SMSP, 8 ops a MMA): its coupling with the tensor pipe
