@@ -24,6 +24,7 @@ import Proofs.Flock.Claims.KS.ZkBound
 import Proofs.Flock.Claims.KS.ZkKS
 import Proofs.Flock.Claims.KS.JointJ
 import Proofs.Flock.Claims.KS.ZkTables
+import Proofs.Flock.Claims.KS.ZkBoundJ
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -103,4 +104,8 @@ follows from every table's bound with one family of escapes, over every table's 
 (`Flock.TableBoundJ`, `Flock.ColsOkJ`, `Flock.ConflictTiedJ`, `Flock.oneWait_of_tableBoundJ`), and at the masked record
 accepted runs open table `j`'s columns at its width and as its level-0 openings (`ZkTables`: `FlockDeploy.KS.wordLenJ`,
 `FlockDeploy.KS.zk_colsOkJ`, `FlockDeploy.KS.zk_openingJ`, `FlockDeploy.KS.zk_conflictTiedJ`), so `Flock.KS` there
-follows from every table's bound alone, at every number of tables (`FlockDeploy.KS.zk_KS_of_tableBoundJ`). -/
+follows from every table's bound alone, at every number of tables (`FlockDeploy.KS.zk_KS_of_tableBoundJ`). The
+batched tables' old fork events share rounds, so joined by round they fit the masked weight
+(`ZkBoundJ`: `Flock.joinEscZ`, `FlockDeploy.KS.joinEscZ_fitsFork_zk`, `Flock.oldEscZ_term_le_join`); at table `j` the
+old padded bound is at most `ε_table` (`FlockDeploy.KS.mean_epsSZ_leJ`), and a table that does not extract table `j` is
+not committed to its model statement (`FlockDeploy.KS.zk_not_committedJ`). -/
