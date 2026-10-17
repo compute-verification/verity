@@ -282,6 +282,30 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER: zeroing a fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
           "LIN-STEER", "conjectured"),
+    # The data-sheet axioms A1–A7 (Security/Models/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
+    # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
+    Entry("accounting-sheet-clock", "assumption",
+          "A1 CLOCK: the SM clock never exceeds the data sheet's maximum boost clock", "A1 clock (data sheet)",
+          "measured"),
+    Entry("accounting-sheet-dispatch", "assumption",
+          "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
+          "instructions included (A2u, which no vendor document states)", "A2 dispatch (whitepapers)", "measured"),
+    Entry("accounting-sheet-tensor", "assumption",
+          "A3 TENSOR: the tensor cores do at most the data sheet's dense MACs per SM clock for each operand type",
+          "A3 tensor (data sheet)", "measured"),
+    Entry("accounting-sheet-pipe", "assumption",
+          "A4 PIPE: the instruction classes Nsight Compute puts on one pipe share that pipe's CUDA Programming Guide "
+          "throughput", "A4 pipe (Programming Guide)", "measured"),
+    Entry("accounting-sheet-smem", "assumption",
+          "A5 SMEM: shared memory moves at most 32 banks × 4 B = 128 B per SM clock, loads and stores together",
+          "A5 shared memory (Programming Guide)", "measured"),
+    Entry("accounting-sheet-words", "assumption",
+          "A6 WORDS: an instruction writes at most its destination registers' 32-bit words (its PTX fragment; two a "
+          "lane for a lane instruction)", "A6 words (PTX ISA)", "measured"),
+    Entry("accounting-sheet-semantics", "assumption",
+          "A7 SEMANTICS: each instruction computes the function its ISA defines and writes nothing else, so no unit "
+          "outside the route menu heads a fresh committed word and a side unit's words cost its per-word vector",
+          "A7 semantics (PTX ISA)", "measured"),
 )}
 
 

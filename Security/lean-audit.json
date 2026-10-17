@@ -62,6 +62,27 @@
    "owner": "@compute-accounting",
    "digest": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd"
   },
+  "Accounting.Assumptions.TS.SheetClock": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.SheetDispatch": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.SheetPipe": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.SheetSemantics": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.SheetSmem": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.SheetTensor": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.Assumptions.TS.SheetWords": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.Assumptions.TS.SideUnits": {
    "owner": "@compute-accounting",
    "digest": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179"
@@ -1430,6 +1451,15 @@
    "signature": ["Accounting.SecurityProofs.TS.RoutesOffD2 : Accounting.Guarantees.TS.RoutesOffD2"],
    "assumptions": [],
    "type_hash": "910ce6a26665e311102a94c12eaccac326387b0accd53002a814c6795e97b5fc"
+  },
+  "Accounting.SecurityProofs.TS.SheetDIdealFloor": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.SheetFacetCeilings": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.TS.TensorSlotCount": {
    "owner": "@compute-accounting",
@@ -5471,7 +5501,10 @@
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
    "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
-   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier."
+   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
+   "Accounting.SecurityProofs.TS.SheetFacetCeilings": "lemma: (I1) FacetCeilings on the data-sheet machine from A1-A5 (Models.Accounting.Assumptions.Sheet), over any sheet and run with counts >= 0; arithmetic over the machine's rows, not a Lean function.",
+   "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": "lemma: (I3) ScalarRoute at q, q_T <= 1/2 and b_T <= 0 from A6 (two words a lane) and the labelling's split; arithmetic, not a Lean function.",
+   "Accounting.SecurityProofs.TS.SheetDIdealFloor": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7-flat) of EPS1-SPEC on the data-sheet machine, DIdealFloor with (I1)-(I5) replaced by A1-A7 at the 1/2 floor, over every full-checking play and labelled program, not a Lean function; A1-A7 and (I6)-(I8) are not on the premises list."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
