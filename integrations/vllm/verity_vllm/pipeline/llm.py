@@ -30,6 +30,8 @@ SUPPORTED: dict[str, Supported] = {
     "max_model_len": Supported(int, None, "context length (default: the pin's)"),
     "gpu_memory_utilization": Supported((float, int), None, "fraction of device memory the engine may take (default: the "
                                                             "engine profile's)"),
+    "kv_cache_memory_bytes": Supported(int, None, "the KV cache's size in bytes, in place of sizing it from free memory "
+                                                  "(default: vLLM's sizing)"),
     "enforce_eager": Supported(bool, True, "True runs eagerly; False compiles with torch.compile and CUDA graphs"),
     "dtype": Supported((str, type(None)), None, "served dtype override (default: the checkpoint profile's)"),
     "quantization": Supported((str, type(None)), None, "vLLM quantization override, such as fp8 (default: the checkpoint's)"),
@@ -40,8 +42,8 @@ SUPPORTED: dict[str, Supported] = {
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
 #: Options passed to vLLM only when the caller sets them; unset, the engine profile's value stands.
-ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "dtype", "quantization",
-               "compilation_config", "seed")
+ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "kv_cache_memory_bytes", "dtype",
+               "quantization", "compilation_config", "seed")
 #: Explicit overrides that can select kernels outside a protocol option's Build.
 KERNEL_PROFILE_OVERRIDES = ("dtype", "quantization", "compilation_config")
 #: The keyword arguments ``generate`` accepts beside the prompts and sampling parameters.
@@ -131,6 +133,8 @@ class LLM:
     * ``max_num_batched_tokens`` (int): tokens per scheduler step; default vLLM's for the model length.
     * ``max_model_len`` (int): context length; default the pin's.
     * ``gpu_memory_utilization`` (float): fraction of device memory the engine may take; default the engine profile's.
+    * ``kv_cache_memory_bytes`` (int): the KV cache's size in bytes, in place of sizing it from free memory; default vLLM's
+      sizing.
     * ``enforce_eager`` (bool, default True): True runs eagerly; False compiles with torch.compile and CUDA graphs, in a
       fresh Inductor cache for this process.
     * ``dtype`` (str): served dtype override; default the checkpoint profile's.

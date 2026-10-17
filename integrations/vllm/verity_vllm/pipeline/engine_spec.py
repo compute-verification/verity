@@ -37,6 +37,7 @@ class Engine:
     max_num_batched_tokens: int | None = None
     max_model_len: int | None = None
     gpu_memory_utilization: float | None = None
+    kv_cache_memory_bytes: int | None = None
     enforce_eager: bool | None = None
     dtype: str | None = None
     quantization: str | None = None
