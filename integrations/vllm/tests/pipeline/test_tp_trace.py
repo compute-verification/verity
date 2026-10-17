@@ -1,9 +1,10 @@
-"""`tp-commit --trace-dir` (`pipeline.tp.trace`): one extra pair per profiler after the timed pairs, outside runs.jsonl -- the instrumented
-run installed, profiled, finalized for its roots only and reset -- and the per-rank Commit timing every finalize carries
-(`engine.rank_worker._commit_timing`).  CPU-only: stand-in ranks behind an LLM that dispatches `collective_rpc` to them."""
+"""`tp-commit --trace-dir` (`pipeline.tp.trace`): one extra pair under torch.profiler after the timed pairs, outside runs.jsonl -- the
+instrumented run installed, profiled, finalized for its roots only and reset --, the per-thread CPU readings around every timed run
+(`trace.thread_cpu`) and the per-rank Commit timing every finalize carries (`engine.rank_worker._commit_timing`).  CPU-only: stand-in ranks behind an LLM that dispatches `collective_rpc` to them."""
 from __future__ import annotations
 
 import json
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -52,22 +53,11 @@ def _once(walls):
     return run
 
 
-def test_tools_are_named_and_pyspy_needs_its_binary():
-    assert TRACE.tools_of("torch", None) == ["torch"]
-    for bad in ("", "nsys", "torch,perf"):
-        with pytest.raises(SystemExit, match="--trace-tools"):
-            TRACE.tools_of(bad, "/opt/py-spy")
-    with pytest.raises(SystemExit, match="--trace-pyspy"):
-        TRACE.tools_of("torch,pyspy", None)
-    assert TRACE.tools_of("torch,pyspy", "/opt/py-spy") == ["torch", "pyspy"]
-
-
 def test_torch_profiles_a_control_and_an_instrumented_run_that_is_finalized_for_its_roots_only(tmp_path):
     llm = _LLM([_Rank(0), _Rank(1)])
-    rows = TRACE.run(llm, _once([[0.5, 0.1], [0.7, 0.2]]), tmp_path / "trace", ["torch"], [0], 60.0)
-    assert [(r["tool"], r["arm"], r["step_wall_s"]) for r in rows] == [("torch", "control", [0.5, 0.1]), ("torch", "instrumented", [0.7, 0.2])]
+    rows = TRACE.run(llm, _once([[0.5, 0.1], [0.7, 0.2]]), tmp_path / "trace", [0], 60.0)
+    assert [(r["arm"], r["step_wall_s"]) for r in rows] == [("control", [0.5, 0.1]), ("instrumented", [0.7, 0.2])]
     assert "run_roots" not in rows[0] and rows[1]["run_roots"] == {0: "00" * 32, 1: "01" * 32}
-    assert rows[0]["pids"] == rows[1]["pids"] and set(rows[0]["pids"]) == {0, 1}
     for x in llm.ranks:
         assert x.seen == [("start",), ("stop", True, [0]), ("install",), ("start",), ("stop", True, [0]), ("finalize", False), ("reset",)]
     traced = [json.loads(ln) for ln in (tmp_path / "trace" / "traced.jsonl").read_text().splitlines()]
@@ -75,34 +65,33 @@ def test_torch_profiles_a_control_and_an_instrumented_run_that_is_finalized_for_
     assert (tmp_path / "trace" / "torch.control").is_dir() and (tmp_path / "trace" / "torch.instrumented").is_dir()
 
 
-def test_pyspy_samples_the_traced_ranks_from_outside_for_a_fixed_time_and_is_waited_for(tmp_path, monkeypatch):
-    started = []
+def test_thread_cpu_reads_this_process_threads_by_python_name_and_the_delta_keeps_what_ran():
+    done = threading.Event()
 
-    class _Proc:
-        def __init__(self, argv, stdin=None, stdout=None, stderr=None):
-            self.argv, self.stdin, self.waited = argv, stdin, False
-            started.append(self)
+    def spin():
+        x = 0
+        while not done.is_set():
+            x += 1
 
-        def wait(self):
-            self.waited = True
-            return 0
-
-    monkeypatch.setattr(TRACE.subprocess, "Popen", _Proc)
-    llm = _LLM([_Rank(0), _Rank(1)])
-    rows = TRACE.run(llm, _once([[0.5], [0.6]]), tmp_path, ["pyspy"], [1], 60.0, pyspy="/opt/py-spy", pyspy_s=25)
-    assert [r["profiler"] for r in rows] == [{1: 0}, {1: 0}] and len(started) == 2
-    for p, arm in zip(started, ("control", "instrumented")):
-        assert p.argv[:4] == ["sudo", "-n", "/opt/py-spy", "record"] and p.argv[p.argv.index("--pid") + 1] == str(rows[0]["pids"][1])
-        assert p.argv[p.argv.index("--duration") + 1] == "25" and p.stdin == TRACE.subprocess.DEVNULL and p.waited
-        assert {"--idle", "--threads", "--nonblocking"} <= set(p.argv) and p.argv[-1] == str(tmp_path / f"pyspy.{arm}" / "rank1.speedscope.json")
-    assert all(("start",) not in x.seen for x in llm.ranks)
+    t = threading.Thread(target=spin, name="cmt-worker", daemon=True)
+    before = [TRACE.thread_cpu(_Rank(3))]
+    t.start()
+    while TRACE.thread_cpu(_Rank(3))["cpu_s"].get("cmt-worker", 0.0) <= 0.0:
+        pass
+    after = [TRACE.thread_cpu(_Rank(3))]
+    done.set()
+    t.join()
+    assert after[0]["rank"] == 3 and "MainThread" in after[0]["cpu_s"]
+    d = TRACE.cpu_delta(before, after)
+    assert d[3]["cmt-worker"] > 0 and all(v > 0 for v in d[3].values())
+    assert TRACE.cpu_delta([{"rank": 0, "cpu_s": {"a": 1.0, "b": 2.0}}], [{"rank": 0, "cpu_s": {"a": 1.0, "b": 2.5, "c": 0.25}}]) == {0: {"b": 0.5, "c": 0.25}}
 
 
 @pytest.mark.parametrize("release", [False, True])
 def test_the_gpus_go_back_after_the_last_traced_run_only_when_asked(tmp_path, monkeypatch, release):
     stops = []
     monkeypatch.setattr(TRACE.TPL, "stop", lambda llm, timeout, after: stops.append(after))
-    TRACE.run(_LLM([_Rank(0)]), _once([[0.5], [0.6]]), tmp_path, ["torch"], [0], 60.0, release=release)
+    TRACE.run(_LLM([_Rank(0)]), _once([[0.5], [0.6]]), tmp_path, [0], 60.0, release=release)
     assert stops == (["work.trace"] if release else [])
 
 

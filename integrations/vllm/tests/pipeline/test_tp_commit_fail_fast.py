@@ -19,7 +19,7 @@ RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "ste
 
 
 class _LLM:
-    """`vllm.LLM` over two ranks: every `collective_rpc` goes on ``events`` and answers one dict per rank."""
+    """`vllm.LLM` over two ranks: every `collective_rpc` but the CPU readings around a run goes on ``events`` and answers one dict per rank."""
 
     def __init__(self, events: list[str]) -> None:
         self.events = events
@@ -28,8 +28,9 @@ class _LLM:
         return self
 
     def collective_rpc(self, method, timeout=None, args=(), kwargs=None):
-        self.events.append(f"rpc.{getattr(method, '__name__', method)}")
-        return [{"rank": r, "leaves": 3, "errors_n": 0, "errors": [], "committer": "native_collect_v2b", "verdict": "PASS"} for r in (0, 1)]
+        if getattr(method, "__name__", None) != "thread_cpu":
+            self.events.append(f"rpc.{getattr(method, '__name__', method)}")
+        return [{"rank": r, "leaves": 3, "errors_n": 0, "errors": [], "committer": "native_collect_v2b", "verdict": "PASS", "cpu_s": {}} for r in (0, 1)]
 
 
 def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], Path]:

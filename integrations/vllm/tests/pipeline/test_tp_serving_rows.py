@@ -52,7 +52,7 @@ class _LLM:
         if method is SRT.rank_rows:
             return [method(SimpleNamespace(_tp2_commit={"rank": r}), *args) for r in ROOTS]
         return [{"rank": r, "leaves": 3, "errors_n": 0, "errors": [], "committer": "native_collect_v2b", "run_root": ROOTS[r].hex(),
-                 "leaves_per_step": [3]} for r in ROOTS]
+                 "leaves_per_step": [3], "cpu_s": {}} for r in ROOTS]
 
 
 def _tp_commit(tmp_path: Path, monkeypatch, write) -> tuple[list[str], Path]:
