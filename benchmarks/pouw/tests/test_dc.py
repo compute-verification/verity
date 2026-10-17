@@ -265,12 +265,12 @@ def test_uniform_tables_pin_every_loop():
     un = _load("uniform")
     for fam in ("sm90", "sm100"):
         tab = un.tables(fam)
-        assert len(tab) == 76, fam
+        assert len(tab) == 115, fam
         for name, t in tab.items():
             assert t["counted"] in t["counts"], (fam, name)
             if name.startswith("uz_"):
                 assert un.kind_of(t["counted"]) == "UNI" and set(map(un.kind_of, t["counts"])) <= {"UNI", "ALU"}
-            elif t["binary"].endswith("uniform"):
+            elif t["binary"].endswith(("uniform", "issue", "sat")):
                 assert t["counted"].startswith("IMMA.16832"), (fam, name)
 
 
@@ -290,6 +290,39 @@ def test_uniform_fit_and_check():
     assert un.check(pts, coef, f) == []
     assert un.check(pts + [{"probe": "bad", "T": 100.0, "n": {"UNI": 60}}], coef, f) == \
         ["bad: UP 117.60 > T 100.00 (1 + 0.02)"]
+    g = un.fit(pts, coef, ["issue", "JI9_0"], 1.96, price=0.9)
+    assert g["issue"]["c"] == 0.9 and abs(g["JI9_0"]["c"] - 0.98 * 0.9) < 1e-12
+
+
+def test_uniform_issue_price_reads_only_saturated_streams(tmp_path):
+    """The issue price is the least slowdown a uniform instruction adds, counted in full from the SASS (a loop-control
+    uniform instruction the tables drop is still subtracted), over the streams whose baseline issues ≥ 0.95, less 2%."""
+    un = _load("uniform")
+    out = tmp_path / "out"
+    (out / "probes").mkdir(parents=True)
+    (out / "sass").mkdir()
+    loops = {"uv_0": (98, 0), "uv_32x": (98, 48), "uv_64x": (98, 96), "uw_0": (98, 0), "uw_64x": (98, 96)}
+    T = {"uv_0": 100.0, "uv_32x": 140.0, "uv_64x": 196.0, "uw_0": 110.0, "uw_64x": 120.0}
+    sass, verdicts, rows = [], [], []
+    for name, (vec, uni) in loops.items():
+        ops = ["FFMA R1, R1, 1, R1"] * (vec - 3) + ["UIADD3 UR4, UR4, 1, URZ", "UISETP.NE.AND UP0, PT, UR4, 8, PT"] + \
+              ["ULOP3.LUT UR5, UR5, UR6, 3, 0x96, !UPT"] * uni + ["@P0 BRA 0x10"]
+        sass.append(f"\t\tFunction : {name}\n" + "\n".join(f"        /*{16 * (i + 1):04x}*/   {op} ;   /* 0x0 */"
+                                                           for i, op in enumerate(ops)))
+        verdicts.append({"binary": "sm90_sat", "probe": name,
+                         "verdict": {"loops": [{"head": "0x0010", "tail": hex(16 * len(ops))}]}})
+        rows.append(json.dumps({"probe": name, "run": "r1", "rates": {"0:IMMA.16832.S8.S8": 4 * 8 / T[name]}}))
+    (out / "sass" / "sm90_sat.sass").write_text("\n".join(sass) + "\n")
+    (out / "gate-build.json").write_text(json.dumps({"verdicts": verdicts}))
+    (out / "probes" / "rows.jsonl").write_text("\n".join(rows) + "\n")
+    assert un.loop_counts(out)["uv_32x"] == {"FFMA": 95, "UIADD3": 1, "UISETP.NE.AND": 1, "ULOP3.LUT": 48, "BRA": 1}
+    s = un.saturated([out], "sm90")
+    uv = next(v for k, v in s["streams"].items() if k.startswith("uv "))
+    uw = next(v for k, v in s["streams"].items() if k.startswith("uw "))
+    assert abs(uv["issue0"] - 0.98) < 1e-12 and uw["issue0"] < 0.95
+    assert uv["points"]["uv_32x"]["added"] == 48 and abs(uv["points"]["uv_32x"]["dT"] - 40 / 48) < 1e-12
+    assert abs(uw["points"]["uw_64x"]["dT"] - 10 / 96) < 1e-12
+    assert s["set_by"] == "uv_32x" and abs(s["price"] - 40 / 48 / 1.02) < 1e-12
 
 
 def test_uniform_write_census_is_idempotent(tmp_path):

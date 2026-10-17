@@ -13,9 +13,11 @@ with U is a uniform-datapath instruction (UNI); IMMA, ALU (LOP3, LEA.HI, IADD3, 
 form) and FFMA take the device census's coefficients, and any other vector opcode (MOV, HFMA2, VIADD) the largest of
 them on each row, which only lowers what UNI is left.
 
-UNI's lines are what the points show and no more. UP, the uniform pipe, is 1 / the fastest uniform rate alone (+ 2%). A
-uniform instruction takes an issue slot (decision 73), so on `issue` and every joint issue row (JI…) it carries the
-ALU's coefficient there, as every other warp instruction does. On every other row it carries nothing: no point loads a
+UNI's lines are what the points show and no more. UP, the uniform pipe, is 1 / the fastest uniform rate alone (+ 2%). On
+`issue` a uniform instruction carries its measured issue price: the least slowdown it adds to an issue-saturated stream
+(`saturated`: the s, v, w and x streams of sm90_sat.cu and sm100_sat.cu, read only where the stream issues at least 0.95
+of its slots without the chains), less 2%; every joint issue row (JI…) scales it as the ALU's coefficient scales from
+`issue`. Where no stream saturates, it takes the ALU's issue slot (decision 73). On every other row it carries nothing: no point loads a
 pipe row to its limit beside the chains (the honest step is latency-bound), so contention there is not measured, and 0
 gives the cheater the most. Each such row's `limit`, the largest coefficient every point allows, says how much
 contention the points leave room for. `check` confirms each row's facet, UNI's lines included, holds at every point.
@@ -37,12 +39,15 @@ MARGIN = 0.02
 MIN_UNI = 16
 ALU = re.compile(r"^(LOP3|LEA|IADD3|SHF|PRMT|ISETP)")
 TABLE = re.compile(r'P_[UI]\((\w+), "([^"]*)", "([^"]*)"\)')
-WARPS = {"uniform": 16, "issue": 16, "imad": 32}
+SASS_LINE = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)")
+WARPS = {"uniform": 16, "issue": 16, "sat": 16, "imad": 32}
+SAT = ("us", "uv", "uw", "ux")
+SAT_MIN = 0.95
 
 
 def tables(fam: str) -> dict[str, dict]:
     out = {}
-    for kind in ("uniform", "issue", "imad"):
+    for kind in ("uniform", "issue", "sat", "imad"):
         for name, ex, cnt in TABLE.findall((HERE / "probes" / f"{fam}_{kind}.cu").read_text()):
             out[name] = {"counts": {k: int(v) for k, v in (p.split("=") for p in ex.split(","))}, "counted": cnt,
                          "warps": WARPS[kind], "binary": f"{fam}_{kind}"}
@@ -117,6 +122,64 @@ def points(out: Path, fam: str) -> list[dict]:
     return pts
 
 
+def loop_counts(out: Path) -> dict[str, dict[str, int]]:
+    """probe → every opcode of its loop and its count, from the run's SASS (sass/<binary>.sass) between the loop bounds
+    the gate recorded (gate-build.json); the tables keep only the eight most frequent."""
+    gate = out / "gate-build.json"
+    if not gate.exists():
+        return {}
+    bounds = {}
+    for v in json.loads(gate.read_text())["verdicts"]:
+        if len(v["verdict"]["loops"]) == 1:
+            lp = v["verdict"]["loops"][0]
+            bounds[(v["binary"], v["probe"])] = (int(lp["head"], 16), int(lp["tail"], 16))
+    counts: dict[str, dict[str, int]] = {}
+    for f in (out / "sass").glob("*.sass"):
+        for chunk in f.read_text().split("Function : ")[1:]:
+            name = chunk.split(None, 1)[0]
+            b = bounds.get((f.stem, name))
+            if b is None:
+                continue
+            c: dict[str, int] = {}
+            for m in SASS_LINE.finditer(chunk):
+                if b[0] <= int(m[1], 16) <= b[1]:
+                    c[m[2]] = c.get(m[2], 0) + 1
+            counts[name] = c
+    return counts
+
+
+def saturated(outs: list[Path], fam: str) -> dict:
+    """The issue-saturated streams (SAT): each stream's baseline issue (every loop instruction a slot, over T) and each
+    density's slowdown a uniform instruction it adds, counted in full from the SASS. The issue price is the least
+    slowdown over the streams whose baseline issues at least SAT_MIN, less the margin; None if no stream does."""
+    streams, least = {}, None
+    for out in outs:
+        pts = {p["probe"]: p for p in points(out, fam) if p["probe"][:2] in SAT}
+        full = loop_counts(out)
+        for base in SAT:
+            b = pts.get(f"{base}_0")
+            if b is None or b["probe"] not in full:
+                continue
+            nb = sum(full[b["probe"]].values())
+            ub = sum(n for k, n in full[b["probe"]].items() if k.startswith("U"))
+            s = {"run": out.parent.name, "T0": b["T"], "issue0": nb / b["T"], "points": {}}
+            for name, p in pts.items():
+                if not name.startswith(base + "_") or name == b["probe"] or name not in full:
+                    continue
+                added = sum(n for k, n in full[name].items() if k.startswith("U")) - ub
+                if added < MIN_UNI:
+                    continue
+                d = (p["T"] - b["T"]) / added
+                s["points"][name] = {"T": p["T"], "added": added, "dT": d, "issue": sum(full[name].values()) / p["T"]}
+                if s["issue0"] >= SAT_MIN and (least is None or d < least[0]):
+                    least = (d, name, out.parent.name)
+            streams[f"{base} {out.parent.name}"] = s
+    res = {"streams": streams, "min_issue": SAT_MIN}
+    if least:
+        res |= {"least": least[0], "set_by": least[1], "run": least[2], "price": least[0] / (1 + MARGIN)}
+    return res
+
+
 def issue_row(row: str) -> bool:
     return row == "issue" or row.startswith("JI")
 
@@ -132,9 +195,12 @@ def vector_load(p: dict, coef: dict[str, dict[str, float]], row: str) -> float:
     return load
 
 
-def fit(pts: list[dict], coef: dict[str, dict[str, float]], rows: list[str], up: float) -> dict[str, dict]:
-    """UNI's coefficient on each row (UP; an issue slot on the issue rows; 0 elsewhere) and the largest every point allows,
-    with the point that sets it."""
+def fit(pts: list[dict], coef: dict[str, dict[str, float]], rows: list[str], up: float,
+        price: float | None = None) -> dict[str, dict]:
+    """UNI's coefficient on each row (UP; on the issue rows the measured issue price, scaled as the ALU's coefficient is
+    from `issue` to each joint row, or an issue slot where none is measured; 0 elsewhere) and the largest every point
+    allows, with the point that sets it."""
+    scale = 1.0 if price is None else price / coef["ALU"]["issue"]
     out = {"UP": {"c": up}}
     for row in rows:
         if row == "UP":
@@ -151,7 +217,7 @@ def fit(pts: list[dict], coef: dict[str, dict[str, float]], rows: list[str], up:
         if best:
             out[row] |= {"limit": max(0.0, best[0]), "set_by": best[1]}
         if issue_row(row):
-            out[row]["c"] = min(coef["ALU"].get(row, 0.0), out[row].get("limit", math.inf))
+            out[row]["c"] = min(coef["ALU"].get(row, 0.0) * scale, out[row].get("limit", math.inf))
     return out
 
 
@@ -174,7 +240,8 @@ def analyze(outs: list[Path], fam: str, census: Path, rows_csv: Path) -> dict:
     top = max(alone, key=alone.get)
     res = {"family": fam, "uniform_alone": alone, "up": {"rate": alone[top], "by": top,
                                                           "cycles": 1 / (alone[top] * (1 + MARGIN))}}
-    res["rows"] = fit(pts, coef, rows, res["up"]["cycles"])
+    res["sat"] = saturated(outs, fam)
+    res["rows"] = fit(pts, coef, rows, res["up"]["cycles"], res["sat"].get("price"))
     res["violations"] = check(pts, coef, res["rows"])
     issue_pts = {p["probe"]: {"T": p["T"], "vector": sum(v for k, v in p["n"].items() if k != "UNI"),
                               "uni": p["n"].get("UNI", 0)} for p in pts if not p["binary"].endswith("imad")}
@@ -214,6 +281,13 @@ def text(res: dict) -> str:
              ", ".join(f"{r} {v['c']:.4f}" + (f" ({v['limit']:.4f} {v['set_by']})" if "limit" in v else "")
                        for r, v in res["rows"].items()))
     L.append("facets exceeded: " + ("; ".join(res["violations"]) or "none"))
+    sat = res["sat"]
+    L.append(f"issue-saturated streams (baseline issue, then ΔT a uniform instruction added, at the loop's issue):")
+    for k, s in sorted(sat["streams"].items()):
+        L.append(f"  {k}: issue {s['issue0']:.3f}{'' if s['issue0'] >= sat['min_issue'] else ' (below ' + str(sat['min_issue']) + ', not read)'}  " +
+                 "  ".join(f"{n[3:]} {v['dT']:+.3f} ({v['issue']:.3f})" for n, v in sorted(s["points"].items())))
+    L.append(f"issue price: {sat['price']:.4f} SMSP-cycles a uniform instruction (least {sat['least']:.4f} at {sat['set_by']}, "
+             f"{sat['run']}, less 2%)" if "price" in sat else "issue price: no stream issues at 0.95 (an issue slot)")
     L.append("beside (T, T without the chains, ΔT a uniform instruction):")
     for k, v in sorted(res["beside"].items()):
         L.append(f"  {k:9s} T {v['T']:8.2f} T0 {v['T0']:8.2f} ΔT/UNI {v['dT_per_uni']:+.3f} UNI rate {v['uni_rate']:.3f}")
@@ -251,10 +325,13 @@ def write_census(dev: Path, res: dict, runs: str) -> None:
     alone = ", ".join(f"{k} {v:.3f}" for k, v in sorted(res["uniform_alone"].items()))
     limits = ", ".join(f"{r} {v['limit']:.2f} ({v['set_by']})" for r, v in res["rows"].items()
                        if "limit" in v and not issue_row(r))
+    sat = res.get("sat", {})
+    issue = (f"costs {sat['price']:.4f} of an issue slot (the least slowdown a uniform instruction adds to an issue-"
+             f"saturated stream, {sat['least']:.4f} at {sat['set_by']}, less 2%; JI rows scaled as the ALU's)"
+             if "price" in sat else "takes an issue slot (issue and JI rows at the ALU's coefficient)")
     desc = (f"uniform pipe: {res['up']['rate']:.4f} uniform instructions a SMSP-cycle, 2% margin ({res['up']['by']}, the "
-            f"fastest form alone; DC's uniform.cuh, each alone: {alone}). A uniform instruction also takes an issue slot "
-            f"(issue and JI rows at the ALU's coefficient) and holds no other row: no point beside the chains loads one to "
-            f"its limit; the largest each point allows: {limits}")
+            f"fastest form alone; DC's uniform.cuh, each alone: {alone}). A uniform instruction also {issue} and holds "
+            f"no other row: no point beside the chains loads one to its limit; the largest each point allows: {limits}")
     buf = io.StringIO()
     csv.writer(buf, lineterminator="\n").writerow(["UP", "measured", runs, desc])
     rows.write_text("\n".join([head, *body]) + "\n" + buf.getvalue())
