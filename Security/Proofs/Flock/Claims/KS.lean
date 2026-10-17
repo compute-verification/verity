@@ -82,6 +82,7 @@ import Proofs.Flock.Claims.KS.ZkSlackFit
 import Proofs.Flock.Claims.KS.ZkSim
 import Proofs.Flock.Claims.KS.ZkLock
 import Proofs.Flock.Claims.KS.ZkStep
+import Proofs.Flock.Claims.KS.ZkClash0
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -414,4 +415,11 @@ every statement: it sends `P`'s messages at `zkΦ`'s coins along the live histor
 outcome is the record's view, the record's rounds read back stream by stream (`ZkStep`: `FlockDeploy.KS.zkSim_reps`,
 `FlockDeploy.KS.zkSimRun`, `FlockDeploy.KS.zkSimRunAt`), so masked KS and the recursion's premise rest on its fork
 bounds and view clashes alone (`FlockDeploy.KS.zk_KS_of_fork`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_fork`,
-`FlockDeploy.KS.zk_KSFlock_of_fork`). -/
+`FlockDeploy.KS.zk_KSFlock_of_fork`). The view's clash splits along the self-clash's three cases (`ZkClash0`:
+`FlockDeploy.KS.ZkViewClashQ`, `FlockDeploy.KS.zkViewClash_of_Q`). At level 0, where the clash compares whole rows,
+the deployed decoders are right at the reps' opened rows at the view (`ZkRows`: `FlockDeploy.KS.decodesTableR_deploy`),
+which are the run's rows, each a Merkle opening in its log, so two that differ at one position collide there
+(`FlockDeploy.KS.rawRows_zk`, `FlockDeploy.KS.zk_rowClash_tiedJ`, `FlockDeploy.KS.zkViewClashQ₀`); masked KS and the
+recursion's premise rest on the fork bounds and the view's clashes past level 0 and at the pads
+(`FlockDeploy.KS.zk_KS_of_later`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_later`,
+`FlockDeploy.KS.zk_KSFlock_of_later`). -/
