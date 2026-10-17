@@ -60,7 +60,11 @@ READINGS = {
 }
 COMMON = ["--credit", "floor", "--operands", "floor", "--uni-issue", "0.92", "--q", "8", "--checking", "full", "--json"]
 COLORS = {"closed": "tab:green", "measured": "tab:blue", "builds charged": "tab:orange", "restated floor": "tab:red"}
-MARKERS = "*osDv^<>p"
+HOLLOW = {"builds charged", "restated floor"}
+RECOMMENDED = "H1, U ±16"
+MARKERS = "*osDv^<>pPhX"
+NOTES = {"H1, U ±8": "narrow_u.py's H: at folds 1.5 and 1 a bit-sliced route gains below x = 11.86, above QSTAR's "
+                     "measured 10.66, so U ±8's core ε holds only at the as-built fold 3 (±16 holds to x = 9.48)"}
 TARGET = {"llama-3.1-8b": 1.0, "llama-3.1-70b": 2.0}
 
 
@@ -107,8 +111,9 @@ def table(rs: dict, ep: dict) -> str:
     rd = list(READINGS)
     head = ["design", "arm"] + [f"{m} · {s} · {c // 1024}K" for m, s, c in pts] + ["γ"] + [f"core ε, {r}" for r in rd]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * 2 + "---:|" * (len(pts) + 1 + len(rd))]
+    marks = {label: "†" * (n + 1) for n, label in enumerate(NOTES)}
     for label, arm, _, _ in DESIGNS:
-        cells = [label, f"`{arm}`"]
+        cells = [label + marks.get(label, ""), f"`{arm}`"]
         for pt in pts:
             r = rs.get((*pt, arm))
             cells.append("–" if r is None else f"{r['inc']:+.2f} ({r['inc_min']:+.2f} to {r['inc_max']:+.2f}), {r['run']}")
@@ -118,6 +123,7 @@ def table(rs: dict, ep: dict) -> str:
             meets = e <= 0.005 and all((r := rs.get((*pt, arm))) is not None and r["inc"] <= TARGET[pt[0]] for pt in pts)
             cells.append(f"{100 * e:.3f}%" + (" ✓" if meets else ""))
         lines.append("| " + " | ".join(cells) + " |")
+    lines += [""] + [f"{marks[label]} {text}." for label, text in NOTES.items()]
     return "\n".join(lines) + "\n"
 
 
@@ -139,9 +145,12 @@ def plot(rs: dict, ep: dict, png: str) -> None:
     from matplotlib.patches import Rectangle
 
     pts = points(rs)
-    fig, axes = plt.subplots(1, len(pts), figsize=(7.2 * len(pts), 5.6), squeeze=False)
+    fig, axes = plt.subplots(1, len(pts), figsize=(6.4 * len(pts) + 2.6, 5.4), squeeze=False)
     for j, pt in enumerate(pts):
         ax = axes[0][j]
+        here = [r for k, r in rs.items() if k[:3] == pt]
+        lo, hi = min(r["inc_min"] for r in here), max(r["inc_max"] for r in here)
+        ax.set_ylim(max(0.0, lo - 0.25), hi + 0.25)
         ax.add_patch(Rectangle((0.005, -1), 0.5 - 0.005, TARGET[pt[0]] + 1, color="tab:green", alpha=0.08, zorder=0))
         for reading, color in COLORS.items():
             pairs = []
@@ -151,9 +160,13 @@ def plot(rs: dict, ep: dict, png: str) -> None:
                     continue
                 x = max(100 * ep["readings"][reading][label]["core"], 0.006)
                 pairs.append((x, r["inc"]))
+                ring = reading in HOLLOW
                 ax.errorbar([x], [r["inc"]], yerr=[[r["inc"] - r["inc_min"]], [r["inc_max"] - r["inc"]]],
-                            marker=MARKERS[n], markersize=10 if MARKERS[n] == "*" else 6, color=color, capsize=2,
-                            linestyle="none", alpha=0.85)
+                            marker=MARKERS[n], markersize=(12 if MARKERS[n] == "*" else 7) + 3 * ring, color=color,
+                            markerfacecolor="none" if ring else color, capsize=2, linestyle="none", alpha=0.85)
+                if label == RECOMMENDED and reading == "closed":
+                    ax.annotate(label, (x, r["inc"]), xytext=(-60, -28), textcoords="offset points", fontsize=8,
+                                arrowprops={"arrowstyle": "->", "color": "black", "lw": 0.8})
             f = frontier(pairs)
             if f:
                 xs = [p[0] for p in f] + [10.0]
@@ -165,18 +178,19 @@ def plot(rs: dict, ep: dict, png: str) -> None:
         ax.axhline(TARGET[pt[0]], color="gray", linestyle=":", linewidth=1)
         ax.set_xlabel("core ε (100% checking: ε_skip + ε_mand + ε_machine), %")
         ax.set_ylabel("perplexity increase over bf16, %")
-        ax.set_title(f"{pt[0]} · {pt[1]} · {pt[2] // 1024}K (3 seeds; bars: range)", fontsize=10)
+        seeds = "/".join(map(str, sorted({r["seeds"] for r in here})))
+        ax.set_title(f"{pt[0]} · {pt[1]} · {pt[2] // 1024}K ({seeds} seeds; bars: range)", fontsize=10)
         ax.grid(alpha=0.3, which="both")
-        if j == 0:
-            g = sorted({round(v["gamma"], 3) for v in ep["readings"]["closed"].values()})
-            hd = [Line2D([], [], color=c, marker="o", linestyle="-", label=f"table route: {k}") for k, c in COLORS.items()]
-            hd += [Line2D([], [], color="black", marker=MARKERS[n], linestyle="none", label=lab)
-                   for n, (lab, _, _, _) in enumerate(DESIGNS)]
-            ax.legend(handles=hd, fontsize=7.5, loc="upper right", title=f"γ = {', '.join(map(str, g))} (every design)",
-                      title_fontsize=8)
+    g = sorted({round(v["gamma"], 3) for v in ep["readings"]["closed"].values()})
+    hd = [Line2D([], [], color=c, marker="o", markerfacecolor="none" if k in HOLLOW else c, linestyle="-",
+                 label=f"table route: {k}") for k, c in COLORS.items()]
+    hd += [Line2D([], [], color="black", marker=MARKERS[n], linestyle="none", label=lab)
+           for n, (lab, _, _, _) in enumerate(DESIGNS)]
+    fig.legend(handles=hd, fontsize=8, loc="center right", title=f"γ = {', '.join(map(str, g))}\n(every design)",
+               title_fontsize=9)
     fig.suptitle(f"Perplexity against core ε by table-route reading; Π {next(iter(ep['readings']['closed'].values()))['vector']}"
                  f", floor credit, q* = 8; shaded: core ε ≤ 0.5% and the perplexity target", fontsize=10)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1 - 2.4 / fig.get_figwidth(), 1))
     fig.savefig(png, dpi=140)
 
 
