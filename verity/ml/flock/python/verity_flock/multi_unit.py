@@ -119,11 +119,10 @@ def _scale_circuit(T: int, word_ins: bool, reverse: bool = False) -> gf2.Circuit
 
 
 def _fp8_shape(K: int, N: int, G: int):
-    from verity_vllm.program.registry import fp8 as F8
-
+    """``(T, NB, x words, w words)``: the K/G tiles, the ``cdiv(N, G)`` weight-scale rows (`registry.fp8.weight_blocks`)."""
     if K % G or G % 32:
         raise ValueError(f"ScaledMmFp8Block: K={K} a multiple of G={G}, G a multiple of 32")
-    T, NB = K // G, F8.weight_blocks(N, G)
+    T, NB = K // G, -(-N // G)
     wx, ww = K // 2 + 2 * T, N * K // 2 + 2 * T * NB
     return T, NB, wx, ww
 
@@ -137,17 +136,11 @@ def _kstep_leaves(K: int, N: int, G: int, n: int, kb: int) -> list[int]:
     return x + w
 
 
-def _definition(K: int, N: int, G: int):
-    from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import boolean_fp8 as BF
-
-    return bind(BF.ScaledMmFp8BlockV2, K=K, N=N, G=G)
-
-
-def fp8_block(K: int, N: int, G: int = 128) -> Split:
+def fp8_block(K: int, N: int, G: int = 128, definition: object = None) -> Split:
     """``ScaledMmFp8Block_v2{K,N,G}`` as ``N * K/G`` k-step units (unit ``u = n T + kb`` returns cut words ``2u`` = temp and
     ``2u + 1`` = s) and a scale stage of ``N`` slots (slot ``n`` reads its T tiles' pairs, returns output word ``n``). Rows
-    ``x`` = xq || sx, ``w`` = w[0..N] || ws, little-endian bit concatenations (`class_statement.unit_lowering`'s)."""
+    ``x`` = xq || sx, ``w`` = w[0..N] || ws, little-endian bit concatenations (`class_statement.unit_lowering`'s).
+    ``definition`` is the bound Definition whose Program digest META names (the caller's: it is an integration's)."""
     T, _NB, wx, ww = _fp8_shape(K, N, G)
     rows = [("x", wx), ("w", ww)]
     in_src = [[("leaf", p) for p in _kstep_leaves(K, N, G, n, kb)] for n in range(N) for kb in range(T)]
@@ -158,7 +151,7 @@ def fp8_block(K: int, N: int, G: int = 128) -> Split:
     slot_outs = [[("ret", n)] for n in range(N)]
     tail = lambda S: TL.Tail([TL.Stage(S, slot_ins[0], slot_outs[0], [32] * (2 * T), [16], count=N, slot_ins=slot_ins,  # noqa: E731
                                        slot_outs=slot_outs)], [], [], list(range(N)))
-    return Split(name, low, tail(_scale_circuit(T, False)), rows, N, _definition(K, N, G),
+    return Split(name, low, tail(_scale_circuit(T, False)), rows, N, definition,
                  forged=tail(_scale_circuit(T, False, reverse=True)))
 
 

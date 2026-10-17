@@ -53,11 +53,18 @@ def draw(K: int, N: int, n: int, seed: int = 0):
     return {"x": np.stack(xs), "w": np.stack(ws)}, np.stack(twin)
 
 
+def definition(K: int, N: int):
+    from verity.ml.circuits.defs import bind
+    from verity_vllm.program.registry import boolean_fp8 as BF
+
+    return bind(BF.ScaledMmFp8BlockV2, K=K, N=N, G=G)
+
+
 def reference(K: int, N: int, rows: dict) -> np.ndarray:
     """The whole Definition's IR reference on each instance's leaves (the rows' bits, low first)."""
     from verity.ml.circuits.evaluation import evaluate
 
-    d = MU._definition(K, N, G)
+    d = definition(K, N)
     out = []
     for x, w in zip(rows["x"], rows["w"]):
         bx = np.unpackbits(np.asarray(x, dtype="<u2").view(np.uint8), bitorder="little").tolist()
@@ -81,7 +88,7 @@ def main(argv: list[str]) -> int:
     res = []
     if form == "c":
         t = time.monotonic()
-        split = MU.fp8_block(K, N, G)
+        split = MU.fp8_block(K, N, G, definition(K, N))
         t_build = time.monotonic() - t
         res.append((out / "c", MU.stage(split, rows, out / "c", SALT_KEY, twin), t_build))
     elif form == "b":
