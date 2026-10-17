@@ -191,15 +191,18 @@ or not the outputs are hidden (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDepl
 statement's draw, the event the mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
 `FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the rest
 of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the merged
-coins being uniform (`LiveMix`: `Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_le_liveMix`). From a simulation
-of the deployed prover by a live prover on coins of uniform law, and the record's draw on accepting runs, the mixture's
-first bound holds (`PlainFirst`: `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.RecordDrawVerbatim`,
-`FlockDeploy.KS.plain_first_of_sim`). Where `verify --zk` sets its session up at a draw (`FlockDeploy.KS.setupAt`), the
-old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`),
-and so are the hidden-output plan's (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`).
-`Deploy.V`'s checks pin the record's draw to the statement's only up to key order, so the old discharge is read at the
-setup at the statement's draw, which reads no draw in the record, with a writer that records the live session there
-(`ZkDrawJ`: `FlockSoundness.Discharge.Composed.AcceptsAt`, `FlockSoundness.Discharge.Composed.runsAtZCJ_live`,
+coins being uniform, and the mixture by an event of the deployed coins the live event implies (`LiveMix`:
+`Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.liveMix_eq`, `Claims.Bridge.Live.Pr_le_liveMix`,
+`Claims.Bridge.Live.liveMix_le_Pr`). From a simulation of the deployed prover by a live prover on coins of uniform law,
+and the record's draw on accepting runs, the mixture's first bound holds (`PlainFirst`: `FlockDeploy.KS.PlainSim`,
+`FlockDeploy.KS.RecordDrawVerbatim`, `FlockDeploy.KS.plain_first_of_sim`); the checks compare draws only up to
+`JsonEquiv`, which holds between different terms (`FlockDeploy.KS.drawEq_ne`). Where `verify --zk` sets its session up
+at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`:
+`FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`:
+`FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's draw to the
+statement's only up to key order, so the old discharge is read at the setup at the statement's draw, which reads no draw
+in the record, with a writer that records the live session there (`ZkDrawJ`:
+`FlockSoundness.Discharge.Composed.AcceptsAt`, `FlockSoundness.Discharge.Composed.runsAtZCJ_live`,
 `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`, `Claims.Bridge.Custody.wrS`,
 `Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted there
 (`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty draw the deployed `--zk` decoders are right at `zkTabs` at
@@ -216,9 +219,9 @@ self-clash (`ZkXferJ`: `FlockDeploy.KS.OffNoClashZ`, `FlockDeploy.KS.AccOffJ`, `
 `FlockDeploy.KS.decodesOff_deploy`), the deployed decoders are right at a verdict accepting with none, so `ZkLiveAccJ`
 follows from the live sessions' bound at the deployed decoders (`FlockDeploy.KS.ZkXferJ`,
 `FlockDeploy.KS.zkLiveAccJ_of_xferJ`) and `Flock.KS` from it and `ExtendJ` (`FlockDeploy.KS.zk_KS_of_xferJ`), table 0's
-bound with escapes on accepted runs from it alone (`FlockDeploy.KS.zk_tableBoundθAccAt_of_xferJ`). Level 0's
-masked rows carry both reps' extra lanes, which the session's level-0 term reads and the claim's witness-lane columns do
-not, so a verifying opening with a nonzero extra lane is off every table of those columns (`ZkPads`:
+bound with escapes on accepted runs from it alone (`FlockDeploy.KS.zk_tableBoundθAccAt_of_xferJ`). Level 0's masked rows
+carry both reps' extra lanes, which the session's level-0 term reads and the claim's witness-lane columns do not, so a
+verifying opening with a nonzero extra lane is off every table of those columns (`ZkPads`:
 `FlockDeploy.KS.off₀Z_oracleOf_of_extra`, `FlockDeploy.KS.offNoClashZ_oracleOf_of_extra`), while whether a table is
 committed reads only its witness lanes (`FlockDeploy.KS.committed_congr_lanes`). So the masked session's bound holds
 with its level-0 term on the witness lanes, the extra lanes the plurality of the openings on `C`'s, at the old level-0

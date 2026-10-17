@@ -10,9 +10,11 @@ coins the round draws, so a prover that plays the live session keeps the rest of
 
 * `mergeC`, `Pr_mergeC`: the coins whose coordinate `j` takes its first `n j` entries from `r` and the rest from `u`
   are uniform when `u` and `r` are: swapping those entries between `u` and `r` is an involution (`swapC`).
+* `liveMix_eq`: the average over `u` of the live session's probability of `pL` against `liveStrat` at `(ω, u)` is the
+  probability over the tape and the round coins of `pL` at the live outcome.
 * `Pr_le_liveMix`: an event `E` of coins whose law is that of `E ∘ Φ` on the tape and the live session's coins, and
-  which implies `pL` at the live outcome of a prover `P'` at the tape `(ω, u)`, has probability at most the average
-  over `u` of the live session's probability of `pL` against `liveStrat` at `(ω, u)`.
+  which implies `pL` at the live outcome of a prover `P'` at the tape `(ω, u)`, has probability at most that average;
+  `liveMix_le_Pr`: where `pL` implies `E ∘ Φ` instead, the average is at most `Pr[E]`.
 -/
 
 namespace Claims.Bridge.Live
@@ -45,6 +47,28 @@ theorem Pr_mergeC {K M : ℕ} {X : Type} [Fintype X] [Nonempty X] (n : Fin K →
   exact congrArg Ex (funext fun a => Ex_const' (ind E a))
 
 open Classical in
+/-- **A mixture of live strategies is a probability over the tape and the live coins**: the average over `u` of the
+live session's probability of `pL` against `liveStrat` at `(ω, u)` is the probability over `u` and the round coins
+`r'` of `pL` at the live outcome of `P'` at `(ω, u)` and `r'`. -/
+theorem liveMix_eq {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : (x : Msg) → Wire nMax (J x) (mPts x)) (H : Msg → Msg) {Ω τ : Type} [Fintype τ] [Nonempty τ]
+    (P' : Prover (Ω × τ)) (x : Msg) (ω : Ω) (pL : LiveOutJ (J x) (mPts x) → Prop) :
+    (∑ u, (prob pL (liveSession dg (J x) (mPts x) (N x))
+      (liveStrat J mPts N dg w H P' x (ω, u))).toReal) / Fintype.card τ =
+      Pr (fun p : τ × (Fin (N x + 2) → LCoin nMax) => pL (liveOut J mPts N dg w H P' x (ω, p.1) p.2)) := by
+  symm
+  calc Pr (fun p : τ × (Fin (N x + 2) → LCoin nMax) => pL (liveOut J mPts N dg w H P' x (ω, p.1) p.2))
+      = Ex fun u => Pr fun r' : Fin (N x + 2) → LCoin nMax => pL (liveOut J mPts N dg w H P' x (ω, u) r') :=
+        Pr_prod (fun u r' => pL (liveOut J mPts N dg w H P' x (ω, u) r'))
+    _ = Ex fun u => (prob pL (liveSession dg (J x) (mPts x) (N x))
+          (liveStrat J mPts N dg w H P' x (ω, u))).toReal := by
+        refine congrArg Ex (funext fun u => ?_)
+        rw [liveStrat, prob_eqRec, prob_toReal, Pr_eq_Ex]
+        exact ex_outcome H P' (fun x => N x + 2) (fun x => sessionK dg (J x) (mPts x) (N x))
+          (fun x => sessionIf (w x) dg (N x)) x (ω, u) (sessionLe (w x) dg (N x) _) (ind pL)
+    _ = _ := rfl
+
+open Classical in
 /-- **A mixture of live strategies bounds an event of another verifier's coins**: where the event `E` of coins `R` has
 the law of `E ∘ Φ` on the tape `τ` and the live session's round coins, and `E (Φ (u, r'))` gives `pL` at the live
 outcome of `P'` at the tape `(ω, u)` and coins `r'`, `Pr[E]` is at most the average over `u` of the live session's
@@ -56,18 +80,22 @@ theorem Pr_le_liveMix {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → 
     (hsim : ∀ u r', E (Φ (u, r')) → pL (liveOut J mPts N dg w H P' x (ω, u) r')) :
     Pr E ≤ (∑ u, (prob pL (liveSession dg (J x) (mPts x) (N x))
       (liveStrat J mPts N dg w H P' x (ω, u))).toReal) / Fintype.card τ := by
-  rw [← hΦ]
-  calc Pr (fun p => E (Φ p))
-      ≤ Pr (fun p : τ × (Fin (N x + 2) → LCoin nMax) => pL (liveOut J mPts N dg w H P' x (ω, p.1) p.2)) :=
-        Pr_mono fun p hp => hsim p.1 p.2 hp
-    _ = Ex fun u => Pr fun r' : Fin (N x + 2) → LCoin nMax => pL (liveOut J mPts N dg w H P' x (ω, u) r') :=
-        Pr_prod (fun u r' => pL (liveOut J mPts N dg w H P' x (ω, u) r'))
-    _ = Ex fun u => (prob pL (liveSession dg (J x) (mPts x) (N x))
-          (liveStrat J mPts N dg w H P' x (ω, u))).toReal := by
-        refine congrArg Ex (funext fun u => ?_)
-        rw [liveStrat, prob_eqRec, prob_toReal, Pr_eq_Ex]
-        exact ex_outcome H P' (fun x => N x + 2) (fun x => sessionK dg (J x) (mPts x) (N x))
-          (fun x => sessionIf (w x) dg (N x)) x (ω, u) (sessionLe (w x) dg (N x) _) (ind pL)
-    _ = _ := rfl
+  rw [← hΦ, liveMix_eq J mPts N dg w H P' x ω pL]
+  exact Pr_mono fun p hp => hsim p.1 p.2 hp
+
+open Classical in
+/-- **An event of another verifier's coins bounds a mixture of live strategies**: where the event `E` of coins `R` has
+the law of `E ∘ Φ` on the tape and the round coins, and `pL` at the live outcome of `P'` at `(ω, u)` and `r'` gives
+`E (Φ (u, r'))`, the average over `u` of the live session's probability of `pL` against `liveStrat` is at most
+`Pr[E]`. -/
+theorem liveMix_le_Pr {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : (x : Msg) → Wire nMax (J x) (mPts x)) (H : Msg → Msg) {Ω τ : Type} [Fintype τ] [Nonempty τ]
+    (P' : Prover (Ω × τ)) (x : Msg) (ω : Ω) (pL : LiveOutJ (J x) (mPts x) → Prop) {R : Type} [Fintype R]
+    (E : R → Prop) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → R) (hΦ : Pr (fun p => E (Φ p)) = Pr E)
+    (hsim : ∀ u r', pL (liveOut J mPts N dg w H P' x (ω, u) r') → E (Φ (u, r'))) :
+    (∑ u, (prob pL (liveSession dg (J x) (mPts x) (N x))
+      (liveStrat J mPts N dg w H P' x (ω, u))).toReal) / Fintype.card τ ≤ Pr E := by
+  rw [← hΦ, liveMix_eq J mPts N dg w H P' x ω pL]
+  exact Pr_mono fun p hp => hsim p.1 p.2 hp
 
 end Claims.Bridge.Live

@@ -37,6 +37,14 @@ def RecordDrawVerbatim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω :
             (Claims.coinSeq r)) = .decide s spec sts link c₁ mids f →
         Exec.recordDraw f.record = s.read.draw
 
+/-- **`drawEq` passes on different terms**: two objects with the same fields in trees of different shapes are
+`JsonEquiv`, so the checks passing does not give `RecordDrawVerbatim`. -/
+theorem drawEq_ne : ∃ a b : Json, drawEq (some a) (some b) = true ∧ a ≠ b := by
+  refine ⟨.obj ⟨⟨.inner 2 "a" .null .leaf (.inner 1 "b" .null .leaf .leaf)⟩⟩,
+    .obj ⟨⟨.inner 2 "b" .null (.inner 1 "a" .null .leaf .leaf) .leaf⟩⟩, (drawEq_iff _ _).2 (.some rfl), fun h => ?_⟩
+  have e := congrArg (fun j : Json => match j with | .obj ⟨⟨.inner _ k _ _ _⟩⟩ => k | _ => "") h
+  exact absurd e (by decide)
+
 /-- **A prover of the live session at one table simulates `P`**: `Φ (u, r')`, the coins of `V false` at the tape `u`
 and the live coins `r'`, have the law of uniform coins, and wherever `V false` accepts at them, the live outcome of
 `P'` at the tape `(ω, u)` is the run's (`viewOf`). -/
@@ -53,14 +61,13 @@ def PlainSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts
 
 open Classical in
 /-- **The plain mixture's first bound, from a simulation**: at a plain statement `x` that sets up at `s₀` with inputs
-`I`, draw `d` and no `--public-inputs`, if `P`'s accepting runs carry the statement's draw verbatim
+`I` and draw `d`, if `P`'s accepting runs carry the statement's draw verbatim
 (`RecordDrawVerbatim`) and a prover `P'` of the live session at one table simulates `P` (`PlainSim`), then the
 accepting runs with no column off `C` are no likelier than the average over `u` of `plainVerdict` against `P'`'s
 strategies, at the root of `P`'s first message. -/
 theorem plain_first_of_sim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ}
     (C : Fin M → List 𝔽) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} {d : Json}
-    (hset : setupOf false x = some (s₀, spec₀, sts₀)) (hpi : s₀.read.publicInputs = none)
-    (hd : s₀.read.draw = some d) (hdraw : RecordDrawVerbatim P x ω)
+    (hset : setupOf false x = some (s₀, spec₀, sts₀)) (hd : s₀.read.draw = some d) (hdraw : RecordDrawVerbatim P x ω)
     {nMax : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts)
     {τ : Type} [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin)
@@ -94,6 +101,6 @@ theorem plain_first_of_sim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (
     rw [hlink]
     rfl
   rw [hroot, hsim u r' hacc s spec sts link c₁ mids f hact]
-  exact hv d hpi (hdraw _ hacc s spec sts link c₁ mids f hact) hd hno
+  exact hv d (hdraw _ hacc s spec sts link c₁ mids f hact) hd hno
 
 end FlockDeploy.KS
