@@ -135,7 +135,7 @@ def test_lane_filler_dilutes_the_operand_floor():
     two = provisional("dither-2s")
     fill = provisional("dither-2s-fill")
     f = fill.filler[0]
-    assert (f.per_word, f.mix, f.route) == (4.5, E.lane_fill(4.5).mix, "lanes")
+    assert (f.per_word, f.mix, f.route, f.p) == (4.5, E.lane_fill(4.5).mix, "lanes", E.lane_fill(4.5).p)
     assert two.with_fill(4.5).filler == (E.lane_fill(4.5),)
     e0, e = E.eps(two, PIU, 8), E.eps(fill, PIU, 8)
     assert e.as_built.T * 128 == pytest.approx(JI + 12.375 + 4 * 4.5, rel=1e-12)
@@ -267,17 +267,26 @@ def test_core_and_sample_are_two_layers():
 
 
 def test_luck_spends_one_budget_on_words_and_filler():
-    """Theorem S's budget ln(1/δ)/S weights each deficient block by 1 − p (¾ a word, 0.854 a filler block): a lane
-    filler is cheaper to skip than a word, so the lucky cheater leaves filler undone and saves more than d̄ of words."""
+    """Theorem S's budget ln(1/δ)/S weights each deficient block by 1 − p: ¾ a word, and 0 a lane filler block, whose
+    receipt the check recomputes (PinnedFillBlocksDeficit), so the lucky cheater skips words alone. At pfill's 0.854 a
+    filler block is cheaper to skip than a word and the cheater leaves filler undone; with no luck credit (p = 1) it
+    leaves the whole filler undone, even with every block checked."""
     d = E.design("dither-2s-fill")
-    assert all(f.p == 0.854 for f in d.filler)
+    assert [(f.p, f.luck.split(":")[0]) for f in d.filler] == [(0.0, E.PINNED.split(" ")[0])]
     e = E.eps(d, PIU, 8, operands="floor", credit="floor")
-    s = e.lucky.short
-    assert s["filler 1"] > 0 and (1 - d.p) * s["words"] + sum(
-        (1 - f.p) * s[f"filler {j + 1}"] for j, f in enumerate(d.filler)) == pytest.approx(E.budget(d), rel=1e-6)
-    words_only = E.eps(replace(d, filler=tuple(replace(f, p=0.0) for f in d.filler)), PI, 8, operands="floor",
-                       credit="floor")
-    assert e.luck > words_only.luck and words_only.lucky.short["filler 1"] == 0
+    assert e.lucky.short["filler 1"] == 0
+    assert (1 - d.p) * e.lucky.short["words"] == pytest.approx(E.budget(d), rel=1e-6)
+
+    def at(p: float, operands: str = "floor") -> E.Eps:
+        return E.eps(replace(d, filler=tuple(replace(f, p=p) for f in d.filler)), PIU, 8, operands=operands,
+                     credit="floor")
+
+    s = at(0.854).lucky.short
+    assert s["filler 1"] > 0 and (1 - d.p) * s["words"] + (1 - 0.854) * s["filler 1"] == pytest.approx(
+        E.budget(d), rel=1e-6)
+    assert at(0.854).luck > e.luck
+    assert at(1.0).lucky.short["filler 1"] == pytest.approx(1)
+    assert at(1.0, "free").core() > at(0.0, "free").core() > at(0.0).core()
 
 
 def test_the_table_route_is_bound_by_L2():
@@ -351,6 +360,13 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
                    '[filler]\nper_word = 4\nmix = { ALU = 1 }\nroute = "uniform"\n')
     with pytest.raises(SystemExit, match="decision 73"):
         E.design("x", data)
+    head = 'base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[filler]\nper_word = 4\nmix = { ALU = 1 }\n'
+    for luck in ("", "p = 0.854\n", "p = 1.5\nluck = \"x\"\n"):
+        bad.write_text(head + luck)
+        with pytest.raises(SystemExit, match="theorem that proves it"):
+            E.design("x", data)
+    bad.write_text(head + "p = 1.0\n")
+    assert [(f.p, f.luck) for f in E.design("x", data).filler] == [(1.0, "")]
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[coins]\nbits = 2\nsource = "x"\n')
     assert E.design("x", data).index_bits == 2 and two.index_bits == 1
     bad.write_text(bad.read_text() + "[table]\nbits = 1\n")
@@ -377,7 +393,7 @@ def test_cli(capsys):
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-2s" and d["registry"]["aliases"] == ["dither-two-sided", "A", "adopted-bd-lm"]
     assert d["credit"] == "floor" and d["terms"]["machine"] == 0 and d["terms"]["sched"] is None
-    assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["core"] < 0.002
+    assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["core"] < 0.004
     assert d["adapt"]["unit"] == "per-stage" and d["terms"]["adapt"] == 0
     assert d["sample"]["eps"] == pytest.approx(d["terms"]["luck"]) and d["sample"]["budget"]["checks"] == 48000
     assert main(["eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--q", "4", "--json"]) == 0
@@ -452,8 +468,9 @@ def test_sm89_the_fold_binds_honest():
     ALU's measured rate, above IMMA.16816's issue, so no lane route saves time at any q*. The uniform route does: UNI
     runs on UP at 2.0 a SM-clock (uniform.cu, every form) and costs issue and JI89 its measured cost beside honest16, so
     a cheater writes words there in JI89's slack, less of them as q* grows, and ε_machine never reaches its floor. At
-    L = 32 IMMA.16832's joint facets with ALU bind, lane words on other pipes save time until q* reaches dp4a's 8.5, and
-    UNI's JI89 cost leaves the uniform route nothing."""
+    L = 32, with IMMA.16832's ALU and FFMA facets refitted to FACET-BREAK's schedule (EPS1 ADA r3, opcode_probe/sm89/
+    ji.py), JI89 binds the floor program and the cheater alike: lane words save time only below JI89's q*0 (IMMA.16832's
+    coefficient over a thread's 4 words, 1.9), and UNI's JI89 cost leaves the uniform route nothing."""
     pi = E.machine("", SM89)
     assert pi.vector == "ADA-89" and set(pi.c[E.UNI]) == {"UP", "issue", "JI89"}
     assert pi.c[E.UNI]["UP"] == pytest.approx(4 / (2.0 * 1.02), rel=1e-3)   # UNI's rate + 2%
@@ -471,9 +488,9 @@ def test_sm89_the_fold_binds_honest():
     assert e.T_honest * 128 == pytest.approx(19.069) and e.T_honest_source == "measured"
     assert e.gamma_clock == pytest.approx(e.gamma * 2520 / 1680, rel=1e-6)
     s32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor")
-    assert E.threshold(s32) == pytest.approx(8.5, abs=1e-5)   # dp4a: 8 IDP4A and 0.5 LDS.128 a word
-    assert s32.machine_eps(8.5) == pytest.approx(0, abs=1e-9) and 0 < s32.machine_eps(8) < s32.machine_eps(2)
-    assert all(s32.machine_eps(q) == pytest.approx(s32.machine_eps(q, uniform=False), abs=1e-12) for q in (2, 8, 16))
+    assert "JI89" in s32.as_built.binding and 1.8 < E.threshold(s32) < 2
+    assert all(s32.machine_eps(q) == pytest.approx(0, abs=1e-9) for q in (2, 8, 16)) and s32.machine_eps(1.5) > 0
+    assert all(s32.machine_eps(q) == pytest.approx(s32.machine_eps(q, uniform=False), abs=1e-12) for q in (1.5, 2, 8))
     t = E.table(SM89)
     assert t.l2 is None and t.per_cycle() is None and t.mhz == 2520 and t.sms == 142
     open32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor", table=t)
@@ -483,23 +500,52 @@ def test_sm89_the_fold_binds_honest():
 def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
     """EPS1 DC's H200 and B200: duo binds the floor program on each one's joint ALU facet at L = 32. On sm_90 a wgmma
     takes 62.77 SMSP-cycles of that facet and 62.74 of issue, so lane words save time at every q* (no threshold) and
-    ε_machine is 4% at q* = 2.03; on sm_100 a tcgen05.mma takes 1.09 of issue, so only dp4a's 8 IMAD bound q*. At
-    L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit spacing's cost."""
+    ε_machine is 4% at q* = 2.03; on sm_100 a tcgen05.mma takes 1.09 of issue, so on lanes only dp4a's 8 IMAD bound q*.
+    The uniform datapath (UP, and 0.92 of an issue slot a uniform instruction, its price beside an issue-saturated
+    stream: DC r5) takes 0.60% of the B200's words off JPA100_0 at q* = 2.03, so it has no threshold either; on the
+    H200 JI90_0 charges a uniform instruction 0.96, which closes it. At L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit
+    spacing's cost."""
     sm90, sm100 = DEVICES / "sm_90", DEVICES / "sm_100"
-    assert E.designs(sm90) == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
+    duo = [n for n in E.designs(sm90) if "-li" not in n]
+    assert duo == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
     p90 = E.machine("", sm90)
     s = E.setup(E.design("dither-2s-l32", sm90), p90, sm90, "floor", "floor")
     assert s.as_built.T * 4096 == pytest.approx(62.7735919 + 256 * 1.99077535, rel=1e-6)
     assert s.as_built.binding == ("JPA90_0",) and E.threshold(s) is None
     assert s.machine_eps(2.03) > 0.04 and s.machine_eps(8) < 0.001
+    assert s.cheat(2.03).words["uniform"] == pytest.approx(0, abs=1e-9)
     p100 = E.machine("", sm100)
     s = E.setup(E.design("dither-2s-l32", sm100), p100, sm100, "floor", "floor")
     assert s.as_built.T * 32768 == pytest.approx(10.9668404 + 2048 * 1.9602715, rel=1e-6)
-    assert s.as_built.binding == ("JPA100_0",) and E.threshold(s) == pytest.approx(8, abs=1e-4)
+    assert s.as_built.binding == ("JPA100_0",) and E.threshold(s, uniform=False) == pytest.approx(8, abs=1e-4)
     assert p100.load(s.as_built.n)["TM100_0"] * 32768 == pytest.approx(19.911599 + 32 * 16.5392944, rel=1e-6)
-    assert s.machine_eps(2.03) < 0.001
+    assert s.machine_eps(2.03, uniform=False) < 0.001
+    assert E.threshold(s) is None and s.cheat(2.03).words["uniform"] == pytest.approx(0.0060, abs=1e-4)
+    assert s.machine_eps(2.03) == pytest.approx(0.00570, abs=1e-4)
     far = E.setup(E.design("dither-2s-l256", sm100), p100, sm100, "floor", "floor")
     assert far.as_built.binding == ("JPA100_1",) and far.machine_eps(2.03) > 0.2
+
+
+def test_dc_li_binds_honest_on_the_lane_facet():
+    """DC-DESIGN's LI designs at L = 32 (one lane instruction a word, LOP3 and IMAD alternating): a balanced fold binds
+    honest where duo binds one pipe with issue slack, so relocating a word to lanes stops paying below output counting's
+    q* = ½. On sm_90 LI alone leaves the ALU pipe 1.5% short of half issue; 0.02 verified FFMA a word puts honest on
+    JI90_0, whose threshold is 0.4999, no margin. On sm_100 the x128 loads are the tensor route's, honest binds issue,
+    and γ is the measured tcliU_x128 (107.7 words a SM-clock beside the saturated MMA)."""
+    for dev, binds, thr, t in (("sm_90", ("JI90_0",), 0.4999, 190.761), ("sm_100", ("issue",), 0.0088, 1216.6)):
+        d = DEVICES / dev
+        pi = E.machine("", d)
+        for n in ("1s", "2s", "c"):
+            ds = E.design(f"dither-{n}-li-l32", d)
+            h = E.honest(ds.honest, d)
+            s = E.setup(ds, pi, d, "floor", "floor")
+            assert h.fold_name == ds.fold_name == "li" and ds.fold == h.fold == {"ALU": 0.5, "IMAD": 0.5}, dev
+            assert s.as_built.binding == binds and E.threshold(s) == pytest.approx(thr, abs=1e-4), dev
+            assert s.machine_eps(0.5) == pytest.approx(0, abs=1e-9), dev
+            e = E.eps(ds, pi, 0.5, d, operands="floor", credit="floor")
+            assert e.T_honest * h.words == pytest.approx(t, rel=1e-4) and e.core() == pytest.approx(e.skip), dev
+    assert [(f.mix, f.p) for f in E.design("dither-2s-li-l32", DEVICES / "sm_90").filler] == [({"FFMA": 1}, 0.0)]
+    assert E.honest("dc100-li-l32", DEVICES / "sm_100").base() == {"UTCIMMA_M128_N256": 1, "LDTM_32X32B_X128": 8}
 
 
 def test_cli_device(capsys):

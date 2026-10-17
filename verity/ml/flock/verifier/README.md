@@ -19,10 +19,14 @@ generic over the hash). The legacy module (pure-block, IR frame) is not written 
 `verify` fails closed (§16.15): every session of a statement whose form the soundness proof does not cover is refused
 with `refused: <why>: a statement form the soundness proof does not cover` (`Flock.ProvedScope.check`), once every check
 has passed, so a session that fails a check keeps that check's reason. That refuses every version before `hm96-sha512`
-rows, the typed statements, public input ports, several tables without `--zk`, shared-row public files (except under
+rows, the typed statements, public input ports, several tables without `--zk` and more than 2^16 with it
+(`ProvedScope.zkTableCap`), shared-row public files (except under
 `--zk` at hidden outputs with the verifier's own `--registered F`, which `FailClosed.SoundZHJR` covers), and circuits
-outside `Layout.scopeOk` (`Layout.scopeOkH` under hidden outputs, which also covers unsegmented `sha512/row/v2` rows: a unit
-reading more than one input group, a tail that computes the outputs, a segmented row, among others).
+outside `Layout.scopeOk` (with public outputs: a unit reading more than one input group, a tail that computes the outputs,
+a `sha512/row/v2` or segmented row, among others). Under hidden outputs the circuit check is `ProvedScope.scopeOkI`, the
+general instance form: a unit reading any number of input groups and tail stages returning the outputs (a repeated last
+stage from any of its slots, `out_net_ports` of `[slot, port]` pairs), once the wires
+compute every slot from the leaves (`ProvedScope.wiresAcyclic`), with `sha512/row/v2` and `sha512/row-seg/v1` rows.
 Those statements still parse, set up and verify (`statement` prints their digest and Σ), and the agreement check
 compares a session refused for its form alone as accepted (D12, `vectors.json`'s `lean_refuses`). A session drawn by a
 sampling design no soundness claim draws by is refused at setup, with
@@ -30,7 +34,8 @@ sampling design no soundness claim draws by is refused at setup, with
 or without a closure, and a subset draw without `--zk` (`lean_refuses_drawn`). So is a session without a draw, with
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)`, last, after the form's
 refusal (`lean_refuses_drawless`). Under `--rec-inner`, a V* session whose draw is not the `subset` draw of every unit of
-its population is refused after that (`Flock.RecSetup.fullDraw`, PROTOCOL.md).
+its population is refused after that, and so is a recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`)
+without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md).
 
 ## Build and run
 
@@ -191,6 +196,11 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
 - Template queries (§16.10): `template_query_agree.py` checks the decoding against #131's
   `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates, the
   refusals word for word, the malformed parameters).
+- The outer firewall's release (`Flock.Firewall.Frame`, `flock-firewall frame`, live PROTOCOL.md §10.4): every round a
+  firewalled rep sends is the Lean frame's, with the masking challenger held to it byte for byte (`test_firewall_frame.py`
+  on hand-made reps). On RoPE d64 at m = 25 (`art:edc7c50b`), 3 honest firewalled CPU sessions were accepted and each of the
+  7 `FC_FIREWALL_TAMPER` controls was refused or stopped as before; `firewall_outer_agree.py` found 10 of 10 transcripts as
+  expected, with the same public input and the same 1,454-item sequence as `r20261006-134729-fddc` before the Lean release.
 - The firewall's contract (`Flock.Firewall.Contract`, `flock-firewall contract`), the property every firewall's sessions
   must have, beside the inner phase's program (`Flock.Firewall.run`, which `test_firewall_agreement.py` holds the proxy
   to): `firewall_agree.py` runs the inner phase's firewall (`rec_live.Proxy`) and the contract on the same transcript
@@ -229,8 +239,9 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   `ci.py --live`: 20/20, 21/21, 20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`). On flat RoPE the honest
   sessions pass every check, so digest and Σ are the prover's (they have no draw, so their verdict is that refusal, D12),
   and every negative is refused by its check, `output_row_committed_false` (an
-  output row's `b ‖ c` not the circuit's outputs) included; flat GEMM (a unit reading two input groups) and both typed
-  sets are D12 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
+  output row's `b ‖ c` not the circuit's outputs) included. Flat GEMM (a unit reading two input groups, a tail stage
+  returning the outputs) is the general instance form, which the check passes, so its honest sessions meet the same
+  draw-less refusal (set 3: 21/21); both typed sets are D12 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
   cases (the honest session and the three false statements) from a fetched fixture
   (`verity/ml/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable set needs a pinned upstream build
   with `flock-circuit replay` (the selftest's `record_replays_offline` already replays in process).
