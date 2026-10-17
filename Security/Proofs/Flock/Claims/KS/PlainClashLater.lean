@@ -524,7 +524,7 @@ theorem plain_laterClashHAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse
     (hcl : LaterClashL ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
       (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
     LaterEntriesClash ins.read.I d (wrPD ins.read.I d o) := by
-  obtain ⟨ht, hc, ho, hT, hst, rfl, -, -⟩ := plain_setupHidden hs hin hset h hh hd
+  obtain ⟨ht, hc, hT, hst, rfl, -, -⟩ := plain_setupHidden hs hin hset h hh hd
   obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
     have e := fast100_schedOf st.m
     rw [hsch] at e
@@ -533,8 +533,8 @@ theorem plain_laterClashHAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse
     | some sch => exact ⟨sch, rfl⟩
   obtain ⟨pop, -, hdr⟩ := HiddenExec.setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
-  obtain ⟨x₀, hx₀⟩ := HiddenExec.drawSetupH_of_setupHidden (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc
-    ho hst hf hD (fun u hu => absurd hu (Finset.notMem_empty u)) rfl
+  obtain ⟨x₀, hx₀⟩ := HiddenExec.drawSetupH_of_setupHiddenI (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc
+    hst hf hD (fun u hu => absurd hu (Finset.notMem_empty u)) rfl
   have e : HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ =
       fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
     funext S R
