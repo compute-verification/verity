@@ -121,7 +121,8 @@ class SingleRow(Row):
         env = self.env
         self.ncb_set = env.native_collect_build
         self.ncb = env.native_collect_build or env.native_collect_default
-        self.setup({"MATCH_IMPL": self.cm.match_impl, "MATCH_PIPELINE": self.cm.match_pipeline, "NATIVE_COLLECT_BUILD": self.ncb})
+        self.setup({"MATCH_IMPL": self.cm.match_impl, "MATCH_PIPELINE": self.cm.match_pipeline, "NATIVE_COLLECT_BUILD": self.ncb,
+                    "VERITY_INSTANCES_FORM": self.cm.instances_form})
         os.makedirs(self.d, exist_ok=True)
         os.makedirs(self.ncb, exist_ok=True)
         if not os.path.isfile(self.path(self.wl)):
@@ -425,7 +426,6 @@ class SingleRow(Row):
         sb, st = max(1, self.B), max(1, (self.I + self.O + 287) // 288)
         to = cm.match_timeout or min(CAP, 1800 * sb * st)
         to_c = cm.compare_timeout or min(CAP, 600 * max(sb, 4) * st)
-        self.child_env["VERITY_INSTANCES_FORM"] = cm.instances_form
         self.log(f"fold: instances.jsonl stored form = {cm.instances_form} (F2)")
         self.child_env["MATCH_PHASE"] = cm.match_phase
         if cm.match_phase == "cpu":

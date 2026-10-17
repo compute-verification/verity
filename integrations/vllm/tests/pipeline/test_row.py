@@ -785,6 +785,21 @@ def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_a
     assert ran == ["match.check"] and last[:2] == ["match", "PASS"] and last[3] == "rc=0/0/0/-1"
 
 
+def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_path, monkeypatch):
+    """Every child of either row (a TP row's per-rank folds under tp-fold-match among them) stores instances.jsonl in `--instances-form`,
+    progressions by default, not the fold library's run-by-run default (a transposed weight's operand is ~1e6 runs per instance)."""
+    def precheck_reached(*a, **kw):
+        raise Stop(99)
+    for argv, form in (((), "progressions"), (("--instances-form", "runs"), "runs")):
+        single, tp = _row(tmp_path, *argv), _tp_row(tmp_path, GLM53, *argv)
+        monkeypatch.setattr(single, "release_line", precheck_reached)
+        monkeypatch.setattr(tp, "hidden_build", precheck_reached)
+        for r in (single, tp):
+            with pytest.raises(Stop):
+                r.prepare()
+            assert r.child_env["VERITY_INSTANCES_FORM"] == form
+
+
 @pytest.mark.parametrize("row, off", [
     (GLM53, False),                                  # an H box: vLLM's default, the custom all-reduce on
     (TP_DENSE, True),
