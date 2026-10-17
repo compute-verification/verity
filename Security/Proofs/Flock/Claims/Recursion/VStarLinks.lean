@@ -1,5 +1,7 @@
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsSparse
+import Proofs.Flock.Claims.Recursion.VStarCross
+import Proofs.Flock.Recursive.VStarCheck
 
 /-!
 # V*'s part links, shared across the shapes
@@ -37,6 +39,18 @@ that link once for every kind and every shape, with what is the circuit's own pr
   holds `b` there, and every agreeing list of messages has `b` at round `i`. Bits read back as the bytes they spell
   (`bytesOf_bitL`). This is the message half of the input tie, at any layout that reads its messages at the copies'
   input columns.
+* **A table of V\*'s statement, by its kind** (`StmtUnit`, `stmtUnit_of_check`): a table named as V\*'s statement
+  `sv` that passes `checkPart sv` is that kind's unit, with the kind's outputs (`UnitOuts`): a level's `LevelOuts`, an
+  algebra part's or R's opening part's `ResOuts` at its parameters, RecSparse's `SparseReadOuts`.
+* **The staging at `deployRec`, per part** (`showsPart`: VS2's `showsTr`, which reads the transcript only, and
+  `StagedPart`, part `s`'s V\* statement as V\* stages it). An accepted run stages every part (`stagedPart_run`), so
+  `Staged` holds at `showsPart` (`staged_deployRec_part`). A staged statement parses untyped, without public input
+  words, with at least one table, each named as V\*'s statement `s` at `x`'s inner shape and of that kind
+  (`stagedTables`, `stagedReads`).
+* **What is left of a link at `deployRec`** (`StmtReadsTo`: `PartReadsTo` at `showsPart` given `stagedReads`, so the
+  held tie and the goal from the outputs; `StagedLinked` for `LinkedPart`): `partReadsTo_deployRec`,
+  `linkedPart_deployRec`, and the bundles with `Staged` proved, `vstarParts_deployRec_staged` and
+  `vstarAccepts_deployRec_staged`.
 -/
 
 namespace Flock.Readable
@@ -158,6 +172,222 @@ theorem allOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} 
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) : AllOuts p w :=
   fun _ htl _ hK _ _ _ ho hg hu => unitOuts_of_check h hx ht hpi htl hK ho hg hu
+
+/-! ## A table of V*'s statement, by its kind -/
+
+/-- **The name `rec-open-stacked/l<L>-h<H>` determines `L` and `H`.** -/
+theorem stackedName_inj {L H L' H' : ℕ} (h : Flock.RecOpen.stackedName L H = Flock.RecOpen.stackedName L' H') :
+    L = L' ∧ H = H' := by
+  have h := congrArg String.toList h
+  simp only [Flock.RecOpen.stackedName, String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h
+  have h := List.append_cancel_left h
+  have dig : ∀ n, ∀ x ∈ Nat.toDigits 10 n, x.isDigit := fun n x hx =>
+    Nat.isDigit_of_mem_toDigits (by decide) (by decide) hx
+  obtain ⟨h1, h2⟩ := FlockVBridge.digits_dash (dig L) (dig L') (by simpa using h)
+  simp only [List.cons.injEq, true_and] at h2
+  exact ⟨FlockVBridge.eq_of_toDigits h1, FlockVBridge.eq_of_toDigits h2⟩
+
+theorem stackedName_startsWith (L H : ℕ) :
+    (Flock.RecOpen.stackedName L H).startsWith "rec-open-stacked/" = true := by
+  have : Flock.RecOpen.stackedName L H = "rec-open-stacked/" ++ s!"l{L}-h{H}" := by
+    simp [Flock.RecOpen.stackedName, ← String.toList_inj, List.append_assoc, FlockVBridge.toString_str]
+  rw [this]
+  simp [String.startsWith_string_iff]
+
+/-- **A unit the verifier accepted under the name of one of R's levels gives back its `L` and `H`**: where
+`stackedParams` is `none`, so is `params`, and `RecOpen.check` refuses a `rec-open-stacked/…` name. -/
+theorem stackedParams_of_check {c : Flock.Circuit} (h : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
+    (hn : c.unit.name = VStar.recOpenStackedName L H) : Flock.RecOpen.stackedParams c.unit.name = some (L, H) := by
+  have hn' : c.unit.name = Flock.RecOpen.stackedName L H := hn
+  cases hp : Flock.RecOpen.stackedParams c.unit.name with
+  | some p =>
+    obtain ⟨L', H'⟩ := p
+    obtain ⟨rfl, rfl⟩ := stackedName_inj ((Flock.RecOpen.stackedName_of_params hp).trans hn')
+    rfl
+  | none =>
+    have hu : Flock.RecOpen.params c.unit.name = none := by
+      cases hq : Flock.RecOpen.params c.unit.name with
+      | none => rfl
+      | some q =>
+        exact absurd ((Flock.RecOpen.unitName_of_params hq).trans hn') (Flock.RecOpen.unitName_ne_stackedName _ _ _ _)
+    unfold Flock.RecOpen.check at h
+    rw [hu, hp] at h
+    dsimp only at h
+    rw [hn', Flock.RecOpen.startsWith_stackedName, stackedName_startsWith] at h
+    cases h
+
+/-- **The name `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` determines the shape.** -/
+theorem sparseName_inj {sh sh' : Flock.RecSparse.Shape}
+    (h : Flock.RecSparse.unitName sh = Flock.RecSparse.unitName sh') : sh = sh' := by
+  have h := congrArg String.toList h
+  simp only [Flock.RecSparse.unitName, String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h
+  have h := List.append_cancel_left h
+  have dig : ∀ n, ∀ x ∈ Nat.toDigits 10 n, x.isDigit := fun n x hx =>
+    Nat.isDigit_of_mem_toDigits (by decide) (by decide) hx
+  obtain ⟨h1, h⟩ := FlockVBridge.digits_dash (dig _) (dig _) (by simpa using h)
+  simp only [List.cons.injEq, true_and] at h
+  obtain ⟨h2, h⟩ := FlockVBridge.digits_dash (dig _) (dig _) (by simpa using h)
+  simp only [List.cons.injEq, true_and] at h
+  obtain ⟨h3, h⟩ := FlockVBridge.digits_dash (dig _) (dig _) (by simpa using h)
+  simp only [List.cons.injEq, true_and] at h
+  obtain ⟨_, _, _, _⟩ := sh
+  obtain ⟨_, _, _, _⟩ := sh'
+  simp only [Flock.RecSparse.Shape.mk.injEq]
+  exact ⟨FlockVBridge.eq_of_toDigits h1, FlockVBridge.eq_of_toDigits h2, FlockVBridge.eq_of_toDigits h3,
+    FlockVBridge.eq_of_toDigits h⟩
+
+theorem sparseName_startsWith (sh : Flock.RecSparse.Shape) :
+    (Flock.RecSparse.unitName sh).startsWith "rec-sparse/" = true := by
+  have : Flock.RecSparse.unitName sh = "rec-sparse/" ++ s!"n{sh.nu}-e{sh.ell}-s{sh.sLog}-t{sh.tLog}" := by
+    simp [Flock.RecSparse.unitName, ← String.toList_inj, List.append_assoc, FlockVBridge.toString_str]
+  rw [this]
+  simp [String.startsWith_string_iff]
+
+/-- **A unit the verifier accepted under the RecSparse name of a shape gives back that shape**: `RecSparse.check`
+refuses a `rec-sparse/…` name that `params` doesn't read. -/
+theorem sparseParams_of_check {c : Flock.Circuit} (h : Flock.RecSparse.check c = .ok ())
+    {sh : Flock.RecSparse.Shape} (hn : c.unit.name = Flock.RecSparse.unitName sh) :
+    Flock.RecSparse.params c.unit.name = some sh := by
+  cases hp : Flock.RecSparse.params c.unit.name with
+  | some sh' => rw [sparseName_inj ((FlockVBridge.Sparse.unitName_params hp).trans hn)]
+  | none =>
+    unfold Flock.RecSparse.check at h
+    rw [hp] at h
+    dsimp only at h
+    rw [hn, sparseName_startsWith] at h
+    cases h
+
+/-- **The name `rec-opening/m<m>-c<claims>-p<j>` determines `m`, the claims and `j`.** -/
+theorem openingName_inj {m c j m' c' j' : ℕ}
+    (h : Flock.RecOpening.unitName m c j = Flock.RecOpening.unitName m' c' j') : m = m' ∧ c = c' ∧ j = j' := by
+  have h := congrArg String.toList h
+  simp only [Flock.RecOpening.unitName, String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h
+  have h := List.append_cancel_left h
+  have dig : ∀ n, ∀ x ∈ Nat.toDigits 10 n, x.isDigit := fun n x hx =>
+    Nat.isDigit_of_mem_toDigits (by decide) (by decide) hx
+  obtain ⟨h1, h⟩ := FlockVBridge.digits_dash (dig _) (dig _) (by simpa using h)
+  simp only [List.cons.injEq, true_and] at h
+  obtain ⟨h2, h⟩ := FlockVBridge.digits_dash (dig _) (dig _) (by simpa using h)
+  simp only [List.cons.injEq, true_and] at h
+  exact ⟨FlockVBridge.eq_of_toDigits h1, FlockVBridge.eq_of_toDigits h2, FlockVBridge.eq_of_toDigits h⟩
+
+theorem openingName_startsWith (m c j : ℕ) :
+    (Flock.RecOpening.unitName m c j).startsWith "rec-opening/" = true := by
+  have : Flock.RecOpening.unitName m c j = "rec-opening/" ++ s!"m{m}-c{c}-p{j}" := by
+    simp [Flock.RecOpening.unitName, ← String.toList_inj, List.append_assoc, FlockVBridge.toString_str]
+  rw [this]
+  simp [String.startsWith_string_iff]
+
+/-- `RecOpening.params` gives `(m, claims, j)` only for the name `unitName m claims j`. -/
+theorem openingName_of_params {name : String} {m c j : ℕ} (h : Flock.RecOpening.params name = some (m, c, j)) :
+    Flock.RecOpening.unitName m c j = name := by
+  unfold Flock.RecOpening.params at h
+  repeat' (first | split at h | dsimp only at h)
+  all_goals first
+    | (simp only [Option.some.injEq, Prod.mk.injEq] at h; obtain ⟨rfl, rfl, rfl⟩ := h; assumption)
+    | cases h
+
+/-- **A unit the verifier accepted under the name of R's opening's part gives back its numbers**:
+`RecOpening.check` refuses a `rec-opening/…` name that `params` doesn't read. -/
+theorem openingParams_of_check {c : Flock.Circuit} (h : Flock.RecOpening.check c = .ok ()) {m cl j : ℕ}
+    (hn : c.unit.name = Flock.RecOpening.unitName m cl j) :
+    Flock.RecOpening.params c.unit.name = some (m, cl, j) := by
+  cases hp : Flock.RecOpening.params c.unit.name with
+  | some q =>
+    obtain ⟨m', cl', j'⟩ := q
+    obtain ⟨rfl, rfl, rfl⟩ := openingName_inj ((openingName_of_params hp).trans hn)
+    rfl
+  | none =>
+    unfold Flock.RecOpening.check at h
+    rw [hp] at h
+    dsimp only at h
+    rw [hn, openingName_startsWith] at h
+    cases h
+
+/-- `RecOpening.check` refuses a `rec-opening/…` unit at an `m` and claims without a shape. -/
+theorem openingShape_of_check {c : Flock.Circuit} (h : Flock.RecOpening.check c = .ok ()) {m cl j : ℕ}
+    (hp : Flock.RecOpening.params c.unit.name = some (m, cl, j)) : ∃ sh, Flock.RecOpening.shape? m cl = some sh := by
+  cases hsh : Flock.RecOpening.shape? m cl with
+  | some sh => exact ⟨sh, rfl⟩
+  | none =>
+    unfold Flock.RecOpening.check at h
+    rw [hp] at h
+    dsimp only at h
+    rw [hsh] at h
+    cases h
+
+/-- **The part check at an algebra part's statement**: its unit's name, shape, META and part are the verifier's
+(`RecResiduals.params`, `shape?`, `holoOf`, `part`), or it refuses. -/
+theorem checkPart_inner {j : ℕ} {nm : String} {pt : VStar.Part} {c : Flock.Circuit}
+    (h : Flock.RecVStar.checkPart (.inner j nm pt) c = .ok ()) :
+    ∃ (m k cl jj : ℕ) (sh : Flock.Shape) (holo : Bool) (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
+      RecResiduals.params c.unit.name = some (m, k, cl, jj) ∧ RecResiduals.shape? m k cl = some sh ∧
+        RecResiduals.holoOf c = .ok holo ∧ RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) := by
+  unfold Flock.RecVStar.checkPart at h
+  dsimp only at h
+  cases hp : Flock.RecResiduals.params c.unit.name with
+  | none => rw [hp] at h; cases h
+  | some q =>
+    obtain ⟨m, k, cl, jj⟩ := q
+    rw [hp] at h
+    dsimp only at h
+    cases hsh : Flock.RecResiduals.shape? m k cl with
+    | none => rw [hsh] at h; cases h
+    | some sh =>
+      rw [hsh] at h
+      dsimp only at h
+      cases hh : Flock.RecResiduals.holoOf c with
+      | error e => rw [hh] at h; cases h
+      | ok holo =>
+        rw [hh] at h
+        dsimp only at h
+        cases hpt : Flock.RecResiduals.part { sh with holo } jj with
+        | error e => rw [hpt] at h; cases h
+        | ok q =>
+          obtain ⟨S, ns, nv⟩ := q
+          exact ⟨m, k, cl, jj, sh, holo, S, ns, nv, rfl, hsh, rfl, hpt⟩
+
+/-- **A table of V\*'s statement `sv`, its copies' outputs at what their inputs read being `K`** (`UnitOuts`), at
+`sv`'s own numbers: a level's climb at `sv`'s `LANES` and `H` (`.recOpen`, `.recOpenStacked`), the residuals of the
+algebra's part the unit's name, shape and META give (`.inner`), of R's opening's part at `sv`'s `m`, claims and `j`
+(`.opening`), or the RecSparse unit's at `sv`'s shape (`.sparse`). -/
+def StmtUnit (sv : VStar.Stmt) (c : Flock.Circuit) (K : (ℕ → Bool) → Prop) : Prop :=
+  UnitOuts c K ∧
+    match sv with
+    | .recOpen _ L H _ => K = fun v => LevelOuts v L H
+    | .recOpenStacked _ L H _ => K = fun v => LevelOuts v L H
+    | .inner .. => ∃ (m k cl j : ℕ) (sh : Flock.Shape) (holo : Bool) (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
+        RecResiduals.params c.unit.name = some (m, k, cl, j) ∧ RecResiduals.shape? m k cl = some sh ∧
+        RecResiduals.holoOf c = .ok holo ∧ RecResiduals.part { sh with holo } j = .ok (S, ns, nv) ∧
+        K = ResOuts S ns nv
+    | .opening m cl j .. => ∃ (sh : Flock.Shape) (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
+        RecOpening.shape? m cl = some sh ∧ RecOpening.part sh j = .ok (S, ns, nv) ∧ K = ResOuts S ns nv
+    | .sparse sh _ => K = SparseReadOuts sh
+
+/-- **A table named as V\*'s statement `sv` that the parser and the part check accepted is a table of `sv`**: the
+unit's own check (`ParseFacts`) reads the name back at `sv`'s numbers (`params_of_check`, `stackedParams_of_check`,
+`sparseParams_of_check`, `openingParams_of_check` with `check_opening`), and at an algebra part the part check gives the
+verifier's part (`checkPart_inner`). -/
+theorem stmtUnit_of_check {tags : Flock.Tags} {c : Flock.Circuit} (P : FlockSoundness.ParseFacts tags c)
+    {sv : VStar.Stmt} (hn : c.unit.name = sv.name) (hp : Flock.RecVStar.checkPart sv c = .ok ()) :
+    ∃ K, StmtUnit sv c K := by
+  cases sv with
+  | recOpen level L H n =>
+    exact ⟨_, Or.inl ⟨L, H, Or.inl (FlockVBridge.params_of_check P.recNet hn), rfl⟩, rfl⟩
+  | recOpenStacked level L H n =>
+    exact ⟨_, Or.inl ⟨L, H, Or.inr (stackedParams_of_check P.recNet hn), rfl⟩, rfl⟩
+  | inner j nm pt =>
+    obtain ⟨m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4⟩ := checkPart_inner hp
+    exact ⟨_, Or.inr (Or.inl ⟨S, ns, nv, Or.inl ⟨m, k, cl, jj, sh, holo, h1, h2, h3, h4⟩, rfl⟩),
+      m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, rfl⟩
+  | sparse sh hRound =>
+    exact ⟨_, Or.inr (Or.inr ⟨sh, sparseParams_of_check P.recSparse hn, rfl⟩), rfl⟩
+  | opening m cl j S ports nv =>
+    have hq := openingParams_of_check P.recOpening hn
+    obtain ⟨sh, hsh⟩ := openingShape_of_check P.recOpening hq
+    obtain ⟨S', ns, nv', hpart, -⟩ := check_opening P.recOpening hq hsh
+    exact ⟨_, Or.inr (Or.inl ⟨S', ns, nv', Or.inr ⟨m, cl, j, sh, hq, hsh, hpart⟩, rfl⟩), sh, S', ns, nv', hsh,
+      hpart, rfl⟩
 
 end Flock.Readable
 
@@ -546,5 +776,323 @@ theorem vstarPartsStaging_deployRec_of_linked {L : Layout} {opening : Opening} {
   vstarPartsStaging_of_linked rfl hP hO hRC hV hD hLD hH
 
 end Deployed
+
+end Claims.Recursion.VStar
+
+namespace RecDeploy
+
+open Claims (Msg Out Prover run coinSeq replay)
+open FlockDeploy (Coin)
+
+/-! ## The staging at `deployRec`, per part -/
+
+/-- **Part `s`'s V\* statement as V\* stages it**: `xO` is `staged st x ms s` at some list of messages, its setup
+decodes, and its read's check passes. -/
+def StagedPart (st : Stage) (s : ℕ) (x xO : Msg) : Prop :=
+  ∃ (ms : List (Msg × Out)) (i : RecIns) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
+    xO = staged st x ms s ∧ setupO xO = some (i, spec, sts) ∧ i.base.read.check = .ok ()
+
+section Run
+
+variable (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
+  (r : Fin ((V IV st).k x) → Coin)
+
+/-- **An accepted run stages every part**: session `s` decided (`run_decides`) and did not refuse, so its outer
+statement's setup decoded and its read checked (`nextO_decide`, `actO_decide`, `scope_of_checks`), and that statement
+is part `s`'s V\* statement at the run's inner messages (`ract_sess`, `innerPairs_run`). -/
+theorem stagedPart_run (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} (hs : s < nS x) :
+    StagedPart st s x (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) := by
+  obtain ⟨i, f, hi, ⟨j, xO, as', cs', ins, spec, sts, link, c₁, mids, hr, hO⟩, hn⟩ :=
+    run_decides H IV st x P ω r hacc hs
+  rw [next_sess H hr] at hn
+  have hacc' : ((nextO xO as' cs').eval H).1 = .acc := by
+    rcases nextO_decide_out H hO with ho | ho
+    · exact ho
+    · rw [ho] at hn
+      exact absurd rfl hn
+  obtain ⟨⟨spec', sts', -, -, hc⟩, -⟩ := (nextO_decide H hO).1 hacc'
+  obtain ⟨i', hi', hib⟩ := actO_decide hO
+  obtain ⟨hk, -, -⟩ := ract_sess_locate hr
+  obtain ⟨-, -, hxO⟩ := ract_sess hr
+  have hK := run_acc_length H IV st x P ω r hacc
+  have hlen : (((run H P (V IV st) x ω r).msgs.take (i + 1)).map Prod.fst).length = i + 1 := by
+    simp only [List.length_map, List.length_take]
+    omega
+  rw [hlen] at hk
+  have hip := innerPairs_run H IV st x P ω r hacc (off := i + 1) hk.le (by omega) []
+    (range_map_take (coinSeq r) hk.le)
+  rw [List.append_nil] at hip
+  rw [hip] at hxO
+  subst hxO
+  refine ⟨_, i', spec, sts, rfl, hi', ?_⟩
+  rw [hib]
+  exact scope_of_checks hc
+
+end Run
+
+/-- **Part `s`'s coins shown on `xO`, with `xO` staged**: `showsTr` (which reads the transcript only) and
+`StagedPart`. -/
+def showsPart (b : Brings) (s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=
+  showsTr b s x xO c ∧ StagedPart b.st s x xO
+
+/-- **`Staged` at `showsPart`**: `staged_deployRec`, with the part's V\* statement on the run staged
+(`stagedPart_run`). -/
+theorem staged_deployRec_part {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
+    (b : Brings) (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop)
+    (htr : ∀ x, Function.Injective (b.tr x)) (hL : ∀ x, L.rounds x ≤ I.V.k (xIOf x)) :
+    Claims.Recursion.VStar.Staged H (deployRec I.V ivScope b) I L shape (showsPart b) (cmtTr b) := by
+  intro x stx hst hf Ω P ω r hacc s hs
+  obtain ⟨h1, h2⟩ := staged_deployRec H I ivScope b L shape htr hL x stx hst hf Ω P ω r hacc s hs
+  refine ⟨⟨h1, ?_⟩, h2⟩
+  change (run H P (V I.V b.st) x ω r).out = .acc at hacc
+  change s < nS x at hs
+  obtain ⟨hnum, -⟩ := run_round H I.V b.st x P ω r hacc hs rfl rfl
+  have hv : (Claims.Recursion.runVstar H (deployRec I.V ivScope b) I P x ω r).getD s [] =
+      staged b.st x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)) s := by
+    show (vstar b.st x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x))).getD s [] = _
+    rw [vstar_getD b.st x _ hs]
+    unfold vstarAt
+    rw [ite_eq_left hnum]
+  rw [hv]
+  exact stagedPart_run H I.V b.st x P ω r hacc hs
+
+/-- A decoded setup's outer statement parses at `readOfO` to its read with the setup's tables. -/
+theorem parse_of_setupO {xO : Msg} {i : RecIns} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
+    (h : setupO xO = some (i, spec, sts)) :
+    Flock.Readable.parseBytes readOfO xO = some { i.base.read with sts } := by
+  obtain ⟨hins, hsu⟩ := setupO_some h
+  have hr : readOfO xO = some i.base.read := by rw [readOfO, hins, Option.map_some]
+  have hz := readOfO_zk hr
+  unfold Flock.Readable.parseBytes
+  rw [hr, Option.bind_some]
+  unfold Flock.Readable.Read.parse Flock.Readable.Read.tablesOf
+  rw [RecIns.setup_read hsu]
+  simp only [hz, ↓reduceIte, RecIns.setup_shapeOk hsu hz, Option.map_some]
+
+/-- A setup that decodes has passed `RecSetup.checks` on its tables. -/
+theorem RecIns.setup_checks {s : RecIns} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
+    (h : s.setup = .ok (spec, sts)) :
+    Flock.RecSetup.checks s.inner s.commits s.base.stmtTags s.base.read.I.tables sts s.base.read.I.circuitFile
+      s.base.read.I.partition s.base.read.I.program s.base.registered s.part s.bindings s.rows = .ok () := by
+  unfold RecIns.setup at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    assumption
+
+/-- `RecSetup.checks` runs `RecVStar.checkStmt` at every table. -/
+theorem checks_stmt {inner : Option Flock.RecVStar.Inner} {commits : Option Flock.RecVStar.InnerCommits}
+    {tags : Flock.Tags} {tables : List (String × ByteArray)} {sts : Array Flock.Stmt} {circuitB : ByteArray}
+    {partition : Option Lean.Json} {program : Option ByteArray} {registered : Option (Array Flock.Registered.Port)}
+    {part : Option ℕ} {bindings : Option VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    (h : Flock.RecSetup.checks inner commits tags tables sts circuitB partition program registered part bindings rows =
+      .ok ()) (t : ℕ) (ht : t < sts.size) :
+    Flock.RecVStar.checkStmt inner tags tables sts[t] circuitB partition program registered part bindings rows =
+      .ok () := by
+  unfold Flock.RecSetup.checks at h
+  dsimp only at h
+  split at h
+  · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+    cases h1
+  · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+    exact Flock.Readable.array_forM_ok h1 t ht
+
+/-- A raw setup's decoded instance carries its part. -/
+theorem RecRaw.ins_part {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) : s.part = w.recPart := by
+  unfold RecRaw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; rfl)
+
+/-- Part `s`'s staged statement decodes with part `s`. -/
+theorem insO_staged_part {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i : RecIns}
+    (h : insO (staged st x ms s) = some i) : i.part = some s := by
+  have hne : staged st x ms s ≠ [] := fun he => by rw [he, insO_nil] at h; cases h
+  obtain ⟨r, p, -, -, hd⟩ := staged_decode hne
+  unfold insO at h
+  rw [hd] at h
+  simp only [Option.bind_eq_bind, Option.bind_some] at h
+  split_ifs at h
+  · simp at h
+  have h' : (partRaw r st x ms s p).ins.toOption = some i := by simpa using h
+  rw [RecRaw.ins_part (toOption_eq_some h')]
+  rfl
+
+/-- With an inner shape, `RecVStar.checkStmt` runs `checkCircuit` at the setup's part and bindings. -/
+theorem checkStmt_circuit {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {registered : Option (Array Flock.Registered.Port)} {part : Option ℕ} {bindings : Option VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
+    (h : Flock.RecVStar.checkStmt (some i) tags tables st circuitB partition program registered part bindings rows =
+      .ok ()) :
+    ∃ j f sv, part = some j ∧ bindings = some f ∧
+      Flock.RecVStar.checkCircuit i j st.c (Flock.RecVStar.population st) circuitB f = .ok sv := by
+  unfold Flock.RecVStar.checkStmt at h
+  dsimp only at h
+  split at h
+  · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+    cases h1
+  · split at h
+    · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+      cases h1
+    · split at h
+      · split at h
+        · split at h
+          · split at h
+            · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+              cases h1
+            obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+            obtain ⟨sv, hs, -⟩ := FlockSoundness.Refine.ebind_ok h
+            exact ⟨_, _, sv, rfl, rfl, hs⟩
+          · cases h
+        · cases h
+      · cases h
+
+/-- **A table checked at part `s`** is named as V\*'s statement `s` at the inner shape, and passes its kind's
+`checkPart` (`checkCircuit_ok`, `check_ok`). -/
+theorem stagedTable {i0 : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {registered : Option (Array Flock.Registered.Port)} {s : ℕ} {bindings : Option VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
+    (h : Flock.RecVStar.checkStmt (some i0) tags tables st circuitB partition program registered (some s) bindings
+      rows = .ok ()) :
+    ∃ ss sv, Flock.RecVStar.statements i0 = .ok ss ∧ ss[s]? = some sv ∧ sv.name = st.c.unit.name ∧
+      Flock.RecVStar.checkPart sv st.c = .ok () := by
+  obtain ⟨j, f, sv, hj, -, hc⟩ := checkStmt_circuit h
+  cases hj
+  obtain ⟨hck, -, -, hp⟩ := FlockSoundness.Discharge.Recursion.checkCircuit_ok hc
+  obtain ⟨ss, hss, hs, hn, -, -⟩ := FlockSoundness.Discharge.Recursion.check_ok hck
+  exact ⟨ss, sv, hss, hs, hn, hp⟩
+
+/-- **A staged part's tables**: it parses untyped, without public input words, at `x`'s inner shape, with at least
+one table, each named as V\*'s statement `s` there and passing its kind's `checkPart`. -/
+theorem stagedTables {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x xO) :
+    ∃ (p : Flock.Readable.Parsed) (r : XR) (sv : VStar.Stmt),
+      Flock.Readable.parseBytes readOfO xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
+      readX x = some r ∧ (∃ ss, Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) ∧ 0 < p.sts.size ∧
+      ∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ Flock.RecVStar.checkPart sv p.sts[t].c = .ok () := by
+  obtain ⟨ms, i, spec, sts, rfl, hsu, hck⟩ := h
+  obtain ⟨hins, hset⟩ := setupO_some hsu
+  obtain ⟨r, hr, hinner, -⟩ := insO_staged hins
+  have hC := RecIns.setup_checks hset
+  rw [hinner, insO_staged_part hins] at hC
+  have hpi := publicInputs_none_of_scope hck
+  have hsz : 0 < sts.size := by
+    have hrd := RecIns.setup_read hset
+    unfold Flock.Readable.Read.setup at hrd
+    rw [hpi] at hrd
+    exact (FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hrd).1
+  obtain ⟨ss, sv, hss, hs, -, -⟩ := stagedTable (checks_stmt hC 0 hsz)
+  refine ⟨{ i.base.read with sts }, r, sv, parse_of_setupO hsu,
+    ((Flock.Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hck).1.2.1, hpi, hr, ⟨ss, hss, hs⟩, hsz, fun t ht => ?_⟩
+  obtain ⟨ss', sv', hss', hs', hn, hp⟩ := stagedTable (checks_stmt hC t ht)
+  rw [hss] at hss'
+  cases hss'
+  rw [hs] at hs'
+  cases hs'
+  exact ⟨hn.symm, hp⟩
+
+/-- **What a part shown at `showsPart` reads**: `stagedTables`, with each table's unit and its outputs by kind
+(`StmtUnit`, from the parser's checks: `stmtUnit_of_check`). -/
+theorem stagedReads {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} (h : showsPart b s x xO c) :
+    ∃ (p : Flock.Readable.Parsed) (r : XR) (sv : VStar.Stmt),
+      Flock.Readable.parseBytes readOfO xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
+      readX x = some r ∧ (∃ ss, Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) ∧ 0 < p.sts.size ∧
+      ∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ ∃ K, Flock.Readable.StmtUnit sv p.sts[t].c K := by
+  obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := stagedTables h.2
+  refine ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, fun t htl => ⟨(htab t htl).1, ?_⟩⟩
+  obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi htl
+  exact Flock.Readable.stmtUnit_of_check P (htab t htl).1 (htab t htl).2
+
+end RecDeploy
+
+namespace Claims.Recursion.VStar
+
+/-! ## What is left of a part's links at `deployRec` -/
+
+section Staged
+
+variable {W Col T : Type} (H : Msg → Msg) (I : Inner FlockDeploy.Coin W) (ivScope : Msg → Bool)
+  (b : RecDeploy.Brings)
+
+/-- **Part `s`'s link at `deployRec` toward `G`, with the staging done**: `PartReadsTo` at `showsPart`, given what
+`stagedReads` proves (the parse, `x`'s inner shape, V\*'s statement `sv` there, and every table's unit and outputs
+by kind). What is left is the held tie (the layout's messages at the copies' columns) and the goal from the outputs. -/
+def StmtReadsTo (L : Layout) (shape : Form → Prop)
+    (G : Msg → (ℕ → FlockDeploy.Coin) → Flock.Wit → List Msg → Prop) (s : ℕ) : Prop :=
+  ∀ (x : Msg) (st : Stmt), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
+    ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart b s x xO c →
+    ∀ (p : Flock.Readable.Parsed) (r : RecDeploy.XR) (sv : VStar.Stmt),
+      Flock.Readable.parseBytes RecDeploy.readOfO xO = some p → RecDeploy.readX x = some r →
+      (∃ ss, _root_.Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) → 0 < p.sts.size →
+      (∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ ∃ K, Flock.Readable.StmtUnit sv p.sts[t].c K) →
+      ∀ (w : Flock.Wit) (ms : List Msg), Agrees L x s w ms → Flock.Readable.AllOuts p w →
+        G x c w ms ∨ PartColl H (RecDeploy.deployRec I.V ivScope b) L s x xO w
+
+/-- `StmtReadsTo` is `PartReadsTo` at `showsPart`: the staging is `stagedReads`. -/
+theorem partReadsTo_deployRec {L : Layout} {shape : Form → Prop}
+    {G : Msg → (ℕ → FlockDeploy.Coin) → Flock.Wit → List Msg → Prop} {s : ℕ}
+    (h : StmtReadsTo H I ivScope b L shape G s) :
+    PartReadsTo H (RecDeploy.deployRec I.V ivScope b) RecDeploy.readOfO L shape (RecDeploy.showsPart b) G s := by
+  intro x st hst hf xO c hc
+  obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := RecDeploy.stagedReads hc
+  exact ⟨p, hx, ht, hpi, fun w ms hA hO => h x st hst hf xO c hc p r sv hx hr hss hsz htab w ms hA hO⟩
+
+/-- **A part linked at `deployRec` with the staging done**: `StmtReadsTo` toward its check, and its calls either none
+where its coins are shown (`LogsNil`) or `StmtReadsTo` toward them. -/
+def StagedLinked (L : Layout) (shape : Form → Prop)
+    (chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop)
+    (logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)) (s : ℕ) : Prop :=
+  StmtReadsTo H I ivScope b L shape (fun x c _ ms => chk s x c ms) s ∧
+    (LogsNil (RecDeploy.deployRec I.V ivScope b) shape (RecDeploy.showsPart b) logs s ∨
+      StmtReadsTo H I ivScope b L shape (fun x c w ms => ∀ e ∈ logs s x c ms, e ∈ L.calls x s w) s)
+
+/-- `StagedLinked` is `LinkedPart` at `showsPart`. -/
+theorem linkedPart_deployRec {L : Layout} {shape : Form → Prop}
+    {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop}
+    {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)} {s : ℕ}
+    (h : StagedLinked H I ivScope b L shape chk logs s) :
+    LinkedPart H (RecDeploy.deployRec I.V ivScope b) RecDeploy.readOfO L shape (RecDeploy.showsPart b) chk logs s :=
+  ⟨partReadsTo_deployRec H I ivScope b h.1, h.2.imp id (partReadsTo_deployRec H I ivScope b)⟩
+
+/-- **V\*'s parts at any shape at `deployRec`, with the staging proved** (`ksA_deployed_parts`' premise at each of the
+dense, holo and sparse shapes): `vstarParts_deployRec_of_linked` at `showsPart`, with `Staged` from
+`staged_deployRec_part`. -/
+theorem vstarParts_deployRec_staged {L : Layout} {opening : Opening} {shape : Form → Prop}
+    {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop} {dig : Msg → ℕ → Msg → Msg}
+    {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)}
+    (htr : ∀ x, Function.Injective (b.tr x)) (hL : ∀ x, L.rounds x ≤ I.V.k (RecDeploy.xIOf x))
+    (hP : ∀ s, StagedLinked H I ivScope b L shape chk logs s)
+    (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
+      shape (RecDeploy.showsPart b) opening dig s)
+    (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
+      shape (RecDeploy.showsPart b) (RecDeploy.cmtTr b) dig s)
+    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk)
+    (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V shape logs)
+    (hH : Held (RecDeploy.deployRec I.V ivScope b) I L shape) :
+    VStarParts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
+      shape :=
+  vstarParts_deployRec_of_linked H I ivScope b (fun s => linkedPart_deployRec H I ivScope b (hP s)) hO hRC
+    (RecDeploy.staged_deployRec_part H I ivScope b L shape htr hL) hD hLD hH
+
+/-- **`VStarAcceptsR` at any shape at `deployRec`, with the staging proved**: `vstarAccepts_deployRec_of_linked` at
+`showsPart`, with `Staged` from `staged_deployRec_part`. -/
+theorem vstarAccepts_deployRec_staged {L : Layout} (hb : b.rd = RecDeploy.readersOf L) {opening : Opening}
+    {shape : Form → Prop} {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop} {dig : Msg → ℕ → Msg → Msg}
+    (htr : ∀ x, Function.Injective (b.tr x)) (hL : ∀ x, L.rounds x ≤ I.V.k (RecDeploy.xIOf x))
+    (hC : ∀ s, StmtReadsTo H I ivScope b L shape (fun x c _ ms => chk s x c ms) s)
+    (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
+      shape (RecDeploy.showsPart b) opening dig s)
+    (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
+      shape (RecDeploy.showsPart b) (RecDeploy.cmtTr b) dig s)
+    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk) :
+    VStarAcceptsR H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) shape :=
+  vstarAccepts_deployRec_of_linked H I ivScope b hb (fun s => partReadsTo_deployRec H I ivScope b (hC s)) hO hRC
+    (RecDeploy.staged_deployRec_part H I ivScope b L shape htr hL) hD
+
+end Staged
 
 end Claims.Recursion.VStar
