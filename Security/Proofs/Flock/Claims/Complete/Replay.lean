@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
 import Proofs.Flock.Claims.Complete.Replay.RepRounds
 import Proofs.Flock.Claims.Complete.Replay.ProverOk
 import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`, `Agrees`),
@@ -45,18 +46,21 @@ identity, `ligeritoWith_of`; `LigeritoGoal`: the skeleton's `Ligerito` at the re
 session walk's alignment of each rep's Ligerito, `LgAt`, each level's Merkle opening, `LgMerkle`, and the final
 identity, `LgFinal`, `ligerito_goal`, and `Consumed` once each rep's stream holds exactly the model's rounds, `LgCount`,
 `consumed_goal`; `LigeritoProver`: the honest prover's Ligerito ends where the model does on the proof it returns,
-`ligeritoP_go`; `LigeritoRep`: a returning rep's transcript ends at the model's, `repP_ligerito`, so `LgAt` and `LgCount`
-follow from the recorded stream carrying the rep's rounds, `Run.lgAt_of`, `Run.lgCount_of`, and lincheck's circuit fold
-returns at a returning rep, `Run.lcFold_of`; `LigeritoMerkle`: a committed table's Merkle openings pass,
+`ligeritoP_go`; `LigeritoRep`: a returning rep's transcript ends at the model's, `repP_ligerito`, so `LgAt` and
+`LgCount` follow from the recorded stream carrying the rep's rounds, `Run.lgAt_of`, `Run.lgCount_of`, and lincheck's
+circuit fold returns at a returning rep, `Run.lcFold_of`; `LigeritoMerkle`: a committed table's Merkle openings pass,
 `commitP_tree`, `merkle_open`, the honest prover opens at the model's query rounds, `ligeritoP_opens`, and so every
 level's Merkle check passes, `merkleOk_of_opens`; `LigeritoWalk`: a returning rep opens honestly, `repP_opens`, so
 `LgMerkle` follows from the session walk at each rep, `RepWalk`, and the schemes' widths, `SchemeWidths`,
 `lgMerkle_of_walk`, and `Ligerito` and `Consumed` rest on those and `LgFinal`, `ligerito_goal_walk`,
-`consumed_goal_walk`; `LigeritoFinal`: a returning rep runs the honest Ligerito on its table at ring switching's `T`
-and basis, `repP_lig`, so `LgFinal` holds at every rep the walk runs on the trace's packed table, `RepWalkP`, given the
+`consumed_goal_walk`; `LigeritoFinal`: a returning rep runs the honest Ligerito on its table at ring switching's `T` and
+basis, `repP_lig`, so `LgFinal` holds at every rep the walk runs on the trace's packed table, `RepWalkP`, given the
 honest Ligerito's final identity, `Lg.Honest`, ring switching's claim on the packed table, `RsSum`, and the verifier's
-basis as the batched basis's extension, `BasisOk`, `lgFinal_of`), and the prover's pieces (`RepRounds`: a returning rep records a round, each of at most `65536`
-coins, `repP_repOk`, every squeeze of the models being few coins, `Bnd`; `ProverOk`: the case's table has a registered
-scheme and at most 1,024 regions, `Case.schemeOk`, so at an oracle of 64-byte outputs its digests have the scheme's width,
-`opsWith_widths`, `schemeWidths`, its level-0 cap is non-empty and under `2^64` bytes, `commitP_cap`, and `ProverOk`
-holds, `proverOk`). -/
+basis as the batched basis's extension, `BasisOk`, `lgFinal_of`; `LigeritoBasis`: every claim a rep opens has `m − 6`
+coordinates, `claims_xsize`, so the verifier's basis is the extension of the prover's batched basis on the cube,
+`Lg.fOf_basisVals`, `Lg.basis_bHat`, and `BasisOk` holds at the deployed relation, `basisOk_relation`), and the prover's
+pieces (`RepRounds`: a returning rep records a round, each of at most `65536` coins, `repP_repOk`, every squeeze of the
+models being few coins, `Bnd`; `ProverOk`: the case's table has a registered scheme and at most 1,024 regions,
+`Case.schemeOk`, so at an oracle of 64-byte outputs its digests have the scheme's width, `opsWith_widths`,
+`schemeWidths`, its level-0 cap is non-empty and under `2^64` bytes, `commitP_cap`, and `ProverOk` holds, `proverOk`).
+-/
