@@ -39,10 +39,12 @@ the inner verifier.
   second half, every recorded call a true evaluation (`CallsTrue`), from each part's SHA-512 gadgets
   (`PartCallsTrue`, `callsTrue_of_parts`; `callsRecord_of_parts` takes the first half as a hypothesis).
 * **Openings at the played rounds.** `CallsOpen` asks for an opening of the inner view's message at every inner round,
-  `[]` at a round the inner view doesn't play (the deployed Flock verifier decides at the prover's last message, so a
-  prover can stop early), which no part opens. `CallsOpenPlayed` asks for it only at the rounds the inner view plays,
-  and V*'s parts give it (`callsOpenPlayed_of_parts`): there the inner view's message is the first holder's, which
-  that holder opens, given that some part holds each inner round (`Held`). It serves the consumer as `CallsOpen` does
+  `[]` at a round the inner view doesn't play, which no part opens. The deployed Flock verifier decides at the prover's
+  tag-1 message and accepts only at its last round (`AccLast`), so the inner view stops early only where it rejects,
+  which `VStarAccepts` allows only at a collision among the recorded calls; `CallsOpen` must hold there too.
+  `CallsOpenPlayed` asks for it only at the rounds the inner view plays, and V*'s parts give it
+  (`callsOpenPlayed_of_parts`): there the inner view's message is the first holder's, which that holder opens, given
+  that some part holds each inner round (`Held`). It serves the consumer as `CallsOpen` does
   (`forkColl_of_openingPlayed`, `sum_opensDiffer_le_played`): two inner views that differ at round `j` first differ
   at a round `i ≤ j` that both play, since two runs that agree on their messages and coins before a round play it
   alike (`run_replay_plays`).
