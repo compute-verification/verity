@@ -64,7 +64,19 @@ theorem price_le_bound [Nonempty R] (G : Machine K R) (lam : R → ℝ) (n : K �
 theorem stars_nonneg [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K) (lam : R → ℝ)
     (hZ : Z.Wf P) (h : IsCert lam) :
     (∀ hd r, 0 ≤ Z.demand hd r) ∧ 0 ≤ Z.wStar lam ∧ 0 ≤ Z.phiStar lam ∧ 0 ≤ Z.chiStar lam := by
-  sorry
+  obtain ⟨ha, -, -, -, hom, hq, -, hbT, hside, hfold, hfill, -⟩ := hZ
+  obtain ⟨hlam, -⟩ := h
+  have hd : ∀ hd r, 0 ≤ Z.demand hd r := by
+    intro hd r
+    cases hd with
+    | writer t => exact div_nonneg (ha r _) (hom t).le
+    | vector => exact mul_nonneg (div_nonneg hq (by norm_num)) (vecMin_nonneg Z ha r)
+    | table l => exact le_max_of_le_right (mul_nonneg hbT (ha r _))
+    | side u => exact Finset.sum_nonneg fun k _ => mul_nonneg (ha r k) (hside u k)
+  have hp : ∀ d : R → ℝ, (∀ r, 0 ≤ d r) → 0 ≤ demandPrice lam d := fun d hd =>
+    Finset.sum_nonneg fun r _ => mul_nonneg (hlam r) (hd r)
+  exact ⟨hd, Real.iInf_nonneg fun hd' => hp _ (hd hd'), Real.iInf_nonneg fun φ => hp _ (hfold φ),
+    Real.iInf_nonneg fun ψ => hp _ (hfill ψ)⟩
 
 /-- Each head's words dominate its route facet by facet, from (I2)/(I4) `WordsWritten`, (I3) `ScalarRoute` and (I5)
 `SideUnits` (the per-head part of (RD)). -/
