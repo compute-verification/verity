@@ -47,7 +47,7 @@ theorem ratio_honest {Φ B CH fH fmax t : ℝ} (hB : 0 < B) (hCH : 0 < CH) (hfH 
   linarith
 
 /-- `Φ/B ≤ T/(B/f_max)` when `Φ ≤ f_max·T`. -/
-theorem ratio_floor {Φ B fmax t : ℝ} (hB : 0 < B) (hf : 0 < fmax) (h : Φ ≤ fmax * t) :
+theorem ratio_floor {Φ B fmax t : ℝ} (hB : 0 < B) (h : Φ ≤ fmax * t) :
     Φ / B ≤ t / (B / fmax) := by
   rw [div_div_eq_mul_div]
   exact div_le_div_of_nonneg_right (by linarith) hB.le
@@ -91,7 +91,7 @@ theorem floor_of_price {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T
     rw [identity Z Fl lam dbar abar hZ]
     ring
   rw [e, Model.credit]
-  exact ratio_floor hB hf (hΦ.trans (price_le_time Z.G lam M h hf hM))
+  exact ratio_floor hB (hΦ.trans (price_le_time Z.G lam M h hf hM))
 
 /-- The fixed words' part of `Φ`: `fixed ≥ (1 − d̄ − ā)·N_w` and (RD) in price form give `Φ(π) ≤ π·n`. -/
 theorem phi_le_of_fixed {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
@@ -119,12 +119,12 @@ theorem pow_ceil_le {p δ' : ℝ} (hp0 : 0 < p) (hp1 : p < 1) (hδ : 0 < δ') :
 
 /-- Theorem D(a): `price_le_bound`, `price_of_rd`, `identity` and `TimeBound`. -/
 theorem DecompositionD : Accounting.Guarantees.TS.DecompositionD := by
-  intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z H Ω _ accepts M fixed lam dbar abar h hZ hCH hfH hM hRD hLk
+  intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z H Ω _ accepts M fixed lam dbar abar δ h hZ hCH hfH hM hRD hLk
   refine le_trans (prob_mono ?_) hLk
   rintro ω ⟨ha, hlt⟩
   refine ⟨ha, ?_⟩
   by_contra hfix
-  push_neg at hfix
+  push Not at hfix
   refine absurd hlt (not_lt.mpr (honest_of_price Z H lam dbar abar (M ω) h hZ hCH hfH (hM ω) ?_))
   exact phi_le_of_fixed Z lam dbar abar (fixed ω) _ (stars_nonneg Z H.prog lam hZ h).2.1 hfix
     (price_of_rd Z H.prog (M ω).n (fixed ω) lam h hZ (hRD ω ha))
@@ -157,7 +157,7 @@ theorem DIdeal : Accounting.Guarantees.TS.DIdeal := by
         refine prob_mono ?_
         rintro x ⟨ha, hlt⟩
         by_contra hne
-        push_neg at hne
+        push Not at hne
         have hfix := fixed_of_tail P Z.Nw t hS hZ.2.2.1 E hacc x ha hne.1 fun hg =>
           (deficiency_le_rounds P.game p hL x).trans_lt (Nat.lt_ceil.mp (hne.2 hg))
         have key := honest_of_price Z H lam (t / S) 0 (P.run x).run h hZ hCH hfH (hM x)
@@ -188,7 +188,7 @@ theorem DIdealFloor : Accounting.Guarantees.TS.DIdealFloor := by
         refine prob_mono ?_
         rintro x ⟨ha, hlt⟩
         by_contra hne
-        push_neg at hne
+        push Not at hne
         have hfix := fixed_of_tail P Z.Nw t hS hZ.2.2.1 E hacc x ha hne.1 fun hg =>
           (deficiency_le_rounds P.game p hL x).trans_lt (Nat.lt_ceil.mp (hne.2 hg))
         have key := floor_of_price Z Fl lam (t / S) 0 (P.run x).run h hZ (hM x)
@@ -222,7 +222,7 @@ theorem CompilerC : Accounting.Guarantees.TS.CompilerC := by
         refine prob_mono ?_
         rintro x ⟨ha, hlt⟩
         by_contra hne
-        push_neg at hne
+        push Not at hne
         have hfix := fixed_of_tail P Z.Nw (Λ * t) hS hZ.2.2.1 E hacc x ha hne.1 hne.2
         have key := honest_of_price Z H lam (Λ * t / S) 0 (P.run x).run h hZ hCH hfH (hM x)
           (phi_le_of_fixed Z lam (Λ * t / S) 0 _ _ (stars_nonneg Z H.prog lam hZ h).2.1 hfix
@@ -240,7 +240,7 @@ theorem CompilerC : Accounting.Guarantees.TS.CompilerC := by
     _ = δ := by rw [hδ']; ring
 
 /-- A star is at most the price of each route of its menu. -/
-theorem iInf_le_price {ι R : Type} [Finite ι] (lam : R → ℝ) (d : ι → R → ℝ) (i : ι) :
+theorem iInf_le_price {ι R : Type} [Finite ι] [Fintype R] (lam : R → ℝ) (d : ι → R → ℝ) (i : ι) :
     ⨅ j, demandPrice lam (d j) ≤ demandPrice lam (d i) :=
   ciInf_le (Set.finite_range _).bddBelow i
 
@@ -255,7 +255,7 @@ theorem price_of_combination {K R ι : Type} [Fintype K] [Fintype R] [Fintype ι
 
 /-- Corollary D3: `price_of_rd`, `identity` at ♭, `TimeBound`; the signs from `FloorKnown`. -/
 theorem FloorCreditD3 : Accounting.Guarantees.TS.FloorCreditD3 := by
-  intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z H Fl Ω _ accepts M fixed lam dbar abar h hZ hCH hfH hM hRD hLk
+  intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z H Fl Ω _ accepts M fixed lam dbar abar δ h hZ hCH hfH hM hRD hLk
   have hZ' := hZ
   obtain ⟨ha0, hf, hNw, hB, -, -, -, -, -, -, -, hmuF0, -, hmuX0, -⟩ := hZ'
   obtain ⟨-, hw, hφ, hχ⟩ := stars_nonneg Z Fl lam hZ h
@@ -264,12 +264,14 @@ theorem FloorCreditD3 : Accounting.Guarantees.TS.FloorCreditD3 := by
     rintro ω ⟨ha, hlt⟩
     refine ⟨ha, ?_⟩
     by_contra hfix
-    push_neg at hfix
+    push Not at hfix
     refine absurd hlt (not_lt.mpr (floor_of_price Z Fl lam dbar abar (M ω) h hZ (hM ω) ?_))
     exact phi_le_of_fixed Z lam dbar abar (fixed ω) _ hw hfix
       (price_of_rd Z Fl (M ω).n (fixed ω) lam h hZ (hRD ω ha))
   · rintro ⟨⟨N, hN0, hNsum, hNload⟩, ⟨φ, hφload⟩, ⟨ψ, hψload⟩⟩ hns hd ha
-    have hκ : 0 ≤ Z.kappa Fl lam := div_nonneg (mul_nonneg hNw.le hw) hB.le
+    have hκ : 0 ≤ Z.kappa Fl lam := by
+      rw [Model.kappa]
+      exact div_nonneg (mul_nonneg hNw.le hw) hB.le
     have hpw : Z.Nw * Z.wStar lam ≤ Z.G.price lam Fl.nw := by
       rw [price_of_combination Z.G lam Fl.nw N Z.demand hNload, ← hNsum, Finset.sum_mul]
       refine Finset.sum_le_sum fun hd _ => mul_le_mul_of_nonneg_left ?_ (hN0 hd)
