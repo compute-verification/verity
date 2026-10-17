@@ -23,7 +23,8 @@ bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolch
 python tools/verity/lean/cache.py get [PKG...]           main's cached build of each package, every file sha256-checked
 python tools/verity/lean/check.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
 python tools/verity/lean/check.py --update PKG...        write the guarantees' records from the build; commit the diff (a copy of
-                                                  each record goes beside its reports, which a recorded run publishes)
+                                                  each record goes beside its reports, which a recorded run publishes;
+                                                  refused in a tree `research run --on` shipped: use --cwd clone)
 python tools/verity/lean/check.py --update --owner @lane PKG...   the same, with @lane as the owner of each new guarantee
 python tools/verity/lean/check.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/verity/lean/check.py --name-instances PKG...  write each anonymous instance's name, the one Lean gave it, into its
