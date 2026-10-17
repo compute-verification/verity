@@ -24,7 +24,7 @@ escapes' term (`mean_epsSZ_le`). What is left are the hypotheses on the deployed
 
 With the mixture the simulated strategies after `Commit` (`simAtZ`) of live strategies whose roots agree, the first is
 the live verdict bounding the deployed runs that accept on `C`, and the decoder right for the verdict accepting with
-no opening off `C` (`zk_tableBoundθAt_of_live`).
+no opening off `C` (`ZkLiveAt`, which `zk_tableBoundθAt_of_live` reads).
 -/
 
 namespace FlockDeploy.KS
@@ -150,22 +150,15 @@ theorem zk_tableBoundθAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [Dec
   exact key
 
 open Classical in
-/-- **The masked table bound at a statement, from live sessions**: `zk_tableBoundθAt_of_sessions` with the mixture the
-simulated strategies after `Commit` (`simAtZ`) of live strategies `σL` whose roots agree. At each tape and table `C`
-`Ok` allows, what is left is that the live verdict `pL` bounds the deployed runs accepting on `C`, that the decoder is
-right for the verdict accepting with no opening off `C`, and that the escapes' events bound the simulated strategies'
+/-- **The live sessions' bound at a masked table** `T`: `zk_tableBoundθAt_of_live`'s hypothesis on the deployed
+prover, at tables of `Ok` columns. Every prover has escapes at fork rounds `j`, no two one, such that, at each tape and
+table `C`, live strategies `σL` whose roots agree bound the deployed runs accepting on `C` by their verdict `pL`, the
+decoder is right for `pL` accepting with no opening off `C`, and the escapes' events bound the simulated strategies'
 `Adv`s and self-clash. -/
-theorem zk_tableBoundθAt_of_live {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
-    [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
-    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → List 𝔽 → Prop)
-    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) {mPts : ℕ}
-    (T : TabZK 𝔽 mPts) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.m)
-    (ht : T.t = Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st) (hN : T.N ≤ 2 ^ 13)
-    (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
-    (hNp : T.N ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
-    (hnc : ∀ C : Fin (wordLen true x) → List 𝔽, (∀ p, Ok x (C p)) →
-      ¬ Claims.Flock.GoodTable (deployZk rel) (wordLen true) x C → ¬ T.Committed A (Claims.Flock.oracleOf C))
-    (hlive : ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
+def ZkLiveAt {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
+    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
+    (T : TabZK 𝔽 mPts) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
       ∃ (j : Claims.Flock.IZ T.sch.levels.length → Fin ((V true).k x)) (_ : Function.Injective j)
         (ev : Claims.Flock.IZ T.sch.levels.length → Ω → (Fin ((V true).k x) → Coin) →
           (Fin ((V true).k x) → Coin) → Prop)
@@ -204,7 +197,24 @@ theorem zk_tableBoundθAt_of_live {K D Sl : Type} [Field K] [Fintype K] [Decidab
             (∑ u, expect (ind fun outs : List (OutZC 𝔽 D Sl) => SelfClashZ Hs T (outs.getD 0 dfltOutZC))
               (sessAtZ [] [] (tabAfterZC A Hs T (capOf rootB₀ ⟨0, Nat.one_pos⟩)))
               (simAtZ A Hs T _ pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u))) / Fintype.card τ ≤
-              Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ ω s) :
+              Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ ω s
+
+/-- **The masked table bound at a statement, from live sessions**: `zk_tableBoundθAt_of_sessions` with the mixture the
+simulated strategies after `Commit` (`simAtZ`) of live strategies `σL` whose roots agree. At each tape and table `C`
+`Ok` allows, what is left is that the live verdict `pL` bounds the deployed runs accepting on `C`, that the decoder is
+right for the verdict accepting with no opening off `C`, and that the escapes' events bound the simulated strategies'
+`Adv`s and self-clash (`ZkLiveAt`). -/
+theorem zk_tableBoundθAt_of_live {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
+    [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
+    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → List 𝔽 → Prop)
+    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) {mPts : ℕ}
+    (T : TabZK 𝔽 mPts) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.m)
+    (ht : T.t = Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st) (hN : T.N ≤ 2 ^ 13)
+    (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
+    (hNp : T.N ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+    (hnc : ∀ C : Fin (wordLen true x) → List 𝔽, (∀ p, Ok x (C p)) →
+      ¬ Claims.Flock.GoodTable (deployZk rel) (wordLen true) x C → ¬ T.Committed A (Claims.Flock.oracleOf C))
+    (hlive : ZkLiveAt A Hs Ok x T) :
     Claims.Flock.TableBoundθAt sha512 (deployZk rel) (wordLen true) Ok x := by
   refine zk_tableBoundθAt_of_sessions A hA Hs rel Ok h T h25 h35 hsch ht he hS hN hq hδ hNp hnc fun Ω _ _ P => ?_
   obtain ⟨j, hj, ev, ev₁, tied, tied₁, hω⟩ := hlive Ω P

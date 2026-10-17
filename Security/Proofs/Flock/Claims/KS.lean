@@ -21,6 +21,7 @@ import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.KS.PlainKS
 import Proofs.Flock.Claims.KS.MixtureZk
 import Proofs.Flock.Claims.KS.ZkBound
+import Proofs.Flock.Claims.KS.ZkKS
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -91,4 +92,8 @@ cap and then `sessAtZ` with no other game, so a live verdict at one masked table
 and at a masked statement of one table, `TableBoundθAt` follows from a mixture of masked sessions after `Commit` at a
 table `T` at C-Flock ZK's parameters, the escapes `Flock.oldEscZ` at injective fork rounds, and no table that does not
 extract committed to `T` (`ZkBound`: `FlockDeploy.KS.zk_tableBoundθAt_of_sessions`,
-`FlockDeploy.KS.zk_tableBoundθAt_of_live`). -/
+`FlockDeploy.KS.zk_tableBoundθAt_of_live`, at the live sessions' bound `FlockDeploy.KS.ZkLiveAt`). At the deployed
+masked record, `T` is C-Flock ZK's padded table of the statement's table 0 (`ZkKS`: `FlockDeploy.KS.zkTab`,
+`FlockDeploy.KS.zkTab_m1`), so `Flock.KS` follows from one table at every statement some run accepts
+(`FlockDeploy.KS.ZkOne`, which the masked scope's several tables do not give), the live sessions' bound at `zkTab`
+(`FlockDeploy.KS.ZkLive`) and `Extendθ` (`FlockDeploy.KS.zk_KS_of_live`). -/
