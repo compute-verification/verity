@@ -27,12 +27,14 @@ many reads of a node's registered blocks the node made in each window, from rece
    which is its window's last, and starts the next window's chain.  Blocks written after the codec seed (KV pages)
    join the store mid-session: their payloads committed (`append_tree`, `Session.append`) before any pass whose plan
    holds them, at fresh store indices from N up, each encoded under its bound key (`codec.encode(..., bound=True)`);
-   and a block released (`Session.release`) is in no later plan.
+   a block released (`Session.release`) is in no later plan; and an appended block is in no plan of a window L or more
+   after the window it joined (`Params.lifetime`): one kept longer is released and appended again, under a fresh index
+   and so a fresh bound key.
 5. Deadline.  Window t's roots must all arrive by `D_t = b_t + A`, where `b_t` is the verifier's clock when it sent the
    boundary message and `A` the allowance (`Params.deadline_ns`: the message's trip down, the pass in flight, its root's
    reduction and its trip up, `timing.deadline`).  A late root, one out of order, one with no step or a step not above
-   the previous pass's, or a plan that repeats a block rejects the session.  A window with fewer than `min_passes` roots
-   is rejected.
+   the previous pass's, a plan that repeats a block, or one that holds an appended block past L rejects the session.
+   A window with fewer than `min_passes` roots is rejected.
 6. Openings.  Once window t's roots are final (the next window's first root has arrived, or `D_t` has passed), the
    challenger releases the window's openings coin, and the verifier draws `s = samples` distinct receipts uniformly from
    the window's `U_t = Σ_i L_i` with it (`Session.close`).  The prover opens each (`Prover.open`): the block, its receipt
@@ -96,10 +98,15 @@ WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
 DELTA = 2.0 ** -40
 
-FAILURES = ("late", "order", "step", "plan", "append", "release", "few", "malformed", "receipt-path", "codec",
-            "payload-path", "tile", "receipt")
+FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "release", "few", "malformed", "receipt-path",
+            "codec", "payload-path", "tile", "receipt")
 STEP_LIMIT = 1 << 64
 """A step is an integer below this, memory-map/v1's."""
+LIFETIME = 60
+"""L, the lifetime cap, in windows: a block appended after the codec seed is in no plan of a window L or more after the
+window it joined (the window of the first root received after its append), so it leaves the credited store within L
+windows unless the prover appends it again, which gives it a fresh index and so a fresh bound key.  60 windows is an
+hour at the stated window."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,9 +114,9 @@ class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
     deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at 2^-40 by default, 555 a second of the
     stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
-    boundary message leaves sooner after its window's challenge), and the store's codec, receipt kind, whether its
+    boundary message leaves sooner after its window's challenge), the store's codec, receipt kind, whether its
     receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
-    registration's."""
+    registration's, and the lifetime cap L on an appended block, in windows (`LIFETIME`)."""
 
     blocks: int
     deadline_ns: int
@@ -123,9 +130,10 @@ class Params:
     bind: bool = False
     layout: str = receipts.LAYOUT
     rows: int | None = None
+    lifetime: int = LIFETIME
 
     def __post_init__(self) -> None:
-        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns"):
+        for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"{name} is a positive integer")
         if not 0 < self.delta < 1:
@@ -515,8 +523,9 @@ class Record:
     """An accepted session: its registration, its coin commitment's root, its store's `blocks`, every window's record,
     and the receipt kind the registration names, whether its receipts bind z, its codec, its block layout and its sketch
     rows (its digest binds all five; the record repeats them, since what a receipt rests on depends on the kind, `bind`
-    and the rows, μ_rebuild on the codec, and which bytes a credited block is on the layout), and the blocks the
-    session appended after the codec seed and released.  `public` is what acceptance makes public;
+    and the rows, μ_rebuild on the codec, and which bytes a credited block is on the layout), the blocks the
+    session appended after the codec seed and released, and the lifetime cap it held them to (`Params.lifetime`, None
+    in a record no session made).  `public` is what acceptance makes public;
     `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`)."""
 
@@ -532,6 +541,7 @@ class Record:
     rows: int = receipts.SKETCH_ROWS
     appended: int = 0
     released: int = 0
+    lifetime: int | None = None
 
     @property
     def start_ns(self) -> int:
@@ -558,7 +568,7 @@ class Record:
     def public(self) -> dict:
         return {"appended": self.appended, "bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks,
                 "codec": self.codec.name, "codec_params": self.codec.to_json(), "coins": self.coins.hex(),
-                "layout": self.layout, "passes": [w.passes for w in self.windows],
+                "layout": self.layout, "lifetime": self.lifetime, "passes": [w.passes for w in self.windows],
                 "post_seed": [sum(w.post_seed) for w in self.windows], "protocol": PROTOCOL_ID,
                 "receipt": self.receipt, "receipts": [w.receipts for w in self.windows],
                 "registration": self.registration.hex(), "released": self.released, "rows": self.rows,
@@ -619,6 +629,7 @@ class Session:
         self.extent = registration.blocks
         self.released = 0
         self._appends: list[tuple[int, CommitmentDomain, Commitment]] = []
+        self._joined: list[int] = []
         self._gone: list[tuple[int, int]] = []
         self._plan = Plan.whole(registration.blocks)
         self._step = -1
@@ -674,8 +685,10 @@ class Session:
 
     def append(self, root: bytes, count: int) -> int | Verdict:
         """The root of an append's payload tree (`append_tree`), `count` blocks written after the codec seed: they take
-        the store's next fresh indices, from the one returned, and a plan received after this may hold them.  Its
-        rejection, `append`, if it is malformed or would take the store past its codec's `max_blocks`."""
+        the store's next fresh indices, from the one returned, and a plan received after this may hold them, until the
+        lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
+        more after it may hold them.  Its rejection, `append`, if it is malformed or would take the store past its
+        codec's `max_blocks`."""
         self._live()
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
                 or self.extent + count > self.params.codec.max_blocks):
@@ -709,15 +722,22 @@ class Session:
         r = bisect.bisect_right(self._gone, (first, math.inf))
         return (r > 0 and self._gone[r - 1][1] > first) or (r < len(self._gone) and self._gone[r][0] < first + count)
 
+    def _stale_below(self, t: int) -> int:
+        """The store index below which every appended block joined a window `Params.lifetime` or more before `t`:
+        appends join windows in index order, so the stale ones are a prefix of them."""
+        k = bisect.bisect_right(self._joined, t - self.params.lifetime)
+        return self._appends[k][0] if k < len(self._appends) else self.extent
+
     def receive(self, t: int, i: int, root: bytes, runs: Sequence[tuple[int, int]] | None = None, *,
                 change: tuple[Sequence[tuple[int, int]], Sequence[tuple[int, int]]] | None = None,
                 step: int | None = None) -> Verdict | None:
         """Root `i` of window `t`, its pass's plan as the prover sends it, and the step it covers, as they arrive: `runs`
         (None: the registered store in order; a numpy array of rows (first, count): `Plan.from_array`), or `change`,
         the blocks (added, removed) from the session's previous pass's plan (`Plan.changed`; before its first pass, the
-        registered store).  A plan is over the store's blocks so far, registered and appended, and holds none released.
-        `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan is to
-        be the blocks the circuit reads at it, which the plan's proof unit checks against the prover's memory map
+        registered store).  A plan is over the store's blocks so far, registered and appended, and holds none released;
+        its rejection, `lifetime`, if it holds an appended block that joined a window `Params.lifetime` or more before
+        `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
+        is to be the blocks the circuit reads at it, which the plan's proof unit checks against the prover's memory map
         (`PROTOCOL.md` §8); its rejection, `step`, if it is missing or not above.  Returns the rejection they cause, if
         any."""
         self._live()
@@ -750,6 +770,9 @@ class Session:
             return self._fail(t, "plan")
         if self._gone and any(self._released(f, c) for f, c in plan.runs):
             return self._fail(t, "plan")
+        self._joined.extend([t] * (len(self._appends) - len(self._joined)))
+        if (below := self._stale_below(t)) > N and any(f < below and f + c > N for f, c in plan.runs):
+            return self._fail(t, "lifetime")
         self.windows[t].roots.append(root)
         self.windows[t].plans.append(plan)
         self.windows[t].post.append(0 if extent == N else sum(max(0, f + c - max(f, N)) for f, c in plan.runs))
@@ -860,7 +883,8 @@ class Session:
                                     tuple(w.steps)))
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
-                      self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released)
+                      self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
+                      self.params.lifetime)
 
 
 LEDGER_SOURCES = {

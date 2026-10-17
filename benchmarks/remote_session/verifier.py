@@ -9,7 +9,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
    calibration (pass times, the gap, its measured read rate);
 2. the round trip, measured by pings;
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
-   and gaps and of the measured round trip (`--quantile`), and `--jitter-ms`; the coin commitment sent first, then
+   and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
+   (`--lifetime`, windows, sent with the session so the prover re-keys in time); the coin commitment sent first, then
    σ_0, a boundary message every window, each root fed to `Session.receive` stamped with the time its last byte was
    read (with the appends and releases its message carries first, its plan as a change when it carries one, and the
    step its pass covers: `Verifier.root`), each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
@@ -102,8 +103,8 @@ class RealClock:
 
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
-                 jitter_ns: int, clock=None, log=print, checks=None) -> None:
-        self.conn, self.source, self.W, self.T = conn, source, windows, window_ns
+                 jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME) -> None:
+        self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.checks = checks
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
         self.clock = clock or RealClock()
@@ -183,11 +184,12 @@ class Verifier:
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None) -> dict:
         W, reg = self.W, self.registration
         params = audit.Params(reg.blocks, allowance_ns, W, self.samples, self.delta, window_ns=self.T, codec=reg.codec,
-                              receipt=reg.receipt, rows=reg.rows)
+                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime)
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         challenger = coins.Challenger(reg.digest, k, params.coins)
         session = audit.Session(params, reg, None, challenger, clock=self._now, not_before_ns=not_before_ns)
-        self.conn.send({"type": "session", "k": k, "windows": W, "commitment": session.commitment.to_json()})
+        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
+                        "commitment": session.commitment.to_json()})
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -424,6 +426,8 @@ def main() -> int:
     ap.add_argument("--delta-log2", type=float, default=-40.0)
     ap.add_argument("--jitter-ms", type=float, default=2.0)
     ap.add_argument("--sessions", type=int, default=1)
+    ap.add_argument("--lifetime", type=int, default=audit.LIFETIME,
+                    help="L: windows an appended block may stay in plans after the window it joined")
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--check-workers", type=int, default=len(os.sched_getaffinity(0)) - 1,
                     help="processes checking openings (0: one thread of the verifier's own)")
@@ -440,7 +444,7 @@ def main() -> int:
     conn = wire.Conn(sock)
     v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
-                 log=lambda m: print(m, flush=True), checks=checks)
+                 log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime)
     c0 = time.process_time_ns()
     reg, cal = v.register()
     print(f"verifier: registered {reg.blocks} blocks, digest {reg.digest.hex()[:16]}, calibration {json.dumps(cal)}",

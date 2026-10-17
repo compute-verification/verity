@@ -84,7 +84,7 @@ class TickingBackend(prover.CpuBackend):
 
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
-        read_bytes_per_s: float = 1e20, tiers: dict | None = None, **kv):
+        read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME, **kv):
     clock = PassClock()
     a, b = socket.socketpair()
     vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
@@ -102,7 +102,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks)
+                          checks=checks, lifetime=lifetime)
     v.register()
     allowance = v.allowance(v.ping(4))
     out, not_before = [], None
@@ -223,6 +223,21 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     assert not dropping["accepted"] and not pd["accepted"]
     assert dropping["failure"]["failure"] == "receipt" and pd["failure_on_dropped"] is True
     assert pd["kv"]["appended"] > 0 and min(pd["dropped"]) == 16 and dropping["appended"] > 0
+
+
+def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is_rejected(monkeypatch):
+    """Under L = 1 window, sent with the session, every appended page is stale in the window after the one it joined.
+    The honest prover re-keys each before that window's first pass (writes its payload again in its slot, at a fresh
+    index) and is accepted. One that never re-keys is rejected at that pass's root (`lifetime`)."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), (p,) = run("kv:2", samples=8, kv_every=4, kv_pool=8, lifetime=1)
+    assert r["accepted"] and p["accepted"] and r["record"]["public"]["lifetime"] == 1
+    kv = p["kv"]
+    assert kv["lifetime"] == 1 and kv["rekeyed"] > 0 and kv["appended"] == 2 * kv["steps"] + kv["rekeyed"]
+    monkeypatch.setattr(prover.ServingTrace, "stale", lambda self, window: [])
+    (r,), (p,) = run("kv:2", samples=8, kv_every=4, kv_pool=8, lifetime=1)
+    assert not r["accepted"] and not p["accepted"] and p["kv"]["rekeyed"] == 0
+    assert r["failure"]["failure"] == "lifetime" and r["failure"]["t"] == 1
 
 
 def test_a_root_message_is_applied_in_order_and_a_plan_holding_a_released_block_is_rejected():
