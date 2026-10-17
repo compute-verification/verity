@@ -726,6 +726,16 @@ static void sweep() {
   mixu<F, 96, LANE_MIX, NW, 1>();
 }
 
+// The points sweep() and form() leave out (r20261017-081119-98b5 moved IMMA.SP.16864 3.9% at 7 warps a SMSP)
+template <class F, int NW>
+static void sweep2() {
+  mixu<F, 16, LANE_MIX, NW, 4>(); mixu<F, 16, LANE_MIX, NW, 6>(); mixu<F, 24, LANE_MIX, NW, 5>();
+  mixu<F, 88, LANE_MIX, NW, 1>(); mixu<F, 88, LANE_MIX, NW, 2>();
+  if constexpr (NW == 5 || NW == 7) {
+    mixu<F, 16, LANE_MIX, NW>(); mixu<F, 32, LANE_MIX, NW>(); mixu<F, 40, LANE_MIX, NW>();
+  }
+}
+
 template <class F>
 static void form() {
   exact<F>();
@@ -755,6 +765,10 @@ static void form() {
   // the search's extension (decision 76: its margin is the spread once two successive extensions agree within 2%)
   sweep<F, 5>();
   sweep<F, 7>();
+  sweep2<F, 5>();
+  sweep2<F, 6>();
+  sweep2<F, 7>();
+  sweep2<F, 8>();
 }
 
 // A scalar class beside a saturated MMA (2 MMA + 2 lane warps a SMSP, 8 ops a MMA): its coupling with the tensor pipe
