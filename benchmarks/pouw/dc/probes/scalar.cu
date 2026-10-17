@@ -27,6 +27,7 @@ DC_DEV void s_pair(const OpArgs& a) {
   OP_SINK(l.fold() ^ threadIdx.x)
 }
 
+OP_KERNEL(s_mix, 1024) { s_alone<L_MIX>(a); }
 OP_KERNEL(s_iadd, 1024) { s_alone<L_IADD>(a); }
 OP_KERNEL(s_lop3, 1024) { s_alone<L_LOP3>(a); }
 OP_KERNEL(s_imad, 1024) { s_alone<L_IMAD>(a); }
@@ -51,6 +52,7 @@ OP_KERNEL(p_lea_ffma, 1024) { s_pair<L_LEA, L_FFMA>(a); }
 
 #define P(NAME, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 1024, .expect = PAT, .iters = 4096}
 static const OpProbe PROBES[] = {
+    P(s_mix, "I*ADD*=32,FFMA=32"),
     P(s_iadd, "I*ADD*=64"),
     P(s_lop3, "LOP3.LUT=64"),
     P(s_imad, "IMAD=64"),
