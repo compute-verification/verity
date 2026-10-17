@@ -7,8 +7,8 @@ branch that targets it), counts MMA and other instructions an iteration, and tur
 per-SMSP counts over the timed window. On the facet a·#MMA + #other <= cycles (one issue a SMSP-cycle for every other
 instruction, as JI3e_0), each case bounds a <= (cycles - #other) / #MMA; a form's coefficient is the least bound over
 its cases. The form's issue price a slot is a / slots. The tensor theorem's issue form is tight when no form's price a
-slot is below IMMA s8 m16n8k32's (2% noise margin). The fit counts only if the lane op alone issues at >= 0.9 a
-SMSP-cycle; a slower lane op binds the mixed points on its own rate and overstates a.
+slot is below IMMA s8 m16n8k32's (2% noise margin). The fit counts only if the lane op (IADD3 and FFMA alternating)
+alone issues at >= 0.9 a SMSP-cycle; a slower lane op binds the mixed points on its own rate and overstates a.
 
 Writes OUT_DIR/tensor_kinds.json and OUT_DIR/tensor_kinds.md; exits 3 when a gate fails (the case is named).
 """
@@ -23,9 +23,11 @@ from pathlib import Path
 MMA = re.compile(r"^(IMMA|HMMA|QMMA|OMMA|DMMA|BMMA)")
 REF = "imma_s8_m16n8k32"
 NOISE = 0.02
-#: The lane op alone must issue at least this many warp instructions a SMSP-cycle, or the mixed points bind on its own
-#: rate instead of the issue facet and overstate a.
+#: The mixed points' lane op (IADD3 and FFMA alternating) alone must issue at least this many warp instructions a
+#: SMSP-cycle, or the mixed points bind on a pipe's own rate instead of the issue facet and overstate a.
 LANE_MIN = 0.9
+LANES = ("iadd3", "ffma", "iadd3_ffma")
+MIXED_LANE = "iadd3_ffma"
 STRUCTS = {
     "ImmaS8k32": "imma_s8_m16n8k32",
     "ImmaU8S8k32": "imma_u8s8_m16n8k32",
@@ -89,14 +91,15 @@ def loops(body: list[tuple[int, str, str]]) -> list[dict]:
         seg = [o for o in (opcode(x) for _, _, x in body[i : j + 1]) if o != "NOP"]
         mma = [o for o in seg if MMA.match(o)]
         out.append({"mma": len(mma), "mma_ops": sorted(set(mma)), "other": len(seg) - len(mma),
-                    "iadd3": sum(o.startswith("IADD3") for o in seg)})
+                    "iadd3": sum(o.startswith("IADD3") for o in seg), "ffma": sum(o.startswith("FFMA") for o in seg)})
     return out
 
 
 def kernel_key(name: str) -> tuple[str, str, int] | None:
     """(mode, form, R) of a mangled kernel name, e.g. _Z6k_specI11QmmaE4m3k32Li32EEviPjP8BlockClk."""
-    if name == "_Z9k_opaloneiPjP8BlockClk":
-        return "opalone", "iadd3_32", 64
+    m = re.fullmatch(r"_Z9k_opaloneILi(\d)EEviPjP8BlockClk", name)
+    if m:
+        return "opalone", LANES[int(m.group(1))], 64
     m = re.match(r"_Z\d+(k_alone|k_spec|k_mixu)I(\d+)", name)
     if not m:
         return None
@@ -118,18 +121,19 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         if k:
             kl[k] = loops(body)
     by_form: dict[str, list[dict]] = defaultdict(list)
-    lane = None
+    lanes = {}
     for r in [r for r in cases if r["mode"] == "opalone"]:
-        L = kl.get(("opalone", "iadd3_32", 64))
-        if not L or len(L) != 1 or L[0]["mma"] or L[0]["iadd3"] < 64:
-            fails.append(f"opalone: loops {L} (want one loop of >= 64 IADD3)")
+        L = kl.get(("opalone", r["form"], 64))
+        if not L or len(L) != 1 or L[0]["mma"] or L[0]["iadd3"] + L[0]["ffma"] < 64:
+            fails.append(f"opalone {r['form']}: loops {L} (want one loop of >= 64 IADD3 and FFMA)")
             continue
         # 8 warps a SMSP, every instruction of the loop body an iteration
-        lane = 8 * r["iters"] * (L[0]["other"]) / r["cyc_med"]
-        if lane < LANE_MIN:
-            fails.append(f"opalone: the lane op issues {lane:.3f} a SMSP-cycle alone, below {LANE_MIN}")
-    if lane is None and not any("opalone" in f for f in fails):
-        fails.append("opalone: no lane-op-alone row")
+        lanes[r["form"]] = 8 * r["iters"] * L[0]["other"] / r["cyc_med"]
+    if MIXED_LANE not in lanes:
+        if not any(f"opalone {MIXED_LANE}" in f for f in fails):
+            fails.append(f"opalone: no {MIXED_LANE} row")
+    elif lanes[MIXED_LANE] < LANE_MIN:
+        fails.append(f"opalone: the lane op issues {lanes[MIXED_LANE]:.3f} a SMSP-cycle alone, below {LANE_MIN}")
     for r in cases:
         mode, form = r["mode"], r["form"]
         if mode == "opalone":
@@ -150,10 +154,11 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         if ml["mma"] % PTX_MMAS[mode]:
             fails.append(f"{key}: {ml['mma']} SASS MMAs a loop, not a multiple of {PTX_MMAS[mode]}")
         want_iadd3 = {"alone": 0, "spec": 0, "mixu": 8 * R}[mode]
-        if mode == "mixu" and ml["iadd3"] < want_iadd3:
-            fails.append(f"{key}: {ml['iadd3']} IADD3 in the loop, want >= {want_iadd3}")
-        if mode == "spec" and op_loops[0]["iadd3"] < R:
-            fails.append(f"{key}: {op_loops[0]['iadd3']} IADD3 in the lane loop, want >= {R}")
+        if mode == "mixu" and ml["iadd3"] + ml["ffma"] < want_iadd3:
+            fails.append(f"{key}: {ml['iadd3'] + ml['ffma']} IADD3 and FFMA in the loop, want >= {want_iadd3}")
+        if mode == "spec" and op_loops[0]["iadd3"] + op_loops[0]["ffma"] < R:
+            fails.append(f"{key}: {op_loops[0]['iadd3'] + op_loops[0]['ffma']} IADD3 and FFMA in the lane loop, "
+                         f"want >= {R}")
         it = r["iters"]
         if mode == "alone":
             n_mma, n_other = 2 * it * PTX_MMAS[mode], 2 * it * ml["other"]
@@ -185,8 +190,8 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
     for form, s in summary.items():
         s["vs_ref"] = s["a_per_slot"] / ref if ref and s["a_per_slot"] else None
         s["below_ref"] = bool(s["vs_ref"] is not None and s["vs_ref"] < 1 - NOISE)
-    if lane is not None:
-        summary["lane_op_alone"] = {"op": "iadd3_32", "issue_per_smsp_cycle": lane}
+    if lanes:
+        summary["lane_op_alone"] = {k: {"issue_per_smsp_cycle": v} for k, v in lanes.items()}
     return summary, fails
 
 
@@ -200,8 +205,9 @@ def render(summary: dict) -> str:
         lines.append(f"| {form} | {', '.join(s['mma_ops'])} | {s['slots']:.0f} | {f(s['alone_smsp_cycles_per_mma'], 2)} | "
                      f"{f(s['a'])} | {f(s['a_per_slot'], 4)} | {f(s['vs_ref'])}{' **below**' if s['below_ref'] else ''} |")
     if "lane_op_alone" in summary:
-        lines.append(f"\nLane op alone (iadd3_32, 8 warps a SMSP): "
-                     f"{summary['lane_op_alone']['issue_per_smsp_cycle']:.3f} warp instructions a SMSP-cycle.")
+        rates = ", ".join(f"{k} {v['issue_per_smsp_cycle']:.3f}" for k, v in summary["lane_op_alone"].items())
+        lines.append(f"\nLane ops alone, 8 warps a SMSP, warp instructions a SMSP-cycle: {rates} "
+                     f"(mixed points use {MIXED_LANE}).")
     return "\n".join(lines) + "\n"
 
 
