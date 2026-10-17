@@ -235,7 +235,7 @@ def test_tree_window_equals_whole_tree(n_leaves: int, j: int):
     # retain_levels=False: the same window tops on the device, with no host copy and no host sync
     dev_tops = [H.tree_window_top(leaves[k * per_win:(k + 1) * per_win].clone(), n_levels, side.cuda_stream) for k in range(len(tops))]
     assert torch.equal(torch.cat(dev_tops), tops_t)
-    assert H.tree(torch.cat(dev_tops), side.cuda_stream)[1] == ref_root
+    assert H.tree(torch.cat(dev_tops), side.cuda_stream, False, torch.empty(0, dtype=torch.uint8))[1] == ref_root
     assert len(levels) == len(ref_levels)
     for L, (a, b) in enumerate(zip(levels, ref_levels)):
         assert a.shape == b.shape, L

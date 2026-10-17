@@ -1577,7 +1577,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 tops = torch.cat(state["tops"]) if len(state["tops"]) > 1 else state["tops"][0]
             # upper tree over the per-window top nodes (level n_levels-1 of the step) -> root; its levels go to pinned host too
             if state["views"] is None:
-                _upper, mr, tree_ms = H.tree(tops, side.cuda_stream)            # its event sync also orders every window's subtree
+                _upper, mr, tree_ms = H.tree(tops, side.cuda_stream, False, torch.empty(0, dtype=torch.uint8))   # its event sync orders every window's subtree
                 levels = []
             else:
                 tot, n = 0, int(tops.shape[0])
