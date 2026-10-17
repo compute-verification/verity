@@ -23,6 +23,7 @@ import Proofs.Flock.Claims.Complete.Zk.ProverOk
 import Proofs.Flock.Claims.Complete.Zk.RepRounds
 import Proofs.Flock.Claims.Complete.Zk.Lanes
 import Proofs.Flock.Claims.Complete.Zk.Consumed
+import Proofs.Flock.Claims.Complete.Zk.Transfer
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
@@ -45,5 +46,6 @@ the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_go
 running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Count` the sends fitting the rounds (`sendCountZk_goal`);
 `ProverOk` `ProverOkZk` from `Out64` and its rep half `RepRoundsZk` (`proverOkZk`), and `RepRounds` that half
 (`repRoundsZk_goal`); `Lanes` level 0's lane phase from the masked Ligerito returning (`laneConstraints_goal`);
-`Consumed` every recorded round consumed where the rep's steps return (`consumedZk_goal`);
+`Consumed` every recorded round consumed where the rep's steps return (`consumedZk_goal`); `Transfer` a replay
+returning on any rounds that carry the prover's, whatever the hashes (`replayWith_xfer`);
 `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved. -/
