@@ -212,8 +212,9 @@ class SiluAndMulPerBlockQuantRule(InPlaceRule):
                     preconditions=("input is a bf16 value [rows, 2I] = [gate || up]", "out is an unwritten float8_e4m3fn allocation [rows, I]",
                                    "scales is an unwritten f32 allocation [rows, I/G], row-major (is_scale_transposed False)",
                                    "group_size G a power of two dividing I; scale_ub None"),
-                    evidence_domain="structural; numerics: SiluMulFp8BlockQuant_v1 (registry.fp8_moe, model-untested: "
-                                    "tests/properties/glm53_block_fp8_capture_gpu.py is its hardware check)")
+                    evidence_domain="structural; numerics: SiluMulFp8BlockQuant_v1 (registry.fp8_moe, model-untested: not on "
+                                    "vLLM's served sm_90 path; glm53_block_fp8_capture/v3 compared it on the H200 at "
+                                    "VLLM_USE_DEEP_GEMM=0, run r20261014-092222-e32d)")
 
     def targets(self):
         return targets_for("silu_and_mul_per_block_quant")
