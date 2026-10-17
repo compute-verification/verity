@@ -333,7 +333,8 @@ def fixKonst (k : ℕ) (rs : Array (Array ℕ)) : Array (Array ℕ) :=
   Array.map (fun r => Array.map (fun c => if (c == KONST) = true then k else c) r) rs
 
 /-- **`build`, step by step.** An accepted slot passed its checks, and its net is the input rows, the two decoders, the
-product rows, padding to a word, the output rows and the constant, with `KONST` resolved and encoded sparse. -/
+product rows, padding to a word, the output rows and the constant, with `KONST` resolved and encoded sparse, the rows its
+order check (`Net.checkOrder`) passed. -/
 theorem build_spec {name : String} {table : ByteArray} {n lo bits : ℕ} {net : Net} (h : build name table n lo bits = .ok net) :
     2 ≤ lo ∧ lo < n ∧ bits ≤ 32 ∧ n ≤ 128 ∧ table.size = 4 * 2 ^ n ∧
     ∃ (d1 d2 : Builder × Array Form × ℕ) (r3 : Builder),
@@ -351,7 +352,13 @@ theorem build_spec {name : String} {table : ByteArray} {n lo bits : ℕ} {net : 
       net.useful = (outputRows d2.1.a.size d2.2.1.size bits r3).a.size + 1 ∧
       net.constPos = (outputRows d2.1.a.size d2.2.1.size bits r3).a.size ∧
       net.outGroups = #[⟨r3.a.size / 128, 1, #[bits]⟩] ∧
-      net.lookup = some ⟨table, n, lo, bits, d2.1.a.size, d1.2.2⟩ := by
+      net.lookup = some ⟨table, n, lo, bits, d2.1.a.size, d1.2.2⟩ ∧
+      ∃ nm, Net.checkOrder nm 128 (outputRows d2.1.a.size d2.2.1.size bits r3).a.size
+        (fixKonst (outputRows d2.1.a.size d2.2.1.size bits r3).a.size
+          ((outputRows d2.1.a.size d2.2.1.size bits r3).a.push #[(outputRows d2.1.a.size d2.2.1.size bits r3).a.size]))
+        (fixKonst (outputRows d2.1.a.size d2.2.1.size bits r3).a.size
+          ((outputRows d2.1.a.size d2.2.1.size bits r3).b.push #[(outputRows d2.1.a.size d2.2.1.size bits r3).a.size]))
+        = .ok () := by
   simp only [build] at h
   split at h
   · simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
@@ -398,7 +405,7 @@ theorem build_spec {name : String} {table : ByteArray} {n lo bits : ℕ} {net : 
   rw [hB] at h
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
-  exact ⟨d1, d2, r3, rfl, rfl, hshape.1, hshape.2, hpad, hA, hB, by simp [r4, outputRows], rfl, rfl, rfl⟩
+  exact ⟨d1, d2, r3, rfl, rfl, hshape.1, hshape.2, hpad, hA, hB, by simp [r4, outputRows], rfl, rfl, rfl, _, hO⟩
 
 /-! ### The rows of each stage -/
 
@@ -528,8 +535,8 @@ theorem build_computes {name : String} {table : ByteArray} {n lo bits : ℕ} {ne
         z net.constPos = 1 →
         (∀ i < n, z i = 0 ∨ z i = 1) ∧
         ∀ j < bits, z (128 * col + j) = if (rd32 table (4 * bitsVal z (List.range n))).testBit j then 1 else 0 := by
-  obtain ⟨hlo, hln, hb32, hn, hts, d1, d2, r3, hd1, hd2, hs1, hs2, ⟨k, hr3a, hr3b, hr3m⟩, hA, hB, huse, hconst, hout, hlk⟩ :=
-    build_spec hb
+  obtain ⟨hlo, hln, hb32, hn, hts, d1, d2, r3, hd1, hd2, hs1, hs2, ⟨k, hr3a, hr3b, hr3m⟩, hA, hB, huse, hconst, hout, hlk,
+    -⟩ := build_spec hb
   -- the stages append rows to A and B together
   have I0 := inputRows_eq n
   have hI0a : (inputRows n).a.size = 128 := by rw [I0]; simp

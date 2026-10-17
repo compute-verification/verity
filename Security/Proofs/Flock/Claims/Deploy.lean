@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
+import Proofs.Flock.Claims.JsonEq
 import Proofs.Flock.Level3.ArithFacts
 import Flock.With.Deployed
 import Flock.With.SetupEq
@@ -183,11 +184,12 @@ def setupCallsOf (h : ByteArray → ByteArray) (r : Readable.Read) : ℕ :=
     r.I.work r.I.stratified r.I.closure r.publicInputs
 
 /-- **The checks after the verdict**, with no hash: the last message's statement is `x`, the record's draw is the
-statement's, the live session's custody, the verifier's scope check, and a draw-less session's refusal. -/
+statement's whatever its key order (`drawEq`: `JsonEquiv`, objects as finite maps, as the service's dict equality), the
+live session's custody, the verifier's scope check, and a draw-less session's refusal. -/
 def checks (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) : V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
-  Record.check (FlockSoundness.Discharge.Exec.recordDraw f.record == s.read.draw)
+  Record.check (drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw)
     "live: the record's draw is not the statement's"
   custody spec (← liveOf spec f.record) link c₁ mids
   s.read.check
