@@ -363,6 +363,8 @@ class Queue:
         #: how many members at the bottom of `next` a running check covers (`Drive`): `first` goes above them, so no reorder
         #: takes a running check's commit off `next`
         self.hold = 0
+        #: why a ready PR stays off `next` for now, or None (`Driver.warming`: a cold-forcing PR whose circuit-check is pre-warmed)
+        self.warming: Callable[[PR], str | None] | None = None
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
 
@@ -490,7 +492,8 @@ class Queue:
             elif ejected and ejected["head"] == p.head and not self._marked_again(p, ejected):
                 e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push or ready mark re-admits it)"
             elif self.ready(p.number, p.head):
-                pass
+                if self.warming is not None and (why := self.warming(p)):
+                    e.state, e.why = "waiting", why
             elif self.before_cutoff and (when := self.before_cutoff(p.number, p.head)):
                 e.state, e.why = "waiting", (f"ignored: marked before cutoff (its ready mark at {p.head[:8]} is from {when}, "
                                              f"before `marked_after`): re-mark it or close it")

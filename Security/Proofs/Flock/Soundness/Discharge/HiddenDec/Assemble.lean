@@ -94,15 +94,22 @@ theorem tableAtH_ptLocal {n mPts : ℕ} {I : Inputs} (dj : Finset (Fin n) → Le
     (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (S : Finset (Fin n)) : (tableAtH dj x₀ S).T.ptLocal = PT_LOCAL := by
   rcases tableAtH_cases dj x₀ S with ⟨x, e⟩ | e <;> rw [e] <;> rfl
 
-theorem decodesOn_execH : DecodesOnExecH := by
-  intro c n I ht hc ho mPts dj S₀ x₀ Reg L wr hT hwr hdraw
+/-- **The decoder is right at the hidden-output headline's draws**, wherever the outputs are returned
+(`DecodesOnExecH` without `c.outNet = c.unitNet`). -/
+theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
+    (hT : TagsOkH I) (hwr : RecordsLive I dj wr) (hdraw : ∀ ω, DrawOkH I dj mPts (L.draw ω)) :
+    DecodesOn H512 enc512 leaf512 (tablesAtH (Reg := Reg) dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj)
+      (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L := by
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
   refine PlaysCoin.decodesOnOfRuns H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj)
     (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L ?_
   intro ω R o hacc
   obtain ⟨hd, hprf, hrec⟩ := hwr _ R o hacc
   obtain ⟨hSD, hmPts⟩ := hdraw ω
-  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_accepts ht hc ho hh hc1 dj x₀ hacc hd hSD hmPts
+  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsI ht hc hh hc1 dj x₀ hacc hd hSD hmPts
   obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsH hh hrr hl hc1 hacc
   rw [hd] at hst
   obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
@@ -147,5 +154,9 @@ theorem decodesOn_execH : DecodesOnExecH := by
   show (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB) (pend 0, pend 1) _).accepted = true
   rw [hopn, ← hroot]
   exact hv
+
+theorem decodesOn_execH : DecodesOnExecH := by
+  intro c n I ht hc _ mPts dj S₀ x₀ Reg L wr hT hwr hdraw
+  exact decodesOn_execHI ht hc dj x₀ L wr hT hwr hdraw
 
 end FlockSoundness.Discharge.HiddenDec

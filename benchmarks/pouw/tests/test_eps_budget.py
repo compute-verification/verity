@@ -67,10 +67,11 @@ def test_checked_designs_skip_no_product_only_vector_work(name):
 
 
 def test_the_designs_reproduce_skips_figures():
-    """SKIP's calculator before the registry (#2234): A 0.131% at 8B 2K, Ap 0.078% at 8B 2K and Bc 0.145% at 8B 8K by
-    honest time, P in one block and every served output free."""
-    for name, eps, ctx in (("dither-2s", 0.0013098, 2048), ("dither-2s-pv", 0.00077950, 2048),
-                           ("dither-c", 0.0014506, 8192)):
+    """SKIP's calculator before the registry (#2234): A 0.131% at 8B 2K by honest time, P in one block and every served
+    output free; Ap 0.155% and Bc 0.217%, both at 8B 2K, at BC-KERNEL's measured pv costs (0.078% at 8B 2K and 0.145% at
+    8B 8K at the model's)."""
+    for name, eps, ctx in (("dither-2s", 0.0013098, 2048), ("dither-2s-pv", 0.0015473, 2048),
+                           ("dither-c", 0.0021662, 2048)):
         q = E.design_skip(design(name))
         assert (q.model, q.ctx, q.phase) == ("llama-3.1-8b", ctx, "prefill"), name
         assert q.eps_time == pytest.approx(eps, rel=1e-4), name
@@ -89,7 +90,7 @@ def test_the_registry_skip_is_eps_budgets_number():
 
 def test_pv_units_price_as_checked_strip_without_the_scaling_and_the_sink(monkeypatch):
     monkeypatch.setattr(E, "PV_SCALE_OPS", 0.0)
-    for m, c, eps, gamma in (("llama-3.1-8b", 2048, 0.019613, 1.3753), ("llama-3.1-70b", 8192, 0.005081, 1.2920)):
+    for m, c, eps, gamma in (("llama-3.1-8b", 2048, 0.043914, 1.4080), ("llama-3.1-70b", 8192, 0.010158, 1.2985)):
         e, g = E.pv_ts(m, c, 0, sink=False)
         assert eps <= e < eps + 1e-4 and g == pytest.approx(gamma, abs=1e-4)   # the zero-instance routes add < 0.01%
 

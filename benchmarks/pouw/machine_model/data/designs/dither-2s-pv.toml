@@ -15,5 +15,5 @@ qk = "two-sided"
 pv = "pv"
 
 [skip.served]
-eps = 0.000779
-source = "eps_budget.py (benchmarks/pouw, `design_skip`): the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, of the whole-model ε_skip by honest time, every served output free; at 8B 2K prefill, pv's vector work that only the served output needs, P in one block (`pv_ts`, CHECKED-STRIP's tensor–scalar model; its digit and epilogue constants unmeasured; note:20261017T0030Z-draft-checked-strip, note:20261017T0340Z-draft-skip Result 3)"
+eps = 0.00155
+source = "eps_budget.py (benchmarks/pouw, `design_skip`): the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, of the whole-model ε_skip by honest time, every served output free; at 8B 2K prefill, pv's vector work that only the served output needs at BC-KERNEL's measured digit, epilogue and scaling costs, P in one block (`pv_ts`, CHECKED-STRIP's tensor–scalar model; note:20261017T0645Z-draft-bc-kernel). With P·V's served output checked downstream it is 0.053% (8B) / 0.016% (70B) (note:20261017T0320Z-draft-eps1-calc Round 5, note:20261017T0030Z-draft-checked-strip, note:20261017T0340Z-draft-skip Result 3)"

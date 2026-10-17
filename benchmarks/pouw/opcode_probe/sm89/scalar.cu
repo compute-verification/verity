@@ -1,9 +1,9 @@
 // sm_89 (L40S) census probes on probe.cuh (EPS1 ADA, note:20261017T0605Z-draft-eps1-ada): every scalar pipe's rate
 // alone, the shared-memory loads, IMMA beside every scalar class, and the honest step (8 IMMA then the duo fold of
 // their words) at m16n8k32 and m16n8k16. stmatrix (lm.cu's STSM) is sm_90+, so the shared-memory probes are LDS, STS
-// and LDSM only. frontier.cu's mixes don't unroll on sm_89, so this file carries its own. There is no uniform-datapath
-// probe: ptxas 13.0 keeps a warp-uniform add/xor chain in vector registers on sm_89 even when its consumer is uniform
-// (a shared address, a branch, a SHFL lane). Built for sm_89 by run.sh.
+// and LDSM only. frontier.cu's mixes don't unroll on sm_89, so this file carries its own. The uniform datapath is
+// uniform.cu's: ptxas 13.0 keeps a warp-uniform chain there only in a loop with MMAs, and on lanes in these loops,
+// whatever its consumer (a shared address, a branch, a SHFL lane). Built for sm_89 by run.sh.
 //   alone_<x>      16 warps, 16 ops of x an iteration on 8 chains: x's own rate (a census line)
 //   mix_<x>_<Q>    16 warps, every warp 8 IMMA m16n8k32 and Q ops of x an iteration (a joint point)
 //   spec_<x>_w<W>  8 IMMA warps and W x warps that run only while they do (a joint point)

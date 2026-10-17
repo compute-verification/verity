@@ -226,11 +226,12 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
 #: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv (CHECKED-STRIP's
 #: TS_FACETS, note:20261017T0030Z-draft-checked-strip).
 TS_FACETS = ((16.0, 0.0), (8.115, 1.0), (15.030, 0.317), (15.539, 0.172))
-#: pv's vector work a tile (16 queries by 8 channels: 128 cells, 4 a lane) beyond the folds, in warp instructions.
-#: Estimates from instruction counts; no kernel has measured them: one digit of one Ycum entry (a shift or mask, then
-#: the carry; CHECKED-STRIP's PV_DIGIT_OPS), the epilogue's offset and centring (one op a cell; PV_SERVE_OPS), and a
-#: unit's I2F and FFMA into the float output (two ops a cell), which every block of P adds once.
-PV_DIGIT_OPS, PV_SERVE_OPS, PV_SCALE_OPS = 2.0, 4.0, 8.0
+#: pv's vector work a tile (16 queries by 8 channels: 128 cells, 4 a lane) beyond the folds, as BC-KERNEL measured it
+#: (exact ncu counts, note:20261017T0645Z-draft-bc-kernel): one digit of one Ycum entry, 7 per-thread instructions
+#: (cpv.cu's vdig without z's hashing; checked_strip's PV_DIGIT_OPS), the epilogue's 2.8 a cell over a dequantizing one
+#: (pv_l7qs − pv_plain; PV_SERVE_OPS, warp instructions a tile), and a unit's I2F and FMULs into the float output, 3 a
+#: cell (c_l7qs_v − c_l7qs, less its epilogue's 2.2), which every block of P adds once.
+PV_DIGIT_OPS, PV_SERVE_OPS, PV_SCALE_OPS = 7.0, 11.2, 12.0
 #: A checked leaf's vector work that only the served output needs, in the TS model at the duo fold, as a fraction of its
 #: component's own time, by leaf, model and component: co32c's recombination with O committed (linears, lm_head) and
 #: cohalf with every zero-instance route at X_BITSLICED (Q Kᵀ, k = 128), from checked_strip.py @007ee9c54
