@@ -8,6 +8,7 @@ Decoding the Program's descriptor and extracting each Call's graph (and so decid
 is the evaluator's input as extraction will produce it.
 -/
 import Flock.Partition
+import Flock.Steps
 
 namespace Flock.Qword
 
@@ -205,7 +206,9 @@ private def graphOf (j : Json) : V CallGraph := do
   let (g, _, _, _) ← checkCutOfJson (Json.mkObj [("graph", j), ("owner", Json.arr #[])])
   return g
 
-partial def defOfJson (j : Json) : V Def := do
+/-- A Definition from its JSON, nested at most `fuel` deep. -/
+def defOfJsonIn (fuel : Nat) (j : Json) : V Def := do
+  let fuel + 1 := fuel | throw "evaluate: definitions nest deeper than this verifier follows"
   match j.getObjVal? "prim", j.getObjVal? "separable", j.getObjVal? "flat" with
   | .ok p, _, _ =>
     pure (.prim ((p.getObjValAs? Bool "params").toOption.getD false) ((p.getObjValAs? Bool "wiring").toOption.getD false))
@@ -214,8 +217,10 @@ partial def defOfJson (j : Json) : V Def := do
       let .ok a := n.getArr? | throw "evaluate: a separable node is not [def, members]"
       if a.size != 2 then throw "evaluate: a separable node is not [def, members]"
       let .ok m := a[1]!.getNat? | throw "evaluate: members is not a natural number"
-      pure (← defOfJson a[0]!, m)))
+      pure (← defOfJsonIn fuel a[0]!, m)))
   | _, _, .ok g => pure (.flat (← graphOf g))
   | _, _, _ => throw "evaluate: a definition is not prim, separable or flat"
+
+def defOfJson (j : Json) : V Def := defOfJsonIn Steps.FUEL j
 
 end Flock.Qword

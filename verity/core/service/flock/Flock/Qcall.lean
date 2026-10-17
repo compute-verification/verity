@@ -177,13 +177,14 @@ inductive Piece where
   | gate
 
 /-- Step 4 (`call_units`), from a piece down, depth first in layout order: a piece without computing gates is no unit, one with
-at most X bits out is one unit, any other piece's children are the pieces. -/
-partial def cut (P : Prog) (G : Gates) (X : Nat) (lo hi : Nat) (path : Array (Array Nat)) (how : Piece) (acc : Array Unit) :
-    Array Unit :=
-  if !G.anyComputing lo hi then acc
-  else if G.wOut lo hi ≤ X then acc.push ⟨lo, hi, path⟩
+at most X bits out is one unit, any other piece's children are the pieces. Pieces nest at most `fuel` deep. -/
+def cutIn (fuel : Nat) (P : Prog) (G : Gates) (X : Nat) (lo hi : Nat) (path : Array (Array Nat)) (how : Piece)
+    (acc : Array Unit) : V (Array Unit) := do
+  let n + 1 := fuel | throw "pieces nest deeper than this verifier follows"
+  if !G.anyComputing lo hi then return acc
+  else if G.wOut lo hi ≤ X then return acc.push ⟨lo, hi, path⟩
   else match how with
-    | .act d off => Id.run do
+    | .act d off => do
       let body := (P.defs[d]!).body
       let mut acc := acc
       for k in [0:body.nodes.size] do
@@ -194,18 +195,22 @@ partial def cut (P : Prog) (G : Gates) (X : Nat) (lo hi : Nat) (path : Array (Ar
           | .prim => .gate
           | .call => .act node.fn a
           | _ => .members d a k
-        acc := cut P G X a b (path.push #[k]) kid acc
+        acc ← cutIn n P G X a b (path.push #[k]) kid acc
       return acc
-    | .members d off k => Id.run do
+    | .members d off k => do
       let node := (P.defs[d]!).body.nodes[k]!
       let callee := P.defs[node.fn]!
       let g := callee.gates
       let mut acc := acc
       for m in [0:node.n] do
         let a := off + m * g
-        acc := cut P G X a (a + g) (path.pop.push #[k, m]) (if callee.prim then .gate else .act node.fn a) acc
+        acc ← cutIn n P G X a (a + g) (path.pop.push #[k, m]) (if callee.prim then .gate else .act node.fn a) acc
       return acc
-    | .gate => acc
+    | .gate => return acc
+
+def cut (P : Prog) (G : Gates) (X : Nat) (lo hi : Nat) (path : Array (Array Nat)) (how : Piece) (acc : Array Unit) :
+    V (Array Unit) :=
+  cutIn Steps.FUEL P G X lo hi path how acc
 
 /-- One Definition's cut: its gates, units and the unit of every computing gate (compact order). -/
 structure DefCut where
@@ -222,7 +227,7 @@ def evaluateDef (P : Prog) (X : Nat) (d : Nat) : V DefCut := do
   if let some j := G.widest X then
     inapplicable (Json.mkObj [("definition", Json.str defn.key), ("gate", Lean.toJson j), ("primitive", Json.str G.prim[j]!),
       ("width", Lean.toJson G.width[j]!), ("X", Lean.toJson X), ("why", Json.str "gate-too-wide")])
-  let units := cut P G X 0 G.n #[] (if defn.prim then .gate else .act d 0) #[]
+  let units ← cut P G X 0 G.n #[] (if defn.prim then .gate else .act d 0) #[]
   let mut owner : Array Int := Array.replicate G.nc (-1)
   for u in [0:units.size] do
     for g in [units[u]!.lo:units[u]!.hi] do

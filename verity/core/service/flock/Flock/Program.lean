@@ -14,6 +14,7 @@ import Lean.Data.Json
 import Std.Data.HashMap
 import Flock.Canon
 import Flock.Hash
+import Flock.Steps
 
 namespace Flock.Program
 
@@ -226,8 +227,11 @@ def Seq.toArray (s : Seq) : Array Ref :=
 
 /-- A sequence's JSON parts, checked as `codec._checked_refs` checks them: every reference names a leaf of a parameter of the
 body (`p`) or of a node's declared output (`n`); a strided sequence by the extremes of its pattern. `leaves p i` is that
-collection's leaf count. An `alias` stands for an earlier node argument's sequence (`args k a`). -/
-partial def parseParts (j : Json) (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq) : V (Array Part) := do
+collection's leaf count. An `alias` stands for an earlier node argument's sequence (`args k a`). Concatenations nest at most
+`fuel` deep. -/
+def parsePartsIn (fuel : Nat) (j : Json) (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq) :
+    V (Array Part) := do
+  let n + 1 := fuel | throw "references nest deeper than this verifier follows"
   let noLeaf := s!"references {j.compress} name no leaf of a parameter or a node"
   let space := fun (s : Json) => match s with
     | .str "p" => some true
@@ -249,7 +253,7 @@ partial def parseParts (j : Json) (leaves : Bool → Nat → Option Nat) (args :
     | _ => throw s!"alias {a.compress}: aliases name an argument of an earlier node"
   if let .ok c := j.getObjVal? "concat" then
     let .arr ps := c | throw "a concat is a list"
-    return (← ps.mapM (parseParts · leaves args)).foldl (· ++ ·) #[]
+    return (← ps.mapM (parsePartsIn n · leaves args)).foldl (· ++ ·) #[]
   if let .ok a := j.getObjVal? "affine" then
     let .arr #[s, i, b, c] := a | throw s!"affine {a.compress}: not [space, index, base, count]"
     let (some b, some c) := (intJ? b, natJ? c) | throw noLeaf
@@ -279,6 +283,9 @@ partial def parseParts (j : Json) (leaves : Bool → Nat → Option Nat) (args :
       | _ => throw s!"references {j.compress} name no leaf of a parameter or a node"
     return #[.explicit rs]
   throw s!"references {j.compress}: not affine, strided, explicit, concat or alias"
+
+def parseParts (j : Json) (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq) : V (Array Part) :=
+  parsePartsIn Steps.FUEL j leaves args
 
 /-! ### §4 The descriptor -/
 
@@ -498,8 +505,10 @@ private def nodeKeys : Form → List String
 
 mutual
 
-/-- Decode definition `fid` (core's `decode_program.get`), and first every definition it depends on. -/
-private partial def getDef (desc : Desc) (fid : String) : D Nat := do
+/-- Decode definition `fid` (core's `decode_program.get`), and first every definition it depends on, through at most `fuel`
+nested definitions and static values. -/
+private def getDef (fuel : Nat) (desc : Desc) (fid : String) : D Nat := do
+  let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
   if let some i := (← get).index[fid]? then return i
   if (← get).busy.contains fid then throw s!"definition '{fid}' depends on itself"
   let some d := desc.ddefs[fid]? | throw s!"KeyError: no definition {fid}"
@@ -515,12 +524,13 @@ private partial def getDef (desc : Desc) (fid : String) : D Nat := do
         if !(params.isEmpty && w == iw) then throw s!"primitive {fid} signature differs from the registry"
       pure ({ key := fid, id, prim := true, params, ret, binding := input.map (·.1), gates := 1,
               paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := 1 } : Defn)
-    else composite desc fid d form id
+    else composite n desc fid d form id
   let s ← get
   set { s with defs := s.defs.push defn, index := s.index.insert fid s.defs.size, busy := s.busy.erase fid }
   return s.defs.size
 
-private partial def composite (desc : Desc) (fid : String) (d : Json) (form id : String) : D Defn := do
+private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form id : String) : D Defn := do
+  let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
   let parts := id.splitOn "_v"
   let name := "_v".intercalate parts.dropLast
   let ver := parts.getLast!
@@ -540,7 +550,7 @@ private partial def composite (desc : Desc) (fid : String) (d : Json) (form id :
   let key := id ++ (if statics.isEmpty then "" else "{" ++ ",".intercalate rec_.toList ++ "}")
   modify fun s => { s with busy := s.busy.insert fid }
   if key != fid then throw s!"definition '{fid}': a composite is keyed by its id and binding record, '{key}'"
-  for (_, v) in bkv.toArray do staticFns desc v
+  for (_, v) in bkv.toArray do staticFns n desc v
   let b := (d.getObjVal? "body").toOption.getD Json.null
   let params ← liftV (paramsOf ((b.getObjVal? "params").toOption.getD Json.null) s!"definition '{fid}'")
   let retType ← liftV (Ty.ofJson ((b.getObjVal? "ret_type").toOption.getD Json.null))
@@ -554,7 +564,7 @@ private partial def composite (desc : Desc) (fid : String) (d : Json) (form id :
     let pre := s!"definition '{fid}' node {k}"
     let fname ← liftV (at_ desc.callees ((nd.getObjVal? "fn").toOption.getD Json.null) "callees")
     let .str fname := fname | throw s!"KeyError: no definition {fname.compress}"
-    let ci ← getDef desc fname
+    let ci ← getDef n desc fname
     let callee := (← get).defs[ci]!
     let fstr := (nd.getObjValAs? String "form").toOption.getD ""
     let keys : Array String := match nd with
@@ -613,18 +623,19 @@ private partial def composite (desc : Desc) (fid : String) (d : Json) (form id :
            gates := offsets.back!, paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := retType.leaves }
 
 /-- The functions a static value names (`static_of`): `{"fn": id}` decodes `id`. -/
-private partial def staticFns (desc : Desc) (v : Json) : D Unit := do
+private def staticFns (fuel : Nat) (desc : Desc) (v : Json) : D Unit := do
+  let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
   match v with
   | .obj _ =>
     if let .ok f := v.getObjVal? "fn" then
       let .str f := f | throw s!"KeyError: no definition {f.compress}"
-      discard (getDef desc f)
+      discard (getDef n desc f)
     else if let .ok f := v.getObjVal? "f64" then
       let .str _ := f | throw s!"a float static is written as its hex string, not {f.compress}"
     else if let .ok d := v.getObjVal? "dict" then
       let .obj kvs := d | throw s!"a dict static is an object, not {d.compress}"
-      for (_, x) in kvs.toArray do staticFns desc x
-  | .arr a => for x in a do staticFns desc x
+      for (_, x) in kvs.toArray do staticFns n desc x
+  | .arr a => for x in a do staticFns n desc x
   | _ => pure ()
 
 end
@@ -660,9 +671,9 @@ def decode (bytes : ByteArray) : V Prog := do
   let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
   let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
   let go : D Nat := do
-    let r ← getDef desc rootId
+    let r ← getDef Steps.FUEL desc rootId
     for f in recordFunctionIds programFn do
-      if desc.ddefs.contains f then discard (getDef desc f)
+      if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
     return r
   let (root, st) ← go.run {}
   let rd := st.defs[root]!
@@ -707,9 +718,9 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
   let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
   let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
   let go : D Nat := do
-    let r ← getDef desc rootId
+    let r ← getDef Steps.FUEL desc rootId
     for f in recordFunctionIds programFn do
-      if desc.ddefs.contains f then discard (getDef desc f)
+      if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
     return r
   let (root, st) ← (go.run {} : V _)
   let rd := st.defs[root]!
@@ -746,42 +757,46 @@ def Scope.off : Scope → Nat
   | none => a.seq.get k
   | some (d, L) => a.seq.get ((k / L * d + m) * L + k % L)
 
-/-- `layout.resolve`: the gate a body-scoped reference denotes in an activation, up through parameters and down through node
-outputs until a primitive. -/
-partial def resolve (P : Prog) : Scope → Ref → V Nat
-  | .top _ _ none, ⟨true, _, _⟩ => throw "the root has no parameters (prescribed inputs are Input gates)"
-  | .top _ _ (some starts), ⟨true, i, j⟩ => match starts[i]? with
-    | some s => pure (s + j)
+/-- One step of `layout.resolve`: the gate a body-scoped reference denotes in an activation when it is a prescribed input's or
+a primitive's, else the reference it denotes one activation up (through a parameter) or down (through a node's output). -/
+def resolveStep (P : Prog) : Scope × Ref → V (Nat ⊕ (Scope × Ref))
+  | (.top _ _ none, ⟨true, _, _⟩) => throw "the root has no parameters (prescribed inputs are Input gates)"
+  | (.top _ _ (some starts), ⟨true, i, j⟩) => match starts[i]? with
+    | some s => pure (.inl (s + j))
     | none => throw s!"parameter {i} of the Call does not exist"
-  | .child parent d off k m, ⟨true, i, j⟩ => do
+  | (.child parent d off k m, ⟨true, i, j⟩) => do
     let node := (P.defs[parent.d]!).body.nodes[k]!
     let a := node.args[i]!
     match node.form with
     | .scan =>
       if i == 0 then
-        if m == 0 then resolve P parent (a.seq.get j)
-        else resolve P (.child parent d (off - (P.defs[d]!).gates) k (m - 1)) ((P.defs[d]!).body.ret.get j)
-      else resolve P parent (if i ≤ node.nxs then a.seq.get (m * (a.dims.map (·.2)).getD 0 + j) else a.seq.get j)
-    | .batch => resolve P parent (a.memberRef m j)
-    | _ => resolve P parent (a.seq.get j)
-  | sc, ⟨false, k, j⟩ => do
+        if m == 0 then pure (.inr (parent, a.seq.get j))
+        else pure (.inr (.child parent d (off - (P.defs[d]!).gates) k (m - 1), (P.defs[d]!).body.ret.get j))
+      else pure (.inr (parent, if i ≤ node.nxs then a.seq.get (m * (a.dims.map (·.2)).getD 0 + j) else a.seq.get j))
+    | .batch => pure (.inr (parent, a.memberRef m j))
+    | _ => pure (.inr (parent, a.seq.get j))
+  | (sc, ⟨false, k, j⟩) => do
     let body := (P.defs[sc.d]!).body
     let node := body.nodes[k]!
     let o := sc.off + body.offsets[k]!
     let callee := P.defs[node.fn]!
     match node.form with
-    | .prim => pure o
-    | .call => resolve P (.child sc node.fn o k 0) (callee.body.ret.get j)
+    | .prim => pure (.inl o)
+    | .call => pure (.inr (.child sc node.fn o k 0, callee.body.ret.get j))
     | .batch =>
       let L := callee.outLeaves
-      if callee.prim then pure (o + j / L)
-      else resolve P (.child sc node.fn (o + j / L * callee.gates) k (j / L)) (callee.body.ret.get (j % L))
+      if callee.prim then pure (.inl (o + j / L))
+      else pure (.inr (.child sc node.fn (o + j / L * callee.gates) k (j / L), callee.body.ret.get (j % L)))
     | .scan =>
       if node.n == 0 then throw s!"a scan with no iterations has no output to read"
       let .tuple #[carry, y] := callee.ret | throw "a scan step returns (carry, y)"
       let c := carry.leaves
       let (m, jj) := if j < c then (node.n - 1, j) else ((j - c) / y.leaves, c + (j - c) % y.leaves)
-      resolve P (.child sc node.fn (o + m * callee.gates) k m) (callee.body.ret.get jj)
+      pure (.inr (.child sc node.fn (o + m * callee.gates) k m, callee.body.ret.get jj))
+
+/-- `layout.resolve`: the gate a body-scoped reference denotes in an activation, up through parameters and down through node
+outputs until a primitive. -/
+def resolve (P : Prog) (sc : Scope) (r : Ref) : V Nat := Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
 
 /-- `partition_object.order_violation`: the first reference naming neither a parameter of its body nor an earlier node of it
 (a body's `ret` may name any node), over every body the root reaches, root first and callees in node order, each
@@ -836,7 +851,9 @@ def operands (P : Prog) (sc : Scope) (node : Node) (m : Nat) : V (Array Nat) := 
     for t in [0:cnt] do ops := ops.push (← resolve P sc (if node.form == .batch then a.memberRef m t else a.seq.get t))
   return ops
 
-private partial def gateIn (P : Prog) (g : Nat) (sc : Scope) : V (Nat × Array Nat × Scope) := do
+/-- One step of locating gate `g` from an activation: its primitive, operands and activation when the node holding it is a
+primitive's, else the activation of the node's member that holds it. -/
+def gateStep (P : Prog) (g : Nat) (sc : Scope) : V ((Nat × Array Nat × Scope) ⊕ Scope) := do
   let body := (P.defs[sc.d]!).body
   let rel := g - sc.off
   let some k := (Array.range body.nodes.size).find? fun k => body.offsets[k]! ≤ rel && rel < body.offsets[k + 1]!
@@ -844,12 +861,12 @@ private partial def gateIn (P : Prog) (g : Nat) (sc : Scope) : V (Nat × Array N
   let node := body.nodes[k]!
   let callee := P.defs[node.fn]!
   let m := if node.form == .prim || node.form == .call then 0 else (rel - body.offsets[k]!) / callee.gates
-  if callee.prim then return (node.fn, ← operands P sc node m, sc)
-  gateIn P g (P.child sc k m)
+  if callee.prim then return .inl (node.fn, ← operands P sc node m, sc)
+  return .inr (P.child sc k m)
 
 /-- A gate's primitive and operands (`layout.Circuit.gate`): located through the offsets along the call hierarchy. -/
 def Prog.gate (P : Prog) (g : Nat) : V (Nat × Array Nat × Scope) := do
   if g ≥ (P.defs[P.root]!).gates then throw s!"gate {g} outside the circuit"
-  gateIn P g P.rootScope
+  Steps.run "gate location" (gateStep P g) Steps.FUEL P.rootScope
 
 end Flock.Program
