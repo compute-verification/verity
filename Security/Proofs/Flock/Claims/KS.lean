@@ -67,6 +67,7 @@ import Proofs.Flock.Claims.KS.ZkLiveW
 import Proofs.Flock.Claims.KS.JointR
 import Proofs.Flock.Claims.KS.ZkXferW
 import Proofs.Flock.Claims.KS.ZkTrimW
+import Proofs.Flock.Claims.KS.ZkSimW
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -325,4 +326,10 @@ column at a position of its word (`FlockDeploy.KS.okThroughJ_nil`), so with no `
 (`FlockDeploy.KS.zk_tableBoundJR_trim`): `Flock.KS` at the trimmed masked record follows from every table's bound
 counted per round at full-width columns (`FlockDeploy.KS.zk_KS_trim_of_tableBoundJR`), so from `ZkLiveAccWJ` or
 `ZkXferWJ` where some run accepts alone (`FlockDeploy.KS.zk_KS_trim_of_liveAccWJ`,
-`FlockDeploy.KS.zk_KS_trim_of_xferWJ`). -/
+`FlockDeploy.KS.zk_KS_trim_of_xferWJ`). With an accepting run or fork with its collision as the events, `ZkXferWJ`
+holds from a live prover for each prover, with a finite tape and coins of uniform law, that sends its roots, simulates
+its accepting runs, whose self-clashes give its accepting runs with a collision and whose fork bounds hold (`ZkSimW`:
+`FlockDeploy.KS.zkRoot`, `FlockDeploy.KS.zkRoot_of_first`, `FlockDeploy.KS.ZkClashRun`, `FlockDeploy.KS.ZkSimWJ`,
+`FlockDeploy.KS.zkXferWJ_of_simWJ`), with no premise on the record's draw, so `Flock.KS` at the trimmed masked record
+and table 0's bound counted per round follow from it (`FlockDeploy.KS.zk_KS_trim_of_simWJ`,
+`FlockDeploy.KS.zk_tableBoundθAccAtR_of_simWJ`). -/
