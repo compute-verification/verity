@@ -34,7 +34,7 @@ Five Props say what the models must satisfy; `Claims.Hm96Hiding` stays the one n
 
 `n_L` bounding the pre-final view's leaves and `n_B` each coin vector's hidden leaves (`OnModel.size`) or pre-final leaves
 (`OffModel.size`). `Flock.zk_deployZk_of_models` is `Claims.Flock.ZK` at the masked record `zkOf`, whose reference prover
-is `honestPZk`, where `G`'s messages are `honestPZk`'s (`Proto.Honest`).
+is `ZkTables.honestP`, where `G`'s messages are `ZkTables.honestP`'s (`Proto.Honest`).
 -/
 
 namespace Claims.ZKMal
@@ -428,8 +428,8 @@ theorem Flock.zkAt_deployZk_of_models (H : Msg → Msg)
 
 /-- **Flock's zero knowledge against a malicious verifier at the masked record of a committed-coin protocol**:
 `Claims.Flock.ZK` at `zkOf rel G coinOf tapeOf (G.simulatorE t (t·3^t))`, the record whose reference prover is
-`honestPZk` behind `G`'s `Hello` and opening checks, at `ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`, under
-`Claims.Hm96Hiding`, the five named hypotheses and `Proto.Honest` (`G`'s messages are `honestPZk`'s). -/
+`ZkTables.honestP` behind `G`'s `Hello` and opening checks, at `ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`, under
+`Claims.Hm96Hiding`, the five named hypotheses and `Proto.Honest` (`G`'s messages are `ZkTables.honestP`'s). -/
 theorem Flock.zk_deployZk_of_models (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) (t : ℕ) (ht : 0 < t)
     (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B]
@@ -440,7 +440,7 @@ theorem Flock.zk_deployZk_of_models (H : Msg → Msg)
     (hL : G.MsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) My cs Mp Mc) (hS : G.SimLink H Mc)
     (hN : G.NonDegenerate Mc) (hI : G.InnerHolds (Flock.R (FlockDeploy.deployZk rel).parse) Mc) (hC : G.CoinCheck)
     (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk)
-    (hG : G.Honest H FlockComplete.honestPZk coinOf tapeOf) :
+    (hG : G.Honest H FlockComplete.ZkTables.honestP coinOf tapeOf) :
     Claims.Flock.ZK H (zkOf rel G coinOf tapeOf (G.simulatorE t (t * 3 ^ t)))
       (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
   zk_zkOf rel G coinOf tapeOf _ (fun _ => by positivity) (deployZk_proto_k rel G hK) hG
