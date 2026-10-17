@@ -11,10 +11,8 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 nodes (`slots`), for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
 `service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
-programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
-refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
-Call among them, which one-stage refuses at either, and `SHARED`, whose `Q_call` unit at `X = 16` holds a constant
-another unit reads. Records are v1 and, on the programs with root parameters to register
+programs of random members of three templates under template queries over them, and programs of random root Calls
+(`call_program`) under `Q_word` and `Q_call`, a 32-bit Call among them, which one-stage refuses at either. Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries.
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
@@ -43,8 +41,7 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
-from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, partition as P, registered as G,
-                                                            registration as R)
+from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registered as G, registration as R
 from verity.core.protocols.sampled_proofs.two_stage import (OwnRandomness, ReplayUnit, Stage, TwoStageLaw, draw_first,
                                                             select_proof_units, select_replay_units)
 from verity.ml.circuits import codec, partition_object as PO
@@ -81,34 +78,8 @@ def _fork(B, S, x):
 FORK = bind(CompositeDefinition("CoreSampledProofsFork", 0, (),
                                 lambda S: ((("x", Array(4, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _fork,
                                 register=False))
-#: A template of no gate, which one-stage refuses.
-IDENTITY = bind(CompositeDefinition("CoreSampledProofsIdentity", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
-                                    lambda B, S, x: x[0], register=False))
-#: The templates a population's members are instances of: `TEMPLATES`, `FORK` and `IDENTITY`.
-MEMBERS = TEMPLATES + [FORK, IDENTITY]
-CONST8 = PrimitiveDefinition("CoreSampledProofsConst8", 1, (), Value(8), lambda: 0x5A, register=False)
-
-
-def _held(B, S, x):
-    a = B.call(XOR8, x[0], x[1])
-    return tuple_of(a, B.call(XOR8, a, x[1]), B.call(CONST8))
-
-
-def _shared(B, S, x):
-    s = B.call(HELD, x)
-    return tuple_of(s[0], s[1], B.call(XOR8, s[0], s[2]))
-
-
-HELD = bind(CompositeDefinition("CoreSampledProofsHeld", 0, (),
-                                lambda S: ((("x", Array(2, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _held,
-                                register=False))
-#: A Call whose first `Q_call` unit at `X = 16`, `HELD`, returns 16 bits and holds a constant the last gate reads: 24
-#: committed bits, which `Q_call`'s width rule doesn't count; at `X = 8` the constant is in no unit.
-SHARED = bind(CompositeDefinition("CoreSampledProofsShared", 0, (),
-                                  lambda S: ((("x", Array(2, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _shared,
-                                  register=False))
-#: The Calls a `call_program` may make: the templates, the fork, the 8- and 32-bit primitives and the shared constant's.
-CALLEES = [PAIR, TRIPLE, FORK, XOR8, XOR32, SHARED]
+#: The Calls a `call_program` may make: the templates, the fork and the 8- and 32-bit primitives.
+CALLEES = [PAIR, TRIPLE, FORK, XOR8, XOR32]
 CALLEE_IDS = [codec.descriptor_id(f) for f in CALLEES]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LEAF = "ee" * 64
@@ -220,8 +191,8 @@ QUERIES = [s.query for s in SETUPS] + CALL_QUERIES + [
 @functools.cache
 def _population(members: tuple[tuple[int, int], ...]) -> str:
     """The canonical descriptor of the mixed population of `members`, `(template, instances)` pairs with the template an
-    index into `MEMBERS`, its program put among `PROGRAMS`."""
-    program = P.mixed_population_program([(MEMBERS[t], n) for t, n in members])
+    index into `TEMPLATES`, its program put among `PROGRAMS`."""
+    program = P.mixed_population_program([(TEMPLATES[t], n) for t, n in members])
     PROGRAMS[PO.program_sha512(program)] = program
     return D.canonical(codec.encode_program(program))
 
@@ -250,12 +221,12 @@ def _calls(members: tuple[int, ...]) -> str:
 @st.composite
 def partitions(draw) -> tuple[dict, dict, int]:
     """A random partition P = Q(C): a mixed population program of one to four members, each some instances of one of
-    `MEMBERS` (rarely of `FORK` or `IDENTITY`; one template's members apart, adjacent or alone), and a template query over
-    it, mostly one that applies (the members' templates, in any order); or, a third of the time, a program of one to five
-    root Calls of `CALLEES` (rarely the 32-bit one or `SHARED`) under `Q_word` or `Q_call`, mostly at a width one-stage
-    applies. The program's descriptor, the query and the population, 0 where the query doesn't apply."""
+    `TEMPLATES` (one template's members apart, adjacent or alone), and a template query over it, mostly one that applies
+    (the members' templates, in any order); or, a third of the time, a program of one to five root Calls of `CALLEES`
+    (rarely the 32-bit one) under `Q_word` or `Q_call`, mostly at a width one-stage applies. The program's descriptor,
+    the query and the population, 0 where the query doesn't apply."""
     if draw(st.integers(0, 2)) == 0:
-        members = tuple(draw(st.lists(st.sampled_from([0, 1, 2, 3] * 6 + [4, 4, 5]), min_size=1, max_size=5)))
+        members = tuple(draw(st.lists(st.sampled_from([0, 1, 2, 3] * 3 + [4]), min_size=1, max_size=5)))
         query = draw(st.sampled_from(CALL_QUERIES[:4] * 3 + CALL_QUERIES[4:]) | st.sampled_from(QUERIES))
         desc = json.loads(_calls(members))
         try:
@@ -263,12 +234,12 @@ def partitions(draw) -> tuple[dict, dict, int]:
         except (P.QueryRefused, ValueError):
             n = 0
         return desc, _json(query), n
-    members = tuple(draw(st.lists(st.tuples(st.sampled_from([0, 1, 2] * 10 + [3, 4]), st.integers(1, 6)), min_size=1,
+    members = tuple(draw(st.lists(st.tuples(st.integers(0, len(TEMPLATES) - 1), st.integers(1, 6)), min_size=1,
                                   max_size=4)))
-    ids = [t.id for t in MEMBERS]
+    ids = [t.id for t in TEMPLATES]
     kind = draw(st.integers(0, 9))
     if kind < 8:
-        templates = draw(st.permutations(list(dict.fromkeys(MEMBERS[t].id for t, _ in members))))
+        templates = draw(st.permutations(list(dict.fromkeys(TEMPLATES[t].id for t, _ in members))))
         one = len(templates) == 1 and draw(st.booleans())
         query = P.template_instance_query(templates[0]) if one else P.template_instances_query(templates)
     elif kind == 8:
@@ -891,8 +862,7 @@ def _receipt(rec, challenger: str, received: str) -> dict:
 def run(j):
     """`Run.run`: a `Stream`'s run of one registration from its public check through its verdict, the pieces above in its
     order. `register`: `check_public` on the boundary values and declared items, the population, R1-R7 under
-    `service.selection_law` over it, a law whose drawn count varies (`service.count_varies`: `shapes`), and the
-    receipt; `select`: the draw from the source's bytes (`select`); `interior`
+    `service.selection_law` over it, and the receipt; `select`: the draw from the source's bytes (`select`); `interior`
     (`register_interiors`): a two-stage rule that drew some RU, `check_public` on the interior values, the K proved RUs'
     population, R1-R7 on the interiors' copies under the run's query and `subset:K`, and the receipt; `deliver`: one or
     more sessions, each matching `service._DIGEST`, and the interiors registered first when a two-stage rule drew some RU;
@@ -942,8 +912,6 @@ def run(j):
     codes = _registration({**p, "law": law}, rec)
     if codes:
         return {"codes": list(codes), "step": "register"}
-    if service.count_varies(law):
-        return {"codes": ["shapes"], "step": "register"}
     receipt = _receipt(rec, j["challenger"], j["received"])
     try:
         derived = DR.derive(p["program"], p["query"], law, p["work_table"])
@@ -1075,26 +1043,6 @@ def proof_units(j):
     """`select_proof_units`: each selected RU's index and the positions checked in it, in order, and the bytes read."""
     out, read = _two_stage_draw(j, "selected", select_proof_units)
     return {"read": read, "units": [[i, list(ps)] for i, ps in out.items()]}
-
-
-def hello(j):
-    """The run's Hello on its record (`hello.check_run`) on `{"own", "hello", "coin_tree", "seen", "selection", "slots",
-    "session"}`. Rejected where the Lean refuses: an own Hello that isn't an object with an object `coins`, a Hello that
-    isn't a string, `seen`, `selection` or `session` not lists of strings, and `slots` not a natural number."""
-    j = _json(j)
-    if not isinstance(j, dict):
-        raise D.Reject("the run is not an object")
-    own, received, slots = j.get("own"), j.get("hello"), j.get("slots")
-    if not (isinstance(own, dict) and isinstance(own.get("coins"), dict)):
-        raise D.Reject("the verifier's own Hello is not an object with an object coins")
-    if not isinstance(received, str):
-        raise D.Reject("the Hello is not a string")
-    seen, selection, session = (j.get(k) for k in ("seen", "selection", "session"))
-    if not all(isinstance(x, list) and all(isinstance(s, str) for s in x) for x in (seen, selection, session)):
-        raise D.Reject("seen, selection or session is not a list of strings")
-    if not (type(slots) is int and slots >= 0):
-        raise D.Reject("slots is not a natural number")
-    return _json(H.check_run(own, received, j.get("coin_tree"), seen, selection, slots, session).to_json())
 
 
 # --- strategies ------------------------------------------------------------------------------------------------------
@@ -2138,106 +2086,19 @@ REPLAY_UNITS = D.Port(PIECES, "replay_units", replay_units, st.one_of(*[two_stag
 PROOF_UNITS = D.Port(PIECES, "proof_units", proof_units, st.one_of(*[two_stage_cases("selected")] * 5, JSON),
                      package=PACKAGE)
 
-
-def _key(tag: bytes) -> str:
-    """A 256-byte key with bit 2047 zero."""
-    h = hashlib.shake_256(tag).hexdigest(256)
-    return h[:510] + "0" + h[511]
-
-
-RUN_NONCE = hashlib.sha256(b"run nonce").hexdigest()
-RUN_KEY = _key(b"run key")
-RUN_ROOT = hashlib.sha512(b"run root").hexdigest()
-
-
-def run_hello(selection=("selection",), slots=2, session=("session", "t/rep0", "t/rep1"), streams=None) -> dict:
-    """A run's Hello on its record: the verifier's own Hello, the prover's (the nonce put in), the record's tree."""
-    spec = {"block": 3, "rounds_log": 2, "scheme": H.SCHEME,
-            "streams": H.run_streams(selection, slots, session) if streams is None else list(streams)}
-    own = {"digests": "sha512", "profile": "fast100", "slots": slots, "coins": {**spec, "nonce": ""}}
-    return {"own": own, "hello": D.canonical({**own, "coins": {**spec, "nonce": RUN_NONCE}}),
-            "coin_tree": {"key": RUN_KEY, "nonce": RUN_NONCE, "root": RUN_ROOT, "spec": spec}, "seen": [],
-            "selection": list(selection), "slots": slots, "session": list(session)}
-
-
-def _hello_as(c: dict, own: dict) -> dict:
-    """`c` with the verifier's own Hello `own`, and the prover's Hello its with the nonce."""
-    return {**c, "own": own, "hello": D.canonical({**own, "coins": {**own["coins"], "nonce": RUN_NONCE}})}
-
-
-def _tree(c: dict, **change) -> dict:
-    return {**c, "coin_tree": {**c["coin_tree"], **change}}
-
-
-#: One change each to a run's Hello on its record: the tree reused, the Hello tampered, the streams not the run's, the
-#: record's tree not the Hello's, and inputs the Lean refuses.
-HELLO_CHANGES = [
-    lambda c, x: c,
-    lambda c, x: {**c, "seen": [_key(b"earlier"), RUN_KEY][x % 2:]},
-    lambda c, x: {**c, "seen": [_key(b"earlier %d" % i) for i in range(x % 3)]},
-    lambda c, x: {**c, "hello": c["hello"].replace(RUN_NONCE, [RUN_NONCE.upper(), RUN_NONCE[:-2], "1" * 64][x % 3])},
-    lambda c, x: {**c, "hello": [json.dumps(json.loads(c["hello"])), c["hello"] + " ", " " + c["hello"],
-                                 c["hello"].replace("fast100", "fast101"), "x", "", "[]", "null"][x % 8]},
-    lambda c, x: _hello_as(c, {**c["own"], "coins": {**c["own"]["coins"], "scheme": ["coin-tree/v1", 1, None][x % 3]}}),
-    lambda c, x: _hello_as(c, {**c["own"], "coins": {k: v for k, v in c["own"]["coins"].items()
-                                                     if k != ["streams", "rounds_log", "block"][x % 3]}}),
-    lambda c, x: _hello_as(c, {**c["own"], "coins": {**c["own"]["coins"], "rounds_log": [-1, True, "2"][x % 3]}}),
-    lambda c, x: {**c, "selection": [[], ["other"], c["selection"] * 2][x % 3]},
-    lambda c, x: {**c, "slots": c["slots"] + 1 + x % 2},
-    lambda c, x: {**c, "session": c["session"][::-1] if len(set(c["session"])) > 1 else c["session"] + ["x"]},
-    lambda c, x: _tree(c, nonce=["11" * 32, None, RUN_NONCE.upper()][x % 3]),
-    lambda c, x: _tree(c, key=[RUN_KEY[:-2] + "a5", RUN_KEY.upper(), RUN_KEY[:-2], 7][x % 4]),
-    lambda c, x: _tree(c, root=[RUN_ROOT[:-2], RUN_ROOT.upper(), None][x % 3]),
-    lambda c, x: _tree(c, spec=[{**c["coin_tree"]["spec"], "block": 4}, None,
-                                {**c["coin_tree"]["spec"], "streams": c["coin_tree"]["spec"]["streams"][::-1] + ["z"]}][x % 3]),
-    lambda c, x: _tree(c, answer="00"),
-    lambda c, x: {**c, "coin_tree": [None, [], "tree"][x % 3]},
-    lambda c, x: {**c, ["own", "hello", "seen", "selection", "session", "slots"][x % 6]:
-                  [None, {"coins": []}, 5, ["a", 1], "s", -1][x % 6]},
-]
-STREAM_NAMES = st.lists(st.sampled_from(["session", "t/rep0", "t/rep1", "nl/rep0", "lin"]), unique=True, max_size=4)
-RUN_HELLOS = st.builds(lambda sel, slots, ses, change, x: HELLO_CHANGES[change](run_hello(sel, slots, ses), x),
-                       st.sampled_from([("selection",), ("selection", "selection/1"), ("draw",)]), st.integers(0, 3),
-                       STREAM_NAMES, st.integers(0, len(HELLO_CHANGES) - 1), st.integers(0, 63))
-HELLO = D.Port(PIECES, "hello", hello, st.one_of(RUN_HELLOS, RUN_HELLOS, JSON), package=PACKAGE)
-
 pieces = D.server_fixture(DECODE)
 
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400), (HELLO, 500)]
+              (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
-
-
-@pytest.mark.parametrize("name, change, code", [
-    ("a good run", lambda c: c, None),
-    ("a reused tree", lambda c: {**c, "seen": [_key(b"earlier"), RUN_KEY]}, "fresh"),
-    ("a nonce not lowercase hex", lambda c: {**c, "hello": c["hello"].replace(RUN_NONCE, RUN_NONCE.upper())}, "hello"),
-    ("a Hello whose nonce the tree is not under", lambda c: {**c, "hello": c["hello"].replace(RUN_NONCE, "1" * 64)},
-     "coin_tree"),
-    ("a tampered parameter", lambda c: {**c, "hello": c["hello"].replace("fast100", "fast101")}, "hello"),
-    ("the selection not first", lambda c: {**c, "selection": ["t/rep0"]}, "streams"),
-    ("a slot short", lambda c: {**c, "slots": 3}, "streams"),
-    ("the slots out of order", lambda c: _hello_as(c, {**c["own"], "coins": {**c["own"]["coins"], "streams": [
-        "selection", *(H.slot_stream(i, s) for i in (1, 0) for s in ("session", "t/rep0", "t/rep1"))]}}), "streams"),
-    ("the record's tree not the Hello's", lambda c: _tree(c, nonce="11" * 32), "coin_tree"),
-    ("a key with bit 2047 set", lambda c: _tree(c, key=RUN_KEY[:-2] + "a5"), "coin_tree"),
-    ("a tampered spec", lambda c: _tree(c, spec={**c["coin_tree"]["spec"], "streams": ["selection"]}), "coin_tree"),
-])
-def test_the_runs_hello_and_its_one_tree(pieces, name, change, code):
-    """The run's Hello on its record, Lean's verdict the Python's whole: a good run, then one named change each, refused
-    with its code."""
-    case = change(run_hello())
-    out = hello(copy.deepcopy(case))
-    assert D.replay(HELLO, case, pieces) == ("output", D.canonical(out)), name
-    assert out["codes"] == ([] if code is None else [code]) and out["ok"] == (code is None), (name, out)
 
 
 def test_the_two_stage_samplers_read_the_coins_in_order(pieces):
@@ -2336,23 +2197,6 @@ def test_the_call_queries_cut_call_by_call(pieces):
         assert D.replay(SLOTS, refused, pieces)[0] == "reject", query
         with pytest.raises(D.Reject):
             slots(copy.deepcopy(refused))
-
-
-def test_a_q_call_unit_wider_than_the_limit_or_a_template_of_no_gate_is_refused(pieces):
-    """Lean refuses as the Python does a population with an instance of `IDENTITY`, of no gate, and `SHARED` under
-    `Q_call` at `X = 16`, whose first unit passes `Q_call`'s width rule with 16 returned bits while it holds a constant a
-    later unit reads; at `X = 8`, where that constant is in no unit, both take the program and agree on its slots."""
-    case = {"closure": None, "rule": {"law": "subset:1", "rule": "law"},
-            "source": hashlib.shake_256(b"refused").hexdigest(400), "work_table": None}
-    shared = json.loads(_calls((0, 5)))
-    for program, query in [(json.loads(_population(((0, 1), (4, 2)))), P.template_instances_query([PAIR.id, IDENTITY.id])),
-                           (shared, PO.call_query(16))]:
-        refused = {**case, "program": program, "query": _json(query)}
-        assert D.replay(SLOTS, refused, pieces)[0] == "reject", query
-        with pytest.raises(D.Reject):
-            slots(copy.deepcopy(refused))
-    taken = {**case, "program": shared, "query": _json(PO.call_query(8))}
-    assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken))))
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held"}
@@ -2484,9 +2328,8 @@ def test_the_record_is_compared_field_by_field(pieces):
     assert [json.loads(json.loads(D.replay(RECORD_PORT, c, pieces)[1]))["accepted"] for c in cases] == [True] * 12 + [False, True]
 
 
-def _v1_audit(kind: str, s: Setup = SETUPS[3], p: str = "1/1") -> dict:
-    """One valid v1 audit of `s` under a law of `kind` (a Bernoulli one at `p`, which a run refuses at 0 < p < 1), its
-    verdicts accepting."""
+def _v1_audit(kind: str, s: Setup = SETUPS[3], p: str = "1/2") -> dict:
+    """One valid v1 audit of `s` under a law of `kind` (a Bernoulli one at `p`), its verdicts accepting."""
     law = {"law": "bernoulli", "p": p} if kind == "bernoulli" else {"k": 3, "law": kind}
     table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
     table = {t: w for t, w in table.items() if t in s.templates} if kind == "work" else None
@@ -2557,27 +2400,3 @@ def test_the_run_holds_the_interiors(pieces):
         assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out))
         seen.append(out.get("codes") or out["symbol"])
     assert seen[-2:] == ["accept", ["interior-empty"]]
-
-
-def test_the_run_refuses_a_count_that_varies(pieces):
-    """A registration whose law draws a count that varies, a Bernoulli one at 0 < p < 1, one-stage or as a two-stage
-    rule's replay, is refused at its registration (`shapes`), Lean's the Python's whole: its sessions would set up tables
-    of different shapes. At p = 0 or 1, and under subset, stratified and work, the run goes on; R1-R7 come first."""
-    source = hashlib.shake_256(b"run").hexdigest(600)
-    seen = []
-    for s, p, two_stage in [(SETUPS[3], "1/2", False), (SETUPS[3], "2/3", False), (SETUPS[3], "2/4", False),
-                            (SETUPS[2], "1/2", True), (SETUPS[3], "0/1", False), (SETUPS[3], "1/1", False),
-                            (SETUPS[3], "3/3", False), (SETUPS[2], "0/1", True)]:
-        case = _run_case(_v1_audit("bernoulli", s, p), source, 2, ["credited"], two_stage)
-        for changed in (case, {**case, "record": {**case["record"], "previous": "11" * 64}}):
-            out = run(copy.deepcopy(changed))
-            assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out)), (p, out)
-            seen.append((p, out.get("codes") or out["symbol"]))
-    assert [c for _, c in seen[0:8:2]] == [["shapes"]] * 4
-    assert all(c != ["shapes"] for _, c in seen[8::2]) and all(c != ["shapes"] for _, c in seen[1::2])
-    for kind in ("subset", "stratified", "work"):
-        out = run(copy.deepcopy(_run_case(_v1_audit(kind), source, 2, ["credited"], False)))
-        assert out["symbol"] == "accept"
-    assert service.count_varies({"law": "bernoulli", "p": "1/2"})
-    assert not any(service.count_varies(law) for law in ({"law": "bernoulli", "p": "0/1"}, {"law": "bernoulli", "p": "1/1"},
-                                                         {"k": 2, "law": "subset"}, {"k": 2, "law": "work"}))

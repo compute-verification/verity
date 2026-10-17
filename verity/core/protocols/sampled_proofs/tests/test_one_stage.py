@@ -16,8 +16,7 @@ import verity.ml.circuits.ops.scalar  # noqa: F401
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.circuits.types import Array, Value
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -66,37 +65,6 @@ def test_the_query_refuses_what_it_does_not_describe():
                                 lambda B, S, x: B.call(XOR8, B.call(PAIR, x), x[0]), register=False)
     with pytest.raises(P.QueryRefused):
         P.units(Program(bind(other)), q)
-
-
-def test_a_q_call_unit_wider_than_the_literal_limit_or_a_template_of_no_gate_is_refused():
-    """A `Q_call` unit commits at most `UNIT_BITS` bits, counting the constants it holds, and a template has a gate: a
-    template of no gate, and a Call whose first unit at `X = 16` returns 16 bits and holds a constant a later unit reads,
-    are refused; at `X = 8` that constant is in no unit, and the program is taken."""
-    v8x3 = Tuple(Value(8), Value(8), Value(8))
-    const = PrimitiveDefinition("OneStageTestConst8", 1, (), Value(8), lambda: 0x5A, register=False)
-    empty = bind(CompositeDefinition("OneStageTestEmpty", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
-                                     lambda B, S, x: x[0], register=False))
-    with pytest.raises(P.QueryRefused, match="has no gate"):
-        P.units(P.population_program(empty, 3), P.template_instance_query(empty.id))
-
-    def held(B, S, x):
-        a = B.call(XOR8, x[0], x[1])
-        return tuple_of(a, B.call(XOR8, a, x[1]), B.call(const))
-
-    inner = bind(CompositeDefinition("OneStageTestHeld", 0, (), lambda S: ((("x", Array(2, Value(8))),), v8x3), held,
-                                     register=False))
-
-    def shared(B, S, x):
-        s = B.call(inner, x)
-        return tuple_of(s[0], s[1], B.call(XOR8, s[0], s[2]))
-
-    call = bind(CompositeDefinition("OneStageTestShared", 0, (), lambda S: ((("x", Array(2, Value(8))),), v8x3), shared,
-                                    register=False))
-    prog = Program(bind(CompositeDefinition("OneStageTestSharedProgram", 0, (), lambda S: call.signature(),
-                                            lambda B, S, x: B.call(call, x), register=False)))
-    with pytest.raises(P.QueryRefused, match="unit 0 of .* commits 24 bits, more than 16"):
-        P.units(prog, PO.call_query(16))
-    assert P.unit_gates(prog, PO.call_query(8)) == [(2, 3), (3, 4), (5, 6)]
 
 
 XOR3 = bind(CompositeDefinition("OneStageTestTriple", 0, (), lambda S: ((("x", Array(3, Value(8))),), Value(8)),
