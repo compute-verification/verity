@@ -90,6 +90,10 @@ CORE_ROWS = os.environ.get("FLOCK_CORE_ROWS") == "1"
 #: inner statement, ZK off); another statement from the default's
 PLAIN_LEAVES = os.environ.get("FLOCK_PLAIN_LEAVES") == "1"
 LEAF_SCHEME = FC.LEAF_SCHEME_PLAIN if PLAIN_LEAVES else None
+#: FLOCK_OWN_ROWS=1: an unwired class is staged with every instance's own rows (`stage`'s ``share_rows=False``), the public
+#: file the verifier covers outside a registered ZK session (``ProvedScope.sharedRowsOk``); rows a Call shares are committed
+#: once per instance rather than once
+OWN_ROWS = os.environ.get("FLOCK_OWN_ROWS") == "1"
 #: Per FP GEMM coordinate family: the parameters each row holds, in order (x, then its scales; the W column, then its scales)
 ELEMENT_ROWS = {"GemmCoordinateE4m3_v1": (("x",), ("wrow",)),
                 "GemmCoordinateNvf4_v1": (("x", "sx"), ("wrow", "sw")),
@@ -786,8 +790,8 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
     ``real``: the statement padded to ``n`` instances (a public cap, `rec_shape`), its first ``real`` tiles the class's and the
     rest fillers: every row zero and the output the class lowering's own on them, checked as every tile's is. A filler's rows
     are equal, so the fillers open one committed row per port; the real tiles' rows and outputs are the unpadded statement's."""
-    if PACK_WORDS or CORE_ROWS:
-        raise ValueError("FLOCK_PACK_WORDS, FLOCK_CORE_ROWS: a tile is staged in the default layout only")
+    if PACK_WORDS or CORE_ROWS or OWN_ROWS:
+        raise ValueError("FLOCK_PACK_WORDS, FLOCK_CORE_ROWS, FLOCK_OWN_ROWS: a tile is staged in the default layout only")
     if real is not None and not 1 <= real <= n:
         raise ValueError(f"--real {real}: between 1 and the statement's {n} instances")
     lanes_n = n if real is None else real
@@ -1298,7 +1302,8 @@ def _stage_cache(s: str) -> Path | None:
     a = c["a"]
     ident = [c["source_digest"], c["program_digest"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
              a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else []) + (["core-rows"] if CORE_ROWS else []) \
-        + (["plain-leaves"] if PLAIN_LEAVES else []) + ([f"real-{a.real}"] if a.real is not None else [])
+        + (["plain-leaves"] if PLAIN_LEAVES else []) + (["own-rows"] if OWN_ROWS else []) \
+        + ([f"real-{a.real}"] if a.real is not None else [])
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
 
 
@@ -1374,7 +1379,7 @@ def _stage_job_fresh(s: str) -> dict:
                 n = auto_batch(cc.counts["ands"], c["row_units"].get(s) or cl.units) if a.batch == "auto" else a.n
                 lanes_ = class_lanes(units, cl, c["key"], a.real or n, c["shared"])
                 rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"],
-                                     pad=n if a.real is not None else None)
+                                     pad=n if a.real is not None else None, share_rows=not OWN_ROWS)
             rec["stage_py_maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
         except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
             rec.pop("stage", None)
