@@ -7,7 +7,8 @@ import Proofs.Flock.Claims.Complete.Replay.Steps
 
 * **The prover** (`innerP_go`): the masked prover's inner proof (`innerP`) in the pure session, at the coins of the
   replies to its four sends (`ε`, the batching coins, `β`, the query coins), where its two refusals don't fire: the
-  batched constraint holds on the pads, and `β ≠ 0`. Its proof is `InZ.proof` and its transcript `InZ.tEnd`.
+  batched constraint holds on the pads, and `β ≠ 0`. Its proof is `InZ.proof` and its transcript `InZ.tEnd`. At a
+  rep's pads whose constraints vanish, the first refusal never fires, whatever the coins (`innerP_go_pads`).
 * **The verifier** (`verifyInnerWith_of`): on rounds carrying those four sends, from the prover's round and pending
   bytes, `Zk.verifyInnerWith` passes on `InZ.proof` at a rep's pads whose constraints vanish (`ConsHold`), where
   `β ≠ 0` and the hash's digests are 64 bytes: the proof has its sizes (`innerRoot_size`, `tcOf_size`), the coins are
@@ -120,6 +121,21 @@ theorem innerP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay
   simp only [Array.size_push]
   rw [pure_go]
   exact ⟨_, by simp, rfl⟩
+
+/-- **At a rep's pads, the masked prover's inner proof refuses only at `β = 0`**: where the rep's constraints vanish at
+its pads (`ConsHold`), the batched constraint holds at every sacrifice and batching coin (`innerP_batched`), so `innerP`
+returns in closed form at every reply but one whose `β` is `0`. -/
+theorem innerP_go_pads (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (tape : TapeZk)
+    (i r : ℕ) (ic : InnerCommit) (finalC : F128) {cons : Array (String × Zk.Lin)}
+    (hc : ConsHold cons (padsOf tape i r lay).h) (t : Transcript) (l : Array Claims.Msg)
+    (hb : (coinOf (resp (l.size + 2)) 0).isZero = false) :
+    ∃ l', l'.size = l.size + 4 ∧
+      ((innerP (asksS resp) (Hashes.ofSha512 h) lay (padsOf tape i r lay) ic finalC cons).run t).go l =
+        (.ok (InZ.proof lay (padsOf tape i r lay) cons h ic (InZ.coinsAt resp l.size),
+          InZ.tEnd lay (padsOf tape i r lay) finalC cons h (InZ.coinsAt resp l.size) t), l') :=
+  innerP_go resp h lay _ ic finalC cons t l
+    (innerP_batched tape i r lay hc _ ((Array.range (InZ.all lay (padsOf tape i r lay) cons
+      (InZ.coinsAt resp l.size)).size).map (InZ.coinsAt resp l.size).cg)) hb
 
 /-! ## The verifier's inner check on the prover's inner proof -/
 
