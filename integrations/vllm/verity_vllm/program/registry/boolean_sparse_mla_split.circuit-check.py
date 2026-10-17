@@ -18,6 +18,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         # two splits of one block each (T = 17 at BN = 16: a full block, then the partial one)
         ("SparseMlaHeadSplit_v2", lambda: bind(BX.SparseMlaHeadSplitV2, T=17, NS=2, DR=16, DV=16, BN=16, DOT=dot, INV=inv,
                                                SCALE=0.0625)),
-        ("SparseMlaSplit_v2", lambda: bind(BX.SparseMlaSplitV2, T=17, NS=2, NH=2, DR=16, DV=16, BN=16, DOT=dot, INV=inv,
+        # two heads at NS = 1, the branch the binding above leaves (two heads at NS = 2 are over `Options.partition_max_gates`)
+        ("SparseMlaSplit_v2", lambda: bind(BX.SparseMlaSplitV2, T=5, NS=1, NH=2, DR=16, DV=16, BN=16, DOT=dot, INV=inv,
                                            SCALE=0.0625)),
     ]
