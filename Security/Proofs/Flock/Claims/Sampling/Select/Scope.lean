@@ -26,7 +26,8 @@ variable {Coin Col T : Type}
 
 /-- **The scope check is the readable scope's program part**: it takes a statement exactly when it parses, its query
 evaluates to a partition, the program is topologically ordered and the partition partitions it into proof units of at
-most 16 committed values. The design part it need not check (`scopeMatches_of`). -/
+most 16 committed values. The design part it need not check (`scopeMatches_of`). The program is the statement's bit
+gates, its word gates' Boolean lowering, and a `Q_word` unit is the set of its word gates' bit gates. -/
 def ProgramScope (D : Deploy Coin Col T) : Prop :=
   ∀ x, D.scopeCheck x = true ↔ ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt ∧
     s.prog.Topological ∧ Pt.Partitions s.prog
