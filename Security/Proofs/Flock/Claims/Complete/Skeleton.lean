@@ -6,8 +6,8 @@ import Proofs.Flock.Claims.Scope.Matches
 /-!
 # The completeness proof's skeleton
 
-`complete_of_goals`: Flock's plain verifier is complete for `honestP` with error `δc H`
-(`Claims.Flock.Complete H (deployPlain rel) honestP (δc H)`), given one goal per check the honest run must pass.
+`complete_of_goals`: Flock's plain verifier is complete for `honestP`, the record's reference prover, with error `δc H`
+(`Claims.Flock.Complete H (deployPlain rel) (δc H)`), given one goal per check the honest run must pass.
 
 * **The setting.** A good case (`Case`): a statement in scope that the verifier can accept (`ready H`), at its setup, a
   witness in the relation, a tape, and coins outside `Bad`. The honest run at it (`Run`): the pure session's record,
@@ -451,7 +451,7 @@ theorem Run.acc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Reada
 /-- **Completeness from the goals**: Flock's plain verifier is complete for `honestP` with error `δc`, given each
 goal. -/
 theorem complete_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (g : Goals H rel) :
-    Claims.Flock.Complete H (deployPlain rel) honestP (δc H) := by
+    Claims.Flock.Complete H (deployPlain rel) (δc H) := by
   refine complete_of H rel fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf false x = some (s, spec, sts) := by
     unfold ready at hready

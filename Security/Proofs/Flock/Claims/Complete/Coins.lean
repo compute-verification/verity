@@ -26,7 +26,8 @@ zerocheck outer coin is `1` (`Bad`), at most `2^-128` per coin element (`pr_slot
   prover sets up at SHA-512, so `ready H` asks that the two setups agree. At `sha512` they do, and `ready` asks no more
   (`ready_sha512`).
 * **The composition** (`complete_of`): if the honest prover is accepted at every coin outside `Bad` on every statement in
-  scope, ready, with a witness in the relation, then `Claims.Flock.Complete H (deployPlain rel) honestP (δc H)`.
+  scope, ready, with a witness in the relation, then `Claims.Flock.Complete H (deployPlain rel) (δc H)`, whose prover is
+  the record's (`honestP`).
 -/
 
 namespace FlockComplete
@@ -191,7 +192,7 @@ theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
     (hacc : ∀ x w, Claims.Flock.Scope (deployPlain rel) x → Claims.Flock.R (deployPlain rel).parse x w →
       ready H x = true → ∀ (ω : Tape) (r : Fin ((V false).k x) → Coin), ¬ Bad x r →
         (Claims.run H (honestP w) (V false) x ω r).out = .acc) :
-    Claims.Flock.Complete H (deployPlain rel) honestP (δc H) := by
+    Claims.Flock.Complete H (deployPlain rel) (δc H) := by
   intro _ x w hs hr ω
   unfold δc
   split

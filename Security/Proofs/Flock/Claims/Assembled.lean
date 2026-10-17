@@ -17,7 +17,7 @@ every relation's fields `rel` and every hash `H`, the conjunction of Flock's cla
 * `Efficient` at the record's own counted decoder (`GS.plainCountedRD`, `GS.zkCountedRD`): `E^rep`'s reruns at every
   deployment (`ERep_cost`), the decoder's `ListWithin`, and its count and lists at most `plainStepPoly` (`zkStepPoly`)
   at the opened word's encoded length, which bounds `assemble`'s checks (`efficient_plain`, `efficient_zk`);
-* `Complete` at the honest prover `P` with error `δc`: a hypothesis.
+* `Complete` at the record's reference prover (`honestP`, `honestPZk`) with error `δc`: a hypothesis.
 
 ## What remains: the hypotheses
 
@@ -27,8 +27,9 @@ every relation's fields `rel` and every hash `H`, the conjunction of Flock's cla
   decodes the word filled to table 0's level-0 length with a zero column of the lanes' width (`Eθ`, `fillWord`,
   `zeroCol`), at every decoder meeting `ListCompleteθ`; `Flock.KS`'s decodes the opened columns, at every decoder
   meeting `ListWithin`, whose word has `[]` where no column was opened. So the hypothesis is `Flock.KS` itself.
-* `hComplete : Flock.Complete H (deployPlain rel) P δc`: C3, `cursor/claims-complete-c7a9`, whose honest prover
-  (`honestP`, with its `δc`) is not on main, so `P` and `δc` are any. At `deployZk rel` no branch proves it yet.
+* `hComplete : Flock.Complete H (deployPlain rel) δc`, of the record's reference prover `honestP`: C3's
+  `FlockComplete.complete_of_goals` proves it at `FlockComplete.δc H` from the goals still open (`FlockComplete.Goals`);
+  here `δc` is any. At `deployZk rel`, of `honestPZk`: no proof on this tree yet.
 -/
 
 namespace FlockDeploy.Assembled
@@ -66,12 +67,11 @@ theorem γ_pos {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (x : Cla
 
 /-- **Flock's claims at the deployed plain verifier**, at every relation's fields and every hash: the readable scope
 is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the radius decoder at every bound
-on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the honest prover. `hKS` (E4) and
-`hComplete` (C3) are what remains. -/
+on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the record's reference prover.
+`hKS` (E4) and `hComplete` (C3) are what remains. -/
 theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployPlain rel))
-    {Ω : Type} (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → ℝ)
-    (hComplete : Claims.Flock.Complete H (deployPlain rel) P δc) :
+    (δc : Claims.Msg → ℝ) (hComplete : Claims.Flock.Complete H (deployPlain rel) δc) :
     Claims.Flock.ScopeMatches (deployPlain rel) ∧
       Claims.Flock.KS H (deployPlain rel) ∧
       Claims.Flock.Bits H (deployPlain rel) ∧
@@ -80,7 +80,7 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
         Claims.Bits H (deployPlain rel).V (Claims.Flock.R (deployPlain rel).parse)
           (Claims.Flock.E (deployPlain rel) Claims.GS.plainDecodeRD) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
       Claims.Flock.Efficient H (deployPlain rel) plainStepPoly ∧
-      Claims.Flock.Complete H (deployPlain rel) P δc :=
+      Claims.Flock.Complete H (deployPlain rel) δc :=
   ⟨scopeMatches_plain rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg false),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg false) hκ
       (fun x => γ_pos (deployPlain rel) x (V_k_pos false x)) hγ _ (listWithin_plain rel),
@@ -88,12 +88,11 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
 
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
 readable scope is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the radius decoder
-at every bound on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the honest prover.
-`hKS` (E4) and `hComplete` (no owner yet) are what remains. -/
+at every bound on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the record's
+reference prover. `hKS` (E4) and `hComplete` (no owner yet) are what remains. -/
 theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployZk rel))
-    {Ω : Type} (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → ℝ)
-    (hComplete : Claims.Flock.Complete H (deployZk rel) P δc) :
+    (δc : Claims.Msg → ℝ) (hComplete : Claims.Flock.Complete H (deployZk rel) δc) :
     Claims.Flock.ScopeMatches (deployZk rel) ∧
       Claims.Flock.KS H (deployZk rel) ∧
       Claims.Flock.Bits H (deployZk rel) ∧
@@ -102,7 +101,7 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
         Claims.Bits H (deployZk rel).V (Claims.Flock.R (deployZk rel).parse)
           (Claims.Flock.E (deployZk rel) Claims.GS.zkDecodeRD) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
       Claims.Flock.Efficient H (deployZk rel) zkStepPoly ∧
-      Claims.Flock.Complete H (deployZk rel) P δc :=
+      Claims.Flock.Complete H (deployZk rel) δc :=
   ⟨scopeMatches_zk rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg true),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg true) hκ
       (fun x => γ_pos (deployZk rel) x (V_k_pos true x)) hγ _ (listWithin_zk rel),

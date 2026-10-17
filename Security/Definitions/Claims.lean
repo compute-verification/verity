@@ -57,6 +57,10 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   the decoder's polynomial, which counts them. At one table this is the text it replaces.
 * (16 Oct) Completeness is at a hash whose outputs are 64 bytes (`Out64`), as the deployed oracle's are, SHA-512 with
   its whole output, and as the random-oracle model draws them. It fixes the length only: `H` stays a parameter.
+* (17 Oct) Completeness is at a nonempty tape type (`Complete`), and Flock's is of the deployed record's reference
+  prover (`Flock.Deploy.P`), not of a prover the claim takes. The form first frozen held at an empty tape type for every
+  verifier, and its prover was whatever its discharge chose, so an assembled claim's completeness premise was met for
+  free.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
@@ -371,9 +375,10 @@ def KSLin (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : Extractor Coin 
 
 /-- `Complete(V, P, R, Scope, δ_c)`: at a hash whose outputs are 64 bytes (`Out64`), on every statement in scope and
 witness in the relation, the honest prover `P(w; ω)` is accepted with probability at least `1 − δ_c(x)` over the
-verifier's coins, at every tape. -/
-def Complete {Ω : Type} (H : Msg → Msg) (V : Verifier Coin) (P : W → Prover Ω) (R : Rel W) (Scope : Msg → Prop)
-    (δc : Msg → ℝ) : Prop :=
+verifier's coins, at every tape. The tapes are a nonempty type: over an empty one, "at every tape" holds of every
+verifier. -/
+def Complete {Ω : Type} [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (P : W → Prover Ω) (R : Rel W)
+    (Scope : Msg → Prop) (δc : Msg → ℝ) : Prop :=
   Out64 H →
     ∀ x w, Scope x → R x w → ∀ ω : Ω, 1 - δc x ≤ Pr fun r : Fin (V.k x) → Coin => (run H (P w) V x ω r).out = .acc
 
@@ -629,7 +634,10 @@ code. A single-table statement is its own table `0`, and reads table `0`'s colum
 `dec` is a named, counted program: on opened columns it returns its list and the steps it took, counted along the same
 computation, one step per field operation (arithmetic or a comparison of field elements), per position compared and
 per column entry read, moving data free. `Flock.Efficient` reads that count; that it is the cost of running the
-decoder is `trustedBase`'s. -/
+decoder is `trustedBase`'s.
+
+`P` is the reference prover, the honest prover the deployment runs, on its tapes (`Tape`, a nonempty type):
+completeness is its (`Complete`), so the claim is about the deployed prover and no other. -/
 structure Deploy (Coin Col T : Type) where
   zk : Bool
   V : Verifier Coin
@@ -647,6 +655,11 @@ structure Deploy (Coin Col T : Type) where
   weight : Msg → ℝ
   waits : Msg → ℕ
   cap : Msg → ℕ
+  Tape : Type
+  [tapeNonempty : Nonempty Tape]
+  P : Wit → Prover Tape
+
+instance Deploy.instNonemptyTape {Coin Col T : Type} (D : Deploy Coin Col T) : Nonempty D.Tape := D.tapeNonempty
 
 /-- The deployed decoder's list, without its count. -/
 def Deploy.decode {Coin Col T : Type} (D : Deploy Coin Col T) (os : List (ℕ × Col)) : List T := (D.dec os).1
@@ -678,9 +691,9 @@ def Scope (D : Deploy Coin Col T) (x : Msg) : Prop := ∃ s, D.parse x = some s 
 def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ decode, ListWithin D.len D.enc D.θ decode → Claims.KS H D.V (R D.parse) (E D decode) (κ D) (γ D)
 
-/-- **Flock: Complete**, on the statements in scope. -/
-def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (δc : Msg → ℝ) : Prop :=
-  Claims.Complete H D.V P (R D.parse) (Scope D) δc
+/-- **Flock: Complete**, on the statements in scope, of the deployed record's reference prover (`D.P`). -/
+def Complete (H : Msg → Msg) (D : Deploy Coin Col T) (δc : Msg → ℝ) : Prop :=
+  Claims.Complete H D.V D.P (R D.parse) (Scope D) δc
 
 /-- **Flock: the readable scope is the verifier's.** -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
