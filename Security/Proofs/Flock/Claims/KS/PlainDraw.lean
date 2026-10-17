@@ -24,7 +24,7 @@ draw `d`, and no draw in the record is read, as the masked side does (`Composed.
 namespace Claims.Bridge.PlainDraw
 
 open _root_.Flock FlockDeploy FlockSoundness FlockSoundness.Discharge Claims.Bridge.Custody Claims.Bridge.CustodyPlain
-open FlockSoundness.Refine (ptsOf)
+open FlockSoundness.Refine (ptsOf shapeOf)
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
