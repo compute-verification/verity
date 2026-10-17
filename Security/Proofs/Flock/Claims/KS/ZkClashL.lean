@@ -81,7 +81,7 @@ open Claims.Bridge.Custody
 the level-`ℓ` rows table `j`'s rep `k` opens in an accepting masked run, two of which verify at one position with
 different rows (`ClashL`), give two of those rows at one position that differ (`zk_levelClash_tiedJ`). -/
 theorem zk_laterClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
-    {r : Fin ((V true).k x) → Coin} {j k ℓ : ℕ} {cap : Exec.Cap Refine.Dig} {lanes depth : ℕ}
+    {r : Fin ((V true).k x) → Coin} {j k ℓ : ℕ} {cap : Model.Cap Refine.Dig} {lanes depth : ℕ}
     {xs : List (ℕ × List 𝔽 × List UInt8 × List Refine.Dig)} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hxs : xs.map (fun x => (x.1, x.2.1)) = zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ)
     (hcl : Exec.ClashL ZkExec.hs512.H ZkExec.hs512.E ZkExec.hs512.Lf cap lanes depth xs) :
