@@ -184,7 +184,8 @@ def main() -> int:
             r1, r2 = sw.ROT[n]
             ok = [a for a in range(1, 1 << n, 2) if sw.kj_scaled(a, n, r2)]
             jobs = sw.jobs_for("symmetric", n, rng, 6 if quick else 40, 0)
-            summ, elems = root_kernels(exe, n, r1, r2, 6, jobs)
+            settle = ("-p", str(64 // n), "-c", "28")
+            summ, elems = root_kernels(exe, n, r1, r2, 6, jobs, settle)
             twins = all(elems[(j, 2)] - elems[(j, 1)] >=
                         {((j[2] ^ ((1 << n) - 1)), j[3], j[4], j[5])} for j in jobs)
             checks.check(f"n{n}, {len(jobs)} NOT-symmetric words at pairs passing the scaled KJ ({len(ok)} keys): "
@@ -193,7 +194,7 @@ def main() -> int:
                          str(sorted({tuple(summ[j]) for j in jobs})))
             if checks.mutations:
                 off = [j[:3] + ((j[3] + 1) % (1 << n),) + j[4:] for j in jobs]
-                ms, _ = root_kernels(exe, n, r1, r2, 6, off)
+                ms, _ = root_kernels(exe, n, r1, r2, 6, off, settle)
                 checks.mutation(f"n{n}: the same words with d1 one off (2 d1 ≠ a0 − 1)",
                                 not all(ms[j] == [16, 32, 16, 32, 16, 32, 1, 0, 0] for j in off),
                                 str(sorted({tuple(ms[j]) for j in off})))
