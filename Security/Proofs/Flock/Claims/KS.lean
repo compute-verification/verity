@@ -136,5 +136,6 @@ deployed reader looks up no column off `C` (`DecodeSC`: `Claims.Bridge.DecodePla
 `plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for (`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`).
 With hidden outputs, the hidden table is `plainTab` too, and the same holds at its openings (`DecodeHidden`:
 `Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`). A statement some run accepts sets
-up at a draw, so where its outputs are public the plain chain asks only for the mixture at those decoders (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`,
-`FlockDeploy.KS.PlainLiveW`, `FlockDeploy.KS.plain_KS_of_w`). -/
+up at a draw, so the plain chain asks only for the mixture at those decoders, whether or not the outputs are hidden
+(`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`, `FlockDeploy.KS.PlainLiveW`,
+`FlockDeploy.KS.plain_KS_of_w`). -/
