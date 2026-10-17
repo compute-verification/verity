@@ -2,10 +2,17 @@
 # The noise, ε_skip and ε_mand are sm_120's design's (data/designs/); honest, its operand floor and the baseline are
 # the B200's. Every Dither noise has the same floor here: no operand passes through a register.
 name = "dither-1s-l64"
+title = "Dither-1S, L = 64"
 summary = "Dither-1S on the B200 at L = 64: one-sided dither, duo receipts on every committed word, the linears' peel"
 honest = "dc100-l64"
 L = 64
 work = 1.0
+
+[noise]
+linears = "one-sided"
+lm_head = "clean"
+qk = "one-sided"
+pv = "peel"
 
 [operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
 floor = { LDTM_32X32B_X32 = 16 }

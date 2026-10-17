@@ -10,32 +10,34 @@
                                               the N cheapest attacks of each design (or of D) at NAME's prices
     machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) at EPOCH, the last
                                               epoch, into data/census/EPOCH.csv: each (kind, row) keeps its faster line
+    machine-model designs [--json]            the design registry (data/designs): each design's name, its aliases, the
+                                              noise on each product, fold, filler, proof unit, coins and perplexity arm
     machine-model eps [DESIGN] [--device sm_NN] [--q Q] [--q-uniform QU] [--operands O] [--credit C]
-                      [--fold-cost R] [--fill X] [--upfill] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]
+                      [--fold-cost R] [--fill X] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]
                       [--index-bits B]] [--uni-issue C] [--checking full|sampled [--adapt UNIT]] [--vector V] [--json]
-                                              a design's ε budget (data/designs, default dither-duo) at q* = Q (default
-                                              8): every term with its source, ε_machine's LP (the credited and the
-                                              cheater's mix, binding rows and certificate π*), the ε(q*) curve for q*
-                                              in [0.5, 16] (and for q*_U at q* = Q) and the q* at which ε_machine
-                                              reaches its floor; q*_U is q* unless given; the
-                                              cheater's operand delivery is free (default), at the noise's floor, or
-                                              honest's; ε is a fraction of honest's kernel (--credit H, default) or of
-                                              the floor program ♭ (--credit floor); --fill adds X lane instructions a
-                                              word of verified filler on lanes, --upfill filler keeping the uniform
-                                              datapath busy (not adopted: decision 73); --lookups opens the table
-                                              route (data/table.toml: lane instructions and L2 bytes a word against an
-                                              L2 facet; --lookup-q, --lookup-bytes, --l2); --uni-issue C also charges a
-                                              uniform instruction C times an ALU's cost on the issue rows (a no-op
-                                              where the census has it there already); --checking full (default) is the
-                                              protocol with every word and operand verified, the core ε alone, and
-                                              --checking sampled adds ε_sample = ε_luck + ε_adapt on its own line, for
-                                              --adapt UNIT's proof unit (data/adapt.toml, today's segment by default)
-    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--upfill] [--operands O] [--credit C]
+                                              a design's ε budget (a name or alias in data/designs, default
+                                              dither-1s) at q* = Q (default 8): every term with its source,
+                                              ε_machine's LP (the credited and the cheater's mix, binding rows and
+                                              certificate π*), the ε(q*) curve for q* in [0.5, 16] (and for q*_U at
+                                              q* = Q) and the q* at which ε_machine reaches its floor; q*_U is q*
+                                              unless given; the cheater's operand delivery is free (default), at the
+                                              noise's floor, or honest's; ε is a fraction of honest's kernel (--credit
+                                              H, default) or of the floor program ♭ (--credit floor); --fill adds X
+                                              lane instructions a word of verified filler on lanes; --lookups opens
+                                              the table route (data/table.toml: lane instructions and L2 bytes a word
+                                              against an L2 facet; --lookup-q, --lookup-bytes, --l2; --index-bits B
+                                              for B-bit noise entries on the operand it indexes); --uni-issue C also
+                                              charges a uniform instruction C times an ALU's cost on the issue rows
+                                              (a no-op where the census has it there already); --checking full
+                                              (default) is the protocol with every word and operand verified, the
+                                              core ε alone, and --checking sampled adds ε_sample = ε_luck + ε_adapt
+                                              on its own line, for the design's proof unit (data/adapt.toml) or
+                                              --adapt UNIT's
+    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--operands O] [--credit C]
                       [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
                                               one line a design (every design by default; with --fold-sweep, each at
-                                              each fold cost; with --upfill, each without and with it), in two column
-                                              groups: the core (γ and γ_f, γ with the clock gap f_max/f_H, the
-                                              credited time, ε_skip, ε_sched, ε_machine at
+                                              each fold cost), in two column groups: the core (γ and γ_f, γ with the
+                                              clock gap f_max/f_H, the credited time, ε_skip, ε_sched, ε_machine at
                                               q* = 2, 4, 8, 16 and its floor, the core ε at q* = 2, 8 and Q, and the
                                               thresholds), then with --checking sampled the sample (ε_luck, ε_adapt
                                               and ε_sample at Q)
@@ -177,7 +179,6 @@ def _design(args, name: str) -> E.Design:
     d = E.design(name, args.data)
     d = d.with_fold_cost(args.fold_cost) if args.fold_cost is not None else d
     d = d.with_fill(args.fill) if args.fill else d
-    d = d.with_upfill() if args.upfill else d
     d = d.with_index_bits(args.index_bits) if args.index_bits else d
     return d if args.q_uniform is None else replace(d, name=f"{d.name}@qu{args.q_uniform:g}", q_uniform=args.q_uniform)
 
@@ -192,12 +193,36 @@ def _lookups(args) -> E.Table | None:
     return E.table(args.data, args.lookup_q, args.l2, args.lookup_bytes) if args.lookups else None
 
 
-def _adapt(args) -> E.Adapt | None:
+def _adapt(args, d: E.Design) -> E.Adapt | None:
     if args.checking == "full":
         if args.adapt:
             raise SystemExit("eps: --adapt picks the sampled protocol's proof unit: add --checking sampled")
         return None
-    return E.adapt(args.adapt or "", args.data)
+    return E.adapt(args.adapt or d.unit, args.data)
+
+
+def _registry(d: E.Design) -> dict:
+    return {"name": d.name, "title": d.title, "aliases": list(d.aliases), "base": d.base or None,
+            "summary": d.summary, "noise": d.noise, "fold": {"name": d.fold_name, **d.fold},
+            "filler": [{"per_word": f.per_word, "mix": f.mix, "route": f.route} for f in d.filler], "L": d.L,
+            "unit": d.unit, "coins": {"bits": d.coin_bits, "source": d.coins_source}, "ppl": d.ppl or None}
+
+
+def _designs(args) -> int:
+    ds = [E.design(n, args.data) for n in E.designs(args.data)]
+    if args.json:
+        print(json.dumps([_registry(d) for d in ds], ensure_ascii=False, indent=1))
+        return 0
+    print(f"{'design':15s} {'title':22s} {'linears':>9s} {'lm_head':>9s} {'QKᵀ':>9s} {'P·V':>5s} {'fold':>9s} "
+          f"{'filler':>6s} {'unit':>6s} {'coins':>5s} {'ppl':14s} aliases")
+    for d in ds:
+        n = d.noise
+        print(f"{d.name:15s} {d.title:22s} {n['linears']:>9s} {n['lm_head']:>9s} {n['qk']:>9s} {n['pv']:>5s} "
+              f"{d.fold_name + ' ' + f'{d.fold_cost():g}':>9s} {sum(f.per_word for f in d.filler):6g} {d.unit:>6s} "
+              f"{d.coin_bits:5d} {d.ppl or '–':14s} {', '.join(d.aliases)}")
+    print(textwrap.fill("noise: " + "; ".join(f"{k}: {v}" for k, v in E.NOISE.items()), width=120,
+                        subsequent_indent="  "))
+    return 0
 
 
 def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, credit: str = "H",
@@ -207,7 +232,7 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
     s = E.setup(d, pi, data, operands, credit, table)
     per_mma = e.honest.words * e.honest.depth / d.L
     return {
-        "design": d.name, "summary": d.summary, "vector": pi.vector, "honest": e.honest.name,
+        "design": d.name, "summary": d.summary, "registry": _registry(d), "vector": pi.vector, "honest": e.honest.name,
         "honest_status": e.honest.status, "operands": operands, "credit": credit, "L": d.L, "fold": d.fold_name,
         "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source}
                                                 for f, pw in e.fillers], "q": q,
@@ -251,12 +276,12 @@ def _eps_table(args, pi: E.Machine) -> int:
     cred = {"H": "honest's kernel (H)", "model": "honest's model bound B(H)",
             "floor": "the floor program ♭ (SPEC §0.7a)"}[args.credit]
     tb = _lookups(args)
-    ad = _adapt(args)
     sampled = args.checking == "sampled"
     look = "" if tb is None else (f", the table route open at {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a "
                                   f"word ({_l2(tb)})")
-    unit = "" if not sampled else (f" Sample (the sampling compiler, proof unit {ad.name}: {ad.selection}; never in "
-                                   f"core): ε_luck at q* = {args.q:g}, ε_adapt, ε_sample = their sum.")
+    unit = "" if not sampled else (f" Sample (the sampling compiler, never in core): the proof unit ("
+                                   f"{f'{args.adapt} for every design' if args.adapt else 'each design its own'}), "
+                                   f"ε_luck at q* = {args.q:g}, ε_adapt, ε_sample = their sum.")
     print(f"Π {pi.vector}, operands {args.operands}, credit {cred}{look}, checking {args.checking}. Core (every word "
           f"and operand verified): γ_f γ with the clock gap f_max/f_H; T/MMA the credited time and its binding rows, "
           f"H/cred honest's time over it; ε_skip; "
@@ -268,16 +293,16 @@ def _eps_table(args, pi: E.Machine) -> int:
           f"{'sched':>6s} " + " ".join(f"{'m@' + str(q):>7s}" for q in qs)
           + f" {'floor':>7s} " + " ".join(f"{f'core@{q:g}':>9s}" for q in qe)
           + f" {'q*₀':>9s} {'lanes':>6s} {'UP@16':>6s}"
-          + (f" | {'luck':>7s} {'adapt':>7s} {'sample':>7s}" if sampled else ""))
+          + (f" | {'unit':>15s} {'luck':>7s} {'adapt':>7s} {'sample':>7s}" if sampled else ""))
     rows = []
     for n in names:
         for r in sweep:
             d = E.design(n, args.data)
             d = d.with_fold_cost(r) if r is not None else d
             d = d.with_fill(args.fill) if args.fill else d
-            d = d.with_index_bits(args.index_bits) if args.index_bits else d
-            rows += [d, d.with_upfill()] if args.upfill else [d]
+            rows.append(d.with_index_bits(args.index_bits) if args.index_bits else d)
     for d in rows:
+        ad = _adapt(args, d)
         es = {q: E.eps(d, pi, q, args.data, operands=args.operands, credit=args.credit, table=tb, adapt=ad)
               for q in {*qs, *qe}}
         e = es[8]
@@ -294,8 +319,8 @@ def _eps_table(args, pi: E.Machine) -> int:
               + f" {100 * e.floor:6.2f}% "
               + " ".join(f"{100 * es[q].core():8.3f}%" for q in qe)
               + f" {_thr(t):>9s} {_thr(tl):>6s} {100 * up:5.2f}%"
-              + (f" | {100 * eq.luck:6.3f}% {100 * (ad.eps if ad else 0):6.3f}% {100 * eq.sample():6.3f}%"
-                 if sampled else ""))
+              + (f" | {ad.name:>15s} {100 * eq.luck:6.3f}% {100 * ad.eps:6.3f}% {100 * eq.sample():6.3f}%"
+                 if ad else ""))
     return 0
 
 
@@ -310,9 +335,9 @@ def _eps(args) -> int:
     if len(args.designs) > 1:
         raise SystemExit("eps: one design, or --table for several")
     names = E.designs(args.data)
-    d = _design(args, args.designs[0] if args.designs else "dither-duo" if "dither-duo" in names else names[0])
+    d = _design(args, args.designs[0] if args.designs else "dither-1s" if "dither-1s" in names else names[0])
     tb = _lookups(args)
-    ad = _adapt(args)
+    ad = _adapt(args, d)
     rec = _eps_record(d, pi, args.q, args.data, args.operands, args.credit, tb, ad, args.checking)
     if args.json:
         print(json.dumps(rec, ensure_ascii=False, indent=1))
@@ -326,6 +351,9 @@ def _eps(args) -> int:
     built = {"H": "honest as built", "model": "honest as built",
              "floor": f"the floor program ♭ (the tensor route at φ_del = {floor} a MMA)"}
     print(f"{d.name}: {d.summary}")
+    print(f"  {d.title}" + (f" (also {', '.join(d.aliases)})" if d.aliases else "") + ": noise "
+          + ", ".join(f"{k} {v}" for k, v in d.noise.items()) + f"; proof unit {d.unit}; {d.coin_bits}-bit coins; "
+          + (f"perplexity arm {d.ppl}" if d.ppl else "no perplexity arm on main"))
     print(f"  Π: {pi.vector}'s {len(pi.rows)} rows; honest {h.name} ({h.status}): {h.mma}, {h.words} words a MMA; "
           f"L {d.L}; fold {d.fold_name} {d.fold_cost():g} a word ({', '.join(f'{k} {v:g}' for k, v in d.fold.items())});"
           f" filler {filler}")
@@ -398,6 +426,8 @@ def main(argv: list[str] | None = None) -> int:
     d = sub.add_parser("adopt")
     d.add_argument("census", type=Path)
     d.add_argument("epoch")
+    r = sub.add_parser("designs")
+    r.add_argument("--json", action="store_true")
     e = sub.add_parser("eps")
     e.add_argument("designs", nargs="*")
     e.add_argument("--device", default=argparse.SUPPRESS, help=dev)
@@ -414,9 +444,6 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--table", action="store_true")
     e.add_argument("--fold-sweep", help="with --table: each design at each of these fold costs")
     e.add_argument("--fill", type=float, help="add X lane instructions a word of verified filler on lanes")
-    e.add_argument("--upfill", action="store_true",
-                   help="add verified filler keeping the uniform datapath busy (with --table: a row beside each; "
-                        "not adopted, decision 73)")
     e.add_argument("--lookups", action="store_true",
                    help="open the cheater's table route: words from register-indexed L2 lookups (data/table.toml)")
     e.add_argument("--lookup-q", type=float, help="with --lookups: lane instructions a table word (default: the file's)")
@@ -428,7 +455,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="full: every word and operand verified, the core ε alone (default); sampled: also ε_sample = "
                         "ε_luck + ε_adapt, on its own line and columns")
     e.add_argument("--adapt", metavar="UNIT",
-                   help="with --checking sampled: the proof unit (data/adapt.toml; default: its default, today's)")
+                   help="with --checking sampled: the proof unit (data/adapt.toml; default: the design's own)")
     e.add_argument("--lookup-bytes", type=float, metavar="B",
                    help="with --lookups: L2 bytes a table word (default: the file's)")
     e.add_argument("--index-bits", type=int, metavar="B",
@@ -443,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
         print(__doc__)
         return 0
     return {"list": _list, "solve": _solve, "census": _census, "attacks": _attacks, "adopt": _adopt,
-            "eps": _eps}[args.cmd](args)
+            "designs": _designs, "eps": _eps}[args.cmd](args)
 
 
 if __name__ == "__main__":

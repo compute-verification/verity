@@ -1,0 +1,24 @@
+# Dither-C with Dither-2S's P·V (SKIP's Bc at 04:41Z): co32c on the linears and lm_head, cohalf on QKᵀ, and the recorded
+# w64 peel on P·V, whose whole strip is free at a one-hot P row (CHECKED-STRIP Result 3), which Dither-C's pv closes
+# (note:20261017T0340Z-draft-skip 04:41Z, note:20261017T0030Z-draft-checked-strip). Its arm `co32c` is the one Dither-C
+# perplexity measured on main.
+base = "dither-c"
+name = "dither-c-peel"
+title = "Dither-C, peel P·V"
+aliases = ["co-dither", "Bc"]
+summary = "co32c linears and lm_head (every limb a checked word), cohalf QKᵀ, Dither-2S's P·V, duo at L = 32"
+ppl = "co32c"
+
+[noise]
+linears = "co32c"
+lm_head = "co32c"
+qk = "cohalf"
+pv = "peel"
+
+[skip.pv-strip]
+eps = 0.00129
+source = "CALC from SKIP's parts: Bc's adopted P·V, 0.064% by time at 04:41Z, doubled by CHECKED-STRIP Result 3's one-hot P row (its whole strip free) as A's went 0.065% → 0.131% (note:20261017T0340Z-draft-skip Result 3, 06:19Z; note:20261017T0030Z-draft-checked-strip)"
+
+[skip.recombination]
+eps = 0.00074
+source = "co32c's recombination IMADs, 0.077% of the 8B linears' time at the duo fold (CHECKED-STRIP), at the linears' share of SKIP's worst cell (8B 2K prefill: 0.138% − 0.064%); added to P·V's maximum, which may sit in another cell, so conservative (note:20261017T0340Z-draft-skip, 04:41Z)"
