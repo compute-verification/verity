@@ -18,7 +18,6 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-
 from exact_kit.checks import Checks
 
 HERE = Path(__file__).resolve().parent

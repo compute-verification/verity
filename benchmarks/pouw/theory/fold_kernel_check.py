@@ -26,7 +26,6 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-
 from exact_kit import search, wrap
 from exact_kit.checks import Checks
 

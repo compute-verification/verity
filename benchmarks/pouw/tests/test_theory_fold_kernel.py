@@ -10,7 +10,7 @@ import numpy as np
 THEORY = Path(__file__).resolve().parents[1] / "theory"
 sys.path.insert(0, str(THEORY))
 
-import fold_kernel_check as fk  # noqa: E402
+import fold_kernel_check as fk
 
 
 def test_fold_kernel_matches_meet_in_the_middle(tmp_path):

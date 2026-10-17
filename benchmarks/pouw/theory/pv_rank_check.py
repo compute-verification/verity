@@ -18,8 +18,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import checked_strip as cs  # noqa: E402
-from exact_kit.checks import Checks  # noqa: E402
+import checked_strip as cs
+from exact_kit.checks import Checks
 
 KINDS = ("zero", "onehot", "random", "balanced")
 

@@ -20,7 +20,6 @@ from __future__ import annotations
 import sys
 
 import numpy as np
-
 from exact_kit.checks import Checks
 
 
@@ -30,7 +29,6 @@ def quantize(z, gamma):
 
 
 def attack(W, gamma, R, h, j, rng, polish=2000):
-    d = W.shape[0]
     t = -R * gamma[j] / (127.0 * gamma)
     t[j] = 1.0
     xs = np.linalg.solve(W.T, t)

@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "theory"))
 
-import checked_strip as cs  # noqa: E402
+import checked_strip as cs
 
 
 def test_pv_coin_rank_in_the_first_block():
