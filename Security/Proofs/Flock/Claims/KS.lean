@@ -80,6 +80,8 @@ import Proofs.Flock.Claims.KS.ForkCoupling
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.ZkSlackFit
 import Proofs.Flock.Claims.KS.ZkSim
+import Proofs.Flock.Claims.KS.ZkLock
+import Proofs.Flock.Claims.KS.ZkStep
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -406,4 +408,10 @@ hold, from four named Props: its lockstep, its abort, its fork bounds and a view
 (`ZkSim`: `FlockDeploy.KS.zkSim`, `FlockDeploy.KS.zkΦ`, `FlockDeploy.KS.zkRd`, `FlockDeploy.KS.zk_simFork_le`,
 `FlockDeploy.KS.ZkSimRunAt`, `FlockDeploy.KS.ZkSimAbortAt`, `FlockDeploy.KS.ZkSimForkLe`,
 `FlockDeploy.KS.ZkViewClash`, `FlockDeploy.KS.zkSimWJ_of_parts`, `FlockDeploy.KS.zk_KS_of_parts`,
-`FlockDeploy.KS.zk_tableBoundJOnAccR_of_parts`, `FlockDeploy.KS.zk_KSFlock_of_parts`). -/
+`FlockDeploy.KS.zk_tableBoundJOnAccR_of_parts`, `FlockDeploy.KS.zk_KSFlock_of_parts`). Its lockstep and abort hold at
+every statement: it sends `P`'s messages at `zkΦ`'s coins along the live history and aborts where `V true` rejects
+(`ZkLock`: `FlockDeploy.KS.zkSim_liveOut`, `FlockDeploy.KS.zkSimAbortAt`), and where `P`'s run accepts its live
+outcome is the record's view, the record's rounds read back stream by stream (`ZkStep`: `FlockDeploy.KS.zkSim_reps`,
+`FlockDeploy.KS.zkSimRun`, `FlockDeploy.KS.zkSimRunAt`), so masked KS and the recursion's premise rest on its fork
+bounds and view clashes alone (`FlockDeploy.KS.zk_KS_of_fork`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_fork`,
+`FlockDeploy.KS.zk_KSFlock_of_fork`). -/
