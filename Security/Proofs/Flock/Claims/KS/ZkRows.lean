@@ -1,0 +1,601 @@
+import Proofs.Flock.Claims.KS.ZkEvent
+
+/-!
+# The masked reader's level-0 rows at a rep's run
+
+`ZkEntries` and `ZkDrawJ` with each opened level-0 row whole: its witness lanes and both reps' extra lanes. A masked
+level-0 self-clash (`ClashW`) compares whole rows, so where `OpensEntries` reads an output's level-0 openings as the
+reader's entries on the witness lanes, `OpensRows` reads them as the rep's opened rows, row by row:
+
+* `Claims.Flock.zkRepRowsOf`, `Claims.Flock.zkRepRowsOf_ok`, `Claims.Flock.slotOpensZ_rows`: `zkRepColsOf`,
+  `zkRepColsOf_ok` and `slotOpensZ_entries` with no row cut.
+* `FlockSoundness.Discharge.ZkExec.zk_rep_rows`, `FlockSoundness.Discharge.ZkExec.zk_table_rows₀Z`: a rep's, and an
+  accepted table's, level-0 openings are its reps' `zkRepRowsOf` rows (`zk_rep_entries`, `zk_table_opens₀Z`).
+* `OpensRows`, `runsAtZCJ_live_rows`, `runsAtZCJH_live_rows`: at public and hidden outputs, each accepted output's
+  level-0 openings are the reps' rows (`runsAtZCJ_live_entries`, `runsAtZCJH_live_entries` at `OpensRows`).
+* `decodesTableR_zkTabs`, `decodesTableHR_zkTabs`, `decodesTableR_deploy`: the deployed `opnD` and `decD` at `zkTabs`
+  are right at `OpensRows` at one live outcome `o₀`, on `o₀` where `verify --zk` accepts what `wrS` writes for it, at
+  public and hidden outputs and at a masked statement in scope (`decodesTableW_zkTabs`, `decodesTableHW_zkTabs`,
+  `decodesTableW_deploy`). The verdict reads `o₀`'s transcript, so the outcome is pinned.
+-/
+
+namespace Claims.Flock
+
+open FlockSoundness FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession
+
+local notation "𝔽" => FlockLevel3.GF128
+
+/-- **A rep's opened level-0 rows** from its recorded rounds and proof bytes: `zkRepColsOf` with each row whole, none
+if the proof does not decode. -/
+def zkRepRowsOf (sh : _root_.Flock.Shape) (rounds : Array _root_.Flock.Round) (bytes : ByteArray) :
+    List (ℕ × List 𝔽) :=
+  match _root_.Flock.Zk.decode sh bytes with
+  | .ok zp =>
+    zkRepCols (sh.sched.levels.getD 0 default)
+      ((rounds[zkQueryRound sh.m sh.kLog sh.sched.k0 sh.claims]?.map (·.coins)).getD #[])
+      zp.proof.ligerito.initialProof.rows
+  | .error _ => []
+
+/-- The rows at a proof that decodes: `zkRepCols` at level 0, the coins of round `zkQueryRound` and the proof's
+level-0 rows. -/
+theorem zkRepRowsOf_ok {sh : _root_.Flock.Shape} {rounds : Array _root_.Flock.Round} {bytes : ByteArray}
+    {zp : _root_.Flock.Zk.ZkProof} (h : _root_.Flock.Zk.decode sh bytes = .ok zp) :
+    zkRepRowsOf sh rounds bytes = zkRepCols (sh.sched.levels.getD 0 default)
+      (rounds[zkQueryRound sh.m sh.kLog sh.sched.k0 sh.claims]!).coins zp.proof.ligerito.initialProof.rows := by
+  unfold zkRepRowsOf
+  rw [h, coins_getElem!]
+
+/-- **A masked rep's level-0 openings are its rows**: `slotOpensZ_entries` with each row whole. -/
+theorem slotOpensZ_rows {D Sl : Type} (out : OutZC 𝔽 D Sl) (r : ℕ) (lv : _root_.Flock.Level)
+    (coins : Array _root_.Flock.F128) (rows : Array (Array _root_.Flock.F128)) (R : Model.Req)
+    (rest : List Model.Req) (hreqs : (if r = 0 then out.pend.1 else out.pend.2).lig.reqs = R :: rest)
+    (hl : R.level = 0) (hpos : R.positions = (_root_.Flock.positions lv coins).toList)
+    (hq : R.positions.length = lv.q) (hrows : rows.size = R.positions.length)
+    (hop : ∀ j, (out.opens.rows r 0 j).1 = rows[j]!.toList.map FlockLevel3.GF128.of) :
+    (slotOpensZ out r 0 lv.q).map (fun x => (x.1, x.2.1)) = zkRepCols lv coins rows := by
+  unfold slotOpensZ zkRepCols
+  rw [hreqs, List.find?_cons_of_pos (by simp [hl])]
+  simp only [List.map_map]
+  rw [← hq, List.take_length, ← hpos]
+  apply List.ext_getElem
+  · simp [hrows]
+  · intro i h1 h2
+    simp only [List.length_map, List.length_zipIdx] at h1
+    simp [hop, hrows, h1]
+
+end Claims.Flock
+
+namespace FlockSoundness.Discharge.ZkExec
+
+open Flock Refine Exec Game Model
+
+local notation "𝔽" => FlockLevel3.GF128
+
+/-- **A masked rep's level-0 openings are its deployed rows**: `zk_rep_entries` with each row whole. -/
+theorem zk_rep_rows {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
+    (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
+    (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
+    (bytes : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
+    (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
+    (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
+      ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
+    (hwf : RoundsWF rounds)
+    (hrun : (repProg st sch tPad r.val extras zp).run (Flock.Transcript.init rounds dom) = .ok ((), tr))
+    (hk : tr.k = rounds.size) (hdec : Zk.decode (shapeZK st sch extras) bytes = .ok zp)
+    (out : ZkLink.OutZC 𝔽 Dig Sl)
+    (hp : Plays fOf (ZkLink.repZCAt execArith Hs T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
+      (rounds.toList.map (·.coins)) (if r.val = 0 then out.pend.1 else out.pend.2))
+    (ho : ∀ j, (out.opens.rows r.val 0 j).1 = zp.proof.ligerito.initialProof.rows[j]!.toList.map fOf) :
+    (ZkLink.slotOpensZ out r.val 0 (lvOf T.sch 0).queries).map (fun x => (x.1, x.2.1)) =
+      Claims.Flock.zkRepRowsOf (shapeZK st sch extras) rounds bytes := by
+  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨-, h2, -, -⟩ := hdim
+  obtain ⟨pend', hp', -, hreqs, R, rest, hR, hl, hpos⟩ :=
+    zk_rep_reqs Hs T pts r st sch tPad extras zp rounds dom tr hsch hseam hlen hext hwf hrun hk
+  have he := plays_det hp hp'
+  have hseam0 : LevelSeam (sch.levels.getD 0 default) := hlv 0 (by omega)
+  have hQ : (lvOf T.sch 0).queries = (sch.levels.getD 0 default).q := by
+    rw [hseam.hsch, lvOf_schedOf (by omega)]
+    rfl
+  have hmc := ((hreqs R (by rw [hR]; exact List.mem_cons_self)).1 hl).2
+  have hrows : zp.proof.ligerito.initialProof.rows.size = R.positions.length := by
+    simpa using (merkleCheck_rows hmc).1
+  rw [hQ, Claims.Flock.zkRepRowsOf_ok hdec]
+  exact Claims.Flock.slotOpensZ_rows out r.val _ _ _ R rest (by rw [he]; exact hR) hl hpos
+    (by rw [hpos, Array.length_toList, positions_size _ hseam0]) hrows ho
+
+/-- **At `verify --zk`'s acceptance of a table, its level-0 openings are its reps' rows**: `zk_table_opens₀Z`'s
+entries with each row whole (`zk_rep_rows`), rep 0's then rep 1's. -/
+theorem zk_table_rows₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
+    (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
+    (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
+    (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
+    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
+    (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
+    (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
+    (h0 : Zk.verifyRep spec st sch tPad sess i 0 b₀ = .ok c) (h1 : Zk.verifyRep spec st sch tPad sess i 1 b₁ = .ok c)
+    (s₀ s₁ : StreamRec) (zp₀ zp₁ : Zk.ZkProof)
+    (hs₀ : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 0) =
+      some s₀)
+    (hs₁ : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 1) =
+      some s₁)
+    (hd₀ : Zk.decode (shapeZKn st sch N) b₀ = .ok zp₀) (hd₁ : Zk.decode (shapeZKn st sch N) b₁ = .ok zp₁)
+    (pend : ZkLink.PendZ 𝔽 Dig (List UInt8) × ZkLink.PendZ 𝔽 Dig (List UInt8)) (cap : Cap Dig)
+    (hp₀ : Plays fOf (ZkLink.repZCAt execArith hs512 (T S R) pts 0) (repMsgsZ st sch (2 + N) tPad zp₀)
+      (s₀.rounds.toList.map (·.coins)) pend.1)
+    (hp₁ : Plays fOf (ZkLink.repZCAt execArith hs512 (T S R) pts 1) (repMsgsZ st sch (2 + N) tPad zp₁)
+      (s₁.rounds.toList.map (·.coins)) pend.2) :
+    (ZkLink.opens₀Z (T S R).sch (ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁]))).map
+        (fun x => (x.1, x.2.1)) =
+      Claims.Flock.zkRepRowsOf (shapeZKn st sch N) s₀.rounds b₀ ++
+        Claims.Flock.zkRepRowsOf (shapeZKn st sch N) s₁.rounds b₁ := by
+  obtain ⟨s₀', ex, zp₀', tr₀, hs₀', hx₀, hd₀', -, -, hrun₀, hk₀, -, -⟩ :=
+    zk_verifyRep_ok spec st sch tPad sess i 0 b₀ c h0
+  obtain ⟨s₁', ex₁, zp₁', tr₁, hs₁', hx₁, hd₁', -, -, hrun₁, hk₁, -, -⟩ :=
+    zk_verifyRep_ok spec st sch tPad sess i 1 b₁ c h1
+  obtain rfl : ex = ex₁ := Except.ok.inj (hx₀.symm.trans hx₁)
+  obtain ⟨hsz, hrel⟩ := hext ex hx₀
+  have hsh : shapeZK st sch ex = shapeZKn st sch N := by
+    unfold shapeZK shapeZKn; rw [hsz, hN]
+  obtain rfl : s₀' = s₀ := Option.some.inj (hs₀'.symm.trans hs₀)
+  obtain rfl : s₁' = s₁ := Option.some.inj (hs₁'.symm.trans hs₁)
+  have hz₀ := hd₀'
+  have hz₁ := hd₁'
+  rw [hsh] at hz₀ hz₁
+  obtain rfl : zp₀' = zp₀ := Except.ok.inj (hz₀.symm.trans hd₀)
+  obtain rfl : zp₁' = zp₁ := Except.ok.inj (hz₁.symm.trans hd₁)
+  have hn : ex.size = N := hsz.trans hN
+  rw [← hn] at hp₀ hp₁
+  obtain ⟨hro, -, -, -⟩ := opnZ_pair hd₀ hd₁
+  have he₀ := zk_rep_rows hs512 (T S R) pts 0 st sch tPad ex zp₀' s₀'.rounds _ tr₀ b₀ hsch hseam hsz
+    hrel (hwf s₀' (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs₀))) hrun₀ hk₀ hd₀'
+    (ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁])) hp₀
+    (fun j => by show ((opnZ st sch N #[b₀, b₁]).rows 0 0 j).1 = _; rw [hro]; simp [opensOf, openRow, openAt])
+  have he₁ := zk_rep_rows hs512 (T S R) pts 1 st sch tPad ex zp₁' s₁'.rounds _ tr₁ b₁ hsch hseam hsz
+    hrel (hwf s₁' (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs₁))) hrun₁ hk₁ hd₁'
+    (ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁])) hp₁
+    (fun j => by show ((opnZ st sch N #[b₀, b₁]).rows 1 0 j).1 = _; rw [hro]; simp [opensOf, openRow, openAt])
+  rw [hsh] at he₀ he₁
+  unfold ZkLink.opens₀Z
+  rw [List.map_append]
+  exact congrArg₂ (· ++ ·) he₀ he₁
+
+end FlockSoundness.Discharge.ZkExec
+
+namespace FlockSoundness.Discharge.Composed
+
+open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL
+open FlockSoundness.Discharge.Tables (LiveOutJ DecodesTable repTapeJ)
+
+local notation "𝔽" => FlockLevel3.GF128
+local notation "𝕂" => FlockLevel3.GF256
+
+variable {n mPts : ℕ} {Reg : Type}
+
+/-- **An output's level-0 openings are its reps' rows at table `j`**: `OpensEntries` with each row whole, at the
+setup at the draw `d`, table `j`'s `Zk.schedule` schedule and the session's two rep streams of table `j`, at
+`2·|regions|` extra claims on the streams' rounds and table `j`'s proof files. -/
+def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : TabZK 𝔽 mPts)
+    (out : OutZC 𝔽 Dig (List UInt8)) : Prop :=
+  ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
+    (s₀ s₁ : StreamRec) (h : j < sts.size),
+    FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
+    Zk.schedule sts[j].m = .ok (sch, tPad) ∧
+    sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+    sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
+    (opens₀Z T.sch out).map (fun x => (x.1, x.2.1)) =
+      Claims.Flock.zkRepRowsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₀.rounds
+          t.proofs[2 * j]! ++
+        Claims.Flock.zkRepRowsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₁.rounds
+          t.proofs[2 * j + 1]!
+
+/-- **`runsZCJ_live` at the setup at each draw, with the rows**: `runsAtZCJ_live_entries` at `OpensRows`
+(`zk_table_rows₀Z`). -/
+theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
+    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
+    (L : Law n) (hT : TagsOkZJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
+    (hDraw : ∀ ω, DrawOkZKJ I dj mPts (L.draw ω)) :
+    RunsOnZCJW (K := 𝕂) execArith hs512 (planZJ dj y₀) (opnAtZJ (planZJ dj y₀) I dj) (decAtZJ (planZJ dj y₀))
+      (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
+      (fun S R o => AcceptsAt I (dj S) (wr S R o))
+      (fun S R o j out => out.accepted = true ∧
+        OpensRows I (dj S) (wr S R o) j.val ((planZJ dj y₀ S R).get j) out) := by
+  intro ω R o hacc j
+  obtain ⟨hh, hrr, hl⟩ := hT
+  obtain ⟨hprf, hrec⟩ := hRec _ R o hacc
+  obtain ⟨spec, sts, hs, -, hv⟩ := hacc
+  have hh' : (zkTags I).hiddenOutputs = false := (zkTags_hiddenOutputs I).trans hh
+  have hpts2 := setupTables_points hh' hs
+  have hsr : spec.retainRounds = true := ((setupTables_retain hh' hs).trans (zkTags_retainRounds I)).trans hrr
+  obtain ⟨hsz, hstJ⟩ := FlockDeploy.KS.setupAt_tableJ hh hs
+  have hjn : j.val < nTab I := planZJ_length dj y₀ (L.draw ω) R ▸ j.isLt
+  have hj : j.val < sts.size := hsz ▸ hjn
+  have hst := hstJ j.val hj
+  obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
+  obtain ⟨hs0, c, hz0, hv0, hv1⟩ := hall j.val (by simpa using hj)
+  simp only [Array.getElem_map] at hz0 hv0 hv1
+  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
+  have ht' : (inputsJ I j.val).tags.typed = false := typedJ _ht j.val
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
+  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
+  obtain ⟨x, hx⟩ := drawSetup_of_setupH_g (I := inputsJ I j.val)
+    (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hst hf hD
+    ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
+  obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZJ_of ht' x (sch := schs[j.val].1) (tPad := schs[j.val].2)
+    (by rw [hx]; exact hz')
+  have hyst : y.x.st = sts[j.val] := by rw [hyx]; exact hx
+  have hTy : (planZJ (Reg := Reg) dj y₀ (L.draw ω) R).get j = y.table := by
+    have hget : (planZJ (Reg := Reg) dj y₀ (L.draw ω) R).get j = tableZJ dj y₀ (L.draw ω) ⟨j.val, hjn⟩ := by
+      exact List.get_ofFn _ j
+    rw [hget]
+    unfold tableZJ
+    rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩)]
+    exact DrawSetupZJ.table_eq _ _
+  rw [← hysch, ← hytp, ← hyst] at hv0 hv1
+  rw [← hyst] at hst
+  obtain ⟨hpts, hrj⟩ := hrec spec sts sess hs hdecS
+  obtain ⟨hroot, hstreams⟩ := hrj j
+  obtain ⟨hp2, hmp⟩ := hpts2
+  have hpd := decode_points hdecS
+  have hmP : sts[j.val].mPts = mPts := by rw [← hyst]; exact y.x.hmPts
+  have hsz' : ∀ p ∈ sess.points.toList, p.size = mPts := fun p hp =>
+    (hpd.2 p hp).trans ((hmp j.val hj).symm.trans hmP)
+  have hwf := setupH_wf y.x.h
+  have hExt : ExtraRealizes (Setup.ofCircuit y.x.st) y.table.S sess.points
+      (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts) := by
+    have := ofCircuit_extra y.x.st hwf.1 hwf.2 sess.points (hpd.1.trans hp2) (by rw [y.x.hmPts]; exact hsz')
+    rw [y.x.hmPts, hpts] at this
+    exact this
+  have hms : (Setup.ofCircuit y.x.st).merkle = MerkleScheme.hm96Sha512 :=
+    setupH_tagsAt_hm96 ((zkTags_merkleLeaf I).trans hl) hst
+  have hdl : (Setup.ofCircuit y.x.st).merkle.digestLen = 64 := by rw [hms]; rfl
+  have hseam := y.table_seam
+  have hlay := y.table_lay
+  have hfold : FoldRealizes (Setup.ofCircuit y.x.st).fold y.table.S :=
+    ofCircuit_fold y.x.st y.x.wf.1 (regionsOf y.x.st)
+  have hwfA := decode_roundsWF hdecS
+  have hretA := decode_allRetained hsr hdecS
+  obtain ⟨s₀, ex₀, zp₀, tr₀, hf₀, hex₀, hdz₀, -, hrt₀, hrun₀, hk₀, -, -⟩ := zk_verifyRep_ok _ _ _ _ _ _ _ _ _ hv0
+  obtain ⟨s₁, ex₁, zp₁, tr₁, hf₁, hex₁, hdz₁, -, hrt₁, hrun₁, hk₁, -, -⟩ := zk_verifyRep_ok _ _ _ _ _ _ _ _ _ hv1
+  have e₁ : ex₁ = ex₀ := Except.ok.inj (hex₁.symm.trans hex₀)
+  subst ex₁
+  obtain ⟨hlen₀, hcr₀⟩ := hExt ex₀ hex₀
+  have hm₀ : s₀ ∈ sess.streams.toList := Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hf₀)
+  have hm₁ : s₁ ∈ sess.streams.toList := Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hf₁)
+  obtain ⟨p₀, hpl₀, hrr₀⟩ := zk_rep_run_plays hs512 y.table o.pts 0 (Setup.ofCircuit y.x.st) y.sch y.tPad ex₀ _ zp₀
+    s₀.rounds _ tr₀ y.hz hdl hseam hlen₀ hcr₀ hdz₀ hrt₀ (hwfA s₀ hm₀) (hretA s₀ hm₀) hrun₀ hk₀
+  obtain ⟨p₁, hpl₁, hrr₁⟩ := zk_rep_run_plays hs512 y.table o.pts 1 (Setup.ofCircuit y.x.st) y.sch y.tPad ex₀ _ zp₁
+    s₁.rounds _ tr₁ y.hz hdl hseam hlen₀ hcr₀ hdz₁ hrt₁ (hwfA s₁ hm₁) (hretA s₁ hm₁) hrun₁ hk₁
+  obtain ⟨s₀', s₁', zp₀', zp₁', hf₀', hf₁', hd₀', hd₁', -, hall'⟩ :=
+    zk_table_verdict (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec (Setup.ofCircuit y.x.st)
+      y.sch y.tPad sess j.val _ _ c y.hz hms hseam hlay hfold hExt hwfA hv0 hv1
+  have e₂ : s₀' = s₀ := Option.some.inj (hf₀'.symm.trans hf₀)
+  subst s₀'
+  have e₃ : s₁' = s₁ := Option.some.inj (hf₁'.symm.trans hf₁)
+  subst s₁'
+  have hshp : shapeZK (Setup.ofCircuit y.x.st) y.sch ex₀ =
+      shapeZKn (Setup.ofCircuit y.x.st) y.sch (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts).length := by
+    rw [← hlen₀]
+    rfl
+  rw [hshp] at hdz₀ hdz₁
+  have e₄ : zp₀' = zp₀ := Except.ok.inj (hd₀'.symm.trans hdz₀)
+  subst zp₀'
+  have e₅ : zp₁' = zp₁ := Except.ok.inj (hd₁'.symm.trans hdz₁)
+  subst zp₁'
+  rw [hlen₀] at hpl₀ hpl₁
+  have hacc' := hall' (p₀, p₁) hpl₀ hpl₁
+  have hnX : nXZJ y.table = ex₀.size := by
+    unfold nXZJ
+    rw [hlen₀, DecodeZL.extraClaims_length, DecodeZL.extraClaims_length]
+  have hdecEq : decAtZJ (planZJ (Reg := Reg) dj y₀) (L.draw ω) R j =
+      decZ (wRestZ (Setup.ofCircuit y.x.st).m (Setup.ofCircuit y.x.st).kLog (2 + ex₀.size) (schedOf y.sch) y.tPad
+        (layZ (Setup.ofCircuit y.x.st) y.sch).len) := by
+    unfold decAtZJ
+    rw [hTy, hseam.hm, hseam.hk, hseam.hsch, hseam.ht, hseam.hnp, hnX]
+  obtain ⟨e₀, he₀, hr₀⟩ := hstreams 0
+  obtain ⟨e₁, he₁, hr₁⟩ := hstreams 1
+  have e₆ : e₀ = s₀ := Option.some.inj (he₀.symm.trans hf₀)
+  subst e₀
+  have e₇ : e₁ = s₁ := Option.some.inj (he₁.symm.trans hf₁)
+  subst e₁
+  have hopn : opnAtZJ (planZJ (Reg := Reg) dj y₀) I dj (L.draw ω) R o.proofs j =
+      opnZ (Setup.ofCircuit y.x.st) y.sch (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts).length
+        #[(wr (L.draw ω) R o).proofs[2 * j.val]!, (wr (L.draw ω) R o).proofs[2 * j.val + 1]!] := by
+    rw [hprf]
+    unfold opnAtZJ
+    rw [hst]
+    dsimp only
+    rw [y.hz]
+    dsimp only
+    rw [hTy, hnX, hlen₀]
+  refine ⟨(p₀, p₁), ?_, ?_, ?_⟩
+  · rw [hTy, hdecEq, ← hr₀]
+    exact hrr₀
+  · rw [hTy, hdecEq, ← hr₁]
+    exact hrr₁
+  · dsimp only
+    rw [hTy, hopn, ← hroot]
+    have hok := outZC_of_accZ hacc'
+    have hN : (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts).length = 2 * sts[j.val].regions.size := by
+      rw [DecodeZL.extraClaims_length, ← hyst]
+      show 2 * (regionsOf y.x.st).length = _
+      simp [regionsOf]
+    refine ⟨hok, spec, sts, sess, y.sch, y.tPad, s₀, s₁, hj, hs, hdecS, by rw [← hyst]; exact y.hz, hf₀, hf₁,
+      (zk_table_rows₀Z (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
+        (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ c _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁).trans ?_⟩
+    rw [hN, hyst]
+
+end FlockSoundness.Discharge.Composed
+
+namespace FlockSoundness.Discharge.ZkHidden
+
+open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
+  HiddenExec Composed
+open FlockSoundness.Discharge.Tables (LiveOutJ)
+open FlockSoundness.Discharge.DecodeZLJ (partJson)
+
+local notation "𝔽" => FlockLevel3.GF128
+local notation "𝕂" => FlockLevel3.GF256
+
+variable {n mPts : ℕ} {Reg : Type}
+
+/-- **`runsZCJH_liveI` at the setup at each draw, with the rows**: `runsAtZCJH_live_entries` at `OpensRows`
+(`zk_table_rows₀Z`). -/
+theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
+    (L : Law n) (hT : TagsOkZHJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
+    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
+    RunsOnZCJW (K := 𝕂) execArith hs512 (planZHJ dj y₀) (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
+      (fun S R o => AcceptsAt I (dj S) (wr S R o))
+      (fun S R o j out => out.accepted = true ∧
+        OpensRows I (dj S) (wr S R o) j.val ((planZHJ dj y₀ S R).get j) out) := by
+  intro ω R o hacc j
+  obtain ⟨hh, hrr, hl⟩ := hT
+  obtain ⟨hprf, hrec⟩ := hRec _ R o hacc
+  obtain ⟨spec, sts, hs, hshape, hv⟩ := hacc
+  have hpts2 := setupTables_pointsAny hs
+  have hsr : spec.retainRounds = true := ((setupTables_retainAny hs).trans (zkTags_retainRounds I)).trans hrr
+  obtain ⟨hsz, hstJ⟩ := FlockDeploy.KS.setupAt_tableJH hh hs
+  have hjn : j.val < nTab I := planZHJ_length dj y₀ (L.draw ω) R ▸ j.isLt
+  have hj : j.val < sts.size := hsz ▸ hjn
+  have hst := hstJ j.val hj
+  obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
+  obtain ⟨hs0, cap, hz0, hv0, hv1⟩ := hall j.val (by simpa using hj)
+  simp only [Array.getElem_map] at hz0 hv0 hv1
+  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
+  have ht' : (inputsJ I j.val).tags.typed = false := typedJ ht j.val
+  have hcJ : HmOut.parse (inputsJ I j.val).tags (inputsJ I j.val).circuitFile (inputsJ I j.val).tables = .ok c :=
+    (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
+  obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
+  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
+  obtain ⟨x, hx⟩ := drawSetupH_of_setupHiddenI (I := inputsJ I j.val)
+    (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hcJ hst hf hD
+    ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
+  obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
+    (sch := schs[j.val].1) (tPad := schs[j.val].2) (by rw [hx]; exact hz')
+  have hyst : y.x.st = sts[j.val] := by rw [hyx]; exact hx
+  have hTy : (planZHJ (Reg := Reg) dj y₀ (L.draw ω) R).get j = y.table := by
+    have hget : (planZHJ (Reg := Reg) dj y₀ (L.draw ω) R).get j = tableZHJ dj y₀ (L.draw ω) ⟨j.val, hjn⟩ := by
+      exact List.get_ofFn _ j
+    rw [hget]
+    unfold tableZHJ
+    rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩)]
+    exact DrawSetupZHJ.table_eq _ _
+  rw [← hysch, ← hytp, ← hyst] at hv0 hv1
+  rw [← hyst] at hst
+  obtain ⟨hpts, hrj⟩ := hrec spec sts sess hs hdecS
+  obtain ⟨hroot, hstreams⟩ := hrj j
+  obtain ⟨hp2, hmp⟩ := hpts2
+  have hpd := decode_points hdecS
+  have hmP : sts[j.val].mPts = mPts := by rw [← hyst]; exact y.x.hmPts
+  have hsz' : ∀ p ∈ sess.points.toList, p.size = mPts := fun p hp =>
+    (hpd.2 p hp).trans ((hmp j.val hj).symm.trans hmP)
+  have hExt : ExtraRealizes (Setup.ofCircuit y.x.st) y.table.S sess.points
+      (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts) := by
+    have := ofCircuit_extra y.x.st y.x.wf.1 y.x.wf.2 sess.points (hpd.1.trans hp2) (by rw [y.x.hmPts]; exact hsz')
+    rw [y.x.hmPts, hpts] at this
+    exact this
+  have hms : (Setup.ofCircuit y.x.st).merkle = MerkleScheme.hm96Sha512 :=
+    setupHidden_hm96 (((tagsAt_merkleLeaf _ _ _).trans (zkTags_merkleLeaf I)).trans hl) hst
+  have hdl : (Setup.ofCircuit y.x.st).merkle.digestLen = 64 := by rw [hms]; rfl
+  have hseam := y.table_seam
+  have hlay := y.table_lay
+  have hfold : FoldRealizes (Setup.ofCircuit y.x.st).fold y.table.S :=
+    ofCircuit_fold y.x.st y.x.wf.1 (regionsOf y.x.st)
+  have hwfA := decode_roundsWF hdecS
+  have hretA := decode_allRetained hsr hdecS
+  obtain ⟨s₀, ex₀, zp₀, tr₀, hf₀, hex₀, hdz₀, -, hrt₀, hrun₀, hk₀, -, -⟩ := zk_verifyRep_ok _ _ _ _ _ _ _ _ _ hv0
+  obtain ⟨s₁, ex₁, zp₁, tr₁, hf₁, hex₁, hdz₁, -, hrt₁, hrun₁, hk₁, -, -⟩ := zk_verifyRep_ok _ _ _ _ _ _ _ _ _ hv1
+  have e₁ : ex₁ = ex₀ := Except.ok.inj (hex₁.symm.trans hex₀)
+  subst ex₁
+  obtain ⟨hlen₀, hcr₀⟩ := hExt ex₀ hex₀
+  have hm₀ : s₀ ∈ sess.streams.toList := Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hf₀)
+  have hm₁ : s₁ ∈ sess.streams.toList := Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hf₁)
+  obtain ⟨p₀, hpl₀, hrr₀⟩ := zk_rep_run_plays hs512 y.table o.pts 0 (Setup.ofCircuit y.x.st) y.sch y.tPad ex₀ _ zp₀
+    s₀.rounds _ tr₀ y.hz hdl hseam hlen₀ hcr₀ hdz₀ hrt₀ (hwfA s₀ hm₀) (hretA s₀ hm₀) hrun₀ hk₀
+  obtain ⟨p₁, hpl₁, hrr₁⟩ := zk_rep_run_plays hs512 y.table o.pts 1 (Setup.ofCircuit y.x.st) y.sch y.tPad ex₀ _ zp₁
+    s₁.rounds _ tr₁ y.hz hdl hseam hlen₀ hcr₀ hdz₁ hrt₁ (hwfA s₁ hm₁) (hretA s₁ hm₁) hrun₁ hk₁
+  obtain ⟨s₀', s₁', zp₀', zp₁', hf₀', hf₁', hd₀', hd₁', -, hall'⟩ :=
+    zk_table_verdict (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec (Setup.ofCircuit y.x.st)
+      y.sch y.tPad sess j.val _ _ cap y.hz hms hseam hlay hfold hExt hwfA hv0 hv1
+  have e₂ : s₀' = s₀ := Option.some.inj (hf₀'.symm.trans hf₀)
+  subst s₀'
+  have e₃ : s₁' = s₁ := Option.some.inj (hf₁'.symm.trans hf₁)
+  subst s₁'
+  have hshp : shapeZK (Setup.ofCircuit y.x.st) y.sch ex₀ =
+      shapeZKn (Setup.ofCircuit y.x.st) y.sch (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts).length := by
+    rw [← hlen₀]
+    rfl
+  rw [hshp] at hdz₀ hdz₁
+  have e₄ : zp₀' = zp₀ := Except.ok.inj (hd₀'.symm.trans hdz₀)
+  subst zp₀'
+  have e₅ : zp₁' = zp₁ := Except.ok.inj (hd₁'.symm.trans hdz₁)
+  subst zp₁'
+  rw [hlen₀] at hpl₀ hpl₁
+  have hacc' := hall' (p₀, p₁) hpl₀ hpl₁
+  have hnX : nXZJ y.table = ex₀.size := by
+    unfold nXZJ
+    rw [hlen₀, DecodeZL.extraClaims_length, DecodeZL.extraClaims_length]
+  have hdecEq : decAtZJ (planZHJ (Reg := Reg) dj y₀) (L.draw ω) R j =
+      decZ (wRestZ (Setup.ofCircuit y.x.st).m (Setup.ofCircuit y.x.st).kLog (2 + ex₀.size) (schedOf y.sch) y.tPad
+        (layZ (Setup.ofCircuit y.x.st) y.sch).len) := by
+    unfold decAtZJ
+    rw [hTy, hseam.hm, hseam.hk, hseam.hsch, hseam.ht, hseam.hnp, hnX]
+  obtain ⟨e₀, he₀, hr₀⟩ := hstreams 0
+  obtain ⟨e₁, he₁, hr₁⟩ := hstreams 1
+  have e₆ : e₀ = s₀ := Option.some.inj (he₀.symm.trans hf₀)
+  subst e₀
+  have e₇ : e₁ = s₁ := Option.some.inj (he₁.symm.trans hf₁)
+  subst e₁
+  have hopn : opnAtZHJ (planZHJ (Reg := Reg) dj y₀) I dj (L.draw ω) R o.proofs j =
+      opnZ (Setup.ofCircuit y.x.st) y.sch (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts).length
+        #[(wr (L.draw ω) R o).proofs[2 * j.val]!, (wr (L.draw ω) R o).proofs[2 * j.val + 1]!] := by
+    rw [hprf]
+    unfold opnAtZHJ
+    rw [hst]
+    dsimp only
+    rw [y.hz]
+    dsimp only
+    rw [hTy, hnX, hlen₀]
+  refine ⟨(p₀, p₁), ?_, ?_, ?_⟩
+  · rw [hTy, hdecEq, ← hr₀]
+    exact hrr₀
+  · rw [hTy, hdecEq, ← hr₁]
+    exact hrr₁
+  · dsimp only
+    rw [hTy, hopn, ← hroot]
+    have hok := outZC_of_accZ hacc'
+    have hN : (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts).length = 2 * sts[j.val].regions.size := by
+      rw [DecodeZL.extraClaims_length, ← hyst]
+      show 2 * (regionsOf y.x.st).length = _
+      simp [regionsOf]
+    refine ⟨hok, spec, sts, sess, y.sch, y.tPad, s₀, s₁, hj, hs, hdecS, by rw [← hyst]; exact y.hz, hf₀, hf₁,
+      (zk_table_rows₀Z (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
+        (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ cap _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁).trans ?_⟩
+    rw [hN, hyst]
+
+end FlockSoundness.Discharge.ZkHidden
+
+namespace FlockDeploy.KS
+
+open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession
+open FlockSoundness.Discharge
+open FlockSoundness.Discharge.Composed (planZJ outJ repJ)
+open FlockSoundness.Discharge.ZkHidden (TagsOkZHJ planZHJ)
+open FlockSoundness.Discharge.Tables (DecodesTable LiveOutJ)
+
+local notation "𝔽" => FlockLevel3.GF128
+
+/-- **The deployed `--zk` decoders are right at `zkTabs` at the rows, at one outcome**: where `verify --zk` sets its
+session up at the empty draw `dj ∅`, on untyped inputs under `TagsOkZJ`, the openings `opnD` and decoder `decD` at
+`tabsJ` of `zkTabs` are right at `OpensRows` of `o₀`'s transcript at `wrS`, on `o₀` where `verify --zk` accepts that
+transcript (`decodesTableW_zkTabs` with `runsAtZCJ_live_rows`). -/
+theorem decodesTableR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : Composed.TagsOkZJ I) {n : ℕ}
+    (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
+    (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts))
+    (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    (o₀ : LiveOutJ (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length spec.mPts)
+    (i : Fin (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length) :
+    DecodesTable (outJ ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
+      (fun j out => out.accepted = true ∧ Composed.OpensRows I (dj ∅) (Claims.Bridge.Custody.wrS I (dj ∅) o₀) j.val
+        ((tabsJ sts.size (zkTabs h0 L hz hk hlay)).get j) out)
+      (fun o => Composed.AcceptsAt I (dj ∅) (Claims.Bridge.Custody.wrS I (dj ∅) o) ∧ o = o₀)
+      (opnD sts (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (decD (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
+      (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
+  have hok := drawOkZKJ_empty hT.1 dj hs
+  obtain ⟨y₀, -, -, -⟩ := setupZJ_of_setupAt hT.1 ht dj hs hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
+  have h := Composed.decodes_of_runsOnZCJW
+    (Composed.runsAtZCJ_live_rows (Reg := Unit) I ht dj y₀ (fun S _ o => Claims.Bridge.Custody.wrS I (dj S) o)
+      { Ω := Unit, draw := fun _ => ∅ } hT (fun S _ o => Claims.Bridge.Custody.recordsLiveAtS_wrS I (dj S) o)
+      (fun _ => hok)) () ()
+  have hp := planZJ_eq_tabsJ hT.1 ht dj y₀ hs hok h0 L hz hk hlay ()
+  revert i o₀
+  rw [← hp, ← opnAtZJ_eq_opnD (planZJ dj y₀) dj hT.1 hs (by rw [hp, tabsJ_length])]
+  intro o₀ i
+  exact h _ _ (fun o ho => by obtain ⟨ha, rfl⟩ := ho; exact ⟨ha, fun _ _ hw => ⟨hw.1, hw⟩⟩) i
+
+/-- **The deployed hidden-output `--zk` decoders are right at `zkTabs` at the rows, at one outcome**
+(`decodesTableHW_zkTabs` with `runsAtZCJH_live_rows`). -/
+theorem decodesTableHR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : TagsOkZHJ I)
+    {c : Flock.Circuit} (hc : HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {n : ℕ}
+    (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
+    (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts)) (hshape : sts.forM Flock.Zk.shapeOk = .ok ())
+    (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    (o₀ : LiveOutJ (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length spec.mPts)
+    (i : Fin (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length) :
+    DecodesTable (outJ ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
+      (fun j out => out.accepted = true ∧ Composed.OpensRows I (dj ∅) (Claims.Bridge.Custody.wrS I (dj ∅) o₀) j.val
+        ((tabsJ sts.size (zkTabs h0 L hz hk hlay)).get j) out)
+      (fun o => Composed.AcceptsAt I (dj ∅) (Claims.Bridge.Custody.wrS I (dj ∅) o) ∧ o = o₀)
+      (opnD sts (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (decD (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
+      (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
+  have hok := drawOkZKHJ_empty hT.1 dj hs
+  obtain ⟨y₀, -, -, -⟩ :=
+    setupZHJ_of_setupAt hT.1 ht hc dj hs hshape hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
+  have h := Composed.decodes_of_runsOnZCJW
+    (ZkHidden.runsAtZCJH_live_rows (Reg := Unit) I ht hc dj y₀ (fun S _ o => Claims.Bridge.Custody.wrS I (dj S) o)
+      { Ω := Unit, draw := fun _ => ∅ } hT (fun S _ o => Claims.Bridge.Custody.recordsLiveAtS_wrS I (dj S) o)
+      (fun _ => hok)) () ()
+  have hp := planZHJ_eq_tabsJ hT.1 ht hc dj y₀ hs hshape hok h0 L hz hk hlay ()
+  revert i o₀
+  rw [← hp, ← opnAtZHJ_eq_opnD (planZHJ dj y₀) dj hT.1 hs (by rw [hp, tabsJ_length])]
+  intro o₀ i
+  exact h _ _ (fun o ho => by obtain ⟨ha, rfl⟩ := ho; exact ⟨ha, fun _ _ hw => ⟨hw.1, hw⟩⟩) i
+
+/-- **The deployed `--zk` decoders are right at `zkTabs` at the rows at a masked statement in scope, at one outcome**:
+`decodesTableR_zkTabs` at public outputs, `decodesTableHR_zkTabs` at hidden outputs (`decodesTableW_deploy`). -/
+theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d)
+    (o₀ : LiveOutJ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts)
+    (i : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) :
+    DecodesTable (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (fun j out => out.accepted = true ∧ Composed.OpensRows ins.read.I d (Claims.Bridge.Custody.wrS ins.read.I d o₀)
+        j.val ((tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).get j) out)
+      (fun o => Composed.AcceptsAt ins.read.I d (Claims.Bridge.Custody.wrS ins.read.I d o) ∧ o = o₀)
+      (opnD sts (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (decD (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) i := by
+  have hlen : (tables true x).length = sts.size := by
+    unfold tables
+    rw [hset]
+    simp
+  revert i o₀
+  rw [hlen]
+  intro o₀ i
+  obtain ⟨hzk, hsA⟩ := setupAt_of_setupOf hs hin hset
+  rw [hd] at hsA
+  obtain ⟨ht, hrr, hl⟩ := tags_of_inScope hs hin hset
+  cases hh : ins.read.I.tags.hiddenOutputs
+  · exact decodesTableR_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA h0 L hz hk hlay o₀ i
+  · have hshape := Claims.Bridge.Custody.setup_shapeOk (setupOf_some hset).2 hzk
+    obtain ⟨-, hstJ⟩ := setupAt_tableJH hh hsA
+    have hp := (Hidden.setupHidden_spec' (hstJ 0 h0)).parse
+    have hc : HmOut.parse (ZkExec.zkTags ins.read.I) ins.read.I.circuitFile ins.read.I.tables = .ok sts[0].c :=
+      (ZkHidden.parseH_tagsAt ((ZkExec.zkTags_typed _).trans ht) _ _ _ _).symm.trans hp
+    exact decodesTableHR_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay o₀ i
+
+end FlockDeploy.KS
