@@ -33,6 +33,7 @@ import Proofs.Flock.Claims.Recursion.VStarKS
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsDense
 import Proofs.Flock.Claims.Recursion.DeployReg
+import Proofs.Flock.Claims.Recursion.DeployLayout
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
