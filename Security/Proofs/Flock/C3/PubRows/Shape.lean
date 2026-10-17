@@ -152,7 +152,7 @@ theorem sparse_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSta
   obtain ⟨n1, n2, n3, n4⟩ := sparse_ne_names sh
   obtain ⟨vsh, A, C, hA, hC, rfl, -⟩ := FlockC3.VStarList.statements_ok h
   rcases Array.mem_append.1 hs with hs | hs
-  · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statements_eq hA
+  · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_range] at hs
     rcases hs with ⟨l, -, rfl⟩ | ⟨j, -, rfl⟩
     · exact absurd hn (n1 _ _)
@@ -324,7 +324,8 @@ theorem checks_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'} {P Pc : I
     exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH t ht).elim
 
 /-- **`checkMsgNames` passing names each port of the circuit once** (its first refusal). -/
-theorem names_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkMsgNames s c = .ok ()) :
+theorem names_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit} {holo : Bool}
+    (h : RecVStar.checkMsgNames s c holo = .ok ()) :
     ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q' := by
   unfold RecVStar.checkMsgNames at h
   split at h
@@ -343,7 +344,7 @@ theorem msgNames_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables :
     {own : Option (Array Flock.Registered.Port)} {j : ℕ} {f : VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)}
     (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program own (some j) (some f) rows = .ok ()) :
-    ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ RecVStar.checkMsgNames s st.c = .ok () := by
+    ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ RecVStar.checkMsgNames s st.c i.holo = .ok () := by
   unfold RecVStar.checkStmt at h
   dsimp only at h
   split at h

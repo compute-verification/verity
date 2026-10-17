@@ -1,0 +1,7 @@
+description = "plain int8 attention: one limb, rotated, Q, K, P, V rounded to their per-row/per-channel grids, no peel, no noise (tonight's (a), bf16 linears)"
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "int8"

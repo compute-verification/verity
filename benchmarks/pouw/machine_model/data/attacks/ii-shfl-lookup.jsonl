@@ -1,0 +1,42 @@
+{"design": "{±1}", "family": "(ii) SHFL lookup", "name": "b = 5, k = 4", "program": {"SHFL": 0.0015625, "ALU": 0.00078125}}
+{"design": "{±1,±3}", "family": "(ii) SHFL lookup", "name": "b = 2, k = 4", "program": {"SHFL": 0.00390625, "ALU": 0.001953125}}
+{"design": "u5", "family": "(ii) SHFL lookup", "name": "b = 1, k = 4", "program": {"SHFL": 0.0078125, "ALU": 0.00390625}}
+{"design": "peeled wide U", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2", "program": {"SHFL": 0.003125, "ALU": 0.0015625}}
+{"design": "U±8, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2", "program": {"SHFL": 0.003125, "ALU": 0.0015625}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 1, k = 2", "program": {"SHFL": 0.015625, "ALU": 0.0078125}}
+{"design": "U±64, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2", "program": {"SHFL": 0.003125, "ALU": 0.0015625}}
+{"design": "{±1}", "family": "(ii) SHFL lookup", "name": "b = 5, k = 4, integer work on UNI", "program": {"SHFL": 0.0015625, "UNI": 0.025}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) SHFL lookup", "name": "b = 2, k = 4, integer work on UNI", "program": {"SHFL": 0.00390625, "UNI": 0.0625}, "since": "VF2"}
+{"design": "u5", "family": "(ii) SHFL lookup", "name": "b = 1, k = 4, integer work on UNI", "program": {"SHFL": 0.0078125, "UNI": 0.125}, "since": "VF2"}
+{"design": "peeled wide U", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, integer work on UNI", "program": {"SHFL": 0.003125, "UNI": 0.05}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, integer work on UNI", "program": {"SHFL": 0.003125, "UNI": 0.05}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 1, k = 2, integer work on UNI", "program": {"SHFL": 0.015625, "UNI": 0.25}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, integer work on UNI", "program": {"SHFL": 0.003125, "UNI": 0.05}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) SHFL lookup", "name": "b = 5, k = 4, ALU on ALU64", "program": {"SHFL": 0.0015625, "ALU64": 0.000390625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) SHFL lookup", "name": "b = 5, k = 4, ALU on UNI64", "program": {"SHFL": 0.0015625, "UNI64": 0.0125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) SHFL lookup", "name": "b = 2, k = 4, ALU on ALU64", "program": {"SHFL": 0.00390625, "ALU64": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) SHFL lookup", "name": "b = 2, k = 4, ALU on UNI64", "program": {"SHFL": 0.00390625, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "u5", "family": "(ii) SHFL lookup", "name": "b = 1, k = 4, ALU on ALU64", "program": {"SHFL": 0.0078125, "ALU64": 0.001953125}, "since": "VF3c"}
+{"design": "u5", "family": "(ii) SHFL lookup", "name": "b = 1, k = 4, ALU on UNI64", "program": {"SHFL": 0.0078125, "UNI64": 0.0625}, "since": "VF3c"}
+{"design": "peeled wide U", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on ALU64", "program": {"SHFL": 0.003125, "ALU64": 0.00078125}, "since": "VF3c"}
+{"design": "peeled wide U", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on UNI64", "program": {"SHFL": 0.003125, "UNI64": 0.025}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on ALU64", "program": {"SHFL": 0.003125, "ALU64": 0.00078125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on UNI64", "program": {"SHFL": 0.003125, "UNI64": 0.025}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 1, k = 2, ALU on ALU64", "program": {"SHFL": 0.015625, "ALU64": 0.00390625}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 1, k = 2, ALU on UNI64", "program": {"SHFL": 0.015625, "UNI64": 0.125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on ALU64", "program": {"SHFL": 0.003125, "ALU64": 0.00078125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on UNI64", "program": {"SHFL": 0.003125, "UNI64": 0.025}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) SHFL lookup", "name": "b = 5, k = 4, ALU on W2", "program": {"SHFL": 0.0015625, "W2": 0.000390625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) SHFL lookup", "name": "b = 2, k = 4, ALU on W2", "program": {"SHFL": 0.00390625, "W2": 0.0009765625}, "since": "VF3e"}
+{"design": "u5", "family": "(ii) SHFL lookup", "name": "b = 1, k = 4, ALU on W2", "program": {"SHFL": 0.0078125, "W2": 0.001953125}, "since": "VF3e"}
+{"design": "peeled wide U", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on W2", "program": {"SHFL": 0.003125, "W2": 0.00078125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on W2", "program": {"SHFL": 0.003125, "W2": 0.00078125}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 1, k = 2, ALU on W2", "program": {"SHFL": 0.015625, "W2": 0.00390625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on W2", "program": {"SHFL": 0.003125, "W2": 0.00078125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) SHFL lookup", "name": "b = 5, k = 4, ALU on DMUL", "program": {"SHFL": 0.0015625, "DMUL": 0.000390625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) SHFL lookup", "name": "b = 2, k = 4, ALU on DMUL", "program": {"SHFL": 0.00390625, "DMUL": 0.0009765625}, "since": "VF3e"}
+{"design": "u5", "family": "(ii) SHFL lookup", "name": "b = 1, k = 4, ALU on DMUL", "program": {"SHFL": 0.0078125, "DMUL": 0.001953125}, "since": "VF3e"}
+{"design": "peeled wide U", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on DMUL", "program": {"SHFL": 0.003125, "DMUL": 0.00078125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on DMUL", "program": {"SHFL": 0.003125, "DMUL": 0.00078125}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 1, k = 2, ALU on DMUL", "program": {"SHFL": 0.015625, "DMUL": 0.00390625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) SHFL lookup", "name": "F-indexed, b = 5, k = 2, ALU on DMUL", "program": {"SHFL": 0.003125, "DMUL": 0.00078125}, "since": "VF3e"}

@@ -15,6 +15,7 @@ by the check it names, or nothing is timed at all.
 | `probes/issue.cu` | IMMA alone, and k_spec/k_mixu: DADD, DFMA or RED.64 beside IMMA (joint points, no census line) |
 | `probes/atom.cu` | ATOMS, ATOMG, REDG and ATOM.E, 32- and 64-bit; each global form on 16 SMs (its row) and on every SM (L2red) |
 | `probes/cl.cu` | DSMEM atomics and reductions in a 2-CTA cluster, to the own CTA (ATOME32) and the peer (joint) |
+| `probes/mma.cu` | IMMA s8, QMMA E4M3, OMMA MXFP4 and NVFP4, dense and 2:4-sparse, at unit scales, and a `_data` probe a format on the sweep's drawn operands and mix scales (a data-dependent-clock check; joint points, no census line; `../fp_exact/` reads them) |
 
 ## Write a probe
 

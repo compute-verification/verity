@@ -1,0 +1,36 @@
+# VF3f: The P4 opcode census, and prices for the word-writers VF3e left unpriced (RS-W′ round 5).
+name = "VF3f"
+epoch = "VF3f"
+summary = "The P4 opcode census, and prices for the word-writers VF3e left unpriced (RS-W′ round 5)."
+note = "note:20261016T0913Z-draft-rs-p4-census"
+rows = [
+    "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
+    "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
+    "IW", "JI3e_0", "JI3e_1", "JI3e_2", "A64", "DP", "DPM", "ROW_TLD1",
+    "ROW_TLD2", "ROW_TLD4w", "ROW_TLD2D1", "ROW_TLD2D4", "ROW_TEX1", "ROW_TEX4", "ROW_TLD4G", "ROW_TEXBIL",
+    "ROW_SULD1", "ROW_SULD4", "ROW_LDCUNI", "ROW_SURED", "ROW_LDCDIV", "ROW_LDC64", "ROW_UTMA", "ROW_UTMA8",
+    "ROW_UTMA512", "ROW_G4_16", "ROW_G4_32",
+]
+# [kind, MACs]: the kind's price is at least that many tensor MACs
+credits = [
+    ["IMAD", 32], ["IMAD", 128], ["HFMA2", 64], ["FFMA", 32], ["ALU", 8], ["XU", 29],
+    ["NOROW", 32], ["ALU", 91], ["ALU", 112], ["ALU", 240], ["SHFL", 496], ["ALU", 512],
+    ["HFMA2", 512], ["FFMA", 512], ["NOROW", 512], ["FFMA", 1024.0], ["VIMNMX", 1024.0], ["HFMA2", 1024.0],
+    ["IMAD", 1024.0], ["ALU", 1024.0], ["F2FS", 1024.0], ["XU", 1024.0], ["SHFL", 1024.0], ["NOROW", 1024.0],
+    ["RED32", 1024.0], ["TMAred512", 4096.0], ["SEL", 32], ["SEL", 512], ["SEL", 1024], ["UNI", 16],
+    ["UNI", 32], ["UNI64", 32], ["UNI64", 64], ["IMADW", 1024], ["IMADW", 2048], ["ALU64", 1024],
+    ["ALU64", 2048], ["REDV", 2048], ["REDV", 4096], ["RED64", 1024], ["RED64", 2048], ["W2", 1024],
+    ["W2", 2048], ["DMUL", 1024], ["DMUL", 2048],
+]
+
+[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+tau = 0.1349
+tau_600w = 0.1055
+uf_low = 1.0938
+margin = 1.935
+
+[legacy]  # the legacy chain's values in full, which a re-solve matches to 1e-12
+tau = 0.13493116729846372
+infl = 0.09375
+margin = 1.9345238095238095
+attacks = 1306
