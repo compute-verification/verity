@@ -124,6 +124,29 @@ theorem rankFull_sub {j k D : ℕ} (e : Fin j ↪ Fin k) (p : Fin k → Fin D �
   rw [← key]
   exact span_top_of_map π hπ _ h
 
+/-- **Nonzero scalars per point keep the rank.** The prover's check evaluates `eq` over the whole word index, so the
+slot's fixed in-block bits multiply point `i`'s weights by `γ i`, the product of their `eq` factors. Where every `γ i`
+is nonzero that is a GF(2)-automorphism of `GF(2^128)^k`: the scaled vectors have full rank exactly at `RankFull`, and
+the refusal's other cause is a coin at the one value that zeroes its `eq` factor. -/
+theorem rankFull_scale_iff {k D : ℕ} (γ : Fin k → GF128) (hγ : ∀ i, γ i ≠ 0) (p : Fin k → Fin D → GF128) :
+    AddSubgroup.closure (Set.range fun x => γ * eqProd (fun t i => p i t) x) = ⊤ ↔ RankFull p := by
+  have hl : γ⁻¹ * γ = 1 := funext fun i => inv_mul_cancel₀ (hγ i)
+  have hr : γ * γ⁻¹ = 1 := funext fun i => mul_inv_cancel₀ (hγ i)
+  have hinj : Function.Injective (AddMonoidHom.mulLeft γ) := fun x y hxy => by
+    have := congrArg (γ⁻¹ * ·) hxy
+    simpa only [AddMonoidHom.coe_mulLeft, ← mul_assoc, hl, one_mul] using this
+  have hsur : Function.Surjective (AddMonoidHom.mulLeft γ) := fun y =>
+    ⟨γ⁻¹ * y, by rw [AddMonoidHom.coe_mulLeft, ← mul_assoc, hr, one_mul]⟩
+  have hmap : AddSubgroup.closure (Set.range fun x => γ * eqProd (fun t i => p i t) x) =
+      (span fun t i => p i t).map (AddMonoidHom.mulLeft γ) := by
+    rw [span, AddMonoidHom.map_closure, ← Set.range_comp]
+    rfl
+  have htop : (⊤ : AddSubgroup (Fin k → GF128)).map (AddMonoidHom.mulLeft γ) = ⊤ :=
+    AddSubgroup.map_top_of_surjective _ hsur
+  unfold RankFull
+  rw [hmap]
+  exact ⟨fun h => AddSubgroup.map_injective hinj (h.trans htop.symm), fun h => h ▸ htop⟩
+
 open Classical in
 /-- **The rank bound's statement** at `k` points with `D` word coordinates each: coordinate `t` of point `i` is the
 constant `fix i t` where that is `some`, else its own uniform coin; at most a fraction `2^-κ` of the coins leave the
