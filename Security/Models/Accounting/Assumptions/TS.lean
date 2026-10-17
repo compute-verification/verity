@@ -32,7 +32,8 @@ Which form each takes:
   `δ_bind` and proof soundness `δ_ZK`, with Lemma E1(c) (every adaptive word lies below a committed value wrong for its
   own derivation). E1(c) is proved on paper; it sits inside this premise until the adaptive model is in Lean.
   `Accounting.Guarantees.TS.ProofsSoundOfPinned` derives it from a window's proofs (`Accounting.TS.ProofLayer`):
-  binding at `δ_bind`, proof soundness at `δ_ZK`, the Definitions' pinning, and `RightFixed`.
+  binding at `δ_bind` (at `√δ_fork` from its fork form, `Accounting.Guarantees.TS.BindingOfFork`), proof soundness at
+  `δ_ZK`, the Definitions' pinning, and `RightFixed`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof service's.
 * `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.

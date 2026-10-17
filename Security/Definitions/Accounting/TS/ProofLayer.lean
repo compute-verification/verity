@@ -7,7 +7,8 @@ EPS1-SPEC §2.7's (I8), `Accounting.Assumptions.TS.ProofsSound`, reads three pie
 TS model's accounting (note:20261017T1817Z-draft-i8-lean):
 
 * **binding at `δ_bind`**: an accepted proof opens its round's leaves (hm96 rows in frame-v3-sha512 trees, committed
-  before the round's σ) to the values the round committed (`ProofLayer.Moved`, its failure);
+  before the round's σ) to the values the round committed (`ProofLayer.Moved`, its failure). Its fork form
+  (`ProofLayer.Forked`, the 8 Oct ruling's): two runs off one commitment, both accepted, open it differently;
 * **proof soundness at `δ_ZK`**: an accepted proof's opening satisfies its relation, outside `δ_ZK` a proof
   (`ProofLayer.SoundAt`); C-Flock's `Flock.Guarantees.EndToEndHiddenDrawn` is this bound for a session, against the
   committed transcript fixed at registration;
@@ -18,20 +19,21 @@ TS model's accounting (note:20261017T1817Z-draft-i8-lean):
 `ProofLayer` is what a window's proofs carry on each path of coins: per round `w < S` and proof `i < n_π`, whether the
 verifier accepted it, the values its opening gives the round's leaves (its session's committed transcript, salts
 included), and its relation (the public Program it must pass, with the leaves' rows among its outputs). The values the
-round committed (`ProofLayer.committed`) are its proofs' opening on a reference continuation: among the paths that
-agree with this one before round `w`, so share the leaves committed before σ_w, and on which every proof of round `w` is
-accepted, one whose opening is the most frequent. They are a function of the coins before round `w`.
+round committed (`ProofLayer.committed`) are its proofs' opening on a reference continuation: among the continuations
+of the path's coins before round `w` (`splice`), which share the leaves committed before σ_w, and on which every proof
+of round `w` is accepted, one whose opening is the most frequent. They are a function of the coins before round `w`.
 -/
 
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity
 
-/-- Two paths agree before round `w`: the same coins in every round before it. -/
-def Agree {Ω : Type} : {n : ℕ} → ℕ → Paths Ω n → Paths Ω n → Prop
-  | 0, _, _, _ => True
-  | _ + 1, 0, _, _ => True
-  | _ + 1, w + 1, x, y => x.1 = y.1 ∧ Agree w x.2 y.2
+/-- `x`'s coins before round `w`, then `z`'s from round `w` on: the run that shares `x`'s commitments up to σ_w and
+continues on fresh coins. -/
+def splice {Ω : Type} : {n : ℕ} → ℕ → Paths Ω n → Paths Ω n → Paths Ω n
+  | 0, _, _, _ => ()
+  | _ + 1, 0, _, z => z
+  | _ + 1, w + 1, x, z => (x.1, splice w x.2 z.2)
 
 /-- **A window's proofs** over `S` rounds of coins on `Ω`, `n_π` proofs a round, opening the round's leaves to values in
 `V`: on each path, whether the verifier accepted proof `i` of round `w` (`accepted`) and the values its opening gives
@@ -52,21 +54,22 @@ variable {Ω : Type} {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V)
 def Proved (x : Paths Ω S) (w : Fin S) : Prop := ∀ i, pf.accepted x w i
 
 open Classical in
-/-- The paths that agree with `x` before round `w` and on which every proof of round `w` is accepted. -/
+/-- The fresh coins `z` on whose continuation of `x` from round `w` (`splice w x z`) every proof of round `w` is
+accepted. -/
 noncomputable def provedAt [Fintype Ω] (x : Paths Ω S) (w : Fin S) : Finset (Paths Ω S) :=
-  Finset.univ.filter fun y => Agree w x y ∧ pf.Proved y w
+  Finset.univ.filter fun z => pf.Proved (splice w x z) w
 
 open Classical in
-/-- How many of `provedAt x w` open round `w`'s leaves as `y` does. -/
-noncomputable def weight [Fintype Ω] (x y : Paths Ω S) (w : Fin S) : ℕ :=
-  ((pf.provedAt x w).filter fun y' => ∀ i, pf.opened y' w i = pf.opened y w i).card
+/-- How many of `provedAt x w` open round `w`'s leaves as the continuation on `z` does. -/
+noncomputable def weight [Fintype Ω] (x z : Paths Ω S) (w : Fin S) : ℕ :=
+  ((pf.provedAt x w).filter fun z' => ∀ i, pf.opened (splice w x z') w i = pf.opened (splice w x z) w i).card
 
 open Classical in
-/-- **The continuation round `w`'s commitment is read at**: among the paths that agree with `x` before round `w` and on
-which every proof of round `w` is accepted, one whose opening of round `w`'s leaves is the most frequent; `x` when
-there is none. -/
+/-- **The continuation round `w`'s commitment is read at**: among the continuations of `x` from round `w` on which every
+proof of round `w` is accepted, one whose opening of round `w`'s leaves is the most frequent; `x` when there is none. -/
 noncomputable def ref [Fintype Ω] (x : Paths Ω S) (w : Fin S) : Paths Ω S :=
-  if h : (pf.provedAt x w).Nonempty then ((pf.provedAt x w).exists_max_image (fun y => pf.weight x y w) h).choose
+  if h : (pf.provedAt x w).Nonempty then
+    splice w x ((pf.provedAt x w).exists_max_image (fun z => pf.weight x z w) h).choose
   else x
 
 /-- **The values round `w` committed before σ_w**: its proofs' opening of its leaves on the reference continuation. -/
@@ -75,6 +78,14 @@ noncomputable def committed [Fintype Ω] (x : Paths Ω S) (w : Fin S) (i : Fin n
 /-- **Binding fails at round `w`**: every proof of round `w` is accepted, and one opens the round's leaves to values
 other than those the round committed. -/
 def Moved [Fintype Ω] (x : Paths Ω S) (w : Fin S) : Prop := pf.Proved x w ∧ ∃ i, pf.opened x w i ≠ pf.committed x w i
+
+/-- **Two runs off one commitment open it differently** (the fork form): on `x` and on its continuation from round `w`
+on fresh coins `z`, which share round `w`'s leaves, every proof of round `w` is accepted, and some proof's openings
+differ. Where the proofs open hm96 rows of one frame-v3-sha512 tree against its root, different openings are two
+different inputs hashed to one SHA-512 digest along their paths: the break the 8 Oct ruling ties to the run, which
+`cr/sha-512` bounds at a finder that runs the window twice from round `w`. -/
+def Forked (w : Fin S) (x z : Paths Ω S) : Prop :=
+  pf.Proved x w ∧ pf.Proved (splice w x z) w ∧ ∃ i, pf.opened x w i ≠ pf.opened (splice w x z) w i
 
 /-- Proof `i` of round `w` is accepted, and its opening fails its relation. -/
 def Unsound (x : Paths Ω S) (w : Fin S) (i : Fin nπ) : Prop := pf.accepted x w i ∧ ¬ pf.rel w i (pf.opened x w i)

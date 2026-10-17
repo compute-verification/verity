@@ -19,6 +19,8 @@ note:20261017T0321Z-draft-eps1-tensor), each `def G : Prop`, proved (or a `sorry
 * `OutputCount`: Lemma 2's count, owned committed positions at most `Σ_k ω_k n_k`.
 * `ProofsSoundOfPinned`: (I8) `ProofsSound` from binding at `δ_bind`, proof soundness at `δ_ZK`, the Definitions'
   pinning and E1(c) (`RightFixed`).
+* `BindingOfFork`: binding's failure squared is at most its fork form's, two runs off one commitment opening it
+  differently, so `δ_bind = √δ_fork`.
 
 Probability statements put acceptance in the event: the probability that the window is accepted and the bound fails is
 at most `δ`.
@@ -190,6 +192,15 @@ def ProofsSoundOfPinned : Prop :=
     (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V) (Nw δbind δzk : ℝ),
     pf.Of P → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk → pf.Pins → RightFixed P pf Nw →
     ProofsSound P Nw δbind δzk nπ
+
+/-- **Binding from the fork form.** For a window's proofs and a round `w`, the probability that binding fails at `w`
+(`Moved`, against the values committed before σ_w), squared, is at most the probability that two runs off one
+commitment, the second continuing from round `w` on fresh coins, are both accepted and open round `w`'s leaves
+differently (`Forked`). So a bound `δ_fork` on the fork form, which `cr/sha-512` gives at a finder that runs the window
+twice from round `w`, is binding at `δ_bind = √δ_fork`. -/
+def BindingOfFork : Prop :=
+  ∀ {V : Type} (Ω : Type) [Fintype Ω] (S nπ : ℕ) (pf : ProofLayer Ω S nπ V) (w : Fin S),
+    prob (fun x => pf.Moved x w) ^ 2 ≤ prob (fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2)
 
 /-- **Lemma 2 (output count).** In a straight-line program whose class-`k` instances write at most `ω_k` words each,
 the owned committed positions (one per head write their values trace to) are at most `Σ_k ω_k n_k`. -/
