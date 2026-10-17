@@ -14,6 +14,8 @@
 struct OpClk {
   long long cyc;  // the block's SM cycles from OP_BEGIN to OP_END (its slowest warp: both sides hold a barrier)
   int smid, pad;
+  long long trips;  // an OP_UNTIL loop's trips, summed over the warps that ran it (0: none)
+  long long stop;   // SM cycles from OP_BEGIN to OP_DONE's stop (0: none)
 };
 
 struct OpArgs {
@@ -22,6 +24,8 @@ struct OpArgs {
   unsigned char* g;    // a global buffer of gbytes, zeroed
   unsigned long long gbytes;
   int iters, mode;
+  unsigned long long tex1 = 0;  // g as a 1D linear texture of u32 (tex1Dfetch: TLD)
+  unsigned long long tex2 = 0;  // g as a 1024-wide pitch-2D texture of float4 with linear filtering (tex2D: TEX)
 };
 
 #define OP_KERNEL(name, tpb) extern "C" __global__ void __launch_bounds__(tpb, 1) name(OpArgs a)
@@ -40,6 +44,38 @@ struct OpArgs {
   }
 // Every thread stores what its timed instructions computed, unconditionally: the gate traces this store back to them.
 #define OP_SINK(v) a.sink[blockIdx.x * blockDim.x + threadIdx.x] = (unsigned)(v);
+
+// A joint point between a fixed role and a role that runs only while the fixed one does, so neither rate includes time
+// the other sat idle at the barrier:
+//   OP_BEGIN_STOP
+//   if (fixed role) { OP_LOOP(it) {...} OP_DONE } else { OP_UNTIL(n) {...} OP_TRIPS(n) }
+//   OP_END_STOP
+// The first fixed-role warp to finish raises the stop and records its cycle; the other role's warps poll it once a trip
+// (one LDS) and add their trips, 32-bit (a 64-bit shared atomicAdd is a CAS loop the gate refuses). Its rate is trips
+// over the stop's cycles (probe.py, `until`).
+#define OP_BEGIN_STOP                         \
+  __shared__ int op_stop_;                    \
+  __shared__ unsigned op_trips_;              \
+  __shared__ long long op_tstop_;             \
+  if (threadIdx.x == 0) {                     \
+    op_stop_ = 0;                             \
+    op_trips_ = 0;                            \
+    op_tstop_ = 0;                            \
+  }                                           \
+  OP_BEGIN
+#define OP_DONE                                                                   \
+  if ((threadIdx.x & 31) == 0 && atomicCAS(&op_stop_, 0, 1) == 0) op_tstop_ = clock64() - op_t0_;
+#define OP_UNTIL(n) \
+  int n = 0;        \
+  _Pragma("unroll 1") for (; !*(volatile int*)&op_stop_; ++n)
+#define OP_TRIPS(n) \
+  if ((threadIdx.x & 31) == 0) atomicAdd(&op_trips_, (unsigned)(n));
+#define OP_END_STOP                    \
+  OP_END                               \
+  if (threadIdx.x == 0) {              \
+    a.rec[blockIdx.x].trips = op_trips_; \
+    a.rec[blockIdx.x].stop = op_tstop_;  \
+  }
 
 // A lane's byte offset into shared memory for one access (`slot`, in the loop's order) at a warp and iteration: the
 // kernel computes its addresses with the same function, so the gate's bank check reads the kernel's own addresses.
@@ -65,6 +101,7 @@ struct OpProbe {
   const char* note = "";
   const char* fn = "";         // the kernel's name when the probe shares another's kernel ("": `name`)
   int blocks = 0;              // blocks, one an SM (0: every SM, a whole number of clusters)
+  int until = 0;               // the OP_UNTIL loop, 1-based in `expect`'s order (0: none)
 };
 
 namespace op {
@@ -87,11 +124,11 @@ inline void list(const OpProbe* p, size_t n) {
     const OpProbe& q = p[i];
     printf(" {\"name\": %s, \"tpb\": %d, \"kind\": %s, \"row\": %s, \"expect\": %s, \"counted\": %s, \"warps\": %s, "
            "\"words\": %.17g, \"smem_ops\": %s, \"dyn_smem\": %d, \"cluster\": %d, \"mode\": %d, \"iters\": %d, "
-           "\"refuse\": %s, \"note\": %s, \"fn\": %s, \"blocks\": %d",
+           "\"refuse\": %s, \"note\": %s, \"fn\": %s, \"blocks\": %d, \"until\": %d",
            json_str(q.name).c_str(), q.tpb, json_str(q.kind).c_str(), json_str(q.row).c_str(),
            json_str(q.expect).c_str(), json_str(q.counted).c_str(), json_str(q.warps).c_str(), q.words,
            json_str(q.smem_ops).c_str(), q.dyn_smem, q.cluster, q.mode, q.iters, json_str(q.refuse).c_str(),
-           json_str(q.note).c_str(), json_str(*q.fn ? q.fn : q.name).c_str(), q.blocks);
+           json_str(q.note).c_str(), json_str(*q.fn ? q.fn : q.name).c_str(), q.blocks, q.until);
     printf(", \"smem\": [");
     if (q.smem && *q.smem_ops) {
       std::vector<std::string> ops;
@@ -134,6 +171,29 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
   unsigned char* g;
   GK_CK(cudaMalloc(&g, gbytes));
   GK_CK(cudaMemsetAsync(g, 0, gbytes, s));
+  cudaTextureObject_t tex1 = 0, tex2 = 0;
+  {
+    cudaResourceDesc r{};
+    cudaTextureDesc t{};
+    r.resType = cudaResourceTypeLinear;
+    r.res.linear.devPtr = g;
+    r.res.linear.desc = cudaCreateChannelDesc<unsigned>();
+    r.res.linear.sizeInBytes = gbytes;
+    t.readMode = cudaReadModeElementType;
+    GK_CK(cudaCreateTextureObject(&tex1, &r, &t, nullptr));
+    cudaResourceDesc r2{};
+    cudaTextureDesc t2{};
+    r2.resType = cudaResourceTypePitch2D;
+    r2.res.pitch2D.devPtr = g;
+    r2.res.pitch2D.desc = cudaCreateChannelDesc<float4>();
+    r2.res.pitch2D.width = 1024;
+    r2.res.pitch2D.height = gbytes / (1024 * sizeof(float4));
+    r2.res.pitch2D.pitchInBytes = 1024 * sizeof(float4);
+    t2.filterMode = cudaFilterModeLinear;
+    t2.addressMode[0] = t2.addressMode[1] = cudaAddressModeWrap;
+    t2.readMode = cudaReadModeElementType;
+    GK_CK(cudaCreateTextureObject(&tex2, &r2, &t2, nullptr));
+  }
   std::vector<const OpProbe*> ps;
   for (const std::string& nm : names) {
     const OpProbe* q = nullptr;
@@ -153,10 +213,11 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
     Buf b;
     b.blocks = q->blocks ? q->blocks : prop.multiProcessorCount / q->cluster * q->cluster;
     GK_CK(cudaMalloc(&b.rec, sizeof(OpClk) * b.blocks));
+    GK_CK(cudaMemset(b.rec, 0, sizeof(OpClk) * b.blocks));
     GK_CK(cudaMalloc(&b.sink, sizeof(unsigned) * b.blocks * q->tpb));
     if (q->dyn_smem)
       GK_CK(cudaFuncSetAttribute(q->kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, q->dyn_smem));
-    b.args = OpArgs{b.rec, b.sink, g, gbytes, std::max(1, (int)(q->iters * scale)), q->mode};
+    b.args = OpArgs{b.rec, b.sink, g, gbytes, std::max(1, (int)(q->iters * scale)), q->mode, tex1, tex2};
     bufs.push_back(b);
   }
   for (size_t i = 0; i < ps.size(); i++) {
@@ -189,6 +250,12 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
       for (int i = 0; i < b->blocks; i++) printf("%s%lld", i ? ", " : "", h[i].cyc);
       printf("], \"smid\": [");
       for (int i = 0; i < b->blocks; i++) printf("%s%d", i ? ", " : "", h[i].smid);
+      if (q->until) {
+        printf("], \"trips\": [");
+        for (int i = 0; i < b->blocks; i++) printf("%s%lld", i ? ", " : "", h[i].trips);
+        printf("], \"stop\": [");
+        for (int i = 0; i < b->blocks; i++) printf("%s%lld", i ? ", " : "", h[i].stop);
+      }
       printf("]}\n");
     };
     arms.push_back({q->name, launch, after});

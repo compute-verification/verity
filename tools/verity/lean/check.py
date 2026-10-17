@@ -2372,6 +2372,9 @@ def main(argv: list[str]) -> int:
             ap.error(f"{a.lift}: a JSON object {{guarantee: {{\"as\": X.Guarantees.G, \"into\": module[, \"beside\": module]}}}}")
     if a.owner is not None and not (a.update and OWNER.fullmatch(a.owner)):
         ap.error("--owner goes with --update, and names a handle such as @proofs")
+    if a.update and (shipped := next((t for p in pkgs for t in (p, *p.parents) if (t / "READY.json").is_file()), None)):
+        ap.error(f"{shipped} is a tree `research run --on` shipped, which every run of its commit shares: rerun with "
+                 "`research run ... --cwd clone`, or take the records `--update` writes under --out (audit-<pkg>/lean-audit.json)")
     named = set(pkgs)
     for p in pkgs:                                      # grows: a package proving another's guarantees is audited beside it
         try:
