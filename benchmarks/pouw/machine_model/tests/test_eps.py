@@ -328,6 +328,7 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
     summary or aliases, which would collide."""
     two, fill = E.design("dither-2s"), E.design("dither-2s-fill")
     assert fill.base == "dither-2s" and fill.noise == two.noise and fill.floor == two.floor and fill.ppl == two.ppl
+    assert E.design("co-dither-l16").sums == E.design("dither-c-peel").sums == "vfold" != E.design("dither-c").sums
     assert fill.aliases == ("dither-two-sided-fill",) and fill.title != two.title and fill.filler and not two.filler
     assert E.design("dither-2s-pv").ppl == "adopted-bd-lm-pv" and E.design("dither-c-peel").noise["pv"] == "peel"
     assert E.design("A") == two and E.design("dither-duo").name == "dither-1s" and E.aliases()["Bc"] == "dither-c-peel"
@@ -347,8 +348,8 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[noise]\nlinears = "ncp"\n')
     with pytest.raises(SystemExit, match=r"\[noise\] names a leaf"):
         E.design("x", data)
-    bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\nsums = "vfold"\n')
-    assert E.design("x", data).sums == "vfold" and two.sums == "vsum"
+    bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\nsums = "vsum"\n')
+    assert E.design("x", data).sums == "vsum" and two.sums == "vfold"
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\nsums = "vscan"\n')
     with pytest.raises(SystemExit, match="not a peel sums kernel"):
         E.design("x", data)

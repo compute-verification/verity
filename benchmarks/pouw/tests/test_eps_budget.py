@@ -70,20 +70,24 @@ def test_checked_designs_skip_no_product_only_vector_work(name):
 
 
 def test_the_designs_reproduce_skips_figures():
-    """Corollary D3's ε_skip, P in one block and every served output free: A's 0.327% at 8B 2K on VF3q-16 (SPEC §2.9's
-    vector, its peel at BC-KERNEL r2's apv_l7qs), and each design's on VF3r-16, the vector of record, whose ♭ is about
-    10% cheaper, each at its own ♭ (decision 90: dither-2s-fill's filler takes ♭ from 17.221 to 34.000 and halves its
-    share) (note:20261017T0320Z-draft-eps1-calc Round 10). Dither-1S binds at 8B 32K decode: QKᵀ's one-sided strip is
-    2L of its d = 128 products a word."""
-    q = E.design_skip(design("dither-2s"), vector="VF3q-16")
-    assert (q.ctx, q.phase) == (2048, "prefill") and q.eps_time == pytest.approx(0.0032750, rel=1e-4)
-    for name, eps, ctx, phase in (("dither-2s", 0.0036468, 2048, "prefill"),
-                                  ("dither-2s-fill", 0.0018504, 2048, "prefill"),
+    """Corollary D3's ε_skip, P in one block and every served output free: A's 0.327% at 8B 2K on VF3q-16 with vsum's
+    sums (SPEC §2.9's vector, its peel at BC-KERNEL r2's apv_l7qs) and 0.292% with vfold's, the served V producer of
+    every peel (decision 91), and each design's on VF3r-16, the vector of record, whose ♭ is about 10% cheaper, each at
+    its own ♭ (decision 90: dither-2s-fill's filler takes ♭ from 17.221 to 34.000 and halves its share) (note:
+    20261017T0320Z-draft-eps1-calc Round 10). Dither-1S binds at 8B 32K decode: QKᵀ's one-sided strip is 2L of its
+    d = 128 products a word."""
+    two = design("dither-2s")
+    for sums, eps in (("vsum", 0.0032750), ("vfold", 0.0029227)):
+        q = E.design_skip(replace(two, sums=sums), vector="VF3q-16")
+        assert (q.ctx, q.phase) == (2048, "prefill") and q.eps_time == pytest.approx(eps, rel=1e-4), sums
+    assert E.design_skip(replace(two, sums="vsum")).eps_time == pytest.approx(0.0036468, rel=1e-4)
+    for name, eps, ctx, phase in (("dither-2s", 0.0032546, 2048, "prefill"),
+                                  ("dither-2s-fill", 0.0016511, 2048, "prefill"),
                                   ("dither-2s-pv", 0.0024783, 2048, "prefill"),
                                   ("dither-c", 0.0034120, 8192, "prefill"),
-                                  ("dither-c-peel", 0.0045657, 2048, "prefill"),
-                                  ("co-dither-l16", 0.0017670, 2048, "prefill"),
-                                  ("dither-1s", 0.1232346, 32768, "decode")):
+                                  ("dither-c-peel", 0.0041746, 2048, "prefill"),
+                                  ("co-dither-l16", 0.0015656, 2048, "prefill"),
+                                  ("dither-1s", 0.1230973, 32768, "decode")):
         q = E.design_skip(design(name))
         assert (q.model, q.ctx, q.phase) == ("llama-3.1-8b", ctx, phase), name
         assert q.eps_time == pytest.approx(eps, rel=1e-4) and q.credit == "floor", name
@@ -122,32 +126,36 @@ def test_each_device_prices_its_own_floor_and_the_same_skippable_work():
     assert f0 == f1 and w0 / w1 == pytest.approx(17.158 / 5.961, abs=1e-3)
 
 
-def test_every_family_keeps_a_design_under_one_percent_and_the_b200_li_2s_is_at_it():
+def test_every_family_keeps_a_design_under_one_percent_and_vfold_takes_the_b200_li_2s_under_it():
     """Under D3 every device has a design whose ε_skip is under 1%; Dither-1S is above it everywhere (QKᵀ's one-sided
-    strip), and the B200's LI Dither-2S is at it: 1.005% at 8B 2K with its served output free (0.833% checked), its
-    vsum and tail each about half (note:20261017T0320Z-draft-eps1-calc Round 9)."""
+    strip). The B200's LI Dither-2S was at it with vsum's sums, 1.005% at 8B 2K with its served output free, its sums
+    and tail each about half; vfold's (decision 91) take it to 0.839% (0.666% checked), the tail 0.446% and the sums
+    0.331% (note:20261017T0320Z-draft-eps1-calc Round 10)."""
     for dev in devices():
         data = device(dev)
         skips = {n: E.design_skip(design(n, data), data=data).eps_time for n in designs(data)}
         assert min(skips.values()) < 1e-2 and all(v > 0.06 for n, v in skips.items() if n.startswith("dither-1s")), dev
     sm100 = device("sm_100")
     li = design("dither-2s-li-l32", sm100)
-    assert E.design_skip(li, data=sm100).eps_time == pytest.approx(0.010050, abs=1e-5)
+    assert li.sums == "vfold" and E.design_skip(li, data=sm100).eps_time == pytest.approx(0.0083948, abs=1e-6)
+    assert E.design_skip(replace(li, sums="vsum"), data=sm100).eps_time == pytest.approx(0.010049, abs=1e-5)
     chk = E.floor_eps("llama-3.1-8b", 2048, "prefill", li, checked=True, data=sm100)[0]
-    assert chk == pytest.approx(0.00833, abs=1e-5)
+    assert chk == pytest.approx(0.0066649, abs=1e-6)
 
 
 def test_the_b200s_filled_li_design_is_under_one_percent_with_the_operands_free():
     """Decision 89's reading (operands free, q* = 1.22, D3's ε_skip): the free-operand cheater skips LI's 8
     tcgen05.ld.x128 a MMA, 8 of ♭'s 1033 issue cycles at every q* (the lane and uniform routes write no word), beside
-    its ε_skip of 1.005%. ¾ verified lane instruction a word adds 768 to ♭ and to the cheater, diluting both terms over
-    one B_♭, and vfold's sums (#2300) cost 0.7265 an entry against vsum's 35/32: core 0.927% at γ 3.90 (EPS1 DC r6)."""
+    its ε_skip of 0.839% with vfold's sums (decision 91; 1.005% with vsum's): core 1.61%. ¾ verified lane instruction a
+    word adds 768 to ♭ and to the cheater, diluting both terms over one B_♭, and vfold's sums (#2300) cost 0.7265 an
+    entry against vsum's 35/32: core 0.927% at γ 3.90 (EPS1 DC r6)."""
     sm100 = device("sm_100")
     pi = machine("", sm100)
     li, fill = design("dither-2s-li-l32", sm100), design("dither-2s-li-fill-l32", sm100)
-    assert (li.sums, fill.sums, fill.noise, fill.honest) == ("vsum", "vfold", li.noise, li.honest)
+    assert (li.sums, fill.sums, fill.noise, fill.honest) == ("vfold", "vfold", li.noise, li.honest)
     bare = eps(li, pi, 1.22, sm100, operands="free", credit="floor")
-    assert bare.machine_eps == pytest.approx(8 / 1033, abs=1e-9) and bare.core() > 1e-2
+    assert bare.machine_eps == pytest.approx(8 / 1033, abs=1e-9) and bare.skip == pytest.approx(0.00839, abs=5e-6)
+    assert bare.core() == pytest.approx(0.01613, abs=1e-5)
     e = eps(fill, pi, 1.22, sm100, operands="free", credit="floor")
     assert e.machine_eps == pytest.approx(8 / 1801, abs=1e-9) and e.skip == pytest.approx(0.00483, abs=5e-6)
     assert e.core() == pytest.approx(0.00927, abs=1e-5) and e.gamma == pytest.approx(3.900, abs=1e-3)
@@ -162,9 +170,11 @@ def test_the_b200s_filled_li_design_is_under_one_percent_with_the_operands_free(
 def test_h1_under_the_floor_credit_is_specs_table(monkeypatch):
     """SPEC §2.9's H1 table (note:20261017T0324Z-draft-eps1-spec): Corollary D3's ε_skip, prefill, served free (served
     checked), each piece at its model price over B_♭, on VF3q-16 with co32c's and cohalf's vector work at TS_EPS of ♭'s
-    component (SPEC's reading). Its "line 209 alone" row, vsum at its issue rate over honest's measured time,
-    understates it. At the TS model's own gap (TS_CHEAT, the larger) 8B 2K is 0.411%, and on VF3r-16 0.457%."""
-    d, m, v = design("dither-c-peel"), "llama-3.1-8b", "VF3q-16"
+    component (SPEC's reading), its sums by vsum as SPEC prices them. Its "line 209 alone" row, vsum at its issue rate
+    over honest's measured time, understates it. At the TS model's own gap (TS_CHEAT, the larger) 8B 2K is 0.411%, and
+    on VF3r-16 0.457%; vfold's sums, the served V producer (decision 91), take VF3r-16's to 0.417%."""
+    m, v = "llama-3.1-8b", "VF3q-16"
+    d = replace(design("dither-c-peel"), sums="vsum")
     for leaf in ("co32c", "cohalf"):
         monkeypatch.setitem(E.TS_CHEAT, leaf, E.prices(d.name, vector=v).mma)
     spec = {("llama-3.1-8b", 2048): (0.405, 0.340), ("llama-3.1-8b", 8192): (0.373, 0.315),
@@ -183,6 +193,7 @@ def test_h1_under_the_floor_credit_is_specs_table(monkeypatch):
     monkeypatch.undo()
     f, r = E.summary(m, 2048, "prefill", d, credit="floor", vector=v), E.summary(m, 2048, "prefill", d, credit="floor")
     assert round(100 * f.eps_time, 3) == 0.411 and round(100 * r.eps_time, 3) == 0.457
+    assert round(100 * E.summary(m, 2048, "prefill", design("dither-c-peel"), credit="floor").eps_time, 3) == 0.417
     assert E.summary(m, 2048, "decode", d, credit="floor").eps_time < f.eps_time    # decode's ♭ at its compute alone
 
 
