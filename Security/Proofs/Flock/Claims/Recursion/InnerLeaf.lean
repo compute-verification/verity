@@ -149,7 +149,7 @@ theorem parse_metaLeaf {tags : Tags} {bytes : ByteArray} {tables : List (String 
   (have hh := except_bind_ok h; clear h; obtain ⟨dummyOutputs, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨outPorts, -, h⟩ := hh)
-  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h)
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h
   obtain ⟨outRowPorts, h⟩ : ∃ r, jpR r = .ok c := by
     split at h
     · exact ⟨_, h⟩
