@@ -24,7 +24,8 @@ rows, the typed statements, public input ports, several tables without `--zk` an
 `--zk` at hidden outputs with the verifier's own `--registered F`, which `FailClosed.SoundZHJR` covers), and circuits
 outside `Layout.scopeOk` (with public outputs: a unit reading more than one input group, a tail that computes the outputs,
 a `sha512/row/v2` or segmented row, among others). Under hidden outputs the circuit check is `ProvedScope.scopeOkI`, the
-general instance form: a unit reading any number of input groups and tail stages returning the outputs, once the wires
+general instance form: a unit reading any number of input groups and tail stages returning the outputs (a repeated last
+stage from any of its slots, `out_net_ports` of `[slot, port]` pairs), once the wires
 compute every slot from the leaves (`ProvedScope.wiresAcyclic`), with `sha512/row/v2` and `sha512/row-seg/v1` rows.
 Those statements still parse, set up and verify (`statement` prints their digest and Σ), and the agreement check
 compares a session refused for its form alone as accepted (D12, `vectors.json`'s `lean_refuses`). A session drawn by a

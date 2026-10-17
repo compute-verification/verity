@@ -86,6 +86,7 @@ import Definitions.Pouw.PearlC.W1Stop
 import Definitions.Pouw.PearlC.WholeCircuit
 import Definitions.Pouw.PearlC.WholeCircuit4
 import Definitions.Pouw.Receipt.Duo
+import Definitions.Pouw.Receipt.Li
 import Definitions.Pouw.Receipt.Run
 import Definitions.Pouw.RelativeSecurity
 import Definitions.Pouw.TileBound.AlignedExactDefs
@@ -152,9 +153,10 @@ two (`Completeness`).
 
 ## `Receipt`: the receipt folds
 
-`Duo`: duo's step, one word and two words (`benchmarks/pouw/receipts/receipt_folds.py`, `duo_word`); its binding
-statements are `Models.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`. `Run`: duo and fx1 over a run of `N`
-words; their per-word binding is `Models.Pouw.Guarantees.ReceiptRun`, proved in `Proofs.Pouw.Receipt.Run`.
+`Duo`: duo's step, one word and two words (`benchmarks/pouw/receipts/receipt_folds.py`, `duo_word`). `Li`: li's half
+step, a chain of them and a checkpoint, the XOR of several chains' states (`li_step`). Their binding statements are
+`Models.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`. `Run`: duo and fx1 over a run of `N` words; their
+per-word binding is `Models.Pouw.Guarantees.ReceiptRun`, proved in `Proofs.Pouw.Receipt.Run`.
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 

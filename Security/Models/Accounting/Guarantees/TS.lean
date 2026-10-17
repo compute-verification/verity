@@ -17,6 +17,9 @@ note:20261017T0321Z-draft-eps1-tensor), each `def G : Prop`, proved (or a `sorry
 * `RoutesOffD2`: Corollary D2, routes off the binding facet.
 * `TensorSlotCount`, `TensorSlotTight`: T1, the tensor slot count, and its tightness criterion.
 * `OutputCount`: Lemma 2's count, owned committed positions at most `Σ_k ω_k n_k`.
+* `FanInCount`, `SeesOfInjective`, `ThinFoldInjective`: the fan-in count, `|ι| ≤ |O| + Σ_i (sources − 1)` for a
+  straight-line program whose outputs see every input; a receipt injective in each word sees it; the thin fold's is.
+* `FoldOptOfFanIn`, `FillOptOfFanIn`: (I6) from `FanIn` at the fan-in menu's price.
 
 Probability statements put acceptance in the event: the probability that the window is accepted and the bound fails is
 at most `δ`.
@@ -183,5 +186,55 @@ def OutputCount : Prop :=
   ∀ {K : Type} [Fintype K] [DecidableEq K] (ω : K → ℕ) (G : ℕ) (cls : Fin G → K) (Nc : ℕ)
     (head : Fin Nc → HeadWrite ω G cls),
     ((Finset.univ.image head).card : ℝ) ≤ ∑ k, (ω k : ℝ) * classCount cls k
+
+/-- **The fan-in count.** A straight-line program whose outputs `O` see every one of its fresh inputs has merged them
+into at most `|O|` components, a node merging its sources less one: `|ι| ≤ |O| + Σ_i (|src i| − 1)`. -/
+def FanInCount : Prop :=
+  ∀ {ι W : Type} [Fintype ι] [Nontrivial W] [Inhabited W] (D : Dataflow ι W) (O : Finset (ι ⊕ Fin D.n)),
+    D.Sees O → Fintype.card ι ≤ O.card + ∑ i, D.merges i
+
+/-- **A receipt injective in each word sees it.** If every run's outputs `O` are `f` of its inputs, and `f` changes
+whenever exactly one input does, the outputs see every input. -/
+def SeesOfInjective : Prop :=
+  ∀ {ι W : Type} (D : Dataflow ι W) (O : Finset (ι ⊕ Fin D.n)) (f : (ι → W) → O → W),
+    (∀ x v, D.Runs x v → ∀ o : O, v o = f x o) →
+    (∀ j x x', (∀ j', j' ≠ j → x j' = x' j') → x j ≠ x' j → f x ≠ f x') → D.Sees O
+
+/-- **The thin fold's state is injective in every word of its run**, the state and the other words fixed (each step
+is a bijection of the state and of each word it absorbs), and in the starting state. -/
+def ThinFoldInjective : Prop :=
+  ∀ (xor : Bool) (s : BitVec 32) (pre post : List (BitVec 32 × BitVec 32)) (w₁ w₁' w₂ w₂' : BitVec 32),
+    (w₁ ≠ w₁' → thinFold xor s (pre ++ (w₁, w₂) :: post) ≠ thinFold xor s (pre ++ (w₁', w₂) :: post)) ∧
+    (w₂ ≠ w₂' → thinFold xor s (pre ++ (w₁, w₂) :: post) ≠ thinFold xor s (pre ++ (w₁, w₂') :: post)) ∧
+    ∀ s', s ≠ s' → thinFold xor s (pre ++ post) ≠ thinFold xor s' (pre ++ post)
+
+/-- **FOLD-OPT from fan-in.** If the run's fold is a straight-line program over the `N_w` committed words whose
+receipt `O` sees every word, issued as instructions `ins` of classes `cls` that `FanIn` bounds at `m ≥ 0`, labelled to
+the fold (at most `A.nfold k` instructions of class `k`), with `|O| ≤ μ_f·N_w`, and the fold menu holds every class's
+fan-in route (a word at `a_{r,k}/m_k` on every facet, for every `k` with `m_k > 0`), then `FoldOpt`. -/
+def FoldOptOfFanIn : Prop :=
+  ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
+    [Nonempty F] [Nonempty X] {ι W J : Type} [Fintype ι] [Nontrivial W] [Inhabited W] [Fintype J] [DecidableEq J]
+    [DecidableEq K] (Z : Model K R T L U F X) (P : Labelled K) (A : Anatomy K T L U) (D : Dataflow ι W)
+    (O : Finset (ι ⊕ Fin D.n)) (ins : Fin D.n → J) (cls : J → K) (m : K → ℝ),
+    Z.Wf P → D.Sees O → FanIn D ins cls m → (∀ k, 0 ≤ m k) →
+    (∀ k, ((Finset.univ.filter fun j => cls j = k).card : ℝ) ≤ A.nfold k) →
+    (Fintype.card ι : ℝ) = Z.Nw → (O.card : ℝ) ≤ Z.muF * Z.Nw →
+    (∀ k, 0 < m k → ∃ φ, ∀ r, Z.fold φ r ≤ Z.G.a r k / m k) →
+    FoldOpt Z A
+
+/-- **FILL-OPT from fan-in.** As `FoldOptOfFanIn` for the filler over the `N_x = |ι| > 0` fresh inputs its receipt
+sees, with `|O| ≤ μ_x·N_x` and the fill menu's routes at `N_x·a_{r,k}/m_k`. A filler over public inputs (its start
+and the coins) sees none of the committed words, so this prices it at most its own inputs' fan-in. -/
+def FillOptOfFanIn : Prop :=
+  ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
+    [Nonempty F] [Nonempty X] {ι W J : Type} [Fintype ι] [Nonempty ι] [Nontrivial W] [Inhabited W] [Fintype J]
+    [DecidableEq J] [DecidableEq K] (Z : Model K R T L U F X) (P : Labelled K) (A : Anatomy K T L U)
+    (D : Dataflow ι W) (O : Finset (ι ⊕ Fin D.n)) (ins : Fin D.n → J) (cls : J → K) (m : K → ℝ),
+    Z.Wf P → D.Sees O → FanIn D ins cls m → (∀ k, 0 ≤ m k) →
+    (∀ k, ((Finset.univ.filter fun j => cls j = k).card : ℝ) ≤ A.nfill k) →
+    (O.card : ℝ) ≤ Z.muX * Fintype.card ι →
+    (∀ k, 0 < m k → ∃ ψ, ∀ r, Z.fill ψ r ≤ Fintype.card ι * Z.G.a r k / m k) →
+    FillOpt Z A
 
 end Accounting.Guarantees.TS
