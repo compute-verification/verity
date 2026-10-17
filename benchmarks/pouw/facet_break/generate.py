@@ -110,7 +110,8 @@ def name_of(g: dict) -> str:
         ls = "_".join(lanes_of(g)) or "none"
         sched = f"a{g['na']}u{g['u']}"
         if g["kind"] == "js":
-            return f"js_{g['form']}_{ls}_{sched}_m{g['mw']}_w{w}"
+            lq = f"_l{g['lq']}" if g["lq"] != _js_lq(lanes_of(g)) else ""
+            return f"js_{g['form']}_{ls}_{sched}_m{g['mw']}{lq}_w{w}"
         ld = f"_{g['d']}x{g['qd']}" if g.get("d") else ""
         rep = f"_k{g['rep']}" if g.get("rep") else ""
         return f"jm_{g['form']}_{ls}_q{g['q']}_p{g['p']}_{sched}{ld}_w{w}{rep}"
@@ -382,9 +383,14 @@ def _jm(form: str, ls, q: int, w: int, p: int = 0, na: int = 8, u: int = 1, d: s
     return g | ({"d": d, "qd": qd} if d else {})
 
 
-def _js(form: str, ls, mw: int, w: int, na: int = 8, u: int = 1) -> dict:
+def _js_lq(ls) -> int:
+    """A warp-specialized program's lane ops a trip unless asked: 24 for three lanes, else 16."""
+    return 24 if len(ls) == 3 else 16
+
+
+def _js(form: str, ls, mw: int, w: int, na: int = 8, u: int = 1, lq: int = 0) -> dict:
     ls = (ls,) if isinstance(ls, str) else tuple(ls)
-    g = {"kind": "js", "form": form, "na": na, "u": u, "mw": mw, "lq": 24 if len(ls) == 3 else 16, "tpb": 128 * w}
+    g = {"kind": "js", "form": form, "na": na, "u": u, "mw": mw, "lq": lq or _js_lq(ls), "tpb": 128 * w}
     return g | {f"l{i + 1}": x for i, x in enumerate(ls)}
 
 
@@ -703,6 +709,20 @@ def targeted_rt6() -> list[dict]:
     return out
 
 
+def targeted_rt7() -> list[dict]:
+    """RT-FACET r4: the warp-specialized programs with the lane warps' trip widened. FACET-BREAK's ran 16 lane ops a
+    trip, beside the trip's uncounted stop poll, counter and branch; here 64-256 lane ops a trip beside FMUL, on the
+    forms r3 and r3b beat and IMMA.16832, 1-2 MMA warps a SMSP among 2-4, 4 and 8 accumulators, 32 and 64 MMAs a trip."""
+    out: list[dict] = []
+    for form in ("isp16864", "hsp16832", "qsp16864", "i16832"):
+        for mw, w in ((1, 2), (1, 3), (2, 4)):
+            for na in (4, 8):
+                for u in (4, 8):
+                    for lq in (64, 128, 256):
+                        out.append(_js(form, "fmuli", mw, w, na=na, u=u, lq=lq))
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -734,7 +754,7 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
               "r4": (targeted_r4, sampled_ji), "rt": (targeted_rt, sampled_ji),
               "rt2": (targeted_rt2, sampled_ji), "rt3": (targeted_rt3, sampled_ji),
               "rt4": (targeted_rt4, sampled_ji), "rt5": (targeted_rt5, sampled_ji),
-              "rt6": (targeted_rt6, sampled_ji)}[family]
+              "rt6": (targeted_rt6, sampled_ji), "rt7": (targeted_rt7, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -821,7 +841,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
     p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4", "rt", "rt2", "rt3",
-                                             "rt4", "rt5", "rt6"),
+                                             "rt4", "rt5", "rt6", "rt7"),
                    default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
@@ -831,7 +851,7 @@ def main(argv: list[str] | None = None) -> int:
                         "schedule axes on the low-accumulator break (na 5, unroll, placement, uniform co-issue); rt2: "
                         "rt's unroll and uniform co-issue crossed, unroll 8 for the instruction cache; rt3: the FMA "
                         "lane at unroll 8 to 32, past rt2's best; rt4: rt3's break again and around it; rt5: rt3's unroll on every other MMA form; rt6: rt5's break past its "
-                        "grid's edge")
+                        "grid's edge; rt7: the warp-specialized programs with 64-256 lane ops a trip")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")

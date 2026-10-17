@@ -104,7 +104,7 @@ def test_fine_grid_sweeps_the_near_frontier_and_the_ji3n_0_form():
 
 
 def test_rt_families_are_unique_and_hold_the_programs_that_broke_ji3s_and_ji3t():
-    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192}
+    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192, "rt7": 144}
     names = {f: [g["name"] for g in gen.grid(0, 0, family=f)] for f in sizes}
     assert {f: len(set(n)) for f, n in names.items()} == {f: len(n) for f, n in names.items()} == sizes
     assert "jm_i16832_fmuli_q120_p0_a3u20_w8" in names["rt4"]
