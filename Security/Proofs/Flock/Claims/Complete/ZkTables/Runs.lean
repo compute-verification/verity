@@ -143,7 +143,7 @@ theorem Case.sessionRuns (S : JsonSpec) (c : Case H rel) (hS : StmtAt c) (hR : P
     rw [getElem!_pos cms j (by rw [hc1, htabs]; exact hj)]
     exact this
   suffices h : Runs (sessionPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) c.spec (tabsOf c.sts)
-      (traces c.sts c.w) c.ω) #[] fun _ _ => True by
+      (MaskRank.masksOf c.sts) (traces c.sts c.w) c.ω) #[] fun _ _ => True by
     obtain ⟨⟨record, proofs⟩, bodies, e, -⟩ := h
     exact ⟨record, proofs, bodies, e⟩
   rw [sessionPZk_eq]

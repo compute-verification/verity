@@ -337,7 +337,7 @@ theorem Case.ready_parts (c : Case H rel) :
 /-- **The printed honest masked record is under `2^64` bytes**, from `ready` (`RecordFitsAt`). -/
 theorem Run.recordFits (o : Run H rel) : o.record.toUTF8.size < 2 ^ 64 := by
   obtain ⟨bs, h1, -⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)
-    (traces o.sts o.w) o.ω #[]
+    (MaskRank.masksOf o.sts) (traces o.sts o.w) o.ω #[]
   have hran := o.ran
   unfold sessionS at hran
   rw [hran] at h1

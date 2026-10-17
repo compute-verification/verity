@@ -205,7 +205,7 @@ theorem sendCountZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
   have htabs : tabsOf o.sts = #[Setup.ofCircuit st] := by rw [hsts]; simp [tabsOf]
   have h1 : o.spec.tables.size = 1 := by rw [hspec]; rfl
   have hP : sendsC.P (sessionPZk (asksS o.resp) (Hashes.ofSha512 (Claims.hOf H)) o.spec (tabsOf o.sts)
-      (tracesOf o.sts o.w) o.ω) (1 + rounds true o.spec o.sts) := by
+      (MaskRank.masksOf o.sts) (tracesOf o.sts o.w) o.ω) (1 + rounds true o.spec o.sts) := by
     rw [sessionPZk_eq, htabs]
     refine sendsC_quiet_bind (schedsPZk_quiet _) fun schs hs => ?_
     obtain ⟨⟨sch, tp⟩, hv, rfl⟩ := schedsPZk_one hs

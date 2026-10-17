@@ -100,7 +100,8 @@ theorem sessionPZk_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Lean.Json}
     (hown : Lean.Json.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
     (trs : Array Trace) (tape : TapeZk) {r : String × Array ByteArray} {bodies : Array Claims.Msg}
-    (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] trs tape).go #[] = (.ok r, bodies)) :
+    (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] words trs tape).go #[] =
+      (.ok r, bodies)) :
     ∃ v cm e, Zk.schedule st.m = .ok v ∧
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2
         (packed trs[0]! st.m) (tape.extra 0) (tape.lanePad 0) (tape.salt 0 0 0) = .ok cm ∧

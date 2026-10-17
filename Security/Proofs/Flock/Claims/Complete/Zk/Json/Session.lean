@@ -151,7 +151,8 @@ theorem sessionPZk_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
         lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
     {r : String × Array ByteArray} {bodies : Array Claims.Msg}
-    (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] trs tape).go #[] = (.ok r, bodies)) :
+    (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] words trs tape).go #[] =
+      (.ok r, bodies)) :
     SessionFactsZk (Claims.hOf H) resp spec st hz ct r bodies := by
   unfold sessionPZk at hrun
   obtain ⟨schs, l1, hA, hrun⟩ := go_bind_ok hrun

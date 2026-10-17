@@ -66,7 +66,8 @@ theorem Run.jsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
       (fun st hst' => by
         obtain ⟨st', hst'', rfl⟩ := Array.mem_map.1 hst'
         exact (hP st' hst'').2) hst hrun
-  have hpf := sessionPZk_proofs (Claims.hOf H) _ o.spec (tabsOf o.sts) (traces o.sts o.w) o.ω #[] _ _ o.ran
+  have hpf := sessionPZk_proofs (Claims.hOf H) _ o.spec (tabsOf o.sts) (MaskRank.masksOf o.sts) (traces o.sts o.w) o.ω
+    #[] _ _ o.ran
   dsimp only at hrec
   rw [ptsOf_coin] at hrec
   rw [tabsOf_size, ← hsz] at hrbs

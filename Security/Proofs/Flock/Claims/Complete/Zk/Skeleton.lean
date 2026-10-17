@@ -8,7 +8,7 @@ import Proofs.Flock.Claims.Complete.Zk.Verdict
 
 `complete_zk_of_goals`: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`
 (`CompleteWith H (deployZk rel) honestPZk (δcZk H)`), given one goal per check the honest masked run must
-pass.
+pass and the rank bound (`MaskRank.MaskRankBound`, which `pr_badZk_le` reads).
 
 * **The setting.** A good case (`CaseZk`): a statement in scope that the masked verifier can accept at one table
   (`readyZk H`), at its setup, a witness in the relation, a masked tape, and coins outside `BadZk`. The honest run at it
@@ -369,7 +369,7 @@ the pure session's run is (`sessionPZk_sim`). -/
 theorem RunZk.recordFits (o : RunZk H rel) : o.record.toUTF8.size < 2 ^ 64 := by
   refine o.ready_fits.2 o.w o.ω o.r o.record o.proofs ?_
   obtain ⟨bs, h1, -⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)
-    (tracesOf o.sts o.w) o.ω #[]
+    (MaskRank.masksOf o.sts) (tracesOf o.sts o.w) o.ω #[]
   have hran := o.ran
   unfold sessionSZk at hran
   rw [hran] at h1
@@ -493,10 +493,10 @@ theorem RunZk.acc (g : GoalsZk H rel) (o : RunZk H rel) :
 end Proved
 
 /-- **Masked completeness from the goals**: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`,
-given each goal. -/
+given each goal and the rank bound. -/
 theorem complete_zk_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (g : GoalsZk H rel) : CompleteWith H (deployZk rel) honestPZk (δcZk H) := by
-  refine complete_zk_of H rel fun x w hsc hr hready ω r hgood => ?_
+    (hMR : MaskRank.MaskRankBound) (g : GoalsZk H rel) : CompleteWith H (deployZk rel) honestPZk (δcZk H) := by
+  refine complete_zk_of H rel hMR fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf true x = some (s, spec, sts) := by
     unfold readyZk at hready
     split at hready

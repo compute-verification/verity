@@ -1,6 +1,7 @@
 import Proofs.Flock.Level3.ArithFacts
 import Proofs.Flock.Level3.GF256
 import Proofs.Flock.Soundness.Discharge.Composed.Base
+import Proofs.Flock.Claims.Deploy
 
 /-!
 # The mask slot's rank
@@ -297,6 +298,32 @@ def roundPoints (m kLog : ℕ) (R : Array Flock.Round) : Array (List F128) :=
   claimPoints m kLog fun j e => (R[j]!.coins).getD e 0
 
 theorem claimPoints_size (m kLog : ℕ) (coin : ℕ → ℕ → F128) : (claimPoints m kLog coin).size = 2 := rfl
+
+/-- Each table's mask slot's words, the session's rank checks read. -/
+def masksOf (sts : Array Flock.Stmt) : Array (List ℕ) := sts.map maskWordsOf
+
+/-! ## At the verifier's coins -/
+
+open FlockDeploy (Coin setupOf Ins)
+
+/-- **A rep's claim points at the verifier's coins** `r`, the rep's first coin the `n`th: its round `j`'s element `e`
+is coin `n + j`'s. -/
+def claimsAt (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n : ℕ) : Array (List F128) :=
+  claimPoints st.m st.c.kLog fun j e => (Claims.coinSeq r (n + j)).at e
+
+/-- **A table's rank checks pass** at the coins `r` (`MaskRankT`): its rep `0`'s claim points from coin `n₀` and its rep
+`1`'s from coin `n₁`, the four points rep `1`'s check reads, have full rank over the mask slot's words. -/
+def MaskRankAt (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n₀ n₁ : ℕ) : Prop :=
+  maskRankOk (claimsAt st r n₀ ++ claimsAt st r n₁) (maskWordsOf st) = true
+
+/-- **The rank bound at the verifier's coins** (open: `DeployedRankBound`'s argument at every table the `--zk` setup
+admits, not yet in Lean): at each table of a masked session that sets up, where rep `1`'s coins come after rep `0`'s
+claim points, the coins at which its rank checks refuse have probability at most `4·m/2^128`. -/
+def MaskRankBound : Prop :=
+  ∀ (x : Claims.Msg) (s : Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
+    setupOf true x = some (s, spec, sts) → ∀ st ∈ sts, ∀ k n₀ n₁ : ℕ, n₀ + (st.m + st.c.kLog) ≤ n₁ →
+      Claims.Pr (fun r : Fin k → Coin => n₁ + (st.m + st.c.kLog) ≤ k ∧ ¬ MaskRankAt st r n₀ n₁) ≤
+        4 * st.m / 2 ^ 128
 
 /-! ## The slot's size -/
 

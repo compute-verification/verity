@@ -81,7 +81,8 @@ theorem RunZk.json (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : Pr
   rw [hst, htabs] at hrun
   obtain ⟨rb, streams, hrec, hrb, hrb64, hss, hrs, hex, bs, hbs, hrecs⟩ :=
     sessionPZk_facts H _ ht hct hown hc (Setup.ofCircuit st) _ _ hC hR hrun
-  have hpf := sessionPZk_proofs (Claims.hOf H) _ o.spec (tabsOf o.sts) (tracesOf o.sts o.w) o.ω #[] _ _ o.ran
+  have hpf := sessionPZk_proofs (Claims.hOf H) _ o.spec (tabsOf o.sts) (MaskRank.masksOf o.sts) (tracesOf o.sts o.w)
+    o.ω #[] _ _ o.ran
   rw [show o.resp 0 = (Claims.coinSeq o.r 0).bytes from rfl, ptsOf_coin] at hrec hex
   have hpts : (pointsOf o.spec (Claims.coinSeq o.r 0)).size = o.spec.points := by simp [pointsOf]
   have hpm : ∀ p ∈ pointsOf o.spec (Claims.coinSeq o.r 0), p.size = o.spec.mPts := by

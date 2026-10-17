@@ -131,7 +131,7 @@ theorem sends_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
   intro o
   obtain ⟨-, -, hspec, hall⟩ := o.tables
   have hP : sendsC.P (sessionPZk (asksS o.resp) (Hashes.ofSha512 (Claims.hOf H)) o.spec (tabsOf o.sts)
-      (traces o.sts o.w) o.ω) (1 + rounds true o.spec o.sts) := by
+      (MaskRank.masksOf o.sts) (traces o.sts o.w) o.ω) (1 + rounds true o.spec o.sts) := by
     rw [sessionPZk_eq]
     refine sendsC_quiet_bind (schedsPZk_quiet _) fun schs hs => ?_
     unfold schedsPZk at hs
