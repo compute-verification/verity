@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Sampling.Reference.Complete
 # Sampling completeness at the deployed record
 
 `complete_deploy`: **`Claims.Sampling.Complete H (deploy rel c)`**, of the deployed record's reference prover
-(`Reference.refP` at the code's framing) at its error (`units c x · sessErrAt c.session (δcZk H) x`), from
+(`Reference.refP` at the code's framing) at its error (`c.sessions x · sessErrAt c.session (δcZk H) x`), from
 `Reference.complete_of_sessions` with the record's facts. What remains, each a hypothesis:
 
 * `hF : Claims.Flock.Complete H (deployZk rel)`: Flock's masked completeness, of `honestPZk` at `δcZk H`.
@@ -24,6 +24,9 @@ import Proofs.Flock.Claims.Sampling.Reference.Complete
   check, are the committed values and cover what `u`'s session reads under its statement make a Flock witness (`wit`)
   in that statement's relation; the code's. The session's statement may be several drawn units', as in the one-stage
   audit, whose one session proves every drawn unit.
+* `SessionSlots`: on a statement in scope, every checked unit's session is the session of the unit checked at a slot
+  below `c.sessions x`; the code's. One session that proves every drawn unit has it at `sessions = 1`; one session per
+  unit at the proof units' count, from `DrawSlots` (`sessionSlots_units`).
 
 What is proved here: the reference prover's session messages are `honestPZk`'s on what it reveals (`refP_session`), it
 says the framing outside them (`refP_say`), what it reveals opens under the roots and is the committed value
@@ -82,6 +85,15 @@ def SessionWit (H : Msg → Msg) : Prop :=
         (∀ g ∈ c.reads s xS, ∀ b, w.val H (commit c) s g = some b → ∃ o ∈ os, o.pos = g) →
           Claims.Flock.R (FlockDeploy.deployZk rel).parse xS (c.wit s xS os)
 
+/-- **The run's sessions are its first `sessions x` slots'**: on a statement in scope, at any run, every checked unit's
+session is the session of the unit checked at a slot below `c.sessions x`. One session that proves every drawn unit has
+it at `sessions = 1`, and one session per unit at the proof units' count (`sessionSlots_units`). -/
+def SessionSlots (H : Msg → Msg) : Prop :=
+  ∀ x, (∃ s Pt, c.parse x = some s ∧ c.partition s.prog s.query = some Pt ∧ InScope Pt s) →
+    ∀ {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin) u, u ∈ c.checked x r →
+      ∃ p < c.sessions x, ∃ u', (c.checked x r)[p]? = some u' ∧
+        c.session x u (run H P c.V x ω r).seen = c.session x u' (run H P c.V x ω r).seen
+
 /-- **Flock's masked error is nonnegative**: `εZk`, a count over `2^128`, or `1`. -/
 theorem δcZk_nonneg (H : Msg → Msg) (x : Msg) : 0 ≤ FlockComplete.δcZk H x := by
   unfold FlockComplete.δcZk FlockComplete.εZk
@@ -117,16 +129,29 @@ theorem acceptsSessions_deploy (H : Msg → Msg) (haccept : AcceptsFramed c H) :
 
 theorem nPU_deploy (x : Msg) : nPU (deploy rel c) x = units c x := rfl
 
+/-- **At one session per unit, the proof units' count bounds the slots**: the draw checks at most them (`DrawSlots`). -/
+theorem sessionSlots_units (H : Msg → Msg) (hslots : DrawSlots (deploy rel c)) (hn : ∀ x, units c x ≤ c.sessions x) :
+    SessionSlots c H := by
+  intro x hx Ω P ω r u hu
+  obtain ⟨i, hi, hget⟩ := List.getElem_of_mem hu
+  have hle : (c.checked x r).length ≤ units c x := checkedLe_of_slots _ hslots x hx r
+  exact ⟨i, (hi.trans_le hle).trans_le (hn x), u, List.getElem?_eq_some_iff.2 ⟨hi, hget⟩, rfl⟩
+
+/-- **At the deployed record, the checked units' sessions are the first `sessions x` slots'.** -/
+theorem sessionsAmong_deploy (H : Msg → Msg) (h : SessionSlots c H) : SessionsAmong H (deploy rel c) c.sessions := by
+  rintro x w hx - ω r u hu
+  exact h x hx (Reference.refP c.step c.parse c.reads (commit c) c.wit w) ω r u hu
+
 set_option synthInstance.maxSize 1024 in
 /-- **Sampling completeness at the deployed record**: the reference prover is accepted with probability at least
-`1 − units c x · sessErrAt c.session (δcZk H) x`, from Flock's masked completeness and the facts the module docstring
+`1 − c.sessions x · sessErrAt c.session (δcZk H) x`, from Flock's masked completeness and the facts the module docstring
 lists. -/
 theorem complete_deploy (H : Msg → Msg) (hF : Claims.Flock.Complete H (FlockDeploy.deployZk rel))
     (hfix : DrawFixed (deploy rel c)) (hslots : DrawSlots (deploy rel c)) (hframe : Framed c H)
-    (haccept : AcceptsFramed c H) (hscope : SessionsScope c H) (hwit : SessionWit rel c H) :
-    Complete H (deploy rel c) :=
+    (haccept : AcceptsFramed c H) (hscope : SessionsScope c H) (hwit : SessionWit rel c H)
+    (hsess : SessionSlots c H) : Complete H (deploy rel c) :=
   complete_of_sessions H (deploy rel c) hF hfix (checkedLe_of_slots _ hslots)
-    (honestSessions_deploy rel c H hframe hscope hwit)
-    (acceptsSessions_deploy rel c H haccept) (δcZk_nonneg H) fun x => by rw [nPU_deploy]; rfl
+    (honestSessions_deploy rel c H hframe hscope hwit) (acceptsSessions_deploy rel c H haccept) c.sessions
+    (sessionsAmong_deploy rel c H hsess) (δcZk_nonneg H) fun _ => le_of_eq rfl
 
 end SamplingDeploy

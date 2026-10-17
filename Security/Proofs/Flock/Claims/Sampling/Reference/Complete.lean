@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Sampling.Reference.Prover
 # Sampling completeness from Flock's, session by session
 
 `Claims.Sampling.Complete H D` at a record whose reference prover runs, in each checked unit's session, Flock's
-reference prover on a statement Flock's verifier serves and a witness in its relation. Three facts about the record's
+reference prover on a statement Flock's verifier serves and a witness in its relation. Four facts about the record's
 verifier and reference prover, each a hypothesis to discharge at the deployment:
 
 * `CheckedLe`: on a statement in scope, the draw checks at most `n_PU` units; from `DrawSlots`
@@ -14,15 +14,17 @@ verifier and reference prover, each a hypothesis to discharge at the deployment:
   (`D.flock.P`) on a statement in Flock's scope and a witness in its relation, on `u`'s own rounds (an injective map of
   Flock's) with the coins off them fixed.
 * `AcceptsSessions`: at an honest witness, the run accepts when every checked unit's session accepts.
+* `SessionsAmong K`: every checked unit's session is the session of the unit checked at a slot below `K x`; at
+  `K = n_PU` from `CheckedLe` (`sessionsAmong_nPU`), and at `K = 1` when one session proves every drawn unit.
 
-With `DrawFixed` (the checked units don't read their sessions' coins), each checked slot `p < n_PU` rejects with
-probability at most its session's Flock error: resampling the slot's session rounds (`Ex_resample`) leaves the slot's
-unit and statement fixed, and the session's coins are then uniform (`Pr_comp_inj`), so Flock's completeness bounds the
-rejection. The union bound over the slots gives the error `n_PU · sessErr`, `sessErr` the largest Flock error, capped at
-`1`, over the statements of the sessions at `x`.
+With `DrawFixed` (the checked units don't read their sessions' coins), each slot `p` rejects with probability at most
+its session's Flock error: resampling the slot's session rounds (`Ex_resample`) leaves the slot's unit and statement
+fixed, and the session's coins are then uniform (`Pr_comp_inj`), so Flock's completeness bounds the rejection. The union
+bound over the slots below `K x` gives the error `K · sessErr`, `sessErr` the largest Flock error, capped at `1`, over
+the statements of the sessions at `x`.
 
-* `complete_of_sessions`: **`Complete H D`** from Flock's completeness at `D.flock`, `DrawFixed`, the three facts,
-  Flock's errors nonnegative, and `D.δc H x ≥ n_PU · sessErr`.
+* `complete_of_sessions`: **`Complete H D`** from Flock's completeness at `D.flock`, `DrawFixed`, the four facts,
+  Flock's errors nonnegative, and `D.δc H x ≥ K · sessErr`.
 -/
 
 namespace Claims.Sampling.Reference
@@ -99,30 +101,38 @@ def slotRounds (D : Deploy Coin Col T) (x : Msg) (p : ℕ) (r : Fin (D.V.k x) �
   | none => ∅
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem slotRounds_fork (D : Deploy Coin Col T) (hfix : DrawFixed D) (x : Msg) (p : Fin (nPU D x))
-    (d σ : Fin (D.V.k x) → Coin) :
-    slotRounds D x p.val (forkOn (slotRounds D x p.val d) d σ) = slotRounds D x p.val d := by
+/-- A slot that checks a unit is below `n_PU`. -/
+theorem slot_lt (D : Deploy Coin Col T) (hle : CheckedLe D) {x : Msg} (hx : Scope D x) {d : Fin (D.V.k x) → Coin}
+    {p : ℕ} {u : ℕ × ℕ} (hu : (D.checked x d)[p]? = some u) :
+    ∃ q : Fin (nPU D x), (D.checked x d)[q.val]? = some u :=
+  ⟨⟨p, (List.getElem?_eq_some_iff.1 hu).1.trans_le (hle x hx d)⟩, hu⟩
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem slotRounds_fork (D : Deploy Coin Col T) (hfix : DrawFixed D) (hle : CheckedLe D) {x : Msg} (hx : Scope D x)
+    (p : ℕ) (d σ : Fin (D.V.k x) → Coin) :
+    slotRounds D x p (forkOn (slotRounds D x p d) d σ) = slotRounds D x p d := by
   unfold slotRounds
-  cases hu : (D.checked x d)[p.val]? with
+  cases hu : (D.checked x d)[p]? with
   | none => simp only [forkOn_empty, hu]
-  | some u => simp only [(hfix x d u ⟨p, hu⟩).2 σ, hu]
+  | some u => simp only [(hfix x d u (slot_lt D hle hx hu)).2 σ, hu]
 
 /-- **A checked slot rejects with at most its session's error**: the event that the unit checked at slot `p` has a
 session that shows a rejection. -/
 theorem Pr_slot_le (H : Msg → Msg) (D : Deploy Coin Col T) (hF : Claims.Flock.Complete H D.flock)
-    (hfix : DrawFixed D) (hS : HonestSessions H D) (hnn : ∀ xS, 0 ≤ D.flock.δc H xS) (h64 : Out64 H) (x : Msg)
-    (w : Wit) (hx : Scope D x) (hw : Rhon H D.commit D.parse D.partition x w) (ω : D.Tape) (p : Fin (nPU D x)) :
-    Pr (fun r : Fin (D.V.k x) → Coin => ∃ u, (D.checked x r)[p.val]? = some u ∧
+    (hfix : DrawFixed D) (hle : CheckedLe D) (hS : HonestSessions H D) (hnn : ∀ xS, 0 ≤ D.flock.δc H xS)
+    (h64 : Out64 H) (x : Msg) (w : Wit) (hx : Scope D x) (hw : Rhon H D.commit D.parse D.partition x w) (ω : D.Tape)
+    (p : ℕ) :
+    Pr (fun r : Fin (D.V.k x) → Coin => ∃ u, (D.checked x r)[p]? = some u ∧
       ∃ xS vS, D.session x u (run H (D.P w) D.V x ω r).seen = some (xS, vS) ∧ vS.out ≠ .acc) ≤ sessErr H D x := by
   classical
-  set Bad := fun r : Fin (D.V.k x) → Coin => ∃ u, (D.checked x r)[p.val]? = some u ∧
+  set Bad := fun r : Fin (D.V.k x) → Coin => ∃ u, (D.checked x r)[p]? = some u ∧
       ∃ xS vS, D.session x u (run H (D.P w) D.V x ω r).seen = some (xS, vS) ∧ vS.out ≠ .acc with hBad
   have hinner : ∀ d : Fin (D.V.k x) → Coin,
-      Ex (fun σ => if Bad (forkOn (slotRounds D x p.val d) d σ) then (1 : ℝ) else 0) ≤ sessErr H D x := by
+      Ex (fun σ => if Bad (forkOn (slotRounds D x p d) d σ) then (1 : ℝ) else 0) ≤ sessErr H D x := by
     intro d
     rw [Ex_ind]
     unfold slotRounds
-    cases hu : (D.checked x d)[p.val]? with
+    cases hu : (D.checked x d)[p]? with
     | none =>
       simp only [forkOn_empty]
       refine le_trans (le_of_eq ?_) (sessErr_nonneg H D hnn x)
@@ -140,7 +150,7 @@ theorem Pr_slot_le (H : Msg → Msg) (D : Deploy Coin Col T) (hF : Claims.Flock.
       have hbad : ∀ σ, Bad (forkOn (D.rounds x u) d σ) →
           (run H (D.flock.P wF) D.flock.V xS ωF fun i => σ (emb i)).out ≠ .acc := by
         rintro σ ⟨u', hu', xS', vS, hs, hrej⟩
-        rw [(hfix x d u ⟨p, hu⟩).2 σ, hu] at hu'
+        rw [(hfix x d u (slot_lt D hle hx hu)).2 σ, hu] at hu'
         cases hu'
         rw [hsess _ (hagree σ), hcoins σ] at hs
         cases hs
@@ -159,35 +169,52 @@ theorem Pr_slot_le (H : Msg → Msg) (D : Deploy Coin Col T) (hF : Claims.Flock.
             (by linarith [hF h64 xS wF hsc hR ωF])
         _ ≤ sessErr H D x := le_sessErr H D hd
   calc Pr Bad = Ex (fun r => if Bad r then (1 : ℝ) else 0) := (Ex_ind Bad).symm
-    _ = Ex (fun d => Ex fun σ => if Bad (forkOn (slotRounds D x p.val d) d σ) then (1 : ℝ) else 0) :=
-      (Ex_resample (slotRounds D x p.val) (slotRounds_fork D hfix x p) _).symm
+    _ = Ex (fun d => Ex fun σ => if Bad (forkOn (slotRounds D x p d) d σ) then (1 : ℝ) else 0) :=
+      (Ex_resample (slotRounds D x p) (slotRounds_fork D hfix hle hx p) _).symm
     _ ≤ Ex (fun _ : Fin (D.V.k x) → Coin => sessErr H D x) := Ex_mono hinner
     _ = sessErr H D x := Ex_const _
 
+/-- **The checked units' sessions are the first `K x` slots'**: on a statement in scope, at an honest witness, every
+checked unit's session at the reference prover is the session of the unit checked at a slot below `K x`. At `K = n_PU`
+it holds of every draw that checks at most `n_PU` units (`sessionsAmong_nPU`); one session that proves every drawn unit
+has it at `K = 1`. -/
+def SessionsAmong (H : Msg → Msg) (D : Deploy Coin Col T) (K : Msg → ℕ) : Prop :=
+  ∀ x w, Scope D x → Rhon H D.commit D.parse D.partition x w → ∀ (ω : D.Tape) (r : Fin (D.V.k x) → Coin) u,
+    u ∈ D.checked x r → ∃ p < K x, ∃ u', (D.checked x r)[p]? = some u' ∧
+      D.session x u (run H (D.P w) D.V x ω r).seen = D.session x u' (run H (D.P w) D.V x ω r).seen
+
+omit [Fintype Coin] [Nonempty Coin] in
+theorem sessionsAmong_nPU (H : Msg → Msg) (D : Deploy Coin Col T) (hle : CheckedLe D) :
+    SessionsAmong H D (nPU D) := by
+  intro x w hx _ ω r u hu
+  obtain ⟨i, hi, hget⟩ := List.getElem_of_mem hu
+  exact ⟨i, hi.trans_le (hle x hx r), u, List.getElem?_eq_some_iff.2 ⟨hi, hget⟩, rfl⟩
+
 /-- **Sampling completeness from Flock's, session by session**: at Flock's completeness at the record's sessions,
-`DrawFixed`, `CheckedLe`, `HonestSessions` and `AcceptsSessions`, with Flock's errors nonnegative, the reference prover
-is accepted with probability at least `1 − n_PU · sessErr`, so `Complete` holds at any `δc` at least that. -/
+`DrawFixed`, `CheckedLe`, `HonestSessions`, `AcceptsSessions` and `SessionsAmong` at `K`, with Flock's errors
+nonnegative, the reference prover is accepted with probability at least `1 − K · sessErr`, so `Complete` holds at any
+`δc` at least that. -/
 theorem complete_of_sessions (H : Msg → Msg) (D : Deploy Coin Col T) (hF : Claims.Flock.Complete H D.flock)
-    (hfix : DrawFixed D) (hle : CheckedLe D) (hS : HonestSessions H D) (hA : AcceptsSessions H D)
-    (hnn : ∀ xS, 0 ≤ D.flock.δc H xS) (hδ : ∀ x, nPU D x * sessErr H D x ≤ D.δc H x) : Complete H D := by
+    (hfix : DrawFixed D) (hle : CheckedLe D) (hS : HonestSessions H D) (hA : AcceptsSessions H D) (K : Msg → ℕ)
+    (hK : SessionsAmong H D K) (hnn : ∀ xS, 0 ≤ D.flock.δc H xS) (hδ : ∀ x, K x * sessErr H D x ≤ D.δc H x) :
+    Complete H D := by
   intro h64 x w hx hw ω
   classical
   have hrej : ∀ r : Fin (D.V.k x) → Coin, ¬ (run H (D.P w) D.V x ω r).out = .acc →
-      ∃ p ∈ (univ : Finset (Fin (nPU D x))), ∃ u, (D.checked x r)[p.val]? = some u ∧
+      ∃ p ∈ (univ : Finset (Fin (K x))), ∃ u, (D.checked x r)[p.val]? = some u ∧
         ∃ xS vS, D.session x u (run H (D.P w) D.V x ω r).seen = some (xS, vS) ∧ vS.out ≠ .acc := by
     intro r hr
     by_contra hno
     refine hr (hA x w hx hw ω r fun u hu xS vS hs => ?_)
     by_contra hout
-    obtain ⟨i, hi, hget⟩ := List.getElem_of_mem hu
-    exact hno ⟨⟨i, lt_of_lt_of_le hi (hle x hx r)⟩, mem_univ _, u, List.getElem?_eq_some_iff.2 ⟨hi, hget⟩, xS, vS,
-      hs, hout⟩
-  have hsum : ∑ p : Fin (nPU D x), Pr (fun r : Fin (D.V.k x) → Coin => ∃ u, (D.checked x r)[p.val]? = some u ∧
+    obtain ⟨p, hp, u', hu', heq⟩ := hK x w hx hw ω r u hu
+    exact hno ⟨⟨p, hp⟩, mem_univ _, u', hu', xS, vS, heq ▸ hs, hout⟩
+  have hsum : ∑ p : Fin (K x), Pr (fun r : Fin (D.V.k x) → Coin => ∃ u, (D.checked x r)[p.val]? = some u ∧
       ∃ xS vS, D.session x u (run H (D.P w) D.V x ω r).seen = some (xS, vS) ∧ vS.out ≠ .acc) ≤
-      nPU D x * sessErr H D x := by
-    calc _ ≤ ∑ _p : Fin (nPU D x), sessErr H D x :=
-          sum_le_sum fun p _ => Pr_slot_le H D hF hfix hS hnn h64 x w hx hw ω p
-      _ = nPU D x * sessErr H D x := by simp
+      K x * sessErr H D x := by
+    calc _ ≤ ∑ _p : Fin (K x), sessErr H D x :=
+          sum_le_sum fun p _ => Pr_slot_le H D hF hfix hle hS hnn h64 x w hx hw ω p.val
+      _ = K x * sessErr H D x := by simp
   have hbad := (Pr_mono hrej).trans ((Claims.Sampling.Pr_exists_le univ _).trans hsum)
   rw [Claims.Sampling.Pr_not] at hbad
   linarith [hδ x]
