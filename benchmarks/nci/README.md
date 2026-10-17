@@ -65,7 +65,8 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   holds under the row's rates and the theorem's assumptions. `rates` caps the inputs where a row's own numbers make an
   assumption false:
   - the weight rate is at most the whole update spread over its weights;
-  - the activation rate is at most `b_tok`, since a token id is a thread value;
+  - the activation rate is at most `b_tok`, since a token id is a thread value, and at most `w_cut / d`, since a block
+    may take the values it needs from a compressed boundary crossing;
   - when one block can hold the state a token touches, the entry fee vanishes (`d = 1`, `e` at least the counted
     multiplications per token).
 - `upper` is the cost of an explicit compliant construction, the cheapest that applies:

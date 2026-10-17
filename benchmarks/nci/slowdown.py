@@ -61,14 +61,17 @@ CHAIN_THEOREM = "Nci.SecurityProofs.UpdatedMatMul"
 def rates(i: dict, K: float, b_tok: float) -> tuple[float, float, float, float]:
     """The parameters the theorem may use, ``(b_w, b_a, d, e)``, capped where a row's own inputs make its assumptions
     false: no more per updated weight than the whole update spread over them; no more per thread value than a prompt
-    token costs, since a token id is a thread value too; and when one block can hold all the updated state a token
-    touches, it computes that token's every counted multiplication from the token alone, so the only valid threading
-    is ``d = 1`` with ``e`` at least the counted multiplications per token, ``kappa flops_per_token / 2``."""
+    token costs, since a token id is a thread value too, or than a boundary crossing costs per value, ``w_cut / d``,
+    since a block may take the ``d`` values it needs from a compressed crossing; and when one block can hold all the
+    updated state a token touches, it computes that token's every counted multiplication from the token alone, so the
+    only valid threading is ``d = 1`` with ``e`` at least the counted multiplications per token,
+    ``kappa flops_per_token / 2``."""
     b_w = min(i["b_w"], i["U_bits"] / i["n_updated"]) if i["n_updated"] > 0 else i["b_w"]
+    b_a = min(i["b_a"], b_tok, i["w_cut"] / i["d"])
     d, e = i["d"], i["e"]
     if i["U_token_bits"] <= K:
         d, e = 1.0, max(e, i["kappa"] * i["flops_per_token"] / 2)
-    return b_w, min(i["b_a"], b_tok), d, e
+    return b_w, b_a, d, e
 
 
 def thread_lower(i: dict, K: float, Gamma: float, b_tok: float) -> float:
