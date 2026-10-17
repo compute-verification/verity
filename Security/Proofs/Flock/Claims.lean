@@ -1,4 +1,5 @@
 import Models.Flock.Guarantees.Claims
+import Proofs.Flock.Claims.RecursionStated
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Aggregate
@@ -11,6 +12,7 @@ import Proofs.Flock.Claims.NumbersTable
 import Proofs.Flock.Claims.NumbersPads
 import Proofs.Flock.Claims.NumbersGamma
 import Proofs.Flock.Claims.NumbersNMin
+import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.Claims.NumbersRadius
 import Proofs.Flock.Claims.Counted
@@ -37,7 +39,9 @@ import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Assembled
+import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.ZK
+import Proofs.Flock.Claims.Witnesses
 import Proofs.Flock.Claims.Sampling
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its

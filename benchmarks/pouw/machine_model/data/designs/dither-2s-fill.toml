@@ -1,0 +1,17 @@
+# Dither-2S with verified lane filler: the filler dilutes what the cheater saves on operand delivery, which SPEC's
+# conservative contract prices at 0 (note:20261017T0324Z-draft-eps1-spec §0.5), at the cost of γ.
+base = "dither-2s"
+name = "dither-2s-fill"
+title = "Dither-2S, lane filler"
+aliases = ["dither-two-sided-fill"]
+summary = "Two-sided dither, duo at L = 32, and 4.5 lane instructions a word of verified filler"
+
+[filler]
+per_word = 4.5
+mix = { ALU = 1, IMAD = 1 }
+route = "lanes"
+source = "CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate); FILL-OPT (μ_x = 0) is its named assumption"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD), and the filler the cheapest of its work (FILL-OPT)"

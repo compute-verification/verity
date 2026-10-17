@@ -1,0 +1,39 @@
+# Dither-C's linear (co32c) a MMA as measured: c_l7qs, e_l7qs's mainloop (duo receipts at L = 32, LAG 7, a LOP3 tie every
+# 4th MMA, consumers sleeping on the stage barrier) with co32c's tail stage (O' = T_last - U A_0, D_d = U A_d, each word
+# absorbed) and the served O = O' - sum_d 128^d D_d, 8192^3 (m = 3 digits). Counts are the kernel's executed mix (ncu;
+# the tail's 3 MMAs a 256 included: 1.0117 MMAs a useful one); WAIT, the barrier wait, is left out (0.2076 a MMA).
+# Llama-3.1-8B's linears at 2,048 tokens run 1.47-1.52x plain int8 (cuBLASLt), within 1.7% of e_l7qs.
+name = "c-l7qs"
+status = "measured"
+source = "BC-KERNEL's c_l7qs (benchmarks/pouw/edited_gemm/cgemm.cu) at 8192^3, `eps_profile.py OUT --toml`, census VF3n-16's classes (r20261017-070242-acba; bit-exact against checked_strip's co32c_words, cgemm_ref.py)"
+L = 32
+
+[mma]
+kind = "IMMA.16832.S32.S8.S8"   # mma.sync m16n8k32 s8: 16 SMSP-cycles on the tensor pipe
+words = 128                     # 16 x 8 s32 accumulators
+depth = 32                      # k
+
+[per_mma]       # warp instructions a MMA by class, everything the kernel issues (the fold included)
+MMA = 1
+ALU = 8.9557
+IMAD = 4.0644
+NOROW = 0.7682
+LDSM_X4 = 0.5
+UNI = 0.0919
+SEL = 0.0711
+UTMA16K = 0.0039
+IMADW = 0.0024
+VIMNMX = 0.0005
+
+[measured]
+cycles_per_mma = 26.2457        # the hot median at its clock; ncu 26.1156; work bound 20.9802 on JI3n_0 (eps_sched 0.193)
+source = "c_l7qs at 8192^3 (r20261017-070242-acba): hot 2.2730 ms against e_l7qs's 2.2344 and plain's 1.5148"
+
+[operands]      # the least operand delivery a program pays a MMA when the design names none (`--operands floor`)
+floor = { LDSM_X4 = 0.2 }
+source = "SPEC §3.4: an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
+
+[fold]          # the fold inside per_mma, lane instructions a committed word (12 warp instructions a MMA at L = 32)
+name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)
+ALU = 2
+IMAD = 1
