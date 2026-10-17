@@ -36,9 +36,9 @@ REASONS = {
                                           "shared/routed overlap there, on shared-expert models only; value- and Program-neutral",
 }
 
-#: The meta-device instantiation of the pinned model class (``program/frontend/vllm_meta.py``).
+#: The meta-device instantiation of the pinned model class (``program/frontend/vllm_meta.py``).  Batch invariance is the Build
+#: target's (``TargetProfile.env()``, applied before vLLM is imported), which is the row's execution label's, not the profile's.
 EXPORT = {
-    "VLLM_BATCH_INVARIANT": "1",
     "VLLM_USE_LAYERNAME": "0",
     "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
     "HF_HUB_OFFLINE": "1",

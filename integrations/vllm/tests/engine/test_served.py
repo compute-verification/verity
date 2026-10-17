@@ -1,5 +1,6 @@
 """`engine.served`: what sets each kernel-selecting switch of a served engine, the verdict on what a serving process reads back, the
-read-back itself, and that every row file gives a reason for each switch it moves away from vLLM's default."""
+read-back itself, that every row file gives a reason for each switch it moves away from vLLM's default, and that a row's Build and
+its engine run under one batch invariance."""
 from __future__ import annotations
 
 import enum
@@ -10,10 +11,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity_vllm.config import WORKLOADS, RowId
+from verity_vllm.config import WORKLOADS, RowId, row_execution
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import served as SV
 from verity_vllm.engine import vllm_adapter as va
+from verity_vllm.pipeline import row_records
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 GLM = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 #: The switches GLM-5.3's Commit of record ran under (art:4b274f2088e57bbb01800948211a04c35b346b973dafa7214a090a202ed5b886,
@@ -51,7 +54,18 @@ def test_an_execution_label_sets_batch_invariance_and_an_unknown_one_is_refused(
 
 def test_the_engine_profile_sets_no_switch_but_with_its_reason():
     assert "VLLM_BATCH_INVARIANT" not in engine_env.ENGINE, "batch invariance is the row's execution label's"
+    assert "VLLM_BATCH_INVARIANT" not in engine_env.EXPORT, "a Build's batch invariance is its target's"
     assert set(engine_env.REASONS) == set(engine_env.ENGINE) and all(engine_env.REASONS.values())
+
+
+@pytest.mark.parametrize("path", ROWS, ids=lambda p: p.stem)
+def test_a_rows_build_runs_under_its_execution_labels_batch_invariance(path):
+    """The Build applies its target's `env()` (`build.derive_step`; no target: `TargetProfile.default()` or the host's, both
+    batch-invariant), the engine its execution label's (`served.apply`): one row, one batch invariance."""
+    declared = row_records.declared_target(str(path), row=path.stem)
+    target = TargetProfile.from_json(json.loads(declared)) if declared else TargetProfile.default()
+    label = SV.execution_env(row_execution(path.stem))
+    assert {k: target.env()[k] for k in label} == label
 
 
 def test_glm53s_row_declares_each_switch_with_its_source_and_reason():

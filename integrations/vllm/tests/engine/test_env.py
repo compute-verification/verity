@@ -79,7 +79,7 @@ def test_the_engine_profile_reads_this_table() -> None:
     assert env.ENGINE == {"VLLM_USE_V2_MODEL_RUNNER": "1", "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_USE_FLASHINFER_SAMPLER": "0",
                           "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1"}
     assert set(env.REASONS) == set(env.ENGINE) and all(env.REASONS.values())
-    assert env.EXPORT == {"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_LAYERNAME": "0", "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
+    assert env.EXPORT == {"VLLM_USE_LAYERNAME": "0", "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
                           "HF_HUB_OFFLINE": "1", "VLLM_LOGGING_LEVEL": "WARNING", "TOKENIZERS_PARALLELISM": "false"}
 
 
