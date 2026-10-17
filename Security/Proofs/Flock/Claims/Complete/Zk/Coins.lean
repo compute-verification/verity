@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Complete.Zk.Run
+import Proofs.Flock.Claims.Complete.Zk.Layout
 import Proofs.Flock.Claims.Complete.Coins
 import Proofs.Flock.Claims.Complete.Runs
 
@@ -179,9 +180,17 @@ theorem mem_rankSlotsZk {x : Claims.Msg} {s : Flock.Stmt × ℕ × ℕ} (hs : s 
     · simp at hs
   · simp at hs
 
+/-- **A rank slot's table has the layout the rank bound reads**, at a statement in scope. -/
+theorem rankSlotsZk_layout {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+    (hsc : Claims.Flock.Scope (deployZk rel) x) : ∀ s ∈ rankSlotsZk x, MaskRank.LayoutOk s.1 := by
+  intro s hs
+  obtain ⟨ins, spec, sts, hx, hst, -⟩ := mem_rankSlotsZk hs
+  exact MaskRank.layoutOk_of_scope hsc hx s.1 hst
+
 /-- **`Pr[BadZk] ≤ εZk`**: the union bound over the outer coins, the `β`s, the pairs and, at the rank bound
-(`MaskRank.MaskRankBound`), each table's rank checks. -/
-theorem pr_badZk_le (hMR : MaskRank.MaskRankBound) (x : Claims.Msg) {k : ℕ} :
+(`MaskRank.MaskRankBound`) and each rank slot's layout (`rankSlotsZk_layout`), each table's rank checks. -/
+theorem pr_badZk_le (hMR : MaskRank.MaskRankBound) (x : Claims.Msg)
+    (hlay : ∀ s ∈ rankSlotsZk x, MaskRank.LayoutOk s.1) {k : ℕ} :
     Claims.Pr (fun r : Fin k → Coin => BadZk x r) ≤ εZk x := by
   have ho := pr_list_le (fun (p : ℕ × ℕ) (r : Fin k → Coin) => (Claims.coinSeq r p.1).at p.2 = 1) (outerSlotsZk x)
     (1 / 2 ^ 128) fun p _ => pr_slot_le p.1 p.2
@@ -193,8 +202,8 @@ theorem pr_badZk_le (hMR : MaskRank.MaskRankBound) (x : Claims.Msg) {k : ℕ} :
       ¬ MaskRank.MaskRankAt s.1 r s.2.1 s.2.2) ≤ (((rankSlotsZk x).map fun s => 4 * s.1.m).sum : ℕ) / 2 ^ 128 := by
     refine le_trans (Pr_exists_le _ _) (le_of_le_of_eq
       (List.sum_le_sum (g := fun s : Flock.Stmt × ℕ × ℕ => (4 * s.1.m : ℝ) / 2 ^ 128) fun s hs => ?_) ?_)
-    · obtain ⟨ins, spec, sts, hx, hst, hn⟩ := mem_rankSlotsZk hs
-      exact hMR x ins spec sts hx s.1 hst k s.2.1 s.2.2 hn
+    · obtain ⟨-, -, -, -, -, hn⟩ := mem_rankSlotsZk hs
+      exact hMR s.1 (hlay s hs) k s.2.1 s.2.2 hn
     · simp only [div_eq_mul_inv, List.sum_map_mul_right, Nat.cast_list_sum, List.map_map]
       congr 2
       refine List.map_congr_left fun s _ => ?_
@@ -221,7 +230,7 @@ theorem complete_zk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
   split
   · rename_i hready
     calc 1 - εZk x ≤ 1 - Claims.Pr (fun r : Fin ((V true).k x) → Coin => BadZk x r) := by
-          linarith [pr_badZk_le hMR x (k := (V true).k x)]
+          linarith [pr_badZk_le hMR x (rankSlotsZk_layout hs) (k := (V true).k x)]
       _ = Claims.Pr (fun r : Fin ((V true).k x) → Coin => ¬ BadZk x r) := (Pr_not _).symm
       _ ≤ Claims.Pr (fun r : Fin ((V true).k x) → Coin =>
             (Claims.run H (honestPZk w) (V true) x ω r).out = .acc) :=

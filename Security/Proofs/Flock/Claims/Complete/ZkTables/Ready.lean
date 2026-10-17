@@ -139,7 +139,7 @@ theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
   split
   · rename_i hready
     calc 1 - εZk x ≤ 1 - Claims.Pr (fun r : Fin ((V true).k x) → Coin => BadZk x r) := by
-          linarith [pr_badZk_le hMR x (k := (V true).k x)]
+          linarith [pr_badZk_le hMR x (rankSlotsZk_layout hs) (k := (V true).k x)]
       _ = Claims.Pr (fun r : Fin ((V true).k x) → Coin => ¬ BadZk x r) := (Pr_not _).symm
       _ ≤ Claims.Pr (fun r : Fin ((V true).k x) → Coin =>
             (Claims.run H (honestPR w) (V true) x ω r).out = .acc) :=
