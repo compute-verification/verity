@@ -20,6 +20,7 @@ class Harness:
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
         monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
+        monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
                         post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
@@ -742,3 +743,32 @@ def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to,
 
     monkeypatch.setattr(drive.subprocess, "run", run)
     assert drive.merge_thread_post(f"{' '.join(to)} queue: b22a0c54d29e on `next` (#1 #2) failed its check", to, sender=sender)
+
+
+def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
+    """17 Oct, r20261017-104751-c19c on cpu-2: the Security/Proofs replay was OOM-killed (exit 137), lean-audit failed with rc 1,
+    and the fallback on Lean sources ejected #2224 and #2231, whose heads had passed."""
+    from research.drive import killed
+
+    d = tmp_path / "run"
+    d.mkdir()
+    (d / "steps.jsonl").write_text('{"step": "lean-audit", "status": "failed", "rc": 1, "log": "lean-audit.log"}\n')
+    (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n  replay: killed (exit 137; out of "
+                                      "memory?), which is not a kernel verdict: rerun it alone\n")
+    assert killed(d)
+    (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n    error: build failed\n")
+    assert not killed(d)
+
+def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
+    """CI-48: nothing deleted a landed PR's branch or an idle one, and the repository reached 3,543 branches."""
+    from research.drive import BRANCH_SWEEP_S
+
+    h = Harness(world, monkeypatch)
+    calls = []
+    monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: calls.append(a) or (2, 1))
+    h.tick()
+    h.tick()
+    assert len(calls) == 1 and any("branch sweep: 2 deleted (on main), 1 archived" in x for x in world.logs)
+    h.clock += BRANCH_SWEEP_S + 1
+    h.tick()
+    assert len(calls) == 2

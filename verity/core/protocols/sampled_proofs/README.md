@@ -148,8 +148,7 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
     sampling design's `closure=`), `register_interiors` (under `TwoStage`), `session`, `deliver` and `outcome`, which
     raise `Refused` (with its `Verdict`) or `Pending`.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
-    challenger's coins (or a sampler) under the expanded design, with a work draw's closure: what `register` and
-    `select` run.
+    challenger's coins (or a sampler) under the expanded design, with a work draw's closure.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `served_domain` is a
   served root's commitment domain.
@@ -165,7 +164,8 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
   sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
 - `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
   (and `verifiers`, both verifiers' outcomes, from `verifier`).
-- `verifier`: the verifier of record, `check`, `matches_public`, `check_draw`, `check_proved`, `audit_record` and
+- `hello`: `check_run`, the run's Hello and its one coin tree over `run_streams`.
+- `verifier`: the verifier of record, `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record` and
   `check_public` and `check_verdicts` (given the service's Python verdict) by the Lean and the Python, `RECORD_VERDICT`
   naming whose is the record's.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
@@ -213,9 +213,8 @@ named with each. A rule leaves this list in the change whose Lean states it.
 - The receipt is `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier": ..., "received":
   "<UTC, %Y-%m-%dT%H:%M:%SZ>"}`, and the draw names it.
 - The verifier holds its own public file (scheme, roots, their domains, its instance count) to the record
-  (`matches_public`). That those roots, domains and instance count are the proved rows' is flock-verify's check of the
-  public file (`checkPublic`), stated deterministically by the Lean guarantee
-  `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
+  (`matches_public`). That they are the proved rows' is flock-verify's check of the public file (`checkPublic`), stated
+  by the Lean guarantee `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
 - `window` is provenance only: `served` roots are what serving committed, and `stand-in` roots a fresh commitment to
   values captured from serving, whose link to the served root is provenance, not proof.
 - A served root's domain (`served_domain`, agreed with vllm-serving-commit) binds the program, the partition, the port,
@@ -464,21 +463,9 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   "audit"}` for the interiors in the same forms; `Outcome.record` is its SHA-512.
 
 A stream refuses a two-stage count, the `Sequential` rule, a window statement and a timed session until they are built,
-and a check with no proof deadline.
-Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outcome`,
-`test_the_rule_refuses_an_extra_field` and the other `test_the_rule_refuses_*`,
-`test_no_retries_nothing_redraws_and_an_outcome_is_final`, `test_a_late_proof_is_a_reject`,
-`test_a_proof_that_never_arrives_ends_late`, `test_a_late_registration_is_refused_and_ends_the_epoch`,
-`test_an_on_time_registration_carries_both_readings`,
-`test_a_registration_before_the_salt_is_late`, `test_the_salt_is_issued_once_from_the_challengers_coins`,
-`test_no_registration_deadline_changes_nothing`, `test_the_interiors_are_not_held_to_the_registration_deadline`,
-`test_a_salt_released_elsewhere_counts_the_deadline_from_its_release`,
-`test_a_released_salt_is_never_in_the_future_and_is_the_epochs_one_salt`,
-`test_the_stream_stops_at_its_budgeth_failure`, `test_a_call_names_its_own_streams_registration_and_draw`,
-`test_two_stage_round_trip_registers_the_interiors_between_the_draw_and_the_proof`,
-`test_the_interiors_are_registered_once_after_select_before_deliver_over_the_proved_rus`,
-`test_a_two_stage_outcome_accepts_only_when_both_audits_do`, `test_a_work_draw_carries_its_closure_and_the_proof_proves_it`,
-`test_a_closure_widens_a_work_draw_only_and_stays_in_range`, `test_the_default_draw_is_draw_first_on_the_challengers_bytes`).
+and a check with no proof deadline. After R1 to R7, `register` refuses a law whose drawn count varies (`shapes`:
+`bernoulli` at `0 < p < 1`); a work draw's closure varies too and is not refused (a planned design).
+Pinned by `tests/test_service.py`.
 What a registration reads of the log, and that its verdicts are the whole log's, is pinned by
 `tests/test_service_history.py`, and sessions by `tests/test_service_sessions.py`.
 
