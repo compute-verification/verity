@@ -82,7 +82,8 @@ class Installation:
 
 
 class OccurrenceSink:
-    """Counts runtime occurrences per site and records (shape, dtype, device) of what was seen; never reads a value."""
+    """Counts runtime occurrences per site and records (shape, dtype) of what was seen -- each tensor of a tuple, as a module's whole
+    return (slot `out`) is when it returns several; never reads a value."""
 
     def __init__(self) -> None:
         self.counts: dict[tuple[str, str, str], int] = {}
@@ -92,15 +93,16 @@ class OccurrenceSink:
 
     def __call__(self, key: tuple[str, str, str], t: Any) -> None:
         self.counts[key] = self.counts.get(key, 0) + 1
-        shape = getattr(t, "shape", None)
-        if shape is None:
+        ts = [x for x in (t if isinstance(t, (tuple, list)) else (t,)) if getattr(x, "shape", None) is not None]
+        if not ts:
             self.non_tensor[key] = self.non_tensor.get(key, 0) + 1
             return
-        sh = [int(x) for x in shape]
         lst = self.shapes.setdefault(key, [])
-        if sh not in lst and len(lst) < 64:
-            lst.append(sh)
-        self.dtypes.setdefault(key, set()).add(str(getattr(t, "dtype", "?")).replace("torch.", ""))
+        for x in ts:
+            sh = [int(n) for n in x.shape]
+            if sh not in lst and len(lst) < 64:
+                lst.append(sh)
+            self.dtypes.setdefault(key, set()).add(str(getattr(x, "dtype", "?")).replace("torch.", ""))
 
     def to_json(self) -> dict[str, Any]:
         keys = sorted(set(self.counts) | set(self.non_tensor))
