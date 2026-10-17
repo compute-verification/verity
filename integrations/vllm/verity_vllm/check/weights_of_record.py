@@ -124,7 +124,7 @@ def to_served(arr: np.ndarray, src_dtype: str, bits: int) -> tuple[np.ndarray, s
             return (arr.view(np.uint16).astype(np.uint32) << 16), "bf16->f32 (exact)"
         if src_dtype in ("F16", "F64"):
             return arr.astype(np.float32).view(np.uint32), f"{src_dtype}->f32"
-    if bits == 8 and src_dtype in ("F8_E4M3", "F8_E5M2", "I8", "U8", "BOOL"):
+    if bits == 8 and src_dtype in ("F8_E4M3", "F8_E5M2", "F8_E8M0", "I8", "U8", "BOOL"):
         return arr.view(np.uint8), None
     if bits == 64 and src_dtype in ("I64", "F64"):
         return arr.view(np.uint64), None
