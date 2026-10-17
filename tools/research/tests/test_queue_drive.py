@@ -742,3 +742,16 @@ def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to,
 
     monkeypatch.setattr(drive.subprocess, "run", run)
     assert drive.merge_thread_post(f"{' '.join(to)} queue: b22a0c54d29e on `next` (#1 #2) failed its check", to, sender=sender)
+
+
+def test_a_twin_stopped_by_sigterm_is_no_verdict_and_its_sibling_still_decides(world, monkeypatch):
+    """17 Oct 11:47Z: twin 30ce of train bd74745daa5f, SIGTERMed while it waited for a slot, was read as the train failing,
+    while its sibling 4af6 ran on cpu-2."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    (rid,) = h.run_state
+    h.run_state[rid] = ("done", 143, None)
+    assert h.d.verdict(_tip(world), _git(world.origin, "rev-parse", "main"), h.d.q.load_state()["drive"]).state == "none"
+    h.tick()
+    assert len(h.launched) == 2 and not h.posts                          # launched again, nothing told

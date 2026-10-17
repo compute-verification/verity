@@ -63,6 +63,8 @@ ACTIVE = ("submitted", "waiting", "running", "unknown")
 PUBLISH_GRACE_S = 1800
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
+#: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
+SIGTERM_RC = 143
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
 CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
 RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
@@ -389,7 +391,10 @@ class Driver:
                 return Verdict("passed", rid)
         rows = store.index.sql("SELECT id, state, rc FROM attempts WHERE tool = 'check' AND source_commit = ?", (commit,))
         old = set(drive.get("resent", {}).get(commit, ()))
-        ran = [(rid, st, rc) for rid, st, rc in rows if rc != NOT_STARTED and rid not in old]
+        # a cancel or a SIGTERM is a decision, not a verdict: a twin a sibling won the slot from, or a run someone stopped
+        # (17 Oct 11:47Z: bd74745daa5f read as failed from twin 30ce, SIGTERMed unstarted, while twin 4af6 ran on)
+        ran = [(rid, st, rc) for rid, st, rc in rows
+               if rc not in (NOT_STARTED, SIGTERM_RC) and st != "cancelled" and rid not in old]
         if ids:
             return Verdict("failed", ids[0], f"{ids[0]} passed without {', '.join(need)}, which the gate needs for "
                                             f"{', '.join(sorted({p for ps in need.values() for p in ps}))}")
@@ -407,8 +412,8 @@ class Driver:
                                                               f"the full picture) and has already failed: {early}")
         if any(st in ACTIVE for st, *_ in states.values()):
             return Verdict("running", " ".join(launch["ids"]))
-        if all(rc == NOT_STARTED for _, rc, *_ in states.values()):
-            return Verdict("none", why="every twin exited without starting")
+        if all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
+            return Verdict("none", why="every twin exited without starting, or was stopped")
         ended = max((_utc(e) or launch["at"] for _, _, e, *_ in states.values()), default=launch["at"])
         if self.now() - ended < PUBLISH_GRACE_S:
             return Verdict("running", " ".join(launch["ids"]), "ended; its attempt isn't in the store yet")
