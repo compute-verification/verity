@@ -37,7 +37,8 @@ lemma. Which template each part uses:
   statement, V* statement and coins: `ClimbAt` (either level kind, M's `OpenLinks` body), `ResReadsAt` (an algebra part
   at either flag, M's `ResReads` body), `OpeningReadsAt`, `SparseCopyAt`; `PartKindAt` is their disjunction and
   `PartsLinks s` asks it wherever part `s`'s coins are shown. `partChecks_of_links` gives `PartChecks s` at any shape;
-  `partChecks_holo` at every part of the holo shape.
+  `partChecks_holo` at every part of the holo shape. M's dense links are instances (`partsLinks_of_reads`,
+  `partsLinks_of_open`).
 * **`PartLogs`** (`partLogs_of_shown_nil`, `partLogs_holo`): the algebra, opening and sparse parts' checks log no call,
   so `logs s = []` wherever their coins are shown; a level's check logs the climb's calls, which its recorded calls
   must hold (`ClimbLogs`).
@@ -358,6 +359,36 @@ theorem partChecks_of_links {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Depl
   intro x st hst hf xO w hck _
   rw [hDO] at hck
   exact Or.inl fun c hc ms hms => chk_of_kindAt hck (hR x st hst hf xO c hc) hms
+
+/-- **M's algebra links are part links** (`ResReads`, the plain flag): a shape `RecResiduals.shape?` gives is plain
+(`shape?_holo`), so its part at `holo := false` is its own. -/
+theorem partsLinks_of_reads {D : Deploy Coin} {decode : Msg → Option Flock.Readable.Read} {L : Layout}
+    {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
+    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} (hR : ResReads D decode L shape shows chk s) :
+    PartsLinks D decode L shape shows chk s := by
+  intro x st hst hf xO c hc
+  obtain ⟨p, hx, ht, hpi, t, htl, m, k, cl, j, sh, S, ns, nv, hrc, hp, hsh, hh, hpart, o, g, u, ho, hg, hu, hlink⟩ :=
+    hR x st hst hf xO c hc
+  have e : { sh with holo := false } = sh := by
+    have h0 := shape?_holo hsh
+    cases sh
+    simp only at h0
+    subst h0
+    rfl
+  have hpart' : _root_.Flock.RecResiduals.part { sh with holo := false } j = .ok (S, ns, nv) := by
+    rw [e]
+    exact hpart
+  exact Or.inr (Or.inl ⟨p, hx, ht, hpi, t, htl, m, k, cl, j, sh, false, S, ns, nv, hrc, hp, hsh, hh, hpart', o, g, u,
+    ho, hg, hu, hlink⟩)
+
+/-- **M's level links are part links** (`OpenLinks`, a unit named `rec-open/…`). -/
+theorem partsLinks_of_open {D : Deploy Coin} {decode : Msg → Option Flock.Readable.Read} {L : Layout}
+    {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
+    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} (hR : OpenLinks D decode L shape shows chk s) :
+    PartsLinks D decode L shape shows chk s := by
+  intro x st hst hf xO c hc
+  obtain ⟨p, hx, ht, hpi, t, htl, LANES, Ht, hrec, hp, o, g, u, ho, hg, hu, hlink⟩ := hR x st hst hf xO c hc
+  exact Or.inl ⟨p, hx, ht, hpi, t, htl, LANES, Ht, hrec, Or.inl hp, o, g, u, ho, hg, hu, hlink⟩
 
 /-- **`PartChecks` at every part of the holo shape**: `partChecks_of_links` at `Form.Holo`. -/
 theorem partChecks_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
