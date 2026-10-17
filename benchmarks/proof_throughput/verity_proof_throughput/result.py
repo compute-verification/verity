@@ -18,7 +18,7 @@ verifier (``flock-verify verify``). The VU is one coordinate (K MACs, 2K FLOP), 
 - ``fixed.setup_seconds``: staging the statement (lowering, lanes, witness and public files), done once per B.
 
 The prover run's result passes when the live verifier accepted every session; the verifier run's, the point's result of
-record, only when the Lean verifier also accepted every session.
+record, only when the Lean verifier also accepted every session or refused it for having no draw alone (``DRAWLESS``).
 """
 from __future__ import annotations
 
@@ -93,14 +93,29 @@ def prover_measurements(w: Workload, B: int, rec: Mapping[str, Any], gpu_peak_mi
     return ms
 
 
+#: The Lean verifier's refusal of a session without a draw, issued only once every check has passed and the statement's form is
+#: covered (verity/ml/flock/verifier/PROTOCOL.md §16.15, D12). No plain live session carries a draw a claim covers: without
+#: --zk only the stratified law is in scope (`ProvedScope.drawLaw`), and the live server draws by the subset and Bernoulli
+#: laws only. So a point's Lean leg passes on acceptance or on this refusal alone, and its result counts each
+#: (``verify.lean_accepted``, ``verify.lean_drawless``).
+DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
+
+
+def lean_passed(v: Mapping[str, Any]) -> bool:
+    return bool(v.get("accepted")) or v.get("why") == DRAWLESS
+
+
 def verifier_measurements(lean: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """The Lean verifier's side: its median wall and CPU seconds over the timed sessions, and its peak memory."""
+    """The Lean verifier's side: its median wall and CPU seconds over the timed sessions, its peak memory, and how many
+    sessions it accepted and how many it refused for having no draw alone."""
     timed = [v for v in lean if v.get("wall_s") is not None]
     if not timed:
         return []
     m = contract.measurement
     wall = statistics.median(v["wall_s"] for v in timed)
-    ms = [m("verifier.seconds", wall), m("verify.wall_s", wall)]
+    ms = [m("verifier.seconds", wall), m("verify.wall_s", wall),
+          m("verify.lean_accepted", sum(1 for v in lean if v.get("accepted")), "count"),
+          m("verify.lean_drawless", sum(1 for v in lean if v.get("why") == DRAWLESS), "count")]
     cpu = [v["cpu_s"] for v in timed if v.get("cpu_s") is not None]
     if cpu:
         ms.append(m("verify.cpu_s", statistics.median(cpu)))
@@ -139,19 +154,23 @@ def point(w: Workload, B: int, rec: Mapping[str, Any], *, run_id: str, hardware:
     lv = rec.get("live") or {}
     live_ok = bool(lv.get("accepted"))
     lean = list(lean or [])
-    lean_ok = bool(lean) and all(v.get("accepted") for v in lean)
+    lean_ok = bool(lean) and all(lean_passed(v) for v in lean)
     ms = prover_measurements(w, B, rec, gpu_peak_mib) if lv.get("prove_total_s") is not None else []
     ms += verifier_measurements(lean)
     why = []
     if not live_ok:
         why.append(f"live verifier: {lv.get('why') or rec.get('broke') or 'no record'}")
     if lean and not lean_ok:
-        why += [f"Lean {v.get('session')}: {v.get('why')}" for v in lean if not v.get("accepted")][:4]
+        why += [f"Lean {v.get('session')}: {v.get('why')}" for v in lean if not lean_passed(v)][:4]
     status = "passed" if live_ok and (lean_ok or not lean) else "failed"
     checker = ("flock-verify (compiled Lean verifier) on every timed session; flock-circuit serve (live, loopback) on every session"
                if lean else "flock-circuit serve (live, loopback) on every session; the Lean verifier not run yet")
-    detail = "; ".join(why) or ((f"{len(lean)} timed sessions accepted by the Lean verifier; " if lean else "")
-                                + f"{lv.get('timed_runs')} timed and the warm sessions accepted live")
+    accepted = sum(1 for v in lean if v.get("accepted"))
+    drawless = sum(1 for v in lean if v.get("why") == DRAWLESS)
+    lean_said = (f"Lean verifier: {accepted} of {len(lean)} sessions accepted"
+                 + (f", {drawless} passed every check and were refused only for having no draw (D12)" if drawless else "")
+                 + "; ") if lean else ""
+    detail = "; ".join(why) or (lean_said + f"{lv.get('timed_runs')} timed and the warm sessions accepted live")
     fp = fingerprint(w, B, rec, hardware=hardware, software=software, config=config, **extra)
     doc = {"schema": contract.RESULT_SCHEMA, "run_id": run_id, "workload_fingerprint": fp,
            "validation": {"status": status, "checker": checker, "detail": detail[:900], "evidence": list(evidence)},

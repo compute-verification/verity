@@ -55,6 +55,17 @@ def test_a_rejection_anywhere_fails_the_point(record, hardware):
     assert contract.validate(doc) == [] and RS.value(doc, "t.total") == pytest.approx(6.6)
 
 
+def test_the_lean_leg_passes_on_the_drawless_refusal_alone_and_says_so(record, hardware):
+    lean = [{**v, "accepted": False, "why": RS.DRAWLESS} for v in LEAN]
+    doc = point(record, hardware, lean)
+    assert doc["validation"]["status"] == "passed" and contract.validate(doc) == []
+    assert "0 of 3 sessions accepted, 3 passed every check and were refused only for having no draw" in doc["validation"]["detail"]
+    assert (RS.value(doc, "verify.lean_accepted"), RS.value(doc, "verify.lean_drawless")) == (0, 3)
+    lean[1] = {**lean[1], "why": "refused: a subset draw without --zk: no soundness claim draws by this law"}
+    doc = point(record, hardware, lean)
+    assert doc["validation"]["status"] == "failed" and "subset draw" in doc["validation"]["detail"]
+
+
 def test_a_run_without_a_session_record_fails_with_its_reason(hardware):
     doc = point({"broke": "staging: out of memory"}, hardware)
     assert doc["validation"]["status"] == "failed"

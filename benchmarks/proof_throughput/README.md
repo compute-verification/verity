@@ -34,7 +34,17 @@ A point is one statement of B coordinates of one workload, the first B instances
    the circuit binds (`--partition`, derived from the workload's program and checked against the circuit's META, not taken
    from the bundle), and writes the point's result of record: the
    prover's measurements and the Lean verifier's. It passes only when the live verifier accepted every session and the
-   Lean verifier accepted every timed one.
+   Lean verifier accepted every timed one, or refused it with `refused: a session without a draw ... (D12)` and nothing
+   else.
+
+**The drawless refusal.** No plain live session is accepted by the Lean verifier today. Every soundness claim is about a
+drawn session, and without `--zk` only the stratified law is in a claim's scope (`ProvedScope.drawLaw`); the live server
+draws by the subset and Bernoulli laws only, and the class sweep's sessions prove the whole staged population with no
+draw. The Lean verifier issues the D12 refusal only once every check has passed and the statement's form is covered
+(`verity/ml/flock/verifier/PROTOCOL.md` §16.15), so its time is a full verification's. The result counts both kinds
+(`verify.lean_accepted`, `verify.lean_drawless`) and its detail says which it was. Acceptance needs drawn sessions: the
+whole population staged and a stratified draw of B units from it per session (the live server's `--draw-file` taking a
+stratified draw, and the prover building the drawn statement). When that lands, the exception goes.
 
 ## The result contract
 
