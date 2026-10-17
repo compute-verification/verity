@@ -20,6 +20,7 @@ class Harness:
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
         monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
+        monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
                         post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
@@ -691,3 +692,18 @@ def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to,
 
     monkeypatch.setattr(drive.subprocess, "run", run)
     assert drive.merge_thread_post(f"{' '.join(to)} queue: b22a0c54d29e on `next` (#1 #2) failed its check", to, sender=sender)
+
+
+def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
+    """CI-48: nothing deleted a landed PR's branch or an idle one, and the repository reached 3,543 branches."""
+    from research.drive import BRANCH_SWEEP_S
+
+    h = Harness(world, monkeypatch)
+    calls = []
+    monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: calls.append(a) or (2, 1))
+    h.tick()
+    h.tick()
+    assert len(calls) == 1 and any("branch sweep: 2 deleted (on main), 1 archived" in x for x in world.logs)
+    h.clock += BRANCH_SWEEP_S + 1
+    h.tick()
+    assert len(calls) == 2
