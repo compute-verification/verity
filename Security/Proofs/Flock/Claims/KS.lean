@@ -64,6 +64,7 @@ import Proofs.Flock.Claims.KS.PlainParts
 import Proofs.Flock.Claims.KS.PlainClash0
 import Proofs.Flock.Claims.KS.PlainLevels
 import Proofs.Flock.Claims.KS.LevelsAll
+import Proofs.Flock.Claims.KS.PlainClashLater
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -288,4 +289,9 @@ position that differ clash in the run's log (`PlainLevels`: `FlockDeploy.KS.plai
 `FlockDeploy.KS.plain_levelClash`). On the model's side, the same accepted rep's requests after level 0's are
 levels `1, …, R` in order, each at the positions of the coins of its query round (`LevelsAll`:
 `FlockSoundness.Refine.LaterAt`, `FlockSoundness.Refine.find?_later`, `FlockSoundness.Refine.rep_refines_reqs`).
+So a self-clash past level 0 at the concrete simulator's outcome is two of one rep's level-`ℓ` entries at one position
+with different columns, which are the run's level-`ℓ` rows and clash in its log, and KS at the deployed plain
+verifier's trimmed record holds from the simulator's fork bound alone (`PlainClashLater`:
+`FlockSoundness.Discharge.AtDraw.accepts_opensLD`, `FlockDeploy.KS.plainClashQL`,
+`FlockDeploy.KS.plainSimLaterClashAt`, `FlockDeploy.KS.plain_KS_of_fork`).
 -/
