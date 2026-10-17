@@ -133,7 +133,7 @@ theorem instances_of_openingName {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h
   obtain ⟨n1, n2, n3, n4⟩ := openingName_ne m c j
   obtain ⟨vsh, A, C, hA, hC, rfl, -⟩ := FlockC3.VStarList.statements_ok h
   rcases Array.mem_append.1 hs with hs | hs
-  · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statements_eq hA
+  · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_range] at hs
     rcases hs with ⟨l, -, rfl⟩ | ⟨j', -, rfl⟩
     · exact absurd hn (n1 _ _)
@@ -220,7 +220,7 @@ def SessStmt (ish : RecVStar.Inner) (bind : Fin S → VStar.Bindings)
   ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ s : Fin S,
     ∃ (ss : Array VStar.Stmt) (sv : VStar.Stmt) (cf : ByteArray), RecVStar.statements ish = .ok ss ∧
       ss[(s : ℕ)]? = some sv ∧ ss.toList.filter (·.name == (Vs s).c.unit.name) = [sv] ∧
-      RecVStar.circuitFile sv (bind s) = .ok cf ∧
+      RecVStar.circuitFile sv (bind s) ish.holo = .ok cf ∧
       Flock.HmRow.parse (Flock.Zk.tags (Flock.Tags.circuit.withCoins
         (.tree (Flock.Zk.coinSpec #[Flock.Tags.circuit.table]))) (Flock.Zk.maskLogOf cf) 1) cf [] = .ok (Vs s).c
 
