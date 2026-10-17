@@ -438,7 +438,7 @@
    },
    "Claims.Recursion.Complete": {
     "fails": "Claims.Witness.Recursion.Complete_fails",
-    "meets": ["Claims.Witness.Recursion.Complete_meets"]
+    "meets": ["Claims.Witness.Recursion.Complete_meets", "Claims.Witness.Recursion.Complete_meets_deployed"]
    },
    "Claims.Recursion.Efficient": {
     "fails": "Claims.Witness.Recursion.Efficient_fails",
@@ -5598,6 +5598,9 @@
    ],
    "assumptions": [],
    "type_hash": "abebd32213005259fa2754347dd54a59c26cf68bf16f917ef2ba76241d292710"
+  },
+  "Claims.Witness.Recursion.Complete_meets_deployed": {
+   "owner": "@proofs"
   }
  },
  "shape": {
