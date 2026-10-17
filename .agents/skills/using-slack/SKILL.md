@@ -94,7 +94,7 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 ~~~
 
 - **A holder subscribes to its own inbox thread, not to `#agent-coordination`'s top level.** The sender rings the inbox of
-  each handle a post addresses (`routes.d`, mode `cli`); no agent forwards. The registry's `subscribers` lists the holders
+  each handle a post addresses (`routes.d`); no agent forwards. The registry's `subscribers` lists the holders
   that still take the channel top level as well (the `old-*` advisors). A doorbell for a
   post that turns out not to be for you ends the turn silently. **Timers are for schedules and absence checks** (a
   deadline, a renewal), **never for polling** your inbox, the channel or Linear: what's addressed to you rings your

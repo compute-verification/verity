@@ -1404,75 +1404,11 @@ def test_a_long_multi_line_merge_thread_reply_rings_only_the_names_it_starts_wit
     assert rc == 0 and len(bells(fake, lean)) == 1 and "vy-monitors" not in err   # naming no one, a PR's namer is rung
 
 
-def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fake, registry, routes_dirs, capsys):
+def test_a_finished_name_forwards_to_its_successor(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "old-worker", "1.0", closed="2026-10-01T18:00Z", forward_to="circuits")
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-worker", "--text", "where is the tree?")
     assert rc == 0 and "route @circuits: rang (for @old-worker, finished)" in err and len(bells(fake, box)) == 1
-    router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z"}   # no inbox
-    (routes_dirs[1] / "router.json").write_text(json.dumps(router))                    # published, not yet in the clone
-    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "again")
-    assert rc == 0 and "route: the router rings @circuits" in err and len(bells(fake, box)) == 1
-    t = fake.messages[COORD][-1]["ts"]
-    rc, _, err = run(capsys, "reply", "--as", "circuits", "--thread", t, "--quiet", "--text", "thanks")
-    assert rc == 0 and "route: this rings no one" in err
-    (routes_dirs[0] / "router.json").write_text(json.dumps(router))
-    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "and again")
-    assert rc == 0 and "rang" not in err and len(bells(fake, box)) == 1
-    (routes_dirs[1] / "router.json").write_text(json.dumps({**router, "mode": "cli"}))   # switched back; the clone not pulled
-    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "once more")
-    assert rc == 0 and "route @circuits: rang" in err and len(bells(fake, box)) == 2
-
-
-def test_a_long_lived_routes_reads_the_routers_switch_back_to_cli(tmp_path, monkeypatch):
-    clock = [1700000000.0]
-    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(clock[0], timezone.utc))
-    router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z"}
-    routes = slack.Routes(root=tmp_path, base="https://example.invalid/routes.d",
-                          get=lambda url: json.dumps(router).encode() if url.endswith("/router.json") else None)
-    assert routes.server_delivers()
-    router["mode"] = "cli"
-    clock[0] += slack.ROUTER_RECHECK_S - 1
-    assert routes.server_delivers()
-    clock[0] += 1
-    assert not routes.server_delivers(), "a relay that started in server mode would otherwise ring no one for good"
-
-
-def test_a_server_router_whose_route_stops_answering_falls_back_to_the_sender_and_alerts_its_owner(fake, registry, routes_dirs, capsys, monkeypatch):
-    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
-    status = [405]
-
-    class Route(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(status[0])
-            self.end_headers()
-
-        def log_message(self, *a):
-            pass
-
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Route)
-    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True).start()
-    box, top = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "top")
-    router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z",
-              "url": f"http://127.0.0.1:{srv.server_address[1]}/api/agent-slack/events", "owner": "top"}
-    for d in routes_dirs[:2]:
-        (d / "router.json").write_text(json.dumps(router))
-    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "answered")
-    assert rc == 0 and "route: the router rings @circuits" in err and bells(fake, box) == [] and bells(fake, top) == []
-    status[0] = 404
-    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "not answered")
-    assert rc == 0 and "route @circuits: rang" in err and "route @top: alerted, the router's events route doesn't answer (HTTP 404)" in err
-    alert = bells(fake, top)
-    assert len(bells(fake, box)) == 1 and len(alert) == 1 and alert[0]["text"].startswith("from router (URGENT), thread ")
-    assert router["url"] in alert[0]["text"] and "routes.d/router.json" in alert[0]["text"]
-    status[0] = 503
-    rc, _, err = run(capsys, "send", "--as", "proofs", "--to", "@circuits", "--text", "still down")
-    assert rc == 0 and "route @top: the router's events route doesn't answer (HTTP 503), so this sender rang; already alerted" in err
-    assert len(bells(fake, box)) == 2 and len(bells(fake, top)) == 1
-    rc, _, err = run(capsys, "send", "--as", "top", "--to", "@circuits", "--text", "from its owner")
-    assert rc == 0 and "route @top: the router's events route doesn't answer (HTTP 503), so this sender rang" in err
-    assert len(bells(fake, box)) == 3 and len(bells(fake, top)) == 1
-    srv.shutdown()
 
 
 def test_names_list_shows_a_handles_published_route_that_the_clone_lacks(fake, registry, routes_dirs, capsys):
