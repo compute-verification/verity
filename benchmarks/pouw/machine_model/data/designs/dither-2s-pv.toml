@@ -1,12 +1,12 @@
 # Dither-2S with Dither-C's committed-digit P·V (SKIP's Ap, Result 3): both operands dithered, no U, the last checked
 # word served, and P·V's strip digits committed, so no product is unchecked. Perplexity +1.38% (8B WT-2 2K) on SKIP's
-# `adopted-bd-lm-pv` arms, which are not on main yet (cursor/eps-pv-ea24).
+# `adopted-bd-lm-pv` arm (P in one block; `adopted-bd-lm-pv256` and up for blocks of keys).
 base = "dither-2s"
 name = "dither-2s-pv"
 title = "Dither-2S, pv P·V"
 aliases = ["dither-two-sided-pv", "Ap"]
 summary = "Two-sided dither serving the last checked word, P·V on committed digit limbs, duo at L = 32"
-ppl = ""
+ppl = "adopted-bd-lm-pv"
 
 [noise]
 linears = "two-sided"
@@ -14,6 +14,6 @@ lm_head = "two-sided"
 qk = "two-sided"
 pv = "pv"
 
-[skip.ts-time]
-eps = 0.00016
-source = "SKIP's Ap (calculator @a668d59c3, Result 3): 0 by int8 products and by time, plus pv's TS vector work ≤ 0.016% (note:20261017T0340Z-draft-skip, 06:19Z)"
+[skip.served]
+eps = 0.000779
+source = "eps_budget.py (benchmarks/pouw, `design_skip`): the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, of the whole-model ε_skip by honest time, every served output free; at 8B 2K prefill, pv's vector work that only the served output needs, P in one block (`pv_ts`, CHECKED-STRIP's tensor–scalar model; its digit and epilogue constants unmeasured; note:20261017T0030Z-draft-checked-strip, note:20261017T0340Z-draft-skip Result 3)"
