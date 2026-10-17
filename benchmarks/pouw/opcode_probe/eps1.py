@@ -152,7 +152,7 @@ def cmd_facets(a) -> int:
 
 
 #: words a warp instruction of a side loop's other patterns, by unit (the counted pattern's are the probe's `words`)
-MORE_WORDS = {"redblk": {"UBLKRED*": 256}, "uni": {"ULOP3*": 1}}
+MORE_WORDS = {"redblk": {"UBLKRED*": 256}}
 
 
 def side_words(row: dict, unit: str) -> float:
