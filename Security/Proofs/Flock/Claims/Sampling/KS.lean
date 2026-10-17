@@ -518,7 +518,29 @@ theorem stepWith_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (�
       have hm' : t.msgs.length = m := le_antisymm hm hge
       rw [he, he', List.take_append_of_le_length hm'.ge, List.take_append_of_le_length hm'.ge]
 
+/-- **Acceptance is the verifier's answer**: rounds that end accepting had the verifier answer `acc` to some prover
+messages. -/
+theorem stepWith_acc_next {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+      (stepWith H P x ω vnext n hist as t).out = .acc → ∃ as', ((vnext as').eval H).1 = .acc := by
+  intro n
+  induction n with
+  | zero => intro hist as t h; simp [stepWith] at h
+  | succ n ih =>
+    intro hist as t h
+    simp only [stepWith] at h
+    split at h
+    · exact ih _ _ _ h
+    · exact ⟨_, by assumption⟩
+    · simp at h
+
 variable {Coin : Type} [Inhabited Coin]
+
+/-- **An accepted run's verifier answered `acc`** to some prover messages and coins. -/
+theorem run_acc_next {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg) (ω : Ω)
+    (r : Fin (V.k x) → Coin) (h : (run H P V x ω r).out = .acc) : ∃ as cs, ((V.next x as cs).eval H).1 = .acc := by
+  obtain ⟨as, has⟩ := stepWith_acc_next H P x ω _ _ _ _ _ h
+  exact ⟨as, _, has⟩
 
 /-- **A run's first `m` messages read only its first `m` rounds' coins.** -/
 theorem run_msgs_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg) (ω : Ω) (m : ℕ)

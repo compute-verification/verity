@@ -291,6 +291,17 @@ def InnerNumbers (D : Deploy Coin Col T) : Prop :=
     D.flock.waits xS = D.innerWaits x ∧ D.flock.cap xS = D.innerCap x ∧ D.flock.N₀ xS = D.innerN₀ x ∧
       D.flock.εtable xS ≤ D.εtable x ∧ D.flock.weight xS ≤ D.weight x
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
+/-- **`DrawFixed` from the draw's place in the run**: where each checked unit's session is in the second stage and the
+checked units read only the coins off the second stage, fresh coins on a session keep them. -/
+theorem drawFixed_of_first (D : Deploy Coin Col T)
+    (hrounds : ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) → D.rounds x u ⊆ D.stage2 x)
+    (hfirst : ∀ x r r', (∀ t ∉ D.stage2 x, r t = r' t) → D.checked x r = D.checked x r') : DrawFixed D := by
+  intro x r u hu
+  refine ⟨hrounds x r u hu, fun d => hfirst x _ _ fun t ht => ?_⟩
+  have hn : t ∉ D.rounds x u := fun hm => ht (hrounds x r u hu hm)
+  simp [forkOn, hn]
+
 /-- **`SessionRuns` a session at a time**: at coins `r`, the unit checked at a slot below `S x` has its session a Flock
 run on its rounds, as `SessionRuns` says of every checked unit. Where the slots cover the checked units
 (`SlotsCover`), that is `SessionRuns` (`sessionRuns_of_slots`): one session over every checked unit, as the one-stage
