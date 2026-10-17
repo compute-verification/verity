@@ -2,17 +2,17 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3n-16) re-solves here to the τ, τ at 600 W, U/F_low and
+checks every attack against it. Each named vector (VF … VF3o-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3n-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3n-16, the vector of record since 17 Oct; VF3l-16 by decision 62 before it)
-uv run machine-model census VF3n-16 --kind ATOMS64
-uv run machine-model attacks VF3n-16 -n 3 # the cheapest attacks of every design
+uv run machine-model solve VF3o-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current` (VF3o-16, the vector of record since 17 Oct after VF3n-16; VF3l-16 by decision 62 before them)
+uv run machine-model census VF3o-16 --kind ATOMS64
+uv run machine-model attacks VF3o-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 ~~~
@@ -83,7 +83,12 @@ KIMAD, KHFMA2 and KSHFL that way for EIMAD, EHFMA2 and ESHFL, and replaced the A
 VF3n-16 closed the joint issue rows JI3e_0..2 for JI3n_0..2 (note:20261017T0321Z-draft-eps1-tensor): IMMA m16n8k16 and
 TF32 m16n8k4 beside IADD3 load JI3e_1 past 1. Each JI3n row is JI3e's refit over every native mma.sync form's programs and
 VF3e's at the 2% margin, then divided by 1.07 for the 6.9% one program's time varied between builds; MMA takes every form's
-least, and each form is its own kind on them (`IMMA16816`, `HMMA1684T`, …, with its `copy16` line).
+least, and each form is its own kind on them (`IMMA16816`, `HMMA1684T`, …, with its `copy16` line). VF3o-16 replaced
+the 1.07 with a measured margin (EPS1 TENSOR's M1c, r20261017-052102-d832, the tensor_kinds probe's schedule search):
+600 schedules of the forms that set JI3n (lane op, register layout, 2 to 6 warps a SMSP, placement) join the refit, and
+each JI3o row is divided by the most a searched program loads the row fitted to M1 alone, over 0.98 (1.038, 1.026,
+1.025), so a search as wide again finding as much again stays covered; the probe's refit with its search runs prints
+the rows.
 
 ## Where the data came from
 

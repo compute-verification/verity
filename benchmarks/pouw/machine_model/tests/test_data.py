@@ -163,3 +163,19 @@ def test_joint_issue_rows_refit_over_every_mma_form():
         assert c["MMA"][n] == pytest.approx(min(c[k][n] for k in forms)) == pytest.approx(mma * M.cycle_u, abs=0.05)
         assert c["MMA"][n] < old["MMA"][e] / 1.07
         assert all(c[k][n] == pytest.approx(v[e] / 1.07) for k, v in old.items() if e in v and k != "MMA")
+
+
+def test_joint_issue_rows_take_the_schedule_search():
+    """VF3o-16 closes JI3n_0..2 for JI3o_0..2: M1c's 600 schedules (r20261017-052102-d832) join M1's programs in the refit
+    at the 2% noise margin, and each row's ÷ 1.07 gives way to its measured margin, the most a searched program loads
+    the row fitted to M1 alone (over 0.98). Every kind but the MMA forms keeps VF3e's other coefficient over that margin."""
+    c, old = census(M, "VF3o-16"), census(M, "VF3n-16")
+    ji3n, ji3o = [f"JI3n_{i}" for i in range(3)], [f"JI3o_{i}" for i in range(3)]
+    assert not set(ji3n) & {r for v in c.values() for r in v}
+    forms = [k for k in old if k not in census(M, "VF3m-16") and set(ji3n) <= set(old[k])]
+    assert len(forms) == 14
+    for n, o, mma, margin in zip(ji3n, ji3o, (7.2340, 13.8781, 14.6943), (1.03783, 1.02623, 1.02466)):
+        assert ROWS[o].status == "joint" and "r20261017-052102-d832" in ROWS[o].runs
+        assert c["MMA"][o] == pytest.approx(min(c[k][o] for k in forms)) == pytest.approx(mma * M.cycle_u, abs=0.05)
+        assert all(c[k][o] == pytest.approx(v[n] * 1.07 / margin, rel=1e-5)
+                   for k, v in old.items() if n in v and k not in forms and k != "MMA")

@@ -32,8 +32,8 @@ MMA_FORMS = ["HMMA16816", "HMMA16816F16", "HMMA1684T", "HMMA1688T", "HMMASP16832
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
-    assert d["vector"] == "VF3n-16" and round(d["tau"], 4) == 0.0586 and d["failures"] == [] and d["unreproduced"] == []
-    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0459, 1.1563, 2.0)
+    assert d["vector"] == "VF3o-16" and round(d["tau"], 4) == 0.0588 and d["failures"] == [] and d["unreproduced"] == []
+    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0460, 1.1563, 2.0)
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
                            "loads16": {"kinds": 9, "below": [], "absent": []},
                            "copy16": {"kinds": 77, "below": ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"],
@@ -82,7 +82,8 @@ def test_a_measurement_is_data(tmp_path, capsys):
     assert "ROW_TEST" in new.census["FFMA"] and "ROW_TEST" not in old.census["FFMA"]
     assert (old.tau, old.margin) == (resolve(cur).tau, resolve(cur).margin)
     assert "JI3e_0" in resolve("VF3m-16", data).census["LDSM_X1"] and "JI3e_0" not in resolve("VF3j", data).census["LDSM_X1"]
-    assert "JI3n_0" in new.census["LDSM_X1"] and "JI3e_0" not in new.census["LDSM_X1"]
+    assert "JI3n_0" in resolve("VF3n-16", data).census["LDSM_X1"]
+    assert "JI3o_0" in new.census["LDSM_X1"] and not {"JI3e_0", "JI3n_0"} & set(new.census["LDSM_X1"])
     assert vector("TEST", data).published == {}
     assert main(["--data", str(data), "solve", "TEST"]) == 0
     assert "published: nothing yet" in capsys.readouterr().out
