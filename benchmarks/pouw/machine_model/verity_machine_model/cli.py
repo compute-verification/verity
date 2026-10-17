@@ -8,8 +8,8 @@
     machine-model census [EPOCH] [--kind K]   each instruction class's u on each row at EPOCH (default: the last)
     machine-model attacks [NAME] [--design D] [-n N]
                                               the N cheapest attacks of each design (or of D) at NAME's prices
-    machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) into data/ at EPOCH,
-                                              the last epoch: each (kind, row) keeps the faster of its old and new line
+    machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) at EPOCH, the last
+                                              epoch, into data/census/EPOCH.csv: each (kind, row) keeps its faster line
     machine-model designs [--json]            the design registry (data/designs): each design's name, its aliases, the
                                               noise on each product, fold, filler, proof unit, coins and perplexity arm
     machine-model eps [DESIGN] [--device sm_NN] [--q Q] [--q-uniform QU] [--operands O] [--credit C]
