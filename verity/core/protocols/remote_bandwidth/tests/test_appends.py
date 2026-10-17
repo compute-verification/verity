@@ -276,7 +276,7 @@ def test_an_append_s_leaves_bind_the_indices_the_verifier_assigns() -> None:
     r = Run(st, windows=1)
     ys = salts(b"page salts", 2)
     a = st.append(pages(N, 2), ys)
-    shifted = audit.append_tree(st.registration.digest, N + 1, pages(N, 2), ys)
+    shifted = audit.append_tree(st.registration.digest, N + 1, a.digests, ys)
     assert r.s.append(shifted.commitment.root, 2) == N
     assert len(shifted.open(N + 1).path) == len(a.tree.open(N).path)
     assert r.run(change=(((N, 2),), ())) is None
@@ -334,10 +334,13 @@ def test_a_store_appends_at_fresh_indices_under_bound_keys() -> None:
         salt, path, d = st.committed(j)
         assert d == codec.digest(pages(j, 1)[0]) and codec.decode(st.blocks[j], j, k, d) == pages(j, 1)[0]
     assert st.committed(N + 2)[1] == () and st.committed(0)[2] == b""
+    assert a.tree.open(N + 1).value == receipts.hidden(pages(N + 1, 1)[0], a.salts[1])
     with pytest.raises(ValueError, match="salt per payload"):
         st.append(pages(0, 2), salts(b"c", 1))
     with pytest.raises(ValueError, match="one or more"):
         audit.append_tree(st.registration.digest, N, [], [])
+    with pytest.raises(ValueError, match="64 bytes each"):
+        audit.append_tree(st.registration.digest, N, [bytes(63)], salts(b"d", 1))
     with pytest.raises(ValueError, match="registration's digest"):
         audit.append_domain(bytes(32), N, 1)
 

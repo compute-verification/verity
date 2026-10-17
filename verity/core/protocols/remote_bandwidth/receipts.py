@@ -473,7 +473,12 @@ def domain(seed: bytes, plan: Plan) -> CommitmentDomain:
 def hidden(row: bytes, salt: bytes) -> bytes:
     """`row`'s committed value as an hm96-sha512/row/v2 leaf: the hm96-sha512 leaf over its sha512/row/v2 digest under
     `salt` (a receipt leaf's receipts, or a payload block)."""
-    return HM96.tree_leaf(KEY, HM96.commit_string(KEY, sha512_row_v2_digest(row, 8 * len(row)), salt))
+    return hidden_digest(sha512_row_v2_digest(row, 8 * len(row)), salt)
+
+
+def hidden_digest(x: bytes, salt: bytes) -> bytes:
+    """`hidden` of a row from its sha512/row/v2 digest `x` alone (a payload block's `d_j`)."""
+    return HM96.tree_leaf(KEY, HM96.commit_string(KEY, x, salt))
 
 
 def tree(seed: bytes, plan: Plan, ys: Sequence[bytes], salts: Sequence[bytes]) -> MerkleTree:

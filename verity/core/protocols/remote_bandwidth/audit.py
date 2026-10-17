@@ -177,17 +177,17 @@ def append_domain(registration: bytes, first: int, count: int) -> CommitmentDoma
     return CommitmentDomain(binding, 0, RangeIndexedDomain(first, first + count), hash="sha512")
 
 
-def append_tree(registration: bytes, first: int, payloads: Sequence[bytes], salts: Sequence[bytes]) -> MerkleTree:
-    """The prover's commitment to the payloads of blocks written after the codec seed, at store indices `first` …:
-    leaves as `payload_tree`'s (block j hidden under `salts[j − first]`, its `x_j` the payload's digest `d_j`), in
-    `append_domain`.  Its root commits each block's `d_j`, and so its bound key and its encoding, before any pass
-    whose plan holds it."""
-    if not payloads or any(type(m) is not bytes or len(m) != BLOCK_BYTES for m in payloads):
-        raise ValueError(f"an append is one or more payload blocks of {BLOCK_BYTES} bytes")
-    if len(salts) != len(payloads):
+def append_tree(registration: bytes, first: int, digests: Sequence[bytes], salts: Sequence[bytes]) -> MerkleTree:
+    """The prover's commitment to the payloads of blocks written after the codec seed, at store indices `first` …,
+    from their digests `d_j` (`codec.digest`) alone, so a payload never leaves the device that wrote it: leaves as
+    `payload_tree`'s (block j hidden under `salts[j − first]`, its `x_j` the digest), in `append_domain`.  Its root
+    commits each block's `d_j`, and so its bound key and its encoding, before any pass whose plan holds it."""
+    if not digests or any(type(d) is not bytes or len(d) != DIGEST_BYTES for d in digests):
+        raise ValueError(f"an append is the digests of one or more payload blocks, {DIGEST_BYTES} bytes each")
+    if len(salts) != len(digests):
         raise ValueError("a salt per payload block")
-    return MerkleTree(append_domain(registration, first, len(payloads)),
-                      {first + u: receipts.hidden(m, y) for u, (m, y) in enumerate(zip(payloads, salts))},
+    return MerkleTree(append_domain(registration, first, len(digests)),
+                      {first + u: receipts.hidden_digest(d, y) for u, (d, y) in enumerate(zip(digests, salts))},
                       lambda _j: PAYLOAD_SCHEMA)
 
 
@@ -340,8 +340,8 @@ class Store:
         reg, first = self.registration, self.extent
         if first + len(payloads) > reg.codec.max_blocks:
             raise ValueError(f"a store under {reg.codec.name} is at most {reg.codec.max_blocks} blocks")
-        a = Append(first, tuple(codec.digest(m) for m in payloads), tuple(salts),
-                   append_tree(reg.digest, first, payloads, salts))
+        digests = tuple(codec.digest(m) for m in payloads)
+        a = Append(first, digests, tuple(salts), append_tree(reg.digest, first, digests, salts))
         k = reg.key
         self.blocks.extend(codec.encode(m, first + u, k, bound=True) for u, m in enumerate(payloads))
         self.appends.append(a)
