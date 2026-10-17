@@ -145,7 +145,7 @@ class _AnswerCudaFinder:
         return spec
 
 
-def select_cuda_platform(world: int = 1) -> str:
+def select_cuda_platform(world: int = 1, device_name: str | None = None) -> str:
     """A declared target is a CUDA device: vLLM's platform resolution answers `vllm.platforms.cuda.CudaPlatform` (the qualname its CUDA
     plugin returns on a GPU host) instead of probing NVML for it.  On a GPU-free Build host NVML is absent and that probe resolves a
     non-CUDA platform.  `import vllm` itself resolves `current_platform` (`torch_utils.PIN_MEMORY`), so before vLLM is imported the answer
@@ -153,8 +153,10 @@ def select_cuda_platform(world: int = 1) -> str:
     NVML-backed class when NVML answers, the torch-backed one when it does not), and `apply_target_profile` answers the target's
     capability on either.  The target is `world` such devices: the platform's `device_count()` answers `world`, not the host's visible
     count, so `ParallelConfig`'s "world size larger than the available GPUs" check passes on a GPU-free host and the executor backend
-    resolves to `mp`, as on a host with the `world` GPUs the Commit runs on.  Build path only: serving resolves its platform and counts
-    its devices as before.  Raises when `current_platform` already resolved to a non-CUDA platform."""
+    resolves to `mp`, as on a host with the `world` GPUs the Commit runs on.  On a host with no visible device the platform's
+    `get_device_name()` answers `device_name` (the row's class's, `engine.profiles.devices`), the key vLLM's tuned fused-MoE configs
+    are read by, so the Build reads the config file the class's GPU does; a GPU host answers its own.  Build path only: serving resolves
+    its platform and counts its devices as before.  Raises when `current_platform` already resolved to a non-CUDA platform."""
     # vLLM freezes export knobs at import (`VLLM_USE_LAYERNAME` -> `torch_utils._USE_LAYERNAME`): pin them before importing vLLM here
     engine_env.pin(engine_env.EXPORT)
     loaded = sys.modules.get("vllm.platforms")
@@ -166,6 +168,8 @@ def select_cuda_platform(world: int = 1) -> str:
     if not current_platform.is_cuda():
         raise RuntimeError(f"vLLM resolved {type(current_platform).__qualname__} before the declared CUDA target could select its platform")
     hooks.patch(type(current_platform), "device_count", classmethod(lambda cls, _n=int(world): _n))
+    if device_name is not None and not torch.cuda.is_available():
+        hooks.patch(type(current_platform), "get_device_name", classmethod(lambda cls, device_id=0, _n=device_name: _n))
     return type(current_platform).__qualname__
 
 

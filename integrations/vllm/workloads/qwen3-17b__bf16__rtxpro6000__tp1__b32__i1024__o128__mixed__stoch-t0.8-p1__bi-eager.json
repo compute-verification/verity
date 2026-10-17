@@ -1,8 +1,22 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen3-1.7B",
  "case": "QWEN3_17B",
- "tokenizer_revision": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+ "engine": {
+  "revision": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 8347,
+   "max_model_len": 1152
+  },
+  "target": {
+   "compute_capability": [
+    12,
+    0
+   ],
+   "num_sms": 188
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -66,10 +80,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 128,
- "engine_args_required": {
-  "max_num_batched_tokens": 8347,
-  "max_model_len": 1152
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 aeb13307a71acd8f (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   9,
@@ -9279,12 +9289,5 @@
   "lengths_only": false,
   "execution": "bi-eager"
  },
- "note": "R12 sweep qwen3-17b__bf16__rtxpro6000__tp1__b32__i1024__o128__mixed__stoch-t0.8-p1__bi-eager: B=32 I<=1024 O<=128 stoch-t0.8-p1 arrivals=none; prompt lens [963, 21, 159, 97, 543, 9, 15, 117, 25, 527, 323, 767, 345, 47, 141, 29, 27, 873, 227, 1024, 65, 587, 457, 423, 267, 37, 11, 79, 17, 57, 23, 13], caps [2, 25, 57, 33, 23, 101, 27, 11, 37, 17, 7, 75, 31, 45, 17, 128, 111, 13, 7, 85, 27, 21, 9, 19, 47, 5, 15, 3, 97, 67, 29, 69], arrive steps [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.",
- "target": {
-  "compute_capability": [
-   12,
-   0
-  ],
-  "num_sms": 188
- }
+ "note": "R12 sweep qwen3-17b__bf16__rtxpro6000__tp1__b32__i1024__o128__mixed__stoch-t0.8-p1__bi-eager: B=32 I<=1024 O<=128 stoch-t0.8-p1 arrivals=none; prompt lens [963, 21, 159, 97, 543, 9, 15, 117, 25, 527, 323, 767, 345, 47, 141, 29, 27, 873, 227, 1024, 65, 587, 457, 423, 267, 37, 11, 79, 17, 57, 23, 13], caps [2, 25, 57, 33, 23, 101, 27, 11, 37, 17, 7, 75, 31, 45, 17, 128, 111, 13, 7, 85, 27, 21, 9, 19, 47, 5, 15, 3, 97, 67, 29, 69], arrive steps [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
 }

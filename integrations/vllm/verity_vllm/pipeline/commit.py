@@ -243,9 +243,9 @@ COMPILED_REPLAY_SEED_SOURCE = "run root (first 4 bytes, after commitment): int(r
 
 
 def admission_lag(wl: dict) -> int:
-    """The lag rows the host admission counts: the declared LAG of the manifest target (`global_program.workload_target`)."""
+    """The lag rows the host admission counts: the declared LAG of the loaded workload's target (`global_program.workload_target`)."""
     from verity_vllm.pipeline import global_program as _GP
-    return int(_GP.workload_target(wl).lag())
+    return int(_GP.workload_target(wl.get("target")).lag())
 
 
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
@@ -262,7 +262,7 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
         _srule = _GP.stop_rule(eng.cp.get("local_path"), None, wl)
         out["srule"] = {k: _srule.get(k) for k in ("eos_token_ids", "source", "refusal") if k in _srule}
         out["eos"] = None if _srule.get("refusal") else _srule.get("eos_token_ids")
-        _decl_lag = _GP.workload_target(wl).lag()
+        _decl_lag = _GP.workload_target(wl.get("target")).lag()
         _eng_async = (versions.get("engine_kwargs") or {}).get("async_scheduling")
         # one field, one reader (padrev M-0517): GP-01's eos_lag_rows_declared over the engine's resolved read-back
         _eng_lag = _GP.eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
@@ -2226,7 +2226,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     else:
                         # [rev-cb M-0655 W2] the record must be the one of THIS Program and THIS checkpoint: its program_digest against the
                         # Build digest of record (--program-digest) / the manifest's component digests, its checkpoints.json entry against
-                        # the workload's (model, tokenizer_revision) pin -- a record built for another Program/checkpoint is refused by name
+                        # the workload's (model, engine.revision) pin -- a record built for another Program/checkpoint is refused by name
                         _pdr: set[str] = set()
                         if getattr(args, "program_digest", None):
                             _pdr.add(str(args.program_digest))
@@ -2236,7 +2236,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                 if isinstance(_c, dict) and _c.get("program_digest"):
                                     _pdr.add(str(_c["program_digest"]))
                         _wp = WR.check(_wor_rec, _live_wd, program_digests_of_record=(_pdr or None),
-                                       checkpoint_of_record={"repo": wl.get("model"), "revision": wl.get("tokenizer_revision")},
+                                       checkpoint_of_record={"repo": wl.get("model"), "revision": wl.get("revision")},
                                        kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))
                     _wp["source"] = (_wor_rec or {}).get("source")
                     _wp["committed_weights_root"] = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else None

@@ -150,6 +150,20 @@ def test_an_unregistered_definition_fails(registry):
     assert _check(cmap, registry=registry) == ["program silu-mul: Definition SiluMul_v99 is not registered"]
 
 
+def test_the_captures_are_registered_properties_and_the_map_is_its_checkpoints_at_its_world():
+    """Each property a Program's `captures` names is registered (an unknown one fails the check), and the circuit database finds the
+    map by the Build's checkpoint and world (`records.due`)."""
+    caps = CM.captures(CMAP)
+    assert caps["glm53_dsa_capture"] == ["fused-rope-triton", "mla-sparse-attention", "dsa-indexer-q", "dsa-indexer-k", "dsa-mqa-logits",
+                                         "dsa-topk"]
+    assert caps["glm53_fa3_split_capture"] == ["mla-sparse-attention"] and caps["deepgemm_sm90_capture"] == ["fp8-block-linear-deepgemm"]
+    cmap = copy.deepcopy(CMAP)
+    cmap["programs"]["silu-mul"]["captures"] = ["glm53_silu_capture"]
+    assert _check(cmap) == ["program silu-mul: capture 'glm53_silu_capture' is not a registered property"]
+    repo = CMAP["pins"]["checkpoint"]["repo"]
+    assert CM.of_checkpoint(repo, TP)["id"] == CMAP["id"] and CM.of_checkpoint(repo, 2) is None
+
+
 def test_every_tap_names_a_program_of_a_known_status():
     statuses = {pid: p["status"] for pid, p in CMAP["programs"].items()}
     assert {statuses[t["program"]] for t in CMAP["taps"]} <= set(CM.STATUSES)
