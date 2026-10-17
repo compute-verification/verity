@@ -78,7 +78,8 @@ else
 fi
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-proofs/proof_throughput/${RESEARCH_RUN_ID:-local}}
 ph lease wait
-"${LEASE[@]}" 1 --wait --max-min "${LEASE_MAX_MIN:-30}" -- bash -c '
+# one point's sessions at a time on this node (their staging overlaps): two would share its host CPUs and memory bandwidth
+flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" 1 --wait --max-min "${LEASE_MAX_MIN:-30}" -- bash -c '
   set -u; O=$1; shift
   printf "lease\tstart\t%s\n" "$(date +%s.%N)" >> "$O/phases.tsv"
   G=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-0}}
