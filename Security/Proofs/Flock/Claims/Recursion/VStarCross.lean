@@ -25,6 +25,10 @@ appeal to V*'s circuits, at every shape.
   first `N` of tag `0`, the first the link message, the `N`-th `Final`, the setup, the shipped verdict and the checks
   passing on it (`InnerAccSha` at SHA-512). So `Decomp` holds at a shape exactly where the parts' inner checks together
   give that (`InnerCut`), a fact about how the compiled statement cuts the inner verifier into V*'s parts.
+* **`Decomp` refuses out-of-scope inner statements** (`innerAcc_public`, `decomp_public`): the inner checks run the
+  inner statement's scope check and refuse it without a draw, and neither `readX` nor V*'s setup does. So at a compiled
+  statement whose inner statement fails either, `Decomp` holds only where no coins and inner messages pass all the
+  parts' checks.
 * **`LogDecomp` over Flock's deployed verifier asks the parts for its setup's calls** (`logDecomp_setup`,
   `logDecomp_deployed_setup`): every decision runs the inner statement's setup over `OC` first, on public data (the
   inner circuit file's bytes, its sigma's), so with `PartLogs` some part's SHA-512 gadgets would have to record each of
@@ -340,6 +344,23 @@ theorem decomp_of_cut {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shap
     Claims.Recursion.VStar.Decomp H D (FlockDeploy.V false) shape chk :=
   fun x st hst hf c ms hc => run_replay_acc H _ c ms (h x st hst hf c ms hc)
 
+/-- **`InnerAcc` reads the inner statement's public checks**: the checks after the verdict run its scope check
+(`scope_of_checks`) and refuse it without a draw (`ProvedScope.drawLaw`), on what the verifier read of it. -/
+theorem innerAcc_public {H : Msg → Msg} {x : Msg} {c : ℕ → Coin} {ms : List Msg} (h : InnerAcc H x c ms) :
+    ∃ s spec sts, FlockDeploy.setupOf false x = some (s, spec, sts) ∧ s.read.check = .ok () ∧
+      ∃ d, s.read.draw = some d := by
+  obtain ⟨_, s, spec, sts, _, _, hs, -, -, -, -, _, _, -, -, hc⟩ := h
+  refine ⟨s, spec, sts, hs, scope_of_checks hc, ?_⟩
+  unfold FlockDeploy.checks at hc
+  obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
+  obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
+  obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
+  obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
+  obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
+  cases hd : s.read.draw with
+  | none => simp [hd, Flock.ProvedScope.drawLaw] at hc
+  | some d => exact ⟨d, rfl⟩
+
 /-! ## The replayed run's steps -/
 
 section Replay
@@ -540,6 +561,18 @@ theorem decomp_iff_cut {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {sha
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} :
     Claims.Recursion.VStar.Decomp H D (FlockDeploy.V false) shape chk ↔ InnerCut H D shape chk :=
   ⟨fun h x st hst hf c ms hc => innerAcc_of_run H _ c ms (h x st hst hf c ms hc), decomp_of_cut⟩
+
+/-- **`Decomp` asks nothing of the parts to hold where the inner statement is out of scope**: at a compiled statement
+of the shape whose inner statement fails its scope check or holds no draw, the parts' inner checks hold together at no
+coins and no inner messages, since the inner verifier accepts none there (`innerAcc_of_run`, `innerAcc_public`). -/
+theorem decomp_public {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
+    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
+    (hD : Claims.Recursion.VStar.Decomp H D (FlockDeploy.V false) shape chk) {x : Msg} {st : Claims.Recursion.Stmt}
+    (hst : D.parse x = some st) (hf : shape st.form)
+    (hout : ¬ ∃ s spec sts, FlockDeploy.setupOf false (Claims.Recursion.xI D x) = some (s, spec, sts) ∧
+      s.read.check = .ok () ∧ ∃ d, s.read.draw = some d) (c : ℕ → Coin) (ms : List Msg) :
+    ¬ ∀ p < D.nS x, chk p x c ms := fun hall =>
+  hout (innerAcc_public (innerAcc_of_run H _ c ms (hD x st hst hf c ms hall)))
 
 /-! ## `LogDecomp` with the inner setup's calls admitted -/
 
