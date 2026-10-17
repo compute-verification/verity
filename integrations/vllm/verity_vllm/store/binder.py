@@ -8,11 +8,14 @@ BlockPool.get_new_blocks            after: kv_alloc of the pages it handed out
 BlockPool.free_blocks               after: kv_free of the pages it freed, moved to the back of the free queue (FIFO
                                     reuse, so a page freed inside a window is reused as late as the pool allows)
 BlockPool.touch                     refused: a prefix-cache hit would bring a page back with its KV (run without it)
-Scheduler.schedule                  after: kv_append of the scheduled tokens' slots, then begin_pass over the
-                                    allocated pages (a pass still open from an earlier schedule is ended first; a
-                                    verifier's message since then ends the window, the next challenge begins one)
-Scheduler.update_from_output        before: end_pass, with the device reader's roots, and the store's memory map
-                                    flushed (the step's KV is written by now, so its blocks' digests are taken)
+Scheduler.schedule                  after: a verifier's message since the last pass ends the window, the next
+                                    challenge begins one; then kv_append of the scheduled tokens' slots, which closes
+                                    the last step's memory-map line (with its re-keys for the window just begun), and
+                                    begin_pass over the allocated pages, tagged with the step (a pass still open from
+                                    an earlier schedule is ended first)
+Scheduler.update_from_output        before: end_pass, with the device reader's roots, and end_step (the step's KV is
+                                    written by now, so a memory map takes its digests; the pages vLLM frees after
+                                    this, in update_from_output, are freed at this step)
 ~~~
 
 The step's own device work (a codec's ``encode_slots_`` in attention's KV write, a fused GEMM's receipts) is the
@@ -326,17 +329,17 @@ class Binder:
     def on_schedule(self, sched: Any, so: Any) -> None:
         if self.store.in_pass:
             self.end()
-        t = time.perf_counter()
-        apps = self.appends(sched, so)
-        self.store.counters.add("appends", time.perf_counter() - t)
-        self.store.kv_append(apps, self.step)
-        self.step += 1
         for m in self.messages() if self.messages is not None else ():
             self.end_window()
             if m is not None:
                 self.store.begin_window(m, None if self.windows else self.registration)
                 self._in_window = True
-        ps = self.store.begin_pass(None)
+        t = time.perf_counter()
+        apps = self.appends(sched, so)
+        self.store.counters.add("appends", time.perf_counter() - t)
+        s, self.step = self.step, self.step + 1
+        self.store.kv_append(apps, s)
+        ps = self.store.begin_pass(None, step=s)
         self._segments, self._seed = ps.segments, ps.seed
 
     def z(self, seed: bytes) -> Callable[[str, int], bytes]:
@@ -345,8 +348,7 @@ class Binder:
         return lambda name, b: tiles.output(seed, region(name).first + b)
 
     def end(self) -> None:
-        if self.store.memory_map is not None:
-            self.store.memory_map.flush()
+        self.store.end_step()
         if self.store.in_pass:
             read = self.reader(self._segments) if self.reader else None
             z = self.z(self._seed) if self.tiles is not None and self._seed is not None else None

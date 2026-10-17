@@ -46,6 +46,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
+from verity.core.protocols.remote_bandwidth.audit import LIFETIME
 from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, SALT_BYTES, Plan
 from verity.ml.commitments import merkle_depth
 from verity_vllm.store.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
@@ -244,6 +245,7 @@ class _Pass:
     positions: int = 0
     starts: list[int] = field(default_factory=list)
     z: Callable[[str, int], bytes | None] | None = None     # the z each receipt is bound to, kept for the openings
+    step: int | None = None
     _plan: Plan | None = None
 
     def plan(self) -> Plan:
@@ -313,6 +315,7 @@ class Store:
         self._last_root: bytes | None = None
         self._passes: list[PassCommitment] = []
         self._window = -1
+        self._pass_step = -1
         self._retained: dict[tuple[int, int], _Pass] = {}
         self._open_pass: _Pass | None = None
         self.filler_plan = filler_plan
@@ -436,11 +439,17 @@ class Store:
         b, bb = slot - r.info.first, r.info.block_bytes
         return r.codec.decode(r.backing.read(b * bb, bb), r.info.word_index(b))
 
-    def record_memory_map(self, path: Any = None, registration: bytes | None = None) -> mm.MemoryMap:
+    def record_memory_map(self, path: Any = None, registration: bytes | None = None, lifetime: int = LIFETIME,
+                          on_line: Any = None) -> mm.MemoryMap:
         """Record each step's KV blocks as memory-map/v1 into ``path`` (the prover's own file) or kept, beside
-        ``registration``, the remote audit's `Registration.digest`, which the session's first window chains from
-        (`memory_map.record`)."""
-        return mm.record(self, path, registration)
+        ``registration``, the remote audit's `Registration.digest`, which the session's first window chains from, under
+        the session's lifetime cap of ``lifetime`` windows, each closed line to ``on_line`` (`memory_map.record`)."""
+        return mm.record(self, path, registration, lifetime, on_line)
+
+    def end_step(self) -> None:
+        """The step's forward has written its KV (`Scheduler.update_from_output`): a memory map takes its digests."""
+        if self.memory_map is not None:
+            self.memory_map.end_step()
 
     # --- the KV pool's pages ----------------------------------------------------------------------------------------
 
@@ -475,8 +484,8 @@ class Store:
 
     def kv_append(self, appends: Sequence[Append], step: int) -> None:
         """The step's KV writes: each block a write reaches turns dirty, and each it completes is registered again
-        (epoch + 1, under ``step``).  One registration record for the step.  A memory map records the step's completed
-        blocks as written, and its reached registered ones it leaves dirty as freed (`verity_vllm.store.memory_map`)."""
+        (epoch + 1, under ``step``).  One registration record for the step.  A memory map closes the last step's line and
+        opens this one's: its completed blocks written, its reached registered ones freed (`memory_map`)."""
         t = time.perf_counter()
         p, m = self.pool, self.memory_map
         if m is not None:
@@ -504,13 +513,13 @@ class Store:
             self._log({"event": "kv-append", "step": step, "appends": n, "registered": len(key)},
                       hashlib.sha512(np.stack([pg, first, end]).astype(">i8").tobytes()).digest())
         if m is not None:
-            m.record(step, np.setdiff1d(reached, key), key)
+            m.open(step, np.setdiff1d(reached, key), key)
         self.counters.add("kv_append", time.perf_counter() - t)
 
     def kv_write_reference(self, appends: Sequence[Append], payload: Callable[[int, int, int], bytes],
                            step: int) -> None:
         """The CPU reference of a step's KV write: slot ``s`` of page ``p`` in layer ``l`` takes ``payload(l, p, s)``
-        (its planes in order, ``slot_bytes`` each), encoded on append, then `kv_append` (a memory map flushed after)."""
+        (its planes in order, ``slot_bytes`` each), encoded on append, then `kv_append` and `end_step`."""
         p = self.pool
         lay = p.layout
         ps, ks = lay.strides()
@@ -528,8 +537,7 @@ class Store:
                         r.backing.write(off, data[k * lay.slot_bytes:(k + 1) * lay.slot_bytes])
                         self.encode_range(rn, off, lay.slot_bytes)
         self.kv_append(appends, step)
-        if self.memory_map is not None:
-            self.memory_map.flush()
+        self.end_step()
 
     def idle_blocks(self, region: str) -> np.ndarray:
         """A KV layer region's registered blocks that no attention reads: every block of a free page, and the blocks of
@@ -543,6 +551,15 @@ class Store:
     @property
     def in_pass(self) -> bool:
         return self._open_pass is not None
+
+    @property
+    def window(self) -> int:
+        """The latest window's number, -1 before the first."""
+        return self._window
+
+    @property
+    def window_open(self) -> bool:
+        return self._challenge is not None
 
     def begin_window(self, challenge: bytes, registration: bytes | None = None) -> None:
         """Open a window under ``challenge`` (32 bytes).  Its first pass chains from the session's last root.  The
@@ -573,18 +590,23 @@ class Store:
         self._challenge = None
         return rec
 
-    def begin_pass(self, live_pages: Sequence[int] | None = ()) -> _Pass:
+    def begin_pass(self, live_pages: Sequence[int] | None = (), step: int | None = None) -> _Pass:
         """Plan pass j: every weights region whole, each KV layer over ``live_pages``' blocks that attention reads
         (None: every allocated page), then the filler plan's.  Outside a window the pass has no seed and commits
-        nothing."""
+        nothing.  ``step`` is the engine step whose reads it covers, above the last pass's; while a memory map records,
+        the step `kv_append` opened last."""
         t = time.perf_counter()
         if self._open_pass is not None:
             raise RuntimeError("a pass is already open")
+        if step is not None and (step <= self._pass_step or (self.memory_map is not None and step != self.memory_map.last)):
+            raise ValueError(f"a pass covers the step kv_append opened last, above the last pass's {self._pass_step}: "
+                             f"not {step}")
+        self._pass_step = self._pass_step if step is None else step
         j = len(self._passes)
         seed = None
         if self._challenge is not None:
             seed = self.chaining(self._challenge, self._last_root, j)
-        ps = _Pass(j, seed, [], [])
+        ps = _Pass(j, seed, [], [], step=step)
         parts = [(r.info.name, 0, r.info.blocks, None, None) for r in self._regions if r.info.kind == "weights"]
         if self._pool is not None and live_pages is None:
             live_pages = np.nonzero(self._pool.allocated)[0]
@@ -682,7 +704,7 @@ class Store:
             self.counters.add("end_pass", time.perf_counter() - t)
             return None
         if root is not None:
-            pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, (), root)
+            pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, (), root, ps.step)
         else:
             dom = rb.domain(ps.seed, ps.plan())
             leaf, n = self._leaf(ps, dom, z), dom.count
@@ -690,7 +712,7 @@ class Store:
                       for k, s in enumerate(ps.segments) if aligned(s)}
             root = _node(dom, n, merkle_depth(n), 0, leaf, ps.top)
             seg_roots = tuple(_node(dom, n, *node_of(s), leaf, ps.top) for s in ps.segments)
-            pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, seg_roots, root)
+            pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, seg_roots, root, ps.step)
         self._passes.append(pc)
         self._last_root = root
         self._retained[(self._window, ps.index)] = ps
