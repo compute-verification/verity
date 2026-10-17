@@ -184,10 +184,30 @@ when the deployed verifier's rounds with `Hello` are the protocol's and
   pre-final view's leaves);
 * (Lemmas B and C) `SHVZK` holds at `2·n_B(x)·δ₁` (`hB`: `Proto.shvzk_at_hm96` where the prover goes on and
   `Proto.shvzk_refused_hm96` where it refuses, `n_B` at least the hidden leaves and the pre-final ones);
-* (T6) the opening check is the coin-tree walk and the coin is read from the opening's coins (`hchk`, `hdec`).
+* (T6) the opening check binds (`hC`: `Proto.binding_of_tree` where the check is the coin-tree walk and the coin is read
+  from the opening's coins, `Proto.binding_of_open` where the opening is read at its round and the coin from all of it).
 
 `δ₁` is `Hm96Hiding`'s; the binding term is `γ` times `Fork`'s collision probability among the honest prover's calls
 (`ZKmalR`). -/
+theorem Flock.zkR_gkE_hm96_bind {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (G : Proto Flock.Wit)
+    (t : ℕ) (ht : 0 < t) (hzk : D.zk = true) (hk : ∀ x, D.V.k x + 1 = G.k x) (δ₁ : ENNReal) (nL nB : Msg → ℕ)
+    (hA : ∀ x w, Flock.R D.parse x w → ∀ (ν : G.Nonce) (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1))
+      (E : (Fin (G.K x + 1) → Msg) → Prop),
+      |Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.msg x w ν)) V r)) -
+        Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.dmsg x ν)) V r))| ≤ 2 * nL x * δ₁.toReal)
+    (hB : G.SHVZK H (Flock.R D.parse) fun x => 2 * nB x * δ₁.toReal) (hC : G.Binding H) :
+    Claims.Flock.ZKAt H D G.prover (G.simulatorE t (t * 3 ^ t))
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
+  have h := Flock.zkR_gkE_of_proto H D G t ht (fun x => 2 * nL x * δ₁.toReal) (fun x => 2 * nB x * δ₁.toReal) hzk hk
+    (G.prefixHides_of_runs H _ _ hA) hB (fun x => by positivity) hC
+  have e : (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3 : ℝ) ^ t) =
+      fun x => 4 * (2 * nL x * δ₁.toReal) + 4 * t * (2 * nB x * δ₁.toReal) + 2 * (1 / 3) ^ t :=
+    funext fun x => by ring
+  rw [e]
+  exact h
+
+/-- **The same where the opening check is the coin-tree walk and the coin is read from the opening's coins** (`hchk`,
+`hdec`, `Proto.binding_of_tree`). -/
 theorem Flock.zkR_gkE_hm96 {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (G : Proto Flock.Wit)
     (t : ℕ) (ht : 0 < t) (hzk : D.zk = true) (hk : ∀ x, D.V.k x + 1 = G.k x) (δ₁ : ENNReal) (nL nB : Msg → ℕ)
     (hA : ∀ x w, Flock.R D.parse x w → ∀ (ν : G.Nonce) (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1))
@@ -202,15 +222,9 @@ theorem Flock.zkR_gkE_hm96 {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Depl
       treeChk (Tr x ρ) (nb ν) (root x ρ) (pos x ρ j) (idx x ρ j) (n x ρ j) (depth x ρ j) (parse m))
     (hdec : ∀ m op, parse m = some op → G.dec m = dc op.cs) :
     Claims.Flock.ZKAt H D G.prover (G.simulatorE t (t * 3 ^ t))
-      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
-  have h := Flock.zkR_gkE_of_proto H D G t ht (fun x => 2 * nL x * δ₁.toReal) (fun x => 2 * nB x * δ₁.toReal) hzk hk
-    (G.prefixHides_of_runs H _ _ hA) hB (fun x => by positivity)
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
+  Flock.zkR_gkE_hm96_bind H D G t ht hzk hk δ₁ nL nB hA hB
     (G.binding_of_tree H Tr nb root parse pos idx n depth dc hchk hdec)
-  have e : (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3 : ℝ) ^ t) =
-      fun x => 4 * (2 * nL x * δ₁.toReal) + 4 * t * (2 * nB x * δ₁.toReal) + 2 * (1 / 3) ^ t :=
-    funext fun x => by ring
-  rw [e]
-  exact h
 
 /-- **The same at `FlockDeploy.deployZk`.** -/
 theorem Flock.zkR_gkE_hm96_deployZk (H : Msg → Msg)
@@ -231,6 +245,19 @@ theorem Flock.zkR_gkE_hm96_deployZk (H : Msg → Msg)
       (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
   Flock.zkR_gkE_hm96 H _ G t ht rfl (fun x => (deployZk_proto_k rel G hK x).symm) δ₁ nL nB hA hB Tr nb root parse
     pos idx n depth dc hchk hdec
+
+/-- **The same at `FlockDeploy.deployZk`, from `Binding` itself.** -/
+theorem Flock.zkR_gkE_hm96_deployZk_bind (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) (t : ℕ) (ht : 0 < t)
+    (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) (δ₁ : ENNReal) (nL nB : Msg → ℕ)
+    (hA : ∀ x w, Flock.R (FlockDeploy.deployZk rel).parse x w → ∀ (ν : G.Nonce)
+      (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1)) (E : (Fin (G.K x + 1) → Msg) → Prop),
+      |Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.msg x w ν)) V r)) -
+        Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.dmsg x ν)) V r))| ≤ 2 * nL x * δ₁.toReal)
+    (hB : G.SHVZK H (Flock.R (FlockDeploy.deployZk rel).parse) fun x => 2 * nB x * δ₁.toReal) (hC : G.Binding H) :
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover (G.simulatorE t (t * 3 ^ t))
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
+  Flock.zkR_gkE_hm96_bind H _ G t ht rfl (fun x => (deployZk_proto_k rel G hK x).symm) δ₁ nL nB hA hB hC
 
 /-- `S_GK`'s cost: `(1 + 5t)` runs in expectation (`SimCost`) at every cap `M`. -/
 theorem Flock.simCostExp_of_proto (H : Msg → Msg) (G : Proto Flock.Wit) (t M : ℕ) (cChk cMsg cSim : Msg → ℕ)
