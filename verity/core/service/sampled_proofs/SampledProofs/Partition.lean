@@ -76,21 +76,52 @@ def wordCalls (P : Flock.Program.Prog) : V (Array (Nat × Nat × Flock.Qword.DCu
       throw s!"query-refused: unit {u} of {(P.defs[d]!).key} commits {ob[u]!} bits, more than {UNIT_BITS}"
   return calls
 
+/-- `partition._check_intervals`: a template instance's or `Q_call` unit's gates are an interval `[lo, hi)` of root gates,
+refused when it has none, or commits more than `UNIT_BITS` bits, the summed declared widths of its gates that the program
+returns, that are Input gates, or that a gate at or past `hi` reads, constants included (the claims' `Prog.Boundary`;
+`Q_call`'s width rule counts computing gates only). -/
+def checkIntervals (P : Flock.Program.Prog) (gs : Array (Nat × Nat)) : V Unit := do
+  let n := (P.defs[P.root]!).gates
+  let mut prim : Array Nat := Array.mkEmpty n
+  let mut last : Array Int := Array.replicate n (-1)
+  for i in [0:n] do
+    let (f, ops, _) ← P.gate i
+    prim := prim.push f
+    for o in ops do
+      if o < n && last[o]! < i then last := last.set! o i
+  let outs ← (P.defs[P.root]!).body.ret.toArray.mapM (Flock.Program.resolve P P.rootScope)
+  for u in [0:gs.size] do
+    let (lo, hi) := gs[u]!
+    if hi ≤ lo then throw s!"query-refused: unit {u} has no gate"
+    let mut bits := 0
+    for g in [lo:hi] do
+      let d := P.defs[prim[g]!]!
+      if outs.contains g || Flock.Program.isInputId d.key || last[g]! ≥ hi then
+        bits := bits + match d.ret with
+          | .value w => w
+          | _ => 0
+    if bits > UNIT_BITS then throw s!"query-refused: unit {u} commits {bits} bits, more than {UNIT_BITS}"
+
 /-- The `Q_word` or `Q_call` query's Calls with their units, as `(root-body index, Definition id, units)`: `Q_word` v1 at
-`X = 16` (`wordCalls`) or `Q_call` v1 at `X ≤ 16` (any `W` core accepts); `query-refused` for any other parameters or
-query, and where the query is inapplicable. -/
+`X = 16` (`wordCalls`) or `Q_call` v1 at `X ≤ 16` (any `W` core accepts, its units' intervals `checkIntervals`');
+`query-refused` for any other parameters or query, and where the query is inapplicable. -/
 def calls (p : Program) (name : String) (version : Nat) (params : Json) : V (Array (Nat × String × Nat)) := do
   let X := (nat? (getD params "X")).getD 0
   let key := fun d => (p.prog.defs[d]!).key
   if name == "Q_word" && version == 1 && X == UNIT_BITS then
     return (← wordCalls p.prog).map fun (k, d, c) => (k, key d, c.units)
   if name == "Q_call" && version == 1 && X ≤ UNIT_BITS then
-    return (← Flock.Qcall.evaluate p.prog X).map fun c => (c.k, key c.d, c.c.units.size)
+    let cs ← Flock.Qcall.evaluate p.prog X
+    let root := (p.prog.defs[p.prog.root]!).body
+    checkIntervals p.prog (cs.foldl (fun acc c =>
+      acc ++ c.c.units.map fun u => (root.offsets[c.k]! + u.lo, root.offsets[c.k]! + u.hi)) #[])
+    return cs.map fun c => (c.k, key c.d, c.c.units.size)
   throw s!"query-refused: one-stage applies the template queries, Q_word v1 at X = 16 and Q_call v1 at X <= 16, not {name} v{version} at X = {X}"
 
 /-- `partition.evaluate`'s ranges: the query applied to the program, once core accepts its form, per root node or Call
 with units its template or Definition, first unit and count; `query-refused` when it is malformed, the program is not
-topological, or the query is not one one-stage applies or does not apply. -/
+topological, the query is not one one-stage applies or does not apply, or a unit is wider than the literal limit or, an
+instance, has no gate (`wordCalls`, `checkIntervals`). -/
 def evaluate (p : Program) (query : Json) : V (Array TRange) := do
   let obj := build (Flock.hexOf p.sha512) query
   if !valid obj then throw "query-refused: not a verity/partition/v1 query"
@@ -99,7 +130,13 @@ def evaluate (p : Program) (query : Json) : V (Array TRange) := do
   let name := (q.getObjValAs? String "name").toOption.getD ""
   let version := (nat? (getD q "version")).getD 0
   match Flock.TemplateQuery.templatesOf name version (getD q "params") with
-  | some ts => Flock.TemplateQuery.evaluate p.desc (← ts)
+  | some ts =>
+    let rs ← Flock.TemplateQuery.evaluate p.desc (← ts)
+    checkIntervals p.prog (← (Array.range (Flock.TemplateQuery.population rs)).mapM fun u =>
+      match Flock.TemplateQuery.gates p.desc rs u with
+      | some g => pure g
+      | none => throw s!"unit {u} has no instance")
+    return rs
   | none => return callRanges (← calls p name version (getD q "params"))
 
 /-- `partition.units`: the population. -/
