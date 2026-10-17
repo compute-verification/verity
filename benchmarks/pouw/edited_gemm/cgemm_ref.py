@@ -164,8 +164,9 @@ def check(d: Path) -> dict:
     if "cohalf" in meta.get("kinds", {}).values():
         return check_half(d, meta)
     m_, n, k, seed, inv_s = meta["m"], meta["n"], meta["k"], meta["seed"], np.float32(meta["inv_s"])
-    # H1's numerics (co32c-u16, decision 82): per-token s_a = amax / 126 (recomputed from x, fp32, matching crow_s),
-    # X floor-clamped on [-126, 126], weights +-110 with the narrow U (u_rows16). Else Dither-C's one-scale 7-bit form.
+    # H1's numerics (co32c-u16, decision 82): per-token s_a = amax / 126 (recomputed from x, fp32, matching crow_s), then
+    # X = floor(clamp(x / s_a, -126, 126)) + b dividing by s_a (two roundings, as crow_s + cquant_h1 and steps.act_quant
+    # do, not one reciprocal), weights +-110 with the narrow U (u_rows16). Else Dither-C's one-scale 7-bit form.
     h1 = meta.get("numerics") == "h1"
     key = b"".join(struct.pack(">Q", int(w, 16)) for w in meta["key"])
     tiles_n = n // T
@@ -180,8 +181,8 @@ def check(d: Path) -> dict:
 
         x = (rd("x", np.uint16).astype(np.uint32) << 16).view(np.float32).reshape(T, k)
         if h1:
-            inv_row = (np.float32(126.0) / np.maximum(np.abs(x).max(axis=1), np.float32(1e-30))).astype(np.float32)
-            Vq = np.clip(np.floor(x * inv_row[:, None]), -126, 126).astype(np.int64)
+            s_row = (np.maximum(np.abs(x).max(axis=1), np.float32(1e-30)) / np.float32(126.0)).astype(np.float32)
+            Vq = np.clip(np.floor(x / s_row[:, None]), -126, 126).astype(np.int64)
         else:
             Vq = np.clip(np.floor(x * inv_s), -127, 126).astype(np.int64)
         b = patch_bits(key, DITHER_TAG, tm * T, T, k)
@@ -224,7 +225,7 @@ def check(d: Path) -> dict:
         }
         out["tiles"][f"{tm},{tn}"] = res
         ok &= all(v for v in res.values() if isinstance(v, bool))
-        if h1:   # X = floor(clamp(x inv_row, -126, 126)) + b in [-126, 127]; Wp = W + c + U in [-126, 127]
+        if h1:   # X = floor(clamp(x / s_a, -126, 126)) + b in [-126, 127]; Wp = W + c + U in [-126, 127]
             ok &= -126 <= res["X_range"][0] and res["X_range"][1] <= 127 and -126 <= res["Wp_range"][0] and res["Wp_range"][1] <= 127
         else:
             ok &= -127 <= res["X_range"][0] and res["X_range"][1] <= 127 and -128 <= res["Wp_range"][0] and res["Wp_range"][1] <= 127
