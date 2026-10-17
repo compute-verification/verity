@@ -237,15 +237,8 @@ def e2e_xin_absorb(y: list[int], p: list[int], xa0, xa1) -> list[int]:
 FOLDS = {
     "duo": {"step": duo_step, "state": ("y", "z"), "keys": ("a0", "a1", "k0", "k1"), "xor_rotations": (),
             "key_rule": {"pfill": "key_ok (key_ok_r9 in an r9 build)", "served": "fixed public odd keys SERVED_KA"},
-            "status": "open", "needs": ("D",),
-            "ref": "(D): different runs of a chain's words leave different final states on some start state. Proved for "
-                   "one, two and three words at every width (Lean Pouw.SecurityProofs.Receipt.DuoWordInjective, "
-                   "DuoPairNoKernel, DuoTripleNoKernel); false at four words for odd keys with r1 + r3 = 0 mod 32, "
-                   "a2 = -1 mod 2^r1 and a3 = ±1 mod 2^(33 - r1), which key_ok and both schedules' rotations exclude. "
-                   "At four words a kernel needs a2 = -1 mod 2^r1, for odd a1, a2, a3, 0 < r2, r3 < n and "
-                   "0 < r1 <= n - 3 (Lean DuoQuadNoKernel), so both schedules' keys have none; open for five or more "
-                   "words, and for the served receipt y ^ rotl(z, 16) at any length "
-                   "(note:20261017T1000Z-draft-fold-r §6.5)"},
+            "status": "proved", "needs": (),
+            "ref": "no all-state kernel at 2, 4, 6 or 8 words; binds every word (note:20261016T1013Z-draft-pfill-fold §2)"},
     "xin13": {"step": xin13_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": (13, 19),
               "key_rule": {"pfill": "key_ok_r9", "egemm": "key_ok_r9", "e2e": "lambda8 (weaker: no key_ok)"},
               "status": "open", "needs": ("RT", "G3"),
