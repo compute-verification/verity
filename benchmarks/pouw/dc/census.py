@@ -65,7 +65,7 @@ SYNC = {"imma_s8_k32": ("IMMA16832_S8", 32), "imma_s8_k16": ("IMMA16816_S8", 16)
 SCALAR = {"ALU": ("A", {"s_lop3": "LOP3.LUT", "s_shf": "SHF.L.W.U32.HI", "s_lea": "LEA.HI"}),
           "IMAD": ("I", {"s_imad": "IMAD"}), "SHFL": ("SHFL", {"s_shfl": "SHFL.BFLY"}), "FFMA": (None, {"s_ffma": "FFMA"})}
 #: lanes beside the tensor whose pipe row a joint can bind: lane -> (scalar kind, the lane's counted pattern)
-LANE_PIPE = {"imad": ("IMAD", "IMAD"), "lop3": ("ALU", "LOP3.LUT")}
+LANE_PIPE = {"imad": ("IMAD", "IMAD"), "lop3": ("ALU", "LOP3.LUT"), "shfl": ("SHFL", "SHFL.BFLY")}
 
 
 def run_id(d: Path) -> str:
@@ -192,14 +192,14 @@ class Device:
         return pts
 
     def lane_points(self, lane: str) -> list[tuple[float, float, str]]:
-        """(honest tensor, the lane's pattern) a SMSP-cycle over its exact beside points, its alone rate and the tensor's;
-        empty unless the lane loses more than the margin beside the saturated tensor (else its pipe row holds as is)."""
+        """(honest tensor, the lane's pattern) a SMSP-cycle over every beside point (a block-timed one is a time average a
+        program achieves, so a point of the region too), its alone rate and the tensor's; empty when some point keeps
+        both within the margin of alone (the pipe row holds as is)."""
         kind, pat = LANE_PIPE[lane]
         alone, t_alone = self.kinds[kind]["rate"], self.honest_rate()
         beside = [(j["tensor_rate"], j["lane_rate"], f"{name}@{run}") for run, name, j in self.joints
-                  if j.get("exact") and analyze.lane_of(name) == lane and j.get("lane_opcode") == pat
-                  and j.get("tensor_rate")]
-        if all(min(t / t_alone, x / alone) >= 1 - MARGIN for t, x, _ in beside):
+                  if analyze.lane_of(name) == lane and j.get("lane_opcode") == pat and j.get("tensor_rate")]
+        if not beside or any(min(t / t_alone, x / alone) >= 1 - MARGIN for t, x, _ in beside):
             return []
         return [(0.0, alone / SMSPS, f"{kind} alone"), (t_alone / SMSPS, 0.0, "tensor alone")] + [
             (t / SMSPS, x / SMSPS, n) for t, x, n in beside]
@@ -337,8 +337,8 @@ def census(dev: Device) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
             r = f"JP{pipe}{sfx}_{i}"
             lines.append(cycles_line(honest, r, f["MMA"], every))
             lines.append(cycles_line(kind, r, f["X"], every))
-            row(r, "joint", every, f"{honest} {f['MMA']:.3f} + {kind} {f['X']:.3f} SMSP-cycles (DC's exact {lane} "
-                f"lanes beside the tensor, 2% noise margin; tight at {tight(f)})")
+            row(r, "joint", every, f"{honest} {f['MMA']:.3f} + {kind} {f['X']:.3f} SMSP-cycles (DC's {lane} lanes "
+                f"beside the tensor, exact and block-timed, 2% noise margin; tight at {tight(f)})")
     return lines, rows
 
 
@@ -426,11 +426,12 @@ def tables(dev: Device) -> str:
         out[-1] += (f"; with the {n_ld:.0f} tcgen05.ld.x32 (and a wait every 2) that bring them to registers: "
                     f"{q_ld:.4f} (x128 loads: {(c_m + n_ld / 4 * 1.5 * c_x) / lane_words:.4f})")
     duo = max((a["duo_words"] or 0) for a in dev.analyses)
-    beside = max((j["lane_rate"] * 32 for _, n, j in dev.joints if j.get("exact") and analyze.lane_of(n) == "duo"
+    beside = max(((j["lane_rate"] * 32, n) for _, n, j in dev.joints if analyze.lane_of(n) == "duo"
                   and (j.get("tensor_fraction") or 0) >= 1 - MARGIN), default=None)
     if duo:
         out.append(f"L_bal (duo, 3 ops a word): 32 rho_T / duo = {32 * rho / duo:.1f} alone ({duo:.2f} words/SM/clk)"
-                   + (f", {32 * rho / beside:.1f} beside the saturated tensor ({beside:.2f})" if beside else ""))
+                   + (f"; beside the saturated tensor the best measured duo is {beside[0]:.2f} ({beside[1]}), so "
+                      f"L_bal <= {32 * rho / beside[0]:.1f}" if beside else ""))
     return "\n".join(out) + "\n"
 
 
