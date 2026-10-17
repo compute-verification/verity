@@ -12,6 +12,13 @@ import Proofs.Flock.Claims.Complete.Zk.InnerGo
   values on the proof's switched vectors. On the prover's ring switches that is each claim's identity, the extra
   claims' included, with no appeal to the relation (`rs_eq`): the verifier's ring switch, on the replay's claims and
   rounds carrying the prover's, returns the prover's `T` and switched claims, where the prover's stopped.
+* `replay_bridge`: the verifier's masked replay under any hash returns the prover's own replay's output (`Zk.replay`),
+  on rounds carrying the prover's, each of which carries its bytes.
+* `innerP_ret`: a masked inner proof that returned met its batched constraint at its coins, so the verifier's inner
+  check passes on it (`verifyInnerWith_of'`) with no appeal to the lane rows' algebra.
+* `view`: given level 0's verifier premise (`Level0.Verifier`), the verifier's masked Ligerito, after a replay and a
+  ring switch that returned, runs on the prover's inputs and returns where the prover's stopped, and the prover's
+  inner proof returned on the verifier's constraints.
 -/
 
 namespace FlockComplete.Replay
@@ -339,4 +346,125 @@ theorem basis_size (sws : Array Switched) (q : Array F256) (e : ℕ) : (basis sw
   rw [← Array.foldl_toList]
   exact foldl_size_const (fun _ _ => by simp) _ _ (by simp)
 
+theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) : v.1.n = m - 7 := by
+  unfold Zk.schedule at h
+  obtain ⟨q0, -, h⟩ := except_ok_bind h
+  cases hf : fast100 m with
+  | none => rw [hf] at h; cases h
+  | some sch =>
+    rw [hf] at h
+    cases h
+    obtain ⟨hd, hm⟩ := FlockSoundness.Refine.fast100_dims m sch hf
+    show sch.n = m - 7
+    rw [hd.1, hm]
+
 end FlockComplete.Replay
+
+namespace FlockComplete.ZkTables
+
+open Flock Transcript FlockComplete FlockDeploy FlockComplete.Replay
+
+variable {H : Claims.Msg → Claims.Msg}
+
+/-- **The verifier's view of a returning rep**, given level 0's verifier premise: on a table and its rep's inputs,
+where the rep returned from `l` sends and the verifier's rounds carry its rounds, the verifier's replay `q` and ring
+switch `sw` (wherever they return) give its masked Ligerito the prover's inputs, which then returns level 0's record
+where the prover's Ligerito stopped; the replay's output is the prover's own replay's; and the prover's inner proof
+returned on the verifier's constraints, the lane rows those of the record. -/
+theorem view (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (hT : TableT st tr)
+    (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
+    (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
+    (hin : RepIn H st tr ω i v cm pts e rep ic)
+    (hrep : rep < 2) (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Claims.Msg)
+    (hgo : (repT H r st tr ω i d v cm e rep ic).go l = (.ok (p, t'), l')) (R : Array Round)
+    (hAg : Agrees R t'.rounds 0) (q : Zk.Replayed × Transcript)
+    (hq : (Zk.replayWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st)
+        (Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0) p.proof p.inner.root).run
+        (Transcript.init R d) = .ok q)
+    (sw : (F128 × Array Switched) × Transcript)
+    (hsw : (ringSwitchWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).m
+        (ringClaimsZk q.1 p.proof ++ e) p.proof.ringSwitches).run q.2 = .ok sw) :
+    ∃ (rec : Zk.L0Rec) (tI : Transcript) (lI : Array Claims.Msg) (rp : Zk.Replayed)
+      (lgc : Array (String × Zk.Lin)),
+      (Zk.ligeritoWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle v.1 sw.1.1
+        p.proof.cap p.proof.ligerito (basis sw.1.2) ⟨v.2, rep, p.level0⟩).run sw.2 = .ok (rec, ⟨R, tI.k, tI.pending⟩) ∧
+      tI.k = tI.rounds.size ∧
+      Zk.ligeritoConstraints (Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0) rec
+        p.proof.ligerito p.level0 = .ok lgc ∧
+      q.1 = rp ∧
+      ((innerP (asksS fun j => (Claims.coinSeq r j).bytes) (Hashes.ofSha512 (Claims.hOf H))
+        (Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0)
+        (padsOf ω i rep (Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0)) ic
+        p.proof.zerocheck.finalC (repConsZk rp p.proof ++ lgc)).run tI).go lI = (.ok (p.inner, t'), l') := by
+  obtain ⟨h25, h35, hms, -, p0, w, hpe, hR0, -⟩ := hT
+  obtain ⟨hf, -⟩ := holds_only hpe hR0
+  have hkm : st.c.kLog ≤ st.m := hf.2.2.2.1.trans_eq hf.1
+  have hm14 : 14 ≤ (Setup.ofCircuit st).m := by show 14 ≤ st.m; omega
+  have hmerk : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := hms
+  set resp : ℕ → Claims.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
+  set lay := Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0 with hlay
+  set pads := padsOf ω i rep lay with hpads
+  unfold repT at hgo
+  obtain ⟨rs, bs, hrs, -, hrec⟩ := JsonRT.repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ l p t' l'
+    hgo
+  obtain ⟨full, lL, lg, zl, rec, tI, lI, rp, x, lgc, hfold, hlL, hlig, hre, hlgc, hinn, hP, hzl⟩ :=
+    repPZk_split resp (Claims.hOf H) (Setup.ofCircuit st) v.1 v.2 rep d tr (packed tr (Setup.ofCircuit st).m) cm e
+      pads ic (ω.extra i) (ω.lanePad i) (ω.salt i rep) (ω.nonce i rep) hm14 _ l hgo
+  have hpre1 : Prefix (tPiop resp (Setup.ofCircuit st) tr l.size lay pads.h (Setup.ofCircuit st).digest (flat cm.cap)
+      ic.root full e (Transcript.init #[] d)).rounds tI.rounds :=
+    rec_pre (JsonRT.ligeritoPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _) _ _ _ _ hlig
+  have hpre2 : Prefix tI.rounds t'.rounds := innerP_pre resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ hinn
+  have hbI : ∀ j (h : j < tI.rounds.size), tI.rounds[j].bytes.isSome := by
+    intro j hj
+    obtain ⟨C, hC⟩ := hpre2
+    refine recs_bytes hrec _ ?_
+    have hm : tI.rounds[j] ∈ t'.rounds.toList := by
+      rw [hC, Array.toList_append]
+      exact List.mem_append_left _ (Array.getElem_mem_toList hj)
+    rw [hrs] at hm
+    simpa [Transcript.init] using hm
+  have hAgI : Agrees R tI.rounds 0 := hAg.of_prefix hpre2
+  have hAgP := hAgI.of_prefix hpre1
+  obtain ⟨-, -, hpi, -⟩ := innerP_ret resp (Claims.hOf H) _ _ _ _ _ _ _ hinn
+  have hroot : p.inner.root = ic.root := by rw [hpi]; rfl
+  rw [hP, hroot] at hq
+  have hq1 : q.1 = rp := replay_bridge _ _ _ _ _ d hbI hAgI hre hq
+  obtain ⟨hq2, hqc⟩ := replayWith_ret _ (Setup.ofCircuit st) hm14 lay _ _ R 0 _ q.1 q.2 hq
+  rw [hq2] at hsw
+  have hsw' := rs_eq (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st) rfl tr e lay pads.h
+    (Setup.ofCircuit st).digest (flat cm.cap) ic.root (Zc.coinsAt resp l.size) full
+    (lcCoinsR resp (Setup.ofCircuit st) l.size) (rsCoinsR resp (Setup.ofCircuit st) l.size e)
+    (Transcript.init #[] d) rfl rfl R q.1 p.proof hAgP hqc (by rw [hP]; rfl) hsw
+  have hn : v.1.n = st.m - 7 := zkSchedule_n hin.schedule
+  have hx : ∀ c ∈ claimsR resp (Setup.ofCircuit st) tr l.size e, c.x.size = st.m - 6 :=
+    claims_xsize' st hkm (by omega) tr (Zc.coinsAt resp l.size) (lcCoinsR resp (Setup.ofCircuit st) l.size) pts e
+      hin.extra
+  have hcs : (claimsR resp (Setup.ofCircuit st) tr l.size e).size = 2 + e.size := by simp [claimsR, abcClaims]
+  have htk : (tPiop resp (Setup.ofCircuit st) tr l.size lay pads.h (Setup.ofCircuit st).digest (flat cm.cap) ic.root
+      full e (Transcript.init #[] d)).k = (tPiop resp (Setup.ofCircuit st) tr l.size lay pads.h
+      (Setup.ofCircuit st).digest (flat cm.cap) ic.root full e (Transcript.init #[] d)).rounds.size := by
+    simp only [tPiop, Rs.tEnd_k, Rs.tEnd_size, LcZ.tEnd_k, LcZ.tEnd_size, ZcZ.tEnd_k, ZcZ.tEnd_size]
+    rfl
+  have hLk : lL.size = l.size + (tPiop resp (Setup.ofCircuit st) tr l.size lay pads.h (Setup.ofCircuit st).digest
+      (flat cm.cap) ic.root full e (Transcript.init #[] d)).k := by
+    simp only [hlL, tPiop, Rs.tEnd_k, LcZ.tEnd_k, ZcZ.tEnd_k, hcs, piopSends]
+    show l.size + (3 + _ + 3 + _ + (2 + e.size + 1)) = l.size + (0 + 3 + _ + 3 + _ + (2 + e.size) + 1)
+    omega
+  obtain ⟨hLgV, htIk⟩ := hV resp (Claims.hOf H) (Setup.ofCircuit st).m v
+    (Rs.T tr (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e)) cm
+    (packed tr (Setup.ofCircuit st).m)
+    (basisVals (Rs.sws (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e))
+      ((Setup.ofCircuit st).m - 7))
+    lay pads.h rep (ω.extra i) (ω.lanePad i) (ω.salt i 0 0) (ω.salt i rep) (ω.nonce i rep)
+    (basis (Rs.sws (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e)))
+    l.size _ tI lL lI lg zl rec R (JsonRT.hOf_size h64) h25 h35 hin.schedule hrep
+    (by simp [packed, hn]; rfl) (by simp [basisVals, hn]; rfl) (Lg.rsSum_eq tr _ _ _ hx)
+    (by rw [← hmerk]; exact hin.commit)
+    (fun q e' y hqe hy => by rw [hn] at hqe ⊢; exact Lg.basis_sws _ _ _ hx q e' y hqe hy)
+    (fun q e' => basis_size _ q e') htk hLk (by rw [hmerk] at hlig; exact hlig) (hAgI.mono (Nat.zero_le _))
+  subst hsw'
+  refine ⟨rec, tI, lI, rp, lgc, ?_, htIk, by rw [hP, hzl]; exact hlgc, hq1, by rw [hP]; exact hinn⟩
+  rw [hP, hzl, hmerk]
+  exact hLgV
+
+end FlockComplete.ZkTables
