@@ -48,6 +48,7 @@ import Proofs.Flock.Claims.Complete.Zk.Level0Run
 import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
 import Proofs.Flock.Claims.Complete.Zk.Level0Shape
 import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+import Proofs.Flock.Claims.Complete.Zk.Level0Model
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
 the masked record's prover `ZkTables.honestP`): the honest masked prover (`Honest`: `honestPZk`, on
@@ -98,4 +99,6 @@ and `complete_zk_relation` at the deployed relation. `Level0Pad` is level 0's ma
 lanes combine to the blinded table's, the padding cancelling (`row_comb`, `consE0_honestZk`); `Level0Run` the masked
 Ligerito prover returning where its pair's coins are independent (`ligeritoPZk_ret`); `Level0Lanes` its lane phase in
 closed form (`ligeritoPZk_lanes`); `Level0Shape` its proof's lengths (`ligeritoPZk_shape`); `Level0Premises` the
-premises of `ZkTables.Level0` proved (`proverRuns`, `proverShape`, `lanes`). -/
+premises of `ZkTables.Level0` proved (`proverRuns`, `proverShape`, `lanes`); `Level0Model` the masked verifier's
+Ligerito returning on rounds carrying its closed-form model, given its openings and final identity at the model's values
+(`ligeritoWithZ_of`). -/
