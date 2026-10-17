@@ -1,4 +1,5 @@
 import Definitions.Claims.Recursion
+import Proofs.Flock.Claims.DeployCode
 import Flock.RecCoins
 import Flock.Witness
 
@@ -20,7 +21,7 @@ whose draw is not every unit of its population (`Witness.fullDraw` at the draw's
   setup's checks giving every condition on the inner shape (`statements_ok`, `candidate3_ok`, `checkAtC3_ok`,
   `checkInnerRange_ok`);
 * `scopeMatches`: `ScopeMatches` at every inner protocol whose scope its check matches; `scopeMatches_flock` with
-  Flock inside.
+  Flock inside, and `scopeMatches_deployed` at the deployed plain Flock inside.
 
 `InScope` states the inner shape's numbers that `statements` and `checkAtC3` check. `statements` also builds V*'s list
 at the shape (V*'s parts as many as the verifier's groups, a holo shape's `h` round in a group, R's opening's parts),
@@ -338,5 +339,15 @@ theorem scopeMatches_flock {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [I
     (hcheck : D.scopeCheck = scopeCheckOf DI.scopeCheck decode) (hI : Claims.Flock.ScopeMatches DI) :
     Claims.Recursion.ScopeMatches D (Claims.Recursion.Inner.ofFlock DI decI) :=
   scopeMatches D _ decode DI.scopeCheck hparse hcheck hI
+
+/-- **`ScopeMatches` at the deployed inner Flock**: the inner session is a plain one (`RecVStar.innerTags`), so its
+scope check is the deployed plain verifier's (`FlockDeploy.deployPlain`), whose readable scope it is
+(`FlockDeploy.scopeMatches_plain`), at every inner decoder. -/
+theorem scopeMatches_deployed (rel : Readable.Parsed → Readable.Relation) (D : Claims.Recursion.Deploy FlockDeploy.Coin)
+    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (decode : Claims.Msg → Option Read)
+    (hparse : D.parse = parseOf decode)
+    (hcheck : D.scopeCheck = scopeCheckOf (FlockDeploy.deployPlain rel).scopeCheck decode) :
+    Claims.Recursion.ScopeMatches D (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) :=
+  scopeMatches_flock D _ decI decode hparse hcheck (FlockDeploy.scopeMatches_plain rel)
 
 end Flock.RecScope
