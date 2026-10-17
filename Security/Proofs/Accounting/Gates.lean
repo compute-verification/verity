@@ -6,6 +6,7 @@ import Mathlib.Algebra.Order.Ring.GeomSum
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Int.Interval
 import Mathlib.Data.List.GetD
+import Mathlib.NumberTheory.LegendreSymbol.Basic
 import Mathlib.Tactic.NormNum.Basic
 import Mathlib.Tactic.Ring
 import Models.Accounting.Guarantees.Gates
@@ -17,7 +18,8 @@ import Models.Accounting.Guarantees.Gates
 `Iv.mul` are sound), and `ClampOrWrap` from it (in the window a clamp and a wrap are both the identity); `Fooling` by
 induction over the gates (every free gate is 2-adically triangular in its window) and a count of the
 charged gates' joint values; `SquaringCarry` from it at `j = 1` on the sparse family, whose squares have no carries
-between bytes; `EncodeBudget` and `EncodeCost` from `EncodeChainHardness` by summing the census over the windows.
+between bytes; `EncodeBudget` and `EncodeCost` from `EncodeChainHardness` by summing the census's units over the
+windows and classes; `RhoPairs` from Fermat's little theorem (`s² = x · x^((p−1)/2) = ±x`).
 -/
 
 namespace Accounting.SecurityProofs.Gates
@@ -328,7 +330,7 @@ lemma window_inv (C : Dag ι) (x : ι → ℤ) (hP : Proven C) (hD : DeclaredHol
     · subst hj
       rw [List.getD_append_right _ _ _ _ (by rw [hlenI]), List.getD_append_right _ _ _ _ (by rw [hlen]), hlenI, hlen,
         Nat.sub_self, List.getD_cons_zero, List.getD_cons_zero]
-      obtain ⟨h1, h2⟩ := hP j hn'
+      obtain ⟨h1, -, h2⟩ := hP j hn'
       exact (gate_window C[j] x _ _ (ih (by omega)) h1 h2 (hD j hn')).2
     · rw [List.getD_append_right _ _ _ _ (by rw [hlenI]; omega), List.getD_append_right _ _ _ _ (by rw [hlen]; omega),
         hlenI, hlen]
@@ -338,7 +340,7 @@ lemma window_inv (C : Dag ι) (x : ι → ℤ) (hP : Proven C) (hD : DeclaredHol
 
 theorem ProvenWindow : Accounting.Guarantees.Gates.ProvenWindow := by
   intro ι C x hP hD i hi
-  obtain ⟨h1, h2⟩ := hP i hi
+  obtain ⟨h1, -, h2⟩ := hP i hi
   exact (gate_window C[i] x _ _ (window_inv C x hP hD i hi.le) h1 h2 (hD i hi)).1
 
 theorem ClampOrWrap : Accounting.Guarantees.Gates.ClampOrWrap := by
@@ -606,48 +608,142 @@ lemma sum_countAt (C : Dag ι) (win : ℕ → ℕ) (N : ℕ) (p : Gate ι → �
     simp only [countAt_cons, Finset.sum_add_distrib, Finset.sum_ite_eq, Finset.mem_range, hg, ite_true, ih,
       List.map_cons, List.sum_cons]
 
+/-- A gate of no budgeted class has no units. -/
+lemma units_of_budget_none (C : Dag ι) (i : ℕ) (g : Gate ι) (hg : C[i]? = some g) (hb : g.op.budget = none) :
+    units C i = 0 := by
+  simp only [units, hg]
+  split <;> simp_all [Op.budget]
+
+/-- Summing the census's units over the windows and classes: each gate's units are in its window's census, under its
+class. -/
 lemma budgeted_eq (C : Dag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.windows) :
     budgeted C = ∑ v ∈ Finset.range A.windows, (census C fun t => A.win t = v).budgeted := by
-  have key : ∀ g : Gate ι, (if g.op.budget.isSome then 1 else 0) =
-      g.isBudget .rounding + g.isBudget .compareSelect + g.isBudget .gather + g.isBudget .product +
-        g.isBudget .fold + g.isBudget .neutral := by
-    intro g
-    unfold Gate.isBudget
-    rcases g.op.budget with _ | b
-    · simp
-    · cases b <;> simp
-  unfold budgeted
-  simp only [census, Census.budgeted, Finset.sum_add_distrib, sum_countAt C A.win A.windows _ h,
-    ← List.sum_map_add]
-  congr 1
-  exact List.map_congr_left fun g _ => key g
+  simp only [census, Census.budgeted, unitsAt, ← Finset.sum_add_distrib]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun i hi => ?_
+  have hi' : i < C.length := Finset.mem_range.mp hi
+  have hg : C[i]? = some C[i] := List.getElem?_eq_getElem hi'
+  have hw := h C[i] (List.getElem_mem hi')
+  simp only [hg, Option.any_some]
+  rcases hb : C[i].op.budget with _ | b
+  · simp [units_of_budget_none C i C[i] hg hb]
+  · cases b <;> simp [Finset.sum_ite_eq, hw]
 
 theorem EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget := by
-  intro F k f w E εnum εden ι W caps A m x words out H hP hR hci hnd hlt hcw
+  intro F k B E εnum εden ι W caps A m x words out H hP hR hci hnd hlt hcw
   have h := H W m x words out hR hci hnd hlt hcw
   obtain ⟨hwin, hcap, -⟩ := hP
   have hb : budgeted W ≤ caps.total * ∑ v ∈ Finset.range A.windows, A.reads v := by
     rw [budgeted_eq W A hwin, Finset.mul_sum]
     apply Finset.sum_le_sum
     intro v hv
-    obtain ⟨h1, h2, h3, h4, h5, h6, -⟩ := hcap v (Finset.mem_range.mp hv)
+    obtain ⟨h1, h2, h3, h4, h5, -⟩ := hcap v (Finset.mem_range.mp hv)
     simp only [Census.budgeted, Caps.total, add_mul]
     omega
   have hr : runBits W ≤ 8 * caps.runBytes * A.windows := by
     rw [runBits, ← sum_countAt W A.win A.windows _ hwin]
     calc _ ≤ ∑ v ∈ Finset.range A.windows, 8 * caps.runBytes :=
-          Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2.2.2
+          Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2.2
       _ = 8 * caps.runBytes * A.windows := by simp [mul_comm]
   calc words.length * E * (F.n - 1) ≤ budgeted W * (F.n - 1) + runBits W * E := h
     _ ≤ _ := add_le_add (Nat.mul_le_mul_right _ hb) (Nat.mul_le_mul_right _ hr)
 
 theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
-  intro F k f w E εnum εden q H hn hne
+  intro F k B E εnum εden q H hn
   unfold encodeCost
-  obtain ⟨ι, C, m, x, words, out, hlen, hnd, hlt, hR, hrb, hci, hcw, hc⟩ := Nat.sInf_mem hne
+  refine le_iInf₂ fun c hc => ?_
+  obtain ⟨ι, C, m, x, words, out, hlen, hnd, hlt, hR, hrb, hci, hcw, rfl⟩ := hc
   have h := H C m x words out hR hci hnd hlt hcw
-  rw [hrb, zero_mul, add_zero, hlen, hc] at h
-  exact Nat.le_of_mul_le_mul_right h (by omega)
+  rw [hrb, zero_mul, add_zero, hlen] at h
+  exact_mod_cast Nat.le_of_mul_le_mul_right h (by omega)
+
+/-! ## `ρ` on pairs -/
+
+/-- A natural below `p` is its residue: two that agree mod `p` are equal. -/
+lemma eq_of_cast_eq {p a b : ℕ} (ha : a < p) (hb : b < p) (h : (a : ZMod p) = b) : a = b := by
+  rw [ZMod.natCast_eq_natCast_iff'] at h
+  rwa [Nat.mod_eq_of_lt ha, Nat.mod_eq_of_lt hb] at h
+
+/-- `ρ(x)` is `s = x^((p+1)/4) mod p` or `p − s`, of parity `[s² ≢ x]`, when `0 < s < p` and `p` is odd. -/
+lemma rho_cases (p x : ℕ) (hp : p % 2 = 1) (h0 : 0 < x ^ ((p + 1) / 4) % p) (hsp : x ^ ((p + 1) / 4) % p < p) :
+    (rho p x = x ^ ((p + 1) / 4) % p ∨ rho p x = p - x ^ ((p + 1) / 4) % p) ∧
+      rho p x % 2 = if x ^ ((p + 1) / 4) % p * (x ^ ((p + 1) / 4) % p) % p = x then 0 else 1 := by
+  simp only [rho]
+  generalize x ^ ((p + 1) / 4) % p = s at h0 hsp ⊢
+  split_ifs <;> omega
+
+/-- At `p ≡ 3 mod 4`, the square of `a^((p+1)/4)` is `a · a^(p/2)`, so `±a`. -/
+lemma sq_pow_quarter {p : ℕ} [Fact p.Prime] (hp : p % 4 = 3) (a : ZMod p) :
+    (a ^ ((p + 1) / 4)) ^ 2 = a * a ^ (p / 2) := by
+  rw [← pow_mul, ← pow_succ']
+  congr 1
+  omega
+
+/-- `(p − a) mod p` is `−a`. -/
+lemma cast_sub_self {p a : ℕ} (h : a ≤ p) : ((p - a : ℕ) : ZMod p) = -(a : ZMod p) := by
+  rw [Nat.cast_sub h, ZMod.natCast_self, zero_sub]
+
+/-- A residue `b < p` whose cast is `±a`'s, for `0 < a < p`, is `a` or `p − a`. -/
+lemma eq_or_sub_of_cast {p a b : ℕ} (ha : 0 < a) (hap : a < p) (hb : b < p)
+    (h : (b : ZMod p) = a ∨ (b : ZMod p) = -(a : ZMod p)) : b = a ∨ b = p - a := by
+  rcases h with h | h
+  · exact Or.inl (eq_of_cast_eq hb hap h)
+  · rw [← cast_sub_self hap.le] at h
+    exact Or.inr (eq_of_cast_eq hb (by omega) h)
+
+theorem RhoPairs : Accounting.Guarantees.Gates.RhoPairs := by
+  intro p x hpr hp hx hxp
+  have := Fact.mk hpr
+  have hpos : 0 < p := hpr.pos
+  have hxz : (x : ZMod p) ≠ 0 := by
+    rw [Ne, ZMod.natCast_eq_zero_iff]
+    exact Nat.not_dvd_of_pos_of_lt hx hxp
+  have hrt : ∀ a : ℕ, (a : ZMod p) ≠ 0 → 0 < a ^ ((p + 1) / 4) % p := fun a ha => by
+    refine Nat.pos_of_ne_zero fun h => pow_ne_zero ((p + 1) / 4) ha ?_
+    rw [← Nat.cast_pow, ← ZMod.natCast_mod, h, Nat.cast_zero]
+  have hmx := cast_sub_self (p := p) hxp.le
+  have h1 := rho_cases p x (by omega) (hrt x hxz) (Nat.mod_lt _ hpos)
+  have h2 := rho_cases p (p - x) (by omega) (hrt (p - x) (by rw [hmx]; exact neg_ne_zero.mpr hxz))
+    (Nat.mod_lt _ hpos)
+  have hcast : ∀ a : ℕ, ((a ^ ((p + 1) / 4) % p : ℕ) : ZMod p) = (a : ZMod p) ^ ((p + 1) / 4) := fun a => by
+    rw [ZMod.natCast_mod, Nat.cast_pow]
+  generalize hs : x ^ ((p + 1) / 4) % p = s at h1
+  generalize hs' : (p - x) ^ ((p + 1) / 4) % p = s' at h2
+  have hsc : (s : ZMod p) = (x : ZMod p) ^ ((p + 1) / 4) := by rw [← hs, hcast]
+  have hsc' : (s' : ZMod p) = (-(x : ZMod p)) ^ ((p + 1) / 4) := by rw [← hs', hcast, hmx]
+  have hs0 : 0 < s := hs ▸ hrt x hxz
+  have hsp : s < p := hs ▸ Nat.mod_lt _ hpos
+  have hsp' : s' < p := hs' ▸ Nat.mod_lt _ hpos
+  have hsq : (s : ZMod p) ^ 2 = (x : ZMod p) * (x : ZMod p) ^ (p / 2) := by rw [hsc, sq_pow_quarter hp]
+  have hss : s * s % p = x ∨ s * s % p = p - x := by
+    refine eq_or_sub_of_cast hx hxp (Nat.mod_lt _ hpos) ?_
+    rw [ZMod.natCast_mod, Nat.cast_mul, ← sq, hsq]
+    rcases ZMod.pow_div_two_eq_neg_one_or_one p hxz with h | h <;> rw [h] <;> simp
+  have hss' : s' * s' % p = s * s % p := by
+    rw [← ZMod.natCast_eq_natCast_iff', Nat.cast_mul, Nat.cast_mul, ← sq, ← sq, hsc, hsc', ← pow_mul, ← pow_mul,
+      mul_comm _ 2, pow_mul, pow_mul, neg_sq]
+  have hs's : s' = s ∨ s' = p - s := by
+    refine eq_or_sub_of_cast hs0 hsp hsp' ?_
+    rw [hsc', neg_pow, ← hsc]
+    rcases neg_one_pow_eq_or (ZMod p) ((p + 1) / 4) with h | h <;> rw [h] <;> simp
+  refine ⟨?_, ?_⟩
+  · rw [hss'] at h2
+    generalize s * s % p = r at hss h1 h2
+    obtain ⟨h1a, h1b⟩ := h1
+    obtain ⟨h2a, h2b⟩ := h2
+    split_ifs at h1b h2b <;> omega
+  · rw [h1.2]
+    have hsq_iff : s * s % p = x ↔ ∃ y, y ^ 2 % p = x := by
+      refine ⟨fun h => ⟨s, by rw [sq]; exact h⟩, fun ⟨y, hy⟩ => ?_⟩
+      have hyx : (y : ZMod p) ^ 2 = x := by rw [← hy, ZMod.natCast_mod, Nat.cast_pow]
+      have hy0 : (y : ZMod p) ≠ 0 := fun h => hxz (by rw [← hyx, h, zero_pow two_ne_zero])
+      have he : (x : ZMod p) ^ (p / 2) = 1 := by
+        rw [← hyx, ← pow_mul, show 2 * (p / 2) = p - 1 by omega]
+        exact ZMod.pow_card_sub_one_eq_one hy0
+      refine eq_of_cast_eq (Nat.mod_lt _ hpos) hxp ?_
+      rw [ZMod.natCast_mod, Nat.cast_mul, ← sq, hsq, he, mul_one]
+    rw [← hsq_iff]
+    split_ifs <;> simp_all
 
 /-! ## The codec at toy fields, against `codec.py` -/
 

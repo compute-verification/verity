@@ -900,6 +900,9 @@
    "assumptions": [],
    "type_hash": "59fda584e7cbcdc063143484aaf92b346c31dc58334e8e5216c0d469de199bf5"
   },
+  "Accounting.SecurityProofs.Gates.RhoPairs": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Gates.SquaringCarry": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Gates.SquaringCarry : Accounting.Guarantees.Gates.SquaringCarry"],
@@ -5655,7 +5658,8 @@
    "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
    "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
    "Accounting.SecurityProofs.Gates.ProvenWindow": "frozen (no-function): The soundness of the gate model's interval analysis (Accounting.Gates.Proven) over every circuit and input, not a property of a Lean function: property/v1's interval analysis has no Lean code yet.",
-   "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function."
+   "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function.",
+   "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -5689,7 +5693,7 @@
    "Accounting.Assumptions.EncodeChainHardness": {
     "status": "open",
     "test": "verity/core/protocols/remote_bandwidth/tests/test_encode_chain.py::test_encode_chain_hardness_known_constructions",
-    "why": "In the circuit model (Definitions/Accounting/Gates: window proven by interval analysis, budgeted fan-in at most f, values within w bits), computing q distinct words of the masked k-round codec's encoding, less parity, on more than ε of the draws costs q·E budgeted gates less E/(n−1) per run-input bit; open, with E = k·S·e for e = 2 (the proved per-squaring carry bound composed) or e = n/8 − 2 (one carry a limb, Renormalization at d = 2), false without the restriction (one wide gate an output byte). Its test runs the known constructions of a p1024 squaring (ripple carries, (f−1)-limb look-ahead) and checks each costs at least n/8 − 2."
+    "why": "In the circuit model (Definitions/Accounting/Gates: window proven by interval analysis, each budgeted gate reading at most B operand bits, costs in property/v1's units), computing q distinct words of the masked k-round codec's encoding, less parity, on more than ε of the draws costs q·E budgeted units less E/(n−1) per run-input bit; open, with E = k·S·(n/8 − d(ε)) and d(ε) = d₀ + log₂(1/ε)/8 (d₀ = 4 taken, at least 3.46 measured; the red team's Lemma R, Renormalization, for one squaring), false without B (one gate reading a word's bits computes a byte of its root). Its test runs the known constructions of a p1024 squaring within B = 128 (ripple carries, 3-limb look-ahead) and checks each costs at least n/8 − d₀."
    }
   },
   "events": ["FlockSoundness.Game.prob"]

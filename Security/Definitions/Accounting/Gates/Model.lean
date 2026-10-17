@@ -1,4 +1,5 @@
 import Mathlib.Algebra.BigOperators.Group.List.Basic
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Data.Nat.Log
 import Mathlib.Data.Finset.Card
 
@@ -6,8 +7,8 @@ import Mathlib.Data.Finset.Card
 # The circuit model: a declared circuit's gates, their classes, its window and its census (trusted)
 
 One model of what a declared circuit `W` computes, for the lower bounds every resource lane proves over it: the stacking
-property's carry and encode bounds, the requirement `A1` reads, and compute accounting's work statement and fan-in floor.
-It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
+property's carry and encode bounds, the requirement `A1` reads, and compute accounting's work statement and fan-in
+floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
 (`verity/ml/circuits/census.py`, `stacking.py`) can be held to it by difftest.
 
 * **Values.** Every value is an integer (`ℤ`): a `Value<w>` leaf read as the integer its Definition gives it, two's
@@ -17,38 +18,49 @@ It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so that cens
   values of the gates `args` names, each earlier than `i` (`Topological`). A gate is one primitive: one `Value` out.
   Its values on an input are `values` (`val` for one gate's).
 * **Provenance.** Each gate carries its primitive's id (`prim`), which names the device form the bridge to the actual
-  run prices (`BlackwellS8ImmaDot32_v1` is sm_120's m16n8k32 IMMA, so `Op.mma` has no m and n), and its role in the
-  Definition that made it (`Role`: a served product's step toward committed word `T_t`, a tail group's step, a limb
-  split's gate, a receipt fold's). A gate is committed (`commit`) when its value is one of the circuit's committed
-  outputs (`committed`): S8-PORT's COMMIT layout, the final `T_1` or the prefix `T_1 … T_{K/L}`.
+  run prices (`BlackwellS8ImmaDot32_v1` is sm_120's m16n8k32 IMMA, so `Op.mma` has no m and n), and where it sits in
+  the Definition that made it, as the IR binds it (`site`: step `s` of an `S8Dot_v1` body, with the statics `K`, `L`
+  and `TAIL`). Its role (`Gate.role`: a served product's step toward committed word `T_t`, a tail group's step, a limb
+  split's carry or limb read, a receipt fold's step) is a function of the two (`roleOf`), never a field, so no gate
+  carries a role its primitive and statics don't give it. A gate is committed (`commit`) when its value is one of the
+  circuit's committed outputs (`committed`): S8-PORT's COMMIT layout, the final `T_1` or the prefix `T_1 … T_{K/L}`.
 * **Inputs.** An input gate reads slot `i` of the input assignment `x : ι → ℤ`, by its binding time (circuits' input
   origins, `verity/ml/circuits/ports.py`). A `registered` input (the weights, the store's payload, a codec's public
   parameters) is bound before the audit's coins; a `coin` input is a live verifier coin (a noise or fold key), passed
   through untouched; a `run` input (a request's tokens, anything the prover sends a running circuit) is bound after
   the coins, so it may be any function of them. Only run inputs are charged, and only they count against `R_in`.
-* **Classes.** Free (no unit in any cap): an input, a constant (an operation's own bits), an integer affine map with
-  constant coefficients (`I32Add`, `I32Sub`, a product with a constant), and an s8-family step (`mma`: the exact int8
-  dot of `verity/ml/circuits/silicon/integer.py`, `D = C + Σ a_k·b_k` with s8 or u8 operands and s32 accumulation,
-  clamped by `.satfinite` or wrapped mod 2^32 outside the s32 range). Budgeted, one unit per output value: a rounding
-  (`ρ_b(x) = ⌊x/2^b⌋`, and every cast, quantizer, requantizer, FP elementwise op, integer floor, mod, division, bit op,
-  limb split and word reinterpretation), a comparison or selection, a gather, a product of two runtime values, a
-  receipt fold's step, and a neutral gate (a lane instruction whose class is its own, in no cap). A budgeted gate is
-  any function of its operands (`budgeted`), the most a cheater could ask of a primitive, except a gather, which selects
-  a word of its column by its index (`gather`). The registry's primitives map to exactly one class each
+* **Classes.** Free (no unit in any cap): an input, a constant (an operation's own bits), an exact integer affine map
+  with constant coefficients (`I32Add`, `I32Sub`), proven within s32, and an s8-family step (`mma`: the exact int8 dot
+  of `verity/ml/circuits/silicon/integer.py`, `D = C + Σ a_k·b_k` with s8 or u8 operands and s32 accumulation, clamped
+  by `.satfinite` or wrapped mod 2^32 outside the s32 range). Budgeted: a rounding (`ρ_b(x) = ⌊x/2^b⌋`, and every cast,
+  quantizer, requantizer, FP op, integer floor, mod, division, product reduced mod `2^w`, bit op on words, field
+  extraction, limb split and word reinterpretation), a comparison, selection or 1-bit logic op, a gather, a receipt
+  fold's step, and a neutral gate (a lane instruction whose class is its own, in no cap). A budgeted gate is any
+  function of its operands (`budgeted`), the most a cheater could ask of a primitive, except a gather, which selects a
+  word of its column by its index (`gather`). The registry's primitives map to exactly one class each
   (`Gates/Registry.lean`); an unlisted primitive is refused, so it has no `Op`.
 * **The window.** On an input, every gate's exact value lies in its declared interval, and every s8-family step's
   operands lie in their formats and its exact sum in s32, so no accumulator clamps or wraps (`InWindow`). The property
   proves it for the free gates by interval analysis over the whole DAG from the declared intervals of inputs and
-  budgeted gates (`Proven`), never from a free gate's declaration; so on an input on which the inputs and budgeted
-  gates hold their declared intervals (`DeclaredHold`), the circuit is in its window, where an s8-family step's clamp
-  and wrap agree (`Gate.Reclamped` relates the two arms).
-* **Cost.** The census (`census`) counts the gates of a set of steps by class, the s8 family's MACs (served and tail
+  budgeted gates (`Proven`), never from a free gate's declaration, and proves each affine map's declared interval
+  within s32, where `I32Add` and `I32Sub` are exact; so on an input on which the inputs and budgeted gates hold their
+  declared intervals (`DeclaredHold`), the circuit is in its window, where an s8-family step's clamp and wrap agree
+  (`Gate.Reclamped` relates the two arms).
+* **Units** (property/v1's count, `units`). A budgeted gate is one unit when it reads a value that depends on a run or
+  coin input (`dynamic`), and none otherwise: a gate of constants and registered values computes the same value at
+  registration. A gather whose index depends on one is the index bits no earlier gather of that index paid (fresh index
+  bits, `⌈log₂ V⌉` for a column of `V` words), and one more when its column holds such a value too: a selection among
+  run-time values is a `V`-way select. Without that unit a tree of gathers that share indices, over constant leaves,
+  would compute any function of `b` index bits for `b` units. A gather at a fixed index is wiring.
+* **Cost.** The census (`census`) counts the units of a set of steps by class, the s8 family's MACs (served and tail
   apart), the limb splits' carries, the committed outputs and the inputs' bits. The counting bounds charge each
   budgeted gate and each run input the size of its declared interval (`volume`, `chargedBits`).
 * **The property.** `Property caps A W`: the stacking property `P(c, R_in, L)` of property/v1 as a predicate on `W`'s
-  census and the audit's certified reads: per window, each budgeted class within its cap per certified byte read, no
-  neutral gate and the run inputs within `R_in`, every gate in a window, and no value read more than `L` engine steps
-  after it is produced.
+  census and the audit's certified reads: per window, each budgeted class's units within its cap per certified byte
+  read, no neutral unit and the run inputs within `R_in`, every gate in a window, and no value read more than `L`
+  engine steps after it is produced.
+* **The chain's restriction.** Every budgeted gate reads at most `B` operand bits, the declared bits of its operands
+  (`OperandBits`): one gate that reads a word's bits computes a byte of its root.
 * **Fan-in.** MULT-LB's lane programs (`ofLane`: inputs, then instructions that each apply an arbitrary function to at
   most `f` earlier values, and `c` outputs) are this model's circuits of neutral gates of fan-in at most `f` (`FanIn`).
 -/
@@ -91,17 +103,15 @@ def clampS32 (z : ℤ) : ℤ := max s32Min (min s32Max z)
 /-- Without `.satfinite`: wrapped modulo `2^32` into `[−2^31, 2^31 − 1]`. -/
 def wrapS32 (z : ℤ) : ℤ := (z - s32Min) % 2 ^ 32 + s32Min
 
-/-- A budgeted class: what the property caps, one unit per output value. -/
+/-- A budgeted class: what the property caps, in units (`units`). -/
 inductive Budget
-  /-- `ρ_b(x) = ⌊x/2^b⌋`, and every cast, quantizer, requantizer, FP elementwise op, integer floor, mod or division,
-  bit op, limb split and word reinterpretation -/
+  /-- `ρ_b(x) = ⌊x/2^b⌋`, and every cast, quantizer, requantizer, FP op, integer floor, mod, division or product
+  reduced mod `2^w`, bit op on words, field extraction, limb split and word reinterpretation -/
   | rounding
-  /-- a comparison, a selection by a condition, a min or max -/
+  /-- a comparison, a selection by a condition, a min, max or clamp, a logic op on 1-bit values -/
   | compareSelect
   /-- a selection of a word of a column by a runtime index -/
   | gather
-  /-- a product of two runtime values outside the s8 family -/
-  | product
   /-- a receipt fold's step: a fold's state after absorbing words (`PouwDuoAbsorb_v1`) -/
   | fold
   /-- a lane instruction whose class is its own (MULT-LB's `ofLane`): one unit, in no cap -/
@@ -140,9 +150,6 @@ def le : Op ι := budgeted .compareSelect fun v => if v.headD 0 ≤ v.tail.headD
 /-- `c ≠ 0 ? a : b`, a selection. -/
 def select : Op ι := budgeted .compareSelect fun v => if v.headD 0 ≠ 0 then v.tail.headD 0 else v.tail.tail.headD 0
 
-/-- `a · b`, a product of two runtime values. -/
-def mul : Op ι := budgeted .product fun v => v.headD 0 * v.tail.headD 0
-
 /-- The exact value of an operation on operands `v`, before an s8-family step's clamp or wrap. -/
 def raw : Op ι → (ι → ℤ) → List ℤ → ℤ
   | input _ i, x, _ => x i
@@ -152,7 +159,8 @@ def raw : Op ι → (ι → ℤ) → List ℤ → ℤ
   | gather, _, v => v.tail.getD (v.headD 0).toNat 0
   | budgeted _ f, _, v => f v
 
-/-- The value an operation produces from its exact value: an s8-family step clamps or wraps it, every other passes it. -/
+/-- The value an operation produces from its exact value: an s8-family step clamps or wraps it, every other passes
+it. -/
 def out : Op ι → ℤ → ℤ
   | mma _ _ _ true, z => clampS32 z
   | mma _ _ _ false, z => wrapS32 z
@@ -170,6 +178,11 @@ def budget : Op ι → Option Budget
   | gather => some .gather
   | budgeted cls _ => some cls
   | _ => none
+
+/-- A gather. -/
+def isGather : Op ι → Bool
+  | gather => true
+  | _ => false
 
 /-- An s8-family step's operands are `C` and `2k` words in their formats; other operations ask nothing. -/
 def OperandsOk : Op ι → List ℤ → Prop
@@ -215,8 +228,33 @@ def Role.isTail : Role → Bool
   | .tail _ => true
   | _ => false
 
+/-- Where a gate sits in the Definition that made it, as the IR binds it: step `s` of an `S8Dot_v1` coordinate's body
+(an `S8Matmul_v1` row's among them), whose statics are `K` products committed every `L` (`T_t` after `t·L`) and the
+tail groups' atom counts (`TAIL`); or any other place. -/
+inductive Site
+  | dot (K L : ℕ) (tail : List ℕ) (s : ℕ)
+  | other
+  deriving DecidableEq, Repr
+
+/-- Tail atom `j`'s group, among groups of the given atom counts numbered from `g`. -/
+def tailRole : List ℕ → ℕ → ℕ → Role
+  | [], _, _ => .other
+  | a :: as, j, g => if j < a then .tail g else tailRole as (j - a) (g + 1)
+
+/-- **The role** of a gate of primitive `prim` at `site` (S8-PORT's `ops/s8.py`). Step `s < K/32` of an `S8Dot_v1`
+body is on the main chain toward `T_t`, `t = ⌊32·s/L⌋ + 1`, and a later step is tail atom `s − K/32`, in the group
+that holds it. Off a dot body, `S32ByteCarry` and `S32ClampRest` are a limb split's carries (`N − 1` a split, in
+either form), `S32LowByte` and `S32ClampS8` its limb reads, and `PouwDuoAbsorb_v1` the receipt fold's step. -/
+def roleOf (prim : String) : Site → Role
+  | .dot K L tail s => if s < K / 32 then .served (32 * s / L + 1) else tailRole tail (s - K / 32) 0
+  | .other =>
+      if prim ∈ ["S32ByteCarry_v1", "S32ByteCarry_v2", "S32ClampRest_v1", "S32ClampRest_v2"] then .limbSplit true
+      else if prim ∈ ["S32LowByte_v1", "S32LowByte_v2", "S32ClampS8_v1", "S32ClampS8_v2"] then .limbSplit false
+      else if prim = "PouwDuoAbsorb_v1" then .fold
+      else .other
+
 /-- A gate: its operation, its operands (earlier gates), its declared interval, the engine step that runs it, its
-primitive's id, its role, and whether it is committed. -/
+primitive's id, where it sits in its Definition, and whether it is committed. -/
 structure Gate (ι : Type) where
   op : Op ι
   args : List ℕ
@@ -226,7 +264,8 @@ structure Gate (ι : Type) where
   step : ℕ
   /-- its primitive's id (`classOf`'s key), which gives its device form -/
   prim : String
-  role : Role
+  /-- where it sits in the Definition that made it, from the IR's binding -/
+  site : Site
   /-- its value is one of the circuit's committed outputs -/
   commit : Bool
 
@@ -236,6 +275,12 @@ abbrev Dag (ι : Type) := List (Gate ι)
 namespace Gate
 
 variable {ι : Type} (g : Gate ι)
+
+/-- Its role: its primitive's and site's (`roleOf`). -/
+def role : Role := roleOf g.prim g.site
+
+/-- A gather's index bits: `⌈log₂ V⌉` for its column of `V` words. -/
+def indexBits : ℕ := Nat.clog 2 (g.args.length - 1)
 
 /-- The gate's operand values, read from the values `vs` of the gates before it. -/
 def operands (vs : List ℤ) : List ℤ := g.args.map fun j => vs.getD j 0
@@ -333,13 +378,15 @@ def Gate.derive (g : Gate ι) (ivs : List Iv) : Iv :=
 def intervals (C : Dag ι) : List Iv := C.foldl (fun ivs g => ivs ++ [g.derive ivs]) []
 
 /-- **The window, proven** (property/v1's interval analysis over the whole DAG): every constant, affine map and
-s8-family step has its derived interval within its declared one, and every s8-family step its operands' derived
-intervals within their formats and its declared interval within s32. -/
+s8-family step has its derived interval within its declared one, every affine map its declared interval within s32
+(where `I32Add` and `I32Sub` don't wrap), and every s8-family step its operands' derived intervals within their
+formats and its declared interval within s32. -/
 def Proven (C : Dag ι) : Prop :=
   ∀ i (h : i < C.length),
     let g := C[i]
     let ivs := intervals (C.take i)
     (g.op.IsDerived → (g.derive ivs).Within g.lo g.hi) ∧
+      (∀ c₀ cs, g.op = .affine c₀ cs → s32Min ≤ g.lo ∧ g.hi ≤ s32Max) ∧
       ∀ fa fb k sat, g.op = .mma fa fb k sat →
         g.args.length = 2 * k + 1 ∧ s32Min ≤ g.lo ∧ g.hi ≤ s32Max ∧
           (∀ j ∈ g.args.tail.take k, (ivs.getD j (0, 0)).Within fa.lo fa.hi) ∧
@@ -361,6 +408,11 @@ def FanIn (f : ℕ) (C : Dag ι) : Prop :=
 /-- Every value's declared interval lies within `[−2^w, 2^w)`: `w` bits and a sign, so s32 is `Width 31`. -/
 def Width (w : ℕ) (C : Dag ι) : Prop := ∀ g ∈ C, -2 ^ w ≤ g.lo ∧ g.hi < 2 ^ w
 
+/-- **The chain's restriction** (the red team's `B`): every budgeted gate reads at most `B` operand bits, the declared
+bits of the operands it reads. A gather is exempt: its value is one of its operands. -/
+def OperandBits (B : ℕ) (C : Dag ι) : Prop :=
+  ∀ g ∈ C, ∀ cls f, g.op = .budgeted cls f → (g.args.map fun j => (C[j]?.map Gate.bits).getD 0).sum ≤ B
+
 /-- MULT-LB's lane program (`Accounting.Program.Prog`) as a circuit: run inputs `0 … N−1`, then each instruction a
 neutral gate (`Budget.neutral`) that applies an arbitrary function to the earlier nodes it names, with the nodes `outs`
 (its `c` outputs) committed. A lane program is abstract, so its gates name no primitive (`prim = ""`). -/
@@ -368,9 +420,35 @@ def ofLane (N : ℕ) (instrs : List (List ℕ × (List ℤ → ℤ))) (outs : Li
   (List.range N).map (fun i => ⟨.input .run i, [], lo, hi, 0, "", .other, decide (i ∈ outs)⟩) ++
     instrs.zipIdx.map fun e => ⟨.budgeted .neutral e.1.2, e.1.1, lo, hi, 0, "", .other, decide (N + e.2 ∈ outs)⟩
 
-/-! ## The census and the property -/
+/-! ## Units, the census and the property -/
 
-/-- A circuit's census over a set of steps: its gates by class, the s8 family's MACs, the limb splits' carries, its
+/-- Whether each gate's value depends on a run or coin input, in order: an input bound after registration, or a gate
+that reads such a value (property/v1's run dependence: circuits bind a coin as a run input of kind coin). -/
+def dynamic (C : Dag ι) : List Bool :=
+  C.foldl (fun ds g => ds ++ [match g.op with
+    | .input b _ => b != .registered
+    | _ => g.args.any fun j => ds.getD j false]) []
+
+/-- **Gate `i`'s units** (property/v1's count). A budgeted gate is one unit when it reads a value that depends on a run
+or coin input, and none when it doesn't (it computes the same value at registration). A gather whose index depends on
+one is the index bits no earlier gather of that index paid (fresh index bits), and one more when its column holds
+such a value: a `V`-way selection among run-time values, without which a tree of gathers sharing indices would
+select among `2^b` constants for `b` units. A gather at a fixed index is wiring, and every other gate is free. -/
+def units (C : Dag ι) (i : ℕ) : ℕ :=
+  let dyn := fun j => (dynamic C).getD j false
+  match C[i]? with
+  | none => 0
+  | some g =>
+    match g.op, g.args with
+    | .budgeted _ _, args => if args.any dyn then 1 else 0
+    | .gather, j :: col =>
+        if dyn j then
+          (g.indexBits - (((C.take i).filter fun h => h.op.isGather && h.args.head? == some j).map
+            Gate.indexBits).foldl max 0) + (if col.any dyn then 1 else 0)
+        else 0
+    | _, _ => 0
+
+/-- A circuit's census over a set of steps: its units by class, the s8 family's MACs, the limb splits' carries, its
 committed outputs, and its inputs' bits. -/
 structure Census where
   /-- s8-family coordinates -/
@@ -383,19 +461,17 @@ structure Census where
   tailMacs : ℕ
   /-- affine maps and constants -/
   affine : ℕ
-  /-- roundings -/
+  /-- roundings' units -/
   rounding : ℕ
   /-- the limb splits' carries (S8-PORT's `carries`: `N − 1` a split) -/
   carries : ℕ
-  /-- comparisons and selections -/
+  /-- comparisons' and selections' units -/
   compareSelect : ℕ
-  /-- gathers -/
+  /-- gathers' units: fresh index bits, and one a selection among run-time values -/
   gather : ℕ
-  /-- products of two runtime values -/
-  product : ℕ
-  /-- receipt folds' steps -/
+  /-- receipt folds' units -/
   fold : ℕ
-  /-- neutral gates -/
+  /-- neutral gates' units -/
   neutral : ℕ
   /-- committed outputs -/
   committed : ℕ
@@ -410,8 +486,9 @@ structure Census where
 def countAt (C : Dag ι) (s : ℕ → Prop) [DecidablePred s] (p : Gate ι → ℕ) : ℕ :=
   ((C.filter fun g => decide (s g.step)).map p).sum
 
-/-- One for a gate of budgeted class `b`. -/
-def Gate.isBudget (b : Budget) (g : Gate ι) : ℕ := if g.op.budget = some b then 1 else 0
+/-- The units of `C`'s gates of budgeted class `b` at the steps `s` picks. -/
+def unitsAt (C : Dag ι) (s : ℕ → Prop) [DecidablePred s] (b : Budget) : ℕ :=
+  ∑ i ∈ Finset.range C.length, if C[i]?.any fun g => decide (s g.step ∧ g.op.budget = some b) then units C i else 0
 
 /-- An s8-family step's MACs, `k`; none for another gate. -/
 def Gate.macs (g : Gate ι) : ℕ := match g.op with | .mma _ _ k _ => k | _ => 0
@@ -429,33 +506,31 @@ def census (C : Dag ι) (s : ℕ → Prop) [DecidablePred s] : Census where
   servedMacs := countAt C s fun g => if g.role.isServed then g.macs else 0
   tailMacs := countAt C s fun g => if g.role.isTail then g.macs else 0
   affine := countAt C s fun g => match g.op with | .affine .. | .const _ => 1 | _ => 0
-  rounding := countAt C s (Gate.isBudget .rounding)
+  rounding := unitsAt C s .rounding
   carries := countAt C s fun g => if g.role = .limbSplit true then 1 else 0
-  compareSelect := countAt C s (Gate.isBudget .compareSelect)
-  gather := countAt C s (Gate.isBudget .gather)
-  product := countAt C s (Gate.isBudget .product)
-  fold := countAt C s (Gate.isBudget .fold)
-  neutral := countAt C s (Gate.isBudget .neutral)
+  compareSelect := unitsAt C s .compareSelect
+  gather := unitsAt C s .gather
+  fold := unitsAt C s .fold
+  neutral := unitsAt C s .neutral
   committed := countAt C s fun g => if g.commit then 1 else 0
   runBits := countAt C s (Gate.inputBits .run)
   coinBits := countAt C s (Gate.inputBits .coin)
   registeredBits := countAt C s (Gate.inputBits .registered)
 
-/-- The budgeted units of a census: every budgeted class, one unit a gate. -/
-def Census.budgeted (c : Census) : ℕ := c.rounding + c.compareSelect + c.gather + c.product + c.fold + c.neutral
+/-- The budgeted units of a census: every budgeted class's. -/
+def Census.budgeted (c : Census) : ℕ := c.rounding + c.compareSelect + c.gather + c.fold + c.neutral
 
-/-- The budgeted gates of a circuit, one unit each. -/
-def budgeted (C : Dag ι) : ℕ := (C.map fun g => if g.op.budget.isSome then 1 else 0).sum
+/-- **The budgeted units** of a circuit: its gates' units. -/
+def budgeted (C : Dag ι) : ℕ := ∑ i ∈ Finset.range C.length, units C i
 
 /-- The run inputs' declared bits. -/
 def runBits (C : Dag ι) : ℕ := (C.map (Gate.inputBits .run)).sum
 
-/-- The property's parameters: each budgeted class's cap per certified byte read, `R_in` and `L`. -/
+/-- The property's parameters: each budgeted class's cap in units per certified byte read, `R_in` and `L`. -/
 structure Caps where
   rounding : ℕ
   compareSelect : ℕ
   gather : ℕ
-  product : ℕ
   fold : ℕ
   /-- `R_in`: run-input bytes a window -/
   runBytes : ℕ
@@ -463,7 +538,7 @@ structure Caps where
   life : ℕ
 
 /-- The budgeted units the caps allow per certified byte read. -/
-def Caps.total (k : Caps) : ℕ := k.rounding + k.compareSelect + k.gather + k.product + k.fold
+def Caps.total (k : Caps) : ℕ := k.rounding + k.compareSelect + k.gather + k.fold
 
 /-- The audit's windows: `windows` of them, the window `win t` of each engine step `t`, and the bytes the audit
 certified `W` read in each (`reads w`). -/
@@ -473,15 +548,15 @@ structure Audit where
   reads : ℕ → ℕ
 
 /-- **The stacking property `P(c, R_in, L)`** of a declared circuit `W`, on its census and the audit's certified reads:
-every gate is in a window; in each window each budgeted class is within its cap per certified byte read, no gate is
-neutral (the registry classes every primitive) and the run inputs are within `R_in` bytes; and no gate reads a value
-produced more than `L` engine steps before it. -/
+every gate is in a window; in each window each budgeted class's units are within its cap per certified byte read, no
+unit is neutral (the registry classes every primitive) and the run inputs are within `R_in` bytes; and no gate reads
+a value produced more than `L` engine steps before it. -/
 def Property (k : Caps) (A : Audit) (W : Dag ι) : Prop :=
   (∀ g ∈ W, A.win g.step < A.windows) ∧
     (∀ w < A.windows,
       let c := census W (fun t => A.win t = w)
       c.rounding ≤ k.rounding * A.reads w ∧ c.compareSelect ≤ k.compareSelect * A.reads w ∧
-        c.gather ≤ k.gather * A.reads w ∧ c.product ≤ k.product * A.reads w ∧ c.fold ≤ k.fold * A.reads w ∧
+        c.gather ≤ k.gather * A.reads w ∧ c.fold ≤ k.fold * A.reads w ∧
           c.neutral = 0 ∧ c.runBits ≤ 8 * k.runBytes) ∧
     ∀ i (h : i < W.length), ∀ j ∈ W[i].args, ∀ g ∈ W[j]?, W[i].step ≤ g.step + k.life
 
