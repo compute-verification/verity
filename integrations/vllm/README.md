@@ -356,7 +356,10 @@ passes superseded by the manifest of record.  `records.programs(row)` returns `{
 Program the Commit binds, and the step and request Programs it composes; `ranks=` and `part=` select), fetched by row id and
 checked against the record's digests, ready for `verity.ml.circuits.evaluation` on synthetic inputs.  `verity-vllm records
 publish` adds a row (a FAIL record, a Commit that committed against another manifest or other Programs than the Build's, a Build
-artifact that lacks a Program the record names, or a needed property neither cited nor a gap, is refused), `records show` prints
+artifact that lacks a Program the record names, or a needed property neither cited nor a gap, is refused).  `row chain` publishes
+it itself once the row's Build, Match and Commit Attempts pass (their artifacts, the Commit's summary.json and each needed
+property's newest capture of record, `--newest-captures`); a row that did not pass publishes nothing, and `records pull ART`
+indexes in a checkout the record a pod's job tree published.  `records show` prints
 the rows and their records' ids or a record, and `records programs` decodes a row one rank at a time.  A `research run` job has no store: the launcher
 writes the row's record and the descriptors the job needs into one file (`records fetch ROW --to FILE [--rank R] [--part P]`),
 sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/inputs/`), and the job reads them from it
