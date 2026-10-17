@@ -228,7 +228,7 @@
    "captures": [
     "sigmoid_router_capture"
    ],
-   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp. Registered (moe.MoeRouterSigmoidBias_v1, Boolean _v2); its capture GO is on the H200 (sigmoid_router_capture, run r20261012-220523-6aa4) and on sm_120"
+   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp. Registered (moe.MoeRouterSigmoidBias_v1, Boolean _v2); its capture GO is on the H200 at vLLM's defaults (sigmoid_router_capture/v2, run r20261017-121712-18ba: not batch invariant, the fused grouped top-k on, read back) and on sm_120"
   },
   "fp8-moe-triton": {
    "status": "port",
