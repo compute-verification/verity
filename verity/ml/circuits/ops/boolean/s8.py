@@ -1,19 +1,17 @@
-"""The exact s8 matmul family as Boolean Definitions: the next version of each word Definition of `ops.s8` and of its two
-steps, the same function on bits.
+"""The exact s8 matmul family as Boolean Definitions: the next version of each word Definition of `ops.s8` and of the u8 x s8
+step, the same function on bits.  The s8 step on bits is `ops.boolean.gemm`'s `BlackwellS8ImmaDot32_v2`.
 
-    BlackwellS8ImmaDot32_v2   (acc: Array<32, Value<1>>, a, b: Array<32, Array<8, Value<1>>>) -> Array<32, Value<1>>
-                                                                                  word view: BlackwellS8ImmaDot32_v1
-    BlackwellU8S8ImmaDot32_v2 the same signature (a's codes unsigned)             word view: BlackwellU8S8ImmaDot32_v1
+    BlackwellU8S8ImmaDot32_v2 (acc: Array<32, Value<1>>, a, b: Array<32, Array<8, Value<1>>>) -> Array<32, Value<1>>
+                                                                                  word view: BlackwellU8S8ImmaDot32_v1
     S8Dot_v2{K, L, T0, C, DOT, A, B, TAIL, TDOT, NOISE, LIMBS, COMMIT}
                               S8Dot_v1's signature on bits                         word view: S8Dot_v1{..., DOT', TDOT'}
     LimbSplit_v2{FORM, N, Y}  (y: Array<32, Value<1>>) -> Array<N, Array<8, Value<1>>>  word view: LimbSplit_v1{FORM, N, Y}
     S32LowByte_v2, S32ByteCarry_v2, S32ClampS8_v2, S32ClampRest_v2                 word view: each one's _v1
 
-A step is traced from `_imma` (`trace.definition`): the 32·64 bit products of the operand pairs and the accumulator's bits in
-carry-save columns modulo 2^34, where the exact sum fits (a two's-complement bit of negative weight, x·(-2^p), enters as
-NOT(x)·2^p and the constant -2^p), one ripple, then `.satfinite`'s clamp to s32 (when bits 31..33 disagree: 0x80000000 for a
-negative sum, else 0x7FFFFFFF) or the low 32 bits.  `S8Dot_v2` is `S8Dot_v1`'s body on bits over Boolean steps, with the same
-statics, bind-time checks and census rule; ``DOT'`` is `DOT`'s word Definition (`trace.word_of`).  The limb steps compute
+The u8 x s8 step is `silicon.integer.step_s8_bits`'s array with a's codes unsigned: the 32·64 bit products, those of b's sign
+bit negated (NOT(p)·2^(i+7) and a constant), and the accumulator's bits, reduced once modulo 2^32, where the step wraps, and
+committed.  `S8Dot_v2` is `S8Dot_v1`'s body on bits over Boolean steps, with the same statics, bind-time checks and census
+rule; ``DOT'`` is `DOT`'s word Definition (`trace.word_of`).  The limb steps compute
 the carry as y[8:] sign-extended plus y[7], and the clamp and its rest select on (h > 127, h < -127), read from h's sign
 and bits 0..30.  `LimbSplit_v2` is one circuit traced from their builders (`elementwise.specialized`), so a carry whose
 limb reads only its low byte keeps only those gates, and byteclamp's clamp and rest share h's comparisons.
@@ -33,54 +31,33 @@ from .. import prims as P
 from .. import s8 as S8
 from .elementwise import specialized
 
-__all__ = ["BlackwellS8ImmaDot32", "BlackwellU8S8ImmaDot32", "LimbSplit", "S32ByteCarry", "S32ClampRest", "S32ClampS8",
-           "S32LowByte", "S8Dot"]
+__all__ = ["BlackwellU8S8ImmaDot32", "LimbSplit", "S32ByteCarry", "S32ClampRest", "S32ClampS8", "S32LowByte", "S8Dot"]
 
 BIT = BL.BIT
 S32 = Array(32, BIT)
 CODE = Array(8, BIT)
 A32_8 = Array(32, CODE)
 
-#: the columns' width: |acc + 32 products| < 2^33 for every s8 or u8 by s8 operand
-_M = 34
+#: one u8 x s8 product's negated row (b's sign bit): -(2^15 - 2^7)
+_U8S8_CONSTANT = -(1 << 15) + (1 << 7)
 
 
-def _imma(C, acc, a, b, a_signed: bool, satfinite: bool):
-    cols: list[list] = [[] for _ in range(_M)]
-    const = 0
-    for i, x in enumerate(acc):
-        if i == 31:
-            cols[i].append(NOT(x))
-            const -= 1 << i
-        else:
-            cols[i].append(x)
-    for ak, bk in zip(a, b):
-        for i, x in enumerate(ak):
-            for j, y in enumerate(bk):
-                p = C.AND(x, y)
-                if (i == 7 and a_signed) != (j == 7):
-                    cols[i + j].append(NOT(p))
-                    const -= 1 << (i + j)
-                else:
-                    cols[i + j].append(p)
-    const %= 1 << _M
-    for i in range(_M):
+def _u8s8_step(C, acc, a, b):
+    cols: list[list] = [[x] for x in acc]
+    for x, y in zip(a, b):
+        for i in range(8):
+            for j in range(8):
+                p = C.AND(x[i], y[j])
+                cols[i + j].append(NOT(p) if j == 7 else p)
+    const = (len(a) * _U8S8_CONSTANT) % (1 << 32)
+    for i in range(32):
         if const >> i & 1:
             cols[i].append(ONE)
-    s = compress_columns(C, cols)[:_M]
-    if not satfinite:
-        return s[:32]
-    sign = s[_M - 1]
-    ovf = or_reduce(C, [s[i] ^ sign for i in range(31, _M - 1)])
-    return mux(C, ovf, [NOT(sign)] * 31 + [sign], s[:32])
+    return C.commit(compress_columns(C, cols)[:32])
 
 
-BlackwellS8ImmaDot32 = definition(
-    "BlackwellS8ImmaDot32", 2, lambda C, acc, *ab: _imma(C, acc, ab[:32], ab[32:], True, True),
-    (("acc", S32), ("a", A32_8), ("b", A32_8)), S32, word=P.BlackwellS8ImmaDot32,
-    doc="mma.sync.m16n8k32 .satfinite s32.s8.s8.s32 on sm_120, one accumulator coordinate, on bits: BlackwellS8ImmaDot32_v1")
 BlackwellU8S8ImmaDot32 = definition(
-    "BlackwellU8S8ImmaDot32", 2, lambda C, acc, *ab: _imma(C, acc, ab[:32], ab[32:], False, False),
+    "BlackwellU8S8ImmaDot32", 2, lambda C, acc, *ab: _u8s8_step(C, acc, ab[:32], ab[32:]),
     (("acc", S32), ("a", A32_8), ("b", A32_8)), S32, word=P.BlackwellU8S8ImmaDot32,
     doc="mma.sync.m16n8k32 s32.u8.s8.s32 on sm_120, one accumulator coordinate, on bits: BlackwellU8S8ImmaDot32_v1")
 
