@@ -114,6 +114,14 @@ theorem VRuns.modify (g : LigState → LigState)
   obtain ⟨h1, h2, h3, h4, h5⟩ := hg st
   exact ⟨hl, hk, ⟨Pre.of_eq h1.symm, Pre.of_eq h2.symm, Pre.of_eq h3.symm, Pre.of_eq h4.symm, Pre.of_eq h5.symm⟩, rfl⟩
 
+theorem VRuns.oodPush (y : F128) (k : ℕ) (S : LigState) :
+    VRuns L (_root_.modify (fun st : LigState => { st with oods := st.oods.push y })) k k (· = S)
+      fun _ st => st = { S with oods := S.oods.push y } := by
+  intro st t l b st' t' l' hl h hk hS
+  subst hS
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with oods := st.oods.push y }), t), l) = _ from h)
+  exact ⟨hl, hk, ⟨Pre.refl _, Pre.push _ _, Pre.refl _, Pre.refl _, Pre.refl _⟩, rfl⟩
+
 theorem VRuns.get (k : ℕ) (S : LigState) :
     VRuns L (MonadState.get : LP PS LigState) k k (· = S) fun b st => b = S ∧ st = S := by
   intro st t l b st' t' l' hl h hk hS
@@ -275,21 +283,22 @@ theorem VRuns.challenge (resp : ℕ → Claims.Msg) (split : Bool) (k : ℕ) (S 
       r = ⟨cfOf resp L k 0, cfOf resp L k 1⟩ ∧ st = chalSt ⟨cfOf resp L k 0, cfOf resp L k 1⟩ split S := by
   unfold challengeP
   refine VRuns.seqV (VRuns.sampleK resp k S) ?_
-  refine VRuns.seq (VRuns.modify _ (fun _ => ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _) ?_
+  refine VRuns.seq (VRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _) ?_
   cases split
   · refine VRuns.ite (fun h => absurd h (by simp)) fun _ => ?_
     refine VRuns.seqV (VRuns.get _ _) ?_
     refine VRuns.seq (VRuns.sendMsg _ _ _) ?_
     exact VRuns.pure fun s h => ⟨rfl, h⟩
   · refine VRuns.ite (fun _ => ?_) fun h => absurd rfl h
-    refine VRuns.seq (VRuns.modify _ (fun _ => ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _) ?_
+    refine VRuns.seq (VRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _) ?_
     refine VRuns.seqV (VRuns.get _ _) ?_
     refine VRuns.seq (VRuns.sendMsg _ _ _) ?_
     exact VRuns.pure fun s h => ⟨rfl, h⟩
 
 /-- The state after an out-of-domain intro on `g` at `z` with coin `b`. -/
 def oodSt (nonce : ℕ → ℕ → UInt64) (g z : Array F128) (b : F128) (S : LigState) : LigState :=
-  { S with oods := S.oods.push (mleF g z), msgs := S.msgs.push (roundPoly (embedF g) (embedF (eqTable z))),
+  { S with
+    oods := S.oods.push (mleF g z), msgs := S.msgs.push (roundPoly (embedF g) (embedF (eqTable z))),
     cbn := S.cbn.push (nonce 2 S.cbn.size), w := addScaled S.w (embedF (eqTable z)) b }
 
 theorem VRuns.oodIntro (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0)
@@ -298,12 +307,12 @@ theorem VRuns.oodIntro (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt
       st = oodSt nonce g ((Array.range dim).map (cfOf resp L k)) (cfOf resp L (k + 1) 0) S := by
   unfold oodIntroP
   refine VRuns.seqV (VRuns.sampleVec resp hdim k S) ?_
-  refine VRuns.seq (VRuns.modify _ (fun _ => ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _) ?_
+  refine VRuns.seq (VRuns.oodPush _ _ _) ?_
   refine VRuns.seq (VRuns.absorbF _ _ _) ?_
   refine VRuns.seq (VRuns.sendMsg _ _ _) ?_
   refine VRuns.seq (VRuns.powB _ _ _) ?_
   refine VRuns.seqV (VRuns.sample resp _ _) ?_
-  exact VRuns.modify _ (fun _ => ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _
+  exact VRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _
 
 /-- A level's query coins' positions and consistency coins, drawn at positions `k` and `k + 1`. -/
 def qPosK (cf : ℕ → ℕ → F128) (lv : Level) (k : ℕ) : Array ℕ := Flock.positions lv ((Array.range lv.q).map (cf k))
