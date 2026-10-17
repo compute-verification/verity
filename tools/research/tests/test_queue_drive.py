@@ -745,6 +745,19 @@ def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to,
     assert drive.merge_thread_post(f"{' '.join(to)} queue: b22a0c54d29e on `next` (#1 #2) failed its check", to, sender=sender)
 
 
+def test_a_twin_stopped_by_sigterm_is_no_verdict_and_its_sibling_still_decides(world, monkeypatch):
+    """17 Oct 11:47Z: twin 30ce of train bd74745daa5f, SIGTERMed while it waited for a slot, was read as the train failing,
+    while its sibling 4af6 ran on cpu-2."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    (rid,) = h.run_state
+    h.run_state[rid] = ("done", 143, None)
+    assert h.d.verdict(_tip(world), _git(world.origin, "rev-parse", "main"), h.d.q.load_state()["drive"]).state == "none"
+    h.tick()
+    assert len(h.launched) == 2 and not h.posts                          # launched again, nothing told
+
+
 def test_a_new_head_keeps_the_running_train_at_the_head_it_checks_and_rejoins_above_it(world, monkeypatch):
     """17 Oct 07:56Z: two re-marked heads (#2222, #2235) took their PRs off `next` and cancelled two running trains; top ruled a
     new head no longer cancels a running train: it runs on at the head the owner marked, and the new head rejoins above."""
