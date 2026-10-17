@@ -185,12 +185,13 @@ def local_probe(lat: str, cpu: int, celldir: str, pings: int, rounds: int, max_s
 
 
 def remote_probe(name: str, src: bytes, celldir: str, pings: int, rounds: int, max_s: int, extra: tuple[str, ...] = (),
-                 out: str | None = None, port: int = PORT) -> dict:
+                 out: str | None = None, port: int = PORT, to: str | None = None) -> dict:
     dest, lport = REMOTES[name]
     out = out or name
+    to = to or f"{NODE_IP}:{port}"
     script = ("set -e; d=$(mktemp -d /tmp/lat-probe.XXXXXX); trap 'rm -rf \"$d\"' EXIT; cat > \"$d/lat.cu\"; "
               "g++ -O2 -std=c++17 -x c++ -o \"$d/lat\" \"$d/lat.cu\" -lpthread; "
-              f"\"$d/lat\" probe to={NODE_IP}:{port} lport={lport} cpu=auto pings={pings} rounds={rounds} max_s={max_s} "
+              f"\"$d/lat\" probe to={to} lport={lport} cpu=auto pings={pings} rounds={rounds} max_s={max_s} "
               f"{' '.join(extra)} out=\"$d/{out}\" >&2 || echo \"probe rc=$?\" >&2; "
               f"(uptime; nproc) > \"$d/{out}.host\"; tar -C \"$d\" -cf - {out}.bin {out}.json {out}.host")
     p = subprocess.run([*SSH, dest, script], input=src, capture_output=True, timeout=1800)

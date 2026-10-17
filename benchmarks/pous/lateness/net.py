@@ -3,19 +3,22 @@ host memory, no GPU) on a core of the job, then challengers on vy-nebius-cpu-1 a
 variants that separate the network's causes: back-to-back pings, pings paced 1 ms and 300 µs apart (adaptive interrupt
 moderation follows the packet rate), and 4 KiB answers in 1,472-byte datagrams (fragmented on cpu-1's MTU-1450 path)
 and in 1,422-byte ones (whole), back to back and paced, and a five-minute ping series 1 ms apart (how the path's
-modes change with time). Writes `<challenger>/<variant>.bin|json` and `summary.json` to $OUT."""
+modes change with time), then that series from both challengers at once. `--only NAME,...` runs only those variants
+(`ping-series-concurrent` the concurrent one). Writes `<challenger>/<variant>.bin|json` and `summary.json` to $OUT."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from job import HERE, REMOTES, busy_ticks, busy_frac, log, plan_cpus, remote_probe, summarize  # noqa: E402
+from job import HERE, REMOTES, SSH, busy_ticks, busy_frac, log, plan_cpus, remote_probe, summarize  # noqa: E402
 
 PORT = 47320
 # (name, pings, rounds, max_s, extra probe arguments)
@@ -28,9 +31,31 @@ VARIANTS = [
     ("host4k-1422-1ms", 0, 40000, 50, ("ops=2", "dgram=1422", "k=1", "gap_us=1000")),
     ("ping-series-1ms", 0, 400000, 300, ("ops=3", "k=1", "gap_us=1000")),
 ]
+# Run from both challengers at once: whether the paths' slow episodes coincide (node 2's side) or not.
+CONCURRENT = ("ping-series-concurrent", 0, 400000, 300, ("ops=3", "k=1", "gap_us=1000"))
+# The same series on a path without node 2: a responder on vy-nebius-1 for the challenger on vy-nebius-cpu-1.
+CROSS = ("ping-series-cpu1-to-node1", 0, 400000, 300, ("ops=3", "k=1", "gap_us=1000"))
+CROSS_PORT = 47330
+
+
+def remote_serve(src: bytes, seconds: int, log_path: str) -> subprocess.Popen:
+    """`lat serve` on vy-nebius-1 for `seconds`, built and run in a scratch dir that it removes on exit."""
+    dest = REMOTES["node1"][0]
+    peer = f"{REMOTES['cpu1'][0].split('@')[1]}:{REMOTES['cpu1'][1]}"
+    script = ("set -e; d=$(mktemp -d /tmp/lat-serve.XXXXXX); trap 'rm -rf \"$d\"' EXIT; cat > \"$d/lat.cu\"; "
+              "g++ -O2 -std=c++17 -x c++ -o \"$d/lat\" \"$d/lat.cu\" -lpthread; "
+              f"timeout -s TERM {seconds} \"$d/lat\" serve port={CROSS_PORT} cpu=auto host_mib=1024 peer={peer} || true")
+    p = subprocess.Popen([*SSH, dest, script], stdin=subprocess.PIPE, stdout=open(log_path, "w"), stderr=subprocess.STDOUT)
+    p.stdin.write(src)
+    p.stdin.close()
+    return p
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--only", default=None, help="comma-separated variant names (default: all)")
+    ns = ap.parse_args()
+    only = set(ns.only.split(",")) if ns.only else None
     out = os.environ.get("OUT") or sys.exit("$OUT is unset: run under research run")
     scratch = tempfile.mkdtemp(prefix="latnet-")
     src = open(os.path.join(HERE, "lat.cu"), "rb").read()
@@ -52,6 +77,8 @@ def main() -> None:
             d = os.path.join(out, who)
             os.makedirs(d, exist_ok=True)
             for name, pings, rounds, max_s, extra in VARIANTS:
+                if only is not None and name not in only:
+                    continue
                 a = busy_ticks()
                 r = remote_probe(who, src, d, pings, rounds, max_s, ("warm=500", *extra), out=name, port=PORT)
                 b = busy_ticks()
@@ -62,6 +89,42 @@ def main() -> None:
                 summary["cells"][f"{who}/{name}"] = r
                 log(f"{who}/{name}: {json.dumps(r.get('summary', r))[:300]}")
                 json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=1)
+        name, pings, rounds, max_s, extra = CONCURRENT
+        if only is None or name in only:
+            results: dict = {}
+
+            def probe(who: str) -> None:
+                d = os.path.join(out, who)
+                os.makedirs(d, exist_ok=True)
+                results[who] = remote_probe(who, src, d, pings, rounds, max_s, ("warm=500", *extra), out=name, port=PORT)
+
+            threads = [threading.Thread(target=probe, args=(who,)) for who in REMOTES]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            for who, r in results.items():
+                path = os.path.join(out, who, f"{name}.bin")
+                if os.path.exists(path):
+                    r["summary"] = summarize(path)
+                summary["cells"][f"{who}/{name}"] = r
+                log(f"{who}/{name}: {json.dumps(r.get('summary', r))[:300]}")
+            json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=1)
+        name, pings, rounds, max_s, extra = CROSS
+        if only is None or name in only:
+            server = remote_serve(src, max_s + 90, os.path.join(out, "node1-responder.log"))
+            d = os.path.join(out, "cpu1")
+            os.makedirs(d, exist_ok=True)
+            node1_ip = REMOTES["node1"][0].split("@")[1]
+            r = remote_probe("cpu1", src, d, pings, rounds, max_s, ("warm=500", *extra), out=name,
+                             to=f"{node1_ip}:{CROSS_PORT}")
+            server.wait()
+            path = os.path.join(d, f"{name}.bin")
+            if os.path.exists(path):
+                r["summary"] = summarize(path)
+            summary["cells"][f"cpu1/{name}"] = r
+            log(f"cpu1/{name}: {json.dumps(r.get('summary', r))[:300]}")
+            json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=1)
     finally:
         responder.terminate()
         responder.wait(30)
