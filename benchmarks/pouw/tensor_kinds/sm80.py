@@ -358,7 +358,9 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         f = forms.get(s)
         if f and f["a_mix"] is not None:
             q[s] = {"a_mix": f["a_mix"], "words_per_lane": f["words"] / 32, "q0": f["a_mix"] / (f["words"] / 32)}
-    summary = {"device": heads[:1], "lanes": lanes, "forms": forms, "rho_T_slots_per_sm_clk": rho,
+    meta = out / "meta.json"
+    summary = {"run_id": json.loads(meta.read_text()).get("run_id") if meta.exists() else None,
+               "device": heads[:1], "lanes": lanes, "forms": forms, "rho_T_slots_per_sm_clk": rho,
                "words_per_sm_clk_max": words_max, "duofold": duofold, "duo": duo, "beside": beside,
                "exact": dict(exact_by), "qstar0": q, "excluded": excluded}
     return summary, fails
@@ -369,7 +371,8 @@ def _f(v, d=3):
 
 
 def render(s: dict) -> str:
-    L = ["## Forms (alone: least SMSP-cycles a PTX MMA over 2 and 4 warps a SMSP)", "",
+    L = [f"Run {s.get('run_id', '?')}; clocks read, never set (default boost).", "",
+         "## Forms (alone: least SMSP-cycles a PTX MMA over 2, 4 and 8 warps a SMSP)", "",
          "| form | SASS | slots | alone SMSP-cyc a MMA | slots/SM/clk | MACs/SM/clk | a, IADD3+FFMA | a, IADD3 (issue) | "
          "a, IADD3 (pipe) | a a slot vs IMMA.16832 (mix / IADD3) | word | MHz clock64 / NVML |",
          "|---|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -413,6 +416,86 @@ def render(s: dict) -> str:
     return "\n".join(L) + "\n"
 
 
+EPOCH = "sm80-1"
+#: the scalar census kinds (sm_120's names where one exists) -> (row, the lanes whose per-op rate prices it)
+SCALAR = {"ALU": ("A", ["iadd3", "lop3"]), "FFMA": ("FMA", ["ffma"]), "IMAD": ("FMA", ["imad", "dp4a"]),
+          "XU": ("XU", ["popc"]), "SHFL": ("SHFL", ["shfl"]), "LDS32": ("LDSi", ["lds"])}
+ROWS = {
+    "M": "tensor pipe: SMSP-cycles a MMA of each kind alone (best of 2, 4 and 8 warps a SMSP, 8 accumulators a warp; "
+         "the loop's 3 instructions a 8 MMAs included)",
+    "A": "ALU pipe: IADD3 and LOP3 (IADD3+LOP3 issue {iadd3+lop3} a SMSP-cycle: one pipe)",
+    "FMA": "FMA pipe: FFMA, IMAD and IDP.4A (IMAD+FFMA {imad+ffma}, IDP.4A+FFMA {dp4a+ffma} a SMSP-cycle: one pipe)",
+    "XU": "XU: POPC",
+    "SHFL": "SHFL.BFLY",
+    "LDSi": "LDS.32 (one warp a SM-cycle: 128 B/SM/clk)",
+    "JIM": "M1's issue facet: a(kind) #MMA + every other warp instruction 1 <= T SMSP-cycles, a the least (T - #other)/#MMA "
+           "over the gated spec and mixu programs beside IADD3+FFMA ({iadd3+ffma} issue a SMSP-cycle alone); no noise margin",
+    "JIA": "the same facet beside IADD3 alone (on its pipe at {iadd3} a SMSP-cycle), a the least (T - #other)/#MMA",
+}
+
+
+def census(outs: list[Path]) -> tuple[str, str]:
+    """sm_80's census (data/sm80/'s rows.csv and census.csv) from analyzed runs: each tensor kind's least alone cycles
+    and joint coefficients, each scalar class's fastest rate, over every run; a run whose lane gate failed gives no
+    joint coefficient."""
+    alone: dict[str, tuple[float, set]] = {}
+    joint: dict[tuple[str, str], tuple[float, set]] = {}
+    rate: dict[str, tuple[float, set]] = {}
+    pairs: dict[str, float] = {}
+
+    def keep(d, k, v, run, better):
+        if v is None:
+            return
+        old = d.get(k)
+        if old is None or better(v, old[0]):
+            d[k] = (v, {run})
+        elif abs(v - old[0]) <= 1e-9 * abs(v):
+            old[1].add(run)
+
+    for out in outs:
+        rec = json.loads((out / "sm80.json").read_text())
+        s, fails = rec["summary"], rec["gate_failures"]
+        run = s.get("run_id") or out.name
+        lane_ok = not any(f.startswith("opalone") for f in fails)
+        for st, f in s["forms"].items():
+            kind = FORMS[st][1]
+            keep(alone, kind, f["alone_smsp_cycles_per_mma"], run, lambda a, b: a < b)
+            if lane_ok:
+                keep(joint, (kind, "JIM"), f["a_mix"], run, lambda a, b: a < b)
+                keep(joint, (kind, "JIA"), f["a_iadd3"], run, lambda a, b: a < b)
+        for kind, (_, lanes) in SCALAR.items():
+            for ln in lanes:
+                v = s["lanes"].get(ln, {}).get("per_op", {}).get(ln)
+                keep(rate, kind, None if v is None else 4 * v, run, lambda a, b: a > b)
+        for ln, v in s["lanes"].items():
+            pairs[ln] = max(pairs.get(ln, 0.0), v["instr_per_smsp_cycle"])
+    lines, cites = [], defaultdict(set)
+    for kind, (v, runs) in sorted(alone.items()):
+        lines.append(f"{kind},M,,,{v:.6g},,{EPOCH},,{' '.join(sorted(runs))}")
+        cites["M"] |= runs
+    for kind, (v, runs) in sorted(rate.items()):
+        row = SCALAR[kind][0]
+        lines.append(f"{kind},{row},{v:.6g},,,,{EPOCH},,{' '.join(sorted(runs))}")
+        cites[row] |= runs
+    for row in ("JIM", "JIA"):
+        ks = sorted(k for (k, r) in joint if r == row)
+        for kind in ks:
+            v, runs = joint[kind, row]
+            lines.append(f"{kind},{row},,,{v:.6g},,{EPOCH},,{' '.join(sorted(runs))}")
+            cites[row] |= runs
+        if ks:
+            for other in ("ALU", "FFMA"):
+                lines.append(f"{other},{row},,,1,,{EPOCH},,{' '.join(sorted(cites[row]))}")
+    fmt = {k: f"{v:.3f}" for k, v in pairs.items()}
+    fmt.update({k: f"{rate[c][0] / 4:.3f}" for c, (_, lns) in SCALAR.items() for k in lns[:1] if c in rate})
+    rows = ["row,status,runs,description"]
+    for row, desc in ROWS.items():
+        if cites[row]:
+            status = "joint" if row.startswith("JI") else "measured"
+            rows.append(f'{row},{status},{" ".join(sorted(cites[row]))},"{desc.format_map(defaultdict(lambda: "?", fmt))}"')
+    return "\n".join(rows) + "\n", "kind,row,rate,noise,cycles,u,since,until,runs\n" + "\n".join(lines) + "\n"
+
+
 def main(argv: list[str]) -> int:
     if argv[1] == "gate":
         return gate(Path(argv[2]), [Path(a) for a in argv[3:]])
@@ -425,6 +508,17 @@ def main(argv: list[str]) -> int:
         print(md)
         for x in fails:
             print("GATE", x)
+        return 0
+    if argv[1] == "census":
+        args = argv[2:]
+        to = Path(args[args.index("--to") + 1]) if "--to" in args else None
+        outs = [Path(a) for a in args if a != "--to" and (to is None or Path(a) != to)]
+        rows_csv, census_csv = census(outs)
+        if to:
+            to.mkdir(parents=True, exist_ok=True)
+            (to / "rows.csv").write_text(rows_csv)
+            (to / "census.csv").write_text(census_csv)
+        print(rows_csv + "\n" + census_csv, end="")
         return 0
     raise SystemExit(__doc__)
 
