@@ -1,0 +1,132 @@
+"""The N_L search's port of 6b's model, its tables, its circuits and its p1024 families compute what `renorm.py` claims."""
+
+from __future__ import annotations
+
+import random
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+
+import renorm as R  # noqa: E402
+
+
+def _col(n, v):
+    return np.full(n, v, dtype=np.int64)
+
+
+def test_mma_clamps_or_wraps_outside_s32_and_proven_refuses_a_wide_operand():
+    big = R.Gate(R.Op("const", c=2 ** 20), (), 2 ** 20, 2 ** 20)
+    zero = R.Gate(R.Op("const", c=0), (), 0, 0)
+    sat = R.Gate(R.Op("mma", k=1, sat=True), (1, 0, 0), R.S32_MIN, R.S32_MAX)
+    wrap = R.Gate(R.Op("mma", k=1, sat=False), (1, 0, 0), R.S32_MIN, R.S32_MAX)
+    vs, window, _hold = R.evaluate([big, zero, sat, wrap], {}, 1)
+    assert vs[2][0] == R.S32_MAX and vs[3][0] == (2 ** 40 - R.S32_MIN) % 2 ** 32 + R.S32_MIN
+    assert not window[0]  # the operand 2^20 leaves s8, and the exact sum leaves the declared interval
+    assert any("outside" in m for m in R.proven([big, zero, sat]))
+
+
+def test_derive_is_the_interval_image_and_a_budgeted_gate_keeps_its_declaration():
+    a = R.Gate(R.Op("input", slot=0), (), 0, 15)
+    b = R.Gate(R.Op("input", slot=1), (), -8, 7)
+    zero = R.Gate(R.Op("const", c=0), (), 0, 0)
+    m = R.Gate(R.Op("mma", fa=(False, 4), fb=(True, 4), k=1), (2, 0, 1), 0, 0)
+    f = R.Gate(R.Op("affine", c=3, coeff=(2, -1)), (0, 1), 0, 0)
+    g = R.Gate(R.Op("budgeted", f=lambda v: v[0] // 2), (0,), 0, 7)
+    ivs = R.intervals([a, b, zero, m, f, g])
+    assert ivs[3] == (-120, 105) and ivs[4] == (3 + 0 - 7, 3 + 30 + 8) and ivs[5] == (0, 7)
+
+
+def test_fan_in_and_width_are_restricted_s():
+    a = R.Gate(R.Op("input", slot=0), (), 0, 255)
+    g = R.Gate(R.Op("budgeted", f=lambda v: v[0]), (0, 0, 0, 0, 0), 0, 255)
+    assert not R.fan_in(4, [a, g]) and R.fan_in(5, [a, g])
+    assert R.width(8, [a]) and not R.width(7, [a])
+
+
+@pytest.mark.parametrize("B,L", [(4, 4), (16, 3), (256, 2)])
+def test_every_square_is_its_column_sums_plus_the_carry_lattice(B, L):
+    F = R.Field.toy(B, L)
+    assert F.p % 4 == 3 and R.is_prime(F.p) and not any(R.is_prime(q) and q % 4 == 3 for q in range(F.p + 1, B ** L))
+    T = R.table(F)
+    pw = np.array([B ** l for l in range(L)], dtype=np.int64)
+    a = np.arange(F.p, dtype=np.int64)
+    assert (T.y @ pw == a * a % F.p).all() and (T.digits @ pw == a).all()
+    rebuilt = T.s.copy()
+    rebuilt[:, 0] += F.delta * T.c[:, L - 1]
+    rebuilt[:, 1:] += T.c[:, :L - 1]
+    rebuilt -= B * T.c
+    assert (rebuilt == T.y).all()
+
+
+@pytest.mark.parametrize("B,L", [(4, 5), (16, 3), (256, 2)])
+def test_the_column_sum_circuit_needs_no_budgeted_gate_on_the_carry_free_set(B, L):
+    F = R.Field.toy(B, L)
+    T = R.table(F)
+    _m, names = R.monomials(T.digits[:1])
+    eye = [[int(i == j) for j in range(L)] for i in range(L)]
+    cn = R.Constraint(eye, [[0] * len(names)] * L, [0] * L, 0, "carry-free")
+    wit = R.renormalization_witness(T, R.build(T, cn, names))
+    assert wit["restricted"] and wit["run_bits"] == 0 and wit["budgeted"] == 0 and wit["window_on_good"]
+    assert wit["good"] == int((T.c == 0).all(axis=1).sum()) == R.carry_free_count(F)
+
+
+def test_the_honest_circuit_is_exact_everywhere_with_L_budgeted_gates():
+    F = R.Field.toy(16, 3)
+    T = R.table(F)
+    _m, names = R.monomials(T.digits[:1])
+    wit = R.renormalization_witness(T, R.build(T, None, names))
+    assert wit["restricted"] and wit["good"] == F.p and wit["budgeted"] == F.L
+
+
+def test_each_constraint_found_is_a_restricted_circuit_with_L_minus_k_budgeted_gates_exact_on_its_fiber():
+    r = R.run_field(4, 4)  # run_field asserts the witness for every k it reports
+    ks = [row["k"] for row in r["frontier"]]
+    assert ks == list(range(1, 5))
+    counts = [row["count"] for row in r["frontier"]]
+    assert counts == sorted(counts, reverse=True) and counts[-1] >= r["carry_free"]
+
+
+def test_integer_kernel_and_unimodular_completion():
+    rnd = random.Random(3)
+    for _ in range(40):
+        L = rnd.randint(2, 6)
+        k = rnd.randint(1, L)
+        rows = [[rnd.randint(-3, 3) for _ in range(L)] for _ in range(k)]
+        ker = R.integer_kernel(rows, L)
+        assert all(sum(r[i] * v[i] for i in range(L)) == 0 for r in rows for v in ker)
+        rank = int(np.linalg.matrix_rank(np.array(rows, dtype=float)))
+        assert len(ker) == L - rank
+        W = R.unimodular_completion(rows, L)
+        if W is not None:
+            assert W[:k] == rows and abs(R._det(W)) == 1
+    assert R.unimodular_completion([[2, 0]], 2) is None and R.unimodular_completion([[2, 3]], 2) is not None
+
+
+def test_p1024_small_digit_families_need_no_budgeted_gate():
+    fam = R.p1024_family([2] * 63 + [1] + [0] * 64)
+    assert fam["exact"] and fam["max_column"] == 252 and abs(fam["log2_size"] - 100.85) < 0.01
+    assert fam["implied_d0"] > 12.6 and fam["formula_d_at_eps"] < 128
+    assert not R.p1024_family([3] * 64 + [0] * 64)["exact"]  # its all-max member carries
+    greedy = R.p1024_greedy_family()
+    assert R.p1024_family(greedy)["exact"] and R.p1024_family(greedy)["log2_size"] > fam["log2_size"]
+    rnd = random.Random(5)
+    for _ in range(25):
+        digits = [rnd.randint(0, m) for m in [2] * 63 + [1] + [0] * 64]
+        a = sum(x << (8 * l) for l, x in enumerate(digits))
+        assert list((a * a % R.P1024).to_bytes(128, "little")) == R.p1024_column_sums(digits)
+    assert R.is_prime(R.P1024) and R.P1024 % 4 == 3
+
+
+def test_p1024_carries_rebuild_the_square():
+    c = R.p1024_carries(8, seed=2)
+    rnd = random.Random(2)
+    A = [rnd.randrange(R.P1024) for _ in range(8)]
+    for i, a in enumerate(A):
+        s = R.p1024_column_sums(list(a.to_bytes(128, "little")))
+        y = [s[l] + (105 * c[i, 127] if l == 0 else c[i, l - 1]) - 256 * c[i, l] for l in range(128)]
+        assert y == list((a * a % R.P1024).to_bytes(128, "little"))
