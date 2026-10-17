@@ -45,6 +45,18 @@ TRACE_RE = re.compile(r'^\s*([\w./+-]+\.py):\d+:|File "([^"]+\.py)", line \d+', 
 NAMED_RE = re.compile(r"(?<![\w./-])((?:[\w+-]+/)+[\w+.-]*\w\.\w+)")
 #: pytest's failing tests in its short summary
 FAILED_RE = re.compile(r"^FAILED ([^\s:]+)::", re.M)
+#: in lean-audit's log: the package an audit failed (its path under the audit's scratch tree), and a Lean error's file, relative
+#: to that package
+LEAN_AUDIT_RE = re.compile(r"^AUDIT \S*?/lean-audit-scratch-[^/\s]+/(\S+?): FAIL", re.M)
+LEAN_ERROR_RE = re.compile(r"^\s*error: (\S+?\.lean):\d+", re.M)
+#: a run's or a step's exit that a kill gave, not a failure of what it checked: SIGHUP, SIGKILL, SIGTERM as 128+N, or a signal
+KILLED_RC = (129, 137, 143)
+#: what `Driver.culprit` says of a failure that names no file and was a kill
+KILLED = "it was killed (a signal or 128+N) and names no file: a machine's fault"
+#: what it says of one whose files, and the declared inputs of what failed, no PR's change touches: a machine's fault too
+UNTOUCHED = "no PR's change touches what failed or its declared inputs: a machine's fault"
+#: Lean's own inputs, for a Lean step that failed with no file named
+LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json", "lean-audit.json")
 #: states `research status` reports for a run that may still publish an attempt
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: after a launched run ends, how long its attempt may take to reach the store before the launch counts as lost
@@ -243,6 +255,45 @@ def failed_steps(run_dir: Path) -> list[dict]:
     return out
 
 
+def suite_inputs(repo: Path, commit: str, suite: str) -> list[str]:
+    """The paths suite ``suite`` (its directory) reads at ``commit``: its directory and its `[tool.verity.tests] inputs`; the
+    repository's own suite (``.``) only its inputs."""
+    import tomllib
+
+    own = "pyproject.toml" if suite.strip("/") in ("", ".") else f"{suite.strip('/')}/pyproject.toml"
+    r = _git(repo, "show", f"{commit}:{own}", check=False)
+    try:
+        inputs = tomllib.loads(r.stdout).get("tool", {}).get("verity", {}).get("tests", {}).get("inputs", []) if not r.returncode else []
+    except tomllib.TOMLDecodeError:
+        inputs = []
+    return [i for i in ([] if suite in ("", ".") else [suite]) + [str(x) for x in inputs] if i]
+
+
+def under(f: str, paths: list[str]) -> bool:
+    return any(f == p or f.startswith(p.rstrip("/") + "/") for p in paths)
+
+
+def lean_errors(log: str) -> set[str]:
+    """The repository paths of the Lean files lean-audit's ``log`` reports errors in: each `error: FILE.lean:LINE` after an
+    `AUDIT .../PKG: FAIL` line, FILE relative to PKG."""
+    out, pkg = set(), None
+    for line in log.splitlines():
+        if m := LEAN_AUDIT_RE.match(line):
+            pkg = m[1]
+        elif pkg and (m := LEAN_ERROR_RE.match(line)):
+            out.add(os.path.normpath(os.path.join(pkg, m[1])))
+    return out
+
+
+def killed(run_dir: Path, why: str = "") -> bool:
+    """Whether a check failed by being killed rather than by what it checked: a failed step that exited by a signal or 128+N,
+    or the run's own exit (``why``, the verdict's `rc=N`) one of those."""
+    rcs = [st.get("rc") for st in failed_steps(run_dir)]
+    if any(isinstance(rc, int) and (rc < 0 or rc in KILLED_RC) for rc in rcs):
+        return True
+    return any(f"rc={rc}" in why for rc in (*KILLED_RC, -9, -15))
+
+
 def _named(log: str, base: str) -> set[str]:
     """The files a pytest log's failures name: its tracebacks' frames, and the repository paths in its failure report."""
     rel = lambda p: p if p.startswith("/") else os.path.normpath(os.path.join(base, p))  # noqa: E731
@@ -267,6 +318,9 @@ def implicated(run_dir: Path) -> set[str] | None:
             log = (run_dir / Path(st.get("log") or "").name).read_text(errors="replace") if st.get("log") else ""
         except OSError:
             log = ""
+        if st.get("step") == "lean-audit" and (lean := lean_errors(log)):
+            paths |= lean
+            continue
         if not (tests := FAILED_RE.findall(log)):
             return None
         paths |= {os.path.normpath(t) for t in tests} | _named(log, "")
@@ -332,7 +386,8 @@ class Driver:
             if all(step_status(store, rid, s) == "passed" for s in need):
                 return Verdict("passed", rid)
         rows = store.index.sql("SELECT id, state, rc FROM attempts WHERE tool = 'check' AND source_commit = ?", (commit,))
-        ran = [(rid, st, rc) for rid, st, rc in rows if rc != NOT_STARTED]
+        old = set(drive.get("resent", {}).get(commit, ()))
+        ran = [(rid, st, rc) for rid, st, rc in rows if rc != NOT_STARTED and rid not in old]
         if ids:
             return Verdict("failed", ids[0], f"{ids[0]} passed without {', '.join(need)}, which the gate needs for "
                                             f"{', '.join(sorted({p for ps in need.values() for p in ps}))}")
@@ -485,43 +540,101 @@ class Driver:
 
     def culprit(self, members: list[Member], v: Verdict) -> tuple[Member | None, list[Member], str]:
         """The one member of a failed train whose own change (its merge commit against the one below) touches a file the
-        failure points at (`implicated`), else None; with the members that touch one, and what the failure points at."""
+        failure points at (`implicated`), else None; with the members that touch one, and what the failure points at.  A
+        failure that names no file and was a kill (`killed`) says `KILLED`."""
         found: set[str] = set()
-        for d in self.evidence(self.repo, v.attempt.split()):
+        dirs = self.evidence(self.repo, v.attempt.split())
+        for d in dirs:
             if (paths := implicated(d)) is None:
-                return None, [], "the failure names no file (a step failed with no failing test)"
+                if killed(d, v.why):
+                    return None, [], KILLED
+                continue
             found |= paths
-        if not found:
+        own = {x.commit: changed(self.repo, f"{x.commit}^1", x.commit) for x in members}
+        hits = [(x, t) for x in members if (t := touches(own[x.commit], found))] if found else []
+        if hits:
+            what = ", ".join(sorted({f for _, t in hits for f in t}))
+            return (hits[0][0] if len(hits) == 1 else None), [x for x, _ in hits], what
+        if not dirs:
             return None, [], "no failed suite's report reached drive"
-        hits = [(x, touches(changed(self.repo, f"{x.commit}^1", x.commit), found)) for x in members]
-        hits = [(x, t) for x, t in hits if t]
-        if not hits:
-            return None, [], f"no PR's change touches a file the failure names ({', '.join(sorted(found)[:4])})"
-        what = ", ".join(sorted({f for _, t in hits for f in t}))
-        return (hits[0][0] if len(hits) == 1 else None), [x for x, _ in hits], what
+        back, what = self.by_inputs(members, own, dirs)
+        if back:
+            return (back[0] if len(back) == 1 else None), back, what
+        return None, [], UNTOUCHED
+
+    def by_inputs(self, members: list[Member], own: dict[str, set[str]], dirs: list[Path]) -> tuple[list[Member], str]:
+        """The members whose change touches the declared inputs of what failed, when the failure's own files touch none
+        (16 Oct: #2164's suite failed in tests/, and the cause was its benchmarks/pouw/pyproject.toml): a failed suite's
+        directory and `[tool.verity.tests] inputs`, a Lean step's Lean sources, circuit-check's (`queue.forces_cold`)."""
+        from .queue import forces_cold
+
+        tip, rules = members[-1].commit, []
+        for d in dirs:
+            for s in failed_suites(d):
+                ins = suite_inputs(self.repo, tip, s.get("suite") or "")
+                rules.append((f"suite {s.get('name') or s.get('suite')}'s inputs", lambda f, ins=ins: under(f, ins)))
+            for st in failed_steps(d):
+                step = st.get("step") or ""
+                if step.startswith("lean") and step != "lean-suites":
+                    rules.append(("Lean sources", lambda f: f.endswith(LEAN_INPUTS)))
+                elif step == "circuit-check":
+                    rules.append(("circuit-check's inputs", lambda f: forces_cold([f])))
+        out, why = [], set()
+        for x in members:
+            if t := {label for label, ok in rules for f in own[x.commit] if ok(f)}:
+                out.append(x)
+                why |= t
+        return out, ", ".join(sorted(why))
 
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
+        """Act on a failed train with no lander (16 Oct, Daniel through top): eject every member whose change touches what the
+        failure points at, so the next sync rebuilds the train without them; when the failure was a kill that points at nothing,
+        a machine's fault, check the same train again once, on ``on``'s machines; else tell `CI` and the owners."""
         key, prs = f"failed:{m.commit}", " ".join(f"#{x.pr}" for x in members)
         if key in drive["told"]:
             return
         head = f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}"
-        pick, hit, what = self.culprit(members, v)
-        why = f"{len(hit)} PRs ({' '.join(f'#{x.pr}' for x in hit)}) touch {what}" if hit else what
-        if pick is not None:
-            reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which only #{pick.pr} changes"
-            if self.q.shadow or self.dry_run:
-                self.q.log(f"research queue drive: would eject #{pick.pr}: {reason}")
-            else:
-                try:
-                    self.q.eject(pick.pr, reason, "ci")
-                except QueueError as e:
-                    pick, why = None, f"only #{pick.pr} touches {what}, but ejecting it failed: {e}"
-        if pick is not None:
-            self.refuse(drive, key, f"{head}. Ejected #{pick.pr}: its change is the only one in {what}; the next sync rebuilds "
-                                    f"without it. Fix it and re-mark it", self._handle(pick.pr))
+        _, hit, what = self.culprit(members, v)
+        if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}):
+            self.resend(drive, m, prs, v)
             return
+        ejected, why = [], what
+        for x in hit:
+            reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which #{x.pr} changes"
+            if self.q.shadow or self.dry_run:
+                self.q.log(f"research queue drive: would eject #{x.pr}: {reason}")
+                continue
+            try:
+                self.q.eject(x.pr, reason, "ci")
+                ejected.append(x)
+            except QueueError as e:
+                why = f"{what}; ejecting #{x.pr} failed: {e}"
+        if ejected:
+            names = " ".join(f"#{x.pr}" for x in ejected)
+            self.refuse(drive, key, f"{head}. Ejected {names}: {'its' if len(ejected) == 1 else 'their'} change touches {what}; "
+                                    f"the next sync rebuilds without {'it' if len(ejected) == 1 else 'them'}. Fix and re-mark",
+                        *(self._handle(x.pr) for x in ejected))
+            return
+        if what in (KILLED, UNTOUCHED):
+            why = f"it failed again on its resend ({what})"
         self.refuse(drive, key, f"{head}. Not ejected: {why}. Eject the PR that broke it (`research queue eject N --reason ...`); "
                                 "the next sync rebuilds without it", *(self._handle(x.pr) for x in hit))
+
+    def resend(self, drive: dict, m: Member, prs: str, v: Verdict) -> None:
+        """Check ``m``'s train again on ``on``'s machines, once: its failure was a kill and names no file, so no PR is at fault.
+        Its failed attempts stop counting (`verdict` passes over `resent`), so the new run's verdict is the train's."""
+        main = _out(self.repo, "rev-parse", "origin/main")
+        if self.q.shadow or self.dry_run:
+            self.q.log(f"research queue drive: would resend {m.commit[:12]} ({prs}): {v.why}")
+            return
+        ids, tail = self.launch(self.repo, m.commit, self.on, needs_agreement(self.repo, main, m.commit))
+        if not ids:
+            self.refuse(drive, f"launch:{m.commit}", f"train.sh {m.commit[:12]} {self.on} registered no run on a resend: {tail}")
+            return
+        drive["resent"][m.commit] = v.attempt.split()
+        drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": needs_agreement(self.repo, main, m.commit)}
+        self.q.log(f"research queue drive: resent {m.commit[:12]} ({prs}) as {' '.join(ids)}: {v.attempt} failed ({v.why}), and "
+                   f"no PR's change touches what failed, so no PR is ejected")
 
     # -- the tick
 
@@ -575,6 +688,7 @@ class Driver:
                     self.cancel(self.repo, live, f"drive: {c[:12]} is no longer on `{q.branch}` (rebuilt); no check of it lands")
                     q.log(f"research queue drive: cancelled {' '.join(live)}: {c[:12]} is no longer on `{q.branch}`")
         drive["launched"] = {c: v for c, v in drive["launched"].items() if c in on_chain}
+        drive["resent"] = {c: v for c, v in drive.get("resent", {}).items() if c in on_chain}
         what = [f"landed #{landed.pr}"] if landed else []
         main = _out(self.repo, "rev-parse", "origin/main")
         running = sum(self.verdict(c, main, drive).state == "running" for c in drive["launched"])
