@@ -422,7 +422,10 @@ interior roots the run showed).
 
 The numbers: the session's `E^rep` makes `m′` waits (`innerWaits`) of `K′` reruns (`innerCap`) with `N₀` (`innerN₀`),
 `ε_table` and the weight `C` of `γ`, each good for every session at `x`; `openCalls` bounds the SHA-512 calls of checking
-what one session's witness reveals. -/
+what one session's witness reveals.
+
+And the reference prover (`P`), the honest sampled prover the deployment runs, on its tapes (`Tape`, a nonempty type):
+completeness is its (`Complete`). -/
 structure Deploy (Coin Col T : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
@@ -442,6 +445,11 @@ structure Deploy (Coin Col T : Type) where
   εtable : Msg → ℝ
   weight : Msg → ℝ
   openCalls : Msg → ℕ
+  Tape : Type
+  [tapeNonempty : Nonempty Tape]
+  P : Wit → Prover Tape
+
+instance Deploy.instNonemptyTape {Coin Col T : Type} (D : Deploy Coin Col T) : Nonempty D.Tape := D.tapeNonempty
 
 /-- The statement's partition, as the verifier evaluates its query; empty when the query doesn't apply. -/
 def Deploy.part {Coin Col T : Type} (D : Deploy Coin Col T) (s : Stmt) : Partition :=
@@ -718,9 +726,9 @@ def FaultyBoundary : Prop :=
 
 /-- **Sampling: Complete**, on the statements in scope, when no unit is faulty. It needs the verifier to check before
 the draw that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference prover
-(ruling 4). -/
-def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (δc : Msg → ℝ) : Prop :=
-  Claims.Complete H D.V P (Rhon H D.commit D.parse D.partition) (Scope D) δc
+(ruling 4). It is of the deployed record's reference prover (`D.P`). -/
+def Complete (H : Msg → Msg) (D : Deploy Coin Col T) (δc : Msg → ℝ) : Prop :=
+  Claims.Complete H D.V D.P (Rhon H D.commit D.parse D.partition) (Scope D) δc
 
 /-- **Sampling: the readable scope is the verifier's.** -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
@@ -746,16 +754,18 @@ def Bits (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
       fun x => lamLin (κ D δ x) (γ D x) 1 (work D x)
 
 /-- **Sampling: efficiency**: the extractor's reruns, at most `1 + K + k·(K + k·n_PU·m′·K′)` and
-`1 + k + k²·(1 + n_PU·m′·k′)` expected; its own SHA-512 calls, at most `k²·n_PU·openCalls`; and a decoder that lists
-every trace within Flock's radius, with its stated complexity. -/
-def Efficient (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
-    (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) : Prop :=
-  ExtractRunsLe H (E D decode)
+`1 + k + k²·(1 + n_PU·m′·k′)` expected; its own SHA-512 calls, at most `k²·n_PU·openCalls`; and the deployed decoder
+(`D.flock.dec`, a named, counted program, as at `Flock.Efficient`) lists every trace within Flock's radius, its count at
+most `p` at the opened word's encoded length (`Flock.wordLen`). -/
+def Efficient {F : Type} [Fintype F] [DecidableEq F] [Zero (List F)] (H : Msg → Msg) (D : Deploy Coin (List F) T)
+    (p : Polynomial ℕ) : Prop :=
+  ExtractRunsLe H (E D D.flock.decode)
       (fun x => 1 + D.cap x + D.k x * (D.cap x + D.k x * (nPU D x * (D.innerWaits x * D.innerCap x)))) ∧
-    ExtractRunsExpLe H (E D decode)
+    ExtractRunsExpLe H (E D D.flock.decode)
       (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)) ∧
-    ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x) ∧
-    Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode ∧ DecoderComplexity decode counted size p
+    ExtractOwnLe H (E D D.flock.decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x) ∧
+    Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
+    ∀ os, (D.flock.dec os).2 ≤ p.eval (Flock.wordLen os)
 
 /-- **Sampling: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
 accepts. -/

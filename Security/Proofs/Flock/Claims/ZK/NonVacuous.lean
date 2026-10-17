@@ -167,12 +167,15 @@ def toyD : Flock.Deploy Unit Unit Unit where
   enc _ _ := ()
   len _ := 0
   θ _ := 0
+  dec _ := ([], 0)
   read _ := ⟨[]⟩
   εtable _ := 0
   N₀ _ := 0
   weight _ := 0
   waits _ := 0
   cap _ := 0
+  Tape := Unit
+  P _ := ⟨fun _ _ _ => .ret []⟩
 
 theorem toyD_R (x : Msg) (w : Flock.Wit) : Flock.R toyD.parse x w := ⟨toyStmt, rfl, toy_relS w⟩
 
