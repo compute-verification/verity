@@ -332,7 +332,7 @@ class _MarlinMoe(nn.Module):
         super().__init__()
         self.site, self.bias, self.quant_method = site, bias, _Mxfp4Method()
         self.w13_weight, self.w2_weight = _meta(4, 64, 32, dtype=torch.uint8), _meta(4, 64, 16, dtype=torch.uint8)
-        self.w13_scale, self.w2_scale = _meta(4, 64, 2, dtype=torch.float8_e8m0fnu), _meta(4, 64, 1, dtype=torch.float8_e8m0fnu)
+        self.w13_scale, self.w2_scale = _meta(4, 64, 2, dtype=torch.uint8), _meta(4, 64, 1, dtype=torch.uint8)
 
     def _expert_routing_tables(self):
         return "routing_tables"
@@ -980,16 +980,17 @@ MARLIN_SMALL = {(MARLIN_E, MARLIN_TOPK, MARLIN_H, 2 * MARLIN_I, MARLIN_TOPK): {M
 
 class _MarlinLaunches(nn.Module):
     """`fused_marlin_moe`'s align and two expert GEMMs as `mxfp4_marlin_moe_leaf` exports them, the w2 launch over its own input
-    rows: the layer's codes packed two a byte as the checkpoint stores them, scale bytes 118..127."""
+    rows: the layer's codes packed two a byte as the checkpoint stores them, and its scale bytes 118..127 in u8 Parameters as
+    `Mxfp4MoEMethod` holds them."""
 
     def __init__(self, rng, block_m: int = 8) -> None:
         super().__init__()
         E, H, I = MARLIN_E, MARLIN_H, MARLIN_I
         self.codes13, self.codes2 = rng.integers(0, 16, (E, 2 * I, H)), rng.integers(0, 16, (E, H, I))
         self.bytes13, self.bytes2 = rng.integers(118, 128, (E, 2 * I, H // 32)), rng.integers(118, 128, (E, H, I // 32))
-        p = lambda a, dt: nn.Parameter(torch.from_numpy(a.astype(np.uint8)).view(dt), requires_grad=False)
-        self.w13, self.w2 = p(MR.pack_e2m1(self.codes13), torch.uint8), p(MR.pack_e2m1(self.codes2), torch.uint8)
-        self.s13, self.s2 = p(self.bytes13, torch.float8_e8m0fnu), p(self.bytes2, torch.float8_e8m0fnu)
+        p = lambda a: nn.Parameter(torch.from_numpy(a.astype(np.uint8)), requires_grad=False)
+        self.w13, self.w2 = p(MR.pack_e2m1(self.codes13)), p(MR.pack_e2m1(self.codes2))
+        self.s13, self.s2 = p(self.bytes13), p(self.bytes2)
         self.block_m = block_m
 
     def forward(self, x, ids, key, weights, act):

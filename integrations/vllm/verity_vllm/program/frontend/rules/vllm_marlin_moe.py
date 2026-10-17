@@ -5,7 +5,7 @@ of its `moe_align_block_size` and its two `ops.moe_wna16_marlin_gemm` launches (
     marlin_moe_align(topk_ids [M, TOPK] i32, key [M, TOPK] i32, E, BM) -> (blk [M * TOPK] i32, par [1] i32)
         one `MoeAlignBlocks{E,P=M*TOPK,BM}` over the router ids and each pair's key, the TP rank Program's `schedule` input
         (`CollectiveBus.schedule_key`), so the application is tagged `schedule` for `tp_links.json`
-    marlin_moe_mxfp4_gemm(x, w [E, N, K/2] u8, w_scale [E, N, K/32] e8m0, topk_ids, blk, par, topk_weights, BM, top_k, mul_topk_weights)
+    marlin_moe_mxfp4_gemm(x, w [E, N, K/2] u8, w_scale [E, N, K/32] u8, topk_ids, blk, par, topk_weights, BM, top_k, mul_topk_weights)
         -> [M * TOPK, N] bf16: per pair p, `MarlinMoeExpertGemm{E,K,N,TK,TN,GRID,DOT}` of x[p // top_k], ids[p], blk[p] and par (the
         w13 launch), or `MarlinMoeExpertGemmW` of x[p], ids[p], topk_weights[p], blk[p] and par (the w2 launch, top_k 1)
 
@@ -33,7 +33,7 @@ from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.program.registry import marlin_moe as MM
 from verity_vllm.program.registry.prims import F32 as F32_WORD, I32 as I32_WORD
 
-BF16, F32, I32, U8, E8M0 = torch.bfloat16, torch.float32, torch.int32, torch.uint8, torch.float8_e8m0fnu
+BF16, F32, I32, U8 = torch.bfloat16, torch.float32, torch.int32, torch.uint8
 
 #: the roles the vocabulary may lack, and which kernel each states
 ROLE_KERNELS = {"marlin_moe_align": "moe_align_block_size's schedule over a key per pair (MoeAlignBlocks_v1)",
@@ -111,7 +111,7 @@ class MarlinMoeGemmRule(OpRule):
                     preconditions=("topk_ids an i32 value [M, TOPK]; blk an i32 value [M * TOPK] and par [1] (marlin_moe_align's)",
                                    "w13: top_k == TOPK, mul_topk_weights False, x a bf16 value [M, K]; w2: top_k 1, mul_topk_weights True, "
                                    "x a bf16 value [M * TOPK, K], topk_weights an f32 value [M, TOPK]",
-                                   "w a u8 value [E, N, K / 2] and w_scale an e8m0 value [E, N, K / 32]",
+                                   "w a u8 value [E, N, K / 2] and w_scale a u8 value [E, N, K / 32] (the e8m0 bytes Mxfp4MoEMethod holds)",
                                    "the capture gives the launch's config at M tokens (MARLIN_SERVED) and moe_block_size is "
                                    "fused_marlin_moe's at M"),
                     evidence_domain="structural; numerics: MarlinMoeExpertGemm_v1 / MarlinMoeExpertGemmW_v1 (registry.marlin_moe; the "
@@ -140,7 +140,7 @@ class MarlinMoeGemmRule(OpRule):
         if (r := _value(ctx, a["w"], U8, (None, None, K // 2), "w")):
             return r
         E, N, _ = shape(ctx, a["w"])
-        if (r := _value(ctx, a["w_scale"], E8M0, (E, N, K // MM.GROUP), "w_scale") or _value(ctx, a["blk"], I32, (P,), "blk")
+        if (r := _value(ctx, a["w_scale"], U8, (E, N, K // MM.GROUP), "w_scale") or _value(ctx, a["blk"], I32, (P,), "blk")
                 or _value(ctx, a["par"], I32, (1,), "par") or (mul and _value(ctx, a["topk_weights"], F32, (M, TOPK), "topk_weights"))):
             return r
         if BM != MR.moe_block(M, TOPK, E):
