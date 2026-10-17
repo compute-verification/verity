@@ -143,15 +143,17 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
     efficient_zk H rel, hComplete⟩
 
 /-- **Flock's claims at the deployed masked verifier at the deployed relation** (`Readable.relation`), at every hash:
-`flock_zk_assembled` with its completeness from the record's JSON and the honest masked run's premises
-(`FlockComplete.ZkTables.complete_json`). `hKS` (E4) and those premises are what remains. -/
+`flock_zk_assembled` with its completeness from the record's JSON, the honest masked run's premises
+(`FlockComplete.ZkTables.complete_json`) and the mask slots' rank bound (`FlockComplete.MaskRank.MaskRankBound`).
+`hKS` (E4) and those premises are what remains. -/
 theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployZk Readable.relation))
     (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hPR : ∀ c : FlockComplete.ZkTables.Case H Readable.relation, FlockComplete.ZkTables.ProverRunsAt c)
     (hR : ∀ c : FlockComplete.ZkTables.Case H Readable.relation, FlockComplete.ZkTables.RepShapedAt c)
     (hC : ∀ o : FlockComplete.ZkTables.Run H Readable.relation,
-      FlockComplete.ZkTables.LgInnerAt H Readable.relation o) :
+      FlockComplete.ZkTables.LgInnerAt H Readable.relation o)
+    (hMR : FlockComplete.MaskRank.MaskRankBound) :
     Claims.Flock.ScopeMatches (deployZk Readable.relation) ∧
       Claims.Flock.KS H (deployZk Readable.relation) ∧
       Claims.Flock.Bits H (deployZk Readable.relation) ∧
@@ -162,6 +164,6 @@ theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
           fun x => min (a x) (255.5 - b x / 2) - 1) ∧
       Claims.Flock.Efficient H (deployZk Readable.relation) zkStepPoly ∧
       Claims.Flock.Complete H (deployZk Readable.relation) :=
-  flock_zk_assembled Readable.relation H hKS (FlockComplete.ZkTables.complete_json H S hPR hR hC)
+  flock_zk_assembled Readable.relation H hKS (FlockComplete.ZkTables.complete_json H S hPR hR hC hMR)
 
 end FlockDeploy.Assembled

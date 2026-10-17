@@ -32,13 +32,13 @@ open Flock FlockDeploy
 theorem complete_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hR : JsonRT.RepShapedZk H rel) (hPR : JsonRT.ProverRunsZk H rel) (hX : RsExtrasZk H rel)
-    (hLg : LigeritoZk H rel) (hIn : Inner H rel) :
+    (hLg : LigeritoZk H rel) (hIn : Inner H rel) (hMR : MaskRank.MaskRankBound) :
     CompleteWith H (deployZk rel) honestPZk (δcZk H) :=
   have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H rel)
   have hD : RepDecodesZk H rel := JsonRT.repDecodesZk_goal S h64 hS hP hR
   have hRp : Replay H rel := replay_goal S h64 hS hP hR
   have hRS : RingSwitchZk H rel := ringSwitchZk_goal S h64 hS hP hR hX
-  complete_zk_of_goals H rel
+  complete_zk_of_goals H rel hMR
     { session := JsonRT.sessionRunsZk_goal S hS hPR
       sends := sendCountZk_goal H rel
       linkFirst := linkFirstZk_goal H h64 rel
@@ -75,8 +75,8 @@ from named premises. -/
 theorem complete_zk_relation (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
     (hS : JsonRT.StmtOkZk H Readable.relation) (hR : JsonRT.RepShapedZk H Readable.relation)
     (hPR : JsonRT.ProverRunsZk H Readable.relation)
-    (hLg : LigeritoZk H Readable.relation) (hIn : Inner H Readable.relation) :
+    (hLg : LigeritoZk H Readable.relation) (hIn : Inner H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     CompleteWith H (deployZk Readable.relation) honestPZk (δcZk H) :=
-  complete_zk H Readable.relation S h64 hS hR hPR (rsExtrasZk H) hLg hIn
+  complete_zk H Readable.relation S h64 hS hR hPR (rsExtrasZk H) hLg hIn hMR
 
 end FlockComplete

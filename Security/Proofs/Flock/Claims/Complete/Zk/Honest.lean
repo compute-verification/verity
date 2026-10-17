@@ -26,7 +26,7 @@ def progZk (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk) : PI Claims.Msg
   match setupOf true x with
   | none => .ret []
   | some (_, spec, sts) => do
-    match ← (sessionPZk asks Hashes.pi spec (tabsOf sts) (tracesOf sts w) ω).run with
+    match ← (sessionPZk asks Hashes.pi spec (tabsOf sts) (MaskRank.masksOf sts) (tracesOf sts w) ω).run with
     | .ok (record, proofs) => pure (Final.encode ⟨x, record, proofs⟩)
     | .error _ => pure []
 
