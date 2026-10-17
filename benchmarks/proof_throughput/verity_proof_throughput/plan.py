@@ -120,7 +120,7 @@ def prover_command(root: Path, item: Planned, *, mem_gb: int = 96, cpus: int = 3
 def verifier_command(root: Path, bundle: str, prove_run: str, *, node: str = VERIFIER_NODES[0], mem_gb: int = 16,
                      timeout: str = "3h") -> list[str]:
     return ["research", "run", "--on", node, "--project", "verity", "--campaign", "proof-throughput", "--source", str(root),
-            "--cwd", "source", "--mem-gb", str(mem_gb), "--timeout", timeout, "--require-result",
+            "--cwd", "source", "--mem-gb", str(mem_gb), "--mem-wait", "1800", "--timeout", timeout, "--require-result",
             "--tool", "verity_proof_throughput.tool:VERIFIER_POINT",
             "--", "bash", "benchmarks/proof_throughput/verify.sh", f"BUNDLE={bundle}", f"PROVE_RUN={prove_run}"]
 
