@@ -633,40 +633,65 @@ def ZkSessJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] 
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
 open Classical in
-/-- **Every masked table's bound at a statement, from masked sessions after `Commit`** (`zk_tableBoundθAt_of_sessions`
-at every table): where table `j` of the setup is `st j` and `T j` is C-Flock ZK's padded table there, when the
-masked sessions bound every table (`ZkSessJ`) and no table `Ok` allows that does not extract table `j` is committed
-to `T j`. The escapes are the tables' old ones joined by round (`joinEscZ`); at table `j`, `ε_ω` is at most the
-deployed runs' probability of accepting with no column of table `j` off `C`, at most the mean `ε_c⁻` of table `j`'s
-mixture (`session_sound_of_table_accZ`, its term off `C` empty), at most `ε_table` and table `j`'s old escapes'
-term (`mean_epsSZ_leJ`), at most the joined escapes' (`oldEscZ_term_le_join`); plus that of accepting with one off
-`C`, which the bound keeps. -/
-theorem zk_tableBoundJAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
-    [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
-    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
-    (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
-    (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
+/-- **The masked bound at one tape and table**: at table `j`, where `st j` is table `j` of the setup and `T j` C-Flock
+ZK's padded table there, not committed to `C`, with table `j`'s old masked events, at injective rounds, bounding a
+mixture `σ` of masked sessions after `Commit` as `ZkSessJ` asks. `ε_ω` is at most the deployed runs' probability of
+accepting with no column of table `j` off `C`, at most the mean `ε_c⁻` of table `j`'s mixture
+(`session_sound_of_table_accZ`, its term off `C` empty), at most `ε_table` and table `j`'s old escapes' term
+(`mean_epsSZ_leJ`), at most the joined escapes' (`oldEscZ_term_le_join`); plus that of accepting with one off `C`,
+which the bound keeps. -/
+theorem zk_le_sessionsJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
+    (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl) {x : Claims.Msg} {spec : SessionSpec}
+    (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
+    (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
       (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
         (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
-    (hnc : ∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, Ok x j (C p)) →
-      ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C →
-        ¬ (T j).Committed A (Claims.Flock.oracleOf C))
-    (hmix : ZkSessJ A Hs Ok x T) :
-    Claims.Flock.TableBoundJAt sha512 (deployZk rel) (wordLenJ true) Ok x := by
-  intro Ω _ _ P
-  obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, hω⟩ := hmix Ω P
-  refine ⟨Claims.Flock.joinEscZ sha512 (V true) P x (tables true x).length (fun j => (T j).sch)
-      (fun j => (T j).N) rd ev ev₁ tied tied₁,
-    joinEscZ_fitsFork_zk rel P x st hst (fun j hj => (hT j hj).1) (fun j hj => (hT j hj).2.1) _
-      (fun j hj => (hT j hj).2.2.1) _ (fun j hj => (hT j hj).2.2.2.2.2.2.2.2.2) rd ev ev₁ tied tied₁,
-    fun ω j hj C hok hg => ?_⟩
-  rw [hn] at hj
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω)
+    (rd : (j : ℕ) → Claims.Flock.IZ (T j).sch.levels.length → Fin ((V true).k x))
+    (hrd : ∀ j, Function.Injective (rd j))
+    (ev : (j : ℕ) → Claims.Flock.IZ (T j).sch.levels.length → Ω → (Fin ((V true).k x) → Coin) →
+      (Fin ((V true).k x) → Coin) → Prop)
+    (ev₁ : ℕ → Ω → (Fin ((V true).k x) → Coin) → Prop)
+    (tied : ∀ j i ω s s', ev j i ω s s' → Claims.TiedColl sha512
+      ((Claims.run sha512 P (V true) x ω s).vLog ++
+        (Claims.run sha512 P (V true) x ω (Claims.forkCoins (rd j i) s s')).vLog))
+    (tied₁ : ∀ j ω s, ev₁ j ω s → Claims.TiedColl sha512 (Claims.run sha512 P (V true) x ω s).vLog)
+    (ω : Ω) {j : ℕ} (hj : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽)
+    (hTc : ¬ (T j).Committed A (Claims.Flock.oracleOf C)) {τ : Type} [Fintype τ] [Nonempty τ]
+    (pre post : List ((Fin 2 → Fin spec.mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D)
+    (σ : τ → Strategy (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)))
+    (hacc : (Claims.Pr fun r : Fin ((V true).k x) → Coin => (Claims.run sha512 P (V true) x ω r).out = .acc ∧
+        ¬ ∃ (p : Fin (wordLenJ true x j)) (u : List 𝔽),
+          Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧
+            u ≠ C p) ≤
+      (∑ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
+          (outs.getD pre.length dfltOutZC).accepted = true ∧
+            ¬ Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC))
+        (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ)
+    (hadv : ∀ r ℓ, (∑ t, advRSZ A Hs (T j) pre post cap₀ r.val (ℓ.val + 1) (σ t)) / Fintype.card τ ≤
+      Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+        ev j (.inl (r, ℓ)) ω s.1 s.2)
+    (hP : ∀ r : Fin 2, (∑ t, advPadsSZ A Hs (T j) pre post cap₀ r.val (σ t)) / Fintype.card τ ≤
+      Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+        ev j (.inr (.inl r)) ω s.1 s.2)
+    (hTau : ∀ r : Fin 2, (∑ t, advTauSZ A Hs (T j) pre post cap₀ r.val (σ t)) / Fintype.card τ ≤
+      Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+        ev j (.inr (.inr r)) ω s.1 s.2)
+    (hsc : (∑ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
+        SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC))
+      (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ ≤
+      Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s) :
+    Claims.accPr sha512 (V true) P x ω ≤ εtable true x +
+      (Claims.Flock.joinEscZ sha512 (V true) P x (tables true x).length (fun j => (T j).sch)
+        (fun j => (T j).N) rd ev ev₁ tied tied₁).term ω +
+      Claims.Pr fun r : Fin ((V true).k x) → Coin => (Claims.run sha512 P (V true) x ω r).out = .acc ∧
+        ∃ (p : Fin (wordLenJ true x j)) (u : List 𝔽),
+          Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧
+            u ≠ C p := by
   obtain ⟨h25, h35, hsch, ht, he, hS, hN, hq, hδ, -⟩ := hT j hj
-  obtain ⟨τ, _, _, pre, post, cap₀, σ, hacc, hadv, hP, hTau, hsc⟩ := hω ω j hj C hok
-  have hTc := hnc j hj C hok hg
   have hper : ∀ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
         (outs.getD pre.length dfltOutZC).accepted = true ∧
           ¬ Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC))
@@ -720,15 +745,39 @@ theorem zk_tableBoundJAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [Deci
         Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧ u ≠ C p
     · exact Or.inr ⟨hr, hq⟩
     · exact Or.inl ⟨hr, hq⟩
-  have key : Claims.accPr sha512 (V true) P x ω ≤ εtable true x +
-      (Claims.Flock.joinEscZ sha512 (V true) P x (tables true x).length (fun j => (T j).sch)
-        (fun j => (T j).N) rd ev ev₁ tied tied₁).term ω +
-      Claims.Pr fun r : Fin ((V true).k x) → Coin => (Claims.run sha512 P (V true) x ω r).out = .acc ∧
-        ∃ (p : Fin (wordLenJ true x j)) (u : List 𝔽),
-          Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧
-            u ≠ C p := by
-    linarith [hsplit, hacc, hmean, hdiv, hjoin]
-  exact key
+  linarith [hsplit, hacc, hmean, hdiv, hjoin]
+
+/-- **Every masked table's bound at a statement, from masked sessions after `Commit`** (`zk_tableBoundθAt_of_sessions`
+at every table): where table `j` of the setup is `st j` and `T j` is C-Flock ZK's padded table there, when the
+masked sessions bound every table (`ZkSessJ`) and no table `Ok` allows that does not extract table `j` is committed
+to `T j`. The escapes are the tables' old ones joined by round (`joinEscZ`), and at each tape and table the bound is
+`zk_le_sessionsJ`. -/
+theorem zk_tableBoundJAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
+    [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
+    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
+    (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
+    (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
+    (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
+      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
+      (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
+      (T j).N ≤ Claims.Flock.Numbers.padDomain
+        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
+    (hnc : ∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, Ok x j (C p)) →
+      ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C →
+        ¬ (T j).Committed A (Claims.Flock.oracleOf C))
+    (hmix : ZkSessJ A Hs Ok x T) :
+    Claims.Flock.TableBoundJAt sha512 (deployZk rel) (wordLenJ true) Ok x := by
+  intro Ω _ _ P
+  obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, hω⟩ := hmix Ω P
+  refine ⟨Claims.Flock.joinEscZ sha512 (V true) P x (tables true x).length (fun j => (T j).sch)
+      (fun j => (T j).N) rd ev ev₁ tied tied₁,
+    joinEscZ_fitsFork_zk rel P x st hst (fun j hj => (hT j hj).1) (fun j hj => (hT j hj).2.1) _
+      (fun j hj => (hT j hj).2.2.1) _ (fun j hj => (hT j hj).2.2.2.2.2.2.2.2.2) rd ev ev₁ tied tied₁,
+    fun ω j hj C hok hg => ?_⟩
+  rw [hn] at hj
+  obtain ⟨τ, _, _, pre, post, cap₀, σ, hacc, hadv, hP, hTau, hsc⟩ := hω ω j hj C hok
+  exact zk_le_sessionsJ A hA Hs st hst T hT P rd hrd ev ev₁ tied tied₁ ω hj C (hnc j hj C hok hg) pre post cap₀ σ
+    hacc hadv hP hTau hsc
 
 /-- **The masked record: every table's bound from its bound at the statements some run accepts**, which parse in
 scope and set up at least one table: elsewhere the verifier accepts no run and `k ≤ 2·weight` (`zk_k_le`). -/
