@@ -29,6 +29,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Parts
 import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
 import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
@@ -85,5 +86,8 @@ stage by stage (`RepSplit`: `repPZk_split`), so given `Level0.Verifier` the veri
 returning rep records `repRoundsT` rounds (`RepRuns`: `rep_rounds`), level 0's two lane rows vanish at the honest pads
 where its lane phase is in closed form (`LaneRows`: `lanes_hold`), and the verifier's masked replay returns on rounds
 carrying the prover's zerocheck and lincheck (`ReplayGo`: `replayWith_ok`). So a rep returns at good coins, its
-replay's and lanes' rows vanishing at its pads, and `RunsRest` holds (`RunsGo`: `repT_go`, `runsRest`), leaving
-`complete_jsonT` to level 0's four and `ShapeRest` (`complete_jsonT_of_level0`). -/
+replay's and lanes' rows vanishing at its pads, and `RunsRest` holds (`RunsGo`: `repT_go`, `runsRest`); a returning
+rep's proof has the masked PIOP's closed-form lengths, level 0's cap and Ligerito lengths, the inner proof's 192-byte
+salts and 64-byte path entries, and a file under `2^64` bytes at a good case's at most 2,048 extra claims
+(`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four
+(`complete_jsonT_of_level0`). -/

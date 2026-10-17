@@ -13,8 +13,7 @@ import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 # The masked prover's rep returns
 
 `RunsRest` holds: given level 0's `ProverRuns`, `Lanes` and `Verifier`, a masked rep returns from any sends at which
-its coins are good, and records `repRoundsT` rounds (`runsRest`), so `complete_jsonT` follows from level 0's four
-premises and `ShapeRest` (`complete_jsonT_of_level0`).
+its coins are good, and records `repRoundsT` rounds (`runsRest`).
 
 * `TableT.model`: a table and its trace (`TableT`) are the statement the soundness proof plays, satisfied by the
   witness's bits, and the trace is R1CS-valid.
@@ -410,13 +409,5 @@ theorem runsRest (H : Claims.Msg → Claims.Msg) : RunsRest H := by
   intro h0 h2 h3 h64 st tr hT ω i d k r v cm pts e rep ic hin hrep
   exact ⟨fun l _ hco => repT_go h0 h2 h3 h64 st tr hT ω i d r v cm pts e rep ic hin hrep l hco,
     fun l a l' hgo => rep_rounds h3 h64 st tr hT ω i d r v cm pts e rep ic hin hrep l a.1 a.2 l' hgo⟩
-
-/-- **Masked completeness from level 0 and the shapes**: `complete_jsonT` from level 0's four premises (`Level0`) and
-`RepShapedT` beyond level 0's shape (`ShapeRest`); `ProverRunsT` beyond level 0 holds (`runsRest`). -/
-theorem complete_jsonT_of_level0 (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
-    (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier)
-    (gS : ShapeRest H) :
-    Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT_of_parts H S h0 h1 h2 h3 gS (runsRest H)
 
 end FlockComplete.ZkTables

@@ -10,7 +10,7 @@ level 0's masked Ligerito, stated once over `ligeritoPZk` and `Zk.ligeritoWith` 
 `Lanes`, `Verifier`), and the rest, which the plain proofs and the closed forms of the masked PIOP cover: what each
 T-Prop asks beyond `Level0` (`ShapeRest`, `RunsRest`, `LigeritoRest`, `InnerRest`). `LigeritoRest` and `InnerRest`
 hold (`ligeritoRest`, `innerRest`, from `View.view`), so `complete_jsonT_of_parts` composes `Level0`'s four with
-`ShapeRest` and `RunsRest`.
+`ShapeRest` and `RunsRest`, which hold too (`ShapeGo.shapeRest`, `RunsGo.runsRest`; `complete_jsonT_of_level0`).
 
 The mask-rank bound and the prover's rank refusal enter none of the four: the masked prover `repPZk` has no rank
 refusal, so its error is `BadZk`'s, which `δc` already counts.
