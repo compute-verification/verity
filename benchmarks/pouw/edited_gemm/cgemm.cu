@@ -778,6 +778,7 @@ static int cone(const std::string& arm, int m, int n, int k) {
   return 0;
 }
 
+#ifndef CGEMM_LIB
 int main(int argc, char** argv) {
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
@@ -787,3 +788,4 @@ int main(int argc, char** argv) {
   fprintf(stderr, "usage: cgemm gate DIR M N K SEED | bench REPS M N K | one ARM M N K\n");
   return 2;
 }
+#endif
