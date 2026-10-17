@@ -139,7 +139,8 @@ activations on 1/N of the positions only (U still coins every position).
 SKIP's designs (note:20261017T0340Z-draft-skip): `adopted-qkd` (Q Kᵀ dithered on both operands, no Q peel),
 `adopted-bd` (the linears too), `adopted-bd-lm` (and lm_head), `co` (CO-Dither's served values at r = k/2: 7-bit
 sides plus fresh bits), `co32c` (CHECKED-STRIP's: 7-bit weights and 8-bit activations on the linears, `co`'s
-attention), `ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention).
+attention), `co32c-pv` (`co32c` with P·V as CO-Dither serves it: P dithered with a fresh bit under the w64 peel),
+`ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention).
 Any other file passes as a path.
 
 ## Adding an intervention
