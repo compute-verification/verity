@@ -127,10 +127,11 @@ template <int RK, int T, int E> DEV void fr_word(St& s, uint32_t p) {
     }
   }
 }
-// Verified-filler stand-ins: duo folds the end of a dependent chain of x lane ops from the word (t = t a_i + p, IMAD,
-// and t = t ^ p ^ k_i, LOP3, alternating from an IMAD), so a word costs x + 3 ops and no op can be dropped. FX45
-// (x = 4.5): 4 ops on words 0 and 2, 5 on 1 and 3; FX05 (x = 0.5): one op on words 1 and 3; FX15: one on 0 and 2, two
-// on 1 and 3. Timing variants, not receipts
+// Verified filler: duo folds the end of a dependent chain of x lane ops from the word (t = t a_i, IMAD with a_i odd, and
+// t = t ^ k_i, LOP3, alternating and ending on an IMAD so no constant XOR meets duo's LOP3), so a word costs x + 3 ops,
+// no op can be dropped or merged, and the chain is a bijection, so the fold binds the word as duo does. FX45 (x = 4.5):
+// 4 ops on words 0 and 2, 5 on 1 and 3; FX05 (x = 0.5): one op on words 1 and 3; FX15: one on 0 and 2, two on 1 and 3.
+// Timing variants, not receipts
 constexpr int FX05 = -150, FX1 = -101, FX15 = -115, FX2 = -102, FX3 = -103, FX45 = -145, FX8 = -108, FX12 = -112, FX24 = -124;
 __host__ __device__ constexpr bool is_fx(int k) {
   return k == FX05 || k == FX1 || k == FX15 || k == FX2 || k == FX3 || k == FX45 || k == FX8 || k == FX12 || k == FX24;
@@ -139,14 +140,15 @@ __host__ __device__ constexpr int fx_ops(int k, int e) {
   return k == FX05 ? e % 2 : k == FX1 ? 1 : k == FX15 ? 1 + e % 2 : k == FX2 ? 2 : k == FX3 ? 3 : k == FX45 ? 4 + e % 2
          : k == FX8 ? 8 : k == FX12 ? 12 : 24;
 }
-template <int RK, int T, int E, int I = 0> DEV uint32_t fx_chain(uint32_t t, uint32_t p) {
-  if constexpr (I == fx_ops(RK, E)) {
+template <int RK, int T, int E, int I = 0> DEV uint32_t fx_chain(uint32_t t) {
+  constexpr int n = fx_ops(RK, E);
+  if constexpr (I == n) {
     return t;
   } else {
     constexpr int c = (4 * T + E) * 32 + I;
-    if constexpr (I % 2 == 0) t = t * key_mul(1, c) + p;
-    else t = t ^ p ^ key_xor(1, c);
-    return fx_chain<RK, T, E, I + 1>(t, p);
+    if constexpr ((n - I) % 2 == 1) t = t * key_mul(1, c);
+    else t = t ^ key_xor(1, c);
+    return fx_chain<RK, T, E, I + 1>(t);
   }
 }
 
@@ -298,10 +300,10 @@ template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0>
       fr_word<RK, J, 3>(ch[H + 3], (uint32_t)w[3]);
     } else if constexpr (is_fx(RK)) {
       constexpr int H = 4 * (J % 2);
-      duo<DUO, 0, J>(ch[H], fx_chain<RK, J, 0>((uint32_t)w[0], (uint32_t)w[0]));
-      duo<DUO, 0, J>(ch[H + 1], fx_chain<RK, J, 1>((uint32_t)w[1], (uint32_t)w[1]));
-      duo<DUO, 0, J>(ch[H + 2], fx_chain<RK, J, 2>((uint32_t)w[2], (uint32_t)w[2]));
-      duo<DUO, 0, J>(ch[H + 3], fx_chain<RK, J, 3>((uint32_t)w[3], (uint32_t)w[3]));
+      duo<DUO, 0, J>(ch[H], fx_chain<RK, J, 0>((uint32_t)w[0]));
+      duo<DUO, 0, J>(ch[H + 1], fx_chain<RK, J, 1>((uint32_t)w[1]));
+      duo<DUO, 0, J>(ch[H + 2], fx_chain<RK, J, 2>((uint32_t)w[2]));
+      duo<DUO, 0, J>(ch[H + 3], fx_chain<RK, J, 3>((uint32_t)w[3]));
     } else if constexpr (XF) {
       St& c = ch[J % 4];
       c.y = (rotl(c.y, ROT0) ^ (uint32_t)w[0]) * kr[0] + (uint32_t)w[1];
