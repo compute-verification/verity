@@ -58,6 +58,7 @@ import Proofs.Flock.Claims.KS.PlainDrawDec
 import Proofs.Flock.Claims.KS.PlainDrawSim
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainSim
+import Proofs.Flock.Claims.KS.PlainLock
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -256,5 +257,7 @@ geometrically past its round, and the slack fits level 0's room in the plain wei
 rebuilds from a tape of uniform functions of the revealed live history and the entries the live session revealed, which
 are the coins `fnAt` gives on the live history; a live prover whose messages along the live history are known has those
 rounds as its live outcome (`PlainSim`: `FlockDeploy.KS.plainSim`, `FlockDeploy.KS.plainΦ`, `FlockDeploy.KS.Pr_plainΦ`,
-`FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`).
+`FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`). A deployed run's messages are `P`'s at the history
+of its coins' bytes, and its acceptance does not read its last coin (`PlainLock`: `FlockDeploy.KS.run_dep`,
+`FlockDeploy.KS.depMsg_congr`, `FlockDeploy.KS.run_acc_iff_last`).
 -/
