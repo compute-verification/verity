@@ -8,8 +8,8 @@ One GPU process writes `<out>/deepgemm_capture.json`, the property record `deepg
 prints one line per case and then `DEEPGEMM GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
 nothing else runs when it fails (exit 3).  vLLM runs with DeepGEMM on (`VLLM_USE_DEEP_GEMM=1`, `VLLM_USE_DEEP_GEMM_E8M0=1`,
 `VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=1`: the defaults on Hopper) and not batch invariant, so M < 32 takes FlashInfer's branch;
-`--batch-invariant` sends every M to DeepGEMM's (flashinfer.py:309-310).  GLM-5.3's engine pins `VLLM_USE_DEEP_GEMM=0`
-(TargetProfile `fp8_block_gemm="cutlass"`, glm53_block_fp8_capture_gpu.py); its shapes run here as a DeepGEMM-served GLM-5.3 would.
+`--batch-invariant` sends every M to DeepGEMM's (flashinfer.py:309-310).  GLM-5.3's engine runs these defaults too (its row's
+target declares no `fp8_block_gemm`; capture map `fp8-block-linear-deepgemm`), so its shapes run here as it serves them.
 A phase that raises records its error and fails the verdict without stopping the others.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
