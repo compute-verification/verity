@@ -102,7 +102,7 @@ def fold_profile(ops: list[str], nb: int, lw: int) -> dict:
     return {"instructions": len(seg) / words, **{k: v / words for k, v in sorted(by.items())}, "words": words}
 
 
-KERNELS = 32   # (NB, LW) in (2, 1) (2, 2) (4, 1) (4, 2), four modes, one MMA warp or one a tile
+KERNELS = 38   # (NB, LW) in (2, 1) (2, 2) (4, 1) (4, 2), four modes, and (4, 4) without honest; one MMA warp or one a tile
 REGS_SMSP = 16384
 
 

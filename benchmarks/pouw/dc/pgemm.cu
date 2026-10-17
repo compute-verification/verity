@@ -113,7 +113,7 @@ __global__ void __maxnreg__(reg_cap(4 * LW + mma_warps(NB, MI)))
           long long* clk) {
 #if defined(__CUDA_ARCH_FEAT_SM100_ALL)
   constexpr int BN = CTA_N / NB, TPW = NB / LW, MMA_WARP = 4 * LW, NMW = mma_warps(NB, MI);
-  static_assert(NB % LW == 0 && NB <= 4 && LW <= 2, "tiles a loader warpgroup");
+  static_assert(NB % LW == 0 && NB <= 4 && (LW <= 2 || MODE != 2), "tiles a loader warpgroup");
   extern __shared__ __align__(1024) unsigned char dsm[];
   unsigned char* sA = dsm;
   unsigned char* sB = dsm + STAGES * A_STAGE;
@@ -238,9 +238,12 @@ struct Cfg {
 #define CFG(NB, LW, MI)                                                                                               \
   {NB, LW, 0, MI, pg100<NB, LW, 0, MI>}, {NB, LW, 1, MI, pg100<NB, LW, 1, MI>}, {NB, LW, 2, MI, pg100<NB, LW, 2, MI>}, \
       {NB, LW, 3, MI, pg100<NB, LW, 3, MI>}
-static const Cfg CFGS[] = {CFG(2, 1, false), CFG(2, 2, false), CFG(4, 1, false), CFG(4, 2, false),
-                           CFG(2, 1, true),  CFG(2, 2, true),  CFG(4, 1, true),  CFG(4, 2, true)};
+// LW = 4 without the honest arm: its fold needs 108 registers, and 17 or more warps leave 96.
+#define CFG4(MI) {4, 4, 0, MI, pg100<4, 4, 0, MI>}, {4, 4, 1, MI, pg100<4, 4, 1, MI>}, {4, 4, 3, MI, pg100<4, 4, 3, MI>}
+static const Cfg CFGS[] = {CFG(2, 1, false), CFG(2, 2, false), CFG(4, 1, false), CFG(4, 2, false), CFG4(false),
+                           CFG(2, 1, true),  CFG(2, 2, true),  CFG(4, 1, true),  CFG(4, 2, true),  CFG4(true)};
 #undef CFG
+#undef CFG4
 static const Cfg* find(int nb, int lw, int mode, int mi) {
   for (const Cfg& c : CFGS)
     if (c.nb == nb && c.lw == lw && c.mode == mode && c.mi == mi) return &c;
