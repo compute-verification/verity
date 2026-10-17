@@ -7,11 +7,11 @@ The reference is `one_stage` itself (`registration.check`, `draw.derive`, `check
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `two_stage.draw_first` on
 `OwnRandomness` over the given bytes, for the `select` piece the challenger's draw from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
-`slots` piece that draw in the claims' slots, read off `partition.strata`, `TemplatePartition.gates` and the root's input
+`slots` piece that draw in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), and for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
 `service.check_verdicts`). The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
-programs of random members of three
-templates under template queries over them. Records are v1 and, on the programs with root parameters to register
+programs of random members of three templates under template queries over them, and programs of random root Calls
+(`call_program`) under `Q_word` and `Q_call`, a 32-bit Call among them, which one-stage refuses at either. Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries.
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
@@ -45,6 +45,7 @@ from verity.core.protocols.sampled_proofs.two_stage import OwnRandomness, draw_f
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
+from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Record, Tuple, Value
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -60,6 +61,24 @@ QUAD = bind(CompositeDefinition("CoreSampledProofsQuad", 0, (), lambda S: ((("x"
                                 lambda B, S, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), B.call(XOR8, x[2], x[3])),
                                 register=False))
 TEMPLATES = [PAIR, TRIPLE, QUAD]
+XOR32 = PrimitiveDefinition("CoreSampledProofsXor32", 1, (("a", Value(32)), ("b", Value(32))), Value(32),
+                            lambda a, b: a ^ b, register=False)
+
+
+def _fork(B, S, x):
+    a = B.call(XOR8, x[0], x[1])
+    first, last = B.call(XOR8, a, x[2]), B.call(XOR8, a, x[3])
+    return tuple_of(first, B.call(XOR8, x[2], x[3]), last)
+
+
+#: Three outputs, two units at `Q_word`'s `X = 16`: the first two, whose gates the last one's interleaves, and the last;
+#: the interior value both read is committed, a unit of its own.
+FORK = bind(CompositeDefinition("CoreSampledProofsFork", 0, (),
+                                lambda S: ((("x", Array(4, Value(8))),), Tuple(Value(8), Value(8), Value(8))), _fork,
+                                register=False))
+#: The Calls a `call_program` may make: the templates, the fork and the 8- and 32-bit primitives.
+CALLEES = [PAIR, TRIPLE, FORK, XOR8, XOR32]
+CALLEE_IDS = [codec.descriptor_id(f) for f in CALLEES]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LEAF = "ee" * 64
 ROOTS = {"out": "cd" * 64, "x": "ab" * 64}
@@ -88,9 +107,26 @@ class Setup:
                                                 ("x", "hm96-sha512/row/v1", self.population))}
 
 
+def call_program(members) -> Program:
+    """A root of one Call per member, an index into `CALLEES`, each over a parameter of its own (a primitive's two values
+    as an array of two), returning their results: what `Q_word` and `Q_call` cut, Call by Call."""
+    def param(f):
+        return Array(2, f.signature()[0][0][1]) if isinstance(f, PrimitiveDefinition) else f.signature()[0][0][1]
+
+    def call(B, f, x):
+        return B.call(f, x[0], x[1]) if isinstance(f, PrimitiveDefinition) else B.call(f, x)
+
+    fns = [CALLEES[m] for m in members]
+    defn = CompositeDefinition(f"CoreSampledProofsCalls{''.join(map(str, members))}", 0, (),
+                               lambda S: (tuple((f"p{i}", param(f)) for i, f in enumerate(fns)), Tuple(*(f.signature()[1] for f in fns))),
+                               lambda B, S, *xs: tuple_of(*(call(B, f, x) for f, x in zip(fns, xs))), register=False)
+    return Program(bind(defn))
+
+
 SETUPS = [Setup(P.population_program(PAIR, n), P.template_instance_query(PAIR.id)) for n in (1, 3, 6)] + [
     Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]), P.template_instances_query([PAIR.id, TRIPLE.id])),
-    Setup(P.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id]))]
+    Setup(P.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id])),
+    Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
 
 
 def _registered_program(name: str, n: int, extra, registered) -> Program:
@@ -138,9 +174,14 @@ REGISTERED_SETUPS = [
         [{"T": 2}, {"T": 1, "U": 3}, {"U": 1}, {"T": 4, "x": 1}])]
 PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS}
 PROGRAMS_TEMPLATES = [PAIR.id, TRIPLE.id]
-#: Queries a verifier may hold: the setups' own, and ones core refuses or one-stage doesn't apply.
-QUERIES = [s.query for s in SETUPS] + [
-    {}, PO.query(), PO.query(version=2), {**PO.query(), "params": {"W": 32, "X": 70000}}, P.template_instance_query("Other_v1"),
+#: The strata a work table may name: the templates' and the Calls'.
+WORK_IDS = list(dict.fromkeys([t.id for t in TEMPLATES] + CALLEE_IDS))
+#: `Q_word` and `Q_call` as one-stage applies them, `X = 16` and `X <= 16`, and at the widths it refuses.
+CALL_QUERIES = [PO.query(), PO.query(W=16), PO.call_query(16), PO.call_query(8), PO.call_query(4), PO.call_query(32),
+                PO.query(X=8), PO.query(version=2)]
+#: Queries a verifier may hold: the setups' own, `CALL_QUERIES`, and ones core refuses or one-stage doesn't apply.
+QUERIES = [s.query for s in SETUPS] + CALL_QUERIES + [
+    {}, {**PO.query(), "params": {"W": 32, "X": 70000}}, P.template_instance_query("Other_v1"),
     P.template_instances_query([PAIR.id]), {"name": "Q_template_instance", "version": 1, "params": {"template": PAIR.id}},
     {"name": "Nope", "version": 0, "params": {}}, {"name": "Q_template_instance", "version": 0, "params": {}}]
 
@@ -154,12 +195,30 @@ def _population(members: tuple[tuple[int, int], ...]) -> str:
     return D.canonical(codec.encode_program(program))
 
 
+@functools.cache
+def _calls(members: tuple[int, ...]) -> str:
+    """The canonical descriptor of `call_program(members)`, its program put among `PROGRAMS`."""
+    program = call_program(members)
+    PROGRAMS[PO.program_sha512(program)] = program
+    return D.canonical(codec.encode_program(program))
+
+
 @st.composite
 def partitions(draw) -> tuple[dict, dict, int]:
     """A random partition P = Q(C): a mixed population program of one to four members, each some instances of one of
     `TEMPLATES` (one template's members apart, adjacent or alone), and a template query over it, mostly one that applies
-    (the members' templates, in any order); the program's descriptor, the query and the population, 0 where the query
-    doesn't apply."""
+    (the members' templates, in any order); or, a third of the time, a program of one to five root Calls of `CALLEES`
+    (rarely the 32-bit one) under `Q_word` or `Q_call`, mostly at a width one-stage applies. The program's descriptor,
+    the query and the population, 0 where the query doesn't apply."""
+    if draw(st.integers(0, 2)) == 0:
+        members = tuple(draw(st.lists(st.sampled_from([0, 1, 2, 3] * 3 + [4]), min_size=1, max_size=5)))
+        query = draw(st.sampled_from(CALL_QUERIES[:4] * 3 + CALL_QUERIES[4:]) | st.sampled_from(QUERIES))
+        desc = json.loads(_calls(members))
+        try:
+            n = P.units(PROGRAMS[PO.program_sha512(desc)], query)
+        except (P.QueryRefused, ValueError):
+            n = 0
+        return desc, _json(query), n
     members = tuple(draw(st.lists(st.tuples(st.integers(0, len(TEMPLATES) - 1), st.integers(1, 6)), min_size=1,
                                   max_size=4)))
     ids = [t.id for t in TEMPLATES]
@@ -571,14 +630,14 @@ def select(j):
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its draw's
     checked proof units. The population's strata are `partition.strata`'s, each unit a replay unit of one proof unit, its
-    instance's gates (`TemplatePartition.gates`); the input class is one stratum of every gate of the root's input nodes
+    gates (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes
     (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
     units are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
-    tp = P.evaluate(program, j["query"])
-    pop = [[{"pus": [list(tp.gates(u))], "unit": u} for lo, hi in rs for u in range(lo, hi)]
+    gates = P.unit_gates(program, j["query"])
+    pop = [[{"pus": [list(gates[u])], "unit": u} for lo, hi in rs for u in range(lo, hi)]
            for _t, rs in P.strata(program, j["query"])]
     body = program.root.body
     inputs = [{"pus": [[g, g + 1]], "unit": None} for k, node in enumerate(body.nodes) if is_input(node.fn)
@@ -1185,7 +1244,7 @@ PARTITION = D.Port(PIECES, "partition", partition, st.one_of(
         "program": pq[0], "query": pq[1], "law": law, "work_table": t,
         "partition": {"program": PO.program_sha512(pq[0]), "query": pq[1]} if pre else None}},
         changed_audits(most=0, setups=SETUPS), partitions(), laws(24),
-        st.one_of(st.none(), st.fixed_dictionaries({t.id: WORK_ENTRY for t in TEMPLATES})), st.booleans()),
+        st.one_of(st.none(), st.fixed_dictionaries({t: WORK_ENTRY for t in WORK_IDS})), st.booleans()),
     JSON), package=PACKAGE)
 _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
@@ -1281,7 +1340,8 @@ DRAW = D.Port(PIECES, "draw", draw, st.one_of(
 #: leading zeros, a missing or zero argument.
 ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
                  "bernoulli:\u00b9/2", "bernoulli:01/04", "bernoulli:0/0", "bernoulli:3/2", "bernoulli:1", "bernoulli:1/2/3",
-                 "subset:1:2", "subset:+1", "subset: 1", "subset:-1", "stratified:0", "work:007", "subset:007", "nope:1",
+                 "subset:1:2", "subset:+1", "subset: 1", "subset:-1", "stratified:0", "subset:0", "subset:00", "work:007",
+                 "subset:007", "nope:1",
                  "Subset:1", "bernoulli:", "bernoulli:/2"]
 LAW_TEXTS = st.one_of(
     st.builds(lambda kind, k: f"{kind}:{k}", st.sampled_from(["subset", "stratified", "work"]), st.integers(0, 30)),
@@ -1323,9 +1383,9 @@ def selections(draw) -> dict:
         rule = draw(st.sampled_from([{"law": text, "rule": "law"}, {"check": "all", "replay": text, "rule": "two-stage"}]))
     table = None
     if kind == "work":
-        table = {t.id: draw(st.integers(1, 4) | WORK_ENTRY) for t in TEMPLATES}
+        table = {t: draw(st.integers(1, 4) | WORK_ENTRY) for t in WORK_IDS}
         if draw(st.integers(0, 9)) == 9:
-            table[draw(st.sampled_from([t.id for t in TEMPLATES]))] = draw(BAD_WORK_ENTRY)
+            table[draw(st.sampled_from(WORK_IDS))] = draw(BAD_WORK_ENTRY)
     closure = draw(closure_maps(n)) if kind == "work" and draw(st.integers(0, 3)) < 3 else None
     return {"closure": closure, "program": desc, "query": query, "rule": rule, "source": draw(SOURCE), "work_table": table}
 
@@ -1611,6 +1671,31 @@ def test_the_slots_follow_the_strata(pieces):
     units = [r["unit"] for r in rus]
     drawn = [units.index(u) for u in select(case)["draw"]["units"]]
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
+
+
+def test_the_call_queries_cut_call_by_call(pieces):
+    """On a program of root Calls, Lean's slots are the Python's whole under `Q_word` at `X = 16` and `Q_call` at `X = 8`:
+    the strata are the Calls' Definitions, `FORK`'s `Q_word` units two output units and its committed interior value, the
+    first's gate span holding the second's; and both refuse the widths one-stage doesn't apply, and a Call whose unit
+    commits 32 bits, which `Q_word`'s `W = 32` admits."""
+    desc = json.loads(_calls((0, 2, 0, 3)))
+    case = {"closure": None, "program": desc, "rule": {"law": "subset:2", "rule": "law"},
+            "source": hashlib.shake_256(b"calls").hexdigest(400), "work_table": None}
+    word = slots({**case, "query": _json(PO.query())})
+    assert D.replay(SLOTS, {**case, "query": _json(PO.query())}, pieces) == ("output", D.canonical(word))
+    assert [[r["unit"] for r in s] for s in word["classes"][0]] == [[0, 4], [1, 2, 3], [5]]
+    (first,), (second,) = word["classes"][0][1][0]["pus"], word["classes"][0][1][1]["pus"]
+    assert first[0] < second[0] < second[1] < first[1]
+    call = slots({**case, "query": _json(PO.call_query(8))})
+    assert D.replay(SLOTS, {**case, "query": _json(PO.call_query(8))}, pieces) == ("output", D.canonical(call))
+    assert [[r["unit"] for r in s] for s in call["classes"][0]] == [[0, 5], [1, 2, 3, 4], [6]]
+    wide = json.loads(_calls((0, 4)))
+    for program, query in [(desc, PO.call_query(4)), (desc, PO.call_query(32)), (desc, PO.query(X=8)),
+                           (desc, PO.query(version=2)), (wide, PO.query()), (wide, PO.call_query(16))]:
+        refused = {**case, "program": program, "query": _json(query)}
+        assert D.replay(SLOTS, refused, pieces)[0] == "reject", query
+        with pytest.raises(D.Reject):
+            slots(copy.deepcopy(refused))
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held"}
