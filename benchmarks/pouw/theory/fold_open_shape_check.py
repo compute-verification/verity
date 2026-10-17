@@ -5,7 +5,8 @@
 `fold_kernel_sweep.py` found them among 400 random key_ok_r11 keys; this checks them independently. At (97, 179) with the
 word (255, 48, 87, 75), K_1 has 64 elements (meet in the middle), all fixing the R-fold for R = 1..5 on every state, 48
 of them outside (G₃). At (83, 225) with the word (144, 166, 44, 160), K_1 is the 16-element group, but changes outside it
-fix the 2-fold and the 4-fold on every state. Both keys are ≡ 1 mod 2^(r1+2) = 32. FOLD's reduced KJ19 rejects only
+fix the 2-fold and the 4-fold on every state. At n = 10, (321, 411) has a 32-element K_1. All three keys are
+≡ 1 mod 2^(r1+2). FOLD's reduced KJ19 rejects only
 ±1 mod 2^(n−2) = 64, which is looser than its 32-bit KJ19 (±1 mod 2^13 = 2^r1, `key_ok_r11_32`) would be at this width.
 Scaled as ±1 mod 2^r1, the filter rejects both.
 
@@ -27,11 +28,13 @@ N, R1, R2 = 8, 3, 5
 BIG = (97, 179), (255, 48, 87, 75)
 EVEN = (83, 225), (144, 166, 44, 160)
 EVEN_EXTRA = (16, 38, 60, 160)
+N10, R1_10, R2_10 = 10, 4, 6
+BIG10 = (321, 411), (827, 208, 250, 366)
 
 
-def fixes(word, other, key, rounds):
-    xs = np.arange(1 << N, dtype=np.uint64)
-    return bool(np.array_equal(fk.fold(xs, word, *key, N, R1, R2, rounds), fk.fold(xs, other, *key, N, R1, R2, rounds)))
+def fixes(word, other, key, rounds, n=N, r1=R1, r2=R2):
+    xs = np.arange(1 << n, dtype=np.uint64)
+    return bool(np.array_equal(fk.fold(xs, word, *key, n, r1, r2, rounds), fk.fold(xs, other, *key, n, r1, r2, rounds)))
 
 
 def kj19_scaled(a, e=R1):
@@ -60,11 +63,18 @@ def main() -> int:
                  len(k1) + 1 == 16 and EVEN_EXTRA not in k1 and fixes(word, EVEN_EXTRA, key, 2)
                  and fixes(word, EVEN_EXTRA, key, 4) and not fixes(word, EVEN_EXTRA, key, 1)
                  and not fixes(word, EVEN_EXTRA, key, 3) and fk.g3_ok(word, EVEN_EXTRA, N))
+    (key, word) = BIG10
+    k1 = fk.mitm_k1(word, *key, N10, R1_10, R2_10)
+    checks.check("n = 10, rotations (4, 6): (321, 411) passes the reduced key_ok_r11, is ≡ 1 mod 2^(r1+2) = 64, and with "
+                 "the word (827, 208, 250, 366) has a 32-element K_1, every element fixing the R-fold on every state for "
+                 "R = 1..3", fold_ref.key_ok_r11(*key, N10) and key[0] % 64 == 1 and len(k1) + 1 == 32
+                 and all(fixes(word, w, key, r, N10, R1_10, R2_10) for w in k1 for r in range(1, 4)),
+                 f"(G₃) breaks at {sum(not fk.g3_ok(word, w, N10) for w in k1)}")
     rng = np.random.default_rng(1)
     near = [(s + (int(k) << 15)) & 0xFFFFFFFF for k in rng.integers(0, 1 << 17, 64) for s in (1, -1)]
-    checks.check("KJ19 scaled as the 32-bit filter is (a ≢ ±1 mod 2^r1, r1 = 3 here as 13 there) rejects both keys, "
-                 "and the 32-bit key_ok_r11 rejects the keys ≡ ±1 mod 2^(13+2) (128 sampled)",
-                 all(kj19_scaled(k[0]) or kj19_scaled(k[1]) for k in keys)
+    checks.check("KJ19 scaled as the 32-bit filter is (a ≢ ±1 mod 2^r1, as 13 at 32 bits) rejects all three keys, and "
+                 "the 32-bit key_ok_r11 rejects the keys ≡ ±1 mod 2^(13+2) (128 sampled)",
+                 all(kj19_scaled(k[0]) or kj19_scaled(k[1]) for k in keys) and kj19_scaled(BIG10[0][0], R1_10)
                  and not any(fold_ref.key_ok_r11_32(a) for a in near))
     return checks.finish()
 
