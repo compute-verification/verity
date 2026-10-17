@@ -1,0 +1,11 @@
+# The served (prefill) edited GEMM: egemm.cu and its profile/probe scripts run on a GPU node through research run; FOLD's
+# depth-R binding proof (egemm_depthr_check.py) runs here as a suite (`uv run tools/verity/check/suites.py
+# benchmarks/pouw/edited_gemm`). Not a package.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# egemm_depthr_check.py uses exact_kit's check registry and rotl/wrap helpers; numpy is in the workspace environment. The
+# proof inlines the XOR-in(13,19) fold (receipt_folds_r9.xorin_step), so it reads nothing else of the tree.
+inputs = ["benchmarks/pouw/exact_kit"]
