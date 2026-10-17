@@ -398,7 +398,7 @@ mod tests {
             nets: nets.into_iter().map(|n| ("net".to_string(), n)).collect(), ranges: vec![], ports: vec![], n_in: 0,
             out_words: vec![], out_row_ports: vec![], g: 1, k_log: 0, upv: per_vu[0], unit_net: 0, leaves_in: vec![],
             leaves_out: vec![], public_inputs: vec![], leaves_public: vec![], rows: vec![], sha_net: k, hm_net: k + 1, out_net: 0,
-            out_ports: vec![], leaf_cuts_of: vec![], leaf_cuts, dummy_bc: vec![], dummy_outputs: vec![],
+            out_ports: vec![], out_slotted: false, leaf_cuts_of: vec![], leaf_cuts, dummy_bc: vec![], dummy_outputs: vec![],
             leaf_scheme: serde_json::Value::Null, per_vu,
             wires: wires.iter().map(|&(a, b, c, d, e, f)| Wire { dst: (a, b, c), src: (d, e, f) }).collect(),
             lookups: lookups.into_iter().collect(), typed: None,
