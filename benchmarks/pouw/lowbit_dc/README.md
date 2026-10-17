@@ -13,11 +13,13 @@ answers in `../fp_exact/`, `../fp4_nobits/` and `../emu8/`:
 |---|---|
 | `fpx.cu` | Chains of tcgen05 kind::f8f6f4 E4M3, kind::mxf4 and kind::mxf4nvf4 (B200) or wgmma E4M3 (H200) on exact grids from four accumulator starts, each output against the int64 sum and against a round-toward-zero chain; the adder's alignment window; emu8's limb routes and the two Hopper-exact ones (k3h, e4r), every k32 prefix word (`fpx run OUT`) |
 | `egemm.cu` | dgemm's Dither GEMM (`../dc/dgemm.cu`: the same receipt definition and single-stage skeleton) with int8 emulated in E4M3: k3z and k4s on tcgen05, k3h on wgmma, beside native int8 at the same tile (`i8`, and on B200 `i8r`, int8 in k4s's shape). Modes `selftest` (host: every limb identity), `gate` (every arm against the host reference, 0xA5 poison, no-write control, the device limb split against the host's) and `bench` (streamed, resident, and on B200 pipelined) |
-| `analyze.py` | fpx's records into the exactness tables; `analyze.py gemm` egemm's gates and time ratios |
-| `run.sh` | The job for one GPU, the family read from the device: `run.sh` (fpx) or `run.sh gemm` (egemm and dgemm with cuBLASLt) |
+| `pgemm.cu` | The k4s Dither GEMM pipelined on B200 (note:20261017T0828Z-draft-lowbit-dc-k4s): a loader warp (cp.async.bulk of pre-tiled stages into a 6–8-stage ring on mbarriers), an MMA warp (tcgen05 into 4 TMEM word buffers), fold warps (tcgen05.ld x32, double-buffered). Routes k4s, k4p (k4s with a public per-word offset in the receipt, so its extraction can go to the IMAD pipe), int8 Dither in the same skeleton (i8c: running sum in TMEM, duo alone a word; i8r: fresh accumulator, T in registers), plain FP8/int8 and cuBLASLt; time-split modes (EXT, LD, MMA, FOLDONLY, and MMARES/FULLRES on resident operands); each arm's SM clock. Modes `selftest`, `gate`, `bench` |
+| `analyze.py` | fpx's records into the exactness tables; `analyze.py gemm` egemm's gates and time ratios; `analyze.py pgemm` pgemm's γ per spacing, time split, binding facet and the word loop's issue cost from SASS |
+| `run.sh` | The job for one GPU, the family read from the device: `run.sh` (fpx), `run.sh gemm` (egemm and dgemm with cuBLASLt) or `run.sh pgemm` (B200) |
 
 The tests are `../tests/test_lowbit_dc.py`: each emulated route's k32 word step in FP32 against the int64 word under the
-adders fpx measured, analyze.py's tables on synthetic rows, and egemm's nvcc build and selftest.
+adders fpx measured, analyze.py's tables on synthetic rows, and egemm's and pgemm's nvcc builds and selftests (pgemm's
+also its spill-free FW 2 kernels and each route's word-loop issue cost).
 
 ## The routes
 
@@ -40,7 +42,7 @@ toward zero per MMA past it.
 
 ~~~text
 research run --on vy-dc-b200 --project verity --campaign cmp-13 --source <tree> --cwd source --timeout 40m \
-  --env GPU_LEASE_WHO=lowbit-dc -- bash benchmarks/pouw/lowbit_dc/run.sh [gemm]
+  --env GPU_LEASE_WHO=lowbit-dc -- bash benchmarks/pouw/lowbit_dc/run.sh [gemm|pgemm]
 ~~~
 
 Each run builds and dumps SASS before it takes the lease (one GPU, `gpu-lease 1 --max-min 15`), and runs for under a
@@ -51,5 +53,9 @@ On a B300 (sm_103a, no kind::i8) `run.sh` runs fpx as on the B200 (the same tcge
 UTCOMMA.BLOCK16 there); that run is what k4s rests on there: B200's adder (exact whenever representable, round toward
 zero per MMA) holding on sm_103. `run.sh gemm` refuses on sm_103a, since its baselines are native int8.
 
-Not covered: a production-grade (TMA, multi-stage, warp-specialized) emulated kernel, and FP4 emulation of int8 (emu8's
-FP4 route is counted in `../emu8/accounting.py`, not built).
+`run.sh pgemm` gates every route, spacing (L = 32, 64) and receipt tile width on three shapes × two distributions, and
+benches only if every gate is exact. Its tile is 128 × 128 on one CTA, so plain FP8 there is operand-feed bound (L2) below
+cuBLASLt; γ is taken against cuBLASLt, and FULLRES gives it with the feed removed.
+
+Not covered: FP4 emulation of int8 (emu8's FP4 route is counted in `../emu8/accounting.py`, not built), and pgemm on a
+CTA pair (cta_group::2, 256-wide tiles), which a production kernel would use for its operand feed.
