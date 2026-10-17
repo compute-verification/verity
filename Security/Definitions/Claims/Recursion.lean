@@ -9,37 +9,45 @@ compiled verifier's, parametric in the inner protocol (`Inner`, a `Deploy`-like 
 eight items:
 
 1. **Statement format.** `x` is the canonical bytes of what the compiled verifier reads, parsed by its own parser
-   (`Deploy.parse`) into the inner statement's bytes, the inner statement's dimensions as its parser reads them, the
-   commitment to the circuit (the private-circuit variant only) and the recursion's form (`Stmt`, `Form`).
+   (`Deploy.parse`) into the inner statement's bytes, the inner statement's dimensions as the verifier sets it up, the
+   commitment to the circuit (the private-circuit variant only), the recursion's form, and each V* session's draw as
+   its record holds it, where the statement carries the records (`Stmt`, `Form`, `Draw`).
 2. **Witness.** The inner protocol's (`W`), in both variants. In the private-circuit one the circuit is in the inner
    witness, which the universal unit's relation reads, and its commitment is hm96 rows that unit outputs.
 3. **Relation (inherited).** `R(x, w) :⇔ x` parses, has no circuit commitment, and `R_I(x_I, w)` (`R`). The private
    variant: `x` parses with a circuit commitment, and `R_I(x_I, w)`, whose outputs bind it to the circuit (`RPriv`).
-4. **Scope, readable** (`Scope`, `InScope`): the inner scope, and candidate 3's form (a fast100 inner table,
-   `k_log ≥ 6`, two claims and two per region, no private circuit, a valid RecSparse phase at `T_LOG = 0` with
-   `6 ≤ ℓ ≤ k_log` and its unit range inside a block, R at `table_m` with two claims). `ScopeMatches` states that it is
-   the compiled verifier's own scope check.
+4. **Scope, readable** (`Scope`, `InScope`): the inner scope, and the inner shapes the compiled verifier accepts:
+   dense, holo (private inner circuits) and sparse (candidate 3's RecSparse phase and R). A fast100 inner table,
+   `k_log ≥ 6`, two claims and two per region, no circuit commitment; either no RecSparse phase and no R, or a valid
+   RecSparse phase at `T_LOG = 0` with `6 ≤ ℓ ≤ k_log`, the inner statement's dimensions the form's and its unit range
+   inside a block, and R at `table_m` with two claims. Every V* session draws every unit of its population
+   (`Draw.Full`). There is no recursion-level scope refusal: `ScopeMatches` states that this is the compiled
+   verifier's own scope check, its setup's checks of the inner shape and its refusal of a V* session whose draw is not
+   every unit. Where the V* records are run messages, the statement carries no draws, and the compiled verifier
+   refuses a session whose draw is not every unit when that session decides.
 5. **Named pieces.** A run is the inner session's rounds, the prover's staging rounds (`Deploy.kS`), at which it stages
    the V* statements, then the V* sessions. `E*` (`E`): the outer extractor `E_O` (`EO`: per V* session, `E^rep` over
    forks of the judged run at the session's first round, with the outer Flock's assemble and check), then the inner one
    (`E^rep` at the inner protocol's waits, assemble and check), each inner rerun served by `E_O` at that rerun's coins
    and read off its output at the claim's oracle (`served`, `dec`). The simulator `Sim`: the inner session's commit
-   strings to zero messages under fresh salts at the pinned hm96 key (`Deploy.zeroCommit`), the honest staging messages
-   (`Deploy.stage`), then the outer simulator on each V* statement (`SO`, the named Flock simulator, a parameter as in
+   strings to zero messages under fresh salts at the pinned hm96 key (`Deploy.zeroCommit`), the staging messages
+   (`Deploy.stage`) at their commit strings to zero messages under fresh salts (the honest prover stages its values'
+   under its own), then the outer simulator on each V* statement (`SO`, the named Flock simulator, a parameter as in
    `Flock.ZK`). The extraction-based finder `Be`: `B`'s fork, `E_O` on both runs, a collision among the SHA-512
    evaluations their outer witnesses record (`Deploy.calls`), which no party computes in the clear.
 6. **Claims.** `KS` with costs (`Efficient`), `Bits`, `ZK`, `Complete` on the scope of the deployed reference prover
-   (`Deploy.P`), `ScopeMatches`, `Nontrivial`, and the private variant's `KSPriv`, `ZKPriv`; `At Flock` instantiates the
-   inner protocol with Flock and its decoder. The inner protocol's claim the recursion rests on is `Inner.KSAbort`: its
-   KS against provers that may abort after the inner rounds, on coins the inner verifier doesn't read (with no aborts,
-   `Inner.KS`).
+   (`Deploy.P`) at the deployed error (`Deploy.δc`), `ScopeMatches`, `Nontrivial`, and the private variant's `KSPriv`,
+   `ZKPriv`; `At Flock` instantiates the inner protocol with Flock and its decoder. The inner protocol's claim the
+   recursion rests on is `Inner.KSAbort`: its KS against provers that may abort after the inner rounds, on coins the
+   inner verifier doesn't read (with no aborts, `Inner.KS`).
 7. **Assumptions used.** `StrictBirthday` (for `B`), `ExpectedCR` (for `Be`), each read once in `Bits`; `Hm96Hiding`
    (hm96 leaves hide up to `δ₁`) at the deployed key's salt mask and salt hash (`Deploy.mask`, `Deploy.saltHash`), read
    in `ZK` and `ZKPriv`; and `trustedBase`. The decoders are those within Flock's list-decoding radius (`decOK`,
    `Flock.ListWithin`).
 8. **Status.** A draft: nothing here is frozen. `γ` and `γe` are the constants the recursion's KS proof gives from
    `Inner.KSAbort`; `κ` and `cBe` are the draft's, fixed by the proof before freezing. `ZK`'s errors are Flock's proved
-   `--zk` simulation error at each V* session (`Nums.εzk`) and `2δ₁` per inner commit string.
+   `--zk` simulation error at each V* session (`Nums.εzk`) and `2δ₁` per commit string of the inner session and the
+   staging messages.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
@@ -270,10 +278,10 @@ end OfFlock
 
 /-! ## The compiled verifier's statement and scope -/
 
-/-- **The recursion's form**, as the compiled verifier reads it (candidate 3, `RecVStar.Inner`): the inner table's `m`,
-`k_log`, regions and claims, whether the inner circuits are private (`holo`), the RecSparse phase's shape
-`(NU, ELL, S_LOG, T_LOG)`, R's shape `(m, claims)`, and whether the RecSparse unit range's slots lie inside the
-block. -/
+/-- **The recursion's form**, as the compiled verifier reads it (its inner shape, `RecVStar.Inner`): the inner table's
+`m`, `k_log`, regions and claims, whether the inner circuits are private (`holo`), the RecSparse phase's shape
+`(NU, ELL, S_LOG, T_LOG)` and R's shape `(m, claims)` (candidate 3's sparse phase; neither at a dense or holo inner
+session), and whether the RecSparse unit range's slots lie inside the block. -/
 structure Form where
   m : ℕ
   kLog : ℕ
@@ -284,27 +292,46 @@ structure Form where
   stacked : Option (ℕ × ℕ)
   unitRangeInBlock : Bool
 
-/-- **The recursion's statement**: the inner statement's bytes, its `(m, k_log, regions)` as its own parser reads
-them, the commitment to the circuit (the private-circuit variant), and the form. -/
+/-- **A V* session's draw**, as its record holds it: its law's `k` when the law is `subset` (`none` for another law),
+its population, its units and its closure. -/
+structure Draw where
+  subset : Option ℕ
+  population : ℕ
+  units : List ℕ
+  closure : List ℕ
+
+/-- **The full draw**: the `subset` draw of every unit of its population, `0, …, N − 1` in order, with no closure. -/
+def Draw.Full (d : Draw) : Prop :=
+  d.subset = some d.population ∧ d.units = List.range d.population ∧ d.closure = []
+
+/-- **The recursion's statement**: the inner statement's bytes, its `(m, k_log, regions)` as the verifier sets it up
+from its files (`none` where the verifier holds none), the commitment to the circuit (the private-circuit variant),
+the form, and each V* session's draw as its record holds it (`none` where it holds none the verifier reads; no draws
+where the records are run messages rather than the statement's). -/
 structure Stmt where
   inner : Msg
-  innerDims : ℕ × ℕ × ℕ
+  innerDims : Option (ℕ × ℕ × ℕ)
   circ : Option Msg
   form : Form
+  draws : List (Option Draw)
 
 /-- RecSparse's `P_LOG` at `ℓ`: the bit length of `2ℓ + 1`. -/
 def pLog (ell : ℕ) : ℕ := Nat.log 2 (2 * ell + 1) + 1
 
-/-- **The recursion's scope, readable** (candidate 3): no circuit commitment and no private inner circuit; the form's
-inner shape is the inner statement's, at a fast100 `m` (`22 ≤ m ≤ 35`), `k_log ≥ 6`, two claims and two per region;
-a RecSparse phase at `NU ≥ 1`, `6 ≤ ℓ ≤ k_log`, `T_LOG = 0`, its unit range's slots inside the block; R at the phase's
-`table_m = max(22, NU + P_LOG)` with a fast100 schedule and the two reps' claims. -/
+/-- **The recursion's scope, readable**: the inner shapes the compiled verifier accepts, every V* session drawing every
+unit of its population. No circuit commitment; the inner table at a fast100 `m` (`22 ≤ m ≤ 35`), `k_log ≥ 6`, two
+claims and two per region, its circuits public or private (`holo` either way); and either no RecSparse phase and no R
+(a dense or holo inner session), or candidate 3's sparse phase: a RecSparse shape at `NU ≥ 1`, `6 ≤ ℓ ≤ k_log`,
+`T_LOG = 0`, the inner statement's `(m, k_log, regions)` the form's, its unit range's slots inside the block, and R at
+the phase's `table_m = max(22, NU + P_LOG)` with a fast100 schedule and the two reps' claims. Every V* session's
+record holds a draw, and it is the full draw (`Draw.Full`). -/
 def InScope (s : Stmt) : Prop :=
-  s.circ = none ∧ s.form.holo = false ∧ (s.form.m, s.form.kLog, s.form.regions) = s.innerDims ∧
-    22 ≤ s.form.m ∧ s.form.m ≤ 35 ∧ 6 ≤ s.form.kLog ∧ s.form.claims = 2 + 2 * s.form.regions ∧
-    s.form.unitRangeInBlock = true ∧
-    ∃ nu ell sLog, s.form.sparse = some (nu, ell, sLog, 0) ∧ 1 ≤ nu ∧ 6 ≤ ell ∧ ell ≤ s.form.kLog ∧
-      s.form.stacked = some (max 22 (nu + pLog ell), 2) ∧ max 22 (nu + pLog ell) ≤ 35
+  s.circ = none ∧ 22 ≤ s.form.m ∧ s.form.m ≤ 35 ∧ 6 ≤ s.form.kLog ∧ s.form.claims = 2 + 2 * s.form.regions ∧
+    (s.form.sparse = none ∧ s.form.stacked = none ∨
+      ∃ nu ell sLog, s.form.sparse = some (nu, ell, sLog, 0) ∧ 1 ≤ nu ∧ 6 ≤ ell ∧ ell ≤ s.form.kLog ∧
+        s.innerDims = some (s.form.m, s.form.kLog, s.form.regions) ∧ s.form.unitRangeInBlock = true ∧
+        s.form.stacked = some (max 22 (nu + pLog ell), 2) ∧ max 22 (nu + pLog ell) ≤ 35) ∧
+    ∀ d ∈ s.draws, ∃ e, d = some e ∧ e.Full
 
 /-! ## What the compiled verifier brings -/
 
@@ -340,22 +367,26 @@ noncomputable def Nums.εzk (n : Nums) (t : ℕ) (δ₁ : ℝ) : ℝ :=
 
 /-- **What the compiled verifier brings**, read by the recursion's claims: the verifier (public-coin: each prover
 message answered by its live coin, the decision the shipped verdict), its parser and scope check; the prover's staging
-rounds after the inner session's (`kS`), and the honest prover's staging message at the run so far (`stage`, which
-reads only the statement and the public transcript); the V* statements of a run, from the public transcript of the
+rounds after the inner session's (`kS`), the hm96 commit strings each staging message holds (`nC`), and the staging
+message at the run so far from its commit strings (`stage`, which reads only the statement, the public transcript and
+those commit strings: the honest prover's are its staged values' under its own salts, the simulator's the zero
+digest's under its salts, `Deploy.zeroCommit`); the V* statements of a run, from the public transcript of the
 inner session and the staging rounds (`vstar`), and their count at `x` (`nS`, fixed by `x`'s form); outer session `s`'s
 view in a run's view (`session`: its messages and its verifier's decision as the compiled verifier's answers show it);
 the inner session's view read off a run's coins and the outer witnesses, at an oracle (`innerView`: the inner verifier
 runs at it); the SHA-512 evaluations the outer witnesses record (`calls`); the numbers of outer session `s` at `x`
 (`nums`, the outer Flock's at that session's V* statements, which their public shape fixes); for the simulator, the
 pinned hm96 key's salts (`saltLen` bytes), its salt prefix `p_salt` and its GF(2)-linear salt mask `Φ`, into 64 bytes
-(`mask`); and the reference prover (`P`), the honest prover the deployment runs, on its tapes (`Tape`, a nonempty
-type). -/
+(`mask`); the reference prover (`P`), the honest prover the deployment runs, on its tapes (`Tape`, a nonempty
+type); and its completeness error as the deployment states it, at each hash (`δc H x` at `H`): `Complete` is at that
+error and no other. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
   scopeCheck : Msg → Bool
   kS : Msg → ℕ
-  stage : Msg → List (Msg × Out) → OC Msg
+  nC : Msg → ℕ
+  stage : Msg → List (Msg × Out) → List Msg → OC Msg
   vstar : Msg → List (Msg × Out) → List Msg
   nS : Msg → ℕ
   session : Msg → ℕ → Seen → Seen
@@ -368,6 +399,7 @@ structure Deploy (Coin : Type) where
   Tape : Type
   [tapeNonempty : Nonempty Tape]
   P : Flock.Wit → Prover Tape
+  δc : (Msg → Msg) → Msg → ℝ
 
 instance Deploy.instNonemptyTape {Coin : Type} (D : Deploy Coin) : Nonempty D.Tape := D.tapeNonempty
 
@@ -379,6 +411,11 @@ def Deploy.saltHash {Coin : Type} (D : Deploy Coin) (H : Msg → Msg) (y : Fin D
 `b = 0 ⊕ Φy` and `c = H(p_salt ‖ y)`, the oracle's answer. -/
 def Deploy.zeroCommit {Coin : Type} (D : Deploy Coin) (y : Fin D.saltLen → UInt8) : OC Msg :=
   .query (D.saltPrefix ++ List.ofFn y) fun c => .ret (List.ofFn (D.mask y) ++ c)
+
+/-- **Commit strings to the zero digest** under the salts `ys`, in order. -/
+def Deploy.zeroCommits {Coin : Type} (D : Deploy Coin) : List (Fin D.saltLen → UInt8) → SP (List Msg)
+  | [] => .ret []
+  | y :: ys => spBind (spOf (D.zeroCommit y)) fun c => spBind (D.zeroCommits ys) fun cs => .ret (c :: cs)
 
 section Recursion
 
@@ -511,20 +548,30 @@ def simOuter {n : ℕ} (SO : Msg → ℕ → OSim) (x : Msg) (xs : List Msg) (c 
         simOuter SO x xs c ss (ms ++ ts)
     else .ret ms
 
-/-- **The recursion's simulator**: the inner session's commit strings to the zero digest under fresh salts, the honest
-staging messages, which read only the public transcript, then each V* session by the outer simulator `SO` (the named
-Flock simulator) at its statement. -/
+/-- The staging rounds simulated after the `n` inner rounds: staging round `j`'s message at the run so far, from its
+commit strings to the zero digest under the salts `salts j`. -/
+def simStage (D : Deploy Coin) (x : Msg) (n : ℕ) (salts : Fin (D.kS x) → Fin (D.nC x) → Fin D.saltLen → UInt8)
+    (ms : List (Msg × Out)) : SP (List (Msg × Out)) :=
+  simRounds (fun ms => if h : ms.length - n < D.kS x then
+      spBind (D.zeroCommits ((List.finRange (D.nC x)).map (salts ⟨ms.length - n, h⟩))) fun cs => spOf (D.stage x ms cs)
+    else .ret []) (D.kS x) ms
+
+/-- **The recursion's simulator**: the inner session's commit strings to the zero digest under fresh salts, the staging
+messages with their commit strings to the zero digest under fresh salts, then each V* session by the outer simulator
+`SO` (the named Flock simulator) at its statement. -/
 def Sim (D : Deploy Coin) (I : Inner Coin W) (SO : Msg → ℕ → OSim) : Simulator where
-  C x := (Fin (I.V.k (xI D x)) → Fin D.saltLen → UInt8) × ((s : Fin (D.nS x)) → (SO x s).C)
+  C x := (Fin (I.V.k (xI D x)) → Fin D.saltLen → UInt8) × (Fin (D.kS x) → Fin (D.nC x) → Fin D.saltLen → UInt8) ×
+    ((s : Fin (D.nS x)) → (SO x s).C)
   prog x c :=
     spBind (simInner D (I.V.k (xI D x)) c.1) fun ms =>
-      spBind (simRounds (fun ms => spOf (D.stage x ms)) (D.kS x) ms) fun ms =>
-        simOuter SO x (D.vstar x ms) c.2 (List.finRange (D.nS x)) ms
+      spBind (simStage D x (I.V.k (xI D x)) c.2.1 ms) fun ms =>
+        simOuter SO x (D.vstar x ms) c.2.2 (List.finRange (D.nS x)) ms
 
 /-- **`ZK`'s error** at the attempt budget `t`, where hm96 leaves hide up to `δ₁`: each V* session's `--zk` simulation
-error (`Nums.εzk`) and `2δ₁` for each of the inner session's `k_I(x_I)` commit strings, which `Sim` commits to zero. -/
+error (`Nums.εzk`) and `2δ₁` for each commit string `Sim` commits to zero, the inner session's `k_I(x_I)` and the
+staging messages' `k_S(x) · n_C(x)`. -/
 noncomputable def εzk (D : Deploy Coin) (I : Inner Coin W) (t : ℕ) (δ₁ : ℝ) (x : Msg) : ℝ :=
-  ∑ s : Fin (D.nS x), (D.nums x s).εzk t δ₁ + 2 * I.V.k (xI D x) * δ₁
+  ∑ s : Fin (D.nS x), (D.nums x s).εzk t δ₁ + 2 * (I.V.k (xI D x) + D.kS x * D.nC x) * δ₁
 
 /-- **`ZK`'s collision weight** at the attempt budget `t`: Flock's `4t·3^t` at each of the `n_S(x)` V* sessions. -/
 noncomputable def γzk (D : Deploy Coin) (t : ℕ) (x : Msg) : ℝ := D.nS x * (4 * t * 3 ^ t)
@@ -558,19 +605,20 @@ def Efficient (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock
     (1 + ∑ s : Fin (D.nS x), ((D.nums x s).waits * (D.nums x s).k : ℕ)))
 
 /-- **The recursion: Complete**, on the statements in scope, of the deployed record's reference prover (`D.P`, on its
-nonempty tapes), at an inner protocol of Flock's witnesses. -/
-def Complete (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin Flock.Wit) (δc : Msg → ℝ) : Prop :=
-  Claims.Complete H D.V D.P (R D I) (Scope D I) δc
+nonempty tapes), at an inner protocol of Flock's witnesses, at the deployed error (`D.δc H`). -/
+def Complete (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin Flock.Wit) : Prop :=
+  Claims.Complete H D.V D.P (R D I) (Scope D I) (D.δc H)
 
-/-- **The recursion: the readable scope is the compiled verifier's.** -/
+/-- **The recursion: the readable scope is the compiled verifier's**: a statement is in `Scope` exactly when the
+compiled verifier's scope check takes it. -/
 def ScopeMatches (D : Deploy Coin) (I : Inner Coin W) : Prop := Claims.ScopeMatches (Scope D I) D.scopeCheck
 
 /-- **The recursion: zero knowledge** of the honest prover against every malicious verifier of the compiled verifier's
 rounds (`ZKmalR` at `D.V.k`), at `Sim` over the outer `--zk` Flock's simulators at each attempt budget `t ≥ 1`
 (`SO t`): wherever hm96 leaves hide up to `δ₁` at the deployed key (`Hm96Hiding` at its salt mask `D.mask` and salt
-hash `D.saltHash H`), within `εzk` (each V* session's proved `--zk` simulation error, and `2δ₁` per inner commit string)
-plus `γzk` times the probability that `Fork` finds a collision among the honest prover's SHA-512 calls in two real runs
-against `V*`. -/
+hash `D.saltHash H`), within `εzk` (each V* session's proved `--zk` simulation error, and `2δ₁` per commit string of
+the inner session and the staging messages) plus `γzk` times the probability that `Fork` finds a collision among the
+honest prover's SHA-512 calls in two real runs against `V*`. -/
 def ZK {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (D : Deploy Coin)
     (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (P : W → Prover (N × Ω)) (SO : ℕ → Msg → ℕ → OSim) : Prop :=
   DO.zk = true ∧ ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, Hm96Hiding D.mask (D.saltHash H) δ₁ →
@@ -588,7 +636,7 @@ def KSPriv [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO
       κ D I x + Real.sqrt (γ D I x * PrB H D.V P x) + Real.sqrt (γe D I x * PrBe H D I DO decO P x)
 
 /-- **The private variant: zero knowledge**, at the same simulator, errors and hiding as `ZK`: `Sim` commits to the
-zero digest at every inner round, so it needs no circuit of the class. -/
+zero digest at every inner round and in every staging message, so it needs no circuit of the class. -/
 def ZKPriv {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (D : Deploy Coin)
     (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (P : W → Prover (N × Ω)) (SO : ℕ → Msg → ℕ → OSim) : Prop :=
   DO.zk = true ∧ ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, Hm96Hiding D.mask (D.saltHash H) δ₁ →
@@ -600,14 +648,19 @@ end Recursion
 
 section AtFlock
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+  [DecidableEq Col']
 
-/-- **KS of the recursion over Flock**, at every inner and outer decoder that meets the spec. -/
-def KSFlock [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) : Prop :=
+/-- **KS of the recursion over Flock**, at every inner and outer decoder that meets the spec: the inner Flock `DI` and
+the outer `DO` each on its own columns and traces (the deployed inner session is plain, the V* sessions masked). -/
+def KSFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
+    (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK DI decI → KS H D (Inner.ofFlock DI decI) DO
 
-/-- **Bits of the recursion over Flock**, at every inner decoder that meets the spec. -/
-def BitsFlock [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) : Prop :=
+/-- **Bits of the recursion over Flock**, at every inner decoder that meets the spec, the inner and outer Flock each on
+its own columns and traces. -/
+def BitsFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
+    (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK DI decI → Bits H D (Inner.ofFlock DI decI) DO
 
 end AtFlock
