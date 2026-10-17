@@ -165,7 +165,8 @@ def RoutesOffD2 : Prop :=
 
 /-- **T1 (tensor slot counting).** A program that commits `N` fresh words, each read whole by the fold from its own
 slot write of a tensor instruction (freshness makes the map injective), holds the tensor pipe at least `N/ρ_T`
-cycles: `Σ_i c(i) n_i ≥ N/ρ_T`. -/
+cycles: `Σ_i c(i) n_i ≥ N/ρ_T`. Injectivity is the premise (one word a slot): design A's packed `T_1` words, two a
+s32 slot (REFEREE S14), are outside it. -/
 def TensorSlotCount : Prop :=
   ∀ (ι : Type) [Fintype ι] [Nonempty ι] (w c n : ι → ℕ) (N : ℕ) (slot : Fin N → SlotWrite ι w n),
     (∀ i, 0 < c i) → Function.Injective slot → (N : ℝ) / rhoT w c ≤ ∑ i, (c i : ℝ) * n i

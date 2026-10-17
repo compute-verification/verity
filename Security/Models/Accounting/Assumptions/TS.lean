@@ -55,7 +55,10 @@ def FacetCeilings (G : Machine K R) (P : Run K) : Prop :=
       (G.smClocked r = false → G.load P.n r ≤ G.fmax * P.time)
 
 /-- `accounting-ts-words-written` (ISA, P12). **An instruction writes at most `ω` words**: the owned right fixed words
-headed by writer kind `t` are at most `ω_t` times the instructions of `t`'s class the labelling gives them. -/
+headed by writer kind `t` are at most `ω_t` times the instructions of `t`'s class the labelling gives them. An MMA
+kind's `ω_t` counts one committed word a slot: design A's packed `T_1` words, two a s32 slot through int8 B entries
+`s_j + 64·s_j′` (REFEREE S14), fit no route at the stated `ω` and floors (as writer words they exceed `ω`, as vector
+words their ½–1 op of extraction is below `q`) and need their own (a side unit) or 2-bit entries. -/
 def WordsWritten (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ t, A.words (.writer t) ≤ Z.omega t * A.nword (.writer t) (Z.cls t)
 
