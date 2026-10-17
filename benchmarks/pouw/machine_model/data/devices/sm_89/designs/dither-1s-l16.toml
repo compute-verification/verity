@@ -1,0 +1,51 @@
+# Dither-1S at L = 16 on the L40S (sm_89): one-sided dither, duo receipts on every committed word, the linears' peel.
+# The noise, ε_skip and ε_mand are sm_120's design's (data/designs/); honest, its operand floor, the clock and the
+# baseline are the L40S's.
+name = "dither-1s-l16"
+title = "Dither-1S, L = 16"
+summary = "Dither-1S on the L40S at L = 16: one-sided dither, duo receipts on every committed word, the linears' peel"
+honest = "ada-l16"
+L = 16
+work = 1.0
+
+[noise]
+linears = "one-sided"
+lm_head = "clean"
+qk = "one-sided"
+pv = "peel"
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDSM_X4 = 0.010638 }
+source = "SPEC §3.4's count for m16n8k16 (CALC): at the zero instance B̃ = ΠUᵀ repeats every 32 rows, so only A's fragment (2 registers a lane) is delivered: >= 1/(2b) with 4ab + 2a + b <= 240, least 1/94 at (a, b) = (1, 47)"
+
+[fold]
+name = "duo"
+ALU = 2
+IMAD = 1
+
+[skip.peel]
+eps = 0.00315
+source = "the linears' peel L/k, MAC-weighted over Llama-3.1-8B's linears (k = 4096 and 14336): 0.63% at L = 32 (note:20261017T0310Z-report-eps1-program §3, note:20261017T0031Z-draft-eps-budget); at L = 16, L/k: scaled from L = 32 by SKIP's strip widths (`../eps_budget.py`: every strip is L, L + 1, 2L or 2(L + 1) wide), the weights sm_120's honest time"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD). On the L40S duo's IMAD form (rotl(u, r) + y as IMAD.HI.U32 then IMAD: ALU 1 + IMAD 3 a word) is slower at every share of words: honest16 17% slower with 8 of a lane's 32 words in it, 129% with all 32; IMAD.HI.U32 is half IMAD's rate (EPS1 ADA r2, opcode_probe/sm89/uniform.cu's duo<W>, r20261017-095204-4cc4, r20261017-100238-352e)"
+
+[clock]
+eps = 0.333333
+source = "EPS1 ADA (note:20261017T0605Z-draft-eps1-ada, r20261017-070403-a5ff, 50 s a kernel): f_max = 2,520 MHz (light and zero-operand IMMA, no throttle reason), honest at L = 16 1680 MHz at thermal steady state under the node's enforced 325 W cap (SW power cap), 1 − 1680/2520"
+
+[luck]
+delta = 4.547473508864641e-13
+p = 0.75
+checks = 48000
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IDP4A = 4, LDS128 = 0.25 }
+source = "dp4a at 4 IDP4A a word at L = 16 (IDP4A on its own row I4A on sm_89), its loads 2(a + b)/(ab) LDS.128 a word at a = b = 8, scaled by L/32"
+
+[routes]
+lanes = true
+uniform = true      # UNI on UP, issue and JI89 (EPS1 ADA r2, opcode_probe/sm89/uniform.cu)
