@@ -8,6 +8,7 @@ numbers with the Program's digest.
 from __future__ import annotations
 
 import json
+import random
 
 import pytest
 
@@ -16,6 +17,7 @@ from verity.ml.circuits import stacking as P
 from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.program import Program
 from verity_vllm.predict.build import build_program
+from verity_vllm.program.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 WGMMA = "HopperBF16WgmmaDot16_v1"
@@ -28,18 +30,33 @@ def _analysis(model: str, wrapper: str, **kw) -> tuple:
     return r, c, P.analyze(program, c)
 
 
+def test_the_quantizers_range_rule_holds_on_its_evaluator():
+    """`F32ToU32RzByte`'s rule (the truncation below 128.0; 0 for a NaN, -0 or negative float) on vLLM's evaluator, over its
+    boundaries and sampled operand ranges; at 128.0 or above the low byte isn't monotone, and the rule gives none."""
+    rule, rng = P.RANGES["F32ToU32RzByte_v1"], random.Random(0)
+    edges = [P.S32[0], -0x00800000, -1, 0, 1, 0x007FFFFF, 0x3F7FFFFF, 0x3F800000, 0x42FE0000, 0x42FEFFFF, 0x42FFFFFF]
+    for lo in edges:
+        for hi in edges:
+            if lo > hi:
+                continue
+            out = rule((lo, hi))
+            for x in [lo, hi] + [rng.randint(lo, hi) for _ in range(200)]:
+                assert out[0] <= f32_to_u32_rz_byte(x & 0xFFFFFFFF) <= out[1], (lo, hi, hex(x), out)
+    assert rule((0, 0x43000000)) is None and rule(None) is None and rule((0x3F800000, 0x42FE0000)) == (1, 127)
+
+
 @pytest.mark.parametrize("model,wrapper,kw,digest,steps,units,lifetime", [
     ("llama32-1b", "step", dict(M=1, pos0=8), "773b545605765fe9", 1,
-     {"roundings": 78581580, "compare_select": 385277, "gathers": 17, "products": 0}, 1),
+     {"roundings": 78581580, "compare_select": 385277, "gathers": 17, "products": 0, "folds": 0}, 1),
     ("llama32-1b", "request", dict(LP=3, T=2), "6861bab5ba6ed6d2", 3,
-     {"roundings": 359600254, "compare_select": 1161975, "gathers": 85, "products": 0}, 2),
+     {"roundings": 359600254, "compare_select": 1161975, "gathers": 85, "products": 0, "folds": 0}, 2),
     ("qwen3-30b-a3b", "step", dict(M=1, pos0=8), "98a180a562abf1d6", 1,
-     {"roundings": 198675628, "compare_select": 906429, "gathers": 2706, "products": 0}, 1),
+     {"roundings": 198675628, "compare_select": 906429, "gathers": 3090, "products": 0, "folds": 0}, 1),
 ])
 def test_a_bf16_program_is_refused_for_its_tensor_core_steps(model, wrapper, kw, digest, steps, units, lifetime):
     """Roundings: each tensor-core step is one, beside the FP elementwise ops. Gathers: 17 index bits a token row's embedding
-    (V = 128256) in Llama, five rows in the request; Qwen's 18 (V = 151936) and 48 layers x 8 routed experts x 7 bits (one of
-    128). The request's run input is its 3 prompt tokens, first read in step 0, and its longest-held value lives 2 steps."""
+    (V = 128256, or out of range) in Llama, five rows in the request; Qwen's 18 (V = 151936) and 48 layers x 8 routed experts x 8
+    bits (one of 128, or out of range). The request's run input is its 3 prompt tokens, first read in step 0, and its longest-held value lives 2 steps."""
     r, c, a = _analysis(model, wrapper, **kw)
     assert r.digest.startswith(digest)
     g = a.gates[WGMMA]

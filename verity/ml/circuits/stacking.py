@@ -8,29 +8,41 @@ floor, a comparison, a selection, a wrap or a clamp. P bounds both, and how long
 The free set is closed. A gate is free only when it is
 
 - a constant (``const``: `CONST_ID`);
-- an s8-family core step (``family``: `BlackwellS8ImmaDot32_v1` and its u8 x s8 sibling `BlackwellU8S8ImmaDot32_v1`,
-  ``D = C + sum_k a_k * b_k``) whose window the interval pass proves: D's bound lies in s32, from its operands' ranges as
-  their producers give them, so it never clamps or wraps; or
+- an s8-family core step (``family``, `FAMILY`: `BlackwellS8ImmaDot32_v1`, its u8 x s8 sibling `BlackwellU8S8ImmaDot32_v1`,
+  and PoUW's wrapping dots `PouwSegDot_v1` and `PouwDot16U8S8_v1`, ``D = C + sum_k a_k * b_k``) whose window the interval pass
+  proves: D's bound lies in s32, from its operands' ranges as their producers give them, so it never clamps or wraps; or
 - an integer affine map with constant coefficients (``affine``: `I32Add_v1`, `I32Sub_v1`, and `I32Mul_v1` with a constant
   operand) that the interval pass proves never wraps.
 
-Every other primitive the table lists is budgeted, one unit per output value (a primitive returns one value), in one of four
-classes: ``roundings`` (FP arithmetic, casts and dots, special functions, integer floors, mods and narrowing, bit operations,
-and an add or subtract that may wrap), ``compare_select`` (comparisons, selections, min, max, the top-p keep mask),
-``gathers`` (a data-dependent read of one of V words, counted in fresh index bits: ceil(log2 V) for each distinct index a body
-reads, so one routing index read by many gathers counts once) and ``products`` (`I32Mul_v1` of two runtime values, and the
-integer dots outside the family). Only gates with an operand that depends on a run input are budgeted: a gate of constants and
+Every other primitive the table lists is budgeted, one unit per output value (a primitive returns one value), in one of five
+classes: ``roundings`` (FP arithmetic, casts and dots, special functions, integer floors, mods and narrowing, bit operations and
+field extractions, limb steps, and an add or subtract that may wrap), ``compare_select`` (comparisons, selections, min, max, the
+top-p keep mask, the lifting's tag tests), ``gathers`` (a data-dependent read of one of V words, counted in fresh index bits),
+``products`` (`I32Mul_v1` of two runtime values, and the integer dots outside the family) and ``folds`` (the receipt fold's
+step, `PouwDuoAbsorb_v1`). Only gates with an operand that depends on a run input are budgeted: a gate of constants and
 registered words computes the same function before the seed. A primitive the table doesn't list is refused. The table
-(`CLASSES` and the families `class_of` reads) is Lean's `Accounting.Gates.classOf`, id for id.
+(`CLASSES`, and the families `class_of` reads) is Lean's `Accounting.Gates.classOf` id for id where Lean lists the id, except the
+field extractions below, and the red team's closed table (round 2) for the families built on demand that Lean doesn't list yet.
 
-Restricted f w. A budgeted gate other than a gather reads at most f operand leaves, and every gate's leaves (its operands and
-its value, an input's included) hold at most w bits. A primitive past either limit (an FP or integer dot, a wide gather or
-table read, PoUW's 576-bit squares) is refused: its decomposition into fan-in-f, width-w gates isn't charged.
+A gather's index bits are those that tell its outcomes apart (`GATHERS`): ceil(log2(V + 1)) for an entry of V or the family's
+out-of-range constant, n for the entry at the index's low n bits, and ceil(log2(V + 3)) for a lifted row of V (or ⊥, an invalid
+index, or out of range). Each distinct index a body reads counts once per kind, so one routing index read by many gathers counts
+once; a constant index is wiring. A field extraction (`BitAtx{W}`, `PouwWindowWord_v1`) is a rounding, not a gather: at a
+constant position it still computes. A lift (`Lifted[P]_v1`, `Lifted[P]_v2`, ``P{ORD=k}``) is P's class with a tag test, so a
+free P's lift is budgeted (a constant's a select on the enable, the rest roundings). A lifted gather also scans every operand's
+tag (any invalid row gives INV), so it pays one ``compare_select`` unit beside its index bits, and it isn't exempt from fan-in.
 
-Ranges. A constant is its value, a proven core step its D, a proven affine map its exact result, and every other value any
-word of its width (an s8 operand -128..127, an accumulator all of s32): ranges are derived from producers, never declared. So an
-accumulator from a run input, a split-K combine that may wrap, or a chain long enough to clamp is never proven. A `scan`'s carry
-is iterated to a fixpoint, exactly up to 2^16 iterations and then widened to any word.
+Restricted f w. A budgeted gate other than an unlifted gather reads at most f operand leaves, and every gate's leaves (its
+operands and its value, an input's included) hold at most w bits. A primitive past either limit (an FP or integer dot, a wide
+table read, PoUW's 576-bit squares, a lifted word's tag bit past w) is refused: its decomposition into fan-in-f, width-w gates
+isn't charged.
+
+Ranges. A constant is its value, a proven core step its D, a proven affine map its exact result, a gate `RANGES` lists what its
+rule derives from its operands' ranges (`fmaxf` and `fminf` of a non-negative float, and the low byte of an f32's truncation
+below 128.0, over f32 bit patterns read as s32, which order +0..+inf as the floats), and every other value any word of its width
+(an s8 operand -128..127, an accumulator all of s32): ranges are derived from producers, never declared. So an accumulator from a
+run input, a split-K combine that may wrap, or a chain long enough to clamp is never proven. A `scan`'s carry is iterated to a
+fixpoint, exactly up to 2^16 iterations and then widened to any word.
 
 A word is read at its own width. A reference to a leaf of another width than the reading position's type declares (an s32
 word read back as s8 lanes: a limb split no gate computes) is a ``reinterpretation``, refused wherever it occurs, an argument
@@ -54,13 +66,15 @@ bytes the audit certified as read in it and its duration):
    reports the longest.
 
 The sink, coin and limb-split types of the s8 family's companions (the receipt fold, the noise derivation, `LimbSplit`) are
-circuits' Build types; until the table lists those Definitions they are refused or budgeted gate by gate, never free. Bits
-become bytes exactly (bits / 8), and every comparison is exact (`fractions.Fraction`).
+circuits' Build types; until the table lists those Definitions they are refused or budgeted gate by gate (`LimbSplit`'s byte,
+carry and clamp primitives are listed), never free. Bits become bytes exactly (bits / 8), and every comparison is exact
+(`fractions.Fraction`).
 """
 from __future__ import annotations
 
 import hashlib
 import re
+import struct
 from collections import Counter
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -78,7 +92,7 @@ TAG = "verity/stacking-property"
 VERSION = 1
 SCHEMA = f"{TAG}/v{VERSION}"
 
-BUDGETED = ("roundings", "compare_select", "gathers", "products")
+BUDGETED = ("roundings", "compare_select", "gathers", "products", "folds")
 REFUSED = ("unlisted", "reinterpretation")
 
 S8 = (-(1 << 7), (1 << 7) - 1)
@@ -92,18 +106,33 @@ WIDTH = 32
 
 #: a constant primitive's id (`PROTOCOL.md` §9)
 CONST_ID = re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$")
-#: the gathers by id: its index operand, and the index bits it reads (``log2``: ceil(log2 n) of the id's n words; ``n``: the
-#: id's n bits; or a count)
-GATHERS: tuple[tuple[str, int, str | int], ...] = (
-    (r"^Gather(?:Bf16|F32)x([1-9][0-9]*)_v1$", 0, "log2"),  # (index: i32, column: Array<V, word>)
-    (r"^TableRead([1-9][0-9]*)x[1-9][0-9]*_v1$", 0, "n"),  # (index, table): the entry at the index's low IB bits
-    (r"^BitAtx([1-9][0-9]*)_v1$", 1, "log2"),  # (word: Value<W>, i: i32): bit i
-    (r"^PouwWindowWord_v1$", 1, 4),  # (x: Value<480>, m: Value<4>): mask m's word
+#: the gathers by id: the index operand and the kind of its bits, of the id's n (``range``: ceil(log2(n + 1)), an entry of n or
+#: the out-of-range constant; ``low``: n, the index's low n bits; ``lifted``: ceil(log2(n + 3)), a row of n, ⊥, an invalid index
+#: or out of range)
+GATHERS: tuple[tuple[str, int, str], ...] = (
+    (r"^Gather(?:Bf16|F32|I32|E4m3|E2m1|E8m0)x([1-9][0-9]*)_v1$", 0, "range"),  # (index: i32, column: Array<V, word>)
+    (r"^TableRead([1-9][0-9]*)x[1-9][0-9]*_v1$", 0, "low"),  # (index, table)
+    (r"^LGatherRow[1-9][0-9]*x([1-9][0-9]*)(?:o[0-9a-f]+)?_v1$", 0, "lifted"),  # (idx: Value<33>, rows: Array<N, Value<w+1>>)
 )
-#: the compare-select families by id: the top-p keep mask of V lanes
-SELECTS = (r"^TopPMaskWordx([1-9][0-9]*)_v1$",)
-_GATHERS = tuple((re.compile(p), i, b) for p, i, b in GATHERS)
-_SELECTS = tuple(re.compile(p) for p in SELECTS)
+_BITS: dict[str, Callable[[int], int]] = {"range": lambda n: n.bit_length(), "low": lambda n: n,
+                                          "lifted": lambda n: (n + 2).bit_length()}
+#: the other families built on demand, by id, and their class
+FAMILIES: tuple[tuple[str, str], ...] = (
+    (r"^BitAtx[1-9][0-9]*_v1$", "roundings"),  # (word, i): bit i of one runtime word, a field extraction
+    (r"^(?:And|Xor)(?:[2-9]|[1-9][0-9]+)_v1$", "roundings"),  # Boolean logic on n bits, as And2_v1 and Xor2_v1
+    (r"^TopPMaskWordx[1-9][0-9]*_v1$", "compare_select"),  # the top-p keep mask of V lanes
+    (r"^L(?:Select[1-9][0-9]*|FixedSelect[1-9][0-9]*x[1-9][0-9]*|IsActive[1-9][0-9]*|IsEOS[1-9][0-9]*|StepLive[1-9][0-9]*"
+     r"|Enable|EmitNext\[H=[1-9][0-9]*\])_v1$", "compare_select"),  # the lifting's tag tests and selects
+    (r"^L?SplitsForSMS[1-9][0-9]*_v1$", "roundings"),  # an integer division of a live count
+    (r"^LiveCount[1-9][0-9]*_v1$", "roundings"),  # the sum of R bits
+    (r"^LBot[1-9][0-9]*_v1$", "const"),  # the ⊥ encoding
+)
+#: the lifts of a primitive P, by id: P's class with a tag test
+LIFTS = (r"^Lifted\[(.+)\]_v[12]$", r"^(.+)\{ORD=[0-9]+\}$")
+_GATHERS = tuple((re.compile(p), i, k) for p, i, k in GATHERS)
+_FAMILIES = tuple((re.compile(p), c) for p, c in FAMILIES)
+_LIFTS = tuple(re.compile(p) for p in LIFTS)
+_LIFTED = {"const": "compare_select", "affine": "roundings", "family": "roundings"}
 
 
 @dataclass(frozen=True)
@@ -115,7 +144,11 @@ class Step:
     b: tuple[int, int]
 
 
-FAMILY: dict[str, Step] = {"BlackwellS8ImmaDot32_v1": Step(32, S8, S8), "BlackwellU8S8ImmaDot32_v1": Step(32, U8, S8)}
+FAMILY: dict[str, Step] = {
+    **dict.fromkeys(("BlackwellS8ImmaDot32_v1", "BlackwellS8ImmaDot32_v2", "PouwSegDot_v1"), Step(32, S8, S8)),
+    **dict.fromkeys(("BlackwellU8S8ImmaDot32_v1", "BlackwellU8S8ImmaDot32_v2"), Step(32, U8, S8)),
+    "PouwDot16U8S8_v1": Step(16, U8, S8),
+}
 #: the primitives the pass tries as affine maps; `I32Mul_v1` is one only with a constant operand
 AFFINE = ("I32Add_v1", "I32Sub_v1", "I32Mul_v1")
 
@@ -144,47 +177,70 @@ CLASSES: dict[str, str] = {
         "PouwHopperE4m3Window_v1 PouwI32ToF32Rn_v1 PouwMaj32_v1 PouwNegBetaSum16_v1 PouwNoiseByte_v1 PouwPackBE4_v1 "
         "PouwRotl64Hi_v1 PouwRotl64Lo_v1 PouwSha512BigSigma0Hi_v1 PouwSha512BigSigma0Lo_v1 PouwSha512BigSigma1Hi_v1 "
         "PouwSha512BigSigma1Lo_v1 PouwSha512SmallSigma0Hi_v1 PouwSha512SmallSigma0Lo_v1 PouwSha512SmallSigma1Hi_v1 "
-        "PouwSha512SmallSigma1Lo_v1 PouwSqCeil_v1 PouwSub8_v1 PouwXor32_v1 RopeOutAdd_v1 RopeOut_v1 RsqrtApprox_v1 "
-        "SiluMulBf16_v1 SiluMulBf16_v2 TanhF32Rn_v1 TopPNumkeep_v1 U32And_v1 U32Xor_v1 Ue8m0CeilByte_v1 Ue8m0InvScale_v1 "
-        "Xor2_v1"
+        "PouwSha512SmallSigma1Lo_v1 PouwSqCeil_v1 PouwSub8_v1 PouwWindowWord_v1 PouwXor32_v1 RopeOutAdd_v1 RopeOut_v1 "
+        "RsqrtApprox_v1 S32ByteCarry_v1 S32ByteCarry_v2 S32ClampRest_v1 S32ClampRest_v2 S32ClampS8_v1 S32ClampS8_v2 "
+        "S32LowByte_v1 S32LowByte_v2 S32ToF32Rn_v1 SiluMulBf16_v1 SiluMulBf16_v2 TanhF32Rn_v1 TopPNumkeep_v1 U32And_v1 "
+        "U32Xor_v1 Ue8m0CeilByte_v1 Ue8m0InvScale_v1 Xor2_v1"
     ), "roundings"),
     **dict.fromkeys(_ids(
         "Bf16GtStrict_v1 F32Eq_v1 F32Fmaxf_v1 F32Fminf_v1 F32Geu_v1 F32GtStrict_v1 F32IsFinite_v1 F32MaxRef_v1 F32Max_v1 "
         "GuardNegInfZero_v1 I32Eq_v1 I32Le_v1 NcpAbsMax_v1 PouwBlackwellE4m3SaltDead_v1 PouwHopperE4m3SaltDead_v1 "
-        "PouwSqGe_v1 SelectBf16_v1 SelectBit_v1 SelectF32_v1 SelectI32_v1 U32Ge_v1"
+        "PouwSel32_v1 PouwSqGe_v1 PouwWinOk_v1 SelectBf16_v1 SelectBit_v1 SelectF32_v1 SelectI32_v1 U32Ge_v1"
     ), "compare_select"),
-    "PouwWindowWord_v1": "gathers",
-    **dict.fromkeys(_ids("I32Mul_v1 NcpDot16I7_v1 PouwDot16U8S8_v1 PouwSqAcc_v1"), "products"),
+    **dict.fromkeys(_ids("I32Mul_v1 NcpDot16I7_v1 PouwSqAcc_v1"), "products"),
+    "PouwDuoAbsorb_v1": "folds",
 }
 
+def _unlift(fid: str) -> tuple[str, bool]:
+    """The primitive a lift (`LIFTS`) wraps, innermost, and whether `fid` is one."""
+    lifted = False
+    while True:
+        m = next((m for p in _LIFTS if (m := p.fullmatch(fid))), None)
+        if m is None:
+            return fid, lifted
+        fid, lifted = m[1], True
 
-def gather(fid: str) -> tuple[int, int] | None:
-    """A gather's index operand and the index bits it reads (`GATHERS`), or None when `fid` isn't a gather."""
-    for pat, i, bits in _GATHERS:
-        m = pat.fullmatch(fid)
+
+def gather(fid: str) -> tuple[int, int, str, bool] | None:
+    """A gather's index operand, its index bits and their kind (`GATHERS`), and whether it is lifted (`LGatherRow`, or a lift
+    of a gather: its tag scan reads every operand); None when `fid` isn't a gather."""
+    inner, lifted = _unlift(fid)
+    for pat, i, kind in _GATHERS:
+        m = pat.fullmatch(inner)
         if m:
-            return i, bits if isinstance(bits, int) else int(m[1]) if bits == "n" else (int(m[1]) - 1).bit_length()
+            return i, _BITS[kind](int(m[1])), kind, lifted or kind == "lifted"
     return None
 
 
+def _column(fid: str) -> bool:
+    """Whether `fid` is an unlifted gather, whose fan-in is the column its index bits pay for."""
+    g = gather(fid)
+    return g is not None and not g[3]
+
+
 def class_of(fid: str) -> str | None:
-    """A primitive's class by its id: `CLASSES`, else ``const``, ``gathers`` or ``compare_select`` by family, else None
-    (unlisted, refused)."""
+    """A primitive's class by its id: `CLASSES`, else ``const``, ``gathers`` or a `FAMILIES` class by family, else a lift's
+    (P's class, a free P's budgeted), else None (unlisted, refused)."""
     c = CLASSES.get(fid)
-    if c is None and CONST_ID.fullmatch(fid):
+    if c is not None:
+        return c
+    inner, lifted = _unlift(fid)
+    if lifted:
+        c = class_of(inner)
+        return _LIFTED.get(c, c) if c is not None else None
+    if CONST_ID.fullmatch(fid):
         return "const"
-    if c is None and gather(fid):
+    if gather(fid):
         return "gathers"
-    if c is None and any(p.fullmatch(fid) for p in _SELECTS):
-        return "compare_select"
-    return c
+    return next((c for p, c in _FAMILIES if p.fullmatch(fid)), None)
 
 
 def spec() -> dict:
     """The table as canonical data: what `digest` hashes."""
     return {"format": TAG, "version": VERSION, "budgeted": list(BUDGETED), "refused": list(REFUSED),
             "classes": dict(sorted(CLASSES.items())), "const": CONST_ID.pattern, "affine": list(AFFINE),
-            "gathers": [list(g) for g in GATHERS], "selects": list(SELECTS),
+            "gathers": [list(g) for g in GATHERS], "families": [list(f) for f in FAMILIES], "lifts": list(LIFTS),
+            "lifted": dict(sorted(_LIFTED.items())), "ranges": sorted(RANGES),
             "family": {f: {"k": s.k, "a": list(s.a), "b": list(s.b), "acc": list(S32)} for f, s in sorted(FAMILY.items())}}
 
 
@@ -270,6 +326,49 @@ def _affine(fid: str, a: Range, b: Range) -> tuple[int, int] | None:
         return None
     o = y if _point(a) is not None else x
     return (min(k * o[0], k * o[1]), max(k * o[0], k * o[1]))
+
+
+F32_POS = (0, 0x7F800000)  # +0 to +inf, f32 bit patterns read as s32: ordered as the floats
+
+
+def _f32_pos(r: Range) -> bool:
+    return r is not None and r[0] <= r[1] and _within(r, F32_POS)
+
+
+def _fmaxf(a: Range, b: Range) -> Range:
+    """`fmaxf`: at least a non-negative operand, so non-negative itself (a NaN or -0 operand gives the other or +0)."""
+    pa, pb = _f32_pos(a), _f32_pos(b)
+    if pa and pb:
+        return (max(a[0], b[0]), max(a[1], b[1]))  # type: ignore[index]
+    if pa or pb:
+        return ((a if pa else b)[0], F32_POS[1])  # type: ignore[index]
+    return None
+
+
+def _fminf(a: Range, b: Range) -> Range:
+    """`fminf`: at most a non-negative operand (a NaN operand gives the other; a negative float or -0 reads below 0)."""
+    pa, pb = _f32_pos(a), _f32_pos(b)
+    if pa and pb:
+        return (min(a[0], b[0]), min(a[1], b[1]))  # type: ignore[index]
+    if pa or pb:
+        return (S32[0], (a if pa else b)[1])  # type: ignore[index]
+    return None
+
+
+def _trunc(bits: int) -> int:
+    return int(struct.unpack("<f", struct.pack("<I", bits))[0])
+
+
+def _rz_byte(x: Range) -> Range:
+    """`F32ToU32RzByte`'s low byte of `cvt.rzi.u32.f32` below 128.0: the truncation; a NaN, -0 or negative float (read below 0)
+    gives 0."""
+    if x is None or x[0] > x[1] or x[1] >= 0x43000000:
+        return None
+    return (_trunc(x[0]) if x[0] >= 0 else 0, _trunc(x[1]) if x[1] >= 0 else 0)
+
+
+#: the budgeted gates whose value's range a rule derives from their operands' ranges (`F32_POS`)
+RANGES: dict[str, Callable[..., Range]] = {"F32Fmaxf_v1": _fmaxf, "F32Fminf_v1": _fminf, "F32ToU32RzByte_v1": _rz_byte}
 
 
 def _colls(refs: Refs) -> set[tuple[str, int]]:
@@ -419,8 +518,8 @@ class _Pass:
             return None, t
         if cls == "const":
             m = CONST_ID.fullmatch(fn.id)
-            v = _signed(int(m[1]), int(m[2], 16))  # type: ignore[index]
-            return (v, v), t
+            v = _signed(int(m[1]), int(m[2], 16)) if m else None
+            return ((v, v) if v is not None else None), t
         if cls == "family":
             st = FAMILY[fn.id]
             c, a, b = _clip(rng[0], S32), _operand(rng[1], st.a), _operand(rng[2], st.b)
@@ -440,9 +539,11 @@ class _Pass:
                 return r, t
             if cls == "affine":
                 cls = "roundings"
-        if any(dyn) and cls != "gathers":
-            t.units[cls] += 1
-        return None, t
+        g = gather(fn.id) if cls == "gathers" else None
+        if any(dyn) and (g is None or g[3]):
+            t.units["compare_select" if g else cls] += 1
+        rule = RANGES.get(fn.id)
+        return (rule(*rng) if rule else None), t
 
     def call(self, fn: Any, dyn: tuple[bool, ...], rng: tuple[Range, ...], where: tuple[str, int]) -> tuple[Segs, bool, Tally]:
         if isinstance(fn, PrimitiveDefinition):
@@ -465,19 +566,19 @@ class _Pass:
     def walk(self, body: Body, pdyn: Sequence[bool], prng: Sequence[Range], def_id: str, segs: list[Segs],
              dyns: list[bool], up: dict) -> Iterator[tuple[int, Tally]]:
         """Each node of `body` with the tally of its gates (a batch's and a scan's whole), filling its output's segments and
-        run dependence, and a reinterpreting return as its last node's. Gather index bits: an index computed in this body
-        counts once, in the tally of the first node that reads it; one read from the parameters goes in `up` for the caller;
-        a batch member's own index (a mapped one) counts once a member."""
+        run dependence, and a reinterpreting return as its last node's. Gather index bits, by index and kind: an index
+        computed in this body counts once, in the tally of the first node that reads it; one read from the parameters goes in
+        `up` for the caller; a batch member's own index (a mapped one) counts once a member."""
         bad = self.widths.get(id(body))
         if bad is None:
             self.keep.append(body)
             bad = self.widths[id(body)] = frozenset(_reinterpretations(body))
         fresh: dict[Any, int] = {}
 
-        def note(refs: Refs, bits: int, t: Tally) -> None:
-            key = _key(refs)
+        def note(refs: Refs, bits: int, kind: str, t: Tally) -> None:
+            key = (kind, _key(refs))
             if any(s == "p" for s, _i in _colls(refs)):
-                up[key] = (refs, max(bits, up.get(key, (refs, 0))[1]))
+                up[key] = (refs, max(bits, up.get(key, (refs, 0))[1]), kind)
             elif bits > fresh.get(key, 0):
                 t.units["gathers"] += bits - fresh.get(key, 0)
                 fresh[key] = bits
@@ -500,19 +601,19 @@ class _Pass:
                     s = ((0, nd.out.leaves, _seg_union(s)),)
                 t = Tally()
                 t.add(t0, nd.n if batch else 1)
-                for refs, bits in t0.index.values():
+                for refs, bits, kind in t0.index.values():
                     leaves = list(refs)
                     if batch and any(nd.axes[i] is not None for _s, i, _j in leaves):
                         t.units["gathers"] += nd.n * bits
                     else:
-                        note(Explicit(tuple(nd.args[i].refs[j] for _s, i, j in leaves)), bits, t)
+                        note(Explicit(tuple(nd.args[i].refs[j] for _s, i, j in leaves)), bits, kind, t)
                 g = gather(nd.fn.id) if isinstance(nd.fn, PrimitiveDefinition) else None
                 if g and ad[g[0]]:
-                    i, bits = g
+                    i, bits, kind, _lifted = g
                     if batch and nd.axes[i] is not None:
                         t.units["gathers"] += nd.n * bits
                     else:
-                        note(nd.args[i].refs, bits, t)
+                        note(nd.args[i].refs, bits, kind, t)
             if k in bad:
                 t.refused[("reinterpretation", def_id)] += 1
             segs.append(s)
@@ -538,7 +639,7 @@ class _Pass:
             reps = nd.n - i if nxt == carry else 1
             out.add(t, reps)
             if t.index:
-                out.units["gathers"] += reps * sum(bits for _refs, bits in t.index.values())  # an iteration's index counts anew
+                out.units["gathers"] += reps * sum(bits for _refs, bits, _kind in t.index.values())  # an iteration's index counts anew
             if nxt == carry:
                 break
             carry = nxt
@@ -586,7 +687,7 @@ def count(fn: Any, dyn: Sequence[bool], ranges: Sequence[Range] | None = None) -
     for _k, t in p.walk(fn.body, tuple(dyn), rng, fn.id, [], [], up):
         out.add(t)
     if up:
-        out.units["gathers"] += sum(bits for _refs, bits in up.values())
+        out.units["gathers"] += sum(bits for _refs, bits, _kind in up.values())
     return out
 
 
@@ -683,7 +784,7 @@ def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in:
             raise ValueError(f"a window is a non-empty range of the census's {S} steps with reads >= 0 and seconds > 0, not {win}")
     reasons: list[dict] = [{"code": code, "definitions" if code == "reinterpretation" else "primitives": a.refused[code]}
                            for code in REFUSED if code in a.refused]
-    fan = {g: s["fan_in"] for g, s in a.gates.items() if s["class"] in BUDGETED and s["class"] != "gathers" and s["fan_in"] > f}
+    fan = {g: s["fan_in"] for g, s in a.gates.items() if s["class"] in BUDGETED and s["fan_in"] > f and not _column(g)}
     if fan:
         reasons.append({"code": "fan-in", "f": f, "primitives": fan})
     wide = {g: s["width"] for g, s in a.gates.items() if s["width"] > w}
@@ -714,6 +815,6 @@ def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in:
     return Verdict(not reasons, tuple(reasons), numbers)
 
 
-__all__ = ["AFFINE", "Analysis", "BUDGETED", "CLASSES", "CONST_ID", "FAMILY", "FAN_IN", "GATHERS", "REFUSED", "R_IN", "S32", "S8",
-           "SELECTS", "SCHEMA", "Step", "TAG", "Tally", "U8", "VERSION", "Verdict", "WIDTH", "Window", "analyze", "check",
-           "class_of", "count", "digest", "gather", "judge", "spec"]
+__all__ = ["AFFINE", "Analysis", "BUDGETED", "CLASSES", "CONST_ID", "F32_POS", "FAMILIES", "FAMILY", "FAN_IN", "GATHERS", "LIFTS",
+           "RANGES", "REFUSED", "R_IN", "S32", "S8", "SCHEMA", "Step", "TAG", "Tally", "U8", "VERSION", "Verdict", "WIDTH", "Window",
+           "analyze", "check", "class_of", "count", "digest", "gather", "judge", "spec"]
