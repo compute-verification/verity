@@ -1,7 +1,7 @@
-# VF3r-16: VF3q-16 with FACET-BREAK's 2-3-accumulator refit (note:20261017T0524Z-draft-eps1-facet-break; runs @JI3s): JI3o_1, JI3o_2 and JI3q_0-11 as JI3s_0-30 (each MMA form its own class, decision 81, at the most it carries beside each vector coefficient), EFFMA0-6 as EFFMB0-4 (MMA beside FFMA/FMUL by an immediate on 2-3 accumulators, 2 warps a SMSP)
+# VF3r-16: VF3q-16 with FACET-BREAK's 2-3-accumulator refit (note:20261017T0524Z-draft-eps1-facet-break; runs @JI3s): JI3o_1, JI3o_2 and JI3q_0-11 as JI3s_0-20 (each MMA form its own class, decision 81, at the most it carries beside each vector coefficient), EFFMA0-6 as EFFMB0-1 (MMA beside FFMA/FMUL by an immediate on 2-3 accumulators, 2 warps a SMSP, every MMA form on the generic MMA axis); in the census, EALU0-8, EIMAD0-5 and EDMUL0-2 as EALUB0-4, EIMADB0-4 and EDMULB0-2 (MMA of any form beside SHF/PRMT by an immediate, IDP.4A and DMUL)
 name = "VF3r-16"
 epoch = "VF3r-16"
-summary = "VF3q-16 with FACET-BREAK's 2-3-accumulator refit (note:20261017T0524Z-draft-eps1-facet-break; runs @JI3s): JI3o_1, JI3o_2 and JI3q_0-11 as JI3s_0-30 (each MMA form its own class, decision 81, at the most it carries beside each vector coefficient), EFFMA0-6 as EFFMB0-4 (MMA beside FFMA/FMUL by an immediate on 2-3 accumulators, 2 warps a SMSP)"
+summary = "VF3q-16 with FACET-BREAK's 2-3-accumulator refit (note:20261017T0524Z-draft-eps1-facet-break; runs @JI3s): JI3o_1, JI3o_2 and JI3q_0-11 as JI3s_0-20 (each MMA form its own class, decision 81, at the most it carries beside each vector coefficient), EFFMA0-6 as EFFMB0-1 (MMA beside FFMA/FMUL by an immediate on 2-3 accumulators, 2 warps a SMSP, every MMA form on the generic MMA axis); in the census, EALU0-8, EIMAD0-5 and EDMUL0-2 as EALUB0-4, EIMADB0-4 and EDMULB0-2 (MMA of any form beside SHF/PRMT by an immediate, IDP.4A and DMUL)"
 note = "note:20261017T0524Z-draft-eps1-facet-break"
 rows = [
     "issue", "M", "F", "VMNX", "H", "I", "A", "F2FS",
@@ -17,9 +17,7 @@ rows = [
     "ELDG1", "ELDG2", "ROW_LDS64", "ROW_LDG64", "ROW_LDG256", "ROW_L2RD", "JI3s_0", "JI3s_1",
     "JI3s_2", "JI3s_3", "JI3s_4", "JI3s_5", "JI3s_6", "JI3s_7", "JI3s_8", "JI3s_9",
     "JI3s_10", "JI3s_11", "JI3s_12", "JI3s_13", "JI3s_14", "JI3s_15", "JI3s_16", "JI3s_17",
-    "JI3s_18", "JI3s_19", "JI3s_20", "JI3s_21", "JI3s_22", "JI3s_23", "JI3s_24", "JI3s_25",
-    "JI3s_26", "JI3s_27", "JI3s_28", "JI3s_29", "JI3s_30", "EFFMB0", "EFFMB1", "EFFMB2",
-    "EFFMB3", "EFFMB4",
+    "JI3s_18", "JI3s_19", "JI3s_20", "EFFMB0", "EFFMB1",
 ]
 # [kind, MACs]: the kind's price is at least that many tensor MACs
 credits = [
