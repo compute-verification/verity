@@ -338,6 +338,19 @@ def test_files_already_in_lakes_cache_are_not_fetched_again(s3, tmp_path, lake):
 
 # ---------------------------------------------------------------- the client's switches
 
+def test_the_read_credential_falls_back_to_the_file_under_home(tmp_path):
+    keys = dict(zip(C.READ_ENV, ("id", "secret", "https://r2.example", "bucket")))
+    assert C.reader({"HOME": str(tmp_path)}) is None
+    f = tmp_path / C.READ_FILE
+    f.parent.mkdir(parents=True)
+    f.write_text("".join(f"{k}={v}\n" for k, v in keys.items() if k != "LEAN_CACHE_BUCKET") + "OTHER=x\n")
+    assert C.reader({"HOME": str(tmp_path)}) is None
+    f.write_text("# read-only\n" + "".join(f"export {k}='{v}'\n" for k, v in keys.items()))
+    s3 = C.reader({"HOME": str(tmp_path)})
+    assert (s3.host, s3.bucket, s3.key_id, s3.secret) == ("r2.example", "bucket", "id", "secret")
+    assert C.reader({**keys, "LEAN_CACHE_BUCKET": "other", "HOME": str(tmp_path)}).bucket == "other"    # the environment wins
+
+
 def test_off_without_a_credential_or_with_the_kill_switch_off(s3, tmp_path, lake):
     b, url = s3
     r, rev = repo(tmp_path)
@@ -923,3 +936,15 @@ def test_the_daily_run_publishes_nothing_after_a_probe_a_refusal_an_unclean_tree
     assert D.daily(n, lines.append) == rc
     assert why in lines[-1] and "nothing published" in lines[-1], lines
     assert not b.objects
+
+
+def test_a_dependency_whose_name_lean_escapes_counts_as_fetched(tmp_path):
+    """Lake writes a name Lean must escape as `«doc-gen4»` in the manifest and `doc-gen4` on disk; reading the manifest's
+    name raw made every package depending on doc-gen4 (Security/Proofs) look unfetched, and the cache built it from source."""
+    (tmp_path / "lake-manifest.json").write_text(json.dumps({"packages": [
+        {"name": "«doc-gen4»", "type": "git"}, {"name": "Arklib", "type": "git"}, {"name": "security", "type": "path"}]}))
+    (tmp_path / ".lake" / "packages" / "Arklib").mkdir(parents=True)
+    assert not C.fetched_deps(tmp_path)
+    (tmp_path / ".lake" / "packages" / "doc-gen4").mkdir()
+    assert C.fetched_deps(tmp_path)
+    assert C.unescape("«doc-gen4»") == "doc-gen4" and C.unescape("Arklib") == "Arklib"

@@ -1,5 +1,6 @@
-"""The machine model's sm_89 census (`benchmarks/pouw/machine_model/data/devices/sm_89/`) from a run of `run.sh` (scalar.cu) and a
-run of tensor_kinds with TK_ARCH=89, in the machine model's schema with one epoch (no `since` or `until`).
+"""The machine model's sm_89 census (`benchmarks/pouw/machine_model/data/devices/sm_89/`) from a run of `run.sh`
+(scalar.cu) and a run of tensor_kinds with TK_ARCH=89, in the machine model's schema with one epoch (no `since` or
+`until`).
 
   python census.py SCALAR_OUT TENSOR_KINDS_OUT [--write DIR]   # prints rows.csv and census.csv, or writes them in DIR
 

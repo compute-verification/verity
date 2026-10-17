@@ -1,0 +1,47 @@
+# Bc, SKIP's recommendation: CHECKED-STRIP's CO-Dither as co32c on the linears and lm_head, cohalf on QKᵀ, design A's P·V
+# (note:20261017T0340Z-draft-skip 04:41Z, note:20261017T0030Z-draft-checked-strip).
+name = "co-dither"
+summary = "Bc: CO-Dither's co32c on the linears and lm_head (every limb a checked word), cohalf QKᵀ, A's P·V (SKIP), duo at L = 32"
+honest = "e-l7qs"
+L = 32
+work = 1.0
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDSM_X4 = 0.025641 }
+source = "SPEC §3.4: CO-Dither's U is resident (B̃ a data-independent map of a resident matrix), so Dither's one-operand floor, least 1/39 at (a, b) = (1, 39); co32c's words are subset sums of wide U values, as fresh as Dither's (SKIP) (note:20261017T0324Z-draft-eps1-spec)"
+
+[fold]
+name = "duo"
+ALU = 2
+IMAD = 1
+
+[skip.pv-strip]
+eps = 0.00129
+source = "CALC from SKIP's parts: Bc's adopted P·V, 0.064% by time at 04:41Z, doubled by CHECKED-STRIP Result 3's one-hot P row (its whole strip free) as A's went 0.065% → 0.131% (note:20261017T0340Z-draft-skip Result 3, 06:19Z; note:20261017T0030Z-draft-checked-strip)"
+
+[skip.recombination]
+eps = 0.00074
+source = "co32c's recombination IMADs, 0.077% of the 8B linears' time at the duo fold (CHECKED-STRIP), at the linears' share of SKIP's worst cell (8B 2K prefill: 0.138% − 0.064%); added to P·V's maximum, which may sit in another cell, so conservative (note:20261017T0340Z-draft-skip, 04:41Z)"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD)"
+
+[clock]
+eps = 0.1391
+source = "SPEC's P1 (note:20261017T0324Z-draft-eps1-spec, 04:47Z): the prover sets its own clocks, so f_max is the hardware's 2,430 MHz against honest at the node's 2,092 lock, 1 − 2092/2430, unless a trusted device attests the lock; at the lock every program runs 2,099.5-2,100.0 MHz (DATASHEET, r20261017-033131-4e67), and the default-clock gap is unmeasured"
+
+[luck]
+delta = 4.547473508864641e-13
+p = 0.75
+checks = 48000
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 8, LDS128 = 0.5 }   # lane instructions a word: 8 IDP4A at k = 32, operands for an 8x8 tile a lane
+source = "dp4a at 8 IDP4A a word (note:20261017T0310Z-report-eps1-program §3); its loads: 2(a + b)/(ab) LDS.128 a word at a = b = 8"
+
+[routes]
+lanes = true
+uniform = true

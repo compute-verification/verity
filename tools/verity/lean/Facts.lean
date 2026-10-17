@@ -27,7 +27,9 @@ judgement; `check.py` holds the policy.
   package declares can change how its statements read.
 - `spec_definitions`: the definitions and inductive types the audited modules under `spec` declare in their source (with a
   declaration range: what Lean generates for them has none), projections and internal names aside, each with whether it
-  is a statement (`def G : Prop`).
+  is a statement (`def G : Prop`) and whether it is a predicate (its type, past its binders, is `Prop`).
+- each pin's `body`: the constant its statement applies past its `∀` and `∃` binders (`head`), and whether a `¬` stands
+  before that application (`negated`), read as written: nothing is unfolded.
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
@@ -449,6 +451,19 @@ partial def premisesOf (env : Environment) (moduleOf : Name → Option Name) (de
       return ps)
   return out
 
+/-- The constant a statement applies past its `∀` and `∃` binders, and whether `¬` stands before it. -/
+partial def bodyHead (t : Expr) : MetaM (Option Name × Bool) :=
+  forallTelescope t fun _ b => do
+    let b := b.consumeMData
+    if b.isAppOfArity ``Exists 2 then
+      match b.appArg!.consumeMData with
+      | .lam n ty body bi => withLocalDecl n bi ty fun x => bodyHead (body.instantiate1 x)
+      | _ => return (none, false)
+    else if b.isAppOfArity ``Not 1 then
+      return (b.appArg!.consumeMData.getAppFn.constName?, true)
+    else
+      return (b.getAppFn.constName?, false)
+
 def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
@@ -478,6 +493,9 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("shape", ← shapeInfo env meaning moduleOf ci.type),
     ("premises", ← (do return toJson (← premisesOf env moduleOf 3 ci.type)) <|> pure Json.null),
+    ("body", ← (do
+      let (h, neg) ← bodyHead ci.type
+      return Json.mkObj [("head", toJson (h.map toString)), ("negated", toJson neg)]) <|> pure Json.null),
     ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
     ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]
@@ -607,7 +625,8 @@ unsafe def main (args : List String) : IO UInt32 := do
       counts := counts.insert (kind ci) (counts.getD (kind ci) 0 + 1)
       if under spec m && specDefinition ci && ranges.contains n then
         specDefs := specDefs.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString),
-          ("kind", toJson (kind ci)), ("statement", toJson ci.type.isProp)]
+          ("kind", toJson (kind ci)), ("statement", toJson ci.type.isProp),
+          ("predicate", toJson (ci.type.getForallBody matches .sort .zero))]
       if let (some r, .str _ s) := (ranges[n]?, privateToUserName n) then
         if s.startsWith "inst" then
           instances := instances.push <| Json.mkObj [("name", toJson (privateToUserName n).toString),

@@ -1,0 +1,33 @@
+description = "the adopted design with Q K^T dithered on both operands: Q served as floor(q / s) + b like K, no peel on Q (so no strip on Q K^T); P's w64 peel, psink, kc and the linears as in adopted"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight_top = 63
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64
