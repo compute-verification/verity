@@ -114,8 +114,10 @@ def test_router_stand_in_ids_and_tie_rule():
 def test_quarantine_identity_and_conformance_labels():
     assert Q.SEMANTIC_ID == "ov-moe/MoeExpertGemm@v1"
     assert Q.MoeRouterTopK.conformance == "not-yet-established" and Q.NvExpf.id == "NvExpf_v1"   # cov-moe: the CUDA expf sequence, no stand-in
-    for d in (Q.MoeExpertGemm, Q.MoeExpertGemmW, Q.MoeSum):
+    for d in (Q.MoeExpertGemm, Q.MoeExpertGemmW):
         assert d.conformance == "not-yet-established" and d.version == 1
+    assert Q.MoeSum.version == 1 and Q.MoeSum.conformance.startswith("exact-model-tested")
+    assert "glm53_block_fp8_capture/v4" in Q.MoeSum.conformance
 
 
 # --- NvExpf: the CUDA math-library expf as nvcc emits it (cov-moe) -------------------------------------------------------

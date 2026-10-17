@@ -79,20 +79,21 @@ FI_LANES = 32
 #: (bf16, e4m3, f32): the word types; `boolean_deepgemm` passes their bits
 WORD_TYPES = (BF16, E4M3, F32)
 
-#: the H200 capture at vLLM's defaults with a served engine's toolchain that every conformance below cites
+#: the capture on cc 9.0 (132 SMs) at vLLM's defaults with a served engine's toolchain that every conformance below cites
 _CAPTURE = "deepgemm_sm90_capture/v2, run r20261017-134740-47df, art:ed32605612a39b3a0f4cad575e5b6a325385f28657ddb7f7dbcdb768406a9d01"
-_UE8M0_CONF = ("exact-model-tested: vLLM d9105ea80's per_token_group_quant_8bit_kernel (ue8m0) on the H200 at vLLM's defaults, every "
-               f"(q, s) of 5,312 rows (both models' TP8 linears at M >= 32 and the fma probe) equal ({_CAPTURE}); read from "
+_UE8M0_CONF = ("exact-model-tested: vLLM d9105ea80's per_token_group_quant_8bit_kernel (ue8m0) on cc 9.0 (132 SMs) at vLLM's defaults, "
+               f"every (q, s) of 5,312 rows (both models' TP8 linears at M >= 32 and the fma probe) equal ({_CAPTURE}); read from "
                "per_token_group_quant.cu:42-160 (nvcc without fast-math), the ue8m0 rounding written as the bit form of "
                "per_token_group_quant.cu:381-387, equal on every reachable scale (Fp8Ue8m0Ceil_v1's doc)")
 _FI_CONF = ("exact-model-tested inside FlashInferFp8Linear_v1 (the quant's words never leave the op): FlashInfer 0.6.18's "
-            "fp8_blockscale_gemm on the H200 at vLLM's defaults, its module built by the served toolchain (CUDA 13.0, -use_fast_math), "
-            "equals FlashInferFp8Linear_v1 on every word at M 1, 8, 16 and 31, the all-subnormal groups its FTZ compare decides "
-            f"included, and the H200's rcp.approx.ftz table is MufuRcpFtz_v1's ({_CAPTURE}); read from fp8_blockscale_gemm_kernel.cuh:"
+            "fp8_blockscale_gemm on cc 9.0 (132 SMs) at vLLM's defaults, its module built by the served toolchain (CUDA 13.0, "
+            "-use_fast_math), equals FlashInferFp8Linear_v1 on every word at M 1, 8, 16 and 31, the all-subnormal groups its FTZ "
+            f"compare decides included, and that GPU's rcp.approx.ftz table is MufuRcpFtz_v1's ({_CAPTURE}); read from "
+            "fp8_blockscale_gemm_kernel.cuh:"
             "820-895 and its sm_90 PTX")
-_GEMM_CONF = ("exact-model-tested: both branches' GEMMs and DeepSeek-V4's wo_a einsum on the H200 at vLLM's defaults, 28,196,352 words "
-              "with 0 mismatches over DeepSeek-V4-Pro's and GLM-5.3's TP8 linears at M 1, 8, 16, 31, 32, 64 and 256, wo_a at M 1, 31 "
-              "and 64, and two probes; on the probes "
+_GEMM_CONF = ("exact-model-tested: both branches' GEMMs and the grouped wo_a einsum on cc 9.0 (132 SMs) at vLLM's defaults, "
+              "28,196,352 words with 0 mismatches over both models' TP8 linears (the capture's dsv4 and glm53 cases) at M 1, 8, 16, "
+              "31, 32, 64 and 256, wo_a at M 1, 31 and 64, and two probes; on the probes "
               "FFMA(temp, FMUL(sx, ws), acc) with subnormals kept is the kernels' composition, where FTZ at the FMUL, the FFMA, both or "
               "the cvt, FMUL + FADD, and either scale applied first each differ on FlashInfer's branch, and FMUL + FADD and either "
               f"scale first at DeepGEMM's f32 overflow edge ({_CAPTURE}); read from DeepGEMM 8b1392b9 sm90_fp8_gemm_1d2d.cuh:283-347 "

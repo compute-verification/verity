@@ -559,7 +559,7 @@ def MoeRouterSigmoidNorm(B, S, w, v):
            conformance="exact-model-tested; the RTX PRO 6000's (cc 12.0, 188 SMs) _moe_C.grouped_topk at E=256, TOPK=8, SCALE=2.5, "
                        "both launches: 10,240 rows bit-exact against this Program and every MUFU-range logit word (65,873,464) "
                        "against its twin (tests/properties/sigmoid_router_capture_gpu.py; runs r20261003-090316-1374 and "
-                       "r20261003-091025-e5e7, art:a827deda); likewise the H200's (cc 9.0, 132 SMs) at vLLM d9105ea80's defaults "
+                       "r20261003-091025-e5e7, art:a827deda); likewise cc 9.0's (132 SMs) at vLLM d9105ea80's defaults "
                        "(not batch invariant, the fused grouped top-k on; run r20261017-121712-18ba, art:f0439f03)")
 def MoeRouterSigmoidBias(B, S, logits, bias):
     """`_moe_C.grouped_topk(scores, n_group=1, topk_group=1, TOPK, renormalize=True, SCALE, bias, scoring_func=SIGMOID)` for one
@@ -696,8 +696,8 @@ def MoeExpertGemmWV2(B, S, x, e, g, w):
 # ---------------------------------------------------------------------------------------------------------
 
 
-SUM_CONF = ("exact-model-tested at TOPK = 8, H = 6144: vLLM d9105ea80's moe_sum (moe_sum_vec_kernel<bf16, int32, 8>) on the H200 "
-            "at vLLM's defaults, inside GLM-5.3's served FusedMoEKernel (349 token rows) and on 8 planted rows (-0s, a tie into "
+SUM_CONF = ("exact-model-tested at TOPK = 8, H = 6144: vLLM d9105ea80's moe_sum (moe_sum_vec_kernel<bf16, int32, 8>) on cc 9.0 "
+            "(132 SMs) at vLLM's defaults, inside GLM-5.3's served FusedMoEKernel (349 token rows) and on 8 planted rows (-0s, a tie into "
             "infinity, overflow, NaN payloads, infinities, ties, bf16 subnormals, order-dependent cancellations) on which descending "
             "order, a pairwise tree, the first slot's start, a bf16 accumulator, FTZ, NaN payloads kept and truncation each differ, "
             "0 mismatches (property glm53_block_fp8_capture/v4, run r20261017-125608-3071, art:41943522)")

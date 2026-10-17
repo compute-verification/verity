@@ -94,7 +94,7 @@ from verity_vllm.program.registry.prims import BF16, F32
 
 
 _CONF = ("exact-model-tested as the `_v3` forms at DOT = HopperE4m3QgmmaDot32_v1, of which these are the function "
-         "(tests/program/test_fp8_moe_dot.py): vLLM d9105ea80's fused_moe_kernel (Triton 3.7.1) on the H200 at vLLM's defaults, "
+         "(tests/program/test_fp8_moe_dot.py): vLLM d9105ea80's fused_moe_kernel (Triton 3.7.1) on cc 9.0 (132 SMs) at vLLM's defaults, "
          "GLM-5.3's wgmma tiles 16x64x128 and 16x128x128 under SWAP_AB, 18,432,000 w13 and w2 words, 0 mismatches (property "
          "glm53_block_fp8_capture/v4, run r20261017-125608-3071, art:41943522)")
 
@@ -185,8 +185,8 @@ DOT_CONF = ("exact-model-tested at cc 12.0's DOT (GemmTarget.fp8_moe_dot), Black
              "moe/prefill: fused_experts (E 128, top 8, hidden 4096, I 192) under TritonExperts, every block-[64, 64] fused_moe_kernel "
              "launch at 64x64x32, 11,791,360 w13 and w2 words, 0 mismatches; Hopper's step, the swapped and CUTLASS scale orders and an "
              "unfused mul + add each refuted (3,942, 577, 568 and 575 words); read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1 "
-             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); and at cc 9.0's DOTs (`sm90_dot`), G = 128, KB = 128, SWAP "
-             "both: property glm53_block_fp8_capture/v4 on the H200 at vLLM's defaults, run r20261017-125608-3071, art:41943522: "
+             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); and at cc 9.0's DOTs (as this module's dot picks them), G = 128, KB = 128, SWAP "
+             "both: property glm53_block_fp8_capture/v4 on cc 9.0 (132 SMs) at vLLM's defaults, run r20261017-125608-3071, art:41943522: "
              "GLM-5.3's served chain under vLLM's FusedMoEKernel / TritonExperts (E 256, top 8, hidden 6144, I 256 and 2048), "
              "every launch at its tuned tile, HopperE4m3MmaV2Dot32_v1 at 8x32x128 and 8x64x128/SWAP_AB (638,976 words) and "
              "HopperE4m3QgmmaDot32_v1 at 16x64x128 and 16x128x128/SWAP_AB (18,432,000 words), 0 mismatches")
@@ -241,8 +241,8 @@ def MoeExpertFp8BlockGemmWV3(B, S, xq, sx, g, w, ws):
     return rows(B, coord, S.N, S.G, w, ws, (xq, sx, g))
 
 
-_ACT_CONF = ("model-untested: read from vLLM d9105ea80 fused_silu_mul_block_quant.cu and its build flags; not on the served sm_90 "
-             "path (vLLM's defaults run silu_and_mul and the ue8m0 quant instead); glm53_block_fp8_capture/v3 compared it on the H200 "
+_ACT_CONF = ("model-untested: read from vLLM d9105ea80 fused_silu_mul_block_quant.cu and its build flags; not on the served cc 9.0 "
+             "path (vLLM's defaults run silu_and_mul and the ue8m0 quant instead); glm53_block_fp8_capture/v3 compared it on cc 9.0 "
              "at VLLM_USE_DEEP_GEMM=0 (GO, run r20261014-092222-e32d)")
 
 
