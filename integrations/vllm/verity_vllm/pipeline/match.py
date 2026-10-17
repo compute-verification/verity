@@ -63,6 +63,7 @@ from verity_vllm.config import RowEngine, UsageError, option
 from verity_vllm.engine.served import ENFORCE_EAGER
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
+from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program.sampling_event import program_sampler_construction
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
@@ -684,6 +685,8 @@ def main(a: Options) -> int:
     spec_note = write_spec_for(plan, a, man)          # D88: spec.json (known before execution) -- written once, before any GPU stage
     recs = load_stages(plan.run)
     logs = plan.run / "logs"
+    if a.phase in ("gpu", "all"):
+        GL.acquire()                 # a leased row's GPU phase: its GPU from here to the exit (`row_stages.SingleRow.match`); nothing reads the device before
     t_phase = time.time()
     stages = _batch_replays(stages, plan.parallel)
     if a.phase == "cpu":
