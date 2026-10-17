@@ -46,6 +46,8 @@ DEFAULT_CUBLAS_SPLIT_K = {
 }
 DEFAULT_CUBLAS_NON_SPLIT = {
     ("linear", 6144, 19360): frozenset((1, 4, 16, 128, 256)),
+    # DeepSeek-V4-Pro's lm_head shard: one nvjet launch, no reduction kernel, every word Gemm_v2's (r20261016-234133-bbc8, served default)
+    ("linear", 7168, 16160): frozenset((1, 4, 16, 128, 256)),
 }
 
 
