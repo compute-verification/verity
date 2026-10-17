@@ -6,9 +6,9 @@ steers a flow's receive queue to the CPU that sends it, which our busy-polling c
 hashes each UDP 4-tuple to one of 11 channels, whose interrupt is on CPU 96 + channel, idle or not.
 
 1. `lat serve` on cpu-1 (port 47340), peers node 1's candidate source ports.
-2. On node 1, with the challenger on one fixed idle CPU, each candidate source port's 2,000 pings: the channel whose
-   interrupt count rises with it is that port's receive channel (`discovery.json`).
-3. Two ports L1, L2 with different receive channels r1, r2, both off the fixed CPU's transmit channel. Phase 1 times
+2. On node 1, with the challenger on one fixed idle CPU, each candidate source port's 2,000 pings, twice from new
+   sockets: the channel whose interrupt count rises both times is that port's receive channel (`discovery.json`).
+3. Two ports L1, L2 with different receive channels r1, r2. Phase 1 times
    L1 with its challenger on CPU 96 + r1 (`on`) and L2 on the fixed CPU (`off`) at once; phase 2 swaps them. 1 ms-paced
    pings (or `--ops 2`, 4 KiB answers from cpu-1's host memory), `--seconds` per phase. Each machine's CPUs are sampled
    once a second (`cpusample.py`).
@@ -52,13 +52,15 @@ try:
     irq_cpus = set(range(96, 107))
     fixed = max((c for c in idle if c not in irq_cpus and c != 0), key=lambda c: idle[c])
     res = []
-    for L in lports:
-        a = irqs()
-        p = subprocess.run([d + "/lat", "probe", "to=" + to, "lport=%d" % L, "cpu=%d" % fixed, "pings=%d" % pings,
-                            "rounds=0", "k=1", "gap_us=1000", "warm=50", "max_s=20", "out=" + d + "/disc"],
-                           capture_output=True)
-        b = irqs()
-        res.append({"lport": L, "rc": p.returncode, "delta": {k: b[k] - a[k] for k in b}, "stderr": p.stderr.decode()[-300:]})
+    for rep in range(2):
+        for L in lports:
+            a = irqs()
+            p = subprocess.run([d + "/lat", "probe", "to=" + to, "lport=%d" % L, "cpu=%d" % fixed, "pings=%d" % pings,
+                                "rounds=0", "k=1", "gap_us=1000", "warm=50", "max_s=20", "out=" + d + "/disc"],
+                               capture_output=True)
+            b = irqs()
+            res.append({"lport": L, "pass": rep, "rc": p.returncode, "delta": {k: b[k] - a[k] for k in b},
+                        "stderr": p.stderr.decode()[-300:]})
     rfs = open("/proc/sys/net/core/rps_sock_flow_entries").read().strip()
     print(json.dumps({"fixed_cpu": fixed, "fixed_idle": idle[fixed], "rps_sock_flow_entries": rfs, "ports": res}))
 finally:
@@ -74,21 +76,24 @@ def discover(src: bytes, to: str, pings: int) -> dict:
     return json.loads(p.stdout.decode().strip().splitlines()[-1])
 
 
-def receive_channels(disc: dict, pings: int) -> tuple[int, dict[int, int | None]]:
-    """Each port's receive channel: the channel whose interrupts during its pings exceed that channel's median over all
-    ports (the background, plus the fixed CPU's transmit channel, which every port shares) by more than pings / 2.
-    None where no channel does (the port receives on the transmit channel). Also the transmit channel: the largest
-    median."""
+def receive_channels(disc: dict, pings: int) -> dict[int, int | None]:
+    """Each port's receive channel. A port's pings raise two channels' interrupts above the channel's median over all
+    ports (the background): its receive channel, fixed by the 4-tuple's RSS hash, and its transmit channel, which each
+    new socket draws at random (no XPS map here). Each port is timed twice from new sockets, so its receive channel is
+    the one raised both times; None where that is not exactly one channel."""
     chans = sorted({int(k.removeprefix("mlx5_comp")) for p in disc["ports"] for k in p["delta"]})
     def get(p: dict, ch: int) -> int:
         return p["delta"].get(f"mlx5_comp{ch}", 0)
     med = {ch: sorted(get(p, ch) for p in disc["ports"])[len(disc["ports"]) // 2] for ch in chans}
-    rx: dict[int, int | None] = {}
+    raised: dict[int, list[set[int]]] = {}
     for p in disc["ports"]:
-        ex = {ch: get(p, ch) - med[ch] for ch in chans}
-        best = max(ex, key=ex.get)
-        rx[p["lport"]] = best if p["rc"] == 0 and ex[best] > pings // 2 else None
-    return max(med, key=med.get), rx
+        raised.setdefault(p["lport"], []).append(
+            {ch for ch in chans if get(p, ch) - med[ch] > pings * 3 // 4} if p["rc"] == 0 else set())
+    rx: dict[int, int | None] = {}
+    for L, sets in raised.items():
+        common = set.intersection(*sets) if len(sets) > 1 else set()
+        rx[L] = common.pop() if len(common) == 1 else None
+    return rx
 
 
 def main() -> None:
@@ -117,18 +122,18 @@ def main() -> None:
         disc = discover(src, to, ns.discovery_pings)
         json.dump(disc, open(os.path.join(out, "discovery.json"), "w"), indent=1)
         fixed = disc["fixed_cpu"]
-        tx, rx = receive_channels(disc, ns.discovery_pings)
-        log(f"discovery: fixed CPU {fixed}, its transmit channel {tx}, receive channel by port {rx}")
+        rx = receive_channels(disc, ns.discovery_pings)
+        log(f"discovery: fixed CPU {fixed}, receive channel by port {rx}")
         picks: list[tuple[int, int]] = []
         for L, ch in rx.items():
-            if ch is not None and ch != tx and all(ch != c for _l, c in picks):
+            if ch is not None and all(ch != c for _l, c in picks):
                 picks.append((L, ch))
             if len(picks) == 2:
                 break
         if len(picks) < 2:
-            sys.exit(f"no two ports with distinct receive channels off channel {tx}: {rx}")
+            sys.exit(f"no two ports with distinct, unambiguous receive channels: {rx}")
         (l1, r1), (l2, r2) = picks
-        summary.update(fixed_cpu=fixed, tx_channel=tx, rx_channel_by_port=rx, ports={"L1": [l1, r1], "L2": [l2, r2]})
+        summary.update(fixed_cpu=fixed, rx_channel_by_port=rx, ports={"L1": [l1, r1], "L2": [l2, r2]})
         plan = {1: {"on": (l1, NODE1_IRQ_CPU0 + r1), "off": (l2, fixed)},
                 2: {"on": (l2, NODE1_IRQ_CPU0 + r2), "off": (l1, fixed)}}
         for phase, cells in plan.items():
