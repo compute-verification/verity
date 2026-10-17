@@ -1097,8 +1097,8 @@ def test_the_marlin_moes_align_and_expert_gemms_derive_per_pair_word_for_word_th
     rep, inputs = _derive_marlin(model, xs, monkeypatch)
     assert rep.program is not None, rep.unsupported
     apps = {a["rule"]: a for a in rep.provenance["applications"] if "vllm-marlin-moe" in a["rule"]}
-    assert apps["MarlinMoeAlign[vllm-marlin-moe]_v1"]["emitted"] == "MoeAlignBlocks_v1{E=3,P=6,BM=8}"
-    assert apps["MarlinMoeAlign[vllm-marlin-moe]_v1"]["schedule"] == "marlin_moe_align"
+    assert apps["MarlinMoeAlign[vllm-marlin-moe]_v2"]["emitted"] == "MoeAlignRanks_v1{E=3,P=6,BM=8} + MoeAlignBlocks_v1{P=6,BM=8}"
+    assert apps["MarlinMoeAlign[vllm-marlin-moe]_v2"]["schedule"] == "marlin_moe_align"
     gemms = [a for a in rep.provenance["applications"] if a["rule"] == "MarlinMoeGemm[vllm-marlin-moe]_v1"]
     assert [(a["preconditions_checked"]["TK"], a["preconditions_checked"]["TN"], a["preconditions_checked"]["GRID"]) for a in gemms] == [
         (64, 128, 132), (64, 128, 264)]

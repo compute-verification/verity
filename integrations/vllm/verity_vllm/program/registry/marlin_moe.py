@@ -37,8 +37,9 @@ the launch's thread config (TK, TN) (ops.cu:274-342; the H200's numRegs decide b
 (no group rounding of iters: group_blocks 2 < thread_k_blocks, the template 408-416).  `blk` and `parallel` are the launch's schedule,
 `moe_align_block_size`'s sorted_token_ids (a pair's position / moe_block_size) and num_tokens_post_padded / moe_block_size; at
 every block the template reduces a tile's W = TK / 32 warp rows as above (red_off = threads / (TN / 2) / 2, 1539-1541, per m block
-of 16).  The pairs' ranks within an expert come from atomicAdd (moe_align_sum_kernels.cu), so `MoeAlignBlocks` reads them from a
-key per pair, a witness of the run (the GPU's sorted position), and is a schedule the kernel can give whatever the key.
+of 16).  The pairs' ranks within an expert come from atomicAdd (moe_align_sum_kernels.cu), so `MoeAlignRanks` reads them from a
+key per pair, a witness of the run (the GPU's sorted position), and with `MoeAlignBlocks` is a schedule the kernel can give
+whatever the key.
 
 Registered functions (`_v1`):
   E2m1ToBf16, E8m0DequantBf16                 primitives: the exact e2m1 value, the e8m0 scale as bf16
@@ -49,9 +50,11 @@ Registered functions (`_v1`):
   MarlinMxfp4StepFromZero{DOT}                (x, q, s) -> f32: the same from +0 (k-tile 0)
   MarlinMoeSchedule{KT,NT,GRID}               (blk, par: i32) -> NT x (KT-1) bits: cut[J][t-1] = k-tile t of tile column J
                                               starts a segment
-  MoeAlignBlocks{E,P,BM}                      (ids, key: P i32) -> (blk: P i32, par: i32): `moe_align_block_size`'s schedule with
-                                              each expert's pairs in key order; MoeAlignRank{P} (over MoeAlignBefore),
-                                              MoeAlignStart{E,BM} and MoeAlignBlockOf{P,BM} (over MoeAlignBelow) its steps
+  MoeAlignRanks{E,P,BM}                       (ids, key, ix: P i32) -> (rank, start: P i32): each expert's pairs in key order,
+                                              one MoeAlignRankStart{E,P,BM} per pair (MoeAlignRank{P} over MoeAlignBefore, then
+                                              MoeAlignStart{E,BM})
+  MoeAlignBlocks{P,BM}                        (ids, rank, start: P i32) -> (blk: P i32, par: i32): `moe_align_block_size`'s
+                                              schedule, MoeAlignBlockOf{P,BM} (over MoeAlignBelow) per pair and MoeAlignPar{P}
   MarlinMxfp4Coordinate{K,TK,DOT}             (x: K bf16, cut: KT-1 bits, wq: K e2m1, ws: K/32 e8m0) -> bf16: the w13 word
   MarlinMxfp4CoordinateW{K,TK,DOT}            (x, cut, g: bf16, wq, ws) -> bf16: the w2 word, times the routed weight
   E2m1x2Lo, E2m1x2Hi                          primitives: a packed byte's low and high nibble, the codes of its even and odd k
@@ -448,20 +451,44 @@ def MoeAlignBlockOf(B, S, e, rank, es, starts):
     return o.add(_isum(o, B.batch(MoeAlignBelow, e, es, starts, axes=(None, 0, 0)), S.P), o.div(rank, o.i(S.BM)))
 
 
-@composite("MoeAlignBlocks", 1, ["E", "P", "BM"],
-           lambda S: ((("ids", Array(S.P, I32)), ("key", Array(S.P, I32))), Tuple(Array(S.P, I32), I32)), conformance=_ALIGN_CONF)
-def MoeAlignBlocks(B, S, ids, key):
-    """`moe_align_block_size` at moe block BM over P pairs routed to `ids`, as the Marlin launches read it: (blk, par), each pair's
-    moe block and the launch's num_tokens_post_padded / BM.  The kernel pads each expert's pairs to whole blocks in expert order
-    and places a pair at its expert's offset plus its rank, which atomicAdd hands out in an order no input fixes; `key` orders
-    each expert's pairs (ties by pair index), so any key gives a schedule of that form, and the GPU's sorted position of each
-    pair gives the GPU's.  An expert outside [0, E) opens no block (`ignore_invalid_experts`)."""
-    o = word_int_ops(B)
-    ix = array_of([o.i(p) for p in range(S.P)])
-    rank = B.batch(bind(MoeAlignRank, P=S.P), ids, key, ix, ids, key, ix, axes=(0, 0, 0, None, None, None))
-    start = B.batch(bind(MoeAlignStart, E=S.E, BM=S.BM), ids, rank, axes=(0, 0))
+@composite("MoeAlignRankStart", 1, ["E", "P", "BM"], lambda S: ((("e", I32), ("k", I32), ("i", I32), ("es", Array(S.P, I32)),
+                                                             ("ks", Array(S.P, I32)), ("ix", Array(S.P, I32))), Array(2, I32)),
+           conformance=_ALIGN_CONF)
+def MoeAlignRankStart(B, S, e, k, i, es, ks, ix):
+    """[rank, start] of pair p: its rank in its expert (`MoeAlignRank_v1`) and whether it opens a moe block (`MoeAlignStart_v1`)."""
+    rank = B.call(bind(MoeAlignRank, P=S.P), e, k, i, es, ks, ix)
+    return array_of([rank, B.call(bind(MoeAlignStart, E=S.E, BM=S.BM), e, rank)])
+
+
+@composite("MoeAlignRanks", 1, ["E", "P", "BM"], lambda S: ((("ids", Array(S.P, I32)), ("key", Array(S.P, I32)), ("ix", Array(S.P, I32))),
+                                                         Tuple(Array(S.P, I32), Array(S.P, I32))), conformance=_ALIGN_CONF)
+def MoeAlignRanks(B, S, ids, key, ix):
+    """`moe_align_block_size`'s ranks over P pairs routed to `ids`: (rank, start) per pair (`MoeAlignRankStart_v1`), `ix` the pairs'
+    indices 0 .. P - 1 (the align rule's constants).  The kernel places a pair at its expert's offset plus its rank, which atomicAdd
+    hands out in an order no input fixes; `key` orders each expert's pairs (ties by index), so any key gives ranks of that form, and
+    the GPU's sorted position of each pair gives the GPU's."""
+    rs = B.batch(bind(MoeAlignRankStart, E=S.E, P=S.P, BM=S.BM), ids, key, ix, ids, key, ix, axes=(0, 0, 0, None, None, None))
+    return tuple_of(rs.take(1, 0), rs.take(1, 1))
+
+
+@composite("MoeAlignPar", 1, ["P"], lambda S: ((("starts", Array(S.P, I32)),), I32), conformance=_ALIGN_CONF)
+def MoeAlignPar(B, S, starts):
+    """The moe blocks the P pairs open: num_tokens_post_padded / BM."""
+    return _isum(word_int_ops(B), starts, S.P)
+
+
+@composite("MoeAlignBlocks", 1, ["P", "BM"], lambda S: ((("ids", Array(S.P, I32)), ("rank", Array(S.P, I32)), ("start", Array(S.P, I32))),
+                                                     Tuple(Array(S.P, I32), I32)), conformance=_ALIGN_CONF)
+def MoeAlignBlocks(B, S, ids, rank, start):
+    """`moe_align_block_size` at moe block BM over P pairs routed to `ids`, ranked by `MoeAlignRanks_v1`, as the Marlin launches read
+    it: (blk, par), each pair's moe block (`MoeAlignBlockOf_v1`) and the launch's num_tokens_post_padded / BM (`MoeAlignPar_v1`).
+    The kernel pads each expert's pairs to whole blocks in expert order; an expert outside [0, E) opens no block
+    (`ignore_invalid_experts`).
+
+    Ranks and blocks are two Definitions, and each body's nodes read only its parameters (`verity.ml.circuits.cut.separable`), so the
+    word check cuts one pair's member, not a body over all P pairs (42.5M gates at P = 1536, over its gate limit)."""
     blk = B.batch(bind(MoeAlignBlockOf, P=S.P, BM=S.BM), ids, rank, ids, start, axes=(0, 0, None, None))
-    return tuple_of(blk, _isum(o, start, S.P))
+    return tuple_of(blk, B.call(bind(MoeAlignPar, P=S.P), start))
 
 
 def gather_e2m1_pair(vocab: int) -> PrimitiveDefinition:

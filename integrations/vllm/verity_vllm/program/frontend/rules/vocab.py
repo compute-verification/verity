@@ -500,7 +500,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_router_hash": lambda E, SCALE: ir_bind(_dsv4_moe.MoeRouterHash, E=E, SCALE=SCALE),
            "moe_router_sqrtsoftplus": lambda E, SCALE: ir_bind(_dsv4_moe.MoeRouterSqrtSoftplus, E=E, SCALE=SCALE),
            # [DSV4] the MXFP4 Marlin MoE's schedule and expert GEMMs (registry.marlin_moe). `rules/vllm_marlin_moe.py` asks for them.
-           "marlin_moe_align": lambda E, P, BM: ir_bind(_marlin.MoeAlignBlocks, E=E, P=P, BM=BM),
+           "marlin_moe_rank": lambda E, P, BM: ir_bind(_marlin.MoeAlignRanks, E=E, P=P, BM=BM),
+           "marlin_moe_align": lambda P, BM: ir_bind(_marlin.MoeAlignBlocks, P=P, BM=BM),
            "marlin_moe_gemm": lambda E, K, N, TK, TN, GRID, DOT:
                ir_bind(_marlin.MarlinMoeExpertGemm, E=E, K=K, N=N, TK=TK, TN=TN, GRID=GRID, DOT=DOT),
            "marlin_moe_gemm_w": lambda E, K, N, TK, TN, GRID, DOT:
@@ -628,8 +629,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_router_sqrtsoftplus": "MoeRouterSqrtSoftplus_v1{E,SCALE}: _dsv4_topk_kernel's weights and ids for one token from its f32 "
                                       "logits and the correction bias -- the top six of Dsv4SqrtSoftplus_v1 + bias, renormalised and "
                                       "scaled by SCALE",
-           "marlin_moe_align": "MoeAlignBlocks_v1{E,P,BM}: moe_align_block_size's schedule over P router ids, each expert's pairs ranked "
-                               "by a key per pair -- each pair's moe block and the padded block count",
+           "marlin_moe_rank": "MoeAlignRanks_v1{E,P,BM}: moe_align_block_size's ranks over P router ids, each expert's pairs ranked by a "
+                              "key per pair, ties by index -- each pair's rank and whether it opens a moe block",
+           "marlin_moe_align": "MoeAlignBlocks_v1{P,BM}: moe_align_block_size's schedule over those ranks -- each pair's moe block and "
+                               "the padded block count",
            "marlin_moe_gemm": "MarlinMoeExpertGemm_v1{E,K,N,TK,TN,GRID,DOT}: Marlin's w13 launch (W4A16 e2m1, e8m0 group-32 scales) on one "
                               "pair at its moe block, the k slices and fp32 fold of the launch's schedule",
            "marlin_moe_gemm_w": "MarlinMoeExpertGemmW_v1{E,K,N,TK,TN,GRID,DOT}: Marlin's w2 launch on one pair, the routed weight rounded "

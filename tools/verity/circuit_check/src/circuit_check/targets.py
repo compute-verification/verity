@@ -361,7 +361,8 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "flashmla_decode": {**FM.FLASHMLA_DSV4, "NH": 1, "SPLITS": (0, 1), "NW": 64},
             "flashmla_gather_row": FP.FLASHMLA_GATHER_DSV4, "flashmla_prefill": {**FP.FLASHMLA_PREFILL_DSV4, "NH": 1, "NP": 1},
             "silu_mul_clamp": {"I": 4, "LIMIT": 10.0}, "moe_router_hash": router, "moe_router_sqrtsoftplus": router,
-            "marlin_moe_align": {"E": 3, "P": 30, "BM": 4}, "marlin_moe_gemm": marlin, "marlin_moe_gemm_w": marlin}
+            "marlin_moe_rank": {"E": 3, "P": 30, "BM": 4}, "marlin_moe_align": {"P": 30, "BM": 4}, "marlin_moe_gemm": marlin,
+            "marlin_moe_gemm_w": marlin}
     return {"rmsnorm_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256}, "rmsnorm_fused_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256},
             "all_reduce_mnnvl": {"WORLD": 8, "N": 8, "SHOT": 2},
             "all_reduce_rmsnorm_mnnvl": {"WORLD": 8, "N": 512, "SHOT": 1, "CLUSTER": 2, "EPS": 1e-5, "FMA": False},

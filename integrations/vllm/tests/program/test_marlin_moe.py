@@ -120,22 +120,41 @@ def _vllm_align(ids: list[int], E: int, BM: int, order) -> tuple[list[int], int]
     return pos, offset[E]
 
 
+def _align_words(E: int, P: int, BM: int, ids: list[int], keys: list[int]) -> list[int]:
+    """`MoeAlignRanks_v1` over the pair indices, then `MoeAlignBlocks_v1` over its ranks, as the align rule emits them: blk + [par]."""
+    ids = [i & MM.M32 for i in ids]
+    rs = evaluate(bind(MM.MoeAlignRanks, E=E, P=P, BM=BM), ids, [k & MM.M32 for k in keys], list(range(P)))
+    return evaluate(bind(MM.MoeAlignBlocks, P=P, BM=BM), ids, rs[:P], rs[P:])
+
+
 @pytest.mark.parametrize("E,P,BM", [(4, 1, 8), (5, 12, 8), (6, 23, 48), (3, 30, 4)])
 def test_align_blocks_are_the_kernel_s_in_every_atomic_order(E: int, P: int, BM: int) -> None:
     """With the GPU's sorted positions as keys the blocks are the kernel's, whatever order atomicAdd took (hot experts over several
     blocks, an expert with none, ids outside [0, E)); any other keys, ties and negatives included, give the kernel's blocks in
     some order: the pairs sorted by (key, index)."""
-    align, rng = bind(MM.MoeAlignBlocks, E=E, P=P, BM=BM), np.random.default_rng(P)
+    rng = np.random.default_rng(P)
     for trial in range(6):
         ids = rng.choice([0, 0, 0, E - 1, E - 1, 1, -1, E, 7 - 2**31], P).tolist() if trial % 3 == 2 else rng.integers(0, E, P).tolist()
         pos, npp = _vllm_align(ids, E, BM, rng.permutation(P))
         keys = [p if p >= 0 else int(k) for p, k in zip(pos, rng.integers(-5, 5, P))]
-        got = evaluate(align, [i & MM.M32 for i in ids], [k & MM.M32 for k in keys])
+        got = _align_words(E, P, BM, ids, keys)
         assert [g for g, p in zip(got[:P], pos) if p >= 0] == [p // BM for p in pos if p >= 0] and got[P] == npp // BM, ids
         keys = rng.integers(-3, 3, P).tolist()
         want, _ = _vllm_align(ids, E, BM, sorted(range(P), key=lambda p: (keys[p], p)))
-        got = evaluate(align, [i & MM.M32 for i in ids], [k & MM.M32 for k in keys])
+        got = _align_words(E, P, BM, ids, keys)
         assert [g for g, p in zip(got[:P], want) if p >= 0] == [p // BM for p in want if p >= 0] and got[P] == npp // BM, (ids, keys)
+
+
+def test_align_bodies_are_cut_per_pair() -> None:
+    """Both align Definitions are separable with no value two pair members compute, so the word check cuts one member however many
+    pairs a batch routes (DeepSeek-V4-Pro's 256-token prefill: 1536 pairs, 42.5M gates in one body)."""
+    from verity.ml.circuits.cut import separable
+    from verity_vllm.query import word as W
+    from verity_vllm.query.cross_call import members_check
+    for fn in (bind(MM.MoeAlignRanks, E=384, P=64, BM=8), bind(MM.MoeAlignBlocks, P=64, BM=8)):
+        assert separable(fn) is not None, fn.id
+        assert not members_check(fn, {})["recomputes"], fn.id
+        assert not W.unit_rule(fn, 16, 32, 0, memo={})["violations"], fn.id
 
 
 def test_divrem_is_c_int() -> None:

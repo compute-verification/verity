@@ -3,8 +3,9 @@
 of its `moe_align_block_size` and its two `ops.moe_wna16_marlin_gemm` launches (`vllm_iface`):
 
     marlin_moe_align(topk_ids [M, TOPK] i32, key [M, TOPK] i32, E, BM) -> (blk [M * TOPK] i32, par [1] i32)
-        one `MoeAlignBlocks{E,P=M*TOPK,BM}` over the router ids and each pair's key, the TP rank Program's `schedule` input
-        (`CollectiveBus.schedule_key`), so the application is tagged `schedule` for `tp_links.json`
+        `MoeAlignRanks{E,P=M*TOPK,BM}` over the router ids, each pair's key (the TP rank Program's `schedule` input,
+        `CollectiveBus.schedule_key`, so the application is tagged `schedule` for `tp_links.json`) and the pair indices as constants,
+        then `MoeAlignBlocks{P,BM}` over the ids and its ranks
     marlin_moe_mxfp4_gemm(x, w [E, N, K/2] u8, w_scale [E, N, K/32] u8, topk_ids, blk, par, topk_weights, BM, top_k, mul_topk_weights)
         -> [M * TOPK, N] bf16: per pair p, `MarlinMoeExpertGemm{E,K,N,TK,TN,GRID,DOT}` of x[p // top_k], ids[p], blk[p] and par (the
         w13 launch), or `MarlinMoeExpertGemmW` of x[p], ids[p], topk_weights[p], blk[p] and par (the w2 launch, top_k 1)
@@ -36,7 +37,9 @@ from verity_vllm.program.registry.prims import F32 as F32_WORD, I32 as I32_WORD
 BF16, F32, I32, U8 = torch.bfloat16, torch.float32, torch.int32, torch.uint8
 
 #: the roles the vocabulary may lack, and which kernel each states
-ROLE_KERNELS = {"marlin_moe_align": "moe_align_block_size's schedule over a key per pair (MoeAlignBlocks_v1)",
+ROLE_KERNELS = {"marlin_moe_rank": "moe_align_block_size's ranks over a key per pair (MoeAlignRanks_v1)",
+                "marlin_moe_align": "moe_align_block_size's schedule over those ranks (MoeAlignBlocks_v1)",
+                "const": "a constant word",
                 "marlin_moe_gemm": "Marlin's w13 launch on one pair (MarlinMoeExpertGemm_v1)",
                 "marlin_moe_gemm_w": "Marlin's w2 launch on one pair, the routed weight multiplied in (MarlinMoeExpertGemmW_v1)"}
 
@@ -69,18 +72,19 @@ def served_config(E: int, TOPK: int, K: int, N: int, top_k: int, M: int) -> tupl
 
 
 class MarlinMoeAlignRule(OpRule):
-    """`vllm_iface.marlin_moe_align`: one `MoeAlignBlocks{E,P,BM}` over the P = M * TOPK router ids and keys; the node is (blk, par)."""
+    """`vllm_iface.marlin_moe_align`: `MoeAlignRanks{E,P,BM}` over the P = M * TOPK router ids, keys and pair indices, then
+    `MoeAlignBlocks{P,BM}`; the node is (blk, par)."""
     modes = frozenset({"profile"})
-    info = RuleInfo("MarlinMoeAlign[vllm-marlin-moe]", 1, "op-binding", applies_to="vllm_iface.marlin_moe_align",
+    info = RuleInfo("MarlinMoeAlign[vllm-marlin-moe]", 2, "op-binding", applies_to="vllm_iface.marlin_moe_align",
                     preconditions=("topk_ids and key are i32 values of one shape [M, TOPK]",
                                    "num_experts and moe_block_size are static positive ints"),
-                    evidence_domain="structural; numerics: MoeAlignBlocks_v1 (registry.marlin_moe)")
+                    evidence_domain="structural; numerics: MoeAlignRanks_v1, MoeAlignBlocks_v1 (registry.marlin_moe)")
 
     def targets(self):
         return {iface.marlin_moe_align.default}
 
     def applies(self, node, ctx):
-        if (r := _missing(ctx, ["marlin_moe_align"], ROLE_KERNELS)):
+        if (r := _missing(ctx, ["marlin_moe_rank", "marlin_moe_align", "const"], ROLE_KERNELS)):
             return r
         a = call_args(node)
         if (r := _value(ctx, a["topk_ids"], I32, (None, None), "topk_ids")):
@@ -96,11 +100,14 @@ class MarlinMoeAlignRule(OpRule):
         a = call_args(node)
         M, TOPK = shape(ctx, a["topk_ids"])
         S = {"E": a["num_experts"], "P": M * TOPK, "BM": a["moe_block_size"]}
-        fn = ctx.kind("marlin_moe_align", node, **S)
+        ranks, blocks = ctx.kind("marlin_moe_rank", node, **S), ctx.kind("marlin_moe_align", node, P=S["P"], BM=S["BM"])
         ids, key = (ctx.coll(a[k]).reshape(Array(S["P"], I32_WORD)) for k in ("topk_ids", "key"))
-        out = ctx.call(fn, ids, key, node=node, rule=self, name=ctx.hint_name(node))
+        h = ctx.hint_name(node)
+        ix = array_of([ctx.call(ctx.kind("const", node, W=32, BITS=p), node=node, rule=self, name=f"{h}/i32[{p}]") for p in range(S["P"])])
+        rank, start = ctx.call(ranks, ids, key, ix, node=node, rule=self, name=f"{h}/rank")
+        out = ctx.call(blocks, ids, rank, start, node=node, rule=self, name=h)
         ctx.define(node, [out[0], array_of([out[1]])])
-        ctx.record(self, node, S, emitted=fn.id, schedule="marlin_moe_align")
+        ctx.record(self, node, S, emitted=f"{ranks.id} + {blocks.id}", schedule="marlin_moe_align")
 
 
 class MarlinMoeGemmRule(OpRule):

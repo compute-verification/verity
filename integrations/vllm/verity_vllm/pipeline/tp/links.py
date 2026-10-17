@@ -78,7 +78,8 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
                            for r, a in zip(sched, aligns)]
         doc["schedule_binding"] = ("align call k's keys are schedule_input[offset : offset + pairs], shaped as its router ids: each pair's "
                                    "position in the sorted_token_ids that call's moe_align_block_size wrote on this rank's GPU, a witness "
-                                   "(registry.marlin_moe.MoeAlignBlocks gives a schedule the kernel can produce for any key)")
+                                   "(registry.marlin_moe.MoeAlignRanks then MoeAlignBlocks give a schedule the kernel can produce "
+                                   "for any key)")
     json.dump(doc, open(os.path.join(out, "tp_links.json"), "w"), indent=1)
     return {"n_peer_inputs": len(peer_names), "n_prompt_inputs": n_own, "file": "tp_links.json"}
 

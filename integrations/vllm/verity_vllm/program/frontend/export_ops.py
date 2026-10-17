@@ -188,7 +188,7 @@ class CollectiveBus:
         return torch.ops.verity_tp.fused_allreduce_rms_norm(self._parts(x, peers), residual, weight, float(eps))
 
     def schedule_key(self, ids: torch.Tensor) -> torch.Tensor:
-        """The next `moe_align_block_size` call's key per pair (`registry.marlin_moe.MoeAlignBlocks`), shaped as its router `ids`:
+        """The next `moe_align_block_size` call's key per pair (`registry.marlin_moe.MoeAlignRanks`), shaped as its router `ids`:
         the next `ids.numel()` words of the `schedule` input, which the run's GPU sorted positions fill; recorded in probe mode."""
         shape, n = tuple(ids.shape), ids.numel()
         if self.mode == "probe":
