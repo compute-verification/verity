@@ -1,4 +1,6 @@
 import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
+import Proofs.Flock.Soundness.CompiledLock
+import Proofs.Flock.Soundness.Refine.Ligerito
 
 /-!
 # Every level's Merkle opening passes at every honest rep
@@ -693,6 +695,80 @@ theorem ligeritoP_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
   obtain ⟨-, -, hop0, -, hloop, hfin⟩ := key
   obtain ⟨hcs, hrs, hlast⟩ := hfin rfl
   exact ⟨hop0, hcs, hrs, fun i hi => hloop i hi (by omega), hlast⟩
+
+/-! ## Every level's check passes at the honest openings -/
+
+/-- A level's query positions are below `2^d` at a level with fast100's seam. -/
+theorem positions_lt_d {lv : Level} (hl : FlockSoundness.Refine.LevelSeam lv) (coins : Array F128) :
+    ∀ p ∈ positions lv coins, p < 2 ^ lv.d := by
+  intro p hp
+  have hlt := FlockSoundness.positions_lt FlockSoundness.execArith (FlockSoundness.Refine.levelOf lv).queries
+    (FlockSoundness.Refine.levelOf lv).logLen (FlockSoundness.Refine.vecOf lv.q coins) p
+  rw [FlockSoundness.Refine.positions_eq lv hl coins, ← hl.2.2.2.2] at hlt
+  exact hlt (Array.mem_toList_iff.2 hp)
+
+/-- fast100's levels cap at most their depth. -/
+theorem fast100_cap {m : ℕ} {s : Schedule} (hs : fast100 m = some s) : ∀ lv ∈ s.levels, lv.cap ≤ lv.d := by
+  by_cases hm : m < 40
+  · have key : ∀ m : Fin 40, ∀ s ∈ fast100 m.val, (s.levels.all fun lv => decide (lv.cap ≤ lv.d)) = true := by
+      decide +kernel
+    intro lv hlv
+    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hlv
+    simpa using Array.all_eq_true.1 (key ⟨m, hm⟩ s hs) i hi
+  · rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at hs
+    cases hs
+
+theorem getD_mem {α : Type} {a : Array α} {j : ℕ} (d : α) (h : j < a.size) : a.getD j d ∈ a := by
+  rw [Array.getD, dif_pos h]
+  exact Array.getElem_mem h
+
+/-- **Every level's Merkle check passes at honest openings** (`MerkleOk`): level `0`'s of a commitment `cm0` of level
+`0`, every later level's of its own (`Opens`), through a scheme whose node and leaf digests are its width, at levels
+that cap at most their depth and query below `2^d`. -/
+theorem merkleOk_of_opens {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cm0 : Commit} {p : LigeritoProof}
+    {cf : ℕ → ℕ → F128} {k : ℕ} (hn : ∀ l r v, (ms.opsWith hs).node l r = .ok v → v.size = ms.digestLen)
+    (hlf : ∀ row s v, (ms.opsWith hs).leaf row s = .ok v → v.size = ms.digestLen)
+    (hcap : ∀ j < sch.levels.size, (sch.levels.getD j default).cap ≤ (sch.levels.getD j default).d)
+    (hpos : ∀ j < sch.levels.size, ∀ coins, ∀ x ∈ positions (sch.levels.getD j default) coins,
+      x < 2 ^ (sch.levels.getD j default).d)
+    {g : Array F128} {salt : ℕ → ByteArray} (h0 : commitP hs ms (sch.levels.getD 0 default) g salt = .ok cm0)
+    (ho : Opens hs ms sch cm0 p cf k) : MerkleOk hs ms sch cm0.cap p cf k := by
+  obtain ⟨h0p, -, -, hin, hfin⟩ := ho
+  intro j hj
+  by_cases hj0 : j = 0
+  · subst hj0
+    have hoj : opening p cm0.cap (sch.levels.size - 1) 0 =
+        (cm0.cap, p.initialProof.rows, p.initialProof.siblings, p.initialProof.salts) := if_pos rfl
+    rw [hoj]
+    dsimp only
+    rw [h0p]
+    exact merkle_open (commitP_tree hn hlf (hcap 0 hj) h0) (hcap 0 hj) (hpos 0 hj _)
+  · by_cases hjR : j < sch.levels.size - 1
+    · obtain ⟨cm, g', salt', hc, hcc, hop⟩ := hin (j - 1) (by omega)
+      rw [Nat.sub_add_cancel (show 1 ≤ j by omega)] at hc hop
+      have hoj : opening p cm0.cap (sch.levels.size - 1) j = (p.recursiveCaps[j - 1]!,
+          p.recursiveProofs[j - 1]!.rows, p.recursiveProofs[j - 1]!.siblings, p.recursiveProofs[j - 1]!.salts) := by
+        unfold opening
+        rw [if_neg hj0, if_pos hjR]
+      rw [hoj]
+      dsimp only
+      rw [hop, ← hcc]
+      exact merkle_open (commitP_tree hn hlf (hcap j hj) hc) (hcap j hj) (hpos j hj _)
+    · obtain rfl : j = sch.levels.size - 1 := by omega
+      obtain ⟨cm, g', salt', hc, hcc, hop⟩ := hfin
+      have hoj : opening p cm0.cap (sch.levels.size - 1) (sch.levels.size - 1) =
+          (p.recursiveCaps[sch.levels.size - 1 - 1]!, p.finalProof.rows, p.finalProof.siblings,
+            p.finalProof.salts) := by
+        unfold opening
+        rw [if_neg hj0, if_neg (lt_irrefl _)]
+      rw [hoj]
+      dsimp only
+      have e1 := congrArg LevelProof.rows hop
+      have e2 := congrArg LevelProof.siblings hop
+      have e3 := congrArg LevelProof.salts hop
+      dsimp only at e1 e2 e3
+      rw [e1, e2, e3, ← hcc]
+      exact merkle_open (commitP_tree hn hlf (hcap _ hj) hc) (hcap _ hj) (hpos _ hj _)
 
 end Lg
 
