@@ -51,6 +51,7 @@ import Proofs.Flock.Claims.KS.PlainSimW
 import Proofs.Flock.Claims.KS.FnFork
 import Proofs.Flock.Claims.KS.PlainWire
 import Proofs.Flock.Claims.KS.PlainClashL
+import Proofs.Flock.Claims.KS.ForkCoupling
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
