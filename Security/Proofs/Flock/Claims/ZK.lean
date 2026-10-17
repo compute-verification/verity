@@ -142,7 +142,8 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   for any values whose round encoding is causal (`RefSession.SwCausal`), `Flock.zkAt_deployZk_ref` its case at the
   tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server at
   every pad-blind worker within `D.V.k x + 2` of the guessing simulator, with no term for the masked checks, and at a
-  statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`).
+  statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`), at the deployed coin layer with the
+  tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
