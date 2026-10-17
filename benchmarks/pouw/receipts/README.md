@@ -21,7 +21,7 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
 |---|---|---|---|
 | duo | per word: u = y ^ d ^ k, y ← u·a + z, z ← rotl(u, r) + y | pfill: key_ok; served: fixed odd keys | needs (D) past four words; one, two and three proved, four at both schedules' keys |
 | xin13 | y ← (rotl(y, 13) ^ d0)·a0 + d1, then (rotl(y, 19) ^ d2)·a1 + d3 | key_ok_r9; key_ok_r11 for r11's Theorem 1 | needs (RT) and (G₃) |
-| li | y ← (y ^ d0 ^ k0)·a0 + d1, then (y ^ d2 ^ k1)·a1 + d3 | key_ok_r9 | needs (RT), (G₃) and (HO) |
+| li | y ← (y ^ d0 ^ k0)·a0 + d1, then (y ^ d2 ^ k1)·a1 + d3 | key_ok_r9 | needs (RT), (G₃) and (HO); with pinned openings and a checkpoint a segment, nothing beyond odd multipliers (proved) |
 | ram | y ← (rotl(y, 7) + d0)·a0 + d1, then (rotl(y, 19) + d2)·a1 + d3 | key_ok | binds pairs only, through Q = a0·d0 + d1 |
 | xin7 | xin13 with rotations (7, 19) | key_ok | retired: ±128 is an int8 ratio at its step boundary |
 
@@ -46,6 +46,14 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
   proves (G₃) at one MMA under key_ok_r11 (its Theorem 1), and for chains apart from runs of two or more non-XOR δ.
 - **(HO), li's extra premise.** No hand-off joins two words whose rows or columns are equal or complementary
   (note:20261016T1117Z-draft-fullfloor-s-r9 §2).
+- **li with pinned openings and a checkpoint a segment.** When every absorbed word is recomputed from committed operands
+  and a pinned start, and each segment commits the XOR of the chains' states, li needs none of (RT), (G₃), (HO) or a key
+  rule beyond odd multipliers. A half step is a bijection of the state, a checkpoint is injective in each word any chain
+  absorbed, and changing one word by XOR with x changes the checkpoint at x's lowest set bit and at no bit below it, at
+  every width (Lean: `Pouw.SecurityProofs.Receipt.LiHalfBijective`, `Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective`,
+  `Pouw.SecurityProofs.Receipt.LiCheckpointLowBit`). So a skipped value that lands on one word of a segment is always
+  caught. One receipt word a window is not enough: li is a T-function, so a persistent skip's copies all differ first at
+  the same bit, and an even number of them can cancel there (note:20261017T1848Z-draft-li-alt).
 
 The key rules:
 
