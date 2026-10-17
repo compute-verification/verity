@@ -17,7 +17,9 @@ protocol. It reuses relative security's machine model (`Machine`: algorithms, wh
   `time(M') ≤ (1 + ε) time(M)`.
 * `dither`: Dither's ideal protocol. σ draws `R ∈ {0,1}^{m×k}` and `U ∈ {±1, …, ±64}^{n×32}`, `S = ΠUᵀ`
   (`S_{tj} = U_{j, t mod 32}`); the proof is the transcript `T`, every 32-step prefix sum of `(A + R)(B + S)` over
-  `Z/2³²`; `Verify` recomputes `T`; the useful output is `(A + R)B`.
+  `Z/2³²`; `Verify` recomputes `T`; the useful output is `(A + R)B`. Its instances are all of `Z/2³²`'s; at the agreed
+  int8 bounds (`A ≤ 126`, `|B| ≤ 63`) the edited operands are int8, so for `k ≤ 2¹⁷` the s32 words are the integer
+  sums (`int8_product_bounds`).
 
 Main's `Secure` (`Proofs.Pouw.RelativeSecurity`, Neekon's `∃ M'` form as RS-DEF froze it) is the one-stage form of the
 same shape: its adversary is one algorithm that commits first, timed whole, its `M'` may use coins and an additive
