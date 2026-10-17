@@ -104,7 +104,8 @@ nodes = ["vy-nebius-cpu-1"]
 owner = "infra"
 
 # ---- the shared nodes: how each reaches the others, for a check's twins (`check.py --on auto`, slot.py --twin); cpu-1's
-# authorized_keys takes the vy-cluster key from n1 and n2 only (from="10.80.0.18,10.80.0.42")
+# authorized_keys takes the vy-cluster key from n1, n2, cpu-2 and cpu-3 only (from="10.80.0.18,10.80.0.42,10.80.0.140,10.80.0.193");
+# cpu-2 and cpu-3 (train slots since 17 Oct, INF-49) get theirs by hand until they are deploy.toml nodes (INF-40)
 
 [[file]]
 path = "/etc/vy/peers"

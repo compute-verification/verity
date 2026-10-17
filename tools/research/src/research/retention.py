@@ -101,9 +101,11 @@ def fmt_utc(t: datetime) -> str:
 
 
 def parse_expires(s: str, now: datetime) -> str | None:
-    """`--expires`: `never` (None), a date (its midnight UTC), a UTC time, or an offset from now (`7d`, `36h`)."""
+    """`--expires`: `never` (None), `now`, a date (its midnight UTC), a UTC time, or an offset from now (`7d`, `36h`)."""
     if s == "never":
         return None
+    if s == "now":
+        return fmt_utc(now)
     if m := re.fullmatch(r"(\d+)([dh])", s):
         return fmt_utc(now + timedelta(**{"days" if m[2] == "d" else "hours": int(m[1])}))
     try:
@@ -111,7 +113,7 @@ def parse_expires(s: str, now: datetime) -> str | None:
             return fmt_utc(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc))
         return fmt_utc(parse_utc(s))
     except ValueError:
-        raise RecordError(f"--expires {s!r}: give never, a date (2026-10-08), a UTC time (2026-10-08T12:00:00Z) or an offset (7d, 36h)") from None
+        raise RecordError(f"--expires {s!r}: give never, now, a date (2026-10-08), a UTC time (2026-10-08T12:00:00Z) or an offset (7d, 36h)") from None
 
 
 def _utc_or_none(s: Any) -> datetime | None:

@@ -51,6 +51,8 @@ LEAN_AUDIT_RE = re.compile(r"^AUDIT \S*?/lean-audit-scratch-[^/\s]+/(\S+?): FAIL
 LEAN_ERROR_RE = re.compile(r"^\s*error: (\S+?\.lean):\d+", re.M)
 #: a run's or a step's exit that a kill gave, not a failure of what it checked: SIGHUP, SIGKILL, SIGTERM as 128+N, or a signal
 KILLED_RC = (129, 137, 143)
+#: what the Lean check says of a process of its own that was killed (`tools/verity/lean/check.py`: the replay, `--fresh`)
+KILLED_SAYS = "not a kernel verdict"
 #: how often drive sweeps the repository's branches (`merge.sweep_branches`)
 BRANCH_SWEEP_S = 86400
 #: what `Driver.culprit` says of a failure that names no file and was a kill
@@ -290,9 +292,14 @@ def lean_errors(log: str) -> set[str]:
 def killed(run_dir: Path, why: str = "") -> bool:
     """Whether a check failed by being killed rather than by what it checked: a failed step that exited by a signal or 128+N,
     or the run's own exit (``why``, the verdict's `rc=N`) one of those."""
-    rcs = [st.get("rc") for st in failed_steps(run_dir)]
-    if any(isinstance(rc, int) and (rc < 0 or rc in KILLED_RC) for rc in rcs):
+    steps = failed_steps(run_dir)
+    if any(isinstance(rc, int) and (rc < 0 or rc in KILLED_RC) for rc in (st.get("rc") for st in steps)):
         return True
+    for st in steps:                                     # a step that says one of its own processes was killed (17 Oct: the
+        if st.get("log"):                                # Lean check's kernel replay, exit 137 on cpu-2, ejected #2224, #2231)
+            with contextlib.suppress(OSError):
+                if KILLED_SAYS in (run_dir / Path(st["log"]).name).read_text(errors="replace"):
+                    return True
     return any(f"rc={rc}" in why for rc in (*KILLED_RC, -9, -15))
 
 
