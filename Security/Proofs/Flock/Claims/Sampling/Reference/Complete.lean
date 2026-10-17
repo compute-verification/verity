@@ -21,8 +21,8 @@ unit and statement fixed, and the session's coins are then uniform (`Pr_comp_inj
 rejection. The union bound over the slots gives the error `n_PU · sessErr`, `sessErr` the largest Flock error, capped at
 `1`, over the statements of the sessions at `x`.
 
-* `complete_of_sessions`: **`Complete H D`** from Flock's completeness at `D.flock`, `DrawFixed`, the three facts, Flock's
-  errors nonnegative, and `D.δc H x ≥ n_PU · sessErr`.
+* `complete_of_sessions`: **`Complete H D`** from Flock's completeness at `D.flock`, `DrawFixed`, the three facts,
+  Flock's errors nonnegative, and `D.δc H x ≥ n_PU · sessErr`.
 -/
 
 namespace Claims.Sampling.Reference
@@ -31,7 +31,8 @@ open Claims Claims.Sampling Finset Properties.SampledProofs Properties.SampledPr
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The draw checks at most the proof units**: on a statement in scope, at every coins, at most `n_PU` checked units. -/
+/-- **The draw checks at most the proof units**: on a statement in scope, at every coins, at most `n_PU` checked
+units. -/
 def CheckedLe (D : Deploy Coin Col T) : Prop := ∀ x, Scope D x → ∀ r, (D.checked x r).length ≤ nPU D x
 
 omit [Nonempty Coin] [Inhabited Coin] in
@@ -53,8 +54,8 @@ theorem checkedLe_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : CheckedLe
 
 /-- **At the reference prover, a checked unit's session is Flock's reference prover's run**: on a statement in scope,
 at a witness with no faulty unit and coins `r` that check `u`, a statement `xS` in Flock's scope, a witness `wF` in its
-relation, a Flock tape `ωF` and an injective map `emb` of Flock's rounds into `u`'s, such that at coins agreeing with `r`
-off `u`'s rounds, `u`'s session is `D.flock.P wF`'s run on `xS` at the coins `emb` reads. -/
+relation, a Flock tape `ωF` and an injective map `emb` of Flock's rounds into `u`'s, such that at coins agreeing with
+`r` off `u`'s rounds, `u`'s session is `D.flock.P wF`'s run on `xS` at the coins `emb` reads. -/
 def HonestSessions (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ x w, Scope D x → Rhon H D.commit D.parse D.partition x w → ∀ (ω : D.Tape) (r : Fin (D.V.k x) → Coin) u,
     u ∈ D.checked x r →

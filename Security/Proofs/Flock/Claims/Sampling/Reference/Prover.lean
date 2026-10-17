@@ -11,13 +11,15 @@ The trace is committed before the run: the statement's roots, hm96 leaves under 
 frame-v3-sha512 path check (`SamplingDeploy.commit`, `pathCommit` at `hm96Leaf`), and the witness holds the openings.
 The prover waits for the selection coin, saying what the run's framing fixes, and in each checked unit's session runs
 Flock's masked reference prover (`FlockComplete.honestPZk`) at the session's own history, on the Flock witness that
-encodes the unit's values and what it opens: at each position the unit reads, the witness's first opening there that
+encodes what it opens: at each position the session reads, the witness's first opening there that
 passes its own check under the roots (`revealOC`), with its own `H` calls. Its framing is the code's:
 
 * `step`: where the run is at a history, for the prover: unit `u`'s session at its own history under its statement
   (`Step.session`), or a message the framing fixes outside the sessions (`Step.say`);
-* `reads`: the positions a checked unit's session opens;
-* `wit`: the Flock witness that encodes a unit's revealed openings.
+* `reads`: the positions a checked unit's session opens under the session's statement;
+* `wit`: the Flock witness that encodes what a unit's session reveals, under the session's statement.
+
+Both read the session's statement, so one session may prove several drawn units, its statement theirs.
 
 What it reveals opens and is the committed value `Wit.val` reads (`found_opens`, `found_val`), and covers every read
 position with a committed value (`found_covers`).
@@ -50,7 +52,8 @@ def firstOC (Cm : Commitment Bool) (roots : List Msg) (g : ℕ) : List (Opening 
 /-- **The openings revealed at the positions `gs`**: at each, the witness's first opening there that passes. -/
 def revealOC (Cm : Commitment Bool) (roots : List Msg) (w : Wit) : List ℕ → OC (List (Opening Bool))
   | [] => .ret []
-  | g :: gs => ocBind (firstOC Cm roots g w.vals) fun o => ocBind (revealOC Cm roots w gs) fun os => .ret (o.toList ++ os)
+  | g :: gs => ocBind (firstOC Cm roots g w.vals) fun o =>
+      ocBind (revealOC Cm roots w gs) fun os => .ret (o.toList ++ os)
 
 /-- **What it reveals at the positions `gs`**, against `H`. -/
 def found (H : Msg → Msg) (Cm : Commitment Bool) (roots : List Msg) (w : Wit) (gs : List ℕ) : List (Opening Bool) :=
@@ -59,15 +62,16 @@ def found (H : Msg → Msg) (Cm : Commitment Bool) (roots : List Msg) (w : Wit) 
 /-- **The sampled reference prover** at the witness `w`: what the framing fixes outside the sessions; in unit `u`'s
 session, Flock's masked reference prover at the session's history, on the Flock witness of what it reveals and the
 unit's tape. -/
-def refP (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt) (reads : Stmt → ℕ × ℕ → List ℕ)
-    (Cm : Commitment Bool) (wit : Stmt → ℕ × ℕ → List (Opening Bool) → Claims.Flock.Wit) (w : Wit) : Prover Tape :=
+def refP (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt) (reads : Stmt → ℕ × ℕ → Msg → List ℕ)
+    (Cm : Commitment Bool) (wit : Stmt → ℕ × ℕ → Msg → List (Opening Bool) → Claims.Flock.Wit) (w : Wit) :
+    Prover Tape :=
   ⟨fun x hist ω =>
     match step x hist with
     | .say m => .ret m
     | .session u xS hS =>
       match parse x with
-      | some s => ocBind (revealOC Cm s.roots w (reads s u)) fun os =>
-          (FlockComplete.honestPZk (wit s u os)).next xS hS (ω u)
+      | some s => ocBind (revealOC Cm s.roots w (reads s u xS)) fun os =>
+          (FlockComplete.honestPZk (wit s u xS os)).next xS hS (ω u)
       | none => .ret []⟩
 
 /-- **The sessions' error at `x`**: the largest of `δ`, capped at `1`, over the statements of the sessions `x` sets up;
@@ -147,16 +151,18 @@ theorem found_covers {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {w : Wi
 /-- **In a session, its message is Flock's reference prover's** at the session's history, on the Flock witness of what
 it reveals. -/
 theorem refP_session (H : Msg → Msg) (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt)
-    (reads : Stmt → ℕ × ℕ → List ℕ) (Cm : Commitment Bool) (wit : Stmt → ℕ × ℕ → List (Opening Bool) → Claims.Flock.Wit)
+    (reads : Stmt → ℕ × ℕ → Msg → List ℕ) (Cm : Commitment Bool)
+    (wit : Stmt → ℕ × ℕ → Msg → List (Opening Bool) → Claims.Flock.Wit)
     (w : Wit) {x : Msg} {s : Stmt} {hist : List (Msg × Msg)} {u : ℕ × ℕ} {xS : Msg} {hS : List (Msg × Msg)}
     (hs : parse x = some s) (hstep : step x hist = .session u xS hS) (ω : Tape) :
     (((refP step parse reads Cm wit w).next x hist ω).eval H).1 =
-      (((FlockComplete.honestPZk (wit s u (found H Cm s.roots w (reads s u)))).next xS hS (ω u)).eval H).1 := by
+      (((FlockComplete.honestPZk (wit s u xS (found H Cm s.roots w (reads s u xS)))).next xS hS (ω u)).eval H).1 := by
   simp only [refP, hstep, hs, ocBind_eval, revealOC_eval]
 
 /-- **Outside the sessions, it says what the framing fixes.** -/
 theorem refP_say (H : Msg → Msg) (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stmt)
-    (reads : Stmt → ℕ × ℕ → List ℕ) (Cm : Commitment Bool) (wit : Stmt → ℕ × ℕ → List (Opening Bool) → Claims.Flock.Wit)
+    (reads : Stmt → ℕ × ℕ → Msg → List ℕ) (Cm : Commitment Bool)
+    (wit : Stmt → ℕ × ℕ → Msg → List (Opening Bool) → Claims.Flock.Wit)
     (w : Wit) {x : Msg} {hist : List (Msg × Msg)} {m : Msg} (hstep : step x hist = .say m) (ω : Tape) :
     (((refP step parse reads Cm wit w).next x hist ω).eval H).1 = m := by
   simp only [refP, hstep, OC.eval]

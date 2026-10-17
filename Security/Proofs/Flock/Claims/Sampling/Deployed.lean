@@ -48,8 +48,8 @@ index of each position under a run's roots (`at_`) and its published leaf layer 
 sits, its row's width and its place there (`place`), and how the reveal encodes an opening's data: the row's other bits,
 the salt and the path (`bits`, `salt`, `π`); and its numbers: the sessions' `N₀`, the most tables a session at a
 statement sets up (`tables`) and the most openings one session reveals (`reveals`); and the reference prover's framing
-(`Reference.refP`): where a run is at a history (`step`), the positions a checked unit's session opens (`reads`) and the
-Flock witness that encodes what it reveals (`wit`). -/
+(`Reference.refP`): where a run is at a history (`step`), the positions a checked unit's session opens under the
+session's statement (`reads`) and the Flock witness that encodes what it reveals (`wit`). -/
 structure Code where
   V : Verifier FlockDeploy.Coin
   parse : Msg → Option Stmt
@@ -71,8 +71,8 @@ structure Code where
   tables : Msg → ℕ
   reveals : Msg → ℕ
   step : Msg → List (Msg × Msg) → Reference.Step
-  reads : Stmt → ℕ × ℕ → List ℕ
-  wit : Stmt → ℕ × ℕ → List (Opening Bool) → Claims.Flock.Wit
+  reads : Stmt → ℕ × ℕ → Msg → List ℕ
+  wit : Stmt → ℕ × ℕ → Msg → List (Opening Bool) → Claims.Flock.Wit
 
 /-! ## The trace commitment -/
 
