@@ -5,7 +5,8 @@ import Proofs.Flock.Claims.Scope.Fit
 /-!
 # The masked scope at several tables
 
-* `setupTables_names`: a session of several tables names them `Tags.tableNames` and has at most `Tags.MAX_TABLES`.
+* `setupTables_names`: a session of several tables names them `Tags.tableNames` and has at most `Tags.MAX_TABLES`;
+  every session links at two points (`setupTables_points`).
 * `Case.tables`: at a good case the session has `1 ≤ |tables| ≤ 64`, the spec names one table per statement, and
   every table is of `25 ≤ m ≤ 35` and commits with `hm96-sha512/v1`.
 -/
@@ -23,11 +24,12 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- **A session of several tables** names them `Tags.tableNames` and has at most `Tags.MAX_TABLES`. -/
-theorem setupTables_names (hc : 1 < count)
+/-- **A session of several tables** names them `Tags.tableNames`, links at two points, and has at most
+`Tags.MAX_TABLES`. -/
+theorem setupTables_several (hc : 1 < count)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
-    spec.tables = tags.tableNames count ∧ count ≤ Tags.MAX_TABLES := by
+    spec.tables = tags.tableNames count ∧ spec.points = 2 ∧ count ≤ Tags.MAX_TABLES := by
   unfold Stmt.setupTables at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
   replace h : jp0 () = .ok (spec, sts) := by
@@ -53,7 +55,23 @@ theorem setupTables_names (hc : 1 < count)
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  all_goals exact ⟨rfl, by omega⟩
+  all_goals exact ⟨rfl, rfl, by omega⟩
+
+/-- **A session of several tables** names them `Tags.tableNames` and has at most `Tags.MAX_TABLES`. -/
+theorem setupTables_names (hc : 1 < count)
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
+      .ok (spec, sts)) :
+    spec.tables = tags.tableNames count ∧ count ≤ Tags.MAX_TABLES :=
+  ⟨(setupTables_several hc h).1, (setupTables_several hc h).2.2⟩
+
+/-- **A session links at two points.** -/
+theorem setupTables_points
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
+      .ok (spec, sts)) :
+    spec.points = 2 := by
+  rcases HiddenExec.setupTables_okAny h with ⟨-, st, -, rfl, -⟩ | ⟨hc, -, -, -, -⟩
+  · rfl
+  · exact (setupTables_several hc h).2.1
 
 theorem tableNames_size (t : Tags) {count : ℕ} (h : 1 < count) : (t.tableNames count).size = count := by
   simp [Tags.tableNames, show ¬ count ≤ 1 by omega]

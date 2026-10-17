@@ -13,6 +13,8 @@ import Proofs.Flock.Claims.Complete.ZkTables.One
 import Proofs.Flock.Claims.Complete.ZkTables.Names
 import Proofs.Flock.Claims.Complete.ZkTables.Session
 import Proofs.Flock.Claims.Complete.ZkTables.Decode
+import Proofs.Flock.Claims.Complete.ZkTables.Prover
+import Proofs.Flock.Claims.Complete.ZkTables.Goals
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
@@ -32,4 +34,7 @@ Toward `RecordJ`, the tables' names and the rep streams' are distinct (`Names`: 
 `rootBList_distinct`, `Case.tables_nodup`), and the session returns the printed honest masked record of one `root_B` per
 table and sends the link of them, then the streams' rounds (`Session`: `sessionPZk_factsJ`); that record decodes, each
 table's `root_B` read under its name and each rep stream found under its name, reads live and carries the draw
-(`Decode`: `decode_recordObjZkJ`, `live_recordObjZkJ`, `recordDraw_recordObjZkJ`). -/
+(`Decode`: `decode_recordObjZkJ`, `live_recordObjZkJ`, `recordDraw_recordObjZkJ`). Every table's cap and reps are what
+the record needs (`Prover`: `Case.points_regions`, `proverOkJ`), so the record's checks hold at several tables but what
+they ask of the proof files (`Goals`: `Run.jsonJ`, `recordJsonJ`, `FilesJ`, `recordJ_of`), and `complete` holds with
+`FilesJ` for `RecordJ` (`completeJ`). -/
