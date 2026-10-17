@@ -463,7 +463,8 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     totals = {k: sum(t[k] for t in doc["summary"]["cases"].values()) for k in TOTALS}
     ls = doc["launches"]
     print(f"GLM53-FUSED-RMSNORM {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} served={doc['served'].get('ok')} "
-          f"words={json.dumps(totals)} refuted={json.dumps(doc['summary']['refuted'])} launches_ok={sum(all(x['checks'].values()) for x in ls)}/{len(CASES)} "
+          f"words={json.dumps(totals)} refuted={json.dumps(doc['summary']['refuted'])} "
+          f"launches_ok={sum(all(x['checks'].values()) for x in ls)}/{len(CASES)} "
           f"ptx={doc['ptx'].get('ok')} bind={doc['bind'].get('ok')} errors={sorted(doc['errors'])}", flush=True)
     return doc
 

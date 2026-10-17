@@ -1,6 +1,7 @@
 """The GLM-5.3 FA3 split capture without a GPU: the launches split as the kernel derives it, the operands, each comparison job
 takes the kernel's words and finds a flipped one (the attention job names the split count the words are), the reference sample,
-the switches read back, the verdict and `main` end to end (the GPU run is `tests/properties/glm53_fa3_split_capture_gpu.py --out ...` on an H200)."""
+the switches read back, the verdict and `main` end to end (the GPU run is `tests/properties/glm53_fa3_split_capture_gpu.py
+--out ...` on an H200)."""
 from __future__ import annotations
 
 import copy
