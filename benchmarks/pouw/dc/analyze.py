@@ -234,7 +234,7 @@ def analyze(family: str, d: Path) -> dict:
                 joints[name] = j
             elif name.startswith("tcliU_") and t_alone and rate_of(row, "LDTM"):
                 # words loaded and folded (one LI op each) a SM a clock; L = 64 commits one slot in two of UTCIMMA's
-                cols = int(re.fullmatch(r"tcliU_[xp](\d+)f?", name).group(1))
+                cols = int(re.fullmatch(r"tcliU_[xp](\d+)f?(?:_t\d+)?", name).group(1))
                 words, asked = rate_of(row, "LDTM") * 32 * cols, rate_of(row, "UTC") * 128 * 256 / 2
                 joints[name] = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
                                 "issue": issue_rates(row, verdicts.get(name)), "li_words": words,
