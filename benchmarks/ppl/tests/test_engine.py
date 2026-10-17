@@ -101,6 +101,13 @@ def test_q_dithered_attention_passes_every_gate(llama, ids, calib):
     assert abs(ppl(r["nll"]["adopted-qkd/s0"]) / ppl(r["nll"]["bf16/s0"]) - 1) < 0.05
 
 
+def test_dithered_weights_pass_every_gate(llama, ids, calib):
+    r = evaluate(llama, ids[:4], ["adopted-bd", "adopted-qkd"], calib=calib)
+    assert passed(r), r["gates"]
+    assert abs(ppl(r["nll"]["adopted-bd/s0"]) / ppl(r["nll"]["bf16/s0"]) - 1) < 0.05
+    assert not np.array_equal(r["nll"]["adopted-bd/s0"], r["nll"]["adopted-qkd/s0"])
+
+
 def test_linear_variants_pass_their_gates(llama, ids, calib):
     arms = [spec.parse({"linear": [{"step": "rotate", "kind": "h"}, {"step": "int8", "group": 32}]}, "grouped"),
             spec.parse({"linear": [{"step": "smooth", "alpha": 0.5}, {"step": "rotate"},

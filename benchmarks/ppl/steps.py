@@ -180,22 +180,26 @@ def rotate_linear(mm, nxt, *, kind: str = "q"):
 
 
 def _check_int8_linear(p):
-    if p["act"] not in ("round", "dither"):
-        raise ValueError("int8.act is round or dither")
+    for x in ("act", "weight"):
+        if p[x] not in ("round", "dither"):
+            raise ValueError(f"int8.{x} is round or dither")
     if not 1 <= p["weight_top"] <= 127 or not 2 <= p["act_top"] <= 127:
         raise ValueError("int8: tops within 127")
     if p["gptq"] and p["group"]:
         raise ValueError("int8: gptq runs on one scale per row")
+    if p["weight"] == "dither" and (p["gptq"] or p["group"] or p["weight_top"] < 2):
+        raise ValueError("int8: a dithered weight has one scale per row, no gptq and weight_top >= 2")
 
 
-@linear_step("int8", phase="quantize", seeded=lambda p: p["act"] == "dither", calib=lambda p: p["gptq"],
+@linear_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["act"], p["weight"]), calib=lambda p: p["gptq"],
              check=_check_int8_linear)
-def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight_top: int = 127, group: int = 0,
-                gptq: bool = False):
+def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str = "round", weight_top: int = 127,
+                group: int = 0, gptq: bool = False):
     """The int8 grid: activations one scale per token (`round` to [-act_top, act_top], or `dither`: floor(x / s) + b,
     b a fresh coin bit, s = absmax / (act_top - 1)), weights one scale per output row (or per (row, `group` inputs),
-    each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded or by GPTQ (blocks of 128, on
-    the calibration windows' served inputs). The integer product is exact (s8 x s8 -> s32), scaled after."""
+    each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded, by GPTQ (blocks of 128, on
+    the calibration windows' served inputs) or dithered like the activations (fresh bits every call, drawn after the
+    activations'). The integer product is exact (s8 x s8 -> s32), scaled after."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
         if gptq:
@@ -204,6 +208,10 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight_top: 
 
     def weights():
         w = mm.weight()
+        if weight == "dither":
+            t = weight_top - 1
+            s = w.abs().amax(dim=1).clamp(min=1e-30) / t
+            return torch.floor((w / s[:, None]).clamp(-t, t)).to(torch.int8), s
         if gptq:
             q, s = gptq_round(w, mm.run.calib["H"][hkey], weight_top)
             return q.to(torch.int8), s
@@ -218,6 +226,8 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight_top: 
     wq, sw = mm.cached("int8", weights)
     bits = mm.coins(mm.x.shape) if act == "dither" else None
     xq, sa = act_quant(mm.x, act, bits, act_top)
+    if weight == "dither":
+        wq = (wq.float() + mm.coins(wq.shape)).to(torch.int8)
     if group:
         k = xq.shape[1]
         y = torch.zeros(xq.shape[0], wq.shape[0], device=xq.device)

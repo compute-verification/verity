@@ -14,7 +14,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     want = {"int8-linears": ("linears", "int8-linears", False), "int8-attention": ("attention", "int8-attention", True),
             "int8-all": ("all", "int8-all", True), "adopted-linears": ("linears", "int8-linears", True),
             "adopted-attention": ("attention", "int8-attention", True), "adopted": ("all", "int8-all", True),
-            "adopted-no-smooth": ("all", "int8-all", True), "adopted-qkd": ("all", "int8-all", True)}
+            "adopted-no-smooth": ("all", "int8-all", True), "adopted-qkd": ("all", "int8-all", True),
+            "adopted-bd": ("all", "int8-all", True)}
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
@@ -49,6 +50,19 @@ def test_adopted_qkd_is_adopted_with_q_dithered_and_unpeeled():
         parse('[[attention]]\nstep = "int8"\nq = "peel"')
 
 
+def test_adopted_bd_dithers_both_operands_of_the_linears():
+    q, bd = spec.load("adopted-qkd"), spec.load("adopted-bd")
+    assert bd.attention == q.attention
+    kw = {s.defn.name: s.kw for s in bd.linear}
+    assert (kw["int8"]["act"], kw["int8"]["weight"], kw["int8"]["weight_top"]) == ("dither", "dither", 127)
+    assert not parse('[[linear]]\nstep = "int8"').seeded
+    assert parse('[[linear]]\nstep = "int8"\nweight = "dither"').seeded
+    for bad in ('weight = "peel"', 'weight = "dither"\ngptq = true', 'weight = "dither"\ngroup = 32',
+                'weight = "dither"\nweight_top = 1'):
+        with pytest.raises(ValueError, match="int8"):
+            parse(f'[[linear]]\nstep = "int8"\n{bad}')
+
+
 def test_round_trip():
     for p in spec.SPECS.glob("*.toml"):
         a = spec.load(str(p))
@@ -58,7 +72,8 @@ def test_round_trip():
 
 def test_defaults_are_filled_and_typed():
     a = parse('[[linear]]\nstep = "int8"\nweight_top = 63\n[[linear]]\nstep = "int8"\nlayers = [0]\nact = "dither"')
-    assert a.linear[0].kw == {"act": "round", "act_top": 127, "weight_top": 63, "group": 0, "gptq": False}
+    assert a.linear[0].kw == {"act": "round", "act_top": 127, "weight": "round", "weight_top": 63, "group": 0,
+                              "gptq": False}
     assert a.linear[1].layers == frozenset({0})
     s = parse('[[linear]]\nstep = "smooth"\nalpha = 1').linear[0]
     assert s.kw["alpha"] == 1.0 and isinstance(s.kw["alpha"], float)
