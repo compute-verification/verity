@@ -18,7 +18,8 @@ import Proofs.Flock.Claims.Sampling.Reference.Complete
   code's.
 * `AcceptsFramed`: on a statement in scope, a prover that says what the framing fixes outside the sessions is accepted
   when every checked unit's session accepts; the sampled verifier's.
-* `SessionsScope`: every session's statement is in Flock's masked scope; the code's.
+* `SessionsScope`: on a statement in scope, every session's statement passes the deployed `--zk` scope check, so it is
+  in Flock's masked scope (`FlockDeploy.scopeMatches_zk`); the code's.
 * `SessionWit`: at a unit with no faulty unit in the trace, openings that pass the commitment's check, are the committed
   values and cover the session's reads make a Flock witness (`wit`) in the session statement's relation; the code's.
 
@@ -57,9 +58,12 @@ def AcceptsFramed (H : Msg → Msg) : Prop :=
     (∀ u ∈ c.checked x r, ∀ xS vS, c.session x u (run H P c.V x ω r).seen = some (xS, vS) → vS.out = .acc) →
       (run H P c.V x ω r).out = .acc
 
-/-- **The sessions are in Flock's masked scope**: every session's statement. -/
+/-- **The sessions pass Flock's masked scope check**: on a statement in scope, every session's statement passes the
+deployed `--zk` scope check (`FlockDeploy.scopeCheck true`), so it is in Flock's masked scope
+(`FlockDeploy.scopeMatches_zk`). -/
 def SessionsScope : Prop :=
-  ∀ x u v xS vS, c.session x u v = some (xS, vS) → Claims.Flock.Scope (FlockDeploy.deployZk rel) xS
+  ∀ x s Pt, c.parse x = some s → c.partition s.prog s.query = some Pt → InScope Pt s →
+    ∀ u v xS vS, c.session x u v = some (xS, vS) → FlockDeploy.scopeCheck true xS = true
 
 /-- **An honest unit's openings make a Flock witness in its session's relation**: on a statement in scope with no
 faulty unit, openings that pass the commitment's check under the roots, are the committed values `Wit.val` reads, and
@@ -79,7 +83,7 @@ theorem δcZk_nonneg (H : Msg → Msg) (x : Msg) : 0 ≤ FlockComplete.δcZk H x
   split_ifs <;> positivity
 
 /-- **At the deployed record, a checked unit's session is `honestPZk`'s run** on what the reference prover reveals. -/
-theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : SessionsScope rel c)
+theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : SessionsScope c)
     (hwit : SessionWit rel c H) : HonestSessions H (deploy rel c) := by
   rintro x w ⟨s, Pt, hs, hP, hin⟩ ⟨s', Pt', hs', hP', hf⟩ ω r u hu
   change c.parse x = some s at hs
@@ -95,7 +99,8 @@ theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : 
   have hr := hrun (FlockComplete.honestPZk (c.wit s u (found H (commit c) s.roots w (c.reads s u)))) (ω u)
     fun hist hS h => refP_session H c.step c.parse c.reads (commit c) c.wit w hs h ω
   have h0 := hr r fun _ _ => rfl
-  exact ⟨xS, c.wit s u (found H (commit c) s.roots w (c.reads s u)), ω u, emb, hinj, hemb, hscope x u _ xS _ h0,
+  exact ⟨xS, c.wit s u (found H (commit c) s.roots w (c.reads s u)), ω u, emb, hinj, hemb,
+    (FlockDeploy.scopeMatches_zk rel xS).2 (hscope x s Pt hs hP hin u _ xS _ h0),
     hwit x s Pt w u _ xS _ hs hP hin hf h0 _ (fun o ho => ⟨found_opens ho, found_val ho⟩)
       (fun g hg b hb => found_covers hg hb), hr⟩
 
@@ -113,7 +118,7 @@ set_option synthInstance.maxSize 1024 in
 lists. -/
 theorem complete_deploy (H : Msg → Msg) (hF : Claims.Flock.Complete H (FlockDeploy.deployZk rel))
     (hfix : DrawFixed (deploy rel c)) (hslots : DrawSlots (deploy rel c)) (hframe : Framed c H)
-    (haccept : AcceptsFramed c H) (hscope : SessionsScope rel c) (hwit : SessionWit rel c H) :
+    (haccept : AcceptsFramed c H) (hscope : SessionsScope c) (hwit : SessionWit rel c H) :
     Complete H (deploy rel c) :=
   complete_of_sessions H (deploy rel c) hF hfix (checkedLe_of_slots _ hslots)
     (honestSessions_deploy rel c H hframe hscope hwit)
