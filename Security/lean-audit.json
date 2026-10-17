@@ -377,6 +377,208 @@
   "Definitions.Accounting.Bandwidth",
   "Models.Accounting.Guarantees.Bandwidth"
  ],
+ "claims": {
+  "modules": ["Definitions.Claims"],
+  "witnesses": {
+   "Claims.Bits": {
+    "fails": "Claims.Bits_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Complete": {
+    "fails": "Claims.Complete_fails",
+    "meets": []
+   },
+   "Claims.ExtractRunsExpLe": {
+    "fails": "Claims.ExtractRunsExpLe_fails",
+    "meets": []
+   },
+   "Claims.ExtractRunsLe": {
+    "fails": "Claims.ExtractRunsLe_fails",
+    "meets": []
+   },
+   "Claims.Flock.Bits": {
+    "fails": "Claims.Flock.Bits_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Flock.Complete": {
+    "fails": "Claims.Flock.Complete_fails",
+    "meets": []
+   },
+   "Claims.Flock.Efficient": {
+    "fails": "Claims.Flock.Efficient_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Flock.KS": {
+    "fails": "Claims.Flock.KS_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.Flock.Nontrivial": {
+    "fails": "Claims.Flock.Nontrivial_fails",
+    "meets": []
+   },
+   "Claims.Flock.ScopeMatches": {
+    "fails": "Claims.Flock.ScopeMatches_fails",
+    "meets": []
+   },
+   "Claims.Flock.ZK": {
+    "fails": "Claims.Flock.ZK_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.KS": {
+    "fails": "Claims.KS_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.KSLin": {
+    "fails": "Claims.KSLin_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Nontrivial": {
+    "fails": "Claims.Nontrivial_fails",
+    "meets": []
+   },
+   "Claims.Recursion.Bits": {
+    "fails": "Claims.Recursion.Bits_fails",
+    "meets": ["Claims.Recursion.decoder_meets_plain", "Claims.Recursion.decoder_meets_zk"]
+   },
+   "Claims.Recursion.BitsFlock": {
+    "fails": "Claims.Recursion.BitsFlock_fails",
+    "meets": ["Claims.Recursion.decoder_meets_plain", "Claims.Recursion.decoder_meets_zk"]
+   },
+   "Claims.Recursion.Complete": {
+    "fails": "Claims.Recursion.Complete_fails",
+    "meets": []
+   },
+   "Claims.Recursion.Efficient": {
+    "fails": "Claims.Recursion.Efficient_fails",
+    "meets": []
+   },
+   "Claims.Recursion.Inner.KS": {
+    "fails": "Claims.Recursion.Inner.KS_fails",
+    "meets": ["Claims.Recursion.decoder_meets_plain", "Claims.Recursion.decoder_meets_zk"]
+   },
+   "Claims.Recursion.Inner.KSAbort": {
+    "fails": "Claims.Recursion.Inner.KSAbort_fails",
+    "meets": ["Claims.Recursion.decoder_meets_plain", "Claims.Recursion.decoder_meets_zk"]
+   },
+   "Claims.Recursion.KS": {
+    "fails": "Claims.Recursion.KS_fails",
+    "meets": ["Claims.Recursion.decoder_meets_plain", "Claims.Recursion.decoder_meets_zk"]
+   },
+   "Claims.Recursion.KSFlock": {
+    "fails": "Claims.Recursion.KSFlock_fails",
+    "meets": ["Claims.Recursion.decoder_meets_plain", "Claims.Recursion.decoder_meets_zk"]
+   },
+   "Claims.Recursion.KSPriv": {
+    "fails": "Claims.Recursion.KSPriv_fails",
+    "meets": ["Claims.Recursion.decoder_meets_plain", "Claims.Recursion.decoder_meets_zk"]
+   },
+   "Claims.Recursion.Nontrivial": {
+    "fails": "Claims.Recursion.Nontrivial_fails",
+    "meets": []
+   },
+   "Claims.Recursion.ScopeMatches": {
+    "fails": "Claims.Recursion.ScopeMatches_fails",
+    "meets": []
+   },
+   "Claims.Recursion.ZK": {
+    "fails": "Claims.Recursion.ZK_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.Recursion.ZKPriv": {
+    "fails": "Claims.Recursion.ZKPriv_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.Sampling.Binding": {
+    "fails": "Claims.Sampling.Binding_fails",
+    "meets": []
+   },
+   "Claims.Sampling.Bits": {
+    "fails": "Claims.Sampling.Bits_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.BitsLin": {
+    "fails": "Claims.Sampling.BitsLin_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.Complete": {
+    "fails": "Claims.Sampling.Complete_fails",
+    "meets": []
+   },
+   "Claims.Sampling.Efficient": {
+    "fails": "Claims.Sampling.Efficient_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.ExtractOwnLe": {
+    "fails": "Claims.Sampling.ExtractOwnLe_fails",
+    "meets": []
+   },
+   "Claims.Sampling.KS": {
+    "fails": "Claims.Sampling.KS_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.KSCount": {
+    "fails": "Claims.Sampling.KSCount_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.Nontrivial": {
+    "fails": "Claims.Sampling.Nontrivial_fails",
+    "meets": []
+   },
+   "Claims.Sampling.ScopeMatches": {
+    "fails": "Claims.Sampling.ScopeMatches_fails",
+    "meets": []
+   },
+   "Claims.Sampling.Universal": {
+    "fails": "Claims.Sampling.Universal_fails",
+    "meets": []
+   },
+   "Claims.Sampling.ZK": {
+    "fails": "Claims.Sampling.ZK_fails",
+    "meets": ["Claims.Sampling.masked_meets_zk"]
+   },
+   "Claims.ScopeMatches": {
+    "fails": "Claims.ScopeMatches_fails",
+    "meets": []
+   },
+   "Claims.SimCost": {
+    "fails": "Claims.SimCost_fails",
+    "meets": []
+   },
+   "Claims.ZKmalR": {
+    "fails": "Claims.ZKmalR_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   }
+  },
+  "not": {
+   "Claims.Collision": "a helper the claims read: two inputs with one output",
+   "Claims.ERepCost": "proved at every deployment (`Claims.ERep_cost`); Flock's `Efficient` reads it",
+   "Claims.Flock.InScope": "a helper the claims read: the forms Flock proves, which its scope reads",
+   "Claims.Flock.ListWithin": "the list-decoding spec Flock's KS, Bits and Efficient ask of a decoder, proved of both deployed decoders (`FlockDeploy.listWithin_plain`, `listWithin_zk`)",
+   "Claims.Flock.RelS": "a helper the claims read: a statement's relation, which `Flock.R` reads",
+   "Claims.Flock.Scope": "a helper the claims read: the scope Flock's claims read",
+   "Claims.Recursion.InScope": "a helper the claims read: the forms the compiled verifier proves, which its scope reads",
+   "Claims.Recursion.Scope": "a helper the claims read: the scope the recursion's claims read",
+   "Claims.Recursion.decOK": "a helper the claims read: the decoders the recursion's claims quantify over (`Flock.ListWithin`)",
+   "Claims.Rel.L": "a helper the claims read: a relation's language",
+   "Claims.Rel.ext": "a helper the claims read: a relation at an extractor's optional witness",
+   "Claims.Sampling.BoundaryFaulty": "a helper the claims read: a faulty unit on the boundary trace, which `FaultyBoundary` reads",
+   "Claims.Sampling.Commitment.Binds": "a helper the claims read: a commitment's binding, which `Binding` reads",
+   "Claims.Sampling.Design.WellFormed": "a helper the claims read: a well-formed design, one well-formed rule per class",
+   "Claims.Sampling.Faulty": "a helper the claims read: a faulty unit, which the sampling relation reads",
+   "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",
+   "Claims.Sampling.InScope": "a helper the claims read: the programs and partitions the sampling scope takes",
+   "Claims.Sampling.LogColl": "a helper the claims read: a collision in a log of `H` calls",
+   "Claims.Sampling.Netlist.Fits": "a helper the claims read: a netlist of a size class",
+   "Claims.Sampling.OneStage.WellFormed": "a helper the claims read: a well-formed one-stage design",
+   "Claims.Sampling.Partition.Partitions": "a helper the claims read: a partition of a program's gates into proof units",
+   "Claims.Sampling.Prog.Correct": "a helper the claims read: a correct gate interval on committed values",
+   "Claims.Sampling.Prog.Topological": "a helper the claims read: a topologically ordered program",
+   "Claims.Sampling.RU.Consecutive": "a helper the claims read: a replay unit of consecutive gate intervals",
+   "Claims.Sampling.RelS": "a helper the claims read: a statement's sampling relation",
+   "Claims.Sampling.Rule.WellFormed": "a helper the claims read: a well-formed rule on its class",
+   "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read"
+  }
+ },
  "layers": {
   "Definitions.Core": {
    "imports": ["Mathlib", "Definitions.Core"],
@@ -624,7 +826,13 @@
   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct"
+  "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
+  "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "four_names": ["Nci", "NetTiming", "Accounting"],
  "guarantees": {
@@ -1498,6 +1706,156 @@
    "signature": ["Bandwidth.SecurityProofs.MbwCapacity.{u_1, u_2} : Bandwidth.Guarantees.MbwCapacity"],
    "assumptions": [],
    "type_hash": "14543c855bb73081fb225a17c7df7478387af02155c806d46e19367db0d5f2f6"
+  },
+  "Claims.Bits_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Complete_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.ExtractRunsExpLe_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.ExtractRunsLe_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Flock.Bits_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Flock.Complete_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Flock.Efficient_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Flock.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Flock.Nontrivial_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Flock.ScopeMatches_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Flock.ZK_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Flock.decoder_meets_plain": {
+   "owner": "@proofs"
+  },
+  "Claims.Flock.decoder_meets_zk": {
+   "owner": "@proofs"
+  },
+  "Claims.Flock.masked_meets_zk": {
+   "owner": "@proofs"
+  },
+  "Claims.KSLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Nontrivial_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.BitsFlock_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.Bits_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.Complete_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.Efficient_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.Inner.KSAbort_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.Inner.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.KSFlock_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.KSPriv_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.Nontrivial_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.ScopeMatches_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.ZKPriv_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.ZK_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.decoder_meets_plain": {
+   "owner": "@proofs"
+  },
+  "Claims.Recursion.decoder_meets_zk": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.Binding_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.BitsLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.Bits_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.Complete_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.Efficient_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.ExtractOwnLe_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.KSCount_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.Nontrivial_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.ScopeMatches_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.Universal_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.ZK_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.decoder_meets_plain": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.decoder_meets_zk": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.masked_meets_zk": {
+   "owner": "@proofs"
+  },
+  "Claims.ScopeMatches_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.SimCost_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKmalR_fails": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.ClaimsStated": {
    "owner": "@proofs",
