@@ -81,10 +81,10 @@ def test_lm_head_takes_only_the_steps_that_name_it():
 
 def test_co_and_ncp_serve_seven_bit_sides():
     co, ncp = spec.load("co"), spec.load("ncp")
-    ckw = {s.defn.name: s.kw for s in co.linear}
-    assert (ckw["int8"]["act"], ckw["int8"]["weight"], ckw["int8"]["weight_top"]) == ("dither", "dither", 63)
-    akw = {s.defn.name: s.kw for s in co.attention}
-    assert (akw["int8"]["q"], akw["int8"]["q_top"], akw["int8"]["k"], akw["int8"]["k_top"]) == ("dither", 63, "dither", 127)
+    ckw = {s.defn.name: s.kw for s in co.linear}["int8"]
+    assert (ckw["act"], ckw["act_top"], ckw["weight"], ckw["weight_top"]) == ("dither", 64, "dither", 63)
+    akw = {s.defn.name: s.kw for s in co.attention}["int8"]
+    assert (akw["q"], akw["q_top"], akw["k"], akw["k_top"], akw["v_top"]) == ("dither", 63, "dither", 63, 127)
     nkw = {s.defn.name: s.kw for s in ncp.linear}
     assert (nkw["int8"]["act"], nkw["int8"]["act_top"], nkw["int8"]["weight_top"]) == ("round", 63, 63)
     assert not any(s.defn.name == "peel" for s in ncp.attention)
