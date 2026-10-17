@@ -173,7 +173,7 @@ theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
   rw [hform] at ht hrr hl hc1 hpi ho
   simp only [Readable.Read.form, htags] at ht hrr hl hc1 hpi ho
   simp only [Bool.not_eq_true] at ht
-  simp only [Bool.false_eq_true, false_or] at hc1
+  simp only [Bool.false_eq_true, ↓reduceIte] at hc1
   have hpi' : ins.read.publicInputs = none := Option.not_isSome_iff_eq_none.1 hpi
   have hcoins : ins.read.coins = ins.read.I.coins := by simp [Readable.Read.coins, hzk]
   unfold Readable.Read.setup at hsr
