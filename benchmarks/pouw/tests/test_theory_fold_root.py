@@ -49,6 +49,22 @@ def test_scaled_kj_is_kj19_at_32_bits():
     assert all(sw.kj_last(a, 13) for a in keys if rf.kj19(a))
 
 
+def test_not_symmetric_words_open_k2(tmp_path):
+    """At words with 2 d1 ≡ a0 − 1 and 2 d3 ≡ a1 − 1, complementing d0 gives F_{w'} = NOT ∘ F_w: every even fold is fixed,
+    at n = 10 under the scaled KJ (|K_even| = 32, odd R adds none) and at 32 bits at a key_ok_r11 pair; one off, it isn't."""
+    jobs = sw.jobs_for("symmetric", 10, random.Random(3), 2, 0)
+    summ, elems = fr.root_kernels(fr.build(tmp_path), 10, 4, 6, 4, jobs + [j[:3] + (j[3] ^ 2,) + j[4:] for j in jobs[:2]])
+    assert all(summ[j] == [16, 32, 16, 32, 1, 0, 0] and (j[2] ^ 1023,) + j[3:] in elems[(j[0], j[1], 2)] for j in jobs)
+    assert all(summ[j[:3] + (j[3] ^ 2,) + j[4:]] == [16, 16, 16, 16, 1, 0, 0] for j in jobs[:2])
+    a0, a1 = 0x9E3779B1, 0x7F4A7C15
+    assert rf.key_ok_r11(a0) and rf.key_ok_r11(a1)
+    w = (0x12345678, (a0 - 1) // 2, 0x0BADF00D, (a1 - 1) // 2 + (1 << 31))
+    w2 = (w[0] ^ 0xFFFFFFFF,) + w[1:]
+    for y in (0, 1, 0xDEADBEEF, 0x80000000):
+        p, q = fr.fold32(y, w, a0, a1), fr.fold32(y, w2, a0, a1)
+        assert q == p ^ 0xFFFFFFFF and fr.fold32(q, w2, a0, a1) == fr.fold32(p, w, a0, a1)
+
+
 @pytest.mark.slow
 def test_n8_bad_pairs_fail_kj_last(tmp_path):
     """Over 1,024 random n = 8 key pairs, a random word each, every pair where K_R = K_1 = P/X/N fails for some R <= 6 has

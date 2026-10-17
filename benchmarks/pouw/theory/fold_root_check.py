@@ -10,8 +10,12 @@ middle with 2^(2n) half-round maps a side (REFEREE's `fold_kernel.c` enumerates 
       `kj_last` is egemm_depthr_check.key_ok_r11_32's KJ19 clause;
   (4) at n = 8 over every odd key pair (--quick: a sample), one random word each, every pair where K_R = K_1 = P/X/N fails
       for some R <= 6 has a key ≡ ±1 mod 2^r1, which KJ19's last clause rejects; so at n = 8 that clause alone, with no
-      pair clause, admits 4,096 pairs and K_R = K_1 = P/X/N holds at every one.
-Mutations: a brute-force comparison against a different word is caught; a kernel that drops P1's doubling is caught.
+      pair clause, admits 4,096 pairs and K_R = K_1 = P/X/N holds at every one;
+  (5) the exception no key rule removes: when 2·d1 ≡ a0 − 1 and 2·d3 ≡ a1 − 1 (mod 2^n), both half-rounds commute with
+      bitwise NOT, and w with d0 complemented has F_{w'} = NOT ∘ F_w, so it fixes every even fold. At n = 8 and 10 under
+      the scaled KJ that orbit is all depth adds (|K_even| = 32), and at 32 bits it holds at key_ok_r11 keys.
+Mutations: a brute-force comparison against a different word is caught; a kernel that drops P1's doubling is caught;
+a NOT-symmetric word with d1 one off keeps K_2 = K_1.
 
   uv run python benchmarks/pouw/theory/fold_root_check.py [--quick] [--mutations] [--verdict PATH]
 """
@@ -166,7 +170,51 @@ def main() -> int:
                      f"{len(admitted)} pairs pass KJ19's last clause at both keys, "
                      f"{sum(not good(summ[j], rmax) for j in admitted)} of them fail; "
                      f"{sum(sw.near_inverse(a, b, n) for a, b, *_ in admitted)} of the admitted are near-inverse pairs")
+
+        # (5) the NOT-symmetric words open K_2 at every key
+        for n in (8, 10):
+            r1, r2 = sw.ROT[n]
+            ok = [a for a in range(1, 1 << n, 2) if sw.kj_scaled(a, n, r2)]
+            jobs = sw.jobs_for("symmetric", n, rng, 6 if quick else 40, 0)
+            summ, elems = root_kernels(exe, n, r1, r2, 6, jobs)
+            twins = all(elems[(j[0], j[1], 2)] - elems[(j[0], j[1], 1)] >=
+                        {((j[2] ^ ((1 << n) - 1)), j[3], j[4], j[5])} for j in jobs)
+            checks.check(f"n{n}, {len(jobs)} NOT-symmetric words at pairs passing the scaled KJ ({len(ok)} keys): "
+                         "|K_1| = |K_odd| = 16 = P/X/N, |K_even| = 32, and the added words include w with d0 complemented",
+                         all(summ[j] == [16, 32, 16, 32, 16, 32, 1, 0, 0] for j in jobs) and twins,
+                         str(sorted({tuple(summ[j]) for j in jobs})))
+            if checks.mutations:
+                off = [j[:3] + ((j[3] + 1) % (1 << n),) + j[4:] for j in jobs]
+                ms, _ = root_kernels(exe, n, r1, r2, 6, off)
+                checks.mutation(f"n{n}: the same words with d1 one off (2 d1 ≠ a0 − 1)",
+                                not all(ms[j] == [16, 32, 16, 32, 16, 32, 1, 0, 0] for j in off),
+                                str(sorted({tuple(ms[j]) for j in off})))
+        fails = []
+        for _ in range(8 if quick else 64):
+            while True:
+                a0, a1 = rng.randrange(1 << 32) | 1, rng.randrange(1 << 32) | 1
+                if rf.key_ok_r11(a0) and rf.key_ok_r11(a1):
+                    break
+            h = rng.choice((0, 1 << 31)), rng.choice((0, 1 << 31))
+            w = (rng.randrange(1 << 32), ((a0 - 1) // 2 + h[0]) % (1 << 32), rng.randrange(1 << 32),
+                 ((a1 - 1) // 2 + h[1]) % (1 << 32))
+            w2 = (w[0] ^ 0xFFFFFFFF,) + w[1:]
+            for y in (rng.randrange(1 << 32) for _ in range(256)):
+                p, q = fold32(y, w, a0, a1), fold32(y, w2, a0, a1)
+                if q != p ^ 0xFFFFFFFF or fold32(q, w2, a0, a1) != fold32(p, w, a0, a1):
+                    fails.append((a0, a1, w, y))
+                    break
+        checks.check("32 bits, rotations (13, 19), keys passing key_ok_r11, NOT-symmetric words: F_{w'} = NOT ∘ F_w and "
+                     "F_{w'}^2 = F_w^2 with w' = w with d0 complemented, so K_2 ⊋ K_1 at every key",
+                     not fails, f"{8 if quick else 64} key pairs × 256 states; failures {fails[:2]}")
     return checks.finish()
+
+
+def fold32(y: int, w, a0: int, a1: int) -> int:
+    """One round of the XOR-in(13, 19) fold at 32 bits."""
+    m = 0xFFFFFFFF
+    y = ((((y << 13) | (y >> 19)) & m ^ w[0]) * a0 + w[1]) & m
+    return ((((y << 19) | (y >> 13)) & m ^ w[2]) * a1 + w[3]) & m
 
 
 if __name__ == "__main__":
