@@ -40,7 +40,8 @@ import Proofs.Flock.SamplingBoundary
 * `DrawLaw`, `SessionOpens`, `InteriorFixed`, `Refuses` (`Sampling.KS`): the same verifier, starting with the draw.
 * `hopen : OpenCallsLe H D`: checking what one checked unit's Flock witness reveals makes at most `openCalls` SHA-512
   calls; the deployed opening check's count, the Lean sampled-proofs verifier's. With it the extractor's own calls are
-  `Efficient`'s (`E_own_le`); its reruns are, at every deployment (`E_runs_le`).
+  `Efficient`'s (`E_own_le`); its reruns are, at every deployment (`E_runs_le`), and its expected reruns are with
+  `DrawFixed` (`E_runs_exp`).
 * `hscope : ScopeMatches D`: the deployed scope check, the Lean sampled-proofs verifier's.
 * `huniv : UniversalIs D`: the deployed universal unit computes what its Definition's gates do (`universalProg`, the
   port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
