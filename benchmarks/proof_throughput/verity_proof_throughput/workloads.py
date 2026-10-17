@@ -1,8 +1,10 @@
 """The VU families the benchmark proves: GLM-5.3's dot products at their served K, each one ``GemmCoordinate<K>`` (K MACs).
 
-A workload is one VU family: the coordinate Definition a served GEMM's ``Q_word`` partition cuts it into, at that GEMM's K,
-proved B at a time in one statement. Its instances are the first B coordinates of one synthetic ``Gemm_v2`` Call of ``n_max``
-outputs (``instances``), so every B on the ladder proves a prefix of the same frozen set.
+A workload is one VU family: the coordinate Definition a served GEMM's ``Q_word`` partition cuts it into, at that GEMM's K.
+Its population is ``n_max`` independent instances of that Definition (``population``: core's ``population_program``, each
+instance one unit of ``Q_template_instance`` v0, so the population is one stratum), staged once as one statement; each
+session proves the B units the verifier draws from it by the stratified law, the draw the Lean verifier's soundness covers
+(``instances``). Its unit is the coordinate class the ``Q_word`` partition of a ``Gemm_v2`` Call gives, gate for gate.
 
 ``bf16-k6144`` is the VU family behind GLM-5.3's bf16 GEMMs at hidden 6144 over ``HopperBF16WgmmaDot16_v1``
 (``integrations/vllm/verity_vllm/program/registry/bf16_gemm_check.py``): lm_head and the DSA indexer's ``wk_weights_proj``
@@ -14,9 +16,9 @@ point job proves only the class-statement workloads today (``stager``).
 """
 from __future__ import annotations
 
-import json
 import math
 from dataclasses import dataclass, field
+from typing import Any
 
 #: ``MAX_STATEMENT_BITS`` the hill-climb proves at (2^35 witness bits): the GPU's ceiling for one statement
 MAX_STATEMENT_BITS = 1 << 35
@@ -32,9 +34,9 @@ class Workload:
     profile: str
     #: the served GEMMs whose coordinates these are, each with its N per TP8 rank (None: vocabulary-sized)
     sites: dict[str, int | None]
-    #: how the point job stages it: ``class-statement`` (verity_flock.class_statement --definitions) or ``served-unit``
+    #: how the point job stages it: ``class-statement`` (verity_flock.class_statement --program-module) or ``served-unit``
     stager: str
-    #: the synthetic Call the instances are cut from: its output count, and so the instance set's size
+    #: the population's instance count: the units a session's draw is taken from, and the largest B
     n_max: int
     #: block bits one coordinate takes in a statement (2^k_log), from staging; the cap is MAX_STATEMENT_BITS / 2^k_log
     k_log: int | None = None
@@ -48,12 +50,13 @@ class Workload:
             return self.n_max
         return min(self.n_max, MAX_STATEMENT_BITS >> self.k_log)
 
-    def definitions(self) -> dict[str, int]:
-        """The class sweep's ``--definitions`` source: one ``Gemm_v2`` Call of ``n_max`` coordinates."""
+    def population(self) -> Any:
+        """The Program the statement is staged over: ``n_max`` independent instances of the VU Definition."""
         if self.stager != "class-statement":
-            raise ValueError(f"{self.name}: staged by {self.stager}, not by the class sweep's --definitions")
-        dot = self.extra["dot"]
-        return {f'Gemm_v2{{K={self.K},N={self.n_max},DOT={{"fn":"{dot}"}}}}': 1}
+            raise ValueError(f"{self.name}: staged by {self.stager}, not by the class sweep")
+        from .population import population
+
+        return population(self.vu, self.n_max)
 
     def to_json(self) -> dict:
         return {"name": self.name, "vu": self.vu, "K": self.K, "profile": self.profile, "sites": self.sites,
@@ -91,6 +94,3 @@ def ladder(cap: int, lo: int = 1) -> list[int]:
         raise ValueError(f"the ladder runs over powers of two, lo <= cap: got lo={lo}, cap={cap}")
     return [1 << i for i in range(int(math.log2(lo)), int(math.log2(cap)) + 1)]
 
-
-def defs_json(w: Workload) -> str:
-    return json.dumps(w.definitions()) + "\n"
