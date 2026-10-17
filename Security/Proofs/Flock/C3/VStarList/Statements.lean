@@ -41,13 +41,13 @@ theorem vstarParsesScoped_of_list (ish : Flock.RecVStar.Inner) (bind : Fin (vsta
   have key : ∀ j : Fin (vstarCount ish), ∃ q : Flock.Circuit × ℕ, FlockSoundness.Built q.1.unit ∧
       FlockSoundness.Discharge.Layout.scopeOk q.1 = true ∧
       ∀ ss s cf c, Flock.RecVStar.statements ish = .ok ss → ss[(j : ℕ)]? = some s →
-        Flock.RecVStar.circuitFile s (bind j) = .ok cf →
+        Flock.RecVStar.circuitFile s (bind j) ish.holo = .ok cf →
         Flock.HmRow.parse (Flock.Zk.tags (Flock.Tags.circuit.withCoins
           (.tree (Flock.Zk.coinSpec #[Flock.Tags.circuit.table]))) (Flock.Zk.maskLogOf cf) 1) cf [] = .ok c →
         FlockSoundness.Discharge.Layout.scopeOk c = true → c = q.1 ∧ q.2 = s.instances := by
     intro j
     by_cases hw : ∃ ss s cf c, Flock.RecVStar.statements ish = .ok ss ∧ ss[(j : ℕ)]? = some s ∧
-        Flock.RecVStar.circuitFile s (bind j) = .ok cf ∧
+        Flock.RecVStar.circuitFile s (bind j) ish.holo = .ok cf ∧
         Flock.HmRow.parse (Flock.Zk.tags (Flock.Tags.circuit.withCoins
           (.tree (Flock.Zk.coinSpec #[Flock.Tags.circuit.table]))) (Flock.Zk.maskLogOf cf) 1) cf [] = .ok c ∧
         FlockSoundness.Discharge.Layout.scopeOk c = true

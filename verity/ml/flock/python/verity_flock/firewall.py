@@ -41,18 +41,31 @@ challenger's connection without sending ``Finish``. So every stop the firewall m
 session cut after some message, never why. A refused or stopped session's worker is answered outside the slot, so it
 can't hold up another session's.
 
-The record is read whole at every call. A torn last line (a writer killed inside its append) fails every call, so the
-firewall serves nothing until the developer repairs the record: it fails closed, never by skipping an event it can't read.
+What the rules read of the record is kept beside it in ``index-py/`` (`_Index`: each recursive session's open, stop,
+finish and releases, each stream's first open and failures, the last ``slot``, the counts), and a call reads only what
+was appended to the record since the index last read it, by whichever process. The Rust firewall keeps its own, in
+``index/``. The index is rebuilt from the record's start when the record was replaced, cut shorter or no longer holds the
+last bytes the index read, when the machine has booted since the index was written, when a writer of it ended mid-write,
+or when a file of it won't read; an edit further back that leaves the record no shorter isn't seen, nor is a file of the
+index edited by hand that still reads. Since the firewall only appends, the verdicts are the ones a read of the whole
+record gives. A record the index can't answer is read whole at every call, as
+before, and each rule's read is a scan of it (`_Scan`): one whose last line has no newline yet, or one holding a line
+the firewall doesn't write or a name over `KEY_MAX` bytes. A torn last line (a writer killed inside its append) fails
+every call, so the firewall serves nothing until the developer repairs the record: it fails closed, never by skipping an
+event it can't read.
 """
 from __future__ import annotations
 
 import fcntl
 import json
+import locale
+import os
 import socket
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from .rec_live import (REQ_FINISH, REQ_PING, REQ_PROOF, RESP_REFUSED, RESP_VERDICT, decode_resp, read_frame, refused,
                        resp_ok, resp_str, write_frame)
@@ -76,11 +89,18 @@ class Firewall:
         self._log = self.state / "record.jsonl"
 
     @contextmanager
-    def _locked(self) -> Iterator[list[dict]]:
+    def _locked(self, sessions: tuple[str, ...] = (), streams: tuple[str, ...] = ()) -> Iterator[_Index | _Scan]:
+        """The record as the rules read it (`_read`), under ``record.lock``; then what changed of the index is written
+        back."""
         with open(self.state / "record.lock", "a") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
             try:
-                yield self._events()
+                rec = self._read(sessions, streams)
+                try:
+                    yield rec
+                finally:
+                    if (ix := rec if isinstance(rec, _Index) else rec.index) is not None:
+                        ix.flush()
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
 
@@ -89,17 +109,69 @@ class Firewall:
             return []
         return [json.loads(line) for line in self._log.read_text().splitlines() if line]
 
-    def _append(self, events: list[dict], ev: dict) -> dict:
-        ev = {"seq": len(events), **ev}
-        with open(self._log, "a") as f:
-            f.write(json.dumps(ev, sort_keys=True) + "\n")
-        events.append(ev)
+    def _read(self, sessions: tuple[str, ...] = (), streams: tuple[str, ...] = ()) -> _Index | _Scan:
+        """The index, given the lines appended since it last read the record; or the record read whole (`_Scan`, with the
+        index when it read as far as it could), when the index can't answer it or a line won't read (the whole read then
+        fails as it always has). ``sessions`` and ``streams`` are the ones the call reads and appends for (`_Index.load`)."""
+        try:
+            f = open(self._log, "rb")
+        except FileNotFoundError:
+            f = None
+        if f is None:
+            ix, data = _Index.of(self.state / _INDEX, None), b""
+        else:
+            with f:
+                st = os.fstat(f.fileno())
+                ix = _Index.of(self.state / _INDEX, ([st.st_dev, st.st_ino], st.st_size))
+                f.seek(ix.offset - len(ix.last))
+                data = f.read()
+                if data.startswith(ix.last):
+                    data = data[len(ix.last):]
+                else:
+                    ix = _Index(ix.dir, ix.boot, ix.file)
+                    f.seek(0)
+                    data = f.read()
+        end = data.rfind(b"\n") + 1
+        try:
+            lines = [json.loads(line) for line in data[:end].decode(_ENCODING).splitlines() if line]
+        except (ValueError, RecursionError):
+            return _Scan(self._events())
+        try:
+            for e in lines:
+                ix.add(e)
+            ix.read(data[:end])
+            ix.load(sessions, streams)
+        except _BAD:
+            ix.broken = True
+            ix.flush()
+            return _Scan(self._events())
+        if not ix.regular or end < len(data):
+            return _Scan(self._events(), ix)
+        return ix
+
+    def _append(self, rec: _Index | _Scan, ev: dict) -> dict:
+        ev = {"seq": rec.count, **ev}
+        line = (json.dumps(ev, sort_keys=True) + "\n").encode(_ENCODING)
+        with open(self._log, "ab") as f:
+            f.write(line)
+            if isinstance(rec, _Index) and rec.file is None:
+                st = os.fstat(f.fileno())
+                rec.file = [st.st_dev, st.st_ino]
+        if isinstance(rec, _Index):
+            try:
+                rec.add(ev)
+            except BaseException:
+                rec.broken = True
+                raise
+            rec.read(line)
+        else:
+            rec.add(ev)
         return ev
 
     def record(self) -> list[dict]:
         """Every event so far, in order."""
-        with self._locked() as ev:
-            return ev
+        with self._locked():
+            return self._events()
 
     def open(self, stream: str, parts: list[str], budget: int | None = None, release: dict | None = None) -> str:
         """A new recursive session on ``stream``, opened by its inner session, with its V* statements in their order
@@ -112,38 +184,37 @@ class Firewall:
             raise ValueError(f"a failure budget is a positive integer, not {budget!r}")
         if release is not None:
             _schedule_ok(release, len(parts))
-        with self._locked() as ev:
-            first = next((e for e in ev if e["event"] == "open" and e["stream"] == stream), None)
-            if first is not None and first.get("budget") != budget:
-                raise ValueError(f"stream {stream}'s budget is {first.get('budget')}, not {budget}")
-            if budget is not None and (n := _failures(ev, stream)) >= budget:
+        with self._locked(streams=(stream,)) as rec:
+            if rec.known(stream) and (b := rec.budget(stream)) != budget:
+                raise ValueError(f"stream {stream}'s budget is {b}, not {budget}")
+            if budget is not None and (n := rec.failures(stream)) >= budget:
                 raise Refused(refused(f"stream {stream} stopped at its failure budget ({n} of {budget})"))
-            sid = f"r{sum(e['event'] == 'open' for e in ev):04d}"
+            sid = f"r{rec.opens:04d}"
             e = {"event": "open", "session": sid, "stream": stream, "parts": list(parts)}
             if budget is not None:
                 e["budget"] = budget
             if release is not None:
                 e["release"] = release
-            self._append(ev, e)
+            self._append(rec, e)
             return sid
 
     def finish(self, session: str) -> None:
         """The recursive session's inner session finished: its outer sessions may be served."""
-        with self._locked() as ev:
-            self._append(ev, {"event": "finish", "session": session, "part": INNER})
+        with self._locked((session,)) as rec:
+            self._append(rec, {"event": "finish", "session": session, "part": INNER})
 
     def stop(self, session: str, part: str, why: str) -> bool:
         """The recursive session stops at ``part``: its one failure, recorded once (False if it had already stopped)."""
-        with self._locked() as ev:
-            if _stopped(ev, session):
+        with self._locked((session,)) as rec:
+            if rec.stopped(session):
                 return False
-            self._append(ev, {"event": "stop", "session": session, "part": part, "why": why})
+            self._append(rec, {"event": "stop", "session": session, "part": part, "why": why})
             return True
 
     def release(self, session: str, part: str) -> None:
         """An outer proof of the recursive session was released (the challenger's verdict accepted it)."""
-        with self._locked() as ev:
-            self._append(ev, {"event": "release", "session": session, "part": part})
+        with self._locked((session,)) as rec:
+            self._append(rec, {"event": "release", "session": session, "part": part})
 
     def admit(self, session: str, part: str, *, timed: bool = False) -> int | None:
         """Raise `Refused` unless an outer session of ``session`` may be served now: the recursive session is open, has not
@@ -152,21 +223,21 @@ class Firewall:
         one (never opened), then refused. A refusal is recorded (``refused``). Returns ``part``'s release time (rule 3), or
         None. Only a ``timed`` caller (one that holds the proofs to that time: the Rust firewall, or a test of its rules)
         is admitted to a scheduled session; this module's relay is not."""
-        with self._locked() as ev:
+        with self._locked((session,)) as rec:
             why, at = None, None
-            open_ = next((e for e in ev if e["event"] == "open" and e["session"] == session), None)
+            open_ = rec.opened(session)
             if open_ is None:
                 why = f"recursive session {session} was never opened"
-            elif (s := _stopped(ev, session)) is not None:
+            elif (s := rec.stopped(session)) is not None:
                 why = f"recursive session {session} stopped at {s['part']}: the firewall serves nothing more of it"
-            elif (j := _next(ev, open_)) is None:
+            elif (j := rec.next(open_)) is None:
                 why = f"recursive session {session} released all its statements: the firewall serves nothing more of it"
-            elif (b := _budget(ev, open_["stream"])) is not None and (n := _failures(ev, open_["stream"])) >= b:
+            elif (b := rec.budget(open_["stream"])) is not None and (n := rec.failures(open_["stream"])) >= b:
                 why = f"stream {open_['stream']} stopped at its failure budget ({n} of {b})"
-            elif not any(e["event"] == "finish" and e["session"] == session for e in ev):
+            elif not rec.finished(session):
                 why = f"recursive session {session}: its inner session has not finished"
             elif (nxt := open_["parts"][j]) != part:
-                self._append(ev, {"event": "stop", "session": session, "part": nxt, "why": f"never opened: {part} was asked in its place"})
+                self._append(rec, {"event": "stop", "session": session, "part": nxt, "why": f"never opened: {part} was asked in its place"})
                 why = f"recursive session {session} stopped at {nxt}: {part} is not its next statement"
             elif (r := open_.get("release")) is not None:
                 if not timed:
@@ -175,19 +246,19 @@ class Firewall:
                 else:
                     at = r["start_ms"] + sum(r["windows_ms"][:j + 1])
             if why is not None:
-                self._append(ev, {"event": "refused", "session": session, "part": part})
+                self._append(rec, {"event": "refused", "session": session, "part": part})
                 raise Refused(refused(why))
             return at
 
     def stopped(self, session: str) -> dict | None:
-        with self._locked() as ev:
-            return _stopped(ev, session)
+        with self._locked((session,)) as rec:
+            return rec.stopped(session)
 
     def failures(self, stream: str) -> int:
         """The failures on ``stream`` so far (rule 4): its recursive sessions' stops, and each refusal of one that had not
         stopped while the stream had not."""
-        with self._locked() as ev:
-            return _failures(ev, stream)
+        with self._locked(streams=(stream,)) as rec:
+            return rec.failures(stream)
 
     @contextmanager
     def slot(self, session: str, part: str, waiting: Callable[[], None] | None = None) -> Iterator[None]:
@@ -198,17 +269,17 @@ class Firewall:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                with self._locked() as ev:
-                    self._append(ev, {"event": "wait", "session": session, "part": part})
+                with self._locked((session,)) as rec:
+                    self._append(rec, {"event": "wait", "session": session, "part": part})
                 if waiting:
                     waiting()
                 fcntl.flock(f, fcntl.LOCK_EX)
             try:
-                with self._locked() as ev:
-                    if (o := _orphan(ev)) is not None and _stopped(ev, o["session"]) is None:
-                        self._append(ev, {"event": "stop", "session": o["session"], "part": o["part"],
-                                          "why": f"the slot's holder ended before its outcome (slot {o['seq']})"})
-                    self._append(ev, {"event": "slot", "session": session, "part": part})
+                with self._locked((session,)) as rec:
+                    if (o := rec.orphan()) is not None and rec.stopped(o["session"]) is None:
+                        self._append(rec, {"event": "stop", "session": o["session"], "part": o["part"],
+                                           "why": f"the slot's holder ended before its outcome (slot {o['seq']})"})
+                    self._append(rec, {"event": "slot", "session": session, "part": part})
                 yield
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
@@ -254,6 +325,339 @@ def _orphan(ev: list[dict]) -> dict | None:
     done = any(e["session"] == s["session"] and (e["event"] in ("release", "refused") and e["part"] == s["part"] or e["event"] == "stop")
                for e in ev[k + 1:])
     return None if done else s
+
+
+#: the encoding `Path.read_text` reads the record in
+_ENCODING = locale.getpreferredencoding(False)
+#: the index's directory in the state directory (the Rust firewall's is ``index/``)
+_INDEX = "index-py"
+#: the longest session or stream name the index keeps, in bytes (its files are named by it); a record holding a longer
+#: one is read whole
+KEY_MAX = 100
+#: how many of the last bytes it read the index keeps, to tell that the record still holds them
+_LAST = 256
+_KINDS = ("finish", "stop", "release", "refused", "wait", "slot")
+#: what a file of the index that won't read raises
+_BAD = (OSError, ValueError, KeyError, TypeError, RecursionError)
+#: the head's fields of one type (besides ``file``, ``last`` and ``slot``)
+_HEAD = {"v": int, "boot": str, "dirty": bool, "offset": int, "regular": bool, "count": int, "opens": int, "slot_done": bool}
+
+
+class _Scan:
+    """The record read whole, each rule's read a scan of it; and the index, if it read as far as it could, to be written
+    back."""
+
+    def __init__(self, events: list[dict], index: _Index | None = None) -> None:
+        self.events, self.index = events, index
+
+    @property
+    def count(self) -> int:
+        return len(self.events)
+
+    @property
+    def opens(self) -> int:
+        return sum(e["event"] == "open" for e in self.events)
+
+    def add(self, e: dict) -> None:
+        self.events.append(e)
+
+    def opened(self, session: str) -> dict | None:
+        return next((e for e in self.events if e["event"] == "open" and e["session"] == session), None)
+
+    def known(self, stream: str) -> bool:
+        return any(e["event"] == "open" and e["stream"] == stream for e in self.events)
+
+    def stopped(self, session: str) -> dict | None:
+        return _stopped(self.events, session)
+
+    def finished(self, session: str) -> bool:
+        return any(e["event"] == "finish" and e["session"] == session for e in self.events)
+
+    def next(self, open_: dict) -> int | None:
+        return _next(self.events, open_)
+
+    def budget(self, stream: str) -> int | None:
+        return _budget(self.events, stream)
+
+    def failures(self, stream: str) -> int:
+        return _failures(self.events, stream)
+
+    def orphan(self) -> dict | None:
+        return _orphan(self.events)
+
+
+def _key(name: str) -> str | None:
+    """The hex of ``name``'s bytes, which names its files in the index; None for a name over `KEY_MAX` bytes."""
+    b = name.encode("utf-8", "surrogatepass")
+    return b.hex() if len(b) <= KEY_MAX else None
+
+
+def _regular(e: Any) -> bool:
+    """Whether ``e`` is an event as the firewall writes it, one whose reads `_Index` answers as `_Scan` does: an object with
+    a ``seq`` and a string ``session``, and either an ``open`` with a string ``stream``, a list of string ``parts`` and an
+    integer ``budget`` or none, or one of the other events with a string ``part``; every name at most `KEY_MAX` bytes."""
+    if not (type(e) is dict and "seq" in e and type(e.get("session")) is str and _key(e["session"]) is not None):
+        return False
+    if e.get("event") == "open":
+        return (type(e.get("stream")) is str and _key(e["stream"]) is not None and type(e.get("parts")) is list
+                and all(type(p) is str for p in e["parts"]) and (e.get("budget") is None or type(e["budget"]) is int))
+    return e.get("event") in _KINDS and type(e.get("part")) is str
+
+
+def _strings(v: Any) -> bool:
+    return type(v) is list and all(type(x) is str for x in v)
+
+
+class _Session:
+    """What the index keeps of a recursive session: its first open and first stop, whether its inner session finished, the
+    statements released, and for each stream it was opened on (``member``), what that stream's failures read of it: its
+    statements as its last open there gave them, and what was released and whether it stopped after its first open
+    there."""
+
+    def __init__(self, v: Any = None) -> None:
+        if v is None:
+            v = {"open": None, "stop": None, "finished": False, "released": [], "member": []}
+        if not (type(v) is dict and set(v) == {"open", "stop", "finished", "released", "member"}
+                and all(v[k] is None or type(v[k]) is dict for k in ("open", "stop")) and type(v["finished"]) is bool
+                and _strings(v["released"]) and type(v["member"]) is list
+                and all(type(m) is dict and set(m) == {"stream", "parts", "released", "stopped"} and type(m["stream"]) is str
+                        and _strings(m["parts"]) and _strings(m["released"]) and type(m["stopped"]) is bool
+                        for m in v["member"])):
+            raise ValueError("the firewall's index: not a session")
+        self.open, self.stop, self.finished = v["open"], v["stop"], v["finished"]
+        self.released, self.member = v["released"], v["member"]
+
+    def json(self) -> dict:
+        return {"open": self.open, "stop": self.stop, "finished": self.finished, "released": self.released,
+                "member": self.member}
+
+
+def _boot() -> str:
+    """The machine's boot: an index written before it may have lost writes the page cache held."""
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        return ""
+
+
+def _put(dir: Path, name: str, v: Any) -> None:
+    tmp = dir / f".{name}"
+    tmp.write_text(json.dumps(v))
+    os.replace(tmp, dir / name)
+
+
+class _Index:
+    """What the rules read of the record, kept as it grows, an event at a time, in ``index-py/`` beside it: `_Scan`'s
+    answers. Its files are ``head.json`` (where the index stands in the record: the record's device and inode
+    (``file``), how much of it was read (``offset``) and its last bytes (``last``), whether every line so far is one the
+    index answers for (``regular``), the counts, the last ``slot`` (its seq, session and part) and whether an outcome of
+    it followed), and one for each recursive session and each opened stream (``s`` or ``t``, then `_key` of its name: a
+    `_Session`, and the stream's first open's budget and its failures so far). Each call loads the files it reads and
+    writes back the ones that changed, under ``record.lock``: first the head marked dirty, then the files, then the head,
+    each written whole and renamed into place, so a writer that ends mid-write leaves a dirty head, and the next call
+    rebuilds the index from the record."""
+
+    def __init__(self, dir: Path, boot: str, file: list[int] | None, head: dict | None = None) -> None:
+        self.dir, self.boot, self.file = dir, boot, file
+        self.offset, self.last, self.regular, self.count, self.opens = 0, b"", True, 0, 0
+        self.slot: list | None = None
+        self.slot_done = False
+        #: rebuilt from the record's start: no file of the index is read, and every one is written anew
+        self.fresh = head is None
+        if head is not None:
+            self.offset, self.last, self.regular = head["offset"], head["last"], head["regular"]
+            self.count, self.opens, self.slot, self.slot_done = head["count"], head["opens"], head["slot"], head["slot_done"]
+        #: a file of the index wouldn't read while an event was applied: the next call rebuilds it
+        self.broken = False
+        #: the head changed, so it is written back
+        self.moved = self.fresh
+        self._sessions: dict[str, _Session] = {}
+        self._streams: dict[str, dict | None] = {}
+        self._changed: tuple[set[str], set[str]] = (set(), set())
+
+    @classmethod
+    def of(cls, dir: Path, at: tuple[list[int], int] | None) -> _Index:
+        """The index in ``dir`` of the record as it stands (``at``: its device and inode, and its length; None if there is
+        none yet), or a new one to be built from the record's start if the one there isn't of this record."""
+        boot, file = _boot(), None if at is None else at[0]
+        try:
+            with open(dir / "head.json", "rb") as f:
+                h = json.load(f)
+            h["last"] = bytes.fromhex(h["last"])
+            if not (set(h) == {*_HEAD, "file", "last", "slot"} and all(type(h[k]) is t for k, t in _HEAD.items())
+                    and h["v"] == 1 and h["boot"] == boot and h["dirty"] is False and h["file"] == file
+                    and min(h["offset"], h["count"], h["opens"]) >= 0 and len(h["last"]) <= h["offset"]
+                    and (0 if at is None else at[1]) >= h["offset"]
+                    and (h["slot"] is None or type(h["slot"]) is list and len(h["slot"]) == 3
+                         and all(type(x) is str for x in h["slot"][1:]))):
+                h = None
+        except _BAD:
+            h = None
+        return cls(dir, boot, file, h)
+
+    def _get(self, name: str) -> Any:
+        try:
+            with open(self.dir / name, "rb") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return None
+
+    def session(self, s: str) -> _Session:
+        if s not in self._sessions:
+            key = _key(s)
+            self._sessions[s] = _Session(None if self.fresh or key is None else self._get(f"s{key}.json"))
+        return self._sessions[s]
+
+    def stream(self, t: str) -> dict | None:
+        if t not in self._streams:
+            key = _key(t)
+            v = None if self.fresh or key is None else self._get(f"t{key}.json")
+            if not (v is None or type(v) is dict and set(v) == {"budget", "n"} and type(v["n"]) is int
+                    and (v["budget"] is None or type(v["budget"]) is int)):
+                raise ValueError(f"the firewall's index: t{key}.json is not a stream")
+            self._streams[t] = v
+        return self._streams[t]
+
+    def load(self, sessions: tuple[str, ...], streams: tuple[str, ...]) -> None:
+        """Load what a call may read and append for: ``sessions`` and ``streams``, the session the next open would name,
+        the slot's session if no outcome of it followed, and each of those sessions' streams. A file of the index that
+        won't read raises here, before the call reads anything."""
+        orphan = () if self.slot is None or self.slot_done else (self.slot[1],)
+        for s in (*sessions, f"r{self.opens:04d}", *orphan):
+            self.members(s)
+        for t in streams:
+            self.stream(t)
+
+    def members(self, s: str) -> list[dict]:
+        """The session's ``member``, each stream of it loaded."""
+        member = self.session(s).member
+        for m in member:
+            if self.stream(m["stream"]) is None:
+                raise ValueError(f"the firewall's index: session {s}'s stream {m['stream']} is missing")
+        return member
+
+    def add(self, e: Any) -> None:
+        """The record's next event, ``e``, is in the index. Everything it changes is loaded first, so a load that fails
+        changes nothing."""
+        if not (self.regular and _regular(e)):
+            self.count, self.regular, self.moved = self.count + 1, False, True
+            return
+        kind, s = e["event"], e["session"]
+        if kind not in ("wait", "slot"):
+            self.members(s)
+            if kind == "open":
+                self.stream(e["stream"])
+        self.count, self.moved = self.count + 1, True
+        if kind == "slot":
+            self.slot, self.slot_done = [e["seq"], s, e["part"]], False
+            return
+        if kind != "open" and self.slot is not None and self.slot[1] == s and (
+                kind == "stop" or kind in ("release", "refused") and e["part"] == self.slot[2]):
+            self.slot_done = True
+        if kind == "wait":
+            return
+        sess, tallies = self._sessions[s], self._streams
+        if kind == "open":
+            self.opens += 1
+            if sess.open is None:
+                sess.open = e
+            m = next((m for m in sess.member if m["stream"] == e["stream"]), None)
+            if m is None:
+                sess.member.append({"stream": e["stream"], "parts": list(e["parts"]), "released": [], "stopped": False})
+            else:
+                m["parts"] = list(e["parts"])
+            if tallies[e["stream"]] is None:
+                tallies[e["stream"]] = {"budget": e.get("budget"), "n": 0}
+            self._changed[1].add(e["stream"])
+        elif kind == "finish":
+            sess.finished = True
+        elif kind == "stop":
+            if sess.stop is None:
+                sess.stop = e
+            for m in sess.member:
+                m["stopped"] = True
+                tallies[m["stream"]]["n"] += 1
+                self._changed[1].add(m["stream"])
+        elif kind == "release":
+            for released in [sess.released] + [m["released"] for m in sess.member]:
+                if e["part"] not in released:
+                    released.append(e["part"])
+        else:
+            for m in sess.member:
+                t = tallies[m["stream"]]
+                if (not all(p in m["released"] for p in m["parts"]) and not m["stopped"]
+                        and (t["budget"] is None or t["n"] < t["budget"])):
+                    t["n"] += 1
+                    self._changed[1].add(m["stream"])
+        self._changed[0].add(s)
+
+    def read(self, chunk: bytes) -> None:
+        """The record's next bytes, whole lines, are in the index."""
+        if chunk:
+            self.offset += len(chunk)
+            self.last = (self.last + chunk[-_LAST:])[-_LAST:]
+            self.moved = True
+
+    def flush(self) -> None:
+        """Write back what changed. A write that fails leaves the old head, whose record the next call reads again from
+        where it stood, or a dirty one, and the next call rebuilds the index: either way nothing of the index outruns its
+        head."""
+        try:
+            if self.broken:
+                (self.dir / "head.json").unlink(missing_ok=True)
+            elif self.moved:
+                self._write()
+        except OSError:
+            pass
+
+    def _head(self, dirty: bool) -> dict:
+        return {"v": 1, "boot": self.boot, "dirty": dirty, "file": self.file, "offset": self.offset,
+                "last": self.last.hex(), "regular": self.regular, "count": self.count, "opens": self.opens,
+                "slot": self.slot, "slot_done": self.slot_done}
+
+    def _write(self) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True)
+        _put(self.dir, "head.json", self._head(True))
+        if self.fresh:
+            for p in self.dir.iterdir():
+                if p.name != "head.json":
+                    p.unlink()
+        for s in self._changed[0]:
+            _put(self.dir, f"s{_key(s)}.json", self._sessions[s].json())
+        for t in self._changed[1]:
+            if (x := self._streams.get(t)) is not None:
+                _put(self.dir, f"t{_key(t)}.json", x)
+        _put(self.dir, "head.json", self._head(False))
+
+    def opened(self, session: str) -> dict | None:
+        return self.session(session).open
+
+    def known(self, stream: str) -> bool:
+        return self.stream(stream) is not None
+
+    def stopped(self, session: str) -> dict | None:
+        return self.session(session).stop
+
+    def finished(self, session: str) -> bool:
+        return self.session(session).finished
+
+    def next(self, open_: dict) -> int | None:
+        released = self.session(open_["session"]).released
+        return next((j for j, p in enumerate(open_["parts"]) if p not in released), None)
+
+    def budget(self, stream: str) -> int | None:
+        t = self.stream(stream)
+        return None if t is None else t["budget"]
+
+    def failures(self, stream: str) -> int:
+        t = self.stream(stream)
+        return 0 if t is None else t["n"]
+
+    def orphan(self) -> dict | None:
+        if self.slot is None or self.slot_done:
+            return None
+        seq, session, part = self.slot
+        return {"seq": seq, "session": session, "part": part}
 
 
 def _parts_ok(parts) -> None:

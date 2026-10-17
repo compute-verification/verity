@@ -429,7 +429,7 @@ theorem zkRepColsOf_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Set
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
       sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
-      Flock.Zk.decode (shapeZK st sch extras) bytes = .ok zp ∧
+      st.extra sess.points = .ok extras ∧ Flock.Zk.decode (shapeZK st sch extras) bytes = .ok zp ∧
       Claims.Flock.zkQueryRound st.m st.kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
       Claims.Flock.zkRepColsOf (Claims.Flock.zkProofShape st.m st.kLog (2 + extras.size) st.merkle.digestLen
           (if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes)) stream.rounds bytes =
@@ -443,9 +443,9 @@ theorem zkRepColsOf_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Set
         zp.proof.ligerito.initialProof.rows zp.proof.ligerito.initialProof.siblings
         zp.proof.ligerito.initialProof.salts (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) = .ok () ∧
       zp.proof.cap.foldl (· ++ ·) ByteArray.empty = sess.rootB[i]! := by
-  obtain ⟨stream, extras, zp, hstream, -, hzp, hlt, hmc, hcap, hroot⟩ :=
+  obtain ⟨stream, extras, zp, hstream, hext, hzp, hlt, hmc, hcap, hroot⟩ :=
     zkQueryRound_verifyRepWith hs spec st sch tPad sess i r bytes cap hsch h
-  refine ⟨stream, extras, zp, hstream, hzp, hlt, ?_, hmc, hcap ▸ hroot⟩
+  refine ⟨stream, extras, zp, hstream, hext, hzp, hlt, ?_, hmc, hcap ▸ hroot⟩
   rw [zkProofShape_eq st sch tPad extras hsch, Claims.Flock.zkRepColsOf, hzp]
   simp only [shapeZK, Array.getElem?_eq_getElem hlt, Option.map_some, Option.getD_some,
     getElem!_pos stream.rounds (Claims.Flock.zkQueryRound st.m st.kLog sch.k0 (2 + extras.size)) hlt]
@@ -509,7 +509,8 @@ theorem verifyWithM_reps (hs : Hashes V) (spec : SessionSpec) (tabs : Array Setu
 
 /-- **Level 0's query round in an accepted `--zk` session** (`Zk.verifyWithM` in `V`, any oracle): for every table `i`
 and rep `r < 2`, the rep's stream has round `zkQueryRound m kLog k0 claims` at the table's `m`, `kLog`, schedule and
-claim count, the reader's columns of the rep (`zkRepColsOf` at `zkProofShape`) are the witness lanes of the proof's
+claim count (`2 +` its extra claims at the session's link points), the reader's columns of the rep (`zkRepColsOf` at
+`zkProofShape`) are the witness lanes of the proof's
 level-0 rows at the positions of that round's coins, and level 0's Merkle check passed on exactly those rows at exactly
 those positions against the table's committed `root_B`. -/
 theorem zkQueryRound_verifyWithM (hs : Hashes V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
@@ -519,6 +520,7 @@ theorem zkQueryRound_verifyWithM (hs : Hashes V) (spec : SessionSpec) (tabs : Ar
         Flock.Zk.schedule tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
+          tabs[i].extra sess.points = .ok extras ∧
           Flock.Zk.decode (shapeZK tabs[i] sch extras) proofs[2 * i + r]! = .ok zp ∧
           Claims.Flock.zkQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
           Claims.Flock.zkRepColsOf (Claims.Flock.zkProofShape tabs[i].m tabs[i].kLog (2 + extras.size)
@@ -551,6 +553,7 @@ theorem zkQueryRound_verify (spec : SessionSpec) (tabs : Array Setup) (record : 
         Flock.Zk.schedule tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
+          tabs[i].extra sess.points = .ok extras ∧
           Flock.Zk.decode (shapeZK tabs[i] sch extras) proofs[2 * i + r]! = .ok zp ∧
           Claims.Flock.zkQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
           Claims.Flock.zkRepColsOf (Claims.Flock.zkProofShape tabs[i].m tabs[i].kLog (2 + extras.size)

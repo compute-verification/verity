@@ -82,6 +82,15 @@ def loose (out : Bool) : Net :=
 -- a net with no slot is not read
 #guard ProvedScope.wiresAcyclic (circ #[unit, loose false] #[1, 0] #[] #[(0, 1, 0)])
 
+/-- A stage of one input port and one computed row (column 128), its constant column 129, whose output ports are its
+first `k` columns from 128. -/
+def past (k : Nat) : Net := { net #[⟨0, 1, #[1]⟩] 1 #[1] #[(#[0], #[0])] with outGroups := #[⟨1, 1, Array.replicate k 1⟩] }
+
+-- an output port at the constant reads nothing; one past it, which no row computes, is refused
+#guard ProvedScope.outReads (past 2) == (#[#[0], #[]], true)
+#guard (ProvedScope.outReads (past 3)).2 == false
+#guard !ProvedScope.wiresAcyclic (circ #[unit, past 3] #[1, 1] #[(0, 0, 1, 1, 0, 2), (1, 0, 0, 0, 0, 0)])
+
 /-- A lookup slot (one input port, one output port, taken whole) between two stages; `back` wires the lookup from the
 stage it feeds. -/
 def lookup (back : Bool) : Circuit :=

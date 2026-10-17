@@ -280,7 +280,7 @@ theorem setupH_of_verifies (I : Inputs) (hh : I.tags.hiddenOutputs = true) {n mP
     ∃ st D, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program =
         .ok st ∧ Draw.UnitDraw.ofJson d = .ok D ∧
       ((∀ u ∈ S, u.val ∈ D.proved) → st.mPts = mPts → ∃ x : DrawSetupH I mPts S d, x.st = st) :=
-  drawSetupH_of_accepts h.2.typed (h.2.parseH hh) h.2.outNet hh h.2.count h.1 hd
+  drawSetupH_of_accepts h.2.typed (h.2.parseH hh) hh h.2.count h.1 hd
 
 end
 
