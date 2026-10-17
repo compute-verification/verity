@@ -32,7 +32,7 @@ LANE_MIX, LANE_IADD3, LANE_LOP3 = 0 | 1 << 4, 0 | 15 << 4, 2 | 15 << 4
 
 
 def test_kernel_names_round_trip():
-    for kern, struct, targs in [("k_mixu", "ImmaS8k16", [32, LANE_MIX, 8]), ("k_spec", "HmmaF16k16F32", [64, 245]),
+    for kern, struct, targs in [("k_mixu", "ImmaS8k16", [32, LANE_MIX, 8, 4]), ("k_spec", "HmmaF16k16F32", [64, 245]),
                                 ("k_alone", "ImmaS8k32", [2]), ("k_opalone", "", [LANE_MIX]), ("k_duofold", "", [4])]:
         assert SM.demangle(SM.mangle(kern, struct, targs)) == (kern, struct, targs)
     assert SM.mangle("k_mixu", "ImmaS8k16", [32, 16, 8]) == "_Z6k_mixuI9ImmaS8k16Li32ELi16ELi8EEviPjP8BlockClk"
@@ -42,7 +42,8 @@ def test_kernel_names_round_trip():
 
 def test_expect_follows_the_templates():
     assert SM.expect("k_mixu", "ImmaS8k16", [32, LANE_MIX, 8]) == [{"IMMA*": 32, "*IADD3": 65, "FFMA": 64}]
-    assert SM.expect("k_mixu", "ImmaS8k32", [128, LANE_IADD3, 4]) == [{"IMMA*": 8, "*IADD3": 129}]
+    assert SM.expect("k_mixu", "ImmaS8k32", [128, LANE_IADD3, 4]) == [{"IMMA*": 8, "*IADD3": 129}]   # before U
+    assert SM.expect("k_mixu", "ImmaS8k32", [72, LANE_MIX, 8, 2]) == [{"IMMA*": 16, "*IADD3": 73, "FFMA": 72}]
     assert SM.expect("k_spec", "ImmaS8k32", [64, LANE_IADD3]) == [{"IMMA*": 8}, {"*IADD3": 65}]
     assert SM.expect("k_opalone", "", [LANE_LOP3]) == [{"LOP3*": 64}]
     assert SM.expect("k_alone", "HmmaTf32k8", [8]) == [{"HMMA*": 8}]   # before k_alone took U
@@ -55,6 +56,8 @@ def test_sm80_cu_agrees_with_the_analysis():
     assert "constexpr int mixu_u(int r) { return 192 / (8 + r) > 8 ? 8 : 192 / (8 + r) < 1 ? 1 : 192 / (8 + r); }" in cu
     rs = {int(r) for r in re.findall(r"\bmixu<F, (\d+),", cu)}
     assert rs and all(r % 8 == 0 for r in rs), "k_mixu puts R / 8 lane ops after each MMA"
+    ru = [(int(r), int(u)) for r, u in re.findall(r"\bmixu<F, (\d+), \w+, \w+, (\d+)>", cu)]
+    assert ru and all(u * (8 + r) <= 192 for r, u in ru), "a longer loop exits through CALL.REL.NOINC"
     enum = re.search(r"enum \{ (OP_[^}]*)\}", cu).group(1)
     ops = {int(v): k.lower() for k, v in re.findall(r"OP_(\w+) = (\d+)", enum)}
     assert ops.pop(SM.OP_NONE) == "none" and ops == {p: name for p, (name, _) in SM.OPS.items()}
@@ -106,7 +109,8 @@ def _run(tmp_path: Path, mix_rate: float) -> Path:
     cases = [(_row("k_opalone", "", [LANE_MIX], 8000 * 67 / mix_rate, lane_w=8, lane=LANE_MIX), mix),
              (_row("k_opalone", "", [LANE_IADD3], 8000 * 67 / 0.508, lane_w=8, lane=LANE_IADD3), iadd3),
              (_row("k_alone", "ImmaS8k32", [2, 1], 2 * 1000 * 8 * 8.375, mma_w=2, mma_ptx=8), ALONE_LOOP),
-             (_row("k_mixu", "ImmaS8k32", [32, LANE_MIX, 4], n_mma * 5.125 + n_other, mma_w=4, mma_ptx=32, lane=LANE_MIX),
+             (_row("k_mixu", "ImmaS8k32", [32, LANE_MIX, 4, 4], n_mma * 5.125 + n_other, mma_w=4, mma_ptx=32,
+                   lane=LANE_MIX),
               MIXU_LOOP)]
     keys = [f"g0:{SM.mangle(r['kern'], r['struct'], r['targs'])}" for r, _ in cases]
     (tmp_path / "gate.json").write_text(json.dumps({"kernels": {k: {"ok": True, "reasons": []} for k in keys}}))

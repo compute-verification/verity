@@ -131,7 +131,7 @@ def lane_counts(x: int, n: int) -> dict[str, int]:
 
 
 def mixu_u(r: int) -> int:
-    """sm80.cu's mixu_u: k_mixu's groups of 8 MMAs an iteration at R lane ops a group."""
+    """sm80.cu's mixu_u: k_mixu's groups of 8 MMAs an iteration at R lane ops a group, where the sweep doesn't set U."""
     return max(1, min(8, 192 // (8 + r)))
 
 
@@ -152,7 +152,7 @@ def expect(kern: str, struct: str, targs: list[int]) -> list[dict[str, int]]:
         return [{fam: 8 * s}, lane_counts(x, R)]
     if kern == "k_mixu":
         R, x = targs[:2]
-        u = mixu_u(R)
+        u = targs[3] if len(targs) > 3 else mixu_u(R)
         return [{fam: 8 * u * s, **lane_counts(x, u * R)}]
     raise ValueError(kern)
 

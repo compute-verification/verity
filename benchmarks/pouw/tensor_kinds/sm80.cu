@@ -387,10 +387,11 @@ __global__ void __launch_bounds__(512, 1) k_spec(int iters, uint32_t* sink, Bloc
   sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
 }
 
-// Interleaved: every warp issues a MMA then R/8 lane ops, 8 accumulators, U groups of 8 MMAs an iteration. A loop of
-// more than ~200 instructions makes ptxas exit it through CALL.REL.NOINC, which hides its data flow from the gate.
+// Interleaved: every warp issues a MMA then R/8 lane ops, 8 accumulators, U groups of 8 MMAs an iteration (mixu_u(R)
+// unless the sweep sets it). A loop of more than ~200 instructions makes ptxas exit it through CALL.REL.NOINC, which
+// hides its data flow from the gate.
 constexpr int mixu_u(int r) { return 192 / (8 + r) > 8 ? 8 : 192 / (8 + r) < 1 ? 1 : 192 / (8 + r); }
-template <class F, int R, int X, int NW>
+template <class F, int R, int X, int NW, int U>
 __global__ void __launch_bounds__(128 * NW, 1) k_mixu(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t a[4], b[4], e;
@@ -402,7 +403,7 @@ __global__ void __launch_bounds__(128 * NW, 1) k_mixu(int iters, uint32_t* sink,
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
 #pragma unroll
-    for (int u = 0; u < mixu_u(R); u++) {
+    for (int u = 0; u < U; u++) {
 #pragma unroll
       for (int c = 0; c < 8; c++) {
         F::mma(d[c], a, b, e);
@@ -621,13 +622,13 @@ static void spec() {
   Timing t = timed(k_spec<F, R, X>, WSM * 32, &iters, &ok);
   emit("spec", "k_spec", F::SNAME, F::NAME, {R, X}, F::MACS, F::SLOTS, F::WORDS, 2, 2, 8, R, X, iters, ok, t);
 }
-template <class F, int R, int X, int NW = 4>
+template <class F, int R, int X, int NW = 4, int U = mixu_u(R)>
 static void mixu() {
   int iters;
   bool ok;
-  Timing t = timed(k_mixu<F, R, X, NW>, 4 * NW * 32, &iters, &ok);
-  emit("mixu", "k_mixu", F::SNAME, F::NAME, {R, X, NW}, F::MACS, F::SLOTS, F::WORDS, NW, 0, 8 * mixu_u(R), mixu_u(R) * R,
-       X, iters, ok, t);
+  Timing t = timed(k_mixu<F, R, X, NW, U>, 4 * NW * 32, &iters, &ok);
+  emit("mixu", "k_mixu", F::SNAME, F::NAME, {R, X, NW, U}, F::MACS, F::SLOTS, F::WORDS, NW, 0, 8 * U, U * R, X, iters, ok,
+       t);
 }
 template <class F, int NW>
 static void duo() {
@@ -713,6 +714,18 @@ static void exact() {
   if constexpr (F::EX != 0) exact_int<F>();
 }
 
+// The least bound moves with the loop's length (r20261017-073620-0273: IMMA.16832 at 8 warps 5.16 at R = 32, 4.54 at
+// 48, 5.19 at 64), so R and U each vary, every loop under ~200 instructions.
+template <class F, int NW>
+static void sweep() {
+  mixu<F, 24, LANE_MIX, NW, 2>(); mixu<F, 24, LANE_MIX, NW, 3>(); mixu<F, 24, LANE_MIX, NW, 4>();
+  mixu<F, 32, LANE_MIX, NW, 2>(); mixu<F, 32, LANE_MIX, NW, 3>(); mixu<F, 40, LANE_MIX, NW, 2>();
+  mixu<F, 40, LANE_MIX, NW, 3>(); mixu<F, 48, LANE_MIX, NW, 2>(); mixu<F, 56, LANE_MIX, NW, 2>();
+  mixu<F, 56, LANE_MIX, NW, 3>(); mixu<F, 64, LANE_MIX, NW, 1>(); mixu<F, 72, LANE_MIX, NW, 1>();
+  mixu<F, 72, LANE_MIX, NW, 2>(); mixu<F, 80, LANE_MIX, NW, 1>(); mixu<F, 80, LANE_MIX, NW, 2>();
+  mixu<F, 96, LANE_MIX, NW, 1>();
+}
+
 template <class F>
 static void form() {
   exact<F>();
@@ -734,6 +747,8 @@ static void form() {
   mixu<F, 16, LANE_IADD3, 2>(); mixu<F, 32, LANE_IADD3, 2>(); mixu<F, 16, LANE_IADD3, 8>(); mixu<F, 32, LANE_IADD3, 8>();
   mixu<F, 8, LANE_MIX, 8>(); mixu<F, 16, LANE_MIX, 8>(); mixu<F, 24, LANE_MIX, 8>(); mixu<F, 40, LANE_MIX, 8>();
   mixu<F, 48, LANE_MIX, 8>(); mixu<F, 16, LANE_MIX, 6>(); mixu<F, 32, LANE_MIX, 6>(); mixu<F, 8, LANE_IADD3, 8>();
+  sweep<F, 6>();
+  sweep<F, 8>();
 }
 
 // A scalar class beside a saturated MMA (2 MMA + 2 lane warps a SMSP, 8 ops a MMA): its coupling with the tensor pipe
