@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "checked_strip.py"
+SCRIPT = Path(__file__).resolve().parents[1] / "theory" / "checked_strip.py"
 
 
 @pytest.mark.slow
