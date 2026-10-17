@@ -75,7 +75,7 @@ def Read.pub (r : Read) : Public :=
 
 /-- **The statement's form**, each field the value `ProvedScope.check` tests: the tags' (`statementRules`), the table
 count, the verifier's own public input words and registered reads, a shared-row public file (`Public.tables`), and the
-unit's and the rows' (`scopeOk`, `scopeOkH`). -/
+unit's and the rows' (`scopeOk`, `scopeOkI`), and whether the wires compute every slot (`wiresAcyclic`). -/
 def Read.form (r : Read) : Claims.Flock.Form where
   hm96Rows := r.tags.hm96Rows
   typed := r.tags.typed
@@ -92,6 +92,7 @@ def Read.form (r : Read) : Claims.Flock.Form where
   readsOnlyPortBits := ProvedScope.portReadsB r.circ.unit
   rowsV1 := ProvedScope.v1Ports r.circ
   rowsV2OrSeg := ProvedScope.bitRows r.circ
+  wiresAcyclic := ProvedScope.wiresAcyclic r.circ
 
 /-- A statement the verifier parsed: what it read, and the tables its setup made of it. -/
 structure Parsed extends Read where

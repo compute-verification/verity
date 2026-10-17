@@ -9,8 +9,8 @@ flags) as a `Claims.Verifier`, built as `FlockDeploy.V true` is: the same messag
 rounds, the last message, each round answered by its live coin) and the same decision (`FlockDeploy.decision`: the
 shipped verdict over `OC`, `Zk.verifyWithM Hashes.oc`, then the custody checks), at the recursive setup
 (`RecIns.setup`) where `FlockDeploy.V` has Flock's (`Ins.setup`), which refuses every V* statement; then the verdict's
-last refusal under `--rec-inner` (`fullDrawO`: `RecSetup.fullDraw` at the record's draw), which `FlockDeploy.V` doesn't
-run.
+last refusal (`fullDrawO`: `RecSetup.fullDraw` at the record's draw, which refuses a recursive session without
+`--rec-inner` and, under it, a draw short of every unit), which `FlockDeploy.V` doesn't run.
 
 `nextO_rej`, `nextO_coin` and `nextO_decide` are its three steps; at the SHA-512 oracle a decision accepts exactly when
 the deployed `Zk.verify` accepts the record and proof files at the recursive setup's tables, the custody checks pass and
@@ -53,10 +53,17 @@ def actO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Act :=
 /-- The verifier's own inner shape (`--rec-inner`) at the statement, where it reads. -/
 def innerOfO (x : Claims.Msg) : Option RecVStar.Inner := (insO x).bind (·.inner)
 
-/-- **The verdict's last refusal** (`RecSetup.fullDraw`, as `verifyCmd` calls it at the record's draw): under the
-verifier's inner shape, a V* session whose record's draw is not every unit of its population. -/
+/-- Whether the statement is a recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`), where it reads. -/
+def recOfO (x : Claims.Msg) : Bool :=
+  match insO x with
+  | some s => s.part.isSome || s.bindings.isSome || s.rows.isSome
+  | none => false
+
+/-- **The verdict's last refusal** (`RecSetup.fullDraw`, as `verifyCmd` calls it at the record's draw): a recursive
+session without the verifier's inner shape (`RecSetup.noInner`), and under that shape a V* session whose record's draw
+is not every unit of its population. -/
 def fullDrawO (x : Claims.Msg) (f : Final) : Bool :=
-  (RecSetup.fullDraw (innerOfO x) (Witness.recordDraw f.record) f.record).isOk
+  (RecSetup.fullDraw (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record).isOk
 
 /-- The outer verifier's next message: at a decision, the decision, then the verdict's full-draw refusal, which makes no
 SHA-512 call. -/
