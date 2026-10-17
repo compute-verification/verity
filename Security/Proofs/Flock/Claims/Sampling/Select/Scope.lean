@@ -28,7 +28,7 @@ variable {Coin Col T : Type}
 evaluates to a partition, the program is topologically ordered and the partition partitions it into proof units of at
 most 16 committed values. The design part it need not check (`scopeMatches_of`). -/
 def ProgramScope (D : Deploy Coin Col T) : Prop :=
-  ∀ x, D.scopeCheck x = true ↔ ∃ s Pt, D.parse x = some s ∧ D.partition s.prog s.query = some Pt ∧
+  ∀ x, D.scopeCheck x = true ↔ ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt ∧
     s.prog.Topological ∧ Pt.Partitions s.prog
 
 /-- **The verifier runs its scope check**: a run it accepts is of a statement its scope check takes. -/
@@ -46,8 +46,9 @@ theorem scopeMatches_of [Fintype Coin] (D : Deploy Coin Col T) (hslots : DrawSlo
   · rintro ⟨s, Pt, hx, hP, htop, hpart, -⟩
     exact ⟨s, Pt, hx, hP, htop, hpart⟩
   · rintro ⟨s, Pt, hx, hP, htop, hpart⟩
-    obtain ⟨rule, d, query, table, -, l, -, -, hl, rfl, hds, -, -⟩ := hslots x s Pt hx hP
-    exact ⟨s, _, hx, hP, htop, hpart, designWellFormed rule d query table l s.design hl hds⟩
+    obtain ⟨rule, d, query, table, -, l, -, -, hl, hshape, hds, -, -⟩ := hslots x s Pt hx hP
+    exact ⟨s, _, hx, hP, htop, hpart,
+      (Design.wellFormed_of_shape _ hshape).2 (designWellFormed rule d query table l s.design hl hds)⟩
 
 /-- **The verifier refuses what is out of scope**: an accepted run's statement passed the scope check (`ChecksScope`),
 which is the readable scope (`ScopeMatches`). -/

@@ -367,7 +367,7 @@ def SessionKS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
 bounds, at each, the probability over the second stage that the checked units (the first `n_PU`) miss a fixed proof unit
 `f(v)` of every replay unit `v ∈ B`, and averages at most `P_a(B)`. -/
 def DrawLaw (D : Deploy Coin Col T) : Prop :=
-  ∀ x s Pt, D.parse x = some s → D.partition s.prog s.query = some Pt → InScope Pt s →
+  ∀ x s Pt, D.parse x = some s → D.partition s = some Pt → InScope Pt s →
     ∀ B ⊆ range Pt.rus.length, ∃ esc : (Fin (D.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
       (∀ r (f : ℕ → ℕ), (∀ v ∈ B, f v < Pt.sizes.getD v 0) →
         Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
@@ -378,7 +378,7 @@ def DrawLaw (D : Deploy Coin Col T) : Prop :=
 pair is in scope. -/
 def Refuses (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P D.V x ω r).out = .acc →
-    ∃ s Pt, D.parse x = some s ∧ D.partition s.prog s.query = some Pt ∧ InScope Pt s
+    ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt ∧ InScope Pt s
 
 /-- **The interior commitments precede the second stage**: the roots `iroots` a run shows for replay unit `v`'s
 interior values are the same at fresh second-stage coins. -/
@@ -392,7 +392,7 @@ def InteriorFixed (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Se
 showed for `v`) make proof unit `i` of replay unit `v` correct on `ref_ι`. -/
 def SessionOpens (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) : Prop :=
   ∀ x s Pt (Ω : Type) (P : Prover Ω) ω r u xS vS wF,
-    D.parse x = some s → D.partition s.prog s.query = some Pt → InScope Pt s →
+    D.parse x = some s → D.partition s = some Pt → InScope Pt s →
     (run H P D.V x ω r).out = .acc → (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
     D.session x u (run H P D.V x ω r).seen = some (xS, vS) → Flock.check D.flock.parse xS wF = true →
     ∃ rv pu, Pt.rus[u.1]? = some rv ∧ rv[u.2]? = some pu ∧
@@ -449,7 +449,7 @@ noncomputable def S₁ (d : Design) (Pt : Partition) (δ : ℝ) : Finset (Finset
 refused faulty set `B`, every kept outer run is bad for `B`. -/
 def Fails (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (δ : ℝ) (x : Msg)
     (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x) : Prop :=
-  ∃ s Pt, D.parse x = some s ∧ D.partition s.prog s.query = some Pt ∧ InScope Pt s ∧
+  ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt ∧ InScope Pt s ∧
     ((accList (fun r => (run' r).out = .acc) (D.k x) ((List.finRange (D.cap x)).map c.1)).length < D.k x ∨
       ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (D.k x)
         (fun r e => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e) ((List.finRange (D.cap x)).map c.1)
@@ -595,12 +595,12 @@ theorem rpow_k_le_slack (D : Deploy Coin Col T) (x : Msg) {N m : ℕ} (hN : N �
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem nRU_eq {D : Deploy Coin Col T} {x : Msg} {s : Stmt} {Pt : Partition} (hs : D.parse x = some s)
-    (hPt : D.partition s.prog s.query = some Pt) : nRU D x = Pt.rus.length := by
+    (hPt : D.partition s = some Pt) : nRU D x = Pt.rus.length := by
   simp only [nRU, hs, Deploy.part, hPt, Option.getD_some]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem nPU_eq {D : Deploy Coin Col T} {x : Msg} {s : Stmt} {Pt : Partition} (hs : D.parse x = some s)
-    (hPt : D.partition s.prog s.query = some Pt) : nPU D x = Pt.sizes.sum := by
+    (hPt : D.partition s = some Pt) : nPU D x = Pt.sizes.sum := by
   simp only [nPU, hs, Deploy.part, hPt, Option.getD_some]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -765,7 +765,7 @@ theorem Pr_fails_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
     (fun ω c => Fails H D decode δ x (run H P D.V x ω) c)).trans_le ?_
   have hc := slack_pos
   have hκ0 := κ_pos D hδ x hε
-  by_cases hsc : ∃ s Pt, D.parse x = some s ∧ D.partition s.prog s.query = some Pt ∧ InScope Pt s
+  by_cases hsc : ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt ∧ InScope Pt s
   swap
   · have h0 : ∀ ω, Pr (fun c : ECoins D x => Fails H D decode δ x (run H P D.V x ω) c) = 0 := fun ω =>
       (Pr_congr fun c => ⟨fun ⟨s, Pt, h1, h2, h3, _⟩ => hsc ⟨s, Pt, h1, h2, h3⟩, False.elim⟩).trans Pr_false

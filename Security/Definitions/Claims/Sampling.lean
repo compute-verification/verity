@@ -8,9 +8,10 @@ shared definitions of `Definitions.Claims`, in the template's eight items and th
 the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
 the code side's.
 
-1. **Statement** (`Stmt`): the program `C` (named by its digest; both parties hold it), the partition query `Q` (named,
-   versioned, with its parameters), the sampling design, and the roots the trace is committed under. The partition is
-   public: `P = Q(C)`, which the verifier evaluates itself (`Deploy.partition`), gives the proof units (sets of gates of
+1. **Statement** (`Stmt`): the program `C` (named by its digest; both parties hold it), as its descriptor and its gates,
+   the partition query `Q` (named, versioned, with its parameters), the sampling design, and the roots the trace is
+   committed under. The partition is public: `P = Q(C)`, which the verifier evaluates itself on the statement it parsed,
+   descriptor and gates (`Deploy.partition`), gives the proof units (sets of gates of
    `C`, every gate but a constant in exactly one, input gates included; a constant is public and in one or in none), the
    replay units, the strata and the classes, and so every replay unit's size `n_v`. `x` is the canonical bytes of what the verifier reads before it draws, and `parse`
    is its own.
@@ -332,9 +333,11 @@ structure Query where
   version : ℕ
   params : Msg
 
-/-- **The sampling statement**: the program (named by its digest; both parties hold it), the partition query, the
-sampling design, and the roots the trace is committed under. -/
+/-- **The sampling statement**: the program (named by its digest; both parties hold it), as its descriptor's canonical
+bytes (`desc`, `verity-ir/descriptor/v1`, which a template query reads) and its gates (`prog`, the descriptor
+flattened), the partition query, the sampling design, and the roots the trace is committed under. -/
 structure Stmt where
+  desc : Msg
   prog : Prog
   query : Query
   design : Design
@@ -373,20 +376,20 @@ def RelS (H : Msg → Msg) (Cm : Commitment Bool) (δ : ℝ) (s : Stmt) (P : Par
   faulty H Cm s P w ∈ s.design.M P δ
 
 /-- **The sampling relation** at `δ`, on the statement's bytes: it parses (`parse`, the verifier's own), its query
-evaluates on its program (`partition`, the verifier's own), and `RelS` holds. -/
-def R (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Prog → Query → Option Partition)
+evaluates on its program, descriptor and gates (`partition`, the verifier's own), and `RelS` holds. -/
+def R (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Stmt → Option Partition)
     (δ : ℝ) : Rel Wit :=
-  fun x w => ∃ s P, parse x = some s ∧ partition s.prog s.query = some P ∧ RelS H Cm δ s P w
+  fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ RelS H Cm δ s P w
 
 /-- The count form: fewer than `t` units are faulty. -/
 def RCount (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt)
-    (partition : Prog → Query → Option Partition) (t : ℕ) : Rel Wit :=
-  fun x w => ∃ s P, parse x = some s ∧ partition s.prog s.query = some P ∧ (faulty H Cm s P w).card < t
+    (partition : Stmt → Option Partition) (t : ℕ) : Rel Wit :=
+  fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ (faulty H Cm s P w).card < t
 
 /-- The honest relation: no unit is faulty. -/
 def Rhon (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt)
-    (partition : Prog → Query → Option Partition) : Rel Wit :=
-  fun x w => ∃ s P, parse x = some s ∧ partition s.prog s.query = some P ∧ faulty H Cm s P w = ∅
+    (partition : Stmt → Option Partition) : Rel Wit :=
+  fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ faulty H Cm s P w = ∅
 
 /-! ## 4. Scope -/
 
@@ -420,7 +423,8 @@ def InScope (P : Partition) (s : Stmt) : Prop :=
 /-! ## 5. Named pieces -/
 
 /-- What the deployed sampled verifier brings, read by the claims: the verifier, its parser and scope check, its own
-evaluation of a partition query on a program (`partition`, `P = Q(C)`), the trace's commitment, the universal unit of
+evaluation of a statement's partition query on its program, descriptor and gates (`partition`, `P = Q(C)`), the
+trace's commitment, the universal unit of
 each size class (the program a private circuit's units run, its arguments the private netlist), and the Flock verifier
 its sessions run (`flock`): whether it is the masked one, its parser, the opened columns of a run, the code, each
 trace's codeword length and decoding radius, and how a trace is read as a witness.
@@ -439,7 +443,7 @@ structure Deploy (Coin Col T : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
   scopeCheck : Msg → Bool
-  partition : Prog → Query → Option Partition
+  partition : Stmt → Option Partition
   commit : Commitment Bool
   universal : SizeClass → Prog
   flock : Flock.Deploy Coin Col T
@@ -457,7 +461,7 @@ structure Deploy (Coin Col T : Type) where
 
 /-- The statement's partition, as the verifier evaluates its query; empty when the query doesn't apply. -/
 def Deploy.part {Coin Col T : Type} (D : Deploy Coin Col T) (s : Stmt) : Partition :=
-  (D.partition s.prog s.query).getD ⟨[]⟩
+  (D.partition s).getD ⟨[]⟩
 
 /-! ### Rerun programs -/
 
@@ -704,7 +708,7 @@ a Bernoulli rule with `den = 0` or `num > den`, a stratified rule outside `1 ≤
 rule whose weights or floors don't match its strata, with a zero floor or with no work, and a check of part of a replay
 unit under any but a Bernoulli first stage. That the verifier refuses what is out of it is `ScopeMatches`. -/
 def Scope (D : Deploy Coin Col T) (x : Msg) : Prop :=
-  ∃ s P, D.parse x = some s ∧ D.partition s.prog s.query = some P ∧ InScope P s
+  ∃ s P, D.parse x = some s ∧ D.partition s = some P ∧ InScope P s
 
 /-- **Sampling: KS**, on the statements in scope, at every `δ ≥ 0`, at the sampling extractor and every decoder that
 lists every trace within Flock's radius: `Pr[acc ∧ faulty ∉ M_δ] ≤ δ + ε_ks + ε_bind`, with

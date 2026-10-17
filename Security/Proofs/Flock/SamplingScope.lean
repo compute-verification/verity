@@ -32,10 +32,10 @@ def toyQuery : Query := ⟨"", 0, []⟩
 def toyPart : Partition := ⟨[[[[[0]], [[1]]]]]⟩
 
 /-- The program, drawn `subset 1`: in scope. -/
-def toyStmt : Stmt := ⟨toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, []⟩
+def toyStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, []⟩
 
 /-- The program, drawn `subset 3` from two units: out of scope. -/
-def holeStmt : Stmt := ⟨toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
+def holeStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
 
 theorem toyPart_rus : toyPart.rus = [[[0]], [[1]]] := rfl
 
@@ -110,7 +110,7 @@ variable {Coin Col T : Type}
 `m′ = 20` waits, `N₀ = 3000`, `K′ = 10^9` and `ε_table = 0`. -/
 structure ToyNumbers (D : Deploy Coin Col T) (x : Msg) : Prop where
   parse : D.parse x = some toyStmt
-  partition : D.partition toyProg toyQuery = some toyPart
+  partition : D.partition toyStmt = some toyPart
   εtable : D.εtable x = 0
   innerWaits : D.innerWaits x = 20
   innerN₀ : D.innerN₀ x = 3000
@@ -122,7 +122,7 @@ theorem scope_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D 
 theorem k_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : D.k x = 2 ^ 40 * 5 := by
   have hp : D.part toyStmt = toyPart := by
     simp only [Deploy.part]
-    rw [show toyStmt.prog = toyProg from rfl, show toyStmt.query = toyQuery from rfl, h.partition]
+    rw [h.partition]
     rfl
   simp only [Deploy.k, nRU, nPU, h.parse, hp]
   rfl
@@ -260,7 +260,7 @@ def toyD : Deploy Bool ℕ Unit where
   V := toyV
   parse _ := some toyStmt
   scopeCheck _ := true
-  partition _ _ := some toyPart
+  partition _ := some toyPart
   commit := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
   universal _ := toyProg
   flock := toyFlock

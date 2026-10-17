@@ -14,7 +14,8 @@ clause of it, each a named Prop over the statements the verifier evaluates:
 * `RefusesEmpty`: every proof unit has a gate.
 * `RefusesWide`: every proof unit commits at most 16 values (the claims' `committed`, on its own gates).
 
-On the verifier's own partitions (`DrawSlots`), whose replay units are one proof unit each (`slotPartition_single`), the
+On partitions of the shape of the verifier's own layouts (`DrawSlots`), whose replay units are one proof unit each
+(`slotPartition_single`, `Partition.single_of_shape`), the
 five give `ProgramScope` (`programScope_of_refusals`), and so `ScopeMatches` (`scopeMatches_of_refusals`) and, with
 `ChecksScope`, `Refuses` (`refuses_of_refusals`). Each is needed: `ScopeMatches` at such a scope check gives all five
 (`refusals_of_scopeMatches`, `scopeMatches_iff_refusals`).
@@ -86,11 +87,11 @@ theorem slotPartition_single (d : Program) (query : Lean.Json) (l : Slots.Layout
 /-- **The scope check is the verifier's evaluation**: it takes a statement exactly when the statement parses and its
 query evaluates. -/
 def QueryCheck (D : Deploy Coin Col T) : Prop :=
-  ∀ x, D.scopeCheck x = true ↔ ∃ s Pt, D.parse x = some s ∧ D.partition s.prog s.query = some Pt
+  ∀ x, D.scopeCheck x = true ↔ ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt
 
 /-- `Q` holds of every statement the verifier evaluates: its program and the partition its query evaluates to. -/
 def Evaluated (D : Deploy Coin Col T) (Q : Prog → Partition → Prop) : Prop :=
-  ∀ x s Pt, D.parse x = some s → D.partition s.prog s.query = some Pt → Q s.prog Pt
+  ∀ x s Pt, D.parse x = some s → D.partition s = some Pt → Q s.prog Pt
 
 /-- **The verifier refuses a program out of order**: every program it evaluates is topologically ordered. -/
 def RefusesUnordered (D : Deploy Coin Col T) : Prop := Evaluated D fun C _ => C.Topological
@@ -118,9 +119,10 @@ theorem programScope_of_refusals [Fintype Coin] [Nonempty Coin] (D : Deploy Coin
   rw [hq x]
   constructor
   · rintro ⟨s, Pt, hx, hP⟩
-    obtain ⟨-, d, query, -, -, l, -, -, hl, rfl, -⟩ := hslots x s Pt hx hP
-    exact ⟨s, _, hx, hP, h₁ x s _ hx hP, (partitions_iff_cuts _ _ (slotPartition_single d query l hl)).2
-      ⟨h₂ x s _ hx hP, h₃ x s _ hx hP, h₄ x s _ hx hP, h₅ x s _ hx hP⟩⟩
+    obtain ⟨-, d, query, -, -, l, -, -, hl, hshape, -⟩ := hslots x s Pt hx hP
+    exact ⟨s, _, hx, hP, h₁ x s _ hx hP,
+      (partitions_iff_cuts _ _ (Partition.single_of_shape hshape (slotPartition_single d query l hl))).2
+        ⟨h₂ x s _ hx hP, h₃ x s _ hx hP, h₄ x s _ hx hP, h₅ x s _ hx hP⟩⟩
   · rintro ⟨s, Pt, hx, hP, -, -⟩
     exact ⟨s, Pt, hx, hP⟩
 
@@ -141,7 +143,7 @@ theorem refuses_of_refusals [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H :
 only if the verifier refuses all five. -/
 theorem refusals_of_scopeMatches [Fintype Coin] (D : Deploy Coin Col T) (hq : QueryCheck D) (h : ScopeMatches D) :
     RefusesUnordered D ∧ RefusesOverlap D ∧ RefusesUncovered D ∧ RefusesEmpty D ∧ RefusesWide D := by
-  have key : ∀ x s Pt, D.parse x = some s → D.partition s.prog s.query = some Pt →
+  have key : ∀ x s Pt, D.parse x = some s → D.partition s = some Pt →
       s.prog.Topological ∧ Pt.Cuts s.prog := by
     intro x s Pt hx hP
     obtain ⟨s', Pt', hx', hP', htop, hpart, -⟩ := (h x).2 ((hq x).2 ⟨s, Pt, hx, hP⟩)
