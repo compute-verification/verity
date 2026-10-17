@@ -18,8 +18,10 @@ that plan is `zkTabs` too, so the old hidden-output decoders are right at `zkTab
 * `tableZHJ_eq_zkTabs`, `planZHJ_eq_tabsJ`: so the plan there is `tabsJ` of `zkTabs`, at every layout.
 * `drawOkZKHJ_empty`: at no drawn units, `DrawOkZKHJ` is the tables' link points (`setupTables_pointsAny`).
 * `decodesOnZKHJ_wrD`: `Custody.decodesOnZKJ_wrD` under hidden outputs (`ZkHidden.runsZCJH_liveI` at `wrD`).
-* `decodesTableH_zkTabs`: so at the empty draw the deployed hidden-output `--zk` decoders are right at `zkTabs`, on
-  the outcomes `verify --zk` accepts at `wrD` (`DecodesTable`, `ZkLiveAtJ`'s `hdec` at the verdict `accepted`).
+* `opnAtZHJ_eq_opnD`: the old hidden-output openings at the plan are `opnD` where `verify --zk` sets the session up.
+* `decodesTableH_zkTabs`: so at the empty draw the deployed `--zk` decoders `opnD` and `decD` are right at `zkTabs`
+  under hidden outputs, on the outcomes `verify --zk` accepts at `wrD` (`DecodesTable`, `ZkLiveAtJ`'s `hdec` at the
+  verdict `accepted`).
 -/
 
 namespace FlockDeploy.KS
@@ -177,12 +179,26 @@ theorem decodesOnZKHJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.
   Composed.decodesOnZKJ_of_runsOnZCJ execArith ZkExec.hs512 _ I _ _ _ _ _ _
     (ZkHidden.runsZCJH_liveI I ht hc dj y₀ _ L hT (Claims.Bridge.Custody.recordsLiveZKJ_wrD I dj _) hDraw)
 
+/-- **The old hidden-output `--zk` openings are `opnD`** where `verify --zk` sets its session up at the draw `dj S`,
+at a plan of the session's number of tables: table `j`'s `setupHidden` statement is the session's
+(`setupAt_tableJH`). -/
+theorem opnAtZHJ_eq_opnD {I : Exec.Inputs} {n mPts : ℕ} {Reg : Type}
+    (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)) (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)}
+    {R : Reg} {spec : SessionSpec} {sts : Array Stmt} (hh : I.tags.hiddenOutputs = true)
+    (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hlen : (planZ S R).length = sts.size) :
+    opnAtZHJ planZ I dj S R = opnD sts (planZ S R) := by
+  funext proofs j
+  have hj : j.val < sts.size := hlen ▸ j.isLt
+  unfold opnAtZHJ opnD
+  rw [(setupAt_tableJH hh hs).2 j.val hj, Array.getElem?_eq_getElem hj]
+  rfl
+
 /-- **The deployed hidden-output `--zk` decoders are right at `zkTabs`**: where `verify --zk` sets its session up at
 the empty draw `dj ∅` and its tables pass the shape check, on untyped inputs under `TagsOkZHJ` whose circuit file
-`HmOut.parse` accepts, at every layout and link layout at the session's link points, the old hidden-output openings
-and decoder at the plan, moved to `tabsJ` of `zkTabs` (`planZHJ_eq_tabsJ`), are right on the outcomes `verify --zk`
-accepts at `wrD` (`decodesOnZKHJ_wrD` at the law of that one draw, `drawOkZKHJ_empty`, table 0's setup as the
-reference). -/
+`HmOut.parse` accepts, at every layout and link layout at the session's link points, the openings `opnD` and decoder
+`decD` at `tabsJ` of `zkTabs` are right on the outcomes `verify --zk` accepts at `wrD`: they are the old hidden-output
+ones at the plan (`opnAtZHJ_eq_opnD`), which is `tabsJ` of `zkTabs` (`planZHJ_eq_tabsJ`), and those are right there
+(`decodesOnZKHJ_wrD` at the law of that one draw, `drawOkZKHJ_empty`, table 0's setup as the reference). -/
 theorem decodesTableH_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : TagsOkZHJ I)
     {c : Flock.Circuit} (hc : HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
@@ -191,20 +207,20 @@ theorem decodesTableH_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT :
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {Reg : Type} (R : Reg) :
-    ∃ (opn : Array ByteArray → Fin (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length →
-        OpensZ 𝔽 Refine.Dig (List UInt8))
-      (dec : Fin (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length → ℕ → ByteArray → List Msg),
-      ∀ i, DecodesTable (outJ ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (fun _ o => o.accepted = true)
-        (fun o => ZkExec.AcceptsZK I
-          (Claims.Bridge.Custody.wrD I dj (fun _ _ => (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length) ∅ R o))
-        opn dec (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
-        (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
+    {Reg : Type} (R : Reg) (i : Fin (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length) :
+    DecodesTable (outJ ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (fun _ o => o.accepted = true)
+      (fun o => ZkExec.AcceptsZK I
+        (Claims.Bridge.Custody.wrD I dj (fun _ _ => (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length) ∅ R o))
+      (opnD sts (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (decD (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
+      (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
   have hok := drawOkZKHJ_empty hT.1 dj hs
   obtain ⟨y₀, -, -, -⟩ :=
     setupZHJ_of_setupAt hT.1 ht hc dj hs hshape hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
   have h := decodesOnZKHJ_wrD (Reg := Reg) I ht hc dj y₀ { Ω := Unit, draw := fun _ => ∅ } hT (fun _ => hok) () R
-  rw [← planZHJ_eq_tabsJ hT.1 ht hc dj y₀ hs hshape hok h0 L hz hk hlay R]
-  exact ⟨_, _, h⟩
+  have hp := planZHJ_eq_tabsJ hT.1 ht hc dj y₀ hs hshape hok h0 L hz hk hlay R
+  revert i
+  rw [← hp, ← opnAtZHJ_eq_opnD (planZHJ dj y₀) dj hT.1 hs (by rw [hp, tabsJ_length])]
+  exact h
 
 end FlockDeploy.KS

@@ -14,8 +14,9 @@ right at C-Flock ZK's padded tables (`zkTabs`) on the outcomes `verify --zk` acc
   `--public-inputs` (`InScope` refuses them, `publicInputs_none_of_inScope`).
 * `tags_of_inScope`: the scope gives `verify --zk`'s inputs untyped tags with retained rounds and `hm96-sha512/v1`
   leaves (`Read.form`).
-* `decodesTable_deploy`: the deployed decoders are right at `zkTabs` (`decodesTable_zkTabs` at public outputs,
-  `decodesTableH_zkTabs` at hidden outputs, whose circuit file `HmOut.parse` accepts as table 0's statement shows).
+* `decodesTable_deploy`: the deployed decoders `opnD` and `decD` are right at `zkTabs` (`decodesTable_zkTabs` at
+  public outputs, `decodesTableH_zkTabs` at hidden outputs, whose circuit file `HmOut.parse` accepts as table 0's
+  statement shows).
 -/
 
 namespace FlockDeploy.KS
@@ -100,11 +101,11 @@ theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 /-- **The deployed `--zk` decoders are right at `zkTabs` at a masked statement in scope**: where the statement parses
 in scope, `Deploy.V` sets it up at the draw `d` and at least one table, at every layout and link layout at the
-session's link points, some openings and decoder are right at `zkTabs` on the outcomes `verify --zk` accepts at `wrD`
-of the draw `d` (`DecodesTable`, `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`): at public outputs
-`decodesTable_zkTabs` under `TagsOkZJ`, at hidden outputs `decodesTableH_zkTabs` under `TagsOkZHJ`, the circuit file
-being table 0's circuit under `HmOut.parse` (`setupHidden_spec'`, `parseH_tagsAt`) and every table passing the shape
-check (`setup_shapeOk`). -/
+session's link points, the openings `opnD` and decoder `decD` are right at `zkTabs` on the outcomes `verify --zk`
+accepts at `wrD` of the draw `d` (`DecodesTable`, `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`): at public
+outputs `decodesTable_zkTabs` under `TagsOkZJ`, at hidden outputs `decodesTableH_zkTabs` under `TagsOkZHJ`, the
+circuit file being table 0's circuit under `HmOut.parse` (`setupHidden_spec'`, `parseH_tagsAt`) and every table
+passing the shape check (`setup_shapeOk`). -/
 theorem decodesTable_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -112,20 +113,21 @@ theorem decodesTable_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d) {Reg : Type} (R : Reg) :
-    ∃ (opn : Array ByteArray → Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length →
-        OpensZ 𝔽 Refine.Dig (List UInt8))
-      (dec : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length → ℕ → ByteArray → List Msg),
-      ∀ i, DecodesTable (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-        (fun _ o => o.accepted = true)
-        (fun o => ZkExec.AcceptsZK ins.read.I (Claims.Bridge.Custody.wrD ins.read.I (fun _ : Finset (Fin 0) => d)
-          (fun _ _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) ∅ R o))
-        opn dec (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
-        (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) i := by
+    {d : Lean.Json} (hd : ins.read.draw = some d) {Reg : Type} (R : Reg)
+    (i : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) :
+    DecodesTable (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (fun _ o => o.accepted = true)
+      (fun o => ZkExec.AcceptsZK ins.read.I (Claims.Bridge.Custody.wrD ins.read.I (fun _ : Finset (Fin 0) => d)
+        (fun _ _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) ∅ R o))
+      (opnD sts (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+      (decD (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) (fun _ _ => true) (fun _ _ _ => [])
+      (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) i := by
   have hlen : (tables true x).length = sts.size := by
     unfold tables
     rw [hset]
     simp
+  revert i
   rw [hlen]
   obtain ⟨hzk, hsA⟩ := setupAt_of_setupOf hs hin hset
   rw [hd] at hsA

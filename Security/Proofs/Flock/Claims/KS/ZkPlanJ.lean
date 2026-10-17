@@ -19,8 +19,10 @@ sets its session up, the two are one list, so the old decoders are right at `zkT
 * `tableZJ_eq_zkTabs`, `planZJ_eq_tabsJ`: so the plan there is `tabsJ` of `zkTabs`, at every layout.
 * `drawOkZKJ_empty`: at no drawn units, `DrawOkZKJ` is the tables' link points, which `setupTables` makes the session's
   (`setupTables_points`).
-* `decodesTable_zkTabs`: so at the empty draw the deployed `--zk` decoders are right at `zkTabs`, on the outcomes
-  `verify --zk` accepts at `wrD` (`DecodesTable`, `ZkLiveAtJ`'s `hdec` at the verdict `accepted`), from
+* `opnD`, `decD`, `opnAtZJ_eq_opnD`: the deployed `--zk` openings and decoder at the session's statements and tables,
+  which the old ones at the plan are where `verify --zk` sets the session up.
+* `decodesTable_zkTabs`: so at the empty draw the deployed `--zk` decoders `opnD` and `decD` are right at `zkTabs`, on
+  the outcomes `verify --zk` accepts at `wrD` (`DecodesTable`, `ZkLiveAtJ`'s `hdec` at the verdict `accepted`), from
   `Custody.decodesOnZKJ_wrD` at the law of that one draw, with table 0's setup as the reference.
 -/
 
@@ -161,11 +163,43 @@ theorem drawOkZKJ_empty {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = false) {n
   obtain rfl : st = sts[j.val] := Except.ok.inj (hst.symm.trans (hstJ j.val hj))
   exact hpts j.val hj
 
+/-- **The deployed `--zk` openings at table `j`** of a session whose statements are `sts`, on the tables `ts`: `opnZ`
+at table `j`'s statement and its `--zk` schedule, on proof files `2j` and `2j + 1` (`Composed.opnAtZJ` and
+`ZkHidden.opnAtZHJ` where `verify --zk` sets the session up: `opnAtZJ_eq_opnD`, `opnAtZHJ_eq_opnD`). -/
+noncomputable def opnD {mPts : ℕ} (sts : Array Stmt) (ts : List (TabZK 𝔽 mPts)) (proofs : Array ByteArray)
+    (j : Fin ts.length) : OpensZ 𝔽 Refine.Dig (List UInt8) :=
+  match sts[j.val]? with
+  | some st => match Zk.schedule st.m with
+    | .ok (sch, _) => ZkExec.opnZ (Flock.Setup.ofCircuit st) sch (Composed.nXZJ (ts.get j))
+        #[proofs[2 * j.val]!, proofs[2 * j.val + 1]!]
+    | .error _ => default
+  | none => default
+
+/-- **The deployed `--zk` decoder at table `j`** of the tables `ts`: `decZ` at its dimensions, claims, schedule and
+pads (`Composed.decAtZJ` at a plan that is `ts`). -/
+noncomputable def decD {mPts : ℕ} (ts : List (TabZK 𝔽 mPts)) (j : Fin ts.length) : ℕ → ByteArray → List Msg :=
+  ZkExec.decZ (ZkExec.wRestZ (ts.get j).S.m (ts.get j).S.kLog (2 + Composed.nXZJ (ts.get j)) (ts.get j).sch
+    (ts.get j).t (ts.get j).np)
+
+/-- **The old `--zk` openings are `opnD`** where `verify --zk` sets its session up at the draw `dj S`, at a plan of
+the session's number of tables: table `j`'s `setupH` statement is the session's (`setupAt_tableJ`). -/
+theorem opnAtZJ_eq_opnD {I : Exec.Inputs} {n mPts : ℕ} {Reg : Type}
+    (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)) (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)}
+    {R : Reg} {spec : SessionSpec} {sts : Array Stmt} (hh : I.tags.hiddenOutputs = false)
+    (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hlen : (planZ S R).length = sts.size) :
+    Composed.opnAtZJ planZ I dj S R = opnD sts (planZ S R) := by
+  funext proofs j
+  have hj : j.val < sts.size := hlen ▸ j.isLt
+  unfold Composed.opnAtZJ opnD
+  rw [(setupAt_tableJ hh hs).2 j.val hj, Array.getElem?_eq_getElem hj]
+  rfl
+
 /-- **The deployed `--zk` decoders are right at `zkTabs`**: where `verify --zk` sets its session up at the empty draw
-`dj ∅`, on untyped inputs under `TagsOkZJ`, at every layout and link layout at the session's link points, the old
-openings and decoder at the plan, moved to `tabsJ` of `zkTabs` (`planZJ_eq_tabsJ`), are right on the outcomes
-`verify --zk` accepts at `wrD` (`Custody.decodesOnZKJ_wrD` at the law of that one draw, `drawOkZKJ_empty`, table 0's
-setup as the reference). -/
+`dj ∅`, on untyped inputs under `TagsOkZJ`, at every layout and link layout at the session's link points, the
+openings `opnD` and decoder `decD` at `tabsJ` of `zkTabs` are right on the outcomes `verify --zk` accepts at `wrD`:
+they are the old ones at the plan (`opnAtZJ_eq_opnD`), which is `tabsJ` of `zkTabs` (`planZJ_eq_tabsJ`), and those are
+right there (`Custody.decodesOnZKJ_wrD` at the law of that one draw, `drawOkZKJ_empty`, table 0's setup as the
+reference). -/
 theorem decodesTable_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : Composed.TagsOkZJ I) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts))
@@ -173,20 +207,20 @@ theorem decodesTable_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : 
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {Reg : Type} (R : Reg) :
-    ∃ (opn : Array ByteArray → Fin (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length →
-        OpensZ 𝔽 Refine.Dig (List UInt8))
-      (dec : Fin (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length → ℕ → ByteArray → List Msg),
-      ∀ i, DecodesTable (outJ ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (fun _ o => o.accepted = true)
-        (fun o => ZkExec.AcceptsZK I
-          (Claims.Bridge.Custody.wrD I dj (fun _ _ => (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length) ∅ R o))
-        opn dec (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
-        (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
+    {Reg : Type} (R : Reg) (i : Fin (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length) :
+    DecodesTable (outJ ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (fun _ o => o.accepted = true)
+      (fun o => ZkExec.AcceptsZK I
+        (Claims.Bridge.Custody.wrD I dj (fun _ _ => (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length) ∅ R o))
+      (opnD sts (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (decD (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
+      (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
+      (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
   have hok := drawOkZKJ_empty hT.1 dj hs
   obtain ⟨y₀, -, -, -⟩ := setupZJ_of_setupAt hT.1 ht dj hs hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
   have h := Claims.Bridge.Custody.decodesOnZKJ_wrD (Reg := Reg) I ht dj y₀ { Ω := Unit, draw := fun _ => ∅ } hT
     (fun _ => hok) () R
-  rw [← planZJ_eq_tabsJ hT.1 ht dj y₀ hs hok h0 L hz hk hlay R]
-  exact ⟨_, _, h⟩
+  have hp := planZJ_eq_tabsJ hT.1 ht dj y₀ hs hok h0 L hz hk hlay R
+  revert i
+  rw [← hp, ← opnAtZJ_eq_opnD (planZJ dj y₀) dj hT.1 hs (by rw [hp, tabsJ_length])]
+  exact h
 
 end FlockDeploy.KS
