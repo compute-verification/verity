@@ -11,6 +11,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Runs
 import Proofs.Flock.Claims.Complete.ZkTables.Complete
 import Proofs.Flock.Claims.Complete.ZkTables.One
 import Proofs.Flock.Claims.Complete.ZkTables.Names
+import Proofs.Flock.Claims.Complete.ZkTables.Session
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
@@ -27,4 +28,5 @@ table's trace is its share's and satisfies its block R1CS (`Trace`: `Case.traceR
 table, and at several tables `StmtOkJ`, `ProverRunsJ`, `RecordJ` and `OpenJ`. The bound at several tables loses nothing
 at one (`One`: `completeZk_of`, `honestP`'s completeness with error `δc H` gives `honestPZk`'s with error `δcZk H`).
 Toward `RecordJ`, the tables' names and the rep streams' are distinct (`Names`: `tableNames_nodup`, `repNames_nodup`,
-`rootBList_distinct`, `Case.tables_nodup`). -/
+`rootBList_distinct`, `Case.tables_nodup`), and the session returns the printed honest masked record of one `root_B` per
+table and sends the link of them, then the streams' rounds (`Session`: `sessionPZk_factsJ`). -/
