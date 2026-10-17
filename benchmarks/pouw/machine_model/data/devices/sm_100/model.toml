@@ -5,7 +5,8 @@ current = "DC-100"
 epochs = ["DC-100"]
 
 # The CUDA lane classes a word on lanes may use: every lane class the census prices. LOP3, SHF and LEA.HI share ALU's
-# pipe row A; FFMA has only the issue rows. No IDP4A, LDS or uniform-datapath kind is measured on sm_100.
+# pipe row A; FFMA has only the issue rows. No IDP4A or LDS kind is measured on sm_100. The uniform datapath (UNI, on
+# UP and the issue rows) is measured but is not a lane class: it opens the uniform route.
 cuda = ["FFMA", "IMAD", "ALU", "SHFL"]
 
 [constants]

@@ -38,6 +38,7 @@ uv run machine-model eps --device sm100 --table --credit floor --operands floor 
 | `data/census/EPOCH.csv` | The census lines from EPOCH, a file for each epoch that brought any: one line per instruction class on a row, its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, its file's epoch; `until`) and its runs |
 | `data/census/runs.toml` | The run lists many census lines share (a refit's every line cites every run its fit read), each cited in a line's `runs` as `@NAME` |
 | `data/vectors/NAME.toml` | A named vector: its epoch, the rows and credits it uses in LP order, its note, and the numbers it was published with |
+| `data/devices/sm_80/` | Ampere (sm_80, the A100-SXM4-80GB at default boost, EPS1 AMPERE) as a device of its own: its `rows.csv` and `census.csv` in the same schema, one epoch (no `since` or `until`), rates at the 2% noise margin and the joint row JIM at decision 76's margin, written by `tensor_kinds/sm80.py census`; no vector reads them yet |
 | `data/attacks/FAMILY.jsonl` | An attack family: one program a line, its design, and the epochs it holds |
 | `data/devices/sm_NN/` | Another device's data ("Devices" below): `sm_89`, the L40S, from EPS1 ADA; `sm_90`, the H200, and `sm_100`, the B200, from EPS1 DC (`dc/census.py` writes their census) |
 | `data/floors.csv` | What the claims read: each root-writing kind at 32 MACs a word ((π₃₂)), each load into registers at 16 (PRICES-32's load half) and each copy route at 16 (π_c ≥ 16, `copy16`: every kind that writes registers, a UR word at the 32 lanes it serves), with the words a warp instruction of it writes |
@@ -180,6 +181,7 @@ The noise leaves are `NOISE` in `eps.py`, and `designs` prints them as a legend:
 Beside its names, a design file has these keys:
 
 - `[noise]`: a leaf for each of `linears`, `lm_head`, `qk` and `pv`.
+- `sums`: the kernel that forms a peel's sums, `vsum` (the default) or `vfold` (`SUMS` in `eps.py`).
 - `honest`, `L`, `work` and `plain`.
 - `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes (decision 73).
 - `[operands]`: the noise's floor φ_del.
@@ -189,8 +191,8 @@ Beside its names, a design file has these keys:
 - `ppl`: a spec in `benchmarks/ppl/specs/`, or `""` while the design's arm isn't on main.
 - The ε terms' accounting: `[skip.served]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
   `[baseline]` and `[routes]`. `[skip.served]` is the number SKIP's calculator, `../eps_budget.py`, gives the design's
-  `[noise]` (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served
-  output free), and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
+  `[noise]` and `sums` (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every
+  served output free), and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
 
 A new design is a file with its own name, title and summary, and a `base` if it varies one. The tests refuse:
 

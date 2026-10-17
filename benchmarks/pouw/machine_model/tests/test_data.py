@@ -8,8 +8,8 @@ import re
 import pytest
 
 from verity_machine_model.model import (CLAIMS, COPIES, DATA, DEVICES, STATUSES, all_attacks, attacks, census,
-                                        census_files, census_lines, entries, floors, holds, model, rows, run_lists,
-                                        u_of, vector, vectors)
+                                        census_files, census_lines, entries, floors, holds, kind_lists, model, rows,
+                                        run_lists, u_of, vector, vectors)
 
 M = model()
 ROWS = rows()
@@ -37,10 +37,10 @@ def test_census_is_a_file_per_epoch():
     """data/census/ is EPOCH.csv for each epoch that brought lines, each line's since its file's, and runs.toml; no file
     comes near the repository's cap, so the census grows by files, not by one file growing."""
     files = census_files(M)
-    assert {p.name for p in (DATA / "census").iterdir()} == {p.name for p in files} | {"runs.toml"}, (
-        "data/census/ holds EPOCH.csv for epochs in model.toml's epochs, and runs.toml")
-    named = run_lists()
-    used = set()
+    assert {p.name for p in (DATA / "census").iterdir()} == {p.name for p in files} | {"runs.toml", "kinds.toml"}, (
+        "data/census/ holds EPOCH.csv for epochs in model.toml's epochs, runs.toml and kinds.toml")
+    named, kinds = run_lists(), kind_lists()
+    used, used_kinds = set(), set()
     for p in files:
         with open(p, newline="") as f:
             r = csv.DictReader(f)
@@ -48,12 +48,17 @@ def test_census_is_a_file_per_epoch():
             for d in r:
                 assert d["since"] == p.stem, f"census/{p.name}: {d['kind']} on {d['row']} is from {d['since']!r}"
                 used |= {c[1:] for c in d["runs"].split() if c.startswith("@")}
-    for p in [*files, DATA / "census" / "runs.toml"]:
+                used_kinds |= {d["kind"][1:]} if d["kind"].startswith("@") else set()
+    for p in [*files, DATA / "census" / "runs.toml", DATA / "census" / "kinds.toml"]:
         assert p.stat().st_size <= BLOB_LIMIT // 4, (
             f"census/{p.name} is {p.stat().st_size} bytes, past a quarter of the {BLOB_LIMIT}-byte cap: name a run list "
-            f"its lines share in census/runs.toml and cite it as @NAME")
+            f"its lines share in census/runs.toml and cite it as @NAME, or a kind list a row prices at one value in "
+            f"census/kinds.toml and write its line as kind @NAME")
     assert used == set(named), f"runs.toml: {sorted(set(named) - used)} cited by no line; {sorted(used - set(named))} not in it"
     assert all(xs and all(CITE.fullmatch(x) for x in xs) for xs in named.values())
+    assert used_kinds == set(kinds), (f"kinds.toml: {sorted(set(kinds) - used_kinds)} written by no line; "
+                                      f"{sorted(used_kinds - set(kinds))} not in it")
+    assert all(xs and len(set(xs)) == len(xs) and not any(x.startswith("@") for x in xs) for xs in kinds.values())
 
 
 def test_census_lines_are_well_formed():
@@ -70,7 +75,8 @@ def test_census_lines_are_well_formed():
             assert M.epochs.index(d["since"]) <= M.epochs.index(d["until"]), where
         assert d["runs"] and all(CITE.fullmatch(x) or x.startswith("@") and x[1:] in named for x in d["runs"].split()), (
             f"{where}: cite its runs or note, or a run list of census/runs.toml as @NAME")
-    assert len(entries(M)) == len(lines)
+    kinds = kind_lists()
+    assert len(entries(M)) == sum(len(kinds[d["kind"][1:]]) if d["kind"].startswith("@") else 1 for d in lines)
 
 
 @pytest.mark.parametrize("epoch", M.epochs)
@@ -78,6 +84,28 @@ def test_one_value_per_kind_and_row_at_each_epoch(epoch):
     c = census(M, epoch)   # raises on two lines for one kind and row
     assert all(u > 0 for v in c.values() for u in v.values())
     assert set(M.honest) <= set(c) and "MMA" in c
+
+
+def test_sm80_census_is_well_formed():
+    """data/devices/sm_80/ (tensor_kinds/sm80.py census): one epoch, every line on a row it defines with one value, every
+    MMA kind on M and the joint row JIM."""
+    d = DATA / "devices" / "sm_80"
+    rows80 = rows(d)
+    assert all(r.status in STATUSES and r.runs and all(CITE.fullmatch(x) for x in r.runs) for r in rows80.values())
+    with open(d / "census.csv", newline="") as f:
+        lines = list(csv.DictReader(f))
+    for x in lines:
+        where = f"devices/sm_80/census.csv: {x['kind']} on {x['row']}"
+        assert x["row"] in rows80, f"{where}: add the row to devices/sm_80/rows.csv"
+        assert sum(x[c] != "" for c in ("rate", "cycles", "u")) == 1, f"{where}: give one of rate, cycles and u"
+        assert x["noise"] == "" or x["rate"] != "", f"{where}: noise derates a rate only"
+        assert not x["since"] and not x["until"], f"{where}: a device directory has one epoch, no since or until"
+        assert x["runs"] and all(CITE.fullmatch(r) for r in x["runs"].split()), f"{where}: cite its runs or note"
+    assert len(lines) == len(entries(M, d))
+    c = census(M, M.epochs[-1], d)   # raises on two lines for one kind and row
+    assert all(u > 0 for v in c.values() for u in v.values())
+    mma = {k for k, v in c.items() if "M" in v}
+    assert mma and all("JIM" in c[k] for k in mma) and {r for v in c.values() for r in v} == set(rows80)
 
 
 def test_u_of():
