@@ -85,26 +85,28 @@ def frontier_points(rows: list[dict], x: str, pattern: str) -> list[tuple[float,
     return pts
 
 
-def prior_points(rows_csv: Path, prefix: str, kind: str, margin: float) -> list[tuple[float, float, str]]:
-    """The points a published set of facets (rows.csv's `prefix`N rows, MMA a + KIND b) was fitted through: each
-    consecutive pair's intersection and the MMA-axis end, at 1 - margin of the facets (a published facet sits at 1 - margin
-    on its points). The KIND-axis end is left out: the run's own alone probe gives it (KSHFL0's is the ASSUMED SHFL)."""
+def prior_points(rows_csv: Path, prefix: str, kind: str, margin: float) -> tuple[list[tuple[float, float, str]], set[str]]:
+    """The points a published set of facets (rows.csv's `prefix`N rows, MMA a + KIND b) was fitted through, and the runs
+    those rows cite: each consecutive pair's intersection and the MMA-axis end, at 1 - margin of the facets (a published
+    facet sits at 1 - margin on its points). The KIND-axis end is left out: the run's own alone probe gives it (KSHFL0's is
+    the ASSUMED SHFL)."""
     pat = re.compile(rf"MMA ([0-9.]+) \+ {kind} ([0-9.]+) SMSP-cycles")
-    fs = []
+    fs, runs = [], set()
     with rows_csv.open(newline="") as f:
         for d in csv.DictReader(f):
             m = pat.search(d["description"])
             if re.fullmatch(rf"{prefix}\d+", d["row"]) and m:
                 fs.append((float(m.group(1)), float(m.group(2)), d["row"]))
+                runs |= set(d["runs"].split())
     fs.sort()
     if not fs:
-        return []
+        return [], runs
     s = 1 - margin
     pts = []
     for (a1, b1, n1), (a2, b2, n2) in zip(fs, fs[1:]):
         det = a1 * b2 - a2 * b1
         pts.append((s * (b2 - b1) / det, s * (a1 - a2) / det, f"{n1}/{n2}"))
-    return pts + [(s / fs[-1][0], 0.0, f"{fs[-1][2]}:axis")]
+    return pts + [(s / fs[-1][0], 0.0, f"{fs[-1][2]}:axis")], runs
 
 
 OPS = {"imad": "IMAD", "hfma2": "HFMA2*", "lop3": "LOP3.LUT", "shfl": "SHFL.BFLY"}
@@ -123,18 +125,23 @@ def cmd_facets(a) -> int:
             print(f"{x}: {e}", file=sys.stderr)
             continue
         kind, prior, new = FAMILY[x]
+        prior_runs = set()
         if a.prior:
-            pts += prior_points(a.prior, prior, kind, a.margin)
+            more, prior_runs = prior_points(a.prior, prior, kind, a.margin)
+            pts += more
         fs = facets(pts, a.margin)
         if a.emit:
             for i, f in enumerate(fs):
+                tight = [t.split("@")[0] for t in f["tight"]]
+                cite = " ".join(sorted(set(runs.split()) | (prior_runs if any(t.startswith(prior) for t in tight)
+                                                             else set())))
                 desc = (f"MMA {f['MMA']:.3f} + {kind} {f['X']:.3f} SMSP-cycles (EPS1 frontier, {x} for {kind}"
                         f"{', with ' + prior + chr(39) + 's points' if a.prior else ''}, 2% noise margin; tight at "
-                        f"{' and '.join(t.split('@')[0] for t in f['tight'])})")
-                print(f'rows.csv: {new}{i},joint,{runs},"{desc}"')
+                        f"{' and '.join(tight)})")
+                print(f'rows.csv: {new}{i},joint,{cite},"{desc}"')
                 for k, c in (("MMA", f["MMA"]), (kind, f["X"])):
                     if c > 0:
-                        print(f"census.csv: {k},{new}{i},,,{c:.9g},,{a.emit},,{runs}")
+                        print(f"census.csv: {k},{new}{i},,,{c:.9g},,{a.emit},,{cite}")
             continue
         print(f"## MMA + {x} ({pat}); points (MMA, {x}) a SMSP-cycle:")
         for m, v, n in sorted(pts):
