@@ -34,10 +34,17 @@ a pass's certified stream and oracle, receipts it computed elsewhere among them:
 whose inputs are any function of the store, the stream and the oracle. A device reads such a carrier through its side
 sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts the side link without them.
 
-**The encode cost.** An `encode` step of `x` bits is charged `encodeBitsCost`: the fewest budgeted gates of a circuit of
-the gate model (`Definitions/Accounting/Gates`) that computes the codec words `x` bits fill, and `⊤` when no circuit of
-the model's restricted class computes them, so that such a step exceeds every budget. The provenances' `gates` count
-them.
+**The encode cost.** An `encode` step of `x` bits is charged `encodeBitsCost`: the gate model's `Gates.encodeCost`
+(`Definitions/Accounting/Gates`) of the codec words `x` bits fill, `⊤` when no circuit of the model's restricted class
+computes them, so that such a step exceeds every budget. The provenances' `gates` count them.
+
+**A store per pass.** The audit appends blocks during a session (a KV page), so the store a pass certifies is the one
+resident going into the step the pass is bound to, and it may depend on the session's coins drawn before it. A pass's
+`SketchPrefix` is those coins: every earlier window's, its own window's signs, and the window's earlier passes. The
+writers make pass `j`'s store from its prefix and their choices (`programmed`), and a window's correct receipts and
+reads are counted pass by pass, each on its own store (`correctOn`, `readsOn`). With one store for every pass they are
+`correctAll` and `reads`. The audit rule behind it: a block appended after a pass's seed is in no plan of that pass, so
+a pass's store doesn't depend on its own coins.
 -/
 
 namespace Accounting.RateSketch
@@ -90,6 +97,50 @@ structure Carrier (N m : ℕ) where
   carried : Finset (Fin N × Fin m)
   provenance : Provenance N m (carried → Sector)
   holds : ∀ E, provenance.run E = fun p => E p.1
+
+/-- The coins a session has drawn before pass `j` of window `w`: every earlier window's, window `w`'s signs, and its
+passes before `j`. -/
+structure SketchPrefix (n P N m ρ h ks G d : ℕ) where
+  w : Fin n
+  windows : {v : Fin n // v < w} → SketchWindowCoins P N m ρ h ks G d
+  signs : SketchSigns ks m
+  j : Fin P
+  passes : {i : Fin P // i < j} → SketchPassCoins N ρ h ks G
+
+/-- The prefix before pass `j` of window `w`, at the session's coins `x`. -/
+def SketchPrefix.of {n P N m ρ h ks G d : ℕ} (x : Fin n → SketchWindowCoins P N m ρ h ks G d) (w : Fin n)
+    (j : Fin P) : SketchPrefix n P N m ρ h ks G d :=
+  ⟨w, fun v => x v.1, (x w).1, j, fun i => (x w).2.1 i.1⟩
+
+/-- **The stores the writers make for window `w`'s passes**: pass `j`'s is `view (choice ω c, c) ω` at the prefix `c`
+before it, `ω` being drawn before the session and `choice ω c` the writers' choices there. -/
+def programmed {n P N m ρ h ks G d : ℕ} {Ω Ch : Type}
+    (view : Ch × SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m)
+    (choice : Ω → SketchPrefix n P N m ρ h ks G d → Ch) (ω : Ω)
+    (x : Fin n → SketchWindowCoins P N m ρ h ks G d) (w : Fin n) : Fin P → SketchStore N m :=
+  fun j => view (choice ω (.of x w j), .of x w j) ω
+
+namespace SketchDeployedWindow
+
+variable {P N m ρ h S L q ks G : ℕ}
+
+/-- The pooled receipts whose sketch tags are correct, each pass on its own store `E j`. -/
+def correctOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
+    (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) : Finset (Fin P × Fin N) :=
+  Finset.univ.filter fun p =>
+    let D := Data.ofParts (E p.1) (ω p.1).1
+    let B := A.dev p.1 (E p.1) σ ω
+    let O := A.oracle p.1 (E p.1) σ ω
+    p.2 ∈ B.correct sketch σ O D
+
+/-- Device-memory sectors read in the window, in bits, summed over its passes, each on its own store `E j`. -/
+def readsOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
+    (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) : ℕ :=
+  ∑ j,
+    let D := Data.ofParts (E j) (ω j).1
+    (A.dev j (E j) σ ω).footprint σ (A.oracle j (E j) σ ω) D
+
+end SketchDeployedWindow
 
 end Accounting.RateSketch
 
@@ -159,13 +210,13 @@ end Accounting.Rate
 
 namespace Accounting
 
-/-- **The encode cost of `x` bits of a block's encoding**, in budgeted gates: the fewest budgeted gates of a circuit of
-`Gates.encodeCosts` (a restricted circuit with no run input that computes that many codec words over `F` at `k` rounds,
-budgeted fan-in at most `f`, values within `w` bits, on more than `εnum/εden` of the draws) for the `⌈x / (8·bytes)⌉`
-words that `x` bits fill, and `⊤` when the gate model has no such circuit. A function of a block's encoding is charged
-as the whole words its bits would fill; one a circuit gets without computing those words (a word's parity, the Legendre
-symbol of its last round's input, which is why the words' targets leave it out) enters a provenance as an input. -/
-noncomputable def encodeBitsCost (F : Gates.Field) (k f w εnum εden x : ℕ) : ℕ∞ :=
-  ⨅ c ∈ Gates.encodeCosts F k f w εnum εden ((x + 8 * F.bytes - 1) / (8 * F.bytes)), (c : ℕ∞)
+/-- **The encode cost of `x` bits of a block's encoding**, in budgeted units: `Gates.encodeCost` (the fewest budgeted
+units of a restricted circuit with no run input, at most `B` operand bits a budgeted gate, that computes that many codec
+words over `F` at `k` rounds on more than `εnum/εden` of the draws, `⊤` when there is none) of the `⌈x / (8·bytes)⌉`
+words that `x` bits fill. A function of a block's encoding is charged as the whole words its bits would fill; one a
+circuit gets without computing those words (a word's parity, the Legendre symbol of its last round's input, which is
+why the words' targets leave it out) enters a provenance as an input. -/
+noncomputable def encodeBitsCost (F : Gates.Field) (k B εnum εden x : ℕ) : ℕ∞ :=
+  Gates.encodeCost F k B εnum εden ((x + 8 * F.bytes - 1) / (8 * F.bytes))
 
 end Accounting

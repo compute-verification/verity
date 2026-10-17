@@ -3,6 +3,7 @@ import Models.Accounting.Guarantees.Stacking
 import Proofs.Accounting.RateAudit.DeployedSketchSum
 import Proofs.Accounting.RateAudit.DeployedRelay
 import Proofs.Accounting.Requirement
+import Proofs.Accounting.Gates
 
 /-!
 # Stacking: the carrier lemma and the stacked session
@@ -11,17 +12,24 @@ import Proofs.Accounting.Requirement
 `2^x` classes, in each of which the rest of the provenance has `x` bits fewer, so the values take at most `2^n`
 contents when every run has at most `n` input and encoded bits (`Provenance.card_image_le`). A carrier's values are its
 sectors at every store, which take every value, so its sectors are at most `n` bits (`Carrier.card_le`). Under
-`EncodeChainHardness` an encode of `x` bits costs at least `x/(8·bytes)` words' `E` budgeted gates
+`EncodeChainHardness` an encode of `x` bits costs at least `x/(8·bytes)` words' `E` budgeted units
 (`encodeBitsCost_ge`, with `⊤` where the gate model has no circuit), so a gate budget bounds the encoded bits
 (`Provenance.encoded_mul_le`).
 
-`KeyBinding` moves an event of the store made with one choice and the session's coins to a uniform store at a cost of
-`δ` (`KeyBinding.pr_le`), fiber by fiber over the coins, and an event of the store made with the writers' choices to
-`|Ch|` times that (`KeyBinding.pr_le_advice`), by a union over the choices. The session's draws hold at every store, so
-only its unpaid words' event pays for the choices.
+`KeyBinding` moves an event of the store made at an index read from the coins, and of the coins, to a uniform store at a
+cost of `δ` (`KeyBinding.pr_le_of`), fiber by fiber over the coins, and an event of the store made with the writers'
+choices to `|Ch|` times that (`KeyBinding.pr_le_advice`), by a union over the choices.
 
 `Accounting.SecurityProofs.StackedSessionConservationSketchDeployed` charges each carrier's sectors in the pass's
-rebuilds and applies the deployed guarantee at rebuilt bits `X + C`.
+rebuilds, so every pass rebuilds at most `X + C` bits, and bounds the session with a store per pass. A window that
+doesn't pay for its correct receipts has a sign matrix of low rank, paid once a window, or a pass whose kept candidate
+is unpaid on its own store (`SketchDeployedWindow.exists_unpaidOn`). At the writers' choice that pass is unpaid at
+some choice; at each choice its store is `view` at an index read from the coins before the pass, which `KeyBinding`
+moves to a uniform store independent of the session's coins, where the deployed guarantee's one-pass family bound
+holds (`SketchDeployedSession.pr_pass_le`). So the unpaid windows cost `n·ε + n·P·|Ch|·(G·N/2^h + qtot/2^(8r) + δ)`
+(`SketchDeployedSession.pr_unpaidOn_le`). The passes' correct receipts are a causal family of the windows' draws,
+whatever stores they are on (`pr_draws_causal_le`), so the draws' terms are the deployed guarantee's
+(`pr_deployed_of_unpaid_causal`).
 
 `Accounting.SecurityProofs.StackedSessionConservationRelay` simulates each pass device by one that reruns its carrier's
 circuit first, reading every step's bits over the side link at odd addresses (`PIChip.walk`, within `C` bits), and then
@@ -38,12 +46,12 @@ shortfall against the requirement is one against the store.
 namespace Accounting
 
 /-- **Under the gate model's conjecture, `x` bits of a block's encoding cost `x/(8·bytes)` words' `E` budgeted
-gates**: every circuit of `Gates.encodeCosts` at the `⌈x/(8·bytes)⌉` words those bits fill has at least that many words'
-`E` budgeted gates, and `encodeBitsCost` is `⊤` where there is none. -/
-theorem encodeBitsCost_ge {F : Gates.Field} {k f w E εnum εden : ℕ}
-    (hE : Assumptions.EncodeChainHardness F k f w E εnum εden) (hbytes : 0 < F.bytes) (x : ℕ) :
-    ((x * E : ℕ) : ℕ∞) ≤ (8 * F.bytes : ℕ) * encodeBitsCost F k f w εnum εden x := by
-  have hn : 0 < F.n - 1 := by
+units**: the encode cost of the `⌈x/(8·bytes)⌉` words those bits fill is at least that many words' `E`
+(`SecurityProofs.Gates.EncodeCost`), and `⊤` where the gate model has no circuit. -/
+theorem encodeBitsCost_ge {F : Gates.Field} {k B E εnum εden : ℕ}
+    (hE : Assumptions.EncodeChainHardness F k B E εnum εden) (hbytes : 0 < F.bytes) (x : ℕ) :
+    ((x * E : ℕ) : ℕ∞) ≤ (8 * F.bytes : ℕ) * encodeBitsCost F k B εnum εden x := by
+  have hn : 2 ≤ F.n := by
     have h := hbytes
     simp only [Gates.Field.bytes] at h
     omega
@@ -52,16 +60,12 @@ theorem encodeBitsCost_ge {F : Gates.Field} {k f w E εnum εden : ℕ}
   have hlt := Nat.lt_mul_div_succ (x + 8 * F.bytes - 1) hwb
   rw [← hq, mul_add, mul_one] at hlt
   have hxq : x ≤ 8 * F.bytes * q := by omega
-  have hcost : ((q * E : ℕ) : ℕ∞) ≤ encodeBitsCost F k f w εnum εden x := by
-    refine le_iInf₂ fun c hc => ?_
-    obtain ⟨ι, C, m, xs, words, out, hlen, hnd, hp, hres, hrun, hin, hcomp, rfl⟩ := hc
-    have h := hE C m xs words out hres hin hnd hp hcomp
-    rw [hrun, zero_mul, add_zero, hlen] at h
-    exact_mod_cast Nat.le_of_mul_le_mul_right h hn
+  have hcost : ((q * E : ℕ) : ℕ∞) ≤ encodeBitsCost F k B εnum εden x :=
+    SecurityProofs.Gates.EncodeCost F k B E εnum εden q hE hn
   calc ((x * E : ℕ) : ℕ∞) ≤ ((8 * F.bytes * q * E : ℕ) : ℕ∞) := by
         exact_mod_cast Nat.mul_le_mul_right E hxq
     _ = (8 * F.bytes : ℕ) * ((q * E : ℕ) : ℕ∞) := by push_cast; ring
-    _ ≤ (8 * F.bytes : ℕ) * encodeBitsCost F k f w εnum εden x := by gcongr
+    _ ≤ (8 * F.bytes : ℕ) * encodeBitsCost F k B εnum εden x := by gcongr
 
 end Accounting
 
@@ -137,12 +141,12 @@ theorem card_image_le [DecidableEq α] (c : Provenance N m α) :
         simp only [inputs, encoded] at this
         omega
 
-/-- **A gate budget bounds the encoded bits**: under `EncodeChainHardness` at `E` budgeted gates a word of `8·bytes`
-bits, the encoded bits times `E` are at most `8·bytes` times the encodes' budgeted gates. -/
-theorem encoded_mul_le {F : Gates.Field} {kr fan wid E εnum εden : ℕ}
-    (hE : Assumptions.EncodeChainHardness F kr fan wid E εnum εden) (hbytes : 0 < F.bytes) (c : Provenance N m α)
+/-- **A gate budget bounds the encoded bits**: under `EncodeChainHardness` at `E` budgeted units a word of `8·bytes`
+bits, the encoded bits times `E` are at most `8·bytes` times the encodes' budgeted units. -/
+theorem encoded_mul_le {F : Gates.Field} {kr B E εnum εden : ℕ}
+    (hE : Assumptions.EncodeChainHardness F kr B E εnum εden) (hbytes : 0 < F.bytes) (c : Provenance N m α)
     (Es : SketchStore N m) :
-    ((c.encoded Es * E : ℕ) : ℕ∞) ≤ (8 * F.bytes : ℕ) * c.gates (encodeBitsCost F kr fan wid εnum εden) Es := by
+    ((c.encoded Es * E : ℕ) : ℕ∞) ≤ (8 * F.bytes : ℕ) * c.gates (encodeBitsCost F kr B εnum εden) Es := by
   induction c with
   | done a => simp [encoded, gates]
   | input x g k ih => simpa [encoded, gates] using ih (g Es)
@@ -174,12 +178,12 @@ theorem card_le (K : Carrier N m) {n : ℕ} (hK : ∀ E, K.provenance.inputs E +
   rw [hs, ← pow_mul, mul_comm] at h
   exact (Nat.pow_le_pow_iff_right (by norm_num)).mp h
 
-/-- A carrier whose circuit takes in at most `I` bits and spends at most `R` budgeted gates on its encodes carries at
-most `I + 8·bytes·R/E` bits, under `EncodeChainHardness` at `E` budgeted gates a word of `8·bytes` bits. -/
-theorem card_le_of_budget (K : Carrier N m) {F : Gates.Field} {kr fan wid E εnum εden I R : ℕ}
-    (hE : Assumptions.EncodeChainHardness F kr fan wid E εnum εden) (hbytes : 0 < F.bytes) (hE0 : 0 < E)
+/-- A carrier whose circuit takes in at most `I` bits and spends at most `R` budgeted units on its encodes carries at
+most `I + 8·bytes·R/E` bits, under `EncodeChainHardness` at `E` budgeted units a word of `8·bytes` bits. -/
+theorem card_le_of_budget (K : Carrier N m) {F : Gates.Field} {kr B E εnum εden I R : ℕ}
+    (hE : Assumptions.EncodeChainHardness F kr B E εnum εden) (hbytes : 0 < F.bytes) (hE0 : 0 < E)
     (hK : ∀ Es, K.provenance.inputs Es ≤ I ∧
-      K.provenance.gates (encodeBitsCost F kr fan wid εnum εden) Es ≤ (R : ℕ)) :
+      K.provenance.gates (encodeBitsCost F kr B εnum εden) Es ≤ (R : ℕ)) :
     K.carried.card * 256 ≤ I + 8 * F.bytes * R / E := by
   refine K.card_le fun Es => ?_
   have h2 : K.provenance.encoded Es ≤ 8 * F.bytes * R / E := by
@@ -211,19 +215,28 @@ theorem pr_prod_eq_sum_div {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → 
   rw [ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
   ring
 
-/-- **Key binding moves an event to a uniform store, at a cost of `δ`**: for each choice `α`, an event of the store
-made with `α` and of independent coins `C` is at most as likely as on a uniform store, plus `δ`. -/
-theorem KeyBinding.pr_le {St Ω Ch C : Type} [Fintype St] [Fintype Ω] [Fintype C] {δ : ℝ≥0∞} {view : Ch → Ω → St}
-    (h : KeyBinding δ view) (α : Ch) (P : St → C → Prop) :
-    pr (fun x : Ω × C => P (view α x.1) x.2) ≤ pr (fun y : St × C => P y.1 y.2) + δ := by
-  rw [pr_prod_eq_sum_div (fun x : Ω × C => P (view α x.1) x.2), pr_prod_eq_sum_div (fun y : St × C => P y.1 y.2)]
-  calc (∑ c, pr fun ω => P (view α ω) c) / Fintype.card C
+/-- **Key binding moves an event to a uniform store, at a cost of `δ`, at an index read from the coins**: an event of
+the store made at index `f c` and of coins `c` independent of `ω` is at most as likely as on a uniform store
+independent of them, plus `δ`. -/
+theorem KeyBinding.pr_le_of {St Ω Ch C : Type} [Fintype St] [Fintype Ω] [Fintype C] {δ : ℝ≥0∞}
+    {view : Ch → Ω → St} (h : KeyBinding δ view) (f : C → Ch) (P : St → C → Prop) :
+    pr (fun x : Ω × C => P (view (f x.2) x.1) x.2) ≤ pr (fun y : St × C => P y.1 y.2) + δ := by
+  rw [pr_prod_eq_sum_div (fun x : Ω × C => P (view (f x.2) x.1) x.2),
+    pr_prod_eq_sum_div (fun y : St × C => P y.1 y.2)]
+  calc (∑ c, pr fun ω => P (view (f c) ω) c) / Fintype.card C
       ≤ (∑ c, (pr (fun E => P E c) + δ)) / Fintype.card C :=
-        ENNReal.div_le_div_right (Finset.sum_le_sum fun c _ => h α {E | P E c}) _
+        ENNReal.div_le_div_right (Finset.sum_le_sum fun c _ => h (f c) {E | P E c}) _
     _ = (∑ c, pr fun E => P E c) / Fintype.card C + Fintype.card C * δ / Fintype.card C := by
         rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, ENNReal.add_div]
     _ ≤ (∑ c, pr fun E => P E c) / Fintype.card C + δ :=
         add_le_add le_rfl (ENNReal.div_le_of_le_mul (le_of_eq (mul_comm _ _)))
+
+/-- **Key binding moves an event to a uniform store, at a cost of `δ`**: for each choice `α`, an event of the store
+made with `α` and of independent coins `C` is at most as likely as on a uniform store, plus `δ`. -/
+theorem KeyBinding.pr_le {St Ω Ch C : Type} [Fintype St] [Fintype Ω] [Fintype C] {δ : ℝ≥0∞} {view : Ch → Ω → St}
+    (h : KeyBinding δ view) (α : Ch) (P : St → C → Prop) :
+    pr (fun x : Ω × C => P (view α x.1) x.2) ≤ pr (fun y : St × C => P y.1 y.2) + δ :=
+  h.pr_le_of (fun _ => α) P
 
 /-- **The writers' choices are advice**: an event of the store made with the choices `choice ω` and of independent
 coins `C` is at most `|Ch|` times as likely as on a uniform store, plus `δ`. -/
@@ -256,13 +269,13 @@ def transcript (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvena
   | input x f k, i => if hi : i < x then f E R O ⟨i, hi⟩ else (k (f E R O)).transcript E R O (i - x)
   | encode j x _ f k, i => if hi : i < x then f (E j) ⟨i, hi⟩ else (k (f (E j))).transcript E R O (i - x)
 
-/-- **A gate budget bounds the encoded bits**: under `EncodeChainHardness` at `E` budgeted gates a word of `8·bytes`
-bits, the encoded bits times `E` are at most `8·bytes` times the encodes' budgeted gates. -/
-theorem encoded_mul_le {F : Gates.Field} {kr fan wid E εnum εden : ℕ}
-    (hE : Assumptions.EncodeChainHardness F kr fan wid E εnum εden) (hbytes : 0 < F.bytes)
+/-- **A gate budget bounds the encoded bits**: under `EncodeChainHardness` at `E` budgeted units a word of `8·bytes`
+bits, the encoded bits times `E` are at most `8·bytes` times the encodes' budgeted units. -/
+theorem encoded_mul_le {F : Gates.Field} {kr B E εnum εden : ℕ}
+    (hE : Assumptions.EncodeChainHardness F kr B E εnum εden) (hbytes : 0 < F.bytes)
     (c : PassProvenance N b h ρ α) (Es : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     ((c.encoded Es R O * E : ℕ) : ℕ∞) ≤
-      (8 * F.bytes : ℕ) * c.gates (encodeBitsCost F kr fan wid εnum εden) Es R O := by
+      (8 * F.bytes : ℕ) * c.gates (encodeBitsCost F kr B εnum εden) Es R O := by
   induction c with
   | done a => simp [encoded, gates]
   | input x g k ih => simpa [encoded, gates] using ih (g Es R O)
@@ -651,6 +664,354 @@ end DeployedSession
 
 end Accounting.Rate
 
+namespace Accounting.RateSketch
+
+open Pous (pr)
+open scoped ENNReal
+open Bandwidth (pr_exists_le pr_mono pr_or_le)
+
+/-- The oracle family of a pass's `G` grinding candidates is finite. -/
+local instance instFintypeOracleFamStack (N ρ h ks G : ℕ) :
+    Fintype (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := by
+  letI : Fintype (Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
+  exact inferInstance
+
+/-- Signs whose sector blocks all have rank at least `r`. -/
+def RankGood {ks m : ℕ} (r : ℕ) (σ : SketchSigns ks m) : Prop :=
+  ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
+
+namespace SketchDeployedWindow
+
+variable {P N m ρ h S L q ks G : ℕ}
+
+/-- Correct receipts counted pass by pass, each pass on its own store. -/
+theorem card_correctOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
+    (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) :
+    (A.correctOn E σ ω).card = ∑ j,
+      let D := Data.ofParts (E j) (ω j).1
+      ((A.dev j (E j) σ ω).correct sketch σ (A.oracle j (E j) σ ω) D).card := by
+  classical
+  unfold correctOn
+  rw [Finset.card_filter, Fintype.sum_prod_type]
+  refine Finset.sum_congr rfl (fun j _ => ?_)
+  rw [Finset.sum_boole]
+  simp
+
+/-- If a window's reads, each pass on its own store, plus one slack per pass do not pay for its correct receipts, some
+pass's kept candidate is unpaid on its own store. -/
+theorem exists_unpaidOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
+    (σ : SketchSigns ks m) (slack : ℕ) (ω : Fin P → SketchPassCoins N ρ h ks G)
+    (hx : A.readsOn E σ ω + P * slack < (A.correctOn E σ ω).card * (m * 256)) :
+    ∃ j c, UnpaidAt A σ slack j c (E j, ω) := by
+  by_contra hno
+  push Not at hno
+  have hle := Finset.sum_le_sum (fun j (_ : j ∈ Finset.univ) =>
+    (not_lt.1 (hno j (A.kept j (E j) σ ω)) :
+      let D := Data.ofParts (E j) (ω j).1
+      ((A.dev j (E j) σ ω).correct sketch σ (A.oracle j (E j) σ ω) D).card * (m * 256) ≤
+        (A.dev j (E j) σ ω).footprint σ (A.oracle j (E j) σ ω) D + slack))
+  rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul] at hle
+  rw [card_correctOn, Finset.sum_mul] at hx
+  exact (not_lt_of_ge (by simpa [readsOn] using hle)) hx
+
+/-- **One pass on a uniform store**: at signs of rank at least `r`, pass `j` has an unpaid candidate with at most the
+one-pass family bound, the store uniform and independent of the window's coins. -/
+theorem pr_pass_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r X qtot : ℕ) (hr32 : r ≤ 32)
+    (hX : ∀ j η c σ O D, ((A.device j η c).prog σ D).rebuilds O D * 256 ≤ X)
+    (hq : ∀ j η σ (Os : Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) (D : Data N m ρ Sector),
+      ∑ c, (((A.device j η c).prog σ D).queries (Os c) D).length ≤ qtot) (j : Fin P) :
+    pr (fun y : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
+      RankGood r y.2.1 ∧ ∃ c, UnpaidAt A y.2.1 (S + (L - ρ * 256) + X) j c (y.1, y.2.2.1))
+      ≤ (G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r) := by
+  classical
+  let e : SketchStore N m × SketchWindowCoins P N m ρ h ks G d ≃
+      (SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G)) × (SketchSigns ks m × (Fin d → Fin P × Fin N)) :=
+    { toFun := fun y => ((y.1, y.2.2.1), (y.2.1, y.2.2.2))
+      invFun := fun z => (z.1.1, (z.2.1, (z.1.2, z.2.2)))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  rw [Rate.pr_equiv e]
+  refine Rate.pr_le_of_fiber _ _ (fun sd => ?_)
+  by_cases hr : RankGood r sd.1
+  · exact (pr_mono fun z hz => hz.2).trans (pr_unpaidPass_le A sd.1 _ _ j fun η =>
+      Device.pr_unpaid_rank_family_le (fun c => A.device j η c) sd.1 r X qtot hr32 hr
+        (fun c => hX j η c sd.1) (hq j η sd.1))
+  · calc _ ≤ pr (fun _ : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) => False) :=
+          pr_mono fun _ hz => hr hz.1
+      _ ≤ _ := by
+          rw [Rate.Horizon.pr_false]
+          exact bot_le
+
+end SketchDeployedWindow
+
+namespace SketchDeployedSession
+
+variable {n P N m ρ h S L q ks G d : ℕ}
+
+/-- **One pass of a session on a uniform store**: at window `w`'s signs of rank at least `r`, pass `j` has an unpaid
+candidate with at most the one-pass family bound, the store uniform and independent of the session's coins. -/
+theorem pr_pass_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (r X qtot : ℕ) (hr32 : r ≤ 32)
+    (hX : ∀ w η j ι c E σ R O,
+      let B := (A.window w η).device j ι c
+      let D := Data.ofParts E R
+      (B.prog σ D).rebuilds O D * 256 ≤ X)
+    (hq : ∀ w η j ι, Accounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot)
+    (w : Fin n) (j : Fin P) :
+    pr (fun y : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+      RankGood r (y.2 w).1 ∧
+        ∃ c, SketchDeployedWindow.UnpaidAt (A.win w y.2) (y.2 w).1 (S + (L - ρ * 256) + X) j c (y.1, (y.2 w).2.1))
+      ≤ (G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r) := by
+  have hX' : ∀ η j ι c σ O D, (((A.window w η).device j ι c).prog σ D).rebuilds O D * 256 ≤ X := by
+    intro η j ι c σ O D
+    let E : SketchStore N m := fun p => D (.inl p)
+    let R : SketchStream ρ := fun i => D (.inr i)
+    have hD : Data.ofParts E R = D := by
+      funext p
+      rcases p with p | p <;> rfl
+    simpa [hD] using hX w η j ι c E σ R O
+  exact pr_window_le A w (fun C y => RankGood r y.2.1 ∧
+      ∃ c, SketchDeployedWindow.UnpaidAt C y.2.1 (S + (L - ρ * 256) + X) j c (y.1, y.2.2.1)) _
+    fun η => SketchDeployedWindow.pr_pass_le (A.window w η) r X qtot hr32 (hX' η)
+      (fun j ι σ Os D => hq w η j ι σ Os D) j
+
+/-- The rank tail of window `w`'s signs, on any `ω` drawn before the session. -/
+theorem pr_rank_le {Ω : Type} [Fintype Ω] (r : ℕ) (ε : ℝ≥0∞) (hRank : Accounting.Assumptions.SketchRank ks m r ε)
+    (w : Fin n) :
+    pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) => ¬ RankGood r (x.2 w).1) ≤ ε := by
+  classical
+  rw [Rate.pr_equiv (Equiv.prodComm _ _)]
+  refine Rate.pr_le_of_fiber _ _ fun _ => ?_
+  rw [Rate.pr_equiv (Equiv.funSplitAt w _)]
+  refine Rate.pr_le_of_fiber _ _ fun rest => ?_
+  refine Rate.pr_le_of_fiber _ _ fun pd => ?_
+  refine (pr_mono fun σ hσ => ?_).trans hRank
+  have e1 : ((Equiv.funSplitAt w (SketchWindowCoins P N m ρ h ks G d)).symm ((σ, pd), rest)) w = (σ, pd) := by
+    simp
+  simp only [Equiv.prodComm_symm, Equiv.prodComm_apply, Prod.swap, e1, RankGood] at hσ
+  push Not at hσ
+  exact hσ
+
+/-- **A session's unpaid windows with a store per pass**: when every pass's store is the writers' `view` at their
+choice and the prefix before the pass, some window fails to pay for its correct receipts with probability at most
+`n·ε + n·P·|Ch|·(G·N/2^h + qtot/2^(8r) + δ)`: the rank tail once a window, and each pass's family bound and `δ` once
+for each choice. -/
+theorem pr_unpaidOn_le {Ω Ch : Type} [Fintype Ω] [Fintype Ch] (A : SketchDeployedSession n P N m ρ h S L q ks G d)
+    (view : Ch × SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m)
+    (choice : Ω → SketchPrefix n P N m ρ h ks G d → Ch) (δ : ℝ≥0∞)
+    (hKB : Accounting.Assumptions.KeyBinding δ view) (r X qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32)
+    (hRank : Accounting.Assumptions.SketchRank ks m r ε)
+    (hX : ∀ w η j ι c E σ R O,
+      let B := (A.window w η).device j ι c
+      let D := Data.ofParts E R
+      (B.prog σ D).rebuilds O D * 256 ≤ X)
+    (hq : ∀ w η j ι, Accounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) :
+    pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+      ∃ w, (A.win w x.2).readsOn (programmed view choice x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 +
+          P * (S + (L - ρ * 256) + X) <
+        ((A.win w x.2).correctOn (programmed view choice x.1 x.2 w) (x.2 w).1 (x.2 w).2.1).card * (m * 256))
+      ≤ (n : ℝ≥0∞) * ε + (n * P : ℝ≥0∞) *
+        (Fintype.card Ch * ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r) + δ)) := by
+  classical
+  let pass : Fin n → Fin P → Ch → Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) → Prop := fun w j α x =>
+    RankGood r (x.2 w).1 ∧ ∃ c, SketchDeployedWindow.UnpaidAt (A.win w x.2) (x.2 w).1 (S + (L - ρ * 256) + X) j c
+      (view (α, .of x.2 w j) x.1, (x.2 w).2.1)
+  have hsub : ∀ x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d),
+      (∃ w, (A.win w x.2).readsOn (programmed view choice x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 +
+          P * (S + (L - ρ * 256) + X) <
+        ((A.win w x.2).correctOn (programmed view choice x.1 x.2 w) (x.2 w).1 (x.2 w).2.1).card * (m * 256)) →
+      (∃ w, ¬ RankGood r (x.2 w).1) ∨ ∃ w j α, pass w j α x := by
+    rintro x ⟨w, hw⟩
+    by_cases hr : RankGood r (x.2 w).1
+    · obtain ⟨j, c, hc⟩ := SketchDeployedWindow.exists_unpaidOn _ _ _ _ _ hw
+      exact Or.inr ⟨w, j, choice x.1 (.of x.2 w j), hr, c, hc⟩
+    · exact Or.inl ⟨w, hr⟩
+  let hash := (G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)
+  have hpass : ∀ w j α, pr (pass w j α) ≤ hash + δ := fun w j α =>
+    (hKB.pr_le_of (fun x : Fin n → SketchWindowCoins P N m ρ h ks G d => (α, SketchPrefix.of x w j))
+      (fun E x => RankGood r (x w).1 ∧
+        ∃ c, SketchDeployedWindow.UnpaidAt (A.win w x) (x w).1 (S + (L - ρ * 256) + X) j c (E, (x w).2.1))).trans
+      (add_le_add (pr_pass_le A r X qtot hr32 hX hq w j) le_rfl)
+  refine (pr_mono hsub).trans ((pr_or_le _ _).trans (add_le_add ?_ ?_))
+  · refine (pr_exists_le _).trans ?_
+    calc ∑ w, pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) => ¬ RankGood r (x.2 w).1)
+        ≤ ∑ _w : Fin n, ε := Finset.sum_le_sum fun w _ => pr_rank_le r ε hRank w
+      _ = (n : ℝ≥0∞) * ε := by simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+  · refine (pr_exists_le _).trans ?_
+    calc ∑ w, pr (fun x => ∃ j α, pass w j α x)
+        ≤ ∑ w, ∑ j, ∑ α, pr (pass w j α) :=
+          Finset.sum_le_sum fun w _ => (pr_exists_le _).trans (Finset.sum_le_sum fun j _ => pr_exists_le _)
+      _ ≤ ∑ _w : Fin n, ∑ _j : Fin P, ∑ _α : Ch, (hash + δ) :=
+          Finset.sum_le_sum fun w _ => Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun α _ => hpass w j α
+      _ = (n * P : ℝ≥0∞) * (Fintype.card Ch * (hash + δ)) := by
+          simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+          ring
+
+/-- **The draws are causal in any correct sets that read each window's earlier windows, signs and passes**, on any `ω`
+drawn before the session: both pooled-draw readings of `pr_draws_le_map`, for correct sets `cor` in place of one
+store's. -/
+theorem pr_draws_causal_le {Ω : Type} [Fintype Ω]
+    (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))
+    (hcor : ∀ o x x' w, (∀ v, v < w → x v = x' v) → (x w).1 = (x' w).1 → (x w).2.1 = (x' w).2.1 →
+      cor o x w = cor o x' w) (K Kw : ℕ) :
+    pr (fun z : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+      (∀ w t, (z.2 w).2.2 t ∈ cor z.1 z.2 w) ∧
+        (∑ w, (cor z.1 z.2 w).card ≤ K ∨ ∃ w, (cor z.1 z.2 w).card ≤ Kw))
+      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
+        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) := by
+  classical
+  rw [Rate.pr_equiv (Equiv.prodComm _ _)]
+  refine Rate.pr_le_of_fiber _ _ (fun o => ?_)
+  let X : Fin n → Type := fun _ => SketchSigns ks m × (Fin P → SketchPassCoins N ρ h ks G)
+  let e : (Fin n → SketchWindowCoins P N m ρ h ks G d) ≃
+      ((w : Fin n) → X w × (Fin d → Fin (P * N))) :=
+    Equiv.piCongrRight fun _ =>
+      (Equiv.prodAssoc _ _ _).symm |>.trans
+        ((Equiv.refl _).prodCongr (Equiv.arrowCongr (Equiv.refl _) finProdFinEquiv))
+  rw [Rate.pr_equiv e]
+  let Gs : (w : Fin n) → ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Finset (Fin (P * N)) :=
+    fun w ω => (cor o (e.symm ω) w).map finProdFinEquiv.toEmbedding
+  have hG : Rate.Causal (s := fun _ => d) Gs := by
+    intro w ω ω' hlt hw
+    have h1 : ∀ v, v < w → e.symm ω v = e.symm ω' v := fun v hv => by simp [e, hlt v hv]
+    have hσ : (e.symm ω w).1 = (e.symm ω' w).1 := by simp [e, hw]
+    have hp : (e.symm ω w).2.1 = (e.symm ω' w).2.1 := by simp [e, hw]
+    simp only [Gs]
+    rw [hcor o _ _ w h1 hσ hp]
+  have hmem : ∀ ω w t, (e.symm ω w).2.2 t ∈ cor o (e.symm ω) w → (ω w).2 t ∈ Gs w ω := by
+    intro ω w t ht
+    simp only [Gs, Finset.mem_map_equiv]
+    exact ht
+  have hcard : ∀ ω w, (Gs w ω).card = (cor o (e.symm ω) w).card := fun ω w => Finset.card_map _
+  refine (pr_mono fun ω hω => ?_).trans ((pr_or_le _ _).trans (add_le_add
+    ((Rate.Horizon.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
+    ((Rate.Horizon.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))))
+  · obtain ⟨hall, hK | ⟨w, hw⟩⟩ := hω
+    · refine Or.inl ⟨fun w t => hmem ω w t (hall w t), ?_⟩
+      show ∑ i, d * (Gs i ω).card ≤ d * K
+      simp only [hcard]
+      rw [← Finset.mul_sum]
+      exact Nat.mul_le_mul_left d hK
+    · exact Or.inr ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
+  · simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
+    rcases Nat.eq_zero_or_pos d with rfl | hd
+    · simp
+    rw [mul_comm n d]
+    congr 1
+    have hd' : (d : ℝ≥0∞) ≠ 0 := by exact_mod_cast hd.ne'
+    push_cast
+    rw [show (P : ℝ≥0∞) * N * (d * n) = d * (n * P * N) by ring]
+    exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
+  · simp only [Nat.cast_mul, mul_assoc]
+
+/-- Session conservation in counts from the pooled draws and an unpaid bound `ε_u`, for causal correct sets `cor`
+and reads `rd`: `pr_paid_of_unpaid_map` with them in place of one store's. -/
+theorem pr_paid_of_unpaid_causal {Ω : Type} [Fintype Ω]
+    (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))
+    (rd : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → ℕ)
+    (hcor : ∀ o x x' w, (∀ v, v < w → x v = x' v) → (x w).1 = (x' w).1 → (x w).2.1 = (x' w).2.1 →
+      cor o x w = cor o x' w) (slack K Kw : ℕ) (εu : ℝ≥0∞)
+    (hu : pr (fun z : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+      ∃ w, rd z.1 z.2 w + P * slack < (cor z.1 z.2 w).card * (m * 256)) ≤ εu) :
+    pr (fun z : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+      (∀ w t, (z.2 w).2.2 t ∈ cor z.1 z.2 w) ∧
+        (∑ w, rd z.1 z.2 w + n * (P * slack) < (K + 1) * (m * 256) ∨
+          ∃ w, rd z.1 z.2 w + P * slack < (Kw + 1) * (m * 256)))
+      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
+        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + εu := by
+  have h₁ := pr_draws_causal_le cor hcor K Kw
+  refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ hu))
+  obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
+  · by_cases hD : ∑ w, (cor x.1 x.2 w).card ≤ K ∨ ∃ w, (cor x.1 x.2 w).card ≤ Kw
+    · exact Or.inl ⟨hall, hD⟩
+    refine Or.inr ?_
+    push Not at hD
+    by_contra hno
+    push Not at hno
+    have hle := Finset.sum_le_sum fun w (_ : w ∈ Finset.univ) => hno w
+    rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul,
+      ← Finset.sum_mul] at hle
+    have hK : (K + 1) * (m * 256) ≤ (∑ w, (cor x.1 x.2 w).card) * (m * 256) :=
+      Nat.mul_le_mul_right _ hD.1
+    omega
+  · by_cases hD : ∑ w, (cor x.1 x.2 w).card ≤ K ∨ ∃ w, (cor x.1 x.2 w).card ≤ Kw
+    · exact Or.inl ⟨hall, hD⟩
+    push Not at hD
+    exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
+
+/-- `pr_conservation_of_unpaid` for causal correct sets `cor` and reads `rd`. -/
+theorem pr_conservation_of_unpaid_causal {Ω : Type} [Fintype Ω]
+    (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))
+    (rd : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → ℕ)
+    (hcor : ∀ o x x' w, (∀ v, v < w → x v = x' v) → (x w).1 = (x' w).1 → (x w).2.1 = (x' w).2.1 →
+      cor o x w = cor o x' w) (X : ℕ) (dbar dw : ℝ) (hn : 0 < n) (hP : 0 < P)
+    (hN : 0 < N) (hm : 0 < m) (hdw : dw ≤ 1) (εu : ℝ≥0∞)
+    (hu : pr (fun z : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+      ∃ w, rd z.1 z.2 w + P * (S + (L - ρ * 256) + X) < (cor z.1 z.2 w).card * (m * 256)) ≤ εu) :
+    pr (fun z : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+      (∀ w t, (z.2 w).2.2 t ∈ cor z.1 z.2 w) ∧
+        ((((∑ w, rd z.1 z.2 w : ℕ)) : ℝ) < (1 - (dbar + gammaSketch N m ρ S L X)) * (n * P * N * m * 256) ∨
+          ∃ w, ((rd z.1 z.2 w : ℕ) : ℝ) < (1 - (dw + gammaSketch N m ρ S L X)) * (P * N * m * 256)))
+      ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) + εu := by
+  let slack := S + (L - ρ * 256) + X
+  have main := pr_paid_of_unpaid_causal cor rd hcor slack
+    ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊ εu hu
+  have hγ := gammaSketch_mul N m ρ S L X hN hm
+  have hγ' : gammaSketch N m ρ S L X * ((N : ℝ) * (m * 256)) = (slack : ℝ) := by
+    simpa [slack, mul_assoc] using hγ
+  have hb : (0 : ℝ) < m * 256 := by positivity
+  refine (pr_mono (fun x hx => ?_)).trans (main.trans ?_)
+  · obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
+    · refine ⟨hall, Or.inl ?_⟩
+      have hc := Rate.Deployed.count_lt
+        (R := ((∑ w, rd x.1 x.2 w : ℕ) : ℝ))
+        (t := dbar) (g := gammaSketch N m ρ S L X) (c := (n : ℝ) * P)
+        (Nn := N) (b := (m : ℝ) * 256) (sl := slack) hb hγ'
+        (by simpa [mul_assoc] using hT)
+      rw [← mul_assoc]
+      exact_mod_cast hc
+    · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
+      have hc := Rate.Deployed.count_lt
+        (R := ((rd x.1 x.2 w : ℕ) : ℝ))
+        (t := dw) (g := gammaSketch N m ρ S L X) (c := (P : ℝ))
+        (Nn := N) (b := (m : ℝ) * 256) (sl := slack) hb hγ'
+        (by simpa [mul_assoc] using hw)
+      exact_mod_cast hc
+  · have e1 : ((n : ℝ) * P * N) = ((n * P * N : ℕ) : ℝ) := by push_cast; ring
+    have e2 : ((P : ℝ) * N) = ((P * N : ℕ) : ℝ) := by push_cast; ring
+    rw [e1, e2]
+    refine add_le_add (add_le_add ?_ ?_) le_rfl
+    · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+      exact Rate.Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+    · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+      exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+
+/-- `pr_deployed_of_unpaid` for causal correct sets `cor` and reads `rd`: the draws' terms are at most `2·2^-40`. -/
+theorem pr_deployed_of_unpaid_causal {Ω : Type} [Fintype Ω]
+    (cor : Ω → (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin n → Finset (Fin P × Fin N))
+    (rd : Ω → (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin n → ℕ)
+    (hcor : ∀ o x x' w, (∀ v, v < w → x v = x' v) → (x w).1 = (x' w).1 → (x w).2.1 = (x' w).2.1 →
+      cor o x w = cor o x' w) (X : ℕ) (hn : 7 ≤ n) (hP : 0 < P) (hN : 0 < N) (εu : ℝ≥0∞)
+    (hu : pr (fun z : Ω × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+      ∃ w, rd z.1 z.2 w + P * (S + (L - ρ * 256) + X) < (cor z.1 z.2 w).card * (128 * 256)) ≤ εu) :
+    pr (fun z : Ω × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+      (∀ w t, (z.2 w).2.2 t ∈ cor z.1 z.2 w) ∧
+        ((((∑ w, rd z.1 z.2 w : ℕ)) : ℝ) < (1 - (0.0015 + gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
+          ∃ w, ((rd z.1 z.2 w : ℕ) : ℝ) < (1 - (0.01 + gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
+      ≤ 2 / 2 ^ 40 + εu := by
+  have h := pr_conservation_of_unpaid_causal (S := S) (L := L) cor rd hcor X 0.0015 0.01 (by omega) hP hN
+    (by norm_num) (by norm_num) εu hu
+  refine (le_of_eq ?_).trans (h.trans ?_)
+  · norm_num [mul_assoc]
+  rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
+    rw [ENNReal.div_add_div_same]; norm_num]
+  gcongr
+  · exact Rate.Deployed.horizon_deployed n hn
+  · exact Rate.Deployed.window_deployed n (by omega)
+
+end SketchDeployedSession
+
+end Accounting.RateSketch
+
 namespace Accounting.Requirement
 
 variable {V : Type} [DecidableEq V] (W : Wiring V) (e : Execution V) (ℓ : Layout V)
@@ -699,39 +1060,53 @@ theorem CarrierBits : Accounting.Guarantees.CarrierBits := by
   have h := c.card_image_le Finset.univ (I + X) fun E _ => add_le_add (hc E).1 (hc E).2
   rwa [Nat.card_coe_set_eq, Set.ncard_eq_toFinset_card', Set.toFinset_range]
 
-/-- **The remote audit at the deployed parameters on a programmed store, with stacking**,
+/-- **The remote audit at the deployed parameters with a store per pass, with stacking**,
 `Accounting.Guarantees.StackedSessionConservationSketchDeployed`. -/
 theorem StackedSessionConservationSketchDeployed :
     Accounting.Guarantees.StackedSessionConservationSketchDeployed := by
-  intro n P N ρ S L q G X qtot Rin cρ reads life E fan wid εnum εden a ε δ Ω Ch _ _ view choice A hn hP hN hE0 hCh
+  intro n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden a ε δ Ω Ch _ _ view choice A hn hP hN hE0 hCh
     hrank hKB hE hB hK C
   have hX : ∀ w η j ι c Es σ R O,
-      let B := (A.window w η).device j ι c
+      let dv := (A.window w η).device j ι c
       let D := RateSketch.Data.ofParts Es R
-      (B.prog σ D).rebuilds O D * 256 ≤ X + C := by
+      (dv.prog σ D).rebuilds O D * 256 ≤ X + C := by
     intro w η j ι c Es σ R O
-    obtain ⟨K, hS, hKb⟩ := hK w η j ι c
-    have h1 := hS Es σ R O
+    obtain ⟨K, hS, hKb⟩ := hK w η j ι c σ
+    have h1 := hS Es R O
     have h2 := K.card_le_of_budget hE (by decide) hE0 hKb
     dsimp only at h1 ⊢
     calc _ ≤ X + K.carried.card * 256 := h1
       _ ≤ X + C := Nat.add_le_add_left h2 X
-  have hu := hKB.pr_le_advice choice fun (Es : SketchStore N 128)
-      (ω : Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
-    ∃ w, (A.win w ω).reads Es (ω w).1 (ω w).2.1 + P * (S + (L - ρ * 256) + (X + C)) <
-      ((A.win w ω).correctAll Es (ω w).1 (ω w).2.1).card * (128 * 256)
-  have hunif := SketchDeployedSession.pr_unpaid_sum_le A 12 (X + C) qtot ε (by norm_num) hrank hX hB
+  have hcor : ∀ (o : Ω) (x x' : Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) (w : Fin n),
+      (∀ v, v < w → x v = x' v) → (x w).1 = (x' w).1 → (x w).2.1 = (x' w).2.1 →
+      (A.win w x).correctOn (programmed view choice o x w) (x w).1 (x w).2.1 =
+        (A.win w x').correctOn (programmed view choice o x' w) (x' w).1 (x' w).2.1 := by
+    intro o x x' w hlt hσ hp
+    have hη : (fun v : {v : Fin n // v < w} => x v.1) = fun v => x' v.1 := funext fun v => hlt v.1 v.2
+    have hwin : A.win w x = A.win w x' := by
+      simp only [SketchDeployedSession.win]
+      rw [hη]
+    have hpre : ∀ j, SketchPrefix.of x w j = SketchPrefix.of x' w j := fun j => by
+      simp only [SketchPrefix.of]
+      rw [hη, hσ, hp]
+    have hprog : programmed view choice o x w = programmed view choice o x' w := funext fun j => by
+      simp only [programmed]
+      rw [hpre j]
+    rw [hwin, hprog, hσ, hp]
+  have hu := SketchDeployedSession.pr_unpaidOn_le A view choice δ hKB 12 (X + C) qtot ε (by norm_num) hrank hX hB
   have hCh' : (Fintype.card Ch : ℝ≥0∞) ≤ 2 ^ a := by exact_mod_cast hCh
-  refine (SketchDeployedSession.pr_deployed_of_unpaid (fun ω => view (choice ω) ω) A (X + C) hn hP hN _
-    (hu.trans (mul_le_mul_right (add_le_add hunif le_rfl) _))).trans
-    (le_of_le_of_eq (add_le_add le_rfl (mul_le_mul_left hCh' _)) ?_)
+  refine (SketchDeployedSession.pr_deployed_of_unpaid_causal
+    (fun o x w => (A.win w x).correctOn (programmed view choice o x w) (x w).1 (x w).2.1)
+    (fun o x w => (A.win w x).readsOn (programmed view choice o x w) (x w).1 (x w).2.1)
+    hcor (X + C) hn hP hN _ hu).trans
+    (le_of_le_of_eq (add_le_add le_rfl (add_le_add le_rfl (mul_le_mul_right (mul_le_mul_left hCh' _) _))) ?_)
   rw [show 8 * 12 = 96 from rfl]
   ring
 
 /-- **The remote audit with relaying side sources on a programmed store, with stacking**,
 `Accounting.Guarantees.StackedSessionConservationRelay`. -/
 theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionConservationRelay := by
-  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E a cost Fc k fan wid εnum εden tier δ
+  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E a cost Fc k B εnum εden tier δ
     Ω Ch _ _ view choice A dbar dw hn hP hN hb hrc hdw hE0 hbytes hCh hKB hW hF hE hK C
   choose K hside hL hbud using hK
   have hC : ∀ w η j ι c Es R O, (K w η j ι c).inputs Es R O + (K w η j ι c).encoded Es R O ≤ C := by
@@ -764,10 +1139,10 @@ theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionCo
 /-- **The stacked remote audit at the deployed parameters, read against a declared circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementSketchDeployed`. -/
 theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed := by
-  intro n P N ρ S L q G X qtot Rin cρ reads life E fan wid εnum εden a ε δ Ω Ch _ _ view choice A V _ W e ℓ mm plan
+  intro n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden a ε δ Ω Ch _ _ view choice A V _ W e ℓ mm plan
     win hn hP hN hE0 hCh hrank hKB hE hB hK hwin hm C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan 32768 N (n * P) win hwin hm
-  have base := StackedSessionConservationSketchDeployed n P N ρ S L q G X qtot Rin cρ reads life E fan wid εnum εden
+  have base := StackedSessionConservationSketchDeployed n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden
     a ε δ view choice A hn hP hN hE0 hCh hrank hKB hE hB hK
   dsimp only at base
   refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
@@ -778,12 +1153,12 @@ theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirem
 /-- **The stacked remote audit with relaying side sources, read against a declared circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementRelay`. -/
 theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay := by
-  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E a cost Fc k fan wid εnum εden tier δ
+  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E a cost Fc k B εnum εden tier δ
     Ω Ch _ _ view choice A dbar dw V _ W e ℓ mm plan win hn hP hN hb hrc hdw hE0 hbytes hCh hKB hW hF hE hK hwin hm
     C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan b N (n * P) win hwin hm
   have base := StackedSessionConservationRelay n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life
-    E a cost Fc k fan wid εnum εden tier δ view choice A dbar dw hn hP hN hb hrc hdw hE0 hbytes hCh hKB hW hF hE hK
+    E a cost Fc k B εnum εden tier δ view choice A dbar dw hn hP hN hb hrc hdw hE0 hbytes hCh hKB hW hF hE hK
   dsimp only at base
   refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
   have h := Requirement.lt_of_cap hcap.1 hcap.2 hx.2
