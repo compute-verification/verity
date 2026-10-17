@@ -3,7 +3,9 @@ and run on the CPU through the bench's own `matmul.MM` and gates.
 
 `int8_linear(x, w)` is what the bench's layer computes for a linear under the arm `[[linear]] step = "int8"` (defaults): the
 chain `steps.int8_linear` -> `matmul.terminal` on x.float() and the bf16 weight's float(), then `.to(bf16)` as `model.Layer.linear`
-does.  Every product runs on the check window, so the bench's gates (int8 range, s32 accumulator, float64 recomputation) run too.
+does.  `int8_attention(q, k, v)` is the bench's own `model.Layer.edited_attention` under the arm `[[attention]] step = "int8"`
+(defaults; no `rotate` step).  Every product runs on the check window, so the bench's gates (int8 range, s32 accumulator, float64
+recomputation) run too.
 """
 from __future__ import annotations
 
@@ -20,11 +22,13 @@ if str(PPL) not in sys.path:
 import gates as G  # noqa: E402
 import matmul as MM  # noqa: E402
 import methodology  # noqa: E402
+import model as M  # noqa: E402
+import spec  # noqa: E402
 import steps as S  # noqa: E402
 
 
-def run() -> MM.Run:
-    return MM.Run(types.SimpleNamespace(name="vllm-int8"), 0, methodology.CHECK_WINDOW, types.SimpleNamespace(li=0), G.Gates(),
+def run(arm=None) -> MM.Run:
+    return MM.Run(arm or types.SimpleNamespace(name="vllm-int8"), 0, methodology.CHECK_WINDOW, types.SimpleNamespace(li=0), G.Gates(),
                   {}, {}, None)
 
 
@@ -53,3 +57,13 @@ def int8_weights(w: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """(int8 [N, K], scales [N]) steps.int8_linear quantizes the bf16 weight w to (`quant_rows(w.float(), 127)`)."""
     q, s = S.quant_rows(w.float(), 127)
     return q.to(torch.int8), s
+
+
+def int8_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    """out [s, H, d] bf16 of a window's q [s, H, d] and k, v [s, G, d] (bf16, after RoPE): `model.Layer.edited_attention` under
+    the plain int8 attention step, its scale head_dim^-0.5."""
+    r = run(spec.parse({"attention": [{"step": "int8"}]}, "vllm-int8"))
+    layer = M.Layer(types.SimpleNamespace(head_dim=q.shape[-1]), 0, {}, q.device)
+    out = layer.edited_attention(*(t.transpose(0, 1)[None] for t in (q, k, v)), r)
+    _passed(r)
+    return out[0]
