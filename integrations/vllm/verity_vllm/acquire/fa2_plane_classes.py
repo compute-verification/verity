@@ -17,7 +17,7 @@ The seven questions for the Value `fa2.m1/L<k>` (the FA3 twin `fa3.m1/L<k>` diff
  5. Occurrence resolution: layer k = the step's k-th launch (`launches_in_step`); sequence i = the global index in `cu_seqlens_q`
     order = the step's row order (`step_rows`, BIND-01): (request, seqlen_q) per active sequence.
  6. Binding: the name splits into (op_path `fa2.m1/L<k>`, member) -> the manifest identity of that layer at that engine step
-    (`required_manifest.committed_identity`, coverage op-level per step); leaves are position-identified in the packed step stream.
+    (`verity_vllm.commit.bind`, coverage op-level per step); leaves are position-identified in the packed step stream.
  7. Independent check (this module): `check_step` recomputes each layer's class and count from the declarations and the active set and
     names every layer whose observed inventory disagrees; the old uniformity rule is kept as `uniform_rule` for runs without declarations.
 No model names anywhere: a layer is described only by its statics (NH, KVH, D, window); classes are derived, never tabulated.

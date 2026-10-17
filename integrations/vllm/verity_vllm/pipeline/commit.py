@@ -587,18 +587,6 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
 
     request_rows = {int(s): [(_logical(rid), lo, hi) for rid, lo, hi in rows] for s, rows in step_rows.items()} if n_req > 1 else None
     padded = bool(getattr(com, "_padding", None))                                   # [B9.1] finalize materialised padding steps (--padded-finalize)
-    # [R19 int-20] the manifest's promoted members observed at their consumers' inputs: `<consumer>/in` binds the producer's identity
-    name_bindings = dict(getattr(com, "promoted_input_bindings", None) or {})
-    if name_bindings:
-        collector = dict(collector, promoted_inputs={"names": name_bindings, "rule": "binding.PROMOTED_INPUT_RULE"})
-    if padded:
-        from verity_vllm.commit import padding_steps as PS
-        bmap = PS.padded_binding_map_of_committer(com, rc, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
-                                                  weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows,
-                                                  name_bindings=name_bindings or None)
-    else:
-        bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
-                                   weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, name_bindings=name_bindings or None)
     caps = {f"r{int(r.get('index', i))}": int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for i, r in enumerate(reqs)}
     # [R17-1 / F-moe-r17-03 (moe M-0283)] the EXECUTED PREFIX OF RECORD of every request: cap on a length stop; served + LAG on an EOS stop
     # (the driver's served tokens of THIS run; the Program's declared EOS set and LAG -- stop_rule_of_record; nothing from the trace).
@@ -623,6 +611,22 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     if not schedule["all_equal_declared"]:
         print(f"[delta] engine schedule of record: arrivals observed {schedule['observed_arrive_steps']} vs declared {schedule['declared_arrive_steps']} "
               f"-> population placed by the {schedule['use'].upper()} schedule{'' if not schedule['why'] else ' (' + schedule['why'] + ')'}", flush=True)
+    # the manifest's identities, placed by the same schedule, bind the committed tensors (`verity_vllm.commit.bind`)
+    binder = None
+    if getattr(args, "required_manifest", None):
+        from verity_vllm.commit.bind import Binder, source_ports
+
+        binder = Binder.of_manifest(_hdr, rank=0, ports=source_ports(getattr(com, "sources", []) or []), arrivals=arrivals)
+        if binder.rebind:
+            collector = dict(collector, promoted_inputs={"names": {k: list(v) for k, v in binder.rebind.items()}, "rule": "binding.PROMOTED_INPUT_RULE"})
+    if padded:
+        from verity_vllm.commit import padding_steps as PS
+        bmap = PS.padded_binding_map_of_committer(com, rc, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
+                                                  weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows,
+                                                  binder=binder)
+    else:
+        bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
+                                   weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, binder=binder)
     horizon = max(arrivals[k] + n_exec[k] for k in caps)
     request_steps = EP.request_steps_of_record(epr, arrivals)
     executed_steps = request_steps
@@ -632,16 +636,13 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         request_steps = {k: list(range(int(arrivals[k]), int(arrivals[k]) + int(caps[k]))) for k in caps}
         horizon = max(arrivals[k] + caps[k] for k in caps)
     workload = {"program_digest": pd, "requests": sorted(caps, key=lambda k: int(k[1:])), "steps": horizon, "ranks": [0], "request_steps": request_steps}
-    pop_struct = list(B.expected_population(structure, workload))
     man_hdr = None
     comp = None
     if getattr(args, "required_manifest", None):
-        # lane manifest's Program x query manifest is the population of record; the structural population is recorded beside it
+        # lane manifest's Program x query manifest is the population of record
         pop, man_hdr = B.load_required_manifest(args.required_manifest, pd, requests=workload["requests"], steps=horizon, ranks=[0], arrivals=arrivals,
                                                 request_steps=request_steps)
-        man_hdr["structural_population_digest"], man_hdr["structural_population_n"] = B.population_digest(pop_struct)
         man_hdr["schedule"] = schedule
-        man_hdr["structural_coverage_ok"] = B.coverage_check(pop_struct, bmap)["ok"]
         man_hdr["root_program_digest"] = root_pd
         man_hdr["build_program_digest"] = getattr(args, "program_digest", None)
         # [R15 B8] declared per-step composition vs the map's partition.  The EXECUTED steps of record go in (not the padded population's
@@ -649,7 +650,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         # inside the prefix / an executed block past the stop (B9.1 / F-r17b-66); on a plain map they are the same dict
         comp = B.composition_check(man_hdr, bmap, request_steps=executed_steps)
     else:
-        pop = pop_struct
+        pop = list(B.expected_population(structure, workload))
     pop_digest, pop_n = B.population_digest(pop)
     cov = B.coverage_check(pop, bmap)
     cov["schedule"] = schedule
@@ -1117,6 +1118,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
         from verity_vllm.query.manifest.format import coverage_check as manifest_coverage_check
+        from verity_vllm.commit.bind import source_ports
         from verity_vllm.commit.partition import require_partition
         required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
         print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
@@ -1380,7 +1382,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 _mods = dict(com.model.named_modules())
                 _absent = sorted(c for c in _pia["consumers"] if c not in _mods)
                 com.acquire_inputs = dict(_pia["consumers"])
-                com.promoted_input_bindings = dict(_pia["names"])       # read by the binding-map build (name -> the producer identity it binds)
                 print(f"[delta] acquisition extended by the manifest (promoted members): {len(_pia['names'])} consumer input(s) "
                       f"{sorted(_pia['names'])} bind {sorted(v[0] + '/' + v[1] for v in _pia['names'].values())} "
                       f"({sum(p['rows_n'] for p in _pia['producers'].values())} promoted manifest rows; "
@@ -2011,7 +2012,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                   f"(by family {_ne_class['by_family']}; manifest of record untouched: {_ids_all_n} identities, digest {str(required_manifest.get('manifest_digest'))[:16]}), "
                                   f"composition members dropped {_es_r['members_dropped']} over {_es_r['steps_changed']} steps, steps not executed {_es_r['steps_dropped']}", flush=True)
                     try:
-                        cov = manifest_coverage_check(_man_cov, lay, request_id=None, rank=0)
+                        cov = manifest_coverage_check(_man_cov, lay, request_id=None, rank=0, ports=source_ports(getattr(com, "sources", []) or []))
                     except Exception as e:  # noqa: BLE001  -- fail closed, keep the bind record (e.g. B>1 global manifests with `step: "*"` rows)
                         cov = {"ok": False, "error": repr(e)[:300], "checked": 0, "missing_n": -1, "missing_by_family": {}, "families_missing_entirely": [],
                                "committed_unmatched_n": -1, "manifest_source": str(args.required_manifest)}

@@ -7,6 +7,7 @@ import json
 import types
 
 import pytest
+from verity_vllm.commit.bind import Binder
 from verity_vllm.query.units import ValueRef
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import router_softmax as RS
@@ -109,7 +110,8 @@ def test_the_family_is_in_every_vocabulary():
     assert RS.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[RS.FAMILY] == "router_tap" and RS.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     entry = {"identity": {"op_path": "moe/L1", "output_member": RS.MEMBER}, "name": f"moe/L1/{RS.MEMBER}"}
     assert OC._family_of(entry) == "hidden_stream", "the Match record holds no value for the router's softmax: form (B) never compares it"
-    assert fmt.committed_identity(f"moe/L1/{RS.MEMBER}") == ("moe/L1", RS.MEMBER)
+    row = {"family": RS.FAMILY, "op_path": "moe/L1", "output_member": RS.MEMBER, "step": 0}
+    assert Binder([row]).bind(0, [f"moe/L1/{RS.MEMBER}"]) == [("moe/L1", RS.MEMBER, 0, "label")]
 
 
 def test_the_plan_anchors_the_tap_on_the_moe_module():

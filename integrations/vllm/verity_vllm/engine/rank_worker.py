@@ -997,9 +997,10 @@ class TP2CaptureWorkerExtension:
 
     def _tp2_binding(self, rc: Any) -> dict[str, Any] | None:
         """[R14 TP-03 x BIND-01] THIS rank's binding map (bind's `verity_vllm.commit.binding`: identity -> commitment location, fixed at
-        finalize before any challenge) and its coverage against the rank's EXPECTED population = model structure x workload steps x this
-        rank, where every collective-issuing module additionally requires its rank-local member `part_rank<r>` / `shard_rank<r>` (the TP
-        partial source's sites).  The population is structural (install-time module set + site set), never read from what was emitted."""
+        finalize before any challenge) and its coverage against the rank's required manifest, whose rows the committed tensors are bound to
+        (`verity_vllm.commit.bind`).  Without a manifest: the EXPECTED population = model structure x workload steps x this rank, where every
+        collective-issuing module additionally requires its rank-local member `part_rank<r>` / `shard_rank<r>` (the TP partial source's
+        sites), never read from what was emitted."""
         st = self._tp2_commit
         pd = st.get("program_digest")
         if not pd:
@@ -1007,6 +1008,7 @@ class TP2CaptureWorkerExtension:
         n_req = int(st.get("n_requests") or 1)
         try:
             from verity_vllm.commit import binding as bd
+            from verity_vllm.commit.bind import Binder, source_ports
         except Exception as e:  # noqa: BLE001
             return {"skipped": f"binding module unavailable: {e!r}"}
         com, rank = st["com"], int(st["rank"])
@@ -1018,7 +1020,11 @@ class TP2CaptureWorkerExtension:
         if n_req > 1 and not step_rows:
             return {"skipped": f"B={n_req} > 1 but the rank's collector recorded no step_rows ({getattr(com, 'step_rows_why', None)}) -- no coverage verdict"}
         try:
-            bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows, name_bindings=bd.source_name_bindings(com.sources),
+            requests = [f"r{i}" for i in range(n_req)]
+            arrivals = {f"r{i}": int((st.get("arrivals") or {}).get(f"r{i}", 0)) for i in range(n_req)}
+            man_doc = st.get("manifest_doc") if st.get("required_manifest") else None
+            binder = Binder.of_manifest(man_doc, rank=rank, ports=source_ports(com.sources), arrivals=arrivals) if man_doc else None
+            bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows, binder=binder,
                                         collector={"committer": com.name, "layout": "chunk-leaf-v1", "retain": getattr(com, "retain", None), "windowed": bool(getattr(com, "windowed", False))})
             struct = bd.structure_of(com)
             tps = st.get("tps")
@@ -1038,8 +1044,6 @@ class TP2CaptureWorkerExtension:
                         struct["modules"].append({"op_path": site, "class": cls, "invocations": 1, "members": [mem]})
                     tp_members += 1
                 struct["tp_partial_sites"] = len(tps.sites)
-            requests = [f"r{i}" for i in range(n_req)]
-            arrivals = {f"r{i}": int((st.get("arrivals") or {}).get(f"r{i}", 0)) for i in range(n_req)}
             caps = {f"r{i}": int((st.get("caps") or {}).get(f"r{i}", 0)) for i in range(n_req)}
             horizon = max(arrivals[k] + caps[k] for k in caps) if any(caps.values()) else len(rc.steps)
             wl = {"program_digest": pd, "requests": requests, "steps": horizon, "ranks": [rank],
@@ -1051,12 +1055,10 @@ class TP2CaptureWorkerExtension:
             source = "structure(model modules x MEMBER_RULES + TP partial sites) x workload(requests, steps, rank)"
             if st.get("required_manifest"):
                 # [R15 TP-04] population of record = manbind's Program x canonical query manifest for THIS rank (rows with rank=r; the
-                # manifest's per-rank Program digest already checked at make); the structural population is recorded beside it
+                # manifest's per-rank Program digest already checked at make)
                 pop_all, man_hdr = bd.load_required_manifest(st["required_manifest"], pd, requests=requests, steps=horizon, ranks=[rank], arrivals=arrivals)
                 pop = [i for i in pop_all if int(i[7]) == rank]          # identity = (pd, rid, step, inv, op, member, (lo, hi), rank)
                 man_hdr["rows_for_rank"], man_hdr["rows_all_ranks"] = len(pop), len(pop_all)
-                man_hdr["structural_population_digest"], man_hdr["structural_population_n"] = bd.population_digest(pop_struct)
-                man_hdr["structural_coverage_ok"] = bd.coverage_check(pop_struct, bmap)["ok"]
                 man_hdr["program_digest_for_rank"] = ((st.get("manifest_doc") or {}).get("program_digest_per_rank") or {}).get(str(rank))
                 source = "required-manifest (manbind: Program(rank) x canonical query, rows with rank=r)"
                 if not pop:

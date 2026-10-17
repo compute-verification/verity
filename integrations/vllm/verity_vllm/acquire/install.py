@@ -202,8 +202,8 @@ def _values_at(plan: AcquisitionPlan | Mapping[str, Any], site: Site) -> list[st
 
 def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str, Any]) -> dict[str, Any]:
     """The committer's selection from the plan (`plan_selection`): `_modules` = the producer_output sites' modules
-    (runtime order), `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token,
-    `promoted_input_bindings`) stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.
+    (runtime order), `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token)
+    stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.
     A VERITY_SKIP ablation (`committer.skip_classes`) is applied to THIS selection (`apply_skip`, refused by name when it cannot be); the
     record names the dropped modules and the Values left unacquired.  Returns a record."""
     hooks, deferred, _unsupported = _sites_of(plan)

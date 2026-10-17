@@ -562,31 +562,16 @@ def manifest_digest(identities: list[dict[str, Any]]) -> str:
     return h.hexdigest()
 
 
-def committed_identity(name: str) -> tuple[str, str] | None:
-    """Committed tensor name -> (op_path, output_member) in the manifest vocabulary; None for extra committed data that binds no required
-    identity (`/row4_f32` regenerate baselines)."""
-    if name.startswith(("fa2.m1/", "fa3.m1/")):
-        tap, rest = name.split("/", 1)
-        layer, geo = rest.split("/", 1)
-        return f"{tap}/{layer}", geo
-    if name.startswith("moe/"):
-        _m, layer, plane = name.split("/", 2)
-        return f"moe/{layer}", plane
-    if name.endswith("/row4_f32"):
-        return None
-    if "/" not in name:
-        return name, "out"
-    base, member = name.rsplit("/", 1)
-    return base, member
-
-
 def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[str, Any]]], *, request_id: str | int | None = None,
-                   rank: int = 0, max_report: int = 12) -> dict[str, Any]:
-    """Every manifest identity of (`request_id`, `rank`) must have a committed tensor of the same (step, op_path, output_member,
-    invocation) whose element range CONTAINS the manifest's; `layouts` = {step: [{"name", "numel"|"shape", ...} in layout order]}.
-    Reports missing identities (by family / step), and the committed extras (allowed).  Identity coverage only -- value correspondence
-    is bind's separate check."""
+                   rank: int = 0, max_report: int = 12, ports: Any = None) -> dict[str, Any]:
+    """Every manifest identity of (`request_id`, `rank`) must have a committed tensor bound to the same (step, op_path, output_member,
+    invocation) whose element range CONTAINS the manifest's; `layouts` = {step: [{"name", "numel"|"shape", ...} in layout order]}, each
+    name bound by the manifest's binder (`verity_vllm.commit.bind`, with the committing sources' declared `ports`).  Reports missing
+    identities (by family / step), and the committed extras (allowed).  Identity coverage only -- value correspondence is bind's separate
+    check."""
     from collections import Counter
+
+    from verity_vllm.commit.bind import Binder
 
     if manifest.get("complete") is False:                                        # [MAN-02] an incomplete manifest never yields coverage
         um = manifest.get("unmodelled") or {}
@@ -595,34 +580,14 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
                 "manifest_digest": manifest.get("manifest_digest"), "checked": n, "missing_n": n, "missing_by_family": {"(unmodelled)": n},
                 "checked_by_family": {}, "families_missing_entirely": sorted(um), "steps_with_missing": [], "missing": [],
                 "committed_unmatched_n": 0, "committed_unmatched": [], "committed_extras_n": 0, "duplicate_names_n": 0, "steps_committed": [], "unmodelled": um}
-    aliases = manifest.get("op_path_aliases") or {}
-    # [R19 int-20] a PROMOTED identity (producer module, `out`) is committed under its first consumer's input name (`<consumer>/in`,
-    # PROMOTED_OBSERVATION_RULE): that name binds the producer identity here; a committed tensor named for the producer module itself (its
-    # forward output -- by definition NOT the promoted value) binds nothing and is counted under `promoted_misbound`
-    promoted_keys = {(str(r["op_path"]), str(r["output_member"])) for r in manifest.get("identities") or [] if r.get("promoted")}
-    rebind: dict[str, tuple[str, str]] = {}
-    if promoted_keys:
-        rebind = {k: (v[0], v[1]) for k, v in promoted_observation(manifest)["names"].items()}
-    misbound: list[str] = []
+    binder = Binder.of_manifest(manifest, rank=rank, ports=ports)
     have: dict[tuple, list[int]] = {}
     extras = 0
     for step, metas in layouts.items():
-        seen: Counter = Counter()
-        for m in metas:
-            ident = rebind.get(m["name"]) or committed_identity(m["name"])
-            if ident is None:
+        for m, (op, member, inv, how) in zip(metas, binder.bind(int(step), [m["name"] for m in metas])):
+            if how == "unbound":
                 extras += 1
                 continue
-            if ident in promoted_keys and m["name"] not in rebind:
-                misbound.append(m["name"])
-                extras += 1
-                continue
-            op, member = ident
-            if op in aliases:                                  # a collector that names the shared module per layer -> canonical path + invocation
-                op, inv = aliases[op][0], int(aliases[op][1])
-            else:
-                inv = seen[(op, member)]
-                seen[(op, member)] += 1
             numel = m.get("numel")
             if numel is None:
                 numel = 1
@@ -704,8 +669,7 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
             "missing": missing[:max_report], "committed_unmatched_n": len(unexpected), "committed_unmatched": [list(k) for k in unexpected[:max_report]],
             "committed_extras_n": extras, "duplicate_names_n": len(dup), "steps_committed": sorted(int(s) for s in layouts),
             "composition_mismatch_n": len(composition), "composition_mismatch": composition[:max_report],
-            **({"promoted_observed_as": dict(sorted((k, list(v)) for k, v in rebind.items())), "promoted_misbound_n": len(misbound),
-                "promoted_misbound": sorted(set(misbound))[:max_report]} if promoted_keys else {})}
+            **({"promoted_observed_as": dict(sorted((k, list(v)) for k, v in binder.rebind.items()))} if binder.rebind else {})}
 
 
 def programs_for(fx: dict[str, Any], programs_root: str) -> dict[str, Any]:

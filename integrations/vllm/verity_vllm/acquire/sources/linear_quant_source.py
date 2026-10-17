@@ -15,12 +15,15 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from verity_vllm.acquire.sources.allreduce_norm import _flush
+from verity_vllm.commit.bind import Port
 from verity_vllm.engine import hooks
 
 GROUP_QUANT_OP = "per_token_group_fp8_quant"
 GROUP = 128
 MEMBERS = ("x_q", "x_s")
 FAMILY = "DeepGemmFp8Linear_v1"
+#: `bind.Binder`'s declared labels: the quant branch is the Definition's ports 0 / 1 (y, port 2, is the hook's slot 0)
+PORTS = {m: Port(frozenset({FAMILY}), str(i)) for i, m in enumerate(MEMBERS)}
 
 
 def sites(model: Any) -> list[str]:
@@ -125,6 +128,9 @@ class LinearQuantSource:
     def declaration_classes(self) -> list[dict]:
         return []
 
+    def ports(self) -> dict[str, Port]:
+        return PORTS
+
 
 def attach(com: Any, model: Any, manifest: Mapping[str, Any] | None) -> LinearQuantSource | None:
     """Attach the source to `com` when the rank's manifest rows name a `DeepGemmFp8Linear_v1` Call; None otherwise."""
@@ -135,4 +141,4 @@ def attach(com: Any, model: Any, manifest: Mapping[str, Any] | None) -> LinearQu
     return src
 
 
-__all__ = ["LinearQuantSource", "sites", "manifest_names_it", "attach", "MEMBERS", "FAMILY", "GROUP_QUANT_OP"]
+__all__ = ["LinearQuantSource", "sites", "manifest_names_it", "attach", "MEMBERS", "FAMILY", "PORTS", "GROUP_QUANT_OP"]

@@ -7,14 +7,14 @@
     module_body    `Q_module_body_v1(P, correspondence)`: units = module bodies; `module_body_boundary` = its crossing Values minus
                    the Program's literals (Calls that read no Value: the descriptor's, never acquired)
     required       required values under the query of record (Q_word v1: every Call boundary; Q_module_body_v1 for A/B) spelt as v1
-                   IDENTITY_KEY rows (+ the named residuals); the partition of record (`partition_of`)
+                   IDENTITY_KEY rows; the partition of record (`partition_of`)
     compare        identity-set comparison against a v1 manifest, every difference classified
     (the CLI)      `verity-vllm manifest build|build-global ... --out manifest.json`
 
 Nothing in this package names a model or decides a member by a module-name or Definition-family table
 (`tests/program/test_lint.py` holds that): what a Call produces comes from its Definition's output signature, where it lives from the
-recorded correspondence, what crosses from the Program's own dataflow.  What v1 named that the structure cannot is a *named residual*
-on the output, never a rule.
+recorded correspondence, what crosses from the Program's own dataflow.  The committed tensors are bound to those identities by
+structure (`verity_vllm.commit.bind`), never by respelling an identity as a tap names it.
 
 Gate (Phase 2): the per-row records are `tests/query/gate/row<N>_*.json`; the narrative (rows table, the #57 / #60 / #67 differences
 explained, the named-residual table, the v1 by-name tables this path does not use) lives in Notion, "v2 query gate -- Q_module_body_v1

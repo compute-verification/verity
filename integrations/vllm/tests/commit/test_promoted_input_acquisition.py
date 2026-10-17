@@ -17,6 +17,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm.commit import binding as B  # noqa: E402
+from verity_vllm.commit.bind import Binder  # noqa: E402
 from verity_vllm.query.manifest import format as RM  # noqa: E402
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta, _StepJob, _dtype_name  # noqa: E402
 
@@ -96,15 +97,14 @@ def _manifest(consumers: list[str], *, spec: str = "Bf16MulScalarTensor_v1", ext
 
 
 def _cpu_committer(model, *, acquire_classes: set[str], manifest: dict) -> tuple[NativeHostCommitter, dict]:
-    """The committer armed the way `commit_delta` arms it from the manifest (binding.promoted_input_acquisition -> acquire_inputs /
-    promoted_input_bindings), on a CPU model: the worker thread and the CUDA arena are not started (the packed commit is driven directly)."""
+    """The committer armed the way `commit_delta` arms it from the manifest (binding.promoted_input_acquisition -> acquire_inputs), on a
+    CPU model: the worker thread and the CUDA arena are not started (the packed commit is driven directly)."""
     c = NativeHostCommitter(_Engine(model), chunk=4096, hash_threads=1, program_digest=bytes.fromhex(PD), acquire_classes=acquire_classes,
                             staging="direct", retain_values=False, geo_digest=hashlib.sha256(b"geo").digest())
     c._start_worker = lambda: None                                             # the worker hashes CUDA jobs; the test commits its step itself
     pia = B.promoted_input_acquisition(manifest)
     assert pia["problems"] == [], pia["problems"]
     c.acquire_inputs = dict(pia["consumers"])
-    c.promoted_input_bindings = dict(pia["names"])
     return c, pia
 
 
@@ -229,7 +229,7 @@ def test_a_value_produced_in_the_parents_forward_body_is_acquired_at_the_childs_
     assert [n for n, _m in c._input_only_modules()] == ([] if consumer_is_acquire_class else ["model.norm"])
     assert c.x03_expected == c.x03_committed == len(names) and c.errors == []
     # the binding map: `<consumer>/in` binds the PRODUCER's identity (model, out), says so, keeps the committed name
-    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk, name_bindings=c.promoted_input_bindings)
+    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk, binder=Binder.of_manifest(man))
     by_name = {e["name"]: e for e in bmap["entries"] if e["kind"] == "leaf"}
     e = by_name["model.norm/in"]
     assert (e["identity"]["op_path"], e["identity"]["output_member"]) == ("model", "out") and e["observation"] == "consumer-input"
@@ -252,21 +252,21 @@ def test_a_value_produced_in_the_parents_forward_body_is_acquired_at_the_childs_
         assert c.verify(run, op), op
 
 
-def test_without_the_name_binding_the_promoted_identity_is_unbound_by_name_and_the_consumer_input_is_an_extra():
+def test_without_the_manifests_binder_the_promoted_identity_is_unbound_by_name_and_the_consumer_input_is_an_extra():
     """The negative the rule closes: the same collector, the same committed tensor, but a map that does not know the manifest's promoted
     rows binds `<child>/in` to its own name (child, in) -- coverage names the promoted identity missing (fail closed), never covered by the
     stray `/in`."""
     model = _Model()
     man = _manifest(["model.norm"])
     c, _pia, run, _vals = _run_one_step(model, acquire_classes={"_Embed"}, manifest=man)
-    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk)          # no name_bindings
+    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk)          # no binder
     pop = [B.identity(PD, "r0", 0, 0, r["op_path"], r["output_member"], 0, r["element_range"][1]) for r in man["identities"]]
     cov = B.coverage_check(pop, bmap)
     assert not cov["ok"] and cov["missing_n"] == 1 and cov["missing"][0]["op_path"] == "model" and cov["missing"][0]["output_member"] == "out", cov
     assert ["r0", 0, 0, "model.norm", "in", 0] in cov["extra"]
     # two maps of the same layouts differ ONLY by the binding (same leaves, same roots): the identity is a statement of the map, fixed
     # before the challenge, and its digest changes with it
-    bmap2 = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk, name_bindings={"model.norm/in": ("model", "out")})
+    bmap2 = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk, binder=Binder.of_manifest(man))
     assert bmap2["digest"] != bmap["digest"] and bmap2["run_root"] == bmap["run_root"]
 
 
@@ -278,7 +278,7 @@ def test_a_consumer_that_is_not_a_module_of_the_built_model_leaves_the_identity_
     c, pia, run, _vals = _run_one_step(model, acquire_classes={"_Embed"}, manifest=man)
     assert pia["consumers"] == {"model.layers.0.input_layernorm": H * 2}
     assert c._input_only_modules() == [] and [m.name for m in c._layouts[0]] == ["model.embed_tokens"]
-    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk, name_bindings=c.promoted_input_bindings)
+    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk, binder=Binder.of_manifest(man))
     pop = [B.identity(PD, "r0", 0, 0, r["op_path"], r["output_member"], 0, r["element_range"][1]) for r in man["identities"]]
     cov = B.coverage_check(pop, bmap)
     assert not cov["ok"] and cov["missing_n"] == 1 and cov["missing"][0]["op_path"] == "model"
@@ -291,7 +291,7 @@ def test_batched_requests_split_the_consumer_input_by_token_rows_like_any_per_to
     man = _manifest(["model.norm"])
     c, _pia, run, vals = _run_one_step(model, acquire_classes={"_Embed"}, manifest=man)
     rows = {0: [("r0", 0, 2), ("r1", 2, TOKENS)]}
-    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_rows=rows, rank=0, chunk=c.chunk, name_bindings=c.promoted_input_bindings)
+    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_rows=rows, rank=0, chunk=c.chunk, binder=Binder.of_manifest(man))
     ents = sorted((e for e in bmap["entries"] if e["name"] == "model.norm/in"), key=lambda e: e["identity"]["request_id"])
     assert [(e["identity"]["request_id"], e["identity"]["element_range"], e["element_offset"]) for e in ents] == [("r0", [0, 2 * H], 0), ("r1", [0, (TOKENS - 2) * H], 2 * H)]
     assert all(e["identity"]["op_path"] == "model" and e["identity"]["output_member"] == "out" for e in ents)
