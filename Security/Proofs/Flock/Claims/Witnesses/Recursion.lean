@@ -19,7 +19,10 @@ Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy r
   every coin, above the expected bound `N_I · (1 + m′·k) = 2`. The worst-case conjunct holds at every record (each
   wait reruns at most `K`); the expected one also needs a session's view to accept wherever the run does, which the
   record's `session` doesn't promise.
-* `ZK_fails`, `ZKPriv_fails`: at an outer Flock without `--zk`.
+* `zkR` (`zkPR` with a circuit commitment): the compiled verifier takes one round, and every statement parses, under
+  an inner protocol of no rounds (`zeroI`), with no staging rounds and no V* session, so `Sim` outputs the empty
+  transcript. `ZK_fails`, `ZKPriv_fails`: at a masked outer Flock, every outer simulator and every hiding level (all
+  masks hide up to `δ₁ = 1`), the quiet prover's one message is never simulated, at an error of `0`.
 * `Inner.KS_fails`, `Inner.KSAbort_fails`: at `noI`, an inner protocol that accepts and whose relation is empty, with
   no abort.
 -/
@@ -27,6 +30,7 @@ Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy r
 namespace Claims.Witness.Recursion
 
 open Claims Claims.Recursion
+open scoped ENNReal NNReal
 
 /-! ## The toy records -/
 
@@ -90,6 +94,21 @@ noncomputable def nums1 : Nums := ⟨0, Real.exp 1 / 4, 0, 0, 1, 2, 0, 0⟩
 /-- The toy record of `Efficient`: the run always accepts, and its one V* session's view never does. -/
 noncomputable def effR (Coin : Type) : Recursion.Deploy Coin :=
   { ksR Coin with nS := fun _ => 1, session := fun _ _ _ => ⟨[], .rej⟩, nums := fun _ _ => nums1 }
+
+/-- An inner protocol of no rounds, whose relation and scope hold everywhere. -/
+noncomputable def zeroI (Coin : Type) : Recursion.Inner Coin Flock.Wit :=
+  { accI Coin with V := ⟨fun _ => 0, fun _ _ _ => .ret .acc⟩ }
+
+/-- The toy record of `ZK`: the compiled verifier takes one round, every statement parses as `recStmt`, and there are
+no staging rounds and no V* session. -/
+def zkR (Coin : Type) : Recursion.Deploy Coin := { ksR Coin with parse := fun _ => some recStmt }
+
+/-- `zkR` with a circuit commitment in every statement. -/
+def zkPR (Coin : Type) : Recursion.Deploy Coin :=
+  { ksR Coin with parse := fun _ => some { recStmt with circ := some [] } }
+
+/-- A masked outer Flock. -/
+noncomputable def zkO (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit := { Flock.ksD Coin with zk := true }
 
 theorem recStmt_inScope : Recursion.InScope recStmt := by
   have hp : pLog 6 ≤ 14 := by unfold pLog; have := Nat.log_le_self 2 (2 * 6 + 1); omega
@@ -337,6 +356,49 @@ theorem effR_EO_reruns (H : Msg → Msg) (decO : List (ℕ × Unit) → List Uni
 
 end Efficient
 
+/-! ## `zkR`'s simulator -/
+
+section Sim
+
+theorem prENNReal_le_one {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : PrENNReal p ≤ 1 := by
+  classical
+  unfold PrENNReal
+  have hn : (Fintype.card α : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
+  calc (∑ a, (Fintype.card α : ℝ≥0∞)⁻¹ * if p a then 1 else 0)
+        ≤ ∑ _a : α, (Fintype.card α : ℝ≥0∞)⁻¹ :=
+        Finset.sum_le_sum fun a _ => by split_ifs <;> simp
+    _ = 1 := by
+        rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, ENNReal.mul_inv_cancel hn (ENNReal.natCast_ne_top _)]
+
+/-- Every mask hides up to `δ₁ = 1`. -/
+theorem hm96Hiding_one {Y B C : Type} [Fintype Y] [Nonempty Y] [Fintype B] (My : Y → B) (c : Y → C) :
+    Hm96Hiding My c 1 := fun _ => (prENNReal_le_one _).trans le_add_self
+
+variable {Coin : Type}
+
+theorem simOuter_zero (SO : Msg → ℕ → OSim) (x : Msg) (xs : List Msg) (ms : List (Msg × Out)) :
+    ∀ (n : ℕ) (c : (s : Fin n) → (SO x s).C), n = 0 → simOuter SO x xs c (List.finRange n) ms = .ret ms := by
+  rintro n c rfl
+  rfl
+
+/-- `Sim` outputs the empty transcript wherever the inner protocol, the staging and the V* sessions take no round. -/
+theorem sim_out_nil (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0) (SO : Msg → ℕ → OSim)
+    {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (c : (Sim D (zeroI Coin) SO).C []) :
+    (Sim D (zeroI Coin) SO).out H Vs θ [] c = [] := by
+  unfold Simulator.out Sim
+  simp only [simInner, zeroI, accI, simRounds, spBind, hk]
+  rw [simOuter_zero SO [] _ [] _ c.2 hn]
+  rfl
+
+theorem zk_εzk (D : Recursion.Deploy Coin) (hn : D.nS [] = 0) (t : ℕ) (δ₁ : ℝ) :
+    Recursion.εzk D (zeroI Coin) t δ₁ [] = 0 := by
+  have : IsEmpty (Fin (D.nS [])) := by rw [hn]; exact Fin.isEmpty'
+  unfold Recursion.εzk
+  rw [Finset.univ_eq_empty, Finset.sum_empty]
+  simp [zeroI]
+
+end Sim
+
 /-! ## The claims -/
 
 section Claims
@@ -427,16 +489,26 @@ theorem Nontrivial_fails (H : Msg → Msg) : ¬ Recursion.Nontrivial H (compR Co
   fun h => Witness.Nontrivial_fails H h.1
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The recursion's `ZK` fails** at an outer Flock without `--zk`, at every prover and outer simulator. -/
+/-- **The recursion's `ZK` fails** at a masked outer Flock, at the quiet prover and every outer simulator, whatever
+hm96 hides: `zkR`'s compiled verifier takes a round that `Sim` doesn't simulate, as the inner protocol, the staging and
+the V* sessions take none, so the real transcript is never the simulated one, at an error of `0`. -/
 theorem ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
-    (P : Flock.Wit → Prover (N × Ω)) (SO : ℕ → Msg → ℕ → OSim) :
-    ¬ Recursion.ZK H (ksR Coin) (accI Coin) (Flock.ksD Coin) P SO := fun h => Bool.false_ne_true h.1
+    (SO : ℕ → Msg → ℕ → OSim) :
+    ¬ Recursion.ZK H (zkR Coin) (zeroI Coin) (zkO Coin) (fun _ => ZKMal.quietP N Ω []) SO := fun h =>
+  ZKMal.not_zkmalR_of_out H _ _ [] _ _ _ [] ⟨[]⟩ ⟨recStmt, rfl, rfl, trivial⟩ Nat.one_pos
+    (by rw [zk_εzk _ rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
+    (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The recursion's private `ZK` fails** at an outer Flock without `--zk`, at every prover and outer simulator. -/
+/-- **The recursion's private `ZK` fails** at a masked outer Flock, at the quiet prover and every outer simulator,
+whatever hm96 hides, as `ZK` does, at `zkPR`. -/
 theorem ZKPriv_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
-    (P : Flock.Wit → Prover (N × Ω)) (SO : ℕ → Msg → ℕ → OSim) :
-    ¬ ZKPriv H (ksR Coin) (accI Coin) (Flock.ksD Coin) P SO := fun h => Bool.false_ne_true h.1
+    (SO : ℕ → Msg → ℕ → OSim) :
+    ¬ ZKPriv H (zkPR Coin) (zeroI Coin) (zkO Coin) (fun _ => ZKMal.quietP N Ω []) SO := fun h =>
+  ZKMal.not_zkmalR_of_out H _ _ [] _ _ _ [] ⟨[]⟩ ⟨{ recStmt with circ := some [] }, rfl, rfl, trivial⟩
+    Nat.one_pos
+    (by rw [zk_εzk _ rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
+    (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
 
 /-- **The inner protocol's `KS` fails** at `noI`, which accepts and whose relation is empty. -/
 theorem Inner.KS_fails (H : Msg → Msg) : ¬ (noI Coin).KS H :=
