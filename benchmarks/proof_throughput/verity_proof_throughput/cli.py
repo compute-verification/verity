@@ -199,10 +199,10 @@ def cmd_point_result(a) -> int:
                    gpu_peak_mib=max(mem) if mem else None, lean=timed if lean else None,
                    evidence=[p for p in ("out/results.jsonl", "out/lean.jsonl", "out/index.jsonl") if (d / Path(p).name).exists()],
                    **extra)
-    if lean and len(timed) < len(lean) and not all(v.get("accepted") for v in lean):
+    if lean and len(timed) < len(lean) and not all(RS.lean_passed(v) for v in lean):
         doc["validation"] = {**doc["validation"], "status": "failed",
                              "detail": "a warm session was rejected by the Lean verifier: " +
-                                       "; ".join(f"{v['session']}: {v.get('why')}" for v in lean if not v.get("accepted"))[:800]}
+                                       "; ".join(f"{v['session']}: {v.get('why')}" for v in lean if not RS.lean_passed(v))[:800]}
     rounds = [r["rounds"] for r in idx if isinstance(r.get("rounds"), (int, float))]
     if rounds and doc["validation"]["status"] != "failed":
         doc["measurements"].append({"name": "rounds.protocol", "value": max(rounds), "unit": "count"})

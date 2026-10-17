@@ -4,6 +4,7 @@ import json
 from verity_numerical.bench import contract
 
 from verity_proof_throughput import cli
+from verity_proof_throughput import result as RS
 
 VERDICT = {"session": "l0001-77", "accepted": True, "why": "accepted", "rounds": 61}
 ERR = "inputs: 812 ms\nsetup: 2304 ms\n/tmp/b/sessions/l0001-77: 5120 ms\n"
@@ -63,6 +64,12 @@ def test_point_result_on_the_prover_then_the_verifier(tmp_path, record, hardware
     assert names["verifier.seconds"] == 5.0   # the timed sessions l0001..l0003; l0000 was the warm one
     fp = doc["workload_fingerprint"]
     assert fp["software"]["verifier"]["sha256"] == "f" * 64 and fp["prove_run"] == "rP" and fp["bundle"] == "art:b"
+
+    drawless = [{"session": f"l000{i}-1", "accepted": False, "why": RS.DRAWLESS, "wall_s": 3.0, "cpu_s": 2.0} for i in range(4)]
+    lean.write_text("".join(json.dumps(v) + "\n" for v in drawless))
+    cli.main(["point-result", "--workload", "bf16-k6144", "--B", "16", "--dir", str(tmp_path), "--lean", str(lean), "--out", str(out)])
+    doc = json.loads(out.read_text())
+    assert doc["validation"]["status"] == "passed" and "refused only for having no draw" in doc["validation"]["detail"]
 
     lean.write_text(json.dumps({"session": "l0000-1", "accepted": False, "why": "bad"}) + "\n" + lean.read_text().split("\n", 1)[1])
     cli.main(["point-result", "--workload", "bf16-k6144", "--B", "16", "--dir", str(tmp_path), "--lean", str(lean), "--out", str(out)])
