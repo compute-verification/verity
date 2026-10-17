@@ -498,18 +498,17 @@ end Proto
 up**: `Claims.Flock.ZKAt` at `P_zk = G.prover` and `S_GK = (G.withSim Mc).simulatorE t (t·3^t)`, at
 `ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`, for a committed-coin protocol whose coins are the deployed
 verifier's, under `Claims.Hm96Hiding` at the pinned key and three named hypotheses: `TMsgLink`, `TablesOK` and
-`CoinCheck`. -/
-theorem Flock.zk_deployZk_of_tables (H : Msg → Msg)
+`Binding`. -/
+theorem Flock.zk_deployZk_of_tables_bind (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
     (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (Mp : ∀ x, G.Nonce → G.TPreModel x)
     (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Msg → ℕ)
     (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
-    (hC : G.CoinCheck) :
+    (hC : G.Binding H) :
     Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
       (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
-  obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := hC
   have hA : ∀ x w, Flock.R (FlockDeploy.deployZk rel).parse x w → ∀ (ν : G.Nonce)
       (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1)) (E : (Fin (G.K x + 1) → Msg) → Prop),
       |Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.msg x w ν)) V r)) -
@@ -522,9 +521,21 @@ theorem Flock.zk_deployZk_of_tables (H : Msg → Msg)
           have : ((Mp x ν).size : ℝ) ≤ nL x := by exact_mod_cast hnL x ν
           gcongr
   rw [← G.withSim_prover Mc]
-  exact Flock.zkR_gkE_hm96_deployZk H rel (G.withSim Mc) t ht hK δ₁ nL nB hA
-    (G.withSim_shvzk H _ hT1 hδ₁ Mc nB hnB (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) Tr nb root parse pos idx n
-    depth dc hchk hdec
+  exact Flock.zkR_gkE_hm96_deployZk_bind H rel (G.withSim Mc) t ht hK δ₁ nL nB hA
+    (G.withSim_shvzk H _ hT1 hδ₁ Mc nB hnB (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) hC
+
+/-- **The same under `CoinCheck`** (`Proto.binding_of_coinCheck`). -/
+theorem Flock.zk_deployZk_of_tables (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
+    (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (Mp : ∀ x, G.Nonce → G.TPreModel x)
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Msg → ℕ)
+    (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
+    (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
+    (hC : G.CoinCheck) :
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
+  Flock.zk_deployZk_of_tables_bind H rel G t ht hK hT1 hδ₁ Mp Mc nL nB hnL hnB hL hOK (G.binding_of_coinCheck H hC)
 
 /-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): `Claims.Flock.ZKAt` at `δ₁` the statistical
 distance of `(M·y, c(y))` from `(U, c(y))` at the pinned key, under `TMsgLink`, `TablesOK` and `CoinCheck` alone. -/
