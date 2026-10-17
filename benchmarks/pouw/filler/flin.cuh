@@ -20,9 +20,10 @@
 constexpr int FLIN_BN = 128;
 // FLIN_FIT: tiles whose GEMM-only CTA (FW = 0) fits beside one pump block on its SM, so a co-scheduled pump never holds a
 // linear off (flin_cfg): ≤ 41 KB of shared memory, and registers by SMSP, since each SMSP's file is 16 K and the pump's
-// two warps there hold 8 K. A 5-warp CTA puts two warps on one SMSP, so ≤ 128 a thread (launch bounds of 4 blocks: 102);
-// M 128's 9 warps put three on one, ≤ 85, which its accumulators (64 a thread) and fragments don't leave, so it fits the
-// SM's file but not an SMSP's (r20261017-083215-99e0). FLIN_FIT=2 takes M 32 in four half stages. M > 128 keeps its tile.
+// two warps there hold 8 K. A 5-warp CTA puts two warps on one SMSP, so ≤ 128 a thread (launch bounds of 4 blocks: 102).
+// M 128 at BN 128 would need 9 warps, three on one SMSP at ≤ 85, which its accumulators (64 a thread) don't leave
+// (r20261017-083215-99e0), so it runs BN 64 tiles on 2 x 2 consumer warps, each warp the M 64 tile's 32 x 64 (the same
+// tiled W: a 64-row tile is half of a 128-row one). FLIN_FIT=2 takes M 32 in four half stages. M > 128 keeps its tile.
 #ifdef FLIN_FIT
 #define FLIN_MINB(CW) ((CW) <= 4 ? 4 : 2)
 #else
@@ -329,11 +330,11 @@ struct FlinArgs {
   int stop;  // > 0: the filler warps start no step once consumer warp 0 has `stop` or fewer of the CTA's units left
 };
 
-template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
+template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC, int BN = FLIN_BN>
 __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB(CWN * CWM) : 1) flin_k(const FlinArgs a) {
-  constexpr int BN = FLIN_BN, CW = CWN * CWM, FM = BN / CWN / 16, TN = M / CWM / 8, KC = BK / 32;
+  constexpr int CW = CWN * CWM, FM = BN / CWN / 16, TN = M / CWM / 8, KC = BK / 32;
   constexpr int WB = BN * BK, XB = M * BK, SB = WB + XB;
-  static_assert(FM >= 1 && TN >= 1 && KC % 2 == 0, "flin tile shape");
+  static_assert(FM >= 1 && TN >= 1 && KC % 2 == 0 && FLIN_BN % BN == 0 && BN % 16 == 0, "flin tile shape");
   extern __shared__ __align__(128) uint8_t sm[];
   uint64_t* full = reinterpret_cast<uint64_t*>(sm + ST * SB);
   uint64_t* empty = full + ST;
@@ -342,6 +343,10 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB
   const int warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
   const int KB = a.K / BK, U = a.N / BN * KB;
   const int u0 = (int)((long long)blockIdx.x * U / gridDim.x), u1 = (int)((long long)(blockIdx.x + 1) * U / gridDim.x);
+  // W is tiled at FLIN_BN (repack_w), whose 16-row groups are contiguous, so a BN-row tile is a run of one of its tiles
+  auto wtile = [&](int nt, int kb) {
+    return a.W + ((size_t)(nt * BN / FLIN_BN) * KB + kb) * (FLIN_BN * BK) + (size_t)(nt * BN % FLIN_BN) * BK;
+  };
   if (threadIdx.x == 0) {
     for (int s = 0; s < ST; s++) {
       mb_init(&full[s], 1);
@@ -363,7 +368,7 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB
       for (int i = 0; i < pre; i++) {
         const int u = u0 + i;
         mb_expect(&full[i], SB);
-        bulk_g2s(sm + i * SB, a.W + ((size_t)(u / KB) * KB + u % KB) * WB, WB, &full[i], pw);
+        bulk_g2s(sm + i * SB, wtile(u / KB, u % KB), WB, &full[i], pw);
       }
       asm volatile("griddepcontrol.wait;" ::: "memory");
       for (int i = 0; i < pre; i++) bulk_g2s(sm + i * SB + WB, a.X + (size_t)((u0 + i) % KB) * XB, XB, &full[i], px);
@@ -373,7 +378,7 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB
         }
         mb_expect(&full[s], SB);
         const int nt = u / KB, kb = u % KB;
-        bulk_g2s(sm + s * SB, a.W + ((size_t)nt * KB + kb) * WB, WB, &full[s], pw);
+        bulk_g2s(sm + s * SB, wtile(nt, kb), WB, &full[s], pw);
         bulk_g2s(sm + s * SB + WB, a.X + (size_t)kb * XB, XB, &full[s], px);
       }
     }
@@ -579,7 +584,7 @@ __global__ void count_nz(const int* __restrict__ p, size_t n, unsigned long long
 
 // ---------------------------------------------------------------- host side
 struct FlinCfg {
-  int BK, ST, CW;
+  int BK, ST, CW, BN = FLIN_BN;
 };
 static bool flin_m_ok(int M) { return M == 32 || M == 64 || M == 128 || M == 160 || M == 192 || M == 256; }
 // the flin tile height a batch of B rows runs at (its rows past B are computed and ignored)
@@ -588,7 +593,7 @@ static FlinCfg flin_cfg(int M) {
 #ifdef FLIN_FIT
   if (M == 32) return FLIN_FIT == 2 ? FlinCfg{64, 4, 4} : FlinCfg{128, 2, 4};
   if (M == 64) return {64, 3, 4};
-  if (M == 128) return {64, 2, 8};
+  if (M == 128) return {64, 3, 4, 64};
 #endif
   if (M == 32 || M == 64) return {128, 4, 4};
   if (M == 128) return {128, 3, 8};
@@ -596,18 +601,18 @@ static FlinCfg flin_cfg(int M) {
 }
 static int flin_smem(int M) {
   const FlinCfg c = flin_cfg(M);
-  return c.ST * (FLIN_BN + M) * c.BK + 2 * c.ST * 8 + 16;
+  return c.ST * (c.BN + M) * c.BK + 2 * c.ST * 8 + 16;
 }
 static bool g_pdl = true;  // FLIN_PDL=0 launches each linear only after the previous grid has finished
 static int g_flin_stop = 0;  // FLIN_STOP: Flin.stop (a pfill build's filler warps start no step with that few units left)
 static int g_flin_lm = 0;    // FLIN_LM=1: fstep's lm_head through flin (Flin.lm) when any linear is
-template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
+template <int M, int BK, int ST, int CWN, int CWM, int BN, int FW, int NC>
 static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
   static bool attr = false;
   if (!attr) {
-    CK(cudaFuncSetAttribute(flin_k<M, BK, ST, CWN, CWM, FW, NC>, cudaFuncAttributeMaxDynamicSharedMemorySize, flin_smem(M)));
+    CK(cudaFuncSetAttribute(flin_k<M, BK, ST, CWN, CWM, FW, NC, BN>, cudaFuncAttributeMaxDynamicSharedMemorySize, flin_smem(M)));
 #ifdef FLIN_FIT
-    CK(cudaFuncSetAttribute(flin_k<M, BK, ST, CWN, CWM, FW, NC>, cudaFuncAttributePreferredSharedMemoryCarveout,
+    CK(cudaFuncSetAttribute(flin_k<M, BK, ST, CWN, CWM, FW, NC, BN>, cudaFuncAttributePreferredSharedMemoryCarveout,
                             cudaSharedmemCarveoutMaxShared));
 #endif
     attr = true;
@@ -622,49 +627,49 @@ static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
   at[0].val.programmaticStreamSerializationAllowed = 1;
   cfg.attrs = at;
   cfg.numAttrs = g_pdl ? 1 : 0;
-  CK(cudaLaunchKernelEx(&cfg, flin_k<M, BK, ST, CWN, CWM, FW, NC>, a));
+  CK(cudaLaunchKernelEx(&cfg, flin_k<M, BK, ST, CWN, CWM, FW, NC, BN>, a));
 }
 // the (FW, NC) pairs built for each M: FW = 0 is the GEMM alone. FLIN_PUMP_ONLY (fscore.cu's FSCORE_PUMP_ONLY) builds
 // FW = 0 alone and no attention filler warps (fatt_with), so a pump-only arm's fscore holds no clone of dfill_k_warp
 // for the scorer to read as its filler.
-template <int M, int BK, int ST, int CWN, int CWM>
+template <int M, int BK, int ST, int CWN, int CWM, int BN = FLIN_BN>
 static bool flin_fw(const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st) {
   const int k = FW == 0 ? 0 : FW * 10 + NC;
-  if (k == 0) { flin_go<M, BK, ST, CWN, CWM, 0, 2>(a, grid, st); return true; }
+  if (k == 0) { flin_go<M, BK, ST, CWN, CWM, BN, 0, 2>(a, grid, st); return true; }
 #ifndef FLIN_PUMP_ONLY
   if constexpr (M == 32) {
-    if (k == 114) { flin_go<M, BK, ST, CWN, CWM, 11, 4>(a, grid, st); return true; }
+    if (k == 114) { flin_go<M, BK, ST, CWN, CWM, BN, 11, 4>(a, grid, st); return true; }
   }
   if constexpr (M <= 128) {
     switch (k) {
-      case 14: flin_go<M, BK, ST, CWN, CWM, 1, 4>(a, grid, st); return true;
-      case 24: flin_go<M, BK, ST, CWN, CWM, 2, 4>(a, grid, st); return true;
+      case 14: flin_go<M, BK, ST, CWN, CWM, BN, 1, 4>(a, grid, st); return true;
+      case 24: flin_go<M, BK, ST, CWN, CWM, BN, 2, 4>(a, grid, st); return true;
     }
   }
   if constexpr (M <= 64) {
     switch (k) {
-      case 42: flin_go<M, BK, ST, CWN, CWM, 4, 2>(a, grid, st); return true;
-      case 44: flin_go<M, BK, ST, CWN, CWM, 4, 4>(a, grid, st); return true;
-      case 82: flin_go<M, BK, ST, CWN, CWM, 8, 2>(a, grid, st); return true;
-      case 84: flin_go<M, BK, ST, CWN, CWM, 8, 4>(a, grid, st); return true;
+      case 42: flin_go<M, BK, ST, CWN, CWM, BN, 4, 2>(a, grid, st); return true;
+      case 44: flin_go<M, BK, ST, CWN, CWM, BN, 4, 4>(a, grid, st); return true;
+      case 82: flin_go<M, BK, ST, CWN, CWM, BN, 8, 2>(a, grid, st); return true;
+      case 84: flin_go<M, BK, ST, CWN, CWM, BN, 8, 4>(a, grid, st); return true;
     }
   } else if constexpr (M == 128) {
     switch (k) {
-      case 42: flin_go<M, BK, ST, CWN, CWM, 4, 2>(a, grid, st); return true;
-      case 44: flin_go<M, BK, ST, CWN, CWM, 4, 4>(a, grid, st); return true;
+      case 42: flin_go<M, BK, ST, CWN, CWM, BN, 4, 2>(a, grid, st); return true;
+      case 44: flin_go<M, BK, ST, CWN, CWM, BN, 4, 4>(a, grid, st); return true;
     }
   } else if constexpr (M < 256) {
     switch (k) {
-      case 14: flin_go<M, BK, ST, CWN, CWM, 1, 4>(a, grid, st); return true;
-      case 22: flin_go<M, BK, ST, CWN, CWM, 2, 2>(a, grid, st); return true;
-      case 24: flin_go<M, BK, ST, CWN, CWM, 2, 4>(a, grid, st); return true;
-      case 44: flin_go<M, BK, ST, CWN, CWM, 4, 4>(a, grid, st); return true;
+      case 14: flin_go<M, BK, ST, CWN, CWM, BN, 1, 4>(a, grid, st); return true;
+      case 22: flin_go<M, BK, ST, CWN, CWM, BN, 2, 2>(a, grid, st); return true;
+      case 24: flin_go<M, BK, ST, CWN, CWM, BN, 2, 4>(a, grid, st); return true;
+      case 44: flin_go<M, BK, ST, CWN, CWM, BN, 4, 4>(a, grid, st); return true;
     }
   } else {
     switch (k) {
-      case 14: flin_go<M, BK, ST, CWN, CWM, 1, 4>(a, grid, st); return true;
-      case 22: flin_go<M, BK, ST, CWN, CWM, 2, 2>(a, grid, st); return true;
-      case 24: flin_go<M, BK, ST, CWN, CWM, 2, 4>(a, grid, st); return true;
+      case 14: flin_go<M, BK, ST, CWN, CWM, BN, 1, 4>(a, grid, st); return true;
+      case 22: flin_go<M, BK, ST, CWN, CWM, BN, 2, 2>(a, grid, st); return true;
+      case 24: flin_go<M, BK, ST, CWN, CWM, BN, 2, 4>(a, grid, st); return true;
     }
   }
 #endif
@@ -675,11 +680,11 @@ static bool flin_launch(int M, const FlinArgs& a, int grid, int FW, int NC, cuda
 #if FLIN_FIT == 2
     case 32: return flin_fw<32, 64, 4, 4, 1>(a, grid, FW, NC, st);
     case 64: return flin_fw<64, 64, 3, 4, 1>(a, grid, FW, NC, st);
-    case 128: return flin_fw<128, 64, 2, 4, 2>(a, grid, FW, NC, st);
+    case 128: return flin_fw<128, 64, 3, 2, 2, 64>(a, grid, FW, NC, st);
 #elif defined(FLIN_FIT)
     case 32: return flin_fw<32, 128, 2, 4, 1>(a, grid, FW, NC, st);
     case 64: return flin_fw<64, 64, 3, 4, 1>(a, grid, FW, NC, st);
-    case 128: return flin_fw<128, 64, 2, 4, 2>(a, grid, FW, NC, st);
+    case 128: return flin_fw<128, 64, 3, 2, 2, 64>(a, grid, FW, NC, st);
 #else
     case 32: return flin_fw<32, 128, 4, 4, 1>(a, grid, FW, NC, st);
     case 64: return flin_fw<64, 128, 4, 4, 1>(a, grid, FW, NC, st);

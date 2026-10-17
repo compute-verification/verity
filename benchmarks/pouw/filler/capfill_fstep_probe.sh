@@ -46,7 +46,7 @@ bad=0
 for p in "${pids[@]}"; do wait "$p" || bad=1; done
 for b in $builds; do
   [ -x "$B/dcap_$b" ] || { echo "build $b failed"; grep -E "error" "$O/build-$b.log" | head -20; bad=1; }
-  grep -A4 -E "Compiling entry function '_Z6flin_kILi(32|64|128)ELi[0-9]+ELi[0-9]+ELi4ELi[12]ELi0E" "$O/build-$b.log" \
+  grep -A4 -E "Compiling entry function '_Z6flin_kILi(32|64|128)ELi[0-9]+ELi[0-9]+ELi[24]ELi[12]ELi0E" "$O/build-$b.log" \
     | grep -E "Compiling|registers" > "$O/flin-regs-$b.txt"
   grep -A4 -E "Compiling entry function '_Z7dfill_kILi[0-9]+EE" "$O/build-$b.log" \
     | grep -E "Compiling|registers|spill" > "$O/pump-regs-$b.txt"
