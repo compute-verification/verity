@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.Complete.Run
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.DeployCode
+import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.Level3.ArithFacts
 
 /-!
@@ -11,19 +11,13 @@ at the outer coin `r = r_i` (`bindAndZerocheckWith`), and `F128.inv 0 = 0`: at `
 whatever the honest prover's is, and the next claim need not hold. So the honest prover can fail only where some
 zerocheck outer coin is `1` (`Bad`), at most `2^-128` per coin element (`pr_slot_le`).
 
-* **The outer coins** (`outerSlots`): rep `q`'s second round (`rOuter`, after `r_skip`), elements `0` to `m − 14`, at
-  its index among the verifier's coins (`repStart`: the link's coin, then the earlier reps' recorded rounds,
-  `spec.repStreams` order).
-* **`ε`** is their count over `2^128`; `pr_bad_le`: `Pr[Bad] ≤ ε`, a union bound.
-* **`δc`** is `ε` on the statements the deployed verifier can accept against `H` (`ready H`), and `1` elsewhere: a
-  statement that sets up no session, or whose session draws no unit (`checks` ends in `drawLaw zk none`, which refuses),
-  is refused at every run, and the last message's length words (`Final.encode`) fit only a statement under `2^56` bytes:
-  the record carries the statement's `hello`, which JSON escaping can grow sixfold, past `2^64` bytes for a statement
-  near it. The verifier sets the statement up against `H` (`setupWith (hOf H)`), and the statement pins digests of
-  SHA-512 that this setup recomputes with `H`; the honest prover sets up at SHA-512, so `ready H` asks that the two
-  setups agree. At `sha512` they do, and `ready` asks no more (`ready_sha512`).
+* **The bound** (`pr_bad_le`): `Pr[Bad] ≤ ε`, a union bound over the outer coins (`outerSlots`, `Complete.Ready`).
 * **The composition** (`complete_of`): if the honest prover is accepted at every coin outside `Bad` on every statement in
-  scope, ready, with a witness in the relation, then `Claims.Flock.Complete H (deployPlain rel) honestP (δc H)`.
+  scope, ready (`ready H`), with a witness in the relation, then `Claims.Flock.Complete H (deployPlain rel)`, at the
+  record's error `δc H` (`Complete.Ready`, which states where it is `1`), whose prover is the record's (`honestP`).
+* **The error is below `1`** where the verifier can accept, at the sessions the numbers are stated at (`PlainIn`,
+  `ZkIn`: at most `200` tables at `m ≤ 35`): at most `44` outer coins per table (`Claims.Flock.Complete_meets_plain`),
+  and `50` coins at the masked verifier's one table (`Claims.Flock.Complete_meets_zk`).
 -/
 
 namespace FlockComplete
@@ -114,52 +108,10 @@ theorem pr_slot_le {k : ℕ} (j i : ℕ) :
       · decide
     · rw [Claims.Pr_false]; positivity
 
-/-! ## δc -/
-
-/-- **Rep `q`'s first coin's index** (table `q / 2`'s rep `q % 2`, `spec.repStreams` order): the link's coin, then every
-earlier rep's recorded rounds. -/
-def repStart (spec : SessionSpec) (sts : Array Flock.Stmt) (q : ℕ) : ℕ :=
-  1 + ((List.range q).map fun q' => repRounds false spec sts[q' / 2]!).sum
-
-/-- **The zerocheck outer coins** of the session the statement sets up: rep `q`'s second round (`rOuter`, after
-`r_skip`), elements `0` to `m − 14`, as (coin index, element) pairs. -/
-def outerSlots (x : Claims.Msg) : List (ℕ × ℕ) :=
-  match setupOf false x with
-  | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      (List.range (sts[q / 2]!.m - 13)).map fun i => (repStart spec sts q + 1, i)
-  | none => []
+/-! ## The bad coins -/
 
 /-- **The bad coins**: a zerocheck outer coin is `1`, where the verifier's `(1 + r)⁻¹` is `0⁻¹ = 0`. -/
 def Bad (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop := ∃ p ∈ outerSlots x, (Claims.coinSeq r p.1).at p.2 = 1
-
-/-- `ε`: the outer coins' count over `2^128`. -/
-noncomputable def ε (x : Claims.Msg) : ℝ := (outerSlots x).length / 2 ^ 128
-
-open Classical in
-/-- **The statements the deployed verifier can accept** against `H`: it sets up the session, its setup against `H` is
-the one at SHA-512, the session draws a unit, and the statement is under `2^56` bytes, so that the last message's
-lengths fit their words. -/
-noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
-  match setupOf false x with
-  | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
-      decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts))
-  | none => false
-
-/-- **At SHA-512, `ready` asks only for a drawn session and the statement's length**: the setup against `sha512` is
-the statement's. -/
-theorem ready_sha512 (x : Claims.Msg) :
-    ready sha512 x = match setupOf false x with
-      | some (s, _, _) => s.read.draw.isSome && decide (x.length < 2 ^ 56)
-      | none => false := by
-  unfold ready
-  split
-  · rename_i s spec sts hs
-    rw [hOf_sha512, setupWith_sha512, Ins.setup_read (setupOf_some hs).2]
-    simp
-  · rfl
-
-/-- **Flock's `δc` at the plain verifier** against `H`: `ε` where the verifier can accept, else `1`. -/
-noncomputable def δc (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if ready H x then ε x else 1
 
 /-- **`Pr[Bad] ≤ ε`**: the union bound over the outer coins. -/
 theorem pr_bad_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin => Bad x r) ≤ ε x := by
@@ -178,13 +130,14 @@ theorem pr_bad_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin
 
 /-- **Completeness from acceptance at the good coins**: if, on every statement in scope that the verifier can accept
 and every witness in the relation, the honest prover is accepted at every tape and every coin outside `Bad`, then Flock's
-plain verifier is complete for `honestP` with error `δc`. -/
+plain verifier is complete for `honestP` at the record's error, `δc H`. -/
 theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hacc : ∀ x w, Claims.Flock.Scope (deployPlain rel) x → Claims.Flock.R (deployPlain rel).parse x w →
       ready H x = true → ∀ (ω : Tape) (r : Fin ((V false).k x) → Coin), ¬ Bad x r →
         (Claims.run H (honestP w) (V false) x ω r).out = .acc) :
-    Claims.Flock.Complete H (deployPlain rel) honestP (δc H) := by
-  intro x w hs hr ω
+    Claims.Flock.Complete H (deployPlain rel) := by
+  intro _ x w hs hr ω
+  show 1 - δc H x ≤ _
   unfold δc
   split
   · rename_i hready
@@ -197,4 +150,96 @@ theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
   · rw [sub_self]
     exact Claims.Pr_nonneg _
 
+/-! ## The error is below `1` -/
+
+theorem length_flatMap_range_le {β : Type} (n c : ℕ) (f : ℕ → List β) (h : ∀ q < n, (f q).length ≤ c) :
+    ((List.range n).flatMap f).length ≤ n * c := by
+  rw [List.length_flatMap]
+  refine (List.sum_le_length_nsmul _ c ?_).trans (by simp)
+  intro y hy
+  obtain ⟨q, hq, rfl⟩ := List.mem_map.1 hy
+  exact h q (List.mem_range.1 hq)
+
+theorem m_sub_le {sts : Array Flock.Stmt} (hm : ∀ st ∈ sts.toList, st.m ≤ 35) {q : ℕ} (hq : q < 2 * sts.size) :
+    sts[q / 2]!.m - 13 ≤ 22 := by
+  have hi : q / 2 < sts.size := by omega
+  have := hm sts[q / 2]! (by rw [getElem!_pos sts (q / 2) hi]; exact Array.getElem_mem_toList hi)
+  omega
+
+/-- **At most `22` outer coins per rep**, two reps per table, at tables of `m ≤ 35`. -/
+theorem outerSlots_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+    (hs : setupOf false x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
+    (outerSlots x).length ≤ 2 * sts.size * 22 := by
+  unfold outerSlots
+  rw [hs]
+  exact length_flatMap_range_le _ _ _ fun q hq => by simpa using m_sub_le hm hq
+
+theorem outerSlotsZk_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+    (hs : setupOf true x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
+    (outerSlotsZk x).length ≤ 2 * sts.size * 22 := by
+  unfold outerSlotsZk
+  rw [hs]
+  exact length_flatMap_range_le _ _ _ fun q hq => by simpa using m_sub_le hm hq
+
+theorem rhoSlotsZk_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+    (hs : setupOf true x = some (s, spec, sts)) : (rhoSlotsZk x).length ≤ 2 * sts.size * 1 := by
+  unfold rhoSlotsZk
+  rw [hs]
+  exact length_flatMap_range_le _ _ _ fun q _ => by split <;> simp
+
+theorem betaSlotsZk_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+    (hs : setupOf true x = some (s, spec, sts)) : (betaSlotsZk x).length ≤ 2 * sts.size * 1 := by
+  unfold betaSlotsZk
+  rw [hs]
+  exact length_flatMap_range_le _ _ _ fun q _ => by split <;> simp
+
 end FlockComplete
+
+open Flock FlockDeploy FlockComplete in
+/-- **The plain record's error is below `1`** on every statement the verifier can accept (`ready H`) at a session the
+numbers are stated at (`PlainIn`): at most `44` outer coins per table over `2^128`, at most `200` tables. -/
+theorem Claims.Flock.Complete_meets_plain (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
+    {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} (hin : PlainIn x s spec sts)
+    (hready : ready H x = true) :
+    (deployPlain rel).δc H x ≤ 44 * sts.size / 2 ^ 128 ∧ (deployPlain rel).δc H x < 1 := by
+  have hlen := outerSlots_length_le hin.setup fun st hst => (hin.tab st hst).2.1
+  have hle : (deployPlain rel).δc H x ≤ 44 * sts.size / 2 ^ 128 := by
+    have e : δc H x = ε x := by simp [δc, hready]
+    show δc H x ≤ _
+    rw [e, ε]
+    gcongr
+    exact_mod_cast hlen.trans (le_of_eq (by ring))
+  refine ⟨hle, lt_of_le_of_lt hle ?_⟩
+  have h200 : (sts.size : ℝ) ≤ 200 := by exact_mod_cast hin.size_le
+  rw [div_lt_one (by positivity)]
+  calc 44 * (sts.size : ℝ) ≤ 44 * 200 := by linarith
+    _ < 2 ^ 128 := by norm_num
+
+open Flock FlockDeploy FlockComplete in
+/-- **The masked record's error is below `1`** on every statement the masked verifier can accept (`readyZk H`, one
+table) at a session the numbers are stated at (`ZkIn`): `44` outer coins, two `β`s and two pairs counted twice, over
+`2^128`. -/
+theorem Claims.Flock.Complete_meets_zk (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
+    {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} (hin : ZkIn x s spec sts)
+    (hready : readyZk H x = true) :
+    (deployZk rel).δc H x ≤ 50 / 2 ^ 128 ∧ (deployZk rel).δc H x < 1 := by
+  have h1 : sts.size = 1 := by
+    have h := hready
+    unfold readyZk at h
+    rw [hin.setup] at h
+    simp only [Bool.and_eq_true] at h
+    exact beq_iff_eq.1 h.1.1.1.1.1.1
+  have ho := outerSlotsZk_length_le hin.setup fun st hst => (hin.tab st hst).2.1
+  have hr := rhoSlotsZk_length_le hin.setup
+  have hb := betaSlotsZk_length_le hin.setup
+  rw [h1] at ho hr hb
+  have hle : (deployZk rel).δc H x ≤ 50 / 2 ^ 128 := by
+    have e : δcZk H x = εZk x := by simp [δcZk, hready]
+    show δcZk H x ≤ _
+    rw [e, εZk]
+    gcongr
+    have ho' : ((outerSlotsZk x).length : ℝ) ≤ 44 := by exact_mod_cast ho
+    have hr' : ((rhoSlotsZk x).length : ℝ) ≤ 2 := by exact_mod_cast hr
+    have hb' : ((betaSlotsZk x).length : ℝ) ≤ 2 := by exact_mod_cast hb
+    linarith
+  exact ⟨hle, lt_of_le_of_lt hle (by norm_num)⟩
