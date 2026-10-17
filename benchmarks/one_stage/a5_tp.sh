@@ -7,7 +7,8 @@
 #     the partition file (glm53_silu_mul_v2_tp8.json) are this tree's.
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
 #     rows, its partition's law).
-#   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only.
+#   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
+#   audits up to N ranks at once (a GLM-5.3 rank: its window ~14 min and ~50 GB, then M0's session ~31 GB).
 #   research run --on M --project verity --cwd clone --mem-gb 64 -- bash benchmarks/one_stage/a5_tp.sh
 # Kept in $OUT: a5's records and logs, the public files, the sessions (their proofs and records), the binaries' sha256 and the
 # circuits' pins; never a prover's file (inst-*, m*-inst-*, m*-private.bin: the rows and their salts) nor a circuit (its pin is).
@@ -44,7 +45,7 @@ TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
 audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION
   mkdir -p $O/$1
   $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 --workload $4 --windows $5 --partition $6 \
-    ${A5_RANKS:+--ranks $A5_RANKS} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --out $W/$1 \
+    ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --out $W/$1 \
     > $O/$1/a5.log 2> $O/$1/a5.err
   local rc=$?
   grep '^A5' $O/$1/a5.log | cut -c1-4000; tail -25 $O/$1/a5.err
