@@ -331,9 +331,35 @@ def table_probe(fn: Any) -> Any:
 ROOT_ERRORS: list[tuple[str, str]] = []
 
 
+def _served_kind_statics() -> dict[str, dict[str, Any]]:
+    """The kinds no small table binds (launch blocks, collective routes, split counts, the DSA and sparse-MLA shapes), each at a
+    binding its Definition module's sidecar already checks, so they add no task."""
+    from verity.ml.circuits.boolean.trace import word_of
+    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity_vllm.program.registry import sparse_mla as SM
+    from verity_vllm.program.registry import tp_allreduce as TA
+
+    hop = word_of(BG.HopperBF16WgmmaDot16)
+    mla = {k: SM.SPARSE_MLA_GLM53[k] for k in ("NH", "DR", "DV", "BN", "DOT", "INV")} | {"SM_SCALE": SM.SPARSE_MLA_GLM53["SCALE"]}
+    trees = (TA.chain(8),) * 4 + ((((0, 1), (2, 3)), ((4, 5), (6, 7))),) * 4
+    return {"rmsnorm_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256}, "rmsnorm_fused_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256},
+            "all_reduce_mnnvl": {"WORLD": 8, "N": 8, "SHOT": 2},
+            "all_reduce_rmsnorm_mnnvl": {"WORLD": 8, "N": 512, "SHOT": 1, "CLUSTER": 2, "EPS": 1e-5, "FMA": False},
+            "all_reduce_custom": {"WORLD": 8, "SIZE": 64, "STAGE": 2},
+            "all_reduce_multimem": {"WORLD": 8, "SIZE": 128, "TREES": trees, "FTZ": False},
+            "dsa_indexer_k_row": {"D": 128, "ROPE": 64, "EPS": 1e-6}, "dsa_indexer_q": {"H": 32, "D": 128, "ROPE": 64},
+            "dsa_mqa_logits": {"N": 4, "H": 32, "D": 128},
+            "cublas_splitk_gemm": {"K": 64, "N": 3, "SPLIT_K": 4, "DOT": hop},
+            "cublas_splitk_gemm_f32out": {"K": 64, "N": 3, "SPLIT_K": 4, "DOT": hop},
+            "batched_gemm": {"B": 2, "K": 32, "N": 3, "DOT": hop},
+            "ll_bf16_dotprod": {"N": 2, "K": 256, "BS": 64, "VEC": 2, "FMA": 1},
+            "ll_bf16_splitk": {"N": 2, "K": 128, "SPLIT_K": 2, "TILE_K": 32, "WARPS": 2, "DOT": hop},
+            "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla}}
+
+
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
-    """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics: (label, the bound
-    Definition, or the error)."""
+    """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics, or at
+    `_served_kind_statics`' when no small table binds it: (label, the bound Definition, or the error)."""
     from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
     from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -347,11 +373,13 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     e4m3 = {**small, "G": 32, "DOT": BlackwellE4m3QmmaDot32}  # the block-FP8 MoE pair forms: an e4m3 step, one K tile per scale block
     act = {**small, "G": 8}                                  # the experts' fused activation quant: a scale group dividing I
+    served = _served_kind_statics()
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
-    kinds = [(f"{v.name}/{k}", make) for v in vocabularies for k, make in v.kinds.items()]
-    kinds += [(f"dense/{k}", make) for k, make in V._dense_kinds()[0].items()]
+    kinds = [(v.name, k, make) for v in vocabularies for k, make in v.kinds.items()]
+    kinds += [("dense", k, make) for k, make in V._dense_kinds()[0].items()]
     out = []
-    for label, make in kinds:
+    for vocabulary, kind, make in kinds:
+        label = f"{vocabulary}/{kind}"
         code = make.__code__
         args = code.co_varnames[:code.co_argcount]
         required = args[:len(args) - len(make.__defaults__ or ())]
@@ -360,7 +388,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
             variants = [(required, "")] + ([(required + optional, "+" + "+".join(optional))] if optional else [])
             for names, suffix in variants:
                 fn, err = None, None
-                for table in (small, wide, e4m3, act):
+                for table in (small, wide, e4m3, act, *([served[kind]] if kind in served else [])):
                     try:
                         fn = make(**{a: (dt if a == "DT" else table[a]) for a in names})
                         _ = getattr(fn, "gates", None)
