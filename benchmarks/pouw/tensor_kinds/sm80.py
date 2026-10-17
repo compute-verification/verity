@@ -2,7 +2,8 @@
 
     python sm80.py gate OUT BIN...   # gpu_kit's timing gate on every timed kernel -> OUT/gate.json, OUT/loops.json
     python sm80.py analyze OUT       # OUT/g*.jsonl with the gate's records -> OUT/sm80.json, OUT/sm80.md
-    python sm80.py census OUT... [--to DIR]    # analyzed runs -> the machine model's rows.csv and census.csv (sm80-1)
+    python sm80.py census OUT... --extension OUT... [--to DIR]   # analyzed runs -> the machine model's rows.csv and
+                                                                 # census.csv (machine_model/data/devices/sm_80)
 
 Every case of sm80.cu prints its kernel's template (`kern`, `struct`, `targs`), so its mangled name, and so its SASS
 loops, follow from the line. `gate` runs gpu_kit's timing gate (`../gpu_kit/sass_gate.py`: clock reads, the timed
@@ -12,9 +13,11 @@ lease, and records each timed loop's opcode counts. `analyze` reports no number 
 
 Per SMSP, over the timed window of T cycles: a case's MMAs are its MMA warps a SMSP x iterations x PTX MMAs an
 iteration, its other instructions every non-MMA SASS instruction its loops issue. On the issue facet a.#MMA + #other <=
-T, each case bounds a <= (T - #other)/#MMA; a form's coefficient is the least bound over a lane's programs (TENSOR's M1,
-note:20261017T0321Z-draft-eps1-tensor §2.1). The IADD3 lane binds on its pipe (half the issue rate on sm_80), so its
-programs also bound the pipe facet a' + #IADD3/x_IADD3 <= T, x_IADD3 its rate alone.
+T, each case bounds a <= (T - #other)/#MMA; a form's coefficient `a` is the least bound over every program that holds
+its MMA, whatever runs beside it, since a facet holds on every program (TENSOR's M1, note:20261017T0321Z-draft-eps1-tensor
+§2.1). `a_mix` and `a_iadd3` are the least over the IADD3+FFMA and the IADD3 programs. The IADD3 lane binds on its pipe
+(half the issue rate on sm_80), so its programs also bound the pipe facet a' + #IADD3/x_IADD3 <= T, x_IADD3 its rate
+alone.
 """
 from __future__ import annotations
 
@@ -287,6 +290,7 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         alone = [p for p in pts if p["kern"] == "k_alone"]
         mixed = [p for p in pts if p["kern"] in ("k_spec", "k_mixu")]
         lane_pts = {lane: [p for p in mixed if p["lane"] == lane] for lane in (16, 240)}
+        a = min((p["a_bound"] for p in pts if "a_bound" in p), default=None)
         a_mix = min((p["a_bound"] for p in lane_pts[16]), default=None)
         a_iadd3 = min((p["a_bound"] for p in lane_pts[240]), default=None)
         a_pipe = (min(((p["T"] - p["n_iadd3"] / x_iadd3) / p["n_mma"] for p in lane_pts[240]), default=None)
@@ -304,16 +308,15 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
             "slots_per_sm_clk": 4 * p0["slots"] / c if c else None,
             "words_per_sm_clk": 4 * p0["words"] / c if c else None,
             "macs_per_sm_clk": 4 * p0["macs"] / c if c else None,
-            "a_mix": a_mix, "a_iadd3": a_iadd3, "a_iadd3_pipe": a_pipe,
+            "a": a, "a_mix": a_mix, "a_iadd3": a_iadd3, "a_iadd3_pipe": a_pipe,
             "programs": len(mixed), "mhz_clock64": [min(mhz), max(mhz)], "mhz_nvml": [min(nv), max(nv)] if nv else None,
             "points": [{k: p[k] for k in ("mode", "kern", "targs", "lane", "cycles_per_mma", "other_per_mma", "a_bound",
                                           "mhz", "nvml_mhz_before", "nvml_mhz_after", "group")} for p in mixed + alone],
         }
     ref = forms.get(REF, {})
     for s, f in forms.items():
-        for k in ("a_mix", "a_iadd3"):
-            r0, v = ref.get(k), f[k]
-            f[f"{k}_per_slot_vs_ref"] = (v / f["slots"]) / (r0 / ref["slots"]) if v and r0 else None
+        r0, v = ref.get("a"), f["a"]
+        f["a_per_slot_vs_ref"] = (v / f["slots"]) / (r0 / ref["slots"]) if v and r0 else None
         depth = {"ImmaS8k32": 32, "ImmaU8S8k32": 32, "ImmaU8U8k32": 32, "ImmaS8k32Sat": 32, "ImmaS8k16": 16,
                  "ImmaS8m8k16": 16}.get(s)
         f["depth"] = depth or None
@@ -361,8 +364,8 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
     q = {}
     for s in ("ImmaS8k32", "ImmaS8k16", "ImmaS8m8k16"):
         f = forms.get(s)
-        if f and f["a_mix"] is not None:
-            q[s] = {"a_mix": f["a_mix"], "words_per_lane": f["words"] / 32, "q0": f["a_mix"] / (f["words"] / 32)}
+        if f and f["a"] is not None:
+            q[s] = {"a": f["a"], "words_per_lane": f["words"] / 32, "q0": f["a"] / (f["words"] / 32)}
     meta = out / "meta.json"
     summary = {"run_id": json.loads(meta.read_text()).get("run_id") if meta.exists() else None,
                "device": heads[:1], "lanes": lanes, "forms": forms, "rho_T_slots_per_sm_clk": rho,
@@ -378,15 +381,15 @@ def _f(v, d=3):
 def render(s: dict) -> str:
     L = [f"Run {s.get('run_id', '?')}; clocks read, never set (default boost).", "",
          "## Forms (alone: least SMSP-cycles a PTX MMA over 2, 4 and 8 warps a SMSP, 8, 32 and 64 MMAs a loop iteration)", "",
-         "| form | SASS | slots | alone SMSP-cyc a MMA | slots/SM/clk | MACs/SM/clk | a, IADD3+FFMA | a, IADD3 (issue) | "
-         "a, IADD3 (pipe) | a a slot vs IMMA.16832 (mix / IADD3) | word | MHz clock64 / NVML |",
-         "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+         "| form | SASS | slots | alone SMSP-cyc a MMA | slots/SM/clk | MACs/SM/clk | a, every program | a, IADD3+FFMA | "
+         "a, IADD3 (issue) | a, IADD3 (pipe) | a a slot vs IMMA.16832 | word | MHz clock64 / NVML |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for k, f in s["forms"].items():
         nv = f["mhz_nvml"]
         nvs = "–" if not nv else f"{nv[0]}–{nv[1]}"
         L.append(f"| {f['name']} | {', '.join(f['sass'])} | {f['slots']:.0f} | {_f(f['alone_smsp_cycles_per_mma'], 2)} | "
-                 f"{_f(f['slots_per_sm_clk'], 2)} | {_f(f['macs_per_sm_clk'], 0)} | {_f(f['a_mix'])} | {_f(f['a_iadd3'])} | "
-                 f"{_f(f['a_iadd3_pipe'])} | {_f(f['a_mix_per_slot_vs_ref'])} / {_f(f['a_iadd3_per_slot_vs_ref'])} | "
+                 f"{_f(f['slots_per_sm_clk'], 2)} | {_f(f['macs_per_sm_clk'], 0)} | {_f(f['a'])} | {_f(f['a_mix'])} | "
+                 f"{_f(f['a_iadd3'])} | {_f(f['a_iadd3_pipe'])} | {_f(f['a_per_slot_vs_ref'])} | "
                  f"{f['word']} | {f['mhz_clock64'][0]:.0f}–{f['mhz_clock64'][1]:.0f} / {nvs} |")
     L += ["", f"ρ_T = {_f(s['rho_T_slots_per_sm_clk'], 2)} slots/SM/clk; most output words {_f(s['words_per_sm_clk_max'], 2)}/SM/clk.",
           "", "## Lanes alone (8 warps a SMSP, ILP 8)", "",
@@ -414,39 +417,45 @@ def render(s: dict) -> str:
         L.append(f"| {v['form']} | {v['semantics']} | {v['cases']} | {v['wrong']} | {v['wrapped']} | {v['saturated']} |")
     L += ["", "## q*₀ (MMA issue a word, against one scalar instruction's issue slot)", ""]
     for k, v in s["qstar0"].items():
-        L.append(f"- {k}: a = {_f(v['a_mix'])} issue-cycles a MMA / {v['words_per_lane']:.0f} words a lane = "
+        L.append(f"- {k}: a = {_f(v['a'])} issue-cycles a MMA / {v['words_per_lane']:.0f} words a lane = "
                  f"**q*₀ {_f(v['q0'])}**")
     if s["excluded"]:
         L += ["", "## Excluded (no number reported)", ""] + [f"- {x}" for x in s["excluded"]]
     return "\n".join(L) + "\n"
 
 
-EPOCH = "sm80-1"
 #: the scalar census kinds (sm_120's names where one exists) -> (row, the lanes whose per-op rate prices it)
 SCALAR = {"ALU": ("A", ["iadd3", "lop3"]), "FFMA": ("FMA", ["ffma"]), "IMAD": ("FMA", ["imad", "dp4a"]),
           "XU": ("XU", ["popc"]), "SHFL": ("SHFL", ["shfl"]), "LDS32": ("LDSi", ["lds"])}
 ROWS = {
-    "M": "tensor pipe: SMSP-cycles a MMA of each kind alone (best of 2, 4 and 8 warps a SMSP and of 8, 32 and 64 MMAs a loop "
-         "iteration, 8 accumulators a warp; the loop's 3 instructions included)",
-    "A": "ALU pipe: IADD3 and LOP3 (IADD3+LOP3 issue {iadd3+lop3} a SMSP-cycle: one pipe)",
-    "FMA": "FMA pipe: FFMA, IMAD and IDP.4A (IMAD+FFMA {imad+ffma}, IDP.4A+FFMA {dp4a+ffma} a SMSP-cycle: one pipe)",
-    "XU": "XU: POPC",
-    "SHFL": "SHFL.BFLY",
-    "LDSi": "LDS.32 (one warp a SM-cycle: 128 B/SM/clk)",
+    "M": "tensor pipe: each MMA kind alone, 4 / its least SMSP-cycles a MMA warp instructions/SM/clk + 2% (best of 2, 4 "
+         "and 8 warps a SMSP and of 8, 32 and 64 MMAs a loop iteration, 8 accumulators a warp; the loop's 3 instructions "
+         "included)",
+    "A": "ALU pipe: IADD3 and LOP3 + 2% (IADD3+LOP3 issue {iadd3+lop3} a SMSP-cycle: one pipe)",
+    "FMA": "FMA pipe: FFMA, IMAD and IDP.4A + 2% (IMAD+FFMA {imad+ffma}, IDP.4A+FFMA {dp4a+ffma} a SMSP-cycle: one pipe)",
+    "XU": "XU: POPC + 2%",
+    "SHFL": "SHFL.BFLY + 2%",
+    "LDSi": "LDS.32 + 2% (one warp a SM-cycle: 128 B/SM/clk)",
     "JIM": "M1's issue facet: a(kind) #MMA + every other warp instruction 1 <= T SMSP-cycles, a the least (T - #other)/#MMA "
-           "over the gated spec and mixu programs beside IADD3+FFMA ({iadd3+ffma} issue a SMSP-cycle alone); no noise margin",
-    "JIA": "the same facet beside IADD3 alone (on its pipe at {iadd3} a SMSP-cycle), a the least (T - #other)/#MMA",
+           "over every gated program that holds the kind's MMA (beside IADD3+FFMA, which issues {iadd3+ffma} a SMSP-cycle "
+           "alone, beside IADD3 and the other lanes, duo, alone); every coefficient x 0.98 (2% noise) / {margin} "
+           "(decision 76: the most the search's latest extension, {ext}, moved a kind's least)",
 }
 
 
-def census(outs: list[Path]) -> tuple[str, str]:
-    """sm_80's census (data/sm80/'s rows.csv and census.csv) from analyzed runs: each tensor kind's least alone cycles
-    and joint coefficients, each scalar class's fastest rate, over every run; a run whose lane gate failed gives no
-    joint coefficient."""
+def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
+    """sm_80's census (machine_model/data/devices/sm_80/'s rows.csv and census.csv: one epoch, no since or until) from
+    analyzed runs: each MMA kind's least alone cycles as a rate, each scalar class's fastest rate, both at the 2% noise
+    margin, and each kind's least joint coefficient; a run whose lane gate failed gives no joint coefficient. The joint
+    row takes decision 76's margin: `ext` are the runs of the search's latest extension, and the row is divided by 1 + m,
+    m the most they moved a kind's least below the other runs'. Past the noise the search hasn't converged, and the census
+    refuses."""
     alone: dict[str, tuple[float, set]] = {}
-    joint: dict[tuple[str, str], tuple[float, set]] = {}
+    joint: dict[str, tuple[float, set]] = {}
+    before: dict[str, tuple[float, set]] = {}
     rate: dict[str, tuple[float, set]] = {}
     pairs: dict[str, float] = {}
+    ext_runs: set[str] = set()
 
     def keep(d, k, v, run, better):
         if v is None:
@@ -457,17 +466,21 @@ def census(outs: list[Path]) -> tuple[str, str]:
         elif abs(v - old[0]) <= 1e-9 * abs(v):
             old[1].add(run)
 
-    for out in outs:
+    lt = lambda a, b: a < b
+    for out, latest in [(p, False) for p in outs] + [(p, True) for p in ext]:
         rec = json.loads((out / "sm80.json").read_text())
         s, fails = rec["summary"], rec["gate_failures"]
         run = s.get("run_id") or out.name
+        if latest:
+            ext_runs.add(run)
         lane_ok = not any(f.startswith("opalone") for f in fails)
         for st, f in s["forms"].items():
             kind = FORMS[st][1]
-            keep(alone, kind, f["alone_smsp_cycles_per_mma"], run, lambda a, b: a < b)
+            keep(alone, kind, f["alone_smsp_cycles_per_mma"], run, lt)
             if lane_ok:
-                keep(joint, (kind, "JIM"), f["a_mix"], run, lambda a, b: a < b)
-                keep(joint, (kind, "JIA"), f["a_iadd3"], run, lambda a, b: a < b)
+                keep(joint, kind, f["a"], run, lt)
+                if not latest:
+                    keep(before, kind, f["a"], run, lt)
         for kind, (_, lanes) in SCALAR.items():
             for ln in lanes:
                 v = s["lanes"].get(ln, {}).get("per_op", {}).get(ln)
@@ -475,24 +488,32 @@ def census(outs: list[Path]) -> tuple[str, str]:
         for ln, v in s["lanes"].items():
             pairs[ln] = max(pairs.get(ln, 0.0), v["instr_per_smsp_cycle"])
     lines, cites = [], defaultdict(set)
+    fmt = {k: f"{v:.3f}" for k, v in pairs.items()}
+    fmt.update({k: f"{rate[c][0] / 4:.3f}" for c, (_, lns) in SCALAR.items() for k in lns[:1] if c in rate})
     for kind, (v, runs) in sorted(alone.items()):
-        lines.append(f"{kind},M,,,{v:.6g},,{EPOCH},,{' '.join(sorted(runs))}")
+        lines.append(f"{kind},M,{4 / v:.6g},{NOISE},,,,,{' '.join(sorted(runs))}")
         cites["M"] |= runs
     for kind, (v, runs) in sorted(rate.items()):
         row = SCALAR[kind][0]
-        lines.append(f"{kind},{row},{v:.6g},,,,{EPOCH},,{' '.join(sorted(runs))}")
+        lines.append(f"{kind},{row},{v:.6g},{NOISE},,,,,{' '.join(sorted(runs))}")
         cites[row] |= runs
-    for row in ("JIM", "JIA"):
-        ks = sorted(k for (k, r) in joint if r == row)
-        for kind in ks:
-            v, runs = joint[kind, row]
-            lines.append(f"{kind},{row},,,{v:.6g},,{EPOCH},,{' '.join(sorted(runs))}")
-            cites[row] |= runs
-        if ks:
-            for other in ("ALU", "FFMA"):
-                lines.append(f"{other},{row},,,1,,{EPOCH},,{' '.join(sorted(cites[row]))}")
-    fmt = {k: f"{v:.3f}" for k, v in pairs.items()}
-    fmt.update({k: f"{rate[c][0] / 4:.3f}" for c, (_, lns) in SCALAR.items() for k in lns[:1] if c in rate})
+    if joint:
+        if not ext_runs:
+            raise SystemExit("census: name the runs of the schedule search's latest extension (--extension OUT...); "
+                             "decision 76 takes the joint row's margin from them")
+        moved = {k: before[k][0] / v - 1 if k in before else math.inf for k, (v, _) in joint.items()}
+        worst, m = max(moved.items(), key=lambda x: x[1])
+        if m > NOISE:
+            raise SystemExit(f"census: the search's latest extension moved {worst}'s a {m:.1%} below the earlier runs', "
+                             f"past the {NOISE:.0%} noise: extend the search again (decision 76)")
+        scale = (1 - NOISE) / (1 + m)
+        for kind, (v, runs) in sorted(joint.items()):
+            lines.append(f"{kind},JIM,,,{v * scale:.6g},,,,{' '.join(sorted(runs))}")
+            cites["JIM"] |= runs
+        cites["JIM"] |= ext_runs
+        for other in SCALAR:
+            lines.append(f"{other},JIM,,,{scale:.6g},,,,{' '.join(sorted(cites['JIM']))}")
+        fmt.update(margin=f"{1 + m:.4f}", ext=" ".join(sorted(ext_runs)))
     rows = ["row,status,runs,description"]
     for row, desc in ROWS.items():
         if cites[row]:
@@ -515,10 +536,17 @@ def main(argv: list[str]) -> int:
             print("GATE", x)
         return 0
     if argv[1] == "census":
-        args = argv[2:]
-        to = Path(args[args.index("--to") + 1]) if "--to" in args else None
-        outs = [Path(a) for a in args if a != "--to" and (to is None or Path(a) != to)]
-        rows_csv, census_csv = census(outs)
+        to, outs, ext = None, [], []
+        args = iter(argv[2:])
+        dest = outs
+        for a in args:
+            if a == "--to":
+                to = Path(next(args))
+            elif a == "--extension":
+                dest = ext
+            else:
+                dest.append(Path(a))
+        rows_csv, census_csv = census(outs, ext)
         if to:
             to.mkdir(parents=True, exist_ok=True)
             (to / "rows.csv").write_text(rows_csv)

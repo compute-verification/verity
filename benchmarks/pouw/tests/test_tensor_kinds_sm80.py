@@ -1,6 +1,6 @@
 """tensor_kinds/sm80.py: kernel names decode, the gate's counts match sm80.cu's templates (the loop counter an IADD3 or a
-UIADD3), the issue coefficient is the least bound over the gated programs, a slow lane withholds every joint line, and
-the census is in the machine model's schema."""
+UIADD3), the issue coefficient is the least bound over every gated program, a slow lane withholds every joint line, the
+joint row takes decision 76's margin, and the census is in the machine model's schema."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ import io
 import json
 import re
 from pathlib import Path
+
+import pytest
 
 POUW = Path(__file__).resolve().parents[1]
 SM80 = POUW / "tensor_kinds" / "sm80.py"
@@ -101,49 +103,75 @@ def _row(kern, struct, targs, T, mma_w=0, lane_w=0, mma_ptx=0, lane=-1, iters=10
             "nvml_mhz_before": 1410, "nvml_mhz_after": 1410, "throttle": "0x0"}
 
 
-def _run(tmp_path: Path, mix_rate: float) -> Path:
-    """One run: the two lanes alone, IMMA.16832 alone at 8.375 SMSP-cycles a MMA, and one mixu at a = 5.125."""
+def _run(out: Path, mix_rate: float, a_mix: float = 5.125, a_iadd3: float | None = None,
+         run_id: str = "r20261017-072600-1397") -> Path:
+    """One run: the two lanes alone, IMMA.16832 alone at 8.375 SMSP-cycles a MMA, one mixu beside IADD3+FFMA at a_mix
+    and, given a_iadd3, one beside IADD3 at that bound."""
+    out.mkdir(parents=True, exist_ok=True)
     mix = {"IADD3": 33, "FFMA": 32, "ISETP.GE.AND": 1, "BRA": 1}
     iadd3 = {"IADD3": 65, "ISETP.GE.AND": 1, "BRA": 1}
     n_mma, n_other = 4 * 1000 * 32, 4 * 1000 * 131
     cases = [(_row("k_opalone", "", [LANE_MIX], 8000 * 67 / mix_rate, lane_w=8, lane=LANE_MIX), mix),
              (_row("k_opalone", "", [LANE_IADD3], 8000 * 67 / 0.508, lane_w=8, lane=LANE_IADD3), iadd3),
              (_row("k_alone", "ImmaS8k32", [2, 1], 2 * 1000 * 8 * 8.375, mma_w=2, mma_ptx=8), ALONE_LOOP),
-             (_row("k_mixu", "ImmaS8k32", [32, LANE_MIX, 4, 4], n_mma * 5.125 + n_other, mma_w=4, mma_ptx=32,
+             (_row("k_mixu", "ImmaS8k32", [32, LANE_MIX, 4, 4], n_mma * a_mix + n_other, mma_w=4, mma_ptx=32,
                    lane=LANE_MIX),
               MIXU_LOOP)]
+    if a_iadd3 is not None:
+        cases.append((_row("k_mixu", "ImmaS8k32", [32, LANE_IADD3, 4, 4], n_mma * a_iadd3 + n_other, mma_w=4, mma_ptx=32,
+                           lane=LANE_IADD3),
+                      {"IMMA.16832.S8.S8": 32, "IADD3": 129, "ISETP.GE.AND": 1, "BRA": 1}))
     keys = [f"g0:{SM.mangle(r['kern'], r['struct'], r['targs'])}" for r, _ in cases]
-    (tmp_path / "gate.json").write_text(json.dumps({"kernels": {k: {"ok": True, "reasons": []} for k in keys}}))
-    (tmp_path / "loops.json").write_text(json.dumps({k: [lp] for k, (_, lp) in zip(keys, cases)}))
-    (tmp_path / "meta.json").write_text(json.dumps({"run_id": "r20261017-072600-1397"}))
+    (out / "gate.json").write_text(json.dumps({"kernels": {k: {"ok": True, "reasons": []} for k in keys}}))
+    (out / "loops.json").write_text(json.dumps({k: [lp] for k, (_, lp) in zip(keys, cases)}))
+    (out / "meta.json").write_text(json.dumps({"run_id": run_id}))
     rows = [r for r, _ in cases] + [{"probe": "tensor_kinds_sm80", "done": True}]
-    (tmp_path / "g0.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
-    assert SM.main(["sm80.py", "analyze", str(tmp_path)]) == 0
-    return tmp_path
+    (out / "g0.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    assert SM.main(["sm80.py", "analyze", str(out)]) == 0
+    return out
+
+
+def test_the_coefficient_holds_on_every_program(tmp_path: Path):
+    # r20261017-075541-3c04: IMMA.8816's IADD3 programs bound a at 2.207, below its IADD3+FFMA programs' 2.374
+    f = json.loads((_run(tmp_path, 0.973, a_iadd3=4.9) / "sm80.json").read_text())["summary"]["forms"]["ImmaS8k32"]
+    assert abs(f["a"] - 4.9) < 1e-9 and abs(f["a_mix"] - 5.125) < 1e-9 and abs(f["a_iadd3"] - 4.9) < 1e-9
 
 
 def test_the_coefficient_q0_and_census(tmp_path: Path):
-    out = _run(tmp_path, 0.973)
+    out = _run(tmp_path / "a", 0.973)
     rec = json.loads((out / "sm80.json").read_text())
     s, fails = rec["summary"], rec["gate_failures"]
     assert fails == []
     f = s["forms"]["ImmaS8k32"]
-    assert abs(f["alone_smsp_cycles_per_mma"] - 8.375) < 1e-9 and abs(f["a_mix"] - 5.125) < 1e-9
+    assert abs(f["alone_smsp_cycles_per_mma"] - 8.375) < 1e-9 and abs(f["a"] - 5.125) < 1e-9
     assert abs(f["slots_per_sm_clk"] - 4 * 128 / 8.375) < 1e-9 and f["a_iadd3"] is None
     assert abs(s["qstar0"]["ImmaS8k32"]["q0"] - 5.125 / 4) < 1e-9
     assert "Run r20261017-072600-1397" in (out / "sm80.md").read_text()
 
-    rows_csv, census_csv = SM.census([out])
+    ext = _run(tmp_path / "b", 0.973, a_mix=5.1, run_id="r20261017-081119-98b5")
+    rows_csv, census_csv = SM.census([out], [ext])
     rows = {d["row"]: d for d in csv.DictReader(io.StringIO(rows_csv))}
     assert set(rows) == {"M", "A", "JIM"} and rows["JIM"]["status"] == "joint" and rows["M"]["status"] == "measured"
-    assert "0.973 issue a SMSP-cycle alone" in rows["JIM"]["description"]
+    assert "0.973 a SMSP-cycle alone" in rows["JIM"]["description"] and "/ 1.0049 " in rows["JIM"]["description"]
     lines = {(d["kind"], d["row"]): d for d in csv.DictReader(io.StringIO(census_csv))}
-    assert set(lines) == {("IMMA16832", "M"), ("ALU", "A"), ("IMMA16832", "JIM"), ("ALU", "JIM"), ("FFMA", "JIM")}
-    assert float(lines["IMMA16832", "JIM"]["cycles"]) == 5.125 and lines["FFMA", "JIM"]["cycles"] == "1"
-    assert abs(float(lines["ALU", "A"]["rate"]) - 4 * 0.508 * 65 / 67) < 1e-5
+    assert set(lines) == {("IMMA16832", "M"), ("ALU", "A"), ("IMMA16832", "JIM")} | {(k, "JIM") for k in SM.SCALAR}
+    scale = 0.98 / (5.125 / 5.1)
+    assert abs(float(lines["IMMA16832", "JIM"]["cycles"]) - 5.1 * scale) < 1e-5
+    assert abs(float(lines["FFMA", "JIM"]["cycles"]) - scale) < 1e-5
+    assert abs(float(lines["IMMA16832", "M"]["rate"]) - 4 / 8.375) < 1e-5 and lines["IMMA16832", "M"]["noise"] == "0.02"
+    assert abs(float(lines["ALU", "A"]["rate"]) - 4 * 0.508 * 65 / 67) < 1e-5 and lines["ALU", "A"]["noise"] == "0.02"
+    assert lines["IMMA16832", "JIM"]["runs"] == "r20261017-081119-98b5"
     for d in lines.values():
-        assert sum(d[c] != "" for c in ("rate", "cycles", "u")) == 1
-        assert d["since"] == SM.EPOCH and d["runs"] == "r20261017-072600-1397"
+        assert sum(d[c] != "" for c in ("rate", "cycles", "u")) == 1 and d["since"] == d["until"] == ""
+
+
+def test_the_joint_row_waits_for_the_search_to_converge(tmp_path: Path):
+    a = _run(tmp_path / "a", 0.973)
+    with pytest.raises(SystemExit, match="--extension"):
+        SM.census([a])
+    far = _run(tmp_path / "b", 0.973, a_mix=4.9, run_id="r20261017-081119-98b5")
+    with pytest.raises(SystemExit, match="moved IMMA16832's a 4.6% .* extend the search again"):
+        SM.census([a], [far])
 
 
 def test_a_lane_below_issue_withholds_every_joint_line(tmp_path: Path):
