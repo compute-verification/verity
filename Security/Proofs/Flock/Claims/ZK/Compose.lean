@@ -26,6 +26,11 @@ every statement: nothing at `x` reads another statement, so the tapes and the nu
 statement. A session whose tape is its own type at each unit's statement is one prover on one tape at `x` through
 bijections of the nonces and of the rests (`ZKmalAt.of_equiv`). `ZKmalRx` is the statement-indexed form proposed for
 `Definitions/` (`ZKmalR` its constant case, `zkmalRx_const`), and `zkmalRx_iter` meets it with `m x` sessions.
+
+`zkmalAt_seqG` and `zkmalAt_iterG` are the general forms, of which `zkmalAt_seqU` and `zkmalAt_iter` are the case
+`go = goesOn`: the simulator goes on where a test `go` holds, which need agree with `goesOn` only at `A`'s honest
+transcripts (as a claim's own test may), and `B`'s zero knowledge is read only at the units `A`'s honest runs select
+(`Seq.Reach`), so a session's rounds need be fixed only there.
 -/
 
 namespace Claims.ZKMal
@@ -175,21 +180,43 @@ def spOut {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (p :
     List (Msg × Out) :=
   (p.eval H fun as => ((Vs.next x as θ).eval H).1).1
 
-/-- **The composed simulator**: `A`'s, then, where its transcript goes on, `B`'s program at the unit that transcript
-selects (`progB`), asking `V*` after `A`'s messages. `B`'s coins are one type `CB x` for every unit. -/
-def Seq.simU {WA WB TA : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type) [∀ x, Fintype (CB x)]
-    [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out))) : Simulator where
+/-- **The composed simulator, continuing where `go` holds**: `A`'s, then, where `go` holds at its transcript, `B`'s
+program at the unit that transcript selects (`progB`), asking `V*` after `A`'s messages. `B`'s coins are one type `CB x`
+for every unit. `go` need agree with `goesOn` only at `A`'s real transcripts (`zkmalAt_seqG`). -/
+def Seq.simG {WA WB TA : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type) [∀ x, Fintype (CB x)]
+    [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out)))
+    (go : Msg → List (Msg × Out) → Bool) : Simulator where
   C x := SA.C x × CB x
   prog x c := spBind (SA.prog x c.1) fun τA =>
-    if goesOn (Q.kA x) τA then
+    if go x τA then
       spBind (spUnder (τA.map Prod.fst) (progB x (Q.sel x (histOf τA)) c.2)) fun τB => .ret (τA ++ τB)
     else .ret τA
+
+/-- **The composed simulator**: `simG` where `A`'s transcript goes on. -/
+def Seq.simU {WA WB TA : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type) [∀ x, Fintype (CB x)]
+    [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out))) : Simulator :=
+  Q.simG SA CB progB fun x => goesOn (Q.kA x)
 
 /-- **The composed simulator at `B`'s simulator**, where the units are finitely many: `B`'s coins are `SB`'s at every
 unit. -/
 def Seq.sim {WA WB TA : Type} (Q : Seq WA WB TA) [∀ x, Fintype (Q.U x)] [∀ x, DecidableEq (Q.U x)]
     (SA SB : Simulator) : Simulator :=
   Q.simU SA (fun x => (u : Q.U x) → SB.C (Q.xB x u)) fun x u c => SB.prog (Q.xB x u) (c u)
+
+theorem Seq.simG_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type)
+    [∀ x, Fintype (CB x)] [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out)))
+    (go : Msg → List (Msg × Out) → Bool) (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB : Msg → ℕ)
+    (c : (Q.simG SA CB progB go).C x) :
+    (Q.simG SA CB progB go).out H Vs θ x c =
+      if go x (SA.out H (Vs.head Q.kA) θ x c.1) then SA.out H (Vs.head Q.kA) θ x c.1 ++
+        spOut H (Vs.after x kB) (θ, (SA.out H (Vs.head Q.kA) θ x c.1).map Prod.fst)
+          (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))))
+          (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))) c.2)
+      else SA.out H (Vs.head Q.kA) θ x c.1 := by
+  simp only [Simulator.out, Seq.simG, spBind_eval, VStar.head, VStar.after, spOut]
+  by_cases hg : go x (SP.eval H (fun as => ((Vs.next x as θ).eval H).1) (SA.prog x c.1)).1 = true
+  · simp only [hg, ite_true, spBind_eval, spUnder_eval, SP.eval]
+  · simp only [hg, ite_false, Bool.false_eq_true, SP.eval]
 
 theorem Seq.simU_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type)
     [∀ x, Fintype (CB x)] [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out)))
@@ -198,11 +225,8 @@ theorem Seq.simU_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (C
       cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x c.1)
         (spOut H (Vs.after x kB) (θ, (SA.out H (Vs.head Q.kA) θ x c.1).map Prod.fst)
           (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))))
-          (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))) c.2)) := by
-  simp only [Simulator.out, Seq.simU, spBind_eval, cont, VStar.head, VStar.after, spOut]
-  by_cases hg : goesOn (Q.kA x) (SP.eval H (fun as => ((Vs.next x as θ).eval H).1) (SA.prog x c.1)).1 = true
-  · simp only [hg, ite_true, spBind_eval, spUnder_eval, SP.eval]
-  · simp only [hg, ite_false, Bool.false_eq_true, SP.eval]
+          (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))) c.2)) :=
+  Q.simG_out SA CB progB _ H Vs θ x kB c
 
 /-- **The composed run is `A`'s run, then where it goes on `B`'s run** against `V*` after `A`'s messages. -/
 theorem Seq.msgs_eq {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB)
@@ -506,6 +530,14 @@ def Seq.RelOn {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA �
     (RB : Rel WB) : Prop :=
   ∀ x, Q.RelOnAt H PA RA RB x
 
+/-- **A unit an honest run of `A` at `x` selects** against some `V*`, where that run goes on: the units at which
+`B`'s zero knowledge is read. -/
+def Seq.Reach {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA → Prover TA) (RA : Rel WA) (x : Msg)
+    (u : Q.U x) : Prop :=
+  ∃ w, RA x w ∧ ∃ (Θ : Type) (Vs : VStar Θ) (θ : Θ) (ωA : TA),
+    goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs = true ∧
+      Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs) = u
+
 /-- `RelOn` where `B`'s relation holds at every unit and tape. -/
 theorem Seq.relOn_of_forall {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA → Prover TA)
     (RA : Rel WA) (RB : Rel WB) (h : ∀ x w, RA x w → ∀ ωA u, RB (Q.xB x u) (Q.wB w ωA x u)) :
@@ -584,25 +616,31 @@ theorem ZKmalAt.of_equiv {W N Ω N' Ω' : Type} [Fintype N] [Nonempty N] [Fintyp
   rw [hr, hf]
   exact h w hw Θ Vs θ hV Ev
 
-/-- **Sequential composition at one statement.** At `x`, `A` then `B` at the unit `A`'s history selects is `ZKmalAt`
-with the simulator that runs `SA`, then `B`'s program at that unit on coins of their own (`simU`): `ε` adds up, with
-`B`'s at every unit at most `eB`, and so does `γ` (`γ_A ≤ a·g`, `γ_B ≤ g` at every unit), to `(a + 1)·g` against the
-composed `Fork`. The composed tape is `forkTape a`. `B`'s hybrid keeps `A` real and gives `V*` `A`'s messages as its
-tape (`Vs.after`): `B`'s zero knowledge is against every tape, chosen after `H`, at the witness `A`'s tape gives,
-where `B`'s relation holds (`RelOnAt`). `A`'s runs `B`'s program after `A`'s transcript, a function of that transcript
-and coins independent of `A`'s. The units need not be finitely many. Nothing is read at another statement, so the
-tapes may be chosen per statement. -/
-theorem zkmalAt_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
+/-- **Sequential composition at one statement, continuing where `go` holds.** At `x`, `A` then `B` at the unit `A`'s
+history selects is `ZKmalAt` with the simulator that runs `SA`, then, where `go` holds at its transcript, `B`'s program
+at that unit on coins of their own (`simG`): `ε` adds up, with `B`'s at every unit `A`'s honest runs select at most
+`eB` (`Reach`), and so does `γ` (`γ_A ≤ a·g`, `γ_B ≤ g` there), to `(a + 1)·g` against the composed `Fork`. `go` need
+agree with `goesOn` only at `A`'s honest transcripts (`hgo`), so the simulator may test whether to go on as the claim's
+does. The composed tape is `forkTape a`. `B`'s hybrid keeps `A` real and gives `V*` `A`'s messages as its tape
+(`Vs.after`): `B`'s zero knowledge is against every tape, chosen after `H`, at the witness `A`'s tape gives, where `B`'s
+relation holds (`RelOnAt`). `A`'s runs `B`'s program after `A`'s transcript, a function of that transcript and coins
+independent of `A`'s. The units need not be finitely many. Nothing is read at another statement, so the tapes may be
+chosen per statement. -/
+theorem zkmalAt_seqG {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
     [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (Q : Seq WA WB (NA × ΩA)) (H : Msg → Msg) (x : Msg) (nB : Msg → ℕ)
     (PA : WA → Prover (NA × ΩA)) (PB : WB → Prover (NB × ΩB)) (RA : Rel WA) (RB : Rel WB) (SA : Simulator)
     (CB : Msg → Type) [∀ x, Fintype (CB x)] [∀ x, Nonempty (CB x)]
-    (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out))) (εA γA eB g : ℝ) (a : ℕ)
+    (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out))) (go : Msg → List (Msg × Out) → Bool)
+    (εA γA eB g : ℝ) (a : ℕ)
     (hA : ZKmalAt H (Q.kA x) PA (RA x) x (SA.C x) (SA.prog x) εA γA)
-    (hB : ∀ u, ZKmalAt H (nB x) PB (RB (Q.xB x u)) (Q.xB x u) (CB x) (progB x u) eB g)
-    (hR : Q.RelOnAt H PA RA RB x) (he0 : 0 ≤ eB) (hγA : γA ≤ a * g) (hg : 0 ≤ g) :
+    (hB : ∀ u, Q.Reach H PA RA x u → ZKmalAt H (nB x) PB (RB (Q.xB x u)) (Q.xB x u) (CB x) (progB x u) eB g)
+    (hR : Q.RelOnAt H PA RA RB x)
+    (hgo : ∀ w, RA x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ) (ωA : NA × ΩA),
+      go x (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs = goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)
+    (he0 : 0 ≤ eB) (hγA : γA ≤ a * g) (hg : 0 ≤ g) :
     ZKmalAt H (Q.kA x + nB x) (fun w => (Q.prover PA PB w).comap (forkTape a)) (RA x) x
-      ((Q.simU SA CB progB).C x) ((Q.simU SA CB progB).prog x) (εA + eB) ((a + 1) * g) := by
+      ((Q.simG SA CB progB go).C x) ((Q.simG SA CB progB go).prog x) (εA + eB) ((a + 1) * g) := by
   classical
   intro w hw Θ Vs θ hV Ev
   have hreal : Pr (fun ω => Ev (runStar H ((Q.prover PA PB w).comap (forkTape a)) Vs x ω θ).msgs) =
@@ -614,14 +652,16 @@ theorem zkmalAt_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fi
     refine (Pr_forkTape a fun t => Ev (runStar H (Q.prover PA PB w) Vs x t θ).msgs).trans (Pr_congr fun t => ?_)
     obtain ⟨ωA, ωB⟩ := t
     rw [Q.msgs_eq PA PB w H Vs θ x (fun _ => nB x) nB (fun _ => rfl) hV ωA ωB]
-  have hsim : Pr (fun c : (Q.simU SA CB progB).C x => Ev (spOut H Vs θ x ((Q.simU SA CB progB).prog x c))) =
-      Pr (fun s : SA.C x × CB x => Ev (cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x s.1)
-        (spOut H (Vs.after x fun _ => nB x) (θ, (SA.out H (Vs.head Q.kA) θ x s.1).map Prod.fst)
-          (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x s.1))))
-          (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x s.1))) s.2)))) := by
+  have hsim : Pr (fun c : (Q.simG SA CB progB go).C x => Ev (spOut H Vs θ x ((Q.simG SA CB progB go).prog x c))) =
+      Pr (fun s : SA.C x × CB x => Ev (if go x (SA.out H (Vs.head Q.kA) θ x s.1) then
+        SA.out H (Vs.head Q.kA) θ x s.1 ++
+          spOut H (Vs.after x fun _ => nB x) (θ, (SA.out H (Vs.head Q.kA) θ x s.1).map Prod.fst)
+            (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x s.1))))
+            (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x s.1))) s.2)
+        else SA.out H (Vs.head Q.kA) θ x s.1)) := by
     refine Pr_congr fun c => ?_
-    change Ev ((Q.simU SA CB progB).out H Vs θ x c) ↔ _
-    rw [Q.simU_out SA CB progB H Vs θ x (fun _ => nB x) c]
+    change Ev ((Q.simG SA CB progB go).out H Vs θ x c) ↔ _
+    rw [Q.simG_out SA CB progB go H Vs θ x (fun _ => nB x) c]
   rw [hreal, hsim]
   have hF := Q.fork_ge PA PB w H Vs θ x (fun _ => nB x) nB (fun _ => rfl) hV a
   refine (abs_sub_le_hybrid (TA := NA × ΩA) (TB := NB × ΩB) (CA := SA.C x)
@@ -630,14 +670,18 @@ theorem zkmalAt_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fi
       (runStar H (PB (Q.wB w ωA x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))
         (Vs.after x fun _ => nB x) (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))) ωB
         (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)).msgs))
-    (fun ωA cB => Ev (cont (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs
-      (spOut H (Vs.after x fun _ => nB x) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)
-        (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)))
-        (progB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)) cB))))
-    (fun cA cB => Ev (cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x cA)
-      (spOut H (Vs.after x fun _ => nB x) (θ, (SA.out H (Vs.head Q.kA) θ x cA).map Prod.fst)
-        (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x cA))))
-        (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x cA))) cB))))
+    (fun ωA cB => Ev (if go x (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs then
+      (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs ++
+        spOut H (Vs.after x fun _ => nB x) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)
+          (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)))
+          (progB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)) cB)
+      else (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))
+    (fun cA cB => Ev (if go x (SA.out H (Vs.head Q.kA) θ x cA) then
+      SA.out H (Vs.head Q.kA) θ x cA ++
+        spOut H (Vs.after x fun _ => nB x) (θ, (SA.out H (Vs.head Q.kA) θ x cA).map Prod.fst)
+          (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x cA))))
+          (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x cA))) cB)
+      else SA.out H (Vs.head Q.kA) θ x cA))
     (fun ωA => eB + (if goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs then
         (Fork H (PB (Q.wB w ωA x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))
           (Vs.after x fun _ => nB x) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)
@@ -645,19 +689,20 @@ theorem zkmalAt_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fi
     (εA + γA * (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H) ?_ ?_).trans ?_
   · -- `B`'s hybrid, at `A`'s real run
     intro ωA
-    by_cases hgo : goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs = true
-    · simp only [cont, hgo, ite_true]
-      refine (hB _ _ (hR w hw Θ Vs θ ωA hgo) (Θ × List Msg)
+    rw [hgo w hw Θ Vs θ ωA]
+    by_cases hgo' : goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs = true
+    · simp only [cont, hgo', ite_true]
+      refine (hB _ ⟨w, hw, Θ, Vs, θ, ωA, hgo', rfl⟩ _ (hR w hw Θ Vs θ ωA hgo') (Θ × List Msg)
         (Vs.after x fun _ => nB x) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst) rfl
         (fun τ => Ev ((runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs ++ τ))).trans (le_of_eq ?_)
       ring
-    · simp only [cont, hgo, ite_false, Bool.false_eq_true, Pr_const, sub_self, abs_zero, zero_mul, add_zero]
+    · simp only [cont, hgo', ite_false, Bool.false_eq_true, Pr_const, sub_self, abs_zero, zero_mul, add_zero]
       exact he0
   · -- `A`'s hybrid, with `B`'s program after it
     intro cB
-    exact hA w hw Θ (Vs.head Q.kA) θ rfl fun τ => Ev (cont (Q.kA x) τ
-      (spOut H (Vs.after x fun _ => nB x) (θ, τ.map Prod.fst) (Q.xB x (Q.sel x (histOf τ)))
-        (progB x (Q.sel x (histOf τ)) cB)))
+    exact hA w hw Θ (Vs.head Q.kA) θ rfl fun τ => Ev (if go x τ then τ ++
+      spOut H (Vs.after x fun _ => nB x) (θ, τ.map Prod.fst) (Q.xB x (Q.sel x (histOf τ)))
+        (progB x (Q.sel x (histOf τ)) cB) else τ)
   · rw [Ex_const_add, Ex_mul_const]
     have hFA := Finder.pr_nonneg H (Fork H (PA w) (Vs.head Q.kA) θ x)
     have h1 : γA * (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H ≤ a * g * (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H :=
@@ -665,6 +710,21 @@ theorem zkmalAt_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fi
     have h2 := mul_le_mul_of_nonneg_left hF hg
     nlinarith
 
+/-- **Sequential composition at one statement**: `zkmalAt_seqG` where the simulator goes on as `goesOn` does
+(`simU`), with `B`'s zero knowledge at every unit. -/
+theorem zkmalAt_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
+    [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
+    (Q : Seq WA WB (NA × ΩA)) (H : Msg → Msg) (x : Msg) (nB : Msg → ℕ)
+    (PA : WA → Prover (NA × ΩA)) (PB : WB → Prover (NB × ΩB)) (RA : Rel WA) (RB : Rel WB) (SA : Simulator)
+    (CB : Msg → Type) [∀ x, Fintype (CB x)] [∀ x, Nonempty (CB x)]
+    (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out))) (εA γA eB g : ℝ) (a : ℕ)
+    (hA : ZKmalAt H (Q.kA x) PA (RA x) x (SA.C x) (SA.prog x) εA γA)
+    (hB : ∀ u, ZKmalAt H (nB x) PB (RB (Q.xB x u)) (Q.xB x u) (CB x) (progB x u) eB g)
+    (hR : Q.RelOnAt H PA RA RB x) (he0 : 0 ≤ eB) (hγA : γA ≤ a * g) (hg : 0 ≤ g) :
+    ZKmalAt H (Q.kA x + nB x) (fun w => (Q.prover PA PB w).comap (forkTape a)) (RA x) x
+      ((Q.simU SA CB progB).C x) ((Q.simU SA CB progB).prog x) (εA + eB) ((a + 1) * g) :=
+  zkmalAt_seqG Q H x nB PA PB RA RB SA CB progB _ εA γA eB g a hA (fun u _ => hB u) hR
+    (fun _ _ _ _ _ _ => rfl) he0 hγA hg
 
 /-- **Sequential composition of `ZKmalR`**: `zkmalAt_seqU` at every statement. -/
 theorem zkmalR_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
@@ -734,20 +794,68 @@ def iterProver {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintyp
   | 0 => P₀
   | n + 1 => fun w => ((Q n).prover (iterProver T₀ c NB ΩB Q P₀ PB n) (PB n) w).comap (forkTape (c + n))
 
-/-- The simulator of `n + 1` sessions in turn: `S₀`, then session `j + 1`'s program at the unit the simulated history
-selects (`Seq.simU`), on coins `CB j`. -/
+/-- The simulator of `n + 1` sessions in turn, continuing where `go` holds: `S₀`, then, where `go j` holds at the
+simulated history, session `j + 1`'s program at the unit that history selects (`Seq.simG`), on coins `CB j`. -/
+def iterSimG {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB]
+    [Nonempty ΩB] (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (S₀ : Simulator) (CB : ℕ → Msg → Type)
+    [∀ n x, Fintype (CB n x)] [∀ n x, Nonempty (CB n x)]
+    (progB : (n : ℕ) → (x : Msg) → (Q n).U x → CB n x → SP (List (Msg × Out)))
+    (go : ℕ → Msg → List (Msg × Out) → Bool) : ℕ → Simulator
+  | 0 => S₀
+  | n + 1 => (Q n).simG (iterSimG T₀ c NB ΩB Q S₀ CB progB go n) (CB n) (progB n) (go n)
+
+/-- The simulator of `n + 1` sessions in turn: `iterSimG` going on where the first `j + 1`'s simulated transcript does
+(`goesOn`, `Seq.simU`). -/
 def iterSim {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB]
     [Nonempty ΩB] (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (S₀ : Simulator) (CB : ℕ → Msg → Type)
     [∀ n x, Fintype (CB n x)] [∀ n x, Nonempty (CB n x)]
-    (progB : (n : ℕ) → (x : Msg) → (Q n).U x → CB n x → SP (List (Msg × Out))) : ℕ → Simulator
-  | 0 => S₀
-  | n + 1 => (Q n).simU (iterSim T₀ c NB ΩB Q S₀ CB progB n) (CB n) (progB n)
+    (progB : (n : ℕ) → (x : Msg) → (Q n).U x → CB n x → SP (List (Msg × Out))) : ℕ → Simulator :=
+  iterSimG T₀ c NB ΩB Q S₀ CB progB fun n x => goesOn ((Q n).kA x)
+
+/-- **Sequential composition of `n + 1` sessions at one statement, continuing where `go` holds.** At `x`, the first
+`ZKmalAt` with `ε₀` and `γ₀ ≤ c·g`, and session `j + 1` `ZKmalAt` with `eB j` and `g` on coins `CB j x` at every unit
+the first `j + 1`'s honest runs select (`Reach`), where `(Q n).kA x` counts the first `n + 1` sessions' rounds (`hk`)
+and `go j` agrees with `goesOn` at their honest transcripts (`hgo`): the `n + 1` in turn are `ZKmalAt` with
+`ε₀ + Σ_{j < n} eB j` and `(c + n)·g`. -/
+theorem zkmalAt_iterG {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (T₀ : SeqTape)
+    (c : ℕ) (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (H : Msg → Msg) (x : Msg) (nB : ℕ → Msg → ℕ)
+    (P₀ : WA → Prover (T₀.at c NB ΩB 0)) (PB : ℕ → WB → Prover (NB × ΩB)) (RA : Rel WA) (RB : ℕ → Rel WB)
+    (S₀ : Simulator) (CB : ℕ → Msg → Type) [∀ n x, Fintype (CB n x)] [∀ n x, Nonempty (CB n x)]
+    (progB : (n : ℕ) → (x : Msg) → (Q n).U x → CB n x → SP (List (Msg × Out)))
+    (go : ℕ → Msg → List (Msg × Out) → Bool) (ε₀ γ₀ g : ℝ) (eB : ℕ → ℝ)
+    (h₀ : ZKmalAt H ((Q 0).kA x) P₀ (RA x) x (S₀.C x) (S₀.prog x) ε₀ γ₀)
+    (hB : ∀ n u, (Q n).Reach H (iterProver T₀ c NB ΩB Q P₀ PB n) RA x u →
+      ZKmalAt H (nB n x) (PB n) (RB n ((Q n).xB x u)) ((Q n).xB x u) (CB n x) (progB n x u) (eB n) g)
+    (hR : ∀ n, (Q n).RelOnAt H (iterProver T₀ c NB ΩB Q P₀ PB n) RA (RB n) x)
+    (hgo : ∀ n w, RA x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ) (ωA : T₀.at c NB ΩB n),
+      go n x (runStar H (iterProver T₀ c NB ΩB Q P₀ PB n w) (Vs.head (Q n).kA) x ωA θ).msgs =
+        goesOn ((Q n).kA x) (runStar H (iterProver T₀ c NB ΩB Q P₀ PB n w) (Vs.head (Q n).kA) x ωA θ).msgs)
+    (hk : ∀ n, (Q (n + 1)).kA x = (Q n).kA x + nB n x) (hγ₀ : γ₀ ≤ c * g) (he0 : ∀ n, 0 ≤ eB n) (hg : 0 ≤ g)
+    (n : ℕ) :
+    ZKmalAt H ((Q n).kA x) (iterProver T₀ c NB ΩB Q P₀ PB n) (RA x) x
+      ((iterSimG T₀ c NB ΩB Q S₀ CB progB go n).C x) ((iterSimG T₀ c NB ΩB Q S₀ CB progB go n).prog x)
+      (ε₀ + ∑ j ∈ Finset.range n, eB j) ((c + n) * g) := by
+  induction n with
+  | zero =>
+      intro w hw Θ Vs θ hV Ev
+      refine (h₀ w hw Θ Vs θ hV Ev).trans ?_
+      simp only [Finset.range_zero, Finset.sum_empty, Nat.cast_zero, add_zero]
+      exact add_le_add le_rfl (mul_le_mul_of_nonneg_right hγ₀ (Finder.pr_nonneg _ _))
+  | succ n ih =>
+      have h := zkmalAt_seqG (Q n) H x (nB n) (iterProver T₀ c NB ΩB Q P₀ PB n) (PB n) RA (RB n)
+        (iterSimG T₀ c NB ΩB Q S₀ CB progB go n) (CB n) (progB n) (go n) (ε₀ + ∑ j ∈ Finset.range n, eB j)
+        ((c + n) * g) (eB n) g (c + n) ih (hB n) (hR n) (hgo n) (he0 n) (by push_cast; exact le_rfl) hg
+      have eγ : ((c + n : ℕ) : ℝ) + 1 = (c : ℝ) + ((n + 1 : ℕ) : ℝ) := by push_cast; ring
+      rw [eγ, ← hk n] at h
+      rw [Finset.sum_range_succ, ← add_assoc]
+      exact h
 
 /-- **Sequential composition of `n + 1` sessions at one statement.** At `x`, the first `ZKmalAt` with `ε₀` and
 `γ₀ ≤ c·g`, and session `j + 1` `ZKmalAt` every unit with `eB j` and `g` on coins `CB j x`, where `(Q n).kA x` counts
 the first `n + 1` sessions' rounds (`hk`): the `n + 1` in turn are `ZKmalAt` with `ε₀ + Σ_{j < n} eB j` and
-`(c + n)·g`. A first protocol that rewinds nothing (`γ₀ = 0`) takes `c = 0`, and `n` sessions after it cost `n·g`.
-Nothing is read at another statement, so `T₀`, `NB`, `ΩB` and `n` may be chosen per statement. -/
+`(c + n)·g` (`zkmalAt_iterG` at `goesOn`). A first protocol that rewinds nothing (`γ₀ = 0`) takes `c = 0`, and `n`
+sessions after it cost `n·g`. Nothing is read at another statement, so `T₀`, `NB`, `ΩB` and `n` may be chosen per
+statement. -/
 theorem zkmalAt_iter {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (T₀ : SeqTape)
     (c : ℕ) (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (H : Msg → Msg) (x : Msg) (nB : ℕ → Msg → ℕ)
     (P₀ : WA → Prover (T₀.at c NB ΩB 0)) (PB : ℕ → WB → Prover (NB × ΩB)) (RA : Rel WA) (RB : ℕ → Rel WB)
@@ -759,21 +867,9 @@ theorem zkmalAt_iter {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype �
     (hk : ∀ n, (Q (n + 1)).kA x = (Q n).kA x + nB n x) (hγ₀ : γ₀ ≤ c * g) (he0 : ∀ n, 0 ≤ eB n) (hg : 0 ≤ g)
     (n : ℕ) :
     ZKmalAt H ((Q n).kA x) (iterProver T₀ c NB ΩB Q P₀ PB n) (RA x) x ((iterSim T₀ c NB ΩB Q S₀ CB progB n).C x)
-      ((iterSim T₀ c NB ΩB Q S₀ CB progB n).prog x) (ε₀ + ∑ j ∈ Finset.range n, eB j) ((c + n) * g) := by
-  induction n with
-  | zero =>
-      intro w hw Θ Vs θ hV Ev
-      refine (h₀ w hw Θ Vs θ hV Ev).trans ?_
-      simp only [Finset.range_zero, Finset.sum_empty, Nat.cast_zero, add_zero]
-      exact add_le_add le_rfl (mul_le_mul_of_nonneg_right hγ₀ (Finder.pr_nonneg _ _))
-  | succ n ih =>
-      have h := zkmalAt_seqU (Q n) H x (nB n) (iterProver T₀ c NB ΩB Q P₀ PB n) (PB n) RA (RB n)
-        (iterSim T₀ c NB ΩB Q S₀ CB progB n) (CB n) (progB n) (ε₀ + ∑ j ∈ Finset.range n, eB j) ((c + n) * g)
-        (eB n) g (c + n) ih (hB n) (hR n) (he0 n) (by push_cast; exact le_rfl) hg
-      have eγ : ((c + n : ℕ) : ℝ) + 1 = (c : ℝ) + ((n + 1 : ℕ) : ℝ) := by push_cast; ring
-      rw [eγ, ← hk n] at h
-      rw [Finset.sum_range_succ, ← add_assoc]
-      exact h
+      ((iterSim T₀ c NB ΩB Q S₀ CB progB n).prog x) (ε₀ + ∑ j ∈ Finset.range n, eB j) ((c + n) * g) :=
+  zkmalAt_iterG T₀ c Q H x nB P₀ PB RA RB S₀ CB progB _ ε₀ γ₀ g eB h₀ (fun n u _ => hB n u) hR
+    (fun _ _ _ _ _ _ _ => rfl) hk hγ₀ he0 hg n
 
 /-- **Sequential composition of `n + 1` sessions**: `zkmalAt_iter` at every statement. -/
 theorem zkmalR_iter {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (T₀ : SeqTape)
