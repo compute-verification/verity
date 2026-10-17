@@ -108,7 +108,7 @@ self-clash, a self-clash being in `ε_c⁻` already (`SessionSC`: `FlockSoundnes
 follows from, at each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C`
 unless it self-clashes bounds the deployed runs accepting on `C`, and whose `Adv` and self-clash the escapes' events
 bound, the escapes at the plain fork rounds (`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`).
-`Flock.KS` at the plain record follows from the live sessions' bound at table 0 and `Extendθ` (`PlainKS`:
+`Flock.KS` at the trimmed plain record follows from the live sessions' bound at table 0 (`PlainKS`:
 `FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit`
 against the simulated strategy arises only on live runs the live verdict accepts, whose decoded outputs self-clash
 (`Escapes`: `FlockDeploy.KS.selfClash_le_live`, `FlockDeploy.KS.mean_selfClash_le_live`). Escapes on accepted runs
@@ -161,7 +161,7 @@ the simulation of the runs alone (`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.
 `JsonEquiv`, which holds between different terms (`FlockDeploy.KS.drawEq_ne`). At those coins, a deployed event
 that the live event implies bounds the mixture, the third bound's form (`PlainThird`:
 `FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision as the events, KS at the
-deployed plain verifier holds from a live prover for each prover that simulates its accepting runs, whose self-clashes
-give its accepting runs with a collision and whose fork bound holds, the record's draw verbatim and `Extendθ`
+deployed plain verifier's trimmed record holds from a live prover for each prover that simulates its accepting runs,
+whose self-clashes give its accepting runs with a collision and whose fork bound holds, and the record's draw verbatim
 (`PlainSimW`: `FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
 `FlockDeploy.KS.plainLiveWrPAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). -/
