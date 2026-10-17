@@ -223,7 +223,7 @@ theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
       rw [innerOfO, hxO, hins]
       exact hinner
     unfold fullDrawO at hf
-    rw [hio, RecScope.fullDraw_some_rec] at hf
+    rw [hio] at hf
     unfold RecScope.fullDrawOk
     have hd := checks_recordDraw hc
     cases hrd : Witness.recordDraw f.record with
