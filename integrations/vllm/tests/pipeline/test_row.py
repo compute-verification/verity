@@ -785,6 +785,23 @@ def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_a
     assert ran == ["match.check"] and last[:2] == ["match", "PASS"] and last[3] == "rc=0/0/0/-1"
 
 
+@pytest.mark.parametrize("argv, leg", [((), 7200), (("--fold-timeout", "100"), 100)])
+def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path, monkeypatch, argv, leg):
+    """tp-fold-match's ``--timeout`` bounds each subprocess, and a rank runs three in turn before the cross-rank leg: one leg's limit
+    on the whole would stop a fold that fits its own (a GLM-5.3 B8 rank folds for ~100 min of the default 120)."""
+    t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
+    t.fold_profile = "derived_GLM53_tp8"
+    os.makedirs(t.M)
+    Path(t.M, "gpu_legs.json").write_text(json.dumps({"capture_rc": 0, "control_rc": 0}))
+    monkeypatch.setattr(R, "derived_ok", lambda p: True)
+    monkeypatch.setattr(R, "tp_passed", lambda p: True)
+    seen: dict[str, tuple[int, list[str]]] = {}
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.setdefault(stage, (to, cmd)) and 0)
+    t.match()
+    to, cmd = seen["match.fold_match"]
+    assert int(cmd[cmd.index("--timeout") + 1]) == leg and to == 4 * leg
+
+
 def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_path, monkeypatch):
     """Every child of either row (a TP row's per-rank folds under tp-fold-match among them) stores instances.jsonl in `--instances-form`,
     progressions by default, not the fold library's run-by-run default (a transposed weight's operand is ~1e6 runs per instance)."""

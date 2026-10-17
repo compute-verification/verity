@@ -392,7 +392,8 @@ class TpRow(Row):
                 gp = f"{self.rank(r)}/build_workload/workload_program.json"
                 if os.path.isfile(gp):
                     fargs += ["--gprog-rank", f"{r}={gp}"]
-            rc_fold = self.run_tl("match.fold_match", to_f, f"{M}/fold_match.log",
+            # --timeout bounds each subprocess: a rank runs three in turn (fold, compare, GM-01), and the cross-rank leg follows them
+            rc_fold = self.run_tl("match.fold_match", 4 * to_f, f"{M}/fold_match.log",
                                   self.cli("tp-fold-match", "--capture", f"{M}/capture", "--profile", fp, *fargs, "--workload", self.wl,
                                            "--tp2-match", f"{M}/tp2_match.json", "--within-step", "dag", "--rank-workers", "0", "--python", self.py,
                                            "--timeout", str(to_f), "--out", f"{M}/fold_match"))
