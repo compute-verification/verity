@@ -209,7 +209,7 @@ class FusedPumpBU(FusedPumpK):
     GEMM C = A B with A (128 S x 32) on {0,1} and B (32 x 1024) on U = {±1..±64}, from the coins and the public tile
     id; B sits in shared memory for the block's 8 warps and each A fragment, expanded once, meets all 128 B fragments,
     so the hashing is ~1 issue slot an MMA (dfill_k_warp's ~10). Every k32 word goes into duo's receipt (NC 2, three
-    ops a word), which reads every word where ram's reads a pair only through Q (P2-FF r8)."""
+    ops a word), which binds every word where ram's binds only pairs (P2-FF r8)."""
 
     name: str = "fill-fused-pump-bu"
     lineage: dict = field(default_factory=lambda: {
