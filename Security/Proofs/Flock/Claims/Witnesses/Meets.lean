@@ -1,26 +1,29 @@
 import Proofs.Flock.Claims.DeployEfficient
 import Definitions.Claims.Sampling
-import Definitions.Claims.Recursion
 
 /-!
 # What the claims ask of a record holds at the deployed ones
 
 The lock's `claims` section names, for each claim, theorems `meets`, one per deployed record, that state the claim's
 checkable antecedents there, so that the claim is not true at the deployment only because nothing meets them. The
-deployed records are Flock's, `deployPlain` and `deployZk` (`DeployCode`). The sampling and recursion compilers' claims
-read a Flock record, the sampling record's `flock` and the recursion's outer record `DO` (over Flock, its inner record
-too), and their antecedents are of that record:
+deployed records are Flock's, `deployPlain` and `deployZk` (`DeployCode`). The sampling compiler's claims read a Flock
+record, the sampling record's `flock`, and their antecedents are of that record (the recursion's are `RecursionMeets`):
 
 * `Flock.decoder_meets_plain`, `_zk`: the record's own decoder meets the list-decoding spec at the record's code,
   length and radius (`decode_plain`, `listWithin_plain`). That is the antecedent of Flock's `KS` and `Bits` (every
   decoder that meets the spec) and a conjunct of its `Efficient`.
 * `Sampling.decoder_meets_plain`, `_zk`: the same at a sampling record whose `flock` is the deployed record, the
   antecedent of the sampling `KS`, `KSCount` and `Bits` and a conjunct of its `Efficient`.
-* `Recursion.decoder_meets_plain`, `_zk`: the deployed record's decoder is one the recursion's claims quantify over
-  (`decOK`).
-* `Flock.masked_meets_zk`: `deployZk` is the masked verifier, the first conjunct of Flock's `ZK` and of the recursion's
-  (`DO.zk`); `Sampling.masked_meets_zk`: so is the `flock` of a sampling record over it, the first conjunct of the
-  sampling `ZK`.
+* `Flock.masked_meets_zk`: `deployZk` is the masked verifier, the first conjunct of Flock's `ZK`;
+  `Sampling.masked_meets_zk`: so is the `flock` of a sampling record over it, the first conjunct of the sampling `ZK`.
+* `Flock.scope_meets_plain`, `_zk`: the record's readable scope (`Flock.InScope` at the record's `zk`) holds a statement
+  with a witness in its relation (`RelS`), the readable part of `Complete`'s antecedent (`Scope x`, `R x w`), what
+  `ScopeMatches` equates with the scope check, and what each of `Nontrivial`'s recorded runs is of. That some bytes parse
+  to it is beyond Lean: the verifier's parser reads the circuit file's header with `Lean.Json.parse`, a `partial`
+  function.
+* `Sampling.scope_meets`: the sampling scope's readable form (`Sampling.InScope`) holds a program, partition and
+  design; it reads no field of the record, of which the tree has no concrete one. It is the readable part of the
+  sampling `Complete`'s antecedent, of what its `ScopeMatches` equates, and of `Nontrivial`'s runs.
 -/
 
 open FlockDeploy
@@ -46,6 +49,70 @@ theorem Flock.decoder_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.R
 theorem Flock.masked_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) : (deployZk rel).zk = true :=
   rfl
 
+/-- **A statement of a record's readable scope**: `2^m` trace bits in blocks of `2^6`, the empty circuit, one table,
+hm96 rows (`rows-v1`) under SHA-512 leaves. -/
+def Flock.scopeStmt (m : ℕ) : Claims.Flock.Stmt :=
+  ⟨m, 6, ⟨0, [], []⟩, fun _ => [], fun _ => [], [],
+    ⟨true, false, true, "hm96-sha512/v1", 1, false, false, false, false, 1, false, 0, true, true, false⟩⟩
+
+/-- **The plain record's readable scope holds a statement with a witness in its relation.** -/
+theorem Flock.scope_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
+    ∃ (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit), Claims.Flock.InScope (deployPlain rel).zk s ∧
+      Claims.Flock.RelS s w :=
+  ⟨Flock.scopeStmt 22, ⟨[]⟩, by
+    show Claims.Flock.InScope false _
+    unfold Claims.Flock.InScope
+    decide, fun _ _ => rfl⟩
+
+/-- **The masked record's readable scope holds a statement with a witness in its relation**, at `2^25` trace bits. -/
+theorem Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
+    ∃ (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit), Claims.Flock.InScope (deployZk rel).zk s ∧
+      Claims.Flock.RelS s w :=
+  ⟨Flock.scopeStmt 25, ⟨[]⟩, by
+    show Claims.Flock.InScope true _
+    unfold Claims.Flock.InScope
+    decide, fun _ _ => rfl⟩
+
+/-- **A statement of the sampling scope**: the one-gate program that returns its input, under `Q_word` v1, with the
+design that checks every unit of its one class. -/
+def Sampling.scopeStmt : Claims.Sampling.Stmt := ⟨⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+
+/-- Its partition: one class of one stratum of one replay unit, the one proof unit `[0, 1)`. -/
+def Sampling.scopePartition : Claims.Sampling.Partition := ⟨[[[[(0, 1)]]]]⟩
+
+/-- **The sampling scope holds a statement**: its readable form reads no field of the record. -/
+theorem Sampling.scope_meets :
+    ∃ (P : Claims.Sampling.Partition) (s : Claims.Sampling.Stmt), Claims.Sampling.InScope P s := by
+  refine ⟨Sampling.scopePartition, Sampling.scopeStmt, ⟨?_, ?_⟩, ⟨?_, ?_, ?_⟩, rfl, ?_⟩
+  · intro g x hg i hi
+    cases g with
+    | zero =>
+      simp only [Sampling.scopeStmt, List.getElem?_cons_zero, Option.some.injEq] at hg
+      subst hg
+      simp [Claims.Sampling.BGate.reads] at hi
+    | succ n => simp [Sampling.scopeStmt] at hg
+  · intro o ho
+    simp [Sampling.scopeStmt] at ho ⊢
+    exact ho
+  · decide
+  · intro r hr
+    simp only [Sampling.scopePartition, Claims.Sampling.Partition.rus, List.flatten_cons, List.flatten_nil,
+      List.append_nil, List.mem_singleton] at hr
+    subst hr
+    exact ⟨by simp, by simp, fun i h => by simp at h⟩
+  · intro r hr u hu
+    simp only [Sampling.scopePartition, Claims.Sampling.Partition.rus, List.flatten_cons, List.flatten_nil,
+      List.append_nil, List.mem_singleton] at hr
+    subst hr
+    simp only [List.mem_singleton] at hu
+    subst hu
+    decide
+  · intro p hp
+    simp only [Sampling.scopeStmt, Sampling.scopePartition, List.zip_cons_cons, List.zip_nil_left,
+      List.mem_singleton] at hp
+    subst hp
+    exact ⟨trivial, fun k hk => by cases hk⟩
+
 /-- **At a sampling record over the plain record**, its Flock record's decoder meets the list-decoding spec. -/
 theorem Sampling.decoder_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
     (D : Claims.Sampling.Deploy Coin (List 𝔽) Claims.Flock.PlainTrace) (hD : D.flock = deployPlain rel) :
@@ -66,15 +133,5 @@ theorem Sampling.masked_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable
     D.flock.zk = true := by
   rw [hD]
   rfl
-
-/-- **The plain record's decoder is one the recursion's claims quantify over.** -/
-theorem Recursion.decoder_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
-    Claims.Recursion.decOK (deployPlain rel) (deployPlain rel).decode :=
-  Claims.Flock.decoder_meets_plain rel
-
-/-- **The masked record's decoder is one the recursion's claims quantify over.** -/
-theorem Recursion.decoder_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
-    Claims.Recursion.decOK (deployZk rel) (deployZk rel).decode :=
-  Claims.Flock.decoder_meets_zk rel
 
 end Claims

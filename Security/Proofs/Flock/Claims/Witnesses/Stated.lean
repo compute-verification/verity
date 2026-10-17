@@ -1,4 +1,3 @@
-import Proofs.Flock.Claims.Witnesses.Recursion
 import Proofs.Flock.Claims.Witnesses.Sampling
 
 /-!
@@ -6,9 +5,9 @@ import Proofs.Flock.Claims.Witnesses.Sampling
 
 The lock's `claims` section (`Security/lean-audit.json`) names a theorem `C_fails` for each claim `C`: past its `∀`
 and `∃` binders it is `¬ C …`, so `C` is not true of everything. A guarantee's statement reads only the spec, so each
-quantifies (`∃`) over the toy instance it fails at, and its proof is the toy witness of `Witnesses.Shared`, `Flock`,
-`Sampling` or `Recursion`. A record whose decoder's columns are words of bits takes the zero word as an instance
-(`Zero (List Bool)`), which the statement quantifies over too.
+quantifies (`∃`) over the toy instance it fails at, and its proof is the toy witness of `Witnesses.Shared`, `Flock` or
+`Sampling`. A record whose decoder's columns are words of bits takes the zero word as an instance (`Zero (List Bool)`),
+which the statement quantifies over too. The ZK-recursion compiler's are `Witnesses.Recursion`'s and `RecursionMeets`'.
 -/
 
 namespace Claims
@@ -170,90 +169,5 @@ theorem Sampling.ScopeMatches_fails {Coin : Type} [Fintype Coin] [Nonempty Coin]
     ∃ (z : Zero (List Bool)) (D : Claims.Sampling.Deploy Coin (List Bool) Unit),
       ¬ (letI := z; Claims.Sampling.ScopeMatches D) :=
   ⟨Witness.Sampling.zeroCol, _, Witness.Sampling.ScopeMatches_fails⟩
-
-/-! ## The ZK-recursion compiler -/
-
-/-- **The recursion's `KS` fails** at some record, inner protocol and outer record. -/
-theorem Recursion.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
-      (DO : Claims.Flock.Deploy Coin Unit Unit), ¬ Claims.Recursion.KS H D I DO :=
-  ⟨_, _, _, Witness.Recursion.KS_fails H⟩
-
-/-- **The private variant's `KS` fails** at some record, inner protocol and outer record. -/
-theorem Recursion.KSPriv_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
-      (DO : Claims.Flock.Deploy Coin Unit Unit), ¬ Claims.Recursion.KSPriv H D I DO :=
-  ⟨_, _, _, Witness.Recursion.KSPriv_fails H⟩
-
-/-- **The recursion's `KS` over Flock fails** at some record and inner and outer Flock records. -/
-theorem Recursion.KSFlock_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ (D : Claims.Recursion.Deploy Coin) (DI DO : Claims.Flock.Deploy Coin Unit Unit),
-      ¬ Claims.Recursion.KSFlock H D DI DO :=
-  ⟨_, _, _, Witness.Recursion.KSFlock_fails H⟩
-
-/-- **The recursion's `Bits` fails** at some record, inner protocol and outer record. -/
-theorem Recursion.Bits_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
-      (DO : Claims.Flock.Deploy Coin Unit Unit), ¬ Claims.Recursion.Bits H D I DO :=
-  ⟨_, _, _, Witness.Recursion.Bits_fails H⟩
-
-/-- **The recursion's `Bits` over Flock fails** at some record and inner and outer Flock records. -/
-theorem Recursion.BitsFlock_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ (D : Claims.Recursion.Deploy Coin) (DI DO : Claims.Flock.Deploy Coin Unit Unit),
-      ¬ Claims.Recursion.BitsFlock H D DI DO :=
-  ⟨_, _, _, Witness.Recursion.BitsFlock_fails H⟩
-
-/-- **The recursion's `Efficient` fails** at some record, inner protocol, outer record and decoder. -/
-theorem Recursion.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
-      (DO : Claims.Flock.Deploy Coin Unit Unit) (decO : List (ℕ × Unit) → List Unit),
-      ¬ Claims.Recursion.Efficient H D I DO decO :=
-  ⟨_, _, _, _, Witness.Recursion.Efficient_fails H⟩
-
-/-- **The recursion's `ScopeMatches` fails** at some record and inner protocol. -/
-theorem Recursion.ScopeMatches_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :
-    ∃ (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit),
-      ¬ Claims.Recursion.ScopeMatches D I :=
-  ⟨_, _, Witness.Recursion.ScopeMatches_fails⟩
-
-/-- **The recursion's `Complete` fails**: at every `δ_c`, wherever `δ_c < 1`, at some hash, record and inner
-protocol. -/
-theorem Recursion.Complete_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (δc : Msg → ℝ)
-    (x : Msg) (hδ : δc x < 1) :
-    ∃ (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit),
-      ¬ Claims.Recursion.Complete H D I δc :=
-  ⟨_, _, _, Witness.Recursion.Complete_fails δc x hδ⟩
-
-/-- **The recursion's `Nontrivial` fails** at some record and recorded run. -/
-theorem Recursion.Nontrivial_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ (D : Claims.Recursion.Deploy Coin) (recs : List (Claims.Recorded D.V)), ¬ Claims.Recursion.Nontrivial H D recs :=
-  ⟨_, _, Witness.Recursion.Nontrivial_fails H⟩
-
-/-- **The recursion's `ZK` fails**: at every outer simulator family, at some record, inner protocol, outer record and
-prover. -/
-theorem Recursion.ZK_fails {Coin N Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype N]
-    [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (SO : ℕ → Msg → ℕ → Claims.Recursion.OSim) :
-    ∃ (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
-      (DO : Claims.Flock.Deploy Coin Unit Unit) (P : Claims.Flock.Wit → Prover (N × Ω)),
-      ¬ Claims.Recursion.ZK H D I DO P SO :=
-  ⟨_, _, _, _, Witness.Recursion.ZK_fails H SO⟩
-
-/-- **The private variant's `ZK` fails** there too. -/
-theorem Recursion.ZKPriv_fails {Coin N Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype N]
-    [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (SO : ℕ → Msg → ℕ → Claims.Recursion.OSim) :
-    ∃ (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
-      (DO : Claims.Flock.Deploy Coin Unit Unit) (P : Claims.Flock.Wit → Prover (N × Ω)),
-      ¬ Claims.Recursion.ZKPriv H D I DO P SO :=
-  ⟨_, _, _, _, Witness.Recursion.ZKPriv_fails H SO⟩
-
-/-- **The inner protocol's `KS` fails** at some inner protocol. -/
-theorem Recursion.Inner.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ∃ I : Claims.Recursion.Inner Coin Claims.Flock.Wit, ¬ I.KS H :=
-  ⟨_, Witness.Recursion.Inner.KS_fails H⟩
-
-/-- **The inner protocol's `KS` against aborting provers fails** at some inner protocol. -/
-theorem Recursion.Inner.KSAbort_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    (H : Msg → Msg) : ∃ I : Claims.Recursion.Inner Coin Claims.Flock.Wit, ¬ I.KSAbort H :=
-  ⟨_, Witness.Recursion.Inner.KSAbort_fails H⟩
 
 end Claims
