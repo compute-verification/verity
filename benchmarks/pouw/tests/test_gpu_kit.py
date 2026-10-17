@@ -216,6 +216,46 @@ def test_side_effect_sink_and_two_loops():
                for r in G.judge_kernel(spec, both[:1])["reasons"])
 
 
+ELECT_LISTING = """\t.section\t.text.blkred,"ax",@progbits
+        .global         blkred
+        .type           blkred,@function
+        .size           blkred,(.L_x_9 - blkred)
+        .other          blkred,@"STO_CUDA_ENTRY STV_DEFAULT"
+blkred:
+.text.blkred:
+        /*0000*/                   CS2UR UR10, SR_CLOCKLO ;
+.L_x_1:
+        /*0010*/                   PLOP3.LUT P0, PT, PT, PT, PT, 0x80, 0x8 ;
+.L_x_2:
+        /*0020*/               @P0 ELECT P2, URZ, PT ;
+        /*0030*/                   UBLKRED.G.S.ADD [UR4], [UR7], UR8 ;
+        /*0040*/               @P2 PLOP3.LUT P0, PT, P2, PT, PT, 0x8, 0x80 ;
+        /*0050*/                   PLOP3.LUT P2, PT, PT, PT, PT, 0x8, 0x80 ;
+        /*0060*/               @P0 BRA.U.ANY `(.L_x_2) ;
+        /*0070*/                   UIADD3 UR6, UPT, UPT, UR6, 0x1, URZ ;
+        /*0080*/                   UISETP.NE.AND UP0, UPT, UR6, URZ, UPT ;
+        /*0090*/                   BRA.U UP0, `(.L_x_1) ;
+        /*00a0*/                   CS2R R2, SR_CLOCKLO ;
+        /*00b0*/                   EXIT ;
+.L_x_9:
+"""
+
+
+def test_an_elect_loop_is_one_trip_and_listed():
+    """ptxas wraps UBLKRED (sm_120, r20261017-033329-80d9) in an ELECT loop that runs once per active lane."""
+    fn = {f["name"]: H.Function(f) for f in H.parse_nvdisasm(ELECT_LISTING)}["blkred"]
+    rec = G.judge_kernel(fn, [{"UBLKRED*": 1}])
+    assert rec["ok"], rec["reasons"]
+    assert rec["elect"] == ["0x0020"] and rec["sink"]["by"] == "side effect"
+    plain = ELECT_LISTING.replace("BRA.U.ANY", "BRA.U")
+    fn = {f["name"]: H.Function(f) for f in H.parse_nvdisasm(plain)}["blkred"]
+    assert any("is nested in the timed loop" in r for r in G.judge_kernel(fn, [{"UBLKRED*": 1}])["reasons"])
+
+
+def test_ldgsts_is_a_side_effect():
+    assert G.is_write(["LDGSTS", "E", "BYPASS", "128"])
+
+
 def test_forbid_clock_and_sink_refusals():
     rec = G.judge_kernel(functions("lm")["ldsm_x1"], [{"LDSM.16.M88": 8}], forbid=("LDSM",))
     assert checks(rec) == {"forbid"}
