@@ -47,6 +47,7 @@ A warp instruction does 32 lane instructions; a uniform instruction does one. Ev
 from __future__ import annotations
 
 import math
+import re
 import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -282,7 +283,9 @@ def adapts(data: Path = DATA) -> list[str]:
 
 
 def designs(data: Path = DATA) -> list[str]:
-    return sorted(p.stem for p in (data / "designs").glob("*.toml"))
+    """The design names, their numbers in numeric order (dither-1s-l32 before dither-1s-l128)."""
+    key = lambda n: [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", n)]
+    return sorted((p.stem for p in (data / "designs").glob("*.toml")), key=key)
 
 
 @dataclass(frozen=True)
