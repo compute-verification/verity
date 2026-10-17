@@ -15,8 +15,8 @@ What an accepted run of the deployed verifier (`Deploy.V`, plain or `--zk`) give
   `hashesIn (vLog.map Prod.fst)`, through `within`), and the custody checks pass;
 * the link the decision reads is the prover's first message, which depends on the tape alone (`run_head`,
   `act_decide_link`), so two runs at one tape decide on one link;
-* the scope check those checks run pins `hm96-sha512/v1` leaves, so every table's Merkle scheme is `hm96Sha512`
-  (`checks_hm96`).
+* the scope check those checks run pins every table's Merkle scheme to `hm96Sha512` or, for a statement read
+  without `--zk`, plain SHA-512 leaves (`checks_leaf`); under `--zk` it is `hm96Sha512` (`checks_hm96`).
 -/
 
 namespace FlockDeploy.KS
@@ -241,7 +241,7 @@ theorem checks_leaf {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
 /-- A statement set up at `zk` is read at `zk`. -/
 theorem setupOf_zk {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupOf zk x = some (s, spec, sts)) : s.read.zk = zk :=
-  readOf_zk (by simp [readOf, (setupOf_some h).1])
+  readOf_zk (x := x) (by simp [readOf, (setupOf_some h).1])
 
 /-- **The checks pin `hm96-sha512/v1` under `--zk`**: every table a masked statement sets up commits under
 `hm96Sha512`. -/
