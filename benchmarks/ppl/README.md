@@ -110,10 +110,10 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 |---|---|---|---|
 | `linear.smooth(alpha, kv_shared)` | real | SmoothQuant, x / m and W m; `kv_shared` is the foldable variant | D4-70B |
 | `linear.rotate(kind)` | real | x Q and W Q; `q` is exact_grid's rotation, `h` the flat Hadamard | D4-PPL |
-| `linear.int8(act, act_top, weight, weight_top, group, gptq, density)` | quantize | activations per token, rounded or dithered (`density` < 1: dithered on a coin-chosen fraction of every k64 word's positions, rounded elsewhere); weights per row or per `group` inputs, capped at `weight_top`, rounded, GPTQ or dithered (`weight = "dither"`: fresh bits a call, density 1) | D4-PPL, D4-70B, LOWBIT-DESIGN, EPS-BUDGET |
+| `linear.int8(act, act_top, weight, weight_top, group, gptq, density, dither_bits)` | quantize | activations per token, rounded or dithered (`density` < 1: dithered on a coin-chosen fraction of every k64 word's positions, rounded elsewhere); weights per row or per `group` inputs, capped at `weight_top`, rounded, GPTQ or dithered (`weight = "dither"`: fresh bits a call, density 1); `dither_bits` = b: coins R on {0, …, 2^b − 1}, served floor(x / s) − (2^(b−1) − 1) + R on s = absmax / (top − 2^(b−1)), the bit's mean given x | D4-PPL, D4-70B, LOWBIT-DESIGN, EPS-BUDGET, PPL-DITHER-SIZE |
 | `attention.rotate()` | real | Q R, K R, V R and the output R⁻¹ | D4-ATTN |
 | `attention.center_keys()` | real | kc | D4-ATTN |
-| `attention.int8(q, q_top, k, k_top, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; Q, K and V rounded or dithered within their tops; P per row or per key block, `p_sink` | D4-ATTN, EPS-BUDGET |
+| `attention.int8(q, q_top, k, k_top, p, p_top, p_block, p_sink, v, v_top, v_scale, qk_bits)` | quantize | one limb; Q, K, P and V rounded or dithered within their tops (P's bits only where key <= query); P per row or per key block, `p_sink`; `qk_bits` widens Q's and K's coins as `linear.int8`'s `dither_bits` does (V and P keep their bit) | D4-ATTN, EPS-BUDGET, PPL-DITHER-SIZE |
 | `attention.peel(operand, width, offset)` | integer | low-rank noise on Q or P, peeled exactly | D4-ATTN |
 | `linear.grid(grid, act, weight, block, scales, density)` | quantize | both operands on a low-bit grid (`fp4c`, `fp4`, `int5`), per token and per row, each rounded, dithered or `sr`; `block = 16` adds NVFP4's integer block scales over k (`scales`: `odd`, the UE4M3 odd integers 1–15, or `int`); `density` < 1 coins only a coin-chosen fraction of every k64 word's positions | D4-LOWBIT, LOWBIT-DESIGN |
 | `linear.peel(alphabet, width, top)` | integer | the int8 design's weight-side coin: W + U served, U low-rank (period 32 in k, {0,1} or ±1..±width), peeled exactly and gated on the check window, with \|W + U\| ≤ top | LOWBIT-DESIGN |
@@ -136,10 +136,25 @@ contiguous region in the same blocks, `nvfp4-qN`, `nvfp4c-qN` and `int5-qN` dith
 word's positions on both operands, and `fp8-peel-wW[-gptq]` is the int8 design on E4M3's exact integers: activations
 dithered on −16..16, weights on ±W (rounded or GPTQ) served as W + U and peeled; `fp8-peel-w15-qN` dithers the
 activations on 1/N of the positions only (U still coins every position).
-SKIP's designs (note:20261017T0340Z-draft-skip): `adopted-qkd` (Q Kᵀ dithered on both operands, no Q peel),
+SKIP's arms (note:20261017T0340Z-draft-skip): `adopted-qkd` (Q Kᵀ dithered on both operands, no Q peel),
 `adopted-bd` (the linears too), `adopted-bd-lm` (and lm_head), `co` (CO-Dither's served values at r = k/2: 7-bit
 sides plus fresh bits), `co32c` (CHECKED-STRIP's: 7-bit weights and 8-bit activations on the linears, `co`'s
-attention), `ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention).
+attention), `co32c-pv` (`co32c` with P·V as CO-Dither serves it: P dithered with a fresh bit under the w64 peel; `co32c-pvN`
+in blocks of N = 256, 512 or 1,024 keys; `adopted-bd-lm-pv` is `adopted-bd-lm` with that P·V, `adopted-bd-lm-pvN` in
+blocks), and `ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention),
+kept as records now that NCP-INT is no longer a design candidate. A design names its arm as `ppl` in the design registry
+(`benchmarks/pouw/machine_model/data/designs/`, decision 79's names): Dither-1S `adopted`, Dither-2S `adopted-bd-lm`,
+Dither-2S-pv `adopted-bd-lm-pv`, Dither-C `co32c-pv` and Dither-C-peel `co32c`.
+`adopted-bd-lm-dB` and `co32c-dB` (B = 2, 3, 4) are `adopted-bd-lm` and `co32c` with a B-bit dither on the linears,
+lm_head, Q and K (note:20261017T0518Z-draft-ppl-dither-size).
+One-sided dither against `adopted-bd-lm`'s both-sided: `side-lin-act` and `side-lin-w` round the linears' and
+lm_head's weights, or their activations, on ±127; `side-qk-q` and `side-qk-k` round K, or Q, in Q Kᵀ; each `-dB`
+(B = 2, 3, 4) is `adopted-bd-lm-dB` with the same operand rounded; `side-act-k[-d2]` rounds both the weights and Q
+(the record's sides without U). `dither_plot.py` draws perplexity against B per side choice.
+`co32c-uN` (N = 8, 16, 32, 64) is `adopted-bd-lm` with the linears' and lm_head's weights capped at ±(127 − N): co32c's
+linears with the peeled U on ±N (`benchmarks/pouw/theory/narrow_u.py`) and design A's attention.
+`frontier_plot.py` draws perplexity against core ε (`machine-model eps --checking full`) under each reading of the table
+route, and writes the table.
 Any other file passes as a path.
 
 ## Adding an intervention

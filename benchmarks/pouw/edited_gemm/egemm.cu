@@ -839,8 +839,9 @@ static void qf(EP& P, const Sig& s, QweK f = qwe<0>) {
 }
 static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
   P.m = m; P.n = n; P.k = k; P.seed = seed;
-  if (m % 1024 || n % 128 || k % 256 || k > 16128) {
-    fprintf(stderr, "shape %d %d %d: m %% 1024 == 0 (EL's raster groups), n %% 128 == 0, k %% 256 == 0, k <= 16128 (S_1, S_2 in s8)\n", m, n, k);
+  // k = 128: cgemm.cu's cohalf, on its own operands (quant's 256-column steps leave this file's X unwritten there)
+  if (m % 1024 || n % 128 || (k % 256 && k != 128) || k > 16128) {
+    fprintf(stderr, "shape %d %d %d: m %% 1024 == 0 (EL's raster groups), n %% 128 == 0, k %% 256 == 0 or 128, k <= 16128 (S_1, S_2 in s8)\n", m, n, k);
     exit(2);
   }
   int nsm;
@@ -1253,6 +1254,7 @@ static int eone(const std::string& arm, int m, int n, int k) {
   return 0;
 }
 
+#ifndef EGEMM_LIB
 int main(int argc, char** argv) {
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
@@ -1263,3 +1265,4 @@ int main(int argc, char** argv) {
   fprintf(stderr, "usage: egemm gate DIR M N K SEED | bench REPS M N K | il REPS ARM BASE M N K | one ARM M N K\n");
   return 2;
 }
+#endif
