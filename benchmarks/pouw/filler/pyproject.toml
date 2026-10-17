@@ -1,0 +1,16 @@
+# The DRAM-free filler beside the decode step: its kernels (dcap.cu, pfill.cuh, flin.cuh, comm/tpcomm.cu) run on a GPU
+# node through research run; the scorer, the arms and the kernels' host references run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/pouw/filler`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The scorer refuses an arm whose record the attempt ledger (harness/ledger.py) or the evidence store's canonical form, ids
+# and manifest model would refuse (arms.record_problems), so the tests import both; the ledger takes its variant record's
+# schema from verity.core.protocols.pouw.serving when that imports (`ledger.serving`). pfill.cuh and pfill_ref.py take
+# their folds, key rules and lane starts from the receipts reference.
+inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/receipts", "tools/research/src/research/__init__.py",
+          "tools/research/src/research/store", "verity/__init__.py", "verity/core/__init__.py",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
+          "verity/core/protocols/pouw/serving.py"]
