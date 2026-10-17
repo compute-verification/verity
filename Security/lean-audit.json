@@ -58,6 +58,9 @@
    "owner": "@compute-accounting",
    "digest": "2dd67bf94ae505daf300e0b2cf43706a0f4da5f2ed8e6b08a8156cd3abd1d5d3"
   },
+  "Accounting.Assumptions.TS.RightFixed": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.Assumptions.TS.ScalarRoute": {
    "owner": "@compute-accounting",
    "digest": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd"
@@ -1424,6 +1427,9 @@
    "signature": ["Accounting.SecurityProofs.TS.OutputCount : Accounting.Guarantees.TS.OutputCount"],
    "assumptions": [],
    "type_hash": "f63122b9d09208627838844f85921930911249f025c810b9936cfc84542bef96"
+  },
+  "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.TS.RoutesOffD2": {
    "owner": "@compute-accounting",
@@ -5461,6 +5467,7 @@
    "Accounting.SecurityProofs.TS.DIdeal": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7) of EPS1-SPEC over every full-checking play (Accounting.TS.Play) and labelled run, not a Lean function: the service's full check has no Lean code yet. Its premises (I1)-(I8) are the named assumptions of Models.Accounting.Assumptions.TS, not on the premises list, and it takes definitional side conditions (a well-formed model, a split labelling, 0 < p < 1, delta' > 0).",
    "Accounting.SecurityProofs.TS.DIdealFloor": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7-flat) of EPS1-SPEC under the floor credit, over every full-checking play and labelled program, not a Lean function; premises and side conditions as DIdeal's.",
    "Accounting.SecurityProofs.TS.CompilerC": "frozen (no-function,world-unlisted): Lemma C (the compiler) of EPS1-SPEC over every sampled play, not a Lean function; its premises are DIdeal's but (L), with (C1)-(C3) in ProofsSound, and it takes Lambda's definition (Accounting.TS.RoundGame.BudgetAt) as a hypothesis.",
+   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": "lemma: (I8) ProofsSound of EPS1-SPEC from its pieces over every play and window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding at delta_bind and proof soundness at delta_ZK as probability hypotheses, the Definitions' pinning (ProofLayer.Pins) and the play being its proofs' (ProofLayer.Of) as definitional hypotheses, and E1(c) as the named assumption RightFixed, not on the premises list; DIdeal and CompilerC, which take ProofsSound, are what it is for.",
    "Accounting.SecurityProofs.TS.FloorCreditD3": "lemma: Corollary D3 of EPS1-SPEC, from (Pi), (RD) and (Lk) as hypotheses like DecompositionD, with the terms' signs on a floor program on the known menu and T(H) = gamma_flat T_cred.",
    "Accounting.SecurityProofs.TS.BindingFacetD1": "lemma: Corollary D1 of EPS1-SPEC, epsilon_machine at a binding facet is 0 when every menu costs at least honest's there; arithmetic over the terms' definitions.",
    "Accounting.SecurityProofs.TS.VectorThresholdD1": "lemma: Corollary D1's threshold, S_V(q) costs at least T_kappa with delivery iff q >= 32(alpha + beta phi_del)/(beta omega); arithmetic over the route demands.",

@@ -2,6 +2,7 @@ import Proofs.Accounting.TS.Price
 import Proofs.Accounting.TS.Rounds
 import Proofs.Accounting.TS.Facets
 import Proofs.Accounting.TS.Tensor
+import Proofs.Accounting.TS.ProofsSound
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -9,8 +10,8 @@ import Proofs.Pouw.RelativeSecurity
 
 Each guarantee of `Models.Accounting.Guarantees.TS` as `Accounting.SecurityProofs.TS.G` (the gap list:
 note:20261017T0801Z-draft-lean-stmt). One file per prover group: the price lemmas (`TS/Price.lean`), the round lemmas
-(`TS/Rounds.lean`), Lemma 1 with Corollaries D1 and D2 (`TS/Facets.lean`), T1 and Lemma 2 (`TS/Tensor.lean`); this
-file keeps the theorems built from them (EPS1-SPEC §2.2, §2.4, §2.7).
+(`TS/Rounds.lean`), Lemma 1 with Corollaries D1 and D2 (`TS/Facets.lean`), T1 and Lemma 2 (`TS/Tensor.lean`), (I8) from
+its pieces (`TS/ProofsSound.lean`); this file keeps the theorems built from them (EPS1-SPEC §2.2, §2.4, §2.7).
 
 All five run one chain: a price lower bound `Φ(π) ≤ π·n(M)` (from (RD), `price_of_rd`, or from the parts,
 `price_of_parts`), then `π·n ≤ B(n)` (`price_le_bound`) and `B(n) ≤ f_max·T(M)` (`TimeBound`), and `identity` reads
