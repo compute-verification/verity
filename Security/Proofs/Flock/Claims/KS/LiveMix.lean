@@ -16,6 +16,7 @@ coins the round draws, so a prover that plays the live session keeps the rest of
 * `Pr_le_liveMix`: an event `E` of coins whose law is that of `E ∘ Φ` on the tape and the live session's coins, and
   which implies `pL` at the live outcome of a prover `P'` at the tape `(ω, u)`, has probability at most that average;
   `liveMix_le_Pr`: where `pL` implies `E ∘ Φ` instead, the average is at most `Pr[E]`.
+* `liveStrat_fst`: `liveStrat`'s roots are the wire's roots of the prover's first message (`fst_eqRec`).
 -/
 
 namespace Claims.Bridge.Live
@@ -111,5 +112,18 @@ theorem liveMix_le_Pr {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → 
       (liveStrat J mPts N dg w H P' x (ω, u))).toReal) / Fintype.card τ ≤ Pr E := by
   rw [← hΦ, liveMix_eq J mPts N dg w H P' x ω pL]
   exact Pr_mono fun p hp => hsim p.1 p.2 hp
+
+/-- A strategy cast across an equation of two games that send the same type sends the same message. -/
+theorem fst_eqRec {α M : Type} {k k' : M → Game α} (h : Game.send M k' = Game.send M k)
+    (s : Strategy (Game.send M k')) : (h ▸ s : Strategy (Game.send M k)).1 = s.1 := by
+  obtain ⟨-, hk⟩ := Game.send.inj h
+  cases eq_of_heq hk
+  rfl
+
+/-- **`liveStrat`'s roots are the wire's roots of the prover's first message.** -/
+theorem liveStrat_fst {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : (x : Msg) → Wire nMax (J x) (mPts x)) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
+    (liveStrat J mPts N dg w H P x ω).1 = (w x).root ((P.next x [] ω).eval H).1 :=
+  fst_eqRec (liveSession_eq dg (J x) (mPts x) (N x)).symm _
 
 end Claims.Bridge.Live

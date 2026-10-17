@@ -15,7 +15,10 @@ facts about `P'` (`PlainSimWrPAt`):
 * the second, the fork bound at `P'`'s strategies, is asked as it is.
 
 So KS at the deployed plain verifier holds from `PlainSimW` at the statements some run accepts, `RecordDrawVerbatim` at
-them, and `Extendθ` (`plain_KS_of_sim`).
+them, and `Extendθ` (`plain_KS_of_sim`). The strategies send `P`'s roots wherever `P'`'s first message is `P`'s and the
+wire reads roots as the deployed link does (`plainRoot_of_first`). Where the self-clash is at level 0, the collision in
+`PlainClashRun` follows from two different columns the run's reps open at one position (`PlainRawClashRun`,
+`plainClashRun_of_raw`).
 -/
 
 namespace FlockDeploy.KS
@@ -29,6 +32,16 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **The roots of `P`'s first message**, as `plain_first_of_run` reads them. -/
 def plainRoot {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Array ByteArray :=
   ((linkOf ((P.next x [] ω).eval sha512).1).getD default).1.toArray
+
+/-- **A live prover whose first message is `P`'s sends `P`'s roots**, where the wire reads roots as the deployed link
+does (`liveStrat_fst`): the strategies' roots `PlainSimWrPAt` asks for. -/
+theorem plainRoot_of_first {Ω τ : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
+    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) {w : Claims.Msg → Wire 65536 1 mPts} {P' : Claims.Prover (Ω × τ)}
+    (hw : ∀ a, (w x).root a = ((linkOf a).getD default).1.toArray)
+    (h1 : ∀ u, ((P'.next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1) (u : τ) :
+    (liveStrat (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u)).1 = plainRoot P x ω := by
+  rw [liveStrat_fst, hw, h1]
+  rfl
 
 /-- **An accepting run with a collision among the verifier's calls**: the one-run event the third bound reads. -/
 def plainEv₁ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (s : Fin ((V false).k x) → Coin) : Prop :=
@@ -54,6 +67,32 @@ def PlainClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) 
     (n : Fin ((V false).k x) → ℕ) (pL : LiveOutJ 1 mPts → Prop) : Prop :=
   ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →
     plainEv₁ P x ω (plainCoins hk n (u, r'))
+
+/-- **A live event at `P'`'s outcome gives an accepting run of `P` whose reps open two different columns at one
+position, or a collision**: `PlainClashRun` with a self-clash at level 0 asked without the hashes (`plainRawCols`).
+`SelfClashL` also counts clashes at later levels, against the caps of the reps' pendings; those still need their
+collision. -/
+def PlainRawClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (N : Claims.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts)
+    (P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))) (hk : N x + 2 = (V false).k x)
+    (n : Fin ((V false).k x) → ℕ) (pL : LiveOutJ 1 mPts → Prop) : Prop :=
+  ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →
+    (Claims.run sha512 P (V false) x ω (plainCoins hk n (u, r'))).out = .acc ∧
+      ((∃ (q : ℕ) (a b : List 𝔽),
+        (q, a) ∈ plainRawCols (Claims.run sha512 P (V false) x ω (plainCoins hk n (u, r'))).seen ∧
+        (q, b) ∈ plainRawCols (Claims.run sha512 P (V false) x ω (plainCoins hk n (u, r'))).seen ∧ a ≠ b) ∨
+        Claims.TiedColl sha512 (Claims.run sha512 P (V false) x ω (plainCoins hk n (u, r'))).vLog)
+
+/-- **The clash gives the collision**: two different columns of an accepting run at one position collide in its log
+(`plain_selfClash_tied`), so `PlainRawClashRun` gives `PlainClashRun`. -/
+theorem plainClashRun_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
+    {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts}
+    {P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))} {hk : N x + 2 = (V false).k x}
+    {n : Fin ((V false).k x) → ℕ} {pL : LiveOutJ 1 mPts → Prop} (h : PlainRawClashRun P x ω mPts N dg w P' hk n pL) :
+    PlainClashRun P x ω mPts N dg w P' hk n pL := fun u r' hp => by
+  obtain ⟨hacc, ⟨q, a, b, ha, hb, hab⟩ | ht⟩ := h u r' hp
+  · exact ⟨hacc, plain_selfClash_tied hacc ha hb hab⟩
+  · exact ⟨hacc, ht⟩
 
 open Classical in
 /-- **A simulator of each prover at `wrP`'s verdict**: for each prover `P` and tape `ω`, a live prover `P'` with the
