@@ -1,15 +1,16 @@
 // Side units beside the honest kernel (EPS1's eps_side, note:20261017T0310Z-report-eps1-program): the words a cycle a unit
 // that works off the SM's vector pipes (L2 reductions and atomics, cp.async, TMA bulk copies and reductions, DSMEM,
 // texture point fetch and bilinear filtering over 32 MB, and tld1c/texc over a window the texture cache holds; tld1d,
-// texd, atomgd: tld1, texbil, atomg32 with 4x, 2x, 4x the fetches in flight; redblk: REDG.32 and a 1 KB bulk reduce a
-// warp in one trip, both L2 paths) adds
+// texd, atomgd: tld1, texbil, atomg32 with 4x, 2x, 4x the fetches in flight; texr: texd on two rows (32 KB); tld1w, texw:
+// tld1d and texr with 12 side warps; redblk: REDG.32 and a 1 KB bulk reduce a warp in one trip, both L2 paths) adds
 // beside a saturated int8 IMMA kernel that folds every output word with duo (receipt_folds.cuh, the served fold), and
 // whether the MMAs keep their rate. Joint points, rows.jsonl only.
 //   honest        16 warps: 8 IMMA an iteration, then rf_duo_step on each accumulator's 4 words (side warps idle)
 //   honest16      the same in a block of only its 16 warps
 //   hs_<s>        the same 16 warps (OP_LOOP), and the side role (OP_UNTIL) running unit s only while they do
 //   sa_<s>        the side role alone, the same warps (OP_LOOP)
-// The side role is 4 warps (one a SMSP) issuing 8 ops a trip, but a bulk unit's role is one warp whose lane 0 issues: a
+// The side role is 4 warps (one a SMSP; 12 for the wide roles) issuing 8 ops a trip (ops()), but a bulk unit's role is one
+// warp whose lane 0 issues: a
 // TMA bulk op takes uniform operands, so its addresses come from blockIdx and the op's slot only, never the lane. Vector
 // reductions are 128 bits a lane at most (v4.f32, v4.bf16x2).
 #include "../probe.cuh"
@@ -20,12 +21,14 @@ typedef unsigned long long u64;
 
 enum {
   S_RED32, S_RED64, S_REDV4, S_REDV4H, S_ATOMG32, S_LDGSTS, S_BLKRED512, S_BLKRED4K, S_BLKCP4K, S_DSM_ST4, S_DSM_RED,
-  S_TLD1, S_TEXBIL, S_REDBLK, S_TLD1C, S_TEXC, S_TLD1D, S_TEXD, S_ATOMGD
+  S_TLD1, S_TEXBIL, S_REDBLK, S_TLD1C, S_TEXC, S_TLD1D, S_TEXD, S_ATOMGD, S_TEXR
 };
 
 __host__ __device__ constexpr bool bulk(int s) { return s == S_BLKRED512 || s == S_BLKRED4K || s == S_BLKCP4K; }
 // ops a trip: R, but the deep roles (TLD, TEX, ATOMG with a result) keep 4x or 2x as many fetches in flight a warp
-__host__ __device__ constexpr int ops(int s) { return s == S_TLD1D || s == S_ATOMGD ? 4 * R : s == S_TEXD ? 2 * R : R; }
+__host__ __device__ constexpr int ops(int s) {
+  return s == S_TLD1D || s == S_ATOMGD ? 4 * R : s == S_TEXD || s == S_TEXR ? 2 * R : R;
+}
 __host__ __device__ constexpr unsigned bulk_bytes(int s) { return s == S_BLKRED512 ? 512u : 4096u; }
 
 __device__ __forceinline__ unsigned mapa(unsigned addr, unsigned rank) {
@@ -43,14 +46,14 @@ struct Side {
   cudaTextureObject_t tex1, tex2;
   uint32_t gtid, total, acc, lane, sw;
   unsigned sbase, peer;
-  __device__ Side(const OpArgs& a, int side_warp, unsigned char* sb, bool cluster) {
+  __device__ Side(const OpArgs& a, int side_warp, int nsw, unsigned char* sb, bool cluster) {
     g = a.g;
     tex1 = a.tex1;
     tex2 = a.tex2;
     lane = threadIdx.x & 31;
     sw = side_warp;
-    gtid = (blockIdx.x * SW + sw) * 32 + lane;
-    total = gridDim.x * SW * 32;
+    gtid = (blockIdx.x * nsw + sw) * 32 + lane;
+    total = gridDim.x * nsw * 32;
     acc = gtid;
     sbase = (unsigned)__cvta_generic_to_shared(sb);
     peer = 0;
@@ -121,6 +124,12 @@ struct Side {
       const float4 f = tex2D<float4>(tex2, x, y);
       acc ^= __float_as_uint(f.x) ^ __float_as_uint(f.y) ^ __float_as_uint(f.z) ^ __float_as_uint(f.w);
     }
+    // texbil's x walk on rows 0 and 1 only: 32 KB, and only two rows at the 16 KB pitch (texc's five alias in the cache)
+    if constexpr (S == S_TEXR) {
+      const float x = (float)((gtid + seq * 37u) & 1023u) + 0.25f;
+      const float4 f = tex2D<float4>(tex2, x, 0.75f);
+      acc ^= __float_as_uint(f.x) ^ __float_as_uint(f.y) ^ __float_as_uint(f.z) ^ __float_as_uint(f.w);
+    }
   }
   // A bulk trip: R ops from one thread, each to its own slot of the block's region, then a group bound so the bulk
   // unit's queue stays full without unbounded reads of the source slots in flight.
@@ -173,7 +182,7 @@ __device__ __forceinline__ void honest_side(const OpArgs& a) {
   extern __shared__ __align__(128) unsigned char sb[];
   const int w = threadIdx.x >> 5;
   Honest h(a.mode);
-  Side s(a, w - HW, sb, clustered(S));
+  Side s(a, w - HW, blockDim.x / 32 - HW, sb, clustered(S));
   if constexpr (clustered(S)) cluster_sync();
   OP_BEGIN_STOP
   if (w < HW) {
@@ -192,7 +201,7 @@ __device__ __forceinline__ void honest_side(const OpArgs& a) {
 template <int S>
 __device__ __forceinline__ void side_alone(const OpArgs& a) {
   extern __shared__ __align__(128) unsigned char sb[];
-  Side s(a, threadIdx.x >> 5, sb, clustered(S));
+  Side s(a, threadIdx.x >> 5, blockDim.x / 32, sb, clustered(S));
   if constexpr (clustered(S)) cluster_sync();
   OP_BEGIN
   OP_LOOP(it) { s.template trip<S>((uint32_t)it); }
@@ -231,6 +240,14 @@ SIDE(texc, S_TEXC, NOCL)
 SIDE(tld1d, S_TLD1D, NOCL)
 SIDE(texd, S_TEXD, NOCL)
 SIDE(atomgd, S_ATOMGD, NOCL)
+SIDE(texr, S_TEXR, NOCL)
+// the wide side roles: SWW warps beside the same 16 honest warps (the honest block's registers fit (HW + SWW) * 32)
+constexpr int SWW = 12;
+#define SIDEW(s, S)                                                                                                \
+  extern "C" __global__ void __launch_bounds__((HW + SWW) * 32, 1) hs_##s(OpArgs a) { honest_side<S, true>(a); } \
+  extern "C" __global__ void __launch_bounds__(SWW * 32, 1) sa_##s(OpArgs a) { side_alone<S>(a); }
+SIDEW(tld1w, S_TLD1D)
+SIDEW(texw, S_TEXR)
 
 #define IMMA "IMMA.16832.S8.S8"
 #define HTPB ((HW + SW) * 32)
@@ -242,6 +259,11 @@ SIDE(atomgd, S_ATOMGD, NOCL)
   {.name = "sa_" #s, .kernel = (const void*)sa_##s, .tpb = BW * 32, .expect = OP "=" #N MORE, .words = W,          \
    .dyn_smem = SMEM, .cluster = CLN, .iters = IT}
 #define P_SIDE(s, OP, N, W, CLN, IT, BW) P_SIDE_X(s, OP, N, W, CLN, IT, BW, "")
+#define P_SIDE_W(s, OP, N, W, IT)                                                                                  \
+  {.name = "hs_" #s, .kernel = (const void*)hs_##s, .tpb = (HW + SWW) * 32, .expect = IMMA "=8;" OP "=" #N,       \
+   .counted = OP, .warps = "16;12", .words = W, .dyn_smem = SMEM, .iters = 2048, .until = 2},                     \
+  {.name = "sa_" #s, .kernel = (const void*)sa_##s, .tpb = SWW * 32, .expect = OP "=" #N, .words = W,              \
+   .dyn_smem = SMEM, .iters = IT}
 
 static const OpProbe PROBES[] = {
     {.name = "honest", .kernel = (const void*)honest, .tpb = HTPB, .expect = IMMA "=8", .warps = "16",
@@ -269,6 +291,9 @@ static const OpProbe PROBES[] = {
     P_SIDE(tld1d, "TLD*", 32, 32, 1, 256, 4),
     P_SIDE(texd, "TEX*", 16, 128, 1, 256, 4),
     P_SIDE(atomgd, "ATOMG*", 32, 32, 1, 256, 4),
+    P_SIDE(texr, "TEX*", 16, 128, 1, 256, 4),
+    P_SIDE_W(tld1w, "TLD*", 32, 32, 256),
+    P_SIDE_W(texw, "TEX*", 16, 128, 256),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
