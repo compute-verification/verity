@@ -2,7 +2,8 @@
 # c's mean taken off in the epilogue, V served, Ycum's digits committed, so no product is unchecked; what the cheater
 # gets free is vector work, the TS-time ε below (note:20261017T0340Z-draft-skip Result 3, 06:19Z;
 # note:20261017T0030Z-draft-checked-strip). Perplexity +2.20% (8B WT-2 2K), +3.32% (70B C4 2K) with P in one block;
-# +1.65% (8B) in blocks of 256 keys, whose TS ε grows as keys/256 (up to ≈ 1% of the whole at 32K, not priced here).
+# +1.65% (8B) in blocks of 256 keys, whose TS ε grows as keys/256 (at the measured costs 3.4% (8B) / 1.9% (70B) of the
+# whole at 32K, served output free; eps_budget.pv_block_table; not priced here).
 name = "co-dither-pv"
 summary = "Bc with P·V on committed digit limbs (co32c-pv, P in one block): every product a checked word, duo at L = 32"
 honest = "e-l7qs"
