@@ -36,6 +36,7 @@ import Proofs.Flock.Claims.KS.LevelZero
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Claims.KS.ZkDecJ
+import Proofs.Flock.Claims.KS.ZkXferJ
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -155,4 +156,8 @@ are right at them (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTabl
 plan's and decoders (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`,
 `FlockDeploy.KS.decodesTableH_zkTabs`). So at every masked statement in scope that `Deploy.V` sets up at a draw, which
 every statement some run accepts carries (`FlockDeploy.KS.acc_draw`), the deployed decoders are right at `zkTabs`
-(`ZkDecJ`: `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. -/
+(`ZkDecJ`: `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. Read with the live
+outcomes whose decoded table `j` has no opening off `C` (`ZkXferJ`: `FlockDeploy.KS.AccOffJ`, `FlockDeploy.KS.OkOffJ`,
+`FlockDeploy.KS.decodesOff_deploy`), they are right at a verdict accepting with none, so `ZkLiveAccJ` follows from the
+live sessions' bound at the deployed decoders (`FlockDeploy.KS.ZkXferJ`, `FlockDeploy.KS.zkLiveAccJ_of_xferJ`) and
+`Flock.KS` from it and `ExtendJ` (`FlockDeploy.KS.zk_KS_of_xferJ`). -/
