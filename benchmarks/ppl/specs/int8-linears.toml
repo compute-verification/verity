@@ -1,0 +1,7 @@
+description = "plain int8 linears: rotated, one scale per token and per output row, rounded to ±127 (tonight's r127)"
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"

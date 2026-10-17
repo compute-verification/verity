@@ -52,8 +52,9 @@ epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither t
 
 **No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is drawn once, after its receipt (`select`); its
 interiors are registered once; its proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
-redraws. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject.
-Each failure is one visible symbol, `reject` or `late`, or a late registration's refusal, `late-registration`.
+redraws. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject,
+and so is a draw whose proof is not delivered by then: a `Stream` refuses a check without a proof deadline, so every draw
+ends. Each failure is one visible symbol, `reject` or `late`, or a late registration's refusal, `late-registration`.
 
 **The failure budget.** A stream counts its failures, and at the `budget`-th it stops and refuses further registrations.
 It holds one open registration at a time, so it never ends with more than `budget` failures.
@@ -220,7 +221,8 @@ class Check:
     `query`: its proof units, one-stage's template query over that Program's Definition. `window`: the window statement's
     Program's SHA-512, proved once per window over the committed layout. `public_outputs`: what the verifier reports that
     the auditor reads. `deadline`: a timed session's (PoUS's rounds). `proof_deadline`: seconds on the challenger's clock
-    from the draw; a proof delivered later is a reject. `registration_deadline`: seconds on the challenger's clock from
+    from the draw; a proof delivered later, or none by then, is a reject (`late`), and a `Stream` refuses a check
+    without one. `registration_deadline`: seconds on the challenger's clock from
     the salt coin's release (`Stream.salt`, or `Stream.salt_released`'s `released_at`); a registration received later,
     or before any salt, is refused (`late-registration`) and ends the epoch. The interiors' registration is not held to
     it: it follows the draw, which `proof_deadline` bounds."""
@@ -542,6 +544,9 @@ class Stream:
                              "(check='all'); a count needs a second draw after the interiors are registered")
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
+        if spec.check.proof_deadline is None:
+            raise ValueError("a stream's check has a proof deadline (Check.proof_deadline), so that a draw whose proof "
+                             "never arrives ends as a reject (late)")
         if P.program_digest(Program(unit)) != spec.check.program:
             raise ValueError("the challenger's unit is not the check's program")
         if dict(spec.check.query) != P.template_instance_query(unit):
@@ -773,8 +778,8 @@ class Stream:
         return e.interior
 
     def _late(self, e: _Entry) -> bool:
-        d = self.spec.check.proof_deadline
-        return d is not None and e.drawn_at is not None and self._clock() - e.drawn_at > d
+        assert e.drawn_at is not None and self.spec.check.proof_deadline is not None
+        return self._clock() - e.drawn_at > self.spec.check.proof_deadline
 
     def deliver(self, draw: Draw, sessions: Sequence[str]) -> Outcome | None:
         """The firewall delivers the draw's proof, once: `sessions` are its session records' SHA-512, which the outcome

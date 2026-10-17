@@ -102,7 +102,7 @@ research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@S
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
-research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
+research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
@@ -149,14 +149,13 @@ step needs. It may also name what runs after a landing (`Tool.after_land`, an ar
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
-**Not live yet:** `main` still moves only by the trains the research coordinator lands with `research merge`, so a `ready`
-label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
+Since 12 Oct `research queue drive` moves `main`; the lander handles only what drive refuses.
 
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
 fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (drafts too),
-names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
-ready PR`, a `ready` label on `pr:{n}@{head}`, by hand for a train member); no change waits on a per-head grant
-(Daniel, 8 Oct). The branch holds the queue's state (each
+names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
+owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
+`pr:{n}@{head}`). No PR waits on Daniel (16 Oct) or on a per-head grant (8 Oct). The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
 conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 

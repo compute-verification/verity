@@ -416,6 +416,19 @@ theorem delta_wired {tags : Tags} (F : Aliased.UnitFacts tags st) {n g i o s : �
 
 end net
 
+/-- **Δ at the input bits a wire fills**: at each, its one copy pair, `(x, x)` and `(x, src)`, the wire's source bit
+(`feed`), at every template instance. -/
+def WiredDelta (st : Stmt) : Prop :=
+  ∀ {n g i o s : ℕ}, n < st.c.nets.size → n ≠ st.c.shaNet → n ≠ st.c.hmNet → g < st.c.g →
+    i < st.c.perVu.getD n 0 → feed st.c n i o = some s → ∀ j,
+      st.da.toList.count (pos st.c g (code n i o), j) =
+        (if pos st.c g (code n i o) = j then 1 else 0) + if pos st.c g s = j then 1 else 0
+
+/-- `delta_wired` as `WiredDelta`. -/
+theorem wiredDelta {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (F : Aliased.UnitFacts tags st) :
+    WiredDelta st :=
+  fun hn hsha hhm hg hi hf j => delta_wired L F hn hsha hhm hg hi hf j
+
 /-! ## Reads, placed -/
 
 theorem zmod2_cast (v : ZMod 2) : (((if v = 1 then 1 else 0 : ℕ)) : ZMod 2) = v := by
@@ -520,23 +533,27 @@ theorem order_valid {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.
   · have := rowAt_dom (order_row hℓ (by omega))
     exact ⟨this.1, this.2.2.2.1, this.2.2.2.2⟩
 
-include F in
-/-- The order's columns are in the block, at every template instance. -/
-theorem inst_hb {g : ℕ} (hg : g < st.c.g) :
+/-- The order's columns are in the block, at every template instance, from the parse and the check. -/
+theorem inst_hbOf (P : ParseFacts tags st.c) (C : CheckFacts st.c) {g : ℕ} (hg : g < st.c.g) :
     ∀ ℓ < (logical st.c).order.length, pos st.c g ((logical st.c).order.getD ℓ 0) < 2 ^ (L.model regs).kLog := by
   intro ℓ hℓ
-  obtain ⟨h1, h2, h3⟩ := order_valid L F.parse F.check (by omega) hℓ
-  have := pos_lt L F.check h1 hg h2 h3
+  obtain ⟨h1, h2, h3⟩ := order_valid L P C (by omega) hℓ
+  have := pos_lt L C h1 hg h2 h3
   rwa [code_parts] at this
 
 include F in
+/-- The order's columns are in the block, at every template instance. -/
+theorem inst_hb {g : ℕ} (hg : g < st.c.g) :
+    ∀ ℓ < (logical st.c).order.length, pos st.c g ((logical st.c).order.getD ℓ 0) < 2 ^ (L.model regs).kLog :=
+  inst_hbOf L regs F.parse F.check hg
+
 /-- **The block rows at a column with a computed row read its row's columns**, placed: a computed row's local rows, or
-an input bit's local self row with Δ's copy pair. -/
-theorem placed_comp {g n i o : ℕ} (hg : g < st.c.g) {p : List ℕ × List ℕ} (hrow : rowAt st.c n i o = some (some p))
+an input bit's local self row with Δ's copy pair (`WiredDelta`). -/
+theorem placed_comp (C : CheckFacts st.c) (hD : WiredDelta st) {g n i o : ℕ} (hg : g < st.c.g)
+    {p : List ℕ × List ℕ} (hrow : rowAt st.c n i o = some (some p))
     (r j : Fin (2 ^ st.c.kLog)) (hr : r.val = pos st.c g (code n i o)) :
     placedA st r j = (((p.1.map (pos st.c g)).count j.val : ℕ) : ZMod 2) ∧
       placedB st r j = (((p.2.map (pos st.c g)).count j.val : ℕ) : ZMod 2) := by
-  have C := F.check
   obtain ⟨hn, hsha, hhm, hi, ho⟩ := rowAt_dom (c := st.c) (n := n) (i := i) (o := o) (by rw [hrow]; simp)
   obtain ⟨-, hcase⟩ := rowAt_comp hrow
   obtain ⟨-, -, -, hsl⟩ := net_range L C hn
@@ -556,7 +573,7 @@ theorem placed_comp {g n i o : ℕ} (hg : g < st.c.g) {p : List ℕ × List ℕ}
       rw [L.delta_b, hr, rangesEntry_net L C hn hg hi ho, delta_comp_net L C hn hg hi hlo hhi, add_zero,
         count_reads _ hpos]
       rfl
-  · have hcnt := delta_wired L F hn hsha hhm hg hi hf j.val
+  · have hcnt := hD hn hsha hhm hg hi hf j.val
     rw [hpos o] at hcnt
     have hR : ∀ e, ((((reads st.c n i e ++ [s]).map (pos st.c g)).count j.val : ℕ) : ZMod 2) =
         (if j.val / netW st.c n = (st.c.rangeOf n).pos0 + (g * st.c.perVu.getD n 0 + i) then
@@ -578,17 +595,16 @@ theorem placed_comp {g n i o : ℕ} (hg : g < st.c.g) {p : List ℕ × List ℕ}
       rw [hR]
       exact wired_sum hW ho _ _
 
-include F in
 /-- **The block rows at a slot's constant read the pin.** -/
-theorem placed_const {g n i o : ℕ} (hg : g < st.c.g) (hrow : rowAt st.c n i o = some none)
+theorem placed_const (P : ParseFacts tags st.c) (C : CheckFacts st.c) {g n i o : ℕ} (hg : g < st.c.g)
+    (hrow : rowAt st.c n i o = some none)
     (r j : Fin (2 ^ (L.model regs).kLog)) (hr : r.val = pos st.c g (code n i o)) :
     (L.model regs).A₀ r j = (if j = (L.model regs).pin then 1 else 0) ∧
       (L.model regs).B₀ r j = if j = (L.model regs).pin then 1 else 0 := by
-  have C := F.check
   obtain ⟨hn, -, -, hi, ho⟩ := rowAt_dom (c := st.c) (n := n) (i := i) (o := o) (by rw [hrow]; simp)
   obtain rfl := rowAt_const hrow
   obtain ⟨-, -, -, hsl⟩ := net_range L C hn
-  have hcr := net_const L F.parse C hn hg hi
+  have hcr := net_const L P C hn hg hi
   have hW : 0 < netW st.c n := Nat.two_pow_pos _
   have hpos : ∀ j', pos st.c g (code n i j') =
       ((st.c.rangeOf n).pos0 + (g * st.c.perVu.getD n 0 + i)) * netW st.c n + j' := by
@@ -645,33 +661,42 @@ theorem order_row' {c : Circuit} {k : ℕ} (hk : k < (logical c).order.length - 
   order_row (show (logical c).nIn + k < (order c).length by
     have : (logical c).order = order c := rfl; rw [← this]; omega) (Nat.le_add_right _ _)
 
+/-- **A template instance's rows, placed by the accepted statement**, from the parse, the check and Δ at the input
+bits a wire fills (`WiredDelta`): template instance `g`'s columns at their positions (`pos`), `one` at the pin
+(`composePlace`). -/
+theorem placement_instOf (P : ParseFacts tags st.c) (C : CheckFacts st.c) (hD : WiredDelta st) {g : ℕ}
+    (hg : g < st.c.g) :
+    Placement (L.model regs) (instRows st.c)
+      (composePlace (L.model regs) (logical st.c) (logical_ordered st.c) (pos st.c g) (inst_hbOf L regs P C hg)) := by
+  refine placement_of_realizes ?_ ?_ ?_ ?_ ?_ ?_
+  · intro k _ p hp r j hr
+    exact (placed_comp L C hD hg (row_of_getD hp) r j (by rw [code_parts]; exact hr)).1
+  · intro k _ p hp r j hr
+    exact (placed_comp L C hD hg (row_of_getD hp) r j (by rw [code_parts]; exact hr)).2
+  · intro k hk hnone r j hr
+    have hne := order_row' hk
+    have hrow : row st.c ((logical st.c).order.getD ((logical st.c).nIn + k) 0) = some none := by
+      revert hnone hne
+      show (row st.c _).getD none = none → _
+      rcases row st.c ((logical st.c).order.getD ((logical st.c).nIn + k) 0) with _ | _ | q <;> simp
+    exact (placed_const L regs P C hg hrow r j (by rw [code_parts]; exact hr)).1
+  · intro k hk hnone r j hr
+    have hne := order_row' hk
+    have hrow : row st.c ((logical st.c).order.getD ((logical st.c).nIn + k) 0) = some none := by
+      revert hnone hne
+      show (row st.c _).getD none = none → _
+      rcases row st.c ((logical st.c).order.getD ((logical st.c).nIn + k) 0) with _ | _ | q <;> simp
+    exact (placed_const L regs P C hg hrow r j (by rw [code_parts]; exact hr)).2
+  · exact fun j => (placed_pin L regs j).1
+  · exact fun j => (placed_pin L regs j).2
+
 include F in
 /-- **A template instance's rows, placed by the accepted statement**: template instance `g`'s columns at their
 positions (`pos`), `one` at the pin (`composePlace`). -/
 theorem placement_inst {g : ℕ} (hg : g < st.c.g) :
     Placement (L.model regs) (instRows st.c)
-      (composePlace (L.model regs) (logical st.c) (logical_ordered st.c) (pos st.c g) (inst_hb L F regs hg)) := by
-  refine placement_of_realizes ?_ ?_ ?_ ?_ ?_ ?_
-  · intro k _ p hp r j hr
-    exact (placed_comp L F hg (row_of_getD hp) r j (by rw [code_parts]; exact hr)).1
-  · intro k _ p hp r j hr
-    exact (placed_comp L F hg (row_of_getD hp) r j (by rw [code_parts]; exact hr)).2
-  · intro k hk hnone r j hr
-    have hne := order_row' hk
-    have hrow : row st.c ((logical st.c).order.getD ((logical st.c).nIn + k) 0) = some none := by
-      revert hnone hne
-      show (row st.c _).getD none = none → _
-      rcases row st.c ((logical st.c).order.getD ((logical st.c).nIn + k) 0) with _ | _ | q <;> simp
-    exact (placed_const L F regs hg hrow r j (by rw [code_parts]; exact hr)).1
-  · intro k hk hnone r j hr
-    have hne := order_row' hk
-    have hrow : row st.c ((logical st.c).order.getD ((logical st.c).nIn + k) 0) = some none := by
-      revert hnone hne
-      show (row st.c _).getD none = none → _
-      rcases row st.c ((logical st.c).order.getD ((logical st.c).nIn + k) 0) with _ | _ | q <;> simp
-    exact (placed_const L F regs hg hrow r j (by rw [code_parts]; exact hr)).2
-  · exact fun j => (placed_pin L regs j).1
-  · exact fun j => (placed_pin L regs j).2
+      (composePlace (L.model regs) (logical st.c) (logical_ordered st.c) (pos st.c g) (inst_hb L F regs hg)) :=
+  placement_instOf L regs F.parse F.check (wiredDelta L F) hg
 
 end placement
 

@@ -1,0 +1,14 @@
+description = "the adopted design's linears: SmoothQuant alpha 0.5 (foldable), rotated, activations dithered, weights on ±63 (tonight's d63-sm50-smkv)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight_top = 63

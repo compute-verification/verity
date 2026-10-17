@@ -208,7 +208,7 @@ theorem selPort_of_part {S : ℕ} {Vs : Fin S → VStmt} {sh : Flock.Shape} {ses
         .msg q.val (kq / 8) (kq % 8)) :
     SelPort Vs own sel (stage ρ m) (sess p) (un p ρ) q := by
   obtain ⟨hc, -, m', k', cl, sh₀, hpar, hsh, hh, hsheq⟩ := hck p hp
-  obtain ⟨S₁, ns, nv, hpart, hn, -, W, hW, hmis⟩ := ReadWhole.check_whole hc hpar hsh hh
+  obtain ⟨S₁, ns, nv, hpart, hn, -, W, hW, -, hmis⟩ := ReadWhole.check_whole hc hpar hsh hh
   rw [← hsheq] at hpart hW hmis
   obtain ⟨S0, gs, hS, hg⟩ := ReadWhole.part_ok hpart
   have hpo := partsOf_eq hS hg

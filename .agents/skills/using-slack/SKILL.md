@@ -23,8 +23,10 @@ The coordination API has one place, three interactions and one lifecycle.
   `@vllm`, `@benchmarks`, `@console` and `@top` (the admin, Daniel's coordinator), plus two advisors,
   `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. Since
   14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own subagents.
-  `@console` is Daniel's desktop agent on his laptop, which holds no Slack inbox: reach it through its Linear team CON (an
-  ask to `@console` files there, and `send` says so where it would ring an inbox). A handle's current holder is its
+  `@console` is Daniel's desktop agent on his laptop, beside the console's dev server. Nothing wakes it: its inbox holds
+  your ask until Daniel opens it, and then it reads every unread doorbell (`names read --as console`) and answers in your
+  thread. So put the whole brief in the ask, since it can't open Linear, and card `#ask-daniel` when it can't wait for
+  him to open console. A handle's current holder is its
   inbox's holder: `names open --succeeds` records the successor's agent id and its working branch's suffix in the route,
   and routing reads them (`--as`, the owners of PRs and runs). Run `names open --as HANDLE` again on a new branch: it
   adds that branch's suffix. So a handover edits nothing in the repo; the registry's `holder` is a description. One agent may hold several handles, and posts as whichever
@@ -107,8 +109,9 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   Anything another handle must read about your issue comes on Slack, naming you, and rings your inbox.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - **Subscribe to a thread (`subscribe_slack_thread`) only where a human may answer**: your own `#ask-daniel` card, a
-  thread a named human posted in, or Codex's thread when you ask it something (Daniel's Codex agent posts outside
-  `research msg`, so its replies ring no inbox). Between handles your inbox already carries every reply addressed to you: one that names
+  thread a named human posted in, or Codex's thread when you've asked it something (its replies ring no inbox). A task
+  for Daniel's console, laptop or browser goes to `#ask-daniel` as a card with the exact steps, not to Codex: Codex is
+  a session on his laptop that Slack doesn't wake, so ask in its thread only when Daniel says it's on. Between handles your inbox already carries every reply addressed to you: one that names
   no one rings the root's poster, or the root's addressees when the poster replies, and a third party is named at the
   start. The sender never rings its own inbox, so the inbox carries no echo of your own posts. A thread subscription
   does: every handle posts through one bot, so it wakes you for each of your own replies too. Unsubscribe from any thread
