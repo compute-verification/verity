@@ -11,14 +11,55 @@ namespace Pouw.SecurityProofs.Eps1
 
 open Pouw.Eps1
 
+/-- An argument's value reads only instructions before its own. -/
+theorem argVal_congr {ι : Type} {G : ℕ} (P : M3 ι G) (x : ι → Word) (v v' : Fin G → Word) (t : Fin G)
+    (h : ∀ s : Fin G, s.val < t.val → v s = v' s) (j : Fin 3) : P.argVal x v t j = P.argVal x v' t j := by
+  unfold M3.argVal
+  split
+  · rfl
+  · rename_i s _
+    exact h _ s.isLt
+
 /-- Every M3 program has a run on every input (instructions read only earlier words). -/
 theorem run_exists {ι : Type} {G : ℕ} (P : M3 ι G) (x : ι → Word) : ∃ v, P.IsRun x v := by
-  sorry
+  have key : ∀ n, ∃ v : Fin G → Word, ∀ t : Fin G, t.val < n →
+      v t = P.op t (P.argVal x v t 0) (P.argVal x v t 1) (P.argVal x v t 2) := by
+    intro n
+    induction n with
+    | zero => exact ⟨fun _ => 0, fun t h => absurd h (Nat.not_lt_zero _)⟩
+    | succ n ih =>
+      obtain ⟨v, hv⟩ := ih
+      by_cases hn : n < G
+      · refine ⟨Function.update v ⟨n, hn⟩
+          (P.op ⟨n, hn⟩ (P.argVal x v ⟨n, hn⟩ 0) (P.argVal x v ⟨n, hn⟩ 1) (P.argVal x v ⟨n, hn⟩ 2)),
+          fun t ht => ?_⟩
+        have hle : ∀ s : Fin G, s.val < t.val → Function.update v ⟨n, hn⟩
+            (P.op ⟨n, hn⟩ (P.argVal x v ⟨n, hn⟩ 0) (P.argVal x v ⟨n, hn⟩ 1) (P.argVal x v ⟨n, hn⟩ 2)) s =
+              v s :=
+          fun s hs => Function.update_of_ne (Fin.ne_of_val_ne (by simp only; omega)) _ _
+        rw [argVal_congr P x _ v t hle 0, argVal_congr P x _ v t hle 1, argVal_congr P x _ v t hle 2]
+        rcases Nat.lt_succ_iff_lt_or_eq.mp ht with h | h
+        · rw [Function.update_of_ne (Fin.ne_of_val_ne (by simp only; omega)), hv t h]
+        · obtain rfl : t = ⟨n, hn⟩ := Fin.ext h
+          exact Function.update_self _ _ _
+      · exact ⟨v, fun t ht => hv t (by omega)⟩
+  obtain ⟨v, hv⟩ := key G
+  exact ⟨v, fun t => hv t t.isLt⟩
 
 /-- The run is unique. -/
 theorem run_unique {ι : Type} {G : ℕ} (P : M3 ι G) (x : ι → Word) (v v' : Fin G → Word) (h : P.IsRun x v)
     (h' : P.IsRun x v') : v = v' := by
-  sorry
+  have key : ∀ n, ∀ t : Fin G, t.val < n → v t = v' t := by
+    intro n
+    induction n with
+    | zero => intro t ht; omega
+    | succ n ih =>
+      intro t ht
+      have hle : ∀ s : Fin G, s.val < t.val → v s = v' s := fun s hs => ih s (by omega)
+      rw [h t, h' t, argVal_congr P x v v' t hle 0, argVal_congr P x v v' t hle 1,
+        argVal_congr P x v v' t hle 2]
+  funext t
+  exact key _ t (Nat.lt_succ_self _)
 
 open Classical in
 /-- Theorem B's counting: a block whose live part has `a` instructions, each but the writer an argument of another
