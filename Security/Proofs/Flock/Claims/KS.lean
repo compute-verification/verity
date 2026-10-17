@@ -60,6 +60,7 @@ import Proofs.Flock.Claims.KS.ZkDecodeW
 import Proofs.Flock.Claims.KS.ZkEvent
 import Proofs.Flock.Claims.KS.ZkFirst
 import Proofs.Flock.Claims.KS.FitsR
+import Proofs.Flock.Claims.KS.ZkFitsW
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -274,4 +275,9 @@ masked tables' weight spends level 0's share on `k`'s ceiling (`FlockDeploy.KS.c
 their own rounds, only round `0`'s events are charged twice, and the escapes' root is `Escapes.le`'s (`FitsR`:
 `Claims.collapseR`, `Claims.Escapes.FitsR`, `Claims.Escapes.FitsForkR`, `Claims.Escapes.le_of_fitsR`,
 `Claims.Escapes.Fits.fitsR`, `Claims.Escapes.FitsFork.fitsForkR`, `Claims.Escapes.fitsR_addFork`,
-`Claims.Escapes.fitsForkR_of_round`). -/
+`Claims.Escapes.fitsForkR_of_round`). Joined by round with level 0's events (`ZkFitsW`: `Claims.Flock.IZW`,
+`Claims.Flock.cZW`, `Claims.Flock.joinEscW`, `Claims.Flock.joinEscW_onAcc`), each table puts at most one event at
+round `0` and every event but one weighs at least `2` (`Claims.Flock.joinEscW_c_le`), and each table's weight pays
+exactly for its events with level 0's and its share of `k` (`FlockDeploy.KS.cZW_sum_le_tableWeight`), so the masked
+escapes with level 0's fit the deployed weight with the fork event of weight `k`, counted per round
+(`FlockDeploy.KS.joinEscW_fitsForkR_zk`). -/
