@@ -29,6 +29,7 @@ import Proofs.Flock.Claims.KS.LevelZero
 import Proofs.Flock.Claims.KS.LevelZeroAcc
 import Proofs.Flock.Claims.KS.OffSC
 import Proofs.Flock.Claims.KS.Entries
+import Proofs.Flock.Claims.KS.DecodeSC
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -125,4 +126,7 @@ reader's entries opens a position off `C` without a self-clash only where the re
 table's level-0 openings verify (`Claims.Flock.verified_opens₀L`). At flock-verify's acceptance, every accepted
 salted output of a table's reps' runs has its level-0 openings verifying below `2^d`, with positions and rows its reps'
 `plainRepColsOf` entries (`Entries`: `FlockSoundness.Discharge.Exec.accepts_opens₀L`,
-`Claims.Flock.exists_ne_of_entries`). -/
+`Claims.Flock.exists_ne_of_entries`). So at `wrP`, at one table, the deployed plain decoders are right for accepting
+with no level-0 opening off `C` unless it self-clashes, on the outcomes flock-verify accepts at the live root where the
+deployed reader looks up no column off `C` (`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`,
+`Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). -/
