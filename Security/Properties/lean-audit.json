@@ -1252,6 +1252,12 @@
    "assumptions": [],
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09"
   },
+  "Properties.Requirement.credits": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.credits : Properties.Requirement.Credits"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Properties.Requirement.follows": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.follows : Properties.Requirement.Follows"],
@@ -1263,6 +1269,12 @@
    "signature": ["Properties.Requirement.held : Properties.Requirement.Held"],
    "assumptions": [],
    "type_hash": "3d7c2fbd60187988784f07c165f16e3d0f5a06edcc2581a7a629f9757e8fb12c"
+  },
+  "Properties.Requirement.ingress": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.ingress : Properties.Requirement.Ingress"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Properties.Requirement.live": {
    "owner": "@memory-accounting",
@@ -1324,11 +1336,23 @@
    "assumptions": [],
    "type_hash": "f633ba4c7cf1d592ad705a48c7721f4c953453594bcae3773340fd0d750d5dc7"
   },
+  "Properties.Requirement.region": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.region : Properties.Requirement.Region"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Properties.Requirement.resident": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.resident : Properties.Requirement.Resident"],
    "assumptions": [],
    "type_hash": "470291f02debf0fb8da9e2db573d6030baf1dc36857302f60b387f5cc259d84c"
+  },
+  "Properties.Requirement.stepRegion": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.stepRegion : Properties.Requirement.StepRegion"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Properties.Requirement.storeMatches": {
    "owner": "@memory-accounting",
@@ -2115,6 +2139,22 @@
    },
    "Properties.Requirement.planMatches": {
     "function": "CircuitRequirement.Instance.planMatches",
+    "outcome": "none"
+   },
+   "Properties.Requirement.region": {
+    "function": "CircuitRequirement.Instance.region",
+    "outcome": "none"
+   },
+   "Properties.Requirement.stepRegion": {
+    "function": "CircuitRequirement.Instance.stepRegion",
+    "outcome": "none"
+   },
+   "Properties.Requirement.ingress": {
+    "function": "CircuitRequirement.Instance.ingress",
+    "outcome": "none"
+   },
+   "Properties.Requirement.credits": {
+    "function": "CircuitRequirement.Instance.credits",
     "outcome": "none"
    }
   },
