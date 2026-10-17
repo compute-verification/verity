@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
 DATA = Path(__file__).resolve().parents[1] / "data"
+DEVICES = DATA / "devices"
+DEVICE = "sm_120"   # data/ itself, the RTX PRO 6000: the default device
 
 Census = dict[str, dict[str, float]]  # instruction class: {row: u one warp instruction holds the row alone}
 STATUSES = ("measured", "ASSUMED", "provisional", "joint")
@@ -111,11 +114,35 @@ def u_of(cycle_u: float, rate: str, noise: str, cycles: str, u: str) -> float:
 
 
 def model(data: Path = DATA) -> Model:
+    """A device directory (`data/devices/sm_NN/`) that no vector is solved on leaves out what only `solve` reads: the
+    honest kernel's u a MAC, the price LP's `[lp]`, `[honest]` and `adopted` (NaN and empty here)."""
     t = tomllib.loads((data / "model.toml").read_text())
-    c, lp = t["constants"], t["lp"]
-    return Model(cycle_u=c["cycle_u"], honest_real=c["honest_real"], honest_real_600w=c["honest_real_600w"],
-                 cuda=tuple(t["cuda"]), honest=dict(t["honest"]), adopted=t["adopted"], rho=lp["rho"], tie=lp["tie"],
-                 x_min=lp["x_min"], epochs=tuple(t["epochs"]), current=t["current"])
+    c, lp = t["constants"], t.get("lp", {})
+    return Model(cycle_u=c["cycle_u"], honest_real=c.get("honest_real", math.nan),
+                 honest_real_600w=c.get("honest_real_600w", math.nan), cuda=tuple(t["cuda"]),
+                 honest=dict(t.get("honest", {})), adopted=t.get("adopted", ""), rho=lp.get("rho", math.nan),
+                 tie=lp.get("tie", math.nan), x_min=lp.get("x_min", math.nan), epochs=tuple(t["epochs"]),
+                 current=t["current"])
+
+
+def device(name: str = DEVICE) -> Path:
+    """A device's data directory (README "Devices"): `data/` for sm_120, else `data/devices/sm_NN/`, which a command can
+    price once it holds a `model.toml` beside its census."""
+    m = re.fullmatch(r"sm_?(\d+)", name)
+    key = f"sm_{m.group(1)}" if m else name
+    if key == DEVICE:
+        return DATA
+    p = DEVICES / key
+    if not (p / "model.toml").is_file():
+        why = "has a census and no model.toml yet" if (p / "census.csv").is_file() else "isn't a device directory"
+        raise SystemExit(f"device {name}: {p} {why}; priced: {', '.join(devices())}")
+    return p
+
+
+def devices() -> list[str]:
+    """The devices a command can price: sm_120 and each device directory with a `model.toml`."""
+    return [DEVICE, *sorted((p.name for p in DEVICES.glob("sm_*") if (p / "model.toml").is_file()),
+                            key=lambda n: int(n[3:]))]
 
 
 def _runs(s: str) -> tuple[str, ...]:
@@ -129,14 +156,17 @@ def rows(data: Path = DATA) -> dict[str, Row]:
 
 def census_files(m: Model, data: Path = DATA) -> list[Path]:
     """`data/census/EPOCH.csv`: a file for each epoch that brought census lines, in model.toml's order, each line's `since`
-    its file's epoch."""
+    its file's epoch. A device directory with one epoch (`data/devices/sm_NN/`) keeps a single `census.csv`."""
+    if not (data / "census").is_dir():
+        return [p] if (p := data / "census.csv").is_file() else []
     return [p for e in m.epochs if (p := data / "census" / f"{e}.csv").is_file()]
 
 
 def run_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
     """`data/census/runs.toml`: the run lists many census lines share (a refit's every line cites every run its fit read),
     each cited in a line's `runs` as `@NAME`."""
-    return {k: tuple(v) for k, v in tomllib.loads((data / "census" / "runs.toml").read_text()).items()}
+    p = data / "census" / "runs.toml"
+    return {k: tuple(v) for k, v in tomllib.loads(p.read_text()).items()} if p.is_file() else {}
 
 
 def census_lines(m: Model, data: Path = DATA) -> list[dict[str, str]]:
