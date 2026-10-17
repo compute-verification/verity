@@ -5567,7 +5567,9 @@
    "Accounting.SecurityProofs.TS.SeesOfInjective": "lemma: a receipt injective in each input sees it, over any dataflow and receipt map.",
    "Accounting.SecurityProofs.TS.ThinFoldInjective": "lemma: the thin fold's state is injective in each absorbed word and in its start, BitVec arithmetic.",
    "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
-   "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function."
+   "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
+   "Accounting.Guarantees.Gates.ProvenWindow": "unstated: the window lemma, a circuit whose window is proven is in its window wherever its inputs and budgeted gates hold their declared intervals; its theorem Accounting.SecurityProofs.Gates.ProvenWindow is not proved yet.",
+   "Accounting.Guarantees.Gates.ClampOrWrap": "unstated: in the window an s8-family step's clamp and wrap give the same values; its theorem Accounting.SecurityProofs.Gates.ClampOrWrap is not proved yet."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
