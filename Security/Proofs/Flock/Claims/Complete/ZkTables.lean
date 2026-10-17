@@ -1,5 +1,7 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Honest
+import Proofs.Flock.Claims.Complete.ZkTables.Faithful
 import Proofs.Flock.Claims.Complete.ZkTables.Ready
+import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
 import Proofs.Flock.Claims.Complete.ZkTables.Run
 import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
 import Proofs.Flock.Claims.Complete.ZkTables.Scope

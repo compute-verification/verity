@@ -19,7 +19,7 @@ draw, `DrawSetupZHJ.table`), so every table is a table the session sets up (`set
   reading; it needs `Parses p`, an untyped statement and no public input ports, under which the readable table's
   matrices are `stmtOf`'s (`tableAt_model`), and none of `SetupTable`'s other side conditions.
 * `Readable.parsed_zk`: what the masked scope and the relation give the parse (`FlockComplete.ZkTables.Case.parsed`
-  without the case, and the scope's `outNet = unitNet`).
+  without the case, the verifier's parse of `x`, and the scope's `outNet = unitNet`).
 * `Masked.Live`: the statements in the masked scope each of whose tables has a `ZkTab`; `jOf` is their table count
   (`0` elsewhere), `tabC` their tables, `dummy` a witness holding the regions (`RegionsHold`), and `wtOf` the shares.
   `live_of`: every statement of the scope with a witness is `Live`. So `Tables` (`setupTable_tabC`) and `DummyReg`
@@ -237,10 +237,14 @@ theorem parsed_zk {rel : Parsed → Relation} {x : Claims.Msg} {w : Claims.Flock
     (hR : Claims.Flock.R (FlockDeploy.deployZk rel).parse x w)
     (hset : FlockDeploy.setupOf true x = some (s, spec, sts)) :
     ∃ p : Parsed, Parses p ∧ p.zk = true ∧ p.tags.typed = false ∧ p.publicInputs = none ∧ p.sts = sts ∧
-      Claims.Flock.RelS (toReadable rel p) w ∧
+      (FlockDeploy.deployZk rel).parse x = some (toReadable rel p) ∧ Claims.Flock.RelS (toReadable rel p) w ∧
       ∃ c, ProvedScope.circuitOf p.tags p.I.circuitFile p.I.tables = .ok c ∧ c.outNet = c.unitNet := by
   obtain ⟨p, hp, hsc'⟩ := (scope_iff (FlockDeploy.deployZk rel) rel (FlockDeploy.readOf true) rfl
     (fun _ _ h => FlockDeploy.readOf_zk h) x).1 hsc
+  have hparse : (FlockDeploy.deployZk rel).parse x = some (toReadable rel p) := by
+    change (parseBytes (FlockDeploy.readOf true) x).map (toReadable rel) = _
+    rw [hp]
+    rfl
   obtain ⟨s', hs', hR'⟩ := hR
   change (parseBytes (FlockDeploy.readOf true) x).map (toReadable rel) = some s' at hs'
   rw [hp] at hs'
@@ -269,7 +273,7 @@ theorem parsed_zk {rel : Parsed → Relation} {x : Claims.Msg} {w : Claims.Flock
     split at hok <;>
       simp only [ProvedScope.scopeOk, ProvedScope.scopeOkH, Bool.and_eq_true, beq_iff_eq] at hok <;>
       exact hok.1.1.1.2
-  exact ⟨p, hps, hz, hRu.2.1, hpi, hpe, hR', c, hcirc, ho⟩
+  exact ⟨p, hps, hz, hRu.2.1, hpi, hpe, hparse, hR', c, hcirc, ho⟩
 
 end Flock.Readable
 
@@ -367,7 +371,7 @@ theorem complete_tabC (P : Composed.LigProver) {x : Msg} {w : Claims.Flock.Wit}
     (tabC P x j).Valid (wtOf P x w j) := by
   have hj := lt_of_jOf j
   obtain ⟨s, spec, hset⟩ := setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
-  obtain ⟨p, hp, -, ht, hpi, hpe, hRp, -⟩ := _root_.Flock.Readable.parsed_zk (live_of_lt j).1 hR hset
+  obtain ⟨p, hp, -, ht, hpi, hpe, -, hRp, -⟩ := _root_.Flock.Readable.parsed_zk (live_of_lt j).1 hR hset
   have h := _root_.Flock.Readable.tableLowers hp ht hpi hRp (j := j.val) (st := stAt x j)
     (by rw [hpe]; exact Array.getElem?_eq_getElem hj) (zkTab x j).wf.1
   rw [hpe, ← _root_.Flock.Readable.zOf_tableWit hj] at h
@@ -381,7 +385,7 @@ theorem live_of {x : Msg} {w : Claims.Flock.Wit}
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) : Live x := by
   refine ⟨hsc, fun j hj => ?_⟩
   obtain ⟨s, spec, hset⟩ := setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
-  obtain ⟨p, hp, hz, ht, hpi, hpe, hRp, c, hc, ho⟩ := _root_.Flock.Readable.parsed_zk hsc hR hset
+  obtain ⟨p, hp, hz, ht, hpi, hpe, -, hRp, c, hc, ho⟩ := _root_.Flock.Readable.parsed_zk hsc hR hset
   have hs : p.toRead.tablesOf = some (stsOf x) := by
     rw [← hpe]
     exact _root_.Flock.Readable.tablesOf_of_parses hp
