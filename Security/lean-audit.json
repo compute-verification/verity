@@ -59,7 +59,8 @@
    "digest": "2dd67bf94ae505daf300e0b2cf43706a0f4da5f2ed8e6b08a8156cd3abd1d5d3"
   },
   "Accounting.Assumptions.TS.RightFixed": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "d17ab6dafa91dbbf183e5a1221cd1f8fc26fb93ebb1b21e83117ef2337a454f2"
   },
   "Accounting.Assumptions.TS.ScalarRoute": {
    "owner": "@compute-accounting",
@@ -1393,7 +1394,10 @@
    "type_hash": "12199d162077ce4fc6f237428b788d29d10f95ece558031db6fed753c245cb9f"
   },
   "Accounting.SecurityProofs.TS.BindingOfFork": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.BindingOfFork : Accounting.Guarantees.TS.BindingOfFork"],
+   "assumptions": [],
+   "type_hash": "35df2fcc55dd37402511f188176a776059b9c8e8cabacb798f5dceb4b3c5d8ff"
   },
   "Accounting.SecurityProofs.TS.CompilerC": {
    "owner": "@compute-accounting",
@@ -1432,7 +1436,10 @@
    "type_hash": "f63122b9d09208627838844f85921930911249f025c810b9936cfc84542bef96"
   },
   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.ProofsSoundOfPinned : Accounting.Guarantees.TS.ProofsSoundOfPinned"],
+   "assumptions": [],
+   "type_hash": "0d86ac02d35b0a45cdccc1e8ace9d5a097be7b41f6ca5997353812461c532783"
   },
   "Accounting.SecurityProofs.TS.RoutesOffD2": {
    "owner": "@compute-accounting",
@@ -6706,6 +6713,7 @@
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.RoutesOffD2",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
@@ -6724,8 +6732,32 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.DIdeal",
-    "Accounting.SecurityProofs.TS.DIdealFloor"
+    "Accounting.SecurityProofs.TS.DIdealFloor",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned"
    ]
+  },
+  "Definitions.Accounting.TS.ProofLayer": {
+   "digest": "5a4b95c147fb84fdc485c8f4e9aa0dab21cb23635c5d028fff17681f2272780a",
+   "definitions": {
+    "Accounting.TS.ProofLayer": "0ad5bbd9faf85415876e1f65bcb734d01d3010be0bdea6cc42217926bdee2faa",
+    "Accounting.TS.ProofLayer.Forked": "55c58d1754b70e63ed79ff1de36f05715136f8150a822ec042451feacb16a39d",
+    "Accounting.TS.ProofLayer.Moved": "411ca805da2167e51b6ee76740bfca4dae0ba0985ee0e97ce0e5ef12db00c0a6",
+    "Accounting.TS.ProofLayer.Of": "25ac2e4439576c0e21e3314b2c20624bfc66f68352fb86a8bf8838ff47844fa0",
+    "Accounting.TS.ProofLayer.Pins": "51211a807584439401bf71d2c7b8c8d80b9e5d56a9ed7f8c37d2e14fbeaf4840",
+    "Accounting.TS.ProofLayer.Proved": "a777f6e0414e8c731ec605f0fe1980ec94608a5f5f0f8bf982ca86ccd5da2a44",
+    "Accounting.TS.ProofLayer.SoundAt": "176465e170875487d7aefac3c26f2efa881763a0a1b598957e8a02b3a6488be3",
+    "Accounting.TS.ProofLayer.Unsound": "773923d867da4237bc471a9189a99e91f84e4f23f3c9dbf245ee07d09cd2fc4c",
+    "Accounting.TS.ProofLayer.accepted": "5798c39a51753e14dc84c29e68082020233a71fe03974d40ba023bcdd747943f",
+    "Accounting.TS.ProofLayer.committed": "1f3cf57081dd280ef2a3c4c781ab09be307abd3ec0caa039a4b3c8f3a45f04a6",
+    "Accounting.TS.ProofLayer.opened": "16d9397ed5f723e4ed47ef3060b017f9f551d23ff837035d3eb2572744255712",
+    "Accounting.TS.ProofLayer.provedAt": "935b64c8b840e0b59e5a43e370f6b37fdc787b4fe67451a3f8c2a6fedc9500e2",
+    "Accounting.TS.ProofLayer.ref": "5e03b414960aab885fe217633505ae358f7de1c7d7ce9ddbb875dc6208697234",
+    "Accounting.TS.ProofLayer.rel": "83555a91afeb887a656e1adb50b74b7d5f482612e59df9c6d725714ea2045f7f",
+    "Accounting.TS.ProofLayer.right": "3d8dc224098620ff165a220f6424ae98455bffdba161ad01e80ea3894bbc6c89",
+    "Accounting.TS.ProofLayer.weight": "d0fe086d87d743fd1604e6242b936d4959fbc3898ee996c0711bd2118426dea7",
+    "Accounting.TS.splice": "23e1874cde3d6a922d163ccc57a9b970e58ca7e88f6898d154d6764a0e24ecc0"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.BindingOfFork", "Accounting.SecurityProofs.TS.ProofsSoundOfPinned"]
   },
   "Definitions.Accounting.TS.Routes": {
    "digest": "30c8abcb6735ac3215f7f48cfa482adc6e2ae2096c61de3f69ef8282eb1c6166",
@@ -6805,6 +6837,7 @@
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
   },
@@ -11921,11 +11954,13 @@
     "Pouw.RelativeSecurity.wRe": "8111c43d37e7e41182d2ee61f0d6d86d9c6f2991686898fc9e1ea46a14ebac70"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
@@ -16788,7 +16823,7 @@
    ]
   },
   "Models.Accounting.Assumptions.TS": {
-   "digest": "1dc280d7e8e68052be922d55c6fe791e9b49a76282ad2f6e4e8c247f6b6c5746",
+   "digest": "aebe0dd5842951f7a1b3ae1cecfc7679d19d2e57475a22ca49fc4e9068dbc5a8",
    "definitions": {
     "Accounting.Assumptions.TS.FacetCeilings": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b",
     "Accounting.Assumptions.TS.FillOpt": "32e6f1ad9b1cd5704affa13c87dae03fad67a20aa3acd62efdde326a1702a503",
@@ -16796,6 +16831,7 @@
     "Accounting.Assumptions.TS.LuckAt": "28ff53f429206bbd8f8447d74044812a42bfe9123fb10443321873882cb02cac",
     "Accounting.Assumptions.TS.NoSum": "b15287f80f20515d6d017205278b5209546abfab825e4f5e01da4875e74b2fda",
     "Accounting.Assumptions.TS.ProofsSound": "2dd67bf94ae505daf300e0b2cf43706a0f4da5f2ed8e6b08a8156cd3abd1d5d3",
+    "Accounting.Assumptions.TS.RightFixed": "d17ab6dafa91dbbf183e5a1221cd1f8fc26fb93ebb1b21e83117ef2337a454f2",
     "Accounting.Assumptions.TS.ScalarRoute": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd",
     "Accounting.Assumptions.TS.SideUnits": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179",
     "Accounting.Assumptions.TS.WordsWritten": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
@@ -16806,6 +16842,7 @@
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.TimeBound"
    ]
   },
@@ -17223,15 +17260,17 @@
    ]
   },
   "Models.Accounting.Guarantees.TS": {
-   "digest": "3a5b8bc7e4763abfbef28a3d19661f915b19f4cad5ebf1aecdbd488b8b9304ac",
+   "digest": "41f65bf78e0c52ee43427b7b13f16d58dba855c5be4f2426e332ed926f45f9cb",
    "definitions": {
     "Accounting.Guarantees.TS.BindingFacetD1": "a17c578d0bc020c50567b3b8f50848237bddadf7d54aab6ce18ef007d4af1c6e",
+    "Accounting.Guarantees.TS.BindingOfFork": "3eccd9186cd22f86da6fbc02ad9f003aad9cd0f43259388a0dbbd1485039a911",
     "Accounting.Guarantees.TS.CompilerC": "f682a20b0128c7e27115eb3896b65e7979b26b401d5b9b453ec4b33356fe1ac1",
     "Accounting.Guarantees.TS.DIdeal": "77a519583df833db703098e098abccdb8e01aa5370400d7cc7b6f07174790679",
     "Accounting.Guarantees.TS.DIdealFloor": "91de155feb20dd52c94faa3da0da1246fc8d2153a753adc41713ba576fb74de5",
     "Accounting.Guarantees.TS.DecompositionD": "237b5d1e8dbe814eaa3942aa253b33b7b0d4856b390e60d95cd596728134446d",
     "Accounting.Guarantees.TS.FloorCreditD3": "012916939463cfd453565042c4696d6cc8fbad47c52bd373d88d9258b3893e54",
     "Accounting.Guarantees.TS.OutputCount": "aec5f1a001e3ac62af705b8bcbf3a64f9664f671f3b2d0595814c9143f03e3e9",
+    "Accounting.Guarantees.TS.ProofsSoundOfPinned": "bedb754d00b353977e5c40c7e79201a5adae5b170216bf47d9a2c0fc9e8ba1db",
     "Accounting.Guarantees.TS.RoutesOffD2": "8b5d8b812b583f648a13c6890d2c0b70eb09e092f01708ef3945f7f1a0f0b4e7",
     "Accounting.Guarantees.TS.TensorSlotCount": "749efbc6ec8a01cb4f02f3f2e68d33a67489e518b471a5d8873bbe3d85209045",
     "Accounting.Guarantees.TS.TensorSlotTight": "d6115b12104006a38f9ccceda9590623dacece975558f8d2869debd163255152",
@@ -17240,12 +17279,14 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.BindingFacetD1",
+    "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
     "Accounting.SecurityProofs.TS.OutputCount",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.RoutesOffD2",
     "Accounting.SecurityProofs.TS.TensorSlotCount",
     "Accounting.SecurityProofs.TS.TensorSlotTight",
