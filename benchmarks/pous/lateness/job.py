@@ -36,6 +36,7 @@ TAUS_US = (50, 100, 150, 300, 840)
 CUDA = "/usr/local/cuda"
 NVCC = f"{CUDA}/bin/nvcc"
 VENV = "/workspace/jobs/venv312/bin/python"
+VLLM_CUDA = "/workspace/jobs/cuda-12.9"  # the toolkit the venv's torch (cu129) JIT-compiles with
 MODEL = "/workspace/hf/hub/models--unsloth--Meta-Llama-3.1-8B-Instruct/snapshots/a2856192dd7c25b842431f39c179a6c2c2f627d1"
 REC = struct.Struct("<IIIHH")
 OPS = {1: "gpu", 5: "gpu_sm", 2: "host", 3: "ping"}
@@ -135,7 +136,9 @@ class Load:
                        f"{celldir}/load-gpu1.log")
             self.spawn(["taskset", "-c", cpu_arg, lat, "load", *hogs, f"report={celldir}/load-cpu.jsonl"], f"{celldir}/load-cpu.log")
         elif cond == "vllm":
-            env = dict(os.environ, HF_HOME="/workspace/hf", HF_HUB_OFFLINE="1", CUDA_VISIBLE_DEVICES=os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0])
+            env = dict(os.environ, HF_HOME="/workspace/hf", HF_HUB_OFFLINE="1", CUDA_HOME=VLLM_CUDA,
+                       PATH=f"{os.path.dirname(VENV)}:{VLLM_CUDA}/bin:{os.environ.get('PATH', '')}",
+                       CUDA_VISIBLE_DEVICES=os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0])
             self.spawn(["taskset", "-c", cpu_arg, VENV, os.path.join(HERE, "vllm_load.py"), MODEL, self.ready_file, self.stop_file,
                         f"{celldir}/vllm.jsonl"], f"{celldir}/vllm.log", env=env)
 
