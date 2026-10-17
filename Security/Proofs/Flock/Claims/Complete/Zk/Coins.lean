@@ -181,19 +181,21 @@ noncomputable def εZk (x : Claims.Msg) : ℝ :=
 
 open Classical in
 /-- **The statements the masked verifier can accept** against `H`, at one table: it sets up the session at one table,
-its setup against `H` is the one at SHA-512, the session draws a unit, and the statement is under `2^56` bytes
-(`ready H`'s reasons). The `--zk` scope admits several tables, whose masked record is per table; `δcZk H` is `1` there
-until it is. -/
+its setup against `H` is the one at SHA-512, the session draws a unit, the statement is under `2^56` bytes (`ready H`'s
+reasons), and its `Hello` names the keyed coin tree (the masked verifier refuses any other session). The `--zk` scope
+admits several tables, whose masked record is per table; `δcZk H` is `1` there until it is. -/
 noncomputable def readyZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
   match setupOf true x with
   | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
-      decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts))
+      decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) && spec.coinTree.isSome
   | none => false
 
-/-- **At SHA-512, `readyZk` asks only for one table, a drawn session and the statement's length** (`ready_sha512`). -/
+/-- **At SHA-512, `readyZk` asks only for one table, a drawn session, the statement's length and the coin tree**
+(`ready_sha512`). -/
 theorem readyZk_sha512 (x : Claims.Msg) :
     readyZk sha512 x = match setupOf true x with
-      | some (s, _, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56)
+      | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
+          spec.coinTree.isSome
       | none => false := by
   unfold readyZk
   split

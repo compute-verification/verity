@@ -18,6 +18,7 @@ Ligerito of `Ligerito`, the pads' commitment and inner proof of `Inner`, the ses
 `V true` (`Run`: `run_acc_of_zk`), that run as a pure session (`Sim`: `honestRunZk_eq`), `δcZk H` with the composition
 into `Claims.Flock.Complete` (`Coins`: `pr_badZk_le`, `complete_zk_of`), and the masked verdict accepting when each of
 its checks passes (`Verdict`: `zk_verifyRepWith_ok`, `zk_verifyWith_ok`). The skeleton (`Skeleton`:
-`complete_zk_of_goals`) composes them from one named goal per check (`GoalsZk`); `Discharge` proves those that follow
+`complete_zk_of_goals`) composes them from one named goal per check (`GoalsZk`), proving the keyed coin tree from
+`readyZk` (`coinTree_goal`); `Discharge` proves those that follow
 from the scope and the session's shape (`tablesZk_goal`, `schedulesZk_goal`, `proofCountZk_goal`), and `Link` the first
 send (`linkFirstZk_goal`). -/
