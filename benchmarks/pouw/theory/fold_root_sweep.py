@@ -6,6 +6,8 @@ Each job is a key pair and a word at width n; `fold_root_kernel` finds K_1 .. K_
   all        every odd key pair at width n, one seeded random word each
   filtered   every pair whose keys both pass the scaled KJ (`kj_scaled`, the 32-bit KJ19 read at width n), with the
              structured words of `WORDS` and `--random-words` seeded random words each
+  lastsample `--keys` seeded random pairs whose keys pass only KJ19's last clause (`kj_last`), with the words of
+             `filtered`
   sample     `--keys` seeded random pairs passing the scaled KJ and as many unfiltered, the zero word and one random word
 
 Writes `<set>-n<n>.txt` (the enumerator's S and E lines) and `<set>-n<n>.json` (counts) under --out.
@@ -80,6 +82,11 @@ def jobs_for(kind: str, n: int, rng: random.Random, nkeys: int, nrand: int, word
     if kind == "filtered":
         ws = words(n)
         return [(a0, a1) + w for a0 in ok for a1 in ok for w in ws + [rw() for _ in range(nrand)]]
+    if kind == "lastsample":
+        last = [a for a in odd if kj_last(a, r1)]
+        ws = words(n)
+        return [k + w for k in ((rng.choice(last), rng.choice(last)) for _ in range(nkeys))
+                for w in ws + [rw() for _ in range(nrand)]]
     if kind == "sample":
         out = []
         for _ in range(nkeys):
@@ -93,7 +100,7 @@ def jobs_for(kind: str, n: int, rng: random.Random, nkeys: int, nrand: int, word
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--set", required=True, choices=("all", "filtered", "sample"))
+    ap.add_argument("--set", required=True, choices=("all", "filtered", "lastsample", "sample"))
     ap.add_argument("--n", type=int, required=True)
     ap.add_argument("--rmax", type=int, default=6)
     ap.add_argument("--keys", type=int, default=1000)
@@ -116,9 +123,10 @@ def main() -> int:
         exe = build(Path(tmp))
         inp = "".join(" ".join(map(str, j)) + "\n" for j in jobs)
         env = dict(os.environ, OMP_NUM_THREADS=str(a.threads))
-        res = subprocess.run([str(exe), str(a.n), str(r1), str(r2), str(a.rmax)], input=inp, capture_output=True,
-                             text=True, check=True, env=env).stdout
-    (out / f"{tag}.txt").write_text(res)
+        with open(out / f"{tag}.txt", "w") as f:
+            subprocess.run([str(exe), str(a.n), str(r1), str(r2), str(a.rmax)], input=inp, stdout=f, text=True,
+                           check=True, env=env)
+    res = (out / f"{tag}.txt").read_text()
     summ = {"set": a.set, "n": a.n, "rotations": [r1, r2], "rmax": a.rmax, "jobs": len(jobs), "seconds": round(time.time() - t0, 1),
             "threads": a.threads}
     S = [line.split() for line in res.splitlines() if line.startswith("S ")]

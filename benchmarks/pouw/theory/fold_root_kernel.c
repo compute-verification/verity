@@ -25,9 +25,16 @@
 
 #define RMAX 8
 #define NPROBE 3
+#define MAXPROBE 256
 
 typedef struct { uint32_t a0, a1, w[4]; } job_t;
 typedef struct { uint32_t d[4]; } word_t;
+typedef struct { uint64_t fp; uint32_t idx; } fpidx_t;
+
+static int fpidx_cmp(const void *p, const void *q) {
+    const fpidx_t *a = p, *b = q;
+    return a->fp < b->fp ? -1 : a->fp > b->fp ? 1 : (a->idx > b->idx) - (a->idx < b->idx);
+}
 
 static int n, r1, r2, rmax, all_out;
 static uint32_t mask, top, ns;
@@ -103,15 +110,26 @@ static int kernel_r(const job_t *j, int R, scratch_t *s, size_t cap) {
     for (int k = 0; k < NPROBE; k++) probe[k] = (uint32_t)(mix64(0x9E3779B97F4A7C15ULL * (k + 1)) & mask);
     size_t half_n = (size_t)(ns / 2) * ns, hsize = (size_t)ns * ns, hmask = hsize - 1;
     memset(s->slot, 0, hsize * sizeof(uint32_t));
+    int hashed = 1;
     for (size_t idx = 0; idx < half_n; idx++) {
         uint32_t x = (uint32_t)(idx >> n), c = (uint32_t)(idx & mask);
         uint64_t fp = 0;
         for (int k = 0; k < NPROBE; k++)
             fp |= (uint64_t)half(sig[half_inv(probe[k], r1, x, c, a0i)], r1, x, c, a0) << (k * n);
         s->fpa[idx] = fp;
-        size_t h = mix64(fp) & hmask;
-        while (s->slot[h]) h = (h + 1) & hmask;
-        s->slot[h] = (uint32_t)idx + 1;
+        if (!hashed) continue;
+        size_t h = mix64(fp) & hmask, len = 0;
+        while (s->slot[h] && ++len < MAXPROBE) h = (h + 1) & hmask;
+        if (len >= MAXPROBE) hashed = 0;
+        else s->slot[h] = (uint32_t)idx + 1;
+    }
+    /* A very structured σ (the identity, at a key where the round is a rotation) gives many equal fingerprints, and
+       linear probing goes quadratic; the sorted join has no such case. */
+    fpidx_t *sorted = NULL;
+    if (!hashed) {
+        sorted = malloc(half_n * sizeof(fpidx_t));
+        for (size_t idx = 0; idx < half_n; idx++) sorted[idx] = (fpidx_t){s->fpa[idx], (uint32_t)idx};
+        qsort(sorted, half_n, sizeof(fpidx_t), fpidx_cmp);
     }
     s->nfound = 0;
     size_t cand = 0;
@@ -121,9 +139,27 @@ static int kernel_r(const job_t *j, int R, scratch_t *s, size_t cap) {
         uint64_t fp = 0;
         for (int k = 0; k < NPROBE; k++)
             fp |= (uint64_t)half_inv(sig[half(probe[k], r2, x, c, a1)], r2, x, c, a1i) << (k * n);
-        for (size_t h = mix64(fp) & hmask; s->slot[h]; h = (h + 1) & hmask) {
-            uint32_t ia = s->slot[h] - 1;
-            if (s->fpa[ia] != fp) continue;
+        size_t h = 0, lo = 0;
+        if (hashed) {
+            h = mix64(fp) & hmask;
+        } else {
+            size_t hi = half_n;
+            while (lo < hi) {
+                size_t mid = (lo + hi) / 2;
+                if (sorted[mid].fp < fp) lo = mid + 1; else hi = mid;
+            }
+        }
+        for (;;) {
+            uint32_t ia;
+            if (hashed) {
+                if (!s->slot[h]) break;
+                ia = s->slot[h] - 1;
+                h = (h + 1) & hmask;
+                if (s->fpa[ia] != fp) continue;
+            } else {
+                if (lo >= half_n || sorted[lo].fp != fp) break;
+                ia = sorted[lo++].idx;
+            }
             if (++cand > cap) { cut = 1; break; }
             uint32_t xa = ia >> n, ca = ia & mask;
             int ok = 1;
@@ -141,6 +177,7 @@ static int kernel_r(const job_t *j, int R, scratch_t *s, size_t cap) {
             }
         }
     }
+    free(sorted);
     qsort(s->found, s->nfound, sizeof(word_t), word_cmp);
     return cut;
 }
@@ -159,7 +196,7 @@ int main(int argc, char **argv) {
         return 2;
     }
     mask = (1u << n) - 1; top = 1u << (n - 1); ns = 1u << n;
-    size_t cap = (size_t)1 << 22;
+    size_t cap = (size_t)1 << 16;
     size_t njobs = 0, capjobs = 1024;
     job_t *jobs = malloc(capjobs * sizeof(job_t));
     unsigned long v[6];
