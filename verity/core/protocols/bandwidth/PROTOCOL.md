@@ -13,6 +13,37 @@ is `Bandwidth.Guarantees.AuditRO`, in the `Accounting` area of `Security/`'s gua
 `Bandwidth.SecurityProofs.AuditRO` with no named assumption by lane `ra-bandwidth-lean` (PR #1806); its completeness
 is `HonestPasses`. Until #1806 is on `main`, the statement is that PR's.
 
+## 0. Where each part runs
+
+No guarantee assumes trusted prover hardware (Daniel, 12 Oct 2026). The audit has two parts, and only one is trusted:
+
+- **The verifier** holds the secret `source`, draws each window's nonce, derives its key, sends `σ`, runs the clock,
+  draws the samples, checks the openings and keeps the store's state (§3). It is PoUS's memory challenger (§3), the
+  auditor's hardware on a machine the prover doesn't control (the auditor's own VM or box, under the auditor's
+  account), never a process on the GPU's node. `trusted-nebius-host` (§5) is about that machine only.
+- **The on-node challenger** is the code that runs on the GPU's own node: `audit.read_device`, and
+  `benchmarks/bandwidth`'s `gpu.challenger_device` and `gpu.Prover`. It is prover hardware. Its only role is to run the
+  protocol: to drive the tagger and carry `σ`, the root, the samples and the openings between the GPU and the verifier.
+  The guarantees are stated for an adversarial one, which is just part of the prover. `σ` and the samples come from
+  the verifier's key, which the node never holds, and leave the verifier only when it sends them, the samples after
+  the root. The deadline runs on the verifier's clock, so `RTT` includes the hop to the node. Every opening is checked
+  against `vk` and the committed root. §1's bound for one accepted window, and §3's rules (one open window per store,
+  no repeated key), hold whatever the on-node challenger does.
+
+Two things still rest on the on-node challenger, and neither is certified until the verifier can check it:
+
+1. **The device's identity** (§2, §5). The node reads the GPU's UUID and SKU from its own driver, so an adversarial
+   node can report another GPU's. A window's bound holds for the store the verifier salted, whichever chip answered.
+   But which GPU that was, and so a per-GPU figure, the pairwise-distinct stores of a co-audited set (§5) and the
+   device class that `S` and `c` are measured for, are the node's word. The GPU's confidential-computing attestation,
+   checked by the verifier, would move this to the chip; the audit does not use it yet.
+2. **The measured margins** (§6). Every run of §6 ran the verifier on the GPU's node, so the honest window's elapsed
+   time with the verifier off the node, which adds a round trip inside the site, is unmeasured. This is completeness
+   only: the bound reads `T + RTT` on the verifier's clock wherever it runs.
+
+The remote bandwidth audit (PR #1883) keeps the same split: its passes are chained by Fiat–Shamir from the verifier's
+live challenge, and its openings are drawn from the verifier's live coin after the last root.
+
 ## 1. What a window certifies
 
 A window certifies that a device moved at least `I` bits of a fixed store `E` from its memory into the chip within
@@ -78,17 +109,17 @@ commitment is never audited as this device's (`test_a_store_not_salted_for_its_d
 **The device's id** is the 16 bytes of its GPU's UUID, nothing else: `draw_salt` refuses any other value, and
 `audit.device_id` reads it only from the one spelling nvidia-smi prints, `GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` in
 lowercase hex, refusing uppercase, missing dashes, braces, a MIG instance's id and anything else. So one GPU has one id
-and one salt. The challenger reads the id itself, on the device's node, from the NVIDIA driver: `audit.read_device(gpu)`
-asks nvidia-smi (NVML) for the GPU's UUID and MIG mode, reads the `GPU-…` string through `device_id`, and refuses a MIG
-slice, whether the selector names one or the GPU is in MIG mode (its CUDA devices are then slices, each with a UUID of
-its own). The prover's word is only checked against it: `benchmarks/bandwidth` refuses a tagger whose CUDA device
+and one salt. The on-node challenger reads the id on the device's node, from the NVIDIA driver (§0):
+`audit.read_device(gpu)` asks nvidia-smi (NVML) for the GPU's UUID and MIG mode, reads the `GPU-…` string through
+`device_id`, and refuses a MIG slice, whether the selector names one or the GPU is in MIG mode (its CUDA devices are
+then slices, each with a UUID of its own). `benchmarks/bandwidth` refuses a tagger whose CUDA device
 (`cudaDeviceProp.uuid`, `Tagger.device()`) has another UUID (`gpu.challenger_device`;
-`test_the_challenger_reads_a_devices_id_from_the_driver`, `test_the_challenger_reads_the_device_it_audits`). Nothing on
-the chip signs it: the verifier trusts the id because it trusts the host the challenger runs on (`trusted-nebius-host`,
-§5) to report the UUID of the GPU it audits. A host that reported another GPU's id would get that GPU's store, and two
-GPUs would answer from one store. The GPU's confidential-computing attestation could sign the UUID with a key in the
-chip, which would remove the host from this step; the audit does not use it yet. The SKU the device reports is
-recorded beside the id.
+`test_the_challenger_reads_a_devices_id_from_the_driver`, `test_the_challenger_reads_the_device_it_audits`), which keeps
+an honest node consistent and binds an adversarial one to nothing. Nothing on the chip signs the id, and the node is the
+prover's (§0), so the id is the prover's word: a node that reported another GPU's id would get that GPU's store, and two
+GPUs would answer from one store. No trusted host stands behind it. The GPU's confidential-computing attestation could
+sign the UUID with a key in the chip, checked by the verifier; the audit does not use it yet, so until it does the id
+names a store, not a GPU (§0, item 1). The SKU the device reports is recorded beside the id, and is the node's word too.
 
 The salt is the place for the device, not the window key. With the device only in the window key, two devices holding
 byte-identical stores get different seeds, but one device that reads each block once can tag it under both seeds and
@@ -129,8 +160,9 @@ one read of each block, so their ingress would not add; with one open at a time,
 its own interval (`test_one_window_over_a_store_is_open_at_a_time`).
 
 **The challenger's state.** Both rules hold across every verifier of a store, whatever its tag, and across restarts:
-every verifier of a store takes the store's one challenger state (`audit.ChallengerState`). It is a file in the
-challenger's state directory on its host, passed explicitly and never the LMS key directory, and the store names it:
+every verifier of a store takes the store's one challenger state (`audit.ChallengerState`; the code's name, it is the
+verifier's state, kept on the verifier's machine and never on the GPU's node, §0). It is a file in the verifier's
+state directory on that machine, passed explicitly and never the LMS key directory, and the store names it:
 `<vk.root>-<vk.salt>.state` in hex (`audit.state_name`). The directory holds nothing else: `ChallengerState.create` and
 opening refuse a directory holding any file that is not a state named by the store its first line names, so a copy or
 hard link of a state under another name, a symbolic link, a subdirectory or a stray file is refused for every store,
@@ -140,27 +172,28 @@ and the store (`vk.root`, `vk.salt`); then each window appends `open NONCE TAG`,
 `close NONCE` when it closes (its root, or `T + RTT` without one). The file is append-only: nothing rewrites or
 truncates it, and a store's state is never made again, so it is never reset. A state that is missing, a link, unreadable
 (a record cut short, a nonce opened twice, a close that is not the open window's), another store's, or changed since this
-challenger last wrote it opens no window. The challenger holds the file's lock while it runs, so one challenger holds a
+verifier last wrote it opens no window. The verifier holds the file's lock while it runs, so one verifier holds a
 store's state at a time. A nonce in the file is never drawn again, and one window over the store is open at a time,
-whichever verifier opens it. A window the file shows open when the state is reopened belonged to a challenger that
+whichever verifier opens it. A window the file shows open when the state is reopened belonged to a verifier that
 stopped; reopening records it closed, and no verifier can accept it. A file cannot detect being restored from a
 snapshot, nor a directory a copy of a state kept in another directory or on another host. Both rest on
-`trusted-nebius-host`, which network-accounting widens under the same id to say that the device runs its stated code
-on its Nebius host, "…, and its host never restores an earlier copy of the state the device keeps there", pending
-network-accounting's widening (Daniel, decision 2). The challenger's stated code keeps one state directory and never
-copies a state, and its host never brings an earlier copy back. PoUS's memory challenger cites the same assumption for
+`trusted-nebius-host` for the verifier's machine, which network-accounting widens under the same id to say that the
+device runs its stated code on its Nebius host, "…, and its host never restores an earlier copy of the state the device
+keeps there", pending network-accounting's widening (Daniel, decision 2). The verifier's stated code keeps one state
+directory and never copies a state, and its host never brings an earlier copy back. A state kept on the GPU's node
+would rest on prover hardware, which no guarantee does (§0). PoUS's memory challenger cites the same assumption for
 its session-id log. The audit needs it for the two properties below.
 
 **What the no-rollback presumption is for.** A single window's bound does not need it. AuditRO's bound for one
 accepted window (§5) needs only that the prover could not know `σ` or the samples before `σ` left, and both come from
-the window's key, which binds the verifier's secret and a 32-byte nonce from the challenger's own randomness. Two
+the window's key, which binds the verifier's secret and a 32-byte nonce from the verifier's own randomness. Two
 windows over a store share a key only if their nonces collide, with probability below `n²/2^257` over `n` windows, so
 keys are unique given fresh randomness alone; the state's refusal of a nonce it holds only catches a source that
 repeats. A state rolled back, restored or forked therefore replays no window unless the randomness repeats too. The
 presumption is still needed for two properties, both about windows that overlap in time:
 
 - **One open window per store.** The state enforces it through its record of the open window and its lock. A second
-  copy of the state, or one restored to before an open window's record, would let a second challenger open a window
+  copy of the state, or one restored to before an open window's record, would let a second verifier open a window
   over the store while that one is open, and two such windows can be answered from one read of each block.
 - **Additivity across windows.** The ingress of a store's windows over a period, or of a co-audited set's (§5), adds up
   only because no two windows over a store are open at once. Without the presumption each accepted window's bound
@@ -269,14 +302,15 @@ The claims registry (`verity.core.claims`, on #1806's branch) names what a deplo
   rebuild time on the stated device, each falsified by a measurement (a larger on-chip working set, a faster path in,
   a faster root). The device for all three is a whole GPU, not a MIG slice: slices share the chip's L2 and crossbar,
   so a co-resident slice's path in is on chip, not over PCIe. The RTX PRO 6000 Server's only link is its PCIe Gen 5
-  x16 (no NVLink, no chip-to-chip link). A deployment records the SKU the device attests (it supports confidential
-  computing) beside its id (§2).
-- **`trusted-nebius-host`** (assumption, core's): the challenger runs its stated code on its Nebius host, which offers
-  no attesting hardware, "…, and its host never restores an earlier copy of the state the device keeps there", the
-  wording network-accounting adds under the same id, pending network-accounting's widening (Daniel, decision 2). The
-  audit cites it for two properties: the device id the challenger reads from the driver is the UUID of the GPU it
-  audits (§2), and the challenger keeps one state directory, never copies a state and never gets an earlier copy back
-  (§3), which one open window per store and additivity across windows need and a single window's bound does not.
+  x16 (no NVLink, no chip-to-chip link). A deployment records the SKU the node reports beside its id (§2); it is the
+  node's word until the device's confidential-computing attestation is checked (§0, item 1).
+- **`trusted-nebius-host`** (assumption, core's): the verifier's machine, the auditor's, runs its stated code on its
+  Nebius host, which offers no attesting hardware, "…, and its host never restores an earlier copy of the state the
+  device keeps there", the wording network-accounting adds under the same id, pending network-accounting's widening
+  (Daniel, decision 2). The audit cites it for one property: the verifier keeps one state directory, never copies a
+  state and never gets an earlier copy back (§3), which one open window per store and additivity across windows need
+  and a single window's bound does not. It covers no machine the prover controls: not the GPU's node, and not the
+  device id the node reads from its driver (§2), which rests on nothing yet (§0, item 1).
 - **`bandwidth-device`** (model): the device is a chip with device memory and side sources, all laid out before `σ`; it
   reads device memory only through counted ingress, computes every tag on chip, and commits before the samples.
 
@@ -438,7 +472,7 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
   `draw_salt(source, commitment, device)`), the prover's
   reference (`Store`, `tag_pass(store, tag, σ) -> TagCommitment` with `root` and
   `open(j) -> Opening`), the store's challenger state (`ChallengerState.create(state_dir, vk)` once, then
-  `ChallengerState(state_dir, vk)`, the file `state_name(vk)` in the challenger's state directory, shared by every
+  `ChallengerState(state_dir, vk)`, the file `state_name(vk)` in the verifier's state directory, shared by every
   verifier of the store), the verifier
   (`Verifier(vk, params, source, state, device=, commitment=, salt_source=).window()`: `open()`, `start() -> σ`,
   `commit(root) -> samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`), the proof's point
@@ -446,9 +480,9 @@ from the raw rate is the time the honest pass and its margin take beyond a raw r
 - `tests/bandwidth_vectors.py` writes `tests/vectors.json`: tags at 2,056 bytes for every construction, two devices'
   ids and salts, window seeds and samples over the first device's store, and a whole window over 37 blocks.
 - `benchmarks/bandwidth`: the GPU tagger (`tagger.cu`, one kernel per tag, the leaves and the tree), its harness API
-  (`gpu.py`: `challenger_device(tagger, gpu)` is the id the challenger reads, refused unless `Tagger.device()`, the
-  tagger's CUDA device, is that GPU; `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root; `open(j, store_tree)` gives the
-  `Opening` this verifier checks; `Prover(tagger, store, blocks, scrub)` is a store's one prover for every tag, and
-  `commit(window)` opens the window, prepares, then takes `σ` and commits; `windows` runs every window of every tag through it and
-  through the store's one challenger state), its Python twins
+  (`gpu.py`: `challenger_device(tagger, gpu)` is the id the on-node challenger reads, refused unless `Tagger.device()`,
+  the tagger's CUDA device, is that GPU; `Tagger.tag_pass(tag, store, blocks, σ, workspace)` returns the root;
+  `open(j, store_tree)` gives the `Opening` this verifier checks; `Prover(tagger, store, blocks, scrub)` is a store's one prover
+  for every tag, and `commit(window)` opens the window, prepares, then takes `σ` and commits; `windows` runs every
+  window of every tag through it and through the store's one challenger state), its Python twins
   (`benchmarks/bandwidth/tests/test_tagger_twin.py`), and the runs of §6.

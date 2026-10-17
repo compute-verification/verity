@@ -298,6 +298,29 @@ def stage_stacked(public: dict, private: dict, program: str, sr: SimpleNamespace
     return {"m": sr.sh.m, "openings": len(sr.qs), "levels": levels, "opening": opening}
 
 
+def shared_rows(algebra, stacked=()) -> dict:
+    """The verifier's record of V*'s shared rows (`--rec-rows`: `RecVStar.checkRows`, `checkAcc`, `checkShared`) from staged
+    statement directories: every row port of the algebra's parts ``algebra`` (all but ``v`` and ``out``), and, under its value,
+    the ``out`` entry of each of R's levels ``stacked`` (`stage_stacked`'s ``L<l>``, reading ``rec-top-stacked-L<l>``). Each
+    session's port reading a value listed here must be that registration but in reads (`checkShared`, the first entry of the
+    value), so two entries of one name, or of one value, that differ are refused here."""
+    ports: dict = {}
+    for d, top in [(Path(d), False) for d in algebra] + [(Path(d), True) for d in stacked]:
+        for nm, e in json.loads((d / "registered.json").read_text())["ports"].items():
+            if top != (nm == "out") or (not top and nm == "v"):
+                continue
+            if top and not e["value"].startswith("rec-top-stacked-L"):
+                raise ValueError(f"{d}: its out reads {e['value']}, not one of R's tops rec-top-stacked-L<l>")
+            if ports.setdefault(e["value"] if top else nm, e) != e:
+                raise ValueError(f"{d}: its port {nm} is not the other statements' {e['value'] if top else nm}")
+    site = lambda e: {k: x for k, x in e.items() if k != "reads"}  # noqa: E731
+    first: dict = {}
+    for nm, e in ports.items():
+        if site(first.setdefault(e["value"], e)) != site(e):
+            raise ValueError(f"the shared rows register {e['value']} twice: {nm} is not the first entry of that value")
+    return {"format": "verity/registered-reads/v0", "ports": ports}
+
+
 def coefficients(vf: SimpleNamespace, queries: list[V.Query]) -> dict:
     """Each opening's ``coef`` words at its rep's coins, its position the one the verifier's query coins give."""
     out = {}

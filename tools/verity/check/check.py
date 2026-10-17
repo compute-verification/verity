@@ -62,7 +62,9 @@ except after a failed preflight, which starts no group, or a step in `HALTS`: a 
 record is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
 (`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
-appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.  A SIGTERM
+appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run, and mirrored
+as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step is a completed child, the run's end
+completes the root), the frozen shape the observability watcher reads.  A SIGTERM
 (`research cancel`, a runner's timeout) stops the steps the same way, and a recorded run still writes its result, validation
 `not_run`, and the pack of the passes its steps stored before it, then exits 143: a cancelled check's passes are reused.
 
@@ -212,6 +214,8 @@ JOBS = DECLARATION.load()
 VERDICTS = _load("verdicts")
 #: the helpers `lean_audit.py` shares (`common.py`), kept out of this file so that its audit key doesn't cover this file
 COMMON = _load("common")
+#: trace/v1 spans over the run (`spans.py`): `spans.jsonl` beside `steps.jsonl`, the frozen shape the watcher reads
+SPANS = _load("spans")
 #: the test runner (`suites.py`), for where the steps' Python imports this tree's packages from
 SUITES = _load("suites")
 cache_dir = COMMON.cache_dir
@@ -902,8 +906,8 @@ GATHER = 12
 
 
 def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None = None) -> Path | None:
-    """One pack (`verdicts.py combine`) of the verdicts the newest ``limit`` recorded checks stored, for `--record` to send with
-    `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
+    """One pack (`verdicts.py combine`) of the verdicts the ``limit`` recorded checks that ended last stored, for `--record` to
+    send with `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
     recorded runs' packs are taken, a failed or cancelled run's too: its pack holds only the passes its steps stored, each
     under a key of everything it read.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
     flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse is passed over by name, so its
@@ -920,7 +924,7 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
-        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY start_utc DESC LIMIT ?",
+        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?",
                                (4 * limit,))
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
@@ -986,7 +990,11 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     beside = only is None or any(x == "pytest" or x.startswith("lean") for x in names)
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
-    tail = ["--jobs", str(a), *([] if cache else ["--fresh"]),
+    slot_gb = int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
+    with_cc = only is None or "circuit-check" in names
+    # pytest and lean-suites run at once, each with this share: what circuit-check leaves, halved
+    tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
+    tail = ["--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
@@ -997,7 +1005,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
-          *(["--mem-gb", str(cc_mem_gb(int(m), beside))] if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else [])]
+          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside))] if slot_gb is not None else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
@@ -1380,6 +1388,7 @@ class Steps:
         self.halted: str | None = None
         self.why: str | None = None
         self.log.unlink(missing_ok=True)
+        self.spans = SPANS.SpanLog(out)
         _LIVE.add(self)
         if TERMINATED:
             self.stop(f"check got {TERMINATED[0]}")
@@ -1413,6 +1422,7 @@ class Steps:
             rec["ended_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             with open(self.log, "a") as f:
                 f.write(json.dumps(rec) + "\n")
+            self.spans.step(rec)
             if rec["status"] == "failed" and not self.stopping and (not self.keep_going or rec["step"] in HALTS or rec.get("halts")):
                 self.halted = rec["step"]
                 self.stop(f"{rec['step']} failed")
@@ -1453,7 +1463,9 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             entry.write_text(json.dumps({"key": key, "argv": argv, "passed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
             rec["cache"] = {"stored": key}
         if name == "circuit-check" and (out / "circuit-check.json").exists():
-            rec["cache"] = json.loads((out / "circuit-check.json").read_text()).get("cache")
+            c = json.loads((out / "circuit-check.json").read_text()).get("cache")
+            # counts only: result.json's steps are its attempt's meta, capped at 256 KiB, and a list per target outgrows it
+            rec["cache"] = {k: len(v) if isinstance(v, list) else v for k, v in c.items()} if isinstance(c, dict) else c
     rec["seconds"] = round(time.monotonic() - t0, 1)
     rec = steps.end(rec)
     if rec["status"] == "failed" and log.exists():
@@ -1509,7 +1521,9 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
     finally:
         if urls and urls.name.startswith("lean-deps-urls-"):
             urls.unlink(missing_ok=True)
-    return not any(r["status"] in ("failed", "stopped") for r in results), results
+    ok = not any(r["status"] in ("failed", "stopped") for r in results)
+    steps.spans.close("ok" if ok else ("cancelled" if TERMINATED else "failed"))
+    return ok, results
 
 
 def agreement_verdicts(run_dir: Path) -> list[str]:
@@ -1549,8 +1563,7 @@ def reuse(out: Path, done: list[dict]) -> dict:
     for s in done:
         c = s.get("cache") or {}
         if s["step"] == "circuit-check" and "hits" in c:
-            misses = {"untraced": len(c.get("untraced") or []), "errors": len(c.get("errors") or []),
-                      "changed": len(c.get("changed") or [])}
+            misses = {k: c.get(k) or 0 for k in ("untraced", "errors", "changed")}
             got["circuit-check"] = {"of": "targets", "reused": c["hits"], "rerun": c.get("stored", 0) + sum(misses.values()),
                                     "not_stored": misses}
         elif s["step"] in STEP_KEYS and s["status"] in ("passed", "failed"):
@@ -1597,7 +1610,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
            "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
-                                                    "verdicts.tar.gz", STEPS_LOG,
+                                                    "verdicts.tar.gz", STEPS_LOG, SPANS.SPANS_LOG,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     if shard:

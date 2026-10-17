@@ -5,9 +5,9 @@ import Proofs.Flock.Recursive.Statements
 # `v-bridge` at the wires V* reads
 
 `Flock.Assumptions.VBridge` reads `VDecodes` and `VFull` at the wires some unit reads (`VDecodesR`, `VFullR`, `ReadW`,
-`Proofs.Flock.Recursive.Stage`), and `VCommits` at sessions that accept some transcript: V*'s message rows pad a port of
-`n` elements to `64 ⌈8 n / 64⌉` words and read its first `128 n` bits (`InnerRepCheck.lean:24,39-44`), and a session
-that accepts nothing may be another history's. `VBridgeRead` is that assumption at the family's arguments, so the
+`Proofs.Flock.Recursive.Stage`), and `VCommits` at sessions that accept a transcript they write (`ZkOuter.Writes`):
+V*'s message rows pad a port of `n` elements to `64 ⌈8 n / 64⌉` words and read its first `128 n` bits
+(`InnerRepCheck.lean:24,39-44`), and a session that accepts nothing it writes may be another history's. `VBridgeRead` is that assumption at the family's arguments, so the
 lanes' theorems state what `Flock.SecurityProofs.RecursiveSound` reads.
 -/
 

@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.CROnly.Hm96Defs
 
 * `CommittedLe`: on any interaction that opens each committed round at most once, a committed prover succeeds with
   probability at most the optimal prover's against live coins (`value p g.erase`) plus `δ₁` for each committed round,
-  where `δ₁` is the leaf's hiding gap (`Assumptions.Hm96Hiding`).
+  where `δ₁` is the leaf's hiding gap (`Claims.Hm96Hiding`).
 * `CommittedLeHm96`: the same at hm96-sha512 under a fresh uniform key, with `δ₁ = 2^-257` and no hypothesis on the
   key: the key is drawn first and is public, and the event, the interaction, the digests, the leaf hash and the prover
   may all depend on it.
@@ -25,14 +25,14 @@ open FlockSoundness Game
 open scoped ENNReal
 
 /-- **Committed coins cost their hiding gap once a round.** If no path of `g` opens a committed round twice and the
-leaf's hiding gap is `δ₁` (`Assumptions.Hm96Hiding My cs δ₁`), then a committed prover `τ`, which sees every round's leaf
+leaf's hiding gap is `δ₁` (`Claims.Hm96Hiding My cs δ₁`), then a committed prover `τ`, which sees every round's leaf
 before its first message and each round's block and salt at its opening, makes `g`'s output satisfy `p` with
 probability at most `value p g.erase + |I|·δ₁`. `dig`, `H` and the event are arbitrary. -/
 def CommittedLe : Prop :=
   ∀ {I Blk Salt B Cs D α : Type} [Fintype I] [DecidableEq I] [Fintype Blk] [Nonempty Blk] [Fintype Salt] [Nonempty Salt]
     [AddCommGroup B] [Fintype B] (p : α → Prop) (g : TGame I Blk α), g.Distinct →
     ∀ (dig : I → Blk → B) (My : Salt → B) (cs : Salt → Cs) (H : B × Cs → D) (δ₁ : ℝ≥0∞),
-      Assumptions.Hm96Hiding My cs δ₁ →
+      Claims.Hm96Hiding My cs δ₁ →
       ∀ τ : (I → D) → TGame.CStrat Salt g, probC p g dig My cs H τ ≤ value p g.erase + Fintype.card I * δ₁
 
 /-- **Committed coins at hm96-sha512 under a fresh key.** As `CommittedLe`, with the leaf
@@ -61,7 +61,7 @@ def SessionCoinsSound : Prop :=
     (A : Model.Arith F K), A.Correct → ∀ (ts : List (ZkSession.TabZK F mPts)) (j : Fin ts.length)
     {Blk Salt B Cs D : Type} [Fintype Blk] [Nonempty Blk] [Fintype Salt] [Nonempty Salt] [AddCommGroup B] [Fintype B]
     (dc : Decoders Blk) (R : ℕ) (dig : SessIdx ts.length R → Blk → B) (My : Salt → B) (cs : Salt → Cs) (H : B × Cs → D)
-    (δ₁ : ℝ≥0∞), Assumptions.Hm96Hiding My cs δ₁ →
+    (δ₁ : ℝ≥0∞), Claims.Hm96Hiding My cs δ₁ →
     ∀ τ : (SessIdx ts.length R → D) → TGame.CStrat Salt (sessionZKC dc R A ts),
       probC (fun outs => ZkSession.acceptedZK ts outs ∧ ¬ (ts.get j).Committed A (outs.getD j ZkSession.dfltZK).2)
           (sessionZKC dc R A ts) dig My cs H τ ≤

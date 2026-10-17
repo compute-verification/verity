@@ -120,3 +120,19 @@ def test_report_is_fast_and_complete():
     assert len(rep["uncertainties"]) >= 3 and rep["vole"]["-128"]["zk_mode"] == "designated-verifier"
     for opt in rep["limb_options"].values():
         assert "max_inner_length" in opt and "viable" in opt
+
+
+def test_the_default_zk_level_is_what_tensor_md_priced_and_its_pads_are_small():
+    """The default level (``zk="hvzk"``) reproduces tensor.md's rows (up to the PRG bucket, < 1%): the accountant's rows
+    and pads already contained the honest-verifier layer; its pads over ``zk="none"`` are under 50k elements; an unknown
+    level is refused."""
+    for dn, field, pinned in (("A", "babybear", 1.07e7), ("B", "babybear", 1.43e7), ("A", "goldilocks", 1.25e7)):
+        p = t.price_design(t.DESIGNS[dn], t.FIELDS[field], -128)
+        tm = p.times(t.GPUS["H100"], "H100", 0.172, 50e9, fs=t.FIELDS[field])
+        assert abs(tm["overhead.vs_native_peak"] / pinned - 1) < 0.01
+        assert 0 < tm["t.prg"] < 0.01 * tm["t.total"]
+    pa = t.price_design(t.DESIGNS["A"], t.FIELDS["babybear"], -128, zk="none")
+    pb = t.price_design(t.DESIGNS["A"], t.FIELDS["babybear"], -128, zk="hvzk")
+    assert 0 < pb.committed_elements - pa.committed_elements < 50_000
+    with pytest.raises(ValueError):
+        t.price_design(t.DESIGNS["A"], t.FIELDS["babybear"], -128, zk="perfect")

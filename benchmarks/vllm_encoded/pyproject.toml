@@ -1,0 +1,14 @@
+# Llama-3.1-8B decode in vLLM with its linear weights stored only as word-codec words. Not a package: `ve.cu`, `kernels.py`
+# and `serve.py` run on a GPU node (`run.sh`); the torch layouts (`layout.py`) are tested here against the word codec's
+# byte-exact reference (`uv run tools/verity/check/suites.py benchmarks/vllm_encoded`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# the word codecs' references, which the layouts must equal, the sketches' vector layouts, and (the KV-append capture's
+# CPU references) the KV codec with its key derivation and the circuits' E4M3 append Definition
+inputs = ["benchmarks/word_codec/codec.py", "benchmarks/word_codec/wide.py", "benchmarks/word_codec/wide_sketch.py",
+          "benchmarks/codec_tensor/wide.py", "benchmarks/codec_tensor/sketching.py", "benchmarks/codec_tensor/tagging.py",
+          "benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py",
+          "verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
+          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py"]

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Minimal RunPod lifecycle for a measurement campaign (local machine only).
+"""RunPod, which now hosts only the control pod (`vy-control-verity`): create, list, get, ssh and terminate, plus the REST and
+GraphQL calls the budgets guard and `research notes` make. Nebius runs every node (`pods/nebius/`).
 
 Reads the API key from ``~/.runpod/config.toml`` and never prints it.  Talks to
 the REST API (``https://rest.runpod.io/v1``); the GraphQL endpoint is used only
@@ -12,15 +13,11 @@ environment stands in, and a file that exists always wins:
 ``$XDG_STATE_HOME/research/runpod/`` (default ``~/.local/state``), with its
 known_hosts beside it.  Neither value is ever printed.
 
-    python -m research.pods.runpod balance
-    python -m research.pods.runpod gpus                      # price/stock for the SKUs we care about
-    python -m research.pods.runpod create --name vy-4090 --gpu "NVIDIA GeForce RTX 4090" --disk 100
+    python -m research.pods.runpod create --name vy-control --gpu ... --disk 100
     python -m research.pods.runpod list
     python -m research.pods.runpod get POD_ID
     python -m research.pods.runpod ssh POD_ID                # prints the ssh command once port 22 is mapped
-    python -m research.pods.runpod wait-ssh POD_ID           # blocks until sshd answers
     python -m research.pods.runpod terminate POD_ID
-    python -m research.pods.runpod watchdog POD_ID --hours 9 # detached: terminate after N hours
 
 Every pod this script creates carries the label ``veritor-campaign`` in its
 name so a stray pod is recognisable from the console.
@@ -35,7 +32,6 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
 import threading
 import time
 import tomllib
@@ -169,26 +165,6 @@ def _graphql(query: str) -> Any:
     )
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.load(response)
-
-
-def balance() -> None:
-    result = _graphql("{ myself { clientBalance spendLimit currentSpendPerHr } }")
-    print(json.dumps(result["data"]["myself"]))
-
-
-def gpus() -> None:
-    result = _graphql(
-        "{ gpuTypes { id memoryInGb secureCloud lowestPrice(input:{gpuCount:1}) "
-        "{ uninterruptablePrice stockStatus } } }"
-    )
-    for gpu in result["data"]["gpuTypes"]:
-        if not any(tag in gpu["id"] for tag in ("4090", "5090", "H100", "A100", "L40")):
-            continue
-        price = gpu["lowestPrice"] or {}
-        print(
-            f"{gpu['id']:<32} {gpu['memoryInGb']:>3}GB  on-demand ${price.get('uninterruptablePrice')}"
-            f"  stock={price.get('stockStatus')}"
-        )
 
 
 def create(args: argparse.Namespace) -> None:
@@ -331,52 +307,20 @@ def terminate(pod_id: str) -> None:
     print(f"terminated {pod_id}")
 
 
-def watchdog(pod_id: str, hours: float) -> None:
-    """Detach a process that terminates the pod after ``hours`` even if this session dies."""
-
-    log = Path.home() / ".runpod" / f"watchdog-{pod_id}.log"
-    script = (
-        "import time, sys, subprocess\n"
-        f"time.sleep({int(hours * 3600)})\n"
-        f"subprocess.run([sys.executable, {str(Path(__file__).resolve())!r}, 'terminate', {pod_id!r}])\n"
-    )
-    command = [sys.executable, "-c", script]
-    if os.uname().sysname == "Darwin":
-        command = ["caffeinate", "-is", *command]
-    with log.open("ab") as handle:
-        process = subprocess.Popen(
-            command,
-            stdout=handle,
-            stderr=handle,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    print(f"watchdog pid {process.pid}: terminates {pod_id} in {hours} h (log {log})")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("balance")
-    sub.add_parser("gpus")
     create_args(sub.add_parser("create"))
     sub.add_parser("list")
-    for name in ("get", "ssh", "wait-ssh", "terminate"):
+    for name in ("get", "ssh", "terminate"):
         p = sub.add_parser(name)
         p.add_argument("pod_id")
-    w = sub.add_parser("watchdog")
-    w.add_argument("pod_id")
-    w.add_argument("--hours", type=float, default=9.0)
     args = parser.parse_args()
 
     try:
-        if args.command == "balance":
-            balance()
-        elif args.command == "gpus":
-            gpus()
-        elif args.command == "create":
+        if args.command == "create":
             create(args)
         elif args.command == "list":
             list_pods()
@@ -387,13 +331,8 @@ def main() -> None:
             if target is None:
                 raise SystemExit("port 22 not mapped yet")
             print(" ".join(ssh_command(*target)))
-        elif args.command == "wait-ssh":
-            host, port = wait_ssh(args.pod_id)
-            print(" ".join(ssh_command(host, port)))
         elif args.command == "terminate":
             terminate(args.pod_id)
-        elif args.command == "watchdog":
-            watchdog(args.pod_id, args.hours)
     except PodError as e:                       # the standalone CLI: one line, exit 1, no traceback
         raise SystemExit(f"runpod: {e}") from None
 

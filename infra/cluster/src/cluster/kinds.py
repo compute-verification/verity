@@ -25,6 +25,7 @@ SHAPES: dict[str, dict[str, int | bool]] = {
     "cpu-s": {"gpus": 0, "cpus": 2, "memory_gib": 8},
     "cpu-m": {"gpus": 0, "cpus": 8, "memory_gib": 32},
     "cpu-l": {"gpus": 0, "cpus": 32, "memory_gib": 128},
+    "cpu-xl": {"gpus": 0, "cpus": 32, "memory_gib": 280},      # a whole Security Lean build (~260 GB peak, lean 16 Oct)
     "gpu1": {"gpus": 1, "cpus": 8, "memory_gib": 64},
     "gpu2": {"gpus": 2, "cpus": 16, "memory_gib": 128},
     "gpu8-timed": {"gpus": 8, "cpus": 0, "memory_gib": 1024, "quiet": True},

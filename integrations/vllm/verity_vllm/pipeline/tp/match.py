@@ -13,7 +13,8 @@ output, sha256s; the tensors of the first `--store-steps` steps are saved) and t
      Build (`tp_links.json` of `derive_step --tp 2 --rank r`), and the rows of every collective equal the step's token count;
   2. CROSS-RANK PROVENANCE: for every stored collective k of every step, the value each rank RECEIVED equals the registered
      Definition of the two ranks' COMMITTED partials — `AllReduce2_v1{N}` (`bf16(f32(part_rank0) + f32(part_rank1))` per element) /
-     `AllGather2_v1{N}` (`[part_rank0 | part_rank1]`) — bit-exactly, and both ranks received the same value;
+     `AllGather2_v1{N}` (`[part_rank0 | part_rank1]`) — bit-exactly, and both ranks received the same value; a
+     `fused_allreduce_rms_norm` call on its fused path, the new residual (`collectives.fused_norm.expected_residual`);
   3. TOKENS: the instrumented run's tokens equal the control's (non-interference of the seam), per request.
 It is NOT the instance-sequence Match of `row_pod.sh` (the fold of a per-rank log against the rank Program: the fold needs a
 peer-input operand class and a sharded weights Record — see tp-STATUS); a PASS here is intermediate evidence, not a green row.
@@ -28,7 +29,9 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
+from verity_vllm.collectives import fused_norm as FN
 from verity_vllm.config import option
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 
@@ -241,24 +244,11 @@ def _check_main(args) -> int:
                 if int(xr.get("k", k)) != k or int(xr.get("step", s)) != s:
                     _digest_fail(rank, s, k, "key", f"recorder row keyed (step {xr.get('step')}, k {xr.get('k')}) at position {k} of step {s}")
             kind = x0[k]["kind"]
-            if kind == "all_reduce":
-                exp = parts[order[0]]
-                for r_ in order[1:]:
-                    exp = (exp.float() + parts[r_].float()).to(torch.bfloat16)      # world 2: exactly the R13 rule bf16(f32(a) + f32(b))
-                prov["all_reduce_checked"] += 1
-                if world > 2:
-                    alt = sum(pr.float() for pr in parts).to(torch.bfloat16)
-                    prov["alt_f32_once_equal"] += int(all(torch.equal(o, alt) for o in outs))
-                    asc = parts[0]
-                    for pr in parts[1:]:
-                        asc = (asc.float() + pr.float()).to(torch.bfloat16)
-                    prov["alt_ascending_equal"] += int(all(torch.equal(o, asc) for o in outs))
-            elif kind == "all_gather":
-                exp = torch.cat(parts, dim=-1)
-                prov["all_gather_checked"] += 1
-            else:
-                prov["mismatches"].append({"step": s, "k": k, "kind": kind, "why": "unbound collective kind"})
-                prov["pass"] = False
+            exp = _expected(kind, x0[k].get("path"), parts, outs, order, prov)
+            if exp is None:
+                if kind != FN.KIND:
+                    prov["mismatches"].append({"step": s, "k": k, "kind": kind, "why": "unbound collective kind"})
+                    prov["pass"] = False
                 continue
             same_all = all(torch.equal(outs[0], o) for o in outs[1:])
             eqs = [bool(torch.equal(o, exp)) for o in outs]
@@ -295,6 +285,38 @@ def _check_main(args) -> int:
     return 0 if res["pass"] else 1
 
 
+def _expected(kind: str, path: str | None, parts: list, outs: list, order: Any, prov: dict) -> Any:
+    """What every rank must have received for one collective of ``kind`` from the ranks' ``parts``, counted in ``prov``; None for a
+    kind with no relation here.  An all-reduce is the Definition's chain in ``order`` (world > 2 adds two diagnostics); a
+    `fused_norm.KIND` call on the fused path is its new residual (`fused_norm.expected_residual`), and on the unfused path (past
+    FlashInfer's token budget, the communicator's route) it is counted and left to the Commit's replay."""
+    import torch
+
+    if kind == "all_reduce":
+        exp = parts[order[0]]
+        for r_ in order[1:]:
+            exp = (exp.float() + parts[r_].float()).to(torch.bfloat16)      # world 2: exactly the R13 rule bf16(f32(a) + f32(b))
+        prov["all_reduce_checked"] += 1
+        if len(parts) > 2:
+            alt = sum(pr.float() for pr in parts).to(torch.bfloat16)
+            prov["alt_f32_once_equal"] += int(all(torch.equal(o, alt) for o in outs))
+            asc = parts[0]
+            for pr in parts[1:]:
+                asc = (asc.float() + pr.float()).to(torch.bfloat16)
+            prov["alt_ascending_equal"] += int(all(torch.equal(o, asc) for o in outs))
+        return exp
+    if kind == "all_gather":
+        prov["all_gather_checked"] += 1
+        return torch.cat(parts, dim=-1)
+    if kind == FN.KIND:
+        if path != FN.FUSED:
+            prov["fused_norm_unfused_left_to_commit"] = prov.get("fused_norm_unfused_left_to_commit", 0) + 1
+            return None
+        prov["fused_norm_checked"] = prov.get("fused_norm_checked", 0) + 1
+        return FN.expected_residual(parts)
+    return None
+
+
 def _ruled_out_sites(cap: Path, ranks: list[int]) -> dict | None:
     """The mid-module collective calls the recorder did not expect because the instance's flags rule them out (`coll_meta.rank<r>.json`,
     `collective_sites.mid_module_site_census`); None when no rank's meta lists them."""
@@ -328,6 +350,26 @@ def _count(xs) -> dict:
 
 def _write(run: Path, res: dict) -> None:
     (run / "tp2_match.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
+
+
+def match_record(match_dir: str, request_ids: dict[str, str], world: int) -> tuple[dict[str, list[int]], dict[str, Any]]:
+    """The Match record a TP Commit compares against (``tp-commit --match-dir``): the capture arm's generated ids per request, keyed by
+    the workload's logical ``r<i>`` (``request_ids``: workload request id -> ``r<i>``), every request of the workload and no other; and
+    its record: the check's verdict and the capture recorder's stored collectives per rank, the independent oracle every committed TP
+    partial and MoE received output is compared against at finalize."""
+    mp = Path(match_dir) / "capture" / "tokens.json"
+    tokens: dict[str, list[int]] = {}
+    for q in json.loads(mp.read_text())["requests"]:
+        lg = request_ids.get(str(q["request_id"]))
+        if lg is None:
+            raise SystemExit(f"fail-closed: Match record request {q['request_id']} is not a request of this workload")
+        tokens[lg] = [int(t) for t in q["generated_token_ids"]]
+    if set(tokens) != set(request_ids.values()):
+        raise SystemExit(f"fail-closed: Match record covers {sorted(tokens)} but the workload declares {sorted(set(request_ids.values()))}")
+    verdict = Path(match_dir) / "tp2_match.json"
+    return tokens, {"path": str(mp), "requests": len(tokens), "generated_total": sum(len(v) for v in tokens.values()),
+                    "tp2_match_verdict": json.loads(verdict.read_text()).get("pass") if verdict.exists() else None,
+                    "capture_dir": str(mp.parent), "stored_steps_per_rank": {r: len(list(mp.parent.glob(f"coll.rank{r}.step*.pt"))) for r in range(world)}}
 
 
 @dataclass(frozen=True, kw_only=True)

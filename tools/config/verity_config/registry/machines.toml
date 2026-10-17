@@ -1,0 +1,19 @@
+schema = "verity-config/machines/v0"
+
+[[machine]]
+id = "vy-nebius-1"
+research_name = "vy-nebius-1"
+provider = "nebius"
+platform = ""
+preset = ""
+gpu_id = "rtx-pro-6000"
+gpu_count = 8
+
+[[machine]]
+id = "vy-nebius-2"
+research_name = "vy-nebius-2"
+provider = "nebius"
+platform = ""
+preset = ""
+gpu_id = "rtx-pro-6000"
+gpu_count = 8

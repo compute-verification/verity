@@ -378,12 +378,12 @@ def test_show_key_prints_one_key_or_those_under_it_and_refuses_a_key_naming_none
 
 
 def test_the_cli_reads_the_default_description_and_refuses_a_bad_one(capsys, tmp_path):
-    assert cli.main(["policy", "show", "--node", "nebius-1", "--json", "--log", str(tmp_path / "none.jsonl")]) == 0
+    assert cli.main(["policy", "show", "--on", "nebius-1", "--json", "--log", str(tmp_path / "none.jsonl")]) == 0
     assert json.loads(capsys.readouterr().out)["description"] == str(NEBIUS)
     bad = described(tmp_path, '[policy.vy-nebius-1]\ndirect-gpus = "none"\n')
     assert cli.main(["policy", "diff", "--description", str(bad)]) == 2
     with pytest.raises(SystemExit) as e:
-        cli.main(["policy", "diff", "--node", "nebius-3"])
+        cli.main(["policy", "diff", "--on", "nebius-3"])
     assert e.value.code == 2
     with pytest.raises(SystemExit) as e:
         cli.main(["policy", "override", f"{N1}.lease-pool.provers.max", "6", "--until", "2026-10-04T10:30:00Z"])

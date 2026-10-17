@@ -183,6 +183,8 @@ def protocol_reference(protocol_id: str, schemes):
 
 #: The sessions' hm96 keys: few, since a key's tables are built once and cached.
 COIN_KEYS = [mc.HM96.key_from_label(b"memory-challenger-lean/coin key %d" % i) for i in range(2)]
+SETUP_ROOTS = [hashlib.sha512(b"memory-challenger-lean/setup root %d" % i).digest() for i in range(2)]
+"""Roots a session is bound to: a setup's root of `C*` is 64 bytes."""
 SECRETS = [b"challenger a", b"challenger b"]
 STRANGER = b"someone else"
 
@@ -291,8 +293,8 @@ def sessions(draw, signer: AtLeaf | None = None) -> Session:
     spends = draw(st.lists(st.one_of(st.integers(0, limit), st.just(limit), st.just(limit + 1)), min_size=k, max_size=k))
     tampered = draw(st.sets(st.integers(0, k - 1), max_size=1))
     clock = Clock(draw(st.integers(0, 2 ** 40)))
-    c = mc.MemoryChallenger(tree, signer, limit_ns=limit, block_bytes=block_bytes, binding=draw(st.binary(max_size=4)),
-                            clock=clock)
+    c = mc.MemoryChallenger(tree, signer, log=ts.session_log(), limit_ns=limit, block_bytes=block_bytes,
+                            binding=draw(st.sampled_from(SETUP_ROOTS)), clock=clock)
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()

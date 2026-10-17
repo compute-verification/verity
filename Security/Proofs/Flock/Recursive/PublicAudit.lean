@@ -25,8 +25,9 @@ What it takes, against `RecursiveAudit`:
   hidden entries, `execClassAt_nnz`), in place of `hiddenAt` and `stmtAt`;
 * `AcceptsPublic obj prog st` in place of `AcceptsStmt st`: the partition object and program are the verifier's own,
   not some the prover picks (`AcceptsPublic.acceptsStmt`: it implies `AcceptsStmt`, so `ExecClass`'s lemmas apply);
-* premises: record custody (`Flock.Premises.RecordCustody`), A3 (`Flock.Premises.UniformRandomBytes`) and VBridge
-  (`Flock.Premises.VBridge`: V*'s circuits compute C-Flock's inner verifier, here at the public statement), as in
+* premises: record custody (`Flock.Premises.RecordCustody`), A3 (`Flock.Premises.UniformRandomBytes`) and VBridge at
+  the committed rounds (`Flock.Premises.VBridgeC`, which `VBridge` gives: V*'s circuits compute C-Flock's inner
+  verifier at the rounds before the last, here at the public statement), as in
   `RecursiveAudit`. The coin server's randomness is the game's own coin draw (`uniform/flock-coin-server`, no `Prop`),
   and SHA-512 enters only as the fork disjuncts;
 * obligations, facts about our own code: in (i), `VStarParses` (V*'s files parse to `Vs`, until gap 4) and `TagsFound`
@@ -83,11 +84,11 @@ obligation until gap 4), every session's inputs carrying the tags their name nam
 on our code), the messages V*'s layers hold and the rounds' commitments (`wmsg`, `Sk`, `cmt`, `msg`), as in
 `RecursiveAudit`. Taken: A3 (`_hA3`).
 Then for every count curve `(k, R_w, M, ρ)` that bounds every session's rate at each setup of its inputs, given that
-V*'s circuits compute the inner verifier at the typed sessions and the public statement (VBridge,
-`Flock.Premises.VBridge`): the event below is empty; or the sessions type and there is a registrant fork (one run of
-the transported prover reaching two sessions whose registrant records clash, `regFinder`), a round fork, a session
-fork, or an inner fork of the transported prover's own runs whose decoded transcripts play the compiled table to
-outcomes that clash; or
+V*'s circuits compute the inner verifier at the typed sessions and the public statement, at the rounds before the last
+(VBridge at the committed rounds, `Flock.Premises.VBridgeC`): the event below is empty; or the sessions type and there
+is a registrant fork (one run of the transported prover reaching two sessions whose registrant records clash,
+`regFinder`), a round fork, a session fork, or an inner fork of the transported prover's own runs whose decoded
+transcripts play the compiled table to outcomes that clash; or
 $$\Pr[\text{Lean's verifier builds } st \text{ from } obj, prog \wedge \text{every session verifies as V*'s statement
   of its index} \wedge \neg\,st \text{ holds}]$$
 is at most V*'s sessions' expected statistical errors under the full draw's model, `r` times their expected stage
@@ -96,7 +97,15 @@ slack, and the compiled table's error.
 (ii) `RecursiveFirewallPrivate`, `RecursiveAudit`'s (ii), named rather than restated. At a public unit it is read at
 no registration rows (`nr = 0`) and the public circuit `P` as the simulator's `p₀`: the registration's term
 `2 n_r·δ_{K*}` is zero, the bound is `ε_V(δ_{K*}) + n_h·δ_{K*}`, and the simulator reads `P`, the schedule's transcript
-and the owed outputs. -/
+and the owed outputs.
+
+**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): (i)'s event asks that the inner statement have no witness
+(`¬ holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string
+`b ‖ c`, with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right
+row except with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
+cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and (i) bounds it, not a wrong
+computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids
+this by extraction. -/
 def PublicAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws
@@ -137,9 +146,10 @@ def PublicAudit : Prop :=
     (_hr : ∀ R ω t R₂ j S₀
       (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
-    -- VBridge, a premise: V*'s circuits compute the inner verifier, at the typed sessions and the public statement
+    -- VBridge at the committed rounds, a premise: V*'s circuits compute the inner verifier at the rounds before the
+    -- last, at the typed sessions and the public statement
     (_hbr : ∀ h : Typed zr,
-      Flock.Premises.VBridge (custodied zr _hCust h) dg N k Rw (fun _ _ => publicHidden st) wmsg Sk cmt msg),
+      Flock.Premises.VBridgeC (custodied zr _hCust h) dg N k Rw (fun _ _ => publicHidden st) wmsg Sk cmt msg),
     prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ¬ (innerAt T CT st).holds (publicHidden st))
         (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨

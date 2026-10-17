@@ -277,5 +277,5 @@ def test_cli_status_reports_a_node_it_cannot_read_and_exits_1(capsys, monkeypatc
 
     monkeypatch.setattr(status, "clock", lambda: T)
     monkeypatch.setattr(status, "main", lambda nodes, owner, as_json, main=status.main: main(nodes, owner, as_json, runner=runner))
-    assert cli.main(["status", "--node", "nebius-2"]) == 1
+    assert cli.main(["status", "--on", "nebius-2"]) == 1
     assert capsys.readouterr().out == "vy-nebius-2: could not read: ReadError: vy-nebius-2: ssh: connect to host: Connection timed out\n"

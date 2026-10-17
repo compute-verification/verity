@@ -1,0 +1,11 @@
+# The remote bandwidth audit's sessions end to end: the verifier's process (`verifier.py`), the prover's (`prover.py`,
+# its GPU backend `device.py` and `session.cu`), and their wire (`wire.py`). Not a package: `run.sh` runs both on a GPU
+# node, and the suite runs both over a loopback socket with the driver's reference as the prover's backend
+# (`uv run tools/verity/check/suites.py benchmarks/remote_session`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
+          "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness"]

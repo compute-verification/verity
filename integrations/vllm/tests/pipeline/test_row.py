@@ -669,6 +669,19 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     assert "--norm-tap-so" in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
 
 
+def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
+    """SERVING_ROWS reaches the single-GPU Commit and tp-commit alike as the request `Row.serving_rows_request` writes."""
+    pf = str(tmp_path / "partition.json")
+    single = _row(tmp_path, environ={"SERVING_ROWS": pf})
+    single.hidden_so, single.B = "/x/verity_fa2_matReqG.so", 1
+    tp = _tp_row(tmp_path, TP_DENSE, environ={"SERVING_ROWS": pf, "REPLAY_DEFERRED": "1"})
+    for r in (single, tp):
+        cmd = r.commit_cmd([])
+        req = json.loads(Path(cmd[cmd.index("--serving-rows") + 1]).read_text())
+        assert req == {"dir": f"{r.d}/serving-rows", "partition": pf, "run": r.row, "committer": {"source": r.env.environ.get("RESEARCH_SOURCE_SHA")}}
+    assert "--replay-deferred" in tp.commit_cmd([]) and "--serving-rows" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
+
+
 @pytest.mark.parametrize("row, p2p", [
     ("glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", None),   # an H box: its env_required names none
     (TP_DENSE, "1"),                                                          # an L40S row's env_required names it
@@ -921,3 +934,15 @@ def test_the_admission_plan_survives_a_broken_planner_input(tmp_path):
     r.admission()
     log = (Path(r.d) / "row.log").read_text()
     assert "ADMISSION advisory unavailable" in log and "WARN" not in log
+
+
+def test_a_tp_rows_gpu_budget_is_the_option_else_the_workloads_else_tp_util(tmp_path, monkeypatch):
+    from verity_vllm.pipeline import row_tp
+    assert _tp_row(tmp_path, TP_DENSE).gpu_util == row_tp.TP_UTIL
+    monkeypatch.setattr(R, "load_json", lambda path: {"gpu_memory_utilization": 0.9} if path.endswith(f"{TP_DENSE}.json") else None)
+    t = _tp_row(tmp_path, TP_DENSE)
+    assert (t.gpu_util, t.commit_util) == ("0.9", "0.9")
+    o = _opts(tmp_path, row=TP_DENSE)
+    explicit = row_tp.TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util="0.7",
+                            build=o.build, match=o.match, commit=o.commit)
+    assert explicit.gpu_util == "0.7"

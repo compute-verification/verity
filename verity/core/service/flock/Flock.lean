@@ -24,6 +24,17 @@ import Flock.Verify
 import Flock.ZkProof
 import Flock.ZkLigerito
 import Flock.Zk
+import Flock.With.Hashes
+import Flock.With.Transcript
+import Flock.With.Verify
+import Flock.With.Zk
+import Flock.With.Eq
+import Flock.With.ZkEq
+import Flock.With.Sim
+import Flock.With.SimWalk
+import Flock.With.SimVerify
+import Flock.With.SimZk
+import Flock.With.Log
 import Flock.Partition
 import Flock.HmNets
 import Flock.RecOpen
@@ -38,6 +49,7 @@ import Flock.ProvedScope
 import Flock.Registered
 import Flock.Keccak
 import Flock.RecCoins
+import Flock.RecSetup
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll
@@ -52,4 +64,10 @@ import Flock.Firewall.Contract
 import Flock.Firewall.Assumptions
 import Flock.Firewall.Released
 import Flock.Witness
+import Flock.With.Returns
+import Flock.With.ReturnsWalk
+import Flock.With.Deployed
+import Flock.With.Setup
+import Flock.With.SetupEq
+import Flock.With.SimSetup
 import Flock.RecOpeningCmd

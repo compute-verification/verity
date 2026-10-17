@@ -9,6 +9,7 @@
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
+                                                 # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc
   research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
   research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group, recorded as a manual
@@ -56,7 +57,7 @@
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
-  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
+  research deploy drift [--on N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
                                                  # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
@@ -71,8 +72,8 @@
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
-  research msg send|close|list|read|names|subscribe|traffic|ask-daniel|... [--dry-run]
-                                                 # messages between agents, on Slack (`research slack` too; research/slack.py; skill using-slack)
+  research msg send|close|read|names|traffic|ask-daniel|... [--dry-run]
+                                                 # messages between agents, on Slack (research/slack.py; skill using-slack)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -179,6 +180,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or, with --on, on the machine), recorded as "
                                                                                  "the attempt's params.env (values of secret-named keys redacted)")
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
+    ap.add_argument("--wait", action="store_true",
+                    help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused). Without it, run "
+                         "returns once the machine has started the run, so a loop of launches doesn't serialize them")
+    ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
                          "and reserve them for the run; else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
@@ -190,6 +195,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--job-user", default=None, metavar="USER",
                     help="run the workload as USER (an unprivileged system user) in a transient system unit, with no sudo, no home and "
                          "a clean environment; the runner keeps its records as itself (research.jobuser)")
+    ap.add_argument("--pool", default=None, metavar="NAME",
+                    help="with --on --source: run in the machine's NAME pool (`research`: any lane's research runs on vy-nebius-cpu-1, "
+                         "at nice 19 beside the merge checks; `proofs`): the run takes a slot there and its cwd is its source, or "
+                         "with --cwd clone a private clone of it, for a job that writes into the tree (a Lean check that rewrites a lock)")
+    ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
+                    help="with --pool: the lane the slot names (default $RESEARCH_LANE)")
     q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
                                    "--on then pins its node, and --mem-gb is its memory")
     q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
@@ -257,6 +268,25 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if (ns.on or ns.queue) and (why := remote.pss_bound_problem(harness_opts, Path(ns.source).expanduser() if ns.source else None)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 3
+    if ns.pool:
+        from .pods.nebius import slot_only  # noqa: PLC0415
+
+        cwd = remote.flag_value(harness_opts, "--cwd")
+        why = ("is for --on, not --queue" if ns.queue
+               else "needs --on MACHINE and --source (slot.py runs from the shipped tree)" if not (ns.on and ns.source)
+               else "needs a lane: --as LANE or $RESEARCH_LANE" if not ns.lane
+               else f"runs from its source or a clone of it (slot.py's path is the tree's), not --cwd {cwd}"
+               if cwd not in (None, "source", "clone") else None)
+        if why:
+            print(f"research run: --pool {why}", file=sys.stderr)
+            return 2
+        try:
+            command = slot_only.in_pool(ns.pool, ns.lane, command)
+        except ValueError as e:
+            print(f"research run: --pool: {e}", file=sys.stderr)
+            return 2
+        if cwd is None:
+            harness_opts = [*harness_opts, "--cwd", "source"]
     if ns.queue:
         try:
             harness_opts = _normalize_timeout(harness_opts)
@@ -998,8 +1028,38 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     if launch.get("first_record") == "disk-hold":
         print(f"research: {ns.on} holds it for disk before its runner starts (research disk-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
+    if getattr(ns, "wait", False):
+        return wait_remote(run_id, run_dir, every_s=ns.wait_every)
     print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
     return 0
+
+
+#: the states `summarize` gives a remote run that will not change again
+ENDED = (*R.TERMINAL, "refused", "launcher-exited", "runner-gone")
+
+
+def wait_remote(run_id: str, run_dir: Path, *, every_s: float, fetch=None, sleep=None) -> int:
+    """`research run --on ... --wait`: fetch the run's records every `every_s` seconds until it has ended, and return its rc (1 when
+    it ended without one, 3 when the machine refused it). An unreachable machine is waited out, as `research fetch` would be."""
+    import time
+
+    fetch, sleep = fetch or remote.fetch, sleep or time.sleep
+    while True:
+        rec = fetch(run_dir)
+        s = R.summarize(run_dir)
+        if s["state"] in ENDED:
+            if s["state"] == "refused":
+                rc = 3
+            elif s["state"] == "done":
+                rc = s["rc"] if isinstance(s["rc"], int) else 0
+            else:
+                rc = s["rc"] if isinstance(s["rc"], int) and s["rc"] != 0 else 1
+            why = f": {s['why']}" if s.get("why") else ""
+            print(f"research: run {run_id} {s['state']} (rc {s['rc']}){why}", file=sys.stderr)
+            return rc
+        if (rec or {}).get("last_fetch_error"):
+            print(f"research: run {run_id}: machine unreachable (rc {rec['last_fetch_error'].get('rc')}); still waiting", file=sys.stderr)
+        sleep(every_s)
 
 
 def _run_dir(root: Path, ref: str, on: str | None, *, unique: bool = False) -> Path:
@@ -1578,7 +1638,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd in ("msg", "slack"):
         from .slack import main as slack_main
 
-        return slack_main(rest, prog=f"research {cmd}")
+        if cmd == "slack":
+            print("research: `research slack` is `research msg`; use `research msg`", file=sys.stderr)
+        return slack_main(rest, prog="research msg")
     if cmd == "usage":
         return cmd_usage(rest)
     age = checkout_age()

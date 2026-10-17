@@ -3,6 +3,9 @@
   "RMSNormArgCuda_v1{N=16,EPS=1e-05,NW=1}": {
    "and": 1673
   },
+  "RMSNormFusedVectorLaneCuda_v1{J=2}": {
+   "and": 33700
+  },
   "RMSNormInvTriton_v1": {
    "and": 34
   },
@@ -50,6 +53,15 @@
   },
   "RMSNormVarEpsTriton_v2{N=16,EPS=1e-05}": {
    "and": 1982
+  },
+  "RMSNormVectorLaneCuda_v1{J=2}": {
+   "and": 31318
+  },
+  "RMSNormVectorLanesCuda_v1{N=24,BLOCK=2,FUSED=False}": {
+   "and": 46268
+  },
+  "RMSNormVectorLanesCuda_v1{N=24,BLOCK=2,FUSED=True}": {
+   "and": 50144
   },
   "RMSNormWarpCuda_v1{L=16}": {
    "and": 12180

@@ -27,4 +27,28 @@ def oneWord (pos H : Nat) : Array Nat := #[pos % 2 ^ H] ++ Array.replicate (DIRS
   | some s => s.levels.all fun l => l.d - l.cap ≤ 32
   | none => false
 
+/-! `zeroSalt` is `rec_residuals.zero_salts`, and `checkZero`'s root over two zero rows of 128 words is
+`Registered.commit("p", "rec-residuals-zero", …, salts=zero_salts(…))`'s root, both printed by Python. -/
+
+def hexOf (b : ByteArray) : String := String.join (b.toList.map fun x => (Nat.toDigits 16 (x.toNat + 256)).drop 1 |>.asString)
+
+#guard hexOf ((zeroSalt ZERO_VALUE 0).extract 0 8) == "4ec33c0e6abc3727"
+#guard hexOf ((zeroSalt ZERO_VALUE 1).extract 184 192) == "1d2a28d05cc645ac"
+#guard hexOf ((zeroSalt SPARSE_ZERO_VALUE 0).extract 0 8) == "bf86f81a839d245b"
+#guard (zeroSalt ZERO_VALUE 0).size == SALT_BYTES
+#guard zeroSalt ZERO_VALUE 0 != verifierSalt "" ZERO_VALUE 0
+
+#guard match Registered.domain "p" ZERO_VALUE OUT_WORDS 2 16 with
+  | .ok dom => hexOf (FV3.root dom ((Array.range 2).map fun i => Registered.rowLeaf dom i
+      (Hm96.Default512.treeLeaf (commitRow (zeroRows 2 OUT_WORDS)[i]! (zeroSalt ZERO_VALUE i)))) Sha512.hash) ==
+    "2c9284397d43972cf9cc3954c442d25e4100c793211da7718213450dfe0d300136ae0e706de7136e0f68f84862387cde689461618cee310d816d6af564b18cd1"
+  | .error _ => false
+
+/-! R's opening part's one zero row (`checkOpening`), as `rec_residuals.stage_opening` registers it. -/
+#guard match Registered.domain "p" ZERO_VALUE OUT_WORDS 1 16 with
+  | .ok dom => hexOf (FV3.root dom #[Registered.rowLeaf dom 0
+      (Hm96.Default512.treeLeaf (commitRow (zeroRows 1 OUT_WORDS)[0]! (zeroSalt ZERO_VALUE 0)))] Sha512.hash) ==
+    "af8c0fa801627686aad3af3cc4c63840162705a903222f507a84c01e9f1414742bb6985e4eee425f0dd1539277a0b71fcb6d895abd7bad14ce4f03dc487265b9"
+  | .error _ => false
+
 end Flock.Test.RecCoins

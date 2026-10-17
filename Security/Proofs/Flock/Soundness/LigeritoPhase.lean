@@ -8,6 +8,10 @@ Ligerito accepts with probability at most `εLig`:
 * level 0: the OOD claim's batching coin `β₀` (`L₀/|F|`), then the level-0 folds (`phaseB0`);
 * every next level: `phaseA` from `PostFold` to `PreFold`, then its folds (`phaseB`);
 * the last level: its queries against the clear residual and the final check (`finalStage`).
+
+`ligerito_sound_at` takes level 0's doom at any radius `δ ≤ radius` (`PostFoldAt`): its list
+bound `L` replaces `L₀`, and its queries cost `ε` beyond `queryError`. `ligerito_sound` is the
+instance at the radius itself.
 -/
 
 namespace FlockSoundness
@@ -102,25 +106,27 @@ theorem foldLoL_W0 [CharP K 2] (A : Arith F K) (n : ℕ) (b : ℕ → F) (z₀ :
   simp only [oodFixed, oodScale, origOf, cffFrom, List.map_nil, List.flatten_nil, List.append_nil,
     List.drop_nil, List.prod_nil, mul_one, bHat, mleAt]
 
-/-- **The level-0 folds.** From a level-0 claim false for every message of the list against
-`W0`, after the folds by `initial` the claim is false for every fold, against `resAt` with the
-level-0 OOD claim, and no round was an MCA event, except with probability `foldError`. -/
+/-- **The level-0 folds.** From a level-0 claim false for every message within `δ` of the table
+against `W0` (at most `listBound` of them), after the folds by `initial` the claim is false for
+every fold, against `resAt` with the level-0 OOD claim, and no round was an MCA event, except
+with probability `foldError`. -/
 theorem phaseB0 (A : Arith F K) (hA : A.Correct) (n : ℕ)
     (b : ℕ → F) (l : Level) (hl : l.Ok) (hf : l.Fits) (k0 : ℕ) (hk0 : l.lanes = k0)
-    (hn : n = k0 + l.logCols) (C : Oracle F) (z₀ : List F) (hz : z₀.length = n) (β₀ : F) (s₀ : K)
+    (hn : n = k0 + l.logCols) (C : Oracle F) (δ : ℝ)
+    (hS : (closeL A δ k0 l.logCols l.logLen C).card ≤ l.listBound) (z₀ : List F)
+    (hz : z₀.length = n) (β₀ : F) (s₀ : K)
     (q₀ : Quad K) (hq₀ : q₀.eval 0 + q₀.eval 1 = s₀) (dim : ℕ)
-    (hdoom : ∀ M ∈ closeL A l.radius k0 l.logCols l.logLen C,
+    (hdoom : ∀ M ∈ closeL A δ k0 l.logCols l.logLen C,
       s₀ ≠ ∑ y ∈ Finset.range (2 ^ n), A.embed (flat M y) * W0 A b z₀ β₀ y) :
-    value (fun out : List K × K × Quad K => ¬ PostFold A hA n b out.1 l hf k0 C out.1
+    value (fun out : List K × K × Quad K => ¬ PostFoldAt A hA n b out.1 l hf k0 C out.1 δ
         ⟨out.2.1, out.2.2, dim, [], [⟨z₀, β₀, none⟩], [], C, l⟩) (foldRounds A k0 s₀ q₀) ≤
       ENNReal.ofReal (l.foldError l.listBound) := by
   classical
   haveI : CharP K 2 := hA.charTwoK
-  set S := closeL A l.radius k0 l.logCols l.logLen C
-  have hS : S.card ≤ l.listBound := card_close_le A hA l hf k0 (tbl k0 l.logLen C)
+  set S := closeL A δ k0 l.logCols l.logLen C
   set u : Message F k0 l.logCols → ℕ → K := fun M y => A.embed (flat M y)
   set v := W0 A b z₀ β₀
-  have himp : ∀ out : List K × K × Quad K, ¬ PostFold A hA n b out.1 l hf k0 C out.1
+  have himp : ∀ out : List K × K × Quad K, ¬ PostFoldAt A hA n b out.1 l hf k0 C out.1 δ
       ⟨out.2.1, out.2.2, dim, [], [⟨z₀, β₀, none⟩], [], C, l⟩ →
       (out.1.length ≠ k0 ∨ out.2.2.eval 0 + out.2.2.eval 1 ≠ out.2.1) ∨
         (¬ MCAGood (codeK A hA l hf) l.radius k0 out.1 (rowsK A k0 l.logLen C) ∨
@@ -222,7 +228,7 @@ theorem finalStage (A : Arith F K) (hA : A.Correct) (n : ℕ)
     let D : Unit → K := fun _ => st₁.s - ∑ x ∈ Finset.range (2 ^ l.logCols),
       G x * resAt A n b initial st₁.levels st₁.oods st₁.cons l.logCols x
     refine value_queryAndBatch_le A hA l hf.2 hQ st₁.prev ch st₁.levels.length st₁ false {()} D
-      (fun _ => G) (fun _ _ _ _ _ _ => rfl)
+      (fun _ => G) l.queryError (fun _ _ _ _ _ _ => rfl)
       (fun _ _ hD => query_bound_of_doom A hA n b initial l hf l.lanes st₁.prev ch st₁ hpost G
         (sub_eq_zero.1 hD)) _ ?_
     intro w α β st' h1 h2 h3 h4 _ _ hacc
@@ -316,7 +322,7 @@ theorem foldError_mono (l : Level) {L L' : ℕ} (h : L ≤ L') : l.foldError L �
   have : (L : ℝ) ≤ L' := by exact_mod_cast h
   gcongr
 
-/-- `phaseA` with the next level's variables named. -/
+/-- `phaseA` at the level's radius: from `PostFold`, at most `midA l l'`. -/
 theorem phaseA' (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initial : List K)
     (l l' : Level) (hf : l.Fits) (hf' : l'.Fits) (hQ : l.queries ≤ 2 ^ 64) (lanes : ℕ)
     (ch : List K) (st : LigState F K) (hpost : PostFold A hA n b initial l hf lanes st.prev ch st)
@@ -325,8 +331,9 @@ theorem phaseA' (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (init
     (hk : ∀ C' st', PreFold A n b initial l' C' l.logCols st' →
       value (fun r => r = true) (k C' st') ≤ εk) :
     value (fun r => r = true) (midRound A l dim ch st k) ≤ ENNReal.ofReal (midA l l') + εk := by
-  subst hd
-  exact phaseA A hA n b initial l l' hf hf' hQ lanes ch st hpost hdim k εk hk
+  refine (phaseA A hA n b initial l l' hf hf' hQ lanes ch st l.radius le_rfl 0
+    ((queryError_eq l).symm.le.trans_eq (add_zero _).symm) hpost hdim dim hd k εk hk).trans_eq ?_
+  rw [ENNReal.ofReal_zero, add_zero]
 
 /-- **Every level.** From `PreFold` on the first of chained levels, the recursive rounds accept
 with probability at most `ligeritoError`. -/
@@ -392,19 +399,23 @@ theorem ligerito_eq (A : Arith F K) (m k0 : ℕ) (l₀ l₁ : Level) (rest : Lis
                   fun C' st' => recursiveRounds A (m - 7) b initial ext (l₁ :: rest)
                     { st' with prev := C', prevLevel := l₁ } := rfl
 
-/-- **Ligerito is sound.** For a schedule of the `fast100` shape, if the claim `Σ_y f(y)·b(y) = T`
-is false for every message near the committed level-0 table, Ligerito accepts with probability
-at most `L₀/|F| + ligeritoError`. -/
-theorem ligerito_sound (A : Arith F K) (hA : A.Correct)
-    (sch : Schedule)
+/-- **Ligerito is sound, at any level-0 radius.** For a schedule of the `fast100` shape, if the
+claim `Σ_y f(y)·b(y) = T` is false for every message within `δ ≤ radius` of the committed level-0
+table, of which there are at most `L ≤ L₀`, and level 0's queries miss a mismatch with probability
+at most `queryError + ε` at `δ`, Ligerito accepts with probability at most
+`L/|F| + ε + ligeritoError`. -/
+theorem ligerito_sound_at (A : Arith F K) (hA : A.Correct) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
         levelsChained sch.levels sch.ext = true)
-    (T : F) (b : ℕ → F) (C : Oracle F)
-    (hdoom : ∀ M ∈ closeL A sch.level₀.radius sch.k0 sch.level₀.logCols sch.level₀.logLen C,
+    (T : F) (b : ℕ → F) (C : Oracle F) (δ : ℝ) (hδ : δ ≤ sch.level₀.radius) (L : ℕ)
+    (hS : (closeL A δ sch.k0 sch.level₀.logCols sch.level₀.logLen C).card ≤ L)
+    (hL : L ≤ sch.level₀.listBound) (ε : ℝ) (hε0 : 0 ≤ ε)
+    (hε : (1 - δ) ^ sch.level₀.queries ≤ sch.level₀.queryError + ε)
+    (hdoom : ∀ M ∈ closeL A δ sch.k0 sch.level₀.logCols sch.level₀.logLen C,
       (∑ y ∈ Finset.range (2 ^ (sch.m - 7)), flat M y * b y) ≠ T) :
     value (fun r => r = true) (ligerito A sch T b C) ≤
-      ENNReal.ofReal ((sch.level₀.listBound : ℝ) / qF + ligeritoError sch.levels) := by
+      ENNReal.ofReal ((L : ℝ) / qF + ε + ligeritoError sch.levels) := by
   classical
   haveI : CharP K 2 := hA.charTwoK
   obtain ⟨m, k0, levels, ext⟩ := sch
@@ -412,16 +423,15 @@ theorem ligerito_sound (A : Arith F K) (hA : A.Correct)
   rcases levels with _ | ⟨l₀, _ | ⟨l₁, rest⟩⟩
   · simp at hlen
   · simp at hlen
-  dsimp only [List.headD, Schedule.level₀] at hk0 hn hdoom ⊢
+  dsimp only [List.headD, Schedule.level₀] at hk0 hn hdoom hδ hS hL hε ⊢
   have h' := hchain
   simp only [levelsChained, Bool.and_eq_true, decide_eq_true_eq] at h'
   obtain ⟨⟨hgood₀, hdim₀⟩, hrest⟩ := h'
   obtain ⟨hl₀, hf₀, _, hQ₀⟩ := levelGood_spec hgood₀
   obtain ⟨_, hf₁, _, _⟩ := levelGood_spec (levelsChained_head_good hrest)
-  set S₀ := closeL A l₀.radius k0 l₀.logCols l₀.logLen C
-  have hS₀ : S₀.card ≤ l₀.listBound := card_close_le A hA l₀ hf₀ k0 (tbl k0 l₀.logLen C)
+  set S₀ := closeL A δ k0 l₀.logCols l₀.logLen C
   set ε₂ : ℝ≥0∞ := ENNReal.ofReal (l₀.foldError l₀.listBound) +
-    (ENNReal.ofReal (midA l₀ l₁) + ENNReal.ofReal (ligeritoError (l₁ :: rest)))
+    (ENNReal.ofReal (midA l₀ l₁) + ENNReal.ofReal ε + ENNReal.ofReal (ligeritoError (l₁ :: rest)))
   rw [ligerito_eq]
   refine (value_coin_le_of_forall _ _ _ (S₀.card / Fintype.card F + ε₂) fun z₀ => ?_).trans ?_
   · rw [value_send]
@@ -448,35 +458,60 @@ theorem ligerito_sound (A : Arith F K) (hA : A.Correct)
       refine iSup_le fun msg => ?_
       have hq₀ := fromMsg_sum msg (s₀ β₀)
       refine (value_bind_le (foldRounds A k0 (s₀ β₀) (fromMsg msg (s₀ β₀))) _ _
-        (fun out : List K × K × Quad K => PostFold A hA (m - 7) b out.1 l₀ hf₀ k0 C out.1
+        (fun out : List K × K × Quad K => PostFoldAt A hA (m - 7) b out.1 l₀ hf₀ k0 C out.1 δ
           ⟨out.2.1, out.2.2, m - 7 - k0 + 1, [], [⟨List.ofFn z₀, β₀, none⟩], [], C, l₀⟩)
-        (ENNReal.ofReal (midA l₀ l₁) + ENNReal.ofReal (ligeritoError (l₁ :: rest)))
+        (ENNReal.ofReal (midA l₀ l₁) + ENNReal.ofReal ε +
+          ENNReal.ofReal (ligeritoError (l₁ :: rest)))
         fun out hpost => ?_).trans ?_
       · obtain ⟨initial, s, q⟩ := out
-        exact phaseA' A hA (m - 7) b initial l₀ l₁ hf₀ hf₁ hQ₀ k0 initial
-          ⟨s, q, m - 7 - k0 + 1, [], [⟨List.ofFn z₀, β₀, none⟩], [], C, l₀⟩ hpost hdim₀
+        exact phaseA A hA (m - 7) b initial l₀ l₁ hf₀ hf₁ hQ₀ k0 initial
+          ⟨s, q, m - 7 - k0 + 1, [], [⟨List.ofFn z₀, β₀, none⟩], [], C, l₀⟩ δ hδ ε hε hpost hdim₀
           (m - 7 - k0 + 1) (by omega) _ _ fun C' st' hpre' =>
             value_recursiveRounds_le A hA (m - 7) b initial ext (l₁ :: rest)
               { st' with prev := C', prevLevel := l₁ } l₀.logCols hrest
               ⟨hpre'.sum, hpre'.ok, hpre'.dim, hpre'.doom⟩
-      · refine add_le_add (phaseB0 A hA (m - 7) b l₀ hl₀ hf₀ k0 hk0 hn C (List.ofFn z₀)
-          (by simp) β₀ (s₀ β₀) _ hq₀ (m - 7 - k0 + 1) fun M hM h => hβ₀ ⟨M, hM, h⟩) le_rfl
+      · refine add_le_add (phaseB0 A hA (m - 7) b l₀ hl₀ hf₀ k0 hk0 hn C δ (hS.trans hL)
+          (List.ofFn z₀) (by simp) β₀ (s₀ β₀) _ hq₀ (m - 7 - k0 + 1)
+          fun M hM h => hβ₀ ⟨M, hM, h⟩) le_rfl
   · have hok := levelsChained_ok hchain
     have hq : (0 : ℝ) < qF := by unfold qF; positivity
     have hfe := foldError_nonneg l₀ (max l₀.listBound l₁.listBound) hl₀
     have hm := midA_nonneg l₀ l₁
     have hr := ligeritoError_nonneg (l₁ :: rest) (fun l hl => hok l (List.mem_cons_of_mem _ hl))
-    have hL : (0 : ℝ) ≤ (l₀.listBound : ℝ) / qF := by positivity
+    have hL' : (0 : ℝ) ≤ (L : ℝ) / qF := by positivity
     calc (S₀.card : ℝ≥0∞) / Fintype.card F + ε₂
-        ≤ ENNReal.ofReal ((l₀.listBound : ℝ) / qF) +
+        ≤ ENNReal.ofReal ((L : ℝ) / qF) +
             (ENNReal.ofReal (l₀.foldError (max l₀.listBound l₁.listBound)) +
-              (ENNReal.ofReal (midA l₀ l₁) + ENNReal.ofReal (ligeritoError (l₁ :: rest)))) := by
+              (ENNReal.ofReal (midA l₀ l₁) + ENNReal.ofReal ε +
+                ENNReal.ofReal (ligeritoError (l₁ :: rest)))) := by
           refine add_le_add ?_ (add_le_add (ENNReal.ofReal_le_ofReal
             (foldError_mono l₀ (le_max_left _ _))) le_rfl)
           rw [ofReal_nat_div_qF', hA.card_F, Nat.cast_pow, Nat.cast_ofNat]
           gcongr
-      _ = ENNReal.ofReal ((l₀.listBound : ℝ) / qF + ligeritoError (l₀ :: l₁ :: rest)) := by
-          rw [ligeritoError, midLevelError_eq, ENNReal.ofReal_add hL (add_nonneg (add_nonneg hfe hm) hr),
-            ENNReal.ofReal_add (add_nonneg hfe hm) hr, ENNReal.ofReal_add hfe hm, add_assoc]
+      _ = ENNReal.ofReal ((L : ℝ) / qF + ε + ligeritoError (l₀ :: l₁ :: rest)) := by
+          rw [ligeritoError, midLevelError_eq,
+            ENNReal.ofReal_add (add_nonneg hL' hε0) (add_nonneg (add_nonneg hfe hm) hr),
+            ENNReal.ofReal_add hL' hε0, ENNReal.ofReal_add (add_nonneg hfe hm) hr,
+            ENNReal.ofReal_add hfe hm]
+          ring
+
+/-- **Ligerito is sound.** For a schedule of the `fast100` shape, if the claim `Σ_y f(y)·b(y) = T`
+is false for every message near the committed level-0 table, Ligerito accepts with probability
+at most `L₀/|F| + ligeritoError`. -/
+theorem ligerito_sound (A : Arith F K) (hA : A.Correct)
+    (sch : Schedule)
+    (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
+      sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
+        levelsChained sch.levels sch.ext = true)
+    (T : F) (b : ℕ → F) (C : Oracle F)
+    (hdoom : ∀ M ∈ closeL A sch.level₀.radius sch.k0 sch.level₀.logCols sch.level₀.logLen C,
+      (∑ y ∈ Finset.range (2 ^ (sch.m - 7)), flat M y * b y) ≠ T) :
+    value (fun r => r = true) (ligerito A sch T b C) ≤
+      ENNReal.ofReal ((sch.level₀.listBound : ℝ) / qF + ligeritoError sch.levels) := by
+  have hf₀ : sch.level₀.Fits := (levelGood_spec (levelsChained_head_good hshape.2.2.2)).2.1
+  refine (ligerito_sound_at A hA sch hshape T b C sch.level₀.radius le_rfl sch.level₀.listBound
+    (card_close_le A hA _ hf₀ _ (tbl _ _ C)) le_rfl 0 le_rfl
+    ((queryError_eq _).symm.le.trans_eq (add_zero _).symm) hdoom).trans_eq ?_
+  rw [add_zero]
 
 end FlockSoundness

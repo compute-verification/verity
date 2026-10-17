@@ -1,0 +1,10 @@
+# /etc/systemd/system/vy-store-evict.timer on vy-nebius-1 and vy-nebius-2: every hour.
+[Unit]
+Description=store eviction every hour
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target

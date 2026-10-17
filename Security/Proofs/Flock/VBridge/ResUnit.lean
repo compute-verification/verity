@@ -15,8 +15,8 @@ net, at the bridge's `residualForms` (`gfsOf S`), which needs no range hypothesi
 * The theorems. `laid_part`: whenever the laid-out net's rows hold at `v`, if the input columns hold `w` on the row ports
   and `vv` on `v`'s (`InCols`), the output columns hold each of S's residuals at `w`, `vv`, 128 bits each, then zeros
   (`PartCols`, in the form `PartS.res_partS` reads). `unit_part`: the same of a copy in a unit of any partition.
-  `check_part`: what `check` accepted. `decode_resUnit`, `decode_check`: `decode_innerUnit`, `decode_part` at the
-  verifier's unit.
+  `check_part`, `check_part_holo`: what `check` accepted, at a plain and at a holo statement. `decode_resUnit`,
+  `decode_check`, `decode_check_holo`: `decode_innerUnit`, `decode_part` at the verifier's unit.
 * The size. `part_small`: the verifier's part has at most 16 residuals, as `laid_part` asks: `groups` adds a residual to
   a part only where `8 (size + 1) ≤ 128` (`groups_small`), and `partS` keeps its group's residuals.
 -/
@@ -273,6 +273,15 @@ theorem check_part {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k 
   rw [e] at hpart
   exact ⟨S, ns, nv, hpart, hn⟩
 
+/-- **`check_part_at` on a holo statement**: META says `holo: true`, so the unit is the holo part's net, the hidden
+units' residuals. -/
+theorem check_part_holo {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j : ℕ}
+    (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
+    (hsh : RecResiduals.shape? m k cl = some sh) (hh : RecResiduals.holoOf c = .ok true) :
+    ∃ S ns nv, RecResiduals.part { sh with holo := true } j = .ok (S, ns, nv) ∧
+      netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S ns nv) = .ok c.unit :=
+  check_part_at h hp hsh hh
+
 /-- Part `j`'s plain and holo nets differ. They need not: at (25,22,8), part 1's holo net is its plain one. -/
 def NetsDiffer (m k cl j : ℕ) (sh : Flock.Shape) : Prop :=
   ∀ S ns nv S' ns' nv' g g', RecResiduals.part sh j = .ok (S, ns, nv) →
@@ -441,6 +450,29 @@ theorem decode_check {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgr
   rw [hpart] at hpart'
   cases hpart'
   exact ⟨sub wI w, sub V (vOf sh rounds extras comb), sub_lt wI w, sub_lt V _,
+    decode_resUnit zo hA u hj hone S ns nv (part_small hpart) hn hu _ _ (sub_ge w hwI) (sub_ge _ hV) hw hv⟩
+
+/-- **`decode_check` on a holo statement** (`check_part_holo`): META says `holo: true`, and `sh` is the holo form of
+the shape the verifier accepts, whose part `p` is the hidden units' `S`. -/
+theorem decode_check_holo {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgree bits) (u : Fin nU) {j : ℕ}
+    (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true)
+    (hc : RecResiduals.check c = .ok ()) {m k cl p : ℕ} (hp : RecResiduals.params c.unit.name = some (m, k, cl, p))
+    {sh0 sh : Flock.Shape} (hsh : RecResiduals.shape? m k cl = some sh0) (hho : sh = { sh0 with holo := true })
+    {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (hpart : RecResiduals.part sh p = .ok (S, ns, nv)) (hu : c.unit.unitLog ≤ 32)
+    (hh : RecResiduals.holoOf c = .ok true)
+    (rounds : Array (Array Flock.F128)) (extras : Array Flock.Claim) (comb : Array Flock.F128)
+    (w : ℕ → Flock.F128) (wI V : Array ℕ) (hwI : wI.size ≤ ns.sum) (hV : V.size ≤ nv)
+    (hw : ∀ q < 128 * ns.sum, RegBit zo u j (rowCol (partRep ns nv).ports 0 q) (wbit (sub wI w) q))
+    (hv : ∀ q < 128 * nv, RegBit zo u j (vBase (partRep ns nv) + q) (wbit (sub V (vOf sh rounds extras comb)) q)) :
+    ∃ w' v' : ℕ → Flock.F128, (∀ k (hk : k < wI.size), w' k = w wI[k]) ∧
+      (∀ k (hk : k < V.size), v' k = vOf sh rounds extras comb V[k]) ∧
+      PartCols S w' v' (copyVal (keyInst hU nU (Layout.outsOf c hU nU) u) bits hj) (partBase S ns nv) := by
+  subst hho
+  obtain ⟨S', ns', nv', hpart', hn⟩ := check_part_holo hc hp hsh hh
+  rw [hpart] at hpart'
+  cases hpart'
+  exact ⟨sub wI w, sub V (vOf _ rounds extras comb), sub_lt wI w, sub_lt V _,
     decode_resUnit zo hA u hj hone S ns nv (part_small hpart) hn hu _ _ (sub_ge w hwI) (sub_ge _ hV) hw hv⟩
 
 end Decode

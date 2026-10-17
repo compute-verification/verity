@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pickle
 import random
 import shutil
 import subprocess
 from pathlib import Path
 
+import keyed
 import pytest
 from test_rec_open import _tree
 from verity_flock import circuit as FC
@@ -95,13 +97,19 @@ def test_a_value_the_verifier_registers_is_a_function_of_its_rows_alone():
 
 
 @pytest.fixture(scope="module")
-def staged(tmp_path_factory):
+def staged(once):
+    """Level 1 staged once on the machine (`once`, here and in `test_rec_vstar_checks`), with what `rec_outer.stage` said."""
     qs, layers = _queries(level=1)
     (level,) = O.levels(qs)
     coefs = _coefs(qs)
     tops = O.TopValue.build(PROGRAM, 1, {0: _top(layers[1], 2), 1: _top(layers[1], 3)})
-    d = tmp_path_factory.mktemp("rec-outer")
-    return d, O.stage(level, d, O.Chain.build(PROGRAM, qs, coefs), coefs, tops, link_rows=True), tops, level, coefs
+
+    def make(d):
+        s = O.stage(level, d / "level", O.Chain.build(PROGRAM, qs, coefs), coefs, tops, link_rows=True)
+        (d / "stage.pickle").write_bytes(pickle.dumps(s))
+
+    d = once("rec-outer-staged", make, lambda: keyed.key(code=[__name__]))
+    return d / "level", pickle.loads((d / "stage.pickle").read_bytes()), tops, level, coefs
 
 
 @pytest.mark.slow
@@ -241,12 +249,16 @@ def test_a_level_of_salted_leaves_is_refused(tmp_path):
         O.stage(level, tmp_path, O.Chain.build(PROGRAM, qs, _coefs(qs)), _coefs(qs), tops)
 
 
+def _verify(d: Path) -> subprocess.CompletedProcess:
+    return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
+                           "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program",
+                           str(d / "program.json"), "--registered", str(d / "registered.json")],
+                          capture_output=True, text=True, check=False)
+
+
 def _statement(d: Path) -> dict:
     """The Lean verifier's `statement` on a staged level under the verifier's own files: its first line."""
-    p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
-                        "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
-                        "--registered", str(d / "registered.json")],
-                       capture_output=True, text=True, check=False)
+    p = _verify(d)
     assert p.returncode == 0, p.stdout + p.stderr
     line = json.loads(p.stdout.splitlines()[0])
     assert line["partition_check"]["units"] == "derived"
@@ -260,6 +272,62 @@ def test_the_lean_verifier_reads_the_statement_under_the_verifiers_own_files(sta
     line = _statement(d)
     own = json.loads((d / "registered.json").read_text())["ports"]
     assert line["registered"] == {k: {"value": v["value"], "root": v["root"]} for k, v in own.items()}
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
+def test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening(staged, tmp_path):
+    """One of R's levels names the opening unit `rec-open-stacked/l<LANES>-h<H>` (V*'s `recOpenStackedName`), and the Lean
+    verifier holds it to the opening's net under that name (`Flock.RecOpen.check`), as it holds a `rec-open/` unit. The
+    staged level with its unit renamed (its public file pinning the renamed file) is read under the verifier's own files;
+    with the unit's first AND row changed as well, it is refused, naming the row."""
+    d, name = tmp_path / "s", "rec-open-stacked/l8-h1"
+    shutil.copytree(staged[0], d)
+    lines = (d / "circuit.txt").read_text().split("\n")
+    at = next(k for k, line in enumerate(lines) if line.startswith("CIRCUIT unit ")) + 1
+    fields = lines[at].split(" ")
+    assert fields[1] == "rec-open/l8-h1", fields[:2]
+    lines[at] = " ".join([fields[0], name, *fields[2:]])
+    head, rest = (staged[0] / "pub.bin").read_bytes().split(b"\n", 1)
+    head = json.loads(head)
+
+    def write():
+        text = "\n".join(lines)
+        (d / "circuit.txt").write_text(text)
+        head["circuit_sha512"] = FC.digest(text)
+        head["units"]["classes"] = [FC.class_digest(text)] * len(head["units"]["classes"])
+        (d / "pub.bin").write_bytes(json.dumps(head).encode() + b"\n" + rest)
+
+    write()
+    _statement(d)
+    row = next(q for q, line in enumerate(lines[at + 1:]) if line not in (f"1 {q} 1 {q}", "0 0"))
+    lines[at + 1 + row] = "1 0 1 1"
+    write()
+    p = _verify(d)
+    assert p.returncode == 1 and f"not the verifier's {name} (row {row} differs)" in p.stdout, p.stdout + p.stderr
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
+def test_the_lean_verifier_refuses_outputs_not_laid_as_vstars(staged, tmp_path):
+    """`RecOpen.check` holds a `rec-open/` unit's outputs to V*'s layout (`Flock.RecOpen.outsOk`): `out` then `acc_out`,
+    64 words each, one output row each, every copy returning words 0..127 in order. The staged level with one copy's
+    `leaves_out` permuted passes the rows' and input leaves' checks and is refused there, before the net is built."""
+    d = tmp_path / "s"
+    shutil.copytree(staged[0], d)
+    lines = (d / "circuit.txt").read_text().split("\n")
+    meta = json.loads(lines[1][5:])
+    meta["leaves_out"][0][0], meta["leaves_out"][0][1] = meta["leaves_out"][0][1], meta["leaves_out"][0][0]
+    lines[1] = "META " + json.dumps(meta)
+    text = "\n".join(lines)
+    (d / "circuit.txt").write_text(text)
+    head, rest = (staged[0] / "pub.bin").read_bytes().split(b"\n", 1)
+    head = json.loads(head)
+    head["circuit_sha512"] = FC.digest(text)
+    head["units"]["classes"] = [FC.class_digest(text)] * len(head["units"]["classes"])
+    (d / "pub.bin").write_bytes(json.dumps(head).encode() + b"\n" + rest)
+    p = _verify(d)
+    assert p.returncode == 1 and "outputs are not out then acc_out" in p.stdout, p.stdout + p.stderr
 
 
 def _sparse(H: int, c: int, positions: list[int], seed: int):

@@ -32,6 +32,12 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     return ()
 
 
+def requires_build(scheme: str, ctx: Context) -> bool:
+    """Sampled proofs verifies the Program emitted by the row's Build."""
+
+    return True
+
+
 def install(scheme: str, target: Target) -> Option:
     entry = f"{NAME}:{scheme}"
     return Option(name=entry, hooks=target.hooks(entry),

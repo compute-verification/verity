@@ -265,10 +265,22 @@ def params (name : String) : Option Shape :=
 /-- The verifier's unit net at a shape. -/
 def unitNet (sh : Shape) : V Net := netOf (unitName sh) (unitLaid sh)
 
-/-- A unit named `rec-sparse/…` is the verifier's at the shape its name gives, equal in every field; any other unit
-passes. The shape is bounded by the file's unit before any power of two is taken (every H3 round is a port of at least
-64 words, `u` holds `2 ELL + 2` elements, and with T > 1 `tau` a word a slot), and the input and output bits are
-compared before the net is built. Irreducible, so that no unification against it builds the net. -/
+/-- The circuit's first rows are `ports sh` (`rec_sparse.subcircuit`'s inputs, `h` first; `out` follows): each one's
+name, and its bits as both `16 · words` and its row length. -/
+def rowsOk (c : Circuit) (sh : Shape) : Bool :=
+  decide ((c.ports.extract 0 (ports sh).length).map (fun q => (q.name, 16 * q.words, q.bits)) =
+    (ports sh).toArray.map fun x => (x.1, 16 * x.2, 16 * x.2))
+
+/-- Every copy's input word `i` reads the rows' word `i` (`rec_sparse.lowering`'s `("leaf", p)` at input `p`), so each
+copy reads its rows in `ports`' order. -/
+def leavesOk (c : Circuit) (sh : Shape) : Bool :=
+  (List.range c.upv).all fun j => decide (c.leavesIn.getD j #[] = (Array.range (inWords sh)).map Int.ofNat)
+
+/-- A unit named `rec-sparse/…` is the verifier's at the shape its name gives, equal in every field, and the statement's
+rows are its inputs, every copy reading them in order (`rowsOk`, `leavesOk`); any other unit passes. The shape is bounded
+by the file's unit before any power of two is taken (every H3 round is a port of at least 64 words, `u` holds `2 ELL + 2`
+elements, and with T > 1 `tau` a word a slot), and the input and output bits, rows and leaves are compared before the net
+is built. Irreducible, so that no unification against it builds the net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some sh =>
@@ -279,6 +291,10 @@ compared before the net is built. Irreducible, so that no unification against it
     else if ib != 16 * inWords sh || RecOpen.outBits c.unit != 16 * outWords sh then
       throw (s!"circuit {c.name}: unit {c.unit.name} has {ib} input and {RecOpen.outBits c.unit} output bits, " ++
         s!"not rec-sparse's {16 * inWords sh} and {16 * outWords sh}")
+    else if !rowsOk c sh then
+      throw s!"circuit {c.name}: {c.unit.name}'s first rows are not rec-sparse's ports at their widths"
+    else if !leavesOk c sh then
+      throw s!"circuit {c.name}: a copy of {c.unit.name} does not read its rows' words in order"
     else match unitNet sh with
       | .error e => throw e
       | .ok g =>
@@ -303,10 +319,20 @@ def netlist (name : String) (l : Laid) : String :=
     line ((a.size :: a.toList) ++ (b.size :: b.toList))
   "\n".intercalate (head :: rows) ++ "\n"
 
-/-- `check` reads a circuit's name and unit only. -/
-theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) : check c = check c' := by
+/-- `check` reads a circuit's name, unit, rows, input leaves and copies only. -/
+theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit)
+    (hp : c.ports = c'.ports := by rfl) (hl : c.leavesIn = c'.leavesIn := by rfl) (hv : c.upv = c'.upv := by rfl) :
+    check c = check c' := by
+  have hr : rowsOk c = rowsOk c' := by
+    funext sh
+    unfold rowsOk
+    rw [hp]
+  have hlv : leavesOk c = leavesOk c' := by
+    funext sh
+    unfold leavesOk
+    rw [hl, hv]
   unfold check
-  rw [hn, hu]
+  rw [hn, hu, hr, hlv]
 
 end RecSparse
 end Flock

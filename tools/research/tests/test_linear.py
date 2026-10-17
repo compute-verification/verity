@@ -9,7 +9,7 @@ import urllib.parse
 import pytest
 
 from research import linear, slack
-from test_slack import COORD, fake, registry, routes_dirs, run  # noqa: F401  (Slack's fixtures)
+from test_slack import COORD, bells, fake, inbox, registry, routes_dirs, run  # noqa: F401  (Slack's fixtures)
 
 APP = {"LINEAR_CLIENT_ID": "dummy-client", "LINEAR_CLIENT_SECRET": "dummy-secret"}
 KEY = {"LINEAR_API_KEY": "dummy-key"}
@@ -64,8 +64,19 @@ class FakeLinear:
             return {"data": {"issue": {"subscribers": {"nodes": [{"name": n} for n in self.subscribers[v["id"]]]}}}}
         if "states" in q:
             return {"data": {"issue": {"id": "I1", "team": {"states": {"nodes": [{"id": "S1", "name": "Todo", "type": "unstarted"},
+                                                                    {"id": "S2", "name": "In Review", "type": "started"},
+                                                                    {"id": "S3", "name": "In Progress", "type": "started"},
                                                                     {"id": "S5", "name": "Done", "type": "completed"},
                                                                     {"id": "S9", "name": "Canceled", "type": "canceled"}]}}}}}
+        if "issues(filter" in q:
+            self.listed = v["f"]
+            return {"data": {"issues": {"nodes": [
+                {"identifier": "INF-2", "title": "later", "createdAt": "2026-10-14T02:00Z", "state": {"name": "In Progress"}},
+                {"identifier": "INF-1", "title": "first", "createdAt": "2026-10-14T01:00Z", "state": {"name": "Backlog"}}]}}}
+        if "team { key }" in q:
+            return {"data": {"issue": {"id": "I1", "identifier": "INF-1", "url": "https://linear.app/x/issue/INF-1", "team": {"key": "INF"}}}}
+        if "issue(id: $id) { id }" in q:
+            return {"data": {"issue": {"id": "I1"}}}
         if "issueUpdate" in q:
             self.moved.append((v["id"], v["s"]))
             return {"data": {"issueUpdate": {"success": True}}}
@@ -161,6 +172,9 @@ def test_an_ask_files_in_its_owners_team_and_still_goes_out_when_linear_fails(fa
     assert rc == 0 and out.startswith("linear: INF-1 https://linear.app/x/issue/INF-1")
     assert fake.messages[COORD][-1]["text"].endswith("4 GPUs on node 2" + LINKED)
     assert lin.sent("teams(filter")[0][1] == {"n": "INF"}                                      # the registry's key, not the handle
+    rc, _, _ = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", "4 GPUs for 6 h\nspec: the panel\nby 8 PM")
+    assert rc == 0 and fake.messages[COORD][-1]["text"].endswith("> 4 GPUs for 6 h" + LINKED)              # Slack: one line and the link
+    assert lin.sent("issueCreate")[-1][1]["i"]["description"] == "4 GPUs for 6 h\nspec: the panel\nby 8 PM"  # the issue: the whole brief
     lin.teams = []
     rc, _, err = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", "again")
     assert rc == 0 and "not filed on Linear (no Linear team named 'INF')" in err
@@ -196,9 +210,54 @@ def test_closing_or_declining_an_ask_moves_its_issue_to_done_or_canceled(fake, r
     assert run(capsys, "close", "--as", "infra", "--thread", plain["ts"])[0] == 0 and len(lin.calls) == n
 
 
+def test_a_state_is_matched_by_name_before_type_so_in_progress_is_never_the_first_started_state(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(KEY, fake, cache=tmp_path / "t")
+    assert lin.move("INF-1", "in progress") == "In Progress" and fake.moved[-1] == ("I1", "S3")   # not In Review, the first started
+    assert lin.move("INF-1", "completed") == "Done" and fake.moved[-1] == ("I1", "S5")            # a type still works
+    with pytest.raises(linear.LinearError, match="no state 'Doing': its states are Todo, In Review, In Progress, Done, Canceled"):
+        lin.move("INF-1", "Doing")
+
+
+def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
+    lin.subscribers["I1"] = []                                                                 # an issue filed earlier
+    rc, out, _ = run(capsys, "linear", "state", "INF-1", "In Progress")
+    assert rc == 0 and out.strip() == "INF-1 In Progress" and lin.moved == [("I1", "S3")]
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "picked up", "--as", "infra")
+    assert rc == 0 and out.strip() == "INF-1 commented"
+    (_, v, _), = lin.sent("commentCreate")
+    assert v["i"] == {"issueId": "I1", "body": "@infra: picked up"}
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "no sender")
+    assert rc != 0 and "--as HANDLE" in err
+    rc, out, _ = run(capsys, "linear", "list", "infra")
+    assert rc == 0 and out.splitlines()[:2] == ["INF-1  Backlog  first", "INF-2  In Progress  later"]   # oldest first
+    assert out.splitlines()[2] == f"states: {slack.LINEAR_STATES}" and "In Progress = someone is on it now" in slack.LINEAR_STATES
+    assert lin.listed == {"team": {"id": {"eq": "T-infra"}}, "state": {"type": {"nin": ["completed", "canceled"]}}}
+    assert run(capsys, "linear", "list", "INF", "--state", "In Progress")[0] == 0
+    assert lin.listed["state"] == {"name": {"eqIgnoreCase": "In Progress"}}
+    rc, _, err = run(capsys, "linear", "state", "INF-1")
+    assert rc != 0 and "give the STATE" in err
+
+
+def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_its_author(fake, registry, routes_dirs, capsys, lin):
+    """No one subscribes to Linear comments (each would echo its author), so a lane polled its issues instead (COMM-30)."""
+    lin.subscribers["I1"] = []
+    infra, circuits = inbox(fake, routes_dirs, "infra"), inbox(fake, routes_dirs, "circuits")
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "@circuits the trace is up", "--as", "compute-accounting")
+    assert rc == 0 and "route @infra: rang" in err and "route @circuits: rang" in err
+    (bell,) = bells(fake, infra)
+    assert bell["text"] == "from compute-accounting, Linear INF-1 (https://linear.app/x/issue/INF-1): @circuits the trace is up"
+    assert len(bells(fake, circuits)) == 1 and not bell["text"].startswith("@")
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "picked up", "--as", "infra")              # the owner on its own issue
+    assert rc == 0 and "route" not in err and len(bells(fake, infra)) == 1
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "see this, @circuits", "--as", "proofs")
+    assert rc == 2 and "past its start" in err                                                         # names ring only at the start
+
+
 def test_subscriptions_name_the_leads_linear_team_and_the_registry_refuses_a_shared_key(registry, capsys):
     rc, out, _ = run(capsys, "subscriptions", "--as", "comms")
-    assert rc == 0 and 'subscribe_linear_comment(options={"scope": "team", "teamId": "COMM"}' in out
+    assert rc == 0 and 'subscribe_linear_issue(options={"scope": "team", "teamId": "COMM"}' in out
+    assert "subscribe_linear_comment" not in out
     assert "subscribe_linear" not in run(capsys, "subscriptions", "--as", "old-accounting")[1]
     reg = json.loads(registry.read_text())
     next(h for h in reg["handles"] if h["handle"] == "ci")["linear"] = "COMM"

@@ -70,8 +70,8 @@ def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
 # -- the kinds whose program values are inputs (`TargetProfile.registered_values`): the value is the kind's last operand, a field of
 # the registered `values` parameter (`Ctx.supplied`); the rules ask for them instead of the constant-holding kinds under the switch
 _VALUE_KINDS = {
-    "rmsnorm_value": lambda N: ir_bind(_vi.RMSNormTritonV3, N=N),
-    "rmsnorm_fused_value": lambda N, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, eps_input=True),
+    "rmsnorm_value": lambda N, TARGET, M=1: _targets.rmsnorm_value_spec(TARGET, N),
+    "rmsnorm_fused_value": lambda N, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, eps_input=True, M=M),
     "attention_value": lambda T, NH, KVH, D: ir_bind(_vi.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
     "attention_dot_value": _attention_dot_value,
     "attention_dot_plain_value": lambda T, NH, KVH, D, BN, DOT, INV: ir_bind(_vi.AttentionV12, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV),
@@ -98,10 +98,10 @@ PROFILE_B1_EAGER = Vocabulary(
         "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "gemm_bias": lambda K, N: ir_bind(_gemm_bias.GemmBias, K=K, N=N),
-        "rmsnorm": lambda N, EPS: ir_bind(b1.RMSNormTriton, N=N, EPS=EPS),
-        # `_C.fused_add_rms_norm` by the declared target (`frontend.targets.rmsnorm_fused_spec`, which the fold calls too): the rule
-        # states `TARGET`, and without it the role has no kind
-        "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
+        # The target and launch row count select the batch-invariant kernels or
+        # vLLM's default width-8 CUDA kernels and their launch blocks.
+        "rmsnorm": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_spec(TARGET, N, EPS, M),
+        "rmsnorm_fused": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, EPS, M=M),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
         "attention": lambda T, NH, KVH, D: ir_bind(b1.Attention, T=T, NH=NH, KVH=KVH, D=D),
         "silu_mul": lambda I: ir_bind(b1.SiluMul, I=I),
@@ -117,8 +117,10 @@ PROFILE_B1_EAGER = Vocabulary(
         "pouw_linear_row_bias": "NcpLinearRowBias_v1{K,N}: one row of a biased pouw:ncp-v2 linear's served y (NcpDequant adds the bias)",
         "bias_add": "BiasAdd_v1{N}: aten.add(bf16, bf16)",
         "gemm_bias": "GemmBias_v1{K,N}: Gemm_v1 then BiasAdd_v1 per output word (the batch-invariant linear with a bias)",
-        "rmsnorm": "RMSNormTriton_v1{N,EPS}: vLLM batch-invariant Triton _rms_norm_kernel",
-        "rmsnorm_fused": "RMSNormFusedCuda_v2{N,EPS}: vLLM CUDA fused_add_rms_norm (generic kernel)",
+        "rmsnorm": "target-selected norm: batch-invariant Triton RMSNormTriton_v1{N,EPS}, otherwise "
+                   "RMSNormCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
+        "rmsnorm_fused": "target-selected fused norm: batch-invariant generic RMSNormFusedCuda_v2{N,EPS}, otherwise "
+                         "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
         "rope": "RoPE_v1{NHEADS,D}: vLLM _C.rotary_embedding NeoX, bf16 cos/sin cache row as Input",
         "attention": "Attention_v1{T,NH,KVH,D}: FA2 causal GQA over [T][KVH][D] caches",
         "silu_mul": "SiluMul_v1{I}: vLLM _C.silu_and_mul",
@@ -188,13 +190,6 @@ from verity_vllm.program.registry import topp_words as _topp_words  # the keep w
 from verity_vllm.program.registry import layer_norm as _LN
 
 
-def _norm_v2(role: str):
-    def bind_norm(N, EPS):
-        rec = b1.norm_bundle({"H": N, "EPS": EPS})
-        return rec[role]
-    return bind_norm
-
-
 PROFILE_B1_EAGER_V2 = Vocabulary(
     "b1-eager-v2", "profile", "b1-eager-v2",
     kinds={
@@ -202,8 +197,8 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
         "pouw_linear_row": lambda K, N: ir_bind(_pouw_rows.NcpLinearRow, K=K, N=N),
         "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
-        "rmsnorm": _norm_v2("L0"),
-        "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
+        "rmsnorm": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_spec(TARGET, N, EPS, M),
+        "rmsnorm_fused": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, EPS, M=M),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
         "attention": lambda T, NH, KVH, D: ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, **b1.ATTENTION_FA2),
         "silu_mul": lambda I: ir_bind(b1.SiluMul, I=I),

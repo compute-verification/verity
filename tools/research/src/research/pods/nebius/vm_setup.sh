@@ -40,6 +40,12 @@ install -d -o "$U" -g "$U" /workspace/hf /workspace/hf/hub /workspace/hf/prefetc
 
 # TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB; four at once filled it on vy-nebius-1 (6 Oct)
 install -d -m 1777 -o root -g root /workspace/tmp
+if [ -n "${VY_FS_TAG:-}" ]; then   # a shared filesystem launch.sh attached (NEBIUS_FILESYSTEM_ID), shared by every VM it is attached to
+  mkdir -p /workspace/fs
+  grep -q ' /workspace/fs ' /etc/fstab || echo "$VY_FS_TAG /workspace/fs virtiofs defaults,nofail 0 0" >> /etc/fstab
+  mountpoint -q /workspace/fs || mount /workspace/fs
+  chown "$U:$U" /workspace/fs
+fi
 echo 'd /workspace/tmp 1777 root root 10d' > /etc/tmpfiles.d/workspace-tmp.conf
 touch /etc/environment
 for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID TMPDIR=/workspace/tmp; do
@@ -159,7 +165,7 @@ EOF
 systemctl daemon-reload
 systemctl enable --now vy-lease.service
 systemctl enable --now vy-deadline.timer
-systemctl enable --now vy-clocks.service
+[ "${VY_LOCK_CLOCKS:-1}" = 0 ] || systemctl enable --now vy-clocks.service   # the clocks are the RTX PRO 6000's
 
 nvidia-smi -pm 1 > /dev/null 2>&1 || log "nvidia-smi -pm 1 refused (persistence mode stays off)"
 date -u +%Y-%m-%dT%H:%M:%SZ > /var/lib/vy-setup.done

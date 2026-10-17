@@ -13,17 +13,17 @@
   cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]] [--sampler UTIL.jsonl[.gz]...]  # the pass bar: exit 0 or 2
   cluster submit DESCRIPTION.toml --run-id R --now T --project P --submitter W [--kind K] [--max-s S] [--gpus N ...]
                                                         # the node, wrappers and kind as JSON; exit 3 with {"refused"}
-  cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # each node's jobs, GPU-h ready, holds, disk,
+  cluster status [--on nebius-1|nebius-2|all] [--owner OWNER] [--json]   # each node's jobs, GPU-h ready, holds, disk,
                                                         # bundles, read over SSH (status.py); exit 1 if a node can't be read
-  cluster usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] [--file PATH]   # per node and UTC hour: busy
+  cluster usage hourly [--on nebius-1|nebius-2|all] [--hours H] [--json] [--file PATH]   # per node and UTC hour: busy
                                                         # and useful against 95% / 90%, held idle, unmeasured (usage.py)
   cluster usage wasters --day YYYY-MM-DD [--top N] [--json] [--file PATH]   # held-but-idle GPU-hours by holding, most first;
                                                         # both read the console's record on vy-nebius-1, exit 1 if stale or unread
   cluster kueue-shadow tick|loop --out RECORD.jsonl [--every S --hours H] | down   # on vy-nebius-1: what Kueue alone
                                                         # would admit beside what the node did (kueue_shadow.py)
-  cluster policy show [--description D] [--node N|all] [--key K] [--log L] [--json]   # the policy in force: each key, its
+  cluster policy show [--description D] [--on N|all] [--key K] [--log L] [--json]   # the policy in force: each key, its
                                                         # owner and source, with the overrides in force from the local log
-  cluster policy diff [--description D] [--node N|all] [--json]   # every key whose live value differs, read over SSH
+  cluster policy diff [--description D] [--on N|all] [--json]   # every key whose live value differs, read over SSH
                                                         # (policy.py); exit 1 drift, 3 a value unread, 2 a bad description
   cluster policy override KEY VALUE --until T --by WHO --reason R [--log L] [--apply] [--json]   # on KEY's node: KEY is
                                                         # VALUE until T (UTC); a dry run without --apply; exit 2 refused
@@ -59,6 +59,21 @@ def _action(a: plan.Action) -> dict:
         v = getattr(a, f.name)
         d[f.name] = model.allocation_to_dict(v) if isinstance(v, model.Allocation) else v
     return d
+
+
+def renamed(argv: list[str] | None, names: dict[str, str]) -> list[str]:
+    """Old flag spellings as hidden aliases (tests/test_cli_conventions.py): `--node X` and `--node=X` read as `--on`, said once
+    on stderr. A copy of research.flags.renamed: this package is stdlib only."""
+    out, said = [], set()
+    for a in sys.argv[1:] if argv is None else argv:
+        old, eq, value = a.partition("=")
+        if old in names:
+            if old not in said:
+                print(f"cluster: {old} is now {names[old]}", file=sys.stderr)
+                said.add(old)
+            a = names[old] + eq + value
+        out.append(a)
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -125,12 +140,12 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--custody-s", type=int, default=0)
     sb.add_argument("--preempt", choices=("requeue", "never"), default="requeue")
     sb.add_argument("--quiet", action="store_true", default=None)
-    sb.add_argument("--node")
+    sb.add_argument("--on", dest="node", metavar="NODE")
     sb.add_argument("--gpu-ids", default="", help="comma-separated GPU indices the job must get")
     sb.add_argument("--gpu-host", action="store_true", help="a job without --gpus that takes its GPUs with gpu-lease itself: its scope runs "
                                                                "at a GPU job's CPU weight (node 1: not idle)")
     st = sub.add_parser("status", help="each node's running, queued and held jobs, GPU-h ready, holds, disk and bundles")
-    st.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
+    st.add_argument("--on", dest="node", choices=("nebius-1", "nebius-2", "all"), default="all")
     st.add_argument("--owner", help="only this owner's jobs (verity.dev/owner, else the workstream; a submitter on node 2)")
     st.add_argument("--json", action="store_true")
     usage.add_parser(sub)
@@ -143,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         pp.add_argument("--description", default=str(Path(__file__).parents[2] / "descriptions" / "nebius.toml"))
         pp.add_argument("--json", action="store_true")
         if name != "override":
-            pp.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
+            pp.add_argument("--on", dest="node", choices=("nebius-1", "nebius-2", "all"), default="all")
         if name != "diff":
             pp.add_argument("--log", default=OVERRIDES, help="the override log (this node's)")
         if name == "show":
@@ -155,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
             pp.add_argument("--by", required=True, help="the handle who decided it")
             pp.add_argument("--reason", required=True)
             pp.add_argument("--apply", action="store_true", help="record it (else print what would be recorded)")
-    a = ap.parse_args(argv)
+    a = ap.parse_args(renamed(argv, {"--node": "--on"}))
 
     if a.cmd == "usage":
         return usage.main(a)

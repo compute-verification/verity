@@ -1231,10 +1231,17 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - its input ports must total `384·LANES + 1024·max(1, ⌈H/2⌉) + 2048` bits and its output ports 2048, compared before
     the verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's
     rows allow;
+  - the statement's first five rows must be `row, aux, acc, coef, dirs` at the input widths below (`out` and `acc_out`
+    follow), and every copy's input word `i` must read leaf `i` (`leaves_in[u] = [0, 1, …]`), so each copy reads its
+    opening's rows in that order; both are compared before the net is built (`RecOpen.rowsOk`, `RecOpen.leavesOk`);
   - the net must be `Flock.RecOpen`'s builder of `rec_open._steps` at those parameters, laid out as `ir_lower.layout`
     lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·max(1, ⌈H/2⌉)` (at `H = 0` one row the net does
     not read), `64`, `16·LANES` and `64` u16 words, and outputs `out` then `acc_out` of 64 words each, one 16-bit port
     per word.
+
+  So must a unit net whose name starts with `rec-open-stacked/` (one of R's levels, V*'s `recOpenStackedName`): its name
+  must be `rec-open-stacked/l<LANES>-h<H>`, and the same three rules hold at those parameters, the net being the same
+  builder's under the unit's own name.
 
   So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
@@ -1245,8 +1252,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     `holo`, so exactly one net is accepted: a holo statement on plain parts refuses, and so does a plain statement on
     holo parts. With `--rec-inner`, V*'s statements are built at the verifier's own `--hide` (`holo` in
     `verity/rec-inner/v1`, `RecVStar.Inner.holo`), so a file's META `holo` must equal it, and every `VERDICT` line
-    carries it as `private_circuit`. The verifier refuses an inner shape with `holo` true until V*'s circuit writer
-    writes holo parts;
+    carries it as `private_circuit`. At `holo` true V*'s statements are its holo ones (`VStar.statementsHolo`: the parts
+    of `specHolo`, whose files carry META `holo`), and a part's message rounds are `holoRepRounds`', `h`'s among them;
+    an inner shape at which no group of the verifier's algebra (below) holds `h`'s round `m<hRound>` as a row port
+    (`RecVStar.hRound`, the round RecSparse reads as its port `h`) is refused before V*'s statements are built;
   - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
     its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
     residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 160 `sha512x3`
@@ -1257,14 +1266,28 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - its input ports must total the part's (`16·P(n)` bits a row port of `n` elements and `v`, `P(n) = 64·⌈8n/64⌉`) and
     its output ports 2048, compared before the verifier builds its net;
   - the net must be `Flock.RecResiduals`' builder of `rec_residuals.unit_circuit` on part `j`'s S, laid out as
-    `ir_lower.layout` lays it out, one 16-bit port per word.
+    `ir_lower.layout` lays it out, one 16-bit port per word;
+  - its computed rows must read each row-port element in all 128 bits or in none (`RecResiduals.partlyRead`), refused
+    by the first element read in part and how many of its bits are;
+  - its computed rows must read each element of `h` (`.h l`, at a holo shape) the part holds in all 128 bits
+    (`RecResiduals.hUnread`), refused by the first that is not and how many of its bits are, so the algebra unit's
+    decoded `h` is the registered row RecSparse reads as its port `h`;
+  - at copy 0 and each copy below `units_per_vu`, a circuit port that keys a bit of an element of `w` (its leaf at the
+    column's word, `HmRow.delta`'s copy) must be named `m<r>` for each round `r` that holds the element's key
+    (`RecResiduals.misnamed`, `roundNames`), refused by the first copy, element, bit and port that is not.
 
   So must a unit net whose name starts with `rec-opening/` (a part of R's opening, `rec_residuals.stage_opening`):
   - its name must be `rec-opening/m<m>-c<claims>-p<j>`, with a `fast100` schedule at `m` and `claims ≥ 1`;
   - the circuit must have one unit per VU (`units_per_vu = 1`), so each part is one copy of its unit, refused before
     the structure is computed;
   - the rest is a `rec-residuals/` part's (the claims bounded by the input bits, part `j`'s bits, the net), at the
-    opening's S (`Flock.RecOpening.structureOf`, `rec_algebra.structure` at an opening-only shape) and its row ports.
+    opening's S (`Flock.RecOpening.structureOf`, `rec_algebra.structure` at an opening-only shape) and its row ports;
+  - its computed rows must read each element of a claim's ring switch, and of Ligerito's running sums (`acc0`,
+    `acc1`), the part holds in all 128 bits (`RecOpening.rsUnread`), refused by the first that is not and how many of
+    its bits are, and each other element in all 128 or in none (`RecResiduals.partlyRead`), refused as a
+    `rec-residuals/` part is;
+  - a circuit port that keys a bit of claim `i`'s ring-switch element must be named `m<i>` (`RecResiduals.misnamed`,
+    `RecOpening.rsName`), refused as a `rec-residuals/` part's misnamed port is.
 
   Any other unit is not checked against a builder (D13, §17.1).
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
@@ -1597,6 +1620,10 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows
    of 16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each`). A
    PoUW tile's rows, row-seg A rows and v2 B rows, are such a mix (`ZkHidden.witnessMix_scope`).
+8. every table's `m` at least `25` under `--zk`, else `22` (`ProvedScope.sizesOk`, the claims' `InScope` bound):
+   `m = <m>, below <22|25> without --zk|under --zk`. A table's `m` is its drawn statement's, so `verify` checks it on the
+   session's tables right after `ProvedScope.check`. Each verifier's own schedule refuses a smaller `m` first (§15's
+   `fast100` below `22`, `--zk`'s `queries0` at `m ≤ 24`), so no session's verdict carries this reason.
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
 design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling
@@ -1732,11 +1759,14 @@ expectation):
   statement whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the
   live server and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it;
   `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier.
-- **D13:** a unit net named `rec-open/…` is the verifier's V* opening net (`Flock.RecOpen`, §16.10). Upstream takes the
-  unit's net as the file gives it. The spec refuses a `rec-open/` unit whose name is not `rec-open/l<LANES>-h<H>` at valid
-  parameters, one whose port bits are not the opening's at them, and one whose net differs from the verifier's. No vector
-  exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean
-  verifier.
+- **D13:** a unit net named `rec-open/…` or `rec-open-stacked/…` is the verifier's V* opening net (`Flock.RecOpen`,
+  §16.10). Upstream takes the unit's net as the file gives it. The spec refuses such a unit whose name is not
+  `rec-open/l<LANES>-h<H>` (or `rec-open-stacked/l<LANES>-h<H>`) at valid parameters, one whose port bits are not the
+  opening's at them, one whose rows or copies' leaves are not the opening's inputs in order, and one whose net differs
+  from the verifier's. No vector exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs
+  the bits' refusal on the Lean verifier, `verity/core/service/flock/Flock/Test/RecOpenLeaves.lean` the rows' and
+  leaves', and `test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening` a stacked unit's acceptance and
+  its net's.
 - **D14:** U4 (§7.3, §16.10): a drawn statement must draw in full each unit that reads a round's commitment. Upstream
   ignores the header's `registered` (D5) and so cannot tell which units read one; the spec refuses the draw at setup. No
   vector exercises it: no set's draw meets a port of a round's commitment (`rec-c<i>`, `rec-top-L<l>`, R's and the sparse
@@ -1745,6 +1775,11 @@ expectation):
   refuses a description table that is not the registration in order, a row that does not open the registered root, and a
   registered row no instance reads. No vector exercises it; `verity/ml/flock/tests/test_inner_registered.py` runs each
   refusal on the Lean verifier.
+- **D16:** a drawn session with an inner shape (`--rec-inner`, V*'s) must label each table's instances with the units its
+  draw proves (`RecVStar.checkLabels`): a registered read's position is read at an instance's label, so the label must be
+  the unit. V*'s populations are their units `0..n-1`, so its honest statements pass. Upstream reads no inner shape; the
+  spec refuses at setup. No vector exercises it; `Flock.Test.Labels` runs it on synthetic draws and labels, and
+  `test_the_honest_level_passes_setup_at_the_honest_inner_session` passes it on an honest V* level.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

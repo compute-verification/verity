@@ -270,7 +270,11 @@ theorem pouwRow : Guarantees.pouwRow := by
   simpa only [Pouw.AcceptsBy, Actual.timedRun, le_refl, true_and] using h
 
 theorem B4 : Guarantees.B4 := by
-  intro L E Ω _ _ _ S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hc hα hT hXc hh hr
+  intro L E Ω _ _ _ S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec
+  obtain ⟨hc, hcr⟩ := hcs
+  obtain ⟨hα, hlr⟩ := hdl
+  obtain ⟨hXc, hh⟩ := hsec
+  have hr : ∀ r, (S r).A.Causal ℓ ∧ (S r).A.Links ends β (link r) := fun r => ⟨hcr r, hlr r⟩
   obtain ⟨-, -, J, hJ⟩ := hT
   set O : Finset L := (X ∪ cert)ᶜ with hO
   have hOc : (↑O : Set L) = (↑X ∪ ↑cert)ᶜ := by rw [hO, coe_compl, coe_union]
@@ -356,5 +360,12 @@ theorem B4 : Guarantees.B4 := by
     _ = _ := by
       rw [← Nat.cast_mul, ← pow_mul, ← pow_add, show jitter * (cert.card * K.card) = jitter * K.card * cert.card by
         ring]
+
+/-- **B4 at a covered location**: `B4` with `Covered` rewriting the uncertified term to zero. -/
+theorem B4Covered : Guarantees.B4Covered := by
+  intro L E Ω _ _ _ S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec hcov
+  have h := B4 S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec
+  have hc0 : Accounting.uncertifiedCapacity ends β cert X = 0 := hcov
+  rwa [hc0, Nat.zero_mul, Nat.add_zero] at h
 
 end Accounting.SecurityProofs

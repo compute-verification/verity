@@ -90,10 +90,10 @@ uv run cluster submit infra/cluster/descriptions/nebius.toml --run-id R --now T 
 uv run cluster ledger verify|quiet|failures LEDGER.jsonl ...
 uv run cluster shadow replay infra/cluster/descriptions/nebius.toml --sampler UTIL.jsonl.gz --preempted preempted.log --out DIR
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
-uv run cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
+uv run cluster status [--on nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
 python3 -m cluster kueue-shadow loop --out RECORD.jsonl --hours H   # on vy-nebius-1; `kueue-shadow down` removes it
-uv run cluster policy show [--node nebius-1|nebius-2|all] [--key K] [--json]   # the policy in force: key, owner, source
-uv run cluster policy diff [--node nebius-1|nebius-2|all] [--json]   # over SSH: exit 1 drift, 3 a value unread
+uv run cluster policy show [--on nebius-1|nebius-2|all] [--key K] [--json]   # the policy in force: key, owner, source
+uv run cluster policy diff [--on nebius-1|nebius-2|all] [--json]   # over SSH: exit 1 drift, 3 a value unread
 uv run cluster policy override KEY VALUE --until 2026-10-04T10:30:00Z --by WHO --reason R [--apply]   # on KEY's node
 ~~~
 

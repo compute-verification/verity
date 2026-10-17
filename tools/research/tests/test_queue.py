@@ -94,7 +94,7 @@ class World:
     def queue(self, **kw) -> Queue:
         kw.setdefault("ready", lambda n, h: (n, h) in self.gh.ready)
         return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh,
-                     store=self.store, notes=self.tmp / "notes", log=self.logs.append, **kw)
+                     store=self.store, log=self.logs.append, **kw)
 
     def on_next(self, q: Queue) -> list[int]:
         q.fetch()
@@ -208,18 +208,30 @@ def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world
     assert set(merged["guarantees"]) == {"T", "A", "B"}
 
 
-def test_a_conflicting_pr_is_left_out_and_its_owner_told_which_queued_pr_touched_the_file(world):
+def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):
+    """13 Oct: a sync on @lean's VM wrote conflict handoffs for ci's and circuits' PRs into @lean's notes clone, where they
+    waited for @lean's next notes push; drive tells each conflict in the merge thread (`Driver.refuse`)."""
+    monkeypatch.setenv("RESEARCH_NOTES", str(world.tmp / "notes"))
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, world.change({"a.txt": "two\n", "b.txt": "b2\n"}))
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1]
     assert entries[2].state == "refused" and entries[2].why == "conflicts with `next` in a.txt (touched by #1)"
-    notices = sorted((world.tmp / "notes" / "lanes" / "lane-2").glob("*-handoff-from-merge-queue-2-conflict.md"))
-    assert len(notices) == 1 and "touched by #1" in notices[0].read_text()
-    q.sync()
-    assert len(list((world.tmp / "notes" / "lanes" / "lane-2").glob("*.md"))) == 1      # one notice per head
+    assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why
+    assert not (world.tmp / "notes").exists()
     assert q.status()[2].why == "conflicts with `next` in a.txt (touched by #1) (at the last sync)"
+
+
+def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
+    """14 Oct: status on circuits' VM called #1959/#1961/#1969 'admitted' for about 80 min while each conflicted with `main`,
+    because only the drive VM's last sync had recorded the conflict."""
+    world.gh.put(1, world.change({"a.txt": "pr\n"}))
+    world.gh.put(2, world.change({"b.txt": "fine\n"}))
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'a.txt': 'main moved\n'})}:refs/heads/main")
+    got = world.queue().status()
+    assert got[1].state == "refused" and got[1].why.startswith("conflicts with `main` in a.txt")
+    assert got[2].state == "ready" and got[2].why.startswith("admitted")
 
 
 def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world):
@@ -244,8 +256,7 @@ def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
     assert world.on_next(q) == [1, 2, 3]                        # an ejection takes effect at the next sync
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 3] and entries[2].why.startswith("ejected at")
-    notice = next((world.tmp / "notes" / "lanes" / "lane-2").glob("*-eject.md")).read_text()
-    assert "breaks suite `verity`" in notice
+    assert "breaks suite `verity`" in entries[2].why                # the notice is `tell_ejected`'s post, tested below
     world.gh.put(2, world.change({"b.txt": "fixed\n"}))
     assert [m.pr for m in q.sync()[0]] == [1, 3, 2]
 
@@ -342,7 +353,7 @@ def test_the_clone_authenticates_as_the_callers_checkout_does_and_fails_rather_t
 
     def queue(auth: tuple[str, ...]) -> Queue:
         return Queue(world.tmp / "q" / "verity", remote=served, github=world.gh, ready=lambda n, h: True,
-                     notes=world.tmp / "notes", log=world.logs.append, auth=auth)
+                     log=world.logs.append, auth=auth)
 
     with pytest.raises(QueueError, match=r"git clone .*terminal prompts disabled; no credential helper applies to the remote"):
         queue(()).status()
@@ -678,7 +689,7 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
     assert labels.ready(1, h1) is True
     q = Queue(world.tmp / "q" / "verity", remote=str(world.origin), github=world.gh, ready=labels.ready,
-              store=world.store, notes=world.tmp / "notes", log=world.logs.append)
+              store=world.store, log=world.logs.append)
     members, _ = q.sync()
     assert [m.pr for m in members] == [1]
     h2 = world.change({"a.txt": "a2\n"})
@@ -702,6 +713,25 @@ def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     assert ready(world.gh, world.store, 3, "lane-3", MarkOnly()) == 0
     assert "marked on lane-3's word, with no quick tier" in capsys.readouterr().out
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
+
+
+def test_ready_refuses_a_head_that_was_ejected_and_says_why_unless_again(world, capsys):
+    """16 Oct: #2174, ejected at 24a9b5e635 for a lean-audit failure, was marked ready again at that head and failed a second train
+    on the same line, holding up the PRs without Lean in it."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    h = world.change({"e.txt": "e\n"})
+    world.gh.put(4, h, ready=False)
+    world.store.add_label(label_target(4, h), vocab.READY, True, "lane-4", ts="2026-10-16T20:00:00Z")
+    world.queue().eject(4, "lean-audit in r1: X.lean:189", "ci")
+    capsys.readouterr()
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly()) == 1
+    err = capsys.readouterr().err
+    assert "that head was ejected: lean-audit in r1: X.lean:189 (ejected by ci at" in err and "Push the fix" in err
+    assert StoreLabels(world.store, log=world.logs.append).ready(4, h) is False
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), again=True) == 0
+    assert StoreLabels(world.store, log=world.logs.append).ready(4, h) is True
 
 
 def test_a_head_with_the_tree_of_a_head_marked_ready_is_marked_without_running_the_tier_again(world, monkeypatch, capsys):
@@ -1332,9 +1362,9 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, land and drive only"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, land and drive only"),
-                      (["queue", "drive"], "drive needs --on MACHINE")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, land, drive and report only"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, land, drive and report only"),
+                      (["queue", "drive"], "drive needs --on MACHINE"), (["queue", "report"], "report needs --on MACHINE")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
@@ -1389,3 +1419,22 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
     assert quick_tier.warm_dir({"HOME": env["HOME"]}, d) is None and quick_tier.warm_dir({**env, "CHECK_SLOT": "../x"}, d) is None
     env.pop("CHECK_SLOT")
     assert run(4) == {"dir": d, "rc": 0, "start": "cold"} and log.read_text().split()[-1] == "cold"
+
+
+def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monkeypatch):
+    """14 Oct 00:46Z: drive's listing of the open PRs hung for 5 min on a dead connection, and gh has no timeout of its own."""
+    import research.merge as M
+    import research.queue as Q
+
+    asked = []
+
+    def hangs(argv, **kw):
+        asked.append(kw.get("timeout"))
+        raise subprocess.TimeoutExpired(argv, kw["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", hangs)
+    with pytest.raises(QueueError, match=f"no answer in {Q.GH_TIMEOUT_S} s"):
+        Q.GitHub("o/r").open_prs()
+    with pytest.raises(M.Refused, match=f"no answer in {M.GH_TIMEOUT_S} s"):
+        M._gh_cli(Path("."), "pr", "view", "1")
+    assert asked == [Q.GH_TIMEOUT_S, M.GH_TIMEOUT_S]

@@ -77,11 +77,11 @@ from typing import Any, Callable, Protocol, runtime_checkable
 
 VERSION = "v0.6"
 #: a call's step groups, in the order its main lane runs them; must equal verity.core.protocols.pouw.serving.GROUPS
-GROUPS = ("a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
+GROUPS = ("row_seeds", "a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 #: the groups nothing later in the call reads, so they may leave the main lane; must equal verity.core.protocols.pouw.serving.MOVABLE
 MOVABLE = frozenset({"tile_hash", "screen"})
 #: the chain's parts (`chain.py`), each the groups it runs, in order
-PARTS = {"before": ("a_tree", "forming"), "gemm": ("gemm", "cleanup"), "after": ("tile_hash", "screen")}
+PARTS = {"before": ("row_seeds", "a_tree", "forming"), "gemm": ("gemm", "cleanup"), "after": ("tile_hash", "screen")}
 #: the groups the chain's side stream takes: the served deferred schedule's side lane, so must equal
 #: verity.core.protocols.pouw.serving.DEFERRED.side; moving more of `MOVABLE` would time a schedule nobody serves
 DEFERRED = frozenset({"tile_hash"})

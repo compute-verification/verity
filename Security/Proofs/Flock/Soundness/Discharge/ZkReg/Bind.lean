@@ -38,10 +38,10 @@ theorem sitesSh_bcSiteS :
       unfold tableSh; rw [dite_eq_left_of_eq_true (eq_true hS)]
     rw [e]
     exact table_bcSiteS (zkTyped ht) dj hc (Layout.scopeOk_spec hU hscope).2.1 hpub _ h
-  · have e : tableSh ht dj y₀ S = y₀.x.refused (zkTyped ht) S := by
+  · have e : tableSh ht dj y₀ S = y₀.x.refusedC (zkTyped ht) S := by
       unfold tableSh; rw [dite_eq_right_of_eq_false (eq_false hS)]
     have hns : ∀ z, ¬ (tableSh ht dj y₀ S).T.S.Satisfies z := by
-      rw [e]; exact y₀.x.refused_unsat (zkTyped ht) S
+      rw [e]; exact y₀.x.refusedC_unsat (zkTyped ht) S
     exact absurd hM (hns _)
 
 /-- The public plan's layout at the `--zk` tables' draws: e2e-layout's `keyedLayout` at `tableSh`'s sites, whose

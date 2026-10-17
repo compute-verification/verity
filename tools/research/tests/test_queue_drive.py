@@ -309,6 +309,31 @@ def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_fil
     assert implicated(d) is None
 
 
+def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_and_their_readers(tmp_path):
+    """Train 21b3d26fe1a6 (14 Oct 21:08Z): verity-lean-audit failed with 146/146 tests passing — the read guard alone — and
+    drive said "the failure names no file", so attribution took an agent's archaeology. The suite's record names the files
+    read outside the inputs and the test module that read each (`outside`, path -> module; a child's reads in
+    `child_outside`), and those implicate the PR that added the reading test or changed the file read."""
+    import json
+
+    from research.drive import implicated, touches
+
+    d = tmp_path / "run"
+    (d / "suites").mkdir(parents=True)
+    (d / "steps.jsonl").write_text('{"step": "lean-suites", "status": "failed"}\n')
+    record = {"name": "verity-lean-audit", "suite": "tools/verity/lean", "status": "failed", "failed_tests": [],
+              "outside": {"tools/verity/check/lean_slot.py": "tools/verity/lean/tests/test_lean_changed.py",
+                          "tools/verity/check/slot.py": "*"},
+              "child_outside": {"tools/verity/lean/tests/test_cache.py": ["elsewhere/data.txt"]}, "log": None}
+    (d / "suites-lean.json").write_text(json.dumps([record]))
+    got = implicated(d)
+    assert got == {"tools/verity/check/lean_slot.py", "tools/verity/check/slot.py",
+                   "tools/verity/lean/tests/test_lean_changed.py", "tools/verity/lean/tests/test_cache.py", "elsewhere/data.txt"}
+    assert touches({"tools/verity/lean/tests/test_lean_changed.py", "a.txt"}, got) == {"tools/verity/lean/tests/test_lean_changed.py"}
+    (d / "suites-lean.json").write_text(json.dumps([{**record, "outside": {}, "child_outside": {}}]))
+    assert implicated(d) is None
+
+
 def test_what_a_running_check_has_failed_is_read_from_its_steps_and_its_suites_failures(tmp_path):
     import json
 
@@ -374,6 +399,36 @@ def test_next_is_checked_in_stacked_trains_and_a_failed_train_holds_up_only_the_
     h.tick()
     assert _git(world.origin, "rev-parse", "main") == members[1].commit       # the train below the failure lands
     assert len(h.posts) == 1 and f"{members[3].commit[:12]} on `next` (#3 #4) failed" in h.posts[0]
+
+
+def test_a_pr_that_makes_circuit_check_run_cold_goes_above_the_warm_ones_and_they_get_a_check_of_their_own(world, monkeypatch):
+    """15 Oct: Lean-only PRs from proofs sat for hours in trains with a circuits change, whose check ran circuit-check cold."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 6
+    for n, f in ((1, "a.txt"), (2, "verity/ml/circuits/library.py"), (3, "Security/X.lean")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    members = h.q.chain()
+    assert [m.pr for m in members] == [1, 3, 2]
+    assert [c for c, _, _ in h.launched] == [members[1].commit, members[2].commit]
+
+
+def test_two_cold_prs_side_by_side_share_one_cold_train(world, monkeypatch):
+    """16 Oct 06:38Z: #2113 and #2115, both cold, were cut into two trains, and two nodes each ran circuit-check cold."""
+    h = Harness(world, monkeypatch)
+    assert h.d.trains(6, frozenset({4, 5})) == [3, 5]
+    assert h.d.trains(6, frozenset({2, 4})) == [1, 3, 5]
+
+
+def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
+    from research.queue import forces_cold
+
+    assert forces_cold(["verity/ml/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
+    assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
+    assert forces_cold(["integrations/vllm/verity_vllm/pipeline/serving_rows.py"])          # #2114: 907 targets rerun
+    assert not forces_cold(["integrations/vllm/tests/pipeline/test_row.py", "tools/research/src/research/drive.py"])
+    assert not forces_cold(["Security/Proofs/X.lean", "verity/ml/circuits/README.md", "verity/ml/circuits/tests/test_x.py"])
+    assert not forces_cold([])
 
 
 def test_shadow_launches_lands_and_tells_nothing(world, monkeypatch):

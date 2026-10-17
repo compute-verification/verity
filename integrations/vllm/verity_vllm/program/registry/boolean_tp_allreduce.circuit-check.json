@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "AllReduceMnnvl_v2{WORLD=8,N=8,SHOT=1}": {
+   "and": 43904
+  },
+  "AllReduceMnnvl_v2{WORLD=8,N=8,SHOT=2}": {
+   "and": 43912
+  }
+ }
+}

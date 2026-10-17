@@ -1,8 +1,59 @@
-"""Pinned host memory for the capture's asynchronous D2H copies, and the storage byte range a tensor view spans."""
+"""Pinned host memory for the capture's asynchronous D2H copies, the storage byte range a tensor view spans, and whether a
+CPU tensor's memory is really on the device."""
 
 from __future__ import annotations
 
+import ctypes
+from typing import Any
+
 import torch
+
+_CUDA_MEMORY_TYPE_DEVICE = 2     # cudaMemoryTypeDevice
+
+#: Ops whose output is their input, the same storage and view: a snapshot of their call holds no new value, and the capture
+#: takes none.  ``torch::from_blob`` dispatches ``aten.detach`` on the tensor C++ code just wrapped, whose device may not be
+#: its memory's (VLLM-8).
+IDENTITY_ALIAS_OPS = frozenset({"aten.detach.default", "aten.alias.default", "aten.lift_fresh.default"})
+#: The snapshot index's reason for a `device_backed` tensor.
+DEVICE_BACKED = "a CPU tensor whose storage is device memory (torch::from_blob without its device): not readable on the host"
+
+
+class _PointerAttributes(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_int), ("device", ctypes.c_int), ("devicePointer", ctypes.c_void_p),
+                ("hostPointer", ctypes.c_void_p)]
+
+
+_cudart: Any = None
+
+
+def _runtime() -> Any:
+    """The CUDA runtime torch loaded (by soname, so no second copy), None when there is none."""
+    global _cudart
+    if _cudart is None:
+        _cudart = False
+        for name in ("libcudart.so.12", "libcudart.so"):
+            try:
+                _cudart = ctypes.CDLL(name)
+                break
+            except OSError:
+                continue
+    return _cudart or None
+
+
+def device_backed(t: torch.Tensor) -> bool:
+    """True when ``t`` says it is on the CPU but its storage is device memory: a tensor C++ code wrapped with
+    ``torch::from_blob`` and no device (DeepGEMM's paged MQA logits, VLLM-8).  Reading its bytes on the host faults.  False
+    for a device tensor, without CUDA, or when the runtime can't say."""
+    if t.device.type != "cpu" or not torch.cuda.is_available():
+        return False
+    lib = _runtime()
+    if lib is None:
+        return False
+    attrs = _PointerAttributes()
+    if lib.cudaPointerGetAttributes(ctypes.byref(attrs), ctypes.c_void_p(t.untyped_storage().data_ptr())) != 0:
+        lib.cudaGetLastError()
+        return False
+    return attrs.type == _CUDA_MEMORY_TYPE_DEVICE
 
 
 class PinnedArena:

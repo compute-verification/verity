@@ -10,6 +10,9 @@ the level, this leaves `PreFold` on the next level except with probability
 * `2L'/|F|` (the OOD claims' batching coins),
 * the level's `queryError` (the queries miss the unique OOD-consistent message's mismatch),
 * `⌈log2 Q⌉/|F|` (the consistency coins cancel it) and `L'/|F|` (its batching coin).
+
+`phaseA` takes the level's doom at any radius `δ` within its own (`PostFoldAt`): its queries then
+miss a `δ`-far fold with probability at most `(1 − δ)^Q`, which costs `ε` beyond `queryError`.
 -/
 
 namespace FlockSoundness
@@ -327,16 +330,15 @@ theorem positions_length (A : Arith F K) (Q d : ℕ) (w : Fin Q → F) :
 
 open Classical in
 /-- **The queries and the consistency coins.** If at most one message has a zero difference `D`
-and its claimed fold's mismatch survives the queries with probability at most `queryError`, then
+and its claimed fold's mismatch survives the queries with probability at most `ε`, then
 after the queries, `α` and `β`, every difference is nonzero, except with probability
-`queryError + ⌈log2 Q⌉/|F| + |S|/|F|`. -/
+`ε + ⌈log2 Q⌉/|F| + |S|/|F|`. -/
 theorem value_queryAndBatch_le (A : Arith F K) (hA : A.Correct) (l : Level) (hd : l.logLen ≤ 64)
     (hQ : l.queries ≤ 2 ^ 64) (C : Oracle F) (ch : List K) (start : ℕ) (st : LigState F K)
-    (wm : Bool) {ι : Type} (S : Finset ι) (D : ι → K) (G : ι → ℕ → K)
+    (wm : Bool) {ι : Type} (S : Finset ι) (D : ι → K) (G : ι → ℕ → K) (ε : ℝ)
     (huniq : ∀ M ∈ S, D M = 0 → ∀ M' ∈ S, D M' = 0 → M' = M)
     (hfar : ∀ M ∈ S, D M = 0 →
-      (1 - ((mismatch A l.logCols l.logLen C ch (G M)).card : ℝ) / 2 ^ l.logLen) ^ l.queries ≤
-        l.queryError)
+      (1 - ((mismatch A l.logCols l.logLen C ch (G M)).card : ℝ) / 2 ^ l.logLen) ^ l.queries ≤ ε)
     (P : LigState F K → Prop)
     (hP : ∀ (w : Fin l.queries → F) (α : Fin (ceilLog2 l.queries) → F) (β : F) (st' : LigState F K),
       st'.s = st.s + A.embed β * consValue A (List.ofFn α) ch C (positions A l.queries l.logLen w) →
@@ -347,8 +349,7 @@ theorem value_queryAndBatch_le (A : Arith F K) (hA : A.Correct) (l : Level) (hd 
       P st' → ∃ M ∈ S, D M + A.embed β *
         consGap A l.logCols C ch (G M) (List.ofFn α) (positions A l.queries l.logLen w) = 0) :
     value P (queryAndBatch A l C ch start st wm) ≤
-      ENNReal.ofReal l.queryError +
-        ((ceilLog2 l.queries : ℝ≥0∞) / Fintype.card F + S.card / Fintype.card F) := by
+      ENNReal.ofReal ε + ((ceilLog2 l.queries : ℝ≥0∞) / Fintype.card F + S.card / Fintype.card F) := by
   haveI : CharP K 2 := hA.charTwoK
   set Q := l.queries
   set pos := fun w : Fin Q → F => positions A Q l.logLen w
@@ -360,7 +361,7 @@ theorem value_queryAndBatch_le (A : Arith F K) (hA : A.Correct) (l : Level) (hd 
     ∃ M ∈ S, D M = 0 ∧ gap M w α = 0
   let Bβ : (Fin Q → F) → (Fin (ceilLog2 Q) → F) → F → Prop := fun w α β =>
     ∃ M ∈ S, D M + A.embed β * gap M w α = 0 ∧ ¬ (D M = 0 ∧ gap M w α = 0)
-  have hBq : prCoin Bq ≤ ENNReal.ofReal l.queryError := by
+  have hBq : prCoin Bq ≤ ENNReal.ofReal ε := by
     by_cases hex : ∃ M ∈ S, D M = 0
     · obtain ⟨M, hM, hD⟩ := hex
       refine (prCoin_mono (q := fun w => ∀ p ∈ positions A Q l.logLen w,
@@ -614,23 +615,24 @@ theorem card_agree_add_mismatch (A : Arith F K) (cols d : ℕ) (C : Oracle F) (c
   unfold mismatch
   exact Finset.filter_congr_decidable _ _ _
 
-/-- **The far fold.** A claimed fold `G` whose value is the claim, for a claim false for every
-fold of the level's list, is far from the level's fold: its mismatch survives the queries with
-probability at most `queryError`. -/
-theorem query_bound_of_doom (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F)
+/-- **The far fold at a radius `δ`.** A claimed fold `G` whose value is the claim, for a claim
+false for every fold of a message `δ`-close to the table (`δ` within the level's radius), is
+`δ`-far from the level's fold: its mismatch survives the queries with probability at most
+`(1 − δ)^Q`. -/
+theorem query_bound_at (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F)
     (initial : List K) (l : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K)
-    (st : LigState F K) (hpost : PostFold A hA n b initial l hf lanes C ch st) (G : ℕ → K)
+    (st : LigState F K) (δ : ℝ) (hδ : δ ≤ l.radius)
+    (hpost : PostFoldAt A hA n b initial l hf lanes C ch δ st) (G : ℕ → K)
     (hs : st.s = ∑ x ∈ Finset.range (2 ^ l.logCols),
       G x * resAt A n b initial st.levels st.oods st.cons l.logCols x) :
     (1 - ((mismatch A l.logCols l.logLen C ch G).card : ℝ) / 2 ^ l.logLen) ^ l.queries ≤
-      l.queryError := by
+      (1 - δ) ^ l.queries := by
   classical
   have hmis : (mismatch A l.logCols l.logLen C ch G).card ≤ 2 ^ l.logLen := by
     have := card_agree_add_mismatch A l.logCols l.logLen C ch G
     omega
   have h2 : (0 : ℝ) < 2 ^ l.logLen := by positivity
-  have hle : 1 - ((mismatch A l.logCols l.logLen C ch G).card : ℝ) / 2 ^ l.logLen ≤
-      Real.sqrt l.rate + Accounting.eta := by
+  have hle : 1 - ((mismatch A l.logCols l.logLen C ch G).card : ℝ) / 2 ^ l.logLen ≤ 1 - δ := by
     by_contra hgt
     push Not at hgt
     set T := Finset.univ.filter fun q : Fin (2 ^ l.logLen) =>
@@ -638,16 +640,13 @@ theorem query_bound_of_doom (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ 
     have hT := card_agree_add_mismatch A l.logCols l.logLen C ch G
     have hTr : (T.card : ℝ) = 2 ^ l.logLen - (mismatch A l.logCols l.logLen C ch G).card := by
       rw [eq_sub_iff_add_eq]; exact_mod_cast hT
-    have hTc : (T.card : ℝ) ≥ Fintype.card (Fin (2 ^ l.logLen)) * (1 - l.radius) := by
-      rw [Fintype.card_fin]
-      have hrad : 1 - l.radius = Real.sqrt l.rate + Accounting.eta := by
-        unfold Level.radius; ring
-      have hm := mul_lt_mul_of_pos_left hgt h2
-      rw [mul_sub, mul_one, mul_div_cancel₀ _ h2.ne'] at hm
+    have hTc : (T.card : ℝ) ≥ Fintype.card (Fin (2 ^ l.logLen)) * (1 - δ) := by
+      have hlt : ((mismatch A l.logCols l.logLen C ch G).card : ℝ) / 2 ^ l.logLen < δ := by linarith
+      rw [div_lt_iff₀ h2] at hlt
+      rw [Fintype.card_fin, hTr]
       push_cast
-      rw [hrad, hTr]
       linarith
-    obtain ⟨M₀, hM₀, hG⟩ := decode A hA l hf lanes C ch hpost.len hpost.mca G T hTc
+    obtain ⟨M₀, hM₀, hG⟩ := decode A hA l hf lanes C ch hpost.len hpost.mca δ hδ G T hTc
       fun q hq => (Finset.mem_filter.1 hq).2
     refine hpost.doom M₀ hM₀ ?_
     rw [hs]
@@ -656,12 +655,29 @@ theorem query_bound_of_doom (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ 
     rw [sub_nonneg, div_le_one h2]; exact_mod_cast hmis
   exact pow_le_pow_left₀ hnn hle _
 
+theorem queryError_eq (l : Level) : l.queryError = (1 - l.radius) ^ l.queries := by
+  unfold Level.queryError Level.radius
+  congr 1
+  ring
+
+/-- **The far fold** (`query_bound_at` at the level's radius): its mismatch survives the queries
+with probability at most `queryError`. -/
+theorem query_bound_of_doom (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F)
+    (initial : List K) (l : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K)
+    (st : LigState F K) (hpost : PostFold A hA n b initial l hf lanes C ch st) (G : ℕ → K)
+    (hs : st.s = ∑ x ∈ Finset.range (2 ^ l.logCols),
+      G x * resAt A n b initial st.levels st.oods st.cons l.logCols x) :
+    (1 - ((mismatch A l.logCols l.logLen C ch G).card : ℝ) / 2 ^ l.logLen) ^ l.queries ≤
+      l.queryError :=
+  (query_bound_at A hA n b initial l hf lanes C ch st l.radius le_rfl hpost G hs).trans_eq
+    (queryError_eq l).symm
+
 /-- **A failed `PreFold` is a zero batched difference.** After the OOD claims `oods₂` and the
 consistency claim at `(α, positions, β)`, if the next level's claim is true for a message `M`
 of its list, then `M`'s OOD difference plus `β` times its consistency gap vanishes. -/
-theorem exists_zero_of_not_preFold (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F)
-    (initial : List K) (l l' : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K)
-    (st : LigState F K) (hpost : PostFold A hA n b initial l hf lanes C ch st)
+theorem exists_zero_of_not_preFold (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
+    (l l' : Level) (C : Oracle F) (ch : List K) (st : LigState F K)
+    (hok : PostOK initial st.levels st.oods st.cons l.logCols)
     (hdim : l.logCols + 1 = l'.lanes + l'.logCols) (C' : Oracle F)
     (s₂ : K) (q₂ : Quad K) (oods₂ : List (OodCtx F)) (hsum₂ : q₂.eval 0 + q₂.eval 1 = s₂)
     (hshape : ∀ o ∈ oods₂, o.split = some st.levels.length ∧ o.z.length = l'.logCols + l'.lanes)
@@ -678,19 +694,19 @@ theorem exists_zero_of_not_preFold (A : Arith F K) (hA : A.Correct) (n : ℕ) (b
         A.embed β * consGap A l.logCols C ch (unsplit A (flat M)) α pos = 0 := by
   have hdim' : l'.logCols + l'.lanes = l.logCols + 1 := by omega
   have hq' : st'.q.eval 0 + st'.q.eval 1 = st'.s := by rw [h6, h1, hsum₂]
-  have hok : PreOK initial st'.levels st'.oods st'.cons l.logCols := by
+  have hok' : PreOK initial st'.levels st'.oods st'.cons l.logCols := by
     rw [h2, h3, h4]
-    exact preOK_of_postOK initial st.levels st.oods st.cons l.logCols hpost.ok oods₂
+    exact preOK_of_postOK initial st.levels st.oods st.cons l.logCols hok oods₂
       (fun o ho => ⟨(hshape o ho).1, by rw [(hshape o ho).2, hdim']⟩) _ rfl
   obtain ⟨M, hM, hM'⟩ : ∃ M ∈ closeL A l'.radius l'.lanes l'.logCols l'.logLen C',
       st'.s = ∑ y ∈ Finset.range (2 ^ (l.logCols + 1)),
         A.embed (flat M y) * preW A n b initial st'.levels st'.oods st'.cons l.logCols y := by
     by_contra hall
     push Not at hall
-    exact hno ⟨hq', hok, hdim, hall⟩
+    exact hno ⟨hq', hok', hdim, hall⟩
   refine ⟨M, hM, ?_⟩
   rw [h2, h3, h4, sum_preW_new A n b initial st.levels st.oods oods₂ st.cons l.logCols _
-    (fun o ho => (hpost.ok.ood o ho).1) (fun o ho => (hshape o ho).1) rfl, h1] at hM'
+    (fun o ho => (hok.ood o ho).1) (fun o ho => (hshape o ho).1) rfl, h1] at hM'
   have hcv : consValue A α ch C pos = ((pos.zipIdx).map fun pj =>
       A.embed (eqList α pj.2) * foldColumn A ch (fun ℓ => C ℓ pj.1)).sum := rfl
   have hgap : consGap A l.logCols C ch (unsplit A (flat M)) α pos =
@@ -703,17 +719,22 @@ theorem exists_zero_of_not_preFold (A : Arith F K) (hA : A.Correct) (n : ℕ) (b
   linear_combination hM'
 
 open Classical in
-/-- **From one level to the next.** From `PostFold` on level `l`, the commitment of `l'`, its two
-OOD samples and `l`'s queries leave `PreFold` on `l'` except with probability `midA l l'`. -/
+/-- **From one level to the next.** From `PostFoldAt` on level `l` at a radius `δ` within its own,
+the commitment of `l'` (on `dim` variables), its two OOD samples and `l`'s queries leave `PreFold`
+on `l'` except with probability `midA l l' + ε`, where the queries miss a fold `δ`-far from `l`'s
+table with probability at most `(1 − δ)^Q ≤ queryError + ε`. -/
 theorem phaseA (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initial : List K)
     (l l' : Level) (hf : l.Fits) (hf' : l'.Fits) (hQ : l.queries ≤ 2 ^ 64) (lanes : ℕ)
-    (ch : List K) (st : LigState F K) (hpost : PostFold A hA n b initial l hf lanes st.prev ch st)
-    (hdim : l.logCols + 1 = l'.lanes + l'.logCols)
+    (ch : List K) (st : LigState F K) (δ : ℝ) (hδ : δ ≤ l.radius) (ε : ℝ)
+    (hε : (1 - δ) ^ l.queries ≤ l.queryError + ε)
+    (hpost : PostFoldAt A hA n b initial l hf lanes st.prev ch δ st)
+    (hdim : l.logCols + 1 = l'.lanes + l'.logCols) (dim : ℕ) (hd : dim = l'.logCols + l'.lanes)
     (k : Oracle F → LigState F K → Game Bool) (εk : ℝ≥0∞)
     (hk : ∀ C' st', PreFold A n b initial l' C' l.logCols st' →
       value (fun r => r = true) (k C' st') ≤ εk) :
-    value (fun r => r = true) (midRound A l (l'.logCols + l'.lanes) ch st k) ≤
-      ENNReal.ofReal (midA l l') + εk := by
+    value (fun r => r = true) (midRound A l dim ch st k) ≤
+      ENNReal.ofReal (midA l l') + ENNReal.ofReal ε + εk := by
+  subst hd
   haveI : CharP K 2 := hA.charTwoK
   have hdim' : l'.logCols + l'.lanes = l.logCols + 1 := by omega
   show value _ (Game.send (Oracle F) fun C' => _) ≤ _
@@ -726,7 +747,7 @@ theorem phaseA (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initi
     ∑ x ∈ Finset.range (2 ^ l.logCols), unsplit A (flat M) x *
       resAt A n b initial st.levels st.oods st.cons l.logCols x
   refine (value_bind_le _ _ _ (OodGood A S' (fun M => flat M) base (l'.logCols + l'.lanes)
-      st.levels.length st.s) (ENNReal.ofReal l.queryError + ((ceilLog2 l.queries : ℝ≥0∞) /
+      st.levels.length st.s) (ENNReal.ofReal (l.queryError + ε) + ((ceilLog2 l.queries : ℝ≥0∞) /
         Fintype.card F + S'.card / Fintype.card F) + εk) fun y hy => ?_).trans ?_
   · obtain ⟨s₂, q₂, oods₂⟩ := y
     obtain ⟨hsum₂, hshape, hgood⟩ := hy
@@ -737,27 +758,30 @@ theorem phaseA (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initi
     refine value_queryAndBatch_le A hA l hf.2 hQ st.prev ch st.levels.length
       { st with s := s₂, q := q₂, oods := st.oods ++ oods₂ } true S'
       (fun M => oodDiff A (l'.logCols + l'.lanes) (flat M) (base M) (s₂, q₂, oods₂))
-      (fun M => unsplit A (flat M)) (fun M hM hD M' hM' hD' => (hgood M hM hD).2 M' hM' hD')
-      (fun M hM hD => query_bound_of_doom A hA n b initial l hf lanes st.prev ch st hpost _
-        (hgood M hM hD).1) _ ?_
+      (fun M => unsplit A (flat M)) (l.queryError + ε)
+      (fun M hM hD M' hM' hD' => (hgood M hM hD).2 M' hM' hD')
+      (fun M hM hD => (query_bound_at A hA n b initial l hf lanes st.prev ch st δ hδ hpost _
+        (hgood M hM hD).1).trans hε) _ ?_
     intro w α β st' h1 h2 h3 h4 h5 h6 hno
-    exact exists_zero_of_not_preFold A hA n b initial l l' hf lanes st.prev ch st hpost hdim C'
+    exact exists_zero_of_not_preFold A n b initial l l' st.prev ch st hpost.ok hdim C'
       s₂ q₂ oods₂ hsum₂ hshape _ _ β st' h1 h2 h3 h4 (h6 rfl) hno
   · calc value (fun y => ¬ OodGood A S' (fun M => flat M) base (l'.logCols + l'.lanes)
             st.levels.length st.s y) (twoOod A (l'.logCols + l'.lanes) st.levels.length st.s st.q) +
-          (ENNReal.ofReal l.queryError + ((ceilLog2 l.queries : ℝ≥0∞) / Fintype.card F +
+          (ENNReal.ofReal (l.queryError + ε) + ((ceilLog2 l.queries : ℝ≥0∞) / Fintype.card F +
             S'.card / Fintype.card F) + εk)
         ≤ ((S'.card.choose 2 : ℝ≥0∞) * (((l'.logCols + l'.lanes : ℕ) : ℝ≥0∞) / Fintype.card F) ^ 2 +
-            2 * (S'.card / Fintype.card F)) + (ENNReal.ofReal l.queryError +
+            2 * (S'.card / Fintype.card F)) + (ENNReal.ofReal l.queryError + ENNReal.ofReal ε +
               ((ceilLog2 l.queries : ℝ≥0∞) / Fintype.card F + S'.card / Fintype.card F) + εk) :=
           add_le_add (value_twoOod_good A hA S' (fun M => flat M) (l'.logCols + l'.lanes)
             (fun M _ M' _ h => flat_inj M M' (fun y hy => h y (by rw [hdim', hdim]; exact hy)))
-            base st.levels.length st.s st.q hpost.sum) le_rfl
+            base st.levels.length st.s st.q hpost.sum)
+            (add_le_add (add_le_add ENNReal.ofReal_add_le le_rfl) le_rfl)
       _ = ((S'.card.choose 2 : ℝ≥0∞) * (((l'.logCols + l'.lanes : ℕ) : ℝ≥0∞) /
             Fintype.card F) ^ 2 + 2 * (S'.card / Fintype.card F) + (ENNReal.ofReal l.queryError +
-              ((ceilLog2 l.queries : ℝ≥0∞) / Fintype.card F + S'.card / Fintype.card F))) + εk := by
+              ((ceilLog2 l.queries : ℝ≥0∞) / Fintype.card F + S'.card / Fintype.card F))) +
+            ENNReal.ofReal ε + εk := by
           ring
-      _ ≤ ENNReal.ofReal (midA l l') + εk :=
-          add_le_add (midA_bound l l' S'.card hS' hA.card_F) le_rfl
+      _ ≤ ENNReal.ofReal (midA l l') + ENNReal.ofReal ε + εk :=
+          add_le_add (add_le_add (midA_bound l l' S'.card hS' hA.card_F) le_rfl) le_rfl
 
 end FlockSoundness

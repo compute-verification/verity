@@ -110,7 +110,7 @@ def test_the_flag_off_asks_no_queue_and_the_job_is_the_same_either_way(dispatch,
                                  "question": "Does the grid row replay equal?", "executor": "kueue", "node": "vy-nebius-1",
                                  "why": "starts now"}
     (a,) = _argv(tmp_path)
-    assert a[a.index("--kind") + 1] == "grid-models" and a[a.index("--node") + 1] == "vy-nebius-1"
+    assert a[a.index("--kind") + 1] == "grid-models" and a[a.index("--on") + 1] == "vy-nebius-1"
     assert a[a.index("--cpus") + 1] == "8" and a[a.index("--mem-gb") + 1] == "64" and a[a.index("--submitter") + 1] == "circuits"
 
 

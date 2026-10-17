@@ -106,6 +106,9 @@ suite runs in one process.
 `--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`: a suite
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
 an hour, not its slot until the run's own timeout.
+
+`--mem-gb GB` (`check` passes its slot's share) bounds a parallel suite to as many xdist workers as GB holds at its `[tool.verity.tests]
+worker_gb`, what one of them may reach, else at `TEST_PROCESS_GB`.
 """
 from __future__ import annotations
 
@@ -231,6 +234,7 @@ class Suite:
     artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
     timeout_s: float = 0.0       # [tool.verity.tests] timeout_s: the bound `--timeouts` puts on its run (0: SUITE_TIMEOUT_S)
     inputs_only: bool = False    # [tool.verity.tests] inputs_only: its dependencies' directories are left out (`inputs_of`)
+    worker_gb: float = 0.0       # [tool.verity.tests] worker_gb: one xdist worker's peak, which `--mem-gb` divides (0: unbounded)
 
 
 def _pyproject(path: str) -> dict:
@@ -356,7 +360,8 @@ def discover() -> list[Suite]:
         name = "repository" if path == "." else _norm(project["name"]) if project else path
         tests = data["tool"].get("verity", {}).get("tests", {})
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
-                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True))
+                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True,
+                            float(tests.get("worker_gb", 0))))
     return suites
 
 
@@ -1286,7 +1291,7 @@ class Result:
     status: str                  # passed, cached, failed
     seconds: float = 0.0
     counts: dict | None = None
-    outside: list | None = None
+    outside: dict | None = None  # file read outside the inputs (a cached module as its source) -> the test module that read it ("*": a conftest or session fixture)
     unmarked_slow: list | None = None
     log: Path | None = None
     since: dict | None = None    # for a cached pass, the run it came from
@@ -1422,6 +1427,8 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         elif kind == "X":
             untraced.setdefault(module, set()).add(rel)
     rep["reads"] = {m: sorted(fs) for m, fs in sorted(reads.items())}
+    out = rep.get("outside") or {}
+    rep["outside"] = dict.fromkeys(out, "*") if isinstance(out, list) else out      # a report written before the attribution
     # a child's read outside the inputs is the test's own: no key covers it, so nothing vouches for a pass
     passed = ran_all and reported and not rep["outside"] and not rep["unguarded"] and not child_outside and not timed_out
     return Result(suite, "passed" if passed else "failed", seconds, rep.get("counts"), rep.get("outside"),
@@ -1504,6 +1511,14 @@ class Slots:
                 self.cond.notify_all()
 
 
+def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
+    """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
+    at `TEST_PROCESS_GB` (16 Oct: verity_core_protocols_pous_check's undeclared workers reached 11 GB each)."""
+    if mem_gb is None:
+        return n
+    return max(1, min(n, int(mem_gb // (s.worker_gb if s.worker_gb > 0 else TEST_PROCESS_GB))))
+
+
 def serial_slots(seconds: list[float | None], parallel: int, jobs: int) -> int:
     """How many of the ``jobs`` slots the suites that run in one process share (``seconds``: each one's last duration, None when
     none is recorded), the rest going to the ``parallel`` suites, which run one at a time over all of theirs. The fewest that let
@@ -1552,6 +1567,7 @@ def failing_path(out: Path) -> Path:
 
 def failing(out: Path, results: list[Result]) -> None:
     doc = [{"name": r.suite.name, "suite": r.suite.path, "failed_tests": (r.failed_tests or [])[:10],
+            "outside": r.outside or {}, "child_outside": r.child_outside or {},
             "log": r.log.name if r.log else None} for r in results if r.status == "failed"]
     tmp = failing_path(out).with_suffix(".tmp")
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
@@ -1578,6 +1594,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", "-j", type=int, default=default_jobs(),
                     help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use, "
                          f"at most one per {TEST_PROCESS_GB} GB of available memory)")
+    ap.add_argument("--mem-gb", type=float, default=None, metavar="GB",
+                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB undeclared)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
     ap.add_argument("--run", metavar="RUN", help="the recorded run this is (check passes its own): kept with each pass, so a reuse of it "
@@ -1698,7 +1716,7 @@ def main(argv: list[str] | None = None) -> int:
     stopping = threading.Event()
 
     def start(s: Suite, paths: list[str]) -> Result:
-        n = jobs - r if s in wide else 1
+        n = wide_workers(s, jobs - r, a.mem_gb) if s in wide else 1
         with lanes[s in wide].take(turns[s], n):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
@@ -1759,7 +1777,9 @@ def main(argv: list[str] | None = None) -> int:
                                                           "reused": r.reused, "seconds": round(r.seconds, 1), **u,
                                                           "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
         elif r.outside:
-            print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(r.outside[:3])}:"
+            few = [p + (f" (read by {m})" if m != "*" else " (read by a conftest or session fixture)")
+                   for p, m in list(r.outside.items())[:3]]
+            print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(few)}:"
                   f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml"
                   f" (a file of a dependency that lists `exports`: under those, if its dependents read it)")
         elif r.unguarded:

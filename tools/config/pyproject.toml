@@ -1,0 +1,21 @@
+[project]
+name = "verity-config"
+version = "0.1.0"
+description = "Strict configuration loading and canonical resource identities for Verity."
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verity_config"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+
+[tool.verity.tests]
+inputs = []
+exports = ["tools/config/verity_config"]

@@ -254,8 +254,11 @@ def _named(log: str, base: str) -> set[str]:
 def implicated(run_dir: Path) -> set[str] | None:
     """The paths a failed check's failure points at: each failed suite's failing test files and the files its log's failures
     name (`_named`: relative to the repository, or absolute as the log wrote them), and the same of a failed step that runs
-    pytest on the repository's own tests (`preflight-lints`); None when another step failed, or a failed suite or step names
-    no failing test (a timeout, a kill), so no file says what broke it."""
+    pytest on the repository's own tests (`preflight-lints`). A suite the read guard failed with no failing test names the
+    files its tests (or their children, `child_outside`) read outside its inputs and the test modules that read them (its
+    record's `outside`, path -> module), so the PR that added the reading test, or changed the file read, is implicated.
+    None when another step failed, or a failed suite or step names no failing test and no outside read (a timeout, a kill),
+    so no file says what broke it."""
     paths: set[str] = set()
     for st in failed_steps(run_dir):
         if st.get("step") in ("pytest", "lean-suites"):
@@ -273,7 +276,13 @@ def implicated(run_dir: Path) -> set[str] | None:
     for s in suites:
         base, tests = s.get("suite") or "", s.get("failed_tests") or []
         if not tests:
-            return None
+            out, child = s.get("outside") or {}, s.get("child_outside") or {}
+            modules = list(out.values() if isinstance(out, dict) else ()) + list(child)
+            files = list(out) + [f for fs in child.values() for f in fs]
+            if not files:
+                return None
+            paths |= {os.path.normpath(p) for p in files} | {os.path.normpath(m) for m in modules if m and m != "*"}
+            continue
         paths |= {os.path.normpath(os.path.join(base, t.split("::")[0])) for t in tests}
         if s.get("log"):
             with contextlib.suppress(OSError):
@@ -569,7 +578,7 @@ class Driver:
         what = [f"landed #{landed.pr}"] if landed else []
         main = _out(self.repo, "rev-parse", "origin/main")
         running = sum(self.verdict(c, main, drive).state == "running" for c in drive["launched"])
-        for i in self.trains(len(members)):
+        for i in self.trains(len(members), self._cold(members)):
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
             v = self.verdict(m.commit, main, drive)
             if v.state == "failed":
@@ -607,7 +616,19 @@ class Driver:
         q.log(f"research queue drive: {'; '.join(what) or 'nothing queued'}")
         return "; ".join(what) or "idle"
 
-    def trains(self, n: int) -> list[int]:
+    def trains(self, n: int, cold: frozenset[int] = frozenset()) -> list[int]:
         """The members whose commits get a check: every `train_size`-th one and the tip, each train stacked on the one below, so a
-        failure holds up only the PRs from its train up, and the trains below it still land."""
-        return sorted({*range(self.train_size - 1, n, self.train_size), n - 1}) if n else []
+        failure holds up only the PRs from its train up, and the trains below it still land; and the member just below each one
+        in ``cold`` (`queue.forces_cold`) but not itself cold, so the PRs under a run of cold ones get a warm check of their own and
+        the run pays one cold circuit-check."""
+        if not n:
+            return []
+        return sorted({*range(self.train_size - 1, n, self.train_size), n - 1,
+                       *(i - 1 for i in cold if 0 < i < n and i - 1 not in cold)})
+
+    def _cold(self, members: list) -> frozenset[int]:
+        """The indices of ``members`` whose own merge onto `next` makes circuit-check run cold (`queue.forces_cold`)."""
+        from .queue import forces_cold
+
+        return frozenset(i for i, m in enumerate(members)
+                         if forces_cold(_out(self.repo, "diff", "--name-only", f"{m.commit}^1", m.commit).split()))

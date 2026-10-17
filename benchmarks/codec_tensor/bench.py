@@ -87,6 +87,7 @@ class Lib:
         so.wt_set_mask.argtypes = [v]
         so.wt_encode.argtypes = [v, v, q, q, i, i, v]
         so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
+        so.wt_decode_rows.argtypes = [v, v, q, q, i, i, v, i, v]
         so.wt_tc_decode.argtypes = [v, v, q, q, i, v, i, v]
         so.wt_read.argtypes = [v, q, v, i, v]
         so.wt_tc_square_gate.argtypes = [v, v, i, v]
@@ -95,6 +96,8 @@ class Lib:
         so.wt_gemm.argtypes = [i, v, v, v, i, i, i, i, i, i, i, i, v, v, v]
         so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
         so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, v, v, i, i, v, v]
+        if hasattr(so, "wt_fused_sketch_bf"):   # builds from before it
+            so.wt_fused_sketch_bf.argtypes = so.wt_fused_sketch.argtypes
         so.wt_set_pass.argtypes = [v, i, i]
         so.wt_pass.argtypes = [ctypes.c_uint, v, v, i, v]
         so.wt_sign_frags.argtypes = [v, v, i, v]

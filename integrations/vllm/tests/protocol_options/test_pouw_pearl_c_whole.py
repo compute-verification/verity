@@ -208,9 +208,11 @@ def test_whole_step_refuses_an_engine_without_decode_graphs_it_can_capture_whole
     runner.cudagraph_manager.graphs = {}
     with pytest.raises(ValueError, match="no CUDA graphs"):
         WholeStep(run, Stack([], Executor(run)), runner, Hooks())
-    runner.cudagraph_manager.graphs = {Desc(FULL, 24, 24): "g"}
-    with pytest.raises(ValueError, match=r"\[24\]"):
+    runner.cudagraph_manager.graphs = {Desc(FULL, 24, 24): "g", Desc(FULL, 250, 250): "g", Desc(FULL, 264, 264): "g"}
+    with pytest.raises(ValueError, match=r"\[264\]"):            # 272 rows with its filler, over GRAPH_ROWS
         WholeStep(run, Stack([], Executor(run)), runner, Hooks())
+    runner.cudagraph_manager.graphs = {Desc(FULL, 24, 24): "g", Desc(FULL, 250, 250): "g"}
+    WholeStep(run, Stack([], Executor(run)), runner, Hooks())
 
 
 def test_uninstalling_the_hooks_puts_the_managers_methods_back():
@@ -325,14 +327,31 @@ def test_inside_vllms_capture_a_call_is_recorded_and_launched_into_it(monkeypatc
     sh = type("Sh", (), {"m16": 32, "k": 1024, "n": 4096})()
     run.whole_capture_begin()
     assert run._graph_call(7, sh, "pipe", 0, 32, 32, 0, None) == ("y", True)
-    with pytest.raises(RuntimeError, match="filler rows"):
-        run._graph_call(8, sh, "pipe", 0, 32, 20, 1, None)
-    assert run.whole_capture_end() == (PG.WholeCall(7, 32, 1024, 4096, 32, 32),) and len(into) == 1
+    assert run._graph_call(8, sh, "pipe", 0, 32, 20, 1, None) == ("y", True)     # filler rows too: vLLM's batch fixes m
+    assert run.whole_capture_end() == (PG.WholeCall(7, 32, 1024, 4096, 32, 32), PG.WholeCall(8, 20, 1024, 4096, 32, 32))
+    assert len(into) == 2
     run.whole_capture_begin()
     run._graph_call(7, sh, "pipe", 0, 32, 32, 0, None)
     run._graph_call(7, sh, "pipe", 0, 32, 32, 1, None)
     with pytest.raises(RuntimeError, match="twice"):
         run.whole_capture_end()
+
+
+def test_a_graph_screens_its_filler_rows_call_only_inside_a_whole_capture_where_it_is_that_ms_own():
+    torch = pytest.importorskip("torch")
+    run = Calls(torch)
+    sh = SimpleNamespace(m16=32)
+    full, filler = run._graph_key(7, sh, 32), run._graph_key(7, sh, 20)
+    assert full[1] is True and filler[1] is False and filler[0] == run._graph_key(7, sh, 17)[0]   # one graph for every m
+    run.whole_capture_begin()                                 # from the capture's warm-up on
+    inside = run._graph_key(7, sh, 20)
+    assert inside[1] is True and inside[0] not in (full[0], filler[0], run._graph_key(7, sh, 17)[0])
+    assert run._graph_key(7, sh, 32) == full
+    run.whole_capture_end()
+    assert run._graph_key(7, sh, 20) == filler
+    run.hashing = False
+    run.whole_capture_begin()
+    assert run._graph_key(7, sh, 20)[1] is False              # nothing to screen without hashing
 
 
 def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whether_it_is_retained():
@@ -515,5 +534,5 @@ def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():
     run.hashing = False
     assert PPD.PearlCDeviceRun._call_cuts(run, pipe) == (0, len(run._call_names()))
     run._call_names = lambda: ("lines_ea", "hash_rows_a", "gemm_pearlc", "hash_leaf")
-    with pytest.raises(RuntimeError, match="A's tree"):
+    with pytest.raises(RuntimeError, match="A's commitment"):
         PPD.PearlCDeviceRun._call_cuts(run, pipe)

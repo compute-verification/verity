@@ -76,7 +76,7 @@ uv run pytest                            # all tests
 
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
-research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [...] -- CMD...
+research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [--wait] [...] -- CMD...
 research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
 research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N]
@@ -102,7 +102,7 @@ research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@S
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
-research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
+research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
@@ -149,14 +149,13 @@ step needs. It may also name what runs after a landing (`Tool.after_land`, an ar
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
-**Not live yet:** `main` still moves only by the trains the research coordinator lands with `research merge`, so a `ready`
-label alone lands nothing; ask the train runner on Slack as well until the queue lands a full train.
+Since 12 Oct `research queue drive` moves `main`; the lander handles only what drive refuses.
 
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
 fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (drafts too),
-names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
-ready PR`, a `ready` label on `pr:{n}@{head}`, by hand for a train member); no change waits on a per-head grant
-(Daniel, 8 Oct). The branch holds the queue's state (each
+names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
+owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
+`pr:{n}@{head}`). No PR waits on Daniel (16 Oct) or on a per-head grant (8 Oct). The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
 conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
@@ -477,7 +476,7 @@ lane had approved the deletion, so the passes were lost. Here that `rm` is refus
 
 ### Slack
 
-`research msg` (`slack.py`; `research slack` is the same command) is the coordination API on Slack: a handle posts with
+`research msg` (`slack.py`) is the coordination API on Slack: a handle posts with
 `send` (`--to` names lead it and are woken; `--kind announce` for an announcement, `--kind fyi` or `--quiet` for a note that
 needs no reply) and closes a thread it was asked in with `close` (a status line, ✅, or ❌ with `--declined WHY`). The
 conventions (only handle holders are on Slack, who subscribes to what, the norms) are the `using-slack` skill, and
@@ -495,9 +494,9 @@ channels; `channels:history` for a public one), `reactions:write` (`close`), and
 `usergroups:write`. It must be a member of both channels (`chat:write.public` does not reach private channels), and Cursor's
 Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
-Routing: each handle holder subscribes to its own inbox thread, not to the top level. The site's router
-(`/api/agent-slack/events`) rings the doorbells of the names a post addresses, by the rule in `route_targets` (`slack.py`),
-which `tests/slack_routing_vectors.json` pins for both.
+Routing: each handle holder subscribes to its own inbox thread, not to the top level. The sender rings the doorbells of
+the names a post addresses right after posting, by the rule in `route_targets` (`slack.py`), which
+`tests/slack_routing_vectors.json` pins.
 
 ### Notes and evidence over MCP
 
@@ -573,7 +572,7 @@ which returns once the machine has started the workload detached, so a pass wait
 for the run. It prints `LAUNCHED <name> <run id> on <machine>`, or `RUN-FAILED <name> <run id>: <why>`, and the next launch is
 the next period's; an invalid entry is one `RUN-FAILED <name>: <why>` line. The run's Attempt records what ran and how it
 ended (`research inspect <run id>`). The Lean runs it schedules are declared in `tools/verity/lean/tool.py`: `lean_audit`
-(`audit.py --all --build --fresh`, nightly on `main`) and `lean_upstream` (the entry above, weekly).
+(`check.py --all --build --fresh`, nightly on `main`) and `lean_upstream` (the entry above, weekly).
 
 ### A lane's older notes
 

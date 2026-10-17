@@ -11,7 +11,8 @@ the verifier's `CircuitFold.folded` at `lincheck`'s fold points. The rounds are 
 `Refine.forIn_rounds` shows the verifier's loop computes. The other `check` (Piop.lean:146) is the comb's width:
 `folded_size` reads it off level 3's `folded_eq` for a statement's circuit fold.
 
-`lincheck_coins` says which rounds `lincheck` draws its points from, and `lincheck_of_residuals` is the stage at a rep.
+`lincheck_coins` says which rounds `lincheck` draws its points from, `lincheck_of_residuals_dec` is the stage at a rep,
+and `lincheck_of_residuals` is it at a plain shape, where the comb w holds is the comb.
 -/
 
 namespace Flock.RecAlgebra
@@ -183,20 +184,54 @@ theorem decoded_lc_size (sh : Shape) (w comb : Array F128) (cons : Nat → Nat �
     (decoded sh w comb cons).lc.size = sh.kLog - 6 := by
   simp [decoded, Messages.map, symbolic]
 
-theorem decoded_comb (sh : Shape) {w comb : Array F128} (cons : Nat → Nat → F128) (hc : comb.size = 64) :
-    (decoded sh w comb cons).comb = comb := by
+theorem decoded_comb_size (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F128) :
+    (decoded sh w comb cons).comb.size = 64 := by
+  simp [decoded, Messages.map, symbolic]
+
+/-- The comb's elements w holds: the comb's, plus w's `h` at a holo shape (`hOf`). -/
+theorem decoded_comb_get (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F128) {l : Nat} (hl : l < 64) :
+    (decoded sh w comb cons).comb[l]! = comb[l]! + hOf sh w l := by
+  rw [getElem!_pos _ l (by rw [decoded_comb_size]; exact hl)]
+  simp only [decoded, Messages.map, symbolic, Array.getElem_map, Array.getElem_range, Function.comp, Lin.eval_var,
+    valOf]
+
+theorem decoded_comb (sh : Shape) {w comb : Array F128} (cons : Nat → Nat → F128) (hpl : sh.holo = false)
+    (hc : comb.size = 64) : (decoded sh w comb cons).comb = comb := by
   apply Array.ext
   · simp [decoded, Messages.map, symbolic, hc]
   · intro i h1 h2
     simp only [decoded, Messages.map, symbolic, Array.getElem_map, Array.getElem_range, Function.comp, Lin.eval_var,
       valOf]
+    rw [hOf_plain hpl, f128_add_zero]
     exact getElem!_pos comb i h2
 
-/-- **The lincheck at a rep.** When `GfResiduals`' residuals at w, on the S `structureOf` builds and the v
-`verifierRows` gives at the rep's coins, are all zero, a proof carrying the lincheck messages w holds (`decoded`) ends
-the verifier's lincheck rounds at the fold points `verifierRows` returns, from the `v_A`, `v_B` w holds, at
-`dot comb z_partial`: Piop.lean:148's check for `comb` the verifier's `CircuitFold.folded` at those points, which is
-the comb port. -/
+/-- **The lincheck at a rep, at either shape.** When `GfResiduals`' residuals at w, on the S `structureOf` builds and
+the v `verifierRows` gives at the rep's coins, are all zero, a proof carrying the lincheck messages w holds (`decoded`)
+ends the verifier's lincheck rounds at the fold points `verifierRows` returns, from the `v_A`, `v_B` w holds, at the
+comb w holds dotted with `z_partial`: the comb, plus `h` at a holo shape (`decoded_comb_get`). -/
+theorem lincheck_of_residuals_dec {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
+    {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
+    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}
+    (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
+    (hw : w.size = S.nw) (hc : comb.size = 64)
+    (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum kappa r cons)
+    (hres : residuals S w v = .ok rs) (hzero : ∀ x ∈ rs, x = 0) {p : LincheckProof}
+    (hp : LcProofOf (decoded sh w comb cons) p)
+    {C : Nat → Array F128} (hC : ∀ j < sh.kLog - 6, (C j).getD 0 0 = info.lc.fold.ts[j]!) :
+    lcFold p C (sh.kLog - 6)
+        (info.lc.fold.alpha * (decoded sh w comb cons).fa + (decoded sh w comb cons).fb + info.lc.fold.beta) =
+      (dot (decoded sh w comb cons).comb p.zPartial, info.lc.fold.ts) := by
+  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hrows hS hw hc hacc
+  rw [hres] at hres'
+  cases hres'
+  obtain ⟨-, r0, r1, rsr, lgr, k1, k2, -, -, h1, -, -, hrs⟩ := run_stages hrun
+  have hl := decoded_lc_size sh w comb cons
+  rw [← hl]
+  exact lincheck_checks h1 (hzero r1 (by rw [hrs]; simp)) hp (fun j hj => hC j (by rwa [hl] at hj))
+
+/-- **The lincheck at a rep.** `lincheck_of_residuals_dec` at a plain shape, where the comb w holds is the comb: the
+rounds end at `dot comb z_partial`, Piop.lean:148's check for `comb` the verifier's `CircuitFold.folded` at those
+points, which is the comb port. -/
 theorem lincheck_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
     {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hpl : sh.holo = false)
@@ -209,12 +244,7 @@ theorem lincheck_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat →
     lcFold p C (sh.kLog - 6)
         (info.lc.fold.alpha * (decoded sh w comb cons).fa + (decoded sh w comb cons).fb + info.lc.fold.beta) =
       (dot comb p.zPartial, info.lc.fold.ts) := by
-  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hpl hrows hS hw hc hacc
-  rw [hres] at hres'
-  cases hres'
-  obtain ⟨-, r0, r1, rsr, lgr, k1, k2, -, -, h1, -, -, hrs⟩ := run_stages hrun
-  have hl := decoded_lc_size sh w comb cons
-  rw [← hl, show dot comb p.zPartial = dot (decoded sh w comb cons).comb p.zPartial by rw [decoded_comb sh cons hc]]
-  exact lincheck_checks h1 (hzero r1 (by rw [hrs]; simp)) hp (fun j hj => hC j (by rwa [hl] at hj))
+  have h := lincheck_of_residuals_dec hrows hS hw hc hacc hres hzero hp hC
+  rwa [decoded_comb sh cons hpl hc] at h
 
 end Flock.RecAlgebra

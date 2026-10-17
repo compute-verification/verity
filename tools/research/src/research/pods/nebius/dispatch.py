@@ -434,7 +434,7 @@ def place(item: dict, key: str, job: dict) -> dict:
            "--run-id", row["job"], "--now", str(int(time.time())), "--project", "verity", "--submitter", "circuits",
            "--question", question, "--gpus", str(int(quantity(req.get("nvidia.com/gpu", 0), 1))),
            "--cpus", str(max(1, round(quantity(req.get("cpu", 1), 1)))),
-           "--mem-gb", str(max(1, round(quantity(req.get("memory", "1G"), 1e9)))), "--preempt", "requeue", "--node", SERVER]
+           "--mem-gb", str(max(1, round(quantity(req.get("memory", "1G"), 1e9)))), "--preempt", "requeue", "--on", SERVER]
     if kind:
         cmd += ["--kind", kind["name"]]
     if job["spec"].get("activeDeadlineSeconds"):

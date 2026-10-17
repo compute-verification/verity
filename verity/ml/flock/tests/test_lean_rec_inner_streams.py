@@ -6,8 +6,9 @@ Hello, R's top registered at staging, R's shape in META and each sparse phase's 
 record, which keeps z_partial's round 40 whole), both reps' sparse phases (34 each) and the stacked table R (36), whose root
 is no Hello table's but the top its stream's binding round commits. The reps' coins are checked against the prover's record,
 the sparse streams and R's are the coin server's alone; `session/session.json` is the relay's record, which is refused. The
-verifier holds every stream's `c_k` and tops, and refuses the session with a stream missing or a top another stream
-committed. R has no root at `Commit`, so its salted top is registered at staging (#1798: the entry `stacked` of the
+verifier holds every stream's `c_k` and tops, and refuses the session with a stream missing, a top another stream
+committed, or its table named as a sparse phase's or R's stream (`sparse`, `stacked`). R has no root at `Commit`, so
+its salted top is registered at staging (#1798: the entry `stacked` of the
 statement's `verity/registration/v2` circuit registration, `circuit-registration.json`), whose digest the inner circuit's
 META binds (`circuit-meta.txt`, the staged `circuit.txt`'s header): the verifier takes both (`--rec-inner-circuit`,
 `--rec-inner-registration`) and refuses, each with its `FIREWALL-REFUSED` reason, a record META does not bind, a session
@@ -216,11 +217,14 @@ def test_a_cap_other_than_the_registered_top_is_refused(tmp_path, change):
     lambda r: _stacked(r).__setitem__("leaves", 64),
     lambda r: _stacked(r).__setitem__("words", 32),
     lambda r: _stacked(r).__setitem__("word_bits", 32),
+    lambda r: _stacked(r).__delitem__("root"),
+    lambda r: _stacked(r).__delitem__("leaves"),
+    lambda r: _stacked(r).__delitem__("domain"),
     lambda r: r.__setitem__("program", "cd" * 64),
-], ids=["root", "domain", "leaves", "words", "word-bits", "program"])
+], ids=["root", "domain", "leaves", "words", "word-bits", "no-root", "no-leaves", "no-domain", "program"])
 def test_a_registered_entry_the_top_does_not_make_is_refused(tmp_path, change):
     """A record META binds whose entry `stacked` is not the one R's binding round's top makes: its root, domain, leaf count
-    or row width another, or its program another (the domain is the program's, derived, never read from the entry)."""
+    or row width another or absent, or its program another (the domain is the program's, derived, then checked)."""
     assert _read(C3, inner=_registered(tmp_path, change)) == (1, None, CAP)
 
 
@@ -460,6 +464,34 @@ def test_candidate_3s_session_is_held_to_its_layout(tmp_path, change, why):
     assert (rc, line, err) == (1, None, f"rec inner transcript: {why}")
 
 
+def _table(tmp_path: Path, table: str) -> tuple[Path, Path]:
+    """2d61's session with its circuit table named ``table``: the reps' streams, Hello's table and the committed root,
+    in the transcript and the prover's record alike."""
+    t = json.loads((_fixture(C3) / "public.json").read_text().replace('"circuit/rep', f'"{table}/rep'))
+    t["hello"]["tables"], t["link"]["roots"] = [table], {table: t["link"]["roots"]["circuit"]}
+    (tmp_path / "rec").mkdir(parents=True)
+    r = (C3 / "prover" / "session.json").read_text().replace('"circuit/rep', f'"{table}/rep')
+    (tmp_path / "rec" / "session.json").write_text(r)
+    return _write(tmp_path / "transcript.json", t), tmp_path / "rec"
+
+
+@pytest.mark.parametrize("table,streams", [
+    ("sparse", "[sparse/rep0, sparse/rep1, stacked/rep0]"),
+    ("stacked", "[stacked/rep0, stacked/rep1, sparse/rep0, sparse/rep1]"),
+])
+def test_a_table_named_as_candidate_3s_own_streams_is_refused(tmp_path, table, streams):
+    """A table whose reps' streams `<table>/rep<x>` are named as a sparse phase's (`sparse/rep<x>`) or R's
+    (`stacked/rep0`), where `holoMap`'s lookup by name finds the reps first: `innerCommits` takes the table's prefix
+    from a stream named neither way, so it finds no table's reps. The session with its table named otherwise is read,
+    its reps renamed."""
+    rc, line, err = _read(C3, *_table(tmp_path / "other", "other"))
+    assert rc == 0, err
+    assert [s["stream"] for s in line["streams"]][:2] == ["other/rep0", "other/rep1"]
+    rc, line, err = _read(C3, *_table(tmp_path / table, table))
+    why = f"rec inner transcript: its message rounds' streams {streams} hold no table's reps"
+    assert (rc, line, err) == (1, None, why)
+
+
 def test_the_plain_session_is_read_as_before(tmp_path):
     """`rec-coins`' inner session, one table's two reps: the verifier holds their `c_k` and no stream besides, and the
     session without rep 1's rounds is refused with the message it always had."""
@@ -524,10 +556,15 @@ def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse,
     n18-e13-s6-t0, is the only RecSparse statement whose message rows a coin server recorded, so nothing smaller shows
     the verifier reads `sparse/rep<x>`'s rounds at the ports' order. `statement` with the inner transcript sets it up
     (its `rec-sparse-v` compared with no round), and refuses it at a transcript whose `sparse/rep1`
-    `c_k` of `u` (the round before the claim's) is one bit off; without the transcript it sets up as before."""
+    `c_k` of `u` (the round before the claim's) is one bit off; without the transcript it sets up as before. Its reads file
+    holds the statement's message ports as `RecVStar.checkOwn` asks (`rec-statements --registered`, at public inner
+    circuits since a private session has no statements yet: `ownPorts` and RecSparse's other messages, `sparseMsgs`)."""
     unit = f"rec-sparse/n{SPARSE[0]}-e{SPARSE[1]}-s{SPARSE[2]}-t{SPARSE[3]}"
     ports = {k: x["value"] for k, x in json.loads((sparse / "registered.json").read_text())["ports"].items()}
     assert {"rec-sparse-u", "rec-sparse-v"} <= set(ports.values()), ports
+    p = subprocess.run([str(BIN), "rec-statements", *_shape(tmp_path, holo=False), "--unit", unit, "--instances", "2",
+                        "--registered", str(sparse / "registered.json")], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
     (port,) = [k for k, v in ports.items() if v == "rec-sparse-u"]
     for t in (None, _fixture(C3) / "public.json"):
         p = _statement(sparse, t)
@@ -546,10 +583,11 @@ def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse,
                         rf"round {flip.k}\) of the inner transcript", p.stdout.strip()), p.stdout
 
 
-def _shape(tmp_path: Path, sparse=SPARSE, stacked=R_SHAPE) -> list[str]:
-    """`rec-inner`'s line at 2d61's table shape (m 25, k_log 22, claims 8 over 3 regions), with the bucket's RecSparse shape
-    and R's when given (`rec-inner --sparse`, META's `stacked`)."""
-    j = {"format": "verity/rec-inner/v1", "m": 25, "k_log": 22, "claims": 8, "regions": 3,
+def _shape(tmp_path: Path, sparse=SPARSE, stacked=R_SHAPE, holo=True) -> list[str]:
+    """`rec-inner`'s line at 2d61's table shape (m 25, k_log 22, claims 8 over 3 regions), its circuits private (`holo`,
+    `rec-inner --hide`: its reps split z_partial's round), with the bucket's RecSparse shape and R's when given (`rec-inner
+    --sparse`, META's `stacked`)."""
+    j = {"format": "verity/rec-inner/v1", "m": 25, "k_log": 22, "claims": 8, "regions": 3, **({"holo": True} if holo else {}),
          **({"sparse": list(sparse)} if sparse else {}), **({"stacked": stacked} if stacked else {})}
     return ["--rec-inner", str(_write(tmp_path / "rec-inner.json", j))]
 
@@ -581,6 +619,65 @@ def test_the_verifiers_inner_shape_covers_candidate_3s_session(tmp_path, sparse,
     assert _covers(tmp_path, _shape(tmp_path, sparse, stacked)) == (0 if not why else 1, why)
 
 
+def _moved(stream: str, j: int, k: int):
+    """``stream``'s ``j``-th message round's `c_k` moved to its round ``k``, which commits none."""
+    def change(t: dict) -> None:
+        rs = sorted((r for r in t["rounds"] if r["stream"] == stream), key=lambda r: r["k"])
+        src, dst = [r for r in rs if r["commits"]][j], rs[k]
+        assert not dst["commits"]
+        dst["commits"], src["commits"] = src["commits"], []
+    return change
+
+
+def test_each_reps_stream_holds_its_schedules_rounds(tmp_path):
+    """`RecVStar.checkCommitRounds` first holds every stream but the sparse phases' and R's to the rep's schedule at the
+    verifier's inner shape, round for round (`RepsDrawn`'s second half): 2d61's reps split z_partial's round, as private
+    circuits' do (`holo_rounds`, 95 rounds), so under a shape whose circuits are public (`rep_rounds`, 94) they are
+    refused for their rounds."""
+    assert _covers(tmp_path, _shape(tmp_path, holo=False)) == (
+        1, "rec inner transcript: circuit/rep0 holds 95 rounds, and its schedule (m 25, k_log 22, claims 8) 94")
+
+
+@pytest.mark.parametrize("change,why", [
+    (_moved("circuit/rep1", 20, 23), "rep 1's message round 20 is at round 23, and its schedule's at round 22 (77 message "
+     "rounds, the schedule's 77)"),
+    (_moved("sparse/rep0", 0, 0), "sparse/rep0's message round 0 is at round 0, and its schedule's at round 1 (33 message "
+     "rounds, the schedule's 33)"),
+], ids=["rep-round", "sparse-round"])
+def test_each_streams_c_k_sit_at_its_schedules_message_rounds(tmp_path, change, why):
+    """`RecVStar.checkCommitRounds`, the last of `checkCovers`: the verifier holds each rep's `c_k` at the message rounds of
+    `rec_live.rep_rounds` at its own inner shape (`holo_rounds` when its circuits are private, as 2d61's are), each
+    sparse stream's at `sparse_rounds` of its RecSparse shape, and R's at `stacked_rounds`. 2d61's transcript with one
+    rep's or one sparse stream's `c_k` moved to a round that commits none (which the reps' coins and the streams' counts
+    do not see) is refused by the round."""
+    assert _covers(tmp_path, _shape(tmp_path), _changed(tmp_path, change)) == (1, f"rec inner transcript: {why}")
+
+
+def test_rs_c_k_off_its_schedule_is_refused(tmp_path):
+    """R's stream with its second `c_k` moved to round 2, which commits none, is refused under the honest inner shape:
+    `checkStackedShape` holds R's transcript rounds to `stackedRounds` of META's shape before `checkCommitRounds`
+    holds the `c_k` and tops the verifier keeps of them to the same rounds (its refusals, unreachable past the first,
+    are the Lean guards in `Test/InnerStreams.lean`)."""
+    assert _covers(tmp_path, _shape(tmp_path), _changed(tmp_path, _moved("stacked/rep0", 1, 2))) == (
+        1, SHAPE.format(**R_SHAPE) + "round 1 is (coins 7, tops [], level0 0, commits false), not (coins 7, tops [], "
+        "level0 0, commits true)")
+
+
+def test_a_third_sparse_stream_is_refused(tmp_path):
+    """A `sparse/rep2` beside the two reps' sparse phases (sparse/rep1's rounds, each `c_k` fresh) is refused under the
+    honest inner shape: `candidate3` holds the session's streams to the reps', their sparse phases and R's before
+    `checkCommitRounds`, which reads `sparse/rep0` and `sparse/rep1` only, refuses any other held `sparse/…` stream (its
+    refusal is the Lean guards' in `Test/InnerStreams.lean`)."""
+    def change(t: dict) -> None:
+        t["streams"]["sparse/rep2"] = dict(t["streams"]["sparse/rep1"])
+        t["rounds"] += [{**r, "stream": "sparse/rep2", "commits": [_fresh("rep2", r["k"])] if r["commits"] else []}
+                        for r in t["rounds"] if r["stream"] == "sparse/rep1"]
+    assert _covers(tmp_path, _shape(tmp_path), _changed(tmp_path, change)) == (
+        1, "rec inner transcript: its message rounds' streams [circuit/rep0, circuit/rep1, sparse/rep0, sparse/rep1, "
+        "stacked/rep0, sparse/rep2] are not one table's rep0 and rep1, both reps' sparse phases and at most R's stream "
+        "([circuit/rep0, circuit/rep1, sparse/rep0, sparse/rep1, stacked/rep0])")
+
+
 def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_path):
     """The plain session (`rec-coins`' inner session, two reps and no other stream) passes under its own inner shape, and is
     refused under one naming the bucket's RecSparse shape: the shape names a phase the session does not have."""
@@ -594,6 +691,54 @@ def test_an_inner_shape_naming_candidate_3_over_a_plain_session_is_refused(tmp_p
     assert p.returncode == 1 and p.stderr.strip() == (
         "rec-inner: the verifier's inner shape names a RecSparse shape (--sparse), and the inner transcript holds no sparse "
         "phase"), p
+
+
+#: `rec-coins`' inner statement, a whole inner circuit (plain, with no registration and no R in its META)
+STAGE = PLAIN.parent / "u" / "stage"
+
+
+#: candidate 3's inner shape at `STAGE` (m 27, k_log 22, claims 8 over 3 regions), with a RecSparse shape whose sparse
+#: range check 5 passes on it (`RecCoins.checkAtC3`), and R's
+AT_STAGE = {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22, "claims": 8, "regions": 3, "sparse": [1, 12, 1, 0],
+            "stacked": R_SHAPE}
+
+
+NO_TRANSCRIPT = ("rec inner transcript: candidate 3's session needs the inner transcript (--rec-inner-transcript, "
+                 "--rec-inner-session), which its V* list and rows are checked against")
+NO_REGISTRATION = ("rec inner registration: candidate 3's session needs R's circuit registration "
+                   "(--rec-inner-registration), which binds R before the coins")
+
+
+@pytest.mark.parametrize("cmd,transcript,why", [
+    ("statement", False, (1, f"setup: {NO_TRANSCRIPT}")),
+    ("statement", True, (2, NO_REGISTRATION)),
+    ("verify", True, (2, NO_REGISTRATION)),
+], ids=["no-transcript", "no-registration", "verify-no-registration"])
+def test_candidate_3s_session_needs_the_inner_transcript_and_rs_registration(tmp_path, cmd, transcript, why):
+    """What the bridge to `AcceptsC3` reads beside the inner statement's files. `statement` on `rec-coins`' inner
+    statement at candidate 3's inner shape there, with that statement's files, which pass check 5's sparse range
+    (`RecCoins.checkAtC3`) and whose circuit's META is its header's (`RecSetup.checkMeta`), refuses it at setup without
+    the inner transcript (`RecSetup.checks`), and refuses its inputs (exit 2) with the transcript and no circuit
+    registration (`RecSetup.commits`). `verify` reads its inputs as `statement` does (shown on an empty outer circuit:
+    it refuses a plain-leaves one at its inputs, and sets up no empty one as far as the V* checks)."""
+    _fixture(PLAIN)
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    (tmp_path / "empty").write_bytes(b"")
+    files = ["--rec-inner-circuit", str(STAGE / "circuit.txt"), "--rec-inner-public", str(STAGE / "pub-64.bin"),
+             "--rec-inner-partition", str(STAGE / "partition.json"), "--rec-inner-session", str(PLAIN / "session"),
+             *(["--rec-inner-transcript", str(PLAIN / "public.json")] if transcript else [])]
+    inner = ["--rec-inner", str(_write(tmp_path / "rec-inner.json", AT_STAGE)), *files]
+    if cmd == "statement":
+        args = ["statement", "--statement", "verity/flock-circuit+plain-leaves", "--circuit",
+                str(STAGE / "circuit.txt"), "--public", str(STAGE / "pub-64.bin"), "--partition",
+                str(STAGE / "partition.json"), "--coins", "os"]
+    else:
+        args = ["verify", "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"), "--session",
+                str(tmp_path / "s")]
+    p = subprocess.run([str(BIN), *args, *inner], capture_output=True, text=True)
+    out = p.stdout.strip() if why[0] == 1 else p.stderr.strip()
+    assert (p.returncode, out) == why, p.stdout + p.stderr
 
 
 def test_rec_inner_refuses_r_without_the_sparse_shape():

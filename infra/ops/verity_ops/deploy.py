@@ -3,7 +3,7 @@
 pods/nebius/deploy.toml lists every file that infra's loops, timers and services run on a node, the file of this repository it
 comes from, who owns it (a Slack handle), and the patterns (`managed`) under which nothing else should live.
 
-  research deploy drift [--node N ...] [--ref origin/main] [--json] [--no-fetch]
+  research deploy drift [--on N ...] [--ref origin/main] [--json] [--no-fetch]
   research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--no-fetch]
   research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--apply] [--no-fetch]
 
@@ -55,6 +55,7 @@ from pathlib import Path
 from typing import Callable
 
 import research
+from research.flags import renamed
 
 MANIFEST = Path(research.__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
 REPO = Path(__file__).resolve().parents[3]
@@ -613,10 +614,11 @@ def attic(node: Node, ref: str, by: str, paths: list[str], backups: bool, run: R
 
 
 def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Path = MANIFEST, repo: Path = REPO) -> int:
+    argv = renamed(argv, {"--node": "--on"}, "research deploy")
     ap = argparse.ArgumentParser(prog="research deploy", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("drift", help="each node's files against REF")
-    d.add_argument("--node", nargs="+", action="extend", help="default: every node in deploy.toml")
+    d.add_argument("--on", dest="node", nargs="+", action="extend", metavar="NODE", help="default: every node in deploy.toml")
     d.add_argument("--ref", default="origin/main")
     d.add_argument("--json", action="store_true")
     i = sub.add_parser("install", help="install a node's files from REF")
@@ -698,7 +700,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
               + (f": {d['state']}" if failed else ""))
     runs = sorted({r for f in done["files"] for r in f["run"]})
     if runs:
-        print(f"restart when safe: {', '.join(runs)} (`research deploy drift --node {ns.node}` says `restart` until then)")
+        print(f"restart when safe: {', '.join(runs)} (`research deploy drift --on {ns.node}` says `restart` until then)")
     if not ns.apply:
         print("nothing changed: --apply installs and restarts")
     return 1 if any(d["state"].startswith("failed") for d in done["restarts"]) else 0

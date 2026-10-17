@@ -1,6 +1,6 @@
 """``verity.ml.circuits.silicon.term``: the exact decoders and products agree with Python floats wherever floats represent the value.
 
-Every finite BF16 / E4M3 / E5M2 / E2M1 encoding is a dyadic rational far inside double range, so the decoders and the
+Every finite BF16 / E4M3 / E5M2 / E2M1 / TF32 encoding is a dyadic rational far inside double range, so the decoders and the
 products are checked against ``struct`` / ``Fraction`` on every code (every pair, for the 8- and 4-bit formats); the
 FP32 codecs are checked on every boundary word and a 20k-word sample.
 """
@@ -20,6 +20,7 @@ from verity.ml.circuits.silicon.term import (
     E4M3,
     E5M2,
     FORMATS,
+    TF32,
     PRODUCT_WIDTH,
     ZERO,
     Term,
@@ -36,6 +37,7 @@ from verity.ml.circuits.silicon.term import (
     pack_fp32,
     product,
     term_value,
+    tf32_product,
 )
 
 
@@ -120,9 +122,9 @@ def test_generic_decode_dispatches_by_dtype_and_rejects_wide_words() -> None:
     assert decode("e4m3", 0x38) == decode_e4m3(0x38) and _decoded_value(decode_e4m3(0x38)) == 1
     assert decode("e5m2", 0x3C) == decode_e5m2(0x3C) and _decoded_value(decode_e5m2(0x3C)) == 1
     assert decode("e2m1", 0x2) == decode_e2m1(0x2) and _decoded_value(decode_e2m1(0x2)) == 1
-    assert set(FORMATS) == {"bf16", "e4m3", "e5m2", "e2m1"}
-    assert (BF16.bits, E4M3.bits, E5M2.bits, E2M1.bits) == (16, 8, 8, 4)
-    assert (BF16.bias, E4M3.bias, E5M2.bias, E2M1.bias) == (127, 7, 15, 1)
+    assert set(FORMATS) == {"bf16", "e4m3", "e5m2", "e2m1", "tf32"}
+    assert (BF16.bits, E4M3.bits, E5M2.bits, E2M1.bits, TF32.bits) == (16, 8, 8, 4, 19)
+    assert (BF16.bias, E4M3.bias, E5M2.bias, E2M1.bias, TF32.bias) == (127, 7, 15, 1, 127)
     for fmt in FORMATS.values():
         with pytest.raises(InvalidArtifact):
             fmt.decode(1 << fmt.bits)
@@ -184,6 +186,17 @@ def test_e2m1_product_is_exact_on_every_pair() -> None:
     assert _term_value(e2m1_product(0x7, 0x7)) == 36 and not e2m1_product(0x7, 0x7).negative
     assert e2m1_product(0xF, 0x7).negative
     assert e2m1_product(0x0, 0x7) == ZERO and e2m1_product(0x8, 0x7) == ZERO
+
+
+def test_tf32_product_is_exact_on_a_sample() -> None:
+    """TF32 is an FP32 word's top 19 bits: its value is that word's with the low 13 bits cleared."""
+    rng = random.Random(0x7F32)
+    codes = [rng.randrange(1 << 19) for _ in range(160)]
+    codes += [0x00000, 0x40000, 0x00001, 0x003FF, 0x00400, 0x3FBFF, 0x7FBFF, 0x1FC00, 0x5FC00, 0x3FC00, 0x3FE00, 0x7FC00]
+    assert _check_products(TF32, tf32_product, codes) > 20_000
+    assert TF32.product_shift == 3 and TF32.min_exponent == -136
+    for w in (0x3F800000, 0x00002000, 0xC0490FDB, 0x7F7FFFFF):
+        assert _decoded_value(TF32.decode(w >> 13)) == Fraction(struct.unpack("<f", struct.pack("<I", w & ~0x1FFF))[0])
 
 
 def test_generic_product_rejects_unknown_dtype() -> None:

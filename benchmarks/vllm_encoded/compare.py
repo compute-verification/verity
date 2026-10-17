@@ -1,0 +1,382 @@
+"""The run's gates and points from its arms (`serve.py`'s arm-*.json in OUT): exits non-zero unless every arm installed,
+every encoded arm in mode 0 or compiled without autotuning generated the gate prompts of the plain arm in its mode bit for
+bit (token ids and log-probs), and every encoded configuration has such an arm.  The gates of arms compiled as vLLM serves by
+default are reported, not required: that compile picks inductor's kernels by timing, in each process.
+
+Writes OUT/points.json: one point per encoded arm, batch and context, with its decode tokens/s, the stock and plain arms'
+in the same compilation mode (the median over their repeats), y (encoded decode-step time over native: against stock vLLM
+FP8, against the fused kernel's own plain FP8 fragments, and against stock vLLM compiled as it serves by default) and the
+step's working set by kind.  The working set is an accounting from the model's
+shapes, the context and the arm's store, not a counter reading: per decode step, the bytes each kind of tensor moves between
+HBM and the chip if nothing is reused from L2 (the encoded weights; the KV cache read and written; the activations; the
+fused kernel's chunk partial sums, written and read once; the BF16 LM head, which no arm encodes).
+
+Writes OUT/frontier.json too: the same points in the rate audit's shared schema (`verity/codec-frontier-point/v0`, ra-codec-wide's
+`benchmarks/word_codec/frontier.py`), with ``end_to_end: true``, the context and the model: y over stock vLLM compiled (the
+decode headline's baseline) of the compiled arms, as vLLM serves (-c) or without autotuning (-d, the step its gate ran; a
+little slower than -c, so its y errs high), split by the run's own arms in the same mode into base (the arm's kernel on plain payloads: `plain`, or the wide
+kernel at k = 0), decode (over base), tag (the tagged arm over the same arm untagged) and commit (a committed sketch arm,
+serve.py --commit, over the same arm uncommitted; 0 when the step runs no commit).  x, Δ (and τ for a tagged arm) are the
+codec lanes' measurements for the same field, k and packing (`CODEC`;
+`TENSOR_CODEC` for the tensor kernel's fields, by name: its m521 and the wide kernel's p521 are one prime); a sketched
+tensor arm's τ is 0, as ra-codec-tensor's points.py has it (the sketch's MMAs share the decode's CTA), and a sketched wide
+arm's is ra-codec-wide's τ_sketch at p512 (`WIDE_SKETCH_TAU`).
+Each point also carries d, the step's time in native passes of the weights (the encoded arm's step over the stock arms'
+`native_pass`: every FP8 linear once through vLLM's own kernel, in one CUDA graph), which is μ_rebuild's numerator
+(d − τ)/x end to end, with x* = (d − τ)/0.5%; frontier.py's default d is y_total, which is a kernel-level point's d only.
+"""
+from __future__ import annotations
+
+import json
+import os
+import statistics
+import sys
+from pathlib import Path
+
+TASK_COLS = 512
+FRONTIER = "verity/codec-frontier-point/v0"
+WORD_CODEC_POINTS = "art:615ddafdbdca40c9a79359dcd942422100b8b2d3e8d82b1e36073acdaedcb1de"  # ra-word-codec, r20261012-072836-5a84
+MU_BUDGET = 0.005  # μ_rebuild's share of γ = 1% (the overnight brief's budget)
+WIDE_POINTS = "art:96b9bcd36ce70e8e5f06a2da0faddc9a6aff4242ccc7c16f6c4faa0080fd9d53"  # ra-codec-wide, r20261012-074744-2f82
+WIDE512_POINTS = "art:abd163bfa9df2289377d531e64caded21af9264c60f2a7439eb438f9820b11b8"  # ra-codec-wide, r20261012-112605-e146
+#: (word bits, payload bits, k) -> the encode time of one pass's words in native passes (x), the decode's share of a pass's
+#: compute (Δ) and the ro-blake3/v1 tag's (τ), as the codec lanes measured them on the same GPU
+CODEC = {
+    (61, 56, 2): (14.498248107145026, 0.4995289804729952, 0.7324373834472417, WORD_CODEC_POINTS),
+    (61, 56, 3): (22.969029769476588, 0.7053308070724508, 0.7324373834472417, WORD_CODEC_POINTS),
+    (127, 126, 1): (32.03854113091271, 0.4621287561288848, 0.8233024528242008, WIDE_POINTS),
+    (127, 126, 2): (64.07708226182542, 0.8317700493707707, 0.8233024528242008, WIDE_POINTS),
+    (255, 254, 1): (109.22912467435894, 1.193949892482768, 0.8223356015334597, WIDE_POINTS),
+    (255, 254, 2): (218.45824934871789, 2.208046886523409, 0.8223356015334597, WIDE_POINTS),
+    (521, 520, 1): (332.236924960776, 0.8769569643747882, 0.8224952428519756, WIDE_POINTS),
+    (521, 520, 2): (664.473849921552, 1.6401752171760773, 0.8224952428519756, WIDE_POINTS),
+    (512, 512, 1): (326.151527648199, 0.691243128520072, 0.8264958893738357, WIDE512_POINTS),
+    (512, 512, 2): (652.303055296398, 1.3306932724844047, 0.8264958893738357, WIDE512_POINTS),
+}
+#: the wide kernel's sketch-then-hash τ at p512 (the sketch's MMAs and hash in its CTA, as ra-codec-wide prices it)
+WIDE_SKETCH_TAU = 0.04132479446869178
+#: ra-codec-tensor's (its 08:55Z report: x with its tensor cores and the 1.16× clock, from r20261012-080525-4dcf's
+#: squaring rates; τ = 0.48 a stored pass, r20261012-083520-f31c), by (field, k)
+TENSOR_POINTS = ("art:a4a86704b3bb90121b67ecc1655443e133523e321700ba4fe153c751ce421a4b "
+                 "art:6ef8f6d802c7fab5d042dea5d362ca938e436b4a2eff445a323bb268ebb14214")
+TENSOR_CODEC = {
+    ("p255", 1): (72.0, 0.71, 0.48, TENSOR_POINTS),
+    ("p255", 2): (134.0, 1.39, 0.48, TENSOR_POINTS),
+    ("p511", 1): (189.0, 0.84, 0.48, TENSOR_POINTS),
+    ("m521", 1): (216.0, 0.87, 0.48, TENSOR_POINTS),
+    ("p767", 1): (351.0, 0.98, 0.48, TENSOR_POINTS),
+    ("p1023", 1): (531.0, 1.15, 0.48, TENSOR_POINTS),
+    ("m1279", 1): (794.0, 1.29, 0.48, TENSOR_POINTS),
+}
+#: the full-slot fields at the x, Δ and τ measured for the field of their width (16 and 24 limbs), as ra-codec-theory
+#: prices 2^768 − 825 at p767's costs: no rates of their own yet
+TENSOR_CODEC |= {("p512", 1): TENSOR_CODEC[("p511", 1)], ("p768", 1): TENSOR_CODEC[("p767", 1)]}
+#: the 1,536- and 2,048-bit full-slot fields at their own k = 1 rates (r20261012-115146-b886: the CUDA-core root, their
+#: words being wider than the tensor-core squaring's 5 chunks; x over the same 1.16× clock), τ the tag's as above
+TENSOR_1536_POINTS = "art:a5459c87668c5c3c38329f057890e0529d308e391537369dd2fc752f085bdfca"
+TENSOR_CODEC |= {("p1536", 1): (1507.3083428871978 / 1.16, 1.0855995545095118, 0.48, TENSOR_1536_POINTS),
+                 ("p2048", 1): (2660.044909318239 / 1.16, 1.3364140923253431, 0.48, TENSOR_1536_POINTS)}
+ENCODED = ("enc", "wide", "tensor")
+SKETCH = "ro-sketch-blake3/v0"
+#: frontier.py's `model`, by (layers, hidden)
+MODELS = {(32, 4096): "llama-3.1-8b", (80, 8192): "llama-3.1-70b"}
+
+
+def checkpoint(path: str) -> str:
+    """The checkpoint's name: the hub repo of a hub snapshot path, else the directory's name."""
+    if "models--" in path:
+        return path.split("models--", 1)[1].split("/", 1)[0].replace("--", "/")
+    return Path(path).name
+
+
+def load(out: Path) -> list[dict]:
+    arms = []
+    for p in sorted(out.glob("arm-*.json"), key=lambda p: int(p.stem.split("-")[1])):
+        d = json.loads(p.read_text())
+        d["tag"] = p.stem[4:]
+        arms.append(d)
+    return arms
+
+
+def linears(ms: dict) -> list[tuple[int, int]]:
+    """(N, K) of one decoder layer's linears."""
+    h, i, kvh, hd, nh = ms["hidden"], ms["intermediate"], ms["kv_heads"], ms["head_dim"], ms["heads"]
+    return [((nh + 2 * kvh) * hd, h), (h, nh * hd), (2 * i, h), (h, i)]
+
+
+def working_set(ms: dict, b: int, ctx: float, weight_bytes: int, partials: bool, tag_bytes: int = 0) -> dict:
+    layers, h, i = ms["layers"], ms["hidden"], ms["intermediate"]
+    kv_token = layers * 2 * ms["kv_heads"] * ms["head_dim"] * 2
+    lin = linears(ms)
+    io = layers * b * sum(2 * k + 2 * k + 2 * n for n, k in lin)
+    other = layers * b * (2 * 4 * 2 * h + 2 * 2 * h + 3 * 2 * i)
+    part = layers * b * sum(k // TASK_COLS * n * 4 * 2 for n, k in lin) if partials else 0
+    ws = {"weights": weight_bytes, "lm_head": ms["vocab"] * h * 2, "kv_read": int(b * ctx * kv_token), "kv_write": b * kv_token,
+          "activations": io + other, "partials": part, "tags": tag_bytes}
+    total = sum(ws.values())
+    unc = total - ws["weights"]
+    ws.update(total=total, uncertified=unc, uncertified_share=unc / total,
+              uncertified_share_without_lm_head=(unc - ws["lm_head"]) / (total - ws["lm_head"]))
+    return ws
+
+
+def mode(a: dict) -> str:
+    """"" for mode 0, -c compiled as vLLM serves by default, -d compiled without inductor's autotuning (serve.py
+    --no-autotune: the same compiled step in every process, so its gate is meaningful)."""
+    if not a.get("compiled"):
+        return ""
+    return "-c" if a.get("autotune", True) else "-d"
+
+
+#: the modes whose gate is bit for bit: vLLM's default compile picks inductor kernels by timing in each process, so two of
+#: its plain arms can differ in the last bits of a log-prob (r20261012-083225-9bee); its gates are reported, not required
+DETERMINISTIC = ("", "-d")
+
+
+def config(a: dict) -> str:
+    """Arms that repeat one configuration share a name: stock, plain, enc2-56 (k, payload bits), w521-1t (wide field bits,
+    k, t when tagged), t511-1t (the same for the tensor kernel; t768-1s16 sketched at k_s = 16)."""
+    if a["arm"] == "enc":
+        return f"enc{a['k']}-{a['install'].get('bits')}"
+    if a["arm"] in ("wide", "tensor"):
+        cod = a["install"]["codec"]
+        return f"{a['arm'][0]}{cod['word_bits']}-{a['k']}{tag_suffix(cod)}"
+    return a["arm"]
+
+
+def tag_suffix(cod: dict) -> str:
+    """t for ro-blake3/v1, sK_S (sK_StT past T = 8 tasks a vector) for the sketch, then c when each step commits."""
+    if cod.get("tag") != SKETCH:
+        return "t" if cod.get("tag") else ""
+    return f"s{cod['sketch_k']}{sketch_t(cod)}" + ("c" if cod.get("commit") else "")
+
+
+def sketch_t(cod: dict) -> str:
+    """tT for a tensor sketch of T != 8 tasks a vector; the wide kernel's vectors (a CTA's tile) have no T."""
+    return f"t{cod['sketch_t']}" if cod.get("sketch_t") not in (None, 8) else ""
+
+
+def tag_blocks(cod: dict, batch: int) -> int:
+    """The tags a decode step's calls write: a tensor store's blocks, or sketched, its vectors at the launch the batch's
+    capture size selected (the CTA groups set them)."""
+    return cod.get("tag_vectors", {}).get(str(batch), cod["tag_blocks"])
+
+
+def tag_bytes(cod: dict, batch: int) -> int:
+    """The tags' HBM bytes a step: each tag written (32 bytes), and with the commit also read back by the leaves, and
+    the tree's nodes (64 bytes, one a leaf of 16 tags and about as many above them) each written and read; a commit
+    from a ring (the wide kernel's) keeps the tags in L2 and writes only the leaves and the nodes above them."""
+    n = tag_blocks(cod, batch)
+    if cod.get("commit_ring"):
+        return 2 * 64 * -(-n // 16)
+    return 32 * n + (32 * n + 4 * 64 * -(-n // 16) if cod.get("commit") else 0)
+
+
+def group_name(a: dict) -> str:
+    """The configuration with its mode: -c when compiled, -d when compiled without autotuning; +s when the arm registered
+    the node's store (serve.py --store)."""
+    return config(a) + mode(a) + ("+s" if a.get("store") else "")
+
+
+def store_points(by: dict, keys: list) -> list[dict]:
+    """Each +s group against the same configuration without the store: the decode step's ratio (median tokens/s) and
+    the store hooks' host microseconds a step."""
+    out = []
+    for name, group in by.items():
+        base = by.get(name[:-2]) if name.endswith("+s") else None
+        if not base:
+            continue
+        for b, ctx in keys:
+            with_s = [p for a in group for p in a["points"] if p["batch"] == b and p["context"] == ctx and "tokens_per_s" in p]
+            without = [p["tokens_per_s"] for a in base for p in a["points"]
+                       if p["batch"] == b and p["context"] == ctx and "tokens_per_s" in p]
+            if not with_s or not without:
+                continue
+            e, s0 = statistics.median(p["tokens_per_s"] for p in with_s), statistics.median(without)
+            hooks = {k: v["us_per_step"] for k, v in (with_s[0].get("store") or {}).items()}
+            out.append({"arm": name, "batch": b, "context": ctx, "tokens_per_s": e, "tokens_per_s_without": s0,
+                        "step_ratio": s0 / e, "hook_us_per_step": hooks, "hook_us_total": sum(hooks.values()),
+                        "step_ms": b / e * 1e3, "store": group[0].get("store")})
+    return out
+
+
+def codec_tag(a: dict) -> str | None:
+    """The tag the arm's GEMMs compute (``a["tag"]`` is the arm's file tag)."""
+    return a.get("install", {}).get("codec", {}).get("tag")
+
+
+def encoded(a: dict) -> bool:
+    return a["arm"] in ENCODED and a["k"] > 0
+
+
+def main() -> int:
+    out = Path(sys.argv[1])
+    arms = load(out)
+    rc = out / "arms.rc"
+    fails = [f"arm {line} (exit status)" for line in (rc.read_text().splitlines() if rc.exists() else ["none ran"])
+             if not line.endswith(" 0")]
+    for a in arms:
+        if a["arm"] != "stock" and not a.get("install", {}).get("gates"):
+            fails.append(f"{a['tag']}: no install record")
+    by = {}
+    for a in arms:
+        by.setdefault(group_name(a), []).append(a)
+    gate, passed = {}, set()
+    for a in arms:
+        ref = by.get("plain" + mode(a), [])
+        if not ref or not a["gate"]:
+            continue
+        ref = ref[0]
+        same = sum(x["token_ids"] == y["token_ids"] and x["logprobs"] == y["logprobs"] for x, y in zip(a["gate"], ref["gate"]))
+        tok = sum(sum(p == q for p, q in zip(x["token_ids"], y["token_ids"])) for x, y in zip(a["gate"], ref["gate"]))
+        total = sum(len(y["token_ids"]) for y in ref["gate"])
+        required = mode(a) in DETERMINISTIC
+        gate[a["tag"]] = {"against": ref["tag"], "prompts_bit_identical": f"{same}/{len(ref['gate'])}",
+                          "tokens_equal": f"{tok}/{total}", "required": required}
+        if a["arm"] in ENCODED and required:
+            if same == len(ref["gate"]) == len(a["gate"]):
+                passed.add(config(a))
+            else:
+                fails.append(f"{a['tag']}: gate generation differs from {ref['tag']}")
+    for c in sorted({config(a) for a in arms if a["arm"] in ENCODED} - passed):
+        fails.append(f"{c}: no arm of it generated the plain arm's gate bit for bit in mode 0 or compiled without autotuning")
+    print("gate", json.dumps(gate, indent=1))
+
+    def tps(group: list[dict], b: int, ctx: int) -> float | None:
+        v = [p["tokens_per_s"] for a in group for p in a["points"] if p["batch"] == b and p["context"] == ctx and "tokens_per_s" in p]
+        return statistics.median(v) if v else None
+
+    def ratio(x: float | None, e: float) -> float | None:
+        return x / e if x else None
+
+    points, rows, frontier = [], [], []
+    run_id = os.environ.get("RESEARCH_RUN_ID")
+    passes: dict[int, list[float]] = {}
+    for a in arms:
+        for p in a.get("native_pass", []):
+            passes.setdefault(p["batch"], []).append(p["pass_ms"])
+    native_pass = {b: statistics.median(v) for b, v in passes.items()}
+    keys = sorted({(p["batch"], p["context"]) for a in arms for p in a["points"]})
+    for name, group in by.items():
+        a = group[0]
+        if a["arm"] not in ENCODED:
+            continue
+        ms, inst, md = a["model_shape"], a["install"], mode(a)
+        model = MODELS.get((ms["layers"], ms["hidden"]), f"{ms['layers']}x{ms['hidden']}")
+        cod = inst.get("codec") or {"field": "p61", "word_bits": 61, "payload_bits": inst["bits"], "tag": None}
+        wide, tensor = a["arm"] == "wide", a["arm"] == "tensor"
+        stock, plain, compiled = by.get("stock" + md, []), by.get("plain" + md, []), by.get("stock-c", [])
+        base = (by.get(f"w{cod['word_bits']}-0" + md) if wide else None) or plain
+        base_name = "wide k = 0" if base is not plain else "plain fragments"
+        if not base and md == "-c":
+            base, base_name = by.get("plain-d", []), "plain fragments compiled without autotuning (no plain -c arm)"
+        untagged = by.get(f"{a['arm'][0]}{cod['word_bits']}-{a['k']}" + md, []) if cod.get("tag") else []
+        uncommitted = by.get(config(a)[:-1] + md, []) if cod.get("commit") else []
+        for b, ctx in keys:
+            e, s, pl, sc = tps(group, b, ctx), tps(stock, b, ctx), tps(plain, b, ctx), tps(compiled, b, ctx)
+            if e is None:
+                continue
+            pt = next(p for p in a["points"] if p["batch"] == b and p["context"] == ctx)
+            mean_ctx = ctx + pt.get("max_tokens", 0) / 2
+            tb = (tag_bytes(cod, b) if "tag_blocks" in cod else inst["plain_bytes"] // 8) if cod.get("tag") else 0
+            ws = working_set(ms, b, mean_ctx, inst["store_bytes"], True, tb)
+            ws_stock = working_set(ms, b, mean_ctx, inst["plain_bytes"], False)
+            point = {
+                "lane": "ra-vllm-encoded", "end_to_end": True, "model": model,
+                "workload": f"{checkpoint(a['model'])} decode",
+                "engine": f"vLLM {a['vllm']}, FP8 online, full decode CUDA graphs, "
+                          + {"": "mode 0 (no torch.compile)", "-c": "torch.compile (vLLM's default)",
+                             "-d": "torch.compile without inductor's autotuning"}[md],
+                "gpu": a["gpu"],
+                "codec": {"field": cod["field"], "word_bits": cod["word_bits"], "rounds": a["k"],
+                          "payload_bits": cod["payload_bits"], "tag": cod.get("tag")},
+                "kernel": ("benchmarks/word_codec/wide.cu ww_gemm_sketch (ra-codec-wide's fused decode + sketch-then-hash "
+                           "GEMM" + (", each step committing as it goes from an L2 ring of tags" if cod.get("commit")
+                                     else "") + ")" if wide and cod.get("tag") == SKETCH else
+                           "benchmarks/word_codec/wide.cu ww_gemm (ra-codec-wide's fused decode + tag GEMM)" if wide else
+                           "benchmarks/codec_tensor/wt.cu wt_fused_sketch (ra-codec-tensor's decoder, MMA and tag "
+                           "warps; sketched, the decoders sketch and the MMA warp tags), warps chosen per shape and "
+                           "batch" if tensor else
+                           "benchmarks/vllm_encoded/ve.cu (word_codec wc.cu fused GEMM), form chosen per shape and batch"),
+                "batch": b, "context": ctx, "tokens_per_s": e, "step_ms": b / e * 1e3,
+                "native_stock_tokens_per_s": s, "native_plain_tokens_per_s": pl, "native_stock_compiled_tokens_per_s": sc,
+                "y_vs_stock": ratio(s, e), "y_vs_plain": ratio(pl, e), "y_vs_stock_compiled": ratio(sc, e),
+                "working_set_bytes": ws, "working_set_bytes_stock": ws_stock, "run": run_id,
+            }
+            points.append(point)
+            rows.append((name, b, ctx, e, s, pl, point["y_vs_stock"], point["y_vs_plain"], point["y_vs_stock_compiled"],
+                         ws["uncertified_share"]))
+            ref = (TENSOR_CODEC.get((cod["field"], a["k"])) if tensor else
+                   CODEC.get((cod["word_bits"], cod["payload_bits"], a["k"])))
+            bs, un, uc = tps(base, b, ctx), tps(untagged, b, ctx), tps(uncommitted, b, ctx)
+            if md not in ("-c", "-d") or sc is None or bs is None or ref is None or not encoded(a):
+                continue
+            y_total, y_base = sc / e, sc / bs
+            y_commit = sc / e - sc / uc if uc else 0.0
+            y_tag = sc / e - y_commit - sc / un if un else 0.0
+            sketched = cod.get("tag") == SKETCH
+            tau = ref[2] if cod.get("tag") and not sketched else WIDE_SKETCH_TAU if sketched and wide else 0.0
+            pass_ms = native_pass.get(b)
+            d = b / e * 1e3 / pass_ms if pass_ms else None
+            frontier.append({
+                "schema": FRONTIER, "lane": "ra-vllm-encoded", "end_to_end": True, "model": model,
+                "b": cod["word_bits"], "k": a["k"],
+                "arithmetic": (f"cuda-int32/{cod['field']}/{'wt' if tensor else 'wide'}.cu" if wide or tensor else
+                               "cuda-int32/mersenne61/pb56/ve.cu")
+                              + (f"/sketch{cod['sketch_k']}{sketch_t(cod)}" + ("/commit" if cod.get("commit") else "")
+                                 if sketched else "/tag" if cod.get("tag") else ""),
+                "compiled": bool(a.get("compiled")), "mode": md, "batch": b, "context": ctx,
+                "y_total": y_total, "y_base": y_base, "y_decode": y_total - y_base - y_tag - y_commit,
+                "y_tag": y_tag, "y_commit": y_commit, "x": ref[0], "delta": ref[1], "tau": tau,
+                "d": d, "native_pass_ms": pass_ms, "step_ms": b / e * 1e3,
+                "mu_rebuild": (d - tau) / ref[0] if d else None, "x_star": (d - tau) / MU_BUDGET if d else None,
+                "x_source": ref[3], "measured": True, "packing": cod["payload_bits"],
+                "label": f"vLLM end to end, {name}, ctx {ctx}: whole decode step over stock vLLM FP8 compiled; base = "
+                         + base_name
+                         + (", tag split by the untagged arm" if un else ", no tag split" if cod.get("tag") else "")
+                         + ("; the commit (leaves and root of the step's tags) in the step"
+                            + (", split by the uncommitted arm" if uc else ", not split") if cod.get("commit")
+                            else "; no commit in the step"),
+                "gpu": a["gpu"], "run": run_id, "art": None,
+            })
+    f = lambda x, fmt: "-" if x is None else format(x, fmt)
+    print(f"{'arm':10} {'B':>3} {'ctx':>5} {'enc tok/s':>10} {'stock':>8} {'plain':>8} {'y/stock':>8} {'y/plain':>8} "
+          f"{'y/stk-c':>8} {'uncert':>7}")
+    for r in rows:
+        print(f"{r[0]:10} {r[1]:3d} {r[2]:5d} {f(r[3], '10.1f')} {f(r[4], '8.1f')} {f(r[5], '8.1f')} {f(r[6], '8.3f')} "
+              f"{f(r[7], '8.3f')} {f(r[8], '8.3f')} {f(r[9], '7.1%')}")
+    for name, group in by.items():
+        if group[0]["arm"] not in ENCODED:
+            for b, ctx in keys:
+                v = tps(group, b, ctx)
+                if v:
+                    print(f"{name:10} {b:3d} {ctx:5d} {v:10.1f}", *(f"{p['tokens_per_s']:.1f}" for a in group for p in a["points"]
+                                                                  if p["batch"] == b and p["context"] == ctx and "tokens_per_s" in p))
+    summary = {"schema": "verity/ra-points/v0-provisional", "gate": gate, "fails": fails, "points": points,
+               "arms": [{"tag": a["tag"], "arm": a["arm"], "compiled": bool(a.get("compiled")), "mode": mode(a), "k": a["k"],
+                         "install": {k: v for k, v in a.get("install", {}).items()
+                                                                                     if k != "selection"},
+                         "kv_tokens": a.get("kv_tokens"), "attention": a.get("attention"), "startup_s": a.get("startup_s")}
+                        for a in arms]}
+    (out / "points.json").write_text(json.dumps(summary, indent=1))
+    sp = store_points(by, keys)
+    if sp:
+        (out / "store.json").write_text(json.dumps(sp, indent=1))
+        for p in sp:
+            print(f"store {p['arm']:16} B={p['batch']:3d} ctx={p['context']:5d} step {p['step_ms']:.3f} ms, x{p['step_ratio']:.4f} "
+                  f"of the arm without the store, hooks {p['hook_us_total']:.1f} us a step "
+                  + json.dumps({k: round(v, 1) for k, v in p["hook_us_per_step"].items()}))
+    (out / "frontier.json").write_text(json.dumps(frontier, indent=1))
+    for p in frontier:
+        if p["batch"] in (1, 32) and p["context"] == 512:
+            print(f"frontier b={p['b']} k={p['k']} M={p['batch']} ctx={p['context']} {p['arithmetic']}: y_total "
+                  f"{p['y_total']:.3f} = base {p['y_base']:.3f} + decode {p['y_decode']:.3f} + tag {p['y_tag']:.3f}, x {p['x']:.1f}"
+                  + (f", d {p['d']:.3f} (pass {p['native_pass_ms']:.3f} ms), x* {p['x_star']:.0f}, μ_rebuild "
+                     f"{p['mu_rebuild']:.2%}" if p["d"] else ", d unmeasured (no stock native pass)"))
+    for x in fails:
+        print("FAIL", x)
+    return 1 if fails else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

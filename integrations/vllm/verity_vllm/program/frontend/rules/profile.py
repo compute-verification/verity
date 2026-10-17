@@ -261,7 +261,8 @@ class RmsNormRule(InPlaceRule):
         xc, wc = ctx.coll(x), ctx.coll(w)
         rows, lead = rows_of(xc)
         N = rows[0].type.n
-        fn, extra = norm_kind(ctx, "rmsnorm", node, N, eps)
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports this module)
+        fn, extra = norm_kind(ctx, "rmsnorm", node, N, eps, TARGET=active_target_profile(), M=len(rows))
         outs = [ctx.call(fn, r, wc, *extra, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
         ctx.bind_weight_role(w, self, "rmsnorm.weight", N=N, EPS=eps)
@@ -302,7 +303,7 @@ class FusedAddRmsNormRule(InPlaceRule):
         N = xr[0].type.n
         from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports this module)
         try:
-            fn, extra = norm_kind(ctx, "rmsnorm_fused", node, N, eps, TARGET=active_target_profile())
+            fn, extra = norm_kind(ctx, "rmsnorm_fused", node, N, eps, TARGET=active_target_profile(), M=len(xr))
         except UnregisteredTarget as e:
             refuse("numerics_unregistered", node, ctx.module_path(node), f"the declared target has no registered fused_add_rms_norm kind: {e}")
         ns, rs = [], []

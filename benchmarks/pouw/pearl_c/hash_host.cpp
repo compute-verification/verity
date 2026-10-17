@@ -1,7 +1,7 @@
-// hash_h3.cuh built for the host (tests/test_pearl_c_hash_host.py): the CUDA builtins they use, and `launch`,
-// which runs a 1-D grid's CTAs in order; a CTA's threads run in order too, or as host threads under one barrier for a kernel
-// that calls __syncthreads (hash_rows, s512_rows, s512_tile_leaves, s512_tree_small).  Buffers are host memory: Args' pointers are host
-// addresses.
+// hash_h3.cuh and pearl_c_sm120's hash_fast.cuh built for the host (tests/test_pearl_c_hash_host.py): the CUDA builtins they
+// use, and `launch`, which runs a 1-D grid's CTAs in order; a CTA's threads run in order too, or as host threads under one
+// barrier for a kernel that calls __syncthreads (hash_rows, s512_rows, s512_tile_leaves, s512_tree_small).  Buffers are host
+// memory: Args' pointers are host addresses.
 //   g++ -O2 -std=c++20 -pthread -shared -fPIC -I benchmarks/pouw/pearl_c -o hash_host.so hash_host.cpp
 #include <algorithm>
 #include <barrier>
@@ -31,6 +31,7 @@ struct uint4 { uint32_t x, y, z, w; };
 static uint4 make_uint4(uint32_t x, uint32_t y, uint32_t z, uint32_t w) { return {x, y, z, w}; }
 
 #include "hash_h3.cuh"
+#include "../pearl_c_sm120/hash_fast.cuh"
 
 namespace {
 struct Kernel { const char* name; void (*fn)(const Args); bool syncs; };
@@ -38,7 +39,9 @@ const Kernel KERNELS[] = {{"s512_rows", s512_rows, true},          {"s512_seeds"
                           {"s512_line_raws", s512_line_raws, false}, {"s512_tile_leaves", s512_tile_leaves, true},
                           {"s512_pads", s512_pads, false},         {"s512_nodes", s512_nodes, false},
                           {"s512_tree_small", s512_tree_small, true}, {"hm_leaves", hm_leaves, false},
-                          {"s512_tickets", s512_tickets, false},     {"s512_frame_leaves", s512_frame_leaves, false}};
+                          {"s512_tickets", s512_tickets, false},     {"s512_frame_leaves", s512_frame_leaves, false},
+                          {"s512_heads", s512_heads, false},         {"s512_row_segs", s512_row_segs, false},
+                          {"s512_tile_segs", s512_tile_segs, false}, {"s512_folds", s512_folds, false}};
 constexpr int COUNT = sizeof KERNELS / sizeof *KERNELS;
 }  // namespace
 

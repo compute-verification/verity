@@ -53,7 +53,7 @@ from verity.ml.circuits.defs import SpecializedDefinition, bind
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.kernels.kernel_registry import Declined, covers, instance, register
 from verity_vllm.program.registry import b1, prims as P
-from verity_vllm.program.kernels import prims_twins
+from verity_vllm.program.kernels import cuda_rmsnorm_rows as CNR, prims_twins
 
 SCHEMA = "verity-gen/twins/v1"
 U16, U32, U64, F32, F64 = np.uint16, np.uint32, np.uint64, np.float32, np.float64
@@ -699,15 +699,15 @@ class AttentionTwin(Twin):
         k = {"wide": "spread", "mixed": "spread", "boundary": "spread"}.get(kind, kind)
         return [rand_bf16(rng, NH * D, k).astype(U64), rand_bf16(rng, T * KVH * D, k).astype(U64),
                 rand_bf16(rng, T * KVH * D, k).astype(U64)]
-
-
 FAMILIES: dict[str, type[Twin]] = {cls.base_id: cls for cls in (GemmTwin, BiasAddTwin, EmbeddingTwin, TokenSelectTwin, SiluMulTwin,
                                                                 RoPETwin, RMSNormTritonTwin, RMSNormFusedTwin, AttentionTwin)}
+FAMILIES.update(CNR.twin_families(Twin, rand_bf16, RANDOM_KINDS))
+RMSNormCudaVector8Twin, RMSNormFusedCudaVector8Twin = (
+    FAMILIES[k] for k in CNR.TWIN_DEFINITIONS)
 DEFINITIONS = {"Gemm_v1": b1.Gemm, "BiasAdd_v1": b1.BiasAdd, "Embedding_v1": b1.Embedding, "TokenSelect_v1": b1.TokenSelect,
                "SiluMul_v1": b1.SiluMul, "RoPE_v1": b1.RoPE, "RMSNormTriton_v1": b1.RMSNormTriton,
                "RMSNormFusedCuda_v2": b1.RMSNormFusedCuda, "Attention_v3": b1.AttentionV3}
-
-
+DEFINITIONS.update(CNR.TWIN_DEFINITIONS)
 # ---------------------------------------------------------------------------------------------------------
 # the twins as core `verity.ml.circuits.evaluation` kernels, checked against the reference by core `self_check`
 # ---------------------------------------------------------------------------------------------------------

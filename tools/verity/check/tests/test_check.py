@@ -250,7 +250,8 @@ def test_the_recorded_check_takes_cpu_only_torch():
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.command[:5] == ["uv", "run", "--locked", "--extra", "torch-cpu"]
+    assert tool.CHECK.command[:6] == ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu"], \
+        "every member's own dependencies, not only the root's dev group (CI-36: #2159's new member lacked scipy)"
     import tomllib
     cpu = [p for p in tomllib.loads((ROOT / "uv.lock").read_text())["package"] if p["name"] == "torch" and "+cpu" in p["version"]]
     assert cpu and all("download.pytorch.org/whl/cpu" in p["source"]["registry"] for p in cpu)
@@ -484,6 +485,23 @@ def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs
     assert mem(None) == mem(["circuit-check", "pytest"]) == mem(["circuit-check", "lean-build"]) == "210"
     assert mem(["flock-circuit-build", "circuit-check", "flock-rust-tests"]) == "560"
     assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
+
+
+def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypatch):
+    """CI-35: pytest's parallel suites had no bound beside circuit-check's, so the two together outgrew the slot."""
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+
+    def mem(only):
+        [pt] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == "pytest"]
+        return pt[1][pt[1].index("--mem-gb") + 1]
+
+    assert mem(None) == mem(["circuit-check", "pytest"]) == "175", "halved: lean-suites runs beside pytest with the same share"
+    assert mem(["pytest"]) == "280"
+    monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV)
+    [pt] = [s for g in CHECK.groups(tmp_path, 16) for s in g if s[0] == "pytest"]
+    assert "--mem-gb" not in pt[1]
 
 
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
@@ -1079,7 +1097,7 @@ def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_
     (tmp_path / "lean-audit").mkdir()
     (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps({"cached": {"P": "k"}, "packages": [{"package": "P"}, {"package": "Q"}]}))
     done = [{"step": "pytest", "status": "passed"},
-            {"step": "circuit-check", "status": "passed", "cache": {"hits": 7, "stored": 2, "untraced": [{}], "errors": [], "changed": ["t"]}},
+            {"step": "circuit-check", "status": "passed", "cache": {"hits": 7, "stored": 2, "untraced": 1, "errors": 0, "changed": 1}},
             {"step": "flock-rust-tests", "status": "passed", "cache": {"hit": "k"}},
             {"step": "lean-agreement", "status": "passed", "cache": {"stored": "k"}},
             {"step": "lean-audit", "status": "passed"}, {"step": "lean-build", "status": "passed"}]
@@ -1100,6 +1118,20 @@ def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_
     CHECK.write_result(tmp_path, True, [{**s, "seconds": 1.0} for s in done])
     doc = json.loads((tmp_path / "result.json").read_text())
     assert list(doc)[:4] == ["schema", "kind", "run_id", "reuse"] and doc["reuse"] == r
+
+
+def test_the_circuit_check_step_records_its_cache_as_counts(tmp_path):
+    """result.json's steps are its attempt's meta, which the store caps at 256 KiB: a circuit-check cache listing every target
+    it could not store (each one, once its workers forked) made a passing check's attempt unpublishable. The step keeps counts;
+    the lists stay in circuit-check.json, an artifact."""
+    import json
+
+    cache = {"hits": 0, "stored": 3, "untraced": [{"target": f"T{i}", "because": ["os.fork "] * 3} for i in range(4000)],
+             "errors": [{"target": "E"}], "changed": []}
+    (tmp_path / "circuit-check.json").write_text(json.dumps({"cache": cache}))
+    rec = CHECK._step("circuit-check", _py("pass"), tmp_path, tmp_path, False, CHECK.Steps(tmp_path, keep_going=True))
+    assert rec["status"] == "passed" and rec["cache"] == {"hits": 0, "stored": 3, "untraced": 4000, "errors": 1, "changed": 0}
+    assert CHECK.reuse(tmp_path, [rec])["steps"]["circuit-check"]["not_stored"] == {"untraced": 4000, "errors": 1, "changed": 0}
 
 
 def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
@@ -1149,7 +1181,8 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
 
 
 #: the stubbed `uv`'s answer to train.sh's post to the merge thread: the post's body is copied to {posted}, and nothing launches
-_POST_STUB = ('case "$*" in *"slack reply"*) f=; p=; for a; do [ "$p" = --file ] && f=$a; p=$a; done; cp "$f" {posted}; exit 0;; '
+_POST_STUB = ('case "$*" in *"msg reply"*) f=; p=; for a; do [ "$p" = --file ] && f=$a; p=$a; done; cp "$f" {posted}; '
+              'echo "$*" > {posted}.args; exit 0;; '
               'esac\n')
 
 
@@ -1242,6 +1275,7 @@ def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_
     posted = (tmp_path / "posted").read_text()
     assert p.returncode == 1 and "git fetch origin failed" in p.stderr, p.stderr
     assert "registered no run (exit 1)" in posted and "git fetch origin failed" in posted, posted
+    assert posted.startswith("@ci ") and "--quiet" in (tmp_path / "posted.args").read_text().split(), "it rings only @ci"
     (tmp_path / "gone.git").rename(tmp_path / "origin.git")
 
     (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}"
@@ -1310,7 +1344,7 @@ def test_train_sh_against_keeps_the_quick_tiers_bounds_and_lean_build():
     text = (ROOT / "tools" / "verity" / "check" / "train.sh").read_text()
     assert f"wait_s={queue.REMOTE_WAIT_S} run_s={queue.REMOTE_TIMEOUT_S}" in text
     assert "".join(f" --lean {d}" for d in queue.LEAN_BUILDS) + " --head" in text
-    assert "uv run --locked --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
+    assert "uv run --locked --all-packages --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
 
 
 def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_path):

@@ -152,12 +152,12 @@ registers the stages' commitments where its public files hold their `b ‖ c` (`
 theorem hCommits_of (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
     (hSk : F.Sk = skOf F.Vs own sel) (hcmt : F.cmt = cmtOf F.Vs bc) (hpub : F.PubCommits bc) : F.HCommits := by
-  intro i R ω t e he R₂ j hacc pos hpos R'
+  intro i R ω t e he R₂ j R' tr _ hacc pos hpos
   rcases pos with ⟨u, q⟩ | g
   · rw [hcmt]
     exact (vb_cs_inl (F.zs R ω t R₂ j) R' u q).trans
       (congrArg (fun l => ((Sum.inl (u, q) : PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv),
-        Refine.H512 (Refine.K512.leafPrefix ++ l))) (hpub i R ω t e he R₂ j hacc u q hpos))
+        Refine.H512 (Refine.K512.leafPrefix ++ l))) (hpub i R ω t e he R₂ j ⟨tr, hacc⟩ u q hpos))
   · rw [hSk] at hpos
     exact absurd hpos (inr_not_mem_skOf g)
 
@@ -242,8 +242,8 @@ theorem vbridgeRead_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' R
     (hsch : F.HSch) (hfiles : F.HFiles dg N k Rw) (hruns : F.HRuns dg N k Rw) (hcm : F.HCommits)
     (hdec : F.VDecodesRead) (hfull : F.VFullRead) :
     VBridgeRead (I := ℐ) F.zs dg N k Rw F.x F.wmsg F.Sk F.cmt F.msg :=
-  ⟨fun R ω t R₂ hc τ o h₀ =>
-    have h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o := ⟨h₀, hc⟩
+  ⟨fun R ω t R₂ hc τ o hout h₀ =>
+    have h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o := ⟨h₀, hc, hout⟩
     (F.files R ω t (layers F.zs dg N k Rw R ω t R₂ τ)).accepts regs (F.x R ω) T CT sch (hsch R ω t _) _
       (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h fun r => by
         obtain ⟨⟨v, info, kappa, hv, hvs⟩, hw, hc⟩ := hsh R ω t R₂ τ o h r

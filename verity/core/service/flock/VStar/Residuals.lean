@@ -119,6 +119,33 @@ def leafSums : List (List Lin × List Lin) → List Lin → M (List Lin)
     let zs ← (leaves 7 p.1 p.2).mapM fun xy => Flock.HmNets.and xy.1 xy.2
     leafSums ps (xorL sums zs)
 
+/-- `leafSums` over `Flock.HmNets.Acc` sums, as `Flock.RecOpen.leafSumsGo`: each leaf AND is a fresh variable, so it lands
+at its sum's end instead of being merged into it. -/
+def leafSumsGo : List (List Lin × List Lin) → List Acc → M (List Acc)
+  | [], sums => pure sums
+  | p :: ps, sums => do
+    let zs ← (leaves 7 p.1 p.2).mapM fun xy => Flock.HmNets.and xy.1 xy.2
+    leafSumsGo ps (List.zipWith Acc.add sums zs)
+
+/-- What the compiled code runs for `leafSums` (`leafSums_eq_fast`). -/
+def leafSumsFast (ps : List (List Lin × List Lin)) (sums : List Lin) : M (List Lin) :=
+  (·.map Acc.get) <$> leafSumsGo ps (sums.map Acc.of)
+
+theorem leafSumsGo_eq : ∀ (ps : List (List Lin × List Lin)) (sums : List Acc),
+    (·.map Acc.get) <$> leafSumsGo ps sums = leafSums ps (sums.map Acc.get)
+  | [], _ => by simp [leafSumsGo, leafSums]
+  | p :: ps, sums => by
+    simp only [leafSumsGo, leafSums, map_bind]
+    congr 1
+    funext zs
+    rw [leafSumsGo_eq ps, Acc.zipWith_add_get]
+    rfl
+
+@[csimp] theorem leafSums_eq_fast : @leafSums = @leafSumsFast := by
+  funext ps sums
+  rw [leafSumsFast, leafSumsGo_eq, List.map_map]
+  simp [Function.comp_def, Acc.of_get]
+
 /-- One residual's 128 forms: its added terms' sum, plus, if it has products, the recombined and reduced committed leaf
 sums. -/
 def residual (ops : Array (List Lin)) (W V : Array Lin) (r : Res) : M (List Lin) := do

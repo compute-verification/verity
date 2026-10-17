@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-import sys
 import json
 import time
 from collections import Counter
@@ -37,7 +36,6 @@ import numpy as np
 
 from verity.ml.circuits.query_ast import NameSel
 
-from verity_vllm.config import option
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.population import phase_anchor, population, split_not_executed
@@ -385,35 +383,3 @@ def after_replay(out_dir: str | None, sr: dict[str, Any], pair: int, run_root: b
     print(f"[vu-export] {len(s['sets'])} sets, {sum(x['n'] for x in s['sets'])} instances, {sum(x['bytes'] for x in s['sets'])} bytes "
           f"in {s['wall_s']} s -> {out}", flush=True)
     return s
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class ExtractOptions:
-    """cut flat instance sets from a store by query"""
-
-    store: str = option("store", help="<export>/store")
-    out: str = option("out", help="where the sets go")
-    where: str | None = option("--where", default=None, help="Definition selector, e.g. 'Gemm_v1{K=2048,*}'")
-    module: str | None = option("--module", default=None, help="a module path: its units and its descendants'")
-    cmd: str = dataclasses.field(default="extract", init=False)
-
-
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class VerifyOptions:
-    """check a store's values and a set directory's instances"""
-
-    store: str = option("store", help="<export>/store")
-    cmd: str = dataclasses.field(default="verify", init=False)
-
-
-COMMANDS = {"extract": ExtractOptions, "verify": VerifyOptions}
-
-
-def main(a: ExtractOptions | VerifyOptions) -> int:
-    if a.cmd == "extract":
-        sets, fam = extract(a.store, a.out, where=a.where, module=a.module)
-        print(json.dumps({"sets": sets, "instances_by_family": fam}, indent=1))
-        return 0
-    r = verify_store(a.store)
-    print(json.dumps(r, indent=1), file=sys.stdout)
-    return 0 if r["ok"] else 1

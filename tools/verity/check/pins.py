@@ -10,7 +10,7 @@ A pin is written only by its command, never by hand: #1499's revert came from a 
 records has another digest in the tree (or is gone), and its command, run at the root of a checkout, rewrites it from the tree.
 `tests/test_pins.py` fails while a pin is stale, naming its command, and while a tracked file records the digest of a Lean source
 (`*.lean`, a Lake manifest, lakefile or toolchain) without being listed here. `tools/move/restack.py` runs `--regen` on every
-restacked branch. Not listed, since another check owns them: a `lean-audit.json`'s records (the Lean check, `audit.py --update`)
+restacked branch. Not listed, since another check owns them: a `lean-audit.json`'s records (the Lean check, `check.py --update`)
 and `tools/verity/lean/lean-deps.json`, a bundle per manifest that a cold run exports (preflight names its command).
 
 `--merged` is the merge's half (`research merge --train --prepare` runs it on every merge of a train): Lake manifests and pins

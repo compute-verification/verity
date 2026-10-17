@@ -220,7 +220,7 @@ in `protocol_options.pouw`, never by assigning `quant_method.apply`.
 
 **(Lands with #567 and bc-f4e8ae34's migration onto it:**
 - A kernel directory exports `VARIANT` (family, device, schemes, schedules, shapes) and `STEP_IO` (each step's group and
-  per-call reads and writes) beside `Dev` and `Pipeline`, and names its steps in `GROUPS` (`a_tree`, `forming`, `gemm`,
+  per-call reads and writes) beside `Dev` and `Pipeline`, and names its steps in `GROUPS` (`row_seeds`, `a_tree`, `forming`, `gemm`,
   `cleanup`, `tile_hash`, `screen`).
 - Its identity is `KernelVariant.id`, the digest of its sources. The loader keys modules by it, and every served pass
   records it in `PassCommitment.kernel`, so a row names exactly what ran.
