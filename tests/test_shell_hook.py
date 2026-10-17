@@ -68,6 +68,10 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     "ps --everyone --format=pid,cmd",
     "sudo ps aux | tail",
     "ssh n1 'ps -ef'",
+    "ps -o pid,etime,cmd --ppid 4242",                    # a git child's token-bearing URL, 17 Oct (INF-52)
+    "ps -f -u research",
+    "ps -o args -C git",
+    "ps -p 1,2 -o args",
     "cat /proc/*/cmdline",
     "tmux -f /exec-daemon/tmux.portal.conf show-environment -g | cut -d= -f1",   # the Nebius key's lines again, 11 Oct
     "tmux show-environment",
@@ -112,6 +116,8 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "ps ax -o pid,comm",
     "ps",
     "ps -p 1234 -o pid,args",
+    "ps -o pid,etime,comm --ppid 4242",
+    "ps -u research",
     "ps -eo pid,args | grep \"[p]ytest\"",
     "ps aux | rg -i lake",
     "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
