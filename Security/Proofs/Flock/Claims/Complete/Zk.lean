@@ -53,6 +53,7 @@ import Proofs.Flock.Claims.Complete.Zk.Level0Honest
 import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
 import Proofs.Flock.Claims.Complete.Zk.Level0Opens
 import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
+import Proofs.Flock.Claims.Complete.Zk.Level0Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
 the masked record's prover `ZkTables.honestP`): the honest masked prover (`Honest`: `honestPZk`, on
@@ -109,4 +110,5 @@ Ligerito returning on rounds carrying its closed-form model, given its openings 
 `Level0HonestRun` its whole walk: it ends at the model's transcript and meets the model's final identity (`honestZ`);
 `Level0Opens` its openings passing the masked Merkle checks, level 0's over rows `EXTRA_LANES` wider
 (`ligeritoPZk_opens`, `merkleOkZ_of_opens`); `Level0Verifier` the last premise, the verifier returning the prover's
-record at its transcript (`verifier`). -/
+record at its transcript (`verifier`); `Level0Complete` the four in `complete_jsonT_of_level0`, leaving `ShapeRest`
+(`complete_jsonT_of_shapeRest`). -/
