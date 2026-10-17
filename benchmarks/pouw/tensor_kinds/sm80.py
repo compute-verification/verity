@@ -2,7 +2,7 @@
 
     python sm80.py gate OUT BIN...   # gpu_kit's timing gate on every timed kernel -> OUT/gate.json, OUT/loops.json
     python sm80.py analyze OUT       # OUT/g*.jsonl with the gate's records -> OUT/sm80.json, OUT/sm80.md
-    python sm80.py census OUT... [--epoch E]   # the runs' rows as machine-model census lines (sm_80 device)
+    python sm80.py census OUT... [--to DIR]    # analyzed runs -> the machine model's rows.csv and census.csv (sm80-1)
 
 Every case of sm80.cu prints its kernel's template (`kern`, `struct`, `targs`), so its mangled name, and so its SASS
 loops, follow from the line. `gate` runs gpu_kit's timing gate (`../gpu_kit/sass_gate.py`: clock reads, the timed
