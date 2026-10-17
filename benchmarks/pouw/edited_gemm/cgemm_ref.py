@@ -10,8 +10,10 @@ transposed, k x n'):
     Y = residue sums of X,  A = digits(Y, z, m),  P_A = [A_0 | A_1 | A_2 | 0]^T (A_2 = 0 at m = 2)
     (T, D, O') = co32c_words(W, V, U, c, b, z, 32, 32, m),  O = O' - sum_d 128^d D_d  (== P^ X, checked)
 and the device's bytes must equal: X, P_A, W', P_B, the served O (c_l7qs), O' (c_l7qs_o) and the receipts (derive.py's
-tile_receipts over T_1 .. T_last, O', D_1 .. D_{m-1}). One JSON line a gate directory; exit 1 on any difference, on a
-device mismatch or on a control the device didn't reject.
+tile_receipts over T_1 .. T_last, O', D_1 .. D_{m-1}). A cohalf gate (QK^T at k = 128, meta's kinds "cohalf") is
+check_half's: X = clamp(floor(x inv_s), -64, 62)^T + b (meta's inv_s the 7-bit scale), Y = X's two 64-halves summed, U from tag 11 (row i's digest
+byte r), and (T, O) = honest_words(W, V, U, c, b, 64, 32) with O = T_last - U Y. One JSON line a gate directory; exit 1
+on any difference, on a device mismatch or on a control the device didn't reject.
     uv run --no-project --with numpy --with python-sat --with-editable benchmarks/pouw/exact_kit \
       python3 benchmarks/pouw/edited_gemm/cgemm_ref.py GATE_DIR...
 """

@@ -17,19 +17,27 @@
 // bit e % 8 of digest byte e / 8); beta under tag 10 (block j = rows 2j, 2j + 1, entry (row % 2) 32 + r digest byte v,
 // beta_p = bit p of v, bit 7 unread); z under tag 9 (block j = rows 4j .. 4j + 3, z_d(i, r) = bit 32 d + r of digest
 // bytes 16 (i % 4) .. 16 (i % 4) + 15 read little-endian).
+// cohalf (QK^T, k = 128 = the head dimension, r = k / 2 = 64; checked_strip's honest_words at r = 64): K is the served
+// side at 7 bits, X = clamp(floor(x / 2s), -64, 62) + b, with Y(r) = X(r) + X(r + 64); Q the peeled side, W' = W^ + U
+// over r = col % 64 (U from tag 11: row i's digest byte r, bits 0..6); words T_0 .. T_3, then O = T_last - U Y.
 // Kernels:
 //   cquant           the dithered quantizer with the tail rows P_A = [A_0 | A_1 | A_2 | 0] (A_2 = 0 at m = 2)
 //   cwedit           W' = W + c + U and P_B = [-U | U | U | 0]
 //   c_*              the GEMM: e_l7qs's mainloop over X and W', then the tail stage: O' = IMMA (A_0, -U) seeded by T_last,
 //                    D_d = IMMA (A_d, U), each word absorbed as it is made, O = O' - 128^d D_d (one IMAD a word a digit);
-//                    c_*_o writes O' instead of O (the recombination's cost, and O' for the CPU reference)
-// Modes:
+//                    c_*_o writes O' instead of O (the recombination's cost, and O' for the CPU reference); c_l7qs_v
+//                    writes P.V's served value f = float(2 O + 127 S) s_row s_col instead (that epilogue's cost a cell)
+//   hquant, hwedit   cohalf's X and P_A = [Y_lo | Y_hi | 0 | 0], W' and P_B = [-U_lo | -U_hi | 0 | 0]
+//   h_l7qs, h_l2q    cohalf's GEMM (htail: O = T_last - U Y, absorbed), on c_*'s schedules
+// Modes (at K = 128, cohalf's kernels):
 //   cgemm gate DIR M N K SEED       poisoned buffers: each c_* kernel's O against cuBLASLt's X W^T (W^ = W' - U on the
-//                                   device), c_l2q's receipts (another schedule) against c_l7qs's, a no-write control;
-//                                   three tiles' operands, O, O' and receipts to DIR for cgemm_ref.py
+//                                   device), c_l2q's receipts (another schedule) against c_l7qs's, c_l7qs_v's f against
+//                                   vref's, a no-write control; three tiles' operands, O, O' and receipts to DIR for
+//                                   cgemm_ref.py
 //   cgemm bench REPS M N K          hot items interleaved across CG_ARMS (egemm.cu's arms too), one JSON line
 //   cgemm one ARM M N K             three warm-up calls, then one between cudaProfilerStart and Stop (for ncu)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a cgemm.cu -lcuda -lcublasLt -lnvidia-ml
+// (CGEMM_LIB defined: the kernels without main, as cpv.cu includes them)
 #define EGEMM_LIB
 #include "egemm.cu"
 
