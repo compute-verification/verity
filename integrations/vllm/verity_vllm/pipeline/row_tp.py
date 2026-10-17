@@ -39,7 +39,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
-from verity_vllm.engine.profiles.transport import row_p2p_env, workload_custom_all_reduce_off
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
@@ -163,11 +162,8 @@ class TpRow(Row):
             raise Stop(10)
 
     def p2p_env(self) -> str | None:
-        """The stages' NCCL_P2P_DISABLE: the workload's ``env_required`` value, else unset (one the caller's environment has is
-        dropped).  A workload written before it had ``env_required`` requires what the generator writes for its target
-        (`engine.profiles.transport.row_p2p_env`)."""
-        req = (R.load_json(self.path(self.wl)) or {}).get("env_required")
-        v = (row_p2p_env(self.row) if req is None else req).get("NCCL_P2P_DISABLE")
+        """The stages' NCCL_P2P_DISABLE: the row's ``engine.env`` value, else unset (one the caller's environment has is dropped)."""
+        v = self.config().engine.env.get("NCCL_P2P_DISABLE")
         if v is None:
             self.child_env.pop("NCCL_P2P_DISABLE", None)
             return None
@@ -175,11 +171,9 @@ class TpRow(Row):
         return str(v)
 
     def custom_all_reduce_off(self) -> bool:
-        """The engines' ``disable_custom_all_reduce`` (tp-capture's and tp-commit's ``--engine-arg``): the workload's
-        ``engine_args_required`` value.  Its fallback is not `p2p_env`'s: a workload without the field keeps True, what every TP row's
-        engines ran before (`engine.profiles.transport.workload_custom_all_reduce_off`), where a workload without ``env_required``
-        takes the generator's value for its target."""
-        return workload_custom_all_reduce_off(R.load_json(self.path(self.wl)) or {})
+        """The engines' ``disable_custom_all_reduce`` (tp-capture's and tp-commit's ``--engine-arg``): the row's ``engine.args``
+        value, which a TP row's file states (`config.RowConfig`)."""
+        return bool(self.config().engine.args["disable_custom_all_reduce"])
 
     def engine_args(self) -> list[str]:
         """The ``--engine-arg``s tp-capture and tp-commit share; ``disable_custom_all_reduce`` last."""

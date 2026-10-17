@@ -24,14 +24,14 @@ ROW_90 = "llama32-1b__bf16__h100__tp1__b1__i1024__o128__mixed__greedy__bi-eager"
 
 def _wl(tmp_path, target=None):
     p = tmp_path / "wl.json"
-    p.write_text(json.dumps({"sweep": {}, **({"target": target} if target is not None else {})}))
+    p.write_text(json.dumps({"sweep": {}, **({"engine": {"target": target}} if target is not None else {})}))
     return str(p)
 
 
 def test_an_rtxpro6000_row_declares_its_whole_target_and_other_classes_keep_the_workload_s(tmp_path):
     assert tf.declared_profile(ROW_120, {}) == {"compute_capability": [12, 0], "num_sms": 188}
-    assert tf.declared_profile(ROW_120, {"target": {"compilation": "piecewise"}}) == {"compute_capability": [12, 0], "num_sms": 188, "compilation": "piecewise"}
-    assert tf.declared_profile(ROW_120, {"target": {"compute_capability": [12, 0], "num_sms": 170}})["num_sms"] == 170, "the workload's own target wins"
+    assert tf.declared_profile(ROW_120, {"engine": {"target": {"compilation": "piecewise"}}}) == {"compute_capability": [12, 0], "num_sms": 188, "compilation": "piecewise"}
+    assert tf.declared_profile(ROW_120, {"engine": {"target": {"compute_capability": [12, 0], "num_sms": 170}}})["num_sms"] == 170, "the workload's own target wins"
     assert tf.declared_profile(ROW_89, {}) == {} and tf.declared_profile(ROW_90, {}) == {}
     assert R.declared_target(_wl(tmp_path), row=ROW_120) == '{"compute_capability": [12, 0], "num_sms": 188}'
     assert R.declared_target(_wl(tmp_path), row=ROW_89) == "", "an l40s row's Build target stays the host GPU's"

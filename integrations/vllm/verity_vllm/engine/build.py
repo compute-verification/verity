@@ -104,7 +104,7 @@ def parse_target_arg(s: str | None):
 
 def target_of_workload(workload: dict | None, cli: str | None = None):
     """[R13 hopper] The `TargetProfile` a GPU stage builds its engine for: the CLI `--target` (JSON overrides / path) when given, else the
-    workload manifest's `target` block (the row's declared overrides, e.g. `{"flash_attn_version": 2}` for `…__bi-eager-fa2`) laid over
+    loaded workload's `target` (`vllm_adapter.load_workload`: the row file's `engine.target`, the row's declared overrides, e.g. `{"flash_attn_version": 2}` for `…__bi-eager-fa2`) laid over
     THIS host's device facts (`TargetProfile.from_device()`: capability + SM count, as `derive_step` does without `--target`), else None
     (no declared target: vLLM's own selection, header records the device only)."""
     if cli:

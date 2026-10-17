@@ -289,7 +289,7 @@ measure on a stub clock.  The capture's timing-only mode (`engine.capture.Captur
 PoUW, POUS and sampled proofs are protocol options (`verity_vllm/protocol_options/`), each enabled on its own and any of them
 in one run.  A set is `name:scheme` entries, one per protocol (`config.parse_protocols`), off by default: `LLM(protocols=...)`
 installs PoUW and POUS on a serving engine; a row takes its set from `verity-vllm row --protocols` (`PROTOCOLS`) or its
-workload's target, every stage reads it as the target's `protocols` (`TargetProfile.protocols`; unset is sampled proofs
+row file's `engine.target`, every stage reads it as the target's `protocols` (`TargetProfile.protocols`; unset is sampled proofs
 alone, the Commit as it has always run), `run_row` refuses a set it cannot run before any stage, and the Commit installs
 the others once its committers registered the weights of record (the replay reads live weights through what an option
 released: `protocol_options.weights_view`).  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
@@ -327,6 +327,13 @@ Tests and tools read fixtures relative to this directory: run them from here.  T
 `tools/verity/check/check.py`) does not collect them: `integrations/vllm` is outside the root `pyproject.toml` testpaths.  Every tool is a `verity-vllm` command
 (`verity-vllm --help`); a sweep row runs with `verity-vllm row run <row-id> <ROLE> <hf-repo> <revision>`.
 
+A row's one config is its file `workloads/<row-id>.json`, schema `verity-vllm/workload/v2`, read as `config.RowConfig`: the
+checkpoint's repo (`model`) and role (`case`), an `engine` block (`config.RowEngine`: the checkpoint's full `revision`, the
+`vllm` commit, the engine `args`, the `env` that selects kernels, and the declared `target`), and the workload (requests,
+sampling, the sweep's parameters).  `verity-vllm workload` writes it.  The κ profile a Match folds with is the role's
+(`engine.profiles.generic.module_name`), never a field.  The stages' flags and variables override how a run goes, never the
+file; `row run` writes what a run used, its effective config, to `<sweep dir>/<row>/effective_config.json`.
+
 The pod runtime (Python 3.12, torch cu129, vLLM `d9105ea80`, native taps, `hidden_gpu`) is built by `verity_vllm/ops/pod_bootstrap.sh`
 and exercised through `research run --source <sha> --on <machine>`.  On a pod without a GPU (`nvidia-smi` absent, or `--cpu`)
 it skips the native taps and writes the same `readiness.json` with `"mode": "cpu"`; `--dry-run` prints the resolved mode.
@@ -337,6 +344,8 @@ The engine is vLLM at one commit, today `d9105ea80`, and vllm owns which commit 
 places, and a move rewrites all of them in one PR:
 
 - the wheel URL and its sha256 in `ops/pod_bootstrap.sh` (step 2), and its readiness check `vllm_commit_<sha9>`;
+- `config.VLLM`, which every row file's `engine.vllm` states (`verity-vllm workload` rewrites them) and `TargetProfile`
+  checks against the running build;
 - the engine profiles named for it (`engine/profiles/vllm_<sha9>_*`), whose κ pins were recorded from that build;
 - benchmarks' `VLLM_PIN` (`verity_bench.vllm.presets`), the `vllm_pin` of each benchmark spec, and PoUW's
   serving venv check (`benchmarks/pouw/pearl_c_vllm/setup.sh`).

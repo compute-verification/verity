@@ -1,8 +1,15 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "HuggingFaceTB/SmolLM2-135M",
  "case": "B0",
- "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+ "engine": {
+  "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 2048,
+   "max_model_len": 64
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,10 +35,6 @@
   "depends_on": "the PAD-INT workload only"
  },
  "expected_engine_steps": 32,
- "engine_args_required": {
-  "max_num_batched_tokens": 2048,
-  "max_model_len": 64
- },
  "tokenizer_note": "prompt_token_ids copied verbatim from the PAD-INT stage-0 workload (tokenizer revision 93efa2f0, add_special_tokens=False); prompt_text is the decode (informational)",
  "prompt_lengths": [
   32

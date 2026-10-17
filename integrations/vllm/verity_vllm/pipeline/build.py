@@ -23,9 +23,8 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity_vllm.config import option
+from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
-from verity_vllm.engine.profiles.transport import workload_custom_all_reduce_off
 from verity_vllm.program.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
@@ -249,11 +248,11 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
 
 
 def workload_engine_args(workload: str | None, tp: int) -> dict:
-    """The engine arguments a TP row's Build takes from its workload: ``disable_custom_all_reduce`` as the row's engines run it
-    (`engine.profiles.transport.workload_custom_all_reduce_off`).  None at TP1 or without a workload: `vllm_meta`'s default then."""
+    """The engine arguments a TP row's Build takes from its workload: ``disable_custom_all_reduce`` as the row's engines run it (its
+    ``engine.args``).  None at TP1 or without a workload: `vllm_meta`'s default then."""
     if tp < 2 or workload is None:
         return {}
-    return {"disable_custom_all_reduce": workload_custom_all_reduce_off(json.load(open(workload)))}
+    return {"disable_custom_all_reduce": bool(RowConfig.load(workload).engine.args["disable_custom_all_reduce"])}
 
 
 def sampling_policy(arg: str | None, workload: str | None) -> dict:
