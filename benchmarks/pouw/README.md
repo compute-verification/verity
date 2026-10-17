@@ -4,13 +4,20 @@ The measuring side of `verity/core/protocols/pouw`: Pearl-C's kernels on the RTX
 harness, the served vLLM path and its audits, and the CPU accounting. How a kernel is designed, gated, timed and landed is
 the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 
+Compute accounting's standards are in `machine_model/README.md`: the design registry (one file a design under decision
+79's names, Dither-1S, Dither-2S and Dither-C, which `eps_budget.py` prices and `machine-model eps` reads), the ε
+vocabulary, how a facet is measured (gates, noise, margins, clocks, row status), and the per-device data layout.
+
 | Path | Runs on | What |
 |---|---|---|
 | `harness/` | RTX PRO 6000 | One harness for every PoUW prover arm and plain GEMM baseline: each gated at the exact shape and flags it is timed at, then timed the same way (its own README) |
 | `gpu_kit/` | RTX PRO 6000 | The timing protocol for a standalone `.cu` bench, as code: `bench.cuh` (0xA5 poisoning and its no-write control, interleaved items with NVML clocks, the dump format), `sass_gate.py` (the timed loop's opcode counts, no spills, a live sink, bank conflicts) and `compare.py` (the twin compare) |
+| `dc/` | H200, B200 (CPU: build and gate) | TENSOR's M3/M4 probes on sm_90a wgmma and sm_100a tcgen05, the scalar pipes, and the honest Dither GEMM with its duo fold on both (`run.sh sm90` or `sm100`; the run plan and B300 are its README) |
 | `opcode_probe/` | RTX PRO 6000 | One instruction class's rate a probe, gated by `gpu_kit/sass_gate.py` before it is timed, written as a census line in the machine model's schema (`run.sh`; how a probe is written is its README) |
 | `tensor_kinds/` | RTX PRO 6000 | Every native MMA form's joint issue coefficient (fitted beside an IADD3+FFMA lane, which issues at 1 a SMSP-cycle alone, and beside IADD3 alone, in the warp-specialized and interleaved schedules), its issue price an output slot against IMMA s8 m16n8k32's (whether the issue form of the tensor theorem is tight), and each form's worst load on VF3e's joint rows JI3e_0/1/2 (`run.sh` under `gpu-lease 1`, `tensor_kinds.py` the fit); `tensor_kinds.py refit OUT...` prints the machine model's JI3n rows (VF3n-16) from the runs |
 | `fp_exact/` | RTX PRO 6000 | Whether FP8 E4M3 and FP4 (MXFP4, NVFP4, 2:4-sparse) MMA chains on restricted grids are exact integer arithmetic: every output against an exact int64 sum, over three accumulation orders, replayed through the silicon models, beside the MMAs' rates against IMMA (`run.sh`) |
+| `lowbit_dc/` | B200, H200 (CPU: build and selftest) | Dither's FP8 and FP4 routes on datacenter GPUs: whether tcgen05's and wgmma's FP8/FP4 kinds are exact integer arithmetic (`fpx.cu`), and dgemm's Dither GEMM with int8 emulated in E4M3 limbs (k3z, k4s on tcgen05; k3h on wgmma), gated bit for bit and timed against native int8 in the same kernel (`egemm.cu`; `run.sh [gemm]`) |
+| `emu8/` | RTX PRO 6000 | Dither's int8 k32 prefix words from E4M3 QMMA (Karatsuba with 3 products per step, schoolbook with 4), each prefix word gated bit for bit against int64 and timed against native IMMA and cuBLASLt int8; `accounting.py` counts the limb products a cheater still needs (`run.sh`) |
 | `pearl_c_sm120/` | RTX PRO 6000 | `pearl-c-sm120-v1` (G = 4) and the unpromoted record on sm_120a: `build.sh` builds the cubin and refuses it unless `sass_gate.py` passes; `fixture.py` writes the check; `hash_fast.cuh` computes `hash_h3.cuh`'s row digests and tile leaves in two launches, a thread per 1 KiB segment across every row or tile and then a thread per row or tile for the fold, which `run.py` uses unless `PEARLC_SHA=ref`; `run.py` checks every buffer bit for bit on the expected UUID, then times diagnostic phases |
 | `pearl_c/` | CPU | Pearl-C's hashing format -h3 on the device (`hash_h3.cuh`, which `pearl_c_sm120.cu` includes), its host build (`hash_host.cpp`, which also builds `pearl_c_sm120/hash_fast.cuh`, and `simt_twin.py`, for byte tests without a GPU) and `fake_cuda.c`, the stand-in for libcuda that `run.py`'s dry run uses. BLAKE3 and the H100 -h1 bench are in `archive/pouw-blake3/` |
 | `pearl_c_vllm/` | RTX PRO 6000 | Pearl-C on every linear of a served vLLM model: `e2e.py` (gates, timing against stock FP8, retained passes, smoke), `window.sh` (the timed window), `verify.sh` (the reference replay), and the `verity-bench` arm (`bench_arm.py`) |
@@ -26,13 +33,13 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `filler/` | RTX PRO 6000 | The DRAM-free filler beside the decode step, its arms and its locked scorer, one suite (below) |
 | `floored_gemm/`, `masked_gemm/`, `edited_gemm/`, `hashed_gemm/` | RTX PRO 6000 | The noised GEMMs, from the floored int8 grid to the adopted edited GEMM with its commitments hashed in its own CTAs (below) |
 | `commit_gpu/` | RTX PRO 6000 | The GPU hm96-sha512 committer, its small path beside a GEMM, and its byte gate against `verity.ml.commitments` (`reference.py`) |
-| `stage_cost/`, `stage_ovl/` | RTX PRO 6000 | What the stage coins and the deferred edit cost at Llama-3.1-8B's shapes, and their overlap in prefill with the committer |
+| `stage_cost/`, `stage_ovl/` | RTX PRO 6000 | What decision 36's stage coins and deferred edit cost at Llama-3.1-8B's shapes, and their overlap in prefill with the committer. One σ a request (decision 72) retired both, so these are the measurements of record; the committer's latency and overlap still apply |
 | `vllm_bench.py` | RTX 4090 | Overhead against plain vLLM for BF16, stock FP8, W7A7, NCP and Pearl by wrapping every `LinearBase` layer's apply; `pearl_c_vllm/` reads its prompts and model lookup |
 | `gamma.py` | CPU | γ accounting: each scheme's honest reference priced term by term under W1, split into checked and unchecked work |
-| `eps_budget.py` | CPU | Dither's skippable share of honest work as served (Llama-3.1-8B and 70B, 2K–32K, prefill and decode), by int8 products and by time, per component and design, with γ and decode's zero-weight gap (SKIP, note:20261017T0340Z-draft-skip) |
+| `eps_budget.py` | CPU | Dither's skippable share of honest work as served, for each design of the registry (`machine_model/data/designs/`): Llama-3.1-8B and 70B, 2K–32K, prefill and decode, by int8 products and by time, per component, with γ and decode's zero-weight gap; P·V's block size for the designs whose P·V is `pv`; and each design's ε_skip, the number its `[skip]` records (SKIP, note:20261017T0340Z-draft-skip) |
 | `int8_toggle.py` | RTX PRO 6000 | Sustained int8 GEMM throughput, SM clock and power by operand pattern (wide, U against a bit, bit against bit, zero): what a zero instance's narrow operands gain on the clock (SKIP) |
 | `pearlc_census.py` | CPU | TT_OUT's falsification census for Pearl-C's ticket chain, bit-exact, on the H100's atom or sm_120's (`--atom`) |
-| `machine_model/` | CPU | The sm_120 machine model's price vectors (VF … VF3n-16, VF3n-16 the vector of record): the LP, the rows, census and attack families as data, and `machine-model solve NAME` (its own README, and its own suite) |
+| `machine_model/` | CPU | The sm_120 machine model's price vectors (VF … VF3q-16, VF3q-16 the vector of record): the LP, the rows, census and attack families as data, and `machine-model solve NAME` (its own README, and its own suite) |
 | `exact_kit/` | CPU | `verity-exact-kit`, the theory and referee scripts' primitives (F_2 and F_p linear algebra, Möbius coefficients, kernel searches, SAT) and their one check registry with a JSON verdict; no theory, no folds (its own README) |
 | `workloads.json` | | The model and its linear shapes, the decode batches and prefill lengths, and the reference shapes (`gamma.py`) |
 | `run_result.py`, `tool.py` | | The runs' result record (`research/result/v0.1`) and the store's tool declaration |
@@ -73,7 +80,7 @@ directory's `*.sh` builds and runs it through `research run`, and each `*ref.py`
 | The adopted design's edited GEMM (decision 29), its receipt folds and its profile, also ncu's against the machine model (eps_sched, the fold-cost sweep) | `edited_gemm/egemm.cu`, `egemm_ref.py`, `prof.cu`, `run.sh`, `profile.sh`, `eps_profile.py` | `masked_gemm/lpgemm.cu` |
 | That GEMM with its windowed receipts and X's tile leaves hashed in its CTAs | `hashed_gemm/hgemm.cu`, `hgref.py`, `segment_e2e.py`, `run.sh` | `edited_gemm/egemm.cu`, `commit_gpu/commit_gpu.cuh` |
 | The committer: hm96-sha512 row leaves in frame-v3-sha512 trees | `commit_gpu/commit_gpu.cuh`, `sha512.cuh`, `commit_gpu.cu`, `reference.py`, `gpu.sh` | |
-| Stage coins and the deferred edit | `stage_cost/stage.cu`, `prep.py`, `report.py`, `run.sh` | `filler/dcap.cu`, `served_zk/hm96_rows.cu` |
+| Stage coins and the deferred edit (retired by decision 72) | `stage_cost/stage.cu`, `prep.py`, `report.py`, `run.sh` | `filler/dcap.cu`, `served_zk/hm96_rows.cu` |
 | Their overlap in prefill, with the committer's small path, and the edited arms (EGEMM's GEMM with windowed receipts) | `stage_ovl/ovl.cu`, `eg.cu`, `eg.h`, `eref.py`, `report.py`, `run.sh` | `stage_cost/stage.cu`, `commit_gpu/commit_gpu.cuh`, `edited_gemm/egemm.cu` |
 
 `edited_gemm/egemm_ref.py` imports the E2E slice's `derive.py` from `e2e_slice/` beside it (the slice's receipt and noise

@@ -9,6 +9,7 @@ import csv
 import importlib.util
 import io
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -84,14 +85,15 @@ def test_macs_a_word_pins():
     assert round(rows.macs_a_word(0.027522, 4), -1) == 68480
 
 
-@pytest.mark.skipif(not (MACHINE_MODEL / "data" / "census.csv").exists(),
-                    reason="machine_model (RS-W′'s cursor/machine-model-ea24) isn't in this tree yet")
 def test_schema_is_machine_models():
-    data = MACHINE_MODEL / "data"
-    with open(data / "census.csv", newline="") as f:
-        r = csv.DictReader(f)
-        assert tuple(r.fieldnames) == rows.CENSUS_COLUMNS
-        lines = list(r)
+    files = sorted((MACHINE_MODEL / "data" / "census").glob("*.csv"))
+    assert files
+    lines = []
+    for p in files:
+        with open(p, newline="") as f:
+            r = csv.DictReader(f)
+            assert tuple(r.fieldnames) == rows.CENSUS_COLUMNS, p.name
+            lines += r
     sys.path.insert(0, str(MACHINE_MODEL))
     try:
         from verity_machine_model import model
@@ -208,6 +210,30 @@ def test_prior_points_give_back_the_published_facets(tmp_path):
     assert {(2.0, 1.96), (15.0, 0.4)} <= got
 
 
+sm89 = _load("opcode_probe_sm89_census", POUW / "opcode_probe" / "sm89" / "census.py")
+
+
+def test_sm89_pipe_rate_counts_the_loops_instructions_on_its_pipe():
+    """An ALU probe's loop counter runs on the ALU pipe, so the pipe's rate counts it; SHFL's doesn't (SHF isn't SHFL)."""
+    loop = lambda pat, n: {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1,
+                                                                    "BRA": 1}}]}
+    assert sm89.pipe_rate({"rates": {"0:LOP3.LUT": 1.6}}, loop("LOP3.LUT", 16)) == pytest.approx(1.6 * 18 / 16)
+    assert sm89.pipe_rate({"rates": {"0:SHFL.BFLY": 0.5}}, loop("SHFL.BFLY", 16)) == pytest.approx(0.5)
+    assert sm89.pipe_rate({"rates": {"0:IMAD": 1.9}}, loop("IMAD", 16)) == pytest.approx(1.9)
+    fold = {"loops": [{"counts": {"LOP3.LUT": 32, "IMAD": 32, "LEA.HI": 32},
+                       "top": {"LOP3.LUT": 32, "IMAD": 32, "LEA.HI": 32, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+    rates = {"0:LOP3.LUT": 0.96, "0:IMAD": 0.96, "0:LEA.HI": 0.96}
+    assert sm89.pipe_rate({"rates": rates}, fold) == pytest.approx(0.96 * 66 / 32)   # LOP3, LEA.HI and the counter
+
+
+def test_sm89_frontier_counts_every_non_mma_instruction_as_x():
+    """A mix's loop overhead could be X in an attacker's program, so the facet points count it."""
+    v = {"loops": [{"counts": {"IMMA.16832.S8.S8": 8, "LOP3.LUT": 4},
+                    "top": {"IMMA.16832.S8.S8": 8, "LOP3.LUT": 4, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+    m, x = sm89.loop_rates({"rates": {"0:IMMA.16832.S8.S8": 0.25, "0:LOP3.LUT": 0.125}}, v)
+    assert (m, x) == pytest.approx((0.25, 0.25 * 7 / 8))
+
+
 def test_one_census_line_a_kind_and_row(tmp_path):
     binary = tmp_path / "atom"
     binary.write_bytes(b"\x7fELF")
@@ -228,6 +254,32 @@ def test_one_census_line_a_kind_and_row(tmp_path):
     assert "0.500000" in probe.row_line(by["atoms_add32"]) and "macs/word=" in probe.row_line(by["atoms_add32"])
     unnamed = probe.make_rows(binary, probes[:1], verdicts, lines, "", "")
     assert unnamed[0]["census"] is None and "names the run" in unnamed[0]["census_refused"]
+
+
+def test_uniform_reads_each_loop_from_its_sass(tmp_path, capsys):
+    """`eps1.py uniform`: V and U from the gate's loop in the listing, T = 4 n / rate, and a uniform instruction's cost as
+    T's slope in U within a fixed stream (the K = 0 point included, a step variant left out of the fit)."""
+    out = tmp_path / "out"
+    (out / "sass").mkdir(parents=True)
+    body = ["IMMA.16832.S8.S8 R0, R4, R8, R0 ;", "LOP3.LUT R1, R1, R2, R3, 0x96, !PT ;", "UIADD3 UR4, UPT, UPT, UR4, 0x1, URZ ;"]
+    loops = {"ux_0": body, "ux_16": body + ["UIMAD UR5, UR5, UR6, URZ ;"] * 16,
+             "ux_16s": body + ["@UP0 USHF.L.U32 UR5, UR5, 0x3, URZ ;"] * 16}
+    sass, verdicts = [], []
+    for name, ops in loops.items():
+        ins = [f"        /*{16 * i:04x}*/                   {op}" for i, op in enumerate(ops + ["BRA.U UP0, 0x0 ;"])]
+        sass += [f"\t\tFunction : {name}", "        /*fff0*/                   NOP ;", *ins]
+        verdicts.append({"probe": name, "passed": True,
+                         "verdict": {"loops": [{"head": "0000", "tail": f"{16 * len(ops):04x}"}]}})
+    (out / "sass" / "uniform.sass").write_text("\n".join(sass) + "\n")
+    (out / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    rates = {"ux_0": 4 / 10, "ux_16": 4 / 26, "ux_16s": 4 / 18}
+    (out / "rows.jsonl").write_text("".join(json.dumps({"probe": p, "rate": r, "counted": "IMMA.16832.S8.S8", "tags": []})
+                                            + "\n" for p, r in rates.items()))
+    assert eps1.main(["uniform", str(out)]) == 0
+    got = capsys.readouterr().out
+    assert re.search(r"^ux_16 +3 +17 +26\.000 .* 1\.000 *$", got, re.M)
+    assert re.search(r"^ux_16s +3 +17 +18\.000 .* 0\.500 *$", got, re.M)
+    assert "  ux: 1->17:1.000  fit 1.000 over U 1..17" in got
 
 
 # ---- the probes themselves -------------------------------------------------------------------------------------------
