@@ -1,0 +1,21 @@
+# Dither-2S: both operands dithered with fresh bits, no U, the last checked word served (SKIP's design A; the name,
+# decision 79), so no peel on the linears, lm_head or QKᵀ; P·V keeps the recorded w64 peel.
+name = "dither-2s"
+title = "Dither-2S"
+aliases = ["dither-two-sided", "A", "adopted-bd-lm"]
+summary = "Two-sided dither serving the last checked word, duo at L = 32"
+ppl = "adopted-bd-lm"
+
+[noise]
+linears = "two-sided"
+lm_head = "two-sided"
+qk = "two-sided"
+pv = "peel"
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDSM_X4 = 0.2 }
+source = "SPEC §3.4: two-sided {0,1} noise is fresh on both operands at every 32-step at every instance, so the register floor stays 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
+
+[skip.pv-strip]
+eps = 0.00131
+source = "SKIP's design A (`adopted-bd-lm`) over Llama-3.1-8B and 70B x 2K, 8K, 32K by honest time, with CHECKED-STRIP Result 3's correction: at a one-hot P row adopted P·V's whole strip is free, both limbs of U·Ycum and the triangle, so 0.131% by time (0.119% by int8 products), twice the 04:20Z count (note:20261017T0340Z-draft-skip Result 3, 06:19Z; note:20261017T0030Z-draft-checked-strip)"

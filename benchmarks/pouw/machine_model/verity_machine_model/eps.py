@@ -15,8 +15,9 @@ rule, 0 at 100% sampling. Each term is a fraction of honest time.
   CUDA classes, NOROW's componentwise minimum among them, folded on lanes), `baseline` (the design's `[baseline]`
   program, dp4a, folded on lanes) or `uniform` (q_u uniform instructions a word, folded there too); the cheater may
   have a fifth, `table` (QSTAR's register-indexed lookups, data/table.toml: q_T lane instructions from the lanes' pool
-  and 8 B of L2 a word against an L2 facet at the card's bandwidth, honest's L2 uncharged). Each filler runs on
-  lanes (its class mix) or on the uniform datapath (one uniform instruction a lane instruction). The cheater minimizes
+  and 8 B of L2 a word against an L2 facet at the card's bandwidth, honest's L2 uncharged). Honest runs each filler on
+  lanes (its class mix); the cheater may run it on the uniform datapath (one uniform instruction a lane instruction).
+  The cheater minimizes
   T at q = q* over every route. Honest is the same LP with its own routes: the tensor route at its own operand cost, the
   baseline program (whose words belong to the baseline, not to ε: the brief §2) and its filler where it runs it.
   ε_machine = 1 − T_cheat/T_honest, and against honest as built (the tensor route alone) beside it. The cheater's
@@ -40,7 +41,12 @@ rule, 0 at 100% sampling. Each term is a fraction of honest time.
   program's model time.
 - **ε_skip**, **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
 - **ε_adapt** is the proof unit's (data/adapt.toml, SPEC's Theorem D): what steering instances in unproved regions gains
-  when σ is drawn after the commitment and before evaluation.
+  when σ is drawn after the commitment and before evaluation. A design names its unit (`unit`).
+
+A design is one file in data/designs/, read on top of its `base` and of data/designs.toml (`design`): its name (decision
+79's, with the names tonight's notes and data used as `aliases`), the noise on each product (`[noise]`, a leaf of
+NOISE for each of PRODUCTS), the fold, the filler, the proof unit, the coins and its perplexity arm (`ppl`, a spec in
+benchmarks/ppl/specs/), with the ε terms' accounting beside them.
 
 A warp instruction does 32 lane instructions; a uniform instruction does one. Every count is per committed word.
 """
@@ -61,6 +67,18 @@ MMA = "MMA"
 ROUTES = ("tensor", "lanes", "baseline", "uniform", "table")
 OPERANDS = ("free", "floor", "honest")
 CREDITS = ("H", "model", "floor")
+PRODUCTS = ("linears", "lm_head", "qk", "pv")     # a served model's products: the linears, lm_head, QKᵀ and P·V
+NOISE = {                                          # how a product is noised and served, and what of it is unchecked
+    "one-sided": "one operand dithered with the low-rank U, the clean product served: the peeled strip (L of k products "
+                 "a word) unchecked",
+    "two-sided": "both operands dithered with fresh bits, no U, the last checked word served: nothing unchecked",
+    "co32c": "CO-Dither at r = 32, the residue sums' base-128 digits committed: every limb a checked word",
+    "cohalf": "CO-Dither at r = k/2 with a 7-bit served side: the strip one checked limb",
+    "peel": "P's w64 peel with U: the strip unchecked, all of it free at a one-hot P row (CHECKED-STRIP Result 3)",
+    "pv": "P served with a fresh bit, V served, Ycum's base-128 digits committed: every product checked",
+    "clean": "served plain, never proved",
+}
+OWN = ("name", "title", "summary")                 # what a design file states itself, never from its base
 
 
 @dataclass(frozen=True)
@@ -112,18 +130,14 @@ class Part:
 
 @dataclass(frozen=True)
 class Filler:
-    """Verified proof-of-work filler: `per_word` lane instructions a committed word (or "saturate": enough to fill the
-    uniform datapath for honest's time), in the class mix `mix` on lanes, run by honest on `route`; a deficient block
-    of it passes its check with probability ≤ `p` (SPEC §5: 0.854 for both fillers, any K)."""
-    per_word: float | str = 0.0
+    """Verified proof-of-work filler: `per_word` lane instructions a committed word in the class mix `mix`, run by
+    honest on `route`; a deficient block of it passes its check with probability ≤ `p` (SPEC §5: 0.854 for both
+    fillers, any K)."""
+    per_word: float = 0.0
     mix: dict[str, float] | None = None
     route: str = "lanes"         # lanes or uniform
     source: str = ""
     p: float = 0.854
-
-
-UPFILL = Filler(per_word="saturate", mix={"ALU": 1.0, "IMAD": 1.0}, route="uniform",
-                source="CALC: a uniform duo-style chain a warp, receipts checked like the fold's (candidate)")
 
 
 def lane_fill(x: float) -> Filler:
@@ -134,7 +148,7 @@ def lane_fill(x: float) -> Filler:
 
 @dataclass(frozen=True)
 class Design:
-    """A protocol's parameters (data/designs/NAME.toml)."""
+    """A protocol's parameters (data/designs/NAME.toml, on its base and data/designs.toml)."""
     name: str
     summary: str
     honest: str
@@ -159,6 +173,14 @@ class Design:
     lanes: bool = True
     uniform: bool = True
     q_uniform: float | None = None   # uniform instructions a word on the uniform datapath; None: q*
+    title: str = ""              # decision 79's name
+    aliases: tuple[str, ...] = ()    # the names tonight's notes and data used
+    base: str = ""               # the design this one varies
+    ppl: str = ""                # its perplexity arm, benchmarks/ppl/specs/PPL.toml; "": none on main
+    noise: dict[str, str] | None = None   # each of PRODUCTS: a leaf of NOISE
+    unit: str = ""               # the proof unit, a table of data/adapt.toml
+    coin_bits: int = 1           # a noised entry's coin on {0, …, 2^coin_bits − 1}
+    coins_source: str = ""
 
     def fold_cost(self) -> float:
         return sum(self.fold.values())
@@ -168,12 +190,6 @@ class Design:
         s = r / self.fold_cost()
         return replace(self, name=f"{self.name}@r{r:g}", fold={k: v * s for k, v in self.fold.items()},
                        fold_name=f"{self.fold_name}×{s:.3g}")
-
-    def with_upfill(self) -> Design:
-        """The design with UPFILL, verified filler keeping the uniform datapath busy for honest's time."""
-        if any(f.per_word == "saturate" for f in self.filler):
-            raise SystemExit(f"{self.name} has UPFILL already")
-        return replace(self, name=f"{self.name}+up", filler=(*self.filler, UPFILL))
 
     def with_fill(self, x: float) -> Design:
         """The design with x lane instructions a word of verified filler on lanes (`lane_fill`)."""
@@ -200,11 +216,28 @@ def honest(name: str, data: Path = DATA) -> Honest:
                   floor_source=ops.get("source", ""))
 
 
-def design(name: str, data: Path = DATA) -> Design:
+def _table(name: str, data: Path, seen: tuple[str, ...] = ()) -> dict:
+    """A design file read on top of its base's, and the first on top of data/designs.toml: each top-level key of the
+    later replaces the earlier's whole, but OWN and `aliases` are never inherited."""
     p = data / "designs" / f"{name}.toml"
     if not p.is_file():
-        raise SystemExit(f"no design {name!r}: one of {', '.join(designs(data))}")
+        raise SystemExit(f"no design {name!r}: one of {', '.join(designs(data))} (or an alias: "
+                         f"{', '.join(sorted(aliases(data)))})")
+    if name in seen:
+        raise SystemExit(f"design {name}: its bases loop ({' → '.join((*seen, name))})")
     t = tomllib.loads(p.read_text())
+    missing = [k for k in OWN if k not in t]
+    if missing or t["name"] != name:
+        raise SystemExit(f"designs/{name}.toml: name it {name!r} and give it its own {', '.join(OWN)}")
+    under = _table(t["base"], data, (*seen, name)) if t.get("base") else tomllib.loads(
+        (data / "designs.toml").read_text())
+    return {**{k: v for k, v in under.items() if k not in (*OWN, "aliases", "base")}, **t}
+
+
+def design(name: str, data: Path = DATA) -> Design:
+    """The design NAME, or the design with NAME among its aliases."""
+    name = aliases(data).get(name, name)
+    t = _table(name, data)
     h = honest(t["honest"], data)
     fold = dict(t.get("fold", {"name": h.fold_name, **h.fold}))
     luck, routes, base = t["luck"], t.get("routes", {}), t.get("baseline", {})
@@ -212,8 +245,15 @@ def design(name: str, data: Path = DATA) -> Design:
     f = t.get("filler", {})
     filler = Filler(per_word=f.get("per_word", 0.0), mix=f.get("mix"), route=f.get("route", "lanes"),
                     source=f.get("source", ""), p=f.get("p", Filler.p))
-    if filler.route not in ("lanes", "uniform") or (filler.per_word and not filler.mix):
-        raise SystemExit(f"{name}: the filler runs on lanes or uniform, with its class mix on lanes")
+    if filler.route != "lanes" or (filler.per_word and not filler.mix):
+        raise SystemExit(f"{name}: honest runs a filler on lanes, with its class mix (decision 73: a uniform "
+                         "instruction takes an issue slot, so no design fills the uniform datapath)")
+    noise = dict(t.get("noise", {}))
+    if set(noise) != set(PRODUCTS) or set(noise.values()) - set(NOISE):
+        raise SystemExit(f"{name}: [noise] names a leaf of NOISE ({', '.join(NOISE)}) for each of {', '.join(PRODUCTS)}")
+    if t["unit"] not in adapts(data):
+        raise SystemExit(f"{name}: unit {t['unit']!r} is not a proof unit of adapt.toml ({', '.join(adapts(data))})")
+    coins = t["coins"]
     return Design(name=t["name"], summary=t["summary"], honest=t["honest"], L=t["L"], work=t.get("work", 1.0),
                   fold_name=fold.pop("name"), fold=fold, filler=(filler,) if filler.per_word else (),
                   skip=_parts(t.get("skip", {})),
@@ -222,7 +262,9 @@ def design(name: str, data: Path = DATA) -> Design:
                   baseline=dict(base.get("program", {})), baseline_name=base.get("name", ""),
                   baseline_source=base.get("source", ""), floor=dict(ops.get("floor", {})),
                   floor_source=ops.get("source", ""), plain=t.get("plain", 0.0), lanes=routes.get("lanes", True),
-                  uniform=routes.get("uniform", True), q_uniform=routes.get("q_uniform"))
+                  uniform=routes.get("uniform", True), q_uniform=routes.get("q_uniform"), title=t["title"],
+                  aliases=tuple(t.get("aliases", ())), base=t.get("base", ""), ppl=t.get("ppl", ""), noise=noise,
+                  unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"])
 
 
 def profiles(data: Path = DATA) -> list[str]:
@@ -261,9 +303,8 @@ class Adapt:
     selection: str = ""
 
 
-def adapt(name: str = "", data: Path = DATA) -> Adapt:
+def adapt(name: str, data: Path = DATA) -> Adapt:
     t = tomllib.loads((data / "adapt.toml").read_text())
-    name = name or t["default"]
     if name not in t or not isinstance(t[name], dict):
         raise SystemExit(f"no proof unit {name!r} in adapt.toml: one of {', '.join(adapts(data))}")
     return Adapt(name=name, eps=t[name]["eps"], source=t[name]["source"], selection=t[name].get("selection", ""))
@@ -275,6 +316,17 @@ def adapts(data: Path = DATA) -> list[str]:
 
 def designs(data: Path = DATA) -> list[str]:
     return sorted(p.stem for p in (data / "designs").glob("*.toml"))
+
+
+def aliases(data: Path = DATA) -> dict[str, str]:
+    """Each alias, a name tonight's notes and data used, with the design it names."""
+    out: dict[str, str] = {}
+    for n in designs(data):
+        for a in tomllib.loads((data / "designs" / f"{n}.toml").read_text()).get("aliases", ()):
+            if a in out or (data / "designs" / f"{a}.toml").is_file():
+                raise SystemExit(f"alias {a!r} names two designs ({out.get(a, a)}, {n})")
+            out[a] = n
+    return out
 
 
 @dataclass(frozen=True)
@@ -505,8 +557,7 @@ def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", cre
           table: Table | None = None) -> Setup:
     """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a):
     the tensor route at the noise's φ_del, the fold, the fillers on their own routes and the baseline program, with no
-    overhead. A saturating filler fills the uniform pipe's slack in the credited program's time. `table` opens the
-    cheater's table route."""
+    overhead. `table` opens the cheater's table route."""
     h = honest(d.honest, data)
     if d.L % h.depth:
         raise SystemExit(f"{d.name}: L = {d.L} is not a multiple of the MMA's depth {h.depth}")
@@ -515,17 +566,7 @@ def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", cre
     if credit == "floor" and operands == "honest":
         raise SystemExit("the floor program delivers operands at φ_del: --operands honest reads honest's credit only")
     tm = h.tensor("floor", d.floor) if credit == "floor" else None
-    fixed = tuple((f, float(f.per_word)) for f in d.filler if f.per_word != "saturate")
-    fillers = []
-    for f in d.filler:
-        if f.per_word == "saturate":
-            if f.route != "uniform":
-                raise SystemExit(f"{d.name}: only a uniform filler saturates")
-            m = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fixed, tensor_mma=tm)
-            fillers.append((f, max(0.0, m.T - pi.load(m.n)["UP"]) / pi.c[UNI]["UP"]))
-        else:
-            fillers.append((f, float(f.per_word)))
-    fs = tuple(fillers)
+    fs = tuple((f, float(f.per_word)) for f in d.filler)
     built = fastest(d, h, pi, q=None, q_uniform=None, baseline=False, fillers=fs, tensor_mma=tm)
     base = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fs, tensor_mma=tm)
     return Setup(design=d, honest=h, machine=pi, operands=operands, credit=credit, fillers=fs, as_built=built,
