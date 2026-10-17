@@ -302,7 +302,7 @@ def moe_ops_traced(model=None):
                 continue
             if fe is packets.get("moe_forward") or fe is packets.get("moe_forward_shared"):
                 h.patch(m, "_forward_entry", (lambda hs, rl, sei, ids, _name, _hd, _l=m: _l._forward_impl(hs, rl, sei, ids)))
-        _router_bias_through_owner(model, h)
+        _router_params_through_owner(model, h)
     if "fused_experts" in packets:
         # `_OpNamespace.__getattr__` caches resolved packets as instance attributes; a plain function in its place is what callers
         # of `torch.ops.vllm.fused_experts(**kw)` now reach, and the packet is restored below.
@@ -328,7 +328,7 @@ def _expert_weight_scales_through_owner(layer, quant_method, h) -> None:
     ``moe_kernel.fused_experts.quant_config._w1.scale`` / ``_w2.scale``; the experts' ``w1_scale`` / ``w2_scale`` are read-only
     properties over those descriptors.  Neither object is an ``nn.Module``.  Torch export swaps Parameters on modules for graph values
     while tracing, so the stale descriptor references otherwise become lifted tensor constants.  Refresh them immediately before
-    ``fused_experts.apply`` from the owning module, exactly as ``_router_bias_through_owner`` does for the router's correction bias.
+    ``fused_experts.apply`` from the owning module, exactly as ``_router_params_through_owner`` does for the router's Parameters.
     Identity is checked before patching: a backend-owned derived scale is not silently relabelled as a Parameter."""
     kernel = getattr(quant_method, "moe_kernel", None)
     experts = getattr(kernel, "fused_experts", None)
@@ -356,25 +356,28 @@ def _expert_weight_scales_through_owner(layer, quant_method, h) -> None:
     h.patch(experts, "apply", apply_with_owned_scales)
 
 
-def _router_bias_through_owner(model, h) -> None:
-    """A MoE router is a plain object (not a module) holding the layer's `e_score_correction_bias` Parameter (`GroupedTopKRouter`,
-    `FusedTopKBiasRouter`).  The export swaps each module's parameters for its own tensors while it traces, so a reference held
-    outside the module tree is the original tensor, which the export lifts as a hidden constant.  For the duration, each such
-    router reads the bias from the module that registers it, at every `select_experts` (the same Parameter: the bias the engine
-    loads into it)."""
+def _router_params_through_owner(model, h) -> None:
+    """A MoE router is a plain object (not a module) holding Parameters of the layer: its `e_score_correction_bias`
+    (`GroupedTopKRouter`, `FusedTopKBiasRouter`) and `FusedTopKBiasRouter`'s hash table (`_hash_indices_table`, DeepSeek-V4's
+    `gate.tid2eid`).  The export swaps each module's parameters for its own tensors while it traces, so a reference held outside
+    the module tree is the original tensor, which the export lifts as a hidden constant.  For the duration, each such router reads
+    each of them from the module that registers it, at every `select_experts` (the same Parameter: the one the engine loads)."""
     owners = {id(p): (mod, n) for mod in model.modules() for n, p in mod._parameters.items() if p is not None}
     for m in model.modules():
         r = getattr(m, "router", None)
-        b = getattr(r, "e_score_correction_bias", None)
-        if r is None or isinstance(r, torch.nn.Module) or not isinstance(b, torch.nn.Parameter) or id(b) not in owners:
+        if r is None or isinstance(r, torch.nn.Module):
             continue
-        owner, name = owners[id(b)]
+        held = tuple((a, *owners[id(p)]) for a, p in vars(r).items() if isinstance(p, torch.nn.Parameter) and id(p) in owners)
+        if not held:
+            continue
 
-        def select(*a, _r=r, _o=owner, _n=name, _sel=r.select_experts, **k):
-            _r.e_score_correction_bias = getattr(_o, _n)
+        def select(*a, _r=r, _held=held, _sel=r.select_experts, **k):
+            for attr, owner, name in _held:
+                setattr(_r, attr, getattr(owner, name))
             return _sel(*a, **k)
 
-        h.patch(r, "e_score_correction_bias", b)
+        for attr, _owner, _name in held:
+            h.patch(r, attr, getattr(r, attr))
         h.patch(r, "select_experts", select)
 
 
