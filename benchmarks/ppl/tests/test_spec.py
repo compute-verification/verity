@@ -17,7 +17,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
             "adopted-attention": ("attention", "int8-attention", True), "adopted": ("all", "int8-all", True),
             "adopted-no-smooth": ("all", "int8-all", True), "adopted-qkd": ("all", "int8-all", True),
             "adopted-bd": ("all", "int8-all", True), "adopted-bd-lm": ("all", "int8-all", True),
-            "co": ("all", "int8-all", True), "ncp": ("all", "int8-all", True)}
+            "co": ("all", "int8-all", True), "ncp": ("all", "int8-all", True),
+            "cb": ("all", "int8-all", True)}
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
@@ -89,6 +90,8 @@ def test_co_and_ncp_serve_seven_bit_sides():
     assert (nkw["int8"]["act"], nkw["int8"]["act_top"], nkw["int8"]["weight_top"]) == ("round", 63, 63)
     assert not any(s.defn.name == "peel" for s in ncp.attention)
     assert {s.defn.name: s.kw for s in ncp.attention}["int8"]["p_top"] == 63
+    cb = spec.load("cb")
+    assert cb.linear == ncp.linear and cb.attention == co.attention
 
 
 def test_a_dithered_operand_stays_within_its_top():

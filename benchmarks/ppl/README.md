@@ -120,8 +120,8 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 (`adopted-linears`, tonight's `d63-sm50-smkv`; `adopted-attention`, tonight's `int8-rot-eqp=w64-poff64-psink-kc-kv=dith`)
 and `adopted-no-smooth` (tonight's WikiText end to end); SKIP's designs (note:20261017T0340Z-draft-skip): `adopted-qkd`
 (Q Kᵀ dithered on both operands, no Q peel), `adopted-bd` (the linears too), `adopted-bd-lm` (and lm_head), `co`
-(CO-Dither's served values at r = k/2: 7-bit sides plus fresh bits) and `ncp` (NCP-INT's: the exact product of 7-bit
-operands). Any other file passes as a path.
+(CO-Dither's served values at r = k/2: 7-bit sides plus fresh bits), `ncp` (NCP-INT's: the exact product of 7-bit
+operands) and `cb` (`ncp`'s linears with `co`'s attention). Any other file passes as a path.
 
 ## Adding an intervention
 

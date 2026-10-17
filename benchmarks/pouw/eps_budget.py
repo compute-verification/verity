@@ -221,7 +221,11 @@ SKIP_DESIGNS = {
     "B32": "CO-Dither at r = 32 with an 8-bit served side: the strip's second int8 limb unforced, r/(k + r)",
     "C": "NCP-INT on k32 IMMA: three noised copies cancelling in one depth-3k product, the exact output the last "
          "checked word, so at the zero instance the last segment (L of 3k) is known",
+    "CB": "NCP-INT on the linears and lm_head, CO-Dither at r = d/2 (7-bit) on Q Kᵀ, P V as in A: wide noise on every "
+          "product",
 }
+#: hybrids: (design for the linears and lm_head, design for attention)
+HYBRIDS = {"CB": ("C", "B")}
 #: Every SKIP design but `record` derives each stage's operand by C1′ from the previous stage's served output (the
 #: epilogue and quantizer are checked) and serves decode edited, with coins drawn per round once the weights and the
 #: round's inputs are committed (no deferred pass, no per-stage round trip).
@@ -232,6 +236,8 @@ def products(design: str, comp: str, k: int) -> tuple[float, float, float]:
     """(transcript, strip, skippable) int8 products an output word of depth k executes. A strip runs on two int8 limbs
     when its operand is a residue sum that leaves int8 (L = 32 classes of k / L terms), on one when it fits (CO-Dither's
     r = k/2 with a 7-bit served side: two terms)."""
+    if design in HYBRIDS:
+        return products(HYBRIDS[design][comp in ("QKᵀ", "P·V")], comp, k)
     if comp == "P·V":
         if design == "C":
             return 3 * k, 0, L
@@ -299,7 +305,7 @@ def parts(name: str, ctx: int, phase: str, design: str, rates: dict = RATES) -> 
     out.append(Part("forming", 0, 0, form, form if design == "record" else 0, form))
     lin_plain = sum(k * n for _, k, n in s.linears) * t_lin
     weights = sum(k * n for _, k, n in s.linears)
-    copies = 3 if design == "C" else 1
+    copies = 3 if design in ("C", "CB") else 1
     extra = (r["t_dither"] * copies * (act + qkv_el + s.heads * s.d + weights / r["tokens_per_draw"])
              + r["t_xcommit"] * (act + qkv_el) + (r["receipt_commit"] + r["draws"]) * (lin_plain + att_plain))
     if design == "record":
