@@ -154,7 +154,8 @@ def test_the_coefficient_q0_and_census(tmp_path: Path):
     assert set(rows) == {"M", "A", "JIM"} and rows["JIM"]["status"] == "joint" and rows["M"]["status"] == "measured"
     assert "0.973 a SMSP-cycle alone" in rows["JIM"]["description"] and "/ 1.0049 " in rows["JIM"]["description"]
     lines = {(d["kind"], d["row"]): d for d in csv.DictReader(io.StringIO(census_csv))}
-    assert set(lines) == {("IMMA16832", "M"), ("ALU", "A"), ("IMMA16832", "JIM")} | {(k, "JIM") for k in SM.SCALAR}
+    assert set(lines) == ({("IMMA16832", "M"), ("ALU", "A"), ("IMMA16832", "JIM")}
+                          | {(k, "JIM") for k in [*SM.SCALAR, *SM.ISSUE_ONLY]})
     scale = 0.98 / (5.125 / 5.1)
     assert abs(float(lines["IMMA16832", "JIM"]["cycles"]) - 5.1 * scale) < 1e-5
     assert abs(float(lines["FFMA", "JIM"]["cycles"]) - scale) < 1e-5

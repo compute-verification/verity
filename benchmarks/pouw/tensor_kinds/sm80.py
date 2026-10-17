@@ -522,7 +522,7 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
             lines.append(f"{kind},JIM,,,{v * scale:.6g},,,,{' '.join(sorted(runs))}")
             cites["JIM"] |= runs
         cites["JIM"] |= ext_runs
-        for other in [k for k in SCALAR if k in rate] + ISSUE_ONLY:
+        for other in list(SCALAR) + ISSUE_ONLY:
             lines.append(f"{other},JIM,,,{scale:.6g},,,,{' '.join(sorted(cites['JIM']))}")
         fmt.update(margin=f"{1 + m:.4f}", ext=" ".join(sorted(ext_runs)))
     rows = ["row,status,runs,description"]
