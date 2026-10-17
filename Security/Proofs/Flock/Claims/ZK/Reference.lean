@@ -26,7 +26,8 @@ witnesses valid, the lowering's completeness; `DummyReg`: the dummy's carry the 
 encoding reads the coins before `i` only; `TapeOK`: the tape read with fibers of one size). `Flock.zkAt_deployZk_ref` is
 `Claims.Flock.ZKAt` at `refP`'s prover; `Flock.zk_zkD_ref` is `Claims.Flock.ZK` at the masked record
 `RefSession.zkD`, whose reference prover is `honestPZk` behind `refP`'s `Hello` and coin-tree checks, where `refP`'s
-messages are `honestPZk`'s (`RefSession.HonestMsgs`, a named Prop until it is proved).
+messages are `honestPZk`'s (`RefSession.HonestMsgs`, a named Prop until it is proved). `Flock.zk_deployZk_ref` is its case
+at the deployed coin layer (`ZK.CoinLayer`).
 -/
 
 namespace Claims.ZKMal

@@ -18,6 +18,7 @@ import Proofs.Flock.Claims.ZK.Hypotheses
 import Proofs.Flock.Claims.ZK.Prefinal
 import Proofs.Flock.Claims.ZK.Deployed
 import Proofs.Flock.Claims.ZK.Reference
+import Proofs.Flock.Claims.ZK.CoinLayer
 import Proofs.Flock.Claims.ZK.Tape
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Server
@@ -100,6 +101,11 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   the cut view the round messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and `Flock.zk_zkD_ref` at the session's masked record
   `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `honestPZk`'s, a named Prop), each also at the
   pinned key's hiding gap (`_gap`).
+* `CoinLayer`: the deployed masked record `zkDeployed`, `RefSession.zkD` at `coin-tree/hm96-sha512/v2`'s coin layer
+  (the 32-byte nonce, `Hello`'s frame with its hex, `Hello`'s answer of root and hm96 key, the keyed tree, the
+  committed schedule's places, the opening read from `Resp::Coins`'s words, the coin handed on its words), and
+  **`Flock.zk_deployZk_ref`** at it, at every rep rounds' coin counts; `Claims.Witness.Flock.ZK_meets` states its coin
+  layer and `ZK_coins_fails` that the degenerate one (every opening passes, the coin is the opening) is not it.
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
