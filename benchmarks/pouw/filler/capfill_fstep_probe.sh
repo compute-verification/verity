@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # FILLER (note:20261017T0652Z-draft-filler): the whole decode step co-resident with a 1-block pump on every SM, its
 # linears through flin's FLIN_FIT tiles (a CTA fits beside the pump block: ≤ 32 K registers, ≤ 41 KB of shared memory)
-# and lm_head too (FLIN_LM=1), attention dcap's (it already fits, capfill_fit_probe.sh). Gates: fgate (every fitted
-# tile bit for bit, every row) and dgate on the fit build. Then flin alone at each fitted M, and fstep co (FILL_SMS -1,
-# FW = AFW = 0: the step beside the pump at the lowest priority) at each decode point, against the cuBLASLt step alone on
-# the whole GPU; the control is the same co step with flin's default tiles. Each co run may take only the linears or only
-# attention (FSTEP_KIND), flin without PDL, and another pump shape. Clocks are read, never set.
+# and lm_head too (FLIN_LM=1), attention dcap's (it already fits, capfill_fit_probe.sh). Gates: dgate on the fit build,
+# fgate (every fitted tile bit for bit, every row) on the CP_FGATE builds. Then flin alone at each fitted M (CP_FLIN
+# builds), and fstep co (FILL_SMS -1, FW = AFW = 0: the step beside the pump at the lowest priority) for each CP_RUNS
+# entry, against the cuBLASLt step alone on the whole GPU; the control (c1) is the same co step with flin's default
+# tiles. A co run may take only the linears or only attention (FSTEP_KIND), flin without PDL, and another pump shape.
+# Builds: fit (FLIN_FIT), fit2 (FLIN_FIT=2), c1 (default tiles), all with the 1-block pump. Clocks are read, never set.
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -14,42 +15,47 @@ export B; B=$(mktemp -d /tmp/capfillf.XXXXXX); trap 'rm -rf "$B"' EXIT
 # CP_RUNS: BUILD,B,L,FSTEP_KIND,FLIN_PDL,W:NC:S a co step each (default: the fit build at each decode point, then the
 # control at B 32, both whole steps beside the pump at 8:2:256)
 export CP_RUNS=${CP_RUNS:-"fit,1,2048,2,1,8:2:256 fit,32,2048,2,1,8:2:256 fit,128,2048,2,1,8:2:256 fit,256,2048,2,1,8:2:256 c1,32,2048,2,1,8:2:256"}
-export CP_PAD=${CP_PAD:-4} CP_FGATE=${CP_FGATE:-1} CP_FLIN=${CP_FLIN:-1}
+export CP_PAD=${CP_PAD:-4} CP_FGATE=${CP_FGATE:-fit} CP_FLIN=${CP_FLIN:-fit}
+[ "$CP_FGATE" = none ] && CP_FGATE=""
+[ "$CP_FLIN" = none ] && CP_FLIN=""
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
 for v in CP_RUNS CP_PAD CP_FGATE CP_FLIN; do echo "$v=${!v}"; done > "$O/params.txt"
 
-declare -A FLAGS=([fit]="-DPF_CTAS=1 -DPF_MINB=2 -DFLIN_FIT" [c1]="-DPF_CTAS=1 -DPF_MINB=2")
+declare -A FLAGS=([fit]="-DFLIN_FIT" [fit2]="-DFLIN_FIT=2" [c1]="")
+builds=$(for x in fit $CP_FGATE $CP_FLIN $CP_RUNS; do echo "${x%%,*}"; done | sort -u)
 pids=()
-for b in fit c1; do
+for b in $builds; do
+  [ -n "${FLAGS[$b]+x}" ] || { echo "unknown build $b"; exit 4; }
   # shellcheck disable=SC2086
-  nvcc -O3 -std=c++17 -DPFILL_BU -DPF_PW=4 ${FLAGS[$b]} -Xcompiler -mpopcnt -gencode arch=compute_120a,code=sm_120a \
-    -Xptxas -v -o "$B/dcap_$b" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl > "$O/build-$b.log" 2>&1 &
+  nvcc -O3 -std=c++17 -DPFILL_BU -DPF_PW=4 -DPF_CTAS=1 -DPF_MINB=2 ${FLAGS[$b]} -Xcompiler -mpopcnt \
+    -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap_$b" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl \
+    > "$O/build-$b.log" 2>&1 &
   pids+=("$!")
 done
 bad=0
 for p in "${pids[@]}"; do wait "$p" || bad=1; done
-for b in fit c1; do
+for b in $builds; do
   [ -x "$B/dcap_$b" ] || { echo "build $b failed"; grep -E "error" "$O/build-$b.log" | head -20; bad=1; }
+  grep -A4 -E "Compiling entry function '_Z6flin_kILi(32|64|128)ELi[0-9]+ELi[0-9]+ELi4ELi[12]ELi0E" "$O/build-$b.log" \
+    | grep -E "Compiling|registers" > "$O/flin-regs-$b.txt"
 done
 [ "$bad" = 0 ] || exit 4
-grep -A4 -E "Compiling entry function '_Z6flin_kILi(32|64|128)ELi[0-9]+ELi[0-9]+ELi4ELi[12]ELi0E" "$O/build-fit.log" \
-  | grep -E "Compiling|registers" > "$O/flin-fit-regs.txt"
 
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,power.limit --format=csv,noheader \
     -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
   "$B/dcap_fit" dgate > "$O/dgate-fit.jsonl" 2>> "$O/errors.txt"; echo "dgate fit rc $?" >> "$O/rc.txt"
-  if [ "$CP_FGATE" = 1 ]; then
-    "$B/dcap_fit" fgate > "$O/fgate-fit.jsonl" 2>> "$O/errors.txt"; echo "fgate fit rc $?" >> "$O/rc.txt"
-  fi
-  if [ "$CP_FLIN" = 1 ]; then
+  for b in $CP_FGATE; do
+    "$B/dcap_$b" fgate > "$O/fgate-$b.jsonl" 2>> "$O/errors.txt"; echo "fgate $b rc $?" >> "$O/rc.txt"
+  done
+  for b in $CP_FLIN; do
     for m in 32 64 128; do
-      "$B/dcap_fit" flin "$m" 0 2 0 >> "$O/flin-fit.jsonl" 2>> "$O/errors.txt"; echo "flin fit $m rc $?" >> "$O/rc.txt"
+      "$B/dcap_$b" flin "$m" 0 2 0 >> "$O/flin-$b.jsonl" 2>> "$O/errors.txt"; echo "flin $b $m rc $?" >> "$O/rc.txt"
     done
-  fi
+  done
   for run in $CP_RUNS; do
     IFS=, read -r b bb l kind pdl pump <<< "$run"
     FSTEP_KIND=$kind FLIN_PDL=$pdl FSTEP_PUMP=$pump DFILL_PAD_KB=$CP_PAD FLIN_LM=1 "$B/dcap_$b" fstep "$bb" "$l" 0 2 0 0 -1 \
@@ -61,8 +67,8 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
 r=$?
 echo "lease rc $r" >> "$O/rc.txt"
 echo "=== rc ==="; cat "$O/rc.txt" 2>/dev/null
-echo "=== regs ==="; cat "$O/flin-fit-regs.txt" 2>/dev/null
-echo "=== fgate fails ==="; grep -c '"ok": false' "$O/fgate-fit.jsonl" 2>/dev/null
-echo "=== flin ==="; cut -c1-300 "$O/flin-fit.jsonl" 2>/dev/null
+echo "=== regs ==="; cat "$O"/flin-regs-*.txt 2>/dev/null
+echo "=== fgate fails ==="; cat "$O"/fgate-*.jsonl 2>/dev/null | grep -c '"ok": false'
+echo "=== flin ==="; cut -c1-300 "$O"/flin-*.jsonl 2>/dev/null
 echo "=== fstep ==="; cut -c1-600 "$O/fstep.jsonl" 2>/dev/null
 exit "$r"

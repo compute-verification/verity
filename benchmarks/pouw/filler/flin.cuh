@@ -18,9 +18,9 @@
 // the same bytes. Partial tiles meet in D by integer red.add, exact in any order; D must start at zero, so each CTA also
 // zeroes its share of the next linear's output (Z, zn ints, a multiple of 4).
 constexpr int FLIN_BN = 128;
-// FLIN_FIT: tiles whose GEMM-only CTA (FW = 0) fits beside one pump block on its SM (≤ 32 K registers, ≤ 40 KB of shared
-// memory, 41 KB at M 32), so a co-scheduled pump never holds a linear off (flin_cfg); M > 128 keeps its tile, whose accumulators alone are
-// BN · M = 32 K registers at M 256.
+// FLIN_FIT: tiles whose GEMM-only CTA (FW = 0) fits beside one pump block on its SM (≤ 32 K registers, ≤ 41 KB of shared
+// memory), so a co-scheduled pump never holds a linear off (flin_cfg); FLIN_FIT=2 takes M 32 in four half stages and M 128
+// with four consumer warps. M > 128 keeps its tile, whose accumulators alone are BN · M = 32 K registers at M 256.
 #ifdef FLIN_FIT
 #define FLIN_MINB 2
 #else
@@ -583,7 +583,11 @@ static bool flin_m_ok(int M) { return M == 32 || M == 64 || M == 128 || M == 160
 // the flin tile height a batch of B rows runs at (its rows past B are computed and ignored)
 static int flin_m_for(int B) { return B <= 32 ? 32 : B <= 64 ? 64 : B <= 128 ? 128 : B <= 160 ? 160 : B <= 192 ? 192 : 256; }
 static FlinCfg flin_cfg(int M) {
-#ifdef FLIN_FIT
+#if FLIN_FIT == 2
+  if (M == 32) return {64, 4, 4};
+  if (M == 64) return {64, 3, 4};
+  if (M == 128) return {64, 2, 4};
+#elif defined(FLIN_FIT)
   if (M == 32) return {128, 2, 4};
   if (M == 64) return {64, 3, 4};
   if (M == 128) return {64, 2, 8};
@@ -670,7 +674,11 @@ static bool flin_fw(const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st
 }
 static bool flin_launch(int M, const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st) {
   switch (M) {
-#ifdef FLIN_FIT
+#if FLIN_FIT == 2
+    case 32: return flin_fw<32, 64, 4, 4, 1>(a, grid, FW, NC, st);
+    case 64: return flin_fw<64, 64, 3, 4, 1>(a, grid, FW, NC, st);
+    case 128: return flin_fw<128, 64, 2, 4, 1>(a, grid, FW, NC, st);
+#elif defined(FLIN_FIT)
     case 32: return flin_fw<32, 128, 2, 4, 1>(a, grid, FW, NC, st);
     case 64: return flin_fw<64, 64, 3, 4, 1>(a, grid, FW, NC, st);
     case 128: return flin_fw<128, 64, 2, 4, 2>(a, grid, FW, NC, st);
