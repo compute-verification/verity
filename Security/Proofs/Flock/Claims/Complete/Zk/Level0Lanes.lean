@@ -85,27 +85,22 @@ theorem grL_powP (nonce : ℕ → ℕ → UInt64) (kind : ℕ) : grL.T (powP non
   · exact ⟨Pre.refl _, Pre.refl _, Pre.refl _, Pre.refl _, Pre.push _ _⟩
   · exact ⟨Pre.refl _, Pre.refl _, Pre.push _ _, Pre.refl _, Pre.refl _⟩
 
-/-- A state map that changes no list, or pushes onto one. -/
-macro "grow_map" : tactic => `(tactic| (intro s; unfold Grow; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;>
-  first | exact Pre.refl _ | exact Pre.push _ _))
-
-macro "grow_tac" : tactic => `(tactic| repeat (first
+theorem grL_sendMsg (m : F256 × F256) : grL.T (sendMsg (M := PS) m) fun _ => True := by
+  unfold sendMsg
+  repeat (first
     | extract_lets
     | (with_reducible apply Total.bind')
     | (with_reducible intro _)
     | (with_reducible apply Total.pure')
     | (with_reducible apply grL_get)
-    | (with_reducible apply grL_modify; grow_map)
+    | (with_reducible apply grL_modify; intro s; unfold Grow; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;>
+        (first | exact Pre.refl _ | exact Pre.push _ _))
     | (with_reducible apply grL_liftT)
     | (with_reducible apply grL_powP)
     | (with_reducible apply Total.forIn_range)
     | (with_reducible apply Total.forIn_array)
     | (with_reducible apply Total.ite)
-    | split))
-
-theorem grL_sendMsg (m : F256 × F256) : grL.T (sendMsg (M := PS) m) fun _ => True := by
-  unfold sendMsg
-  grow_tac
+    | split)
 
 theorem grL_challengeP (resp : ℕ → Claims.Msg) (split : Bool) :
     grL.T (challengeP (asksS resp) split) fun _ => True := by
@@ -116,7 +111,8 @@ theorem grL_challengeP (resp : ℕ → Claims.Msg) (split : Bool) :
     | (with_reducible intro _)
     | (with_reducible apply Total.pure')
     | (with_reducible apply grL_get)
-    | (with_reducible apply grL_modify; grow_map)
+    | (with_reducible apply grL_modify; intro s; unfold Grow; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;>
+        (exact Pre.refl _))
     | (with_reducible apply grL_liftT)
     | (with_reducible apply grL_sendMsg)
     | (with_reducible apply Total.ite)
@@ -129,7 +125,8 @@ theorem grL_oodIntroP (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt6
     | extract_lets
     | (with_reducible apply Total.bind')
     | (with_reducible intro _)
-    | (with_reducible apply grL_modify; grow_map)
+    | (with_reducible apply grL_modify; intro s; unfold Grow; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;>
+        (first | exact Pre.refl _ | exact Pre.push _ _))
     | (with_reducible apply grL_liftT)
     | (with_reducible apply grL_sendMsg)
     | (with_reducible apply grL_powP))
@@ -399,7 +396,8 @@ theorem ligeritoPZk_lanes (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : Mer
       | (exact grL.pure _ rfl)
       | (with_reducible apply Total.pure')
       | (with_reducible apply grL_get)
-      | (with_reducible apply grL_modify; grow_map)
+      | (with_reducible apply grL_modify; intro s; unfold Grow; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;>
+        (exact Pre.refl _))
       | (with_reducible apply grL_liftT)
       | (with_reducible apply grL_powP)
       | (with_reducible apply grL_sendMsg)
