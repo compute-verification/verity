@@ -215,9 +215,13 @@ def test_sm89_pipe_rate_counts_the_loops_instructions_on_its_pipe():
     """An ALU probe's loop counter runs on the ALU pipe, so the pipe's rate counts it; SHFL's doesn't (SHF isn't SHFL)."""
     loop = lambda pat, n: {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1,
                                                                     "BRA": 1}}]}
-    assert sm89.pipe_rate({"rate": 1.6}, loop("LOP3.LUT", 16)) == pytest.approx(1.6 * 18 / 16)
-    assert sm89.pipe_rate({"rate": 0.5}, loop("SHFL.BFLY", 16)) == pytest.approx(0.5)
-    assert sm89.pipe_rate({"rate": 1.9}, loop("IMAD", 16)) == pytest.approx(1.9)
+    assert sm89.pipe_rate({"rates": {"0:LOP3.LUT": 1.6}}, loop("LOP3.LUT", 16)) == pytest.approx(1.6 * 18 / 16)
+    assert sm89.pipe_rate({"rates": {"0:SHFL.BFLY": 0.5}}, loop("SHFL.BFLY", 16)) == pytest.approx(0.5)
+    assert sm89.pipe_rate({"rates": {"0:IMAD": 1.9}}, loop("IMAD", 16)) == pytest.approx(1.9)
+    fold = {"loops": [{"counts": {"LOP3.LUT": 32, "IMAD": 32, "LEA.HI": 32},
+                       "top": {"LOP3.LUT": 32, "IMAD": 32, "LEA.HI": 32, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+    rates = {"0:LOP3.LUT": 0.96, "0:IMAD": 0.96, "0:LEA.HI": 0.96}
+    assert sm89.pipe_rate({"rates": rates}, fold) == pytest.approx(0.96 * 66 / 32)   # LOP3, LEA.HI and the counter
 
 
 def test_sm89_frontier_counts_every_non_mma_instruction_as_x():

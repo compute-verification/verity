@@ -45,8 +45,11 @@ TK = _load("tensor_kinds_fit", HERE.parents[1] / "tensor_kinds" / "tensor_kinds.
 ALU_PIPE = {"IADD3", "LOP3", "SHF", "PRMT", "ISETP", "IMNMX", "LEA", "SEL"}
 #: scalar kind: (row, alone probes, what the row holds)
 PIPES = {
-    "ALU": ("A", ("alone_iadd3", "alone_lop3", "alone_shf", "alone_prmt"), "ALU pipe: IADD3, LOP3, SHF, PRMT, IMNMX"),
+    "ALU": ("A", ("alone_iadd3", "alone_lop3", "alone_shf", "alone_prmt"),
+            "ALU pipe: IADD3, LOP3, SHF, PRMT, IMNMX, LEA.HI"),
     "VIMNMX": ("A", ("alone_imnmx",), ""),
+    # duo's fold (LOP3 + IMAD + LEA.HI a word): its LOP3, LEA.HI and loop counter together run at the pipe's rate
+    "LEA": ("A", ("fold_only",), ""),
     "IMAD": ("I", ("alone_imad",), "IMAD"),
     "IDP4A": ("I4A", ("alone_idp4a",), "IDP.4A"),
     "HFMA2": ("H", ("alone_hfma2",), "HFMA2"),
@@ -90,12 +93,15 @@ def loop_rates(row: dict, verdict: dict) -> tuple[float, float]:
 
 
 def pipe_rate(row: dict, verdict: dict) -> float:
+    """The probe's pipe rate: its loop's rate times the loop's instructions on the counted ones' pipe (every ALU-pipe
+    instruction when one counted pattern is on it)."""
     (lp,) = verdict["loops"]
-    (pat,) = [p for p, n in lp["counts"].items() if n]
-    ops = [op for op in lp["top"] if op.startswith(pat.rstrip("*"))]
-    cls = pipe_class(ops[0])
-    same = sum(n for op, n in lp["top"].items() if pipe_class(op) == cls) if cls == "ALU" else lp["counts"][pat]
-    return row["rate"] * same / lp["counts"][pat]
+    pats = [p for p, n in lp["counts"].items() if n]
+    per_iter = next(r for k, r in row["rates"].items() if k.split(":", 1)[1] == pats[0]) / lp["counts"][pats[0]]
+    ops = [op for op in lp["top"] for p in pats if op.startswith(p.rstrip("*"))]
+    if any(pipe_class(op) == "ALU" for op in ops):
+        return per_iter * sum(n for op, n in lp["top"].items() if pipe_class(op) == "ALU")
+    return per_iter * sum(lp["top"][op] for op in ops)
 
 
 def build(scalar: Path, tk: Path) -> tuple[list[list[str]], list[list[str]]]:
