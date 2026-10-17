@@ -729,12 +729,14 @@ def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D)
 no unit is faulty, against every malicious verifier of the sampled verifier's rounds. This is `ZKmalR` with the
 simulator given the trace's leaf layer under the roots (`leafLayer`), which the protocol publishes: the leakage is that
 whole layer, a fixed function of `(x, w)`. `ZKmalR` runs one simulator per statement, so the claim holds at every
-assignment `l` of a leaf layer to each statement, on the honest pairs whose layer is `l x`. -/
-def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (S : SimLeak)
-    (εzk : Msg → ℝ) : Prop :=
+assignment `l` of a leaf layer to each statement, on the honest pairs whose layer is `l x`. Its binding term is `γ`
+times `Fork`'s collision probability among the honest prover's calls in two real runs on one nonce, never the
+simulator's calls. -/
+def ZK {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (D : Deploy Coin Col T)
+    (P : Wit → Prover (N × Ω)) (S : SimLeak) (εzk γ : Msg → ℝ) : Prop :=
   D.flock.zk = true ∧ ∀ l : Msg → List Msg,
     ZKmalR H D.V.k P (fun x w => Rhon H D.commit D.parse D.partition x w ∧ leafLayer H D.commit D.parse x w = l x)
-      (S.given l) εzk
+      (S.given l) εzk γ
 
 /-- **Sampling: bits** at every `δ ≥ 0`, `λ_δ = min(log₂(1/κ_δ), 255.5 − ½ log₂ γ, 256 − log₂(2c)) − log₂ 3`, at every
 decoder that lists every trace within Flock's radius. -/
@@ -744,16 +746,18 @@ def Bits (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
       fun x => lamLin (κ D δ x) (γ D x) 1 (work D x)
 
 /-- **Sampling: efficiency**: the extractor's reruns, at most `1 + K + k·(K + k·n_PU·m′·K′)` and
-`1 + k + k²·(1 + n_PU·m′·k′)` expected; its own SHA-512 calls, at most `k²·n_PU·openCalls`; and a decoder that lists
-every trace within Flock's radius, with its stated complexity. -/
-def Efficient (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
-    (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) : Prop :=
-  ExtractRunsLe H (E D decode)
+`1 + k + k²·(1 + n_PU·m′·k′)` expected; its own SHA-512 calls, at most `k²·n_PU·openCalls`; and the deployed decoder
+(`D.flock.dec`, a named, counted program, as at `Flock.Efficient`) lists every trace within Flock's radius, its count at
+most `p` at the opened word's encoded length (`Flock.wordLen`). -/
+def Efficient {F : Type} [Fintype F] [DecidableEq F] [Zero (List F)] (H : Msg → Msg) (D : Deploy Coin (List F) T)
+    (p : Polynomial ℕ) : Prop :=
+  ExtractRunsLe H (E D D.flock.decode)
       (fun x => 1 + D.cap x + D.k x * (D.cap x + D.k x * (nPU D x * (D.innerWaits x * D.innerCap x)))) ∧
-    ExtractRunsExpLe H (E D decode)
+    ExtractRunsExpLe H (E D D.flock.decode)
       (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)) ∧
-    ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x) ∧
-    Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode ∧ DecoderComplexity decode counted size p
+    ExtractOwnLe H (E D D.flock.decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x) ∧
+    Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
+    ∀ os, (D.flock.dec os).2 ≤ p.eval (Flock.wordLen os)
 
 /-- **Sampling: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
 accepts. -/

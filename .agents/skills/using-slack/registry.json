@@ -16,7 +16,7 @@
         "old-accounting",
         "old-circuits-and-proofs"
       ],
-      "routed_by": "each sender: `research msg` rings the addressed handles' inbox threads (routes.d, mode cli), and every holder subscribes to its own inbox thread; no agent forwards"
+      "routed_by": "each sender: `research msg` rings the addressed handles' inbox threads (routes.d), and every holder subscribes to its own inbox thread; no agent forwards"
     },
     "agent-alerts": {
       "id": "C0C5Q30MCNA",
@@ -144,6 +144,7 @@
         "Security/Models/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
+        "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
