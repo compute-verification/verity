@@ -2,7 +2,7 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3p-16) re-solves here to the τ, τ at 600 W, U/F_low and
+checks every attack against it. Each named vector (VF … VF3q-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
@@ -10,7 +10,7 @@ price a word beside its measured cost.
 ~~~bash
 uv run machine-model list                 # the named vectors
 uv run machine-model solve VF3p-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3p-16, the vector of record since 17 Oct after VF3n-16 and VF3o-16; VF3l-16 by decision 62 before them)
+uv run machine-model solve                # model.toml's `current` (VF3q-16, the vector of record since 17 Oct after VF3p-16; VF3l-16 by decision 62 before them)
 uv run machine-model census VF3p-16 --kind ATOMS64
 uv run machine-model attacks VF3p-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
@@ -94,6 +94,13 @@ SMSP-cycles, so UNI is 1 on issue and 0.7416 of a vector instruction's coefficie
 every uniform.cu point at the 2% margin (0.8168 holds them exactly), and UP rises to the fastest form alone, 0.766 a
 SMSP-cycle. A uniform row's measurement is valid only on ptxas 13.0 with the uniform chain gated by its exact uniform and
 MMA counts in SASS, inside a loop whose vector work reads the MMAs' results (ptxas moves the chain to lanes otherwise).
+VF3q-16 added the L2 random-row gather routes the CUDA-core table route uses (EPS1 DATASHEET r5, `opcode_probe/l2gather.cu`,
+r20261017-071007-85c9): a data-dependent gather of a W-byte row from an L2-resident table at a fresh random index, by
+`LDG.E.{64,128,256}` (`L2G8`/`L2G16`/`L2G32`, 8/16/32 B a lane), texture (`L2GT4`, `TLD`) and the read-only cache
+(`L2GN16`, `LDG.E.128.CONSTANT`), each a copy route at π_c ≥ 16 (`L2GT4` at π₃₂ ≥ 32). The widest row (`L2G32`) is the
+fastest useful rate, 9.76 B/SM/clk = 3.84 TB/s L2-resident (above QSTAR's 3.3 TB/s but well under the ~6 TB/s L2 peak);
+past the ~128 MB L2 it falls to 0.5-0.6 TB/s. As VF3m-16's word-writers did, the credits that price the new routes lower
+τ (0.0588 → 0.0585); the adopted design's margin (2.0) and U/F_low (1.1563) are unchanged.
 
 ## Where the data came from
 

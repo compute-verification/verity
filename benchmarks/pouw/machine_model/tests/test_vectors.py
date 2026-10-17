@@ -21,8 +21,9 @@ def solved(name):
 
 
 def test_every_named_vector_is_here():
-    assert NAMES[0] == "VF" and NAMES[-9:] == ["VF3l-16", "VF3l-16-copy16", "VF3l-16-copy16-fan32", "VF3l-16-copy32",
-                                              "VF3l-16-copy32-fan16", "VF3m-16", "VF3n-16", "VF3o-16", "VF3p-16"]
+    assert NAMES[0] == "VF" and NAMES[-10:] == ["VF3l-16", "VF3l-16-copy16", "VF3l-16-copy16-fan32", "VF3l-16-copy32",
+                                                "VF3l-16-copy32-fan16", "VF3m-16", "VF3n-16", "VF3o-16", "VF3p-16",
+                                                "VF3q-16"]
     assert {"VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict", "VF3j", "VF3j-8",
             "VF3j-16", "VF3k-16"} < set(NAMES)
 
@@ -43,6 +44,7 @@ PUBLISHED = {
     "VF3n-16": (0.0586, 0.0459, 1.1563, 2.000),       # note:20261017T0321Z-draft-eps1-tensor
     "VF3o-16": (0.0588, 0.0460, 1.1563, 2.000),
     "VF3p-16": (0.0588, 0.0460, 1.1563, 2.000),       # note:20261017T0332Z-draft-eps1-datasheet
+    "VF3q-16": (0.0585, 0.0457, 1.1563, 2.000),       # note:20261017T0332Z-draft-eps1-datasheet, the L2-gather routes
 }
 
 
@@ -122,6 +124,7 @@ CLAIMED = {
     "VF3n-16": ([], []),
     "VF3o-16": ([], []),
     "VF3p-16": ([], []),
+    "VF3q-16": ([], []),
 }
 
 
@@ -129,7 +132,8 @@ CLAIMED = {
 def test_claims(name):
     r = solved(name)
     assert (r.floors["pi32"][1], r.floors["loads16"][1]) == CLAIMED[name]
-    assert r.floors["loads16"][0] == 9 and r.floors["pi32"][0] == 84 + ("ATOME32P" in r.census)
+    assert r.floors["loads16"][0] == 9 + 4 * ("L2G32" in r.census)   # VF3q-16 adds the four LDG/read-only gather loads
+    assert r.floors["pi32"][0] == 84 + ("ATOME32P" in r.census) + ("L2GT4" in r.census)   # and the texture gather
 
 
 # π_c ≥ 16 by vector: what is under it, and its cheapest copy route a word. VF3k-16 and VF3l-16 price the UR fan-out
@@ -138,14 +142,15 @@ UR_FANOUT = ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"]
 COPIES = {"VF3k-16": (UR_FANOUT, 1), "VF3l-16": (UR_FANOUT, 1), "VF3l-16-copy16": ([], 16),
           "VF3l-16-copy16-fan32": ([], 16), "VF3l-16-copy32-fan16": ([], 16), "VF3l-16-copy32": ([], 32),
           "VF3m-16": (UR_FANOUT, 1), "VF3n-16": (UR_FANOUT, 1), "VF3o-16": (UR_FANOUT, 1),
-          "VF3p-16": (UR_FANOUT[1:], 1)}
+          "VF3p-16": (UR_FANOUT[1:], 1), "VF3q-16": (UR_FANOUT[1:], 1)}
 
 
 @pytest.mark.parametrize("name", sorted(COPIES))
 def test_copy_routes(name):
     r = solved(name)
     below, cheapest = COPIES[name]
-    assert r.floors["copy16"][1] == below and r.floors["copy16"][0] == len(r.copies) == 63 + 14 * ("IMMA16832" in r.census)
+    assert r.floors["copy16"][1] == below and r.floors["copy16"][0] == len(r.copies) == (
+        63 + 14 * ("IMMA16832" in r.census) + 5 * ("L2G32" in r.census))  # VF3q-16 adds the five L2-gather routes
     assert r.copies[0][2] == pytest.approx(cheapest)
     assert all(p <= mc * (1 + 1e-9) for _k, _w, p, mc, _ in r.copies)  # no copy route priced over its measured cost
 
@@ -181,3 +186,18 @@ def test_vf3m16_loses_tau_on_the_new_word_writers(tmp_path):
     p.write_text(p.read_text().replace(credits, ""))
     assert resolve("VF3m-16", data).tau == pytest.approx(solved("VF3l-16").tau, rel=1e-9)
     assert solved("VF3m-16").tau < solved("VF3l-16").tau * (1 - 0.02)
+
+
+def test_vf3q16_prices_the_l2_gather_routes(tmp_path):
+    """VF3q-16 adds the five L2 random-row gather copy routes (l2gather.cu, r20261017-071007-85c9), each a landed word at
+    π_c ≥ 16 (L2GT4, the texture path, at π₃₂ ≥ 32). Without their credits its rows leave VF3p-16's τ as it was: the 0.6%
+    it loses is the price of pricing the new routes, as VF3m-16's word-writers were. The adopted margin stays 2."""
+    data = tmp_path / "data"
+    shutil.copytree(DATA, data)
+    p = data / "vectors" / "VF3q-16.toml"
+    credits = '    ["L2G8", 1024], ["L2G16", 2048], ["L2G32", 4096], ["L2GT4", 1024], ["L2GN16", 2048],\n'
+    assert p.read_text().count(credits) == 1
+    p.write_text(p.read_text().replace(credits, ""))
+    assert resolve("VF3q-16", data).tau == pytest.approx(solved("VF3p-16").tau, rel=1e-9)
+    assert solved("VF3q-16").tau < solved("VF3p-16").tau * (1 - 0.004)
+    assert solved("VF3q-16").margin == solved("VF3p-16").margin == 2.0

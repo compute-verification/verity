@@ -20,29 +20,32 @@ def test_solve_prints_the_numbers_and_the_check(capsys):
     assert "τ 0.0610   τ at 600 W 0.0477   U/F_low 1.1563   margin 2.000" in out
     assert "(reproduced)" in out and "1306 attacks in 13 families at X ≥ 1.0: pass" in out
     assert "superseded by VF3k-16" in out
-    assert "(π₃₂): every root-writing kind at ≥ 32 MACs a word: 84 kinds, holds (not split out at VF3j-8: ATOME32P)" in out
+    assert ("(π₃₂): every root-writing kind at ≥ 32 MACs a word: 84 kinds, holds (not split out at VF3j-8: "
+            "ATOME32P, L2GT4)") in out
     assert "a UR word at the 32 lanes it serves) at ≥ 16 MACs a word: 62 kinds, fails: UNI 2.00 a word < 16;" in out
     assert "copy routes, MACs a word (price/measured), cheapest first: UNI64 1.00/" in out
 
 
-# VF3n-16's MMA forms, each its own kind from VF3n-16: an earlier vector doesn't split them out
+# VF3n-16's MMA forms, each its own kind from VF3n-16, and VF3q-16's L2-gather routes: an earlier vector doesn't split
+# either out, so both are absent (as copy routes) from VF3l-16's census
 MMA_FORMS = ["HMMA16816", "HMMA16816F16", "HMMA1684T", "HMMA1688T", "HMMASP16832", "IMMA16816", "IMMA16832", "IMMA8816", "IMMASP16832", "IMMASP16864", "OMMASF16864", "QMMA16832", "QMMASF16832", "QMMASP16864"]
+L2_GATHERS = ["L2G8", "L2G16", "L2G32", "L2GT4", "L2GN16"]
 
 
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
-    assert d["vector"] == "VF3p-16" and round(d["tau"], 4) == 0.0588 and d["failures"] == [] and d["unreproduced"] == []
-    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0460, 1.1563, 2.0)
-    assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
-                           "loads16": {"kinds": 9, "below": [], "absent": []},
-                           "copy16": {"kinds": 77, "below": ["UNI64 1.00 a word < 16"], "absent": []}}
+    assert d["vector"] == "VF3q-16" and round(d["tau"], 4) == 0.0585 and d["failures"] == [] and d["unreproduced"] == []
+    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0457, 1.1563, 2.0)
+    assert d["floors"] == {"pi32": {"kinds": 86, "below": [], "absent": []},
+                           "loads16": {"kinds": 13, "below": [], "absent": []},
+                           "copy16": {"kinds": 82, "below": ["UNI64 1.00 a word < 16"], "absent": []}}
     assert d["copies"][0]["kind"] == "UNI64"
     uni = next(c for c in d["copies"] if c["kind"] == "UNI")
     assert uni["words"] == 32 and round(uni["price"], 2) == 29.91 and uni["measured"] > 32
     assert uni["what"].startswith("UR fan-out")
     assert main(["solve", "VF3l-16", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out)["floors"]["copy16"]["absent"] == MMA_FORMS
+    assert json.loads(capsys.readouterr().out)["floors"]["copy16"]["absent"] == MMA_FORMS + L2_GATHERS
 
 
 def test_list_census_attacks(capsys):
