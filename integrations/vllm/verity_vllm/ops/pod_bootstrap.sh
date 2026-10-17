@@ -112,12 +112,13 @@ if not all((local / f).exists() for f in shas) or not (local / "config.json").ex
     from huggingface_hub import snapshot_download
     fetch = lambda e: snapshot_download(e["repo"], revision=e["revision"], allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model", "*.py"],
                                         cache_dir=os.path.join(os.environ["HF_HOME"], "hub"))
-    if ent.get("recipe"):          # no hub repo holds a recipe pin: made here from its BF16 pin (engine/fp8_checkpoint.py)
-        from verity_vllm.engine import fp8_checkpoint as F
-        base = F.base_entry(ent, doc["checkpoints"])
+    if ent.get("recipe"):          # no hub repo holds a recipe pin: made here from its BF16 pin (engine/fp8_checkpoint.py, int8_checkpoint.py)
+        from verity_vllm.engine import fp8_checkpoint as F, int8_checkpoint as I8
+        recipe = {r.id: r for r in (F.FP8, I8.INT8)}[ent["recipe"]["id"]]
+        base = F.base_entry(ent, doc["checkpoints"], recipe)
         if not all((Path(base["local_path"]) / f).exists() for f in base["safetensors_sha256"]):
             print("downloaded", fetch(base), flush=True)
-        made, bad = F.remake(ent, doc["checkpoints"])
+        made, bad = F.remake(ent, doc["checkpoints"], recipe=recipe)
         print("made", made["local_path"], "mismatch", bad, flush=True)
     else:
         print("downloaded", fetch(ent), flush=True)
