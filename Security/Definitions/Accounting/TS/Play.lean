@@ -11,8 +11,8 @@ fresh coins on `Ω`, each round one live σ (and, when sampling, the round's dra
   round `w` has a share `d_w` and a check `pass`, its rounds' proofs as if every proof were sound. In 𝒫_full `d_w` is
   round `w`'s deficient share of its committed words; in 𝒫_samp(u, s, Q) it is its deficient, wrong and adaptive
   work share, and `pass` is the drawn units' proofs.
-* `RoundGame.LuckAt p`: (L) at `p`, one bet a round: every round's share is in `[0, 1]`, and given the past the round
-  is deficient and passes with probability at most `p`.
+* `RoundGame.LuckAt p`: (L) at `p`, one bet a round: every round's share is in `[0, 1]`, and given the past a
+  deficient round passes with probability at most `p`.
 * `RoundGame.BudgetAt Λ`: `Λ` bounds the round's saving per unit of detection (Lemma C's `Λ`): given the past,
   `E[exp(d_w / Λ) · 1{pass}] ≤ 1`. When `d_w` is fixed before the round's draws this reads
   `d_w ≤ Λ · (−ln Pr[pass | past])`, SAMPLING's budget.
@@ -34,12 +34,14 @@ namespace RoundGame
 
 variable {Ω : Type} [Fintype Ω]
 
-/-- **(L) at `p`, one bet a round**: every round's share lies in `[0, 1]`, and at every round, whatever the past, the
-round's coins make it deficient and passing with probability at most `p`. -/
+/-- **(L) at `p`, one bet a round**: every round's share lies in `[0, 1]`, and at every round, whatever the past, a
+deficient round passes with probability at most `p`: `Pr[pass ∧ d_w > 0] ≤ p·Pr[d_w > 0]` over the round's coins
+(when `d_w` is fixed before them, as a committed share is, this is `d_w > 0 → Pr[pass] ≤ p`). -/
 def LuckAt (p : ℝ) : {n : ℕ} → RoundGame Ω n → Prop
   | _, .done => True
   | _, .round d pass next =>
-      (∀ ω, 0 ≤ d ω ∧ d ω ≤ 1) ∧ prob (fun ω => pass ω ∧ 0 < d ω) ≤ p ∧ ∀ ω, LuckAt p (next ω)
+      (∀ ω, 0 ≤ d ω ∧ d ω ≤ 1) ∧ prob (fun ω => pass ω ∧ 0 < d ω) ≤ p * prob (fun ω => 0 < d ω) ∧
+        ∀ ω, LuckAt p (next ω)
 
 /-- **`Λ` bounds the saving per unit of detection**: at every round, whatever the past, the shares are `≥ 0` and
 `E[exp(d_w / Λ) · 1{pass}] ≤ 1` over the round's coins. -/
