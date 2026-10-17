@@ -382,7 +382,8 @@ module docstring has the layout and the rules. In short:
 - A package's record also carries the build of each dependency that Mathlib's cache doesn't provide (ArkLib and the
   packages it brings, for `Security/Proofs`), unstaged into that dependency's scope. A fresh machine then needs
   `setup.sh` (the toolchain, Mathlib's cache, the dependencies' sources) and `cache.py get`, and compiles none of ArkLib.
-- A miss or a mismatch means building from source. So do a missing read credential (`LEAN_CACHE_R2_*`), the kill switch
+- A miss or a mismatch means building from source. So do a missing read credential (the `LEAN_CACHE_*` variables, else
+  the same four lines in `~/.config/verity/lean-cache-read.env`, as the nodes' research user holds them), the kill switch
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
 - The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off`, and `LAKE_ARTIFACT_CACHE=false` unless check's audit
   names its node's own Lake cache (`--artifacts`, `lean_audit.LakeArtifacts`), which only a passing audit on that node
