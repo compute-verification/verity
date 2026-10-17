@@ -19,6 +19,7 @@
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
   "Flock.Test.Wires",
+  "Flock.Test.TableCap",
   "VStar"
  ],
  "exempt": {
