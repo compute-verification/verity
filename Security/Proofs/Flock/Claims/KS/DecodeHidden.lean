@@ -7,10 +7,14 @@ import Proofs.Flock.Soundness.Discharge.HiddenDec
 `DecodeSC` and `DecodeDeploy` where the statement hides its outputs (`hiddenOutputs = true`), at the hidden tables
 `HiddenExec.tablesAtH` and their openings `HiddenDec.opnAtH`:
 
-* `decodesTable_wrP_scH`: `decodesTable_wrP_sc` at the hidden tables, from `accepts_repsH` and `tableAtH_of_accepts`;
+* `decodesTable_wrP_scH`: `decodesTable_wrP_sc` at the hidden tables, from `accepts_repsH` and `tableAtH_of_acceptsI`;
   `accepts_opens₀L` holds at hidden outputs too.
 * `plain_setupHidden`: a plain statement in scope with hidden outputs sets its one table up at its draw under
   setupHidden, with the tags `HiddenDec.TagsOkH` asks.
+
+None of them reads which net returns the outputs: `InScope`'s general instance form (hidden outputs and `wiresAcyclic`)
+may have tail stages, which the verifier evaluates and the table's statement (`stmtOf` of setupHidden's) carries, and
+the decoders read only the table's committed rows.
 * `tableAtH_plainTab`: the hidden table of a draw that sets up `st` is `plainTab` at `st`, its statement read off any
   layout (`Integrate.model_eq`).
 * `plain_hdecH`: so at the draw `d` and no drawn unit, `decodesTable_wrP_scH` is the decoders' fact `PlainLiveAccAt`
@@ -27,9 +31,10 @@ local notation "𝔽" => FlockLevel3.GF128
 
 open DecodeZL HiddenExec HiddenDec in
 /-- **The deployed plain decoders are right at `wrP` for accepting with no opening off `C` without a self-clash, at
-hidden outputs**: `decodesTable_wrP_sc` at the hidden tables and their openings `opnAtH`. -/
+hidden outputs**: `decodesTable_wrP_sc` at the hidden tables and their openings `opnAtH`, wherever the outputs are
+returned (`tableAtH_of_acceptsI`). -/
 theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
-    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
     (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg) {N : ℕ}
     (hN : N = 2 ^ (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).logLen) (C : Fin N → List 𝔽)
@@ -66,7 +71,7 @@ theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inpu
   rintro o' rfl
   obtain ⟨hd, hprf, hrec⟩ := recordsLive_wrP1 (Reg := Reg) (mPts := mPts) I dj S R (oneOf o) hacc
   obtain ⟨hSD, hmPts⟩ := hS
-  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_accepts ht hc ho hh hc1 dj x₀ hacc hd hSD hmPts
+  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsI ht hc hh hc1 dj x₀ hacc hd hSD hmPts
   obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsH hh hrr hl hc1 hacc
   rw [hd] at hst
   obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
@@ -152,13 +157,14 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A plain statement in scope with hidden outputs sets up its one table at its draw**: `plain_setupH` with
-setupHidden for setupH and `HmOut.parse` for `HmRow.parse`. -/
+setupHidden for setupH and `HmOut.parse` for `HmRow.parse`, in the general instance form (any input groups, any tail
+stages the verifier evaluates, whichever net returns the outputs). -/
 theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) {d : Json} (hd : ins.read.draw = some d) :
     ins.read.I.tags.typed = false ∧ HmOut.parse ins.read.I.tags ins.read.I.circuitFile ins.read.I.tables = .ok st.c ∧
-      st.c.outNet = st.c.unitNet ∧ HiddenDec.TagsOkH ins.read.I ∧
+      HiddenDec.TagsOkH ins.read.I ∧
       Stmt.setupHidden ins.read.I.tags ins.read.I.circuitFile ins.read.I.publicFile ins.read.I.coins
         ins.read.I.tables (some d) ins.read.I.partition ins.read.I.program = .ok st ∧ spec = st.spec ∧ 22 ≤ st.m ∧
       st.m ≤ 35 := by
@@ -169,11 +175,11 @@ theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
   have hzk : ins.read.zk = false := readOf_zk (x := x) (by unfold readOf; rw [(setupOf_some hset).1]; rfl)
   have htags : ins.read.tags = ins.read.I.tags := by simp [Readable.Read.tags, hzk]
   have hform : (Readable.toReadable Readable.relation p).form = ins.read.form := by rw [← hpr]; rfl
-  obtain ⟨-, -, -, -, -, ht, hrr, hl, hc1, hpi, -, -, ho, -⟩ := hin
-  rw [hform] at ht hrr hl hc1 hpi ho
-  simp only [Readable.Read.form, htags] at ht hrr hl hc1 hpi ho
+  obtain ⟨-, -, -, -, -, ht, hrr, hl, hc1, hpi, -⟩ := hin
+  rw [hform] at ht hrr hl hc1 hpi
+  simp only [Readable.Read.form, htags] at ht hrr hl hc1 hpi
   simp only [Bool.not_eq_true] at ht
-  simp only [Bool.false_eq_true, false_or] at hc1
+  simp only [Bool.false_eq_true, ↓reduceIte] at hc1
   have hpi' : ins.read.publicInputs = none := Option.not_isSome_iff_eq_none.1 hpi
   have hcoins : ins.read.coins = ins.read.I.coins := by simp [Readable.Read.coins, hzk]
   unfold Readable.Read.setup at hsr
@@ -187,12 +193,9 @@ theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
     simpa using h
   subst e
   have hc := HiddenExec.setupHidden_parseC hst
-  have hcirc : ins.read.circ = st'.c := by
-    simp only [Readable.Read.circ, ProvedScope.circuitOf, htags, hh, ↓reduceIte, hc]
-  rw [hcirc] at ho
   have hm := parse_m hs hset (by simp)
   simp only [Bool.false_eq_true, ↓reduceIte] at hm₁
-  refine ⟨ht, hc, by simpa using ho, ⟨hh, hrr, hl, hc1⟩, hst, hsp, ?_, ?_⟩
+  refine ⟨ht, hc, ⟨hh, hrr, hl, hc1⟩, hst, hsp, ?_, ?_⟩
   · simpa [hm] using hm₁
   · simpa [hm] using hm₂
 
@@ -249,7 +252,7 @@ theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
       (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
       (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
       j := by
-  obtain ⟨ht, hc, ho, hT, hst, rfl, h22, h35⟩ := plain_setupHidden hs hin hset h hh hd
+  obtain ⟨ht, hc, hT, hst, rfl, h22, h35⟩ := plain_setupHidden hs hin hset h hh hd
   obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
     have e := Refine.fast100_schedOf st.m
     rw [hsch] at e
@@ -258,8 +261,8 @@ theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
     | some sch => exact ⟨sch, rfl⟩
   obtain ⟨pop, -, hdr⟩ := HiddenExec.setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
-  obtain ⟨x₀, hx₀⟩ := HiddenExec.drawSetupH_of_setupHidden (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc
-    ho hst hf hD (fun u hu => absurd hu (Finset.notMem_empty u)) rfl
+  obtain ⟨x₀, hx₀⟩ := HiddenExec.drawSetupH_of_setupHiddenI (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc
+    hst hf hD (fun u hu => absurd hu (Finset.notMem_empty u)) rfl
   have e : HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ =
       fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
     funext S R
@@ -274,7 +277,7 @@ theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
       2 ^ (lvOf (HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ ∅ ()).sch 0).logLen := by
     rw [e]
     exact plain_wordLen h h22 h35 hsch
-  have hdec := decodesTable_wrP_scH ht hc ho (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () hN C rootB₀
+  have hdec := decodesTable_wrP_scH ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () hN C rootB₀
   rw [e] at hdec
   exact hdec
 
