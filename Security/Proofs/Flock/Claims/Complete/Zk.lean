@@ -15,6 +15,7 @@ import Proofs.Flock.Claims.Complete.Zk.Json.QSort
 import Proofs.Flock.Claims.Complete.Zk.Json.Record
 import Proofs.Flock.Claims.Complete.Zk.Json.Decode
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
 the masked tape `TapeZk` and pads `padsOf` of `Tape`, the masked zerocheck and lincheck of `Piop`, level 0's masked
@@ -29,4 +30,5 @@ send (`linkFirstZk_goal`). `Json.Record` is the masked record's JSON (`recordJso
 and coin-tree checks passing on it (`checkHello_ok`, `checkRecord_ok`, with `Json.QSort`'s `qsort_coinTree`), after
 which it decodes as the plain record of `specZ` (`decodeWith_specZ`); `Json.Decode` reads it back: decoded, live, and
 its draw (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `Json.Session` is what the one-table
-masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`). -/
+masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`); `Json.Goals` proves
+the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`). -/
