@@ -602,4 +602,190 @@ theorem ligerito_accepts_opening_req0 {D : Type} (ms : MerkleScheme) (sch : Floc
   exact ligerito_accepts_req0 ms sch T cap p (basis sws) r op.b capD o hdim hlv hα1 ho
     (fun orig y horig hy => basis_eq hop orig sch.ext horig y hy) hwf h
 
+/-- **Lincheck's rounds**: `3 + (kLog − 6)` (`α`, `β`, `kLog − 6` sumcheck rounds and `r′`). -/
+theorem lincheck_moves (c : CircuitFold) (zc : Flock.ZcOut) (p : LincheckProof) {t t' : Transcript} {lc : LcOut}
+    (h : Flock.lincheck c zc p t = .ok (lc, t')) : t'.rounds = t.rounds ∧ t'.k = t.k + 3 + (c.kLog - 6) := by
+  unfold Flock.lincheck at h
+  obtain ⟨t₁, k₁, h⟩ := label_bind h
+  obtain ⟨-, -, t₂, r₂, kk₂, h⟩ := sample_bind h
+  obtain ⟨-, -, t₃, r₃, kk₃, h⟩ := sample_bind h
+  obtain ⟨s, t₅, hloop, h⟩ := bind_ok h
+  dsimp only at h
+  rcases hw : c.folded (t₁.rounds[t₁.k]!.coins.getD 0 0) (t₂.rounds[t₂.k]!.coins.getD 0 0) (skipWeights zc.z)
+      (zc.rho.extract 0 (c.kLog - 6)) s.2 with err | w
+  · rw [hw] at h
+    obtain ⟨_, _, h₀, _⟩ := bind_ok h
+    cases h₀
+  · rw [hw] at h
+    simp only [pure_bind] at h
+    obtain ⟨-, h⟩ := check_bind h
+    obtain ⟨t₆, k₆, h⟩ := absorbSlice_bind h
+    obtain ⟨-, h⟩ := check_bind h
+    obtain ⟨-, -, t₇, r₇, kk₇, h⟩ := sample_bind h
+    obtain ⟨rfl, rfl⟩ := pure_ok h
+    rw [forIn_range_eq] at hloop
+    obtain ⟨hr₅, hk₅, -, -⟩ := forIn_rounds _ (lStep p.rounds) 1 (by
+        intro j st tt b tt' hb
+        obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
+        obtain ⟨tt₂, kk₂, hb⟩ := absorbF_bind hb
+        obtain ⟨-, nn, tt₃, rr₃, kk₃, hb⟩ := sample_bind hb
+        obtain ⟨rfl, rfl⟩ := pure_ok hb
+        have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
+        have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
+        refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_⟩
+        rw [← e1, ← e2]
+        rfl) (c.kLog - 6) 0 t₃.k _ t₃ t₅ s (by omega) hloop
+    refine ⟨by rw [r₇, k₆.2, hr₅, r₃, r₂, k₁.2], ?_⟩
+    rw [kk₇, k₆.1, hk₅, kk₃, kk₂, k₁.1]
+    omega
+
+/-- **The ring switch's rounds**: `claims + 1` (one per claim and the batching coin). -/
+theorem ringSwitch_moves (m : ℕ) (claims : Array Flock.Claim) (rs : Array (Array F128)) {t t' : Transcript}
+    {T : F128} {sws : Array Switched} (hn : 0 < claims.size) (h : ringSwitch m claims rs t = .ok ((T, sws), t')) :
+    t'.rounds = t.rounds ∧ t'.k = t.k + claims.size + 1 := by
+  unfold ringSwitch at h
+  obtain ⟨t₁, k₁, h⟩ := label_bind h
+  obtain ⟨s, t₂, hloop, h⟩ := bind_ok h
+  obtain ⟨-, -, t₃, r₃, kk₃, h⟩ := sampleVec_bind (by omega) h
+  obtain ⟨-, rfl⟩ := pure_ok h
+  rw [forIn_range_eq] at hloop
+  obtain ⟨hr₂, hk₂, -, -⟩ := forIn_roundsQ _ (oStep claims rs) 7 (RsCheck claims rs) (by
+      intro k st tt b tt' hb
+      obtain ⟨tt₁, kk₁, hb⟩ := label_bind hb
+      obtain ⟨tt₂, kk₂, hb⟩ := absorbSlice_bind hb
+      obtain ⟨hval, hb⟩ := check_bind hb
+      obtain ⟨-, nn, tt₃, rr₃, kk₃, hb⟩ := sampleVec_bind (by omega) hb
+      obtain ⟨rfl, rfl⟩ := pure_ok hb
+      have e1 : tt₂.rounds = tt.rounds := by rw [kk₂.2, kk₁.2]
+      have e2 : tt₂.k = tt.k := by rw [kk₂.1, kk₁.1]
+      refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_, hval⟩
+      rw [← e1, ← e2]
+      rfl) claims.size 0 t₁.k _ t₁ t₂ s (by omega) hloop
+  exact ⟨by rw [r₃, hr₂, k₁.2], by rw [kk₃, hk₂, k₁.1]⟩
+
+/-- **One rep refines the model's, level 0's request first** (§9–§14): `rep_refines`, and the result's first request
+is level 0's, at the positions of the coins of the stream's round after zerocheck's `3 + (m − 6)` rounds, lincheck's
+`3 + (kLog − 6)`, the ring switch's `claims + 1` and Ligerito's `k0 + 6`. -/
+theorem rep_refines_req0 {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+    (h15 : 15 ≤ S.m) (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog)
+    (hfold : FoldRealizes st.fold S) (extra : List (Model.Claim 𝔽 S.m)) (sess : Session)
+    (hext : ExtraRealizes st S sess.points extra) (hdim : DimSeam sch)
+    (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
+    (hα1 : ∀ i < sch.levels.size, ceilLog2 (sch.levels.getD i default).q ≠ 1) (hschm : sch.m = S.m)
+    (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds) (i r : ℕ) (bytes cap : ByteArray)
+    (h : verifyRep spec st sch sess i r bytes = .ok cap) :
+    ∃ (stream : StreamRec) (p : Proof),
+      sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) = some stream ∧
+      decodeProof (shapeOf st sch extra.length) bytes = .ok p ∧
+      cap = p.cap.foldl (· ++ ·) ByteArray.empty ∧ (cap == sess.rootB[i]!) = true ∧
+      p.cap.size = 2 ^ (sch.levels.getD 0 default).cap ∧ (∀ b ∈ p.cap.toList, b.size = st.merkle.digestLen) ∧
+      ∀ (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D),
+        (∀ ℓ < sch.levels.size, ∀ j < (sch.levels.getD ℓ default).q,
+          (o r ℓ j).1 = ((openAt p.ligerito (sch.levels.size - 1) ℓ).1)[j]!.toList.map fOf) →
+        ∃ pend : PendL 𝔽 D,
+          Plays fOf (Model.repC execArith r S (schedOf sch) hm extra) (repMsgs st sch (2 + extra.length) p capD)
+            (stream.rounds.toList.map (·.coins)) pend ∧
+          pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capD p.ligerito.recursiveCaps[j]!) ∧
+          (∀ req ∈ pend.reqs, ReqOK st.merkle sch p.cap p.ligerito req) ∧ pend.verdict o = true ∧
+          ∃ (R : Req) (rest : List Req), pend.reqs = R :: rest ∧ R.level = 0 ∧
+            R.positions = (Flock.positions (sch.levels.getD 0 default) (stream.rounds[(3 + (S.m - 6)) +
+              (3 + (S.kLog - 6)) + (2 + extra.length + 1) + (sch.k0 + 6)]!).coins).toList := by
+  unfold verifyRep at h
+  dsimp only at h
+  cases hs : Array.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r)
+      sess.streams with
+  | none => rw [hs] at h; cases h
+  | some stream =>
+      rw [hs] at h
+      obtain ⟨extras, hex, h⟩ := ebind_ok h
+      obtain ⟨p, hp, h⟩ := ebind_ok h
+      by_cases c1 : (p.params != pcsParams st.merkle sch) = true
+      · rw [ite_eq_left c1] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+      rw [ite_eq_right c1] at h
+      obtain ⟨⟨u, t⟩, hrun, h⟩ := ebind_ok h
+      change (if (t.k != stream.rounds.size) = true then _ else _) = _ at h
+      by_cases c2 : (t.k != stream.rounds.size) = true
+      · rw [ite_eq_left c2] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+      rw [ite_eq_right c2] at h
+      by_cases c3 : (Array.foldl (fun x1 x2 => x1 ++ x2) ByteArray.empty p.cap != sess.rootB[i]!) = true
+      · rw [ite_eq_left c3] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+      rw [ite_eq_right c3] at h
+      cases h
+      simp only [bne_iff_ne, ne_eq, not_not] at c2
+      have c3' : (Array.foldl (fun x1 x2 => x1 ++ x2) ByteArray.empty p.cap == sess.rootB[i]!) = true := by
+        cases hb : (Array.foldl (fun x1 x2 => x1 ++ x2) ByteArray.empty p.cap == sess.rootB[i]!)
+        · exact absurd (by simp [bne, hb]) c3
+        · rfl
+      obtain ⟨hlenx, hcx⟩ := hext extras hex
+      have hcapE : p.cap.size = 2 ^ (sch.levels.getD 0 default).cap ∧
+          ∀ b ∈ p.cap.toList, b.size = st.merkle.digestLen := by
+        rw [StateT.run] at hrun
+        obtain ⟨_, _, _, hrun⟩ := bind_ok hrun
+        obtain ⟨_, _, _, hrun⟩ := bind_ok hrun
+        obtain ⟨⟨_, _⟩, _, _, hlig⟩ := bind_ok hrun
+        exact ligerito_cap _ _ _ _ _ _ (hlv 0 (by have := hdim.2.1; omega)).q_ne_zero hlig
+      refine ⟨stream, p, rfl, by rw [← hlenx]; exact hp, rfl, c3', hcapE.1, hcapE.2, fun capD o ho => ?_⟩
+      have hwf₀ : RoundsWF stream.rounds := hwf stream (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs))
+      rw [StateT.run] at hrun
+      obtain ⟨zc, t₁, h₁, hrun⟩ := bind_ok hrun
+      obtain ⟨lc, t₂, h₂, hrun⟩ := bind_ok hrun
+      obtain ⟨⟨T, sws⟩, t₃, h₃, h₄⟩ := bind_ok hrun
+      rw [hmS] at h₁
+      obtain ⟨hr₁, hk₁, zc', hpl₁, hzc, -⟩ := zerocheck_refines_coins S.m h15 _ _ _ _ _ zc hwf₀ h₁
+      have hm₂ := lincheck_moves _ _ _ h₂
+      obtain ⟨hr₂, hk₂, ab, hpl₂, hab⟩ := lincheck_refines S st.fold hfold zc zc' hzc p.lincheck t₁ t₂ lc
+        (hr₁ ▸ hwf₀) h₂
+      rw [hmS, hkS] at h₃
+      have hm₃ := ringSwitch_moves _ _ _ (by simp [abcClaims]) h₃
+      have hcsz : (abcClaims S.m S.kLog zc lc ++ extras).size = (ab :: Model.cClaim execArith zc' :: extra).length := by
+        simp [abcClaims, hlenx]; omega
+      obtain ⟨hr₃, hk₃, op, hpl₃, hop⟩ := opening_refines S.m (by omega) _ (ab :: Model.cClaim execArith zc' :: extra)
+        hcsz (fun k hk => by
+          rcases k with _ | _ | k
+          · rw [getElem!_pos _ 0 (by simp [abcClaims]), Array.getElem_append_left (by simp [abcClaims])]
+            rw [getElem!_pos _ 0 (by simp [abcClaims])] at hab
+            exact hab
+          · rw [getElem!_pos _ 1 (by simp [abcClaims]; omega), Array.getElem_append_left (by simp [abcClaims])]
+            exact cClaim_rel zc zc' hzc
+          · have hk' : k < extra.length := by simp at hk; omega
+            have hsz2 : (abcClaims S.m S.kLog zc lc).size = 2 := rfl
+            rw [getElem!_pos _ (k + 2) (by rw [Array.size_append, hsz2]; omega),
+              Array.getElem_append_right (by rw [hsz2]; omega)]
+            simp only [hsz2, Nat.add_sub_cancel]
+            rw [← getElem!_pos extras k (by omega)]
+            exact hcx k hk')
+        (by simp [abcClaims]) (by rw [Array.size_append, show (abcClaims S.m S.kLog zc lc).size = 2 from rfl]; omega)
+        p.ringSwitches t₂ t₃ T sws (hr₂ ▸ hr₁ ▸ hwf₀) h₃
+      rw [← hschm] at hop
+      obtain ⟨pend, hr₄, hk₄, hpl₄, hcaps, hreqs, hver, R, rest, hRe, hRl, hRp⟩ := ligerito_accepts_opening_req0
+        st.merkle sch T sws _ op hop p.cap p.ligerito r capD o hdim hlv hα1 ho (hr₃ ▸ hr₂ ▸ hr₁ ▸ hwf₀) h₄
+      have hsz' : (abcClaims S.m S.kLog zc lc ++ extras).size = 2 + extra.length := by
+        simp [abcClaims, hlenx]
+      have hidx : t₃.k + 6 + sch.k0 =
+          (3 + (S.m - 6)) + (3 + (S.kLog - 6)) + (2 + extra.length + 1) + (sch.k0 + 6) := by
+        rw [hm₃.2, hm₂.2, hk₁, hfold.kLog, hsz']
+        simp only [Transcript.init]
+        omega
+      have e₃ : t₃.rounds = stream.rounds := hr₃.trans (hr₂.trans hr₁)
+      refine ⟨pend, ?_, hcaps, hreqs, hver, R, rest, hRe, hRl, by rw [hRp, ← hidx, e₃]⟩
+      have hcs : stream.rounds.toList.map (·.coins) =
+          consumed stream.rounds 0 t₁.k ++ (consumed t₁.rounds t₁.k t₂.k ++ (consumed t₂.rounds t₂.k t₃.k ++
+            consumed t₃.rounds t₃.k t.k)) := by
+        have e1 : t₁.rounds = stream.rounds := hr₁
+        have e2 : t₂.rounds = stream.rounds := hr₂.trans hr₁
+        have e3 : t₃.rounds = stream.rounds := hr₃.trans e2
+        rw [e1, e2, e3, ← consumed_append _ hk₃ hk₄, ← consumed_append _ hk₂ (hk₃.trans hk₄),
+          ← consumed_append _ (Nat.zero_le t₁.k) (hk₂.trans (hk₃.trans hk₄)), c2]
+        exact (consumed_all _).symm
+      have hsz : (abcClaims S.m S.kLog zc lc ++ extras).size = 2 + extra.length := by
+        simp [abcClaims, hlenx]
+      rw [hsz] at hpl₃
+      rw [hcs]
+      unfold Model.repC
+      refine Plays.bind' (ms₂ := lcMsgs S.kLog p.lincheck ++ opMsgs (2 + extra.length) p.ringSwitches ++
+        ligMsgs p.ligerito capD sch) hpl₁ ?_ (by simp [repMsgs, hmS, hkS]) rfl
+      refine Plays.bind' (ms₂ := opMsgs (2 + extra.length) p.ringSwitches ++ ligMsgs p.ligerito capD sch) hpl₂ ?_
+        (by simp) rfl
+      exact Plays.bind' hpl₃ hpl₄ rfl rfl
+
 end FlockSoundness.Refine

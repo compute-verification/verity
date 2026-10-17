@@ -107,4 +107,6 @@ statement's coins (`FlockDeploy.zkRepNs`, `FlockDeploy.zkVerifyRepWith_readsN`; 
 `FlockDeploy.zkRepNsOf`, `FlockDeploy.streams_ns_zk`), and custody reads each masked round message's coin at the
 session's count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted Ligerito run's first model request is
 level 0's, at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
-`FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`). -/
+`FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`), so an accepted
+rep's is at the stream's round `plainQueryRound` (`FlockSoundness.Refine.lincheck_moves`,
+`FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). -/
