@@ -41,9 +41,11 @@ theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
   have hzk : ins.read.zk = false := readOf_zk (x := x) (by unfold readOf; rw [(setupOf_some hset).1]; rfl)
   have htags : ins.read.tags = ins.read.I.tags := by simp [Readable.Read.tags, hzk]
   have hform : (Readable.toReadable Readable.relation p).form = ins.read.form := by rw [← hpr]; rfl
-  obtain ⟨-, -, -, -, -, ht, hrr, hl, hc1, hpi, -, -, ho, -⟩ := hin
-  rw [hform] at ht hrr hl hc1 hpi ho
-  simp only [Readable.Read.form, htags] at ht hrr hl hc1 hpi ho
+  obtain ⟨-, -, -, -, -, ht, hrr, hl, hc1, hpi, -, hg, -⟩ := hin
+  rw [hform] at ht hrr hl hc1 hpi hg
+  simp only [Readable.Read.form, htags] at ht hrr hl hc1 hpi hg
+  simp only [hh, Bool.false_eq_true, false_and, or_false] at hg
+  obtain ⟨-, ho⟩ := hg
   simp only [Bool.not_eq_true] at ht
   simp only [Bool.false_eq_true, false_or] at hc1
   have hpi' : ins.read.publicInputs = none := Option.not_isSome_iff_eq_none.1 hpi
