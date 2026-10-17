@@ -17,6 +17,6 @@ recorded correspondence, what crosses from the Program's own dataflow.  The comm
 structure (`verity_vllm.commit.bind`), never by respelling an identity as a tap names it.
 
 Gate (Phase 2): the per-row records are `tests/query/gate/row<N>_*.json`; the narrative (rows table, the #57 / #60 / #67 differences
-explained, the named-residual table, the v1 by-name tables this path does not use) lives in Notion, "v2 query gate -- Q_module_body_v1
+explained, the named-residual table since retired, the v1 by-name tables this path does not use) lives in Notion, "v2 query gate -- Q_module_body_v1
 vs v1 manifests (23 Sep)": https://app.notion.com/p/3e4399515d9e8180a637f4310c60a4f8 (child of the migration control page).
 """
