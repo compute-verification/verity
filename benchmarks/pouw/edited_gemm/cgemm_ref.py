@@ -67,6 +67,19 @@ def u_rows(key: bytes, row0: int, rows: int) -> np.ndarray:
     return -64 + beta @ cs.W_RE
 
 
+#: H1's narrow U planes (co32c-u16, decision 82): narrow_u.planes(16), offset 16, so U in {-16..-1, 1..16}
+W_RE16 = np.array([1, 2, 4, 8, 17], np.int64)
+
+
+def u_rows16(key: bytes, row0: int, rows: int) -> np.ndarray:
+    """H1's U (cgemm.cu's u_beta16, same BETA_TAG layout as u_rows but five planes): -16 + beta[:5] @ (1, 2, 4, 8, 17)."""
+    beta = np.zeros((rows, 32, 5), np.int64)
+    for j in range(row0 // 2, (row0 + rows) // 2):
+        v = np.frombuffer(block(key, BETA_TAG, j), np.uint8).reshape(2, 32)
+        beta[2 * j - row0:2 * j - row0 + 2] = np.unpackbits(v[..., None], axis=-1, bitorder="little")[..., :5]
+    return -16 + beta @ W_RE16
+
+
 def z_rows(key: bytes, row0: int, rows: int, m: int) -> np.ndarray:
     """z, (m - 1) x 32 x rows (Lean's (digit, r, column) order)."""
     z = np.zeros((rows, 128), np.int64)
@@ -151,11 +164,14 @@ def check(d: Path) -> dict:
     if "cohalf" in meta.get("kinds", {}).values():
         return check_half(d, meta)
     m_, n, k, seed, inv_s = meta["m"], meta["n"], meta["k"], meta["seed"], np.float32(meta["inv_s"])
+    # H1's numerics (co32c-u16, decision 82): per-token s_a = amax / 126 (recomputed from x, fp32, matching crow_s),
+    # X floor-clamped on [-126, 126], weights +-110 with the narrow U (u_rows16). Else Dither-C's one-scale 7-bit form.
+    h1 = meta.get("numerics") == "h1"
     key = b"".join(struct.pack(">Q", int(w, 16)) for w in meta["key"])
     tiles_n = n // T
     nd = cs.n_digits((k // 32) * -128, (k // 32) * 127)
-    out = {"dir": str(d), "m": m_, "n": n, "k": k, "digits": nd, "device_ok": meta["device_ok"],
-           "control_rejected": meta["control_rejected"], "device": meta["device"], "tiles": {}}
+    out = {"dir": str(d), "m": m_, "n": n, "k": k, "digits": nd, "numerics": "h1" if h1 else "co32c",
+           "device_ok": meta["device_ok"], "control_rejected": meta["control_rejected"], "device": meta["device"], "tiles": {}}
     ok = bool(meta["device_ok"]) and bool(meta["control_rejected"])
     for tm, tn in meta["tiles"]:
         sfx = f"_{tm}_{tn}.bin"
@@ -163,12 +179,16 @@ def check(d: Path) -> dict:
             return np.fromfile(d / (name + sfx), dt)
 
         x = (rd("x", np.uint16).astype(np.uint32) << 16).view(np.float32).reshape(T, k)
-        Vq = np.clip(np.floor(x * inv_s), -127, 126).astype(np.int64)
+        if h1:
+            inv_row = (np.float32(126.0) / np.maximum(np.abs(x).max(axis=1), np.float32(1e-30))).astype(np.float32)
+            Vq = np.clip(np.floor(x * inv_row[:, None]), -126, 126).astype(np.int64)
+        else:
+            Vq = np.clip(np.floor(x * inv_s), -127, 126).astype(np.int64)
         b = patch_bits(key, DITHER_TAG, tm * T, T, k)
         X = Vq + b
         W = rd("W", np.int8).astype(np.int64).reshape(T, k)
         c = patch_bits(key, C_TAG, tn * T, T, k)
-        U = u_rows(key, tn * T, T)
+        U = u_rows16(key, tn * T, T) if h1 else u_rows(key, tn * T, T)
         z = z_rows(key, tm * T, T, nd)
         Wp = W + c + U[:, np.arange(k) % 32]
         Y = X.reshape(T, k // 32, 32).sum(1).T
@@ -204,7 +224,10 @@ def check(d: Path) -> dict:
         }
         out["tiles"][f"{tm},{tn}"] = res
         ok &= all(v for v in res.values() if isinstance(v, bool))
-        ok &= -127 <= res["X_range"][0] and res["X_range"][1] <= 127 and -128 <= res["Wp_range"][0] and res["Wp_range"][1] <= 127
+        if h1:   # X = floor(clamp(x inv_row, -126, 126)) + b in [-126, 127]; Wp = W + c + U in [-126, 127]
+            ok &= -126 <= res["X_range"][0] and res["X_range"][1] <= 127 and -126 <= res["Wp_range"][0] and res["Wp_range"][1] <= 127
+        else:
+            ok &= -127 <= res["X_range"][0] and res["X_range"][1] <= 127 and -128 <= res["Wp_range"][0] and res["Wp_range"][1] <= 127
     out["ok"] = bool(ok)
     return out
 
