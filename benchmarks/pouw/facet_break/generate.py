@@ -666,6 +666,21 @@ def targeted_rt4() -> list[dict]:
     return out
 
 
+def targeted_rt5() -> list[dict]:
+    """RT-FACET r3: r2's unroll on every other MMA form, whose VF3s-16 hull is still FACET-BREAK r4's unroll-1 programs
+    (r20261017-100812-180b): FMUL beside each at unroll 8 and 16 on 2 and 3 accumulators, 96-128 lane ops a 8 MMAs, 2
+    warps a SMSP, and 4 at the vector end (128 on 2 accumulators)."""
+    out: list[dict] = []
+    for form in R4_FORMS + ("h16816f16", "h1688t"):
+        for na in (2, 3):
+            for q in (96, 112, 128):
+                for u in (8, 16):
+                    out.append(_jm(form, "fmuli", q, 2, na=na, u=u))
+        for u in (8, 16):
+            out.append(_jm(form, "fmuli", 128, 4, na=2, u=u))
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -696,7 +711,7 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
               "jifine": (targeted_jifine, sampled_ji), "jipair": (targeted_jipair, sampled_ji),
               "r4": (targeted_r4, sampled_ji), "rt": (targeted_rt, sampled_ji),
               "rt2": (targeted_rt2, sampled_ji), "rt3": (targeted_rt3, sampled_ji),
-              "rt4": (targeted_rt4, sampled_ji)}[family]
+              "rt4": (targeted_rt4, sampled_ji), "rt5": (targeted_rt5, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -783,7 +798,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
     p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4", "rt", "rt2", "rt3",
-                                             "rt4"),
+                                             "rt4", "rt5"),
                    default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
@@ -792,7 +807,7 @@ def main(argv: list[str] | None = None) -> int:
                         "the break on every other form, its repeats, and ALU work beside the MMA; rt: RT-FACET's "
                         "schedule axes on the low-accumulator break (na 5, unroll, placement, uniform co-issue); rt2: "
                         "rt's unroll and uniform co-issue crossed, unroll 8 for the instruction cache; rt3: the FMA "
-                        "lane at unroll 8 to 32, past rt2's best; rt4: rt3's break again and around it")
+                        "lane at unroll 8 to 32, past rt2's best; rt4: rt3's break again and around it; rt5: rt3's unroll on every other MMA form")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
