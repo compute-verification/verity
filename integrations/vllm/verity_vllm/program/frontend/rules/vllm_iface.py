@@ -135,6 +135,42 @@ _define_once("dsa_indexer_attn(Tensor positions, Tensor ql_nope, Tensor q_pe, Te
 _define_once("ll_bf16_gemm(Tensor x, Tensor w) -> Tensor", "ll_bf16_gemm",
              lambda x, w: x.new_empty((x.shape[0], w.shape[0]), dtype=torch.float32))
 
+
+# [DSV4] DeepSeek-V4's manifold-constrained hyper-connections (vllm/model_executor/kernels/mhc/tilelang.py): the three ops vLLM
+# registers from the functions DeepSeek-V4's model calls (`vllm::<name>`, the schemas here are theirs), and layer 0's broadcast
+# pre, which vLLM does not register (`export_compat.mhc_pre_broadcast_leaf` puts this op, of the schema `infer_schema` gives the
+# function, in its place).  residual [T, HC, H] bf16; post mix [T, HC, 1], comb mix [T, HC, HC] f32; the layer input [T, H] bf16.
+def _mhc_mixes(t, HC):
+    T = t.shape[0]
+    return t.new_empty((T, HC, 1), dtype=torch.float32), t.new_empty((T, HC, HC), dtype=torch.float32)
+
+
+def _mhc_fused_post_pre_fake(x, residual, post_layer_mix, comb_res_mix, fn, hc_scale, hc_base, rms_eps, hc_pre_eps, hc_sinkhorn_eps,
+                             hc_post_mult_value, sinkhorn_repeat, n_splits=1, tile_n=1, norm_weight=None, norm_eps=1e-6):
+    T, HC, H = residual.shape
+    return (residual.new_empty((T, HC, H)), *_mhc_mixes(residual, HC), residual.new_empty((T, H)))
+
+
+def _mhc_pre_broadcast_fake(residual, fn, hc_scale, hc_base, rms_eps, hc_pre_eps, hc_sinkhorn_eps, hc_post_mult_value, sinkhorn_repeat,
+                            n_splits=1, norm_weight=None, norm_eps=1e-6, fn_broadcast=None):
+    T, H = residual.shape
+    HC = fn.shape[1] // H
+    return (residual.new_empty((T, HC, H)), *_mhc_mixes(residual, HC), residual.new_empty((T, H)))
+
+
+_MHC_PRE = ("Tensor fn, Tensor hc_scale, Tensor hc_base, float rms_eps, float hc_pre_eps, float hc_sinkhorn_eps, float hc_post_mult_value, "
+            "SymInt sinkhorn_repeat, SymInt n_splits=1")
+_define_once("mhc_fused_post_pre_tilelang(Tensor x, Tensor residual, Tensor post_layer_mix, Tensor comb_res_mix, " + _MHC_PRE +
+             ", SymInt tile_n=1, Tensor? norm_weight=None, float norm_eps=9.9999999999999995e-07) -> (Tensor, Tensor, Tensor, Tensor)",
+             "mhc_fused_post_pre_tilelang", _mhc_fused_post_pre_fake)
+_define_once("mhc_pre_broadcast_tilelang(Tensor residual, " + _MHC_PRE + ", Tensor? norm_weight=None, float norm_eps=1e-06, "
+             "Tensor? fn_broadcast=None) -> (Tensor, Tensor, Tensor, Tensor)", "mhc_pre_broadcast_tilelang", _mhc_pre_broadcast_fake)
+_define_once("mhc_post_tilelang(Tensor x, Tensor residual, Tensor post_layer_mix, Tensor comb_res_mix) -> Tensor", "mhc_post_tilelang",
+             lambda x, residual, post_layer_mix, comb_res_mix: residual.new_empty(residual.shape))
+_define_once("hc_head_fused_kernel_tilelang(Tensor hs_flat, Tensor fn, Tensor hc_scale, Tensor hc_base, float rms_eps, float hc_eps) -> Tensor",
+             "hc_head_fused_kernel_tilelang", lambda hs_flat, fn, hc_scale, hc_base, rms_eps, hc_eps:
+                 hs_flat.new_empty((hs_flat.shape[0], hs_flat.shape[-1]), dtype=torch.bfloat16))
+
 iface = torch.ops.vllm_iface
 
 

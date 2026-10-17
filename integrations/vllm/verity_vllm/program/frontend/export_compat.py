@@ -9,11 +9,15 @@ counts them as structural scaffolding.
 2. The declared target applied (`apply_target_profile`).  3. vLLM's MoE dispatcher ops traced through (`moe_ops_traced`).
 4. DeepSeek sparse attention's three kernels as leaf ops (`dsa_ops_leaf`).  5. The MoE gate's cuteDSL GEMM as a leaf op
    (`moe_gate_leaf`).  6. The default Hopper block-FP8 linear's dynamic custom op as a leaf
-   (`default_fp8_linear_leaf`).  7. CUDA streams and events as inert stand-ins (`cuda_streams_inert`).
+   (`default_fp8_linear_leaf`).  7. CUDA streams and events as inert stand-ins (`cuda_streams_inert`).  8. A registered op's
+   Python body, called directly by a model module, as the op (`registered_op_bodies_as_ops`).  9. DeepSeek-V4's layer-0 mHC
+   broadcast pre as a leaf op (`mhc_pre_broadcast_leaf`).
 """
 
 from __future__ import annotations
 
+import importlib
+import inspect
 import sys
 from contextlib import contextmanager
 
@@ -470,6 +474,11 @@ def dsa_leaves(site, model=None):
         yield
 
 
+def _model_modules(model) -> list:
+    """The modules ``model``'s classes are defined in: the globals their methods read."""
+    return [sys.modules[n] for n in sorted({type(m).__module__ for m in model.modules()}) if n in sys.modules]
+
+
 _FUSED_AR_NORM_MODULE = "vllm.models.common.ops.fused_allreduce_rms_norm"
 _FUSED_AR_NORM_NAME = "fused_allreduce_rms_norm"
 
@@ -488,9 +497,7 @@ def fused_allreduce_rms_norm_leaf(model=None):
     if original is None or model is None:
         yield
         return
-    users = [sys.modules[n] for n in sorted({type(m).__module__ for m in model.modules()})
-             if n in sys.modules and n != _FUSED_AR_NORM_MODULE]
-    users = [m for m in users if getattr(m, _FUSED_AR_NORM_NAME, None) is original]
+    users = [m for m in _model_modules(model) if m is not home and getattr(m, _FUSED_AR_NORM_NAME, None) is original]
     if not users:
         yield
         return
@@ -532,7 +539,6 @@ def moe_gate_leaf(model=None, site=None):
         yield
         return
     if site is None:
-        import importlib
         site = importlib.import_module(_LL_BF16_SITE)
     from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the op)
 
@@ -630,20 +636,84 @@ def cuda_streams_inert():
         yield
 
 
+def _registered_from(ns, f):
+    """The op packet of ``ns`` that was registered from function ``f``: of f's name, with the schema `infer_schema` gives f (the
+    arguments the op writes declared as mutated), else None."""
+    from torch._library.infer_schema import infer_schema
+    if not inspect.isfunction(f):
+        return None
+    try:
+        packet = getattr(ns, f.__name__)
+        schema = packet.default._schema
+    except (AttributeError, RuntimeError):
+        return None
+    written = [a.name for a in schema.arguments if a.alias_info is not None and a.alias_info.is_write]
+    try:
+        mine = torch._C.parse_schema(f"{schema.name}{infer_schema(f, mutates_args=written)}")
+    except (ValueError, RuntimeError):
+        return None
+    return packet if mine == schema else None
+
+
+@contextmanager
+def registered_op_bodies_as_ops(model=None, ns=None):
+    """8. A model module may import the Python body of a vLLM custom op and call it directly: DeepSeek-V4's decoder layer calls
+    `mhc_fused_post_pre_tilelang`, which `direct_register_custom_op` also registers as `vllm::mhc_fused_post_pre_tilelang`.  Traced,
+    the body launches kernels a meta export cannot run.  For the duration, each global of a module ``model``'s classes are defined in
+    that is the function an op of ``ns`` (default `torch.ops.vllm`) was registered from (`_registered_from`) is that op: the same call
+    through the dispatcher, the op's fake giving the shapes."""
+    if model is None:
+        yield
+        return
+    ns = torch.ops.vllm if ns is None else ns
+    with hooks.Hooks() as h:
+        for module in _model_modules(model):
+            for name, f in list(vars(module).items()):
+                if (packet := _registered_from(ns, f)) is not None:
+                    h.patch(module, name, packet)
+        yield
+
+
+_MHC_SITE = "vllm.model_executor.kernels.mhc.tilelang"
+
+
+@contextmanager
+def mhc_pre_broadcast_leaf(model=None, original=None):
+    """9. Layer 0's mHC pre on the embedding broadcast to the residual streams (`mhc_pre_broadcast_tilelang`, DeepSeek-V4), which
+    vLLM does not register: its body sizes DeepGEMM's split-K from the device's SM count and launches TileLang.  For the duration,
+    each global of a module ``model``'s classes are defined in that is ``original`` (default vLLM's function, loaded by the model
+    module that imports it) is `vllm_iface.mhc_pre_broadcast_tilelang`, an op of the schema `infer_schema` gives the function.  A
+    model that does not call it is unchanged."""
+    if original is None:
+        original = getattr(sys.modules.get(_MHC_SITE), "mhc_pre_broadcast_tilelang", None)
+    if model is None or original is None:
+        yield
+        return
+    from verity_vllm.program.frontend.rules.vllm_iface import iface
+    with hooks.Hooks() as h:
+        for module in _model_modules(model):
+            for name, f in list(vars(module).items()):
+                if f is original:
+                    h.patch(module, name, iface.mhc_pre_broadcast_tilelang)
+        yield
+
+
 @contextmanager
 def export_compat(profile=None, model=None):
     """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
     dispatcher ops traced through their bodies (`moe_ops_traced`) + DeepSeek sparse attention's kernels, the MoE gate's cuteDSL GEMM
     and the default Hopper FP8 linear as leaf ops (`dsa_ops_leaf`, `moe_gate_leaf`, `default_fp8_linear_leaf`) + inert CUDA streams
-    (`cuda_streams_inert`); `model` = the instantiated module, for the per-layer entries."""
+    (`cuda_streams_inert`) + registered op bodies called as their ops (`registered_op_bodies_as_ops`) and layer 0's mHC broadcast
+    pre as a leaf (`mhc_pre_broadcast_leaf`); `model` = the instantiated module, for the per-layer entries."""
     if profile is None:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         profile = TargetProfile.default()
     with (tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model),
-          fused_allreduce_rms_norm_leaf(model), moe_gate_leaf(model), default_fp8_linear_leaf(model), cuda_streams_inert()):
+          fused_allreduce_rms_norm_leaf(model), moe_gate_leaf(model), default_fp8_linear_leaf(model), cuda_streams_inert(),
+          registered_op_bodies_as_ops(model), mhc_pre_broadcast_leaf(model)):
         yield
 
 
 __all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "dsa_ops_leaf", "dsa_leaves",
            "fused_allreduce_rms_norm_leaf", "moe_gate_leaf", "default_fp8_linear_leaf", "cuda_streams_inert", "InertStream", "InertEvent",
-           "read_back_applied", "host_facts"]
+           "registered_op_bodies_as_ops", "mhc_pre_broadcast_leaf", "read_back_applied", "host_facts"]
