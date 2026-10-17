@@ -390,16 +390,19 @@ end KS
 
 section AtFlock
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+  [DecidableEq Col']
 
 /-- **The recursion's KS over Flock at the errors its proof gives**: `KSA` at every inner decoder that meets the
-spec, as `KSFlock` is `KS`. -/
-def KSFlockA [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) : Prop :=
+spec, as `KSFlock` is `KS`, the inner and outer Flock each on its own columns and traces. -/
+def KSFlockA [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
+    (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK DI decI → KSA H D (Inner.ofFlock DI decI) DO
 
 /-- **KS of the recursion over Flock**: `KS_of` with Flock as the inner protocol, at every inner decoder that meets the
 spec. -/
-theorem KSFlock_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) (hRef : Refuses H D)
+theorem KSFlock_of [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
+    (DO : Flock.Deploy Coin Col' T') (hRef : Refuses H D)
     (hRounds : ∀ x, DI.V.k (xI D x) ≤ D.V.k x)
     (hO : ∀ decI, decOK DI decI → OuterKS H D (Inner.ofFlock DI decI) DO)
     (hI : ∀ decI, decOK DI decI → InnerKS H D (Inner.ofFlock DI decI) DO) : KSFlockA H D DI DO :=

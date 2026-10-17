@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Claims.KS.SessionSC
 import Proofs.Flock.Claims.KS.PlainBound
+import Proofs.Flock.Claims.KS.Trim
 import Proofs.Flock.Claims.KS.PlainKS
 import Proofs.Flock.Claims.KS.Escapes
 import Proofs.Flock.Claims.KS.OnAcc
@@ -38,6 +39,14 @@ import Proofs.Flock.Claims.KS.LevelZeroAcc
 import Proofs.Flock.Claims.KS.OffSC
 import Proofs.Flock.Claims.KS.Entries
 import Proofs.Flock.Claims.KS.DecodeSC
+import Proofs.Flock.Claims.KS.DecodeDeploy
+import Proofs.Flock.Claims.KS.DecodeHidden
+import Proofs.Flock.Claims.KS.PlainWrP
+import Proofs.Flock.Claims.KS.PlainEvent
+import Proofs.Flock.Claims.KS.LiveMix
+import Proofs.Flock.Claims.KS.PlainFirst
+import Proofs.Flock.Claims.KS.PlainThird
+import Proofs.Flock.Claims.KS.PlainSimW
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Claims.KS.ZkDrawJ
@@ -45,6 +54,10 @@ import Proofs.Flock.Claims.KS.ZkDecJ
 import Proofs.Flock.Claims.KS.ZkXferJ
 import Proofs.Flock.Claims.KS.ZkSessionSC
 import Proofs.Flock.Claims.KS.ZkPads
+import Proofs.Flock.Claims.KS.ZkSessionW
+import Proofs.Flock.Claims.KS.ZkOffSC
+import Proofs.Flock.Claims.KS.ZkEntries
+import Proofs.Flock.Claims.KS.ZkDecodeW
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -60,9 +73,11 @@ One wait's bound from a fixed table's bound (`Joint`): the old theorems' `joint_
 run law (`Flock.runGame`, `Flock.oneWait_lhs_eq`), with three obligations: a fixed table's bound over tables of
 well-formed or unopened (`0`) columns, accepted runs opening only well-formed columns, and conflicts tied to collisions
 (`Flock.TableBoundθ`, `Flock.orZero`, `Flock.ColsOk`, `Flock.ConflictTied`, `Flock.oneWait_of_tableBound`,
-`FlockDeploy.KS.plain_KS_of_tableBound`, `FlockDeploy.KS.zk_KS_of_tableBound`); the bound over tables with unopened
-columns from the one over full tables, where a table that does not extract extends to a full one that does not either
-(`Flock.Extendθ`, `Flock.tableBoundθ_of_extend`). The old table at the opened word (`Trace`): a word as the old oracle,
+`FlockDeploy.KS.plain_KS_of_tableBound`, `FlockDeploy.KS.zk_KS_of_tableBound`). At the records the claims read, whose
+columns are trimmed of trailing zeros so `0` is the trimmed zero column (`FlockDeploy.deployPlainTrim`,
+`FlockDeploy.deployZkTrim`), the three obligations carry over from the untrimmed records over full-width columns,
+the table's bound by padding back (`Trim`, `Flock.tableBoundθ_mapCols`, `FlockDeploy.KS.plain_KS_trim`,
+`FlockDeploy.KS.zk_KS_trim`). The old table at the opened word (`Trace`): a word as the old oracle,
 `Close` bounding the agreement (`Flock.agree_of_close`), the deployed plain code, read step, schedule and radius as the
 old model's (`Flock.radius_plain`), so an old `Committed` table extracts (`FlockDeploy.KS.good_of_committed_plain`,
 `FlockDeploy.KS.not_committed_plain`), and the masked code and read step as the old padded ones (`Flock.zkEnc_eq_encAt`,
@@ -153,11 +168,12 @@ masked record an output at the empty openings never self-clashes, so table `j`'s
 on accepted live runs (`ZkAccJ`: `FlockDeploy.KS.not_selfClashZ_nul`, `FlockDeploy.KS.mean_selfClash_le_liveJZ`); with
 the live sessions' bound at escapes on accepted runs (`FlockDeploy.KS.ZkLiveAccJ`, which gives `ZkLiveJ`,
 `FlockDeploy.KS.zkLiveJ_of_acc`), every table's bound holds with escapes on accepted runs at every statement
-(`Flock.TableBoundJAccAt`, `FlockDeploy.KS.zk_tableBoundJAccAt`). Each round of an accepted masked rep issued the coins
-its statement fixes (`RoundsNZk`: `FlockDeploy.zkRepNs`, `FlockDeploy.zkVerifyRepWith_readsN`; per rep stream,
-`FlockDeploy.zkRepNsOf`, `FlockDeploy.streams_ns_zk`), and custody reads each round message's coin at the session's
-count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted Ligerito run's first model request is level 0's,
-at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
+(`Flock.TableBoundJAccAt`, `FlockDeploy.KS.zk_tableBoundJAccAt`), and so table 0's (`Flock.TableBoundθAccAt`,
+`Flock.TableBoundJAccAt.tableBoundθAccAt`, `FlockDeploy.KS.zk_tableBoundθAccAt`). Each round of an accepted masked rep
+issued the coins its statement fixes (`RoundsNZk`: `FlockDeploy.zkRepNs`, `FlockDeploy.zkVerifyRepWith_readsN`; per rep
+stream, `FlockDeploy.zkRepNsOf`, `FlockDeploy.streams_ns_zk`), and custody reads each round message's coin at the
+session's count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted Ligerito run's first model request is
+level 0's, at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
 `FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`), so an accepted
 rep's is at the stream's round `plainQueryRound` (`FlockSoundness.Refine.lincheck_moves`,
 `FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). At flock-verify's acceptance, every
@@ -171,19 +187,41 @@ table's reps' runs has its level-0 openings verifying below `2^d`, with position
 entries (`Entries`: `FlockSoundness.Discharge.Exec.accepts_opens₀L`, `Claims.Flock.exists_ne_of_entries`). So at `wrP`,
 at one table, the deployed plain decoders are right for accepting with no level-0 opening off `C` unless it
 self-clashes, on the outcomes flock-verify accepts at the live root where the deployed reader looks up no column off `C`
-(`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`, `Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). Where `verify --zk`
-sets its session up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`:
-`FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`:
-`FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's draw to the
-statement's only up to key order, so the old discharge is read at the setup at the statement's draw, which reads no draw
-in the record, with a writer that records the live session there (`ZkDrawJ`:
-`FlockSoundness.Discharge.Composed.AcceptsAt`, `FlockSoundness.Discharge.Composed.runsAtZCJ_live`,
-`FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`, `Claims.Bridge.Custody.wrS`,
-`Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted there
-(`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty draw the deployed `--zk` decoders are right at `zkTabs` at
-public and hidden outputs (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`,
+(`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`, `Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). At a plain statement
+in scope with public outputs, that table is `plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for
+(`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`). With hidden outputs, the hidden table is `plainTab` too, and the same
+holds at its openings (`DecodeHidden`: `Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`).
+A statement some run accepts sets up at a draw, so the plain chain asks only for the mixture at those decoders, whether
+or not the outputs are hidden (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`,
+`FlockDeploy.KS.PlainLiveW`, `FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the
+statement's draw, the event the mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
+`FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the rest
+of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the merged
+coins being uniform, and the mixture by an event of the deployed coins the live event implies (`LiveMix`:
+`Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_mergeAt`, `Claims.Bridge.Live.liveMix_eq`,
+`Claims.Bridge.Live.Pr_le_liveMix`, `Claims.Bridge.Live.liveMix_le_Pr`). From a simulation of the deployed prover by a
+live prover on coins of uniform law, and the record's draw on accepting runs, the mixture's first bound holds
+(`PlainFirst`: `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.RecordDrawVerbatim`, `FlockDeploy.KS.plain_first_of_sim`), and
+at the coins that merge each live coin with the rest of a deployed coin, from the simulation of the runs alone
+(`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`, `FlockDeploy.KS.plainSim_of_run`,
+`FlockDeploy.KS.plain_first_of_run`); the checks compare draws only up to `JsonEquiv`, which holds between different
+terms (`FlockDeploy.KS.drawEq_ne`). At those coins, a deployed event that the live event implies bounds the mixture, the
+third bound's form (`PlainThird`: `FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision
+as the events, KS at the deployed plain verifier holds from a live prover for each prover that simulates its accepting
+runs, whose self-clashes give its accepting runs with a collision and whose fork bound holds, the record's draw verbatim
+and `Extendθ` (`PlainSimW`: `FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
+`FlockDeploy.KS.plainLiveWrPAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). Where `verify --zk` sets its session up at a
+draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`,
+`FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`,
+`FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's draw to the statement's only up to key order,
+so the old discharge is read at the setup at the statement's draw, which reads no draw in the record, with a writer that
+records the live session there (`ZkDrawJ`: `FlockSoundness.Discharge.Composed.AcceptsAt`,
+`FlockSoundness.Discharge.Composed.runsAtZCJ_live`, `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`,
+`Claims.Bridge.Custody.wrS`, `Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted
+there (`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty draw the deployed `--zk` decoders are right at `zkTabs`
+at public and hidden outputs (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`,
 `FlockDeploy.KS.decodesTableH_zkTabs`), and so at every masked statement in scope that `Deploy.V` sets up at a draw,
-which every statement some run accepts carries (`FlockDeploy.KS.acc_draw`; `ZkDecJ`:
+which every statement some run accepts carries (`FlockDeploy.KS.acc_draw_of_setup`; `ZkDecJ`:
 `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. The masked session's bound
 reads its level-0 term only on runs that do not self-clash, a self-clash being in `ε_c⁻` already (`ZkSessionSC`:
 `FlockSoundness.Discharge.ZkLink.bad_pointwise_ofZ_sc`,
@@ -193,8 +231,28 @@ reads its level-0 term only on runs that do not self-clash, a self-clash being i
 self-clash (`ZkXferJ`: `FlockDeploy.KS.OffNoClashZ`, `FlockDeploy.KS.AccOffJ`, `FlockDeploy.KS.OkOffJ`,
 `FlockDeploy.KS.decodesOff_deploy`), the deployed decoders are right at a verdict accepting with none, so `ZkLiveAccJ`
 follows from the live sessions' bound at the deployed decoders (`FlockDeploy.KS.ZkXferJ`,
-`FlockDeploy.KS.zkLiveAccJ_of_xferJ`) and `Flock.KS` from it and `ExtendJ` (`FlockDeploy.KS.zk_KS_of_xferJ`). Level 0's
-masked rows carry both reps' extra lanes, which the session's level-0 term reads and the claim's witness-lane columns do
-not, so a verifying opening with a nonzero extra lane is off every table of those columns (`ZkPads`:
+`FlockDeploy.KS.zkLiveAccJ_of_xferJ`) and `Flock.KS` from it and `ExtendJ` (`FlockDeploy.KS.zk_KS_of_xferJ`), table 0's
+bound with escapes on accepted runs from it alone (`FlockDeploy.KS.zk_tableBoundθAccAt_of_xferJ`). Level 0's masked rows
+carry both reps' extra lanes, which the session's level-0 term reads and the claim's witness-lane columns do not, so a
+verifying opening with a nonzero extra lane is off every table of those columns (`ZkPads`:
 `FlockDeploy.KS.off₀Z_oracleOf_of_extra`, `FlockDeploy.KS.offNoClashZ_oracleOf_of_extra`), while whether a table is
-committed reads only its witness lanes (`FlockDeploy.KS.committed_congr_lanes`). -/
+committed reads only its witness lanes (`FlockDeploy.KS.committed_congr_lanes`). So the masked session's bound holds
+with its level-0 term on the witness lanes, the extra lanes the plurality of the openings on `C`'s, at the old level-0
+term `√(2^{d₀}·2Q₀·Adv₀)` (`ZkSessionW`: `FlockSoundness.Discharge.ZkLink.OffW₀Z`,
+`FlockSoundness.Discharge.ZkLink.session_sound_of_table_accZ_w`). The masked reader keeps each opened row's witness
+lanes, so a masked output whose level-0 openings verify and are, with those lanes, the reader's entries opens a position
+off `C` on a witness lane without a self-clash only where the reader looks up a column off `C` (`ZkOffSC`:
+`Claims.Flock.exists_ne_of_offW₀Z_sc`, `Claims.Flock.exists_ne_of_zk_entries`). A compiled masked rep's first request is
+level 0's, at the positions of the coins of its stream's round `zkQueryRound`
+(`FlockSoundness.Discharge.ZkExec.zk_rep_reqs`), so at a rep's run its level-0 openings, on the witness lanes, are the
+masked reader's entries, and an accepted masked table's level-0 openings verify at `width₀` (`ZkEntries`:
+`Claims.Flock.slotOpensZ_entries`, `Claims.Flock.zkRepColsOf_ok`, `FlockSoundness.Discharge.ZkExec.zk_rep_entries`,
+`Claims.Flock.verified_opens₀Z`); so where `Zk.verifyRep` accepts both reps of a table, every accepted output of their
+results has its level-0 openings verifying at `width₀` below `2^d`, with positions and witness lanes its reps'
+`zkRepColsOf` entries (`FlockSoundness.Discharge.ZkExec.zk_table_opens₀Z`), and so does every accepted output of an
+outcome `verify --zk` accepts at the setup at the draw (`FlockSoundness.Discharge.Composed.OpensEntries`,
+`FlockSoundness.Discharge.Composed.runsAtZCJ_live_entries`,
+`FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_entries`). There, where the deployed masked reader looks up no column
+of table `j` off `C`, table `j`'s accepted output opens no position off `C` on a witness lane without a self-clash
+(`ZkDecodeW`: `FlockSoundness.Discharge.Composed.ZkTxNoOff`, `FlockSoundness.Discharge.Composed.not_offW_of_entries`,
+`FlockSoundness.Discharge.Composed.runsAtZCJ_live_offW`, `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_offW`). -/
