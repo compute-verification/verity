@@ -17,6 +17,8 @@ note:20261017T0321Z-draft-eps1-tensor), each `def G : Prop`, proved (or a `sorry
 * `RoutesOffD2`: Corollary D2, routes off the binding facet.
 * `TensorSlotCount`, `TensorSlotTight`: T1, the tensor slot count, and its tightness criterion.
 * `OutputCount`: Lemma 2's count, owned committed positions at most `Σ_k ω_k n_k`.
+* `ProofsSoundOfPinned`: (I8) `ProofsSound` from binding at `δ_bind`, proof soundness at `δ_ZK`, the Definitions'
+  pinning and E1(c) (`RightFixed`).
 
 Probability statements put acceptance in the event: the probability that the window is accepted and the bound fails is
 at most `δ`.
@@ -176,6 +178,18 @@ every `L/d_H` of them (`d_H ≤ L`), so `ε_tensor ≤ 1 − (ρ_H/ρ_T)(d_H/L)`
 def TensorSlotTight : Prop :=
   ∀ ρH ρT dH L : ℝ, 0 < ρH → ρH ≤ ρT → 0 < dH → dH ≤ L →
     (1 - ρH / ρT * (dH / L) = 0 ↔ L = dH ∧ ρH = ρT)
+
+/-- **(I8) from its pieces.** In 𝒫_full over a window's proofs (`ProofLayer`, `n_π` a round) whose play is theirs (`Of`:
+the window is accepted only if every proof is, and the ideal game's check is the proofs' relations at the committed
+values): if at every round binding fails with probability at most `δ_bind` (`Moved`: an accepted round's proof opens
+its leaves to values other than those committed before σ_w), every proof is unsound with probability at most `δ_ZK`
+(`SoundAt`), the relations pin every committed value (`Pins`, a property of the Definitions the proofs pass), and E1(c)
+holds with the equal shares (`RightFixed`), then (I8) `ProofsSound` holds at `S·(δ_bind + n_π·δ_ZK)`. -/
+def ProofsSoundOfPinned : Prop :=
+  ∀ {K T L U V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] (Ω : Type) [Fintype Ω] (S nπ : ℕ)
+    (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V) (Nw δbind δzk : ℝ),
+    pf.Of P → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk → pf.Pins → RightFixed P pf Nw →
+    ProofsSound P Nw δbind δzk nπ
 
 /-- **Lemma 2 (output count).** In a straight-line program whose class-`k` instances write at most `ω_k` words each,
 the owned committed positions (one per head write their values trace to) are at most `Σ_k ω_k n_k`. -/
