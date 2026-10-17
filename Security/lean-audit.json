@@ -378,7 +378,7 @@
   "Models.Accounting.Guarantees.Bandwidth"
  ],
  "claims": {
-  "modules": ["Definitions.Claims"],
+  "modules": ["Definitions.Claims", "Definitions.Claims.Recursion"],
   "witnesses": {
    "Claims.Bits": {
     "fails": "Claims.Bits_fails",
