@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.DeployReg
 import Proofs.Flock.Claims.Recursion.DeployScopeRuns
+import Proofs.Flock.Claims.Recursion.DeployLayout
 
 /-!
 # V*'s cross-part facts at `deployRec`
@@ -38,6 +39,12 @@ appeal to V*'s circuits, at every shape.
   inner circuit file's bytes, its sigma's), so with `PartLogs` some part's SHA-512 gadgets would have to record each of
   them. With those calls admitted as public (`LogDecompPub`), it is the verdict's calls alone that must be the parts'
   (`VerdictCut`, `logDecompPub_of_cut`).
+* **At the registered ports' layout** (`layoutOf`, `DeployLayout.lean`): `Staged` needs only `b.tr x` injective
+  (`staged_layoutOf`), since the layout spans exactly the inner verifier's rounds. `Held` holds exactly at a shape no
+  compiled statement parses at (`held_layoutOf_iff`). The layout records no call, so `PartLogs` leaves each part no
+  inner call at its own points (`partLogs_layoutOf_nil`), and with `LogDecomp` the inner setup makes none at an
+  accepted inner replay there (`setupLog_nil_layoutOf`), off a collision among the V* setup's own evaluations. The
+  inner setup always hashes (its digest and sigma), so off such a collision no inner replay at the parts' points accepts.
 -/
 
 namespace RecDeploy
@@ -808,5 +815,72 @@ theorem logDecomp_deployed_setup (rel : Flock.Readable.Parsed → Flock.Readable
       ∀ e ∈ ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval FlockDeploy.sha512).2,
         ∃ p < nS x, e ∈ logs p x c ms :=
   logDecomp_setup hLD hst hf c ms hacc
+
+/-! ## At the registered ports' layout -/
+
+/-- **`Staged` at `layoutOf`**, at every shape, wherever the coin server's transcript determines the rounds: the layout
+spans exactly the inner verifier's rounds. -/
+theorem staged_layoutOf (H : Msg → Msg) (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
+    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
+    (shape : Claims.Recursion.Form → Prop)
+    (htr : ∀ x st, parse x = some st → shape st.form → Function.Injective (b.tr x)) :
+    Claims.Recursion.VStar.Staged H (deployRec (FlockDeploy.V false) ivScope b.atPorts)
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) layoutOf shape (showsTr b.atPorts)
+      (cmtTr b.atPorts) :=
+  staged_deployRec H (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) ivScope b.atPorts layoutOf
+    shape htr fun _ _ _ _ => le_rfl
+
+/-- **`Held` at `layoutOf` holds exactly at a shape no compiled statement parses at** (`not_held_layoutOf`): no part
+holds the link message. -/
+theorem held_layoutOf_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
+    (shape : Claims.Recursion.Form → Prop) :
+    Claims.Recursion.VStar.Held D I layoutOf shape ↔ ∀ x st, D.parse x = some st → ¬ shape st.form :=
+  ⟨not_held_layoutOf, fun h x st hst hf => absurd hf (h x st hst)⟩
+
+/-- **`PartLogs` at `layoutOf` leaves the part no inner calls**: the layout records none, so wherever the part's outer
+relation holds at a V* statement showing the coins, its inner check makes no call on messages agreeing with what it
+holds, or the V* setup's own evaluations at that statement collide. -/
+theorem partLogs_layoutOf_nil {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
+    {DO : Claims.Flock.Deploy Coin Col T} {shape : Claims.Recursion.Form → Prop}
+    {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {s : ℕ}
+    (hP : Claims.Recursion.VStar.PartLogs H D DO layoutOf shape shows logs s) {x : Msg} {st : Claims.Recursion.Stmt}
+    (hst : D.parse x = some st) (hf : shape st.form) {xO : Msg} {w : Claims.Flock.Wit}
+    (hchk : Claims.Flock.check DO.parse xO w = true) {c : ℕ → Coin} (hc : shows s x xO c) {ms : List Msg}
+    (hms : ∀ i < layoutOf.rounds x, ∀ m, layoutOf.held x s w i = some m → ms.getD i [] = m) :
+    logs s x c ms = [] ∨ Claims.Recursion.SetupColl H D xO [] := by
+  have hnil : layoutOf.calls x s w = [] := rfl
+  rcases hP x st hst hf xO w hchk (by simp [hnil]) with h | h | h
+  · exact Or.inl (List.eq_nil_iff_forall_not_mem.2 fun e he => by simpa [hnil] using h c hc ms hms e he)
+  · simp [hnil, Claims.findColl] at h
+  · exact Or.inr (hnil ▸ h)
+
+/-- **`LogDecomp` with `PartLogs` at `layoutOf` leaves the inner setup no calls**: at an accepted inner replay at coins
+each part's V* statement shows, on messages agreeing with what each part holds, every call of the inner statement's
+setup is some part's inner check's (`logDecomp_setup`), and those are none (`partLogs_layoutOf_nil`), off a collision
+among some part's V* setup evaluations. -/
+theorem setupLog_nil_layoutOf {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
+    {DO : Claims.Flock.Deploy Coin Col T} {shape : Claims.Recursion.Form → Prop}
+    {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
+    (hLD : Claims.Recursion.VStar.LogDecomp H D (FlockDeploy.V false) shape logs)
+    (hP : ∀ s, Claims.Recursion.VStar.PartLogs H D DO layoutOf shape shows logs s) {x : Msg}
+    {st : Claims.Recursion.Stmt} (hst : D.parse x = some st) (hf : shape st.form) (c : ℕ → Coin) (ms : List Msg)
+    (hacc : (run H (replay ms) (FlockDeploy.V false) (Claims.Recursion.xI D x) () fun i => c i.val).out = .acc)
+    (hparts : ∀ p < D.nS x, ∃ (xO : Msg) (w : Claims.Flock.Wit), Claims.Flock.check DO.parse xO w = true ∧
+      shows p x xO c ∧ ∀ i < layoutOf.rounds x, ∀ m, layoutOf.held x p w i = some m → ms.getD i [] = m) :
+    innerSetupLog false H (Claims.Recursion.xI D x) = [] ∨
+      ∃ p < D.nS x, ∃ xO, Claims.Recursion.SetupColl H D xO [] := by
+  by_cases hcoll : ∃ p < D.nS x, ∃ xO, Claims.Recursion.SetupColl H D xO []
+  · exact Or.inr hcoll
+  left
+  obtain ⟨s, spec, sts, hs, hlog⟩ := logDecomp_setup hLD hst hf c ms hacc
+  unfold innerSetupLog
+  rw [hs]
+  refine List.eq_nil_iff_forall_not_mem.2 fun e he => ?_
+  obtain ⟨p, hp, hep⟩ := hlog e he
+  obtain ⟨xO, w, hchk, hc, hms⟩ := hparts p hp
+  rcases partLogs_layoutOf_nil (hP p) hst hf hchk hc hms with h | h
+  · rw [h] at hep
+    exact List.not_mem_nil hep
+  · exact hcoll ⟨p, hp, xO, h⟩
 
 end RecDeploy
