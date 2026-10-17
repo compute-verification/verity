@@ -41,4 +41,8 @@ the record needs (`Prover`: `Case.points_regions`, `proverOkJ`), so the record's
 they ask of the proof files (`Goals`: `Run.jsonJ`, `recordJsonJ`, `FilesJ`, `recordJ_of`), and `complete` holds with
 `FilesJ` for `RecordJ` (`completeJ`). Each table's reps' proof files decode to proofs of its parameters, its `root_B` as
 their cap and a 64-byte pads' root (`Files`: `sessionPZk_filesJ`, `Run.repJ`), so `FilesJ` holds from each table's
-`RepShapedZk` and the record's size (`filesJ` from `RepShapedJ`, `RecordFitsJ`; `completeJR`). -/
+`RepShapedZk` and the record's size (`filesJ` from `RepShapedJ`, `RecordFitsJ`; `completeJR`). Each proof file is
+the proof its rep returned, ending at its stream (`Reps`: `Run.walkJ`), so the masked replay passes (`replayJ`), level
+0's lanes follow from the masked Ligerito (`lanesJ`), and every round is consumed (`consumedJ`) at every table; so the
+rep's checks reduce to what `complete_zk` takes at one table, per rep the ring switch, the masked Ligerito and the
+inner proof (`RepChecksJ`, `openJ_of`; `completeJO`). -/

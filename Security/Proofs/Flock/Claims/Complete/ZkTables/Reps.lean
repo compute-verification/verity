@@ -239,4 +239,167 @@ theorem lanesJ {o : Run H rel} {i r : ℕ}
   rw [hv]
   rfl
 
+section Consumed
+
+open FlockSoundness.Refine FlockSoundness.Discharge.ZkExec
+
+/-- **Where a masked rep's steps return, the inner proof ends at the rep's round count**, within the rep's stream, at
+any table (`RunZk.inner_k`). -/
+theorem Run.inner_kJ (o : Run H rel) {i r : ℕ} {st : Flock.Stmt} (ht : o.tabs[i]! = Setup.ofCircuit st)
+    {v : Schedule × ℕ} (hv : Zk.schedule st.m = .ok v) (hsch : o.sch i = v.1)
+    (hRp : (Zk.replayWith o.hs o.tabs[i]! (o.lay i) (o.zp i r).proof (o.zp i r).inner.root).run (o.t₀ i r) =
+      .ok (o.rp i r))
+    (hRS : (ringSwitchWith o.hs o.tabs[i]!.m (ringClaimsZk (o.rp i r).1 (o.zp i r).proof ++ o.extras i)
+      (o.zp i r).proof.ringSwitches).run (o.rp i r).2 = .ok (o.sw i r))
+    (hLg : (Zk.ligeritoWith o.hs o.tabs[i]!.merkle (o.sch i) (o.sw i r).1.1 (o.zp i r).proof.cap
+      (o.zp i r).proof.ligerito (basis (o.sw i r).1.2) ⟨o.tPad i, r, (o.zp i r).level0⟩).run (o.sw i r).2 =
+        .ok (o.lg i r))
+    (hIn : (Zk.verifyInnerWith o.hs (o.lay i) (o.zp i r).inner (o.zp i r).proof.zerocheck.finalC
+      (repConsZk (o.rp i r).1 (o.zp i r).proof ++ o.lanes i r)).run (o.lg i r).2 = .ok (o.inner i r)) :
+    (o.inner i r).2.k = (st.m + ((Setup.ofCircuit st).kLog - 6)) + ((2 + (o.extras i).size) + 1) +
+        (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)) + 4 ∧
+      (o.inner i r).2.k ≤ (o.stream i r).rounds.size := by
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams st.m v.1 v.2 hv
+  obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
+  rw [hsch] at hLg
+  obtain ⟨hr₁, hk₁⟩ := replayWith_rounds o.hs (t' := (o.rp i r).2) (rp := (o.rp i r).1)
+    (by rw [ht]; exact (by omega : 14 ≤ st.m)) hRp
+  obtain ⟨hr₂, hk₂⟩ := ringSwitchWith_rounds o.hs (t' := (o.sw i r).2) (out := (o.sw i r).1)
+    (by simp [ringClaimsZk]) hRS
+  obtain ⟨hr₃, hk₃⟩ := zkLigeritoWith_rounds o.hs _ v.1 _ _ _ _ _ (t' := (o.lg i r).2) (rc := (o.lg i r).1)
+    (by omega) hk0 h2 (fun i hi => (hlv i hi).q_ne_zero) hLg
+  obtain ⟨hr₄, hk₄⟩ := verifyInnerWith_rounds o.hs (t' := (o.inner i r).2) (u := (o.inner i r).1) hIn
+  have hend := verifyInnerWith_end o.hs (t' := (o.inner i r).2) (u := (o.inner i r).1) hIn
+  refine ⟨?_, ?_⟩
+  · rw [hk₄, hk₃, hk₂, hk₁, ht]
+    simp [ringClaimsZk, Run.t₀, Transcript.init, Setup.ofCircuit]
+  · rw [hr₄, hr₃, hr₂, hr₁] at hend
+    exact hend
+
+/-- **Values bounded below whose sum is at most their bounds' sum** equal their bounds. -/
+theorem eq_of_sum_le {α : Type} (a b : α → ℕ) :
+    ∀ l : List α, (∀ j ∈ l, b j ≤ a j) → (l.map a).sum ≤ (l.map b).sum → ∀ j ∈ l, a j = b j
+  | [], _, _, j, hj => absurd hj List.not_mem_nil
+  | x :: l, hle, hs, j, hj => by
+    simp only [List.map_cons, List.sum_cons] at hs
+    have h1 := hle x List.mem_cons_self
+    have h2 : (l.map b).sum ≤ (l.map a).sum := List.sum_le_sum fun j hj => hle j (List.mem_cons_of_mem _ hj)
+    rcases List.mem_cons.1 hj with rfl | hj
+    · omega
+    · exact eq_of_sum_le a b l (fun j hj => hle j (List.mem_cons_of_mem _ hj)) (by omega) j hj
+
+/-- **Every recorded round of a masked rep is consumed** at a run of several tables, wherever its steps return
+(`consumedZk_goal`): each rep's inner proof ends at its table's `repRounds` within its stream (`Run.inner_kJ`), and the
+streams together are the sends after the link, at most `2 · repRounds` per table (`sends_goal`, `rounds_eq`). -/
+theorem consumedJ (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShapedJ H rel) (o : Run H rel)
+    (hc : 1 < o.sts.size)
+    (hRS : ∀ i < o.tabs.size, ∀ r < 2,
+      (ringSwitchWith o.hs o.tabs[i]!.m (ringClaimsZk (o.rp i r).1 (o.zp i r).proof ++ o.extras i)
+        (o.zp i r).proof.ringSwitches).run (o.rp i r).2 = .ok (o.sw i r))
+    (hLg : ∀ i < o.tabs.size, ∀ r < 2,
+      (Zk.ligeritoWith o.hs o.tabs[i]!.merkle (o.sch i) (o.sw i r).1.1 (o.zp i r).proof.cap (o.zp i r).proof.ligerito
+        (basis (o.sw i r).1.2) ⟨o.tPad i, r, (o.zp i r).level0⟩).run (o.sw i r).2 = .ok (o.lg i r))
+    (hIn : ∀ i < o.tabs.size, ∀ r < 2,
+      (Zk.verifyInnerWith o.hs (o.lay i) (o.zp i r).inner (o.zp i r).proof.zerocheck.finalC
+        (repConsZk (o.rp i r).1 (o.zp i r).proof ++ o.lanes i r)).run (o.lg i r).2 = .ok (o.inner i r)) :
+    ∀ i < o.tabs.size, ∀ r < 2, ((o.inner i r).2.k != (o.stream i r).rounds.size) = false := by
+  have hRp := replayJ S h64 hS hR o hc
+  have hJ := recordJsonJ S h64 hS o hc
+  obtain ⟨schs, cms, streams, hss, -, ⟨bs, hbs, hrecs⟩, hpts, hrep⟩ := Run.walkJ S h64 hS hR o hc
+  have htsz : o.tabs.size = o.sts.size := tabsOf_size _
+  let K : ℕ → ℕ := fun i => repRounds true o.spec o.sts[i]!
+  have hk : ∀ i (hi : i < o.sts.size), ∀ r < 2, (o.inner i r).2.k = K i ∧
+      K i ≤ streams[2 * i + r]!.size := by
+    intro i hi r hr
+    obtain ⟨htabi, hv, hsch, hreps⟩ := hrep i hi
+    have hi' : i < o.tabs.size := by rw [htsz]; exact hi
+    obtain ⟨k₀, le₀⟩ := Run.inner_kJ o htabi hv hsch (hRp i hi' r hr) (hRS i hi' r hr) (hLg i hi' r hr)
+      (hIn i hi' r hr)
+    have hx : (o.extras i).size = o.spec.points * o.sts[i]!.regions.size := by
+      have he := hJ.repExtras i hi'
+      rw [htabi] at he
+      rw [FlockDeploy.extraClaims_size (st := o.sts[i]!) he, hpts]
+      simp [pointsOf, Nat.mul_comm]
+    have hK : K i = (o.inner i r).2.k := by
+      rw [k₀, hx]
+      simp [K, repRounds, hv, Setup.ofCircuit]
+    refine ⟨hK.symm, ?_⟩
+    rw [hK]
+    refine le₀.trans (le_of_eq ?_)
+    rw [(hreps r hr).1, Array.size_map]
+  have hsum : ((List.range (2 * o.sts.size)).map fun j => streams[j]!.size).sum ≤
+      ((List.range (2 * o.sts.size)).map fun j => K (j / 2)).sum := by
+    have hsend := sends_goal H rel o
+    rw [rounds_eq] at hsend
+    have hlen := Recs.length_eq hrecs
+    have hb : o.bodies.size = 1 + bs.length := by
+      rw [← Array.length_toList, hbs]
+      simp only [List.length_cons]
+      omega
+    rw [List.length_flatMap, toList_range streams, List.map_map, hss] at hlen
+    rw [sum_range_two]
+    have : ((List.range o.sts.size).map fun i => repRounds true o.spec o.sts[i]!).sum =
+        ((List.range o.sts.size).map K).sum := rfl
+    simp only [Function.comp_def, Array.length_toList] at hlen
+    omega
+  have heq := eq_of_sum_le (fun j => streams[j]!.size) (fun j => K (j / 2)) (List.range (2 * o.sts.size))
+    (fun j hj => by
+      have hj' := List.mem_range.1 hj
+      have := (hk (j / 2) (by omega) (j % 2) (by omega)).2
+      rwa [show 2 * (j / 2) + j % 2 = j by omega] at this) hsum
+  intro i hi r hr
+  have hi' : i < o.sts.size := by rw [← htsz]; exact hi
+  obtain ⟨-, -, -, hreps⟩ := hrep i hi'
+  have h1 := heq (2 * i + r) (List.mem_range.2 (by omega))
+  simp only [show (2 * i + r) / 2 = i by omega] at h1
+  rw [(hreps r hr).1, Array.size_map, h1, (hk i hi' r hr).1]
+  exact bne_self_eq_false _
+
+end Consumed
+
+section Several
+
+variable (H rel)
+
+/-- **The rep's checks `complete_zk` takes at one table, at a run**: per rep the ring switch, the masked Ligerito and
+the inner proof. -/
+structure RepChecksAt (o : Run H rel) : Prop where
+  ringSwitch : ∀ i < o.tabs.size, ∀ r < 2,
+    (ringSwitchWith o.hs o.tabs[i]!.m (ringClaimsZk (o.rp i r).1 (o.zp i r).proof ++ o.extras i)
+      (o.zp i r).proof.ringSwitches).run (o.rp i r).2 = .ok (o.sw i r)
+  ligerito : ∀ i < o.tabs.size, ∀ r < 2,
+    (Zk.ligeritoWith o.hs o.tabs[i]!.merkle (o.sch i) (o.sw i r).1.1 (o.zp i r).proof.cap (o.zp i r).proof.ligerito
+      (basis (o.sw i r).1.2) ⟨o.tPad i, r, (o.zp i r).level0⟩).run (o.sw i r).2 = .ok (o.lg i r)
+  inner : ∀ i < o.tabs.size, ∀ r < 2,
+    (Zk.verifyInnerWith o.hs (o.lay i) (o.zp i r).inner (o.zp i r).proof.zerocheck.finalC
+      (repConsZk (o.rp i r).1 (o.zp i r).proof ++ o.lanes i r)).run (o.lg i r).2 = .ok (o.inner i r)
+
+/-- **The rep's checks `complete_zk` takes at one table, at every run of several tables.** -/
+def RepChecksJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → RepChecksAt H rel o
+
+end Several
+
+/-- **The rep's checks at every run of several tables**, from the ring switch, the masked Ligerito and the inner proof
+there: the replay (`replayJ`), level 0's lanes (`lanesJ`) and every round consumed (`consumedJ`). -/
+theorem openJ_of (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShapedJ H rel)
+    (hC : RepChecksJ H rel) : OpenJ H rel := fun o hc =>
+  { replay := replayJ S h64 hS hR o hc
+    ringSwitch := (hC o hc).ringSwitch
+    ligerito := (hC o hc).ligerito
+    lanes := fun i hi r hr => lanesJ ((hC o hc).ligerito i hi r hr) ((Run.repJ S h64 hS hR o hc).2.2 i hi r hr).1
+    inner := (hC o hc).inner
+    consumed := consumedJ S h64 hS hR o hc (hC o hc).ringSwitch (hC o hc).ligerito (hC o hc).inner }
+
+/-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
+any number of tables: from `complete_zk`'s premises and at several tables the statement's and the prover's pieces'
+(`StmtOkJ`, `ProverRunsJ`), the proof files' (`RepShapedJ`, `RecordFitsJ`), and per rep the ring switch, the masked
+Ligerito and the inner proof (`RepChecksJ`), the premises `complete_zk` takes at one table. -/
+theorem completeJO (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
+    (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel)
+    (hLg : FlockComplete.LigeritoZk H rel) (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
+    (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel) (hFJ : RecordFitsJ H rel) (hCJ : RepChecksJ H rel) :
+    Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
+  completeJR H rel S h64 hS hR hF hPR hRS hLg hIn hSJ hPRJ hRJ hFJ (openJ_of S h64 hSJ hRJ hCJ)
+
 end FlockComplete.ZkTables
