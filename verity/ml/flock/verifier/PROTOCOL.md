@@ -1372,6 +1372,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - When a tail stage returns the outputs: the unit range need not be a power of two and the units return none; that stage's
     only output group is one 16-bit port per output word (`16 · words` a power of two); and the `Out` region is that group,
     free bits `[0, log2(16 · words))` and the stage range's slot bits, valued at each VU's output words (u16 LE).
+  - A repeated last stage (`per_vu` above 1, a second repeated unit type) returns them as `out_net_ports` of `[slot, port]`
+    pairs, a plain port meaning slot 0: one pair per output word, each a 16-bit output port of a slot of the stage below its
+    `per_vu`, no pair twice. Only a statement with hidden outputs may (its output rows hash each word at its slot's port,
+    `HmOut.outCol`); with public outputs the `Out` region pins one slot per VU, so pairs are refused there.
   - Any range may be packed except those a region reads (`hm96`, `out_net`, the mask).
   - A leaf cut wires a unit's cut input from a row word: bit `t < 16` copies the word's message bit (as a unit leaf does),
     the higher bits the forced-zero row. Each wires its port once, and Δ lists them after the unit leaf wiring, before the
@@ -1600,16 +1604,26 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
 2. untyped (§16.11): `<name>, a typed statement`;
 3. retained rounds (§6.2) and `hm96-sha512/v1` leaves (`<name>, a statement without retained rounds`, `... with <leaf>
    leaves`);
-4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`;
+4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`; and at most
+   `ProvedScope.zkTableCap` (2^16) with it, the bound ZK's tape premise holds over: `<J> tables in a --zk session, more
+   than 65536`;
 5. no public input ports: `public input ports (--public-inputs)`;
 6. no shared-row public file, except in a `--zk` session of a statement with hidden outputs whose verifier holds its
    own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
    table row): `a shared-row public file (header shared_rows)`;
-7. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
+7. wherever the wires feed the unit or the outputs (the unit reads more than one input group, or a tail stage returns
+   the outputs: `ProvedScope.wiresFeed`), an order of the wires that fills every slot's input ports from the leaves, each
+   slot reading only port bits among its inputs (`ProvedScope.wiresAcyclic`): `a slot no order of the wires computes from
+   the leaves: a cycle through wires, an input port no wire fills, or a read of an input column that is not a port bit`;
+8. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
    outputs (`a circuit whose outputs a tail stage computes (META out_net)`), of at most `2^32` rows, whose computed rows
    read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
    `sha512/row/v1` row of `16 · words` bits in at least one chunk (`a row that is not a sha512/row/v1 row of 16 · words
-   bits in at least one chunk`). Under hidden outputs (§16.13) the check is `Layout.scopeOkH`: the same unit, and every
+   bits in at least one chunk`). Under hidden outputs (§16.13) the check is `ProvedScope.scopeOkI`, the general instance
+   form: the unit repeated, reading any number of committed input groups, and any number of stages the verifier
+   evaluates, each reading wires from earlier outputs, any of them returning the outputs, a repeated last stage from any
+   of its slots (`out_net_ports` of `[slot, port]` pairs, §16.10; rule 7 orders them); the unit
+   of at most `2^32` rows reading only port bits as above, and every
    row a `sha512/row/v1` row as above, or every row, in any mix, either an unsegmented `sha512/row/v2` row (§16.14) of
    `16 · words` bits whose last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block
    (`128 · chunks ≤ 2 · words` and `2 · words + 17 ≤ 128 · (chunks + 1)`, `ProvedScope.v2Row`) or a `sha512/row-seg/v1`
@@ -1620,7 +1634,7 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows
    of 16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each`). A
    PoUW tile's rows, row-seg A rows and v2 B rows, are such a mix (`ZkHidden.witnessMix_scope`).
-8. every table's `m` at least `25` under `--zk`, else `22` (`ProvedScope.sizesOk`, the claims' `InScope` bound):
+9. every table's `m` at least `25` under `--zk`, else `22` (`ProvedScope.sizesOk`, the claims' `InScope` bound):
    `m = <m>, below <22|25> without --zk|under --zk`. A table's `m` is its drawn statement's, so `verify` checks it on the
    session's tables right after `ProvedScope.check`. Each verifier's own schedule refuses a smaller `m` first (§15's
    `fast100` below `22`, `--zk`'s `queries0` at `m ≤ 24`), so no session's verdict carries this reason.
@@ -1642,10 +1656,17 @@ population with no closure is refused after that, once every check has passed (`
 population's (`HmRow.drawn`), and V*'s statement check pins the circuit, so a V* part's numbers (its rounds, table
 error, `N₀` and weight) are the ones its circuit and population fix. The verdict is
 `refused: <why>: a V* session draws every unit of its population, the only draw the recursion's proof covers`, `<why>`
-`the draw is subset:<k> of <n> units over <N>, not every one of <N>` or `the draw's law is not subset`.
+`the draw is subset:<k> of <n> units over <N>, not every one of <N>` or `the draw's law is not subset`. A recursive
+session (the verifier holds `--rec-part`, `--rec-bindings` or `--rec-rows`) without `--rec-inner` is refused at the same
+point, whatever its draw (`RecSetup.noInner`), since V*'s checks and the full-draw refusal run under the verifier's inner
+shape: `refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) without the verifier's own inner shape
+(--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no session
+without it` (one line).
 
 The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
-are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
+are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. Under hidden outputs a circuit
+the wires don't feed passes `scopeOkH`, and the headlines at the unit's program (`keyProg`) cover it; one they feed
+passed `wiresAcyclic`, and the headlines at the template instance's program (`instProg`, `FailClosed.Inst`) cover it. `FailClosed.flock_verify_sound` is
 the one theorem: at every statement, with or without `--zk` and `--registered F`, it states the headline of the
 statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several; under
 `--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`, whose

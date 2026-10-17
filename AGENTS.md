@@ -134,6 +134,10 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
   assumption (`trusted-nebius-host`). Nothing the prover runs or hosts is trusted.
+- **The audited hardware is untrusted, and so is its vendor** (Daniel, 17 Oct: an international scheme may treat the chip
+  designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
+  (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,
+  and later from a separate physical calibration.
 - **Soundness is one theorem** (see Lean below).
 
 ## Tests
@@ -204,8 +208,9 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
 - Drive stacks admitted PRs on `next`, checks them in trains and lands the newest train whose check passed. What it
   refuses (a conflict, a failed check) goes to the lander, who ejects the PR that caused it; its owner is told, and
   marks its fixed head ready.
-- A PR whose head is in a train being checked keeps that head until the train lands or fails: a new head takes it off
-  `next` and cancels the checks of its train and every train above it.
+- A new head doesn't cancel a running train (top, 17 Oct): a train being checked runs on at the head its owner marked, and
+  lands that head if it passes; the new head rejoins `next` above once that train ends. Only when the PR's own train has
+  failed does the new head rebuild at once, since then the push is the fix.
 - A landing that breaks `main` is reverted at once (`git revert -m 1`), and its owner relands with the fix.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
   of the queue, since drive doesn't order it: the lander lands it with `research merge` on its own passing check, and
@@ -343,8 +348,8 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   (`research notes claim`).
 - **Work toward outcomes.** A lane's night is one or two outcomes, each with a done-condition anyone can check, which its
   lead proposed and Daniel approved.
-- **Push your branch after every commit** (never `main`, never `--force`), except to a PR in a train being checked
-  (Checking and merging). Only drive and the lander move `main`.
+- **Push your branch after every commit** (never `main`, never `--force`). A push to a PR in a train being checked waits
+  for that train to end (Checking and merging). Only drive and the lander move `main`.
 - **Landing is drive's.** Push your PR, mark it ready and go back to research; you hear back only if your PR fails. A
   lane works on at most two open PRs; one whose head is on `next` (queued or in a running check) doesn't count until
   its check fails.
