@@ -146,10 +146,10 @@ one masked table is no likelier than any verdict after `Commit` the decoder is r
 escapes `Flock.oldEscZ` at injective fork rounds, and no table that does not extract committed to `T` (`ZkBound`:
 `FlockDeploy.KS.zk_tableBoundθAt_of_sessions`, `FlockDeploy.KS.zk_tableBoundθAt_of_live`, at the live sessions' bound
 `FlockDeploy.KS.ZkLiveAt`). At the deployed masked record, `T` is C-Flock ZK's padded table of the statement's table 0
-(`ZkKS`: `FlockDeploy.KS.zkTab`, `FlockDeploy.KS.zkTab_m1`), so `Flock.KS` follows from one table at every statement
-some run accepts (`FlockDeploy.KS.ZkOne`, which the masked scope's several tables do not give), the live sessions' bound
-at `zkTab` (`FlockDeploy.KS.ZkLive`) and `Extendθ` (`FlockDeploy.KS.zk_KS_of_live`). At several tables (`JointJ`), one
-wait follows from every table's bound with one family of escapes, over every table's word's positions
+(`ZkKS`: `FlockDeploy.KS.zkTab`, `FlockDeploy.KS.zkTab_m1`), so `Flock.KS` at the trimmed record follows from one
+table at every statement some run accepts (`FlockDeploy.KS.ZkOne`, which the masked scope's several tables do not give)
+and the live sessions' bound at `zkTab` (`FlockDeploy.KS.ZkLive`, `FlockDeploy.KS.zk_KS_of_live`). At several tables
+(`JointJ`), one wait follows from every table's bound with one family of escapes, over every table's word's positions
 (`Flock.TableBoundJ`, `Flock.ColsOkJ`, `Flock.ConflictTiedJ`, `Flock.oneWait_of_tableBoundJ`), and at the masked record
 accepted runs open table `j`'s columns at its width and as its level-0 openings (`ZkTables`: `FlockDeploy.KS.wordLenJ`,
 `FlockDeploy.KS.zk_colsOkJ`, `FlockDeploy.KS.zk_openingJ`, `FlockDeploy.KS.zk_conflictTiedJ`), so `Flock.KS` there
@@ -250,15 +250,16 @@ proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
 `FlockDeploy.KS.plain_hdecHAt`), and KS at the deployed plain verifier's trimmed record holds from a simulator at
 that verdict alone, with nothing asked of the record's draw (`PlainDrawSim`: `FlockDeploy.KS.plain_first_of_simD`,
 `FlockDeploy.KS.PlainSimWrPAtD`, `FlockDeploy.KS.PlainSimWD`, `FlockDeploy.KS.plain_KS_of_simD`). At the coupling's
-chances with every revealed length positive, each `δ_t` is at most `2^{-128}`, a fork's slack weights fall
-geometrically past its round, and the slack fits level 0's room in the plain weight whatever the number of rounds
-(`PlainSlackFit`: `Claims.Flock.sum_slackW_le`, `Claims.Flock.sum_slackC_le`, `Claims.Flock.slack_fits_fast100`,
+chances with every revealed length before the last round positive, each `δ_t` there is at most `2^{-128}`, the plain
+fork rounds are before the last round, a fork's slack weights fall geometrically past its round, and the slack fits
+level 0's room in the plain weight whatever the number of rounds (`PlainSlackFit`: `Claims.Flock.sum_slackW_le`,
+`Claims.Flock.sum_slackC_le`, `Claims.Flock.slack_fits_fast100`, `FlockDeploy.KS.plainJ_succ_lt`,
 `FlockDeploy.KS.plain_slack_fits`). The plain simulator runs `P` round by round on the plain wire, at deployed coins it
 rebuilds from a tape of uniform functions of the revealed live history and the entries the live session revealed, which
 are the coins `fnAt` gives on the live history; a live prover whose messages along the live history are known has those
 rounds as its live outcome (`PlainSim`: `FlockDeploy.KS.plainSim`, `FlockDeploy.KS.plainΦ`, `FlockDeploy.KS.Pr_plainΦ`,
-`FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`). A deployed run's messages are `P`'s at the history
-of its coins' bytes, and its acceptance does not read its last coin (`PlainLock`: `FlockDeploy.KS.run_dep`,
+`FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`). A deployed run's messages are `P`'s at the history of
+its coins' bytes, and its acceptance does not read its last coin (`PlainLock`: `FlockDeploy.KS.run_dep`,
 `FlockDeploy.KS.depMsg_congr`, `FlockDeploy.KS.run_acc_iff_last`); along the live history the simulator's coins are
 `plainΦ`'s wherever it has revealed them, so it sends `P`'s rounds and its live outcome is theirs
 (`FlockDeploy.KS.simCoins_agree`, `FlockDeploy.KS.plainSim_msg`, `FlockDeploy.KS.plainSim_liveOut`).
