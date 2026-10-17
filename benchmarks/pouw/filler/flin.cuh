@@ -501,20 +501,6 @@ __device__ __forceinline__ void att_filler(const FattArgs& fa, size_t slot, cons
     default: filler_warp<NC, 4>(fa.fs, slot, done, done, ndone, 0);
   }
 }
-// PF_YIELD_ATT: attention's warps mark their SM too (from griddepcontrol.wait to their end), as flin's consumers do
-#if PF_YIELD && PF_YIELD_ATT
-__device__ __forceinline__ int* att_mark(int lane) {
-  if (lane) return nullptr;
-  int* m = pf_mark();
-  atomicAdd(m, 1);
-  return m;
-}
-#define ATT_MARK int* att_busy = att_mark(lane)
-#define ATT_UNMARK if (att_busy) atomicSub(att_busy, 1)
-#else
-#define ATT_MARK
-#define ATT_UNMARK
-#endif
 template <int FW, int NC>
 __global__ void __launch_bounds__(QK_W * 32 + 32 * FW, 2) fqk_k(const int8_t* __restrict__ K, const int8_t* __restrict__ q,
                                                                  int* __restrict__ S, int L, int* __restrict__ O, int on,
@@ -531,7 +517,6 @@ __global__ void __launch_bounds__(QK_W * 32 + 32 * FW, 2) fqk_k(const int8_t* __
     return;
   }
   asm volatile("griddepcontrol.wait;" ::: "memory");
-  ATT_MARK;
   auto item = [&](size_t it, size_t nb, int bx, int g, int b) {
     const size_t o0 = it * on / nb, o1 = (it + 1) * on / nb;
     for (size_t e = o0 + threadIdx.x; e < o1; e += QK_W * 32) O[e] = 0;
@@ -544,7 +529,6 @@ __global__ void __launch_bounds__(QK_W * 32 + 32 * FW, 2) fqk_k(const int8_t* __
   }
   __syncwarp();
   if (lane == 0) atomicAdd(&done, 1);
-  ATT_UNMARK;
 }
 template <int FW, int NC>
 __global__ void __launch_bounds__(PV_W * 32 + 32 * FW, 2) fpv_k(const int8_t* __restrict__ V, const int8_t* __restrict__ P,
@@ -562,7 +546,6 @@ __global__ void __launch_bounds__(PV_W * 32 + 32 * FW, 2) fpv_k(const int8_t* __
     return;
   }
   asm volatile("griddepcontrol.wait;" ::: "memory");
-  ATT_MARK;
   if (fa.items == 0) pv_body<true>(V, P, O, L, blockIdx.x, blockIdx.y, blockIdx.z, w, lane, red);
   for (long long it = blockIdx.x; it < fa.items; it += gridDim.x) {
     const long long r = it / fa.nx;
@@ -571,7 +554,6 @@ __global__ void __launch_bounds__(PV_W * 32 + 32 * FW, 2) fpv_k(const int8_t* __
   }
   __syncwarp();
   if (lane == 0) atomicAdd(&done, 1);
-  ATT_UNMARK;
 }
 
 // Wt[nt][kb][i][c][lane][4 words] from W (N x K row-major): word r of lane (g, t) is W[row][col..col+3] with
@@ -1440,8 +1422,8 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
          co ? "co" : "split", lo, hi, smem_sm, flin_smem(f.M), (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1],
          pw, pnc, ps, fs ? pf.tiles : 0, fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
-  printf("\"M\": %d, \"kind\": %d, \"flin_grid\": %d, \"yield\": [%d, %d, %d, %d, %d, %d], ", f.M, g_fstep_kind, f.grid,
-         PF_YIELD, PF_YIELD_J, PF_YIELD_NS, PF_YIELD_EARLY, PF_YIELD_ATT, PF_YIELD_POLL_NS);
+  printf("\"M\": %d, \"kind\": %d, \"flin_grid\": %d, \"yield\": [%d, %d, %d, %d, %d], ", f.M, g_fstep_kind, f.grid,
+         PF_YIELD, PF_YIELD_J, PF_YIELD_NS, PF_YIELD_EARLY, PF_YIELD_POLL_NS);
   printf("\"APS\": %d, \"ALZ\": %d, \"LM\": %d, \"lm_mismatches\": %llu, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.lazy,
          (int)f.lm, lm_bad, a.pg[0], a.pg[1]);
   printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, \"ANC\": %d, "
