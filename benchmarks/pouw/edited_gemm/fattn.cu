@@ -3,10 +3,10 @@
 // heads, head dimension 128, s tokens, causal).
 //
 // Operands, one KV head's block at a time: keys x (bf16, kvh s x 128) through hquant (X = clamp(floor(x / 2), -64, 62) + b,
-// P_A = [Y_lo | Y_hi | 0 | 0]), queries Q (int8 in [-64, 62], H s x 128, head h = kvh rep + j at rows h s ..) through hwedit
-// (W' = Q + c + U, P_B = [-U_lo | -U_hi | 0 | 0]) and phat (W^ = W' - U = Q + c, the served queries). For KV head kvh,
-// cohalf's O = X_kvh W'^T's tail-corrected value is S^T: rows the keys, columns its rep s queries (query column col at
-// position pos = col mod s).
+// P_A = [Y_lo | Y_hi | 0 | 0]), queries Q (int8 in [-64, 62], H s x 128, head h = kvh rep + j at rows h s ..) through
+// cgemm.cu's hwedit<true> (W' = Q + c + U, P_B = [-U_lo | -U_hi | 0 | 0], and W^ = Q + c, the served queries). For KV head
+// kvh, cohalf's O = X_kvh W'^T's tail-corrected value is S^T: rows the keys, columns its rep s queries (query column col
+// at position pos = col mod s).
 //
 // The softmax (this file's reference, `fattn_ref.py` on the CPU): for query (h, pos), S(key) for keys 0 .. pos, m its max,
 // e(key) = LUT[min(umulhi(m - S(key), A), 255)] with LUT[t] = rint(127 2^(-t / 16)) (so the max key's e is 127), P_prob =
@@ -21,7 +21,7 @@
 //             epilogue: P_prob's bytes to P, e(0) to E0, the row's sum of e (atomicAdd) to L
 //   lred      s_q and z_q from L and E0
 //   hsref     the unfused reference: h_l7qs's stored O (one KV head), a thread a query column: P_prob, s_q, z_q
-// The fused attention is hquant, hwedit, phat, hm_l7qs, hsm, lred, then apv.cu's uedit, vedit, vsum and apv_fu on P_prob.
+// The fused attention is hquant, hwedit<true>, hm_l7qs, hsm, lred, then apv.cu's uedit, vedit, vsum and apv_fu on P_prob.
 // Modes:
 //   fattn gate DIR S H REP SEED   poisoned buffers. Unfused: h_l7qs a KV head at a time (S stored), hsref, apv.cu's four
 //                                 producers and apv_l7qs. Fused: hm_l7qs (causal; and over all tiles), hsm, lred, uedit,
@@ -36,6 +36,7 @@
 #include "apv.cu"
 #include <climits>
 #include <cmath>
+#include <type_traits>
 
 constexpr int FA_LUT = 256;
 __device__ uint8_t fa_lut[FA_LUT];
@@ -144,22 +145,28 @@ __global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs(const __grid_constant__ Fa
     htail<L>(ml, acc, ch);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
     int* mc = a.M + (size_t)kvh * a.rep * a.s + col0;
+    // a tile strictly below the diagonal needs no key <= pos test (EDGE: the tiles that do)
+    auto colmax = [&](auto edge_t) {
+      constexpr bool EDGE = decltype(edge_t)::value;
 #pragma unroll
-    for (int ni = 0; ni < NI; ni++)
+      for (int ni = 0; ni < NI; ni++)
 #pragma unroll
-      for (int c = 0; c < 2; c++) {
-        const int pos = (col0 + 8 * ni + c) & (a.s - 1);
-        int mx = INT_MIN;
+        for (int c = 0; c < 2; c++) {
+          const int pos = (col0 + 8 * ni + c) & (a.s - 1);
+          int mx = INT_MIN;
 #pragma unroll
-        for (int mi = 0; mi < MI; mi++)
+          for (int mi = 0; mi < MI; mi++)
 #pragma unroll
-          for (int h = 0; h < 2; h++)
-            if (row0 + 16 * mi + 8 * h <= pos) mx = max(mx, acc[mi][ni][2 * h + c]);
-        mx = max(mx, __shfl_xor_sync(0xFFFFFFFFu, mx, 4));
-        mx = max(mx, __shfl_xor_sync(0xFFFFFFFFu, mx, 8));
-        mx = max(mx, __shfl_xor_sync(0xFFFFFFFFu, mx, 16));
-        if (g == 0 && mx != INT_MIN) atomicMax(mc + 8 * ni + c, mx);
-      }
+            for (int h = 0; h < 2; h++)
+              if (!EDGE || row0 + 16 * mi + 8 * h <= pos) mx = max(mx, acc[mi][ni][2 * h + c]);
+          mx = max(mx, __shfl_xor_sync(0xFFFFFFFFu, mx, 4));
+          mx = max(mx, __shfl_xor_sync(0xFFFFFFFFu, mx, 8));
+          mx = max(mx, __shfl_xor_sync(0xFFFFFFFFu, mx, 16));
+          if (g == 0 && mx != INT_MIN) atomicMax(mc + 8 * ni + c, mx);
+        }
+    };
+    if (tm >= tn % (a.s / 128)) colmax(std::true_type{});
+    else colmax(std::false_type{});
     uint4* r = reinterpret_cast<uint4*>(a.R) + (((size_t)kvh * tpk + tile_id) * L::NCT + ctid) * 2;
     r[0] = make_uint4(finish<DUO>(ch, 0), finish<DUO>(ch, 1), finish<DUO>(ch, 2), finish<DUO>(ch, 3));
     r[1] = make_uint4(finish<DUO>(ch, 4), finish<DUO>(ch, 5), finish<DUO>(ch, 6), finish<DUO>(ch, 7));
@@ -182,54 +189,74 @@ __global__ void __launch_bounds__(MLW::NT, 1) hsm(const __grid_constant__ FaArgs
   uint32_t kr[L::NKR];
   kr[0] = 0;
   St ch[8];
+  const bool b1 = q & 2, b0 = q & 1;
   for (int t = blockIdx.x; t < a.ntiles; t += gridDim.x) {
     const int4 te = __ldg(a.tab + t);
     const int tm = te.x, tn = te.y, kvh = te.z;
-    int acc[MI][NI][4];
-    ml.tile1(acc, ch, kr, 0u);
     const int qr0 = tn * 128 + wm * 32 + g, k0 = tm * 128 + wn * 32 + 2 * q;
     const size_t qb = (size_t)kvh * a.rep * a.s;
+    int m[MI][2];
 #pragma unroll
     for (int mi = 0; mi < MI; mi++)
 #pragma unroll
-      for (int h = 0; h < 2; h++) {
-        const int qr = qr0 + 16 * mi + 8 * h, pos = qr & (a.s - 1);
-        const int m = __ldg(a.M + qb + qr);
-        int8_t* prow = a.P + (qb + qr) * a.s + k0;
-        int sum = 0;
+      for (int h = 0; h < 2; h++) m[mi][h] = __ldg(a.M + qb + qr0 + 16 * mi + 8 * h);
+    int acc[MI][NI][4];
+    ml.tile1(acc, ch, kr, 0u);
+    // a tile strictly below the diagonal and off key 0 needs neither test (EDGE: the tiles that do)
+    auto epi = [&](auto edge_t) {
+      constexpr bool EDGE = decltype(edge_t)::value;
 #pragma unroll
-        for (int ni = 0; ni < NI; ni++) {
-          uint32_t pw = 0;
+      for (int mi = 0; mi < MI; mi++)
 #pragma unroll
-          for (int c = 0; c < 2; c++) {
-            const int key = k0 + 8 * ni + c;
-            const uint32_t tt = min(__umulhi((uint32_t)(m - acc[mi][ni][2 * h + c]), a.A), (uint32_t)(FA_LUT - 1));
-            const int e = key <= pos ? (int)lut[tt] : 0;
-            sum += e;
-            if (key == 0) a.E0[qb + qr] = e;
-            else pw |= (uint32_t)e << (8 * c);
+        for (int h = 0; h < 2; h++) {
+          const int qr = qr0 + 16 * mi + 8 * h, pos = qr & (a.s - 1);
+          int sum = 0;
+          uint32_t pw[NI];
+#pragma unroll
+          for (int ni = 0; ni < NI; ni++) {
+            pw[ni] = 0;
+#pragma unroll
+            for (int c = 0; c < 2; c++) {
+              const int key = k0 + 8 * ni + c;
+              const uint32_t tt = min(__umulhi((uint32_t)(m[mi][h] - acc[mi][ni][2 * h + c]), a.A), (uint32_t)(FA_LUT - 1));
+              int e = lut[tt];
+              if (EDGE && key > pos) e = 0;
+              sum += e;
+              if (EDGE && key == 0) a.E0[qb + qr] = e;
+              else pw[ni] |= (uint32_t)e << (8 * c);
+            }
           }
-          *reinterpret_cast<uint16_t*>(prow + 8 * ni) = (uint16_t)pw;
+          // the quad's 4 x 4 16-bit pieces transposed so lane q stores keys 8q .. 8q + 7 of the warp's 32 in one 8-byte store
+          const uint32_t A01 = pw[0] | pw[1] << 16, A23 = pw[2] | pw[3] << 16;
+          const uint32_t X = b1 ? A23 : A01, Y = __shfl_xor_sync(0xFFFFFFFFu, b1 ? A01 : A23, 2);
+          const uint32_t r2 = __shfl_xor_sync(0xFFFFFFFFu, b0 ? ((X & 0xFFFFu) | (Y << 16)) : ((X >> 16) | (Y & 0xFFFF0000u)), 1);
+          const uint32_t mx = b0 ? X >> 16 : X & 0xFFFFu, my = b0 ? Y >> 16 : Y & 0xFFFFu, rlo = r2 & 0xFFFFu, rhi = r2 >> 16;
+          const uint32_t P1 = b0 ? (rlo | mx << 16) : (mx | rlo << 16), P2 = b0 ? (rhi | my << 16) : (my | rhi << 16);
+          *reinterpret_cast<uint2*>(a.P + (qb + qr) * a.s + tm * 128 + wn * 32 + 8 * q) = make_uint2(b1 ? P2 : P1, b1 ? P1 : P2);
+          sum += __shfl_xor_sync(0xFFFFFFFFu, sum, 1);
+          sum += __shfl_xor_sync(0xFFFFFFFFu, sum, 2);
+          if (q == 0) atomicAdd(a.L + qb + qr, sum);
         }
-        sum += __shfl_xor_sync(0xFFFFFFFFu, sum, 1);
-        sum += __shfl_xor_sync(0xFFFFFFFFu, sum, 2);
-        if (q == 0) atomicAdd(a.L + qb + qr, sum);
-      }
+    };
+    if (tm == 0 || tm >= tn % (a.s / 128)) epi(std::true_type{});
+    else epi(std::false_type{});
   }
 }
 
-// one: 1.0f, a runtime value (ptxas folds a constant numerator into an unpinned copy of div.rn's slow path)
-__global__ void lred(const int* __restrict__ L, const int* __restrict__ E0, float* __restrict__ sp, float* __restrict__ sz, int n,
-                     float one) {
+// float32's IEEE quotient a / L through double: with 0 <= a <= 127 and 1 <= L < 2^24, a / L is a float or at least 2^-31
+// of itself from a float midpoint, so double's rounding can't move float's (FP32 div.rn shares one reciprocal between
+// the two quotients of a divisor, which the SASS gate's pinned sequence doesn't match)
+DEV float qdiv(int a, int L) { return __double2float_rn(__ddiv_rn((double)a, (double)L)); }
+__global__ void lred(const int* __restrict__ L, const int* __restrict__ E0, float* __restrict__ sp, float* __restrict__ sz, int n) {
   for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += gridDim.x * blockDim.x) {
-    const float l = __int2float_rn(__ldg(L + i));
-    sp[i] = __fdiv_rn(one, l);
-    sz[i] = __fdiv_rn(__int2float_rn(__ldg(E0 + i)), l);
+    const int l = __ldg(L + i);
+    sp[i] = qdiv(1, l);
+    sz[i] = qdiv(__ldg(E0 + i), l);
   }
 }
 
 __global__ void hsref(const int* __restrict__ S, int8_t* __restrict__ P, float* __restrict__ sp, float* __restrict__ sz, int s, int rep,
-                      int kvh, uint32_t A, float one) {
+                      int kvh, uint32_t A) {
   const int col = blockIdx.x * blockDim.x + threadIdx.x;
   if (col >= rep * s) return;
   const int pos = col & (s - 1);
@@ -245,8 +272,8 @@ __global__ void hsref(const int* __restrict__ S, int8_t* __restrict__ P, float* 
     if (key == 0) e0 = e;
     pr[key] = key == 0 ? 0 : (int8_t)e;
   }
-  sp[qrow] = __fdiv_rn(one, __int2float_rn(L));
-  sz[qrow] = __fdiv_rn(__int2float_rn(e0), __int2float_rn(L));
+  sp[qrow] = qdiv(1, L);
+  sz[qrow] = qdiv(e0, L);
 }
 
 // the words of a table's tiles, R against R2 (a block a tile)
@@ -350,9 +377,8 @@ static void fafree(FA& F) {
 static void fq(FA& F, const Sig& sg) {
   const int kr = F.kvh * F.s, qr = F.H * F.s;
   hquant<<<(kr + 31) / 32, 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, F.inv7, sg);
-  hwedit<<<(qr + 31) / 32, 256, 0, F.V.st>>>(reinterpret_cast<const uint8_t*>(F.W7), reinterpret_cast<uint8_t*>(F.Wp),
-                                             reinterpret_cast<uint8_t*>(F.PB), qr, sg);
-  phat<true><<<4096, 256, 0, F.V.st>>>(F.Wp, F.PB, F.Wh, (size_t)qr, 128);
+  hwedit<true><<<(qr + 31) / 32, 256, 0, F.V.st>>>(reinterpret_cast<const uint8_t*>(F.W7), reinterpret_cast<uint8_t*>(F.Wp),
+                                                   reinterpret_cast<uint8_t*>(F.PB), qr, sg, reinterpret_cast<uint8_t*>(F.Wh));
 }
 static FaArgs faargs(FA& F, const Maps* m, bool full, uint32_t* R) {
   return FaArgs{m, full ? F.tabf : F.tabc, full ? F.ntf : F.ntc, F.s, F.rep, F.seed, F.A, R, F.M, F.L, F.E0, F.V.P};
@@ -365,7 +391,7 @@ static void fsm(FA& F) {
   CK(cudaMemsetAsync(F.L, 0, (size_t)F.H * F.s * 4, F.V.st));
   hsm<<<std::min(F.grid, F.ntc), MLW::NT, CSMEM, F.V.st>>>(faargs(F, F.ms, false, nullptr));
 }
-static void flr(FA& F) { lred<<<(F.H * F.s + 255) / 256, 256, 0, F.V.st>>>(F.L, F.E0, F.V.sp, F.V.sz, F.H * F.s, 1.0f); }
+static void flr(FA& F) { lred<<<(F.H * F.s + 255) / 256, 256, 0, F.V.st>>>(F.L, F.E0, F.V.sp, F.V.sz, F.H * F.s); }
 static void fqks(FA& F) { fhm(F, false, F.R); fsm(F); flr(F); }
 static void fpv(FA& F, const Sig& sg) { ued(F.V, sg); ved(F.V, sg); vsm(F.V); aprun(F.V, apv_fu, F.V.R3); }
 // the unfused QK^T: h_l7qs a KV head at a time, O (= S^T) to S
@@ -379,9 +405,9 @@ static void fhqk(FA& F, uint32_t* R) {
 static void fsref(FA& F) {
   const size_t sk = (size_t)F.s * F.rep * F.s;
   for (int k = 0; k < F.kvh; k++)
-    hsref<<<(F.rep * F.s + 127) / 128, 128, 0, F.V.st>>>(F.S + k * sk, F.V.P, F.V.sp, F.V.sz, F.s, F.rep, k, F.A, 1.0f);
+    hsref<<<(F.rep * F.s + 127) / 128, 128, 0, F.V.st>>>(F.S + k * sk, F.V.P, F.V.sp, F.V.sz, F.s, F.rep, k, F.A);
 }
-// an arm: hquant (with hwedit and phat: the QK^T operands), hm (causal), hm_full (every tile), hsm (with L's memset),
+// an arm: hquant (with hwedit<true>: the QK^T operands), hm (causal), hm_full (every tile), hsm (with L's memset),
 // lred, qks (hm, hsm, lred: QK^T and the softmax, S never stored), pv (uedit, vedit, vsum, apv_fu), attn (the operands,
 // qks and pv under one key), fu (apv_fu alone), hqk (the unfused h_l7qs, S stored)
 static std::function<void(FA&)> farm(const std::string& a) {
