@@ -8,22 +8,34 @@
 * `export_compat.mhc_pre_broadcast_leaf`: layer 0's broadcast pre, which vLLM does not register, exports as the leaf op;
 * `dsv4_leaves.dsv4_attention_leaves`: the sparse MLA's cache insert, compressor state and attention export as the leaf ops;
 * `export_compat.deep_gemm_fp8_einsum_leaf`: the o-projection's DeepGEMM einsum exports as the leaf op;
-* `marlin_moe_leaf.mxfp4_marlin_moe_leaf`: the MXFP4 Marlin MoE exports as its steps, its two expert GEMMs as the leaf op."""
+* `marlin_moe_leaf.mxfp4_marlin_moe_leaf`: the MXFP4 Marlin MoE exports as its steps, its two expert GEMMs as the leaf op;
+* `rules/vllm_mhc.py`: the four mHC ops derive per token at the dispatch's own split counts, word for word the numpy twin's
+  (`kernels.mhc_twin`) on the FMA path and the TF32 path, and what the Definitions do not take refuses by name."""
 from __future__ import annotations
 
 import sys
 import types
 
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
 from torch._library.infer_schema import infer_schema
 
 from verity_vllm.program.frontend import marlin_moe_leaf as mml
+from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.export_compat import (InertEvent, InertStream, cuda_streams_inert, deep_gemm_fp8_einsum_leaf,
                                                         mhc_pre_broadcast_leaf, registered_op_bodies_as_ops)
+from verity_vllm.program.frontend.rules import vllm_bindings as VB
+from verity_vllm.program.frontend.rules import vllm_mhc
+from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.rules.vllm_iface import iface
+from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
+from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.vllm_meta import post_load_tensors_as_the_loader_does
+from verity_vllm.program.kernels import mhc_twin as W
+from verity_vllm.program.kernels.serve3_reference import materialize
 
 
 class _Overlapped(nn.Module):
@@ -338,3 +350,126 @@ def test_a_marlin_moe_beyond_the_leafs_operands_refuses_at_export(marlin_site):
     model = _MarlinMoe(marlin_site, bias=_meta(4, 64))
     with mml.mxfp4_marlin_moe_leaf(model), pytest.raises(NotImplementedError, match=r"given \['bias1'\]"):
         torch.export.export(model, _moe_inputs(), strict=False)
+
+
+H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
+HC, HID, REPEAT, EPS = 2, 64, 2, 1e-6
+OUT = HC * (2 + HC)
+GEOMETRY = {"TH": 2, "TN": 2, "TH_HEAD": 2}
+
+
+@pytest.fixture
+def served(monkeypatch):
+    """The H200 as the Build observes it, and a pinned mHC thread geometry at the small hidden size."""
+    saved = dict(VB._OBSERVED)
+    monkeypatch.setitem(vllm_mhc.MHC_GEOMETRY, HID, GEOMETRY)
+    VB.observe_target_profile(H200)
+    yield
+    VB._OBSERVED.clear()
+    VB._OBSERVED.update(saved)
+
+
+def _f32(rng, *shape, sd: float = 1.0) -> np.ndarray:
+    return (rng.standard_normal(shape) * sd).astype(np.float32).view(np.uint32)
+
+
+def _tensor(words: np.ndarray) -> torch.Tensor:
+    """The torch tensor of bf16 (uint16) or f32 (uint32) words."""
+    if words.dtype == np.uint16:
+        return torch.from_numpy(words.view(np.int16).copy()).view(torch.bfloat16)
+    return torch.from_numpy(words.view(np.float32).copy())
+
+
+def _words(t: torch.Tensor) -> list[int]:
+    width = {torch.bfloat16: (torch.int16, np.uint16), torch.float32: (torch.int32, np.uint32)}[t.dtype]
+    return t.contiguous().view(width[0]).numpy().reshape(-1).astype(width[1]).tolist()
+
+
+def _run(rep, model: nn.Module, inputs) -> list[int]:
+    held = dict(model.named_parameters())
+    weights = [v for w in rep.provenance["weights"] for v in _words(held[w["name"]])]
+    t = materialize(rep.program, [_words(x) for x in inputs] + [weights])
+    return [int(t[g]) for g in rep.program.circuit.root_outputs()]
+
+
+class _Hyper(nn.Module):
+    """`DeepseekV4Model`'s mHC calls on HC = 2 streams of H = 64: layer 0's broadcast pre, the next sublayer's fused post + pre
+    (the sublayer itself the identity), the last post and the head.  The calls pass split counts the dispatch does not run."""
+
+    def __init__(self, rng, norm_weight: bool = True, norm_eps: float = EPS) -> None:
+        super().__init__()
+        p = lambda words: nn.Parameter(_tensor(words), requires_grad=False)
+        self.fn0, self.fn0_broadcast = p(_f32(rng, OUT, HC * HID, sd=0.1)), p(_f32(rng, OUT, HID, sd=0.1))
+        self.fn1 = p(_f32(rng, OUT, HC * HID, sd=0.1))
+        self.scale0, self.base0, self.scale1, self.base1 = (p(_f32(rng, n, sd=0.5)) for n in (3, OUT, 3, OUT))
+        self.norm0, self.norm1 = (p(W.bf16(_f32(rng, HID))) for _ in range(2))
+        self.head_fn, self.head_scale, self.head_base = p(_f32(rng, HC, HC * HID, sd=0.1)), p(_f32(rng, 1, sd=0.5)), p(_f32(rng, HC, sd=0.5))
+        self.norm_weight, self.norm_eps = norm_weight, norm_eps
+
+    def forward(self, x):
+        norm0 = self.norm0 if self.norm_weight else None
+        streams, post, comb, h = iface.mhc_pre_broadcast_tilelang(x, self.fn0, self.scale0, self.base0, EPS, EPS, EPS, 2.0, REPEAT, 3,
+                                                                  norm0, self.norm_eps, self.fn0_broadcast)
+        streams, post, comb, h = iface.mhc_fused_post_pre_tilelang(h, streams, post, comb, self.fn1, self.scale1, self.base1, EPS, EPS,
+                                                                   EPS, 2.0, REPEAT, 3, 7, self.norm1, EPS)
+        streams = iface.mhc_post_tilelang(h, streams, post, comb)
+        return iface.hc_head_fused_kernel_tilelang(streams, self.head_fn, self.head_scale, self.head_base, EPS, EPS)
+
+
+def _twin(model: _Hyper, x: np.ndarray, NS: int, NS0: int) -> list[int]:
+    """The model's output as the twin composes the kernels at T tokens: the FMA path at most 16 tokens, the TF32 path above."""
+    u = lambda t: np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
+    m = {k: u(v) for k, v in model.named_parameters()}
+    TN, TH, TH_HEAD = GEOMETRY["TN"], GEOMETRY["TH"], GEOMETRY["TH_HEAD"]
+    h, post, comb = W.pre_broadcast(x, m["fn0_broadcast"], m["scale0"], m["base0"], m["norm0"], NS0, TN, REPEAT, EPS, EPS)
+    streams = np.broadcast_to(x[:, None, :], (len(x), HC, HID))
+    args = (m["fn1"], m["scale1"], m["base1"], m["norm1"])
+    if len(x) <= vllm_mhc.SMALL_FMA_TOKENS:
+        streams, h, post, comb = W.fused_post_pre(h, streams, post, comb, *args, NS, TH, TN, REPEAT, EPS, EPS)
+    else:
+        streams, h, post, comb = W.post_pre_tf32(h, streams, post, comb, *args, NS, TN, REPEAT, EPS, EPS)
+    streams = W.post(h, streams, post, comb)
+    y = W.hc_head(streams, m["head_fn"], m["head_scale"], m["head_base"], TH_HEAD, EPS, EPS)
+    return [int(v) for v in np.asarray(y).reshape(-1)]
+
+
+def _derive_mhc(model: nn.Module, inputs):
+    return derive_report(model, inputs, mode="profile", profile=PROFILE_B1_EAGER_V3.name, name="mhc", rules=vllm_ruleset())
+
+
+@pytest.mark.parametrize("T, NS, NS0", [(2, 8, 1), (17, 1, 1)])
+def test_the_mhc_ops_derive_per_token_at_the_dispatchs_splits_word_for_word_the_twins(T, NS, NS0, served):
+    rng = np.random.default_rng(T)
+    model, x = _Hyper(rng), W.bf16(_f32(rng, T, HID, sd=2.0))
+    rep = _derive_mhc(model, (_tensor(x),))
+    assert rep.program is not None, rep.unsupported
+    apps = {a["rule"]: a["preconditions_checked"] for a in rep.provenance["applications"]}
+    fused = "mhc_fused_post_pre" if T <= vllm_mhc.SMALL_FMA_TOKENS else "mhc_post_pre_tf32"
+    assert apps["MhcPreBroadcast[vllm-dsv4]_v1"]["NS"] == NS0 and apps["MhcFusedPostPre[vllm-dsv4]_v1"]["NS"] == NS
+    assert apps["HcHead[vllm-dsv4]_v1"]["TH"] == GEOMETRY["TH_HEAD"]
+    want = [PROFILE_B1_EAGER_V3.kind(r, **{k: v for k, v in s.items() if k != "T"}).id for r, s in (
+        ("mhc_pre_broadcast", apps["MhcPreBroadcast[vllm-dsv4]_v1"]), (fused, apps["MhcFusedPostPre[vllm-dsv4]_v1"]))]
+    ids = {n.fn.id for n in rep.program.fn.body.nodes}
+    assert set(want) <= ids and len(ids) == 5
+    roles = rep.provenance["weight_roles"]
+    assert (roles["fn0_broadcast"]["role"], roles["fn1"]["role"], roles["head_fn"]["role"]) == ("mhc.fn_broadcast", "mhc.fn", "hc_head.fn")
+    assert _run(rep, model, (_tensor(x),)) == _twin(model, x, NS, NS0)
+
+
+@pytest.mark.parametrize("over, refusal", [
+    ({"geometry": None}, "no pinned mHC thread geometry at hidden size 64 (pinned: [7168])"),
+    ({"norm_weight": False}, "the mHC pre without its fused RMS norm"),
+    ({"norm_eps": 1e-5}, "the Definitions take one EPS"),
+    ({"target": TargetProfile(compute_capability=(12, 0), num_sms=188, batch_invariant=False, moe_backend="triton")},
+     "the TF32 pre is DeepGEMM's cc 9.0 hc-prenorm GEMM"),
+])
+def test_what_the_mhc_definitions_do_not_take_refuses_by_name(over, refusal, served, monkeypatch):
+    rng = np.random.default_rng(0)
+    if "geometry" in over:
+        monkeypatch.delitem(vllm_mhc.MHC_GEOMETRY, HID)
+    if "target" in over:
+        VB.observe_target_profile(over["target"])
+    model = _Hyper(rng, **{k: v for k, v in over.items() if k in ("norm_weight", "norm_eps")})
+    rep = _derive_mhc(model, (_tensor(W.bf16(_f32(rng, 2, HID))),))
+    assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+

@@ -25,6 +25,7 @@ from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import fp8_vocab as _fp8_vocab
+from verity_vllm.program.registry import mhc as _mhc
 from verity_vllm.program.registry import moe as _moe
 from verity_vllm.program.registry import pouw_rows as _pouw_rows
 from verity_vllm.program.frontend import targets as _targets
@@ -460,7 +461,17 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "sparse_mla": lambda T, NH, DR, DV, BN, DOT, INV, SM_SCALE:
                ir_bind(_sparse_mla.SparseMla, T=T, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
            "sparse_mla_split": lambda T, NS, NH, DR, DV, BN, DOT, INV, SM_SCALE:
-               ir_bind(_sparse_mla_split.SparseMlaSplit, T=T, NS=NS, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE)},
+               ir_bind(_sparse_mla_split.SparseMlaSplit, T=T, NS=NS, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
+           # [DSV4] DeepSeek-V4's mHC on the H200 (registry.mhc), per token. `rules/vllm_mhc.py` asks for them.
+           "mhc_pre_broadcast": lambda HC, H, NS, TN, REPEAT, EPS, HC_EPS:
+               ir_bind(_mhc.MhcPreBroadcast, HC=HC, H=H, NS=NS, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=HC_EPS),
+           "mhc_residual_broadcast": lambda HC, H: ir_bind(_mhc.MhcResidualBroadcast, HC=HC, H=H),
+           "mhc_fused_post_pre": lambda HC, H, NS, TH, TN, REPEAT, EPS, HC_EPS:
+               ir_bind(_mhc.MhcFusedPostPre, HC=HC, H=H, NS=NS, TH=TH, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=HC_EPS),
+           "mhc_post_pre_tf32": lambda HC, H, NS, TN, REPEAT, EPS, HC_EPS:
+               ir_bind(_mhc.MhcPostPreTf32, HC=HC, H=H, NS=NS, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=HC_EPS),
+           "mhc_post": lambda HC, N: ir_bind(_mhc.MhcPost, HC=HC, N=N),
+           "hc_head": lambda HC, H, TH, EPS, HC_EPS: ir_bind(_mhc.HcHead, HC=HC, H=H, TH=TH, EPS=EPS, HC_EPS=HC_EPS)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -550,7 +561,16 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "sparse_mla": "SparseMla_v1{T,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3's sparse MLA (_vllm_fa3_C.fwd, FLASH_ATTN_MLA_SPARSE) of one "
                          "query token's NH heads over its T selected [kv_c | k_pe] rows -- the k16 wgmma chain over [q_rope | q_nope], "
                          "AttnBlock_v4's online softmax over BN-key blocks last to first, AttentionHead_v4's epilogue",
-           "sparse_mla_split": "SparseMlaSplit_v1{T,NS,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3 sparse MLA at the token's default split count"})
+           "sparse_mla_split": "SparseMlaSplit_v1{T,NS,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3 sparse MLA at the token's default split count",
+           "mhc_pre_broadcast": "MhcPreBroadcast_v1{HC,H,NS,TN,REPEAT,EPS,HC_EPS}: layer 0's mHC pre on the embedding -- DeepGEMM's TF32 "
+                                "hc-prenorm GEMM over fn_broadcast in NS splits, the mixes, Sinkhorn and the fused RMS norm",
+           "mhc_residual_broadcast": "MhcResidualBroadcast_v1{HC,H}: layer 0's embedding copied to the HC streams",
+           "mhc_fused_post_pre": "MhcFusedPostPre_v1{HC,H,NS,TH,TN,REPEAT,EPS,HC_EPS}: mhc_fused_post_pre_tilelang at most 16 tokens -- "
+                                 "the post and the pre's products by FMA in NS splits of H, then the big fuse",
+           "mhc_post_pre_tf32": "MhcPostPreTf32_v1{HC,H,NS,TN,REPEAT,EPS,HC_EPS}: mhc_fused_post_pre_tilelang above 16 tokens -- "
+                                "mhc_post, DeepGEMM's TF32 hc-prenorm GEMM in NS splits, the big fuse",
+           "mhc_post": "MhcPost_v1{HC,N}: mhc_post_tilelang, the streams after the last layer",
+           "hc_head": "HcHead_v1{HC,H,TH,EPS,HC_EPS}: hc_head_fuse_tilelang, the final streams' mix to one row"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:
