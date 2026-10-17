@@ -31,6 +31,7 @@ import Definitions.Accounting.Remote
 import Definitions.Accounting.Remote.Deployed
 import Definitions.Accounting.Responder
 import Definitions.Accounting.Tag
+import Definitions.Accounting.TS
 import Definitions.Accounting.Window
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, and

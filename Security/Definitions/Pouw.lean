@@ -4,6 +4,7 @@ import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Basic.QTree
 import Definitions.Pouw.D1
+import Definitions.Pouw.Eps1.M3
 import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Dimension.Lift
