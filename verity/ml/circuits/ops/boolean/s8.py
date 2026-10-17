@@ -6,19 +6,23 @@ steps, the same function on bits.
     BlackwellU8S8ImmaDot32_v2 the same signature (a's codes unsigned)             word view: BlackwellU8S8ImmaDot32_v1
     S8Dot_v2{K, L, T0, C, DOT, A, B, TAIL, TDOT, NOISE, LIMBS, COMMIT}
                               S8Dot_v1's signature on bits                         word view: S8Dot_v1{..., DOT', TDOT'}
+    LimbSplit_v2{FORM, N, Y}  (y: Array<32, Value<1>>) -> Array<N, Array<8, Value<1>>>  word view: LimbSplit_v1{FORM, N, Y}
+    S32LowByte_v2, S32ByteCarry_v2, S32ClampS8_v2, S32ClampRest_v2                 word view: each one's _v1
 
 A step is traced from `_imma` (`trace.definition`): the 32·64 bit products of the operand pairs and the accumulator's bits in
 carry-save columns modulo 2^34, where the exact sum fits (a two's-complement bit of negative weight, x·(-2^p), enters as
 NOT(x)·2^p and the constant -2^p), one ripple, then `.satfinite`'s clamp to s32 (when bits 31..33 disagree: 0x80000000 for a
 negative sum, else 0x7FFFFFFF) or the low 32 bits.  `S8Dot_v2` is `S8Dot_v1`'s body on bits over Boolean steps, with the same
-statics, bind-time checks and census rule; ``DOT'`` is `DOT`'s word Definition (`trace.word_of`).
+statics, bind-time checks and census rule; ``DOT'`` is `DOT`'s word Definition (`trace.word_of`).  `LimbSplit_v2` is
+`LimbSplit_v1`'s body over the Boolean limb steps: the carry is y[8:] sign-extended plus y[7], and the clamp and its rest
+select on (h > 127, h < -127), read from h's sign and bits 0..30.
 """
 from __future__ import annotations
 
 from typing import Any
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, compress_columns, mux, or_reduce
+from verity.ml.circuits.boolean.forms import NOT, ONE, add, and_reduce, compress_columns, const_bits, mux, or_reduce
 from verity.ml.circuits.boolean.trace import definition, word_of
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, broadcast
@@ -27,7 +31,8 @@ from verity.ml.circuits.types import Array
 from .. import prims as P
 from .. import s8 as S8
 
-__all__ = ["BlackwellS8ImmaDot32", "BlackwellU8S8ImmaDot32", "S8Dot"]
+__all__ = ["BlackwellS8ImmaDot32", "BlackwellU8S8ImmaDot32", "LimbSplit", "S32ByteCarry", "S32ClampRest", "S32ClampS8",
+           "S32LowByte", "S8Dot"]
 
 BIT = BL.BIT
 S32 = Array(32, BIT)
@@ -95,3 +100,49 @@ def _word(b: dict) -> Any:
 
 S8Dot.word = _word  # type: ignore[attr-defined]
 S8Dot.counts = S8.counts  # type: ignore[attr-defined]
+
+
+# -- limb splits ---------------------------------------------------------------------------------------------------------
+
+
+def _byte_carry(C, y):
+    return add(C, list(y[8:]) + [y[31]] * 8, [], cin=y[7], width=32)
+
+
+def _out_of_s8(C, h):
+    """(h > 127, h < -127) for an s32 h, never both."""
+    neg, mid = h[31], h[7:31]
+    over = C.AND(NOT(neg), or_reduce(C, mid))
+    under = C.AND(neg, NOT(C.AND(and_reduce(C, mid), or_reduce(C, h[:7]))))
+    return over, under
+
+
+def _clamp_s8(C, h):
+    over, under = _out_of_s8(C, h)
+    return mux(C, over, const_bits(0x7F, 8), mux(C, under, const_bits(0x81, 8), h[:8]))
+
+
+def _clamp_rest(C, h):
+    over, under = _out_of_s8(C, h)
+    s = add(C, h[:8], [ONE] + [under] * 6 + [NOT(under)], width=8)  # h - 127 or h + 127, mod 2^8
+    return [C.AND(over ^ under, x) for x in s]
+
+
+S32LowByte = definition("S32LowByte", 2, lambda C, y: list(y[:8]), (("y", S32),), CODE, word=S8.S32LowByte,
+                        doc="y's low byte, on bits: S32LowByte_v1")
+S32ByteCarry = definition("S32ByteCarry", 2, _byte_carry, (("y", S32),), S32, word=S8.S32ByteCarry,
+                          doc="(y >> 8) + y[7], (y - sext8(y)) / 256, on bits: S32ByteCarry_v1")
+S32ClampS8 = definition("S32ClampS8", 2, _clamp_s8, (("h", S32),), CODE, word=S8.S32ClampS8,
+                        doc="clamp(h, -127, 127) as an s8 code, on bits: S32ClampS8_v1")
+S32ClampRest = definition("S32ClampRest", 2, _clamp_rest, (("h", S32),), CODE, word=S8.S32ClampRest,
+                          doc="h - clamp(h, -127, 127)'s low byte, on bits: S32ClampRest_v1")
+
+
+@composite("LimbSplit", 2, ["FORM", "N", "Y"], lambda S: S8._limb_signature(S, S32, CODE), conformance="exact-model-tested")
+def LimbSplit(B, S, y):
+    """`LimbSplit_v1`'s limbs on bits, over the Boolean limb steps."""
+    return S8._limb_body(B, S, y, (S32LowByte, S32ByteCarry, S32ClampS8, S32ClampRest), CODE)
+
+
+LimbSplit.word = lambda b: bind(S8.LimbSplit, **b)  # type: ignore[attr-defined]
+LimbSplit.carries = S8.carries  # type: ignore[attr-defined]

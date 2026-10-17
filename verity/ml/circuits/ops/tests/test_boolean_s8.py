@@ -1,5 +1,6 @@
-"""`verity.ml.circuits.ops.boolean.s8`: the Boolean s8 IMMA steps and `S8Dot_v2` agree with their word Definitions (`word_of`)
-on sampled words and on the clamp and wrap edges, and carry exactly their builders' live ANDs, pinned."""
+"""`verity.ml.circuits.ops.boolean.s8`: the Boolean s8 IMMA steps, `S8Dot_v2`, the limb steps and `LimbSplit_v2` agree with their
+word Definitions (`word_of`) on sampled words and on the clamp, carry and wrap edges, and the steps carry exactly their
+builders' live ANDs, pinned."""
 from __future__ import annotations
 
 import numpy as np
@@ -14,12 +15,17 @@ from verity.ml.circuits.ops import s8 as S8
 from verity.ml.circuits.ops.boolean import s8 as BS8
 
 STEPS = [BS8.BlackwellS8ImmaDot32, BS8.BlackwellU8S8ImmaDot32]
+LIMB_STEPS = [BS8.S32LowByte, BS8.S32ByteCarry, BS8.S32ClampS8, BS8.S32ClampRest]
 BOOLEAN = {"DOT": BS8.BlackwellS8ImmaDot32, "TDOT": None}
 DOTS = [bind(BS8.S8Dot, **S8.SMOKE_PLAIN | BOOLEAN),
         bind(BS8.S8Dot, **S8.SMOKE_PLAIN | {"T0": "input", "C": (-(1 << 30), 1 << 30)} | BOOLEAN),
         bind(BS8.S8Dot, **S8.SMOKE_EDITED | BOOLEAN | {"TDOT": BS8.BlackwellS8ImmaDot32})]
+SPLITS = [bind(BS8.LimbSplit, FORM="bytes", N=3, Y=(-127 * 65793, 127 * 65793)),
+          bind(BS8.LimbSplit, FORM="bytes", N=4, Y=(-(1 << 30), 1 << 30)),
+          bind(BS8.LimbSplit, FORM="byteclamp", N=3, Y=(-65152, 65151))]
 #: id -> And gates
-PINS = {"BlackwellS8ImmaDot32_v2": 4157, "BlackwellU8S8ImmaDot32_v2": 4125}
+PINS = {"BlackwellS8ImmaDot32_v2": 4157, "BlackwellU8S8ImmaDot32_v2": 4125, "S32LowByte_v2": 0, "S32ByteCarry_v2": 31,
+        "S32ClampS8_v2": 59, "S32ClampRest_v2": 57}
 
 
 def _agree(target, inputs) -> None:
@@ -46,7 +52,26 @@ def test_the_steps_agree_with_their_word_steps(d) -> None:
     _agree(bind(d), [acc, a, b])
 
 
-@pytest.mark.parametrize("d", STEPS, ids=lambda d: d.name)
+@pytest.mark.parametrize("d", LIMB_STEPS, ids=lambda d: d.name)
+def test_the_limb_steps_agree_with_their_word_steps(d) -> None:
+    """Every word within 400 of 0, the s32 and 2^23 edges, the clamp's and carry's thresholds, and uniform words."""
+    edges = list(range(-400, 400)) + [-(1 << 31), -(1 << 31) + 1, (1 << 31) - 2, (1 << 31) - 1, -(1 << 23) - 1, -(1 << 23),
+                                      (1 << 23) - 1, 1 << 23, -32641, -32640, 32639, 32640, -65152, 65151]
+    rng = np.random.default_rng(31)
+    y = np.concatenate([np.array(edges, dtype=np.int64), rng.integers(-(1 << 31), 1 << 31, 20_000)]).astype(np.uint32)
+    _agree(bind(d), [y])
+
+
+@pytest.mark.parametrize("target", SPLITS, ids=lambda t: t.id)
+def test_the_limb_split_on_bits_agrees_with_its_word_definition(target) -> None:
+    lo, hi = target.bindings["Y"]
+    rng = np.random.default_rng(37)
+    y = np.concatenate([rng.integers(lo, hi + 1, 5_000), [lo, hi, -1, 0, 1]]).astype(np.int64).astype(np.uint32)
+    _agree(target, [y])
+    assert TR.word_of(target).id == target.id.replace("LimbSplit_v2", "LimbSplit_v1")
+
+
+@pytest.mark.parametrize("d", STEPS + LIMB_STEPS, ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
     T = d.traced()
     params = [t for _, t in d.signature(None)[0]]
