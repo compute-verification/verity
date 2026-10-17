@@ -13,6 +13,7 @@ L = 32
 kind = "IMMA.16832.S32.S8.S8"   # mma.sync m16n8k32 s8: 16 SMSP-cycles on the tensor pipe
 words = 128                     # 16 x 8 s32 accumulators
 depth = 32                      # k
+form = "IMMA16832"              # its census kind (data/forms.toml): per_mma's MMA is one of these
 
 [per_mma]       # warp instructions a MMA by class, everything the kernel issues (the fold and the column max included)
 MMA = 1
