@@ -1,8 +1,11 @@
 """The TTP-encoding note's derived numbers, from one run's records and named constants (stdlib only).
 
-    python3 derive.py RUN_OUT_DIR     # e.g. ~/.research/runs/r20261017-083410-d961/out
+    python3 derive.py RUN_OUT_DIR [SLOTH_OUT_DIR]   # e.g. ~/.research/runs/r20261017-083410-d961/out
+                                                    #      ~/.research/runs/r20261017-090405-2c12/out
 
-Measured inputs are the run's `decode.jsonl`, `chain.jsonl` and `bw.json`; every other constant names its source.
+Measured inputs are the run's `decode.jsonl`, `chain.jsonl` and `bw.json`, and `sloth_fft.sh`'s `sloth.jsonl` (the FFT
+part of one squaring mod 2^1257787 - 1, without carries, so an upper bound on that decode); every other constant names
+its source.
 """
 
 from __future__ import annotations
@@ -46,7 +49,17 @@ def products_per_record(bits, form):
     return 2 * (square + reduce)
 
 
-def main(out):
+def measured_sloth(sloth_out):
+    if not sloth_out:
+        return []
+    rows = [json.loads(line) for line in open(os.path.join(sloth_out, "sloth.jsonl"))]
+    best = max(rows, key=lambda r: r["word_gb_per_s_median"])
+    print(f"\nFP64 cuFFT squaring mod 2^1257787 - 1, FFT part only: best {best['word_gb_per_s_median']:.2f} GB/s a round "
+          f"({best['points']} points, {best['words']} words, max round-off {best['max_roundoff']})")
+    return [("FP64 cuFFT, measured", best["word_gb_per_s_median"])]
+
+
+def main(out, sloth_out=None):
     rows, chain, bw, clock = load(out)
     read = bw["read_gb_per_s_median"]
     print(f"read {read} GB/s (median), clock {clock['clock_mhz']} MHz, {clock['sms']} SMs")
@@ -92,22 +105,24 @@ def main(out):
     for name, r_in in (("token ids at prefill (A, R3)", 58e3), ("honest serving, high (F)", 110e3)):
         print(f"  epoch at {name} {r_in / 1e3:.0f} kB/s: E <= {cap / r_in / 3600:.1f} h")
 
-    print("\n1e6 public Sloth (modeled):")
+    rates = [("NTT, modeled", g) for g in NTT_GBPS_PER_ROUND] + measured_sloth(sloth_out)
+    print("\n1e6 public Sloth:")
     for k_rounds in (1, 2):
-        for gbps in NTT_GBPS_PER_ROUND:
+        for name, gbps in rates:
             dec = gbps / k_rounds
             w_d = read / dec
             setup_s = W_BYTES / (G * dec * 1e9 / SLOTH_A)
-            print(f"  {k_rounds} round(s), {gbps:.0f} GB/s a round: w_d {w_d:.0f}, honest setup of 70.6 GB on the node "
-                  f"{setup_s / 3600:.0f} h, x at L = 10 min {600 / setup_s:.3%}")
+            print(f"  {k_rounds} round(s), {name} {gbps:.1f} GB/s a round: w_d {w_d:.0f}, honest setup of 70.6 GB on "
+                  f"the node {setup_s / 3600:.0f} h, x at L = 10 min {600 / setup_s:.3%}")
     for bits in (1024, 2048):
         w = derived[bits]["w_d"]
-        lo, hi = read / NTT_GBPS_PER_ROUND[1] * 2 / w, read / NTT_GBPS_PER_ROUND[0] * 2 / w
-        print(f"  RW-SMS {bits} vs two-round Sloth: decode {lo:.0f}-{hi:.0f}x cheaper")
+        for k_rounds in (1, 2):
+            print(f"  RW-SMS {bits} vs {k_rounds}-round Sloth: decode "
+                  + ", ".join(f"{read / g * k_rounds / w:.0f}x cheaper ({name} {g:.1f})" for name, g in rates))
     print(f"\nnode: weights read once a pass {W_BYTES / NODE_READ * 1e3:.2f} ms; "
           + ", ".join(f"{b}-bit decode adds {W_BYTES / (G * best[b]['record_gb_per_s_median'] * 1e9) * 1e3:.1f} ms"
                       for b in sorted(best)))
 
 
 if __name__ == "__main__":
-    main(os.path.expanduser(sys.argv[1]))
+    main(*(os.path.expanduser(a) for a in sys.argv[1:3]))
