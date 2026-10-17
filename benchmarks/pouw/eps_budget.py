@@ -608,7 +608,7 @@ def design_table(skips: dict[str, Summary], ds: list[Design]) -> str:
     for d in ds:
         q = skips[d.name]
         noise = ", ".join(d.noise[p] for p in PRODUCTS)
-        lines.append(f"| {d.name} ({d.title}) | {noise} | {100 * q.eps_time:.3g}% | {q.credit} | {q.model} "
+        lines.append(f"| {d.name} ({d.title}) | {noise} | {100 * q.eps_time:#.3g}% | {q.credit} | {q.model} "
                      f"{q.ctx // 1024}K {q.phase} | {q.gamma:.2f} |")
     return "\n".join(lines)
 
@@ -629,7 +629,8 @@ def device_table(data: Path = DATA, vector: str = "", rates: dict = RATES) -> st
         q = design_skip(d, rates, data, vector)
         at = f"{q.model.removeprefix('llama-3.1-')} {q.ctx // 1024}K {q.phase}"
         lines.append(f"| {d.name} | {d.L} | {prices(d.name, data, vector).mma:.3f} | "
-                     + " | ".join(f"{a} / {b}" for a, b in zip(row[::2], row[1::2])) + f" | {100 * q.eps_time:.3g}% | {at} |")
+                     + " | ".join(f"{a} / {b}" for a, b in zip(row[::2], row[1::2]))
+                     + f" | {100 * q.eps_time:#.3g}% | {at} |")
     return "\n".join(lines)
 
 
