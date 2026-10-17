@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 import Proofs.Flock.Claims.Complete.Zk.Json.Files
 import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 import Proofs.Flock.Claims.Complete.Zk.Count
+import Proofs.Flock.Claims.Complete.Zk.ProverOk
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
@@ -39,4 +40,5 @@ the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_go
 `Json.Files` the proof files' goals, given `RepShapedZk` (`RunZk.rep`, `repDecodesZk_goal`, `repParamsZk_goal`,
 `padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal` given `RecordFitsZk`); `Json.Runs` the session
 running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Count` the sends fitting the rounds (`sendCountZk_goal`);
-`Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved. -/
+`ProverOk` `ProverOkZk` from `Out64` and its rep half `RepRoundsZk` (`proverOkZk`); `Complete` assembles them into
+`complete_zk`, from those premises and the goals not yet proved. -/
