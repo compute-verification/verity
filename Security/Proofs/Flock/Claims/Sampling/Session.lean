@@ -22,6 +22,12 @@ fork on the same round, and Flock's `γ` at its `k_F ≤ k` rounds, times the `k
 rounds costs, is at most `γ_F` (`γFlock_mul_le`).
 
 * `SessionKS_of`: **`SessionKS` from Flock's KS**, `DrawFixed`, `SessionRuns`, `InnerNumbers` and `ε_table ≥ 0`.
+
+A session may cover several checked units, as the one-stage audit's one session proves every drawn unit:
+`SessionRunsSlots` asks `SessionRuns` only of the units at the slots whose sessions cover the rest (`SlotsCover`,
+`Sampling.KS`), and gives it (`sessionRuns_of_slots`); one session per unit is `SessionRuns` itself
+(`sessionRunsSlots_units_iff`). `InnerNumbers` at one session over every unit is one statement about it
+(`innerNumbers_one_iff`).
 -/
 
 namespace Claims.Sampling
@@ -284,6 +290,47 @@ def InnerNumbers (D : Deploy Coin Col T) : Prop :=
   ∀ x u v xS vS, D.session x u v = some (xS, vS) →
     D.flock.waits xS = D.innerWaits x ∧ D.flock.cap xS = D.innerCap x ∧ D.flock.N₀ xS = D.innerN₀ x ∧
       D.flock.εtable xS ≤ D.εtable x ∧ D.flock.weight xS ≤ D.weight x
+
+/-- **`SessionRuns` a session at a time**: at coins `r`, the unit checked at a slot below `S x` has its session a Flock
+run on its rounds, as `SessionRuns` says of every checked unit. Where the slots cover the checked units
+(`SlotsCover`), that is `SessionRuns` (`sessionRuns_of_slots`): one session over every checked unit, as the one-stage
+audit runs, is one obligation per run (`S = 1`), and one session per unit is `SessionRuns` itself (`S = nPU D`,
+`sessionRunsSlots_units_iff`). -/
+def SessionRunsSlots (H : Msg → Msg) (D : Deploy Coin Col T) (S : Msg → ℕ) : Prop :=
+  ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (p : ℕ) (u : ℕ × ℕ),
+    p < S x → (D.checked x r)[p]? = some u →
+    ∃ (xS : Msg) (emb : Fin (D.flock.V.k xS) → Fin (D.V.k x)) (P' : Prover Unit),
+      StrictMono emb ∧ (∀ t, t ∈ D.rounds x u ↔ ∃ i, emb i = t) ∧
+      (∀ r' : Fin (D.V.k x) → Coin, (∀ t ∉ D.rounds x u, r' t = r t) →
+        ((run H P D.V x ω r').out = .acc ↔ (run H P' D.flock.V xS () fun i => r' (emb i)).out = .acc)) ∧
+      ∀ r' : Fin (D.V.k x) → Coin, (∀ t ∉ D.rounds x u, (∀ i, t < emb i) → r' t = r t) →
+        D.session x u (run H P D.V x ω r').seen = some (xS, (run H P' D.flock.V xS () fun i => r' (emb i)).seen) ∧
+          ∀ q ∈ (run H P' D.flock.V xS () fun i => r' (emb i)).vLog, q ∈ (run H P D.V x ω r').vLog
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
+/-- **`SessionRuns` from its slot form**: each checked unit has a slot's rounds and session. -/
+theorem sessionRuns_of_slots {H : Msg → Msg} {D : Deploy Coin Col T} {S : Msg → ℕ} (hc : SlotsCover D S)
+    (h : SessionRunsSlots H D S) : SessionRuns H D := by
+  intro x Ω P ω r u hu
+  obtain ⟨p, hp, u', hu', hr, hs⟩ := hc x r u hu
+  rw [hr, hs]
+  exact h x Ω P ω r p u' hp hu'
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
+/-- **At one session per unit the slot form is `SessionRuns`.** -/
+theorem sessionRunsSlots_units_iff (H : Msg → Msg) (D : Deploy Coin Col T) :
+    SessionRunsSlots H D (nPU D) ↔ SessionRuns H D :=
+  ⟨sessionRuns_of_slots (slotsCover_units D), fun h x Ω P ω r p u hp hu => h x Ω P ω r u ⟨⟨p, hp⟩, hu⟩⟩
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
+/-- **`InnerNumbers` at one session over every unit**: one statement about the run's one session. `InnerNumbers` reads
+every session a unit has, whichever units share it, so several sessions at `x` must have Flock's numbers alike: the
+same tables' shapes give the same `N₀`. -/
+theorem innerNumbers_one_iff (D : Deploy Coin Col T) (hs : ∀ x u u', D.session x u = D.session x u') :
+    InnerNumbers D ↔ ∀ x v xS vS, D.session x (0, 0) v = some (xS, vS) →
+      D.flock.waits xS = D.innerWaits x ∧ D.flock.cap xS = D.innerCap x ∧ D.flock.N₀ xS = D.innerN₀ x ∧
+        D.flock.εtable xS ≤ D.εtable x ∧ D.flock.weight xS ≤ D.weight x :=
+  ⟨fun h x v xS vS hv => h x (0, 0) v xS vS hv, fun h x u v xS vS hv => h x v xS vS (hs x u (0, 0) ▸ hv)⟩
 
 /-- The unit a selection picks among those checked at `R`. -/
 def selUnit (D : Deploy Coin Col T) (x : Msg) (sel : List (ℕ × ℕ) → Option (Fin (nPU D x)))
