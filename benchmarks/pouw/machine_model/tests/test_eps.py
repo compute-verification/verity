@@ -353,3 +353,53 @@ def test_cli(capsys):
     assert lines[1].split()[-4:] == ["|", "luck", "adapt", "sample"] and lines[2].split()[-4] == "|"
     luck, adapt, sample = (float(x.rstrip("%")) for x in lines[2].split()[-3:])
     assert adapt == 0.35 and sample == pytest.approx(luck + adapt, abs=1e-3)
+
+
+SOUND = E.machine("VF3q-16")   # FACET-BREAK's refit (#2244), on which the MMA form decides the joint row
+OWN = E.mma_form(SOUND, "IMMA16832")
+
+
+def test_the_mma_form_convention():
+    """IMMA16832's own line on every JI3q row, the EFFMA family (which its line leaves out) at the least over forms:
+    FACET-BREAK's counterfactual, dither-two-sided at T 19.18 a MMA and q*₀ 3.2 (07:45Z)."""
+    assert OWN.c["MMA"]["JI3q_0"] == SOUND.c["IMMA16832"]["JI3q_0"] > SOUND.c["MMA"]["JI3q_0"]
+    assert OWN.c["MMA"]["EFFMA0"] == SOUND.c["MMA"]["EFFMA0"] and "EFFMA0" not in SOUND.c["IMMA16832"]
+    assert OWN.vector == "VF3q-16 (MMA as IMMA16832)" and SOUND.c["MMA"] != OWN.c["MMA"]
+    s = E.setup(E.design("dither-two-sided"), OWN, operands="floor", credit="floor")
+    assert s.baseline.T * 128 == pytest.approx(19.183, abs=1e-3) and E.threshold(s) == pytest.approx(3.243, abs=1e-3)
+    for form in ("MMA", "ALU", "none"):
+        with pytest.raises(SystemExit, match="no census line for the MMA form"):
+            E.mma_form(SOUND, form)
+
+
+@pytest.mark.parametrize("pi, x, row", [(SOUND, 0.5, "JI3q_5"), (OWN, 2.0, "JI3q_0")])
+def test_mandatory_lane_work_closes_the_lane_route(pi, x, row):
+    """Enough per-word lane work moves honest's floor program to a joint row whose MMA share a word, a_k/128, is under
+    a lane word's q*·b_k/32 at q* = 2, so ε_machine is 0 there; a pipe row (A, I) never binds below x = 2."""
+    d = E.design("co-dither")
+    e0 = E.eps(d, pi, 2, operands="floor", credit="floor")
+    e = E.eps(d.with_fill(x), pi, 2, operands="floor", credit="floor")
+    assert e0.machine_eps > 0.02 and e.machine_eps == 0 and e.baseline.binding == (row,)
+    t = E.threshold(E.setup(d.with_fill(x), pi, operands="floor", credit="floor"))
+    a, b = pi.c["MMA"][row], pi.c["ALU"][row]
+    assert t < 2 and t == pytest.approx((a + b * d.floor["LDSM_X4"]) / (4 * b), abs=2e-3)
+    assert e.core() == pytest.approx(1 - (1 - e.skip), abs=1e-12)
+
+
+def test_a_filler_mix():
+    assert E.lane_fill(1.0, {"IMAD": 1.0}).mix == {"IMAD": 1.0} and E.lane_fill(1.0).mix == {"ALU": 1.0, "IMAD": 1.0}
+    d = E.design("co-dither")
+    imad = E.eps(d.with_fill(4.0, {"IMAD": 1.0}), SOUND, 2, operands="floor", credit="floor")
+    assert imad.baseline.binding == ("I",)   # IMAD alone at half rate: the pipe row, which the lane route relocates
+    assert imad.machine_eps > E.eps(d.with_fill(4.0), SOUND, 2, operands="floor", credit="floor").machine_eps
+
+
+def test_cli_mma_form_and_fill_mix(capsys):
+    assert main(["eps", "--vector", "VF3q-16", "co-dither", "--credit", "floor", "--operands", "floor", "--q", "2",
+                 "--fill", "2", "--fill-mix", "IMAD=1,ALU=1", "--mma-form", "IMMA16832", "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["vector"] == "VF3q-16 (MMA as IMMA16832)" and d["terms"]["machine"] == 0
+    assert d["fillers"][0]["mix"] == {"IMAD": 1.0, "ALU": 1.0} and d["baseline"]["binding"] == ["JI3q_0"]
+    for bad in (["--fill-mix", "IMAD=1"], ["--fill", "1", "--fill-mix", "IMAD"], ["--fill", "1", "--fill-mix", "IMAD=0"]):
+        with pytest.raises(SystemExit, match="--fill-mix"):
+            main(["eps", "--vector", "VF3q-16", *bad])

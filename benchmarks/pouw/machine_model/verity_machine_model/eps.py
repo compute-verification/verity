@@ -126,10 +126,13 @@ UPFILL = Filler(per_word="saturate", mix={"ALU": 1.0, "IMAD": 1.0}, route="unifo
                 source="CALC: a uniform duo-style chain a warp, receipts checked like the fold's (candidate)")
 
 
-def lane_fill(x: float) -> Filler:
-    """x lane instructions a word of verified filler on lanes, LOP3 and IMAD alternating (FILL-OPT)."""
-    return Filler(per_word=x, mix={"ALU": 1.0, "IMAD": 1.0}, route="lanes",
-                  source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)")
+def lane_fill(x: float, mix: dict[str, float] | None = None) -> Filler:
+    """x lane instructions a word of verified filler on lanes, LOP3 and IMAD alternating (FILL-OPT), or in `mix`."""
+    if mix is None:
+        return Filler(per_word=x, mix={"ALU": 1.0, "IMAD": 1.0}, route="lanes",
+                      source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)")
+    return Filler(per_word=x, mix=dict(mix), route="lanes",
+                  source=f"a lane chain in the mix {', '.join(f'{k} {v:g}' for k, v in mix.items())} (candidate)")
 
 
 @dataclass(frozen=True)
@@ -175,9 +178,9 @@ class Design:
             raise SystemExit(f"{self.name} has UPFILL already")
         return replace(self, name=f"{self.name}+up", filler=(*self.filler, UPFILL))
 
-    def with_fill(self, x: float) -> Design:
+    def with_fill(self, x: float, mix: dict[str, float] | None = None) -> Design:
         """The design with x lane instructions a word of verified filler on lanes (`lane_fill`)."""
-        return replace(self, name=f"{self.name}+fill{x:g}", filler=(*self.filler, lane_fill(x)))
+        return replace(self, name=f"{self.name}+fill{x:g}", filler=(*self.filler, lane_fill(x, mix)))
 
 
 def _parts(t: dict) -> dict[str, Part]:
@@ -313,6 +316,17 @@ def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
             if k in c and r in c["ALU"]:
                 c[k][r] = cycles * c["ALU"][r]
     return replace(pi, vector=f"{pi.vector} (UNI on issue at {cycles:g})", c=c)
+
+
+def mma_form(pi: Machine, form: str) -> Machine:
+    """Π with the MMA class at one form's own coefficients (`IMMA16832`: honest's MMA as itself, not as the least over
+    the MMA forms on each row), the convention TENSOR r5's per-form classes settle. A row the form's line leaves out
+    (the EFFMA family) keeps the least over the forms (FACET-BREAK's counterfactual, 07:45Z)."""
+    if form == "MMA" or not pi.c.get(form, {}).get("M"):   # a MMA form is on the tensor pipe's row
+        raise SystemExit(f"{pi.vector}: no census line for the MMA form {form}")
+    c = {k: dict(v) for k, v in pi.c.items()}
+    c["MMA"].update(pi.c[form])
+    return replace(pi, vector=f"{pi.vector} (MMA as {form})", c=c)
 
 
 def _add(n: dict[str, float], prog: dict[str, float], x: float) -> None:

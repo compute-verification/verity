@@ -173,9 +173,23 @@ def _pi(m: E.Mix) -> str:
 def _design(args, name: str) -> E.Design:
     d = E.design(name, args.data)
     d = d.with_fold_cost(args.fold_cost) if args.fold_cost is not None else d
-    d = d.with_fill(args.fill) if args.fill else d
+    d = d.with_fill(args.fill, _fill_mix(args)) if args.fill else d
     d = d.with_upfill() if args.upfill else d
     return d if args.q_uniform is None else replace(d, name=f"{d.name}@qu{args.q_uniform:g}", q_uniform=args.q_uniform)
+
+
+def _fill_mix(args) -> dict[str, float] | None:
+    if args.fill_mix is None:
+        return None
+    if not args.fill:
+        raise SystemExit("eps: --fill-mix is the --fill filler's mix: add --fill")
+    try:
+        mix = {k.strip(): float(v) for k, v in (kv.split("=") for kv in args.fill_mix.split(","))}
+    except ValueError:
+        raise SystemExit(f"eps: --fill-mix {args.fill_mix!r}: write CLASS=WEIGHT,... (ALU=1,IMAD=1)") from None
+    if not mix or any(v < 0 for v in mix.values()) or not sum(mix.values()):
+        raise SystemExit(f"eps: --fill-mix {args.fill_mix!r}: weights ≥ 0, not all 0")
+    return mix
 
 
 def _lookups(args) -> E.Table | None:
@@ -261,7 +275,7 @@ def _eps_table(args, pi: E.Machine) -> int:
         for r in sweep:
             d = E.design(n, args.data)
             d = d.with_fold_cost(r) if r is not None else d
-            d = d.with_fill(args.fill) if args.fill else d
+            d = d.with_fill(args.fill, _fill_mix(args)) if args.fill else d
             rows += [d, d.with_upfill()] if args.upfill else [d]
     for d in rows:
         es = {q: E.eps(d, pi, q, args.data, operands=args.operands, credit=args.credit, table=tb, adapt=ad)
@@ -287,6 +301,8 @@ def _eps_table(args, pi: E.Machine) -> int:
 def _eps(args) -> int:
     pi = E.machine(args.vector or "", args.data)
     pi = pi if args.uni_issue is None else E.uniform_on_issue(pi, args.uni_issue)
+    pi = pi if args.mma_form is None else E.mma_form(pi, args.mma_form)
+    _fill_mix(args)
     if args.table:
         return _eps_table(args, pi)
     if len(args.designs) > 1:
@@ -389,6 +405,11 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--table", action="store_true")
     e.add_argument("--fold-sweep", help="with --table: each design at each of these fold costs")
     e.add_argument("--fill", type=float, help="add X lane instructions a word of verified filler on lanes")
+    e.add_argument("--fill-mix", metavar="K=V,...",
+                   help="with --fill: the filler's class mix on lanes (default ALU=1,IMAD=1, LOP3 and IMAD alternating)")
+    e.add_argument("--mma-form", metavar="FORM",
+                   help="price the MMA class at FORM's own census line (IMMA16832: honest's MMA as itself) instead of "
+                        "the least over the MMA forms on each row")
     e.add_argument("--upfill", action="store_true",
                    help="add verified filler keeping the uniform datapath busy (with --table: a row beside each)")
     e.add_argument("--lookups", action="store_true",
