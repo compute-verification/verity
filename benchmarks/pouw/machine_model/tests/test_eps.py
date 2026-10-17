@@ -347,6 +347,11 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[noise]\nlinears = "ncp"\n')
     with pytest.raises(SystemExit, match=r"\[noise\] names a leaf"):
         E.design("x", data)
+    bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\nsums = "vfold"\n')
+    assert E.design("x", data).sums == "vfold" and two.sums == "vsum"
+    bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\nsums = "vscan"\n')
+    with pytest.raises(SystemExit, match="not a peel sums kernel"):
+        E.design("x", data)
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n'
                    '[filler]\nper_word = 4\nmix = { ALU = 1 }\nroute = "uniform"\n')
     with pytest.raises(SystemExit, match="decision 73"):

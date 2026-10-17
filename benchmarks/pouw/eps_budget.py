@@ -90,6 +90,8 @@ RATES = {
                                         # bound (JI3n_0, 21.47 a MMA); a served-checked cheater pays its ¼, the 4th IMMA
     "apv_tail_macs": 1.57,   # the same mainloop MACs a strip product, on a device with no apv kernel at ♭'s price a MAC
     "c_vsum": 35 / 32,       # an entry: vsum's 35 per-thread instructions an entry (BC-KERNEL r2), a warp's a cycle
+    "c_vfold": 0.7265,       # an entry: vfold's sums, vfold - vfold_x by ncu, 0.6884 / 0.7265 / 0.7221 warp instructions
+                             # at 2K / 8K / 32K, the most (D2S-KERNEL r3, #2300, r20261017-113844-b913)
     "c_apv_serve": 4.4 / 128,  # a cell: the served f's 4.4 warp instructions a 128-cell tile
     "t_quant": 0.56e-12,     # s an element, plain activation quantizer (COMMIT-GPU r5: +23 ms at 8 x 4K, 40.8 G elements)
     "t_dither": 0.48e-12,    # s an element, the dither's bits (EGEMM r20261016-104404-700b: qdither - qplain 0.016 ms, 8192 x 4096)
@@ -456,8 +458,8 @@ def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path =
 
     - the peel's tail, a strip product at its mainloop MACs' price (`c_tail_pv`, apv's measured issue bound on sm_120;
       `apv_tail_macs` of ♭'s MACs elsewhere) or at Π's price of its instructions (`prices`), whichever is more; ¼ of
-      the mainloop part and the 4th IMMA a served-checked cheater pays. Its sums (`c_vsum`) and served epilogue
-      (`c_apv_serve`) are vector instructions at one an issue cycle;
+      the mainloop part and the 4th IMMA a served-checked cheater pays. Its sums (`c_vsum`, or `c_vfold` for a design
+      whose `sums` is vfold) and served epilogue (`c_apv_serve`) are vector instructions at one an issue cycle;
     - a one-sided strip, its 2L executed products at ♭'s price a MAC;
     - a TS leaf's skippable vector work, prefill only: TS_EPS of TS_CHEAT (co32c, cohalf), and pv's gap `pv_ts` at
       16 cycles a plain MMA times its γ.
@@ -480,7 +482,7 @@ def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path =
     for comp in flat:
         leaf = d.noise[COMP[comp]]
         if comp == "P·V" and leaf == "peel":
-            strip, sums = outs[comp] * 2 * (L_ + 1), r["c_vsum"] * s.kv * s.d
+            strip, sums = outs[comp] * 2 * (L_ + 1), r[f"c_{d.sums}"] * s.kv * s.d
             free[comp] = strip * tail + sums + r["c_apv_serve"] * s.heads * s.d
             chk[comp] = strip * tail_chk + sums
         elif leaf == "one-sided":

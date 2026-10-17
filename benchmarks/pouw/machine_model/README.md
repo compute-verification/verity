@@ -181,6 +181,7 @@ The noise leaves are `NOISE` in `eps.py`, and `designs` prints them as a legend:
 Beside its names, a design file has these keys:
 
 - `[noise]`: a leaf for each of `linears`, `lm_head`, `qk` and `pv`.
+- `sums`: the kernel that forms a peel's sums, `vsum` (the default) or `vfold` (`SUMS` in `eps.py`).
 - `honest`, `L`, `work` and `plain`.
 - `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes (decision 73).
 - `[operands]`: the noise's floor φ_del.
@@ -190,8 +191,8 @@ Beside its names, a design file has these keys:
 - `ppl`: a spec in `benchmarks/ppl/specs/`, or `""` while the design's arm isn't on main.
 - The ε terms' accounting: `[skip.served]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
   `[baseline]` and `[routes]`. `[skip.served]` is the number SKIP's calculator, `../eps_budget.py`, gives the design's
-  `[noise]` (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served
-  output free), and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
+  `[noise]` and `sums` (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every
+  served output free), and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
 
 A new design is a file with its own name, title and summary, and a `base` if it varies one. The tests refuse:
 
