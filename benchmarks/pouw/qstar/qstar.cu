@@ -483,11 +483,13 @@ __global__ void __launch_bounds__(CO_T, 1) k_co(const uint4* __restrict__ Ap, co
 
 // ---- design A (note:20261017T0340Z-draft-skip): both operands dither bits, Ã = R and B̃ = Rc ∈ {0,1}, so a word's
 // segment is popc(R_ℓ[i] & C_ℓ[j]), with R_ℓ[i] and C_ℓ[j] the 32 bits as in Rw. A thread is BR = 4 consecutive rows by
-// the BCPT = 4 columns its whole block shares, 64 threads a block. The operands are group-major, [rows/4][L + 4] uint4
+// BCPT = 4 consecutive columns; a block of 64 is BG × BG = 8 × 8 of them, 32 rows by 32 columns, so each 128-bit row
+// and column load is shared by 8 threads through L1 and L2 carries a quarter byte a lane-word (4 columns a block
+// carried 1 byte, which bound every arm at L2's ≈ 3.3 TB/s). The operands are group-major, [rows/4][L + 4] uint4
 // (pack_g4), so a thread's segments are consecutive: one 128-bit load a segment for its rows and one for its columns, at
 // immediate offsets from two pointers that move once an iteration. Segments are loaded ahead into the registers their
 // ANDs have just read, as in imma_warp.
-constexpr int BR = 4, BBT = 64, BCPT = 4;
+constexpr int BR = 4, BBT = 64, BCPT = 4, BG = 8;
 struct Seg {
   uint4 r, c;
 };
@@ -620,16 +622,18 @@ __device__ __forceinline__ void bx_thread(const uint4* __restrict__ Rg, const ui
           a < NP ? (uint32_t)acc[a][c]
                  : 8u * acc[a][c] + 4u * __popc(four[a][c]) + 2u * __popc(two[a][c]) + __popc(one[a][c]);
 }
-// grid (m/(BBT·BR), columns/BCPT): the columns [jbase, jbase + BCPT·gridDim.y)
+// grid (m/(BG·BR), columns/(BG·BCPT)): the columns [jbase, jbase + BG·BCPT·gridDim.y)
+#define BIT_I0 ((blockIdx.x * BG + threadIdx.x / BG) * BR)
+#define BIT_J0 (jbase + (blockIdx.y * BG + threadIdx.x % BG) * BCPT)
 extern "C" __global__ void __launch_bounds__(BBT) k_bb(const uint4* __restrict__ Rg, const uint4* __restrict__ Cg,
                                                        uint32_t* __restrict__ out, int L, int n, int jbase, Clk* rec) {
-  bb_thread<true>(Rg, Cg, L, n, (blockIdx.x * BBT + threadIdx.x) * BR, jbase + BCPT * blockIdx.y, out, rec);
+  bb_thread<true>(Rg, Cg, L, n, BIT_I0, BIT_J0, out, rec);
 }
 #define BX_KERNEL(NAME, NP)                                                                                       \
   extern "C" __global__ void __launch_bounds__(BBT) NAME(const uint4* __restrict__ Rg, const uint4* __restrict__ Cg, \
                                                          uint32_t* __restrict__ out, int L, int n, int jbase,      \
                                                          Clk* rec) {                                               \
-    bx_thread<NP, true>(Rg, Cg, L, n, (blockIdx.x * BBT + threadIdx.x) * BR, jbase + BCPT * blockIdx.y, out, rec); \
+    bx_thread<NP, true>(Rg, Cg, L, n, BIT_I0, BIT_J0, out, rec);                                                   \
   }
 BX_KERNEL(k_bx, BR)
 BX_KERNEL(k_bx_hs, 0)
@@ -839,7 +843,7 @@ static int written(Arm a, const Dev& d) {
 
 // Design A's arm a (bb, bx, bx_hs, bx_mix) on the columns [j0, j1)
 static void bit_launch(const Dev& d, Arm a, int j0, int j1, cudaStream_t s) {
-  const dim3 grid(d.m / (BBT * BR), (j1 - j0) / BCPT);
+  const dim3 grid(d.m / (BG * BR), (j1 - j0) / (BG * BCPT));
   auto* k = a == BB ? k_bb : a == BX ? k_bx : a == BX_HS ? k_bx_hs : k_bx_mix;
   k<<<grid, BBT, 0, s>>>(d.Rg, d.Cg, d.out, d.L, d.n, j0, d.rec);
 }

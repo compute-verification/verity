@@ -152,9 +152,9 @@
   "IADD.64": 2,
   "UMOV": 1,
   "UIADD3": 1,
-  "ISETP.LE.AND": 1,
+  "UISETP.GE.AND": 1,
   "UIADD3.64": 1,
-  "BRA": 1
+  "BRA.U": 1
  },
  "k_bx": {
   "LOP3.LUT": 128,
