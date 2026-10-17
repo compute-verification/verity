@@ -627,6 +627,9 @@ def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(t
                  {"number": 9, "headRefName": "D", "headRefOid": tips["D"]}]                       # D isn't on main: kept
     M.sweep(repo, gh=gh, log=[].append)
     assert _heads(repo) == {"main", "C", "D", "E"}
+    log = []
+    M.sweep(repo, gh=gh, log=log.append)                                  # A and B are gone: nothing to delete, nothing kept
+    assert not [x for x in log if "branch A" in x or "branch B" in x or "kept" in x], log
 
 
 def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_work(tmp_path):
