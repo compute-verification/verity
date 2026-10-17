@@ -13,7 +13,8 @@ below 32 rows, else DeepGEMM), DsaRMSNorm of q_c and kv_c, the interleaved RoPE 
 DsaIndexerQ, DsaMqaLogits and DsaTopKShortRow; the all-reduce + residual + RMSNorm (FlashInfer's fused MNNVL kernel within its token
 budget, else the all-reduce and RMSNormFusedCuda); the SiLU MLP below FIRST_DENSE, and from it on the MoE block: the f32 router GEMM,
 the shared expert, MoeRouterSigmoidBias, Fp8GroupQuantUe8m0, the block-FP8 expert GEMMs per (token, slot) pair, MoeSum and the
-shared expert's add; then the last row's logits, their all-gather and TokenSelect.  A fact outside it raises `Unexpressible`, φ's
+shared expert's add; then the last row's logits, their all-gather and the token select (greedy, or the seeded temperature + top-p
+select: `common.select_token`).  A fact outside it raises `Unexpressible`, φ's
 when the decoder is made and a launch's (a prefill past the decode threshold, a row of more than INDEX_TOPK keys, a GEMM, all-reduce
 or MoE tile no record covers) when the launch is written.
 """
@@ -24,7 +25,7 @@ from verity.ml.circuits.defs import Builder
 from verity.ml.circuits.refs import Coll, PartLog, Refs, concat, strided_view
 from verity.ml.circuits.types import Type, Value
 
-from .common import Unexpressible, _arr_shape, _Launch, _Peers, _ptypes, kind, served_class
+from .common import Unexpressible, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
 from .phi import Phi
 
 
@@ -161,12 +162,12 @@ class _Model:
             x, res = self.reduce_norm(self.moe(L, x) if L >= int(C["FIRST_DENSE"]) else self.mlp(L, x), res, nxt)
         return x
 
-    def sample(self, row: Refs, event: int, pos: int, policy=None) -> Coll:
-        """The greedy token of the row's logits: this rank's vocabulary slice, gathered across the ranks."""
+    def sample(self, row: Refs, event: int, pos: int, policy: _Stochastic | None = None) -> Coll:
+        """The token of the row's logits (`common.select_token`): this rank's vocabulary slice, gathered across the ranks."""
         V, W = int(self.C["V"]), self.net.world
         lg = self.cublas([row], self.w["lm_head"], sampled=True)
         gathered = self.call(self.k("all_gather", WORLD=W, N=V), self.peers.rows(lg)[0])
-        return self.call(self.k("token_select", V=V * W), gathered.refs)
+        return select_token(self.call, self.k, gathered.refs, V * W, self.net.tp, event, pos, policy)
 
     # -- collectives (`collectives.AllReduceRule`, `FusedAllReduceRmsNormRule`)
 

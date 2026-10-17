@@ -38,7 +38,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
 
-from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, kind, served_class
+from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
 from .phi import Phi
 
 BUILDER_ID = "predict-build/derived/v1"
@@ -293,7 +293,6 @@ class _Specs:
             self.moe()
         self.rope_q, self.rope_k = self.kind("rope", NHEADS=C.NH, D=C.D), self.kind("rope", NHEADS=C.KVH, D=C.D)
         self.silu = self.kind(_ACTS[C.act], I=C.I)
-        self.token_select = self.kind("token_select", V=C.V)
         if C.norm_chain:
             self.chain = {r: self.kind(r, N=C.H) for r in ("square_bf16", "square_f32", "mean_triton", "add_widened_bf16", "scale_row_bf16",
                                                            "scale_row_f32", "mul_vec_f32", "narrow_f32_bf16")}
@@ -306,7 +305,6 @@ class _Specs:
             self.cap = [self.kind("bf16_div_scalar", N=C.V, C=C.final_cap), self.kind("bf16_tanh", N=C.V),
                         self.kind("bf16_mul_scalar", N=C.V, C=C.final_cap)]
         self._attn: dict[tuple, Any] = {}
-        self._const: dict[tuple, Any] = {}
 
     def moe(self) -> None:
         """The fused-MoE block's kinds under the target's declared construction (`rules.vllm_moe`): the router GEMM, the top-k
@@ -330,18 +328,6 @@ class _Specs:
         self.expert_up = self.kind("moe_expert_gemm" + sfx, E=C.E, K=C.H, N=2 * C.I, **extra)
         self.expert_down = self.kind("moe_expert_gemm_w" + sfx, E=C.E, K=C.I, N=C.H, **extra)
         self.moe_sum = self.kind("moe_sum", TOPK=C.TOPK, H=C.H)
-
-    def stochastic_select(self, S):
-        """`GumbelTopPTokenSelect[vllm]`'s kind: the select over a derived `splits` operand, or at the single request's constant S."""
-        if S == "derived":
-            return self.kind("token_select_stochastic", V=self.C.V, CONSTRUCTION=self.tp.effective_sampler_construction())
-        return self.kind("token_select_stochastic_split", V=self.C.V, S=int(S))
-
-    def const(self, W: int, BITS: int):
-        key = (W, BITS)
-        if key not in self._const:
-            self._const[key] = self.kind("const", W=W, BITS=BITS)
-        return self._const[key]
 
     kind = staticmethod(kind)
 
@@ -570,35 +556,16 @@ class _Model:
         out = [self.call(fn, Coll(ph[0], r.slice(h * D, (h + 1) * D)), Coll(ph[1], weight.refs)) for r in rows for h in range(heads)]
         return [concat([out[i * heads + h].refs for h in range(heads)]) for i in range(len(rows))]
 
-    def sample(self, hidden_row: Coll, event: int, pos: int, policy: "_Stochastic | None" = None) -> Coll:
-        """The token of sampling event `event` from the logits of `hidden_row` (at position `pos`): greedy `TokenSelect`, or the seeded
-        temperature + top-p select with its per-row constants in operand order (top_p, pos, temperature[, S])."""
+    def sample(self, hidden_row: Coll, event: int, pos: int, policy: _Stochastic | None = None) -> Coll:
+        """The token of sampling event `event` from the logits of `hidden_row` (at position `pos`), gathered across the ranks and
+        soft-capped where the family caps them (`common.select_token`)."""
         S = self.S
         pl = _ptypes(S.logits)
         lg = self.collective(S.all_gather, [self.call(S.logits, Coll(pl[0], hidden_row.refs), Coll(pl[1], self.lm_head.refs))])[0]
         for fn in S.cap if self.C.final_cap is not None else ():
             lg = self.call(fn, Coll(_ptypes(fn)[0], lg.refs))
-        if policy is None:
-            return self.call(S.token_select, Coll(_ptypes(S.token_select)[0], lg.refs))
-        fn = S.stochastic_select(policy.S)
-        pt = _ptypes(fn)
-        top_p = self.call(S.const(32, policy.top_p_bits))
-        pos_c = self.call(S.const(64, int(pos) & 0xFFFFFFFFFFFFFFFF))
-        temp = self.call(S.const(32, policy.temperature_bits))
-        splits = policy.splits.refs.slice(event, event + 1) if policy.S == "derived" else self.call(S.const(32, int(policy.S))).refs
-        return self.call(fn, Coll(pt[0], lg.refs), Coll(pt[1], top_p.refs), Coll(pt[2], policy.seed.refs), Coll(pt[3], pos_c.refs),
-                         Coll(pt[4], temp.refs), Coll(pt[5], splits))
-
-
-@dataclass(frozen=True)
-class _Stochastic:
-    """The row's stochastic policy as the select reads it: the seed (and, for several requests, the `splits`) Inputs, the f32 bits of
-    temperature and top_p, and S: "derived" (an Input entry per event) or the single request's constant split count."""
-    seed: Coll
-    splits: Coll | None
-    S: Any
-    temperature_bits: int
-    top_p_bits: int
+        return select_token(lambda fn, *refs: self.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs))), kind, lg.refs, self.C.V,
+                            S.tp, event, pos, policy)
 
 
 def _check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, str]) -> None:
@@ -616,8 +583,6 @@ def _check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, str]) -> None:
     world = int((phi.tp or {}).get("world", 1))
     if world not in worlds:
         facts.append(f"tensor parallel world {world} ({' and '.join(f'TP{w}' for w in worlds)}, the worlds a Build has traced)")
-    elif world > 1 and s.get("kind", "greedy") != "greedy":
-        facts.append("stochastic sampling under tensor parallelism (the with-peers wrapper takes the prompt and the peers only)")
     if phi.profile != "b1-eager-v3":
         facts.append(f"numerics profile {phi.profile!r}")
     if phi.execution != execution:

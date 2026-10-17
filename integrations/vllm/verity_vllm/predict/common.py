@@ -1,12 +1,14 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
-class, the IR types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), and the
-batch a request's calls run in (`_Launch`)."""
+class, the IR types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
+batch a request's calls run in (`_Launch`) and the token select over a row's whole-vocabulary logits (`select_token`)."""
 
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
+from typing import Any
 
-from verity.ml.circuits.refs import Coll, concat
+from verity.ml.circuits.refs import Coll, Refs, concat
 from verity.ml.circuits.types import Array, Type, Value
 
 
@@ -52,6 +54,32 @@ def _arr_shape(t: Type) -> tuple[int, ...]:
 def _ptypes(spec) -> tuple:
     params, _ = spec.signature()
     return tuple(t for _, t in params)
+
+
+@dataclass(frozen=True)
+class _Stochastic:
+    """The row's stochastic policy as the select reads it: the seed (and, for several requests, the `splits`) Inputs, the f32 bits of
+    temperature and top_p, and S: "derived" (an Input entry per event) or the single request's constant split count."""
+    seed: Coll
+    splits: Coll | None
+    S: Any
+    temperature_bits: int
+    top_p_bits: int
+
+
+def select_token(call, k, logits: Refs, V: int, target, event: int, pos: int, policy: _Stochastic | None) -> Coll:
+    """The token of sampling event `event` from a row's V logits at position `pos` (`call(fn, *refs)` emits, `k(role, **statics)` is
+    the kind): greedy `TokenSelect`, or `GumbelTopPTokenSelect[vllm]` over the derived `splits` entry or at the single request's
+    constant S, its per-row constants in operand order (top_p, pos, temperature[, S])."""
+    if policy is None:
+        return call(k("token_select", V=V), logits)
+    fn = (k("token_select_stochastic", V=V, CONSTRUCTION=target.effective_sampler_construction()) if policy.S == "derived"
+          else k("token_select_stochastic_split", V=V, S=int(policy.S)))
+    top_p = call(k("const", W=32, BITS=policy.top_p_bits))
+    pos_c = call(k("const", W=64, BITS=int(pos) & 0xFFFFFFFFFFFFFFFF))
+    temp = call(k("const", W=32, BITS=policy.temperature_bits))
+    splits = policy.splits.refs.slice(event, event + 1) if policy.S == "derived" else call(k("const", W=32, BITS=int(policy.S))).refs
+    return call(fn, logits, top_p.refs, policy.seed.refs, pos_c.refs, temp.refs, splits)
 
 
 class _Peers:
