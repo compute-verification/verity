@@ -6,6 +6,10 @@
    "owner": "@memory-accounting",
    "digest": "cdd35e79a4b367be9dcb441f6d61dbfe860834b165d39dbe5df28008bccaa821"
   },
+  "Accounting.Assumptions.EncodeChainHardness": {
+   "owner": "@memory-accounting",
+   "digest": "521b5858f17bcf6eb5074568dc0e7f5c1ccb30d3b3855b149bcf083a17593952"
+  },
   "Accounting.Assumptions.KeyBinding": {
    "owner": "@memory-accounting",
    "digest": "55e9c82a339072a3c882023d26f02ec93e38263f0a24d26e97df1c695a8af2d5"
@@ -381,9 +385,6 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
-  },
-  "Accounting.Assumptions.EncodeChainHardness": {
-   "owner": "@memory-accounting"
   }
  },
  "meaning": [
@@ -796,6 +797,14 @@
    "signature": ["Accounting.SecurityProofs.CarrierBits : Accounting.Guarantees.CarrierBits"],
    "assumptions": [],
    "type_hash": "ea4f70e25ce50c4ed37d62528245c1c2801cb1b6060e5831f971206042aa4789"
+  },
+  "Accounting.SecurityProofs.CircuitEncodeHardnessOfChain": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.CircuitEncodeHardnessOfChain : Accounting.Guarantees.CircuitEncodeHardnessOfChain"
+   ],
+   "assumptions": [],
+   "type_hash": "315deb871bc9b3bfa1b83dfe30d5a79ca36605fc5e7153af0aa6437cb470417f"
   },
   "Accounting.SecurityProofs.Colocation": {
    "owner": "@memory-accounting",
@@ -4925,9 +4934,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Accounting.SecurityProofs.CircuitEncodeHardnessOfChain": {
-   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -5857,7 +5863,7 @@
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
   "Definitions.Accounting.Carrier": {
-   "digest": "6508cf583f26320360238dbcfe5b9fd22ff1b9dcc4d3aba7d7138373b8ce1c22",
+   "digest": "5b58d4f4b7eae5d4259dda6f28c0755020d5a0a29d32307027d57e5babbd9b39",
    "definitions": {
     "Accounting.Rate.PIChip.linkBitsEven": "664fdfcc22cb307c84e0dced36156f3512a82bd18bac34e67c7f1b1b3020dca6",
     "Accounting.Rate.PassProvenance": "ee44265e1c690be67eb25e35098885dc2a5c05ae23924c5202dbff4731579ede",
@@ -5887,10 +5893,12 @@
     "Accounting.RateSketch.Provenance.inputs": "6b30c8cf04bfbeceada1175d9d5886cff3f2b3605c1920a3881b4aa8699b083c",
     "Accounting.RateSketch.Provenance.rec": "29ef2b5e0697a74454072abd56c2e61301503db37e36fc206de6f1d1a32233df",
     "Accounting.RateSketch.Provenance.roundings": "9e948d1408b08ccb2fc1a384e2696e7fb98c8e12df2864602ab1d815b6e3cbbc",
-    "Accounting.RateSketch.Provenance.run": "f3927eefe53c708fe975d11873e6d296127a232b98f78b1746368901d89641bf"
+    "Accounting.RateSketch.Provenance.run": "f3927eefe53c708fe975d11873e6d296127a232b98f78b1746368901d89641bf",
+    "Accounting.encodeBitsCost": "bc443378f6371d832c031982979140b85c3cbbf3587daf8dfb5564bfa5f41c2b"
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.CircuitEncodeHardnessOfChain",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
@@ -6022,6 +6030,138 @@
     "Accounting.SecurityProofs.RateOfAuditPartialPasses",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed"
+   ]
+  },
+  "Definitions.Accounting.Gates.Codec": {
+   "digest": "0f1d425bdc25ea555267780215b0ded5b8cedf5f69824f272f605fa11ab4c27e",
+   "definitions": {
+    "Accounting.Gates.CodecInputs": "8d628af280a4f0aacc6ecf45bc6e985422e4416617500c755309b2fc5b4b21f3",
+    "Accounting.Gates.ComputesWords": "afd093216f48466d7613c852f1a9b59a17aa1c229381cd5450dac4f5491eb888",
+    "Accounting.Gates.Draw": "50deda17b9d1bcc6700e615c7ede160095ecbd48c5d560135589790fceb651f8",
+    "Accounting.Gates.Draw.key": "6dad2d133e6707aad372e0cf61b6006820806f2089588c465d798690b2f44db0",
+    "Accounting.Gates.Draw.tweak": "ff514570f3f06d0ff3eeb94803b514d56bd49608dadc6ce1c8546ebbe7fdde74",
+    "Accounting.Gates.Encodes": "dd73a40206014e3b734d0a70a80f42e65046f732bb71e8930f566ca297bf680c",
+    "Accounting.Gates.Field": "0696561576ed1787739a841cb54d8ab9021fd089f23579d7ccb59d60507563d6",
+    "Accounting.Gates.Field.bytes": "0fbe042dd76b28731226e125cb8b5cbf37374ff48bdb6c9625a5c5731661f2e7",
+    "Accounting.Gates.Field.c": "a29e754e40f18e03d4a3f39281867624376aa27203ff0ff46dcfffde85477531",
+    "Accounting.Gates.Field.n": "af1819f039912e5b63629a4360d32ddfbf3cb20124fc8feae794e94b58ea8d5a",
+    "Accounting.Gates.Field.p": "87b68352241b466a1848e386fe375f86236681978616c72cc19027dde3fd8391",
+    "Accounting.Gates.Key": "1208172ccf34d57ca3f9fabd92df3d8d239c7c4a81d184776bb256d9252a2836",
+    "Accounting.Gates.Key.c": "ede382da747dff7b52e659220d9681b35ed6634915a5a71fca79090dc0826f7d",
+    "Accounting.Gates.Key.mask": "16fc2ad8620dcfd05e377c8a41425802a2c79c569bea6089b229dd5a7baf36df",
+    "Accounting.Gates.Restricted": "c256ac49bdca45cbbec26d4a2ad5728f0cacf770dc1d0fc04f6d23cd5c889b0c",
+    "Accounting.Gates.Slot": "1a8d2ecdadc9d860b0cd67cf15fa153407ea324e7e8d3e3f5617c9383bc97b63",
+    "Accounting.Gates.Slot.casesOn": "b9d4ec3af87cbb4d7519b1e864ef1e2f035a21cebaaf870e0d17e4d83864809a",
+    "Accounting.Gates.Slot.const": "cffff9617a66e87a16d047c0a63c69e65da0871a077010af358ec0a0e3168245",
+    "Accounting.Gates.Slot.mask": "d86e54886bc48abf29587b52d8d323066f5db204325ff5d4cfd822db94798d46",
+    "Accounting.Gates.Slot.payload": "541f290e838b5070bed7ca1ee8a4a9a82a031846a22d6bb1b03486d7ec80b21f",
+    "Accounting.Gates.Slot.rec": "d53d37c187d37ea8675df69de89e3c4bcbf68dac4d983d0363db5877976c9376",
+    "Accounting.Gates.Slot.tweak": "51f81d95c3abd5b6489b94e40da3662885d5b8c359b804eb6711f6d9e31f2eb0",
+    "Accounting.Gates.Slot.value": "de1383909404be14f80478e8328211ab9adc36938f3b816ceb570e9c146f369a",
+    "Accounting.Gates.byte": "b0f7db41b980d006780ca44a0e30f7a47c2c4b99f40cbcc44310be453bc4e4cf",
+    "Accounting.Gates.draws": "05e2b2d92f4dc4e0ad5172eab703b7ad8afd60ebe362cd9ac4f2dde8fb340e1f",
+    "Accounting.Gates.encodeCost": "51aaeca75b004029f2acab872f0a79b8efb84882e7429c52df5d300d9556ea52",
+    "Accounting.Gates.encodeCosts": "146d759ee60fd96df7b9a689cdf4f2d55bb729d27a3b51185ede952773f0e233",
+    "Accounting.Gates.encodeWord": "554d51815728fecb57794d50b9fa8e5af60363cefaa851eb9b4bf664a685222d",
+    "Accounting.Gates.lessParity": "31e8614acb1229ac42def0795071f4ba897d3a8e60746ca526ff33e13bcb305b",
+    "Accounting.Gates.p1024": "ae4ba7853892f72e67a166ceb12a244157183475c3ec20d602d6e4d79c9ec8ca",
+    "Accounting.Gates.rho": "ef65a85f7c61cfd841f11e14a7b06ecb13fd990b89a3e63f1206f51d7ed0126b",
+    "Accounting.Gates.sigma": "1fa89715a668bb55c59206af4defc0f120b6544b444645c7cc756b3364163d38"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.CircuitEncodeHardnessOfChain",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
+   ]
+  },
+  "Definitions.Accounting.Gates.Model": {
+   "digest": "f8b7a0c6eebf793205de215e5fed058edaf2de4a4f5fbdceab428fbc6786ca49",
+   "definitions": {
+    "Accounting.Gates.Binding": "6c7fc5128f87384bdf6133dddae02d0cffcbe3c6b292376b40994432d609393c",
+    "Accounting.Gates.Binding.casesOn": "d9b8cbbb0de7aef4fcd6d80775a2f3be3fc7bdd3fd42e3f9dc5212bc18dfc0e0",
+    "Accounting.Gates.Binding.ctorIdx": "a9d324073684bce1ab8d64ad6de0f5ff34a9cb115a351fff4c5004788594c72c",
+    "Accounting.Gates.Binding.rec": "54b16700ba7645f3661b373fd92152930cc6dbc62a12a8fbf421cdbfb567fdbe",
+    "Accounting.Gates.Binding.registered": "10b89fecd20b63e7c9cff2b3ceacf7b1fa3711bb0a9f3545a8a5d1562c548cb2",
+    "Accounting.Gates.Binding.run": "524a4a3f0458d99b91c29342d620162df869a70f5cb64e2e6828fa0d7471be9a",
+    "Accounting.Gates.Budget": "5ed25d54a2404018efc831d83067a4cfb87ded1cb277b367b0ec83308266a0bf",
+    "Accounting.Gates.Budget.compareSelect": "ede77fcaf41c7265e98c1758632d1f488141276ad1d409387ba16d85b672af8f",
+    "Accounting.Gates.Budget.gather": "49c5d9c5af8ed8ba6621034020c494fbfadc0380c4652ae34031f284b487d701",
+    "Accounting.Gates.Budget.product": "7c910b8c39a74a54d921587413edc56dcb2c5885a9d6409a359cd941338a2c4e",
+    "Accounting.Gates.Budget.rounding": "f73354f2aef603e9f1794323a0d5ea196714059020beb1f90e3864b12b8155c7",
+    "Accounting.Gates.Circuit": "bd676278d25ea45c73d75faadb5af3ceec9441c7642089b3fb66878f42f1fcb0",
+    "Accounting.Gates.FanIn": "e02f130cb9cf53df123d69c1bffe3eb639b5a9d8143d8ee0e9d53f73e85f711f",
+    "Accounting.Gates.Gate": "4fee28b23f5f4784a34289603ef0f74e973d56151282cf37ac871e5864f944b9",
+    "Accounting.Gates.Gate.Ok": "4518b2180dbb9a84fe07e9cacdd0ae7e53ac452937853658668797cf96cac973",
+    "Accounting.Gates.Gate.args": "c2b7aac8e94fc2bf4cda5057039ccdc07cd95ca35ed9019ddbe29e509ab3865e",
+    "Accounting.Gates.Gate.bits": "9bd7d7b28f22f0ec4a3220c0de049ba766906da3efaf2213ed0f38bb690ebce6",
+    "Accounting.Gates.Gate.derive": "11f670cf47657abf125b7ed338316772ec6bbfd26da475161d9ab8d3ba75bc22",
+    "Accounting.Gates.Gate.hi": "98a1a62e76e0723e682b8405233c130f0df4ed36dbe2d9955ca0236aba2a0589",
+    "Accounting.Gates.Gate.lo": "aca2bca0fcdcf1cdeedb99183570fffe7dd02d40f18eff3d784ee64b8611327e",
+    "Accounting.Gates.Gate.op": "5ef5d1f2d1acfe2e40b59d1ce97701299a0b7268c6f5ed07c1a437fc1513b909",
+    "Accounting.Gates.Gate.operands": "9101cfdcfc9a928a8b615ea434dee5ebf5dcba9a33fcde9d046611606dedbd87",
+    "Accounting.Gates.Gate.raw": "1925505af8994a3086c69c2dd7cca22134444f4c591830db4c7ab4867b7305e2",
+    "Accounting.Gates.Gate.size": "1cbff01a190ac6f9b88955755d3fa3f438766724901a0edb289b4d2a3614d1f0",
+    "Accounting.Gates.Gate.value": "88afa9e6c222d6b06d06e2bd552a70114bec8e9d430f3c01bc7cd3e1c57cca93",
+    "Accounting.Gates.InWindow": "a2d4973f08d3b3b71d6cbc2703113f79375c28e2816105a418a6337e45bc2f64",
+    "Accounting.Gates.Int8Fmt": "8bcd44067e7e334cb23ca7790ce39d69261bfc670884808240126d87a46b5f41",
+    "Accounting.Gates.Int8Fmt.casesOn": "193e839fc9961fdd84e1d4130dbedd299e1c58244a1fae45663f164680117a23",
+    "Accounting.Gates.Int8Fmt.hi": "8fecc32a980bcfe34a3008e37dd395ef85c96db7ed43553129dbfb899326adbb",
+    "Accounting.Gates.Int8Fmt.lo": "133a3c1a16d05d4833434cfd09da3236ac12621ab6ced150939b0fde392f7501",
+    "Accounting.Gates.Int8Fmt.rec": "a8407ea764e169925ec7d6691f994b45b3faf7f10be7ec67d80222eca794952d",
+    "Accounting.Gates.Int8Fmt.s8": "d8fb50d18f31ec226e135e55fb361e9b05ee9e457e15ece2d0d6b16610449e52",
+    "Accounting.Gates.Int8Fmt.u8": "4e46547354831b49eb32f927ccf8681c8ae2980a32fae492b3370d33be79a72a",
+    "Accounting.Gates.Iv": "2fafc85e2ab9137a99247881ef5766d0b37202b68043fde64c869e344939d380",
+    "Accounting.Gates.Iv.Within": "58bca08c3ddb6ba4b88243672c95b9de7b0e0291e9d46e7b5090c5f3d9d6ab54",
+    "Accounting.Gates.Iv.add": "1457a4743d375b42f9c79ed52d64e46715c3ce0ffacbf1623728a9c5b8553da7",
+    "Accounting.Gates.Iv.mul": "5d980465c1ec1e2fc695b1ccce298d44b087681a59b293a706dabbe81920f6df",
+    "Accounting.Gates.Iv.scale": "990f80f6260468d78182dfe89a252e82effea4463e2c2eeec14964d842f4316d",
+    "Accounting.Gates.MoreThan": "0e376806784efe89e621a085af907ef1e650a4c1b59f2bbec3f1a619d6e67990",
+    "Accounting.Gates.Op": "2dff76dcf04a939652958421053c1605aa6fbfd6e1e785ccf8eb162a18b0008e",
+    "Accounting.Gates.Op.IsDerived": "05ccca71708a99f8ee98580744f937d6cebe6edb953677eadad42a2c0267d207",
+    "Accounting.Gates.Op.IsDerived._sparseCasesOn_1": "50315d45a70ad76076705ab70368a05060b199ac878d6e585e05a05135e3d9dc",
+    "Accounting.Gates.Op.IsMma": "12d520df5d40222ff3f610339b1ce1c8d2245991d3567c4e82820eccaebe862b",
+    "Accounting.Gates.Op.OperandsOk": "b4344017de30e043bd9630174763634f1e43340b15972db0bc5c003895f3ddb0",
+    "Accounting.Gates.Op.affine": "c67b42f21c7ca346f8fdcec9598498e185851d8c6fd298a889369f7c321e8f3a",
+    "Accounting.Gates.Op.budget": "d2b235ec3bb88deda7a938d167e14c66409c3575547afcab45defa0cb1be550b",
+    "Accounting.Gates.Op.budget._sparseCasesOn_1": "5a04982db2df03961401beac7e4f89fb826df62499b2657844ea36809e2d8c92",
+    "Accounting.Gates.Op.budgeted": "3e906b5871a33f598415f1df261d8991eef00ff0b008aad64b57873e17cfb87c",
+    "Accounting.Gates.Op.casesOn": "d8434a367d78276b46a95aee05a5dee00b1ec5f1100eb8b91accd71cb43f3f86",
+    "Accounting.Gates.Op.charged": "1bdc76db6e65fde593abd4d2e915a7265fb32abc5f87e11d46e45170baf0e7be",
+    "Accounting.Gates.Op.charged._sparseCasesOn_1": "48ccad9e5a34dcd9924a306397777a0d928daf5f9738ecc628eddfbea55e63d9",
+    "Accounting.Gates.Op.charged._sparseCasesOn_2": "1974cf15a12d3fa754d5e11c1a613937b98dfecd6a1a155fe83a287bbd357e69",
+    "Accounting.Gates.Op.const": "f653ab1e166a3601acfe4de378db68ceb1cd0d5ff0c1cf8396a5af3a03e293fa",
+    "Accounting.Gates.Op.ctorIdx": "950613e2e50f9065233e39cc458f4d94fb7b72d147ff4b6efb5274bc6af99094",
+    "Accounting.Gates.Op.gather": "00c028004264fcd17c37d1a93d0076c92bf9f67c9509b0b761ec382be2f8dd41",
+    "Accounting.Gates.Op.input": "f34d873e2f4cd561d1ffd72deee133639d3c904ec7feef50c82844ecd0743e00",
+    "Accounting.Gates.Op.mma": "bcd4c00b985dd52adf11ae20b15991a32bb73d35af2b9e09d3449ed85e5b8a2f",
+    "Accounting.Gates.Op.out": "5e04e00e0b39059f63ac9046ec5af5dab7b05a55a3e6de0fde39f76a02575c2e",
+    "Accounting.Gates.Op.out._sparseCasesOn_1": "21a1da09def905b25c1bd74ecc7a04718ae222601c2bb9f9d8595a0a9a85c02b",
+    "Accounting.Gates.Op.raw": "bfc612d087a3c4b1d6c491c538f53ea2647f68c32f347bd4db5753a1d1c5d3c1",
+    "Accounting.Gates.Op.rec": "86d96596f4ac7c90e53679fdcba180da5605c3fd63ee33f0506f7cc4ea0bf04b",
+    "Accounting.Gates.Proven": "4a6f76887a0599adeeeab2c24aa549e5d5daec022ef16d2e4b7a9bcf88dc89d0",
+    "Accounting.Gates.Width": "d407695e11857a45921fc72a9a0d29c841cc3111699e904524310b245af7e10f",
+    "Accounting.Gates.budgeted": "e78de9f69e0dd8b55cfba23fda9dbb093e91ff867463dc2c22d7058b526360fc",
+    "Accounting.Gates.census._sparseCasesOn_4": "f5a056e0b97e181796cee0c87041d9e5e01d689432c5ecfc42f17b454a40c3cc",
+    "Accounting.Gates.census.match_4": "14315ef260c48aa869a4c61ed1b7735c33662a9d1f9c03b6faaf51d163db47aa",
+    "Accounting.Gates.clampS32": "a9e8cefc19985df52cd8f4ddb16087d5179aa73d3f0558ce886e5b6d0efe1014",
+    "Accounting.Gates.dot": "1764b5c5afccea94afaeff460e869e02f600874ea2229f8cffd857125e341bfb",
+    "Accounting.Gates.instReprInt8Fmt.repr.match_1": "27b187bac098a49a6690f49a6e16e36a222794d0eeb13b8fbb7e3c49a36e4193",
+    "Accounting.Gates.intervals": "44efb866bf6ea70cd79f36abfa693b404401c58bec0bb4f145988a23529065b7",
+    "Accounting.Gates.run": "b7805a6fd6083d1e57d5115670c7d8855e65918e5926e720a88281aee58ed530",
+    "Accounting.Gates.runBits": "f8329921bc0e0feb0fe6eaae10833e94296d5e69fb39fad620da1d992ebbd198",
+    "Accounting.Gates.s32Max": "727421d80050be3308e1178902145012bbd03c32195c51f29f54f87d4b03add9",
+    "Accounting.Gates.s32Min": "c28e17104c9c9d73409970ab20be2cc9df08f6359d805b74a0a564a25a6439c2",
+    "Accounting.Gates.val": "dc26e4861dc49904e7c331f8f9a8d870b8aa2ece4234d1caab0da985a3f6f139",
+    "Accounting.Gates.wrapS32": "c2b80b5f88ef1f826eadce16b5aa10d1c1b8a090ecd6b15863701843163ab56f"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.CircuitEncodeHardnessOfChain",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.Joint": {
@@ -16924,6 +17064,13 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
+  "Models.Accounting.Assumptions.EncodeChain": {
+   "digest": "16b3884d9c1be2d11148c42ca2e854a743623898556c067b433d6249365a129e",
+   "definitions": {
+    "Accounting.Assumptions.EncodeChainHardness": "521b5858f17bcf6eb5074568dc0e7f5c1ccb30d3b3855b149bcf083a17593952"
+   },
+   "guarantees": ["Accounting.SecurityProofs.CircuitEncodeHardnessOfChain"]
+  },
   "Models.Accounting.Assumptions.PouwFloor": {
    "digest": "4f9b562c931e2da9c956607655fcd71f416e3789589c2c2a40b16527b84a2885",
    "definitions": {
@@ -16994,6 +17141,7 @@
     "Accounting.Assumptions.KeyBinding": "55e9c82a339072a3c882023d26f02ec93e38263f0a24d26e97df1c695a8af2d5"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.CircuitEncodeHardnessOfChain",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
@@ -17449,16 +17597,18 @@
    ]
   },
   "Models.Accounting.Guarantees.Stacking": {
-   "digest": "d3f3c94ab05f8ac05f13c670e4658251e94f35fc8674e9e697638d3f6a36964d",
+   "digest": "73d12a8d9761aa9d551a1cb24a959b0489ff3a9c53d471af6d86b35963089032",
    "definitions": {
     "Accounting.Guarantees.CarrierBits": "20428995c2321369af63229df03218efa0f480d915fc3d6b52a08f798f159c97",
-    "Accounting.Guarantees.StackedRequirementRelay": "9a320eb4114f29421f93c2015684f2fed5966a4b2521169791a0f9cf0c18a818",
-    "Accounting.Guarantees.StackedRequirementSketchDeployed": "4efbad1296c5e5dca654726e90f38016c731f998a4a47a0d9ffcc8a3af99761c",
-    "Accounting.Guarantees.StackedSessionConservationRelay": "96639ff0f04d27752b914df1d70e416b8f8926d7ae7163a5835c15c1b0ff4038",
-    "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "4b65b04a019a8435296841f9905b49718675faf03620e5a925a59890b946d4ca"
+    "Accounting.Guarantees.CircuitEncodeHardnessOfChain": "8e5ac47dcf44c06c2785a50d75c5c5bf58e0870a78e3a60a91fb74fa6879829c",
+    "Accounting.Guarantees.StackedRequirementRelay": "038081b5c9cf256d5bc1c88d2065eb362e9fe3ce6a1bec1e3dd6375d8e597fae",
+    "Accounting.Guarantees.StackedRequirementSketchDeployed": "c4b09a50f556bfca1dd956ab9d64b5147b1b7143ff689e96f0be0af626a98f00",
+    "Accounting.Guarantees.StackedSessionConservationRelay": "289e6eeff66ac5f6b4ef4d6be122bbce47341849d41c9c7131bc5a5862c34de2",
+    "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "cebfe000f6bf899755d12aa4c0d06bda566e105e40b66030919532dce8e9c362"
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.CircuitEncodeHardnessOfChain",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
