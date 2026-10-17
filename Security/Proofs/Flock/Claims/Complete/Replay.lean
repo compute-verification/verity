@@ -9,6 +9,7 @@ import Proofs.Flock.Claims.Complete.Replay.Satisfies
 import Proofs.Flock.Claims.Complete.Replay.Ligerito
 import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+import Proofs.Flock.Claims.Complete.Replay.Walk
 import Proofs.Flock.Claims.Complete.Replay.LigeritoModel
 import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
 import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
@@ -37,7 +38,9 @@ circuit the halved fold with `β` at the pin, `folded_ok`, the start `α·v_A + 
 `lcAlgebra`, so `Lincheck` holds without it, `lincheck_relation`; `RingSwitchAlgebra`: the ring switch's algebra there
 from `RelS`, every claim's value the witness's extension at its point, lincheck's `w`, `Lc.ab_eval`, zerocheck's
 `P_c(ζ)`, `Zc.c_claim_eval`, and the extra claims at link points of `m_pts` coordinates, `Region.regionClaim_holds`,
-`rsAlgebra`, so `RingSwitch` holds without it, `ringSwitch_relation`), and Ligerito (`LigeritoModel`: the verifier's
+`rsAlgebra`, so `RingSwitch` holds without it, `ringSwitch_relation`; `Walk`: the statement's circuit fold returns at
+every rep, `Run.fold_ok`, so the three goals hold there from the session walk alone, `ZcAt`, `LcWalk` and `RsAt`,
+`replay_goals`), and Ligerito (`LigeritoModel`: the verifier's
 steps on rounds that carry a model's coins, `Runs`, composing by `Runs.bind` and `Runs.loop`; `LigeritoRun`: the
 verifier's Ligerito in closed form, `out`, and its return on the model's rounds given the Merkle openings and the final
 identity, `ligeritoWith_of`; `LigeritoGoal`: the skeleton's `Ligerito` at the rep's coins and decoded sizes, given the
