@@ -4,10 +4,12 @@ import Proofs.Flock.Soundness.Merkle
 # Zero knowledge: the verifier's coin commitment is binding (T6)
 
 The one computational step of the public-circuit zero-knowledge proof (`docs/zk-proof-public.md` in the Project store, §4.1
-T6). The verifier commits to every coin of a session with `coin-tree/hm96-sha512/v1` (`backends/flock/live/src/coin_tree.rs`,
-C-Flock ZK): per (stream, round), a block of coins is chained, `T_i = H(CHAIN ‖ c_i ‖ T_{i+1})`; the round's digest is
-`x = H(ROUND ‖ stream ‖ round ‖ T_0)`; the leaf is the hm96 leaf of `x` under a salt, `H(lp ‖ b ‖ c)` with `b = mix(x, y)`
-and `c = H(sp ‖ y)`; the leaves sit in one SHA-512 tree. An opening of `n` coins is the coins, `T_n`, the salt and the path.
+T6). The verifier commits to every coin of a session with a coin tree (`verity/ml/flock/live/src/coin_tree.rs`, C-Flock
+ZK), today the keyed `coin-tree/hm96-sha512/v2`: v1's tree with every hash under the session's nonce
+(`coin_opening_binding_keyed`). This file's model is v1's: per (stream, round), a block of coins is chained,
+`T_i = H(CHAIN ‖ c_i ‖ T_{i+1})`; the round's digest is `x = H(ROUND ‖ stream ‖ round ‖ T_0)`; the leaf is the hm96 leaf
+of `x` under a salt, `H(lp ‖ b ‖ c)` with `b = mix(x, y)` and `c = H(sp ‖ y)`; the leaves sit in one SHA-512 tree. An
+opening of `n` coins is the coins, `T_n`, the salt and the path.
 
 `coin_opening_binding`: if two openings of one (stream, round) position with the same number of coins both reach the root
 and disagree on a coin, then `H` has a collision. The conclusion is the proposition `Collision H`, that a collision exists.

@@ -3367,9 +3367,10 @@ fn skipped(st: &Stmt, name: &str) -> bool {
     let multi_block = st.c.ports.iter().any(|p| p.comps > 1);
     let cut = st.c.wires.iter().any(|w| w.dst.0 != st.c.sha_net && w.dst.0 != st.c.hm_net)
         || st.c.typed.as_ref().is_some_and(|t| t.inst.bind.iter().any(|b| !b.is_empty()));
-    // a tail with no positive constant to forge (GEMM's: the zero accumulator and the cast) forges to itself: nothing to swap
-    let forged_same = std::fs::read_to_string(arg("--forged", "circuit-forged.txt"))
-        .map(|f| f == std::fs::read_to_string(arg("--circuit", "")).unwrap_or_default()).unwrap_or(true);
+    // a tail with no positive constant to forge (GEMM's: the zero accumulator and the cast) forges to itself: nothing to swap.
+    // A forged file that can't be read is no reason to skip: the case fails, naming it (`forged_missing`)
+    let forged = std::fs::read_to_string(arg("--forged", "circuit-forged.txt")).ok();
+    let forged_same = forged.as_ref().is_some_and(|f| *f == std::fs::read_to_string(arg("--circuit", "")).unwrap_or_default());
     (name == "chaining_value_forged" && !multi_block)
         || (name == "row_fill_bit_set" && !st.c.ports.iter().any(|p| p.v2 && p.bits % 8 != 0))
         || (name == "row_padding_bit_forged_beside_its_bytes" && !st.c.ports.iter().any(|p| p.v2 && p.bytes() % 128 != 0))
@@ -3377,8 +3378,17 @@ fn skipped(st: &Stmt, name: &str) -> bool {
         || (is_zk(st) && NOT_ZK.contains(&name))
         || (!is_zk(st) && name.starts_with("zk_"))
         || (forged_same && ["tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
-        || (name == "tail_swapped" && st.c.typed.is_some() && forged_instance(st).is_none())
+        || (name == "tail_swapped" && st.c.typed.is_some() && forged.is_some() && forged_instance(st).is_none())
         || (name == "public_input_claim_false" && st.c.public_inputs.is_empty())
+}
+
+/// A case that swaps the tail (`tail_swapped`, `tail_swapped_circuit_refused`) on a statement it isn't skipped on, when the
+/// forged circuit can't be read: the reason its record fails with, in place of a skip that would hide an unstaged forgery.
+fn forged_missing(name: &str) -> Option<String> {
+    let path = arg("--forged", "circuit-forged.txt");
+    (["tail_swapped", "tail_swapped_circuit_refused"].contains(&name) && std::fs::metadata(&path).is_err()).then(|| {
+        format!("no forged circuit at {path}: stage circuit-forged.txt beside the circuit (`verity_flock.circuit.stage`) and pass --forged")
+    })
 }
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
@@ -4388,14 +4398,21 @@ fn relabel(text: &str) -> String {
 
 fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     let only = arg("--only", "");
+    let missing = |name: &str| forged_missing(name).map(|why| json!({"case": name, "gpu": gpu, "accepted": false, "pass": false, "why": why}));
     if !only.is_empty() {
-        println!("NEG\t{}", run_case(st, inst, &only, gpu));
+        println!("NEG\t{}", missing(&only).unwrap_or_else(|| run_case(st, inst, &only, gpu)));
         return;
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
         if skipped(st, name) || (name == "row_ref_claim_false" && !inst.tables.as_ref().is_some_and(|t| t.counts[..st.c.n_in].iter().any(|&r| r > 1)))
             || (["gpu_proofs_match_cpu", "gpu_paths_agree", "verify_ahead_matches_serial"].contains(&name) && !gpu) {
+            println!("SKIP\t{}", json!({"case": name}));
+            continue;
+        }
+        if let Some(v) = missing(name) {
+            all = false;
+            println!("NEG\t{v}");
             continue;
         }
         let v = if gpu {

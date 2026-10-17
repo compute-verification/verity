@@ -18,6 +18,17 @@
 // the same bytes. Partial tiles meet in D by integer red.add, exact in any order; D must start at zero, so each CTA also
 // zeroes its share of the next linear's output (Z, zn ints, a multiple of 4).
 constexpr int FLIN_BN = 128;
+// FLIN_FIT: tiles whose GEMM-only CTA (FW = 0) fits beside one pump block on its SM, so a co-scheduled pump never holds a
+// linear off (flin_cfg): ≤ 41 KB of shared memory, and registers by SMSP, since each SMSP's file is 16 K and the pump's
+// two warps there hold 8 K. A 5-warp CTA puts two warps on one SMSP, so ≤ 128 a thread (launch bounds of 4 blocks: 102).
+// M 128 at BN 128 would need 9 warps, three on one SMSP at ≤ 85, which its accumulators (64 a thread) don't leave
+// (r20261017-083215-99e0), so it runs BN 64 tiles on 2 x 2 consumer warps, each warp the M 64 tile's 32 x 64 (the same
+// tiled W: a 64-row tile is half of a 128-row one). FLIN_FIT=2 takes M 32 in four half stages. M > 128 keeps its tile.
+#ifdef FLIN_FIT
+#define FLIN_MINB(CW) ((CW) <= 4 ? 4 : 2)
+#else
+#define FLIN_MINB(CW) 1
+#endif
 
 __device__ __forceinline__ uint32_t sa(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
 __device__ __forceinline__ void mb_init(uint64_t* b, unsigned n) {
@@ -319,11 +330,11 @@ struct FlinArgs {
   int stop;  // > 0: the filler warps start no step once consumer warp 0 has `stop` or fewer of the CTA's units left
 };
 
-template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
-__global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const FlinArgs a) {
-  constexpr int BN = FLIN_BN, CW = CWN * CWM, FM = BN / CWN / 16, TN = M / CWM / 8, KC = BK / 32;
+template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC, int BN = FLIN_BN>
+__global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB(CWN * CWM) : 1) flin_k(const FlinArgs a) {
+  constexpr int CW = CWN * CWM, FM = BN / CWN / 16, TN = M / CWM / 8, KC = BK / 32;
   constexpr int WB = BN * BK, XB = M * BK, SB = WB + XB;
-  static_assert(FM >= 1 && TN >= 1 && KC % 2 == 0, "flin tile shape");
+  static_assert(FM >= 1 && TN >= 1 && KC % 2 == 0 && FLIN_BN % BN == 0 && BN % 16 == 0, "flin tile shape");
   extern __shared__ __align__(128) uint8_t sm[];
   uint64_t* full = reinterpret_cast<uint64_t*>(sm + ST * SB);
   uint64_t* empty = full + ST;
@@ -332,6 +343,10 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
   const int warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
   const int KB = a.K / BK, U = a.N / BN * KB;
   const int u0 = (int)((long long)blockIdx.x * U / gridDim.x), u1 = (int)((long long)(blockIdx.x + 1) * U / gridDim.x);
+  // W is tiled at FLIN_BN (repack_w), whose 16-row groups are contiguous, so a BN-row tile is a run of one of its tiles
+  auto wtile = [&](int nt, int kb) {
+    return a.W + ((size_t)(nt * BN / FLIN_BN) * KB + kb) * (FLIN_BN * BK) + (size_t)(nt * BN % FLIN_BN) * BK;
+  };
   if (threadIdx.x == 0) {
     for (int s = 0; s < ST; s++) {
       mb_init(&full[s], 1);
@@ -339,6 +354,9 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
     }
     flag[0] = flag[1] = flag[2] = 0;
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
+#if PF_YIELD && PF_YIELD_EARLY
+    atomicAdd(pf_mark(), CW);  // each consumer warp clears its own after its flush
+#endif
   }
   __syncthreads();
   // Launched with programmatic stream serialization, the next linear's CTA takes this SM as soon as this one leaves it:
@@ -353,7 +371,7 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
       for (int i = 0; i < pre; i++) {
         const int u = u0 + i;
         mb_expect(&full[i], SB);
-        bulk_g2s(sm + i * SB, a.W + ((size_t)(u / KB) * KB + u % KB) * WB, WB, &full[i], pw);
+        bulk_g2s(sm + i * SB, wtile(u / KB, u % KB), WB, &full[i], pw);
       }
       asm volatile("griddepcontrol.wait;" ::: "memory");
       for (int i = 0; i < pre; i++) bulk_g2s(sm + i * SB + WB, a.X + (size_t)((u0 + i) % KB) * XB, XB, &full[i], px);
@@ -363,7 +381,7 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
         }
         mb_expect(&full[s], SB);
         const int nt = u / KB, kb = u % KB;
-        bulk_g2s(sm + s * SB, a.W + ((size_t)nt * KB + kb) * WB, WB, &full[s], pw);
+        bulk_g2s(sm + s * SB, wtile(nt, kb), WB, &full[s], pw);
         bulk_g2s(sm + s * SB + WB, a.X + (size_t)kb * XB, XB, &full[s], px);
       }
     }
@@ -379,6 +397,13 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
   // consumer
   const int wn = warp % CWN, wm = warp / CWN, g = lane >> 2, t = lane & 3;
   asm volatile("griddepcontrol.wait;" ::: "memory");
+#if PF_YIELD
+  int* busy = nullptr;
+  if (lane == 0) {
+    busy = pf_mark();
+    if (!PF_YIELD_EARLY) atomicAdd(busy, 1);
+  }
+#endif
   {
     const long long n4 = a.zn / 4, z0 = (long long)blockIdx.x * n4 / gridDim.x, z1 = (long long)(blockIdx.x + 1) * n4 / gridDim.x;
     int4* z = reinterpret_cast<int4*>(a.Z);
@@ -447,6 +472,9 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
   flush(nt);
   __syncwarp();
   if (lane == 0) atomicAdd(&flag[0], 1);
+#if PF_YIELD
+  if (lane == 0) atomicSub(busy, 1);
+#endif
 }
 
 // ---------------------------------------------------------------- attention blocks with filler warps
@@ -569,28 +597,37 @@ __global__ void count_nz(const int* __restrict__ p, size_t n, unsigned long long
 
 // ---------------------------------------------------------------- host side
 struct FlinCfg {
-  int BK, ST, CW;
+  int BK, ST, CW, BN = FLIN_BN;
 };
 static bool flin_m_ok(int M) { return M == 32 || M == 64 || M == 128 || M == 160 || M == 192 || M == 256; }
 // the flin tile height a batch of B rows runs at (its rows past B are computed and ignored)
 static int flin_m_for(int B) { return B <= 32 ? 32 : B <= 64 ? 64 : B <= 128 ? 128 : B <= 160 ? 160 : B <= 192 ? 192 : 256; }
 static FlinCfg flin_cfg(int M) {
+#ifdef FLIN_FIT
+  if (M == 32) return FLIN_FIT == 2 ? FlinCfg{64, 4, 4} : FlinCfg{128, 2, 4};
+  if (M == 64) return {64, 3, 4};
+  if (M == 128) return {64, 3, 4, 64};
+#endif
   if (M == 32 || M == 64) return {128, 4, 4};
   if (M == 128) return {128, 3, 8};
   return {64, 4, 8};
 }
 static int flin_smem(int M) {
   const FlinCfg c = flin_cfg(M);
-  return c.ST * (FLIN_BN + M) * c.BK + 2 * c.ST * 8 + 16;
+  return c.ST * (c.BN + M) * c.BK + 2 * c.ST * 8 + 16;
 }
 static bool g_pdl = true;  // FLIN_PDL=0 launches each linear only after the previous grid has finished
 static int g_flin_stop = 0;  // FLIN_STOP: Flin.stop (a pfill build's filler warps start no step with that few units left)
 static int g_flin_lm = 0;    // FLIN_LM=1: fstep's lm_head through flin (Flin.lm) when any linear is
-template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
+template <int M, int BK, int ST, int CWN, int CWM, int BN, int FW, int NC>
 static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
   static bool attr = false;
   if (!attr) {
-    CK(cudaFuncSetAttribute(flin_k<M, BK, ST, CWN, CWM, FW, NC>, cudaFuncAttributeMaxDynamicSharedMemorySize, flin_smem(M)));
+    CK(cudaFuncSetAttribute(flin_k<M, BK, ST, CWN, CWM, FW, NC, BN>, cudaFuncAttributeMaxDynamicSharedMemorySize, flin_smem(M)));
+#ifdef FLIN_FIT
+    CK(cudaFuncSetAttribute(flin_k<M, BK, ST, CWN, CWM, FW, NC, BN>, cudaFuncAttributePreferredSharedMemoryCarveout,
+                            cudaSharedmemCarveoutMaxShared));
+#endif
     attr = true;
   }
   cudaLaunchConfig_t cfg = {};
@@ -603,49 +640,49 @@ static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
   at[0].val.programmaticStreamSerializationAllowed = 1;
   cfg.attrs = at;
   cfg.numAttrs = g_pdl ? 1 : 0;
-  CK(cudaLaunchKernelEx(&cfg, flin_k<M, BK, ST, CWN, CWM, FW, NC>, a));
+  CK(cudaLaunchKernelEx(&cfg, flin_k<M, BK, ST, CWN, CWM, FW, NC, BN>, a));
 }
 // the (FW, NC) pairs built for each M: FW = 0 is the GEMM alone. FLIN_PUMP_ONLY (fscore.cu's FSCORE_PUMP_ONLY) builds
 // FW = 0 alone and no attention filler warps (fatt_with), so a pump-only arm's fscore holds no clone of dfill_k_warp
 // for the scorer to read as its filler.
-template <int M, int BK, int ST, int CWN, int CWM>
+template <int M, int BK, int ST, int CWN, int CWM, int BN = FLIN_BN>
 static bool flin_fw(const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st) {
   const int k = FW == 0 ? 0 : FW * 10 + NC;
-  if (k == 0) { flin_go<M, BK, ST, CWN, CWM, 0, 2>(a, grid, st); return true; }
+  if (k == 0) { flin_go<M, BK, ST, CWN, CWM, BN, 0, 2>(a, grid, st); return true; }
 #ifndef FLIN_PUMP_ONLY
   if constexpr (M == 32) {
-    if (k == 114) { flin_go<M, BK, ST, CWN, CWM, 11, 4>(a, grid, st); return true; }
+    if (k == 114) { flin_go<M, BK, ST, CWN, CWM, BN, 11, 4>(a, grid, st); return true; }
   }
   if constexpr (M <= 128) {
     switch (k) {
-      case 14: flin_go<M, BK, ST, CWN, CWM, 1, 4>(a, grid, st); return true;
-      case 24: flin_go<M, BK, ST, CWN, CWM, 2, 4>(a, grid, st); return true;
+      case 14: flin_go<M, BK, ST, CWN, CWM, BN, 1, 4>(a, grid, st); return true;
+      case 24: flin_go<M, BK, ST, CWN, CWM, BN, 2, 4>(a, grid, st); return true;
     }
   }
   if constexpr (M <= 64) {
     switch (k) {
-      case 42: flin_go<M, BK, ST, CWN, CWM, 4, 2>(a, grid, st); return true;
-      case 44: flin_go<M, BK, ST, CWN, CWM, 4, 4>(a, grid, st); return true;
-      case 82: flin_go<M, BK, ST, CWN, CWM, 8, 2>(a, grid, st); return true;
-      case 84: flin_go<M, BK, ST, CWN, CWM, 8, 4>(a, grid, st); return true;
+      case 42: flin_go<M, BK, ST, CWN, CWM, BN, 4, 2>(a, grid, st); return true;
+      case 44: flin_go<M, BK, ST, CWN, CWM, BN, 4, 4>(a, grid, st); return true;
+      case 82: flin_go<M, BK, ST, CWN, CWM, BN, 8, 2>(a, grid, st); return true;
+      case 84: flin_go<M, BK, ST, CWN, CWM, BN, 8, 4>(a, grid, st); return true;
     }
   } else if constexpr (M == 128) {
     switch (k) {
-      case 42: flin_go<M, BK, ST, CWN, CWM, 4, 2>(a, grid, st); return true;
-      case 44: flin_go<M, BK, ST, CWN, CWM, 4, 4>(a, grid, st); return true;
+      case 42: flin_go<M, BK, ST, CWN, CWM, BN, 4, 2>(a, grid, st); return true;
+      case 44: flin_go<M, BK, ST, CWN, CWM, BN, 4, 4>(a, grid, st); return true;
     }
   } else if constexpr (M < 256) {
     switch (k) {
-      case 14: flin_go<M, BK, ST, CWN, CWM, 1, 4>(a, grid, st); return true;
-      case 22: flin_go<M, BK, ST, CWN, CWM, 2, 2>(a, grid, st); return true;
-      case 24: flin_go<M, BK, ST, CWN, CWM, 2, 4>(a, grid, st); return true;
-      case 44: flin_go<M, BK, ST, CWN, CWM, 4, 4>(a, grid, st); return true;
+      case 14: flin_go<M, BK, ST, CWN, CWM, BN, 1, 4>(a, grid, st); return true;
+      case 22: flin_go<M, BK, ST, CWN, CWM, BN, 2, 2>(a, grid, st); return true;
+      case 24: flin_go<M, BK, ST, CWN, CWM, BN, 2, 4>(a, grid, st); return true;
+      case 44: flin_go<M, BK, ST, CWN, CWM, BN, 4, 4>(a, grid, st); return true;
     }
   } else {
     switch (k) {
-      case 14: flin_go<M, BK, ST, CWN, CWM, 1, 4>(a, grid, st); return true;
-      case 22: flin_go<M, BK, ST, CWN, CWM, 2, 2>(a, grid, st); return true;
-      case 24: flin_go<M, BK, ST, CWN, CWM, 2, 4>(a, grid, st); return true;
+      case 14: flin_go<M, BK, ST, CWN, CWM, BN, 1, 4>(a, grid, st); return true;
+      case 22: flin_go<M, BK, ST, CWN, CWM, BN, 2, 2>(a, grid, st); return true;
+      case 24: flin_go<M, BK, ST, CWN, CWM, BN, 2, 4>(a, grid, st); return true;
     }
   }
 #endif
@@ -653,9 +690,19 @@ static bool flin_fw(const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st
 }
 static bool flin_launch(int M, const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st) {
   switch (M) {
+#if FLIN_FIT == 2
+    case 32: return flin_fw<32, 64, 4, 4, 1>(a, grid, FW, NC, st);
+    case 64: return flin_fw<64, 64, 3, 4, 1>(a, grid, FW, NC, st);
+    case 128: return flin_fw<128, 64, 3, 2, 2, 64>(a, grid, FW, NC, st);
+#elif defined(FLIN_FIT)
+    case 32: return flin_fw<32, 128, 2, 4, 1>(a, grid, FW, NC, st);
+    case 64: return flin_fw<64, 64, 3, 4, 1>(a, grid, FW, NC, st);
+    case 128: return flin_fw<128, 64, 3, 2, 2, 64>(a, grid, FW, NC, st);
+#else
     case 32: return flin_fw<32, 128, 4, 4, 1>(a, grid, FW, NC, st);
     case 64: return flin_fw<64, 128, 4, 4, 1>(a, grid, FW, NC, st);
     case 128: return flin_fw<128, 128, 3, 4, 2>(a, grid, FW, NC, st);
+#endif
     case 160: return flin_fw<160, 64, 4, 4, 2>(a, grid, FW, NC, st);
     case 192: return flin_fw<192, 64, 4, 4, 2>(a, grid, FW, NC, st);
     case 256: return flin_fw<256, 64, 4, 4, 2>(a, grid, FW, NC, st);
@@ -1214,12 +1261,17 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
 // bit is set in FLIN_LT (1 qkv, 2 o, 4 gate_up, 8 down), which stay on cuBLASLt, and its attention blocks with AFW filler warps
 // each (0: dcap's kernels); lm_head stays on cuBLASLt unless FLIN_LM=1 runs it through flin too. Arms: the cuBLASLt step on the whole GPU, flin alone with dcap's
 // attention, both with filler warps, the cuBLASLt step again. With FILL_SMS > 0 the two flin arms run on a green split's
-// other SMs and the last beside round 1's pump (W 8, NC 4, S 2048) on FILL_SMS SMs, whose window share and receipts are
-// reported with the rest. A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
+// other SMs and the last beside round 1's pump (FSTEP_PUMP=W:NC:S, default 8:4:2048) on FILL_SMS SMs, whose window share and
+// receipts are reported with the rest. FILL_SMS -1 (co): the pump on every SM at the lowest stream priority and the flin
+// arms on the whole GPU at the highest, so with FW = AFW = 0 the last arm is the step beside a co-resident pump (a
+// FLIN_FIT build with a 1-block pump, PF_CTAS=1). FSTEP_KIND=0|1 runs only the linears and lm_head, or only attention, in
+// every arm. FLIN_GRID > 0: flin's CTAs (default one an SM; a split's step SMs); in a PF_YIELD build the pump yields the
+// SMs they occupy. A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
 // step at B. The filler warps' MACs are their step counts over the last rep's launches (each step's tiles are the next
 // `per` ids, fused_layout); the last linear's output is checked on every row when down runs through flin, and so is
 // lm_head's when it does.
 static int g_lt_mask = 0;
+static int g_fstep_kind = 2;  // FSTEP_KIND: fstep's linears and lm_head only (0), its attention only (1), or both (2)
 static std::vector<int> fstep_seq() {
   std::vector<int> s;
   for (int i = 0; i < Flin::LAUNCHES; i++)
@@ -1232,6 +1284,7 @@ static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vecto
   int k = 0;
   auto lin = [&](int i) {
     const int j = i % 4;
+    if (g_fstep_kind == 1) return;
     if (g_lt_mask >> j & 1) {
       lt_run(p[j], d.X, d.W[i / 4][j], d.D, d.st);
       return;
@@ -1241,10 +1294,12 @@ static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vecto
   };
   for (int l = 0; l < LAYERS; l++) {
     lin(4 * l);
-    enqueue_fatt(d, a, B, L, l, wrapped);
+    if (g_fstep_kind != 0) enqueue_fatt(d, a, B, L, l, wrapped);
     for (int j = 1; j < 4; j++) lin(4 * l + j);
   }
-  if (lm)
+  if (g_fstep_kind == 1)
+    ;
+  else if (lm)
     flin_lm(d, f, seq[0] % 4);
   else if (B <= 256 && p[4].algo_id != -2)
     lt_run(p[4], d.X, d.Wlm, d.D, d.st);
@@ -1252,18 +1307,29 @@ static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vecto
 }
 static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int fill_sms, int reps) {
   if (g_lt_mask & ~15) { fprintf(stderr, "FLIN_LT: bits 1 qkv, 2 o, 4 gate_up, 8 down\n"); exit(1); }
+  if (const char* e = getenv("FSTEP_KIND")) g_fstep_kind = atoi(e);
+  if (g_fstep_kind < 0 || g_fstep_kind > 2) { fprintf(stderr, "FSTEP_KIND: 0 linears, 1 attention, 2 both\n"); exit(1); }
   const std::vector<int> seq = fstep_seq();
   const std::vector<Lt> p = lin_plans(d, B);
   Flin f;
   flin_prepare(d, f, flin_m_for(B), true);
+  if (const char* e = getenv("FLIN_GRID"); e && atoi(e) > 0) f.grid = atoi(e);
   if (g_flin_lm && !seq.empty()) flin_prepare_lm(d, f);
   f.thr = thr;
   f.stop = g_flin_stop;
   f.NC = NC;
   Fatt a0, a;
   cudaStream_t full = d.st, ss = d.st, fs = nullptr;
-  int got[2] = {d.sms, 0};
-  if (fill_sms > 0) {
+  int got[2] = {d.sms, 0}, lo = 0, hi = 0, pw = 8, pnc = 4, ps = 2048, smem_sm = 0;
+  if (const char* e = getenv("FSTEP_PUMP")) sscanf(e, "%d:%d:%d", &pw, &pnc, &ps);
+  CK(cudaDeviceGetAttribute(&smem_sm, cudaDevAttrMaxSharedMemoryPerMultiprocessor, 0));
+  const bool co = fill_sms < 0;
+  if (co) {
+    CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+    CK(cudaStreamCreateWithPriority(&ss, cudaStreamNonBlocking, hi));
+    CK(cudaStreamCreateWithPriority(&fs, cudaStreamNonBlocking, lo));
+    got[1] = d.sms;
+  } else if (fill_sms > 0) {
     const int e = gc_split(d.sms - fill_sms, &ss, &fs, got);
     if (e || !fs) {
       fprintf(stderr, "gc_split(%d): %d (filler SMs %d)\n", d.sms - fill_sms, e, got[1]);
@@ -1279,7 +1345,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   DFill pf;
   if (fs) {
     dfill_prep();
-    pf = dfill_make(got[1], 8, 4, 2048, g_c0, g_c1);
+    pf = dfill_make(got[1], pw, pnc, ps, g_c0, g_c1);
   }
   bool wrapped = false;
   d.st = ss;
@@ -1292,7 +1358,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
     }
   }
   CK(cudaStreamSynchronize(ss));
-  auto base = [&] { enqueue_step(d, p, 2, B, L, &wrapped); };
+  auto base = [&] { enqueue_step(d, p, g_fstep_kind, B, L, &wrapped); };
   auto fused = [&](int fw, const Fatt& at) { f.FW = fw; enqueue_fstep(d, f, at, p, B, L, &wrapped); };
   double amhz = 0, awatt = 0, alone = 0;
   if (fs) alone = dfill_alone(d, pf, fs, 20, &amhz, &awatt);
@@ -1323,7 +1389,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
                   ta = fill_tally(r, fused_launches(r, nullptr, {}, &a, LAYERS, last), 16, 0xA57E + B * 8 + L);
   // the last flin launch is down's of the last layer unless FLIN_LT keeps down on cuBLASLt, whose output lm_head overwrites;
   // lm_head's through flin is checked too
-  const int out_rows = g_lt_mask & 8 ? 0 : B, N = LN[3], K = LK[3];
+  const int out_rows = g_lt_mask & 8 || g_fstep_kind == 1 ? 0 : B, N = LN[3], K = LK[3];
   unsigned long long out_bad = 0;
   if (out_rows) {
     ref_rows<<<(unsigned)(((size_t)B * N + 255) / 256), 256, 0, d.st>>>(d.X, d.W[LAYERS - 1][3], g_ref, B, 1, N, K);
@@ -1332,7 +1398,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
     CK(cudaMemcpyAsync(&out_bad, g_cnt, sizeof out_bad, cudaMemcpyDeviceToHost, d.st));
   }
   unsigned long long lm_bad = 0;
-  if (f.lm) {
+  if (f.lm && g_fstep_kind != 1) {
     ref_rows<<<(unsigned)(((size_t)B * VOCAB + 255) / 256), 256, 0, d.st>>>(d.X, d.Wlm, g_ref, B, 1, VOCAB, HID);
     CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, d.st));
     count_neq_rows<<<(unsigned)(((size_t)B * VOCAB + 255) / 256), 256, 0, d.st>>>(f.Dlm, g_ref, B, 1, VOCAB, g_cnt);
@@ -1342,17 +1408,22 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   CK(cudaGetLastError());
   double lin_macs = 0;
   for (int j = 0; j < 4; j++) lin_macs += (double)LAYERS * B * LN[j] * LK[j];
-  const double step_macs = lin_macs + (double)B * VOCAB * HID + 2.0 * LAYERS * B * HQ * HD * (double)L;
+  const double step_macs = (g_fstep_kind != 1 ? lin_macs + (double)B * VOCAB * HID : 0.0) +
+                           (g_fstep_kind != 0 ? 2.0 * LAYERS * B * HQ * HD * (double)L : 0.0);
   const Rep mb = median(vb), m0 = median(v0), mf = median(vf), mb2 = median(vb2);
   const double bms = (mb.ms + mb2.ms) / 2, cap = 1024.0 * d.sms * mf.mhz * 1e6;
   const double lin_share = t.macs / (mf.ms * 1e-3) / cap, att_share = ta.macs / (mf.ms * 1e-3) / cap;
   const double pump_share = fs ? (double)nwin * pf.macs() / ((w1 - w0) * 1e-3) / cap : 0.0;
-  printf("{\"mode\": \"fstep\", \"pdl\": %d, \"fatt_pdl\": %d, \"lt_mask\": %d, \"fill_sms_req\": %d, \"step_sms\": %d, "
-         "\"fill_sms\": %d, \"pump\": {\"alone_share\": %.5f, \"share\": %.5f, \"chunks\": %lld, \"chunk_macs\": %.6e, "
-         "\"rec_checked\": %d, \"rec_bad\": %d}, \"fill_share_pump\": %.5f, \"fill_share_total\": %.5f, ",
-         (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1], fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
+  printf("{\"mode\": \"fstep\", \"place\": \"%s\", \"prio\": [%d, %d], \"smem_sm\": %d, \"flin_smem\": %d, \"pdl\": %d, "
+         "\"fatt_pdl\": %d, \"lt_mask\": %d, \"fill_sms_req\": %d, \"step_sms\": %d, "
+         "\"fill_sms\": %d, \"pump\": {\"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"alone_share\": %.5f, \"share\": %.5f, "
+         "\"chunks\": %lld, \"chunk_macs\": %.6e, \"rec_checked\": %d, \"rec_bad\": %d}, \"fill_share_pump\": %.5f, "
+         "\"fill_share_total\": %.5f, ",
+         co ? "co" : "split", lo, hi, smem_sm, flin_smem(f.M), (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1],
+         pw, pnc, ps, fs ? pf.tiles : 0, fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
-  printf("\"M\": %d, ", f.M);
+  printf("\"M\": %d, \"kind\": %d, \"flin_grid\": %d, \"yield\": [%d, %d, %d, %d, %d], ", f.M, g_fstep_kind, f.grid,
+         PF_YIELD, PF_YIELD_J, PF_YIELD_NS, PF_YIELD_EARLY, PF_YIELD_POLL_NS);
   printf("\"APS\": %d, \"ALZ\": %d, \"LM\": %d, \"lm_mismatches\": %llu, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.lazy,
          (int)f.lm, lm_bad, a.pg[0], a.pg[1]);
   printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, \"ANC\": %d, "

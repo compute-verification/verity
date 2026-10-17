@@ -360,3 +360,61 @@ def test_probes_build_and_gate(tmp_path):
     assert not wrong, "\n".join(wrong)
     assert {v["probe"] for v in verdicts if not v["passed"]} == {"bad_ldsm_merged", "bad_stsm_conflict",
                                                                  "dsm_red_add64_self"}
+
+
+ji89 = _load("opcode_probe_sm89_ji", POUW / "opcode_probe" / "sm89" / "ji.py")
+
+
+def test_sm89_ji_pins_only_the_schedule_its_name_says():
+    top = {"FMUL": 112, "IMMA.16816.S8.S8": 8, "MOV": 1, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}
+    assert ji89.exact("j16_fmuli_q112_a2u1_w2", top)
+    assert not ji89.exact("j16_fmuli_q112_a2u1_w2", {**top, "CALL.REL.NOINC": 1})
+    assert not ji89.exact("j16_fmuli_q112_a2u1_w2", {**top, "FMUL": 111})
+    assert not ji89.exact("j16_fmuli_q112_a2u1_w2", {**top, "IMMA.16816.S8.S8": 16})
+    assert ji89.exact("j16_iadd3_q64_a2u1_w2", {"IMAD.IADD": 32, "IADD3": 33, "IMMA.16816.S8.S8": 8, "ISETP.GE.AND": 1})
+    names = [p[0] for p in ji89.grid(32)]
+    assert "j32_fmuli_q112_a2u1_w2" in names and len(names) == len(set(names))
+
+
+def test_sm89_ji_refit_is_the_upper_hull_at_the_margin(tmp_path):
+    """JI89 at ADA-89 is 4.0306 x_IMMA16816 + 0.93458 v <= 1: a program under it leaves the line as it is, one above it
+    (load 1.083) splits it into facets through that program at the margin, each holding every point."""
+    def run(d, progs):
+        d.mkdir()
+        (d / "rows.jsonl").write_text("".join(json.dumps({"probe": p, "run": RUN, "rates": {
+            "0:IMMA.16816.S8.S8": 4 * x, "0:FMUL": 4 * v}}) + "\n" for p, x, v in progs))
+        return d
+
+    under = run(tmp_path / "under", [("j16_a", 0.05, 0.5)])
+    (old,) = ji89.refit([under], "IMMA16816")
+    assert old[:2] == pytest.approx((4.03060164, 0.934579439))
+    beat = run(tmp_path / "beat", [("j16_a", 0.05, 0.5), ("j16_b", 0.06, 0.9)])
+    assert ji89.worst(ji89.loads([beat]))["JI89"] == (pytest.approx(4.03060164 * 0.06 + 0.934579439 * 0.9), "j16_b")
+    fs = ji89.refit([beat], "IMMA16816")
+    assert len(fs) == 2 and all("j16_b" in f[2] for f in fs)
+    for a, b, _ in fs:
+        assert a * 0.06 * 1.02 + b * 0.9 * 1.02 <= 1 + 1e-9
+        assert a * 0.05 * 1.02 + b * 0.5 * 1.02 < 1
+        assert b * 1.07 <= 1 + 1e-9 and a / 4.03060164 <= 1 + 1e-9
+
+
+def test_sm89_ji_points_join_only_their_own_family(tmp_path):
+    """A ji32 program joins the E families its lane beat, as (IMMA.16832, every non-MMA instruction) a SMSP-cycle; one
+    whose adds ptxas split onto the IMAD pipe stays out, and IMMA.16816 programs and IMAD lanes join nothing."""
+    rows_, verdicts = [], []
+    for name, top in (("j32_fmuli_q112_a2u2_w2", {"FMUL": 224, "IMMA.16832.S8.S8": 16, "MOV": 6, "IADD3": 1}),
+                      ("j32_axi_q64_a3u1_w2", {"IADD3": 33, "LOP3.LUT": 32, "IMMA.16832.S8.S8": 8, "IMAD.MOV.U32": 6}),
+                      ("j32_iadd3_q112_a8u1_w2", {"IMAD.IADD": 70, "IADD3": 43, "IMMA.16832.S8.S8": 8}),
+                      ("j32_imadi_q32_a3u1_w2", {"IMAD": 32, "IMMA.16832.S8.S8": 8, "IADD3": 1}),
+                      ("j16_fmuli_q112_a2u1_w2", {"FMUL": 112, "IMMA.16816.S8.S8": 8, "IADD3": 1})):
+        mma = next(op for op in top if op.startswith("IMMA"))
+        top = {**top, "ISETP.GE.AND": 1, "BRA": 1}
+        rows_.append({"probe": name, "run": RUN, "rates": {f"0:{mma}": 0.25 * top[mma] / 8}})
+        verdicts.append({"probe": name, "verdict": {"loops": [{"top": top, "counts": {mma: top[mma]}}]}})
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows_))
+    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    pts = sm89.ji_points([tmp_path])
+    assert set(pts) == {"ffma", "iadd3", "lop3"}
+    (m, x, name), = pts["ffma"]
+    assert name == f"j32_fmuli_q112_a2u2_w2@{RUN}" and m == pytest.approx(0.125) and x == pytest.approx(0.125 * 233 / 16)
+    assert [n.split("@")[0] for *_, n in pts["iadd3"]] == [n.split("@")[0] for *_, n in pts["lop3"]] == ["j32_axi_q64_a3u1_w2"]
