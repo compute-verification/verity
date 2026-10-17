@@ -150,4 +150,5 @@ merged coins being uniform, and the mixture by an event of the deployed coins th
 `Claims.Bridge.Live.liveMix_le_Pr`). From a
 simulation of the deployed prover by a live prover on coins of uniform law, and the record's draw on accepting runs,
 the mixture's first bound holds (`PlainFirst`: `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.RecordDrawVerbatim`,
-`FlockDeploy.KS.plain_first_of_sim`). -/
+`FlockDeploy.KS.plain_first_of_sim`); the checks compare draws only up to `JsonEquiv`, which holds between different
+terms (`FlockDeploy.KS.drawEq_ne`). -/

@@ -37,6 +37,14 @@ def RecordDrawVerbatim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω :
             (Claims.coinSeq r)) = .decide s spec sts link c₁ mids f →
         Exec.recordDraw f.record = s.read.draw
 
+/-- **`drawEq` passes on different terms**: two objects with the same fields in trees of different shapes are
+`JsonEquiv`, so the checks passing does not give `RecordDrawVerbatim`. -/
+theorem drawEq_ne : ∃ a b : Json, drawEq (some a) (some b) = true ∧ a ≠ b := by
+  refine ⟨.obj ⟨⟨.inner 2 "a" .null .leaf (.inner 1 "b" .null .leaf .leaf)⟩⟩,
+    .obj ⟨⟨.inner 2 "b" .null (.inner 1 "a" .null .leaf .leaf) .leaf⟩⟩, (drawEq_iff _ _).2 (.some rfl), fun h => ?_⟩
+  have e := congrArg (fun j : Json => match j with | .obj ⟨⟨.inner _ k _ _ _⟩⟩ => k | _ => "") h
+  exact absurd e (by decide)
+
 /-- **A prover of the live session at one table simulates `P`**: `Φ (u, r')`, the coins of `V false` at the tape `u`
 and the live coins `r'`, have the law of uniform coins, and wherever `V false` accepts at them, the live outcome of
 `P'` at the tape `(ω, u)` is the run's (`viewOf`). -/
