@@ -1,4 +1,4 @@
-"""[R15 hopper HOP-03, M-0225] The LAUNCH CONTEXT of every request shape of a workload -- what `derive_step --launch-max-seqlen-q` needs.
+"""[R15 hopper HOP-03, M-0225] The LAUNCH CONTEXT of every request shape of a workload -- what `build --launch-context` needs.
 
 FA3's forward tile (`verity_vllm.program.frontend.targets.fa3_kblock_n`: vllm-flash-attn `tile_size_fwd_sm90` + `heuristics.h::use_one_mma_wg`) reads
 the varlen launch's `max_seqlen_q` = the most query rows any ONE sequence of the launch has.  A request Program built alone sees its own rows
@@ -15,7 +15,12 @@ records it inert under FA2, whose tile does not read seqlen_q).  Chunked prefill
 `enable_chunked_prefill=False`; the row's expected_engine_steps assume no preemption) -- a scheduler that does either changes the launches
 and the Match would show it.
 
-    verity-vllm launch-context <workload.json> [<LP> <T>]      -> the shape's JSON list (or 'conflict'); no shape: all shapes
+Without batch invariance (the row's `engine.target.batch_invariant` false, B >= 2) every token-count-dependent kernel choice reads the whole
+launch, so the context is the BATCH form: per request step s, every sequence engine step a_r + s schedules as [rows_q, start_q], start_q
+the position of its first query row (0 for its prefill, L_q + e - a_q - 1 on a decode step); `frontend.targets.parse_launch_context`
+reads it as {"batch": [...]}.
+
+    verity-vllm launch-context <workload.json> [<LP> <T>]      -> the shape's JSON (or 'conflict'); no shape: all shapes
 """
 from __future__ import annotations
 
@@ -35,6 +40,12 @@ def rows_at(req: dict[str, Any], e: int) -> int:
     return 0
 
 
+def start_at(req: dict[str, Any], e: int) -> int:
+    """The position of req's first query row at engine step e: 0 for its prefill, its next position on a decode step."""
+    a, L = int(req["arrive_step"]), int(req["prompt_len"])
+    return 0 if e == a else L + e - a - 1
+
+
 def request_launch_context(reqs: list[dict[str, Any]], r: dict[str, Any]) -> list[int]:
     """Per request step s of r: the launch's max_seqlen_q at engine step arrive_step(r) + s."""
     a, c = int(r["arrive_step"]), int(r["max_tokens"])
@@ -45,14 +56,44 @@ def request_launch_context(reqs: list[dict[str, Any]], r: dict[str, Any]) -> lis
     return out
 
 
-def shape_contexts(workload: dict[str, Any]) -> dict[tuple[int, int], list[int] | str]:
-    """{(LP, T): [max_seqlen_q per step] | 'conflict'} for every request shape of the workload (T = max_tokens - 1, the derive's --T)."""
+def request_launch_batch(reqs: list[dict[str, Any]], r: dict[str, Any]) -> list[list[list[int]]]:
+    """Per request step s of r: every sequence engine step arrive_step(r) + s schedules, as [rows, start], in request order."""
+    a, c = int(r["arrive_step"]), int(r["max_tokens"])
+    return [[[rows_at(q, e), start_at(q, e)] for q in reqs if rows_at(q, e)] for e in range(a, a + c)]
+
+
+def batch_dispatch(workload: dict[str, Any]) -> bool:
+    """Whether the row's kernels read a launch other than one request's own: its declared target is not batch invariant and it
+    co-schedules several requests (a B1 row's launch is its request)."""
+    return ((workload.get("engine") or {}).get("target") or {}).get("batch_invariant") is False and len(_requests(workload)) > 1
+
+
+def batch_dispatch_of(path: str | None) -> bool:
+    """`batch_dispatch` of the workload file at `path` (False without one)."""
+    return bool(path) and batch_dispatch(json.load(open(path)))
+
+
+def missing_batch(launch: dict | None, LP: int, T: int) -> dict | None:
+    """The Build's refusal of a `batch_dispatch` row's request Program declared without its batch (`launch` parsed), else None."""
+    if (launch or {}).get("batch_by_step"):
+        return None
+    return {"reason": "launch_context", "phase": "applicability", "node": None, "module_path": None,
+            "hint": (f"the row is not batch invariant and co-schedules several requests, so every token-count-dependent kernel choice "
+                     f"reads the whole launch; this request Program was given {launch!r}, not its launch batch. Pass --launch-context "
+                     f"'{{\"batch\": ...}}' (`verity-vllm launch-context <workload> {LP} {T}`); a 'conflict' shape (requests of one "
+                     f"(LP, T) co-scheduled differently) has no one Program.")}
+
+
+def shape_contexts(workload: dict[str, Any]) -> dict[tuple[int, int], list | str]:
+    """{(LP, T): context | 'conflict'} for every request shape of the workload (T = max_tokens - 1, the derive's --T): the batch per
+    step without batch invariance (`batch_dispatch`), else max_seqlen_q per step."""
     reqs = _requests(workload)
-    by: dict[tuple[int, int], set[tuple[int, ...]]] = {}
+    per_step = request_launch_batch if batch_dispatch(workload) else request_launch_context
+    by: dict[tuple[int, int], set[str]] = {}
     for r in reqs:
         key = (int(r["prompt_len"]), int(r["max_tokens"]) - 1)
-        by.setdefault(key, set()).add(tuple(request_launch_context(reqs, r)))
-    return {k: (list(next(iter(v))) if len(v) == 1 else "conflict") for k, v in by.items()}
+        by.setdefault(key, set()).add(json.dumps(per_step(reqs, r)))
+    return {k: (json.loads(next(iter(v))) if len(v) == 1 else "conflict") for k, v in by.items()}
 
 
 def _requests(workload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -66,13 +107,16 @@ def _requests(workload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def spec_for(workload: dict[str, Any], LP: int, T: int) -> str:
-    """The `--launch-max-seqlen-q` argument for the (LP, T) shape: a JSON list, 'conflict', or '' when the workload has no such shape
-    (the row's default `build_request` of the longest prompt / largest cap is a shape too)."""
-    ctxs = shape_contexts(workload)
-    v = ctxs.get((int(LP), int(T)))
+    """The `--launch-context` argument for the (LP, T) shape: a JSON list, {"batch": ...} (`batch_dispatch`), 'conflict', or '' when
+    the workload has no such shape (the row's default `build_request` of the longest prompt / largest cap is a shape too)."""
+    v = shape_contexts(workload).get((int(LP), int(T)))
     if v is None:
         return ""
-    return v if isinstance(v, str) else json.dumps(v, separators=(",", ":"))
+    return v if isinstance(v, str) else _spec(workload, v)
+
+
+def _spec(workload: dict[str, Any], v: list) -> str:
+    return json.dumps({"batch": v} if batch_dispatch(workload) else v, separators=(",", ":"))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -88,5 +132,5 @@ def main(a: Options) -> int:
         print(spec_for(w, a.LP, a.T))
         return 0
     for (lp, t), v in sorted(shape_contexts(w).items()):
-        print(f"LP{lp}_T{t} {v if isinstance(v, str) else json.dumps(v, separators=(',', ':'))}")
+        print(f"LP{lp}_T{t} {v if isinstance(v, str) else _spec(w, v)}")
     return 0

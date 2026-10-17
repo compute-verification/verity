@@ -325,8 +325,12 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         int N                -> {0: N}                    the prefill step's launch has a sequence of N query rows (co-arrival, no later arrivals)
         list [n0, n1, ...]   -> {s: n_s}                  per request step s: the launch's max_seqlen_q at that engine step (1 = decode-only step)
         dict {"s": n}        -> same, string or int keys
+        dict {"batch": [[[rows, start], ...], ...]}
+                             -> per request step s: every sequence the engine step schedules, its query rows and the position of its
+                                first row (`batch_by_step`); max_seqlen_q follows from it.  Without batch invariance every
+                                token-count-dependent kernel choice reads it (`launch_tokens`, `launch_keys`)
         "conflict"           -> {"conflict": True}        requests of this shape have DIFFERENT contexts: refused where the tile rule reads it
-    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True}."""
+    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]})."""
     if spec is None or spec == "":
         return None
     if isinstance(spec, str):
@@ -349,6 +353,8 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
     elif isinstance(spec, dict):
         if spec.get("conflict"):
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
+        if "batch" in spec:
+            return _launch_batch(spec["batch"])
         src = spec.get("max_seqlen_q_by_step", spec)
         by = {int(k): int(v) for k, v in src.items()}
     else:
@@ -356,6 +362,19 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
     if any(v < 1 for v in by.values()) or any(k < 0 for k in by):
         raise ValueError(f"launch context: steps and max_seqlen_q must be >= 0 / >= 1: {by}")
     return {"max_seqlen_q_by_step": by, "conflict": False, "declared": True}
+
+
+def _launch_batch(steps) -> dict[str, Any]:
+    if not isinstance(steps, list) or not steps:
+        raise ValueError(f"launch context: batch must be a non-empty list of steps, got {steps!r}")
+    batch: dict[int, list[tuple[int, int]]] = {}
+    for s, seqs in enumerate(steps):
+        seqs = [(int(n), int(p)) for n, p in seqs]
+        if not seqs or any(n < 1 or p < 0 for n, p in seqs):
+            raise ValueError(f"launch context: step {s} schedules {seqs}: every step holds sequences of >= 1 rows at positions >= 0")
+        batch[s] = seqs
+    return {"max_seqlen_q_by_step": {s: max(n for n, _ in seqs) for s, seqs in batch.items()}, "batch_by_step": batch, "conflict": False,
+            "declared": True}
 
 
 class LaunchContextInvalid(ValueError):
@@ -387,6 +406,41 @@ def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> 
         raise LaunchContextInvalid(f"the declared launch context says max_seqlen_q {int(v)} at step {int(step)} but this request alone has {own} "
                                    f"query rows there: the launch contains the request, so the declaration is another shape's context")
     return int(v), "declared launch context"
+
+
+def _launch_step(step: int, launch: dict[str, Any] | None) -> list[tuple[int, int]] | None:
+    """The sequences the declared batch schedules at a request step, or None without a declared batch (a batch of one)."""
+    if launch and launch.get("conflict"):
+        raise LaunchContextConflict("the launch context of this request shape is not one value ('conflict'): requests of the same (LP, T) are "
+                                    "co-scheduled with different batches; give each request its own shape")
+    batch = (launch or {}).get("batch_by_step")
+    if not batch:
+        return None
+    seqs = batch.get(int(step))
+    if seqs is None:
+        raise LaunchContextInvalid(f"the declared launch batch names steps 0..{max(batch)} but the request runs step {int(step)}")
+    return seqs
+
+
+def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sampled: bool = False) -> int:
+    """The rows of the batched launch that a request's `own_rows` run in at its request `step`: the step's token count (every scheduled
+    sequence's query rows), or, for the rows after the logits selection (`sampled`), its sequence count (one logits row per scheduled
+    sequence: without chunked prefill every one samples).  Without a declared batch, `own_rows` (a batch of one).  A count below
+    `own_rows` is refused: the launch contains the request."""
+    own, seqs = int(own_rows), _launch_step(step, launch)
+    if seqs is None:
+        return own
+    n = len(seqs) if sampled else sum(r for r, _ in seqs)
+    if n < own:
+        raise LaunchContextInvalid(f"the declared launch batch has {n} {'sequences' if sampled else 'rows'} at step {int(step)} but this request "
+                                   f"alone has {own} there: the declaration is another request's context")
+    return n
+
+
+def launch_keys(step: int, launch: dict[str, Any] | None) -> list[int] | None:
+    """Every query row's key count in the declared batch's step (a row at position p sees p + 1 keys), or None without a declared batch."""
+    seqs = _launch_step(step, launch)
+    return None if seqs is None else [p + i + 1 for n, p in seqs for i in range(n)]
 
 
 def attention_geometry(profile, D: int, seqlen_q: int, NH: int, KVH: int) -> dict[str, Any]:
@@ -576,4 +630,4 @@ __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "tar
            "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_spec", "rmsnorm_value_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
-           "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
+           "LaunchContextConflict", "LaunchContextInvalid", "parse_launch_context", "launch_seqlen_q", "launch_tokens", "launch_keys"]

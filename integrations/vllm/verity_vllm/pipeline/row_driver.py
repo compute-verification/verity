@@ -364,6 +364,22 @@ class Row:
             f.write(line + "\n")
         return rc, line
 
+    def launch_args(self, lp: int, t: int) -> list[str] | None:
+        """A B >= 2 request Program is built under its launch context (``launch-context``); None = the context did not
+        read, which FAILS that shape's Build (it is not "no context")."""
+        if self.B <= 1:
+            return []
+        err = f"{self.d}/launch_context_LP{lp}_T{t}.err"
+        with open(err, "w") as f:
+            r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t)), stdout=subprocess.PIPE, stderr=f, text=True,
+                               cwd=self.tree, env=self.child_env)
+        if r.returncode != 0:
+            self.log(f"Build FAIL shape LP{lp} T{t}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
+            return None
+        os.remove(err)
+        lc = r.stdout.rstrip("\n")
+        return ["--launch-context", *lc.split("\n")] if lc else []
+
     def call_boundaries(self, to: int | str, cmd: list[str] | None = None) -> None:
         """After a PASS Build: the row stops (exit 21, no Match, no Commit) unless every `call_boundaries` identity of its manifest has
         a source the Commit attaches (`cmd`, else `gate call-boundaries`); the verdict line names the first identity without one."""

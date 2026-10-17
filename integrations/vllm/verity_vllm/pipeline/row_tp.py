@@ -75,6 +75,7 @@ class TpRow(Row):
         self.trap = False
         self.config_run = commit.config_run == "1"
         self.replay_pending = False
+        self.lctx: dict[tuple[int, int], list[str] | None] = {}
 
     def workload_gpu_util(self) -> str | None:
         """The workload's ``gpu_memory_utilization``, for a model whose weights don't fit `TP_UTIL` (GLM-5.3 TP8, about 88 GB a
@@ -218,7 +219,17 @@ class TpRow(Row):
     def request(self, r: int, lp: int, t: int) -> tuple[Any, ...]:
         out = f"{self.rank(r)}/build_request_LP{lp}_T{t}"
         shutil.rmtree(out, ignore_errors=True)
-        return (r, out, "--wrapper", "request", "--LP", str(lp), "--T", str(t))
+        return (r, out, "--wrapper", "request", "--LP", str(lp), "--T", str(t), *self.launch_of(lp, t))
+
+    def launch_of(self, lp: int, t: int) -> list[str]:
+        """The shape's `Row.launch_args`, read once for every rank; one that does not read fails the Build."""
+        if (lp, t) not in self.lctx:
+            self.lctx[(lp, t)] = self.launch_args(lp, t)
+        if self.lctx[(lp, t)] is None:
+            self.verdict("build", "FAIL", f"rc=1 the launch context of shape LP{lp} T{t} did not read (row.log)")
+            self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
+            raise Stop(10)
+        return self.lctx[(lp, t)]
 
     def compose(self, r: int) -> None:
         """GP-01's workload Program of rank ``r`` over its request Programs."""

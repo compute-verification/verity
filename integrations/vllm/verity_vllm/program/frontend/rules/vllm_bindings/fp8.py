@@ -9,7 +9,7 @@ from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity_vllm.program.registry.fp8 import QUANT_GROUPS, weight_blocks
@@ -35,7 +35,7 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
     """vLLM's default Hopper block-FP8 linear, one registered row call per token.
 
     The custom op owns both branches: FlashInfer for M < 32 and DeepGEMM for
-    M >= 32.  GLM-5.3's load-time ``requant_weight_ue8m0_inplace`` output is
+    M >= 32, M the launch's tokens (`launch_tokens_of`).  GLM-5.3's load-time ``requant_weight_ue8m0_inplace`` output is
     the op's ``weight`` / ``weight_scale`` parameter pair, so those served
     tensors are the declared weight operands.
     """
@@ -85,7 +85,7 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
             return f"output {osh} {ctx.dtype_of(node)}, expected {xs[:-1] + (N,)} bf16"
         if ctx.weight_of(w) is None or ctx.weight_of(ws) is None:
             return "weight / weight_scale are not declared weight operands"
-        role = "flashinfer_fp8_linear" if xs[0] < 32 else "deepgemm_fp8_linear"
+        role = "flashinfer_fp8_linear" if launch_tokens_of(node, xs[0]) < 32 else "deepgemm_fp8_linear"
         if not ctx.vocab.has(role):
             return f"the vocabulary has no {role}"
         return True
@@ -94,7 +94,8 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
         x, w, ws, _group, _ue8m0 = node.args
         N, K = shape(ctx, w)
         rows, lead = rows_of(ctx.coll(x))
-        branch = "flashinfer" if len(rows) < 32 else "deepgemm"
+        M = launch_tokens_of(node, len(rows))
+        branch = "flashinfer" if M < 32 else "deepgemm"
         fn = ctx.kind(f"{branch}_fp8_linear", node, K=K, N=N)
         calls = [
             ctx.call(fn, row, ctx.coll(w), ctx.coll(ws), node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]")
@@ -107,7 +108,7 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
         ctx.record(
             self,
             node,
-            {"M": len(rows), "K": K, "N": N, "G": 128, "branch": branch, "use_deep_gemm_e8m0": True},
+            {"M": M, "K": K, "N": N, "G": 128, "branch": branch, "use_deep_gemm_e8m0": True},
             emitted=f"{fn.id} x{len(rows)}",
         )
 
