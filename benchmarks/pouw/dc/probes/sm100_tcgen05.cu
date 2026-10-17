@@ -18,6 +18,7 @@
 //   tclaneU_<lane>        the same, exact (the lanes run only while the MMA does)
 //   tcliU_x<C>, _p<C>[f]  the LI fold beside the MMA, exact: lane warps load C columns of TMEM and fold each word
 //                         (p: two buffers, a load in flight while the other folds; f: one FFMA filler op in 8 words)
+//   tc_mxf4_m128_n256     kind::mxf4 128x256x64 alone; tcfU_<lane>: lanes beside it, exact (a deep form's coupling)
 // dc/analyze.py turns rows.jsonl into words a cycle and the joint facets.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
@@ -407,6 +408,61 @@ DC_DEV void sync_until_mma(const OpArgs& a) {
   OP_SINK(v ^ threadIdx.x)
 }
 
+// ---- kind::mxf4: E2M1 K = 64 a MMA at twice i8's MAC rate (lowbit_dc/fpx.cu's call and descriptor) --------------------
+// The operand tile's 32 bytes a row are 64 packed E2M1 (every code valid). UE8M0 scales of 1 (0x7F) fill columns 256-383
+// (uniform, so their layout doesn't matter), so the MMAs write D0 only.
+DC_DEV void umma_mxf4(uint32_t d, uint64_t da, uint64_t db, uint32_t idesc, uint32_t sfa, uint32_t sfb, uint32_t acc) {
+  asm volatile(
+      "{\n.reg .pred p;\nsetp.ne.b32 p, %6, 0;\n"
+      "tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X [%0], %1, %2, %3, [%4], [%5], p;\n}\n" ::"r"(d),
+      "l"(da), "l"(db), "r"(idesc), "r"(sfa), "r"(sfb), "r"(acc)
+      : "memory");
+}
+// A and B E2M1 (1) at [7,10) and [10,13), N >> 3 at [17,23), UE8M0 scales (1) at 23, M >> 4 at [24,29)
+DC_HD constexpr uint32_t idesc_mxf4(uint32_t m, uint32_t n) {
+  return (1u << 7) | (1u << 10) | ((n >> 3) << 17) | (1u << 23) | ((m >> 4) << 24);
+}
+DC_DEV void sf_fill(uint32_t tmem) {
+  if (warp_u() < 4) {
+    uint32_t r[16];
+#pragma unroll
+    for (int i = 0; i < 16; i++) r[i] = 0x7F7F7F7Fu;
+    for (int u = 0; u < 8; u++) tmem_st16(tmem + ((32u * warp_u()) << 16) + 256u + 16u * u, r);
+    tmem_wait_st();
+  }
+  tc_before_sync();
+  __syncthreads();
+  tc_after_sync();
+}
+DC_DEV void mxf4x4(uint32_t tmem, uint64_t da, uint64_t db) {
+  constexpr uint32_t idesc = idesc_mxf4(128, 256);
+  umma_mxf4(tmem, da, db, idesc, tmem + 256, tmem + 320, 0);
+  umma_mxf4(tmem, da, db, idesc, tmem + 256, tmem + 320, 1);
+  umma_mxf4(tmem, da, db, idesc, tmem + 256, tmem + 320, 1);
+  umma_mxf4(tmem, da, db, idesc, tmem + 256, tmem + 320, 1);
+}
+DC_DEV void mxf4_alone(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  const uint32_t tmem = setup<0>(s, a.mode);
+  sf_fill(tmem);
+  const uint64_t da = desc_a(s), db = desc_b(s);
+  OP_BEGIN
+  if (warp_u() == 0) {
+    OP_LOOP(it) {
+      if (elect_one()) mxf4x4(tmem, da, db);
+      __syncwarp();
+    }
+    if (elect_one()) umma_commit(&s.bar);
+    __syncwarp();
+  }
+  OP_END
+  mbar_wait(&s.bar, 0);
+  tc_after_sync();
+  const uint32_t x = sink_ld(tmem, 0);
+  teardown(tmem);
+  OP_SINK(x ^ threadIdx.x)
+}
+
 // ---- lane ops beside tcgen05.mma ---------------------------------------------------------------------------------------
 // thread 0: tcgen05.mma; warps 4-15 (3 a SMSP): R lane ops an iteration.
 template <int X, int R>
@@ -434,16 +490,21 @@ DC_DEV void lane_beside_mma(const OpArgs& a) {
   OP_SINK(v ^ threadIdx.x)
 }
 // lane_beside_mma exact on both sides: the MMA warp fixed, the lane warps running only while it does (OP_UNTIL).
-template <int X, int R>
+// MXF4: the MMA is kind::mxf4 (mxf4x4) instead of i8.
+template <int X, int R, bool MXF4 = false>
 DC_DEV void lane_until_mma(const OpArgs& a) {
   __shared__ __align__(1024) Smem s;
   const uint32_t tmem = setup<0>(s, a.mode);
+  if constexpr (MXF4) sf_fill(tmem);
   const uint64_t da = desc_a(s), db = desc_b(s);
   Lane l(threadIdx.x);
   OP_BEGIN_STOP
   if (warp_u() == 0) {
     OP_LOOP(it) {
-      if (elect_one()) mma4<0, 128, 256>(tmem, da, db);
+      if (elect_one()) {
+        if constexpr (MXF4) mxf4x4(tmem, da, db);
+        else mma4<0, 128, 256>(tmem, da, db);
+      }
       __syncwarp();
     }
     OP_DONE
@@ -594,6 +655,9 @@ OP_KERNEL(tcliU_p32, 512) { li_until_mma<32, 12, true>(a); }
 OP_KERNEL(tcliU_p64, 384) { li_until_mma<64, 8, true>(a); }
 OP_KERNEL(tcliU_p32f, 512) { li_until_mma<32, 12, true, true>(a); }
 OP_KERNEL(tclaneU_lif, 512) { lane_until_mma<L_LIF, 64>(a); }
+OP_KERNEL(tc_mxf4_m128_n256, 128) { mxf4_alone(a); }
+OP_KERNEL(tcfU_li, 512) { lane_until_mma<L_LI, 64, true>(a); }
+OP_KERNEL(tcfU_mix, 512) { lane_until_mma<L_MIX, 64, true>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -657,6 +721,9 @@ static const OpProbe PROBES[] = {
     {.name = "tcliU_p64", .kernel = (const void*)tcliU_p64, .tpb = 384, .expect = UI ";LDTM.x64=2,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
     {.name = "tcliU_p32f", .kernel = (const void*)tcliU_p32f, .tpb = 512, .expect = UI ";LDTM.x32=2,LOP3.LUT=32,IMAD=32,FFMA=8", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_lif", .kernel = (const void*)tclaneU_lif, .tpb = 512, .expect = UI ";LOP3.LUT=28,IMAD=28,FFMA=8", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tc_mxf4_m128_n256", .kernel = (const void*)tc_mxf4_m128_n256, .tpb = 128, .expect = "UTC*MMA*=4", .warps = "1", .iters = 4096},
+    {.name = "tcfU_li", .kernel = (const void*)tcfU_li, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=32,IMAD=32", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcfU_mix", .kernel = (const void*)tcfU_mix, .tpb = 512, .expect = "UTC*MMA*=4;FFMA=32", .warps = "1;12", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
