@@ -29,10 +29,12 @@ the code side's.
    `Universal`), a fact about the programs private circuits run as; the acceptance probabilities (`OneStage.Pa`,
    `Rule.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the second stage, in
    each Flock's `E^rep` on every checked unit's session; the expected-time finder (`Bext`); and the parameters
-   (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`).
+   (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`, and the masked deployment `ZkDeploy`: the
+   reference prover's tape as a finite nonce and rest, and the simulator).
 6. **Claims**: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at the units' sessions and
    `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`; `Complete`; `ScopeMatches`;
-   `ZK`, relative to the trace's published leaf layer; `Bits`; `Efficient`; and `Nontrivial`.
+   `ZK`, of the masked deployment's reference prover and simulator, relative to the trace's published leaf layer;
+   `Bits`; `Efficient`; and `Nontrivial`.
 7. **Assumptions used**: `StrictBirthday` (for `B`), `ExpectedCR` (for `Bext`), and `trustedBase`. `ZK` gives the
    simulator the leaf layer the protocol publishes, so it reads no hiding assumption of the leaves.
 8. **Status**: stated; `FaultyBoundary` is proved (`Proofs.Flock.SamplingBoundary`), no other claim is.
