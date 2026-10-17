@@ -34,6 +34,10 @@
 #     -- taskset -c 96-127 bash benchmarks/remote_session/run.sh
 #   research run --on vy-nebius-2 ... --env ROLE=prover --env PORT=7791 --env PLAN=honest,skip:0.0625 \
 #     -- taskset -c 48-95 bash benchmarks/remote_session/run.sh
+#
+# CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
+# GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
+# with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -77,17 +81,23 @@ if [ "$ROLE" = prover ]; then
   ss -Hltn "sport = :$PORT" | grep -q . || { echo "no verifier tunnel on 127.0.0.1:$PORT"; exit 3; }
 fi
 LEASE=(gpu-lease "${GPUS:-1}" --wait ${GPU:+--on "$GPU"} ${TIMED:+--timed} --max-min "${MAXMIN:-30}" --)
-[ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
+[ -n "${GPU_LEASE_UUID:-}" ] || [ -n "${CPU:-}" ] && LEASE=()
+export CPU=${CPU:-} CODEC=${CODEC:-p512/k2}
 # shellcheck disable=SC2016
 "${LEASE[@]}" bash -c '
-  nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
-    --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
-  FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
-  nvcc "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-  nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" benchmarks/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
-  wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
-  wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
-  sha256sum "$B"/*.so > "$O/libs.sha256"
+  if [ -n "$CPU" ]; then
+    DEV=(--cpu "$CPU" --codec "$CODEC")
+  else
+    nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
+      --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
+    FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+    nvcc "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" benchmarks/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+    wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
+    wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
+    sha256sum "$B"/*.so > "$O/libs.sha256"
+    DEV=(--lib "$B/session.so" --kv "$B/kv.so" --gib "$GIB")
+  fi
   V=
   if [ "$ROLE" = both ]; then
     # shellcheck disable=SC2086
@@ -102,7 +112,7 @@ LEASE=(gpu-lease "${GPUS:-1}" --wait ${GPU:+--on "$GPU"} ${TIMED:+--timed} --max
       setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- "${PIN[@]}")
   fi
   "${PIN[@]}" "$PY" $RS/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
-    --lib "$B/session.so" --kv "$B/kv.so" --gib "$GIB" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
+    "${DEV[@]}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
   P=$?
   W=0
   if [ -n "$V" ]; then
