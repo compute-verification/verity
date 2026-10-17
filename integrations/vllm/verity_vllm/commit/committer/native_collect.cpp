@@ -1426,6 +1426,28 @@ struct StepHasher {
     return cur;
   }
 
+  // tree_window without the host copies (a run that keeps no tree levels: its openings take their paths from a replay): the same levels on
+  // the device and the same top node, and no host sync -- every tensor here is allocated on `stream_ptr`, and the caller releases the
+  // window's slot with an event recorded on that stream after these kernels.
+  at::Tensor tree_window_top(at::Tensor leaves, int64_t n_levels, int64_t stream_ptr) {
+    if (!leaves.is_cuda() || leaves.scalar_type() != at::kInt || !leaves.is_contiguous() || leaves.dim() != 2 || leaves.size(1) != 8) throw std::runtime_error("tree_window_top: leaves must be a contiguous CUDA int32 [n, 8]");
+    if (n_levels < 1) throw std::runtime_error("tree_window_top: n_levels must be positive");
+    at::Tensor cur = leaves;
+    py::gil_scoped_release nogil;
+    c10::InferenceMode inf;
+    cudaStream_t side = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, leaves.device().index());
+    c10::cuda::CUDAStreamGuard g(cs);
+    for (int64_t L = 0; L + 1 < n_levels; ++L) {
+      const long n_in = cur.size(0);
+      at::Tensor out = at::empty({(n_in + 1) / 2, 8}, leaves.options());
+      int lrc = verity_tree_level_launch(reinterpret_cast<const uint32_t*>(cur.data_ptr()), reinterpret_cast<uint32_t*>(out.data_ptr()), n_in, side);
+      if (lrc != 0) throw std::runtime_error(std::string("tree_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+      cur = out;
+    }
+    return cur;
+  }
+
   // -> (levels: list[Tensor int32 [n,8]] leaves first, keep: Tensor uint8 [padded] (device | host | empty), root: bytes(32), padded, leaf_ms, tree_ms)
   // keep_mode (R13 P0 retention policy): 0 = compact DEVICE copy (R9..R12), 1 = HOST copy (D2H on the side stream; pageable), 2 = no copy
   // (openings by replay).  The leaves are always hashed from the arena block first, so the root does not depend on keep_mode.
@@ -1539,6 +1561,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
            py::arg("chunk_bytes"), py::arg("m_words"), py::arg("stream_ptr"))
       .def("tree", &StepHasher::tree, py::arg("leaves"), py::arg("stream_ptr"), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor())
       .def("tree_window", &StepHasher::tree_window, py::arg("leaves"), py::arg("n_levels"), py::arg("stream_ptr"), py::arg("host_dsts"))
+      .def("tree_window_top", &StepHasher::tree_window_top, py::arg("leaves"), py::arg("n_levels"), py::arg("stream_ptr"))
       .def("commit", &StepHasher::commit, py::arg("arena"), py::arg("used"), py::arg("step"), py::arg("src_mask"), py::arg("chunk_bytes"),
            py::arg("side_stream_ptr"), py::arg("step_event_ptr"), py::arg("keep_mode") = 0, py::arg("keep_dst") = at::Tensor(), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor());
   py::class_<Collector>(m, "Collector")

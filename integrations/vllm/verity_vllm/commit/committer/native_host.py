@@ -1841,6 +1841,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if step in self._gpu_levels:
             lv0 = self._gpu_levels[step][0]
             return [lv0[i].cpu().numpy().astype("uint32").tobytes() for i in range(int(lv0.shape[0]))]
+        if step not in self._levels and not getattr(self, "retain_levels", True):
+            raise RuntimeError(f"step {step}: this run kept no tree levels (retain_levels=False), so its leaves cannot be refolded with padding")
         return list(self._levels[step][0])
 
     def _apply_padding(self, steps: list[StepCommitment]) -> list[StepCommitment]:
@@ -2269,7 +2271,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 if step in self._gpu_blocks:
                     blk, used = self._gpu_blocks[step]           # lazy D2H of the 256 B chunk (zero-padded past `used`) + level sibling path
                     lo = index * self.chunk
-                    levels = self._gpu_levels[step]
+                    levels = self._gpu_levels.get(step)
                     if not self._block_holds(blk, lo, lo + self.chunk) or (paths_from_replay and values_from is not None):
                         if values_from is None or step not in values_from._gpu_blocks:
                             raise RuntimeError(f"open({step}, {index}): raw bytes released / not retained (retain={self.retain}) and no replay source holds step {step}")
@@ -2283,6 +2285,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                             if step not in values_from._gpu_levels:
                                 raise RuntimeError(f"open({step}, {index}): the replay source has no tree levels for step {step}")
                             levels = values_from._gpu_levels[step]
+                    if levels is None:
+                        raise RuntimeError(f"open({step}, {index}): this run kept no tree levels (retain_levels=False): open with a replay "
+                                           "source and paths_from_replay=True")
                     value = bytes(blk[lo:lo + self.chunk].cpu().numpy().tobytes())
                     path = self._HG.gpu_open(levels, index) if self._HG is not None else open_levels(levels, index)
                     out.append(Opening(step, index, value, tuple(path), ident))

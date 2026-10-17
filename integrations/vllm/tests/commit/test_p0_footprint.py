@@ -138,6 +138,8 @@ def test_the_declared_layout_reaches_only_a_committer_that_implements_it(monkeyp
         NC.NativeCollectCommitter(None, layout="chunk-leaf-v3")
     with pytest.raises(ValueError, match="windowed path only"):
         NC.NativeCollectCommitter(None, layout="chunk-leaf-v2")
+    with pytest.raises(ValueError, match="retain_levels=False is implemented on the windowed path only"):
+        NC.NativeCollectCommitter(None, retain_levels=False)
     args = argparse.Namespace(layout="chunk-leaf-v2", chunk=256, hash_threads=1, arena_mb=None)
     for kind in ("native_host", "native_host_direct", "hooks_only"):
         with pytest.raises(ValueError, match="native_collect committers only"):
@@ -199,7 +201,8 @@ def test_e2e_windowed_roots(tmp_path: Path):
 @pytest.mark.parametrize("n_leaves,j", [(1, 4), (5, 4), (16, 4), (17, 4), (48, 4), (49, 4), (1000, 4), (3, 6), (64, 6), (65, 6), (200, 3)])
 def test_tree_window_equals_whole_tree(n_leaves: int, j: int):
     """Per-window subtrees (window = 2^j leaves, `StepHasher.tree_window`) + the ordinary tree over the window tops == the whole-step tree
-    (`StepHasher.tree`): same root AND the same nodes at every level (the levels are what openings read).  Covers: a single collapsed
+    (`StepHasher.tree`): same root AND the same nodes at every level (the levels are what openings read); `tree_window_top` gives the
+    same window tops.  Covers: a single collapsed
     window (n < 2^j, height < j), exact multiples, a partial last window that collapses below the window level (the lift chain), and
     steps with many windows."""
     from verity_vllm.commit.committer.native_collect import ext
@@ -229,6 +232,10 @@ def test_tree_window_equals_whole_tree(n_leaves: int, j: int):
     upper, root, _ = H.tree(tops_t, side.cuda_stream, True, torch.empty(0, dtype=torch.uint8))
     levels = list(views[:n_levels - 1]) + list(upper)
     assert root == ref_root
+    # retain_levels=False: the same window tops on the device, with no host copy and no host sync
+    dev_tops = [H.tree_window_top(leaves[k * per_win:(k + 1) * per_win].clone(), n_levels, side.cuda_stream) for k in range(len(tops))]
+    assert torch.equal(torch.cat(dev_tops), tops_t)
+    assert H.tree(torch.cat(dev_tops), side.cuda_stream)[1] == ref_root
     assert len(levels) == len(ref_levels)
     for L, (a, b) in enumerate(zip(levels, ref_levels)):
         assert a.shape == b.shape, L

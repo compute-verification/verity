@@ -131,6 +131,8 @@ class NativeRangeOpenings:
             blk = self._gpu_blocks[step][0]
             if not self._block_holds(blk, lo * C, hi * C):
                 return None
+            if step not in self._gpu_levels:
+                raise RuntimeError(f"open_range({step}, {lo}, {hi}): this run kept no tree levels (retain_levels=False)")
             seg = blk[lo * C:hi * C]
             value = bytes((seg.cpu() if getattr(seg, "is_cuda", False) else seg).numpy().tobytes())
             levels = self._gpu_levels[step]

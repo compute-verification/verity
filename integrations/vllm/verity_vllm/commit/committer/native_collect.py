@@ -577,7 +577,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
-                 layout: str = "chunk-leaf-v1", **kw: Any) -> None:
+                 layout: str = "chunk-leaf-v1", retain_levels: bool = True, **kw: Any) -> None:
         kw.setdefault("fast_copy", True)
         kw.setdefault("gpu_tree", True)
         super().__init__(engine, **kw)
@@ -609,6 +609,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.layout_v2 = layout == "chunk-leaf-v2"
         if self.layout_v2 and not self.windowed:
             raise ValueError("chunk-leaf-v2 is implemented on the windowed path only (--window-mb > 0)")   # header M := 0 (coordinator decision)
+        # `retain_levels=False`: no tree level of a step is kept (on the windowed path each window's subtree stays on the device, no host
+        # copy and no host sync per window); the roots are the same, and an opening takes its value and path from a replay
+        # (`open(values_from=, paths_from_replay=True)`), which `verify` holds to this run's roots
+        self.retain_levels = bool(retain_levels)
+        if not self.retain_levels and not self.windowed:
+            raise ValueError("retain_levels=False is implemented on the windowed path only (--window-mb > 0)")
         # [R17 fp8, F-fp8-B8MEM] BOUNDED staging (VERITY_STAGING_BOUNDED=1; flag until root parity is on record): under chunk-leaf-v1 the
         # leaf header binds the step length M, which a LEARNING step (plan not yet known) only knows at step end -- the windowed path
         # therefore copied EVERY window of every step to pinned host (the learning re-hash source; the hit-plan "hedge" copy) and
@@ -1266,6 +1272,9 @@ class NativeCollectCommitter(NativeHostCommitter):
             union of per-window subtrees; the upper tree is built over the per-window top nodes by `H.tree` afterwards."""
             sizes = level_sizes(n_total, j)
             n_levels = len(sizes)
+            if not self.retain_levels:
+                state.update(n_total=n_total, n_levels=n_levels, views=None, tops=[])
+                return
             buf = self.pool.take(sum(sizes) * 32) if self.retain_pinned else torch.empty(sum(sizes) * 32, dtype=torch.uint8)
             views, off = [], 0
             for nL in sizes:
@@ -1277,6 +1286,9 @@ class NativeCollectCommitter(NativeHostCommitter):
             """Subtree of window k (lv_k = its leaves, device) -> host level slices + top node kept on device."""
             n_k = int(lv_k.shape[0])
             views, n_levels = state["views"], state["n_levels"]
+            if views is None:
+                state["tops"].append(H.tree_window_top(lv_k, n_levels, side.cuda_stream))
+                return
             dsts = []
             for L in range(n_levels):
                 s0 = k << (j - L)
@@ -1485,7 +1497,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 if self.retain == "host":
                     excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
                     parts = [p for kk in range(-(-padded // W)) for p in retained_parts(kk * W, kk * W + min(W, padded - kk * W))]
-                self.pool.reserve([32 * sum(level_sizes(padded // C, j))] + [b - a for a, b in parts])
+                self.pool.reserve(([32 * sum(level_sizes(padded // C, j))] if self.retain_levels else []) + [b - a for a, b in parts])
                 begin_tree(padded // C)
                 state.clear()
                 for a, b in parts:
@@ -1517,7 +1529,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             if state["n_levels"] != old["n_levels"]:
                 raise RuntimeError(f"windowed absorb (layout v2): plan {plan_pad} -> step {padded} bytes changes the tree height class "
                                    f"({old['n_levels']} -> {state['n_levels']} window levels); no host copy to re-hash from")
-            for L in range(state["n_levels"]):
+            for L in range(state["n_levels"] if state["views"] is not None else 0):
                 n_copy = min(int(old["views"][L].shape[0]), int(state["views"][L].shape[0]))
                 if n_copy:
                     state["views"][L][:n_copy].copy_(old["views"][L][:n_copy])
@@ -1546,9 +1558,11 @@ class NativeCollectCommitter(NativeHostCommitter):
             with torch.inference_mode(), torch.cuda.stream(side):
                 for kk, hv_k, hb in pending:
                     lv_k = hv_k.to("cuda", non_blocking=True)                   # H2D of the window's leaves (1/8 of its bytes), side stream
-                    absorb(kk, lv_k)                                            # syncs the side stream -> hv_k / hb reusable
+                    absorb(kk, lv_k)
                     del lv_k
-                    self.pool.give_back(hb)
+            side.synchronize()                                                  # the H2Ds out of the blocks are done -> reusable
+            for _kk, _hv_k, hb in pending:
+                self.pool.give_back(hb)
             pending = []
         if not padded:
             with torch.inference_mode(), torch.cuda.stream(side):
@@ -1562,15 +1576,19 @@ class NativeCollectCommitter(NativeHostCommitter):
             with torch.inference_mode(), torch.cuda.stream(side):
                 tops = torch.cat(state["tops"]) if len(state["tops"]) > 1 else state["tops"][0]
             # upper tree over the per-window top nodes (level n_levels-1 of the step) -> root; its levels go to pinned host too
-            tot, n = 0, int(tops.shape[0])
-            while True:
-                tot += n
-                if n <= 1:
-                    break
-                n = (n + 1) // 2
-            upper_dst = self.pool.take(tot * 32) if self.retain_pinned else torch.empty(0, dtype=torch.uint8)
-            upper, mr, tree_ms = H.tree(tops, side.cuda_stream, True, upper_dst)
-            levels = list(state["views"][:state["n_levels"] - 1]) + list(upper)
+            if state["views"] is None:
+                _upper, mr, tree_ms = H.tree(tops, side.cuda_stream)            # its event sync also orders every window's subtree
+                levels = []
+            else:
+                tot, n = 0, int(tops.shape[0])
+                while True:
+                    tot += n
+                    if n <= 1:
+                        break
+                    n = (n + 1) // 2
+                upper_dst = self.pool.take(tot * 32) if self.retain_pinned else torch.empty(0, dtype=torch.uint8)
+                upper, mr, tree_ms = H.tree(tops, side.cuda_stream, True, upper_dst)
+                levels = list(state["views"][:state["n_levels"] - 1]) + list(upper)
             del tops
             state.clear()
         nc.finish_step(job.step)
@@ -1634,7 +1652,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
         self.spans.add("worker_idle", idle, step=job.step)                     # inside `hashing`: the rest of it is the worker's own work
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
-        self._gpu_levels[job.step] = levels
+        if self.retain_levels:
+            self._gpu_levels[job.step] = levels
         self._gpu_blocks[job.step] = (keep, used)
         self._layouts[job.step] = metas
         self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(metas), layout_dig, job.t_step_end, t2, job.backlog,
