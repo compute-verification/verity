@@ -1,6 +1,7 @@
 import Flock.Canon
 import Std.Data.TreeMap.Raw.Lemmas
 import Definitions.Claims.Json
+import Proofs.Flock.Claims.JsonEq
 import Proofs.Flock.Claims.Complete.Prover.Print
 
 /-!
@@ -13,7 +14,8 @@ named assumption the record's theorems take as a hypothesis, over alike (`Same`)
 (`Wf`) values (`Definitions/Claims/Json.lean`). It is the spec's `Claims.JsonSpec` with the honest prover's printer,
 `printJ`, where the spec reads `Json.compress`. Here are the lemmas on alike values the proofs read: alike leaves are
 equal, and alike objects have alike values at each key (`Same.getObjVal`) and the same missing keys
-(`Same.getObjVal_none`). The record's numbers are all `Lean.toJson` of naturals, so printable.
+(`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's draw check (`drawEq`)
+passes on them. The record's numbers are all `Lean.toJson` of naturals, so printable.
 -/
 
 namespace FlockComplete.JsonRT
@@ -44,6 +46,16 @@ theorem _root_.Claims.Json.Same.symm : ∀ {a b : Json}, Same a b → Same b a
   | _, _, .str s => .str s
   | _, _, .arr hs he => .arr hs.symm fun i h₁ h₂ => (he i h₂ h₁).symm
   | _, _, .obj hm hn hk hv => .obj hn hm (fun k => (hk k).symm) fun k a b ha hb => (hv k b a hb ha).symm
+
+/-- **Alike values are equivalent** (`FlockDeploy.JsonEquiv`): one form, whatever their objects' key order. -/
+theorem _root_.Claims.Json.Same.jsonEquiv : ∀ {a b : Json}, Same a b → FlockDeploy.JsonEquiv a b
+  | _, _, .null => rfl
+  | _, _, .bool _ => rfl
+  | _, _, .num _ => rfl
+  | _, _, .str _ => rfl
+  | _, _, .arr hs he => (FlockDeploy.jsonEquiv_arr_iff _ _).2 ⟨hs, fun i h₁ h₂ => (he i h₁ h₂).jsonEquiv⟩
+  | _, _, .obj hm hn hk hv =>
+    (FlockDeploy.jsonEquiv_obj_iff hm hn).2 ⟨hk, fun k a b ha hb => (hv k a b ha hb).jsonEquiv⟩
 
 theorem same_str {s : String} {j : Json} (h : Same (.str s) j) : j = .str s := by cases h; rfl
 

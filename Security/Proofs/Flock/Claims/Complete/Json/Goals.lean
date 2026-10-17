@@ -192,7 +192,7 @@ theorem drawMatches_goal (S : JsonSpec Flock.canon) (h64 : Claims.Out64 H) (hP :
   | some d =>
     rintro ⟨d', hd', hs⟩
     rw [hd']
-    exact S.beq_same d' d hs.symm
+    exact (drawEq_iff _ _).2 (.some hs.symm.jsonEquiv)
 
 theorem list_bytes_beq_self (l : List ByteArray) : (l == l) = true := by
   induction l with
