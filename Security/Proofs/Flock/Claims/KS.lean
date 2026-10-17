@@ -61,6 +61,7 @@ import Proofs.Flock.Claims.KS.ZkEvent
 import Proofs.Flock.Claims.KS.ZkFirst
 import Proofs.Flock.Claims.KS.FitsR
 import Proofs.Flock.Claims.KS.ZkFitsW
+import Proofs.Flock.Claims.KS.ZkBoundW
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -284,4 +285,10 @@ their own rounds, only round `0`'s events are charged twice, and the escapes' ro
 round `0` and every event but one weighs at least `2` (`Claims.Flock.joinEscW_c_le`), and each table's weight pays
 exactly for its events with level 0's and its share of `k` (`FlockDeploy.KS.cZW_sum_le_tableWeight`), so the masked
 escapes with level 0's fit the deployed weight with the fork event of weight `k`, counted per round
-(`FlockDeploy.KS.joinEscW_fitsForkR_zk`). -/
+(`FlockDeploy.KS.joinEscW_fitsForkR_zk`). At one tape and table, the deployed masked runs accept with no column of table
+`j` off `C` with probability at most `ε_table` and those escapes' term when the mixture bounds them by its acceptance
+with no level-0 opening off `C` on a witness lane (`ZkBoundW`: `Claims.Flock.oldEscW_term_le_join`,
+`FlockDeploy.KS.zk_le_sessionsJW`), so the masked sessions bounding every table at that verdict with events on accepted
+runs give every masked table's bound with the escapes counted per round (`FlockDeploy.KS.ZkSessWJ`,
+`Claims.Flock.TableBoundJAccAtR`, `Claims.Flock.TableBoundJAccAt.tableBoundJAccAtR`,
+`FlockDeploy.KS.zk_tableBoundJAccAtR_of_sessionsW`). -/
