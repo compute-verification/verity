@@ -168,7 +168,7 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
   gk::Nvml nv(0);
   cudaStream_t s;
   GK_CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
-  const unsigned long long gbytes = 64ull << 20;
+  const unsigned long long gbytes = 512ull << 20;  // holds l2gather.cu's tables past the L2 (others mask into their own pools)
   unsigned char* g;
   GK_CK(cudaMalloc(&g, gbytes));
   GK_CK(cudaMemsetAsync(g, 0, gbytes, s));
@@ -179,7 +179,7 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
     r.resType = cudaResourceTypeLinear;
     r.res.linear.devPtr = g;
     r.res.linear.desc = cudaCreateChannelDesc<unsigned>();
-    r.res.linear.sizeInBytes = gbytes;
+    r.res.linear.sizeInBytes = std::min(gbytes, 256ull << 20);  // within the 1D linear texture limit (l2gather's tex tables are 64/128 MB)
     t.readMode = cudaReadModeElementType;
     GK_CK(cudaCreateTextureObject(&tex1, &r, &t, nullptr));
     cudaResourceDesc r2{};

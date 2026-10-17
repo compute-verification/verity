@@ -6,6 +6,10 @@ import Proofs.Flock.Claims.Bridge.LiveZk
 import Proofs.Flock.Claims.Bridge.LivePlain
 import Proofs.Flock.Claims.Bridge.Committed
 import Proofs.Flock.Claims.Bridge.Custody
+import Proofs.Flock.Claims.Bridge.CustodyPlain
+import Proofs.Flock.Claims.Bridge.DecodePlain
+import Proofs.Flock.Claims.Bridge.Dead
+import Proofs.Flock.Claims.Bridge.Returns
 import Proofs.Flock.Claims.Bridge.Hm96Tree
 import Proofs.Flock.Claims.Bridge.CustodyPlain
 import Proofs.Flock.Claims.Bridge.DecodePlain
