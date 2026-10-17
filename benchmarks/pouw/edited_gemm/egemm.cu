@@ -449,6 +449,10 @@ EGEMM(e_l2q, DUO, 2, 4)
 EGEMM(e_l3qm, DUO, 3, -4)
 EGEMM(e_l2o, DUO, 2, 8)
 EGEMM(e_l4q, DUO, 4, 4)
+EGEMM(e_l4o, DUO, 4, 8)
+EGEMM(e_l6q, DUO, 6, 4)
+EGEMM(e_l7q, DUO, 7, 4)
+EGEMM(e_l7o, DUO, 7, 8)
 EGEMM(d64_l2q, DUO64, 2, 4)
 EGEMM(d64_l7q, DUO64, 7, 4)
 EGEMM(d64_lsq, DUO64, -1, 4)
@@ -703,7 +707,8 @@ struct EKn { const char* name; Kern k, k3; const char* kind; };
 #define EKE(NAME, KIND) {#NAME, NAME, NAME##_k3, KIND}
 static const EKn EK[] = {
     EKE(e_plain, ""), {"t_duo32", t_duo32, t_duo32, "duo32"}, EKE(e_l2h, "duo32"), EKE(e_l2q, "duo32"),
-    EKE(e_l3qm, "duo32"), EKE(e_l2o, "duo32"), EKE(e_l4q, "duo32"),
+    EKE(e_l3qm, "duo32"), EKE(e_l2o, "duo32"), EKE(e_l4q, "duo32"), EKE(e_l4o, "duo32"), EKE(e_l6q, "duo32"),
+    EKE(e_l7q, "duo32"), EKE(e_l7o, "duo32"),
     EKE(d64_l2q, "duo64"), EKE(d64_l7q, "duo64"), EKE(d64_lsq, "duo64"), EKE(d64_lsqm, "duo64"),
     EKE(x_l2, "xin"), EKE(x_l2q, "xin"), EKE(x_l3qm, "xin"), EKE(x_l2o, "xin"), EKE(x64_l2q, "xin64"), EKE(x64_l2o, "xin64"),
     EKE(x13_l2o, "xin13"),

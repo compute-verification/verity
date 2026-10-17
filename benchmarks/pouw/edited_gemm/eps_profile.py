@@ -273,7 +273,12 @@ def main() -> int:
         base = res.get(f"{sh}-e_plain", {}).get("kernel", {})
         base = base["inst_per_mma"] - base["wait_per_mma"] if base else None
         rows = [(None, "plain")] + SWEEP + [(3.0, "e_l4q"), (1.5, "x_l2o")]
+        seen = {arm for _, arm in rows}
+        rows += [(3.0 if arm.startswith("e_l") else None, arm) for arm in
+                 sorted({n.split("-", 1)[1] for n in res if n.startswith(sh + "-")} - seen)]
         for rr, arm in rows:
+            if f"{sh}-{arm}" not in res and arm not in arms:
+                continue
             r = res.get(f"{sh}-{arm}", {})
             k = r.get("kernel", {})
             hb = arms.get(arm, {})
