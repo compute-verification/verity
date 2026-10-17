@@ -37,6 +37,7 @@ from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFIL
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, hopper, sparse_mla, sparse_mla_split
+from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
 from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
 
@@ -374,8 +375,9 @@ def test_a_gate_in_a_batch_binds_the_route_of_the_launchs_tokens(served):
 
 
 def test_the_large_gate_refuses_an_uncaptured_default_cublas_route(served):
-    rep = _derive(_CublasGate(), (torch.empty(18, 6144, device="meta", dtype=torch.bfloat16),))
-    assert "no captured vLLM-default cuBLAS router route for M=18, K=6144, N=256" in _hint(rep)
+    M = BC.CUBLAS_ROUTES["m_max"] + 1
+    rep = _derive(_CublasGate(), (torch.empty(M, 6144, device="meta", dtype=torch.bfloat16),))
+    assert f"no captured vLLM-default cuBLAS router route for M={M}, K=6144, N=256" in _hint(rep)
 
 
 def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):

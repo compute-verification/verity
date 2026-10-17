@@ -171,8 +171,7 @@ def _f32out_phase(K: int, N: int) -> str:
     """The captured route family of a bf16 -> f32 ``torch.mm(x, W.T, out_dtype=float32)`` at (K, N): ``"f32out"``, a direct call,
     when the shape has captured routes of its own, else ``"router"``, `GateLinear`'s cuBLAS tier, which vLLM dispatches only past
     its cuteDSL tiers.  The two families' captured shapes are disjoint, so a shape binds only in the family it was captured in."""
-    key = ("f32out", K, N)
-    return "f32out" if key in bf16_gemm_check.DEFAULT_CUBLAS_SPLIT_K or key in bf16_gemm_check.DEFAULT_CUBLAS_NON_SPLIT else "router"
+    return "f32out" if f"f32out {K} {N}" in bf16_gemm_check.CUBLAS_ROUTES["routes"] else "router"
 
 
 class CublasRouterRule(OpRule):
