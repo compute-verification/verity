@@ -16,6 +16,8 @@ from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm
 from verity_vllm.program.registry import dsv4_indexer as _dsv4_indexer, dsv4_qnorm_insert as _dsv4_qnorm
+from verity_vllm.program.registry import dsv4_compressor as _dsv4_compressor
+from verity_vllm.program.registry import flashmla as _flashmla, flashmla_prefill as _flashmla_prefill
 from verity_vllm.program.registry import deepgemm as _deepgemm
 from verity_vllm.program.registry import boolean_rope as _rope
 from verity_vllm.program.registry import cublas_bf16 as _cublas_bf16, ll_bf16 as _ll_bf16
@@ -476,7 +478,15 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "hc_head": lambda HC, H, TH, EPS, HC_EPS: ir_bind(_mhc.HcHead, HC=HC, H=H, TH=TH, EPS=EPS, HC_EPS=HC_EPS),
            "dsv4_qnorm_rope_kv_insert": lambda NH, NHP, DN, DR, QB, EPS:
                ir_bind(_dsv4_qnorm.Dsv4QNormRopeKvInsert, NH=NH, NHP=NHP, DN=DN, DR=DR, QB=QB, EPS=EPS),
-           "dsv4_compressor_score": lambda W: ir_bind(_dsv4_indexer.Dsv4CompressorScore, W=W)},
+           "dsv4_compressor_score": lambda W: ir_bind(_dsv4_indexer.Dsv4CompressorScore, W=W),
+           "dsv4_compress_c4": lambda ROWS, D, QB, EPS: ir_bind(_dsv4_compressor.Dsv4MlaCompressC4, ROWS=ROWS, D=D, QB=QB, EPS=EPS),
+           "dsv4_compress_c128": lambda W, R, D, QB, EPS:
+               ir_bind(_dsv4_compressor.Dsv4MlaCompressC128, W=W, R=R, D=D, QB=QB, EPS=EPS),
+           "flashmla_decode": lambda NH, SPLITS, NW, DN, DR, QT, BN, DOT, SCALE:
+               ir_bind(_flashmla.FlashMlaDecode, NH=NH, SPLITS=SPLITS, NW=NW, DN=DN, DR=DR, QT=QT, BN=BN, DOT=DOT, SCALE=SCALE),
+           "flashmla_gather_row": lambda DN, DR, QT: ir_bind(_flashmla_prefill.FlashMlaGatherRow, DN=DN, DR=DR, QT=QT),
+           "flashmla_prefill": lambda NH, NP, D, BN, DOT, SCALE:
+               ir_bind(_flashmla_prefill.FlashMlaPrefill, NH=NH, NP=NP, D=D, BN=BN, DOT=DOT, SCALE=SCALE)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -580,7 +590,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "hc_head": "HcHead_v1{HC,H,TH,EPS,HC_EPS}: hc_head_fuse_tilelang, the final streams' mix to one row",
            "dsv4_qnorm_rope_kv_insert": "Dsv4QNormRopeKvInsert_v1{NH,NHP,DN,DR,QB,EPS}: the sparse MLA's query norm, RoPE and "
                                         "fp8_ds_mla window row, one token",
-           "dsv4_compressor_score": "Dsv4CompressorScore_v1{W}: save_partial_states' score row plus ape[pos % ratio]"})
+           "dsv4_compressor_score": "Dsv4CompressorScore_v1{W}: save_partial_states' score row plus ape[pos % ratio]",
+           "dsv4_compress_c4": "Dsv4MlaCompressC4_v1{ROWS,D,QB,EPS}: the ratio-4 compressor's row at a window's end (CuTe DSL)",
+           "dsv4_compress_c128": "Dsv4MlaCompressC128_v1{W,R,D,QB,EPS}: the ratio-128 compressor's row at a window's end (CuTe DSL)",
+           "flashmla_decode": "FlashMlaDecode_v1{NH,SPLITS,NW,DN,DR,QT,BN,DOT,SCALE}: FlashMLA's sparse fp8 decode of one token over "
+                              "its window and compressed rows, at the planner's splits",
+           "flashmla_gather_row": "FlashMlaGatherRow_v1{DN,DR,QT}: the prefill's K-cache gather of one fp8_ds_mla row to bf16",
+           "flashmla_prefill": "FlashMlaPrefill_v1{NH,NP,D,BN,DOT,SCALE}: FlashMLA's sparse prefill of one token over its gathered rows"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:
