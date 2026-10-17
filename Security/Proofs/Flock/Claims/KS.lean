@@ -15,6 +15,9 @@ import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.ConflictTied
 import Proofs.Flock.Claims.KS.TableBound
 import Proofs.Flock.Claims.KS.Refit
+import Proofs.Flock.Claims.KS.Rounds
+import Proofs.Flock.Claims.KS.Mixture
+import Proofs.Flock.Claims.KS.PlainBound
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -71,4 +74,12 @@ fork and self-clash terms are escapes' (`Flock.oldEsc`, `Flock.oldEsc_term`; mas
 `Flock.oldEscZ`, `Flock.oldEscZ_term`) that fit the weight with the fork event of weight `k`
 (`FlockDeploy.KS.oldEsc_fitsFork_plain`, `FlockDeploy.KS.oldEscZ_fitsFork_zk`), so the salted and masked sessions'
 `ε_c⁻` are at most `ε_table` and their term (`FlockDeploy.KS.epsSL_le`, `FlockDeploy.KS.epsSZ_le`), also averaged over
-a mixture of strategies (`FlockDeploy.KS.mean_epsSL_le`, `FlockDeploy.KS.mean_epsSZ_le`). -/
+a mixture of strategies (`FlockDeploy.KS.mean_epsSL_le`, `FlockDeploy.KS.mean_epsSZ_le`). The plain fork rounds
+(`Rounds`): rep `r`'s level-`ℓ + 1` cap round at table 0, no two of them one (`FlockDeploy.KS.plainJ`,
+`FlockDeploy.KS.plainJ_inj`), at which the old escapes fit the plain weight (`FlockDeploy.KS.oldEsc_fitsFork_plainJ`).
+At one table the model does not commit to, a live verdict is no likelier than the simulated strategy's `ε_c⁻` after
+`Commit` and its probability of accepting off the table (`Mixture`: `FlockDeploy.KS.live_le_epsSL`; over a mixture of
+live strategies, `FlockDeploy.KS.mean_live_le`). At a plain statement of one table, `TableBoundθAt` follows from, at
+each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C` bounds the deployed
+runs accepting on `C`, and whose `Adv` and self-clash the escapes' events bound, the escapes at the plain fork rounds
+(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). -/
