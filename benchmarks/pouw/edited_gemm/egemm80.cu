@@ -1,7 +1,7 @@
 // The edited GEMM on sm_80 (A100, EPS1 AMPERE r2): egemm.cu's e_l7qs, lpgemm.cu's 16-warp 128 x 128 mainloop with duo
 // receipts on C's running sums (each absorb LAG = 7 MMAs after its tile's MMA, a LOP3 tie every 4th MMA) and the peel as
 // a 2-atom tail, with sm_80's loads. TMA and mbarrier transactions are sm_90+, so a stage (128 of k for the tile's A and
-// B rows) comes in by cp.async, every thread 4 16-byte copies into an NST-stage ring (EG80_NST, 3 by default) laid out
+// B rows) comes in by cp.async, every thread 4 16-byte copies into an NST-stage ring (EG80_NST, 4 by default) laid out
 // as TMA's 128-byte swizzle (16-byte chunk c of row r at c ^ (r % 8)), and the CTA meets at one __syncthreads a stage,
 // where the stage NST - 1 ahead is issued. The thread layout, the fragments (ldmatrix x4), the saturating IMMA, the receipt chains, keys and finish are
 // egemm.cu's (fgemm.cu's duo), so derive.py's tile_receipts checks them over the running sums at each commit boundary.
@@ -99,7 +99,7 @@ struct Args {
 };
 
 #ifndef EG80_NST
-#define EG80_NST 3
+#define EG80_NST 4  // 3 holds L = 32 and 64 2% and 8% slower; 5 is no faster; L = 16 runs 0.5% faster at 3
 #endif
 constexpr int BM = 128, BN = 128, BK = 128, NST = EG80_NST, NT = 512, WARPS_N = 4, MI = 2, NI = 4, NU = MI * NI;
 static_assert(NST >= 3, "a stage's one barrier frees only the previous step's slot for the refill");

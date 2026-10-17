@@ -7,7 +7,7 @@
 #     --env GPU_LEASE_WHO=ampere -- bash benchmarks/pouw/edited_gemm/run80.sh
 #
 # Every output is under $OUT: build.log, sass/, gate-sass.json, gate/ (the dump), gate.jsonl, ref.jsonl, bench.jsonl,
-# hold-<arm>.jsonl, smi-samples.csv, summary.json. EG80_NVCC adds nvcc flags (-DEG80_NST=4: a 4-stage ring).
+# hold-<arm>.jsonl, smi-samples.csv, summary.json. EG80_NVCC adds nvcc flags (-DEG80_NST=3: a 3-stage ring).
 set -uo pipefail
 OUT=${OUT:?run under research run}
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
