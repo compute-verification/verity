@@ -2,10 +2,17 @@
 # noise, ε_skip and ε_mand are sm_120's design's (data/designs/); honest, its operand floor and the baseline are the
 # H200's. Every Dither noise has the same floor here: no operand passes through a register.
 name = "dither-c-l256"
+title = "Dither-C, L = 256"
 summary = "Dither-C on the H200 at L = 256: CO-Dither (co32c, cohalf), P·V on committed digit limbs, duo receipts"
 honest = "dc90-l256"
 L = 256
 work = 1.0
+
+[noise]
+linears = "co32c"
+lm_head = "co32c"
+qk = "cohalf"
+pv = "pv"
 
 [operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
 floor = { IGMMA_S8_N256 = 0.0 }
