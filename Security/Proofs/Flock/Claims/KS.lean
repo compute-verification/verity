@@ -120,4 +120,5 @@ every result of each table's reps' runs requests level 0 first there, and every 
 path length (`LevelZeroAcc`: `FlockSoundness.Discharge.Exec.accepts_req0`). A position the deployed reader is given
 below `2^d` is looked up, to a column it was given there, so an output whose level-0 openings verify and are the
 reader's entries opens a position off `C` without a self-clash only where the reader looks up a column off `C`
-(`OffSC`: `Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`). -/
+(`OffSC`: `Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`); an accepted salted
+table's level-0 openings verify (`Claims.Flock.verified_opens₀L`). -/
