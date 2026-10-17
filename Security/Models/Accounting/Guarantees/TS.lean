@@ -11,6 +11,9 @@ note:20261017T0321Z-draft-eps1-tensor), each `def G : Prop`, proved (or a `sorry
 * `DecompositionD`: Theorem D(a), the master inequality from (Π), (RD) and (Lk).
 * `DIdeal`, `DIdealFloor`: Theorem D-ideal, (2.7) and (2.7♭), in 𝒫_full from (I1)–(I8).
 * `CompilerC`: Lemma C, the compiler, in 𝒫_samp: the same bound with `ε_sample` added.
+* `ProofsSoundOfPinned`: (I8) `ProofsSound` from binding at `δ_bind`, proof soundness at `δ_ZK`, the Definitions'
+  pinning and E1(c) (`RightFixed`); `BindingOfFork`: binding's failure squared is at most its fork form's, two runs
+  off one commitment opening it differently, so `δ_bind = √δ_fork`.
 * `FloorCreditD3`: Corollary D3, the credit at the floor, with every term `≥ 0` and `T(H) = γ_♭·T_cred`.
 * `BindingFacetD1`, `VectorThresholdD1`: Corollary D1, one binding facet, and the vector route's threshold
   `q ≥ 32(α + β·φ_del)/(β·ω)`.
@@ -176,6 +179,27 @@ every `L/d_H` of them (`d_H ≤ L`), so `ε_tensor ≤ 1 − (ρ_H/ρ_T)(d_H/L)`
 def TensorSlotTight : Prop :=
   ∀ ρH ρT dH L : ℝ, 0 < ρH → ρH ≤ ρT → 0 < dH → dH ≤ L →
     (1 - ρH / ρT * (dH / L) = 0 ↔ L = dH ∧ ρH = ρT)
+
+/-- **(I8) from its pieces.** In 𝒫_full over a window's proofs (`ProofLayer`, `n_π` a round) whose play is theirs (`Of`:
+the window is accepted only if every proof is, and the ideal game's check is the proofs' relations at the committed
+values): if at every round binding fails with probability at most `δ_bind` (`Moved`: an accepted round's proof opens
+its leaves to values other than those committed before σ_w), every proof is unsound with probability at most `δ_ZK`
+(`SoundAt`), the relations pin every committed value (`Pins`, a property of the Definitions the proofs pass), and E1(c)
+holds with the equal shares (`RightFixed`), then (I8) `ProofsSound` holds at `S·(δ_bind + n_π·δ_ZK)`. -/
+def ProofsSoundOfPinned : Prop :=
+  ∀ {K T L U V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] (Ω : Type) [Fintype Ω] (S nπ : ℕ)
+    (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V) (Nw δbind δzk : ℝ),
+    pf.Of P → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk → pf.Pins → RightFixed P pf Nw →
+    ProofsSound P Nw δbind δzk nπ
+
+/-- **Binding from the fork form.** For a window's proofs and a round `w`, the probability that binding fails at `w`
+(`Moved`, against the values committed before σ_w), squared, is at most the probability that two runs off one
+commitment, the second continuing from round `w` on fresh coins, are both accepted and open round `w`'s leaves
+differently (`Forked`). So a bound `δ_fork` on the fork form, which `cr/sha-512` gives at a finder that runs the window
+twice from round `w`, is binding at `δ_bind = √δ_fork`. -/
+def BindingOfFork : Prop :=
+  ∀ {V : Type} (Ω : Type) [Fintype Ω] (S nπ : ℕ) (pf : ProofLayer Ω S nπ V) (w : Fin S),
+    prob (fun x => pf.Moved x w) ^ 2 ≤ prob (fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2)
 
 /-- **Lemma 2 (output count).** In a straight-line program whose class-`k` instances write at most `ω_k` words each,
 the owned committed positions (one per head write their values trace to) are at most `Σ_k ω_k n_k`. -/
