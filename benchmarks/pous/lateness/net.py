@@ -2,7 +2,8 @@
 host memory, no GPU) on a core of the job, then challengers on vy-nebius-cpu-1 and vy-nebius-1 in turn, each in
 variants that separate the network's causes: back-to-back pings, pings paced 1 ms and 300 µs apart (adaptive interrupt
 moderation follows the packet rate), and 4 KiB answers in 1,472-byte datagrams (fragmented on cpu-1's MTU-1450 path)
-and in 1,422-byte ones (whole), back to back and paced. Writes `<challenger>/<variant>.bin|json` and `summary.json` to $OUT."""
+and in 1,422-byte ones (whole), back to back and paced, and a five-minute ping series 1 ms apart (how the path's
+modes change with time). Writes `<challenger>/<variant>.bin|json` and `summary.json` to $OUT."""
 
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ VARIANTS = [
     ("host4k-1472-b2b", 0, 150000, 45, ("ops=2", "dgram=1472")),
     ("host4k-1422-b2b", 0, 150000, 45, ("ops=2", "dgram=1422")),
     ("host4k-1422-1ms", 0, 40000, 50, ("ops=2", "dgram=1422", "k=1", "gap_us=1000")),
+    ("ping-series-1ms", 0, 400000, 300, ("ops=3", "k=1", "gap_us=1000")),
 ]
 
 
