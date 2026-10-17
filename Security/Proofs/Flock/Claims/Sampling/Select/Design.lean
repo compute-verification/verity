@@ -375,12 +375,7 @@ theorem partition_covered (d : Program) (query : Lean.Json) (rs : Array Flock.Te
       · rename_i ts _
         cases hts : ts with
         | error e => rw [hts] at h; exact absurd h (by rw [bind_error]; simp)
-        | ok ts' =>
-          rw [hts, bind_ok] at h
-          obtain ⟨rs', hrs', h⟩ := bind_eq_ok.1 h
-          obtain ⟨_, -, h⟩ := bind_eq_ok.1 h
-          obtain rfl := (Except.ok.inj h).symm
-          exact evaluate_covered d.desc ts' _ hrs'
+        | ok ts' => rw [hts, bind_ok] at h; exact evaluate_covered d.desc ts' rs h
       · obtain ⟨cs, _, h⟩ := bind_eq_ok.1 h
         obtain rfl := (Except.ok.inj h).symm
         have heq : Partition.callRanges cs = (cs.toList.foldl callStep (#[], 0)).1 := by

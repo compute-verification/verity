@@ -3,10 +3,9 @@ The partition as a named query over the verifier's own program (`one_stage/parti
 object and its digest (C-Flock's `HmRow.checkPartitionObject` and `HmRow.partitionDigest`), and the queries one-stage
 applies to the program: the template queries (C-Flock's `TemplateQuery`), `Q_word` v1 at `X = 16` (`Flock.Extract`) and
 `Q_call` v1 at `X ≤ 16` (`Flock.Qcall`), each on a topological program only, as core's `evaluate` refuses any other. A
-`Q_word` or `Q_call` unit commits at most 16 bits, the literal limit: a program with a unit that commits more is refused,
-which `Q_word`'s width rule's `W` allows a unit of one value, and `Q_call`'s leaves out the constants a unit holds
-(`committedBits`); so is a program with a template of no gate. A template query has no width rule. The verifier holds its
-own copy of the program and applies the query itself; it never takes a population or a unit index on the prover's word.
+`Q_word` or `Q_call` unit commits at most 16 bits, the literal limit; `Q_word` refuses a program with a unit that commits
+more, which its width rule's `W` allows a unit of one value. The verifier holds its own copy of the program and applies
+the query itself; it never takes a population or a unit index on the prover's word.
 -/
 import Flock.HmRow
 import Flock.TemplateQuery
@@ -77,87 +76,21 @@ def wordCalls (P : Flock.Program.Prog) : V (Array (Nat × Nat × Flock.Qword.DCu
       throw s!"query-refused: unit {u} of {(P.defs[d]!).key} commits {ob[u]!} bits, more than {UNIT_BITS}"
   return calls
 
-/-- `partition._committed_bits`: per unit `[lo, hi)` of one activation of definition `d` (its local gates, as
-`Flock.Qcall.gates` lays them out), the bits it commits: the summed declared widths of its gates that are Input gates, or
-that a later gate of the activation reads or the activation returns, constants included. Nothing outside an activation
-reads its gates but through its returns, so in any program this bounds the claims' `Prog.Boundary` count, as `Q_call`'s
-width rule bounds its computing gates'. -/
-def committedBits (P : Flock.Program.Prog) (d : Nat) (units : Array (Nat × Nat)) : V (Array Nat) := do
-  let defn := P.defs[d]!
-  let lo := defn.paramLeaves
-  let n := defn.gates
-  let starts := (defn.params.foldl (fun (acc : Array Nat × Nat) (_, t) => (acc.1.push acc.2, acc.2 + t.leaves)) (#[], 0)).1
-  let top : Flock.Program.Scope := .top d lo (some starts)
-  let mut prim : Array Nat := if defn.prim then #[d] else Array.mkEmpty n
-  let mut last : Array Int := Array.replicate n (-1)
-  let mut stack : Array (Flock.Program.Scope × Nat × Nat) := if defn.prim then #[] else #[(top, 0, 0)]
-  while stack.size > 0 do
-    let (sc, k, m) := stack.back!
-    let body := (P.defs[sc.d]!).body
-    if k ≥ body.nodes.size then
-      stack := stack.pop
-      continue
-    let node := body.nodes[k]!
-    if m ≥ node.members then
-      stack := stack.set! (stack.size - 1) (sc, k + 1, 0)
-      continue
-    stack := stack.set! (stack.size - 1) (sc, k, m + 1)
-    let callee := P.defs[node.fn]!
-    let o := sc.off + body.offsets[k]!
-    if !callee.prim then
-      stack := stack.push (.child sc node.fn (o + m * callee.gates) k m, 0, 0)
-      continue
-    let j := o + m - lo
-    for g in ← Flock.Program.operands P sc node m do
-      if lo ≤ g && g - lo < j then last := last.set! (g - lo) j
-    prim := prim.push node.fn
-  if prim.size != n then throw s!"{defn.key}: {prim.size} gates laid out, {n} declared"
-  for g in ← if defn.prim then pure #[lo] else defn.body.ret.toArray.mapM (Flock.Program.resolve P top) do
-    if lo ≤ g && g < lo + n then last := last.set! (g - lo) n
-  return units.map fun (a, b) => (List.range (b - a)).foldl (fun bits i =>
-    let f := P.defs[prim[a + i]!]!
-    if Flock.Program.isInputId f.key || last[a + i]! ≥ b then
-      bits + match f.ret with
-        | .value w => w
-        | _ => 0
-    else bits) 0
-
-/-- `partition._check_units` on a template query's ranges: refused for a template of no gate. -/
-def checkTemplates (P : Flock.Program.Prog) (rs : Array TRange) : V Unit := do
-  let root := (P.defs[P.root]!).body
-  for r in rs do
-    if r.count > 0 && (P.defs[root.nodes[r.node]!.fn]!).gates == 0 then
-      throw s!"query-refused: template {r.template} has no gate"
-
-/-- `partition._check_units` on `Q_call`'s Calls: refused when a unit commits more than `UNIT_BITS` bits (`committedBits`,
-constants counted, which `Q_call`'s width rule leaves out), each Definition once. -/
-def checkCalls (P : Flock.Program.Prog) (cs : Array Flock.Qcall.Call) : V Unit := do
-  let mut seen : Array Nat := #[]
-  for c in cs do
-    if seen.contains c.d then continue
-    seen := seen.push c.d
-    let bits ← committedBits P c.d (c.c.units.map fun u => (u.lo, u.hi))
-    if let some u := (List.range bits.size).find? (bits[·]! > UNIT_BITS) then
-      throw s!"query-refused: unit {u} of {(P.defs[c.d]!).key} commits {bits[u]!} bits, more than {UNIT_BITS}"
-
 /-- The `Q_word` or `Q_call` query's Calls with their units, as `(root-body index, Definition id, units)`: `Q_word` v1 at
-`X = 16` (`wordCalls`) or `Q_call` v1 at `X ≤ 16` (any `W` core accepts, its units `checkCalls`'); `query-refused` for
-any other parameters or query, and where the query is inapplicable. -/
+`X = 16` (`wordCalls`) or `Q_call` v1 at `X ≤ 16` (any `W` core accepts); `query-refused` for any other parameters or
+query, and where the query is inapplicable. -/
 def calls (p : Program) (name : String) (version : Nat) (params : Json) : V (Array (Nat × String × Nat)) := do
   let X := (nat? (getD params "X")).getD 0
   let key := fun d => (p.prog.defs[d]!).key
   if name == "Q_word" && version == 1 && X == UNIT_BITS then
     return (← wordCalls p.prog).map fun (k, d, c) => (k, key d, c.units)
   if name == "Q_call" && version == 1 && X ≤ UNIT_BITS then
-    let cs ← Flock.Qcall.evaluate p.prog X
-    checkCalls p.prog cs
-    return cs.map fun c => (c.k, key c.d, c.c.units.size)
+    return (← Flock.Qcall.evaluate p.prog X).map fun c => (c.k, key c.d, c.c.units.size)
   throw s!"query-refused: one-stage applies the template queries, Q_word v1 at X = 16 and Q_call v1 at X <= 16, not {name} v{version} at X = {X}"
 
 /-- `partition.evaluate`'s ranges: the query applied to the program, once core accepts its form, per root node or Call
 with units its template or Definition, first unit and count; `query-refused` when it is malformed, the program is not
-topological, the query is not one one-stage applies or does not apply, or a unit is wider than the literal limit or a
-template has no gate (`wordCalls`, `checkCalls`, `checkTemplates`). -/
+topological, or the query is not one one-stage applies or does not apply. -/
 def evaluate (p : Program) (query : Json) : V (Array TRange) := do
   let obj := build (Flock.hexOf p.sha512) query
   if !valid obj then throw "query-refused: not a verity/partition/v1 query"
@@ -166,10 +99,7 @@ def evaluate (p : Program) (query : Json) : V (Array TRange) := do
   let name := (q.getObjValAs? String "name").toOption.getD ""
   let version := (nat? (getD q "version")).getD 0
   match Flock.TemplateQuery.templatesOf name version (getD q "params") with
-  | some ts =>
-    let rs ← Flock.TemplateQuery.evaluate p.desc (← ts)
-    checkTemplates p.prog rs
-    return rs
+  | some ts => Flock.TemplateQuery.evaluate p.desc (← ts)
   | none => return callRanges (← calls p name version (getD q "params"))
 
 /-- `partition.units`: the population. -/

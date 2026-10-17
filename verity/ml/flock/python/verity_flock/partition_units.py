@@ -68,17 +68,8 @@ PARTITIONS: dict[str, Callable[[str], Mapping[str, Any]]] = {
 
 
 def partition_units(program: Any, spec: str) -> PartitionUnits:
-    """``q-word[:X/W]``, ``q-template-instance[:TEMPLATE]``, ``blocks[:B]`` or ``scatter[:k[/seed]]`` over ``program``.
-    ``q-template-instance`` is ``Q_template_instance`` v0 of TEMPLATE (a descriptor id), by default of the one Definition the
-    program's root calls (a population program's template: every instance one unit)."""
+    """``q-word[:X/W]``, ``blocks[:B]`` or ``scatter[:k[/seed]]`` over ``program``."""
     name, _, arg = spec.partition(":")
-    if name == "q-template-instance":
-        if not arg:
-            called = {PO.template_instance_query(fn)["params"]["template"] for _k, fn in PO.calls(program)}
-            if len(called) != 1:
-                raise ValueError(f"q-template-instance: the root calls {len(called)} Definitions; name the template")
-            arg = called.pop()
-        return PartitionUnits(program, query=PO.template_instance_query(arg))
     return PartitionUnits(program, **PARTITIONS[name](arg))
 
 
@@ -254,7 +245,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--model", choices=["tiny"], help="circuit-check's tiny Serve_v1 Program (38 Calls)")
     src.add_argument("--definition", help="a registered Definition id, as a one-Call Program (circuit-check's parser)")
-    ap.add_argument("--partition", default="q-word", help="q-word[:X/W], q-template-instance[:TEMPLATE], blocks[:B] or scatter[:k[/seed]]")
+    ap.add_argument("--partition", default="q-word", help="q-word[:X/W], blocks[:B] or scatter[:k[/seed]]")
     ap.add_argument("--vectors", type=int, default=16)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-gates", type=int, default=1 << 20, help="lower a class only up to this many word gates")
