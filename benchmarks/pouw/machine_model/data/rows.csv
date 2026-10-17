@@ -13,7 +13,7 @@ R6r,measured,note:20261015T0608Z-draft-census-sm120,"smem reads 128 B/SM/clk (LD
 LDSi,measured,note:20261015T0608Z-draft-census-sm120,LDS.32 0.5 warp instructions/SM/clk (64 B/SM/clk)
 R6w,measured,note:20261015T0608Z-draft-census-sm120 r20261016-183617-3914,smem writes 128 B/SM/clk (STS.128; TMA writes assumed to share it)
 LDG,measured,note:20261015T0608Z-draft-census-sm120,LDG into registers 86 B/SM/clk (L1 path)
-L2red,measured,note:20261015T0608Z-draft-census-sm120 r20261016-183617-3914,"L2 reductions 1.91 adds/SM/clk (coalesced); refitted: RED64 × 0.9671 (red64 alone, ILP 8 (r6 b53b) at 1.0137, + 2%); REDV × 0.9705 (IMMA+redh2x4×8 (mixu, rm 0fd9) at 1.0102, + 2%)"
+L2red,measured,note:20261015T0608Z-draft-census-sm120 r20261016-183617-3914 r20261016-210926-d856,"L2 reductions 1.91 adds/SM/clk (coalesced); refitted: RED64 × 0.9671 (red64 alone, ILP 8 (r6 b53b) at 1.0137, + 2%); REDV × 0.9705 (IMMA+redh2x4×8 (mixu, rm 0fd9) at 1.0102, + 2%)"
 SHFL,ASSUMED,note:20261015T0608Z-draft-census-sm120,SHFL 32 lanes/SM/clk (CUDA guide; not in the census)
 R2,provisional,note:20261015T0608Z-draft-census-sm120,M + 0.18 I <= 1
 R3,provisional,note:20261015T0608Z-draft-census-sm120,M + 0.24 H <= 1
@@ -100,13 +100,13 @@ ROW_STSM_X1T,measured,r20261016-112703-0297,"stmatrix m8n8.x1.trans.b16 (STSM.16
 ROW_STSM_X2T,measured,r20261016-112703-0297,"stmatrix m8n8.x2.trans.b16 (STSM.16.MT88.2, transpose) 0.062496/SM/clk + 2%"
 ROW_STSM_X4T,measured,r20261016-112703-0297,"stmatrix m8n8.x4.trans.b16 (STSM.16.MT88.4, transpose) 0.031249/SM/clk + 2%"
 ROW_ATOMG32,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,ATOMG.E.<op> .32 (returning; select ops min/max/cas/exch/and/or/xor) 0.0727/SM/clk + 2%; from VF3k-16 the gated probe's 0.0998499
-ROW_ATOMG64,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,ATOMG.E.<op>.64 0.0498/SM/clk + 2%; from VF3k-16 the gated probe's 0.0499395
+ROW_ATOMG64,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914 r20261016-210926-d856,"ATOMG.E.<op>.64 0.0498/SM/clk + 2%; from VF3k-16 the gated probe's 0.0499395, from VF3l-16 its replicate's 0.0499401"
 ROW_REDG32,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,REDG.E.<op> .32 (min/max/and/or/xor and add) 0.0999/SM/clk + 2%; from VF3k-16 the gated probe's 0.100065
 ROW_REDG64,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,REDG.E.<op>.64 0.05/SM/clk + 2%; from VF3k-16 the gated probe's 0.0500398
 ROW_ATOMS32,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,"ATOMS.<op> .32 (atom.shared, red.shared) 0.4946/SM/clk + 2%; from VF3k-16 the gated probe's 0.497461"
-ROW_ATOMS64,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,ATOMS.CAS.64 / EXCH.64 / CAST.SPIN.64 (shared and DSMEM-own-CTA 64-bit) 0.29523/SM/clk + 2%; from VF3k-16 the gated probe's 0.480156 (EXCH.64)
+ROW_ATOMS64,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914 r20261016-210926-d856,"ATOMS.CAS.64 / EXCH.64 / CAST.SPIN.64 (shared and DSMEM-own-CTA 64-bit) 0.29523/SM/clk + 2%; from VF3k-16 the gated probe's 0.480156 (EXCH.64), from VF3l-16 its replicate's 0.480171"
 ROW_ATOME32,measured,r20261016-144147-4597 r20261016-145213-5ed0 r20261016-183617-3914,"ATOM.E.<op> .32 (generic or DSMEM address, any window) 0.47767/SM/clk + 2%; from VF3k-16 the gated generic-to-shared add 0.497945, and a peer CTA's window is ROW_ATOME32P's class"
-ROW_ATOME64,measured,r20261016-144147-4597 r20261016-145213-5ed0,"ATOM.E.<op>.64 (generic or DSMEM address, any window) 0.29523/SM/clk + 2%"
+ROW_ATOME64,measured,r20261016-144147-4597 r20261016-145213-5ed0,"ATOM.E.<op>.64 (generic or DSMEM address, any window) 0.29523/SM/clk + 2%, ungated (red.shared::cluster.add.u64 at the own rank, whose CAST.SPIN fallback loop the gate refuses); the gated EXCH.64 and CAS.64 forms are slower (r20261016-210926-d856: generic to shared 0.155495 and 0.133670, own rank 0.153850 and 0.133354), so the ungated line stays"
 ROW_ATOME32P,measured,r20261016-183617-3914,"ATOM.E.<op> .32 into a peer CTA's shared memory (atom/red.shared::cluster at the other rank of a 2-CTA cluster; red.add the fastest of add, cas and red) 0.0108515/SM/clk + 2%"
 ROW_REDAS32,measured,r20261016-144147-4597 r20261016-145213-5ed0,REDAS.<op> .32 (red.async to shared::cluster) 0.01086/SM/clk + 2%
 ROW_REDAS64,measured,r20261016-144147-4597 r20261016-145213-5ed0,REDAS.ADD.64 0.00543/SM/clk + 2%

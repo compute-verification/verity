@@ -21,9 +21,10 @@ def solved(name):
 
 
 def test_every_named_vector_is_here():
-    assert NAMES[0] == "VF" and NAMES[-1] == "VF3k-16"
+    assert NAMES[0] == "VF" and NAMES[-5:] == ["VF3l-16", "VF3l-16-copy16", "VF3l-16-copy16-fan32", "VF3l-16-copy32",
+                                              "VF3l-16-copy32-fan16"]
     assert {"VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict", "VF3j", "VF3j-8",
-            "VF3j-16"} < set(NAMES)
+            "VF3j-16", "VF3k-16"} < set(NAMES)
 
 
 # τ, τ at 600 W, U/F_low and margin as the round notes published them
@@ -33,6 +34,11 @@ PUBLISHED = {
     "VF3j": (0.0634, 0.0495, 1.0938, 1.935),
     "VF3j-16": (0.0610, 0.0477, 1.1563, 2.000),
     "VF3k-16": (0.0603, 0.0472, 1.1563, 2.000),       # note:20261016T1912Z-draft-machine-model-vf3k
+    "VF3l-16": (0.0603, 0.0472, 1.1563, 2.000),       # note:20261016T2055Z-draft-machine-model-vf3l, with its copy prices
+    "VF3l-16-copy16": (0.0525, 0.0410, 1.1563, 2.000),
+    "VF3l-16-copy16-fan32": (0.0460, 0.0360, 1.1563, 2.000),
+    "VF3l-16-copy32-fan16": (0.0600, 0.0469, 1.3125, 2.000),
+    "VF3l-16-copy32": (0.0518, 0.0405, 1.3125, 2.000),
 }
 
 
@@ -105,6 +111,9 @@ CLAIMED = {
     "VF3j": ([], ["LDS128 8.00 a word < 16", "LDG128 8.00 a word < 16", "LDC64 0.00 a word < 16"]),
     "VF3j-16": ([], []),
     "VF3k-16": ([], []),
+    "VF3l-16": ([], []),
+    "VF3l-16-copy16": ([], []),
+    "VF3l-16-copy32": ([], []),
 }
 
 
@@ -112,7 +121,23 @@ CLAIMED = {
 def test_claims(name):
     r = solved(name)
     assert (r.floors["pi32"][1], r.floors["loads16"][1]) == CLAIMED[name]
-    assert r.floors["loads16"][0] == 9 and r.floors["pi32"][0] == 84 + (r.vector.epoch == "VF3k-16")
+    assert r.floors["loads16"][0] == 9 and r.floors["pi32"][0] == 84 + ("ATOME32P" in r.census)
+
+
+# π_c ≥ 16 by vector: what is under it, and its cheapest copy route a word. VF3k-16 and VF3l-16 price the UR fan-out
+# under it; each copy candidate raises the routes it names
+UR_FANOUT = ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"]
+COPIES = {"VF3k-16": (UR_FANOUT, 1), "VF3l-16": (UR_FANOUT, 1), "VF3l-16-copy16": ([], 16),
+          "VF3l-16-copy16-fan32": ([], 16), "VF3l-16-copy32-fan16": ([], 16), "VF3l-16-copy32": ([], 32)}
+
+
+@pytest.mark.parametrize("name", sorted(COPIES))
+def test_copy_routes(name):
+    r = solved(name)
+    below, cheapest = COPIES[name]
+    assert r.floors["copy16"][1] == below and r.floors["copy16"][0] == len(r.copies) == 63
+    assert r.copies[0][2] == pytest.approx(cheapest)
+    assert all(p <= mc * (1 + 1e-9) for _k, _w, p, mc, _ in r.copies)  # no copy route priced over its measured cost
 
 
 def test_vf3j16_rested_on_slow_rows():
@@ -128,7 +153,7 @@ def test_vf3k16_loses_tau_on_atoms64_alone(tmp_path):
     data = tmp_path / "data"
     shutil.copytree(DATA, data)
     c = (data / "census.csv").read_text()
-    line = "ATOMS64,ROW_ATOMS64,0.480156,0.02,,,VF3k-16,,r20261016-183617-3914\n"
+    line = "ATOMS64,ROW_ATOMS64,0.480156,0.02,,,VF3k-16,VF3k-16,r20261016-183617-3914\n"
     assert c.count(line) == 1
     (data / "census.csv").write_text(c.replace(line, line.replace("0.480156", "0.29523")))
     assert resolve("VF3k-16", data).tau == pytest.approx(solved("VF3j-16").tau, rel=1e-6)
