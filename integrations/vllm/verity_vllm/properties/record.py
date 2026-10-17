@@ -130,8 +130,9 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
     Property("router_tap_exactness", "verity-vllm/router-tap-exactness/v1",
              "The tapped topk_softmax computes exactly the installed op's outputs, writes every word of every row's softmax, and each word "
              "is the ordered router's committed value in the IR bit for bit (ties, NaN, +-inf and +-0 included), in vLLM's own MoE layers too."),
-    Property("sigmoid_router_capture", "verity-vllm/sigmoid-router-capture/v1",
-             "On the capture's GPU, MUFU ex2 / rcp are core's tables on every input, and vLLM's fused sigmoid noaux_tc router "
+    Property("sigmoid_router_capture", "verity-vllm/sigmoid-router-capture/v2",
+             "On the capture's GPU at vLLM's defaults (not batch invariant, the fused grouped top-k on, as vLLM read its switches), "
+             "MUFU ex2 / rcp are core's tables on every input, and vLLM's fused sigmoid noaux_tc router "
              "(_moe_C.grouped_topk, 256 experts, top-8, renormalized, x2.5) returns through its block and its warp kernel exactly the "
              "ids and weights of MoeRouterSigmoidBias_v1 for that kernel on every captured row and every logit whose sigmoid reads MUFU."),
     Property("glm53_fa3_split_capture", "verity-vllm/glm53-fa3-split-capture/v1",

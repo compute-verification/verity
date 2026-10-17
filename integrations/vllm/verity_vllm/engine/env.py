@@ -44,6 +44,17 @@ EXPORT = {
 INDUCTOR_DIR_MARK = "VERITY_INDUCTOR_DIR_PER_PROCESS"
 
 
+#: The switches a served engine leaves at vLLM's defaults; a capture of record runs with none of them set, so the kernels it compares
+#: are the ones vLLM selects by default whatever the process inherited.
+SERVED_DEFAULTS = ("VLLM_BATCH_INVARIANT", "VLLM_USE_DEEP_GEMM", "VLLM_USE_DEEP_GEMM_E8M0", "VLLM_MOE_USE_DEEP_GEMM",
+                   "VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER", "VLLM_USE_FUSED_MOE_GROUPED_TOPK", "VLLM_TUNED_CONFIG_FOLDER", "NCCL_P2P_DISABLE")
+
+
+def served_defaults() -> dict[str, str]:
+    """Clear `SERVED_DEFAULTS` from the process environment (before vLLM is imported); returns the values cleared."""
+    return {k: os.environ.pop(k) for k in SERVED_DEFAULTS if k in os.environ}
+
+
 def pin(pins: Mapping[str, str]) -> dict[str, str]:
     for k, v in pins.items():
         os.environ.setdefault(k, v)

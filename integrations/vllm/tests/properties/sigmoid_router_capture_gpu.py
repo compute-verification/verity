@@ -3,10 +3,13 @@
 f32 correction bias, against `registry.moe.MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL}`.
 
 One GPU process writes `<out>/sigmoid_router_capture.json`, the property record `sigmoid_router_capture` (`properties.record`), and
-`<out>/rows.npz`: every captured row's logits, each launch group's bias and both launches' outputs.  `ok` = every check below.  The
-device gate runs first and nothing else runs when it fails (exit 3):
+`<out>/rows.npz`: every captured row's logits, each launch group's bias and both launches' outputs.  `ok` = every check below.  vLLM
+runs at its defaults, as it serves: `engine.env.served_defaults` clears every switch the process inherited before vLLM is imported.
+The device gate runs first and nothing else runs when it fails (exit 3):
 
   gate     `fa2_target_capture_gpu.gate`: driver, compute capability and SM count.
+  served   vLLM's switches read back (`served`): not batch invariant, and `VLLM_USE_FUSED_MOE_GROUPED_TOPK` on, so `grouped_topk`
+           routes GLM-5.3's sigmoid scores to `_moe_C.grouped_topk` (grouped_topk_router.py `grouped_topk`).
   binary   the SASS and PTX archs vLLM's `_moe_C` carries (informational).
   mufu     `fa2_target_capture_gpu.mufu`: MUFU ex2 / rcp, which the sigmoid reads, are core's tables on all 2^32 inputs.
   launch   the kernel each launch ran (torch.profiler): `single_group_topk_block_kernel<float, float, int, SIGMOID, 256, 8>` for at most
@@ -22,7 +25,7 @@ device gate runs first and nothing else runs when it fails (exit 3):
 `--check DIR` evaluates the Program on every row of a capture's `rows.npz` through both launches (no GPU; about 0.33 core-seconds a
 row and launch) and writes `<DIR>/program_check.json`.  `--verify RECORD` re-derives a record's digest and verdict.
 
-It lives under tests/ because it seeds random generators and sets VLLM_BATCH_INVARIANT for its own process (lints P3, P7).
+It lives under tests/ because it seeds random generators and clears vLLM's switches for its own process (lints P3, P7).
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python      # PYTHONPATH as for the other captures
     $PY tests/properties/sigmoid_router_capture_gpu.py --out DIR --want-cc 12.0 --want-sms 188    # RTX PRO 6000 Blackwell (sm_120)
@@ -47,7 +50,7 @@ import numpy as np
 from verity.ml.circuits.ops import mufu as MU
 from verity_vllm.program.kernels import derived_rows as DR
 
-SCHEMA = "verity-vllm/sigmoid-router-capture/v1"
+SCHEMA = "verity-vllm/sigmoid-router-capture/v2"
 RECORD = "sigmoid_router_capture.json"
 ROWS_FILE = "rows.npz"
 CHECK_FILE = "program_check.json"
@@ -462,9 +465,17 @@ def host_keeps_subnormals() -> bool:
     return bool(tiny[0] != 0 and (tiny * np.float32(1.0))[0] != 0 and np.float64(1e-40).astype(np.float32) != 0)
 
 
+def served(envs) -> dict[str, Any]:
+    """vLLM's switches as it read them: the router serves through `_moe_C.grouped_topk` at its defaults."""
+    rec = {"VLLM_BATCH_INVARIANT": bool(envs.VLLM_BATCH_INVARIANT),
+           "VLLM_USE_FUSED_MOE_GROUPED_TOPK": bool(envs.VLLM_USE_FUSED_MOE_GROUPED_TOPK)}
+    rec["ok"] = not rec["VLLM_BATCH_INVARIANT"] and rec["VLLM_USE_FUSED_MOE_GROUPED_TOPK"]
+    return rec
+
+
 def _verdict(doc: dict[str, Any]) -> bool:
     c, s = doc["capture"], doc.get("sweep") or {}
-    return (doc["gate"]["ok"] and doc["host_subnormals"] and doc["mufu"].get("ok") is True
+    return (doc["gate"]["ok"] and doc["served"]["ok"] and doc["host_subnormals"] and doc["mufu"].get("ok") is True
             and all(doc["kernels"][lnch]["ok"] for lnch in LAUNCHES)
             and c["deterministic"] and c["tiles_equal"] and c["logits_intact"]
             and all(doc["rows"][lnch]["mismatch"] == 0 for lnch in LAUNCHES) and doc["program"]["ok"] is True
@@ -473,14 +484,13 @@ def _verdict(doc: dict[str, Any]) -> bool:
 
 def run(out: str, seed: int, n: int, min_driver: int, want_cc: str, want_sms: int, workers: int, program_sample: int,
         do_sweep: bool) -> dict[str, Any]:
-    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine.env import served_defaults
     from verity_vllm.properties.record import seal as seal_record
 
     from tests.properties import fa2_target_capture_gpu as C
     from tests.properties import fa_tap_exactness_gpu as G
 
-    env_flags = prof.apply_env()
-    os.environ["VLLM_BATCH_INVARIANT"] = "1"
+    cleared = served_defaults()
     import torch
     import vllm
     import vllm._custom_ops
@@ -488,12 +498,13 @@ def run(out: str, seed: int, n: int, min_driver: int, want_cc: str, want_sms: in
 
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)
-    doc: dict[str, Any] = {"schema": SCHEMA, "utc": _utc(), "argv": sys.argv, "environment": G._environment(), "env_flags": env_flags,
-                           "fused_grouped_topk": bool(envs.VLLM_USE_FUSED_MOE_GROUPED_TOPK), "host_subnormals": host_keeps_subnormals(),
+    doc: dict[str, Any] = {"schema": SCHEMA, "utc": _utc(), "argv": sys.argv, "environment": G._environment(), "env_cleared": cleared,
+                           "served": served(envs), "host_subnormals": host_keeps_subnormals(),
                            "config": {"E": E, "TOPK": TOPK, "SCALE": SCALE, "n_group": 1, "topk_group": 1, "renormalize": True,
                                       "scoring_func": "sigmoid", "dtype": "float32", "bias_dtype": "float32", "seed": seed, "rows": n},
                            "gate": C.gate(min_driver, want_cc, want_sms)}
-    print(f"[sigmoid-router] {_utc()} gate {json.dumps(doc['gate'])}", flush=True)
+    print(f"[sigmoid-router] {_utc()} gate {json.dumps(doc['gate'])} served {json.dumps(doc['served'])} cleared {sorted(cleared)}",
+          flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print("SIGMOID-ROUTER-CAPTURE GATE-FAIL", flush=True)
