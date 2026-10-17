@@ -221,7 +221,8 @@ __device__ __forceinline__ void init_ops(uint32_t lane, uint32_t* a, uint32_t* b
 // ---- lane ops -------------------------------------------------------------------------------------------------------
 // A lane program X is one op, or two ops alternating (X = P + 16 Q, Q = OP_NONE for one op). Each op runs on its own bank
 // of 8 registers (a second op of the same file uses the second bank), so the 8 chains a bank give ILP 8.
-enum { OP_IADD3 = 0, OP_FFMA = 1, OP_LOP3 = 2, OP_IMAD = 3, OP_DP4A = 4, OP_SHFL = 5, OP_POPC = 6, OP_LDS = 7, OP_NONE = 15 };
+enum { OP_IADD3 = 0, OP_FFMA = 1, OP_LOP3 = 2, OP_IMAD = 3, OP_DP4A = 4, OP_SHFL = 5, OP_POPC = 6, OP_LDS = 7, OP_IADD3R = 8,
+       OP_XOR = 9, OP_NONE = 15 };
 constexpr int lane1(int p) { return p + 16 * OP_NONE; }
 constexpr int lane2(int p, int q) { return p + 16 * q; }
 constexpr int LANE_IADD3 = lane1(OP_IADD3), LANE_MIX = lane2(OP_IADD3, OP_FFMA);
@@ -236,8 +237,11 @@ __device__ __forceinline__ void op1(Lane& s, int bank, int i) {
   const int j = i & 7, n = (i + 1) & 7;
   uint32_t* r = bank ? s.q : s.r;
   float* f = bank ? s.g : s.f;
-  // three inputs: sm_80's ptxas moves a two-input add.u32 to the FMA pipe as IMAD.IADD, but r + n + k is one IADD3
-  if (OP == OP_IADD3) asm volatile("add.u32 %0,%0,%1;\n\tadd.u32 %0,%0,%2;" : "+r"(r[j]) : "r"(r[n]), "r"(s.k));
+  // three inputs: sm_80's ptxas moves a two-input add.u32 to the FMA pipe as IMAD.IADD, but r + n + c is one IADD3
+  // (OP_IADD3 with an immediate c, so two register reads as TENSOR's lane; OP_IADD3R with a third register)
+  if (OP == OP_IADD3) asm volatile("add.u32 %0,%0,%1;\n\tadd.u32 %0,%0,0x9E3779B9;" : "+r"(r[j]) : "r"(r[n]));
+  if (OP == OP_IADD3R) asm volatile("add.u32 %0,%0,%1;\n\tadd.u32 %0,%0,%2;" : "+r"(r[j]) : "r"(r[n]), "r"(s.k));
+  if (OP == OP_XOR) asm volatile("xor.b32 %0,%0,%1;" : "+r"(r[j]) : "r"(r[n]));
   if (OP == OP_FFMA) asm volatile("fma.rn.f32 %0,%0,%1,0f3F800000;" : "+f"(f[j]) : "f"(f[n]));
   if (OP == OP_LOP3) asm volatile("lop3.b32 %0,%0,%1,%2,0xE8;" : "+r"(r[j]) : "r"(r[n]), "r"(s.k));
   if (OP == OP_IMAD) asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(r[j]) : "r"(s.k), "r"(r[n]));
@@ -379,7 +383,9 @@ __global__ void __launch_bounds__(512, 1) k_spec(int iters, uint32_t* sink, Bloc
   sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
 }
 
-// Interleaved: every warp issues a MMA then R/8 lane ops, 8 accumulators, body unrolled x8 (64 MMAs an iteration).
+// Interleaved: every warp issues a MMA then R/8 lane ops, 8 accumulators, U groups of 8 MMAs an iteration. A loop of
+// more than ~200 instructions makes ptxas exit it through CALL.REL.NOINC, which hides its data flow from the gate.
+constexpr int mixu_u(int r) { return 192 / (8 + r) > 8 ? 8 : 192 / (8 + r) < 1 ? 1 : 192 / (8 + r); }
 template <class F, int R, int X>
 __global__ void __launch_bounds__(512, 1) k_mixu(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t lane = threadIdx.x & 31;
@@ -392,7 +398,7 @@ __global__ void __launch_bounds__(512, 1) k_mixu(int iters, uint32_t* sink, Bloc
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
 #pragma unroll
-    for (int u = 0; u < 8; u++) {
+    for (int u = 0; u < mixu_u(R); u++) {
 #pragma unroll
       for (int c = 0; c < 8; c++) {
         F::mma(d[c], a, b, e);
@@ -615,7 +621,8 @@ static void mixu() {
   int iters;
   bool ok;
   Timing t = timed(k_mixu<F, R, X>, WSM * 32, &iters, &ok);
-  emit("mixu", "k_mixu", F::SNAME, F::NAME, {R, X}, F::MACS, F::SLOTS, F::WORDS, 4, 0, 64, 8 * R, X, iters, ok, t);
+  emit("mixu", "k_mixu", F::SNAME, F::NAME, {R, X}, F::MACS, F::SLOTS, F::WORDS, 4, 0, 8 * mixu_u(R), mixu_u(R) * R, X,
+       iters, ok, t);
 }
 template <class F, int NW>
 static void duo() {
@@ -721,7 +728,8 @@ template <class F>
 static void beside() {
   spec<F, 64, lane1(OP_LOP3)>(); spec<F, 64, lane1(OP_IMAD)>(); spec<F, 64, lane1(OP_DP4A)>();
   spec<F, 64, lane1(OP_FFMA)>(); spec<F, 64, lane1(OP_SHFL)>(); spec<F, 64, lane1(OP_POPC)>();
-  spec<F, 64, lane1(OP_LDS)>(); spec<F, 64, lane2(OP_LOP3, OP_IMAD)>();
+  spec<F, 64, lane1(OP_LDS)>(); spec<F, 64, lane2(OP_LOP3, OP_IMAD)>(); spec<F, 64, lane1(OP_XOR)>();
+  spec<F, 64, lane2(OP_XOR, OP_FFMA)>(); spec<F, 64, lane2(OP_IADD3, OP_IMAD)>();
 }
 
 int main() {
@@ -747,6 +755,9 @@ int main() {
   opalone<lane2(OP_DP4A, OP_IADD3)>(); opalone<lane2(OP_POPC, OP_FFMA)>(); opalone<lane2(OP_POPC, OP_IADD3)>();
   opalone<lane2(OP_SHFL, OP_FFMA)>(); opalone<lane2(OP_LDS, OP_FFMA)>(); opalone<lane2(OP_LDS, OP_IADD3)>();
   opalone<lane2(OP_LOP3, OP_IMAD)>();
+  // register reads: IADD3 with a third register, and LOP3 with two (xor), alone and beside FFMA
+  opalone<lane1(OP_IADD3R)>(); opalone<lane1(OP_XOR)>(); opalone<lane2(OP_IADD3R, OP_FFMA)>();
+  opalone<lane2(OP_XOR, OP_FFMA)>(); opalone<lane2(OP_XOR, OP_IMAD)>(); opalone<lane2(OP_IADD3, OP_XOR)>();
   duofold<2>(); duofold<4>(); duofold<8>();
   duo<ImmaS8k32, 2>(); duo<ImmaS8k32, 4>(); duo<ImmaS8k32, 8>();
   duo<ImmaS8k16, 2>(); duo<ImmaS8k16, 4>(); duo<ImmaS8k16, 8>();

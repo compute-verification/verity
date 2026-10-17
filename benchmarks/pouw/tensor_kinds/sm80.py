@@ -33,7 +33,7 @@ REF = "ImmaS8k32"
 MMA = re.compile(r"^(IMMA|HMMA|BMMA|DMMA)")
 #: lane op codes (sm80.cu's OP_*) -> (name, the SASS opcode pattern the gate counts)
 OPS = {0: ("iadd3", "IADD3"), 1: ("ffma", "FFMA"), 2: ("lop3", "LOP3*"), 3: ("imad", "IMAD"), 4: ("dp4a", "IDP.4A*"),
-       5: ("shfl", "SHFL.BFLY*"), 6: ("popc", "POPC"), 7: ("lds", "LDS*")}
+       5: ("shfl", "SHFL.BFLY*"), 6: ("popc", "POPC"), 7: ("lds", "LDS*"), 8: ("iadd3r", "IADD3"), 9: ("xor", "LOP3*")}
 OP_NONE = 15
 #: SASS MMAs a PTX mma.sync, where not 1
 SASS_PER_PTX: dict[str, int] = {}
@@ -127,6 +127,11 @@ def lane_counts(x: int, n: int) -> dict[str, int]:
     return out
 
 
+def mixu_u(r: int) -> int:
+    """sm80.cu's mixu_u: k_mixu's groups of 8 MMAs an iteration at R lane ops a group."""
+    return max(1, min(8, 192 // (8 + r)))
+
+
 def expect(kern: str, struct: str, targs: list[int]) -> list[dict[str, int]]:
     """Each timed loop's opcode counts, as the kernel's template sets them."""
     fam = f"{FORMS[struct][0]}*" if struct else None
@@ -142,7 +147,8 @@ def expect(kern: str, struct: str, targs: list[int]) -> list[dict[str, int]]:
         return [{fam: 8 * s}, lane_counts(x, R)]
     if kern == "k_mixu":
         R, x = targs
-        return [{fam: 64 * s, **lane_counts(x, 8 * R)}]
+        u = mixu_u(R)
+        return [{fam: 8 * u * s, **lane_counts(x, u * R)}]
     raise ValueError(kern)
 
 
