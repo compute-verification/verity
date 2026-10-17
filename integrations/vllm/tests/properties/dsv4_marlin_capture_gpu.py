@@ -88,7 +88,6 @@ import ctypes
 import glob
 import hashlib
 import inspect
-import itertools
 import json
 import multiprocessing
 import os
@@ -882,14 +881,10 @@ def model(served: dict[str, dict[str, list[int] | None]], sms: int) -> dict[str,
     the block's m blocks, and the registers of a driver-compiled kernel, another instantiation at each block)."""
     out: dict[str, Any] = {}
     for kind, by_m in sorted(served.items()):
+        swept = {int(M): c for M, c in by_m.items() if c}
         for block in sorted({block_of(M) for M in SERVED_M}):
-            obs = [(int(M), tuple(c)) for M, c in sorted(by_m.items(), key=lambda kv: int(kv[0])) if c and block_of(int(M)) == block]
-            configs, consistent = MR.thread_configs(block), []
-            for a in itertools.product(range(MR.max_blocks_per_sm(block) + 1), repeat=len(configs)):
-                allow = {(tk, tn): v for (tk, tn, _), v in zip(configs, a) if v}
-                if obs and all(_auto(M, kind, sms, allow) == c for M, c in obs):
-                    consistent.append(allow)
-            out[f"{kind}/{block}"] = {"observed": len(obs), "consistent": len(consistent),
+            consistent = MR.allows(swept, block, shape(kind)[1], TOP_K, launch_top_k(kind), NUM_EXPERTS, sms)
+            out[f"{kind}/{block}"] = {"observed": sum(block_of(M) == block for M in swept), "consistent": len(consistent),
                                       "allow": [{f"{tk}/{tn}": v for (tk, tn), v in allow.items()} for allow in consistent[:8]]}
     return out
 

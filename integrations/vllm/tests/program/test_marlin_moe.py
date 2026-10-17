@@ -5,7 +5,8 @@
 * a split-K coordinate against its fold written out from the primitives: each segment's warp tree, folded from the highest k down;
 * the numpy twin (`kernels.marlin_moe_rows`) the H200 capture compares the kernel with, against the Definitions: the group, the
   schedule, the coordinates and a whole pair launch over three experts;
-* `auto_config` on the shapes DeepSeek-V4-Pro's TP8 rank launches, and the moe block `fused_marlin_moe` picks for its batches.
+* `auto_config` on the shapes DeepSeek-V4-Pro's TP8 rank launches, `served_config` over the H200 sweep, and the moe block
+  `fused_marlin_moe` picks for its batches.
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ import pytest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops.prims import F2fpBf16
+from verity_vllm.program.frontend.rules.vllm_marlin_moe import MARLIN_SERVED
 from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.program.registry import flashmla as F
 from verity_vllm.program.registry import marlin_moe as MM
@@ -252,6 +254,16 @@ def test_auto_config_on_the_rank_shapes() -> None:
         MR.auto_config(1, 768, 6, 132, {}, block=8)
     with pytest.raises(ValueError):
         MR.auto_config(922, 768, 6, 132, {(128, 128): 2}, block=32)
+
+
+def test_the_h200_sweep_gives_the_config_at_every_batch_of_its_moe_blocks() -> None:
+    """The GO capture's sweep (`MARLIN_SERVED`): at a batch it holds, its config; at the prefill's 256 tokens, which it did not sweep,
+    the one every limit consistent with the sweep's block-8 batches gives; past its blocks, none."""
+    w13, w2 = (MARLIN_SERVED[(384, 6, K, N, k)] for K, N, k in ((7168, 768, 6), (384, 7168, 1)))
+    assert len(MR.allows(w13, 8, 768, 6, 6, 384, 132)) == 4 and len(MR.allows(w2, 8, 7168, 6, 1, 384, 132)) == 20
+    assert [MR.served_config(w13, M, 768, 6, 6, 384, 132) for M in (1, 3, 256, 900)] == [(128, 64, 2), (128, 64, 4), (64, 128, 4), (64, 128, 3)]
+    assert [MR.served_config(w2, M, 7168, 6, 1, 384, 132) for M in (1, 256, 923)] == [(64, 128, 4), (64, 128, 4), (64, 128, 2)]
+    assert MR.served_config(w13, 2000, 768, 6, 6, 384, 132) is None, "a moe block of 48 is not in the sweep"
 
 
 @pytest.mark.parametrize("M,block", [(1, 8), (460, 8), (461, 16), (921, 16), (922, 32), (1843, 32), (1844, 48), (2764, 48),

@@ -27,6 +27,9 @@
   served kernel (`dsv4_moe_capture_gpu.clamp_twin`), and SwiGLU-OAI's alpha and beta or a limit that is no bf16 value refuses by name;
 * `TopkSoftplusSqrtHashRule`: a hash layer's router derives per token word for word the capture's twin over the table's ids
   (`dsv4_moe_capture_gpu.hash_twin`), and the kernel's scored path or another normalisation refuses by name;
+* `rules/vllm_marlin_moe.py`: the Marlin MoE's align derives as `moe_align_block_size` with each expert's pairs in key order, and
+  its two expert GEMMs per pair word for word the twin (`kernels.marlin_moe_rows.launch`) at the config the capture gives, and
+  a batch, block or shape the capture does not give refuses by name;
 * `vllm_meta.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
   leaves them."""
 from __future__ import annotations
@@ -47,7 +50,7 @@ from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.export_compat import (InertEvent, InertStream, cuda_streams_inert, deep_gemm_fp8_einsum_leaf,
                                                         mhc_pre_broadcast_leaf, registered_op_bodies_as_ops)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
-from verity_vllm.program.frontend.rules import vllm_dsv4, vllm_mhc
+from verity_vllm.program.frontend.rules import vllm_dsv4, vllm_marlin_moe, vllm_mhc
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.triton_iface import triton_launch
 from verity_vllm.program.frontend.rules.vllm_iface import iface
@@ -61,6 +64,7 @@ from verity_vllm.program.kernels import dsv4_compressor_twin as DC
 from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as TQ
 from verity_vllm.program.kernels import flashmla_prefill_twin as FP
 from verity_vllm.program.kernels import flashmla_twin as FT
+from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.program.kernels import mhc_twin as W
 from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import hopper
@@ -446,7 +450,8 @@ def _tensor(words: np.ndarray) -> torch.Tensor:
 
 def _words(t: torch.Tensor) -> list[int]:
     width = {torch.bfloat16: (torch.int16, np.uint16), torch.float32: (torch.int32, np.uint32), torch.int32: (torch.int32, np.uint32),
-             torch.float8_e4m3fn: (torch.uint8, np.uint8)}[t.dtype]
+             torch.float8_e4m3fn: (torch.uint8, np.uint8), torch.float8_e8m0fnu: (torch.uint8, np.uint8),
+             torch.uint8: (torch.uint8, np.uint8)}[t.dtype]
     return t.contiguous().view(width[0]).numpy().reshape(-1).astype(width[1]).tolist()
 
 
@@ -965,6 +970,90 @@ def test_a_router_beyond_the_hash_definition_refuses_by_name(over, refusal, serv
     table, x, toks = _hash_inputs(np.random.default_rng(3))
     rep = _derive_mhc(_HashRouter(table, **over), (_tensor(x), torch.from_numpy(toks)))
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
+
+#: E = 3 experts of hidden 128 and intermediate 128 (w13 N 256), top 2, at M = 3 tokens: the configs a capture would pin
+MARLIN_E, MARLIN_H, MARLIN_I, MARLIN_TOPK, MARLIN_M = 3, 128, 128, 2, 3
+MARLIN_SMALL = {(MARLIN_E, MARLIN_TOPK, MARLIN_H, 2 * MARLIN_I, MARLIN_TOPK): {MARLIN_M: (64, 128, 1)},
+                (MARLIN_E, MARLIN_TOPK, MARLIN_I, MARLIN_H, 1): {MARLIN_M: (64, 128, 2)}}
+
+
+class _MarlinLaunches(nn.Module):
+    """`fused_marlin_moe`'s align and two expert GEMMs as `mxfp4_marlin_moe_leaf` exports them, the w2 launch over its own input
+    rows: the layer's codes packed two a byte as the checkpoint stores them, scale bytes 118..127."""
+
+    def __init__(self, rng, block_m: int = 8) -> None:
+        super().__init__()
+        E, H, I = MARLIN_E, MARLIN_H, MARLIN_I
+        self.codes13, self.codes2 = rng.integers(0, 16, (E, 2 * I, H)), rng.integers(0, 16, (E, H, I))
+        self.bytes13, self.bytes2 = rng.integers(118, 128, (E, 2 * I, H // 32)), rng.integers(118, 128, (E, H, I // 32))
+        p = lambda a, dt: nn.Parameter(torch.from_numpy(a.astype(np.uint8)).view(dt), requires_grad=False)
+        self.w13, self.w2 = p(MR.pack_e2m1(self.codes13), torch.uint8), p(MR.pack_e2m1(self.codes2), torch.uint8)
+        self.s13, self.s2 = p(self.bytes13, torch.float8_e8m0fnu), p(self.bytes2, torch.float8_e8m0fnu)
+        self.block_m = block_m
+
+    def forward(self, x, ids, key, weights, act):
+        blk, par = iface.marlin_moe_align(ids, key, MARLIN_E, self.block_m)
+        up = iface.marlin_moe_mxfp4_gemm(x, self.w13, self.s13, ids, blk, par, weights, self.block_m, MARLIN_TOPK, False)
+        down = iface.marlin_moe_mxfp4_gemm(act, self.w2, self.s2, ids, blk, par, weights, self.block_m, 1, True)
+        return blk, par, up, down
+
+
+def _align(ids: np.ndarray, key: np.ndarray, E: int, BM: int) -> tuple[np.ndarray, int]:
+    """`moe_align_block_size` with each expert's pairs sorted by (key, pair): each pair's sorted position / BM, and the padded count
+    / BM."""
+    blk, start = np.zeros(len(ids), np.int64), 0
+    for e in range(E):
+        for r, p in enumerate(sorted(np.flatnonzero(ids == e), key=lambda q: (key[q], q))):
+            blk[p] = (start + r) // BM
+        start += -(-int((ids == e).sum()) // BM) * BM
+    return blk, start // BM
+
+
+def _marlin_inputs(rng) -> tuple:
+    P = MARLIN_M * MARLIN_TOPK
+    ids = np.stack([rng.permutation(MARLIN_E)[:MARLIN_TOPK] for _ in range(MARLIN_M)]).astype(np.int32)
+    key = rng.permutation(P).reshape(MARLIN_M, MARLIN_TOPK).astype(np.int32)
+    return (W.bf16(_f32(rng, MARLIN_M, MARLIN_H)), ids, key, _f32(rng, MARLIN_M, MARLIN_TOPK), W.bf16(_f32(rng, P, MARLIN_I)))
+
+
+def _derive_marlin(model, xs, monkeypatch, served=MARLIN_SMALL):
+    monkeypatch.setattr(vllm_marlin_moe, "MARLIN_SERVED", served)
+    to = lambda a: torch.from_numpy(a) if a.dtype == np.int32 else _tensor(a)
+    inputs = tuple(to(a) for a in xs)
+    return derive_report(model, inputs, mode="profile", profile=PROFILE_B1_EAGER_V3.name, name="marlin", rules=vllm_ruleset()), inputs
+
+
+def test_the_marlin_moes_align_and_expert_gemms_derive_per_pair_word_for_word_the_twin(served, monkeypatch):
+    rng = np.random.default_rng(11)
+    model, xs = _MarlinLaunches(rng), _marlin_inputs(rng)
+    rep, inputs = _derive_marlin(model, xs, monkeypatch)
+    assert rep.program is not None, rep.unsupported
+    apps = {a["rule"]: a for a in rep.provenance["applications"] if "vllm-marlin-moe" in a["rule"]}
+    assert apps["MarlinMoeAlign[vllm-marlin-moe]_v1"]["emitted"] == "MoeAlignBlocks_v1{E=3,P=6,BM=8}"
+    assert apps["MarlinMoeAlign[vllm-marlin-moe]_v1"]["schedule"] == "marlin_moe_align"
+    gemms = [a for a in rep.provenance["applications"] if a["rule"] == "MarlinMoeGemm[vllm-marlin-moe]_v1"]
+    assert [(a["preconditions_checked"]["TK"], a["preconditions_checked"]["TN"], a["preconditions_checked"]["GRID"]) for a in gemms] == [
+        (64, 128, 132), (64, 128, 264)]
+    assert rep.provenance["weight_roles"]["w13"]["role"] == "moe.expert_weight_e2m1x2"
+    x, ids, key, g, act = xs
+    blk, par = _align(ids.reshape(-1), key.reshape(-1), MARLIN_E, 8)
+    e, pair = ids.reshape(-1), np.arange(MARLIN_M * MARLIN_TOPK)
+    up = MR.launch(x[pair // MARLIN_TOPK], blk, par, e, model.codes13, model.bytes13, np.arange(2 * MARLIN_I), TK=64, TN=128, GRID=132)
+    down = MR.launch(act, blk, par, e, model.codes2, model.bytes2, np.arange(MARLIN_H), TK=64, TN=128, GRID=264, g=g.reshape(-1))
+    assert _run(rep, model, inputs) == blk.tolist() + [par] + up.reshape(-1).tolist() + down.reshape(-1).tolist()
+
+
+@pytest.mark.parametrize("block_m, sweep, refusal", [
+    (16, MARLIN_SMALL, "moe_block_size 16 is not fused_marlin_moe's at 3 tokens over 3 experts (8)"),
+    (8, {}, "no Marlin capture of a launch at E=3, TOPK=2, K=128, N=256, top_k=2 (MARLIN_SERVED)"),
+    (8, {k: {460: c[MARLIN_M]} for k, c in MARLIN_SMALL.items()}, "the capture's sweep does not determine the Marlin config at 3 tokens"),
+])
+def test_a_marlin_launch_the_capture_does_not_give_refuses_by_name(block_m, sweep, refusal, served, monkeypatch):
+    rng = np.random.default_rng(11)
+    rep, _ = _derive_marlin(_MarlinLaunches(rng, block_m=block_m), _marlin_inputs(rng), monkeypatch, sweep)
+    assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
 
 class _Fp8Linear(nn.Module):
     def __init__(self, scale_dtype, g: int = 0) -> None:

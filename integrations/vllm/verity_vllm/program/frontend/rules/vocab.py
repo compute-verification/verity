@@ -29,6 +29,7 @@ from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import fp8_vocab as _fp8_vocab
+from verity_vllm.program.registry import marlin_moe as _marlin
 from verity_vllm.program.registry import mhc as _mhc
 from verity_vllm.program.registry import moe as _moe
 from verity_vllm.program.registry import pouw_rows as _pouw_rows
@@ -496,7 +497,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "silu_mul_clamp": lambda I, LIMIT: ir_bind(_dsv4_moe.SiluMulClamp, I=I, LIMIT=LIMIT),
            # [DSV4] the sqrtsoftplus routers (registry.dsv4_moe) and the hash table's lookup. `rules/vllm_moe_router.py` asks for them.
            "gather_i32": lambda V: gather_i32(V),
-           "moe_router_hash": lambda E, SCALE: ir_bind(_dsv4_moe.MoeRouterHash, E=E, SCALE=SCALE)},
+           "moe_router_hash": lambda E, SCALE: ir_bind(_dsv4_moe.MoeRouterHash, E=E, SCALE=SCALE),
+           # [DSV4] the MXFP4 Marlin MoE's schedule and expert GEMMs (registry.marlin_moe). `rules/vllm_marlin_moe.py` asks for them.
+           "marlin_moe_align": lambda E, P, BM: ir_bind(_marlin.MoeAlignBlocks, E=E, P=P, BM=BM),
+           "marlin_moe_gemm": lambda E, K, N, TK, TN, GRID, DOT:
+               ir_bind(_marlin.MarlinMoeExpertGemm, E=E, K=K, N=N, TK=TK, TN=TN, GRID=GRID, DOT=DOT),
+           "marlin_moe_gemm_w": lambda E, K, N, TK, TN, GRID, DOT:
+               ir_bind(_marlin.MarlinMoeExpertGemmW, E=E, K=K, N=N, TK=TK, TN=TN, GRID=GRID, DOT=DOT)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -615,7 +622,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                              "up clamped to [-LIMIT, LIMIT], then SiluMulBf16_v2 per element",
            "gather_i32": "GatherI32x{V}_v1: column[token] of V i32 words, -1 for a token outside [0, V)",
            "moe_router_hash": "MoeRouterHash_v1{E,SCALE}: dsv4HashTopkSoftplusSqrt's weights for one token from its f32 logits and six "
-                              "table ids -- Dsv4HashWeight_v1 of each id's logit, renormalised and scaled by SCALE"})
+                              "table ids -- Dsv4HashWeight_v1 of each id's logit, renormalised and scaled by SCALE",
+           "marlin_moe_align": "MoeAlignBlocks_v1{E,P,BM}: moe_align_block_size's schedule over P router ids, each expert's pairs ranked "
+                               "by a key per pair -- each pair's moe block and the padded block count",
+           "marlin_moe_gemm": "MarlinMoeExpertGemm_v1{E,K,N,TK,TN,GRID,DOT}: Marlin's w13 launch (W4A16 e2m1, e8m0 group-32 scales) on one "
+                              "pair at its moe block, the k slices and fp32 fold of the launch's schedule",
+           "marlin_moe_gemm_w": "MarlinMoeExpertGemmW_v1{E,K,N,TK,TN,GRID,DOT}: Marlin's w2 launch on one pair, the routed weight rounded "
+                                "to bf16 and multiplied in"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

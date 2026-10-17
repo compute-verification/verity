@@ -1,10 +1,13 @@
 """The Marlin W4A16 MXFP4 expert GEMMs' twin (`registry.marlin_moe`: `MarlinMxfp4Coordinate(W)_v1` and the schedule
 `MarlinMoeSchedule_v1`), vectorised over a launch's (pair, column) coordinates with core's k16 step; `moe_block`, the moe block
-`fused_marlin_moe` picks for a batch; and `auto_config`, ops.cu's choice of thread config and blocks per SM (`determine_exec_config`)
-at that block over the per-config limits a driver's register count sets.  The scalar Definitions are the reference:
+`fused_marlin_moe` picks for a batch; `auto_config`, ops.cu's choice of thread config and blocks per SM (`determine_exec_config`)
+at that block over the per-config limits a driver's register count sets; and `served_config`, the config a launch runs at a batch
+by a capture's sweep, where the sweep holds it or determines it under that rule.  The scalar Definitions are the reference:
 tests/program/test_marlin_moe.py checks this twin against them word for word, and the H200 capture
 (tests/properties/dsv4_marlin_capture_gpu.py) checks the kernel's words against it."""
 from __future__ import annotations
+
+import itertools
 
 import numpy as np
 
@@ -173,3 +176,37 @@ def auto_config(prob_m: int, prob_n: int, top_k: int, sms: int, allow: dict[tupl
     if cfg is None:
         raise ValueError("no valid thread config")
     return cfg
+
+
+def _auto(prob_m: int, prob_n: int, top_k: int, sms: int, allow: dict[tuple[int, int], int], block: int) -> tuple[int, int, int] | None:
+    try:
+        return auto_config(prob_m, prob_n, top_k, sms, allow, block=block)
+    except ValueError:
+        return None
+
+
+def allows(served: dict[int, tuple[int, int, int]], block: int, prob_n: int, top_k: int, launch_top_k: int, E: int,
+           sms: int) -> list[dict[tuple[int, int], int]]:
+    """Every `allow` of a moe block (each of its thread configs' limit in 0 to the block's clamp, 0 invalid) under which `auto_config`
+    gives the config ``served`` holds at each of its batches at that block: ``served`` maps M tokens to the (TK, TN, blocks per SM) a
+    launch of N = ``prob_n`` ran at (a capture's sweep), routed top ``top_k`` over E experts, its prob_m the M * top_k pairs over the
+    launch's top_k."""
+    configs = thread_configs(block)
+    obs = [(M, tuple(c)) for M, c in sorted(served.items()) if c and moe_block(M, top_k, E) == block]
+    out = []
+    for a in itertools.product(range(max_blocks_per_sm(block) + 1), repeat=len(configs)):
+        allow = {(tk, tn): v for (tk, tn, _), v in zip(configs, a) if v}
+        if obs and all(_auto(M * top_k // launch_top_k, prob_n, launch_top_k, sms, allow, block) == c for M, c in obs):
+            out.append(allow)
+    return out
+
+
+def served_config(served: dict[int, tuple[int, int, int]], M: int, prob_n: int, top_k: int, launch_top_k: int, E: int,
+                  sms: int) -> tuple[int, int, int] | None:
+    """The config a launch runs at M tokens: ``served``'s at a batch it holds, else the one `auto_config` gives at M under every
+    `allows` of M's moe block; None when there is none or they differ."""
+    if M in served:
+        return tuple(served[M])
+    block = moe_block(M, top_k, E)
+    got = {_auto(M * top_k // launch_top_k, prob_n, launch_top_k, sms, a, block) for a in allows(served, block, prob_n, top_k, launch_top_k, E, sms)}
+    return next(iter(got)) if len(got) == 1 and None not in got else None
