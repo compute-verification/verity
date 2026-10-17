@@ -25,6 +25,7 @@ import Proofs.Flock.Claims.KS.PlainAcc
 import Proofs.Flock.Claims.KS.RoundsN
 import Proofs.Flock.Claims.KS.RoundsNZk
 import Proofs.Flock.Claims.KS.LevelZero
+import Proofs.Flock.Claims.KS.LevelZeroAcc
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -109,4 +110,6 @@ session's count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted
 level 0's, at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
 `FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`), so an accepted
 rep's is at the stream's round `plainQueryRound` (`FlockSoundness.Refine.lincheck_moves`,
-`FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). -/
+`FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). At flock-verify's acceptance,
+every result of each table's reps' runs requests level 0 first there (`LevelZeroAcc`:
+`FlockSoundness.Discharge.Exec.accepts_req0`). -/
