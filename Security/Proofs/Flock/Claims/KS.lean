@@ -33,6 +33,7 @@ import Proofs.Flock.Claims.KS.ZkLiveJ
 import Proofs.Flock.Claims.KS.ZkAccJ
 import Proofs.Flock.Claims.KS.RoundsNZk
 import Proofs.Flock.Claims.KS.ZkPlanJ
+import Proofs.Flock.Claims.KS.ZkPlanHJ
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -144,4 +145,5 @@ its statement fixes (`RoundsNZk`: `FlockDeploy.zkRepNs`, `FlockDeploy.zkVerifyRe
 count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). Where `verify --zk` sets a record up, the old `--zk` plan's
 tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), so at the empty
 draw the deployed `--zk` decoders are right at them (`FlockDeploy.KS.drawOkZKJ_empty`,
-`FlockDeploy.KS.decodesTable_zkTabs`). -/
+`FlockDeploy.KS.decodesTable_zkTabs`); so are the hidden-output plan's and decoders (`ZkPlanHJ`:
+`FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`, `FlockDeploy.KS.decodesTableH_zkTabs`). -/
