@@ -116,7 +116,7 @@ template <bool R> struct FL : EL<R ? DUO : NONE, R ? 7 : 0, R ? 4 : 0, true> {
   }
 };
 
-__global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs(const __grid_constant__ FaArgs a) {
+template <bool H1> DEV void hm_body(const FaArgs& a) {
   using L = FL<true>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
@@ -143,7 +143,8 @@ __global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs(const __grid_constant__ Fa
     }
     int acc[MI][NI][4];
     ml.tile1(acc, ch, kr, 0u);
-    htail<L>(ml, acc, ch);
+    if constexpr (H1) htail_h1<L>(ml, acc, ch);
+    else htail<L>(ml, acc, ch);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
     int* mc = a.M + (size_t)kvh * a.rep * a.s + col0;
     // a tile strictly below the diagonal needs no key <= pos test (EDGE: the tiles that do)
@@ -173,6 +174,9 @@ __global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs(const __grid_constant__ Fa
     r[1] = make_uint4(finish<DUO>(ch, 4), finish<DUO>(ch, 5), finish<DUO>(ch, 6), finish<DUO>(ch, 7));
   }
 }
+__global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs(const __grid_constant__ FaArgs a) { hm_body<false>(a); }
+// cohalf H1 (co32c-u16): the digit-split tail (htail_h1), Q/K floored at top 111
+__global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs_h1(const __grid_constant__ FaArgs a) { hm_body<true>(a); }
 
 __global__ void __launch_bounds__(MLW::NT, 1) hsm(const __grid_constant__ FaArgs a) {
   using L = FL<false>;
@@ -305,6 +309,7 @@ struct FA {
   size_t tpk = 0;
   uint32_t seed = 0, inst = 0, A = 0;
   float inv7 = 0.5f;
+  bool h1 = false;    // cohalf H1's QK^T (co32c-u16, decision 82): Q/K floored at top 111, the digit-split tail
   uint16_t* x;
   int8_t *W7, *X, *PA, *Wp, *PB, *Wh;
   int *M, *L, *E0, *S = nullptr;
@@ -323,6 +328,8 @@ static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool
   if (s % 1024 && unf) { fprintf(stderr, "s %d: the unfused h_l7qs needs s %% 1024 == 0 (EL's raster groups)\n", s); exit(2); }
   apsetup(F.V, s, H, rep, seed, gate);
   F.s = s; F.H = H; F.rep = rep; F.kvh = H / rep; F.seed = seed; F.A = fa_A();
+  const char* num = getenv("CG_NUMERICS");
+  F.h1 = num && !strcmp(num, "h1");
   const int tq = s / 128, tn = rep * s / 128;
   F.tpk = (size_t)tq * tn;
   std::vector<int4> hf;
@@ -352,7 +359,9 @@ static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool
   fa_lut_host(lut);
   CK(cudaMemcpyToSymbol(fa_lut, lut, FA_LUT));
   xfill<<<4096, 256, 0, F.V.st>>>(F.x, kr * 128, mix32(seed ^ 0x3333u), 128, gate);
-  wfill<<<4096, 256, 0, F.V.st>>>(F.W7, qr * 128, mix32(seed ^ 0x6666u), 128, gate);
+  // the query: cohalf H1's pre-bit Q in [-112, 110] (floor top 111); the 7-bit arm's in [-64, 62]
+  const int wlo = F.h1 ? -112 : -64, whi = F.h1 ? 110 : 62;
+  wfill<<<4096, 256, 0, F.V.st>>>(F.W7, qr * 128, mix32(seed ^ 0x6666u), 128, gate, wlo, whi);
   F.mq = upload_maps(Maps{tmap(F.X, 128, kr, 128), tmap(F.Wp, 128, qr, 128), tmap(F.PA, 128, kr, 128), tmap(F.PB, 128, qr, 128)});
   F.ms = upload_maps(Maps{tmap(F.Wh, 128, qr, 128), tmap(F.X, 128, kr, 128), tmap(F.Wh, 128, qr, 128), tmap(F.X, 128, kr, 128)});
   if (unf)
@@ -362,8 +371,10 @@ static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool
                                       tmap(F.PB + qo, 128, (size_t)rep * s, 128)}));
     }
   CK(cudaFuncSetAttribute(hm_l7qs, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
+  CK(cudaFuncSetAttribute(hm_l7qs_h1, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
   CK(cudaFuncSetAttribute(hsm, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
   CK(cudaFuncSetAttribute(h_l7qs, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
+  CK(cudaFuncSetAttribute(h_l7qs_h1, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
   CK(cudaStreamSynchronize(F.V.st));
   CK(cudaGetLastError());
 }
@@ -377,16 +388,24 @@ static void fafree(FA& F) {
 }
 static void fq(FA& F, const Sig& sg) {
   const int kr = F.kvh * F.s, qr = F.H * F.s;
-  hquant<<<hq_blocks(kr), 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, F.inv7, sg);
-  hwedit<true><<<hw_blocks(qr), 256, 0, F.V.st>>>(reinterpret_cast<const uint8_t*>(F.W7), reinterpret_cast<uint8_t*>(F.Wp),
-                                                   reinterpret_cast<uint8_t*>(F.PB), qr, sg, reinterpret_cast<uint8_t*>(F.Wh));
+  const uint8_t* W = reinterpret_cast<const uint8_t*>(F.W7);
+  uint8_t *Wp = reinterpret_cast<uint8_t*>(F.Wp), *PB = reinterpret_cast<uint8_t*>(F.PB), *Wh = reinterpret_cast<uint8_t*>(F.Wh);
+  if (F.h1) {
+    hquant_h1<<<hq_blocks(kr), 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, sg);
+    hwedit<true, true><<<hw_blocks(qr), 256, 0, F.V.st>>>(W, Wp, PB, qr, sg, Wh);
+  } else {
+    hquant<<<hq_blocks(kr), 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, F.inv7, sg);
+    hwedit<true><<<hw_blocks(qr), 256, 0, F.V.st>>>(W, Wp, PB, qr, sg, Wh);
+  }
 }
 static FaArgs faargs(FA& F, const Maps* m, bool full, uint32_t* R) {
   return FaArgs{m, full ? F.tabf : F.tabc, full ? F.ntf : F.ntc, F.s, F.rep, F.seed, F.A, R, F.M, F.L, F.E0, F.V.P};
 }
 static void fhm(FA& F, bool full, uint32_t* R) {
   CK(cudaMemsetAsync(F.M, 0x80, (size_t)F.H * F.s * 4, F.V.st));
-  hm_l7qs<<<std::min(F.grid, full ? F.ntf : F.ntc), MLW::NT, CSMEM, F.V.st>>>(faargs(F, F.mq, full, R));
+  const int g = std::min(F.grid, full ? F.ntf : F.ntc);
+  if (F.h1) hm_l7qs_h1<<<g, MLW::NT, CSMEM, F.V.st>>>(faargs(F, F.mq, full, R));
+  else hm_l7qs<<<g, MLW::NT, CSMEM, F.V.st>>>(faargs(F, F.mq, full, R));
 }
 static void fsm(FA& F) {
   CK(cudaMemsetAsync(F.L, 0, (size_t)F.H * F.s * 4, F.V.st));
@@ -402,7 +421,8 @@ static void fhqk(FA& F, uint32_t* R) {
   const size_t nk = (size_t)F.tpk * MLW::NCT * 8, sk = (size_t)F.s * F.rep * F.s;
   for (int k = 0; k < F.kvh; k++) {
     Args a{F.mk[k], F.S + k * sk, R + k * nk, F.s, F.rep * F.s, 128, 8, fa_seed(F.seed, k), 0, 1, 0, 0, {0, 0, 0, 0}, nullptr, 0};
-    h_l7qs<<<std::min(F.grid, (int)F.tpk), MLW::NT, CSMEM, F.V.st>>>(a);
+    if (F.h1) h_l7qs_h1<<<std::min(F.grid, (int)F.tpk), MLW::NT, CSMEM, F.V.st>>>(a);
+    else h_l7qs<<<std::min(F.grid, (int)F.tpk), MLW::NT, CSMEM, F.V.st>>>(a);
   }
 }
 static void fsref(FA& F) {

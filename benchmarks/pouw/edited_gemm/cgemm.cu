@@ -344,13 +344,78 @@ __global__ void __launch_bounds__(256) hquant(const uint16_t* __restrict__ x, in
     }
   }
 }
+// H1's served side (K): per (head, token) asymmetric floor at top 111 (steps.floor_quant at top 111, one bit): amax =
+// max(x), namax = max(-x) over the 128 head-dim entries, s = max(amax / 111, namax / 112) clamped to 1e-30 then * (1 +
+// 2^-20), X = floor(x / s) + b in [-112, 111] (the margin keeps floor(x / s) in [-112, 110], no clamp). Y(r) = X(r) +
+// X(r + 64) in [-224, 222] leaves s8, so the digit split Y = Y0 + 128 Y1 (Y0 = ((Y + 64) & 127) - 64 in [-64, 63],
+// Y1 = (Y - Y0) >> 7 in [-2, 2]) and P_A = [Y0_lo | Y0_hi | Y1_lo | Y1_hi]. Every divide (amax / 111, namax / 112, x / s)
+// shares the one pinned generic div.rn slow path.
+__global__ void __launch_bounds__(256) hquant_h1(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
+                                                 int rows, const __grid_constant__ Sig sg) {
+  __shared__ uint32_t dgs[HQ_G * 16];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, g0 = blockIdx.x * HQ_G;
+  if (threadIdx.x < HQ_G && (g0 + (int)threadIdx.x) * 4 < rows) {
+    uint64_t st[8];
+    sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | (uint64_t)(g0 + threadIdx.x), st);
+    uint32_t* dg = dgs + 16 * threadIdx.x;
+#pragma unroll
+    for (int i = 0; i < 8; i++) {
+      dg[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+      dg[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+    }
+  }
+  __syncthreads();
+#pragma unroll 1
+  for (int gi = warp; gi < HQ_G && (g0 + gi) * 4 < rows; gi += 8) {
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dgs + 16 * gi);
+#pragma unroll 1
+    for (int rr = 0; rr < 4; rr++) {
+      const size_t r = (size_t)(g0 + gi) * 4 + rr;
+      const uint2 w = __ldg(reinterpret_cast<const uint2*>(x + r * 128) + lane);
+      const uint32_t ww[2] = {w.x, w.y};
+      float xf[4];
+#pragma unroll
+      for (int h = 0; h < 2; h++) {
+        xf[2 * h] = __uint_as_float(ww[h] << 16);
+        xf[2 * h + 1] = __uint_as_float(ww[h] & 0xFFFF0000u);
+      }
+      float px = xf[0], nx = -xf[0];
+#pragma unroll
+      for (int j = 1; j < 4; j++) { px = fmaxf(px, xf[j]); nx = fmaxf(nx, -xf[j]); }
+#pragma unroll
+      for (int o = 16; o; o >>= 1) { px = fmaxf(px, __shfl_xor_sync(~0u, px, o)); nx = fmaxf(nx, __shfl_xor_sync(~0u, nx, o)); }
+      const float s = fmaxf(fmaxf(px / 111.f, nx / 112.f), 1e-30f) * (1.f + 0x1p-20f);
+      const uint32_t bits = (bytes[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
+      int qv[4];
+#pragma unroll
+      for (int j = 0; j < 4; j++) qv[j] = __float2int_rd(xf[j] / s) + (int)((bits >> j) & 1u);
+      const uint32_t xw = __byte_perm(__byte_perm(qv[0], qv[1], 0x0040), __byte_perm(qv[2], qv[3], 0x0040), 0x5410);
+      reinterpret_cast<uint32_t*>(X + r * 128)[lane] = xw;
+      const uint32_t hi = __shfl_down_sync(~0u, xw, 16);
+      if (lane < 16) {
+        uint32_t y0w = 0, y1w = 0;
+#pragma unroll
+        for (int b = 0; b < 4; b++) {
+          const int Y = (int)(int8_t)(xw >> (8 * b)) + (int)(int8_t)(hi >> (8 * b));
+          const int Y0 = ((Y + 64) & 127) - 64, Y1 = (Y - Y0) >> 7;
+          y0w |= ((uint32_t)(uint8_t)(int8_t)Y0) << (8 * b);
+          y1w |= ((uint32_t)(uint8_t)(int8_t)Y1) << (8 * b);
+        }
+        reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = y0w;
+        reinterpret_cast<uint32_t*>(PA + r * 128)[lane + 16] = y1w;
+      }
+    }
+  }
+}
 // the peeled side (Q in [-64, 62]): Q' = Q + c + U(i, k mod 64) (c as cwedit's, tag 8; U(i, r) from digest byte r of
 // row i's tag-11 block, r < 64, as cwedit's beta) and P_B = [-U_lo | -U_hi | 0 | 0]. A block HW_G row groups of 4:
 // thread t < HW_G hashes group t's c, thread HW_G + j row j's U (5 HW_G digests on 5 full warps at HW_G = 32), then a
 // warp 4 rows at a time. WH: also W^ = Q + c (phat<true>'s bytes) to Wh
 constexpr int HW_G = 32;
 inline int hw_blocks(int rows) { return (rows + 4 * HW_G - 1) / (4 * HW_G); }
-template <bool WH = false>
+// H1 (co32c-u16): the narrow U (u_beta16) over Q in [-112, 110] (floor top 111), so Q' = Q + c + U stays s8 at Q + c in
+// [-112, 111]; P_B = [-U_lo | -U_hi | -U_lo | -U_hi] (the repeat for the digit split's Y1 atoms, htail_h1)
+template <bool WH = false, bool H1 = false>
 __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB, int rows,
                                               const __grid_constant__ Sig sg, uint8_t* __restrict__ Wh = nullptr) {
   __shared__ uint32_t cds[HW_G * 16];
@@ -374,7 +439,8 @@ __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uin
 #pragma unroll
         for (int b = 0; b < 4; b++) {
           const int e = 4 * q + b;
-          v |= ((uint32_t)u_beta((uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu) & 0xFFu) << (8 * b);
+          const uint32_t db = (uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu;
+          v |= ((uint32_t)(H1 ? u_beta16(db) : u_beta(db)) & 0xFFu) << (8 * b);
         }
         ud[q] = v;
       }
@@ -393,7 +459,7 @@ __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uin
       const uint32_t wc = add_noise<false>(w, bits01(nib));
       reinterpret_cast<uint32_t*>(Wp + r * 128)[lane] = add_noise<false>(wc, u);
       if constexpr (WH) reinterpret_cast<uint32_t*>(Wh + r * 128)[lane] = wc;
-      reinterpret_cast<uint32_t*>(PB + r * 128)[lane] = lane < 16 ? add_noise<false>(~u, 0x01010101u) : 0u;
+      reinterpret_cast<uint32_t*>(PB + r * 128)[lane] = (H1 || lane < 16) ? add_noise<false>(~u, 0x01010101u) : 0u;
     }
   }
 }
@@ -513,8 +579,53 @@ template <class L> DEV void htail(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8
   ml.release(ml.empty(ml.s));
   ml.advance();
 }
+// cohalf H1's tail stage P_A = [Y0_lo | Y0_hi | Y1_lo | Y1_hi], P_B = [-U_lo | -U_hi | -U_lo | -U_hi]: Y = X_lo + X_hi in
+// [-224, 222] = Y0 + 128 Y1, so O = T_last + Y (-U) = T_last + Y0 (-U) + 128 (Y1 (-U)). Atoms 0 and 1 (Y0) accumulate onto
+// T_last; atoms 2 and 3 (Y1) accumulate into a fresh d1, folded in at base 128 (as cdstep's << 7, but added not subtracted)
+template <class L> DEV void htail_h1(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8]) {
+  constexpr int MI = L::MI, NI = L::NI;
+  ml.wait_full();
+  const uint32_t tb = ml.stage(ml.s);
+  uint32_t fa[MI][4], fb[NI][2];
+#pragma unroll
+  for (int kk = 0; kk < 2; kk++) {
+    ml.load_b(fb, tb, kk);
+#pragma unroll
+    for (int mi = 0; mi < MI; mi++) {
+      ml.load_a(fa[mi], tb, kk, mi);
+#pragma unroll
+      for (int ni = 0; ni < NI; ni++) imma(acc[mi][ni], fa[mi], fb[ni]);
+    }
+  }
+  int d1[MI][NI][4];
+#pragma unroll
+  for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+    for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+      for (int e = 0; e < 4; e++) d1[mi][ni][e] = 0;
+#pragma unroll
+  for (int kk = 2; kk < 4; kk++) {
+    ml.load_b(fb, tb, kk);
+#pragma unroll
+    for (int mi = 0; mi < MI; mi++) {
+      ml.load_a(fa[mi], tb, kk, mi);
+#pragma unroll
+      for (int ni = 0; ni < NI; ni++) imma(d1[mi][ni], fa[mi], fb[ni]);
+    }
+  }
+#pragma unroll
+  for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+    for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+      for (int e = 0; e < 4; e++) acc[mi][ni][e] += d1[mi][ni][e] * 128;
+  cabs_all<L>(ch, acc);
+  ml.release(ml.empty(ml.s));
+  ml.advance();
+}
 
-// TAIL 0: co32c's (ctail), 1: cohalf's (htail). SERVE 0: O' to U; 1: O; 2: P.V's served value as float, f = float(2 O + 127 S_row) (s_row s_col) with eb = [S (M ints) |
+// TAIL 0: co32c's (ctail), 1: cohalf's (htail), 2: cohalf H1's (htail_h1). SERVE 0: O' to U; 1: O; 2: P.V's served value as float, f = float(2 O + 127 S_row) (s_row s_col) with eb = [S (M ints) |
 // s_row (M floats) | s_col (N floats)] (pv's epilogue on a full key block, S per channel: the epilogue's cost a cell).
 // RK: the fold, DUO or (co32c) an fx kind on every absorbed word, the mainloop's (EL's) and the tail's
 template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0, int RK = DUO> DEV void c_body(const Args& a) {
@@ -547,6 +658,7 @@ template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0, int
     int acc[MI][NI][4];
     ml.tile_il(a.K, acc, ch, kr, zero);
     if constexpr (TAIL == 1) htail<L>(ml, acc, ch);
+    else if constexpr (TAIL == 2) htail_h1<L>(ml, acc, ch);
     else ctail<L, THREE, SERVE != 0, RK>(ml, acc, ch);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
     if constexpr (SERVE == 2) {
@@ -606,12 +718,16 @@ __global__ void __launch_bounds__(MLW::NT, 1) c_fx1_k3(const __grid_constant__ A
 // cohalf (k = 128)
 __global__ void __launch_bounds__(MLW::NT, 1) h_l7qs(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 1>(a); }
 __global__ void __launch_bounds__(MLW::NT, 1) h_l2q(const __grid_constant__ Args a) { c_body<2, 4, false, false, 1, 1>(a); }
+// cohalf H1 (co32c-u16, decision 82): Q/K floored at top 111, the digit-split tail (htail_h1, TAIL 2)
+__global__ void __launch_bounds__(MLW::NT, 1) h_l7qs_h1(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 2>(a); }
+__global__ void __launch_bounds__(MLW::NT, 1) h_l2q_h1(const __grid_constant__ Args a) { c_body<2, 4, false, false, 1, 2>(a); }
 
 // ---------------------------------------------------------------- host
 struct CKn { const char* name; Kern k, k3; };
 static const CKn CKERN[] = {{"c_l7qs", c_l7qs, c_l7qs_k3}, {"c_l7qs_o", c_l7qs_o, c_l7qs_o_k3}, {"c_l2q", c_l2q, c_l2q_k3},
                           {"c_l2q_o", c_l2q_o, c_l2q_o_k3}, {"c_l7qs_v", c_l7qs_v, c_l7qs_v_k3}, {"c_fx1", c_fx1, c_fx1_k3},
-                          {"h_l7qs", h_l7qs, h_l7qs}, {"h_l2q", h_l2q, h_l2q}};
+                          {"h_l7qs", h_l7qs, h_l7qs}, {"h_l2q", h_l2q, h_l2q},
+                          {"h_l7qs_h1", h_l7qs_h1, h_l7qs_h1}, {"h_l2q_h1", h_l2q_h1, h_l2q_h1}};
 static const CKn* ckern(const std::string& n) {
   for (auto& e : CKERN) if (n == e.name) return &e;
   return nullptr;
@@ -637,7 +753,8 @@ using CqK = void (*)(const uint16_t*, int8_t*, int8_t*, int, int, float, Sig);
 static void cq(CP& C, const Sig& s, CqK f = cquant) {
   EP& P = C.E;
   if (C.half) {
-    hquant<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
+    if (C.h1) hquant_h1<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, s);
+    else hquant<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
     return;
   }
   if (C.h1) {
@@ -649,14 +766,14 @@ static void cq(CP& C, const Sig& s, CqK f = cquant) {
 }
 static void cw(CP& C, const Sig& s) {
   EP& P = C.E;
-  if (C.half) {
-    hwedit<<<hw_blocks(P.n), 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(C.W7), reinterpret_cast<uint8_t*>(C.Wp),
-                                               reinterpret_cast<uint8_t*>(C.PB), P.n, s);
-    return;
-  }
   const uint8_t* W = reinterpret_cast<const uint8_t*>(C.W7);
   uint8_t* Wp = reinterpret_cast<uint8_t*>(C.Wp);
   uint8_t* PB = reinterpret_cast<uint8_t*>(C.PB);
+  if (C.half) {
+    if (C.h1) hwedit<false, true><<<hw_blocks(P.n), 256, 0, P.st>>>(W, Wp, PB, P.n, s);
+    else hwedit<<<hw_blocks(P.n), 256, 0, P.st>>>(W, Wp, PB, P.n, s);
+    return;
+  }
   if (C.h1) cwedit_h1<<<P.n / 8, 256, 0, P.st>>>(W, Wp, PB, P.k, s);
   else cwedit<<<P.n / 8, 256, 0, P.st>>>(W, Wp, PB, P.k, s);
 }
@@ -671,16 +788,17 @@ static void csetup(CP& C, int m, int n, int k, uint32_t seed, bool gate) {
   esetup(P, m, n, k, seed, gate);
   C.half = k == 128;
   const char* num = getenv("CG_NUMERICS");
-  C.h1 = !C.half && num && !strcmp(num, "h1");   // H1's linears; cohalf keeps the 7-bit arm
+  C.h1 = num && !strcmp(num, "h1");   // H1's numerics: the linears (k > 128) and cohalf's QK^T (k = 128)
   C.inv7 = P.inv_s * 0.5f;
   CK(cudaMalloc(&C.W7, (size_t)n * k)); CK(cudaMalloc(&C.X, (size_t)m * k)); CK(cudaMalloc(&C.PA, (size_t)m * 128));
   CK(cudaMalloc(&C.Wp, (size_t)n * k)); CK(cudaMalloc(&C.PB, (size_t)n * 128)); CK(cudaMalloc(&C.Wh, (size_t)n * k));
   CK(cudaMalloc(&C.Y, P.ny * 4)); CK(cudaMalloc(&C.Yr, P.ny * 4));
   CK(cudaMalloc(&C.R, P.nr * 4)); CK(cudaMalloc(&C.R2, P.nr * 4));
   CK(cudaMalloc(&C.eb, (size_t)(2 * m + n) * 4));
-  if (C.h1) CK(cudaMalloc(&C.amax_row, (size_t)m * 4));
+  if (C.h1 && !C.half) CK(cudaMalloc(&C.amax_row, (size_t)m * 4));
   ebfill<<<256, 256, 0, P.st>>>(C.eb, m, n, mix32(seed ^ 0x7777u));
-  const int wlo = C.h1 ? -110 : -64, whi = C.h1 ? 110 : 62;   // H1: W in [-110, 110]; co32c: [-64, 62]
+  // H1: the linears' W in [-110, 110]; cohalf's pre-bit query in [-112, 110] (floor top 111). co32c: [-64, 62]
+  const int wlo = C.h1 ? (C.half ? -112 : -110) : -64, whi = C.h1 ? 110 : 62;
   wfill<<<4096, 256, 0, P.st>>>(C.W7, (size_t)n * k, mix32(seed ^ 0x6666u), k, gate, wlo, whi);
   const Sig s0 = sigma(seed, 0xFFFFFFFFu);
   cq(C, s0);
@@ -756,7 +874,7 @@ static int cgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   };
   // the main kernel (c_l7qs, cohalf's h_l7qs): O against cuBLASLt's X W^T; its receipts are the reference for the
   // other schedule (c_l2q, h_l2q) and the other outputs (c_*_o: O', c_l7qs_v: pv's served epilogue against vref's)
-  const std::string km = C.half ? "h_l7qs" : "c_l7qs";
+  const std::string km = C.half ? (C.h1 ? "h_l7qs_h1" : "h_l7qs") : "c_l7qs";
   CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st));
   cgemm_run(C, cpick(C, ckern(km)), C.Y, C.R2);
   CK(cudaStreamSynchronize(P.st));
@@ -773,7 +891,7 @@ static int cgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     vref<<<dim3((n + 255) / 256, m), 256, 0, P.st>>>(C.Yr, C.eb, F, m, n);
   }
   const std::vector<std::string> others =
-      C.half ? std::vector<std::string>{"h_l2q"} : std::vector<std::string>{"c_l2q", "c_l7qs_o", "c_l2q_o", "c_l7qs_v"};
+      C.half ? std::vector<std::string>{C.h1 ? "h_l2q_h1" : "h_l2q"} : std::vector<std::string>{"c_l2q", "c_l7qs_o", "c_l2q_o", "c_l7qs_v"};
   for (const std::string& name : others) {
     const bool o = name.find("_o") != std::string::npos, v = name.find("_v") != std::string::npos;
     CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
