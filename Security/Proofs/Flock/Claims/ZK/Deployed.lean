@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
 /-!
 # Flock's zero knowledge at the tables `verify --zk` sets up
 
-`Flock.zk_deployZk_of_models` takes five Props of the masked prover's models, each model's tables of one type. At the
+`Flock.zkAt_deployZk_of_models` takes five Props of the masked prover's models, each model's tables of one type. At the
 tables `verify --zk` sets up, each a `CoinedSetup` with its own types as `--session-tables J` has them, the models are
 the session's own and most of what the Props ask is a theorem:
 
@@ -24,7 +24,7 @@ the session's own and most of what the Props ask is a theorem:
   of the tables' `simExe` on the dummy where the prover goes on and the dummy-witness prover's messages where it
   refuses. `SimLink` holds by construction (`Proto.withSim_shvzk`), and the prover is `G`'s.
 
-`Flock.zk_deployZk_of_tables` is `Claims.Flock.ZK` at `FlockDeploy.deployZk` and the pinned hm96 key (`ZkView.My`,
+`Flock.zk_deployZk_of_tables` is `Claims.Flock.ZKAt` at `FlockDeploy.deployZk` and the pinned hm96 key (`ZkView.My`,
 `ZkView.saltHash`), under `Claims.Hm96Hiding` and three Props of a Lean model of `flock-circuit --zk`:
 
 * `Proto.TMsgLink`: the prover's messages are the session's: before the last coin and where it refuses, the round
@@ -495,7 +495,7 @@ end Proto
 /-! ## Flock's zero knowledge at the session's tables -/
 
 /-- **Flock's zero knowledge against a malicious verifier at `FlockDeploy.deployZk`, at the tables the session sets
-up**: `Claims.Flock.ZK` at `P_zk = G.prover` and `S_GK = (G.withSim Mc).simulatorE t (t·3^t)`, at
+up**: `Claims.Flock.ZKAt` at `P_zk = G.prover` and `S_GK = (G.withSim Mc).simulatorE t (t·3^t)`, at
 `ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`, for a committed-coin protocol whose coins are the deployed
 verifier's, under `Claims.Hm96Hiding` at the pinned key and three named hypotheses: `TMsgLink`, `TablesOK` and
 `CoinCheck`. -/
@@ -507,7 +507,7 @@ theorem Flock.zk_deployZk_of_tables (H : Msg → Msg)
     (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.CoinCheck) :
-    Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
       (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
   obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := hC
   have hA : ∀ x w, Flock.R (FlockDeploy.deployZk rel).parse x w → ∀ (ν : G.Nonce)
@@ -526,7 +526,7 @@ theorem Flock.zk_deployZk_of_tables (H : Msg → Msg)
     (G.withSim_shvzk H _ hT1 hδ₁ Mc nB hnB (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) Tr nb root parse pos idx n
     depth dc hchk hdec
 
-/-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): `Claims.Flock.ZK` at `δ₁` the statistical
+/-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): `Claims.Flock.ZKAt` at `δ₁` the statistical
 distance of `(M·y, c(y))` from `(U, c(y))` at the pinned key, under `TMsgLink`, `TablesOK` and `CoinCheck` alone. -/
 theorem Flock.zk_deployZk_of_tables_gap (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
@@ -535,7 +535,7 @@ theorem Flock.zk_deployZk_of_tables_gap (H : Msg → Msg)
     (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.CoinCheck) :
-    Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
       (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
         8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
         2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
