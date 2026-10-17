@@ -18,7 +18,8 @@ second when `j < a` and the first when `j = a`. `Fork` then shares `A`'s run at 
 up to `(a + 1)·g` where `γ_A ≤ a·g` and `γ_B ≤ g`. `zkmalR_iter` composes `n + 1` sessions in turn, the
 `j + 1`-th at the unit the first `j + 1`'s history selects, at `a = c + j` where the first has `γ₀ ≤ c·g`:
 `ε₀ + Σ_{j < n} eB j` and `(c + n)·g`, so `n·g` after a first protocol that rewinds nothing (`zkmalR_iter_const`:
-`ε₀ + n·eB` where the later sessions are one protocol).
+`ε₀ + n·eB` where the later sessions are one protocol). A session's `ZKmalR` gives its `ZKmalAt` at each unit on
+coins for every unit (`ZKmalR.at_pi`) or on coins in bijection with its simulator's there (`ZKmalR.at_equiv`).
 -/
 
 namespace Claims.ZKMal
@@ -511,6 +512,26 @@ theorem zkmalR_iff_at {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Non
     ZKmalR H k P R S εzk γ ↔ ∀ x, ZKmalAt H (k x) P (R x) x (S.C x) (S.prog x) (εzk x) (γ x) :=
   Iff.rfl
 
+/-- **`ZKmalR` at a unit, on coins for every unit**: of finitely many units with statements `xs`, `S` at `xs u` reads
+its coordinate `u`. -/
+theorem _root_.Claims.ZKmalR.at_pi {W N Ω U : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] [Fintype U]
+    [DecidableEq U] {H : Msg → Msg} {k : Msg → ℕ} {P : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ}
+    (h : ZKmalR H k P R S εzk γ) (xs : U → Msg) (u : U) :
+    ZKmalAt H (k (xs u)) P (R (xs u)) (xs u) ((u' : U) → S.C (xs u')) (fun c => S.prog (xs u) (c u)) (εzk (xs u))
+      (γ (xs u)) := by
+  intro w hw Θ Vs θ hV Ev
+  rw [Pr_pi_at (β := fun u' => S.C (xs u')) u (fun c => Ev (spOut H Vs θ (xs u) (S.prog (xs u) c)))]
+  exact h (xs u) w hw Θ Vs θ hV Ev
+
+/-- **`ZKmalR` at a statement, on coins in bijection with its simulator's there.** -/
+theorem _root_.Claims.ZKmalR.at_equiv {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}
+    {k : Msg → ℕ} {P : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ}
+    (h : ZKmalR H k P R S εzk γ) (xs : Msg) {C : Type} [Fintype C] (e : C ≃ S.C xs) :
+    ZKmalAt H (k xs) P (R xs) xs C (fun c => S.prog xs (e c)) (εzk xs) (γ xs) := by
+  intro w hw Θ Vs θ hV Ev
+  rw [Pr_equiv e (fun c => Ev (spOut H Vs θ xs (S.prog xs c)))]
+  exact h xs w hw Θ Vs θ hV Ev
+
 /-- **Sequential composition of `ZKmalR`.** `A` then `B` at the unit `A`'s history selects is `ZKmalR` with the
 simulator that runs `SA`, then `B`'s program at that unit on coins of their own (`simU`): `ε` adds up, with `B`'s at
 every unit at most `eB`, and so does `γ` (`γ_A ≤ a·g`, `γ_B ≤ g` at every unit), to `(a + 1)·g` against the composed
@@ -606,9 +627,7 @@ theorem zkmalR_seq {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fint
       (fun x => εA x + eB x) (fun x => (a + 1) * g x) := by
   refine zkmalR_seqU Q H nB PA PB RA RB SA (fun x => (u : Q.U x) → SB.C (Q.xB x u))
     (fun x u c => SB.prog (Q.xB x u) (c u)) εA γA eB g a hA (fun x u w' hw' Θ Vs θ hVk Ev => ?_) hR he0 hγA hg
-  have h := hB (Q.xB x u) w' hw' Θ Vs θ (hVk.trans (hk x u).symm) Ev
-  rw [Pr_pi_at (β := fun u' => SB.C (Q.xB x u')) u
-    (fun c => Ev (spOut H Vs θ (Q.xB x u) (SB.prog (Q.xB x u) c)))]
+  have h := hB.at_pi (Q.xB x) u w' hw' Θ Vs θ (hVk.trans (hk x u).symm) Ev
   exact h.trans (add_le_add (hε x u) (mul_le_mul_of_nonneg_right (hγ x u) (Finder.pr_nonneg _ _)))
 
 /-! ## `n` sessions in turn -/
