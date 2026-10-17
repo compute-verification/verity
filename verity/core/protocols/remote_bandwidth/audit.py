@@ -10,7 +10,9 @@ many reads of a node's registered blocks the node made in each window, from rece
    follow (`receipts.LAYOUTS`: store-order/v0, a vector one registered block's bytes; `receipts.plan_of` checks a
    kernel's map), and sketch-sha512's rows (`receipts.ROWS`: 16 by default, or 64; 0 under block-sha512).
    `Registration.digest` binds the node, the store's size, the payload root, the codec seed, the codec's name, the
-   receipt kind, `bind`, the layout and the rows.
+   receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
+   second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
+   counting its sessions, an unended one as failed.
 2. Coins.  Before the session the challenger draws two live coins a window, its challenge `σ_t` and its openings coin,
    and commits to them (`coins.Challenger`).  The prover gets the commitment first (`Session.commitment`).
 3. A session of `windows` windows.  The verifier releases `σ_0` (`Session.start`), and at each window's end the next
@@ -275,7 +277,8 @@ def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec
     registered here is under the seed's key; a block written after the seed takes its bound key (`codec.binding`,
     PROTOCOL.md §3) and joins the store by an append (`Store.append`, `Session.append`).  None of the
     receipt kind, `bind`, the block layout and the sketch rows (`receipts.sketch_rows`: the kind's default if None) is
-    in the codec seed's context, since the store depends on none of them; the digest binds all four."""
+    in the codec seed's context, since the store depends on none of them; the digest binds all four.  Each call draws
+    afresh: the verifier draws through its `Registry`, which allows a node one live registration."""
     receipts.store_blocks(blocks)
     if type(codec) is not Codec:
         raise ValueError("a registration names a Codec")
@@ -921,6 +924,16 @@ class Session:
             return "receipt"
         return None
 
+    @property
+    def outcome(self) -> str | None:
+        """"accepted" once every window is, the failure that rejected it, or None while it runs."""
+        if self.failed is not None:
+            return self.failed.failure
+        if len(self.windows) == self.params.windows and all(w.verdict is not None and w.verdict.accepted
+                                                            for w in self.windows):
+            return "accepted"
+        return None
+
     def record(self) -> Record:
         """The session's record, once every window is accepted."""
         self._live()
@@ -937,6 +950,146 @@ class Session:
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
                       self.params.lifetime)
+
+
+REGISTRY_SCHEMA = "verity/remote-bandwidth/registry/v0"
+UNENDED = "unended"
+"""A closed registration's session that was neither accepted nor rejected when it closed: counted as failed."""
+
+
+class RegistryError(RuntimeError):
+    """A call the verifier's registry refuses: a second registration for a node while one is live, a session over a
+    registration that isn't its node's live one here, or a close of a node with none live."""
+
+
+@dataclass(frozen=True, slots=True)
+class Closed:
+    """A registration the verifier closed: its node, its digest, and each of its sessions' outcomes in the order they
+    started: "accepted", the failure that rejected it, or `UNENDED`, which counts as failed."""
+
+    node: bytes
+    registration: bytes
+    sessions: tuple[str, ...]
+
+    @property
+    def failed(self) -> int:
+        return sum(o != "accepted" for o in self.sessions)
+
+    def to_json(self) -> dict:
+        return {"node": self.node.hex(), "registration": self.registration.hex(), "sessions": list(self.sessions)}
+
+
+@dataclass(slots=True)
+class _Live:
+    digest: bytes
+    registration: Registration | None
+    sessions: list
+
+
+def _outcome(session: Session | str) -> str:
+    if isinstance(session, str):
+        return session
+    return session.outcome or UNENDED
+
+
+def _outcomes(value: object) -> list[str]:
+    if type(value) is not list or any(type(o) is not str or not o for o in value):
+        raise ValueError("a registration's sessions are their outcomes, each a nonempty string")
+    return list(value)
+
+
+class Registry:
+    """The verifier's registrations, at most one live a node (the red team's KB-4).  `register` draws a codec seed
+    (`register`) only for a node with none live: a second while one is live is refused (`RegistryError`) and counted
+    (`refused`), and draws nothing, so a retry never redraws.  A registration ends only when the verifier closes it
+    (`close`), which counts each of its sessions as it stands: accepted, the failure that rejected it, or `UNENDED`,
+    counted as failed.  So a failed session stays on its registration's record, and every codec seed a node has been
+    given is in `closed` or live: `drawn(node)` is R, what an advice form charges as log₂ R.  `to_json` and `from_json`
+    keep it across the verifier's processes (never the verifier's secret); a registration read back is live, closable,
+    and runs no session: its sessions' outcomes are as they stood."""
+
+    def __init__(self) -> None:
+        self._live: dict[bytes, _Live] = {}
+        self.closed: list[Closed] = []
+        self.refused: dict[bytes, int] = {}
+
+    def live(self, node: bytes) -> bytes | None:
+        """The digest of the node's live registration, None without one."""
+        x = self._live.get(_node(node))
+        return None if x is None else x.digest
+
+    def drawn(self, node: bytes) -> int:
+        """R: the registrations the node has had, closed and live, each under a codec seed of its own."""
+        node = _node(node)
+        return sum(c.node == node for c in self.closed) + (node in self._live)
+
+    def register(self, source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
+                 receipt: str = receipts.DEFAULT, **kw) -> Registration:
+        """`register`'s draw for a node with no live registration, which it makes live; refused, and counted, for one
+        with."""
+        node = _node(node)
+        if node in self._live:
+            self.refused[node] = self.refused.get(node, 0) + 1
+            raise RegistryError(f"node {node.hex()} has a live registration, {self._live[node].digest.hex()[:16]}…: a "
+                                "second draws no codec seed until the verifier closes the first and counts its sessions")
+        registration = register(source, node, blocks, payload_root, codec, receipt, **kw)
+        self._live[node] = _Live(registration.digest, registration, [])
+        return registration
+
+    def session(self, params: Params, registration: Registration, tiles: Tiles | None, *, not_before_ns: int,
+                clock: Callable[[], int] = time.monotonic_ns, entropy: Callable[[int], bytes] = os.urandom,
+                index: int | None = None) -> Session:
+        """The next session over the node's live registration, its coins `coins.Challenger(digest, k, …)` with k its
+        sessions so far (`index`, if given, must be k), kept to be counted at `close`.  Refused for a registration
+        that isn't its node's live one, drawn here."""
+        x = self._live.get(getattr(registration, "node", None))
+        if x is None or x.registration is None or x.registration != registration:
+            raise RegistryError("a session runs over its node's live registration, drawn by this registry")
+        k = len(x.sessions)
+        if index is not None and index != k:
+            raise RegistryError(f"the registration's next session is {k}, not {index}")
+        session = Session(params, registration, tiles, coins.Challenger(registration.digest, k, params.coins, entropy),
+                          not_before_ns=not_before_ns, clock=clock)
+        x.sessions.append(session)
+        return session
+
+    def close(self, node: bytes) -> Closed:
+        """End the node's live registration, its sessions counted as they stand; refused for a node with none live."""
+        node = _node(node)
+        x = self._live.pop(node, None)
+        if x is None:
+            raise RegistryError(f"node {node.hex()} has no live registration to close")
+        out = Closed(node, x.digest, tuple(_outcome(s) for s in x.sessions))
+        self.closed.append(out)
+        return out
+
+    def to_json(self) -> dict:
+        return {"closed": [c.to_json() for c in self.closed],
+                "live": {n.hex(): {"registration": x.digest.hex(), "sessions": [_outcome(s) for s in x.sessions]}
+                         for n, x in sorted(self._live.items())},
+                "refused": {n.hex(): k for n, k in sorted(self.refused.items())}, "schema": REGISTRY_SCHEMA}
+
+    @classmethod
+    def from_json(cls, data: dict) -> Registry:
+        if type(data) is not dict or data.get("schema") != REGISTRY_SCHEMA:
+            raise ValueError(f"a registry is {REGISTRY_SCHEMA}")
+
+        def digest(value: object) -> bytes:
+            out = bytes.fromhex(value) if type(value) is str else b""
+            if len(out) != DIGEST_BYTES:
+                raise ValueError(f"a registration's digest is {DIGEST_BYTES} bytes")
+            return out
+
+        out = cls()
+        for n, x in data["live"].items():
+            out._live[_node(bytes.fromhex(n))] = _Live(digest(x["registration"]), None, _outcomes(x["sessions"]))
+        out.closed = [Closed(_node(bytes.fromhex(c["node"])), digest(c["registration"]), tuple(_outcomes(c["sessions"])))
+                      for c in data["closed"]]
+        for n, k in data["refused"].items():
+            if type(k) is not int or k < 1:
+                raise ValueError("a node's refused registrations are a positive count")
+            out.refused[_node(bytes.fromhex(n))] = k
+        return out
 
 
 LEDGER_SOURCES = {

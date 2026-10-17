@@ -262,6 +262,27 @@ Three properties of registration matter:
 - **The node is in the codec seed.** Two nodes registering the same weights hold different stores, and the tweak
   \(\tau i\) separates every word of one store.
 
+**One live registration per node.** Each registration draws a fresh codec seed, so a prover that registered \(R\)
+times and kept the registration whose key suits it would choose \(\log_2 R\) bits of the seed: a retry that redraws,
+which live coins rule out (the red team's KB-4, note:20261017T1859Z-report-property-redteam §R4.2). The verifier draws
+through its `Registry`, which holds at most one live registration per node:
+
+- a second `register` for a node while it has a live registration is refused (`RegistryError`), counted (`refused`),
+  and draws nothing;
+- each session over the registration is the registry's (`Registry.session`, its coins' session number its count so
+  far);
+- the registration ends only when the verifier closes it (`Registry.close`), never on the prover's word. The close
+  counts each of its sessions as it stands: accepted, the failure that rejected it, or unended, which counts as failed.
+
+So a failed session stays on its registration's record: no fresh draw can replace that registration while it is
+live, and closing it to draw again records the failure. Every codec seed a node has been given stays in the registry
+(`Registry.drawn`, \(R\)), which an advice form can charge as \(\log_2 R\). Refusal rather than supersession: a second
+registration that superseded the first would cut its session in flight short, so the record would show the supersession
+in place of that session's own verdict, and the prover could have a fresh draw whenever it asked. The remote session
+verifier keeps one registry for its process, or across processes in a file (`--registry`). It answers a refused hello
+with `bye` and the reason, closes its registration after its last session, and leaves a registration live when its
+process ends early, until `--close`. The registry's record holds digests and outcomes, never the verifier's secret.
+
 ## 4. The coins and the chained passes
 
 Before a session the challenger draws its \(2W\) coins and commits to them (`coins.py`), and the prover receives the
