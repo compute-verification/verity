@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.ZK.Reference
+import Proofs.Flock.Claims.ZK.CoinLayer
 
 /-!
 # Zero knowledge at the reference session on a class of statements
@@ -11,15 +11,19 @@ probabilities meets:
 
 * `RefSession.TapeOKOn A` and `RefSession.HonestMsgsOn A`: `TapeOK` and `HonestMsgs` at the statements in `A`.
   `RefSession.msgLinkOn` is `TMsgLink` on the relation's statements in `A` from `TapeOKOn A`, as `msgLink` has it from
-  `TapeOK`.
+  `TapeOK`. **`RefSession.tapeOKOn_of_tape`**: `TapeOKOn A` holds when the tape is read with fibers of one size at each
+  statement in `A` (`FibersEq (S.tape x)`), since each table's randomness is read from that reading with fibers of one
+  size (`fibersEq_tabRand`: `randOf` is a bijection, and `baseWith` drops only the base's revealed salts).
 * `deployOn D A`: the record `D` whose parser refuses every statement outside `A`, so its relation is `D`'s on `A`
   (`r_deployOn`).
 * `zkmalR_congr_on`: `zkmalR_congr` with the two provers agreeing only on the relation's statements. `zkmalR_on`:
   `ZKmalR` on the relation's statements in `A` is `ZKmalR` on the relation at the bound `1` outside `A`.
 * `Flock.zkAt_deployZk_ref_on`: `Claims.Flock.ZKAt` at `refP`'s prover at `deployOn (deployZk rel) A`, under the
   session's Props with `TapeOKOn A` for `TapeOK`. `zk_zkOf_on`: `zk_zkOf` with `Proto.HonestOn A` for `Proto.Honest`.
-* **`Flock.zk_deployZk_ref_on`**: `Claims.Flock.ZK` at the masked record `RefSession.zkD`, at
-  `Flock.zk_deployZk_ref`'s `ε_zk` on `A` and `1` outside it, under `TapeOKOn A` and `HonestMsgsOn A`.
+* **`Flock.zk_zkD_ref_on`**: `Claims.Flock.ZK` at the masked record `RefSession.zkD`, at `Flock.zk_zkD_ref`'s `ε_zk`
+  on `A` and `1` outside it, under `TapeOKOn A` and `HonestMsgsOn A`. **`Flock.zk_deployZk_ref_on`** (and `_gap`): the
+  same at the deployed masked record `zkDeployed`, with `TapeOKOn A` from the tables' tape read with fibers of one size
+  on `A`, where `Flock.zk_deployZk_ref` asks `TapeOK`, which no tables with statements of every table count meet.
 -/
 
 namespace Claims.ZKMal
@@ -142,6 +146,131 @@ theorem zk_zkOf_on (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable
       h.2
   exact ⟨h.1, zkmalR_on A hγ (fun x w hR hA => (r_deployOn (FlockDeploy.deployZk rel) A x w).2 ⟨hA, hR⟩) h'⟩
 
+/-! ## Fibers of one size -/
+
+/-- **Every value of `f` is taken equally often.** -/
+def FibersEq {α β : Type} (f : α → β) : Prop := ∀ b b', Nat.card {a // f a = b} = Nat.card {a // f a = b'}
+
+/-- A first projection through an equivalence has fibers of one size, the second factor. -/
+theorem fibersEq_of_equiv {α β D : Type} {f : α → β} (e : α ≃ β × D) (h : ∀ a, (e a).1 = f a) : FibersEq f := by
+  have k : ∀ b, {a // f a = b} ≃ D := fun b =>
+    { toFun := fun a => (e a.1).2
+      invFun := fun d => ⟨e.symm (b, d), by rw [← h, Equiv.apply_symm_apply]⟩
+      left_inv := fun a => Subtype.ext (e.injective (by
+        rw [Equiv.apply_symm_apply]
+        exact Prod.ext ((h a.1).trans a.2).symm rfl))
+      right_inv := fun d => by simp }
+  exact fun b b' => by rw [Nat.card_congr (k b), Nat.card_congr (k b')]
+
+theorem fibersEq_of_bijective {α β : Type} {f : α → β} (hf : Function.Bijective f) : FibersEq f := fun b b' => by
+  rw [ZkView.card_fiber_of_bijective hf b, ZkView.card_fiber_of_bijective hf b']
+
+/-- Fibers of one size compose, from a finite type: a map with fibers of one size from a nonempty type is onto. -/
+theorem FibersEq.comp {α β γ : Type} [Finite α] {f : α → β} {g : β → γ} (hf : FibersEq f) (hg : FibersEq g) :
+    FibersEq (g ∘ f) := by
+  classical
+  rcases isEmpty_or_nonempty α with hα | hα
+  · intro c c'
+    simp [Nat.card_of_isEmpty]
+  obtain ⟨a₀⟩ := hα
+  have hs : Function.Surjective f := fun b => by
+    have : Nonempty {a // f a = f a₀} := ⟨⟨a₀, rfl⟩⟩
+    have h0 : 0 < Nat.card {a // f a = f a₀} := Nat.card_pos
+    rw [hf (f a₀) b] at h0
+    obtain ⟨a, ha⟩ := (Nat.card_pos_iff.1 h0).1.some
+    exact ⟨a, ha⟩
+  have : Finite β := Finite.of_surjective f hs
+  have : Fintype α := Fintype.ofFinite α
+  have : Fintype β := Fintype.ofFinite β
+  have e : ∀ c, {a // (g ∘ f) a = c} ≃ Σ b : {b // g b = c}, {a // f a = b.1} := fun c =>
+    { toFun := fun a => ⟨⟨f a.1, a.2⟩, ⟨a.1, rfl⟩⟩
+      invFun := fun p => ⟨p.2.1, by simp only [Function.comp, p.2.2, p.1.2]⟩
+      left_inv := fun a => rfl
+      right_inv := by
+        rintro ⟨⟨b, hb⟩, ⟨a, ha⟩⟩
+        simp only at ha
+        subst ha
+        rfl }
+  intro c c'
+  rw [Nat.card_congr (e c), Nat.card_congr (e c'), Nat.card_sigma, Nat.card_sigma]
+  simp only [fun b : β => hf b (f a₀), Finset.sum_const, Finset.card_univ, smul_eq_mul]
+  have := hg c c'
+  rw [Nat.card_eq_fintype_card, Nat.card_eq_fintype_card] at this
+  rw [this]
+
+/-- Fibers of one size, coordinatewise over a finite index. -/
+theorem FibersEq.pi {ι : Type} [Fintype ι] {α β : ι → Type} {f : ∀ i, α i → β i} (h : ∀ i, FibersEq (f i)) :
+    FibersEq fun (a : ∀ i, α i) i => f i (a i) := by
+  have k : ∀ r : ∀ i, β i, {a : ∀ i, α i // (fun i => f i (a i)) = r} ≃ ∀ i, {x // f i x = r i} := fun r =>
+    (Equiv.subtypeEquivRight fun a => funext_iff).trans (Equiv.subtypePiEquivPi (p := fun i x => f i x = r i))
+  intro r r'
+  rw [Nat.card_congr (k r), Nat.card_congr (k r'), Nat.card_pi, Nat.card_pi]
+  exact Finset.prod_congr rfl fun i _ => h i (r i) (r' i)
+
+/-- The salts of a table's base the final message reveals: level 0's opened leaves', each rep's opened pads leaves',
+`y_τ`. -/
+abbrev RevealedSalts (z : ZkView.Sizes) :=
+  (Fin z.nS → ZkView.Salt) × (Fin 2 → Fin z.nQ → ZkView.Salt) × (Fin 2 → ZkView.Salt)
+
+/-- **A table's randomness and hidden leaves' salts from a reading of the tape**: its base, every pre-final leaf's salt
+and seed, the base's revealed salts read from the leaves' (`baseWith`, `hidOf`), as `RefSession.randAt` reads them. -/
+noncomputable def tabRand {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z)
+    (a : ZkView.Base z Hi × (ZkView.LeafPos z → ZkView.Salt) × (ZkView.LeafPos z → ZkView.Bits × ZkView.Salt)) :
+    T.tab.Rand × (T.tab.Hid → ZkView.Salt) :=
+  (T.randOf (baseWith T a.1 a.2.1) a.2.2, hidOf T a.2.1)
+
+/-- The leaves' salts from a base's revealed ones and the hidden leaves'. -/
+def mergeSalt {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (b : ZkView.Base z Hi)
+    (h : T.tab.Hid → ZkView.Salt) : ZkView.LeafPos z → ZkView.Salt :=
+  Sum.elim (fun p => Sum.elim b.2.2.2.2.2.2.1 (fun q => h (.inl q)) (T.s0.symm p))
+    (Sum.elim (fun rp => Sum.elim (b.2.2.2.2.2.2.2.1 rp.1) (fun k => h (.inr (rp.1, k))) ((T.sP rp.1).symm rp.2))
+      b.2.2.2.2.2.2.2.2.1)
+
+/-- A base and the leaves' salts, as the base with the leaves' revealed salts, the hidden leaves' salts and the base's
+own revealed salts. -/
+def splitSalt {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) :
+    ZkView.Base z Hi × (ZkView.LeafPos z → ZkView.Salt) ≃
+      ZkView.Base z Hi × (T.tab.Hid → ZkView.Salt) × RevealedSalts z where
+  toFun a := (baseWith T a.1 a.2, hidOf T a.2, a.1.2.2.2.2.2.2.1, a.1.2.2.2.2.2.2.2.1, a.1.2.2.2.2.2.2.2.2.1)
+  invFun c := ((c.1.1, c.1.2.1, c.1.2.2.1, c.1.2.2.2.1, c.1.2.2.2.2.1, c.1.2.2.2.2.2.1, c.2.2.1, c.2.2.2.1, c.2.2.2.2,
+    c.1.2.2.2.2.2.2.2.2.2), mergeSalt T c.1 c.2.1)
+  left_inv a := by
+    refine Prod.ext rfl (funext fun p => ?_)
+    rcases p with p | ⟨r, p⟩ | r
+    · obtain ⟨q, rfl⟩ := T.s0.surjective p
+      change Sum.elim _ _ (T.s0.symm (T.s0 q)) = _
+      rw [Equiv.symm_apply_apply]
+      rcases q with q | q <;> rfl
+    · obtain ⟨q, rfl⟩ := (T.sP r).surjective p
+      change Sum.elim _ _ ((T.sP r).symm ((T.sP r) q)) = _
+      rw [Equiv.symm_apply_apply]
+      rcases q with q | q <;> rfl
+    · rfl
+  right_inv c := by
+    refine Prod.ext ?_ (Prod.ext (funext fun q => ?_) rfl)
+    · simp only [baseWith, mergeSalt, Sum.elim_inl, Sum.elim_inr, Equiv.symm_apply_apply]
+      rfl
+    · rcases q with q | ⟨r, k⟩
+      · simp only [hidOf, mergeSalt, Sum.elim_inl, Equiv.symm_apply_apply]
+        rfl
+      · simp only [hidOf, mergeSalt, Sum.elim_inl, Sum.elim_inr, Equiv.symm_apply_apply]
+        rfl
+
+/-- **A table's randomness is read from the tape's reading with fibers of one size**, `RevealedSalts`: `randOf` is a
+bijection, and `baseWith` replaces the base's revealed salts by the leaves'. -/
+theorem fibersEq_tabRand {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) :
+    FibersEq (tabRand T) := by
+  let r : ZkView.Base z Hi × (ZkView.LeafPos z → ZkView.Bits × ZkView.Salt) ≃ T.tab.Rand :=
+    Equiv.ofBijective _ ⟨T.randOf_injective, T.randOf_surjective⟩
+  let e : ZkView.Base z Hi × (ZkView.LeafPos z → ZkView.Salt) × (ZkView.LeafPos z → ZkView.Bits × ZkView.Salt) ≃
+      (T.tab.Rand × (T.tab.Hid → ZkView.Salt)) × RevealedSalts z :=
+    (Equiv.prodAssoc _ _ _).symm.trans <| ((splitSalt T).prodCongr (Equiv.refl _)).trans <|
+      { toFun := fun c => ((r (c.1.1, c.2), c.1.2.1), c.1.2.2)
+        invFun := fun d => (((r.symm d.1.1).1, d.1.2, d.2), (r.symm d.1.1).2)
+        left_inv := fun c => by simp
+        right_inv := fun d => by simp }
+  exact fibersEq_of_equiv e fun _ => rfl
+
 /-! ## The reference session on a class of statements -/
 
 namespace RefSession
@@ -153,6 +282,31 @@ def TapeOKOn (S : RefSession) (A : Msg → Prop) : Prop :=
 
 theorem tapeOKOn_iff (S : RefSession) : S.TapeOKOn (fun _ => True) ↔ S.TapeOK :=
   ⟨fun h x => h x trivial, fun h x _ => h x⟩
+
+/-- The tape's reading at a statement, by table. -/
+def byTable (S : RefSession) (x : Msg) :
+    ((∀ j, ZkView.Base (S.C x j).z (S.C x j).Hi) × (ZkView.Leaves (fun j => (S.C x j).z) → ZkView.Salt) ×
+      (ZkView.Leaves (fun j => (S.C x j).z) → ZkView.Bits × ZkView.Salt)) ≃
+    ∀ j, ZkView.Base (S.C x j).z (S.C x j).Hi × (ZkView.LeafPos (S.C x j).z → ZkView.Salt) ×
+      (ZkView.LeafPos (S.C x j).z → ZkView.Bits × ZkView.Salt) where
+  toFun a j := (a.1 j, fun p => a.2.1 ⟨j, p⟩, fun p => a.2.2 ⟨j, p⟩)
+  invFun g := (fun j => (g j).1, fun l => (g l.1).2.1 l.2, fun l => (g l.1).2.2 l.2)
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+/-- **`TapeOKOn A` is the tape read with fibers of one size at the statements in `A`**: the tables' randomness is read
+from that reading with fibers of one size (`fibersEq_tabRand`), whatever the coins, and so is the pre-final view's part
+of it. -/
+theorem tapeOKOn_of_tape (S : RefSession) (A : Msg → Prop) (h : ∀ x, A x → FibersEq (S.tape x)) :
+    S.TapeOKOn A := by
+  intro x hx
+  have he : FibersEq ((fun b => (b.1, b.2.1)) ∘ S.tape x) :=
+    (h x hx).comp (fibersEq_of_equiv (Equiv.prodAssoc _ _ _).symm fun _ => rfl)
+  refine ⟨he, fun c => ?_⟩
+  have hr : FibersEq ((fun a j => tabRand ((S.C x j).T (S.cz x c j)) (a j)) ∘ (S.byTable x ∘ S.tape x)) :=
+    ((h x hx).comp (fibersEq_of_bijective (S.byTable x).bijective)).comp
+      (FibersEq.pi fun j => fibersEq_tabRand ((S.C x j).T (S.cz x c j)))
+  exact hr
 
 /-- **`refP`'s messages are the reference prover's at the statements in `A`**: `HonestMsgs` there. -/
 def HonestMsgsOn (S : RefSession) (A : Msg → Prop) (H : Msg → Msg) (coinOf : Msg → Msg)
@@ -229,7 +383,6 @@ theorem Flock.zkAt_deployZk_ref_on (H : Msg → Msg)
     hV x w ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR)
   have hL := S.msgLinkOn H _ A hV' hD hc hT fun x w hR => ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).1
   have hOK := S.tablesOK H hS
-  obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := S.coinCheck
   have hA : ∀ x w, Flock.R (deployOn (FlockDeploy.deployZk rel) A).parse x w → ∀ (ν : S.Nonce)
       (V : FlockSoundness.ZK.Responder Msg Out (refK x + 1)) (E : (Fin (refK x + 1) → Msg) → Prop),
       |Pr (fun r : S.Tape => E (FlockSoundness.ZK.run (S.refP.preStrat H x ν (S.refP.msg x w ν)) V r)) -
@@ -237,16 +390,16 @@ theorem Flock.zkAt_deployZk_ref_on (H : Msg → Msg)
         2 * S.nLeaves x * δ₁.toReal := fun x w hR ν V E =>
     (S.preModel H x ν).runs_close H hT1 hδ₁ ν w (hL x w hR ν).1 (hOK.1 x ν) V E
   rw [← S.refP.withSim_prover fun x _ c => S.coinModel x c]
-  exact Flock.zkR_gkE_hm96 H (deployOn (FlockDeploy.deployZk rel) A) (S.refP.withSim fun x _ c => S.coinModel x c) t
-    ht rfl (fun x => (deployZk_proto_k rel _ (fun _ => rfl) x).symm) δ₁ S.nLeaves S.nLeaves hA
-    (S.refP.withSim_shvzk H _ hT1 hδ₁ _ S.nLeaves (fun x _ c => S.coinModel_size x c)
-      (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) Tr nb root parse pos idx n depth dc hchk hdec
+  exact Flock.zkR_gkE_hm96_bind H (deployOn (FlockDeploy.deployZk rel) A)
+    (S.refP.withSim fun x _ c => S.coinModel x c) t ht rfl (fun x => (deployZk_proto_k rel _ (fun _ => rfl) x).symm) δ₁
+    S.nLeaves S.nLeaves hA (S.refP.withSim_shvzk H _ hT1 hδ₁ _ S.nLeaves (fun x _ c => S.coinModel_size x c)
+      (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) (S.binding H)
 
 /-- **Flock's zero knowledge at the reference session's masked record, on a class of statements**: `Claims.Flock.ZK`
-at `RefSession.zkD`, at `Flock.zk_deployZk_ref`'s `ε_zk` on the statements in `A` and `1` outside them, under
+at `RefSession.zkD`, at `Flock.zk_zkD_ref`'s `ε_zk` on the statements in `A` and `1` outside them, under
 `Claims.Hm96Hiding` at the pinned key, `Tables`, `Complete` on `A`, `DummyReg`, `Causal`, and `TapeOK` and `HonestMsgs`
 on `A` only (`TapeOKOn`, `HonestMsgsOn`): a tape of bounded size can meet `TapeOKOn A` where `A` bounds the tables. -/
-theorem Flock.zk_deployZk_ref_on (H : Msg → Msg)
+theorem Flock.zk_zkD_ref_on (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession) (A : Msg → Prop)
     [DecidablePred A] (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
     (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables) (hV : S.Complete fun x w => A x ∧ Flock.R (FlockDeploy.deployZk rel).parse x w)
@@ -257,5 +410,41 @@ theorem Flock.zk_deployZk_ref_on (H : Msg → Msg)
       fun _ => 4 * t * 3 ^ t :=
   zk_zkOf_on rel S.refP coinOf tapeOf _ A (fun _ => by positivity) (deployZk_proto_k rel S.refP fun _ => rfl)
     (S.honestOn_of_msgs A H coinOf tapeOf hH) (Flock.zkAt_deployZk_ref_on H rel S A t ht hT1 hδ₁ hS hV hD hc hT)
+
+/-- **Flock's zero knowledge at the deployed masked record, on a class of statements**: `Claims.Flock.ZK` at
+`zkDeployed`, at `Flock.zk_deployZk_ref`'s `ε_zk` on the statements in `A` and `1` outside them, with the tape asked
+for only on `A`, and there only as the tables' tape read with fibers of one size (`RefSession.tapeOKOn_of_tape`).
+`Flock.zk_deployZk_ref`'s `TapeOK` holds at no tables with statements of every table count (`RefSession.not_tapeOK`). -/
+theorem Flock.zk_deployZk_ref_on (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
+    (A : Msg → Prop) [DecidablePred A] (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : (CoinLayer.session nr T).Tables)
+    (hV : (CoinLayer.session nr T).Complete fun x w => A x ∧ Flock.R (FlockDeploy.deployZk rel).parse x w)
+    (hD : (CoinLayer.session nr T).DummyReg) (hc : (CoinLayer.session nr T).Causal)
+    (hT : ∀ x, A x → FibersEq (T.tape x))
+    (hH : (CoinLayer.session nr T).HonestMsgsOn A H CoinLayer.coinOfD fun ω => T.tapeZk ω.2) :
+    Claims.Flock.ZK H (zkDeployed rel nr T t)
+      (fun x => if A x then 8 * (CoinLayer.session nr T).nLeaves x * δ₁.toReal +
+        8 * t * (CoinLayer.session nr T).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t else 1)
+      fun _ => 4 * t * 3 ^ t :=
+  Flock.zk_zkD_ref_on H rel (CoinLayer.session nr T) A t ht hT1 hδ₁ hS hV hD hc
+    ((CoinLayer.session nr T).tapeOKOn_of_tape A hT) CoinLayer.coinOfD _ hH
+
+/-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`), with `Claims.Hm96Hiding` discharged. -/
+theorem Flock.zk_deployZk_ref_on_gap (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
+    (A : Msg → Prop) [DecidablePred A] (t : ℕ) (ht : 0 < t) (hS : (CoinLayer.session nr T).Tables)
+    (hV : (CoinLayer.session nr T).Complete fun x w => A x ∧ Flock.R (FlockDeploy.deployZk rel).parse x w)
+    (hD : (CoinLayer.session nr T).DummyReg) (hc : (CoinLayer.session nr T).Causal)
+    (hT : ∀ x, A x → FibersEq (T.tape x))
+    (hH : (CoinLayer.session nr T).HonestMsgsOn A H CoinLayer.coinOfD fun ω => T.tapeZk ω.2) :
+    Claims.Flock.ZK H (zkDeployed rel nr T t)
+      (fun x => if A x then 8 * (CoinLayer.session nr T).nLeaves x *
+          (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
+        8 * t * (CoinLayer.session nr T).nLeaves x *
+          (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
+        2 * (1 / 3) ^ t else 1) fun _ => 4 * t * 3 ^ t :=
+  Flock.zk_deployZk_ref_on H rel nr T A t ht (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
+    ENNReal.ofReal_ne_top hS hV hD hc hT hH
 
 end Claims.ZKMal

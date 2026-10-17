@@ -114,8 +114,11 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
 * `Capacity`: the tape asked for on a class `A` of statements only (`RefSession.TapeOKOn`, `RefSession.HonestMsgsOn`),
   as a tape of bounded size can meet it where `A` bounds the tables, at the record whose parser refuses the rest
-  (`deployOn`): **`Flock.zk_deployZk_ref_on`**, `Claims.Flock.ZK` at `RefSession.zkD` at `Flock.zk_deployZk_ref`'s
-  `ε_zk` on `A` and `1` outside it (`zkmalR_on`).
+  (`deployOn`): `Flock.zk_zkD_ref_on`, `Claims.Flock.ZK` at `RefSession.zkD` at `Flock.zk_zkD_ref`'s `ε_zk` on `A`
+  and `1` outside it (`zkmalR_on`). `RefSession.tapeOKOn_of_tape`: `TapeOKOn A` from the tape read with fibers of one
+  size at each statement in `A`, each table's randomness being read from it so (`fibersEq_tabRand`). With it,
+  **`Flock.zk_deployZk_ref_on`** (and `_gap`) at `zkDeployed`, the tape asked for only as the tables' tape read with
+  fibers of one size on `A`, where `Flock.zk_deployZk_ref`'s `TapeOK` fails at every unbounded table count.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
@@ -139,7 +142,8 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   for any values whose round encoding is causal (`RefSession.SwCausal`), `Flock.zkAt_deployZk_ref` its case at the
   tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server at
   every pad-blind worker within `D.V.k x + 2` of the guessing simulator, with no term for the masked checks, and at a
-  statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`).
+  statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`), at the deployed coin layer with the
+  tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
