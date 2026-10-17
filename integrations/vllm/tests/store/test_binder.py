@@ -194,6 +194,35 @@ def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_reg
     assert recs[1].passes[0].seed == rb.seed(sigma[1], 0, b"\x02" * 64) and b.windows == 2
 
 
+def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote():
+    """The binder appends at `Scheduler.schedule`, before the step's forward writes its KV; the memory map takes the
+    step's digests at `end` (`Scheduler.update_from_output`), from the bytes the forward wrote."""
+    from verity.core.protocols.remote_bandwidth import codec, memory_map
+
+    s = Store()
+    b = Binder(s)
+    r = runner()
+    r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)]
+    b.on_load(r)
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    m = s.record_memory_map()
+    page = Block(1)
+    page.ref_cnt = 1
+    s.kv_alloc([1])
+    stm = SimpleNamespace(req_to_blocks={"a": [page]})
+    sched = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(single_type_managers=[stm])),
+                            requests={"a": SimpleNamespace(num_computed_tokens=SLOTS)})
+    b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={"a": SLOTS}))
+    assert m.text().count("\n") == 1
+    r.kv_caches[0][:, 1] = 1.5
+    b.end()
+    (step,) = memory_map.parse(m.text().splitlines())[1]
+    kv = s.region("kv/0")
+    want = r.kv_caches[0][0, 1].contiguous().view(torch.uint8).numpy().tobytes()
+    assert [w.slot for w in step.written] == [kv.first + 2, kv.first + 3] and step.freed == ()
+    assert [w.digest for w in step.written] == [codec.digest(want)] * 2 and want != bytes(4096)
+
+
 def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_its_z():
     """Each receipt bound to the tile output before its block (`NoiseTiles`, PoUW's stub), under the driver's own
     receipt: the pass's root is the driver's `Prover`'s over the same blocks, and an opening, made after the next pass,

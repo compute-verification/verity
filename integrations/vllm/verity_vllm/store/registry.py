@@ -49,6 +49,7 @@ from verity.ml.commitments import merkle_depth
 from verity_vllm.store.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
                                          PassCommitment, Receipt, Registration, RegionInfo, Segment, Source, Stale,
                                          WindowRecord)
+from verity_vllm.store import memory_map as mm
 
 CHALLENGE_BYTES = 32
 SEED_BYTES = 64
@@ -322,6 +323,7 @@ class Store:
         self.filler_plan = filler_plan
         self.chaining = chaining
         self.counters = Counters()
+        self.memory_map: mm.MemoryMap | None = None
 
     # --- registration -----------------------------------------------------------------------------------------------
 
@@ -334,6 +336,8 @@ class Store:
              receipt: Receipt, source: str) -> _Region:
         if name in self._by_name:
             raise ValueError(f"region {name!r} is already registered")
+        if self.memory_map is not None:
+            raise RuntimeError(f"region {name!r} after the memory map's header fixed the store: register regions first")
         if tier not in TIERS or kind not in KINDS:
             raise ValueError(f"tier {tier!r} must be one of {TIERS}, kind {kind!r} one of {KINDS}")
         if block_bytes <= 0 or block_bytes % codec.word_bytes or backing.nbytes % block_bytes:
@@ -431,6 +435,17 @@ class Store:
     def region(self, name: str) -> RegionInfo:
         return self._by_name[name].info
 
+    def payload(self, slot: int) -> bytes:
+        """Store block ``slot``'s payload now: its region codec's decoding of the bytes it holds."""
+        r = self._regions[bisect.bisect_right([x.info.first for x in self._regions], slot) - 1]
+        b, bb = slot - r.info.first, r.info.block_bytes
+        return r.codec.decode(r.backing.read(b * bb, bb), r.info.word_index(b))
+
+    def record_memory_map(self, path: Any = None, registration: bytes | None = None) -> mm.MemoryMap:
+        """Record each step's KV blocks as memory-map/v1 into ``path`` (the prover's own file) or kept, beside
+        ``registration`` (the driver's `Registration.digest`; None: the store's root now) (`memory_map.record`)."""
+        return mm.record(self, path, registration)
+
     # --- the KV pool's pages ----------------------------------------------------------------------------------------
 
     @property
@@ -460,9 +475,13 @@ class Store:
 
     def kv_append(self, appends: Sequence[Append], step: int) -> None:
         """The step's KV writes: each block a write reaches turns dirty, and each it completes is registered again
-        (epoch + 1, under ``step``).  One registration record for the step."""
+        (epoch + 1, under ``step``).  One registration record for the step.  A memory map records the step's completed
+        blocks as written, and its reached registered ones it leaves dirty as freed (`verity_vllm.store.memory_map`)."""
         t = time.perf_counter()
-        p = self.pool
+        p, m = self.pool, self.memory_map
+        if m is not None:
+            m.flush(step)
+        key = reached = np.zeros(0, np.int64)
         if appends:
             n = len(appends)
             pg = np.fromiter((a.page for a in appends), np.int64, n)
@@ -471,6 +490,8 @@ class Store:
             if not p.allocated[pg].all() or (end > p.layout.slots).any() or (first < 0).any():
                 raise RuntimeError("an append outside an allocated page's slots")
             touched = (p.lo[None, :] < end[:, None]) & (p.hi[None, :] > first[:, None])
+            if m is not None:
+                reached = np.unique((pg[:, None] * p.per_page + np.arange(p.per_page))[touched & ~p.dirty[pg]])
             np.maximum.at(p.fill, pg, end)
             p.dirty[pg] |= touched
             done = p.dirty[pg] & (p.hi[None, :] <= p.fill[pg][:, None])
@@ -482,17 +503,21 @@ class Store:
             p.step[kp, kc] = step
             self._log({"event": "kv-append", "step": step, "appends": n, "registered": len(key)},
                       hashlib.sha512(np.stack([pg, first, end]).astype(">i8").tobytes()).digest())
+        if m is not None:
+            m.record(step, np.setdiff1d(reached, key), key)
         self.counters.add("kv_append", time.perf_counter() - t)
 
     def kv_write_reference(self, appends: Sequence[Append], payload: Callable[[int, int, int], bytes],
                            step: int) -> None:
         """The CPU reference of a step's KV write: slot ``s`` of page ``p`` in layer ``l`` takes ``payload(l, p, s)``
-        (its planes in order, ``slot_bytes`` each), encoded on append, then `kv_append`."""
+        (its planes in order, ``slot_bytes`` each), encoded on append, then `kv_append` (a memory map flushed after)."""
         p = self.pool
         lay = p.layout
         ps, ks = lay.strides()
         if not lay.slot_major:
             raise NotImplementedError("the reference writes slot-major (NHD) pages")
+        if self.memory_map is not None:
+            self.memory_map.flush(step)
         for rn in p.regions:
             r = self._by_name[rn]
             for a in appends:
@@ -503,6 +528,8 @@ class Store:
                         r.backing.write(off, data[k * lay.slot_bytes:(k + 1) * lay.slot_bytes])
                         self.encode_range(rn, off, lay.slot_bytes)
         self.kv_append(appends, step)
+        if self.memory_map is not None:
+            self.memory_map.flush()
 
     def idle_blocks(self, region: str) -> np.ndarray:
         """A KV layer region's registered blocks that no attention reads: every block of a free page, and the blocks of
