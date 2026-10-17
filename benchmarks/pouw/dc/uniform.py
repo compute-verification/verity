@@ -278,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         for g in a.out:
             print("\n".join(map(str, write_table(g))))
         return 0
-    fam = a.family or ("sm100" if any((o / "sass").glob("sm100_*.sass") for o in a.out) else "sm90")
+    fam = a.family or ("sm100" if any(any((o / "sass").glob("sm100_*.sass")) for o in a.out) else "sm90")
     dev = a.device or HERE.parent / "machine_model" / "data" / "devices" / f"sm_{fam[2:]}"
     res = analyze(a.out, fam, dev / "census.csv", dev / "rows.csv")
     if a.json:
