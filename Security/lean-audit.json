@@ -1413,6 +1413,21 @@
    "assumptions": [],
    "type_hash": "5cd9789694c0df8e5c5a09cd026a4f45b7c72ae8be8393f286cb479d9cac04d0"
   },
+  "Accounting.SecurityProofs.TS.LuckOfReceipt": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.LuckCaseA": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.OperandLuckCube": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.LuckCaseACube": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.TS.FloorCreditD3": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.FloorCreditD3 : Accounting.Guarantees.TS.FloorCreditD3"],
@@ -4806,6 +4821,30 @@
    "assumptions": [],
    "type_hash": "e750ff080ad0a230437eb91653a6a5efce0853e7ca3347d1aed8e1ae58b7118a"
   },
+  "Pouw.SecurityProofs.Receipt.DuoStepBijective": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1WordInjective": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1TripleNoKernel": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1StepBijective": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK : Pouw.Guarantees.RelativeSecurity.OverlapFloorK"],
@@ -4983,6 +5022,38 @@
    },
    "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel": {
     "function": "Pouw.Receipt.duoQuad",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoStepBijective": {
+    "function": "Pouw.Receipt.duoWord",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
+    "function": "Pouw.Receipt.duoRun",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1WordInjective": {
+    "function": "Pouw.Receipt.fx1Word",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel": {
+    "function": "Pouw.Receipt.fx1Pair",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1TripleNoKernel": {
+    "function": "Pouw.Receipt.fx1Triple",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel": {
+    "function": "Pouw.Receipt.fx1Quad",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1StepBijective": {
+    "function": "Pouw.Receipt.fx1Word",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective": {
+    "function": "Pouw.Receipt.fx1Run",
     "outcome": "none"
    }
   },
@@ -5471,7 +5542,12 @@
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
    "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
-   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier."
+   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
+   "Accounting.SecurityProofs.TS.LuckOfReceipt": "lemma: the bridge of LEDGER 1.3-1.5 over every ideal game split at the receipt, the operand and receipt lucks (definitions, not named assumptions) giving (L) at p + (1 - p) pr; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": "lemma: Lemma B of LEDGER 1.3 in case (a), the receipt luck 0 over every game whose rounds are committed duo or fx1 units (a definition), from DuoRunWordInjective and Fx1RunWordInjective; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckCaseA": "lemma: LuckOfReceipt at the receipt luck ReceiptLuckCaseA gives, (L) at the operand luck in case (a); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.OperandLuckCube": "lemma: the operand luck at 3/4 over every game whose rounds draw uniform cube bits against a degree-2 operand error (a definition), luck_quad as a probability; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckCaseACube": "lemma: LuckCaseA at OperandLuckCube's 3/4, (L) at 3/4 in case (a) with degree-2 operands and no luck hypothesis; not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
