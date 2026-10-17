@@ -29,7 +29,7 @@ def test_int8_pins_live_in_the_sibling_manifest():
     assert ENTRIES == OWN + SIBLING
     assert not [e for e in OWN if e.get("int8_of")] and all(e.get("int8_of") for e in SIBLING)
     roles = [e["role"] for e in ENTRIES if e.get("role")]
-    assert len(set(roles)) == len(roles)
+    assert len(set(roles)) == len(roles) and "LLAMA31_8B_INT8" in {e["role"] for e in INT8_PINS}
     assert all(not e.get("fp8_of") and not e["repo"].endswith("-FP8") for e in INT8_PINS)
 
 
