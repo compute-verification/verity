@@ -393,12 +393,16 @@ static int gate(const char* dir, int M, int N, int K, uint32_t seed, cudaStream_
       return std::memcmp(h, hY.data(), n) == 0;
     });
     gk::PoisonGate gr;
-    if (arm != P32) {
+    if (arm != P32)
       gr = gk::poison_gate(b.R, b.rbytes(), s, run, [&](const void* h, size_t n) {
         return gk::poisoned_words(h, n) == 0;
       });
-      d.bytes(std::string("R_") + ARM_NAME[arm], b.R, b.rbytes(), s);
-    }
+    // each gate's control leaves its buffer poisoned: one more launch, so the dump holds the arm's own output
+    CK(cudaMemsetAsync(b.Y, gk::POISON, b.ybytes(), s));
+    CK(cudaMemsetAsync(b.R, gk::POISON, b.rbytes(), s));
+    run(s);
+    CK(cudaStreamSynchronize(s));
+    if (arm != P32) d.bytes(std::string("R_") + ARM_NAME[arm], b.R, b.rbytes(), s);
     d.bytes(std::string("Y_") + ARM_NAME[arm], b.Y, b.ybytes(), s);
     const bool ok = gy.ok() && (arm == P32 || gr.ok());
     bad += !ok;
