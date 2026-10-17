@@ -336,6 +336,15 @@ codec's `max_blocks` rejects with `append`, and a release of a block outside the
 buys nothing: a block whose payload is chosen after a pass's seed still costs an encode for any receipt of it, which
 \(\mu_{\text{rebuild}}\) prices, and its root still precedes the root of the pass that reads it.
 
+**The lifetime cap.** \(L\) here is the lifetime cap of §1's carrier term, not a pass's length \(L_{t,i}\). An
+appended block joins the window of the next root received after its append, and no plan of a window \(L\) or more
+after that one may hold it (`Params.lifetime`, `LIFETIME`: 60 windows, an hour at the stated window). A plan that does
+rejects with `lifetime`. So every post-seed block leaves the credited store within \(L\) windows, and the stacked
+stock the carrier term charges is the input rate times \(L\) (§1, §8). A block the prover keeps longer, a prefix
+cache's for instance, is re-keyed: released, and its payload appended again at the store's next fresh index, which
+gives it a fresh bound key (§3), so its encoding is computed anew. The record names \(L\) (`lifetime`), and the remote
+session sends it with the session, so the prover re-keys in time.
+
 **Fiat–Shamir, and what grinding buys.** A seed after the first depends on the prover's own root, so the prover can
 grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path and no read. A
 chosen seed buys nothing against the block-sha512 receipt, because no seed makes a receipt cheaper to compute without
@@ -666,7 +675,8 @@ opening.
 commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z\), the codec's name and parameters
 (`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), the block layout, the sketch's rows
 (`rows`), each window's passes and receipts \(U_t\) and how many of them are of blocks appended after the seed
-(`post_seed`), the blocks the session appended and released (`appended`, `released`), and the session's span. The
+(`post_seed`), the blocks the session appended and released (`appended`, `released`), the lifetime cap \(L\) it held
+the appended blocks to (`lifetime`, §4), and the session's span. The
 digest binds the kind, `bind`, the
 codec, the layout and the rows already, but the record names them as well: what its receipts rest on depends on the
 kind, `bind` and the rows (§4), and `ledger` takes a link term only from a record that binds \(z\);
@@ -755,8 +765,10 @@ and each window's, from it plus the node's capacities.
   key with \(d_j\) kept beside it, an opening of one carrying \(d_j\), which check 3 decodes under, and releases that
   keep a block out of every later plan. Open:
   - *The verdict's binding.* `ledger` takes the verdict as given (`PostSeedVerdict`: whether it holds, and its carrier
-    bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, that their
-    payloads are those circuits' values (sampled proofs), and that no page outlives \(L\) are I2's and I4's to check.
+    bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, and that
+    their payloads are those circuits' values (sampled proofs), are I2's and I4's to check. That no appended block is
+    credited past \(L\) the session checks itself (§4, `lifetime`); that the verdict was computed at the record's
+    \(L\) is the verdict's to say.
   - *Appends across sessions.* A session's appends end with it, and the next session starts again from \(N\), so a
     page that outlives its session is appended again in the next, its encoding recomputed under its new index.
     Carrying appends over needs the next session to take the previous one's append roots and releases as its
@@ -764,7 +776,8 @@ and each window's, from it plus the node's capacities.
   - *The device side.* A KV page's index is the store's next fresh one, not \(\text{slot} \cdot \text{LAYERS} +
     \text{layer}\): serving records each block it completes, with its slot, the index it gave it and its \(d_j\), and
     each slot it frees, step by step (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its
-    slot held), and the prover's audit side turns the record into appends, releases and plan changes (`Replay`). The record is the prover's: \(d_j\) is witness, and the
+    slot held, and vLLM's `kv_free` is a free, recorded at its values' last read, so the store's filler plan leaves the
+    released blocks out), and the prover's audit side turns the record into appends, releases and plan changes (`Replay`). The record is the prover's: \(d_j\) is witness, and the
     verifier sees only the append roots, the releases and the plans; `benchmarks/remote_session` carries them over
     the wire, each root's message its appends, then its releases, then its plan as a change, and the pass's step. A KV block under the
     seed's key, as vLLM's encoded store (whose `Codec` is keyed by the store index alone) encodes them today, is not
