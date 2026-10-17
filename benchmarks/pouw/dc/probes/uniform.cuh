@@ -9,7 +9,9 @@
 //                that tcgen05 and wgmma share; without a fold reading the accumulators ptxas puts the chains on lanes);
 //                b h + 256 FFMA reading the accumulators (issue-loaded, 0.72 of issue: each warp waits on its MMAs);
 //                s h + 512 FFMA on 16 accumulators and 64 IADD3 + 64 LOP3 on 8 pairs, none reading the MMAs (UVec:
-//                issue binds alone, the ALU at about half, so a uniform instruction's slowdown is its issue price)
+//                issue binds alone, the ALU at about half, so a uniform instruction's slowdown is its issue price);
+//                v as s with each FFMA reading only its accumulator; w v with twice the vector work; x 1024 FADD by an
+//                immediate and 32 IADD3 + 32 LOP3 (one register read an FADD: sm_90 loses issue to operand reads)
 //                S, the uniform step on each chain pair: i UIMAD + ULOP3; x ULOP3; a UIADD3 + ULOP3; f USHF + ULOP3;
 //                p UPRMT + ULOP3; s USHF/ULEA + ULOP3
 #pragma once
@@ -91,8 +93,8 @@ struct UFeed {
   }
 };
 
-// ONE: each FFMA reads only its own accumulator (f·c + f), so no FFMA waits on a register bank
-template <int NF, int NI, bool ONE = false>
+// R: 0 FFMA f·c + g; 1 FFMA f·c + f (one register read); 2 FADD f + c (one register read, FADD for FFMA)
+template <int NF, int NI, int R = 0>
 struct UVec {
   float f[16], g;
   uint32_t v[16];
@@ -108,8 +110,9 @@ struct UVec {
   __device__ __forceinline__ void step() {
 #pragma unroll
     for (int q = 0; q < NF; q++)
-      f[q & 15] = ONE ? __fmaf_rn(f[q & 15], -6.103515625e-05f, f[q & 15])
-                      : __fmaf_rn(f[q & 15], 0.99993896484375f, g);
+      f[q & 15] = R == 2   ? __fadd_rn(f[q & 15], 9.765625e-04f)
+                  : R == 1 ? __fmaf_rn(f[q & 15], -6.103515625e-05f, f[q & 15])
+                           : __fmaf_rn(f[q & 15], 0.99993896484375f, g);
 #pragma unroll
     for (int q = 0; q < NI / 2; q++) {
       const int p = (q & 7) * 2;
@@ -126,11 +129,11 @@ struct UVec {
   }
 };
 
-template <int S, int K, int NF = 512, int NI = 128, bool ONE = false>
+template <int S, int K, int NF = 512, int NI = 128, int R = 0>
 __device__ __forceinline__ void uni_sat(const OpArgs& a) {
   UChains<K, S> u(0x5eed0000u ^ (uint32_t)a.mode);
   Honest h(a.mode);
-  UVec<NF, NI, ONE> w(a.mode);
+  UVec<NF, NI, R> w(a.mode);
   OP_BEGIN
   OP_LOOP(it) {
     h.step();
@@ -206,18 +209,19 @@ USAT(128)
 USK(us_64f, S_F, 64)
 USK(us_64p, S_P, 64)
 
-#define UVK(nm, S, K, NF, NI) \
-  OP_KERNEL(nm, UTPB) { uni_sat<S, K, NF, NI, true>(a); }
-#define UVSAT(N, NF, NI)                 \
-  UVK(u##N##_0, S_I, 0, NF, NI)          \
-  UVK(u##N##_32x, S_X, 32, NF, NI)       \
-  UVK(u##N##_64x, S_X, 64, NF, NI)       \
-  UVK(u##N##_64a, S_A, 64, NF, NI)       \
-  UVK(u##N##_64i, S_I, 64, NF, NI)       \
-  UVK(u##N##_128x, S_X, 128, NF, NI)     \
-  UVK(u##N##_128a, S_A, 128, NF, NI)     \
-  UVK(u##N##_128i, S_I, 128, NF, NI)
-UVSAT(v, 512, 128)
-UVSAT(w, 1024, 256)
+#define UVK(nm, S, K, NF, NI, R) \
+  OP_KERNEL(nm, UTPB) { uni_sat<S, K, NF, NI, R>(a); }
+#define UVSAT(N, NF, NI, R)                 \
+  UVK(u##N##_0, S_I, 0, NF, NI, R)          \
+  UVK(u##N##_32x, S_X, 32, NF, NI, R)       \
+  UVK(u##N##_64x, S_X, 64, NF, NI, R)       \
+  UVK(u##N##_64a, S_A, 64, NF, NI, R)       \
+  UVK(u##N##_64i, S_I, 64, NF, NI, R)       \
+  UVK(u##N##_128x, S_X, 128, NF, NI, R)     \
+  UVK(u##N##_128a, S_A, 128, NF, NI, R)     \
+  UVK(u##N##_128i, S_I, 128, NF, NI, R)
+UVSAT(v, 512, 128, 1)
+UVSAT(w, 1024, 256, 1)
+UVSAT(x, 1024, 64, 2)
 
 #define P_U(nm, EX, CNT) {.name = #nm, .kernel = (const void*)nm, .tpb = UTPB, .expect = EX, .counted = CNT, .iters = UITERS}

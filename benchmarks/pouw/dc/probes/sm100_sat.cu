@@ -1,4 +1,4 @@
-// sm_100a's table for uniform.cuh's issue-saturated stream (s, v, w: the honest step + FFMA, IADD3 and LOP3 on
+// sm_100a's table for uniform.cuh's issue-saturated stream (s, v, w, x: the honest step + FFMA or FADD, IADD3 and LOP3 on
 // independent accumulators): every loop's opcodes as ptxas 13.0.88 emits them (the eight most frequent, the branch aside), so a chain on
 // lanes or a merged instruction refuses.
 #include "uniform.cuh"
@@ -35,6 +35,14 @@ static const OpProbe PROBES[] = {
     P_U(uw_128x, "FFMA=1024,ULOP3.LUT=175,LOP3.LUT=160,IADD3=128,IMAD=32,LEA.HI=32,IMMA.16832.S8.S8=8,UIADD3=1", "IMMA.16832.S8.S8"),
     P_U(uw_128a, "FFMA=1024,LOP3.LUT=160,IADD3=128,UIADD3=65,ULOP3.LUT=64,IMAD=32,LEA.HI=32,IMMA.16832.S8.S8=8", "IMMA.16832.S8.S8"),
     P_U(uw_128i, "FFMA=1024,LOP3.LUT=160,IADD3=128,UIMAD=64,ULOP3.LUT=64,IMAD=32,LEA.HI=32,IMMA.16832.S8.S8=8", "IMMA.16832.S8.S8"),
+    P_U(ux_0, "FADD=1024,LOP3.LUT=64,IMAD=32,LEA.HI=32,IADD3=32,IMMA.16832.S8.S8=8,UIADD3=1,UISETP.NE.AND=1", "IMMA.16832.S8.S8"),
+    P_U(ux_32x, "FADD=1024,LOP3.LUT=64,ULOP3.LUT=48,IMAD=32,LEA.HI=32,IADD3=32,IMMA.16832.S8.S8=8,UIADD3=1", "IMMA.16832.S8.S8"),
+    P_U(ux_64x, "FADD=1024,ULOP3.LUT=94,LOP3.LUT=64,IMAD=32,LEA.HI=32,IADD3=32,IMMA.16832.S8.S8=8,UIADD3=1", "IMMA.16832.S8.S8"),
+    P_U(ux_64a, "FADD=1024,LOP3.LUT=64,UIADD3=33,ULOP3.LUT=32,IMAD=32,LEA.HI=32,IADD3=32,IMMA.16832.S8.S8=8", "IMMA.16832.S8.S8"),
+    P_U(ux_64i, "FADD=1024,LOP3.LUT=64,UIMAD=32,ULOP3.LUT=32,IMAD=32,LEA.HI=32,IADD3=32,IMMA.16832.S8.S8=8", "IMMA.16832.S8.S8"),
+    P_U(ux_128x, "FADD=1024,ULOP3.LUT=175,LOP3.LUT=64,IMAD=32,LEA.HI=32,IADD3=32,IMMA.16832.S8.S8=8,UIADD3=1", "IMMA.16832.S8.S8"),
+    P_U(ux_128a, "FADD=1024,UIADD3=65,ULOP3.LUT=64,LOP3.LUT=64,IMAD=32,LEA.HI=32,IADD3=32,IMMA.16832.S8.S8=8", "IMMA.16832.S8.S8"),
+    P_U(ux_128i, "FADD=1024,UIMAD=64,ULOP3.LUT=64,LOP3.LUT=64,IMAD=32,LEA.HI=32,IADD3=32,IMMA.16832.S8.S8=8", "IMMA.16832.S8.S8"),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
