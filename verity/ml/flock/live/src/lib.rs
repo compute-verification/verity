@@ -180,111 +180,15 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
 
 /// The unit draw (the Lean verifier's PROTOCOL.md §7.3): the verifier draws the units to prove in the clear from its OS
 /// randomness, after registration and before the statement is fixed, with `verity.ml.randomness`'s exact samplers read straight
-/// from OS bytes (no derivation). The draw is the object `{"law": "subset", "population": N, "k": K, "units": [...]}`,
-/// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}` or `{"law": "stratified", "population": N, "k": K,
-/// "strata": [{"template", "units": [[lo, hi], ...], "k"}, ...], "units": [...]}`, units ascending. A stratified law is the
-/// verifier's own expansion of `stratified:K` over its program and query (core's `one_stage.draw.derive`, Lean
-/// `HmRow.stratifiedLaw`): this module checks its form (Lean `Flock.Draw.strataProblem`) and draws by it, never derives it.
+/// from OS bytes (no derivation). The draw is the object `{"law": "subset", "population": N, "k": K, "units": [...]}` or
+/// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}`, units ascending.
 pub mod unit_draw {
     use serde_json::{Value, json};
 
-    /// A stratum of the stratified law: a template's units as ascending, disjoint, non-adjacent half-open ranges, and its draw.
-    #[derive(Clone, Debug, PartialEq)]
-    pub struct Stratum {
-        pub template: String,
-        pub units: Vec<(u64, u64)>,
-        pub k: u64,
-    }
-
-    impl Stratum {
-        pub fn size(&self) -> u64 {
-            self.units.iter().map(|(lo, hi)| hi - lo).sum()
-        }
-
-        /// The stratum's `j`-th unit, `j < size`.
-        fn unit(&self, mut j: u64) -> u64 {
-            for &(lo, hi) in &self.units {
-                if j < hi - lo {
-                    return lo + j;
-                }
-                j -= hi - lo;
-            }
-            unreachable!("a stratum's local index is below its size")
-        }
-
-        fn holds(&self, u: u64) -> bool {
-            self.units.iter().any(|&(lo, hi)| lo <= u && u < hi)
-        }
-
-        fn to_json(&self) -> Value {
-            json!({"template": self.template, "units": self.units.iter().map(|&(lo, hi)| json!([lo, hi])).collect::<Vec<_>>(), "k": self.k})
-        }
-
-        /// Exactly `{template, units, k}`, its units non-empty `[lo, hi)` ranges, ascending, disjoint and not adjacent.
-        fn of_json(v: &Value) -> Result<Stratum, String> {
-            let bad = || "U2: a stratum is exactly {template, units, k}".to_string();
-            let o = v.as_object().ok_or_else(bad)?;
-            if o.keys().map(|k| k.as_str()).ne(["k", "template", "units"]) {
-                return Err(bad());
-            }
-            let template = v["template"].as_str().ok_or_else(bad)?.to_string();
-            let k = v["k"].as_u64().ok_or("U2: a stratum's k")?;
-            let ranges = || format!("U2: stratum '{template}': units are non-empty [lo, hi) ranges");
-            let units: Vec<(u64, u64)> = v["units"].as_array().ok_or_else(ranges)?.iter().map(|r| match r.as_array().map(|p| p.as_slice()) {
-                Some([lo, hi]) => match (lo.as_u64(), hi.as_u64()) {
-                    (Some(lo), Some(hi)) if lo < hi => Ok((lo, hi)),
-                    _ => Err(ranges()),
-                },
-                _ => Err(ranges()),
-            }).collect::<Result<_, _>>()?;
-            if units.is_empty() {
-                return Err(ranges());
-            }
-            if units.windows(2).any(|w| w[1].0 <= w[0].1) {
-                return Err(format!("U2: stratum '{template}': ranges ascending, disjoint and not adjacent"));
-            }
-            Ok(Stratum { template, units, k })
-        }
-    }
-
-    /// A stratum's draw under the stratified rule (core's `draw.stratum_k`, Lean `Flock.Draw.stratumK`):
-    /// `max(1, round(k · size / population))`, rounding half up.
-    pub fn stratum_k(k: u64, size: u64, population: u64) -> u64 {
-        ((2 * k as u128 * size as u128 + population as u128) / (2 * population as u128)).max(1) as u64
-    }
-
-    /// Why a stratified law isn't well formed over `population` units (Lean `Flock.Draw.strataProblem`), or `None`:
-    /// `1 <= k <= population`, distinct templates, each stratum's `k` the rule's, the ranges tiling `[0, population)` exactly.
-    pub fn strata_problem(k: u64, strata: &[Stratum], population: u64) -> Option<String> {
-        if strata.is_empty() || k < 1 || k > population {
-            return Some("U2: strata and 1 <= k <= population".into());
-        }
-        for (i, s) in strata.iter().enumerate() {
-            if strata[..i].iter().any(|t| t.template == s.template) {
-                return Some(format!("U2: template '{}' twice", s.template));
-            }
-            if s.k != stratum_k(k, s.size(), population) {
-                return Some(format!("U2: stratum '{}': k is not the rule's", s.template));
-            }
-        }
-        let mut ranges: Vec<(u64, u64)> = strata.iter().flat_map(|s| s.units.iter().copied()).collect();
-        ranges.sort_unstable();
-        let mut at = 0;
-        for (lo, hi) in ranges {
-            if lo != at {
-                return Some("U2: the strata don't tile the population".into());
-            }
-            at = hi;
-        }
-        (at != population).then(|| "U2: the strata don't tile the population".into())
-    }
-
-    #[derive(Clone, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub enum Law {
         Subset { k: u64 },
         Bernoulli { num: u64, den: u64 },
-        /// One stratum per template, a uniform `k_s`-subset of each, independently (Lean `Flock.Draw.Law.stratified`).
-        Stratified { k: u64, strata: Vec<Stratum> },
     }
 
     impl Law {
@@ -298,37 +202,6 @@ pub mod unit_draw {
                     Ok(Law::Bernoulli { num: a.parse().map_err(|_| bad())?, den: b.parse().map_err(|_| bad())? })
                 }
                 _ => Err(bad()),
-            }
-        }
-
-        /// A law object: `{"law": "stratified", "k": K, "strata": [...]}` (the verifier's own expansion, `draw.derive`'s),
-        /// `{"law": "subset", "k": K}` or `{"law": "bernoulli", "p": "num/den"}`.
-        pub fn of_json(v: &Value) -> Result<Law, String> {
-            let keys: Vec<&str> = v.as_object().ok_or("a draw law is an object")?.keys().map(|k| k.as_str()).collect();
-            match (v["law"].as_str(), keys.as_slice()) {
-                (Some("stratified"), ["k", "law", "strata"]) => {
-                    let k = v["k"].as_u64().ok_or("a stratified law's k")?;
-                    let strata = v["strata"].as_array().ok_or("a stratified law's strata")?.iter().map(Stratum::of_json)
-                        .collect::<Result<_, _>>()?;
-                    Ok(Law::Stratified { k, strata })
-                }
-                (Some("subset"), ["k", "law"]) => Ok(Law::Subset { k: v["k"].as_u64().ok_or("a subset law's k")? }),
-                (Some("bernoulli"), ["law", "p"]) => Law::parse(&format!("bernoulli:{}", v["p"].as_str().unwrap_or(""))),
-                _ => Err(format!("a draw law object is {{law: stratified, k, strata}}, {{law: subset, k}} or {{law: bernoulli, p}}, not {v}")),
-            }
-        }
-
-        /// A draw of each stratum's first `k_s` units (or the first `k`): a stand-in whose tables are every draw's.
-        pub fn first(&self, population: u64) -> Option<Value> {
-            match self {
-                Law::Subset { k } => Some(json!({"law": "subset", "population": population, "k": k, "units": (0..*k).collect::<Vec<_>>()})),
-                Law::Stratified { k, strata } => {
-                    let mut units: Vec<u64> = strata.iter().flat_map(|s| (0..s.k.min(s.size())).map(|j| s.unit(j))).collect();
-                    units.sort_unstable();
-                    Some(json!({"law": "stratified", "population": population, "k": k,
-                                "strata": strata.iter().map(Stratum::to_json).collect::<Vec<_>>(), "units": units}))
-                }
-                Law::Bernoulli { .. } => None,
             }
         }
     }
@@ -354,57 +227,44 @@ pub mod unit_draw {
         }
     }
 
-    /// A uniformly random `k`-subset of `[0, n)`, sorted: the partial Fisher-Yates of verity.ml.randomness's Key.subset.
-    fn subset(k: u64, n: u64) -> Vec<u64> {
-        let mut swapped: std::collections::BTreeMap<u64, u64> = std::collections::BTreeMap::new();
-        let at = |m: &std::collections::BTreeMap<u64, u64>, i: u64| *m.get(&i).unwrap_or(&i);
-        let mut out = Vec::new();
-        for i in 0..k {
-            let j = i + uniform(n - i);
-            let (vi, vj) = (at(&swapped, i), at(&swapped, j));
-            swapped.insert(i, vj);
-            swapped.insert(j, vi);
-            out.push(vj);
-        }
-        out.sort_unstable();
-        out
-    }
-
-    /// The draw over `[0, population)`. A stratified draw is one `subset` per stratum, each on its own OS bytes, local index
-    /// `j` mapped to the stratum's `j`-th unit, the union ascending (Lean `Flock.Draw.stratified`).
-    pub fn draw(law: &Law, population: u64) -> Result<Value, String> {
-        let v = match law {
+    /// The draw over `[0, population)`.
+    pub fn draw(law: Law, population: u64) -> Result<Value, String> {
+        let units: Vec<u64> = match law {
             Law::Subset { k } => {
-                if *k > population {
+                if k > population {
                     return Err(format!("subset: k = {k} > population {population}"));
                 }
-                json!({"law": "subset", "population": population, "k": k, "units": subset(*k, population)})
+                // the partial Fisher-Yates of verity.ml.randomness's Key.subset
+                let mut swapped: std::collections::BTreeMap<u64, u64> = std::collections::BTreeMap::new();
+                let at = |m: &std::collections::BTreeMap<u64, u64>, i: u64| *m.get(&i).unwrap_or(&i);
+                let mut out = Vec::new();
+                for i in 0..k {
+                    let j = i + uniform(population - i);
+                    let (vi, vj) = (at(&swapped, i), at(&swapped, j));
+                    swapped.insert(i, vj);
+                    swapped.insert(j, vi);
+                    out.push(vj);
+                }
+                out.sort_unstable();
+                out
             }
             Law::Bernoulli { num, den } => {
-                if *den == 0 || num > den {
+                if den == 0 || num > den {
                     return Err(format!("bernoulli: p = {num}/{den} is not a probability"));
                 }
-                let units: Vec<u64> = (0..population).filter(|_| uniform(*den) < *num).collect();
-                json!({"law": "bernoulli", "population": population, "p": format!("{num}/{den}"), "units": units})
+                (0..population).filter(|_| uniform(den) < num).collect()
             }
-            Law::Stratified { k, strata } => {
-                if let Some(why) = strata_problem(*k, strata, population) {
-                    return Err(why);
-                }
-                let mut units: Vec<u64> = strata.iter().flat_map(|s| subset(s.k.min(s.size()), s.size()).into_iter().map(|j| s.unit(j)).collect::<Vec<_>>())
-                    .collect();
-                units.sort_unstable();
-                json!({"law": "stratified", "population": population, "k": k,
-                       "strata": strata.iter().map(Stratum::to_json).collect::<Vec<_>>(), "units": units})
-            }
+        };
+        let v = match law {
+            Law::Subset { k } => json!({"law": "subset", "population": population, "k": k, "units": units}),
+            Law::Bernoulli { num, den } => json!({"law": "bernoulli", "population": population, "p": format!("{num}/{den}"), "units": units}),
         };
         check(&v)?;
         Ok(v)
     }
 
     /// U2: exactly the law's keys; units ascending, distinct and in `[0, N)`; a subset has K <= N units; a Bernoulli p is
-    /// `num/den` with `0 <= num <= den`, `den > 0`, no unit at p = 0 and every unit at p = 1; a stratified draw's strata are
-    /// well formed and tile the population (`strata_problem`), and exactly `k_s` of its units fall in each. Returns the units.
+    /// `num/den` with `0 <= num <= den`, `den > 0`, no unit at p = 0 and every unit at p = 1. Returns the units.
     pub fn check(v: &Value) -> Result<Vec<usize>, String> {
         let o = v.as_object().ok_or("U2: the draw is not an object")?;
         let n = v["population"].as_u64().ok_or("U2: population")?;
@@ -430,93 +290,9 @@ pub mod unit_draw {
                     return Err("U2: not a Bernoulli draw".into());
                 }
             }
-            Some("stratified") => {
-                if keys != ["k", "law", "population", "strata", "units"] {
-                    return Err("U2: unit_draw's keys are not law, population, k, strata, units".into());
-                }
-                let k = v["k"].as_u64().ok_or("U2: k")?;
-                let strata: Vec<Stratum> = v["strata"].as_array().ok_or("U2: unit_draw.strata is not a list")?.iter().map(Stratum::of_json)
-                    .collect::<Result<_, _>>()?;
-                if let Some(why) = strata_problem(k, &strata, n) {
-                    return Err(why);
-                }
-                for s in &strata {
-                    let drawn = units.iter().filter(|&&u| s.holds(u)).count() as u64;
-                    if drawn != s.k {
-                        return Err(format!("U2: stratum '{}' holds {drawn} drawn units, not its k = {}", s.template, s.k));
-                    }
-                }
-            }
             _ => return Err("U2: an unknown law".into()),
         }
         Ok(units.into_iter().map(|u| u as usize).collect())
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        fn law() -> Law {
-            // two templates, one in two ranges: 10 + 6 units, k = 5 -> k_s = round(50/16) = 3 and round(30/16) = 2
-            Law::of_json(&json!({"law": "stratified", "k": 5, "strata": [
-                {"template": "A", "units": [[0, 4], [10, 16]], "k": 3}, {"template": "B", "units": [[4, 10]], "k": 2}]})).unwrap()
-        }
-
-        #[test]
-        fn a_stratified_draw_takes_each_strata_k_from_its_own_units() {
-            for _ in 0..200 {
-                let d = draw(&law(), 16).unwrap();
-                let units = check(&d).unwrap();
-                assert_eq!(units.len(), 5);
-                assert_eq!(units.iter().filter(|&&u| (4..10).contains(&u)).count(), 2, "{d}");
-            }
-        }
-
-        #[test]
-        fn every_unit_of_a_stratum_is_drawn() {
-            let mut seen = [false; 16];
-            for _ in 0..400 {
-                for u in check(&draw(&law(), 16).unwrap()).unwrap() {
-                    seen[u] = true;
-                }
-            }
-            assert!(seen.iter().all(|&s| s));
-        }
-
-        #[test]
-        fn the_rule_rounds_half_up_with_a_floor_of_one() {
-            assert_eq!((stratum_k(5, 10, 16), stratum_k(5, 6, 16), stratum_k(1, 1, 1000), stratum_k(2, 3, 4)), (3, 2, 1, 2));
-        }
-
-        #[test]
-        fn a_malformed_law_or_draw_is_refused() {
-            let Law::Stratified { k, strata } = law() else { unreachable!() };
-            assert!(strata_problem(k, &strata, 17).is_some(), "the strata don't tile 17 units");
-            let mut wrong = strata.clone();
-            wrong[1].k = 3;
-            assert!(strata_problem(k, &wrong, 16).is_some(), "k_s not the rule's");
-            let mut twice = strata.clone();
-            twice[1].template = "A".into();
-            assert!(strata_problem(k, &twice, 16).is_some(), "a template twice");
-            assert!(draw(&law(), 17).is_err());
-            let d = draw(&law(), 16).unwrap();
-            let mut moved = d.clone();
-            let u: Vec<u64> = (0..5).collect();
-            moved["units"] = json!(u);
-            assert!(check(&moved).is_err(), "four of A's units and one of B's");
-            let mut extra = d.clone();
-            extra["p"] = json!("1/2");
-            assert!(check(&extra).is_err(), "a key no stratified draw has");
-            assert!(Law::of_json(&json!({"law": "stratified", "k": 5, "strata": [{"template": "A", "units": [[0, 4], [4, 16]], "k": 5}]})).is_err(),
-                    "adjacent ranges");
-            assert_eq!(Law::of_json(&json!({"law": "subset", "k": 3})).unwrap(), Law::Subset { k: 3 });
-        }
-
-        #[test]
-        fn the_stand_in_draw_has_every_draws_count() {
-            let d = law().first(16).unwrap();
-            assert_eq!(check(&d).unwrap(), vec![0, 1, 2, 4, 5]);
-        }
     }
 }
 
@@ -1587,9 +1363,9 @@ impl Server {
                 if self.hello.is_some() || self.cfg.unit_draw.is_some() {
                     return self.refuse("U: the units are drawn once, after registration and before Hello".into());
                 }
-                let drawn = match (&self.cfg.draw_given, &self.cfg.draw_law) {
+                let drawn = match (&self.cfg.draw_given, self.cfg.draw_law) {
                     (Some(d), _) => unit_draw::check(d).map(|_| d.clone()),
-                    (None, Some((law, population))) => unit_draw::draw(law, *population),
+                    (None, Some((law, population))) => unit_draw::draw(law, population),
                     (None, None) => return Resp::Draw("null".into()),
                 };
                 let draw = match drawn {
