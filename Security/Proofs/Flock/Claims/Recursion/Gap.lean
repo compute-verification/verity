@@ -101,6 +101,7 @@ noncomputable def gD (H : Msg → Msg) : Deploy Bool where
   mask := fun _ _ => 0
   Tape := Unit
   P := fun _ => ⟨fun _ _ _ => .ret []⟩
+  δc := fun _ _ => 1
 
 /-! ## The compiled verifier's runs -/
 
