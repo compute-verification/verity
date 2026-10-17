@@ -19,8 +19,10 @@ outputs `([0], [1])`, a collision of the constant hash `constH`, whose outputs a
   type, so the prover with no tape, which met its first form at every verifier and `δ_c = 0`, is refused by its type.
 * `ScopeMatches_fails`: an empty scope and a check that takes everything.
 * `ZKmalR_fails` (`ZKMal.not_zkmalR_collSim`): the colliding simulator, which met the form before `Fork`, fails it.
-  `ZKmalR_vacuous`: the honest prover is a parameter, so a prover that ignores its witness and calls nothing
-  (`ZKMal.quietP`) meets it at `ε_zk = 0` and `γ = 0`, at the simulator that runs that prover (`quietSim`).
+  `ZKmalR_vacuous`: the form's honest prover is a parameter, so a prover that ignores its witness and calls nothing
+  (`ZKMal.quietP`) meets it at `ε_zk = 0` and `γ = 0`, at the simulator that runs that prover (`quietSim`). The
+  families' `ZK` read the masked record's own reference prover and simulator, so it meets theirs only at a record
+  whose own prover ignores its witness (`Flock.ZK_of_quiet_record`).
   `SimCost_fails`: the colliding simulator's two calls exceed a bound of `1`.
 * `ExtractRunsLe_fails`, `ExtractRunsExpLe_fails`: `onceE` reruns once, above a bound of `0`.
 * `Nontrivial_fails`: a recorded run that `rejV` rejects.

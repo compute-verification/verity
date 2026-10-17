@@ -72,12 +72,11 @@ theorem Flock.Nontrivial_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inh
       ¬ Claims.Flock.Nontrivial H D recs :=
   ⟨_, _, Witness.Flock.Nontrivial_fails H⟩
 
-/-- **Flock's `ZK` fails**: at every `ε_zk < 1` and `γ`, at some masked record, prover and simulator. -/
-theorem Flock.ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
-    (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
-    ∃ (D : Claims.Flock.Deploy Unit Unit Unit) (P : Claims.Flock.Wit → Prover (N × Ω)) (S : Simulator),
-      ¬ Claims.Flock.ZK H D P S εzk γ :=
-  ⟨_, _, _, Witness.Flock.ZK_fails H [] [] εzk γ x hε⟩
+/-- **Flock's `ZK` fails**: at every `ε_zk < 1` and `γ`, at some masked record, which carries its prover and
+simulator. -/
+theorem Flock.ZK_fails (H : Msg → Msg) (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
+    ∃ D : Claims.Flock.ZkDeploy Unit Unit Unit, ¬ Claims.Flock.ZK H D εzk γ :=
+  ⟨_, Witness.Flock.ZK_fails H [] [] εzk γ x hε⟩
 
 /-- **Flock's `Efficient` fails** at the zero bound, at some record. -/
 theorem Flock.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
@@ -127,12 +126,12 @@ theorem Sampling.Nontrivial_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [
       ¬ Claims.Sampling.Nontrivial H D recs :=
   ⟨_, _, Witness.Sampling.Nontrivial_fails H⟩
 
-/-- **The sampling `ZK` fails**: at every `ε_zk < 1` and `γ`, at some record, prover and simulator. -/
-theorem Sampling.ZK_fails {Coin N Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype N] [Nonempty N]
-    [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
-    ∃ (D : Claims.Sampling.Deploy Coin Unit Unit) (P : Claims.Sampling.Wit → Prover (N × Ω))
-      (S : Claims.Sampling.SimLeak), ¬ Claims.Sampling.ZK H D P S εzk γ :=
-  ⟨_, _, _, Witness.Sampling.ZK_fails H [] [] εzk γ x hε⟩
+/-- **The sampling `ZK` fails**: at every `ε_zk < 1` and `γ`, at some masked record, which carries its prover and
+simulator. -/
+theorem Sampling.ZK_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
+    (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
+    ∃ D : Claims.Sampling.ZkDeploy Coin Unit Unit, ¬ Claims.Sampling.ZK H D εzk γ :=
+  ⟨_, Witness.Sampling.ZK_fails (Coin := Coin) H [] [] εzk γ x hε⟩
 
 /-- **The sampling `Efficient` fails** at the zero bound, at some record. -/
 theorem Sampling.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
