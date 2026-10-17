@@ -1,0 +1,30 @@
+# Honest at L = 32 on the H200 (sm_90) with the LI fold, a model profile: one IGMMA.64x256x32.S8.S8, then LI on each
+# committed word (LOP3 on one word, IMAD on the next); the accumulator is in registers, so a committed word needs no load.
+# The designs add 0.02 verified FFMA a word as filler. Honest's own shape (each warpgroup's 4 wgmma, then 512 words of a
+# two-pipe mix at one instruction a word, then the wait) runs the wgmma at 0.649 of its rate, γ 1.54 against the LP's 1.52.
+name = "dc90-li-l32"
+status = "provisional"
+source = "DC-DESIGN (note:20261017T0805Z-draft-dc-design §3): LI is LOP3 (^ d0 ^ k0) and IMAD (·a0 + d1) a pair of words, 128 committed words a lane a MMA at L = 32; honest's shape wgmix_mix_r512 (r20261017-092536-be63) and the stress runs r20261017-104008-2898 and -104407-e527 lie inside every row the design reads"
+L = 32
+
+[mma]
+kind = "IGMMA.64x256x32.S8.S8"
+# wgmma m64n256k32 s8 (SS): a warp's 4096 of the warpgroup's 16384 words, 128 SMSP-cycles on the tensor pipe, 128
+# words/SM/clk
+class = "IGMMA_S8_N256"
+words = 4096
+depth = 32
+
+[per_mma]       # warp instructions a MMA: the MMA and the fold
+IGMMA_S8_N256 = 1
+ALU = 64
+IMAD = 64
+
+[operands]      # the least operand delivery any program pays a MMA when the design names none
+floor = { IGMMA_S8_N256 = 0.0 }
+source = "wgmma reads both operands from shared memory by descriptor (TMA fills it), so delivery costs no warp instruction a MMA; the warpgroup fences and commit groups are left out, so it is a lower bound"
+
+[fold]          # lane instructions a committed word
+name = "li"
+ALU = 0.5
+IMAD = 0.5
