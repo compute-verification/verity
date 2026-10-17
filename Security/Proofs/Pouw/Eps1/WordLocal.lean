@@ -243,4 +243,163 @@ theorem wordLocalZero : Pouw.Guarantees.Eps1.WordLocalZero := by
   intro m n Lseg FR FU G P blk hC hW
   exact count_blocks blk 4 fun τ => (block_zero P blk hC hW τ).trans (live_card_le P blk τ)
 
+/-- The int8 information count: eight words are needed to tell apart the `256^32 = 2^256` int8 segments; any map from
+them to `k` words that is injective on them has `k ≥ 8`. -/
+theorem words_needed_int8 (k : ℕ) (f : (Fin 32 → ℤ) → Fin k → Word)
+    (hf : ∀ u u', (∀ p, Int8Valid (u p)) → (∀ p, Int8Valid (u' p)) → f u = f u' → u = u') : 8 ≤ k := by
+  have hval : ∀ a : Fin 32 → Fin 256, ∀ p, Int8Valid (((a p : ℕ) : ℤ) - 128) := fun a p => by
+    have := (a p).isLt
+    unfold Int8Valid
+    constructor <;> omega
+  let g : (Fin 32 → Fin 256) → Fin k → Fin (2 ^ 32) := fun a i =>
+    (f (fun p => ((a p : ℕ) : ℤ) - 128) i).toFin
+  have hg : Function.Injective g := by
+    intro a a' h
+    have h1 : f (fun p => ((a p : ℕ) : ℤ) - 128) = f (fun p => ((a' p : ℕ) : ℤ) - 128) :=
+      funext fun i => BitVec.eq_of_toFin_eq (congrFun h i)
+    have h2 := hf _ _ (hval a) (hval a') h1
+    exact funext fun p => Fin.ext (by have := congrFun h2 p; omega)
+  have hcard := Fintype.card_le_of_injective g hg
+  simp only [Fintype.card_fun, Fintype.card_fin] at hcard
+  by_contra hk
+  have h7 : (2 ^ 32) ^ k ≤ (2 ^ 32) ^ 7 := Nat.pow_le_pow_right (by norm_num) (by omega)
+  have hlt : ((2 : ℕ) ^ 32) ^ 7 < 256 ^ 32 := by norm_num
+  exact absurd (hcard.trans h7) (not_le.mpr hlt)
+
+section General
+
+variable {m n Lseg : ℕ}
+
+/-- A general instance's fiber of `τ`: segment `τ.1` of row `τ.2.1` of `Ã` is `a`, every other entry is zero. -/
+def rowG (τ : Tau m n Lseg) (a : Fin 32 → ℤ) : Rows m Lseg :=
+  fun i l p => if i = τ.2.1 ∧ l = τ.1 then a p else 0
+
+/-- Segment `τ.1` of column `τ.2.2` of `B̃` is `b`, every other entry is zero. -/
+def colG (τ : Tau m n Lseg) (b : Fin 32 → ℤ) : GCols n Lseg :=
+  fun j l p => if j = τ.2.2 ∧ l = τ.1 then b p else 0
+
+theorem int8Valid_zero : Int8Valid 0 := by
+  unfold Int8Valid
+  norm_num
+
+theorem rowG_valid (τ : Tau m n Lseg) (a : Fin 32 → ℤ) (ha : ∀ p, Int8Valid (a p)) :
+    ∀ i l p, Int8Valid (rowG τ a i l p) := by
+  intro i l p
+  unfold rowG
+  split_ifs
+  · exact ha p
+  · exact int8Valid_zero
+
+theorem colG_valid (τ : Tau m n Lseg) (b : Fin 32 → ℤ) (hb : ∀ p, Int8Valid (b p)) :
+    ∀ j l p, Int8Valid (colG τ b j l p) := by
+  intro j l p
+  unfold colG
+  split_ifs
+  · exact hb p
+  · exact int8Valid_zero
+
+theorem genOut_fiber (τ : Tau m n Lseg) (a b : Fin 32 → ℤ) :
+    genOut (rowG τ a) (colG τ b) τ = BitVec.ofInt 32 (∑ p, a p * b p) := by
+  unfold genOut
+  congr 1
+  rw [sum_eq_single τ.1]
+  · simp [rowG, colG]
+  · intro l _ hl
+    simp [rowG, colG, hl]
+  · intro h
+    simp at h
+
+theorem genOut_fiber_prev (τ : Tau m n Lseg) (a b : Fin 32 → ℤ) (h : 0 < τ.1.val) :
+    genOut (rowG τ a) (colG τ b) (τ.prev h) = 0 := by
+  unfold genOut
+  rw [sum_eq_zero]
+  · rfl
+  intro l hl
+  have hle : l.val ≤ τ.1.val - 1 := by
+    have := (mem_filter.mp hl).2
+    simpa only [Tau.prev, Fin.le_def] using this
+  have hne : l ≠ τ.1 := fun he => by rw [he] at hle; omega
+  simp [rowG, colG, hne]
+
+/-- The indicator of entry `p`, an int8 segment. -/
+def ind (p : Fin 32) : Fin 32 → ℤ := fun q => if q = p then 1 else 0
+
+theorem ind_valid (p q : Fin 32) : Int8Valid (ind p q) := by
+  unfold ind Int8Valid
+  split_ifs <;> norm_num
+
+theorem int8_bounds {z : ℤ} (hz : Int8Valid z) : -2 ^ 31 ≤ z ∧ z < 2 ^ 31 := by
+  unfold Int8Valid at hz
+  constructor <;> omega
+
+/-- **Theorem B's block bound, general instance**: each block's live part has at least 8 instructions. -/
+theorem block_general {FR FU : Type} {G : ℕ} (P : Prog (Rows m Lseg) (GCols n Lseg) m n Lseg FR FU G)
+    (blk : Fin G → Tau m n Lseg)
+    (hC : P.Computes (fun A B => (∀ i l p, Int8Valid (A i l p)) ∧ ∀ j l p, Int8Valid (B j l p)) genOut)
+    (hW : P.WordLocal blk) (τ : Tau m n Lseg) : 8 ≤ (live P blk τ).card := by
+  classical
+  let run : (Fin 32 → ℤ) → (Fin 32 → ℤ) → Fin G → Word := fun a b =>
+    (run_exists P.prog (P.inputs (rowG τ a) (colG τ b))).choose
+  have hrun : ∀ a b, P.prog.IsRun (P.inputs (rowG τ a) (colG τ b)) (run a b) := fun a b =>
+    (run_exists P.prog (P.inputs (rowG τ a) (colG τ b))).choose_spec
+  have hout : ∀ a b, (∀ p, Int8Valid (a p)) → (∀ p, Int8Valid (b p)) →
+      run a b (P.out τ) = BitVec.ofInt 32 (∑ p, a p * b p) := fun a b ha hb => by
+    rw [hC _ _ ⟨rowG_valid τ a ha, colG_valid τ b hb⟩ _ (hrun a b) τ, genOut_fiber]
+  have hprev : ∀ a b, (∀ p, Int8Valid (a p)) → (∀ p, Int8Valid (b p)) →
+      ∀ h : 0 < τ.1.val, run a b (P.out (τ.prev h)) = 0 := fun a b ha hb h => by
+    rw [hC _ _ ⟨rowG_valid τ a ha, colG_valid τ b hb⟩ _ (hrun a b), genOut_fiber_prev]
+  let Sr := ((univ : Finset (Fin 3)) ×ˢ live P blk τ).filter fun tj =>
+    ∃ a, P.prog.arg tj.2 tj.1 = .inl (.inl a)
+  let Su := ((univ : Finset (Fin 3)) ×ˢ live P blk τ).filter fun tj =>
+    ∃ b, P.prog.arg tj.2 tj.1 = .inl (.inr b)
+  have hS := slots_le P blk hW τ Sr Su
+    (fun tj h => ⟨(mem_product.mp (mem_filter.mp h).1).2, (mem_filter.mp h).2⟩)
+    (fun tj h => ⟨(mem_product.mp (mem_filter.mp h).1).2, (mem_filter.mp h).2⟩)
+  -- the column side: the writer determines `B̃`'s segment, so at least 8 column-side slots
+  have hu8 : 8 ≤ Su.card := by
+    let e := Su.equivFin
+    let g : (Fin 32 → ℤ) → Fin 3 × Fin G → Word := fun b tj =>
+      match P.prog.arg tj.2 tj.1 with
+      | .inl c => P.inputs (rowG τ 0) (colG τ b) c
+      | .inr _ => 0
+    refine words_needed_int8 _ (fun b k => g b (e.symm k).1) fun b b' hb hb' hf => funext fun p => ?_
+    have hd := out_determined P blk hW τ (rowG τ (ind p)) (rowG τ (ind p)) (colG τ b) (colG τ b') _ _
+      (hrun _ b) (hrun _ b') (fun h => by rw [hprev _ _ (ind_valid p) hb h, hprev _ _ (ind_valid p) hb' h])
+      (fun _ _ _ _ _ => rfl) (fun t ht j c hc => by
+        have hmem : ((j, t) : Fin 3 × Fin G) ∈ Su := mem_filter.mpr ⟨mem_product.mpr ⟨mem_univ _, ht⟩, c, hc⟩
+        have hk := congrFun hf (e ⟨_, hmem⟩)
+        simp only [Equiv.symm_apply_apply, g, hc] at hk
+        simpa [Prog.inputs] using hk)
+    rw [hout _ _ (ind_valid p) hb, hout _ _ (ind_valid p) hb'] at hd
+    simp only [ind, ite_mul, one_mul, zero_mul, sum_ite_eq', mem_univ, ite_true] at hd
+    exact ofInt_inj (int8_bounds (hb p)) (int8_bounds (hb' p)) hd
+  -- the row side: the writer determines `Ã`'s segment, so at least 8 row-side slots
+  have hr8 : 8 ≤ Sr.card := by
+    let e := Sr.equivFin
+    let g : (Fin 32 → ℤ) → Fin 3 × Fin G → Word := fun a tj =>
+      match P.prog.arg tj.2 tj.1 with
+      | .inl c => P.inputs (rowG τ a) (colG τ 0) c
+      | .inr _ => 0
+    refine words_needed_int8 _ (fun a k => g a (e.symm k).1) fun a a' ha ha' hf => funext fun p => ?_
+    have hd := out_determined P blk hW τ (rowG τ a) (rowG τ a') (colG τ (ind p)) (colG τ (ind p)) _ _
+      (hrun a _) (hrun a' _) (fun h => by rw [hprev _ _ ha (ind_valid p) h, hprev _ _ ha' (ind_valid p) h])
+      (fun t ht j c hc => by
+        have hmem : ((j, t) : Fin 3 × Fin G) ∈ Sr := mem_filter.mpr ⟨mem_product.mpr ⟨mem_univ _, ht⟩, c, hc⟩
+        have hk := congrFun hf (e ⟨_, hmem⟩)
+        simp only [Equiv.symm_apply_apply, g, hc] at hk
+        simpa [Prog.inputs] using hk)
+      (fun _ _ _ _ _ => rfl)
+    rw [hout _ _ ha (ind_valid p), hout _ _ ha' (ind_valid p)] at hd
+    simp only [ind, mul_ite, mul_one, mul_zero, sum_ite_eq', mem_univ, ite_true] at hd
+    exact ofInt_inj (int8_bounds (ha p)) (int8_bounds (ha' p)) hd
+  omega
+
+end General
+
+/-- **Theorem B, general instance**: a word-local program computing the prefix words of `Ã·B̃` on every int8 instance
+has at least `8·L·m·n` instructions. -/
+theorem wordLocalGeneral : Pouw.Guarantees.Eps1.WordLocalGeneral := by
+  intro m n Lseg FR FU G P blk hC hW
+  exact count_blocks blk 8 fun τ => (block_general P blk hC hW τ).trans (live_card_le P blk τ)
+
 end Pouw.SecurityProofs.Eps1.WordLocal
