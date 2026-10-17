@@ -101,6 +101,8 @@ def main() -> None:
     ap.add_argument("--seconds", type=int, default=180)
     ap.add_argument("--discovery-pings", type=int, default=2000)
     ap.add_argument("--ops", default="3", help="the phases' challenge ops: 3 pings (default), 2 4 KiB host-memory answers")
+    ap.add_argument("--dgram", type=int, default=1472,
+                    help="answer datagram bytes; 1472 fragments on cpu-1's MTU-1450 link, 1422 does not")
     ns = ap.parse_args()
     out = os.environ.get("OUT") or sys.exit("$OUT is unset: run under research run")
     src = open(os.path.join(HERE, "lat.cu"), "rb").read()
