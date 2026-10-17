@@ -70,8 +70,10 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "for bit, on every rank.  Apart from that verdict, h7168.ok says the same at vLLM's defaults of 7168-wide "
              "tensor_model_parallel_all_reduce (the hidden-7168 pass): FlashInfer's to 36 tokens, multimem past it at its own probe's "
              "trees and FTZ."),
-    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v3",
-             "On the capture's Hopper GPU, the two served workloads' MoE gates (GateLinear) run cuteDSL ll_bf16_gemm on the "
+    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v4",
+             "On the capture's Hopper GPU at vLLM's defaults (read back before and after the launches: not batch invariant, no cuBLAS "
+             "workspace variable, torch's reduced-precision reductions at their default, cuBLAS the BLAS), the two served workloads' "
+             "MoE gates (GateLinear) run cuteDSL ll_bf16_gemm on the "
              "kernel's registered dispatch at M <= 16 and cuBLAS past it, and under vLLM's default cuBLAS route every f32 gate word "
              "equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1, GemmF32Out_v1 or "
              "CublasSplitKGemmF32Out_v1 at the captured split count, every recorded compressor word the selected f32-output "

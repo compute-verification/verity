@@ -10,16 +10,19 @@ and prints one line per case and then `GLM53-BF16-GEMM GO` or `NO-GO` with each 
 for every model run.  The device gate runs first and nothing else runs when it fails (exit 3).  A case that raises records its
 error and fails the verdict without stopping the others.
 
-The split-K-off variant (`SWITCH_ENV` and `switch()`) is vLLM's batch-invariant cuBLAS configuration on cc 9.0 without the rest of that mode
-(determinism/batch_invariant.py:1076-1080 and 1127-1138): CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before torch
-creates a cuBLAS handle, fp16 and bf16 reduced-precision reductions off with split-K off (``(False, False)``, torch >= 2.10), and
-cuBLASLt preferred.  vLLM's Triton bmm override is not part of it: `torch.bmm` stays on cuBLAS.  `--served-default` runs without
-the variant. By default the run checks the variant first and vLLM's served default in a second process; the outer verdict needs
-both, so `served_default` is first-class rather than timing-only.
+The process runs vLLM's served cuBLAS configuration: `environment` clears every switch it inherited (`engine.env.served_defaults`, and
+the variant's workspace variables) before torch is imported, and `configuration` reads it back (`served`, before the first GEMM, and
+`served_after`, after the last): not batch invariant, no workspace variable, torch's reduced-precision reductions at their default
+(True) and cuBLAS the preferred BLAS.  The split-K-off variant (`SWITCH_ENV` and `switch()`, `--variant`, read back as `switch`) is
+vLLM's batch-invariant cuBLAS configuration on cc 9.0 without the rest of that mode (determinism/batch_invariant.py:1076-1080 and
+1127-1138): CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before torch creates a cuBLAS handle, fp16 and bf16
+reduced-precision reductions off with split-K off (``(False, False)``, torch >= 2.10), and cuBLASLt preferred.  vLLM's Triton bmm
+override is not part of it: `torch.bmm` stays on cuBLAS.  The served run checks the variant after its own launches in a second
+process (`variant_run`; the configuration is process-wide) and its verdict needs it unless `--no-variant`.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
   selection  each model's `GateLinear(K, N)` with a bf16 weight and f32 out allows tier 1 (ll_bf16_gemm) and tier 4 (cuBLAS) and
-             neither fp32 tier; `dispatch_unquantized_gemm()` is `default_unquantized_gemm` (F.linear); the switch's flags read back.
+             neither fp32 tier; `dispatch_unquantized_gemm()` is `default_unquantized_gemm` (F.linear).
   router     `GateLinear.forward` at M in the model's `router_m`, twice: every `LLBf16Gemm.dispatch` it makes is tapped and must be
              `bf16_gemm_check.dispatch_sm90`'s kernel at the gate's (K, N) (GLM-5.3, (6144, 256): M <= 4 dotprod at BS 128, 5..16
              split-K at 6, or 8 at M 9 and 11; DeepSeek-V4-Pro, (7168, 384): M 1, 2 dotprod at BS 256, whose K loop ends in a tail
@@ -47,11 +50,12 @@ both, so `served_default` is first-class rather than timing-only.
              cancellation row fit against the stated
              contiguous/f32/forward hypothesis and strided, reverse, tree and bf16-partial alternatives.
 
-GO needs, for every model and both variants, every case run, 0 mismatches on every word, `fma` decided, every launch deterministic
-and on its expected kernel, every profiled split-K launch and unique hypothesis fit pinned, and the references equal.
+GO needs the configuration read back before and after the launches, and, for every model and in both the served run and the
+variant's, every case run, 0 mismatches on every word, `fma` decided, every launch deterministic and on its expected kernel, every
+profiled split-K launch and unique hypothesis fit pinned, and the references equal.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
-    $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--no-default]
+    $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--no-variant]
         [--models glm53,dsv4-pro] [--only router,linear,f32out,bmm]
 """
 from __future__ import annotations
@@ -75,9 +79,10 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.engine.env import served_defaults
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v3"
+SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v4"
 RECORD = "glm53_bf16_gemm_capture.json"
 #: GLM-5.3's MLA at one TP8 rank: heads, the nope and rope query widths, the latent rank and the value width
 NHL, QK_NOPE, QK_ROPE, KV_LORA, V_HEAD = 8, 192, 64, 512, 256
@@ -126,35 +131,49 @@ def _error(e: BaseException) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- env
-def environment(served_default: bool, triton_cache: Path) -> dict[str, str]:
-    """The env, set before torch is imported: the switch's cuBLAS variables, or (`served_default`) none of them."""
-    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_BATCH_INVARIANT": "0", "TRITON_CACHE_DIR": str(triton_cache)}
-    if served_default:
-        for k in SWITCH_ENV:
-            os.environ.pop(k, None)
-    else:
-        env.update(SWITCH_ENV)
+def environment(variant: bool, triton_cache: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """vLLM's defaults (`served_defaults`, and no cuBLAS workspace variable) unless `variant` sets the split-K-off variant's, and the
+    Triton cache in scratch, set before torch is imported: (the env set, the switches cleared)."""
+    cleared = served_defaults()
+    cleared |= {k: os.environ.pop(k) for k in SWITCH_ENV if k in os.environ}
+    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(triton_cache), **(SWITCH_ENV if variant else {})}
     os.environ.update(env)
-    return env
+    return env, cleared
 
 
-def switch(served_default: bool) -> dict[str, Any]:
-    """The switch's torch flags (unless `served_default`), set before the first GEMM, read back."""
+REDUCED = ("allow_fp16_reduced_precision_reduction", "allow_bf16_reduced_precision_reduction")
+
+
+def configuration(variant: bool) -> dict[str, Any]:
+    """The cuBLAS configuration as this process reads it (torch's reduced-precision flags and preferred BLAS, the workspace
+    variables, vLLM's batch invariance, the runtime cuBLAS version), `ok` if it is the one the process runs: vLLM's served
+    defaults (not batch invariant, no workspace variable, both reductions at torch's default True, cuBLAS the BLAS), or
+    (`variant`) the split-K-off variant's."""
+    import torch
+    import vllm.envs as envs
+
+    m = torch.backends.cuda.matmul
+    rec: dict[str, Any] = {"torch": torch.__version__, **{k: repr(getattr(m, k)) for k in REDUCED},
+                           "preferred_blas_library": str(torch.backends.cuda.preferred_blas_library()),
+                           "env": {k: os.environ.get(k) for k in SWITCH_ENV}, "VLLM_BATCH_INVARIANT": bool(envs.VLLM_BATCH_INVARIANT),
+                           "cublas_version": cublas_version()}
+    blas = rec["preferred_blas_library"].rsplit(".", 1)[-1].lower()
+    if variant:
+        rec["ok"] = (rec["env"] == SWITCH_ENV and blas == "cublaslt" and all(rec[k] in ("(False, False)", "False") for k in REDUCED))
+    else:
+        rec["ok"] = not any(rec["env"].values()) and blas == "cublas" and all(rec[k] == "True" for k in REDUCED)
+    rec["ok"] = rec["ok"] and not rec["VLLM_BATCH_INVARIANT"]
+    return rec
+
+
+def switch() -> None:
+    """The split-K-off variant's torch flags, set before the first GEMM."""
     import torch
 
     m = torch.backends.cuda.matmul
-    if not served_default:
-        m.allow_fp16_reduced_precision_reduction = (False, False)
-        m.allow_bf16_reduced_precision_reduction = (False, False)
-        torch.backends.cuda.preferred_blas_library(backend="cublaslt")
-    rec = {"torch": torch.__version__, "allow_fp16_reduced_precision_reduction": repr(m.allow_fp16_reduced_precision_reduction),
-           "allow_bf16_reduced_precision_reduction": repr(m.allow_bf16_reduced_precision_reduction),
-           "preferred_blas_library": str(torch.backends.cuda.preferred_blas_library()),
-           "env": {k: os.environ.get(k) for k in SWITCH_ENV}, "cublas_version": cublas_version()}
-    rec["ok"] = served_default or (rec["env"] == SWITCH_ENV and "cublaslt" in rec["preferred_blas_library"].lower()
-                                   and all(v in ("(False, False)", "False") for v in (rec["allow_fp16_reduced_precision_reduction"],
-                                                                                     rec["allow_bf16_reduced_precision_reduction"])))
-    return rec
+    m.allow_fp16_reduced_precision_reduction = (False, False)
+    m.allow_bf16_reduced_precision_reduction = (False, False)
+    torch.backends.cuda.preferred_blas_library(backend="cublaslt")
 
 
 # ------------------------------------------------------------------------------------------------------------------ operands
@@ -812,39 +831,46 @@ def model_verdicts(doc: dict[str, Any]) -> dict[str, bool]:
             for m in doc["models"]}
 
 
+def config_key(doc: dict[str, Any]) -> str:
+    """The record's configuration read-back: `served` (vLLM's served defaults), or `switch` in the split-K-off variant's run."""
+    return "switch" if doc.get("variant") == "split_k_off" else "served"
+
+
 def _verdict(doc: dict[str, Any]) -> bool:
-    return (doc["gate"]["ok"] and not doc["errors"] and doc["switch"].get("ok") is True
-            and isinstance(doc["switch"].get("cublas_version"), int)
+    key = config_key(doc)
+    return (doc["gate"]["ok"] and not doc["errors"] and all(doc.get(k, {}).get("ok") is True for k in (key, f"{key}_after"))
+            and isinstance(doc[key].get("cublas_version"), int)
             and all(s.get("ok") is True for s in doc["selection"].values()) and bool(doc["selection"])
             and doc["bind"].get("ok") is True and {_case(x) for x in doc["launches"]} == set(doc["expected"])
             and all(_launch_ok(x) for x in doc["launches"]) and _words_ok(doc["totals"]) and doc.get("fma") is not None
             and all(c["ok"] for c in doc["cases"].values()) and all(model_verdicts(doc).values())
-            and (not doc.get("require_served_default") or doc.get("served_default", {}).get("ok") is True))
+            and (not doc.get("require_variant") or doc.get("variant_run", {}).get("ok") is True))
 
 
-# --------------------------------------------------------------------------------------------------------------------- default
-def default_run(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
-    """The first-class served-default capture in its own process (the variant is process-wide and set before the first handle)."""
-    sub = outdir / "served_default"
-    argv = [sys.executable, str(Path(__file__).resolve()), "--served-default", "--no-default", "--out", str(sub),
+# --------------------------------------------------------------------------------------------------------------------- variant
+def variant_run(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
+    """The split-K-off variant in its own process (its configuration is process-wide and set before the first handle)."""
+    sub = outdir / "split_k_off"
+    argv = [sys.executable, str(Path(__file__).resolve()), "--variant", "--no-variant", "--out", str(sub),
             "--workers", str(a.workers), "--only", a.only, "--models", a.models, "--min-driver", str(a.min_driver),
             "--want-cc", a.want_cc, "--want-sms", str(a.want_sms)]
     argv += (["--scratch", a.scratch] if a.scratch else []) + (["--quick"] if a.quick else [])
     argv += ["--dump-operands"] if a.dump_operands else []
     proc = subprocess.run(argv, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2])
-    (outdir / "served_default.log").write_text(proc.stdout + proc.stderr)
+    (outdir / "split_k_off.log").write_text(proc.stdout + proc.stderr)
     doc = json.loads((sub / RECORD).read_text())
     return {"returncode": proc.returncode, "ok": doc["ok"], "digest": doc["digest"], "errors": sorted(doc["errors"]),
-            "model_verdicts": doc.get("model_verdicts"), "cublas_version": doc.get("switch", {}).get("cublas_version"),
+            "model_verdicts": doc.get("model_verdicts"), "switch": doc.get("switch"),
+            "cublas_version": doc.get("switch", {}).get("cublas_version"),
             "profiles": {_case(x): x.get("profile") for x in doc["launches"]},
             "splitk_hypotheses": doc.get("splitk_hypotheses"),
             "changed": sorted(k for k, c in doc["cases"].items() if not c["ok"]), "us": {k: c.get("us") for k, c in doc["cases"].items()}}
 
 
 def _cost(doc: dict[str, Any]) -> dict[str, Any]:
-    """Each case's kernel time under the switch over the default's."""
-    base = doc.get("served_default", {}).get("us") or {}
-    return {k: round(c["us"] / base[k], 3) for k, c in doc["cases"].items() if c.get("us") and base.get(k)}
+    """Each case's kernel time under the split-K-off variant over the served default's."""
+    switched = doc.get("variant_run", {}).get("us") or {}
+    return {k: round(switched[k] / c["us"], 3) for k, c in doc["cases"].items() if c.get("us") and switched.get(k)}
 
 
 # ------------------------------------------------------------------------------------------------------------------------- run
@@ -857,29 +883,36 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=a.scratch)
     work = Path(tmp.name)
-    env = environment(a.served_default, work / "triton_cache")
+    env, cleared = environment(a.variant, work / "triton_cache")
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
     from verity_vllm.program.registry import bf16_gemm_check as BC
 
-    tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")
+    tag = "GLM53-BF16-GEMM" + (" (split-K-off variant)" if a.variant else "")
     todo = cases(a.quick, only, models)
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": a.quick, "served_default": a.served_default,
-                           "variant": "served_default" if a.served_default else "split_k_off",
-                           "require_served_default": not a.served_default and not a.no_default,
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "env_cleared": cleared, "quick": a.quick,
+                           "variant": "split_k_off" if a.variant else "served_default",
+                           "require_variant": not a.variant and not a.no_variant,
                            "models": models, "expected": [case_key(*c) for c in todo], "environment": G._environment(),
                            "gate": C.gate(a.min_driver, a.want_cc, a.want_sms), "errors": {}}
-    print(f"[glm53-bf16-gemm] gate {json.dumps(doc['gate'])}", flush=True)
+    cfg = config_key(doc)
+    print(f"[glm53-bf16-gemm] gate {json.dumps(doc['gate'])} cleared {sorted(cleared)}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print(f"{tag} GATE-FAIL", flush=True)
         raise SystemExit(3)
-    try:
-        doc["switch"] = switch(a.served_default)
-    except Exception as e:  # noqa: BLE001
-        doc["errors"]["switch"] = _error(e)
-        doc["switch"] = {"ok": False}
-    print(f"[glm53-bf16-gemm] switch {json.dumps(doc['switch'])}", flush=True)
+
+    def read_back(name: str, set_switch: bool = False) -> None:
+        try:
+            if set_switch:
+                switch()
+            doc[name] = configuration(a.variant)
+        except Exception as e:  # noqa: BLE001
+            doc["errors"][name] = _error(e)
+            doc[name] = {"ok": False}
+        print(f"[glm53-bf16-gemm] {name} {json.dumps(doc[name])}", flush=True)
+
+    read_back(cfg, set_switch=a.variant)
     doc["selection"], doc["launches"], jobs = {}, [], []
     vllm_config = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     with set_current_vllm_config(vllm_config):
@@ -896,7 +929,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         for i, (model, phase, name, M) in enumerate(todo):
             key = case_key(model, phase, name, M)
             try:
-                launch_rec, job = launch(work, weights, gates, model, phase, name, M, 7000 + i, a.served_default)
+                launch_rec, job = launch(work, weights, gates, model, phase, name, M, 7000 + i, not a.variant)
                 doc["launches"].append(launch_rec)
                 jobs += jobs_of(job)
                 print(f"[glm53-bf16-gemm] {key:48s} K={launch_rec['K']:5d} N={launch_rec['N']:5d} kernel={launch_rec.get('kernel')} "
@@ -905,6 +938,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
             except Exception as e:  # noqa: BLE001
                 doc["errors"][key] = _error(e)
                 print(f"[glm53-bf16-gemm] {key} ERROR {doc['errors'][key][:400]}", flush=True)
+        read_back(f"{cfg}_after")
         del weights
         torch.cuda.empty_cache()
     try:
@@ -947,23 +981,24 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         print(f"[glm53-bf16-gemm] case {key:48s} {'GO' if c['ok'] else 'NO-GO':5s} {c.get('kernel')} words={t['words']}!={t['mismatch']} "
               f"dotprod={t['dotprod_words']} fma1!={t['fma1_mismatch']} fma0!={t['fma0_mismatch']} differ={t['fma_differ']} "
               f"ref={t['reference_coords']} twin!={t['twin_mismatch']} us={c.get('us')}", flush=True)
-    if not a.served_default and not a.no_default:
+    if doc["require_variant"]:
         try:
-            doc["served_default"] = default_run(a, outdir)
+            doc["variant_run"] = variant_run(a, outdir)
             doc["switch_cost"] = _cost(doc)
         except Exception as e:  # noqa: BLE001
-            doc["served_default"] = {"error": _error(e)}
-        print(f"[glm53-bf16-gemm] served default {json.dumps(doc['served_default'])[:1500]}", flush=True)
-        print(f"[glm53-bf16-gemm] switch cost (us switched / default) {json.dumps(doc.get('switch_cost'))}", flush=True)
+            doc["variant_run"] = {"error": _error(e)}
+        print(f"[glm53-bf16-gemm] split-K-off variant {json.dumps(doc['variant_run'])[:1500]}", flush=True)
+        print(f"[glm53-bf16-gemm] switch cost (us switched / served) {json.dumps(doc.get('switch_cost'))}", flush=True)
     doc["model_verdicts"] = model_verdicts(doc)
     doc = seal_record(doc, _verdict(doc))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
     verdicts = " ".join(f"{m}={'GO' if ok else 'NO-GO'}" for m, ok in doc["model_verdicts"].items())
-    default_verdict = (" standalone" if a.served_default or a.no_default else
-                       f" served_default={'GO' if doc.get('served_default', {}).get('ok') else 'NO-GO'}")
-    print(f"{tag} {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} {verdicts} fma={doc['fma']} totals={json.dumps(doc['totals'])} "
-          f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}{default_verdict}", flush=True)
+    read = all(doc.get(k, {}).get("ok") is True for k in (cfg, f"{cfg}_after"))
+    variant = (f" variant={'GO' if doc.get('variant_run', {}).get('ok') else 'NO-GO'}" if doc["require_variant"] else " standalone")
+    print(f"{tag} {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} {cfg}={read} {verdicts} fma={doc['fma']} "
+          f"totals={json.dumps(doc['totals'])} no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} "
+          f"errors={sorted(doc['errors'])}{variant}", flush=True)
     return doc
 
 
@@ -977,8 +1012,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=C.cpu_workers())
     ap.add_argument("--quick", action="store_true",
                     help=f"each model's quick router M, the others at M in {QUICK_M}: a first signal in minutes")
-    ap.add_argument("--served-default", action="store_true", help="torch's default cuBLAS configuration instead of the split-K-off switch")
-    ap.add_argument("--no-default", action="store_true", help="skip the second process under torch's default configuration")
+    ap.add_argument("--variant", action="store_true", help="the split-K-off variant instead of vLLM's served cuBLAS configuration")
+    ap.add_argument("--no-variant", action="store_true", help="skip the split-K-off variant's second process")
     ap.add_argument("--dump-operands", action="store_true",
                     help="preserve operands and outputs for launches with a separate split-K reduction, deduplicating W across M")
     ap.add_argument("--models", default=",".join(MODELS), help=f"comma list of models: {', '.join(MODELS)}")

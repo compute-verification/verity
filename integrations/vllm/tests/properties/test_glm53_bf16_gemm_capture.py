@@ -1,9 +1,9 @@
 """The GLM-5.3 and DeepSeek-V4-Pro bf16 GEMM capture without a GPU: its comparison jobs over operands and words made here (the
 kernels' words stood in for by the models), a dotprod whose K loop ends in a tail tile and a ragged round, a flipped word found and
 located, the dotprod's contraction decided by the stress rows, the gate's kernel record at each model's gate, each model's cases,
-the absorb weights' served layout, the switch's environment, the bindings, the verdict per case and per model, the second process
-under the default configuration, and `main` end to end (the GPU run is `tests/properties/glm53_bf16_gemm_capture_gpu.py --out ...`
-on an H200)."""
+the absorb weights' served layout, the environment and the configuration read back, the bindings, the verdict per case and per
+model, the split-K-off variant's second process, and `main` end to end (the GPU run is
+`tests/properties/glm53_bf16_gemm_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
 import copy
@@ -15,6 +15,7 @@ import pytest
 import torch
 
 from tests.properties import glm53_bf16_gemm_capture_gpu as X
+from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry import mla_check as MK
 from verity_vllm.properties.record import REGISTRY, digest_of
@@ -244,13 +245,67 @@ def test_the_absorb_weights_are_the_served_views() -> None:
     assert uk_t[h, p, ll] == kv_b[h * (P + V) + p, ll] and uv[h, ll, v] == kv_b[h * (P + V) + P + v, ll]
 
 
-def test_the_switch_environment_is_set_or_cleared(tmp_path, monkeypatch) -> None:
-    for k in (*X.SWITCH_ENV, "VLLM_BATCH_INVARIANT", "TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
-        monkeypatch.setenv(k, "x")
-    env = X.environment(False, tmp_path)
-    assert {k: env[k] for k in X.SWITCH_ENV} == X.SWITCH_ENV and env["VLLM_BATCH_INVARIANT"] == "0"
-    env = X.environment(True, tmp_path)
-    assert not set(X.SWITCH_ENV) & set(env) and all(k not in os.environ for k in X.SWITCH_ENV)
+def _stub_envs(monkeypatch, batch_invariant: bool = False) -> None:
+    import sys
+    import types
+
+    envs = types.ModuleType("vllm.envs")
+    envs.VLLM_BATCH_INVARIANT = batch_invariant
+    monkeypatch.setitem(sys.modules, "vllm", sys.modules.get("vllm") or types.ModuleType("vllm"))
+    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+
+
+def _inherit(monkeypatch) -> dict[str, str]:
+    """Every served-default switch and the variant's workspace variables inherited set, the run's own variables touched first so
+    the test undoes what `environment` sets."""
+    inherited = {**{k: "0" for k in SERVED_DEFAULTS}, **{k: "x" for k in X.SWITCH_ENV}}
+    for k, v in inherited.items():
+        monkeypatch.setenv(k, v)
+    for k in ("TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
+        monkeypatch.delenv(k, raising=False)
+    return inherited
+
+
+def test_the_environment_clears_every_switch_and_sets_the_variants(tmp_path, monkeypatch) -> None:
+    inherited = _inherit(monkeypatch)
+    env, cleared = X.environment(False, tmp_path)
+    assert cleared == inherited and not set(X.SWITCH_ENV) & set(env)
+    assert not any(k in os.environ for k in inherited) and os.environ["TRITON_CACHE_DIR"] == str(tmp_path)
+    inherited = _inherit(monkeypatch)
+    env, cleared = X.environment(True, tmp_path)
+    assert cleared == inherited and {k: env[k] for k in X.SWITCH_ENV} == {k: os.environ[k] for k in X.SWITCH_ENV} == X.SWITCH_ENV
+    assert not any(k in os.environ for k in SERVED_DEFAULTS)
+
+
+def test_the_configuration_read_back_is_the_served_default_or_the_variant(monkeypatch) -> None:
+    """torch's defaults (CPU torch's flags are the same globals), no workspace variable and vLLM not batch invariant: the served
+    configuration and not the variant's; any one switch away from it fails the served read-back, and the variant's variables and
+    flags together pass the variant's, batch invariance failing both."""
+    m = torch.backends.cuda.matmul
+    _stub_envs(monkeypatch)
+    monkeypatch.setattr(X, "cublas_version", lambda: 130101)
+    for k in X.SWITCH_ENV:
+        monkeypatch.delenv(k, raising=False)
+    rec = X.configuration(False)
+    assert rec["ok"] and rec["cublas_version"] == 130101 and rec["env"] == dict.fromkeys(X.SWITCH_ENV)
+    assert {k: rec[k] for k in X.REDUCED} == dict.fromkeys(X.REDUCED, "True") and not X.configuration(True)["ok"]
+    lt = lambda: "_BlasBackend.Cublaslt"                                                  # noqa: E731
+    away = (lambda mp: mp.setenv("CUBLASLT_WORKSPACE_SIZE", "1"), lambda mp: mp.setattr(m, X.REDUCED[0], False),
+            lambda mp: mp.setattr(m, X.REDUCED[1], False), lambda mp: mp.setattr(torch.backends.cuda, "preferred_blas_library", lt),
+            lambda mp: _stub_envs(mp, batch_invariant=True))
+    for i, change in enumerate(away):
+        with monkeypatch.context() as mp:
+            change(mp)
+            assert not X.configuration(False)["ok"], i
+    with monkeypatch.context() as mp:
+        for k, v in X.SWITCH_ENV.items():
+            mp.setenv(k, v)
+        for k in X.REDUCED:
+            mp.setattr(m, k, False)
+        mp.setattr(torch.backends.cuda, "preferred_blas_library", lt)
+        assert X.configuration(True)["ok"] and not X.configuration(False)["ok"]
+        _stub_envs(mp, batch_invariant=True)
+        assert not X.configuration(True)["ok"]
 
 
 def test_the_programs_bind_at_every_models_shapes() -> None:
@@ -285,7 +340,8 @@ def _doc() -> dict:
              {**g, "phase": "bmm", "case": "v_absorb", "M": 1, **NONE, "words": 4, "reference_coords": 1},
              {**d, "phase": "f32out", "case": "compressor.kv_score.c4", "M": 1, **NONE, "words": 4, "reference_coords": 1}]
     doc = {"schema": X.SCHEMA, "models": list(X.MODELS), "expected": [X._case(x) for x in launches], "gate": {"ok": True}, "errors": {},
-           "switch": {"ok": True, "cublas_version": 120900}, "selection": {m: {"ok": True} for m in X.MODELS}, "bind": {"ok": True},
+           "served": {"ok": True, "cublas_version": 120900}, "served_after": {"ok": True},
+           "selection": {m: {"ok": True} for m in X.MODELS}, "bind": {"ok": True},
            "launches": launches,
            "comparisons": comps, "totals": dict(TOTALS)}
     doc["fma"] = X.fma_of(doc["totals"])
@@ -293,7 +349,9 @@ def _doc() -> dict:
     return doc
 
 
-@pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("errors", "glm53/router/x"), "boom"), (("switch", "ok"), False),
+@pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("errors", "glm53/router/x"), "boom"), (("served", "ok"), False),
+                                        (("served_after", "ok"), False), (("served_after",), {}), (("served", "cublas_version"), None),
+                                        (("require_variant",), True), (("variant",), "split_k_off"),
                                         (("selection", "dsv4-pro", "ok"), False), (("selection",), {}), (("bind", "ok"), False),
                                         (("totals", "mismatch"), 1), (("totals", "reference_coords"), 0),
                                         (("totals", "twin_mismatch"), 1), (("fma",), None), (("launches", 0, "dispatch_ok"), False),
@@ -334,39 +392,50 @@ def test_each_model_has_its_own_verdict() -> None:
     assert X.model_verdicts(doc) == {"glm53": False, "dsv4-pro": True} and not X._verdict(doc)
 
 
-def test_the_default_run_is_a_second_process(tmp_path, monkeypatch) -> None:
-    """The second process gets `--served-default --no-default`, the same models and its own out directory; its cases that are not
-    GO are the cases the default configuration changes, and the switch's cost is each case's time over the default's."""
+def test_the_variants_record_reads_its_own_switch_and_the_served_run_needs_the_variant() -> None:
+    variant = {k: v for k, v in _doc().items() if k not in ("served", "served_after")}
+    variant |= {"variant": "split_k_off", "switch": {"ok": True, "cublas_version": 130101}, "switch_after": {"ok": True}}
+    assert X.config_key(variant) == "switch" and X.config_key(_doc()) == "served"
+    assert X._verdict(variant) and not X._verdict({**variant, "switch_after": {"ok": False}})
+    assert not X._verdict({**_doc(), "require_variant": True, "variant_run": {"ok": False}})
+    assert not X._verdict({**_doc(), "require_variant": True, "variant_run": {"error": "boom"}})
+    assert X._verdict({**_doc(), "require_variant": True, "variant_run": {"ok": True}})
+
+
+def test_the_variant_runs_in_a_second_process(tmp_path, monkeypatch) -> None:
+    """The second process gets `--variant --no-variant`, the same models and its own out directory; its cases that are not GO are
+    the cases the variant changes, and the switch's cost is each case's time under it over the served run's."""
     seen = {}
     lm, va = "glm53/linear/lm_head.shard/M1", "glm53/bmm/v_absorb/M1"
 
     def fake_run(argv, capture_output, text, cwd):
         seen["argv"] = argv
-        sub = tmp_path / "served_default"
+        sub = tmp_path / "split_k_off"
         sub.mkdir()
         cases = {lm: {"ok": False, "us": 6.0}, va: {"ok": True, "us": 3.0}}
         (sub / X.RECORD).write_text(json.dumps({"ok": False, "digest": "d", "errors": {}, "cases": cases, "launches": [],
-                                                "switch": {"cublas_version": 120900}, "model_verdicts": {"glm53": False},
+                                                "switch": {"ok": True, "cublas_version": 120900}, "model_verdicts": {"glm53": False},
                                                 "splitk_hypotheses": {}}))
         return type("P", (), {"returncode": 1, "stdout": "out", "stderr": ""})()
 
     monkeypatch.setattr(X.subprocess, "run", fake_run)
     a = X.argparse.Namespace(workers=3, only="linear,bmm", models="glm53", min_driver=575, want_cc="9.0", want_sms=132, scratch=None,
                              quick=True, dump_operands=True)
-    got = X.default_run(a, tmp_path)
+    got = X.variant_run(a, tmp_path)
     argv = seen["argv"]
-    assert {"--served-default", "--no-default", "--quick", "--dump-operands"} <= set(argv)
-    assert argv[argv.index("--out") + 1] == str(tmp_path / "served_default") and argv[argv.index("--models") + 1] == "glm53"
-    assert got["changed"] == [lm] and got["us"][va] == 3.0
-    doc = {"served_default": got, "cases": {lm: {"us": 9.0}, va: {"us": 3.0}}}
+    assert {"--variant", "--no-variant", "--quick", "--dump-operands"} <= set(argv)
+    assert argv[argv.index("--out") + 1] == str(tmp_path / "split_k_off") and argv[argv.index("--models") + 1] == "glm53"
+    assert got["changed"] == [lm] and got["us"][va] == 3.0 and got["switch"]["ok"] and got["cublas_version"] == 120900
+    doc = {"variant_run": got, "cases": {lm: {"us": 4.0}, va: {"us": 3.0}}}
     assert X._cost(doc) == {lm: 1.5, va: 1.0}
 
 
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
-    """`main` with the GPU's pieces stood in for (gate, switch, selection, the launches as kernel words made here, the default run)
-    and vLLM's config module stubbed: the comparison jobs through the spawned worker pool, the decided fma, the per-case and
-    per-model verdicts, `--models`, the sealed record and the exit status, so a slip in the orchestration shows here and not in the
-    H200's hour."""
+    """`main` with the GPU's pieces stood in for (gate, the configuration and the switch, selection, the launches as kernel words
+    made here, the variant's run) and vLLM's config module stubbed, every switch inherited set: the switches cleared before the
+    configuration is read, before and after the launches, the comparison jobs through the spawned worker pool, the decided fma, the
+    per-case and per-model verdicts, `--models`, `--no-variant`, `--variant`, the sealed record and the exit status, so a slip in
+    the orchestration shows here and not in the H200's hour."""
     import contextlib
     import sys
     import types
@@ -376,11 +445,19 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
-    for k in (*X.SWITCH_ENV, "VLLM_BATCH_INVARIANT", "TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
-        monkeypatch.setenv(k, "")
+    inherited = _inherit(monkeypatch)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
-    monkeypatch.setattr(X, "switch", lambda served_default: {"ok": True, "cublas_version": 120900})
+    calls = []
+    monkeypatch.setattr(X, "switch", lambda: calls.append("switch"))
+
+    def configuration(variant):
+        calls.append(f"read {variant}")
+        assert not any(k in os.environ for k in SERVED_DEFAULTS)
+        assert {k: os.environ.get(k) for k in X.SWITCH_ENV} == (X.SWITCH_ENV if variant else dict.fromkeys(X.SWITCH_ENV))
+        return {"ok": True, "cublas_version": 120900}
+
+    monkeypatch.setattr(X, "configuration", configuration)
     monkeypatch.setattr(X, "make_gate", lambda cfg, model: object())
     monkeypatch.setattr(X, "selection", lambda gate: {"ok": True})
     todo = [("glm53", "router", "mlp.gate", 5), ("glm53", "router", "mlp.gate", 6), ("glm53", "linear", "lm_head.shard", 5),
@@ -391,6 +468,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
             ("dsv4-pro", "router", 5): _job(tmp_path, "tail", fma=0), ("dsv4-pro", "f32out", 5): _job(tmp_path, "f32out")}
 
     def launch(work, weights, gates, model, phase, name, M, seed, served_default):
+        calls.append(f"launch {served_default}")
         job = jobs[(model, phase, M)]
         rec = {"model": model, "phase": phase, "case": name, "M": M, "K": job["K"], "N": job["N"], "deterministic": True,
                "operands_ok": True, "us": 2.0}
@@ -399,7 +477,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
         return rec, {**job, "case": name}
 
     monkeypatch.setattr(X, "launch", launch)
-    monkeypatch.setattr(X, "default_run", lambda a, outdir: {"ok": False, "changed": ["glm53/router/mlp.gate/M6"],
+    monkeypatch.setattr(X, "variant_run", lambda a, outdir: {"ok": False, "changed": ["glm53/router/mlp.gate/M6"],
                                                              "us": {"glm53/router/mlp.gate/M5": 1.0}})
     out = tmp_path / "out"
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1"]) == 1
@@ -410,20 +488,28 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
                                                              "dsv4-pro/router/mlp.gate/M5": True,
                                                              "dsv4-pro/f32out/compressor.kv_score.c4/M5": True}
     assert doc["model_verdicts"] == {"glm53": False, "dsv4-pro": True} and doc["expected"] == [X.case_key(*c) for c in todo]
-    assert doc["totals"]["mismatch"] == 1 and doc["switch_cost"] == {"glm53/router/mlp.gate/M5": 2.0}
-    assert doc["env"]["CUBLAS_WORKSPACE_CONFIG"] == ":16:8" and doc["env"]["VLLM_BATCH_INVARIANT"] == "0"
+    assert doc["totals"]["mismatch"] == 1 and doc["switch_cost"] == {"glm53/router/mlp.gate/M5": 0.5}
+    assert doc["variant"] == "served_default" and doc["require_variant"] and doc["env_cleared"] == inherited
+    assert doc["served"]["ok"] and doc["served_after"]["ok"] and not set(X.SWITCH_ENV) & set(doc["env"])
+    assert calls == ["read False", *["launch True"] * len(todo), "read False"]
     printed = capsys.readouterr().out
     assert "case glm53/linear/lm_head.shard/M5" in printed and "GLM53-BF16-GEMM NO-GO" in printed and "fma=0" in printed
-    assert "glm53=NO-GO dsv4-pro=GO" in printed
-    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default", "--models", "dsv4-pro"]) == 0
+    assert "served=True glm53=NO-GO dsv4-pro=GO" in printed and printed.rstrip().endswith("variant=NO-GO")
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-variant", "--models", "dsv4-pro"]) == 0
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["models"] == ["dsv4-pro"] and doc["model_verdicts"] == {"dsv4-pro": True} and len(doc["cases"]) == 2
-    assert "GLM53-BF16-GEMM GO" in capsys.readouterr().out
+    assert "GLM53-BF16-GEMM GO" in (printed := capsys.readouterr().out) and printed.rstrip().endswith("standalone")
     jobs[("glm53", "linear", 5)] = _job(tmp_path, "linear")
-    monkeypatch.setattr(X, "default_run", lambda a, outdir: {"ok": True, "changed": [],
-                                                             "us": {"glm53/router/mlp.gate/M5": 1.0}})
-    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default"]) == 0
-    assert "GLM53-BF16-GEMM GO" in (printed := capsys.readouterr().out) and "glm53=GO dsv4-pro=GO" in printed
+    monkeypatch.setattr(X, "variant_run", lambda a, outdir: {"ok": True, "changed": [], "us": {"glm53/router/mlp.gate/M5": 1.0}})
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1"]) == 0
+    assert "GLM53-BF16-GEMM GO" in (printed := capsys.readouterr().out) and "glm53=GO dsv4-pro=GO" in printed and "variant=GO" in printed
+    calls.clear()
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--variant", "--no-variant"]) == 0
+    doc = json.loads((out / X.RECORD).read_text())
+    assert doc["variant"] == "split_k_off" and doc["switch"]["ok"] and doc["switch_after"]["ok"] and "served" not in doc
+    assert {k: doc["env"][k] for k in X.SWITCH_ENV} == X.SWITCH_ENV
+    assert calls == ["switch", "read True", *["launch False"] * len(todo), "read True"]
+    assert "GLM53-BF16-GEMM (split-K-off variant) GO" in (printed := capsys.readouterr().out) and "switch=True" in printed
 
 
 def test_the_record_is_a_registered_property() -> None:
