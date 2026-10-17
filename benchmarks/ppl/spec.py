@@ -31,6 +31,8 @@ KINDS = ("linear", "attention")
 REGISTRY: dict[str, dict[str, "StepDef"]] = {k: {} for k in KINDS}
 LINEAR_NAMES = ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj", "mlp.gate_proj",
                 "mlp.up_proj", "mlp.down_proj")
+#: the output head, x W^T on the final norm's output: a linear step reaches it only by naming it in `linears`
+HEAD = "lm_head"
 ATTENTION_MATMULS = ("qk", "pv")
 
 
@@ -93,7 +95,7 @@ class Step:
         """kind: `linear`, `qk` or `pv`; name: the linear's module name (or the attention matmul's kind)."""
         if self.layers is not None and layer not in self.layers:
             return False
-        if self.linears is not None and name not in self.linears:
+        if (self.linears is None and name == HEAD) or (self.linears is not None and name not in self.linears):
             return False
         return kind in self.defn.on
 
@@ -167,8 +169,8 @@ def parse_step(kind: str, table: dict) -> Step:
     defn = REGISTRY[kind][name]
     layers = table.pop("layers", None)
     linears = table.pop("linears", None) if kind == "linear" else None
-    if linears is not None and not set(linears) <= set(LINEAR_NAMES):
-        raise ValueError(f"{name}: linears are among {LINEAR_NAMES}")
+    if linears is not None and not set(linears) <= {*LINEAR_NAMES, HEAD}:
+        raise ValueError(f"{name}: linears are among {(*LINEAR_NAMES, HEAD)}")
     unknown = set(table) - set(defn.params)
     if unknown:
         raise ValueError(f"{name}: unknown parameters {sorted(unknown)} (it takes {sorted(defn.params)})")
@@ -182,6 +184,8 @@ def parse_step(kind: str, table: dict) -> Step:
             params[p] = default
     if defn.check is not None:
         defn.check(params)
+    if linears is not None and HEAD in linears and (defn.calib(params) or layers is not None):
+        raise ValueError(f"{name}: {HEAD} takes steps without calibration or layers")
     return Step(defn, tuple(sorted(params.items())), frozenset(layers) if layers is not None else None,
                 frozenset(linears) if linears is not None else None)
 
