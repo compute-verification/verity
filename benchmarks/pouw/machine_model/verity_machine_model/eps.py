@@ -10,7 +10,7 @@ each term a fraction of honest time.
   word, folds every word and does the filler, and takes T ≥ every row. A word is written on one of four routes: `tensor`
   (1/128 of the MMA with its operand delivery, folded on lanes), `lanes` (q lane instructions a word in any mix of the
   CUDA classes, NOROW's componentwise minimum among them, folded on lanes), `baseline` (the design's `[baseline]`
-  program, dp4a, folded on lanes) or `uniform` (q_u uniform instructions a word, folded there too). The filler runs on
+  program, dp4a, folded on lanes) or `uniform` (q_u uniform instructions a word, folded there too). Each filler runs on
   lanes (its class mix) or on the uniform datapath (one uniform instruction a lane instruction). The cheater minimizes
   T at q = q* over every route. Honest is the same LP with its own routes: the tensor route at its own operand cost, the
   baseline program (whose words belong to the baseline, not to ε: the brief §2) and its filler where it runs it.
@@ -105,6 +105,12 @@ UPFILL = Filler(per_word="saturate", mix={"ALU": 1.0, "IMAD": 1.0}, route="unifo
                 source="CALC: a uniform duo-style chain a warp, receipts checked like the fold's (candidate)")
 
 
+def lane_fill(x: float) -> Filler:
+    """x lane instructions a word of verified filler on lanes, LOP3 and IMAD alternating (FILL-OPT)."""
+    return Filler(per_word=x, mix={"ALU": 1.0, "IMAD": 1.0}, route="lanes",
+                  source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)")
+
+
 @dataclass(frozen=True)
 class Design:
     """A protocol's parameters (data/designs/NAME.toml)."""
@@ -115,7 +121,7 @@ class Design:
     work: float                  # honest MMAs a useful MMA (NCP's three copies: 3)
     fold: dict[str, float]       # lane instructions a committed word by class
     fold_name: str
-    filler: Filler
+    filler: tuple[Filler, ...]
     skip: dict[str, Part]
     mand: dict[str, Part]
     clock: Part
@@ -141,9 +147,13 @@ class Design:
 
     def with_upfill(self) -> Design:
         """The design with UPFILL, verified filler keeping the uniform datapath busy for honest's time."""
-        if self.filler.per_word:
-            raise SystemExit(f"{self.name} has a filler already")
-        return replace(self, name=f"{self.name}+up", filler=UPFILL)
+        if any(f.per_word == "saturate" for f in self.filler):
+            raise SystemExit(f"{self.name} has UPFILL already")
+        return replace(self, name=f"{self.name}+up", filler=(*self.filler, UPFILL))
+
+    def with_fill(self, x: float) -> Design:
+        """The design with x lane instructions a word of verified filler on lanes (`lane_fill`)."""
+        return replace(self, name=f"{self.name}+fill{x:g}", filler=(*self.filler, lane_fill(x)))
 
 
 def _parts(t: dict) -> dict[str, Part]:
@@ -180,7 +190,8 @@ def design(name: str, data: Path = DATA) -> Design:
     if filler.route not in ("lanes", "uniform") or (filler.per_word and not filler.mix):
         raise SystemExit(f"{name}: the filler runs on lanes or uniform, with its class mix on lanes")
     return Design(name=t["name"], summary=t["summary"], honest=t["honest"], L=t["L"], work=t.get("work", 1.0),
-                  fold_name=fold.pop("name"), fold=fold, filler=filler, skip=_parts(t.get("skip", {})),
+                  fold_name=fold.pop("name"), fold=fold, filler=(filler,) if filler.per_word else (),
+                  skip=_parts(t.get("skip", {})),
                   mand=_parts(t.get("mand", {})), clock=Part(float(t["clock"]["eps"]), t["clock"]["source"]),
                   delta=luck["delta"], p=luck["p"], checks=luck["checks"], luck_source=luck["source"],
                   baseline=dict(base.get("program", {})), baseline_name=base.get("name", ""),
@@ -234,7 +245,7 @@ def binding(load: dict[str, float], T: float) -> tuple[str, ...]:
 class Mix:
     T: float                          # SMSP-cycles a committed word
     words: dict[str, float]           # the share of words on each route
-    filler_uniform: float             # the share of the filler on the uniform datapath
+    filler_uniform: tuple[float, ...]  # each filler's share on the uniform datapath
     n: dict[str, float]               # warp (or uniform) instructions a word by class
     binding: tuple[str, ...]
     pi: dict[str, float]              # the certificate: each row's dual weight, summing to 1
@@ -246,13 +257,14 @@ class Mix:
 
 
 def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: float | None, baseline: bool,
-            filler_per_word: float, filler_routes: tuple[str, ...], tensor_mma: dict[str, float] | None = None,
-            deficit: float = 0.0) -> Mix:
-    """The fastest mix over Π: min T over [T, w_tensor, w_lanes, w_baseline, w_uniform, s_k (k in pi.cuda), filler on
-    lanes, filler on the uniform datapath, a fold alone on lanes, a fold alone on the uniform datapath]. The routes
-    write 1 − `deficit` of the words and every word is folded, the rest alone. The tensor route pays `tensor_mma` a
-    MMA (default honest's). q None closes the lane route, q_uniform None the uniform route (and the fold alone there),
-    and `baseline` opens the design's baseline program."""
+            fillers: tuple[tuple[Filler, float], ...] = (), cheat: bool = False,
+            tensor_mma: dict[str, float] | None = None, deficit: float = 0.0) -> Mix:
+    """The fastest mix over Π: min T over [T, w_tensor, w_lanes, w_baseline, w_uniform, s_k (k in pi.cuda), a fold
+    alone on lanes, a fold alone on the uniform datapath, then each filler on lanes and on the uniform datapath]. The
+    routes write 1 − `deficit` of the words and every word is folded, the rest alone. Each filler (Filler, lane
+    instructions a word) runs once, on its own route unless `cheat`. The tensor route pays `tensor_mma` a MMA (default
+    honest's). q None closes the lane route, q_uniform None the uniform route (and the fold alone there), and
+    `baseline` opens the design's baseline program."""
     tensor: dict[str, float] = {}
     _add(tensor, h.base() if tensor_mma is None else tensor_mma, d.L / (h.depth * h.words))
     _add(tensor, d.fold, 1 / LANES)
@@ -260,13 +272,12 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     base: dict[str, float] = {}
     _add(base, d.baseline, 1 / LANES)
     _add(base, d.fold, 1 / LANES)
-    fmix = d.filler.mix or {}
-    fsum = sum(fmix.values()) or 1.0
-    filler = {k: filler_per_word * v / fsum / LANES for k, v in fmix.items()}
+    fl = [{k: pw * v / sum(f.mix.values()) / LANES for k, v in f.mix.items()} for f, pw in fillers]
     S = list(pi.cuda)
-    nv = 5 + len(S) + 4
-    iT, it, il, ib, iu = 0, 1, 2, 3, 4
-    i_fv, i_fu, i_xv, i_xu = 5 + len(S), 6 + len(S), 7 + len(S), 8 + len(S)
+    nv = 7 + len(S) + 2 * len(fillers)
+    iT, it, il, ib, iu, i_xv, i_xu = 0, 1, 2, 3, 4, 5 + len(S), 6 + len(S)
+    fv = [7 + len(S) + 2 * j for j in range(len(fillers))]
+    fu = [8 + len(S) + 2 * j for j in range(len(fillers))]
 
     def col(k: str) -> list[float]:
         a = [0.0] * nv
@@ -275,14 +286,16 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
         a[ib] = base.get(k, 0.0)
         if k in S:
             a[5 + S.index(k)] = 1.0
-        a[i_fv] = filler.get(k, 0.0)
+        for j, (_, pw) in enumerate(fillers):
+            a[fv[j]] = fl[j].get(k, 0.0)
+            if k == UNI:
+                a[fu[j]] = pw
         if k == UNI:
             a[iu] = (q_uniform or 0.0) + d.fold_cost()
-            a[i_fu] = filler_per_word
             a[i_xu] = d.fold_cost()
         return a
 
-    cols = {k: col(k) for k in set(tensor) | set(on_lanes) | set(base) | set(S) | set(filler) | {UNI}}
+    cols = {k: col(k) for k in set(tensor) | set(on_lanes) | set(base) | set(S) | {k for f in fl for k in f} | {UNI}}
     missing = set(cols) - set(pi.c)
     if missing:
         raise SystemExit(f"{pi.vector}: no census line for {', '.join(sorted(missing))}")
@@ -298,13 +311,14 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
             A_ub.append(a)
             b_ub.append(0.0)
             rows.append(row)
-    eq = [[0.0] * nv for _ in range(4)]
+    eq = [[0.0] * nv for _ in range(3 + len(fillers))]
     eq[0][it] = eq[0][il] = eq[0][ib] = eq[0][iu] = 1.0   # 1 − d̄ of the words written
     eq[1][i_xv] = eq[1][i_xu] = 1.0                       # the rest folded alone
-    eq[2][i_fv] = eq[2][i_fu] = 1.0                       # the filler done once
     for i in range(len(S)):
-        eq[3][5 + i] = 1.0
-    eq[3][il] = -(q or 0.0) / LANES                       # a word on lanes: q lane instructions in any CUDA mix
+        eq[2][5 + i] = 1.0
+    eq[2][il] = -(q or 0.0) / LANES                       # a word on lanes: q lane instructions in any CUDA mix
+    for j in range(len(fillers)):
+        eq[3 + j][fv[j]] = eq[3 + j][fu[j]] = 1.0         # each filler done once
     bounds = [(0, None)] * nv
     if q is None:
         bounds[il] = (0, 0)
@@ -312,13 +326,12 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
         bounds[ib] = (0, 0)
     if q_uniform is None:
         bounds[iu] = bounds[i_xu] = (0, 0)
-    if "lanes" not in filler_routes:
-        bounds[i_fv] = (0, 0)
-    if "uniform" not in filler_routes:
-        bounds[i_fu] = (0, 0)
+    for j, (f, _) in enumerate(fillers):
+        if not cheat:
+            bounds[fu[j] if f.route == "lanes" else fv[j]] = (0, 0)
     obj = [0.0] * nv
     obj[iT] = 1.0
-    s = linprog(obj, A_ub=A_ub, b_ub=b_ub, A_eq=eq, b_eq=[1.0 - deficit, deficit, 1.0, 0.0], bounds=bounds,
+    s = linprog(obj, A_ub=A_ub, b_ub=b_ub, A_eq=eq, b_eq=[1.0 - deficit, deficit, 0.0] + [1.0] * len(fillers), bounds=bounds,
                 method="highs")
     if s.status:
         raise SystemExit(f"{d.name}: the LP failed ({s.message})")
@@ -327,7 +340,7 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     n = {k: v for k, v in n.items() if v > 1e-12}
     lam = {r: -float(m) for r, m in zip(rows, s.ineqlin.marginals) if -m > 1e-9}
     return Mix(T=x[iT], words={"tensor": x[it], "lanes": x[il], "baseline": x[ib], "uniform": x[iu]},
-               filler_uniform=x[i_fu], n=n, binding=binding(pi.load(n), x[iT]), pi=lam)
+               filler_uniform=tuple(x[i] for i in fu), n=n, binding=binding(pi.load(n), x[iT]), pi=lam)
 
 
 def deficit(d: Design) -> float:
@@ -343,7 +356,7 @@ class Setup:
     honest: Honest
     machine: Machine
     operands: str
-    filler_per_word: float
+    fillers: tuple[tuple[Filler, float], ...]   # each filler with its lane instructions a word
     as_built: Mix                    # honest's kernel: the tensor route alone
     baseline: Mix                    # honest's fastest program: the tensor route and the baseline program
 
@@ -354,8 +367,7 @@ class Setup:
         uniform = d.uniform if uniform is None else uniform
         qu = q_uniform if q_uniform is not None else (d.q_uniform if d.q_uniform is not None else q)
         return fastest(d, self.honest, self.machine, q=q if lanes else None, q_uniform=qu if uniform else None,
-                       baseline=True, filler_per_word=self.filler_per_word, filler_routes=("lanes", "uniform"),
-                       tensor_mma=self.honest.tensor(self.operands), deficit=deficit(d) if luck else 0.0)
+                       baseline=True, fillers=self.fillers, cheat=True, tensor_mma=self.honest.tensor(self.operands), deficit=deficit(d) if luck else 0.0)
 
     def machine_eps(self, q: float, **routes) -> float:
         return max(0.0, 1 - self.cheat(q, **routes).T / self.baseline.T)
@@ -369,18 +381,20 @@ def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free") -> 
     h = honest(d.honest, data)
     if d.L % h.depth:
         raise SystemExit(f"{d.name}: L = {d.L} is not a multiple of the MMA's depth {h.depth}")
-    hon = (d.filler.route,)
-    fpw = d.filler.per_word
-    if fpw == "saturate":
-        if d.filler.route != "uniform":
-            raise SystemExit(f"{d.name}: only a uniform filler saturates")
-        t = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, filler_per_word=0.0, filler_routes=hon).T
-        fpw = t / pi.c[UNI]["UP"]
-    fpw = float(fpw)
-    built = fastest(d, h, pi, q=None, q_uniform=None, baseline=False, filler_per_word=fpw, filler_routes=hon)
-    base = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, filler_per_word=fpw, filler_routes=hon)
-    return Setup(design=d, honest=h, machine=pi, operands=operands, filler_per_word=fpw, as_built=built,
-                 baseline=base)
+    fixed = tuple((f, float(f.per_word)) for f in d.filler if f.per_word != "saturate")
+    fillers = []
+    for f in d.filler:
+        if f.per_word == "saturate":
+            if f.route != "uniform":
+                raise SystemExit(f"{d.name}: only a uniform filler saturates")
+            t = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fixed).T
+            fillers.append((f, t / pi.c[UNI]["UP"]))
+        else:
+            fillers.append((f, float(f.per_word)))
+    fs = tuple(fillers)
+    built = fastest(d, h, pi, q=None, q_uniform=None, baseline=False, fillers=fs)
+    base = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fs)
+    return Setup(design=d, honest=h, machine=pi, operands=operands, fillers=fs, as_built=built, baseline=base)
 
 
 @dataclass(frozen=True)
@@ -394,7 +408,7 @@ class Eps:
     baseline: Mix
     cheat: Mix                       # the cheater writing every word: ε_machine
     lucky: Mix                       # the cheater writing 1 − d̄ of them: ε_luck
-    filler_per_word: float
+    fillers: tuple[tuple[Filler, float], ...]
     T_honest_measured: float | None  # measured SMSP-cycles a committed word
     gamma: float                     # the baseline's time a useful MMA over the plain GEMM's fastest, times `work`
     sched: float | None
@@ -425,18 +439,18 @@ class Eps:
 def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = "free", lanes: bool | None = None,
         uniform: bool | None = None, q_uniform: float | None = None) -> Eps:
     s = setup(d, pi, data, operands)
-    h, base, fpw = s.honest, s.baseline, s.filler_per_word
+    h, base = s.honest, s.baseline
     routes = {"lanes": lanes, "uniform": uniform, "q_uniform": q_uniform}
     c, lucky = s.cheat(q, **routes), s.cheat(q, luck=True, **routes)
     words_per_mma = h.words * h.depth / d.L
-    bare = replace(d, fold={}, filler=Filler(), L=h.depth)
-    plain = fastest(bare, h, pi, q=None, q_uniform=None, baseline=True, filler_per_word=0.0, filler_routes=("lanes",))
+    bare = replace(d, fold={}, filler=(), L=h.depth)
+    plain = fastest(bare, h, pi, q=None, q_uniform=None, baseline=True)
     plain_mma = plain.T * h.words
-    same = d.L == h.L and d.fold == h.fold and not fpw
+    same = d.L == h.L and d.fold == h.fold and not d.filler
     measured = h.measured / words_per_mma if (h.measured is not None and same) else None
     machine_eps = max(0.0, 1 - c.T / base.T)
     return Eps(design=d, honest=h, machine=pi.vector, operands=operands, q=q, as_built=s.as_built, baseline=base,
-               cheat=c, lucky=lucky, filler_per_word=fpw, T_honest_measured=measured,
+               cheat=c, lucky=lucky, fillers=s.fillers, T_honest_measured=measured,
                gamma=d.work * base.T * words_per_mma / plain_mma,
                sched=(1 - s.as_built.T / measured) if measured else None, skip=sum(p.eps for p in d.skip.values()),
                mand=sum(p.eps for p in d.mand.values()), machine_eps=machine_eps,

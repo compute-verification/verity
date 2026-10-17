@@ -68,7 +68,7 @@ def test_the_uniform_route_in_closed_form(q):
 def test_upfill_closes_the_uniform_route():
     d = DUO.with_upfill()
     e = E.eps(d, PI, 8, operands="honest")
-    assert e.filler_per_word == pytest.approx(e.as_built.T / UP)
+    assert e.fillers[-1][1] == pytest.approx(e.as_built.T / UP)
     assert e.as_built.T == pytest.approx(E.eps(DUO, PI, 8).as_built.T)   # it costs honest nothing
     assert e.machine_eps == 0 and E.eps(DUO, PI, 8, operands="honest").machine_eps > 0.009
     s = E.setup(d, PI, operands="honest")
@@ -76,8 +76,23 @@ def test_upfill_closes_the_uniform_route():
     free = E.setup(d, PI)
     assert free.machine_eps(8) == pytest.approx(free.floor(), abs=1e-12) and E.threshold(free) == pytest.approx(
         JI / 4, abs=1e-5)
-    with pytest.raises(SystemExit, match="has a filler already"):
+    with pytest.raises(SystemExit, match="has UPFILL already"):
         d.with_upfill()
+
+
+def test_lane_filler_dilutes_the_operand_floor():
+    """x lane instructions a word of verified filler add 4x issue-cycles a MMA to honest, and the cheater must run them
+    too, so what it saves on operands is a smaller share. The design file is DUO's two-sided twin with 4.5 of them."""
+    two = E.design("dither-two-sided").with_upfill()
+    fill = E.design("dither-two-sided-fill").with_upfill()
+    f = fill.filler[0]
+    assert (f.per_word, f.mix, f.route) == (4.5, E.lane_fill(4.5).mix, "lanes")
+    assert two.with_fill(4.5).filler == (E.UPFILL, E.lane_fill(4.5))
+    e0, e = E.eps(two, PI, 8), E.eps(fill, PI, 8)
+    assert e.as_built.T * 128 == pytest.approx(JI + 12.375 + 4 * 4.5, rel=1e-12)
+    assert e.machine_eps == pytest.approx(e.floor, abs=1e-12) and e.machine_eps < e0.machine_eps
+    assert e.total() < 0.01 < e0.total() and e.gamma < 3
+    assert E.threshold(E.setup(fill, PI)) == pytest.approx(JI / 4, abs=1e-5)
 
 
 def test_the_curve_falls_with_q():
@@ -135,7 +150,7 @@ def test_designs_read_what_exists():
     for n in E.designs():
         d = E.design(n)
         assert d.name == n and d.honest in E.profiles()
-        assert set(d.fold) | set(d.baseline) | set((d.filler.mix or {})) <= set(c), n
+        assert set(d.fold) | set(d.baseline) | {k for f in d.filler for k in f.mix} <= set(c), n
         assert all("note:" in p.source or "CALC" in p.source or "assumption" in p.source
                    for p in (*d.skip.values(), *d.mand.values())), n
         assert 0 <= E.eps(d, PI, 8).total() < 1

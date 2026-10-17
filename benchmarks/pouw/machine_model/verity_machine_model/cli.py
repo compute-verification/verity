@@ -10,14 +10,15 @@
                                               the N cheapest attacks of each design (or of D) at NAME's prices
     machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) into data/ at EPOCH,
                                               the last epoch: each (kind, row) keeps the faster of its old and new line
-    machine-model eps [DESIGN] [--q Q] [--operands O] [--fold-cost R] [--upfill] [--vector V] [--json]
+    machine-model eps [DESIGN] [--q Q] [--operands O] [--fold-cost R] [--fill X] [--upfill] [--vector V] [--json]
                                               a design's ε budget (data/designs, default dither-duo) at q* = Q (default
                                               8): every term with its source, ε_machine's LP (honest's and the
                                               cheater's mix, binding rows and certificate π*), the ε(q*) curve for q*
                                               in [0.5, 16] and the q* at which ε_machine reaches its floor; the
                                               cheater's operand delivery is free (default), at the floor, or honest's;
-                                              --upfill adds filler keeping the uniform datapath busy
-    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--upfill] [--operands O]
+                                              --fill adds X lane instructions a word of verified filler on lanes,
+                                              --upfill filler keeping the uniform datapath busy
+    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--upfill] [--operands O]
                                               one line a design (every design by default; with --fold-sweep, each at
                                               each fold cost; with --upfill, each without and with it): γ, ε_machine
                                               at q* = 2, 4, 8, 16 and its floor, ε_luck, ε at q* = 2 and 8, and the
@@ -145,7 +146,8 @@ def _thr(t: float | None) -> str:
 
 def _mix(m: E.Mix, per_mma: float) -> str:
     w = ", ".join(f"{r} {100 * max(m.words[r], 0.0):.1f}%" for r in E.ROUTES)
-    return (f"{m.T * per_mma:.3f} SMSP-cycles a MMA ({w}; filler on UP {100 * max(m.filler_uniform, 0.0):.0f}%), "
+    up = "".join(f"; filler {j + 1} on UP {100 * max(x, 0.0):.0f}%" for j, x in enumerate(m.filler_uniform))
+    return (f"{m.T * per_mma:.3f} SMSP-cycles a MMA ({w}{up}), "
             f"binding {', '.join(m.binding)}")
 
 
@@ -156,6 +158,7 @@ def _pi(m: E.Mix) -> str:
 def _design(args, name: str) -> E.Design:
     d = E.design(name, args.data)
     d = d.with_fold_cost(args.fold_cost) if args.fold_cost is not None else d
+    d = d.with_fill(args.fill) if args.fill else d
     return d.with_upfill() if args.upfill else d
 
 
@@ -166,7 +169,8 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str)
     return {
         "design": d.name, "summary": d.summary, "vector": pi.vector, "honest": e.honest.name,
         "honest_status": e.honest.status, "operands": operands, "L": d.L, "fold": d.fold_name,
-        "fold_cost": d.fold_cost(), "filler_per_word": e.filler_per_word, "filler_route": d.filler.route, "q": q,
+        "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source}
+                                                for f, pw in e.fillers], "q": q,
         "gamma": e.gamma,
         "as_built": {"cycles_per_mma": e.as_built.T * per_mma, "binding": e.as_built.binding},
         "baseline": {"cycles_per_mma": e.baseline.T * per_mma, "binding": e.baseline.binding,
@@ -201,6 +205,7 @@ def _eps_table(args, pi: E.Machine) -> int:
         for r in sweep:
             d = E.design(n, args.data)
             d = d.with_fold_cost(r) if r is not None else d
+            d = d.with_fill(args.fill) if args.fill else d
             rows += [d, d.with_upfill()] if args.upfill else [d]
     for d in rows:
         es = {q: E.eps(d, pi, q, args.data, operands=args.operands) for q in qs}
@@ -230,7 +235,7 @@ def _eps(args) -> int:
         return 0
     e = E.eps(d, pi, args.q, args.data, operands=args.operands)
     h, per_mma = e.honest, e.honest.words * e.honest.depth / d.L
-    filler = (f"{e.filler_per_word:.4g} a word on {d.filler.route}" if e.filler_per_word else "none")
+    filler = ", ".join(f"{pw:.4g} a word on {f.route}" for f, pw in e.fillers) or "none"
     ops = {"free": "free (SPEC's conservative default)", "honest": "at honest's",
            "floor": f"at the floor, {', '.join(f'{k} {v:g}' for k, v in h.floor.items())} a MMA ({h.floor_source})"}
     print(f"{d.name}: {d.summary}")
@@ -295,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--json", action="store_true")
     e.add_argument("--table", action="store_true")
     e.add_argument("--fold-sweep", help="with --table: each design at each of these fold costs")
+    e.add_argument("--fill", type=float, help="add X lane instructions a word of verified filler on lanes")
     e.add_argument("--upfill", action="store_true",
                    help="add verified filler keeping the uniform datapath busy (with --table: a row beside each)")
     args = p.parse_args(argv)

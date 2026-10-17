@@ -1,0 +1,46 @@
+# Two-sided dither with verified lane filler: the filler dilutes what the cheater saves on operand delivery, which SPEC's
+# conservative contract prices at 0 (note:20261017T0324Z-draft-eps1-spec §0.5), at the cost of γ. With `--upfill` it is
+# under 1% at q* ≥ 2.03 and γ 2.71 (note:20261017T0320Z-draft-eps1-calc).
+name = "dither-two-sided-fill"
+summary = "Two-sided dither, duo at L = 32, and 4.5 lane instructions a word of verified filler"
+honest = "dither-duo-l32"
+L = 32
+work = 1.0
+
+[fold]
+name = "duo"
+ALU = 2
+IMAD = 1
+
+[filler]
+per_word = 4.5
+mix = { ALU = 1, IMAD = 1 }
+route = "lanes"
+source = "CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate); FILL-OPT (μ_x = 0) is its named assumption"
+
+[skip.peel]
+eps = 0.0
+source = "strip 0 on every linear (adopted-bd; P·V's 33/keys is attention's, reported apart): note:20261017T0031Z-draft-eps-budget; SKIP's note replaces this"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD), and the filler the cheapest of its work (FILL-OPT)"
+
+[clock]
+eps = 0.0
+source = "honest certified at f_max; DATASHEET measures whether a lighter program clocks higher under the 600 W cap"
+
+[luck]
+delta = 9.094947017729282e-13
+p = 0.75
+checks = 121180
+source = "note:20261016T0005Z-draft-luck-loss-round4 §2 (one week, γ_zk = 0.01, {±1})"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 8, LDS128 = 0.5 }   # lane instructions a word: 8 IDP4A at k = 32, operands for an 8x8 tile a lane
+source = "dp4a at 8 IDP4A a word (note:20261017T0310Z-report-eps1-program §3); its loads: 2(a + b)/(ab) LDS.128 a word at a = b = 8"
+
+[routes]
+lanes = true
+uniform = true

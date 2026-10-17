@@ -89,7 +89,8 @@ floor and `--operands honest` at honest's. The LP's duals are the certificate π
 ε_luck is the same LP with d̄ of the words unwritten but still folded (Theorem S), so the terms add up to its time
 exactly. ε_sched needs a measured profile (`[measured]`) and is otherwise 0, honest certified at the model's bound.
 `--upfill` adds verified filler that keeps the uniform datapath busy for honest's time, which the cheater must then run
-on lanes or leave in place. ε_machine's floor is its value with the scalar routes closed, which no q* lowers, and the
+on lanes or leave in place, and `--fill X` adds X lane instructions a word of verified filler on lanes, which dilutes
+what the cheater saves on operands at the cost of γ (`dither-two-sided-fill` is two-sided dither with 4.5). ε_machine's floor is its value with the scalar routes closed, which no q* lowers, and the
 threshold is the least q* at which ε_machine reaches it.
 
 ## Adopt a probe's census
