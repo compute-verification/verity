@@ -355,9 +355,7 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB
     flag[0] = flag[1] = flag[2] = 0;
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
 #if PF_YIELD && PF_YIELD_EARLY
-    unsigned sm;
-    asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
-    atomicAdd(&pf_busy[sm & 255], CW);  // each consumer warp clears its own after its flush
+    atomicAdd(pf_mark(), CW);  // each consumer warp clears its own after its flush
 #endif
   }
   __syncthreads();
@@ -402,9 +400,7 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB
 #if PF_YIELD
   int* busy = nullptr;
   if (lane == 0) {
-    unsigned sm;
-    asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
-    busy = &pf_busy[sm & 255];
+    busy = pf_mark();
     if (!PF_YIELD_EARLY) atomicAdd(busy, 1);
   }
 #endif
@@ -509,10 +505,9 @@ __device__ __forceinline__ void att_filler(const FattArgs& fa, size_t slot, cons
 #if PF_YIELD && PF_YIELD_ATT
 __device__ __forceinline__ int* att_mark(int lane) {
   if (lane) return nullptr;
-  unsigned sm;
-  asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
-  atomicAdd(&pf_busy[sm & 255], 1);
-  return &pf_busy[sm & 255];
+  int* m = pf_mark();
+  atomicAdd(m, 1);
+  return m;
 }
 #define ATT_MARK int* att_busy = att_mark(lane)
 #define ATT_UNMARK if (att_busy) atomicSub(att_busy, 1)
@@ -1445,8 +1440,8 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
          co ? "co" : "split", lo, hi, smem_sm, flin_smem(f.M), (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1],
          pw, pnc, ps, fs ? pf.tiles : 0, fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
-  printf("\"M\": %d, \"kind\": %d, \"flin_grid\": %d, \"yield\": [%d, %d, %d, %d, %d], ", f.M, g_fstep_kind, f.grid,
-         PF_YIELD, PF_YIELD_J, PF_YIELD_NS, PF_YIELD_EARLY, PF_YIELD_ATT);
+  printf("\"M\": %d, \"kind\": %d, \"flin_grid\": %d, \"yield\": [%d, %d, %d, %d, %d, %d], ", f.M, g_fstep_kind, f.grid,
+         PF_YIELD, PF_YIELD_J, PF_YIELD_NS, PF_YIELD_EARLY, PF_YIELD_ATT, PF_YIELD_POLL_NS);
   printf("\"APS\": %d, \"ALZ\": %d, \"LM\": %d, \"lm_mismatches\": %llu, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.lazy,
          (int)f.lm, lm_bad, a.pg[0], a.pg[1]);
   printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, \"ANC\": %d, "

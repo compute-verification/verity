@@ -129,8 +129,8 @@ constexpr bool PF_R9 = false;
 static_assert(PF_ROUNDS >= 1 && PF_ROUNDS <= 64, "PF_ROUNDS is 1..64");
 // PF_YIELD: a pump warp yields its SM while a serving CTA marks it (pf_busy[smid] > 0: flin's consumer warps, from
 // griddepcontrol.wait to their flush, or with PF_YIELD_EARLY from the CTA's start; with PF_YIELD_ATT attention's warps
-// too), read every PF_YIELD_J B fragments one read ahead. 1 waits until the mark clears, 2 sleeps PF_YIELD_NS a read
-// while it holds. What a tile computes is unchanged; only when.
+// too), read every PF_YIELD_J B fragments one read ahead. 1 waits until the mark clears (a poll every PF_YIELD_POLL_NS),
+// 2 sleeps PF_YIELD_NS a read while it holds. What a tile computes is unchanged; only when.
 #ifndef PF_YIELD
 #define PF_YIELD 0
 #endif
@@ -145,6 +145,9 @@ static_assert(PF_ROUNDS >= 1 && PF_ROUNDS <= 64, "PF_ROUNDS is 1..64");
 #endif
 #ifndef PF_YIELD_NS
 #define PF_YIELD_NS 256
+#endif
+#ifndef PF_YIELD_POLL_NS
+#define PF_YIELD_POLL_NS 1000
 #endif
 static_assert(PF_YIELD >= 0 && PF_YIELD <= 2 && PF_YIELD_J % 4 == 0, "PF_YIELD is 0, 1 or 2; PF_YIELD_J a multiple of 4");
 __host__ __device__ constexpr uint64_t pf_dom(int kd) {
@@ -250,7 +253,13 @@ __host__ __device__ inline uint64_t pf_fold(uint64_t K, uint32_t pos, uint64_t v
 
 #ifdef __CUDACC__
 #if PF_YIELD
-__device__ int pf_busy[256];
+// one 128-byte line an SM: 188 marks in 8 lines put every poll on a few L2 slices, which decode's loads need too
+__device__ int pf_busy[256 * 32];
+__device__ __forceinline__ int* pf_mark() {
+  unsigned sm;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
+  return &pf_busy[(sm & 255) * 32];
+}
 #endif
 // rs_compress's rounds, 16 a loop iteration: a fifth of its code, so the hashing phases fetch fewer instructions
 __device__ __forceinline__ void pf_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f,
@@ -400,12 +409,7 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
     agen(0);
     const uint8_t* bp = Bs + g * 32 + 8 * t;
 #if PF_YIELD
-    const volatile int* busy;
-    {
-      unsigned sm;
-      asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
-      busy = &pf_busy[sm & 255];
-    }
+    const volatile int* busy = pf_mark();
     int mark = 0;
 #endif
 #pragma unroll 1
@@ -439,7 +443,7 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
         if (j % PF_YIELD_J == 0) {
           if (mark > 0) {
             if (PF_YIELD == 1)
-              while (*busy > 0) __nanosleep(PF_YIELD_NS);
+              while (*busy > 0) __nanosleep(PF_YIELD_POLL_NS);
             else
               __nanosleep(PF_YIELD_NS);
             __syncwarp();
