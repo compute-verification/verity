@@ -1025,15 +1025,18 @@ class UnitStager:
             raise AssertionError(f"{self.name}: instance {bad[0]}'s outputs are not the IR reference's")
 
     def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
-              indices: Sequence[int] | None = None) -> dict:
+              indices: Sequence[int] | None = None, set_name: str | None = None) -> dict:
         """A round's statement: ``rows`` each input row's words per instance ``(n, words)`` u16, and each public input's
         (``rows[param]``). The outputs are the lowering's, checked against the IR reference (`reference_check`); the salts are
         ``salts``' where given, else `circuit.stage_salts`'. Writes ``inst.bin`` and ``pub.bin`` (and ``circuit.txt`` without the
         stager's ``circuit``) under ``out_dir``; returns META, the outputs per port, every row's salts, and the unit's ANDs and
         matrix entries. ``indices``: each instance's global unit index, which a bound stager needs and an unbound one refuses
-        (its units are ``0 .. n``)."""
+        (its units are ``0 .. n``). ``set_name``: the round's input set (the header's ``set``), else the stager's, which its
+        frame domains and salts bind; a template's units split across statements (a statement's shape caps its instances) are
+        one set per statement on the one circuit."""
         if (indices is None) == self.bound:
             raise ValueError(f"{self.name}: a bound stager's round names its units' global indices, and only a bound one's")
+        iset = self.iset if set_name is None else SimpleNamespace(**{**vars(self.iset), "name": set_name})
         n = len(rows[self.in_rows[0][0]])
         flat = np.concatenate([np.asarray(rows[r], dtype=np.uint16) for r in self.row_ports], axis=1)
         got, _cut, ok = self.low.evaluate(flat.astype(np.uint64))
@@ -1043,11 +1046,11 @@ class UnitStager:
         at = np.cumsum([0] + self.out_words)
         outs = {f"o{j}": got[:, at[j]:at[j + 1]] for j in range(len(self.out_words))}
         self.reference_check(rows, outs)
-        salts = {**FC.stage_salts(self.iset, 0, n, self.ports, salt_key), **(salts or {})}
+        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key), **(salts or {})}
         out_dir.mkdir(parents=True, exist_ok=True)
         if self.circuit is None:
             (out_dir / "circuit.txt").write_text(self.text)
-        FC.write(self.text, self.iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+        FC.write(self.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
                  digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices])

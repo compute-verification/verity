@@ -155,7 +155,8 @@ def test_a_stagers_rounds_share_its_pin_and_are_each_the_statement_of_their_own_
 def test_a_bound_stager_names_its_definition_and_the_partition_and_its_rounds_their_global_units(tmp_path):
     """Bound to a template query's partition of a two-member program, the stager's META names the toy as the circuit's one
     template (core's digest of its Program), the partition and the program; a round's header names the units it is given; the
-    class is the unbound stager's; and only a bound stager's round takes indices."""
+    class is the unbound stager's; a round staged as another input set, on the one circuit, binds other frame domains; and
+    only a bound stager's round takes indices."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.ml.circuits.codec import descriptor_id, program_digest
     from verity.ml.circuits.program import Program
@@ -172,7 +173,12 @@ def test_a_bound_stager_names_its_definition_and_the_partition_and_its_rounds_th
     assert st.class_sha512 == plain.class_sha512 and st.pin != plain.pin
     st.stage(rows, tmp_path / "bound", b"k" * 32, indices=range(3, 8))
     header = json.loads((tmp_path / "bound" / "pub.bin").read_bytes().split(b"\n", 1)[0])
-    assert header["units"]["indices"] == [3, 4, 5, 6, 7]
+    assert header["units"]["indices"] == [3, 4, 5, 6, 7] and header["set"] == st.iset.name
+    st.stage(rows, tmp_path / "other-set", b"k" * 32, indices=range(3, 8), set_name="toy-c1")
+    h2 = json.loads((tmp_path / "other-set" / "pub.bin").read_bytes().split(b"\n", 1)[0])
+    assert h2["set"] == "toy-c1" and h2["circuit_sha512"] == header["circuit_sha512"] == st.pin
+    doms, doms2 = header["frame_v3"]["domain_ids"], h2["frame_v3"]["domain_ids"]
+    assert doms.keys() == doms2.keys() and all(doms[p] != doms2[p] for p in doms)
     with pytest.raises(ValueError, match="global indices"):
         st.stage(rows, tmp_path / "no-indices", b"k" * 32)
     with pytest.raises(ValueError, match="global indices"):
