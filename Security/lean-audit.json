@@ -4959,6 +4959,12 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Accounting.SecurityProofs.Gates.ProvenWindow": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.ClampOrWrap": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -5596,8 +5602,8 @@
    "Accounting.SecurityProofs.TS.ThinFoldInjective": "lemma: the thin fold's state is injective in each absorbed word and in its start, BitVec arithmetic.",
    "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
    "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
-   "Accounting.Guarantees.Gates.ProvenWindow": "unstated: the window lemma, a circuit whose window is proven is in its window wherever its inputs and budgeted gates hold their declared intervals; its theorem Accounting.SecurityProofs.Gates.ProvenWindow is not proved yet.",
-   "Accounting.Guarantees.Gates.ClampOrWrap": "unstated: in the window an s8-family step's clamp and wrap give the same values; its theorem Accounting.SecurityProofs.Gates.ClampOrWrap is not proved yet."
+   "Accounting.SecurityProofs.Gates.ProvenWindow": "frozen (no-function): The soundness of the gate model's interval analysis (Accounting.Gates.Proven) over every circuit and input, not a property of a Lean function: property/v1's interval analysis has no Lean code yet.",
+   "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
