@@ -21,4 +21,5 @@ def _core_roots() -> list[Any]:
         bind(G.GemmCoordinateMxf4, K=128, **G.GEMM_SM120_MXF4),
         bind(G.GemmAccumulatorS8, K=64, **G.GEMM_SM120_S8),
         bind(G.ScaledMmS8Coordinate, K=64, **G.GEMM_SM120_S8),
+        bind(G.ScaledMmS8, K=64, N=3, **G.GEMM_SM120_S8),
     ]

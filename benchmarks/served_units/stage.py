@@ -34,6 +34,8 @@ FP8 blocks of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 rank):
                 (scale absmax/127), w = a seeded N(0, 0.02) row quantized per channel the same way; the twin is the epilogue in
                 numpy (the exact int sum, two float32 multiplies, the bf16 round).  Llama-3.2-1B's statics: K = 2048 is q, k, v,
                 o, gate and up, 8192 is down.
+    s8-linear   `PARTS`: ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}, the W8A8 linear on one token row, whose `Q_word`
+                units are its N coordinates (`ScaledMmS8Coordinate_v1`): the s8-coord unit as a class of the partition.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -53,6 +55,7 @@ from circuit_check import targets as TG
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops import gemm as OG
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
@@ -155,6 +158,7 @@ PARTS: dict[str, Part] = {
     "dsa-topk": Part(dsa.DsaTopKShortRow, {"TOPK": 2048}),
     "sparse-mla-head": Part(sparse_mla.SparseMlaHead, {"T": 2048, "DR": 64, "DV": 512, "BN": 64, "SCALE": 0.0625}, _MLA),
     "token-select": Part(b1.TokenSelect, {"V": 154880}),
+    "s8-linear": Part(OG.ScaledMmS8, {"K": 2048, "N": 2}, tuple(OG.GEMM_SM120_S8.items())),
 }
 for _p in PARTS.values():
     _p.defaults.setdefault("C", 0)

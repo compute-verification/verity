@@ -22,6 +22,8 @@ word does not depend on the order the k steps run in:
     ScaledMmS8Coordinate_v1{K, DOT}   (x: s8[K], sx: f32, wrow: s8[K], sw: f32) -> bf16: the accumulator through CUTLASS c2x's
                                       `ScaledEpilogue` (ScaleA = sx per token, ScaleB = sw per channel):
                                       cvt.rn.bf16.f32(sx * (sw * cvt.rn.f32.s32(acc)))
+    ScaledMmS8_v1{K, N, DOT}          (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]: the linear on one token row,
+                                      `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` unit)
 
 Provenance: veritor `verity.ir/registry/b1.py` `DotBf16V2` / `GemmCoordinateV2` / `GemmV2` and the binding records
 `GEMM_AMPERE` (b1.py) / `GEMM_HOPPER` (hopper.py).  The `_v1` forms, which named the Ampere step in their bodies, were not
@@ -38,7 +40,8 @@ from . import prims as P
 from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 
 __all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8", "Gemm",
-           "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "ScaledMmS8Coordinate"]
+           "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "ScaledMmS8",
+           "ScaledMmS8Coordinate"]
 
 _SCALE = Value(8)
 
@@ -126,6 +129,16 @@ def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
     acc = B.call(P.S32ToF32Rn, B.call(bind(GemmAccumulatorS8, K=S.K, DOT=S.DOT), x, wrow))
     t = B.call(F.F32MulV2, sw, acc)                   # Compute0: multiplies(ScaleB, Accum)
     return B.call(P.F2fpBf16, B.call(F.F32MulV2, sx, t))  # Compute1: multiplies(ScaleA, .)
+
+
+@composite("ScaledMmS8", 1, ["K", "N", "DOT"],
+           lambda S: ((("x", Array(S.K, S8)), ("sx", F32), ("w", Array(S.N, Array(S.K, S8))), ("sw", Array(S.N, F32))),
+                      Array(S.N, BF16)),
+           conformance=ScaledMmS8Coordinate.conformance)
+def ScaledMmS8(B, S, x, sx, w, sw):
+    """A W8A8 linear on one token row: the N output coordinates (`ScaledMmS8Coordinate_v1`) over the s8 row `x` with its scale
+    `sx`, the s8 weight rows and their per-channel scales."""
+    return B.batch(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, w, sw, axes=(None, None, 0, 0))
 
 
 #: Binding records for the measured architectures.

@@ -196,3 +196,29 @@ def test_nvfp4_coordinate_replays_every_recorded_rtx5090_vector() -> None:
     for c in cases[::40]:
         ops = ([int(ch, 16) for ch in c["a"]], [int(ch, 16) for ch in c["b"]], list(bytes.fromhex(c["sa"])), list(bytes.fromhex(c["sb"])))
         assert _ev(bind(G.GemmCoordinateNvf4, K=len(c["a"]), **G.GEMM_SM120_NVF4), *ops) == (f32_to_bf16_hw_word(int(c["d"], 16)),)
+
+
+def test_the_s8_coordinate_is_the_exact_sum_through_the_c2x_epilogue_and_the_row_its_coordinates() -> None:
+    """`ScaledMmS8Coordinate_v1` is bf16_rn(sx * (sw * f32_rn(acc))) on the exact integer sum (numpy's float32 products), and
+    `ScaledMmS8_v1` is the coordinates over W's rows."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+
+    rng = np.random.default_rng(31)
+    n, K, N = 300, 128, 3
+    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
+    w = rng.integers(-128, 128, (n, N, K)).astype(np.int8)
+    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32)
+    sw = (np.abs(rng.standard_normal((n, N))) * 0.02 / 127).astype(np.float32)
+    acc = (x[:, None, :].astype(np.int64) * w).sum(-1).astype(np.int32)
+    y = sx[:, None] * (sw * acc.astype(np.float32))
+    want = np.vectorize(f32_to_bf16_hw_word, otypes=[np.uint64])(y.view(np.uint32))
+    u8, u32 = (lambda a: a.view(np.uint8)), (lambda a: a.view(np.uint32))
+    coord = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
+    got = E.evaluate_batch(coord, u8(x), u32(sx), u8(w[:, 0]), u32(sw[:, 0]), kernel="reference")
+    assert np.array_equal(got.astype(np.uint64), want[:, 0])
+    row = E.evaluate_batch(bind(G.ScaledMmS8, K=K, N=N, **G.GEMM_SM120_S8), u8(x), u32(sx), u8(w), u32(sw), kernel="reference")
+    assert np.array_equal(row.astype(np.uint64), want)
+    accw = E.evaluate_batch(bind(G.GemmAccumulatorS8, K=K, **G.GEMM_SM120_S8), u8(x), u8(w[:, 0]), kernel="reference")
+    assert np.array_equal(accw.astype(np.uint32).view(np.int32), acc[:, 0])
