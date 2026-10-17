@@ -162,16 +162,17 @@ def _stack(rows: list[Coll], n: int, w: int) -> Coll:
 
 class Dsv4SparseAttnRule(StateRule):
     """`vllm_iface.dsv4_sparse_attn` (`forward_mqa`): the layer's window rows (the insert's NoPE, scale and RoPE by position), its
-    compressor's state rows and its compressed rows are implicit cache state keyed by `layer_name`, made explicit as histories
-    from position 0, each call's T tokens the next positions (one request).
+    compressor's state rows and its compressed rows are implicit cache state keyed by `layer_name`, made explicit as histories.  A
+    layer's history opens at its first call, at whatever position P (the step wrapper's `pos0`, as `vllm_dsa.DsaIndexerAttnRule`'s
+    opens), and each later call's T tokens are its next positions (one request); no row before P is read.
 
     * The compressor (`compress_norm_rope_store_cutedsl`) at each position p of the call with (p + 1) % ratio == 0, before the
-      attention reads its row: compressed row (p + 1) / ratio - 1 from the state rows of positions p - win + 1 .. p at and past 0
+      attention reads its row: compressed row (p + 1) / ratio - 1 from the state rows of positions p - win + 1 .. p at and past P
       (win = 8 at ratio 4, 128 at ratio 128), row r reading the D state words from (r / ratio) * D (ratio 4 overlaps two windows in
       a state of 2D), and the cos_sin row of position p - ratio + 1: `Dsv4MlaCompressC4_v1` / `Dsv4MlaCompressC128_v1`.
-    * Token p reads its window, the rows of positions max(p - window + 1, 0) .. p, and the compressed rows 0 .. (p + 1) / ratio - 1
-      (the indexer's short path selects every compressed row in order, `_fill_short_context_topk_indices`; ratio 128's rows are
-      `_build_c128a_topk_metadata_kernel`'s, the same).
+    * Token p reads its window, the rows of positions max(p - window + 1, P) .. p, and the (p + 1) / ratio - P / ratio compressed
+      rows the history holds by then, in order (the indexer's short path selects every compressed row in order,
+      `_fill_short_context_topk_indices`; ratio 128's rows are `_build_c128a_topk_metadata_kernel`'s, the same).
     * A call of one token is a decode (the metadata builders' decode threshold 1): `FlashMlaDecode_v1` over its window rows padded
       to a multiple of BN, then its compressed rows padded likewise (`get_cur_req_info`'s kernel order), at the splits of FlashMLA's
       planner for the one request (`flashmla_twin.sched_meta` at the padded heads' `num_sm_parts`).
@@ -184,7 +185,7 @@ class Dsv4SparseAttnRule(StateRule):
     modes = frozenset({"profile"})
     info = RuleInfo("Dsv4SparseAttn[vllm-dsv4]", 1, "state", applies_to="vllm_iface.dsv4_sparse_attn",
                     preconditions=("the target's compute capability is 9.0 (FlashMLA's cc 9.0 sparse kernels)",
-                                   "positions are T consecutive rows continuing the layer's history from position 0",
+                                   "positions are T consecutive rows continuing the layer's history (opened at its first call's first position)",
                                    "q [T, NHP, D] bf16, NoPE [T, D - DR] e4m3, scale [T, (D - DR) / QT + 1] u8, RoPE [T, DR] bf16, sink [NHP] f32, "
                                    "(D, DR) a registered FlashMLA geometry; cos_sin an f32 rotary cache [MAX_POS, DR] holding every position",
                                    "ratio 1 without a compressor, or 4 or 128 with state kv and score [T, D] f32 ([T, 2D] at ratio 4), the "
@@ -238,9 +239,10 @@ class Dsv4SparseAttnRule(StateRule):
             return True if not any(given) else "a window-only layer with a compressor's operands"
         if not all(given):
             return f"a ratio-{ratio} layer without its compressor's state and norm weight"
-        if ratio == 4 and (pos[-1] + 1) // 4 > topk:
-            return (f"numerics_unregistered: position {pos[-1]} has {(pos[-1] + 1) // 4} compressed rows, more than the indexer's "
-                    f"top-{topk}: its long path has no Definition")
+        P = (ctx.state.get("dsv4_history", {}).get(layer) or {"from": pos[0]})["from"]
+        if ratio == 4 and (pos[-1] + 1) // 4 - P // 4 > topk:
+            return (f"numerics_unregistered: position {pos[-1]} has {(pos[-1] + 1) // 4 - P // 4} compressed rows, more than the "
+                    f"indexer's top-{topk}: its long path has no Definition")
         width = D * (2 if ratio == 4 else 1)
         for r in (_value(ctx, a["state_kv"], F32, (T, width), "state kv"), _value(ctx, a["state_score"], F32, (T, width), "state score"),
                   _value(ctx, a["norm_weight"], BF16, (D,), "norm weight")):
@@ -269,10 +271,10 @@ class Dsv4SparseAttnRule(StateRule):
         owner = ctx.state.setdefault("dsv4_owner", {})
         if owner.setdefault(layer, mp) != mp:
             refuse("side_input", node, mp, f"the caches of {layer!r} are written from two modules ({owner[layer]} and {mp})")
-        hist = ctx.state.setdefault("dsv4_history", {}).setdefault(layer, {"window": [], "state": [], "compressed": []})
-        P0 = len(hist["window"])
-        if pos != list(range(P0, P0 + T)):
-            refuse("shape", node, mp, f"positions {pos[0]}..{pos[-1]} are not the {T} after {layer!r}'s history of {P0} rows from position 0")
+        hist = ctx.state.setdefault("dsv4_history", {}).setdefault(layer, {"from": pos[0], "window": [], "state": [], "compressed": []})
+        P, P0 = hist["from"], len(hist["window"])
+        if pos != list(range(P + P0, P + P0 + T)):
+            refuse("shape", node, mp, f"positions {pos[0]}..{pos[-1]} are not the {T} after {layer!r}'s history of {P0} rows from position {P}")
         nope, sc, rope = _rows(ctx, a["nope"], 8), _rows(ctx, a["scale"], 8), _rows(ctx, a["rope"], 16)
         hist["window"] += [(nope[i], sc[i][:DN // QT], rope[i]) for i in range(T)]
         consts: dict[int, Coll] = {}
@@ -288,18 +290,18 @@ class Dsv4SparseAttnRule(StateRule):
             hist["state"] += [(kv[i], score[i]) for i in range(T)]
             made = [p for p in pos if (p + 1) % ratio == 0]
             for p in made:
-                hist["compressed"].append(self._compress(ctx, node, a, hist["state"], p, D, QT, h))
+                hist["compressed"].append(self._compress(ctx, node, a, hist["state"], P, p, D, QT, h))
         q, sink = _rows(ctx, a["q"], 16), ctx.coll(a["sink"])[:NH]
-        pre = {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_rows_after": P0 + T, "ratio": ratio, "window": window,
-               "NH": NH, "NHP": NHP, "D": D, "DR": DR, "QT": QT, "BN": BN, "DOT": DOT.name, "scale": scale,
+        pre = {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_from": P, "history_rows_after": P0 + T, "ratio": ratio,
+               "window": window, "NH": NH, "NHP": NHP, "D": D, "DR": DR, "QT": QT, "BN": BN, "DOT": DOT.name, "scale": scale,
                "compressed_rows": [(p + 1) // ratio - 1 for p in made],
                "selection": "the window by position, then every compressed row in order (the indexer's short path)"}
         if T == 1:
             p = pos[0]
-            s0 = max(p - window + 1, 0)
-            swa, nc = p - s0 + 1, (p + 1) // ratio if ratio > 1 else 0
+            s0 = max(p - window + 1, P)
+            swa, nc = p - s0 + 1, (p + 1) // ratio - P // ratio if ratio > 1 else 0
             NW, NX = _blocks(swa, BN) * BN, _blocks(nc, BN) * BN
-            win, comp = hist["window"][s0:p + 1], hist["compressed"][:nc]
+            win, comp = hist["window"][s0 - P:p - P + 1], hist["compressed"][:nc]
             rows = win + win[:1] * (NW - swa) + comp + comp[:1] * (NX - nc)
             idx = [i32(0)] * swa + [i32(-1)] * (NW - swa) + [i32(0)] * nc + [i32(-1)] * (NX - nc)
             # the lengths given, extra_topk only says whether the layer has an extra cache
@@ -323,10 +325,10 @@ class Dsv4SparseAttnRule(StateRule):
 
             outs, pairs = [], []
             for i, p in enumerate(pos):
-                s0, tl = max(p - window + 1, 0), (p + 1) // ratio if ratio > 1 else 0
+                s0, tl = max(p - window + 1, P), (p + 1) // ratio - P // ratio if ratio > 1 else 0
                 n = tl + p - s0 + 1
                 NP = _blocks(_blocks(n, BN), 2)
-                rows = [row("compressed", j) for j in range(tl)] + [row("window", r) for r in range(s0, p + 1)]
+                rows = [row("compressed", j) for j in range(tl)] + [row("window", r - P) for r in range(s0, p + 1)]
                 fn = ctx.kind("flashmla_prefill", node, NH=NH, NP=NP, D=D, BN=BN, DOT=DOT, SCALE=scale)
                 pad = 2 * NP * BN - n
                 outs.append(ctx.call(fn, q[i][:NH], array_of(rows + rows[:1] * pad), array_of([i32(0)] * n + [i32(-1)] * pad), i32(n),
@@ -341,11 +343,12 @@ class Dsv4SparseAttnRule(StateRule):
             ctx.bind_weight_role(a["norm_weight"], self, "dsv4.compressor.norm.weight", D=D)
         ctx.record(self, node, pre, emitted=emitted + (f" + {COMPRESSORS[ratio]} x{len(made)}" if made else ""))
 
-    def _compress(self, ctx, node, a, state: list[tuple[Coll, Coll]], p: int, D: int, QB: int, h: str) -> tuple[Coll, Coll, Coll]:
-        """The compressed row of the window ending at p, as the attention reads it: (NoPE, scale bytes without the pad, RoPE)."""
+    def _compress(self, ctx, node, a, state: list[tuple[Coll, Coll]], P: int, p: int, D: int, QB: int, h: str) -> tuple[Coll, Coll, Coll]:
+        """The compressed row of the window ending at p over the state rows from position P, as the attention reads it: (NoPE, scale
+        bytes without the pad, RoPE)."""
         ratio, eps = a["ratio"], float(a["eps"])
         win = 2 * ratio if ratio == 4 else ratio
-        taken = [(r, s) for r, s in enumerate(range(p - win + 1, p + 1)) if s >= 0]
+        taken = [(r, s - P) for r, s in enumerate(range(p - win + 1, p + 1)) if s >= P]
         if ratio == 4:
             fn = ctx.kind("dsv4_compress_c4", node, ROWS=len(taken), D=D, QB=QB, EPS=eps)
         else:

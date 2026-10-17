@@ -668,14 +668,16 @@ SPARSE_D, SPARSE_DR, SPARSE_BN, SPARSE_SCALE = 64, 16, 16, 0.125
 
 
 class _SparseAttn(nn.Module):
-    """A DeepSeek-V4 attention layer's leaves over one request, a call of each length in ``calls`` from position p0: 2 live heads
-    padded to NHP, head 64 of which 16 rotary, quant block 16; the compressor's state 2D wide at ratio 4, D at 128, none at 1."""
+    """A DeepSeek-V4 attention layer's leaves over one request, a call of each length in ``calls`` from position p0, ``skip``
+    positions between calls: 2 live heads padded to NHP, head 64 of which 16 rotary, quant block 16; the compressor's state 2D wide
+    at ratio 4, D at 128, none at 1."""
 
-    def __init__(self, rng, ratio: int, window: int, calls: tuple[int, ...], topk: int = 1024, NHP: int = 64, p0: int = 0) -> None:
+    def __init__(self, rng, ratio: int, window: int, calls: tuple[int, ...], topk: int = 1024, NHP: int = 64, p0: int = 0,
+                 skip: int = 0) -> None:
         super().__init__()
         p = lambda words: nn.Parameter(_tensor(words), requires_grad=False)
-        self.ratio, self.window, self.calls, self.topk, self.NHP, self.p0 = ratio, window, calls, topk, NHP, p0
-        self.cos_sin_cache, self.attn_sink = p(TQ._cs(rng, (p0 + sum(calls), SPARSE_DR))), p(_f32(rng, NHP))
+        self.ratio, self.window, self.calls, self.topk, self.NHP, self.p0, self.skip = ratio, window, calls, topk, NHP, p0, skip
+        self.cos_sin_cache, self.attn_sink = p(TQ._cs(rng, (p0 + sum(calls) + skip * len(calls), SPARSE_DR))), p(_f32(rng, NHP))
         if ratio > 1:
             self.ape = p(_f32(rng, ratio, SPARSE_D * (2 if ratio == 4 else 1), sd=0.1))
             self.norm_weight = p(W.bf16(_f32(rng, SPARSE_D)))
@@ -685,7 +687,7 @@ class _SparseAttn(nn.Module):
         for call in zip(*(xs[i::k] for i in range(k))):
             q, kv = call[-2:]
             positions = torch.arange(p0, p0 + q.shape[0], dtype=torch.int64)
-            p0 += q.shape[0]
+            p0 += q.shape[0] + self.skip
             state = iface.dsv4_compressor_state(call[0], positions, self.ape) if self.ratio > 1 else (None, None)
             qp, nope, scale, rope = iface.dsv4_qnorm_rope_kv_insert(q, kv, positions, self.cos_sin_cache, self.NHP, EPS, SPARSE_DR)
             outs.append(iface.dsv4_sparse_attn(qp, nope, scale, rope, positions, self.cos_sin_cache, self.attn_sink, *state,
@@ -701,14 +703,15 @@ def _sparse_inputs(rng, model: _SparseAttn) -> list[np.ndarray]:
 
 
 def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray]) -> list[int]:
-    """The layer's outputs as the twins compose the kernels over its window, state and compressed histories."""
+    """The layer's outputs as the twins compose the kernels over its window, state and compressed histories from position P."""
     u = lambda t: np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
     m = {k: u(v) for k, v in model.named_parameters()}
     ratio, window, cs, sink = model.ratio, model.window, m["cos_sin_cache"], m["attn_sink"][:2]
     D, DN, QB, BN, k = SPARSE_D, SPARSE_D - SPARSE_DR, SPARSE_DR, SPARSE_BN, 3 if model.ratio > 1 else 2
     stack = lambda rows: [np.stack(c) for c in zip(*rows)]
     words = lambda v: np.array(v, np.int64).astype(np.uint32)
-    win, state, comp, outs, p0 = [], [], [], [], 0
+    win, state, comp, outs, P = [], [], [], [], model.p0
+    p0 = P
     for call in zip(*(xs[i::k] for i in range(k))):
         q, kv = call[-2:]
         pos = np.arange(p0, p0 + len(q))
@@ -719,25 +722,26 @@ def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray]) -> list[int]:
             w = m["ape"].shape[1]
             state += list(zip(call[0][:, :w], FT.fadd(call[0][:, w:], m["ape"][pos % ratio])))
             for p in pos[(pos + 1) % ratio == 0]:
-                taken = [(r, s) for r, s in enumerate(range(p - (8 if ratio == 4 else 128) + 1, p + 1)) if s >= 0]
+                taken = [(r, s - P) for r, s in enumerate(range(p - (8 if ratio == 4 else 128) + 1, p + 1)) if s >= P]
                 kvr, scr = (np.stack([state[s][j][r // ratio * D:(r // ratio + 1) * D] for r, s in taken]) for j in (0, 1))
                 args = (kvr, scr, m["norm_weight"], cs[p - ratio + 1])
                 row = DC.compress_c4(*args, QB, EPS) if ratio == 4 else DC.compress_c128(*args, 8, 16, QB, EPS)
                 n, ro, e = (a.reshape(-1) for a in row)
                 comp.append((n, e[:DN // QB], ro))
         for i, p in enumerate(pos):
-            s0, nc = max(p - window + 1, 0), (p + 1) // ratio if ratio > 1 else 0
+            s0, nc = max(p - window + 1, P), (p + 1) // ratio - P // ratio if ratio > 1 else 0
+            w0 = s0 - P
             if len(q) == 1:
                 swa = p - s0 + 1
                 NW, N = FT.request_blocks(swa, nc, BN)
-                rows = win[s0:p + 1] + win[s0:s0 + 1] * (NW - swa) + comp[:nc] + win[s0:s0 + 1] * (N - NW - nc)
+                rows = win[w0:w0 + swa] + win[w0:w0 + 1] * (NW - swa) + comp[:nc] + win[w0:w0 + 1] * (N - NW - nc)
                 idx = words([0] * swa + [-1] * (NW - swa) + [0] * nc + [-1] * (N - NW - nc))
                 metas, ns = FT.sched_meta([swa], [nc] if ratio > 1 else None, topk=window, extra_topk=int(ratio > 1),
                                           parts=FT.num_sm_parts(model.NHP), block_size_n=BN)
                 outs.append(FT.decode(qp[i, :2], *stack(rows), idx, [swa] + ([nc] if N > NW else []), sink,
                                       SPLITS=FT.request_splits(metas, ns, 0, N // BN), NW=NW, QT=QB, BN=BN, SCALE=SPARSE_SCALE))
             else:
-                rows = comp[:nc] + win[s0:p + 1]
+                rows = comp[:nc] + win[w0:p - P + 1]
                 n, N = len(rows), -(-len(rows) // (2 * BN)) * 2 * BN
                 kvw = np.zeros((N, D), np.uint16)
                 kvw[:n] = FP.gather_rows(*stack(rows), QB)
@@ -752,20 +756,25 @@ def flashmla_small(served, monkeypatch):
     monkeypatch.setitem(vllm_dsv4.FLASHMLA_GEOMETRY, (SPARSE_D, SPARSE_DR), {"QT": SPARSE_DR, "BN": SPARSE_BN, "DOT": FT.HopperBF16WgmmaDot16})
 
 
-@pytest.mark.parametrize("ratio, window, calls, paths", [
-    (4, 28, (30, 1, 1), [("prefill", list(range(7))), ("decode", []), ("decode", [7])]),
-    (128, 8, (128, 1), [("prefill", [0]), ("decode", [])]),
-    (1, 8, (12, 1), [("prefill", []), ("decode", [])]),
+@pytest.mark.parametrize("ratio, window, calls, p0, paths", [
+    (4, 28, (30, 1, 1), 0, [("prefill", list(range(7))), ("decode", []), ("decode", [7])]),
+    (128, 8, (128, 1), 0, [("prefill", [0]), ("decode", [])]),
+    (1, 8, (12, 1), 0, [("prefill", []), ("decode", [])]),
+    (4, 28, (26, 1, 1), 5, [("prefill", list(range(1, 7))), ("decode", [7]), ("decode", [])]),
+    (4, 28, (1,), 8, [("decode", [])]),
+    (128, 8, (1,), 8, [("decode", [])]),
 ])
-def test_the_sparse_attention_derives_over_its_histories_word_for_word_the_twins(ratio, window, calls, paths, flashmla_small):
+def test_the_sparse_attention_derives_over_its_histories_word_for_word_the_twins(ratio, window, calls, p0, paths, flashmla_small):
+    """A history opened past position 0 (the step wrapper's `pos0`; the last two cases are its one-token call) reads no row before it."""
     rng = np.random.default_rng(ratio)
-    model = _SparseAttn(rng, ratio, window, calls)
+    model = _SparseAttn(rng, ratio, window, calls, p0=p0)
     xs = _sparse_inputs(rng, model)
     rep = _derive_mhc(model, tuple(map(_tensor, xs)))
     assert rep.program is not None, rep.unsupported
     apps = [a["preconditions_checked"] for a in rep.provenance["applications"] if a["rule"] == "Dsv4SparseAttn[vllm-dsv4]_v1"]
     assert [(a["path"], a["compressed_rows"]) for a in apps] == paths
-    if ratio == 4:
+    assert {a["history_from"] for a in apps} == {p0}
+    if (ratio, p0) == (4, 0):
         assert len(apps[2]["SPLITS"]) > 2, "the last decode combines its splits"
     roles = {n: r["role"] for n, r in rep.provenance["weight_roles"].items()}
     assert roles["attn_sink"] == "dsv4.attn_sink" and roles.get("norm_weight", "dsv4.compressor.norm.weight") == "dsv4.compressor.norm.weight"
@@ -776,7 +785,7 @@ def test_the_sparse_attention_derives_over_its_histories_word_for_word_the_twins
     ({"geometry": None}, "no FlashMLA sparse geometry at head 64, rope 16"),
     ({"NHP": 4}, "64 or 128 padded heads, at least one live (2 of 4)"),
     ({"topk": 4}, "position 29 has 7 compressed rows, more than the indexer's top-4"),
-    ({"p0": 5}, "positions 5..34 are not the 30 after 'layers.0.attn''s history of 0 rows from position 0"),
+    ({"p0": 4, "skip": 1, "calls": (26, 1)}, "positions 31..31 are not the 1 after 'layers.0.attn''s history of 26 rows from position 4"),
     ({"target": TargetProfile(compute_capability=(12, 0), num_sms=188, batch_invariant=False, moe_backend="triton")},
      "the FlashMLA Definitions are its cc 9.0 kernels"),
 ])
@@ -786,7 +795,7 @@ def test_a_sparse_attention_beyond_the_definitions_refuses_by_name(over, refusal
         monkeypatch.delitem(vllm_dsv4.FLASHMLA_GEOMETRY, (SPARSE_D, SPARSE_DR))
     if "target" in over:
         VB.observe_target_profile(over["target"])
-    model = _SparseAttn(rng, 4, 28, (30,), **{k: v for k, v in over.items() if k in ("NHP", "topk", "p0")})
+    model = _SparseAttn(rng, 4, 28, over.get("calls", (30,)), **{k: v for k, v in over.items() if k in ("NHP", "topk", "p0", "skip")})
     rep = _derive_mhc(model, tuple(map(_tensor, _sparse_inputs(rng, model))))
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
 
