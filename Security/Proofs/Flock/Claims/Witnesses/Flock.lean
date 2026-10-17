@@ -12,17 +12,16 @@ Each of Flock's claims (`Definitions.Claims`, `Claims.Flock`) fails at a toy rec
   `ScopeMatches_fails`: its scope is empty and its check takes everything.
 * `compD`: the verifier rejects after one round, and every statement parses as `inStmt`, in scope (`m = 22`,
   `k_log = 6`, the forms the proof covers) with an empty circuit, so every witness is in the relation.
-  `Complete_fails`: its reference prover fails at its error `δ_c = 0`. `Nontrivial_fails`: a recorded run is rejected.
+  `Complete_fails`: every prover with a tape fails at `δ_c < 1`. `Nontrivial_fails`: a recorded run is rejected.
 * `ZK_fails` (`ZKMal.not_flockZK_collSim_toy`): the colliding simulator, which met the form before `Fork`, fails at
   `ZKMal.toyD`.
 * `effD`: a decoder that lists the one trace and counts one step. `Efficient_fails`: at `p = 0` its count exceeds
   `p`. Before the count was the record's (`Flock.Deploy.dec`), a count of `0` passed as an argument met the claim.
 * `ListWithin_fails`: the decoder that lists nothing, at a code with a trace (`not_listWithin_nil`).
 
-`Complete` is of the record's reference prover (`Flock.Deploy.P`) on a nonempty tape type, so the prover with no tape
-that met its first form at every record is gone. `ZK` is still met by a trivial instance, because it reads the honest
-prover as a parameter, not the record's:
+Two of the claims are still met by a trivial instance, both because they read the honest prover as a parameter:
 
+* `Complete_vacuous`: a prover with no tape meets `Complete` at `δ_c = 0`, at every record.
 * `ZK_vacuous`: at every masked record, a prover that ignores its witness and calls nothing meets `ZK` at `ε_zk = 0`
   and `γ = 0` (`ZKmalR_vacuous`).
 -/
@@ -49,9 +48,6 @@ noncomputable def ksD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
   weight _ := 0
   waits _ := 4
   cap _ := 1024
-  Tape := Unit
-  P _ := silentP
-  δc _ _ := 0
 
 /-- A statement in Flock's scope, with an empty circuit. -/
 def inStmt : Claims.Flock.Stmt where
@@ -85,9 +81,6 @@ def compD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
   weight _ := 0
   waits _ := 0
   cap _ := 0
-  Tape := Unit
-  P _ := silentP
-  δc _ _ := 0
 
 /-- The empty column, the zero of a word of field-element lists. -/
 local instance zeroCol : Zero (List Bool) := ⟨[]⟩
@@ -110,9 +103,6 @@ def effD (Coin : Type) : Claims.Flock.Deploy Coin (List Bool) Unit where
   weight _ := 0
   waits _ := 0
   cap _ := 0
-  Tape := Unit
-  P _ := silentP
-  δc _ _ := 0
 
 theorem listWithin_unit {Col : Type} [DecidableEq Col] [Zero Col] (len : Unit → ℕ) (enc : Unit → ℕ → Col)
     (θ : Unit → ℝ) : Claims.Flock.ListWithin len enc θ fun _ => [()] :=
@@ -198,10 +188,16 @@ theorem ScopeMatches_fails : ¬ Claims.Flock.ScopeMatches (ksD Coin) := fun h =>
   simp [ksD] at hs
 
 omit [Nonempty Coin] in
-/-- **Flock's `Complete` fails** at `compD`, whose reference prover is silent, at its error `δ_c = 0`. -/
-theorem Complete_fails : ¬ Claims.Flock.Complete constH (compD Coin) :=
-  Witness.Complete_fails (compD Coin).P _ _ ((compD Coin).δc constH) (x := []) (w := ⟨[]⟩) ⟨inStmt, rfl, inStmt_inScope⟩
-    ⟨inStmt, rfl, inStmt_relS _⟩ (show (0 : ℝ) < 1 from zero_lt_one)
+/-- **Flock's `Complete` fails** at `compD`, at every prover with a tape and every `δ_c < 1`. -/
+theorem Complete_fails {Ω : Type} [Nonempty Ω] (P : Claims.Flock.Wit → Prover Ω) (δc : Msg → ℝ) (x : Msg)
+    (hδ : δc x < 1) : ¬ Claims.Flock.Complete constH (compD Coin) P δc :=
+  Witness.Complete_fails P _ _ δc (w := ⟨[]⟩) ⟨inStmt, rfl, inStmt_inScope⟩ ⟨inStmt, rfl, inStmt_relS _⟩ hδ
+
+omit [Nonempty Coin] in
+/-- **Flock's `Complete` is met at a prover with no tape**, at every hash and record and `δ_c = 0`. -/
+theorem Complete_vacuous {Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) :
+    Claims.Flock.Complete H D noTape 0 :=
+  Witness.Complete_vacuous H D.V _ _
 
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **Flock's `Nontrivial` fails** at `compD`, which rejects the recorded run. -/
