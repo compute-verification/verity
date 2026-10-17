@@ -755,3 +755,41 @@ def test_a_twin_stopped_by_sigterm_is_no_verdict_and_its_sibling_still_decides(w
     assert h.d.verdict(_tip(world), _git(world.origin, "rev-parse", "main"), h.d.q.load_state()["drive"]).state == "none"
     h.tick()
     assert len(h.launched) == 2 and not h.posts                          # launched again, nothing told
+
+
+def _steps_run(tmp_path, name: str, steps: dict[str, str]):
+    import json
+
+    d = tmp_path / name
+    d.mkdir(parents=True)
+    (d / "steps.jsonl").write_text("".join(json.dumps({"step": k, "status": v}) + "\n" for k, v in steps.items()))
+    return d
+
+
+def test_defer_lands_a_train_whose_other_steps_passed_and_reverts_it_when_a_deferred_step_fails(world, monkeypatch, tmp_path):
+    """17 Oct (CI-30's interim, Daniel through top): a train lands on the Lean check and the fast steps, with circuit-check
+    running on after landing; a deferred step that fails reverts the landing."""
+    from research.drive import CHECK_STEPS
+
+    h = Harness(world, monkeypatch)
+    h.d.defer = frozenset({"circuit-check"})
+    base = _git(world.origin, "rev-parse", "main")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    (rid,) = h.run_state
+    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "circuit-check"})]
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == tip and h.cancelled == []      # landed; its check runs on
+    h.run_state[rid] = ("done", 1, None)
+    h.evidence = [_steps_run(tmp_path, rid + "-end", {"circuit-check": "failed"})]
+    h.tick()
+    assert _git(world.origin, "diff", "--stat", base, "main") == "" and any("reverted on `main`" in x for x in h.posts), h.posts
+
+
+def test_the_lean_check_is_never_deferred(world, monkeypatch):
+    h = Harness(world, monkeypatch)
+    from research.drive import Driver
+
+    d = Driver(h.q, on="m1", defer=frozenset({"lean-audit", "circuit-check"}))
+    assert d.defer == {"circuit-check"}

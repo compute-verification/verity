@@ -1230,6 +1230,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once; "
                                                                       "report: of merge groups")
     ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
+    ap.add_argument("--defer", default="", metavar="STEP[,STEP...]",
+                    help="drive: land a train once every other step passed, these still running; one that then fails reverts it")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
                                                                            "or after this time (default: `marked_after` in the rules file)")
     ap.add_argument("--first", metavar="N[,N...]", default="", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
@@ -1319,7 +1321,8 @@ def main(argv: list[str]) -> int:
         if a.command == "drive":
             from .drive import Driver
 
-            Driver(q, on=a.on, max_running=a.max_running, train_size=a.train_size).tick(dry_run=a.dry_run)
+            Driver(q, on=a.on, max_running=a.max_running, train_size=a.train_size,
+                   defer=frozenset(x for x in a.defer.split(",") if x)).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses

@@ -63,6 +63,11 @@ ACTIVE = ("submitted", "waiting", "running", "unknown")
 PUBLISH_GRACE_S = 1800
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
+#: the steps of a check (`tools/verity/check/check.py`), for `--defer`: a train lands once each one not deferred has passed
+CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
+               "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests")
+#: what a verdict says when it passed with `--defer`'s steps still running
+DEFERRED = "every step but the deferred ones passed"
 #: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
 SIGTERM_RC = 143
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
@@ -357,8 +362,11 @@ class Driver:
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs,
-                 evidence: Callable[[Path, list[str]], list[Path]] = evidence):
+                 evidence: Callable[[Path, list[str]], list[Path]] = evidence, defer: frozenset[str] = frozenset()):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
+        #: steps a train lands without (Daniel through top, 17 Oct, CI-30's interim): they run on after the landing, and one
+        #: that fails reverts it.  The Lean check's steps are never deferred.
+        self.defer = frozenset(x for x in defer if not x.startswith("lean"))
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
@@ -411,6 +419,8 @@ class Driver:
             return Verdict("failed", " ".join(launch["ids"]), f"{' '.join(launch['ids'])} is still running (`--keep-going`, for "
                                                               f"the full picture) and has already failed: {early}")
         if any(st in ACTIVE for st, *_ in states.values()):
+            if self.defer and (rid := self._passed_but_deferred(launch["ids"])):
+                return Verdict("passed", rid, f"{DEFERRED} ({', '.join(sorted(self.defer))} run on after landing)")
             return Verdict("running", " ".join(launch["ids"]))
         if all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
             return Verdict("none", why="every twin exited without starting, or was stopped")
@@ -420,6 +430,56 @@ class Driver:
         return Verdict("failed", " ".join(launch["ids"]),
                        f"{' '.join(launch['ids'])} ended ({', '.join(f'{s} rc={rc}' for s, rc, *_ in states.values())}) "
                        f"and no attempt reached the store in {PUBLISH_GRACE_S // 60} min")
+
+    def _passed_but_deferred(self, ids: list[str]) -> str | None:
+        """The running check among ``ids`` whose every step but the deferred ones has passed (or was skipped), none failed."""
+        need = [x for x in CHECK_STEPS if x not in self.defer]
+        for d in self.evidence(self.repo, ids):
+            got: dict[str, str] = {}
+            with contextlib.suppress(OSError):
+                for line in (d / PROGRESS[0]).read_text().splitlines():
+                    with contextlib.suppress(ValueError):
+                        rec = json.loads(line)
+                        got[rec.get("step")] = rec.get("status")
+            if any(v == "failed" for v in got.values()):
+                continue
+            if all(got.get(x) in ("passed", "skipped") for x in need):
+                return d.name
+        return None
+
+    def follow_deferred(self, drive: dict) -> None:
+        """Each landing made with `--defer`: once its check ends, drop it if its deferred steps passed; else revert it on
+        `main` (`git revert -m 1` of each merge it landed, newest first) and tell `CI` and the owners."""
+        q = self.q
+        for tip, rec in list(drive.get("deferred", {}).items()):
+            states = self._states(rec["ids"])
+            if any(st in ACTIVE for st, *_ in states.values()):
+                continue
+            failed = [st.get("step") for d in self.evidence(self.repo, rec["ids"]) for st in failed_steps(d)]
+            if not failed:
+                q.log(f"research queue drive: {rec['prs']}'s deferred steps passed ({' '.join(rec['ids'])})")
+                del drive["deferred"][tip]
+                continue
+            if self.dry_run or q.shadow:
+                q.log(f"research queue drive: would revert {rec['prs']} ({tip[:12]}): {', '.join(failed)} failed after landing")
+                continue
+            _git(self.repo, "checkout", "-q", "-B", "main", "refs/remotes/origin/main")
+            ok = True
+            for c in _out(self.repo, "rev-list", "--first-parent", f"{rec['base']}..{tip}").split():
+                merge = len(_out(self.repo, "rev-list", "--parents", "-n", "1", c).split()) > 2
+                r = _git(self.repo, "revert", "--no-edit", *(["-m", "1"] if merge else []), c, check=False, env=IDENTITY)
+                if r.returncode:
+                    _git(self.repo, "revert", "--abort", check=False)
+                    ok = False
+                    break
+            pushed = ok and not q._remote(self.repo, "push", "-q", "--no-verify", "origin", "main:refs/heads/main", ok=None).returncode
+            _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
+            what = (f"{rec['prs']} reverted on `main`: {', '.join(failed)} failed after landing ({' '.join(rec['ids'])}). "
+                    "Fix and re-mark") if pushed else (f"{rec['prs']} must be reverted by hand: {', '.join(failed)} failed after "
+                                                         f"landing ({' '.join(rec['ids'])}), and the revert didn't apply or push")
+            self.refuse(drive, f"deferred:{tip}", what, *(self._handle(int(n.lstrip('#'))) for n in rec["prs"].split()))
+            if pushed:
+                del drive["deferred"][tip]
 
     # -- landing
 
@@ -514,6 +574,8 @@ class Driver:
                 return None
             tip = _out(self.repo, "rev-parse", "HEAD")
             q.log(f"research queue drive: landed {prs} on `main` at {tip[:12]} (check {v.attempt})")
+            if v.why.startswith(DEFERRED):
+                drive.setdefault("deferred", {})[tip] = {"ids": v.attempt.split(), "base": main, "prs": prs}
             from .merge import _sweep_after, caught_up
 
             with authed(q.auth):
@@ -713,6 +775,7 @@ class Driver:
         drive.setdefault("launched", {})
         drive.setdefault("told", [])
         self._drive = drive
+        self.follow_deferred(drive)
         landed = self.land(drive, dry_run)
         if landed is None and (why := self.held(drive)):
             if not dry_run:
@@ -738,8 +801,9 @@ class Driver:
             self.refuse(drive, f"conflict:{n}@{c['head']}", f"#{n} at {c['head'][:8]} is out of `{q.branch}`: {c['why']}",
                         c.get("handle"))
         on_chain = {m.commit for m in members}
+        following = {rid for rec in drive.get("deferred", {}).values() for rid in rec["ids"]}
         for c, v in drive["launched"].items():
-            if c not in on_chain and not dry_run:
+            if c not in on_chain and not dry_run and not set(v["ids"]) & following:
                 live = [rid for rid, (st, *_) in self._states(v["ids"]).items()
                         if st in ACTIVE and st != "unknown"]
                 if live and v.get("failing"):
