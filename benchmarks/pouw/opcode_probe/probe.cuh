@@ -49,10 +49,11 @@ struct OpArgs {
 //   if (fixed role) { OP_LOOP(it) {...} OP_DONE } else { OP_UNTIL(n) {...} OP_TRIPS(n) }
 //   OP_END_STOP
 // The first fixed-role warp to finish raises the stop and records its cycle; the other role's warps poll it once a trip
-// (one LDS) and add their trips. Its rate is trips over the stop's cycles (probe.py, `until`).
+// (one LDS) and add their trips, 32-bit (a 64-bit shared atomicAdd is a CAS loop the gate refuses). Its rate is trips
+// over the stop's cycles (probe.py, `until`).
 #define OP_BEGIN_STOP                         \
   __shared__ int op_stop_;                    \
-  __shared__ unsigned long long op_trips_;    \
+  __shared__ unsigned op_trips_;              \
   __shared__ long long op_tstop_;             \
   if (threadIdx.x == 0) {                     \
     op_stop_ = 0;                             \
@@ -66,7 +67,7 @@ struct OpArgs {
   int n = 0;        \
   _Pragma("unroll 1") for (; !*(volatile int*)&op_stop_; ++n)
 #define OP_TRIPS(n) \
-  if ((threadIdx.x & 31) == 0) atomicAdd(&op_trips_, (unsigned long long)(n));
+  if ((threadIdx.x & 31) == 0) atomicAdd(&op_trips_, (unsigned)(n));
 #define OP_END_STOP                    \
   OP_END                               \
   if (threadIdx.x == 0) {              \

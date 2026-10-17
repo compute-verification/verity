@@ -16,8 +16,8 @@ typedef unsigned long long u64;
 
 enum { S_RED32, S_RED64, S_REDV4, S_REDV4H, S_ATOMG32, S_LDGSTS, S_BLKRED512, S_BLKRED4K, S_BLKCP4K, S_DSM_ST4, S_DSM_RED };
 
-constexpr bool bulk(int s) { return s == S_BLKRED512 || s == S_BLKRED4K || s == S_BLKCP4K; }
-constexpr unsigned bulk_bytes(int s) { return s == S_BLKRED512 ? 512u : 4096u; }
+__host__ __device__ constexpr bool bulk(int s) { return s == S_BLKRED512 || s == S_BLKRED4K || s == S_BLKCP4K; }
+__host__ __device__ constexpr unsigned bulk_bytes(int s) { return s == S_BLKRED512 ? 512u : 4096u; }
 
 __device__ __forceinline__ unsigned mapa(unsigned addr, unsigned rank) {
   unsigned r;
@@ -127,7 +127,7 @@ struct Side {
   }
 };
 
-constexpr bool clustered(int s) { return s == S_DSM_ST4 || s == S_DSM_RED; }
+__host__ __device__ constexpr bool clustered(int s) { return s == S_DSM_ST4 || s == S_DSM_RED; }
 
 template <int S, bool SIDE_ON>
 __device__ __forceinline__ void honest_side(const OpArgs& a) {
