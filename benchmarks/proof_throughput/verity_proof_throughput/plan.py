@@ -117,9 +117,11 @@ def prover_command(root: Path, item: Planned, *, mem_gb: int = 96, cpus: int = 3
             f"RUNS={pt.runs}", f"IDENTITY={item.identity}"]
 
 
-def verifier_command(root: Path, bundle: str, prove_run: str, *, node: str = VERIFIER_NODES[0], mem_gb: int = 64) -> list[str]:
+def verifier_command(root: Path, bundle: str, prove_run: str, *, node: str = VERIFIER_NODES[0], mem_gb: int = 64,
+                     timeout: str = "3h") -> list[str]:
     return ["research", "run", "--on", node, "--project", "verity", "--campaign", "proof-throughput", "--source", str(root),
-            "--cwd", "source", "--mem-gb", str(mem_gb), "--require-result", "--tool", "verity_proof_throughput.tool:VERIFIER_POINT",
+            "--cwd", "source", "--mem-gb", str(mem_gb), "--timeout", timeout, "--require-result",
+            "--tool", "verity_proof_throughput.tool:VERIFIER_POINT",
             "--", "bash", "benchmarks/proof_throughput/verify.sh", f"BUNDLE={bundle}", f"PROVE_RUN={prove_run}"]
 
 
