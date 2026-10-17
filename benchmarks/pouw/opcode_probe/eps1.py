@@ -6,6 +6,8 @@
       # --emit prints the facets as rows.csv and census/EPOCH.csv lines
   python eps1.py side OUT/rows.jsonl                     # side.cu: honest alone, and each unit alone and beside it
   python eps1.py clock OUT/sustain.jsonl [--skip-s 3]    # power.cu: each kernel's clock, power and work rate a phase
+  python eps1.py uniform OUT                             # uniform.cu: issue slots a uniform instruction, each setting
+  python eps1.py l2gather OUT                            # l2gather.cu: bytes a SM a clock and TB/s a gather path, best
 
 A facet is a row c_M n_MMA + c_X n_X <= T over warp instructions on one SMSP in T SMSP-cycles: the upper hull of the
 measured points (x_MMA, x_X) in warp instructions a SMSP-cycle (the rows' rate / 4), each alone rate on its axis, with
@@ -19,6 +21,7 @@ import json
 import re
 import statistics
 import sys
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 IMMA = "IMMA.16832.S8.S8"
@@ -228,6 +231,101 @@ def cmd_clock(a) -> int:
     return 0
 
 
+#: VF2's UNI class: every uniform-datapath opcode, the constant and special-register loads into uniform registers, and
+#: the moves into them
+UNIFORM = re.compile(r"U[A-Z].*|LDCU|R2UR|S2UR|CS2UR|VOTEU")
+SASS_INSN = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)")
+
+
+def loop_ops(sass: str, kernel: str, head: str, tail: str) -> list[str]:
+    """The opcodes of `kernel`'s instructions from `head` to `tail` (the gate's loop) in a cuobjdump listing."""
+    body = sass.split(f"Function : {kernel}\n", 1)[1].split("Function : ", 1)[0]
+    lo, hi = int(head, 16), int(tail, 16)
+    return [m.group(2) for m in SASS_INSN.finditer(body) if lo <= int(m.group(1), 16) <= hi]
+
+
+def slope(pts: list[tuple[float, float]]) -> float:
+    mx, my = statistics.fmean(p[0] for p in pts), statistics.fmean(p[1] for p in pts)
+    return sum((x - mx) * (y - my) for x, y in pts) / sum((x - mx) ** 2 for x, _ in pts)
+
+
+def cmd_uniform(a) -> int:
+    """uniform.cu: each loop's vector (V) and uniform (U) instructions a warp-iteration from its SASS, its SMSP-cycles a
+    warp-iteration (T), and the issue cost of a uniform instruction: T's slope in U within each fixed stream and step."""
+    out = a.out
+    sass = (out / "sass" / "uniform.sass").read_text()
+    loops = {v["probe"]: v["verdict"]["loops"][0] for v in json.loads((out / "gate.json").read_text())["verdicts"]
+             if v["passed"] and v["verdict"].get("loops")}
+    pts = {}
+    for r in load(out / "rows.jsonl"):
+        lp = loops.get(r["probe"])
+        if not lp:
+            continue
+        ops = [o for o in loop_ops(sass, r["probe"], lp["head"], lp["tail"]) if o != "NOP"]
+        u = sum(1 for o in ops if UNIFORM.fullmatch(o.split(".")[0]))
+        n = sum(1 for o in ops if fnmatchcase(o, r["counted"]))
+        pts[r["probe"]] = (len(ops) - u, u, SMSPS * n / r["rate"], r.get("tags") or [])
+    print(f"{'probe':9s} {'V':>4s} {'U':>4s} {'T':>8s} {'V/T':>6s} {'(V+U)/T':>8s} {'U/T':>6s} {'slots/U vs K=0':>14s}  tags")
+    for p, (v, u, t, tags) in pts.items():
+        base = pts.get(p.split("_")[0] + "_0")
+        c = (t - base[2]) / (u - base[1]) if base and u != base[1] else float("nan")
+        print(f"{p:9s} {v:4d} {u:4d} {t:8.3f} {v / t:6.3f} {(v + u) / t:8.3f} {u / t:6.3f} {c:14.3f}  {' '.join(tags)}")
+    print("SMSP-cycles a uniform instruction, each fixed stream's UIMAD+ULOP3 points: between neighbours in U, and the "
+          "least-squares slope")
+    for fam in sorted({p.split("_")[0] for p in pts}):
+        fp = sorted((u, t) for p, (_, u, t, _) in pts.items() if p.split("_")[0] == fam and p.split("_")[1].isdigit())
+        if len(fp) >= 2:
+            steps = " ".join(f"{u0}->{u1}:{(t1 - t0) / (u1 - u0):.3f}" for (u0, t0), (u1, t1) in zip(fp, fp[1:]))
+            print(f"  {fam}: {steps}  fit {slope(fp):.3f} over U {fp[0][0]}..{fp[-1][0]}")
+    return 0
+
+
+#: QSTAR's fastest table kernel (fr16_c32, benchmarks/pouw/qstar, note:20261017T0344Z-draft-eps1-qstar) sustains this
+QSTAR_TBS = 3.3
+
+
+def cmd_l2gather(a) -> int:
+    """l2gather.cu: data-dependent row gathers from an L2-resident table at fresh random indices (a cheater's). Each
+    probe's sustained bytes a SM a clock (rate * words * 4, the warp instruction moving W*32 bytes) and TB/s (* nSM *
+    clock); alone (gl_/gt_/gn_) for the peak, beside the honest IMMA step (gh_, the gather's rate over the honest stop)
+    for the MMA rate kept. The best sustained of each, and whether any path beats QSTAR's 3.3 TB/s table kernel."""
+    rows = {r["probe"]: r for r in load(a.out / "rows.jsonl")}
+    hmma = loop_rate(rows["honest"], IMMA) if "honest" in rows else float("nan")
+    print(f"honest alone: IMMA {hmma:.5f}/SM/clk")
+
+    def read(r: dict) -> tuple[float, float, float, float]:
+        """gather rate, bytes a SM a clock, TB/s, and MMA kept (nan when alone)."""
+        bpc = r["rate"] * (r["words"] or 0) * 4
+        tbs = bpc * r["blocks"] * (r["sm_mhz"] or 0) / 1e6
+        beside = any(k.split(":", 1)[1] == IMMA for k in r["rates"])
+        kept = loop_rate(r, IMMA) / hmma if beside and hmma else float("nan")
+        return r["rate"], bpc, tbs, kept
+
+    print(f"{'probe':15s} {'note':17s} {'W':>3s} {'rate':>8s} {'B/SM/clk':>9s} {'TB/s':>6s} {'MMA kept':>9s}  tags")
+    best_alone = best_beside = None
+    for name, r in rows.items():
+        if name == "honest":
+            continue
+        rate, bpc, tbs, kept = read(r)
+        w = int(round((r["words"] or 0) / 8))
+        tag = " ".join(r.get("tags") or [])
+        print(f"{name:15s} {r.get('note') or '':17s} {w:3d} {rate:8.4f} {bpc:9.3f} {tbs:6.3f} {kept:9.4f}  {tag}")
+        if kept == kept:  # beside (MMA kept is a number)
+            if best_beside is None or bpc > best_beside[1]:
+                best_beside = (name, bpc, tbs, kept)
+        elif best_alone is None or bpc > best_alone[1]:
+            best_alone = (name, bpc, tbs)
+    if best_alone:
+        print(f"best alone:  {best_alone[0]} {best_alone[1]:.3f} B/SM/clk = {best_alone[2]:.3f} TB/s")
+    if best_beside:
+        print(f"best beside: {best_beside[0]} {best_beside[1]:.3f} B/SM/clk = {best_beside[2]:.3f} TB/s, "
+              f"MMA kept {best_beside[3]:.4f}")
+    peak = max((read(r)[2] for n, r in rows.items() if n != "honest"), default=0.0)
+    verb = "beats" if peak > QSTAR_TBS else "does not beat"
+    print(f"fastest path {peak:.3f} TB/s {verb} QSTAR's {QSTAR_TBS} TB/s table kernel")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -241,8 +339,13 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("clock")
     c.add_argument("sustain", type=Path)
     c.add_argument("--skip-s", type=float, default=3.0)
+    u = sub.add_parser("uniform")
+    u.add_argument("out", type=Path, help="a uniform.cu run's out/ (rows.jsonl, gate.json, sass/)")
+    g = sub.add_parser("l2gather")
+    g.add_argument("out", type=Path, help="an l2gather.cu run's out/ (rows.jsonl)")
     a = p.parse_args(argv)
-    return {"facets": cmd_facets, "side": cmd_side, "clock": cmd_clock}[a.cmd](a)
+    return {"facets": cmd_facets, "side": cmd_side, "clock": cmd_clock, "uniform": cmd_uniform,
+            "l2gather": cmd_l2gather}[a.cmd](a)
 
 
 if __name__ == "__main__":

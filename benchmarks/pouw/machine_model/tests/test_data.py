@@ -8,8 +8,8 @@ import re
 import pytest
 
 from verity_machine_model.model import (CLAIMS, COPIES, DATA, DEVICES, STATUSES, all_attacks, attacks, census,
-                                        census_files, census_lines, entries, floors, holds, model, rows, run_lists,
-                                        u_of, vector, vectors)
+                                        census_files, census_lines, entries, floors, holds, kind_lists, model, rows,
+                                        run_lists, u_of, vector, vectors)
 
 M = model()
 ROWS = rows()
@@ -37,10 +37,10 @@ def test_census_is_a_file_per_epoch():
     """data/census/ is EPOCH.csv for each epoch that brought lines, each line's since its file's, and runs.toml; no file
     comes near the repository's cap, so the census grows by files, not by one file growing."""
     files = census_files(M)
-    assert {p.name for p in (DATA / "census").iterdir()} == {p.name for p in files} | {"runs.toml"}, (
-        "data/census/ holds EPOCH.csv for epochs in model.toml's epochs, and runs.toml")
-    named = run_lists()
-    used = set()
+    assert {p.name for p in (DATA / "census").iterdir()} == {p.name for p in files} | {"runs.toml", "kinds.toml"}, (
+        "data/census/ holds EPOCH.csv for epochs in model.toml's epochs, runs.toml and kinds.toml")
+    named, kinds = run_lists(), kind_lists()
+    used, used_kinds = set(), set()
     for p in files:
         with open(p, newline="") as f:
             r = csv.DictReader(f)
@@ -48,12 +48,17 @@ def test_census_is_a_file_per_epoch():
             for d in r:
                 assert d["since"] == p.stem, f"census/{p.name}: {d['kind']} on {d['row']} is from {d['since']!r}"
                 used |= {c[1:] for c in d["runs"].split() if c.startswith("@")}
-    for p in [*files, DATA / "census" / "runs.toml"]:
+                used_kinds |= {d["kind"][1:]} if d["kind"].startswith("@") else set()
+    for p in [*files, DATA / "census" / "runs.toml", DATA / "census" / "kinds.toml"]:
         assert p.stat().st_size <= BLOB_LIMIT // 4, (
             f"census/{p.name} is {p.stat().st_size} bytes, past a quarter of the {BLOB_LIMIT}-byte cap: name a run list "
-            f"its lines share in census/runs.toml and cite it as @NAME")
+            f"its lines share in census/runs.toml and cite it as @NAME, or a kind list a row prices at one value in "
+            f"census/kinds.toml and write its line as kind @NAME")
     assert used == set(named), f"runs.toml: {sorted(set(named) - used)} cited by no line; {sorted(used - set(named))} not in it"
     assert all(xs and all(CITE.fullmatch(x) for x in xs) for xs in named.values())
+    assert used_kinds == set(kinds), (f"kinds.toml: {sorted(set(kinds) - used_kinds)} written by no line; "
+                                      f"{sorted(used_kinds - set(kinds))} not in it")
+    assert all(xs and len(set(xs)) == len(xs) and not any(x.startswith("@") for x in xs) for xs in kinds.values())
 
 
 def test_census_lines_are_well_formed():
@@ -70,7 +75,8 @@ def test_census_lines_are_well_formed():
             assert M.epochs.index(d["since"]) <= M.epochs.index(d["until"]), where
         assert d["runs"] and all(CITE.fullmatch(x) or x.startswith("@") and x[1:] in named for x in d["runs"].split()), (
             f"{where}: cite its runs or note, or a run list of census/runs.toml as @NAME")
-    assert len(entries(M)) == len(lines)
+    kinds = kind_lists()
+    assert len(entries(M)) == sum(len(kinds[d["kind"][1:]]) if d["kind"].startswith("@") else 1 for d in lines)
 
 
 @pytest.mark.parametrize("epoch", M.epochs)
@@ -246,3 +252,17 @@ def test_joint_issue_rows_take_the_schedule_search():
         assert c["MMA"][o] == pytest.approx(min(c[k][o] for k in forms)) == pytest.approx(mma * M.cycle_u, abs=0.05)
         assert all(c[k][o] == pytest.approx(v[n] * 1.07 / margin, rel=1e-5)
                    for k, v in old.items() if n in v and k not in forms and k != "MMA")
+
+
+def test_uniform_takes_the_issue_slot():
+    """VF3p-16 (EPS1 P10, r20261017-055801-e051; decision 73): a uniform instruction takes the SMSP's issue slot, 1 on
+    issue and on each joint issue row 0.7416 of a vector instruction's coefficient, the share that holds every uniform.cu
+    point at the 2% noise margin over JI3o's coefficients (0.8168 holds them exactly; the honest step beside 32 FFMA sets
+    it at JI3o_0); UP refit to the fastest form alone, 0.766 a SMSP-cycle."""
+    c, old = census(M, "VF3p-16"), census(M, "VF3o-16")
+    assert "issue" not in old["UNI"] and c["UNI"]["issue"] == pytest.approx(M.cycle_u)
+    for n in ("JI3o_0", "JI3o_1", "JI3o_2"):
+        assert n not in old["UNI"] and c["UNI"][n] / c["FFMA"][n] == pytest.approx(0.7416, abs=1e-6)
+    assert c["UNI"]["UP"] == pytest.approx(u_of(M.cycle_u, "3.0621", "", "", ""))
+    assert c["UNI"]["UP"] < old["UNI"]["UP"]
+    assert {k: v for k, v in c.items() if k != "UNI"} == {k: v for k, v in old.items() if k != "UNI"}
