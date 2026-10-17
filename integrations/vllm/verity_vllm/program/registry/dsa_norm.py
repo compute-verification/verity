@@ -27,6 +27,21 @@ operand of at least eps >= 2^-126 (`dsa.check_eps`'s reason).  kv_cache_dtype "a
 Registered: `DsaRMSNorm_v1{N, EPS}` (x: N bf16, w: N bf16) -> N bf16, one token's row; `boolean_dsa_norm.DsaRMSNorm_v2` on bits.  N is
 a power of two from 256: at N = 128 a thread holds one element and the compiler contracts the first butterfly level instead (as
 `dsa.DsaIndexerKRow_v1`'s variance), which this body does not state.
+
+`TritonBlockRMSNorm_v1{N, BLOCK, WARPS, EPS}` is the same lowering of a `tl.sum` RMSNorm over a masked block: a row of N live elements
+in a power-of-two BLOCK on 32 WARPS threads, the rest loaded as +0 (`tl.load(..., mask=block < SIZE, other=0.0)`), the mean
+`div.full(sum, N)`; `boolean_dsa_norm.TritonBlockRMSNorm_v2` on bits.  It is vLLM d9105ea80's `_fused_q_kv_rmsnorm_kernel`
+(`models/common/ops/fused_qk_rmsnorm.py`, DeepSeek-V4's q and kv norms: one CTA per (token, program), program 0 q at SIZE = Q_SIZE,
+program 1 kv at KV_SIZE, BLOCK = next_pow2 of the larger, 8 warps from BLOCK 2048, else 4), as Triton 3.7.1 compiles it for sm_90
+at the H200's specialisation (pointers and strides divisible by 16; the PTX at Q_SIZE 1536, KV_SIZE 512: `.reqntid 256`, thread t
+`ld.global.v4.b32` of elements 8t..8t+7 under the one predicate 8t < SIZE, the chain above over them, the five-level butterfly, the
+8 warp sums butterflied 4, 2, 1 (a halving tree), `cvt.rn.f32.u32` of SIZE and `div.full.f32`, `add.f32 eps, mean`,
+`rsqrt.approx.ftz.f32`, `mul.f32 r, x`, `mul.f32 (.), w`, `cvt.rn.bf16x2.f32`; at BLOCK 1024 the same on 128 threads, at BLOCK 512
+and 256 on 128 threads `v2.b32` and `b32` loads of 4 and 2 elements and the same chain, at BLOCK 4096 a thread's two runs 2048 apart,
+each under its own predicate; `launch_pdl` adds `griddepcontrol` only).  At BLOCK 128 on 4 warps a thread holds one element and the
+first butterfly level is contracted, as above, so BLOCK is at least two elements a thread.  A thread wholly past N sums +0
+(`fma(+0, +0, +0 * +0)`), so the body takes its lane as the constant; a masked element of a live thread stays in its chain.
+`DsaRMSNorm_v1{N, EPS}` is `TritonBlockRMSNorm_v1{N, N, 4, EPS}`.
 """
 from __future__ import annotations
 
@@ -42,33 +57,65 @@ from verity_vllm.program.registry.prims import BF16
 THREADS, WARP = 128, 32
 _CONF = ("model-untested: read from the Triton kernel and its PTX at the commits the module docstring pins; "
          "tests/properties/glm53_fused_rmsnorm_capture_gpu.py is its hardware check")
+_BLOCK_CONF = ("model-untested: read from vLLM d9105ea80's _fused_q_kv_rmsnorm_kernel and the cc 9.0 PTX Triton 3.7.1 compiles from it "
+               "(the module docstring); no hardware capture yet")
+
+
+def check_eps(name: str, EPS: float) -> None:
+    if not float(np.float32(EPS)) >= 2.0 ** -126:
+        raise ValueError(f"{name}: EPS {EPS} below 2^-126 (rsqrt.approx.ftz and RsqrtApprox agree on operands from there)")
 
 
 def check_statics(N: int, EPS: float) -> None:
     if not (N >= 2 * THREADS and N & (N - 1) == 0):
         raise ValueError(f"DsaRMSNorm: the 128-thread layout takes a power-of-two row of at least 256 (N={N})")
-    if not float(np.float32(EPS)) >= 2.0 ** -126:
-        raise ValueError(f"DsaRMSNorm: EPS {EPS} below 2^-126 (rsqrt.approx.ftz and RsqrtApprox agree on operands from there)")
+    check_eps("DsaRMSNorm", EPS)
 
 
-def layout(N: int) -> list[list[int]]:
-    """Thread t's elements in register order: E = N / 128 of them, repeats of V = min(E, 8) contiguous ones 128V apart."""
-    E = N // THREADS
+def check_block(N: int, BLOCK: int, WARPS: int, EPS: float) -> None:
+    threads = WARP * WARPS
+    if not (WARPS > 0 and WARPS & (WARPS - 1) == 0 and BLOCK >= 2 * threads and BLOCK & (BLOCK - 1) == 0):
+        raise ValueError(f"TritonBlockRMSNorm: a power-of-two BLOCK of at least two elements a thread on a power-of-two warp count "
+                         f"(BLOCK={BLOCK}, WARPS={WARPS})")
+    if not (0 < N <= BLOCK and N % min(BLOCK // threads, 8) == 0):
+        raise ValueError(f"TritonBlockRMSNorm: the row fills whole vectors of the block (N={N}, BLOCK={BLOCK}, WARPS={WARPS})")
+    check_eps("TritonBlockRMSNorm", EPS)
+
+
+def layout(N: int, threads: int = THREADS) -> list[list[int]]:
+    """Thread t's elements in register order: E = N / threads of them, repeats of V = min(E, 8) contiguous ones threads * V apart."""
+    E = N // threads
     V = min(E, 8)
-    return [[(k // V) * THREADS * V + V * t + k % V for k in range(E)] for t in range(THREADS)]
+    return [[(k // V) * threads * V + V * t + k % V for k in range(E)] for t in range(threads)]
 
 
-def rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16) -> Coll:
-    """`DsaRMSNorm`'s body over ``o``'s steps (the module docstring's sequence), each output word a Call of ``to_bf16``."""
-    check_statics(S.N, S.EPS)
+def rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16, threads: int = THREADS, block: int | None = None) -> Coll:
+    """`DsaRMSNorm`'s body over ``o``'s steps (the module docstring's sequence), each output word a Call of ``to_bf16``; on ``threads``
+    over a ``block`` (default N) whose elements from N are +0."""
+    if block is None:
+        check_statics(S.N, S.EPS)
     xf = [o.cvt(x[i]) for i in range(S.N)]
+    zeros: list = []
+
+    def zero():
+        """The +0 a masked load gives: one constant, made at its first use."""
+        if not zeros:
+            zeros.append(o.word(0))
+        return zeros[0]
     lanes = []
-    for regs in layout(S.N):
-        s = o.fma(xf[regs[0]], xf[regs[0]], o.mul(xf[regs[1]], xf[regs[1]]))
-        for i in regs[2:]:
-            s = o.fma(xf[i], xf[i], s)
+    for regs in layout(block or S.N, threads):
+        if regs[0] >= S.N:
+            lanes.append(None)
+            continue
+        v = [xf[i] if i < S.N else zero() for i in regs]
+        s = o.fma(v[0], v[0], o.mul(v[1], v[1]))
+        for e in v[2:]:
+            s = o.fma(e, e, s)
         lanes.append(s)
-    total = D.halving_tree([D.halving_tree(lanes[WARP * g:WARP * g + WARP], o.add) for g in range(THREADS // WARP)], o.add)
+
+    def add(a, b):
+        return None if a is None and b is None else o.add(zero() if a is None else a, zero() if b is None else b)
+    total = D.halving_tree([D.halving_tree(lanes[WARP * g:WARP * g + WARP], add) for g in range(threads // WARP)], add)
     n = o.word(D.f32_bits(S.N))
     mean = o.mul(o.scale_a(total, n), o.rcp(n))
     r = o.rsqrt(o.add(o.word(D.f32_bits(S.EPS)), mean))
@@ -85,4 +132,19 @@ def DsaRMSNorm(B, S, x, w):
     return rms_norm(D.word_ops(B), S, x, w, P.F2fpBf16)
 
 
-DSA_NORM_COMPOSITES = [DsaRMSNorm]
+def block_rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16) -> Coll:
+    """`TritonBlockRMSNorm`'s body: `rms_norm` on 32 WARPS threads over BLOCK."""
+    check_block(S.N, S.BLOCK, S.WARPS, S.EPS)
+    return rms_norm(o, S, x, w, to_bf16, t, threads=WARP * S.WARPS, block=S.BLOCK)
+
+
+@composite("TritonBlockRMSNorm", 1, ["N", "BLOCK", "WARPS", "EPS"],
+           lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)), conformance=_BLOCK_CONF)
+def TritonBlockRMSNorm(B, S, x, w):
+    """One row of a Triton `tl.sum` RMSNorm over a masked block (the module docstring has the PTX): N live bf16 elements of a BLOCK on
+    32 WARPS threads, each thread's FMA chain over its `layout` registers (a masked one +0), each warp's butterfly, the warp sums'
+    halving tree; `r = rsqrt.approx.ftz(eps + div.full(sum, N))`; `y = bf16(r * x * f32(w))`, the products in that order."""
+    return block_rms_norm(D.word_ops(B), S, x, w, P.F2fpBf16)
+
+
+DSA_NORM_COMPOSITES = [DsaRMSNorm, TritonBlockRMSNorm]
