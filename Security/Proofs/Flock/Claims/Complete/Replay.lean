@@ -17,7 +17,7 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
 import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
 import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
+import Proofs.Flock.Claims.Complete.Replay.LigeritoResidual
 import Proofs.Flock.Claims.Complete.Replay.RepRounds
 import Proofs.Flock.Claims.Complete.Replay.ProverOk
 import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
@@ -72,7 +72,7 @@ batched basis, `Lg.rsSum_eq`, `RsSum` holds at the deployed relation, `rsSum_rel
 honest prover's sum of table against weight, `Lg.Sync`: a challenge, `Lg.Sync.chal`, one that splits,
 `Lg.Sync.chalSplit`, an out-of-domain or consistency claim, `Lg.Sync.ood`, `Lg.Sync.add`, and the final check's sum is
 the claim, `Lg.lhsE_honest`;
-`LigeritoWeight`: every step of the honest prover keeps its weight the verifier's residual weight at the stage, `Lg.WAt`,
+`LigeritoResidual`: every step of the honest prover keeps its weight the verifier's residual weight at the stage, `Lg.WAt`,
 `Lg.WPre`: the start, `Lg.WAt.start`, level 0's out-of-domain sample and challenges, `Lg.WAt.oodHead`, `Lg.WAt.chal0`,
 a split, `Lg.WAt.lift`, an out-of-domain or consistency claim on the split table, `Lg.WPre.ood`, `Lg.WPre.cons` (the
 prover's `X̂_c(ω_q)` are the model's, `Lg.xhats_get`), and a level's four challenges, `Lg.WPre.fold`; at the end the

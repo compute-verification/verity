@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
+import Proofs.Flock.Claims.Complete.Replay.LigeritoResidual
 import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
 
 /-!
