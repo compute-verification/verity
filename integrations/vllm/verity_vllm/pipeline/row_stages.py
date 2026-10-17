@@ -128,6 +128,7 @@ class SingleRow(Row):
         if not os.path.isfile(self.path(self.wl)):
             print(f"no manifest {self.wl}")
             raise Stop(2)
+        self.refuse_unserved_engine()
         self.trap = True
         rel_line, rel_src = self.release_line(" (release_json.py failed; not installed here by pod_release.sh)")
         self.rel_tag = rel_line.split("|", 1)[0]

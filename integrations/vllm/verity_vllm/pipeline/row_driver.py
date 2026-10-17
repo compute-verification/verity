@@ -168,6 +168,14 @@ class Row:
         """The row's config, its file in the tree that runs."""
         return RowConfig.load(self.path(self.wl))
 
+    def refuse_unserved_engine(self) -> None:
+        """Refuse a row whose file declares prefix caching: every stage's engine runs with it off and GP-01 does not model a request
+        reading another's KV blocks (`global_program.MODELLED_ENGINE`), so the row's record would name a serve it never ran."""
+        if self.config().engine.args.get("enable_prefix_caching") is True:
+            self.verdict("precheck", "FAIL", "engine.args.enable_prefix_caching is true: the stages serve with prefix caching off and GP-01 "
+                                             "does not model it (global_program.MODELLED_ENGINE), so the record would name a serve it never ran")
+            raise Stop(3)
+
     def bi_eager(self) -> bool:
         """The row's execution is ``bi-eager``, the only one the template gives JIT caches: its workload's ``execution`` (or
         ``sweep.execution``), else its id's last token.  A compiled row records cubins its Triton cache holds

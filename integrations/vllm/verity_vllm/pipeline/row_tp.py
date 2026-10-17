@@ -129,6 +129,7 @@ class TpRow(Row):
         self.bdir, self.M = f"{self.d}/build", f"{self.d}/match"
         for p in (self.d, self.bdir, self.M, self.ncb):
             os.makedirs(p, exist_ok=True)
+        self.refuse_unserved_engine()
         self.trap = True
         rel_line, _ = self.release_line("")
         tag, bar, rest = rel_line.partition("|")
