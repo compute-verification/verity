@@ -11,7 +11,7 @@ import pytest
 
 from verity_machine_model import eps as E
 from verity_machine_model.cli import main
-from verity_machine_model.model import DATA, DEVICES, census, device, devices, model, rows, vector
+from verity_machine_model.model import DATA, DEVICES, census, device, devices, model, rows, vector, vectors
 
 PIN = "VF3l-16"                    # the vector these hand-checked numbers were read on, whatever is current
 PI = E.machine(PIN)
@@ -427,13 +427,13 @@ SM89 = DEVICES / "sm_89"
 
 def test_devices_follow_the_layout():
     """README "Devices": sm_120 is data/ and the default; any other device is data/devices/sm_NN/, priced once it has a
-    model.toml, with its vector's rows its census's and every design's honest MMA a class of its census."""
+    model.toml, every row of its census some vector's, and every design's honest MMA a class of its census."""
     assert device() == device("sm_120") == device("sm120") == DATA and devices()[0] == "sm_120"
     assert device("sm89") == device("sm_89") == SM89 and "sm_89" in devices()
     for name in devices()[1:]:
         d = device(name)
         pi = E.machine("", d)
-        assert set(pi.rows) == set(rows(d)), name
+        assert set(pi.rows) <= set(rows(d)) == {r for v in vectors(d) for r in vector(v, d).rows}, name
         for n in E.designs(d):
             ds = E.design(n, d)
             h = E.honest(ds.honest, d)
@@ -486,7 +486,7 @@ def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
     H200 JI90_0 charges a uniform instruction 0.96, which closes it. At L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit
     spacing's cost."""
     sm90, sm100 = DEVICES / "sm_90", DEVICES / "sm_100"
-    duo = [n for n in E.designs(sm90) if "-li-" not in n]
+    duo = [n for n in E.designs(sm90) if "-li" not in n]
     assert duo == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
     p90 = E.machine("", sm90)
     s = E.setup(E.design("dither-2s-l32", sm90), p90, sm90, "floor", "floor")
