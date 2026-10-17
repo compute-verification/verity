@@ -12,6 +12,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import arguments  # noqa: E402
 import catalog  # noqa: E402
 import slowdown  # noqa: E402
 
@@ -28,6 +29,7 @@ def render() -> str:
     out = ["# NCI literature index", "",
            f"{len(sources)} sources, {len(fs)} findings, {len(parameters)} parameters, {len(rows)} board rows.", ""]
 
+    out += arguments.render()
     out += ["## Parameters", ""]
     for p in parameters:
         out += [f"### `{p['id']}` ({p['symbol']}, {p['unit']})", "", p["meaning"], ""]

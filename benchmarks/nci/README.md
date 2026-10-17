@@ -21,6 +21,8 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `rows.json` | the board's rows: method, configuration, state representation, calculator inputs (a number or `estimate-id:low|central|high`), notes, sources, demonstrated capability |
 | `algorithms.json` | the algorithm library: training algorithms by architecture-agnostic traits (`library.TRAITS`), measured multipliers and their evidence |
 | `models.json` | model shapes the library queries against |
+| `arguments.json` | the argument map: claims on a ladder, the premises each rests on, the attacks against it, and the proposed evidence with its review |
+| `arguments.py` | the map's checks (every reference resolves, including Lean names against the lock) and its rendering |
 | `catalog.py` | loading, and `problems()`: every rule below that a file breaks |
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
 | `slowdown.py` | the bracket per row; `python benchmarks/nci/slowdown.py [--calibration ID] [--row ID]` |
@@ -88,6 +90,31 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
 The invariant `lower <= upper` is tested on every row. The two caps on threading and token rates exist because rows
 violated it without them, so a violation means a row's inputs break the theorem. A tight bracket settles a row; a wide
 one is a research target.
+
+## The argument map
+
+`arguments.json` organizes everything here around six claims, from most to least trustworthy:
+
+| Rung | Claim | Status |
+| --- | --- | --- |
+| 1 | inference complies as declared | established |
+| 2 | within one declaration with θ frozen, contained dense pretraining runs at about 1e-7 to 3e-7 efficiency | conditional |
+| 3 | the policy throttles pretraining across declarations | contested |
+| 4 | every known method is throttled or weak | open |
+| 5 | translated into capability and time | contested |
+| 6 | robust to unknown algorithms | open |
+
+Each claim lists:
+
+- **what it rests on:** the proved theorems, assumptions, constructions, literature estimates and policy rules, each
+  with its status;
+- **what attacks it:** the red teams' findings, by severity, each with its repair;
+- **what comes next.**
+
+The decisive gap is at rung 3. Recommitting θ makes the throttle apply per declaration, so the policy needs sticky
+novelty: values computed under monitoring stay novel in every later θ. A composition lemma would then let the
+one-declaration theorem cover a whole run. The proposed evidence carries the round-2 red team's verdicts. Render the
+index for the full map.
 
 ## What the literature says now
 
