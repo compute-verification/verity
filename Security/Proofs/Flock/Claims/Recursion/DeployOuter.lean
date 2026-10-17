@@ -10,12 +10,12 @@ rounds, the last message, each round answered by its live coin) and the same dec
 shipped verdict over `OC`, `Zk.verifyWithM Hashes.oc`, then the custody checks), at the recursive setup
 (`RecIns.setup`) where `FlockDeploy.V` has Flock's (`Ins.setup`), which refuses every V* statement.
 
-`nextO_rej`, `nextO_coin` and `nextO_decide` are its three steps; at the SHA-512 oracle a decision accepts exactly when the
-deployed `Zk.verify` accepts the record and proof files at the recursive setup's tables and the custody checks pass
+`nextO_rej`, `nextO_coin` and `nextO_decide` are its three steps; at the SHA-512 oracle a decision accepts exactly when
+the deployed `Zk.verify` accepts the record and proof files at the recursive setup's tables and the custody checks pass
 (`nextO_decide_sha512`).
 
 `deployZkRec rel` is the record Flock's claims read at that verifier: `deployZk rel`'s code, decoder spec and numbers,
-each read at the recursive setup's tables (`colsO`, `εtableO`, `N₀O`, `weightO`).
+each read at the recursive setup's tables (`Readable.tableOf`, `colsO`, `εtableO`, `N₀O`, `weightO`).
 -/
 
 namespace RecDeploy
@@ -137,7 +137,8 @@ theorem actO_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s 
 sets up. -/
 theorem verdictWithO_sha512 {x : Claims.Msg} {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupO x = some (i, spec, sts)) (record : String) (proofs : Array ByteArray) :
-    verdictWith true (Claims.hOf sha512) spec (tabsOf sts) record proofs = Zk.verify spec (tabsOf sts) record proofs := by
+    verdictWith true (Claims.hOf sha512) spec (tabsOf sts) record proofs =
+      Zk.verify spec (tabsOf sts) record proofs := by
   have hr := RecIns.setup_read (setupO_some h).2
   rw [hOf_sha512]
   exact (Zk.verify_eq_verifyWith_of_setupTables _ _ _ _ _ _ _ _ _ _ _ _ _ hr record proofs).symm

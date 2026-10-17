@@ -41,12 +41,14 @@ decision, the compiled verifier accepts the session exactly when it is the sessi
 accepts only at the last session's last round, where the outer verifier accepts.
 
 `deployRec IV ivScope b` is the record the recursion's claims read, at the inner verifier `IV`, its scope check and
-what the deployment brings (`Brings`): the coin server's transcript, the honest stager, the outer witnesses' readers
-(`Readers`: the inner messages and the SHA-512 evaluations they record), each outer session's `--zk` leaf counts and
-the reference prover's pieces. `innerView` runs `IV` at the claim's oracle on those messages and the run's first `k_I`
-coins. The hm96 key is the pinned one (`Hm96.Default512`). The reference prover (`refP`) is a composition: the native
-inner prover, the honest staging message, then Flock's masked honest prover `honestPZk` on each V* session, its witness
-read off the inner prover's tape and transcript; `OuterRef` names what a faithful one needs beyond it.
+what the deployment brings (`Brings`): the coin server's transcript, the stager `stage` reads, the outer witnesses'
+readers (`Readers`: the inner messages and the SHA-512 evaluations they record), each outer session's `--zk` leaf counts
+and the reference prover's pieces. `innerView` runs `IV` at the claim's oracle on those messages and the run's first
+`k_I` coins. The hm96 key is the pinned one (`Hm96.Default512`). The reference prover (`refP`) is a composition: the
+native inner prover, the staging message its output gives, then Flock's masked honest prover `honestPZk` on each V*
+session, its witness read off the inner prover's tape and transcript; `OuterRef` names what a faithful one needs beyond
+it. The record's `stage` is a stager of the public transcript, as the recursion's spec has it; the prover's staging
+message holds its registered entries under its own salts, which no such stager gives.
 -/
 
 namespace RecDeploy
@@ -449,21 +451,24 @@ def innerView (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (rd : 
 
 /-! ## The reference prover -/
 
-/-- **The reference prover's pieces the inner protocol brings**: the native inner prover on its tapes, and the outer
-witnesses its output gives, session `s`'s read off the inner witness, the inner prover's tape and the inner rounds'
-history. -/
+/-- **The reference prover's pieces the inner protocol brings**: the native inner prover on its tapes; the staging
+message its output gives (`vstar stage`'s: each part's public file with the prover's registered entries under its own
+salts, and the inner session's record), read off the inner witness, the inner prover's tape and the inner rounds'
+history; and the outer witnesses it gives, session `s`'s read off the same. -/
 structure RefParts where
   TI : Type
   [ne : Nonempty TI]
   PI : Claims.Flock.Wit → Claims.Prover TI
+  stage : Claims.Flock.Wit → TI → List (Claims.Msg × Claims.Msg) → Claims.Msg
   wit : Claims.Flock.Wit → TI → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit
 
 attribute [instance] RefParts.ne
 
 /-- **What the deployment brings** besides the inner verifier: the coin server's transcript of the inner rounds (`tr`),
-the honest stager (`hs`, whose public files and record the honest staging message holds), the outer witnesses' readers
-(`rd`), each V* statement's `--zk` leaf counts (`zl`: Flock's `n_L` and `n_B`, which `Flock.zk_deployZk_of_models`
-takes as its parameters) and the reference prover's pieces (`ref`). -/
+the stager the record's `stage` reads (`hs`: the recursion's spec has `stage` read only the statement and the public
+transcript, which the prover's staging message, holding its registered entries under its own salts, doesn't), the outer
+witnesses' readers (`rd`), each V* statement's `--zk` leaf counts (`zl`: Flock's `n_L` and `n_B`, which
+`Flock.zk_deployZk_of_models` takes as its parameters) and the reference prover's pieces (`ref`). -/
 structure Brings where
   tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray
   hs : Stage
@@ -474,8 +479,8 @@ structure Brings where
 /-- The staged inputs the compiled verifier reads: the staging message's, at the coin server's transcript. -/
 def Brings.st (b : Brings) : Stage := Stage.ofMsg b.tr
 
-/-- **The honest staging message** at the inner rounds `ms`: the honest stager's public file of each part, and its
-inner session record. -/
+/-- **The staging message of a stager** at the inner rounds `ms`: its public file of each part, and its inner session
+record. -/
 def stageMsg (hs : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) : Claims.Msg :=
   encStage ((List.range (nS x)).map (hs.pub x ms)) (hs.record x ms)
 
@@ -487,13 +492,14 @@ def asRounds (hist : List (Claims.Msg × Claims.Msg)) : List (Claims.Msg × Clai
 abbrev Tape (b : Brings) : Type := b.ref.TI × (ℕ → FlockComplete.TapeZk)
 
 /-- **The reference prover, a composition**: the native inner prover over the inner rounds at the inner statement,
-the honest staging message, then on each V* session Flock's masked honest prover `honestPZk` at the session's V*
-statement, its witness the one the inner prover's output gives (`RefParts.wit`), its history the session's rounds. -/
+the staging message its output gives (`RefParts.stage`), then on each V* session Flock's masked honest prover
+`honestPZk` at the session's V* statement, its witness the one the inner prover's output gives (`RefParts.wit`), its
+history the session's rounds. -/
 noncomputable def refP (IV : Claims.Verifier Coin) (b : Brings) (w : Claims.Flock.Wit) : Claims.Prover (Tape b) :=
   ⟨fun x hist ω =>
     let kI := IV.k (xIOf x)
     if hist.length < kI then (b.ref.PI w).next (xIOf x) hist ω.1
-    else if hist.length < kI + kS x then .ret (stageMsg b.hs x (asRounds (hist.take kI)))
+    else if hist.length < kI + kS x then .ret (b.ref.stage w ω.1 (hist.take kI))
     else
       let xs := vstar b.st x (asRounds (hist.take (kI + kS x)))
       match locate (xs.map VO.k) (hist.length - (kI + kS x)) with

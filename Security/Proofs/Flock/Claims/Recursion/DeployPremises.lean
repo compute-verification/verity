@@ -7,8 +7,8 @@ import Proofs.Flock.Claims.Recursion.FlockKSRecord
 What the recursion's claims read of the compiled verifier, at `deployRec IV ivScope b`, beyond the code facts
 `DeployFacts`, `DeploySessions` and `DeployMargin` prove there:
 
-* **`ScopeMatches`** holds wherever the inner scope check matches the inner scope (`scopeMatches`), so with no hypothesis
-  at the deployed plain inner record (`scopeMatches_deployed`).
+* **`ScopeMatches`** holds wherever the inner scope check matches the inner scope (`scopeMatches`), so with no
+  hypothesis at the deployed plain inner record (`scopeMatches_deployed`).
 * **The V\* facts** (`CallsRecord`, `CallsOpen`, `VStarAccepts` at each shape) quantify over the compiled verifier's
   accepted runs. On such a run each V* statement is the one staged at the run's inner and staging rounds
   (`runVstar_staged`, from `run_round`), and the inner view is the inner verifier's run of the readers' messages at the
@@ -153,9 +153,9 @@ section Readers
 
 variable {Col T : Type}
 
-/-- **The V\* witnesses record only true evaluations** (a code fact about V*'s circuits and the readers): outer witnesses
-in the outer relation at the V* statements staged at inner and staging messages `as` and coins `cs` record only true
-evaluations of `H`. At SHA-512, V*'s circuits compute each recorded call. -/
+/-- **The V\* witnesses record only true evaluations** (a code fact about V*'s circuits and the readers): outer
+witnesses in the outer relation at the V* statements staged at inner and staging messages `as` and coins `cs` record
+only true evaluations of `H`. At SHA-512, V*'s circuits compute each recorded call. -/
 def ReadersTrue (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) :
     Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
