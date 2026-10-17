@@ -42,7 +42,7 @@ inductive SheetRow (P : Type)
   | smem
   deriving DecidableEq, Fintype
 
-instance (P : Type) : Nonempty (SheetRow P) := ⟨.issue⟩
+instance instNonemptySheetRow (P : Type) : Nonempty (SheetRow P) := ⟨.issue⟩
 
 variable {K P : Type} [DecidableEq P]
 
