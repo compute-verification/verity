@@ -8,7 +8,8 @@
 //   mix_<x>_<Q>    16 warps, every warp 8 IMMA m16n8k32 and Q ops of x an iteration (a joint point)
 //   spec_<x>_w<W>  8 IMMA warps and W x warps that run only while they do (a joint point)
 //   ldsm_*, lds32, lds128, sts128: one 1024-thread block an SM, 8 accesses an iteration, conflict-free
-//   honest32/16    8 IMMA (m16n8k32 / m16n8k16) and the duo fold of their 32 words a lane; imma16_ref the MMAs alone
+//   honest32/16    8 IMMA (m16n8k32 / m16n8k16) and the duo fold of their 32 words a lane; imma16_ref the MMAs alone;
+//                  _w2/_w6/_w8 the same at 2, 6 and 8 warps a SMSP (honest32/16 run 4)
 #include "../probe.cuh"
 #include "../probes/honest.cuh"
 
@@ -269,6 +270,12 @@ __device__ __forceinline__ void honest_body(const OpArgs& a) {
 }
 OP_KERNEL(honest32, TPB) { honest_body<false, true>(a); }
 OP_KERNEL(honest16, TPB) { honest_body<true, true>(a); }
+#define HONEST_W(w, threads)                                              \
+  OP_KERNEL(honest32_w##w, threads) { honest_body<false, true>(a); }      \
+  OP_KERNEL(honest16_w##w, threads) { honest_body<true, true>(a); }
+HONEST_W(2, 256)
+HONEST_W(6, 768)
+HONEST_W(8, 1024)
 OP_KERNEL(imma32_ref, TPB) { honest_body<false, false>(a); }
 OP_KERNEL(imma16_ref, TPB) { honest_body<true, false>(a); }
 OP_KERNEL(fold_only, TPB) {
@@ -341,6 +348,14 @@ static const OpProbe PROBES[] = {
     {.name = "honest32", .kernel = (const void*)honest32, .tpb = TPB, .expect = IMMA "=8,LOP3.LUT=32,IMAD=32,LEA.HI=32", .iters = 2048},
     {.name = "honest16", .kernel = (const void*)honest16, .tpb = TPB,
      .expect = "IMMA.16816.S8.S8=8,LOP3.LUT=32,IMAD=32,LEA.HI=32", .iters = 2048},
+#define P_HONEST_W(w, threads)                                                                                        \
+  {.name = "honest32_w" #w, .kernel = (const void*)honest32_w##w, .tpb = threads,                                   \
+   .expect = IMMA "=8,LOP3.LUT=32,IMAD=32,LEA.HI=32", .iters = 2048},                                                \
+  {.name = "honest16_w" #w, .kernel = (const void*)honest16_w##w, .tpb = threads,                                   \
+   .expect = "IMMA.16816.S8.S8=8,LOP3.LUT=32,IMAD=32,LEA.HI=32", .iters = 2048}
+    P_HONEST_W(2, 256),
+    P_HONEST_W(6, 768),
+    P_HONEST_W(8, 1024),
     {.name = "imma16_ref", .kernel = (const void*)imma16_ref, .tpb = TPB, .expect = "IMMA.16816.S8.S8=8", .iters = 4096},
     {.name = "fold_only", .kernel = (const void*)fold_only, .tpb = TPB, .expect = "LOP3.LUT=32,IMAD=32,LEA.HI=32",
      .iters = 2048},
