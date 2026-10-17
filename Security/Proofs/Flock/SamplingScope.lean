@@ -252,6 +252,7 @@ def toyFlock : Flock.Deploy Bool ℕ Unit where
   enc _ _ := 0
   len _ := 0
   θ _ := 0
+  dec _ := ([], 0)
   read _ := ⟨[]⟩
   εtable _ := 0
   N₀ _ := 0
