@@ -98,8 +98,10 @@ instruction merges at most `m` components**: the nodes a straight-line dataflow 
 or the one node of a warp-wide instruction) merge at most `m_{cls j}` components into one, `Σ (sources − 1)`. A lane
 of LOP3, IADD3, IMAD, IDP.4A or FFMA reads three 32-bit registers (2 a lane, 64 a warp instruction); counted by
 dependence its predicate and 64-bit operands count too (IADD3.X: three registers and two carry-ins, 4 a lane;
-IMAD.WIDE: 3); a warp-wide instruction counts its whole operand set (SHFL 63; IMMA.16832: ten registers a thread, 319);
-memory is a node each access reads, so a load or store merges its address, value and that node. -/
+IMAD.WIDE: 3); a warp-wide instruction counts its whole operand set (SHFL 63; IMMA.16832: ten registers a thread, 319).
+Memory is a node each access reads: a load merges its address and that node (1 a lane), a store or atomic its address,
+its value registers and that node (STS.32 and ATOMS 2 a lane; STS.128 and STSM.x4 5 a lane, 160 a warp instruction),
+so the classes that merge most per instruction are the wide stores. -/
 def FanIn {ι W J : Type} [DecidableEq J] (D : Dataflow ι W) (ins : Fin D.n → J) (cls : J → K) (m : K → ℝ) :
     Prop :=
   ∀ j, (D.issued ins j : ℝ) ≤ m (cls j)
