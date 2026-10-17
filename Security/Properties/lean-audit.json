@@ -31,7 +31,9 @@
   "Properties.Proofs.Pous.TimedAudit",
   "Properties.Proofs.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
-  "Properties.Proofs.Pous.Run"
+  "Properties.Proofs.Pous.Run",
+  "Properties.Accounting.Requirement",
+  "Properties.Proofs.Accounting.Requirement"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -104,7 +106,10 @@
   "Properties.Pous.MemoryChallenger",
   "MemoryChallenger",
   "Definitions.Pous",
-  "Models.Pous.Assumptions"
+  "Models.Pous.Assumptions",
+  "Properties.Accounting",
+  "CircuitRequirement",
+  "Definitions.Accounting"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -175,6 +180,11 @@
    ],
    "except": [],
    "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.NetworkCertifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
+  },
+  "Properties.Accounting": {
+   "imports": ["Definitions.Accounting", "CircuitRequirement"],
+   "except": [],
+   "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   }
  },
  "reads_exempt": {
@@ -1242,6 +1252,90 @@
    "assumptions": [],
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09"
   },
+  "Properties.Requirement.follows": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.follows : Properties.Requirement.Follows"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.held": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.held : Properties.Requirement.Held"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.live": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.live : Properties.Requirement.Live"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.liveBits": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.liveBits : Properties.Requirement.LiveBits"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.liveBlocks": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.liveBlocks : Properties.Requirement.LiveBlocks"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.liveIn": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.liveIn : Properties.Requirement.LiveIn"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.planMatches": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.planMatches : Properties.Requirement.PlanMatches"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.read": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.read : Properties.Requirement.Read"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.readBits": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.readBits : Properties.Requirement.ReadBits"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.readBlocks": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.readBlocks : Properties.Requirement.ReadBlocks"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.readIn": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.readIn : Properties.Requirement.ReadIn"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.reads": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.reads : Properties.Requirement.Reads"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.resident": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.resident : Properties.Requirement.Resident"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.storeMatches": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.storeMatches : Properties.Requirement.StoreMatches"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Properties.SampledProofs.acceptMeans": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"],
@@ -1966,6 +2060,62 @@
    "Properties.NetworkCertifier.undecidedPending": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "undecided"
+   },
+   "Properties.Requirement.follows": {
+    "function": "CircuitRequirement.Instance.follows",
+    "outcome": "none"
+   },
+   "Properties.Requirement.live": {
+    "function": "CircuitRequirement.Instance.live",
+    "outcome": "none"
+   },
+   "Properties.Requirement.reads": {
+    "function": "CircuitRequirement.Instance.reads",
+    "outcome": "none"
+   },
+   "Properties.Requirement.liveBits": {
+    "function": "CircuitRequirement.Instance.liveBits",
+    "outcome": "none"
+   },
+   "Properties.Requirement.readBits": {
+    "function": "CircuitRequirement.Instance.readBits",
+    "outcome": "none"
+   },
+   "Properties.Requirement.held": {
+    "function": "CircuitRequirement.Instance.held",
+    "outcome": "none"
+   },
+   "Properties.Requirement.read": {
+    "function": "CircuitRequirement.Instance.read",
+    "outcome": "none"
+   },
+   "Properties.Requirement.liveBlocks": {
+    "function": "CircuitRequirement.Instance.liveBlocks",
+    "outcome": "none"
+   },
+   "Properties.Requirement.liveIn": {
+    "function": "CircuitRequirement.Instance.liveIn",
+    "outcome": "none"
+   },
+   "Properties.Requirement.readBlocks": {
+    "function": "CircuitRequirement.Instance.readBlocks",
+    "outcome": "none"
+   },
+   "Properties.Requirement.readIn": {
+    "function": "CircuitRequirement.Instance.readIn",
+    "outcome": "none"
+   },
+   "Properties.Requirement.resident": {
+    "function": "CircuitRequirement.Store.resident",
+    "outcome": "none"
+   },
+   "Properties.Requirement.storeMatches": {
+    "function": "CircuitRequirement.Instance.storeMatches",
+    "outcome": "none"
+   },
+   "Properties.Requirement.planMatches": {
+    "function": "CircuitRequirement.Instance.planMatches",
+    "outcome": "none"
    }
   },
   "frozen": {
