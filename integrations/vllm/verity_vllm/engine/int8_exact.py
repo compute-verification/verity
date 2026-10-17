@@ -27,12 +27,14 @@ from typing import Any
 
 import torch
 
+from verity_vllm.program.frontend.kernel_readback import INT8_ARM
+
 TOP = 127
 SCALE_FLOOR = 1e-30
 W_MAX = TOP
 MIN_ROWS = 17
 MAX_K = (2 ** 31 - 1) // (TOP * W_MAX)
-ARM = "plain"
+ARM = INT8_ARM
 
 
 def row_scales(x: torch.Tensor, top: int = TOP) -> torch.Tensor:
@@ -73,7 +75,7 @@ def plain_linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.T
 
 def applied_record(model: Any) -> dict[str, dict[str, Any]]:
     """What every linear layer ran, by module name: its quant method's class, int8 arm (None for a method without one) and the
-    calls it served (None for a method that does not count them).  Structural, as `target_profile.int8_exact_arm_of`."""
+    calls it served (None for a method that does not count them).  Structural, as `kernel_readback.int8_exact_of`."""
     out = {}
     for name, m in model.named_modules():
         qm = getattr(m, "quant_method", None)

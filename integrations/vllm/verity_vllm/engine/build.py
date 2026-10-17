@@ -156,9 +156,12 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     env_flags = prof.apply_env()
     if target is not None:
         env_flags = {**env_flags, **target_env}
-    if getattr(target, "int8_exact", None) is not None:
+    if "linears" in getattr(target, "int8_parts", ()):
         from verity_vllm.engine import int8_vllm   # vLLM's own registry, in this process, before LLM() resolves `quantization`
         int8_vllm.register()
+    if "attention" in getattr(target, "int8_parts", ()):
+        from verity_vllm.engine import int8_attention_vllm   # vLLM's CUSTOM attention slot, before LLM() selects the backend
+        int8_attention_vllm.register()
     cp = prof.checkpoint_for(case, checkpoints)
     if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
         raise RuntimeError(f"execution label {execution!r} is not modelled by the harness (known: {sorted(EXECUTION_ENFORCE_EAGER)}); refusing to build an engine")
@@ -284,8 +287,8 @@ def target_mismatches(engine: Engine) -> list[str]:
         if got != tp.fp8_block_gemm_kernel():
             bad.append(f"fp8_block_gemm declared {tp.fp8_block_gemm!r} ({tp.fp8_block_gemm_kernel()}), layers report {got!r}")
     if getattr(tp, "int8_exact", None) is not None:
-        from verity_vllm.program.frontend.target_profile import int8_exact_arm_of
-        got = int8_exact_arm_of(engine.model)
+        from verity_vllm.program.frontend.target_profile import int8_exact_of
+        got = int8_exact_of(engine.model)
         if got != tp.int8_exact:
             bad.append(f"int8_exact declared {tp.int8_exact!r}, layers report {got!r}")
     if getattr(tp, "moe_backend", None) is not None:

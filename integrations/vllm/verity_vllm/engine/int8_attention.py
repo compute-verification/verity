@@ -23,10 +23,13 @@ prefill split into chunks would be another window, and is refused.  Nothing read
 """
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 import torch.nn.functional as F
 
 from verity_vllm.engine import int8_exact as E
+from verity_vllm.program.frontend.kernel_readback import is_attention_impl
 
 ARM = E.ARM
 TOP = E.TOP
@@ -102,3 +105,10 @@ def paged_attention(query: torch.Tensor, key_cache: torch.Tensor, value_cache: t
             raise ValueError(f"int8 attention: request {r} brings {q1 - q0} rows of a {s}-token window (a chunked prefill)")
         k, v = window_of(key_cache, value_cache, block_table[r], s)
         output[q0:q1] = window_attention(query[q0:q1], k, v, scale, softmax)
+
+
+def applied_record(model: Any) -> dict[str, dict[str, Any]]:
+    """What every attention layer ran, by module name: its impl's class, int8 arm (None for an impl without one) and the calls it
+    served (None for an impl that does not count them).  Structural, as `kernel_readback.int8_exact_of`."""
+    return {name: {"impl": type(m.impl).__name__, "arm": getattr(m.impl, "int8_arm", None), "calls": getattr(m.impl, "calls", None)}
+            for name, m in model.named_modules() if is_attention_impl(getattr(m, "impl", None))}

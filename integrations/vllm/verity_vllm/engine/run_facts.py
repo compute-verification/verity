@@ -86,8 +86,8 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
             from verity_vllm.program.frontend.target_profile import moe_experts_class_of
             manifest["backends"]["moe_experts_class"] = moe_experts_class_of(engine.model)
         if getattr(engine.target, "int8_exact", None) is not None:
-            from verity_vllm.program.frontend.target_profile import int8_exact_arm_of
-            manifest["backends"]["int8_exact_arm"] = int8_exact_arm_of(engine.model)
+            from verity_vllm.program.frontend.target_profile import int8_exact_of
+            manifest["backends"]["int8_exact"] = int8_exact_of(engine.model)
         # the MoE gates' cuteDSL ll_bf16_gemm tier (M <= 16), which leaves no torch op behind: written only when a gate took it, so
         # every record without such a gate keeps its profile id
         if moe_gate_ll_bf16_gemm_of(engine.model):
