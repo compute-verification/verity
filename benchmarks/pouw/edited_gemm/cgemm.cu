@@ -51,27 +51,38 @@ __host__ __device__ inline int n_dig(int k) { return k <= 4096 ? 2 : 3; }
 
 // egemm.cu's quant_blk<true> (X and S as there), with P_A's rows S's digits under the carry coins z. DIG 1: that; the
 // cost-split stand-ins (wrong P_A): DIG 0 neither z nor digits (P_A row 0 = S's low byte), DIG 2 the digits over a z
-// that is zeroed, not hashed
+// that is zeroed, not hashed. Warps 0 .. 7 a row group of 4 each; warp 8's lane g hashes group g's z while they hash
+// their patches (one barrier before the last round's digits), so z's digest isn't a second hash on a patch lane
+constexpr int CQ_NT = 288;
 template <int DIG>
 DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint16_t* __restrict__ x, int8_t* __restrict__ X,
                     int8_t* __restrict__ PA, int rows, int k, float inv_s, const Sig& sg) {
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blk * 8 + warp;
-  if (grp * 4 >= rows) return;
+  if (warp == 8) {
+    uint32_t* zs = zss + 16 * lane;
+    if (DIG == 1 && lane < 8 && (blk * 8 + lane) * 4 < rows) {
+      uint64_t st[8];
+      sha_block(sg.w, (uint64_t)Z_TAG << 56 | (uint64_t)(blk * 8 + lane), st);
+#pragma unroll
+      for (int i = 0; i < 8; i++) {
+        zs[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+        zs[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+      }
+    }
+    if (DIG == 2 && lane < 8)
+      for (int i = 0; i < 16; i++) zs[i] = 0;
+    __syncthreads();
+    return;
+  }
+  if (grp * 4 >= rows) {
+    __syncthreads();
+    return;
+  }
   const int kb = k / 128, m = n_dig(k);
   uint32_t* dg = dgs + 512 * warp;
   int* sp = sps + 128 * warp;
   uint32_t* zs = zss + 16 * warp;   // z's digest, digest byte order: row rr's 128 bits are words 4 rr .. 4 rr + 3
   const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dg);
-  if (DIG == 1 && lane == 0) {
-    uint64_t st[8];
-    sha_block(sg.w, (uint64_t)Z_TAG << 56 | (uint64_t)grp, st);
-#pragma unroll
-    for (int i = 0; i < 8; i++) {
-      zs[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
-      zs[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
-    }
-  }
-  if (DIG == 2 && lane < 16) zs[lane] = 0;
 #pragma unroll 1
   for (int p0 = 0; p0 < kb; p0 += 32) {
     const int np = min(32, kb - p0), steps = np / 2;
@@ -85,7 +96,8 @@ DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint1
         dg[16 * lane + 2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
       }
     }
-    __syncwarp();
+    if (p0 + 32 >= kb) __syncthreads();
+    else __syncwarp();
 #pragma unroll 1
     for (int rr = 0; rr < 4; rr++) {
       const size_t r = (size_t)grp * 4 + rr;
@@ -158,7 +170,7 @@ DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint1
   }
 }
 #define CQUANT(NAME, DIG)                                                                                                  \
-  __global__ void __launch_bounds__(256) NAME(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA, \
+  __global__ void __launch_bounds__(CQ_NT) NAME(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA, \
                                               int rows, int k, float inv_s, const __grid_constant__ Sig sg) {               \
     __shared__ uint32_t dg[8 * 512];                                                                                         \
     __shared__ int sp[8 * 128];                                                                                              \
@@ -254,65 +266,72 @@ template <bool HALF> __global__ void phat(const int8_t* __restrict__ Wp, const i
 // ---------------------------------------------------------------- cohalf: QK^T at k = 128, r = k / 2 = 64, Q and K 7-bit
 constexpr uint32_t HBETA_TAG = 11;
 // the served side (K): X = clamp(floor(x / s), -64, 62) + b (b as cquant's, tag 7, block = row / 4 at k = 128) and
-// P_A = [Y_lo | Y_hi | 0 | 0], Y(r) = X(r) + X(r + 64) in [-128, 126]; a warp 4 rows, lane l columns 4 l .. 4 l + 3
+// P_A = [Y_lo | Y_hi | 0 | 0], Y(r) = X(r) + X(r + 64) in [-128, 126]. A block HQ_G row groups of 4: thread g < HQ_G
+// hashes group g's digest, then a warp 4 rows at a time, lane l columns 4 l .. 4 l + 3
+constexpr int HQ_G = 16;
+inline int hq_blocks(int rows) { return (rows + 4 * HQ_G - 1) / (4 * HQ_G); }
 __global__ void __launch_bounds__(256) hquant(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
                                               int rows, float inv_s, const __grid_constant__ Sig sg) {
-  __shared__ uint32_t dgs[8 * 16];
-  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blockIdx.x * 8 + warp;
-  if (grp * 4 >= rows) return;
-  uint32_t* dg = dgs + 16 * warp;
-  if (lane == 0) {
+  __shared__ uint32_t dgs[HQ_G * 16];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, g0 = blockIdx.x * HQ_G;
+  if (threadIdx.x < HQ_G && (g0 + (int)threadIdx.x) * 4 < rows) {
     uint64_t st[8];
-    sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | (uint64_t)grp, st);
+    sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | (uint64_t)(g0 + threadIdx.x), st);
+    uint32_t* dg = dgs + 16 * threadIdx.x;
 #pragma unroll
     for (int i = 0; i < 8; i++) {
       dg[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
       dg[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
     }
   }
-  __syncwarp();
-  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dg);
+  __syncthreads();
 #pragma unroll 1
-  for (int rr = 0; rr < 4; rr++) {
-    const size_t r = (size_t)grp * 4 + rr;
-    const uint2 w = __ldg(reinterpret_cast<const uint2*>(x + r * 128) + lane);
-    const uint32_t bits = (bytes[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
-    const uint32_t ww[2] = {w.x, w.y};
-    int qv[4];
+  for (int gi = warp; gi < HQ_G && (g0 + gi) * 4 < rows; gi += 8) {
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dgs + 16 * gi);
+#pragma unroll 1
+    for (int rr = 0; rr < 4; rr++) {
+      const size_t r = (size_t)(g0 + gi) * 4 + rr;
+      const uint2 w = __ldg(reinterpret_cast<const uint2*>(x + r * 128) + lane);
+      const uint32_t bits = (bytes[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
+      const uint32_t ww[2] = {w.x, w.y};
+      int qv[4];
 #pragma unroll
-    for (int h = 0; h < 2; h++) {
-      const float f0 = __uint_as_float(ww[h] << 16) * inv_s, f1 = __uint_as_float(ww[h] & 0xFFFF0000u) * inv_s;
-      qv[2 * h] = min(max(__float2int_rd(f0), -64), 62) + (int)((bits >> (2 * h)) & 1u);
-      qv[2 * h + 1] = min(max(__float2int_rd(f1), -64), 62) + (int)((bits >> (2 * h + 1)) & 1u);
+      for (int h = 0; h < 2; h++) {
+        const float f0 = __uint_as_float(ww[h] << 16) * inv_s, f1 = __uint_as_float(ww[h] & 0xFFFF0000u) * inv_s;
+        qv[2 * h] = min(max(__float2int_rd(f0), -64), 62) + (int)((bits >> (2 * h)) & 1u);
+        qv[2 * h + 1] = min(max(__float2int_rd(f1), -64), 62) + (int)((bits >> (2 * h + 1)) & 1u);
+      }
+      const uint32_t xw = __byte_perm(__byte_perm(qv[0], qv[1], 0x0040), __byte_perm(qv[2], qv[3], 0x0040), 0x5410);
+      reinterpret_cast<uint32_t*>(X + r * 128)[lane] = xw;
+      const uint32_t hi = __shfl_down_sync(~0u, xw, 16);
+      reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = lane < 16 ? add_noise<false>(xw, hi) : 0u;
     }
-    const uint32_t xw = __byte_perm(__byte_perm(qv[0], qv[1], 0x0040), __byte_perm(qv[2], qv[3], 0x0040), 0x5410);
-    reinterpret_cast<uint32_t*>(X + r * 128)[lane] = xw;
-    const uint32_t hi = __shfl_down_sync(~0u, xw, 16);
-    reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = lane < 16 ? add_noise<false>(xw, hi) : 0u;
   }
 }
 // the peeled side (Q in [-64, 62]): Q' = Q + c + U(i, k mod 64) (c as cwedit's, tag 8; U(i, r) from digest byte r of
-// row i's tag-11 block, r < 64, as cwedit's beta) and P_B = [-U_lo | -U_hi | 0 | 0]; a warp 4 rows. WH: also
-// W^ = Q + c (phat<true>'s bytes) to Wh
+// row i's tag-11 block, r < 64, as cwedit's beta) and P_B = [-U_lo | -U_hi | 0 | 0]. A block HW_G row groups of 4:
+// thread t < HW_G hashes group t's c, thread HW_G + j row j's U (5 HW_G digests on 5 full warps at HW_G = 32), then a
+// warp 4 rows at a time. WH: also W^ = Q + c (phat<true>'s bytes) to Wh
+constexpr int HW_G = 32;
+inline int hw_blocks(int rows) { return (rows + 4 * HW_G - 1) / (4 * HW_G); }
 template <bool WH = false>
 __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB, int rows,
                                               const __grid_constant__ Sig sg, uint8_t* __restrict__ Wh = nullptr) {
-  __shared__ uint32_t cds[8 * 16];
-  __shared__ uint32_t uds[8 * 64];
-  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blockIdx.x * 8 + warp;
-  if (grp * 4 >= rows) return;
-  uint32_t* cd = cds + 16 * warp;
-  uint32_t* ud = uds + 64 * warp;
-  if (lane < 5) {
+  __shared__ uint32_t cds[HW_G * 16];
+  __shared__ uint32_t uds[HW_G * 64];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, g0 = blockIdx.x * HW_G, t = threadIdx.x;
+  if (t < 5 * HW_G && (g0 + (t < HW_G ? t : (t - HW_G) / 4)) * 4 < rows) {
     uint64_t st[8];
-    sha_block(sg.w, lane == 0 ? ((uint64_t)C_TAG << 56 | (uint64_t)grp) : ((uint64_t)HBETA_TAG << 56 | (uint64_t)(4 * grp + lane - 1)), st);
-    if (lane == 0) {
+    sha_block(sg.w, t < HW_G ? ((uint64_t)C_TAG << 56 | (uint64_t)(g0 + t)) : ((uint64_t)HBETA_TAG << 56 | (uint64_t)(4 * g0 + t - HW_G)), st);
+    if (t < HW_G) {
+      uint32_t* cd = cds + 16 * t;
 #pragma unroll
       for (int i = 0; i < 8; i++) {
         cd[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
         cd[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
       }
     } else {
+      uint32_t* ud = uds + 16 * (t - HW_G);
 #pragma unroll
       for (int q = 0; q < 16; q++) {
         uint32_t v = 0;
@@ -321,21 +340,25 @@ __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uin
           const int e = 4 * q + b;
           v |= ((uint32_t)u_beta((uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu) & 0xFFu) << (8 * b);
         }
-        ud[16 * (lane - 1) + q] = v;
+        ud[q] = v;
       }
     }
   }
-  __syncwarp();
-  const uint8_t* cb = reinterpret_cast<const uint8_t*>(cd);
+  __syncthreads();
 #pragma unroll 1
-  for (int rr = 0; rr < 4; rr++) {
-    const size_t r = (size_t)grp * 4 + rr;
-    const uint32_t w = __ldg(reinterpret_cast<const uint32_t*>(W + r * 128) + lane);
-    const uint32_t nib = (cb[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu, u = ud[16 * rr + (lane & 15)];
-    const uint32_t wc = add_noise<false>(w, bits01(nib));
-    reinterpret_cast<uint32_t*>(Wp + r * 128)[lane] = add_noise<false>(wc, u);
-    if constexpr (WH) reinterpret_cast<uint32_t*>(Wh + r * 128)[lane] = wc;
-    reinterpret_cast<uint32_t*>(PB + r * 128)[lane] = lane < 16 ? add_noise<false>(~u, 0x01010101u) : 0u;
+  for (int gi = warp; gi < HW_G && (g0 + gi) * 4 < rows; gi += 8) {
+    const uint8_t* cb = reinterpret_cast<const uint8_t*>(cds + 16 * gi);
+    const uint32_t* ud = uds + 64 * gi;
+#pragma unroll 1
+    for (int rr = 0; rr < 4; rr++) {
+      const size_t r = (size_t)(g0 + gi) * 4 + rr;
+      const uint32_t w = __ldg(reinterpret_cast<const uint32_t*>(W + r * 128) + lane);
+      const uint32_t nib = (cb[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu, u = ud[16 * rr + (lane & 15)];
+      const uint32_t wc = add_noise<false>(w, bits01(nib));
+      reinterpret_cast<uint32_t*>(Wp + r * 128)[lane] = add_noise<false>(wc, u);
+      if constexpr (WH) reinterpret_cast<uint32_t*>(Wh + r * 128)[lane] = wc;
+      reinterpret_cast<uint32_t*>(PB + r * 128)[lane] = lane < 16 ? add_noise<false>(~u, 0x01010101u) : 0u;
+    }
   }
 }
 // pv's served epilogue for the gate: F = float(2 O + 127 S_row) (s_row s_col), c_body's SERVE 2 op for op
@@ -556,15 +579,15 @@ using CqK = void (*)(const uint16_t*, int8_t*, int8_t*, int, int, float, Sig);
 static void cq(CP& C, const Sig& s, CqK f = cquant) {
   EP& P = C.E;
   if (C.half) {
-    hquant<<<(P.m + 31) / 32, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
+    hquant<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
     return;
   }
-  f<<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, P.inv_s, s);
+  f<<<(P.m + QROWS - 1) / QROWS, CQ_NT, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, P.inv_s, s);
 }
 static void cw(CP& C, const Sig& s) {
   EP& P = C.E;
   if (C.half) {
-    hwedit<<<(P.n + 31) / 32, 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(C.W7), reinterpret_cast<uint8_t*>(C.Wp),
+    hwedit<<<hw_blocks(P.n), 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(C.W7), reinterpret_cast<uint8_t*>(C.Wp),
                                                reinterpret_cast<uint8_t*>(C.PB), P.n, s);
     return;
   }
