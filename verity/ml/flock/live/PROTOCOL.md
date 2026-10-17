@@ -401,15 +401,20 @@ The design for malicious-verifier zero knowledge for one batched session, in the
 by round, and a Goldreich–Kahan simulator rewinds once, to just after that commitment. It is not yet zero knowledge
 against every committed coin sequence: the prover must also refuse a zerocheck outer coin `r_j = 1` (see Status).
 
-**The coin commitment** (`src/coin_tree.rs`, scheme `coin-tree/hm96-sha512/v1`, `SessionConfig::coin_tree`).
-- The schedule is pinned in `Hello` (`coins: {scheme, streams, rounds_log, block}`): streams `session`, `circuit/rep0`,
-  `circuit/rep1`; `2^8` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most 277 coins in one
-  (level 0's queries); the session stream's round 0 is the two link points.
-- At `Hello` the verifier draws every block and a 192-byte salt per (stream, round) and commits: per block the chain
-  `T_512 = SHA-512(TAIL)`, `T_i = SHA-512(CHAIN ‖ c_i ‖ T_{i+1})`; the leaf's digest `x = SHA-512(ROUND ‖ u32be(stream) ‖
-  u32be(round) ‖ T_0)` and the leaf `hm96::leaf(x, salt)`; each stream's leaves under a SHA-512 tree (a subtree), and the
-  streams' roots under one more, padded with `SHA-512(PAD)`. The 64-byte root is `Hello`'s answer (4 F128 words), before
-  the prover's first message (`Commit`).
+**The coin commitment** (`src/coin_tree.rs`, the keyed coin tree `coin-tree/hm96-sha512/v2`,
+`SessionConfig::coin_tree`; the verifier's side is `verity/ml/flock/verifier/PROTOCOL.md` §7.4).
+- The schedule is pinned in `Hello` (`coins: {block, nonce, rounds_log, scheme, streams}`): streams `session`,
+  `circuit/rep0`, `circuit/rep1`; `2^8` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most
+  277 coins in one (level 0's queries); the session stream's round 0 is the two link points.
+- The tree is keyed to the session: the prover's `Hello` carries a fresh 32-byte nonce `ν`, and every SHA-512 input of
+  the tree is prefixed by it, `H_ν(m) = SHA-512(ν ‖ m)`.
+- At `Hello` the verifier draws a fresh 256-byte hm96 key `K` for this session's tree (never reused, never revealed
+  before its answer), then every block and a 192-byte salt `y` per (stream, round), and commits: per block the chain
+  `T_512 = H_ν(TAIL)`, `T_i = H_ν(CHAIN ‖ c_i ‖ T_{i+1})`; the leaf's digest
+  `x = H_ν(ROUND ‖ u32be(stream) ‖ u32be(round) ‖ T_0)` and the keyed hm96 leaf `H_ν(LEAF_PREFIX(K) ‖ x ⊕ M(K)·y ‖ c)`
+  with `c = H_ν(SALT_PREFIX ‖ y)`; each stream's leaves under a SHA-512 tree (a subtree), and the streams' roots under
+  one more, padded with `H_ν(PAD)`. The 64-byte root and the key are `Hello`'s answer, before the prover's first message
+  (`Commit`).
 - Every answer is the round's `n` coins, `T_n`, the salt and the path (`Spec::opening_words(n)`), so an opening reveals only
   the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`)
   and stops at one that does not open, before it answers anything that depends on it.
@@ -417,9 +422,10 @@ against every committed coin sequence: the prover must also refuse a zerocheck o
   rank, dependent `ρ`, an outer coin `r_j = 1`) stay functions of committed coins.
 - **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses: statistical in the standard model
   (hm96 `PROTOCOL.md` §3), since every block and salt comes from `/dev/urandom`; no random oracle. *Binding* is the one
-  assumption M2's zero knowledge adds: SHA-512 collision resistance (`cr/sha-512`), which holds whatever salts V* chooses
-  (hm96 §4 holds for every key), so a rewound V* cannot open another coin. Against quantum verifiers the commitment must
-  be collapse-binding (ASSUMPTIONS.md §6).
+  assumption M2's zero knowledge adds: collision resistance of `x ↦ SHA-512(ν ‖ x)` under the session's nonce
+  (`cr/sha-512`), so a collision in V*'s auxiliary input, made before `ν` existed, opens nothing. It holds whatever
+  salts V* chooses (hm96 §4 holds for every key), so a rewound V* cannot open another coin. Against quantum verifiers
+  the commitment must be collapse-binding (ASSUMPTIONS.md §6).
 
 **The simulator** (`gk_simulate` in `flock-circuit.rs`), for every verifier V* as a black box on its random tape
 (rewinding V* is a fresh instance on the same tape, replayed to the same point):
