@@ -21,6 +21,8 @@ and `(c + m)·g`.
   session, and the slot each round of the sessions is in.
 * `Layout.reach_length`, `Layout.relOnAt_of`: a unit an honest run selects is a history of the session's start, so a
   session's zero knowledge and relation are needed only at those.
+* `Layout.iterSimG_seq_congr`, `Layout.start_congr`: the simulator and the sessions' starts read no witness, so a
+  simulator built at the parts alone is the composition's at every witness map.
 -/
 
 namespace Claims.ZKMal
@@ -94,6 +96,13 @@ variable {W WS T TS : Type}
 def start (L : Layout W WS T) (x : Msg) : ℕ → ℕ
   | 0 => L.k₀ x
   | j + 1 => L.start x j + L.n x j
+
+/-- Where the sessions start reads only the rounds. -/
+theorem start_congr {L L' : Layout W WS T} (hk : L.k₀ = L'.k₀) (hn : L.n = L'.n) : L.start = L'.start := by
+  funext x j
+  induction j with
+  | zero => exact congrFun hk x
+  | succ j ih => simp only [start, ih, hn]
 
 theorem start_mono (L : Layout W WS T) (x : Msg) {i j : ℕ} (h : i ≤ j) : L.start x i ≤ L.start x j := by
   induction h with
@@ -178,6 +187,26 @@ noncomputable def seq (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [N
   xB x u := L.xs x j u
   wB w t x u := L.ws j w (flatten T₀ c NB ΩB j t).1 x u
 
+/-- **The simulator reads no witness**: `iterSimG` at two layouts with the same rounds and statements is one
+simulator. -/
+theorem iterSimG_seq_congr (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB]
+    [Nonempty ΩB] (L L' : Layout W WS (T₀.N × T₀.Ω)) (hk : L.k₀ = L'.k₀) (hn : L.n = L'.n) (hx : L.xs = L'.xs)
+    (S₀ : Simulator) (CB : ℕ → Msg → Type) [∀ n x, Fintype (CB n x)] [∀ n x, Nonempty (CB n x)]
+    (progB : (n : ℕ) → (x : Msg) → List (Msg × Msg) → CB n x → SP (List (Msg × Out)))
+    (go : ℕ → Msg → List (Msg × Out) → Bool) (m : ℕ) :
+    iterSimG T₀ c NB ΩB (seq T₀ c NB ΩB L) S₀ CB progB go m =
+      iterSimG T₀ c NB ΩB (seq T₀ c NB ΩB L') S₀ CB progB go m := by
+  obtain ⟨k₀, n, xs, ws⟩ := L
+  obtain ⟨k₀', n', xs', ws'⟩ := L'
+  simp only at hk hn hx
+  subst hk hn hx
+  induction m with
+  | zero => rfl
+  | succ m ih =>
+      simp only [iterSimG]
+      rw [ih]
+      rfl
+
 /-- **The nested prover is the flat one on `flatten`'s tape.** -/
 theorem iterProver_flat (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB]
     [Nonempty ΩB] (L : Layout W WS (T₀.N × T₀.Ω)) (P₀ : W → Prover (T₀.N × T₀.Ω)) (PS : WS → Prover (NB × ΩB)) :
@@ -210,8 +239,8 @@ theorem reach_length (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [No
 
 /-- **Session `j`'s relation where it holds at every history of its start**, at every first part's tape. -/
 theorem relOnAt_of (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (L : Layout W WS (T₀.N × T₀.Ω)) (H : Msg → Msg) {j : ℕ} (P : W → Prover (T₀.at c NB ΩB j)) (RA : Rel W) (RB : Rel WS)
-    (x : Msg)
+    (L : Layout W WS (T₀.N × T₀.Ω)) (H : Msg → Msg) {j : ℕ} (P : W → Prover (T₀.at c NB ΩB j)) (RA : Rel W)
+    (RB : Rel WS) (x : Msg)
     (h : ∀ w, RA x w → ∀ t₀ (u : List (Msg × Msg)), u.length = L.start x j → RB (L.xs x j u) (L.ws j w t₀ x u)) :
     (seq T₀ c NB ΩB L j).RelOnAt H P RA RB x := by
   intro w hw Θ Vs θ ωA hgo
