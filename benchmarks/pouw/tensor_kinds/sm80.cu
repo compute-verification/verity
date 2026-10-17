@@ -236,7 +236,8 @@ __device__ __forceinline__ void op1(Lane& s, int bank, int i) {
   const int j = i & 7, n = (i + 1) & 7;
   uint32_t* r = bank ? s.q : s.r;
   float* f = bank ? s.g : s.f;
-  if (OP == OP_IADD3) asm volatile("add.u32 %0,%0,%1;" : "+r"(r[j]) : "r"(r[n]));
+  // three inputs: sm_80's ptxas moves a two-input add.u32 to the FMA pipe as IMAD.IADD, but r + n + k is one IADD3
+  if (OP == OP_IADD3) asm volatile("add.u32 %0,%0,%1;\n\tadd.u32 %0,%0,%2;" : "+r"(r[j]) : "r"(r[n]), "r"(s.k));
   if (OP == OP_FFMA) asm volatile("fma.rn.f32 %0,%0,%1,0f3F800000;" : "+f"(f[j]) : "f"(f[n]));
   if (OP == OP_LOP3) asm volatile("lop3.b32 %0,%0,%1,%2,0xE8;" : "+r"(r[j]) : "r"(r[n]), "r"(s.k));
   if (OP == OP_IMAD) asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(r[j]) : "r"(s.k), "r"(r[n]));
@@ -599,7 +600,7 @@ static void alone() {
   int iters;
   bool ok;
   Timing t = timed(k_alone<F, NW>, 4 * NW * 32, &iters, &ok);
-  emit(NW == 2 ? "alone" : "alone4", "k_alone", F::SNAME, F::NAME, {NW}, F::MACS, F::SLOTS, F::WORDS, NW, 0, 8, 0, -1,
+  emit(NW == 2 ? "alone" : NW == 4 ? "alone4" : "alone8", "k_alone", F::SNAME, F::NAME, {NW}, F::MACS, F::SLOTS, F::WORDS, NW, 0, 8, 0, -1,
        iters, ok, t);
 }
 template <class F, int R, int X>
@@ -705,6 +706,7 @@ static void form() {
   exact<F>();
   alone<F, 2>();
   alone<F, 4>();
+  alone<F, 8>();
   spec<F, 8, LANE_MIX>(); spec<F, 16, LANE_MIX>(); spec<F, 32, LANE_MIX>(); spec<F, 64, LANE_MIX>(); spec<F, 128, LANE_MIX>();
   mixu<F, 8, LANE_MIX>(); mixu<F, 16, LANE_MIX>(); mixu<F, 32, LANE_MIX>(); mixu<F, 64, LANE_MIX>(); mixu<F, 128, LANE_MIX>();
   // IADD3 alone binds on its pipe; these programs still bound any joint row, which must hold on every program
