@@ -846,6 +846,9 @@
    "assumptions": [],
    "type_hash": "0b217c8812262f71cd1d92dedfdfa361ea82bcda7daf976dcf1351d20fa42619"
   },
+  "Accounting.SecurityProofs.DuoFoldFanIn": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.FanInFloor": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.FanInFloor : Accounting.Guarantees.FanInFloor"],
@@ -863,6 +866,9 @@
    "signature": ["Accounting.SecurityProofs.FoldFanIn : Accounting.Guarantees.FoldFanIn"],
    "assumptions": [],
    "type_hash": "b74857c24febbe9c15bfe30ef106abb7d08bc1de6e9addd0e5e7957fed65bfda"
+  },
+  "Accounting.SecurityProofs.Fx1FoldFanIn": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.HorizonSampling": {
    "owner": "@memory-accounting",
@@ -4806,6 +4812,12 @@
    "assumptions": [],
    "type_hash": "a236d72e1d9cd1d06b54e7baf0b21e92f7cfd039e84b3c901c5056961c72f88c"
   },
+  "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoStepBijective": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoTripleNoKernel : Pouw.Guarantees.Receipt.DuoTripleNoKernel"],
@@ -4817,6 +4829,9 @@
    "signature": ["Pouw.SecurityProofs.Receipt.DuoWordInjective : Pouw.Guarantees.Receipt.DuoWordInjective"],
    "assumptions": [],
    "type_hash": "e750ff080ad0a230437eb91653a6a5efce0853e7ca3347d1aed8e1ae58b7118a"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective": {
+   "owner": "@compute-accounting"
   },
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
    "owner": "@compute-accounting",
@@ -5003,6 +5018,26 @@
    },
    "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel": {
     "function": "Pouw.Receipt.duoQuad",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.DuoFoldFanIn": {
+    "function": ["Accounting.Program.Prog.run", "Pouw.Receipt.duoRun"],
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Fx1FoldFanIn": {
+    "function": ["Accounting.Program.Prog.run", "Pouw.Receipt.fx1Run"],
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoStepBijective": {
+    "function": "Pouw.Receipt.duoWord",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
+    "function": "Pouw.Receipt.duoRun",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective": {
+    "function": "Pouw.Receipt.fx1Run",
     "outcome": "none"
    }
   },
