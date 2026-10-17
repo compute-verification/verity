@@ -13,6 +13,7 @@ import Proofs.Flock.Claims.Complete.Json
 import Proofs.Flock.Claims.Complete.Custody
 import Proofs.Flock.Claims.Complete.Files
 import Proofs.Flock.Claims.Complete.Runs
+import Proofs.Flock.Claims.Complete.Zk
 import Proofs.Flock.Claims.Complete.Replay
 
 /-! Flock's completeness at the deployed plain verifier: the honest prover (`Honest`: `honestP`, on the session prover
