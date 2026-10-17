@@ -107,7 +107,8 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 * `Blind`: the switched prover at the reference session (`RefSession.swP`, at values `RefSession.SwVals` indexed by what
   a pad-blind worker sees), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
   **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZK` at the same `ε_zk`, `γ` and simulator as `Flock.zk_deployZk_ref` for
-  any values whose round encoding is causal (`RefSession.SwCausal`); and **`Flock.zk_server_blind`**, the server at
+  any values whose round encoding is causal (`RefSession.SwCausal`), `Flock.zk_deployZk_ref` its case at the tables'
+  own values (`Flock.zk_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server at
   every pad-blind worker within `D.V.k x + 2` of the guessing simulator, with no term for the masked checks.
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),

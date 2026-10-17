@@ -20,6 +20,8 @@ with the honest prover's simulator, and the server that runs pad-blind workers i
   `DummyReg`, `Causal`, `TapeOK`, `Tables` and `SwCausal vs`, the switched round encoding's causality.
   **`Flock.zk_deployZk_sw`**: `Claims.Flock.ZK` at `swP vs`'s prover with `Flock.zk_deployZk_ref`'s simulator, `ε_zk`
   and `γ`: one simulator for every `vs`.
+* `RefSession.honestVals`, each table's own values: `swP_vals` (`swP` there is `refP`) and `swCausal_vals` (`Causal`
+  gives `SwCausal` there), so `Flock.zk_deployZk_ref_of_sw` recovers `Flock.zk_deployZk_ref` from `zk_deployZk_sw`.
 * **`Flock.zk_server_blind`**: for every pad-blind worker and any values `vs` whose round encoding is causal, the server
   whose frame at the worker's values is `swP vs`'s message where the run is live (`RefLive` at `withHonest`, `srcOf`)
   releases, on every event, at most `D.V.k x + 2` times the guessing simulator's probability plus `ε_zk + γ·Fork`, with
@@ -49,6 +51,23 @@ theorem Hm96.toBase_viewR {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [A
   unfold Hm96.viewR
   rw [hd]
   exact T.toBase_viewWith w ω _
+
+/-- `shift` from a witness to itself moves nothing. -/
+theorem shift_self {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL) (p : W)
+    (ω : T.Rand) : T.shift p p ω = ω := by
+  have h : T.padShift p p ω.1 ω.2.1.2.1 = 0 := by
+    funext r
+    simp only [padShift, sub_self, mul_zero, neg_zero]
+    rfl
+  simp only [shift, h, add_zero]
+
+/-- **At the honest values the switched pre-final view is the honest one.** -/
+theorem swPre_vals {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
+    (T : Table F K W Salt Seed D Hi VL) (w : W) (ω : T.Rand) : T.swPre w T.vals ω = T.preView w ω := by
+  unfold swPre
+  split_ifs
+  · exact T.toBasePre_preView w ω
+  · exact congrArg (T.preView w) (T.onVals.shift_self (w, T.vals) ω)
 
 end FlockSoundness.ZK.Table
 
@@ -129,6 +148,93 @@ theorem viewPre_swExe {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkVie
       simp only [ZkView.Coined.swExeLeaf, hc]
       rfl
     rw [e1, e2, viewPre_viewExe T w (T.shiftB w v b) y u]
+
+/-! ## The switched prover at the honest values -/
+
+theorem _root_.FlockSoundness.Discharge.ZkView.Coined.shiftB_vals {K W Hi VL : Type} [Field K]
+    {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (b : ZkView.Base z Hi) :
+    T.shiftB w T.tab.vals b = b := by
+  have h : T.tab.onVals.padShift (w, T.tab.vals) (w, T.tab.vals) b.1 b.2.1.2.1 = 0 := by
+    funext r
+    simp only [FlockSoundness.ZK.Table.padShift, sub_self, mul_zero, neg_zero]
+    rfl
+  unfold ZkView.Coined.shiftB
+  simp only [h]
+  exact congrArg (fun s => (b.1, b.2.1, s, b.2.2.2)) (add_zero b.2.2.1)
+
+set_option smartUnfolding false in
+theorem _root_.FlockSoundness.Discharge.ZkView.Coined.onVals_col0At_vals {K W Hi VL : Type} [Field K]
+    {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (b : ZkView.Base z Hi) (p : Fin (z.nS + z.nU)) :
+    T.onVals.col0At (w, T.tab.vals) b p = T.col0At w b p :=
+  rfl
+
+set_option smartUnfolding false in
+theorem _root_.FlockSoundness.Discharge.ZkView.Coined.onVals_colPAt_vals {K W Hi VL : Type} [Field K]
+    {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (b : ZkView.Base z Hi) (r : Fin 2)
+    (p : Fin (z.nQ + z.nPU)) : T.onVals.colPAt (w, T.tab.vals) b r p = T.colPAt w b r p :=
+  rfl
+
+set_option smartUnfolding false in
+theorem _root_.FlockSoundness.Discharge.ZkView.Coined.onVals_tau_vals {K W Hi VL : Type} [Field K]
+    {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (b : ZkView.Base z Hi) (r : Fin 2) :
+    (T.onVals.tab.view (w, T.tab.vals) (T.onVals.randOf b 0)).tau r = (T.tab.view w (T.randOf b 0)).tau r :=
+  rfl
+
+theorem _root_.FlockSoundness.Discharge.ZkView.Coined.onVals_content_vals {K W Hi VL : Type} [Field K]
+    {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (b : ZkView.Base z Hi) :
+    T.onVals.content (w, T.tab.vals) b = T.content w b := by
+  funext p
+  rcases p with p | ⟨r, p⟩ | r <;>
+    simp only [ZkView.Coined.content, ZkView.Coined.onVals_col0At_vals, ZkView.Coined.onVals_colPAt_vals,
+      ZkView.Coined.onVals_tau_vals]
+
+theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swContent_vals {K W Hi VL : Type} [Field K]
+    {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (b : ZkView.Base z Hi) :
+    T.swContent w T.tab.vals b = T.content w b := by
+  unfold ZkView.Coined.swContent
+  split_ifs
+  · exact T.onVals_content_vals w b
+  · rw [T.shiftB_vals]
+
+theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swPreWith_vals {K W Hi VL : Type} [Field K]
+    {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (b : ZkView.Base z Hi)
+    (lv : ZkView.LeafPos z → ByteArray) : T.swPreWith w T.tab.vals b lv = T.preWith w b lv := by
+  unfold ZkView.Coined.swPreWith ZkView.Coined.preWith
+  rw [T.tab.swPre_vals]
+
+/-- **At the honest values the switched view is the honest one.** -/
+theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swExe_vals {K W Hi VL : Type} [Field K]
+    {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (ω : T.tab.Rand) (ys : T.tab.Hid → ZkView.Salt) :
+    T.swExe w T.tab.vals ω ys = T.viewExe w ω ys := by
+  have e : T.hm96.onVals.swViewR (w, T.tab.vals) (w, T.tab.vals) ω ys = T.hm96.onVals.viewR (w, T.tab.vals) ω ys := by
+    refine (FlockSoundness.ZK.Table.Hm96.swViewR_eq T.hm96.onVals (w, T.tab.vals) (w, T.tab.vals) ω ys).trans ?_
+    split_ifs
+    · rfl
+    · exact congrArg (fun ω' => T.hm96.onVals.viewR (w, T.tab.vals) ω' ys) (T.tab.onVals.shift_self _ ω)
+  unfold ZkView.Coined.swExe
+  rw [e]
+  exact (T.hm96.toBase_viewR w ω ys).trans (ZkView.Coined.viewExe_eq T w ω ys).symm
+
+theorem swCutAt_vals {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (lv : ZkView.Leaves (fun j => (C j).z) → ByteArray) :
+    swCutAt C cz wt (fun j => ((C j).T (cz j)).tab.vals) ω lv = cutAt C cz wt ω lv := by
+  funext j
+  simp only [swCutAt, cutAt, ZkView.Coined.swPreWith_vals]
+
+theorem swDigOf_vals {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) :
+    swDigOf C cz wt (fun j => ((C j).T (cz j)).tab.vals) ω = digOf C cz wt ω := by
+  funext l
+  simp only [swDigOf, digOf, ZkView.Coined.swContent_vals]
+
+theorem swExeOf_vals {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (y : ZkView.Leaves (fun j => (C j).z) → ZkView.Salt) :
+    swExeOf C cz wt (fun j => ((C j).T (cz j)).tab.vals) ω y = exeOf C cz wt ω y := by
+  funext l
+  simp only [swExeOf, exeOf, ZkView.Coined.swContent_vals]
+  rfl
 
 /-! ## The simulator never reads the prover's messages -/
 
@@ -367,6 +473,36 @@ theorem swCoinModel_size (S : RefSession) (vs : S.SwVals) (x : Msg) (c : Fin (re
     exact Finset.sum_le_sum fun j _ => Fintype.card_le_of_injective _ (hidPos_injective ((S.C x j).T (S.cz x c j)))
   · exact le_rfl
 
+/-- **The honest values**: each table's own (`Table.vals`). -/
+noncomputable def honestVals (S : RefSession) : S.SwVals := fun x _ _ c j => ((S.C x j).T (S.cz x c j)).tab.vals
+
+theorem swMsgAt_vals (S : RefSession) (x : Msg) (w : Flock.Wit) (ν : S.Nonce)
+    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (t : S.Tape) (cs : List S.Coin) :
+    S.swMsgAt x wt (S.honestVals x w ν) t cs = S.msgAt x wt t cs := by
+  have hc : ∀ c, S.swCutOf x c wt (S.honestVals x w ν c) t = S.cutOf x c wt t := fun c => by
+    unfold swCutOf cutOf honestVals
+    rw [swExeOf_vals, swCutAt_vals]
+  have hv : ∀ c, S.swViewsAt x c wt (S.honestVals x w ν c) t = S.viewsAt x c wt t := fun c => by
+    funext j
+    exact ZkView.Coined.swExe_vals _ _ _ _
+  unfold swMsgAt msgAt
+  rw [hc, hv]
+
+/-- **At the honest values the switched prover is `refP`.** -/
+theorem swP_vals (S : RefSession) : S.swP S.honestVals = S.refP := by
+  have h : (fun x w (ν : S.Nonce) (t : S.Tape) cs => OC.ret (S.swMsgAt x (S.wt x w) (S.honestVals x w ν) t cs)) =
+      S.refP.msg :=
+    funext fun x => funext fun w => funext fun ν => funext fun t => funext fun cs =>
+      congrArg OC.ret (S.swMsgAt_vals x w ν (S.wt x w) t cs)
+  exact congrArg (fun m => ({ S.refP with msg := m } : Proto Flock.Wit)) h
+
+/-- **At the honest values `SwCausal` is `Causal`.** -/
+theorem swCausal_vals (S : RefSession) (hc : S.Causal) : S.SwCausal S.honestVals := by
+  intro x w ν ω p c c' i h
+  unfold honestVals
+  rw [swDigOf_vals, swDigOf_vals, swCutAt_vals, swCutAt_vals]
+  exact hc x (S.wt x w) ω p c c' i h
+
 /-! ## The switched prover with the honest prover's simulator -/
 
 /-- **The switched reference prover with `refP`'s simulator**: `refP` with the models' simulator (`withSim` at
@@ -454,6 +590,20 @@ theorem Flock.zk_deployZk_sw (H : Msg → Msg) (rel : _root_.Flock.Readable.Pars
   rw [← S.swPS_prover vs, ← S.swPS_simulatorE vs]
   exact Flock.zkR_gkE_hm96_deployZk H rel (S.swPS vs) t ht (fun _ => rfl) δ₁ S.nLeaves S.nLeaves hA
     (S.swPS_shvzk vs H _ hT1 hδ₁ hV hD hc hsc hT hS) Tr nb root parse pos idx n depth dc hchk hdec
+
+/-- **At the honest values `Flock.zk_deployZk_sw` is `Flock.zk_deployZk_ref`**: the switched prover is `refP`
+(`RefSession.swP_vals`) and `SwCausal` is `Causal` (`RefSession.swCausal_vals`). -/
+theorem Flock.zk_deployZk_ref_of_sw (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession) (t : ℕ) (ht : 0 < t)
+    {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
+    (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
+    (hT : S.TapeOK) :
+    Claims.Flock.ZK H (FlockDeploy.deployZk rel) S.refP.prover
+      ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t := by
+  have h := Flock.zk_deployZk_sw H rel S S.honestVals t ht hT1 hδ₁ hS hV hD hc (S.swCausal_vals hc) hT
+  rwa [S.swP_vals] at h
 
 end Claims.ZKMal
 
