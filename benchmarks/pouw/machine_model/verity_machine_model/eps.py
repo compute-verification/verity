@@ -359,8 +359,7 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     (ln(1/δ)/S; 0 leaves none). The tensor route pays `tensor_mma` a MMA (default honest's). q None closes the lane
     route, q_uniform None the uniform route (and the fold alone there), `baseline` opens the design's baseline
     program, and `table` the table route: table.q lane instructions from the lanes' class pool and table.bytes on an
-    L2 facet a word, folded on lanes. A census with no uniform line (sm_89's: ptxas keeps uniform chains on lanes)
-    closes the uniform route."""
+    L2 facet a word, folded on lanes. A census with no uniform line closes the uniform route."""
     uni = UNI in pi.c
     if not uni:
         q_uniform = None

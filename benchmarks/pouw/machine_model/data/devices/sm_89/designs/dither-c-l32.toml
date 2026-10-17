@@ -22,7 +22,7 @@ source = "SKIP's Result 3 (calculator @07f901181): 0 by int8 products; <= 0.088%
 
 [mand.fold]
 eps = 0.0
-source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD)"
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD). On the L40S duo's IMAD form (rotl(u, r) + y as IMAD.HI.U32 then IMAD: ALU 1 + IMAD 3 a word) is slower at every share of words: honest16 17% slower with 8 of a lane's 32 words in it, 129% with all 32; IMAD.HI.U32 is half IMAD's rate (EPS1 ADA r2, opcode_probe/sm89/uniform.cu's duo<W>, r20261017-095204-4cc4, r20261017-100238-352e)"
 
 [clock]
 eps = 0.371032
@@ -41,4 +41,4 @@ source = "dp4a at 8 IDP4A a word at L = 32 (IDP4A on its own row I4A on sm_89), 
 
 [routes]
 lanes = true
-uniform = false     # no uniform-datapath line on sm_89: ptxas 13.0 keeps warp-uniform chains on lanes (EPS1 ADA)
+uniform = true      # UNI on UP, issue and JI89 (EPS1 ADA r2, opcode_probe/sm89/uniform.cu)
