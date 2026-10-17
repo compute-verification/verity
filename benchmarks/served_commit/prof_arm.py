@@ -188,6 +188,19 @@ class NativeDrainArm(NoLevelsArm):
         self.source.native_drain = True
 
 
+class RowsArm(NativeDrainArm):
+    """The nativedrain arm committing under rows-sha512 (VERITY_COMMIT_SCHEME), COMMIT-GPU's leaves and trees on the windowed worker."""
+
+    def ready(self, target: Any) -> None:
+        import os
+
+        os.environ["VERITY_COMMIT_SCHEME"] = "rows-sha512"
+        try:
+            super().ready(target)
+        finally:
+            os.environ.pop("VERITY_COMMIT_SCHEME", None)
+
+
 class FinalizeProfArm(NativeDrainArm):
     """The nativedrain arm with the committer's finalize under cProfile: the top functions by cumulative time of each run's finalize
     (inside the timed window) appended to $RESEARCH_RUN_DIR/out/finalize_prof.txt."""
@@ -251,6 +264,7 @@ SERVED_COMMIT_BOUNDED = BoundedArm("served-commit-bounded", retain="none")
 SERVED_COMMIT_NOLEVELS = NoLevelsArm("served-commit-nolevels", retain="none")
 SERVED_COMMIT_SWITCH = SwitchArm("served-commit-switch", retain="none")
 SERVED_COMMIT_NATIVEDRAIN = NativeDrainArm("served-commit-nativedrain", retain="none")
+SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")
 SERVED_COMMIT_FPROF = FinalizeProfArm("served-commit-fprof", retain="none")
 SERVED_COMMIT_NOMEMO = NoMemoArm("served-commit-nomemo", retain="none")
 STOCK_PROF = StockProfArm("stock-prof")

@@ -11,7 +11,8 @@ import sqlite3
 import statistics
 from collections import defaultdict
 
-COMMIT_KERNELS = (("chunk_leaves", "hash.leaves"), ("tree_level", "hash.tree"), ("gather", "collect.gather"), ("pos_leaves", "hash.leaves"))
+COMMIT_KERNELS = (("chunk_leaves", "hash.leaves"), ("tree_level", "hash.tree"), ("gather", "collect.gather"), ("pos_leaves", "hash.leaves"),
+                  ("rows_leaf", "hash.leaves"), ("rows_level", "hash.tree"))
 COPY = {1: "HtoD", 2: "DtoH", 8: "DtoD", 10: "PtoP"}
 
 
@@ -80,7 +81,12 @@ def main() -> None:
                                  for k, v in sorted(by.items())}
     allv = [(k[0], k[1]) for k in kern] + [(m[0], m[1]) for m in mem]
     out["gpu_busy_ms"] = union(allv) / 1e6
-    out["gpu_busy_serve_ms"] = union([(k[0], k[1]) for k in kern if cat(k[2]) == "serve"]) / 1e6
+    serve = [(k[0], k[1]) for k in kern if cat(k[2]) == "serve"]
+    hashing = [(k[0], k[1]) for k in kern if cat(k[2]).startswith("hash.")]
+    out["gpu_busy_serve_ms"] = union(serve) / 1e6
+    out["gpu_busy_hash_ms"] = union(hashing) / 1e6
+    # time a hash kernel and a serving kernel both ran (the side stream's overlap with serving)
+    out["hash_overlap_serve_ms"] = (union(serve) + union(hashing) - union(serve + hashing)) / 1e6
     top = defaultdict(lambda: [0, 0])
     for s, e, n, c, st, gn in kern:
         top[n][0] += e - s

@@ -15,6 +15,7 @@ for a in ${ARMS//,/ }; do
     stock-prof) mods+=(--arm-module served_commit.prof_arm:STOCK_PROF);;
     served-commit-switch) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_SWITCH);;
     served-commit-nativedrain) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_NATIVEDRAIN);;
+    served-commit-rows) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS);;
     served-commit-fprof) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_FPROF);;
     served-commit-nomemo) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_NOMEMO);;
     served-commit) mods+=(--arm-module served_commit.arm:SERVED_COMMIT);;
