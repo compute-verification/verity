@@ -164,15 +164,15 @@ DC_DEV void wg_until(const OpArgs& a) {
   OP_SINK((mma_role ? fold_acc(d) : l.fold()) ^ threadIdx.x)
 }
 
-template <int X, int R>
+template <int X, int R, class F = F_s8_n256>
 DC_DEV void wg_mix(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
-  const Tiles t = fill_tiles<0>(sm, a.mode);
-  int d[128] = {};
+  const Tiles t = fill_tiles<F::TYPE>(sm, a.mode);
+  typename F::Acc d[F::NA] = {};
   Lane l(threadIdx.x);
   OP_BEGIN
   OP_LOOP(it) {
-    group4<F_s8_n256>(d, t);
+    group4<F>(d, t);
     lane_ops<X, R>(l);
     wgmma_wait<0>();
   }
@@ -345,6 +345,10 @@ OP_KERNEL(wgU_lif_r512, 384) { wg_until<L_LIF, 512>(a); }
 OP_KERNEL(wgUb1_lif_r256, 384) { wg_until<L_LIF, 256, F_b1_n256>(a); }
 OP_KERNEL(wgUb1_lif_r512, 384) { wg_until<L_LIF, 512, F_b1_n256>(a); }
 OP_KERNEL(wgUe4_lif_r512, 384) { wg_until<L_LIF, 512, F_e4m3_n256>(a); }
+OP_KERNEL(wgmixb1_mix_r256, 256) { wg_mix<L_MIX, 256, F_b1_n256>(a); }
+OP_KERNEL(wgmixb1_mix_r512, 256) { wg_mix<L_MIX, 512, F_b1_n256>(a); }
+OP_KERNEL(wgmixe4_mix_r256, 256) { wg_mix<L_MIX, 256, F_e4m3_n256>(a); }
+OP_KERNEL(wgmixe4_mix_r512, 256) { wg_mix<L_MIX, 512, F_e4m3_n256>(a); }
 OP_KERNEL(wgU_sync_k16, 384) { wg_sync_until<16>(a); }
 OP_KERNEL(wgU_sync_k32, 384) { wg_sync_until<32>(a); }
 OP_KERNEL(imma_s8_k32, 512) { imma_alone<32>(a); }
