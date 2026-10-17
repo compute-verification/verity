@@ -14,11 +14,11 @@ facts about `P'` (`PlainSimWrPAt`):
   among the verifier's calls (`PlainClashRun`), by `plainMix_le_of_run`;
 * the second, the fork bound at `P'`'s strategies, is asked as it is.
 
-So KS at the deployed plain verifier holds from `PlainSimW` at the statements some run accepts, `RecordDrawVerbatim` at
-them, and `Extendθ` (`plain_KS_of_sim`). The strategies send `P`'s roots wherever `P'`'s first message is `P`'s and the
-wire reads roots as the deployed link does (`plainRoot_of_first`). Where the self-clash is at level 0, the collision in
-`PlainClashRun` follows from two different columns the run's reps open at one position (`PlainRawClashRun`,
-`plainClashRun_of_raw`).
+So KS at the deployed plain verifier's trimmed record holds from `PlainSimW` at the statements some run accepts and
+`RecordDrawVerbatim` at them (`plain_KS_of_sim`). The strategies send `P`'s roots wherever `P'`'s first message is
+`P`'s and the wire reads roots as the deployed link does (`plainRoot_of_first`). Where the self-clash is at level 0, the
+collision in `PlainClashRun` follows from two different columns the run's reps open at one position
+(`PlainRawClashRun`, `plainClashRun_of_raw`).
 -/
 
 namespace FlockDeploy.KS
@@ -198,16 +198,15 @@ theorem plainLiveW_of_sim {x : Claims.Msg}
   obtain ⟨hw, hhid⟩ := hs s hs' hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   exact ⟨fun hh => plainLiveWrPAt_of_sim hset hd hdraw (hw hh), fun hh => plainLiveWrPAt_of_sim hset hd hdraw (hhid hh)⟩
 
-/-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, at the statements some run accepts from
-a simulator of each prover (`PlainSimW`) and the record's draw verbatim (`RecordDrawVerbatim`), and `Extendθ` at
-full-width columns. A prover whose record carries the draw with its keys in another order still passes the checks
-(`drawEq_ne`), so `hdraw` holds only where the verifier reads the record's draw as the statement's term. -/
+/-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, at the statements
+some run accepts from a simulator of each prover (`PlainSimW`) and the record's draw verbatim (`RecordDrawVerbatim`).
+A prover whose record carries the draw with its keys in another order still passes the checks (`drawEq_ne`), so
+`hdraw` holds only where the verifier reads the record's draw as the statement's term. -/
 theorem plain_KS_of_sim
     (hdraw : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x →
       ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω) (ω : Ω), RecordDrawVerbatim P x ω)
-    (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimW x)
-    (hext : Claims.Flock.Extendθ (deployPlain Readable.relation) (wordLen false) (wide false)) :
-    Claims.Flock.KS sha512 (deployPlain Readable.relation) :=
-  plain_KS_of_w (fun x hno => plainLiveW_of_sim (hdraw x hno) (hs x hno)) hext
+    (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimW x) :
+    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
+  plain_KS_of_w fun x hno => plainLiveW_of_sim (hdraw x hno) (hs x hno)
 
 end FlockDeploy.KS

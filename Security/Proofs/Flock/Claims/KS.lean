@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Claims.KS.SessionSC
 import Proofs.Flock.Claims.KS.PlainBound
+import Proofs.Flock.Claims.KS.Trim
 import Proofs.Flock.Claims.KS.PlainKS
 import Proofs.Flock.Claims.KS.Escapes
 import Proofs.Flock.Claims.KS.OnAcc
@@ -53,9 +54,11 @@ One wait's bound from a fixed table's bound (`Joint`): the old theorems' `joint_
 run law (`Flock.runGame`, `Flock.oneWait_lhs_eq`), with three obligations: a fixed table's bound over tables of
 well-formed or unopened (`0`) columns, accepted runs opening only well-formed columns, and conflicts tied to collisions
 (`Flock.TableBoundθ`, `Flock.orZero`, `Flock.ColsOk`, `Flock.ConflictTied`, `Flock.oneWait_of_tableBound`,
-`FlockDeploy.KS.plain_KS_of_tableBound`, `FlockDeploy.KS.zk_KS_of_tableBound`); the bound over tables with unopened
-columns from the one over full tables, where a table that does not extract extends to a full one that does not either
-(`Flock.Extendθ`, `Flock.tableBoundθ_of_extend`). The old table at the opened word (`Trace`): a word as the old oracle,
+`FlockDeploy.KS.plain_KS_of_tableBound`, `FlockDeploy.KS.zk_KS_of_tableBound`). At the records the claims read, whose
+columns are trimmed of trailing zeros so `0` is the trimmed zero column (`FlockDeploy.deployPlainTrim`,
+`FlockDeploy.deployZkTrim`), the three obligations carry over from the untrimmed records over full-width columns,
+the table's bound by padding back (`Trim`, `Flock.tableBoundθ_mapCols`, `FlockDeploy.KS.plain_KS_trim`,
+`FlockDeploy.KS.zk_KS_trim`). The old table at the opened word (`Trace`): a word as the old oracle,
 `Close` bounding the agreement (`Flock.agree_of_close`), the deployed plain code, read step, schedule and radius as the
 old model's (`Flock.radius_plain`), so an old `Committed` table extracts (`FlockDeploy.KS.good_of_committed_plain`,
 `FlockDeploy.KS.not_committed_plain`), and the masked code and read step as the old padded ones
@@ -105,7 +108,7 @@ self-clash, a self-clash being in `ε_c⁻` already (`SessionSC`: `FlockSoundnes
 follows from, at each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C`
 unless it self-clashes bounds the deployed runs accepting on `C`, and whose `Adv` and self-clash the escapes' events
 bound, the escapes at the plain fork rounds (`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`).
-`Flock.KS` at the plain record follows from the live sessions' bound at table 0 and `Extendθ` (`PlainKS`:
+`Flock.KS` at the trimmed plain record follows from the live sessions' bound at table 0 (`PlainKS`:
 `FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit`
 against the simulated strategy arises only on live runs the live verdict accepts, whose decoded outputs self-clash
 (`Escapes`: `FlockDeploy.KS.selfClash_le_live`, `FlockDeploy.KS.mean_selfClash_le_live`). Escapes on accepted runs
@@ -158,8 +161,8 @@ the simulation of the runs alone (`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.
 `JsonEquiv`, which holds between different terms (`FlockDeploy.KS.drawEq_ne`). At those coins, a deployed event
 that the live event implies bounds the mixture, the third bound's form (`PlainThird`:
 `FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision as the events, KS at the
-deployed plain verifier holds from a live prover for each prover that simulates its accepting runs, whose self-clashes
-give its accepting runs with a collision and whose fork bound holds, the record's draw verbatim and `Extendθ`
+deployed plain verifier's trimmed record holds from a live prover for each prover that simulates its accepting runs,
+whose self-clashes give its accepting runs with a collision and whose fork bound holds, and the record's draw verbatim
 (`PlainSimW`: `FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
 `FlockDeploy.KS.plainLiveWrPAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). Two different columns an accepted plain
 run's reps open at one position collide in its own log (`ConflictTied`: `FlockDeploy.KS.plainRawCols`,
