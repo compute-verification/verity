@@ -1,4 +1,5 @@
 import Mathlib.Data.Int.ModEq
+import Mathlib.Data.Nat.Prime.Defs
 import Definitions.Accounting.Gates
 import Models.Accounting.Assumptions.EncodeChain
 
@@ -23,14 +24,17 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   the whole family (`2^s` members) its charged gates have at least `s` bits: `s = 63` at p1024 (`256^127 ≤ p`). It is a
   bound in bits, not in gates: a budgeted gate of `b` declared bits carries `b` of them. "Computes" is "on every member
   of `G`": on the fraction `ε` of the family, `G` has `ε · 2^s` members.
-* `Renormalization`: the step the encode bound needs and no counting argument gives, stated and unproved: returning a
-  square's limbs to the window takes `n/8 − d` budgeted gates. `EncodeChainHardness` is its composition over the chain.
+* `Renormalization`: the step the encode bound needs and no counting argument gives, stated and unproved (the red
+  team's Lemma R): returning a square's limbs to byte format takes `L − c − d(ε)` budgeted units, `d(ε) =
+  d₀ + log₂(1/ε)/8`. `EncodeChainHardness` is its composition over the chain.
+* `RhoPairs`: the parity-free target's symmetry. `ρ(p − x) = p − ρ(x)`, and `ρ(x)`'s parity, the bit the target
+  drops, is the Legendre symbol of `x`.
 * `EncodeBudget`: the connection. For a declared circuit `W` that satisfies the stacking property `P` and is in the
   restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the draws number at most
   `(budget)/E + (run-input bits)/(n − 1)`, under `EncodeChainHardness` at `E`: the budget is the caps times the
   audit's certified reads, summed over the windows, and the run inputs are `R_in` a window.
-* `EncodeCost`: under `EncodeChainHardness` at `E`, the encode cost (`encodeCost`) of `q` words is at least `q · E`:
-  the carrier lemma's `cost`, defined.
+* `EncodeCost`: under `EncodeChainHardness` at `E`, the encode cost (`encodeCost`) of `q` words is at least `q · E`
+  (`⊤` when no circuit computes them): the cost 6a's `encodeBitsCost` reads.
 -/
 
 namespace Accounting.Guarantees.Gates
@@ -70,43 +74,60 @@ def SquaringCarry : Prop :=
     (∀ S ∈ G, InWindow C (x S) ∧ ∀ l < n, val C (x S) (out l) = byte (sparse S ^ 2 % p) l) →
     G.card ≤ volume C
 
-/-- **Re-normalization** (the 19:15Z ruling's lemma, unproved): a product's limbs come back to the window only through
-budgeted gates, about one a limb. A restricted circuit with no run input whose registered and coin inputs are bytes of
-`a` or fixed, and that on more than `ε` of the `a ∈ [0, p)` holds its declared intervals (so is in its window) and
-outputs (`out l`, `l < n/8`) the canonical bytes of `a² mod p`, has at least `n/8 − d` budgeted gates. The s8 family
-forms the column sums of `a²` for free; what it can't do is carry, and `SquaringCarry` proves only bits of that (63 at
-p1024), not gates. -/
-def Renormalization (F : Field) (f w d εnum εden : ℕ) : Prop :=
-  ∀ {ι : Type} (C : Dag ι) (x : ℕ → ι → ℤ) (out : ℕ → ℕ) (good : Finset ℕ),
-    Restricted f w C → runBits C = 0 → good ⊆ Finset.range F.p → MoreThan (Finset.range F.p) good εnum εden →
-    (∀ i, FreeInput C i → (∃ l, ∀ a ∈ good, x a i = byte a l) ∨ ∀ a ∈ good, ∀ a' ∈ good, x a i = x a' i) →
-    (∀ a ∈ good, DeclaredHold C (x a) ∧ ∀ l < F.bytes, val C (x a) (out l) = byte (a ^ 2 % F.p) l) →
-    F.bytes - d ≤ budgeted C
+/-- **Re-normalization** (the red team's Lemma R, note:20261017T1859Z-report-property-redteam R3.3; unproved): a
+square's limbs come back to byte format only through budgeted gates, about one a limb. Take a circuit whose window is
+proven, with no run input, whose registered inputs are fixed and whose coin inputs are bytes of `a` or fixed (so units
+count what reads `a`), that on more than `ε` of the `a ∈ [0, p)` holds its declared intervals (so is in its window)
+and outputs `L + c` values (`out l`, `L = n/8`), each within a byte format (`fmt l`), whose base-256 sum is `a²` mod
+`p`. Then `ε · 2^(8L) ≤ 2^(8·(budgeted C + d₀ + c))`, that is `budgeted C ≥ L − c − d(ε)` with
+`d(ε) = d₀ + log₂(1/ε)/8`. The outputs are any byte-format representation (signed digits, extra limbs, unreduced),
+since the chain's next squaring reads any; for one squaring no cap on operand bits is needed. `d₀` is an absolute
+constant: at least 3.46 at p1024 (a no-carry family of `2^27.7` squares), and no `d` below `log₂(1/ε)/9 − 4` holds
+(dropping the honest circuit's carries). The s8 family forms the column sums of `a²` for free; what it can't do is
+carry, and `SquaringCarry` proves only bits of that (63 at p1024), not units. -/
+def Renormalization (F : Field) (d₀ c εnum εden : ℕ) : Prop :=
+  ∀ {ι : Type} (C : Dag ι) (x : ℕ → ι → ℤ) (out : ℕ → ℕ) (fmt : ℕ → Int8Fmt) (good : Finset ℕ),
+    Proven C → runBits C = 0 → good ⊆ Finset.range F.p → MoreThan (Finset.range F.p) good εnum εden →
+    (∀ i, (∃ g ∈ C, g.op = .input .registered i) → ∀ a ∈ good, ∀ a' ∈ good, x a i = x a' i) →
+    (∀ i, (∃ g ∈ C, g.op = .input .coin i) →
+      (∃ l, ∀ a ∈ good, x a i = byte a l) ∨ ∀ a ∈ good, ∀ a' ∈ good, x a i = x a' i) →
+    (∀ a ∈ good, DeclaredHold C (x a) ∧
+      (∀ l < F.bytes + c, (fmt l).lo ≤ val C (x a) (out l) ∧ val C (x a) (out l) ≤ (fmt l).hi) ∧
+      ∑ l ∈ Finset.range (F.bytes + c), 256 ^ l * val C (x a) (out l) ≡ (a : ℤ) ^ 2 [ZMOD F.p]) →
+    εnum * 2 ^ (8 * F.bytes) ≤ εden * 2 ^ (8 * (budgeted C + d₀ + c))
+
+/-- **`ρ` on pairs.** At a prime `p ≡ 3 mod 4` and `0 < x < p`: `ρ(p − x) = p − ρ(x)`, and `ρ(x)` is odd exactly when
+`x` is not a square mod `p`. So `ρ` maps the pair `{x, p − x}` onto the pair `{s, p − s}` of `±x`'s roots, taking the
+member the Legendre symbol of `x` names: the ideal model of a round is a random function on such pairs with that sign
+rule, not a random permutation, and the bit `lessParity` drops is the Legendre symbol of the last round's input. -/
+def RhoPairs : Prop :=
+  ∀ p x : ℕ, p.Prime → p % 4 = 3 → 0 < x → x < p →
+    rho p (p - x) = p - rho p x ∧ (rho p x % 2 = 1 ↔ ¬ ∃ y, y ^ 2 % p = x)
 
 /-- **The encode budget: what the stacking property bounds.** For a declared circuit `W` in the restricted class
-(`Restricted f w`) whose census satisfies the stacking property `P` (`Property caps A W`), whose registered and coin
+(`Restricted B`) whose census satisfies the stacking property `P` (`Property caps A W`), whose registered and coin
 inputs are the codec's (`CodecInputs`), and whose values hold, byte for byte less parity, the encodings of the `q`
 distinct words `words` on more than `ε` of the fresh draws, its inputs and budgeted gates there in their declared
-intervals (its window is then `ProvenWindow`'s, never a hypothesis): under `EncodeChainHardness F k f w E ε`,
+intervals (its window is then `ProvenWindow`'s, never a hypothesis): under `EncodeChainHardness F k B E ε`,
 
   `q · E · (n − 1) ≤ (c · Σ_w reads_w) · (n − 1) + 8 · R_in · windows · E`,
 
-with `c` the caps' budgeted units per certified byte read: `q ≤ c · reads / E + 8 · R_in · windows / (n − 1)`. -/
+with `c` the caps' budgeted units per certified byte read (property/v1's units: gathers by fresh index bits):
+`q ≤ c · reads / E + 8 · R_in · windows / (n − 1)`. -/
 def EncodeBudget : Prop :=
-  ∀ (F : Field) (k f w E εnum εden : ℕ) {ι : Type} (W : Dag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
+  ∀ (F : Field) (k B E εnum εden : ℕ) {ι : Type} (W : Dag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
     (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
-    EncodeChainHardness F k f w E εnum εden →
-    Property caps A W → Restricted f w W → CodecInputs F W (draws F k) m x → words.Nodup →
+    EncodeChainHardness F k B E εnum εden →
+    Property caps A W → Restricted B W → CodecInputs F W (draws F k) m x → words.Nodup →
     (∀ i ∈ words, i < F.p) → ComputesWords F k W x m words out εnum εden →
     words.length * E * (F.n - 1) ≤
       (caps.total * ∑ v ∈ Finset.range A.windows, A.reads v) * (F.n - 1) + 8 * caps.runBytes * A.windows * E
 
-/-- **The encode cost, bounded.** Under `EncodeChainHardness F k f w E ε`, with `n ≥ 2`, every `q` distinct words that
-some restricted circuit with no run input computes on more than `ε` of the draws cost at least `q · E` budgeted
-gates: `q · E ≤ encodeCost F k f w ε q`. -/
+/-- **The encode cost, bounded.** Under `EncodeChainHardness F k B E ε`, with `n ≥ 2`, `q` distinct words cost at
+least `q · E` budgeted units: `q · E ≤ encodeCost F k B ε q`, which is `⊤` when no restricted circuit with no run input
+computes them on more than `ε` of the draws. -/
 def EncodeCost : Prop :=
-  ∀ (F : Field) (k f w E εnum εden q : ℕ),
-    EncodeChainHardness F k f w E εnum εden → 2 ≤ F.n → (encodeCosts F k f w εnum εden q).Nonempty →
-    q * E ≤ encodeCost F k f w εnum εden q
+  ∀ (F : Field) (k B E εnum εden q : ℕ),
+    EncodeChainHardness F k B E εnum εden → 2 ≤ F.n → ((q * E : ℕ) : ℕ∞) ≤ encodeCost F k B εnum εden q
 
 end Accounting.Guarantees.Gates

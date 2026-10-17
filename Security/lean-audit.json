@@ -5569,7 +5569,8 @@
    "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
    "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
    "Accounting.Guarantees.Gates.ProvenWindow": "unstated: the window lemma, a circuit whose window is proven is in its window wherever its inputs and budgeted gates hold their declared intervals; its theorem Accounting.SecurityProofs.Gates.ProvenWindow is not proved yet.",
-   "Accounting.Guarantees.Gates.ClampOrWrap": "unstated: in the window an s8-family step's clamp and wrap give the same values; its theorem Accounting.SecurityProofs.Gates.ClampOrWrap is not proved yet."
+   "Accounting.Guarantees.Gates.ClampOrWrap": "unstated: in the window an s8-family step's clamp and wrap give the same values; its theorem Accounting.SecurityProofs.Gates.ClampOrWrap is not proved yet.",
+   "Accounting.Guarantees.Gates.RhoPairs": "unstated: the codec's square root on pairs, ρ(p − x) = p − ρ(x) and ρ(x)'s parity the Legendre symbol of x at p ≡ 3 mod 4; its theorem Accounting.SecurityProofs.Gates.RhoPairs is not proved yet."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

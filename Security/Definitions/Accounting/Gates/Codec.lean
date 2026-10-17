@@ -3,6 +3,7 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Data.Finset.Prod
 import Mathlib.Order.Interval.Finset.Nat
 import Mathlib.Order.Lattice.Nat
+import Mathlib.Data.ENat.Lattice
 import Definitions.Accounting.Gates.Model
 
 /-!
@@ -17,18 +18,23 @@ circuit of the model (`Model.lean`) computing its words is:
   `b = 0`; word `i` of block `j` is `i = 32j + w` at p1024).
 * **Draws.** A key is drawn after the circuit is declared: its round constants `c_r ∈ [0, p)`, its mask `K ∈ [0, 2^n)`
   and its tweak multiplier `τ ∈ [1, p)`, uniform (`draws`): the codec's seed expanded by an ideal XOF.
-* **Inputs.** The circuit's registered and coin inputs are bytes of the payload `m`, bytes of the draw (each round
-  constant's, the mask's, each word's tweak), or values fixed before the draw (`CodecInputs`): a coin, a live verifier
-  coin of another audit (a noise or fold key), is independent of the codec's draw, so on the draws it is one value;
-  its run inputs may be anything, a function of the draw among them, and the bounds charge their bits.
+* **Inputs** (`CodecInputs`), by their binding. A registered input is bound before the draw, so it is one value on
+  every draw: a byte of the payload `m`, or anything else fixed then. A coin input is a byte of the draw (a round
+  constant's, the mask's, a word's tweak) or one value on every draw: a live verifier coin of another audit (a noise
+  or fold key) is independent of the codec's draw. A run input may be anything, a function of the draw among them, and
+  the bounds charge its bits. Units (`units`) count a gate that reads a coin or run input, so the draw costs where it
+  enters; a registered input holding draw bytes would make the encode free, which is why it can't.
 * **Targets.** Word `i`'s target is its encoding less its parity (`lessParity`: the low bit cleared), byte for byte in
-  the store's layout (`byte`, little-endian). The parity is left out because each round's output parity is the Jacobi
-  symbol of its input, which a circuit gets without the root.
+  the store's layout (`byte`, little-endian). The dropped bit is the Legendre symbol of the last round's input: `ρ(x)`
+  is even exactly when `x` is a square mod `p` (`p ≡ 3 mod 4`), and a circuit gets that symbol without the root.
+  For the same reason `ρ(p − x) = p − ρ(x)` (`Guarantees.Gates.RhoPairs`): `ρ` maps the pair `{x, p − x}` to the
+  pair `{s, p − s}` of `±x`'s roots and takes the member the symbol names, so the ideal model of a round is a random
+  function on such pairs with that sign rule, not a random permutation of `[0, p)`.
 * **Computing.** A circuit computes words `words` on a draw when its inputs and budgeted gates hold their declared
   intervals there (`DeclaredHold`, which with `Proven` puts it in its window) and its output gates `out i l` hold the
-  targets' bytes (`Encodes`). `encodeCost` is the fewest budgeted gates of any circuit of the model, with its window
-  proven, budgeted fan-in at most `f`, values within `w` bits and no run input, that computes `q` distinct words on
-  more than `ε` of the draws: the `cost` 6a's carrier lemma reads.
+  targets' bytes (`Encodes`). `encodeCost` is the fewest budgeted units (`budgeted`) of any circuit of the model, with
+  its window proven, at most `B` operand bits a budgeted gate (`Restricted`) and no run input, that computes `q`
+  distinct words on more than `ε` of the draws, and `⊤` when there is none: the cost 6a's `encodeBitsCost` reads.
 -/
 
 namespace Accounting.Gates
@@ -100,10 +106,13 @@ def Slot.value {k : ℕ} (F : Field) (d : Draw k) (m : ℕ → ℕ) : Slot → �
 
 variable {ι : Type} {k : ℕ}
 
-/-- The codec's inputs over draws `D`: each registered or coin input is a canonical slot's byte on every draw, or one
-value on every draw (fixed before it, or a coin independent of it). -/
+/-- The codec's inputs over draws `D`, by binding: a registered input is one value on every draw (a payload byte, or
+anything fixed before the draw); a coin input is a canonical slot's byte on every draw, or one value on every draw (a
+coin independent of the draw). -/
 def CodecInputs (F : Field) (C : Dag ι) (D : Finset (Draw k)) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) : Prop :=
-  ∀ i, FreeInput C i → (∃ s : Slot, ∀ d ∈ D, x d i = s.value F d m) ∨ ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i
+  (∀ i, (∃ g ∈ C, g.op = .input .registered i) → ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i) ∧
+    ∀ i, (∃ g ∈ C, g.op = .input .coin i) →
+      (∃ s : Slot, ∀ d ∈ D, x d i = s.value F d m) ∨ ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i
 
 /-- On draw `d`, `C`'s inputs and budgeted gates hold their declared intervals and its outputs `out i l` hold the
 bytes of words `words`' encodings, less their parity. -/
@@ -118,19 +127,21 @@ def ComputesWords (F : Field) (k : ℕ) (C : Dag ι) (x : Draw k → ι → ℤ)
     (out : ℕ → ℕ → ℕ) (εnum εden : ℕ) : Prop :=
   ∃ good ⊆ draws F k, MoreThan (draws F k) good εnum εden ∧ ∀ d ∈ good, Encodes F C x m words out d
 
-/-- A circuit of the restricted class: its window proven, budgeted fan-in at most `f`, values within `w` bits. -/
-def Restricted (f w : ℕ) (C : Dag ι) : Prop := Proven C ∧ FanIn f C ∧ Width w C
+/-- A circuit of the chain's restricted class: its window proven, and at most `B` operand bits a budgeted gate. -/
+def Restricted (B : ℕ) (C : Dag ι) : Prop := Proven C ∧ OperandBits B C
 
-/-- The budgeted gate counts of the restricted circuits with no run-input bits that compute `q` distinct words (each
-below `p`) of the codec's encoding, less parity, on more than `ε` of the draws, from the payload and whatever they
+/-- The budgeted units of the restricted circuits with no run-input bits that compute `q` distinct words (each below
+`p`) of the codec's encoding, less parity, on more than `ε` of the draws, from the payload and whatever they
 registered before the draw. -/
-def encodeCosts (F : Field) (k f w εnum εden q : ℕ) : Set ℕ :=
+def encodeCosts (F : Field) (k B εnum εden q : ℕ) : Set ℕ :=
   {c | ∃ (ι : Type) (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
-    words.length = q ∧ words.Nodup ∧ (∀ i ∈ words, i < F.p) ∧ Restricted f w C ∧ runBits C = 0 ∧
+    words.length = q ∧ words.Nodup ∧ (∀ i ∈ words, i < F.p) ∧ Restricted B C ∧ runBits C = 0 ∧
       CodecInputs F C (draws F k) m x ∧ ComputesWords F k C x m words out εnum εden ∧ budgeted C = c}
 
-/-- **The encode cost**: the fewest budgeted gates of any circuit of `encodeCosts`. -/
-noncomputable def encodeCost (F : Field) (k f w εnum εden q : ℕ) : ℕ := sInf (encodeCosts F k f w εnum εden q)
+/-- **The encode cost**: the fewest budgeted units of any circuit of `encodeCosts`, and `⊤` when there is none (6a's
+`encodeBitsCost` at the words its bits fill). -/
+noncomputable def encodeCost (F : Field) (k B εnum εden q : ℕ) : ℕ∞ :=
+  ⨅ c ∈ encodeCosts F k B εnum εden q, (c : ℕ∞)
 
 /-- The carry bound's fooling family: `a_S = 16 · Σ_{i ∈ S} 256^i`, bit 4 of byte `i` set for `i ∈ S`, so every byte
 of `a_S` is even and byte `2i + 1` of `a_S²` is odd exactly when `i ∈ S`. -/
