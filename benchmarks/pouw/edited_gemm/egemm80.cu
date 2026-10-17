@@ -106,7 +106,7 @@ constexpr const char* ARM_NAME[] = {"p32", "e16", "e32", "e64"};
 template <int ARM> struct G {
   static constexpr bool R = ARM != P32, K16 = ARM == E16, HALF = ARM == E64;
   // atom POS of a stage commits (E64: the odd ones, so the odd k32 steps)
-  static constexpr bool rc(int pos) { return R && (!HALF || pos % 2 == 1); }
+  __host__ __device__ static constexpr bool rc(int pos) { return R && (!HALF || pos % 2 == 1); }
 
   uint32_t sbase, a_off[4], b_off[4];
   const Args& a;
