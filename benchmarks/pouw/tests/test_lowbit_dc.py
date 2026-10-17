@@ -365,7 +365,8 @@ def test_pgemm_build_selftest_issue(tmp_path):
             assert word[r]["alu_word"] == pytest.approx(2, abs=0.1) and word[r]["imad_word"] == pytest.approx(2, abs=0.1)
         assert word["i8c"]["alu_word"] == pytest.approx(2, abs=0.1) and word["i8c"]["imad_word"] < 1.1
         assert word["k4b"]["alu_word"] < 2.3 and word["k4b"]["imad_word"] == pytest.approx(2, abs=0.1)
-        assert all(w["instrs_word"] < (5.7 if r == "k4b" else 4.7) for r, w in word.items()), word
+        cap = {"k4b": 6.0, "k4s": 5.0, "k4p": 5.0}  # the k4 routes' restore: 8 x4 tcgen05.st a 32 words
+        assert all(w["instrs_word"] < cap.get(r, 4.7) for r, w in word.items()), word
 
 
 @pytest.mark.slow

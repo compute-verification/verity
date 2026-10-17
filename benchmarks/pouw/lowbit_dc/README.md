@@ -13,7 +13,7 @@ answers in `../fp_exact/`, `../fp4_nobits/` and `../emu8/`:
 |---|---|
 | `fpx.cu` | Chains of tcgen05 kind::f8f6f4 E4M3, kind::mxf4 and kind::mxf4nvf4 (B200) or wgmma E4M3 (H200) on exact grids from four accumulator starts, each output against the int64 sum and against a round-toward-zero chain; the adder's alignment window; emu8's limb routes and the two Hopper-exact ones (k3h, e4r), every k32 prefix word (`fpx run OUT`) |
 | `egemm.cu` | dgemm's Dither GEMM (`../dc/dgemm.cu`: the same receipt definition and single-stage skeleton) with int8 emulated in E4M3: k3z and k4s on tcgen05, k3h on wgmma, beside native int8 at the same tile (`i8`, and on B200 `i8r`, int8 in k4s's shape). Modes `selftest` (host: every limb identity), `gate` (every arm against the host reference, 0xA5 poison, no-write control, the device limb split against the host's) and `bench` (streamed, resident, and on B200 pipelined) |
-| `pgemm.cu` | The k4s Dither GEMM pipelined on B200 (note:20261017T0828Z-draft-lowbit-dc-k4s): a loader warp (cp.async.bulk of pre-tiled stages into a 6–8-stage ring on mbarriers), an MMA warp (tcgen05 into 4 TMEM word buffers), fold warps (tcgen05.ld x32, double-buffered). Routes k4s, k4p (k4s with a public per-word offset in the receipt, so its extraction can go to the IMAD pipe), int8 Dither in the same skeleton (i8c: running sum in TMEM, duo alone a word; i8r: fresh accumulator, T in registers), plain FP8/int8 and cuBLASLt; time-split modes (EXT, LD, MMA, FOLDONLY, and MMARES/FULLRES on resident operands); each arm's SM clock. Modes `selftest`, `gate`, `bench` |
+| `pgemm.cu` | The k4s Dither GEMM pipelined on B200 (note:20261017T0828Z-draft-lowbit-dc-k4s): a loader warp (cp.async.bulk of pre-tiled stages into a 6–8-stage ring on mbarriers), an MMA warp (tcgen05 into 4 TMEM word buffers), fold warps (tcgen05.ld x32, double-buffered). Routes k4s, k4p (k4s with a public per-word offset in the receipt, so its extraction can go to the IMAD pipe), k4b (k4s's receipt from a raw running sum, the public offset removed before the fold), int8 Dither in the same skeleton (i8c: running sum in TMEM, duo alone a word; i8r: fresh accumulator, T in registers), plain FP8/int8 and cuBLASLt; time-split modes (EXT, LD, MMA, FOLDONLY, and MMARES/FULLRES on resident operands); each arm's SM clock and median CTA clocks. Modes `selftest`, `gate`, `bench` |
 | `analyze.py` | fpx's records into the exactness tables; `analyze.py gemm` egemm's gates and time ratios; `analyze.py pgemm` pgemm's γ per spacing, time split, binding facet and the word loop's issue cost from SASS |
 | `run.sh` | The job for one GPU, the family read from the device: `run.sh` (fpx), `run.sh gemm` (egemm and dgemm with cuBLASLt) or `run.sh pgemm` (B200) |
 
@@ -55,7 +55,10 @@ zero per MMA) holding on sm_103. `run.sh gemm` refuses on sm_103a, since its bas
 
 `run.sh pgemm` gates every route, spacing (L = 32, 64) and receipt tile width on three shapes × two distributions, and
 benches only if every gate is exact. Its tile is 128 × 128 on one CTA, so plain FP8 there is operand-feed bound (L2) below
-cuBLASLt; γ is taken against cuBLASLt, and FULLRES gives it with the feed removed.
+cuBLASLt; γ is taken against cuBLASLt, and FULLRES gives it with the feed removed. Sent DC's pipelined int8 kernel
+(`dc/pgemm.cu` and `dc.cuh` from cursor/eps1-dc-pipe-ea24 as `--send dc-pgemm.cu --send dc.cuh`, with
+`--env DC_PGEMM_COMMIT=SHA`), it also runs that kernel's `rate` under the same lease, and analyze.py sets each route's
+words a SM a clock of its median CTA (DC's metric) against DC's fastest honest configuration at each L.
 
 Not covered: FP4 emulation of int8 (emu8's FP4 route is counted in `../emu8/accounting.py`, not built), and pgemm on a
 CTA pair (cta_group::2, 256-wide tiles), which a production kernel would use for its operand feed.

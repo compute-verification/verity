@@ -15,7 +15,8 @@
 //                slot is released (tcgen05.commit to empty) once its MMAs are issued
 //   warps 2 ..   the fold warps (warpgroup g owns columns BNR g .., receipt tile FW tn + g; warp w reads TMEM lanes
 //                32 (w % 4) ..): wait tfull[b], read the word 32 columns at a time (tcgen05.ld.32x32b.x32, the next
-//                chunk's load in flight while this one is folded), extract, fold, release the buffer (tempty[b])
+//                chunk's load in flight while this one is folded, and the next word's first while the last is),
+//                extract, fold, release the buffer (tempty[b])
 // Routes R:
 //   K4S  egemm's k4s: planes [16h, l] on both sides, 4 L / 32 kind::f8f6f4 E4M3 MMAs a word onto one FP32 accumulator;
 //        the fold warps restore it to 1.5 2^23 (tcgen05.st) as they read it; word T += bits - 0x4B400000 (one IADD3)
@@ -127,6 +128,11 @@ DC_DEV void tmem_st32(uint32_t taddr, const uint32_t (&r)[32]) {
       "r"(r[28]), "r"(r[29]), "r"(r[30]), "r"(r[31])
       : "memory");
 }
+DC_DEV void tmem_st4(uint32_t taddr, const uint32_t (&r)[4]) {
+  asm volatile("tcgen05.st.sync.aligned.32x32b.x4.b32 [%0], {%1,%2,%3,%4};" ::"r"(taddr), "r"(r[0]), "r"(r[1]),
+               "r"(r[2]), "r"(r[3])
+               : "memory");
+}
 DC_DEV void tmem_st32c(uint32_t taddr, uint32_t v) {
   asm volatile(
       "tcgen05.st.sync.aligned.32x32b.x32.b32 [%0], {%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,%1,"
@@ -168,20 +174,28 @@ DC_DEV void fold_chunk(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], const uint32_t* r, 
     }
   }
 }
-// K4S / I8R: chunk U's load is in ra; chunk U + 1's goes to rb while U is restored and folded. c0 holds 1.5 2^23 in 32
-// registers of its own for the whole kernel, loaded from memory: ptxas rematerializes a constant operand (32 moves a
-// store). LD mode keeps one word of each chunk (x), or ptxas drops the load.
-template <int R, int M, int U, int BNR>
+// K4S / I8R: chunk U's load is in ra; chunk U + 1's goes to rb while U is restored and folded, and while the last chunk
+// is folded `next` loads the next word's chunk 0 into the free array (ra again, the chunk count being even). c0 holds
+// 1.5 2^23 in 4 registers of its own for the whole kernel, loaded from memory, and a chunk is restored by 8 x4 stores:
+// ptxas rematerializes a constant operand (a move a stored column), and at FW 2 (10 warps, 168 registers) 32 or 8
+// held registers spill once the next word's load is in flight. LD mode keeps one word of each chunk (x), or ptxas
+// drops the load.
+template <int R, int M, int U, int BNR, class F>
 DC_DEV void word_chunks(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], uint32_t (&ra)[32], uint32_t (&rb)[32], uint32_t tsrc,
-                        const uint32_t (&c0)[32], uint32_t& x, uint32_t cw) {
+                        const uint32_t (&c0)[4], uint32_t& x, uint32_t cw, F&& next) {
+  static_assert((BNR / 32) % 2 == 0, "the next word's chunk 0 must land in ra");
   if constexpr (U < BNR / 32) {
     tmem_wait_ld();
     pin(ra);
-    if constexpr (is_k4(R)) tmem_st32(tsrc + 32 * U, c0);
+    if constexpr (is_k4(R)) {
+#pragma unroll
+      for (int i = 0; i < 8; i++) tmem_st4(tsrc + 32 * U + 4 * i, c0);
+    }
     if constexpr (U + 1 < BNR / 32) tmem_ld32(tsrc + 32 * (U + 1), rb);
+    else next(rb);
     if constexpr (M == LD) x ^= ra[0];
     fold_chunk<R, M, U, BNR>(ch, t, ra, cw);
-    word_chunks<R, M, U + 1, BNR>(ch, t, rb, ra, tsrc, c0, x, cw);
+    word_chunks<R, M, U + 1, BNR>(ch, t, rb, ra, tsrc, c0, x, cw, next);
   }
 }
 template <int U, int BNR>
@@ -389,19 +403,31 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
           for (int i = 0; i < BNR; i++) t[i] = v[i];
         }
       } else {
-        uint32_t ra[32], rb[32], c0[32];
+        uint32_t ra[32], rb[32], c0[4];
 #pragma unroll
-        for (int c = 0; c < 32; c++) c0[c] = __ldg(magic + c);
+        for (int c = 0; c < 4; c++) c0[c] = __ldg(magic + c);
+        if constexpr (M != MMAONLY) {
+          mbar_wait(&tfull[0], 0);
+          tc_after_sync();
+          tmem_ld32(tbase, ra);
+        }
 #pragma unroll 1
         for (int wd = 0; wd < words; wd++) {
           const int b = wd % NB;
           const uint32_t tsrc = tbase + b * N;
-          mbar_wait(&tfull[b], (wd / NB) & 1);
-          tc_after_sync();
-          if constexpr (M != MMAONLY) {
-            tmem_ld32(tsrc, ra);
+          if constexpr (M == MMAONLY) {
+            mbar_wait(&tfull[b], (wd / NB) & 1);
+            tc_after_sync();
+          } else {
             cw -= MAGIC_BITS;
-            word_chunks<R, M, 0, BNR>(ch, t, ra, rb, tsrc, c0, x, cw);
+            word_chunks<R, M, 0, BNR>(ch, t, ra, rb, tsrc, c0, x, cw, [&](uint32_t (&r)[32]) {
+              if (wd + 1 < words) {
+                const int b1 = (wd + 1) % NB;
+                mbar_wait(&tfull[b1], ((wd + 1) / NB) & 1);
+                tc_after_sync();
+                tmem_ld32(tbase + b1 * N, r);
+              }
+            });
             if constexpr (is_k4(R)) tmem_wait_st();
           }
           tc_before_sync();
