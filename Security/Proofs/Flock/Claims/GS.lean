@@ -40,6 +40,5 @@ The decoder computes on coefficient lists and tables, and counts its field opera
   is affine in the opened columns (`plainSizeRD_le`, `zkSizeRD_le`), and each counts a step on none
   (`plainCountedRD_nil_pos`, `zkCountedRD_nil_pos`). The deployed records name the counted families as their decoder
   (`FlockDeploy.deployPlain`'s and `deployZk`'s `dec`), and `FlockDeploy.efficient_plain` and `efficient_zk` are
-  `Claims.Flock.Efficient` at the records the claims read, those with their columns trimmed (`deployPlainTrim`,
-  `deployZkTrim`).
+  `Claims.Flock.Efficient` there.
 -/
