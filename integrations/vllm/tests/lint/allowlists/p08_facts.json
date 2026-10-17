@@ -121,7 +121,7 @@
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "gb200"},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "h100"},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "h20"},
-    {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "h200"},
+    {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "h200", "count": 2},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "l4"},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "l40"},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "l40s"},
