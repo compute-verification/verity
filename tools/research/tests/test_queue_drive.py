@@ -297,6 +297,33 @@ def test_a_lean_audit_failure_ejects_the_pr_that_changed_the_failing_file(world,
     assert [m.pr for m in h.q.chain()] == [1]
 
 
+def test_a_suite_failure_whose_files_no_pr_touches_ejects_the_pr_that_changed_the_suites_inputs(world, monkeypatch, tmp_path):
+    """16 Oct: #2164's train failed in benchmarks/pouw's suite (its test in tests/), and the cause was its own change to that
+    suite's pyproject.toml inputs."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"pkg/pyproject.toml": "[tool.verity.tests]\ninputs = ['data/x.json']\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "suite pkg's inputs" in h.posts[0], h.posts
+
+
+def test_a_failure_nothing_in_the_train_reaches_is_resent_as_a_machines_fault(world, monkeypatch, tmp_path):
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    launched = len(h.launched)
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert not h.posts and len(h.launched) == launched + 1 and any("resent" in x for x in world.logs)
+
+
 def _killed_run(tmp_path, name: str):
     d = tmp_path / name
     d.mkdir(parents=True)
@@ -325,7 +352,7 @@ def test_a_killed_check_that_names_no_file_is_resent_once_and_told_when_killed_a
     h.clock += PUBLISH_GRACE_S + 1                                       # killed again, and no attempt of it published
     h.evidence = [_killed_run(tmp_path, "two")]
     h.tick()
-    assert len(h.posts) == 1 and "killed again on its resend" in h.posts[0] and len(h.launched) == launched + 1, h.posts
+    assert len(h.posts) == 1 and "failed again on its resend" in h.posts[0] and len(h.launched) == launched + 1, h.posts
 
 
 LINT_LOG = """..........F........                                                      [100%]
