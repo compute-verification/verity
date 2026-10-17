@@ -74,6 +74,18 @@ def _case(mode, form, struct, R, iters, cyc, mma_loop, op_loop=None, slots=128):
     return row, sass
 
 
+def test_an_add_moved_to_the_fma_pipe_still_counts_as_an_add():
+    # sm_89's ptxas emits part of an add.u32 stream as IMAD.IADD (r20261017-060507-6438's lane loops)
+    sass = _fn("f", ["IADD3 R3, R3, R4, RZ", "IMAD.IADD R5, R5, 0x1, R6", "FFMA R7, R7, R8, 1"])
+    [loop] = TK.loops(TK.parse_sass(sass)["f"])
+    assert loop["iadd3"] == 2 and loop["ffma"] == 1 and loop["other"] == 4
+
+
+def test_kernel_key_reads_alone4():
+    assert TK.kernel_key("_Z8k_alone4I9ImmaS8k16EviPjP8BlockClk") == ("alone4", "imma_s8_m16n8k16", 0)
+    assert TK.kernel_key("_Z6k_specI11BmmaAndK256Li32ELi0EEviPjP8BlockClk") == ("spec_iadd3", "bmma_and_m16n8k256", 32)
+
+
 def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
     imma = ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
     hmma = [x.replace("IMMA.16832.S8.S8", "HMMA.16816.F32") for x in imma]

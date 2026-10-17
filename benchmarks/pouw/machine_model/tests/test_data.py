@@ -107,7 +107,7 @@ def test_floors_name_census_kinds():
 MEMORY_ONLY = {"STS128", "STSM_X1", "STSM_X2", "STSM_X4", "STSM_X1T", "STSM_X2T", "STSM_X4T", "STSM8T_X1", "STSM8T_X2",
                "STSM8T_X4", "RED32", "RED64", "REDV", "REDG32", "REDG64", "REDAS32", "REDAS64", "SURED", "TMAred512",
                "TMA512", "UTMA", "UTMA8", "UTMA512", "UTMA1K", "UTMA2K", "UTMA4K", "UTMA8K", "UTMA16K", "UTMA32K",
-               "UTMA48K", "UTMA64K", "UTMABIG", "G4_16", "G4_32", "G4_256", "G4_1K"}
+               "UTMA48K", "UTMA64K", "UTMABIG", "G4_16", "G4_32", "G4_256", "G4_1K", "LDGSTS16", "UBLKCP4K", "DSMST4P"}
 
 
 def test_every_kind_is_a_copy_route_or_writes_memory_only():
@@ -126,9 +126,40 @@ def test_adopted_lines_are_faster():
         lines = list(csv.DictReader(f))
     u = lambda d: u_of(M.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"])
     for epoch, before, run in [("VF3k-16", "VF3j-8", "r20261016-183617-3914"),
-                               ("VF3l-16", "VF3k-16", "r20261016-210926-d856")]:
+                               ("VF3l-16", "VF3k-16", "r20261016-210926-d856"),
+                               ("VF3m-16", "VF3l-16", "r20261017-034149-3f95"),
+                               ("VF3m-16", "VF3l-16", "r20261017-035245-089f")]:
         for d in (d for d in lines if d["since"] == epoch and run in d["runs"].split()):
             old = [e for e in lines if (e["kind"], e["row"]) == (d["kind"], d["row"]) and e["until"] == before]
             assert old == [] or u(d) < u(old[0]), f"{d['kind']} on {d['row']}"
     assert sum(d["since"] == "VF3k-16" for d in lines) == 18 + 5
     assert sum(d["since"] == "VF3l-16" for d in lines) == 6
+    assert sum(d["since"] == "VF3m-16" for d in lines) == 30 + 15 + 1   # the joint rows, the side units, SHFL
+
+
+def test_sm89_census_is_well_formed():
+    """data/sm89/ (opcode_probe/sm89/census.py): one epoch, every line on a row it defines, every kind on issue and JI89."""
+    d = DATA / "sm89"
+    rs = rows(d)
+    assert all(r.status in STATUSES and r.runs and all(CITE.fullmatch(x) for x in r.runs) for r in rs.values())
+    with open(d / "census.csv", newline="") as f:
+        lines = list(csv.DictReader(f))
+    for x in lines:
+        assert x["row"] in rs and not x["since"] and not x["until"], x
+        assert sum(x[c] != "" for c in ("rate", "cycles", "u")) == 1 and all(CITE.fullmatch(r) for r in x["runs"].split())
+    c = census(M, M.epochs[-1], d)   # raises on two lines for one kind and row
+    assert all(u > 0 for v in c.values() for u in v.values())
+    assert all({"issue", "JI89"} <= set(v) for v in c.values())
+    assert {r for v in c.values() for r in v} == set(rs)
+
+
+def test_violated_rows_close():
+    """VF3m-16 closes every joint row EPS1's frontiers put a point past (r20261017-034143-b1de, r20261017-035229-7c35):
+    R2-R4, the KIMAD, KHFMA2 and KSHFL vertices, and the ASSUMED SHFL; KALU holds and stays."""
+    c = census(M, "VF3m-16")
+    closed = {"R2", "R3", "R4", *(f"KIMAD{i}" for i in range(4)), *(f"KHFMA2{i}" for i in range(4)),
+              *(f"KSHFL{i}" for i in range(3))}
+    assert not closed & {r for v in c.values() for r in v}
+    assert closed <= {r for v in census(M, "VF3l-16").values() for r in v}
+    assert {f"KALU{i}" for i in range(4)} <= set(c["ALU"]) and ROWS["SHFL"].status == "measured"
+    assert c["SHFL"]["SHFL"] == pytest.approx(u_of(M.cycle_u, "0.4997201", "0.02", "", ""))
