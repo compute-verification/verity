@@ -257,7 +257,11 @@ FOLDS = {
            "key_rule": {"pfill": "key_ok_r9"},
            "status": "open", "needs": ("RT", "G3", "HO"),
            "ref": "as xin13 (RS-E-REF Part IX, P2-FF r11), and (HO): no hand-off (d1, d2) or (d3, next d0) joins two "
-                  "words whose rows or columns are equal or complementary (note:20261016T1117Z-draft-fullfloor-s-r9 §2)"},
+                  "words whose rows or columns are equal or complementary (note:20261016T1117Z-draft-fullfloor-s-r9 §2). "
+                  "With every absorbed word pinned and a checkpoint a segment (the XOR of the chains' states), none of "
+                  "them is read: a half step is a bijection and a checkpoint is injective in each word, for odd "
+                  "multipliers alone (Lean: Pouw.SecurityProofs.Receipt.LiHalfBijective, LiCheckpointWordInjective, "
+                  "LiCheckpointLowBit; note:20261017T1848Z-draft-li-alt)"},
     "ram": {"step": ram_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": None,
             "key_rule": {"pfill": "key_ok (key_ok_r9 in an r9 build)"},
             "status": "pairs-only", "needs": (),
