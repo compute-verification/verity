@@ -27,10 +27,9 @@ from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import shape
-from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import _vllm_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _positions, _rows, _static_float, _table, _value
-from verity_vllm.program.frontend.rules.vllm_iface import iface
+from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity_vllm.program.frontend.rules.vllm_mhc import _args
 from verity_vllm.program.kernels.flashmla_twin import num_sm_parts, request_splits, sched_meta
 from verity_vllm.program.registry import dsv4_compressor as C
@@ -374,7 +373,7 @@ class Dsv4InvRopeQuantRule(OpRule):
                     evidence_domain="structural; numerics: Dsv4InvRopeQuantHead_v1 (registry.dsv4_indexer)")
 
     def targets(self):
-        return _vllm_op("fused_inv_rope_fp8_quant_kernel") | {iface.fused_inv_rope_fp8_quant_kernel.default}
+        return targets_for("fused_inv_rope_fp8_quant_kernel")
 
     @staticmethod
     def _geometry(a) -> tuple[int, int, int, int, int]:

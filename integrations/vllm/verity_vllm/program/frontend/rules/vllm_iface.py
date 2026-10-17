@@ -235,16 +235,15 @@ def real_C():
 
 
 def targets_for(name: str) -> set:
-    """Both the stand-in and (if present) the real op, for one kernel name."""
+    """Both the stand-in and (if present) the real op, `torch.ops._C`'s or `torch.ops.vllm`'s, for one kernel name."""
     out = {getattr(iface, name).default}
     C = real_C()
     if C is not None and hasattr(C, name):
         out.add(getattr(C, name).default)
-    if name == "unified_attention":
-        try:
-            out.add(torch.ops.vllm.unified_attention.default)
-        except Exception:  # noqa: BLE001
-            pass
+    try:
+        out.add(getattr(torch.ops.vllm, name).default)
+    except (AttributeError, RuntimeError):
+        pass
     return out
 
 

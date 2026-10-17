@@ -27,7 +27,7 @@ from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _rows, _static_float, _value
-from verity_vllm.program.frontend.rules.vllm_iface import iface
+from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity_vllm.program.frontend.torch_frontend import _tensor_type
 from verity_vllm.program.kernels.mhc_twin import tf32_num_split
 
@@ -175,7 +175,7 @@ class MhcFusedPostPreRule(OpRule):
                     evidence_domain="structural; numerics: MhcFusedPostPre_v1 / MhcPostPreTf32_v1 (registry.mhc)")
 
     def targets(self):
-        return {iface.mhc_fused_post_pre_tilelang.default}
+        return targets_for("mhc_fused_post_pre_tilelang")
 
     def _statics(self, node, ctx):
         a = _args(node)
@@ -224,7 +224,7 @@ class MhcPostRule(OpRule):
                     evidence_domain="structural; numerics: MhcPost_v1 (registry.mhc)")
 
     def targets(self):
-        return {iface.mhc_post_tilelang.default}
+        return targets_for("mhc_post_tilelang")
 
     def applies(self, node, ctx):
         if (r := _missing(ctx, ["mhc_post"], ROLE_KERNELS)):
@@ -255,7 +255,7 @@ class HcHeadRule(OpRule):
                     evidence_domain="structural; numerics: HcHead_v1 (registry.mhc)")
 
     def targets(self):
-        return {iface.hc_head_fused_kernel_tilelang.default}
+        return targets_for("hc_head_fused_kernel_tilelang")
 
     def applies(self, node, ctx):
         if (r := _missing(ctx, ["hc_head"], ROLE_KERNELS)):

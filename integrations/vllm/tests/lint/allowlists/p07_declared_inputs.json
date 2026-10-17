@@ -264,7 +264,6 @@
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/collectives.py", "kind": "broad-except", "symbol": "_tp_op", "detail": "except Exception"},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/pins.py", "kind": "broad-except", "symbol": "tuned_gemm_table_sha256", "detail": "except Exception"},
     {"file": "verity_vllm/program/frontend/rules/vllm_iface.py", "kind": "broad-except", "symbol": "real_C", "detail": "except Exception"},
-    {"file": "verity_vllm/program/frontend/rules/vllm_iface.py", "kind": "broad-except", "symbol": "targets_for", "detail": "except Exception"},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "broad-except", "symbol": "_moe_C_op", "detail": "except Exception"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "broad-except", "symbol": "parse_target_arg", "detail": "except Exception"},
     {"file": "verity_vllm/program/frontend/triton_capture.py", "kind": "broad-except", "symbol": "<module>", "detail": "except Exception"},

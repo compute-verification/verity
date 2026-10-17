@@ -31,13 +31,6 @@ def _f32_equal(a, b: float) -> bool:
     return isinstance(a, (int, float)) and not isinstance(a, bool) and _np.float32(a) == _np.float32(b)
 
 
-def _vllm_op(name: str) -> set:
-    try:
-        return {getattr(torch.ops.vllm, name).default}
-    except (AttributeError, RuntimeError):
-        return set()
-
-
 class DynamicDeepGemmFp8LinearRule(OpRule):
     """vLLM's default Hopper block-FP8 linear, one registered row call per token.
 
@@ -62,9 +55,7 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
     )
 
     def targets(self):
-        return _vllm_op("dynamic_flashinfer_deepgemm_blockscale_gemm") | {
-            iface.dynamic_flashinfer_deepgemm_blockscale_gemm.default
-        }
+        return targets_for("dynamic_flashinfer_deepgemm_blockscale_gemm")
 
     def applies(self, node, ctx):
         target = active_target_profile()
