@@ -210,7 +210,7 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
     have hmiss : ∀ units : Array ℕ, (∀ v ∈ W, (popUnits S).getD v 0 ∉ units) →
         ∀ u ∈ W.image fun v => (popUnits S).getD v 0, u ∉ units := fun units hm u hu => by
       obtain ⟨v, hv, rfl⟩ := mem_image.1 hu; exact hm v hv
-    rcases flockLaw_cases _ _ _ hp with ⟨k, rfl, hk⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
+    rcases flockLaw_cases _ _ _ hp with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
     · refine le_trans (Claims.Pr_mono fun src ⟨units, read, hu, hm⟩ => ⟨units, read, hu, hmiss units hm⟩)
         ((one_bound _ _ hU L).1 k hk) |>.trans_eq ?_
       simp only [Option.getD_none, oneStageOf, OneStage.Pa, hsum, hcard]

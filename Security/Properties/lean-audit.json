@@ -1248,6 +1248,9 @@
    "assumptions": [],
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09"
   },
+  "Properties.SampledProofs.SecurityProofs.designWellFormed": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.SecurityProofs.drawMisses": {
    "owner": "@proofs"
   },
@@ -1939,6 +1942,10 @@
    },
    "Properties.Pouw.Window.workAtRefuses": {
     "function": "PouwWindow.Work.at?",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
+    "function": ["SampledProofs.Slots.layout", "Properties.SampledProofs.slotDesign"],
     "outcome": "accept"
    },
    "Properties.SampledProofs.SecurityProofs.drawMisses": {

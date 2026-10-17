@@ -16,6 +16,9 @@ and its bytes, and every input is in it, the `L` bytes included, however few.
   (`Select.select`'s, `oneStageOf`), `all` for the `All` rule; the input class drawn `all`; every proof unit of a drawn
   replay unit checked. The bound is `0` where the draw is refused before it samples (`missBound`).
 * **The bytes** are `src`'s, in order (`bytesOf`): a draw that would read past them is refused, so it misses nothing.
+
+`DesignWellFormed`: that design is well formed on that partition (the claims' `Design.WellFormed`), so its `P_a` is a
+probability, wherever both are given; the draw's own refusals make it so, and it takes no premise either.
 -/
 
 open Lean (Json)
@@ -76,5 +79,15 @@ def DrawMisses : Prop :=
       (Slots.select rule d query table cm (bytesOf src)).isOk = true ∧
         Misses B (checkedOf (Slots.select rule d query table cm (bytesOf src)))) ≤
       missBound rule d query table B
+
+/-- **The design the draw runs is well formed on the partition it runs over**: wherever `Slots.layout` lays out `d`
+under `query` and `slotDesign` gives the design, it is the claims' `Design.WellFormed` there. One rule per class, and
+the first stage `subset K` with `1 ≤ K ≤ N`, Bernoulli at `NUM/DEN` with `0 < DEN` and `NUM ≤ DEN`, `stratified K` with
+`1 ≤ K ≤ N` over strata of at least one unit each, or `work K` over such strata with one work and one floor of at least
+one per stratum, and some work; every proof unit of a drawn replay unit checked. -/
+def DesignWellFormed : Prop :=
+  ∀ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (l : Slots.Layout)
+    (D : Claims.Sampling.Design),
+    Slots.layout d query = .ok l → slotDesign rule d query table = .ok D → D.WellFormed (slotPartition l)
 
 end Properties.SampledProofs
